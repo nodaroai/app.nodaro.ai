@@ -13,7 +13,8 @@
  */
 import { ytMetadataProbe } from "../../providers/video/youtube-video.js"
 import { downloadVideoForRun, withDownloadSlot } from "../../lib/video-download.js"
-import { downloadAudioToR2 } from "../../workers/shared.js"
+import { downloadAudioToR2 } from "../../workers/download-audio.js"
+import { requireImportAllowed } from "../../lib/import-gate.js"
 import type { VideoLinkFetchDeps } from "./video-link-fetch.js"
 
 export const realVideoLinkFetchDeps: VideoLinkFetchDeps = {
@@ -27,5 +28,12 @@ export const realVideoLinkFetchDeps: VideoLinkFetchDeps = {
   },
   downloadVideo: ({ url, userId, maxHeight, section, signal }) =>
     downloadVideoForRun({ url, userId, maxHeight, section, signal }),
-  downloadAudio: (url, { userId, signal }) => withDownloadSlot(userId, () => downloadAudioToR2(url), { signal }),
+  // A run's own fetch sends no confirmation yet (the Video URL node will carry
+  // one, a later change). The gate reads BEFORE the slot wait, as every lane
+  // does, so a refused import never holds a slot; the engine reads again.
+  downloadAudio: async (url, { userId, signal }) => {
+    const rights = { userId, lane: "run" as const }
+    await requireImportAllowed(url, rights)
+    return withDownloadSlot(userId, () => downloadAudioToR2(url, rights), { signal })
+  },
 }

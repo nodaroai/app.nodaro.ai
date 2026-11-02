@@ -144,7 +144,7 @@ const OUTSIDE_A_JOB_FAMILY: Readonly<Record<string, string>> = {
   "services/media-proxy.ts :: key": `${CACHE} (an analysis proxy, by source url + settings)`,
   "services/media-proxy.ts :: manifestKey": `${CACHE} (the proxy's manifest)`,
   "nodes/gif-to-video/worker.ts :: cacheKey": `${CACHE} (GIF → MP4, by content hash)`,
-  "workers/shared.ts :: `audios/cover-src-${outputId}.mp3`":
+  "workers/download-audio.ts :: `audios/cover-src-${outputId}.mp3`":
     `${NOT_A_JOB} (a workflow run's link audio, fetched by the run before any of its jobs and read by its later nodes)`,
   // The copy helpers.
   "ee/services/community/asset-lifecycle.ts :: prefix": `${NOT_A_JOB} (a community listing's copy of an entity's assets, under \`community/<listingId>/\`)`,
@@ -199,7 +199,7 @@ const SCRATCH_CALL_SITES: Readonly<Record<string, string>> = {
   "workers/handlers/video-mask.ts :: `mask-src-c${chunk.index}`": "Video Mask's chunk of a long clip (what SAM 3 is sent): `ctx.jobId`",
   "workers/handlers/video-mask.ts :: \"mask-src-c0\"": "Video Mask's re-encoded source of a one-request clip (what SAM 3 is sent): `ctx.jobId`",
   "workers/handlers/video-mask.ts :: rleCacheName(value.chunk.index)": "Video Mask's kept chunk segmentation, so a retry after the model answered never pays it again: `jobId` is the handler's `ctx.jobId`",
-  "workers/shared.ts :: \"cover-src\"": "Suno's re-hosted source audio: `opts.scratchJobId` is the Suno handler's `ctx.jobId` (without one the flat `audios/` key is listed above)",
+  "workers/download-audio.ts :: \"cover-src\"": "Suno's re-hosted source audio: `opts.scratchJobId` is the Suno handler's `ctx.jobId` (without one the flat `audios/` key is listed above)",
 }
 
 /** The scratch writers' callers outside the scratch module, as `<file> :: <file name>`. */
@@ -417,6 +417,7 @@ describe("the storage writers, as the code has them", () => {
   it("finds the writers (the census is not empty)", () => {
     expect(CALLS.length).toBeGreaterThan(50)
     expect(CALLS.some((c) => c.file === "workers/shared.ts")).toBe(true)
+    expect(CALLS.some((c) => c.file === "workers/download-audio.ts")).toBe(true)
     // ...the copy helpers and the raw sends past the writers too.
     expect(CALLS.some((c) => c.writer === "copyR2ObjectToPrefix")).toBe(true)
     expect(CALLS.some((c) => c.writer === "PutObjectCommand" && c.file === "lib/retained-images.ts")).toBe(true)

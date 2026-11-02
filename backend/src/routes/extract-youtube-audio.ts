@@ -9,6 +9,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { isImportRefusal, requireImportAllowed } from "../lib/import-gate.js"
 
 const extractYouTubeAudioBody = z.object({
   youtubeUrl: safeUrlSchema.refine(
@@ -16,6 +17,10 @@ const extractYouTubeAudioBody = z.object({
     { message: "Must be a valid YouTube URL" },
   ),
   userId: z.string().uuid().optional(),
+  // The content rights confirmation this import is made under
+  // (`POST /v1/content-rights/confirm`): checked here, spent by the worker
+  // right before the fetch. Optional until `content_rights_required` is on.
+  confirmationId: z.string().uuid().optional(),
 })
 
 export async function extractYouTubeAudioRoutes(app: FastifyInstance) {
@@ -27,13 +32,22 @@ export async function extractYouTubeAudioRoutes(app: FastifyInstance) {
       })
     }
 
-    const { youtubeUrl } = parsed.data
+    const { youtubeUrl, confirmationId } = parsed.data
     const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
       })
+    }
+
+    // The site's policy and the rights check (reads) answer here, before any
+    // job row exists; the worker spends the confirmation when it fetches.
+    try {
+      await requireImportAllowed(youtubeUrl, { userId, confirmationId, lane: "route", requestId: req.id })
+    } catch (e) {
+      if (isImportRefusal(e)) return reply.status(403).send({ error: { code: e.code, message: e.message } })
+      throw e
     }
 
     const mcpClient = extractMcpClient(req.body)
@@ -54,6 +68,7 @@ export async function extractYouTubeAudioRoutes(app: FastifyInstance) {
     await videoQueue.add("extract-youtube-audio", {
       jobId: job.id,
       youtubeUrl,
+      ...(confirmationId ? { confirmationId } : {}),
     })
 
     return { jobId: job.id }

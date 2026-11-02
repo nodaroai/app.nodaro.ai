@@ -218,6 +218,12 @@ vi.mock("../../shared.js", () => ({
   generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,
   completeFfmpegVideoJob: mocks.mockCompleteFfmpegVideoJob,
   completeFfmpegAudioJob: mocks.mockCompleteFfmpegAudioJob,
+  importRightsOf: (job: { data: { confirmationId?: string } }, ctx: { jobId: string; jobUserId?: string }) => ({
+    userId: ctx.jobUserId ?? "",
+    confirmationId: job.data.confirmationId ?? null,
+    lane: "route",
+    requestId: ctx.jobId,
+  }),
   // setJobProgress writes progress to BOTH BullMQ + the jobs.progress
   // DB column. Tests don't care about the side-effects, so a no-op
   // mock is fine.
@@ -1155,12 +1161,11 @@ describe("trim-audio handler", () => {
     const job = makeJob("trim-audio", { videoUrl: "https://vid.mp4" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockTrimAudio).toHaveBeenCalledWith({
-      videoUrl: "https://vid.mp4",
-      audioFormat: undefined,
-      startTime: undefined,
-      endTime: undefined,
-    })
+    // The import rights ride along: the job's owner, the confirmation its route put in the job data, the job as the request.
+    expect(mocks.mockTrimAudio).toHaveBeenCalledWith(
+      { videoUrl: "https://vid.mp4", audioFormat: undefined, startTime: undefined, endTime: undefined },
+      { userId: "user-1", confirmationId: null, lane: "route", requestId: "job-1" },
+    )
     expect(mocks.mockUploadFileToR2).toHaveBeenCalledWith("/tmp/extract-work/audio.mp3", "job-1", "audio", "user-1")
     expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith("/tmp/extract-work")
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
@@ -1170,12 +1175,10 @@ describe("trim-audio handler", () => {
     const job = makeJob("trim-audio", { videoUrl: "https://vid.mp4", startTime: 5, endTime: 15 })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockTrimAudio).toHaveBeenCalledWith({
-      videoUrl: "https://vid.mp4",
-      audioFormat: undefined,
-      startTime: 5,
-      endTime: 15,
-    })
+    expect(mocks.mockTrimAudio).toHaveBeenCalledWith(
+      { videoUrl: "https://vid.mp4", audioFormat: undefined, startTime: 5, endTime: 15 },
+      { userId: "user-1", confirmationId: null, lane: "route", requestId: "job-1" },
+    )
     expect(mocks.mockUploadFileToR2).toHaveBeenCalledTimes(1)
     expect(mocks.mockUploadFileToR2).toHaveBeenCalledWith("/tmp/extract-work/audio.mp3", "job-1", "audio", "user-1")
   })

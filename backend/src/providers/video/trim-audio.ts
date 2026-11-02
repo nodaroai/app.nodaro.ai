@@ -4,6 +4,7 @@ import { ytProxyOption } from "./yt-proxy.js"
 import { withYtDlpOptionsAdmission } from "./ytdlp-admission.js"
 import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 import { isAllowedSocialVideoUrl } from "../../lib/url-validator.js"
+import { requireImportAllowed, spendImportConfirmation, type ImportRights } from "../../lib/import-gate.js"
 import { VIDEO_FORMAT_SELECTOR } from "./video-format.js"
 
 function isSocialMediaUrl(url: string): boolean {
@@ -21,16 +22,29 @@ interface TrimAudioResult {
   readonly audioPath: string
 }
 
-export async function trimAudio(options: TrimAudioOptions): Promise<TrimAudioResult> {
+/**
+ * The sound of a video, cut to a range. A social link is an import of a link,
+ * and this is an ENGINE of the import gate (`lib/import-gate.ts`): the site's
+ * policy and the content rights confirmation are checked before anything is
+ * fetched and the confirmation spent right before yt-dlp runs; a refusal is
+ * the gate's own error, never rewrapped. A direct file is not an import of a
+ * link and passes the gate untouched.
+ */
+export async function trimAudio(options: TrimAudioOptions, rights: ImportRights): Promise<TrimAudioResult> {
   const { videoUrl, audioFormat = "mp3", startTime, endTime } = options
+  const social = isSocialMediaUrl(videoUrl)
+  // Outside the work dir and the try below: a refusal is the gate's own error.
+  if (social) await requireImportAllowed(videoUrl, rights)
   const workDir = await createWorkDir("trim-audio")
 
   try {
     const videoPath = join(workDir, "input.mp4")
     console.log("[trimAudio] Downloading video")
 
-    if (isSocialMediaUrl(videoUrl)) {
+    if (social) {
       console.log("[trimAudio] Social media URL detected, using yt-dlp")
+      // Nothing else can refuse the import now: spend the confirmation, then fetch.
+      await spendImportConfirmation(videoUrl, rights)
       try {
         const ytDlpOptions: Record<string, unknown> = {
           output: videoPath,

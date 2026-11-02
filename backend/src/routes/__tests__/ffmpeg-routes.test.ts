@@ -56,7 +56,9 @@ vi.mock("@/lib/config.js", () => ({
 
 vi.mock("@/lib/url-validator.js", async () => {
   const { z } = await import("zod")
-  return { safeUrlSchema: z.string().url() }
+  // The example links are direct files: not an import of a link, so the
+  // trim-audio route never asks the import gate (its own test covers that).
+  return { safeUrlSchema: z.string().url(), isAllowedSocialVideoUrl: () => false }
 })
 
 // ---------------------------------------------------------------------------

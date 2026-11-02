@@ -39,6 +39,8 @@ export type ContentRightsErrorCode =
   | "rights_confirmation_used"
 
 export class ContentRightsError extends Error {
+  /** A pure function of the import's own inputs: a worker retry answers the same (lib/deterministic-job-error.ts). */
+  readonly deterministic = true
   constructor(readonly code: ContentRightsErrorCode, message: string) {
     super(message)
     this.name = "ContentRightsError"
@@ -297,7 +299,24 @@ export interface ConsumeRightsInput {
  */
 export async function consumeRightsConfirmation(input: ConsumeRightsInput): Promise<void> {
   const consumed = await recordEvent({ confirmationId: input.confirmationId, kind: "consumed", lane: input.lane, requestId: input.requestId ?? null, detail: { url: input.url } })
-  if (!consumed) throw new ContentRightsError("rights_confirmation_used", "That confirmation was used for a download already. Confirm again to import.")
+  if (consumed) return
+  // The same download trying again (a worker job's retry after a transient
+  // fetch failure, keyed by its job id) passes; another download is refused.
+  if (input.requestId && (await consumedByRequest(input.confirmationId)) === input.requestId) return
+  throw new ContentRightsError("rights_confirmation_used", "That confirmation was used for a download already. Confirm again to import.")
+}
+
+/** The request id on the confirmation's `consumed` event, or null. */
+async function consumedByRequest(confirmationId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("rights_events")
+    .select("request_id")
+    .eq("confirmation_id", confirmationId)
+    .eq("kind", "consumed")
+    .maybeSingle()
+  if (error) throw new Error(`[content-rights] event read failed: ${error.message}`)
+  const requestId = (data as { request_id?: unknown } | null)?.request_id
+  return typeof requestId === "string" ? requestId : null
 }
 
 /**

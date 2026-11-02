@@ -937,7 +937,19 @@ describe("extract-youtube-audio handler", () => {
     const job = makeJob("extract-youtube-audio", { youtubeUrl: "https://youtube.com/watch?v=abc" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockExtractYouTubeAudioWithMeta).toHaveBeenCalledWith("https://youtube.com/watch?v=abc")
+    // The import rights ride along: the job's owner, the confirmation its route put in the job data.
+    expect(mocks.mockExtractYouTubeAudioWithMeta).toHaveBeenCalledWith("https://youtube.com/watch?v=abc", { userId: "user-1", confirmationId: null, lane: "route", requestId: "job-1" })
+  })
+
+  it("passes the confirmation the route put in the job data to the extractor, which spends it at the fetch under the job's id", async () => {
+    const job = makeJob("extract-youtube-audio", { youtubeUrl: "https://youtube.com/watch?v=abc", confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01" })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockExtractYouTubeAudioWithMeta).toHaveBeenCalledWith("https://youtube.com/watch?v=abc", {
+      userId: "user-1",
+      confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01",
+      lane: "route",
+      requestId: "job-1",
+    })
     // extract-youtube-audio outputs raw audioUrl — keeps direct markJobCompleted (not via finalize).
     // The length rides beside it so the caller can record it ON the node.
     expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
@@ -1361,6 +1373,8 @@ describe("safe-direction: PRE-provider (input-side) failure → plain error (ref
     const err = await captureThrow(() => audioAIHandlers["transcribe"](job as never, makeCtx()))
     expect(mocks.mockTranscribe).not.toHaveBeenCalled() // provider never reached
     expect(isPostProcessingError(err)).toBe(false)
+    // The extraction is an import of a link: it carries the job's import rights.
+    expect(mocks.mockExtractYouTubeAudio).toHaveBeenCalledWith("https://youtube.com/watch?v=abc", { userId: "user-1", confirmationId: null, lane: "route", requestId: "job-1" })
   })
 })
 

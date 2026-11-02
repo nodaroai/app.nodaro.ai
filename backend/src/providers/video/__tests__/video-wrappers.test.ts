@@ -90,6 +90,16 @@ vi.mock("@/lib/config.js", () => ({
   isBusiness: () => false, hasAdmin: () => true,
 }))
 
+// The import gate has its own tests (import-gate.test.ts, trim-audio-gate.test.ts);
+// here it is a fake that always allows.
+vi.mock("@/lib/import-gate.js", () => ({
+  requireImportAllowed: vi.fn().mockResolvedValue(undefined),
+  spendImportConfirmation: vi.fn().mockResolvedValue(undefined),
+}))
+
+/** The import rights every trim carries (the gate is a fake above). */
+const RIGHTS = { userId: "u1", lane: "route" as const }
+
 // ---------------------------------------------------------------------------
 // Imports under test (after mocks)
 // ---------------------------------------------------------------------------
@@ -751,7 +761,7 @@ describe("trimVideo", () => {
 
 describe("trimAudio", () => {
   it("uses downloadFile for non-social-media URLs", async () => {
-    await trimAudio({ videoUrl: "https://r2.example/video.mp4" })
+    await trimAudio({ videoUrl: "https://r2.example/video.mp4" }, RIGHTS)
     expect(mocks.downloadFile).toHaveBeenCalled()
     expect(mocks.youtubedl).not.toHaveBeenCalled()
   })
@@ -766,13 +776,13 @@ describe("trimAudio", () => {
     "https://facebook.com/watch?v=x",
     "https://fb.watch/x/",
   ])("uses yt-dlp for social media URL %s", async (url) => {
-    await trimAudio({ videoUrl: url })
+    await trimAudio({ videoUrl: url }, RIGHTS)
     expect(mocks.youtubedl).toHaveBeenCalled()
     expect(mocks.downloadFile).not.toHaveBeenCalled()
   })
 
   it("default audioFormat is mp3 with libmp3lame codec", async () => {
-    await trimAudio({ videoUrl: "https://r2/x.mp4" })
+    await trimAudio({ videoUrl: "https://r2/x.mp4" }, RIGHTS)
     const args = ffargs()
     const idx = args.indexOf("-acodec")
     expect(args[idx + 1]).toBe("libmp3lame")
@@ -783,14 +793,14 @@ describe("trimAudio", () => {
     ["wav", "pcm_s16le"],
     ["aac", "aac"],
   ] as const)("audioFormat %s → codec %s", async (format, codec) => {
-    await trimAudio({ videoUrl: "https://r2/x.mp4", audioFormat: format })
+    await trimAudio({ videoUrl: "https://r2/x.mp4", audioFormat: format }, RIGHTS)
     const args = ffargs()
     const idx = args.indexOf("-acodec")
     expect(args[idx + 1]).toBe(codec)
   })
 
   it("includes -ss + -to when startTime + endTime set", async () => {
-    await trimAudio({ videoUrl: "https://r2/x.mp4", startTime: 5, endTime: 15 })
+    await trimAudio({ videoUrl: "https://r2/x.mp4", startTime: 5, endTime: 15 }, RIGHTS)
     const args = ffargs()
     expect(args).toContain("-ss")
     expect(args[args.indexOf("-ss") + 1]).toBe("5")
@@ -799,7 +809,7 @@ describe("trimAudio", () => {
   })
 
   it("strips video stream with -vn", async () => {
-    await trimAudio({ videoUrl: "https://r2/x.mp4" })
+    await trimAudio({ videoUrl: "https://r2/x.mp4" }, RIGHTS)
     expect(ffargs()).toContain("-vn")
   })
 
@@ -808,14 +818,12 @@ describe("trimAudio", () => {
     err.stderr = "video unavailable"
     mocks.youtubedl.mockRejectedValueOnce(err)
 
-    await expect(trimAudio({ videoUrl: "https://youtube.com/x" }))
+    await expect(trimAudio({ videoUrl: "https://youtube.com/x" }, RIGHTS))
       .rejects.toThrow(/yt-dlp download failed/)
   })
 
   it("returns audioPath with the chosen extension", async () => {
-    const result = await trimAudio({
-      videoUrl: "https://r2/x.mp4", audioFormat: "wav",
-    })
+    const result = await trimAudio({ videoUrl: "https://r2/x.mp4", audioFormat: "wav" }, RIGHTS)
     expect(result.audioPath).toMatch(/output\.wav$/)
   })
 })

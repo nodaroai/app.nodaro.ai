@@ -60,7 +60,9 @@ vi.mock("@/providers/kie/suno-client.js", () => ({
   sunoCreditType: (model: string | undefined, fallback: string) =>
     ({ V6: "suno-v6", V6_WILD: "suno-v6_wild", V6_MINI: "suno-v6_mini", V5_5: "suno-v5_5", V5: "suno-v5" } as Record<string, string>)[model ?? ""] ?? fallback,
 }))
-vi.mock("../../shared.js", () => ({
+vi.mock("../../shared.js", async (importOriginal) => ({
+  // The real importRightsOf: what the engine receives is pinned below.
+  importRightsOf: (await importOriginal<typeof import("../../shared.js")>()).importRightsOf,
   commitJobCredits: mocks.mockCommitJobCredits,
   shouldSaveJobResult: mocks.mockShouldSaveJobResult,
   markJobCompleted: mocks.mockMarkJobCompleted,
@@ -252,7 +254,12 @@ describe("suno-cover handler", () => {
     await handler(job as never, makeCtx())
 
     // The job's own copy: its scratch folder, emptied when the job ends (decided 2026-10-09).
-    expect(mocks.mockDownloadAudioToR2).toHaveBeenCalledWith("https://youtube.com/watch?v=abc", { scratchJobId: "job-1" })
+    // The import rights ride along: the job's owner, the confirmation its route put in the job data.
+    expect(mocks.mockDownloadAudioToR2).toHaveBeenCalledWith(
+      "https://youtube.com/watch?v=abc",
+      { userId: "user-1", confirmationId: null, lane: "route", requestId: "job-1" },
+      { scratchJobId: "job-1" },
+    )
     expect(mocks.mockSunoCover).toHaveBeenCalledWith(
       expect.objectContaining({ uploadUrl: "https://r2.example.com/downloads/audio.mp3" }),
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
@@ -446,7 +453,12 @@ describe("suno-upload-extend handler", () => {
     await handler(job as never, makeCtx())
 
     // The job's own copy: its scratch folder, emptied when the job ends (decided 2026-10-09).
-    expect(mocks.mockDownloadAudioToR2).toHaveBeenCalledWith("https://youtube.com/watch?v=abc", { scratchJobId: "job-1" })
+    // The import rights ride along: the job's owner, the confirmation its route put in the job data.
+    expect(mocks.mockDownloadAudioToR2).toHaveBeenCalledWith(
+      "https://youtube.com/watch?v=abc",
+      { userId: "user-1", confirmationId: null, lane: "route", requestId: "job-1" },
+      { scratchJobId: "job-1" },
+    )
     expect(mocks.mockSunoUploadExtend).toHaveBeenCalledWith(
       expect.objectContaining({ uploadUrl: "https://r2.example.com/downloads/audio.mp3" }),
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),

@@ -49,6 +49,7 @@ import {
   withProgressRamp,
   generateAndUploadThumbnail,
   createAssetFromJob,
+  importRightsOf,
   type HandlerFn,
 } from "../shared.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
@@ -368,7 +369,7 @@ const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
   let audioUrl = rawAudioUrl
   if (SOCIAL_VIDEO_URL_RE.test(audioUrl)) {
     console.log(`[worker] transcribe ${ctx.jobId}: extracting audio from social video URL`)
-    audioUrl = await extractYouTubeAudio(audioUrl)
+    audioUrl = await extractYouTubeAudio(audioUrl, importRightsOf(job, ctx))
     await setJobProgress(job, ctx.jobId, 20)
   }
 
@@ -444,7 +445,7 @@ const handleExtractYoutubeAudio: HandlerFn = async function handleExtractYoutube
     job,
     ctx.jobId,
     { start: 5, cap: 80 },
-    () => extractYouTubeAudioWithMeta(youtubeUrl),
+    () => extractYouTubeAudioWithMeta(youtubeUrl, importRightsOf(job, ctx)),
   )
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return

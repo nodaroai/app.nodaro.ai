@@ -10,6 +10,8 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { isAllowedSocialVideoUrl } from "../lib/url-validator.js"
+import { isImportRefusal, requireImportAllowed } from "../lib/import-gate.js"
 
 const trimAudioBody = z.object({
   videoUrl: safeUrlSchema,
@@ -17,6 +19,11 @@ const trimAudioBody = z.object({
   startTime: z.number().min(0).optional(),
   endTime: z.number().min(0).optional(),
   userId: z.string().uuid().optional(),
+  // The content rights confirmation a SOCIAL link is imported under
+  // (`POST /v1/content-rights/confirm`): checked here, spent by the worker
+  // right before the fetch. Optional until `content_rights_required` is on;
+  // a direct file needs none.
+  confirmationId: z.string().uuid().optional(),
 })
 
 export async function trimAudioRoutes(app: FastifyInstance) {
@@ -35,6 +42,18 @@ export async function trimAudioRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
       })
+    }
+
+    // A social link is an import of a link: the site's policy and the rights
+    // check (reads) answer here, before any job row exists; the worker spends
+    // the confirmation when it fetches.
+    if (isAllowedSocialVideoUrl(restData.videoUrl)) {
+      try {
+        await requireImportAllowed(restData.videoUrl, { userId, confirmationId: restData.confirmationId, lane: "route", requestId: req.id })
+      } catch (e) {
+        if (isImportRefusal(e)) return reply.status(403).send({ error: { code: e.code, message: e.message } })
+        throw e
+      }
     }
 
     const modelIdentifier = "trim-audio"

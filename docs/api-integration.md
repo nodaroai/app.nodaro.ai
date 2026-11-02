@@ -5068,7 +5068,9 @@ Instagram `plays` is `null` (views are hidden to a logged-out reader) and
 
 ## 13i. Content rights (import confirmations)
 
-Before a link to someone's video is imported (`POST /v1/download-video`), the
+Before a link to someone's video is imported (`POST /v1/download-video`, and
+the audio lanes `POST /v1/youtube-audio` and `POST /v1/extract-youtube-audio`,
+which take the same `confirmationId`), the
 person importing it confirms a declaration: that they hold the rights to the
 content, or the rights holder's permission, and are responsible for how they
 use it. The server keeps a record of every confirmation (who, which link, which
@@ -5103,11 +5105,19 @@ every confirmation problem, the code above saying which.
 Whether a download WITHOUT a confirmation is refused is the deployment's
 setting `content_rights_required` (off by default; `403 rights_confirmation_required`
 once on). The server accepts before it requires, so every client adds its
-checkbox at its own pace; a client always sends one. **Not covered yet, and a
-blocker before the setting is turned on:** a run started from the API, MCP, the
-SDK or a published app that downloads a link itself sends no confirmation, so
-with the setting on every such run of a Video URL node would fail. That lane,
-and the standing authorization for API keys and agents, are a later change.
+checkbox at its own pace; a client always sends one. Every lane that fetches a
+link runs the same check: the video download, the two audio routes above,
+`POST /v1/trim-audio` given a social link (it takes `confirmationId` too), a
+run's own fetch of a Video URL node (video and sound), a transcription or a
+Suno cover given a link, and the MCP audio tool (it posts to
+`/v1/extract-youtube-audio`). **Not covered yet, and a blocker before the
+setting is turned on** — these lanes run the check but have no way to send a
+confirmation, so with the setting on each one is refused: a run started from
+the API, MCP, the SDK or a published app that downloads a link itself (every
+run of a Video URL node), `POST /v1/transcribe` and the Suno cover and
+upload-extend routes given a link, the MCP audio tool, and a private plugin's
+own download. Those lanes, and the standing authorization for API keys and
+agents, are a later change.
 
 **Import source policies.** Before the confirmation is checked, the link's
 site is held to what an administrator decided about it (Admin → Settings →

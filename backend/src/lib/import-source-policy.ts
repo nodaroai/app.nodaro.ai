@@ -36,6 +36,8 @@ export interface ImportSourcePolicy {
 
 export class ImportSourceError extends Error {
   readonly code = "import_source_disabled" as const
+  /** A pure function of the import's own inputs: a worker retry answers the same (lib/deterministic-job-error.ts). */
+  readonly deterministic = true
   constructor() {
     super("This link can't be imported here.")
     this.name = "ImportSourceError"
