@@ -20,7 +20,10 @@
 // redirect. Fastify request logging is ENABLED in app.ts (with this
 // serializer), so without these two the assertion/token would be written to the
 // deployment logs verbatim. This global set is the single source of truth.
-const SENSITIVE_QUERY_PARAMS = new Set(["code", "state", "access_token", "assertion", "sso_token"])
+// `token` is the one-time link of the public complaints form
+// (`/v1/content-complaints/verify?token=…`, good for 72 hours): logged, it
+// would let a log reader verify a complaint in the complainant's place.
+const SENSITIVE_QUERY_PARAMS = new Set(["code", "state", "access_token", "assertion", "sso_token", "token"])
 
 const REDACTED = "[redacted]"
 

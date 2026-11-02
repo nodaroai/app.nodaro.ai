@@ -39,6 +39,9 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "/mcp",
   // The accessibility statement (Cloud): linked from sign-in, the sidebar and the account menu.
   "/accessibility",
+  // The public complaints form (every edition): reached by its own address and,
+  // once the handler's screen exists, from the policy and the footer.
+  "/copyright-complaints",
 
   // Public share/embed surfaces — reached by a link someone was handed.
   "/present/:shareToken",

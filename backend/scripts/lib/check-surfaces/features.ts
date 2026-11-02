@@ -137,6 +137,7 @@ export const ROUTE_ONLY_FAMILIES: Readonly<Record<string, string>> = {
   "api-tokens": "personal API tokens",
   component: "running a saved component",
   consent: "consent prompts and their answers",
+  "content-complaints": "the public complaints form (a complainant has no account; no SDK or MCP surface on purpose)",
   "deployment-billing": "a deployment's own billing for its users",
   download: "downloading a finished asset",
   "edit-image": "the Edit Image route",

@@ -5185,6 +5185,50 @@ submitted, before any redirect; a listed site covers its subdomains. A change
 takes effect within a minute. The list is the deployment's own and is not part
 of the public API.
 
+## 13j. Content complaints (the public form)
+
+The form at `/copyright-complaints` on the app's host, where anyone reports
+content on the platform that they believe infringes their rights: a
+**copyright infringement notice** (the fields and the two statements the
+copyright policy names), or **another complaint** (unauthorized use of an
+image or likeness, unauthorized voice use, impersonation or identity misuse,
+a privacy violation, or another legal complaint). The routes are public: a
+complainant has no account here. They are the form's own contract and have
+no SDK method, CLI command or MCP tool — a complaint is a person's legal act,
+made on the page.
+
+| Method | Route | What it does |
+|--------|-------|--------------|
+| `GET` | `/v1/content-complaints/statements` | The two statements a copyright notice affirms, verbatim: `{ data: { goodFaith, accuracy } }`. The form shows them and never carries their text. |
+| `POST` | `/v1/content-complaints` | Opens a case. `{ kind: "copyright", name, email, address, phone, claimantRole: "owner" \| "agent", originalWork, originalWorkUrl?, reportedContent, explanation, signature, goodFaith: true, accuracy: true }`, or `{ kind: "other", category, name, email, reportedContent, explanation, address?, phone? }` with `category` one of `likeness`, `voice`, `impersonation`, `privacy`, `other`. → `202 { data: { reference, verificationRequired: true } }`. `400 validation_error` for a missing field or an unaffirmed statement; `429` after five submissions from one network in ten minutes; `503 complaints_unavailable` on a deployment with no encryption key. |
+| `GET` | `/v1/content-complaints/verify?token=` | The one-time link in the email: proves the complainant's address and sends the person back to the form with `?verified=ok`, or `?verified=invalid` for a link already used, expired (72 hours) or unknown. |
+
+**What a submission does.** The case is opened at once, before any email,
+with a reference number (`CR-<year>-<number>`) the complainant quotes from
+then on; nothing a complainant sends is ever dropped. The complainant's
+personal details are stored encrypted, bound to the deployment's key, and
+what they submitted (the work, the explanation, the statements affirmed) is
+frozen: the case moves (its status, its handler, its decision) but the
+submission never changes, and a case is never deleted. The links the
+complainant gives are matched, as text, against the platform's own records
+(a confirmation made for that link, a file imported from it, a file whose
+own address it is); nothing a complainant writes is ever fetched. The answer
+is the same whether or not the links name anything the platform holds: the
+form reveals nothing about what is stored.
+
+**Verification and the acknowledgment.** The complainant is emailed a link
+good for 72 hours; opening it marks the case verified and sends the
+acknowledgment with the reference number, once: the same link opened again
+(a mail scanner's prefetch, a second click) lands on the same page and sends
+nothing more. One address is sent at most three verification emails a day;
+the cases beyond that are still opened. A deployment with no mailer, no
+template (`LOOPS_COMPLAINT_VERIFY_ID` and `LOOPS_COMPLAINT_RECEIVED_ID`,
+Cloud) or no `PUBLIC_URL` still opens and keeps the case; the case's log says
+the email never went, and the handler reaches the complainant from the case.
+Once the case exists, nothing that follows (the email, the log) turns the
+answer into a failure. A complaint never removes or restricts content by
+itself: every case is handled by a person.
+
 ## 14. Pipelines
 
 Story-to-Video pipelines orchestrate multi-stage AI production: script → characters

@@ -88,7 +88,22 @@ const TREND_RADAR_SESSION_ONLY_REASONS = {
 const PRESET_ORGANISATION =
   "preset folders, their order and bulk file import organise the editor's preset lists, which an agent has no use for; they are on the REST API, the SDK and the CLI"
 
+/**
+ * The public complaints form (routes/content-complaints.ts) is a page a
+ * complainant fills without an account: the statements it shows, the
+ * submission, and the one-time link in the email that proves their address.
+ * It is documented on the REST API page as the form's contract, and has no
+ * SDK method or MCP tool: a complaint is a person's legal act, made on the
+ * page, never a client's or an agent's call.
+ */
+const CONTENT_COMPLAINTS_REASONS = {
+  sdk: "the public complaints form's own contract: a complainant fills the page without an account, and a complaint is a person's legal act, never an SDK client's call",
+  mcp: "an agent never files a legal complaint in a person's name; the public page does, without an account",
+} as const
+
 export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
+  { feature: "route:content-complaints", surface: "sdk", reason: CONTENT_COMPLAINTS_REASONS.sdk },
+  { feature: "route:content-complaints", surface: "mcp", reason: CONTENT_COMPLAINTS_REASONS.mcp },
   // Connected apps answer a signed-in browser session only: an app must not
   // list or revoke the grants it lives under.
   {

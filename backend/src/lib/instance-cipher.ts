@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:crypto"
+import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes } from "node:crypto"
 import { config } from "./config.js"
 
 /**
@@ -133,6 +133,17 @@ export function boundCipher(purpose: string): BoundCipher {
       return decipher.update(buf.subarray(IV_LENGTH + TAG_LENGTH), undefined, "utf8") + decipher.final("utf8")
     },
   }
+}
+
+/**
+ * A keyed digest bound to a purpose: HMAC-SHA256 under the purpose's own
+ * subkey of the instance key. The lookup key for a value the table must not
+ * give away on its own (an email address): a plain hash of an email is
+ * guessed from a list of addresses, a keyed one is not.
+ */
+export function boundDigest(purpose: string, text: string): string {
+  if (purpose.length === 0) throw new Error("boundDigest needs a purpose")
+  return createHmac("sha256", subkeyFor(purpose)).update(text, "utf8").digest("hex")
 }
 
 /** Tests swap the key between cases; production never calls this. */
