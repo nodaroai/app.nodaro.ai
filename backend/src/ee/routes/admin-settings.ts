@@ -181,7 +181,10 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
       // reads this and stops serving turns when it is false; a non-boolean
       // written here would be read tolerantly as "on" and the off switch would
       // silently not work, which is the one thing an emergency stop must not do.
-      key === "copilot_enabled"
+      key === "copilot_enabled" ||
+      // Content rights: whether a link import without a confirmation is refused
+      // (lib/content-rights.ts). Read tolerantly as "off" when not a boolean.
+      key === "content_rights_required"
     ) {
       if (typeof value !== "boolean") {
         return reply.status(400).send({

@@ -4996,6 +4996,16 @@ SDK or a published app that downloads a link itself sends no confirmation, so
 with the setting on every such run of a Video URL node would fail. That lane,
 and the standing authorization for API keys and agents, are a later change.
 
+**Import source policies.** Before the confirmation is checked, the link's
+site is held to what an administrator decided about it (Admin → Settings →
+Content rights → Import sources): a site that is not listed is approved; a
+site set to disabled or permission-required refuses the import outright with
+`403 import_source_disabled` and one generic message that names no site (there
+is no way to ask for a permission yet). The site is the host of the link as
+submitted, before any redirect; a listed site covers its subdomains. A change
+takes effect within a minute. The list is the deployment's own and is not part
+of the public API.
+
 ## 14. Pipelines
 
 Story-to-Video pipelines orchestrate multi-stage AI production: script → characters

@@ -357,6 +357,8 @@ export const queryKeys = {
       ["admin", "reports", page, status ?? ""] as const,
     alerts: () => ["admin", "alerts"] as const,
     settings: () => ["admin", "settings"] as const,
+    /** Admin → Settings → Content rights: the import source policies (migration 578). */
+    importSources: () => ["admin", "import-sources"] as const,
     messageTemplates: () => ["admin", "message-templates"] as const,
     userMessages: (userId: string) =>
       ["admin", "user-messages", userId] as const,

@@ -8,8 +8,18 @@ vi.mock("@/lib/storage.js", () => ({
 }))
 vi.mock("@/lib/asset-records.js", () => ({ recordDownloadedVideoAsset: vi.fn().mockResolvedValue(undefined) }))
 vi.mock("@/utils/thumbnail.js", () => ({ thumbnailFromLocalVideo: vi.fn().mockResolvedValue(Buffer.from("png")) }))
-// The content rights check has its own tests; here it is a fake, so these
-// tests pin the run's order: check first, slot, spend, then download.
+// The site's policy and the content rights check have their own tests; here
+// they are fakes, so these tests pin the run's order: check first, slot,
+// spend, then download.
+vi.mock("@/lib/import-source-policy.js", () => ({
+  ImportSourceError: class ImportSourceError extends Error {
+    readonly code = "import_source_disabled"
+    constructor() {
+      super("This link can't be imported here.")
+    }
+  },
+  assertImportSourceAllowed: vi.fn().mockResolvedValue(undefined),
+}))
 vi.mock("@/lib/content-rights.js", () => ({
   ContentRightsError: class ContentRightsError extends Error {
     constructor(readonly code: string, message: string) {

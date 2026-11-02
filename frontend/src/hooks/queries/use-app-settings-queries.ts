@@ -12,6 +12,8 @@ export interface AppSettings {
   readonly apps_page_video_autoplay: boolean
   /** The copilot runtime pause. True = serving turns. Absent row reads as true. */
   readonly copilot_enabled: boolean
+  /** Content rights: whether a link import without a confirmation is refused. Absent row reads as false. */
+  readonly content_rights_required: boolean
   /** Which tier a new copilot thread starts on. Empty string = compiled default. */
   readonly copilot_default_tier: string
   /** Admin per-tier cap overrides: tier -> { maxIterations, maxToolCalls, wallClockMinutes }. */
@@ -50,6 +52,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   carousel_video_autoplay: true,
   apps_page_video_autoplay: true,
   copilot_enabled: true,
+  content_rights_required: false,
   copilot_default_tier: "",
   copilot_tier_caps: {},
   featured_app_ids: [],
@@ -70,6 +73,7 @@ async function fetchAppSettings(): Promise<AppSettings> {
     carousel_video_autoplay: (settings.carousel_video_autoplay as boolean) ?? true,
     apps_page_video_autoplay: (settings.apps_page_video_autoplay as boolean) ?? true,
     copilot_enabled: (settings.copilot_enabled as boolean) ?? true,
+    content_rights_required: (settings.content_rights_required as boolean | undefined) ?? false,
     copilot_default_tier: (settings.copilot_default_tier as string) ?? "",
     copilot_tier_caps: (settings.copilot_tier_caps && typeof settings.copilot_tier_caps === "object"
       ? settings.copilot_tier_caps

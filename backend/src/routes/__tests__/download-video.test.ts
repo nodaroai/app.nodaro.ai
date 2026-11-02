@@ -52,6 +52,18 @@ vi.mock("@/lib/dynamic-origins.js", () => ({
   isOriginAllowedDynamic: vi.fn().mockResolvedValue(false),
 }))
 
+// The site's policy (lib/import-source-policy.ts) has its own tests; here a
+// fake, so these tests pin the 403 the route answers when a site is refused.
+vi.mock("@/lib/import-source-policy.js", () => ({
+  ImportSourceError: class ImportSourceError extends Error {
+    readonly code = "import_source_disabled"
+    constructor() {
+      super("This link can't be imported here.")
+    }
+  },
+  assertImportSourceAllowed: vi.fn().mockResolvedValue(undefined),
+}))
+
 // The content rights check (lib/content-rights.ts) has its own tests; here it
 // is a fake so these tests pin what the route does with its answer: forwards
 // the id to the download, and turns its refusal into a 403.
@@ -591,6 +603,17 @@ describe("POST /v1/download-video — asset bookkeeping", () => {
     await vi.waitFor(() => expect(insertSpy).toHaveBeenCalledTimes(1))
     expect(insertSpy.mock.calls[0][0]).toMatchObject({ rights_confirmation_id: confirmationId, content_hash: "ab".repeat(32) })
     await vi.waitFor(() => expect(recordEvent).toHaveBeenCalledWith(expect.objectContaining({ confirmationId, kind: "download_completed" })))
+  })
+
+  it("a site an admin disabled is refused with 403 before anything else, naming no site", async () => {
+    const { ImportSourceError, assertImportSourceAllowed } = await import("../../lib/import-source-policy.js")
+    vi.mocked(assertImportSourceAllowed).mockRejectedValueOnce(new ImportSourceError())
+    const res = await post({ url: YT_URL, confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e03" })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error).toEqual({ code: "import_source_disabled", message: "This link can't be imported here." })
+    expect(checkRightsConfirmation).not.toHaveBeenCalled()
+    expect(consumeRightsConfirmation).not.toHaveBeenCalled()
+    expect(downloadYouTubeVideo).not.toHaveBeenCalled()
   })
 
   it("a download without a confirmation records none, and is refused with 403 when the check refuses it", async () => {

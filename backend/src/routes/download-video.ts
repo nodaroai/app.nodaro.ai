@@ -13,6 +13,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { isOriginAllowedDynamic } from "../lib/dynamic-origins.js"
 import { firstHeaderValue } from "../lib/request-helpers.js"
 import { ContentRightsError, checkRightsConfirmation, consumeRightsConfirmation } from "../lib/content-rights.js"
+import { ImportSourceError, assertImportSourceAllowed } from "../lib/import-source-policy.js"
 
 const downloadVideoBody = z
   .object({
@@ -102,13 +103,14 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
     const userId = req.userId
     const { url, sectionStartSec, sectionEndSec, exactSection, maxHeight: rawMaxHeight, requireAudio, confirmationId } = parsed.data
 
-    // The rights check (a read) comes before anything else that can refuse the
-    // import; the confirmation is SPENT only once the slot is held, below, so
-    // a consumed confirmation always has a download behind it.
+    // The site's policy and the rights check (reads) come before anything else
+    // that can refuse the import; the confirmation is SPENT only once the slot
+    // is held, below, so a consumed confirmation always has a download behind it.
     try {
+      await assertImportSourceAllowed(url)
       await checkRightsConfirmation({ url, userId, confirmationId, lane: "route" })
     } catch (e) {
-      if (e instanceof ContentRightsError) return reply.status(403).send({ error: { code: e.code, message: e.message } })
+      if (e instanceof ImportSourceError || e instanceof ContentRightsError) return reply.status(403).send({ error: { code: e.code, message: e.message } })
       throw e
     }
 

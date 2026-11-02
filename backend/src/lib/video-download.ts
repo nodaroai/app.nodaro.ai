@@ -7,6 +7,7 @@ import { createReadStream } from "node:fs"
 import { uploadFileWithKeyToR2, uploadBufferToR2 } from "./storage.js"
 import { recordDownloadedVideoAsset } from "./asset-records.js"
 import { ContentRightsError, checkRightsConfirmation, consumeRightsConfirmation, contentHashOf, recordEvent } from "./content-rights.js"
+import { ImportSourceError, assertImportSourceAllowed } from "./import-source-policy.js"
 import { thumbnailFromLocalVideo } from "../utils/thumbnail.js"
 import { downloadYouTubeVideo, type VideoSection } from "../providers/video/youtube-video.js"
 import type { DownloadSlot } from "./download-slots.js"
@@ -369,9 +370,10 @@ export interface RunDownloadOptions extends Omit<TrackedDownloadRequest, "requir
 export async function downloadVideoForRun(options: RunDownloadOptions): Promise<{ videoUrl: string; thumbnailUrl?: string }> {
   const rights = { url: options.url, userId: options.userId, confirmationId: options.rightsConfirmationId, lane: "run" as const }
   try {
+    await assertImportSourceAllowed(options.url)
     await checkRightsConfirmation(rights)
   } catch (e) {
-    if (e instanceof ContentRightsError) throw new RunDownloadError(e.message, "failed")
+    if (e instanceof ImportSourceError || e instanceof ContentRightsError) throw new RunDownloadError(e.message, "failed")
     throw e
   }
   const slot = await acquireSlot(options.userId, options.signal, options.slotWaitMs ?? RUN_DOWNLOAD_SLOT_WAIT_MS)
