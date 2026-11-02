@@ -132,6 +132,19 @@ export function environmentsThatCannotTakeSteps(envs: readonly TrendEngineEnviro
 }
 
 /**
+ * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
+ * in that order) whose engine cannot enforce a forced Style — none recorded,
+ * or one that does not declare `castSwap.styleChoice`. Unknown while the
+ * environments are (undefined). "Always Precise" and "Always Flex" are
+ * offered only when this is empty (the setting is shared: the server refuses
+ * the save otherwise, 409 `engine_unsupported`); "Users choose" always is.
+ */
+export function environmentsThatCannotForceStyle(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+  if (!envs) return undefined
+  return SHARED_SETTING_ENVIRONMENTS.filter((name) => envs.find((e) => e.env === name)?.supports.castSwap?.styleChoice !== true)
+}
+
+/**
  * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose
  * engine cannot take "Body from the clip" (`steps.clipBody`) — none
  * recorded, or one that does not declare `castSwap.steps` and

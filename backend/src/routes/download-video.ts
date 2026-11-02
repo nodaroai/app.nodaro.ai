@@ -17,7 +17,7 @@ const downloadVideoBody = z
   .object({
     url: safeUrlSchema.refine(
       (url) => isAllowedSocialVideoUrl(url) || isDirectVideoFileUrl(url),
-      { message: "Must be a social video URL (YouTube, Facebook, TikTok, Instagram, X) or a direct video file URL (.mp4, .webm, .mov, .avi)" },
+      { message: "Must be a link to a video's page or a direct video file URL (.mp4, .webm, .mov, .avi)" },
     ),
     // Optional max video height (px). When present, caps yt-dlp's format
     // selection to `<=maxHeight`; ABSENT keeps the "best" behaviour

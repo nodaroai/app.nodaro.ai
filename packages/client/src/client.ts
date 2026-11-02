@@ -42,6 +42,7 @@ import { ShotsResource } from "./resources/shots.js"
 import { RecastResource } from "./resources/recast.js"
 import { CastSwapResource } from "./resources/cast-swap.js"
 import { TrendsResource } from "./resources/trends.js"
+import { TrendRadarResource } from "./resources/trend-radar.js"
 import { StudioResource } from "./resources/studio.js"
 import { CopilotResource } from "./resources/copilot.js"
 import { CommunityResource } from "./resources/community.js"
@@ -115,6 +116,8 @@ export class NodaroClient extends NodaroClientCore {
   readonly castSwap: CastSwapResource
   /** Trends: ready-made Cast Swap recipes you fill with your own pictures (Cloud). */
   readonly trends: TrendsResource
+  /** Trend Radar: the daily run's candidate trends and the admin's decisions (Cloud, admin session only). */
+  readonly trendRadar: TrendRadarResource
   readonly studio: StudioResource
   readonly copilot: CopilotResource
   readonly community: CommunityResource
@@ -171,6 +174,7 @@ export class NodaroClient extends NodaroClientCore {
     this.recast = new RecastResource(this)
     this.castSwap = new CastSwapResource(this)
     this.trends = new TrendsResource(this)
+    this.trendRadar = new TrendRadarResource(this)
     this.studio = new StudioResource(this)
     this.copilot = new CopilotResource(this)
     this.community = new CommunityResource(this)

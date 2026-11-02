@@ -484,6 +484,7 @@
         "backend/src/lib/nodaro-motion-motion.ts",
         "backend/src/lib/nodaro-motion-prompt-parts.ts",
         "backend/src/lib/nodaro-motion-steps.ts",
+        "backend/src/lib/nodaro-motion-style.ts",
         "backend/src/lib/node-handles.ts",
         "backend/src/lib/node-registry.ts",
         "backend/src/lib/node-state-job-ids.ts",

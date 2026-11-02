@@ -198,7 +198,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         style: z
           .enum(CAST_SWAP_STYLES)
           .optional()
-          .describe('"precise" (default) follows the clip exactly; "motion" follows the clip\'s movement and takes the looks from the photos, more freely than precise. Its price may differ: the quote shows it.'),
+          .describe('"precise" (default) follows the clip exactly; "motion" follows the clip\'s movement and takes the looks from the photos, more freely than precise. Its price may differ: the quote shows it. A style an admin forced for the engine overrides this.'),
         motion_length: z
           .enum(LENGTHS)
           .optional()

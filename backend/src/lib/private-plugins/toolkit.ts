@@ -132,6 +132,7 @@ import { loadedEngineDrawsFaceMesh, withDepthColormapFor, withFaceMeshFor } from
 import { getPluginSupports } from "./supports-registry.js"
 import { withEarlierPromptPartKeys } from "../nodaro-motion-prompt-parts.js"
 import { withEarlierMotionKeys } from "../nodaro-motion-motion.js"
+import { styleForPlugin } from "../nodaro-motion-style.js"
 import { anyStepsSet, stepsForLoadedEngine, withEarlierStepsKeys } from "../nodaro-motion-steps.js"
 import { loadedEngineTakesSteps } from "../cast-swap-steps.js"
 import { KieVideoProvider } from "../../providers/kie/video.js"
@@ -1598,6 +1599,8 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   nodaroMotionPromptParts: true,
   nodaroMotionMotion: true,
   nodaroMotionSteps: true,
+  // tk.settings.nodaroMotionStyle(): the admin's Style choice per Nodaro Motion engine.
+  nodaroMotionStyle: true,
   jobLanes: true,
   // tk.jobs.waitForJob leaves the time the awaited job waits for a slot
   // (`queued`) out of the plugin's timeout (`queueAware` below).
@@ -2220,6 +2223,14 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (!anyStepsSet(sent)) return null
         // Under the current AND the earlier keys, each a fresh copy (the masking setting's shim).
         return withEarlierStepsKeys(sent)
+      },
+      // Same rules: a failed read throws (null would let people choose a style an admin forced).
+      // Null when never saved or nothing is forced; else each forced engine's choice under its
+      // current AND its earlier key (the masking setting's shim).
+      nodaroMotionStyle: async () => {
+        const settings = await getAppSettings()
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_style: the app settings could not be read")
+        return styleForPlugin(settings.nodaro_motion_style)
       },
     },
     deployment: { publicUrl: appBaseUrl() },

@@ -634,9 +634,9 @@ export type RSSFeedData = {
 }
 
 /**
- * The Video URL node. `youtubeUrl` holds ANY supported link (YouTube, TikTok,
- * Instagram, Facebook, X) or a direct video file url — the name predates the
- * other hosts and is kept because saved workflows carry it.
+ * The Video URL node. `youtubeUrl` holds ANY supported link (a video's page on
+ * a supported site) or a direct video file url — the name predates the other
+ * hosts and is kept because saved workflows carry it.
  *
  * The node's output is `resolveVideoLinkOutput` (`@nodaro/shared`): the
  * downloaded file when it belongs to the current link, else the link itself.

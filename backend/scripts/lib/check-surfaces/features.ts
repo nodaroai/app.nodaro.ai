@@ -79,6 +79,8 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "castSwap", cli: ["cast-swap"], routePrefixes: ["/v1/cast-swap"], mcpFiles: ["cast-swap.ts", "cast-swap-full-quality.ts"] },
   // Trends: the catalog, trend runs and favorites (Cloud, ee/routes/trends.ts).
   { id: "trends", cli: ["trends"], routePrefixes: ["/v1/trends"], mcpFiles: ["trends.ts"] },
+  // Trend Radar: the admin-session-only candidate finder (Cloud, ee/routes/trend-radar.ts); no CLI or MCP by design.
+  { id: "trendRadar", cli: [], routePrefixes: ["/v1/trend-radar"], mcpFiles: [] },
   { id: "studio", cli: [], routePrefixes: ["/v1/studio"], mcpFiles: ["studio-production.ts", "studio-production-run.ts"] },
   { id: "studio.productions", cli: [], routePrefixes: ["/v1/studio/productions"], mcpFiles: ["studio-production.ts", "studio-production-run.ts"] },
   { id: "copilot", cli: [], routePrefixes: ["/v1/copilot"], mcpFiles: [] },

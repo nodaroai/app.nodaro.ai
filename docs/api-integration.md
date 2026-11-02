@@ -4495,6 +4495,7 @@ served by the Nodaro Cloud plugin and answer 404 on self-hosted installs
 |---|---|---|
 | `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged. |
 | `POST` | `/v1/cast-swap` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
+| `GET` | `/v1/cast-swap/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed (see Style below). Public: no sign-in needed. |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
 `{ kind: "person", name?, images, body?, outfit?, hair? }`, at most 1
@@ -4553,6 +4554,15 @@ Motion may cost a different amount than Precise: the estimate (sent with the
 same `style`) shows the exact price. The job records the `style` sent in
 `input_data.style` (absent when it was left out, which is Precise). A trend
 run ignores it: the trend decides.
+
+**A forced style.** Nodaro may fix the style of an engine for everyone
+(always Precise, or always Motion): every run and estimate on that engine then
+uses it, whatever `style` says. `GET /v1/cast-swap/style-choice` (public, no
+sign-in needed) says which, per engine:
+`{ engines: { "motion-prism": Choice, "motion-pulse": Choice } }`, where
+`Choice` is `"user"` (you choose, as above), `"precise"` or `"flex"` (Motion,
+`style: "motion"`). An app shows its style choice only for an engine answered
+`"user"`. The answer may be up to a minute old. Trends are not affected.
 
 **Preparing the clip.** How the source clip is prepared for the video model —
 for one, whether faces are hidden first, and whether a clip the model refuses
@@ -4906,6 +4916,42 @@ never from the draft.
 `runs` and `tags` are never trend slugs. A tag is a plain string on
 its trends; its label per language is set by an admin, and a tag with no label
 reads as itself.
+
+## 13h. Trend Radar (Cloud edition, admin session only)
+
+The daily run that finds candidate trends — a short clip several different
+creators recast within a few weeks — and the admin's decisions on them. The
+run reads template sites' sitemaps and public posts (through Social Search,
+as the runner admin), keeps ids, names, counts and links, and an admin
+approves a candidate into a DRAFT trend: the top post's clip is downloaded
+into it as the source, and the trend page builds the rest.
+
+**Every route answers a signed-in ADMIN session only.** An API key or an
+app's OAuth token gets `403 forbidden` (as the billing routes do); a
+signed-in account that is not an admin gets `403 forbidden` too. A
+first-party app calls them through the SDK
+([`client.trendRadar`](./sdk-reference.md#clienttrendradar)). A deployment
+whose storage does not have the radar yet answers `503 not_available`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/trend-radar/summary` | `{ data: { lastRun, counts: { candidates, watching, slowing }, searchesToday, dailySearchBudget } }`. |
+| `GET` | `/v1/trend-radar/candidates` | `{ data: TrendCandidateCard[], next }`. Query: `status` (`watching`, `candidate`, `slowing`, `approved`, `rejected`, `archived`; left out = everything but the last two), `sort` (`creators` default, `dayChange`, `firstSeen`), `cursor`, `limit` 1–200. |
+| `GET` | `/v1/trend-radar/candidates/:id` | `{ data: TrendCandidate }`: the card plus `posts`, `readings` (one per day, oldest first), `templatesElsewhere`, `search`, `history`, `checklist` and `rejectReason`. `404 not_found`. |
+| `POST` | `/v1/trend-radar/candidates/:id/approve` | Creates a draft trend named after the candidate and marks it `approved`: `{ data: { trendId, clip } }`. `clip` is `"attaching"` when the top post is being downloaded (as the approving admin) and stored as the draft's source clip in the background — the candidate's `history` then gains `source_attached`, or `source_failed` with why — else `"none"`. Approving again answers the same trend. `409 slug_taken` when no free slug was found. |
+| `POST` | `/v1/trend-radar/candidates/:id/watch` | Back to `watching`: `{ data: TrendCandidateCard }`. |
+| `POST` | `/v1/trend-radar/candidates/:id/reject` | Body `{ reason }` (1–500 characters). `rejected`: `{ data: TrendCandidateCard }`. |
+| `GET` | `/v1/trend-radar/settings` | `{ data: { sources, thresholds, alerts, retentionDays, runAt } }`. |
+| `PUT` | `/v1/trend-radar/settings` | Any subset of the same keys; `sources` replaces the list whole. Whoever saves becomes the account the daily searches run as. Answers the settings after the change. |
+| `POST` | `/v1/trend-radar/run` | Starts today's run now: `202 { data: { runId, startedAt } }`. One run at a time. |
+
+A card: `{ id, name, slug, status, label, soundName, durationSec, creators,
+plays, dayChangePct, firstSeen: { kind, name, url, firstSeenAt }, topPost,
+passedAt, trendId, createdAt, updatedAt }`. A post: `{ platform, url, author,
+postedAt, plays, likes, soundName, stillUrl, embedUrl, durationSec }` — on
+Instagram `plays` is `null` (views are hidden to a logged-out reader) and
+`likes` is the count to show. Labels: `new`, `watching`, `rising`, `hot`,
+`slowing`.
 
 ## 14. Pipelines
 
@@ -5695,7 +5741,7 @@ for the formulas). Off Cloud, the four `voice-changer-pro*` routes are absent (4
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/download-video` | Import a social video (YouTube/TikTok/Instagram/X/Facebook) or a direct video file link into storage (`{ url, maxHeight?, sectionStartSec?, sectionEndSec?, exactSection?, requireAudio? }`). A section is fetched with a few seconds of margin on each side, for a client that trims it afterwards; `exactSection: true` cuts it at exactly the requested range instead. A result with no audio stream fails unless `requireAudio: false`. At most 4 downloads run per account at once — a fifth answers `429 too_many_downloads`. Returns `{ downloadId }` — not a job. |
+| `POST` | `/v1/download-video` | Import the video behind a link (the video's page, or a direct video file link) into storage (`{ url, maxHeight?, sectionStartSec?, sectionEndSec?, exactSection?, requireAudio? }`). A section is fetched with a few seconds of margin on each side, for a client that trims it afterwards; `exactSection: true` cuts it at exactly the requested range instead. A result with no audio stream fails unless `requireAudio: false`. At most 4 downloads run per account at once — a fifth answers `429 too_many_downloads`. Returns `{ downloadId }` — not a job. |
 | `GET` | `/v1/download-video/progress/:downloadId` | Live progress as **server-sent events** (`{ phase, percent, videoUrl?, error? }` every ~500ms; stream ends on `completed`/`failed`). |
 | `POST` | `/v1/video-metadata` | Probe duration/dimensions/title without downloading (`{ url }`). Direct read, not a job. |
 | `POST` | `/v1/trim-video` | Trim a video (`{ videoUrl, startTime?/endTime? \| keepFirstSeconds? \| keepLastSeconds? \| trim*Frames/Seconds }`) → job. |

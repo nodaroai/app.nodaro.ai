@@ -27,13 +27,13 @@ generated_from: c607aa02c
 
 ## When to use
 
-A SOURCE node: it holds a video link and emits a video. `youtubeUrl` takes any
-supported link (YouTube, TikTok, Instagram, Facebook, X — the field name predates
-the other hosts) or a direct video file url (`.mp4`, `.webm`, `.mov`, `.avi`).
+A SOURCE node: it holds a video link and emits a video. `youtubeUrl` takes a
+link to a video's page on a supported site (the field name predates the other
+hosts) or a direct video file url (`.mp4`, `.webm`, `.mov`, `.avi`).
 
-In the EDITOR the node downloads the link by itself: a short clip the moment the
-link is pasted, a long YouTube video once the person picks a part or asks for all
-of it. The downloaded file is stored in `downloadedVideoUrl` (bound to its link
+In the EDITOR the node downloads the link by itself: most links the moment they
+are pasted; on a site whose length is read first, a long video once the person
+picks a part or asks for all of it. The downloaded file is stored in `downloadedVideoUrl` (bound to its link
 by `downloadedFromUrl`), and that file is what the `video` handle emits.
 
 <!-- AUTO-GEN:START mcp-call -->
@@ -56,12 +56,14 @@ by `downloadedFromUrl`), and that file is what the `video` handle emits.
   in an `upload-video` node — or in this node's `youtubeUrl`: a direct file link
   passes through untouched. A file already stored for the node's own link
   (`downloadedFromUrl` equal to `youtubeUrl`) is used as it is.
-- **A long or unreadable YouTube video needs a part.** A YouTube video of 4
-  minutes or more, or one whose length cannot be read, is refused before anything
-  runs or is charged, unless `sectionStartSec` and `sectionEndSec` (seconds,
-  `0 <= start < end`) are set on the node or in `inputOverrides`; the run then
-  downloads exactly that part. A live stream is refused. Other platforms
-  download whole.
+- **A long or unreadable video needs a part, on the sites whose length is read
+  first.** Some sites let the platform read a video's length before anything
+  downloads. From such a site, a video of 4 minutes or more, or one whose
+  length could not be read, is refused before anything runs or is charged,
+  unless `sectionStartSec` and `sectionEndSec` (seconds, `0 <= start < end`)
+  are set on the node or in `inputOverrides`; the run then downloads exactly
+  that part. A live stream is refused. A video-page link from any other site
+  downloads whole, whatever its length.
 - **Never write `downloadedVideoUrl` without `downloadedFromUrl` set to the same
   link as `youtubeUrl`**, and never change `youtubeUrl` while leaving the two
   behind. A file whose `downloadedFromUrl` differs from the current link is
@@ -77,7 +79,7 @@ by `downloadedFromUrl`), and that file is what the `video` handle emits.
 - The `in` handle is not an executable input: a URL wired into it is not
   downloaded at run time.
 - Opening the workflow in the editor and pressing Run fetches any link that feeds
-  the run first; a long YouTube video with no part chosen stops the run with a
+  the run first; a long video with no part chosen stops the run with a
   message instead of being downloaded whole.
 
 <!-- AUTO-GEN:START examples -->

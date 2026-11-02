@@ -682,7 +682,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     label: "Video URL",
     category: "input",
     // outputType: video — input-resolver isVideoSourceType() treats youtube-video as a video source.
-    description: "Download video or audio from YouTube, TikTok, Instagram, Facebook, or X.",
+    description: "Download the video or audio behind a link to where the video is.",
     outputType: "video",
     // `youtubeUrl` is the field a run override and a published app's input write
     // (INPUT_FIELD_MAP in @nodaro/shared); it holds a link, not an upload.

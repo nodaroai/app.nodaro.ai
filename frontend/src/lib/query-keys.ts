@@ -385,6 +385,7 @@ export const queryKeys = {
       ["admin", "site-analytics", "realtime"] as const,
     siteAnalyticsOnlineUsers: () =>
       ["admin", "site-analytics", "online-users"] as const,
+    headerVersions: () => ["admin", "header-versions"] as const,
     lanesLive: () => ["admin", "lanes", "live"] as const,
     lanesUser: (userId: string) => ["admin", "lanes", "user", userId] as const,
     lanesHistory: (view: string, days: number) => ["admin", "lanes", "history", view, days] as const,
@@ -432,6 +433,7 @@ export const queryKeys = {
     nodaroMotionMotion: () => ["admin", "nodaro-motion", "motion"] as const,
     nodaroMotionPulseAudio: () => ["admin", "nodaro-motion", "pulse-audio"] as const,
     nodaroMotionPrismReferenceAudio: () => ["admin", "nodaro-motion", "prism-reference-audio"] as const,
+    nodaroMotionStyle: () => ["admin", "nodaro-motion", "style"] as const,
     nodaroMotionPromptPreview: (engine: string, style: string, overrides: string) =>
       ["admin", "nodaro-motion", "prompt-parts", "preview", engine, style, overrides] as const,
   },

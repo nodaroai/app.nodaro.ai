@@ -171,7 +171,9 @@ import { adminSettingsRoutes } from "./ee/routes/admin-settings.js"
 import { adminAvailabilityRoutes } from "./ee/routes/admin-availability.js"
 import { consentRoutes } from "./ee/routes/consent.js"
 import { trendRoutes } from "./ee/routes/trends.js"
+import { castSwapStyleChoiceRoutes } from "./ee/routes/cast-swap-style-choice.js"
 import { adminTrendsRoutes } from "./ee/routes/admin-trends.js"
+import { trendRadarRoutes } from "./ee/routes/trend-radar.js"
 import { adminNodaroMotionRoutes } from "./ee/routes/admin-nodaro-motion.js"
 import { motionTransferRoutes } from "./routes/motion-transfer.js"
 import { videoUpscaleRoutes } from "./routes/video-upscale.js"
@@ -239,6 +241,7 @@ import { adminAppReportsRoutes } from "./ee/routes/admin-app-reports.js"
 import { adminKieCreditsRoutes } from "./ee/routes/admin-kie-credits.js"
 import { adminHostedDeploymentsRoutes } from "./ee/routes/admin-hosted-deployments.js"
 import { adminSiteAnalyticsRoutes } from "./ee/routes/admin-site-analytics.js"
+import { adminHeaderVersionsRoutes } from "./ee/routes/admin-header-versions.js"
 import { adminOnlineUsersRoutes } from "./ee/routes/admin-online-users.js"
 import { adminLanesRoutes } from "./ee/routes/admin-lanes.js"
 import { recordPresence } from "./ee/lib/presence-instance.js"
@@ -751,8 +754,12 @@ export async function buildApp() {
   if (hasCredits()) await app.register(consentRoutes)
   // Trends: the public catalog and trend runs (Cast Swap recipes; ee/lib/trends).
   if (hasCredits()) await app.register(trendRoutes)
+  // Nodaro Motion: whether people choose a direct run's style per engine (public; the admin's setting).
+  if (hasCredits()) await app.register(castSwapStyleChoiceRoutes)
   // Trends admin: build, test, promote admin runs to examples, publish (engine check per environment).
   if (hasAdmin() && hasCredits()) await app.register(adminTrendsRoutes)
+  // Trend Radar: the daily run's candidate queue and settings (admin session only; the cron's tick).
+  if (hasAdmin() && hasCredits()) await app.register(trendRadarRoutes)
 // Nodaro Motion (Cast Swap): the admin's face masking per engine, read by the engine through tk.settings.
 if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   // The review surface only means something where the grant exists.
@@ -811,6 +818,8 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   if (hasAdmin()) await app.register(adminKieCreditsRoutes)
   if (hasAdmin()) await app.register(adminHostedDeploymentsRoutes)
   if (hasAdmin()) await app.register(adminSiteAnalyticsRoutes)
+  // The shared header's versions across Nodaro's own products: the platform's fleet, so Cloud only.
+  if (isCloud()) await app.register(adminHeaderVersionsRoutes)
   if (hasAdmin()) await app.register(adminOnlineUsersRoutes)
   // Concurrency lanes: the switch in every edition with an admin; sizes and ceilings on Cloud (the route checks).
   if (hasAdmin()) await app.register(adminLanesRoutes)

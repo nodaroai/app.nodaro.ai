@@ -216,6 +216,7 @@ here for each one anyway.
 | `PAYG_WEB_BLOCK_ENABLED` · `PAYG_WEB_BLOCK_EXEMPT_USER_IDS` | off · `""` | Cloud only — pay-as-you-go web block and its grandfathered accounts, comma-separated. Not combinable with a `billing.payerAccount` whose effective grade is `free` or `payg`: the pool is resolved at the payer's tier, so the API refuses to boot (`PAYG_WEB_BLOCK_ENABLED is on and the deployment payer's effective tier is …`) rather than refuse every run — put the payer on a paid subscription or leave the flag off |
 | `AUTO_RECHARGE_ENABLED` | off | Cloud only — auto-recharge kill switch: it guards the trigger + charge path only, while webhook provisioning stays on so in-flight payments still settle |
 | `HOSTED_DEPLOYMENTS` | unset | Cloud only — the dedicated deployments whose billing status `/admin/hosted-deployments` shows: a JSON array of `{ "name", "url", "key" }`, where `url` is the deployment's https origin and `key` a **read-only** billing integration key (`ndr_bill_ro_…`) minted on that deployment's `/billing-admin`. An entry with any other key, or a non-https URL, is refused and shown as misconfigured — never called. The page reads each deployment's `GET /v1/deployment-billing/balance` (pool, monthly spend, low balance, auto top-up), cached for a minute. |
+| `HEADER_VERSIONS_PRODUCTS` · `HEADER_VERSIONS_GITHUB_TOKEN` | `""` (the page lists nothing, and explains the setup) | Cloud only — the admin panel's **Header versions** page: which version of the shared header each product's live and test site serves, beside the newest release. In order: the products, a JSON array of `{ "id", "label", "repo", "production", "staging", "source" }` (`repo` as `owner/name`, the two hosts bare, `source` `lockfile` — the version is the deployed commit's lockfile — or `site-file` — the site publishes it at `/shell-version.json`, as this app's cloud build does); and a read-only fine-grained GitHub token with **Contents** and **Deployments** read access to those repositories and the header's own. The server reads each environment's last successful deployment and the version that commit installs; without the token only a site's own file answers |
 | `ORGS_ENABLED` | off | Cloud only — multi-tenant organizations (schools / teams) rollout gate. Ships dark; the schema migrations run in every edition regardless |
 | `MCP_ENABLED` | off | Serve the MCP endpoint (§10) |
 | `SPEECH_LENGTH_PRICING_ENABLED` | off | Cloud only — price Text to Speech and Text to Dialogue by length (every started 100 characters, with a minimum per request) instead of a flat amount per request. On at `app.nodaro.ai` and `next.nodaro.ai` since 2026-10-08. See the Credits section of each node's page |
@@ -1526,6 +1527,17 @@ share one database (a staging and a production deployment), enable it on
 **one** of them, the production one: either environment's tick claims every
 user's due brands, so a staging tick would run production users' paid
 scans on pre-release code.
+
+**The Trend Radar never runs (Cloud).** The daily run that finds candidate
+trends (reading template sites' public sitemaps and public posts through
+Social Search, then keeping one reading per candidate and day) is started
+by a one-minute tick at the hour set in the admin page. It is **off by
+default**: it reads other sites and spends the runner admin's searches.
+Enable it with `TREND_RADAR_ENABLED=true` on the API service and confirm
+`[trend-radar] started` in the boot log; "Run now" on the admin page does
+not need it. With two environments on one database, enable it on **one**,
+the production one. The run searches as the admin who last saved the
+radar's settings (or pressed "Run now"), so save the settings once.
 
 If you're still stuck, file an issue with the Docker logs at
 <https://github.com/nodaroai/app.nodaro.ai/issues>.

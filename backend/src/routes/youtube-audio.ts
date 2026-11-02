@@ -14,7 +14,7 @@ import { formatZodError } from "../lib/zod-error.js"
 const videoAudioBody = z.object({
   url: safeUrlSchema.refine(
     (url) => isAllowedSocialVideoUrl(url),
-    { message: "Must be a valid video URL (YouTube, Facebook, TikTok, Instagram, or X)" },
+    { message: "Must be a link to a video's page" },
   ),
 })
 

@@ -63,6 +63,28 @@ const GALLERY_MODERATION_REASONS: Readonly<Record<string, string>> = {
   "POST /v1/gallery/report":
     "the web gallery's report button: a person viewing the public gallery flags an item for the moderators without signing in; the moderation queue is fed from that page, not by API clients or agents",
 }
+/**
+ * The Trend Radar's routes answer a signed-in ADMIN session only
+ * (`rejectProgrammaticAuth` + `requireAdmin`): the candidate queue and its
+ * settings are the operator's own tooling, called from the app's admin page
+ * and a first-party app through the SDK.
+ */
+const TREND_RADAR_SESSION_ONLY = [
+  "GET /v1/trend-radar/summary",
+  "GET /v1/trend-radar/candidates",
+  "GET /v1/trend-radar/candidates/:p",
+  "POST /v1/trend-radar/candidates/:p/approve",
+  "POST /v1/trend-radar/candidates/:p/watch",
+  "POST /v1/trend-radar/candidates/:p/reject",
+  "GET /v1/trend-radar/settings",
+  "PUT /v1/trend-radar/settings",
+  "POST /v1/trend-radar/run",
+] as const
+const TREND_RADAR_SESSION_ONLY_REASONS = {
+  cli: "the route answers a signed-in admin session only (an operator's review queue, not a user's resource); the CLI signs in with an API key or app token, which it refuses by design. A first-party web app calls it through the SDK",
+  mcp: "an MCP client signs in with an app token, which the route refuses by design: approving a trend candidate is an operator's decision, never an agent's",
+} as const
+
 const PRESET_ORGANISATION =
   "preset folders, their order and bulk file import organise the editor's preset lists, which an agent has no use for; they are on the REST API, the SDK and the CLI"
 
@@ -174,6 +196,14 @@ export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
     atom: "GET /v1/credits/usage-summary",
     reason: "a person's analytics view (spend by model, over time, by session); an agent reads the runs through credit_transactions and sums what it needs",
   },
+  ...TREND_RADAR_SESSION_ONLY.map((atom) => ({ feature: "trendRadar", surface: "cli" as const, atom, reason: TREND_RADAR_SESSION_ONLY_REASONS.cli })),
+  ...TREND_RADAR_SESSION_ONLY.map((atom) => ({ feature: "trendRadar", surface: "mcp" as const, atom, reason: TREND_RADAR_SESSION_ONLY_REASONS.mcp })),
+  ...(["sdk", "mcp", "api-doc"] as const).map((surface) => ({
+    feature: "trendRadar",
+    surface,
+    atom: "POST /v1/trend-radar/internal/tick",
+    reason: "the cron's own door (lib/trend-radar-cron.ts): the internal orchestrator secret only, never a user, a key or an app; not part of the public API",
+  })),
   ...BILLING_SESSION_ONLY.map((atom) => ({ feature: "billing", surface: "cli" as const, atom, reason: BILLING_SESSION_ONLY_REASONS.cli })),
   // The purchase history reaches agents through credit_transactions, which reads the same rows.
   ...BILLING_SESSION_ONLY.filter((atom) => atom !== "GET /v1/billing/transactions").map((atom) => ({

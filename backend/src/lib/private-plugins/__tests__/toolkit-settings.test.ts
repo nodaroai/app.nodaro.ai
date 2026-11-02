@@ -6,11 +6,13 @@ import type {
   NodaroMotionPromptParts as PluginNodaroMotionPromptParts,
   PluginFaceMasking,
   PluginNodaroMotionMasking,
+  PluginNodaroMotionStyle,
   PluginPromptPartId,
 } from "../types.js"
 import type { NodaroMotionMotionForPlugin } from "../../nodaro-motion-motion.js"
 import type { NodaroMotionMaskingForPlugin } from "../../nodaro-motion-masking.js"
 import type { NodaroMotionPromptPartsForPlugin } from "../../nodaro-motion-prompt-parts.js"
+import type { NodaroMotionStyleForPlugin } from "../../nodaro-motion-style.js"
 
 /**
  * `tk.settings.nodaroMotionMasking()` — the admin's face masking per Nodaro
@@ -18,7 +20,7 @@ import type { NodaroMotionPromptPartsForPlugin } from "../../nodaro-motion-promp
  * the settings cache's own read (`getAppSettings`, ~60 s, cleared on an admin
  * write), handed out as a copy, and null when never saved.
  */
-const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, reads: 0, failed: false }))
+const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, reads: 0, failed: false }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("../../app-settings.js", async (importOriginal) => {
@@ -27,7 +29,7 @@ vi.mock("../../app-settings.js", async (importOriginal) => {
     ...orig,
     getAppSettings: async () => {
       h.reads++
-      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps }
+      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style }
     },
     settingsReadFailed: () => h.failed,
   }
@@ -337,5 +339,48 @@ describe("tk.settings.nodaroMotionSteps", () => {
     expect(await buildToolkit().settings!.nodaroMotionSteps!()).toBeNull()
     stepsEngine(false)
     expect(await buildToolkit().settings!.nodaroMotionSteps!()).toBeNull()
+  })
+})
+
+/**
+ * `tk.settings.nodaroMotionStyle()` — the admin's Style choice per Nodaro
+ * Motion engine, which the Cast Swap engine enforces on every DIRECT run and
+ * quote: null when never saved or nothing is forced (the request's `style`
+ * decides, exactly as before), else only the forced engines.
+ */
+describe("tk.settings.nodaroMotionStyle", () => {
+  beforeEach(() => {
+    h.style = null
+    h.reads = 0
+    h.failed = false
+  })
+
+  it("is advertised", () => {
+    expect(buildToolkit().capabilities?.nodaroMotionStyle).toBe(true)
+    expect(typeof buildToolkit().settings?.nodaroMotionStyle).toBe("function")
+  })
+
+  it("rejects when the settings could not be read, never answering null (people choose)", async () => {
+    h.failed = true
+    await expect(buildToolkit().settings!.nodaroMotionStyle!()).rejects.toThrow(/could not be read/)
+  })
+
+  it("answers null when it was never saved, or nothing is forced", async () => {
+    expect(await buildToolkit().settings!.nodaroMotionStyle!()).toBeNull()
+    h.style = {}
+    expect(await buildToolkit().settings!.nodaroMotionStyle!()).toBeNull()
+    expect(h.reads).toBe(2)
+  })
+
+  it("answers each forced engine under the current and the earlier key, a copy the plugin may change", async () => {
+    h.style = { "motion-pulse": "flex" }
+    const got = await buildToolkit().settings!.nodaroMotionStyle!()
+    expect(got).toEqual({ "motion-pulse": "flex", "motion-lite": "flex" })
+    ;(got as Record<string, string>)["motion-pulse"] = "precise"
+    expect(h.style).toEqual({ "motion-pulse": "flex" })
+  })
+
+  it("what the host answers is the plugin's PluginNodaroMotionStyle", () => {
+    expectTypeOf<NodaroMotionStyleForPlugin>().toExtend<PluginNodaroMotionStyle>()
   })
 })

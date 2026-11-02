@@ -35,7 +35,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `instagram-scrape` | Instagram | input | Pull public Instagram posts (images, carousels, reels) by profile, by hashtag or by post link and emit structured JSON (caption, media, likes, comments) | `in`:text | `json`:json | NO |
 | `social-search` | Social Search | input | Search TikTok, Instagram, YouTube, X, Reddit, LinkedIn or Meta's Ad Library by keyword or account and get up to 60 posts with their numbers. Pick the ones to keep in the editor; a workflow run without picks passes on the first few | `in`:text | `json`:json, `text`:text | NO |
 | `webhook-trigger` | Webhook Trigger | input | Trigger the workflow via HTTP POST | — | `payload`:any | NO |
-| `youtube-video` | Video URL | input | Download video or audio from YouTube, TikTok, Instagram, Facebook, or X | `in`:text | `video`:video | NO |
+| `youtube-video` | Video URL | input | Download the video or audio behind a link to where the video is | `in`:text | `video`:video | NO |
 | `action-fx` | Action FX | parameter | Pick environmental effects (multi-pick) from the action-fx catalog (earthquake, lightning, explosion, falling-objects, ...) | `in`:any | `out`:look | NO |
 | `aesthetic` | Aesthetic / Microtrend | parameter | Pick a microtrend aesthetic from 46 entries (y2k, cottagecore, vaporwave, dark-academia, ...) | `in`:any | `out`:look | NO |
 | `animal` | Animal | parameter | Pick an animal from 126 entries across subcategories (mammal, bird, reptile, sea, insect, etc.) | `in`:any | `out`:look | NO |

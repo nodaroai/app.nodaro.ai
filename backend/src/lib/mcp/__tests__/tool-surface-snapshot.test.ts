@@ -1369,6 +1369,11 @@ const TRENDS_HIDE_ORIGINAL_BYTES = 43
 // = 66 B (33 B on each of the two tools; no headroom left).
 const TRENDS_EXAMPLE_NUMBERING_BYTES = 66
 
+// RAISED 2026-11-02 by Nodaro Motion's Style choice, and nothing else: `cast_swap`'s `style` says
+// a style an admin forced for the engine overrides it. No tool was added, so the fixture does NOT
+// move. Measured by this suite: 509_723 total − 509_682 = 41 B (no headroom left).
+const CAST_SWAP_STYLE_FORCED_BYTES = 41
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES,
   totalBytes:
@@ -1538,7 +1543,8 @@ export const TOOL_WIRE_BUDGET = {
     CAST_SWAP_STYLE_BYTES +
     TRENDS_FULL_DEPTH_WORDING_BYTES +
     TRENDS_HIDE_ORIGINAL_BYTES +
-    TRENDS_EXAMPLE_NUMBERING_BYTES,
+    TRENDS_EXAMPLE_NUMBERING_BYTES +
+    CAST_SWAP_STYLE_FORCED_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -3424,6 +3424,13 @@ export interface PluginCapabilities {
    */
   readonly nodaroMotionSteps?: boolean
   /**
+   * `tk.settings.nodaroMotionStyle()` exists: the Style choice an admin set
+   * per Nodaro Motion engine for DIRECT runs (people choose, or always
+   * Precise / always Flex). An older host has no such member: a plugin reads
+   * that as never saved (people choose, the request's `style`).
+   */
+  readonly nodaroMotionStyle?: boolean
+  /**
    * The host reads `NodaroPrivatePlugin.jobLanes()`: the concurrency lane each
    * of a plugin's job types runs in (see `PluginJobLaneClass`). An older host
    * never calls it, and runs every plugin job type as a coordinator.
@@ -3642,6 +3649,26 @@ export interface PluginSettingsToolkit {
    * `capabilities.nodaroMotionSteps`.
    */
   nodaroMotionSteps?(): Promise<PluginNodaroMotionSteps | null>
+  /**
+   * The admin's Style choice per Nodaro Motion engine, for direct runs and
+   * their quotes (a trend run keeps its own trend's style): only the engines
+   * whose style is forced, each answered under its current AND its earlier
+   * key, or null when it was never saved or nothing is forced (then the
+   * request's `style` decides, as before). A forced engine's runs take that
+   * style whatever the request's `style` says (`"flex"` = `style: "motion"`).
+   * Returns a copy the plugin may change freely. REJECTS when the settings
+   * could not be read. Advertised as `capabilities.nodaroMotionStyle`.
+   */
+  nodaroMotionStyle?(): Promise<PluginNodaroMotionStyle | null>
+}
+
+/**
+ * Nodaro Motion's Style choice per engine, keyed by the PUBLIC engine ids
+ * (current and earlier): an engine listed is forced to that style; one left
+ * out lets people choose. (`"user"`, people choose, is never answered.)
+ */
+export type PluginNodaroMotionStyle = {
+  readonly [publicEngineId: string]: "precise" | "flex"
 }
 
 /**
@@ -3950,6 +3977,14 @@ export interface PluginSupports {
    *   sends `shotList`, holds a trend that sets it back from publishing there
    *   and refuses to save a shared setting that sets it while any environment
    *   lacks it (lib/cast-swap-steps.ts `engineTakesShotList`).
+   * - `styleChoice`: a DIRECT run and its estimate read the admin's Style
+   *   choice per engine (`tk.settings.nodaroMotionStyle`) and, for an engine
+   *   an admin forced, run in that style whatever the request's `style` says.
+   *   Additive-optional: absent ⇒ `false` — the engine takes the request's
+   *   `style` as before; the platform then answers every engine as "user"
+   *   (`GET /v1/cast-swap/style-choice`, so clients keep their Style control)
+   *   and refuses to save a forced style while any environment lacks it
+   *   (lib/nodaro-motion-style.ts `engineTakesStyleChoice`).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -3990,6 +4025,7 @@ export interface PluginSupports {
     readonly steps?: boolean
     readonly clipBodySheet?: boolean
     readonly shotList?: boolean
+    readonly styleChoice?: boolean
   }
 }
 
