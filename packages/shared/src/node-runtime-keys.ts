@@ -169,6 +169,9 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   // TRANSIENT_RUNTIME_KEYS — so a saved one can never turn a later plain run
   // into a continuation of an old run.
   "useCaseContinue",
+  // The content rights confirmation a run fetches a Video URL node's link
+  // under: that run's input override alone, never saved (also transient).
+  "rightsConfirmationId",
 ])
 
 /**
@@ -258,6 +261,9 @@ export const TRANSIENT_RUNTIME_KEYS: ReadonlySet<string> = new Set([
   "__triggerData",
   // A use-case node's continuation: one run's override, never config (above).
   "useCaseContinue",
+  // The content rights confirmation a run fetches a Video URL node's link
+  // under: one run's override (RUN_ONLY_NODE_FIELDS), never config.
+  "rightsConfirmationId",
 ])
 
 /**

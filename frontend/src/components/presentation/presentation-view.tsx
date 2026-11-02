@@ -52,6 +52,7 @@ import { useLiveRunFigure } from "@/hooks/use-live-run-estimate"
 import { useChosenRecordingLengths } from "@/hooks/use-chosen-recording-lengths"
 import { recordingLengthPending, runCostLabel } from "@/lib/run-price"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
+import { useVideoLinkRightsVersion } from "@/lib/video-link-rights"
 import { getCachedCredits, prefetchModelCredits, isModelUnpriced } from "@/ee/hooks/use-model-credits"
 import { isExpandedClone } from "@nodaro/shared/workflow"
 import { calculateMonetizedCost } from "@nodaro/shared/credits"
@@ -433,11 +434,13 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const isRunning = isFullscreen ? presStatus === "running" : (externalIsRunning ?? isEditorRunning)
   const isTerminal = isFullscreen && (presStatus === "completed" || presStatus === "failed")
 
-  // Check if all required inputs are filled (fullscreen app/embed mode only)
+  // Check if all required inputs are filled (fullscreen app/embed mode only). A Video URL
+  // input's content rights box is read inside (`isVideoLinkRightsTicked`): its version re-reads on a tick.
+  const rightsVersion = useVideoLinkRightsVersion()
   const allInputsFilled = useMemo(() => {
     if (!isFullscreen) return true
     return areAllInputsFilled(orderedInputNodes, presInputValues, { nodes, edges })
-  }, [isFullscreen, orderedInputNodes, presInputValues, nodes, edges])
+  }, [isFullscreen, orderedInputNodes, presInputValues, nodes, edges, rightsVersion])
 
   const underMinTables = useMemo(() => {
     if (!isFullscreen) return []

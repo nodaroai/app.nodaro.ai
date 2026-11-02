@@ -45,6 +45,41 @@ describe("createGitHubReader", () => {
     expect(seen[0]?.url.searchParams.get("per_page")).toBe("100")
   })
 
+  it("reads the commits between two tags: message, parents and commit time; a malformed row is skipped", async () => {
+    const { fetch, seen } = recorder(() =>
+      Response.json({
+        files: [{ filename: "src/a.ts" }],
+        commits: [
+          { commit: { message: "feat: a", committer: { date: "2026-11-01T10:00:00Z" } }, parents: [{ sha: "p1" }] },
+          { commit: { message: "Merge pull request #2 from a/b\n\nfeat: a" }, parents: [{ sha: "p1" }, { sha: "p2" }] },
+          { commit: null },
+        ],
+      }),
+    )
+    expect(await createGitHubReader("tok", { fetch }).commitsBetween("acme/shell", "v0.12.0", "v0.13.0")).toEqual([
+      { message: "feat: a", parents: 1, committedAt: "2026-11-01T10:00:00Z" },
+      { message: "Merge pull request #2 from a/b\n\nfeat: a", parents: 2, committedAt: null },
+    ])
+    expect(seen[0]?.url.pathname).toBe("/repos/acme/shell/compare/v0.12.0...v0.13.0")
+    expect(seen[0]?.url.searchParams.get("per_page")).toBe("100")
+  })
+
+  it("a comparison longer than a page is read to its newest commit, never kept for an ETag", async () => {
+    const row = (n: number) => ({ commit: { message: `feat: change ${n}`, committer: { date: `2026-11-01T10:${String(n % 60).padStart(2, "0")}:00Z` } }, parents: [{ sha: "p" }] })
+    const { fetch, seen } = recorder((url) => {
+      const page = Number(url.searchParams.get("page"))
+      const rows = page === 1 ? Array.from({ length: 100 }, (_, i) => row(i)) : Array.from({ length: 50 }, (_, i) => row(100 + i))
+      return Response.json({ total_commits: 150, commits: rows }, { headers: { etag: 'W/"cmp"' } })
+    })
+    const reader = createGitHubReader("tok", { fetch })
+    const commits = await reader.commitsBetween("acme/shell", "v0.1.0", "v0.2.0")
+    expect(commits).toHaveLength(150)
+    expect(commits.at(-1)?.message).toBe("feat: change 149")
+    expect(seen.map((s) => s.url.searchParams.get("page"))).toEqual(["1", "2"])
+    await reader.commitsBetween("acme/shell", "v0.1.0", "v0.2.0")
+    expect(seen[2]?.headers.get("if-none-match")).toBeNull()
+  })
+
   it("asks again with the last answer's ETag, and a 304 hands back that answer", async () => {
     let calls = 0
     const { fetch, seen } = recorder(() => {

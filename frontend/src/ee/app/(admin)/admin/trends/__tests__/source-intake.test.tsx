@@ -330,7 +330,7 @@ describe("a link", () => {
     renderEditor()
     const user = userEvent.setup()
     await pasteLink(user, "https://www.tiktok.com/@a/video/123{Enter}")
-    expect(await screen.findByRole("alert")).toHaveTextContent("Your confirmation could not be recorded. Read the declaration and confirm again.")
+    expect(await screen.findByRole("alert")).toHaveTextContent("The confirmation for this link didn't go through. Read the declaration and tick the box again.")
     expect(screen.queryByText(/rights_confirmation_stale/)).not.toBeInTheDocument()
     expect(download).not.toHaveBeenCalled()
     // The declaration is read again and the box is unticked: Try again waits for the tick.

@@ -48,6 +48,14 @@ vi.mock("@/lib/api", () => ({
   downloadYouTubeAudio: vi.fn(),
 }))
 
+// The content rights declaration the box shows (the real controller reads it through the app's client).
+vi.mock("@/lib/content-rights", () => ({
+  useRightsDeclaration: () => ({ status: "ready", declaration: { version: 1, text: "I hold the rights to this content." } }),
+  reloadDeclaration: vi.fn(),
+  confirmLink: vi.fn(),
+  DeclarationChangedError: class DeclarationChangedError extends Error {},
+}))
+
 vi.mock("react-dom", async () => {
   const actual = await vi.importActual("react-dom")
   return { ...actual, createPortal: (node: any) => node }
@@ -94,13 +102,17 @@ describe("YouTubeVideoNode copy comes from the dict", () => {
     ).not.toBeInTheDocument()
   })
 
-  it("localizes the not-downloaded state (badge, button, ✕ tooltip)", () => {
+  it("localizes the not-downloaded state (the content rights box, its badge, button, ✕ tooltip)", () => {
     renderNode(NEEDS_DOWNLOAD)
-    expect(screen.getByText(translate("en", "node.notDownloaded"))).toBeInTheDocument()
+    // Unticked, the badge asks for the box; the box's own line is from the dict too.
+    expect(screen.getByText(translate("en", "videolink.rightsNeeded"))).toBeInTheDocument()
+    expect(screen.getByText(translate("en", "videolink.rightsConfirm"))).toBeInTheDocument()
     expect(screen.getByText(translate("en", "inputcfg.downloadVideo"))).toBeInTheDocument()
     expect(screen.getByTitle(translate("en", "imgcfg.remove"))).toBeInTheDocument()
 
     act(() => useLocaleStore.getState().setLocale("he"))
+    expect(screen.getByText(translate("he", "videolink.rightsNeeded"))).toBeInTheDocument()
+    expect(screen.getByText(translate("he", "videolink.rightsConfirm"))).toBeInTheDocument()
     expect(screen.getByText(translate("he", "inputcfg.downloadVideo"))).toBeInTheDocument()
     expect(screen.getByTitle(translate("he", "imgcfg.remove"))).toBeInTheDocument()
     expect(screen.queryByTitle(translate("en", "imgcfg.remove"))).not.toBeInTheDocument()

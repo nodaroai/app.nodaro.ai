@@ -686,6 +686,14 @@ export type YouTubeVideoData = {
   downloadedAudioUrl?: string
   audioDownloadStatus?: "idle" | "downloading" | "completed" | "failed"
   audioDownloadError?: string
+  /** The content rights confirmation (`POST /v1/content-rights/confirm`, for
+   *  THIS link) a run's own fetch of the link is made under. RUN-ONLY
+   *  (`RUN_ONLY_NODE_FIELDS`): set by the run request's `inputOverrides` — a
+   *  published app's page, an API caller — for the run that starts now; one
+   *  confirmation opens one download within an hour, so a saved one is
+   *  dropped on load and never written by the editor, whose own downloads
+   *  confirm as they go. */
+  rightsConfirmationId?: string
 }
 
 export type ReferenceAudioData = {

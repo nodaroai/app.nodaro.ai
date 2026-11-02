@@ -125,6 +125,37 @@ describe("fetching a Video URL node's link on the server — the card's rules, b
     expect(result.message).toMatch(/live/i)
   })
 
+  describe("the content rights confirmation on the node rides into the fetch", () => {
+    const CONFIRMATION = "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01"
+
+    it("a video fetch is made under the node's confirmation, spent by this execution's fetch of this node", async () => {
+      const d = deps()
+      const result = await fetchVideoLinksForRun(
+        { nodes: [link("src", { youtubeUrl: TIKTOK, rightsConfirmationId: ` ${CONFIRMATION} ` }), node("va", "video-analysis")], edges: [edge("src", "va")], userId: "u1", executionId: "exec-1" },
+        d,
+      )
+      expect(result.ok).toBe(true)
+      expect(d.downloadVideo).toHaveBeenCalledWith(expect.objectContaining({ url: TIKTOK, confirmationId: CONFIRMATION, requestId: "exec-1:src" }))
+    })
+
+    it("an audio fetch too", async () => {
+      const d = deps()
+      await fetchVideoLinksForRun(
+        { nodes: [link("src", { youtubeUrl: TIKTOK, rightsConfirmationId: CONFIRMATION }), node("tr", "transcribe")], edges: [edge("src", "tr")], userId: "u1", executionId: "exec-1" },
+        d,
+      )
+      expect(d.downloadAudio).toHaveBeenCalledWith(TIKTOK, expect.objectContaining({ userId: "u1", confirmationId: CONFIRMATION, requestId: "exec-1:src" }))
+    })
+
+    it("a node without one sends none — the gate decides whether that is allowed; and no execution means no request id", async () => {
+      const d = deps()
+      await run([link("src", { youtubeUrl: TIKTOK, rightsConfirmationId: "" }), node("va", "video-analysis")], [edge("src", "va")], d)
+      const request = d.downloadVideo.mock.calls[0]![0] as Record<string, unknown>
+      expect("confirmationId" in request).toBe(false)
+      expect("requestId" in request).toBe(false)
+    })
+  })
+
   it("a failed download refuses the run with the reason, first line only", async () => {
     const d = deps({ downloadVideo: vi.fn().mockRejectedValue(new Error("Video unavailable: this video is private\n  at spawn…")) })
     const result = await run([link("src", { youtubeUrl: TIKTOK }), node("va", "video-analysis")], [edge("src", "va")], d)

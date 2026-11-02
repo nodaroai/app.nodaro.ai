@@ -317,11 +317,14 @@ export const RUN_OVERRIDE_CLEARED_FIELDS = [
 /**
  * Node fields set for ONE run only, by that run's input override: a use-case
  * node's continuation of an earlier run (`useCaseContinue` — a Render final, a
- * Continue). Never saved (`TRANSIENT_RUNTIME_KEYS`); one found on a saved graph
- * is stale, and every reader ignores it — the server's engine drops it before
- * its override merge, and `withRunOverrides` before its own.
+ * Continue), and the content rights confirmation a Video URL node's link is
+ * fetched under (`rightsConfirmationId` — one download's, within an hour, so
+ * a saved one could only refuse a later run). Never saved
+ * (`TRANSIENT_RUNTIME_KEYS`); one found on a saved graph is stale, and every
+ * reader ignores it — the server's engine drops it before its override merge,
+ * and `withRunOverrides` before its own.
  */
-export const RUN_ONLY_NODE_FIELDS = ["useCaseContinue"] as const
+export const RUN_ONLY_NODE_FIELDS = ["useCaseContinue", "rightsConfirmationId"] as const
 
 /** `data` without its saved run-only fields, or `data` itself when it holds none. */
 function withoutRunOnlyFields(data: Data): Data {

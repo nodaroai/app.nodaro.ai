@@ -21,7 +21,7 @@
 import { isSocialVideoUrl, YOUTUBE_HOSTS } from "@nodaro/shared/video"
 import { fetchVideoMetadata, startVideoDownload, type StartVideoDownloadOptions, type VideoDownloadSection } from "@/lib/api"
 import { followVideoDownload } from "@/lib/video-download-stream"
-import { AUTO_DOWNLOAD_MAX_SEC, YOUTUBE_MAX_HEIGHT, classifyDownloadError, type DownloadErrorCode } from "@/lib/video-link"
+import { AUTO_DOWNLOAD_MAX_SEC, YOUTUBE_MAX_HEIGHT, classifyDownloadError, classifyDownloadFailure, type DownloadErrorCode } from "@/lib/video-link"
 
 export type VideoLinkDownloadMode = "auto" | "whole" | "section"
 
@@ -99,8 +99,8 @@ export async function downloadVideoLink(
       }
       downloadId = (await startVideoDownload(url, options)).downloadId
     } catch (err) {
-      const raw = err instanceof Error ? err.message : ""
-      return fail(classifyDownloadError(raw), raw)
+      const failure = classifyDownloadFailure(err)
+      return fail(failure.code, failure.raw)
     }
     onEvent({ kind: "progress", percent: 0, phase: "downloading" })
     const outcome = await followVideoDownload(downloadId, {

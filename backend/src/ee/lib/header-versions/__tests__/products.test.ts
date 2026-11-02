@@ -26,12 +26,21 @@ const entry = (over: Record<string, unknown> = {}) => ({
 
 describe("parseHeaderProducts", () => {
   it("reads the deployment's list, hosts grouped by environment", () => {
-    const parsed = parseHeaderProducts(JSON.stringify([entry(), entry({ id: "app", label: "App", repo: "acme/app", production: "App.Example.com", staging: "next.example.com", source: "site-file" })]))
+    const parsed = parseHeaderProducts(
+      JSON.stringify([entry(), entry({ id: "app", label: "App", repo: "acme/app", production: "App.Example.com", staging: "next.example.com", source: "site-file", icon: "workflow" })]),
+    )
     expect(parsed.invalid).toEqual([])
     expect(parsed.products).toEqual([
-      { id: "tools", label: "tools", repo: "acme/tools", hosts: { production: "tools.example.com", staging: "next.tools.example.com" }, source: "lockfile" },
-      { id: "app", label: "App", repo: "acme/app", hosts: { production: "app.example.com", staging: "next.example.com" }, source: "site-file" },
+      { id: "tools", label: "tools", repo: "acme/tools", hosts: { production: "tools.example.com", staging: "next.tools.example.com" }, source: "lockfile", icon: null },
+      { id: "app", label: "App", repo: "acme/app", hosts: { production: "app.example.com", staging: "next.example.com" }, source: "site-file", icon: "workflow" },
     ])
+  })
+
+  it("an icon is a plain name or nothing; anything else refuses the entry", () => {
+    const parsed = parseHeaderProducts(JSON.stringify([entry({ icon: "<svg onload=x>" }), entry({ id: "voice", icon: "mic" })]))
+    expect(parsed.invalid.map((i) => i.index)).toEqual([0])
+    expect(parsed.invalid[0]?.reason).toMatch(/^icon:/)
+    expect(parsed.products.map((p) => p.icon)).toEqual(["mic"])
   })
 
   it("no setting lists nothing and refuses nothing", () => {

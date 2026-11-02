@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { classifyVideoLinkInput, isVideoLinkInputReady, videoLinkInputValues } from "../video-link-input"
+import { classifyVideoLinkInput, isVideoLinkInputReady, videoLinkInputNeedsTick, videoLinkInputValues } from "../video-link-input"
 
 const YT = "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
 const FILE = "https://cdn.example.com/ep-12.mp4"
@@ -89,10 +89,24 @@ describe("isVideoLinkInputReady — whether Run may start", () => {
 
   // Decided 2026-10-08: when every node after the link reads only its sound or its
   // page address, the run fetches that itself — Run does not wait for a video file.
-  it("a post link that feeds only audio readers (or link readers) is ready without a file", () => {
-    expect(isVideoLinkInputReady({ youtubeUrl: YT }, "audio")).toBe(true)
+  // The sound is an import of the link, so it waits for the content rights box instead.
+  it("a post link that feeds only audio readers is ready without a file once the box is ticked, or with a stored track; link readers need nothing", () => {
+    expect(isVideoLinkInputReady({ youtubeUrl: YT }, "audio")).toBe(false)
+    expect(isVideoLinkInputReady({ youtubeUrl: YT }, "audio", { confirmed: true })).toBe(true)
+    expect(isVideoLinkInputReady({ youtubeUrl: YT, downloadedAudioUrl: "https://cdn.example.com/a.mp3" }, "audio")).toBe(true)
     expect(isVideoLinkInputReady({ youtubeUrl: YT }, "none")).toBe(true)
-    expect(isVideoLinkInputReady({ youtubeUrl: YT }, "file")).toBe(false)
+    expect(isVideoLinkInputReady({ youtubeUrl: YT }, "file", { confirmed: true })).toBe(false)
+  })
+})
+
+describe("videoLinkInputNeedsTick — when the content rights box must be ticked", () => {
+  it("a post link whose video the page downloads, until it has; whose sound the run fetches, until a track is stored; never for a page-address reader or a file link", () => {
+    expect(videoLinkInputNeedsTick({ youtubeUrl: YT }, "file")).toBe(true)
+    expect(videoLinkInputNeedsTick({ youtubeUrl: YT, downloadedVideoUrl: FILE, downloadedFromUrl: YT }, "file")).toBe(false)
+    expect(videoLinkInputNeedsTick({ youtubeUrl: YT }, "audio")).toBe(true)
+    expect(videoLinkInputNeedsTick({ youtubeUrl: YT, downloadedAudioUrl: "https://cdn.example.com/a.mp3" }, "audio")).toBe(false)
+    expect(videoLinkInputNeedsTick({ youtubeUrl: YT }, "none")).toBe(false)
+    expect(videoLinkInputNeedsTick({ youtubeUrl: FILE }, "file")).toBe(false)
   })
 })
 

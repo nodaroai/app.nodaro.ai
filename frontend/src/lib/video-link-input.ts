@@ -90,15 +90,43 @@ export function videoLinkInputNeed(
   return videoLinkRunNeeds(null, graph.nodes, graph.edges).get(nodeId) ?? "file"
 }
 
+/** The audio track the values hold (fetched by the node's own link field, or an earlier run). */
+export function videoLinkInputTrack(values: VideoLinkInputValues): string | undefined {
+  const track = typeof values.downloadedAudioUrl === "string" ? values.downloadedAudioUrl.trim() : ""
+  return track === "" ? undefined : track
+}
+
+/**
+ * What the content rights box must be ticked for: a post link whose video the
+ * page downloads (`file`) and has not yet, or whose sound the RUN fetches
+ * (`audio`) with no track stored for it. A link read only for its page
+ * address imports nothing; a stored file or track was confirmed when it was
+ * fetched.
+ */
+export function videoLinkInputNeedsTick(values: VideoLinkInputValues, need: VideoLinkNeed): boolean {
+  if (classifyVideoLinkInput(values.youtubeUrl).kind !== "social") return false
+  if (need === "file") return videoLinkDownloadedFile(values) === undefined
+  if (need === "audio") return videoLinkInputTrack(values) === undefined
+  return false
+}
+
 /**
  * Can Run start on this input: a usable link, and for a post link whose video
  * the app needs (`file`, the default) the file fetched from it. A post link read
- * only for its sound or its page address needs no file here — the run fetches
- * the sound itself.
+ * only for its sound needs no file here — the run fetches the sound itself,
+ * under the content rights box, so it needs that box ticked (`confirmed`)
+ * unless a track is stored for it already; one read only for its page address
+ * needs nothing.
  */
-export function isVideoLinkInputReady(values: VideoLinkInputValues, need: VideoLinkNeed = "file"): boolean {
+export function isVideoLinkInputReady(
+  values: VideoLinkInputValues,
+  need: VideoLinkNeed = "file",
+  options: { readonly confirmed?: boolean } = {},
+): boolean {
   const view = classifyVideoLinkInput(values.youtubeUrl)
   if (view.kind === "direct") return true
   if (view.kind !== "social") return false
-  return need !== "file" || videoLinkDownloadedFile(values) !== undefined
+  if (need === "file") return videoLinkDownloadedFile(values) !== undefined
+  if (need === "audio") return videoLinkInputTrack(values) !== undefined || options.confirmed === true
+  return true
 }

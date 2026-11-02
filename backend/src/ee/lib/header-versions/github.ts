@@ -3,7 +3,7 @@ import type { DeploymentRecord, DeploymentState, DeploymentStatus } from "./depl
 /**
  * The few GitHub reads the header versions page needs, with a read-only
  * token: a repository's deployments and their status histories, one file at
- * one commit, and a repository's tags.
+ * one commit, a repository's tags, and the commits between two of them.
  *
  * Every list is asked again on each build — a status can change at any time —
  * but conditionally: the last answer's ETag goes with the request, and GitHub's
@@ -36,6 +36,22 @@ export interface GitHubReader {
   /** The file's text at `ref`, or `null` when the commit has no such file. */
   fileAt(repo: string, path: string, ref: string): Promise<string | null>
   tags(repo: string): Promise<string[]>
+  /** The commits `head` has that `base` does not, oldest first (at most 100). */
+  commitsBetween(repo: string, base: string, head: string): Promise<CommitSummary[]>
+}
+
+export interface CommitSummary {
+  readonly message: string
+  /** How many parents: 2 for a merge. */
+  readonly parents: number
+  readonly committedAt: string | null
+}
+
+const toCommit = (row: Record<string, unknown>): CommitSummary[] => {
+  const commit = row.commit !== null && typeof row.commit === "object" ? (row.commit as Record<string, unknown>) : null
+  if (typeof commit?.message !== "string") return []
+  const committer = commit.committer !== null && typeof commit.committer === "object" ? (commit.committer as Record<string, unknown>) : null
+  return [{ message: commit.message, parents: Array.isArray(row.parents) ? row.parents.length : 1, committedAt: typeof committer?.date === "string" ? committer.date : null }]
 }
 
 const asArray = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.filter((v): v is Record<string, unknown> => v !== null && typeof v === "object") : [])
@@ -94,6 +110,31 @@ const toStatus = (row: Record<string, unknown>): DeploymentStatus => ({
 
 const statusTime = (status: DeploymentStatus): number => (status.at ? Date.parse(status.at) : Number.NEGATIVE_INFINITY)
 
+const COMPARE_PAGE = 100
+/** A comparison longer than this many pages is read only that far. */
+const COMPARE_PAGES = 10
+
+/**
+ * Every commit of a comparison, oldest first. GitHub pages a comparison oldest
+ * first, so its newest commits are on the last page; pages are read until
+ * `total_commits` is reached. Asked plainly, never kept for an ETag: a
+ * comparison's answer carries every changed file's patch, and the caller keeps
+ * the commits it needs.
+ */
+async function compareAll(http: Transport, path: string): Promise<CommitSummary[]> {
+  const pages: CommitSummary[][] = []
+  for (let page = 1; page <= COMPARE_PAGES; page++) {
+    const res = await http.send(`${path}?per_page=${COMPARE_PAGE}&page=${page}`, "application/vnd.github+json")
+    if (!res.ok) throw await refusal(res)
+    const body = (await res.json()) as Record<string, unknown> | null
+    const commits = asArray(body?.commits).flatMap(toCommit)
+    pages.push(commits)
+    const total = typeof body?.total_commits === "number" ? body.total_commits : 0
+    if (commits.length < COMPARE_PAGE || page * COMPARE_PAGE >= total) break
+  }
+  return pages.flat()
+}
+
 /** A reader over GitHub's REST API with `token`; `deps.fetch` is a test seam. */
 export function createGitHubReader(token: string, deps: { fetch?: FetchLike } = {}): GitHubReader {
   const http = createTransport(token, deps.fetch ?? ((url, init) => globalThis.fetch(url, init)))
@@ -115,6 +156,9 @@ export function createGitHubReader(token: string, deps: { fetch?: FetchLike } = 
     },
     async tags(repo) {
       return asArray(await http.json(`/repos/${repo}/tags?per_page=100`)).flatMap((row) => (typeof row.name === "string" ? [row.name] : []))
+    },
+    async commitsBetween(repo, base, head) {
+      return compareAll(http, `/repos/${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`)
     },
   }
 }

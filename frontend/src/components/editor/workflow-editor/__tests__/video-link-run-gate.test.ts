@@ -6,8 +6,12 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 }))
 
 const ensureVideoLinksDownloaded = vi.fn()
+const ensureVideoLinkAudio = vi.fn()
+const findUnconfirmedVideoLink = vi.fn()
 vi.mock("@/lib/video-link-ingest", () => ({
   ensureVideoLinksDownloaded: (...a: unknown[]) => ensureVideoLinksDownloaded(...a),
+  ensureVideoLinkAudio: (...a: unknown[]) => ensureVideoLinkAudio(...a),
+  findUnconfirmedVideoLink: (...a: unknown[]) => findUnconfirmedVideoLink(...a),
 }))
 
 const toastApi = vi.hoisted(() => ({
@@ -17,7 +21,7 @@ const toastApi = vi.hoisted(() => ({
 }))
 vi.mock("sonner", () => ({ toast: toastApi }))
 
-import { CHOOSE_PART_TOAST_MS, choosePartMessage, ensureVideoLinksBeforeRun, videoLinkNodesFeeding } from "../video-link-run-gate"
+import { CHOOSE_PART_TOAST_MS, choosePartMessage, ensureVideoLinksBeforeRun, videoLinkAudioNodesFeeding, videoLinkNodesFeeding } from "../video-link-run-gate"
 import { FOCUS_NODES_EVENT } from "@/lib/canvas-focus-event"
 import { translate } from "@/lib/i18n"
 
@@ -33,6 +37,23 @@ beforeEach(() => {
   store.nodes = []
   store.edges = []
   ensureVideoLinksDownloaded.mockResolvedValue({ ok: true, downloaded: 1 })
+  ensureVideoLinkAudio.mockResolvedValue({ ok: true, downloaded: 0 })
+  findUnconfirmedVideoLink.mockReturnValue(null)
+})
+
+describe("videoLinkAudioNodesFeeding", () => {
+  it("names a link read only for its sound that holds no track — and leaves one that holds its track, or feeds a video reader, alone", () => {
+    const nodes = [
+      link("bare"),
+      link("tracked", { youtubeUrl: YT, downloadedAudioUrl: "https://cdn.nodaro.ai/audios/a.mp3" }),
+      link("watched"),
+      link("direct", { youtubeUrl: FILE }),
+      node("words", "transcribe"),
+      node("cut", "trim-video"),
+    ]
+    const edges = [edge("bare", "words"), edge("tracked", "words"), edge("watched", "cut"), edge("direct", "words")]
+    expect(videoLinkAudioNodesFeeding(["words", "cut"], nodes as never, edges as never)).toEqual(["bare"])
+  })
 })
 
 describe("videoLinkNodesFeeding", () => {
@@ -179,6 +200,62 @@ describe("ensureVideoLinksBeforeRun", () => {
       translate("en", "run.videoLinkFailed", { label: "Reel" }),
       { description: translate("en", "videolink.errorPrivate") },
     )
+  })
+
+  it("stops the run on an unticked node BEFORE anything is fetched, and points the canvas at it — the person confirms, then runs again", async () => {
+    store.nodes = [link("src"), link("talk"), node("run"), node("words", "transcribe")]
+    store.edges = [edge("src", "run"), edge("talk", "words")]
+    // The file nodes are checked first, then the sound nodes; the first unticked one stops the run.
+    findUnconfirmedVideoLink.mockImplementation((ids: string[], opts?: { audio?: boolean }) =>
+      opts?.audio ? { ok: false, nodeId: "talk", label: "Keynote", reason: "confirm" } : null,
+    )
+    const setIsRunning = vi.fn()
+    expect(await ensureVideoLinksBeforeRun(["run", "words"], setIsRunning)).toBe(false)
+    expect(findUnconfirmedVideoLink.mock.calls).toEqual([[["src"]], [["talk"], { audio: true }]])
+    expect(ensureVideoLinksDownloaded).not.toHaveBeenCalled()
+    expect(ensureVideoLinkAudio).not.toHaveBeenCalled()
+    expect(setIsRunning).not.toHaveBeenCalled()
+    expect(toastApi.loading).not.toHaveBeenCalled()
+    expect(toastApi.error).toHaveBeenCalledWith(
+      translate("en", "run.videoLinkConfirm", { label: "Keynote" }),
+      expect.objectContaining({ duration: CHOOSE_PART_TOAST_MS, action: expect.objectContaining({ label: translate("en", "common.show") }) }),
+    )
+  })
+
+  it("stops the run too when the box was unticked while a download ran", async () => {
+    store.nodes = [link("src"), node("run")]
+    store.edges = [edge("src", "run")]
+    ensureVideoLinksDownloaded.mockResolvedValue({ ok: false, nodeId: "src", label: "Keynote", reason: "confirm" })
+    expect(await ensureVideoLinksBeforeRun(["run"], vi.fn())).toBe(false)
+    expect(toastApi.error).toHaveBeenCalledWith(translate("en", "run.videoLinkConfirm", { label: "Keynote" }), expect.anything())
+  })
+
+  it("fetches the sound a Transcribe-only run reads from the node, after the files, under the same Cancel, and stops on its refusal", async () => {
+    store.nodes = [link("src"), node("words", "transcribe")]
+    store.edges = [edge("src", "words")]
+    const setIsRunning = vi.fn()
+    expect(await ensureVideoLinksBeforeRun(["words"], setIsRunning)).toBe(true)
+    expect(ensureVideoLinksDownloaded).toHaveBeenCalledWith([], { signal: expect.any(AbortSignal) })
+    expect(ensureVideoLinkAudio).toHaveBeenCalledWith(["src"], { signal: expect.any(AbortSignal) })
+    expect(setIsRunning.mock.calls).toEqual([[true], [false]])
+
+    ensureVideoLinkAudio.mockResolvedValue({ ok: false, nodeId: "src", label: "Episode", reason: "failed", code: "busy" })
+    expect(await ensureVideoLinksBeforeRun(["words"], vi.fn())).toBe(false)
+    expect(toastApi.error).toHaveBeenCalledWith(translate("en", "run.videoLinkFailed", { label: "Episode" }), { description: translate("en", "videolink.errorBusy") })
+  })
+
+  it("a Cancel that lands while the sound is fetched means no run, even when the fetch then succeeds", async () => {
+    store.nodes = [link("src"), node("words", "transcribe")]
+    store.edges = [edge("src", "words")]
+    ensureVideoLinkAudio.mockImplementation(
+      (_ids: string[], opts: { signal: AbortSignal }) =>
+        new Promise((resolve) => opts.signal.addEventListener("abort", () => resolve({ ok: true, downloaded: 1 }))),
+    )
+    const gate = ensureVideoLinksBeforeRun(["words"], vi.fn())
+    await vi.waitFor(() => expect(toastApi.loading).toHaveBeenCalled())
+    toastApi.loading.mock.calls[0][1]?.action?.onClick()
+    expect(await gate).toBe(false)
+    expect(toastApi.error).not.toHaveBeenCalled()
   })
 
   it("never leaves the Run button held when the download throws", async () => {

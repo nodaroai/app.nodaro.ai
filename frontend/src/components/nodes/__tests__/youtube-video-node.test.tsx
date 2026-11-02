@@ -11,6 +11,15 @@ vi.mock("@/lib/video-link-ingest", () => ({
   ingestVideoLink: (...a: unknown[]) => ingestVideoLink(...a),
   retryVideoLinkIngest: vi.fn(),
   resumeVideoLinkIngest: vi.fn(),
+  confirmVideoLink: vi.fn(),
+  setVideoLinkConfirmed: vi.fn(),
+  // The content rights box, ticked: the card's buttons are live as before.
+  useVideoLinkConfirmed: () => true,
+}))
+
+vi.mock("@/lib/content-rights", () => ({
+  useRightsDeclaration: () => ({ status: "ready", declaration: { version: 1, text: "I hold the rights to this content." } }),
+  reloadDeclaration: vi.fn(),
 }))
 
 vi.mock("@xyflow/react", () => ({
@@ -49,6 +58,8 @@ vi.mock("lucide-react", () => {
   return {
     Link: I, X: I, Play: I, Video: I, Film: I, Music2: I, Camera: I,
     Hash: I, Download: I, AlertCircle: I, CheckCircle2: I, Loader2: I,
+    // The content rights box's checkbox.
+    CheckIcon: I,
   }
 })
 

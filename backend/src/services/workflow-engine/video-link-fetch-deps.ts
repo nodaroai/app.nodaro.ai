@@ -10,11 +10,17 @@
  *    (`lib/video-download.ts`, `lib/download-slots.ts`; decided 2026-10-08);
  *  - the sound is the worker's `downloadAudioToR2` (what Suno Cover uses),
  *    under the same cap.
+ *
+ * Both run under the import gate with the rights the fetch was handed
+ * (`VideoLinkFetchRights`: the node's confirmation and the fetch's request id):
+ * the gate reads BEFORE the slot wait, as every lane does, so a refused import
+ * never holds a slot; the engine reads again and spends the confirmation once
+ * the slot is held.
  */
 import { ytMetadataProbe } from "../../providers/video/youtube-video.js"
 import { downloadVideoForRun, withDownloadSlot } from "../../lib/video-download.js"
 import { downloadAudioToR2 } from "../../workers/download-audio.js"
-import { requireImportAllowed } from "../../lib/import-gate.js"
+import { requireImportAllowed, type ImportRights } from "../../lib/import-gate.js"
 import type { VideoLinkFetchDeps } from "./video-link-fetch.js"
 
 export const realVideoLinkFetchDeps: VideoLinkFetchDeps = {
@@ -26,13 +32,10 @@ export const realVideoLinkFetchDeps: VideoLinkFetchDeps = {
       return { durationSec: null, title: null, isLive: false }
     }
   },
-  downloadVideo: ({ url, userId, maxHeight, section, signal }) =>
-    downloadVideoForRun({ url, userId, maxHeight, section, signal }),
-  // A run's own fetch sends no confirmation yet (the Video URL node will carry
-  // one, a later change). The gate reads BEFORE the slot wait, as every lane
-  // does, so a refused import never holds a slot; the engine reads again.
-  downloadAudio: async (url, { userId, signal }) => {
-    const rights = { userId, lane: "run" as const }
+  downloadVideo: ({ url, userId, maxHeight, section, signal, confirmationId, requestId }) =>
+    downloadVideoForRun({ url, userId, maxHeight, section, signal, rightsConfirmationId: confirmationId ?? null, requestId: requestId ?? null }),
+  downloadAudio: async (url, { userId, signal, confirmationId, requestId }) => {
+    const rights: ImportRights = { userId, confirmationId: confirmationId ?? null, lane: "run", requestId: requestId ?? null }
     await requireImportAllowed(url, rights)
     return withDownloadSlot(userId, () => downloadAudioToR2(url, rights), { signal })
   },

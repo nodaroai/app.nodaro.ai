@@ -86,6 +86,10 @@ export type DownloadErrorCode =
   | "live"
   | "connection"
   | "busy"
+  /** The content rights confirmation could not be recorded, or did not hold (the server's `rights_confirmation_*`). */
+  | "rights"
+  /** The site the link is from is disabled here (the server's `import_source_disabled`). */
+  | "refused"
   | "generic"
 
 /**
@@ -112,8 +116,25 @@ export function classifyDownloadError(raw: string | undefined): DownloadErrorCod
   return "generic"
 }
 
+/**
+ * A failure to START a download, as the request threw it: the import gate's
+ * refusals carry the server's own code (`rights_confirmation_*` for the
+ * confirmation, `import_source_disabled` for the site — `apiJson` keeps it on
+ * the error), and are never guessed from the words; anything else is sorted
+ * by its message as above. `raw` is the message the node keeps as a tooltip.
+ */
+export function classifyDownloadFailure(err: unknown): { readonly code: DownloadErrorCode; readonly raw: string } {
+  const raw = err instanceof Error ? err.message : typeof err === "string" ? err : ""
+  const code = typeof err === "object" && err !== null ? (err as { code?: unknown }).code : undefined
+  if (typeof code === "string") {
+    if (code.startsWith("rights_confirmation")) return { code: "rights", raw }
+    if (code === "import_source_disabled") return { code: "refused", raw }
+  }
+  return { code: classifyDownloadError(raw), raw }
+}
+
 const DOWNLOAD_ERROR_CODES: ReadonlySet<string> = new Set<DownloadErrorCode>([
-  "no_audio", "age_restricted", "private", "region", "live", "connection", "busy", "generic",
+  "no_audio", "age_restricted", "private", "region", "live", "connection", "busy", "rights", "refused", "generic",
 ])
 
 export const DOWNLOAD_ERROR_KEYS = {
@@ -124,6 +145,8 @@ export const DOWNLOAD_ERROR_KEYS = {
   live: "videolink.errorLive",
   connection: "videolink.errorConnection",
   busy: "videolink.errorBusy",
+  rights: "videolink.errorRights",
+  refused: "videolink.errorRefused",
   generic: "videolink.errorGeneric",
 } as const satisfies Record<DownloadErrorCode, MessageKey>
 

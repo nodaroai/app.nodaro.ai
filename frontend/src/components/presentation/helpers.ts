@@ -9,6 +9,7 @@ import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { getNodeLabel, getNodeResult } from "@/lib/presentation-utils"
 import { isMultiColumnList } from "@/lib/list-loop-migration"
 import { isVideoLinkInputReady, videoLinkInputNeed, videoLinkInputValues } from "@/lib/video-link-input"
+import { isVideoLinkRightsTicked } from "@/lib/video-link-rights"
 
 /** Resolve input items from settings — prefer inputItems, fallback to migrated inputOrder */
 export function resolveInputItems(settings: PresentationSettings): PresentationItem[] | null {
@@ -211,8 +212,11 @@ export function areAllInputsFilled(
       const url = (inputVals?.url as string) ?? (data.url as string) ?? ""
       if (!url) return false
     } else if (nodeType === "youtube-video") {
-      // A usable link — and for a post link, the file the runner's card fetched from IT.
-      if (!isVideoLinkInputReady(videoLinkInputValues(data, inputVals), videoLinkInputNeed(node.id, graph))) return false
+      // A usable link — and for a post link, the file the runner's card fetched from IT,
+      // or (a link the run fetches the sound of) the content rights box ticked for it.
+      const values = videoLinkInputValues(data, inputVals)
+      const link = typeof values.youtubeUrl === "string" ? values.youtubeUrl : ""
+      if (!isVideoLinkInputReady(values, videoLinkInputNeed(node.id, graph), { confirmed: isVideoLinkRightsTicked(node.id, link) })) return false
     } else if (nodeType === "list") {
       // "Filled" check by column count (see isMultiColumnList): multi-column
       // validates the `rows` grid, single-column validates `items`.

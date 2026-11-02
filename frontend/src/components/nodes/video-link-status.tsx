@@ -5,13 +5,19 @@
  * and the settings panel, so the two cannot disagree about what a node is
  * doing. It only RENDERS `deriveVideoLinkView(data)` and forwards clicks to the
  * module-level controller (`lib/video-link-ingest.ts`); it owns no download.
+ *
+ * Above the download: the content rights box. A link is fetched only once the
+ * person confirms the declaration for it, in this session (the controller's
+ * rule 4); the box shows for a link whose video or sound is still to fetch.
  */
 import { useEffect, useId, useState, type ReactNode } from "react"
 import { AlertCircle, CheckCircle2, Download, Loader2 } from "lucide-react"
 import { useShallow } from "zustand/react/shallow"
+import { videoLinkRunNeeds } from "@nodaro/shared/video"
 import { useT } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { RightsDeclarationBox } from "@/components/content-rights/rights-declaration-box"
 import { videoLinkLengthLimit } from "@/lib/video-link-length-limits"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import {
@@ -22,7 +28,14 @@ import {
   validateRange,
   type DownloadPhase,
 } from "@/lib/video-link"
-import { ingestVideoLink, resumeVideoLinkIngest, retryVideoLinkIngest } from "@/lib/video-link-ingest"
+import {
+  confirmVideoLink,
+  ingestVideoLink,
+  resumeVideoLinkIngest,
+  retryVideoLinkIngest,
+  setVideoLinkConfirmed,
+  useVideoLinkConfirmed,
+} from "@/lib/video-link-ingest"
 import type { YouTubeVideoData } from "@/types/nodes"
 
 type Variant = "card" | "panel"
@@ -59,11 +72,12 @@ function readSection(value: unknown): { startSec: number; endSec: number } | nul
   return typeof startSec === "number" && typeof endSec === "number" ? { startSec, endSec } : null
 }
 
-function PrimaryButton({ variant, onClick, children }: { variant: Variant; onClick(): void; children: ReactNode }) {
+function PrimaryButton({ variant, onClick, disabled, children }: { variant: Variant; onClick(): void; disabled?: boolean; children: ReactNode }) {
   return (
     <button
       type="button"
-      className={`nodrag w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-white text-xs font-medium transition-colors ${TONE[variant].accent}`}
+      disabled={disabled}
+      className={`nodrag w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-white text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${TONE[variant].accent}`}
       onMouseDown={CONTAINED.onMouseDown}
       onClick={(e) => {
         e.stopPropagation()
@@ -75,11 +89,12 @@ function PrimaryButton({ variant, onClick, children }: { variant: Variant; onCli
   )
 }
 
-function SecondaryButton({ onClick, children }: { onClick(): void; children: ReactNode }) {
+function SecondaryButton({ onClick, disabled, children }: { onClick(): void; disabled?: boolean; children: ReactNode }) {
   return (
     <button
       type="button"
-      className="nodrag w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md border border-muted-foreground/25 hover:bg-muted/40 text-xs font-medium transition-colors"
+      disabled={disabled}
+      className="nodrag w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md border border-muted-foreground/25 hover:bg-muted/40 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       onMouseDown={CONTAINED.onMouseDown}
       onClick={(e) => {
         e.stopPropagation()
@@ -118,6 +133,7 @@ function RangeChooser({
   variant,
   durationSec,
   force,
+  confirmed,
   onCancel,
   onStarted,
 }: {
@@ -126,6 +142,8 @@ function RangeChooser({
   durationSec: number | null
   /** A file is already stored — replace it. */
   force: boolean
+  /** The box is ticked: a download may start. */
+  confirmed: boolean
   onCancel?: () => void
   onStarted(): void
 }) {
@@ -210,14 +228,38 @@ function RangeChooser({
                 : t("videolink.rangeBeyond", { duration: formatTimecode(durationSec ?? 0) })}
         </p>
       )}
-      <PrimaryButton variant={variant} onClick={downloadPart}>
+      <PrimaryButton variant={variant} onClick={downloadPart} disabled={!confirmed}>
         <Download className="w-3.5 h-3.5" />
         {t("videolink.downloadPart")}
       </PrimaryButton>
-      {wholeFits && <SecondaryButton onClick={downloadWhole}>{t("videolink.downloadWhole")}</SecondaryButton>}
+      {wholeFits && (
+        <SecondaryButton onClick={downloadWhole} disabled={!confirmed}>
+          {t("videolink.downloadWhole")}
+        </SecondaryButton>
+      )}
       {onCancel && <SecondaryButton onClick={onCancel}>{t("videolink.cancel")}</SecondaryButton>}
       <p className="text-[11px] text-muted-foreground">{t("videolink.partNote")}</p>
     </div>
+  )
+}
+
+/**
+ * The content rights box for one link: unticked until the person ticks it for
+ * THIS link (the controller unticks it on a link change). The tick confirms the
+ * declaration and fetches what the link still lacks.
+ */
+function RightsBox({ nodeId, variant, confirmed, busy }: { nodeId: string; variant: Variant; confirmed: boolean; busy: boolean }) {
+  return (
+    <RightsDeclarationBox
+      checked={confirmed}
+      disabled={busy}
+      textClass={TONE[variant].text}
+      contained
+      onCheckedChange={(checked) => {
+        if (checked) void confirmVideoLink(nodeId)
+        else setVideoLinkConfirmed(nodeId, false)
+      }}
+    />
   )
 }
 
@@ -233,6 +275,7 @@ export function VideoLinkStatus({
   const t = useT()
   const tone = TONE[variant]
   const view = deriveVideoLinkView(data)
+  const confirmed = useVideoLinkConfirmed(nodeId)
   // "Download a different part" reopens the chooser over a node that is ready.
   const [choosingAgain, setChoosingAgain] = useState(false)
 
@@ -240,6 +283,8 @@ export function VideoLinkStatus({
   // the controller does would land. Show what IS (a file, a failure), never a
   // spinner that cannot end or a button that cannot work.
   const readOnly = useWorkflowStore((s) => s.isReadOnly) === true
+  // What the nodes after this one read: the sound alone means the track is an import to confirm.
+  const need = useWorkflowStore((s) => videoLinkRunNeeds(null, s.nodes ?? [], s.edges ?? []).get(nodeId) ?? "file")
 
   // A saved "downloading"/"checking" with nothing following it in this tab is a
   // download that lost its reader (a reload) — re-attach to it, or settle the
@@ -262,112 +307,131 @@ export function VideoLinkStatus({
     return <p className={`${tone.text} text-orange-400`}>{t("node.notDownloaded")}</p>
   }
 
-  if (view.kind === "checking") {
-    return (
-      <div className={`flex items-center gap-2 ${tone.text} text-muted-foreground`}>
-        <Loader2 className={`w-3.5 h-3.5 animate-spin ${tone.accentText}`} />
-        <span>{t("videolink.checking")}</span>
-      </div>
-    )
-  }
+  // The box shows while the link has something left to import: its video, or —
+  // when only Transcribe / Suno Cover read it — the sound. A node holding what
+  // its readers need shows no box.
+  const trackMissing = typeof data.downloadedAudioUrl !== "string" || data.downloadedAudioUrl.trim() === ""
+  const box = !readOnly && (view.kind !== "ready" || (need === "audio" && trackMissing) || choosingAgain)
+    ? <RightsBox nodeId={nodeId} variant={variant} confirmed={confirmed} busy={inFlight} />
+    : null
 
-  if (view.kind === "downloading") {
-    const phaseLabel: Record<DownloadPhase, string> = {
-      downloading: t("inputcfg.downloadingVideo"),
-      processing: t("credits.processing"),
-      uploading: t("inputcfg.uploading"),
-    }
-    return (
-      <div className="flex flex-col gap-1.5 rounded-md bg-muted/30 p-2">
+  const body = (() => {
+    if (view.kind === "checking") {
+      return (
         <div className={`flex items-center gap-2 ${tone.text} text-muted-foreground`}>
           <Loader2 className={`w-3.5 h-3.5 animate-spin ${tone.accentText}`} />
-          <span>{phaseLabel[view.phase]}</span>
-          <span className={`ms-auto font-mono ${tone.accentText}`}>{view.percent}%</span>
+          <span>{t("videolink.checking")}</span>
         </div>
-        <div
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={view.percent}
-          className="w-full h-1.5 rounded-full bg-muted-foreground/20 overflow-hidden"
-        >
-          <div className={`h-full rounded-full transition-all duration-300 ease-out ${tone.bar}`} style={{ width: `${view.percent}%` }} />
-        </div>
-      </div>
-    )
-  }
+      )
+    }
 
-  if (view.kind === "failed") {
+    if (view.kind === "downloading") {
+      const phaseLabel: Record<DownloadPhase, string> = {
+        downloading: t("inputcfg.downloadingVideo"),
+        processing: t("credits.processing"),
+        uploading: t("inputcfg.uploading"),
+      }
+      return (
+        <div className="flex flex-col gap-1.5 rounded-md bg-muted/30 p-2">
+          <div className={`flex items-center gap-2 ${tone.text} text-muted-foreground`}>
+            <Loader2 className={`w-3.5 h-3.5 animate-spin ${tone.accentText}`} />
+            <span>{phaseLabel[view.phase]}</span>
+            <span className={`ms-auto font-mono ${tone.accentText}`}>{view.percent}%</span>
+          </div>
+          <div
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={view.percent}
+            className="w-full h-1.5 rounded-full bg-muted-foreground/20 overflow-hidden"
+          >
+            <div className={`h-full rounded-full transition-all duration-300 ease-out ${tone.bar}`} style={{ width: `${view.percent}%` }} />
+          </div>
+        </div>
+      )
+    }
+
+    if (view.kind === "failed") {
+      return (
+        <div className="flex flex-col gap-1.5">
+          <div className={`flex items-start gap-1.5 p-2 rounded-md bg-red-500/10 text-red-500 ${tone.text}`}>
+            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
+            <p title={typeof data.downloadError === "string" && data.downloadError ? data.downloadError : undefined}>
+              {t(DOWNLOAD_ERROR_KEYS[view.code])}
+            </p>
+          </div>
+          {!readOnly && (
+            <PrimaryButton variant={variant} onClick={() => void retryVideoLinkIngest(nodeId)} disabled={!confirmed}>
+              <Download className="w-3.5 h-3.5" />
+              {t("inputcfg.retryDownload")}
+            </PrimaryButton>
+          )}
+          {!readOnly && view.canRetrySilent && (
+            <SecondaryButton onClick={() => void retryVideoLinkIngest(nodeId, { allowSilent: true })} disabled={!confirmed}>
+              {t("videolink.downloadSilent")}
+            </SecondaryButton>
+          )}
+        </div>
+      )
+    }
+
+    if (view.kind === "choose" || (view.kind === "ready" && choosingAgain)) {
+      const durationSec =
+        view.kind === "choose"
+          ? view.durationSec
+          : typeof data.videoDurationSec === "number" ? data.videoDurationSec : null
+      return (
+        <RangeChooser
+          nodeId={nodeId}
+          variant={variant}
+          durationSec={durationSec}
+          force={view.kind === "ready"}
+          confirmed={confirmed}
+          onCancel={view.kind === "ready" ? () => setChoosingAgain(false) : undefined}
+          onStarted={() => setChoosingAgain(false)}
+        />
+      )
+    }
+
+    if (view.kind === "ready") {
+      const section = readSection(data.downloadedSection)
+      const link = typeof data.youtubeUrl === "string" ? data.youtubeUrl.trim() : ""
+      const canCut = !readOnly && detectVideoLinkPlatform(link) === "youtube"
+      return (
+        <div className="flex flex-col gap-1.5">
+          <div className={`flex items-center gap-2 p-2 rounded-md bg-green-500/10 text-green-500 ${tone.text}`}>
+            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+            <span>
+              {section
+                ? t("videolink.partReady", { from: formatTimecode(section.startSec), to: formatTimecode(section.endSec) })
+                : t("inputcfg.downloadedAndReady")}
+            </span>
+          </div>
+          {canCut && variant === "panel" && (
+            <SecondaryButton onClick={() => setChoosingAgain(true)}>{t("videolink.choosePart")}</SecondaryButton>
+          )}
+        </div>
+      )
+    }
+
+    // idle — a link nobody has fetched: a node saved before downloads existed, or
+    // one an agent wrote. Run fetches it too; this is the button for "now".
     return (
       <div className="flex flex-col gap-1.5">
-        <div className={`flex items-start gap-1.5 p-2 rounded-md bg-red-500/10 text-red-500 ${tone.text}`}>
-          <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
-          <p title={typeof data.downloadError === "string" && data.downloadError ? data.downloadError : undefined}>
-            {t(DOWNLOAD_ERROR_KEYS[view.code])}
-          </p>
-        </div>
-        {!readOnly && (
-          <PrimaryButton variant={variant} onClick={() => void retryVideoLinkIngest(nodeId)}>
-            <Download className="w-3.5 h-3.5" />
-            {t("inputcfg.retryDownload")}
-          </PrimaryButton>
-        )}
-        {!readOnly && view.canRetrySilent && (
-          <SecondaryButton onClick={() => void retryVideoLinkIngest(nodeId, { allowSilent: true })}>
-            {t("videolink.downloadSilent")}
-          </SecondaryButton>
-        )}
+        <p className={`${tone.text} text-orange-400`}>{confirmed ? t("node.notDownloaded") : t("videolink.rightsNeeded")}</p>
+        <PrimaryButton variant={variant} onClick={() => void ingestVideoLink(nodeId, { mode: "auto" })} disabled={!confirmed}>
+          <Download className="w-3.5 h-3.5" />
+          {t("inputcfg.downloadVideo")}
+        </PrimaryButton>
       </div>
     )
-  }
+  })()
 
-  if (view.kind === "choose" || (view.kind === "ready" && choosingAgain)) {
-    const durationSec =
-      view.kind === "choose"
-        ? view.durationSec
-        : typeof data.videoDurationSec === "number" ? data.videoDurationSec : null
-    return (
-      <RangeChooser
-        nodeId={nodeId}
-        variant={variant}
-        durationSec={durationSec}
-        force={view.kind === "ready"}
-        onCancel={view.kind === "ready" ? () => setChoosingAgain(false) : undefined}
-        onStarted={() => setChoosingAgain(false)}
-      />
-    )
-  }
-
-  if (view.kind === "ready") {
-    const section = readSection(data.downloadedSection)
-    const link = typeof data.youtubeUrl === "string" ? data.youtubeUrl.trim() : ""
-    const canCut = !readOnly && detectVideoLinkPlatform(link) === "youtube"
-    return (
-      <div className="flex flex-col gap-1.5">
-        <div className={`flex items-center gap-2 p-2 rounded-md bg-green-500/10 text-green-500 ${tone.text}`}>
-          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-          <span>
-            {section
-              ? t("videolink.partReady", { from: formatTimecode(section.startSec), to: formatTimecode(section.endSec) })
-              : t("inputcfg.downloadedAndReady")}
-          </span>
-        </div>
-        {canCut && variant === "panel" && (
-          <SecondaryButton onClick={() => setChoosingAgain(true)}>{t("videolink.choosePart")}</SecondaryButton>
-        )}
-      </div>
-    )
-  }
-
-  // idle — a link nobody has fetched: a node saved before downloads existed, or
-  // one an agent wrote. Run fetches it too; this is the button for "now".
+  if (!box) return body
   return (
-    <div className="flex flex-col gap-1.5">
-      <p className={`${tone.text} text-orange-400`}>{t("node.notDownloaded")}</p>
-      <PrimaryButton variant={variant} onClick={() => void ingestVideoLink(nodeId, { mode: "auto" })}>
-        <Download className="w-3.5 h-3.5" />
-        {t("inputcfg.downloadVideo")}
-      </PrimaryButton>
+    <div className="flex flex-col gap-2">
+      {box}
+      {body}
     </div>
   )
 }

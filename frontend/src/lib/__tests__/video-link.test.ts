@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest"
 import {
   AUTO_DOWNLOAD_MAX_SEC,
   classifyDownloadError,
+  classifyDownloadFailure,
   deriveVideoLinkView,
   extractVideoLinkId,
   formatTimecode,
@@ -66,6 +67,23 @@ describe("classifyDownloadError", () => {
 
   it("checks the no-audio wording first — it must never fall through to a looser rule", () => {
     expect(classifyDownloadError("no audio track in this private live stream")).toBe("no_audio")
+  })
+})
+
+describe("classifyDownloadFailure — a request that threw", () => {
+  it("reads the import gate's refusals from the server's code, never from the words", () => {
+    const refused = (code: string, message: string) => Object.assign(new Error(message), { code })
+    expect(classifyDownloadFailure(refused("rights_confirmation_required", "Confirm that you hold the rights to this content before it is imported."))).toEqual({ code: "rights", raw: "Confirm that you hold the rights to this content before it is imported." })
+    expect(classifyDownloadFailure(refused("rights_confirmation_used", "Used already")).code).toBe("rights")
+    expect(classifyDownloadFailure(refused("import_source_disabled", "This link can't be imported here."))).toEqual({ code: "refused", raw: "This link can't be imported here." })
+    // A provider message that happens to mention a confirmation is still sorted by its words.
+    expect(classifyDownloadFailure(new Error("Private video — confirmation of age needed")).code).toBe("private")
+  })
+
+  it("sorts anything else by its message, and keeps the words as the tooltip", () => {
+    expect(classifyDownloadFailure(new Error("Too many downloads are running"))).toEqual({ code: "busy", raw: "Too many downloads are running" })
+    expect(classifyDownloadFailure("Connection lost")).toEqual({ code: "connection", raw: "Connection lost" })
+    expect(classifyDownloadFailure(undefined)).toEqual({ code: "generic", raw: "" })
   })
 })
 

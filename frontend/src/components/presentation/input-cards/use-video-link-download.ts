@@ -20,12 +20,19 @@ export interface LinkDownloadState {
 const IDLE: LinkDownloadState = { status: "idle", percent: 0, phase: "downloading" }
 
 export interface UseVideoLinkDownloadOptions {
-  /** The post link that still needs a file, or "" when nothing needs fetching. */
+  /** The post link that still needs a file, or "" when nothing needs fetching (the box unticked included). */
   readonly link: string
   /** The file arrived for `link` — only ever called while `link` is still current. */
   readonly onCompleted: (file: { readonly videoUrl: string; readonly thumbnailUrl?: string }, link: string) => void
   /** A canvas or page that takes no writes: nothing starts. */
   readonly disabled?: boolean
+  /**
+   * A fresh content rights confirmation for `link` (`lib/content-rights.ts`),
+   * asked for before every start — one confirmation opens one download, and a
+   * restart after the server forgot a download is a download of its own. A
+   * refusal to confirm is a `rights` failure, shown like any other.
+   */
+  readonly confirm?: (link: string) => Promise<string>
 }
 
 /**
@@ -35,13 +42,15 @@ export interface UseVideoLinkDownloadOptions {
  * an answer that lands after the link changed is dropped, because the file it
  * carries belongs to the old link.
  */
-export function useVideoLinkDownload({ link, onCompleted, disabled }: UseVideoLinkDownloadOptions) {
+export function useVideoLinkDownload({ link, onCompleted, disabled, confirm }: UseVideoLinkDownloadOptions) {
   const [state, setState] = useState<LinkDownloadState>(IDLE)
   const controllerRef = useRef<AbortController | null>(null)
   const linkRef = useRef(link)
   const completedRef = useRef(onCompleted)
+  const confirmRef = useRef(confirm)
   linkRef.current = link
   completedRef.current = onCompleted
+  confirmRef.current = confirm
 
   const cancel = useCallback(() => {
     controllerRef.current?.abort()
@@ -65,7 +74,25 @@ export function useVideoLinkDownload({ link, onCompleted, disabled }: UseVideoLi
             : { ...prev, status: "downloading", percent: event.percent, phase: event.phase },
         )
       }
-      void downloadVideoLink(target, request, { onEvent, signal: controller.signal }).then((outcome) => {
+      const confirmFor = confirmRef.current
+      const refresh = confirmFor ? () => confirmFor(target) : undefined
+      const run = async () => {
+        let confirmationId: string | undefined
+        if (confirmFor) {
+          try {
+            confirmationId = await confirmFor(target)
+          } catch (err) {
+            return { status: "failed" as const, code: "rights" as const, raw: err instanceof Error ? err.message : "" }
+          }
+          if (controller.signal.aborted) return { status: "aborted" as const }
+        }
+        return downloadVideoLink(
+          target,
+          confirmationId ? { ...request, confirmationId } : request,
+          { onEvent, signal: controller.signal, ...(refresh ? { refreshConfirmation: refresh } : {}) },
+        )
+      }
+      void run().then((outcome) => {
         // Superseded: another start, a new link, or an unmount took over.
         if (controller.signal.aborted || controllerRef.current !== controller || linkRef.current !== target) return
         controllerRef.current = null

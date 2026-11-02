@@ -98,10 +98,22 @@ export function compareVersions(a: string, b: string): number {
   return preA < preB ? -1 : 1
 }
 
+/** A release and the tag it was cut at. */
+export interface Release {
+  readonly version: string
+  readonly tag: string
+}
+
+/** The releases among tag names (`v0.13.0`), oldest first; pre-releases and other tags are ignored. */
+export function releasesOf(tags: readonly string[]): Release[] {
+  const releases = tags
+    .map((tag) => ({ version: tag.startsWith("v") ? tag.slice(1) : tag, tag }))
+    .filter(({ version }) => isExactVersion(version) && !version.includes("-"))
+  const unique = releases.filter((release, i) => releases.findIndex((other) => other.version === release.version) === i)
+  return [...unique].sort((a, b) => compareVersions(a.version, b.version))
+}
+
 /** The highest release among tag names (`v0.13.0`); pre-releases and other tags are ignored. */
 export function latestRelease(tags: readonly string[]): string | null {
-  const releases = tags
-    .map((tag) => (tag.startsWith("v") ? tag.slice(1) : tag))
-    .filter((version) => isExactVersion(version) && !version.includes("-"))
-  return releases.reduce<string | null>((best, version) => (best === null || compareVersions(version, best) > 0 ? version : best), null)
+  return releasesOf(tags).at(-1)?.version ?? null
 }

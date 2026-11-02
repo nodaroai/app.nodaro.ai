@@ -1,6 +1,9 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, beforeEach } from "vitest"
 import type { WorkflowNode } from "@/types/nodes"
 import { areAllInputsFilled } from "../helpers"
+import { clearVideoLinkRights, tickVideoLinkRights } from "@/lib/video-link-rights"
+
+beforeEach(() => clearVideoLinkRights())
 
 const mk = (id: string, type: string, data: Record<string, unknown> = {}): WorkflowNode =>
   ({ id, type, position: { x: 0, y: 0 }, data } as unknown as WorkflowNode)
@@ -70,8 +73,17 @@ describe("areAllInputsFilled — a Video URL input read only for its sound or it
     edges: consumers.map((_, i) => ({ source: "v1", target: `c${i}` })),
   })
 
-  it("Transcribe alone: a post link is filled without a downloaded file", () => {
+  // The run fetches the sound, an import of the link: the content rights box must be ticked for it.
+  it("Transcribe alone: a post link is filled without a downloaded file, once its box is ticked", () => {
+    expect(areAllInputsFilled([link], { v1: { youtubeUrl: YT } }, graph("transcribe"))).toBe(false)
+    tickVideoLinkRights("v1", YT)
     expect(areAllInputsFilled([link], { v1: { youtubeUrl: YT } }, graph("transcribe"))).toBe(true)
+    // Ticked for another link: not this one.
+    expect(areAllInputsFilled([link], { v1: { youtubeUrl: "https://youtu.be/BBBBBBBBBBB" } }, graph("transcribe"))).toBe(false)
+  })
+
+  it("Dubbing alone (the page address): filled as soon as the link is valid, no box", () => {
+    expect(areAllInputsFilled([link], { v1: { youtubeUrl: YT } }, graph("dubbing"))).toBe(true)
   })
 
   it("a node that watches the video beside it: the file is still awaited", () => {

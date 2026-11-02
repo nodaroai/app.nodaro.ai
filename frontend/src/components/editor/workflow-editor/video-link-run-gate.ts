@@ -9,18 +9,23 @@
  * Instagram page address is not a video file, and every video node fails on it
  * (mid-run, after credits were reserved). So the file has to exist BEFORE the
  * save-and-run, and this is the one place that guarantees it for all four
- * handlers.
+ * handlers. The same for a link read only for its SOUND (Transcribe, Suno
+ * Cover): the run reads the node's own audio track, so a node without one is
+ * fetched here too — never the video, just the track.
+ *
+ * Both are imports of someone's link, made only under the content rights box
+ * ticked in the node (`lib/video-link-ingest.ts`, rule 4): an unticked node
+ * stops the run with a message naming it, before anything is fetched.
  */
 import { toast } from "sonner"
-import { videoLinkNeedsDownload, videoLinkRunNeeds } from "@nodaro/shared/video"
-import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { isSocialVideoUrl, videoLinkNeedsDownload, videoLinkRunNeeds } from "@nodaro/shared/video"
 import { runGraph } from "./run-graph"
 import { tx } from "@/lib/i18n"
 import { localizeNodeLabel } from "@/lib/i18n/labels"
 import { useLocaleStore } from "@/lib/locale-store"
 import { FOCUS_NODES_EVENT, type FocusNodesDetail } from "@/lib/canvas-focus-event"
 import { DOWNLOAD_ERROR_KEYS, formatTimecode } from "@/lib/video-link"
-import { ensureVideoLinksDownloaded } from "@/lib/video-link-ingest"
+import { ensureVideoLinkAudio, ensureVideoLinksDownloaded, findUnconfirmedVideoLink, type EnsureVideoLinksResult } from "@/lib/video-link-ingest"
 import { videoLinkLengthLimit } from "@/lib/video-link-length-limits"
 import { NODE_DEF_MAP, type WorkflowEdge, type WorkflowNode } from "@/types/nodes"
 
@@ -59,6 +64,29 @@ export function videoLinkNodesFeeding(
 }
 
 /**
+ * The Video URL nodes whose AUDIO TRACK this run needs and that hold none: a
+ * post link read only by Transcribe / Suno Cover, whose paste-time fetch never
+ * happened (the box was not ticked) or failed. The run reads the node's own
+ * track, so it is fetched before the run — the track alone, never the video.
+ */
+export function videoLinkAudioNodesFeeding(
+  scopeIds: readonly string[],
+  nodes: readonly WorkflowNode[],
+  edges: readonly WorkflowEdge[],
+): string[] {
+  const needs = videoLinkRunNeeds(scopeIds, nodes, edges)
+  return nodes
+    .filter((n) => {
+      if (n.type !== "youtube-video" || needs.get(n.id) !== "audio") return false
+      const data = n.data as Record<string, unknown>
+      const link = typeof data.youtubeUrl === "string" ? data.youtubeUrl.trim() : ""
+      if (!link || !isSocialVideoUrl(link)) return false
+      return typeof data.downloadedAudioUrl !== "string" || data.downloadedAudioUrl.trim() === ""
+    })
+    .map((n) => n.id)
+}
+
+/**
  * Resolves true when the run may proceed. When a download is needed it holds
  * the Run button (`setIsRunning`) for its length and hands it back before
  * returning, so the caller's own optimistic flip stays the single owner of the
@@ -75,7 +103,16 @@ export async function ensureVideoLinksBeforeRun(
 ): Promise<boolean> {
   const { nodes, edges } = runGraph()
   const needed = videoLinkNodesFeeding(scopeIds, nodes, edges)
-  if (needed.length === 0) return true
+  const tracks = videoLinkAudioNodesFeeding(scopeIds, nodes, edges)
+  if (needed.length === 0 && tracks.length === 0) return true
+
+  // Every box the run needs ticked is asked for BEFORE anything is fetched: nobody waits
+  // out a video download to be told to tick the box of the node after it.
+  const unconfirmed = findUnconfirmedVideoLink(needed) ?? findUnconfirmedVideoLink(tracks, { audio: true })
+  if (unconfirmed && !unconfirmed.ok && unconfirmed.reason === "confirm") {
+    showNodeMessage(unconfirmed.nodeId, tx("run.videoLinkConfirm", { label: unconfirmed.label }))
+    return false
+  }
 
   setIsRunning(true)
   const waiting = new AbortController()
@@ -83,11 +120,18 @@ export async function ensureVideoLinksBeforeRun(
     action: { label: tx("common.cancel"), onClick: () => waiting.abort() },
   })
   try {
-    const result = await ensureVideoLinksDownloaded(needed, { signal: waiting.signal })
+    let result: EnsureVideoLinksResult = await ensureVideoLinksDownloaded(needed, { signal: waiting.signal })
+    if (result.ok && tracks.length > 0) result = await ensureVideoLinkAudio(tracks, { signal: waiting.signal })
+    // A Cancel that landed while the last fetch finished still means no run.
+    if (waiting.signal.aborted) return false
     if (result.ok) return true
     if (result.reason === "cancelled") return false
     if (result.reason === "choose") {
       showChoosePartMessage(result.nodeId, result.label)
+      return false
+    }
+    if (result.reason === "confirm") {
+      showNodeMessage(result.nodeId, tx("run.videoLinkConfirm", { label: result.label }))
       return false
     }
     const headline =
@@ -140,11 +184,8 @@ export function choosePartMessage(
   return { title: tx("run.videoLinkChooseLong", { label, duration }), description }
 }
 
-/** The message, with a button that selects the node, frames it and opens its
- *  settings — where the part chooser is (the canvas focus signal). */
-function showChoosePartMessage(nodeId: string, label: string): void {
-  const { nodes, edges } = runGraph()
-  const { title, description } = choosePartMessage(nodeId, label, nodes, edges)
+/** A message with a button that selects the node, frames it and opens its settings (the canvas focus signal). */
+function showNodeMessage(nodeId: string, title: string, description?: string): void {
   toast.error(title, {
     ...(description ? { description } : {}),
     duration: CHOOSE_PART_TOAST_MS,
@@ -156,4 +197,11 @@ function showChoosePartMessage(nodeId: string, label: string): void {
       },
     },
   })
+}
+
+/** The "choose a part" message — where the part chooser is (the node's From / To). */
+function showChoosePartMessage(nodeId: string, label: string): void {
+  const { nodes, edges } = runGraph()
+  const { title, description } = choosePartMessage(nodeId, label, nodes, edges)
+  showNodeMessage(nodeId, title, description)
 }

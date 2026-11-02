@@ -15,6 +15,7 @@ import {
   getSharedExecutionStatus,
 } from "@/lib/api"
 import { composeLottieSlotOverrides, collectSlotExposedNodeIds } from "@/lib/lottie-slot-overrides"
+import { withVideoLinkRightsConfirmations } from "@/lib/video-link-rights"
 import { resolveInputItems } from "@/components/presentation/helpers"
 
 export type PresentationStatus = "idle" | "loading" | "running" | "completed" | "failed"
@@ -166,7 +167,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   },
 
   run: async () => {
-    const { shareToken, inputValues, presentationSettings, nodes } = get()
+    const { shareToken, inputValues, presentationSettings, nodes, edges } = get()
     if (!shareToken) return
 
     clearPollTimeout()
@@ -186,7 +187,8 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
       // override — the freeze-on-exposure signal (design F16) the backend uses to
       // pre-complete the node instead of re-rolling + re-charging it.
       const slotExposedNodeIds = collectSlotExposedNodeIds(resolveInputItems(presentationSettings))
-      const overrides = composeLottieSlotOverrides(inputValues, nodes, slotExposedNodeIds)
+      // A Video URL input whose sound the run fetches is confirmed now, for this run alone.
+      const overrides = (await withVideoLinkRightsConfirmations(nodes, edges, composeLottieSlotOverrides(inputValues, nodes, slotExposedNodeIds))) ?? {}
       const { executionId } = await runSharedWorkflow(
         shareToken,
         Object.keys(overrides).length > 0 ? overrides : undefined,

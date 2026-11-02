@@ -18,15 +18,16 @@ export interface ChooserLimit {
   readonly consumer: string
 }
 
-function Button({ primary, onClick, children }: { primary?: boolean; onClick(): void; children: ReactNode }) {
+function Button({ primary, onClick, disabled, children }: { primary?: boolean; onClick(): void; disabled?: boolean; children: ReactNode }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={
         primary
-          ? "w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-cta hover:bg-cta-hover text-white text-xs font-medium transition-colors"
-          : "w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border border-border hover:bg-muted/40 text-xs font-medium transition-colors"
+          ? "w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-cta hover:bg-cta-hover text-white text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          : "w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border border-border hover:bg-muted/40 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       }
     >
       {children}
@@ -38,10 +39,12 @@ function Button({ primary, onClick, children }: { primary?: boolean; onClick(): 
 function RangeChooser({
   durationSec,
   limit,
+  locked,
   onChoose,
 }: {
   durationSec: number | null
   limit: ChooserLimit | null
+  locked: boolean
   onChoose(request: VideoLinkDownloadRequest): void
 }) {
   const t = useT()
@@ -107,11 +110,15 @@ function RangeChooser({
                 : t("videolink.rangeBeyond", { duration: formatTimecode(durationSec ?? 0) })}
         </p>
       )}
-      <Button primary onClick={downloadPart}>
+      <Button primary onClick={downloadPart} disabled={locked}>
         <Download className="w-3.5 h-3.5" />
         {t("videolink.downloadPart")}
       </Button>
-      {wholeFits && <Button onClick={() => onChoose({ mode: "whole" })}>{t("videolink.downloadWhole")}</Button>}
+      {wholeFits && (
+        <Button onClick={() => onChoose({ mode: "whole" })} disabled={locked}>
+          {t("videolink.downloadWhole")}
+        </Button>
+      )}
       <p className="text-[11px] text-muted-foreground">{t("videolink.partNote")}</p>
     </div>
   )
@@ -122,11 +129,13 @@ export interface VideoLinkRunnerStatusProps {
   readonly limit: ChooserLimit | null
   /** The server's own words for a failure — a tooltip under the friendly message. */
   readonly rawError?: string
+  /** The content rights box is not ticked for this link: no download can start, and the buttons say so. */
+  readonly locked?: boolean
   readonly onDownload: (request: VideoLinkDownloadRequest) => void
 }
 
 /** What the runner's Video URL card shows below the link: only a post link has a state. */
-export function VideoLinkRunnerStatus({ view, limit, rawError, onDownload }: VideoLinkRunnerStatusProps) {
+export function VideoLinkRunnerStatus({ view, limit, rawError, locked = false, onDownload }: VideoLinkRunnerStatusProps) {
   const t = useT()
 
   switch (view.kind) {
@@ -167,16 +176,20 @@ export function VideoLinkRunnerStatus({ view, limit, rawError, onDownload }: Vid
             <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
             <p title={rawError || undefined}>{t(DOWNLOAD_ERROR_KEYS[code])}</p>
           </div>
-          <Button primary onClick={() => onDownload({ mode: "auto" })}>
+          <Button primary onClick={() => onDownload({ mode: "auto" })} disabled={locked}>
             <Download className="w-3.5 h-3.5" />
             {t("inputcfg.retryDownload")}
           </Button>
-          {view.canRetrySilent && <Button onClick={() => onDownload({ mode: "auto", allowSilent: true })}>{t("videolink.downloadSilent")}</Button>}
+          {view.canRetrySilent && (
+            <Button onClick={() => onDownload({ mode: "auto", allowSilent: true })} disabled={locked}>
+              {t("videolink.downloadSilent")}
+            </Button>
+          )}
         </div>
       )
     }
     case "choose":
-      return <RangeChooser durationSec={view.durationSec} limit={limit} onChoose={onDownload} />
+      return <RangeChooser durationSec={view.durationSec} limit={limit} locked={locked} onChoose={onDownload} />
     case "ready":
       return (
         <div className="flex items-center gap-2 p-2.5 rounded-lg bg-green-500/10 text-green-500 text-xs">
@@ -188,8 +201,8 @@ export function VideoLinkRunnerStatus({ view, limit, rawError, onDownload }: Vid
       // A link nobody has fetched (a remount mid-download, say): Run waits for the file.
       return (
         <div className="flex flex-col gap-1.5">
-          <p className="text-xs text-orange-400">{t("node.notDownloaded")}</p>
-          <Button primary onClick={() => onDownload({ mode: "auto" })}>
+          <p className="text-xs text-orange-400">{locked ? t("videolink.rightsNeeded") : t("node.notDownloaded")}</p>
+          <Button primary onClick={() => onDownload({ mode: "auto" })} disabled={locked}>
             <Download className="w-3.5 h-3.5" />
             {t("inputcfg.downloadVideo")}
           </Button>

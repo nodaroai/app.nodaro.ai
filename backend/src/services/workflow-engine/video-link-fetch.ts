@@ -55,18 +55,34 @@ import {
 /** Downloads a run fetches side by side — under the account's cap on running downloads on purpose. */
 export const VIDEO_LINK_FETCH_CONCURRENCY = 2
 
+/**
+ * The content rights confirmation a fetch is made under (`lib/content-rights.ts`),
+ * and the request it is spent by: the node's `rightsConfirmationId` — what the
+ * run's request set in its `inputOverrides` (the app page's confirmation for
+ * the link whose sound the run fetches, an API caller's for its link) — and
+ * `<execution>:<node>`, so the same fetch tried again (a re-pick of the
+ * execution) passes the one-use lock instead of being refused as a second
+ * download.
+ */
+export interface VideoLinkFetchRights {
+  readonly confirmationId?: string
+  readonly requestId?: string
+}
+
 export interface VideoLinkFetchDeps {
   /** A YouTube link's length / title / live-ness; nulls when unknown (never throws). */
   probe(url: string): Promise<{ readonly durationSec: number | null; readonly title: string | null; readonly isLive: boolean }>
-  downloadVideo(request: {
-    readonly url: string
-    readonly userId: string
-    readonly maxHeight?: number
-    readonly section?: { readonly startSec: number; readonly endSec: number; readonly exact: true }
-    readonly signal?: AbortSignal
-  }): Promise<{ readonly videoUrl: string; readonly thumbnailUrl?: string }>
+  downloadVideo(
+    request: VideoLinkFetchRights & {
+      readonly url: string
+      readonly userId: string
+      readonly maxHeight?: number
+      readonly section?: { readonly startSec: number; readonly endSec: number; readonly exact: true }
+      readonly signal?: AbortSignal
+    },
+  ): Promise<{ readonly videoUrl: string; readonly thumbnailUrl?: string }>
   /** The audio track of the link: its stored URL. */
-  downloadAudio(url: string, request: { readonly userId: string; readonly signal?: AbortSignal }): Promise<string>
+  downloadAudio(url: string, request: VideoLinkFetchRights & { readonly userId: string; readonly signal?: AbortSignal }): Promise<string>
 }
 
 /** What an earlier fetch of a Video URL node produced: the link it was for, and the node fields it wrote. */
@@ -91,6 +107,8 @@ export interface VideoLinkFetchInput {
    */
   readonly scopeIds?: readonly string[] | null
   readonly userId: string
+  /** The execution this fetch belongs to: with the node's id, the request a confirmation is spent by. */
+  readonly executionId?: string
   readonly signal?: AbortSignal
   /** A fetch begins / ends, for the run's progress. */
   readonly onFetch?: (nodeId: string, phase: "start" | "end") => void
@@ -149,6 +167,24 @@ function timecode(sec: number): string {
   return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`
 }
 
+/**
+ * The rights a fetch of this node's link is made under. The confirmation is
+ * read off the node's data as the run holds it — the request's override
+ * merged over the saved node (`applyInputOverridesToNodes`), which drops a
+ * saved one first (`RUN_ONLY_NODE_FIELDS`: a confirmation is one download's,
+ * within an hour, so only this run's own request can supply it) and drops it
+ * with the rest of the old link's fields on a link swap
+ * (`VIDEO_LINK_DERIVED_FIELDS`). A node whose file and track are stored is
+ * not fetched here at all.
+ */
+function rightsOf(node: VideoLinkFetchNode, input: VideoLinkFetchInput): VideoLinkFetchRights {
+  const confirmationId = text(node.data.rightsConfirmationId)
+  return {
+    ...(confirmationId !== "" ? { confirmationId } : {}),
+    ...(input.executionId ? { requestId: `${input.executionId}:${node.id}` } : {}),
+  }
+}
+
 function reasonOf(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err)
   const firstLine = raw.split("\n")[0]!.trim()
@@ -189,6 +225,7 @@ async function fetchVideo(
     file = await deps.downloadVideo({
       url: link,
       userId: input.userId,
+      ...rightsOf(node, input),
       ...(isYouTube ? { maxHeight: YOUTUBE_MAX_HEIGHT } : {}),
       ...(section ? { section: { ...section, exact: true as const } } : {}),
       ...(input.signal ? { signal: input.signal } : {}),
@@ -211,6 +248,7 @@ async function fetchVideo(
 }
 
 async function fetchAudio(
+  node: VideoLinkFetchNode,
   link: string,
   label: string,
   input: VideoLinkFetchInput,
@@ -218,7 +256,7 @@ async function fetchAudio(
 ): Promise<VideoLinkPatch> {
   let url: string
   try {
-    url = await deps.downloadAudio(link, { userId: input.userId, ...(input.signal ? { signal: input.signal } : {}) })
+    url = await deps.downloadAudio(link, { userId: input.userId, ...rightsOf(node, input), ...(input.signal ? { signal: input.signal } : {}) })
   } catch (err) {
     if (input.signal?.aborted) throw err
     throw new Refusal(`Video URL "${label}": the sound of the linked video couldn't be fetched (${reasonOf(err)}).`)
@@ -301,7 +339,7 @@ export async function fetchVideoLinksForRun(input: VideoLinkFetchInput, deps: Vi
           recordedPatch(job.node, job.link, job.need, input) ??
           (job.need === "file"
             ? await fetchVideo(job.node, job.link, job.label, input, deps)
-            : await fetchAudio(job.link, job.label, input, deps))
+            : await fetchAudio(job.node, job.link, job.label, input, deps))
         patches.set(job.node.id, patch)
       } catch (err) {
         if (input.signal?.aborted) cancelled = true
