@@ -194,6 +194,26 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
     expect(res.json().data.masking).toEqual(masking)
   })
 
+  it("saves the face mesh's parts only once every environment's engine draws them (the row is shared), naming those that cannot", async () => {
+    const MESH = { castSwap: { ...HIDES.castSwap, faceMesh: true } }
+    const PARTS = { castSwap: { ...MESH.castSwap, faceMeshParts: ["full", "features", "mouth"] } }
+    const masking = { "motion-pulse": { mode: "always", fill: "depth", faceMesh: true, faceMeshParts: "mouth" } }
+    for (const [envs, blocked] of [
+      [[envRow("production", MESH), envRow("staging", PARTS)], ["production"]],
+      [[envRow("production", { castSwap: { ...MESH.castSwap, faceMeshParts: ["full", "features"] } }), envRow("staging", PARTS)], ["production"]],
+    ] as const) {
+      h.envs = [...envs]
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+      expect(res.statusCode, JSON.stringify(envs)).toBe(409)
+      expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: blocked, message: expect.stringMatching(/cannot draw only the mouth of the face mesh/) })
+    }
+    expect(h.upserts).toEqual([])
+    h.envs = [envRow("production", PARTS), envRow("staging", PARTS)]
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.masking).toEqual(masking)
+  })
+
   it("saves a depth colormap only once every environment's engine draws that map (the row is shared), naming those that cannot", async () => {
     const MAPS = { castSwap: { ...HIDES.castSwap, depthColormaps: ["grayscale", "inferno"] } }
     const masking = { "motion-pulse": { mode: "always", fill: "depth", depthColormap: "inferno" } }

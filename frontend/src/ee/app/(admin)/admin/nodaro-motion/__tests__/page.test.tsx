@@ -166,6 +166,27 @@ describe("Admin → Nodaro Motion", () => {
     expect(sentTo(`PUT ${URL}`)[1]).toEqual({ masking: { "motion-prism": { mode: "always" } } })
   })
 
+  it("the Precise column offers what the face mesh draws once every environment's engine lists the parts, and saves it", async () => {
+    const user = userEvent.setup()
+    const parts = (env: string): TrendEngineEnvironment => {
+      const base = meshes(env)
+      return { ...base, supports: { ...base.supports, castSwap: { ...base.supports.castSwap, faceMeshParts: ["full", "features", "mouth"] } } }
+    }
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [parts("production"), parts("staging")] } })
+    routes[`PUT ${URL}`] = (init) => ({
+      body: { data: { masking: JSON.parse(String(init?.body)).masking, updatedAt: "2026-11-02T12:00:00.000Z", engines: ENGINES } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const precise = within(await section(/Prism/)).getByRole("group", { name: /Prism Precise$/ })
+    await user.click(within(precise).getByRole("combobox", { name: "Mode" }))
+    await user.click(screen.getByRole("option", { name: "Always" }))
+    await user.click(await within(precise).findByRole("checkbox", { name: "Face mesh" }))
+    await user.click(within(precise).getByRole("combobox", { name: "Face mesh lines" }))
+    await user.click(screen.getByRole("option", { name: "Mouth only" }))
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "motion-prism": { mode: "always", faceMesh: true, faceMeshParts: "mouth" } } }]))
+  })
+
   it("a face mesh saved on stays shown and can be turned off while an environment lacks it", async () => {
     routes[`GET ${URL}`] = () => ({ body: { data: { masking: { "motion-prism": { mode: "always", faceMesh: true } }, updatedAt: "2026-10-31T12:00:00.000Z", engines: ENGINES } } })
     routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [meshes("production")] } })
