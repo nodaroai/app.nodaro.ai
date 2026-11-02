@@ -1920,11 +1920,11 @@ the node's model takes. `run_app` turns a numeric string into a number and
 fixed list is refused with `400 validation_error`. See
 [Model and quick-setting fields](../embed-app-guide.md#model-and-quick-setting-fields).
 A [Video URL](../nodes/input/youtube-video.md) node the app exposes is
-`type: "video"` with `required: true`; its value is a link to a video (a
-YouTube, TikTok, Instagram, Facebook or X post, or any other public web
-link). A value that is not a web link is refused with `400 locked_field`. The
-server downloads a post link itself before the first node runs, under the
-app page's rules: a YouTube video of 4 minutes or more is downloaded only as a
+`type: "video"` with `required: true`; its value is a link to a video (the
+video's page, or any other public web link). A value that is not a web link is
+refused with `400 locked_field`. The server downloads a video-page link itself
+before the first node runs, under the app page's rules: from a site whose video
+length the platform reads first, a video of 4 minutes or more is downloaded only as a
 part named in `inputOverrides` (`sectionStartSec` / `sectionEndSec` on the
 node), and a run without one is refused before anything is billed; a node that
 only reads the sound (Transcribe, Suno Cover) gets just the sound. See

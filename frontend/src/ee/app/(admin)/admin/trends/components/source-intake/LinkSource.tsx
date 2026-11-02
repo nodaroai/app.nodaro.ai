@@ -1,8 +1,9 @@
-// The source clip from a link: a field for a YouTube, TikTok, Instagram, X or
-// Facebook link and "Get video" (Enter too). A link it does not take is said at
-// once, with no request. A YouTube video shows first so the part to use is
+// The source clip from a link: a field for a link to a video's page and "Get
+// video" (Enter too). A link it does not take is said at once, with no request.
+// A video whose length the platform can read shows first so the part to use is
 // picked before anything downloads; any other downloads whole, its progress
-// shown, with Cancel. Failures are worded here (`LINK_FAILURES`).
+// shown, with Cancel. Failures are worded here (`LINK_FAILURES`). The copy
+// never names the sites the link may come from (see link-copy guard).
 
 import { useId, useState } from "react"
 import { Loader2, RotateCcw, Video, X } from "lucide-react"
@@ -34,7 +35,7 @@ export function LinkSource({ parts, link, disabled }: Props) {
   return (
     <div className="flex flex-col gap-2">
       <label htmlFor={fieldId} className="text-xs font-medium text-muted-foreground">
-        …or a link to a YouTube, TikTok, Instagram, X or Facebook video
+        …or a link to where the video is
       </label>
       <div className="flex min-w-0 gap-2">
         <Input
@@ -44,7 +45,7 @@ export function LinkSource({ parts, link, disabled }: Props) {
           autoComplete="off"
           spellCheck={false}
           className="h-11 min-w-0 flex-1"
-          placeholder="https://www.youtube.com/watch?v=…"
+          placeholder="https://…"
           aria-describedby={statusId}
           value={text}
           disabled={off}

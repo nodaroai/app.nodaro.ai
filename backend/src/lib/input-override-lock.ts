@@ -239,7 +239,7 @@ export function describeLockedOverrides(locked: ReadonlyArray<LockedOverride>): 
   for (const entry of videoLink) {
     parts.push(
       `inputOverrides "${clip(entry.field, MESSAGE_MAX_PATH_CHARS)}" on Video URL node "${clip(entry.nodeId, MESSAGE_MAX_PATH_CHARS)}" must be a link to a ` +
-        "YouTube, TikTok, Instagram, Facebook or X video, or any other public web link (http or https, a public address).",
+        "video's page, or any other public web link (http or https, a public address).",
     )
   }
   if (subWorkflow.length > 0) {

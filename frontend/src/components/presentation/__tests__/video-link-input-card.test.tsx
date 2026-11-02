@@ -70,7 +70,7 @@ describe("the Video URL app input card", () => {
     setup()
     expect(screen.getByText("Episode")).toBeInTheDocument()
     expect(input().value).toBe("")
-    expect(screen.getByText(/A YouTube, TikTok, Instagram, Facebook or X link/)).toBeInTheDocument()
+    expect(screen.getByText(/A link to where your video is/)).toBeInTheDocument()
   })
 
   it("a direct file link is written as it is: nothing is downloaded, and any earlier file is cleared", async () => {

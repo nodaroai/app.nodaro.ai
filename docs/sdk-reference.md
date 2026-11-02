@@ -6066,8 +6066,8 @@ downloadVideo(input: {
 }): Promise<{ downloadId: string }>
 ```
 
-Download a social video (YouTube / TikTok / Instagram / X / Facebook) into your
-storage (`POST /v1/download-video`). `maxHeight` caps the resolution (omit for
+Download the video behind a link (the video's page, or a direct video file
+link) into your storage (`POST /v1/download-video`). `maxHeight` caps the resolution (omit for
 best available); `sectionStartSec` + `sectionEndSec` (both-or-neither) fetch
 only that time range, with a few seconds of margin on each side for the caller
 to trim (`exactSection: true` cuts it at exactly that range instead). A

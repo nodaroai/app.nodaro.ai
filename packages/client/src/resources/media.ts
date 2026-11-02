@@ -104,8 +104,8 @@ export class MediaResource {
   constructor(private client: NodaroClientCore) {}
 
   /**
-   * Download a social video (YouTube / TikTok / Instagram / X / Facebook) into
-   * your storage (`POST /v1/download-video`). `maxHeight` caps the resolution
+   * Download the video behind a link (the video's page, or a direct video file
+   * link) into your storage (`POST /v1/download-video`). `maxHeight` caps the resolution
    * (default "best"); `sectionStartSec` + `sectionEndSec` (both-or-neither) fetch
    * ONLY that time range instead of the whole video. A download that arrives
    * with no audio stream FAILS by default (it is usually a degraded source

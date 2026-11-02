@@ -453,7 +453,7 @@ nodaro voice clones delete <id> [--json]
 
 # Media — ingestion + compositing: social-video import, trim, split into parts, caption burn-in, still-to-video, slideshow, image collage, image overlay, image mask, video overlay, save-to-storage, metadata probe
 nodaro media download <url> [--max-height <px>] [--section <a-b>] [--watch] [--json]
-                                                         # YouTube / TikTok / Instagram / X / Facebook → your storage. --section fetches only
+                                                         # the video behind a link → your storage. --section fetches only
                                                          # that time range (seconds). --watch streams live progress (no job to poll later).
 nodaro media metadata <url> [--json]                     # probe duration/dimensions/title WITHOUT downloading
 nodaro media trim-video --video <url> --start <sec> --end <sec>|--keep-first <sec>|--keep-last <sec> [--watch] [--poll-interval <ms>] [--json]

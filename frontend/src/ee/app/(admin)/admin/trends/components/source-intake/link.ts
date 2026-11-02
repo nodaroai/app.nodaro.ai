@@ -14,7 +14,7 @@ import { downloadVideoLink } from "@/lib/video-link-download"
 export type LinkFailure = DownloadErrorCode | "unsupported" | "noVideo"
 
 export const LINK_FAILURES: Readonly<Record<LinkFailure, string>> = {
-  unsupported: "Paste a YouTube, TikTok, Instagram, X or Facebook link.",
+  unsupported: "Paste a link to where the video is.",
   noVideo: "This link does not point at one video. Paste the video's own link.",
   live: "This is a live stream. Use a recorded video.",
   busy: "Too many downloads are running on this account. Wait for one to finish, then try again.",

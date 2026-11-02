@@ -105,7 +105,7 @@ describe("YouTubeVideoNode", () => {
 
   it("shows URL input placeholder", () => {
     renderNode()
-    const input = screen.getByPlaceholderText(/YouTube/)
+    const input = screen.getByPlaceholderText(/a link to where your video is/)
     expect(input).toBeInTheDocument()
   })
 
@@ -129,7 +129,7 @@ describe("YouTubeVideoNode", () => {
 
   it("hands every edit of the link to the controller — the card owns no download", () => {
     renderNode()
-    fireEvent.change(screen.getByPlaceholderText(/YouTube/), {
+    fireEvent.change(screen.getByPlaceholderText(/a link to where your video is/), {
       target: { value: "https://www.tiktok.com/@someone/video/123" },
     })
     expect(setVideoLinkUrl).toHaveBeenCalledWith("node-1", "https://www.tiktok.com/@someone/video/123")

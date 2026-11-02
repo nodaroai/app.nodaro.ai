@@ -115,7 +115,7 @@ describe("a run request's link for a Video URL node", () => {
     const locked = findLockedOverrides(GRAPH, { "yt-1": { youtubeUrl: "hello" } })
     const message = describeLockedOverrides(locked)
     expect(message).toContain("youtubeUrl")
-    expect(message).toMatch(/YouTube/)
+    expect(message).toMatch(/video's page/)
     expect(message).toMatch(/public web link/)
     expect(message).not.toMatch(/\.mp4/)
     expect(() => assertNoLockedOverrides(GRAPH, { "yt-1": { youtubeUrl: "hello" } })).toThrow(/youtubeUrl/)

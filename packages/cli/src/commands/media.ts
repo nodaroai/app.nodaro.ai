@@ -166,7 +166,7 @@ export function mediaCommand(): Command {
 
   cmd
     .command("download <url>")
-    .description("download a social video (YouTube / TikTok / Instagram / X / Facebook) into your storage")
+    .description("download the video behind a link (the video's page, or a direct video file link) into your storage")
     .option("--max-height <px>", "cap the resolution (e.g. 720); omit for best available", (v) => parseInt(v, 10))
     .option("--section <a-b>", 'fetch ONLY this time range in seconds (e.g. "30-90"); the cut lands on keyframes, so pad and trim after')
     .option("--watch", "stream the download's live progress until it completes")

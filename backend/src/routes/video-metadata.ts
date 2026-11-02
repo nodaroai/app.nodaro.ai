@@ -30,7 +30,7 @@ const NULL_METADATA = { durationSec: null, title: null, isLive: false } as const
 // allowlist. yt-dlp does its own DNS+HTTP, so this allowlist is the SSRF gate.
 const videoMetadataBody = z.object({
   url: safeUrlSchema.refine((url) => isAllowedSocialVideoUrl(url), {
-    message: "Must be a valid video URL (YouTube, Facebook, TikTok, Instagram, or X)",
+    message: "Must be a link to a video's page",
   }),
 })
 
