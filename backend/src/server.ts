@@ -19,6 +19,7 @@ import { seedTutorialTemplates } from "./lib/tutorial-seed/index.js"
 import { startScheduledPostsCron, stopScheduledPostsCron } from "./lib/scheduled-posts-cron.js"
 import { startRecastDriverCron, stopRecastDriverCron } from "./lib/recast-driver-cron.js"
 import { startCompetitorScanCron, stopCompetitorScanCron } from "./lib/competitor-scan-cron.js"
+import { startTrendRadarCron, stopTrendRadarCron } from "./lib/trend-radar-cron.js"
 import { createSocialPublishWorker } from "./workers/social-publish-worker.js"
 import {
   startWorkflowExecutionsReconcileCron,
@@ -209,6 +210,9 @@ async function main() {
   // Scheduled competitor scans — see competitor-scan-cron.ts. OFF by default
   // for the same reason: a scheduled scan spends the owner's credits.
   startCompetitorScanCron(app)
+  // The Trend Radar's daily run — see trend-radar-cron.ts. OFF by default:
+  // it reads other sites and spends the runner's searches.
+  startTrendRadarCron(app)
 
   // Backstop reaper for orphaned community-listing blobs (multi-user editions)
   if (isMultiUser()) startCommunityReaperCron()
@@ -319,6 +323,7 @@ async function main() {
       stopScheduledPostsCron()
       stopRecastDriverCron()
       stopCompetitorScanCron()
+      stopTrendRadarCron()
       stopWorkflowExecutionsReconcileCron()
       stopPipelinesReconcileCron()
       await orchestratorWorker.close()

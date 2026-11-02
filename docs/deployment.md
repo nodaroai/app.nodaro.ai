@@ -1528,6 +1528,17 @@ share one database (a staging and a production deployment), enable it on
 user's due brands, so a staging tick would run production users' paid
 scans on pre-release code.
 
+**The Trend Radar never runs (Cloud).** The daily run that finds candidate
+trends (reading template sites' public sitemaps and public posts through
+Social Search, then keeping one reading per candidate and day) is started
+by a one-minute tick at the hour set in the admin page. It is **off by
+default**: it reads other sites and spends the runner admin's searches.
+Enable it with `TREND_RADAR_ENABLED=true` on the API service and confirm
+`[trend-radar] started` in the boot log; "Run now" on the admin page does
+not need it. With two environments on one database, enable it on **one**,
+the production one. The run searches as the admin who last saved the
+radar's settings (or pressed "Run now"), so save the settings once.
+
 If you're still stuck, file an issue with the Docker logs at
 <https://github.com/nodaroai/app.nodaro.ai/issues>.
 

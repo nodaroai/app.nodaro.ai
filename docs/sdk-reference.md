@@ -20,6 +20,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.recast`](#clientrecast)
   - [`client.castSwap`](#clientcastswap)
   - [`client.trends`](#clienttrends)
+  - [`client.trendRadar`](#clienttrendradar)
   - [`client.studio`](#clientstudio)
   - [`client.copilot`](#clientcopilot)
   - [`client.executions`](#clientexecutions)
@@ -68,7 +69,7 @@ The root `@nodaro/sdk` exports everything on this page. Each resource is also
 published as its own entry point, `@nodaro/sdk/<entry>`, which loads only that
 resource's module and the types it takes and returns:
 
-`/apps`, `/audio`, `/billing`, `/cast-swap`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/trash`, `/trends`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
+`/apps`, `/audio`, `/billing`, `/cast-swap`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/trash`, `/trend-radar`, `/trends`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
 
 `/client` holds `createClient`, `NodaroClient` and the auth providers;
 `/core` holds `NodaroClientCore` (see below) and the same auth providers;
@@ -2511,6 +2512,46 @@ const request: TrendRunRequest = {
 const quote = await client.trends.estimate(trend.slug, request)
 const { jobId } = await client.trends.run(trend.slug, request, { idempotencyKey: crypto.randomUUID() })
 ```
+
+---
+
+### `client.trendRadar`
+
+Trend Radar: the candidate trends the daily radar run found on Nodaro Cloud —
+a short clip several different creators recast within a few weeks — and an
+admin's decisions on them. Also importable as `@nodaro/sdk/trend-radar`.
+Routes: [Trend Radar](./api-integration.md#13h-trend-radar-cloud-edition-admin-session-only).
+
+**Every method answers a signed-in ADMIN session only** (`supabaseAuth`, the
+credential a first-party web app holds): an API key or an app's OAuth token
+gets `ForbiddenError`, and so does a signed-in account that is not an admin.
+A self-hosted instance has no radar (`NotFoundError`); Nodaro Cloud before
+its storage exists answers a `NodaroError` with status 503 and code
+`not_available`.
+
+```ts
+// The queue, hottest first; then one candidate with its readings and posts.
+const { data: cards } = await client.trendRadar.candidates({ status: "candidate" })
+const candidate = await client.trendRadar.candidate(cards[0].id)
+
+// Approve: a DRAFT trend is created, named after the candidate, and the top
+// post's clip is downloaded into it in the background.
+const { trendId, clip } = await client.trendRadar.approve(candidate.id)
+```
+
+| Method | Returns | Notes |
+|--------|---------|-------|
+| `summary()` | `Promise<TrendRadarSummary>` | `GET /v1/trend-radar/summary`. `{ lastRun, counts: { candidates, watching, slowing }, searchesToday, dailySearchBudget }` — `lastRun` is `{ at, sourcesRead, namesSeen, searchesUsed }` or `null` before the first run. |
+| `candidates(params?)` | `Promise<TrendCandidatePage>` | `GET /v1/trend-radar/candidates`. `{ data: TrendCandidateCard[], next }`; `status` (one `TrendCandidateStatus`; left out = everything but `rejected` and `archived`), `sort` (`"creators"` default, `"dayChange"`, `"firstSeen"`), `cursor` (the previous page's `next`), `limit` 1–200 (default 50). |
+| `candidate(id)` | `Promise<TrendCandidate>` | `GET /v1/trend-radar/candidates/:id`. The card plus `posts` (links and public counts; `embedUrl` is the platform's own player, `stillUrl` its short-lived still), `readings` (one per day, oldest first: `{ date, creators, plays, posts }`), `templatesElsewhere`, `search` (`{ suggest, interest7d, checkedAt }` or `null`), `history`, `checklist` (the thresholds the candidate is held to, `{ key, label, hint, auto }`; `auto` is whether the last reading met it, `null` when it was not read) and `rejectReason`. `NotFoundError` for an unknown id. |
+| `approve(id)` | `Promise<TrendCandidateApproval>` | `POST /v1/trend-radar/candidates/:id/approve`. `{ trendId, clip }`: creates a draft trend named after the candidate and marks the candidate `approved`. `clip` is `"attaching"` when the top post is being downloaded (as the approving admin, through the same path as the editor's Video URL node) and stored as the draft's source clip in the background — the candidate's `history` then gains `source_attached`, or `source_failed` with why (a private post, a clip outside 4–30 s), and the admin uploads the clip by hand — or `"none"` when there is no top post or the candidate was approved before. Approving again answers the same `trendId`. A `NodaroError` with status 409 and code `slug_taken` when no free slug was found. |
+| `watch(id)` | `Promise<TrendCandidateCard>` | `POST /v1/trend-radar/candidates/:id/watch`. Back to `watching`; the daily run keeps reading it. |
+| `reject(id, { reason })` | `Promise<TrendCandidateCard>` | `POST /v1/trend-radar/candidates/:id/reject`. `rejected`, with the reason (1–500 characters); the run stops reading it. |
+| `settings()` | `Promise<TrendRadarSettings>` | `GET /v1/trend-radar/settings`. `{ sources, thresholds, alerts, retentionDays, runAt }` — `sources` are the sitemap, social and suggestion sources with what their last read found; `thresholds` is `{ minCreators, windowDays, risingPct, slowingPct, maxClipSec, dailySearchBudget }`; `runAt` is `HH:MM` in Israel time. |
+| `updateSettings(patch)` | `Promise<TrendRadarSettings>` | `PUT /v1/trend-radar/settings`. Only the keys sent change; `sources` replaces the list whole (a source without `id` is added, one with an `id` updated, one left out removed; a sitemap `url` is `https` only). Whoever saves becomes the account the daily searches run as. |
+| `run()` | `Promise<{ runId: string; startedAt: string }>` | `POST /v1/trend-radar/run`. Starts today's run now (202); one run at a time, a second call joins the running one. |
+
+Statuses: `watching` (under the creator threshold), `candidate` (passed it), `slowing`, `approved`, `rejected`, `archived`. Labels, from the readings: `new`, `watching`, `rising`, `hot`, `slowing`.
 
 ---
 

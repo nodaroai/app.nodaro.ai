@@ -4917,6 +4917,42 @@ never from the draft.
 its trends; its label per language is set by an admin, and a tag with no label
 reads as itself.
 
+## 13h. Trend Radar (Cloud edition, admin session only)
+
+The daily run that finds candidate trends — a short clip several different
+creators recast within a few weeks — and the admin's decisions on them. The
+run reads template sites' sitemaps and public posts (through Social Search,
+as the runner admin), keeps ids, names, counts and links, and an admin
+approves a candidate into a DRAFT trend: the top post's clip is downloaded
+into it as the source, and the trend page builds the rest.
+
+**Every route answers a signed-in ADMIN session only.** An API key or an
+app's OAuth token gets `403 forbidden` (as the billing routes do); a
+signed-in account that is not an admin gets `403 forbidden` too. A
+first-party app calls them through the SDK
+([`client.trendRadar`](./sdk-reference.md#clienttrendradar)). A deployment
+whose storage does not have the radar yet answers `503 not_available`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/trend-radar/summary` | `{ data: { lastRun, counts: { candidates, watching, slowing }, searchesToday, dailySearchBudget } }`. |
+| `GET` | `/v1/trend-radar/candidates` | `{ data: TrendCandidateCard[], next }`. Query: `status` (`watching`, `candidate`, `slowing`, `approved`, `rejected`, `archived`; left out = everything but the last two), `sort` (`creators` default, `dayChange`, `firstSeen`), `cursor`, `limit` 1–200. |
+| `GET` | `/v1/trend-radar/candidates/:id` | `{ data: TrendCandidate }`: the card plus `posts`, `readings` (one per day, oldest first), `templatesElsewhere`, `search`, `history`, `checklist` and `rejectReason`. `404 not_found`. |
+| `POST` | `/v1/trend-radar/candidates/:id/approve` | Creates a draft trend named after the candidate and marks it `approved`: `{ data: { trendId, clip } }`. `clip` is `"attaching"` when the top post is being downloaded (as the approving admin) and stored as the draft's source clip in the background — the candidate's `history` then gains `source_attached`, or `source_failed` with why — else `"none"`. Approving again answers the same trend. `409 slug_taken` when no free slug was found. |
+| `POST` | `/v1/trend-radar/candidates/:id/watch` | Back to `watching`: `{ data: TrendCandidateCard }`. |
+| `POST` | `/v1/trend-radar/candidates/:id/reject` | Body `{ reason }` (1–500 characters). `rejected`: `{ data: TrendCandidateCard }`. |
+| `GET` | `/v1/trend-radar/settings` | `{ data: { sources, thresholds, alerts, retentionDays, runAt } }`. |
+| `PUT` | `/v1/trend-radar/settings` | Any subset of the same keys; `sources` replaces the list whole. Whoever saves becomes the account the daily searches run as. Answers the settings after the change. |
+| `POST` | `/v1/trend-radar/run` | Starts today's run now: `202 { data: { runId, startedAt } }`. One run at a time. |
+
+A card: `{ id, name, slug, status, label, soundName, durationSec, creators,
+plays, dayChangePct, firstSeen: { kind, name, url, firstSeenAt }, topPost,
+passedAt, trendId, createdAt, updatedAt }`. A post: `{ platform, url, author,
+postedAt, plays, likes, soundName, stillUrl, embedUrl, durationSec }` — on
+Instagram `plays` is `null` (views are hidden to a logged-out reader) and
+`likes` is the count to show. Labels: `new`, `watching`, `rising`, `hot`,
+`slowing`.
+
 ## 14. Pipelines
 
 Story-to-Video pipelines orchestrate multi-stage AI production: script → characters

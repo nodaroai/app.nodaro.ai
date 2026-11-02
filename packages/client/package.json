@@ -250,6 +250,11 @@
       "import": "./dist/entries/trash.js",
       "require": "./dist/entries/trash.cjs"
     },
+    "./trend-radar": {
+      "types": "./dist/entries/trend-radar.d.ts",
+      "import": "./dist/entries/trend-radar.js",
+      "require": "./dist/entries/trend-radar.cjs"
+    },
     "./trends": {
       "types": "./dist/entries/trends.d.ts",
       "import": "./dist/entries/trends.js",
