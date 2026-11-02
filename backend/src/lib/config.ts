@@ -341,6 +341,17 @@ export const envSchema = z.object({
   SITE_ANALYTICS_GA4_PROPERTY_ID: z.string().default(""),
   SITE_ANALYTICS_SEARCH_CONSOLE_SITE: z.string().default(""),
   /**
+   * Header versions (admin panel, Cloud): the products to show, a JSON array
+   * of `{ id, label, repo, production, staging, source }` (parsed on first use
+   * in `ee/lib/header-versions/products.ts` — never here, so a bad value cannot
+   * stop the server), and a read-only GitHub token (a fine-grained token with
+   * Contents and Deployments read on those repositories and the header's own)
+   * that reads which commit each site runs. No token = the page shows only
+   * what a site publishes itself, and explains the setup.
+   */
+  HEADER_VERSIONS_PRODUCTS: z.string().default(""),
+  HEADER_VERSIONS_GITHUB_TOKEN: z.string().default(""),
+  /**
    * Hours a job may sit in `pending_review` (held by a registered job policy
    * for human review) before the platform AUTO-REJECTS it: the reservation is
    * refunded, the withheld output is deleted, and the decision is recorded

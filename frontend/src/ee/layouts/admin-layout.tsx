@@ -46,6 +46,7 @@ import {
   LayoutTemplate,
   TrendingUp,
   Clapperboard,
+  PanelTop,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -57,7 +58,7 @@ import {
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
-import { hasCredits, hasOrganizations, isFeatureEnabled } from "@/lib/edition"
+import { hasCredits, hasOrganizations, isCloud, isFeatureEnabled } from "@/lib/edition"
 
 const STORAGE_KEY = "nodaro-admin-sidebar-collapsed"
 
@@ -70,6 +71,7 @@ const ADMIN_NAV = [
   { href: "/admin/usage", label: "Usage", icon: Activity },
   { href: "/admin/live-usage", label: "Live usage", icon: Gauge },
   { href: "/admin/site-analytics", label: "Site Analytics", icon: TrendingUp },
+  ...(isCloud() ? [{ href: "/admin/header-versions", label: "Header versions", icon: PanelTop }] : []),
   { href: "/admin/alerts", label: "Alerts", icon: Bell },
   { href: "/admin/models", label: "Models", icon: Cpu },
   { href: "/admin/node-defaults", label: "Node Defaults", icon: Sliders },

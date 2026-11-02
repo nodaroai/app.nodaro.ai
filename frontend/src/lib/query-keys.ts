@@ -385,6 +385,7 @@ export const queryKeys = {
       ["admin", "site-analytics", "realtime"] as const,
     siteAnalyticsOnlineUsers: () =>
       ["admin", "site-analytics", "online-users"] as const,
+    headerVersions: () => ["admin", "header-versions"] as const,
     lanesLive: () => ["admin", "lanes", "live"] as const,
     lanesUser: (userId: string) => ["admin", "lanes", "user", userId] as const,
     lanesHistory: (view: string, days: number) => ["admin", "lanes", "history", view, days] as const,

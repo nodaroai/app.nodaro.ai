@@ -5,7 +5,18 @@ import { join } from "node:path"
 import type { Plugin, UserConfig } from "vite"
 import { describe, expect, it } from "vitest"
 
-import { isPackageInstalled, MEDIA_EDITOR_ID, mediaEditorDecision, SITE_A11Y_ID, SITE_HEADER_ID, SITE_LOCALE_ID, siteHeaderDecision, siteHeaderModule } from "../header-module-plugin"
+import {
+  installedVersion,
+  isPackageInstalled,
+  MEDIA_EDITOR_ID,
+  mediaEditorDecision,
+  SITE_A11Y_ID,
+  SITE_HEADER_ID,
+  SITE_LOCALE_ID,
+  SITE_VERSION_FILE,
+  siteHeaderDecision,
+  siteHeaderModule,
+} from "../header-module-plugin"
 
 /**
  * The shared header's module resolver. `virtual:site-header` is the real
@@ -36,8 +47,17 @@ function plugin(installed: boolean, env: Record<string, string>): Plugin {
     a11yStubPath: A11Y_STUB,
     mediaEditorStubPath: MEDIA_EDITOR_STUB,
     isInstalled: () => installed,
+    readVersion: () => (installed ? "0.12.0" : null),
     readEnv: () => env,
   })
+}
+
+/** What the build hands Rollup to write beside the bundle. */
+function emitted(p: Plugin): Array<{ type: string; fileName: string; source: string }> {
+  const files: Array<{ type: string; fileName: string; source: string }> = []
+  const generateBundle = p.generateBundle as (this: { emitFile: (file: { type: string; fileName: string; source: string }) => string }) => void
+  generateBundle.call({ emitFile: (file) => (files.push(file), file.fileName) })
+  return files
 }
 
 type ConfigHook = (config: UserConfig, env: { mode: string; command: "build" | "serve" }) => Promise<UserConfig | null | void>
@@ -90,6 +110,55 @@ describe("isPackageInstalled", () => {
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
+  })
+})
+
+describe("installedVersion", () => {
+  it("reads the version from the installed package's own manifest; null when absent or unreadable", () => {
+    const root = mkdtempSync(join(tmpdir(), "site-header-version-"))
+    try {
+      const frontend = join(root, "frontend")
+      mkdirSync(frontend)
+      expect(installedVersion(frontend)).toBeNull()
+      const pkg = join(root, "node_modules", "@nodaroai", "shell")
+      mkdirSync(pkg, { recursive: true })
+      writeFileSync(join(pkg, "package.json"), "{not json")
+      expect(installedVersion(frontend)).toBeNull()
+      writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "@nodaroai/shell", version: "0.12.0" }))
+      expect(installedVersion(frontend)).toBe("0.12.0")
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
+
+describe("the site's shell-version.json", () => {
+  it("a cloud build publishes the version it installed and whether the site shows the header", async () => {
+    // Never the package's name: the file is served to anyone.
+    const cases = [
+      [true, ON, { version: "0.12.0", header: true }],
+      // The package is installed for the media editor, the header off.
+      [true, { VITE_EDITION: "cloud" }, { version: "0.12.0", header: false }],
+      [false, { VITE_EDITION: "cloud" }, { version: null, header: false }],
+    ] as const
+    for (const [installed, env, expected] of cases) {
+      const p = plugin(installed, env)
+      await runConfig(p, "build")
+      const files = emitted(p)
+      expect(files.map((f) => [f.type, f.fileName])).toEqual([["asset", SITE_VERSION_FILE]])
+      expect(JSON.parse(files[0]?.source ?? "")).toEqual(expected)
+    }
+  })
+
+  it("no other build, and no dev server, writes one", async () => {
+    for (const env of [{ ...ON, VITE_EDITION: "community" }, { ...ON, VITE_EDITION: "business" }, {}]) {
+      const p = plugin(true, env)
+      await runConfig(p, "build")
+      expect(emitted(p)).toEqual([])
+    }
+    const dev = plugin(true, ON)
+    await runConfig(dev, "serve")
+    expect(emitted(dev)).toEqual([])
   })
 })
 

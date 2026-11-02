@@ -16,7 +16,8 @@ import { fileURLToPath } from "node:url"
  *     the flag compiled to false;
  *   - control: the same flag with no resolver reaches the bundle as true
  *     (so the first case is the resolver's doing);
- *   - cloud + flag on + no package → the build is refused.
+ *   - cloud + flag on + no package → the build is refused;
+ *   - a cloud build writes `shell-version.json` beside the bundle, no other build does.
  *
  * It needs the workspace's dependencies (vite at the repo root). The tool
  * self-tests job runs tools/__tests__ WITHOUT `npm ci`, so there it skips and
@@ -79,13 +80,13 @@ function viteBuild(dir, env) {
     env: { ...process.env, VITE_EDITION: "", VITE_SHARED_HEADER: "", ...env },
   })
   const outDir = join(dir, "out")
-  let code = ""
+  let files = {}
   try {
-    code = readdirSync(outDir).map((f) => readFileSync(join(outDir, f), "utf8")).join("\n")
+    files = Object.fromEntries(readdirSync(outDir).map((f) => [f, readFileSync(join(outDir, f), "utf8")]))
   } catch {
-    code = ""
+    files = {}
   }
-  return { status: result.status, output: `${result.stdout}${result.stderr}`, code }
+  return { status: result.status, output: `${result.stdout}${result.stderr}`, code: Object.values(files).join("\n"), files }
 }
 
 function withFixture(options, run) {
@@ -113,6 +114,8 @@ test("flag on, another edition: the bundle carries the stub and a literal false"
     // The media editor's stub: a part imported by name builds, as null.
     assert.match(r.code, /mediaEditorAvailable = false/)
     assert.match(r.code, /TrimPanel = null/)
+    // Only a cloud build says which header it carries.
+    assert.equal(r.files["shell-version.json"], undefined)
   })
 })
 
@@ -141,5 +144,7 @@ test("flag unset: the bundle has no forced value and the stub", (t) => {
     assert.equal(r.status, 0, r.output)
     assert.match(r.code, /flagOn = false/)
     assert.match(r.code, /headerAvailable = false/)
+    // A cloud build publishes which header it carries: here none, and none shown.
+    assert.deepEqual(JSON.parse(r.files["shell-version.json"] ?? "null"), { version: null, header: false })
   })
 })

@@ -1,5 +1,5 @@
-// @reads-none checks whether a package is installed under node_modules; reads no repo file
-import { existsSync } from "node:fs"
+// @reads-none checks whether a package is installed under node_modules and reads its version there; reads no repo file
+import { existsSync, readFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import type { Plugin } from "vite"
 
@@ -50,6 +50,12 @@ import type { Plugin } from "vite"
  * Types come from `site-header.d.ts`, `media-editor.d.ts`,
  * `lib/site-locale.d.ts` and `lib/site-a11y.d.ts`; `contract/` holds the
  * internal-only check that those types still fit the package.
+ *
+ * A cloud build also publishes `/shell-version.json`: the header version it
+ * installed (`null` without the package) and whether the site shows it. The
+ * version depends on the environment's build settings as well as the commit,
+ * so the built site is the one place that knows it; the admin's Header
+ * versions page reads it (`backend/src/ee/lib/header-versions/`).
  */
 
 export const SITE_HEADER_ID = "virtual:site-header"
@@ -62,6 +68,8 @@ export const MEDIA_EDITOR_ID = "virtual:media-editor"
 const RESOLVED_MEDIA_EDITOR_ID = `\0${MEDIA_EDITOR_ID}`
 const PACKAGE = "@nodaroai/shell"
 const FLAG = "VITE_SHARED_HEADER"
+/** Served at the site's root; the backend's `SITE_FILE` reads it by this name. */
+export const SITE_VERSION_FILE = "shell-version.json"
 
 export type SiteHeaderDecision = "package" | "stub" | "missing"
 
@@ -85,19 +93,46 @@ export function mediaEditorDecision(edition: string | undefined, installed: bool
 }
 
 /**
- * Whether the package is installed for `root`: a `node_modules/<package>` in
- * `root` or any ancestor (the workspace root, where `npm install` puts it) —
+ * The installed package's `package.json` for `root`: a `node_modules/<package>`
+ * in `root` or any ancestor (the workspace root, where `npm install` puts it) —
  * the directories Node and Vite look in. Not require-style resolution: the
  * package publishes ESM `exports` only, which `require.resolve` cannot use.
  */
-export function isPackageInstalled(root: string): boolean {
+function installedManifest(root: string): string | null {
   let dir = resolve(root)
   for (;;) {
-    if (existsSync(join(dir, "node_modules", ...PACKAGE.split("/"), "package.json"))) return true
+    const manifest = join(dir, "node_modules", ...PACKAGE.split("/"), "package.json")
+    if (existsSync(manifest)) return manifest
     const parent = dirname(dir)
-    if (parent === dir) return false
+    if (parent === dir) return null
     dir = parent
   }
+}
+
+/** Whether the package is installed for `root` (see {@link installedManifest}). */
+export function isPackageInstalled(root: string): boolean {
+  return installedManifest(root) !== null
+}
+
+/** The installed package's version for `root`, or `null` when it is not installed or names none. */
+export function installedVersion(root: string): string | null {
+  const manifest = installedManifest(root)
+  if (!manifest) return null
+  try {
+    const version = (JSON.parse(readFileSync(manifest, "utf8")) as { version?: unknown }).version
+    return typeof version === "string" ? version : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * What `/shell-version.json` says: the version installed, and whether the site
+ * shows the header. Never the package's name: the file is public, the name is
+ * not.
+ */
+export function siteVersionFile(decision: SiteHeaderDecision, version: string | null): string {
+  return `${JSON.stringify({ version, header: decision === "package" })}\n`
 }
 
 export interface SiteHeaderModuleOptions {
@@ -113,6 +148,8 @@ export interface SiteHeaderModuleOptions {
   readonly mediaEditorStubPath: string
   /** Test seam; defaults to Node resolution from `root`. */
   readonly isInstalled?: (root: string) => boolean
+  /** Test seam; defaults to the installed package's own `package.json`. */
+  readonly readVersion?: (root: string) => string | null
   /** Test seam; defaults to Vite's own `loadEnv` (the process env plus `.env*` files, `VITE_` only). */
   readonly readEnv?: (mode: string, envDir: string) => Promise<Record<string, string>> | Record<string, string>
 }
@@ -162,6 +199,7 @@ export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
   const readEnv = options.readEnv ?? viteEnv
   let decision: SiteHeaderDecision = "stub"
   let editor: "package" | "stub" = "stub"
+  let versionFile: string | null = null
   return {
     name: "nodaro-site-header",
     enforce: "pre",
@@ -171,6 +209,8 @@ export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
       const present = installed(options.root)
       decision = siteHeaderDecision({ edition: env.VITE_EDITION, flag: env[FLAG] }, present)
       editor = mediaEditorDecision(env.VITE_EDITION, present)
+      // `/shell-version.json`: a cloud build's only; never on another build or the dev server.
+      versionFile = command === "build" && env.VITE_EDITION === "cloud" ? siteVersionFile(decision, present ? (options.readVersion ?? installedVersion)(options.root) : null) : null
       if (decision === "missing" && command === "build") {
         throw new Error(`${FLAG}=true on a cloud build, but the header package is not installed. Install it (see frontend/src/ee/shell/install-package.sh) or unset the flag.`)
       }
@@ -198,6 +238,9 @@ export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
       if (id === RESOLVED_A11Y_ID) return A11Y_ADAPTER
       if (id === RESOLVED_MEDIA_EDITOR_ID) return MEDIA_EDITOR_ADAPTER
       return id === RESOLVED_LOCALE_ID ? LOCALE_ADAPTER : null
+    },
+    generateBundle() {
+      if (versionFile !== null) this.emitFile({ type: "asset", fileName: SITE_VERSION_FILE, source: versionFile })
     },
   }
 }

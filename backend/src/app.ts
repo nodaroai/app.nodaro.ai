@@ -239,6 +239,7 @@ import { adminAppReportsRoutes } from "./ee/routes/admin-app-reports.js"
 import { adminKieCreditsRoutes } from "./ee/routes/admin-kie-credits.js"
 import { adminHostedDeploymentsRoutes } from "./ee/routes/admin-hosted-deployments.js"
 import { adminSiteAnalyticsRoutes } from "./ee/routes/admin-site-analytics.js"
+import { adminHeaderVersionsRoutes } from "./ee/routes/admin-header-versions.js"
 import { adminOnlineUsersRoutes } from "./ee/routes/admin-online-users.js"
 import { adminLanesRoutes } from "./ee/routes/admin-lanes.js"
 import { recordPresence } from "./ee/lib/presence-instance.js"
@@ -811,6 +812,8 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   if (hasAdmin()) await app.register(adminKieCreditsRoutes)
   if (hasAdmin()) await app.register(adminHostedDeploymentsRoutes)
   if (hasAdmin()) await app.register(adminSiteAnalyticsRoutes)
+  // The shared header's versions across Nodaro's own products: the platform's fleet, so Cloud only.
+  if (isCloud()) await app.register(adminHeaderVersionsRoutes)
   if (hasAdmin()) await app.register(adminOnlineUsersRoutes)
   // Concurrency lanes: the switch in every edition with an admin; sizes and ceilings on Cloud (the route checks).
   if (hasAdmin()) await app.register(adminLanesRoutes)
