@@ -73,7 +73,7 @@ export const BUILD_ASSETS = Object.freeze([
     // src/services/face-mesh/face-mesh-model.ts — and its Apache-2.0 licence,
     // which ships beside it.
     dir: "services/face-mesh/model",
-    match: /^(?:face_landmark\.onnx|LICENSE\.mediapipe\.txt)$/,
+    match: /^(?:face_landmarks_detector\.onnx|LICENSE\.mediapipe\.txt)$/,
   },
 ])
 

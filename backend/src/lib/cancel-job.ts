@@ -31,6 +31,12 @@ export type CancelOwnedJobResult =
   | { kind: "lost_race" }
   | { kind: "cancelled"; analysisJobId: string | null }
 
+/** A refused withdrawal as the owner sees it: a restricted job (migration 581) is one that does not exist for them. */
+function withdrawalRefusal(reason: string): CancelOwnedJobResult {
+  if (reason === "not_found" || reason === "restricted") return { kind: "not_found" }
+  return { kind: "lost_race" }
+}
+
 /**
  * Every in-flight status, `pending_review` included (spec D17).
  *
@@ -447,8 +453,9 @@ export async function cancelOwnedJob(jobId: string, userId: string): Promise<Can
     const withdrawal = await withdrawHeldJob(jobId)
     if (!withdrawal.ok) {
       // `not_held` means a reviewer, the TTL sweep or another tab resolved it
-      // between our read and the CAS — the same shape as any lost race.
-      return withdrawal.reason === "not_found" ? { kind: "not_found" } : { kind: "lost_race" }
+      // between our read and the CAS — the same shape as any lost race. A
+      // restricted job (migration 581) does not exist for its owner any more.
+      return withdrawalRefusal(withdrawal.reason)
     }
     return { kind: "cancelled", analysisJobId }
   }
@@ -495,7 +502,7 @@ export async function cancelOwnedJob(jobId: string, userId: string): Promise<Can
       const { withdrawHeldJob } = await import("./job-policy-gate.js")
       const withdrawal = await withdrawHeldJob(jobId)
       if (withdrawal.ok) return { kind: "cancelled", analysisJobId }
-      return withdrawal.reason === "not_found" ? { kind: "not_found" } : { kind: "lost_race" }
+      return withdrawalRefusal(withdrawal.reason)
     }
     return { kind: "lost_race" }
   }

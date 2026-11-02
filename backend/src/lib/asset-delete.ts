@@ -1,6 +1,7 @@
 import { supabase } from "./supabase.js"
 import { config } from "./config.js"
 import { deleteKeyRecordingFailure } from "./storage-delete.js"
+import { heldAmong } from "./legal-hold.js"
 import { isOwnedObjectKey, objectKeyJobIdCandidates } from "./job-policy-outputs.js"
 import { jobOutputReferrerPaths } from "./job-output-urls.js"
 import { relayPossible } from "./relay-possible.js"
@@ -384,6 +385,8 @@ export interface OwnedAssetRow {
 
 export type PermanentDeleteResult =
   | { ok: true; r2Deleted: boolean }
+  /** The file is evidence of a complaint (migration 582): neither its bytes nor its row go until the hold ends. */
+  | { ok: false; held: true }
   | { ok: false; dbError: { message: string } }
 
 export async function permanentlyDeleteAsset(opts: {
@@ -393,6 +396,10 @@ export async function permanentlyDeleteAsset(opts: {
 }): Promise<PermanentDeleteResult> {
   const { userId, asset, blockOnOwnJobReferrers } = opts
   let r2Deleted = false
+
+  // Evidence is never deleted: a held file answers so before anything is
+  // tried (the storage layer and the row's trigger would refuse it anyway).
+  if (asset.r2_key && (await heldAmong([asset.r2_key])).has(asset.r2_key)) return { ok: false, held: true }
 
   // Relay rule first (see isRelayOwnedObject): when the bytes were created by
   // our relay target we drop our row and nothing else — not the object, and

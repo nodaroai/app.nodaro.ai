@@ -26,15 +26,17 @@
  */
 import { supabase } from "./supabase.js"
 import { config } from "./config.js"
-import { r2KeyFromOurUrl } from "./storage.js"
-import { isOurCdnUrl } from "./cdn-host.js"
-import { originalCdnImageUrl } from "./cdn-original-url.js"
+import { r2KeyFromPublicUrl } from "./r2-public-key.js"
 import { extractJobOutputs, isOwnedObjectKey } from "./job-policy-outputs.js"
+import { restrictedKeyOfAddress } from "./content-restriction-address.js"
+import { invalidateRestrictedSet, restrictedKeys } from "./content-restriction-set.js"
+
+// The light halves, re-exported so every reader keeps one import.
+export { restrictedKeyOfAddress, restrictedKeys, invalidateRestrictedSet }
 
 export { RESTRICTED_ASSET_COLUMN, RESTRICTED_JOB_COLUMN } from "./content-restrictions-column.js"
 
-/** How long the byte proxies' set of restricted keys is kept before it is read again. */
-export const RESTRICTED_SET_TTL_MS = 60_000
+export { RESTRICTED_SET_TTL_MS } from "./content-restriction-set.js"
 
 /** A job may be restricted once its worker has nothing more to write. */
 export const FINISHED_JOB_STATUSES: ReadonlySet<string> = new Set(["completed", "failed", "cancelled", "pending_review"])
@@ -192,7 +194,7 @@ export async function restrictAsset(assetId: string, input: RestrictInput): Prom
     {
       assetId: asset.id,
       jobId: null,
-      keys: keysOf([asset.r2_key, typeof thumb === "string" ? r2KeyFromOurUrl(thumb) : null]),
+      keys: keysOf([asset.r2_key, typeof thumb === "string" ? r2KeyFromPublicUrl(thumb, config.R2_PUBLIC_URL) : null]),
       contentHash: asset.content_hash,
       sourceUrl,
       ownerUserId: asset.user_id,
@@ -260,95 +262,6 @@ export async function listRestrictions(opts: { active?: boolean; limit?: number 
 // ---------------------------------------------------------------------------
 // The byte proxies' question: is this address restricted?
 
-interface RestrictedSet {
-  readonly keys: ReadonlySet<string>
-  readonly readAt: number
-}
-
-/** One page of the active records; the read goes on until a page comes back short. */
-const RESTRICTED_SET_PAGE = 500
-
-let restrictedSet: RestrictedSet | null = null
-let restrictedSetLoad: Promise<RestrictedSet> | null = null
-
-async function readRestrictedSet(): Promise<RestrictedSet> {
-  const keys = new Set<string>()
-  for (let from = 0; ; from += RESTRICTED_SET_PAGE) {
-    const { data, error } = await supabase
-      .from("content_restrictions")
-      .select("r2_keys")
-      .is("lifted_at", null)
-      .order("restricted_at", { ascending: true })
-      .range(from, from + RESTRICTED_SET_PAGE - 1)
-    if (error) throw new Error(`Restricted set read failed: ${error.message}`)
-    const rows = (data ?? []) as Array<{ r2_keys: string[] | null }>
-    for (const row of rows) for (const key of row.r2_keys ?? []) keys.add(key)
-    if (rows.length < RESTRICTED_SET_PAGE) break
-  }
-  return { keys, readAt: Date.now() }
-}
-
-/** The active restrictions' keys, read again once a minute; the last set read stays in force when a read fails. */
-export async function restrictedKeys(): Promise<ReadonlySet<string>> {
-  if (restrictedSet && Date.now() - restrictedSet.readAt < RESTRICTED_SET_TTL_MS) return restrictedSet.keys
-  if (!restrictedSetLoad) {
-    restrictedSetLoad = readRestrictedSet()
-      .then((set) => {
-        restrictedSet = set
-        return set
-      })
-      .finally(() => {
-        restrictedSetLoad = null
-      })
-  }
-  try {
-    return (await restrictedSetLoad).keys
-  } catch (e) {
-    if (restrictedSet) {
-      // The set read before stays in force for another minute, so a database
-      // that is down is asked once a minute, not once a request.
-      restrictedSet = { keys: restrictedSet.keys, readAt: Date.now() }
-      return restrictedSet.keys
-    }
-    throw e
-  }
-}
-
-/** The next question reads the table again (after a restriction or a lift on this replica); the set read before stays in force until then. */
-export function invalidateRestrictedSet(): void {
-  if (restrictedSet) restrictedSet = { keys: restrictedSet.keys, readAt: 0 }
-}
-
-/** The path prefix of Cloudflare's image and media transforms (a rendition of one of our files, on any host of ours). */
-const CDN_TRANSFORM = /^\/cdn-cgi\/(?:image|media)\/[^/]+\//
-
-/**
- * The storage key an address of ours names, as stored: a display rendition's
- * original, a media transform's source, the fallback host's path, with every
- * percent-escape decoded (the storage decodes them too, so `%61` and `a` name
- * the same object). Null for an address that is not ours.
- */
-export function restrictedKeyOfAddress(url: string): string | null {
-  let parsed: URL
-  try {
-    parsed = new URL(originalCdnImageUrl(url))
-  } catch {
-    return null
-  }
-  if (!isOurCdnUrl(parsed.toString(), config.R2_PUBLIC_URL, config.R2_PUBLIC_FALLBACK_DOMAIN)) return null
-  parsed.search = ""
-  parsed.hash = ""
-  const path = parsed.pathname.replace(CDN_TRANSFORM, "/")
-  parsed.pathname = path
-  const key = r2KeyFromOurUrl(parsed.toString()) ?? path.replace(/^\/+/, "")
-  if (!key) return null
-  try {
-    return decodeURIComponent(key)
-  } catch {
-    return key
-  }
-}
-
 /**
  * Whether serving this address would serve restricted bytes. When the set
  * cannot be read and none was read before, the answer is "not restricted",
@@ -366,8 +279,4 @@ export async function isRestrictedAddress(url: string): Promise<boolean> {
   }
 }
 
-/** Tests swap the set between cases; production never calls this. */
-export function __resetRestrictedSetForTests(): void {
-  restrictedSet = null
-  restrictedSetLoad = null
-}
+export { __resetRestrictedSetForTests } from "./content-restriction-set.js"

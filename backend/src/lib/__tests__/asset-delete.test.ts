@@ -39,6 +39,13 @@ vi.mock("../../utils/file-validation.js", () => ({
 const relayGate = vi.hoisted(() => ({ on: true }))
 vi.mock("../relay-possible.js", () => ({ relayPossible: () => relayGate.on }))
 
+// The legal hold (lib/legal-hold.ts): a key kept as evidence of a complaint
+// is not deleted, whoever asks. Empty by default; one pin fills it.
+const hold = vi.hoisted(() => ({ keys: new Set<string>() }))
+vi.mock("../legal-hold.js", () => ({
+  heldAmong: vi.fn(async (keys: readonly string[]) => new Set(keys.filter((k) => hold.keys.has(k)))),
+}))
+
 import { permanentlyDeleteAsset, isRelayOwnedObject, relayOwnedKeys, deletableKeys } from "../asset-delete.js"
 import { supabase } from "../supabase.js"
 import { deleteFromR2 } from "../storage.js"
@@ -162,7 +169,26 @@ beforeEach(() => {
   vi.clearAllMocks()
   configMock.config.R2_SHARED_WITH_RELAY_TARGET = false
   relayGate.on = true
+  hold.keys.clear()
   vi.mocked(deleteFromR2).mockResolvedValue(undefined)
+})
+
+describe("permanentlyDeleteAsset — the legal hold", () => {
+  it("a key kept as evidence of a complaint answers `held` before anything is read, deleted or refunded", async () => {
+    hold.keys.add(NEAR_KEY)
+    useScenario(() => {
+      throw new Error("must not query")
+    })
+    const result = await permanentlyDeleteAsset({
+      userId: USER,
+      asset: { id: "asset-1", r2_key: NEAR_KEY, size_bytes: 4096, job_id: NEAR_JOB },
+      blockOnOwnJobReferrers: true,
+    })
+    expect(result).toEqual({ ok: false, held: true })
+    expect(vi.mocked(supabase.from)).not.toHaveBeenCalled()
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
+    expect(vi.mocked(updateStorageUsage)).not.toHaveBeenCalled()
+  })
 })
 
 describe("isRelayOwnedObject", () => {

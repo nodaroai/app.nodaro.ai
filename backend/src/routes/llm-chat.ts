@@ -26,6 +26,8 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { CONTENT_RESTRICTED_MESSAGE, restrictedInputKey } from "../lib/content-restriction-gate.js"
+import { jobBlockedBody } from "../lib/job-policy.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { billedProviderCost } from "../lib/llm-errors.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
@@ -230,6 +232,11 @@ export async function llmChatRoutes(app: FastifyInstance) {
       }
       const advancedError = advancedModeError(parsed.data, llmModel)
       if (advancedError) return reply.status(400).send({ error: advancedError })
+      // No job row here, so the insert funnel's gate never sees the request:
+      // a restricted file (migration 581) is not sent to the model either.
+      if (await restrictedInputKey({ referenceImageUrls, referenceVideoUrls, referenceAudioUrls }, { userId })) {
+        return reply.status(422).send(jobBlockedBody({ userMessage: CONTENT_RESTRICTED_MESSAGE }))
+      }
       const modelIdentifier = buildLlmCreditIdentifier("llm-chat", llmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
       // Built once: the metered hold is sized from the very request the lane is sent.
       const request: LlmRequest = {
@@ -426,6 +433,11 @@ export async function llmChatRoutes(app: FastifyInstance) {
       }
       const advancedError = advancedModeError(parsed.data, llmModel)
       if (advancedError) return reply.status(400).send({ error: advancedError })
+      // No job row here, so the insert funnel's gate never sees the request:
+      // a restricted file (migration 581) is not sent to the model either.
+      if (await restrictedInputKey({ referenceImageUrls, referenceVideoUrls, referenceAudioUrls }, { userId })) {
+        return reply.status(422).send(jobBlockedBody({ userMessage: CONTENT_RESTRICTED_MESSAGE }))
+      }
       const modelIdentifier = buildLlmCreditIdentifier("llm-chat", llmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
       // Built once: the metered hold is sized from the very request the lane is sent.
       const request: LlmRequest = {

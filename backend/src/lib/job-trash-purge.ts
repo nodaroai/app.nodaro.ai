@@ -19,6 +19,7 @@
  */
 import { supabase } from "./supabase.js"
 import { TRASHED_JOB_COLUMN } from "./public-job-data.js"
+import { RESTRICTED_JOB_COLUMN } from "./content-restrictions-column.js"
 import { isMissingColumnError } from "./postgrest-errors.js"
 import { deleteJobWithPrivateMedia } from "./workflow-delete.js"
 import { TRASH_RETENTION_MS } from "./job-trash.js"
@@ -47,6 +48,9 @@ export async function purgeExpiredTrashedJobs(nowMs: number = Date.now(), logger
       .select(`id, ${TRASHED_JOB_COLUMN}`)
       // trash-read: the purge reads only the Trash.
       .not(TRASHED_JOB_COLUMN, "is", null)
+      // A restricted job (migration 581) is evidence: its delete would be
+      // refused every hour for the life of the hold.
+      .is(RESTRICTED_JOB_COLUMN, null)
       .lt(TRASHED_JOB_COLUMN, cutoff)
     // Strictly after the last row read: values quoted (a timestamp holds `:` and `+`).
     if (after) query = query.or(`${TRASHED_JOB_COLUMN}.gt."${after.at}",and(${TRASHED_JOB_COLUMN}.eq."${after.at}",id.gt."${after.id}")`)

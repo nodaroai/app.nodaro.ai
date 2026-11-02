@@ -45,6 +45,8 @@ import { subjectSchema } from "../lib/subject-schema.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { backendHybridRoles } from "../lib/reference-format.js"
 import { generateVideoChildFields, seedance25OutputFormatFor } from "../lib/seedance25-output-format.js"
+import { CONTENT_RESTRICTED_MESSAGE, restrictedInputKey } from "../lib/content-restriction-gate.js"
+import { jobBlockedBody } from "../lib/job-policy.js"
 
 // Character-voice orchestration (voiced-video). All optional + additive: absent
 // => today's behaviour. A "voiced" request ALSO requires a dialogue-capable
@@ -650,6 +652,12 @@ export async function applyAudioSoundtrackPreHandler(
 ): Promise<void> {
   const body = req.body
   if (!body || typeof body !== "object") return
+  // A restricted clip (migration 581) is not read into a new file: the job
+  // funnel's gate, which runs after this, would otherwise see only the file
+  // made here. The same refusal the funnel gives.
+  if (await restrictedInputKey({ referenceAudioUrls: (body as Record<string, unknown>).referenceAudioUrls }, { userId: req.userId })) {
+    return reply.status(422).send(jobBlockedBody({ userMessage: CONTENT_RESTRICTED_MESSAGE }))
+  }
   const outcome = await applyAudioSoundtrack(body as Record<string, unknown>, req.userId)
   if (!outcome.ok) {
     return reply.status(400).send({ error: { code: "validation_error", message: outcome.message } })

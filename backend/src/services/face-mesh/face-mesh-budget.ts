@@ -11,14 +11,28 @@ import { FACE_DETECT_SESSION_PEAK_MIB_PER_THREAD } from "../face-detect/face-det
 import { cameraMegapixelsOf, canvasPeakMemoryMiB } from "../../providers/video/ffmpeg-memory-model.js"
 import type { FfmpegThreads } from "../../providers/video/ffmpeg-threads.js"
 
-/** The landmark session's working set per intra-op thread, MiB (a 2.3 MB model,
- *  one 192 × 192 crop at a time): about twice what a run grew by locally. */
-export const FACE_MESH_SESSION_PEAK_MIB_PER_THREAD = 128
+/**
+ * The landmark session's working set per intra-op thread, MiB (a 4.9 MB model,
+ * one 256 × 256 crop at a time). It was 128 for the former 192 × 192 model,
+ * about twice what a run grew by locally. Re-measured for this one (2026-11-02,
+ * onnxruntime-node 1.30.0, `README` in model/): the session alone, built and
+ * run on 200 real crops, grows the process by 15–17 MiB (the former model:
+ * 8–13), at one thread as at two; a whole run with onnxruntime and YuNet
+ * already loaded, by 81–99 MiB (the former: 76–86). The former figure plus
+ * about twice the largest increase.
+ */
+export const FACE_MESH_SESSION_PEAK_MIB_PER_THREAD = 160
 /** sharp's working set while it draws a frame (libvips' cache is per call), MiB. */
 export const FACE_MESH_DRAW_PEAK_MIB = 96
 
-/** Hold budget per frame, ms: several times the worst measured (decode, detection,
- *  two faces' landmarks, drawing and the encode's share; `README` in model/). */
+/**
+ * Hold budget per frame, ms: several times the worst measured (decode,
+ * detection, every face's landmarks, drawing and the encode's share; `README`
+ * in model/). The landmark model costs 2.5–3.5 × the former's a face
+ * (3.4–3.5 ms on an Apple M4 Max, 9.8–9.9 ms on linux/arm64; one thread):
+ * the whole step measured 56–61 CPU-ms a frame on four faces a frame (the
+ * former model: 47–51), still well inside.
+ */
 export const FACE_MESH_MS_PER_FRAME = 400
 /** Fixed hold budget per run, ms: the decoders' and encoder's start. */
 export const FACE_MESH_FIXED_MS = 120_000

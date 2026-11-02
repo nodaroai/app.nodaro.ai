@@ -108,6 +108,10 @@ export async function sweepExpiredHolds(): Promise<HoldExpiryResult> {
     .from("jobs")
     .select("id")
     .eq("status", "pending_review")
+    // A parked job whose output an administrator restricted (migration 581)
+    // is evidence: it is not expired, and it must not sit at the head of
+    // every sweep either.
+    .is("restricted_at", null)
     .lt("held_at", cutoff)
     .order("held_at", { ascending: true })
     .limit(MAX_PER_SWEEP)

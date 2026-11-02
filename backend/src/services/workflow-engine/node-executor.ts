@@ -41,6 +41,12 @@ import { previewRefusalMessage } from "../../lib/preview-refusal-copy.js"
  */
 
 import { supabase } from "../../lib/supabase.js"
+import { CONTENT_RESTRICTED_MESSAGE, restrictedInputKey } from "../../lib/content-restriction-gate.js"
+// The gate's two light halves, loaded with this module rather than on the
+// first run that names an address: the executor's step order (payload, gate,
+// probes, reservation, poll) must not depend on a module load in its middle.
+import "../../lib/content-restriction-address.js"
+import "../../lib/content-restriction-set.js"
 import { insertInternalJob, JobBlockedError } from "../../lib/insert-job.js"
 import { resolvedModelOfJob } from "../../lib/job-resolved-model.js"
 import { videoQueue } from "../../lib/queue.js"
@@ -2046,6 +2052,20 @@ export async function computeEditVideoProCreditOverride(
   return { override, pricing }
 }
 
+/**
+ * The restriction gate of a worker node (lib/content-restriction-gate.ts): a
+ * file an administrator restricted after a complaint is not an input to any
+ * job. A refusal deletes the placeholder row, like every refusal of the
+ * stage, and fails the node with `content_restricted` and the one sentence.
+ */
+async function refuseRestrictedInput(jobId: string, input: Record<string, unknown>, userId: string | undefined): Promise<void> {
+  if (!(await restrictedInputKey(input, { userId }))) return
+  await supabase.from("jobs").delete().eq("id", jobId)
+  const refused = new Error(CONTENT_RESTRICTED_MESSAGE) as Error & { errorCode?: string }
+  refused.errorCode = "content_restricted"
+  throw refused
+}
+
 async function executeWorkerNode(
   node: SimpleNode,
   resolvedInputs: ResolvedInputs,
@@ -2202,6 +2222,14 @@ async function executeWorkerNode(
   const { jobName, queueName, modelIdentifier } = buildResult
   // `let`: the Seedance draft-finalize stamp (2b'++) rebinds it to a merged copy.
   let { payload } = buildResult
+
+  // 2. The restriction gate, FIRST: a file an administrator restricted after
+  // a complaint is not an input to any job, and not fetched by the steps
+  // below either (the soundtrack render reads the first audio clip into a new
+  // file, the duration probes read every reference clip). The placeholder row
+  // goes with the refusal, like every refusal of this stage; the payload
+  // write further down asks once more, as a backstop.
+  await refuseRestrictedInput(jobId, { ...resolvedInputs, ...payload }, ctx.userId)
 
   // 2a. Audio soundtrack — the DAG twin of the routes'
   // `applyAudioSoundtrackPreHandler`: on a model that takes reference audio
@@ -2402,6 +2430,11 @@ async function executeWorkerNode(
     const template = userPromptTemplate ?? extractUserPromptTemplate(node)
     if (template !== undefined) inputData.userPrompt = template
   }
+
+  // A DAG child's real payload is written here, past the insert funnel's
+  // gate (lib/insert-job.ts) and after the steps above rewrote it, so the
+  // restriction gate asks once more (the first ask is step 2 above).
+  await refuseRestrictedInput(jobId, inputData, ctx.userId)
 
   await supabase
     .from("jobs")

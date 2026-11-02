@@ -12,6 +12,8 @@ import { config } from "./config.js"
 import { safeFetch } from "./safe-fetch.js"
 import { assertOrdinaryMediaKey } from "./retained-image-keys.js"
 import { keptStoragePrefix, type KeptStoragePrefix } from "./kept-storage-prefixes.js"
+import { heldAmong, LegalHoldUnavailableError } from "./legal-hold.js"
+import { r2KeyFromPublicUrl } from "./r2-public-key.js"
 import { templateKeptKey, templatePreviewKey } from "./template-preview-key.js"
 import { IMAGE_HEADER_MAX_READ_BYTES, forgetStoredImage, noteStoredImage } from "./image-dimensions.js"
 import {
@@ -873,18 +875,7 @@ export async function headR2Object(
 }
 
 export function r2KeyFromOurUrl(url: string): string | null {
-  if (!config.R2_PUBLIC_URL) return null
-  try {
-    const base = new URL(config.R2_PUBLIC_URL)
-    const candidate = new URL(url)
-    if (candidate.origin !== base.origin) return null
-    const prefix = base.pathname.endsWith("/") ? base.pathname : `${base.pathname}/`
-    if (!candidate.pathname.startsWith(prefix)) return null
-    const key = candidate.pathname.slice(prefix.length)
-    return key || null
-  } catch {
-    return null
-  }
+  return r2KeyFromPublicUrl(url, config.R2_PUBLIC_URL)
 }
 
 function extractExtensionFromUrl(url: string): string | null {
@@ -1200,8 +1191,22 @@ function warnKept(keys: readonly string[]): void {
   }
 }
 
+/**
+ * Evidence is never deleted (migration 582): a key under an active
+ * restriction, or of a file an open complaint matches, is left alone with a
+ * warning, as a kept prefix is. The question is asked fresh. A question that
+ * cannot be answered THROWS (lib/legal-hold.ts): `deleteFromR2` lets it
+ * through, so the delete fails and is recorded where the caller records;
+ * `batchDeleteFromR2` answers every key of the batch as not deleted, never
+ * as kept, so the retry pass tries them again.
+ */
+function warnHeld(keys: readonly string[]): void {
+  if (keys.length > 0) console.warn(`[storage] not deleting ${keys.length} key(s) held as evidence of a complaint`)
+}
+
 export async function deleteFromR2(key: string): Promise<void> {
   if (isKeptKey(key)) return warnKept([key])
+  if ((await heldAmong([key])).has(key)) return warnHeld([key])
   assertOrdinaryMediaKey(key)
   await s3.send(
     new DeleteObjectCommand({
@@ -1223,16 +1228,28 @@ export async function deleteFromR2(key: string): Promise<void> {
  * storage never loses its link.
  *
  * `kept` names the keys among them under a kept prefix (`KEPT_STORAGE_PREFIXES`)
- * — skipped on purpose and never deleted, so a caller that retries failed
- * deletes leaves these out.
+ * or held as evidence (migration 582) — skipped on purpose and never deleted,
+ * so a caller that retries failed deletes leaves these out.
  */
 export async function batchDeleteFromR2(
   requested: string[],
 ): Promise<{ deleted: number; errors: number; notDeleted: string[]; kept: string[] }> {
-  const keys = requested.filter((key) => !isKeptKey(key))
-  const kept = requested.filter(isKeptKey)
+  const prefixKept = requested.filter(isKeptKey)
+  warnKept(prefixKept)
+  let held: Set<string>
+  try {
+    held = await heldAmong(requested.filter((key) => !isKeptKey(key)))
+  } catch (err) {
+    if (!(err instanceof LegalHoldUnavailableError)) throw err
+    // The hold could not be read: nothing is deleted, and every key is a
+    // failed delete for the retry pass (not a kept one, which it never retries).
+    const notDeleted = requested.filter((key) => !isKeptKey(key))
+    return { deleted: 0, errors: notDeleted.length, notDeleted: [...prefixKept, ...notDeleted], kept: prefixKept }
+  }
+  warnHeld([...held])
+  const keys = requested.filter((key) => !isKeptKey(key) && !held.has(key))
+  const kept = requested.filter((key) => isKeptKey(key) || held.has(key))
   const notDeleted = [...kept]
-  warnKept(kept)
   if (keys.length === 0) return { deleted: 0, errors: 0, notDeleted, kept }
   // Validate the entire batch before deleting any object.
   keys.forEach(assertOrdinaryMediaKey)

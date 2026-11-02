@@ -946,6 +946,14 @@ describe("rejectHeldJobRow", () => {
 
   beforeEach(() => { db.jobRow.value = { ...HELD } })
 
+  it("a parked row an administrator restricted (migration 581) is not rejected: its bytes are evidence", async () => {
+    db.jobRow.value = { ...HELD, restricted_at: "2026-11-01T00:00:00Z" }
+    expect(await rejectHeldJobRow("job-1", INPUT)).toEqual({ ok: false, reason: "restricted" })
+    expect(failure.markJobFailed).not.toHaveBeenCalled()
+    expect(storage.batchDeleteFromR2).not.toHaveBeenCalled()
+    expect(audit.recordJobPolicyDecision).not.toHaveBeenCalled()
+  })
+
   it("replays only the REAL columns — never the settlement keys, which are not columns", async () => {
     expect(await rejectHeldJobRow("job-1", INPUT)).toEqual({ ok: true, refunded: 1 })
     const extra = (failure.markJobFailed.mock.calls[0]![1] as Record<string, any>).extra as Record<string, unknown>
@@ -1061,6 +1069,15 @@ describe("withdrawHeldJob — the owner's own cancel wins (D17)", () => {
     sideHolds.settleSideHoldsAfterFlip.mockRejectedValueOnce(new Error("boom"))
     expect(await withdrawHeldJob("job-1")).toEqual({ ok: true, refunded: 1 })
     expect(audit.recordJobPolicyDecision).toHaveBeenCalledTimes(2)
+  })
+
+  it("a parked row an administrator restricted (migration 581) is left as it is: no cancel, no money, no delete", async () => {
+    db.jobRow.value = { ...HELD, restricted_at: "2026-11-01T00:00:00Z" }
+    expect(await withdrawHeldJob("job-1")).toEqual({ ok: false, reason: "restricted" })
+    expect(db.updateArgs).toEqual([])
+    expect(credits.refundReservedCreditsForJob).not.toHaveBeenCalled()
+    expect(storage.batchDeleteFromR2).not.toHaveBeenCalled()
+    expect(audit.recordJobPolicyDecision).not.toHaveBeenCalled()
   })
 
   it("a lost CAS moves no money and deletes nothing", async () => {

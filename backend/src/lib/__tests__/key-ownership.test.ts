@@ -12,6 +12,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
  */
 
 vi.mock("../supabase.js", () => ({ supabase: { from: vi.fn() } }))
+// The legal hold (lib/legal-hold.ts) holds nothing here: ownership is the question.
+vi.mock("../legal-hold.js", () => ({ heldAmong: vi.fn(async () => new Set<string>()) }))
 
 vi.mock("../config.js", () => ({
   config: { R2_PUBLIC_URL: "https://r2.test.com", R2_SHARED_WITH_RELAY_TARGET: false },

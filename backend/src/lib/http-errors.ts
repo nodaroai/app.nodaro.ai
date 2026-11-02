@@ -254,6 +254,13 @@ const sanitizedReplies = new WeakSet<object>()
  * preserves the caller's `clientMessage`; any `internal_error` 500 that does NOT
  * go through here is genericized by the net as a backstop.
  */
+/** SQLSTATE 55000 raised by the legal hold's row triggers (migration 582), as PostgREST or a thrown error carries it. */
+function isLegalHoldRefusal(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false
+  const { code, message } = err as { code?: unknown; message?: unknown }
+  return code === "55000" && typeof message === "string" && /held as evidence/i.test(message)
+}
+
 export function sendInternalError(
   reply: FastifyReply,
   req: FastifyRequest,
@@ -296,6 +303,13 @@ export function sendInternalError(
   if (blocked) {
     req.log.info({ policyId: blocked.policyId }, "job blocked by policy")
     return reply.status(422).send(jobBlockedBody({ userMessage: blocked.message }))
+  }
+  // The legal hold's own refusal (migration 582, SQLSTATE 55000 from the
+  // row triggers): a delete that reached the row of a held file or job. A
+  // conflict with one sentence, the same one the library's delete answers.
+  if (isLegalHoldRefusal(err)) {
+    req.log.info("delete refused: the row is held as evidence")
+    return reply.status(409).send({ error: { code: "content_held", message: "This file cannot be deleted right now." } })
   }
   req.log.error({ err }, clientMessage)
   reportServerError(req, errorMessageOf(err) ?? clientMessage, "route-catch", err, clientMessage)

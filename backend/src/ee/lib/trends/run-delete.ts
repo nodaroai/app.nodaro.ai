@@ -102,7 +102,9 @@ export async function deleteTrendTestRun(args: {
   let filesKept = 0
   for (const asset of assets) {
     const result = await permanentlyDeleteAsset({ userId: ownerId, asset, blockOnOwnJobReferrers: false })
-    if (!result.ok) throw new Error(`Could not delete library row ${asset.id} of trend run ${runId}: ${result.dbError.message}`)
+    if (!result.ok) {
+      throw new Error(`Could not delete library row ${asset.id} of trend run ${runId}: ${"held" in result ? "the file is held as evidence of a complaint" : result.dbError.message}`)
+    }
     libraryRows++
     if (asset.r2_key) {
       handledKeys.add(asset.r2_key)

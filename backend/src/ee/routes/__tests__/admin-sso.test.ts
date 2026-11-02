@@ -25,6 +25,10 @@ vi.mock("@/middleware/auth.js", () => ({
   invalidateAuthCache: (...a: unknown[]) => invalidateAuthCache(...a),
 }))
 
+// The legal hold (lib/legal-hold.ts): an account under hold is not deleted.
+const hold = vi.hoisted(() => ({ held: false }))
+vi.mock("@/lib/legal-hold.js", () => ({ userHasHeldContent: vi.fn(async () => hold.held) }))
+
 vi.mock("@/ee/middleware/require-admin.js", () => ({
   requireAdmin: async (
     req: { userId?: string },
@@ -116,6 +120,20 @@ describe("DELETE /v1/admin/sso/:provider/users/:subject", () => {
     expect(deleteUser).toHaveBeenCalledWith("u-1")
     expect(updateUserById).not.toHaveBeenCalled()
     expect(invalidateAuthCache).toHaveBeenCalledWith("u-1")
+  })
+
+  it("mode=delete: an account holding evidence of a complaint is refused 409, and nothing is deleted", async () => {
+    hold.held = true
+    try {
+      listUsers.mockResolvedValue(page([{ id: "u-1", app_metadata: { sso: "librechat", sso_subject: "idp-7" } }]))
+      const res = await del("/v1/admin/sso/librechat/users/idp-7?mode=delete")
+      expect(res.statusCode).toBe(409)
+      expect(res.json().error.code).toBe("content_held")
+      expect(deleteUser).not.toHaveBeenCalled()
+      expect(updateUserById).not.toHaveBeenCalled()
+    } finally {
+      hold.held = false
+    }
   })
 
   it("500 when the GoTrue call fails", async () => {

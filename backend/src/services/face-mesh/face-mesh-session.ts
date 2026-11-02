@@ -15,20 +15,22 @@ import { FACE_DETECT_ORT_INTRA_OP_THREADS } from "../face-detect/face-detect-bud
 import {
   FACE_MESH_INPUT_SIZE,
   FACE_MESH_MODEL_PATH,
-  FACE_MESH_POINTS,
+  FACE_MESH_MODEL_POINTS,
   FaceMeshUnavailableError,
   readVerifiedFaceMeshModel,
 } from "./face-mesh-model.js"
 
 type OrtModule = typeof import("onnxruntime-node")
 
-/** The graph's output holding 468 × (x, y, z) in crop pixels. */
-export const FACE_MESH_LANDMARKS_OUTPUT = "conv2d_21"
-/** The graph's output holding the face presence logit. */
-export const FACE_MESH_PRESENCE_OUTPUT = "conv2d_31"
+/** The graph's input: the `N × 256 × 256 × 3` NHWC RGB crop in [0, 1] (`model/README.md`). */
+export const FACE_MESH_INPUT = "input_12"
+/** The graph's output holding 478 × (x, y, z) in crop pixels (`face_landmarks` in the model's metadata). */
+export const FACE_MESH_LANDMARKS_OUTPUT = "Identity"
+/** The graph's output holding the face presence logit (`presence`). Its third, `Identity_2`, is `tongue_out`: never read. */
+export const FACE_MESH_PRESENCE_OUTPUT = "Identity_1"
 
 export interface FaceMeshOutput {
-  /** 468 × (x, y, z), x and y in pixels of the 192 × 192 crop. */
+  /** 478 × (x, y, z), x and y in pixels of the 256 × 256 crop: the face's 468, then the irises (not drawn). */
   readonly landmarks: Float32Array
   /** The presence logit (sigmoid > 0.5 = a face). */
   readonly presenceLogit: number
@@ -37,7 +39,7 @@ export interface FaceMeshOutput {
 export interface FaceMeshSession {
   /** The intra-op thread count the session runs with — what the admission reserves for. */
   readonly intraOpThreads: number
-  /** Run one `1 × 192 × 192 × 3` NHWC RGB crop in [0, 1]. Serialized per session. */
+  /** Run one `1 × 256 × 256 × 3` NHWC RGB crop in [0, 1]. Serialized per session. */
   run(input: Float32Array): Promise<FaceMeshOutput>
   release(): Promise<void>
 }
@@ -74,16 +76,24 @@ export async function createFaceMeshSession(opts: CreateFaceMeshSessionOptions =
     if (err instanceof DeterministicJobError) throw err
     throw new FaceMeshUnavailableError(`onnxruntime could not build the face mesh session (${(err as Error)?.message ?? String(err)})`)
   }
-  const inputName = session.inputNames[0] ?? "input_1"
+  // The pinned bytes always carry these names; checked once, so another graph is refused before a crop is run.
+  if (
+    !session.inputNames.includes(FACE_MESH_INPUT) ||
+    !session.outputNames.includes(FACE_MESH_LANDMARKS_OUTPUT) ||
+    !session.outputNames.includes(FACE_MESH_PRESENCE_OUTPUT)
+  ) {
+    await session.release().catch(() => undefined)
+    throw new FaceMeshUnavailableError("the model's inputs and outputs are not the pinned graph's")
+  }
   const size = FACE_MESH_INPUT_SIZE
 
   let queue: Promise<unknown> = Promise.resolve()
   const run = (input: Float32Array): Promise<FaceMeshOutput> => {
     const next = queue.then(async () => {
-      const outs = await session.run({ [inputName]: new ort.Tensor("float32", input, [1, size, size, 3]) })
+      const outs = await session.run({ [FACE_MESH_INPUT]: new ort.Tensor("float32", input, [1, size, size, 3]) })
       const landmarks = outs[FACE_MESH_LANDMARKS_OUTPUT]?.data as Float32Array | undefined
       const presence = outs[FACE_MESH_PRESENCE_OUTPUT]?.data as Float32Array | undefined
-      if (!landmarks || landmarks.length !== FACE_MESH_POINTS * 3 || !presence || presence.length !== 1) {
+      if (!landmarks || landmarks.length !== FACE_MESH_MODEL_POINTS * 3 || !presence || presence.length !== 1) {
         throw new FaceMeshUnavailableError("the model's outputs are not the pinned graph's")
       }
       // Copied: the tensor's buffer is the session's, reused by the next run.

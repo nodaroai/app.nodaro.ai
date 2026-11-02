@@ -219,6 +219,16 @@ describe("the proxies' question", () => {
     expect(restrictedKeyOfAddress("not a url")).toBeNull()
   })
 
+  it("reads an http address of ours as the https one, and a transform whose source is a whole address of ours", () => {
+    expect(restrictedKeyOfAddress("http://cdn.example.test/videos/a.mp4")).toBe("videos/a.mp4")
+    expect(restrictedKeyOfAddress("https://cdn.example.test/cdn-cgi/image/width=4000/https://cdn.example.test/videos/a.jpg")).toBe("videos/a.jpg")
+    expect(restrictedKeyOfAddress("https://cdn.example.test/cdn-cgi/media/time=1s/https%3A%2F%2Fcdn.example.test%2Fvideos%2Fa.mp4")).toBe("videos/a.mp4")
+    expect(restrictedKeyOfAddress("https://cdn.example.test/cdn-cgi/image/width=10/https://elsewhere.test/videos/a.jpg")).toBeNull()
+    // Bounded: a transform of a transform of a transform is not followed.
+    const nested3 = "https://cdn.example.test/cdn-cgi/image/w=1/https://cdn.example.test/cdn-cgi/image/w=2/https://cdn.example.test/cdn-cgi/image/w=3/https://cdn.example.test/videos/a.jpg"
+    expect(restrictedKeyOfAddress(nested3)).toBeNull()
+  })
+
   it("answers from the active keys, read once a minute and again after a restriction or a lift", async () => {
     vi.useFakeTimers()
     expect(await isRestrictedAddress("https://cdn.example.test/videos/a.mp4")).toBe(false)

@@ -5246,6 +5246,32 @@ address of a restricted file:
 | `GET` | `/v1/download?url=` | `451 content_restricted`, before any fetch. |
 | `GET` | `/v1/image-proxy?url=` | `451 content_restricted` in every mode (download, image, video), for an address of the platform's own storage; another host's address is not the platform's to restrict. |
 
+A restricted file is not an input to any new job or model call: a request
+naming its address (by any address of the platform's own storage, a
+rendition or transform of it included) is refused `422 job_blocked` (as any
+job policy refusal is, see the error table of section 5) with `policyId`
+`platform:content-restriction` and the sentence above; a workflow run whose
+node would read it fails that node with `content_restricted`; and
+`POST /v1/llm/chat` with such a file among its references answers the same
+`422`. Each server reads the restrictions once a minute, so a restriction
+placed a moment ago can still be missed for up to a minute.
+
+**Legal hold.** From the moment a file is matched to a complaint whose
+sender has verified their email, and while it is restricted, its bytes are
+kept as evidence: the file cannot be deleted, by its owner or by storage's
+own retention (a copy of the same bytes under another key included), and a
+job whose output is restricted is neither deleted nor rejected or withdrawn
+from a review. `DELETE /v1/library/:id` of such a file answers `409` with
+`code: "content_held"` and the message "This file cannot be deleted right
+now."; so does any other delete that reaches such a file or job; a request
+that deletes several files skips it (reason `held`). An account holding such
+a file is not removed either: an administrator's hard delete of it answers
+`409 content_held` until the complaint is closed or the restriction lifted.
+The hold ends by itself when the last verified complaint naming the file is
+resolved or closed and no restriction covers it. A complaint holds the files
+it was matched to when it was received; a job output with no library row of
+its own is held once an administrator restricts it.
+
 A restriction is lifted by an administrator (a counter-notice, a mistake),
 which restores each row to what it was, in one step. The records of
 restrictions and lifts are the deployment's own and are not part of the

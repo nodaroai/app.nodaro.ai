@@ -26,6 +26,7 @@ type Row = Record<string, unknown>
 const h = vi.hoisted(() => {
   const db: Record<string, Row[]> = {}
   const deleted: string[] = []
+  const held = new Set<string>()
   const updates: Array<{ table: string; patch: Row; ids: unknown[] }> = []
   let reads = 0
 
@@ -79,6 +80,7 @@ const h = vi.hoisted(() => {
     from: vi.fn((table: string) => makeChain(table)),
     rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
     updateStorageUsage: vi.fn().mockResolvedValue(undefined),
+    held,
   }
 })
 
@@ -97,10 +99,14 @@ vi.mock("@/lib/storage.js", () => ({
   batchDeleteFromR2: vi.fn(),
   listObjectsByPrefixWithMeta: vi.fn(),
 }))
+// The legal hold (lib/legal-hold.ts): the keys the database says are evidence.
+vi.mock("@/lib/legal-hold.js", () => ({
+  heldAmong: vi.fn(async (keys: readonly string[]) => new Set(keys.filter((k) => h.held.has(k)))),
+}))
 vi.mock("@/lib/storage-delete.js", () => ({
   deleteKeysRecordingFailures: vi.fn(async (keys: readonly string[]) => {
     h.deleted.push(...keys)
-    return { deleted: keys.length, errors: 0, failed: [] }
+    return { deleted: keys.length, errors: 0, failed: [], kept: [] }
   }),
   publicUrlOfKey: (k: string) => `https://cdn.example.com/${k}`,
 }))
@@ -191,6 +197,31 @@ describe("cleanupFreeUserMedia — rows whose objects are kept", () => {
     expect(keyOf("z-other-save")).toBe(SHARED_UPLOAD)
     expect(keyOf("a-own-upload")).toBeNull()
     expect(keyOf("d-my-output")).toBeNull()
+  })
+
+  it("a row whose object is held as evidence of a complaint keeps its key and its object: the next run reads it again", async () => {
+    h.held.add(MY_OUTPUT)
+    try {
+      await cleanupFreeUserMedia()
+      expect(h.deleted).not.toContain(MY_OUTPUT)
+      expect(keyOf("d-my-output")).toBe(MY_OUTPUT)
+      expect(keyOf("a-own-upload")).toBeNull()
+    } finally {
+      h.held.clear()
+    }
+  })
+
+  it("a held row whose object another library claims keeps its key too (the let-go never reaches the row's trigger)", async () => {
+    h.held.add(SHARED_UPLOAD)
+    try {
+      await cleanupFreeUserMedia()
+      expect(h.deleted).not.toContain(SHARED_UPLOAD)
+      expect(keyOf("b-shared-upload")).toBe(SHARED_UPLOAD)
+      expect(keyOf("a-own-upload")).toBeNull()
+      expect(keyOf("d-my-output")).toBeNull()
+    } finally {
+      h.held.clear()
+    }
   })
 
   it("refunds every row that was a charge, the kept-for-another-library one included; frees only what went", async () => {
