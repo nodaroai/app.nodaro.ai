@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { ensureStageRow, failStage } from "../stage-utils.js"
 import { pipelineEvents } from "../events.js"
+import { RESTRICTED_ASSET_COLUMN } from "../../../lib/content-restrictions-column.js"
 
 export interface RunPostMergeStageArgs {
   supabase: SupabaseClient
@@ -84,11 +85,15 @@ export async function runPostMergeStage(
 
   // Resolve the asset URL so we can include it in either the awaiting_approval
   // output OR the pipeline:completed event payload.
-  const { data: asset, error: assetErr } = await supabase
+  // A final output an administrator restricted meanwhile is not handed out
+  // in the completion event: the stage fails as for a missing row.
+  // restricted-read: the column is read and a restricted output fails the stage, below
+  const { data: assetRow, error: assetErr } = await supabase
     .from("assets")
-    .select("r2_url")
+    .select(`r2_url, ${RESTRICTED_ASSET_COLUMN}`)
     .eq("id", finalAssetId)
     .single()
+  const asset = (assetRow as { r2_url: string | null; restricted_at?: string | null } | null)?.restricted_at ? null : assetRow
   if (assetErr || !asset) {
     await failStage(
       supabase,

@@ -80,6 +80,7 @@ export async function mediaDiscardRoutes(app: FastifyInstance) {
     const key = r2KeyFromOurUrl(url)
     if (!key) return { data: { discarded: false } }
 
+    // restricted-read: a discard's own pre-check (a delete), never an answer with the file
     const { data: row, error } = await supabase
       .from("assets")
       .select("id, upload_source, created_at")

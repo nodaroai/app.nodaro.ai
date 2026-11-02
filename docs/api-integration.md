@@ -5228,6 +5228,32 @@ the email never went, and the handler reaches the complainant from the case.
 Once the case exists, nothing that follows (the email, the log) turns the
 answer into a failure. A complaint never removes or restricts content by
 itself: every case is handled by a person.
+## 13k. Content restrictions
+
+After a complaint, an administrator can **restrict** a stored file or a job's
+output. A restriction is of the bytes: every stored row that names them (the
+file, the job that made it, a copy another account saved, by storage key and
+by content hash) is marked in one step, and a job that is still running is
+refused until it finishes. From then on each of those rows reads, for every
+caller including its owner, as one that does not exist: out of the library
+and every listing, out of the gallery and of any share, unresolvable by an
+agent, and a restricted job answers with no output. The two byte proxies
+answer `451` with `code: "content_restricted"` and one sentence for an
+address of a restricted file:
+
+| Method | Route | On a restricted file |
+|--------|-------|----------------------|
+| `GET` | `/v1/download?url=` | `451 content_restricted`, before any fetch. |
+| `GET` | `/v1/image-proxy?url=` | `451 content_restricted` in every mode (download, image, video), for an address of the platform's own storage; another host's address is not the platform's to restrict. |
+
+A restriction is lifted by an administrator (a counter-notice, a mistake),
+which restores each row to what it was, in one step. The records of
+restrictions and lifts are the deployment's own and are not part of the
+public API; the handler's screen is a later change. Two things are later
+changes too: the bytes on the content network (an address copied before the
+restriction still resolves there until that change), and the addresses
+copied into workflow documents, run states and published apps, which are
+not rewritten.
 
 ## 14. Pipelines
 

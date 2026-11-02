@@ -22,6 +22,10 @@ vi.mock("@/lib/url-validator.js", async () => {
   return { safeUrlSchema: z.string().url() }
 })
 
+// The restriction check (lib/content-restrictions.ts) reads the database;
+// here nothing is restricted, and a read that fails answers "not restricted".
+vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
+
 // image-proxy now fetches via safeFetch (DNS-aware SSRF gate). Stubbing
 // globalThis.fetch wouldn't intercept undici's internal fetch, so we mock
 // the module directly and configure per-test responses via vi.mocked().

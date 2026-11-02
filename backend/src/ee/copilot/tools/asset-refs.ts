@@ -17,6 +17,7 @@
 import { supabase } from "../../../lib/supabase.js"
 import { isUuid } from "../../../lib/mcp/tools/_id-guard.js"
 import { TRASHED_JOB_COLUMN } from "../../../lib/public-job-data.js"
+import { RESTRICTED_ASSET_COLUMN } from "../../../lib/content-restrictions-column.js"
 
 export type AssetKind = "image" | "video" | "audio"
 
@@ -126,6 +127,7 @@ export async function resolveCopilotAssetRefs(
     .from("assets")
     .select("id, type, r2_url, filename, mime_type, size_bytes, metadata")
     .in("id", remaining)
+    .is(RESTRICTED_ASSET_COLUMN, null)
     .or(`user_id.eq.${userId},is_library_item.is.true`)
   if (assets.error) throw new Error(`Failed to resolve assets: ${assets.error.message}`)
 

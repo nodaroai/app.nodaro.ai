@@ -85,6 +85,9 @@ export function executionContentRedaction(): { node_states: Record<string, never
  *   NOT NULL, so it becomes the empty object.
  * - `output_data` (001): the job's result and its urls.
  * - `held_output_data` (377): a held job's result, waiting on a reviewer.
+ * - `restricted_output_data` (581): a restricted job's result, moved aside
+ *   after a complaint; expunged with the rest, so a later lift brings nothing
+ *   back.
  * - `error_message` (001): the failure line shown to the user. Sanitized, but
  *   it can still carry the request's own words (decided 2026-10-07).
  * - `error_detail` (368): the provider's raw error, which can quote the prompt.
@@ -100,6 +103,7 @@ export function jobContentRedaction(): {
   input_data: Record<string, never>
   output_data: null
   held_output_data: null
+  restricted_output_data: null
   error_message: null
   error_detail: null
   input_fingerprint: null
@@ -109,6 +113,7 @@ export function jobContentRedaction(): {
     input_data: {},
     output_data: null,
     held_output_data: null,
+    restricted_output_data: null,
     error_message: null,
     error_detail: null,
     input_fingerprint: null,

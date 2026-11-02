@@ -104,6 +104,7 @@ export async function deleteSourceAfterProcess(sourceUrl: string, userId: string
     const sourceKey = r2KeyFromOurUrl(sourceUrl)
     if (!sourceKey) return // foreign URL — not our bucket, nothing to delete
 
+    // restricted-read: a delete's own pre-check, never an answer with the file
     const { data: owned, error: ownedError } = await supabase
       .from("assets")
       // `job_id` + `relay_job_id` are the relay delete rule's inputs
@@ -170,6 +171,7 @@ export async function deleteSourceAfterProcess(sourceUrl: string, userId: string
       // (e.g. saved from the gallery by another user) or one of the user's job
       // outputs may point at the SAME object — deleting it would permanently
       // break them. Any lookup error counts as "a referrer may exist".
+      // restricted-read: a delete's referrer count; a restricted row still refers to its bytes
       const { count: otherAssetRefs, error: assetRefError } = await supabase
         .from("assets")
         .select("id", { count: "exact", head: true })

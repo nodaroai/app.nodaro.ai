@@ -5,6 +5,8 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { config } from "../lib/config.js"
 import { isOurCdnUrl } from "../lib/cdn-host.js"
+import { isRestrictedAddress } from "../lib/content-restrictions.js"
+import { CONTENT_RESTRICTED_BODY } from "./download.js"
 
 const proxyQuery = z.object({
   url: safeUrlSchema,
@@ -56,6 +58,11 @@ export async function imageProxyRoutes(app: FastifyInstance) {
       })
     }
 
+    // One of our own files an administrator restricted after a complaint is
+    // not served in any mode (lib/content-restrictions.ts); another host's
+    // address is not ours to restrict.
+    if (await isRestrictedAddress(url)) return reply.status(451).send(CONTENT_RESTRICTED_BODY)
+
     // Two-layer SSRF defense: safeUrlSchema rejects syntactic red flags at
     // request boundary; safeFetch rejects DNS resolutions to private IP ranges
     // at connect time (catches hostnames that resolve to internal targets).
@@ -82,6 +89,12 @@ export async function imageProxyRoutes(app: FastifyInstance) {
       return reply.status(502).send({
         error: { code: "proxy_error", message: `Upstream returned ${response.status}` },
       })
+    }
+
+    // Another host's address may have redirected to one of our own files: the
+    // address the bytes came from is held to the same restriction.
+    if (response.url && response.url !== url && (await isRestrictedAddress(response.url))) {
+      return reply.status(451).send(CONTENT_RESTRICTED_BODY)
     }
 
     const contentType = response.headers.get("content-type") ?? (isVideo ? "video/mp4" : "image/png")

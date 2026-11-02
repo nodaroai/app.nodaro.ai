@@ -16,6 +16,7 @@
  * yields no asset, never another user's.
  */
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { RESTRICTED_ASSET_COLUMN } from "./content-restrictions-column.js"
 
 /** The same shape migration 480's trigger demands of a new asset pointer. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -77,16 +78,18 @@ export async function ownedAssetUrlsById(
   if (!ownerId || ids.length === 0) return owned
   for (let i = 0; i < ids.length; i += OWNED_ASSET_LOOKUP_CHUNK) {
     const chunk = ids.slice(i, i + OWNED_ASSET_LOOKUP_CHUNK)
+    // restricted-read: the column is read and a restricted file resolves to nothing, below
     const { data, error } = await supabase
       .from("assets")
-      .select("id, r2_url")
+      .select(`id, r2_url, ${RESTRICTED_ASSET_COLUMN}`)
       .in("id", chunk)
       .eq("user_id", ownerId)
     if (error) {
       if (opts.throwOnError) throw new Error(`owned-asset lookup failed: ${error.message}`)
       continue
     }
-    for (const row of (data ?? []) as Array<{ id: string; r2_url: string | null }>) {
+    for (const row of (data ?? []) as Array<{ id: string; r2_url: string | null; restricted_at?: string | null }>) {
+      if (row.restricted_at) continue
       owned.set(row.id, row.r2_url ?? null)
     }
   }

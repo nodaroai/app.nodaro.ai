@@ -44,6 +44,7 @@ import { jobBlockedBody } from "../lib/job-policy.js"
 import { markJobCompletedDetailed } from "../workers/shared.js"
 import { sanitizeJobForPublic, type JobRecord } from "./jobs.js"
 import { CHILD_JOB_COLUMN, TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
+import { RESTRICTED_ASSET_COLUMN } from "../lib/content-restrictions-column.js"
 import { mayUseChildJobAsSource } from "../lib/job-submission-context.js"
 
 /** The job type this route writes (`input_data.type` and `job_type`). */
@@ -98,6 +99,7 @@ async function editedImageUrl(userId: string, assetId: string): Promise<{ url: s
     .select("id, type, mime_type, r2_url, metadata")
     .eq("id", assetId)
     .eq("user_id", userId)
+    .is(RESTRICTED_ASSET_COLUMN, null)
     .maybeSingle()
   if (error) throw error
   const asset = data as { type: string | null; mime_type: string | null; r2_url: string | null; metadata: Record<string, unknown> | null } | null
@@ -154,6 +156,7 @@ async function sourceFields(userId: string, body: JobFromUploadBody, allowChildS
       .select("id, r2_url")
       .eq("id", body.sourceAssetId)
       .eq("user_id", userId)
+      .is(RESTRICTED_ASSET_COLUMN, null)
       .maybeSingle()
     if (error) throw error
     const asset = data as { r2_url: string | null } | null
