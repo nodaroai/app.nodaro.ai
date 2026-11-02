@@ -231,6 +231,25 @@ describe("PUT /v1/admin/nodaro-motion/motion", () => {
     expect(h.upserts).toEqual([])
   })
 
+  it("takes a masking that names a depth model size only while every environment's engine draws with that size", async () => {
+    const SIZES = { ...HIDES, depthModelSizes: ["small", "base", "large"] }
+    h.envs = [envRow("production", SIZES), envRow("staging", SIZES)]
+    const motion = {
+      "motion-prism": { masking: { mode: "always", source: "full-depth", depthModelSize: "small" } },
+      "motion-pulse": { masking: { mode: "always", fill: "depth", depthModelSize: "base" } },
+    }
+    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion } })).statusCode).toBe(200)
+    h.envs = [envRow("production", SIZES), envRow("staging", { ...HIDES, depthModelSizes: ["small"] })]
+    const res = await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion } })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: ["staging"], message: expect.stringMatching(/small or base depth model/) })
+    expect(h.upserts).toHaveLength(1)
+    // A size that changes no render (large, a blur fill) asks no engine.
+    h.envs = []
+    const same = { "motion-prism": { masking: { mode: "always", source: "full-depth", depthModelSize: "large" } }, "motion-pulse": { masking: { mode: "always", depthModelSize: "small" } } }
+    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion: same } })).statusCode).toBe(200)
+  })
+
   it("takes Full depth's description + original scene only while every environment's engine lists it", async () => {
     const BOTH = { ...HIDES, fullDepthScenes: ["description", "original", "none", "description-and-original"] }
     const motion = { "motion-pulse": { masking: { mode: "always", source: "full-depth", scene: "description-and-original" } } }

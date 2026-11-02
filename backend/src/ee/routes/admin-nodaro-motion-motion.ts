@@ -38,7 +38,9 @@
  * that scene (`castSwap.fullDepthScenes`): an engine from before it cannot
  * read the setting at all; one whose masking names a depth colormap
  * (`depthColormap`) while any environment's engine cannot draw that map
- * (`nodaro-motion-depth-colormap.ts`); one whose full depth blurs the depth
+ * (`nodaro-motion-depth-colormap.ts`); one whose masking names a depth model
+ * size (`depthModelSize`) while any environment's engine cannot draw with it
+ * (`nodaro-motion-depth-model-size.ts`); one whose full depth blurs the depth
  * map (`depthBlur` above 0) while any environment's engine cannot
  * (`nodaro-motion-depth-blur.ts`); and one whose face mesh draws only some
  * of its parts (`faceMeshParts`) while any environment's engine does not list
@@ -75,6 +77,7 @@ import {
 } from "../lib/nodaro-motion-face-mesh.js"
 import { cannotBlurDepthMessage, depthBlurOfSetting, environmentsThatCannotBlurDepth } from "../lib/nodaro-motion-depth-blur.js"
 import { cannotDrawColormapsMessage, depthColormapOfSetting, environmentsThatCannotDrawColormaps } from "../lib/nodaro-motion-depth-colormap.js"
+import { cannotDrawModelSizesMessage, depthModelSizeOfSetting, environmentsThatCannotDrawModelSizes } from "../lib/nodaro-motion-depth-model-size.js"
 import { audit } from "./admin-trends-lifecycle.js"
 
 /** The Full depth scenes an engine must list before a shared setting may name them (newer than the setting's scenes). */
@@ -134,10 +137,12 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
       })
       // A depth colormap likewise (each map named, once).
       const colormaps = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => depthColormapOfSetting(parsed.data.motion[engine]?.masking) ?? []))]
+      // A depth model size likewise (each size named, once).
+      const sizes = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => depthModelSizeOfSetting(parsed.data.motion[engine]?.masking) ?? []))]
       // A depth blur, and face mesh parts other than the full mesh (each named, once), likewise.
       const blurs = NODARO_MOTION_ENGINES.some((engine) => depthBlurOfSetting(parsed.data.motion[engine]?.masking) !== undefined)
       const parts = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => faceMeshPartsOfSetting(parsed.data.motion[engine]?.masking) ?? []))]
-      if (hides || meshes || scenes.length > 0 || colormaps.length > 0 || blurs || parts.length > 0) {
+      if (hides || meshes || scenes.length > 0 || colormaps.length > 0 || sizes.length > 0 || blurs || parts.length > 0) {
         const environments = await listEngineEnvironments()
         const bodies = hides ? environmentsThatCannotHideBodies(environments) : []
         if (bodies.length > 0) {
@@ -165,6 +170,10 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
         const maps = environmentsThatCannotDrawColormaps(environments, colormaps)
         if (maps.length > 0) {
           return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawColormapsMessage(colormaps, maps), envs: maps } })
+        }
+        const models = environmentsThatCannotDrawModelSizes(environments, sizes)
+        if (models.length > 0) {
+          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawModelSizesMessage(sizes, models), envs: models } })
         }
         const blur = blurs ? environmentsThatCannotBlurDepth(environments) : []
         if (blur.length > 0) {

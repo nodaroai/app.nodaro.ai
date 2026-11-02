@@ -233,6 +233,47 @@ describe("tk.settings: the depth colormap", () => {
   })
 })
 
+describe("tk.settings: the depth model size", () => {
+  beforeEach(() => {
+    h.masking = null
+    h.motion = null
+    h.failed = false
+  })
+
+  it("answers a size only to an engine that lists it, and only where it changes the render", async () => {
+    h.masking = {
+      "motion-prism": { mode: "always", fill: "depth", depthModelSize: "small" },
+      // Large (the default): never answered, whatever the engine lists.
+      "motion-pulse": { mode: "always", fill: "depth", depthModelSize: "large" },
+    }
+    h.motion = {
+      "motion-prism": { masking: { mode: "always", source: "full-depth", depthModelSize: "base" } },
+      // A blur fill draws no depth: never answered.
+      "motion-pulse": { masking: { mode: "always", depthModelSize: "small" } },
+    }
+    try {
+      setPluginSupports({ castSwap: { ...CS, depthModelSizes: ["small", "base", "large"] } } as never)
+      const masking = await buildToolkit().settings!.nodaroMotionMasking!()
+      expect(masking!["motion-prism"]).toEqual({ mode: "always", fill: "depth", depthModelSize: "small" })
+      expect(masking!["motion-pulse"]).toEqual({ mode: "always", fill: "depth" })
+      expect(masking!["motion-pro"]).toEqual(masking!["motion-prism"])
+      const motion = await buildToolkit().settings!.nodaroMotionMotion!()
+      expect(motion!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", depthModelSize: "base" } })
+      expect(motion!["motion-pulse"]).toEqual({ masking: { mode: "always" } })
+      for (const castSwap of [CS, { ...CS, depthModelSizes: ["large"] }]) {
+        setPluginSupports({ castSwap } as never)
+        const older = await buildToolkit().settings!.nodaroMotionMasking!()
+        expect(older!["motion-prism"], JSON.stringify(castSwap)).toEqual({ mode: "always", fill: "depth" })
+        expect(Object.values(older!).some((m) => m && Object.hasOwn(m, "depthModelSize"))).toBe(false)
+        const olderMotion = await buildToolkit().settings!.nodaroMotionMotion!()
+        expect(olderMotion!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth" } })
+      }
+    } finally {
+      _resetPluginSupportsForTests()
+    }
+  })
+})
+
 describe("the plugin-side types mirror the host's", () => {
   it("what the host answers for the Motion setting (both key sets) is the plugin's NodaroMotionMotion", () => {
     expectTypeOf<NodaroMotionMotionForPlugin>().toExtend<PluginNodaroMotionMotion>()

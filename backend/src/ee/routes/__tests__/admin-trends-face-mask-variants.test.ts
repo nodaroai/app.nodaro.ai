@@ -412,6 +412,30 @@ describe("POST /face-mask/variants/advance", () => {
     })
   })
 
+  it("with a depth model size, person masks start only on an engine that lists it, and each fill is sent it", async () => {
+    const SIZED = { ...MASKING, fill: "depth" as const, depthModelSize: "base" as const }
+    const sized = () => {
+      const d = draft([slotMark("amy", 10)], { faceMasking: { ...SIZED, marks: [slotMark("amy", 10)] } })
+      return { ...d, faceMask: { ...d.faceMask!, depthUrl: "https://cdn.test/depth-small.mp4" } }
+    }
+    mem.data = sized()
+    const held = await post("variants")
+    expect(held.statusCode).toBe(503)
+    expect(held.json().error).toMatchObject({ code: "engine_unsupported", message: expect.stringMatching(/base depth model/) })
+    expect(calls.erase).toEqual([])
+
+    setPluginSupports({ castSwap: { ...structuredClone(SUPPORTS), depthModelSizes: ["base", "large"] } as never })
+    mem.data = sized()
+    await post("variants")
+    const job = mem.data.faceMask!.variantJobs![0]!
+    setJob(job.eraseJobId!, { status: "completed", output_data: { videoUrl: "https://out.test/erased.mp4", frames: 360, coverage: 0.03, droppedRegions: 4, kept: true } })
+    await post("variants/advance")
+    expect(calls.make[0]!.body).toMatchObject({
+      faceMasking: { ...SIZED, zone: { leftPct: 10, rightPct: 10, topPct: 0, bottomPct: 0 } },
+      fromMask: { maskUrl: "https://out.test/erased.mp4", depthUrl: "https://cdn.test/depth-small.mp4" },
+    })
+  })
+
   it("with role outlines, a fill that answers them is approved with them", async () => {
     setPluginSupports({ castSwap: { ...structuredClone(SUPPORTS), roleOutlines: true } as never })
     mem.data = draft([slotMark("lead", 70), slotMark("amy", 10)], { faceMasking: { ...MASKING, roleOutlines: true, marks: [slotMark("lead", 70), slotMark("amy", 10)] } })

@@ -113,6 +113,11 @@ export function stableJson(v: unknown): string {
  * drawn, not the source's default, not under role outlines), so every setting
  * without one hashes exactly as before it existed, while choosing another map
  * makes a stored clip out of date.
+ *
+ * The depth model's size (`depthModelSize`, decided 2026-11-02) likewise, only
+ * when it changes the render (`depthModelSizeSent`: where depth is drawn, not
+ * `"large"`; under role outlines too), so every setting without one hashes
+ * exactly as before it existed.
  */
 export function faceMaskSettingsKeyOf(videoUrl: string, masking: FaceMaskingWithMarks, slots: TrendVersionData["slots"]): string {
   const outlines = makeOutlinesOf({ slots, faceMasking: masking }).map((o) => ({ ...o, boxes: o.boxes.map(stableJson).sort().map((b) => JSON.parse(b) as unknown) }))
@@ -164,6 +169,12 @@ export function faceMaskSettingsKey(data: Pick<TrendVersionData, "source" | "fac
  * therefore the gray view, hashed as role outlines' (`depthColormap:
  * "grayscale"`): today's turbo depth view (no colormap) is never the base of
  * one with a colormap, nor the other way round.
+ *
+ * The depth model's size (`depthModelSizeSent`) IS hashed here, unlike the
+ * colormap: it changes the depth render itself, so a raw mask and depth view
+ * drawn with one size are never the base of a mask with another. `withoutMarks`
+ * keeps it (normalised: `"large"` is no key), so the base key of a setting
+ * without one is exactly as before it existed.
  */
 export function faceMaskBaseKey(data: Pick<TrendVersionData, "source" | "faceMasking">): string | null {
   if (!data.source || !faceMaskingOn(data.faceMasking)) return null

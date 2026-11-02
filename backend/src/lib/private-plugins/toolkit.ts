@@ -128,7 +128,15 @@ import { reserveLlmSideHold, sideCreditsFor, sideHoldFor, sideHoldPayerOf, sideH
 import { appBaseUrl } from "../deployment-urls.js"
 import { getAppSettings, settingsReadFailed } from "../app-settings.js"
 import { withEarlierMaskingKeys } from "../nodaro-motion-masking.js"
-import { loadedEngineDrawsFaceMesh, withDepthBlurFor, withDepthColormapFor, withFaceMeshFor, withFaceMeshPartsFor, type FaceMasking } from "../cast-swap-face-masking.js"
+import {
+  loadedEngineDrawsFaceMesh,
+  withDepthBlurFor,
+  withDepthColormapFor,
+  withDepthModelSizeFor,
+  withFaceMeshFor,
+  withFaceMeshPartsFor,
+  type FaceMasking,
+} from "../cast-swap-face-masking.js"
 import { getPluginSupports } from "./supports-registry.js"
 import { withEarlierPromptPartKeys } from "../nodaro-motion-prompt-parts.js"
 import { withEarlierMotionKeys } from "../nodaro-motion-motion.js"
@@ -1603,12 +1611,13 @@ function assertNotLeaseKey(key: string): void {
 /**
  * A Nodaro Motion masking setting as this process's Cast Swap engine is
  * answered it (`tk.settings`): the face mesh only for an engine that draws it
- * (`withFaceMeshFor`), and the depth colormap, the depth blur and the face
- * mesh's parts only where they change what is drawn AND the engine declares
- * them — else no key, exactly the setting before each existed. A new object.
+ * (`withFaceMeshFor`), and the depth colormap, the depth model size, the
+ * depth blur and the face mesh's parts only where they change what is drawn
+ * AND the engine declares them — else no key, exactly the setting before each
+ * existed. A new object.
  */
 function forLoadedEngine<T extends FaceMasking>(m: T, drawsFaceMesh: boolean, cs: ReturnType<typeof getPluginSupports>["castSwap"]): T {
-  return withFaceMeshPartsFor(withDepthBlurFor(withDepthColormapFor(withFaceMeshFor(m, drawsFaceMesh), cs), cs), cs)
+  return withFaceMeshPartsFor(withDepthBlurFor(withDepthModelSizeFor(withDepthColormapFor(withFaceMeshFor(m, drawsFaceMesh), cs), cs), cs), cs)
 }
 
 /**
@@ -2207,9 +2216,9 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         // The face mesh only to an engine that draws it, and only as `true`: an older
         // engine's strict schema would refuse the whole entry, and that engine would mask nothing.
         // The depth colormap likewise: only a map the engine declares (`castSwap.depthColormaps`), and only
-        // where it changes what is drawn; else no key (the source's default). The depth blur and the face
-        // mesh's parts the same way (`castSwap.depthBlur`, `castSwap.faceMeshParts`): only where they change
-        // what is drawn, and only to an engine that declares them.
+        // where it changes what is drawn; else no key (the source's default). The depth model size, the depth
+        // blur and the face mesh's parts the same way (`castSwap.depthModelSizes`, `castSwap.depthBlur`,
+        // `castSwap.faceMeshParts`): only where they change what is drawn, and only to an engine that declares them.
         if (!masking) return null
         const draws = loadedEngineDrawsFaceMesh()
         const cs = getPluginSupports().castSwap
@@ -2231,7 +2240,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_motion: the app settings could not be read")
         const motion = settings.nodaro_motion_motion
         // Under the current AND the earlier keys, each a fresh copy (the masking setting's shim).
-        // Each entry's masking with the face mesh, the depth colormap, the depth blur and the face mesh's parts
+        // Each entry's masking with the face mesh, the depth colormap and model size, the depth blur and the face mesh's parts
         // only for an engine that draws them (the masking read's rules, `forLoadedEngine`).
         if (!motion) return null
         const draws = loadedEngineDrawsFaceMesh()

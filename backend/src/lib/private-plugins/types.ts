@@ -3542,6 +3542,14 @@ export interface PluginFaceMasking {
    */
   depthColormap?: "grayscale" | "turbo" | "inferno" | "magma" | "viridis"
   /**
+   * The depth model's size wherever the setting draws depth: full depth, keep
+   * people, or a faces-hidden depth fill (role outlines or not). Absent =
+   * `"large"`, exactly as before the choice existed. Sent (and answered by
+   * `tk.settings`) only when it is not `"large"`, and only to an engine that
+   * lists the size in `supports.castSwap.depthModelSizes`.
+   */
+  depthModelSize?: "small" | "base" | "large"
+  /**
    * Full depth only: the depth map blurred before anything is drawn on it,
    * the blur's sigma at 1080 px tall (whole steps, 0–40; 0 = off). Answered
    * by `tk.settings` only when above 0 on full depth, and only to an engine
@@ -3962,6 +3970,22 @@ export interface PluginSupports {
    *   refuses to save a shared Nodaro Motion setting with one while any
    *   environment lacks it), so the wire is byte-identical
    *   (lib/cast-swap-face-masking.ts `engineDrawsDepthColormap`).
+   * - `depthModelSizes`: the model sizes a `faceMasking.depthModelSize` may
+   *   name for this engine (of Video Depth Anything's: small, base, large) —
+   *   on a run, a stored clip's make (and its person variants) and the Nodaro
+   *   Motion settings read through `tk.settings`. Absent, the key means
+   *   `"large"` and the engine behaves exactly as before. Present: the engine
+   *   renders every depth it draws (full depth, keep people, a faces-hidden
+   *   depth fill, the gray one under role outlines too) with that model size
+   *   (Video Depth, `modelSize`). Unlike the colormap it changes the render
+   *   itself, so the platform hashes it into the settings key AND the base
+   *   key: a stored clip's raw mask and depth view are reused only for the
+   *   same size. Additive-optional: absent ⇒ none — the platform never sends
+   *   `depthModelSize` (it strips it from a run and the settings, refuses a
+   *   make, holds a trend that names one back from publishing there, and
+   *   refuses to save a shared Nodaro Motion setting with one while any
+   *   environment lacks it), so the wire is byte-identical
+   *   (lib/cast-swap-face-masking.ts `engineDrawsDepthModelSize`).
    * - `artStyle`: a DIRECT Flex run (`style: "motion"`) and its estimate take
    *   `direction?: { style: string }`, an id of the platform's `style` picker
    *   catalog. Absent ⇒ `false` — the host must not send `direction`.
@@ -4080,6 +4104,7 @@ export interface PluginSupports {
     readonly faceMesh?: boolean
     readonly roleOutlines?: boolean
     readonly depthColormaps?: readonly ("grayscale" | "turbo" | "inferno" | "magma" | "viridis")[]
+    readonly depthModelSizes?: readonly ("small" | "base" | "large")[]
     readonly steps?: boolean
     readonly clipBodySheet?: boolean
     readonly shotList?: boolean

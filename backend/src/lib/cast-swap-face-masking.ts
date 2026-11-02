@@ -18,7 +18,16 @@ import {
   CAST_SWAP_FACE_MASK_TARGETS,
   type CastSwapFaceMaskTarget,
 } from "@nodaro/shared/models"
-import { VIDEO_DEPTH_COLORMAPS, VIDEO_FACE_MESH_PARTS, videoDepthColormaps, type VideoDepthColormap, type VideoFaceMeshParts } from "@nodaro/shared/media"
+import {
+  VIDEO_DEPTH_COLORMAPS,
+  VIDEO_DEPTH_MODEL_SIZES,
+  VIDEO_FACE_MESH_PARTS,
+  resolveVideoDepthModelSize,
+  videoDepthColormaps,
+  type VideoDepthColormap,
+  type VideoDepthModelSize,
+  type VideoFaceMeshParts,
+} from "@nodaro/shared/media"
 // Internal only (render-rules, not an Apache grant): a trend face mask's marks and source modes.
 import {
   CAST_SWAP_DEPTH_BLUR_BOUNDS,
@@ -64,6 +73,13 @@ export type { FaceMaskMark, MaskEraseBox }
  * magma, viridis).
  */
 export type FaceMaskingDepthColormap = VideoDepthColormap
+
+/**
+ * The depth model's size (`depthModelSize`, decided 2026-11-02): the Video
+ * Depth node's lever (`VIDEO_DEPTH_MODEL_SIZES`: small, base, large), large
+ * being what every make and run drew with before the choice existed.
+ */
+export type FaceMaskingDepthModelSize = VideoDepthModelSize
 
 /**
  * What the face mesh draws (`faceMeshParts`, decided 2026-11-02): the full
@@ -150,6 +166,20 @@ export interface FaceMasking {
    * stripped for one that does not.
    */
   depthColormap?: FaceMaskingDepthColormap
+  /**
+   * The depth model's size wherever the setting draws depth (decided
+   * 2026-11-02): full depth, keep people, or a faces-hidden depth fill, role
+   * outlines or not (`depthModelSizeApplies`). Absent = `"large"`, what every
+   * make and run drew with before the choice existed. Read through
+   * `depthModelSizeSent` (the one normaliser): `"large"`, an unknown value, or
+   * a value where no depth is drawn is the same as absent — never sent nor
+   * hashed. Unlike the colormap it changes the depth render itself, so a
+   * chosen size is hashed into the settings key AND the base key. An engine
+   * draws with it only when it declares the size in
+   * `castSwap.depthModelSizes` (`engineDrawsDepthModelSize`): the key is
+   * stripped for one that does not.
+   */
+  depthModelSize?: FaceMaskingDepthModelSize
   /**
    * Full depth only (decided 2026-11-02; the Nodaro Motion Motion setting's
    * alone, `faceMaskingMotionSchema`: a trend's setting and the Precise one
@@ -260,6 +290,7 @@ const faceMaskingShape = {
     .enum(VIDEO_DEPTH_COLORMAPS)
     .refine((c) => FACE_MASKING_DEPTH_COLORMAPS.includes(c), { message: "The depth provider does not offer this colormap." })
     .optional(),
+  depthModelSize: z.enum(VIDEO_DEPTH_MODEL_SIZES).optional(),
 }
 
 const faceHeightsInOrder = (m: Pick<FaceMasking, "minFaceHeightPct" | "maxFaceHeightPct">) =>
@@ -424,8 +455,9 @@ export function erasedBoxesOf(m: Pick<FaceMaskingWithMarks, "marks"> | undefined
 export function withoutMarks(m: FaceMaskingWithMarks): FaceMasking {
   const { marks: _marks, roleOutlines: _outlines, ...rest } = m
   // The colormap as it is drawn (`depthColormapSent`): role outlines draw a depth fill gray, and they
-  // are dropped here, so the colormap is settled before they are.
-  return withDepthColormapNormalised(rest, depthColormapSent(m))
+  // are dropped here, so the colormap is settled before they are. The model size only where it changes
+  // the render (`depthModelSizeSent`).
+  return withDepthModelSizeNormalised(withDepthColormapNormalised(rest, depthColormapSent(m)), depthModelSizeSent(m))
 }
 
 /**
@@ -537,6 +569,75 @@ export function withDepthColormapFor<T extends FaceMasking>(
  */
 export function roleOutlinesOn(m: Pick<FaceMaskingWithMarks, "roleOutlines" | "source" | "mode"> | undefined): boolean {
   return !!m && m.mode !== "off" && m.roleOutlines === true && faceMaskingSourceOf(m) === "faces"
+}
+
+/**
+ * Whether the setting draws depth, where a model size applies: full depth,
+ * keep people, or faces hidden with the depth fill — role outlines or not
+ * (they draw a depth fill gray, but its render still takes the size). The
+ * colormap's `depthColormapApplies`.
+ */
+export function depthModelSizeApplies(m: Pick<FaceMasking, "source" | "fill">): boolean {
+  return depthColormapApplies(m)
+}
+
+/**
+ * THE normaliser of `depthModelSize`: the size the setting names, only where
+ * it changes the depth render — the setting draws depth
+ * (`depthModelSizeApplies`) and the size is a known one other than `"large"`
+ * (`resolveVideoDepthModelSize`, which reads an unknown value as `"large"`).
+ * Else (or no setting) undefined: the setting is sent and hashed exactly as
+ * one without it. Role outlines do not matter here (unlike the colormap).
+ */
+export function depthModelSizeSent(
+  m: Pick<FaceMasking, "source" | "fill" | "depthModelSize"> | undefined,
+): Exclude<FaceMaskingDepthModelSize, "large"> | undefined {
+  if (!m || m.depthModelSize === undefined || !depthModelSizeApplies(m)) return undefined
+  const size = resolveVideoDepthModelSize(m.depthModelSize)
+  return size === "large" ? undefined : size
+}
+
+/** The setting with `depthModelSize` only as `size` (left out when undefined). A new object. */
+function withDepthModelSizeNormalised<T extends FaceMasking>(m: T, size: FaceMaskingDepthModelSize | undefined): T {
+  const { depthModelSize: _s, ...rest } = m
+  return (size === undefined ? rest : { ...rest, depthModelSize: size }) as T
+}
+
+/**
+ * The model sizes a (loaded or recorded) Cast Swap engine draws depth with on
+ * request (`castSwap.depthModelSizes`). Absent ⇒ an engine from before the
+ * choice, which draws every depth with `"large"` and whose make body strips
+ * an unknown key: it is never sent one.
+ */
+export function engineDepthModelSizesOf(cs: { readonly depthModelSizes?: readonly FaceMaskingDepthModelSize[] } | undefined): readonly FaceMaskingDepthModelSize[] {
+  return cs?.depthModelSizes ?? []
+}
+
+/** Whether a (loaded or recorded) Cast Swap engine draws depth with model `size` (`engineDepthModelSizesOf`). */
+export function engineDrawsDepthModelSize(
+  cs: { readonly depthModelSizes?: readonly FaceMaskingDepthModelSize[] } | undefined,
+  size: FaceMaskingDepthModelSize,
+): boolean {
+  return engineDepthModelSizesOf(cs).includes(size)
+}
+
+/** Whether this process's Cast Swap engine draws depth with model `size` (`engineDrawsDepthModelSize` its declaration). */
+export function loadedEngineDrawsDepthModelSize(size: FaceMaskingDepthModelSize): boolean {
+  return engineDrawsDepthModelSize(getPluginSupports().castSwap, size)
+}
+
+/**
+ * The setting as an engine is sent it, model-size-wise: `depthModelSize` only
+ * when it changes the render (`depthModelSizeSent`) AND the engine draws with
+ * it (`engineDrawsDepthModelSize`); else no key at all, exactly the setting
+ * before the choice existed (`"large"`). A new object.
+ */
+export function withDepthModelSizeFor<T extends FaceMasking>(
+  m: T,
+  cs: { readonly depthModelSizes?: readonly FaceMaskingDepthModelSize[] } | undefined,
+): T {
+  const size = depthModelSizeSent(m)
+  return withDepthModelSizeNormalised(m, size !== undefined && engineDrawsDepthModelSize(cs, size) ? size : undefined)
 }
 
 /**
@@ -735,12 +836,13 @@ export function defaultFaceMaskingZone(): Required<FaceMaskingZone> {
  * stays as it is. So "no margins" is never read as "the default". The face
  * mesh is kept only when on (`withFaceMeshNormalised`: a `faceMesh: false`
  * is dropped, so it is sent and hashed exactly as a setting without it), and
- * the colormap only where it changes what is drawn (`depthColormapSent`). A
- * new object; the input is not changed.
+ * the colormap only where it changes what is drawn (`depthColormapSent`), and
+ * the depth model's size likewise (`depthModelSizeSent`). A new object; the
+ * input is not changed.
  */
 export function withResolvedZone(m: FaceMasking): FaceMasking {
   const mesh = withFaceMeshNormalised(m)
-  const n = withDepthColormapNormalised(mesh, depthColormapSent(mesh))
+  const n = withDepthModelSizeNormalised(withDepthColormapNormalised(mesh, depthColormapSent(mesh)), depthModelSizeSent(mesh))
   if (n.zone === undefined) return { ...n, zone: defaultFaceMaskingZone() }
   if (n.zone === null) return { ...n, zone: { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 } }
   return { ...n, zone: { ...n.zone } }
@@ -752,8 +854,9 @@ export function withResolvedZone(m: FaceMasking): FaceMasking {
  * - faces: `withResolvedZone`, with no `source` key — exactly what a run and
  *   a make sent before source modes existed;
  * - full depth: `{ mode, source }` only (nothing else applies), plus
- *   `faceMesh: true` when it draws the face mesh and `depthColormap` when
- *   it names one (`depthColormapSent`);
+ *   `faceMesh: true` when it draws the face mesh, `depthColormap` when it
+ *   names one (`depthColormapSent`) and `depthModelSize` when it names one
+ *   (`depthModelSizeSent`);
  * - keep people: `withResolvedZone` without `fill` (and never a face mesh),
  *   with `source` and the target resolved (`"body"` when left out), named so
  *   an engine never applies a default of its own.
@@ -767,12 +870,15 @@ export function faceMaskingSent(m: FaceMasking): FaceMasking {
   // The colormap as the source draws it, read before `source` is dropped below (`depthColormapSent`).
   const colormap = depthColormapSent(m)
   const withColormap = colormap === undefined ? {} : { depthColormap: colormap }
+  // The depth model's size likewise, read before `source` (and keep people's `fill`) is dropped below.
+  const size = depthModelSizeSent(m)
+  const withSize = size === undefined ? {} : { depthModelSize: size }
   // The scene is a run's, never a make's or the key's (`faceMaskingRunSent`).
   const { source: _source, scene: _scene, ...rest } = m
   if (source === "faces") return withResolvedZone(rest)
-  if (source === "full-depth") return { mode: m.mode, source, ...(faceMeshOn(m) ? { faceMesh: true } : {}), ...withColormap }
-  const { fill: _fill, faceMesh: _faceMesh, depthColormap: _colormap, ...kept } = withResolvedZone(rest)
-  return { ...kept, source, target: faceMaskTargetOf(m)!, ...withColormap }
+  if (source === "full-depth") return { mode: m.mode, source, ...(faceMeshOn(m) ? { faceMesh: true } : {}), ...withColormap, ...withSize }
+  const { fill: _fill, faceMesh: _faceMesh, depthColormap: _colormap, depthModelSize: _size, ...kept } = withResolvedZone(rest)
+  return { ...kept, source, target: faceMaskTargetOf(m)!, ...withColormap, ...withSize }
 }
 
 /**

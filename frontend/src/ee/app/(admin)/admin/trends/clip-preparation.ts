@@ -18,7 +18,7 @@
  * those states.
  */
 import { CAST_SWAP_FACE_MASKING_DEFAULTS } from "@nodaro/shared/models"
-import { videoDepthColormaps, type VideoDepthColormap } from "@nodaro/shared/media"
+import { VIDEO_DEPTH_MODEL_SIZES, resolveVideoDepthModelSize, videoDepthColormaps, type VideoDepthColormap, type VideoDepthModelSize } from "@nodaro/shared/media"
 import type { AdminFaceMeshParts, AdminTrendFaceMasking, AdminTrendFaceMaskingSource, AdminTrendFaceMaskingTarget, TrendEngineEnvironment } from "@/lib/api"
 
 export const CLIP_PREPARATIONS: ReadonlyArray<{ value: AdminTrendFaceMaskingSource; label: string; hint: string }> = [
@@ -271,6 +271,49 @@ export function environmentsThatCannotDrawColormaps(
       SHARED_SETTING_ENVIRONMENTS.filter((name) => !(envs.find((e) => e.env === name)?.supports.castSwap?.depthColormaps ?? []).includes(c)),
     ]),
   ) as Record<VideoDepthColormap, string[]>
+}
+
+/** The depth model sizes a setting may name: the Video Depth node's (`VIDEO_DEPTH_MODEL_SIZES`), in display order. */
+export const DEPTH_MODEL_SIZES: readonly VideoDepthModelSize[] = VIDEO_DEPTH_MODEL_SIZES
+
+/** The depth model size a setting that names none draws with (what every make and run drew with before the choice). */
+export const DEPTH_MODEL_SIZE_DEFAULT: VideoDepthModelSize = "large"
+
+/**
+ * The depth model size the setting saves (the server's `depthModelSizeSent`):
+ * the one it names, only where it draws depth (`depthColormapApplies`; role
+ * outlines or not), when it is not large (an unknown value reads as large);
+ * else undefined (no key).
+ */
+export function depthModelSizeSaved(m: AdminTrendFaceMasking | undefined): VideoDepthModelSize | undefined {
+  if (!m || m.depthModelSize === undefined || !depthColormapApplies(m)) return undefined
+  const size = resolveVideoDepthModelSize(m.depthModelSize)
+  return size === DEPTH_MODEL_SIZE_DEFAULT ? undefined : size
+}
+
+/** A trend's editor: the model sizes some environment's engine draws depth with (`castSwap.depthModelSizes`; unknown while the environments are: none). */
+export function depthModelSizesSomeEngineDraws(envs: readonly TrendEngineEnvironment[] | undefined): VideoDepthModelSize[] {
+  return DEPTH_MODEL_SIZES.filter((s) => (envs ?? []).some((e) => (e.supports.castSwap?.depthModelSizes ?? []).includes(s)))
+}
+
+/**
+ * Admin → Nodaro Motion: for each model size, the environments (of
+ * `SHARED_SETTING_ENVIRONMENTS`, in that order) whose engine cannot draw with
+ * it — none recorded, or one whose `castSwap.depthModelSizes` lacks it.
+ * Unknown while the environments are (undefined). The setting is shared, so a
+ * size is offered only when its list is empty; the server refuses the save
+ * otherwise (409 `engine_unsupported`).
+ */
+export function environmentsThatCannotDrawModelSizes(
+  envs: readonly TrendEngineEnvironment[] | undefined,
+): Readonly<Record<VideoDepthModelSize, string[]>> | undefined {
+  if (!envs) return undefined
+  return Object.fromEntries(
+    DEPTH_MODEL_SIZES.map((size) => [
+      size,
+      SHARED_SETTING_ENVIRONMENTS.filter((name) => !(envs.find((e) => e.env === name)?.supports.castSwap?.depthModelSizes ?? []).includes(size)),
+    ]),
+  ) as Record<VideoDepthModelSize, string[]>
 }
 
 /**

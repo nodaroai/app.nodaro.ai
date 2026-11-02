@@ -40,10 +40,18 @@
 // Admin → Nodaro Motion's: every environment's, naming those that lack it);
 // with none offered the select is greyed out and says why. While role
 // outlines are on, a depth fill is fixed at grayscale, and says so.
+//
+// Depth model (wherever the setting draws depth, role outlines or not): the
+// size of the model that draws the depth (small, base, large). Large, the
+// default, is no key, exactly as before the choice existed. A size is offered
+// as a colormap is (a trend's: some environment's engine; Admin → Nodaro
+// Motion's: every environment's, naming those that lack it); with none
+// offered the select is greyed out and says why. A size already chosen
+// stays, to be set back to the default.
 
 import { useId } from "react"
 import { ROLE_OUTLINE_PALETTE } from "@nodaro/render-rules"
-import type { VideoDepthColormap } from "@nodaro/shared/media"
+import { resolveVideoDepthModelSize, type VideoDepthColormap, type VideoDepthModelSize } from "@nodaro/shared/media"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import {
@@ -67,10 +75,13 @@ import type {
 import { DEPTH_BLUR_BOUNDS, FACE_MASKING_BOUNDS, FACE_MASKING_DEFAULTS, ZONE_SIDES, maskingUsesBlur } from "../model"
 import {
   DEPTH_COLORMAPS,
+  DEPTH_MODEL_SIZES,
+  DEPTH_MODEL_SIZE_DEFAULT,
   defaultTargetFor,
   depthColormapApplies,
   depthColormapDefaultFor,
   depthColormapsSomeEngineDraws,
+  depthModelSizesSomeEngineDraws,
   isDepthPreparation,
   someEngineDrawsFaceMesh,
   someEngineDrawsRoleOutlines,
@@ -118,6 +129,12 @@ const COLORMAP_LABELS: Readonly<Record<VideoDepthColormap, string>> = {
   inferno: "Inferno",
   magma: "Magma",
   viridis: "Viridis",
+}
+
+const MODEL_SIZE_LABELS: Readonly<Record<VideoDepthModelSize, string>> = {
+  small: "Small",
+  base: "Base",
+  large: "Large",
 }
 
 const ZONE_LABELS: Readonly<Record<keyof AdminTrendFaceMaskingZone, string>> = {
@@ -169,6 +186,14 @@ interface Props {
    */
   readonly depthColormapsMissingIn?: Readonly<Record<VideoDepthColormap, readonly string[]>>
   /**
+   * Admin → Nodaro Motion (a setting every environment shares): for each
+   * depth model size, the environments whose engine cannot draw with it
+   * (`environmentsThatCannotDrawModelSizes`). When given, a size is offered
+   * only while its list is empty; left out, once some environment's engine in
+   * `envs` draws with it.
+   */
+  readonly depthModelSizesMissingIn?: Readonly<Record<VideoDepthModelSize, readonly string[]>>
+  /**
    * Admin → Nodaro Motion's Motion column (a setting every environment
    * shares): offer Full depth's depth blur, naming the environments whose
    * engine cannot blur the map (`environmentsThatCannotBlurDepth`). Left out
@@ -201,6 +226,7 @@ export function FaceMaskingEditor({
   bodyMissingIn,
   faceMeshMissingIn,
   depthColormapsMissingIn,
+  depthModelSizesMissingIn,
   depthBlurMissingIn,
   faceMeshPartsMissingIn,
   clipSec,
@@ -267,6 +293,17 @@ export function FaceMaskingEditor({
   const colormapLacking = depthColormapsMissingIn
     ? [...new Set(DEPTH_COLORMAPS.filter((c) => c !== defaultColormap).flatMap((c) => depthColormapsMissingIn[c]))]
     : []
+  // Depth model: wherever depth is drawn, role outlines or not (they fix the colours, not the model).
+  // An off-list stored value (not one the schema takes) reads as Large, as the server's normaliser reads it.
+  const modelSize: VideoDepthModelSize = resolveVideoDepthModelSize(value?.depthModelSize)
+  const modelSizesDrawnSomewhere = depthModelSizesSomeEngineDraws(envs)
+  const modelSizeOffered = (s: VideoDepthModelSize) =>
+    s === DEPTH_MODEL_SIZE_DEFAULT || (depthModelSizesMissingIn ? depthModelSizesMissingIn[s].length === 0 : modelSizesDrawnSomewhere.includes(s))
+  const noModelSizeOffered = DEPTH_MODEL_SIZES.every((s) => s === DEPTH_MODEL_SIZE_DEFAULT || !modelSizeOffered(s))
+  const modelSizeUnsupported = !modelSizeOffered(modelSize)
+  const modelSizeLacking = depthModelSizesMissingIn
+    ? [...new Set(DEPTH_MODEL_SIZES.filter((s) => s !== DEPTH_MODEL_SIZE_DEFAULT).flatMap((s) => depthModelSizesMissingIn[s]))]
+    : []
   // The depth blur (Admin → Nodaro Motion's Motion column): Full depth only. One already set stays shown (and can be
   // set back to 0) whatever the engines say; 0 is off, saved as no key.
   const depthBlur = value?.depthBlur
@@ -290,6 +327,7 @@ export function FaceMaskingEditor({
   const faceMeshId = `${id}-face-mesh`
   const outlinesId = `${id}-role-outlines`
   const colormapId = `${id}-depth-colormap`
+  const modelSizeId = `${id}-depth-model-size`
   const meshPartsId = `${id}-face-mesh-parts`
 
   return (
@@ -380,6 +418,49 @@ export function FaceMaskingEditor({
               {depthColormapsMissingIn
                 ? `The Cast Swap engine of ${colormapLacking.join(", ")} cannot draw other depth colormaps yet, and this setting is shared by every environment.`
                 : "No environment's Cast Swap engine draws other depth colormaps yet: the engine is out of date."}
+            </span>
+          )}
+        </div>
+      )}
+
+      {colormapShown && (
+        <div className="flex flex-col gap-1 text-sm sm:w-1/2 sm:pr-1.5">
+          <label htmlFor={modelSizeId} className="font-medium">
+            Depth model
+          </label>
+          <Select
+            value={modelSize}
+            disabled={noModelSizeOffered && modelSize === DEPTH_MODEL_SIZE_DEFAULT}
+            // Large (the default) is no key: a setting without a size is saved exactly as before the choice existed.
+            onValueChange={(s) => set({ depthModelSize: s === DEPTH_MODEL_SIZE_DEFAULT ? undefined : (s as VideoDepthModelSize) })}
+          >
+            <SelectTrigger id={modelSizeId} className="h-9" aria-describedby={`${modelSizeId}-hint`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DEPTH_MODEL_SIZES.map((s) => (
+                <SelectItem key={s} value={s} disabled={!modelSizeOffered(s) && s !== modelSize}>
+                  {MODEL_SIZE_LABELS[s]}
+                  {s === DEPTH_MODEL_SIZE_DEFAULT ? " (default)" : !modelSizeOffered(s) ? " (not supported yet)" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span id={`${modelSizeId}-hint`} className="text-xs text-muted-foreground">
+            {`The size of the model that draws the depth map: Large is the model every clip used until now; Small and Base are smaller models.${offerRoleOutlines ? " Make the face mask again after a change." : ""}`}
+          </span>
+          {modelSizeUnsupported && (
+            <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+              {depthModelSizesMissingIn
+                ? `The Cast Swap engine of ${depthModelSizesMissingIn[modelSize].join(", ")} cannot draw the depth with the ${MODEL_SIZE_LABELS[modelSize]} model yet, and this setting is shared by every environment: choose the default to save.`
+                : `No environment's Cast Swap engine draws the depth with the ${MODEL_SIZE_LABELS[modelSize]} model yet: the engine is out of date.`}
+            </span>
+          )}
+          {!modelSizeUnsupported && noModelSizeOffered && (
+            <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+              {depthModelSizesMissingIn
+                ? `The Cast Swap engine of ${modelSizeLacking.join(", ")} cannot draw the depth with other model sizes yet, and this setting is shared by every environment.`
+                : "No environment's Cast Swap engine draws the depth with other model sizes yet: the engine is out of date."}
             </span>
           )}
         </div>

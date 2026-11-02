@@ -247,6 +247,39 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
     expect(h.envReads).toBe(0)
   })
 
+  it("saves a depth model size only once every environment's engine draws with it (the row is shared), naming those that cannot", async () => {
+    const SIZES = { castSwap: { ...HIDES.castSwap, depthModelSizes: ["small", "large"] } }
+    const masking = { "motion-pulse": { mode: "always", fill: "depth", depthModelSize: "small" } }
+    for (const [envs, blocked] of [
+      [[envRow("production", HIDES), envRow("staging", SIZES)], ["production"]],
+      [[envRow("staging", SIZES)], ["production"]],
+      [[envRow("production", { castSwap: { ...HIDES.castSwap, depthModelSizes: ["large"] } }), envRow("staging", {})], ["staging", "production"]],
+    ] as const) {
+      h.envs = [...envs]
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+      expect(res.statusCode, JSON.stringify(envs)).toBe(409)
+      expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: blocked, message: expect.stringMatching(/small depth model/) })
+    }
+    expect(h.upserts).toEqual([])
+    h.envs = [envRow("production", SIZES), envRow("staging", SIZES)]
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.masking).toEqual(masking)
+  })
+
+  it("never asks the environments for a depth model size that changes no render (large, a blur fill, the masking off)", async () => {
+    h.envs = []
+    for (const m of [
+      { "motion-prism": { mode: "always", fill: "depth", depthModelSize: "large" } },
+      { "motion-prism": { mode: "always", depthModelSize: "small" } },
+      { "motion-prism": { mode: "off", fill: "depth", depthModelSize: "small" } },
+    ]) {
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking: m } })
+      expect(res.statusCode, JSON.stringify(m)).toBe(200)
+    }
+    expect(h.envReads).toBe(0)
+  })
+
   it("never asks the environments for a face mesh that is off (false, or the masking off)", async () => {
     h.envs = []
     for (const m of [{ "motion-prism": { mode: "always", faceMesh: false } }, { "motion-prism": { mode: "off", faceMesh: true } }]) {

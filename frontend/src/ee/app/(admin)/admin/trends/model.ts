@@ -35,7 +35,7 @@ import {
   type TrendPromptBudget,
   type TrendPromptSource,
 } from "@nodaro/render-rules"
-import { clipPreparationIssues, clipPreparationName, clipPreparationOf, depthColormapSaved, roleOutlinesOn } from "./clip-preparation"
+import { clipPreparationIssues, clipPreparationName, clipPreparationOf, depthColormapSaved, depthModelSizeSaved, roleOutlinesOn } from "./clip-preparation"
 import { FULL_DEPTH_SCENES } from "./prompt-style"
 import { normaliseShotList } from "./shot-list"
 import type {
@@ -286,6 +286,9 @@ export function cleanMasking(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
     // The depth colormap: only where it changes what is drawn (`depthColormapSaved`: depth drawn, not the
     // source's default, not under role outlines); else no key, as before the choice existed.
     ...(depthColormapSaved(m) ? { depthColormap: depthColormapSaved(m) } : {}),
+    // The depth model size: only where it changes the render (`depthModelSizeSaved`: depth drawn, not large;
+    // role outlines or not); else no key, as before the choice existed.
+    ...(depthModelSizeSaved(m) ? { depthModelSize: depthModelSizeSaved(m) } : {}),
     // The depth blur: Full depth only, a whole number above 0 (0, or another preparation, is no key, as before it existed).
     ...(clipPreparationOf(m) === "full-depth" && num(m.depthBlur) && m.depthBlur! > 0 ? { depthBlur: m.depthBlur } : {}),
     // What the face mesh draws: only with the mesh on and not the full mesh (the default, no key), never with Keep people.
@@ -647,6 +650,11 @@ function depthColormapNeedLabel(need: string): string | undefined {
   return need.startsWith("depthColormap:") ? `the depth colormap ${need.slice("depthColormap:".length)}` : undefined
 }
 
+/** A `depthModelSize:<size>` need's label ("the small depth model"), else undefined. */
+function depthModelSizeNeedLabel(need: string): string | undefined {
+  return need.startsWith("depthModelSize:") ? `the ${need.slice("depthModelSize:".length)} depth model` : undefined
+}
+
 /** One publish blocker as a sentence ("production: pet slots not supported yet"). */
 export function describeBlocker(r: TrendPublishBlocker): string {
   switch (r.code) {
@@ -696,7 +704,7 @@ export function describeBlocker(r: TrendPublishBlocker): string {
       return `${r.env ?? "?"}: engine not reported yet`
     case "engine_unsupported": {
       const need = r.need ?? "?"
-      return `${r.env ?? "?"}: ${NEED_LABELS[need] ?? depthColormapNeedLabel(need) ?? prismReferenceAudioNeedLabel(need) ?? need} not supported yet`
+      return `${r.env ?? "?"}: ${NEED_LABELS[need] ?? depthColormapNeedLabel(need) ?? depthModelSizeNeedLabel(need) ?? prismReferenceAudioNeedLabel(need) ?? need} not supported yet`
     }
     default:
       return r.message ?? r.code

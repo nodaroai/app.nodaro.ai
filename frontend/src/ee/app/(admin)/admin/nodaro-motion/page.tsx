@@ -63,6 +63,7 @@ import { maskingIssues } from "../trends/model"
 import {
   environmentsThatCannotBlurDepth,
   environmentsThatCannotDrawColormaps,
+  environmentsThatCannotDrawModelSizes,
   environmentsThatCannotDrawFaceMesh,
   environmentsThatCannotDrawFaceMeshParts,
   environmentsThatCannotForceStyle,
@@ -104,6 +105,8 @@ export default function AdminNodaroMotionPage() {
   const faceMeshMissingIn = environmentsThatCannotDrawFaceMesh(envs.data)
   // The depth colormaps likewise: each offered only once every environment's engine draws it.
   const depthColormapsMissingIn = environmentsThatCannotDrawColormaps(envs.data)
+  // The depth model sizes likewise (Precise and Motion alike).
+  const depthModelSizesMissingIn = environmentsThatCannotDrawModelSizes(envs.data)
   // The Motion column's depth blur and face mesh parts likewise (a Cast Swap engine from 0.430.0 declares them).
   const depthBlurMissingIn = environmentsThatCannotBlurDepth(envs.data)
   const faceMeshPartsMissingIn = environmentsThatCannotDrawFaceMeshParts(envs.data)
@@ -248,6 +251,7 @@ export default function AdminNodaroMotionPage() {
                       bodyMissingIn={bodyMissingIn}
                       faceMeshMissingIn={faceMeshMissingIn}
                       depthColormapsMissingIn={depthColormapsMissingIn}
+                      depthModelSizesMissingIn={depthModelSizesMissingIn}
                       faceMeshPartsMissingIn={faceMeshPartsMissingIn}
                       onChange={(m) =>
                         setDraft((d) => {
@@ -269,6 +273,7 @@ export default function AdminNodaroMotionPage() {
                         bodyMissingIn={bodyMissingIn}
                         faceMeshMissingIn={faceMeshMissingIn}
                         depthColormapsMissingIn={depthColormapsMissingIn}
+                        depthModelSizesMissingIn={depthModelSizesMissingIn}
                         depthBlurMissingIn={depthBlurMissingIn}
                         faceMeshPartsMissingIn={faceMeshPartsMissingIn}
                         onChange={(entry) => setMotionDraft((d) => ({ ...d, [engine.id]: entry }))}

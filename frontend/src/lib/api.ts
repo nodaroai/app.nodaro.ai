@@ -11381,6 +11381,13 @@ export interface AdminTrendFaceMasking {
    */
   depthColormap?: VideoDepthColormap
   /**
+   * The depth model's size wherever the setting draws depth (Full depth,
+   * Keep people, a Faces hidden depth fill, under role outlines too). Left out
+   * = large (the default), saved only when it is small or base, and offered
+   * only where the engine lists the size in `castSwap.depthModelSizes`.
+   */
+  depthModelSize?: VideoDepthModelSize
+  /**
    * Full depth only (Admin → Nodaro Motion's Motion setting; a trend's
    * setting does not take it yet): the depth map blurred before it is
    * coloured and before the face mesh is drawn on it, the blur's sigma at
@@ -11891,6 +11898,8 @@ export interface TrendEngineEnvironment {
       roleOutlines?: boolean
       /** The colormaps the engine draws depth with on request (`faceMasking.depthColormap`); absent = none (the defaults only). */
       depthColormaps?: VideoDepthColormap[]
+      /** The model sizes the engine draws depth with on request (`faceMasking.depthModelSize`); absent = none (large only). */
+      depthModelSizes?: VideoDepthModelSize[]
       /** The Prism reference audio modes the engine takes (`prismReferenceAudio`); absent = "full", "voice" and "none" only. */
       prismReferenceAudioModes?: CastSwapPrismReferenceAudioId[]
       /** The engine takes the preparation steps (`steps`); absent = it cannot. */
