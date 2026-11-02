@@ -24,6 +24,8 @@ interface World {
   tags: string[]
   /** The commits between two tags, by `base...head`. */
   compares?: Record<string, CommitSummary[]>
+  /** Files as they stand on a default branch, by `repo:path`. */
+  current?: Record<string, string>
   failRepo?: string
   failStatuses?: boolean
 }
@@ -46,6 +48,10 @@ function fakeGitHub(world: World) {
     async fileAt(repo, path, ref) {
       calls.push(`file ${repo}@${ref}:${path}`)
       return world.files[`${repo}@${ref}:${path}`] ?? null
+    },
+    async currentFile(repo, path) {
+      calls.push(`current ${repo}:${path}`)
+      return world.current?.[`${repo}:${path}`] ?? null
     },
     async tags(repo) {
       calls.push(`tags ${repo}`)
@@ -272,6 +278,7 @@ describe("createHeaderVersions", () => {
     expect(report.headerPackage).toBeNull()
     expect(report.latest).toEqual({ status: "not_configured" })
     expect(report.releaseNotes).toEqual({ status: "not_configured" })
+    expect(report.headerMap).toEqual({ status: "not_configured" })
     // No release to rank against without GitHub.
     expect(report.products[0]?.sites.production.result).toEqual({ status: "ok", version: "0.12.0", header: false, source: "site-file", deploy: null, standing: null, releasesBehind: null })
     expect(report.products[0]?.sites.staging.result).toEqual({ status: "error", message: "next.example.com does not publish /shell-version.json yet." })
@@ -329,6 +336,42 @@ describe("createHeaderVersions", () => {
     // so the walk asks again — conditionally, which GitHub does not count (github.ts).
     expect(calls.filter((c) => c.startsWith("file "))).toEqual([])
     expect(calls.filter((c) => c.startsWith("status ")).sort()).toEqual(["status acme/tools#11", "status acme/tools#12", "status acme/tools#13"])
+    // The header's explanations are not a file at a commit: asked as they stand on every build.
+    expect(calls).toContain("current nodaroai/shell:docs/header-map.json")
+  })
+
+  it("carries the header's explanations, its worlds' addresses asked by the probe and never by the sites' fetch", async () => {
+    const w = world()
+    w.current = {
+      "nodaroai/shell:docs/header-map.json": JSON.stringify({
+        asOf: "0.13.0",
+        figures: { contract: { heading: "Who gives what", columns: [{ title: "The bar gives", items: [{ name: "Its height" }] }] } },
+        worlds: [{ id: "gallery", label: "Gallery", href: "https://example.com/gallery", group: "simple" }],
+      }),
+    }
+    const { github } = fakeGitHub(w)
+    const { fetch, asked } = sites({})
+    const probed: string[] = []
+    const probe = async (href: string) => {
+      probed.push(href)
+      return 404
+    }
+    const report = await createHeaderVersions({ githubToken: "" }, { github, fetch, probe, products: [TOOLS] }).report({ fresh: false })
+    expect(report.headerMap).toMatchObject({
+      status: "ok",
+      asOf: "0.13.0",
+      figures: { contract: { heading: "Who gives what" } },
+      worlds: [{ id: "gallery", answer: { status: "answered", code: 404 } }],
+    })
+    expect(probed).toEqual(["https://example.com/gallery"])
+    expect(asked).toEqual([])
+  })
+
+  it("a header repository without explanations: the rest of the report is whole", async () => {
+    const { github } = fakeGitHub(world())
+    const report = await createHeaderVersions({ githubToken: "" }, { github, fetch: sites({}).fetch, products: [TOOLS] }).report({ fresh: false })
+    expect(report.headerMap).toEqual({ status: "missing" })
+    expect(report.products[0]?.sites.production.result).toMatchObject({ status: "ok", version: "0.12.0" })
   })
 
   it("a live deployment whose redeploy failed is still shown live, with the failure said", async () => {

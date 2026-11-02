@@ -3,11 +3,13 @@ import type { DeploymentRecord, DeploymentState, DeploymentStatus } from "./depl
 /**
  * The few GitHub reads the header versions page needs, with a read-only
  * token: a repository's deployments and their status histories, one file at
- * one commit, a repository's tags, and the commits between two of them.
+ * one commit or as it stands now, a repository's tags, and the commits between
+ * two of them.
  *
- * Every list is asked again on each build — a status can change at any time —
- * but conditionally: the last answer's ETag goes with the request, and GitHub's
- * 304 (which does not count against the rate limit) means "unchanged".
+ * Every list, and a file as it stands, is asked again on each build — a status
+ * can change at any time — but conditionally: the last answer's ETag goes with
+ * the request, and GitHub's 304 (which does not count against the rate limit)
+ * means "unchanged".
  */
 
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>
@@ -35,6 +37,8 @@ export interface GitHubReader {
   statuses(repo: string, deploymentId: number): Promise<DeploymentStatus[]>
   /** The file's text at `ref`, or `null` when the commit has no such file. */
   fileAt(repo: string, path: string, ref: string): Promise<string | null>
+  /** The file's text on the default branch as it stands now (asked conditionally), or `null` when there is no such file. */
+  currentFile(repo: string, path: string): Promise<string | null>
   tags(repo: string): Promise<string[]>
   /** The commits `head` has that `base` does not, oldest first (at most 100). */
   commitsBetween(repo: string, base: string, head: string): Promise<CommitSummary[]>
@@ -153,6 +157,18 @@ export function createGitHubReader(token: string, deps: { fetch?: FetchLike } = 
       if (res.status === 404) return null
       if (!res.ok) throw await refusal(res)
       return res.text()
+    },
+    async currentFile(repo, path) {
+      let body: unknown
+      try {
+        body = await http.json(`/repos/${repo}/contents/${path}`)
+      } catch (error) {
+        if (error instanceof GitHubError && error.status === 404) return null
+        throw error
+      }
+      const file = body !== null && typeof body === "object" ? (body as Record<string, unknown>) : null
+      if (file?.encoding !== "base64" || typeof file.content !== "string") throw new GitHubError(`GitHub sent ${path} in a form this page cannot read.`, null)
+      return Buffer.from(file.content, "base64").toString("utf8")
     },
     async tags(repo) {
       return asArray(await http.json(`/repos/${repo}/tags?per_page=100`)).flatMap((row) => (typeof row.name === "string" ? [row.name] : []))

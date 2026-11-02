@@ -1,9 +1,11 @@
 import { Loader2 } from "lucide-react"
 import { isCloud } from "@/lib/edition"
+import { HeaderExplained } from "./header-explained"
 import { ProductCard } from "./product-card"
 import { ReleaseNotes } from "./release-notes"
 import { CARD_GAP_PX, Connector, Legend, ShellSummary } from "./shell-summary"
 import type { HeaderVersionsReport } from "./types"
+import { ServicesRow } from "./services-row"
 import { useHeaderVersions, useRefreshHeaderVersions } from "./use-header-versions"
 
 /**
@@ -11,7 +13,9 @@ import { useHeaderVersions, useRefreshHeaderVersions } from "./use-header-versio
  * site and test site serves right now, beside the newest
  * release. The server reads the commit each site last deployed and the version
  * that commit installs; the App says itself what its build installed and
- * whether it shows the header. Read-only.
+ * whether it shows the header. Below: what each newer release brought, what
+ * the worlds' addresses answer, and how the header works in its own words
+ * (kept in its repository). Read-only.
  */
 
 /** A card is never narrower than this; past the screen's width the map scrolls sideways. */
@@ -52,18 +56,25 @@ function ProductsNotice({ report }: { report: HeaderVersionsReport }) {
   )
 }
 
-/** Every product under the header, one card each, in the order the setting lists them. */
+/**
+ * Every product under the header, one card each, in the order the setting
+ * lists them; under them, when the header's repository describes them, the
+ * services the header reaches from every product's page.
+ */
 function ProductMap({ report }: { report: HeaderVersionsReport }) {
   const count = report.products.length
+  const runtime = report.headerMap.status === "ok" ? report.headerMap.figures.runtime : undefined
   return (
     <>
-      <Connector count={count} />
+      <Connector count={count} label={runtime?.toProducts} />
       <ul className="grid" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, gap: CARD_GAP_PX }}>
         {report.products.map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}
       </ul>
+      {runtime && <ServicesRow runtime={runtime} products={count} gap={CARD_GAP_PX} />}
       <Legend />
+      {runtime?.caption && <p className="mx-auto mt-4 max-w-[78ch] text-center text-[13px] leading-relaxed text-muted-foreground">{runtime.caption}</p>}
     </>
   )
 }
@@ -85,6 +96,7 @@ function Report({ report, error }: { report: HeaderVersionsReport; error: string
         </div>
       </div>
       {count > 0 && <ReleaseNotes report={report} />}
+      <HeaderExplained report={report} />
     </div>
   )
 }
