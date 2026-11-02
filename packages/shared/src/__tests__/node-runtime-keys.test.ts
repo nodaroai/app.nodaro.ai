@@ -85,6 +85,15 @@ describe("a use-case node's continuation", () => {
   })
 })
 
+describe("a Video URL node's content rights confirmation", () => {
+  it("is one run's, never saved: a confirmation opens one download within an hour, so a saved one could only refuse a later run", () => {
+    expect(EXECUTION_DATA_KEYS.has("rightsConfirmationId")).toBe(true)
+    expect(TRANSIENT_RUNTIME_KEYS.has("rightsConfirmationId")).toBe(true)
+    const [saved] = stripTransientRuntimeData([{ data: { rightsConfirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01", youtubeUrl: "https://youtu.be/x" } }])
+    expect(saved!.data).toEqual({ youtubeUrl: "https://youtu.be/x" })
+  })
+})
+
 describe("EXECUTION_DATA_KEYS", () => {
   it("files the clear-results watermark as runtime bookkeeping — never preset / template / copilot-visible config", () => {
     expect(EXECUTION_DATA_KEYS.has("resultsClearedAt")).toBe(true)

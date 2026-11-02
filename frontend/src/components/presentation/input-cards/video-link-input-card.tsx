@@ -4,12 +4,15 @@ import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useT } from "@/lib/i18n"
 import { downloadYouTubeAudio } from "@/lib/api"
+import { DeclarationChangedError, confirmLink } from "@/lib/content-rights"
 import { VIDEO_LINK_INGEST_DEBOUNCE_MS } from "@/lib/video-link-ingest-timing"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { NODE_DEF_MAP, type WorkflowEdge, type WorkflowNode } from "@/types/nodes"
-import { deriveVideoLinkView } from "@/lib/video-link"
-import { classifyVideoLinkInput, videoLinkInputNeed, videoLinkInputValues } from "@/lib/video-link-input"
+import { classifyDownloadFailure, deriveVideoLinkView } from "@/lib/video-link"
+import { classifyVideoLinkInput, videoLinkInputNeed, videoLinkInputNeedsTick, videoLinkInputValues } from "@/lib/video-link-input"
 import { videoLinkLengthLimit } from "@/lib/video-link-length-limits"
+import { tickVideoLinkRights, untickVideoLinkRights, useVideoLinkRightsTicked } from "@/lib/video-link-rights"
+import { RightsDeclarationBox } from "@/components/content-rights/rights-declaration-box"
 import { GlassCard } from "../output-cards/shared"
 import { useVideoLinkDownload } from "./use-video-link-download"
 import { VideoLinkRunnerStatus, type ChooserLimit } from "./video-link-runner-status"
@@ -35,15 +38,22 @@ const FILE_FIELDS = ["downloadedVideoUrl", "downloadedFromUrl"] as const
 const NODE_AUDIO_FIELDS = ["downloadedAudioUrl", "audioDownloadStatus"] as const
 
 /**
- * A published app's Video URL input: paste a link to a video (YouTube, TikTok,
- * Instagram, Facebook, X) or any other web link to one. A post link a node
- * after it WATCHES is downloaded here, by the runner, before Run, under the
- * rules the Video URL node follows on the canvas (a long YouTube video asks for
+ * A published app's Video URL input: paste a link to where the video is, or
+ * any other web link to one. A post link a node after it WATCHES is downloaded
+ * here, by the runner, before Run, under the rules the Video URL node follows
+ * on the canvas (a long video from a site whose length is read first asks for
  * a part); the run is sent the link plus the file made from it. A post link
  * read only for its sound (Transcribe, Suno Cover) or its page address is not
- * downloaded here at all: the server fetches what is needed when the run starts
- * (MCP, SDK and API runs get the same), so Run never waits on a video nobody
- * watches.
+ * downloaded here at all: the server fetches what is needed when the run
+ * starts (MCP, SDK and API runs get the same), so Run never waits on a video
+ * nobody watches.
+ *
+ * Every import of the link is made under the content rights box, ticked by
+ * the runner for THIS link in this session (`lib/video-link-rights.ts`; a
+ * changed link is another box): a download here confirms as it goes, one
+ * confirmation per download; a link whose sound the run fetches is confirmed
+ * when Run is pressed, for that run alone. Nothing of the box is ever written
+ * to the run's inputs.
  */
 export function VideoLinkInputCard({ nodeId, label, data, isFullscreen, inputValues, onUpdateInput, readOnly, nodes, edges, variant }: VideoLinkInputCardProps) {
   const t = useT()
@@ -74,40 +84,64 @@ export function VideoLinkInputCard({ nodeId, label, data, isFullscreen, inputVal
   const need = videoLinkInputNeed(nodeId, graphNodes && graphEdges ? { nodes: graphNodes, edges: graphEdges } : undefined)
 
   const socialLink = input.kind === "social" ? input.link : ""
+  // The box: ticked for one link, in this session (a changed link is unticked by construction).
+  const confirmed = useVideoLinkRightsTicked(nodeId, socialLink)
+  // A link the run imports — its video here, or its sound on the server — needs the box
+  // while the import is still to be made.
+  const needsTick = !readOnly && videoLinkInputNeedsTick(values, need)
+
+  // A fresh confirmation for one download of the link: a changed declaration unticks the box.
+  const confirm = useCallback(
+    async (link: string) => {
+      try {
+        return (await confirmLink(link)).id
+      } catch (err) {
+        if (err instanceof DeclarationChangedError) untickVideoLinkRights(nodeId)
+        throw err
+      }
+    },
+    [nodeId],
+  )
+
   // A post link still without its file: the only thing the card downloads — and
-  // only where a node after it watches the video.
+  // only where a node after it watches the video, once the box is ticked.
   const needsFile = socialLink !== "" && need === "file" && deriveVideoLinkView({ ...values, youtubeUrl: socialLink }).kind !== "ready"
   const download = useVideoLinkDownload({
-    link: needsFile ? socialLink : "",
+    link: needsFile && confirmed ? socialLink : "",
     disabled: readOnly,
     onCompleted: (file, link) => write({ downloadedVideoUrl: file.videoUrl, downloadedFromUrl: link }),
+    confirm,
   })
 
   // The canvas preview writes to the node, and on the canvas a run whose only readers take the
   // sound skips the video and reads the node's own audio track — so there the card fetches it
-  // (what the node's own link field does). The runner's page does not: the server fetches the
-  // sound when the run starts, and the run lock admits no audio field from a request.
+  // (what the node's own link field does), under the box. The runner's page does not: the
+  // server fetches the sound when the run starts, under the confirmation Run records then.
   const hasTrack = typeof values.downloadedAudioUrl === "string" && values.downloadedAudioUrl.trim() !== ""
-  const audioLink = !isFullscreen && !readOnly && need === "audio" && socialLink !== "" && !hasTrack ? socialLink : ""
+  const audioLink = !isFullscreen && !readOnly && need === "audio" && socialLink !== "" && !hasTrack && confirmed ? socialLink : ""
   useEffect(() => {
     if (audioLink === "") return
     let current = true
     const timer = setTimeout(() => {
       write({ audioDownloadStatus: "downloading", audioDownloadError: "" })
-      downloadYouTubeAudio(audioLink).then(
-        (result) => {
-          if (current) write({ downloadedAudioUrl: result.url, audioDownloadStatus: "completed" })
-        },
-        (err: unknown) => {
-          if (current) write({ audioDownloadStatus: "failed", audioDownloadError: err instanceof Error ? err.message : "Audio download failed" })
-        },
-      )
+      confirmLink(audioLink)
+        .then((confirmation) => downloadYouTubeAudio(audioLink, { confirmationId: confirmation.id }))
+        .then(
+          (result) => {
+            if (current) write({ downloadedAudioUrl: result.url, audioDownloadStatus: "completed" })
+          },
+          (err: unknown) => {
+            // The failure is written BEFORE a changed declaration unticks the box: the untick ends this effect.
+            if (current) write({ audioDownloadStatus: "failed", audioDownloadError: classifyDownloadFailure(err).raw || "Audio download failed" })
+            if (err instanceof DeclarationChangedError) untickVideoLinkRights(nodeId)
+          },
+        )
     }, VIDEO_LINK_INGEST_DEBOUNCE_MS)
     return () => {
       current = false
       clearTimeout(timer)
     }
-  }, [audioLink, write])
+  }, [audioLink, write, nodeId])
 
   const view = deriveVideoLinkView({
     youtubeUrl: socialLink || rawLink,
@@ -182,8 +216,20 @@ export function VideoLinkInputCard({ nodeId, label, data, isFullscreen, inputVal
               ? t("present.videoLinkAudioOnly")
               : t("present.videoLinkHint")}
       </p>
+      {needsTick && (
+        <div className="mt-2">
+          <RightsDeclarationBox
+            checked={confirmed}
+            disabled={download.state.status === "downloading" || download.state.status === "checking"}
+            onCheckedChange={(checked) => {
+              if (checked) tickVideoLinkRights(nodeId, socialLink)
+              else untickVideoLinkRights(nodeId)
+            }}
+          />
+        </div>
+      )}
       <div className="mt-2">
-        <VideoLinkRunnerStatus view={view} limit={limit} rawError={download.state.raw} onDownload={download.start} />
+        <VideoLinkRunnerStatus view={view} limit={limit} rawError={download.state.raw} locked={needsTick && !confirmed} onDownload={download.start} />
       </div>
     </>
   )

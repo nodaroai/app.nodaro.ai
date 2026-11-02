@@ -27,6 +27,7 @@ import { getOutputNodes } from "@nodaro/shared/apps"
 import { migrateListLoopNodes } from "@/lib/list-loop-migration"
 import { migrateRetiredVideoProviders } from "@/lib/retired-video-provider-migration"
 import { composeLottieSlotOverrides, collectSlotExposedNodeIds } from "@/lib/lottie-slot-overrides"
+import { withVideoLinkRightsConfirmations } from "@/lib/video-link-rights"
 import { resolveInputItems } from "@/components/presentation/helpers"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { appRunFinalReplacedIds, appRunFinalStates } from "@nodaro/render-rules"
@@ -449,7 +450,12 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
       const slotExposedNodeIds = collectSlotExposedNodeIds(
         resolveInputItems((app?.snapshotSettings ?? {}) as unknown as PresentationSettings),
       )
-      const overrides = composeLottieSlotOverrides(inputValues, snapshotNodes, slotExposedNodeIds)
+      const composed = composeLottieSlotOverrides(inputValues, snapshotNodes, slotExposedNodeIds)
+      // A Video URL input whose SOUND the run fetches is confirmed now, for this
+      // run alone (`video-link-rights.ts`): the confirmation rides in this
+      // request and is never part of the saved inputs.
+      const snapshotEdges = (app?.snapshotEdges ?? []) as ReadonlyArray<{ source: string; target: string }>
+      const overrides = (await withVideoLinkRightsConfirmations(snapshotNodes, snapshotEdges, composed)) ?? {}
       const { executionId, runId } = await runPublishedApp(
         slug,
         Object.keys(overrides).length > 0 ? overrides : undefined,

@@ -9,7 +9,7 @@
  * forever. Here a download belongs to the node: both surfaces call in, neither
  * owns it, and `resumeVideoLinkIngest` re-attaches to it after a reload.
  *
- * Three rules everything below is built around:
+ * Four rules everything below is built around:
  *
  *  1. NODE DATA IS NOT TRUSTED TO START A DOWNLOAD. A workflow can be written by
  *     someone else — a template, an import, an agent — and every field here can
@@ -25,6 +25,14 @@
  *     link was edited, cleared, or replaced by a newer request — the file it
  *     carries belongs to the old link, and writing it would hand every
  *     downstream node the wrong video.
+ *  4. NOTHING IS FETCHED UNTIL THE PERSON CONFIRMS THE CONTENT RIGHTS
+ *     DECLARATION FOR THE LINK (`lib/content-rights.ts`). The box is a state of
+ *     THIS SESSION (`lib/video-link-rights.ts`), never written to the node: a
+ *     workflow saved ticked must not let the next person's Run confirm for
+ *     them. A changed link unticks it, and so does another workflow. Every
+ *     download — the video, its sound, a restart after the server forgot one —
+ *     records its own confirmation under that tick, because one confirmation
+ *     opens one download.
  */
 import { isSocialVideoUrl, videoLinkDownloadedFile, YOUTUBE_HOSTS } from "@nodaro/shared/video"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -37,6 +45,14 @@ import {
   type StartVideoDownloadOptions,
   type VideoDownloadSection,
 } from "@/lib/api"
+import { DeclarationChangedError, confirmLink } from "@/lib/content-rights"
+import {
+  clearVideoLinkRights,
+  isVideoLinkRightsTicked,
+  tickVideoLinkRights,
+  untickVideoLinkRights,
+  useVideoLinkRightsTicked,
+} from "@/lib/video-link-rights"
 import { followVideoDownload } from "@/lib/video-download-stream"
 import { VIDEO_LINK_INGEST_DEBOUNCE_MS } from "@/lib/video-link-ingest-timing"
 import { tx } from "@/lib/i18n"
@@ -45,6 +61,7 @@ import {
   VIDEO_PLATFORM_LABELS,
   YOUTUBE_MAX_HEIGHT,
   classifyDownloadError,
+  classifyDownloadFailure,
   deriveVideoLinkView,
   detectVideoLinkPlatform,
   extractVideoLinkId,
@@ -80,6 +97,8 @@ export type VideoLinkIngestOutcome =
   | { readonly status: "skipped" }
   /** The link changed, or a newer request took over, before this one finished. */
   | { readonly status: "superseded" }
+  /** The declaration is not confirmed for this link: nothing was fetched (rule 4). */
+  | { readonly status: "needs-confirmation" }
 
 export type EnsureVideoLinksResult =
   | { readonly ok: true; readonly downloaded: number }
@@ -87,7 +106,7 @@ export type EnsureVideoLinksResult =
       readonly ok: false
       readonly nodeId: string
       readonly label: string
-      readonly reason: "choose" | "failed" | "changed"
+      readonly reason: "choose" | "failed" | "changed" | "confirm"
       readonly code?: DownloadErrorCode
     }
   | { readonly ok: false; readonly reason: "cancelled" }
@@ -107,8 +126,8 @@ interface LiveIngest {
 
 interface PendingFollowUp {
   readonly timer: ReturnType<typeof setTimeout>
-  /** What a new link needs BESIDES its video: the title and the audio track. */
-  readonly sides: () => void
+  /** What a new link gets without any import: its title and picture (oEmbed). */
+  readonly describe: () => void
 }
 
 interface StartOptions {
@@ -120,6 +139,8 @@ interface StartOptions {
 
 const live = new Map<string, LiveIngest>()
 const pending = new Map<string, PendingFollowUp>()
+/** The audio track fetch under way per node, with the link it is for. */
+const liveAudio = new Map<string, { readonly url: string; readonly promise: Promise<AudioIngestOutcome> }>()
 
 type NodeData = Record<string, unknown>
 
@@ -131,6 +152,10 @@ function readData(nodeId: string): NodeData | undefined {
 
 function linkOf(data: NodeData | undefined): string {
   return typeof data?.youtubeUrl === "string" ? data.youtubeUrl.trim() : ""
+}
+
+function trackOf(data: NodeData | undefined): string {
+  return typeof data?.downloadedAudioUrl === "string" ? data.downloadedAudioUrl.trim() : ""
 }
 
 /** A write the PERSON made — the link field, the remove button. An undo step. */
@@ -170,19 +195,80 @@ function dropPending(nodeId: string): void {
 }
 
 /**
- * A download is starting inside the typing pause — a click on Download, or Run.
- * The pause is over for this link, so the rest of what it was waiting to do
- * (title, audio track) happens now; only the pending VIDEO fetch is replaced by
- * the one that is starting. Dropping the follow-up whole would leave the node
- * without its audio track, and Transcribe / Suno Cover read exactly that.
+ * A download is starting inside the typing pause. The pause is over for this
+ * link, so what it was waiting to do (the title and picture) happens now.
  */
 function settlePending(nodeId: string): void {
   const waiting = pending.get(nodeId)
   if (!waiting) return
   clearTimeout(waiting.timer)
   pending.delete(nodeId)
-  waiting.sides()
+  waiting.describe()
 }
+
+// ---------------------------------------------------------------------------
+// The box (rule 4)
+// ---------------------------------------------------------------------------
+
+// Another workflow is another set of nodes: every box starts unticked there,
+// even when a node id repeats (a template opened twice). A NEW canvas getting
+// its id on its first save is the same canvas: its boxes stay.
+;(useWorkflowStore as { subscribe?: (listener: (state: { workflowId?: unknown }, previous: { workflowId?: unknown }) => void) => void }).subscribe?.(
+  (state, previous) => {
+    if (previous.workflowId != null && state.workflowId !== previous.workflowId) clearVideoLinkRights()
+  },
+)
+
+/** Whether the declaration is confirmed, in this session, for the node's CURRENT link. */
+export function isVideoLinkConfirmed(nodeId: string): boolean {
+  return isVideoLinkRightsTicked(nodeId, linkOf(readData(nodeId)))
+}
+
+/**
+ * Tick or untick the box for the node's current link. A tick alone fetches
+ * nothing (`confirmVideoLink` is the tick that does); an untick lets a
+ * download in flight finish — its confirmation was recorded under the tick
+ * that started it — but no new one starts.
+ */
+export function setVideoLinkConfirmed(nodeId: string, confirmed: boolean): void {
+  if (confirmed) tickVideoLinkRights(nodeId, linkOf(readData(nodeId)))
+  else untickVideoLinkRights(nodeId)
+}
+
+/** The box's state for a node, re-rendered when it changes. */
+export function useVideoLinkConfirmed(nodeId: string): boolean {
+  const link = useWorkflowStore((s) => linkOf(s.nodes?.find((n) => n.id === nodeId)?.data as NodeData | undefined))
+  return useVideoLinkRightsTicked(nodeId, link)
+}
+
+/**
+ * The tick: confirms the declaration for the node's current link and fetches
+ * what the link still lacks — its sound (what Transcribe / Suno Cover read)
+ * and, from `auto`, its video — exactly what pasting the link used to start.
+ */
+export function confirmVideoLink(nodeId: string): Promise<VideoLinkIngestOutcome> {
+  setVideoLinkConfirmed(nodeId, true)
+  const data = readData(nodeId)
+  const url = linkOf(data)
+  if (!data || !isVideoLinkRightsTicked(nodeId, url)) return Promise.resolve({ status: "skipped" })
+  settlePending(nodeId)
+  if (trackOf(data) === "") void ingestAudio(nodeId, url)
+  return ingestVideoLink(nodeId, { mode: "auto" })
+}
+
+/** A fresh confirmation for one download of `url`, or the failure the node shows; a changed declaration unticks the box. */
+async function confirmationFor(nodeId: string, url: string): Promise<{ id: string } | { failed: string }> {
+  try {
+    return { id: (await confirmLink(url)).id }
+  } catch (err) {
+    if (err instanceof DeclarationChangedError) untickVideoLinkRights(nodeId)
+    return { failed: err instanceof Error && err.message ? err.message : "The confirmation could not be recorded" }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The download itself
+// ---------------------------------------------------------------------------
 
 /**
  * The id of the server-side download this node was following — but ONLY when it
@@ -215,10 +301,6 @@ function requestKey(url: string, request: VideoLinkIngestRequest, followOnly: bo
     request.allowSilent === true,
   ])
 }
-
-// ---------------------------------------------------------------------------
-// The download itself
-// ---------------------------------------------------------------------------
 
 async function runIngest(
   nodeId: string,
@@ -282,6 +364,12 @@ async function runIngest(
         write({ downloadStatus: "idle", downloadId: "", downloadIdUrl: "" })
         return { status: "skipped" }
       }
+      // A new download, and the box is not ticked for this link (a re-attach
+      // that found nothing, under a box unticked since): nothing starts.
+      if (!isVideoLinkRightsTicked(nodeId, url)) {
+        write({ downloadStatus: "idle", downloadId: "", downloadIdUrl: "" })
+        return { status: "needs-confirmation" }
+      }
       if (startsLeft-- === 0) return fail("connection", "Download expired", false)
 
       // The probe is part of EVERY automatic start, including the one after a
@@ -325,11 +413,16 @@ async function runIngest(
         downloadIdUrl: "",
       })
       if (!began) return { status: "superseded" }
+      // One confirmation per download, recorded right before it (rule 4): the
+      // restart after the server forgot a download is a download of its own.
+      const confirmation = await confirmationFor(nodeId, url)
+      if (control.cancelled) return { status: "superseded" }
+      if ("failed" in confirmation) return fail("rights", confirmation.failed, false)
       try {
-        downloadId = (await startVideoDownload(url, startOptions)).downloadId
+        downloadId = (await startVideoDownload(url, { ...startOptions, confirmationId: confirmation.id })).downloadId
       } catch (err) {
-        const raw = err instanceof Error ? err.message : ""
-        return fail(classifyDownloadError(raw), raw, false)
+        const failure = classifyDownloadFailure(err)
+        return fail(failure.code, failure.raw, false)
       }
       reattached = false
       if (!write({ downloadId, downloadIdUrl: url })) return { status: "superseded" }
@@ -396,10 +489,17 @@ function start(nodeId: string, request: VideoLinkIngestRequest, options: StartOp
   // ANYTHING running for this link — it must never replace a real download.
   if (running && running.url === url && (running.key === key || followOnly)) return running.promise
 
+  const reattachId = options.reattach && !request.force ? boundDownloadId(data, url) : undefined
+  // A new download needs the box ticked for this link (rule 4); a re-attach
+  // to one the server still has does not — that download was confirmed when
+  // it started. Nothing in flight is touched by a refusal.
+  if (!followOnly && reattachId === undefined && !isVideoLinkRightsTicked(nodeId, url)) {
+    return Promise.resolve({ status: "needs-confirmation" })
+  }
+
   cancelLive(nodeId)
   settlePending(nodeId)
 
-  const reattachId = options.reattach && !request.force ? boundDownloadId(data, url) : undefined
   const control: IngestControl = { cancelled: false, abort: new AbortController() }
   const promise = runIngest(nodeId, url, request, control, reattachId, followOnly).finally(() => {
     if (live.get(nodeId)?.control === control) live.delete(nodeId)
@@ -484,22 +584,50 @@ function describeLink(nodeId: string, url: string): void {
   )
 }
 
-/** The audio track, for the consumers that read `downloadedAudioUrl` (Suno Cover, Transcribe). */
-function ingestAudio(nodeId: string, url: string): void {
-  patchFromDownload(nodeId, { audioDownloadStatus: "downloading", downloadedAudioUrl: "", audioDownloadError: "" })
-  downloadYouTubeAudio(url).then(
-    (result) => {
-      if (linkOf(readData(nodeId)) !== url) return
+export type AudioIngestOutcome =
+  | { readonly status: "completed" }
+  | { readonly status: "failed"; readonly code: DownloadErrorCode }
+  | { readonly status: "superseded" | "needs-confirmation" | "skipped" }
+
+/**
+ * The audio track, for the consumers that read `downloadedAudioUrl` (Suno Cover,
+ * Transcribe). An import of the link like the video: under the box, with a
+ * confirmation of its own. One fetch per node and link at a time; a second
+ * call for the same link joins it, and one for another link starts its own
+ * (the old one drops its writes, rule 3).
+ */
+function ingestAudio(nodeId: string, url: string): Promise<AudioIngestOutcome> {
+  const running = liveAudio.get(nodeId)
+  if (running && running.url === url) return running.promise
+  if (useWorkflowStore.getState().isReadOnly) return Promise.resolve({ status: "skipped" })
+  if (!isVideoLinkRightsTicked(nodeId, url)) return Promise.resolve({ status: "needs-confirmation" })
+  const promise = (async (): Promise<AudioIngestOutcome> => {
+    const current = () => linkOf(readData(nodeId)) === url
+    patchFromDownload(nodeId, { audioDownloadStatus: "downloading", downloadedAudioUrl: "", audioDownloadError: "" })
+    const confirmation = await confirmationFor(nodeId, url)
+    if (!current()) return { status: "superseded" }
+    if ("failed" in confirmation) {
+      patchFromDownload(nodeId, { audioDownloadStatus: "failed", audioDownloadError: confirmation.failed })
+      return { status: "failed", code: "rights" }
+    }
+    try {
+      const result = await downloadYouTubeAudio(url, { confirmationId: confirmation.id })
+      if (!current()) return { status: "superseded" }
       patchFromDownload(nodeId, { downloadedAudioUrl: result.url, audioDownloadStatus: "completed" })
-    },
-    (err: unknown) => {
-      if (linkOf(readData(nodeId)) !== url) return
-      patchFromDownload(nodeId, {
-        audioDownloadStatus: "failed",
-        audioDownloadError: err instanceof Error ? err.message : "Audio download failed",
-      })
-    },
-  )
+      return { status: "completed" }
+    } catch (err) {
+      if (!current()) return { status: "superseded" }
+      const failure = classifyDownloadFailure(err)
+      patchFromDownload(nodeId, { audioDownloadStatus: "failed", audioDownloadError: failure.raw || "Audio download failed" })
+      return { status: "failed", code: failure.code }
+    }
+  })()
+  const entry = { url, promise }
+  liveAudio.set(nodeId, entry)
+  void promise.finally(() => {
+    if (liveAudio.get(nodeId) === entry) liveAudio.delete(nodeId)
+  })
+  return promise
 }
 
 /** What a link change resets on the node. A run-time link swap (an app's input) drops the same
@@ -521,15 +649,20 @@ export const CLEARED_DOWNLOAD: NodeData = {
   downloadedAudioUrl: "",
   audioDownloadStatus: "idle",
   audioDownloadError: "",
+  // A run's confirmation left beside the previous link (never saved; dropped on load) is that link's.
+  rightsConfirmationId: "",
 }
 
 /**
  * The link field changed. Resets everything that belonged to the previous link
- * in ONE write, then — once the typing stops — fetches the new one.
+ * in ONE write (the box included), then — once the typing stops — reads the
+ * new link's title and picture. Nothing is imported until the box is ticked.
  */
 export function setVideoLinkUrl(nodeId: string, rawUrl: string): void {
   cancelLive(nodeId)
   dropPending(nodeId)
+  liveAudio.delete(nodeId)
+  untickVideoLinkRights(nodeId)
 
   const url = rawUrl.trim()
   const videoId = extractVideoLinkId(url)
@@ -547,22 +680,21 @@ export function setVideoLinkUrl(nodeId: string, rawUrl: string): void {
   })
   if (!videoId) return
 
-  const sides = () => {
-    if (linkOf(readData(nodeId)) !== url) return
-    describeLink(nodeId, url)
-    ingestAudio(nodeId, url)
+  const describe = () => {
+    if (linkOf(readData(nodeId)) === url) describeLink(nodeId, url)
   }
   const timer = setTimeout(() => {
     pending.delete(nodeId)
-    sides()
-    if (linkOf(readData(nodeId)) === url) void ingestVideoLink(nodeId, { mode: "auto" })
+    describe()
   }, VIDEO_LINK_INGEST_DEBOUNCE_MS)
-  pending.set(nodeId, { timer, sides })
+  pending.set(nodeId, { timer, describe })
 }
 
 export function clearVideoLink(nodeId: string): void {
   cancelLive(nodeId)
   dropPending(nodeId)
+  liveAudio.delete(nodeId)
+  untickVideoLinkRights(nodeId)
   patchNode(nodeId, { ...CLEARED_DOWNLOAD, youtubeUrl: "", videoId: "", title: "", thumbnailUrl: "" })
 }
 
@@ -572,6 +704,27 @@ export function clearVideoLink(nodeId: string): void {
 
 function labelOf(data: NodeData): string {
   return typeof data.label === "string" && data.label.trim() ? data.label : "Video URL"
+}
+
+/**
+ * The first listed node whose box is not ticked for its link and which has
+ * something left to fetch — a post link without its file, or (for the sound)
+ * without its track — with nothing in flight for that link. The gate asks
+ * this for every node a run needs BEFORE it fetches anything, so nobody waits
+ * out a download to be told to tick a box.
+ */
+export function findUnconfirmedVideoLink(nodeIds: readonly string[], { audio = false }: { readonly audio?: boolean } = {}): EnsureVideoLinksResult | null {
+  for (const nodeId of nodeIds) {
+    const data = readData(nodeId)
+    if (!data) continue
+    const url = linkOf(data)
+    if (!url || !isSocialVideoUrl(url)) continue
+    if (audio ? trackOf(data) !== "" : videoLinkDownloadedFile(data) !== undefined) continue
+    const inFlight = audio ? liveAudio.get(nodeId)?.url === url : live.get(nodeId)?.url === url
+    if (inFlight || isVideoLinkRightsTicked(nodeId, url)) continue
+    return { ok: false, nodeId, label: labelOf(data), reason: "confirm" }
+  }
+  return null
 }
 
 async function ensureOne(nodeId: string): Promise<EnsureVideoLinksResult> {
@@ -592,6 +745,7 @@ async function ensureOne(nodeId: string): Promise<EnsureVideoLinksResult> {
 
   if (outcome.status === "completed") return { ok: true, downloaded: 1 }
   if (outcome.status === "needs-choice") return { ok: false, nodeId, label, reason: "choose" }
+  if (outcome.status === "needs-confirmation") return { ok: false, nodeId, label, reason: "confirm" }
   if (outcome.status === "failed") return { ok: false, nodeId, label, reason: "failed", code: outcome.code }
   // skipped / superseded: trust the node, not the outcome — it may have been
   // completed by the request that superseded this one.
@@ -611,9 +765,10 @@ async function ensureOne(nodeId: string): Promise<EnsureVideoLinksResult> {
  * Downloads what is missing (waiting for a download already under way), a few
  * at a time. It never decides a long video for the person and never starts a
  * run over a failed download — both come back as `ok: false`, naming the node —
- * and a node that needs a choice is reported BEFORE anything is downloaded, so
- * nobody waits minutes to be told to pick a part. `signal` abandons the WAIT;
- * the downloads themselves carry on and the nodes show them.
+ * and a node that needs a choice, or the box ticked, is reported BEFORE
+ * anything is downloaded, so nobody waits minutes to be told to pick a part.
+ * `signal` abandons the WAIT; the downloads themselves carry on and the nodes
+ * show them.
  */
 export async function ensureVideoLinksDownloaded(
   nodeIds: readonly string[],
@@ -628,6 +783,9 @@ export async function ensureVideoLinksDownloaded(
     if (view.kind === "choose") return { ok: false, nodeId, label: labelOf(data), reason: "choose" }
     todo.push(nodeId)
   }
+  // A download under way was confirmed when it started; a new one needs the box.
+  const unconfirmed = findUnconfirmedVideoLink(todo)
+  if (unconfirmed) return unconfirmed
 
   const results: EnsureVideoLinksResult[] = []
   let next = 0
@@ -653,7 +811,46 @@ export async function ensureVideoLinksDownloaded(
   return { ok: true, downloaded: results.reduce((sum, r) => sum + (r.ok ? r.downloaded : 0), 0) }
 }
 
+/**
+ * Make sure every listed Video URL node holds its AUDIO TRACK before a run
+ * whose readers take only the sound (Transcribe, Suno Cover) starts: on the
+ * canvas the run reads the node's own track, so a track the paste-time fetch
+ * never made (an unticked box, a failure) is fetched now — under the box, like
+ * the video. A node holding its track costs nothing. An unticked node is
+ * reported before any fetch; `signal` abandons the wait.
+ */
+export async function ensureVideoLinkAudio(
+  nodeIds: readonly string[],
+  options: { readonly signal?: AbortSignal } = {},
+): Promise<EnsureVideoLinksResult> {
+  const unconfirmed = findUnconfirmedVideoLink(nodeIds, { audio: true })
+  if (unconfirmed) return unconfirmed
+  // The wait can always be left: a Cancel ends it at once, the fetch carries on.
+  const cancelled = new Promise<"cancelled">((resolve) => {
+    if (options.signal?.aborted) resolve("cancelled")
+    options.signal?.addEventListener("abort", () => resolve("cancelled"), { once: true })
+  })
+  let downloaded = 0
+  for (const nodeId of nodeIds) {
+    if (options.signal?.aborted) return { ok: false, reason: "cancelled" }
+    const data = readData(nodeId)
+    if (!data) continue
+    const url = linkOf(data)
+    if (!url || !isSocialVideoUrl(url) || trackOf(data) !== "") continue
+    const label = labelOf(data)
+    const outcome = await Promise.race([ingestAudio(nodeId, url), cancelled])
+    if (outcome === "cancelled" || options.signal?.aborted) return { ok: false, reason: "cancelled" }
+    if (outcome.status === "completed") downloaded += 1
+    else if (outcome.status === "needs-confirmation") return { ok: false, nodeId, label, reason: "confirm" }
+    else if (outcome.status === "failed") return { ok: false, nodeId, label, reason: "failed", code: outcome.code }
+    else if (outcome.status === "superseded") return { ok: false, nodeId, label, reason: "changed" }
+  }
+  return { ok: true, downloaded }
+}
+
 export function __resetVideoLinkIngestForTests(): void {
   for (const nodeId of [...live.keys()]) cancelLive(nodeId)
   for (const nodeId of [...pending.keys()]) dropPending(nodeId)
+  liveAudio.clear()
+  clearVideoLinkRights()
 }

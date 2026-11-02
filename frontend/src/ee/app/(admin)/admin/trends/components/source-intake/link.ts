@@ -21,7 +21,8 @@ export type LinkFailure = DownloadErrorCode | "unsupported" | "noVideo" | "right
 export const LINK_FAILURES: Readonly<Record<LinkFailure, string>> = {
   unsupported: "Paste a link to where the video is.",
   noVideo: "This link does not point at one video. Paste the video's own link.",
-  rights: "Your confirmation could not be recorded. Read the declaration and confirm again.",
+  rights: "The confirmation for this link didn't go through. Read the declaration and tick the box again.",
+  refused: "This link can't be imported here.",
   live: "This is a live stream. Use a recorded video.",
   busy: "Too many downloads are running on this account. Wait for one to finish, then try again.",
   private: "This video is private or needs a sign-in. Use a public video.",

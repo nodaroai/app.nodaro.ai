@@ -1628,6 +1628,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     if (!claimedStopping || (ctx.adoptableJobs?.size ?? 0) > 0) {
       const fetched = await prepareVideoLinksForRun({
         userId,
+        executionId,
         nodes,
         edges,
         executingIds: new Set(executableNodes.filter((n) => nodeStates[n.id]?.status === "pending").map((n) => n.id)),

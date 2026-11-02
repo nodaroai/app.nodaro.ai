@@ -5112,14 +5112,30 @@ link runs the same check: the video download, the two audio routes above,
 take `confirmationId` too), a run's own fetch of a Video URL node (video and
 sound), a transcription or a Suno cover given a link, and the MCP audio tool
 (it posts to `/v1/extract-youtube-audio`). A file uploaded from the person's
-own device is not an import of a link and runs no such check. **Not covered yet, and a blocker before the
+own device is not an import of a link and runs no such check.
+
+A run's own fetch of a Video URL node takes its confirmation from the run
+request alone: `rightsConfirmationId` in `inputOverrides` on the node
+(`POST /v1/workflows/:id/run`, `POST /v1/app/:slug/run`, the SDK's `apps.run` /
+`workflows.run`), from a `confirm` of that same link, made for that run. It is
+a run-only field: one saved on a node is dropped before the run reads the
+graph (a confirmation is one download's, within an hour, so a saved one could
+only refuse a later run), and a link swap in `inputOverrides` drops it with
+the rest of the old link's fields. The run spends the confirmation under
+`<executionId>:<nodeId>`, so the same fetch tried again (an execution picked
+up after a deploy) passes the one-use lock. The editor's and the app page's own
+downloads confirm as they go, one confirmation per download; a published app's
+page confirms a link whose sound the run fetches when Run is pressed, for that
+run.
+
+**Not covered yet, and a blocker before the
 setting is turned on** — these lanes run the check but have no way to send a
-confirmation, so with the setting on each one is refused: a run started from
-the API, MCP, the SDK or a published app that downloads a link itself (every
-run of a Video URL node), `POST /v1/transcribe` and the Suno cover and
-upload-extend routes given a link, the MCP audio tool, the editor's own
-picture-link import, and a private plugin's own download. Those lanes, and the standing authorization for API keys and
-agents, are a later change.
+confirmation, so with the setting on each one is refused: a run started by an
+agent over MCP (`run_app`, `run_workflow`: nobody ticks a box), `POST /v1/transcribe`
+and the Suno cover and upload-extend routes given a link, the MCP audio tool,
+the editor's own picture-link import, and a private plugin's own download.
+Those lanes, and the standing authorization for API keys and agents, are a
+later change.
 
 **Import source policies.** Before the confirmation is checked, the link's
 site is held to what an administrator decided about it (Admin → Settings →

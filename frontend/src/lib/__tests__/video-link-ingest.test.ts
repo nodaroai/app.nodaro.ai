@@ -20,8 +20,16 @@ const store = {
   },
 }
 
+type WorkflowListener = (state: { workflowId?: unknown }, previous: { workflowId?: unknown }) => void
+const { workflowListeners } = vi.hoisted(() => ({ workflowListeners: [] as WorkflowListener[] }))
 vi.mock("@/hooks/use-workflow-store", () => ({
-  useWorkflowStore: { getState: () => store },
+  useWorkflowStore: Object.assign((selector: (s: typeof store) => unknown) => selector(store), {
+    getState: () => store,
+    subscribe: (listener: WorkflowListener) => {
+      workflowListeners.push(listener)
+      return () => undefined
+    },
+  }),
 }))
 
 vi.mock("@/hooks/undo-flags", () => ({
@@ -44,16 +52,31 @@ vi.mock("@/lib/video-download-stream", () => ({
   followVideoDownload: (...a: unknown[]) => followVideoDownload(...a),
 }))
 
+// The content rights declaration (`lib/content-rights.ts`): a confirmation per download.
+const { confirmLink, DeclarationChangedError } = vi.hoisted(() => ({
+  confirmLink: vi.fn(),
+  DeclarationChangedError: class DeclarationChangedError extends Error {},
+}))
+vi.mock("@/lib/content-rights", () => ({
+  confirmLink: (...a: unknown[]) => confirmLink(...a),
+  DeclarationChangedError,
+}))
+
 import {
   CLEARED_DOWNLOAD,
   __resetVideoLinkIngestForTests,
   clearVideoLink,
+  confirmVideoLink,
+  ensureVideoLinkAudio,
   ensureVideoLinksDownloaded,
   ENSURE_CONCURRENCY,
+  findUnconfirmedVideoLink,
   ingestVideoLink,
+  isVideoLinkConfirmed,
   isVideoLinkIngestLive,
   resumeVideoLinkIngest,
   retryVideoLinkIngest,
+  setVideoLinkConfirmed,
   setVideoLinkUrl,
   VIDEO_LINK_INGEST_DEBOUNCE_MS,
 } from "../video-link-ingest"
@@ -62,9 +85,12 @@ const YT = "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
 const TIKTOK = "https://www.tiktok.com/@someone/video/7676964064458738952"
 const FILE = "https://cdn.nodaro.ai/videos/yt-1.mp4"
 const THUMB = "https://cdn.nodaro.ai/thumbnails/yt-1.jpg"
+const CONFIRMED = { confirmationId: "conf-1" }
 
-function seed(data: Record<string, unknown> = {}, id = "n1") {
+/** A node, with the content rights box ticked for its link unless said otherwise (rule 4). */
+function seed(data: Record<string, unknown> = {}, id = "n1", options: { readonly ticked?: boolean } = {}) {
   store.nodes = [...store.nodes.filter((n) => n.id !== id), { id, type: "youtube-video", data: { label: "Video URL", ...data } }]
+  if (options.ticked !== false) setVideoLinkConfirmed(id, true)
 }
 const dataOf = (id = "n1") => store.nodes.find((n) => n.id === id)!.data
 
@@ -90,6 +116,7 @@ beforeEach(() => {
   fetchVideoMetadata.mockResolvedValue({ durationSec: 95, title: "A short clip", isLive: false })
   fetchYouTubeOEmbed.mockResolvedValue({ title: "A short clip", thumbnail_url: "https://i.ytimg.com/x.jpg" })
   downloadYouTubeAudio.mockResolvedValue({ url: "https://cdn.nodaro.ai/audios/a.mp3", thumbnailUrl: null })
+  confirmLink.mockResolvedValue({ id: "conf-1", declarationVersion: 1, expiresAt: "2099-01-01T00:00:00.000Z" })
 })
 
 afterEach(() => {
@@ -102,7 +129,7 @@ describe("ingestVideoLink — what gets downloaded", () => {
     const outcome = await ingestVideoLink("n1")
     expect(outcome).toEqual({ status: "completed", videoUrl: FILE })
     expect(fetchVideoMetadata).not.toHaveBeenCalled()
-    expect(startVideoDownload).toHaveBeenCalledWith(TIKTOK, {})
+    expect(startVideoDownload).toHaveBeenCalledWith(TIKTOK, CONFIRMED)
     expect(dataOf()).toMatchObject({
       downloadStatus: "completed",
       downloadedVideoUrl: FILE,
@@ -119,7 +146,7 @@ describe("ingestVideoLink — what gets downloaded", () => {
     const outcome = await ingestVideoLink("n1")
     expect(outcome.status).toBe("completed")
     expect(fetchVideoMetadata).toHaveBeenCalledWith(YT)
-    expect(startVideoDownload).toHaveBeenCalledWith(YT, { maxHeight: 1080 })
+    expect(startVideoDownload).toHaveBeenCalledWith(YT, { maxHeight: 1080, ...CONFIRMED })
     expect(dataOf()).toMatchObject({ videoDurationSec: 95, downloadedFromUrl: YT })
   })
 
@@ -167,6 +194,7 @@ describe("ingestVideoLink — what gets downloaded", () => {
       maxHeight: 1080,
       section: { startSec: 30, endSec: 95 },
       exactSection: true,
+      ...CONFIRMED,
     })
     expect(dataOf()).toMatchObject({
       needsRangeChoice: false,
@@ -181,7 +209,7 @@ describe("ingestVideoLink — what gets downloaded", () => {
     seed({ youtubeUrl: YT, needsRangeChoice: true })
     await ingestVideoLink("n1", { mode: "whole" })
     expect(fetchVideoMetadata).not.toHaveBeenCalled()
-    expect(startVideoDownload).toHaveBeenCalledWith(YT, { maxHeight: 1080 })
+    expect(startVideoDownload).toHaveBeenCalledWith(YT, { maxHeight: 1080, ...CONFIRMED })
     expect(dataOf()).toMatchObject({ downloadMode: "whole", downloadedSection: null })
   })
 
@@ -308,7 +336,7 @@ describe("retryVideoLinkIngest — the Retry button", () => {
   it("asks the server to accept a silent file only on the explicit second try", async () => {
     seed({ youtubeUrl: TIKTOK, downloadStatus: "failed", downloadErrorCode: "no_audio" })
     await retryVideoLinkIngest("n1", { allowSilent: true })
-    expect(startVideoDownload).toHaveBeenCalledWith(TIKTOK, { requireAudio: false })
+    expect(startVideoDownload).toHaveBeenCalledWith(TIKTOK, { requireAudio: false, ...CONFIRMED })
   })
 })
 
@@ -378,17 +406,246 @@ describe("ingestVideoLink — one download per node, and no late answers", () =>
   })
 
   it("is not an undo step — Ctrl+Z after a download takes back the LINK, not the download's bookkeeping", async () => {
-    vi.useFakeTimers()
-    seed()
+    seed({}, "n1", { ticked: false })
     setVideoLinkUrl("n1", TIKTOK)
-    await vi.advanceTimersByTimeAsync(VIDEO_LINK_INGEST_DEBOUNCE_MS + 1)
-    await vi.waitFor(() => expect(dataOf().downloadStatus).toBe("completed"))
+    expect((await confirmVideoLink("n1")).status).toBe("completed")
 
     const undoable = store.patches.filter((p) => p.undoable)
-    // The one thing the person did: change the link.
+    // The one thing the person did: change the link. The tick is session state, not a write.
     expect(undoable).toHaveLength(1)
     expect(undoable[0].patch.youtubeUrl).toBe(TIKTOK)
     expect(undo.skipping).toBe(false) // the flag is always handed back
+  })
+})
+
+describe("the content rights box (rule 4)", () => {
+  it("a pasted link fetches NOTHING until the box is ticked — only its title and picture are read", async () => {
+    vi.useFakeTimers()
+    seed({}, "n1", { ticked: false })
+    setVideoLinkUrl("n1", YT)
+    await vi.advanceTimersByTimeAsync(VIDEO_LINK_INGEST_DEBOUNCE_MS * 2)
+    expect(fetchYouTubeOEmbed).toHaveBeenCalledTimes(1)
+    expect(fetchVideoMetadata).not.toHaveBeenCalled()
+    expect(startVideoDownload).not.toHaveBeenCalled()
+    expect(downloadYouTubeAudio).not.toHaveBeenCalled()
+    expect(confirmLink).not.toHaveBeenCalled()
+    expect(isVideoLinkConfirmed("n1")).toBe(false)
+  })
+
+  it("a download asked of an unticked node is refused without a request — Download, Retry and Run alike", async () => {
+    seed({ youtubeUrl: TIKTOK }, "n1", { ticked: false })
+    expect(await ingestVideoLink("n1")).toEqual({ status: "needs-confirmation" })
+    expect(await retryVideoLinkIngest("n1")).toEqual({ status: "needs-confirmation" })
+    expect(await ensureVideoLinksDownloaded(["n1"])).toEqual({ ok: false, nodeId: "n1", label: "Video URL", reason: "confirm" })
+    expect(startVideoDownload).not.toHaveBeenCalled()
+    expect(confirmLink).not.toHaveBeenCalled()
+    expect(store.patches).toHaveLength(0)
+  })
+
+  it("the tick confirms the declaration for the link and fetches its sound and its video — one confirmation EACH", async () => {
+    seed({ youtubeUrl: TIKTOK }, "n1", { ticked: false })
+    confirmLink
+      .mockResolvedValueOnce({ id: "conf-audio", declarationVersion: 1, expiresAt: "2099-01-01T00:00:00.000Z" })
+      .mockResolvedValueOnce({ id: "conf-video", declarationVersion: 1, expiresAt: "2099-01-01T00:00:00.000Z" })
+    expect((await confirmVideoLink("n1")).status).toBe("completed")
+    expect(isVideoLinkConfirmed("n1")).toBe(true)
+    await vi.waitFor(() => expect(dataOf().audioDownloadStatus).toBe("completed"))
+    expect(confirmLink.mock.calls).toEqual([[TIKTOK], [TIKTOK]])
+    expect(downloadYouTubeAudio).toHaveBeenCalledWith(TIKTOK, { confirmationId: "conf-audio" })
+    expect(startVideoDownload).toHaveBeenCalledWith(TIKTOK, { confirmationId: "conf-video" })
+  })
+
+  it("the box is session state: never written to the node, so a saved workflow never carries a tick", async () => {
+    seed({ youtubeUrl: TIKTOK }, "n1", { ticked: false })
+    await confirmVideoLink("n1")
+    await vi.waitFor(() => expect(dataOf().audioDownloadStatus).toBe("completed"))
+    for (const { patch } of store.patches) {
+      expect(patch.rightsConfirmationId ?? "").toBe("")
+      expect("confirmed" in patch).toBe(false)
+    }
+  })
+
+  it("a changed link unticks the box, and so does clearing it", () => {
+    seed({ youtubeUrl: TIKTOK })
+    expect(isVideoLinkConfirmed("n1")).toBe(true)
+    setVideoLinkUrl("n1", YT)
+    expect(isVideoLinkConfirmed("n1")).toBe(false)
+    // A confirmation an agent wrote beside the old link goes with it.
+    expect(dataOf().rightsConfirmationId).toBe("")
+    setVideoLinkConfirmed("n1", true)
+    clearVideoLink("n1")
+    expect(isVideoLinkConfirmed("n1")).toBe(false)
+  })
+
+  it("a tick on a direct file link or an empty node is nothing — there is no import to confirm", () => {
+    seed({ youtubeUrl: FILE }, "a", { ticked: false })
+    seed({ youtubeUrl: "" }, "b", { ticked: false })
+    setVideoLinkConfirmed("a", true)
+    setVideoLinkConfirmed("b", true)
+    expect(isVideoLinkConfirmed("a")).toBe(false)
+    expect(isVideoLinkConfirmed("b")).toBe(false)
+  })
+
+  it("the restart after the server forgot a download records a fresh confirmation — one confirmation opens one download", async () => {
+    followVideoDownload.mockResolvedValueOnce({ status: "expired" })
+    startVideoDownload.mockResolvedValueOnce({ downloadId: "dl-1" }).mockResolvedValueOnce({ downloadId: "dl-2" })
+    confirmLink
+      .mockResolvedValueOnce({ id: "conf-first", declarationVersion: 1, expiresAt: "2099-01-01T00:00:00.000Z" })
+      .mockResolvedValueOnce({ id: "conf-second", declarationVersion: 1, expiresAt: "2099-01-01T00:00:00.000Z" })
+    seed({ youtubeUrl: TIKTOK })
+    expect((await ingestVideoLink("n1")).status).toBe("completed")
+    expect(startVideoDownload.mock.calls.map(([, o]) => o)).toEqual([{ confirmationId: "conf-first" }, { confirmationId: "conf-second" }])
+  })
+
+  it("a changed declaration unticks the box and fails as a rights problem — the person must read the new text", async () => {
+    confirmLink.mockRejectedValueOnce(new DeclarationChangedError("changed"))
+    seed({ youtubeUrl: TIKTOK })
+    expect(await ingestVideoLink("n1")).toEqual({ status: "failed", code: "rights" })
+    expect(isVideoLinkConfirmed("n1")).toBe(false)
+    expect(dataOf()).toMatchObject({ downloadStatus: "failed", downloadErrorCode: "rights" })
+    expect(startVideoDownload).not.toHaveBeenCalled()
+  })
+
+  it("a confirmation the server refuses for another reason fails the download the same way, box still ticked", async () => {
+    confirmLink.mockRejectedValueOnce(new Error("Authentication required"))
+    seed({ youtubeUrl: TIKTOK })
+    expect(await ingestVideoLink("n1")).toEqual({ status: "failed", code: "rights" })
+    expect(isVideoLinkConfirmed("n1")).toBe(true)
+    expect(dataOf().downloadError).toBe("Authentication required")
+  })
+
+  it("a re-attach needs no tick — that download was confirmed when it started", async () => {
+    seed({ youtubeUrl: TIKTOK, downloadStatus: "downloading", downloadId: "dl-9", downloadIdUrl: TIKTOK }, "n1", { ticked: false })
+    resumeVideoLinkIngest("n1")
+    await vi.waitFor(() => expect(dataOf().downloadStatus).toBe("completed"))
+    expect(confirmLink).not.toHaveBeenCalled()
+    expect(startVideoDownload).not.toHaveBeenCalled()
+  })
+
+  it("…but the fresh start after a re-attach found nothing does, and an unticked node goes back to idle", async () => {
+    followVideoDownload.mockResolvedValueOnce({ status: "expired" })
+    seed({ youtubeUrl: TIKTOK, downloadStatus: "failed", downloadId: "dl-9", downloadIdUrl: TIKTOK }, "n1", { ticked: false })
+    expect(await retryVideoLinkIngest("n1")).toEqual({ status: "needs-confirmation" })
+    expect(dataOf()).toMatchObject({ downloadStatus: "idle", downloadId: "" })
+    expect(startVideoDownload).not.toHaveBeenCalled()
+  })
+
+  it("the audio track fails as a rights problem on the node when its confirmation is refused", async () => {
+    confirmLink.mockRejectedValueOnce(new DeclarationChangedError("changed"))
+    seed({ youtubeUrl: TIKTOK, downloadedVideoUrl: FILE, downloadedFromUrl: TIKTOK }, "n1", { ticked: false })
+    await confirmVideoLink("n1")
+    await vi.waitFor(() => expect(dataOf().audioDownloadStatus).toBe("failed"))
+    expect(dataOf().audioDownloadError).toBe("changed")
+    expect(downloadYouTubeAudio).not.toHaveBeenCalled()
+    expect(isVideoLinkConfirmed("n1")).toBe(false)
+  })
+
+  it("a tick for a NEW link starts its own track fetch instead of joining the old link's", async () => {
+    const first = deferred<{ url: string; thumbnailUrl: null }>()
+    downloadYouTubeAudio.mockReturnValueOnce(first.promise).mockResolvedValueOnce({ url: "https://cdn.nodaro.ai/audios/b.mp3", thumbnailUrl: null })
+    seed({ youtubeUrl: TIKTOK }, "n1", { ticked: false })
+    void confirmVideoLink("n1")
+    await vi.waitFor(() => expect(downloadYouTubeAudio).toHaveBeenCalledTimes(1))
+
+    setVideoLinkUrl("n1", YT)
+    void confirmVideoLink("n1")
+    await vi.waitFor(() => expect(downloadYouTubeAudio).toHaveBeenCalledTimes(2))
+    expect(downloadYouTubeAudio).toHaveBeenLastCalledWith(YT, CONFIRMED)
+    await vi.waitFor(() => expect(dataOf().downloadedAudioUrl).toBe("https://cdn.nodaro.ai/audios/b.mp3"))
+    // The old link's track lands nowhere.
+    first.resolve({ url: "https://cdn.nodaro.ai/audios/a.mp3", thumbnailUrl: null })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(dataOf().downloadedAudioUrl).toBe("https://cdn.nodaro.ai/audios/b.mp3")
+  })
+
+  it("the tick's own state goes with the workflow: another workflow opens with every box unticked — a new canvas getting its id on its first save keeps them", () => {
+    seed({ youtubeUrl: TIKTOK })
+    workflowListeners.forEach((l) => l({ workflowId: "w1" }, { workflowId: null }))
+    expect(isVideoLinkConfirmed("n1")).toBe(true)
+    workflowListeners.forEach((l) => l({ workflowId: "w2" }, { workflowId: "w1" }))
+    expect(isVideoLinkConfirmed("n1")).toBe(false)
+    seed({ youtubeUrl: TIKTOK })
+    workflowListeners.forEach((l) => l({ workflowId: null }, { workflowId: "w2" }))
+    expect(isVideoLinkConfirmed("n1")).toBe(false)
+  })
+
+  describe("findUnconfirmedVideoLink — the question the Run gate asks before it fetches anything", () => {
+    it("names the first unticked node that has something left to fetch; a ticked, fetched, direct or in-flight one is passed over", async () => {
+      seed({ youtubeUrl: TIKTOK, label: "Reel" }, "unticked", { ticked: false })
+      seed({ youtubeUrl: TIKTOK }, "ticked")
+      seed({ youtubeUrl: TIKTOK, downloadedVideoUrl: FILE, downloadedFromUrl: TIKTOK }, "fetched", { ticked: false })
+      seed({ youtubeUrl: FILE }, "direct", { ticked: false })
+      expect(findUnconfirmedVideoLink(["ticked", "fetched", "direct", "unticked"])).toEqual({ ok: false, nodeId: "unticked", label: "Reel", reason: "confirm" })
+      // For the sound: the track, not the file, is what counts.
+      expect(findUnconfirmedVideoLink(["fetched"], { audio: true })).toMatchObject({ nodeId: "fetched" })
+      seed({ youtubeUrl: TIKTOK, downloadedAudioUrl: "https://cdn.nodaro.ai/audios/have.mp3" }, "tracked", { ticked: false })
+      expect(findUnconfirmedVideoLink(["tracked"], { audio: true })).toBeNull()
+    })
+
+    it("a download already running was confirmed when it started", async () => {
+      const follow = deferred<unknown>()
+      followVideoDownload.mockReturnValue(follow.promise)
+      seed({ youtubeUrl: TIKTOK })
+      const pending = ingestVideoLink("n1")
+      await vi.waitFor(() => expect(followVideoDownload).toHaveBeenCalled())
+      setVideoLinkConfirmed("n1", false)
+      expect(findUnconfirmedVideoLink(["n1"])).toBeNull()
+      follow.resolve({ status: "completed", videoUrl: FILE })
+      await pending
+    })
+  })
+
+  describe("ensureVideoLinkAudio — the sound a Transcribe-only run reads from the node", () => {
+    it("fetches a missing track under the tick, and costs nothing when the node holds one", async () => {
+      seed({ youtubeUrl: TIKTOK }, "a")
+      seed({ youtubeUrl: TIKTOK, downloadedAudioUrl: "https://cdn.nodaro.ai/audios/have.mp3" }, "b")
+      seed({ youtubeUrl: FILE }, "c")
+      expect(await ensureVideoLinkAudio(["a", "b", "c"])).toEqual({ ok: true, downloaded: 1 })
+      expect(downloadYouTubeAudio).toHaveBeenCalledTimes(1)
+      expect(downloadYouTubeAudio).toHaveBeenCalledWith(TIKTOK, CONFIRMED)
+      expect(dataOf("a").downloadedAudioUrl).toBe("https://cdn.nodaro.ai/audios/a.mp3")
+    })
+
+    it("stops the run on an unticked node, before any request — even one listed after a ticked node", async () => {
+      seed({ youtubeUrl: TIKTOK }, "a")
+      seed({ youtubeUrl: TIKTOK, label: "Episode" }, "b", { ticked: false })
+      expect(await ensureVideoLinkAudio(["a", "b"])).toEqual({ ok: false, nodeId: "b", label: "Episode", reason: "confirm" })
+      expect(confirmLink).not.toHaveBeenCalled()
+      expect(downloadYouTubeAudio).not.toHaveBeenCalled()
+    })
+
+    it("stops the run on a failed track, naming the class", async () => {
+      downloadYouTubeAudio.mockRejectedValueOnce(new Error("Too many downloads are running"))
+      seed({ youtubeUrl: TIKTOK })
+      expect(await ensureVideoLinkAudio(["n1"])).toEqual({ ok: false, nodeId: "n1", label: "Video URL", reason: "failed", code: "busy" })
+    })
+
+    it("can be abandoned — the wait ends at once, the fetch carries on", async () => {
+      const audio = deferred<{ url: string; thumbnailUrl: null }>()
+      downloadYouTubeAudio.mockReturnValue(audio.promise)
+      seed({ youtubeUrl: TIKTOK })
+      const controller = new AbortController()
+      const gate = ensureVideoLinkAudio(["n1"], { signal: controller.signal })
+      await vi.waitFor(() => expect(downloadYouTubeAudio).toHaveBeenCalled())
+      controller.abort()
+      // The wait is over before the track lands.
+      expect(await gate).toEqual({ ok: false, reason: "cancelled" })
+      audio.resolve({ url: "https://cdn.nodaro.ai/audios/a.mp3", thumbnailUrl: null })
+      await vi.waitFor(() => expect(dataOf().downloadedAudioUrl).toBe("https://cdn.nodaro.ai/audios/a.mp3"))
+    })
+
+    it("a refused confirmation on the track is a rights failure, by its class, not its words", async () => {
+      confirmLink.mockRejectedValueOnce(Object.assign(new Error("Used already"), { code: "rights_confirmation_used" }))
+      seed({ youtubeUrl: TIKTOK })
+      expect(await ensureVideoLinkAudio(["n1"])).toEqual({ ok: false, nodeId: "n1", label: "Video URL", reason: "failed", code: "rights" })
+    })
+
+    it("fetches nothing on a read-only canvas", async () => {
+      seed({ youtubeUrl: TIKTOK })
+      store.isReadOnly = true
+      expect(await ensureVideoLinkAudio(["n1"])).toEqual({ ok: true, downloaded: 0 })
+      expect(confirmLink).not.toHaveBeenCalled()
+    })
   })
 })
 
@@ -421,36 +678,39 @@ describe("setVideoLinkUrl", () => {
     await vi.waitFor(() => expect(dataOf().title).toBe("A short clip"))
   })
 
-  it("waits for the typing to stop — three edits are ONE download, of the last link", async () => {
+  it("three edits are ONE link to confirm — the tick fetches the last one, once", async () => {
     vi.useFakeTimers()
-    seed()
+    seed({}, "n1", { ticked: false })
     setVideoLinkUrl("n1", "https://www.instagram.com/reel/A")
     await vi.advanceTimersByTimeAsync(VIDEO_LINK_INGEST_DEBOUNCE_MS - 50)
     setVideoLinkUrl("n1", "https://www.instagram.com/reel/AB")
     await vi.advanceTimersByTimeAsync(VIDEO_LINK_INGEST_DEBOUNCE_MS - 50)
     setVideoLinkUrl("n1", "https://www.instagram.com/reel/ABC")
-    expect(startVideoDownload).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(VIDEO_LINK_INGEST_DEBOUNCE_MS + 1)
-    await vi.waitFor(() => expect(startVideoDownload).toHaveBeenCalledTimes(1))
-    expect(startVideoDownload).toHaveBeenCalledWith("https://www.instagram.com/reel/ABC", {})
+    expect(startVideoDownload).not.toHaveBeenCalled()
+    const ticked = confirmVideoLink("n1")
+    await vi.advanceTimersByTimeAsync(1)
+    expect((await ticked).status).toBe("completed")
+    expect(startVideoDownload).toHaveBeenCalledTimes(1)
+    expect(startVideoDownload).toHaveBeenCalledWith("https://www.instagram.com/reel/ABC", CONFIRMED)
     expect(downloadYouTubeAudio).toHaveBeenCalledTimes(1)
   })
 
-  it("a Download click INSIDE the typing pause still fetches the title and the audio track", async () => {
+  it("a tick INSIDE the typing pause still reads the title — and the pause running out afterwards adds nothing", async () => {
     vi.useFakeTimers()
-    seed()
+    seed({}, "n1", { ticked: false })
     setVideoLinkUrl("n1", YT)
-    // The person is faster than the pause: the button is already on screen.
-    const clicked = ingestVideoLink("n1", { mode: "auto" })
+    // The person is faster than the pause: the box is already on screen.
+    const ticked = confirmVideoLink("n1")
     await vi.advanceTimersByTimeAsync(1)
-    expect((await clicked).status).toBe("completed")
+    expect((await ticked).status).toBe("completed")
     expect(downloadYouTubeAudio).toHaveBeenCalledTimes(1)
     expect(fetchYouTubeOEmbed).toHaveBeenCalledTimes(1)
 
-    // …and the pause running out afterwards adds nothing.
     await vi.advanceTimersByTimeAsync(VIDEO_LINK_INGEST_DEBOUNCE_MS * 2)
     expect(startVideoDownload).toHaveBeenCalledTimes(1)
     expect(downloadYouTubeAudio).toHaveBeenCalledTimes(1)
+    expect(fetchYouTubeOEmbed).toHaveBeenCalledTimes(1)
   })
 
   it("starts nothing for a direct file link", async () => {
@@ -463,18 +723,18 @@ describe("setVideoLinkUrl", () => {
     expect(dataOf()).toMatchObject({ youtubeUrl: FILE, videoId: "" })
   })
 
-  it("fetches the audio track too, and never writes it onto a changed link", async () => {
-    vi.useFakeTimers()
+  it("fetches the audio track too (on the tick), and never writes it onto a changed link", async () => {
     const audio = deferred<{ url: string; thumbnailUrl: null }>()
     downloadYouTubeAudio.mockReturnValue(audio.promise)
-    seed()
+    seed({}, "n1", { ticked: false })
     setVideoLinkUrl("n1", TIKTOK)
-    await vi.advanceTimersByTimeAsync(VIDEO_LINK_INGEST_DEBOUNCE_MS + 1)
-    await vi.waitFor(() => expect(dataOf().audioDownloadStatus).toBe("downloading"))
+    void confirmVideoLink("n1")
+    await vi.waitFor(() => expect(downloadYouTubeAudio).toHaveBeenCalledTimes(1))
+    expect(dataOf().audioDownloadStatus).toBe("downloading")
 
     clearVideoLink("n1")
     audio.resolve({ url: "https://cdn.nodaro.ai/audios/a.mp3", thumbnailUrl: null })
-    await vi.advanceTimersByTimeAsync(1)
+    await new Promise((r) => setTimeout(r, 0))
     expect(dataOf().downloadedAudioUrl).toBe("")
     expect(dataOf().audioDownloadStatus).toBe("idle")
   })
@@ -619,10 +879,11 @@ describe("ensureVideoLinksDownloaded — the gate in front of Run", () => {
     expect(dataOf("b").downloadedVideoUrl).toBe(FILE)
   })
 
-  it("does not wait out the typing pause — Run means now", async () => {
+  it("does not wait out the typing pause — Run means now, and joins the download the tick started", async () => {
     vi.useFakeTimers()
-    seed()
+    seed({}, "n1", { ticked: false })
     setVideoLinkUrl("n1", TIKTOK)
+    void confirmVideoLink("n1")
     const result = ensureVideoLinksDownloaded(["n1"])
     await vi.advanceTimersByTimeAsync(1)
     expect(await result).toEqual({ ok: true, downloaded: 1 })

@@ -12,10 +12,24 @@ vi.mock("lucide-react", () => new Proxy({}, {
 const ingestVideoLink = vi.fn().mockResolvedValue({ status: "completed", videoUrl: "v.mp4" })
 const retryVideoLinkIngest = vi.fn().mockResolvedValue({ status: "completed", videoUrl: "v.mp4" })
 const resumeVideoLinkIngest = vi.fn()
+const confirmVideoLink = vi.fn().mockResolvedValue({ status: "completed", videoUrl: "v.mp4" })
+const setVideoLinkConfirmed = vi.fn()
+// The box, as the controller holds it for this session.
+const box = { ticked: true }
 vi.mock("@/lib/video-link-ingest", () => ({
   ingestVideoLink: (...a: unknown[]) => ingestVideoLink(...a),
   retryVideoLinkIngest: (...a: unknown[]) => retryVideoLinkIngest(...a),
   resumeVideoLinkIngest: (...a: unknown[]) => resumeVideoLinkIngest(...a),
+  confirmVideoLink: (...a: unknown[]) => confirmVideoLink(...a),
+  setVideoLinkConfirmed: (...a: unknown[]) => setVideoLinkConfirmed(...a),
+  useVideoLinkConfirmed: () => box.ticked,
+}))
+
+const declaration = { status: "ready" as "ready" | "loading" | "failed", declaration: { version: 1, text: "I hold the rights to this content." } }
+const reloadDeclaration = vi.fn()
+vi.mock("@/lib/content-rights", () => ({
+  useRightsDeclaration: () => declaration,
+  reloadDeclaration: (...a: unknown[]) => reloadDeclaration(...a),
 }))
 
 const canvas: { isReadOnly: boolean; nodes: unknown[]; edges: unknown[] } = { isReadOnly: false, nodes: [], edges: [] }
@@ -47,6 +61,8 @@ beforeEach(() => {
   canvas.isReadOnly = false
   canvas.nodes = []
   canvas.edges = []
+  box.ticked = true
+  declaration.status = "ready"
 })
 
 /** Wire this Video URL node (n1) into a node of `type`, as the canvas would. */
@@ -253,6 +269,85 @@ describe("VideoLinkStatus", () => {
     expect(resumeVideoLinkIngest).toHaveBeenCalledTimes(2)
   })
 
+  // Rule 4 of the controller: nothing is fetched until the person confirms the
+  // declaration for the link, in this session. The block shows the box while
+  // the link still has something to import, and no button works before the tick.
+  describe("the content rights box", () => {
+    const boxName = en("videolink.rightsConfirm")
+
+    it("shows the box, unticked, on a link nobody fetched yet; the tick confirms and fetches", () => {
+      box.ticked = false
+      renderStatus({ youtubeUrl: YT })
+      const check = screen.getByRole("checkbox", { name: boxName })
+      expect(check).toHaveAttribute("data-state", "unchecked")
+      expect(screen.getByText(en("videolink.rightsNeeded"))).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: en("inputcfg.downloadVideo") })).toBeDisabled()
+      fireEvent.click(check)
+      expect(confirmVideoLink).toHaveBeenCalledWith("n1")
+      expect(ingestVideoLink).not.toHaveBeenCalled()
+    })
+
+    it("an untick is told to the controller", () => {
+      renderStatus({ youtubeUrl: YT })
+      fireEvent.click(screen.getByRole("checkbox", { name: boxName }))
+      expect(setVideoLinkConfirmed).toHaveBeenCalledWith("n1", false)
+    })
+
+    it("unfolds the declaration's full text on request", () => {
+      renderStatus({ youtubeUrl: YT })
+      expect(screen.queryByText("I hold the rights to this content.")).toBeNull()
+      fireEvent.click(screen.getByRole("button", { name: en("videolink.rightsRead") }))
+      expect(screen.getByText("I hold the rights to this content.")).toBeInTheDocument()
+      fireEvent.click(screen.getByRole("button", { name: en("videolink.rightsHide") }))
+      expect(screen.queryByText("I hold the rights to this content.")).toBeNull()
+    })
+
+    it("holds Retry and the chooser's buttons until the box is ticked", () => {
+      box.ticked = false
+      renderStatus({ youtubeUrl: TIKTOK, downloadStatus: "failed", downloadErrorCode: "no_audio" })
+      expect(screen.getByRole("button", { name: en("inputcfg.retryDownload") })).toBeDisabled()
+      expect(screen.getByRole("button", { name: en("videolink.downloadSilent") })).toBeDisabled()
+      cleanup()
+      renderStatus({ youtubeUrl: YT, needsRangeChoice: true, videoDurationSec: 5530 })
+      expect(screen.getByRole("button", { name: en("videolink.downloadPart") })).toBeDisabled()
+      expect(screen.getByRole("button", { name: en("videolink.downloadWhole") })).toBeDisabled()
+    })
+
+    it("needs no box on a node holding its file — nothing is left to import, whatever reads it", () => {
+      feeds("video-analysis")
+      renderStatus({ youtubeUrl: TIKTOK, downloadedVideoUrl: FILE, downloadedFromUrl: TIKTOK })
+      expect(screen.queryByRole("checkbox")).toBeNull()
+      cleanup()
+      feeds("transcribe")
+      renderStatus({ youtubeUrl: TIKTOK, downloadedVideoUrl: FILE, downloadedFromUrl: TIKTOK, downloadedAudioUrl: "https://cdn.nodaro.ai/audios/a.mp3" })
+      expect(screen.queryByRole("checkbox")).toBeNull()
+    })
+
+    it("keeps the box on a node holding its file but not the sound a Transcribe after it reads", () => {
+      feeds("transcribe")
+      renderStatus({ youtubeUrl: TIKTOK, downloadedVideoUrl: FILE, downloadedFromUrl: TIKTOK })
+      expect(screen.getByRole("checkbox", { name: boxName })).toBeInTheDocument()
+    })
+
+    it("is disabled while a download runs — that download was confirmed when it started", () => {
+      renderStatus({ youtubeUrl: TIKTOK, downloadStatus: "downloading", downloadId: "dl-9", downloadPercent: 40 })
+      expect(screen.getByRole("checkbox", { name: boxName })).toBeDisabled()
+    })
+
+    it("says so while the declaration loads, and offers another read when it could not be", () => {
+      declaration.status = "loading"
+      renderStatus({ youtubeUrl: YT })
+      expect(screen.getByText(en("videolink.rightsLoading"))).toBeInTheDocument()
+      expect(screen.queryByRole("checkbox")).toBeNull()
+      cleanup()
+      declaration.status = "failed"
+      renderStatus({ youtubeUrl: YT })
+      expect(screen.getByText(en("videolink.rightsLoadFailed"))).toBeInTheDocument()
+      fireEvent.click(screen.getByRole("button", { name: en("common.tryAgain") }))
+      expect(reloadDeclaration).toHaveBeenCalled()
+    })
+  })
+
   describe("on a canvas that takes no writes", () => {
     beforeEach(() => {
       canvas.isReadOnly = true
@@ -272,6 +367,8 @@ describe("VideoLinkStatus", () => {
       renderStatus({ youtubeUrl: TIKTOK, downloadStatus: "failed", downloadErrorCode: "no_audio" })
       renderStatus({ youtubeUrl: YT, downloadedVideoUrl: FILE, downloadedFromUrl: YT }, "panel")
       expect(screen.queryByRole("button")).toBeNull()
+      // Nor a box: a tick that could start nothing.
+      expect(screen.queryByRole("checkbox")).toBeNull()
       // What IS true is still said.
       expect(screen.getByText(en("videolink.errorNoAudio"))).toBeInTheDocument()
       expect(screen.getByText(en("inputcfg.downloadedAndReady"))).toBeInTheDocument()

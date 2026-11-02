@@ -91,8 +91,9 @@ describe("a run's download goes through the route's downloader", () => {
 
     const confirmationId = "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01"
     vi.mocked(checkRightsConfirmation).mockResolvedValueOnce({ id: confirmationId } as never)
-    await downloadVideoForRun({ url: URL_, userId: "u1", rightsConfirmationId: confirmationId })
-    expect(consumeRightsConfirmation).toHaveBeenCalledWith(expect.objectContaining({ confirmationId, url: URL_, lane: "run" }))
+    await downloadVideoForRun({ url: URL_, userId: "u1", rightsConfirmationId: confirmationId, requestId: "exec-1:src" })
+    // Spent under the request it is for, so the same fetch tried again passes the one-use lock.
+    expect(consumeRightsConfirmation).toHaveBeenCalledWith(expect.objectContaining({ confirmationId, url: URL_, lane: "run", requestId: "exec-1:src" }))
     expect(recordDownloadedVideoAsset).toHaveBeenCalledWith(expect.objectContaining({ rightsConfirmationId: confirmationId }))
 
     // Spent by another download first: the slot goes back and the run fails.

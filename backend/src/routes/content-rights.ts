@@ -39,9 +39,11 @@ function laneOf(authKind: string | undefined): RightsLane {
 }
 
 export async function contentRightsRoutes(app: FastifyInstance) {
-  // A record is written per call into tables that are never cleaned up: a
-  // person confirms a few links a minute at most, never hundreds.
-  const confirmLimit = rateLimiter({ windowMs: 60_000, max: 30, keyPrefix: "content-rights-confirm", failClosed: true })
+  // A record is written per call into tables that are never cleaned up. One
+  // confirmation opens one download, and a Video URL node fetches two per
+  // link (the video and its sound) — a person ticking a canvas of them, or a
+  // Run fetching for many at once, is a few dozen a minute; never hundreds.
+  const confirmLimit = rateLimiter({ windowMs: 60_000, max: 120, keyPrefix: "content-rights-confirm", failClosed: true })
 
   app.get("/v1/content-rights/declaration", async (req, reply) => {
     try {

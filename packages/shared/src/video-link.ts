@@ -396,6 +396,9 @@ export const VIDEO_LINK_DERIVED_FIELDS = [
   "downloadedAudioUrl",
   "audioDownloadStatus",
   "audioDownloadError",
+  // The content rights confirmation a run's own fetch of the link is made
+  // under: recorded for ONE link, so it never stands under another.
+  "rightsConfirmationId",
 ] as const
 
 /**

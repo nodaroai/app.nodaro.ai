@@ -153,6 +153,12 @@ describe("a continuation saved on the graph is never a run's (the engine's rule,
     expect(rendersAsPreview(node)).toBe(false)
   })
 
+  it("a Video URL node's saved content rights confirmation is dropped the same way — only this run's override sets one", () => {
+    const link = { id: "src", type: "youtube-video", data: { youtubeUrl: "https://youtu.be/AAAAAAAAAAA", rightsConfirmationId: "stale" } }
+    expect(withRunOverrides([link], undefined)[0]!.data).toEqual({ youtubeUrl: "https://youtu.be/AAAAAAAAAAA" })
+    expect(withRunOverrides([link], { src: { rightsConfirmationId: "fresh" } })[0]!.data).toMatchObject({ rightsConfirmationId: "fresh" })
+  })
+
   it("is applied once, to the saved graph: a second pass drops the continuation the first set", () => {
     const once = withRunOverrides(saved({}), { t1: { useCaseContinue: { mode: "render-final", jobId: "job-1" } } })
     expect(withRunOverrides(once, undefined).find((n) => n.id === "t1")!.data).not.toHaveProperty("useCaseContinue")

@@ -54,6 +54,7 @@ import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithI
 import { calculateMonetizedCost } from "@nodaro/shared/credits"
 import type { PresentationItem } from "@nodaro/shared/types"
 import { patchAsRunValues } from "@/components/presentation/helpers"
+import { useVideoLinkRightsVersion } from "@/lib/video-link-rights"
 import { NodeConfigModal, CONFIG_INPUT_TYPES } from "@/components/presentation/node-config-modal"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { GetCreditsModal } from "@/ee/components/credits/GetCreditsModal"
@@ -219,9 +220,11 @@ export function MobileAppShell({
       })
     : ""
 
+  // A Video URL input's content rights box is read inside (`isVideoLinkRightsTicked`): its version re-reads on a tick.
+  const rightsVersion = useVideoLinkRightsVersion()
   const allInputsFilled = useMemo(
     () => areAllInputsFilled(orderedInputNodes, presInputValues, { nodes: presNodes, edges: presEdges }),
-    [orderedInputNodes, presInputValues, presNodes, presEdges],
+    [orderedInputNodes, presInputValues, presNodes, presEdges, rightsVersion],
   )
 
   // ---- Local state ----

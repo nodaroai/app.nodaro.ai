@@ -4789,9 +4789,15 @@ export async function discardMedia(url: string): Promise<void> {
   }
 }
 
-export async function downloadYouTubeAudio(url: string): Promise<{ url: string; thumbnailUrl: string | null }> {
+export interface DownloadAudioOptions {
+  /** The content rights confirmation this import is made under (`nodaroClient.contentRights.confirm`, for this link). */
+  readonly confirmationId?: string
+}
+
+/** The sound of a video link, stored (`POST /v1/youtube-audio`). An import of the link, so it carries a confirmation like the video download. */
+export async function downloadYouTubeAudio(url: string, options: DownloadAudioOptions = {}): Promise<{ url: string; thumbnailUrl: string | null }> {
   return apiJson("/v1/youtube-audio", {
-    body: { url },
+    body: { url, ...(options.confirmationId !== undefined ? { confirmationId: options.confirmationId } : {}) },
     label: "apiErr.extractAudioFromVideo",
   })
 }

@@ -358,6 +358,12 @@ export interface RunDownloadOptions extends Omit<TrackedDownloadRequest, "requir
   readonly signal?: AbortSignal
   readonly slotWaitMs?: number
   readonly maxMs?: number
+  /**
+   * What this download is for (`<execution>:<node>` for a run's fetch): the
+   * confirmation is spent under it, so the same request tried again passes the
+   * one-use lock (`consumeRightsConfirmation`) instead of being refused.
+   */
+  readonly requestId?: string | null
 }
 
 /**
@@ -369,7 +375,7 @@ export interface RunDownloadOptions extends Omit<TrackedDownloadRequest, "requir
  * flight, so the file lands in storage unused and its slot frees when it ends.
  */
 export async function downloadVideoForRun(options: RunDownloadOptions): Promise<{ videoUrl: string; thumbnailUrl?: string }> {
-  const rights = { userId: options.userId, confirmationId: options.rightsConfirmationId, lane: "run" as const }
+  const rights = { userId: options.userId, confirmationId: options.rightsConfirmationId, lane: "run" as const, requestId: options.requestId ?? null }
   try {
     await requireImportAllowed(options.url, rights)
   } catch (e) {
