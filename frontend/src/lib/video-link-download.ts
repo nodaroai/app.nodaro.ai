@@ -30,6 +30,8 @@ export interface VideoLinkDownloadRequest {
   readonly section?: VideoDownloadSection
   /** Accept a file with no sound — the explicit second try after a no-audio failure. */
   readonly allowSilent?: boolean
+  /** The content rights confirmation the download is made under (`startVideoDownload`). */
+  readonly confirmationId?: string
 }
 
 export type LinkDownloadEvent =
@@ -45,12 +47,19 @@ export type LinkDownloadOutcome =
 export interface VideoLinkDownloadHooks {
   onEvent(event: LinkDownloadEvent): void
   readonly signal: AbortSignal
+  /**
+   * A fresh content rights confirmation for the same link, asked for before
+   * the one restart after the server forgot a download: a confirmation is
+   * spent by the start that used it, so the restart needs its own. Without
+   * this hook a download made under a confirmation is not restarted.
+   */
+  readonly refreshConfirmation?: () => Promise<string>
 }
 
 export async function downloadVideoLink(
   url: string,
   request: VideoLinkDownloadRequest,
-  { onEvent, signal }: VideoLinkDownloadHooks,
+  { onEvent, signal, refreshConfirmation }: VideoLinkDownloadHooks,
 ): Promise<LinkDownloadOutcome> {
   const mode = request.mode ?? "auto"
   const section = mode === "section" ? request.section : undefined
@@ -69,18 +78,25 @@ export async function downloadVideoLink(
     }
   }
 
-  const options: StartVideoDownloadOptions = {
+  let options: StartVideoDownloadOptions = {
     ...(isYouTube ? { maxHeight: YOUTUBE_MAX_HEIGHT } : {}),
     ...(section ? { section, exactSection: true } : {}),
     ...(request.allowSilent ? { requireAudio: false } : {}),
+    ...(request.confirmationId ? { confirmationId: request.confirmationId } : {}),
   }
 
   // One fresh start is allowed after the server forgets a download it was
-  // given (a deploy restarts the process that held it) — never a loop.
-  for (let startsLeft = 2; startsLeft > 0; startsLeft--) {
+  // given (a deploy restarts the process that held it) — never a loop. A
+  // start made under a confirmation spent it: the restart needs a fresh one
+  // from the caller, or there is no restart.
+  const restarts = request.confirmationId && !refreshConfirmation ? 0 : 1
+  for (let startsLeft = 1 + restarts, started = 0; startsLeft > 0; startsLeft--, started++) {
     if (signal.aborted) return { status: "aborted" }
     let downloadId: string
     try {
+      if (started > 0 && request.confirmationId && refreshConfirmation) {
+        options = { ...options, confirmationId: await refreshConfirmation() }
+      }
       downloadId = (await startVideoDownload(url, options)).downloadId
     } catch (err) {
       const raw = err instanceof Error ? err.message : ""

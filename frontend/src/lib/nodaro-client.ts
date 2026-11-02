@@ -1,5 +1,6 @@
 import type { ClientOptions } from "@nodaro/sdk/client"
 import { NodaroClientCore, CallbackAuth } from "@nodaro/sdk/core"
+import { ContentRightsResource } from "@nodaro/sdk/content-rights"
 import { DeveloperAppsResource } from "@nodaro/sdk/developer-apps"
 import { ExecutionsResource } from "@nodaro/sdk/executions"
 import { JobsResource } from "@nodaro/sdk/jobs"
@@ -31,6 +32,8 @@ export class AppNodaroClient extends NodaroClientCore {
   readonly developerApps = new DeveloperAppsResource(this)
   readonly projects = new ProjectsResource(this)
   readonly workflows = new WorkflowsResource(this)
+  /** The declaration a person confirms before a link is imported, and the confirmation a download carries. */
+  readonly contentRights = new ContentRightsResource(this)
 }
 
 /**

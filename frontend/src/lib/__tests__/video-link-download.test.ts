@@ -40,6 +40,13 @@ describe("downloadVideoLink — the runner's copy of the Video URL node's downlo
     expect(startVideoDownload).toHaveBeenCalledWith(TIKTOK, {})
   })
 
+  it("the content rights confirmation rides into the download, and only when given", async () => {
+    await run(TIKTOK, { mode: "whole", confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01" }).outcome
+    expect(startVideoDownload).toHaveBeenLastCalledWith(TIKTOK, { confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01" })
+    await run(TIKTOK, { mode: "whole" }).outcome
+    expect(startVideoDownload).toHaveBeenLastCalledWith(TIKTOK, {})
+  })
+
   it("probes a YouTube link and downloads a SHORT one whole, capped at 1080 rows", async () => {
     const { outcome, events } = run(YT)
     expect((await outcome).status).toBe("completed")
@@ -115,6 +122,21 @@ describe("downloadVideoLink — the runner's copy of the Video URL node's downlo
     followVideoDownload.mockResolvedValue({ status: "expired" })
     expect(await run(TIKTOK).outcome).toMatchObject({ status: "failed", code: "connection" })
     expect(startVideoDownload).toHaveBeenCalledTimes(2)
+  })
+
+  it("a download made under a confirmation restarts only with a fresh one from the caller (the first was spent)", async () => {
+    followVideoDownload.mockResolvedValueOnce({ status: "expired" }).mockResolvedValueOnce({ status: "completed", videoUrl: FILE })
+    const refreshConfirmation = vi.fn(async () => "second-confirmation")
+    const outcome = await downloadVideoLink(TIKTOK, { mode: "whole", confirmationId: "first-confirmation" }, { onEvent: () => undefined, signal: new AbortController().signal, refreshConfirmation })
+    expect(outcome.status).toBe("completed")
+    expect(startVideoDownload.mock.calls.map(([, o]) => o)).toEqual([{ confirmationId: "first-confirmation" }, { confirmationId: "second-confirmation" }])
+    expect(refreshConfirmation).toHaveBeenCalledTimes(1)
+
+    // No way to get a fresh one: no restart, the expiry is reported as it is.
+    startVideoDownload.mockClear()
+    followVideoDownload.mockResolvedValue({ status: "expired" })
+    expect(await run(TIKTOK, { mode: "whole", confirmationId: "first-confirmation" }).outcome).toMatchObject({ status: "failed", code: "connection" })
+    expect(startVideoDownload).toHaveBeenCalledTimes(1)
   })
 
   it("an abort ends it as `aborted`, writing nothing after", async () => {

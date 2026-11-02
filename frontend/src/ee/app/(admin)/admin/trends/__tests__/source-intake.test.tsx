@@ -20,6 +20,14 @@ import type { ReactElement } from "react"
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() } }))
 
+// The content rights declaration and the confirmation (the SDK's resource on the app's client).
+const fakeRights = vi.hoisted(() => ({ declaration: vi.fn(), confirm: vi.fn() }))
+vi.mock("@/lib/nodaro-client", async (orig) => {
+  const actual = await orig<typeof import("@/lib/nodaro-client")>()
+  return { ...actual, nodaroClient: { ...actual.nodaroClient, contentRights: fakeRights } }
+})
+const CONFIRMATION = "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01"
+
 const fake = vi.hoisted(() => {
   type Range = { start: number; end: number }
   type Size = { width: number; height: number }
@@ -107,6 +115,13 @@ const STORED = "https://cdn.test/trends/a1/stored.mp4"
 const download = vi.mocked(downloadVideoLink)
 const upload = vi.mocked(uploadLocalFile)
 
+/** Pastes the link, ticks the declaration's box for it (shown once the declaration is read) and asks for the video. */
+async function pasteLink(user: ReturnType<typeof userEvent.setup>, text: string) {
+  await user.type(screen.getByLabelText(/a link to where the video is/), text.replace(/\{Enter\}$/, ""))
+  await user.click(await screen.findByRole("checkbox", { name: /I confirm the declaration/ }))
+  await user.click(screen.getByRole("button", { name: "Get video" }))
+}
+
 function renderEditor() {
   const onChange = vi.fn()
   renderWith(<SourceClipEditor trendId={TREND_ID} source={null} previewStart={null} onChange={onChange} />)
@@ -138,6 +153,10 @@ beforeEach(() => {
   vi.mocked(toast.error).mockClear()
   download.mockReset()
   upload.mockReset()
+  fakeRights.declaration.mockReset()
+  fakeRights.confirm.mockReset()
+  fakeRights.declaration.mockResolvedValue({ version: 1, text: "I confirm that I hold the rights to this content." })
+  fakeRights.confirm.mockResolvedValue({ id: CONFIRMATION, declarationVersion: 1, expiresAt: "2026-11-02T07:00:00Z" })
   fake.trimLimits.length = 0
   fake.nextRange.current = { start: 2, end: 10 }
   routes[`POST ${BASE}/media`] = () => ({ body: { data: { url: STORED, durationSec: 8, width: 1080, height: 1920 } } })
@@ -223,8 +242,10 @@ describe("a link", () => {
     download.mockResolvedValue({ status: "completed", videoUrl: DOWNLOADED })
     renderEditor()
     const user = userEvent.setup()
-    await user.type(screen.getByLabelText(/a link to where the video is/), "https://www.tiktok.com/@a/video/123{Enter}")
-    expect(download).toHaveBeenCalledWith("https://www.tiktok.com/@a/video/123", { mode: "whole" }, expect.anything())
+    await pasteLink(user, "https://www.tiktok.com/@a/video/123{Enter}")
+    // The confirmation for THIS link is recorded first and rides into the download.
+    expect(fakeRights.confirm).toHaveBeenCalledWith({ url: "https://www.tiktok.com/@a/video/123", declarationVersion: 1 })
+    expect(download).toHaveBeenCalledWith("https://www.tiktok.com/@a/video/123", { mode: "whole", confirmationId: CONFIRMATION }, expect.anything())
     const step = await screen.findByRole("group", { name: "New source clip" })
     expect(within(step).getByText("From TikTok")).toBeInTheDocument()
     loadVideo({ sec: 20 })
@@ -246,7 +267,7 @@ describe("a link", () => {
     download.mockResolvedValue({ status: "completed", videoUrl: DOWNLOADED })
     renderEditor()
     const user = userEvent.setup()
-    await user.type(screen.getByLabelText(/a link to where the video is/), "https://www.instagram.com/reel/abc{Enter}")
+    await pasteLink(user, "https://www.instagram.com/reel/abc{Enter}")
     const step = await screen.findByRole("group", { name: "New source clip" })
     loadVideo({ sec: 15 })
     await user.click(within(step).getByRole("button", { name: "Use this clip" }))
@@ -261,30 +282,98 @@ describe("a link", () => {
     download.mockResolvedValue({ status: "completed", videoUrl: DOWNLOADED })
     renderEditor()
     const user = userEvent.setup()
-    await user.type(screen.getByLabelText(/a link to where the video is/), "https://www.youtube.com/watch?v=dQw4w9WgXcQ{Enter}")
+    await pasteLink(user, "https://www.youtube.com/watch?v=dQw4w9WgXcQ{Enter}")
     const pick = await screen.findByRole("group", { name: "Pick the part to download" })
     expect(within(pick).getByText("range 0–30")).toBeInTheDocument()
     expect(download).not.toHaveBeenCalled()
     fake.nextRange.current = { start: 12.3, end: 20.6 }
     await user.click(within(pick).getByRole("button", { name: "Move the range" }))
     await user.click(within(pick).getByRole("button", { name: "Download this part" }))
-    expect(download).toHaveBeenCalledWith("https://www.youtube.com/watch?v=dQw4w9WgXcQ", { mode: "section", section: { startSec: 12.3, endSec: 20.6 } }, expect.anything())
+    expect(fakeRights.confirm).toHaveBeenCalledWith({ url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", declarationVersion: 1 })
+    expect(download).toHaveBeenCalledWith("https://www.youtube.com/watch?v=dQw4w9WgXcQ", { mode: "section", section: { startSec: 12.3, endSec: 20.6 }, confirmationId: CONFIRMATION }, expect.anything())
     const step = await screen.findByRole("group", { name: "New source clip" })
     expect(within(step).getByText("Office dance")).toBeInTheDocument()
+  })
+
+  it("the declaration's box starts unticked and gates Get video; a changed link unticks it", async () => {
+    renderEditor()
+    const user = userEvent.setup()
+    const box = await screen.findByRole("checkbox", { name: /I confirm the declaration/ })
+    expect(box).not.toBeChecked()
+    await user.type(screen.getByLabelText(/a link to where the video is/), "https://www.tiktok.com/@a/video/123{Enter}")
+    expect(download).not.toHaveBeenCalled()
+    expect(fakeRights.confirm).not.toHaveBeenCalled()
+    expect(screen.getByRole("button", { name: "Get video" })).toBeDisabled()
+    await user.click(box)
+    expect(screen.getByRole("button", { name: "Get video" })).toBeEnabled()
+    await user.type(screen.getByLabelText(/a link to where the video is/), "4")
+    expect(box).not.toBeChecked()
+    expect(screen.getByRole("button", { name: "Get video" })).toBeDisabled()
+  })
+
+  it("a declaration that cannot be read says so in the admin's words with Try again, and no link is fetched meanwhile", async () => {
+    fakeRights.declaration.mockRejectedValueOnce(new Error("Network down"))
+    renderEditor()
+    const user = userEvent.setup()
+    expect(await screen.findByText("The declaration could not be loaded.")).toBeInTheDocument()
+    expect(screen.queryByText("Network down")).not.toBeInTheDocument()
+    expect(screen.queryByRole("checkbox", { name: /I confirm the declaration/ })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Get video" })).toBeDisabled()
+    await user.click(screen.getByRole("button", { name: "Try again" }))
+    expect(await screen.findByRole("checkbox", { name: /I confirm the declaration/ })).toBeInTheDocument()
+  })
+
+  it("a confirmation refused for a changed declaration: worded by the admin, the new text shown and unticked, confirmed again under the new version", async () => {
+    fakeRights.confirm.mockRejectedValueOnce(new Error("409 rights_confirmation_stale"))
+    fakeRights.declaration.mockResolvedValueOnce({ version: 1, text: "I confirm that I hold the rights to this content." }).mockResolvedValue({ version: 2, text: "I confirm, under the new declaration." })
+    download.mockResolvedValue({ status: "completed", videoUrl: DOWNLOADED })
+    renderEditor()
+    const user = userEvent.setup()
+    await pasteLink(user, "https://www.tiktok.com/@a/video/123{Enter}")
+    expect(await screen.findByRole("alert")).toHaveTextContent("Your confirmation could not be recorded. Read the declaration and confirm again.")
+    expect(screen.queryByText(/rights_confirmation_stale/)).not.toBeInTheDocument()
+    expect(download).not.toHaveBeenCalled()
+    // The declaration is read again and the box is unticked: Try again waits for the tick.
+    expect(await screen.findByText("I confirm, under the new declaration.")).toBeInTheDocument()
+    const box = screen.getByRole("checkbox", { name: /I confirm the declaration/ })
+    expect(box).not.toBeChecked()
+    expect(screen.getByRole("button", { name: "Try again" })).toBeDisabled()
+    await user.click(box)
+    await user.click(screen.getByRole("button", { name: "Try again" }))
+    expect(await screen.findByRole("group", { name: "New source clip" })).toBeInTheDocument()
+    expect(fakeRights.confirm).toHaveBeenLastCalledWith({ url: "https://www.tiktok.com/@a/video/123", declarationVersion: 2 })
+    expect(download).toHaveBeenCalledWith("https://www.tiktok.com/@a/video/123", { mode: "whole", confirmationId: CONFIRMATION }, expect.anything())
+  })
+
+  it("Enter in the field asks for the video once the box is ticked; a delivered clip unticks it", async () => {
+    download.mockResolvedValue({ status: "completed", videoUrl: DOWNLOADED })
+    renderEditor()
+    const user = userEvent.setup()
+    const field = screen.getByLabelText(/a link to where the video is/)
+    await user.type(field, "https://www.tiktok.com/@a/video/123")
+    const box = await screen.findByRole("checkbox", { name: /I confirm the declaration/ })
+    await user.click(box)
+    await user.click(field)
+    await user.keyboard("{Enter}")
+    expect(await screen.findByRole("group", { name: "New source clip" })).toBeInTheDocument()
+    expect(download).toHaveBeenCalledTimes(1)
+    // The box, where the intake still shows it, is unticked for the next link.
+    expect(screen.queryByRole("checkbox", { name: /I confirm the declaration/ })?.getAttribute("aria-checked") ?? "false").toBe("false")
   })
 
   it("a live YouTube stream is refused before anything downloads", async () => {
     routes["POST /v1/video-metadata"] = () => ({ body: { durationSec: null, title: null, isLive: true } })
     renderEditor()
     const user = userEvent.setup()
-    await user.type(screen.getByLabelText(/a link to where the video is/), "https://youtu.be/dQw4w9WgXcQ{Enter}")
+    await pasteLink(user, "https://youtu.be/dQw4w9WgXcQ{Enter}")
     expect(await screen.findByRole("alert")).toHaveTextContent("This is a live stream. Use a recorded video.")
     expect(download).not.toHaveBeenCalled()
   })
 
-  it("a link it does not take is said at once, with no request", async () => {
+  it("a link it does not take is said at once, with no request and no tick needed", async () => {
     renderEditor()
     const user = userEvent.setup()
+    await screen.findByRole("checkbox", { name: /I confirm the declaration/ })
     await user.type(screen.getByLabelText(/a link to where the video is/), "https://vimeo.com/123{Enter}")
     expect(screen.getByRole("alert")).toHaveTextContent("Paste a link to where the video is.")
     expect(download).not.toHaveBeenCalled()
@@ -296,7 +385,7 @@ describe("a link", () => {
     download.mockResolvedValueOnce({ status: "completed", videoUrl: DOWNLOADED })
     renderEditor()
     const user = userEvent.setup()
-    await user.type(screen.getByLabelText(/a link to where the video is/), "https://www.tiktok.com/@a/video/123{Enter}")
+    await pasteLink(user, "https://www.tiktok.com/@a/video/123{Enter}")
     expect(await screen.findByRole("alert")).toHaveTextContent("The video could not be downloaded. Check the link and try again.")
     expect(screen.queryByText(/Unable to extract/)).not.toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "Try again" }))
@@ -308,7 +397,7 @@ describe("a link", () => {
     download.mockResolvedValue({ status: "failed", code: "private", raw: "Private video. Sign in" })
     renderEditor()
     const user = userEvent.setup()
-    await user.type(screen.getByLabelText(/a link to where the video is/), "https://x.com/a/status/1{Enter}")
+    await pasteLink(user, "https://x.com/a/status/1{Enter}")
     expect(await screen.findByRole("alert")).toHaveTextContent("This video is private or needs a sign-in. Use a public video.")
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument()
   })
@@ -317,7 +406,7 @@ describe("a link", () => {
     download.mockResolvedValue({ status: "completed", videoUrl: DOWNLOADED })
     renderEditor()
     const user = userEvent.setup()
-    await user.type(screen.getByLabelText(/a link to where the video is/), "https://www.facebook.com/reel/77{Enter}")
+    await pasteLink(user, "https://www.facebook.com/reel/77{Enter}")
     const step = await screen.findByRole("group", { name: "New source clip" })
     await user.click(within(step).getByRole("button", { name: "Cancel" }))
     await waitFor(() => expect(sentTo("POST /v1/media/discard")).toEqual([{ url: DOWNLOADED }]))
@@ -347,7 +436,7 @@ describe("leaving the page", () => {
     const onChange = vi.fn()
     const view = renderWith(<SourceClipEditor trendId={TREND_ID} source={null} previewStart={null} onChange={onChange} />)
     const user = userEvent.setup()
-    await user.type(screen.getByLabelText(/a link to where the video is/), "https://www.tiktok.com/@a/video/123{Enter}")
+    await pasteLink(user, "https://www.tiktok.com/@a/video/123{Enter}")
     const step = await screen.findByRole("group", { name: "New source clip" })
     loadVideo({ sec: 20 })
     await user.click(within(step).getByRole("button", { name: "Move the range" }))
@@ -364,7 +453,7 @@ describe("leaving the page", () => {
     download.mockResolvedValue({ status: "completed", videoUrl: DOWNLOADED })
     const view = renderWith(<SourceClipEditor trendId={TREND_ID} source={null} previewStart={null} onChange={vi.fn()} />)
     const user = userEvent.setup()
-    await user.type(screen.getByLabelText(/a link to where the video is/), "https://www.tiktok.com/@a/video/123{Enter}")
+    await pasteLink(user, "https://www.tiktok.com/@a/video/123{Enter}")
     await screen.findByRole("group", { name: "New source clip" })
     view.unmount()
     await waitFor(() => expect(sentTo("POST /v1/media/discard")).toEqual([{ url: DOWNLOADED }]))
@@ -396,7 +485,7 @@ describe("refusals while confirming", () => {
     download.mockResolvedValue({ status: "completed", videoUrl: DOWNLOADED })
     renderEditor()
     const user = userEvent.setup()
-    await user.type(screen.getByLabelText(/a link to where the video is/), "https://www.tiktok.com/@a/video/123{Enter}")
+    await pasteLink(user, "https://www.tiktok.com/@a/video/123{Enter}")
     const step = await screen.findByRole("group", { name: "New source clip" })
     loadVideo({ sec: 20 })
     await user.click(within(step).getByRole("button", { name: "Move the range" }))
