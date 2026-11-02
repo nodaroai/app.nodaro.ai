@@ -32,6 +32,19 @@ const audit = vi.hoisted(() => ({
 vi.mock("../job-policy-audit.js", () => audit)
 vi.mock("../app-reports.js", () => ({ insertAppReport: vi.fn(async () => true) }))
 
+// The restriction gate (lib/content-restriction-gate.ts): an input naming the
+// marker address is a restricted file.
+const RESTRICTED_URL = "https://cdn.example.test/restricted/evidence.mp4"
+vi.mock("../content-restriction-gate.js", async () => {
+  const actual = await vi.importActual<typeof import("../content-restriction-gate.js")>("../content-restriction-gate.js")
+  return {
+    ...actual,
+    restrictedInputKey: vi.fn(async (input: Record<string, unknown> | null) =>
+      JSON.stringify(input ?? {}).includes(RESTRICTED_URL) ? "restricted/evidence.mp4" : null,
+    ),
+  }
+})
+
 import { insertJob, insertJobs, insertInternalJob, insertJobIdempotent } from "../insert-job.js"
 import { withJobSubmissionContext } from "../job-submission-context.js"
 import {
@@ -84,6 +97,24 @@ describe("insert helpers with NO policy registered", () => {
     await insertJobIdempotent(req, { ...row, user_id: "u1" }, "key-1")
     expect(idempotentMock).toHaveBeenCalledTimes(1)
     expect(audit.recordJobPolicyDecision).not.toHaveBeenCalled()
+  })
+})
+
+describe("the restriction gate, a platform rule ahead of the registry", () => {
+  it("refuses a job whose input names a restricted file, with no row, no audit row and the proxies' sentence", async () => {
+    const restricted = { ...row, input_data: { ...row.input_data, videoUrl: RESTRICTED_URL } }
+    const res = await insertJob(req, restricted)
+    expect(res.data).toBeNull()
+    expect((res.error as { blocked?: unknown }).blocked).toEqual({
+      code: "job_blocked", policyId: "platform:content-restriction", message: "This content is not available.",
+    })
+    expect(insertMock).not.toHaveBeenCalled()
+    expect(audit.recordJobPolicyDecision).not.toHaveBeenCalled()
+  })
+
+  it("lets every other job through unchanged", async () => {
+    await insertJob(req, row)
+    expect(insertMock).toHaveBeenCalledTimes(1)
   })
 })
 

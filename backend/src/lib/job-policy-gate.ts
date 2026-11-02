@@ -694,7 +694,8 @@ export interface HeldRejectionInput {
  *  to be false. */
 export type HeldResolution =
   | { ok: true; refunded: number }
-  | { ok: false; reason: "not_found" | "not_held" | "lost_race" }
+  /** `restricted`: an administrator restricted the held job after a complaint (migration 581); it is frozen, neither rejected nor withdrawn. */
+  | { ok: false; reason: "not_found" | "not_held" | "lost_race" | "restricted" }
 
 export async function rejectHeldJobRow(jobId: string, input: HeldRejectionInput): Promise<HeldResolution> {
   const { data } = await supabase
@@ -703,7 +704,7 @@ export async function rejectHeldJobRow(jobId: string, input: HeldRejectionInput)
     // the complete withheld payload, while `held_objects` is the review UI's
     // bounded list. Deleting only the latter would strand the tail of a job
     // that produced more owned objects than a human would page through.
-    .select("id, status, held_completion_fields, held_objects, held_output_data, user_id")
+    .select("id, status, held_completion_fields, held_objects, held_output_data, user_id, restricted_at")
     .eq("id", jobId)
     .single()
   const row = data as
@@ -714,9 +715,13 @@ export async function rejectHeldJobRow(jobId: string, input: HeldRejectionInput)
         held_objects: HeldObject[] | null
         held_output_data: Record<string, unknown> | null
         user_id: string | null
+        restricted_at?: string | null
       }
     | null
   if (!row) return { ok: false, reason: "not_found" }
+  // A held job an administrator restricted is evidence: it is neither
+  // rejected nor has its objects deleted until the restriction is lifted.
+  if (row.restricted_at) return { ok: false, reason: "restricted" }
   if (row.status !== "pending_review") return { ok: false, reason: "not_held" }
 
   const flipped = await markJobFailed(jobId, {
@@ -773,13 +778,15 @@ export async function rejectHeldJobRow(jobId: string, input: HeldRejectionInput)
 export async function withdrawHeldJob(jobId: string): Promise<HeldResolution> {
   const { data } = await supabase
     .from("jobs")
-    .select("id, status, held_objects, held_output_data, user_id")
+    .select("id, status, held_objects, held_output_data, user_id, restricted_at")
     .eq("id", jobId)
     .single()
   const row = data as
-    | { id: string; status: string; held_objects: HeldObject[] | null; held_output_data: Record<string, unknown> | null; user_id: string | null }
+    | { id: string; status: string; held_objects: HeldObject[] | null; held_output_data: Record<string, unknown> | null; user_id: string | null; restricted_at?: string | null }
     | null
   if (!row) return { ok: false, reason: "not_found" }
+  // A restricted held job is evidence: the owner's cancel does not withdraw it.
+  if (row.restricted_at) return { ok: false, reason: "restricted" }
   if (row.status !== "pending_review") return { ok: false, reason: "not_held" }
 
   const { data: flipped } = await supabase

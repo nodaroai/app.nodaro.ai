@@ -368,6 +368,11 @@ export async function libraryRoutes(app: FastifyInstance) {
       })
 
       if (!result.ok) {
+        // Evidence of a complaint stays until the case is closed or the
+        // restriction lifted (migration 582): one sentence, no detail.
+        if ("held" in result) {
+          return reply.status(409).send({ error: { code: "content_held", message: "This file cannot be deleted right now." } })
+        }
         return sendInternalError(reply, req, result.dbError, "Failed to delete asset")
       }
 

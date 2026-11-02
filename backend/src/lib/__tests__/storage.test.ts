@@ -112,6 +112,19 @@ vi.mock("@/lib/safe-fetch.js", () => ({
   safeFetch: mocks.safeFetchMock,
 }))
 
+// The legal hold (lib/legal-hold.ts): the keys the database says are evidence.
+const hold = vi.hoisted(() => ({ held: new Set<string>(), unavailable: false }))
+vi.mock("@/lib/legal-hold.js", () => {
+  class LegalHoldUnavailableError extends Error {}
+  return {
+    LegalHoldUnavailableError,
+    heldAmong: vi.fn(async (keys: readonly string[]) => {
+      if (hold.unavailable) throw new LegalHoldUnavailableError("down")
+      return new Set(keys.filter((k) => hold.held.has(k)))
+    }),
+  }
+})
+
 import {
   uploadToR2,
   uploadBufferToR2,
@@ -318,6 +331,46 @@ describe("deleteFromR2", () => {
         Key: "images/old.png",
       }),
     )
+  })
+  it("leaves a key held as evidence of a complaint alone, with no physical delete", async () => {
+    hold.held.add("images/evidence.png")
+    try {
+      await expect(deleteFromR2("images/evidence.png")).resolves.toBeUndefined()
+      expect(mocks.deleteCalls).toHaveLength(0)
+    } finally {
+      hold.held.clear()
+    }
+  })
+})
+
+describe("batchDeleteFromR2 and the legal hold", () => {
+  it("a hold that cannot be read deletes nothing and reports every key as failed (never kept), so the retry pass tries again", async () => {
+    hold.unavailable = true
+    try {
+      const result = await batchDeleteFromR2(["images/evidence.png", "images/old.png"])
+      expect(result.deleted).toBe(0)
+      expect(result.errors).toBe(2)
+      expect(result.kept).toEqual([])
+      expect(result.notDeleted).toEqual(["images/evidence.png", "images/old.png"])
+      expect(mocks.deleteObjectsCalls).toHaveLength(0)
+      await expect(deleteFromR2("images/old.png")).rejects.toThrow("down")
+      expect(mocks.deleteCalls).toHaveLength(0)
+    } finally {
+      hold.unavailable = false
+    }
+  })
+
+  it("reports a held key as kept and not deleted, and deletes the rest", async () => {
+    hold.held.add("images/evidence.png")
+    try {
+      const result = await batchDeleteFromR2(["images/evidence.png", "images/old.png"])
+      expect(result.kept).toEqual(["images/evidence.png"])
+      expect(result.notDeleted).toEqual(["images/evidence.png"])
+      expect(mocks.deleteObjectsCalls).toHaveLength(1)
+      expect(mocks.deleteObjectsCalls[0]).toEqual(expect.objectContaining({ Delete: { Objects: [{ Key: "images/old.png" }] } }))
+    } finally {
+      hold.held.clear()
+    }
   })
 })
 

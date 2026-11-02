@@ -25,7 +25,8 @@ const db = vi.hoisted(() => {
   const updateArgs: Array<{ arg: Record<string, unknown>; eq: unknown[][] }> = []
   const limitMock = vi.fn(() => Promise.resolve({ data: rows.value, error: null }))
   const ltMock = vi.fn((...a: unknown[]) => { ltArgs.push(a); return { order: () => ({ limit: limitMock }) } })
-  const eqMock = vi.fn(() => ({ lt: ltMock }))
+  // `.is("restricted_at", null)`: a restricted parked job is evidence, never expired.
+  const eqMock = vi.fn(() => ({ is: vi.fn(() => ({ lt: ltMock })) }))
   const selectMock = vi.fn(() => ({ eq: eqMock }))
   const updateMock = vi.fn((arg: Record<string, unknown>) => {
     const call = { arg, eq: [] as unknown[][] }

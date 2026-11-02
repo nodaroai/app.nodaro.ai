@@ -32,6 +32,7 @@ import { ownedJobOutputFiles, r2KeyFromUrl, type JobOutputFile } from "../../lib
 import { blankUrlsInEveryJobOutput, jobOutputBlankingAvailable, markJobOutputsCleaned } from "../../lib/job-output-references.js"
 import { judgeAssetRows, keysHeldByOtherLibraryRows, keysUserMayDelete } from "../../lib/key-ownership.js"
 import { deleteKeysRecordingFailures, publicUrlOfKey, type RecordOptions } from "../../lib/storage-delete.js"
+import { heldAmong } from "../../lib/legal-hold.js"
 import { TIER_STORAGE_LIMITS, TIER_CREDITS } from "./stripe-config.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
 import { CreditsService } from "./credits.js"
@@ -246,7 +247,14 @@ async function reapAssetBatch(
     rows.map((a) => ({ id: a.id, user_id: a.user_id ?? ownerFallback ?? "", r2_key: a.r2_key })),
   )
   const verdictOf = (a: AgedAssetRow) => verdicts.get(String(a.id))
-  const deletable = rows.filter((a) => verdictOf(a)?.deleteObject).map((a) => a.r2_key as string)
+  // A row held as evidence of a complaint (migration 582) is left as it is,
+  // whatever its verdict: its object is not deleted, and its key stays on the
+  // row (the row's trigger would refuse the loss anyway, and a refused update
+  // would stop the whole batch). Asked once for the batch, before anything is
+  // deleted; a hold that cannot be read throws, and the batch stops.
+  const heldKeys = await heldAmong(rows.map((a) => a.r2_key as string))
+  const isHeld = (a: AgedAssetRow) => !!a.r2_key && heldKeys.has(a.r2_key)
+  const deletable = rows.filter((a) => verdictOf(a)?.deleteObject && !isHeld(a)).map((a) => a.r2_key as string)
   const relayKept = await relayOwnedKeys(deletable)
   // What storage did not delete is recorded for a later retry (decided
   // 2026-10-08), BEFORE the rows lose their keys: if the record fails, the
@@ -259,7 +267,7 @@ async function reapAssetBatch(
 
   const letGo = rows.filter((a) => {
     const v = verdictOf(a)
-    return v?.deleteObject || v?.claimedByOthers
+    return (v?.deleteObject || v?.claimedByOthers) && !isHeld(a)
   })
   const keptWithKey = rows.length - letGo.length
   if (letGo.length > 0) {
@@ -286,8 +294,10 @@ async function reapAssetBatch(
     const user = a.user_id ?? ownerFallback
     if (user) refunds.set(user, (refunds.get(user) ?? 0) + size)
   }
-  if (keptWithKey > 0) {
-    console.warn(`[cleanup] ${where}: ${keptWithKey} row(s) name an object nobody can be shown to own; the rows keep their keys and the objects stay`)
+  const heldRows = rows.filter(isHeld).length
+  if (heldRows > 0) console.warn(`[cleanup] ${where}: ${heldRows} row(s) held as evidence of a complaint keep their keys and objects`)
+  if (keptWithKey > heldRows) {
+    console.warn(`[cleanup] ${where}: ${keptWithKey - heldRows} row(s) name an object nobody can be shown to own; the rows keep their keys and the objects stay`)
   }
   return { deleted: batch.deleted, errors: batch.errors, bytesFreed, refunds, keptWithKey, stop: false }
 }

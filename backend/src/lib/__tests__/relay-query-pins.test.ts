@@ -150,8 +150,23 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
+/**
+ * The legal hold (lib/legal-hold.ts, migration 582, decided 2026-11-02): ONE
+ * `held_storage_keys_among` call ahead of every asset delete, asked fresh.
+ * Not part of the relay rule — a deliberate evidence check every deployment
+ * needs — so it is pinned here as an addition, like the whose-object reads.
+ */
+const HOLD = "rpc[held_storage_keys_among]"
+function answerHold() {
+  vi.mocked(supabase.rpc).mockImplementation((async (name: string) => {
+    tables.push(`rpc[${name}]`)
+    return { data: [], error: null }
+  }) as never)
+}
+
 describe("mainline query profile — permanentlyDeleteAsset", () => {
   function useDefault() {
+    answerHold()
     vi.mocked(supabase.from).mockImplementation(
       (table: string) =>
         chain(table, (_filters, asked) => ownObject(table, asked) ?? { data: [{ id: "asset-1" }], error: null, count: 0 }) as never,
@@ -172,6 +187,7 @@ describe("mainline query profile — permanentlyDeleteAsset", () => {
       // round, decided 2026-10-07), which since the allow proof (decided
       // 2026-10-15) also carries how each row came to name it. Not part of
       // the relay rule — deliberate security lookups.
+      HOLD,
       "jobs",
       "assets",
       "assets",
@@ -194,6 +210,7 @@ describe("mainline query profile — permanentlyDeleteAsset", () => {
     expect(tables).toEqual([
       // Whose object: no job-id stem, so only the library read (the row the
       // worker wrote for the key is the proof).
+      HOLD,
       "assets",
       "assets",
       "jobs[output_data->>imageUrl]",
@@ -218,6 +235,7 @@ describe("mainline query profile — permanentlyDeleteAsset", () => {
       // then one `assets` read of every library holding the key (review
       // round, decided 2026-10-07). Not part of the relay rule — deliberate
       // security lookups.
+      HOLD,
       "jobs",
       "assets",
       "assets",
@@ -304,6 +322,7 @@ describe("mainline query profile — deletableKeys (locations / objects / creatu
 describe("armed, the same paths take the relay reads", () => {
   beforeEach(() => {
     relayGate.on = true
+    answerHold()
     vi.mocked(supabase.from).mockImplementation(
       (table: string) =>
         chain(table, () => ({ data: [{ id: "asset-1" }], error: null, count: 0 })) as never,
@@ -316,7 +335,7 @@ describe("armed, the same paths take the relay reads", () => {
       asset: { id: "asset-1", r2_key: "videos/other.mp4", size_bytes: 10, job_id: NEAR_JOB, relay_job_id: null },
       blockOnOwnJobReferrers: true,
     })
-    expect(tables.slice(0, 2)).toEqual(["jobs", "jobs[STEM-PROBE]"])
+    expect(tables.slice(0, 3)).toEqual([HOLD, "jobs", "jobs[STEM-PROBE]"])
   })
 
   it("deletableKeys takes the marker probe and then the stem probe", async () => {

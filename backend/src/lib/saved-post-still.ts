@@ -79,7 +79,7 @@ export async function deleteSavedPostStill(userId: string, assetId: string): Pro
       return
     }
     const result = await permanentlyDeleteAsset({ userId, asset, blockOnOwnJobReferrers: true })
-    if (!result.ok) console.warn(`[saved-posts] still delete failed for asset ${assetId}: ${result.dbError.message}`)
+    if (!result.ok) console.warn(`[saved-posts] still delete failed for asset ${assetId}: ${"held" in result ? "the file is held as evidence of a complaint" : result.dbError.message}`)
   } catch (err) {
     console.warn(`[saved-posts] still delete failed for asset ${assetId}: ${(err as Error).message}`)
   }

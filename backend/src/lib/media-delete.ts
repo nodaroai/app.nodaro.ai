@@ -62,7 +62,7 @@ import { keysUserMayDelete } from "./key-ownership.js"
  * endpoint's contract for a distinction its callers cannot act on.
  */
 
-export type MediaDeleteSkipReason = "foreign" | "not-owned" | "in-use" | "error"
+export type MediaDeleteSkipReason = "foreign" | "not-owned" | "in-use" | "held" | "error"
 
 export interface MediaDeleteResult {
   deleted: string[]
@@ -230,6 +230,8 @@ async function deleteOwnedMediaByUrl(
       blockOnOwnJobReferrers: false,
     })
     if (!result.ok) {
+      // Evidence of a complaint stays (migration 582): skipped, and said so.
+      if ("held" in result) return { status: "skipped", reason: "held" }
       console.warn(`[media-delete] asset row delete failed for ${r2Key}: ${result.dbError.message}`)
       return { status: "skipped", reason: "error" }
     }

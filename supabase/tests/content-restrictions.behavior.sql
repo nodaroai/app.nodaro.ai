@@ -182,12 +182,17 @@ SELECT pg_temp.assert_eq('restricting the job covers its output row and the copy
 SELECT pg_temp.assert_eq('the held output is moved aside too',
   (SELECT (held_output_data IS NULL)::text || ',' || (restricted_output_data -> 'held_output_data' ->> 'imageUrl' IS NOT NULL)::text FROM jobs WHERE id = '00000000-0000-4000-8000-000000000955'), 'true,true');
 
--- 8. The record outlives the rows it points at.
+-- 8. The record outlives the rows it points at. While a restriction stands
+--    its rows are held (migration 582), so the second one is lifted first.
+SELECT pg_temp.expect_error('a restricted row is held while the restriction stands',
+  $q$DELETE FROM jobs WHERE id = '00000000-0000-4000-8000-000000000955'$q$, '55000');
+SELECT lift_content_restriction((SELECT id FROM content_restrictions WHERE lifted_at IS NULL), NULL, 'lifted');
 DELETE FROM assets WHERE id = '00000000-0000-4000-8000-000000000954';
 DELETE FROM jobs WHERE id = '00000000-0000-4000-8000-000000000955';
+-- The first record names the copy's key too (582: every marked row's key is on the record).
 SELECT pg_temp.assert_eq('the records stay when their rows are gone, with the keys they named',
   (SELECT count(*)::text || ',' || count(*) FILTER (WHERE job_id IS NULL AND asset_id IS NULL)::text || ',' || string_agg(DISTINCT array_to_string(r2_keys, ','), ';')
-     FROM content_restrictions), '2,2,00000000-0000-4000-8000-000000000955.png');
+     FROM content_restrictions), '2,2,00000000-0000-4000-8000-000000000955.png;00000000-0000-4000-8000-000000000955.png,uploads/same-bytes.png');
 
 DO $$ BEGIN RAISE NOTICE 'ALL BEHAVIOR ASSERTIONS PASSED'; END $$;
 ROLLBACK;

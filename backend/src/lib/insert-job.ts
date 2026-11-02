@@ -58,6 +58,11 @@ import {
 } from "./generation-session-scope.js"
 import { InvalidClientOriginError, resolveRequestOrigin, withRequestOrigin } from "./client-origin-scope.js"
 import { ACCESS_BLOCKED_BODY, isUserBlocked } from "./access-blocks.js"
+import { CONTENT_RESTRICTED_MESSAGE, CONTENT_RESTRICTION_POLICY_ID, restrictedInputKey } from "./content-restriction-gate.js"
+// The gate's two light halves, loaded with the funnel rather than on the
+// first insert that names an address (see node-executor.ts).
+import "./content-restriction-address.js"
+import "./content-restriction-set.js"
 
 /** The `policyId` a blocked account's refusal carries — the platform's own rule, not a registered policy. */
 export const ACCOUNT_BLOCK_POLICY_ID = "platform:access-block"
@@ -219,6 +224,15 @@ async function gateJobInsert(rows: ReadonlyArray<Record<string, unknown>>): Prom
   const owner = (rows[0]?.user_id as string | null | undefined) ?? null
   if (await isUserBlocked(owner)) {
     return { block: { code: "job_blocked", policyId: ACCOUNT_BLOCK_POLICY_ID, message: ACCESS_BLOCKED_BODY.error.message } }
+  }
+  // The second platform rule: a file an administrator restricted after a
+  // complaint (migration 581) is not an input to any new job. The same shape,
+  // the proxies' sentence. Every row is asked (it is a check on an address,
+  // not on the user), and one restricted input refuses the whole batch.
+  for (const row of rows) {
+    if (await restrictedInputKey((row.input_data as Record<string, unknown> | undefined) ?? null, { userId: owner })) {
+      return { block: { code: "job_blocked", policyId: CONTENT_RESTRICTION_POLICY_ID, message: CONTENT_RESTRICTED_MESSAGE } }
+    }
   }
   if (!hasJobPolicyFor("request")) return null
   const ctx = requestContextOf(rows)

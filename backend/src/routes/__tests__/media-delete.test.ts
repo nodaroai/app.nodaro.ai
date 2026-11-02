@@ -7,6 +7,8 @@ import Fastify, { type FastifyInstance } from "fastify"
 
 const R2_PUBLIC_URL = "https://pub-test.r2.dev"
 
+// The legal hold (lib/legal-hold.ts) holds nothing here: the delete's own rules are the question.
+vi.mock("@/lib/legal-hold.js", () => ({ heldAmong: vi.fn(async () => new Set<string>()), userHasHeldContent: vi.fn(async () => false) }))
 vi.mock("@/lib/supabase.js", () => ({
   supabase: { from: vi.fn() },
 }))

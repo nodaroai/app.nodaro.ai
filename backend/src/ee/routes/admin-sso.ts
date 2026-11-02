@@ -5,6 +5,7 @@ import { requireAdmin } from "../middleware/require-admin.js"
 import { invalidateAuthCache } from "../../middleware/auth.js"
 import { SSO_APP_METADATA_KEY } from "../../lib/sso-linking.js"
 import { deploymentPayerId } from "../../lib/deployment-payer.js"
+import { userHasHeldContent } from "../../lib/legal-hold.js"
 import { BAN_DURATION, BLOCK_BAN_MARKER } from "../lib/account-blocking.js"
 
 /**
@@ -106,6 +107,18 @@ export async function adminSsoRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (query.data.mode === "delete") {
+      // An account whose files are evidence of an open complaint, or under a
+      // restriction, is not deleted until the case is closed or the restriction
+      // lifted (migration 582): the cascade would refuse it half way.
+      if (await userHasHeldContent(userId)) {
+        req.log.warn({ userId }, "admin/sso de-provision (delete) REFUSED — the account holds evidence of a complaint")
+        return reply.status(409).send({
+          error: {
+            code: "content_held",
+            message: "This account holds files that are evidence of a complaint. Close the case or lift the restriction first.",
+          },
+        })
+      }
       const { error } = await supabase.auth.admin.deleteUser(userId)
       if (error) {
         req.log.error({ err: error }, "admin/sso de-provision (delete) failed")
