@@ -548,3 +548,19 @@ describe("Body from the clip in the form", () => {
     )
   })
 })
+
+describe("Style the role pictures in the form", () => {
+  it("is saved as picked, Off included (never trimmed to a default); a draft without it has none", () => {
+    const off = { styleRefs: { mode: "off" as const, send: "styled-and-original" as const } }
+    expect(fromForm(toForm(draft({ steps: off }))).steps).toEqual(off)
+    const on = { steps: { enginePrompt: { mode: "template" as const }, styleRefs: { mode: "on" as const, send: "styled" as const, prompt: "test prompt" } } }
+    expect(fromForm(toForm(draft(on))).steps).toEqual(on.steps)
+    expect(fromForm(toForm(draft({ steps: { enginePrompt: { mode: "template" } } }))).steps).toEqual({ enginePrompt: { mode: "template" } })
+  })
+
+  it("names its need readably when an environment's engine lacks it", () => {
+    expect(describeBlocker({ code: "engine_unsupported", env: "production", need: "styleRefs" })).toBe(
+      "production: the Style the role pictures step not supported yet",
+    )
+  })
+})

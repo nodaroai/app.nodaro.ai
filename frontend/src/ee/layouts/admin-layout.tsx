@@ -47,6 +47,7 @@ import {
   TrendingUp,
   Clapperboard,
   PanelTop,
+  Radar,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -99,6 +100,7 @@ const ADMIN_NAV = [
   { href: "/admin/stuck-pipelines", label: "Stuck Pipelines", icon: AlertTriangle },
   { href: "/admin/templates", label: "Templates", icon: LayoutTemplate },
   ...(hasCredits() ? [{ href: "/admin/trends", label: "Trends", icon: TrendingUp }] : []),
+  ...(hasCredits() ? [{ href: "/admin/trend-radar", label: "Trend Radar", icon: Radar }] : []),
   ...(hasCredits() ? [{ href: "/admin/nodaro-motion", label: "Nodaro Motion", icon: Clapperboard }] : []),
   { href: "/admin/tutorial-categories", label: "Tutorial Categories", icon: FolderTree },
   { href: "/admin/tutorials", label: "Tutorials", icon: PlayCircle },

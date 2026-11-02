@@ -3,8 +3,10 @@ import { randomUUID } from "node:crypto"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { promises as fs } from "node:fs"
+import { createReadStream } from "node:fs"
 import { uploadFileWithKeyToR2, uploadBufferToR2 } from "./storage.js"
 import { recordDownloadedVideoAsset } from "./asset-records.js"
+import { ContentRightsError, checkRightsConfirmation, consumeRightsConfirmation, contentHashOf, recordEvent } from "./content-rights.js"
 import { thumbnailFromLocalVideo } from "../utils/thumbnail.js"
 import { downloadYouTubeVideo, type VideoSection } from "../providers/video/youtube-video.js"
 import type { DownloadSlot } from "./download-slots.js"
@@ -109,9 +111,16 @@ async function runDownloadWithProgress(
   maxHeight?: number,
   maxFilesizeBytes?: number,
   requireAudio = true,
+  rightsConfirmationId: string | null = null,
 ): Promise<void> {
   const state = activeDownloads.get(downloadId)
   if (!state) return
+
+  // The confirmation's own record of how its download ended (best-effort).
+  const noteEnd = (kind: "download_completed" | "download_failed", detail: Record<string, unknown>) => {
+    if (!rightsConfirmationId) return
+    recordEvent({ confirmationId: rightsConfirmationId, kind, downloadId, detail }).catch(() => undefined)
+  }
 
   try {
     // Provider owns yt-dlp spawn + spoof + h264 normalize; we keep the SSE
@@ -149,6 +158,9 @@ async function runDownloadWithProgress(
     // assets row's size_bytes, which is exactly what the delete paths
     // (library.ts, media-process deleteSource) decrement by later.
     const videoSizeBytes = (await fs.stat(outPath)).size
+    // The file's fingerprint, read while it is still on disk: the same video
+    // imported again is found by it (nice-to-have; a failure stores none).
+    const contentHash = await contentHashOf(createReadStream(outPath)).catch(() => null)
     const videoR2Url = await uploadFileWithKeyToR2(outPath, videoR2Key, "video/mp4")
 
     // Sidecar thumbnail first (yt-dlp's --write-thumbnail); when the source had
@@ -193,15 +205,19 @@ async function runDownloadWithProgress(
       r2Url: videoR2Url,
       thumbnailUrl,
       sourceUrl: url,
+      rightsConfirmationId,
+      contentHash,
     })
 
     state.phase = "completed"
     state.percent = 100
     state.videoUrl = videoR2Url
     state.thumbnailUrl = thumbnailUrl
+    noteEnd("download_completed", { videoUrl: videoR2Url, contentHash })
   } catch (err) {
     state.phase = "failed"
     state.error = err instanceof Error ? err.message : "Download failed"
+    noteEnd("download_failed", { error: state.error })
     // LOG IT. This ran in the background and only ever reported the failure to
     // the SSE client, so a broken downloader looked like silence server-side —
     // which is how a `spawn ... yt-dlp ENOENT` (the binary was missing from the
@@ -223,6 +239,12 @@ export interface TrackedDownloadRequest {
   readonly maxFilesizeBytes?: number
   /** Default TRUE — see `runDownloadWithProgress`. */
   readonly requireAudio?: boolean
+  /**
+   * The content rights confirmation this import is made under (migration 577),
+   * already checked and consumed by the caller (`requireRightsConfirmation`);
+   * written on the file's row and the download's end noted on it.
+   */
+  readonly rightsConfirmationId?: string | null
 }
 
 export interface TrackedDownload {
@@ -256,6 +278,7 @@ export function startTrackedDownload(request: TrackedDownloadRequest, slot: Down
   const done = runDownloadWithProgress(
     downloadId, request.url, outputId, baseName, outPath, request.userId,
     request.section, request.maxHeight, request.maxFilesizeBytes, request.requireAudio ?? true,
+    request.rightsConfirmationId ?? null,
   ).finally(() => slot.release())
   return { downloadId, state, done }
 }
@@ -336,13 +359,31 @@ export interface RunDownloadOptions extends Omit<TrackedDownloadRequest, "requir
 }
 
 /**
- * The download a RUN needs, awaited: waits for a slot, then downloads through
- * the very path the route uses and resolves with the stored file. A stop of the
- * run abandons the WAIT only — the provider has no way to kill a download in
+ * The download a RUN needs, awaited: checks the content rights confirmation
+ * (the same check the route makes; a refusal is a `failed` download), waits
+ * for a slot, spends the confirmation, then downloads through the very path
+ * the route uses and resolves with the stored file. A stop of the run
+ * abandons the WAIT only — the provider has no way to kill a download in
  * flight, so the file lands in storage unused and its slot frees when it ends.
  */
 export async function downloadVideoForRun(options: RunDownloadOptions): Promise<{ videoUrl: string; thumbnailUrl?: string }> {
+  const rights = { url: options.url, userId: options.userId, confirmationId: options.rightsConfirmationId, lane: "run" as const }
+  try {
+    await checkRightsConfirmation(rights)
+  } catch (e) {
+    if (e instanceof ContentRightsError) throw new RunDownloadError(e.message, "failed")
+    throw e
+  }
   const slot = await acquireSlot(options.userId, options.signal, options.slotWaitMs ?? RUN_DOWNLOAD_SLOT_WAIT_MS)
+  if (options.rightsConfirmationId) {
+    try {
+      await consumeRightsConfirmation({ confirmationId: options.rightsConfirmationId, url: options.url, lane: "run" })
+    } catch (e) {
+      slot.release()
+      if (e instanceof ContentRightsError) throw new RunDownloadError(e.message, "failed")
+      throw e
+    }
+  }
   const { state, done } = startTrackedDownload(options, slot)
   await within(done, options.signal, options.maxMs ?? RUN_DOWNLOAD_MAX_MS)
   if (state.phase === "completed" && state.videoUrl) {

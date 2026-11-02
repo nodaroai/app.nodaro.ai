@@ -424,6 +424,12 @@ export const queryKeys = {
     trendFaceMaskJob: (jobId: string) => ["admin", "trends", "face-mask-job", jobId] as const,
     trendUpscaleJob: (jobId: string) => ["admin", "trends", "upscale-job", jobId] as const,
     trendEngineEnvironments: () => ["admin", "trends", "engine-environments"] as const,
+    /** Admin → Trend Radar. Everything under ["admin", "trend-radar"], so one invalidation refreshes the queue, the open candidate, the tiles and the settings. */
+    trendRadar: () => ["admin", "trend-radar"] as const,
+    trendRadarSummary: () => ["admin", "trend-radar", "summary"] as const,
+    trendRadarCandidates: (status: string, sort: string) => ["admin", "trend-radar", "candidates", status, sort] as const,
+    trendRadarCandidate: (id: string) => ["admin", "trend-radar", "candidate", id] as const,
+    trendRadarSettings: () => ["admin", "trend-radar", "settings"] as const,
     /** Admin → Nodaro Motion: the face masking per engine. */
     nodaroMotionMasking: () => ["admin", "nodaro-motion", "masking"] as const,
     /** A trend's engine prompt, as the engine reads the saved draft at `revision` (each write moves it, so a draft save refreshes it). */

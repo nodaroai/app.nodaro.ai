@@ -12,6 +12,7 @@ import {
 import { formatZodError } from "../lib/zod-error.js"
 import { isOriginAllowedDynamic } from "../lib/dynamic-origins.js"
 import { firstHeaderValue } from "../lib/request-helpers.js"
+import { ContentRightsError, checkRightsConfirmation, consumeRightsConfirmation } from "../lib/content-rights.js"
 
 const downloadVideoBody = z
   .object({
@@ -44,6 +45,10 @@ const downloadVideoBody = z
     // valid input to a video node, and there it must be importable. A
     // non-boolean is rejected: a truthy string must not switch the policy off.
     requireAudio: z.boolean().optional(),
+    // The content rights confirmation this import is made under
+    // (`POST /v1/content-rights/confirm`): checked and consumed before the
+    // download starts. Optional until `content_rights_required` is on.
+    confirmationId: z.string().uuid().optional(),
   })
   .superRefine((body, ctx) => {
     const hasStart = body.sectionStartSec !== undefined
@@ -95,7 +100,17 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
     }
 
     const userId = req.userId
-    const { url, sectionStartSec, sectionEndSec, exactSection, maxHeight: rawMaxHeight, requireAudio } = parsed.data
+    const { url, sectionStartSec, sectionEndSec, exactSection, maxHeight: rawMaxHeight, requireAudio, confirmationId } = parsed.data
+
+    // The rights check (a read) comes before anything else that can refuse the
+    // import; the confirmation is SPENT only once the slot is held, below, so
+    // a consumed confirmation always has a download behind it.
+    try {
+      await checkRightsConfirmation({ url, userId, confirmationId, lane: "route" })
+    } catch (e) {
+      if (e instanceof ContentRightsError) return reply.status(403).send({ error: { code: e.code, message: e.message } })
+      throw e
+    }
 
     const isSocial = isAllowedSocialVideoUrl(url)
     if (!isSocial) {
@@ -136,6 +151,18 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
       })
     }
 
+    // Nothing else can refuse the import now: spend the confirmation. A race
+    // with another download on the same id gives the slot back and refuses.
+    if (confirmationId) {
+      try {
+        await consumeRightsConfirmation({ confirmationId, url, lane: "route", requestId: req.id })
+      } catch (e) {
+        slot.release()
+        if (e instanceof ContentRightsError) return reply.status(403).send({ error: { code: e.code, message: e.message } })
+        throw e
+      }
+    }
+
     // Start download in background. Direct files carry the 500MB cap; social
     // fetches pass none (unchanged). The slot is given back when it ends.
     const { downloadId } = startTrackedDownload(
@@ -146,6 +173,7 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
         maxHeight,
         maxFilesizeBytes: isSocial ? undefined : DIRECT_FILE_MAX_BYTES,
         requireAudio: requireAudio ?? true,
+        rightsConfirmationId: confirmationId ?? null,
       },
       slot,
     )

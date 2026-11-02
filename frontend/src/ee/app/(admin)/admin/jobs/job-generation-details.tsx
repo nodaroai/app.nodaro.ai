@@ -74,6 +74,7 @@ export const STEP_LABELS: Readonly<Record<SkippableStep, string>> = {
   "engine-prompt": "Engine prompt",
   "scene-description": "Scene description",
   "clip-body": "Body from the clip",
+  "style-refs": "Style the role pictures",
 }
 
 /** A skip reason as an admin reads it; one with no wording of its own reads as its id with spaces. */
@@ -218,11 +219,33 @@ function RoleOutputs({ role }: { role: StepOutputs["roles"][number] }) {
   </section>
 }
 
+const STYLE_REFS_SENT_LABELS: Readonly<Record<NonNullable<StepOutputs["styleRefs"]>["roles"][number]["sent"], string>> = {
+  "styled-and-original": "Sent: styled picture + original",
+  styled: "Sent: styled picture only",
+}
+
+/** "Style the role pictures": each role's picture redrawn in the run's art style, what it sent, and the roles skipped. */
+function StyleRefsOutputs({ out }: { out: NonNullable<StepOutputs["styleRefs"]> }) {
+  return <div className="flex min-w-0 flex-col gap-2" data-testid="style-refs-outputs">
+    <h3 className="text-sm font-semibold">Style the role pictures</h3>
+    {out.roles.length > 0 && <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
+      {out.roles.map((r, i) => <figure key={`${r.role}-${i}`} className="flex min-w-0 flex-col gap-1">
+        {isWebUrl(r.styledUrl) && <img src={r.styledUrl} alt={`Role ${r.role + 1} styled picture`} className="max-h-64 w-full rounded bg-muted object-contain" loading="lazy" />}
+        <figcaption className="text-xs text-muted-foreground">Role {r.role + 1} · {STYLE_REFS_SENT_LABELS[r.sent] ?? r.sent}</figcaption>
+      </figure>)}
+    </div>}
+    {out.skipped && out.skipped.length > 0 && <ul className="list-disc pl-5 text-xs text-amber-700 dark:text-amber-400">
+      {out.skipped.map((s, i) => <li key={`${s.role}-${i}`}>{skippedStepLine("style-refs", s.reason, s.role)}</li>)}
+    </ul>}
+  </div>
+}
+
 /**
  * The body shared by the trend test run's "Steps" dialog and the admin Jobs
  * page: per role its photo labels, what they cover, the layout and the sheet;
  * the engine prompt's mode and, when an LLM wrote it, its body (the full sent
- * prompt is "Show prompt"'s); the scene step and text; the skipped steps.
+ * prompt is "Show prompt"'s); the scene step and text; the styled role
+ * pictures; the skipped steps.
  */
 export function CastSwapStepsBody({ data, showSkipped }: { data: JobCastSwapSteps; showSkipped: boolean }) {
   const { stepOutputs: out, sceneText, skippedSteps } = data
@@ -243,6 +266,7 @@ export function CastSwapStepsBody({ data, showSkipped }: { data: JobCastSwapStep
         <h3 className="text-sm font-semibold">{out.scene.shotList ? "Shot list" : "Scene description"} <span className="font-normal text-muted-foreground">· {out.scene.mode === "llm" ? "LLM" : "Template"}</span></h3>
         {out.scene.shotList && <p className="text-xs text-muted-foreground" data-testid="scene-cuts">{cutsLine(out.scene.cuts)}</p>}
       </div>}
+      {out.styleRefs && <StyleRefsOutputs out={out.styleRefs} />}
     </>}
     {sceneText !== null && <div className="flex flex-col gap-1">
       <h3 className="text-sm font-semibold">Scene text</h3>

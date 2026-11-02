@@ -80,6 +80,11 @@
       "import": "./dist/entries/core.js",
       "require": "./dist/entries/core.cjs"
     },
+    "./content-rights": {
+      "types": "./dist/entries/content-rights.d.ts",
+      "import": "./dist/entries/content-rights.js",
+      "require": "./dist/entries/content-rights.cjs"
+    },
     "./creatures": {
       "types": "./dist/entries/creatures.d.ts",
       "import": "./dist/entries/creatures.js",

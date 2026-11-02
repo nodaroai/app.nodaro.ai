@@ -11836,6 +11836,8 @@ export interface TrendEngineEnvironment {
       clipBodySheet?: boolean
       /** With `steps`, the engine takes the shot list (`steps.shotList`) and runs Flex as Full depth with a shot list; absent = it cannot. */
       shotList?: boolean
+      /** With `steps`, the engine takes "Style the role pictures" (`steps.styleRefs`); absent = it cannot. */
+      styleRefs?: boolean
       /** The engine enforces the admin's Style choice on direct runs (`nodaro_motion_style`); absent = it takes the request's style. */
       styleChoice?: boolean
     }
@@ -11921,7 +11923,7 @@ export type SheetLayout<K extends SheetKind = SheetKind> = (typeof SHEET_LAYOUTS
 export const LLM_INPUTS = ["clip", "rolePhotos", "references", "extraPrompt"] as const
 export type LlmInput = (typeof LLM_INPUTS)[number]
 /** The steps a run may go on without (`skippedSteps[].step`). */
-export const SKIPPABLE_STEPS = ["face-mesh", "photo-labels", "head-crop", "reference-sheet", "engine-prompt", "scene-description", "clip-body"] as const
+export const SKIPPABLE_STEPS = ["face-mesh", "photo-labels", "head-crop", "reference-sheet", "engine-prompt", "scene-description", "clip-body", "style-refs"] as const
 export type SkippableStep = (typeof SKIPPABLE_STEPS)[number]
 export const SKIP_REASONS = ["failed", "timed_out", "frame_count_mismatch", "invalid_output", "too_long", "unavailable", "no_face", "no_frame"] as const
 export type SkipReason = (typeof SKIP_REASONS)[number]
@@ -11968,6 +11970,24 @@ export type ShotListStyle = "precise" | "flex"
  * turned off (`shot_list_flex_always_on`).
  */
 export type ShotListSetting = Partial<Record<ShotListStyle, ShotListStyleSetting>>
+/** What a role sends once its picture is styled: the styled picture and the original beside it, or the styled one only. */
+export const STYLE_REFS_SENDS = ["styled-and-original", "styled"] as const
+export type StyleRefsSend = (typeof STYLE_REFS_SENDS)[number]
+/** What a role sends when `send` is left out. */
+export const STYLE_REFS_DEFAULT_SEND: StyleRefsSend = "styled-and-original"
+/** The longest image instruction "Style the role pictures" may be given. */
+export const STYLE_REFS_PROMPT_MAX = 4000
+/**
+ * "Style the role pictures": for a run that chose an art style (Flex only),
+ * each role's reference picture is first redrawn in that style. Left out =
+ * OFF; `send` left out = "styled-and-original"; `prompt` replaces the
+ * engine's image instruction.
+ */
+export interface StyleRefsSetting {
+  mode: "on" | "off"
+  send?: StyleRefsSend
+  prompt?: string
+}
 /** A trend's, or one engine's, preparation steps. Absent (or `{}`) = today's run. */
 export interface CastSwapSteps {
   sheets?: { labeller?: LlmStepSetting; rules: SheetRules }
@@ -11975,6 +11995,7 @@ export interface CastSwapSteps {
   sceneDescription?: TextStepSetting
   clipBody?: ClipBodySetting
   shotList?: ShotListSetting
+  styleRefs?: StyleRefsSetting
 }
 
 export interface PhotoLabel {
@@ -12011,6 +12032,11 @@ export interface StepOutputs {
   enginePrompt?: { mode: "template" | "llm"; text?: string }
   /** `shotList`: the run made its shot list; `cuts`: the cut times (s) it was told (absent: none measured). */
   scene?: { mode: "template" | "llm"; shotList?: true; cuts?: number[] }
+  /** "Style the role pictures": each role's styled picture and what it sent; the roles it went on without. */
+  styleRefs?: {
+    roles: Array<{ role: number; styledUrl: string; sent: StyleRefsSend }>
+    skipped?: Array<{ role: number; reason: SkipReason }>
+  }
 }
 
 /** A refusal of a steps setting: where, the code, and why. */
@@ -12037,6 +12063,8 @@ export interface CastSwapStepDefaults {
     clipBody?: { prompt: string; mode?: "on" | "off" }
     /** The shot list's defaults per style (Precise off, Flex on); absent from an engine without the step. */
     shotList?: { [S in ShotListStyle]: { mode: "on" | "off"; llm: LlmStepSetting & { instructions: string } } }
+    /** "Style the role pictures"'s defaults (Off, "styled-and-original", its image instruction); absent from an engine without the step. */
+    styleRefs?: { mode?: "on" | "off"; send?: StyleRefsSend; prompt: string }
   }
   /** Each layout's prompt per kind (null: the collage and "none" have none). */
   layoutPrompts: { [K in SheetKind]: Partial<Record<SheetLayout<K>, string | null>> }

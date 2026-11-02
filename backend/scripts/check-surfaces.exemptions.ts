@@ -119,6 +119,15 @@ export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
     reason:
       "an MCP client is itself a connected app, and the route answers a signed-in browser session only: an app must not revoke grants, its own or another's",
   },
+  // Content rights: a PERSON confirms the declaration with a checkbox in the
+  // client that imports the link; a command line and an agent have no checkbox.
+  // Their standing authorization (saved once in the account's settings) is a
+  // later change; until then their downloads go through while the deployment
+  // does not require a confirmation.
+  ...(["GET /v1/content-rights/declaration", "POST /v1/content-rights/confirm"] as const).flatMap((atom) => [
+    { feature: "contentRights", surface: "cli" as const, atom, reason: "the confirmation is a person's checkbox in the client that imports the link; the CLI's standing authorization is a later change" },
+    { feature: "contentRights", surface: "mcp" as const, atom, reason: "the confirmation is a person's checkbox in the client that imports the link; an agent's standing authorization is a later change" },
+  ]),
   {
     feature: "characters",
     surface: "mcp",

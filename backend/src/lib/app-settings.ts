@@ -122,6 +122,16 @@ export interface AppSettings {
    * one is dropped.
    */
   nodaro_motion_style: NodaroMotionStyle | null
+  /**
+   * Whether a link import without a content rights confirmation is refused
+   * (lib/content-rights.ts). Off by default: the server records a
+   * confirmation when one arrives and refuses nothing, until every client
+   * sends one and an admin turns this on. HARD BLOCKER before turning it on:
+   * a run's own download of a video link (`video-link-fetch-deps.ts`) sends
+   * no confirmation yet, so every API, MCP, SDK and published-app run of a
+   * Video URL node would fail with it on. That lane is a later change.
+   */
+  content_rights_required: boolean
 }
 
 // Cache settings for 60 seconds to avoid hitting the DB on every job
@@ -168,7 +178,7 @@ async function refreshSettings(): Promise<AppSettings> {
   if (error) {
     console.error("[getAppSettings] Error fetching settings:", error.message)
     // Return defaults on error
-    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null, nodaro_motion_pulse_audio: null, nodaro_motion_prism_reference_audio: null, nodaro_motion_steps: null, nodaro_motion_style: null }
+    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null, nodaro_motion_pulse_audio: null, nodaro_motion_prism_reference_audio: null, nodaro_motion_steps: null, nodaro_motion_style: null, content_rights_required: false }
     readFailures.add(fallback)
     return fallback
   }
@@ -197,9 +207,14 @@ async function refreshSettings(): Promise<AppSettings> {
     nodaro_motion_prism_reference_audio: null,
     nodaro_motion_steps: null,
     nodaro_motion_style: null,
+    content_rights_required: false,
   }
 
   for (const row of data ?? []) {
+    if (row.key === "content_rights_required" && typeof row.value === "boolean") {
+      settings.content_rights_required = row.value
+      continue
+    }
     if (row.key === NODARO_MOTION_MASKING_KEY) {
       settings.nodaro_motion_masking = parseNodaroMotionMasking(row.value)
       continue

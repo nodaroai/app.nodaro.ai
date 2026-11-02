@@ -544,7 +544,8 @@ export function withoutUnsupportedDepthColormap(composed: ComposedTrendRun): voi
  * The body's `steps` kept only when the loaded engine declares
  * `castSwap.steps`, its `clipBody` only when it also declares
  * `castSwap.clipBodySheet` and its `shotList` only when it also declares
- * `castSwap.shotList` (`withStepsFor`); nothing left = no `steps` key at all. THE
+ * `castSwap.shotList` and its `styleRefs` only when it also declares
+ * `castSwap.styleRefs` (`withStepsFor`); nothing left = no `steps` key at all. THE
  * guard for an older engine: its body schema strips an unknown key silently,
  * so a run there would quietly ignore the trend's steps rather than fail.
  * Publishing holds a trend that sets them back from such an environment

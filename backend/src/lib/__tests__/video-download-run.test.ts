@@ -8,6 +8,19 @@ vi.mock("@/lib/storage.js", () => ({
 }))
 vi.mock("@/lib/asset-records.js", () => ({ recordDownloadedVideoAsset: vi.fn().mockResolvedValue(undefined) }))
 vi.mock("@/utils/thumbnail.js", () => ({ thumbnailFromLocalVideo: vi.fn().mockResolvedValue(Buffer.from("png")) }))
+// The content rights check has its own tests; here it is a fake, so these
+// tests pin the run's order: check first, slot, spend, then download.
+vi.mock("@/lib/content-rights.js", () => ({
+  ContentRightsError: class ContentRightsError extends Error {
+    constructor(readonly code: string, message: string) {
+      super(message)
+    }
+  },
+  checkRightsConfirmation: vi.fn().mockResolvedValue(null),
+  consumeRightsConfirmation: vi.fn().mockResolvedValue(undefined),
+  recordEvent: vi.fn().mockResolvedValue(true),
+  contentHashOf: vi.fn().mockResolvedValue("ab".repeat(32)),
+}))
 
 import {
   MAX_ACTIVE_DOWNLOADS_PER_USER,
@@ -24,6 +37,7 @@ import { RedisDownloadLedger } from "../download-slot-ledger.js"
 import { makeFakeDownloadClient, makeFakeDownloadStore } from "./fake-download-redis.js"
 import { downloadYouTubeVideo } from "../../providers/video/youtube-video.js"
 import { recordDownloadedVideoAsset } from "../asset-records.js"
+import { ContentRightsError, checkRightsConfirmation, consumeRightsConfirmation } from "../content-rights.js"
 
 const URL_ = "https://www.tiktok.com/@someone/video/7676964064458738952"
 
@@ -57,6 +71,26 @@ describe("a run's download goes through the route's downloader", () => {
   it("passes an exact part straight to the provider", async () => {
     await downloadVideoForRun({ url: URL_, userId: "u1", section: { startSec: 600, endSec: 1200, exact: true } })
     expect(downloadYouTubeVideo).toHaveBeenCalledWith(expect.objectContaining({ section: { startSec: 600, endSec: 1200, exact: true } }))
+  })
+
+  it("a rights refusal is a `failed` error before any slot is taken; a confirmation is spent after the slot and before the download", async () => {
+    vi.mocked(checkRightsConfirmation).mockRejectedValueOnce(new ContentRightsError("rights_confirmation_required", "Confirm first"))
+    await expect(downloadVideoForRun({ url: URL_, userId: "u1" })).rejects.toMatchObject({ name: "RunDownloadError", kind: "failed", message: "Confirm first" })
+    expect(downloadYouTubeVideo).not.toHaveBeenCalled()
+    expect(runningDownloadsFor("u1")).toBe(0)
+
+    const confirmationId = "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01"
+    vi.mocked(checkRightsConfirmation).mockResolvedValueOnce({ id: confirmationId } as never)
+    await downloadVideoForRun({ url: URL_, userId: "u1", rightsConfirmationId: confirmationId })
+    expect(consumeRightsConfirmation).toHaveBeenCalledWith(expect.objectContaining({ confirmationId, url: URL_, lane: "run" }))
+    expect(recordDownloadedVideoAsset).toHaveBeenCalledWith(expect.objectContaining({ rightsConfirmationId: confirmationId }))
+
+    // Spent by another download first: the slot goes back and the run fails.
+    vi.mocked(checkRightsConfirmation).mockResolvedValueOnce({ id: confirmationId } as never)
+    vi.mocked(consumeRightsConfirmation).mockRejectedValueOnce(new ContentRightsError("rights_confirmation_used", "Used already"))
+    await expect(downloadVideoForRun({ url: URL_, userId: "u1", rightsConfirmationId: confirmationId })).rejects.toMatchObject({ kind: "failed", message: "Used already" })
+    expect(runningDownloadsFor("u1")).toBe(0)
+    expect(downloadYouTubeVideo).toHaveBeenCalledTimes(1)
   })
 
   it("a provider failure is a `failed` error carrying the provider's message", async () => {

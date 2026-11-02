@@ -39,6 +39,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.webhooks`](#clientwebhooks)
   - [`client.voices`](#clientvoices)
   - [`client.media`](#clientmedia)
+  - [`client.contentRights`](#clientcontentrights)
   - [`client.audio`](#clientaudio)
   - [`client.credits`](#clientcredits)
   - [`client.billing`](#clientbilling)
@@ -69,7 +70,7 @@ The root `@nodaro/sdk` exports everything on this page. Each resource is also
 published as its own entry point, `@nodaro/sdk/<entry>`, which loads only that
 resource's module and the types it takes and returns:
 
-`/apps`, `/audio`, `/billing`, `/cast-swap`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/trash`, `/trend-radar`, `/trends`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
+`/apps`, `/audio`, `/billing`, `/cast-swap`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/content-rights`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/trash`, `/trend-radar`, `/trends`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
 
 `/client` holds `createClient`, `NodaroClient` and the auth providers;
 `/core` holds `NodaroClientCore` (see below) and the same auth providers;
@@ -6678,6 +6679,52 @@ under 24 hours old, and no job of yours uses it (as an output or as an input
 such as a run's `videoUrl`). Otherwise it is left untouched and the call fails
 with 409 `not_discardable`. `discarded: false` means there was nothing of
 yours at that address.
+
+---
+
+### `client.contentRights`
+
+The declaration a person confirms before a link is imported, and the
+confirmation a download then carries (`/v1/content-rights/*`; see
+[Content rights](./api-integration.md#13i-content-rights-import-confirmations)).
+
+#### `declaration()`
+
+```ts
+declaration(): Promise<{ version: number; text: string }>
+```
+
+The current declaration (`GET /v1/content-rights/declaration`): the text to
+show, verbatim, with a checkbox that starts unticked, and the version a
+confirmation names. Public — needs no credential.
+
+#### `confirm(input)`
+
+```ts
+confirm(input: { url: string; declarationVersion: number }): Promise<{
+  id: string
+  declarationVersion: number
+  expiresAt: string
+}>
+```
+
+Records that the signed-in account confirmed the declaration for one link
+(`POST /v1/content-rights/confirm`) and answers the confirmation. Pass its
+`id` as `confirmationId` to `media.downloadVideo`: one confirmation opens one
+download of that link, by the same account, under the current declaration,
+within an hour. A `409 rights_confirmation_stale` means the declaration
+changed since it was read — read it again and ask again.
+
+```ts
+const { version, text } = await client.contentRights.declaration()
+// … show `text` with a checkbox; once ticked:
+const { id } = await client.contentRights.confirm({ url, declarationVersion: version })
+const { downloadId } = await client.media.downloadVideo({ url, maxHeight: 1080, confirmationId: id })
+```
+
+Whether a download without a confirmation is refused is the deployment's
+setting (`403 rights_confirmation_required` once it is); a client always sends
+one.
 
 ---
 

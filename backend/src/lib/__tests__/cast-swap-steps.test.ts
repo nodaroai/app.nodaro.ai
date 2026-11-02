@@ -17,7 +17,9 @@ import {
   engineTakesClipBodySheet,
   engineTakesShotList,
   engineTakesSteps,
+  engineTakesStyleRefs,
   loadedEngineTakesClipBodySheet,
+  loadedEngineTakesStyleRefs,
   loadedEngineTakesSteps,
   normaliseSteps,
   sceneStepKeyOf,
@@ -29,6 +31,9 @@ import {
   stepsProblems,
   stepsSet,
   stepsThatNeedTheEngine,
+  styleRefsNeedsEngine,
+  STYLE_REFS_DEFAULT_SEND,
+  STYLE_REFS_PROMPT_MAX,
   withStepsFor,
   type CastSwapSteps,
   type SheetRules,
@@ -311,5 +316,90 @@ describe("shotList (the shot list per style)", () => {
     expect(stepsForEngine(set, { steps: true, clipBodySheet: true })).toEqual({ enginePrompt: { mode: "template" } })
     const body: { a: number; steps?: CastSwapSteps } = { a: 1, steps: { shotList: { precise: { mode: "on" } } } }
     expect(Object.hasOwn(withStepsFor(body, { steps: true }), "steps")).toBe(false)
+  })
+})
+
+describe("styleRefs (Style the role pictures)", () => {
+  afterEach(() => _resetPluginSupportsForTests())
+
+  /** An engine that declares every step. */
+  const ALL = { steps: true, clipBodySheet: true, shotList: true, styleRefs: true } as const
+
+  it("accepts on and off, each send and an image instruction, in both schemas", () => {
+    for (const schema of [castSwapStepsSchema, castSwapStepsSaveSchema]) {
+      expect(schema.safeParse({ styleRefs: { mode: "on" } }).success).toBe(true)
+      expect(schema.safeParse({ styleRefs: { mode: "off" } }).success).toBe(true)
+      expect(schema.safeParse({ styleRefs: { mode: "on", send: "styled-and-original" } }).success).toBe(true)
+      expect(schema.safeParse({ styleRefs: { mode: "on", send: "styled", prompt: "Redraw {subject} in the style." } }).success).toBe(true)
+      expect(schema.safeParse({ styleRefs: { mode: "off", send: "styled", prompt: "kept while off" } }).success).toBe(true)
+    }
+  })
+
+  it("refuses an unknown mode, an unknown send, an unknown key, and an empty or too long prompt", () => {
+    for (const schema of [castSwapStepsSchema, castSwapStepsSaveSchema]) {
+      expect(schema.safeParse({ styleRefs: {} }).success).toBe(false)
+      expect(schema.safeParse({ styleRefs: { mode: "auto" } }).success).toBe(false)
+      expect(schema.safeParse({ styleRefs: { mode: "on", send: "original" } }).success).toBe(false)
+      expect(schema.safeParse({ styleRefs: { mode: "on", model: "x" } }).success).toBe(false)
+      expect(schema.safeParse({ styleRefs: { mode: "on", prompt: "   " } }).success).toBe(false)
+      expect(schema.safeParse({ styleRefs: { mode: "on", prompt: "x".repeat(STYLE_REFS_PROMPT_MAX + 1) } }).success).toBe(false)
+      expect(schema.safeParse({ styleRefs: { mode: "on", prompt: "x".repeat(STYLE_REFS_PROMPT_MAX) } }).success).toBe(true)
+    }
+    expect(STYLE_REFS_DEFAULT_SEND).toBe("styled-and-original")
+  })
+
+  it("an explicit Off is set and kept as it is: never trimmed to a default (the row is shared)", () => {
+    const off: CastSwapSteps = { styleRefs: { mode: "off", send: "styled-and-original" } }
+    expect(stepsSet(off)).toBe(true)
+    expect(normaliseSteps(off)).toEqual(off)
+    expect(normaliseSteps({ styleRefs: { mode: "off" } })).toEqual({ styleRefs: { mode: "off" } })
+  })
+
+  it("needs the engine only when On (Off, whatever its send and prompt, needs nothing)", () => {
+    expect(styleRefsNeedsEngine(undefined)).toBe(false)
+    expect(styleRefsNeedsEngine({ mode: "off" })).toBe(false)
+    expect(styleRefsNeedsEngine({ mode: "off", send: "styled", prompt: "p" })).toBe(false)
+    expect(styleRefsNeedsEngine({ mode: "on" })).toBe(true)
+    expect(stepsThatNeedTheEngine({ styleRefs: { mode: "off", send: "styled" } })).toBeUndefined()
+    expect(stepsThatNeedTheEngine({ styleRefs: { mode: "on" } })).toEqual({ styleRefs: { mode: "on" } })
+  })
+
+  it("is sent only to an engine that declares castSwap.steps and castSwap.styleRefs; the other steps still go", () => {
+    const set: CastSwapSteps = { enginePrompt: { mode: "template" }, styleRefs: { mode: "on", send: "styled" } }
+    expect(engineTakesStyleRefs({ styleRefs: true })).toBe(false)
+    expect(engineTakesStyleRefs({ steps: true })).toBe(false)
+    expect(engineTakesStyleRefs({ steps: true, styleRefs: true })).toBe(true)
+    expect(stepsForEngine(set, { steps: true, styleRefs: true })).toEqual(set)
+    expect(stepsForEngine(set, { steps: true, clipBodySheet: true, shotList: true })).toEqual({ enginePrompt: { mode: "template" } })
+    expect(stepsForEngine({ styleRefs: { mode: "on" } }, { steps: true, shotList: true })).toBeUndefined()
+    const body: { a: number; steps?: CastSwapSteps } = { a: 1, steps: { styleRefs: { mode: "on" } } }
+    expect(Object.hasOwn(withStepsFor(body, { steps: true, shotList: true }), "steps")).toBe(false)
+    expect(withStepsFor(body, ALL)).toEqual(body)
+  })
+
+  it("reads the loaded engine's capability", () => {
+    setPluginSupports({ castSwap: { steps: true } } as never)
+    expect(loadedEngineTakesStyleRefs()).toBe(false)
+    setPluginSupports({ castSwap: { steps: true, styleRefs: true } } as never)
+    expect(loadedEngineTakesStyleRefs()).toBe(true)
+  })
+
+  it("names its skipped step", () => {
+    expect(SKIPPABLE_STEPS).toContain("style-refs")
+  })
+
+  it("PIN: with nothing set, every body is unchanged, whatever the engine declares", () => {
+    const bare: { a: number; steps?: CastSwapSteps } = { a: 1 }
+    for (const cs of [undefined, {}, { steps: true }, ALL]) {
+      expect(withStepsFor(bare, cs)).toEqual({ a: 1 })
+      expect(Object.hasOwn(withStepsFor(bare, cs), "steps")).toBe(false)
+      expect(Object.hasOwn(withStepsFor({ ...bare, steps: {} }, cs), "steps")).toBe(false)
+      expect(stepsForEngine(undefined, cs)).toBeUndefined()
+    }
+    // A setting from before the step goes out byte-identical to an engine that declares it.
+    const before: CastSwapSteps = { enginePrompt: { mode: "template" }, clipBody: { mode: "on", prompt: "p" }, shotList: { precise: { mode: "on" } } }
+    const sent = JSON.stringify(withStepsFor({ a: 1, steps: before }, ALL))
+    expect(sent).toBe(JSON.stringify({ a: 1, steps: before }))
+    expect(sent).toBe(JSON.stringify(withStepsFor({ a: 1, steps: before }, { steps: true, clipBodySheet: true, shotList: true })))
   })
 })

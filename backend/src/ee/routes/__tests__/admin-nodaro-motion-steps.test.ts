@@ -268,6 +268,38 @@ describe("PUT /v1/admin/nodaro-motion/steps", () => {
     expect(h.upserts[0]).toMatchObject({ value: { "motion-prism": { shotList: { precise: { mode: "on" } } } } })
   })
 
+  it("409s Style the role pictures On while an environment's engine lacks castSwap.styleRefs; Off saves anywhere, kept as it is", async () => {
+    const STYLE_REFS = { castSwap: { steps: true, styleRefs: true } }
+    h.envs = [envRow("production", STEPS), envRow("staging", STYLE_REFS)]
+    const on = await put({ "motion-prism": { styleRefs: { mode: "on", send: "styled" } } })
+    expect(on.statusCode).toBe(409)
+    expect(on.json().error).toEqual({ code: "engine_unsupported", envs: ["production"], message: expect.stringMatching(/Style the role pictures/) })
+    expect(h.upserts).toEqual([])
+    // Off (the default on every engine) needs nothing, and is stored as set: never trimmed to a default.
+    for (const envs of [[envRow("production", STEPS), envRow("staging", {})], []]) {
+      h.envs = envs
+      h.upserts = []
+      const off = { styleRefs: { mode: "off", send: "styled-and-original" } }
+      const res = await put({ "motion-prism": off })
+      expect(res.statusCode, JSON.stringify(envs)).toBe(200)
+      expect(h.upserts[0]).toMatchObject({ value: { "motion-prism": off, "motion-pro": off } })
+    }
+    // Every environment with it: On saved.
+    h.envs = [envRow("production", STYLE_REFS), envRow("staging", STYLE_REFS)]
+    h.upserts = []
+    const set = { styleRefs: { mode: "on", send: "styled", prompt: "Redraw the person in the style." } }
+    expect((await put({ "motion-pulse": set })).statusCode).toBe(200)
+    expect(h.upserts[0]).toMatchObject({ value: { "motion-pulse": set } })
+  })
+
+  it("refuses an unknown send and an empty prompt for Style the role pictures, with their paths", async () => {
+    const res = await put({ "motion-prism": { styleRefs: { mode: "on", send: "original", prompt: " " } } })
+    expect(res.statusCode).toBe(400)
+    const paths = (res.json().error.issues as Array<{ path: string }>).map((i) => i.path)
+    expect(paths).toEqual(expect.arrayContaining(["steps.motion-prism.styleRefs.send", "steps.motion-prism.styleRefs.prompt"]))
+    expect(h.upserts).toEqual([])
+  })
+
   it("turning an engine's Precise shot list on re-checks its saved Precise prompt overrides, and refuses the save when they no longer fit", async () => {
     const SHOT_LIST = { castSwap: { steps: true, shotList: true } }
     h.envs = [envRow("production", SHOT_LIST), envRow("staging", SHOT_LIST)]
@@ -478,6 +510,26 @@ describe("POST /v1/admin/nodaro-motion/steps/check", () => {
     setPluginSupports({ castSwap: { ...CS, steps: true, shotList: true } })
     await check({ engine: "motion-prism", steps })
     expect(engine.calls).toEqual([{ engine: "motion-prism", steps }])
+  })
+
+  it("never forwards styleRefs to an engine without castSwap.styleRefs", async () => {
+    engine.reply = { problems: [] }
+    setPluginSupports({ castSwap: { ...CS, steps: true, shotList: true } })
+    const steps = { enginePrompt: { mode: "template" }, styleRefs: { mode: "on" } }
+    await check({ engine: "motion-prism", steps })
+    expect(engine.calls).toEqual([{ engine: "motion-prism", steps: { enginePrompt: { mode: "template" } } }])
+    engine.calls = []
+    setPluginSupports({ castSwap: { ...CS, steps: true, styleRefs: true } })
+    await check({ engine: "motion-prism", steps })
+    expect(engine.calls).toEqual([{ engine: "motion-prism", steps }])
+  })
+
+  it("relays the engine's styleRefs defaults as they are", async () => {
+    setPluginSupports({ castSwap: { ...CS, steps: true, styleRefs: true } })
+    engine.reply = { defaults: { styleRefs: { mode: "off", send: "styled-and-original", prompt: "Redraw {subject}." } }, problems: [] }
+    const res = await defaults("motion-prism")
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.defaults.styleRefs).toEqual({ mode: "off", send: "styled-and-original", prompt: "Redraw {subject}." })
   })
 
   it("answers a fixed error when the engine refuses, never the engine's words", async () => {

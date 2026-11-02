@@ -42,7 +42,7 @@ import {
   type TrendEngineEnvironment,
 } from "@/lib/api"
 import { ENVIRONMENTS, fetchMock, renderWith, resetRoutes, routes, sentTo } from "./harness"
-import { environmentsThatCannotTakeClipBody, environmentsThatCannotTakeSteps } from "../clip-preparation"
+import { environmentsThatCannotTakeClipBody, environmentsThatCannotTakeSteps, environmentsThatCannotTakeStyleRefs } from "../clip-preparation"
 import { StepsEditor } from "../components/StepsEditor"
 import { layoutLabel } from "../components/SheetRulesTable"
 
@@ -540,5 +540,99 @@ describe("Shot list", { timeout: 20_000 }, () => {
     renderWith(<Harness initial={{ shotList: { precise: { mode: "on" } } }} envs={[shotEnv("production", true), shotEnv("staging")]} />)
     await user.click(await within(shotList()).findByRole("button", { name: "Back to the defaults" }))
     expect(last()).toBeUndefined()
+  })
+})
+
+describe("environmentsThatCannotTakeStyleRefs", () => {
+  it("names every shared environment whose engine lacks castSwap.steps or castSwap.styleRefs", () => {
+    const env = (name: string, castSwap: Record<string, unknown>): TrendEngineEnvironment => ({ ...ENVIRONMENTS[0]!, env: name, supports: { castSwap: castSwap as never } })
+    expect(environmentsThatCannotTakeStyleRefs(undefined)).toBeUndefined()
+    expect(environmentsThatCannotTakeStyleRefs([])).toEqual(["staging", "production"])
+    expect(environmentsThatCannotTakeStyleRefs([env("staging", { steps: true, styleRefs: true }), env("production", { styleRefs: true })])).toEqual(["production"])
+    expect(environmentsThatCannotTakeStyleRefs([env("staging", { steps: true, styleRefs: true }), env("production", { steps: true, styleRefs: true })])).toEqual([])
+  })
+})
+
+describe("Style the role pictures", { timeout: 20_000 }, () => {
+  const WITH_STYLE_REFS: CastSwapStepDefaults = {
+    ...DEFAULTS,
+    defaults: { ...DEFAULTS.defaults, styleRefs: { mode: "off", send: "styled-and-original", prompt: "test style refs prompt" } },
+    critical: { ...DEFAULTS.critical, "style-refs": false },
+  }
+  const styleEnv = (env: string, styleRefs?: boolean): TrendEngineEnvironment => {
+    const e = withSteps(env, true, true)
+    return { ...e, supports: { castSwap: { ...e.supports.castSwap, ...(styleRefs ? { styleRefs } : {}) } } }
+  }
+  const STYLE_ENVS = [styleEnv("production", true), styleEnv("staging", true)]
+  const step = () => section("Style the role pictures step")
+  const toggle = () => within(step()).getByRole("switch", { name: "Style the role pictures" })
+  const send = () => within(step()).getByRole("combobox", { name: "Send" })
+  const prompt = () => within(step()).getByRole("textbox", { name: "Image instruction" })
+
+  beforeEach(() => {
+    routes[`GET ${DEFAULTS_URL}`] = () => ({ body: { data: WITH_STYLE_REFS } })
+  })
+
+  it("unset reads Off, with the hint, the engine's instruction as the placeholder and the default Send; loading writes nothing", async () => {
+    renderWith(<Harness envs={STYLE_ENVS} />)
+    await waitFor(() => expect(toggle()).toBeEnabled())
+    expect(toggle()).not.toBeChecked()
+    expect(within(step()).getByText("Off")).toBeInTheDocument()
+    expect(within(step()).getByText(/Only for runs with an art style: each role's picture is redrawn in that style first/)).toBeInTheDocument()
+    expect(within(step()).getByText("Not critical — skipped if it fails")).toBeInTheDocument()
+    await waitFor(() => expect(prompt()).toHaveAttribute("placeholder", "test style refs prompt"))
+    expect(send()).toHaveTextContent("Styled picture + original")
+    // Off: Send and the instruction wait for On.
+    expect(send()).toBeDisabled()
+    expect(prompt()).toBeDisabled()
+    expect(seen).toEqual([])
+  })
+
+  it("On and Off are each stored as picked, with the Send, never dropped as a default (the row is shared)", async () => {
+    const user = userEvent.setup()
+    renderWith(<Harness envs={STYLE_ENVS} />)
+    await waitFor(() => expect(toggle()).toBeEnabled())
+    await user.click(toggle())
+    expect(last()).toEqual({ styleRefs: { mode: "on", send: "styled-and-original" } })
+    expect(send()).toBeEnabled()
+    await user.click(send())
+    await user.click(screen.getByRole("option", { name: "Styled picture only" }))
+    expect(last()).toEqual({ styleRefs: { mode: "on", send: "styled" } })
+    await user.click(toggle())
+    expect(last()).toEqual({ styleRefs: { mode: "off", send: "styled" } })
+  })
+
+  it("an instruction of its own replaces the default; emptied, or Use the default, it goes and the mode stays", async () => {
+    const user = userEvent.setup()
+    renderWith(<Harness envs={STYLE_ENVS} initial={{ styleRefs: { mode: "on", send: "styled-and-original" } }} />)
+    await waitFor(() => expect(prompt()).toBeEnabled())
+    await user.type(prompt(), "ab")
+    expect(last()).toEqual({ styleRefs: { mode: "on", send: "styled-and-original", prompt: "ab" } })
+    await user.clear(prompt())
+    expect(last()).toEqual({ styleRefs: { mode: "on", send: "styled-and-original" } })
+    await user.type(prompt(), "c")
+    await user.click(within(step()).getByRole("button", { name: "Style the role pictures: use the default image instruction" }))
+    expect(last()).toEqual({ styleRefs: { mode: "on", send: "styled-and-original" } })
+    expect(prompt()).toHaveAttribute("maxlength", "4000")
+  })
+
+  it("greyed out naming the environments whose engine lacks it", async () => {
+    renderWith(<Harness envs={[styleEnv("production", true), styleEnv("staging")]} />)
+    await waitFor(() => expect(within(step()).getByText(/The Cast Swap engine of staging cannot style the role pictures yet/)).toBeInTheDocument())
+    expect(toggle()).toBeDisabled()
+    expect(send()).toBeDisabled()
+    expect(prompt()).toBeDisabled()
+    expect(seen).toEqual([])
+  })
+
+  it("a setting turned on that an environment cannot run asks to be removed, and can be turned off", async () => {
+    const user = userEvent.setup()
+    renderWith(<Harness initial={{ styleRefs: { mode: "on", send: "styled" } }} envs={[withSteps("production"), withSteps("staging")]} />)
+    expect(screen.getByText(/remove them to publish or save/)).toBeInTheDocument()
+    expect(toggle()).toBeEnabled()
+    await user.click(toggle())
+    expect(last()).toEqual({ styleRefs: { mode: "off", send: "styled" } })
+    // Off needs nothing: no warning left.
+    expect(screen.queryByText(/remove them to publish or save/)).not.toBeInTheDocument()
   })
 })

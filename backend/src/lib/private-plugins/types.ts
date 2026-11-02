@@ -3977,6 +3977,22 @@ export interface PluginSupports {
    *   sends `shotList`, holds a trend that sets it back from publishing there
    *   and refuses to save a shared setting that sets it while any environment
    *   lacks it (lib/cast-swap-steps.ts `engineTakesShotList`).
+   * - `styleRefs`: with `steps`, the setting takes `steps.styleRefs` ("Style
+   *   the role pictures": `{ mode: "on" | "off"; send?: "styled-and-original"
+   *   | "styled"; prompt? }`, absent = OFF with "styled-and-original"): for a
+   *   run that chose an art style (`direction.style`, Flex only), each role's
+   *   reference picture is first redrawn in that style by an image model and
+   *   sent as the role's main reference (with the original photo beside it,
+   *   within the engine's picture limit, unless `send` is "styled"), priced in
+   *   the run's quote. The defaults route answers `defaults.styleRefs` (`{
+   *   mode, send, prompt }`), the step outputs may carry `styleRefs` (`{
+   *   roles: [{ role, styledUrl, sent }], skipped?: [{ role, reason }] }`) and
+   *   `skippedSteps` may name `"style-refs"` with its role. Additive-optional:
+   *   absent ⇒ `false` — the platform never sends `styleRefs` (a trend run,
+   *   the per-engine setting), holds a trend that turns it on back from
+   *   publishing there and refuses to save a shared setting that turns it on
+   *   while any environment lacks it (lib/cast-swap-steps.ts
+   *   `engineTakesStyleRefs`).
    * - `styleChoice`: a DIRECT run and its estimate read the admin's Style
    *   choice per engine (`tk.settings.nodaroMotionStyle`) and, for an engine
    *   an admin forced, run in that style whatever the request's `style` says.
@@ -4025,6 +4041,7 @@ export interface PluginSupports {
     readonly steps?: boolean
     readonly clipBodySheet?: boolean
     readonly shotList?: boolean
+    readonly styleRefs?: boolean
     readonly styleChoice?: boolean
   }
 }
