@@ -1,5 +1,26 @@
 # @nodaro/cli
 
+## 1.45.3
+
+### Patch Changes
+
+- e2edcfc: `media.downloadVideo` and `nodaro media download` describe their input as a link to the video's page or a direct video file link; the wording no longer lists sites. No behaviour change.
+- Updated dependencies [e37b1f2]
+- Updated dependencies [23ab5e0]
+- Updated dependencies [e2a5605]
+- Updated dependencies [49e3a4e]
+- Updated dependencies [fd78551]
+- Updated dependencies [783d857]
+- Updated dependencies [783d857]
+- Updated dependencies [e2edcfc]
+- Updated dependencies [3c3dbaf]
+- Updated dependencies [38da18d]
+- Updated dependencies [c9430df]
+- Updated dependencies [66093d7]
+- Updated dependencies [294b909]
+  - @nodaro/sdk@2.61.0
+  - @nodaro/shared@3.51.0
+
 ## 1.45.2
 
 ### Patch Changes

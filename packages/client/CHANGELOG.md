@@ -1,5 +1,30 @@
 # @nodaro/sdk
 
+## 2.61.0
+
+### Minor Changes
+
+- e37b1f2: Nodaro Motion: `castSwap.styleChoice()` (`GET /v1/cast-swap/style-choice`, public) answers, per engine, whether people choose a direct run's style or an admin forced one (`CastSwapStyleChoice`: `{ engines: { "motion-prism", "motion-pulse" } }`, each a `CastSwapStyleChoiceOption`: `"user"`, `"precise"` or `"flex"`). A forced style overrides a run's `style`, so a client hides its Style control for that engine.
+- 23ab5e0: Nodaro Motion: a person, pet or product role of a direct run may leave out its `name` (`CastSwapPersonRole.name`, `CastSwapPetRole.name`, `CastSwapProductRole.name` are now optional). An unnamed role is named by its first picture and needs at least one image (400 `unnamed_role_needs_picture` otherwise); a trend run's roles are always named.
+- e2a5605: Content rights: `client.contentRights.declaration()` reads the text a person confirms before a link is imported, `client.contentRights.confirm({ url, declarationVersion })` records the confirmation, and `media.downloadVideo` takes its id as `confirmationId`. A download without one is still accepted until the deployment turns `content_rights_required` on.
+- fd78551: `uploads.importUrl(url, { confirmationId })` passes the content rights confirmation (`contentRights.confirm({ url })`) with a picture imported from a link. A `403` refusing an import of a link (`media.downloadVideo`, `uploads.importUrl`, the audio imports) is now an `ImportRefusedError` (a `ForbiddenError`) whose `code` is the server's own: `import_source_disabled` for a site an administrator disabled, or a `rights_confirmation_*` code saying what is wrong with the confirmation (`IMPORT_REFUSAL_CODES` lists them). Before, such a 403 was a plain `ForbiddenError` with `code: "forbidden"`.
+- 783d857: Jobs, workflow runs and pipelines that wait for a free concurrency slot now say where they stand in line. `Job`, `JobStatusResult`, `WorkflowExecution` and `PipelineRecord` gain an optional `queue` field (`JobQueueInfo`: `{ lane, position, limit, running, reason, waitedSeconds, upgradeHint }`), present only while the job or pipeline is `queued` (or the run waits for its turn, its status staying `pending`). `JobQueueInfo` is exported from `@nodaro/sdk` and `@nodaro/sdk/jobs`. Concurrency limits are not enforced in this release, so nothing waits for a slot yet and the field does not appear yet.
+
+  `nodes.runAndWait()`, `runMany()` and `runBatchAndWait()` no longer count the time a job spends waiting for a free slot (`queued`) toward `maxMs`, so waiting for a slot never uses up the wait. Every other status, `pending` included, counts as before. `BillingPlan.parallelism`'s description notes what it means once concurrency limits are enforced.
+
+- 38da18d: `trendRadar.approve(id, { confirmationId })` passes the admin's content rights confirmation (`contentRights.confirm({ url: candidate.topPost.url, declarationVersion })`) for the top post's clip, which is downloaded under it when the candidate becomes a draft trend. A confirmation that does not fit the top post as the server has it answers `403` with the content rights code before anything is created.
+- 66093d7: Trend Radar: `client.trendRadar` (`@nodaro/sdk/trend-radar`) — the candidate trends the daily radar run found on Nodaro Cloud, and an admin's decisions on them: `summary()`, `candidates()`, `candidate(id)`, `approve(id)` (creates a draft trend), `watch(id)`, `reject(id, { reason })`, `settings()`, `updateSettings(patch)`, `run()`. Every method answers a signed-in admin session only; an API key or an app token gets `ForbiddenError`.
+
+### Patch Changes
+
+- e2edcfc: `media.downloadVideo` and `nodaro media download` describe their input as a link to the video's page or a direct video file link; the wording no longer lists sites. No behaviour change.
+- Updated dependencies [49e3a4e]
+- Updated dependencies [783d857]
+- Updated dependencies [3c3dbaf]
+- Updated dependencies [c9430df]
+- Updated dependencies [294b909]
+  - @nodaro/shared@3.51.0
+
 ## 2.60.1
 
 ### Patch Changes

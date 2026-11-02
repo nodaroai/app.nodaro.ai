@@ -1,5 +1,21 @@
 # @nodaro/shared
 
+## 3.51.0
+
+### Minor Changes
+
+- 49e3a4e: Video Face Mesh: the lines are drawn in tones of the picture under them instead of blue and green — gray on a gray depth map or a blurred face, and, on a coloured depth map, a colour of that map. `VideoFaceMeshRequest` takes `colormap` (one of `VIDEO_DEPTH_COLORMAPS`) and `depthUrl` (the grayscale depth render of the clip); `VideoFaceMeshOutput` reports the `colormap` used. `VIDEO_FACE_MESH_RECIPE` is now `2026-11-01`.
+- 783d857: `queueInfo` joins `EXECUTION_DATA_KEYS` and `TRANSIENT_RUNTIME_KEYS`: the editor keeps where a node's job stands in line while it waits for a free concurrency slot under this key. It is run state, so it never marks a workflow as changed and is never saved with it. Concurrency limits are not enforced in this release, so nothing waits for a slot yet and the key is never written yet.
+
+  `NodeExecutionStateWire` declares two optional keys a single-node job's node state carries while its job waits for a free concurrency slot: `queued` (`true`) and `waitedSeconds` (whole seconds waited, counted from when it first started waiting). They are present only while the job waits, so they do not appear yet either.
+
+- 3c3dbaf: Every model names its product line (`series`). `ModelCatalogEntry.series` is now required, and `LlmModelDef` gains a required `series` ("Claude", "GPT", "Gemini", "Grok", "Kimi", "DeepSeek"), so a model can be filtered by its line. A catalog entry or LLM model you build yourself must now set it. The two AI Audit catalog rows carry the series "AI Audit"; the Models tab still lists only models that create a node.
+- c9430df: Marketplace templates: a ninth use case, `mcp` in `TEMPLATE_CATEGORIES` — workflows an AI agent built through the MCP server, published whole so every step can be opened, changed and run again. It has no legacy values (`templateCategoryStoredValues("mcp")` is `["mcp"]`).
+
+### Patch Changes
+
+- 294b909: A Video URL node's `rightsConfirmationId` — the content rights confirmation a run fetches the node's link under — is a run-only field: it joins `RUN_ONLY_NODE_FIELDS` (`withRunOverrides` drops a saved one before it merges the run's overrides, as the server's engine does), `TRANSIENT_RUNTIME_KEYS` (never saved) and `VIDEO_LINK_DERIVED_FIELDS` (a run request that points the node at another link drops it with the rest). One confirmation opens one download of one link within an hour, so only the run's own override can supply it.
+
 ## 3.50.0
 
 ### Minor Changes
