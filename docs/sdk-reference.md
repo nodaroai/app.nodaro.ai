@@ -2089,6 +2089,7 @@ run(params: CastSwapParams, options?: { idempotencyKey?: string }): Promise<{ jo
 estimate(params: CastSwapParams): Promise<CastSwapEstimate> // POST /v1/cast-swap/estimate, free
 fullQualityEstimate(jobId: string): Promise<CastSwapFullQualityEstimate> // POST /v1/cast-swap/:jobId/full-quality/estimate, free
 fullQuality(jobId: string, params?: { sessionId?: string }): Promise<CastSwapFullQualityResult> // POST /v1/cast-swap/:jobId/full-quality → 202 (200 + existing)
+styleChoice(): Promise<CastSwapStyleChoice> // GET /v1/cast-swap/style-choice, public
 ```
 
 ```ts
@@ -2197,6 +2198,20 @@ records the `style` sent in `input_data.style` (absent when it was left out).
 While the way Nodaro prepares Motion runs for the engine limits the clip, a
 full Motion run of a clip over 27.9 s is refused as `400
 clip_too_long_for_style` ("Use a shorter clip or choose Precise").
+
+**A forced style** (`styleChoice()`, `CastSwapStyleChoice`): Nodaro may fix
+an engine's style for everyone, and every `run()` and `estimate()` on it then
+uses that style whatever `style` says. `styleChoice()` answers
+`{ engines: { "motion-prism": CastSwapStyleChoiceOption, "motion-pulse": CastSwapStyleChoiceOption } }`,
+each `"user"` (the caller chooses), `"precise"` or `"flex"` (`style: "motion"`);
+show a style control only for an engine answered `"user"`. Public (works
+signed out); the answer may be up to a minute old. A trend run keeps its
+trend's style.
+
+```ts
+const { engines } = await client.castSwap.styleChoice()
+const showStyle = engines["motion-pulse"] === "user"
+```
 
 **Preparing the clip.** How the source clip is prepared for the video model
 (for one, whether faces are hidden first, and whether a clip the model

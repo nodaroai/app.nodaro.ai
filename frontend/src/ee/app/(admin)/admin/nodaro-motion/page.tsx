@@ -17,6 +17,11 @@
 // resolution (the full audio, the default; the voice only; or none), the
 // original audio always back on the result
 // (PUT /v1/admin/nodaro-motion/prism-reference-audio).
+// Each engine also has its Style choice (StyleChoiceSelect.tsx): people choose
+// Precise or Flex (the default), or every direct run is always Precise or
+// always Flex, which hides the Style choice in Nodaro Motion
+// (PUT /v1/admin/nodaro-motion/style); the forced choices are greyed out until
+// every environment's engine enforces them.
 // Each engine also has its preparation steps (StepsColumn.tsx: the reference
 // sheets, the engine prompt and the scene description), for every direct run
 // of either style (PUT /v1/admin/nodaro-motion/steps), greyed out until every
@@ -39,11 +44,13 @@ import type {
   NodaroMotionMasking,
   NodaroMotionMotion,
   NodaroMotionSteps,
+  NodaroMotionStyle,
 } from "@/lib/api"
 import { useEngineEnvironments, useNodaroMotionMasking, useSaveNodaroMotionMasking } from "@/ee/hooks/queries/use-admin-queries"
 import { useNodaroMotionMotion, useSaveNodaroMotionMotion } from "@/ee/hooks/queries/use-nodaro-motion-motion"
 import { useNodaroMotionPulseAudio, useSaveNodaroMotionPulseAudio } from "@/ee/hooks/queries/use-nodaro-motion-pulse-audio"
 import { useNodaroMotionSteps, useSaveNodaroMotionSteps } from "@/ee/hooks/queries/use-nodaro-motion-steps"
+import { useNodaroMotionStyle, useSaveNodaroMotionStyle } from "@/ee/hooks/queries/use-nodaro-motion-style"
 import {
   useNodaroMotionPrismReferenceAudio,
   useSaveNodaroMotionPrismReferenceAudio,
@@ -53,11 +60,17 @@ import { DEFAULT_PULSE_AUDIO, PulseAudioSelect } from "../trends/components/Puls
 import { PrismReferenceAudioSelect } from "../trends/components/PrismReferenceAudioSelect"
 import { prismReferenceAudioModesEveryEngineTakes, prismReferenceAudioTriple } from "../trends/prism-reference-audio"
 import { maskingIssues } from "../trends/model"
-import { environmentsThatCannotDrawColormaps, environmentsThatCannotDrawFaceMesh, environmentsThatCannotHideBodies } from "../trends/clip-preparation"
+import {
+  environmentsThatCannotDrawColormaps,
+  environmentsThatCannotDrawFaceMesh,
+  environmentsThatCannotForceStyle,
+  environmentsThatCannotHideBodies,
+} from "../trends/clip-preparation"
 import { motionIssues, motionToSaved, toSaved } from "./model"
 import { PromptPartsTabs } from "./components/PromptPartsTabs"
 import { MotionColumn } from "./components/MotionColumn"
 import { StepsColumn, stepsToSaved } from "./components/StepsColumn"
+import { StyleChoiceSelect, styleToSaved } from "./components/StyleChoiceSelect"
 
 /** The model each engine runs on, shown to admins beside the public name. */
 const INTERNAL_NAMES: Readonly<Record<AdminTrendEngine, string>> = {
@@ -96,11 +109,16 @@ export default function AdminNodaroMotionPage() {
   const savePrismAudio = useSaveNodaroMotionPrismReferenceAudio()
   const stepsQuery = useNodaroMotionSteps()
   const saveSteps = useSaveNodaroMotionSteps()
+  const styleQuery = useNodaroMotionStyle()
+  const saveStyle = useSaveNodaroMotionStyle()
+  // A forced style is offered only once every environment's engine enforces it (the setting is shared).
+  const forceStyleMissingIn = environmentsThatCannotForceStyle(envs.data)
   const [draft, setDraft] = useState<NodaroMotionMasking>({})
   const [motionDraft, setMotionDraft] = useState<NodaroMotionMotion>({})
   const [pulseDraft, setPulseDraft] = useState<CastSwapPulseAudioId>(DEFAULT_PULSE_AUDIO)
   const [prismAudioDraft, setPrismAudioDraft] = useState<CastSwapPrismReferenceAudioByResolution>(() => prismReferenceAudioTriple(null))
   const [stepsDraft, setStepsDraft] = useState<NodaroMotionSteps>({})
+  const [styleDraft, setStyleDraft] = useState<NodaroMotionStyle>({})
 
   // The drafts start from what is stored, and again after each save.
   useEffect(() => {
@@ -118,6 +136,9 @@ export default function AdminNodaroMotionPage() {
   useEffect(() => {
     if (stepsQuery.data) setStepsDraft(structuredClone(stepsQuery.data.steps ?? {}))
   }, [stepsQuery.data])
+  useEffect(() => {
+    if (styleQuery.data) setStyleDraft({ ...(styleQuery.data.style ?? {}) })
+  }, [styleQuery.data])
 
   const saved = useMemo(() => JSON.stringify(toSaved(data?.masking ?? {})), [data])
   const next = toSaved(draft)
@@ -139,7 +160,11 @@ export default function AdminNodaroMotionPage() {
   // Never saved reads as no steps: a draft with none set is then no change.
   const nextSteps = stepsToSaved(stepsDraft)
   const stepsChanged = !!stepsQuery.data && JSON.stringify(nextSteps) !== JSON.stringify(stepsToSaved(stepsQuery.data.steps))
-  const pending = save.isPending || saveMotion.isPending || savePulse.isPending || savePrismAudio.isPending || saveSteps.isPending
+  // Never saved reads as people choosing: choosing "Users choose" then is no change.
+  const nextStyle = styleToSaved(styleDraft)
+  const styleChanged = !!styleQuery.data && JSON.stringify(nextStyle) !== JSON.stringify(styleToSaved(styleQuery.data.style))
+  const pending =
+    save.isPending || saveMotion.isPending || savePulse.isPending || savePrismAudio.isPending || saveSteps.isPending || saveStyle.isPending
 
   if (!hasAdmin()) return null
 
@@ -151,6 +176,7 @@ export default function AdminNodaroMotionPage() {
       if (pulseChanged) await savePulse.mutateAsync(pulseDraft)
       if (prismAudioChanged) await savePrismAudio.mutateAsync(prismReferenceAudioTriple(prismAudioDraft))
       if (stepsChanged) await saveSteps.mutateAsync(nextSteps)
+      if (styleChanged) await saveStyle.mutateAsync(nextStyle)
       toast.success("Saved. Runs pick it up within a minute.")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
@@ -167,7 +193,7 @@ export default function AdminNodaroMotionPage() {
             Precise and the Motion style. People never see or set it. A trend keeps its own setting.
           </p>
         </div>
-        <Button size="sm" className="min-h-9" disabled={(!changed && !motionChanged && !pulseChanged && !prismAudioChanged && !stepsChanged) || issues.length > 0 || pending} onClick={() => void onSave()}>
+        <Button size="sm" className="min-h-9" disabled={(!changed && !motionChanged && !pulseChanged && !prismAudioChanged && !stepsChanged && !styleChanged) || issues.length > 0 || pending} onClick={() => void onSave()}>
           {pending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
           Save
         </Button>
@@ -195,6 +221,19 @@ export default function AdminNodaroMotionPage() {
                 <h2 id={`engine-${engine.id}`} className="mb-3 text-base font-semibold">
                   {engine.name} <span className="font-normal text-muted-foreground">({INTERNAL_NAMES[engine.internal] ?? engine.internal})</span>
                 </h2>
+                <div role="group" aria-label={`${engine.name} Style`} className="mb-4 max-w-md">
+                  {styleQuery.data ? (
+                    <StyleChoiceSelect
+                      value={styleDraft[engine.id]}
+                      missingIn={forceStyleMissingIn}
+                      onChange={(choice) => setStyleDraft((d) => ({ ...d, [engine.id]: choice }))}
+                    />
+                  ) : styleQuery.error ? (
+                    <p className="text-xs text-destructive">{styleQuery.error.message}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Loading…</p>
+                  )}
+                </div>
                 <div className="grid gap-4 lg:grid-cols-2">
                   <div role="group" aria-label={`${engine.name} Precise`} className="flex min-w-0 flex-col gap-2">
                     <h3 className="text-sm font-semibold">Precise</h3>

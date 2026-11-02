@@ -30,4 +30,6 @@ export {
   type CastSwapFullQualityParams,
   type CastSwapFullQualityResult,
   type CastSwapFullQualityRefusalCode,
+  type CastSwapStyleChoice,
+  type CastSwapStyleChoiceOption,
 } from "../resources/cast-swap.js"

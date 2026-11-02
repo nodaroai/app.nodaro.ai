@@ -171,6 +171,7 @@ import { adminSettingsRoutes } from "./ee/routes/admin-settings.js"
 import { adminAvailabilityRoutes } from "./ee/routes/admin-availability.js"
 import { consentRoutes } from "./ee/routes/consent.js"
 import { trendRoutes } from "./ee/routes/trends.js"
+import { castSwapStyleChoiceRoutes } from "./ee/routes/cast-swap-style-choice.js"
 import { adminTrendsRoutes } from "./ee/routes/admin-trends.js"
 import { adminNodaroMotionRoutes } from "./ee/routes/admin-nodaro-motion.js"
 import { motionTransferRoutes } from "./routes/motion-transfer.js"
@@ -752,6 +753,8 @@ export async function buildApp() {
   if (hasCredits()) await app.register(consentRoutes)
   // Trends: the public catalog and trend runs (Cast Swap recipes; ee/lib/trends).
   if (hasCredits()) await app.register(trendRoutes)
+  // Nodaro Motion: whether people choose a direct run's style per engine (public; the admin's setting).
+  if (hasCredits()) await app.register(castSwapStyleChoiceRoutes)
   // Trends admin: build, test, promote admin runs to examples, publish (engine check per environment).
   if (hasAdmin() && hasCredits()) await app.register(adminTrendsRoutes)
 // Nodaro Motion (Cast Swap): the admin's face masking per engine, read by the engine through tk.settings.

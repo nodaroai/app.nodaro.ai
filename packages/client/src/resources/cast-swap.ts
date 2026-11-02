@@ -514,6 +514,23 @@ export type CastSwapFullQualityRefusalCode =
   | "host_too_old"
   | (string & {})
 
+/**
+ * Who decides a direct run's style on one engine:
+ * - `"user"`: the person (the request's `style`, left out = `"precise"`);
+ *   show a Style control;
+ * - `"precise"` / `"flex"`: an admin forced it — every direct run and quote
+ *   of that engine runs Precise / Flex (`style: "motion"`) whatever the
+ *   request's `style` says; show no Style control.
+ *
+ * A trend run keeps its own trend's style.
+ */
+export type CastSwapStyleChoiceOption = "user" | "precise" | "flex"
+
+/** What {@link CastSwapResource.styleChoice} answers: every engine's choice, by its public id. */
+export interface CastSwapStyleChoice {
+  engines: Record<CastSwapEngine, CastSwapStyleChoiceOption>
+}
+
 export class CastSwapResource {
   constructor(private client: NodaroClientCore) {}
 
@@ -529,6 +546,17 @@ export class CastSwapResource {
       body: params,
       ...(options?.idempotencyKey ? { headers: { "Idempotency-Key": options.idempotencyKey } } : {}),
     })
+  }
+
+  /**
+   * Whether people choose a direct run's style, per engine
+   * (`GET /v1/cast-swap/style-choice`): `"user"` = show a Style control;
+   * `"precise"` / `"flex"` = an admin forced that style for the engine, so a
+   * run's `style` is overridden and the control is best hidden. Public (no
+   * sign-in needed); the answer may be up to a minute old.
+   */
+  styleChoice(): Promise<CastSwapStyleChoice> {
+    return this.client.request("GET", "/v1/cast-swap/style-choice")
   }
 
   /** Quote a run before starting it (`POST /v1/cast-swap/estimate`); spends nothing. */

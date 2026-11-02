@@ -12,6 +12,8 @@ import {
   type CastSwapFaceMasking,
   type CastSwapParams,
   type CastSwapStyle,
+  type CastSwapStyleChoice,
+  type CastSwapStyleChoiceOption,
 } from "../../index.js"
 
 function mockOk<T>(body: T, status = 200) {
@@ -414,5 +416,21 @@ describe("castSwap resource", () => {
     expect(code).toBe("full_quality_pending")
     expect((err as NodaroError).status).toBe(409)
     expect((err as NodaroError).details.retryable).toBe(true)
+  })
+
+  it("styleChoice GETs /v1/cast-swap/style-choice and answers every engine's choice", async () => {
+    const answer: CastSwapStyleChoice = { engines: { "motion-prism": "flex", "motion-pulse": "user" } }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk(answer))
+    const client = make(fetchMock)
+
+    const got = await client.castSwap.styleChoice()
+    expect(got).toEqual(answer)
+    const option: CastSwapStyleChoiceOption = got.engines["motion-prism"]
+    expect(option).toBe("flex")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("https://api.example.com/v1/cast-swap/style-choice")
+    expect(init.method).toBe("GET")
+    expect(init.body).toBeUndefined()
   })
 })

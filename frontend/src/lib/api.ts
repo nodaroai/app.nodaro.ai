@@ -11836,6 +11836,8 @@ export interface TrendEngineEnvironment {
       clipBodySheet?: boolean
       /** With `steps`, the engine takes the shot list (`steps.shotList`) and runs Flex as Full depth with a shot list; absent = it cannot. */
       shotList?: boolean
+      /** The engine enforces the admin's Style choice on direct runs (`nodaro_motion_style`); absent = it takes the request's style. */
+      styleChoice?: boolean
     }
   } & Record<string, unknown>
   updatedAt: string
@@ -12778,6 +12780,39 @@ export async function saveNodaroMotionMotion(motion: NodaroMotionMotion): Promis
     await apiRequest<{ data: NodaroMotionMotionView }>(ADMIN_NODARO_MOTION_MOTION, "apiErr.saveNodaroMotion", {
       method: "PUT",
       body: { motion },
+    })
+  ).data
+}
+
+// ---- Admin: Nodaro Motion's Style choice for direct runs (/v1/admin/nodaro-motion/style, admin-nodaro-motion-style.ts) ----
+
+/** Who decides a direct run's style on an engine: people (the default), or always Precise / always Flex. */
+export type NodaroMotionStyleChoice = "user" | "precise" | "flex"
+
+/** The Style choice per engine, keyed by public id; an engine left out (or "user") lets people choose. */
+export type NodaroMotionStyle = Partial<Record<NodaroMotionEngine, NodaroMotionStyleChoice>>
+
+export interface NodaroMotionStyleView {
+  /** null = never saved: people choose on every engine. Only the forced engines are listed. */
+  style: NodaroMotionStyle | null
+  updatedAt: string | null
+  engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine }>
+  /** Whether this environment's Cast Swap engine enforces the setting (`castSwap.styleChoice`). */
+  supported: boolean
+}
+
+const ADMIN_NODARO_MOTION_STYLE = "/v1/admin/nodaro-motion/style"
+
+export async function fetchNodaroMotionStyle(): Promise<NodaroMotionStyleView> {
+  return (await apiRequest<{ data: NodaroMotionStyleView }>(ADMIN_NODARO_MOTION_STYLE, "apiErr.loadNodaroMotion")).data
+}
+
+/** Saves every engine's choice; a forced one is refused (409 `engine_unsupported`) while an environment's engine cannot enforce it. */
+export async function saveNodaroMotionStyle(style: NodaroMotionStyle): Promise<NodaroMotionStyleView> {
+  return (
+    await apiRequest<{ data: NodaroMotionStyleView }>(ADMIN_NODARO_MOTION_STYLE, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { style },
     })
   ).data
 }

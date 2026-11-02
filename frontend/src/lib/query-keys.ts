@@ -433,6 +433,7 @@ export const queryKeys = {
     nodaroMotionMotion: () => ["admin", "nodaro-motion", "motion"] as const,
     nodaroMotionPulseAudio: () => ["admin", "nodaro-motion", "pulse-audio"] as const,
     nodaroMotionPrismReferenceAudio: () => ["admin", "nodaro-motion", "prism-reference-audio"] as const,
+    nodaroMotionStyle: () => ["admin", "nodaro-motion", "style"] as const,
     nodaroMotionPromptPreview: (engine: string, style: string, overrides: string) =>
       ["admin", "nodaro-motion", "prompt-parts", "preview", engine, style, overrides] as const,
   },
