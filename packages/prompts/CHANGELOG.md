@@ -1,5 +1,16 @@
 # @nodaro/prompts
 
+## 1.48.0
+
+### Minor Changes
+
+- f06e903: Styles: a video-only wording per style. Each of the 49 styles now carries a `videoPromptHint`: the medium first, then its concrete techniques after a colon (Anime: "2D Japanese anime, hand-drawn cel animation: clean thin ink line art, …"). `getStyleVideoPromptHint(id)` returns it, falls back to `promptHint` for a style that has none, and returns `""` for an unknown id. Every video surface reads it, so a video prompt with a style now carries different text, for all 49 styles: the direction fold on video (`renderDirectionHints(…, { surface: "video" })`, `composeVideoPromptText`) and a Style node folded into a video consumer (`getParameterPromptHint(node, ctx, { surface: "video" })`, a new optional third argument). Images keep `promptHint`, byte for byte. Catalog packs: a pack may give a style its own `videoPromptHint`, but only prompts the platform composes on the server read it. The catalog's wire answer (`projectPickerCatalog`, `detail=full` included) does not carry video wordings, so a prompt the editor composes in the browser reads the stock video wording, or the pack's rewritten `promptHint` when the pack rewrote it. A pack that rewrites a style's `promptHint` without a video wording of its own drops the stock video wording everywhere, so video follows the rewrite.
+
+### Patch Changes
+
+- Updated dependencies [b1e6343]
+  - @nodaro/shared@3.52.1
+
 ## 1.47.0
 
 ### Minor Changes
