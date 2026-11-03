@@ -14,59 +14,18 @@
  * 3,564 and charged 854.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
+// The database double is shared with motion-price-run-cases.test.ts; `h` is its state.
+import { DB_DEFAULT_OWNER, db as h, resetDb, type DbJob as Job, type DbLog as Log } from "./helpers/run-credits-db.js"
 
-type Job = { id: string; parent_job_id: string | null; usage_log_id: string | null; credits: number | null; user_id?: string }
-type Log = { id: string; status: string; credits_used: number | null; credits_charged: number | null }
-type Side = { job_id: string; usage_logs: { status: string; credits_used: number | null; credits_charged: number | null } }
-
-const OWNER_ID = "00000000-0000-4000-8000-0000000000a1"
-const h = vi.hoisted(() => ({
-  credits: true,
-  /** A steps read that fails (the gateway, a timeout). */
-  failSteps: false,
-  /** A database that ignores the owner filter (defence in depth must still hold). */
-  ignoreOwner: false,
-  jobs: [] as Job[],
-  logs: [] as Log[],
-  side: [] as Side[],
-  reads: [] as Array<{ table: string; column: string; ids: unknown[]; eqs: Array<[string, unknown]>; ins: Array<[string, unknown[]]> }>,
-}))
-vi.mock("../config.js", async (importOriginal) => ({ ...(await importOriginal<typeof import("../config.js")>()), hasCredits: () => h.credits }))
-vi.mock("../llm-metered-schema-gate.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../llm-metered-schema-gate.js")>()),
-  llmMeteredSchemaReady: () => true,
-}))
-vi.mock("../supabase.js", () => ({
-  supabase: {
-    from: (table: string) => {
-      const read = { table, column: "", ids: [] as unknown[], eqs: [] as Array<[string, unknown]>, ins: [] as Array<[string, unknown[]]> }
-      h.reads.push(read)
-      const ownerOk = (j: Job) => {
-        const owner = j.user_id ?? OWNER_ID
-        const eq = read.eqs.find(([c]) => c === "user_id")
-        const inList = read.ins.find(([c]) => c === "user_id")
-        return h.ignoreOwner || ((!eq || eq[1] === owner) && (!inList || inList[1].includes(owner)))
-      }
-      const rows = (): unknown[] => {
-        if (table === "jobs") return h.jobs.filter((j) => read.ids.includes((j as Record<string, unknown>)[read.column]) && ownerOk(j))
-        if (table === "usage_logs") return h.logs.filter((l) => read.ids.includes(l.id))
-        return h.side.filter((s) => read.ids.includes(s.job_id) && s.usage_logs.status === "committed")
-      }
-      const q = {
-        select: () => q,
-        in: (column: string, ids: unknown[]) => (read.ins.push([column, ids]), column === "user_id" ? q : ((read.column = column), (read.ids = ids), q)),
-        eq: (column: string, value: unknown) => (read.eqs.push([column, value]), q),
-        then: (res: (v: unknown) => unknown) =>
-          Promise.resolve(table === "jobs" && h.failSteps ? { data: null, error: { message: "timeout" } } : { data: rows(), error: null }).then(res),
-      }
-      return q
-    },
-  },
-}))
+vi.mock("../config.js", async (importOriginal) =>
+  (await import("./helpers/run-credits-db.js")).withCreditsSwitch(await importOriginal<typeof import("../config.js")>()))
+vi.mock("../llm-metered-schema-gate.js", async (importOriginal) =>
+  (await import("./helpers/run-credits-db.js")).withMeteredSchemaReady(await importOriginal<typeof import("../llm-metered-schema-gate.js")>()))
+vi.mock("../supabase.js", async () => (await import("./helpers/run-credits-db.js")).supabaseDouble())
 
 const { runCreditsFor, creditsChargedOf, publicCreditFieldsOf } = await import("../job-credit-status.js")
 
-const OWNER = OWNER_ID
+const OWNER = DB_DEFAULT_OWNER
 
 const job = (id: string, parent: string | null, credits: number | null, log: string | null = `ul-${id}`): Job => ({
   id,
@@ -79,15 +38,7 @@ const reserved = (id: string, held: number): Log => ({ id, status: "reserved", c
 const refunded = (id: string, held: number): Log => ({ id, status: "refunded", credits_used: held, credits_charged: 0 })
 const rowOf = (j: Job) => ({ id: j.id, usage_log_id: j.usage_log_id, credits: j.credits })
 
-beforeEach(() => {
-  h.credits = true
-  h.failSteps = false
-  h.ignoreOwner = false
-  h.jobs = []
-  h.logs = []
-  h.side = []
-  h.reads = []
-})
+beforeEach(() => resetDb())
 
 /** The production Nodaro Motion preview: a Cast Swap parent and its four steps. */
 function motionPreview(): Job {

@@ -475,6 +475,16 @@ export const queryKeys = {
     nodaroMotionAdvanced: () => ["admin", "nodaro-motion", "advanced"] as const,
     nodaroMotionPromptPreview: (engine: string, style: string, overrides: string) =>
       ["admin", "nodaro-motion", "prompt-parts", "preview", engine, style, overrides] as const,
+    /**
+     * Admin → Motion price check: a page of the range's runs, and one run.
+     * `kieStamp` is the KIE fetch whose figures the request carries (its
+     * `fetchedAt`, null for none): never the map itself (up to 10,000 tasks)
+     * and never the token.
+     */
+    motionPriceRuns: (params: object | null, kieStamp: string | null) =>
+      ["admin", "motion-price-check", "runs", params, kieStamp] as const,
+    motionPriceRun: (jobId: string | null, kieStamp: string | null) =>
+      ["admin", "motion-price-check", "run", jobId, kieStamp] as const,
   },
 
   nodeDefaults: {
