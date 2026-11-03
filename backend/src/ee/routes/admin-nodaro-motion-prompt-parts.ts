@@ -5,7 +5,7 @@
  *
  *   GET  /v1/admin/nodaro-motion/prompt-parts           the overrides (null = never saved), the engines and the styles
  *   PUT  /v1/admin/nodaro-motion/prompt-parts           { promptParts }: save the whole setting, each entry checked by the engine first; audit-logged
- *   POST /v1/admin/nodaro-motion/prompt-parts/preview   { engine, style, overrides? }: the engine's parts, assembled prompt and problems
+ *   POST /v1/admin/nodaro-motion/prompt-parts/preview   { engine, style, overrides?, promptWording? }: the engine's parts, assembled prompt and problems
  *
  * The setting (`nodaro_motion_prompt_parts`, lib/nodaro-motion-prompt-parts.ts)
  * is read by the Cast Swap engine for every DIRECT run of the engine and style
@@ -20,7 +20,13 @@
  * the Flexible prompt on a face mask) — only to an engine that declares
  * `castSwap.promptStyles`; an older one is asked exactly as before (no
  * `source`, no prompt style). The overrides stay keyed by the run's
- * style (`precise` / `motion`); the parts they edit are the prompt style's. `overrides` left out = the saved ones for that engine and style. The
+ * style (`precise` / `motion`); the parts they edit are the prompt style's. `overrides` left out = the saved ones for that engine and style.
+ * `promptWording` (`"current"` / `"new"`) is the Flex wording to preview, left
+ * out = the engine's saved one (`nodaro_motion_prompt_wording`); it is said
+ * only for a Flex run worded Flexible, and only to an engine that lists it
+ * (`directRunRequest`, `forLoadedEngine`), so a Precise preview is unchanged.
+ * Each save's check (below) words a Flex run's overrides as the engine's
+ * saved wording does. The
  * engine's answer is relayed as it is; an engine without the route is 503
  * `engine_unsupported`.
  *
@@ -57,7 +63,15 @@ import { readNodaroMotionSteps } from "../../lib/nodaro-motion-steps-store.js"
 import type { NodaroMotionSteps } from "../../lib/nodaro-motion-steps.js"
 import { loadedEngineTakesShotList } from "../../lib/cast-swap-steps.js"
 import { askPromptParts, nonEmptyTexts } from "../lib/cast-swap-prompt-parts.js"
-import { directRunPromptPartsInvalid, directRunPromptProblems, directRunRequest, type DirectRunPromptProblem } from "../lib/nodaro-motion-prompt-check.js"
+import {
+  directRunPromptPartsInvalid,
+  directRunPromptProblems,
+  directRunRequest,
+  savedFlexWording,
+  type DirectRunPromptProblem,
+} from "../lib/nodaro-motion-prompt-check.js"
+import { promptWordingOf } from "../../lib/nodaro-motion-prompt-wording.js"
+import { CAST_SWAP_PROMPT_WORDINGS, type CastSwapPromptWording } from "@nodaro/render-rules"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { audit } from "./admin-trends-lifecycle.js"
 
@@ -82,7 +96,13 @@ const editsSchema = z.strictObject(
 ) as unknown as z.ZodType<Partial<Record<NodaroMotionEngine, Partial<Record<CastSwapStyle, PromptPartTexts>>>>>
 
 const putBody = z.strictObject({ promptParts: editsSchema })
-const previewBody = z.strictObject({ engine: engineId, style, overrides: promptPartEditsSchema.optional() })
+// `promptWording` left out = the engine's saved Flex wording (`nodaro_motion_prompt_wording`).
+const previewBody = z.strictObject({
+  engine: engineId,
+  style,
+  overrides: promptPartEditsSchema.optional(),
+  promptWording: z.enum(CAST_SWAP_PROMPT_WORDINGS).optional(),
+})
 
 /** A sample direct run: one person with three pictures, each its own address. */
 const SAMPLE_ROLES = [
@@ -103,6 +123,7 @@ function preview(
   motion: NodaroMotionMotion | null,
   masking: NodaroMotionMasking | null,
   steps: NodaroMotionSteps | null,
+  wording: CastSwapPromptWording,
 ) {
   return askPromptParts(
     app,
@@ -115,6 +136,7 @@ function preview(
       { hasAudio: true, roles: structuredClone(SAMPLE_ROLES), ...(overrides ? { overrides } : {}) },
       masking?.[engine],
       steps?.[engine],
+      wording,
     ),
   )
 }
@@ -165,6 +187,7 @@ export function registerNodaroMotionPromptPartRoutes(app: FastifyInstance): void
       const overrides = parsed.data.overrides
         ? nonEmptyTexts(parsed.data.overrides)
         : (await readNodaroMotionPromptParts()).promptParts?.[engine]?.[s]
+      const wording = parsed.data.promptWording ?? promptWordingOf(await savedFlexWording(), engine)
       const answer = await preview(
         app,
         req,
@@ -175,6 +198,7 @@ export function registerNodaroMotionPromptPartRoutes(app: FastifyInstance): void
         (await readNodaroMotionMotion()).motion,
         (await readNodaroMotionMasking()).masking,
         await stepsForShotList(),
+        wording,
       )
       if (!answer) return reply
       return { data: answer }
@@ -192,11 +216,24 @@ export function registerNodaroMotionPromptPartRoutes(app: FastifyInstance): void
       const motion = (await readNodaroMotionMotion()).motion
       const masking = (await readNodaroMotionMasking()).masking
       const steps = await stepsForShotList()
+      // A Flex run's overrides are checked worded as the engine's direct Flex runs are (the new wording is longer).
+      const wording = await savedFlexWording()
       for (const engine of NODARO_MOTION_ENGINES) {
         for (const s of CAST_SWAP_STYLES) {
           const texts = next[engine]?.[s]
           if (!texts) continue
-          const found = await directRunPromptProblems(app, req, reply, engine, s, texts, motion?.[engine], masking?.[engine], steps?.[engine])
+          const found = await directRunPromptProblems(
+            app,
+            req,
+            reply,
+            engine,
+            s,
+            texts,
+            motion?.[engine],
+            masking?.[engine],
+            steps?.[engine],
+            promptWordingOf(wording, engine),
+          )
           if (!found) return reply
           problems.push(...found)
         }

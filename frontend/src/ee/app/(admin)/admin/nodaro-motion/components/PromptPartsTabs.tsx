@@ -16,6 +16,15 @@
 // with: Precise, the Precise prompt; Motion, the SAVED Motion setting's
 // (left out: Flexible), on its saved clip preparation. Saving the Motion
 // setting asks the previews again.
+//
+// The Motion tab, while its prompt is Flexible, also has the engine's Flex
+// prompt wording (PromptWordingSelect.tsx, `nodaro_motion_prompt_wording`):
+// Current (the default) or New, for every direct Flex run of that engine.
+// The tab's preview follows the chosen wording before it is saved; Save saves
+// a changed wording first (PUT /v1/admin/nodaro-motion/prompt-wording), so the
+// overrides are then checked worded as the runs will be. "New" is greyed out
+// until every environment's engine words it (the setting is shared; the
+// server refuses the save otherwise). Precise never reads it.
 
 import { useEffect, useMemo, useState } from "react"
 import { Loader2 } from "lucide-react"
@@ -27,10 +36,12 @@ import {
   isPromptPartsEngineOutOfDate,
   type AdminTrendEngine,
   type CastSwapPromptStyleId,
+  type CastSwapPromptWordingId,
   type CastSwapStyleId,
   type NodaroMotionEngine,
   type NodaroMotionMotionEntry,
   type NodaroMotionPromptParts,
+  type NodaroMotionPromptWording,
   type PromptPartProblem,
   type PromptPartTexts,
 } from "@/lib/api"
@@ -40,8 +51,12 @@ import {
   useNodaroMotionPromptPreview,
   useSaveNodaroMotionPromptParts,
 } from "@/ee/hooks/queries/use-nodaro-motion-prompt-parts"
+import { useEngineEnvironments } from "@/ee/hooks/queries/use-admin-queries"
+import { useNodaroMotionPromptWording, useSaveNodaroMotionPromptWording } from "@/ee/hooks/queries/use-nodaro-motion-prompt-wording"
 import { AssembledPrompt, PromptPartRow, nonEmpty, partsShown } from "../../trends/components/PromptPartRow"
 import { ENGINE_OUT_OF_DATE } from "../../trends/components/EnginePromptParts"
+import { PromptWordingSelect } from "../../trends/components/PromptWordingSelect"
+import { DIRECT_WORDING_NOTE, environmentsThatCannotUseNewWording } from "../../trends/prompt-wording"
 
 const STYLE_LABELS: Readonly<Record<CastSwapStyleId, { label: string; hint: string }>> = {
   precise: { label: "Precise", hint: "Follows the clip exactly (the default)." },
@@ -59,6 +74,15 @@ export function promptStyleOfRun(style: CastSwapStyleId, motion: NodaroMotionMot
 export function styleTabLabel(style: CastSwapStyleId, motion: NodaroMotionMotionEntry | undefined): string {
   const label = STYLE_LABELS[style]?.label ?? style
   return style === "motion" ? `${label} (${PROMPT_STYLE_NAMES[promptStyleOfRun(style, motion)]} prompt)` : label
+}
+
+/** The wording setting as it is saved: each engine on "new"; one on the current wording is left out. */
+export function promptWordingToSave(draft: NodaroMotionPromptWording | null | undefined): NodaroMotionPromptWording {
+  const out: NodaroMotionPromptWording = {}
+  for (const [id, w] of Object.entries(draft ?? {}) as Array<[NodaroMotionEngine, CastSwapPromptWordingId | undefined]>) {
+    if (w === "new") out[id] = "new"
+  }
+  return out
 }
 
 /** How long typing must stop before a tab asks the engine again. */
@@ -101,20 +125,40 @@ export function PromptPartsTabs({ internalNames }: { readonly internalNames: Rea
 
   const saved = useMemo(() => JSON.stringify(promptPartsToSave(data?.promptParts ?? {})), [data])
   const next = promptPartsToSave(draft)
-  const changed = JSON.stringify(next) !== saved
+  const partsChanged = JSON.stringify(next) !== saved
+
+  // The Flex prompt wording per engine (its own setting, saved by the same button).
+  const wordingQuery = useNodaroMotionPromptWording()
+  const saveWording = useSaveNodaroMotionPromptWording()
+  const envs = useEngineEnvironments()
+  const newWordingMissingIn = environmentsThatCannotUseNewWording(envs.data)
+  const [wordingDraft, setWordingDraft] = useState<NodaroMotionPromptWording>({})
+  useEffect(() => {
+    if (wordingQuery.data) setWordingDraft({ ...(wordingQuery.data.promptWording ?? {}) })
+  }, [wordingQuery.data])
+  const nextWording = promptWordingToSave(wordingDraft)
+  // Never saved reads as the current wording: choosing it then is no change.
+  const wordingChanged = !!wordingQuery.data && JSON.stringify(nextWording) !== JSON.stringify(promptWordingToSave(wordingQuery.data.promptWording))
+  const changed = partsChanged || wordingChanged
+  const pending = save.isPending || saveWording.isPending
 
   const setTexts = (engine: NodaroMotionEngine, style: CastSwapStyleId, texts: PromptPartTexts) =>
     setDraft((d) => ({ ...d, [engine]: { ...(d[engine] ?? {}), [style]: texts } }))
 
-  const onSave = () => {
+  // The wording first: the overrides' check then words a Flex run as its runs will be.
+  const onSave = async () => {
     setProblems([])
-    save.mutate(next, {
-      onSuccess: () => toast.success("Saved. Runs pick it up within a minute."),
-      onError: (err) => {
-        if (err instanceof PromptPartsInvalidError) setProblems(err.problems)
-        else toast.error(isPromptPartsEngineOutOfDate(err) ? ENGINE_OUT_OF_DATE : err.message)
-      },
-    })
+    try {
+      if (wordingChanged) await saveWording.mutateAsync(nextWording)
+      if (partsChanged) await save.mutateAsync(next)
+      toast.success("Saved. Runs pick it up within a minute.")
+    } catch (err) {
+      if (err instanceof PromptPartsInvalidError) setProblems(err.problems)
+      else {
+        const e = err instanceof Error ? err : new Error(String(err))
+        toast.error(isPromptPartsEngineOutOfDate(e) && !wordingChanged ? ENGINE_OUT_OF_DATE : e.message)
+      }
+    }
   }
 
   return (
@@ -129,8 +173,8 @@ export function PromptPartsTabs({ internalNames }: { readonly internalNames: Rea
             part. A trend keeps its own.
           </p>
         </div>
-        <Button size="sm" className="min-h-9" disabled={!changed || save.isPending || !data} onClick={onSave}>
-          {save.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+        <Button size="sm" className="min-h-9" disabled={!changed || pending || !data} onClick={() => void onSave()}>
+          {pending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
           Save engine prompts
         </Button>
       </div>
@@ -172,7 +216,16 @@ export function PromptPartsTabs({ internalNames }: { readonly internalNames: Rea
                   texts={draft[engine.id]?.[style] ?? {}}
                   onChange={(texts) => setTexts(engine.id, style, texts)}
                   saveProblems={problems.filter((p) => p.engine === engine.id && p.style === style)}
-                  disabled={save.isPending}
+                  disabled={pending}
+                  wording={
+                    style === "motion" && wordingQuery.data
+                      ? {
+                          value: wordingDraft[engine.id] ?? "current",
+                          missingIn: newWordingMissingIn,
+                          onChange: (w) => setWordingDraft((d) => ({ ...d, [engine.id]: w })),
+                        }
+                      : undefined
+                  }
                 />
               </TabsContent>
             ))}
@@ -191,6 +244,7 @@ function StylePanel({
   onChange,
   saveProblems,
   disabled,
+  wording,
 }: {
   readonly engine: NodaroMotionEngine
   readonly style: CastSwapStyleId
@@ -200,10 +254,19 @@ function StylePanel({
   readonly onChange: (texts: PromptPartTexts) => void
   readonly saveProblems: readonly PromptPartProblem[]
   readonly disabled: boolean
+  /** Motion: the engine's Flex prompt wording as edited (shown while its prompt is Flexible), and what offers "New". */
+  readonly wording?: {
+    readonly value: CastSwapPromptWordingId
+    /** The environments whose engine cannot word it the new way; undefined while unknown. */
+    readonly missingIn: readonly string[] | undefined
+    readonly onChange: (next: CastSwapPromptWordingId) => void
+  }
 }) {
   const overrides = useDebounced(nonEmpty(texts), PREVIEW_DEBOUNCE_MS)
+  const flexible = style === "motion" && promptStyleOfRun(style, motion) === "flexible"
   // The saved Motion setting is part of the question: its prompt style and clip preparation decide the parts.
-  const preview = useNodaroMotionPromptPreview(engine, style, overrides, JSON.stringify(motion ?? {}))
+  // The Flex wording as chosen here (a Precise prompt never reads it, so none is sent for it).
+  const preview = useNodaroMotionPromptPreview(engine, style, overrides, JSON.stringify(motion ?? {}), true, flexible ? wording?.value : undefined)
   const answer = preview.data
   const problems = saveProblems.length > 0 ? saveProblems : (answer?.problems ?? [])
   return (
@@ -212,6 +275,16 @@ function StylePanel({
         {STYLE_LABELS[style]?.hint}
         {style === "motion" ? ` The parts are the ${PROMPT_STYLE_NAMES[promptStyleOfRun(style, motion)]} prompt's, as the saved Motion setting runs it.` : ""}
       </p>
+      {flexible && wording && (
+        <PromptWordingSelect
+          value={wording.value}
+          onChange={wording.onChange}
+          newOffered={wording.missingIn !== undefined && wording.missingIn.length === 0}
+          unofferedReason={wording.missingIn === undefined ? "checking the environments" : `not supported yet: ${wording.missingIn.join(", ")}`}
+          note={DIRECT_WORDING_NOTE}
+          disabled={disabled}
+        />
+      )}
       {preview.isLoading && (
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Asking the engine…

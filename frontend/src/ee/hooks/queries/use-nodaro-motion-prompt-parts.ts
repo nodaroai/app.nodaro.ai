@@ -15,6 +15,7 @@ import {
   saveAdminTrendEnginePrompt,
   saveNodaroMotionPromptParts,
   type AdminTrendEnginePrompt,
+  type CastSwapPromptWordingId,
   type CastSwapStyleId,
   type NodaroMotionEngine,
   type PromptPartTexts,
@@ -81,12 +82,21 @@ export function useSaveNodaroMotionPromptParts() {
  * One engine and style's parts and assembled prompt with `overrides` (the
  * screen's edits). `shape`: what else decides the answer server-side (the
  * saved Motion setting's entry, as JSON), so a change of it asks again.
+ * `promptWording`: the Flex wording to preview (the screen's choice; left
+ * out = the engine's saved one, server-side).
  */
-export function useNodaroMotionPromptPreview(engine: NodaroMotionEngine, style: CastSwapStyleId, overrides: PromptPartTexts, shape = "", enabled = true) {
-  const key = `${JSON.stringify(overrides)}|${shape}`
+export function useNodaroMotionPromptPreview(
+  engine: NodaroMotionEngine,
+  style: CastSwapStyleId,
+  overrides: PromptPartTexts,
+  shape = "",
+  enabled = true,
+  promptWording?: CastSwapPromptWordingId,
+) {
+  const key = `${JSON.stringify(overrides)}|${shape}|${promptWording ?? ""}`
   return useQuery({
     queryKey: queryKeys.admin.nodaroMotionPromptPreview(engine, style, key),
-    queryFn: () => previewNodaroMotionPromptParts({ engine, style, overrides }),
+    queryFn: () => previewNodaroMotionPromptParts({ engine, style, overrides, ...(promptWording ? { promptWording } : {}) }),
     enabled: hasAdmin() && enabled,
     placeholderData: keepPreviousData,
     retry: false,

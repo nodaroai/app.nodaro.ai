@@ -142,6 +142,7 @@ import { getPluginSupports } from "./supports-registry.js"
 import { withEarlierPromptPartKeys } from "../nodaro-motion-prompt-parts.js"
 import { withEarlierMotionKeys } from "../nodaro-motion-motion.js"
 import { styleForPlugin } from "../nodaro-motion-style.js"
+import { promptWordingForPlugin } from "../nodaro-motion-prompt-wording.js"
 import { anyStepsSet, stepsForLoadedEngine, withEarlierStepsKeys } from "../nodaro-motion-steps.js"
 import { loadedEngineTakesSteps } from "../cast-swap-steps.js"
 import { KieVideoProvider } from "../../providers/kie/video.js"
@@ -1642,6 +1643,8 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   nodaroMotionSteps: true,
   // tk.settings.nodaroMotionStyle(): the admin's Style choice per Nodaro Motion engine.
   nodaroMotionStyle: true,
+  // tk.settings.nodaroMotionPromptWording(): the admin's Flex prompt wording per Nodaro Motion engine.
+  nodaroMotionPromptWording: true,
   jobLanes: true,
   // tk.jobs.waitForJob leaves the time the awaited job waits for a slot
   // (`queued`) out of the plugin's timeout (`queueAware` below).
@@ -2279,6 +2282,14 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         const settings = await getAppSettings()
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_style: the app settings could not be read")
         return styleForPlugin(settings.nodaro_motion_style)
+      },
+      // Same rules: a failed read throws (null would put every direct Flex run back on the current wording).
+      // Null when never saved or every engine is current; else each engine on the new wording under its
+      // current AND its earlier key (the masking setting's shim).
+      nodaroMotionPromptWording: async () => {
+        const settings = await getAppSettings()
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_prompt_wording: the app settings could not be read")
+        return promptWordingForPlugin(settings.nodaro_motion_prompt_wording)
       },
     },
     deployment: { publicUrl: appBaseUrl() },

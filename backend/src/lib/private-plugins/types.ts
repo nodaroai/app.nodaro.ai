@@ -3431,6 +3431,13 @@ export interface PluginCapabilities {
    */
   readonly nodaroMotionStyle?: boolean
   /**
+   * `tk.settings.nodaroMotionPromptWording()` exists: the Flex prompt wording
+   * an admin set per Nodaro Motion engine for DIRECT runs ("current" or
+   * "new"). An older host has no such member: a plugin reads that as never
+   * saved (the current wording everywhere).
+   */
+  readonly nodaroMotionPromptWording?: boolean
+  /**
    * The host reads `NodaroPrivatePlugin.jobLanes()`: the concurrency lane each
    * of a plugin's job types runs in (see `PluginJobLaneClass`). An older host
    * never calls it, and runs every plugin job type as a coordinator.
@@ -3594,6 +3601,7 @@ export type PluginNodaroMotionMasking = Partial<
 /** A Cast Swap prompt part's id (`@nodaro/render-rules` `CAST_SWAP_PROMPT_PART_IDS`; a mirror, pinned by a type test). */
 export type PluginPromptPartId =
   | "opener"
+  | "motionLock"
   | "artStyle"
   | "artStyleMandatory"
   | "original"
@@ -3610,7 +3618,9 @@ export type PluginPromptPartId =
   | "pet"
   | "product"
   | "location"
+  | "pictureRoles"
   | "avoid"
+  | "restate"
   | "postHeader"
 
 /**
@@ -3705,6 +3715,26 @@ export interface PluginSettingsToolkit {
    * could not be read. Advertised as `capabilities.nodaroMotionStyle`.
    */
   nodaroMotionStyle?(): Promise<PluginNodaroMotionStyle | null>
+  /**
+   * The admin's Flex prompt wording per Nodaro Motion engine, for direct runs
+   * (a trend run sends its own trend's `promptWording`): only the engines on
+   * the new wording, each answered under its current AND its earlier key, or
+   * null when it was never saved or every engine is current (then every Flex
+   * prompt is worded as today). Read only by the Flexible prompt: a Precise
+   * one ignores it. Returns a copy the plugin may change freely. REJECTS
+   * when the settings could not be read. Advertised as
+   * `capabilities.nodaroMotionPromptWording`.
+   */
+  nodaroMotionPromptWording?(): Promise<PluginNodaroMotionPromptWording | null>
+}
+
+/**
+ * Nodaro Motion's Flex prompt wording per engine, keyed by the PUBLIC engine
+ * ids (current and earlier): an engine listed is on that wording; one left
+ * out is on the current wording (`"current"` is never answered).
+ */
+export type PluginNodaroMotionPromptWording = {
+  readonly [publicEngineId: string]: "current" | "new"
 }
 
 /**
@@ -4101,6 +4131,18 @@ export interface PluginSupports {
    *   fill's setting without the key and refuses to save a shared Nodaro
    *   Motion setting with it while any environment lacks it
    *   (lib/cast-swap-face-masking.ts `engineBlursDepthFill`).
+   * - `promptWordings`: how the engine may word a FLEXIBLE prompt —
+   *   `"current"` (today's) and `"new"` (a movement lock, the picture roles,
+   *   a closing restatement and the avoid part as a failure list; the parts
+   *   `motionLock`, `pictureRoles` and `restate`). A direct run reads the
+   *   admin's wording per engine (`tk.settings.nodaroMotionPromptWording`); a
+   *   trend run and the prompt-parts route take `promptWording`. Every
+   *   Precise prompt ignores it. Additive-optional: absent ⇒ the current
+   *   wording only — the platform never sends `promptWording` (a trend run,
+   *   the prompt-parts route), holds a trend on "new" back from publishing
+   *   there and refuses to save "new" in the shared setting while any
+   *   environment lacks it (lib/nodaro-motion-prompt-wording.ts
+   *   `engineTakesPromptWording`).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -4148,6 +4190,7 @@ export interface PluginSupports {
     readonly faceMeshParts?: readonly ("full" | "features" | "mouth")[]
     readonly maskFillNone?: boolean
     readonly depthFillBlur?: boolean
+    readonly promptWordings?: readonly ("current" | "new")[]
   }
 }
 

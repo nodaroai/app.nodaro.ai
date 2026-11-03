@@ -805,11 +805,14 @@ export {
   CAST_SWAP_PROMPT_PART_IDS,
   CAST_SWAP_PROMPT_PART_PLACEHOLDERS,
   CAST_SWAP_PROMPT_STYLES,
+  CAST_SWAP_PROMPT_WORDINGS,
+  CAST_SWAP_PROMPT_WORDING_PART_IDS,
   defaultPromptStyleFor,
+  overridesWordingPart,
   fullDepthSceneDescribes,
   fullDepthSceneSendsOriginal,
 } from "./cast-swap-prompt-parts"
-export type { CastSwapFullDepthScene, CastSwapPromptPartId, CastSwapPromptStyle } from "./cast-swap-prompt-parts"
+export type { CastSwapFullDepthScene, CastSwapPromptPartId, CastSwapPromptStyle, CastSwapPromptWording } from "./cast-swap-prompt-parts"
 export {
   TREND_CROP_DEFAULT_POSITION,
   TREND_CROP_TOLERANCE,

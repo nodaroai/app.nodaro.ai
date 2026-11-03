@@ -11,7 +11,7 @@
  * `TrendSlot.roleName` and `previewRoleName`, `references` (their `line` and
  * `previewLine` too), `trendPrompt`, `prePrompt`, `previewTrendPrompt`,
  * `previewPrePrompt`, `faceMasking`, `faceMask`, `faceMaskJob`, `upscaleJobs`,
- * `sourceCrop`, `klingLength`, `pulseAudio`, `prismReferenceAudio`, `promptParts`, `promptStyle`, `steps` and `previewClip` never leave the server — public responses
+ * `sourceCrop`, `klingLength`, `pulseAudio`, `prismReferenceAudio`, `promptParts`, `promptStyle`, `promptWording`, `steps` and `previewClip` never leave the server — public responses
  * are built from the other fields. The source's display copy
  * (`source.display`, a browser-safe re-encode in its own file) is public: the
  * trend's page shows it as the original, unless the trend hides its original
@@ -24,7 +24,7 @@ import type { CastSwapEngine, CastSwapKlingLength } from "@nodaro/shared/models"
 import type { FaceMasking, FaceMaskingWithMarks } from "../../../lib/cast-swap-face-masking.js"
 import type { CastSwapPulseAudio } from "../../../lib/cast-swap-pulse-audio.js"
 import type { CastSwapPrismReferenceAudio, CastSwapPrismReferenceAudioMode } from "../../../lib/cast-swap-prism-reference-audio.js"
-import type { CastSwapPromptPartId, CastSwapPromptStyle, TrendCropAspect, TrendUpscaleResolution } from "@nodaro/render-rules"
+import type { CastSwapPromptPartId, CastSwapPromptStyle, CastSwapPromptWording, TrendCropAspect, TrendUpscaleResolution } from "@nodaro/render-rules"
 import type { CastSwapSteps } from "../../../lib/cast-swap-steps.js"
 
 export type { CastSwapEngine, CastSwapKlingLength, FaceMasking, FaceMaskingWithMarks }
@@ -453,6 +453,15 @@ export interface TrendVersionData {
    * resolved.
    */
   promptStyle?: CastSwapPromptStyle
+  /**
+   * HIDDEN. How the engine words this trend's FLEXIBLE prompt: `"current"`
+   * (today's) or `"new"` (a movement lock, the picture roles, a closing
+   * restatement and the avoid part as a failure list). Absent = `"current"`.
+   * Read only when the prompt style is Flexible (a Precise trend may carry it;
+   * nothing reads it there). A run sends `"new"` only (prompt-style.ts `trendPromptWordingSent`),
+   * and only to an engine whose `castSwap.promptWordings` lists it.
+   */
+  promptWording?: CastSwapPromptWording
   /**
    * The video engine every run of this trend uses; the person running it
    * never chooses. Absent = `"seedance-2-5"` (every version saved before the

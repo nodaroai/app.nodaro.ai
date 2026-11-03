@@ -153,7 +153,7 @@ import { runOutlinesFor } from "./role-outlines.js"
 import { currentPreviewClip } from "./preview-clip.js"
 import { withPromptsFor } from "./prompt-parts.js"
 import { promptPartTexts } from "./prompt-parts-store.js"
-import { promptStyleOf } from "./prompt-style.js"
+import { promptStyleOf, trendPromptWordingSent } from "./prompt-style.js"
 import { storedSceneDescriptionFor, type SceneDescriptionWindow } from "./scene-description.js"
 import type { CastSwapPromptStyle } from "@nodaro/render-rules"
 import type { PromptPartTexts } from "../../../lib/cast-swap-prompt-parts-contract.js"
@@ -300,6 +300,13 @@ export interface TrendRunBody {
    * declare it (`withoutUnsupportedPromptStyle`, run-helpers.ts).
    */
   promptStyle?: CastSwapPromptStyle
+  /**
+   * The new Flex wording, only when the trend names it and its prompt style
+   * is Flexible (`trendPromptWordingSent`; absent = the current wording).
+   * Dropped for an engine that does not list it
+   * (`withoutUnsupportedPromptWording`, run-helpers.ts).
+   */
+  promptWording?: "new"
   /**
    * Full depth with its scene from a description: the trend's stored
    * description (scene-description.ts): the whole clip's, for a preview run
@@ -654,6 +661,7 @@ export function composeTrendRun(
   const draft = castSwapEngineHasDraft(engine) && resolution === "480p" && (req.draft ?? true)
 
   const parts = promptPartTexts(data.promptParts)
+  const wording = trendPromptWordingSent(data)
   const prismAudio = prismReferenceAudioNotFull(prismReferenceAudioByResolutionOf(data.prismReferenceAudio))
   // The stored description belongs to the stored clip: sent only beside it (a full-depth run always is).
   const scene = storedFaceMask ? storedSceneDescriptionFor(data, runMasking, req.preview === true) : undefined
@@ -692,6 +700,8 @@ export function composeTrendRun(
     // The admin's overrides of the engine's prompt parts, the texts only (the hashes are the editor's).
     ...(parts ? { promptParts: parts } : {}),
     promptStyle: promptStyleOf(data),
+    // The new Flex wording, only when the trend says it on a Flexible prompt (the current wording sends no key).
+    ...(wording ? { promptWording: wording } : {}),
     ...(scene ?? {}),
     // The trend's preparation steps, only when it sets some (an engine without them is never sent the key).
     ...(steps ? { steps } : {}),

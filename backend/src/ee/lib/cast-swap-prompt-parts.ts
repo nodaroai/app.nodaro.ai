@@ -8,7 +8,8 @@
  * (admin-trends-prompt-parts.ts) and the direct-run overrides per engine and
  * style (admin-nodaro-motion-prompt-parts.ts).
  *
- * `maskFill: "none"` only to an engine that declares `castSwap.maskFillNone`.
+ * `maskFill: "none"` only to an engine that declares `castSwap.maskFillNone`;
+ * `promptWording` only to one whose `castSwap.promptWordings` lists it.
  * `promptStyle`, `scene`, `faceMesh`, `roleOutlines` and `shotList` are sent
  * only to an engine that declares them (`castSwap.promptStyles`,
  * `castSwap.fullDepthScenes`, `.faceMesh`, `.roleOutlines`, `.shotList`): one from before them
@@ -18,13 +19,15 @@
  * An engine that does not declare the route (`castSwap.promptParts`) is never
  * asked: the caller gets 503 `engine_unsupported` (the editor says the engine
  * is out of date), never a 404 read as an engine fault. A 2xx answer is
- * parsed here (bare or under `data`); one that does not match the contract is
- * 502 `engine_error`.
+ * parsed here (bare or under `data`; a part id this app does not know yet is
+ * left out, `promptPartsAnswerSchema`); one that does not match the contract
+ * is 502 `engine_error`.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { CAST_SWAP_PROMPT_PART_IDS } from "@nodaro/render-rules"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 import { engineDrawsDepthColormap, engineDrawsFillNone } from "../../lib/cast-swap-face-masking.js"
+import { engineTakesPromptWording } from "../../lib/nodaro-motion-prompt-wording.js"
 import { engineRequest, isRec, parseJson, relay } from "./trends/run-helpers.js"
 import { promptPartsAnswerSchema, type PromptPartTexts, type PromptPartsAnswer, type PromptPartsRequest } from "../../lib/cast-swap-prompt-parts-contract.js"
 
@@ -38,7 +41,7 @@ export function loadedEngineHasPromptParts(): boolean {
 /** The request without the keys the loaded engine does not declare (a new object). */
 export function forLoadedEngine(body: PromptPartsRequest): PromptPartsRequest {
   const cs = getPluginSupports().castSwap
-  const { promptStyle, scene, faceMesh, roleOutlines, shotList, depthColormap, maskFill, ...rest } = body
+  const { promptStyle, scene, faceMesh, roleOutlines, shotList, depthColormap, maskFill, promptWording, ...rest } = body
   // The depth look by its map (and the fill it rides with) only to an engine that draws that map.
   const colormap = depthColormap !== undefined && engineDrawsDepthColormap(cs, depthColormap) ? depthColormap : undefined
   // The fill none (the fill-none mesh line) only to an engine that draws it; a depth fill rides with its map as before.
@@ -52,6 +55,8 @@ export function forLoadedEngine(body: PromptPartsRequest): PromptPartsRequest {
     ...(roleOutlines === true && cs?.roleOutlines === true ? { roleOutlines } : {}),
     ...(promptStyle && (cs?.promptStyles ?? []).includes(promptStyle) ? { promptStyle } : {}),
     ...(scene && (cs?.fullDepthScenes ?? []).includes(scene) ? { scene } : {}),
+    // The Flex wording (either one) only to an engine that lists it: an older one is asked as before.
+    ...(promptWording && engineTakesPromptWording(cs, promptWording) ? { promptWording } : {}),
   }
 }
 

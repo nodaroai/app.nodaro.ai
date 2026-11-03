@@ -10,7 +10,7 @@
  *
  * `promptPartsRequestFor` is what the engine is asked for a trend: its engine,
  * how its clip is prepared (with full depth's scene source) and its prompt
- * style (both resolved), its roles (placeholder pictures, the most a slot
+ * style (both resolved), its Flex wording (`trendPromptWordingNamed`), its roles (placeholder pictures, the most a slot
  * takes, each its own address so none is numbered twice), its fixed
  * references and its full run's pre and trend prompts — the longest prompt a
  * run of it can assemble, which the engine's length check needs.
@@ -27,7 +27,7 @@ import { placeholderImageUrl, type PromptPartTexts, type PromptPartsAnswer, type
 export { placeholderImageUrl }
 import { CHIPS_BY_KIND, MAX_IMAGES_PER_SLOT, engineOf } from "./schemas.js"
 import { withPromptsFor, type TrendPromptMode } from "./prompt-parts.js"
-import { promptStyleOf, trendSceneOf, trendSourceOf } from "./prompt-style.js"
+import { promptStyleOf, trendPromptWordingNamed, trendSceneOf, trendSourceOf } from "./prompt-style.js"
 import type { TrendPromptPartOverrides, TrendSlot, TrendVersionData } from "./types.js"
 import {
   faceMaskingOn,
@@ -99,11 +99,14 @@ export function promptPartsRequestFor(
 ): PromptPartsRequest {
   const texts = withPromptsFor(data, mode)
   const scene = trendSceneOf(data)
+  const wording = trendPromptWordingNamed(data, overrides)
   return {
     engine: engineOf(data),
     source: trendSourceOf(data),
     promptStyle: promptStyleOf(data),
     ...(scene ? { scene } : {}),
+    // The Flex wording (its parts and defaults, its length), so the engine lists the new wording's parts.
+    ...(wording ? { promptWording: wording } : {}),
     // A trend that draws the face mesh: the engine counts the mesh's line (`faceMesh` part) in the length.
     ...(faceMaskingOn(data.faceMasking) && faceMeshOn(data.faceMasking) ? { faceMesh: true as const } : {}),
     // A trend that draws role outlines: the engine counts their line (`roleOutlines` part) in the length.

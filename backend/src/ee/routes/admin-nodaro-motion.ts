@@ -57,7 +57,14 @@ import { readNodaroMotionPromptParts } from "../../lib/nodaro-motion-prompt-part
 import { readNodaroMotionMotion } from "../../lib/nodaro-motion-motion-store.js"
 import { CAST_SWAP_STYLES } from "@nodaro/shared/models"
 import { loadedEngineHasPromptParts } from "../lib/cast-swap-prompt-parts.js"
-import { directRunPromptMayGrow, directRunPromptPartsInvalid, directRunPromptProblems, type DirectRunPromptProblem } from "../lib/nodaro-motion-prompt-check.js"
+import {
+  directRunPromptMayGrow,
+  directRunPromptPartsInvalid,
+  directRunPromptProblems,
+  savedFlexWording,
+  type DirectRunPromptProblem,
+} from "../lib/nodaro-motion-prompt-check.js"
+import { promptWordingOf } from "../../lib/nodaro-motion-prompt-wording.js"
 import { readNodaroMotionSteps } from "../../lib/nodaro-motion-steps-store.js"
 import { loadedEngineTakesShotList } from "../../lib/cast-swap-steps.js"
 import { requireAdmin } from "../middleware/require-admin.js"
@@ -82,6 +89,7 @@ import { registerNodaroMotionPulseAudioRoutes } from "./admin-nodaro-motion-puls
 import { registerNodaroMotionPrismReferenceAudioRoutes } from "./admin-nodaro-motion-prism-reference-audio.js"
 import { registerNodaroMotionStepsRoutes } from "./admin-nodaro-motion-steps.js"
 import { registerNodaroMotionStyleRoutes } from "./admin-nodaro-motion-style.js"
+import { registerNodaroMotionPromptWordingRoutes } from "./admin-nodaro-motion-prompt-wording.js"
 
 /**
  * `admin_actions.target_id` is a NOT NULL uuid, and a deployment-wide setting
@@ -128,6 +136,7 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
   registerNodaroMotionPrismReferenceAudioRoutes(app)
   registerNodaroMotionStepsRoutes(app)
   registerNodaroMotionStyleRoutes(app)
+  registerNodaroMotionPromptWordingRoutes(app)
   app.get("/v1/admin/nodaro-motion/masking", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       return { data: await view() }
@@ -195,12 +204,25 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
         const motion = (await readNodaroMotionMotion()).motion
         // The Precise shot list's marker counts too, on an engine that runs it.
         const steps = loadedEngineTakesShotList() ? (await readNodaroMotionSteps()).steps : null
+        // A Flex run's prompt is checked worded as the engine's direct Flex runs are (the new wording is longer).
+        const wording = await savedFlexWording()
         const problems: DirectRunPromptProblem[] = []
         for (const engine of changed) {
           for (const style of CAST_SWAP_STYLES) {
             const texts = saved?.[engine]?.[style]
             if (!texts) continue
-            const found = await directRunPromptProblems(app, req, reply, engine, style, texts, motion?.[engine], parsed.data.masking[engine], steps?.[engine])
+            const found = await directRunPromptProblems(
+              app,
+              req,
+              reply,
+              engine,
+              style,
+              texts,
+              motion?.[engine],
+              parsed.data.masking[engine],
+              steps?.[engine],
+              promptWordingOf(wording, engine),
+            )
             if (!found) return reply
             problems.push(...found)
           }

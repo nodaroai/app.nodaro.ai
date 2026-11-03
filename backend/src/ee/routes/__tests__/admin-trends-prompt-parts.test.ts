@@ -437,3 +437,50 @@ describe("POST /v1/admin/trends/:id/publish — the engine prompt changes", () =
     expect(mem.trends[0]!.status).toBe("draft")
   })
 })
+
+/**
+ * The Flex prompt wording: the engine lists the new wording's parts
+ * (`motionLock`, `pictureRoles`, `restate`) only to a request that names a
+ * wording, either one. A Flexible trend's requests name its wording,
+ * "current" included, so an override of one of those parts stays visible and
+ * saveable after the trend goes back to the current wording — never a 502
+ * for a part the answer left out.
+ */
+describe("the Flex prompt wording", () => {
+  const WORDING_ENGINE = { ...CAST_SWAP, promptStyles: ["precise", "flexible"] as Array<"precise" | "flexible">, promptWordings: ["current", "new"] as Array<"current" | "new"> }
+  const lock = { id: "motionLock", default: "", defaultHash: HASH, placeholders: ["{video}"], required: [], applies: false }
+
+  beforeEach(() => {
+    setPluginSupports({ castSwap: { ...WORDING_ENGINE } })
+  })
+
+  it("a Flexible trend back on the current wording, with a stored movement lock, lists it and saves another edit", async () => {
+    seed(draftData({ promptStyle: "flexible", promptWording: "current", promptParts: { motionLock: { text: "Move as filmed.", defaultHash: HASH } } }))
+    // The engine lists the movement lock because the request names a wording.
+    engine.reply = { ...answer(), parts: [...answer().parts, lock] }
+    const got = await call("GET", URL)
+    expect(got.statusCode).toBe(200)
+    expect(engine.calls.at(-1)!.body).toMatchObject({ promptStyle: "flexible", promptWording: "current", overrides: { motionLock: "Move as filmed." } })
+    expect(got.json().data.parts.map((p: { id: string }) => p.id)).toContain("motionLock")
+
+    const res = await call("PUT", URL, { parts: { motionLock: "Move as filmed.", face: "Faces stay." }, revision: await revisionOf() })
+    expect(res.statusCode).toBe(200)
+    expect(engine.calls.at(-1)!.body).toMatchObject({ promptWording: "current" })
+    expect(draftNow().promptParts).toEqual({ motionLock: { text: "Move as filmed.", defaultHash: HASH }, face: { text: "Faces stay.", defaultHash: FACE_HASH } })
+  })
+
+  it("a Flexible trend on the new wording asks with it; an engine without the wording is asked as before", async () => {
+    seed(draftData({ promptStyle: "flexible", promptWording: "new" }))
+    await call("GET", URL)
+    expect(engine.calls.at(-1)!.body).toMatchObject({ promptWording: "new" })
+    setPluginSupports({ castSwap: { ...CAST_SWAP, promptStyles: ["precise", "flexible"] } })
+    await call("GET", URL)
+    expect(engine.calls.at(-1)!.body).not.toHaveProperty("promptWording")
+  })
+
+  it("a Precise trend is asked as before", async () => {
+    seed(draftData({ promptStyle: "precise", promptWording: "new" }))
+    await call("GET", URL)
+    expect(engine.calls.at(-1)!.body).not.toHaveProperty("promptWording")
+  })
+})

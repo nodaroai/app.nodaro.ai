@@ -8,9 +8,14 @@
  * a public API.
  */
 
-/** Every prompt part, in the order the engine assembles them. */
+/**
+ * Every prompt part, in the engine's own order (its `PROMPT_PART_IDS`). The
+ * new wording's movement lock comes right after the opener here, though the
+ * engine writes a Flex run's art style line before both.
+ */
 export const CAST_SWAP_PROMPT_PART_IDS = [
   "opener",
+  "motionLock",
   "artStyle",
   "artStyleMandatory",
   "original",
@@ -27,7 +32,9 @@ export const CAST_SWAP_PROMPT_PART_IDS = [
   "pet",
   "product",
   "location",
+  "pictureRoles",
   "avoid",
+  "restate",
   "postHeader",
 ] as const
 export type CastSwapPromptPartId = (typeof CAST_SWAP_PROMPT_PART_IDS)[number]
@@ -39,6 +46,8 @@ export type CastSwapPromptPartId = (typeof CAST_SWAP_PROMPT_PART_IDS)[number]
  */
 export const CAST_SWAP_PROMPT_PART_PLACEHOLDERS: Readonly<Record<CastSwapPromptPartId, readonly string[]>> = {
   opener: ["{video}"],
+  // The new Flexible wording only (`promptWording: "new"`): every person moves exactly as in the clip.
+  motionLock: ["{video}"],
   // Flex (flexible) direct runs with an art style only: the style's own wording (the platform's `style` catalog).
   artStyle: ["{style}"],
   // Flex (flexible) direct runs with an art style only: the line under the style's wording that holds every frame
@@ -65,8 +74,36 @@ export const CAST_SWAP_PROMPT_PART_PLACEHOLDERS: Readonly<Record<CastSwapPromptP
   pet: ["{name}", "{image}", "{body}", "{coat}"],
   product: ["{name}", "{image}", "{shape}", "{finish}"],
   location: ["{name}", "{image}"],
+  // The new Flexible wording only, on a run with a person, pet or product role: what to take from their pictures.
+  pictureRoles: ["{video}"],
   avoid: [],
+  // The new Flexible wording only: the closing restatement of the movement and the looks.
+  restate: ["{video}"],
   postHeader: [],
+}
+
+/**
+ * How the engine words a Flexible prompt (`"current"`, today's, or `"new"`:
+ * the movement lock, the picture roles, the closing restatement and the
+ * avoid part as a failure list). Absent = `"current"`. Read only by the
+ * Flexible prompt set: every Precise set ignores it. Set per Nodaro Motion
+ * engine for direct runs (`nodaro_motion_prompt_wording`) and per trend
+ * (`TrendVersionData.promptWording`); sent only to an engine whose
+ * `castSwap.promptWordings` lists it.
+ */
+export const CAST_SWAP_PROMPT_WORDINGS = ["current", "new"] as const
+export type CastSwapPromptWording = (typeof CAST_SWAP_PROMPT_WORDINGS)[number]
+
+/**
+ * The parts only the new wording writes. The engine lists them in a
+ * prompt-parts answer only when the request names a wording (either one),
+ * so a request that may carry an override of one names it.
+ */
+export const CAST_SWAP_PROMPT_WORDING_PART_IDS = ["motionLock", "pictureRoles", "restate"] as const satisfies readonly CastSwapPromptPartId[]
+
+/** Whether `overrides` holds a non-empty text for one of the new wording's parts. */
+export function overridesWordingPart(overrides: Readonly<Partial<Record<CastSwapPromptPartId, string>>> | undefined): boolean {
+  return CAST_SWAP_PROMPT_WORDING_PART_IDS.some((id) => (overrides?.[id] ?? "").trim() !== "")
 }
 
 /**

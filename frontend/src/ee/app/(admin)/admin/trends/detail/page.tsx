@@ -33,6 +33,8 @@ import {
   type AdminTrendFaceMasking,
   type AdminTrendFaceMaskMark,
   type AdminTrendFaceMaskState,
+  type CastSwapPromptWordingId,
+  type TrendEngineEnvironment,
   type TrendPublishBlocker,
 } from "@/lib/api"
 import {
@@ -69,10 +71,12 @@ import { FaceMaskingEditor } from "../components/FaceMaskingEditor"
 import { ClipPreparationSelect } from "../components/ClipPreparationSelect"
 import { EnginePromptParts } from "../components/EnginePromptParts"
 import { PromptStyleSelect } from "../components/PromptStyleSelect"
+import { PromptWordingSelect } from "../components/PromptWordingSelect"
+import { environmentsLackingNewWording, someEnvironmentTakesNewWording } from "../prompt-wording"
 import { clipPreparationOf, roleOutlinesOn, supportedTargetsFor, withClipPreparation } from "../clip-preparation"
 import { FaceMaskPanel } from "../components/FaceMaskPanel"
 import { StepsEditor } from "../components/StepsEditor"
-import { sceneOf } from "../prompt-style"
+import { defaultPromptStyleOf, sceneOf } from "../prompt-style"
 import { EngineEditor } from "../components/EngineEditor"
 import { TestPanel } from "../components/TestPanel"
 import { ExamplesPanel } from "../components/ExamplesPanel"
@@ -496,6 +500,12 @@ export default function AdminTrendEditorPage() {
             <PromptRoom id={promptRoomId} room={promptBudget(form).room} />
             {hasPreview && <PromptRoom id={previewRoomId} room={previewBudget.room} preview />}
             <PromptStyleSelect value={form.promptStyle} faceMasking={form.faceMasking} envs={envs.data} onChange={(promptStyle) => set({ promptStyle })} />
+            <TrendPromptWording
+              value={form.promptWording}
+              flexible={(form.promptStyle ?? defaultPromptStyleOf(form.faceMasking)) === "flexible"}
+              envs={envs.data}
+              onChange={(promptWording) => set({ promptWording })}
+            />
             <EnginePromptParts trendId={id} revision={revision} dirty={dirty} onRevision={setRevision} onWriteError={onWriteError} />
           </Section>
           <Section title="5. Model" description="The video model every run uses. People running the trend never choose it.">
@@ -764,5 +774,42 @@ function Section({ title, description, children }: { readonly title: string; rea
       </div>
       {children}
     </section>
+  )
+}
+
+/**
+ * A trend's Flex prompt wording, under 4. Prompts beside its prompt style:
+ * "New" is offered once some environment's engine words it (the trend
+ * editor's rule); a trend on it names the environments it can't be published
+ * to. Choosing "Current" stores no key. The engine prompt below follows it
+ * once the draft is saved.
+ */
+function TrendPromptWording({
+  value,
+  flexible,
+  envs,
+  onChange,
+}: {
+  readonly value: CastSwapPromptWordingId | undefined
+  /** The trend's prompt style, resolved, is Flexible (only then is the wording read). */
+  readonly flexible: boolean
+  readonly envs: readonly TrendEngineEnvironment[] | undefined
+  readonly onChange: (next: CastSwapPromptWordingId | undefined) => void
+}) {
+  const lacking = value === "new" && flexible ? environmentsLackingNewWording(envs) : []
+  return (
+    <PromptWordingSelect
+      value={value}
+      newOffered={someEnvironmentTakesNewWording(envs)}
+      unofferedReason={envs ? "no environment's engine words it yet" : "checking the environments"}
+      onChange={(w) => onChange(w === "current" ? undefined : w)}
+      warning={
+        !flexible && value === "new"
+          ? "This trend's prompt style is Precise: the wording is not used."
+          : lacking.length > 0
+            ? `Not supported yet by the Cast Swap engine of: ${lacking.join(", ")}. The trend can't be published until it is.`
+            : undefined
+      }
+    />
   )
 }

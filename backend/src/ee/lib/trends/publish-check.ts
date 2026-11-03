@@ -86,7 +86,11 @@
  * `SHOT_LIST_NEED`): an engine without it is sent no `shotList`. A trend
  * that turns "Style the role pictures" On (`steps.styleRefs`,
  * `styleRefsNeedsEngine`) needs an engine that declares `castSwap.styleRefs`
- * (need `STYLE_REFS_NEED`); Off, its default, needs nothing.
+ * (need `STYLE_REFS_NEED`); Off, its default, needs nothing. A Flexible
+ * trend on the new prompt wording (`promptWording: "new"`,
+ * `trendPromptWordingSent`) needs an engine that lists it in
+ * `castSwap.promptWordings` (need `PROMPT_WORDING_NEED`): an engine without
+ * it is sent no wording and words the prompt as today.
  *
  * A trend whose prompt style is not its clip preparation's default
  * (`promptStyle`), or a full-depth trend whose scene source an engine does not
@@ -166,7 +170,8 @@ import { engineOf, MAX_IMAGES_PER_SLOT, trendVersionDataSchema } from "./schemas
 import { promptBudget, promptModesOf, TREND_DETAILS_MAX } from "./prompt-budget.js"
 import { withPromptsFor } from "./prompt-parts.js"
 import { promptPartTexts } from "./prompt-parts-store.js"
-import { FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC, fullDepthClipTooLong, promptStyleBlockers } from "./prompt-style.js"
+import { FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC, fullDepthClipTooLong, promptStyleBlockers, trendPromptWordingSent } from "./prompt-style.js"
+import { engineTakesPromptWording } from "../../../lib/nodaro-motion-prompt-wording.js"
 import { faceMaskState, faceMaskStoredRequired, type FaceMaskOutOfDate } from "./face-mask.js"
 import { previewClipState, type PreviewClipState } from "./preview-clip.js"
 import { MAX_MARKED_PEOPLE, faceMaskVariantsApply, faceMaskVariantsState, markedPeople } from "./face-mask-variants.js"
@@ -201,7 +206,7 @@ export interface PublishBlocker {
   env?: string
   /**
    * What the engine lacks: a slot kind, "fixedReferences", "faceMasking",
-   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "roleOutlines", "depthColormap:<map>" (e.g. "depthColormap:inferno"), "depthModelSize:<size>" (e.g. "depthModelSize:small"), "prismReferenceAudio:<mode>" (e.g. "prismReferenceAudio:one-tone"), "steps", "clipBodySheet", "shotList", "styleRefs", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
+   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "roleOutlines", "depthColormap:<map>" (e.g. "depthColormap:inferno"), "depthModelSize:<size>" (e.g. "depthModelSize:small"), "prismReferenceAudio:<mode>" (e.g. "prismReferenceAudio:one-tone"), "steps", "clipBodySheet", "shotList", "styleRefs", "promptWording:new", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
    * "trendRun" or "castSwap".
    */
   need?: string
@@ -307,6 +312,9 @@ export const SHOT_LIST_NEED = "shotList"
 /** The need of a trend that turns "Style the role pictures" On (`steps.styleRefs`, `castSwap.styleRefs`). */
 export const STYLE_REFS_NEED = "styleRefs"
 
+/** The need of a Flexible trend on the new prompt wording (`promptWording: "new"`, `castSwap.promptWordings`). */
+export const PROMPT_WORDING_NEED = "promptWording:new"
+
 const SOURCE_MODE_NAMES: Readonly<Record<FaceMaskingSource, string>> = {
   faces: "Faces hidden",
   "full-depth": "Full depth",
@@ -352,6 +360,8 @@ function needsOf(data: TrendVersionData): string[] {
     ...(shotListNeedsEngine(data.steps?.shotList) ? [SHOT_LIST_NEED] : []),
     // "Style the role pictures" On: an engine without it is sent none (and would not style the pictures).
     ...(styleRefsNeedsEngine(data.steps?.styleRefs) ? [STYLE_REFS_NEED] : []),
+    // The new Flex wording: an engine without it is sent none (and words the prompt as today).
+    ...(trendPromptWordingSent(data) ? [PROMPT_WORDING_NEED] : []),
     // A pre prompt either run sends: the full run's, or the preview's own while it offers one.
     ...(promptModesOf(data).some((mode) => withPromptsFor(data, mode).prePrompt) ? ["trendPrePrompt"] : []),
     // Seedance 2.5 is every engine's: only another engine is a need of its own.
@@ -404,6 +414,7 @@ function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
     if (need === CLIP_BODY_NEED) return !engineTakesClipBodySheet(cs)
     if (need === SHOT_LIST_NEED) return !engineTakesShotList(cs)
     if (need === STYLE_REFS_NEED) return !engineTakesStyleRefs(cs)
+    if (need === PROMPT_WORDING_NEED) return !engineTakesPromptWording(cs, "new")
     if (need === "trendPrePrompt") return cs.trendPrePrompt !== true
     if ((CAST_SWAP_ENGINES as readonly string[]).includes(need)) return !(castSwapEnginesOf(cs) as readonly string[]).includes(need)
     if ((RESOLUTIONS as readonly string[]).includes(need)) return !(cs.resolutions ?? []).includes(need as TrendResolution)
