@@ -39,7 +39,7 @@ export default function AdminBlocksPage() {
         <>
           <p className="mb-4 text-xs text-muted-foreground">
             {data.ready
-              ? `In force on this server: ${countOf(data.status.users, "account", "accounts")} and ${countOf(data.status.networks, "network", "networks")}, read ${formatBlockDateTime(data.status.loadedAt)}.`
+              ? `In force on this server: ${countOf(data.status.users, "account", "accounts")}${data.status.suspended ? `, ${countOf(data.status.suspended, "suspended account", "suspended accounts")} (see their complaints)` : ""} and ${countOf(data.status.networks, "network", "networks")}, read ${formatBlockDateTime(data.status.loadedAt)}.`
               : "Blocking becomes available after the next production release."}
           </p>
           <BlockedUsersCard users={data.users} truncated={data.usersTruncated} />

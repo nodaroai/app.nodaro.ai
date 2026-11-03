@@ -13,19 +13,22 @@ function Reason({ text }: { readonly text: string }) {
   )
 }
 
+/** What a measure in force says to me: the account closed or suspended (until when), importing links blocked (until when). */
+function inForceText(m: MyAccountMeasure, t: ReturnType<typeof useT>): string {
+  const until = m.endsAt ? formatDate(m.endsAt, { timeZone: "UTC" }) : null
+  if (m.kind === "closed") return t("restrictions.account.closed")
+  if (m.kind === "suspended") return t("restrictions.account.suspendedUntil", { date: until ?? "" })
+  return until ? t("restrictions.account.importsBlockedUntil", { date: until }) : t("restrictions.account.importsBlocked")
+}
+
 /**
- * A measure in force: importing links blocked (until when), or the account
- * closed. The end is the UTC date, as a refused import names it, so the two
- * never name different days.
+ * A measure in force: importing links blocked (until when), the account
+ * suspended (until when), or the account closed. The end is the UTC date, as
+ * a refused import names it, so the two never name different days.
  */
 function MeasureInForce({ measure: m }: { readonly measure: MyAccountMeasure }) {
   const t = useT()
-  const text =
-    m.kind === "closed"
-      ? t("restrictions.account.closed")
-      : m.endsAt
-        ? t("restrictions.account.importsBlockedUntil", { date: formatDate(m.endsAt, { timeZone: "UTC" }) })
-        : t("restrictions.account.importsBlocked")
+  const text = inForceText(m, t)
   return (
     <div className="text-sm">
       <p className="font-medium">{text}</p>
@@ -36,7 +39,8 @@ function MeasureInForce({ measure: m }: { readonly measure: MyAccountMeasure }) 
 
 /**
  * Where my account stands under the repeat-infringer policy: the measures in
- * force (importing links blocked, and until when; the account closed), each
+ * force (importing links blocked, and until when; the account suspended, and
+ * until when; the account closed), each
  * with what the administrator told me, and the warnings and infringements
  * recorded within the policy's window, an infringement by its complaint's
  * reference. Never an administrator's note. Nothing when there is nothing

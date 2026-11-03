@@ -19,9 +19,9 @@ import {
 /**
  * The repeat-infringer policy's editor draft: numbers as typed, read back into
  * a policy only by the server's rules (a window of 1 to 120 months, 1 to 10
- * steps, counts that climb, an import block's days or until lifted, a closure
- * last; the bounds held equal to the server's), and the draft changed without
- * touching the one it came from.
+ * steps, counts that climb, an import block's days or until lifted, a
+ * suspension's days always, a closure last; the bounds held equal to the
+ * server's), and the draft changed without touching the one it came from.
  */
 
 describe("the bounds", () => {
@@ -51,9 +51,31 @@ describe("toDraft and fromDraft", () => {
     expect(fromDraft(draft)).toEqual(POLICY)
   })
 
-  it("drops days from a step that is not an import block, and trims what was typed", () => {
-    const draft: PolicyDraft = { windowMonths: " 12 ", steps: [{ infringements: " 1 ", kind: "warning", days: "9" }, { infringements: "2", kind: "imports_blocked", days: " 14 " }] }
-    expect(fromDraft(draft)).toEqual({ windowMonths: 12, steps: [{ infringements: 1, kind: "warning" }, { infringements: 2, kind: "imports_blocked", days: 14 }] })
+  it("drops days from a step that is not an import block or a suspension, and trims what was typed", () => {
+    const draft: PolicyDraft = {
+      windowMonths: " 12 ",
+      steps: [
+        { infringements: " 1 ", kind: "warning", days: "9" },
+        { infringements: "2", kind: "imports_blocked", days: " 14 " },
+        { infringements: "3", kind: "suspended", days: " 7 " },
+        { infringements: "4", kind: "closed", days: "5" },
+      ],
+    }
+    expect(fromDraft(draft)).toEqual({
+      windowMonths: 12,
+      steps: [
+        { infringements: 1, kind: "warning" },
+        { infringements: 2, kind: "imports_blocked", days: 14 },
+        { infringements: 3, kind: "suspended", days: 7 },
+        { infringements: 4, kind: "closed" },
+      ],
+    })
+  })
+
+  it("round-trips a suspension with its days", () => {
+    const policy = { windowMonths: 24, steps: [{ infringements: 1, kind: "warning" as const }, { infringements: 2, kind: "suspended" as const, days: 7 }] }
+    expect(toDraft(policy).steps[1]).toEqual({ infringements: "2", kind: "suspended", days: "7" })
+    expect(fromDraft(toDraft(policy))).toEqual(policy)
   })
 })
 
@@ -74,6 +96,10 @@ describe("policyProblem", () => {
       [withStep(base, 1, { infringements: "1" }), /more infringements than the one before/],
       [withStep(base, 1, { days: "0" }), /import block lasts/],
       [withStep(base, 1, { days: "3651" }), /import block lasts/],
+      [withStep(base, 1, { kind: "suspended", days: "" }), /suspension lasts a whole number of days, from 1 to 3650/],
+      [withStep(base, 1, { kind: "suspended", days: "0" }), /suspension lasts/],
+      [withStep(base, 1, { kind: "suspended", days: "3651" }), /suspension lasts/],
+      [withStep(base, 1, { kind: "suspended", days: "two" }), /suspension lasts/],
       [withStep(base, 0, { kind: "closed" }), /last step/],
     ]
     for (const [draft, problem] of broken) {

@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   MEASURE_KINDS,
+  measureNeedsDays,
+  measureTakesDays,
   useRepeatInfringerPolicy,
   useSaveRepeatInfringerPolicy,
   type MeasureKind,
@@ -58,7 +60,7 @@ function PolicyView({ policy, saved, updatedAt }: { readonly policy: RepeatInfri
   )
 }
 
-/** One step of the draft: its count, its measure and an import block's days. */
+/** One step of the draft: its count, its measure, and an import block's or a suspension's days. */
 function StepRow({ step, index, onChange, onRemove }: { readonly step: StepDraft; readonly index: number; readonly onChange: (patch: Partial<StepDraft>) => void; readonly onRemove: () => void }) {
   return (
     <li className="flex flex-wrap items-end gap-2 px-3 py-2">
@@ -75,9 +77,9 @@ function StepRow({ step, index, onChange, onRemove }: { readonly step: StepDraft
           </SelectContent>
         </Select>
       </div>
-      {step.kind === "imports_blocked" && (
+      {measureTakesDays(step.kind) && (
         <div className="space-y-1">
-          <Label htmlFor={`policy-days-${index}`}>Days (empty: until lifted)</Label>
+          <Label htmlFor={`policy-days-${index}`}>{measureNeedsDays(step.kind) ? "Days" : "Days (empty: until lifted)"}</Label>
           <Input id={`policy-days-${index}`} className="w-28" inputMode="numeric" value={step.days} onChange={(e) => onChange({ days: e.target.value })} />
         </div>
       )}

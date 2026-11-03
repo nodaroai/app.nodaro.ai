@@ -20,11 +20,12 @@ export function caseErrorStatus(e: ComplaintCaseError): number {
 /**
  * A record move's refusal as a status: unknown is 404; the record not in the
  * database yet is 503; a move the case does not allow (its complainant did
- * not prove their email, it names no account) and a measure that departs from
- * the policy without saying why are 400, as a case's own moves are; an
- * account the block refuses (an administrator, the platform's owner or
- * operators, the payer, oneself) is 403; the rest is the record's state
- * (already done, in force, ended, the case moved on meanwhile): 409.
+ * not prove their email, it names no account), a measure that departs from
+ * the policy without saying why and a suspension without its days are 400,
+ * as a case's own moves are; an account the block refuses (an administrator,
+ * the platform's owner or operators, the payer, oneself) is 403; the rest is
+ * the record's state (already done, in force, ended, the case moved on
+ * meanwhile): 409.
  */
 export function recordErrorStatus(e: RepeatInfringerError): number {
   switch (e.code) {
@@ -35,6 +36,7 @@ export function recordErrorStatus(e: RepeatInfringerError): number {
     case "unverified":
     case "no_account":
     case "departure_required":
+    case "days_required":
       return 400
     case "cannot_block_self":
     case "target_is_admin":

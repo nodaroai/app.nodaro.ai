@@ -68,7 +68,7 @@ describe("requireImportAllowed", () => {
   })
 
   it("an account whose imports are blocked is refused before the site or the rights are read", async () => {
-    vi.mocked(assertImportsAllowed).mockRejectedValueOnce(new AccountMeasureError("2026-12-03T10:00:00.000Z", false))
+    vi.mocked(assertImportsAllowed).mockRejectedValueOnce(new AccountMeasureError("2026-12-03T10:00:00.000Z", "imports_blocked"))
     const refusal = await requireImportAllowed(URL_, { userId: "u1", confirmationId: ID, lane: "route" }).catch((e: unknown) => e)
     expect(refusal).toBeInstanceOf(AccountMeasureError)
     expect(refusal).toMatchObject({ code: "imports_blocked", deterministic: true })
@@ -88,8 +88,8 @@ describe("requireImportAllowed", () => {
 
 describe("spendImportConfirmation", () => {
   it("asks the account's measures again first: a block applied while the download waited is refused before anything is spent", async () => {
-    vi.mocked(assertImportsAllowed).mockRejectedValueOnce(new AccountMeasureError(null, true))
-    await expect(spendImportConfirmation(URL_, { userId: "u1", confirmationId: ID, lane: "route", via: "api" })).rejects.toMatchObject({ code: "imports_blocked", closed: true })
+    vi.mocked(assertImportsAllowed).mockRejectedValueOnce(new AccountMeasureError(null, "closed"))
+    await expect(spendImportConfirmation(URL_, { userId: "u1", confirmationId: ID, lane: "route", via: "api" })).rejects.toMatchObject({ code: "imports_blocked", measure: "closed" })
     expect(consumeRightsConfirmation).not.toHaveBeenCalled()
     expect(deriveAndConsumeConfirmation).not.toHaveBeenCalled()
 
@@ -145,7 +145,7 @@ describe("spendImportConfirmation", () => {
 
 describe("isImportRefusal", () => {
   it("is true for the three gate errors only", () => {
-    expect(isImportRefusal(new AccountMeasureError(null, false))).toBe(true)
+    expect(isImportRefusal(new AccountMeasureError(null, "imports_blocked"))).toBe(true)
     expect(isImportRefusal(new ImportSourceError())).toBe(true)
     expect(isImportRefusal(new ContentRightsError("rights_confirmation_used", "x"))).toBe(true)
     expect(isImportRefusal(new Error("yt-dlp failed"))).toBe(false)

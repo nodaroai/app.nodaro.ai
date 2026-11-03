@@ -204,6 +204,16 @@ describe("what is blocked", () => {
     expect(screen.getByText("Blocked accounts (1)")).toBeInTheDocument()
   })
 
+  it("counts the suspensions still running beside the blocks, and says where they are taken", async () => {
+    blocksBody = makeBlocks({ status: { ready: true, users: 3, suspended: 2, networks: 4, loadedAt: LOADED_AT } })
+    renderPage()
+    expect(
+      await screen.findByText(
+        `In force on this server: 3 accounts, 2 suspended accounts (see their complaints) and 4 networks, read ${new Date(LOADED_AT).toLocaleString()}.`,
+      ),
+    ).toBeInTheDocument()
+  })
+
   it("counts one of each in the singular", async () => {
     blocksBody = makeBlocks({ status: { ready: true, users: 1, networks: 1, loadedAt: LOADED_AT } })
     renderPage()

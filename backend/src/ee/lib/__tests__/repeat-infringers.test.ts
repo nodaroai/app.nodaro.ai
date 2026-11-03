@@ -8,26 +8,31 @@
  * not taken twice while one is in force; a closure is refused up front for an
  * account the block refuses, records the decision before it blocks, takes
  * itself back when the block refuses late, and stands (said so) when the
- * block fails; a lift is once, only while in force, never of a warning, and
- * lifting a closure never unblocks; each move is written to its case's log.
+ * block fails; a suspension (589) needs its days, is refused up front for the
+ * same accounts, is recorded before it is enforced, takes itself back when
+ * refused late, and stands (said so) when its enforcement fails; a lift is
+ * once, only while in force, never of a warning, lifting a closure never
+ * unblocks, and lifting a suspension lets the account back in; each move is
+ * written to its case's log.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import type { MemoryDb, Row } from "../../../test/memory-tables.js"
 
 const db = vi.hoisted(() => ({ tables: {} }) as MemoryDb)
 const log = vi.hoisted(() => ({ events: [] as Array<[string, string, string, Record<string, unknown>]> }))
-const settings = vi.hoisted(() => ({
-  policy: {
-    windowMonths: 24,
-    steps: [
-      { infringements: 1, kind: "warning" },
-      { infringements: 2, kind: "imports_blocked", days: 30 },
-      { infringements: 3, kind: "closed" },
-    ],
-  } as unknown,
+const POLICY = vi.hoisted(() => ({
+  windowMonths: 24,
+  steps: [
+    { infringements: 1, kind: "warning" },
+    { infringements: 2, kind: "imports_blocked", days: 30 },
+    { infringements: 3, kind: "closed" },
+  ],
 }))
+const settings = vi.hoisted(() => ({ policy: POLICY as unknown }))
 const blocks = vi.hoisted(() => ({
   blockAccount: vi.fn(async (): Promise<Record<string, unknown>> => ({ refused: null, signInBlocked: true, signInError: null })),
+  enforceSuspension: vi.fn(async (): Promise<Record<string, unknown>> => ({ refused: null, signInBlocked: true, signInError: null })),
+  releaseSuspension: vi.fn(async (): Promise<Record<string, unknown>> => ({ signInBlocked: false, signInError: null })),
   blockRefusal: vi.fn(async (): Promise<string | null> => null),
   isBlockedNow: vi.fn(async () => true),
   alert: vi.fn(async () => true),
@@ -44,9 +49,10 @@ vi.mock("../../../lib/rights-complaints.js", () => ({
     log.events.push([id, kind, actor, data])
   }),
 }))
-vi.mock("../block-account.js", () => ({ blockAccount: blocks.blockAccount }))
+vi.mock("../block-account.js", () => ({ blockAccount: blocks.blockAccount, enforceSuspension: blocks.enforceSuspension, releaseSuspension: blocks.releaseSuspension }))
 vi.mock("../account-blocking.js", () => ({
   BLOCK_REFUSAL_MESSAGE: { target_is_admin: "Admins cannot be blocked. Change the role first." },
+  SUSPEND_REFUSAL_MESSAGE: { target_is_admin: "Admins cannot be suspended. Change the role first." },
   blockRefusal: blocks.blockRefusal,
   isBlockedNow: blocks.isBlockedNow,
 }))
@@ -64,7 +70,7 @@ const RECENT = "2026-10-01T00:00:00.000Z"
 let ids = 0
 const nextId = () => `00000000-0000-4000-8000-${String(++ids).padStart(12, "0")}`
 
-/** Migration 588's triggers, as far as these moves can meet them. */
+/** Migration 588's triggers (and 589's suspension), as far as these moves can meet them. */
 function guards(): MemoryDb["guards"] {
   const caseOf = (id: unknown) => db.tables.rights_complaints!.find((r) => r.id === id)
   return {
@@ -79,6 +85,7 @@ function guards(): MemoryDb["guards"] {
     },
     account_sanctions: ({ kind, row, before }) => {
       if (kind === "insert") {
+        if (row.kind === "suspended" && !row.ends_at) return { code: "23514", message: 'violates check constraint "account_sanctions_suspension_ends"' }
         const c = row.complaint_id ? caseOf(row.complaint_id) : undefined
         if (c && (!c.verified_at || c.user_id !== row.user_id)) return { code: "55028", message: "not supported" }
         const inForce = db.tables.account_sanctions!.some(
@@ -139,11 +146,27 @@ const threeStanding = () => ({ account_infringements: [infringement(), infringem
 beforeEach(() => {
   seed()
   log.events = []
+  settings.policy = POLICY
   vi.clearAllMocks()
   blocks.blockAccount.mockImplementation(async () => ({ refused: null, signInBlocked: true, signInError: null }))
+  blocks.enforceSuspension.mockImplementation(async () => ({ refused: null, signInBlocked: true, signInError: null }))
+  blocks.releaseSuspension.mockImplementation(async () => ({ signInBlocked: false, signInError: null }))
   blocks.blockRefusal.mockImplementation(async () => null)
   blocks.isBlockedNow.mockImplementation(async () => true)
 })
+
+/** The default ladder with a 14-day suspension where the closure was, and the closure one step further. */
+const withSuspension = () => {
+  settings.policy = {
+    windowMonths: 24,
+    steps: [
+      { infringements: 1, kind: "warning" },
+      { infringements: 2, kind: "imports_blocked", days: 30 },
+      { infringements: 3, kind: "suspended", days: 14 },
+      { infringements: 4, kind: "closed" },
+    ],
+  }
+}
 
 describe("recordInfringement", () => {
   it("records it against the account the case names, with the note and the administrator, and logs it on the case", async () => {
@@ -225,8 +248,8 @@ describe("withdrawInfringement", () => {
 describe("applyMeasure", () => {
   it("follows the step the policy names for the standing count, and keeps that step as applied", async () => {
     seed({ account_infringements: [infringement()] })
-    const { measure: m, block } = await apply()
-    expect(block).toBeNull()
+    const { measure: m, access } = await apply()
+    expect(access).toBeNull()
     expect(m).toMatchObject({ kind: "warning", ends_at: null, infringements_in_window: 1, policy_step: { infringements: 1, kind: "warning", windowMonths: 24 }, departure_reason: null })
     expect(db.tables.account_sanctions![0]).toMatchObject({ applied_by: ADMIN, complaint_id: CASE, reason: "Told to the owner" })
     expect(log.events).toEqual([[CASE, "measure_applied", ADMIN, { measureId: m.id, kind: "warning", endsAt: null, followsPolicy: true }]])
@@ -252,10 +275,13 @@ describe("applyMeasure", () => {
     await expect(apply({ departureReason: "A warning before anything is recorded" })).resolves.toBeTruthy()
   })
 
-  it("days are only an import block's", async () => {
+  it("days are only an import block's or a suspension's", async () => {
     seed({ account_infringements: [infringement()] })
     const { measure: m } = await apply({ days: 30 })
     expect(m.ends_at).toBeNull()
+    seed(threeStanding())
+    const { measure: closure } = await apply({ kind: "closed", days: 30 })
+    expect(closure.ends_at).toBeNull()
   })
 
   it("is refused when the case names another account than the screen showed, before anything is written or blocked", async () => {
@@ -271,11 +297,12 @@ describe("applyMeasure", () => {
       expect(db.tables.account_sanctions).toEqual([expect.objectContaining({ kind: "closed", lifted_at: null })])
       return { refused: null, signInBlocked: false, signInError: new Error("auth down") }
     })
-    const { measure: m, block } = await apply({ kind: "closed" })
+    const { measure: m, access } = await apply({ kind: "closed" })
     expect(blocks.blockRefusal).toHaveBeenCalledWith(ADMIN, OWNER)
     expect(blocks.blockAccount).toHaveBeenCalledWith(ADMIN, OWNER, "Closed under the repeat-infringer policy (case CR-2026-000001)")
+    expect(blocks.enforceSuspension).not.toHaveBeenCalled()
     expect(m).toMatchObject({ kind: "closed", policy_step: { infringements: 3, kind: "closed", windowMonths: 24 } })
-    expect(block).toMatchObject({ placed: true, signInBlocked: false, signInError: expect.any(Error) })
+    expect(access).toMatchObject({ placed: true, signInBlocked: false, signInError: expect.any(Error) })
   })
 
   it("an account the block refuses is refused up front: nothing recorded, nothing blocked", async () => {
@@ -289,8 +316,8 @@ describe("applyMeasure", () => {
   it("a block refused late (the role changed meanwhile) takes the closure back, lifted with why", async () => {
     seed(threeStanding())
     blocks.blockAccount.mockResolvedValueOnce({ refused: "target_is_admin" })
-    const { measure: m, block } = await apply({ kind: "closed" })
-    expect(block).toMatchObject({ placed: false, refused: "target_is_admin", lifted: { id: m.id, lift_reason: "The account could not be blocked: Admins cannot be blocked. Change the role first." } })
+    const { measure: m, access } = await apply({ kind: "closed" })
+    expect(access).toMatchObject({ placed: false, refused: "target_is_admin", lifted: { id: m.id, lift_reason: "The account could not be blocked: Admins cannot be blocked. Change the role first." } })
     expect(db.tables.account_sanctions![0]).toMatchObject({ lifted_by: ADMIN })
     expect(log.events.map((e) => e[1])).toEqual(["measure_applied", "measure_lifted"])
   })
@@ -298,8 +325,8 @@ describe("applyMeasure", () => {
   it("a block that fails leaves the closure standing, and says so", async () => {
     seed(threeStanding())
     blocks.blockAccount.mockRejectedValueOnce(new Error("blocks down"))
-    const { measure: m, block } = await apply({ kind: "closed" })
-    expect(block).toMatchObject({ placed: false, failure: expect.any(Error) })
+    const { measure: m, access } = await apply({ kind: "closed" })
+    expect(access).toMatchObject({ placed: false, failure: expect.any(Error) })
     expect(db.tables.account_sanctions).toEqual([expect.objectContaining({ id: m.id, kind: "closed", lifted_at: null })])
   })
 
@@ -349,12 +376,103 @@ describe("applyMeasure", () => {
   })
 })
 
+describe("applyMeasure: a suspension", () => {
+  it("needs its days: refused before anything is read or written", async () => {
+    withSuspension()
+    seed(threeStanding())
+    expect(await refusal(apply({ kind: "suspended", days: null }))).toMatchObject({ code: "days_required" })
+    expect(await refusal(apply({ kind: "suspended", days: 0 }))).toMatchObject({ code: "days_required" })
+    expect(db.tables.account_sanctions).toEqual([])
+    expect(blocks.blockRefusal).not.toHaveBeenCalled()
+  })
+
+  it("of the step's length ends that many days from now; recorded first, then enforced", async () => {
+    withSuspension()
+    seed(threeStanding())
+    blocks.enforceSuspension.mockImplementationOnce(async () => {
+      expect(db.tables.account_sanctions).toEqual([expect.objectContaining({ kind: "suspended", lifted_at: null })])
+      return { refused: null, signInBlocked: true, signInError: null }
+    })
+    const { measure: m, access } = await apply({ kind: "suspended", days: 14 })
+    expect(m).toMatchObject({ kind: "suspended", ends_at: "2026-11-17T12:00:00.000Z", policy_step: { infringements: 3, kind: "suspended", days: 14, windowMonths: 24 } })
+    expect(blocks.blockRefusal).toHaveBeenCalledWith(ADMIN, OWNER)
+    expect(blocks.enforceSuspension).toHaveBeenCalledWith(ADMIN, OWNER)
+    expect(blocks.blockAccount).not.toHaveBeenCalled()
+    expect(access).toEqual({ placed: true, signInBlocked: true, signInError: null })
+    expect(log.events).toEqual([[CASE, "measure_applied", ADMIN, { measureId: m.id, kind: "suspended", endsAt: "2026-11-17T12:00:00.000Z", followsPolicy: true }]])
+  })
+
+  it("of another length departs from the step, and says why", async () => {
+    withSuspension()
+    seed(threeStanding())
+    expect(await refusal(apply({ kind: "suspended", days: 7 }))).toMatchObject({ code: "departure_required" })
+    const { measure: m } = await apply({ kind: "suspended", days: 7, departureReason: "A first suspension, kept short" })
+    expect(m).toMatchObject({ policy_step: null, ends_at: "2026-11-10T12:00:00.000Z" })
+  })
+
+  it("an account the block refuses is refused up front, in the suspension's words: nothing recorded, nothing enforced", async () => {
+    seed(threeStanding())
+    blocks.blockRefusal.mockResolvedValueOnce("target_is_admin")
+    expect(await refusal(apply({ kind: "suspended", days: 14, departureReason: "d" }))).toMatchObject({
+      code: "target_is_admin",
+      message: "Admins cannot be suspended. Change the role first.",
+    })
+    expect(db.tables.account_sanctions).toEqual([])
+    expect(blocks.enforceSuspension).not.toHaveBeenCalled()
+  })
+
+  it("refused late (the role changed meanwhile), it takes itself back, lifted with why, and lets the account back in", async () => {
+    withSuspension()
+    seed(threeStanding())
+    blocks.enforceSuspension.mockResolvedValueOnce({ refused: "target_is_admin" })
+    const { measure: m, access } = await apply({ kind: "suspended", days: 14 })
+    expect(access).toMatchObject({ placed: false, refused: "target_is_admin", lifted: { id: m.id, lift_reason: "The account could not be suspended: Admins cannot be suspended. Change the role first." } })
+    expect(blocks.releaseSuspension).toHaveBeenCalledWith(OWNER)
+    expect(log.events.map((e) => e[1])).toEqual(["measure_applied", "measure_lifted"])
+  })
+
+  it("an enforcement that fails leaves the suspension standing, and says so", async () => {
+    withSuspension()
+    seed(threeStanding())
+    blocks.enforceSuspension.mockRejectedValueOnce(new Error("profiles down"))
+    const { measure: m, access } = await apply({ kind: "suspended", days: 14 })
+    expect(access).toMatchObject({ placed: false, failure: expect.any(Error) })
+    expect(db.tables.account_sanctions).toEqual([expect.objectContaining({ id: m.id, kind: "suspended", lifted_at: null })])
+  })
+
+  it("a sign-in ban that fails is answered with the suspension in place", async () => {
+    withSuspension()
+    seed(threeStanding())
+    blocks.enforceSuspension.mockResolvedValueOnce({ refused: null, signInBlocked: false, signInError: new Error("auth down") })
+    const { access } = await apply({ kind: "suspended", days: 14 })
+    expect(access).toMatchObject({ placed: true, signInBlocked: false, signInError: expect.any(Error) })
+  })
+
+  it("one in force is not taken again; one that ended leaves room", async () => {
+    withSuspension()
+    seed({ ...threeStanding(), account_sanctions: [measure({ kind: "suspended", ends_at: "2026-11-20T00:00:00.000Z" })] })
+    expect(await refusal(apply({ kind: "suspended", days: 14 }))).toMatchObject({ code: "in_force" })
+    expect(blocks.enforceSuspension).not.toHaveBeenCalled()
+    seed({ ...threeStanding(), account_sanctions: [measure({ kind: "suspended", applied_at: "2026-10-01T00:00:00.000Z", ends_at: "2026-10-15T00:00:00.000Z" })] })
+    await expect(apply({ kind: "suspended", days: 14 })).resolves.toMatchObject({ access: { placed: true } })
+  })
+
+  it("a database that does not take suspensions yet (before 589) is unavailable, not a server error", async () => {
+    withSuspension()
+    seed(threeStanding())
+    db.guards = { account_sanctions: () => ({ code: "23514", message: 'new row for relation "account_sanctions" violates check constraint "account_sanctions_kind"' }) }
+    expect(await refusal(apply({ kind: "suspended", days: 14 }))).toMatchObject({ code: "unavailable" })
+    expect(blocks.enforceSuspension).not.toHaveBeenCalled()
+  })
+})
+
 describe("liftMeasure", () => {
   it("lifts an import block in force once, with the reason, logged on its case", async () => {
     const block = measure({ ends_at: "2026-11-20T00:00:00.000Z" })
     seed({ account_sanctions: [block] })
     const lifted = await liftMeasure(String(block.id), "Appeal upheld", ADMIN)
-    expect(lifted).toMatchObject({ measure: { id: block.id, lift_reason: "Appeal upheld" }, stillBlocked: null })
+    expect(lifted).toMatchObject({ measure: { id: block.id, lift_reason: "Appeal upheld" }, stillBlocked: null, signIn: null })
+    expect(blocks.releaseSuspension).not.toHaveBeenCalled()
     expect(db.tables.account_sanctions![0]).toMatchObject({ lifted_by: ADMIN })
     expect(log.events).toEqual([[CASE, "measure_lifted", ADMIN, { measureId: block.id, kind: "imports_blocked", reason: "Appeal upheld" }]])
     expect(await refusal(liftMeasure(String(block.id), "again", ADMIN))).toMatchObject({ code: "lifted" })
@@ -367,6 +485,24 @@ describe("liftMeasure", () => {
     expect(lifted.stillBlocked).toBe(true)
     expect(blocks.isBlockedNow).toHaveBeenCalledWith(OWNER)
     expect(blocks.blockAccount).not.toHaveBeenCalled()
+    expect(blocks.releaseSuspension).not.toHaveBeenCalled()
+  })
+
+  it("lifting a suspension lets the account back in, its sign-in included, and says how that went", async () => {
+    const suspension = measure({ kind: "suspended", ends_at: "2026-11-20T00:00:00.000Z" })
+    seed({ account_sanctions: [suspension] })
+    blocks.releaseSuspension.mockResolvedValueOnce({ signInBlocked: null, signInError: new Error("auth down") })
+    const lifted = await liftMeasure(String(suspension.id), "Appeal upheld", ADMIN)
+    expect(blocks.releaseSuspension).toHaveBeenCalledWith(OWNER)
+    expect(lifted).toMatchObject({ measure: { lift_reason: "Appeal upheld" }, stillBlocked: null, signIn: { signInBlocked: null, signInError: expect.any(Error) } })
+    expect(blocks.isBlockedNow).not.toHaveBeenCalled()
+  })
+
+  it("a suspension that ended is not lifted after the fact, and lets nobody in", async () => {
+    const ended = measure({ kind: "suspended", ends_at: "2026-11-01T00:00:00.000Z" })
+    seed({ account_sanctions: [ended] })
+    expect(await refusal(liftMeasure(String(ended.id), "x", ADMIN))).toMatchObject({ code: "ended" })
+    expect(blocks.releaseSuspension).not.toHaveBeenCalled()
   })
 
   it("a block that cannot be read after the lift is unknown, and the lift still answers", async () => {

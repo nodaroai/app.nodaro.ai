@@ -29,4 +29,20 @@ describe("AccountStandingBox dates", () => {
     expect(screen.getByText("Importing links is blocked on your account until 2026-12-01T23:30:00Z@UTC.")).toBeTruthy()
     expect(screen.getByText("A warning, 2026-10-01T00:00:00Z@local")).toBeTruthy()
   })
+
+  it("writes a suspension's end in UTC too, never as an import block", () => {
+    render(
+      <AccountStandingBox
+        standing={{
+          inForce: [{ kind: "suspended", reason: "Suspended for two weeks", appliedAt: "2026-11-03T00:00:00Z", endsAt: "2026-11-17T23:30:00Z" }],
+          warnings: [],
+          infringements: [],
+          windowMonths: 24,
+        }}
+      />,
+    )
+    expect(screen.getByText("Your account is suspended until 2026-11-17T23:30:00Z@UTC.")).toBeTruthy()
+    expect(screen.getByText("Why: Suspended for two weeks")).toBeTruthy()
+    expect(screen.queryByText(/Importing links is blocked/)).toBeNull()
+  })
 })

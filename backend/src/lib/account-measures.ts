@@ -1,17 +1,19 @@
 /**
- * The measures in force on an account (migration 588), as the platform
- * enforces them and as the account's owner sees them.
+ * The measures in force on an account (migration 588; a suspension 589), as
+ * the platform enforces them and as the account's owner sees them.
  *
  * Enforcement: the import gate (import-gate.ts) asks `assertImportsAllowed`
  * before anything else, and so does a private plugin's download through the
- * toolkit. An import block in force, or a closure, refuses every import of a
- * link through those (`imports_blocked`: a 403 to a client, a failed download
- * to a run). It is read afresh each time, so a lift takes effect at once.
- * While the table does not exist yet (staging runs ahead of the migration)
- * nothing is in force; any other failed read throws, and the import fails
- * with it: an import is never let through on a record that was not read. A
- * closure's refusal of sign-in and of every request is the account block's
- * (access-blocks.ts); this module makes a closed account's imports refuse too.
+ * toolkit. An import block in force, a suspension or a closure refuses every
+ * import of a link through those (`imports_blocked`: a 403 to a client, a
+ * failed download to a run). It is read afresh each time, so a lift takes
+ * effect at once. While the table does not exist yet (staging runs ahead of
+ * the migration) nothing is in force; any other failed read throws, and the
+ * import fails with it: an import is never let through on a record that was
+ * not read. A suspension's and a closure's refusal of sign-in and of every
+ * request are the access snapshot's (access-blocks.ts: the suspension itself,
+ * the closure's account block); this module makes their imports refuse too,
+ * read fresh, for a run already past those checks.
  *
  * The owner's view (`myAccountStanding`): the measures in force with what the
  * owner was told and until when, and the warnings and infringements within
@@ -41,9 +43,9 @@ export function inForceAt(measure: MeasureTimes, now: Date): boolean {
 
 /**
  * The latest measure of a kind on the account that was not lifted: the only
- * one of its kind that can be in force, since 588 takes no second import
- * block or closure while one is (every earlier one had ended or was lifted
- * when the next was taken, and neither ever comes back). One row, however
+ * one of its kind that can be in force, since 588 takes no second measure of
+ * a kind (but a warning) while one is (every earlier one had ended or was
+ * lifted when the next was taken, and neither ever comes back). One row, however
  * long the account's record, read through 588's partial index of the measures
  * not lifted (`account_sanctions_standing_idx`). Null when there is none, or
  * while the table does not exist yet; throws when the record could not be read.
@@ -65,14 +67,30 @@ export async function latestStandingMeasure(userId: string, kind: MeasureKind): 
 }
 
 /**
- * Refuses (`AccountMeasureError`) when a closure or an import block is in
- * force on the account. Answers nothing when none is; throws the read's own
- * error when the record could not be read.
+ * Refuses (`AccountMeasureError`) when a closure, a suspension or an import
+ * block is in force on the account, naming the first of them in that order.
+ * Answers nothing when none is; throws the read's own error when the record
+ * could not be read.
  */
 export async function assertImportsAllowed(userId: string, now: Date = new Date()): Promise<void> {
-  const [closure, block] = await Promise.all([latestStandingMeasure(userId, "closed"), latestStandingMeasure(userId, "imports_blocked")])
-  if (closure && inForceAt(closure, now)) throw new AccountMeasureError(null, true)
-  if (block && inForceAt(block, now)) throw new AccountMeasureError(block.ends_at, false)
+  const [closure, suspension, block] = await Promise.all([
+    latestStandingMeasure(userId, "closed"),
+    latestStandingMeasure(userId, "suspended"),
+    latestStandingMeasure(userId, "imports_blocked"),
+  ])
+  if (closure && inForceAt(closure, now)) throw new AccountMeasureError(null, "closed")
+  if (suspension && inForceAt(suspension, now)) throw new AccountMeasureError(suspension.ends_at, "suspended")
+  if (block && inForceAt(block, now)) throw new AccountMeasureError(block.ends_at, "imports_blocked")
+}
+
+/**
+ * When the suspension in force on the account ends, read fresh (not the
+ * access snapshot); null when none is in force, or while the table does not
+ * exist yet. Throws when the record could not be read.
+ */
+export async function suspensionEndsAt(userId: string, now: Date = new Date()): Promise<string | null> {
+  const suspension = await latestStandingMeasure(userId, "suspended")
+  return suspension && inForceAt(suspension, now) ? suspension.ends_at : null
 }
 
 export interface MyAccountMeasure {
@@ -91,7 +109,7 @@ export interface MyInfringement {
 }
 
 export interface MyAccountStanding {
-  /** Import blocks and a closure in force now. */
+  /** Import blocks, a suspension and a closure in force now. */
   readonly inForce: readonly MyAccountMeasure[]
   /** Warnings given within the policy's window, newest first. */
   readonly warnings: readonly MyAccountMeasure[]

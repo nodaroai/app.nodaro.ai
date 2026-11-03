@@ -57,7 +57,7 @@ describe("a plugin's download and the account's measures", () => {
 
   it("refuses the running job's account while its imports are blocked, before anything is fetched", async () => {
     const tk = buildToolkit()
-    yt.assertImportsAllowed.mockRejectedValue(new AccountMeasureError(null, false))
+    yt.assertImportsAllowed.mockRejectedValue(new AccountMeasureError(null, "imports_blocked"))
     await runWithJobCancellation("job-1", OWNER, async () => {
       await expect(download(tk)).rejects.toBeInstanceOf(AccountMeasureError)
       await expect(socialPost(tk)).rejects.toBeInstanceOf(AccountMeasureError)

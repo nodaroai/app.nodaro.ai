@@ -5211,15 +5211,19 @@ takes effect within a minute. The list is the deployment's own and is not part
 of the public API.
 
 **An account's measures.** Before the site's policy, the account itself is
-asked: while imports of links are blocked on the account, or the account is
-closed, under the deployment's repeat-infringer policy (see
+asked: while imports of links are blocked on the account under the
+deployment's repeat-infringer policy (see
 [Repeat infringers](#13m-repeat-infringers)), every import of a link, in every
 lane above, is refused with `403 imports_blocked` and a message saying until
 when (a date in UTC, or until an administrator lifts the block). A run's
 import fails the same way, and so does a private plugin's download of a link
 (which does not ask for a confirmation yet). The account is asked again right
 before the fetch starts, so a block placed while a download waited for its
-turn refuses it too; a block lifted takes effect at once.
+turn refuses it too; a block lifted takes effect at once. A suspended account,
+and a closed one (whose account is blocked), is refused every request first,
+imports included, with `403 access_blocked`; an import already under way when
+it is suspended or closed fails with `imports_blocked`, as does every import
+of a closed account whose block could not be placed.
 
 ## 13j. Content complaints (the public form)
 
@@ -5505,9 +5509,12 @@ infringements, counted over a rolling window. The default:
 | 2 | Importing links blocked for 30 days |
 | 3 | The account closed |
 
-The window ends now and starts the same day and time its months back (a day
-the earlier month does not have is that month's last day); an infringement
-counts while it stands and was recorded within it.
+An administrator can change the window and the steps: a step can also
+suspend the account for a number of days (the default has none), and closing
+the account, when it is a step, is the last one. The window ends now and
+starts the same day and time its months back (a day the earlier month does
+not have is that month's last day); an infringement counts while it stands
+and was recorded within it.
 
 A measure is never taken automatically. The case shows the step the policy
 names for the account's count, prefilled, and an administrator takes it, or
@@ -5528,6 +5535,18 @@ naming the case by reference only.
   (see [Content rights](#13i-content-rights-import-confirmations)). A file
   uploaded from the person's own device is not an import and is not refused.
   One import block is in force on an account at a time.
+- **The account suspended**, for the step's number of days (a suspension
+  always has an end), refuses the account's sign-in and every request until
+  then, as a block does and with the same answer (`403 access_blocked`): its
+  scheduled runs and its published apps stop meanwhile, and its imports are
+  refused. It ends by itself at its end, and an administrator can lift it
+  early with a reason, which lets the account back in. Like a closure, it is
+  refused before anything is written for an administrator, the platform's
+  owner and operators, and the deployment's billing account, and one whose
+  role changes in the moment between is taken back at once. One suspension is
+  in force on an account at a time. A suspension and an administrator's block
+  never move each other: an unblock leaves a suspended account suspended until
+  its end, and lifting a suspension leaves a blocked account blocked.
 - **The account closed** records the decision, then blocks the account as an
   administrator's block does (sign-in and every request refused, imports
   too), so an account is never blocked this way without the record of why.
@@ -5547,9 +5566,10 @@ Each move taken from a case names the account the screen showed the case
 naming: a case that names another account since is refused, so a move never
 lands on an account the administrator did not see.
 
-An import block or a closure is lifted early by an administrator, with a
-reason; a measure that has ended is not lifted after the fact. Every step is
-written to the case's log and audited, and the records are never deleted.
+An import block, a suspension or a closure is lifted early by an
+administrator, with a reason; a measure that has ended is not lifted after the
+fact. Every step is written to the case's log and audited, and the records are
+never deleted.
 
 **What the account's owner sees.** Settings → Content restrictions shows the
 measures in force on their account with what they were told and until when,
@@ -5558,7 +5578,9 @@ by its case's reference), and the window's length; never an administrator's
 note, nor who took a step. `GET /v1/account-measures/mine` answers the same
 (`{ data: { inForce, warnings, infringements, windowMonths } }`), to the
 person in their own session only (`403 in_app_only` to a key, an app or an
-agent).
+agent). While the account is suspended its owner cannot sign in, and the app
+answers as it does for a blocked account, so the suspension's reason and end
+do not reach them in the app; one that has ended is not listed.
 
 These routes are the deployment's own and are not part of the public API:
 the person's (`/v1/account-measures/mine`), and the administrator's signed

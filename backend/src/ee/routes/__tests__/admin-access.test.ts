@@ -189,6 +189,9 @@ vi.mock("@/lib/access-blocks.js", async (importOriginal) => ({
   accessBlocksStatus: spies.accessBlocksStatus,
 }))
 vi.mock("@/middleware/auth.js", () => ({ invalidateAuthCache: spies.invalidateAuthCache }))
+/** The suspension in force (lib/account-measures.ts, read fresh by the access view and by the sign-in ban): when it ends, or null. */
+const measures = vi.hoisted(() => ({ suspensionEndsAt: vi.fn(async (_userId: string): Promise<string | null> => null) }))
+vi.mock("@/lib/account-measures.js", () => ({ suspensionEndsAt: measures.suspensionEndsAt }))
 vi.mock("@/ee/middleware/require-admin.js", () => ({
   requireAdmin: async (req: { userId?: string }, reply: { status: (c: number) => { send: (b: unknown) => void } }) => {
     if (req.userId !== ADMIN && req.userId !== SUPER) reply.status(403).send({ error: { code: "forbidden", message: "Admin access required" } })
@@ -214,8 +217,8 @@ const TARGET_IP = "93.184.216.34"
 const NOW = Date.parse("2026-10-05T12:00:00.000Z")
 const DAY_MS = 24 * 60 * 60 * 1000
 const STATUS = { ready: true, users: 0, networks: 0, loadedAt: null }
-const BAN = { ban_duration: "876000h", app_metadata: { nodaro_access_block: true } }
-const LIFT = { ban_duration: "none", app_metadata: { nodaro_access_block: null } }
+const BAN = { ban_duration: "876000h", app_metadata: { nodaro_access_block: true, nodaro_access_block_until: expect.any(String) } }
+const LIFT = { ban_duration: "none", app_metadata: { nodaro_access_block: null, nodaro_access_block_until: null } }
 
 const hashOf = (address: string) => networkHash(networkKey(address)!)
 const rows = (table: string) => fake.rowsOf(table)
@@ -233,6 +236,7 @@ beforeEach(async () => {
   process.env.PLATFORM_OPERATOR_EMAILS = ""
   process.env.PLATFORM_OWNER_EMAIL = "owner@nodaro.test"
   spies.accessBlocksStatus.mockResolvedValue(STATUS)
+  measures.suspensionEndsAt.mockImplementation(async () => null)
   spies.requirePlatformOperator.mockImplementation(async (_req: unknown, reply: { status: (c: number) => { send: (b: unknown) => void } }) => {
     reply.status(403).send({ error: { code: "operator_required", message: "operator only" } })
   })
@@ -516,14 +520,29 @@ describe("POST /v1/admin/users/:id/unblock", () => {
     expect(audits()).toEqual([expect.objectContaining({ action: "account_unblock", payload: { removed: false, signInBlocked: false } })])
   })
 
-  it("a failed lift answers 200 with a warning to press Unblock again", async () => {
+  it("a failed lift answers 200 with a warning to retry from the account's page", async () => {
     blocked({ nodaro_access_block: true })
     fake.state.authUpdateError = { message: "gotrue unavailable" }
     const res = await unblock(TARGET)
     expect(res.statusCode).toBe(200)
     expect(res.json().data).toMatchObject({ blocked: false, signInBlocked: null })
-    expect(res.json().data.warning).toMatch(/Unblock again/)
+    expect(res.json().data.warning).toMatch(/retry from the Access card on its page/)
     expect(rows("account_blocks")).toEqual([])
+  })
+
+  it("a suspended account stays refused sign-in until its suspension ends: the ban is shortened, never lifted", async () => {
+    blocked({ nodaro_access_block: true })
+    const end = new Date(Date.now() + 3 * DAY_MS).toISOString()
+    measures.suspensionEndsAt.mockResolvedValue(end)
+    const res = await unblock(TARGET)
+    expect(res.json().data).toMatchObject({ blocked: false, signInBlocked: true, warning: null })
+    expect(rows("account_blocks")).toEqual([])
+    expect(fake.updateUserById).toHaveBeenCalledWith(TARGET, {
+      ban_duration: expect.stringMatching(/^\d+s$/),
+      app_metadata: { nodaro_access_block: true, nodaro_access_block_until: expect.any(String) },
+    })
+    const until = (fake.updateUserById.mock.calls[0]![1] as { app_metadata: { nodaro_access_block_until: string } }).app_metadata.nodaro_access_block_until
+    expect(Math.abs(Date.parse(until) - Date.parse(end))).toBeLessThan(2_000)
   })
 
   it("503 blocks_unavailable before migration 458", async () => {
@@ -533,6 +552,50 @@ describe("POST /v1/admin/users/:id/unblock", () => {
     expect(res.json().error.code).toBe("blocks_unavailable")
     expect(fake.updateUserById).not.toHaveBeenCalled()
     expect(audits()).toEqual([])
+  })
+})
+
+describe("POST /v1/admin/users/:id/sign-in — sign-in brought in line with the block and the suspension", () => {
+  const sync = (id: string, as = ADMIN) => call("POST", `/v1/admin/users/${id}/sign-in`, { as })
+
+  it("a suspended account whose sign-in was not refused is refused it until the end, audited", async () => {
+    measures.suspensionEndsAt.mockResolvedValue(new Date(Date.now() + DAY_MS).toISOString())
+    const res = await sync(TARGET)
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ data: { userId: TARGET, signInBlocked: true } })
+    expect(fake.updateUserById).toHaveBeenCalledWith(TARGET, {
+      ban_duration: expect.stringMatching(/^\d+s$/),
+      app_metadata: { nodaro_access_block: true, nodaro_access_block_until: expect.any(String) },
+    })
+    expect(spies.invalidateAuthCache).toHaveBeenCalledWith(TARGET)
+    expect(audits()).toEqual([
+      { admin_user_id: ADMIN, action: "account_sign_in_sync", target_type: "user", target_id: TARGET, reason: null, payload: { signInBlocked: true } },
+    ])
+  })
+
+  it("an account neither blocked nor suspended, still refused by our ban, is let back in; nothing else moves", async () => {
+    fake.state.authUsers.set(TARGET, { banned_until: fake.FAR_FUTURE, app_metadata: { nodaro_access_block: true } })
+    const res = await sync(TARGET)
+    expect(res.json().data).toEqual({ userId: TARGET, signInBlocked: false })
+    expect(fake.updateUserById).toHaveBeenCalledWith(TARGET, LIFT)
+    expect(spies.invalidateAccessBlocks).not.toHaveBeenCalled()
+  })
+
+  it("never lifts a ban someone else placed", async () => {
+    fake.state.authUsers.set(TARGET, { banned_until: fake.FAR_FUTURE, app_metadata: { sso: null } })
+    expect((await sync(TARGET)).json().data).toEqual({ userId: TARGET, signInBlocked: true })
+    expect(fake.updateUserById).not.toHaveBeenCalled()
+  })
+
+  it("is an admin's; a failure is a sanitized 500 with nothing audited; an id that is not one is a 400", async () => {
+    expect((await sync(TARGET, NON_ADMIN)).statusCode).toBe(403)
+    fake.state.authUsers.set(TARGET, { banned_until: fake.FAR_FUTURE, app_metadata: { nodaro_access_block: true } })
+    fake.state.authUpdateError = { message: "gotrue unavailable" }
+    const res = await sync(TARGET)
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.message).not.toContain("gotrue")
+    expect(audits()).toEqual([])
+    expect((await sync("not-an-id")).statusCode).toBe(400)
   })
 })
 
@@ -853,8 +916,11 @@ describe("the read views", () => {
         blocked: true,
         reason: "spam",
         blockedAt: "2026-10-01T00:00:00.000Z",
+        suspendedUntil: null,
         signInBlocked: true,
         signInBanIsOurs: true,
+        signInWanted: "refused",
+        signInInLine: true,
         quietStopped: false,
         quietReason: null,
         quietSince: null,
@@ -869,6 +935,31 @@ describe("the read views", () => {
         },
       },
     })
+  })
+
+  it("GET /v1/admin/users/:id/access names a suspension in force by its end, read fresh; one that cannot be read is a 500, never 'not suspended'", async () => {
+    measures.suspensionEndsAt.mockResolvedValueOnce("2026-11-20T00:00:00.000Z")
+    const data = (await call("GET", `/v1/admin/users/${TARGET}/access`)).json().data
+    expect(data).toMatchObject({ blocked: false, suspendedUntil: "2026-11-20T00:00:00.000Z" })
+    expect(measures.suspensionEndsAt).toHaveBeenCalledWith(TARGET)
+
+    measures.suspensionEndsAt.mockRejectedValueOnce(new Error("measures down"))
+    expect((await call("GET", `/v1/admin/users/${TARGET}/access`)).statusCode).toBe(500)
+  })
+
+  it("GET /v1/admin/users/:id/access says whether sign-in agrees with the block and the suspension: an unblock that failed on a suspended account does not", async () => {
+    // Unblocked, but our permanent ban stayed (GoTrue was down); the suspension runs to the 20th.
+    fake.state.authUsers.set(TARGET, { banned_until: fake.FAR_FUTURE, app_metadata: { nodaro_access_block: true } })
+    measures.suspensionEndsAt.mockResolvedValue(new Date(Date.now() + 5 * DAY_MS).toISOString())
+    expect((await call("GET", `/v1/admin/users/${TARGET}/access`)).json().data).toMatchObject({ blocked: false, signInBlocked: true, signInWanted: "refused", signInInLine: false })
+
+    // Neither blocked nor suspended, our ban still on: sign-in is wanted and does not agree.
+    measures.suspensionEndsAt.mockResolvedValue(null)
+    expect((await call("GET", `/v1/admin/users/${TARGET}/access`)).json().data).toMatchObject({ signInWanted: "allowed", signInInLine: false })
+
+    // Someone else's ban is never ours to move: it agrees.
+    fake.state.authUsers.set(TARGET, { banned_until: fake.FAR_FUTURE, app_metadata: { sso: null } })
+    expect((await call("GET", `/v1/admin/users/${TARGET}/access`)).json().data).toMatchObject({ signInInLine: true })
   })
 
   it("GET /v1/admin/users/:id/access before the tables exist: ready:false, nothing reads as blocked", async () => {

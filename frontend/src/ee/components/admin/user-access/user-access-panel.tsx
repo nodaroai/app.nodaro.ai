@@ -19,6 +19,7 @@ import {
 } from "@/ee/hooks/queries/use-admin-access"
 import { FreeGrantActions } from "./free-grant-actions"
 import { BLOCK_DAYS, DEFAULT_BLOCK_DAYS, blockDaysLabel, formatBlockDate } from "./block-format"
+import { SuspensionAccess } from "./suspension-access"
 
 const GRANT_STATE_LABEL: Record<string, string> = {
   unclaimed: "Not claimed yet",
@@ -29,7 +30,10 @@ const GRANT_STATE_LABEL: Record<string, string> = {
 
 /**
  * The Access card in a user's expanded row: block / unblock the account, take
- * back / restore its free credits, and block the network it signed up from.
+ * back / restore its free credits, and block the network it signed up from;
+ * a suspension under the repeat-infringer policy is shown with its end (it is
+ * taken and lifted from its complaint), and a sign-in that disagrees with the
+ * block and the suspension can be brought in line.
  *
  * Every refusal comes from the server with its own sentence (admins and the
  * owner cannot be blocked, a busy network needs a super admin, …) and is shown
@@ -170,19 +174,23 @@ export function UserAccessPanel({
 
   const network = access.network
   const notReady = !access.ready
+  const suspendedUntil = access.suspendedUntil ?? null
 
   return (
     <div className="space-y-3 rounded-lg border bg-card p-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-medium">
-          {access.blocked ? <Ban className="h-4 w-4 text-destructive" /> : <ShieldCheck className="h-4 w-4" />}
+          {access.blocked || suspendedUntil ? <Ban className="h-4 w-4 text-destructive" /> : <ShieldCheck className="h-4 w-4" />}
           Access
         </div>
         <div className="flex items-center gap-1">
           {access.quietStopped && <Badge variant="outline">Quietly stopped</Badge>}
-          {access.blocked ? <Badge variant="destructive">Blocked</Badge> : <Badge variant="secondary">Active</Badge>}
+          {suspendedUntil && <Badge variant="destructive">Suspended</Badge>}
+          {access.blocked ? <Badge variant="destructive">Blocked</Badge> : suspendedUntil ? null : <Badge variant="secondary">Active</Badge>}
         </div>
       </div>
+
+      <SuspensionAccess userId={user.id} access={access} onChanged={onChanged} />
 
       {notReady && (
         <p className="text-xs text-muted-foreground">Blocking becomes available after the next production release.</p>

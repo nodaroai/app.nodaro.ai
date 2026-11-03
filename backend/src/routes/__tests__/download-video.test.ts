@@ -635,7 +635,7 @@ describe("POST /v1/download-video — asset bookkeeping", () => {
   it("an account whose imports are blocked is refused with 403 imports_blocked, and nothing is spent or fetched", async () => {
     const { assertImportsAllowed } = await import("../../lib/account-measures.js")
     const { AccountMeasureError } = await import("../../lib/account-measure-error.js")
-    vi.mocked(assertImportsAllowed).mockRejectedValueOnce(new AccountMeasureError("2026-12-03T10:00:00.000Z", false))
+    vi.mocked(assertImportsAllowed).mockRejectedValueOnce(new AccountMeasureError("2026-12-03T10:00:00.000Z", "imports_blocked"))
     const res = await post({ url: YT_URL, confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e03" })
     expect(res.statusCode).toBe(403)
     expect(res.json().error).toEqual({

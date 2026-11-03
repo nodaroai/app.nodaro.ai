@@ -25,10 +25,14 @@ const ELSEWHERE = "198.51.100.1"
 const db = vi.hoisted(() => {
   type NetworkRow = { network_hash: string | null; cidr: string | null; expires_at: string }
   const state = { networks: [] as NetworkRow[] }
+  // Every table but the networks reads empty: no account blocks, quiet stops or suspensions.
   function from(table: string) {
     const chain = {
       select: () => chain,
       gt: () => chain,
+      eq: () => chain,
+      is: () => chain,
+      not: () => chain,
       order: () => chain,
       range: (first: number, last: number) =>
         Promise.resolve({

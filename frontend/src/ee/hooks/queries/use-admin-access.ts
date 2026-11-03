@@ -45,7 +45,8 @@ export interface AdminQuietStoppedUser {
 export interface AdminBlocks {
   /** False until the database has the block tables (staging runs ahead of production). */
   readonly ready: boolean
-  readonly status: { readonly ready: boolean; readonly users: number; readonly networks: number; readonly quiet?: number; readonly loadedAt: string | null }
+  /** `suspended`: the suspensions still running (absent on a server that predates them). */
+  readonly status: { readonly ready: boolean; readonly users: number; readonly suspended?: number; readonly networks: number; readonly quiet?: number; readonly loadedAt: string | null }
   readonly users: readonly AdminBlockedUser[]
   readonly networks: readonly AdminBlockedNetwork[]
   /** Absent on a server that predates quiet stops. */
@@ -74,9 +75,15 @@ export interface AdminUserAccess {
   readonly blocked: boolean
   readonly reason: string | null
   readonly blockedAt: string | null
+  /** Suspended under the repeat-infringer policy until then; null when not (absent on a server that predates suspensions). */
+  readonly suspendedUntil?: string | null
   /** Sign-in is refused (GoTrue ban). null when it could not be read. */
   readonly signInBlocked: boolean | null
   readonly signInBanIsOurs: boolean | null
+  /** What the block and the suspension call for (absent on a server that predates suspensions). */
+  readonly signInWanted?: "refused" | "allowed"
+  /** Whether sign-in agrees with that: bringing it in line would change nothing. null when the ban could not be read. */
+  readonly signInInLine?: boolean | null
   /** Quietly stopped (absent on a server that predates quiet stops). */
   readonly quietStopped?: boolean
   readonly quietReason?: string | null
@@ -199,6 +206,16 @@ export function useUnblockUser() {
   return useMutation({
     mutationFn: (p: { userId: string }) =>
       send<BlockResult>("POST", `/v1/admin/users/${p.userId}/unblock`, {}, "Failed to unblock the account"),
+    onSuccess: (_d, p) => invalidate(p.userId),
+  })
+}
+
+/** Brings the account's sign-in in line with its block and its suspension: refused while either is in force, allowed once neither is. */
+export function useSyncSignIn() {
+  const invalidate = useInvalidateAccess()
+  return useMutation({
+    mutationFn: (p: { userId: string }) =>
+      send<{ userId: string; signInBlocked: boolean }>("POST", `/v1/admin/users/${p.userId}/sign-in`, {}, "Failed to bring the account's sign-in in line"),
     onSuccess: (_d, p) => invalidate(p.userId),
   })
 }

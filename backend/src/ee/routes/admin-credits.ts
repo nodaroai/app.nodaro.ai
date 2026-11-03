@@ -18,6 +18,7 @@ import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
 import { toUnits } from "../../lib/billing-display-unit.js"
 import type { UserAllowance } from "../../types/deployment-allowance.js"
 import { isBlockedNow } from "../lib/account-blocking.js"
+import { suspensionEndsAt } from "../../lib/account-measures.js"
 import { readAllRows } from "../../lib/postgrest-read-all.js"
 
 // ---- Zod Schemas ----
@@ -483,10 +484,14 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
       return reply.code(200).send({ message: "Role unchanged", role })
     }
 
-    // A blocked admin could not reach the page that lifts blocks (the block
-    // route refuses admins, and re-checks after its write for the other order).
+    // A blocked or suspended admin could not reach the pages that lift either
+    // (the block and the suspension refuse admins, and re-check after their
+    // write for the other order).
     if (role !== "user" && (await isBlockedNow(id))) {
       return reply.code(409).send({ error: "This account is blocked. Unblock it before making it an admin." })
+    }
+    if (role !== "user" && (await suspensionEndsAt(id)) !== null) {
+      return reply.code(409).send({ error: "This account is suspended. Lift its suspension from its complaint before making it an admin." })
     }
 
     const { error: updateError } = await supabase

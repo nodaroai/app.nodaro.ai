@@ -12,17 +12,27 @@ import { send, useCaseMove } from "./use-admin-complaints-queries"
  * the case's other moves do.
  */
 
-export const MEASURE_KINDS = ["warning", "imports_blocked", "closed"] as const
+export const MEASURE_KINDS = ["warning", "imports_blocked", "suspended", "closed"] as const
 export type MeasureKind = (typeof MEASURE_KINDS)[number]
 
-/** The longest import block, in days (as the server takes it). */
+/** The longest import block or suspension, in days (as the server takes it). */
 export const MAX_BLOCK_DAYS = 3650
+
+/** Whether a measure lasts a number of days: an import block may (or lasts until lifted); a suspension must (the server's own rule). */
+export function measureTakesDays(kind: MeasureKind): boolean {
+  return kind === "imports_blocked" || kind === "suspended"
+}
+
+/** Whether a measure must say its days: a suspension always ends. */
+export function measureNeedsDays(kind: MeasureKind): boolean {
+  return kind === "suspended"
+}
 
 export interface PolicyStep {
   /** The standing infringements in the window from which this step applies. */
   readonly infringements: number
   readonly kind: MeasureKind
-  /** An import block's length in days; absent: until lifted. */
+  /** An import block's or a suspension's length in days; absent on an import block: until lifted. */
   readonly days?: number
 }
 
@@ -119,7 +129,7 @@ export interface ApplyMeasureInput {
   /** The account the screen showed the case naming: refused when the case names another now. */
   readonly userId: string
   readonly kind: MeasureKind
-  /** An import block's length; null: until lifted. */
+  /** An import block's length (null: until lifted) or a suspension's (required). */
   readonly days: number | null
   readonly reason: string
   readonly note: string | null
@@ -133,7 +143,7 @@ export interface AppliedMeasure {
     readonly kind: MeasureKind
     readonly endsAt: string | null
     readonly followsPolicy: boolean
-    /** A closure: whether sign-in is refused now. */
+    /** A closure or a suspension: whether sign-in is refused now. */
     readonly signInBlocked: boolean | null
     readonly warning: string | null
   }
@@ -145,7 +155,7 @@ export function useApplyMeasure() {
     (i) => ({
       userId: i.userId,
       kind: i.kind,
-      ...(i.kind === "imports_blocked" ? { days: i.days } : {}),
+      ...(measureTakesDays(i.kind) ? { days: i.days } : {}),
       reason: i.reason,
       note: i.note,
       infringementId: i.infringementId,
@@ -156,7 +166,17 @@ export function useApplyMeasure() {
 }
 
 export interface LiftedMeasure {
-  readonly data: { readonly id: string; readonly kind: MeasureKind; readonly liftedAt: string; readonly stillBlocked: boolean | null }
+  readonly data: {
+    readonly id: string
+    readonly kind: MeasureKind
+    readonly liftedAt: string
+    /** A lifted closure: whether the account is still blocked. */
+    readonly stillBlocked: boolean | null
+    /** A lifted suspension: whether sign-in is still refused (only while the account is blocked too). */
+    readonly signInBlocked?: boolean | null
+    /** Set when the suspension is lifted but its sign-in could not be let back in. */
+    readonly warning?: string | null
+  }
 }
 
 export function useLiftMeasure() {

@@ -20,10 +20,12 @@ export type AdminAccessAction =
   | "free_grant_restore"
   | "account_quiet_stop"
   | "account_quiet_release"
+  | "account_sign_in_sync"
 
 const TARGET_TYPE: Record<AdminAccessAction, "user" | "blocked_network"> = {
   account_block: "user",
   account_unblock: "user",
+  account_sign_in_sync: "user",
   account_quiet_stop: "user",
   account_quiet_release: "user",
   network_block: "blocked_network",

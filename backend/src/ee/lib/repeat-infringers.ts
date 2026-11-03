@@ -28,14 +28,32 @@
  * the unblock), and an unblock from the account's page leaves the closure
  * standing on the record, where the case shows the account as not blocked
  * (account-record.ts).
+ *
+ * Suspending an account (migration 589) follows the same order: refused up
+ * front for an account the block refuses, recorded first, and the record is
+ * itself the refusal (every process's access snapshot reads it, until its
+ * end); then its sign-in is banned until the end. One whose role changed in
+ * between has its suspension taken back at once, lifted with why. A sign-in
+ * ban that failed leaves the suspension refusing every request, and the
+ * answer says so. Lifting it early lets the account back in, its sign-in
+ * included, unless it is blocked; it ends by itself at its end.
  */
 import { supabase } from "../../lib/supabase.js"
 import { isMissingTableError } from "../../lib/postgrest-errors.js"
 import { recordComplaintEventQuietly } from "../../lib/rights-complaints.js"
-import { measureFollowsStep, stepFor, windowStart, type MeasureKind, type PolicyStep, type RepeatInfringerPolicy } from "../../lib/repeat-infringer-policy.js"
+import {
+  measureFollowsStep,
+  measureNeedsDays,
+  measureTakesDays,
+  stepFor,
+  windowStart,
+  type MeasureKind,
+  type PolicyStep,
+  type RepeatInfringerPolicy,
+} from "../../lib/repeat-infringer-policy.js"
 import { currentRepeatInfringerPolicy } from "../../lib/repeat-infringer-policy-store.js"
-import { BLOCK_REFUSAL_MESSAGE, blockRefusal, isBlockedNow, type BlockRefusal } from "./account-blocking.js"
-import { blockAccount } from "./block-account.js"
+import { BLOCK_REFUSAL_MESSAGE, SUSPEND_REFUSAL_MESSAGE, blockRefusal, isBlockedNow, type BlockRefusal } from "./account-blocking.js"
+import { blockAccount, enforceSuspension, releaseSuspension } from "./block-account.js"
 import { alertPolicyNamesClosure } from "./repeat-infringer-alerts.js"
 import { RepeatInfringerError } from "./repeat-infringer-error.js"
 
@@ -83,6 +101,10 @@ interface NamedCase {
 /** A read or write the database refused, as this module's refusal; anything else is the server's. */
 function dbFailure(error: { code?: string; message: string }, what: string): Error {
   if (isMissingTableError(error)) return new RepeatInfringerError("unavailable", "The record of infringements is not in this database yet")
+  // A kind the record does not take yet: staging runs ahead of the migration that adds it (589's suspension).
+  if (error.code === "23514" && error.message.includes("account_sanctions_kind")) {
+    return new RepeatInfringerError("unavailable", "The record does not take this measure in this database yet")
+  }
   if (error.code === "23505") return new RepeatInfringerError("already_recorded", "An infringement from this case is recorded already")
   if (error.code === "55029") return new RepeatInfringerError("in_force", "A measure of this kind is in force on the account already")
   if (error.code === "55028") return new RepeatInfringerError("not_supported", "The case or the infringement changed meanwhile: read the case again")
@@ -183,7 +205,7 @@ export interface ApplyMeasureInput {
   /** The account the screen showed the case naming: refused when the case names another now. */
   readonly userId: string
   readonly kind: MeasureKind
-  /** An import block's length in days; null: until lifted. Only an import block has one. */
+  /** A measure's length in days: an import block's (null: until lifted), a suspension's (required). No other measure has one. */
   readonly days: number | null
   /** What the account's owner is told. */
   readonly reason: string
@@ -194,25 +216,33 @@ export interface ApplyMeasureInput {
   readonly departureReason: string | null
 }
 
-/** What became of a closure's account block once the closure was recorded. */
-export type ClosureBlock =
-  /** Placed: whether sign-in is refused now, and a failure to make it so (the block stands; blocking again repairs it). */
+/**
+ * What became of the refusal of access a recorded measure places: a
+ * closure's account block, a suspension's (the record refuses; its sign-in is
+ * banned until the end).
+ */
+export type AccessOutcome =
+  /** Placed: whether sign-in is refused now, and a failure to make it so (the refusal of every request stands; see the route's warning). */
   | { readonly placed: true; readonly signInBlocked: boolean; readonly signInError: unknown }
-  /** The account's role changed between the check and the block, so the block refused it: the closure was taken back (lifted, with why). */
+  /** The account's role changed between the check and the refusal, so it was refused: the measure was taken back (lifted, with why). */
   | { readonly placed: false; readonly refused: BlockRefusal; readonly lifted: MeasureRow | null }
-  /** The block could not be placed: the closure stands on an unblocked account, as the case shows; block it from the account's page. */
+  /**
+   * The refusal could not be completed. A closure stands on an unblocked
+   * account, as the case shows (block it from the account's page); a
+   * suspension still refuses every request, but its sign-in ban was not set.
+   */
   | { readonly placed: false; readonly failure: unknown }
 
 export interface AppliedMeasure {
   readonly measure: MeasureRow
-  /** A closure's account block; null for any other measure. */
-  readonly block: ClosureBlock | null
+  /** A closure's or a suspension's refusal of access; null for any other measure. */
+  readonly access: AccessOutcome | null
 }
 
 /** The step a measure follows, as the policy reads now, or the refusal for a departure that does not say why. */
 function followedStep(policy: RepeatInfringerPolicy, inWindow: number, input: ApplyMeasureInput): PolicyStep | null {
   const step = stepFor(policy, inWindow)
-  const days = input.kind === "imports_blocked" ? input.days : null
+  const days = measureTakesDays(input.kind) ? input.days : null
   if (step && measureFollowsStep(step, input.kind, days)) return step
   if (!input.departureReason) {
     throw new RepeatInfringerError(
@@ -236,30 +266,42 @@ async function requireStandingInfringement(id: string | null, userId: string): P
   }
 }
 
-/** A closure is refused before anything is written for an account the block refuses. */
-async function requireBlockable(adminUserId: string, userId: string): Promise<void> {
+/** A measure that refuses the account access: a closure (its account block) or a suspension. */
+function refusesAccess(kind: MeasureKind): kind is "closed" | "suspended" {
+  return kind === "closed" || kind === "suspended"
+}
+
+/** What the block's refusals say for this measure: a closure blocks, a suspension suspends. */
+function refusalMessage(kind: "closed" | "suspended", refusal: BlockRefusal): string {
+  return (kind === "suspended" ? SUSPEND_REFUSAL_MESSAGE : BLOCK_REFUSAL_MESSAGE)[refusal]
+}
+
+/** A closure or a suspension is refused before anything is written for an account the block refuses. */
+async function requireBlockable(adminUserId: string, userId: string, kind: "closed" | "suspended"): Promise<void> {
   const refusal = await blockRefusal(adminUserId, userId)
-  if (refusal) throw new RepeatInfringerError(refusal, BLOCK_REFUSAL_MESSAGE[refusal])
+  if (refusal) throw new RepeatInfringerError(refusal, refusalMessage(kind, refusal))
 }
 
 /**
  * A measure on the account a verified case names. What this module can refuse
- * is asked first; an import block or a closure while one of its kind is in
- * force is the database's to refuse, under its lock (`in_force`, two
- * administrators at once included). A closure then records the decision and
- * blocks the account (see the module comment).
+ * is asked first; a measure of a kind already in force (but a warning) is the
+ * database's to refuse, under its lock (`in_force`, two administrators at
+ * once included). A closure then records the decision and blocks the
+ * account, a suspension records itself and bans the sign-in until its end
+ * (see the module comment).
  */
 export async function applyMeasure(input: ApplyMeasureInput, adminUserId: string, now: Date = new Date()): Promise<AppliedMeasure> {
+  if (measureNeedsDays(input.kind) && !input.days) throw new RepeatInfringerError("days_required", "A suspension lasts a number of days")
   const named = await caseNamingAnAccount(input.complaintId, input.userId)
   const policy = await currentRepeatInfringerPolicy()
   const inWindow = await infringementsInWindow(named.user_id, policy, now)
   const step = followedStep(policy, inWindow, input)
   await requireStandingInfringement(input.infringementId, named.user_id)
-  if (input.kind === "closed") await requireBlockable(adminUserId, named.user_id)
+  if (refusesAccess(input.kind)) await requireBlockable(adminUserId, named.user_id, input.kind)
   const measure = await insertMeasure(named, input, adminUserId, { inWindow, step, policy, now })
   await recordComplaintEventQuietly(named.id, "measure_applied", adminUserId, { measureId: measure.id, kind: measure.kind, endsAt: measure.ends_at, followsPolicy: step !== null })
-  const block = input.kind === "closed" ? await blockForClosure(adminUserId, named, measure) : null
-  return { measure, block }
+  const access = refusesAccess(input.kind) ? await refuseAccess(adminUserId, named, measure, input.kind) : null
+  return { measure, access }
 }
 
 async function insertMeasure(
@@ -268,7 +310,7 @@ async function insertMeasure(
   adminUserId: string,
   at: { readonly inWindow: number; readonly step: PolicyStep | null; readonly policy: RepeatInfringerPolicy; readonly now: Date },
 ): Promise<MeasureRow> {
-  const days = input.kind === "imports_blocked" ? input.days : null
+  const days = measureTakesDays(input.kind) ? input.days : null
   const { data, error } = await supabase
     .from("account_sanctions")
     .insert({
@@ -290,12 +332,20 @@ async function insertMeasure(
   return data as MeasureRow
 }
 
-/** The account block a recorded closure places; never throws (see `ClosureBlock`). */
-async function blockForClosure(adminUserId: string, named: NamedCase, closure: MeasureRow): Promise<ClosureBlock> {
+/**
+ * The refusal of access a recorded closure or suspension places: a closure
+ * blocks the account, a suspension's record already refuses it and its
+ * sign-in is banned until the end. Never throws (see `AccessOutcome`).
+ */
+async function refuseAccess(adminUserId: string, named: NamedCase, measure: MeasureRow, kind: "closed" | "suspended"): Promise<AccessOutcome> {
   try {
-    const outcome = await blockAccount(adminUserId, named.user_id, `Closed under the repeat-infringer policy (case ${named.reference})`)
+    const outcome =
+      kind === "closed"
+        ? await blockAccount(adminUserId, named.user_id, `Closed under the repeat-infringer policy (case ${named.reference})`)
+        : await enforceSuspension(adminUserId, named.user_id)
     if (!outcome.refused) return { placed: true, signInBlocked: outcome.signInBlocked, signInError: outcome.signInError }
-    const lifted = await liftMeasure(closure.id, `The account could not be blocked: ${BLOCK_REFUSAL_MESSAGE[outcome.refused]}`, adminUserId)
+    const could = kind === "closed" ? "blocked" : "suspended"
+    const lifted = await liftMeasure(measure.id, `The account could not be ${could}: ${refusalMessage(kind, outcome.refused)}`, adminUserId)
       .then((l) => l.measure)
       .catch(() => null)
     return { placed: false, refused: outcome.refused, lifted }
@@ -308,6 +358,12 @@ export interface LiftedMeasure {
   readonly measure: MeasureRow
   /** A lifted closure: whether the account is still blocked (lifting a closure never unblocks it); null when that could not be read. */
   readonly stillBlocked: boolean | null
+  /**
+   * A lifted suspension: whether sign-in is still refused (only when the
+   * account is blocked as well), and a failure to let it back in (the
+   * account's requests are let through anyway). Null for any other measure.
+   */
+  readonly signIn: { readonly signInBlocked: boolean | null; readonly signInError: unknown } | null
 }
 
 /** Lifts a measure in force, once, with the reason. A warning stands; a measure that ended is not lifted after the fact. */
@@ -329,7 +385,8 @@ export async function liftMeasure(id: string, reason: string, adminUserId: strin
   }
   // The lift is made: a block that cannot be read now is unknown, never an error the lift answers.
   const stillBlocked = measure.kind === "closed" && measure.user_id ? await isBlockedNow(measure.user_id).catch(() => null) : null
-  return { measure, stillBlocked }
+  const signIn = measure.kind === "suspended" && measure.user_id ? await releaseSuspension(measure.user_id) : null
+  return { measure, stillBlocked, signIn }
 }
 
 async function whyNotLifted(id: string): Promise<RepeatInfringerError | Error> {

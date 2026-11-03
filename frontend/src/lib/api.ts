@@ -8905,7 +8905,7 @@ export async function getCounterNoticeDeclaration(): Promise<{ data: { paragraph
 
 /** A measure on my account under the repeat-infringer policy, as I am told it (backend lib/account-measures.ts). */
 export interface MyAccountMeasure {
-  kind: "warning" | "imports_blocked" | "closed"
+  kind: "warning" | "imports_blocked" | "suspended" | "closed"
   /** What the administrator told me. */
   reason: string
   appliedAt: string

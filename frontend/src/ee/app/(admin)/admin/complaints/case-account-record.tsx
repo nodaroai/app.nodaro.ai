@@ -212,11 +212,23 @@ function measureSpan(m: RecordMeasure): string {
   return m.endsAt ? `in force until ${formatWhen(m.endsAt)}` : "in force until lifted"
 }
 
+/** What the lift of a measure is called, and what it says once made. */
+const LIFT_WORDS: Readonly<Partial<Record<RecordMeasure["kind"], { readonly cta: string; readonly done: string }>>> = {
+  closed: { cta: "Lift the closure", done: "Closure lifted: the account's block is unchanged" },
+  suspended: { cta: "Lift the suspension", done: "Suspension lifted" },
+}
+
 function MeasureItem({ measure: m }: { readonly measure: RecordMeasure }) {
   const [asking, setAsking] = useState(false)
   const lift = useLiftMeasure()
+  const words = LIFT_WORDS[m.kind] ?? { cta: "Lift the measure", done: "Measure lifted" }
   const submit = (reason: string | null) => {
-    if (reason) void move(() => lift.mutateAsync({ measureId: m.id, reason }), m.kind === "closed" ? "Closure lifted: the account's block is unchanged" : "Measure lifted", "Failed to lift the measure").then((made) => made && setAsking(false))
+    if (!reason) return
+    const run = async () => {
+      const res = await lift.mutateAsync({ measureId: m.id, reason })
+      if (res.data.warning) toast.warning(res.data.warning)
+    }
+    void move(run, words.done, "Failed to lift the measure").then((made) => made && setAsking(false))
   }
   return (
     <li className="space-y-1 px-3 py-2 text-sm">
@@ -234,7 +246,7 @@ function MeasureItem({ measure: m }: { readonly measure: RecordMeasure }) {
       {m.liftReason && <p className={`text-xs text-muted-foreground ${VALUE}`}>Lifted: {m.liftReason}</p>}
       {m.inForce && m.kind !== "warning" && !asking && <Button size="sm" variant="ghost" onClick={() => setAsking(true)} disabled={lift.isPending}>Lift…</Button>}
       {m.inForce && m.kind !== "warning" && asking && (
-        <StepText label="Why the measure is lifted" placeholder="Why it is lifted" cta={m.kind === "closed" ? "Lift the closure" : "Lift the measure"} required busy={lift.isPending}
+        <StepText label="Why the measure is lifted" placeholder="Why it is lifted" cta={words.cta} required busy={lift.isPending}
           onSubmit={submit} onCancel={() => setAsking(false)} />
       )}
     </li>

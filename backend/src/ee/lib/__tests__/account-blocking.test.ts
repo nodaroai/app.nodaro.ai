@@ -2,12 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 /**
  * Blocking an account: who may not be blocked (`blockRefusal`), and how the
- * GoTrue sign-in ban is made to agree with the block row (`convergeSignInBan`).
+ * GoTrue sign-in ban is made to agree with the block row and the suspension
+ * in force (`convergeSignInBan`): permanent while blocked, until the
+ * suspension's end while only suspended, lifted when neither.
  *
  * The ban is MARKED as ours (`app_metadata.nodaro_access_block = true`, set in
- * the SAME GoTrue update as the ban), and an unblock lifts only a marked ban —
- * a ban something else placed (an SSO de-provision, an operator by hand) is
- * never undone, and never adopted by a later block either.
+ * the SAME GoTrue update as the ban, with the end we set), and an unblock
+ * lifts only a ban of ours — a ban something else placed (an SSO
+ * de-provision, an operator by hand, even after one of ours ran out) is never
+ * undone, and never adopted by a later block either.
  */
 
 const fake = vi.hoisted(() => {
@@ -131,6 +134,10 @@ vi.mock("@/lib/supabase.js", () => ({
   },
 }))
 
+/** The suspension in force (lib/account-measures.ts, read fresh): when it ends, or null. */
+const suspension = vi.hoisted(() => ({ endsAt: vi.fn(async (_userId: string): Promise<string | null> => null) }))
+vi.mock("@/lib/account-measures.js", () => ({ suspensionEndsAt: suspension.endsAt }))
+
 /** `config.PLATFORM_OWNER_EMAIL` is parsed once at boot; a proxy lets each case set it without touching the real object. */
 const owner = vi.hoisted(() => ({ email: "" }))
 vi.mock("@/lib/config.js", async (importOriginal) => {
@@ -146,12 +153,14 @@ vi.mock("@/lib/config.js", async (importOriginal) => {
 import {
   BAN_DURATION,
   BLOCK_BAN_MARKER,
+  BLOCK_BAN_UNTIL,
   BlocksUnavailableError,
   blockRefusal,
   convergeSignInBan,
   deleteBlockRow,
   isBlockedNow,
   readSignInBan,
+  signInInLine,
   writeBlockRow,
 } from "../account-blocking.js"
 import { __resetDeploymentPayerForTests, __setDeploymentPayerForTests } from "../../../lib/deployment-payer.js"
@@ -179,6 +188,7 @@ beforeEach(() => {
   fake.state.authUser = { id: TARGET, banned_until: null, app_metadata: {} }
   fake.state.authGetError = null
   fake.state.authUpdateError = null
+  suspension.endsAt.mockImplementation(async () => null)
 })
 
 afterEach(() => {
@@ -298,22 +308,23 @@ describe("convergeSignInBan", () => {
     fake.state.authUser = { id: TARGET, banned_until, app_metadata }
   }
 
-  it("uses GoTrue's permanent-ban idiom and its own marker key", () => {
+  it("uses GoTrue's permanent-ban idiom and its own marker keys", () => {
     expect(BAN_DURATION).toBe("876000h")
     expect(BLOCK_BAN_MARKER).toBe("nodaro_access_block")
+    expect(BLOCK_BAN_UNTIL).toBe("nodaro_access_block_until")
   })
 
+  /** A permanent ban of ours, as converge sets it: the idiom, the marker, and the end it set (~100 years on). */
+  const PERMANENT = { ban_duration: "876000h", app_metadata: { nodaro_access_block: true, nodaro_access_block_until: expect.stringMatching(/^21\d\d-/) } }
+
   describe("a block row is present", () => {
-    it("not banned → bans AND marks the ban as ours, in ONE GoTrue update", async () => {
+    it("not banned → bans AND marks the ban as ours, with its end, in ONE GoTrue update", async () => {
       blockRow()
       authUser(null)
 
       await expect(convergeSignInBan(TARGET)).resolves.toEqual({ signInBlocked: true, ours: true })
       expect(fake.updateUserById).toHaveBeenCalledTimes(1)
-      expect(fake.updateUserById).toHaveBeenCalledWith(TARGET, {
-        ban_duration: "876000h",
-        app_metadata: { nodaro_access_block: true },
-      })
+      expect(fake.updateUserById).toHaveBeenCalledWith(TARGET, PERMANENT)
       expect(fake.state.calls[0]).toMatchObject({
         table: "account_blocks",
         action: "select",
@@ -326,10 +337,7 @@ describe("convergeSignInBan", () => {
       authUser(LONG_AGO, { [BLOCK_BAN_MARKER]: true })
 
       await expect(convergeSignInBan(TARGET)).resolves.toEqual({ signInBlocked: true, ours: true })
-      expect(fake.updateUserById).toHaveBeenCalledWith(TARGET, {
-        ban_duration: "876000h",
-        app_metadata: { nodaro_access_block: true },
-      })
+      expect(fake.updateUserById).toHaveBeenCalledWith(TARGET, PERMANENT)
     })
 
     it("already banned by a block → nothing to do", async () => {
@@ -359,14 +367,14 @@ describe("convergeSignInBan", () => {
   })
 
   describe("no block row", () => {
-    it("banned by a block → the ban and the marker are lifted", async () => {
+    it("banned by a block → the ban, the marker and its end are lifted", async () => {
       authUser(FAR_FUTURE, { [BLOCK_BAN_MARKER]: true })
 
       await expect(convergeSignInBan(TARGET)).resolves.toEqual({ signInBlocked: false, ours: false })
       expect(fake.updateUserById).toHaveBeenCalledTimes(1)
       expect(fake.updateUserById).toHaveBeenCalledWith(TARGET, {
         ban_duration: "none",
-        app_metadata: { nodaro_access_block: null },
+        app_metadata: { nodaro_access_block: null, nodaro_access_block_until: null },
       })
     })
 
@@ -397,6 +405,166 @@ describe("convergeSignInBan", () => {
       fake.state.authUpdateError = error
 
       await expect(convergeSignInBan(TARGET)).rejects.toBe(error)
+    })
+  })
+
+  describe("a suspension (migration 589)", () => {
+    const T0 = Date.parse("2026-11-03T12:00:00.000Z")
+    const DAY = 86_400_000
+    const at = (ms: number) => new Date(ms).toISOString()
+    const until = (ms: number) => ({ ban_duration: `${(ms - T0) / 1000}s`, app_metadata: { nodaro_access_block: true, nodaro_access_block_until: at(ms) } })
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] })
+      vi.setSystemTime(T0)
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it("suspended and not banned → banned until the suspension's end, marked with that end", async () => {
+      suspension.endsAt.mockResolvedValue(at(T0 + 2 * DAY))
+      authUser(null)
+
+      await expect(convergeSignInBan(TARGET)).resolves.toEqual({ signInBlocked: true, ours: true })
+      expect(suspension.endsAt).toHaveBeenCalledWith(TARGET)
+      expect(fake.updateUserById).toHaveBeenCalledWith(TARGET, until(T0 + 2 * DAY))
+    })
+
+    it("a part of a second left still bans for a whole one", async () => {
+      suspension.endsAt.mockResolvedValue(at(T0 + 400))
+      authUser(null)
+
+      await convergeSignInBan(TARGET)
+      expect(fake.updateUserById).toHaveBeenCalledWith(TARGET, { ban_duration: "1s", app_metadata: { nodaro_access_block: true, nodaro_access_block_until: at(T0 + 1000) } })
+    })
+
+    it("already banned by ours to that end, give or take the two clocks → nothing to do", async () => {
+      suspension.endsAt.mockResolvedValue(at(T0 + 2 * DAY))
+      authUser(at(T0 + 2 * DAY + 4 * 60_000), { [BLOCK_BAN_MARKER]: true, [BLOCK_BAN_UNTIL]: at(T0 + 2 * DAY + 4 * 60_000) })
+
+      await expect(convergeSignInBan(TARGET)).resolves.toEqual({ signInBlocked: true, ours: true })
+      expect(fake.updateUserById).not.toHaveBeenCalled()
+    })
+
+    it("our ban ending at another time (an earlier suspension's) → set again to this one's end", async () => {
+      suspension.endsAt.mockResolvedValue(at(T0 + 2 * DAY))
+      authUser(at(T0 + DAY), { [BLOCK_BAN_MARKER]: true, [BLOCK_BAN_UNTIL]: at(T0 + DAY) })
+
+      await convergeSignInBan(TARGET)
+      expect(fake.updateUserById).toHaveBeenCalledWith(TARGET, until(T0 + 2 * DAY))
+    })
+
+    it("blocked as well → permanent; the suspension is not even read", async () => {
+      blockRow()
+      suspension.endsAt.mockResolvedValue(at(T0 + 2 * DAY))
+      authUser(null)
+
+      await convergeSignInBan(TARGET)
+      expect(fake.updateUserById).toHaveBeenCalledWith(TARGET, PERMANENT)
+      expect(suspension.endsAt).not.toHaveBeenCalled()
+    })
+
+    it("blocked while our ban runs only to a suspension's end → made permanent: the block outlasts it", async () => {
+      blockRow()
+      authUser(at(T0 + 2 * DAY), { [BLOCK_BAN_MARKER]: true, [BLOCK_BAN_UNTIL]: at(T0 + 2 * DAY) })
+
+      await expect(convergeSignInBan(TARGET)).resolves.toEqual({ signInBlocked: true, ours: true })
+      expect(fake.updateUserById).toHaveBeenCalledWith(TARGET, PERMANENT)
+    })
+
+    it("unblocked while suspended → the ban is shortened to the suspension's end, never lifted", async () => {
+      suspension.endsAt.mockResolvedValue(at(T0 + 2 * DAY))
+      authUser(FAR_FUTURE, { [BLOCK_BAN_MARKER]: true })
+
+      await expect(convergeSignInBan(TARGET)).resolves.toEqual({ signInBlocked: true, ours: true })
+      expect(fake.updateUserById).toHaveBeenCalledWith(TARGET, until(T0 + 2 * DAY))
+    })
+
+    it("neither in force while our suspension's ban still runs (lifted early) → lifted", async () => {
+      authUser(at(T0 + 2 * DAY), { [BLOCK_BAN_MARKER]: true, [BLOCK_BAN_UNTIL]: at(T0 + 2 * DAY) })
+
+      await expect(convergeSignInBan(TARGET)).resolves.toEqual({ signInBlocked: false, ours: false })
+      expect(fake.updateUserById).toHaveBeenCalledWith(TARGET, { ban_duration: "none", app_metadata: { nodaro_access_block: null, nodaro_access_block_until: null } })
+    })
+
+    it("a ban someone else placed after ours ran out is not ours: never lifted, never adopted by a block", async () => {
+      authUser(at(T0 + 10 * DAY), { [BLOCK_BAN_MARKER]: true, [BLOCK_BAN_UNTIL]: at(T0 - DAY) })
+      await expect(convergeSignInBan(TARGET)).resolves.toEqual({ signInBlocked: true, ours: false })
+
+      blockRow()
+      await expect(convergeSignInBan(TARGET)).resolves.toEqual({ signInBlocked: true, ours: false })
+      expect(fake.updateUserById).not.toHaveBeenCalled()
+    })
+
+    it("an end that does not read as a time is not ours", async () => {
+      authUser(at(T0 + 2 * DAY), { [BLOCK_BAN_MARKER]: true, [BLOCK_BAN_UNTIL]: "soon" })
+      await expect(convergeSignInBan(TARGET)).resolves.toEqual({ signInBlocked: true, ours: false })
+      expect(fake.updateUserById).not.toHaveBeenCalled()
+    })
+
+    it("throws when the suspension cannot be read, before GoTrue is touched", async () => {
+      const error = new Error("measures down")
+      suspension.endsAt.mockRejectedValue(error)
+
+      await expect(convergeSignInBan(TARGET)).rejects.toBe(error)
+      expect(fake.getUserById).not.toHaveBeenCalled()
+      expect(fake.updateUserById).not.toHaveBeenCalled()
+    })
+
+    it("a suspension lifted while the ban was being written: the record is read again, and the ban lifted too", async () => {
+      suspension.endsAt.mockResolvedValueOnce(at(T0 + 2 * DAY)).mockResolvedValueOnce(null)
+      authUser(null)
+
+      await expect(convergeSignInBan(TARGET)).resolves.toEqual({ signInBlocked: false, ours: false })
+      expect(fake.updateUserById.mock.calls.map((c) => (c[1] as { ban_duration: string }).ban_duration)).toEqual(["172800s", "none"])
+    })
+
+    it("a suspension taken while our ban was being lifted: read again, and banned until its end", async () => {
+      suspension.endsAt.mockResolvedValueOnce(null).mockResolvedValueOnce(at(T0 + 2 * DAY))
+      authUser(at(T0 + 2 * DAY), { [BLOCK_BAN_MARKER]: true, [BLOCK_BAN_UNTIL]: at(T0 + 2 * DAY) })
+
+      await expect(convergeSignInBan(TARGET)).resolves.toEqual({ signInBlocked: true, ours: true })
+      expect(fake.updateUserById.mock.calls.map((c) => (c[1] as { ban_duration: string }).ban_duration)).toEqual(["none", "172800s"])
+    })
+
+    it("a record that keeps moving is written twice at most; the record unmoved, once", async () => {
+      suspension.endsAt.mockResolvedValueOnce(at(T0 + 2 * DAY)).mockResolvedValueOnce(null).mockResolvedValueOnce(at(T0 + 2 * DAY))
+      authUser(null)
+      await convergeSignInBan(TARGET)
+      expect(fake.updateUserById).toHaveBeenCalledTimes(2)
+
+      fake.updateUserById.mockClear()
+      suspension.endsAt.mockResolvedValue(at(T0 + 2 * DAY))
+      await convergeSignInBan(TARGET)
+      expect(fake.updateUserById).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe("signInInLine — whether converging would change nothing, for the panel", () => {
+    const T0 = Date.parse("2026-11-03T12:00:00.000Z")
+    const DAY = 86_400_000
+    const at = (ms: number) => new Date(ms).toISOString()
+    const banned = (endsAt: number, ours = true) => ({ signInBlocked: true, ours, endsAt: at(endsAt) })
+    const none = { signInBlocked: false, ours: false, endsAt: null }
+    const blocked = { blocked: true, suspendedUntil: null }
+    const suspended = { blocked: false, suspendedUntil: at(T0 + 2 * DAY) }
+    const neither = { blocked: false, suspendedUntil: null }
+
+    it.each([
+      ["blocked, our permanent ban", banned(T0 + 90 * 365 * DAY), blocked, true],
+      ["blocked, our ban ending with a suspension", banned(T0 + 2 * DAY), blocked, false],
+      ["blocked, no ban", none, blocked, false],
+      ["blocked, someone else's ban", banned(T0 + DAY, false), blocked, true],
+      ["suspended, our ban to its end", banned(T0 + 2 * DAY + 60_000), suspended, true],
+      ["suspended, our permanent ban (an unblock that failed)", banned(T0 + 90 * 365 * DAY), suspended, false],
+      ["suspended, no ban", none, suspended, false],
+      ["suspended, someone else's ban", banned(T0 + DAY, false), suspended, true],
+      ["neither, no ban", none, neither, true],
+      ["neither, our ban", banned(T0 + DAY), neither, false],
+      ["neither, someone else's ban", banned(T0 + DAY, false), neither, true],
+    ] as const)("%s → %s", (_label, read, state, expected) => {
+      expect(signInInLine(read, state, T0)).toBe(expected)
     })
   })
 
@@ -457,10 +625,12 @@ describe("isBlockedNow — a fresh read for the role route", () => {
 
 describe("readSignInBan", () => {
   it.each([
-    ["banned by a block", FAR_FUTURE, { [BLOCK_BAN_MARKER]: true }, { signInBlocked: true, ours: true }],
-    ["banned by something else", FAR_FUTURE, {}, { signInBlocked: true, ours: false }],
-    ["a ban that ran out, still marked", LONG_AGO, { [BLOCK_BAN_MARKER]: true }, { signInBlocked: false, ours: false }],
-    ["never banned", null, {}, { signInBlocked: false, ours: false }],
+    ["banned by a block", FAR_FUTURE, { [BLOCK_BAN_MARKER]: true }, { signInBlocked: true, ours: true, endsAt: FAR_FUTURE }],
+    ["banned by a block, to the end it kept", FAR_FUTURE, { [BLOCK_BAN_MARKER]: true, [BLOCK_BAN_UNTIL]: FAR_FUTURE }, { signInBlocked: true, ours: true, endsAt: FAR_FUTURE }],
+    ["banned by someone else after ours ran out", FAR_FUTURE, { [BLOCK_BAN_MARKER]: true, [BLOCK_BAN_UNTIL]: LONG_AGO }, { signInBlocked: true, ours: false, endsAt: FAR_FUTURE }],
+    ["banned by something else", FAR_FUTURE, {}, { signInBlocked: true, ours: false, endsAt: FAR_FUTURE }],
+    ["a ban that ran out, still marked", LONG_AGO, { [BLOCK_BAN_MARKER]: true }, { signInBlocked: false, ours: false, endsAt: null }],
+    ["never banned", null, {}, { signInBlocked: false, ours: false, endsAt: null }],
   ])("%s", async (_label, bannedUntil, metadata, expected) => {
     fake.state.authUser = { id: TARGET, banned_until: bannedUntil, app_metadata: metadata }
     await expect(readSignInBan(TARGET)).resolves.toEqual(expected)
