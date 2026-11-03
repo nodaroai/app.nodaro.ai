@@ -12,6 +12,7 @@ import {
   type ComplaintFilters,
 } from "@/ee/hooks/queries/use-admin-complaints-queries"
 import { categoryLabel, formatWhen, statusLabel, statusTone, unreadableLabel } from "./complaint-labels"
+import { RepeatInfringerPolicyCard } from "./repeat-infringer-policy-card"
 
 /**
  * Admin → Complaints: the queue the public form (`/copyright-complaints`)
@@ -154,6 +155,8 @@ export default function AdminComplaintsPage() {
           <Button variant="outline" size="sm" disabled={filters.page >= pages || isPlaceholderData} onClick={() => set({ page: filters.page + 1 })}>Next</Button>
         </div>
       )}
+
+      <RepeatInfringerPolicyCard />
     </div>
   )
 }

@@ -4,7 +4,7 @@ import { requireAdminInApp } from "../middleware/require-admin-in-app.js"
 import { audit } from "./admin-trends-lifecycle.js"
 import { caseFailure } from "./complaint-route-errors.js"
 import { formatZodError } from "../../lib/zod-error.js"
-import { hasRefusedCharacters, normalizeLineBreaks } from "../../lib/counter-notices.js"
+import { plainText } from "../../lib/plain-text.js"
 import {
   declineCounterNotice,
   markCounterNoticeForwarded,
@@ -31,13 +31,7 @@ const MOVES = { rateLimit: { max: 60, timeWindow: "1 minute" } }
 
 const idParams = z.object({ id: z.string().uuid() })
 
-/** Plain text that may break lines, nothing more: it is kept on a legal record, and a decline's reason is shown to the sender. */
-const plainText = (max: number) =>
-  z.preprocess(
-    (value) => (typeof value === "string" ? normalizeLineBreaks(value) : value),
-    z.string().trim().max(max).refine((value) => !hasRefusedCharacters(value, { lineBreaks: true }), { message: "Plain text" }),
-  )
-
+// Plain text only (lib/plain-text.ts): a note is kept on a legal record, and a decline's reason is shown to the sender.
 const noteBody = z.strictObject({ note: plainText(2000).nullable().optional() })
 const declineBody = z.strictObject({ reason: plainText(2000).refine((value) => value.length > 0, { message: "Say why" }) })
 

@@ -21,6 +21,13 @@ vi.mock("../../lib/my-restrictions.js", () => ({
     return [{ id: ids.R, caseReference: "CR-2026-000001" }]
   }),
 }))
+vi.mock("../../lib/account-measures.js", () => ({
+  myAccountStanding: vi.fn(async (userId: string) => {
+    state.calls.push(["standing", userId])
+    if (userId === ids.GONE) throw new Error("Account measures read failed: down")
+    return { inForce: [], warnings: [{ kind: "warning", reason: "A first warning", appliedAt: "2026-10-01T00:00:00Z", endsAt: null }], infringements: [], windowMonths: 24 }
+  }),
+}))
 vi.mock("../../lib/counter-notices.js", async () => {
   const real = await vi.importActual<typeof import("../../lib/counter-notices.js")>("../../lib/counter-notices.js")
   return {
@@ -77,6 +84,7 @@ const send = (id: string, payload: unknown, headers: Record<string, string> = as
 describe("who is answered", () => {
   const routes = [
     { method: "GET", url: "/v1/content-restrictions/mine" },
+    { method: "GET", url: "/v1/account-measures/mine" },
     { method: "GET", url: "/v1/counter-notices/declaration" },
     { method: "POST", url: `/v1/content-restrictions/${ids.R}/counter-notice`, payload: body() },
   ] as const
@@ -103,6 +111,15 @@ describe("the routes", () => {
     const res = await app.inject({ method: "GET", url: "/v1/content-restrictions/mine", headers: asUser })
     expect(res.json()).toEqual({ data: [{ id: ids.R, caseReference: "CR-2026-000001" }] })
     expect(state.calls).toEqual([["list", USER]])
+  })
+
+  it("answers where my account stands, as me; a read that failed is the server's", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/account-measures/mine", headers: asUser })
+    expect(res.json()).toEqual({
+      data: { inForce: [], warnings: [{ kind: "warning", reason: "A first warning", appliedAt: "2026-10-01T00:00:00Z", endsAt: null }], infringements: [], windowMonths: 24 },
+    })
+    expect(state.calls).toEqual([["standing", USER]])
+    expect((await app.inject({ method: "GET", url: "/v1/account-measures/mine", headers: { "x-user-id": ids.GONE } })).statusCode).toBe(500)
   })
 
   it("answers the declaration verbatim with its hash", async () => {

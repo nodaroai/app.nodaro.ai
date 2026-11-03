@@ -64,6 +64,10 @@ vi.mock("@/lib/import-source-policy.js", () => ({
   assertImportSourceAllowed: vi.fn().mockResolvedValue(undefined),
 }))
 
+// The account's measures (lib/account-measures.ts) have their own tests; here
+// a fake, so these tests pin the 403 the route answers when imports are blocked.
+vi.mock("@/lib/account-measures.js", () => ({ assertImportsAllowed: vi.fn().mockResolvedValue(undefined) }))
+
 // The content rights check (lib/content-rights.ts) has its own tests; here it
 // is a fake so these tests pin what the route does with its answer: forwards
 // the id to the download, and turns its refusal into a 403.
@@ -623,6 +627,21 @@ describe("POST /v1/download-video — asset bookkeeping", () => {
     const res = await post({ url: YT_URL, confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e03" })
     expect(res.statusCode).toBe(403)
     expect(res.json().error).toEqual({ code: "import_source_disabled", message: "This link can't be imported here." })
+    expect(checkRightsConfirmation).not.toHaveBeenCalled()
+    expect(consumeRightsConfirmation).not.toHaveBeenCalled()
+    expect(downloadYouTubeVideo).not.toHaveBeenCalled()
+  })
+
+  it("an account whose imports are blocked is refused with 403 imports_blocked, and nothing is spent or fetched", async () => {
+    const { assertImportsAllowed } = await import("../../lib/account-measures.js")
+    const { AccountMeasureError } = await import("../../lib/account-measure-error.js")
+    vi.mocked(assertImportsAllowed).mockRejectedValueOnce(new AccountMeasureError("2026-12-03T10:00:00.000Z", false))
+    const res = await post({ url: YT_URL, confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e03" })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error).toEqual({
+      code: "imports_blocked",
+      message: "Importing links is blocked on this account until 2026-12-03 (UTC). Content restrictions in your settings says why.",
+    })
     expect(checkRightsConfirmation).not.toHaveBeenCalled()
     expect(consumeRightsConfirmation).not.toHaveBeenCalled()
     expect(downloadYouTubeVideo).not.toHaveBeenCalled()

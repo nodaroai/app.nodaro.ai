@@ -284,11 +284,12 @@ export const queryKeys = {
     list: () => ["connected-apps", "list"] as const,
   },
 
-  // Content of mine a complaint led to restricting, and the counter-notification's declaration
+  // Content of mine a complaint led to restricting, the counter-notification's declaration, and where my account stands
   myRestrictions: {
     all: ["my-restrictions"] as const,
     list: () => ["my-restrictions", "list"] as const,
     declaration: () => ["my-restrictions", "declaration"] as const,
+    standing: () => ["my-restrictions", "standing"] as const,
   },
 
   // Content rights: the account's standing authorization for imports through its keys and agents
@@ -401,6 +402,7 @@ export const queryKeys = {
       ["admin", "complaints", "list", status, kind, q, page] as const,
     complaint: (id: string) => ["admin", "complaints", "one", id] as const,
     complaintsCount: () => ["admin", "complaints", "count"] as const,
+    repeatInfringerPolicy: () => ["admin", "complaints", "repeat-infringer-policy"] as const,
     kieCredits: (days: number) =>
       ["admin", "kie-credits", days] as const,
     hostedDeployments: () => ["admin", "hosted-deployments"] as const,

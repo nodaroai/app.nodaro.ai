@@ -25,6 +25,12 @@ import {
   type GalleryBannedEmailPattern,
   type GalleryBannedUser,
 } from "./gallery-moderation-settings.js"
+import {
+  DEFAULT_REPEAT_INFRINGER_POLICY,
+  REPEAT_INFRINGER_POLICY_KEY,
+  parseRepeatInfringerPolicy,
+  type RepeatInfringerPolicy,
+} from "./repeat-infringer-policy.js"
 
 /**
  * How the nodaro.ai credential participates in routing (4b, founder
@@ -148,6 +154,12 @@ export interface AppSettings {
    * Video URL node would fail with it on. That lane is a later change.
    */
   content_rights_required: boolean
+  /**
+   * The repeat-infringer policy (repeat-infringer-policy.ts): the measure an
+   * administrator takes at each count of an account's infringements, and the
+   * window they are counted over. Absent or unreadable: the default.
+   */
+  rights_repeat_infringer_policy: RepeatInfringerPolicy
 }
 
 // Cache settings for 60 seconds to avoid hitting the DB on every job
@@ -194,7 +206,7 @@ async function refreshSettings(): Promise<AppSettings> {
   if (error) {
     console.error("[getAppSettings] Error fetching settings:", error.message)
     // Return defaults on error
-    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null, nodaro_motion_pulse_audio: null, nodaro_motion_prism_reference_audio: null, nodaro_motion_steps: null, nodaro_motion_style: null, nodaro_motion_prompt_wording: null, nodaro_motion_advanced: null, content_rights_required: false }
+    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null, nodaro_motion_pulse_audio: null, nodaro_motion_prism_reference_audio: null, nodaro_motion_steps: null, nodaro_motion_style: null, nodaro_motion_prompt_wording: null, nodaro_motion_advanced: null, content_rights_required: false, rights_repeat_infringer_policy: DEFAULT_REPEAT_INFRINGER_POLICY }
     readFailures.add(fallback)
     return fallback
   }
@@ -226,11 +238,16 @@ async function refreshSettings(): Promise<AppSettings> {
     nodaro_motion_prompt_wording: null,
     nodaro_motion_advanced: null,
     content_rights_required: false,
+    rights_repeat_infringer_policy: DEFAULT_REPEAT_INFRINGER_POLICY,
   }
 
   for (const row of data ?? []) {
     if (row.key === "content_rights_required" && typeof row.value === "boolean") {
       settings.content_rights_required = row.value
+      continue
+    }
+    if (row.key === REPEAT_INFRINGER_POLICY_KEY) {
+      settings.rights_repeat_infringer_policy = parseRepeatInfringerPolicy(row.value)
       continue
     }
     if (row.key === NODARO_MOTION_MASKING_KEY) {

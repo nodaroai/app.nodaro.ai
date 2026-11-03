@@ -175,6 +175,26 @@ vi.mock("../../../lib/content-restrictions.js", async () => {
   }
 })
 
+// The record of infringements and measures has tests of its own (account-record.test.ts); here a fake, to pin how the case shows it.
+const records = vi.hoisted(() => ({
+  policy: { windowMonths: 24, steps: [{ infringements: 1, kind: "warning" }] },
+  down: false,
+  calls: [] as Array<[string, unknown]>,
+}))
+vi.mock("../../../lib/repeat-infringer-policy-store.js", () => ({ currentRepeatInfringerPolicy: async () => records.policy }))
+vi.mock("../account-record.js", () => ({
+  accountRecordOf: vi.fn(async (userId: string, policy: unknown) => {
+    records.calls.push(["record", [userId, policy]])
+    if (records.down) throw new Error("Account measures read failed: down")
+    return { userId, windowMonths: 24, inWindow: 1, step: { infringements: 1, kind: "warning" }, infringements: [], measures: [], blocked: false }
+  }),
+  standingOf: vi.fn(async (userIds: string[], policy: unknown) => {
+    records.calls.push(["standing", [userIds, policy]])
+    if (records.down) throw new Error("Account measures read failed: down")
+    return new Map(userIds.map((id) => [id, { inWindow: id === "u-1" ? 1 : 0, inForce: [] }]))
+  }),
+}))
+
 import {
   ComplaintCaseError,
   addComplaintNote,
@@ -232,6 +252,8 @@ function complaint(over: Row): Row {
 const caseRow = (id = "c-1") => db.tables.rights_complaints!.find((r) => r.id === id)!
 
 beforeEach(() => {
+  records.down = false
+  records.calls = []
   db.tables = {
     rights_complaints: [
       complaint({}),
@@ -341,6 +363,8 @@ describe("one case", () => {
       moreAccounts: 0,
       historyTruncated: false,
       missingAssetIds: [],
+      // The case names no account: there is no record to show.
+      record: null,
       partial: [],
     })
     expect(c.events.map((e) => [e.kind, e.data])).toEqual([["received", { links: 1 }], ["verified", {}]])
@@ -353,8 +377,38 @@ describe("one case", () => {
   it("names each account with its other cases, the verified apart from the unverified, and its standing restrictions only", async () => {
     const c = await readComplaintCase("c-1")
     expect(c.matchedUsers).toEqual([
-      { id: "u-1", email: "owner@example.test", otherCases: { verified: { under_review: 1, closed: 1 }, unverified: { received: 1 } }, activeRestrictions: 1 },
+      {
+        id: "u-1",
+        email: "owner@example.test",
+        otherCases: { verified: { under_review: 1, closed: 1 }, unverified: { received: 1 } },
+        activeRestrictions: 1,
+        standing: { inWindow: 1, inForce: [] },
+      },
     ])
+  })
+
+  it("shows the named account's whole record, and each shown account's standing, under the policy as it reads now", async () => {
+    db.tables.rights_complaints![0] = { ...db.tables.rights_complaints![0]!, user_id: "u-1", matched_user_ids: ["u-1", "u-2"] }
+    const c = await readComplaintCase("c-1")
+    expect(c.record).toMatchObject({ userId: "u-1", inWindow: 1, step: { infringements: 1, kind: "warning" } })
+    expect(c.matchedUsers.map((u) => [u.id, u.standing])).toEqual([
+      ["u-1", { inWindow: 1, inForce: [] }],
+      ["u-2", { inWindow: 0, inForce: [] }],
+    ])
+    expect(records.calls).toEqual([
+      ["record", ["u-1", records.policy]],
+      ["standing", [["u-1", "u-2"], records.policy]],
+    ])
+  })
+
+  it("a record that cannot be read is named and shown empty, the accounts' standing too; the rest of the case is answered", async () => {
+    records.down = true
+    db.tables.rights_complaints![0] = { ...db.tables.rights_complaints![0]!, user_id: "u-1" }
+    const c = await readComplaintCase("c-1")
+    expect(c.partial).toEqual(["record"])
+    expect(c.record).toBeNull()
+    expect(c.matchedUsers.map((u) => [u.id, u.standing])).toEqual([["u-1", null]])
+    expect(c.matchedAssets).toHaveLength(2)
   })
 
   it("names the matched files that no longer exist, and says when the accounts' history was cut", async () => {

@@ -60,6 +60,16 @@ describe("uploads.importUrl", () => {
     expect((err as ImportRefusedError).message).toBe("Confirm that you hold the rights to this content before it is imported.")
   })
 
+  it("rejects an account whose imports are blocked with an ImportRefusedError carrying imports_blocked and the server's message", async () => {
+    const message = "Importing links is blocked on this account until 2026-12-03 (UTC). Content restrictions in your settings says why."
+    const fetchMock = vi.fn().mockReturnValueOnce(mockErr(403, { error: { code: "imports_blocked", message } }))
+    const err = await client(fetchMock).uploads.importUrl(SOURCE).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ImportRefusedError)
+    expect(err).toBeInstanceOf(ForbiddenError)
+    expect((err as ImportRefusedError).code).toBe("imports_blocked")
+    expect((err as ImportRefusedError).message).toBe(message)
+  })
+
   it("rejects a 422 fetch_failed with a NodaroError carrying that code", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(
       mockErr(422, { error: { code: "fetch_failed", message: "The URL responded with HTTP 404" } }),

@@ -8903,6 +8903,29 @@ export async function getCounterNoticeDeclaration(): Promise<{ data: { paragraph
   return apiRequest("/v1/counter-notices/declaration", "apiErr.counterNoticeDeclaration")
 }
 
+/** A measure on my account under the repeat-infringer policy, as I am told it (backend lib/account-measures.ts). */
+export interface MyAccountMeasure {
+  kind: "warning" | "imports_blocked" | "closed"
+  /** What the administrator told me. */
+  reason: string
+  appliedAt: string
+  /** When it ends; null: no end of its own. */
+  endsAt: string | null
+}
+
+/** Where my account stands: the measures in force, and the warnings and infringements within the policy's window. Never an administrator's note. */
+export interface MyAccountStanding {
+  inForce: MyAccountMeasure[]
+  warnings: MyAccountMeasure[]
+  infringements: Array<{ caseReference: string | null; recordedAt: string }>
+  windowMonths: number
+}
+
+/** Where my account stands under the repeat-infringer policy. Browser sessions only. */
+export async function getMyAccountStanding(): Promise<{ data: MyAccountStanding }> {
+  return apiRequest("/v1/account-measures/mine", "apiErr.myAccountStanding")
+}
+
 export interface CounterNoticeInput {
   name: string
   email: string

@@ -5,6 +5,7 @@ import { clientNetworkHash } from "../lib/client-address.js"
 import { firstHeaderValue } from "../lib/request-helpers.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { listMyRestrictions } from "../lib/my-restrictions.js"
+import { myAccountStanding } from "../lib/account-measures.js"
 import {
   COUNTER_NOTICE_DECLARATION,
   COUNTER_NOTICE_DECLARATION_HASH,
@@ -17,13 +18,15 @@ import {
 
 /**
  * The owner's side of a restriction (lib/my-restrictions.ts,
- * lib/counter-notices.ts): what a complaint led to on their content, and the
- * counter-notice that answers it. A counter-notice is a sworn statement, so
- * every route here answers the person in their own session only: an API key,
- * an app's token or an agent is refused (`in_app_only`), and none of them may
- * swear for the person.
+ * lib/counter-notices.ts): what a complaint led to on their content, the
+ * counter-notice that answers it, and where their account stands under the
+ * repeat-infringer policy (lib/account-measures.ts). A counter-notice is a
+ * sworn statement, so every route here answers the person in their own
+ * session only: an API key, an app's token or an agent is refused
+ * (`in_app_only`), and none of them may swear for the person.
  *
  *   GET  /v1/content-restrictions/mine                — the restrictions on my content a complaint led to
+ *   GET  /v1/account-measures/mine                    — the measures in force on my account, and the warnings and infringements in the window
  *   GET  /v1/counter-notices/declaration              — the declaration, verbatim, and its hash
  *   POST /v1/content-restrictions/:id/counter-notice  — the counter-notice for one of them
  */
@@ -91,6 +94,16 @@ export async function counterNoticesRoutes(app: FastifyInstance) {
       return { data: await listMyRestrictions(req.userId!) }
     } catch (e) {
       return sendInternalError(reply, req, e, "Failed to read your restrictions")
+    }
+  })
+
+  app.get("/v1/account-measures/mine", { config: READS }, async (req, reply) => {
+    const refused = refuseOutsideTheApp(req, reply)
+    if (refused) return refused
+    try {
+      return { data: await myAccountStanding(req.userId!) }
+    } catch (e) {
+      return sendInternalError(reply, req, e, "Failed to read your account's standing")
     }
   })
 

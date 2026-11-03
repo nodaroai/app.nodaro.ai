@@ -1,17 +1,66 @@
-// @test-watches supabase/migrations/580_rights_complaints.sql
+// @test-watches supabase/migrations/580_rights_complaints.sql supabase/migrations/588_repeat_infringers.sql backend/src/ee/lib/repeat-infringers.ts
 /**
  * The Complaints screen's words for what the database holds: every status and
  * category the table allows (migration 580) has its label and its place in
- * the screen's own list, and nothing more; the mail link to a complainant can
- * only ever be an address; a file's address is offered to open only when it
- * is not restricted and is https; an account's history reads verified cases
- * apart from unverified ones.
+ * the screen's own list, and nothing more; every measure the record allows
+ * (migration 588) has its label, and every entry the record's moves write to
+ * a case's log has its words; the mail link to a complainant can only ever be
+ * an address; a file's address is offered to open only when it is not
+ * restricted and is https; an account's history reads verified cases apart
+ * from unverified ones, and its standing reads its count and what is in force.
  */
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { COMPLAINT_STATUSES, REFERENCE_SEARCH_MAX, searchProblem } from "@/ee/hooks/queries/use-admin-complaints-queries"
-import { CATEGORY_LABELS, STATUS_LABELS, actorLabel, historyLabel, mailtoHref, openableAddress, unreadableLabel } from "../complaint-labels"
+import { MEASURE_KINDS } from "@/ee/hooks/queries/use-admin-repeat-infringers"
+import {
+  CATEGORY_LABELS,
+  EVENT_LABELS,
+  MEASURE_LABELS,
+  STATUS_LABELS,
+  actorLabel,
+  historyLabel,
+  mailtoHref,
+  measureLabel,
+  openableAddress,
+  standingLabel,
+  unreadableLabel,
+} from "../complaint-labels"
+
+const ROOT = join(import.meta.dirname, "../../../../../../../..")
+
+describe("measures", () => {
+  it("every measure the record allows (migration 588) has its label, and nothing more", () => {
+    const sql = readFileSync(join(ROOT, "supabase/migrations/588_repeat_infringers.sql"), "utf8")
+    const check = /CONSTRAINT account_sanctions_kind CHECK \(kind IN \(([^)]*)\)\)/.exec(sql)
+    const kinds = [...check![1]!.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!).sort()
+    expect(kinds.length).toBeGreaterThan(0)
+    expect(Object.keys(MEASURE_LABELS).sort()).toEqual(kinds)
+    expect([...MEASURE_KINDS].sort()).toEqual(kinds)
+  })
+
+  it("every entry the record's moves write to a case's log has its words", () => {
+    const source = readFileSync(join(ROOT, "backend/src/ee/lib/repeat-infringers.ts"), "utf8")
+    const kinds = [...source.matchAll(/recordComplaintEventQuietly\([^,]+,\s*"([a-z_]+)"/g)].map((m) => m[1]!)
+    expect(kinds.sort()).toEqual(["infringement_recorded", "infringement_withdrawn", "measure_applied", "measure_lifted"])
+    for (const kind of kinds) expect(EVENT_LABELS[kind], kind).toBeTruthy()
+  })
+
+  it("names a measure, an import block with its length or until lifted", () => {
+    expect(measureLabel("warning")).toBe("Warning")
+    expect(measureLabel("closed", 30)).toBe("Account closed")
+    expect(measureLabel("imports_blocked", 30)).toBe("Importing links blocked for 30 days")
+    expect(measureLabel("imports_blocked", 1)).toBe("Importing links blocked for 1 day")
+    expect(measureLabel("imports_blocked")).toBe("Importing links blocked until lifted")
+  })
+
+  it("reads an account's standing: its count in the window, then what is in force", () => {
+    expect(standingLabel({ inWindow: 0, inForce: [] }, 24)).toBe("0 infringements in 24 months")
+    expect(standingLabel({ inWindow: 1, inForce: [] })).toBe("1 infringement in the policy's window")
+    expect(standingLabel({ inWindow: 2, inForce: ["imports_blocked", "closed"] }, 12)).toBe("2 infringements in 12 months · importing links blocked, account closed")
+  })
+})
 
 describe("actorLabel", () => {
   it("names who wrote a log entry: the content's owner (a counter-notice) is never taken for an administrator", () => {

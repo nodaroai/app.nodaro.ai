@@ -1,4 +1,5 @@
 import type { ComplaintStatus } from "@/ee/hooks/queries/use-admin-complaints-queries"
+import type { MeasureKind } from "@/ee/hooks/queries/use-admin-repeat-infringers"
 
 /** What each status means to the handler (the operator pages are English, like the rest of the admin chrome). */
 export const STATUS_LABELS: Readonly<Record<ComplaintStatus, string>> = {
@@ -51,6 +52,30 @@ export const EVENT_LABELS: Readonly<Record<string, string>> = {
   content_restored: "Content restored",
   restore_window_opened: "Restore window opened",
   restore_window_closing: "Restore window closes on the next weekday",
+  infringement_recorded: "Infringement recorded against the account",
+  infringement_withdrawn: "Infringement withdrawn",
+  measure_applied: "Measure taken on the account",
+  measure_lifted: "Measure lifted",
+}
+
+/** A measure on an account, as the handler reads it. */
+export const MEASURE_LABELS: Readonly<Record<MeasureKind, string>> = {
+  warning: "Warning",
+  imports_blocked: "Importing links blocked",
+  closed: "Account closed",
+}
+
+/** A policy step, or a measure, as words: "Importing links blocked for 30 days", "Warning". */
+export function measureLabel(kind: MeasureKind, days?: number | null): string {
+  if (kind !== "imports_blocked") return MEASURE_LABELS[kind]
+  return days ? `${MEASURE_LABELS.imports_blocked} for ${days} day${days === 1 ? "" : "s"}` : `${MEASURE_LABELS.imports_blocked} until lifted`
+}
+
+/** A matched account's standing, as words: its infringements in the window, and what is in force. */
+export function standingLabel(standing: { readonly inWindow: number; readonly inForce: readonly MeasureKind[] }, windowMonths?: number): string {
+  const within = windowMonths ? ` in ${windowMonths} months` : " in the policy's window"
+  const count = `${standing.inWindow} infringement${standing.inWindow === 1 ? "" : "s"}${within}`
+  return standing.inForce.length === 0 ? count : `${count} · ${standing.inForce.map((kind) => MEASURE_LABELS[kind].toLowerCase()).join(", ")}`
 }
 
 /** Who wrote a log entry: the complainant, the content's owner (a counter-notice), the server, the database's own record of a change, or an administrator. */

@@ -56,6 +56,27 @@ export async function blockRefusal(adminId: string, targetId: string): Promise<B
   return null
 }
 
+export interface AccountBlockRow {
+  /** Why it was blocked, as the administrator wrote it. */
+  readonly reason: string | null
+  readonly blockedAt: string
+}
+
+/**
+ * The account's block row — a fresh read, not the snapshot — or null. Null
+ * too while the table does not exist yet (staging runs ahead of migration 458).
+ */
+export async function readBlock(userId: string): Promise<AccountBlockRow | null> {
+  const { data, error } = await supabase.from("account_blocks").select("reason, created_at").eq("user_id", userId.toLowerCase()).maybeSingle()
+  if (error) {
+    if (isMissingTableError(error)) return null
+    throw error
+  }
+  if (!data) return null
+  const row = data as { reason: string | null; created_at: string }
+  return { reason: row.reason, blockedAt: row.created_at }
+}
+
 /**
  * Is this account blocked right now — a fresh read, not the snapshot. False
  * while the table does not exist yet (staging runs ahead of migration 458).

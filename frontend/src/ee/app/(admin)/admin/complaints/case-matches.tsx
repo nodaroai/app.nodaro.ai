@@ -15,7 +15,7 @@ import {
   type ComplaintCase,
   type MatchedAsset,
 } from "@/ee/hooks/queries/use-admin-complaints-queries"
-import { formatWhen, historyLabel, openableAddress } from "./complaint-labels"
+import { formatWhen, historyLabel, openableAddress, standingLabel } from "./complaint-labels"
 import { restrictionBytesSummary } from "./restriction-bytes"
 
 const adminUserLink = (userId: string) => `/admin/users?user=${encodeURIComponent(userId)}`
@@ -185,6 +185,7 @@ function CaseAccounts({ complaint: c }: { readonly complaint: ComplaintCase }) {
                 <span className="text-xs text-muted-foreground">
                   {historyLabel(u.otherCases)}
                   {` · ${u.activeRestrictions} standing restriction${u.activeRestrictions === 1 ? "" : "s"}`}
+                  {u.standing ? ` · ${standingLabel(u.standing, c.record?.windowMonths)}` : ""}
                 </span>
                 {named ? (
                   <>

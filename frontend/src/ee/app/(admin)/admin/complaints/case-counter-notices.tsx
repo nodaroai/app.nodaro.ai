@@ -2,7 +2,6 @@ import { useState } from "react"
 import { Copy, Loader2, Mail } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   useDeclineCounterNotice,
   useMarkCounterNoticeForwarded,
@@ -14,6 +13,7 @@ import {
 } from "@/ee/hooks/queries/use-admin-complaints-queries"
 import { formatWhen, mailtoHref, unreadableLabel } from "./complaint-labels"
 import { counterNoticeText, restoreBlocker, restoreOverdue, unreadableFields, waitingForDecision, windowDay } from "./counter-notice-state"
+import { StepText } from "./step-text"
 
 const POSITION_LABELS: Readonly<Record<CaseCounterNotice["position"], string>> = {
   before: "Window not open yet",
@@ -195,43 +195,6 @@ function NoticeOutcomes({ notice: n }: { readonly notice: CaseCounterNotice }) {
         </p>
       )}
     </>
-  )
-}
-
-/** A short text asked for before a step: a note, or (when `required`) a reason. */
-function StepText({
-  label,
-  placeholder,
-  cta,
-  required,
-  busy,
-  onSubmit,
-  onCancel,
-}: {
-  readonly label: string
-  readonly placeholder: string
-  readonly cta: string
-  readonly required: boolean
-  readonly busy: boolean
-  readonly onSubmit: (text: string | null) => void
-  readonly onCancel: () => void
-}) {
-  const [text, setText] = useState("")
-  return (
-    <form
-      className="flex flex-wrap items-center gap-2"
-      onSubmit={(e) => {
-        e.preventDefault()
-        onSubmit(text.trim() || null)
-      }}
-    >
-      <Input className="max-w-md" aria-label={label} placeholder={placeholder} value={text} maxLength={2000} autoFocus onChange={(e) => setText(e.target.value)} />
-      <Button type="submit" size="sm" disabled={busy || (required && text.trim() === "")}>
-        {busy && <Loader2 className="me-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-        {cta}
-      </Button>
-      <Button type="button" size="sm" variant="ghost" onClick={onCancel} disabled={busy}>Cancel</Button>
-    </form>
   )
 }
 
