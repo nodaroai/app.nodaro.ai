@@ -177,6 +177,7 @@ import { adminAvailabilityRoutes } from "./ee/routes/admin-availability.js"
 import { consentRoutes } from "./ee/routes/consent.js"
 import { trendRoutes } from "./ee/routes/trends.js"
 import { castSwapStyleChoiceRoutes } from "./ee/routes/cast-swap-style-choice.js"
+import { castSwapAdvancedRoutes } from "./ee/routes/cast-swap-advanced.js"
 import { adminTrendsRoutes } from "./ee/routes/admin-trends.js"
 import { trendRadarRoutes } from "./ee/routes/trend-radar.js"
 import { adminNodaroMotionRoutes } from "./ee/routes/admin-nodaro-motion.js"
@@ -777,6 +778,8 @@ export async function buildApp() {
   if (hasCredits()) await app.register(trendRoutes)
   // Nodaro Motion: whether people choose a direct run's style per engine (public; the admin's setting).
   if (hasCredits()) await app.register(castSwapStyleChoiceRoutes)
+  // Nodaro Motion: whether a Nodaro Motion page shows its Advanced options (public; the admin's setting, a page option only).
+  if (hasCredits()) await app.register(castSwapAdvancedRoutes)
   // Trends admin: build, test, promote admin runs to examples, publish (engine check per environment).
   if (hasAdmin() && hasCredits()) await app.register(adminTrendsRoutes)
   // Trend Radar: the daily run's candidate queue and settings (admin session only; the cron's tick).

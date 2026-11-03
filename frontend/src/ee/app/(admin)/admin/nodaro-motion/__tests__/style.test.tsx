@@ -46,6 +46,8 @@ beforeEach(() => {
   routes["GET /v1/admin/nodaro-motion/steps"] = () => ({ body: { data: { steps: null, updatedAt: null, engines: ENGINES } } })
   routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: BOTH } })
   routes[`GET ${STYLE_URL}`] = () => view(null)
+  // The page's Advanced switch (advanced.test.tsx): never saved, hidden.
+  routes["GET /v1/admin/nodaro-motion/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
 })
 afterEach(() => vi.unstubAllGlobals())
 

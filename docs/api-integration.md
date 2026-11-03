@@ -4623,6 +4623,7 @@ served by the Nodaro Cloud plugin and answer 404 on self-hosted installs
 | `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged. |
 | `POST` | `/v1/cast-swap` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
 | `GET` | `/v1/cast-swap/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed (see Style below). Public: no sign-in needed. |
+| `GET` | `/v1/cast-swap/advanced` | Whether the Nodaro Motion page shows its Advanced options (see below). Public: no sign-in needed. |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
 `{ kind: "person", name?, images, body?, outfit?, hair? }`, at most 1
@@ -4690,6 +4691,16 @@ sign-in needed) says which, per engine:
 `Choice` is `"user"` (you choose, as above), `"precise"` or `"flex"` (Motion,
 `style: "motion"`). An app shows its style choice only for an engine answered
 `"user"`. The answer may be up to a minute old. Trends are not affected.
+
+**The Advanced options on the Nodaro Motion page.** The Nodaro Motion page
+offers two of the body's fields, `prepareReferences` (see Reference
+preparation below) and `prePrompt`, only under its Advanced options, which
+stay hidden unless Nodaro turns them on: one setting for the whole page, the
+same for every engine. `GET /v1/cast-swap/advanced` (public, no sign-in
+needed) answers `{ show: boolean }`, so an app built on this API can show or
+hide the same options. It describes the page only: every run and estimate
+takes `prepareReferences` and `prePrompt` as described here, whatever it
+answers. The answer may be up to a minute old.
 
 **Preparing the clip.** How the source clip is prepared for the video model —
 for one, whether faces are hidden first, and whether a clip the model refuses

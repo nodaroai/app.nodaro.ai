@@ -16,6 +16,8 @@
  *                                         the direct runs' preparation steps per engine (admin-nodaro-motion-steps.ts)
  *   GET/PUT /v1/admin/nodaro-motion/style
  *                                         who chooses a direct run's style per engine: people, or always Precise / Flex (admin-nodaro-motion-style.ts)
+ *   GET/PUT /v1/admin/nodaro-motion/advanced
+ *                                         whether a Nodaro Motion page shows its Advanced options, one switch for the page (admin-nodaro-motion-advanced.ts)
  *
  * The setting (`nodaro_motion_masking`, lib/nodaro-motion-masking.ts) is how
  * the Cast Swap engine masks faces on every DIRECT run of each engine —
@@ -90,6 +92,7 @@ import { registerNodaroMotionPrismReferenceAudioRoutes } from "./admin-nodaro-mo
 import { registerNodaroMotionStepsRoutes } from "./admin-nodaro-motion-steps.js"
 import { registerNodaroMotionStyleRoutes } from "./admin-nodaro-motion-style.js"
 import { registerNodaroMotionPromptWordingRoutes } from "./admin-nodaro-motion-prompt-wording.js"
+import { registerNodaroMotionAdvancedRoutes } from "./admin-nodaro-motion-advanced.js"
 
 /**
  * `admin_actions.target_id` is a NOT NULL uuid, and a deployment-wide setting
@@ -137,6 +140,7 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
   registerNodaroMotionStepsRoutes(app)
   registerNodaroMotionStyleRoutes(app)
   registerNodaroMotionPromptWordingRoutes(app)
+  registerNodaroMotionAdvancedRoutes(app)
   app.get("/v1/admin/nodaro-motion/masking", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       return { data: await view() }

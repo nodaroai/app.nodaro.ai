@@ -232,6 +232,12 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; pattern?
   // Style control too. Exact path, GET only: every other /v1/cast-swap route
   // stays behind a credential.
   { method: "GET", path: "/v1/cast-swap/style-choice" },
+  // Whether a Nodaro Motion page shows its Advanced options
+  // (ee/routes/cast-swap-advanced.ts, Cloud): one switch an admin sets — the
+  // same answer for every caller, no user data, so a guest's page shows or
+  // hides them too. Exact path, GET only: every other /v1/cast-swap route
+  // stays behind a credential.
+  { method: "GET", path: "/v1/cast-swap/advanced" },
   { method: "GET", path: "/v1/gallery/items" },
   { path: "/v1/gallery/report" },
   // Public share-by-link read of an OPT-IN-shared workflow (studio /example/:id).

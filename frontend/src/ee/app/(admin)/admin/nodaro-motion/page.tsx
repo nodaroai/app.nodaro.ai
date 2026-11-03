@@ -26,6 +26,10 @@
 // sheets, the engine prompt and the scene description), for every direct run
 // of either style (PUT /v1/admin/nodaro-motion/steps), greyed out until every
 // environment's engine takes them.
+// Above the engines, one switch for the whole page (AdvancedSwitch.tsx): whether
+// the Nodaro Motion page shows its Advanced chip (Prepare references and the
+// pre-prompt), off until turned on (PUT /v1/admin/nodaro-motion/advanced). A page
+// option only: no run reads it.
 // Save sends each setting that changed, whole; runs pick them up within a
 // minute.
 //
@@ -51,6 +55,7 @@ import { useNodaroMotionMotion, useSaveNodaroMotionMotion } from "@/ee/hooks/que
 import { useNodaroMotionPulseAudio, useSaveNodaroMotionPulseAudio } from "@/ee/hooks/queries/use-nodaro-motion-pulse-audio"
 import { useNodaroMotionSteps, useSaveNodaroMotionSteps } from "@/ee/hooks/queries/use-nodaro-motion-steps"
 import { useNodaroMotionStyle, useSaveNodaroMotionStyle } from "@/ee/hooks/queries/use-nodaro-motion-style"
+import { useNodaroMotionAdvanced, useSaveNodaroMotionAdvanced } from "@/ee/hooks/queries/use-nodaro-motion-advanced"
 import {
   useNodaroMotionPrismReferenceAudio,
   useSaveNodaroMotionPrismReferenceAudio,
@@ -76,6 +81,7 @@ import { PromptPartsTabs } from "./components/PromptPartsTabs"
 import { MotionColumn } from "./components/MotionColumn"
 import { StepsColumn, stepsToSaved } from "./components/StepsColumn"
 import { StyleChoiceSelect, styleToSaved } from "./components/StyleChoiceSelect"
+import { AdvancedSwitch } from "./components/AdvancedSwitch"
 
 /** The model each engine runs on, shown to admins beside the public name. */
 const INTERNAL_NAMES: Readonly<Record<AdminTrendEngine, string>> = {
@@ -91,6 +97,12 @@ const PRISM_REFERENCE_AUDIO_UNSUPPORTED = "This environment's engine does not ta
 
 /** Why One-tone or Octave is greyed out on this shared setting. */
 const PRISM_REFERENCE_AUDIO_MODE_SHARED_UNOFFERED = "A mode greyed out is not on every environment's engine yet: this setting is shared by every environment."
+
+/** Said after a save: runs read the engine settings within a minute. */
+export const SAVED_TOAST = "Saved. Runs pick it up within a minute."
+
+/** Said after a save of the page's Advanced switch alone: no run reads it; the page reads it through a cached public answer. */
+export const SAVED_PAGE_ONLY_TOAST = "Saved. The Nodaro Motion page picks it up within a couple of minutes."
 
 const AUTO_HINT =
   "Only when the video model refuses the clip: one retry with the faces covered, charged only then (the quote names it apart)."
@@ -127,12 +139,16 @@ export default function AdminNodaroMotionPage() {
   const saveStyle = useSaveNodaroMotionStyle()
   // A forced style is offered only once every environment's engine enforces it (the setting is shared).
   const forceStyleMissingIn = environmentsThatCannotForceStyle(envs.data)
+  // The page's Advanced switch: one for the whole page, needing no engine (a page option only).
+  const advancedQuery = useNodaroMotionAdvanced()
+  const saveAdvanced = useSaveNodaroMotionAdvanced()
   const [draft, setDraft] = useState<NodaroMotionMasking>({})
   const [motionDraft, setMotionDraft] = useState<NodaroMotionMotion>({})
   const [pulseDraft, setPulseDraft] = useState<CastSwapPulseAudioId>(DEFAULT_PULSE_AUDIO)
   const [prismAudioDraft, setPrismAudioDraft] = useState<CastSwapPrismReferenceAudioByResolution>(() => prismReferenceAudioTriple(null))
   const [stepsDraft, setStepsDraft] = useState<NodaroMotionSteps>({})
   const [styleDraft, setStyleDraft] = useState<NodaroMotionStyle>({})
+  const [advancedDraft, setAdvancedDraft] = useState(false)
 
   // The drafts start from what is stored, and again after each save.
   useEffect(() => {
@@ -153,6 +169,9 @@ export default function AdminNodaroMotionPage() {
   useEffect(() => {
     if (styleQuery.data) setStyleDraft({ ...(styleQuery.data.style ?? {}) })
   }, [styleQuery.data])
+  useEffect(() => {
+    if (advancedQuery.data) setAdvancedDraft(advancedQuery.data.show)
+  }, [advancedQuery.data])
 
   const saved = useMemo(() => JSON.stringify(toSaved(data?.masking ?? {})), [data])
   const next = toSaved(draft)
@@ -177,8 +196,12 @@ export default function AdminNodaroMotionPage() {
   // Never saved reads as people choosing: choosing "Users choose" then is no change.
   const nextStyle = styleToSaved(styleDraft)
   const styleChanged = !!styleQuery.data && JSON.stringify(nextStyle) !== JSON.stringify(styleToSaved(styleQuery.data.style))
+  // Never saved reads as hidden: leaving the switch off then is no change.
+  const advancedChanged = !!advancedQuery.data && advancedDraft !== advancedQuery.data.show
+  // Only the page's switch changed: it is the page that picks it up, not runs.
+  const onlyAdvancedChanged = advancedChanged && !changed && !motionChanged && !pulseChanged && !prismAudioChanged && !stepsChanged && !styleChanged
   const pending =
-    save.isPending || saveMotion.isPending || savePulse.isPending || savePrismAudio.isPending || saveSteps.isPending || saveStyle.isPending
+    save.isPending || saveMotion.isPending || savePulse.isPending || savePrismAudio.isPending || saveSteps.isPending || saveStyle.isPending || saveAdvanced.isPending
 
   if (!hasAdmin()) return null
 
@@ -191,7 +214,8 @@ export default function AdminNodaroMotionPage() {
       if (prismAudioChanged) await savePrismAudio.mutateAsync(prismReferenceAudioTriple(prismAudioDraft))
       if (stepsChanged) await saveSteps.mutateAsync(nextSteps)
       if (styleChanged) await saveStyle.mutateAsync(nextStyle)
-      toast.success("Saved. Runs pick it up within a minute.")
+      if (advancedChanged) await saveAdvanced.mutateAsync(advancedDraft)
+      toast.success(onlyAdvancedChanged ? SAVED_PAGE_ONLY_TOAST : SAVED_TOAST)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
     }
@@ -204,13 +228,23 @@ export default function AdminNodaroMotionPage() {
           <h1 className="text-xl font-bold">Nodaro Motion</h1>
           <p className="text-sm text-muted-foreground">
             How each engine prepares the clip for every run people start themselves (the API, the SDK and MCP), in the
-            Precise and the Motion style. People never see or set it. A trend keeps its own setting.
+            Precise and the Motion style. People never see or set these engine settings. A trend keeps its own setting.
           </p>
         </div>
-        <Button size="sm" className="min-h-9" disabled={(!changed && !motionChanged && !pulseChanged && !prismAudioChanged && !stepsChanged && !styleChanged) || issues.length > 0 || pending} onClick={() => void onSave()}>
+        <Button size="sm" className="min-h-9" disabled={(!changed && !motionChanged && !pulseChanged && !prismAudioChanged && !stepsChanged && !styleChanged && !advancedChanged) || issues.length > 0 || pending} onClick={() => void onSave()}>
           {pending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
           Save
         </Button>
+      </div>
+
+      <div role="group" aria-label="Nodaro Motion page" className="mb-6 rounded-lg border p-4">
+        {advancedQuery.data ? (
+          <AdvancedSwitch checked={advancedDraft} onChange={setAdvancedDraft} />
+        ) : advancedQuery.error ? (
+          <p className="text-xs text-destructive">{advancedQuery.error.message}</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">Loading…</p>
+        )}
       </div>
 
       {isLoading && (

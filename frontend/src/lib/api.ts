@@ -12972,6 +12972,31 @@ export async function saveNodaroMotionPromptWording(promptWording: NodaroMotionP
   ).data
 }
 
+// ---- Admin: whether the Nodaro Motion page shows its Advanced options (/v1/admin/nodaro-motion/advanced, admin-nodaro-motion-advanced.ts) ----
+
+export interface NodaroMotionAdvancedView {
+  /** Whether the Nodaro Motion page shows its Advanced chip (Prepare references and the pre-prompt); false until an admin turns it on. */
+  show: boolean
+  /** null = never saved (hidden). */
+  updatedAt: string | null
+}
+
+const ADMIN_NODARO_MOTION_ADVANCED = "/v1/admin/nodaro-motion/advanced"
+
+export async function fetchNodaroMotionAdvanced(): Promise<NodaroMotionAdvancedView> {
+  return (await apiRequest<{ data: NodaroMotionAdvancedView }>(ADMIN_NODARO_MOTION_ADVANCED, "apiErr.loadNodaroMotion")).data
+}
+
+/** Saves the switch, one for the whole page: a page option only (no run or quote reads it). */
+export async function saveNodaroMotionAdvanced(show: boolean): Promise<NodaroMotionAdvancedView> {
+  return (
+    await apiRequest<{ data: NodaroMotionAdvancedView }>(ADMIN_NODARO_MOTION_ADVANCED, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { show },
+    })
+  ).data
+}
+
 // ---- Admin: Nodaro Motion's Pulse audio for direct runs (/v1/admin/nodaro-motion/pulse-audio, admin-nodaro-motion-pulse-audio.ts) ----
 
 export interface NodaroMotionPulseAudioView {
