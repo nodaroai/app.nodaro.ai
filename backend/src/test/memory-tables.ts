@@ -21,7 +21,9 @@
  * it was); `beforeWrite` runs once just before the next write to a table
  * lands (another writer in between); `onUpdate` adds what a table's trigger
  * stamps on every update; `defaults` fill a column's default on insert. A
- * table listed in `failReads` answers every read with an error.
+ * table listed in `failReads` answers every read with an error; one listed in
+ * `missingTables` answers every read and write as Postgres does a table that
+ * does not exist yet (42P01), the way staging meets a newer migration's table.
  *
  * Reads nothing from disk: it is a plain module.
  */
@@ -40,6 +42,8 @@ export interface MemoryDb {
   tables: Record<string, Row[]>
   unique?: Record<string, readonly string[]>
   failReads?: Set<string>
+  /** Tables the database does not have yet: every read and write answers 42P01. */
+  missingTables?: Set<string>
   beforeWrite?: Record<string, (() => void) | null>
   onUpdate?: Record<string, () => Row>
   /** What a table's column defaults fill on insert, given the row as sent. */
@@ -152,6 +156,7 @@ function chain(db: MemoryDb, name: string) {
   }
 
   const run = (): Result => {
+    if (db.missingTables?.has(name)) return { data: null, error: { code: "42P01", message: `relation "public.${name}" does not exist` }, count: null }
     if (patch || inserted) return runWrite()
     if (db.failReads?.has(name)) return { data: null, error: { message: `${name} is down` }, count: null }
     const hit = rows().filter((r) => filters.every((f) => f(r)))

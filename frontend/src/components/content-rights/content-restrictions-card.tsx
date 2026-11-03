@@ -4,19 +4,21 @@ import { cn } from "@/lib/utils"
 import { useT } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
 import { hasAdmin } from "@/lib/edition"
-import { useMyRestrictions } from "@/hooks/queries/use-my-restrictions"
+import { hasAccountStanding, useMyAccountStanding, useMyRestrictions } from "@/hooks/queries/use-my-restrictions"
 
 /**
  * Settings → the way to Content restrictions, shown only to a person whose
- * content a complaint led to restricting: everyone else has nothing there.
- * Restrictions are made from the admin's Complaints screen, so an edition
- * without one never asks.
+ * content a complaint led to restricting, or whose account has something on
+ * it under the repeat-infringer policy (a measure in force, a warning or an
+ * infringement in the window): everyone else has nothing there. Both are made
+ * from the admin's Complaints screen, so an edition without one never asks.
  */
 export function ContentRestrictionsCard() {
   const t = useT()
   const isRtl = useAppDir() === "rtl"
   const { data } = useMyRestrictions(hasAdmin())
-  if (!data || data.length === 0) return null
+  const { data: standing } = useMyAccountStanding(hasAdmin())
+  if ((!data || data.length === 0) && !hasAccountStanding(standing)) return null
   return (
     <Link
       to="/settings/content-restrictions"

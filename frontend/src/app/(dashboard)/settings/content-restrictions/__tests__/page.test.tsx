@@ -10,10 +10,13 @@ import type { MyCounterNotice, MyRestriction } from "@/lib/api"
  * action and its end; a restore), and the form only where one can be sent.
  */
 
-const state = vi.hoisted(() => ({ data: [] as MyRestriction[] }))
+const state = vi.hoisted(() => ({ data: [] as MyRestriction[], standing: undefined as unknown }))
 
 vi.mock("@/hooks/queries/use-my-restrictions", () => ({
   useMyRestrictions: () => ({ data: state.data, isLoading: false, isError: false }),
+  useMyAccountStanding: () => ({ data: state.standing }),
+  hasAccountStanding: (s: { inForce: unknown[]; warnings: unknown[]; infringements: unknown[] } | undefined) =>
+    Boolean(s && (s.inForce.length > 0 || s.warnings.length > 0 || s.infringements.length > 0)),
   useCounterNoticeDeclaration: () => ({ data: { paragraphs: ["First.", "Second."], hash: "a".repeat(64) }, isLoading: false, isError: false, refetch: vi.fn() }),
   useSendCounterNotice: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }))
@@ -58,6 +61,7 @@ const show = (...rows: MyRestriction[]) => {
 
 beforeEach(() => {
   state.data = []
+  state.standing = undefined
 })
 
 describe("ContentRestrictionsPage", () => {
@@ -99,6 +103,15 @@ describe("ContentRestrictionsPage", () => {
 
   it("nothing restricted says so", () => {
     show()
+    expect(screen.getByText("Nothing of yours is restricted.")).toBeTruthy()
+    expect(screen.queryByRole("heading", { name: "Your account" })).toBeNull()
+  })
+
+  it("shows where the account stands above the restrictions, even with none restricted", () => {
+    state.standing = { inForce: [{ kind: "imports_blocked", reason: "Repeated complaints were upheld.", appliedAt: "2026-11-01T00:00:00Z", endsAt: null }], warnings: [], infringements: [], windowMonths: 24 }
+    show()
+    expect(screen.getByRole("heading", { name: "Your account" })).toBeTruthy()
+    expect(screen.getByText("Importing links is blocked on your account until an administrator lifts the block.")).toBeTruthy()
     expect(screen.getByText("Nothing of yours is restricted.")).toBeTruthy()
   })
 })

@@ -298,6 +298,20 @@ describe("PUT /v1/admin/settings — concurrency lane keys have their own routes
   })
 })
 
+describe("PUT /v1/admin/settings — the repeat-infringer policy has its own route", () => {
+  // Its route validates the ladder, audits what it replaced, and is an
+  // administrator's in the app; a write here would skip all three.
+  it("refuses rights_repeat_infringer_policy and names its route", async () => {
+    const res = await app.inject({
+      method: "PUT", url: "/v1/admin/settings/rights_repeat_infringer_policy",
+      payload: { value: { windowMonths: 1, steps: [] }, userId: "admin-1" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toBe("rights_repeat_infringer_policy is set through PUT /v1/admin/repeat-infringer-policy")
+    expect(supabase.from).not.toHaveBeenCalled()
+  })
+})
+
 describe("PUT /v1/admin/settings — copilot tier controls", () => {
   it("rejects a default tier outside the ladder", async () => {
     const res = await app.inject({

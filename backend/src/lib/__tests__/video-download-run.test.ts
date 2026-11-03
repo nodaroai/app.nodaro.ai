@@ -20,6 +20,7 @@ vi.mock("@/lib/import-source-policy.js", () => ({
   },
   assertImportSourceAllowed: vi.fn().mockResolvedValue(undefined),
 }))
+vi.mock("@/lib/account-measures.js", () => ({ assertImportsAllowed: vi.fn().mockResolvedValue(undefined) }))
 vi.mock("@/lib/content-rights.js", () => ({
   ContentRightsError: class ContentRightsError extends Error {
     constructor(readonly code: string, message: string) {

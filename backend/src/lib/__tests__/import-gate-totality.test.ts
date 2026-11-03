@@ -86,7 +86,7 @@ const MAY_REACH_A_RUNNER: ReadonlyMap<string, string> = new Map([
   ["lib/media-import.ts", "importImageFromUrl itself (safeFetch)"],
   ["lib/media-url-import.ts", "importRecordingFromUrl itself (safeFetch)"],
   ["lib/mcp/flows/import-inputs.ts", "the MCP flow's copy of an outside picture: reads the gate, spends nothing (it carries no confirmation; an agent's standing authorization is a later change)"],
-  ["lib/private-plugins/toolkit.ts", "the private plugin lane: hands the runners to a plugin — NOT gated yet (copyright plan PR 6/7: the other clients)"],
+  ["lib/private-plugins/toolkit.ts", "the private plugin lane: hands the runners to a plugin — asks the account's measures (refuseBlockedImports), not the confirmation yet"],
   ["lib/private-plugins/types.ts", "the plugin contract: the TYPE of what the toolkit hands over, no call"],
 ])
 

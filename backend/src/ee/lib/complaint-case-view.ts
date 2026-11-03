@@ -2,8 +2,10 @@
  * One content complaint as the handler's screen shows it: what the
  * complainant sent (decrypted for this view only), the case's log, what the
  * links matched in our records (the files, a restricted one included; the
- * import confirmations; the accounts behind them, each with its other cases
- * and its active restrictions), and the restrictions the case led to.
+ * import confirmations; the accounts behind them, each with its other cases,
+ * its active restrictions and its standing under the repeat-infringer
+ * policy), the restrictions the case led to, and the whole record of the
+ * account the case names (account-record.ts).
  *
  * Each section is read on its own: one that fails is named in `partial` and
  * shown empty, and the rest of the case is answered. The reads are bounded:
@@ -11,9 +13,11 @@
  * accounts past a cap are counted, not read.
  */
 import { supabase } from "../../lib/supabase.js"
+import { currentRepeatInfringerPolicy } from "../../lib/repeat-infringer-policy-store.js"
 import { listRestrictions, type ContentRestriction } from "../../lib/content-restrictions.js"
 import { readCaseRow, readComplainant, summaryOf, type ComplaintSummary } from "./complaint-case-rows.js"
 import { counterNoticesOfCase, type CaseCounterNotice } from "./counter-notice-cases.js"
+import { accountRecordOf, standingOf, type AccountRecord, type AccountStanding } from "./account-record.js"
 
 /** The log's newest entries a case view keeps; an older entry is past `eventsTruncated`. */
 export const CASE_EVENT_LIMIT = 500
@@ -24,7 +28,7 @@ const IN_CHUNK = 100
 /** Other cases read per account question, the most recent first: the history is counted, never listed. */
 export const HISTORY_LIMIT = 1000
 
-export type CaseSection = "events" | "files" | "confirmations" | "accounts" | "restrictions" | "counterNotices"
+export type CaseSection = "events" | "files" | "confirmations" | "accounts" | "restrictions" | "counterNotices" | "record"
 
 export interface ComplaintEvent {
   readonly id: string
@@ -68,6 +72,8 @@ export interface MatchedUser {
   readonly otherCases: AccountHistory
   /** Restrictions standing (not lifted) on this account's content. */
   readonly activeRestrictions: number
+  /** Its infringements within the policy's window and its measures in force (account-record.ts); null when that could not be read. */
+  readonly standing: AccountStanding | null
 }
 
 export interface ComplaintCase extends ComplaintSummary {
@@ -99,6 +105,8 @@ export interface ComplaintCase extends ComplaintSummary {
   readonly restrictions: readonly ContentRestriction[]
   /** The counter-notices the case received (ee/lib/counter-notice-cases.ts), oldest first. */
   readonly counterNotices: readonly CaseCounterNotice[]
+  /** The record of the account the case names (account-record.ts); null when it names none, or the record could not be read. */
+  readonly record: AccountRecord | null
   /** The sections that could not be read, shown empty. */
   readonly partial: readonly CaseSection[]
 }
@@ -219,8 +227,23 @@ async function matchedUsersOf(ids: readonly string[], thisCaseId: string): Promi
   const matchedRows = (matched.data ?? []) as OtherCase[]
   const emails = new Map(((profiles.data ?? []) as Array<{ id: string; email: string | null }>).map((p) => [p.id, p.email]))
   const others = [...new Map([...namedRows, ...matchedRows].map((c) => [c.id, c])).values()]
-  const users = shown.map((id, i) => ({ id, email: emails.get(id) ?? null, otherCases: historyOf(id, others), activeRestrictions: restrictions[i] ?? 0 }))
+  const users = shown.map((id, i) => ({ id, email: emails.get(id) ?? null, otherCases: historyOf(id, others), activeRestrictions: restrictions[i] ?? 0, standing: null }))
   return { users, more: unique.length - shown.length, historyTruncated: namedRows.length >= HISTORY_LIMIT || matchedRows.length >= HISTORY_LIMIT }
+}
+
+type RecordsRead = { record: AccountRecord | null; standings: ReadonlyMap<string, AccountStanding> }
+
+const NO_RECORDS: RecordsRead = { record: null, standings: new Map() }
+
+/** The named account's record and each shown account's standing, under the repeat-infringer policy as it reads now (fresh: the step shown is the step a measure is checked against). */
+async function recordsOf(namedUserId: string | null, userIds: readonly string[]): Promise<RecordsRead> {
+  const policy = await currentRepeatInfringerPolicy()
+  const now = new Date()
+  const [record, standings] = await Promise.all([
+    namedUserId ? accountRecordOf(namedUserId, policy, now) : Promise.resolve(null),
+    standingOf(userIds.slice(0, CASE_ACCOUNT_LIMIT), policy, now),
+  ])
+  return { record, standings }
 }
 
 function valueOr<T>(result: PromiseSettledResult<T>, empty: T, section: CaseSection, caseId: string): T {
@@ -229,34 +252,26 @@ function valueOr<T>(result: PromiseSettledResult<T>, empty: T, section: CaseSect
   return empty
 }
 
-/** One case, with everything the handler's screen shows. */
-export async function readComplaintCase(id: string): Promise<ComplaintCase> {
-  const row = await readCaseRow(id)
-  const who = readComplainant(row)
-  // The account the case names comes first: it is never past the cap.
-  const userIds = [...new Set([...(row.user_id ? [row.user_id] : []), ...(row.matched_user_ids ?? [])])]
-  const [events, files, confirmations, accounts, restrictions, counterNotices] = await Promise.allSettled([
-    eventsOf(id),
-    matchedAssetsOf(row.matched_asset_ids ?? []),
-    matchedConfirmationsOf(row.matched_confirmation_ids ?? []),
-    matchedUsersOf(userIds, id),
-    listRestrictions({ complaintId: id, limit: 200 }),
-    counterNoticesOfCase(id),
-  ])
-  const sections: ReadonlyArray<readonly [CaseSection, PromiseSettledResult<unknown>]> = [
-    ["events", events],
-    ["files", files],
-    ["confirmations", confirmations],
-    ["accounts", accounts],
-    ["restrictions", restrictions],
-    ["counterNotices", counterNotices],
-  ]
-  const log = valueOr(events, { events: [], truncated: false }, "events", id)
-  const people = valueOr<AccountsRead>(accounts, { users: [], more: 0, historyTruncated: false }, "accounts", id)
-  const stored = valueOr(files, [], "files", id)
-  const found = new Set(stored.map((a) => a.id))
-  // Only a read that answered can say a file is gone.
-  const missingAssetIds = files.status === "fulfilled" ? [...new Set(row.matched_asset_ids ?? [])].filter((assetId) => !found.has(assetId)) : []
+type Submission = Pick<
+  ComplaintCase,
+  | keyof ComplaintSummary
+  | "claimantRole"
+  | "originalWork"
+  | "originalWorkUrl"
+  | "reportedContent"
+  | "explanation"
+  | "goodFaithAffirmedAt"
+  | "accuracyAffirmedAt"
+  | "statementsHash"
+  | "decision"
+  | "complainantAddress"
+  | "complainantPhone"
+  | "signature"
+  | "userAgent"
+>
+
+/** What the complainant sent, and the case's decision, as the screen shows them. */
+function submissionOf(row: Awaited<ReturnType<typeof readCaseRow>>, who: ReturnType<typeof readComplainant>): Submission {
   return {
     ...summaryOf(row, who),
     claimantRole: row.claimant_role,
@@ -272,16 +287,53 @@ export async function readComplaintCase(id: string): Promise<ComplaintCase> {
     complainantPhone: who.phone,
     signature: who.signature,
     userAgent: row.user_agent,
+  }
+}
+
+/** One case, with everything the handler's screen shows. */
+export async function readComplaintCase(id: string): Promise<ComplaintCase> {
+  const row = await readCaseRow(id)
+  const who = readComplainant(row)
+  // The account the case names comes first: it is never past the cap.
+  const userIds = [...new Set([...(row.user_id ? [row.user_id] : []), ...(row.matched_user_ids ?? [])])]
+  const [events, files, confirmations, accounts, restrictions, counterNotices, records] = await Promise.allSettled([
+    eventsOf(id),
+    matchedAssetsOf(row.matched_asset_ids ?? []),
+    matchedConfirmationsOf(row.matched_confirmation_ids ?? []),
+    matchedUsersOf(userIds, id),
+    listRestrictions({ complaintId: id, limit: 200 }),
+    counterNoticesOfCase(id),
+    recordsOf(row.user_id, userIds),
+  ])
+  const sections: ReadonlyArray<readonly [CaseSection, PromiseSettledResult<unknown>]> = [
+    ["events", events],
+    ["files", files],
+    ["confirmations", confirmations],
+    ["accounts", accounts],
+    ["restrictions", restrictions],
+    ["counterNotices", counterNotices],
+    ["record", records],
+  ]
+  const log = valueOr(events, { events: [], truncated: false }, "events", id)
+  const people = valueOr<AccountsRead>(accounts, { users: [], more: 0, historyTruncated: false }, "accounts", id)
+  const standing = valueOr(records, NO_RECORDS, "record", id)
+  const stored = valueOr(files, [], "files", id)
+  const found = new Set(stored.map((a) => a.id))
+  // Only a read that answered can say a file is gone.
+  const missingAssetIds = files.status === "fulfilled" ? [...new Set(row.matched_asset_ids ?? [])].filter((assetId) => !found.has(assetId)) : []
+  return {
+    ...submissionOf(row, who),
     events: log.events,
     eventsTruncated: log.truncated,
     matchedAssets: stored,
     missingAssetIds,
     matchedConfirmations: valueOr(confirmations, [], "confirmations", id),
-    matchedUsers: people.users,
+    matchedUsers: people.users.map((u) => ({ ...u, standing: standing.standings.get(u.id) ?? null })),
     moreAccounts: people.more,
     historyTruncated: people.historyTruncated,
     restrictions: valueOr(restrictions, [], "restrictions", id),
     counterNotices: valueOr(counterNotices, [], "counterNotices", id),
+    record: standing.record,
     partial: sections.filter(([, result]) => result.status === "rejected").map(([section]) => section),
   }
 }

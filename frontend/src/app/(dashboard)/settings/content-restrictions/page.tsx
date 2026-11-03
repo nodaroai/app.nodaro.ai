@@ -8,24 +8,27 @@ import { useAppDir } from "@/lib/locale-store"
 import { formatDate } from "@/lib/i18n/format"
 import { useAuth } from "@/hooks/use-auth"
 import type { MyCounterNotice, MyRestriction } from "@/lib/api"
-import { useMyRestrictions } from "@/hooks/queries/use-my-restrictions"
+import { useMyAccountStanding, useMyRestrictions } from "@/hooks/queries/use-my-restrictions"
 import { CounterNoticeForm } from "./counter-notice-form"
+import { AccountStandingBox } from "./account-standing-box"
 
 /** A window's day as written (`YYYY-MM-DD`, a New York calendar date): read in UTC, so no time zone moves it a day. */
 const calendarDate = (day: string) => formatDate(`${day}T00:00:00Z`, { timeZone: "UTC" })
 
 /**
- * Settings → Content restrictions: content of mine a complaint led to
- * restricting (a restricted file reads as gone everywhere else), why, the
- * complaint's reference, and the counter-notification that answers it, with
- * where it stands. Never the complainant's identity. Masked from session
- * recordings.
+ * Settings → Content restrictions: where my account stands under the
+ * repeat-infringer policy (account-standing-box.tsx), then content of mine a
+ * complaint led to restricting (a restricted file reads as gone everywhere
+ * else), why, the complaint's reference, and the counter-notification that
+ * answers it, with where it stands. Never the complainant's identity. Masked
+ * from session recordings.
  */
 export default function ContentRestrictionsPage() {
   const t = useT()
   const isRtl = useAppDir() === "rtl"
   const { user } = useAuth()
   const { data: restrictions, isLoading, isError } = useMyRestrictions()
+  const { data: standing } = useMyAccountStanding()
   const [answering, setAnswering] = useState<string | null>(null)
 
   return (
@@ -39,6 +42,8 @@ export default function ContentRestrictionsPage() {
           <p className="text-sm text-muted-foreground mt-1">{t("restrictions.subtitle")}</p>
         </div>
       </div>
+
+      <AccountStandingBox standing={standing} />
 
       {isLoading ? (
         <div className="flex justify-center py-12">

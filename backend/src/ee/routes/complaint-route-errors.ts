@@ -2,12 +2,14 @@ import type { FastifyReply, FastifyRequest } from "fastify"
 import { sendInternalError } from "../../lib/http-errors.js"
 import { ContentRestrictionError } from "../../lib/content-restrictions.js"
 import { ComplaintCaseError } from "../lib/complaint-case-rows.js"
+import { RepeatInfringerError } from "../lib/repeat-infringer-error.js"
 
 /**
- * The complaint handler's refusals as answers, shared by the complaint and the
- * counter-notice routes (admin-complaints.ts, admin-counter-notices.ts):
- * unknown is 404, changed meanwhile or already done is 409, a move the case
- * does not allow is 400; anything else is the server's.
+ * The complaint handler's refusals as answers, shared by the complaint, the
+ * counter-notice and the repeat-infringer routes (admin-complaints.ts,
+ * admin-counter-notices.ts, admin-repeat-infringers.ts): unknown is 404,
+ * changed meanwhile or already done is 409, a move the case does not allow is
+ * 400; anything else is the server's.
  */
 export function caseErrorStatus(e: ComplaintCaseError): number {
   if (e.code === "not_found") return 404
@@ -15,9 +17,39 @@ export function caseErrorStatus(e: ComplaintCaseError): number {
   return 400
 }
 
+/**
+ * A record move's refusal as a status: unknown is 404; the record not in the
+ * database yet is 503; a move the case does not allow (its complainant did
+ * not prove their email, it names no account) and a measure that departs from
+ * the policy without saying why are 400, as a case's own moves are; an
+ * account the block refuses (an administrator, the platform's owner or
+ * operators, the payer, oneself) is 403; the rest is the record's state
+ * (already done, in force, ended, the case moved on meanwhile): 409.
+ */
+export function recordErrorStatus(e: RepeatInfringerError): number {
+  switch (e.code) {
+    case "not_found":
+      return 404
+    case "unavailable":
+      return 503
+    case "unverified":
+    case "no_account":
+    case "departure_required":
+      return 400
+    case "cannot_block_self":
+    case "target_is_admin":
+    case "target_protected":
+    case "payer_account_protected":
+      return 403
+    default:
+      return 409
+  }
+}
+
 /** Answers a refusal of the complaint modules with its status and code; anything else is a server error, logged. */
 export function caseFailure(req: FastifyRequest, reply: FastifyReply, e: unknown, fallback: string) {
   if (e instanceof ComplaintCaseError) return reply.status(caseErrorStatus(e)).send({ error: { code: e.code, message: e.message } })
+  if (e instanceof RepeatInfringerError) return reply.status(recordErrorStatus(e)).send({ error: { code: e.code, message: e.message } })
   if (e instanceof ContentRestrictionError) {
     const status = e.code === "not_found" ? 404 : e.code === "unknown_complaint" ? 400 : 409
     return reply.status(status).send({ error: { code: e.code, message: e.message } })

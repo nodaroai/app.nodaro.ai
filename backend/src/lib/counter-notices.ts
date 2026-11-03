@@ -40,28 +40,13 @@ function sha256(text: string): string {
 /** What the record keeps of the text affirmed: a client shows the text and sends this back. */
 export const COUNTER_NOTICE_DECLARATION_HASH = sha256(COUNTER_NOTICE_DECLARATION.join("\n"))
 
-/** The invisible marks that change how text reads without being seen: direction marks, embeddings, overrides, isolates, and the Unicode line and paragraph separators. */
-const INVISIBLE_MARKS: ReadonlySet<number> = new Set([0x061c, 0x200e, 0x200f, 0x2028, 0x2029, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069])
-
 /**
- * Whether text holds what a sender may not type. The counter-notice is
- * forwarded to the complainant as written, so it must read there as it reads
- * here: no control character and no invisible mark, and a line break only
- * where `lineBreaks` allows one (an address, what was restricted, where it was).
+ * What a sender may not type (plain-text.ts): the counter-notice is forwarded
+ * to the complainant as written, so it must read there as it reads here; a
+ * line break only where a field allows one (an address, what was restricted,
+ * where it was).
  */
-export function hasRefusedCharacters(text: string, opts: { readonly lineBreaks: boolean }): boolean {
-  for (const ch of text) {
-    const code = ch.codePointAt(0) ?? 0
-    if (code === 0x0a && opts.lineBreaks) continue
-    if (code < 0x20 || code === 0x7f || INVISIBLE_MARKS.has(code)) return true
-  }
-  return false
-}
-
-/** A multi-line field's line breaks, whatever the client sent, as a line feed. */
-export function normalizeLineBreaks(text: string): string {
-  return text.replace(/\r\n?/g, "\n")
-}
+export { hasRefusedCharacters, normalizeLineBreaks } from "./plain-text.js"
 
 export type CounterNoticeErrorCode = "unavailable" | "not_found" | "not_copyright" | "lifted" | "case_closed" | "already_sent" | "declaration_changed"
 

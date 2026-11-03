@@ -4,7 +4,8 @@
  * last ascending and first descending, `maybeSingle` over several rows and
  * `single` over any count but one are PGRST116, a select projects its
  * columns, an array literal's quoted elements keep their commas, `not`
- * supports only what it can run, and a guard's refusal writes nothing.
+ * supports only what it can run, a guard's refusal writes nothing, and a
+ * table the database does not have yet answers 42P01 to a read and a write.
  */
 import { describe, it, expect } from "vitest"
 import { memorySupabase, type MemoryDb } from "../memory-tables.js"
@@ -72,6 +73,17 @@ describe("memory-tables", () => {
     const db: MemoryDb = { ...fresh(), guards: { t: ({ kind, row }) => (kind === "update" && row.s === "closed" ? { code: "55026", message: "no" } : null) } }
     const answer = await from(db).update({ s: "closed" }).eq("id", "a")
     expect(answer.error).toMatchObject({ code: "55026" })
+    expect(db.tables.t!.find((r) => r.id === "a")!.s).toBe("open")
+  })
+
+  it("a table the database does not have yet answers 42P01 to a read, a count and a write, and keeps nothing", async () => {
+    const db: MemoryDb = { ...fresh(), missingTables: new Set(["t"]) }
+    expect((await from(db).select("id")).error).toMatchObject({ code: "42P01" })
+    expect((await from(db).select("id", { count: "exact", head: true }).eq("id", "a")).error).toMatchObject({ code: "42P01" })
+    expect((await from(db).select("id").eq("id", "a").maybeSingle()).error).toMatchObject({ code: "42P01" })
+    expect((await from(db).insert({ id: "d" }).select("id").single()).error).toMatchObject({ code: "42P01" })
+    expect((await from(db).update({ s: "x" }).eq("id", "a")).error).toMatchObject({ code: "42P01" })
+    expect(db.tables.t!.map((r) => r.id)).toEqual(["a", "b", "c"])
     expect(db.tables.t!.find((r) => r.id === "a")!.s).toBe("open")
   })
 })

@@ -21,9 +21,9 @@ import {
   deleteQuietStopRow,
   readQuietStop,
   readSignInBan,
-  writeBlockRow,
   writeQuietStopRow,
 } from "../lib/account-blocking.js"
+import { blockAccount } from "../lib/block-account.js"
 import {
   BLOCK_DURATION_DAYS,
   DEFAULT_BLOCK_DAYS,
@@ -388,32 +388,22 @@ export async function adminAccessRoutes(app: FastifyInstance) {
     if (!body.success) return badRequest(reply, "The reason is at most 500 characters")
     const userId = params.data.id
     try {
-      const refusal = await blockRefusal(req.userId!, userId)
-      if (refusal) {
+      const reason = body.data.reason || null
+      // Every step, the late refusal included (an account promoted between the
+      // role read and the write is unblocked again), is ee/lib/block-account.ts.
+      // (Promoting a blocked account is refused on the role route, which closes
+      // the other order.)
+      const outcome = await blockAccount(req.userId!, userId, reason)
+      if (outcome.refused) {
+        const refusal = outcome.refused
         return reply.status(refusal === "not_found" ? 404 : 403).send({ error: { code: refusal, message: BLOCK_REFUSAL_MESSAGE[refusal] } })
       }
-      const reason = body.data.reason || null
-      await writeBlockRow(userId, req.userId!, reason)
-      // The role was read BEFORE the write: an account promoted in between
-      // would end up a blocked admin. Ask again now that the row exists, and
-      // take the row back if the answer changed. (Promoting a blocked account
-      // is refused on the role route, which closes the other order.)
-      const late = await blockRefusal(req.userId!, userId)
-      if (late) {
-        await deleteBlockRow(userId)
-        invalidateAccessBlocks()
-        return reply.status(late === "not_found" ? 404 : 403).send({ error: { code: late, message: BLOCK_REFUSAL_MESSAGE[late] } })
-      }
-      invalidateAccessBlocks()
-      invalidateAuthCache(userId)
-      let signInBlocked = false
       let warning: string | null = null
-      try {
-        signInBlocked = (await convergeSignInBan(userId)).signInBlocked
-      } catch (err) {
-        req.log.error({ err, userId }, "block: sign-in ban failed")
+      if (outcome.signInError) {
+        req.log.error({ err: outcome.signInError, userId }, "block: sign-in ban failed")
         warning = "The account is blocked, but blocking its sign-in failed. Press Block again to retry."
       }
+      const signInBlocked = outcome.signInBlocked
       await recordAdminAction(req, "account_block", userId, { signInBlocked }, reason)
       return { data: { userId, blocked: true, signInBlocked, warning } }
     } catch (err) {

@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { getAuthHeaders } from "@/lib/api"
 import { hasAdmin } from "@/lib/edition"
 import { queryKeys } from "@/lib/query-keys"
+import type { AccountRecord, AccountStanding } from "./use-admin-repeat-infringers"
 
 /**
  * Admin → Complaints: the queue the public form fills, one case, and the
@@ -93,6 +94,8 @@ export interface MatchedUser {
   }
   /** Restrictions standing on the account's content. */
   readonly activeRestrictions: number
+  /** Its infringements within the policy's window and its measures in force; null when that could not be read. */
+  readonly standing: AccountStanding | null
 }
 
 /** What happened to one key of a restriction (backend lib/content-restriction-bytes.ts). */
@@ -127,7 +130,7 @@ export interface CaseRestriction {
 }
 
 /** A part of the case the server could not read; it is shown empty. */
-export type CaseSection = "events" | "files" | "confirmations" | "accounts" | "restrictions" | "counterNotices"
+export type CaseSection = "events" | "files" | "confirmations" | "accounts" | "restrictions" | "counterNotices" | "record"
 
 /** A counter-notice's details and an administrator's notes, by name (the ones that could not be read are listed). */
 export type CounterNoticeField = "name" | "email" | "address" | "phone" | "signature" | "courtActionNote" | "courtActionEndedNote"
@@ -201,6 +204,8 @@ export interface ComplaintCase extends ComplaintSummary {
   readonly historyTruncated: boolean
   readonly restrictions: readonly CaseRestriction[]
   readonly counterNotices: readonly CaseCounterNotice[]
+  /** The record of the account the case names; null when it names none, or the record could not be read. */
+  readonly record: AccountRecord | null
   readonly partial: readonly CaseSection[]
 }
 
@@ -249,7 +254,8 @@ async function failure(res: Response, fallback: string): Promise<Error> {
   return new Error(body?.error?.message || fallback)
 }
 
-async function send<T>(path: string, init: RequestInit, fallback: string): Promise<T> {
+/** An admin request with the session's headers; a refusal is thrown as an Error carrying the server's message. */
+export async function send<T>(path: string, init: RequestInit, fallback: string): Promise<T> {
   const headers = { ...(init.body ? { "Content-Type": "application/json" } : {}), ...(await getAuthHeaders()) }
   const res = await fetch(path, { ...init, headers })
   if (!res.ok) throw await failure(res, fallback)
@@ -308,12 +314,12 @@ export function useAdminComplaint(id: string | undefined) {
 }
 
 /** A move on a case: posted, then the whole complaints family read again, made or refused. */
-function useCaseMove<TInput>(path: (input: TInput) => string, body: (input: TInput) => unknown | undefined, fallback: string) {
+export function useCaseMove<TInput, TResult = unknown>(path: (input: TInput) => string, body: (input: TInput) => unknown | undefined, fallback: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: TInput) => {
       const payload = body(input)
-      return send<unknown>(path(input), { method: "POST", ...(payload !== undefined ? { body: JSON.stringify(payload) } : {}) }, fallback)
+      return send<TResult>(path(input), { method: "POST", ...(payload !== undefined ? { body: JSON.stringify(payload) } : {}) }, fallback)
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["admin", "complaints"] }),
   })

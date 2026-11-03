@@ -5210,6 +5210,17 @@ submitted, before any redirect; a listed site covers its subdomains. A change
 takes effect within a minute. The list is the deployment's own and is not part
 of the public API.
 
+**An account's measures.** Before the site's policy, the account itself is
+asked: while imports of links are blocked on the account, or the account is
+closed, under the deployment's repeat-infringer policy (see
+[Repeat infringers](#13m-repeat-infringers)), every import of a link, in every
+lane above, is refused with `403 imports_blocked` and a message saying until
+when (a date in UTC, or until an administrator lifts the block). A run's
+import fails the same way, and so does a private plugin's download of a link
+(which does not ask for a confirmation yet). The account is asked again right
+before the fetch starts, so a block placed while a download waited for its
+turn refuses it too; a block lifted takes effect at once.
+
 ## 13j. Content complaints (the public form)
 
 The form at `/copyright-complaints` on the app's host, where anyone reports
@@ -5472,6 +5483,88 @@ API: the person's in their own session (`/v1/content-restrictions/mine`,
 `/v1/content-restrictions/:id/counter-notice`), and the administrator's
 signed in to the app (`/v1/admin/counter-notices/:id/forwarded`,
 `…/court-action`, `…/court-action-ended`, `…/decline`, `…/restore`).
+
+## 13m. Repeat infringers
+
+A complaint is not an infringement. When an administrator finds a complaint
+substantiated, they record an **infringement** against the account the case
+names, from the case on the Complaints screen: one per case, and only from a
+case whose complainant proved their email, with the administrator's
+reasoning (kept for the record, never shown to the account). An infringement
+can be withdrawn, with a reason (an appeal upheld, or the content restored
+after a counter-notification: the case shows that beside the infringement),
+and a withdrawn one no longer counts.
+
+**The policy.** The repeat-infringer policy, on the Complaints screen, sets
+the **measure** that applies at each count of an account's standing
+infringements, counted over a rolling window. The default:
+
+| Standing infringements within the last 24 months | Measure |
+|---|---|
+| 1 | A warning |
+| 2 | Importing links blocked for 30 days |
+| 3 | The account closed |
+
+The window ends now and starts the same day and time its months back (a day
+the earlier month does not have is that month's last day); an infringement
+counts while it stands and was recorded within it.
+
+A measure is never taken automatically. The case shows the step the policy
+names for the account's count, prefilled, and an administrator takes it, or
+takes another measure and says why it departs from the policy. Each measure
+keeps the step it followed as the policy read then (a later change to the
+policy never rewrites it), the account's count at the time, what the
+account's owner is told, and the administrator's own note. Where the
+deployment has an administrators' Slack, an infringement that brings an
+account to the step where the policy names closing it is posted there,
+naming the case by reference only.
+
+**The measures.**
+
+- **A warning** is shown to the account's owner while it is within the
+  policy's window. It is a record, not a restriction, and it is never lifted.
+- **Importing links blocked**, for the step's number of days or until lifted,
+  refuses every import of a link by the account with `403 imports_blocked`
+  (see [Content rights](#13i-content-rights-import-confirmations)). A file
+  uploaded from the person's own device is not an import and is not refused.
+  One import block is in force on an account at a time.
+- **The account closed** records the decision, then blocks the account as an
+  administrator's block does (sign-in and every request refused, imports
+  too), so an account is never blocked this way without the record of why.
+  An administrator, the platform's owner and operators, and the deployment's
+  billing account are never closed: the closure is refused before anything
+  is written, and one whose role changes in the moment between is taken back
+  at once, lifted with the reason. If the block cannot be placed, the closure
+  stands, the answer says so and the case shows it, and the account's imports
+  are refused meanwhile. Lifting a closure records that the decision was
+  reversed and leaves the account's block as it is: the case shows whether the
+  account is still blocked, and why (the block's own reason, which names the
+  case for a closure's block), and offers to unblock it. An unblock from the
+  account's page likewise leaves the closure on the record, where the case
+  shows the account as not blocked.
+
+Each move taken from a case names the account the screen showed the case
+naming: a case that names another account since is refused, so a move never
+lands on an account the administrator did not see.
+
+An import block or a closure is lifted early by an administrator, with a
+reason; a measure that has ended is not lifted after the fact. Every step is
+written to the case's log and audited, and the records are never deleted.
+
+**What the account's owner sees.** Settings → Content restrictions shows the
+measures in force on their account with what they were told and until when,
+the warnings and the infringements recorded within the policy's window (each
+by its case's reference), and the window's length; never an administrator's
+note, nor who took a step. `GET /v1/account-measures/mine` answers the same
+(`{ data: { inForce, warnings, infringements, windowMonths } }`), to the
+person in their own session only (`403 in_app_only` to a key, an app or an
+agent).
+
+These routes are the deployment's own and are not part of the public API:
+the person's (`/v1/account-measures/mine`), and the administrator's signed
+in to the app (`/v1/admin/complaints/:id/infringement`,
+`/v1/admin/infringements/:id/withdraw`, `/v1/admin/complaints/:id/measure`,
+`/v1/admin/measures/:id/lift`, `/v1/admin/repeat-infringer-policy`).
 
 ## 14. Pipelines
 

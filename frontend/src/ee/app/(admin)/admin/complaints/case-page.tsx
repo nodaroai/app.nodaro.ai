@@ -8,6 +8,7 @@ import { CaseStatusPanel } from "./case-status-panel"
 import { CaseDetails } from "./case-details"
 import { CaseMatches } from "./case-matches"
 import { CaseCounterNotices } from "./case-counter-notices"
+import { CaseAccountRecord } from "./case-account-record"
 import { CaseTimeline } from "./case-timeline"
 
 const SECTION_LABELS: Readonly<Record<CaseSection, string>> = {
@@ -17,6 +18,7 @@ const SECTION_LABELS: Readonly<Record<CaseSection, string>> = {
   accounts: "the accounts",
   restrictions: "the restrictions",
   counterNotices: "the counter-notices",
+  record: "the account's record",
 }
 
 /**
@@ -67,18 +69,24 @@ export default function AdminComplaintCasePage() {
         </p>
       </header>
 
-      {c.partial.length > 0 && (
-        <p role="status" className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
-          Some of the case could not be read and is shown empty: {c.partial.map((s) => SECTION_LABELS[s]).join(", ")}. Reload the page to read it again.
-        </p>
-      )}
-
+      <UnreadSections sections={c.partial} />
       <CaseStatusPanel complaint={c} />
       <CaseDetails complaint={c} />
       <CaseMatches complaint={c} />
       <CaseCounterNotices complaint={c} />
+      <CaseAccountRecord complaint={c} />
       <CaseTimeline complaint={c} />
     </div>
+  )
+}
+
+/** The parts of the case the server could not read: they are shown empty, and a reload reads them again. */
+function UnreadSections({ sections }: { readonly sections: readonly CaseSection[] }) {
+  if (sections.length === 0) return null
+  return (
+    <p role="status" className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+      Some of the case could not be read and is shown empty: {sections.map((s) => SECTION_LABELS[s]).join(", ")}. Reload the page to read it again.
+    </p>
   )
 }
 

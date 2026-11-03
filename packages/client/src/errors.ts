@@ -71,6 +71,7 @@ export class ModelUnavailableError extends ForbiddenError {
 }
 
 export type ImportRefusalCode =
+  | "imports_blocked"
   | "import_source_disabled"
   | "rights_confirmation_required"
   | "rights_authorization_required"
@@ -81,15 +82,18 @@ export type ImportRefusalCode =
   | "rights_confirmation_used"
 
 /**
- * The 403 codes {@link ImportRefusedError} carries: the link's site is
- * disabled by an administrator (`import_source_disabled`), or the content
- * rights confirmation is missing while the deployment requires one
- * (`rights_confirmation_required`; for an import through an API key or an AI
- * agent with no standing authorization, `rights_authorization_required`), does
- * not exist, is for another link or account, was made under an older
+ * The 403 codes {@link ImportRefusedError} carries: imports of links are
+ * blocked on the account, or the account is closed, under the deployment's
+ * repeat-infringer policy (`imports_blocked`; the message says until when),
+ * the link's site is disabled by an administrator (`import_source_disabled`),
+ * or the content rights confirmation is missing while the deployment requires
+ * one (`rights_confirmation_required`; for an import through an API key or an
+ * AI agent with no standing authorization, `rights_authorization_required`),
+ * does not exist, is for another link or account, was made under an older
  * declaration, expired, or was used for an import already.
  */
 export const IMPORT_REFUSAL_CODES: ReadonlySet<ImportRefusalCode> = new Set<ImportRefusalCode>([
+  "imports_blocked",
   "import_source_disabled",
   "rights_confirmation_required",
   "rights_authorization_required",
@@ -109,7 +113,9 @@ export const IMPORT_REFUSAL_CODES: ReadonlySet<ImportRefusalCode> = new Set<Impo
  * code is `contentRights.confirm({ url })` again and a new import with the
  * answered id; for `rights_authorization_required` it is the person giving
  * the standing authorization in their settings (`contentRights.authorize`, in
- * their own session); an `import_source_disabled` site has no remedy on the
+ * their own session); `imports_blocked` lasts until the date its message names
+ * or until an administrator lifts it, and the account's owner reads why in
+ * their settings; an `import_source_disabled` site has no remedy on the
  * caller's side, and the message names no site.
  */
 export class ImportRefusedError extends ForbiddenError {

@@ -120,7 +120,8 @@ import { firePluginTrigger, listActivePluginTriggers } from "../plugin-triggers.
 import { readJobExecution } from "./job-execution.js"
 import { sendTelegramBotTextFor } from "./social-toolkit.js"
 import { jobSourceColumns } from "../job-source.js"
-import { getJobId, throwIfJobCancelled } from "../job-cancellation.js"
+import { getJobId, getJobUserId, throwIfJobCancelled } from "../job-cancellation.js"
+import { assertImportsAllowed } from "../account-measures.js"
 import { jobFileObjectId } from "../job-output-keys.js"
 import { hasCredits, hasOrganizations, llmMeteredPricing } from "../config.js"
 import { LlmSpend, reserveLlmCall, settleLlmJob, type LlmReserveResult } from "../llm-billing.js"
@@ -1680,6 +1681,17 @@ export interface BuildToolkitOptions {
   workerApp?: () => Promise<FastifyInstance>
 }
 
+/**
+ * A plugin's download of a link refuses an account whose imports are blocked,
+ * or that is closed (account-measures.ts), as the import gate does: the
+ * account is the running job's; outside a job there is none to ask. (The
+ * content rights confirmation is not asked in this lane yet.)
+ */
+async function refuseBlockedImports(): Promise<void> {
+  const userId = getJobUserId()
+  if (userId) await assertImportsAllowed(userId)
+}
+
 export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
   const sceneArtifacts = createScene3DArtifactToolkit()
   // Queue and asset authorization modules join the graph only when this lane runs.
@@ -1782,12 +1794,18 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       // maxFilesizeBytes?}. Its `hardening` (raw yt-dlp arguments among them)
       // stays internal: a plugin reaches the hardened lane only through
       // `downloadSocialPostVideo`, whatever it passes here.
-      downloadYouTubeVideo: ({ hardening: _internal, ...opts }: Parameters<typeof downloadYouTubeVideo>[0]) => downloadYouTubeVideo(opts),
+      downloadYouTubeVideo: async ({ hardening: _internal, ...opts }: Parameters<typeof downloadYouTubeVideo>[0]) => {
+        await refuseBlockedImports()
+        return downloadYouTubeVideo(opts)
+      },
       ytMetadataProbe,
       YtUrlNotAllowedError,
       socialPostVideoUrl: (url: string) => socialPostOf(url)?.url ?? null,
       probeSocialPostVideo,
-      downloadSocialPostVideo,
+      downloadSocialPostVideo: async (...args: Parameters<typeof downloadSocialPostVideo>) => {
+        await refuseBlockedImports()
+        return downloadSocialPostVideo(...args)
+      },
     }, PROVIDER_MEMBER_LANES),
     ffmpeg: withMemberSlots<PluginFfmpegToolkit>("ffmpeg", {
       runFfmpeg,
