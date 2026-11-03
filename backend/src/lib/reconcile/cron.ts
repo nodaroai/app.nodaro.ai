@@ -18,6 +18,7 @@ import { sweepStaleSyncJob } from "./sync-sweep.js"
 import { sweepIdleTrendVariantAnchors } from "./trend-variant-anchor-sweep.js"
 import { sweepExpiredHolds } from "./hold-expiry.js"
 import { sweepRestrictionBytes } from "./restriction-bytes.js"
+import { noteCounterNoticeWindows } from "./counter-notice-windows.js"
 import { markJobFailed } from "../job-failure.js"
 import { isUserQuietStopped } from "../access-blocks.js"
 import { sweepUseCaseWrappers } from "./use-case-wrapper-sweep.js"
@@ -273,6 +274,8 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
   await sweepHeldJobsPastTtl(result)
   // A restriction's bytes not where its side says (migration 583): finished again.
   await sweepRestrictionBytesLeft(result)
+  // A counter-notice's restore window opening or on its last day (migration 587): noted on its case.
+  await noteCounterNoticeWindowsDue(result)
   // R38: a cancelled job's reserved metered LLM hold (kept by the cancel when
   // its call had started) is settled from its ledger after the same grace.
   await sweepCancelledMeteredHolds(result)
@@ -746,6 +749,17 @@ async function sweepRestrictionBytesLeft(result: ReconcileResult): Promise<void>
   }
 }
 
+/** A counter-notice's window noted on its case's log; a failure is this step's, never the tick's. */
+async function noteCounterNoticeWindowsDue(result: ReconcileResult): Promise<void> {
+  try {
+    const { noted, errors } = await noteCounterNoticeWindows()
+    result.swept += noted
+    result.errors += errors
+  } catch (err) {
+    console.error(`[reconcile/cron] counter-notice windows failed:`, err)
+    result.errors++
+  }
+}
 async function sweepHeldJobsPastTtl(result: ReconcileResult): Promise<void> {
   try {
     const { expired, errors } = await sweepExpiredHolds()

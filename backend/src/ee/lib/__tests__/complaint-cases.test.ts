@@ -498,6 +498,16 @@ describe("the status", () => {
     await expect(moveComplaintStatus("c-1", { seen: seenOf(), status: "gone" as never }, ADMIN)).rejects.toMatchObject({ code: "invalid_status" })
     await expect(moveComplaintStatus("nope", { seen: "x", status: "closed" }, ADMIN)).rejects.toMatchObject({ code: "not_found" })
   })
+
+  it("a case whose counter-notice waits for a decision is not closed (the database refuses it, migration 587), and says what to do", async () => {
+    db.updateError = { code: "55026", message: "A counter-notice on this case waits for a decision" }
+    await expect(moveComplaintStatus("c-1", { seen: seenOf(), status: "closed" }, ADMIN)).rejects.toMatchObject({
+      code: "invalid_move",
+      message: expect.stringContaining("restore the content, record a court action, or decline the counter-notice"),
+    })
+    expect(caseRow().status).toBe("received")
+    expect(db.events).toEqual([])
+  })
 })
 
 describe("notes and the account", () => {

@@ -43,11 +43,20 @@ export const EVENT_LABELS: Readonly<Record<string, string>> = {
   content_restricted: "Content restricted",
   restriction_lifted: "Restriction lifted",
   row_updated: "Case record changed",
+  counter_notice_received: "Counter-notice received",
+  counter_notice_forwarded: "Counter-notice sent to the complainant",
+  court_action_received: "Court action received",
+  court_action_ended: "Court action ended",
+  counter_notice_declined: "Counter-notice declined",
+  content_restored: "Content restored",
+  restore_window_opened: "Restore window opened",
+  restore_window_closing: "Restore window closes on the next weekday",
 }
 
-/** Who wrote a log entry: the complainant, the server, the database's own record of a change, or an administrator. */
+/** Who wrote a log entry: the complainant, the content's owner (a counter-notice), the server, the database's own record of a change, or an administrator. */
 export function actorLabel(actor: string): string {
   if (actor === "system" || actor === "complainant" || actor === "database") return actor
+  if (actor === "owner") return "the content's owner"
   return `admin ${actor.slice(0, 8)}`
 }
 

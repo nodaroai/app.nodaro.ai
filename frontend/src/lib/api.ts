@@ -8864,6 +8864,69 @@ export async function revokeConnectedApp(authorizationId: string): Promise<{ ok:
   })
 }
 
+/** A counter-notification sent for one of my restrictions (backend lib/my-restrictions.ts). */
+export interface MyCounterNotice {
+  reference: string
+  receivedAt: string
+  /** The New York dates within which the content may be restored. */
+  opensOn: string
+  closesOn: string
+  forwarded: boolean
+  /** The person who complained went to court: the content stays restricted while it lasts. */
+  courtAction: boolean
+  courtActionEnded: boolean
+  /** Declined as not a valid counter-notification, and why. */
+  declined: boolean
+  declinedReason: string | null
+  restored: boolean
+}
+
+/** Content of mine a complaint led to restricting; the kind of complaint says why (never the complainant, never the administrator's note). */
+export interface MyRestriction {
+  id: string
+  caseReference: string
+  caseKind: "copyright" | "other"
+  restrictedAt: string
+  liftedAt: string | null
+  item: { kind: "file" | "result"; name: string | null; type: string | null }
+  counterNotice: MyCounterNotice | null
+  canSendCounterNotice: boolean
+}
+
+/** The restrictions a complaint led to on my content. Browser sessions only. */
+export async function listMyRestrictions(): Promise<{ data: MyRestriction[] }> {
+  return apiRequest("/v1/content-restrictions/mine", "apiErr.listMyRestrictions")
+}
+
+/** The counter-notification's declaration, verbatim, and the hash a submission sends back. */
+export async function getCounterNoticeDeclaration(): Promise<{ data: { paragraphs: string[]; hash: string } }> {
+  return apiRequest("/v1/counter-notices/declaration", "apiErr.counterNoticeDeclaration")
+}
+
+export interface CounterNoticeInput {
+  name: string
+  email: string
+  address: string
+  phone: string
+  signature: string
+  contentIdentification: string
+  locationBefore: string
+  declarationHash: string
+  perjury: true
+  jurisdiction: true
+}
+
+/** Sends my counter-notification for one restriction; answers its reference and restore window. */
+export async function sendCounterNotice(
+  restrictionId: string,
+  input: CounterNoticeInput,
+): Promise<{ data: { reference: string; receivedAt: string; opensOn: string; closesOn: string } }> {
+  return apiRequest(`/v1/content-restrictions/${encodeURIComponent(restrictionId)}/counter-notice`, "apiErr.sendCounterNotice", {
+    method: "POST",
+    body: input,
+  })
+}
+
 export interface ApiToken {
   id: string
   name: string

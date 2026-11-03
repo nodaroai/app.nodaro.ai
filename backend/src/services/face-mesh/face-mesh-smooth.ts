@@ -13,9 +13,11 @@
  * Filters belong to a FACE, not to a detection's place in the list: YuNet
  * answers highest score first, and two people swap places in that order from
  * frame to frame. Each frame's faces are matched to the faces drawn in the
- * frame before by box overlap (greedy, best overlap first); a face with no
- * match starts afresh, and a face not drawn in a frame is forgotten — drawn
- * again later, it starts afresh too (never pulled toward where it was).
+ * frame before by box overlap (`matchFaceBoxes`: greedy, best overlap first);
+ * a face with no match starts afresh, and a face not drawn in a frame is
+ * forgotten — drawn again later, it starts afresh too (never pulled toward
+ * where it was). The same match links found faces into the tracks that decide
+ * which faces are drawn at all (`face-mesh-tracks.ts`).
  */
 import type { FaceBox } from "./face-mesh-filters.js"
 
@@ -73,6 +75,30 @@ export function boxIou(a: FaceBox, b: FaceBox): number {
   return union > 0 ? inter / union : 0
 }
 
+/**
+ * Which box each face continues: greedy, the best overlap first, each box
+ * taken once, none under `FACE_MESH_TRACK_MIN_IOU`. Returns, for each face in
+ * `faces`' order, the index of its box in `boxes`, or -1 (a new face). Pure.
+ */
+export function matchFaceBoxes(faces: readonly FaceBox[], boxes: readonly FaceBox[]): number[] {
+  const pairs: Array<{ face: number; box: number; iou: number }> = []
+  faces.forEach((f, i) =>
+    boxes.forEach((b, j) => {
+      const iou = boxIou(f, b)
+      if (iou >= FACE_MESH_TRACK_MIN_IOU) pairs.push({ face: i, box: j, iou })
+    }),
+  )
+  pairs.sort((a, b) => b.iou - a.iou)
+  const boxOf = faces.map(() => -1)
+  const taken = new Set<number>()
+  for (const p of pairs) {
+    if (boxOf[p.face] !== -1 || taken.has(p.box)) continue
+    boxOf[p.face] = p.box
+    taken.add(p.box)
+  }
+  return boxOf
+}
+
 /** One face found and meshed in a frame: its box (fractions of the frame) and its points (PIXELS of the detection frame). */
 export interface MeshedFace {
   readonly box: FaceBox
@@ -100,24 +126,11 @@ export class FaceMeshTracker {
    * the input's order. Faces not in `faces` are forgotten.
    */
   next(faces: readonly MeshedFace[]): Float64Array[] {
-    const pairs: Array<{ face: number; track: number; iou: number }> = []
-    faces.forEach((f, i) =>
-      this.tracks.forEach((t, j) => {
-        const iou = boxIou(f.box, t.box)
-        if (iou >= FACE_MESH_TRACK_MIN_IOU) pairs.push({ face: i, track: j, iou })
-      }),
-    )
-    pairs.sort((a, b) => b.iou - a.iou)
-    const trackOf = new Map<number, Track>()
-    const taken = new Set<number>()
-    for (const p of pairs) {
-      if (trackOf.has(p.face) || taken.has(p.track)) continue
-      trackOf.set(p.face, this.tracks[p.track]!)
-      taken.add(p.track)
-    }
+    const trackOf = matchFaceBoxes(faces.map((f) => f.box), this.tracks.map((t) => t.box))
     const next: Track[] = []
     const out = faces.map((f, i) => {
-      const track = trackOf.get(i) ?? { box: f.box, filters: Array.from({ length: f.points.length }, () => new OneEuroFilter()) }
+      const j = trackOf[i]!
+      const track = j >= 0 ? this.tracks[j]! : { box: f.box, filters: Array.from({ length: f.points.length }, () => new OneEuroFilter()) }
       track.box = f.box
       next.push(track)
       const scale = faceScale(f.points)

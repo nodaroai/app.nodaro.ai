@@ -148,6 +148,10 @@ vi.mock("../fal.js", () => ({
 vi.mock("../restriction-bytes.js", () => ({
   sweepRestrictionBytes: vi.fn().mockResolvedValue({ finished: 0, errors: 0 }),
 }))
+// So do the counter-notice window notes (counter-notice-windows.ts).
+vi.mock("../counter-notice-windows.js", () => ({
+  noteCounterNoticeWindows: vi.fn().mockResolvedValue({ noted: 0, errors: 0 }),
+}))
 vi.mock("../hold-expiry.js", () => ({
   sweepExpiredHolds: vi.fn().mockResolvedValue({ expired: 0, errors: 0 }),
 }))

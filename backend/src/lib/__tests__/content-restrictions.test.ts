@@ -247,6 +247,18 @@ describe("liftRestriction and listRestrictions", () => {
     await expect(liftRestriction("nope", { reason: null, adminUserId: null })).rejects.toMatchObject({ code: "not_found" })
   })
 
+  it("a court action recorded on the restriction's counter-notice refuses the lift (migration 587): nothing is restored or logged", async () => {
+    const r = await restrictAsset("a-1", { reason: "x", complaintId: "c-1", adminUserId: "admin" })
+    caseLog.events.length = 0
+    mem.rpcError = { code: "55025", message: "lift_content_restriction: a court action holds this content until it is recorded as ended" }
+    await expect(liftRestriction(r.id, { reason: "lift", adminUserId: "admin2" })).rejects.toMatchObject({
+      code: "court_action",
+      message: expect.stringContaining("record that the court action ended first"),
+    })
+    expect(bytes.restored).toEqual([])
+    expect(caseLog.events).toEqual([])
+  })
+
   it("writes a restriction made from a case, and its lift, on the case's log; one made from no case writes nothing", async () => {
     const r = await restrictAsset("a-1", { reason: "x", complaintId: "c-1", adminUserId: "admin" })
     await liftRestriction(r.id, { reason: "counter-notice", adminUserId: "admin2" })

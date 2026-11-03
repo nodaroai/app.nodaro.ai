@@ -149,8 +149,10 @@ SELECT pg_temp.expect_error('a restriction''s reason cannot be edited',
   $q$UPDATE content_restrictions SET reason = 'other'$q$, '55000');
 SELECT pg_temp.expect_error('a lift cannot be given a reason without lifting',
   $q$UPDATE content_restrictions SET lift_reason = 'x'$q$, '55000');
+-- CASCADE: the counter-notices (migration 587) reference the records, and a
+-- plain TRUNCATE of a referenced table fails on that (0A000) before any trigger.
 SELECT pg_temp.expect_error('the records cannot be truncated',
-  $q$TRUNCATE content_restrictions$q$, '55000');
+  $q$TRUNCATE content_restrictions CASCADE$q$, '55000');
 
 -- 6. The lift restores every row exactly, once; an output written since is kept.
 UPDATE jobs SET output_data = '{"imageUrl": "https://cdn.example.test/newer.png"}'::jsonb WHERE id = '00000000-0000-4000-8000-000000000955';

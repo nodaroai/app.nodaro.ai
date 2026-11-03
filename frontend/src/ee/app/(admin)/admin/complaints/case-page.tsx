@@ -7,6 +7,7 @@ import { categoryLabel, formatWhen, statusLabel, statusTone } from "./complaint-
 import { CaseStatusPanel } from "./case-status-panel"
 import { CaseDetails } from "./case-details"
 import { CaseMatches } from "./case-matches"
+import { CaseCounterNotices } from "./case-counter-notices"
 import { CaseTimeline } from "./case-timeline"
 
 const SECTION_LABELS: Readonly<Record<CaseSection, string>> = {
@@ -15,6 +16,7 @@ const SECTION_LABELS: Readonly<Record<CaseSection, string>> = {
   confirmations: "the import confirmations",
   accounts: "the accounts",
   restrictions: "the restrictions",
+  counterNotices: "the counter-notices",
 }
 
 /**
@@ -74,6 +76,7 @@ export default function AdminComplaintCasePage() {
       <CaseStatusPanel complaint={c} />
       <CaseDetails complaint={c} />
       <CaseMatches complaint={c} />
+      <CaseCounterNotices complaint={c} />
       <CaseTimeline complaint={c} />
     </div>
   )

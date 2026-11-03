@@ -163,6 +163,13 @@ export async function moveComplaintStatus(id: string, move: StatusMove, adminUse
     .eq("updated_at", move.seen)
     .select(SUMMARY_COLUMNS)
     .maybeSingle()
+  // 55026: a counter-notice on the case waits for a decision (migration 587); its restore deadline must not pass on a closed case.
+  if (error?.code === "55026") {
+    throw new ComplaintCaseError(
+      "invalid_move",
+      "A counter-notice on this case waits for a decision: restore the content, record a court action, or decline the counter-notice before closing the case",
+    )
+  }
   if (error) throw new Error(`Complaint move failed: ${error.message}`)
   if (!data) throw new ComplaintCaseError("conflict", CHANGED_MEANWHILE)
   const detail = { ...(note ? { note } : {}), ...(decisionChanged ? { decision } : {}) }

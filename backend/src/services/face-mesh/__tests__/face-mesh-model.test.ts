@@ -29,13 +29,16 @@ import {
 } from "../face-mesh-session.js"
 import { FACE_MESH_MIN_PRESENCE, fillFaceMeshInput, landmarksToFrame, roiOfFace, sigmoid, type FaceRoi } from "../face-mesh-crop.js"
 import {
+  faceMeshHeldFramesMiB,
   faceMeshPeakMemoryMiB,
   faceMeshTimeoutMs,
   FACE_MESH_DRAW_PEAK_MIB,
   FACE_MESH_FIXED_MS,
+  FACE_MESH_HELD_FRAMES,
   FACE_MESH_MS_PER_FRAME,
   FACE_MESH_SESSION_PEAK_MIB_PER_THREAD,
 } from "../face-mesh-budget.js"
+import { FACE_MESH_LOOKAHEAD_FRAMES } from "../face-mesh-tracks.js"
 import { FACE_DETECT_SESSION_PEAK_MIB_PER_THREAD } from "../../face-detect/face-detect-budget.js"
 import { decodeYunet, fillYunetInput, paddedSize } from "../../face-detect/yunet-decode.js"
 import { releaseYunetSession, yunetSession } from "../../face-detect/yunet-session.js"
@@ -208,5 +211,23 @@ describe("the run's budget", () => {
     const withMask = faceMeshPeakMemoryMiB({ detect: hd, draw: hd, mask: hd }, 1, threads)
     expect(faceMeshPeakMemoryMiB({ detect: hd, draw: hd, mask: hd, depth: hd }, 1, threads)).toBeGreaterThanOrEqual(withMask)
     expect(faceMeshPeakMemoryMiB({ detect: { width: 1080, height: 1920 }, draw: { width: 1080, height: 1920 } }, 1, threads)).toBeGreaterThan(base)
+  })
+
+  it("reserves the frames held while their faces' tracks are decided: the frames waiting and the one drawn, each a copy of the drawn frame and of the depth render's", () => {
+    expect(FACE_MESH_HELD_FRAMES).toBe(FACE_MESH_LOOKAHEAD_FRAMES + 1)
+    expect(FACE_MESH_HELD_FRAMES).toBe(5)
+    const hd = { width: 720, height: 1280 }
+    // 5 × 720 × 1280 × 3 B = 13.2 MiB; a half-size depth render adds 5 × 360 × 640 × 3 B = 3.3 MiB.
+    expect(faceMeshHeldFramesMiB({ draw: hd })).toBe(14)
+    expect(faceMeshHeldFramesMiB({ draw: hd, depth: { width: 360, height: 640 } })).toBe(17)
+    // 4K, the depth at the drawn size: 2 × 5 × 3840 × 2160 × 3 B.
+    expect(faceMeshHeldFramesMiB({ draw: { width: 3840, height: 2160 }, depth: { width: 3840, height: 2160 } })).toBe(238)
+    // In the run's peak: at two threads a second input adds no decoder share, so the depth render adds exactly its
+    // held copies; the held frames do not grow with the sessions' threads.
+    const threads = { decode: 2, filter: 2, encode: 2 }
+    const plain = faceMeshPeakMemoryMiB({ detect: hd, draw: hd }, 1, threads)
+    expect(faceMeshPeakMemoryMiB({ detect: hd, draw: hd, depth: hd }, 1, threads) - plain)
+      .toBe(faceMeshHeldFramesMiB({ draw: hd, depth: hd }) - faceMeshHeldFramesMiB({ draw: hd }))
+    expect(faceMeshPeakMemoryMiB({ detect: hd, draw: hd }, 2, threads) - plain).toBe(FACE_DETECT_SESSION_PEAK_MIB_PER_THREAD + FACE_MESH_SESSION_PEAK_MIB_PER_THREAD)
   })
 })
