@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { FaceMeshTracker, OneEuroFilter, boxIou, faceScale } from "../face-mesh-smooth.js"
+import { FaceMeshTracker, OneEuroFilter, boxIou, faceScale, matchFaceBoxes } from "../face-mesh-smooth.js"
 
 describe("OneEuroFilter", () => {
   it("passes the first value as it is", () => {
@@ -36,6 +36,24 @@ describe("boxIou", () => {
     expect(boxIou(a, a)).toBe(1)
     expect(boxIou(a, { x: 5, y: 5, w: 1, h: 1 })).toBe(0)
     expect(boxIou(a, { x: 1, y: 0, w: 2, h: 2 })).toBeCloseTo(2 / 6)
+  })
+})
+
+describe("matchFaceBoxes", () => {
+  const a = { x: 0.1, y: 0.1, w: 0.1, h: 0.1 }
+  const b = { x: 0.5, y: 0.1, w: 0.1, h: 0.1 }
+
+  it("pairs each face with the box it overlaps best, whatever the order; a face overlapping none is new (-1)", () => {
+    expect(matchFaceBoxes([{ ...b, x: 0.51 }, { ...a, x: 0.11 }, { x: 0.8, y: 0.8, w: 0.1, h: 0.1 }], [a, b])).toEqual([1, 0, -1])
+  })
+
+  it("best overlap first, each box taken once: of two faces on one box the closer takes it", () => {
+    expect(matchFaceBoxes([{ ...a, x: 0.13 }, { ...a, x: 0.11 }], [a])).toEqual([-1, 0])
+  })
+
+  it("an overlap under FACE_MESH_TRACK_MIN_IOU is no match", () => {
+    expect(matchFaceBoxes([{ ...a, x: 0.16 }], [a])).toEqual([-1]) // IoU 0.04 / 0.16 = 0.25
+    expect(matchFaceBoxes([{ ...a, x: 0.15 }], [a])).toEqual([0]) // IoU 0.05 / 0.15 ≈ 0.33
   })
 })
 

@@ -134,7 +134,7 @@ describe("ffmpeg admission census", () => {
     "services/face-mesh/draw-face-mesh.ts": {
       how:
         "drawFaceMeshVideo: ONE withFfmpegSlot hold around the run's decoders, its encoder AND both onnxruntime " +
-        "sessions' inference, reserving faceMeshPeakMemoryMiB (the canvas predictions + the sessions + sharp)",
+        "sessions' inference, reserving faceMeshPeakMemoryMiB (the canvas predictions + the sessions + sharp + the frames held)",
       // streamFrames only spawns a decode; its one caller holds the slot around it.
       heldBy: { streamFrames: "drawFaceMeshVideo" },
     },

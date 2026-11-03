@@ -47,9 +47,12 @@ export type VideoFaceMeshParts = (typeof VIDEO_FACE_MESH_PARTS)[number]
  * same input: the model, the crop, the smoothing, the filters, the colours or
  * the widths. Never for pricing, limits or messages. 2026-11-02: MediaPipe's
  * refined landmark model (478 points, a 256 × 256 crop) in place of the basic
- * one; the lines' colours and widths are 2026-11-01's.
+ * one; the lines' colours and widths are 2026-11-01's. 2026-11-03: a face gets
+ * lines only when it is found in at least 3 frames of its track (found faces
+ * at the same place in frames at most 2 apart): one found in a frame or two
+ * is never drawn.
  */
-export const VIDEO_FACE_MESH_RECIPE = "2026-11-02"
+export const VIDEO_FACE_MESH_RECIPE = "2026-11-03"
 
 const VIDEO_FACE_MESH_BUCKETS_SEC = [5, 10, 15, 30, 60, 120, 300] as const
 

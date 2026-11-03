@@ -9,8 +9,15 @@
  *      turned level by its eyes, and run through the landmark model
  *      (`face-mesh-crop.ts`, `face-mesh-session.ts`); a presence under 0.5
  *      draws nothing for that face in that frame;
- *   3. the points are smoothed over time per face (`face-mesh-smooth.ts`);
- *   4. the lines (all of them, or only the eye and lip outlines, or only the
+ *   3. a face found so gets lines only when it is found in at least 3 frames
+ *      of its track (`face-mesh-tracks.ts`): one found in a frame or two (a
+ *      tiny face far back, a dark gap read as a face) is never drawn. Each
+ *      frame waits, held as a copy, until the 4 frames after it are read
+ *      (`FACE_MESH_LOOKAHEAD_FRAMES`), then goes on to be drawn and written,
+ *      in order (the end of the clip decides the last ones);
+ *   4. the points of the faces drawn are smoothed over time per face
+ *      (`face-mesh-smooth.ts`: every frame, in order, only the faces drawn);
+ *   5. the lines (all of them, or only the eye and lip outlines, or only the
  *      lip outline: `parts`) are drawn on the clip they go on (`drawOnPath`:
  *      the masked or depth clip) at their place (`face-mesh-draw.ts`), as fractions of the
  *      frame — the clips may differ in size — in tones of the picture under
@@ -24,8 +31,9 @@
  * copied untouched. No face anywhere is not a failure: the clip comes back
  * re-encoded with nothing drawn (`facesDrawn: 0`).
  *
- * Every decoder, both onnxruntime sessions, sharp and the encoder run inside
- * ONE admission hold (`withFfmpegSlot`, `faceMeshPeakMemoryMiB`), started
+ * Every decoder, both onnxruntime sessions, sharp, the frames held and the
+ * encoder run inside ONE admission hold (`withFfmpegSlot`,
+ * `faceMeshPeakMemoryMiB`), started
  * through the one launcher (`spawnFfmpeg`). The decoders run in lockstep with
  * `-fps_mode passthrough`, so ffmpeg never duplicates or drops a frame.
  */
@@ -45,6 +53,7 @@ import { faceMeshSession } from "./face-mesh-session.js"
 import { FACE_MESH_MIN_PRESENCE, fillFaceMeshInput, landmarksToFrame, roiOfFace, sigmoid } from "./face-mesh-crop.js"
 import { faceGetsMesh, type FaceMeshFilters } from "./face-mesh-filters.js"
 import { FaceMeshTracker, type MeshedFace } from "./face-mesh-smooth.js"
+import { FaceMeshLookahead, type DecidedFrame } from "./face-mesh-tracks.js"
 import { compositeFaceMesh, faceMeshOverlay } from "./face-mesh-draw.js"
 import { depthColormapTable } from "./depth-colormaps.js"
 import { faceMeshPeakMemoryMiB, faceMeshTimeoutMs } from "./face-mesh-budget.js"
@@ -103,6 +112,16 @@ export class FaceMeshInputError extends DeterministicJobError {
 interface ClipInfo {
   readonly probe: VideoOverlayBaseProbe
   readonly frames: number
+}
+
+/**
+ * A frame waiting for its faces' tracks: a copy of the drawn clip's frame and,
+ * when a face is found in it and the lines take a depth map's colours, of the
+ * depth render's — each decoder reuses its buffer for the next frame.
+ */
+interface HeldFrame {
+  readonly rgb: Buffer
+  readonly depth?: Buffer
 }
 
 /** The video stream's frame times from its first frame, sorted; null when ffprobe cannot say. */
@@ -391,12 +410,33 @@ export async function drawFaceMeshVideo(input: DrawFaceMeshInput): Promise<DrawF
       return maskGray
     }
     const tracker = new FaceMeshTracker(fpsOf(frameRate))
+    // Each frame is held until its faces' tracks are decided (only a face found in enough frames is drawn).
+    const lookahead = new FaceMeshLookahead<HeldFrame, MeshedFace>()
     const small = k < 1 ? new Uint8Array(dw * dh * 3) : undefined
     const yunetInput = new Float32Array(3 * pw * ph)
     const meshInput = new Float32Array(FACE_MESH_INPUT_SIZE * FACE_MESH_INPUT_SIZE * 3)
     let n = 0
+    let written = 0
     let framesWithFaces = 0
     let facesDrawn = 0
+    /**
+     * A decided frame, drawn and written: the smoothing gets every frame, in
+     * order, with only the faces drawn on it (a face left out of a frame is
+     * forgotten), and the counts are what is drawn.
+     */
+    const writeDecided = async ({ item, drawn }: DecidedFrame<HeldFrame, MeshedFace>): Promise<void> => {
+      const smoothed = tracker.next(drawn).map((p) => p.map((v, i) => v / (i % 2 === 0 ? det.width : det.height)))
+      const overlay = faceMeshOverlay(smoothed, draw.width, draw.height, input.parts ?? "full")
+      if (overlay) {
+        framesWithFaces++
+        facesDrawn += smoothed.length
+        const depth = item.depth && depthSize && depthTable ? { rgb: item.depth, ...depthSize, table: depthTable } : undefined
+        await writeFrame(enc.stdin, await compositeFaceMesh(item.rgb, draw.width, draw.height, overlay, depth))
+      } else {
+        await writeFrame(enc.stdin, item.rgb)
+      }
+      written++
+    }
     try {
       for (;;) {
         const next = await Promise.all(sources.map((s) => s.next()))
@@ -414,7 +454,8 @@ export async function drawFaceMeshVideo(input: DrawFaceMeshInput): Promise<DrawF
         const faces: YunetFace[] = decodeYunet(await detector.run(yunetInput, pw, ph), {
           pw, ph, width: dw, height: dh, minScore: FACE_MESH_MIN_DETECT_SCORE,
         })
-        const meshed: MeshedFace[] = []
+        // The faces FOUND in this frame: through the filters, and present to the landmark model.
+        const found: MeshedFace[] = []
         for (const face of faces) {
           if (!faceGetsMesh(face, input.filters, maskGray && maskSize ? { gray: maskGray, ...maskSize } : undefined)) continue
           const roi = roiOfFace(face, det.width, det.height)
@@ -423,21 +464,16 @@ export async function drawFaceMeshVideo(input: DrawFaceMeshInput): Promise<DrawF
           if (sigmoid(out.presenceLogit) < FACE_MESH_MIN_PRESENCE) continue
           const fractions = landmarksToFrame(out.landmarks, roi, det.width, det.height)
           // The tracker smooths in pixels of the found clip.
-          meshed.push({ box: face, points: fractions.map((v, i) => v * (i % 2 === 0 ? det.width : det.height)) })
+          found.push({ box: face, points: fractions.map((v, i) => v * (i % 2 === 0 ? det.width : det.height)) })
         }
-        const smoothed = tracker.next(meshed).map((p) => p.map((v, i) => v / (i % 2 === 0 ? det.width : det.height)))
-        const overlay = faceMeshOverlay(smoothed, draw.width, draw.height, input.parts ?? "full")
-        if (overlay) {
-          framesWithFaces++
-          facesDrawn += smoothed.length
-          const depth = depthRgb && depthSize && depthTable ? { rgb: depthRgb, ...depthSize, table: depthTable } : undefined
-          await writeFrame(enc.stdin, await compositeFaceMesh(rgb, draw.width, draw.height, overlay, depth))
-        } else {
-          // A copy: the decoder reuses its buffer for the next frame while this one may still be queued.
-          await writeFrame(enc.stdin, Buffer.from(rgb))
-        }
+        // Held as copies (the decoders reuse their buffers); a frame with no face found never gets lines, so no depth.
+        const held: HeldFrame = { rgb: Buffer.from(rgb), ...(depthRgb && found.length > 0 ? { depth: Buffer.from(depthRgb) } : {}) }
+        for (const decided of lookahead.push(held, found)) await writeDecided(decided)
         n++
       }
+      // The clip's end decides the frames still held.
+      for (const decided of lookahead.flush()) await writeDecided(decided)
+      if (written !== n) throw new Error(`face mesh: ${written} of the ${n} frames read were written`)
       // A mask with frames past the clip's last moment: the rest is never read (its decode is stopped).
       await maskStream?.return(undefined)
       enc.stdin.end()
