@@ -52,6 +52,11 @@ const map: LocaleCatalogMap = {
 
   // --- picker-gaps 2026-09-01 ---
   "early-color-photo": { label: "Foto a Color Temprana", description: "Color de principios de 1900, estilo Prokudin-Gorski / autocromo" },
+  "felt-puppet": { label: "Títere de fieltro", description: "Títeres y decorado de fieltro en stop-motion" },
+  "knitted-yarn": { label: "Mundo tejido", description: "Un mundo tejido con lana" },
+  "toy-figure-3d": { label: "Figura de juguete 3D", description: "Figuras de vinilo redondeadas" },
+  "painterly-3d": { label: "3D pictórico", description: "3D de cuento con acabado pintado a mano" },
+  "painted-clay": { label: "Arcilla pintada", description: "Arcilla esculpida con acabado pintado" },
 }
 
 export default map

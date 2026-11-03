@@ -3279,6 +3279,20 @@ catalogs that ship as pure data in [`@nodaro/shared`](https://www.npmjs.com/pack
 [Parameter Picker Catalogs](picker-catalogs.md)); the REST endpoints exist for
 clients that can't.
 
+#### Image and video styles (`media`)
+
+A `style` option offered for one kind of output only carries `media`, at both
+detail levels: `["video"]` on the five video-only styles (`felt-puppet`,
+`knitted-yarn`, `toy-figure-3d`, `painterly-3d`, `painted-clay`). An option
+without `media` is offered for images and video. An image style list leaves out
+an option whose `media` lacks `"image"`; a style sent to an image route anyway
+is still accepted and words the image with its image wording.
+
+A `style` option that does not hold up as a restyle of filmed footage carries
+`restyle: false`, at both detail levels: today `fantasy`, `surrealism` and
+`concept-art`. A list of styles for restyling a clip leaves it out; video
+generation still offers it, and a restyle that names it is still accepted.
+
 #### Pictures (`imageUrl`, `sections`)
 
 Every option that has a picture carries an **absolute** `imageUrl`, at both

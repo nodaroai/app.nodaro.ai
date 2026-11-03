@@ -54,6 +54,11 @@ const map: LocaleCatalogMap = {
 
   // --- picker-gaps 2026-09-01 ---
   "early-color-photo": { label: "Foto colorida antiga", description: "Cor do início dos anos 1900, autochrome / Prokudin-Gorsky" },
+  "felt-puppet": { label: "Boneco de feltro", description: "Bonecos e cenário de feltro em stop-motion" },
+  "knitted-yarn": { label: "Tricô", description: "Um mundo tricotado em lã" },
+  "toy-figure-3d": { label: "Boneco de vinil 3D", description: "Bonecos de vinil arredondados" },
+  "painterly-3d": { label: "3D pictórico", description: "3D de livro ilustrado com acabamento pintado à mão" },
+  "painted-clay": { label: "Argila pintada", description: "Argila esculpida com acabamento pintado" },
 }
 
 export default map

@@ -51,6 +51,11 @@ const map: LocaleCatalogMap = {
   "manga": { label: "Manga", description: "Inked B&W panel कला, screen-tone shading" },
   // --- picker-gaps 2026-09-01 ---
   "early-color-photo": { label: "प्रारंभिक रंगीन फ़ोटो", description: "Prokudin-Gorsky / autochrome शैली का 1900 के दशक का आरंभिक रंगीन फ़ोटो लुक" },
+  "felt-puppet": { label: "फ़ेल्ट कठपुतली", description: "नीडल-फ़ेल्ट स्टॉप-मोशन कठपुतलियाँ और सेट" },
+  "knitted-yarn": { label: "बुनी हुई दुनिया", description: "ऊन के धागे से बुनी दुनिया" },
+  "toy-figure-3d": { label: "खिलौना फ़िगर 3D", description: "गोल-मटोल विनाइल खिलौना फ़िगर" },
+  "painterly-3d": { label: "पेंटरली 3D", description: "हाथ से पेंट किए फ़िनिश वाला कहानी-किताब 3D" },
+  "painted-clay": { label: "पेंट की हुई मिट्टी", description: "पेंट फ़िनिश वाली गढ़ी हुई मिट्टी" },
 }
 
 export default map

@@ -20,7 +20,7 @@ import {
   type VideoGenProvider,
   type VideoToVideoNodeProvider
 } from "@nodaro/shared/models"
-import { STYLES } from "@nodaro/prompts/pickers"
+import { STYLES, stylesForMedia } from "@nodaro/prompts/pickers"
 import { curateEntries } from "@nodaro/prompts/picker-catalogs"
 import type { VideoDepthProvider } from "@nodaro/shared/media"
 export { MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, NATIVE_NEGATIVE_PROMPT_MODELS, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, IMAGE_MASK_MODE, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "@nodaro/shared/models"
@@ -605,6 +605,8 @@ export const KIE_VIDEO_DURATIONS: Record<string, number[]> = durationsByMode("i2
 /** Inline Style dropdown options for image config panels. Derived from the
  *  canonical STYLES catalog so the dropdown and the standalone Style node
  *  stay in sync — both resolve to the same promptHint at execution time.
+ *  Only the styles offered for images (`stylesForMedia`): a video-only style
+ *  (Felt Puppet) is the Style node's and the video pickers' alone.
  *
  *  A FUNCTION, not a constant: it is read through the deployment's curated
  *  view, so a style a pack removed is not offered (and a pack's relabel
@@ -612,14 +614,14 @@ export const KIE_VIDEO_DURATIONS: Record<string, number[]> = durationsByMode("i2
  *  `useCatalogPacksVersion()` so a late registration re-renders; by identity
  *  to the bundled list on a deployment with no packs. */
 export function imageStylePresets(): ReadonlyArray<{ value: string; label: string }> {
-  return curateEntries("style", STYLES).map((s) => ({ value: s.id, label: s.label }))
+  return stylesForMedia(curateEntries("style", STYLES), "image").map((s) => ({ value: s.id, label: s.label }))
 }
 /** The STOCK list, for the one consumer that is a module-scope table
  *  (types/nodes.ts NODE_DEFINITIONS) and cannot read at render time. The
  *  renderer's own `style` case never uses that table's options — it calls
  *  imageStylePresets() — so nothing curated is offered from here. */
 export const IMAGE_STYLE_PRESETS: ReadonlyArray<{ value: string; label: string }> =
-  STYLES.map((s) => ({ value: s.id, label: s.label }))
+  stylesForMedia(STYLES, "image").map((s) => ({ value: s.id, label: s.label }))
 
 // Providers that support start + end frame (2 images -> video) —
 // derived from MODEL_CATALOG.features.includes("end-frame").

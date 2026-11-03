@@ -52,6 +52,11 @@ const map: LocaleCatalogMap = {
 
   // --- picker-gaps 2026-09-01 ---
   "early-color-photo": { label: "초기 컬러 사진", description: "Prokudin-Gorsky / 오토크롬 방식의 1900년대 초 컬러" },
+  "felt-puppet": { label: "펠트 인형", description: "니들 펠트 스톱모션 인형과 세트" },
+  "knitted-yarn": { label: "니트 얀", description: "털실로 뜬 세계" },
+  "toy-figure-3d": { label: "토이 피규어 3D", description: "둥근 비닐 장난감 피규어" },
+  "painterly-3d": { label: "페인터리 3D", description: "손으로 칠한 마감의 동화풍 3D" },
+  "painted-clay": { label: "채색 점토", description: "채색 마감의 조각 점토" },
 }
 
 export default map

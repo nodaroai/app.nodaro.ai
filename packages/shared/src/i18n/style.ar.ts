@@ -52,6 +52,11 @@ const map: LocaleCatalogMap = {
   "manga": { label: "مانغا", description: "فن لوحات مرسومة بالحبر أبيض وأسود بتظليل Screen-tone" },
   // --- picker-gaps 2026-09-01 ---
   "early-color-photo": { label: "صورة ملونة مبكرة", description: "ألوان مطلع القرن العشرين بأسلوب بروكودين-غورسكي / أوتوكروم" },
+  "felt-puppet": { label: "دمية لباد", description: "دمى ومشاهد من اللباد بأسلوب ستوب موشن" },
+  "knitted-yarn": { label: "عالم محبوك", description: "عالم محبوك من خيوط الصوف" },
+  "toy-figure-3d": { label: "مجسم لعبة ثلاثي الأبعاد", description: "مجسمات فينيل مستديرة" },
+  "painterly-3d": { label: "ثلاثي أبعاد تصويري", description: "ثلاثي أبعاد بأسلوب كتب الحكايات بلمسة مرسومة يدويًا" },
+  "painted-clay": { label: "صلصال ملوّن", description: "صلصال منحوت بلمسة ملوّنة" },
 }
 
 export default map

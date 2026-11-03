@@ -70,6 +70,11 @@ export const LOOK_PREVIEW_SETS = {
     "mixed-media": "https://cdn.nodaro.ai/picker-renders/d36ab150-9cd6-47ac-bdd9-3b26990a4fa9.png",
     "early-color-photo": "https://cdn.nodaro.ai/picker-renders/1bf61f3d-c174-466f-9092-5de72dc7abea.png",
     manga: "https://cdn.nodaro.ai/picker-renders/3d6bbfd8-8c62-4769-b62e-11d2a7e43b4b.png",
+    "felt-puppet": "https://cdn.nodaro.ai/picker-renders/31ad3b39-d501-4b76-9c1c-2f87fc374333.png",
+    "knitted-yarn": "https://cdn.nodaro.ai/picker-renders/b80b6a96-2221-4c68-8e0c-4beaa5a6ce56.png",
+    "toy-figure-3d": "https://cdn.nodaro.ai/picker-renders/add81127-a005-4f9a-a002-780768238715.png",
+    "painterly-3d": "https://cdn.nodaro.ai/picker-renders/6aec1d80-be9f-4f2e-a1b7-fa38a61131d1.png",
+    "painted-clay": "https://cdn.nodaro.ai/picker-renders/daedee18-c034-4b98-80bb-7bef7e05c547.png",
   },
   "color-look": {
     warm: "https://cdn.nodaro.ai/picker-renders/8511a1bc-3d3b-46a8-adc0-26fcc9e93a4b.png",

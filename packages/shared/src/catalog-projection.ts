@@ -25,6 +25,19 @@ export interface ProjectedCatalogOption {
   /** Authored Character Motion prerequisites and sequence state. Missing means unknown. */
   motion?: CharacterMotionMetadata
   /**
+   * Style only: the outputs the style is offered for. Present only on a style
+   * offered for one of them (`["video"]`: a look that only works in motion);
+   * absent means both. An image style list leaves out an option without
+   * "image".
+   */
+  media?: Array<"image" | "video">
+  /**
+   * Style only: `false` on a style that does not hold up as a restyle of
+   * filmed footage; a restyle style list leaves it out. Absent means offered.
+   * Video generation still offers it.
+   */
+  restyle?: false
+  /**
    * Per-option parameters — node-data fields that apply only while THIS option
    * is picked (the Transition catalog's `wipe` → `wipeDirection`). Same shape
    * as a catalog's `dimensions`, at both detail levels; `auto` leads each list
