@@ -12,6 +12,7 @@
 export const CAST_SWAP_PROMPT_PART_IDS = [
   "opener",
   "artStyle",
+  "artStyleMandatory",
   "original",
   "scene",
   "quality",
@@ -40,6 +41,9 @@ export const CAST_SWAP_PROMPT_PART_PLACEHOLDERS: Readonly<Record<CastSwapPromptP
   opener: ["{video}"],
   // Flex (flexible) direct runs with an art style only: the style's own wording (the platform's `style` catalog).
   artStyle: ["{style}"],
+  // Flex (flexible) direct runs with an art style only: the line under the style's wording that holds every frame
+  // to it, worded per medium by the engine.
+  artStyleMandatory: [],
   // Depth-reference runs only.
   original: ["{original}"],
   // Flexible full-depth runs whose scene is "description" only: the scene description the engine writes per run.

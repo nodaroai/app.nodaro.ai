@@ -3595,6 +3595,7 @@ export type PluginNodaroMotionMasking = Partial<
 export type PluginPromptPartId =
   | "opener"
   | "artStyle"
+  | "artStyleMandatory"
   | "original"
   | "scene"
   | "quality"
