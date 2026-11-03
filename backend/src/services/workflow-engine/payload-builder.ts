@@ -2277,8 +2277,8 @@ function resolveRefs(text: string | undefined, refMap: Map<string, string>): str
  * DAG executor — keep both call sites lined up by editing it instead of this
  * one-line wrapper.
  */
-function getNodePromptHint(node: SimpleNode | undefined): string {
-  return getParameterPromptHint(node)
+function getNodePromptHint(node: SimpleNode | undefined, surface?: "image" | "video"): string {
+  return getParameterPromptHint(node, undefined, surface ? { surface } : undefined)
 }
 
 /**
@@ -2329,7 +2329,12 @@ const STILL_IMAGE_EXCLUDE_TYPES: ReadonlySet<string> = VIDEO_ONLY_PARAMETER_NODE
 function collectCinematographyHints(
   consumerNodeId: string,
   ctx: PayloadBuildContext | undefined,
-  options?: { excludeTypes?: ReadonlySet<string>; excludeCharacterElements?: boolean },
+  options?: {
+    excludeTypes?: ReadonlySet<string>
+    excludeCharacterElements?: boolean
+    /** `"video"` for a video consumer: a Style node injects its video wording. */
+    surface?: "image" | "video"
+  },
 ): string[] {
   const hints: string[] = []
   const nodes = ctx?.nodes ?? []
@@ -2380,12 +2385,12 @@ function collectCinematographyHints(
       // name; preText/postText are applied by withCustomText. (The old
       // composeCameraMotionHintForNode bypassed custom text and dropped
       // everything when no motion was set.)
-      const composed = getParameterPromptHint(srcNode, { nodes, edges })
+      const composed = getParameterPromptHint(srcNode, { nodes, edges }, options?.surface ? { surface: options.surface } : undefined)
       if (composed) hints.push(composed)
       continue
     }
 
-    const hint = getNodePromptHint(srcNode)
+    const hint = getNodePromptHint(srcNode, options?.surface)
     if (hint) hints.push(hint)
   }
 
@@ -2534,7 +2539,7 @@ function composeVideoPrompt(args: {
   if (args.motionHint) hints.push(args.motionHint)
   // Video gen is a bullet consumer (stamps character elements onto the video
   // ref) → exclude them here to avoid a prompt-tail dup.
-  const cinematographyHints = collectCinematographyHints(args.nodeId, args.buildCtx, { excludeCharacterElements: true })
+  const cinematographyHints = collectCinematographyHints(args.nodeId, args.buildCtx, { excludeCharacterElements: true, surface: "video" })
   for (const h of cinematographyHints) hints.push(h)
   if (hints.length > 0) {
     p = appendPromptHints(p, hints)
@@ -4908,7 +4913,7 @@ export function buildPayload(
         let p: string | undefined = promptFor("video-to-video")
         {
           // Bullet consumer (stamps character elements onto the video ref) → exclude here.
-          const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeCharacterElements: true })
+          const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeCharacterElements: true, surface: "video" })
           if (cinematographyHints.length > 0) {
             p = appendPromptHints(p, cinematographyHints)
           }
@@ -5217,7 +5222,7 @@ export function buildPayload(
           prompt: (() => {
             let p: string | undefined = promptFor("speech-to-video")
             {
-              const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
+              const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { surface: "video" })
               if (cinematographyHints.length > 0) {
                 p = appendPromptHints(p, cinematographyHints)
               }
@@ -5499,7 +5504,7 @@ export function buildPayload(
       const buildExtendPrompt = (): string | undefined => {
         let p: string | undefined = promptFor("extend-video")
         {
-          const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
+          const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { surface: "video" })
           if (cinematographyHints.length > 0) {
             p = appendPromptHints(p, cinematographyHints)
           }

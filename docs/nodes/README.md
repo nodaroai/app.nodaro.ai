@@ -210,7 +210,7 @@ Visual style, mood, color, atmosphere, and aesthetic pickers. Wire into an AI im
 |------|-------------|-------------|
 | [Setting](./parameters/setting.md) | Pick from 66 settings across indoor/urban/nature/fantastical | Establish where a shot takes place |
 | [Atmosphere](./parameters/atmosphere.md) | Pick atmospheric conditions (fog, rain, smoke, ...) from 40 entries | Add weather, particles, and light scattering to a scene |
-| [Style](./parameters/style.md) | Pick a visual style preset (cinematic, anime, oil-painting, ...) from 48 entries | Lock the overall aesthetic register |
+| [Style](./parameters/style.md) | Pick a visual style preset (cinematic, anime, oil-painting, ...) from 49 entries | Lock the overall aesthetic register |
 | [Color / Look](./parameters/color-look.md) | Pick a color-grading look (warm, teal-orange, bleached, ...) from 41 entries | Set the chromatic signature of a frame |
 | [Mood](./parameters/mood.md) | Pick a mood (calm, tense, melancholic, ...) from 50 entries | Anchor the emotional tone of a generation |
 | [Photographer / Artist](./parameters/photographer.md) | Pick from 67 photographers, directors, illustrators, painters | Anchor in a recognizable creator-style canon |

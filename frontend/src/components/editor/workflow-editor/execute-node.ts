@@ -2557,7 +2557,7 @@ function executeNodeCore(
     // (D5) with wired entities attached.
     let prompt: string | undefined = promptOf("generate-video-pro");
     {
-      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true, surface: "video" });
       if (cinematographyHints.length > 0) {
         prompt = appendPromptHints(prompt, cinematographyHints);
       }
@@ -2953,7 +2953,7 @@ function executeNodeCore(
     );
     if (i2vOwnMotion) motionHints.push(i2vOwnMotion);
     // Bullet consumer (stamps character elements onto the video ref) → exclude here.
-    const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
+    const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true, surface: "video" });
     for (const h of cinematographyHints) motionHints.push(h);
     if (motionHints.length > 0) prompt = appendPromptHints(prompt, motionHints);
     {
@@ -3204,7 +3204,7 @@ function executeNodeCore(
     if (!v2vProviderSupportsRefs) prompt = stripVideoImageTokens(prompt)
     {
       // Bullet consumer (stamps character elements onto the video ref) → exclude here.
-      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true, surface: "video" });
       if (cinematographyHints.length > 0) {
         prompt = appendPromptHints(prompt, cinematographyHints);
       }
@@ -3372,7 +3372,7 @@ function executeNodeCore(
       );
       if (t2vOwnMotion) hints.push(t2vOwnMotion);
       // Bullet consumer (stamps character elements onto the video ref) → exclude here.
-      for (const h of collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true })) hints.push(h);
+      for (const h of collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true, surface: "video" })) hints.push(h);
       if (hints.length > 0) {
         prompt = appendPromptHints(prompt, hints);
       }
@@ -6277,7 +6277,7 @@ function executeNodeCore(
       return Promise.reject(new Error("No prompt"));
     }
     {
-      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { surface: "video" });
       if (cinematographyHints.length > 0) {
         prompt = appendPromptHints(prompt, cinematographyHints);
       }
@@ -6426,7 +6426,7 @@ function executeNodeCore(
     // Fold in cinematography hints + identity-lock clause from connected pickers
     // / refs, same as the other generative video nodes.
     {
-      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { surface: "video" });
       if (cinematographyHints.length > 0) {
         prompt = appendPromptHints(prompt, cinematographyHints);
       }
@@ -6666,7 +6666,7 @@ function executeNodeCore(
       }
       let seedancePrompt: string | undefined = promptOf("extend-video");
       {
-        const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+        const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { surface: "video" });
         if (cinematographyHints.length > 0) {
           seedancePrompt = appendPromptHints(seedancePrompt, cinematographyHints);
         }
@@ -6711,7 +6711,7 @@ function executeNodeCore(
     }
 
     {
-      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { surface: "video" });
       if (cinematographyHints.length > 0) {
         prompt = appendPromptHints(prompt, cinematographyHints);
       }
@@ -6757,7 +6757,7 @@ function executeNodeCore(
     // cinematography helper composes them into structured hint clauses
     // here, matching extend-video / generate-video behavior.
     {
-      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { surface: "video" });
       if (cinematographyHints.length > 0) {
         prompt = appendPromptHints(prompt, cinematographyHints);
       }

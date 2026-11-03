@@ -56,7 +56,7 @@ import { getExposurePromptHint, getExposureTerm } from "./exposure-settings.js"
 import { getColorLookPromptHint, getColorLookTerm } from "./color-look.js"
 import { buildAtmosphereHints } from "./atmosphere.js"
 import { buildPostProcessHints } from "./post-process-effects.js"
-import { getStylePromptHint, getStyleTerm } from "./style.js"
+import { getStylePromptHint, getStyleTerm, getStyleVideoPromptHint } from "./style.js"
 import { buildMoodHints } from "./mood.js"
 import { buildAestheticHints } from "./aesthetic.js"
 import { getPhotoGenrePromptHint, getPhotoGenreTerm } from "./photo-genre.js"
@@ -125,8 +125,13 @@ export interface DirectionFieldSpec {
    * Render selected ids in this catalog's own doctrine: per-id for independent
    * catalogs, ONE blended clause for Mood / Aesthetic / Photographer, the
    * catalog's own multi builder where it has one. `[]` when nothing resolves.
+   *
+   * `surface` is the stage being folded. Nearly every row ignores it (one
+   * wording serves stills and video); a row whose catalog authors a video-only
+   * wording (`style`, via `getStyleVideoPromptHint`) reads it. Absent reads as
+   * `"image"`.
    */
-  readonly render: (ids: readonly string[], mode: PickerHintMode) => string[]
+  readonly render: (ids: readonly string[], mode: PickerHintMode, surface?: "image" | "video") => string[]
 }
 
 // ── Render adapters (module-private) ────────────────────────────────────────
@@ -162,6 +167,16 @@ const viaStringBuilder =
     const s = build(ids.length === 1 ? ids[0] : [...ids], mode)
     return s.length > 0 ? [s] : []
   }
+
+/**
+ * Per-id emission whose FULL wording depends on the surface: the image getter
+ * on a still, the video getter on video (which falls back to the image wording
+ * for an id that authors none). The compact term is the same on both.
+ */
+const perIdBySurface =
+  (image: (id: string) => string, video: (id: string) => string, compact: (id: string) => string) =>
+  (ids: readonly string[], mode: PickerHintMode, surface?: "image" | "video"): string[] =>
+    perId(surface === "video" ? video : image, compact)(ids, mode)
 
 /** Mood's builder takes a RECORD and returns a list — and blends multi picks. */
 const viaMood = (ids: readonly string[], mode: PickerHintMode): string[] =>
@@ -242,7 +257,7 @@ export const DIRECTION_FIELDS = [
   { key: "postProcess", surface: "image", family: "look", maxPicks: 2, render: viaListBuilder(buildPostProcessHints) },
 
   // Style.
-  { key: "style", surface: "both", family: "look", styleGroup: "film", maxPicks: 1, userRef: "moodboard", render: perId(getStylePromptHint, getStyleTerm) },
+  { key: "style", surface: "both", family: "look", styleGroup: "film", maxPicks: 1, userRef: "moodboard", render: perIdBySurface(getStylePromptHint, getStyleVideoPromptHint, getStyleTerm) },
   { key: "mood", surface: "both", family: "look", maxPicks: 2, render: viaMood },
   { key: "aesthetic", surface: "both", family: "look", maxPicks: 2, render: viaStringBuilder(buildAestheticHints) },
   { key: "photoGenre", surface: "image", family: "look", maxPicks: 1, render: perId(getPhotoGenrePromptHint, getPhotoGenreTerm) },
@@ -260,7 +275,9 @@ export const DIRECTION_FIELDS = [
   { key: "temporalFreeze", surface: "video", family: "motion", maxPicks: 1, render: temporal },
   { key: "temporalDirection", surface: "video", family: "motion", maxPicks: 1, render: temporal },
   { key: "temporalShutter", surface: "video", family: "motion", maxPicks: 1, render: temporal },
-  { key: "transition", surface: "video", family: "motion", maxPicks: 2, render: renderTransitionBases },
+  // Wrapped: `renderTransitionBases`' third parameter is a row's option values,
+  // not the surface `render` is handed.
+  { key: "transition", surface: "video", family: "motion", maxPicks: 2, render: (ids, mode) => renderTransitionBases(ids, mode) },
   { key: "loopSubject", surface: "video", family: "motion", maxPicks: 1, render: perId(getLoopSubjectPromptHint, getLoopSubjectTerm) },
 
   // ── LEGACY BLOCK — see the table doc above. Placed LAST, in today's exact
@@ -408,14 +425,15 @@ function renderRow(
   spec: DirectionFieldSpec,
   ids: readonly string[],
   mode: PickerHintMode,
+  surface: "image" | "video",
   refs: ReadonlyMap<string, string> | undefined,
 ): string[] {
   if (spec.userRef === undefined || !ids.some((id) => parseUserDirectionRef(id) !== null)) {
-    return spec.render(ids, mode)
+    return spec.render(ids, mode, surface)
   }
   return ids.flatMap((id) => {
     const ref = parseUserDirectionRef(id)
-    if (ref === null) return spec.render([id], mode)
+    if (ref === null) return spec.render([id], mode, surface)
     const clause = ref.kind === spec.userRef ? refs?.get(id) : undefined
     return clause ? [clause] : []
   })
@@ -457,7 +475,7 @@ export function renderDirectionHintClauses(
       spec.maxPicks,
     )
     if (ids.length === 0) continue
-    for (const hint of renderRow(spec, ids, modeForFamily(mode, spec.family), opts.refs)) {
+    for (const hint of renderRow(spec, ids, modeForFamily(mode, spec.family), opts.surface, opts.refs)) {
       if (hint.length > 0 && !seen.has(hint)) {
         seen.add(hint)
         out.push({

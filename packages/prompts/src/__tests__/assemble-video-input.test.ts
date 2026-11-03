@@ -6,7 +6,8 @@ import {
   directionFieldsForSurface,
   renderDirectionHints,
 } from "../direction-registry.js"
-import { getStylePromptHint, getStyleTerm } from "../style.js"
+import { getStyleTerm, getStyleVideoPromptHint } from "../style.js"
+import { joinSentences } from "../hint-join.js"
 import { renderTransitionBases } from "../transitions.js"
 import { getCameraMotionPromptHint, getCameraMotionTerm } from "../camera-motions.js"
 import { getFramingPromptHint } from "../framing.js"
@@ -73,7 +74,7 @@ describe("composeVideoPromptText — the no-op contract", () => {
 describe("composeVideoPromptText — the verbosity policy", () => {
   it("renders a LOOK dimension as its full clause, in the section", () => {
     expect(composeVideoPromptText("a knight", { style: STYLE })).toBe(
-      `a knight\n\n[style]:\n${getStylePromptHint(STYLE)}`,
+      `a knight\n\n[style]:\n${getStyleVideoPromptHint(STYLE)}`,
     )
   })
 
@@ -96,7 +97,7 @@ describe("composeVideoPromptText — the verbosity policy", () => {
       style: STYLE,
       cameraMotion: CAMERA_MOTION,
     })
-    expect(out).toContain(getStylePromptHint(STYLE))
+    expect(out).toContain(getStyleVideoPromptHint(STYLE))
     expect(out).toContain(getCameraMotionTerm(CAMERA_MOTION))
     expect(out).not.toContain(getCameraMotionPromptHint(CAMERA_MOTION))
   })
@@ -141,7 +142,7 @@ describe("composeVideoPromptText — what stays in the body", () => {
     expect(
       composeVideoPromptText("a knight", { cameraMotion: CAMERA_MOTION, style: STYLE }),
     ).toBe(
-      `a knight. ${getCameraMotionTerm(CAMERA_MOTION)}\n\n[style]:\n${getStylePromptHint(STYLE)}`,
+      `a knight. ${getCameraMotionTerm(CAMERA_MOTION)}\n\n[style]:\n${getStyleVideoPromptHint(STYLE)}`,
     )
   })
 })
@@ -153,7 +154,7 @@ describe("composeVideoPromptText — ordering", () => {
       cameraMotion: CAMERA_MOTION,
     })!
     expect(out.indexOf(getCameraMotionTerm(CAMERA_MOTION))).toBeLessThan(
-      out.indexOf(getStylePromptHint(STYLE)),
+      out.indexOf(getStyleVideoPromptHint(STYLE)),
     )
     // Compact motion again — the camera-motion row is `family: "motion"`.
     expect(out).not.toContain(getCameraMotionPromptHint(CAMERA_MOTION))
@@ -175,7 +176,7 @@ describe("composeVideoPromptText — ordering", () => {
     // `shotSize` folds at row 2 and `style` at row 22, so table order alone
     // would read the framing clause first. The section's two lines outrank it.
     expect(composeVideoPromptText("a knight", { style: STYLE, shotSize: SHOT_SIZE })).toBe(
-      `a knight\n\n[style]:\n${getStylePromptHint(STYLE)}\n${getFramingPromptHint(SHOT_SIZE)}`,
+      `a knight\n\n[style]:\n${getStyleVideoPromptHint(STYLE)}\n${getFramingPromptHint(SHOT_SIZE)}`,
     )
   })
 
@@ -190,7 +191,7 @@ describe("composeVideoPromptText — ordering", () => {
     )!
     expect(out).toBe(
       `a knight. ${getCameraMotionTerm(CAMERA_MOTION)}. ${fragment}` +
-        `\n\n[style]:\n${getStylePromptHint(STYLE)}`,
+        `\n\n[style]:\n${getStyleVideoPromptHint(STYLE)}`,
     )
   })
 })
@@ -228,7 +229,7 @@ describe("composeVideoPromptText — multi-pick doctrine", () => {
     // The legacy `V2LookPicker` shape: a single-pick dimension that stored an
     // array. Must degrade to one hint, never throw and never drop the key.
     const out = composeVideoPromptText("a knight", { style: [STYLE, "anime"] })
-    expect(out).toBe(`a knight\n\n[style]:\n${getStylePromptHint(STYLE)}`)
+    expect(out).toBe(`a knight\n\n[style]:\n${getStyleVideoPromptHint(STYLE)}`)
   })
 })
 
@@ -267,7 +268,7 @@ describe("composeVideoPromptText — an empty or absent body", () => {
   })
 
   it("drops the section's blank line with the body (never a leading newline)", () => {
-    const sectionOnly = `[style]:\n${getStylePromptHint(STYLE)}`
+    const sectionOnly = `[style]:\n${getStyleVideoPromptHint(STYLE)}`
     expect(composeVideoPromptText("", { style: STYLE })).toBe(sectionOnly)
     expect(composeVideoPromptText(undefined, { style: STYLE })).toBe(sectionOnly)
     expect(composeVideoPromptText("   ", { style: STYLE })).toBe(sectionOnly)
@@ -279,7 +280,7 @@ describe("composeVideoPromptText — an empty or absent body", () => {
     // the prompt's trailing whitespace. (With NO fold at all the prompt still
     // comes back untrimmed: the no-op contract above.)
     expect(composeVideoPromptText("  a knight \n", { style: STYLE })).toBe(
-      `a knight\n\n[style]:\n${getStylePromptHint(STYLE)}`,
+      `a knight\n\n[style]:\n${getStyleVideoPromptHint(STYLE)}`,
     )
   })
 })
@@ -409,7 +410,8 @@ describe("composeVideoPromptText — order totality over every video dimension",
 
     expect(composeVideoPromptText("a knight", EVERY_VIDEO_DIMENSION)).toBe(
       `${["a knight", ...bySlot.body].join(". ")}` +
-        `\n\n[style]:\n${bySlot.film.join(". ")}\n${bySlot.scene.join(". ")}`,
+        // Each line is joined as sentences (a clause that ends one, as every video style wording does, takes no second period).
+        `\n\n[style]:\n${joinSentences(bySlot.film)}\n${joinSentences(bySlot.scene)}`,
     )
   })
 

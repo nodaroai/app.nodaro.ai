@@ -133,6 +133,14 @@ export interface PickerOption {
    */
   readonly term: string
   /**
+   * Style only: the wording a VIDEO prompt injects in place of `promptHint`
+   * (see `Style.videoPromptHint`). Present only on an entry that authors one;
+   * absent means video uses `promptHint`. A pack option may carry its own. On
+   * this in-memory catalog only: the wire projection (`projectPickerCatalog`)
+   * does not carry it.
+   */
+  readonly videoPromptHint?: string
+  /**
    * Transitions only: present (`true`) on a row whose mechanism is a CUT, so
    * it takes no duration and no intensity — see `Transition.instant` /
    * `isInstantTransition`. A consumer that only reads this catalog (Studio
@@ -221,6 +229,8 @@ interface BaseCatalogEntry {
   readonly promptHint: string
   /** Optional authored compact term (see `term.ts` for the convention). */
   readonly term?: string
+  /** Style: see `Style.videoPromptHint`. Propagated verbatim into the flattened option. */
+  readonly videoPromptHint?: string
   /** W1-a: see Person.adultOnly. Propagated verbatim into the flattened option. */
   readonly adultOnly?: true
   /** Transitions: see `Transition.instant`. Propagated into the flattened option as `instant: true`. */
@@ -267,6 +277,7 @@ function toOptions<T extends BaseCatalogEntry>(
       term: resolveTerm(e),
     }
     if (e.description) opt.description = e.description
+    if (e.videoPromptHint) opt.videoPromptHint = e.videoPromptHint
     if (categoryField) opt.category = e[categoryField] as unknown as string
     if (e.adultOnly) opt.adultOnly = true
     if (e.instant) opt.instant = true

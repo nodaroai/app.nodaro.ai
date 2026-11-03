@@ -20,7 +20,7 @@ import { characterMentionSlug, characterMentionableAssetArrays, resolveEffective
 import { isGeminiOmniProvider, isSeedanceVideoEditProvider, extractCharacterLoraFields, resolveVideoProviderForMode } from "@nodaro/shared/models"
 import { hasFeature } from "@nodaro/shared/model-catalog"
 import { countRefModalityEdges, type ReferenceModality } from "@nodaro/shared/workflow"
-import { computeNodePrompt } from "@nodaro/prompts/prompt-fields"
+import { appendPromptHints, computeNodePrompt } from "@nodaro/prompts/prompt-fields"
 import { ownMotionHint, characterLockToRefLock, collectIdentityLockClause } from "@nodaro/prompts/doctrine"
 import { buildSeedanceVideoEditPrompt, composeVideoPromptText, resolveVideoReferenceCore, type CharacterMeta } from "@nodaro/prompts/assembly"
 import { readDirectionFields, readStructuredFields, readSubjectFields } from "@nodaro/prompts/prompt-builder"
@@ -473,10 +473,11 @@ function resolveGenerateVideoMode(
  *   - motion-transfer handler ~4527-4567 (NO folding — bare resolved prompt)
  *   - video-sfx handler ~4867-4884 (NO folding — bare resolved prompt)
  *
- * The exact join strings (". " between body and hint-list, " " before the
- * identity clause) and the i2v motion-merge (motion hint FIRST, then
- * cinematography hints, joined by ", ") are load-bearing — they must match the
- * run byte-for-byte.
+ * The exact joins (the hint list folded by `appendPromptHints`, the run's own
+ * joiner: ", " between hints and ". " before them, a single space after a piece
+ * that already ends a sentence; " " before the identity clause) and the i2v
+ * motion-merge order (motion hint FIRST, then cinematography hints) are
+ * load-bearing — they must match the run byte-for-byte.
  *
  * NOTE on the preview vs run delta: the run resolves the typed prompt with
  * `{ wired, override, refMap }`; the preview has no wired/override input, so it
@@ -542,19 +543,18 @@ export function assembleVideoPrompt(nodeType: string, args: AssembleVideoPromptA
   }
 
   // ── Hint folding ──
-  // The node's own Motion setting first, then the cinematography hints, joined
-  // to the body with ". " (execute-node.ts's i2v and t2v branches). The Motion
-  // setting follows the REAL node type (`nodeType`): legacy image-to-video and
-  // Generate Video in either mode carry it; t2v / v2v / s2v / cinematic-avatar /
-  // extend-video / video-retake add cinematography hints only.
+  // The node's own Motion setting first, then the cinematography hints, folded
+  // into the body by `appendPromptHints`, as every video branch of
+  // execute-node.ts does (a style's video wording ends a sentence, so the hint
+  // after it follows a space, not ", "). The Motion setting follows the REAL
+  // node type (`nodeType`): legacy image-to-video and Generate Video in either
+  // mode carry it; t2v / v2v / s2v / cinematic-avatar / extend-video /
+  // video-retake add cinematography hints only.
   const hints: string[] = []
   const ownMotion = ownMotionHint(nodeType, data)
   if (ownMotion) hints.push(ownMotion)
-  for (const h of collectCinematographyHints(id, nodes, edges, { excludeCharacterElements: true })) hints.push(h)
-  if (hints.length > 0) {
-    const joined = hints.join(", ")
-    prompt = prompt ? `${prompt}. ${joined}` : joined
-  }
+  for (const h of collectCinematographyHints(id, nodes, edges, { excludeCharacterElements: true, surface: "video" })) hints.push(h)
+  if (hints.length > 0) prompt = appendPromptHints(prompt, hints)
 
   // ── Identity-lock clause (joined with a single space) ──
   // Currently a no-op (`collectIdentityLockClause` returns "" — deprecated),

@@ -206,6 +206,7 @@ import {
   getCameraMotionPromptHint,
   getCameraMotionTerm,
   getStylePromptHint,
+  getStyleVideoPromptHint,
 } from "@nodaro/prompts/pickers"
 import {
   renderStructuredFields,
@@ -689,6 +690,59 @@ describe("preview↔run parity — video", () => {
     expect(previewPrompt).toBe(runPrompt)
   })
 
+  // ── A Style node with a second look picker wired after it ── every style's
+  // video wording ends a sentence, so the hint list must join the way the run
+  // joins it (`appendPromptHints`): no comma after the style's closing period.
+  const styleThenPerson = () => {
+    const styleNode = { id: "cine-style", type: "style", position: { x: 0, y: 0 }, data: { label: "Style", style: "low-poly" } }
+    const personNode = { id: "cine-person", type: "person", position: { x: 0, y: 0 }, data: { label: "Person", preText: "a weathered fisherman" } }
+    // The Style node's edge first, so its wording is followed by another hint.
+    const edges = [
+      { id: "e1", source: "cine-style", target: "n1", targetHandle: "look" },
+      { id: "e2", source: "cine-person", target: "n1", targetHandle: "look" },
+    ]
+    return { pickers: [styleNode, personNode], edges }
+  }
+
+  it("(j2) image-to-video: a Style node then a second look picker — the preview joins the hints as the run does", async () => {
+    const { pickers, edges } = styleThenPerson()
+    const i2vNode = makeNode("image-to-video", { prompt: "walking along the pier at dawn" })
+    mockNodes = [...pickers, i2vNode]
+    mockEdges = edges
+    mockResolveNodeInputs.mockReturnValue({ imageUrl: "http://frame.png" })
+    mockRunVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(i2vNode, makeCtx())
+
+    expect(mockRunVideoGeneration).toHaveBeenCalledTimes(1)
+    const runPrompt = mockRunVideoGeneration.mock.calls[0][8] as string
+    const previewPrompt = assembleVideoPrompt("image-to-video", assemblerArgs(i2vNode))
+
+    // The fold fired: the style's video wording (it ends a sentence), then the Person hint.
+    const styleWording = getStyleVideoPromptHint("low-poly")
+    expect(styleWording.endsWith(".")).toBe(true)
+    expect(runPrompt).toContain(`${styleWording} a weathered fisherman`)
+    expect(previewPrompt).toBe(runPrompt)
+  })
+
+  it("(j3) text-to-video: a Style node then a second look picker — the preview joins the hints as the run does", async () => {
+    const { pickers, edges } = styleThenPerson()
+    const t2vNode = makeNode("text-to-video", { prompt: "a lighthouse in a storm" })
+    mockNodes = [...pickers, t2vNode]
+    mockEdges = edges
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(t2vNode, makeCtx())
+
+    expect(mockRunTextToVideoGeneration).toHaveBeenCalledTimes(1)
+    const runPrompt = mockRunTextToVideoGeneration.mock.calls[0][1] as string
+    const previewPrompt = assembleVideoPrompt("text-to-video", assemblerArgs(t2vNode))
+
+    expect(runPrompt).toContain(`${getStyleVideoPromptHint("low-poly")} a weathered fisherman`)
+    expect(previewPrompt).toBe(runPrompt)
+  })
+
   // ── Node-data cinematic direction / structured ids (P4b) ─────────────────
   // The FRONTEND half of the keystone whose orchestrator half lives in
   // `backend/src/services/workflow-engine/__tests__/payload-builder-video-node-direction.test.ts`.
@@ -704,7 +758,7 @@ describe("preview↔run parity — video", () => {
     // Real catalog ids: every hint helper returns "" on a miss, so a made-up id
     // would make the fold assertions vacuously pass.
     const CAMERA_MOTION = "handheld" // MOTION dimension → compact term
-    const STYLE = "cinematic" // LOOK dimension → full clause
+    const STYLE = "cinematic" // LOOK dimension → full clause (on video: its video wording)
 
     /** Run a `generate-video` node and return the prompt the run actually sent.
      *  With a start frame it dispatches i2v, without one t2v — the two frontend
@@ -779,9 +833,11 @@ describe("preview↔run parity — video", () => {
           { prompt: "a knight", direction: { style: STYLE }, structured },
           mode,
         )
-        const styleHint = getStylePromptHint(STYLE)
+        // A video run (and its preview) folds the style's VIDEO wording, never its image wording.
+        const styleHint = getStyleVideoPromptHint(STYLE)
         const fragment = renderStructuredFields(structured)
         expect(styleHint.length).toBeGreaterThan(0)
+        expect(styleHint).not.toBe(getStylePromptHint(STYLE))
         expect(fragment.length).toBeGreaterThan(0)
         // The section is what the preview has to reproduce byte-for-byte too —
         // the header and both newlines, not just the clause.

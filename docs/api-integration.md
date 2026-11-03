@@ -3053,8 +3053,9 @@ freezing whatever text your client wrote the day it was saved.
 `direction` object, with the same tolerance rules, the same wire bounds and the
 same "absent ≠ empty" semantics as generate-image above — including the
 truncation ordering, which sheds direction clauses before your prose or your
-references. Three things differ — the dimension set and how motion renders,
-below, and what the truncation budget has to cover (after the example). Your own
+references. Four things differ — the dimension set, how motion renders and the
+wording `style` folds, below, and what the truncation budget has to cover (after
+the example). Your own
 palettes and moodboards (`"palette:<id>"`, `"moodboard:<id>"`) are
 generate-image only: these two routes answer `400 validation_error` for one
 rather than fold nothing.
@@ -3083,6 +3084,19 @@ only the look clauses lift into the trailing `[style]` section described above.
 One dimension is never compact in the body and full in the section: the two
 rules read the same column, deliberately, so they cannot drift apart.
 
+**`style` folds its video wording.** Every style carries two wordings: the image
+wording generate-image folds (the option's `promptHint` in the
+[picker catalogs](#picker-catalogs)) and a video-only wording, which these routes
+fold in its place, in the same `[style]` section. The video wording is written
+for moving shots: it names the medium first, then its techniques, and a
+photographic style names a live-action or photographic medium, so it stays
+photographed. The same `"style": "anime"` therefore reads differently on a video
+route than on generate-image, and `jobs.input_data.prompt` records the text the
+model received. Like every clause it is platform-owned: the catalog endpoints
+return only the image wording. The canvas behaves the same way: a Style node
+folded into a video node as a picker injects the video wording, and into a
+still the image wording.
+
 ```json
 {
   "imageUrl": "https://…/frame.png",
@@ -3109,7 +3123,7 @@ halves: `prompt` is what the model received, `userPrompt` is the text you
 submitted (empty string if you sent `direction` with no prompt at all), and
 `direction` is your ids verbatim.
 
-**Truncation is the third thing that differs — in the budget, not the rule.**
+**Truncation is the fourth thing that differs — in the budget, not the rule.**
 Video prompt ceilings are provider-specific and far lower than image ones (kling
 clamps at 1000 characters), so a broad `direction` can exceed one on its own.
 The shed described for generate-image applies here too: over the ceiling, the
@@ -3245,7 +3259,7 @@ returns 400 `validation_error`):
 
 | Param | Values | Purpose |
 |---|---|---|
-| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`, `imageUrl` (when the option has a picture). `full`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
+| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `term`, `icon`, `imageUrl` (when the option has a picture). `full`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects; for a `style` option, the image wording — a video prompt injects the style's video-only wording, which no catalog endpoint returns: see [Cinematic direction on the video routes](#cinematic-direction-on-the-video-routes)). |
 | `category` | string | Single-dim pickers: filter options to one category. |
 | `field` | string | Return only this dimension's field — multi-dim pickers (person / styling / framing), and the secondary parameters of a single-dim picker (transition / character-fx: `position` / `duration` / `intensity`; character-motion: `position` / `pace`). |
 

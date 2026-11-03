@@ -8,7 +8,7 @@ import { buildNodeRefMap, resolveTextRefs, resolveTextRefsSegments, collectWired
 import { matchSnippetRanges } from "@/lib/snippet-matching"
 import type { SnippetPoolItem } from "@/lib/snippet-pool"
 import { getStylePromptHint } from "@nodaro/prompts/pickers"
-import { composeNegative, applyPromptAffixes, promptPartSeparator } from "@nodaro/prompts/prompt-fields"
+import { composeNegative, applyPromptAffixes, promptPartSeparator, appendPromptHints, joinHintFragments, joinSentences } from "@nodaro/prompts/prompt-fields"
 import { assembleImageInput, type SoundConsumerType } from "@nodaro/prompts/assembly"
 import { buildIdentityDirectives } from "@nodaro/prompts/prompt-builder"
 import { collectIdentityLockClause } from "@nodaro/prompts/doctrine"
@@ -60,6 +60,22 @@ function extractDirectivePrefix(promptText: string): string {
   const sep = promptText.indexOf("\n\n")
   // No blank line → the whole prompt is the directive block (empty user body).
   return sep === -1 ? promptText : promptText.slice(0, sep)
+}
+
+/**
+ * The separators `appendPromptHints` writes into a body: `lead` between the
+ * body and the first hint (`joinSentences`), `between[i]` after hint `i`
+ * (`joinHintFragments`). Read back from the joiners themselves, so a video
+ * consumer's tinted spans join exactly like the text its run sends.
+ */
+function appendedHintSeparators(body: string, hints: readonly string[]): { lead: string; between: string[] } {
+  const joined = joinHintFragments(hints)
+  const whole = joinSentences([body, joined])
+  const between = hints.slice(1).map((next, i) => {
+    const before = joinHintFragments(hints.slice(0, i + 1))
+    return joinHintFragments(hints.slice(0, i + 2)).slice(before.length, -next.length)
+  })
+  return { lead: whole.slice(body.length, whole.length - joined.length), between }
 }
 
 /**
@@ -310,11 +326,21 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
     }
     const styleBypass = hasConnectedStyleNode(consumerNodeId, nodes, edges)
 
+    // A video consumer's run folds its pickers on the VIDEO surface (a wired
+    // Style node injects its video wording), so its preview collects them the
+    // same way: on the video path below (`videoProvider`, whose text
+    // `assembleVideoPrompt` composes) and for a video node that reaches the
+    // provider-less path with no `videoProvider` (the quick-edit modal passes one
+    // only when the node has a provider set). The image path (`provider`) keeps
+    // the image wording.
+    const hintSurface = !provider && (Boolean(videoProvider) || getSnippetMedia(consumerType) === "video")
+      ? "video"
+      : "image"
     const hints = consumerNodeId
       // Image preview is a bullet consumer (character elements are stamped onto
       // the ref's identity bullet); exclude them here to mirror the run and
       // avoid a tail dup in the preview.
-      ? collectCinematographyHints(consumerNodeId, nodes, edges, { excludeCharacterElements: true })
+      ? collectCinematographyHints(consumerNodeId, nodes, edges, { excludeCharacterElements: true, surface: hintSurface })
       : []
     const identityClause = consumerNodeId
       ? collectIdentityLockClause(consumerNodeId, nodes, edges)
@@ -333,8 +359,15 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
     // Affixes wrap the (typed [+ wired]) core — mirrors resolvePrompt(appendWired).
     preBuildPrompt = applyPromptAffixes(preBuildPrompt, affixes, refMap)
     if (hints.length > 0) {
-      const joined = hints.join(", ")
-      preBuildPrompt = preBuildPrompt ? `${preBuildPrompt}. ${joined}` : joined
+      if (hintSurface === "video") {
+        // A video consumer's run folds its hints with `appendPromptHints` (a
+        // style's video wording ends a sentence, so the next hint follows a
+        // space, never ", "). Only the provider-less path below reads this.
+        preBuildPrompt = appendPromptHints(preBuildPrompt, hints)
+      } else {
+        const joined = hints.join(", ")
+        preBuildPrompt = preBuildPrompt ? `${preBuildPrompt}. ${joined}` : joined
+      }
     }
     if (identityClause) {
       preBuildPrompt = preBuildPrompt ? `${preBuildPrompt} ${identityClause}` : identityClause
@@ -695,7 +728,15 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
     pushPart(resolveTextRefsSegments(rawUser, refMap) as DisplaySegment[])
     pushPart(affixSuffix ? [{ text: affixSuffix, origin: "affix" }] : [])
     const bodySegsFlat: DisplaySegment[] = [...userSegsFlat]
-    if (hints.length > 0) {
+    if (hints.length > 0 && hintSurface === "video") {
+      // The video body was joined by `appendPromptHints`: the same separators.
+      const { lead, between } = appendedHintSeparators(userSegsFlat.map((s) => s.text).join(""), hints)
+      if (lead) bodySegsFlat.push({ text: lead, origin: "user" })
+      hints.forEach((h, i) => {
+        if (i > 0 && between[i - 1]) bodySegsFlat.push({ text: between[i - 1], origin: "user" })
+        bodySegsFlat.push({ text: h, origin: "picker" })
+      })
+    } else if (hints.length > 0) {
       if (userSegsFlat.length > 0) bodySegsFlat.push({ text: ". ", origin: "user" })
       hints.forEach((h, i) => {
         if (i > 0) bodySegsFlat.push({ text: ", ", origin: "user" })

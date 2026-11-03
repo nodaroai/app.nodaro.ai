@@ -10,7 +10,7 @@
 import { describe, it, expect } from "vitest"
 import { buildPayload } from "../payload-builder.js"
 import type { SimpleNode, SimpleEdge, ResolvedInputs } from "../types.js"
-import { getCameraMotionPromptHint, getCameraMotionTerm, getStylePromptHint } from "@nodaro/prompts/pickers"
+import { getCameraMotionPromptHint, getCameraMotionTerm, getStylePromptHint, getStyleVideoPromptHint } from "@nodaro/prompts/pickers"
 import { renderStructuredFields } from "@nodaro/prompts/prompt-builder"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { PRICING_DEFAULT_RESOLUTION } from "@nodaro/shared/models"
@@ -67,7 +67,7 @@ describe("payload-builder-video-node-direction.test.ts", () => {
   /** A ref-capable provider, so no case takes a degenerate strip path. */
   const PROVIDER = "seedance-2"
   const CAMERA_MOTION = "handheld" // MOTION dimension → compact term
-  const STYLE = "cinematic" // LOOK dimension → full clause
+  const STYLE = "cinematic" // LOOK dimension → full clause (on video: its video wording)
 
   /** A start frame flips `generate-video` onto its i2v mode; without one it is t2v. */
   const WITH_START_FRAME: ResolvedInputs = { startFrameUrl: "https://r2/frame.png" }
@@ -169,11 +169,14 @@ describe("payload-builder-video-node-direction.test.ts", () => {
 
   describe("payload-builder video: stored direction folds into the prompt", () => {
     const motionTerm = getCameraMotionTerm(CAMERA_MOTION)
-    const styleHint = getStylePromptHint(STYLE)
+    // A video fold reads the style's VIDEO wording; a still keeps `promptHint`.
+    const styleHint = getStyleVideoPromptHint(STYLE)
 
     it("has non-empty oracle hints (guards against vacuous assertions)", () => {
       expect(motionTerm.length).toBeGreaterThan(0)
       expect(styleHint.length).toBeGreaterThan(0)
+      // Not the image wording either, so a fold that read `promptHint` fails below.
+      expect(styleHint).not.toBe(getStylePromptHint(STYLE))
       // The verbosity split is the whole point of `VIDEO_HINT_MODE_DEFAULT`: a
       // motion dimension must render the COMPACT term here, not its full clause.
       expect(getCameraMotionPromptHint(CAMERA_MOTION)).not.toBe(motionTerm)
@@ -733,5 +736,47 @@ describe("payload-builder.kling-4.test.ts", () => {
       { imageUrl: "https://cdn.example/maya.png", extraImageUrls: ["https://cdn.example/maya-smile.png"], description: "Short silver hair", name: "Maya" },
     ])
     expect(r.payload.keepOriginalSound).toBe(true)
+  })
+})
+
+describe("payload-builder: a wired Style node's wording follows the consumer's surface", () => {
+  // A Style node wired into a VIDEO consumer injects its video wording
+  // (`getStyleVideoPromptHint`: every style authors one); wired into a still
+  // it keeps the image wording (`promptHint`).
+  function node(id: string, type: string, data: Record<string, unknown> = {}): SimpleNode {
+    return { id, type, data }
+  }
+  function edge(source: string, target: string, targetHandle: string): SimpleEdge {
+    return { id: `${source}->${target}`, source, target, sourceHandle: null, targetHandle }
+  }
+  function promptFor(type: string, styleId: string, handle: string, data: Record<string, unknown> = {}): string {
+    const style = node("style-1", "style", { style: styleId })
+    const target = node("gen-1", type, { prompt: "a man walks", ...data })
+    return buildPayload(target, "job-1", {}, undefined, {
+      nodes: [style, target],
+      edges: [edge("style-1", "gen-1", handle)],
+      nodeStates: {},
+    }).payload.prompt as string
+  }
+
+  it("video consumers inject Low Poly's video wording, never its image wording", () => {
+    for (const type of ["generate-video", "text-to-video", "image-to-video"]) {
+      const prompt = promptFor(type, "low-poly", "look", { provider: "seedance-2" })
+      expect(prompt, type).toContain(getStyleVideoPromptHint("low-poly"))
+      expect(prompt, type).not.toContain(getStylePromptHint("low-poly"))
+    }
+  })
+
+  it("a still keeps Low Poly's image wording", () => {
+    const prompt = promptFor("generate-image", "low-poly", "look", { provider: "nano-banana-pro" })
+    expect(prompt).toContain(getStylePromptHint("low-poly"))
+    expect(prompt).not.toContain(getStyleVideoPromptHint("low-poly"))
+  })
+
+  it("another style, Anime, injects its own video wording on video too", () => {
+    const prompt = promptFor("generate-video", "anime", "look", { provider: "seedance-2" })
+    expect(getStyleVideoPromptHint("anime")).not.toBe(getStylePromptHint("anime"))
+    expect(prompt).toContain(getStyleVideoPromptHint("anime"))
+    expect(prompt).not.toContain(getStylePromptHint("anime"))
   })
 })
