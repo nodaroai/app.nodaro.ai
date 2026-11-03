@@ -621,6 +621,7 @@ export const ptBR: ChromeDict = {
   "legal.privacy": "Política de privacidade",
   "legal.refund": "Política de reembolso",
   "legal.accessibility": "Declaração de acessibilidade",
+  "legal.complaints": "Reclamações de direitos autorais e conteúdo",
   "a11y.skipToContent": "Pular para o conteúdo",
   "a11yMenu.open": "Menu de acessibilidade",
   "a11yMenu.title": "Acessibilidade",

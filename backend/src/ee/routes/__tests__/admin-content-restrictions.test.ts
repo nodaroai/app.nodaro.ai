@@ -1,8 +1,9 @@
 /**
  * /v1/admin/content-restrictions (admin-content-restrictions.ts): an admin
  * restricts a file or a job with a reason, lifts a restriction, reads the
- * records; every change is audited; a non-admin is refused; one target per
- * restriction; the lib's refusals become 404 and 409.
+ * records; every change is audited; a non-admin is refused, and so is an
+ * admin's API or app token (in the app only); nothing is cached; one target
+ * per restriction; the lib's refusals become 404 and 409.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
@@ -11,7 +12,23 @@ const state = vi.hoisted(() => ({
   admin: true,
   audits: [] as unknown[],
   calls: [] as unknown[],
+  caseChecks: [] as unknown[],
 }))
+const OTHER_ASSET = vi.hoisted(() => "00000000-0000-4000-8000-0000000000ff")
+
+// A restriction in a case's name must target what the case matched (ee/lib/complaint-cases.ts `ensureCaseTarget`).
+vi.mock("../../lib/complaint-cases.js", async () => {
+  const real = await vi.importActual<typeof import("../../lib/complaint-cases.js")>("../../lib/complaint-cases.js")
+  return {
+    ...real,
+    ensureCaseTarget: vi.fn(async (caseId: string, target: { assetId?: string; jobId?: string }) => {
+      state.caseChecks.push([caseId, target])
+      if (caseId === "00000000-0000-4000-8000-0000000000cc") throw new real.ComplaintCaseError("not_found", "No such complaint")
+      if (target.assetId === OTHER_ASSET) throw new real.ComplaintCaseError("invalid_move", "The file is not one the case's links matched")
+      return { id: caseId }
+    }),
+  }
+})
 
 vi.mock("../../../lib/admin-check.js", () => ({ checkIsAdmin: vi.fn(async () => state.admin), ADMIN_ROLES: ["admin", "super_admin"] }))
 vi.mock("../admin-trends-lifecycle.js", () => ({
@@ -79,12 +96,17 @@ beforeEach(async () => {
   state.admin = true
   state.audits = []
   state.calls = []
+  state.caseChecks = []
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
     const user = req.headers["x-user-id"]
     if (typeof user === "string") req.userId = user
+    const kind = req.headers["x-auth-kind"]
+    req.authKind = typeof kind === "string" ? (kind as typeof req.authKind) : "jwt"
   })
   await app.register(adminContentRestrictionsRoutes)
+  // A route beside the plugin: its no-store hook must stay inside it.
+  app.get("/elsewhere", async () => ({ ok: true }))
   await app.ready()
 })
 afterEach(async () => {
@@ -124,6 +146,45 @@ describe("POST /v1/admin/content-restrictions", () => {
     const res = await app.inject({ method: "POST", url: "/v1/admin/content-restrictions", headers: asAdmin, payload: { assetId: ASSET, reason: "x" } })
     expect(res.statusCode).toBe(403)
     expect(state.calls).toEqual([])
+  })
+
+  it("in a case's name, only what the case matched: anything else is refused before it is restricted; no case, no check", async () => {
+    const CASE = "00000000-0000-4000-8000-000000000033"
+    const res = await app.inject({ method: "POST", url: "/v1/admin/content-restrictions", headers: asAdmin, payload: { assetId: OTHER_ASSET, reason: "x", complaintId: CASE } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_move")
+    expect(state.calls).toEqual([])
+    expect(state.audits).toEqual([])
+    await app.inject({ method: "POST", url: "/v1/admin/content-restrictions", headers: asAdmin, payload: { assetId: ASSET, reason: "x" } })
+    expect(state.caseChecks).toEqual([[CASE, { assetId: OTHER_ASSET, jobId: undefined }]])
+  })
+})
+
+describe("who is answered", () => {
+  const RESTRICTION = "00000000-0000-4000-8000-000000000044"
+  const routes = [
+    { method: "GET", url: "/v1/admin/content-restrictions" },
+    { method: "POST", url: "/v1/admin/content-restrictions", payload: { assetId: ASSET, reason: "x" } },
+    { method: "POST", url: `/v1/admin/content-restrictions/${RESTRICTION}/lift`, payload: { reason: "x" } },
+    { method: "POST", url: `/v1/admin/content-restrictions/${RESTRICTION}/bytes` },
+  ] as const
+
+  it.each(["api_token", "app_token", "billing_key", "internal"])("an administrator's %s is refused on every route, before anything is done", async (kind) => {
+    for (const route of routes) {
+      const res = await app.inject({ ...route, headers: { ...asAdmin, "x-auth-kind": kind } })
+      expect(res.statusCode, `${route.method} ${route.url}`).toBe(403)
+      expect(res.json().error.code).toBe("in_app_only")
+    }
+    expect(state.calls).toEqual([])
+    expect(state.audits).toEqual([])
+  })
+
+  it("nothing is cached, a refusal included; the routes beside the plugin are untouched", async () => {
+    for (const route of routes) {
+      expect((await app.inject({ ...route, headers: asAdmin })).headers["cache-control"], `${route.method} ${route.url}`).toBe("no-store")
+    }
+    expect((await app.inject({ method: "GET", url: "/v1/admin/content-restrictions", headers: { ...asAdmin, "x-auth-kind": "api_token" } })).headers["cache-control"]).toBe("no-store")
+    expect((await app.inject({ method: "GET", url: "/elsewhere" })).headers["cache-control"]).toBeUndefined()
   })
 })
 

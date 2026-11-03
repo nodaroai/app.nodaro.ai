@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from "react"
 import { AccessibilityStatementLink } from "@/components/legal/accessibility-statement-link"
+import { ComplaintsLink } from "@/components/legal/complaints-link"
 import { buttonHiddenOn } from "@/components/accessibility/accessibility-menu"
 import { ACCESSIBILITY_STATEMENT_PATH } from "@/lib/accessibility-statement"
 import { markSharedHeaderMounted } from "@/lib/shared-header"
@@ -52,6 +53,9 @@ const SITE = readSiteEnv({
   VITE_TOOLS_URL: import.meta.env.VITE_TOOLS_URL,
   VITE_STUDIO_URL: import.meta.env.VITE_STUDIO_URL,
 })
+/** One item of the account menu's legal links, styled like the shell's own items. */
+const ACCOUNT_MENU_LINK =
+  "flex min-h-10 w-full items-center rounded-[9px] px-2.5 text-start text-[13px] font-semibold hover:bg-black/5 focus-visible:outline-2 focus-visible:outline-[#ff0073] dark:hover:bg-white/5"
 
 /**
  * The header takes the SDK's FULL client (`NodaroClient`, every resource),
@@ -161,11 +165,10 @@ export default function AppHeader({ compact, onOpenMenu, onHeaderOverlay }: AppH
       accountPages="in-app"
       onAccountPage={onAccountPage}
       accountMenuExtras={({ close }) => (
-        <AccessibilityStatementLink
-          role="menuitem"
-          onClick={close}
-          className="flex min-h-10 w-full items-center rounded-[9px] px-2.5 text-start text-[13px] font-semibold hover:bg-black/5 focus-visible:outline-2 focus-visible:outline-[#ff0073] dark:hover:bg-white/5"
-        />
+        <>
+          <AccessibilityStatementLink role="menuitem" onClick={close} className={ACCOUNT_MENU_LINK} />
+          <ComplaintsLink role="menuitem" onClick={close} className={ACCOUNT_MENU_LINK} />
+        </>
       )}
       accessibilityButton={!buttonHiddenOn(pathname)}
       claimSignupGrant={false}

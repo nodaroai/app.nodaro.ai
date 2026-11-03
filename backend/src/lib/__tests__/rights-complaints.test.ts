@@ -112,6 +112,7 @@ import {
   decryptComplainant,
   extractLinks,
   matchReportedUrls,
+  openComplainant,
   recentComplaintsByEmail,
   verifyComplaint,
 } from "../rights-complaints.js"
@@ -202,6 +203,18 @@ describe("createComplaint", () => {
     expect(decryptComplainant(row as never)).toEqual({ name: "Dana Example", email: "Dana@Example.com", address: "1 Street, Town", phone: "+1 555 0100", signature: "Dana Example" })
     // A ciphertext moved to another case does not open.
     expect(() => decryptComplainant({ ...(row as object), id: "00000000-0000-4000-8000-00000000000f" } as never)).toThrow()
+    // Opened one column at a time, a column that does not open is named, and never hides the others.
+    expect(openComplainant(row as never)).toEqual({ name: "Dana Example", email: "Dana@Example.com", address: "1 Street, Town", phone: "+1 555 0100", signature: "Dana Example", unreadable: [] })
+    const damaged = { ...(row as Record<string, unknown>), signature_enc: String(row.complainant_name_enc), complainant_phone_enc: "not a ciphertext" }
+    expect(openComplainant(damaged as never)).toEqual({
+      name: "Dana Example",
+      email: "Dana@Example.com",
+      address: "1 Street, Town",
+      phone: null,
+      signature: null,
+      unreadable: ["complainant_phone_enc", "signature_enc"],
+    })
+    expect(openComplainant({ id: String(row.id), complainant_name_enc: String(row.complainant_name_enc) })).toMatchObject({ name: "Dana Example", email: null, unreadable: [] })
     expect(row.statements_hash).toBe(COMPLAINT_STATEMENTS_HASH)
     expect(row.good_faith_affirmed_at).toBeTruthy()
     expect(row.matched_asset_ids).toEqual(["a-2"])

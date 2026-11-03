@@ -177,10 +177,32 @@ async function callRestrict(target: RestrictTarget, input: RestrictInput): Promi
     throw new Error(`Restriction failed: ${error.message}`)
   }
   invalidateRestrictedSet()
+  const restriction = toRestriction(data as RestrictionRow)
+  await noteOnCase(restriction.complaintId, "content_restricted", input.adminUserId, {
+    restrictionId: restriction.id,
+    ...(target.assetId ? { assetId: target.assetId } : { jobId: target.jobId }),
+  })
   // The rows are hidden; now the bytes: moved under the evidence prefix and
   // dropped from the edge, each outcome written on the record (never a
   // failure of the restriction that already happened).
-  return relocateRestrictedBytes(toRestriction(data as RestrictionRow))
+  return relocateRestrictedBytes(restriction)
+}
+
+/**
+ * Writes a restriction's step on the case it was made from, so the case's
+ * log tells its whole story whichever screen or route restricted or lifted.
+ * Best effort: the restriction has happened, and a log write that fails is
+ * logged, never a failure of it. Loaded on demand: most readers of this
+ * module never touch a case.
+ */
+async function noteOnCase(complaintId: string | null, kind: "content_restricted" | "restriction_lifted", adminUserId: string | null, data: Record<string, unknown>): Promise<void> {
+  if (!complaintId) return
+  try {
+    const { recordComplaintEventQuietly } = await import("./rights-complaints.js")
+    await recordComplaintEventQuietly(complaintId, kind, adminUserId ?? "system", data)
+  } catch (e) {
+    console.warn(`[content-restrictions] "${kind}" not written on case ${complaintId}:`, e instanceof Error ? e.message : e)
+  }
 }
 
 /**
@@ -276,8 +298,13 @@ export async function liftRestriction(restrictionId: string, input: { reason: st
     throw new Error(`Restriction lift failed: ${error.message}`)
   }
   invalidateRestrictedSet()
+  const restriction = toRestriction(data as RestrictionRow)
+  await noteOnCase(restriction.complaintId, "restriction_lifted", input.adminUserId, {
+    restrictionId: restriction.id,
+    ...(input.reason ? { reason: input.reason } : {}),
+  })
   // The rows are back; now the bytes, moved back to their keys.
-  return restoreRestrictedBytes(toRestriction(data as RestrictionRow))
+  return restoreRestrictedBytes(restriction)
 }
 
 /**
@@ -294,10 +321,11 @@ export async function finishRestrictionBytes(restrictionId: string): Promise<Con
   return restriction.liftedAt ? restoreRestrictedBytes(restriction) : relocateRestrictedBytes(restriction)
 }
 
-/** Every restriction, newest first; `active` keeps the unlifted ones only. */
-export async function listRestrictions(opts: { active?: boolean; limit?: number } = {}): Promise<ContentRestriction[]> {
+/** Every restriction, newest first; `active` keeps the unlifted ones only, `complaintId` the ones a case led to. */
+export async function listRestrictions(opts: { active?: boolean; limit?: number; complaintId?: string } = {}): Promise<ContentRestriction[]> {
   let query = supabase.from("content_restrictions").select(RESTRICTION_COLUMNS).order("restricted_at", { ascending: false }).limit(opts.limit ?? 200)
   if (opts.active) query = query.is("lifted_at", null)
+  if (opts.complaintId) query = query.eq("complaint_id", opts.complaintId)
   const { data, error } = await query
   if (error) throw new Error(`Restrictions read failed: ${error.message}`)
   return ((data ?? []) as RestrictionRow[]).map(toRestriction)

@@ -375,14 +375,19 @@ export async function recordComplaintEventQuietly(
   }
 }
 
-/** The complainant's details of a row, decrypted: for the handler's screen, never for an answer to the public. */
+/**
+ * The complainant's details of a row, decrypted: for the handler's screen,
+ * never for an answer to the public. A column the row was not read with (the
+ * queue reads the name and email only) answers null. Throws when a ciphertext
+ * does not open: the caller decides what a row it cannot read shows.
+ */
 export function decryptComplainant(row: {
   id: string
   complainant_name_enc: string
   complainant_email_enc: string
-  complainant_address_enc: string | null
-  complainant_phone_enc: string | null
-  signature_enc: string | null
+  complainant_address_enc?: string | null
+  complainant_phone_enc?: string | null
+  signature_enc?: string | null
 }): { name: string; email: string; address: string | null; phone: string | null; signature: string | null } {
   const cipher = boundCipher(CIPHER_PURPOSE)
   const open = (column: "complainant_name_enc" | "complainant_email_enc" | "complainant_address_enc" | "complainant_phone_enc" | "signature_enc") => {
@@ -395,5 +400,54 @@ export function decryptComplainant(row: {
     address: open("complainant_address_enc"),
     phone: open("complainant_phone_enc"),
     signature: open("signature_enc"),
+  }
+}
+
+export type ComplainantColumn = "complainant_name_enc" | "complainant_email_enc" | "complainant_address_enc" | "complainant_phone_enc" | "signature_enc"
+
+const COMPLAINANT_COLUMNS: readonly ComplainantColumn[] = ["complainant_name_enc", "complainant_email_enc", "complainant_address_enc", "complainant_phone_enc", "signature_enc"]
+
+export interface OpenedComplainant {
+  readonly name: string | null
+  readonly email: string | null
+  readonly address: string | null
+  readonly phone: string | null
+  readonly signature: string | null
+  /** The columns whose ciphertext did not open (a key no longer held, a damaged value): their fields are null. */
+  readonly unreadable: readonly ComplainantColumn[]
+}
+
+/**
+ * The complainant's details, each column opened on its own: one that does
+ * not open is null and named in `unreadable`, and the rest are still read (a
+ * damaged signature never hides the address a handler replies to). Never
+ * throws. A column the row was not read with is null, and not unreadable.
+ */
+export function openComplainant(row: { id: string } & Partial<Record<ComplainantColumn, string | null>>): OpenedComplainant {
+  let cipher: ReturnType<typeof boundCipher> | null = null
+  try {
+    cipher = boundCipher(CIPHER_PURPOSE)
+  } catch {
+    cipher = null
+  }
+  const attempt = (column: ComplainantColumn): { readonly value: string | null; readonly failed: boolean } => {
+    const value = row[column]
+    if (!value) return { value: null, failed: false }
+    if (!cipher) return { value: null, failed: true }
+    try {
+      return { value: cipher.decrypt(value, aadOf(row.id, column)), failed: false }
+    } catch {
+      return { value: null, failed: true }
+    }
+  }
+  const opened = new Map(COMPLAINANT_COLUMNS.map((column) => [column, attempt(column)] as const))
+  const valueOf = (column: ComplainantColumn) => opened.get(column)?.value ?? null
+  return {
+    name: valueOf("complainant_name_enc"),
+    email: valueOf("complainant_email_enc"),
+    address: valueOf("complainant_address_enc"),
+    phone: valueOf("complainant_phone_enc"),
+    signature: valueOf("signature_enc"),
+    unreadable: COMPLAINANT_COLUMNS.filter((column) => opened.get(column)?.failed),
   }
 }

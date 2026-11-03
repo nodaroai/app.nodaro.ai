@@ -640,6 +640,7 @@ export const he: ChromeDict = {
   "legal.privacy": "מדיניות פרטיות",
   "legal.refund": "מדיניות החזרים",
   "legal.accessibility": "הצהרת נגישות",
+  "legal.complaints": "תלונות על זכויות יוצרים ותוכן",
   "a11y.skipToContent": "דלג לתוכן",
   "a11yMenu.open": "תפריט נגישות",
   "a11yMenu.title": "נגישות",

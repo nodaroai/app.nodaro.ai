@@ -40,7 +40,7 @@ export const ENTRY_BY_LINK: readonly string[] = [
   // The accessibility statement (Cloud): linked from sign-in, the sidebar and the account menu.
   "/accessibility",
   // The public complaints form (every edition): reached by its own address and,
-  // once the handler's screen exists, from the policy and the footer.
+  // where Nodaro runs the service, from sign-in, the sidebar and the account menu.
   "/copyright-complaints",
 
   // Public share/embed surfaces — reached by a link someone was handed.
@@ -151,6 +151,9 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "organizations",
   "client-apps",
   "app-reports",
+  // Complaints — admin-only: the queue the public complaints form fills, and one case.
+  "complaints",
+  "complaints/:id",
   // Content Review. Its nav entry is unconditional and admin-only — there is no
   // surface NavKey for it (nav.hide's vocabulary is the END-USER nav), so it is
   // classified here like every other /admin child.

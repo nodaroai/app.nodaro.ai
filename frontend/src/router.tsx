@@ -126,6 +126,8 @@ const AdminOrganizations = lazy(() => import("@/ee/app/(admin)/admin/organizatio
 const AdminTutorialCategories = lazy(() => import("@/ee/app/(admin)/admin/tutorial-categories/page"))
 const AdminClientApps = lazy(() => import("@/ee/app/(admin)/admin/client-apps/page"))
 const AdminAppReports = lazy(() => import("@/ee/app/(admin)/admin/app-reports/page"))
+const AdminComplaints = lazy(() => import("@/ee/app/(admin)/admin/complaints/page"))
+const AdminComplaintCase = lazy(() => import("@/ee/app/(admin)/admin/complaints/case-page"))
 const AdminReview = lazy(() => import("@/ee/app/(admin)/admin/review/page"))
 const AdminTrends = lazy(() => import("@/ee/app/(admin)/admin/trends/page"))
 const AdminTrendEditor = lazy(() => import("@/ee/app/(admin)/admin/trends/detail/page"))
@@ -194,6 +196,8 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
         : []),
       { path: "client-apps", element: <SuspenseWrapper><AdminClientApps /></SuspenseWrapper> },
       { path: "app-reports", element: <SuspenseWrapper><AdminAppReports /></SuspenseWrapper> },
+      { path: "complaints", element: <SuspenseWrapper><AdminComplaints /></SuspenseWrapper> },
+      { path: "complaints/:id", element: <SuspenseWrapper><AdminComplaintCase /></SuspenseWrapper> },
       { path: "review", element: <SuspenseWrapper><AdminReview /></SuspenseWrapper> },
       // Trends exist only where credits do (the API is under hasCredits()), as does the nav entry.
       ...(hasCredits()

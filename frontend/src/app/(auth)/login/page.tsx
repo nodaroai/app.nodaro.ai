@@ -8,6 +8,8 @@ import { isCloud } from "@/lib/edition"
 import { surfaceAuthMethods, surfaceAuthSsoLabel, surfacePlatformLinks } from "@/lib/surface-selectors"
 import { accessibilityStatementShown } from "@/lib/accessibility-statement"
 import { AccessibilityStatementLink } from "@/components/legal/accessibility-statement-link"
+import { complaintsLinkShown } from "@/lib/complaints-page"
+import { ComplaintsLink } from "@/components/legal/complaints-link"
 import { runtimeSurfaceProfile, type AuthMethod } from "@/lib/surface-profile"
 import { createClient } from "@/lib/supabase"
 import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
@@ -386,6 +388,12 @@ export default function LoginPage() {
           <>
             <span aria-hidden="true">&middot;</span>
             <AccessibilityStatementLink className="hover:text-foreground transition-colors" />
+          </>
+        )}
+        {complaintsLinkShown() && (
+          <>
+            <span aria-hidden="true">&middot;</span>
+            <ComplaintsLink className="hover:text-foreground transition-colors" />
           </>
         )}
       </footer>}

@@ -42,6 +42,13 @@ vi.mock("../content-restriction-bytes.js", () => ({
     return r
   }),
 }))
+// The case's log (lib/rights-complaints.ts): what a restriction made from a case writes there.
+const caseLog = vi.hoisted(() => ({ events: [] as Array<[string, string, string, Record<string, unknown>]> }))
+vi.mock("../rights-complaints.js", () => ({
+  recordComplaintEventQuietly: vi.fn(async (id: string, kind: string, actor: string, data: Record<string, unknown>) => {
+    caseLog.events.push([id, kind, actor, data])
+  }),
+}))
 vi.mock("../supabase.js", () => {
   const record = (over: Record<string, unknown>) => ({
     id: `r-${++mem.seq}`,
@@ -147,6 +154,7 @@ beforeEach(() => {
   mem.seq = 0
   bytes.relocated.length = 0
   bytes.restored.length = 0
+  caseLog.events.length = 0
   ownership.deny.clear()
   ownership.fail = false
   __resetRestrictedSetForTests()
@@ -237,6 +245,17 @@ describe("liftRestriction and listRestrictions", () => {
     expect(bytes.restored).toEqual([r.id])
     await expect(liftRestriction(r.id, { reason: null, adminUserId: null })).rejects.toMatchObject({ code: "already_lifted" })
     await expect(liftRestriction("nope", { reason: null, adminUserId: null })).rejects.toMatchObject({ code: "not_found" })
+  })
+
+  it("writes a restriction made from a case, and its lift, on the case's log; one made from no case writes nothing", async () => {
+    const r = await restrictAsset("a-1", { reason: "x", complaintId: "c-1", adminUserId: "admin" })
+    await liftRestriction(r.id, { reason: "counter-notice", adminUserId: "admin2" })
+    const j = await restrictJob(JOB, { reason: "y", adminUserId: null })
+    await liftRestriction(j.id, { reason: null, adminUserId: null })
+    expect(caseLog.events).toEqual([
+      ["c-1", "content_restricted", "admin", { restrictionId: r.id, assetId: "a-1" }],
+      ["c-1", "restriction_lifted", "admin2", { restrictionId: r.id, reason: "counter-notice" }],
+    ])
   })
 
   it("lists every record, or the active ones only", async () => {

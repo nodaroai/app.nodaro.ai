@@ -5209,7 +5209,10 @@ image or likeness, unauthorized voice use, impersonation or identity misuse,
 a privacy violation, or another legal complaint). The routes are public: a
 complainant has no account here. They are the form's own contract and have
 no SDK method, CLI command or MCP tool — a complaint is a person's legal act,
-made on the page.
+made on the page. The form is linked from the sign-in page, the sidebar and
+the account menu wherever the deployment has an administrator's screen to
+handle the cases and shows the platform's legal pages; elsewhere it stays at
+its address, unlinked.
 
 | Method | Route | What it does |
 |--------|-------|--------------|
@@ -5242,6 +5245,36 @@ the email never went, and the handler reaches the complainant from the case.
 Once the case exists, nothing that follows (the email, the log) turns the
 answer into a failure. A complaint never removes or restricts content by
 itself: every case is handled by a person.
+
+**Handling a case.** An administrator handles the cases from the admin's
+Complaints screen (`/admin/complaints`): the queue (the open cases by
+default, searchable by reference or by the complainant's email), and each
+case with what the complainant sent, what their links matched in the
+platform's records (the files, the import confirmations, the accounts behind
+them and each account's other cases, verified apart from unverified), the
+restrictions the case led to, and its log. The count beside the screen's
+name in the admin navigation is of the open cases whose sender has verified
+their email. From the case the administrator moves its status (with a
+decision kept on the case), adds a note, names the account the case is
+about (one of the accounts its links matched), matches the links again
+(which adds what they match now and never removes an earlier match),
+restricts a file the case matched (see [Content
+restrictions](#13k-content-restrictions)) or lifts a restriction. A change
+to the status, the decision or the account is made from the case as the
+administrator saw it: when another administrator changed the case
+meanwhile, it is refused and the screen reads the case again (a note is
+added either way). Each step on the case is written to its log, and each
+administrator's action (a move, a restriction, a lift, and every read that
+shows a complainant's details) to the administrators' audit, which names
+the cases by their references and never copies the complainant's details
+or what was searched for. Closing a case (resolved or closed) ends its hold
+on the files it matched. These are the deployment's own routes
+(`/v1/admin/complaints…`) and are not part of the public API: they answer
+an administrator signed in to the app only (an API key or an app's token of
+an administrator's account is refused with `403` and `code: "in_app_only"`),
+and nothing they answer is cached. What is typed into the search is sent in
+a request's body, never in an address.
+
 ## 13k. Content restrictions
 
 After a complaint, an administrator can **restrict** a stored file or a job's
@@ -5283,13 +5316,19 @@ a file is not removed either: an administrator's hard delete of it answers
 `409 content_held` until the complaint is closed or the restriction lifted.
 The hold ends by itself when the last verified complaint naming the file is
 resolved or closed and no restriction covers it. A complaint holds the files
-it was matched to when it was received; a job output with no library row of
-its own is held once an administrator restricts it.
+it was matched to when it was received, and those an administrator's
+matching again adds to it; a job output with no library row of its own is
+held once an administrator restricts it.
 
 A restriction is lifted by an administrator (a counter-notice, a mistake),
 which restores each row to what it was, in one step. The records of
 restrictions and lifts are the deployment's own and are not part of the
-public API; the handler's screen is a later change.
+public API: their routes answer an administrator signed in to the app only,
+like the Complaints screen's. An administrator restricts and lifts from a
+complaint's case on the Complaints screen (see [Handling a
+case](#13j-content-complaints-the-public-form)). A restriction made in a
+case's name is of a file the case matched (or the job that made one), never
+of anything else, and it and its lift are written on that case's log.
 
 **The bytes.** A restriction also moves each file it names out of reach:
 the object leaves its address on the content network for an evidence
@@ -5308,8 +5347,8 @@ query string is a separate copy, dropped only when it expires or when the
 deployment's cache rule ignores query strings; and the addresses copied
 into workflow documents, run states and published apps are not rewritten
 (a run that reads one is refused, as above). A lift moves the bytes back
-to the same address, unless another restriction or an open complaint still
-holds them. What happened to each file and to the purge is written on the
+to the same address, unless another restriction still covers them: then
+they wait in evidence until that one is lifted too. What happened to each file and to the purge is written on the
 restriction's record, per phase, so a deployment without purge keys, or an
 edge that did not answer, is on record rather than assumed; a move left
 unfinished (a file that could not be moved, an edge that did not answer)
