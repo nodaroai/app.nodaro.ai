@@ -691,3 +691,34 @@ describe("useAdminUser — one account, for the users page's direct link", () =>
     expect(optionsOf().enabled).toBe(false)
   })
 })
+
+describe("useAdminStats — the user counts (migration 586)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasAdmin.mockReturnValue(true)
+    mockUseQuery.mockReturnValue({ data: null })
+  })
+
+  const statsFrom = async (rpcData: Record<string, unknown>) => {
+    mockCreateClient.mockReturnValue({ rpc: vi.fn().mockResolvedValue({ data: rpcData, error: null }) })
+    useAdminStats()
+    return mockUseQuery.mock.calls[0][0].queryFn()
+  }
+
+  it("passes both counts through", async () => {
+    const stats = await statsFrom({ totalUsers: 1000, usersAcceptingEmail: 120, usersWithGeneration: 640, jobsByStatus: {} })
+    expect(stats).toMatchObject({ totalUsers: 1000, usersAcceptingEmail: 120, usersWithGeneration: 640 })
+  })
+
+  it("an answer without them (a database before 586) is unknown, never 0", async () => {
+    const stats = await statsFrom({ totalUsers: 1000, jobsByStatus: {} })
+    expect(stats.usersAcceptingEmail).toBeNull()
+    expect(stats.usersWithGeneration).toBeNull()
+  })
+
+  it("a real 0 stays 0", async () => {
+    const stats = await statsFrom({ totalUsers: 3, usersAcceptingEmail: 0, usersWithGeneration: 0, jobsByStatus: {} })
+    expect(stats.usersAcceptingEmail).toBe(0)
+    expect(stats.usersWithGeneration).toBe(0)
+  })
+})

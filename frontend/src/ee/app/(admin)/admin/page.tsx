@@ -1,5 +1,17 @@
-import { Loader2, Users, FolderOpen, GitBranch, Briefcase, Coins } from "lucide-react"
+import { Loader2, Users, FolderOpen, GitBranch, Briefcase, Coins, Mail, Sparkles } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import { useAdminStats } from "@/ee/hooks/queries/use-admin-queries"
+import { hasCredits } from "@/lib/edition"
+import { shareOfUsers } from "./share-of-users"
+
+interface StatCard {
+  readonly label: string
+  /** `null`: not known on this database yet (shown as an em dash, never 0). */
+  readonly value: number | null
+  readonly icon: LucideIcon
+  /** The share of all users, under the count. */
+  readonly ofUsers?: boolean
+}
 
 export default function AdminDashboard() {
   const { data: stats, isLoading: loading } = useAdminStats()
@@ -16,8 +28,11 @@ export default function AdminDashboard() {
     return <div className="p-6 text-muted-foreground">Failed to load stats.</div>
   }
 
-  const cards = [
+  const cards: StatCard[] = [
     { label: "Total Users", value: stats.totalUsers, icon: Users },
+    // Marketing-email consent is asked for on Cloud only; elsewhere the count is always 0.
+    ...(hasCredits() ? [{ label: "Accept Email", value: stats.usersAcceptingEmail, icon: Mail, ofUsers: true }] : []),
+    { label: "Made a Generation", value: stats.usersWithGeneration, icon: Sparkles, ofUsers: true },
     { label: "Total Projects", value: stats.totalProjects, icon: FolderOpen },
     { label: "Total Workflows", value: stats.totalWorkflows, icon: GitBranch },
     { label: "Total Jobs", value: stats.totalJobs, icon: Briefcase },
@@ -39,7 +54,10 @@ export default function AdminDashboard() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">{card.label}</p>
-              <p className="text-2xl font-bold">{card.value.toLocaleString()}</p>
+              <p className="text-2xl font-bold">{card.value === null ? "—" : card.value.toLocaleString()}</p>
+              {card.ofUsers && shareOfUsers(card.value, stats.totalUsers) && (
+                <p className="text-xs text-muted-foreground">{shareOfUsers(card.value, stats.totalUsers)}</p>
+              )}
             </div>
           </div>
         ))}
