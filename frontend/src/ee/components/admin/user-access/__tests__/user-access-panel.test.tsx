@@ -6,7 +6,9 @@
  * SEPARATE request that only follows a block that went through (and only when
  * free credits exist on this deployment), every refusal is shown in the
  * server's own words, and a network can only be blocked when the server said
- * this admin may.
+ * this admin may. A suspension under the repeat-infringer policy shows with
+ * its end, never as Active; a sign-in that disagrees with the block and the
+ * suspension can be brought in line, by one request that moves nothing else.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
@@ -32,6 +34,8 @@ const BLOCK = `POST /v1/admin/users/${USER_ID}/block`
 const UNBLOCK = `POST /v1/admin/users/${USER_ID}/unblock`
 const REVOKE = `POST /v1/admin/free-grants/${USER_ID}/revoke`
 const BLOCK_NETWORK = "POST /v1/admin/access/networks"
+const SIGN_IN = `POST /v1/admin/users/${USER_ID}/sign-in`
+const SUSPENDED_UNTIL = "2026-11-17T12:00:00.000Z"
 
 const BLOCKED_AT = "2026-10-01T12:00:00.000Z"
 const SIGNUP_AT = "2026-09-01T10:00:00.000Z"
@@ -171,6 +175,75 @@ beforeEach(() => {
     [REVOKE]: () => ({ body: { data: { userId: USER_ID, state: "revoked", credits: 1200 } } }),
     [BLOCK_NETWORK]: () => ({ body: { data: { id: "net-1", range: null, token: "nt_7f3a9c", expiresAt: EXPIRES_AT } } }),
   }
+})
+
+describe("a suspension, and sign-in brought in line", () => {
+  it("a suspended account shows Suspended with its end, never Active, and can still be blocked", async () => {
+    accessBody = makeAccess({ suspendedUntil: SUSPENDED_UNTIL, signInBlocked: true, signInBanIsOurs: true, signInWanted: "refused", signInInLine: true })
+    renderPanel()
+    expect(await screen.findByText("Suspended")).toBeInTheDocument()
+    expect(screen.queryByText("Active")).toBeNull()
+    expect(screen.getByText(new RegExp(`Suspended until ${new Date(SUSPENDED_UNTIL).toLocaleDateString()} under the repeat-infringer policy`))).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Block account…" })).toBeEnabled()
+    expect(screen.queryByRole("button", { name: /sign-in$/ })).toBeNull()
+  })
+
+  it("a suspended account whose sign-in is not refused offers Refuse sign-in, one request", async () => {
+    const user = userEvent.setup()
+    accessBody = makeAccess({ suspendedUntil: SUSPENDED_UNTIL, signInBlocked: false, signInWanted: "refused", signInInLine: false })
+    routes[SIGN_IN] = () => {
+      accessBody = makeAccess({ suspendedUntil: SUSPENDED_UNTIL, signInBlocked: true, signInBanIsOurs: true, signInWanted: "refused", signInInLine: true })
+      return { body: { data: { userId: USER_ID, signInBlocked: true } } }
+    }
+    const { onChanged } = renderPanel()
+    expect(await screen.findByText("Sign-in is not refused yet.")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Refuse sign-in" }))
+    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1))
+    expect(sentTo(SIGN_IN)).toEqual([{ key: SIGN_IN, body: {}, headers: expect.anything() }])
+    expect(toast.success).toHaveBeenCalledWith("Sign-in refused")
+    await waitFor(() => expect(screen.queryByText("Sign-in is not refused yet.")).toBeNull())
+  })
+
+  it("an account neither blocked nor suspended, still refused by our ban, offers Allow sign-in", async () => {
+    const user = userEvent.setup()
+    accessBody = makeAccess({ signInBlocked: true, signInBanIsOurs: true, signInWanted: "allowed", signInInLine: false })
+    routes[SIGN_IN] = () => {
+      accessBody = makeAccess()
+      return { body: { data: { userId: USER_ID, signInBlocked: false } } }
+    }
+    renderPanel()
+    expect(await screen.findByText("Sign-in is still refused by an earlier block or suspension.")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Allow sign-in" }))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Sign-in allowed"))
+    expect(sentTo(SIGN_IN)).toHaveLength(1)
+  })
+
+  it("a suspended account refused sign-in until another end (an unblock that failed) offers Correct sign-in", async () => {
+    const user = userEvent.setup()
+    accessBody = makeAccess({ suspendedUntil: SUSPENDED_UNTIL, signInBlocked: true, signInBanIsOurs: true, signInWanted: "refused", signInInLine: false })
+    routes[SIGN_IN] = () => ({ body: { data: { userId: USER_ID, signInBlocked: true } } })
+    renderPanel()
+    expect(await screen.findByText("Sign-in is refused, but not until the end the block or the suspension sets.")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Correct sign-in" }))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Sign-in refused"))
+    expect(sentTo(SIGN_IN)).toHaveLength(1)
+  })
+
+  it("a ban someone else placed is not ours to lift: nothing is offered", async () => {
+    accessBody = makeAccess({ signInBlocked: true, signInBanIsOurs: false, signInWanted: "allowed", signInInLine: true })
+    renderPanel()
+    expect(await screen.findByText("Active")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Allow sign-in" })).toBeNull()
+  })
+
+  it("a refusal of the request is shown in the server's words", async () => {
+    const user = userEvent.setup()
+    accessBody = makeAccess({ signInBlocked: true, signInBanIsOurs: true, signInWanted: "allowed", signInInLine: false })
+    routes[SIGN_IN] = () => refusal("Failed to bring the account's sign-in in line with its block and suspension", 500)
+    renderPanel()
+    await user.click(await screen.findByRole("button", { name: "Allow sign-in" }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Failed to bring the account's sign-in in line with its block and suspension"))
+  })
 })
 
 describe("account state", () => {

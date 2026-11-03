@@ -75,6 +75,7 @@ import {
   environmentsThatCannotFillNone,
   environmentsThatCannotForceStyle,
   environmentsThatCannotHideBodies,
+  faceMeshMinFaceHeightMissing,
 } from "../trends/clip-preparation"
 import { motionIssues, motionToSaved, toSaved } from "./model"
 import { PromptPartsTabs } from "./components/PromptPartsTabs"
@@ -124,6 +125,10 @@ export default function AdminNodaroMotionPage() {
   // The Motion column's depth blur and face mesh parts likewise (a Cast Swap engine from 0.430.0 declares them).
   const depthBlurMissingIn = environmentsThatCannotBlurDepth(envs.data)
   const faceMeshPartsMissingIn = environmentsThatCannotDrawFaceMeshParts(envs.data)
+  // Full depth's smallest face with mesh lines likewise (a Cast Swap engine from 0.436.1), and every environment's
+  // PLATFORM too (one shared database: an older app drops an entry that carries it); the Motion column's alone, as the
+  // Precise column is never Full depth.
+  const minFaceMissing = faceMeshMinFaceHeightMissing(envs.data)
   // The Precise column's fill None (the faces as filmed, the face mesh alone) and a depth fill's blur, likewise
   // (the Motion column never offers them: a direct Motion run does not draw them).
   const fillNoneMissingIn = environmentsThatCannotFillNone(envs.data)
@@ -318,6 +323,7 @@ export default function AdminNodaroMotionPage() {
                         depthModelSizesMissingIn={depthModelSizesMissingIn}
                         depthBlurMissingIn={depthBlurMissingIn}
                         faceMeshPartsMissingIn={faceMeshPartsMissingIn}
+                        faceMeshMinFaceHeightMissing={minFaceMissing}
                         onChange={(entry) => setMotionDraft((d) => ({ ...d, [engine.id]: entry }))}
                       />
                     ) : motionQuery.error ? (

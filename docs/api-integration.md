@@ -5211,15 +5211,19 @@ takes effect within a minute. The list is the deployment's own and is not part
 of the public API.
 
 **An account's measures.** Before the site's policy, the account itself is
-asked: while imports of links are blocked on the account, or the account is
-closed, under the deployment's repeat-infringer policy (see
+asked: while imports of links are blocked on the account under the
+deployment's repeat-infringer policy (see
 [Repeat infringers](#13m-repeat-infringers)), every import of a link, in every
 lane above, is refused with `403 imports_blocked` and a message saying until
 when (a date in UTC, or until an administrator lifts the block). A run's
 import fails the same way, and so does a private plugin's download of a link
 (which does not ask for a confirmation yet). The account is asked again right
 before the fetch starts, so a block placed while a download waited for its
-turn refuses it too; a block lifted takes effect at once.
+turn refuses it too; a block lifted takes effect at once. A suspended account,
+and a closed one (whose account is blocked), is refused every request first,
+imports included, with `403 access_blocked`; an import already under way when
+it is suspended or closed fails with `imports_blocked`, as does every import
+of a closed account whose block could not be placed.
 
 ## 13j. Content complaints (the public form)
 
@@ -5505,9 +5509,12 @@ infringements, counted over a rolling window. The default:
 | 2 | Importing links blocked for 30 days |
 | 3 | The account closed |
 
-The window ends now and starts the same day and time its months back (a day
-the earlier month does not have is that month's last day); an infringement
-counts while it stands and was recorded within it.
+An administrator can change the window and the steps: a step can also
+suspend the account for a number of days (the default has none), and closing
+the account, when it is a step, is the last one. The window ends now and
+starts the same day and time its months back (a day the earlier month does
+not have is that month's last day); an infringement counts while it stands
+and was recorded within it.
 
 A measure is never taken automatically. The case shows the step the policy
 names for the account's count, prefilled, and an administrator takes it, or
@@ -5528,6 +5535,18 @@ naming the case by reference only.
   (see [Content rights](#13i-content-rights-import-confirmations)). A file
   uploaded from the person's own device is not an import and is not refused.
   One import block is in force on an account at a time.
+- **The account suspended**, for the step's number of days (a suspension
+  always has an end), refuses the account's sign-in and every request until
+  then, as a block does and with the same answer (`403 access_blocked`): its
+  scheduled runs and its published apps stop meanwhile, and its imports are
+  refused. It ends by itself at its end, and an administrator can lift it
+  early with a reason, which lets the account back in. Like a closure, it is
+  refused before anything is written for an administrator, the platform's
+  owner and operators, and the deployment's billing account, and one whose
+  role changes in the moment between is taken back at once. One suspension is
+  in force on an account at a time. A suspension and an administrator's block
+  never move each other: an unblock leaves a suspended account suspended until
+  its end, and lifting a suspension leaves a blocked account blocked.
 - **The account closed** records the decision, then blocks the account as an
   administrator's block does (sign-in and every request refused, imports
   too), so an account is never blocked this way without the record of why.
@@ -5547,9 +5566,10 @@ Each move taken from a case names the account the screen showed the case
 naming: a case that names another account since is refused, so a move never
 lands on an account the administrator did not see.
 
-An import block or a closure is lifted early by an administrator, with a
-reason; a measure that has ended is not lifted after the fact. Every step is
-written to the case's log and audited, and the records are never deleted.
+An import block, a suspension or a closure is lifted early by an
+administrator, with a reason; a measure that has ended is not lifted after the
+fact. Every step is written to the case's log and audited, and the records are
+never deleted.
 
 **What the account's owner sees.** Settings → Content restrictions shows the
 measures in force on their account with what they were told and until when,
@@ -5558,7 +5578,9 @@ by its case's reference), and the window's length; never an administrator's
 note, nor who took a step. `GET /v1/account-measures/mine` answers the same
 (`{ data: { inForce, warnings, infringements, windowMonths } }`), to the
 person in their own session only (`403 in_app_only` to a key, an app or an
-agent).
+agent). While the account is suspended its owner cannot sign in, and the app
+answers as it does for a blocked account, so the suspension's reason and end
+do not reach them in the app; one that has ended is not listed.
 
 These routes are the deployment's own and are not part of the public API:
 the person's (`/v1/account-measures/mine`), and the administrator's signed
@@ -6385,7 +6407,7 @@ for the formulas). Off Cloud, the four `voice-changer-pro*` routes are absent (4
 | `POST` | `/v1/still-to-video` | One still image + one audio track → MP4, local FFmpeg, **0 credits** (`{ imageUrl, audioUrl, motion?, intensity?, resolution?, aspectRatio?, fps?, fit?, padColor? }`; output duration = the audio's duration, no duration field) → job. |
 | `POST` | `/v1/slideshow` | 2–100 images + one optional audio track → MP4 slideshow, local FFmpeg, **0 credits** (`{ imageUrls[], audioUrl?, imageDurations?[] (null=auto), perImageDuration?, transition?, transitionDuration?, motion?, intensity?, resolution?, aspectRatio?, fps?, fit?, padColor? }`; with audio the duration IS the audio's — pinned-row mismatches scale proportionally, disclosed in output) → job. |
 | `POST` | `/v1/video-overlay` | 1–20 timed image layers over a video, local FFmpeg, **22 credits**<!-- credits: video-overlay --> (`{ videoUrl, layers[]: { imageUrl, start, end?, preset?: card\|corner-badge\|full-frame, corner?, anchor?, x?, y?, width?, height?, fit?: contain\|cover, opacity?, animate?, zIndex? }, outputAspect?: 16:9\|9:16\|1:1\|4:5, baseFit?: cover\|contain, backgroundColor? }`; an explicit box field overrides the preset, neither = a corner badge (bottom-right, or the `corner` it names); `end` omitted = to the end of the video; base audio untouched; 30 requests / minute per user) → job; output `{ videoUrl, thumbnailUrl, width, height, durationSec, warnings[] }`. Full reference: [Video Overlay](./nodes/processing-video/video-overlay.md). |
-| `POST` | `/v1/video-depth` | Turn a video into a depth video — near is bright, far is dark (`{ videoUrl, provider?: video-depth-anything\|depth-anything-frames, modelSize?: small\|base\|large, colormap?: grayscale\|turbo\|inferno\|magma\|viridis, resolution?: auto\|360p\|480p\|720p\|1080p, sideBySide? }`; `provider` defaults to `video-depth-anything` and `modelSize` to `large`). `video-depth-anything` honours every lever; `depth-anything-frames` (per frame, may flicker) honours `modelSize` and `colormap` `grayscale` or `inferno` only. A lever the provider does not take is ignored and a colormap it cannot render becomes `grayscale`, so switching providers never fails a request — but every value sent must still be valid (an unknown provider, model size, colormap or resolution is a `400 validation_error`). The clip is measured before anything is created and priced by its length tier: `400 video_too_long` over the provider's limit (2,400 frames and at most 300 s for `video-depth-anything`, a clip with no frame rate counted at 30 fps; 80 s for `depth-anything-frames`), `400 video_unreadable` when the clip cannot be read, `400 validation_error` on a malformed body, `403 model_not_available` when this deployment has turned the provider off (an omitted `provider` is checked as the default) — nothing is reserved on any of them. → `{ jobId }`; output `{ videoUrl, thumbnailUrl }`. Full reference: [Video Depth](./nodes/processing-video/video-depth.md). |
+| `POST` | `/v1/video-depth` | Turn a video into a depth video — near is bright, far is dark (`{ videoUrl, provider?: video-depth-anything\|depth-anything-frames, modelSize?: small\|base\|large, colormap?: grayscale\|turbo\|inferno\|magma\|viridis, resolution?: auto\|360p\|480p\|720p\|1080p, sideBySide? }`; `provider` defaults to `video-depth-anything` and `modelSize` to `large`). `video-depth-anything` honours every lever; `depth-anything-frames` (per frame, may flicker) honours `modelSize` and `colormap` `grayscale` or `inferno` only. A lever the provider does not take is ignored and a colormap it cannot render becomes `grayscale`, so switching providers never fails a request — but every value sent must still be valid (an unknown provider, model size, colormap or resolution is a `400 validation_error`). The clip is measured before anything is created and priced by its length (per whole second on `video-depth-anything`, per length tier on `depth-anything-frames`): `400 video_too_long` over the provider's limit (2,400 frames and at most 300 s for `video-depth-anything`, a clip with no frame rate counted at 30 fps; 80 s for `depth-anything-frames`), `400 video_unreadable` when the clip cannot be read, `400 validation_error` on a malformed body, `403 model_not_available` when this deployment has turned the provider off (an omitted `provider` is checked as the default) — nothing is reserved on any of them. → `{ jobId }`; output `{ videoUrl, thumbnailUrl }`. Full reference: [Video Depth](./nodes/processing-video/video-depth.md). |
 | `POST` | `/v1/generate-mask` | Text-prompted image segmentation (Grounded SAM) → a black-and-white mask image, white = the subject (`{ imageUrl, prompt (1–500 chars, e.g. "the person"), threshold?: 0–1 (default 0.3; lower selects more) }`; a malformed body is a `400 validation_error`). → `{ jobId }`; output `{ maskUrl, imageUrl }` — `maskUrl` is the mask PNG, `imageUrl` the source image passed through unchanged. Price: `GET /v1/credits/model-cost?model=generate-mask`. Full reference: [Generate Mask](./nodes/ai-image/generate-mask.md). |
 | `POST` | `/v1/video-mask` | Text-prompted video segmentation (SAM 3.1 / SAM 3) → a black-and-white mask video, white = the subject (`{ videoUrl, prompt (≤500 chars; commas track several subjects), threshold?: 0.05–0.95 (default 0.5), provider?: "sam-3.1" (default) \| "sam-3" (about half the price), holdLastMask?: boolean (default false — frames where the subject is lost, under 0.002 % of the picture, repeat the most recent non-empty mask; frames before the first detection stay empty; the output then carries `heldFrames`), minSubjectHeightPct?: 0–100 (default 0 = off — drops every connected region shorter than that % of the frame height, before holdLastMask; the output then carries `droppedRegions`), maxSubjectHeightPct?: 0–100 (default 0 = off — the mirror: drops regions taller than that %; with both set a region is kept when min ≤ height ≤ max, and min > max is a 400 `validation_error`), zone?: { leftPct?, rightPct?, topPct?, bottomPct? } \| null (each 0–49 % of the frame cut off that side, a side left out is 0; default null = off — keeps only the regions whose bounding-box centre is inside the rectangle left, after the size cuts and before holdLastMask), perShot?: boolean (default false — the clip's scene cuts are found first and each shot is segmented on its own: the subject is detected again after every cut, holdLastMask never crosses a cut, each shot's mask is fitted to that shot's exact frame count; on a clip with no cut it is one shot: the same mask, fitted to the clip's exact frame count), redetectEverySec?: 0 \| 1–10 (default 0 = off — the subject is also detected again every that many seconds: the clip, or each shot with perShot, is sent to the model in pieces of at most that length, a last piece under 8 frames joining the one before; holdLastMask holds across these boundaries; slower — one more request per piece — at the same price; a value between 0 and 1 or above 10 is a 400) }`). Clips up to 5 minutes at 30 fps (a faster clip counts proportionally longer; over 60 s is segmented in chunks); a clip that can't be read or is over the limit is refused with 400 `invalid_video_duration` / `video_duration_exceeds_limit` before anything is charged. Priced by length: `sam-3.1-video:<n>s` / `sam-3-video:<n>s` for n = 5, 10, 15, 30, 60, 90, 120, 180, 240, 300 (SAM 3.1: 55<!-- credits: sam-3.1-video:5s --> … 3108 credits<!-- credits: sam-3.1-video:300s -->; SAM 3: 28<!-- credits: sam-3-video:5s --> … 1555<!-- credits: sam-3-video:300s -->) → job; output `{ videoUrl, thumbnailUrl, width, height, frames, chunks, shots, coverage, kept, recipe }` (`shots` is 1 unless perShot found cuts; `recipe` is the version of the masking algorithm that made it (`VIDEO_MASK_RECIPE` in `@nodaro/shared/media`), which changes whenever the same clip and settings would give a different mask; `kept` is false only when the size / zone filters left nothing on any frame — read it rather than `coverage`, which is rounded to 4 decimals). Full reference: [Video Mask](./nodes/ai-video/video-mask.md). |
 | `POST` | `/v1/mask-composite` | A foreground video over a background video through a mask video (white = foreground), local FFmpeg, keyless, **11 credits**<!-- credits-rate: mask-composite --> **per started 5 s of the result** (the video it follows measured first; over 300 s → 400 `video_duration_exceeds_limit`) (`{ foregroundUrl?, backgroundUrl, maskUrl, invertMask?, feather?: 0–20, grow?: -10–10, opacity?: 0–1 (default 1; inside the mask, opacity × fill + (1 − opacity) × background), fill?: video\|pixelate\|blur (default video), pixelSizePct?: 0.2–10 (default 1.25; block = max(2, round(width × pct ÷ 100)) px), blurStrengthPct?: 0.1–5 (default 2; gaussian sigma = width × pct ÷ 100 px), backgroundFit?: cover\|contain\|stretch, audioSource?: foreground\|background\|mix\|none }`; the result follows the foreground's size, rate and length — the background loops, the mask holds its last frame. `foregroundUrl` is required for `fill: "video"` (400 `validation_error` without it); `pixelate` / `blur` fill the mask with the background itself, take no foreground (one sent is ignored), follow and are priced on the background, and the result always carries the background's sound (`audioSource` is ignored)) → job; output `{ videoUrl, thumbnailUrl, width, height, durationSec }`. Full reference: [Mask Composite](./nodes/processing-video/mask-composite.md). |

@@ -2,6 +2,13 @@
  * Who is blocked — accounts and networks — as ONE in-memory snapshot per
  * process, read on every authenticated request and before any spend.
  *
+ * A SUSPENDED ACCOUNT IS A BLOCKED ONE UNTIL ITS END. A suspension (migration
+ * 589, a measure under the repeat-infringer policy) refuses the account
+ * exactly as a block does, with the same answer, until it ends or is lifted.
+ * The snapshot keeps each suspension's end and checks it at every question,
+ * so a suspension ends on time in every process, between reads too; a lift
+ * reaches the other processes at their next read, as an unblock does.
+ *
  * WHY A SNAPSHOT AND NOT A PER-USER READ. A block is rare and the list is
  * short; the check is not. Loading the whole list every 30 s costs two queries
  * per process regardless of traffic, where a per-user read would cost one per
@@ -54,6 +61,8 @@ const PAGE = 1000
 
 interface Snapshot {
   users: ReadonlySet<string>
+  /** Suspended accounts (migration 589), each with when its suspension ends (ms). */
+  suspendedUntil: ReadonlyMap<string, number>
   /** Quietly stopped accounts (migration 505): their jobs are accepted and never run. */
   quietUsers: ReadonlySet<string>
   networkHashes: ReadonlySet<string>
@@ -153,6 +162,39 @@ async function readQuietStops(): Promise<string[]> {
   }
 }
 
+/**
+ * The suspensions in force (migration 589, on 588's measures): each account
+ * with when its suspension ends. Read on their own, like the quiet stops: a
+ * database without the measures' table yet (staging runs ahead of 588) has
+ * none, and must not fail the load, which would lift every account block.
+ * One suspension is in force per account at a time (588's lock); the latest
+ * end wins should a read ever meet two.
+ */
+async function readSuspensions(): Promise<Map<string, number>> {
+  try {
+    const rows = await readAll<{ user_id: string; ends_at: string }>((from, to) =>
+      supabase
+        .from("account_sanctions")
+        .select("user_id, ends_at")
+        .eq("kind", "suspended")
+        .is("lifted_at", null)
+        .gt("ends_at", new Date().toISOString())
+        .not("user_id", "is", null)
+        .order("id")
+        .range(from, to),
+    )
+    const ends = new Map<string, number>()
+    for (const row of rows) {
+      const end = Date.parse(row.ends_at)
+      if (Number.isFinite(end) && end > (ends.get(row.user_id) ?? 0)) ends.set(row.user_id, end)
+    }
+    return ends
+  } catch (err) {
+    if (isMissingTableError(err as { code?: string | null })) return new Map()
+    throw err
+  }
+}
+
 /** The read, or a failure once LOAD_TIMEOUT_MS has passed without an answer. */
 function withinLoadTimeout<T>(work: Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -168,9 +210,10 @@ function withinLoadTimeout<T>(work: Promise<T>): Promise<T> {
 
 async function load(): Promise<void> {
   try {
-    const [{ users, nets }, quiet] = await withinLoadTimeout(Promise.all([readLists(), readQuietStops()]))
+    const [{ users, nets }, quiet, suspended] = await withinLoadTimeout(Promise.all([readLists(), readQuietStops(), readSuspensions()]))
     snapshot = {
       users: new Set(users.map((u) => u.user_id)),
+      suspendedUntil: suspended,
       quietUsers: new Set(quiet),
       networkHashes: new Set(nets.map((n) => n.network_hash).filter((h): h is string => typeof h === "string")),
       ranges: compileCidrList(nets.map((n) => n.cidr).filter((c): c is string => typeof c === "string")),
@@ -181,7 +224,7 @@ async function load(): Promise<void> {
   } catch (err) {
     const missing = isMissingTableError(err as { code?: string | null })
     if (missing && !everLoaded) {
-      snapshot = { users: new Set(), networkHashes: new Set(), quietUsers: new Set(), ranges: EMPTY_RANGES, ready: false, loadedAt: Date.now() }
+      snapshot = { users: new Set(), suspendedUntil: new Map(), networkHashes: new Set(), quietUsers: new Set(), ranges: EMPTY_RANGES, ready: false, loadedAt: Date.now() }
       return
     }
     // Keep the last good list; try again soon. With none at all, nothing is
@@ -189,7 +232,7 @@ async function load(): Promise<void> {
     // anyway, and refusing every request on top of it would not help anyone.
     snapshot = snapshot
       ? { ...snapshot, loadedAt: Date.now() - REFRESH_MS + 5_000 }
-      : { users: new Set(), networkHashes: new Set(), quietUsers: new Set(), ranges: EMPTY_RANGES, ready: false, loadedAt: Date.now() - NOT_READY_RETRY_MS + 5_000 }
+      : { users: new Set(), suspendedUntil: new Map(), networkHashes: new Set(), quietUsers: new Set(), ranges: EMPTY_RANGES, ready: false, loadedAt: Date.now() - NOT_READY_RETRY_MS + 5_000 }
     if (Date.now() - lastWarnAt > 60_000) {
       lastWarnAt = Date.now()
       console.warn("[access-blocks] could not read the block lists:", (err as { message?: string })?.message ?? err)
@@ -228,11 +271,27 @@ async function current(): Promise<Snapshot | null> {
   return snapshot
 }
 
-/** Is this account blocked? Never true on an edition without an admin panel. */
+/** Whether the account's suspension, as last read, still runs: its end is checked now, not when it was read. */
+function suspendedNow(s: Snapshot, userId: string): boolean {
+  return (s.suspendedUntil.get(userId) ?? 0) > Date.now()
+}
+
+/** How many of the suspensions last read still run. */
+function suspensionsRunning(s: Snapshot): number {
+  const now = Date.now()
+  return [...s.suspendedUntil.values()].filter((end) => end > now).length
+}
+
+/**
+ * Is this account blocked, or suspended until a moment still ahead? One
+ * answer for both (see the module comment). Never true on an edition without
+ * an admin panel.
+ */
 export async function isUserBlocked(userId: string | null | undefined): Promise<boolean> {
   if (!userId) return false
   const s = await current()
-  return s?.users.has(userId) ?? false
+  if (!s) return false
+  return s.users.has(userId) || suspendedNow(s, userId)
 }
 
 /**
@@ -254,10 +313,11 @@ export async function isUserQuietStopped(userId: string | null | undefined): Pro
   return s?.quietUsers.has(userId) ?? false
 }
 
-/** Is any account blocked at all? Lets a caller skip a read when none is. */
+/** Is any account blocked or suspended at all? Lets a caller skip a read when none is. */
 export async function anyUserBlocked(): Promise<boolean> {
   const s = await current()
-  return (s?.users.size ?? 0) > 0
+  if (!s) return false
+  return s.users.size > 0 || suspensionsRunning(s) > 0
 }
 
 /** Is this client address inside a live network block? */
@@ -306,15 +366,17 @@ export function invalidateAccessBlocks(): void {
 export async function accessBlocksStatus(): Promise<{
   ready: boolean
   users: number
+  suspended: number
   networks: number
   quiet: number
   loadedAt: string | null
 }> {
   const s = await current()
-  if (!s) return { ready: false, users: 0, networks: 0, quiet: 0, loadedAt: null }
+  if (!s) return { ready: false, users: 0, suspended: 0, networks: 0, quiet: 0, loadedAt: null }
   return {
     ready: s.ready,
     users: s.users.size,
+    suspended: suspensionsRunning(s),
     networks: s.networkHashes.size + s.ranges.size,
     quiet: s.quietUsers.size,
     loadedAt: s.ready ? new Date(s.loadedAt).toISOString() : null,

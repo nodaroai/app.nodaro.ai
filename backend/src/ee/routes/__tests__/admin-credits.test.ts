@@ -67,6 +67,10 @@ vi.mock("@/middleware/credit-guard.js", () => ({
   reserveCreditsForJob: vi.fn(),
 }))
 
+/** The suspension in force (lib/account-measures.ts): when it ends, or null. */
+const suspension = vi.hoisted(() => ({ endsAt: vi.fn(async (_userId: string): Promise<string | null> => null) }))
+vi.mock("@/lib/account-measures.js", () => ({ suspensionEndsAt: suspension.endsAt }))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -113,6 +117,7 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  suspension.endsAt.mockImplementation(async () => null)
 
   app = Fastify({ logger: false })
 
@@ -439,6 +444,35 @@ describe("PUT /v1/admin/users/:id/role", () => {
     expect(res.statusCode).toBe(409)
     expect(res.json().error).toMatch(/Unblock it before making it an admin/)
     expect(updateChain.update).not.toHaveBeenCalled()
+  })
+
+  // A suspended admin could not reach the case that lifts the suspension.
+  it("refuses to make a suspended account an admin — lift its suspension first — and can still set one back to user", async () => {
+    const adminProfileChain = supabaseChain({ data: { role: "super_admin" }, error: null })
+    const updateChain = supabaseChain({ data: null, error: null })
+    const route = (targetRole: string) => {
+      let callCount = 0
+      mockFrom.mockImplementation((table: string) => {
+        if (table === "account_blocks") return supabaseChain({ data: null, error: null })
+        callCount++
+        if (callCount === 1) return adminProfileChain
+        if (callCount === 2) return supabaseChain({ data: { email: "user@example.com", role: targetRole }, error: null })
+        return updateChain
+      })
+    }
+    suspension.endsAt.mockResolvedValue("2026-11-20T00:00:00.000Z")
+
+    route("user")
+    const promote = await app.inject({ method: "PUT", url: `/v1/admin/users/${VALID_UUID}/role`, headers: { "x-user-id": ADMIN_UUID }, payload: { role: "admin" } })
+    expect(promote.statusCode).toBe(409)
+    expect(promote.json().error).toMatch(/Lift its suspension from its complaint before making it an admin/)
+    expect(suspension.endsAt).toHaveBeenCalledWith(VALID_UUID)
+    expect(updateChain.update).not.toHaveBeenCalled()
+
+    route("admin")
+    const demote = await app.inject({ method: "PUT", url: `/v1/admin/users/${VALID_UUID}/role`, headers: { "x-user-id": ADMIN_UUID }, payload: { role: "user" } })
+    expect(demote.statusCode).toBe(200)
+    expect(updateChain.update).toHaveBeenCalledWith({ role: "user" })
   })
 
   it("a blocked account can still be set back to user", async () => {

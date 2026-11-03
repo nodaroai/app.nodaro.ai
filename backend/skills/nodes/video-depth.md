@@ -1,7 +1,7 @@
 ---
 node_type: video-depth
-generated_at: 2026-10-27T09:33:08.696Z
-generated_from: 121af7c8e
+generated_at: 2026-11-03T17:54:18.532Z
+generated_from: de22e8257
 ---
 
 # Video Depth
@@ -9,7 +9,7 @@ generated_from: 121af7c8e
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `video-depth`
 **Category:** processing
-**Credit cost:** `33-6600` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
+**Credit cost:** `22-6600` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `video`
 **Outputs (source handles):** `video`
 

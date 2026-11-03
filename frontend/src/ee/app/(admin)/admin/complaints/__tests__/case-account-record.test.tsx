@@ -9,9 +9,10 @@ import type { AccountRecord, RecordInfringement, RecordMeasure } from "@/ee/hook
  * count, the block as it is and where it disagrees with a closure (with the
  * unblock); each infringement with its case and a withdraw (suggested after a
  * counter-notice restored the content); each measure with what the owner was
- * told and a lift while it is in force; recording an infringement once per
- * case; and the measure form, prefilled from the policy, asking why only when
- * it departs from it.
+ * told and a lift while it is in force (a suspension's in its own words,
+ * with the lift's warning); recording an infringement once per case; and the
+ * measure form, prefilled from the policy, asking why only when it departs
+ * from it, a suspension always with its days.
  */
 
 const calls = vi.hoisted(() => ({ list: [] as Array<[string, unknown]>, result: {} as Record<string, unknown> }))
@@ -190,6 +191,20 @@ describe("CaseAccountRecord", () => {
     fireEvent.click(screen.getByRole("button", { name: "Lift the measure" }))
     await waitFor(() => expect(calls.list).toEqual([["lift", { measureId: "m-1", reason: "Appeal upheld" }]]))
   })
+
+  it("a suspension in force runs until its end, is lifted as a suspension, and the lift's warning is shown", async () => {
+    show(complaint({ record: record({ measures: [measure({ kind: "suspended", endsAt: "2026-11-17T12:00:00Z", reason: "Suspended for two weeks." })] }) }))
+    expect(screen.getByText("Account suspended")).toBeTruthy()
+    expect(screen.getByText(/^in force until /)).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Lift…" }))
+    fireEvent.change(screen.getByLabelText("Why the measure is lifted"), { target: { value: "Appeal upheld" } })
+    calls.result.lift = { data: { warning: "The suspension is lifted and the account's requests are let through, but allowing its sign-in failed." } }
+    fireEvent.click(screen.getByRole("button", { name: "Lift the suspension" }))
+    await waitFor(() => expect(calls.list).toEqual([["lift", { measureId: "m-1", reason: "Appeal upheld" }]]))
+    const { toast } = await import("sonner")
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith("The suspension is lifted and the account's requests are let through, but allowing its sign-in failed."))
+    expect(toast.success).toHaveBeenCalledWith("Suspension lifted")
+  })
 })
 
 describe("the measure form", () => {
@@ -250,5 +265,32 @@ describe("the measure form", () => {
     await waitFor(() => expect(calls.list[0]?.[1]).toMatchObject({ kind: "closed", days: null, reason: "Closed after three upheld complaints.", departureReason: null }))
     const { toast } = await import("sonner")
     await waitFor(() => expect(toast.warning).toHaveBeenCalledWith("The account is blocked, but blocking its sign-in failed."))
+  })
+
+  it("a suspension the policy names starts at its days, says what it does, and is taken as one", async () => {
+    show(complaint({ record: record({ step: { infringements: 3, kind: "suspended", days: 14 }, inWindow: 3 }) }))
+    fireEvent.click(screen.getByRole("button", { name: "Take a measure…" }))
+    expect((screen.getByLabelText("Account suspended") as HTMLInputElement).checked).toBe(true)
+    expect((screen.getByLabelText("Days") as HTMLInputElement).value).toBe("14")
+    expect((screen.getByLabelText("What the account's owner is told") as HTMLTextAreaElement).value).toContain("the account is suspended")
+    expect(screen.getByText(/Suspending refuses the account's sign-in and every request until the suspension ends/)).toBeTruthy()
+    expect(screen.queryByLabelText("Why this departs from the policy")).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Suspend the account" }))
+    await waitFor(() => expect(calls.list[0]?.[1]).toMatchObject({ kind: "suspended", days: 14, departureReason: null }))
+    const { toast } = await import("sonner")
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Account suspended"))
+  })
+
+  it("a suspension is never sent without its days", () => {
+    show(complaint())
+    fireEvent.click(screen.getByRole("button", { name: "Take a measure…" }))
+    fireEvent.click(screen.getByLabelText("Account suspended"))
+    const days = screen.getByLabelText("Days") as HTMLInputElement
+    fireEvent.change(days, { target: { value: "" } })
+    fireEvent.change(screen.getByLabelText("Why this departs from the policy"), { target: { value: "Suspended instead of a block" } })
+    expect(screen.getByText("A whole number of days from 1 to 3650.")).toBeTruthy()
+    expect((screen.getByRole("button", { name: "Suspend the account" }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(days, { target: { value: "7" } })
+    expect((screen.getByRole("button", { name: "Suspend the account" }) as HTMLButtonElement).disabled).toBe(false)
   })
 })

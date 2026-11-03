@@ -7,8 +7,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
  * What each move on an account's record sends (backend
  * ee/routes/admin-repeat-infringers.ts): a move from a case names the account
  * the screen showed (`userId`), which the server takes or refuses; only an
- * import block carries a number of days; a lift and a withdrawal send their
- * reason alone; an unblock sends nothing.
+ * import block and a suspension carry a number of days; a lift and a
+ * withdrawal send their reason alone; an unblock sends nothing.
  */
 
 vi.mock("@/lib/api", () => ({ getAuthHeaders: async () => ({}) }))
@@ -42,6 +42,16 @@ describe("the record's moves", () => {
     const { result } = renderHook(() => useRecordInfringement(), { wrapper })
     await result.current.mutateAsync({ complaintId: "c-1", userId: "u-1", note: "Theirs" })
     expect(sent()).toEqual({ path: "/v1/admin/complaints/c-1/infringement", body: { userId: "u-1", note: "Theirs" } })
+  })
+
+  it("a suspension carries its days; a closure none", async () => {
+    const { result } = renderHook(() => useApplyMeasure(), { wrapper })
+    const base = { complaintId: "c-1", userId: "u-1", reason: "r", note: null, infringementId: null, departureReason: null }
+    await result.current.mutateAsync({ ...base, kind: "suspended", days: 14 })
+    expect(sent().body).toEqual({ userId: "u-1", kind: "suspended", days: 14, reason: "r", note: null, infringementId: null, departureReason: null })
+    fetchMock.mockClear()
+    await result.current.mutateAsync({ ...base, kind: "closed", days: 14 })
+    expect(sent().body).toEqual({ userId: "u-1", kind: "closed", reason: "r", note: null, infringementId: null, departureReason: null })
   })
 
   it("takes a measure on the account the screen showed; days only for an import block", async () => {

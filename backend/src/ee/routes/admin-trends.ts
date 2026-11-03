@@ -61,6 +61,13 @@
  * the failure in the message). Examples are only ever written by the example
  * routes, which copy a run's media into trend storage: only runs by ADMIN
  * accounts (the role `requireAdmin` checks) may become examples.
+ *
+ * Trends live in the database every environment shares: a draft save or a
+ * publish whose face masking carries `faceMeshMinFaceHeightPct` is 422
+ * `platform_unsupported` while any environment's platform does not claim
+ * that it takes it (an older one keys the stored clip without it, so its runs
+ * of the trend would be refused; `platformHoldOfFaceMeshMinFaceHeight`). Every
+ * other draft write only carries the draft's own face masking forward.
  */
 import { CHILD_JOB_COLUMN } from "../../lib/public-job-data.js"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
@@ -72,7 +79,8 @@ import { formatZodError } from "../../lib/zod-error.js"
 import { afterKeyset, findOwnSession } from "../../lib/generation-sessions.js"
 import { deriveJobSource } from "../../lib/job-source.js"
 import { requireAdmin } from "../middleware/require-admin.js"
-import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments } from "../lib/engine-environments.js"
+import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments, withFreshPlatform } from "../lib/engine-environments.js"
+import { platformHoldOfFaceMeshMinFaceHeight } from "../lib/nodaro-motion-face-mesh.js"
 import {
   DraftConflictError,
   TrendSlugTakenError,
@@ -526,7 +534,10 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
   // Static segments: registered before /:id (find-my-way prefers them anyway).
   app.get("/v1/admin/trends/engine-environments", { preHandler: requireAdmin }, async (req, reply) => {
     try {
-      return { data: await listEngineEnvironments() }
+      // A platform claim only while it is fresh, by its own time (the heartbeat's): the editor greys a stale one out,
+      // on this server's clock. `updatedAt` stays the engine record's (its boot).
+      const now = Date.now()
+      return { data: (await listEngineEnvironments()).map((env) => withFreshPlatform(env, now)) }
     } catch (e) {
       return unavailableOrInternal(reply, req, e, "Failed to read engine environments")
     }
@@ -628,6 +639,11 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       // Validated BEFORE the preview clip is cut: a draft that cannot save pays for no ffmpeg run.
       const valid = trendVersionDataSchema.safeParse(marked)
       if (!valid.success) return badRequest(reply, valid.error)
+      // Full depth's smallest face with mesh lines, held while any environment's platform does not take it: trends are
+      // in the database every environment shares, and an older platform keys the stored clip without it (its runs
+      // refused). Read only when the draft carries it; a failed read is a 500, never a save.
+      const held = await platformHoldOfFaceMeshMinFaceHeight([valid.data.faceMasking], "trend")
+      if (held) return reply.status(422).send({ error: held })
       // The preview's input clip, cut (again) when the source, the window or the face mask moved. A cut that
       // fails never loses the save: the draft is saved as it is (its clip missing or stale, which blocks
       // publish — the blocker carries the reason — but not the admin's other edits), and the answer says why.
@@ -888,6 +904,10 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       const { trend } = loaded
       if (trend.status === "archived") return err(reply, 409, "archived", "Restore the trend before publishing it.")
       if (body.data?.revision !== undefined && body.data.revision !== loaded.revision) return draftConflict(reply)
+      // The draft's saves hold the smallest face with mesh lines until every environment's platform takes it; so does
+      // its publish (a draft saved while they did, then one going back to an older build), before anything is made.
+      const held = await platformHoldOfFaceMeshMinFaceHeight([loaded.draft.faceMasking], "publish")
+      if (held) return reply.status(422).send({ error: held })
       // The preview's input clip, made (again) first so a stale or missing one never blocks on its own:
       // saved as its own write (guarded on the revision read; on a published draft that is a new
       // version), and the checks run on what was saved. A make that fails (a clip ffmpeg cannot cut, a

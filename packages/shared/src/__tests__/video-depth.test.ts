@@ -97,17 +97,41 @@ describe("checkVideoDepthLength", () => {
 })
 
 describe("videoDepthCreditId", () => {
-  it("buckets by duration, boundaries inclusive", () => {
-    expect(videoDepthCreditId("video-depth-anything", 5)).toBe("video-depth-anything:15s")
+  // Video Depth Anything (fal) is priced per whole second of the clip (decided
+  // 2026-11-03): one row per second, the length rounded UP, 1 s at the least.
+  it("fal: one row per whole second of the clip, rounded up", () => {
+    expect(videoDepthCreditId("video-depth-anything", 4)).toBe("video-depth-anything:4s")
+    expect(videoDepthCreditId("video-depth-anything", 9)).toBe("video-depth-anything:9s")
+    expect(videoDepthCreditId("video-depth-anything", 9.2)).toBe("video-depth-anything:10s")
     expect(videoDepthCreditId("video-depth-anything", 15)).toBe("video-depth-anything:15s")
-    expect(videoDepthCreditId("video-depth-anything", 15.01)).toBe("video-depth-anything:30s")
-    expect(videoDepthCreditId("depth-anything-frames", 61)).toBe("depth-anything-frames:120s")
-    expect(videoDepthCreditId("video-depth-anything", 299)).toBe("video-depth-anything:300s")
+    expect(videoDepthCreditId("video-depth-anything", 15.01)).toBe("video-depth-anything:16s")
+    expect(videoDepthCreditId("video-depth-anything", 30)).toBe("video-depth-anything:30s")
+    expect(videoDepthCreditId("video-depth-anything", 299.5)).toBe("video-depth-anything:300s")
+    expect(videoDepthCreditId("video-depth-anything", 300)).toBe("video-depth-anything:300s")
   })
-  it("unknown, non-positive or over-cap duration prices the provider's highest REACHABLE bucket", () => {
-    // fal: capped at 300 s → the 300 s row.
+  it("fal: a clip under one second pays for one second", () => {
+    expect(videoDepthCreditId("video-depth-anything", 0.4)).toBe("video-depth-anything:1s")
+    expect(videoDepthCreditId("video-depth-anything", 1)).toBe("video-depth-anything:1s")
+  })
+  it("fal: rounding an already whole length again changes nothing (the input gate rounds before it asks)", () => {
+    for (const sec of [1, 9, 10, 299, 300]) {
+      expect(videoDepthCreditId("video-depth-anything", Math.ceil(sec))).toBe(videoDepthCreditId("video-depth-anything", sec))
+    }
+  })
+  it("Replicate keeps its length buckets, boundaries inclusive", () => {
+    expect(videoDepthCreditId("depth-anything-frames", 5)).toBe("depth-anything-frames:15s")
+    expect(videoDepthCreditId("depth-anything-frames", 15)).toBe("depth-anything-frames:15s")
+    expect(videoDepthCreditId("depth-anything-frames", 15.01)).toBe("depth-anything-frames:30s")
+    expect(videoDepthCreditId("depth-anything-frames", 61)).toBe("depth-anything-frames:120s")
+  })
+  it("unknown, non-positive or over-cap duration prices the provider's highest REACHABLE row", () => {
+    // fal: capped at 300 s → the 300 s row (a longer clip is refused before anything is reserved).
     expect(videoDepthCreditId("video-depth-anything", undefined)).toBe("video-depth-anything:300s")
+    expect(videoDepthCreditId("video-depth-anything", null)).toBe("video-depth-anything:300s")
     expect(videoDepthCreditId("video-depth-anything", 0)).toBe("video-depth-anything:300s")
+    expect(videoDepthCreditId("video-depth-anything", -1)).toBe("video-depth-anything:300s")
+    expect(videoDepthCreditId("video-depth-anything", Number.NaN)).toBe("video-depth-anything:300s")
+    expect(videoDepthCreditId("video-depth-anything", 300.01)).toBe("video-depth-anything:300s")
     expect(videoDepthCreditId("video-depth-anything", 900)).toBe("video-depth-anything:300s")
     // Replicate: capped at 80 s → the 120 s row; a longer clip is refused, so the 300 s row is unreachable.
     expect(videoDepthCreditId("depth-anything-frames", undefined)).toBe("depth-anything-frames:120s")
@@ -116,10 +140,16 @@ describe("videoDepthCreditId", () => {
     expect(videoDepthCreditId("depth-anything-frames", 200)).toBe("depth-anything-frames:120s")
     expect(videoDepthCreditId("depth-anything-frames", 80)).toBe("depth-anything-frames:120s")
   })
-  it("derives each reachable ceiling from the limits: the smallest bucket at or above the provider's longest clip", () => {
+  it("derives each reachable ceiling from the limits: Replicate's smallest bucket at or above its longest clip, fal's longest clip itself", () => {
     const ceilingFor = (maxSec: number) => VIDEO_DEPTH_BUCKETS.find((b) => b >= maxSec)
     expect(videoDepthCreditId("depth-anything-frames", undefined)).toBe(`depth-anything-frames:${ceilingFor(VIDEO_DEPTH_LIMITS.REPLICATE_MAX_SECONDS)}s`)
-    expect(videoDepthCreditId("video-depth-anything", undefined)).toBe(`video-depth-anything:${ceilingFor(VIDEO_DEPTH_LIMITS.FAL_MAX_SECONDS)}s`)
+    expect(videoDepthCreditId("video-depth-anything", undefined)).toBe(`video-depth-anything:${VIDEO_DEPTH_LIMITS.FAL_MAX_SECONDS}s`)
+  })
+  it("fal: every length it accepts names one of exactly FAL_MAX_SECONDS rows, `:1s` … `:300s`", () => {
+    const ids = new Set<string>()
+    for (let tenth = 1; tenth <= VIDEO_DEPTH_LIMITS.FAL_MAX_SECONDS * 10; tenth++) ids.add(videoDepthCreditId("video-depth-anything", tenth / 10))
+    expect(ids.size).toBe(VIDEO_DEPTH_LIMITS.FAL_MAX_SECONDS)
+    for (let n = 1; n <= VIDEO_DEPTH_LIMITS.FAL_MAX_SECONDS; n++) expect(ids.has(`video-depth-anything:${n}s`), String(n)).toBe(true)
   })
 })
 

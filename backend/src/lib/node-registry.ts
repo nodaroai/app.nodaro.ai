@@ -192,7 +192,7 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "video-sfx": { ids: familyIds("replicate-mmaudio") },
   "video-depth": {
     ids: familyIds(...VIDEO_DEPTH_PROVIDERS),
-    note: "One row per input-clip length bucket per provider (`<provider>:<n>s`, 15/30/60/120/300 s; the bare id is the 300 s ceiling) — the clip is measured before anything is reserved.",
+    note: "One row per input-clip length per provider (`<provider>:<n>s`: every whole second 1–300 s on video-depth-anything, the 15/30/60/120/300 s buckets on depth-anything-frames; each bare id is the 300 s ceiling) — the clip is measured before anything is reserved.",
   },
   "video-retake": { ids: [RETAKE_PER_SECOND_ID], span: RETAKE_BAND_SECONDS },
   "speech-to-video": { ids: familyIds("speech-to-video") },
@@ -1145,10 +1145,11 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     label: "Video Depth",
     category: "ai-video",
     description:
-      "Turn a video into a depth video (near is bright, far is dark) with Video Depth Anything or Depth Anything per frame. Grayscale or a colormap. Credits scale with the input clip's length, in 15 s to 5 min tiers.",
+      "Turn a video into a depth video (near is bright, far is dark) with Video Depth Anything or Depth Anything per frame. Grayscale or a colormap. Credits scale with the input clip's length: per whole second on Video Depth Anything, in 15 s to 5 min tiers on Depth Anything per frame.",
     outputType: "video",
-    // Length-bucketed pricing — see `STATIC_CREDIT_COSTS["video-depth-anything:*"]`
-    // / `["depth-anything-frames:*"]` and `videoDepthCreditId` in `@nodaro/shared`.
+    // Length-priced — see `STATIC_CREDIT_COSTS["video-depth-anything:*"]` (one row
+    // per second) / `["depth-anything-frames:*"]` (one per length bucket) and
+    // `videoDepthCreditId` in `@nodaro/shared`.
     creditCost: creditBandFor("video-depth"),
     providers: [...VIDEO_DEPTH_PROVIDERS],
     inputSchema: { fields: [{ key: "videoUrl", type: "video-url", required: true }] },

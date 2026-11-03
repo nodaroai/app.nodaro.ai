@@ -135,6 +135,7 @@ import {
   withDepthColormapFor,
   withDepthModelSizeFor,
   withFaceMeshFor,
+  withFaceMeshMinFaceHeightFor,
   withFaceMeshPartsFor,
   withFillNoneFor,
   type FaceMasking,
@@ -1615,15 +1616,16 @@ function assertNotLeaseKey(key: string): void {
  * A Nodaro Motion masking setting as this process's Cast Swap engine is
  * answered it (`tk.settings`): the face mesh only for an engine that draws it
  * (`withFaceMeshFor`), and the depth colormap, the depth model size, the
- * depth blur and the face mesh's parts only where they change what is drawn
- * AND the engine declares them — else no key, exactly the setting before each
- * existed. The fill `"none"` first (`withFillNoneFor`): to an engine that
- * cannot draw it (or the face mesh) the whole entry is `{ mode: "off" }`,
- * never a blur. A new object.
+ * depth blur, the face mesh's parts and Full depth's smallest face with mesh
+ * lines only where they change what is drawn AND the engine declares them —
+ * else no key, exactly the setting before each existed. The fill `"none"`
+ * first (`withFillNoneFor`): to an engine that cannot draw it (or the face
+ * mesh) the whole entry is `{ mode: "off" }`, never a blur. A new object.
  */
 function forLoadedEngine<T extends FaceMasking>(m: T, drawsFaceMesh: boolean, cs: ReturnType<typeof getPluginSupports>["castSwap"]): T {
   const fill = withFillNoneFor(m, cs, drawsFaceMesh)
-  return withFaceMeshPartsFor(withDepthBlurFor(withDepthModelSizeFor(withDepthColormapFor(withFaceMeshFor(fill, drawsFaceMesh), cs), cs), cs), cs)
+  const parts = withFaceMeshPartsFor(withDepthBlurFor(withDepthModelSizeFor(withDepthColormapFor(withFaceMeshFor(fill, drawsFaceMesh), cs), cs), cs), cs)
+  return withFaceMeshMinFaceHeightFor(parts, cs)
 }
 
 /**
@@ -2267,8 +2269,8 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_motion: the app settings could not be read")
         const motion = settings.nodaro_motion_motion
         // Under the current AND the earlier keys, each a fresh copy (the masking setting's shim).
-        // Each entry's masking with the face mesh, the depth colormap and model size, the depth blur and the face mesh's parts
-        // only for an engine that draws them (the masking read's rules, `forLoadedEngine`).
+        // Each entry's masking with the face mesh, the depth colormap and model size, the depth blur, the face mesh's parts and
+        // Full depth's smallest face with mesh lines only for an engine that draws them (the masking read's rules, `forLoadedEngine`).
         if (!motion) return null
         const draws = loadedEngineDrawsFaceMesh()
         const cs = getPluginSupports().castSwap

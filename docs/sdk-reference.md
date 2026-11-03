@@ -3316,8 +3316,9 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > answers `403 model_not_available` (an omitted `provider` is checked as the
 > default) — nothing is reserved on any of them. The vocabularies are re-exported from
 > `@nodaro/shared` as `VideoDepthProvider`, `VideoDepthModelSize`,
-> `VideoDepthColormap` and `VideoDepthResolution`. Pricing is per input-clip
-> length tier — see the [Video Depth node docs](nodes/processing-video/video-depth.md#credit-cost).
+> `VideoDepthColormap` and `VideoDepthResolution`. Pricing is by the input
+> clip's length — per whole second on `video-depth-anything`, per length tier
+> on `depth-anything-frames`; see the [Video Depth node docs](nodes/processing-video/video-depth.md#credit-cost).
 >
 > ```ts
 > const { videoUrl } = await client.nodes.runAndWait("video-depth", {

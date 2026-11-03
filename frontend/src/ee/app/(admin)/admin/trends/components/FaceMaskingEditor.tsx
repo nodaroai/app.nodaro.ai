@@ -26,6 +26,17 @@
 // engine; Admin → Nodaro Motion's (a setting every environment shares), shown
 // but greyed out, naming the environments that lack it. Off is no key.
 //
+// Full depth's face mesh, while it is on (decided 2026-11-03): the smallest
+// face with mesh lines, a % of the frame's height (0–100, steps of 1). Empty
+// is the engine's default (10, shown as the placeholder; no key); 0 and 10
+// are values (0: no size minimum, the side margins still apply). Offered
+// where the page passes the environments that lack it
+// (`faceMeshMinFaceHeightMissing`: the Motion column and a trend's editor;
+// the Precise column is never Full depth): greyed out while any environment's
+// engine cannot draw it OR its platform (the app itself) does not take it yet
+// — every environment shares one database, so an older platform would refuse
+// the value — each named apart; one already set stays, to be emptied.
+//
 // Role outlines (a trend's, Faces hidden only: `offerRoleOutlines`): the stored
 // face mask rings each person role's masked region in that role's colour, the
 // region told by the role's boxes on the mask, so a run can say who is who in
@@ -93,9 +104,11 @@ import {
   depthColormapDefaultFor,
   depthColormapsSomeEngineDraws,
   depthModelSizesSomeEngineDraws,
+  FACE_MESH_MIN_FACE_HEIGHT_DEFAULT_PCT,
   isDepthPreparation,
   someEngineDrawsFaceMesh,
   someEngineDrawsRoleOutlines,
+  type FaceMeshMinFaceHeightMissing,
 } from "../clip-preparation"
 import { FullDepthSceneSelect } from "./FullDepthSceneSelect"
 
@@ -221,6 +234,17 @@ interface Props {
    */
   readonly faceMeshPartsMissingIn?: Readonly<Record<"features" | "mouth", readonly string[]>>
   /**
+   * Admin → Nodaro Motion's Motion column and a trend's editor: offer Full
+   * depth's smallest face with mesh lines while the face mesh is on, with the
+   * environments that cannot take it yet (`faceMeshMinFaceHeightMissing`): by
+   * their engine, and by their platform (the app itself; the database is
+   * shared, so an older one refuses what carries the field). Greyed out while
+   * either lists one, each named apart. Left out (the Precise column, never
+   * Full depth; or the environments still loading): no such control, unless
+   * one is set.
+   */
+  readonly faceMeshMinFaceHeightMissing?: FaceMeshMinFaceHeightMissing
+  /**
    * Admin → Nodaro Motion's Precise column: offer the fill None (the faces kept as filmed,
    * only the face mesh drawn), naming the environments whose engine cannot
    * draw it (`environmentsThatCannotFillNone`). Left out (a trend's editor):
@@ -256,6 +280,7 @@ export function FaceMaskingEditor({
   depthModelSizesMissingIn,
   depthBlurMissingIn,
   faceMeshPartsMissingIn,
+  faceMeshMinFaceHeightMissing,
   fillNoneMissingIn,
   depthFillBlurMissingIn,
   clipSec,
@@ -356,6 +381,15 @@ export function FaceMaskingEditor({
   const meshPartsUnsupported = !meshPartOffered(meshParts)
   const noMeshPartOffered = FACE_MESH_PARTS.every((p) => p.value === "full" || !meshPartOffered(p.value))
   const meshPartsLacking = faceMeshPartsMissingIn ? [...new Set([...faceMeshPartsMissingIn.features, ...faceMeshPartsMissingIn.mouth])] : []
+  // Full depth's smallest face with mesh lines, under the switch while it is on. One already set stays shown (and can be
+  // emptied) whatever the engines say; empty is the engine's default, saved as no key.
+  const minFace = value?.faceMeshMinFaceHeightPct
+  const minFaceSet = typeof minFace === "number"
+  const minFaceShown = meshOn && source === "full-depth" && (faceMeshMinFaceHeightMissing !== undefined || minFaceSet)
+  // Greyed out while an environment's engine cannot draw it OR its platform does not take it yet (each named apart).
+  const minFaceEngineLacking = faceMeshMinFaceHeightMissing?.engine ?? []
+  const minFacePlatformLacking = faceMeshMinFaceHeightMissing?.platform ?? []
+  const minFaceUnsupported = minFaceEngineLacking.length > 0 || minFacePlatformLacking.length > 0
   const id = useId()
   const modeId = `${id}-mode`
   const fillId = `${id}-fill`
@@ -553,8 +587,11 @@ export function FaceMaskingEditor({
               // None draws only the face mesh: it cannot be turned off while None is the fill.
               disabled={(meshUnsupported && !meshOn) || (fillNone && meshOn)}
               aria-describedby={`${faceMeshId}-hint`}
-              // Off removes the key (and what the mesh draws): a setting without the mesh is saved exactly as before it existed.
-              onCheckedChange={(checked) => set(checked === true ? { faceMesh: true } : { faceMesh: undefined, faceMeshParts: undefined })}
+              // Off removes the key (and what the mesh draws, and its smallest face): a setting without the mesh is saved
+              // exactly as before it existed.
+              onCheckedChange={(checked) =>
+                set(checked === true ? { faceMesh: true } : { faceMesh: undefined, faceMeshParts: undefined, faceMeshMinFaceHeightPct: undefined })
+              }
             />
             <label htmlFor={faceMeshId} className="font-medium">
               Face mesh
@@ -606,6 +643,34 @@ export function FaceMaskingEditor({
               {!meshPartsUnsupported && noMeshPartOffered && meshPartsLacking.length > 0 && (
                 <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
                   {`The Cast Swap engine of ${meshPartsLacking.join(", ")} cannot draw only parts of the face mesh yet, and this setting is shared by every environment.`}
+                </span>
+              )}
+            </div>
+          )}
+          {minFaceShown && (
+            <div className="flex flex-col gap-1 sm:w-1/2 sm:pr-1.5">
+              <NumberField
+                label="Smallest face with mesh lines"
+                help={`% of the frame's height; faces smaller than this, or centred in the outer 10 % at the left and right, get no lines; 0 = no size minimum (the side margins still apply)${offerRoleOutlines ? ". Make the face mask again after a change." : ""}`}
+                value={minFace}
+                placeholder={FACE_MESH_MIN_FACE_HEIGHT_DEFAULT_PCT}
+                bounds={FACE_MASKING_BOUNDS.faceHeightPct}
+                step={1}
+                disabled={minFaceUnsupported && !minFaceSet}
+                // Emptied removes the key: the engine's default, saved exactly as before the choice existed.
+                onChange={(v) => set({ faceMeshMinFaceHeightPct: v })}
+              />
+              {minFaceEngineLacking.length > 0 && (
+                <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+                  {offerRoleOutlines
+                    ? `The Cast Swap engine of ${minFaceEngineLacking.join(", ")} cannot set the smallest face with mesh lines yet${minFaceSet ? ": a face mask made there is refused while it is set" : ""}.`
+                    : `The Cast Swap engine of ${minFaceEngineLacking.join(", ")} cannot set the smallest face with mesh lines yet, and this setting is shared by every environment${minFaceSet ? ": empty it to save" : ""}.`}
+                </span>
+              )}
+              {/* The platform (the app itself): the database is shared, and an older one refuses what carries the field. */}
+              {minFacePlatformLacking.length > 0 && (
+                <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+                  {`The platform in ${minFacePlatformLacking.join(", ")} does not take the smallest face with mesh lines yet, and ${offerRoleOutlines ? "trends are" : "this setting is"} shared by every environment${minFaceSet ? ": empty it to save" : ""}.`}
                 </span>
               )}
             </div>

@@ -5,9 +5,10 @@ import { blockRefusal, convergeSignInBan, deleteBlockRow, writeBlockRow, type Bl
 /**
  * Blocking an account, every step of it, for every caller: the block button
  * (ee/routes/admin-access.ts) and a closure under the repeat-infringer policy
- * (ee/lib/repeat-infringers.ts). Its own module, so the light helpers in
- * account-blocking.ts stay free of the auth middleware for the modules that
- * only read them.
+ * (ee/lib/repeat-infringers.ts); and the same steps after a suspension is
+ * recorded, whose row is itself the refusal (`enforceSuspension`). Its own
+ * module, so the light helpers in account-blocking.ts stay free of the auth
+ * middleware for the modules that only read them.
  */
 
 export type BlockOutcome =
@@ -44,6 +45,43 @@ export async function blockAccount(adminId: string, userId: string, reason: stri
   } finally {
     invalidateAccessBlocks()
   }
+  return afterAccessChange(userId)
+}
+
+/**
+ * After a suspension was recorded (its row is the refusal: access-blocks.ts
+ * reads it): the same late refusal as a block (an account promoted since the
+ * check before the write is refused, and the caller takes the suspension
+ * back), every process's snapshot told whatever happens next, then the auth
+ * cache, and the sign-in ban converged until the suspension's end; a failure
+ * there is answered, not thrown.
+ */
+export async function enforceSuspension(adminId: string, userId: string): Promise<BlockOutcome> {
+  try {
+    const late = await blockRefusal(adminId, userId)
+    if (late) return { refused: late }
+  } finally {
+    invalidateAccessBlocks()
+  }
+  return afterAccessChange(userId)
+}
+
+/**
+ * After a suspension was lifted: every process's snapshot told, the auth
+ * cache, and the sign-in ban converged (lifted, unless the account is
+ * blocked); a failure there is answered, not thrown.
+ */
+export async function releaseSuspension(userId: string): Promise<{ readonly signInBlocked: boolean | null; readonly signInError: unknown }> {
+  invalidateAccessBlocks()
+  invalidateAuthCache(userId)
+  try {
+    return { signInBlocked: (await convergeSignInBan(userId)).signInBlocked, signInError: null }
+  } catch (err) {
+    return { signInBlocked: null, signInError: err }
+  }
+}
+
+async function afterAccessChange(userId: string): Promise<BlockOutcome> {
   invalidateAuthCache(userId)
   try {
     return { refused: null, signInBlocked: (await convergeSignInBan(userId)).signInBlocked, signInError: null }

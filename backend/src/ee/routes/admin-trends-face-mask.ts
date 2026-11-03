@@ -40,7 +40,12 @@
  * the key and would store the default render under the map's settings key.
  * A depth model size (`depthModelSize`, decided 2026-11-02; only when it
  * changes the render, `depthModelSizeSent`) likewise, unless the engine
- * declares that size (`castSwap.depthModelSizes`).
+ * declares that size (`castSwap.depthModelSizes`). Full depth's smallest face
+ * with mesh lines (`faceMeshMinFaceHeightPct`, decided 2026-11-03; any value
+ * set, with the face mesh on: `faceMeshMinFaceHeightSent`) likewise, unless
+ * the engine declares `castSwap.faceMeshMinFaceHeightPct`: an older one's make
+ * strips the key and would store a clip drawn on every face under the value's
+ * settings key.
  *
  * The scene description step (`steps.sceneDescription`): a make that
  * describes the clip (full depth, on an engine that stores a scene
@@ -89,10 +94,12 @@ import {
   faceMaskingOn,
   faceMaskingSent,
   faceMaskingSourceOf,
+  faceMeshMinFaceHeightSent,
   faceMeshOn,
   loadedEngineDrawsDepthColormap,
   loadedEngineDrawsDepthModelSize,
   loadedEngineDrawsFaceMesh,
+  loadedEngineDrawsFaceMeshMinFaceHeight,
   loadedEngineDrawsRoleOutlines,
   loadedEngineMasksTarget,
   makeMarksOf,
@@ -322,6 +329,16 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       const modelSize = depthModelSizeSent(draft.faceMasking)
       if (modelSize !== undefined && !loadedEngineDrawsDepthModelSize(modelSize)) {
         return err(reply, 503, "engine_unsupported", `This environment's Cast Swap engine cannot draw the depth with the ${modelSize} depth model yet: choose the default (large), or wait for the engine.`)
+      }
+      // Full depth's smallest face with mesh lines likewise: an older engine's make strips the key and draws every
+      // face it finds, under the settings key of the value set.
+      if (faceMeshMinFaceHeightSent(draft.faceMasking) !== undefined && !loadedEngineDrawsFaceMeshMinFaceHeight()) {
+        return err(
+          reply,
+          503,
+          "engine_unsupported",
+          "This environment's Cast Swap engine cannot set the smallest face with mesh lines yet: empty it, or wait for the engine.",
+        )
       }
       const settingsKey = faceMaskSettingsKey(draft)!
       // Full depth on an engine that describes the original clip as it makes it: the roles to name

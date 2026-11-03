@@ -8905,7 +8905,7 @@ export async function getCounterNoticeDeclaration(): Promise<{ data: { paragraph
 
 /** A measure on my account under the repeat-infringer policy, as I am told it (backend lib/account-measures.ts). */
 export interface MyAccountMeasure {
-  kind: "warning" | "imports_blocked" | "closed"
+  kind: "warning" | "imports_blocked" | "suspended" | "closed"
   /** What the administrator told me. */
   reason: string
   appliedAt: string
@@ -11501,6 +11501,18 @@ export interface AdminTrendFaceMasking {
    */
   faceMeshParts?: AdminFaceMeshParts
   /**
+   * Full depth's face mesh (Admin → Nodaro Motion's Motion setting and a
+   * trend's): the smallest face it draws lines on, the face box's height as a
+   * % of the frame's, 0–100 (0 = no size minimum; the side margins still
+   * apply). Left out = the engine's default (10). Saved only with Full depth
+   * and the face mesh on, and only when set (any value, 10 included); the
+   * server refuses it anywhere else. Offered only where every environment's
+   * engine declares `castSwap.faceMeshMinFaceHeightPct` and its platform
+   * records it takes it (`supports.platform`); the server holds a save that
+   * carries it otherwise (422 `platform_unsupported`).
+   */
+  faceMeshMinFaceHeightPct?: number
+  /**
    * Boxes on the trend's stored face mask (at most 50). `"erased"`: the faces
    * centred in the box, on its frames, are left unmasked. Only the stored mask
    * is made with them: a trend with erased marks runs on its approved mask
@@ -11544,6 +11556,8 @@ export interface AdminTrendFaceMask {
   approvedBy: string
   /** The faces its make drew the face mesh on (0 = none: its runs carry no lines); absent without the mesh. */
   facesDrawn?: number
+  /** The face mesh's recipe its make drew the lines by; absent without the mesh, or recorded before it was kept. */
+  meshRecipe?: string
   /** Role outlines: what each role's ring went round (the regions, summed over the frames); absent without outlines. */
   outlines?: AdminTrendFaceMaskOutline[]
   /** The mask before any mark (the base the next edit of the marks is made from), when kept. Absent: the first edit makes the mask whole. */
@@ -11637,6 +11651,13 @@ export interface AdminTrendFaceMaskStats {
 /** Why a stored face mask is out of date. */
 export type AdminTrendFaceMaskOutOfDate = { why: "settings" } | { why: "core_recipe" } | { why: "plugin_recipe"; env: string }
 
+/**
+ * Why a stored face mask is worth making again although nothing makes it out
+ * of date (a flag, never a reason: it holds back no approval, publish or run):
+ * its face mesh was drawn before the stray-face fix.
+ */
+export type AdminTrendFaceMaskFlag = { why: "face_mesh_before_stray_fix" }
+
 /** The draft's face mask, as the server judges it: none, approved and up to date, or out of date (with why). */
 export interface AdminTrendFaceMaskState {
   status: "none" | "approved" | "out_of_date"
@@ -11649,6 +11670,8 @@ export interface AdminTrendFaceMaskState {
    * sent: the panel says so and offers a remake. Never makes it out of date.
    */
   sceneStepChanged?: boolean
+  /** What the panel flags to make again (`AdminTrendFaceMaskFlag`); absent = nothing. Never makes it out of date. */
+  flags?: AdminTrendFaceMaskFlag[]
 }
 
 export interface AdminTrendData {
@@ -12019,8 +12042,19 @@ export interface TrendEngineEnvironment {
       maskFillNone?: boolean
       /** The engine blurs a Faces hidden depth fill (`faceMasking.depthBlur` with `fill: "depth"`); absent = it cannot. */
       depthFillBlur?: boolean
+      /** Full depth's face mesh takes a smallest face (`faceMasking.faceMeshMinFaceHeightPct`); absent = it draws every face. */
+      faceMeshMinFaceHeightPct?: boolean
       /** How the engine may word a Flexible prompt (`promptWording`); absent = the current wording only. */
       promptWordings?: CastSwapPromptWordingId[]
+    }
+    /**
+     * What that environment's platform (the app itself, apart from its engine)
+     * records it takes of the data every environment shares; absent = a
+     * platform from before the record, which takes none of it.
+     */
+    platform?: {
+      /** Full depth's smallest face with mesh lines (`faceMasking.faceMeshMinFaceHeightPct`). */
+      faceMeshMinFaceHeightPct?: boolean
     }
   } & Record<string, unknown>
   updatedAt: string

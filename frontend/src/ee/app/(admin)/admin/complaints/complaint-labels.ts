@@ -62,13 +62,15 @@ export const EVENT_LABELS: Readonly<Record<string, string>> = {
 export const MEASURE_LABELS: Readonly<Record<MeasureKind, string>> = {
   warning: "Warning",
   imports_blocked: "Importing links blocked",
+  suspended: "Account suspended",
   closed: "Account closed",
 }
 
-/** A policy step, or a measure, as words: "Importing links blocked for 30 days", "Warning". */
+/** A policy step, or a measure, as words: "Importing links blocked for 30 days", "Account suspended for 7 days", "Warning". */
 export function measureLabel(kind: MeasureKind, days?: number | null): string {
-  if (kind !== "imports_blocked") return MEASURE_LABELS[kind]
-  return days ? `${MEASURE_LABELS.imports_blocked} for ${days} day${days === 1 ? "" : "s"}` : `${MEASURE_LABELS.imports_blocked} until lifted`
+  if (kind !== "imports_blocked" && kind !== "suspended") return MEASURE_LABELS[kind]
+  if (days) return `${MEASURE_LABELS[kind]} for ${days} day${days === 1 ? "" : "s"}`
+  return kind === "suspended" ? MEASURE_LABELS.suspended : `${MEASURE_LABELS.imports_blocked} until lifted`
 }
 
 /** A matched account's standing, as words: its infringements in the window, and what is in force. */

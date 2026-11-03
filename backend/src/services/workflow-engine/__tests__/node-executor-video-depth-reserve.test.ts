@@ -190,7 +190,7 @@ describe("node-executor — video-depth measures the clip before reserving", () 
     expect(mockReserveCredits).not.toHaveBeenCalled()
   })
 
-  it("a 40 s clip reserves video-depth-anything:60s at BOTH gates, and the payload carries the stamp", async () => {
+  it("a 40 s clip reserves its per-second row, video-depth-anything:40s, at BOTH gates, and the payload carries the stamp", async () => {
     mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 40, fps: 30 })
     await expect(executeNode(makeNode(), {}, [], [], {}, makeCtx())).rejects.toThrow(
       /reservation-sentinel|Credit reservation failed/,
@@ -202,15 +202,25 @@ describe("node-executor — video-depth measures the clip before reserving", () 
     const [userId, jobId, modelIdentifier] = mockReserveCredits.mock.calls[0] as [string, string, string]
     expect(userId).toBe("user-1")
     expect(jobId).toBe("test-job-id")
-    expect(modelIdentifier).toBe("video-depth-anything:60s")
+    expect(modelIdentifier).toBe("video-depth-anything:40s")
     expect(mockCheckCredits).toHaveBeenCalledTimes(1)
-    expect((mockCheckCredits.mock.calls[0] as unknown[])[1]).toBe("video-depth-anything:60s")
+    expect((mockCheckCredits.mock.calls[0] as unknown[])[1]).toBe("video-depth-anything:40s")
 
-    expect(built.result.payload).toMatchObject({ duration_seconds: 40, bucketKey: "video-depth-anything:60s" })
+    expect(built.result.payload).toMatchObject({ duration_seconds: 40, bucketKey: "video-depth-anything:40s" })
     // The stamp did not refuse: any row cleanup here is the reservation
     // sentinel's own failure path, AFTER the reservation was attempted.
     for (const order of mockDeleteEq.mock.invocationCallOrder) {
       expect(order).toBeGreaterThan(mockReserveCredits.mock.invocationCallOrder[0]!)
     }
+  })
+
+  it("a 9.2 s clip is rounded up to whole seconds: video-depth-anything:10s at both gates and in the stamp", async () => {
+    mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 9.2, fps: 30 })
+    await expect(executeNode(makeNode(), {}, [], [], {}, makeCtx())).rejects.toThrow(
+      /reservation-sentinel|Credit reservation failed/,
+    )
+    expect((mockCheckCredits.mock.calls[0] as unknown[])[1]).toBe("video-depth-anything:10s")
+    expect((mockReserveCredits.mock.calls[0] as unknown[])[2]).toBe("video-depth-anything:10s")
+    expect(built.result.payload).toMatchObject({ duration_seconds: 10, bucketKey: "video-depth-anything:10s" })
   })
 })

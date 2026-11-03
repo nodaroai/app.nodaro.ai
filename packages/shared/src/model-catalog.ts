@@ -2816,9 +2816,11 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "volcengine-lipsync:300s", credits: 6000, note: "5-min ceiling" },
     ],
   },
-  // ── Video Depth ── (video-depth node; billed per duration bucket via
-  // videoDepthCreditId in video-depth.ts — `<provider>:<bucket>s`, bare row =
-  // the 300 s ceiling, same shape as volcengine-lipsync.)
+  // ── Video Depth ── (video-depth node; priced by the input clip's length via
+  // videoDepthCreditId in video-depth.ts — `<provider>:<n>s`, bare row = the
+  // 300 s ceiling. Video Depth Anything: one row per whole second of the clip
+  // (`:1s` … `:300s`, rounded up), representative rows below; Depth Anything
+  // per frame: one row per length bucket, same shape as volcengine-lipsync.)
   "video-depth-anything": {
     id: "video-depth-anything",
     kind: "video",
@@ -2831,11 +2833,10 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["depth", "video-to-video", "compositing"],
     pricing: [
       { identifier: "video-depth-anything", credits: 6000, note: "5-min ceiling (no duration given)" },
-      { identifier: "video-depth-anything:15s", credits: 300 },
-      { identifier: "video-depth-anything:30s", credits: 600 },
-      { identifier: "video-depth-anything:60s", credits: 1200 },
-      { identifier: "video-depth-anything:120s", credits: 2400 },
-      { identifier: "video-depth-anything:300s", credits: 6000, note: "5-min ceiling" },
+      { identifier: "video-depth-anything:1s", credits: 20, note: "1s (min) — priced per second of the clip at this row's credits, the length rounded up" },
+      { identifier: "video-depth-anything:15s", credits: 300, note: "15s" },
+      { identifier: "video-depth-anything:60s", credits: 1200, note: "1 min" },
+      { identifier: "video-depth-anything:300s", credits: 6000, note: "5-min ceiling (max)" },
     ],
   },
   "depth-anything-frames": {

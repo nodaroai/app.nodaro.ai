@@ -2,10 +2,12 @@
  * /v1/admin/... repeat infringers (admin-repeat-infringers.ts): an
  * administrator signed in to the app records and withdraws an infringement,
  * takes and lifts a measure, reads and saves the policy; every move audited
- * (a closure's block as an account block too, and what became of it); a move
- * from a case names the account the screen showed; another credential of an
- * administrator is refused; nothing cached; reasons and notes are plain text;
- * days are an import block's only; the refusals mapped.
+ * (a closure's block as an account block too, and what became of a closure's
+ * or a suspension's refusal of access); a move from a case names the account
+ * the screen showed; another credential of an administrator is refused;
+ * nothing cached; reasons and notes are plain text; days are an import
+ * block's or a suspension's only, and a suspension's are required; the
+ * refusals mapped.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
@@ -18,7 +20,10 @@ const state = vi.hoisted(() => ({
   saved: null as unknown,
   stored: { policy: { windowMonths: 24, steps: [{ infringements: 1, kind: "warning" }] }, saved: false, updatedAt: null } as Record<string, unknown>,
   signInError: null as unknown,
-  closure: "placed" as "placed" | "refused" | "refused-unlifted" | "failed",
+  /** What becomes of a closure's or a suspension's refusal of access. */
+  access: "placed" as "placed" | "refused" | "refused-unlifted" | "failed",
+  /** The measure a lift lifts, and how letting a suspended account back in went. */
+  lifted: "closed" as "closed" | "suspended" | "suspended-sign-in-failed",
 }))
 const ids = vi.hoisted(() => ({
   CASE: "00000000-0000-4000-8000-0000000000d1",
@@ -40,7 +45,10 @@ vi.mock("../../lib/admin-actions.js", () => ({
     state.blocks.push(rest)
   }),
 }))
-vi.mock("../../lib/account-blocking.js", () => ({ BLOCK_REFUSAL_MESSAGE: { target_is_admin: "Admins cannot be blocked. Change the role first." } }))
+vi.mock("../../lib/account-blocking.js", () => ({
+  BLOCK_REFUSAL_MESSAGE: { target_is_admin: "Admins cannot be blocked. Change the role first." },
+  SUSPEND_REFUSAL_MESSAGE: { target_is_admin: "Admins cannot be suspended. Change the role first." },
+}))
 vi.mock("../../../lib/repeat-infringer-policy-store.js", () => ({
   readRepeatInfringerPolicy: vi.fn(async () => state.stored),
   saveRepeatInfringerPolicy: vi.fn(async (policy: unknown, admin: string) => {
@@ -55,10 +63,10 @@ vi.mock("../../lib/repeat-infringers.js", async () => {
     if (userId === ids.MOVED) throw new RepeatInfringerError("case_moved", "The case names another account now: read it again")
   }
   const infringement = { id: ids.ROW, complaint_id: ids.CASE, user_id: ids.OWNER, recorded_at: "2026-11-03T12:00:00.000Z", withdrawn_at: "2026-11-03T13:00:00.000Z" }
-  const closureBlock = () => {
-    if (state.closure === "refused") return { placed: false, refused: "target_is_admin", lifted: { id: ids.ROW } }
-    if (state.closure === "refused-unlifted") return { placed: false, refused: "target_is_admin", lifted: null }
-    if (state.closure === "failed") return { placed: false, failure: new Error("blocks down") }
+  const accessOutcome = () => {
+    if (state.access === "refused") return { placed: false, refused: "target_is_admin", lifted: { id: ids.ROW } }
+    if (state.access === "refused-unlifted") return { placed: false, refused: "target_is_admin", lifted: null }
+    if (state.access === "failed") return { placed: false, failure: new Error("blocks down") }
     return { placed: true, signInBlocked: state.signInError === null, signInError: state.signInError }
   }
   return {
@@ -80,13 +88,18 @@ vi.mock("../../lib/repeat-infringers.js", async () => {
       if (input.reason === "unverified") throw new RepeatInfringerError("unverified", "Not evidence yet")
       if (input.reason === "admin") throw new RepeatInfringerError("target_is_admin", "Admins cannot be blocked. Change the role first.")
       if (input.reason === "twice") throw new RepeatInfringerError("in_force", "In force already")
-      const measure = { id: ids.ROW, user_id: ids.OWNER, complaint_id: ids.CASE, kind: input.kind, ends_at: null, policy_step: input.departureReason ? null : { infringements: 1 } }
-      return { measure, block: input.kind === "closed" ? closureBlock() : null }
+      const endsAt = input.kind === "suspended" ? "2026-11-17T12:00:00.000Z" : null
+      const measure = { id: ids.ROW, user_id: ids.OWNER, complaint_id: ids.CASE, kind: input.kind, ends_at: endsAt, policy_step: input.departureReason ? null : { infringements: 1 } }
+      return { measure, access: input.kind === "closed" || input.kind === "suspended" ? accessOutcome() : null }
     }),
     liftMeasure: vi.fn(async (id: string, reason: string, admin: string) => {
       state.calls.push(["lift", id, reason, admin])
       refuse(id)
-      return { measure: { id, user_id: ids.OWNER, complaint_id: ids.CASE, kind: "closed", lifted_at: "2026-11-03T13:00:00.000Z" }, stillBlocked: true }
+      const kind = state.lifted === "closed" ? "closed" : "suspended"
+      const measure = { id, user_id: ids.OWNER, complaint_id: ids.CASE, kind, lifted_at: "2026-11-03T13:00:00.000Z" }
+      if (state.lifted === "closed") return { measure, stillBlocked: true, signIn: null }
+      const signInError = state.lifted === "suspended-sign-in-failed" ? new Error("auth down") : null
+      return { measure, stillBlocked: null, signIn: { signInBlocked: signInError ? null : false, signInError } }
     }),
   }
 })
@@ -103,7 +116,8 @@ beforeEach(async () => {
   state.calls = []
   state.saved = null
   state.signInError = null
-  state.closure = "placed"
+  state.access = "placed"
+  state.lifted = "closed"
   state.stored = { policy: { windowMonths: 24, steps: [{ infringements: 1, kind: "warning" }] }, saved: false, updatedAt: null }
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
@@ -226,7 +240,7 @@ describe("measures", () => {
   it("a closure whose block was placed is audited as an account block too; a sign-in ban that failed is a warning", async () => {
     const res = await measure({ kind: "closed", reason: "Repeated infringement" })
     expect(res.json().data).toMatchObject({ kind: "closed", signInBlocked: true, warning: null, followsPolicy: true })
-    expect(state.audits[0]).toEqual(["measure_apply", "account_sanction", ids.ROW, { complaintId: ids.CASE, userId: ids.OWNER, kind: "closed", endsAt: null, followsPolicy: true, block: "placed" }])
+    expect(state.audits[0]).toEqual(["measure_apply", "account_sanction", ids.ROW, { complaintId: ids.CASE, userId: ids.OWNER, kind: "closed", endsAt: null, followsPolicy: true, access: "placed" }])
     expect(state.blocks).toEqual([["account_block", ids.OWNER, { signInBlocked: true, closure: ids.ROW }, "Closed under the repeat-infringer policy"]])
     state.signInError = new Error("auth down")
     const failed = await measure({ kind: "closed", reason: "Repeated infringement" })
@@ -234,17 +248,17 @@ describe("measures", () => {
   })
 
   it("a closure the block refused late is a 403 saying it was taken back, audited as taken and lifted, and never as a block", async () => {
-    state.closure = "refused"
+    state.access = "refused"
     const res = await measure({ kind: "closed", reason: "Repeated infringement" })
     expect(res.statusCode).toBe(403)
     expect(res.json().error).toEqual({ code: "target_is_admin", message: "Admins cannot be blocked. Change the role first. The closure was taken back." })
     expect(state.audits.map((a) => (a as unknown[])[0])).toEqual(["measure_apply", "measure_lift"])
-    expect((state.audits[0] as unknown[])[3]).toMatchObject({ block: "refused" })
+    expect((state.audits[0] as unknown[])[3]).toMatchObject({ access: "refused" })
     expect(state.blocks).toEqual([])
   })
 
   it("a closure refused late that could not be taken back says it stands", async () => {
-    state.closure = "refused-unlifted"
+    state.access = "refused-unlifted"
     const res = await measure({ kind: "closed", reason: "Repeated infringement" })
     expect(res.statusCode).toBe(403)
     expect(res.json().error.message).toBe("Admins cannot be blocked. Change the role first. The closure stands: lift it from the case.")
@@ -252,17 +266,68 @@ describe("measures", () => {
   })
 
   it("a closure whose block failed stands, and the answer says to block the account from its page", async () => {
-    state.closure = "failed"
+    state.access = "failed"
     const res = await measure({ kind: "closed", reason: "Repeated infringement" })
     expect(res.statusCode).toBe(200)
     expect(res.json().data).toMatchObject({ kind: "closed", signInBlocked: null, warning: "The closure is recorded, but blocking the account failed: block it from the account's page." })
-    expect((state.audits[0] as unknown[])[3]).toMatchObject({ block: "failed" })
+    expect((state.audits[0] as unknown[])[3]).toMatchObject({ access: "failed" })
     expect(state.blocks).toEqual([])
   })
 
-  it("refuses a kind it does not know, days on anything but an import block, days out of range, no reason, no account, and a bad id", async () => {
+  it("a suspension is taken with its days, answered with its end, audited, and never as an account block", async () => {
+    const res = await measure({ kind: "suspended", days: 14, reason: "Repeated infringement" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({ id: ids.ROW, kind: "suspended", endsAt: "2026-11-17T12:00:00.000Z", followsPolicy: true, signInBlocked: true, warning: null })
+    expect(state.calls).toEqual([
+      ["apply", { complaintId: ids.CASE, userId: ids.OWNER, kind: "suspended", days: 14, reason: "Repeated infringement", note: null, infringementId: null, departureReason: null }, USER],
+    ])
+    expect(state.audits).toEqual([
+      ["measure_apply", "account_sanction", ids.ROW, { complaintId: ids.CASE, userId: ids.OWNER, kind: "suspended", endsAt: "2026-11-17T12:00:00.000Z", followsPolicy: true, access: "placed" }],
+    ])
+    expect(state.blocks).toEqual([])
+  })
+
+  it("a suspension whose sign-in ban failed still refuses every request, and the answer says to retry from the account's page", async () => {
+    state.signInError = new Error("auth down")
+    const res = await measure({ kind: "suspended", days: 14, reason: "Repeated infringement" })
+    expect(res.json().data).toMatchObject({
+      signInBlocked: false,
+      warning: "The account is suspended and its requests are refused, but its sign-in could not be refused: retry from the Access card on its page.",
+    })
+  })
+
+  it("a suspension refused late is a 403 in the suspension's words, saying it was taken back or that it stands", async () => {
+    state.access = "refused"
+    const taken = await measure({ kind: "suspended", days: 14, reason: "Repeated infringement" })
+    expect(taken.statusCode).toBe(403)
+    expect(taken.json().error).toEqual({ code: "target_is_admin", message: "Admins cannot be suspended. Change the role first. The suspension was taken back." })
+    expect(state.audits.map((a) => (a as unknown[])[0])).toEqual(["measure_apply", "measure_lift"])
+    state.access = "refused-unlifted"
+    const stands = await measure({ kind: "suspended", days: 14, reason: "Repeated infringement" })
+    expect(stands.json().error.message).toBe("Admins cannot be suspended. Change the role first. The suspension stands: lift it from the case.")
+    expect(state.blocks).toEqual([])
+  })
+
+  it("a suspension whose enforcement failed stands, refusing every request, and says so", async () => {
+    state.access = "failed"
+    const res = await measure({ kind: "suspended", days: 14, reason: "Repeated infringement" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toMatchObject({
+      kind: "suspended",
+      signInBlocked: null,
+      warning:
+        "The suspension is recorded and refuses the account's requests, but the account could not be checked again or its sign-in refused: retry from the Access card on its page.",
+    })
+    expect((state.audits[0] as unknown[])[3]).toMatchObject({ access: "failed" })
+  })
+
+  it("refuses a kind it does not know, days on anything but an import block or a suspension, a suspension without days, days out of range, no reason, no account, and a bad id", async () => {
     const bad = [
+      { userId: ids.OWNER, kind: "fined", reason: "x" },
       { userId: ids.OWNER, kind: "suspended", reason: "x" },
+      { userId: ids.OWNER, kind: "suspended", days: null, reason: "x" },
+      { userId: ids.OWNER, kind: "suspended", days: 0, reason: "x" },
+      { userId: ids.OWNER, kind: "suspended", days: 3651, reason: "x" },
       { userId: ids.OWNER, kind: "warning", days: 3, reason: "x" },
       { userId: ids.OWNER, kind: "closed", days: 3, reason: "x" },
       { userId: ids.OWNER, kind: "imports_blocked", days: 0, reason: "x" },
@@ -282,9 +347,35 @@ describe("measures", () => {
 
   it("lifts one with the reason, audited, and says whether the account is still blocked", async () => {
     const res = await post(LIFT, { reason: "Closed in error" })
-    expect(res.json().data).toEqual({ id: ids.ROW, kind: "closed", liftedAt: "2026-11-03T13:00:00.000Z", stillBlocked: true })
+    expect(res.json().data).toEqual({ id: ids.ROW, kind: "closed", liftedAt: "2026-11-03T13:00:00.000Z", stillBlocked: true, signInBlocked: null, warning: null })
     expect(state.audits).toEqual([["measure_lift", "account_sanction", ids.ROW, { complaintId: ids.CASE, userId: ids.OWNER, kind: "closed" }]])
     expect((await post(LIFT, {})).statusCode).toBe(400)
+  })
+
+  it("lifting a suspension says whether sign-in is still refused, and to retry when letting it back in failed", async () => {
+    state.lifted = "suspended"
+    expect((await post(LIFT, { reason: "Appeal upheld" })).json().data).toEqual({
+      id: ids.ROW,
+      kind: "suspended",
+      liftedAt: "2026-11-03T13:00:00.000Z",
+      stillBlocked: null,
+      signInBlocked: false,
+      warning: null,
+    })
+    state.lifted = "suspended-sign-in-failed"
+    expect((await post(LIFT, { reason: "Appeal upheld" })).json().data).toMatchObject({
+      signInBlocked: null,
+      warning: "The suspension is lifted and the account's requests are let through, but its sign-in could not be let back in: retry from the Access card on its page.",
+    })
+  })
+
+  it("a suspension without its days, refused by the record itself, is a 400", async () => {
+    const { applyMeasure } = await import("../../lib/repeat-infringers.js")
+    const { RepeatInfringerError } = await import("../../lib/repeat-infringer-error.js")
+    vi.mocked(applyMeasure).mockRejectedValueOnce(new RepeatInfringerError("days_required", "A suspension lasts a number of days"))
+    const res = await measure({ kind: "suspended", days: 3, reason: "x" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("days_required")
   })
 
   it("maps the refusals: unknown 404, not yet in the database 503, a move the case does not allow 400, an account the block refuses 403, in force or moved 409; none audited", async () => {

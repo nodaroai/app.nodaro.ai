@@ -1,4 +1,4 @@
-import { MAX_BLOCK_DAYS, type MeasureKind, type PolicyStep, type RepeatInfringerPolicy } from "@/ee/hooks/queries/use-admin-repeat-infringers"
+import { MAX_BLOCK_DAYS, measureNeedsDays, measureTakesDays, type MeasureKind, type PolicyStep, type RepeatInfringerPolicy } from "@/ee/hooks/queries/use-admin-repeat-infringers"
 
 /**
  * The repeat-infringer policy as its editor holds it (repeat-infringer-policy-card.tsx):
@@ -9,7 +9,7 @@ import { MAX_BLOCK_DAYS, type MeasureKind, type PolicyStep, type RepeatInfringer
 export interface StepDraft {
   readonly infringements: string
   readonly kind: MeasureKind
-  /** An import block's days; empty: until lifted. */
+  /** An import block's days (empty: until lifted) or a suspension's (required). */
   readonly days: string
 }
 
@@ -48,6 +48,9 @@ export function policyProblem(draft: PolicyDraft): string | null {
   if (draft.steps.some((s) => s.kind === "imports_blocked" && s.days.trim() !== "" && whole(s.days, 1, MAX_BLOCK_DAYS) === null)) {
     return `An import block lasts a whole number of days from 1 to ${MAX_BLOCK_DAYS}, or until lifted (empty).`
   }
+  if (draft.steps.some((s) => measureNeedsDays(s.kind) && whole(s.days, 1, MAX_BLOCK_DAYS) === null)) {
+    return `A suspension lasts a whole number of days, from 1 to ${MAX_BLOCK_DAYS}.`
+  }
   if (draft.steps.some((s, i) => s.kind === "closed" && i !== draft.steps.length - 1)) return "Closing the account is the last step."
   return null
 }
@@ -59,7 +62,7 @@ export function fromDraft(draft: PolicyDraft): RepeatInfringerPolicy | null {
     windowMonths: Number(draft.windowMonths.trim()),
     steps: draft.steps.map((s): PolicyStep => {
       const infringements = Number(s.infringements.trim())
-      if (s.kind !== "imports_blocked" || s.days.trim() === "") return { infringements, kind: s.kind }
+      if (!measureTakesDays(s.kind) || s.days.trim() === "") return { infringements, kind: s.kind }
       return { infringements, kind: s.kind, days: Number(s.days.trim()) }
     }),
   }

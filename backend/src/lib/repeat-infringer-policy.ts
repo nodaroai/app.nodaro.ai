@@ -18,18 +18,28 @@ import { z } from "zod"
 
 export const REPEAT_INFRINGER_POLICY_KEY = "rights_repeat_infringer_policy"
 
-/** The measures on an account (migration 588's `account_sanctions.kind`). */
-export const MEASURE_KINDS = ["warning", "imports_blocked", "closed"] as const
+/** The measures on an account (`account_sanctions.kind`: migration 588, a suspension 589). */
+export const MEASURE_KINDS = ["warning", "imports_blocked", "suspended", "closed"] as const
 export type MeasureKind = (typeof MEASURE_KINDS)[number]
 
-/** The longest import block a step may name, in days (about ten years). */
+/** The longest a measure with a number of days may last (an import block, a suspension): about ten years. */
 export const MAX_BLOCK_DAYS = 3650
+
+/** Whether a measure lasts a number of days: an import block may (or lasts until lifted); a suspension must. */
+export function measureTakesDays(kind: MeasureKind): boolean {
+  return kind === "imports_blocked" || kind === "suspended"
+}
+
+/** Whether a measure must say its days: a suspension always ends (589). */
+export function measureNeedsDays(kind: MeasureKind): boolean {
+  return kind === "suspended"
+}
 
 export interface PolicyStep {
   /** The standing infringements in the window from which this step applies. */
   readonly infringements: number
   readonly kind: MeasureKind
-  /** An import block's length in days; absent: until an administrator lifts it. */
+  /** An import block's or a suspension's length in days; absent on an import block: until an administrator lifts it. */
   readonly days?: number
 }
 
@@ -56,7 +66,8 @@ const stepSchema = z
     kind: z.enum(MEASURE_KINDS),
     days: z.number().int().min(1).max(MAX_BLOCK_DAYS).optional(),
   })
-  .refine((step) => step.days === undefined || step.kind === "imports_blocked", { message: "Only an import block has a number of days" })
+  .refine((step) => step.days === undefined || measureTakesDays(step.kind), { message: "Only an import block or a suspension has a number of days" })
+  .refine((step) => step.days !== undefined || !measureNeedsDays(step.kind), { message: "A suspension lasts a number of days" })
 
 /** The policy as it is saved: each step needs more infringements than the one before, and a closure ends the list. */
 export const repeatInfringerPolicySchema = z.strictObject({
@@ -84,10 +95,10 @@ export function stepFor(policy: RepeatInfringerPolicy, count: number): PolicySte
   return policy.steps.reduce<PolicyStep | null>((reached, step) => (step.infringements <= count ? step : reached), null)
 }
 
-/** Whether a measure is the one a step names: the same kind, and for an import block the same length. */
+/** Whether a measure is the one a step names: the same kind, and for a measure that lasts days the same length. */
 export function measureFollowsStep(step: PolicyStep, kind: MeasureKind, days: number | null): boolean {
   if (step.kind !== kind) return false
-  return kind !== "imports_blocked" || (step.days ?? null) === days
+  return !measureTakesDays(kind) || (step.days ?? null) === days
 }
 
 /**

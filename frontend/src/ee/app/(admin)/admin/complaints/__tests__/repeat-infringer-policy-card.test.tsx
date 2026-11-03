@@ -38,8 +38,22 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import { RepeatInfringerPolicyCard } from "../repeat-infringer-policy-card"
 
+const DEFAULT_STORED = {
+  policy: {
+    windowMonths: 24,
+    steps: [
+      { infringements: 1, kind: "warning" },
+      { infringements: 2, kind: "imports_blocked", days: 30 },
+      { infringements: 3, kind: "closed" },
+    ],
+  },
+  saved: false,
+  updatedAt: null,
+}
+
 beforeEach(() => {
   state.saves = []
+  state.stored = DEFAULT_STORED
 })
 
 describe("RepeatInfringerPolicyCard", () => {
@@ -80,6 +94,25 @@ describe("RepeatInfringerPolicyCard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add a step" }))
     expect(screen.getByRole("alert").textContent).toBe("Closing the account is the last step.")
     expect(state.saves).toEqual([])
+  })
+
+  it("a suspension step shows its days, and is never saved without them", async () => {
+    state.stored = {
+      ...DEFAULT_STORED,
+      policy: { windowMonths: 24, steps: [{ infringements: 1, kind: "warning" }, { infringements: 2, kind: "suspended", days: 7 }, { infringements: 3, kind: "closed" }] },
+    }
+    render(<RepeatInfringerPolicyCard />)
+    expect(screen.getByText("Account suspended for 7 days")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }))
+    const days = screen.getByLabelText("Days") as HTMLInputElement
+    expect(days.value).toBe("7")
+    fireEvent.change(days, { target: { value: "" } })
+    expect(screen.getByRole("alert").textContent).toBe("A suspension lasts a whole number of days, from 1 to 3650.")
+    expect((screen.getByRole("button", { name: "Save the policy" }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(days, { target: { value: "14" } })
+    fireEvent.click(screen.getByRole("button", { name: "Save the policy" }))
+    await waitFor(() => expect(state.saves).toHaveLength(1))
+    expect(state.saves[0]).toEqual({ windowMonths: 24, steps: [{ infringements: 1, kind: "warning" }, { infringements: 2, kind: "suspended", days: 14 }, { infringements: 3, kind: "closed" }] })
   })
 
   it("cancelling leaves the policy as it was", () => {

@@ -1,18 +1,47 @@
+// @test-watches supabase/migrations/*.sql
 /**
- * The repeat-infringer policy (lib/repeat-infringer-policy.ts): the default
- * ladder, what a saved policy may be, the step a count reaches, whether a
- * measure is the step's, and the window counted back from a moment.
+ * The repeat-infringer policy (lib/repeat-infringer-policy.ts): the measures
+ * the record takes (the latest migration's list), the default ladder, what a
+ * saved policy may be, the step a count reaches, whether a measure is the
+ * step's, and the window counted back from a moment.
  */
 import { describe, it, expect } from "vitest"
+import { readFileSync, readdirSync } from "node:fs"
+import { join } from "node:path"
 import {
   DEFAULT_REPEAT_INFRINGER_POLICY,
+  MEASURE_KINDS,
   measureFollowsStep,
+  measureNeedsDays,
+  measureTakesDays,
   parseRepeatInfringerPolicy,
   repeatInfringerPolicySchema,
   stepFor,
   windowStart,
   type RepeatInfringerPolicy,
 } from "../repeat-infringer-policy.js"
+
+const MIGRATIONS = join(import.meta.dirname, "../../../../supabase/migrations")
+
+describe("the measures", () => {
+  it("are the ones the record takes, as the latest migration that names them says", () => {
+    const check = /CONSTRAINT account_sanctions_kind CHECK \(kind IN \(([^)]*)\)\)/
+    const latest = readdirSync(MIGRATIONS)
+      .filter((f) => /^\d+_.*\.sql$/.test(f))
+      .sort((a, b) => Number.parseInt(a, 10) - Number.parseInt(b, 10))
+      .map((f) => check.exec(readFileSync(join(MIGRATIONS, f), "utf8")))
+      .filter((m): m is RegExpExecArray => m !== null)
+      .at(-1)
+    const kinds = [...latest![1]!.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!).sort()
+    expect(kinds).toContain("suspended")
+    expect([...MEASURE_KINDS].sort()).toEqual(kinds)
+  })
+
+  it("an import block may last days, a suspension must, nothing else does", () => {
+    expect(MEASURE_KINDS.filter(measureTakesDays)).toEqual(["imports_blocked", "suspended"])
+    expect(MEASURE_KINDS.filter(measureNeedsDays)).toEqual(["suspended"])
+  })
+})
 
 const valid: RepeatInfringerPolicy = {
   windowMonths: 12,
@@ -69,13 +98,23 @@ describe("a saved policy", () => {
     expect(JSON.stringify(result.error?.issues)).toContain("Closing the account is the last step")
   })
 
-  it("gives a number of days to an import block only, from 1 to 3650", () => {
+  it("gives a number of days to an import block or a suspension only, from 1 to 3650", () => {
     const warningDays = { ...valid, steps: [{ infringements: 1, kind: "warning", days: 3 }] }
-    expect(JSON.stringify(repeatInfringerPolicySchema.safeParse(warningDays).error?.issues)).toContain("Only an import block has a number of days")
+    expect(JSON.stringify(repeatInfringerPolicySchema.safeParse(warningDays).error?.issues)).toContain("Only an import block or a suspension has a number of days")
     expect(repeatInfringerPolicySchema.safeParse({ ...valid, steps: [{ infringements: 1, kind: "closed", days: 3 }] }).success).toBe(false)
     expect(repeatInfringerPolicySchema.safeParse({ ...valid, steps: [{ infringements: 1, kind: "imports_blocked", days: 0 }] }).success).toBe(false)
     expect(repeatInfringerPolicySchema.safeParse({ ...valid, steps: [{ infringements: 1, kind: "imports_blocked", days: 3651 }] }).success).toBe(false)
     expect(repeatInfringerPolicySchema.safeParse({ ...valid, steps: [{ infringements: 1, kind: "imports_blocked", days: 3650 }] }).success).toBe(true)
+    expect(repeatInfringerPolicySchema.safeParse({ ...valid, steps: [{ infringements: 1, kind: "suspended", days: 3650 }] }).success).toBe(true)
+    expect(repeatInfringerPolicySchema.safeParse({ ...valid, steps: [{ infringements: 1, kind: "suspended", days: 3651 }] }).success).toBe(false)
+  })
+
+  it("a suspension is a step an administrator may add, and it always says its days", () => {
+    const suspending = { ...valid, steps: [{ infringements: 1, kind: "warning" }, { infringements: 2, kind: "suspended", days: 7 }, { infringements: 3, kind: "closed" }] }
+    expect(parseRepeatInfringerPolicy(suspending)).toEqual(suspending)
+    const noDays = repeatInfringerPolicySchema.safeParse({ ...valid, steps: [{ infringements: 1, kind: "suspended" }] })
+    expect(noDays.success).toBe(false)
+    expect(JSON.stringify(noDays.error?.issues)).toContain("A suspension lasts a number of days")
   })
 
   it("counts over 1 to 120 whole months, and has 1 to 10 steps of known kinds", () => {
@@ -85,7 +124,7 @@ describe("a saved policy", () => {
     expect(repeatInfringerPolicySchema.safeParse({ ...valid, steps: [] }).success).toBe(false)
     const eleven = Array.from({ length: 11 }, (_, i) => ({ infringements: i + 1, kind: "warning" }))
     expect(repeatInfringerPolicySchema.safeParse({ ...valid, steps: eleven }).success).toBe(false)
-    expect(repeatInfringerPolicySchema.safeParse({ ...valid, steps: [{ infringements: 1, kind: "suspended" }] }).success).toBe(false)
+    expect(repeatInfringerPolicySchema.safeParse({ ...valid, steps: [{ infringements: 1, kind: "fined" }] }).success).toBe(false)
   })
 })
 
@@ -111,6 +150,12 @@ describe("measureFollowsStep", () => {
     expect(measureFollowsStep({ infringements: 4, kind: "imports_blocked" }, "imports_blocked", null)).toBe(true)
     expect(measureFollowsStep({ infringements: 4, kind: "imports_blocked" }, "imports_blocked", 14)).toBe(false)
     expect(measureFollowsStep({ infringements: 6, kind: "closed" }, "closed", null)).toBe(true)
+  })
+
+  it("a suspension is the step's only at the step's length", () => {
+    expect(measureFollowsStep({ infringements: 3, kind: "suspended", days: 7 }, "suspended", 7)).toBe(true)
+    expect(measureFollowsStep({ infringements: 3, kind: "suspended", days: 7 }, "suspended", 14)).toBe(false)
+    expect(measureFollowsStep({ infringements: 3, kind: "suspended", days: 7 }, "imports_blocked", 7)).toBe(false)
   })
 })
 

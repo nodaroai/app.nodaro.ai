@@ -3581,6 +3581,16 @@ export interface PluginFaceMasking {
    * only to an engine that lists it in `supports.castSwap.faceMeshParts`.
    */
   faceMeshParts?: "full" | "features" | "mouth"
+  /**
+   * Full depth's face mesh (the Nodaro Motion Motion setting's, and a
+   * trend's make): the smallest face it draws lines on, the face box's height
+   * as a % of the frame's (0–100; 0 = no minimum); left out = the engine's
+   * default. Never on a Faces hidden setting. Answered by `tk.settings` (and
+   * sent on a trend's make and run) only with full depth and the face mesh
+   * on, and only to an engine that declares
+   * `supports.castSwap.faceMeshMinFaceHeightPct`.
+   */
+  faceMeshMinFaceHeightPct?: number
 }
 
 /**
@@ -4131,6 +4141,18 @@ export interface PluginSupports {
    *   fill's setting without the key and refuses to save a shared Nodaro
    *   Motion setting with it while any environment lacks it
    *   (lib/cast-swap-face-masking.ts `engineBlursDepthFill`).
+   * - `faceMeshMinFaceHeightPct` (Cast Swap engine ≥ 0.436.1): a full-depth
+   *   masking setting (the Nodaro Motion Motion setting's, read through
+   *   `tk.settings`, and a trend's make) takes `faceMeshMinFaceHeightPct`
+   *   (0–100, the face box's height as a % of the frame's; absent = the
+   *   engine's default, 10; 0 = no minimum): the full-depth face mesh draws no
+   *   lines on a smaller face, nor on one centred in the outer 10 % at the
+   *   left and right. No price, no prompt word; a trend run never draws the
+   *   mesh (it cuts the stored clip). Additive-optional: absent ⇒ `false` —
+   *   the platform answers the settings and sends a run without the key,
+   *   refuses a trend's make that sets it, and refuses to save a shared
+   *   Nodaro Motion setting with it while any environment lacks it
+   *   (lib/cast-swap-face-masking.ts `engineDrawsFaceMeshMinFaceHeight`).
    * - `promptWordings`: how the engine may word a FLEXIBLE prompt —
    *   `"current"` (today's) and `"new"` (a movement lock, the picture roles,
    *   a closing restatement and the avoid part as a failure list; the parts
@@ -4190,6 +4212,7 @@ export interface PluginSupports {
     readonly faceMeshParts?: readonly ("full" | "features" | "mouth")[]
     readonly maskFillNone?: boolean
     readonly depthFillBlur?: boolean
+    readonly faceMeshMinFaceHeightPct?: boolean
     readonly promptWordings?: readonly ("current" | "new")[]
   }
 }

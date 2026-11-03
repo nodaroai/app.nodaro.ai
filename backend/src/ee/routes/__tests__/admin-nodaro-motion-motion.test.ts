@@ -15,7 +15,13 @@ const h = vi.hoisted(() => ({
   admin: true,
   invalidated: 0,
   /** The recorded engine environments (`listEngineEnvironments`). */
-  envs: [] as { env: string; pluginBuildId: string | null; supports: Record<string, unknown>; updatedAt: string }[],
+  envs: [] as {
+    env: string
+    pluginBuildId: string | null
+    supports: Record<string, unknown>
+    updatedAt: string
+    platformClaim?: { supports: Record<string, unknown>; at: string }
+  }[],
 }))
 
 vi.mock("@/lib/supabase.js", () => ({
@@ -47,7 +53,22 @@ vi.mock("../../lib/engine-environments.js", async (importOriginal) => ({
   listEngineEnvironments: async () => h.envs,
 }))
 
-const envRow = (env: string, castSwap: Record<string, unknown>) => ({ env, pluginBuildId: null, supports: { castSwap }, updatedAt: "2026-10-29T00:00:00.000Z" })
+/** When every engine record here was written: its boot, weeks ago (a claim's own time, not this, is what counts). */
+const ENV_BOOT = "2026-10-20T00:00:00.000Z"
+/**
+ * An environment's row as `listEngineEnvironments` reads it: its engine's `castSwap` declaration, written at boot
+ * (`ENV_BOOT`), and, from a platform that claims it, `platform` (what the app itself takes) claimed `claimedAt` (now
+ * by default: a claim counts only while its own time is fresh).
+ */
+const envRow = (env: string, castSwap: Record<string, unknown>, platform?: Record<string, unknown>, claimedAt = new Date().toISOString()) => ({
+  env,
+  pluginBuildId: null,
+  supports: { castSwap },
+  updatedAt: ENV_BOOT,
+  ...(platform ? { platformClaim: { supports: platform, at: claimedAt } } : {}),
+})
+/** A platform that takes Full depth's smallest face with mesh lines. */
+const TAKES_MIN_FACE = { faceMeshMinFaceHeightPct: true }
 const HIDES = { faceMaskTargets: ["face", "head", "body"], faceMaskHideTargets: ["face", "head", "body"] }
 
 const { adminNodaroMotionRoutes } = await import("../admin-nodaro-motion.js")
@@ -216,6 +237,100 @@ describe("PUT /v1/admin/nodaro-motion/motion", () => {
     // The full mesh asks only for the mesh itself.
     h.envs = [envRow("production", { ...HIDES, faceMesh: true }), envRow("staging", { ...HIDES, faceMesh: true })]
     expect((await put({ "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "full" } } })).statusCode).toBe(200)
+  })
+
+  it("takes Full depth's smallest face with mesh lines only while every environment's engine declares it; none set asks no engine", async () => {
+    const MIN = { ...HIDES, faceMesh: true, faceMeshMinFaceHeightPct: true }
+    // Every environment's platform takes it (the hold below), so only the engines decide here.
+    h.envs = [envRow("production", MIN, TAKES_MIN_FACE), envRow("staging", MIN, TAKES_MIN_FACE)]
+    const motion = { "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshMinFaceHeightPct: 20 } } }
+    expect((await put(motion)).statusCode).toBe(200)
+    expect(h.upserts.at(-1)).toMatchObject({ value: { "motion-prism": { masking: { faceMeshMinFaceHeightPct: 20 } } } })
+    h.envs = [envRow("production", MIN, TAKES_MIN_FACE), envRow("staging", { ...HIDES, faceMesh: true }, TAKES_MIN_FACE)]
+    const res = await put(motion)
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: ["staging"], message: expect.stringMatching(/cannot set the smallest face with mesh lines/) })
+    // 0 (no size minimum) is a value set too.
+    expect((await put({ "motion-pulse": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshMinFaceHeightPct: 0 } } })).statusCode).toBe(409)
+    expect(h.upserts).toHaveLength(1)
+    // Left out it asks for the face mesh alone, whatever the platforms say.
+    h.envs = [envRow("production", { ...HIDES, faceMesh: true }), envRow("staging", { ...HIDES, faceMesh: true })]
+    expect((await put({ "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true } } })).statusCode).toBe(200)
+    // With the face mesh off it draws nothing and asks no engine, but an older platform would still refuse the key:
+    // held while one has not said it takes it (none recorded here).
+    h.envs = []
+    const unread = await put({ "motion-prism": { masking: { mode: "always", source: "full-depth", faceMeshMinFaceHeightPct: 20 } } })
+    expect(unread.statusCode).toBe(422)
+    expect(unread.json().error).toMatchObject({ code: "platform_unsupported", envs: ["staging", "production"] })
+  })
+
+  it("holds a value while any environment's platform does not take it (one shared database), naming it; never an absent one", async () => {
+    const MIN = { ...HIDES, faceMesh: true, faceMeshMinFaceHeightPct: true }
+    const motion = { "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshMinFaceHeightPct: 20 } } }
+    // Production's engine declares it, but its platform is older (claims nothing): production would drop the entry.
+    h.envs = [envRow("production", MIN), envRow("staging", MIN, TAKES_MIN_FACE)]
+    const held = await put(motion)
+    expect(held.statusCode).toBe(422)
+    expect(held.json().error).toEqual({
+      code: "platform_unsupported",
+      envs: ["production"],
+      message:
+        "The platform in production does not take the smallest face with mesh lines yet, and this setting is shared by every environment: empty it, or wait until production is updated.",
+    })
+    expect(h.upserts).toEqual([])
+    // Held before the engines are asked: a platform hold wins over an engine gap.
+    h.envs = [envRow("production", { ...HIDES, faceMesh: true }), envRow("staging", MIN, TAKES_MIN_FACE)]
+    expect((await put(motion)).json().error.code).toBe("platform_unsupported")
+    // An absent field is never held, whatever the platforms record.
+    h.envs = [envRow("production", MIN), envRow("staging", MIN)]
+    expect((await put({ "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true }, promptStyle: "precise" } })).statusCode).toBe(200)
+    // Once every platform takes it, it is saved.
+    h.envs = [envRow("production", MIN, TAKES_MIN_FACE), envRow("staging", MIN, TAKES_MIN_FACE)]
+    expect((await put(motion)).statusCode).toBe(200)
+    expect(h.upserts.at(-1)).toMatchObject({ value: motion })
+  })
+
+  it("a stale platform claim is no claim: held as if that platform never took it (its heartbeat stopped)", async () => {
+    const MIN = { ...HIDES, faceMesh: true, faceMeshMinFaceHeightPct: true }
+    const motion = { "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshMinFaceHeightPct: 20 } } }
+    // Production said so 20 minutes ago and has not since (a failed deploy, a crash, a rollback to a build without the heartbeat).
+    const stale = new Date(Date.now() - 20 * 60_000).toISOString()
+    h.envs = [envRow("production", MIN, TAKES_MIN_FACE, stale), envRow("staging", MIN, TAKES_MIN_FACE)]
+    const held = await put(motion)
+    expect(held.statusCode).toBe(422)
+    expect(held.json().error).toMatchObject({ code: "platform_unsupported", envs: ["production"] })
+    expect(h.upserts).toEqual([])
+    // A boot a minute ago (its engine record new) does not freshen that claim: held still.
+    h.envs = [{ ...envRow("production", MIN, TAKES_MIN_FACE, stale), updatedAt: new Date(Date.now() - 60_000).toISOString() }, envRow("staging", MIN, TAKES_MIN_FACE)]
+    expect((await put(motion)).json().error).toMatchObject({ code: "platform_unsupported", envs: ["production"] })
+    expect(h.upserts).toEqual([])
+    // Said again since (fresh), its engine record as old as ever: saved.
+    h.envs = [envRow("production", MIN, TAKES_MIN_FACE, new Date(Date.now() - 4 * 60_000).toISOString()), envRow("staging", MIN, TAKES_MIN_FACE)]
+    expect((await put(motion)).statusCode).toBe(200)
+  })
+
+  it("a setting saved before stays readable while a platform does not take it", async () => {
+    const stored = { "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshMinFaceHeightPct: 20 } } }
+    h.row = { value: stored, updated_at: "2026-11-03T10:00:00.000Z" }
+    h.envs = [envRow("production", HIDES), envRow("staging", HIDES)]
+    const res = await app.inject({ method: "GET", url: URL, headers: as })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.motion).toEqual(stored)
+  })
+
+  it("refuses the smallest face with mesh lines outside 0–100, or anywhere but Full depth, writing nothing", async () => {
+    const MIN = { ...HIDES, faceMesh: true, faceMeshMinFaceHeightPct: true }
+    h.envs = [envRow("production", MIN, TAKES_MIN_FACE), envRow("staging", MIN, TAKES_MIN_FACE)]
+    for (const masking of [
+      { mode: "always", source: "full-depth", faceMesh: true, faceMeshMinFaceHeightPct: 101 },
+      { mode: "always", source: "full-depth", faceMesh: true, faceMeshMinFaceHeightPct: -1 },
+      { mode: "always", source: "full-depth", faceMesh: true, faceMeshMinFaceHeightPct: "20" },
+      { mode: "always", faceMesh: true, faceMeshMinFaceHeightPct: 20 },
+    ]) {
+      const res = await put({ "motion-prism": { masking } })
+      expect(res.statusCode, JSON.stringify(masking)).toBe(400)
+    }
+    expect(h.upserts).toEqual([])
   })
 
   it("refuses the fill none and a depth fill's blur on Faces hidden (the Precise setting's alone), writing nothing", async () => {

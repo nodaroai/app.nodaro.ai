@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase.js"
 import { networkKey } from "../../lib/ip-address.js"
 import { clientAddress, networkHash, networkHashScheme, resolveClientAddress } from "../../lib/client-address.js"
 import { accessBlocksStatus, invalidateAccessBlocks } from "../../lib/access-blocks.js"
+import { suspensionEndsAt } from "../../lib/account-measures.js"
 import { isMissingTableError } from "../../lib/postgrest-errors.js"
 import { sendInternalError } from "../../lib/http-errors.js"
 import { invalidateAuthCache } from "../../middleware/auth.js"
@@ -21,6 +22,7 @@ import {
   deleteQuietStopRow,
   readQuietStop,
   readSignInBan,
+  signInInLine,
   writeQuietStopRow,
 } from "../lib/account-blocking.js"
 import { blockAccount } from "../lib/block-account.js"
@@ -269,7 +271,7 @@ export async function adminAccessRoutes(app: FastifyInstance) {
     }
   })
 
-  /** GET /v1/admin/users/:id/access — one account's block, sign-in ban and signup network. */
+  /** GET /v1/admin/users/:id/access — one account's block, its suspension, its sign-in ban and its signup network. */
   app.get("/v1/admin/users/:id/access", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = userParams.safeParse(req.params)
     if (!parsed.success) return badRequest(reply, "Invalid user id")
@@ -284,6 +286,8 @@ export async function adminAccessRoutes(app: FastifyInstance) {
       if (error && ready) return sendInternalError(reply, req, error, "Failed to read access")
       const ban = await readSignInBan(userId)
       const quiet = await readQuietStop(userId)
+      // A suspension refuses the account as a block does, until its end (migration 589, the repeat-infringer policy's measures).
+      const suspendedUntil = await suspensionEndsAt(userId)
       const network = await signupNetworkOf(userId)
       let networkInfo: Record<string, unknown> | null = null
       if (network) {
@@ -308,14 +312,19 @@ export async function adminAccessRoutes(app: FastifyInstance) {
           blocked,
         }
       }
+      // What the block and the suspension call for, and whether sign-in agrees (the sign-in route brings it in line).
+      const wanted = { blocked: Boolean(block), suspendedUntil }
       return {
         data: {
           ready,
           blocked: Boolean(block),
           reason: (block as { reason?: string | null } | null)?.reason ?? null,
           blockedAt: (block as { created_at?: string } | null)?.created_at ?? null,
+          suspendedUntil,
           signInBlocked: ban?.signInBlocked ?? null,
           signInBanIsOurs: ban?.ours ?? null,
+          signInWanted: wanted.blocked || wanted.suspendedUntil ? "refused" : "allowed",
+          signInInLine: ban ? signInInLine(ban, wanted) : null,
           quietStopped: quiet !== null,
           quietReason: quiet?.reason ?? null,
           quietSince: quiet?.stoppedAt ?? null,
@@ -424,16 +433,38 @@ export async function adminAccessRoutes(app: FastifyInstance) {
       let signInBlocked: boolean | null = null
       let warning: string | null = null
       try {
+        // A suspension in force keeps the sign-in refused until its end (account-blocking.ts).
         signInBlocked = (await convergeSignInBan(userId)).signInBlocked
       } catch (err) {
         req.log.error({ err, userId }, "unblock: lifting the sign-in ban failed")
-        warning = "The account is unblocked, but lifting its sign-in block failed. Press Unblock again to retry."
+        warning = "The account is unblocked, but its sign-in could not be brought in line: retry from the Access card on its page."
       }
       await recordAdminAction(req, "account_unblock", userId, { removed, signInBlocked })
       return { data: { userId, blocked: false, signInBlocked, warning } }
     } catch (err) {
       if (err instanceof BlocksUnavailableError) return reply.status(503).send(BLOCKS_UNAVAILABLE)
       return sendInternalError(reply, req, err, "Failed to unblock the account")
+    }
+  })
+
+  /**
+   * POST /v1/admin/users/:id/sign-in — make the account's sign-in agree with
+   * its block and its suspension (ee/lib/account-blocking.ts): refused while
+   * either is in force, allowed once neither is. A block, an unblock, a
+   * suspension and its lift each do this already; this retries one whose
+   * sign-in step failed. It moves nothing else, so it refuses no account.
+   */
+  app.post("/v1/admin/users/:id/sign-in", { preHandler: requireAdmin, config: ADMIN_WRITE_LIMIT }, async (req, reply) => {
+    const params = userParams.safeParse(req.params)
+    if (!params.success) return badRequest(reply, "Invalid user id")
+    const userId = params.data.id
+    try {
+      invalidateAuthCache(userId)
+      const { signInBlocked } = await convergeSignInBan(userId)
+      await recordAdminAction(req, "account_sign_in_sync", userId, { signInBlocked })
+      return { data: { userId, signInBlocked } }
+    } catch (err) {
+      return sendInternalError(reply, req, err, "Failed to bring the account's sign-in in line with its block and suspension")
     }
   })
 

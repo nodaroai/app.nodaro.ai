@@ -4,13 +4,20 @@ import { requireAdminInApp } from "../middleware/require-admin-in-app.js"
 import { audit } from "./admin-trends-lifecycle.js"
 import { caseFailure } from "./complaint-route-errors.js"
 import { recordAdminAction } from "../lib/admin-actions.js"
-import { BLOCK_REFUSAL_MESSAGE } from "../lib/account-blocking.js"
+import { BLOCK_REFUSAL_MESSAGE, SUSPEND_REFUSAL_MESSAGE } from "../lib/account-blocking.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"
 import { plainText } from "../../lib/plain-text.js"
-import { MAX_BLOCK_DAYS, MEASURE_KINDS, REPEAT_INFRINGER_POLICY_KEY, repeatInfringerPolicySchema } from "../../lib/repeat-infringer-policy.js"
+import {
+  MAX_BLOCK_DAYS,
+  MEASURE_KINDS,
+  REPEAT_INFRINGER_POLICY_KEY,
+  measureNeedsDays,
+  measureTakesDays,
+  repeatInfringerPolicySchema,
+} from "../../lib/repeat-infringer-policy.js"
 import { readRepeatInfringerPolicy, saveRepeatInfringerPolicy } from "../../lib/repeat-infringer-policy-store.js"
-import { applyMeasure, liftMeasure, recordInfringement, withdrawInfringement, type AppliedMeasure, type ClosureBlock } from "../lib/repeat-infringers.js"
+import { applyMeasure, liftMeasure, recordInfringement, withdrawInfringement, type AccessOutcome, type AppliedMeasure } from "../lib/repeat-infringers.js"
 
 /**
  * Admin → an account's record under the repeat-infringer policy (migration
@@ -23,6 +30,7 @@ import { applyMeasure, liftMeasure, recordInfringement, withdrawInfringement, ty
  *   POST /v1/admin/complaints/:id/infringement — { userId, note? }: an infringement against the account the case names
  *   POST /v1/admin/infringements/:id/withdraw  — { reason }
  *   POST /v1/admin/complaints/:id/measure      — { userId, kind, days?, reason, note?, infringementId?, departureReason? }
+ *                                                (days: an import block's, absent until lifted; a suspension's, required)
  *   POST /v1/admin/measures/:id/lift           — { reason }
  *   GET  /v1/admin/repeat-infringer-policy     — the policy (the default until one is saved)
  *   PUT  /v1/admin/repeat-infringer-policy     — { windowMonths, steps }
@@ -52,44 +60,55 @@ const measureBody = z
     infringementId: z.string().uuid().nullable().optional(),
     departureReason: optional(2000),
   })
-  .refine((body) => body.kind === "imports_blocked" || body.days == null, { message: "Only an import block has a number of days", path: ["days"] })
+  .refine((body) => measureTakesDays(body.kind) || body.days == null, { message: "Only an import block or a suspension has a number of days", path: ["days"] })
+  .refine((body) => !measureNeedsDays(body.kind) || body.days != null, { message: "A suspension lasts a number of days", path: ["days"] })
 
 const notFound = (reply: FastifyReply, what: string) => reply.status(404).send({ error: { code: "not_found", message: `No such ${what}` } })
 const invalid = (reply: FastifyReply, error: z.ZodError) => reply.status(400).send({ error: { code: "validation_error", ...formatZodError(error) } })
 
 const SIGN_IN_WARNING = "The account is blocked, but blocking its sign-in failed. Block it again from its page to retry."
 const NOT_BLOCKED_WARNING = "The closure is recorded, but blocking the account failed: block it from the account's page."
+const SUSPENDED_SIGN_IN_WARNING = "The account is suspended and its requests are refused, but its sign-in could not be refused: retry from the Access card on its page."
+const SUSPENSION_UNCHECKED_WARNING =
+  "The suspension is recorded and refuses the account's requests, but the account could not be checked again or its sign-in refused: retry from the Access card on its page."
+const LIFT_SIGN_IN_WARNING = "The suspension is lifted and the account's requests are let through, but its sign-in could not be let back in: retry from the Access card on its page."
 
-/** What became of a closure's block, for the audit row. */
-function blockState(block: ClosureBlock): string {
-  if (block.placed) return "placed"
-  return "refused" in block ? "refused" : "failed"
+/** What became of the refusal of access, for the audit row. */
+function accessState(access: AccessOutcome): string {
+  if (access.placed) return "placed"
+  return "refused" in access ? "refused" : "failed"
 }
 
 /**
- * The answer for a measure taken, a closure's block included (ee/lib/repeat-infringers.ts
- * `ClosureBlock`), audited as each step happened: a placed block as an account
- * block too; a block refused late, with the closure taken back, as a 403; a
- * block that failed, with the closure standing, as a warning.
+ * The answer for a measure taken, a closure's or a suspension's refusal of
+ * access included (ee/lib/repeat-infringers.ts `AccessOutcome`), audited as
+ * each step happened: a closure's placed block as an account block too; a
+ * refusal refused late, with the measure taken back, as a 403; a closure's
+ * block that failed, with the closure standing, and a suspension whose
+ * sign-in was not refused, as a warning.
  */
 async function answerApplied(req: FastifyRequest, reply: FastifyReply, applied: AppliedMeasure) {
-  const { measure: m, block } = applied
+  const { measure: m, access } = applied
   const followsPolicy = m.policy_step !== null
-  await audit(req, "measure_apply", "account_sanction", m.id, { complaintId: m.complaint_id, userId: m.user_id, kind: m.kind, endsAt: m.ends_at, followsPolicy, ...(block ? { block: blockState(block) } : {}) })
+  await audit(req, "measure_apply", "account_sanction", m.id, { complaintId: m.complaint_id, userId: m.user_id, kind: m.kind, endsAt: m.ends_at, followsPolicy, ...(access ? { access: accessState(access) } : {}) })
   const data = { id: m.id, kind: m.kind, endsAt: m.ends_at, followsPolicy }
-  if (!block) return { data: { ...data, signInBlocked: null, warning: null } }
-  if (block.placed) {
-    if (block.signInError) req.log.error({ err: block.signInError, userId: m.user_id }, "closure: sign-in ban failed")
-    await recordAdminAction(req, "account_block", m.user_id!, { signInBlocked: block.signInBlocked, closure: m.id }, "Closed under the repeat-infringer policy")
-    return { data: { ...data, signInBlocked: block.signInBlocked, warning: block.signInError ? SIGN_IN_WARNING : null } }
+  if (!access) return { data: { ...data, signInBlocked: null, warning: null } }
+  const suspension = m.kind === "suspended"
+  if (access.placed) {
+    if (access.signInError) req.log.error({ err: access.signInError, userId: m.user_id }, `${suspension ? "suspension" : "closure"}: sign-in ban failed`)
+    if (!suspension) await recordAdminAction(req, "account_block", m.user_id!, { signInBlocked: access.signInBlocked, closure: m.id }, "Closed under the repeat-infringer policy")
+    const warning = access.signInError ? (suspension ? SUSPENDED_SIGN_IN_WARNING : SIGN_IN_WARNING) : null
+    return { data: { ...data, signInBlocked: access.signInBlocked, warning } }
   }
-  if ("refused" in block) {
-    if (block.lifted) await audit(req, "measure_lift", "account_sanction", m.id, { complaintId: m.complaint_id, userId: m.user_id, kind: m.kind, takenBack: block.refused })
-    const after = block.lifted ? "The closure was taken back." : "The closure stands: lift it from the case."
-    return reply.status(403).send({ error: { code: block.refused, message: `${BLOCK_REFUSAL_MESSAGE[block.refused]} ${after}` } })
+  if ("refused" in access) {
+    if (access.lifted) await audit(req, "measure_lift", "account_sanction", m.id, { complaintId: m.complaint_id, userId: m.user_id, kind: m.kind, takenBack: access.refused })
+    const what = suspension ? "suspension" : "closure"
+    const after = access.lifted ? `The ${what} was taken back.` : `The ${what} stands: lift it from the case.`
+    const refusal = (suspension ? SUSPEND_REFUSAL_MESSAGE : BLOCK_REFUSAL_MESSAGE)[access.refused]
+    return reply.status(403).send({ error: { code: access.refused, message: `${refusal} ${after}` } })
   }
-  req.log.error({ err: block.failure, userId: m.user_id }, "closure: the account block was not placed")
-  return { data: { ...data, signInBlocked: null, warning: NOT_BLOCKED_WARNING } }
+  req.log.error({ err: access.failure, userId: m.user_id }, suspension ? "suspension: the account was not checked again, or its sign-in not refused" : "closure: the account block was not placed")
+  return { data: { ...data, signInBlocked: null, warning: suspension ? SUSPENSION_UNCHECKED_WARNING : NOT_BLOCKED_WARNING } }
 }
 
 /** Registers the record's moves and the policy's routes (see the module comment). */
@@ -155,9 +174,11 @@ export async function adminRepeatInfringersRoutes(app: FastifyInstance) {
     const body = reasonBody.safeParse(req.body ?? {})
     if (!body.success) return invalid(reply, body.error)
     try {
-      const { measure: m, stillBlocked } = await liftMeasure(params.data.id, body.data.reason, req.userId!)
+      const { measure: m, stillBlocked, signIn } = await liftMeasure(params.data.id, body.data.reason, req.userId!)
       await audit(req, "measure_lift", "account_sanction", m.id, { complaintId: m.complaint_id, userId: m.user_id, kind: m.kind })
-      return { data: { id: m.id, kind: m.kind, liftedAt: m.lifted_at, stillBlocked } }
+      if (signIn?.signInError) req.log.error({ err: signIn.signInError, userId: m.user_id }, "suspension lifted: allowing sign-in failed")
+      const warning = signIn?.signInError ? LIFT_SIGN_IN_WARNING : null
+      return { data: { id: m.id, kind: m.kind, liftedAt: m.lifted_at, stillBlocked, signInBlocked: signIn?.signInBlocked ?? null, warning } }
     } catch (e) {
       return caseFailure(req, reply, e, "Failed to lift the measure")
     }

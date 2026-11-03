@@ -18,10 +18,23 @@ beforeEach(() => {
 })
 
 describe("measureVideoDepthInput", () => {
-  it("prices a measurable fal clip by its ceil'd length", async () => {
+  it("prices a measurable fal clip at the row of its length rounded up to whole seconds", async () => {
     mockProbe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 14.2, fps: 24 })
     expect(await measureVideoDepthInput("video-depth-anything", "https://x/v.mp4"))
       .toEqual({ ok: true, durationSec: 15, creditId: "video-depth-anything:15s" })
+    mockProbe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 9.2, fps: 24 })
+    expect(await measureVideoDepthInput("video-depth-anything", "https://x/v.mp4"))
+      .toEqual({ ok: true, durationSec: 10, creditId: "video-depth-anything:10s" })
+  })
+  it("a fal clip under one second pays for one second", async () => {
+    mockProbe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 0.4, fps: 24 })
+    expect(await measureVideoDepthInput("video-depth-anything", "https://x/v.mp4"))
+      .toEqual({ ok: true, durationSec: 1, creditId: "video-depth-anything:1s" })
+  })
+  it("a Replicate clip keeps its length bucket", async () => {
+    mockProbe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 9.2, fps: 24 })
+    expect(await measureVideoDepthInput("depth-anything-frames", "https://x/v.mp4"))
+      .toEqual({ ok: true, durationSec: 10, creditId: "depth-anything-frames:15s" })
   })
   it("rejects over 2,400 frames as video_too_long", async () => {
     mockProbe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 101, fps: 24 })
@@ -58,19 +71,19 @@ describe("stampVideoDepthInput / videoDepthReserveId", () => {
     expect(p).toEqual({ videoUrl: "https://x/v.mp4" })
     expect(videoDepthReserveId("video-sfx", { bucketKey: "x" })).toBeUndefined()
   })
-  it("stamps duration + bucket and defaults the provider", async () => {
+  it("stamps duration + price row and defaults the provider", async () => {
     mockProbe.mockResolvedValue({ width: 1, height: 1, durationSeconds: 40, fps: 30 })
     const p: Record<string, unknown> = { videoUrl: "https://x/v.mp4" }
     expect(await stampVideoDepthInput("video-depth", p)).toBeUndefined()
-    expect(p).toMatchObject({ duration_seconds: 40, bucketKey: "video-depth-anything:60s", provider: "video-depth-anything" })
-    expect(videoDepthReserveId("video-depth", p)).toBe("video-depth-anything:60s")
+    expect(p).toMatchObject({ duration_seconds: 40, bucketKey: "video-depth-anything:40s", provider: "video-depth-anything" })
+    expect(videoDepthReserveId("video-depth", p)).toBe("video-depth-anything:40s")
   })
   it("coerces an unknown provider (raw workflow JSON) to the default, so no unknown id reaches the credit row", async () => {
     mockProbe.mockResolvedValue({ width: 1, height: 1, durationSeconds: 10, fps: 30 })
     const p: Record<string, unknown> = { videoUrl: "https://x/v.mp4", provider: "nope" }
     expect(await stampVideoDepthInput("video-depth", p)).toBeUndefined()
     expect(p.provider).toBe("video-depth-anything")
-    expect(p.bucketKey).toBe("video-depth-anything:15s")
+    expect(p.bucketKey).toBe("video-depth-anything:10s")
   })
   it("returns the refusal for a long clip, and stamps no price row", async () => {
     mockProbe.mockResolvedValue({ width: 1, height: 1, durationSeconds: 200, fps: 30 })

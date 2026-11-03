@@ -1,10 +1,11 @@
 /**
  * The measures in force on an account (lib/account-measures.ts) over an
- * in-memory store: the import gate's question (an import block in force, or
- * a closure, refuses; one that ended or was lifted does not; a missing table
- * is nothing in force; a failed read is never a pass), and the owner's view
- * (what is in force, the warnings and infringements in the policy's window,
- * never the administrator's note).
+ * in-memory store: the import gate's question (an import block in force, a
+ * suspension or a closure refuses, the closure named first, then the
+ * suspension; one that ended or was lifted does not; a missing table is
+ * nothing in force; a failed read is never a pass), the suspension's end
+ * read fresh, and the owner's view (what is in force, the warnings and
+ * infringements in the policy's window, never the administrator's note).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import type { MemoryDb } from "../../test/memory-tables.js"
@@ -18,7 +19,7 @@ vi.mock("../supabase.js", async () => {
 })
 vi.mock("../app-settings.js", () => ({ getAppSettings: async () => ({ rights_repeat_infringer_policy: settings.policy }) }))
 
-import { assertImportsAllowed, inForceAt, myAccountStanding } from "../account-measures.js"
+import { assertImportsAllowed, inForceAt, myAccountStanding, suspensionEndsAt } from "../account-measures.js"
 import { AccountMeasureError } from "../account-measure-error.js"
 
 const ME = "11111111-1111-4111-8111-111111111111"
@@ -61,7 +62,7 @@ describe("assertImportsAllowed", () => {
     db.tables.account_sanctions = [measure({ ends_at: "2026-12-03T10:00:00.000Z" })]
     const refusal = await assertImportsAllowed(ME, NOW).catch((e: unknown) => e)
     expect(refusal).toBeInstanceOf(AccountMeasureError)
-    expect(refusal).toMatchObject({ code: "imports_blocked", endsAt: "2026-12-03T10:00:00.000Z", closed: false, deterministic: true })
+    expect(refusal).toMatchObject({ code: "imports_blocked", endsAt: "2026-12-03T10:00:00.000Z", measure: "imports_blocked", deterministic: true })
     expect((refusal as Error).message).toBe("Importing links is blocked on this account until 2026-12-03 (UTC). Content restrictions in your settings says why.")
   })
 
@@ -85,8 +86,28 @@ describe("assertImportsAllowed", () => {
   })
 
   it("refuses a closed account, whatever else is in force", async () => {
-    db.tables.account_sanctions = [measure({ ends_at: "2026-12-01T00:00:00.000Z" }), measure({ kind: "closed" })]
-    await expect(assertImportsAllowed(ME, NOW)).rejects.toMatchObject({ code: "imports_blocked", closed: true, endsAt: null, message: "This account is closed, so it cannot import links." })
+    db.tables.account_sanctions = [
+      measure({ ends_at: "2026-12-01T00:00:00.000Z" }),
+      measure({ kind: "suspended", ends_at: "2026-11-20T00:00:00.000Z" }),
+      measure({ kind: "closed" }),
+    ]
+    await expect(assertImportsAllowed(ME, NOW)).rejects.toMatchObject({ code: "imports_blocked", measure: "closed", endsAt: null, message: "This account is closed, so it cannot import links." })
+  })
+
+  it("refuses a suspended account until its end, named before an import block", async () => {
+    db.tables.account_sanctions = [measure({ ends_at: "2026-12-01T00:00:00.000Z" }), measure({ kind: "suspended", ends_at: "2026-11-20T00:00:00.000Z" })]
+    const refusal = await assertImportsAllowed(ME, NOW).catch((e: unknown) => e)
+    expect(refusal).toBeInstanceOf(AccountMeasureError)
+    expect(refusal).toMatchObject({ code: "imports_blocked", measure: "suspended", endsAt: "2026-11-20T00:00:00.000Z", deterministic: true })
+    expect((refusal as Error).message).toBe("This account is suspended until 2026-11-20 (UTC), so it cannot import links.")
+  })
+
+  it("a suspension that ended, or was lifted, refuses nothing", async () => {
+    db.tables.account_sanctions = [
+      measure({ kind: "suspended", applied_at: "2026-10-01T00:00:00.000Z", ends_at: "2026-10-15T00:00:00.000Z" }),
+      measure({ kind: "suspended", applied_at: "2026-10-20T00:00:00.000Z", ends_at: "2026-11-20T00:00:00.000Z", lifted_at: "2026-10-21T00:00:00.000Z" }),
+    ]
+    await expect(assertImportsAllowed(ME, NOW)).resolves.toBeUndefined()
   })
 
   it("a closure that was lifted refuses nothing", async () => {
@@ -105,6 +126,29 @@ describe("assertImportsAllowed", () => {
     expect(failure).toBeInstanceOf(Error)
     expect(failure).not.toBeInstanceOf(AccountMeasureError)
     expect((failure as Error).message).toContain("Account measures read failed")
+  })
+})
+
+describe("suspensionEndsAt", () => {
+  it("is the end of the suspension in force, read fresh; none when it ended, was lifted, or is another account's", async () => {
+    db.tables.account_sanctions = [
+      measure({ kind: "suspended", applied_at: "2026-10-01T00:00:00.000Z", ends_at: "2026-10-15T00:00:00.000Z" }),
+      measure({ kind: "suspended", applied_at: "2026-10-20T00:00:00.000Z", ends_at: "2026-11-20T00:00:00.000Z" }),
+      measure({ kind: "imports_blocked", ends_at: "2026-12-20T00:00:00.000Z" }),
+      measure({ user_id: OTHER, kind: "suspended", ends_at: "2026-12-30T00:00:00.000Z" }),
+    ]
+    await expect(suspensionEndsAt(ME, NOW)).resolves.toBe("2026-11-20T00:00:00.000Z")
+    await expect(suspensionEndsAt(ME, new Date("2026-11-20T00:00:00.000Z"))).resolves.toBeNull()
+    db.tables.account_sanctions = [measure({ kind: "suspended", ends_at: "2026-11-20T00:00:00.000Z", lifted_at: "2026-11-02T00:00:00.000Z" })]
+    await expect(suspensionEndsAt(ME, NOW)).resolves.toBeNull()
+  })
+
+  it("none while the table does not exist yet; a failed read throws", async () => {
+    db.missingTables = new Set(["account_sanctions"])
+    await expect(suspensionEndsAt(ME, NOW)).resolves.toBeNull()
+    db.missingTables = undefined
+    db.failReads = new Set(["account_sanctions"])
+    await expect(suspensionEndsAt(ME, NOW)).rejects.toThrow("Account measures read failed")
   })
 })
 
@@ -132,6 +176,13 @@ describe("myAccountStanding", () => {
       windowMonths: 24,
     })
     expect(JSON.stringify(standing)).not.toContain("admin only")
+  })
+
+  it("a suspension in force is in force, with its end, like an import block", async () => {
+    db.tables.account_sanctions = [measure({ kind: "suspended", reason: "Suspended after repeated complaints", applied_at: "2026-11-01T00:00:00.000Z", ends_at: "2026-11-15T00:00:00.000Z" })]
+    const standing = await myAccountStanding(ME, NOW)
+    expect(standing.inForce).toEqual([{ kind: "suspended", reason: "Suspended after repeated complaints", appliedAt: "2026-11-01T00:00:00.000Z", endsAt: "2026-11-15T00:00:00.000Z" }])
+    expect((await myAccountStanding(ME, new Date("2026-11-15T00:00:00.000Z"))).inForce).toEqual([])
   })
 
   it("counts over the window the policy reads now", async () => {

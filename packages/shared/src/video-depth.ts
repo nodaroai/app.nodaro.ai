@@ -9,9 +9,11 @@
  * produces from the inferno output (`videoDepthNeedsGrayscalePass`).
  *
  * Price rows are `model_pricing` rows (`<provider>:<n>s`); the credit amounts
- * live there, never here. Worked examples (repeated in
- * docs/nodes/processing-video/video-depth.md):
- *   5 s → `:15s`,  15 s → `:15s`,  15.01 s → `:30s`,  61 s → `:120s`.
+ * live there, never here. Video Depth Anything has one row per whole second of
+ * the clip, Depth Anything (per frame) one per length bucket. Worked examples
+ * (repeated in docs/nodes/processing-video/video-depth.md):
+ *   video-depth-anything:  0.4 s → `:1s`,  9 s → `:9s`,  9.2 s → `:10s`,  15.01 s → `:16s`.
+ *   depth-anything-frames: 5 s → `:15s`,  15 s → `:15s`,  15.01 s → `:30s`,  61 s → `:120s`.
  */
 
 export const VIDEO_DEPTH_PROVIDERS = ["video-depth-anything", "depth-anything-frames"] as const
@@ -84,7 +86,7 @@ export function videoDepthNeedsGrayscalePass(provider: string, colormap: VideoDe
 export const VIDEO_DEPTH_LIMITS = {
   /** fal `max_frames` ceiling. */
   FAL_MAX_FRAMES: 2400,
-  /** Longest clip the fal lane accepts, whatever its frame rate: the top price bucket (a low-fps clip under the frame limit can otherwise run past every price row). */
+  /** Longest clip the fal lane accepts, whatever its frame rate: its top price row, `:300s` (a low-fps clip under the frame limit can otherwise run past every price row). */
   FAL_MAX_SECONDS: 300,
   /** Frame rate assumed when the clip reports none (variable-rate or missing). */
   ASSUMED_FPS: 30,
@@ -125,6 +127,7 @@ export function checkVideoDepthLength(
   }
 }
 
+/** The length buckets, in seconds, the Replicate lane (Depth Anything per frame) is priced in. */
 export const VIDEO_DEPTH_BUCKETS = [15, 30, 60, 120, 300] as const
 
 /** The longest clip `provider` accepts (`checkVideoDepthLength`); the fal limit for anything else. */
@@ -135,17 +138,25 @@ function videoDepthMaxSeconds(provider: string): number {
 }
 
 /**
- * The price row for a clip of `durationSec`. Unknown, non-positive or longer
- * than the provider accepts → the provider's highest REACHABLE row: the
- * smallest bucket at or above its longest clip (Replicate 80 s → `:120s`,
- * fal 300 s → `:300s`) — the most a run on it can be charged, never a row a
- * run could not reach.
+ * The price row for a clip of `durationSec`.
+ *
+ * The fal lane (Video Depth Anything) has one row per whole second of the clip
+ * (`video-depth-anything:1s` … `:300s`, decided 2026-11-03): the length rounded
+ * UP, so a clip under one second is priced as one. The Replicate lane (Depth
+ * Anything per frame) has one row per length bucket (`VIDEO_DEPTH_BUCKETS`,
+ * boundaries inclusive).
+ *
+ * Unknown, non-positive or longer than the provider accepts → the provider's
+ * highest REACHABLE row: fal's longest clip (300 s → `:300s`), Replicate's
+ * smallest bucket at or above its longest clip (80 s → `:120s`) — the most a
+ * run on it can be charged, never a row a run could not reach.
  */
 export function videoDepthCreditId(provider: string, durationSec: number | null | undefined): string {
-  const top = VIDEO_DEPTH_BUCKETS[VIDEO_DEPTH_BUCKETS.length - 1]
   const maxSec = videoDepthMaxSeconds(provider)
-  const reachableCeiling = VIDEO_DEPTH_BUCKETS.find((b) => b >= maxSec) ?? top
   const known = typeof durationSec === "number" && Number.isFinite(durationSec) && durationSec > 0 && durationSec <= maxSec
+  if (FAL_VIDEO_DEPTH_PROVIDERS.has(provider)) return `${provider}:${known ? Math.ceil(durationSec) : maxSec}s`
+  const top = VIDEO_DEPTH_BUCKETS[VIDEO_DEPTH_BUCKETS.length - 1]
+  const reachableCeiling = VIDEO_DEPTH_BUCKETS.find((b) => b >= maxSec) ?? top
   const bucket = known ? (VIDEO_DEPTH_BUCKETS.find((b) => durationSec <= b) ?? top) : reachableCeiling
   return `${provider}:${bucket}s`
 }

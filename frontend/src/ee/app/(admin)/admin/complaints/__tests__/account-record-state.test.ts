@@ -3,6 +3,7 @@ import type { ComplaintCase } from "@/ee/hooks/queries/use-admin-complaints-quer
 import type { AccountRecord, RecordInfringement, RecordMeasure } from "@/ee/hooks/queries/use-admin-repeat-infringers"
 import {
   blockMismatch,
+  daysFor,
   draftFromStep,
   followsStep,
   measureBlocker,
@@ -75,6 +76,12 @@ describe("followsStep", () => {
     expect(followsStep({ infringements: 2, kind: "imports_blocked" }, "imports_blocked", null)).toBe(true)
     expect(followsStep(null, "warning", null)).toBe(false)
   })
+
+  it("a suspension is the step's only at the step's length", () => {
+    expect(followsStep({ infringements: 3, kind: "suspended", days: 7 }, "suspended", 7)).toBe(true)
+    expect(followsStep({ infringements: 3, kind: "suspended", days: 7 }, "suspended", 14)).toBe(false)
+    expect(followsStep({ infringements: 3, kind: "suspended", days: 7 }, "closed", null)).toBe(false)
+  })
 })
 
 describe("standingInfringementOf", () => {
@@ -107,14 +114,30 @@ describe("draftFromStep and suggestedOwnerReason", () => {
     expect(draftFromStep({ infringements: 2, kind: "imports_blocked", days: 30 })).toEqual({ kind: "imports_blocked", days: 30 })
     expect(draftFromStep({ infringements: 2, kind: "imports_blocked" })).toEqual({ kind: "imports_blocked", days: null })
     expect(draftFromStep({ infringements: 3, kind: "closed" })).toEqual({ kind: "closed", days: null })
+    expect(draftFromStep({ infringements: 3, kind: "suspended", days: 7 })).toEqual({ kind: "suspended", days: 7 })
     expect(draftFromStep(null)).toEqual({ kind: "warning", days: null })
   })
 
   it("suggests what the owner is told, naming a copyright complaint only for a copyright case", () => {
     expect(suggestedOwnerReason("warning", "copyright")).toContain("a copyright complaint")
     expect(suggestedOwnerReason("warning", "other")).not.toContain("copyright")
+    expect(suggestedOwnerReason("warning", "copyright")).toContain("suspended")
     expect(suggestedOwnerReason("imports_blocked", "copyright")).toContain("importing links is blocked")
+    expect(suggestedOwnerReason("suspended", "copyright")).toContain("the account is suspended")
     expect(suggestedOwnerReason("closed", "copyright")).toContain("the account is closed")
+  })
+})
+
+describe("daysFor", () => {
+  it("reads the days a measure takes: an import block's or none (until lifted), a suspension's always, nothing for the rest", () => {
+    expect(daysFor("imports_blocked", "30", 3650)).toBe(30)
+    expect(daysFor("imports_blocked", "", 3650)).toBeNull()
+    expect(daysFor("suspended", "7", 3650)).toBe(7)
+    expect(daysFor("suspended", "", 3650)).toBeUndefined()
+    expect(daysFor("suspended", "0", 3650)).toBeUndefined()
+    expect(daysFor("suspended", "3651", 3650)).toBeUndefined()
+    expect(daysFor("warning", "30", 3650)).toBeNull()
+    expect(daysFor("closed", "nonsense", 3650)).toBeNull()
   })
 })
 

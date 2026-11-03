@@ -118,6 +118,15 @@ export function stableJson(v: unknown): string {
  * when it changes the render (`depthModelSizeSent`: where depth is drawn, not
  * `"large"`; under role outlines too), so every setting without one hashes
  * exactly as before it existed.
+ *
+ * Full depth's smallest face with mesh lines (`faceMeshMinFaceHeightPct`,
+ * decided 2026-11-03) is hashed only when it is SET where it applies
+ * (`faceMeshMinFaceHeightSent`: Full depth, the face mesh on), any value,
+ * the engine's default 10 included. Left out it is not hashed, so every Full
+ * depth clip with the mesh approved before it existed stays up to date (and
+ * its runs go on), while setting it or changing it makes the stored clip out
+ * of date. Neither the engine's `faceMaskRecipe` nor core's `VIDEO_MASK_RECIPE`
+ * moves for it.
  */
 export function faceMaskSettingsKeyOf(videoUrl: string, masking: FaceMaskingWithMarks, slots: TrendVersionData["slots"]): string {
   const outlines = makeOutlinesOf({ slots, faceMasking: masking }).map((o) => ({ ...o, boxes: o.boxes.map(stableJson).sort().map((b) => JSON.parse(b) as unknown) }))
@@ -276,6 +285,30 @@ export type FaceMaskOutOfDate =
   | { why: "core_recipe" }
   | { why: "plugin_recipe"; env: string }
 
+/**
+ * The face mesh recipe (core's `VIDEO_FACE_MESH_RECIPE`, which a stored mask
+ * records as `meshRecipe`) of MediaPipe's refined landmark model before the
+ * stray-face fixes (decided 2026-11-03). A mesh drawn by it could take a tiny
+ * or false face for a frame or two (a few % of the frame tall, or a shape in
+ * a dark gap), and on a Full depth clip the video model renders such a lone
+ * mesh as an object. The fixes: the drawer draws a face only when its track
+ * finds it in 3 frames or more (the recipe after this one), and Full depth's
+ * mesh skips the faces under its smallest face and in the side margins (Cast
+ * Swap engine 0.436.1). The basic model's recipes before it ("2026-10-31",
+ * "2026-11-01") never drew those strays, and none after it does. Named here
+ * alone: a stored mask with it is flagged to make again (`FaceMaskFlag`).
+ */
+export const FACE_MESH_RECIPE_BEFORE_STRAY_FIX = "2026-11-02"
+
+/**
+ * Why a stored mask is worth making again although nothing makes it out of
+ * date: its face mesh was drawn before the stray-face fix
+ * (`FACE_MESH_RECIPE_BEFORE_STRAY_FIX`). A separate, non-blocking kind: never
+ * one of `reasons`, so it never makes the mask out of date, holds back an
+ * approval or a publish, or stops a run (a run keeps using the stored clip).
+ */
+export type FaceMaskFlag = { why: "face_mesh_before_stray_fix" }
+
 export interface FaceMaskState {
   /** `none`: no mask stored; `approved`: stored and up to date; `out_of_date`: see `reasons`. */
   status: "none" | "approved" | "out_of_date"
@@ -286,6 +319,13 @@ export interface FaceMaskState {
    * texts are still sent, so it never makes the mask out of date.
    */
   sceneStepChanged?: true
+  /** What the editor flags to make again (`FaceMaskFlag`), never a reason: present only when there is one. */
+  flags?: FaceMaskFlag[]
+}
+
+/** The stored mask's flags (`FaceMaskFlag`): its face mesh drawn by the recipe before the stray-face fix. */
+export function faceMaskFlagsOf(mask: Pick<TrendFaceMask, "meshRecipe"> | undefined): FaceMaskFlag[] {
+  return mask?.meshRecipe === FACE_MESH_RECIPE_BEFORE_STRAY_FIX ? [{ why: "face_mesh_before_stray_fix" }] : []
 }
 
 /**
@@ -300,6 +340,11 @@ export interface FaceMaskState {
  * than the draft's (`sceneStepChanged`) is said so (`sceneStepChanged:
  * true`), never out of date: the stored texts are still sent, and the editor
  * offers a remake.
+ *
+ * A mask whose face mesh was drawn before the stray-face fix is flagged
+ * (`flags`, `faceMaskFlagsOf`), whatever its source mode and status, never
+ * out of date: the publish check and the approval read `status` and
+ * `reasons` only, and a run reads the settings key (`storedFaceMaskFor`).
  */
 export function faceMaskState(
   data: Pick<TrendVersionData, "source" | "faceMasking" | "faceMask" | "steps" | "slots">,
@@ -317,7 +362,13 @@ export function faceMaskState(
     if (cs?.storedFaceMask !== true) continue
     if (cs.faceMaskRecipe !== mask.recipe.plugin) reasons.push({ why: "plugin_recipe", env })
   }
-  return { status: reasons.length > 0 ? "out_of_date" : "approved", reasons, ...(sceneStepChanged(data) ? { sceneStepChanged: true as const } : {}) }
+  const flags = faceMaskFlagsOf(mask)
+  return {
+    status: reasons.length > 0 ? "out_of_date" : "approved",
+    reasons,
+    ...(sceneStepChanged(data) ? { sceneStepChanged: true as const } : {}),
+    ...(flags.length > 0 ? { flags } : {}),
+  }
 }
 
 /**

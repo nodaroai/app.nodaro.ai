@@ -18,6 +18,7 @@ export type RepeatInfringerErrorCode =
   | "ended"
   | "warning_stands"
   | "departure_required"
+  | "days_required"
   | "not_supported"
   | BlockRefusal
 

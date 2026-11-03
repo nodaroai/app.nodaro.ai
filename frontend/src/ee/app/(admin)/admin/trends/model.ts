@@ -35,7 +35,16 @@ import {
   type TrendPromptBudget,
   type TrendPromptSource,
 } from "@nodaro/render-rules"
-import { clipPreparationIssues, clipPreparationName, clipPreparationOf, depthBlurKindOf, depthColormapSaved, depthModelSizeSaved, roleOutlinesOn } from "./clip-preparation"
+import {
+  clipPreparationIssues,
+  clipPreparationName,
+  clipPreparationOf,
+  depthBlurKindOf,
+  depthColormapSaved,
+  depthModelSizeSaved,
+  faceMeshMinFaceHeightSaved,
+  roleOutlinesOn,
+} from "./clip-preparation"
 import { FULL_DEPTH_SCENES } from "./prompt-style"
 import { normaliseShotList } from "./shot-list"
 import type {
@@ -298,6 +307,9 @@ export function cleanMasking(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
     ...(depthBlurKindOf(m) !== null && num(m.depthBlur) && m.depthBlur! > 0 ? { depthBlur: m.depthBlur } : {}),
     // What the face mesh draws: only with the mesh on and not the full mesh (the default, no key), never with Keep people.
     ...(m.faceMesh === true && clipPreparationOf(m) !== "keep-people" && m.faceMeshParts && m.faceMeshParts !== "full" ? { faceMeshParts: m.faceMeshParts } : {}),
+    // Full depth's smallest face with mesh lines: only with the mesh on, and only when set (empty is the engine's default,
+    // no key, as before it existed; 0 and 10 are values).
+    ...(faceMeshMinFaceHeightSaved(m) !== undefined ? { faceMeshMinFaceHeightPct: faceMeshMinFaceHeightSaved(m) } : {}),
     // The trend's face mask marks, kept as they are (none = no key, as before marks existed).
     ...(m.marks && m.marks.length > 0 ? { marks: m.marks.map((mark) => ({ ...mark })) } : {}),
   }
@@ -595,12 +607,16 @@ export function personMarkIssues(form: Pick<TrendForm, "slots" | "faceMasking">)
 /** A face masking setting's out-of-range values, as sentences (Save is held on any). Also Admin → Nodaro Motion's. */
 export function maskingIssues(m: AdminTrendFaceMasking): string[] {
   const out: string[] = []
-  // Full depth reads the mode (and its depth blur) only: whatever else is kept (from Faces hidden) is neither shown nor sent.
+  // Full depth reads the mode (its depth blur, and its face mesh's smallest face) only: whatever else is kept (from Faces
+  // hidden) is neither shown nor sent.
   if (clipPreparationOf(m) === "full-depth") {
     const { min, max } = CAST_SWAP_DEPTH_BLUR_BOUNDS
     if (m.depthBlur !== undefined && !(Number.isInteger(m.depthBlur) && m.depthBlur >= min && m.depthBlur <= max)) {
       out.push(`Clip preparation: the depth blur is a whole number from ${min} to ${max}.`)
     }
+    const minFace = faceMeshMinFaceHeightSaved(m)
+    const [lo, hi] = FACE_MASKING_BOUNDS.faceHeightPct
+    if (minFace !== undefined && !(minFace >= lo && minFace <= hi)) out.push(`Clip preparation: the smallest face with mesh lines is ${lo}–${hi} %.`)
     return out
   }
   const outside = (v: number | undefined, [lo, hi]: readonly [number, number]) => v !== undefined && !(v >= lo && v <= hi)
@@ -741,6 +757,16 @@ export function describeFaceMaskOutOfDate(r: { why: string; env?: string }): str
       return `${r.env ?? "?"}'s Cast Swap engine masks faces differently since it was made. Make it again.`
     default:
       return "make it again."
+  }
+}
+
+/** Why a stored face mask is worth making again although it is up to date (a flag, never a reason), as a sentence. */
+export function describeFaceMaskFlag(f: { why: string }): string {
+  switch (f.why) {
+    case "face_mesh_before_stray_fix":
+      return "Make again: its face mesh was drawn before the stray-face fix (3 Nov 2026)."
+    default:
+      return "Make it again."
   }
 }
 

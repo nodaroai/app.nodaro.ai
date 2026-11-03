@@ -27,10 +27,17 @@ import { join } from "node:path"
 import { describe, it, expect } from "vitest"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
 import { EDIT_PLAN_BUCKET_MINUTES, EDIT_PLAN_MODES, EDIT_PLAN_TIERS } from "@nodaro/shared/edl"
+import { VIDEO_DEPTH_BUCKETS } from "@nodaro/shared/media"
+import { rowListInsert } from "./model-pricing-row-list.js"
 
 // REPO_ROOT: backend/src/ee/billing/__tests__/ → up 5 → repo root
 const REPO_ROOT = join(__dirname, "..", "..", "..", "..", "..")
 const MIGRATIONS_DIR = join(REPO_ROOT, "supabase/migrations")
+
+/** Every `INSERT INTO model_pricing … ;` statement of `sql`, with where it starts. */
+function modelPricingInserts(sql: string): Array<{ at: number; statement: string }> {
+  return [...sql.matchAll(/INSERT\s+INTO\s+(?:public\.)?model_pricing[\s\S]*?;/gi)].map((m) => ({ at: m.index!, statement: m[0] }))
+}
 
 /**
  * Extract every model_identifier inserted into model_pricing across the full
@@ -43,8 +50,9 @@ const MIGRATIONS_DIR = join(REPO_ROOT, "supabase/migrations")
  * so reading from any migration that ever inserted the identifier counts
  * (admins can override the price in DB after that, which is the point).
  *
- * ONLY a literal `VALUES` list is read. An `INSERT … SELECT` writes identifiers
- * that do not exist as literals anywhere — they are BUILT at migration time by
+ * ONLY literal rows are read: a `VALUES` list, or a row list (below). An
+ * `INSERT … SELECT` that builds its ids writes identifiers that do not exist
+ * as literals anywhere — they are BUILT at migration time by
  * concatenating onto rows the database already holds (migration 419's derived
  * Pro per-frame tiers) — so there is nothing there to compare against
  * `STATIC_CREDIT_COSTS`. Before this was excluded, the non-greedy `…VALUES`
@@ -54,6 +62,12 @@ const MIGRATIONS_DIR = join(REPO_ROOT, "supabase/migrations")
  * (`derived inserts build their ids from an existing model_identifier`) rather
  * than an allowlist entry, because the risk they carry is different in kind:
  * not "an id with no price" but "an id nobody can predict".
+ *
+ * A ROW-LIST insert (`./model-pricing-row-list.ts`) is read too: an
+ * `INSERT … SELECT` over a literal VALUES list whose ids and prices ARE those
+ * literals, its other columns read from rows the table holds (migration 590
+ * takes each per-second row's switches from the bucket that priced it). Its
+ * ids are as predictable as a VALUES list's, so it is not a derived insert.
  */
 function extractInsertedIdentifiers(): Set<string> {
   const identifiers = new Set<string>()
@@ -75,6 +89,9 @@ function extractInsertedIdentifiers(): Set<string> {
       for (const m of rowMatches) {
         identifiers.add(m[1])
       }
+    }
+    for (const { statement } of modelPricingInserts(sql)) {
+      for (const row of rowListInsert(statement)?.rows ?? []) identifiers.add(row.id)
     }
   }
   return identifiers
@@ -123,6 +140,16 @@ function extractInsertedValues(): Map<string, number> {
         },
       })
     }
+    for (const { at, statement } of modelPricingInserts(sql)) {
+      const rowList = rowListInsert(statement)
+      if (!rowList) continue
+      writes.push({
+        at,
+        apply: () => {
+          for (const { id, cost } of rowList.rows) if (typeof cost === "number") values.set(id, cost)
+        },
+      })
+    }
     const updates = sql.matchAll(
       /UPDATE\s+(?:public\.)?model_pricing\s+SET\s+credit_cost\s*=\s*(\d+)\s+WHERE\s+model_identifier\s*=\s*'([^']+)'(?:\s+AND\s+credit_cost\s*=\s*(\d+))?\s*;/gi,
     )
@@ -165,8 +192,13 @@ const INSERTED_VALUES = extractInsertedValues()
 // SPEAKER_FRAMES_CREDITS_PER_BLOCK in @nodaro/render-rules.
 // `vidu-q4`: its 71 per-second rows (migration 533) — the bare id plus 3-16s ×
 // 540p/720p/1080p/2k/4k.
-const VALUE_SYNCED_FAMILIES = ["wan-3", "wan-3-prime", "gemini-omni-flash", "apply-edl", "elevenlabs-sfx", "speaker-view", "speaker-frames", "vidu-q4"] as const
-const VALUE_SYNCED_ROW_COUNT = 296 // 88 wan-3 + 88 wan-3-prime + 11 gemini-omni-flash + 2 apply-edl + 31 elevenlabs-sfx + 4 speaker-view + 1 speaker-frames + 71 vidu-q4
+// `video-depth-anything`: one row per second of the clip, `:1s` … `:300s`
+// (migration 590's row list; the 15/30/60/120/300 s ones seeded by 502 at the
+// same values), plus the bare 300 s ceiling row (502).
+// `cast-swap` / `cast-swap-full-quality`: Nodaro Motion's two per-second fee
+// rates (migration 591), which the plugin reads through `tk.http.unitRatePrice`.
+const VALUE_SYNCED_FAMILIES = ["wan-3", "wan-3-prime", "gemini-omni-flash", "apply-edl", "elevenlabs-sfx", "speaker-view", "speaker-frames", "vidu-q4", "video-depth-anything", "cast-swap", "cast-swap-full-quality"] as const
+const VALUE_SYNCED_ROW_COUNT = 599 // 88 wan-3 + 88 wan-3-prime + 11 gemini-omni-flash + 2 apply-edl + 31 elevenlabs-sfx + 4 speaker-view + 1 speaker-frames + 71 vidu-q4 + 301 video-depth-anything + 1 cast-swap + 1 cast-swap-full-quality
 
 function familyOf(key: string): string | undefined {
   return VALUE_SYNCED_FAMILIES.find((f) => key === f || key.startsWith(`${f}:`))
@@ -370,6 +402,9 @@ describe("derived model_pricing inserts", () => {
         const valuesAt = body.search(/\bVALUES\b/i)
         if (selectAt < 0) continue
         if (valuesAt >= 0 && valuesAt < selectAt) continue
+        // A row list's ids and prices are its literal rows, read with the
+        // VALUES inserts above; only an insert that BUILDS its ids is derived.
+        if (rowListInsert(body) !== null) continue
         out.push({ file, sql: body })
       }
     }
@@ -424,6 +459,69 @@ describe("derived model_pricing inserts", () => {
     // 419 is the first. If this ever reads 0, the three cases above stopped
     // proving anything and the parser exclusion lost its justification.
     expect(derivedInserts().length).toBeGreaterThan(0)
+  })
+})
+
+describe("row-list model_pricing inserts: literal ids and prices, switches read from the table", () => {
+  const SQL_VIDEO_DEPTH = readFileSync(join(MIGRATIONS_DIR, "590_video_depth_per_second_pricing.sql"), "utf8")
+  const SQL_419 = readFileSync(join(MIGRATIONS_DIR, "419_scene3d_pro_render_tiered_pricing.sql"), "utf8")
+
+  it("590 is one row list: a row per second, :1s … :300s, each at 20 credits × n", () => {
+    const lists = modelPricingInserts(SQL_VIDEO_DEPTH).map(({ statement }) => rowListInsert(statement))
+    expect(lists).toHaveLength(1)
+    const rows = lists[0]!.rows
+    expect(rows.map((r) => r.id)).toEqual(Array.from({ length: 300 }, (_, i) => `video-depth-anything:${i + 1}s`))
+    expect(rows.map((r) => r.cost)).toEqual(Array.from({ length: 300 }, (_, i) => 20 * (i + 1)))
+    expect(lists[0]!.conflict).toMatch(/^ON\s+CONFLICT\s*\(model_identifier\)\s*DO\s+NOTHING/i)
+  })
+
+  it("590's rows count as seeded, with their prices", () => {
+    expect(INSERTED_IDENTIFIERS.has("video-depth-anything:9s")).toBe(true)
+    expect(INSERTED_VALUES.get("video-depth-anything:9s")).toBe(180)
+    expect(INSERTED_VALUES.get("video-depth-anything:300s")).toBe(6000)
+  })
+
+  it("590 takes each second's switches from the bucket that priced it before (the rule supabase/tests/video-depth-per-second-pricing.behavior.sql proves on a database)", () => {
+    const rows = [...SQL_VIDEO_DEPTH.matchAll(/\('video-depth-anything:(\d+)s',\s*(\d+),\s*'([^']+)'\)/g)]
+    expect(rows).toHaveLength(300)
+    for (const [, seconds, , bucket] of rows) {
+      const priced = VIDEO_DEPTH_BUCKETS.find((b) => Number(seconds) <= b)
+      expect(bucket, `${seconds}s`).toBe(`video-depth-anything:${priced}s`)
+    }
+    // The switches come from that bucket row, and only a missing one defaults.
+    expect(SQL_VIDEO_DEPTH).toMatch(/LEFT JOIN public\.model_pricing AS bucket ON bucket\.model_identifier = per_second\.bucket_identifier/)
+    expect(SQL_VIDEO_DEPTH).toMatch(/CASE WHEN bucket\.model_identifier IS NULL THEN true ELSE bucket\.is_enabled END/)
+    expect(SQL_VIDEO_DEPTH).toMatch(/\bbucket\.tier_restriction\b/)
+  })
+
+  it("an insert that builds its ids from rows the table holds (419's tiers) is not a row list", () => {
+    const inserts = modelPricingInserts(SQL_419)
+    expect(inserts.length).toBeGreaterThan(0)
+    for (const { statement } of inserts) expect(rowListInsert(statement)).toBeNull()
+  })
+})
+
+describe("Nodaro Motion's per-second fee rates (migration 591)", () => {
+  const SQL_MOTION_RATES = readFileSync(join(MIGRATIONS_DIR, "591_cast_swap_per_second_rates.sql"), "utf8")
+
+  it("seeds the two rate rows the plugin reads, at 2 and 4 credits a second, and the static table holds the same", () => {
+    expect(INSERTED_VALUES.get("cast-swap:per-second")).toBe(2)
+    expect(INSERTED_VALUES.get("cast-swap-full-quality:per-second")).toBe(4)
+    expect(STATIC_CREDIT_COSTS["cast-swap:per-second"]).toBe(2)
+    expect(STATIC_CREDIT_COSTS["cast-swap-full-quality:per-second"]).toBe(4)
+  })
+
+  it("is one plain insert of exactly those rows, enabled, in video, with no display_name, keeping an admin's retune", () => {
+    const inserts = modelPricingInserts(SQL_MOTION_RATES)
+    expect(inserts).toHaveLength(1)
+    const statement = inserts[0]!.statement
+    expect(statement).toMatch(/^INSERT INTO public\.model_pricing \(model_identifier, credit_cost, is_enabled, category\)/)
+    expect(statement).not.toMatch(/display_name/i)
+    expect([...statement.matchAll(/\('([^']+)',\s*(\d+),\s*(true|false),\s*'([^']+)'\)/g)].map((m) => m.slice(1).join(" "))).toEqual([
+      "cast-swap:per-second 2 true video",
+      "cast-swap-full-quality:per-second 4 true video",
+    ])
+    expect(statement).toMatch(/ON CONFLICT \(model_identifier\) DO NOTHING;$/)
   })
 })
 

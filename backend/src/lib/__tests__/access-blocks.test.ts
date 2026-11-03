@@ -17,13 +17,16 @@
  *    BEFORE the admin's write cannot answer for it.
  *  - The reservation refusal speaks the reserve vocabulary (403
  *    `access_blocked`), the same answer the auth hook gives.
+ *  - A suspension (migration 589) refuses its account as a block does, until
+ *    its end, checked at each question, so it ends on time between reads.
  *  - Community (no admin panel) never touches the tables.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 // ---------------------------------------------------------------------------
 // A controllable PostgREST: `from(t).select().order().range()` for accounts,
-// `from(t).select().gt().order().range()` for networks.
+// `from(t).select().gt().order().range()` for networks, and the equality,
+// null and not-null filters the suspensions' read adds.
 // ---------------------------------------------------------------------------
 
 const db = vi.hoisted(() => {
@@ -37,11 +40,16 @@ const db = vi.hoisted(() => {
     columns?: string
     order?: string
     gt?: [string, string]
+    eq?: Array<[string, unknown]>
+    is?: Array<[string, unknown]>
+    not?: Array<[string, string, unknown]>
     from: number
     to: number
   }
   const state = {
     users: [] as string[],
+    /** Measures on accounts (`account_sanctions`): a suspension unless `kind` says otherwise, not lifted unless `lifted_at` says otherwise. */
+    suspensions: [] as Array<{ user_id: string | null; ends_at: string; kind?: string; lifted_at?: string | null }>,
     /** Quietly stopped accounts (`quiet_stops`, migration 505): an id, or a row with the embedded `profiles` standing. */
     quiet: [] as Array<string | { user_id: string; profiles?: { tier?: string | null; topup_credits?: number | null } | null }>,
     networks: [] as NetworkRow[],
@@ -52,8 +60,14 @@ const db = vi.hoisted(() => {
     maxRows: null as number | null,
     reads: [] as Read[],
   }
+  function rowsOf(table: string): Array<Record<string, unknown>> {
+    if (table === "account_blocks") return state.users.map((user_id) => ({ user_id }))
+    if (table === "quiet_stops") return state.quiet.map((q) => (typeof q === "string" ? { user_id: q } : { ...q }))
+    if (table === "account_sanctions") return state.suspensions.map((s) => ({ kind: "suspended", lifted_at: null, ...s }))
+    return state.networks.map((n) => ({ ...n }))
+  }
   function from(table: string) {
-    const q: { columns?: string; order?: string; gt?: [string, string] } = {}
+    const q: { columns?: string; order?: string; gt?: [string, string]; eq?: Array<[string, unknown]>; is?: Array<[string, unknown]>; not?: Array<[string, string, unknown]> } = {}
     const chain = {
       select(columns: string) {
         q.columns = columns
@@ -63,6 +77,18 @@ const db = vi.hoisted(() => {
         q.gt = [column, value]
         return chain
       },
+      eq(column: string, value: unknown) {
+        q.eq = [...(q.eq ?? []), [column, value]]
+        return chain
+      },
+      is(column: string, value: unknown) {
+        q.is = [...(q.is ?? []), [column, value]]
+        return chain
+      },
+      not(column: string, operator: string, value: unknown) {
+        q.not = [...(q.not ?? []), [column, operator, value]]
+        return chain
+      },
       order(column: string) {
         q.order = column
         return chain
@@ -70,15 +96,16 @@ const db = vi.hoisted(() => {
       range(first: number, last: number) {
         state.reads.push({ table, ...q, from: first, to: last })
         const error = state.errors.get(table) ?? null
-        let rows: Array<Record<string, unknown>> =
-          table === "account_blocks"
-            ? state.users.map((user_id) => ({ user_id }))
-            : table === "quiet_stops"
-              ? state.quiet.map((q) => (typeof q === "string" ? { user_id: q } : { ...q }))
-              : state.networks.map((n) => ({ ...n }))
+        let rows = rowsOf(table)
         if (q.gt) {
           const [column, value] = q.gt
           rows = rows.filter((r) => String(r[column]) > value)
+        }
+        for (const [column, value] of q.eq ?? []) rows = rows.filter((r) => r[column] === value)
+        for (const [column, value] of q.is ?? []) rows = rows.filter((r) => (r[column] ?? null) === value)
+        for (const [column, operator, value] of q.not ?? []) {
+          if (operator !== "is") throw new Error(`not.${operator} is not modelled`)
+          rows = rows.filter((r) => (r[column] ?? null) !== value)
         }
         // Taken NOW, at call time: a read that began before an admin's write
         // returns the list as it was, however late it resolves.
@@ -105,6 +132,7 @@ import {
   ACCESS_BLOCKED_BODY,
   __resetAccessBlocksForTests,
   accessBlocksStatus,
+  anyUserBlocked,
   blockedReservationRefusal,
   invalidateAccessBlocks,
   isAddressBlocked,
@@ -162,6 +190,7 @@ function settle(): Promise<void> {
 beforeEach(() => {
   __resetAccessBlocksForTests()
   db.state.users = []
+  db.state.suspensions = []
   db.state.quiet = []
   db.state.networks = []
   db.state.errors.clear()
@@ -227,6 +256,111 @@ describe("quietly stopped accounts", () => {
     expect(await isUserBlocked(BLOCKED)).toBe(true)
     expect(await isUserQuietStopped(BLOCKED)).toBe(false)
     expect((await accessBlocksStatus()).ready).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Suspensions (migration 589)
+// ---------------------------------------------------------------------------
+
+describe("suspended accounts", () => {
+  const HOUR = 3_600_000
+
+  it("a suspended account is refused as a blocked one — the same answer — and any other account is not", async () => {
+    db.state.suspensions = [{ user_id: BLOCKED, ends_at: new Date(NOW + HOUR).toISOString() }]
+    expect(await isUserBlocked(BLOCKED)).toBe(true)
+    expect(await isUserBlocked(OTHER)).toBe(false)
+    expect(await anyUserBlocked()).toBe(true)
+    expect(await blockedReservationRefusal(BLOCKED)).toEqual({ status: 403, code: "access_blocked", message: ACCESS_BLOCKED_BODY.error.message })
+    await expect(refuseBlockedReservation(BLOCKED)).rejects.toBeInstanceOf(ReserveRpcError)
+  })
+
+  it("ends on time, checked at each question: between reads too, with no read", async () => {
+    db.state.suspensions = [{ user_id: BLOCKED, ends_at: new Date(NOW + 10_000).toISOString() }]
+    expect(await isUserBlocked(BLOCKED)).toBe(true)
+    const readsAtLoad = db.from.mock.calls.length
+    vi.setSystemTime(NOW + 9_999)
+    expect(await isUserBlocked(BLOCKED)).toBe(true)
+    vi.setSystemTime(NOW + 10_000)
+    expect(await isUserBlocked(BLOCKED)).toBe(false)
+    expect(await anyUserBlocked()).toBe(false)
+    expect((await accessBlocksStatus()).suspended).toBe(0)
+    expect(db.from.mock.calls.length).toBe(readsAtLoad)
+  })
+
+  it("reads only the suspensions not lifted, still running, of an account still on record, paged on the id", async () => {
+    db.state.suspensions = [
+      { user_id: BLOCKED, ends_at: new Date(NOW + HOUR).toISOString(), lifted_at: new Date(NOW - 60_000).toISOString() },
+      { user_id: OTHER, ends_at: new Date(NOW - 1).toISOString() },
+      { user_id: OTHER, ends_at: new Date(NOW + HOUR).toISOString(), kind: "imports_blocked" },
+      { user_id: null, ends_at: new Date(NOW + HOUR).toISOString() },
+    ]
+    expect(await isUserBlocked(BLOCKED)).toBe(false)
+    expect(await isUserBlocked(OTHER)).toBe(false)
+    expect((await accessBlocksStatus()).suspended).toBe(0)
+    const [read] = reads("account_sanctions")
+    expect(read).toMatchObject({
+      columns: "user_id, ends_at",
+      eq: [["kind", "suspended"]],
+      is: [["lifted_at", null]],
+      gt: ["ends_at", new Date(NOW).toISOString()],
+      not: [["user_id", "is", null]],
+      order: "id",
+    })
+  })
+
+  it("the latest end wins should a read meet two of one account, whichever comes first", async () => {
+    db.state.suspensions = [
+      { user_id: BLOCKED, ends_at: new Date(NOW + HOUR).toISOString() },
+      { user_id: BLOCKED, ends_at: new Date(NOW + 2 * HOUR).toISOString() },
+    ]
+    expect(await isUserBlocked(BLOCKED)).toBe(true)
+    vi.setSystemTime(NOW + HOUR + 1)
+    expect(await isUserBlocked(BLOCKED)).toBe(true)
+  })
+
+  it("the status counts the suspensions still running", async () => {
+    db.state.users = [OTHER]
+    db.state.suspensions = [
+      { user_id: BLOCKED, ends_at: new Date(NOW + HOUR).toISOString() },
+      { user_id: "33333333-3333-4333-8333-333333333333", ends_at: new Date(NOW + 2 * HOUR).toISOString() },
+    ]
+    expect(await accessBlocksStatus()).toMatchObject({ users: 1, suspended: 2 })
+    vi.setSystemTime(NOW + HOUR)
+    expect(await accessBlocksStatus()).toMatchObject({ suspended: 1 })
+  })
+
+  it("a lift made in this process lands at once; one made elsewhere within one refresh", async () => {
+    db.state.suspensions = [{ user_id: BLOCKED, ends_at: new Date(NOW + HOUR).toISOString() }]
+    expect(await isUserBlocked(BLOCKED)).toBe(true)
+    db.state.suspensions = []
+    invalidateAccessBlocks()
+    expect(await isUserBlocked(BLOCKED)).toBe(false)
+
+    db.state.suspensions = [{ user_id: OTHER, ends_at: new Date(NOW + HOUR).toISOString() }]
+    vi.setSystemTime(NOW + 30_000)
+    await isUserBlocked(OTHER) // starts the refresh
+    await settle()
+    expect(await isUserBlocked(OTHER)).toBe(true)
+  })
+
+  it("the measures' table not existing yet (staging ahead of 588) leaves every account block in force", async () => {
+    db.state.users = [BLOCKED]
+    db.state.errors.set("account_sanctions", { code: "42P01", message: 'relation "public.account_sanctions" does not exist' })
+    expect(await isUserBlocked(BLOCKED)).toBe(true)
+    expect(await isUserBlocked(OTHER)).toBe(false)
+    expect(await accessBlocksStatus()).toMatchObject({ ready: true, users: 1, suspended: 0 })
+  })
+
+  it("a failed read of the suspensions after a good load keeps the last list, like any other", async () => {
+    db.state.suspensions = [{ user_id: BLOCKED, ends_at: new Date(NOW + HOUR).toISOString() }]
+    expect(await isUserBlocked(BLOCKED)).toBe(true)
+    db.state.errors.set("account_sanctions", { code: "08006", message: "connection failure" })
+    vi.setSystemTime(NOW + 30_000)
+    await isUserBlocked(BLOCKED)
+    await settle()
+    expect(reads("account_sanctions").length).toBeGreaterThan(1)
+    expect(await isUserBlocked(BLOCKED)).toBe(true)
   })
 })
 
@@ -358,7 +492,7 @@ describe("before migration 458 reaches the database", () => {
     db.state.users = [BLOCKED]
     db.state.errors.set("account_blocks", { code: "42P01", message: 'relation "public.account_blocks" does not exist' })
     expect(await isUserBlocked(BLOCKED)).toBe(false)
-    expect(await accessBlocksStatus()).toEqual({ ready: false, users: 0, networks: 0, quiet: 0, loadedAt: null })
+    expect(await accessBlocksStatus()).toEqual({ ready: false, users: 0, suspended: 0, networks: 0, quiet: 0, loadedAt: null })
     expect(warn).not.toHaveBeenCalled()
     warn.mockRestore()
   })
@@ -666,6 +800,7 @@ describe("accessBlocksStatus", () => {
     expect(await accessBlocksStatus()).toEqual({
       ready: true,
       users: 2,
+      suspended: 0,
       networks: 3,
       quiet: 0,
       loadedAt: new Date(NOW).toISOString(),
@@ -684,7 +819,8 @@ describe("an edition without an admin panel (Community)", () => {
     await expect(refuseBlockedReservation(BLOCKED)).resolves.toBeUndefined()
     expect(await blockedReservationRefusal(BLOCKED)).toBeNull()
     invalidateAccessBlocks()
-    expect(await accessBlocksStatus()).toEqual({ ready: false, users: 0, networks: 0, quiet: 0, loadedAt: null })
+    expect(await accessBlocksStatus()).toEqual({ ready: false, users: 0, suspended: 0, networks: 0, quiet: 0, loadedAt: null })
+    expect(await anyUserBlocked()).toBe(false)
     await settle()
 
     expect(db.from).not.toHaveBeenCalled()

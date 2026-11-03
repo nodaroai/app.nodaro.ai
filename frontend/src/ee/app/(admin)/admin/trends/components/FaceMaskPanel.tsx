@@ -9,7 +9,11 @@
 // The status chip is the server's (`faceMaskState`): none, approved, or out of
 // date — the source clip or the settings changed since it was made, or the
 // masking itself did (Video Mask's recipe, an environment's engine recipe).
-// Publishing needs it approved and up to date.
+// Publishing needs it approved and up to date. Apart from those reasons, the
+// server may flag a mask to make again (`flags`, decided 2026-11-03: its face
+// mesh drawn before the stray-face fix): said under the chip whatever the
+// status, it holds back nothing (the mask stays approved, runs and publishing
+// go on).
 //
 // The job in the making is recorded on the draft, so after a reload the panel
 // follows it again. One started for settings since changed (or a source clip
@@ -60,7 +64,7 @@ import {
   useTrendFaceMaskJob,
 } from "@/ee/hooks/queries/use-admin-queries"
 import { faceMaskMarkSlot } from "@nodaro/render-rules"
-import { describeFaceMaskOutOfDate } from "../model"
+import { describeFaceMaskFlag, describeFaceMaskOutOfDate } from "../model"
 import { FaceMaskMarksEditor, type MarkPerson } from "./FaceMaskMarks"
 import { FaceMaskVariants } from "./FaceMaskVariants"
 import { SceneDescriptionEditor } from "./SceneDescriptionEditor"
@@ -254,6 +258,14 @@ export function FaceMaskPanel({
         <ul aria-label="Why the face mask is out of date" className="list-disc space-y-0.5 pl-5 text-xs text-amber-700 dark:text-amber-400">
           {state.reasons.map((r, i) => (
             <li key={i}>{capitalize(describeFaceMaskOutOfDate(r))}</li>
+          ))}
+        </ul>
+      )}
+      {/* A flag is never a reason: the mask stays as the chip says, and nothing is held back. */}
+      {state?.flags && state.flags.length > 0 && (
+        <ul aria-label="Why to make the face mask again" className="list-disc space-y-0.5 pl-5 text-xs text-amber-700 dark:text-amber-400" data-testid="face-mask-flags">
+          {state.flags.map((f, i) => (
+            <li key={i}>{describeFaceMaskFlag(f)}</li>
           ))}
         </ul>
       )}

@@ -26,7 +26,9 @@
 // Two controls are this column's alone (the trend editor and the Precise
 // column have neither): Full depth's depth blur (0–40, 0 = off) and what the
 // face mesh draws (Full, Eyes and mouth, Mouth only), each naming the
-// environments whose engine cannot do it yet (the setting is shared). The
+// environments whose engine cannot do it yet (the setting is shared). Full
+// depth's face mesh also takes the smallest face with mesh lines here, as in
+// a trend's editor (the Precise column is never Full depth). The
 // Precise column's own Faces hidden choices — the fill None and a blur on the
 // depth fill — are never offered here: a direct Motion run does not draw them
 // (the server refuses them on this setting).
@@ -38,7 +40,7 @@ import type { VideoDepthColormap, VideoDepthModelSize } from "@nodaro/shared/med
 import type { AdminTrendFaceMasking, AdminTrendFullDepthScene, NodaroMotionEngineSupports, NodaroMotionMotionEntry, TrendEngineEnvironment } from "@/lib/api"
 import { FaceMaskingEditor } from "../../trends/components/FaceMaskingEditor"
 import { PromptStyleSelect } from "../../trends/components/PromptStyleSelect"
-import { clipPreparationOf, environmentsThatCannotTakeShotList, withClipPreparation } from "../../trends/clip-preparation"
+import { clipPreparationOf, environmentsThatCannotTakeShotList, withClipPreparation, type FaceMeshMinFaceHeightMissing } from "../../trends/clip-preparation"
 import { motionEngineGaps } from "../model"
 import { FULL_DEPTH_SCENES, sceneOf } from "../../trends/prompt-style"
 
@@ -110,9 +112,27 @@ interface Props {
   readonly depthBlurMissingIn?: readonly string[]
   /** For each face mesh part but the full mesh, the environments whose engine cannot draw it (`environmentsThatCannotDrawFaceMeshParts`); unknown when left out (no control). */
   readonly faceMeshPartsMissingIn?: Readonly<Record<"features" | "mouth", readonly string[]>>
+  /**
+   * The environments that cannot take Full depth's smallest face with mesh lines yet, by their engine and by their
+   * platform (`faceMeshMinFaceHeightMissing`: the setting is shared, and an older platform drops an entry that carries
+   * it); unknown when left out (no control).
+   */
+  readonly faceMeshMinFaceHeightMissing?: FaceMeshMinFaceHeightMissing
 }
 
-export function MotionColumn({ value, onChange, supports, bodyMissingIn, faceMeshMissingIn, envs, depthColormapsMissingIn, depthModelSizesMissingIn, depthBlurMissingIn, faceMeshPartsMissingIn }: Props) {
+export function MotionColumn({
+  value,
+  onChange,
+  supports,
+  bodyMissingIn,
+  faceMeshMissingIn,
+  envs,
+  depthColormapsMissingIn,
+  depthModelSizesMissingIn,
+  depthBlurMissingIn,
+  faceMeshPartsMissingIn,
+  faceMeshMinFaceHeightMissing,
+}: Props) {
   const shotList = flexIsFullDepth(envs)
   return (
     <div className="flex flex-col gap-3">
@@ -126,6 +146,7 @@ export function MotionColumn({ value, onChange, supports, bodyMissingIn, faceMes
           depthModelSizesMissingIn={depthModelSizesMissingIn}
           depthBlurMissingIn={depthBlurMissingIn}
           faceMeshPartsMissingIn={faceMeshPartsMissingIn}
+          faceMeshMinFaceHeightMissing={faceMeshMinFaceHeightMissing}
         />
       ) : (
         <ChoiceMasking
@@ -137,6 +158,7 @@ export function MotionColumn({ value, onChange, supports, bodyMissingIn, faceMes
           depthModelSizesMissingIn={depthModelSizesMissingIn}
           depthBlurMissingIn={depthBlurMissingIn}
           faceMeshPartsMissingIn={faceMeshPartsMissingIn}
+          faceMeshMinFaceHeightMissing={faceMeshMinFaceHeightMissing}
         />
       )}
       <PromptStyleSelect
@@ -157,11 +179,30 @@ export function MotionColumn({ value, onChange, supports, bodyMissingIn, faceMes
 
 type MaskingProps = Pick<
   Props,
-  "value" | "onChange" | "bodyMissingIn" | "faceMeshMissingIn" | "envs" | "depthColormapsMissingIn" | "depthModelSizesMissingIn" | "depthBlurMissingIn" | "faceMeshPartsMissingIn"
+  | "value"
+  | "onChange"
+  | "bodyMissingIn"
+  | "faceMeshMissingIn"
+  | "envs"
+  | "depthColormapsMissingIn"
+  | "depthModelSizesMissingIn"
+  | "depthBlurMissingIn"
+  | "faceMeshPartsMissingIn"
+  | "faceMeshMinFaceHeightMissing"
 >
 
 /** The shot list's rule: Full depth alone, its scene a description or a description + the original. */
-function FullDepthMasking({ value, onChange, faceMeshMissingIn, envs, depthColormapsMissingIn, depthModelSizesMissingIn, depthBlurMissingIn, faceMeshPartsMissingIn }: MaskingProps) {
+function FullDepthMasking({
+  value,
+  onChange,
+  faceMeshMissingIn,
+  envs,
+  depthColormapsMissingIn,
+  depthModelSizesMissingIn,
+  depthBlurMissingIn,
+  faceMeshPartsMissingIn,
+  faceMeshMinFaceHeightMissing,
+}: MaskingProps) {
   const m = value?.masking
   const full = !!m && m.mode !== "off" && clipPreparationOf(m) === "full-depth"
   const runsAs = full ? shotListSceneOf(sceneOf(m)) : null
@@ -199,6 +240,7 @@ function FullDepthMasking({ value, onChange, faceMeshMissingIn, envs, depthColor
         depthModelSizesMissingIn={depthModelSizesMissingIn}
         depthBlurMissingIn={depthBlurMissingIn}
         faceMeshPartsMissingIn={faceMeshPartsMissingIn}
+        faceMeshMinFaceHeightMissing={faceMeshMinFaceHeightMissing}
         envs={envs}
         scenes={SHOT_LIST_SCENES}
         // A change sets the engine's own Full depth (left unset, the default is the same setting).
@@ -210,7 +252,17 @@ function FullDepthMasking({ value, onChange, faceMeshMissingIn, envs, depthColor
 }
 
 /** The rule before the shot list: Same as Precise, Faces hidden or Full depth. */
-function ChoiceMasking({ value, onChange, bodyMissingIn, faceMeshMissingIn, depthColormapsMissingIn, depthModelSizesMissingIn, depthBlurMissingIn, faceMeshPartsMissingIn }: MaskingProps) {
+function ChoiceMasking({
+  value,
+  onChange,
+  bodyMissingIn,
+  faceMeshMissingIn,
+  depthColormapsMissingIn,
+  depthModelSizesMissingIn,
+  depthBlurMissingIn,
+  faceMeshPartsMissingIn,
+  faceMeshMinFaceHeightMissing,
+}: MaskingProps) {
   const id = useId()
   const choice = maskingChoiceOf(value?.masking)
   const hint = MASKING_CHOICES.find((c) => c.value === choice)?.hint
@@ -247,6 +299,7 @@ function ChoiceMasking({ value, onChange, bodyMissingIn, faceMeshMissingIn, dept
           depthModelSizesMissingIn={depthModelSizesMissingIn}
           depthBlurMissingIn={depthBlurMissingIn}
           faceMeshPartsMissingIn={faceMeshPartsMissingIn}
+          faceMeshMinFaceHeightMissing={faceMeshMinFaceHeightMissing}
           // No `envs`: a scene only some engines declare is never offered on this shared setting
           // (the server refuses it until every environment's engine lists it).
           // Off is kept as Off ({ mode: "off" }), never read as "Same as Precise".
