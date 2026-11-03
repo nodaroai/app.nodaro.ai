@@ -135,6 +135,7 @@ import {
   withDepthModelSizeFor,
   withFaceMeshFor,
   withFaceMeshPartsFor,
+  withFillNoneFor,
   type FaceMasking,
 } from "../cast-swap-face-masking.js"
 import { getPluginSupports } from "./supports-registry.js"
@@ -1614,10 +1615,13 @@ function assertNotLeaseKey(key: string): void {
  * (`withFaceMeshFor`), and the depth colormap, the depth model size, the
  * depth blur and the face mesh's parts only where they change what is drawn
  * AND the engine declares them — else no key, exactly the setting before each
- * existed. A new object.
+ * existed. The fill `"none"` first (`withFillNoneFor`): to an engine that
+ * cannot draw it (or the face mesh) the whole entry is `{ mode: "off" }`,
+ * never a blur. A new object.
  */
 function forLoadedEngine<T extends FaceMasking>(m: T, drawsFaceMesh: boolean, cs: ReturnType<typeof getPluginSupports>["castSwap"]): T {
-  return withFaceMeshPartsFor(withDepthBlurFor(withDepthModelSizeFor(withDepthColormapFor(withFaceMeshFor(m, drawsFaceMesh), cs), cs), cs), cs)
+  const fill = withFillNoneFor(m, cs, drawsFaceMesh)
+  return withFaceMeshPartsFor(withDepthBlurFor(withDepthModelSizeFor(withDepthColormapFor(withFaceMeshFor(fill, drawsFaceMesh), cs), cs), cs), cs)
 }
 
 /**
@@ -2217,8 +2221,10 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         // engine's strict schema would refuse the whole entry, and that engine would mask nothing.
         // The depth colormap likewise: only a map the engine declares (`castSwap.depthColormaps`), and only
         // where it changes what is drawn; else no key (the source's default). The depth model size, the depth
-        // blur and the face mesh's parts the same way (`castSwap.depthModelSizes`, `castSwap.depthBlur`,
-        // `castSwap.faceMeshParts`): only where they change what is drawn, and only to an engine that declares them.
+        // blur and the face mesh's parts the same way (`castSwap.depthModelSizes`, `castSwap.depthBlur` /
+        // `castSwap.depthFillBlur`, `castSwap.faceMeshParts`): only where they change what is drawn, and only to an
+        // engine that declares them. A fill "none" entry to an engine without `castSwap.maskFillNone` (or the face
+        // mesh) is `{ mode: "off" }`: the faces as filmed, never a blur.
         if (!masking) return null
         const draws = loadedEngineDrawsFaceMesh()
         const cs = getPluginSupports().castSwap

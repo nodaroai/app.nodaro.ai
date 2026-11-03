@@ -46,6 +46,10 @@
  * of its parts (`faceMeshParts`) while any environment's engine does not list
  * them (`nodaro-motion-face-mesh.ts`).
  *
+ * A save whose Faces hidden masking names the fill `"none"` or a blur on the
+ * depth fill is 400 `validation_error`: both are the Precise setting's alone
+ * (`motionMaskingPreciseOnlyProblem`), never kept here to be ignored.
+ *
  * Each save writes an `admin_actions` row (`update_nodaro_motion_motion`)
  * with the setting before and after.
  */
@@ -76,6 +80,7 @@ import {
   faceMeshPartsOfSetting,
 } from "../lib/nodaro-motion-face-mesh.js"
 import { cannotBlurDepthMessage, depthBlurOfSetting, environmentsThatCannotBlurDepth } from "../lib/nodaro-motion-depth-blur.js"
+import { motionMaskingPreciseOnlyProblem } from "../lib/nodaro-motion-fill-none.js"
 import { cannotDrawColormapsMessage, depthColormapOfSetting, environmentsThatCannotDrawColormaps } from "../lib/nodaro-motion-depth-colormap.js"
 import { cannotDrawModelSizesMessage, depthModelSizeOfSetting, environmentsThatCannotDrawModelSizes } from "../lib/nodaro-motion-depth-model-size.js"
 import { audit } from "./admin-trends-lifecycle.js"
@@ -126,6 +131,15 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
   app.put("/v1/admin/nodaro-motion/motion", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = putBody.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
+    // The fill "none" and a depth fill's blur are the Precise setting's alone: refused here, never stored unused.
+    const preciseOnly = NODARO_MOTION_ENGINES.flatMap((engine) => {
+      const problem = motionMaskingPreciseOnlyProblem(parsed.data.motion[engine]?.masking)
+      return problem ? [{ path: `motion.${engine}.masking.${problem.field}`, message: problem.message }] : []
+    })
+    if (preciseOnly.length > 0) {
+      const first = preciseOnly[0]!
+      return reply.status(400).send({ error: { code: "validation_error", message: `${first.path}: ${first.message}`, issues: preciseOnly } })
+    }
     try {
       // A whole-person masking, or one that draws the face mesh, is saved only once every environment's
       // engine can do it (the row is shared by every environment).

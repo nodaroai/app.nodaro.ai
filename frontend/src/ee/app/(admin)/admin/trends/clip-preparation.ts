@@ -329,6 +329,47 @@ export function environmentsThatCannotBlurDepth(envs: readonly TrendEngineEnviro
   return SHARED_SETTING_ENVIRONMENTS.filter((name) => envs.find((e) => e.env === name)?.supports.castSwap?.depthBlur !== true)
 }
 
+/**
+ * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
+ * in that order) whose engine cannot blur a Faces hidden depth fill — none
+ * recorded, or one that does not declare `castSwap.depthFillBlur` (apart from
+ * Full depth's `castSwap.depthBlur`). Unknown while the environments are
+ * (undefined). A blur above 0 on a depth fill is saved only when this is
+ * empty (the server refuses the save otherwise, 409 `engine_unsupported`).
+ */
+export function environmentsThatCannotBlurDepthFill(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+  if (!envs) return undefined
+  return SHARED_SETTING_ENVIRONMENTS.filter((name) => envs.find((e) => e.env === name)?.supports.castSwap?.depthFillBlur !== true)
+}
+
+/**
+ * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
+ * in that order) whose engine cannot keep the faces as filmed with only the
+ * face mesh (the fill "none") — none recorded, or one that does not declare
+ * `castSwap.maskFillNone`, or does not draw the face mesh it needs
+ * (`castSwap.faceMesh`). Unknown while the environments are (undefined).
+ * "None" is offered only when this is empty (the server refuses the save
+ * otherwise, 409 `engine_unsupported`).
+ */
+export function environmentsThatCannotFillNone(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+  if (!envs) return undefined
+  return SHARED_SETTING_ENVIRONMENTS.filter((name) => {
+    const cs = envs.find((e) => e.env === name)?.supports.castSwap
+    return cs?.maskFillNone !== true || cs.faceMesh !== true
+  })
+}
+
+/**
+ * Which depth a depth blur would blur (the server's `depthBlurKindOf`): Full
+ * depth's map, a Faces hidden depth fill, or none (null: a blur fill, the
+ * fill "none", Keep people).
+ */
+export function depthBlurKindOf(m: Pick<AdminTrendFaceMasking, "source" | "fill"> | undefined): "full-depth" | "depth-fill" | null {
+  const source = clipPreparationOf(m)
+  if (source === "full-depth") return "full-depth"
+  return source === "faces" && (m?.fill ?? CAST_SWAP_FACE_MASKING_DEFAULTS.fill) === "depth" ? "depth-fill" : null
+}
+
 /** The face mesh's parts other than the full mesh, in display order. */
 export const FACE_MESH_PARTIAL = ["features", "mouth"] as const satisfies readonly AdminFaceMeshParts[]
 

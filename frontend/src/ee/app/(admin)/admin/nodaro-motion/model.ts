@@ -1,7 +1,7 @@
 // Admin → Nodaro Motion's form model (pure): the per-engine drafts as they are saved.
 
 import type { AdminTrendFaceMasking, NodaroMotionEngine, NodaroMotionEngineSupports, NodaroMotionMasking, NodaroMotionMotion, NodaroMotionMotionEntry } from "@/lib/api"
-import { clipPreparationIssues, clipPreparationOf } from "../trends/clip-preparation"
+import { clipPreparationIssues, clipPreparationOf, depthBlurKindOf } from "../trends/clip-preparation"
 import { FULL_DEPTH_SCENES, sceneOf } from "../trends/prompt-style"
 import { cleanMasking, maskingIssues } from "../trends/model"
 
@@ -34,7 +34,15 @@ export function motionToSaved(draft: NodaroMotionMotion): NodaroMotionMotion {
 /** What the server would refuse in an engine's Motion masking, as sentences (Save is held on any). */
 export function motionIssues(entry: NodaroMotionMotionEntry | undefined): string[] {
   const m = entry?.masking
-  return m ? [...clipPreparationIssues(m), ...maskingIssues(m)].map((i) => `Motion: ${i}`) : []
+  if (!m) return []
+  // The Precise column's own Faces hidden choices: a direct Motion run does not draw them (the server refuses them here).
+  const preciseOnly = [
+    ...(clipPreparationOf(m) === "faces" && m.fill === "none" ? ['the fill "None" is the Precise column\'s alone: choose Blur or Depth colors.'] : []),
+    ...(depthBlurKindOf(m) === "depth-fill" && typeof m.depthBlur === "number" && m.depthBlur > 0
+      ? ["a blur on the depth fill is the Precise column's alone: set it there."]
+      : []),
+  ]
+  return [...clipPreparationIssues(m), ...maskingIssues(m), ...preciseOnly].map((i) => `Motion: ${i}`)
 }
 
 /**

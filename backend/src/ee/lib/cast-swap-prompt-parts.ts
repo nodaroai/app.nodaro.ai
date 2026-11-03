@@ -8,6 +8,7 @@
  * (admin-trends-prompt-parts.ts) and the direct-run overrides per engine and
  * style (admin-nodaro-motion-prompt-parts.ts).
  *
+ * `maskFill: "none"` only to an engine that declares `castSwap.maskFillNone`.
  * `promptStyle`, `scene`, `faceMesh`, `roleOutlines` and `shotList` are sent
  * only to an engine that declares them (`castSwap.promptStyles`,
  * `castSwap.fullDepthScenes`, `.faceMesh`, `.roleOutlines`, `.shotList`): one from before them
@@ -23,7 +24,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { CAST_SWAP_PROMPT_PART_IDS } from "@nodaro/render-rules"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
-import { engineDrawsDepthColormap } from "../../lib/cast-swap-face-masking.js"
+import { engineDrawsDepthColormap, engineDrawsFillNone } from "../../lib/cast-swap-face-masking.js"
 import { engineRequest, isRec, parseJson, relay } from "./trends/run-helpers.js"
 import { promptPartsAnswerSchema, type PromptPartTexts, type PromptPartsAnswer, type PromptPartsRequest } from "../../lib/cast-swap-prompt-parts-contract.js"
 
@@ -40,9 +41,12 @@ export function forLoadedEngine(body: PromptPartsRequest): PromptPartsRequest {
   const { promptStyle, scene, faceMesh, roleOutlines, shotList, depthColormap, maskFill, ...rest } = body
   // The depth look by its map (and the fill it rides with) only to an engine that draws that map.
   const colormap = depthColormap !== undefined && engineDrawsDepthColormap(cs, depthColormap) ? depthColormap : undefined
+  // The fill none (the fill-none mesh line) only to an engine that draws it; a depth fill rides with its map as before.
+  const fillNone = maskFill === "none" && engineDrawsFillNone(cs)
   return {
     ...rest,
-    ...(colormap ? { depthColormap: colormap, ...(maskFill ? { maskFill } : {}) } : {}),
+    ...(colormap ? { depthColormap: colormap, ...(maskFill === "depth" ? { maskFill } : {}) } : {}),
+    ...(fillNone ? { maskFill: "none" as const } : {}),
     ...(shotList === true && cs?.steps === true && cs.shotList === true ? { shotList } : {}),
     ...(faceMesh === true && cs?.faceMesh === true ? { faceMesh } : {}),
     ...(roleOutlines === true && cs?.roleOutlines === true ? { roleOutlines } : {}),

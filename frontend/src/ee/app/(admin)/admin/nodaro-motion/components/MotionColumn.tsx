@@ -26,7 +26,10 @@
 // Two controls are this column's alone (the trend editor and the Precise
 // column have neither): Full depth's depth blur (0–40, 0 = off) and what the
 // face mesh draws (Full, Eyes and mouth, Mouth only), each naming the
-// environments whose engine cannot do it yet (the setting is shared).
+// environments whose engine cannot do it yet (the setting is shared). The
+// Precise column's own Faces hidden choices — the fill None and a blur on the
+// depth fill — are never offered here: a direct Motion run does not draw them
+// (the server refuses them on this setting).
 
 import { useId } from "react"
 import { Button } from "@/components/ui/button"

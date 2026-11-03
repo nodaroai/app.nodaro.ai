@@ -28,9 +28,15 @@
  * so is one whose entry draws the face mesh (`faceMesh: true`) while any
  * environment's engine cannot draw it (`nodaro-motion-face-mesh.ts`), and
  * one whose entry names a depth colormap (`depthColormap`) while any
- * environment's engine cannot draw that map (`nodaro-motion-depth-colormap.ts`),
- * and one whose entry names a depth model size (`depthModelSize`) while any
- * environment's engine cannot draw with it (`nodaro-motion-depth-model-size.ts`).
+ * environment's engine cannot draw that map (`nodaro-motion-depth-colormap.ts`);
+ * so is one whose entry names a depth model size (`depthModelSize`) while any
+ * environment's engine cannot draw with it (`nodaro-motion-depth-model-size.ts`),
+ * one whose face mesh draws only some of its parts (`faceMeshParts`) while any
+ * environment's engine does not list them, one whose depth fill is blurred
+ * (`depthBlur` above 0) while any environment's engine cannot blur it
+ * (`nodaro-motion-depth-blur.ts`), and one whose fill is `"none"` (the faces
+ * as filmed, only the face mesh drawn) while any environment's engine cannot
+ * draw it (`nodaro-motion-fill-none.ts`).
  *
  * Each save writes an `admin_actions` row (`update_nodaro_motion_masking`)
  * with the setting before and after.
@@ -51,7 +57,7 @@ import { readNodaroMotionPromptParts } from "../../lib/nodaro-motion-prompt-part
 import { readNodaroMotionMotion } from "../../lib/nodaro-motion-motion-store.js"
 import { CAST_SWAP_STYLES } from "@nodaro/shared/models"
 import { loadedEngineHasPromptParts } from "../lib/cast-swap-prompt-parts.js"
-import { directRunPromptPartsInvalid, directRunPromptProblems, type DirectRunPromptProblem } from "../lib/nodaro-motion-prompt-check.js"
+import { directRunPromptMayGrow, directRunPromptPartsInvalid, directRunPromptProblems, type DirectRunPromptProblem } from "../lib/nodaro-motion-prompt-check.js"
 import { readNodaroMotionSteps } from "../../lib/nodaro-motion-steps-store.js"
 import { loadedEngineTakesShotList } from "../../lib/cast-swap-steps.js"
 import { requireAdmin } from "../middleware/require-admin.js"
@@ -66,6 +72,8 @@ import {
   faceMeshPartsOfSetting,
 } from "../lib/nodaro-motion-face-mesh.js"
 import { cannotDrawColormapsMessage, depthColormapOfSetting, environmentsThatCannotDrawColormaps } from "../lib/nodaro-motion-depth-colormap.js"
+import { cannotBlurDepthFillMessage, depthFillBlurOfSetting, environmentsThatCannotBlurDepthFill } from "../lib/nodaro-motion-depth-blur.js"
+import { cannotFillNoneMessage, environmentsThatCannotFillNone, fillsNone } from "../lib/nodaro-motion-fill-none.js"
 import { cannotDrawModelSizesMessage, depthModelSizeOfSetting, environmentsThatCannotDrawModelSizes } from "../lib/nodaro-motion-depth-model-size.js"
 import { audit } from "./admin-trends-lifecycle.js"
 import { registerNodaroMotionPromptPartRoutes } from "./admin-nodaro-motion-prompt-parts.js"
@@ -136,12 +144,15 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
       // engine can do it (the row is shared by every environment).
       const hides = NODARO_MOTION_ENGINES.some((engine) => hidesWholePeople(parsed.data.masking[engine]))
       const meshes = NODARO_MOTION_ENGINES.some((engine) => drawsFaceMesh(parsed.data.masking[engine]))
-      // A depth colormap likewise (each map named, once), and the face mesh's parts when not the full mesh.
+      // A depth colormap likewise (each map named, once).
       const colormaps = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => depthColormapOfSetting(parsed.data.masking[engine]) ?? []))]
-      // A depth model size likewise (each size named, once).
+      // A depth model size likewise (each size named, once), and the face mesh's parts when not the full mesh.
       const sizes = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => depthModelSizeOfSetting(parsed.data.masking[engine]) ?? []))]
       const parts = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => faceMeshPartsOfSetting(parsed.data.masking[engine]) ?? []))]
-      if (hides || meshes || colormaps.length > 0 || sizes.length > 0 || parts.length > 0) {
+      // A blurred depth fill, and the fill "none" (the faces as filmed, the face mesh alone), likewise.
+      const fillBlurs = NODARO_MOTION_ENGINES.some((engine) => depthFillBlurOfSetting(parsed.data.masking[engine]) !== undefined)
+      const nones = NODARO_MOTION_ENGINES.some((engine) => fillsNone(parsed.data.masking[engine]))
+      if (hides || meshes || colormaps.length > 0 || sizes.length > 0 || parts.length > 0 || fillBlurs || nones) {
         const environments = await listEngineEnvironments()
         const bodies = hides ? environmentsThatCannotHideBodies(environments) : []
         if (bodies.length > 0) {
@@ -163,19 +174,29 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
         if (partsLacking.length > 0) {
           return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawFaceMeshPartsMessage(parts, partsLacking), envs: partsLacking } })
         }
+        const fillBlur = fillBlurs ? environmentsThatCannotBlurDepthFill(environments) : []
+        if (fillBlur.length > 0) {
+          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotBlurDepthFillMessage(fillBlur), envs: fillBlur } })
+        }
+        const none = nones ? environmentsThatCannotFillNone(environments) : []
+        if (none.length > 0) {
+          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotFillNoneMessage(none), envs: none } })
+        }
       }
       const before = (await readNodaroMotionMasking()).masking
-      // An engine whose face mesh turns on adds the mesh's line to its direct runs' prompt: the saved
-      // prompt overrides of those runs (Precise, and Motion where it falls back to this masking) are
-      // checked again on a large run, and the save is refused when they no longer fit.
-      const meshOn = NODARO_MOTION_ENGINES.filter((engine) => drawsFaceMesh(parsed.data.masking[engine]) && !drawsFaceMesh(before?.[engine]))
-      if (meshOn.length > 0 && loadedEngineHasPromptParts()) {
+      // An engine whose masking may lengthen its direct runs' prompt — the masking or the face mesh turning
+      // on, or its fill (a fill's guard, the fill none's mesh line), colormap or mesh parts changing
+      // (`directRunPromptMayGrow`) — has the saved prompt overrides of those runs (Precise, and Motion where it
+      // falls back to this masking) checked again on a large run, and the save is refused when they no longer fit.
+      const changed = NODARO_MOTION_ENGINES.filter((engine) => directRunPromptMayGrow(before?.[engine], parsed.data.masking[engine]))
+      const meshTurnsOn = changed.some((engine) => drawsFaceMesh(parsed.data.masking[engine]) && !drawsFaceMesh(before?.[engine]))
+      if (changed.length > 0 && loadedEngineHasPromptParts()) {
         const saved = (await readNodaroMotionPromptParts()).promptParts
         const motion = (await readNodaroMotionMotion()).motion
         // The Precise shot list's marker counts too, on an engine that runs it.
         const steps = loadedEngineTakesShotList() ? (await readNodaroMotionSteps()).steps : null
         const problems: DirectRunPromptProblem[] = []
-        for (const engine of meshOn) {
+        for (const engine of changed) {
           for (const style of CAST_SWAP_STYLES) {
             const texts = saved?.[engine]?.[style]
             if (!texts) continue
@@ -188,7 +209,7 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
           return directRunPromptPartsInvalid(
             reply,
             problems,
-            `With the face mesh on, the saved Nodaro Motion prompt no longer fits: ${problems[0]!.message} Shorten or reset the prompt overrides first.`,
+            `${meshTurnsOn ? "With the face mesh on" : "With this masking"}, the saved Nodaro Motion prompt no longer fits: ${problems[0]!.message} Shorten or reset the prompt overrides first.`,
           )
         }
       }

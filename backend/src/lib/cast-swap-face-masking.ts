@@ -47,7 +47,15 @@ import {
 import { getPluginSupports } from "./private-plugins/supports-registry.js"
 
 export type FaceMaskingMode = "off" | "always" | "auto"
-export type FaceMaskingFill = "blur" | "depth"
+/**
+ * How faces hidden covers the faces it finds: `"blur"` (the default), `"depth"`
+ * (depth colours), or `"none"` (decided 2026-11-02; the Nodaro Motion
+ * Precise setting's alone, never a trend's; the Motion setting's save
+ * refuses it, `motionMaskingPreciseOnlyProblem`): found exactly the same way but NOT
+ * covered — the clip keeps them as filmed and only the face mesh is drawn on
+ * them, so it needs `faceMesh: true` (`FILL_NONE_NEEDS_FACE_MESH`).
+ */
+export type FaceMaskingFill = "blur" | "depth" | "none"
 /** What a mask covers: `"head"` (default: hair and people seen from behind too), `"face"` (the hair stays visible) or `"body"` (the whole person: hidden with faces hidden, kept with keep people; never full depth). */
 export type FaceMaskingTarget = CastSwapFaceMaskTarget
 /**
@@ -172,23 +180,27 @@ export interface FaceMasking {
    * outlines or not (`depthModelSizeApplies`). Absent = `"large"`, what every
    * make and run drew with before the choice existed. Read through
    * `depthModelSizeSent` (the one normaliser): `"large"`, an unknown value, or
-   * a value where no depth is drawn is the same as absent — never sent nor
-   * hashed. Unlike the colormap it changes the depth render itself, so a
-   * chosen size is hashed into the settings key AND the base key. An engine
-   * draws with it only when it declares the size in
-   * `castSwap.depthModelSizes` (`engineDrawsDepthModelSize`): the key is
+   * a value where no depth is drawn (a blur fill, the fill `"none"`) is the
+   * same as absent — never sent nor hashed. Unlike the colormap it changes
+   * the depth render itself, so a chosen size is hashed into the settings key
+   * AND the base key. An engine draws with it only when it declares the size
+   * in `castSwap.depthModelSizes` (`engineDrawsDepthModelSize`): the key is
    * stripped for one that does not.
    */
   depthModelSize?: FaceMaskingDepthModelSize
   /**
-   * Full depth only (decided 2026-11-02; the Nodaro Motion Motion setting's
-   * alone, `faceMaskingMotionSchema`: a trend's setting and the Precise one
-   * refuse the key): the depth map is blurred before it is coloured and
-   * before the face mesh is drawn on it, the number being the blur's sigma at
-   * 1080 px tall (whole steps, `CAST_SWAP_DEPTH_BLUR_BOUNDS`). Absent or 0 =
-   * off; read through `depthBlurSent` (on, full depth, above 0), so 0, or a
-   * value on another source, is never sent. An engine blurs only when it
-   * declares `castSwap.depthBlur` (`engineBlursDepth`): the key is stripped
+   * The depth blur (decided 2026-11-02; the Nodaro Motion settings' alone: a
+   * trend's setting refuses the key): the depth map is blurred before it is
+   * coloured and before the face mesh is drawn on it, the number being the
+   * blur's sigma at 1080 px tall (whole steps, `CAST_SWAP_DEPTH_BLUR_BOUNDS`).
+   * Full depth's (the Motion setting), and a Faces hidden depth fill's (the
+   * Precise setting alone: the Motion setting's save refuses it;
+   * `depthBlurKindOf`). Absent or 0 =
+   * off; read through `depthBlurSent` (on, full depth or a depth fill, above
+   * 0), so 0, or a value where no depth is drawn, is never sent. An engine
+   * blurs full depth only when it declares `castSwap.depthBlur`
+   * (`engineBlursDepth`) and a depth fill only when it declares
+   * `castSwap.depthFillBlur` (`engineBlursDepthFill`): the key is stripped
    * for one that does not.
    */
   depthBlur?: number
@@ -299,6 +311,9 @@ const faceHeightsInOrder = (m: Pick<FaceMasking, "minFaceHeightPct" | "maxFaceHe
   m.maxFaceHeightPct >= (m.minFaceHeightPct ?? FACE_MASKING_DEFAULT_MIN_FACE_HEIGHT_PCT)
 const faceHeightsMessage = { path: ["maxFaceHeightPct"], message: "The largest face height must be at least the smallest (or 0 for no limit)." }
 
+/** The issue code of `fill: "none"` without the face mesh (`fillNoneRules`), in the issue's `params.code`. */
+export const FILL_NONE_NEEDS_FACE_MESH = "fill_none_needs_face_mesh"
+
 /** The issue code of a face mesh asked for with keep people (`sourceModeRules`), in the issue's `params.code`. */
 export const FACE_MESH_NOT_WITH_KEEP_PEOPLE = "face_mesh_not_with_keep_people"
 
@@ -337,16 +352,47 @@ function sourceModeRules(m: FaceMaskingWithMarks, ctx: z.RefinementCtx): void {
 }
 
 /**
+ * `fill: "none"` with faces hidden needs the face mesh: the faces stay as
+ * filmed, so without the mesh the setting would change nothing. Read where
+ * the fill is (faces hidden); a stale `"none"` under Full depth is not read.
+ */
+function fillNoneRules(m: FaceMasking, ctx: z.RefinementCtx): void {
+  if (m.fill === "none" && faceMaskingSourceOf(m) === "faces" && m.faceMesh !== true) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["fill"],
+      params: { code: FILL_NONE_NEEDS_FACE_MESH },
+      message: 'The fill "none" keeps the faces as filmed and draws only the face mesh on them: it needs the face mesh on.',
+    })
+  }
+}
+
+/** The Nodaro Motion settings' own keys (Precise and Motion; a trend's setting takes none of them). */
+const nodaroMotionShape = {
+  // Beside the blur and the depth fill, `"none"`: the faces found but kept as filmed (`fillNoneRules`).
+  fill: z.enum(["blur", "depth", "none"]).optional(),
+  depthBlur: z.int().min(CAST_SWAP_DEPTH_BLUR_BOUNDS.min).max(CAST_SWAP_DEPTH_BLUR_BOUNDS.max).optional(),
+  faceMeshParts: z.enum(VIDEO_FACE_MESH_PARTS).optional(),
+}
+
+/**
  * A face masking setting without marks: what a run takes, and Nodaro Motion's
  * defaults (`nodaro_motion_masking`). A direct run's setting masks faces only:
  * a depth mode is a trend's (a direct run picks `style` instead), so any
  * `source` but `"faces"` is refused here. Beside the shared keys it takes the
- * face mesh's `faceMeshParts`, as the Motion setting does.
+ * face mesh's `faceMeshParts`, the fill `"none"` (with the face mesh on) and
+ * the depth fill's `depthBlur` (only with the fill `"depth"`: the one depth
+ * it draws).
  */
 export const faceMaskingSchema: z.ZodType<FaceMasking> = z
-  .strictObject({ ...faceMaskingShape, faceMeshParts: z.enum(VIDEO_FACE_MESH_PARTS).optional() })
+  .strictObject({ ...faceMaskingShape, ...nodaroMotionShape })
   .refine(faceHeightsInOrder, faceHeightsMessage)
   .superRefine(sourceModeRules)
+  .superRefine(fillNoneRules)
+  .refine((m) => m.depthBlur === undefined || m.fill === "depth", {
+    path: ["depthBlur"],
+    message: 'The depth blur blurs the depth fill: it needs the fill "depth".',
+  })
   .refine((m) => faceMaskingSourceOf(m) === "faces", { path: ["source"], message: 'A direct run masks faces only: clip preparation is a trend setting (a direct run uses "style").' })
 
 /**
@@ -354,16 +400,17 @@ export const faceMaskingSchema: z.ZodType<FaceMasking> = z
  * `masking`): a face mask, or full depth (with its `scene`), never keep
  * people (a trend's alone) and never marks. Its own keys beside the shared
  * ones (decided 2026-11-02): full depth's `depthBlur` (whole steps within
- * `CAST_SWAP_DEPTH_BLUR_BOUNDS`) and the face mesh's `faceMeshParts`.
+ * `CAST_SWAP_DEPTH_BLUR_BOUNDS`) and the face mesh's `faceMeshParts`. The
+ * shape also reads the fill `"none"` and a depth fill's blur (the Precise
+ * setting's keys), but its save refuses both on Faces hidden (400,
+ * `motionMaskingPreciseOnlyProblem` in ee/lib/nodaro-motion-fill-none.ts): a
+ * direct Motion run does not draw them.
  */
 export const faceMaskingMotionSchema: z.ZodType<FaceMasking> = z
-  .strictObject({
-    ...faceMaskingShape,
-    depthBlur: z.int().min(CAST_SWAP_DEPTH_BLUR_BOUNDS.min).max(CAST_SWAP_DEPTH_BLUR_BOUNDS.max).optional(),
-    faceMeshParts: z.enum(VIDEO_FACE_MESH_PARTS).optional(),
-  })
+  .strictObject({ ...faceMaskingShape, ...nodaroMotionShape })
   .refine(faceHeightsInOrder, faceHeightsMessage)
   .superRefine(sourceModeRules)
+  .superRefine(fillNoneRules)
   .refine((m) => faceMaskingSourceOf(m) !== "keep-people", { path: ["source"], message: "A direct Motion run hides faces or uses full depth: Keep people is a trend setting." })
 
 /** The issue code of role outlines asked for with a depth mode (`faceMaskingWithMarksSchema`), in the issue's `params.code`. */
@@ -754,13 +801,27 @@ export function withFaceMeshFor<T extends FaceMasking>(m: T, drawsFaceMesh: bool
 }
 
 /**
- * The depth blur the setting draws its depth map with: `depthBlur` above 0 on
- * a full-depth setting that is on; undefined otherwise (no blur: never sent
- * nor answered), so 0, a value under another source, or one on an "off"
- * setting reads as before the key existed.
+ * Which depth a depth blur would blur: full depth's (`"full-depth"`), a faces
+ * hidden depth fill's (`"depth-fill"`, decided 2026-11-02), or none (null: a
+ * blur fill, the fill `"none"`, keep people). Each is its own engine
+ * capability (`castSwap.depthBlur`, `castSwap.depthFillBlur`).
  */
-export function depthBlurSent(m: Pick<FaceMasking, "mode" | "source" | "depthBlur"> | undefined): number | undefined {
-  if (!m || m.mode === "off" || faceMaskingSourceOf(m) !== "full-depth") return undefined
+export function depthBlurKindOf(m: Pick<FaceMasking, "source" | "fill">): "full-depth" | "depth-fill" | null {
+  const source = faceMaskingSourceOf(m)
+  if (source === "full-depth") return "full-depth"
+  return source === "faces" && (m.fill ?? CAST_SWAP_FACE_MASKING_DEFAULTS.fill) === "depth" ? "depth-fill" : null
+}
+
+/**
+ * The depth blur the setting draws its depth map with: `depthBlur` above 0 on
+ * a setting that is on and draws full depth or a faces hidden depth fill
+ * (`depthBlurKindOf`); undefined otherwise (no blur: never sent nor
+ * answered), so 0, a value where no depth is drawn (a blur fill, the fill
+ * `"none"`, keep people), or one on an "off" setting reads as before the key
+ * existed.
+ */
+export function depthBlurSent(m: Pick<FaceMasking, "mode" | "source" | "fill" | "depthBlur"> | undefined): number | undefined {
+  if (!m || m.mode === "off" || depthBlurKindOf(m) === null) return undefined
   return typeof m.depthBlur === "number" && m.depthBlur > 0 ? m.depthBlur : undefined
 }
 
@@ -785,6 +846,16 @@ export function engineBlursDepth(cs: { readonly depthBlur?: boolean } | undefine
 }
 
 /**
+ * Whether a (loaded or recorded) Cast Swap engine blurs a faces hidden depth
+ * fill (`castSwap.depthFillBlur`, apart from full depth's `depthBlur`).
+ * Absent ⇒ an engine from before it, which would draw the fill unblurred: it
+ * is never sent the key there.
+ */
+export function engineBlursDepthFill(cs: { readonly depthFillBlur?: boolean } | undefined): boolean {
+  return cs?.depthFillBlur === true
+}
+
+/**
  * Whether a (loaded or recorded) Cast Swap engine draws the face mesh's
  * `parts` (`castSwap.faceMeshParts`). Absent ⇒ an engine from before them,
  * which draws the full mesh: it is never sent the key.
@@ -798,13 +869,50 @@ export function engineDrawsFaceMeshParts(
 
 /**
  * The setting as an engine is sent it, depth-blur-wise: `depthBlur` only when
- * it blurs (`depthBlurSent`) AND the engine blurs (`engineBlursDepth`); else
- * no key at all, exactly the setting before the key existed. A new object.
+ * it blurs (`depthBlurSent`) AND the engine blurs that depth (full depth:
+ * `engineBlursDepth`; a depth fill: `engineBlursDepthFill`); else no key at
+ * all, exactly the setting before the key existed. A new object.
  */
-export function withDepthBlurFor<T extends FaceMasking>(m: T, cs: { readonly depthBlur?: boolean } | undefined): T {
+export function withDepthBlurFor<T extends FaceMasking>(
+  m: T,
+  cs: { readonly depthBlur?: boolean; readonly depthFillBlur?: boolean } | undefined,
+): T {
   const { depthBlur: _blur, ...rest } = m
   const blur = depthBlurSent(m)
-  return (blur !== undefined && engineBlursDepth(cs) ? { ...rest, depthBlur: blur } : rest) as T
+  const blurs = depthBlurKindOf(m) === "full-depth" ? engineBlursDepth(cs) : engineBlursDepthFill(cs)
+  return (blur !== undefined && blurs ? { ...rest, depthBlur: blur } : rest) as T
+}
+
+/**
+ * Whether the setting keeps the faces it finds as filmed and draws only the
+ * face mesh on them: on (not "off"), faces hidden, `fill: "none"`.
+ */
+export function fillNoneOn(m: Pick<FaceMasking, "mode" | "source" | "fill"> | undefined): boolean {
+  return !!m && m.mode !== "off" && faceMaskingSourceOf(m) === "faces" && m.fill === "none"
+}
+
+/**
+ * Whether a (loaded or recorded) Cast Swap engine draws the fill `"none"`
+ * (`castSwap.maskFillNone`). Absent ⇒ an engine from before it, whose strict
+ * schema refuses the value (the whole entry): it is never sent one.
+ */
+export function engineDrawsFillNone(cs: { readonly maskFillNone?: boolean } | undefined): boolean {
+  return cs?.maskFillNone === true
+}
+
+/**
+ * The setting as an engine is sent it, fill-none-wise. A setting whose fill is
+ * `"none"` (`fillNoneOn`) goes as it is to an engine that draws it AND the
+ * face mesh (`drawsFaceMesh`); to any other it is `{ mode: "off" }` — the
+ * faces as filmed, never silently covered by a blur. A `"none"` that is not
+ * read (mode "off", full depth) is dropped, so an engine's strict schema
+ * never refuses the entry for it. Any other setting is returned unchanged.
+ */
+export function withFillNoneFor<T extends FaceMasking>(m: T, cs: { readonly maskFillNone?: boolean } | undefined, drawsFaceMesh: boolean): T {
+  if (m.fill !== "none") return m
+  if (fillNoneOn(m)) return (engineDrawsFillNone(cs) && drawsFaceMesh ? m : { mode: "off" }) as T
+  const { fill: _fill, ...rest } = m
+  return rest as T
 }
 
 /**

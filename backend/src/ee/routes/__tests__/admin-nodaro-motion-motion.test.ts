@@ -218,6 +218,25 @@ describe("PUT /v1/admin/nodaro-motion/motion", () => {
     expect((await put({ "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "full" } } })).statusCode).toBe(200)
   })
 
+  it("refuses the fill none and a depth fill's blur on Faces hidden (the Precise setting's alone), writing nothing", async () => {
+    h.envs = [envRow("production", { ...HIDES, faceMesh: true, maskFillNone: true, depthFillBlur: true }), envRow("staging", { ...HIDES, faceMesh: true, maskFillNone: true, depthFillBlur: true })]
+    const none = await put({ "motion-pulse": { masking: { mode: "auto", fill: "none", faceMesh: true } } })
+    expect(none.statusCode).toBe(400)
+    expect(none.json().error).toMatchObject({ code: "validation_error", message: expect.stringMatching(/^motion\.motion-pulse\.masking\.fill: The fill "none" .* is the Precise setting's alone/) })
+    const blur = await put({ "motion-prism": { masking: { mode: "always", fill: "depth", depthBlur: 12 } } })
+    expect(blur.statusCode).toBe(400)
+    expect(blur.json().error).toMatchObject({ code: "validation_error", message: expect.stringMatching(/depthBlur: A blur on the depth fill is the Precise setting's alone/) })
+    expect(h.upserts).toEqual([])
+    // Not refused where nothing is read: a blur of 0 on a depth fill, a "none" left under Full depth, a Full depth blur.
+    for (const masking of [
+      { mode: "always", fill: "depth", depthBlur: 0 },
+      { mode: "always", source: "full-depth", fill: "none" },
+      { mode: "always", fill: "blur", depthBlur: 12 },
+    ]) {
+      expect((await put({ "motion-prism": { masking } })).statusCode, JSON.stringify(masking)).toBe(200)
+    }
+  })
+
   it("refuses a depth blur past 40, below 0 or not whole, and an unknown part, writing nothing", async () => {
     for (const masking of [
       { mode: "always", source: "full-depth", depthBlur: 41 },

@@ -30,6 +30,7 @@ export const PROMPT_PART_LABELS: Readonly<Record<CastSwapPromptPartId, string>> 
   face: "Identity",
   depthGuard: "Depth guard",
   faceMesh: "Face mesh lines",
+  faceMeshFillNone: "Face mesh lines (fill None)",
   roleOutlines: "Role outline colours",
   person: "Each person",
   pet: "Each pet",

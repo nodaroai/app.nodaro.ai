@@ -3518,7 +3518,15 @@ export interface PluginFaceMasking {
    */
   scene?: "description" | "original" | "none" | "description-and-original"
   target?: "face" | "head" | "body"
-  fill?: "blur" | "depth"
+  /**
+   * Faces hidden's fill: `"blur"` (the default), `"depth"`, or `"none"` (the
+   * Nodaro Motion Precise setting's alone, with `faceMesh: true`): the faces found
+   * the same way but kept as filmed, only the face mesh drawn on them, on the
+   * original clip. Answered by `tk.settings` only to an engine that declares
+   * `supports.castSwap.maskFillNone` (and draws the face mesh); any other
+   * engine is answered that whole entry as `{ mode: "off" }`.
+   */
+  fill?: "blur" | "depth" | "none"
   minFaceHeightPct?: number
   maxFaceHeightPct?: number
   zone?: { leftPct?: number; rightPct?: number; topPct?: number; bottomPct?: number } | null
@@ -3543,17 +3551,20 @@ export interface PluginFaceMasking {
   depthColormap?: "grayscale" | "turbo" | "inferno" | "magma" | "viridis"
   /**
    * The depth model's size wherever the setting draws depth: full depth, keep
-   * people, or a faces-hidden depth fill (role outlines or not). Absent =
-   * `"large"`, exactly as before the choice existed. Sent (and answered by
-   * `tk.settings`) only when it is not `"large"`, and only to an engine that
-   * lists the size in `supports.castSwap.depthModelSizes`.
+   * people, or a faces-hidden depth fill (role outlines or not; never the fill
+   * `"none"`, which draws no depth). Absent = `"large"`, exactly as before the
+   * choice existed. Sent (and answered by `tk.settings`) only when it is not
+   * `"large"`, and only to an engine that lists the size in
+   * `supports.castSwap.depthModelSizes`.
    */
   depthModelSize?: "small" | "base" | "large"
   /**
-   * Full depth only: the depth map blurred before anything is drawn on it,
-   * the blur's sigma at 1080 px tall (whole steps, 0–40; 0 = off). Answered
-   * by `tk.settings` only when above 0 on full depth, and only to an engine
-   * that declares `supports.castSwap.depthBlur`.
+   * Full depth's, or a faces hidden depth fill's: the depth map blurred
+   * before anything is drawn on it, the blur's sigma at 1080 px tall (whole
+   * steps, 0–40; 0 = off). Answered by `tk.settings` only when above 0 where
+   * depth is drawn, and only to an engine that declares
+   * `supports.castSwap.depthBlur` (full depth) or
+   * `supports.castSwap.depthFillBlur` (a depth fill).
    */
   depthBlur?: number
   /**
@@ -3592,6 +3603,7 @@ export type PluginPromptPartId =
   | "face"
   | "depthGuard"
   | "faceMesh"
+  | "faceMeshFillNone"
   | "roleOutlines"
   | "person"
   | "pet"
@@ -4067,6 +4079,27 @@ export interface PluginSupports {
    *   — the platform answers the settings without the key and refuses to save
    *   a shared Nodaro Motion setting with one while any environment lacks it
    *   (lib/cast-swap-face-masking.ts `engineDrawsFaceMeshParts`).
+   * - `maskFillNone`: a faces hidden masking setting (the Nodaro Motion
+   *   Precise setting, read through `tk.settings`) may name
+   *   `fill: "none"` (always with `faceMesh: true`): the engine finds the
+   *   faces exactly as for a blur or depth fill, but covers none of them —
+   *   the face mesh alone is drawn on the faces centred inside the mask, on
+   *   the original clip (`/v1/video-face-mesh` with `drawOnUrl` the clip and
+   *   `maskUrl` the mask), and the run's motion video is that clip, its
+   *   prompt worded for faces seen as filmed. Additive-optional: absent ⇒
+   *   `false` — the platform answers such an entry as `{ mode: "off" }` (never
+   *   as a blur) and refuses to save a shared Nodaro Motion setting with it
+   *   while any environment lacks it (lib/cast-swap-face-masking.ts
+   *   `engineDrawsFillNone`).
+   * - `depthFillBlur`: a faces hidden DEPTH fill (the Nodaro Motion Precise
+   *   setting) takes `depthBlur` (whole,
+   *   0–40; absent or 0 = off) as full depth does: the engine blurs the depth
+   *   render used for the fill before it colours it and before the face mesh
+   *   is drawn on it. Apart from full depth's `depthBlur` declaration.
+   *   Additive-optional: absent ⇒ `false` — the platform answers a depth
+   *   fill's setting without the key and refuses to save a shared Nodaro
+   *   Motion setting with it while any environment lacks it
+   *   (lib/cast-swap-face-masking.ts `engineBlursDepthFill`).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -4112,6 +4145,8 @@ export interface PluginSupports {
     readonly styleChoice?: boolean
     readonly depthBlur?: boolean
     readonly faceMeshParts?: readonly ("full" | "features" | "mouth")[]
+    readonly maskFillNone?: boolean
+    readonly depthFillBlur?: boolean
   }
 }
 

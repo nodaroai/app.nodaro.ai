@@ -62,10 +62,12 @@ import { prismReferenceAudioModesEveryEngineTakes, prismReferenceAudioTriple } f
 import { maskingIssues } from "../trends/model"
 import {
   environmentsThatCannotBlurDepth,
+  environmentsThatCannotBlurDepthFill,
   environmentsThatCannotDrawColormaps,
   environmentsThatCannotDrawModelSizes,
   environmentsThatCannotDrawFaceMesh,
   environmentsThatCannotDrawFaceMeshParts,
+  environmentsThatCannotFillNone,
   environmentsThatCannotForceStyle,
   environmentsThatCannotHideBodies,
 } from "../trends/clip-preparation"
@@ -110,6 +112,10 @@ export default function AdminNodaroMotionPage() {
   // The Motion column's depth blur and face mesh parts likewise (a Cast Swap engine from 0.430.0 declares them).
   const depthBlurMissingIn = environmentsThatCannotBlurDepth(envs.data)
   const faceMeshPartsMissingIn = environmentsThatCannotDrawFaceMeshParts(envs.data)
+  // The Precise column's fill None (the faces as filmed, the face mesh alone) and a depth fill's blur, likewise
+  // (the Motion column never offers them: a direct Motion run does not draw them).
+  const fillNoneMissingIn = environmentsThatCannotFillNone(envs.data)
+  const depthFillBlurMissingIn = environmentsThatCannotBlurDepthFill(envs.data)
   const saveMotion = useSaveNodaroMotionMotion()
   const pulseQuery = useNodaroMotionPulseAudio()
   const savePulse = useSaveNodaroMotionPulseAudio()
@@ -253,6 +259,8 @@ export default function AdminNodaroMotionPage() {
                       depthColormapsMissingIn={depthColormapsMissingIn}
                       depthModelSizesMissingIn={depthModelSizesMissingIn}
                       faceMeshPartsMissingIn={faceMeshPartsMissingIn}
+                      fillNoneMissingIn={fillNoneMissingIn}
+                      depthFillBlurMissingIn={depthFillBlurMissingIn}
                       onChange={(m) =>
                         setDraft((d) => {
                           const out = { ...d }

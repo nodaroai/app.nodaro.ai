@@ -11299,7 +11299,13 @@ export interface AdminTrendSource {
 }
 
 export type AdminTrendFaceMaskingMode = "off" | "always" | "auto"
-export type AdminTrendFaceMaskingFill = "blur" | "depth"
+/**
+ * How Faces hidden covers the faces it finds: "blur" (the default), "depth"
+ * (depth colours), or "none" (Admin → Nodaro Motion only, never a trend's:
+ * the faces found but kept as filmed, only the face mesh drawn on them, so it
+ * needs `faceMesh: true`).
+ */
+export type AdminTrendFaceMaskingFill = "blur" | "depth" | "none"
 /**
  * What a mask covers: "head" (the default; hair and people seen from behind
  * too), "face" (the face only), or "body" (the whole person: Keep people only,
@@ -11382,17 +11388,20 @@ export interface AdminTrendFaceMasking {
   depthColormap?: VideoDepthColormap
   /**
    * The depth model's size wherever the setting draws depth (Full depth,
-   * Keep people, a Faces hidden depth fill, under role outlines too). Left out
-   * = large (the default), saved only when it is small or base, and offered
-   * only where the engine lists the size in `castSwap.depthModelSizes`.
+   * Keep people, a Faces hidden depth fill, under role outlines too; never the
+   * fill "none", which draws no depth). Left out = large (the default), saved
+   * only when it is small or base, and offered only where the engine lists
+   * the size in `castSwap.depthModelSizes`.
    */
   depthModelSize?: VideoDepthModelSize
   /**
-   * Full depth only (Admin → Nodaro Motion's Motion setting; a trend's
-   * setting does not take it yet): the depth map blurred before it is
-   * coloured and before the face mesh is drawn on it, the blur's sigma at
-   * 1080 px tall, whole steps 0–40. 0 is off and saved as no key; offered
-   * only where the engine declares `castSwap.depthBlur`.
+   * Admin → Nodaro Motion only (a trend's setting does not take it yet): the
+   * depth map blurred before it is coloured and before the face mesh is drawn
+   * on it, the blur's sigma at 1080 px tall, whole steps 0–40 — Full depth's
+   * (the Motion setting), or a Faces hidden depth fill's (the Precise
+   * setting). 0 is off and saved as no key; offered only where the engine
+   * declares `castSwap.depthBlur` (Full depth) or `castSwap.depthFillBlur`
+   * (a depth fill).
    */
   depthBlur?: number
   /**
@@ -11916,6 +11925,10 @@ export interface TrendEngineEnvironment {
       depthBlur?: boolean
       /** The face mesh parts the engine draws (`faceMasking.faceMeshParts`); absent = the full mesh only. */
       faceMeshParts?: AdminFaceMeshParts[]
+      /** The engine keeps the faces as filmed with only the face mesh (`faceMasking.fill: "none"`); absent = it cannot. */
+      maskFillNone?: boolean
+      /** The engine blurs a Faces hidden depth fill (`faceMasking.depthBlur` with `fill: "depth"`); absent = it cannot. */
+      depthFillBlur?: boolean
     }
   } & Record<string, unknown>
   updatedAt: string

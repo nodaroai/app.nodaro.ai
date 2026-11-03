@@ -214,6 +214,60 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
     expect(res.json().data.masking).toEqual(masking)
   })
 
+  it("saves the fill none only once every environment's engine draws it (the row is shared), naming those that cannot", async () => {
+    const MESH = { castSwap: { ...HIDES.castSwap, faceMesh: true } }
+    const NONE = { castSwap: { ...MESH.castSwap, maskFillNone: true } }
+    const masking = { "motion-pulse": { mode: "always", fill: "none", faceMesh: true, target: "face" } }
+    for (const [envs, blocked] of [
+      [[envRow("production", MESH), envRow("staging", NONE)], ["production"]],
+      [[envRow("production", NONE), envRow("staging", { castSwap: { ...MESH.castSwap, maskFillNone: false } })], ["staging"]],
+    ] as const) {
+      h.envs = [...envs]
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+      expect(res.statusCode, JSON.stringify(envs)).toBe(409)
+      expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: blocked, message: expect.stringMatching(/cannot keep the faces as filmed with only the face mesh/) })
+    }
+    expect(h.upserts).toEqual([])
+    h.envs = [envRow("production", NONE), envRow("staging", NONE)]
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.masking).toEqual(masking)
+  })
+
+  it("refuses the fill none without the face mesh (400 fill_none_needs_face_mesh), writing nothing", async () => {
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking: { "motion-pulse": { mode: "always", fill: "none" } } } })
+    expect(res.statusCode).toBe(400)
+    expect(JSON.stringify(res.json())).toMatch(/needs the face mesh on/)
+    expect(h.upserts).toEqual([])
+  })
+
+  it("saves a depth fill's blur only once every environment's engine blurs a depth fill (not Full depth's declaration); 0 asks no engine", async () => {
+    const FILL_BLUR = { castSwap: { ...HIDES.castSwap, depthFillBlur: true } }
+    const masking = { "motion-pulse": { mode: "always", fill: "depth", depthBlur: 12 } }
+    for (const [envs, blocked] of [
+      [[envRow("production", { castSwap: { ...HIDES.castSwap, depthBlur: true } }), envRow("staging", FILL_BLUR)], ["production"]],
+      [[envRow("staging", FILL_BLUR)], ["production"]],
+    ] as const) {
+      h.envs = [...envs]
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+      expect(res.statusCode, JSON.stringify(envs)).toBe(409)
+      expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: blocked, message: expect.stringMatching(/cannot blur the depth fill/) })
+    }
+    expect(h.upserts).toEqual([])
+    h.envs = [envRow("production", FILL_BLUR), envRow("staging", FILL_BLUR)]
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.masking).toEqual(masking)
+    // 0 (off), or the masking off, asks no engine.
+    h.envs = []
+    const reads = h.envReads
+    for (const m of [{ mode: "always", fill: "depth", depthBlur: 0 }, { mode: "off", fill: "depth", depthBlur: 12 }]) {
+      const r = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking: { "motion-pulse": m } } })
+      expect(r.statusCode, JSON.stringify(m)).toBe(200)
+    }
+    expect(h.envReads).toBe(reads)
+  })
+
   it("saves a depth colormap only once every environment's engine draws that map (the row is shared), naming those that cannot", async () => {
     const MAPS = { castSwap: { ...HIDES.castSwap, depthColormaps: ["grayscale", "inferno"] } }
     const masking = { "motion-pulse": { mode: "always", fill: "depth", depthColormap: "inferno" } }

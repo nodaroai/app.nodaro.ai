@@ -474,3 +474,70 @@ describe("tk.settings: the depth blur and the face mesh's parts", () => {
     }
   })
 })
+
+describe("tk.settings: the fill none and a depth fill's blur", () => {
+  beforeEach(() => {
+    h.masking = null
+    h.motion = null
+    h.failed = false
+  })
+
+  const NONE = { mode: "always", fill: "none", faceMesh: true, target: "face" }
+  const FILL_BLUR = { mode: "always", fill: "depth", depthBlur: 12 }
+
+  it("answers the fill none only to an engine that draws it (and the mesh); any other gets that entry as Off, never a blur", async () => {
+    h.masking = { "motion-prism": NONE, "motion-pulse": FILL_BLUR }
+    h.motion = { "motion-prism": { masking: NONE, promptStyle: "precise" } }
+    try {
+      setPluginSupports({ castSwap: { ...CS, faceMesh: true, maskFillNone: true, depthFillBlur: true } } as never)
+      const masking = await buildToolkit().settings!.nodaroMotionMasking!()
+      expect(masking!["motion-prism"]).toEqual(NONE)
+      expect(masking!["motion-pulse"]).toEqual(FILL_BLUR)
+      expect((await buildToolkit().settings!.nodaroMotionMotion!())!["motion-prism"]).toEqual({ masking: NONE, promptStyle: "precise" })
+      for (const castSwap of [{ ...CS, faceMesh: true }, { ...CS, maskFillNone: true }, CS]) {
+        setPluginSupports({ castSwap } as never)
+        expect((await buildToolkit().settings!.nodaroMotionMasking!())!["motion-prism"], JSON.stringify(castSwap)).toEqual({ mode: "off" })
+        // The Motion entry keeps a masking of its own (Off), never "Same as Precise".
+        expect((await buildToolkit().settings!.nodaroMotionMotion!())!["motion-prism"], JSON.stringify(castSwap)).toEqual({ masking: { mode: "off" }, promptStyle: "precise" })
+      }
+    } finally {
+      _resetPluginSupportsForTests()
+    }
+  })
+
+  it("answers a depth fill's blur only to an engine that declares castSwap.depthFillBlur (Full depth's castSwap.depthBlur is not it)", async () => {
+    h.masking = { "motion-pulse": FILL_BLUR }
+    h.motion = { "motion-pulse": { masking: FILL_BLUR }, "motion-prism": { masking: { mode: "always", source: "full-depth", depthBlur: 28 } } }
+    try {
+      setPluginSupports({ castSwap: { ...CS, depthBlur: true } } as never)
+      expect((await buildToolkit().settings!.nodaroMotionMasking!())!["motion-pulse"]).toEqual({ mode: "always", fill: "depth" })
+      const motion = await buildToolkit().settings!.nodaroMotionMotion!()
+      expect(motion!["motion-pulse"]).toEqual({ masking: { mode: "always", fill: "depth" } })
+      expect(motion!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", depthBlur: 28 } })
+      setPluginSupports({ castSwap: { ...CS, depthFillBlur: true } } as never)
+      expect((await buildToolkit().settings!.nodaroMotionMasking!())!["motion-pulse"]).toEqual(FILL_BLUR)
+      expect((await buildToolkit().settings!.nodaroMotionMotion!())!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth" } })
+    } finally {
+      _resetPluginSupportsForTests()
+    }
+  })
+
+  it("absent = before: a setting without either is answered exactly as before, whatever the engine declares", async () => {
+    const before = { mode: "auto", fill: "depth", faceMesh: true, depthColormap: "inferno" }
+    h.masking = { "motion-pulse": before, "motion-prism": { mode: "always" } }
+    try {
+      const answers = []
+      for (const castSwap of [
+        { ...CS, faceMesh: true, depthColormaps: ["inferno"] },
+        { ...CS, faceMesh: true, depthColormaps: ["inferno"], maskFillNone: true, depthFillBlur: true },
+      ]) {
+        setPluginSupports({ castSwap } as never)
+        answers.push(await buildToolkit().settings!.nodaroMotionMasking!())
+      }
+      expect(answers[1]).toEqual(answers[0])
+      expect(answers[0]!["motion-pulse"]).toEqual(before)
+    } finally {
+      _resetPluginSupportsForTests()
+    }
+  })
+})
