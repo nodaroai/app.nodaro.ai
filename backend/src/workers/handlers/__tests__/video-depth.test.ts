@@ -84,6 +84,19 @@ describe("handleVideoDepth", () => {
     })
   })
 
+  // The run is charged exactly what it reserved (the per-second row of its
+  // measured length): the provider's dollar cost is recorded, never metered
+  // into the charge, so the settlement commits the reservation verbatim.
+  it.each([
+    ["video-depth-anything", "https://x/v.mp4"],
+    ["depth-anything-frames", "https://x/v.mp4"],
+  ])("%s finalizes with no meteredCost: the charge is the reservation", async (provider, videoUrl) => {
+    await handleVideoDepth(job({ provider, videoUrl, colormap: "inferno", durationSec: 10 }), ctx)
+    const [{ result }] = mocks.finalizeJobWithMedia.mock.calls[0] as [{ result: Record<string, unknown> }]
+    expect(result).not.toHaveProperty("meteredCost")
+    expect(mocks.finalizeJobWithMedia.mock.calls[0][0]).not.toHaveProperty("meteredBaseCredits")
+  })
+
   it("reads the orchestrator's duration_seconds stamp when durationSec is absent", async () => {
     await handleVideoDepth(job({ provider: "video-depth-anything", videoUrl: "https://x/v.mp4", colormap: "grayscale", duration_seconds: 12 }), ctx)
     expect(mocks.falVideoDepth).toHaveBeenCalledWith("video-depth-anything", "https://x/v.mp4",

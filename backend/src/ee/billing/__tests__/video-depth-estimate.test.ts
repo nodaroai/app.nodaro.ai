@@ -40,11 +40,12 @@ describe("video-depth workflow estimate", () => {
       est([upload, trim(endTime), depth(data)], wires) - est([upload, trim(endTime)], wires.slice(0, 1))
 
     it.each([
-      [20, "video-depth-anything:30s"],
-      [100, "video-depth-anything:120s"],
-      [400, "video-depth-anything:300s"],
-    ])("a fixed %i-second Trim window quotes %s", (endTime, id) => {
+      [20, "video-depth-anything:20s", 400],
+      [100, "video-depth-anything:100s", 2000],
+      [400, "video-depth-anything:300s", 6000],
+    ])("a fixed %i-second Trim window quotes %s (%i)", (endTime, id, credits) => {
       expect(depthPart(endTime)).toBe(STATIC_CREDIT_COSTS[id])
+      expect(depthPart(endTime)).toBe(credits)
     })
 
     it("on the Replicate provider, its own bucket", () => {

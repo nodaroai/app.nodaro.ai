@@ -530,9 +530,11 @@ export function getModelIdentifier(
     return buildVideoAnalysisCreditId(resolveVideoAnalysisModel(data.llmModel as string | undefined), durationSec)
   }
 
-  // Video Depth: the duration bucket of the wired clip, through the SAME
-  // provider resolution and bucket rule the backend estimator and the route
-  // reserve by (`resolveVideoDepthProvider` + `videoDepthCreditId`) — the node's
+  // Video Depth: the price row of the wired clip's length (a whole second on
+  // Video Depth Anything, rounded up; a length bucket on Depth Anything per
+  // frame), through the SAME provider resolution and row rule the backend
+  // estimator and the route reserve by (`resolveVideoDepthProvider` +
+  // `videoDepthCreditId`) — the node's
   // own badge reads the same upstream length: the producer's own length field,
   // else the clip's metadata the node caches as `probedVideo`. Unknown length →
   // the provider's highest reachable row (fal 300 s, Replicate 120 s), never the

@@ -20,14 +20,19 @@
  * docs track that in `docs-price-settings.json`'s `charged` snapshot.)
  *
  * A statement the replay cannot read exactly (a derived `UPDATE … FROM`, an
- * `INSERT … SELECT`, a value that is an expression) makes the ids it reaches
- * UNKNOWN, and an unknown id is never compared. That set is pinned below, so
- * a new SQL shape fails here, loudly, instead of quietly shrinking coverage.
+ * `INSERT … SELECT` that builds its ids, a value that is an expression) makes
+ * the ids it reaches UNKNOWN, and an unknown id is never compared. That set is
+ * pinned below, so a new SQL shape fails here, loudly, instead of quietly
+ * shrinking coverage. A ROW-LIST insert (`./model-pricing-row-list.ts`: an
+ * `INSERT … SELECT` over a literal VALUES list whose ids and prices are those
+ * literals, its other columns read from rows the table holds) is read exactly,
+ * as the VALUES insert it prices like.
  */
 import { readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
+import { rowListInsert } from "./model-pricing-row-list.js"
 
 const MIGRATIONS_DIR = join(__dirname, "..", "..", "..", "..", "..", "supabase", "migrations")
 
@@ -126,6 +131,14 @@ function namedIds(where: string): string[] | null {
   return null
 }
 
+/** One seeded row, as the database applies it under its statement's `ON CONFLICT` clause (empty: none). */
+function seed(rows: Map<string, Value>, id: string, value: Value, conflict: string): void {
+  const overwrites = /DO\s+UPDATE/i.test(conflict) && /credit_cost\s*=\s*EXCLUDED\.credit_cost/i.test(conflict)
+  const setsOther = /DO\s+UPDATE/i.test(conflict) && !overwrites && /credit_cost\s*=/i.test(conflict)
+  if (!rows.has(id) || !conflict || overwrites) rows.set(id, value)
+  else if (setsOther) rows.set(id, "unknown")
+}
+
 /** The final `model_pricing` value of every id the migrations leave, in migration order. */
 function replayModelPricing(files: { name: string; sql: string }[]): Map<string, Value> {
   const rows = new Map<string, Value>()
@@ -149,15 +162,17 @@ function replayModelPricing(files: { name: string; sql: string }[]): Map<string,
         const idAt = cols.indexOf("model_identifier")
         const costAt = cols.indexOf("credit_cost")
         const conflict = insert[3] ?? ""
-        const overwrites = /DO\s+UPDATE/i.test(conflict) && /credit_cost\s*=\s*EXCLUDED\.credit_cost/i.test(conflict)
-        const setsOther = /DO\s+UPDATE/i.test(conflict) && !overwrites && /credit_cost\s*=/i.test(conflict)
         for (const row of tuples(insert[2]!)) {
           const id = stringOf(row[idAt] ?? "")
           if (!id) continue
-          const value = costAt >= 0 ? numberOf(row[costAt] ?? "") : "unknown"
-          if (!rows.has(id) || !conflict || overwrites) rows.set(id, value)
-          else if (setsOther) rows.set(id, "unknown")
+          seed(rows, id, costAt >= 0 ? numberOf(row[costAt] ?? "") : "unknown", conflict)
         }
+        continue
+      }
+      // A row-list insert: literal ids and prices, its other columns read from the table (590).
+      const rowList = rowListInsert(st)
+      if (rowList) {
+        for (const { id, cost } of rowList.rows) seed(rows, id, cost, rowList.conflict)
         continue
       }
       const update = /^UPDATE\s+(?:public\.)?model_pricing(?:\s+(?:AS\s+)?\w+)?\s+SET\s+([\s\S]*?)(?:\s+WHERE\s+([\s\S]*))?$/i.exec(st)
@@ -252,5 +267,20 @@ describe("STATIC_CREDIT_COSTS equals the latest migration-seeded model_pricing v
     ].join("\n")
     const out = replayModelPricing([{ name: "001_x.sql", sql }])
     expect(Object.fromEntries(out)).toEqual({ a: 5, b: 3, d: "unknown", e: 20 })
+  })
+
+  it("a row-list insert seeds its literal prices under its conflict rule, whatever it reads from the table", () => {
+    const sql = [
+      "INSERT INTO model_pricing (model_identifier, credit_cost) VALUES ('f:15s', 300) ON CONFLICT DO NOTHING;",
+      "INSERT INTO public.model_pricing (model_identifier, credit_cost, is_enabled, category)",
+      "SELECT r.model_identifier, r.credit_cost, CASE WHEN b.model_identifier IS NULL THEN true ELSE b.is_enabled END, b.category",
+      "FROM (VALUES ('f:1s', 20, 'f:15s'), ('f:15s', 999, 'f:15s'), ('f:16s', 320, 'f:30s')) AS r(model_identifier, credit_cost, bucket)",
+      "LEFT JOIN public.model_pricing AS b ON b.model_identifier = r.bucket",
+      "ON CONFLICT (model_identifier) DO NOTHING;",
+      // Builds its ids from rows the table holds: not a row list, so what it reaches is unknown.
+      "INSERT INTO model_pricing (model_identifier, credit_cost) SELECT base.model_identifier || ':x', base.credit_cost FROM model_pricing AS base CROSS JOIN (VALUES ('x')) AS t(n) WHERE base.model_identifier = 'f:16s' ON CONFLICT (model_identifier) DO NOTHING;",
+    ].join("\n")
+    const out = replayModelPricing([{ name: "001_x.sql", sql }])
+    expect(Object.fromEntries(out)).toEqual({ "f:15s": 300, "f:1s": 20, "f:16s": "unknown" })
   })
 })

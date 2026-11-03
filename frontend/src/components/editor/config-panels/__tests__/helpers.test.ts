@@ -292,21 +292,24 @@ describe("getModelIdentifier", () => {
     expect(getModelIdentifier(pt)).toBe("pitch-tempo:30m")
   })
 
-  it("prices Video Depth at the bucket for the wired clip's length, the ceiling when it is unknown", () => {
+  it("prices Video Depth at the row for the wired clip's length (a whole second on fal, a tier on Replicate), the ceiling when it is unknown", () => {
     const depth = (data: Record<string, unknown> = {}) =>
       makeNode({ id: "vd", type: "video-depth", data: { label: "Video Depth", modelSize: "large", ...data } as any })
     const clip = makeNode({ id: "clip", type: "upload-video", data: { label: "Clip", durationSeconds: 40 } as any })
     const wire = makeEdge({ source: "clip", target: "vd", targetHandle: "video" })
     const fal = depth({ provider: "video-depth-anything" })
-    expect(getModelIdentifier(fal, [wire], [clip, fal])).toBe("video-depth-anything:60s")
+    expect(getModelIdentifier(fal, [wire], [clip, fal])).toBe("video-depth-anything:40s")
     expect(getModelIdentifier(fal)).toBe("video-depth-anything:300s")
+    // A fractional length is rounded up to whole seconds, as the server measures and charges it.
+    const short = { ...clip, data: { ...clip.data, durationSeconds: 9.2 } }
+    expect(getModelIdentifier(fal, [wire], [short, fal])).toBe("video-depth-anything:10s")
     const replicate = depth({ provider: "depth-anything-frames" })
     expect(getModelIdentifier(replicate, [wire], [clip, replicate])).toBe("depth-anything-frames:60s")
     // Unknown length on Replicate: its highest reachable row (it refuses clips over 80 s), not :300s.
     expect(getModelIdentifier(replicate)).toBe("depth-anything-frames:120s")
     // An unknown / missing provider is priced as the default one, as the server estimates it.
     const stray = depth({ provider: "not-a-depth-model" })
-    expect(getModelIdentifier(stray, [wire], [clip, stray])).toBe("video-depth-anything:60s")
+    expect(getModelIdentifier(stray, [wire], [clip, stray])).toBe("video-depth-anything:40s")
   })
 
   it("prices Video Depth from the clip's probed length when its producer stores none", () => {
@@ -317,10 +320,10 @@ describe("getModelIdentifier", () => {
       type: "video-depth",
       data: { label: "Video Depth", modelSize: "large", probedVideo: { url: "https://cdn.example/clip.mp4", durationSec: 12 } } as any,
     })
-    expect(getModelIdentifier(probed, [wire], [clip, probed])).toBe("video-depth-anything:15s")
+    expect(getModelIdentifier(probed, [wire], [clip, probed])).toBe("video-depth-anything:12s")
     // The producer's own length wins over the probe.
     const known = makeNode({ id: "clip", type: "upload-video", data: { label: "Clip", durationSeconds: 40 } as any })
-    expect(getModelIdentifier(probed, [wire], [known, probed])).toBe("video-depth-anything:60s")
+    expect(getModelIdentifier(probed, [wire], [known, probed])).toBe("video-depth-anything:40s")
     // A failed probe (no length) keeps the ceiling.
     const failed = makeNode({
       id: "vd",

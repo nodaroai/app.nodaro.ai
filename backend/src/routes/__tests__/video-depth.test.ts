@@ -145,7 +145,26 @@ describe("POST /v1/video-depth", () => {
     expectNothingCreated()
   })
 
-  it("persists the RESOLVED provider + bucket in input_data and reserves the bucket", async () => {
+  it("400 video_too_long past fal's 300-second cap whatever the frame count, as before — no job row, no reservation", async () => {
+    mockProbe.mockResolvedValue({ width: 1, height: 1, durationSeconds: 300.5, fps: 1 })
+    const res = await post({ videoUrl: "https://example.com/v.mp4" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("video_too_long")
+    expect(guardModels).toHaveLength(0)
+    expectNothingCreated()
+  })
+
+  it("a 9.2 s clip: the guard, the reservation and the stamped price row are one per-second row, :10s", async () => {
+    mockProbe.mockResolvedValue({ width: 1, height: 1, durationSeconds: 9.2, fps: 24 })
+    const res = await post({ videoUrl: "https://example.com/v.mp4" })
+    expect(res.statusCode).toBe(200)
+    expect(guardModels).toEqual(["video-depth-anything:10s"])
+    expect(reserveCalls).toEqual([{ jobId: "job-1", model: "video-depth-anything:10s" }])
+    expect(insertedRows[0].input_data).toMatchObject({ duration_seconds: 10, bucketKey: "video-depth-anything:10s" })
+    expect(mockQueueAdd.mock.calls[0][1]).toMatchObject({ durationSec: 10 })
+  })
+
+  it("persists the RESOLVED provider + price row in input_data and reserves that row", async () => {
     mockProbe.mockResolvedValue({ width: 1, height: 1, durationSeconds: 20, fps: 24 })
     const res = await post({ videoUrl: "https://example.com/v.mp4", nodeId: "node-7" })
     expect(res.statusCode).toBe(200)
@@ -158,10 +177,10 @@ describe("POST /v1/video-depth", () => {
       provider: "video-depth-anything",
       modelSize: "large",
       duration_seconds: 20,
-      bucketKey: "video-depth-anything:30s",
+      bucketKey: "video-depth-anything:20s",
     })
-    expect(guardModels).toEqual(["video-depth-anything:30s"])
-    expect(reserveCalls).toEqual([{ jobId: "job-1", model: "video-depth-anything:30s" }])
+    expect(guardModels).toEqual(["video-depth-anything:20s"])
+    expect(reserveCalls).toEqual([{ jobId: "job-1", model: "video-depth-anything:20s" }])
     expect(mockQueueAdd).toHaveBeenCalledTimes(1)
     expect(mockQueueAdd.mock.calls[0][0]).toBe("video-depth")
     expect(mockQueueAdd.mock.calls[0][1]).toMatchObject({
@@ -236,6 +255,6 @@ describe("POST /v1/video-depth", () => {
     expect(mockQueueAdd.mock.calls[0][1]).not.toHaveProperty("outputFps")
     expect(mockQueueAdd.mock.calls[0][1]).not.toHaveProperty("output_fps")
     expect(insertedRows[0].input_data).not.toHaveProperty("outputFps")
-    expect(reserveCalls[0].model).toBe("video-depth-anything:15s")
+    expect(reserveCalls[0].model).toBe("video-depth-anything:10s")
   })
 })

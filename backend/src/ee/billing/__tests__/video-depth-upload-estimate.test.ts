@@ -3,8 +3,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 /**
  * The server's workflow estimates price a Video Depth fed by an upload at the
- * upload's probed length — the tier the run's reservation measures — instead
- * of the provider's ceiling row. A clip the estimate cannot read, or an upload
+ * upload's probed length — the row the run's reservation measures (a whole
+ * second on Video Depth Anything, a length tier on Depth Anything per frame) —
+ * instead of the provider's ceiling row. A clip the estimate cannot read, or an upload
  * the app user replaces, stays at the ceiling: never below the reserve.
  */
 
@@ -50,9 +51,14 @@ beforeEach(() => {
 })
 
 describe("server run estimate — Video Depth on an uploaded clip", () => {
-  it("a 12 s upload quotes the 15 s tier the run reserves, not the 300 s ceiling", async () => {
-    expect(await depthPart([upload, depth()])).toBe(await charged("video-depth-anything:15s"))
+  it("a 12 s upload quotes the 12 s row the run reserves, not the 300 s ceiling", async () => {
+    expect(await depthPart([upload, depth()])).toBe(await charged("video-depth-anything:12s"))
     expect(probe.calls).toEqual([CLIP])
+  })
+
+  it("a 9.2 s upload quotes the 10 s row: the length rounded up to whole seconds", async () => {
+    probe.durations.set(CLIP, 9.2)
+    expect(await depthPart([upload, depth()])).toBe(await charged("video-depth-anything:10s"))
   })
 
   it("on the Replicate provider, its own tier", async () => {
@@ -68,7 +74,7 @@ describe("server run estimate — Video Depth on an uploaded clip", () => {
   it("a length the upload declares wins without a probe", async () => {
     const declared = { ...upload, data: { ...upload.data, duration: 40 } }
     const total = (await CreditsService.estimateWorkflowCredits([declared, depth()], wires)) - (await CreditsService.estimateWorkflowCredits([declared], []))
-    expect(total).toBe(await charged("video-depth-anything:60s"))
+    expect(total).toBe(await charged("video-depth-anything:40s"))
   })
 
   it("probes a URL once, then serves it from the cache", async () => {
@@ -82,7 +88,7 @@ describe("published-app listing — Video Depth on an uploaded clip", () => {
   it("a fixed upload is probed; one the app user replaces is the ceiling", async () => {
     const fixed = await estimateWorkflowListingCredits([upload, depth()], wires, { publishType: "app", replaceableMediaNodeIds: new Set() })
     const fixedUpload = await estimateWorkflowListingCredits([upload], [], { publishType: "app", replaceableMediaNodeIds: new Set() })
-    expect(fixed.preview - fixedUpload.preview).toBe(await charged("video-depth-anything:15s"))
+    expect(fixed.preview - fixedUpload.preview).toBe(await charged("video-depth-anything:12s"))
     const replaced = await estimateWorkflowListingCredits([upload, depth()], wires, { publishType: "app", replaceableMediaNodeIds: new Set(["clip"]) })
     const replacedUpload = await estimateWorkflowListingCredits([upload], [], { publishType: "app", replaceableMediaNodeIds: new Set(["clip"]) })
     expect(replaced.preview - replacedUpload.preview).toBe(await charged("video-depth-anything:300s"))
