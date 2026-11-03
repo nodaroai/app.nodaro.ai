@@ -231,6 +231,49 @@ describe("the stored face mask", { timeout: 20_000 }, () => {
     expect(screen.getByRole("button", { name: /make again/i })).toBeEnabled()
   })
 
+  it("flags a mask whose face mesh was drawn before the stray-face fix to make again, approved all the same", async () => {
+    const FLAG = "Make again: its face mesh was drawn before the stray-face fix (3 Nov 2026)."
+    routes[`GET ${BASE}`] = () => ({
+      body: {
+        data: detail(
+          { faceMaskState: { status: "approved", reasons: [], flags: [{ why: "face_mesh_before_stray_fix" }] } },
+          { faceMasking: { mode: "always", source: "full-depth", faceMesh: true }, faceMask: { ...STORED, recipe: { core: null, plugin: "1" }, meshRecipe: "2026-11-02" } },
+        ),
+      },
+    })
+    const { unmount } = renderEditor()
+    // Still approved: the flag is not one of the reasons a mask is out of date (it holds back nothing).
+    expect(await screen.findByTestId("face-mask-status")).toHaveTextContent("Approved")
+    expect(screen.queryByRole("list", { name: /why the face mask is out of date/i })).not.toBeInTheDocument()
+    const flags = screen.getByRole("list", { name: "Why to make the face mask again" })
+    expect(within(flags).getByText(FLAG)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /make again/i })).toBeEnabled()
+    unmount()
+
+    // Beside the reasons of a mask out of date, apart from them.
+    routes[`GET ${BASE}`] = () => ({
+      body: {
+        data: detail(
+          { faceMaskState: { status: "out_of_date", reasons: [{ why: "settings" }], flags: [{ why: "face_mesh_before_stray_fix" }] } },
+          { faceMasking: { mode: "always", source: "full-depth", faceMesh: true }, faceMask: { ...STORED, meshRecipe: "2026-11-02" } },
+        ),
+      },
+    })
+    renderEditor()
+    const why = await screen.findByRole("list", { name: /why the face mask is out of date/i })
+    expect(within(why).queryByText(FLAG)).not.toBeInTheDocument()
+    expect(within(screen.getByRole("list", { name: "Why to make the face mask again" })).getByText(FLAG)).toBeInTheDocument()
+  })
+
+  it("flags nothing on a mask the server does not flag", async () => {
+    routes[`GET ${BASE}`] = () => ({
+      body: { data: detail({ faceMaskState: { status: "approved", reasons: [] } }, { faceMasking: MASKING, faceMask: { ...STORED, meshRecipe: "2026-11-03" } }) },
+    })
+    renderEditor()
+    expect(await screen.findByTestId("face-mask-status")).toHaveTextContent("Approved")
+    expect(screen.queryByRole("list", { name: "Why to make the face mask again" })).not.toBeInTheDocument()
+  })
+
   it("removes the approved mask with the held revision", async () => {
     const user = userEvent.setup()
     routes[`GET ${BASE}`] = () => ({

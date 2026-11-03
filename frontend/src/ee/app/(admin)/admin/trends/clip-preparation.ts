@@ -399,13 +399,79 @@ export function someEngineDrawsFaceMesh(envs: readonly TrendEngineEnvironment[] 
 }
 
 /**
+ * The smallest face Full depth's face mesh draws lines on when the setting
+ * names none (`faceMeshMinFaceHeightPct` left out): the Cast Swap engine's
+ * own default, 10 % of the frame's height. Shown as the field's placeholder,
+ * never written into a setting (the engine applies it).
+ */
+export const FACE_MESH_MIN_FACE_HEIGHT_DEFAULT_PCT = 10
+
+/**
+ * The smallest face with mesh lines the setting saves (the server's
+ * `faceMeshMinFaceHeightSent`): the value it names, on Full depth with the
+ * face mesh on; any value set (0 and the default's 10 included). Else
+ * undefined (no key).
+ */
+export function faceMeshMinFaceHeightSaved(m: AdminTrendFaceMasking | undefined): number | undefined {
+  if (!m || m.mode === "off" || clipPreparationOf(m) !== "full-depth" || m.faceMesh !== true) return undefined
+  const v = m.faceMeshMinFaceHeightPct
+  return typeof v === "number" && Number.isFinite(v) ? v : undefined
+}
+
+/**
+ * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose
+ * engine cannot draw Full depth's face mesh from a smallest face — none
+ * recorded, or one that does not declare `castSwap.faceMeshMinFaceHeightPct`
+ * (a Cast Swap engine before 0.436.1). Unknown while the environments are
+ * (undefined). Admin → Nodaro Motion's setting is shared, so a value is saved
+ * only when this is empty (the server refuses the save otherwise, 409
+ * `engine_unsupported`); a trend's make is refused where the engine lacks it.
+ */
+export function environmentsThatCannotDrawFaceMeshMinFaceHeight(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+  if (!envs) return undefined
+  return SHARED_SETTING_ENVIRONMENTS.filter((name) => envs.find((e) => e.env === name)?.supports.castSwap?.faceMeshMinFaceHeightPct !== true)
+}
+
+/**
+ * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose
+ * PLATFORM (the app itself, apart from its engine) has not recorded that it
+ * takes Full depth's smallest face with mesh lines — none recorded, or a row
+ * whose `supports.platform` does not say so (an app from before it, however
+ * new its engine). Unknown while the environments are (undefined). Staging and
+ * production share one database, and an older platform refuses a setting or
+ * a trend that carries the field, so a value is saved only when this is empty
+ * (the server holds the save otherwise, 422 `platform_unsupported`). The
+ * server sends a claim only while its record is fresh (its heartbeat, on the
+ * server's clock: a stale one arrives as no claim), so this reads presence.
+ */
+export function environmentsWhosePlatformCannotTakeFaceMeshMinFaceHeight(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+  if (!envs) return undefined
+  return SHARED_SETTING_ENVIRONMENTS.filter((name) => envs.find((e) => e.env === name)?.supports.platform?.faceMeshMinFaceHeightPct !== true)
+}
+
+/** The environments that cannot take Full depth's smallest face with mesh lines yet: by their engine, and by their platform. */
+export interface FaceMeshMinFaceHeightMissing {
+  readonly engine: readonly string[]
+  readonly platform: readonly string[]
+}
+
+/** Both lists (`environmentsThatCannotDrawFaceMeshMinFaceHeight`, `environmentsWhosePlatformCannotTakeFaceMeshMinFaceHeight`); unknown while the environments are. */
+export function faceMeshMinFaceHeightMissing(envs: readonly TrendEngineEnvironment[] | undefined): FaceMeshMinFaceHeightMissing | undefined {
+  const engine = environmentsThatCannotDrawFaceMeshMinFaceHeight(envs)
+  const platform = environmentsWhosePlatformCannotTakeFaceMeshMinFaceHeight(envs)
+  return engine && platform ? { engine, platform } : undefined
+}
+
+/**
  * The setting prepared another way (a new object; undefined stays undefined
  * for Faces hidden, the default). A depth mode is mode "always". Leaving Keep
  * people drops what only it takes: its whole-person target (kept there, it
  * would be HIDDEN with Faces hidden), and the main character boxes
  * (`removedMain` counts them, for the screen to say so). Full depth drops the
  * whole person too (it masks no one). Keep people drops the face mesh (the
- * faces stay as filmed there: nothing to draw on).
+ * faces stay as filmed there: nothing to draw on). Leaving Full depth drops
+ * what only it takes: its scene, its depth blur and its smallest face with
+ * mesh lines (the server refuses the last elsewhere).
  */
 export function withClipPreparation(
   m: AdminTrendFaceMasking | undefined,
@@ -414,10 +480,11 @@ export function withClipPreparation(
   if (!m && source === "faces") return { masking: undefined, removedMain: 0 }
   const { source: _was, ...rest } = m ?? { mode: "always" as const }
   const next: AdminTrendFaceMasking = isDepthPreparation(source) ? { ...rest, mode: "always", source } : { ...rest }
-  // The scene source is Full depth's alone; so is the depth blur.
+  // The scene source is Full depth's alone; so are the depth blur and the smallest face with mesh lines.
   if (source !== "full-depth") {
     delete next.scene
     delete next.depthBlur
+    delete next.faceMeshMinFaceHeightPct
   }
   // The face mesh (and what it draws) is never Keep people's; role outlines are Faces hidden's alone.
   if (source === "keep-people") {

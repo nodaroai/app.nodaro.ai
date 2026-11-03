@@ -38,6 +38,7 @@ import {
   withDepthColormapFor,
   withDepthModelSizeFor,
   withFaceMeshFor,
+  withFaceMeshMinFaceHeightFor,
   withResolvedZone,
   type FaceMaskingZone,
 } from "../../../lib/cast-swap-face-masking.js"
@@ -582,6 +583,22 @@ export function withoutUnsupportedDepthModelSize(composed: ComposedTrendRun): vo
 }
 
 /**
+ * The body's `faceMasking` without Full depth's `faceMeshMinFaceHeightPct`
+ * unless the loaded engine declares it (`castSwap.faceMeshMinFaceHeightPct`,
+ * `withFaceMeshMinFaceHeightFor`): an engine from before it gets exactly the
+ * body it got before the key existed. A run never draws the mesh (it cuts the
+ * stored clip, made with the value), so publishing needs nothing for it and
+ * a run anywhere is the same run. Runs after `withoutUnsupportedFaceMesh`: no
+ * value is sent without the mesh. Mutates `composed.body` (its `faceMasking`
+ * is its own copy).
+ */
+export function withoutUnsupportedFaceMeshMinFaceHeight(composed: ComposedTrendRun): void {
+  const masking = composed.body.faceMasking
+  if (!masking || !Object.hasOwn(masking, "faceMeshMinFaceHeightPct")) return
+  composed.body.faceMasking = withFaceMeshMinFaceHeightFor(masking, getPluginSupports().castSwap)
+}
+
+/**
  * The body's `steps` kept only when the loaded engine declares
  * `castSwap.steps`, its `clipBody` only when it also declares
  * `castSwap.clipBodySheet` and its `shotList` only when it also declares
@@ -725,6 +742,7 @@ export function withoutUnsupportedFields(composed: ComposedTrendRun): void {
   withoutUnsupportedFaceMesh(composed)
   withoutUnsupportedDepthColormap(composed)
   withoutUnsupportedDepthModelSize(composed)
+  withoutUnsupportedFaceMeshMinFaceHeight(composed)
   withoutUnsupportedSceneDescription(composed)
   withoutUnsupportedSteps(composed)
   withoutUnsupportedPulseAudio(composed)

@@ -73,7 +73,13 @@ import { EnginePromptParts } from "../components/EnginePromptParts"
 import { PromptStyleSelect } from "../components/PromptStyleSelect"
 import { PromptWordingSelect } from "../components/PromptWordingSelect"
 import { environmentsLackingNewWording, someEnvironmentTakesNewWording } from "../prompt-wording"
-import { clipPreparationOf, roleOutlinesOn, supportedTargetsFor, withClipPreparation } from "../clip-preparation"
+import {
+  clipPreparationOf,
+  faceMeshMinFaceHeightMissing,
+  roleOutlinesOn,
+  supportedTargetsFor,
+  withClipPreparation,
+} from "../clip-preparation"
 import { FaceMaskPanel } from "../components/FaceMaskPanel"
 import { StepsEditor } from "../components/StepsEditor"
 import { defaultPromptStyleOf, sceneOf } from "../prompt-style"
@@ -286,6 +292,9 @@ export default function AdminTrendEditorPage() {
   // The saved draft draws role outlines (Faces hidden): every person may get boxes then.
   const savedOutlines = roleOutlinesOn(server.draft.faceMasking)
   const supportedTargets = supportedTargetsFor(envs.data, preparation)
+  // Full depth's smallest face with mesh lines: offered greyed out, naming the environments whose engine lacks it or
+  // whose platform does not take it yet (trends are in the database every environment shares).
+  const minFaceMissing = faceMeshMinFaceHeightMissing(envs.data)
   const onClipPreparation = (next: typeof preparation) => {
     const { masking, removedMain } = withClipPreparation(form.faceMasking, next)
     set({ faceMasking: masking })
@@ -533,6 +542,7 @@ export default function AdminTrendEditorPage() {
               value={form.faceMasking}
               source={preparation}
               supportedTargets={supportedTargets}
+              faceMeshMinFaceHeightMissing={minFaceMissing}
               clipSec={form.source?.durationSec}
               envs={envs.data}
               offerRoleOutlines

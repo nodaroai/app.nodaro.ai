@@ -375,9 +375,24 @@ function seed(over: Partial<MemTrend> = {}, data = draftData()) {
   return t
 }
 
-/** An environment row; `castSwap: null` = an engine that records no Cast Swap supports at all. */
-function envRow(env: string, castSwap: unknown = { ...CAST_SWAP_ALL }) {
-  return { env, plugin_build_id: "b1", supports: castSwap === null ? {} : { castSwap }, updated_at: "2026-10-20T00:00:00Z" }
+/** When every engine record here was written: its boot, weeks ago (a claim's own time, not this, is what counts). */
+const ENV_BOOT = "2026-10-20T00:00:00Z"
+
+/**
+ * An environment row as the table holds it; `castSwap: null` = an engine that records no Cast Swap supports at all.
+ * Its engine record was written at boot (`ENV_BOOT`). `platform`: its platform's claim (what the app itself takes;
+ * its own columns, the heartbeat's), made `claimedAt` (now by default: a claim counts only while its own time is
+ * fresh); left out = none (a platform from before the claim).
+ */
+function envRow(env: string, castSwap: unknown = { ...CAST_SWAP_ALL }, platform?: Record<string, unknown>, claimedAt?: string) {
+  return {
+    env,
+    plugin_build_id: "b1",
+    supports: castSwap === null ? {} : { castSwap },
+    updated_at: ENV_BOOT,
+    platform_supports: platform ?? null,
+    platform_claimed_at: platform ? (claimedAt ?? new Date().toISOString()) : null,
+  }
 }
 
 function runInput(over: Record<string, unknown> = {}) {
@@ -2621,6 +2636,37 @@ describe("the stored face mask", () => {
         expect(mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey).toBe(faceMaskSettingsKey(draftData({ faceMasking: FULL })))
       })
 
+      it("full depth's smallest face with mesh lines goes only to an engine that declares it (refused before anything is paid), and is in the settings key", async () => {
+        const MIN = { ...FULL, faceMesh: true, faceMeshMinFaceHeightPct: 20 }
+        seed({}, draftData({ faceMasking: MIN }))
+        for (const extra of [{}, { faceMeshMinFaceHeightPct: false }]) {
+          supports({ ...DEPTH, faceMesh: true, ...extra })
+          const held = await start()
+          expect(held.statusCode, JSON.stringify(extra)).toBe(503)
+          expect(held.json().error).toMatchObject({ code: "engine_unsupported", message: expect.stringMatching(/smallest face with mesh lines/) })
+        }
+        expect(engine.calls).toEqual([])
+
+        supports({ ...DEPTH, faceMesh: true, faceMeshMinFaceHeightPct: true })
+        const res = await start()
+        expect(res.statusCode).toBe(202)
+        expect(engine.calls[0]!.body).toEqual({
+          videoUrl: `https://cdn.test/trends/${T1}/src.mp4`,
+          faceMasking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshMinFaceHeightPct: 20 },
+        })
+        const key = mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey
+        expect(key).toBe(faceMaskSettingsKey(draftData({ faceMasking: MIN })))
+        expect(key).not.toBe(faceMaskSettingsKey(draftData({ faceMasking: { ...FULL, faceMesh: true } })))
+      })
+
+      it("full depth's face mesh with no smallest face set needs no new declaration: the engine is asked exactly as before", async () => {
+        seed({}, draftData({ faceMasking: { ...FULL, faceMesh: true } }))
+        supports({ ...DEPTH, faceMesh: true })
+        const res = await start()
+        expect(res.statusCode).toBe(202)
+        expect(engine.calls[0]!.body).toEqual({ videoUrl: `https://cdn.test/trends/${T1}/src.mp4`, faceMasking: { mode: "always", source: "full-depth", faceMesh: true } })
+      })
+
       it("keep people sends its target named, no fill, and its main marks", async () => {
         seed({}, draftData({ faceMasking: { ...KEEP, marks: [MAIN] } }))
         supports(DEPTH)
@@ -2825,6 +2871,34 @@ describe("the stored face mask", () => {
         expect(stored).not.toHaveProperty("rawMaskUrl")
         expect(stored).not.toHaveProperty("baseKey")
         expect(res.json().data.faceMaskState).toEqual({ status: "approved", reasons: [] })
+      })
+
+      it("a clip whose face mesh was drawn before the stray-face fix approves as up to date, flagged to make again (never refused)", async () => {
+        const MESHED = { ...FULL, faceMesh: true }
+        const meshKey = faceMaskSettingsKey(draftData({ faceMasking: MESHED }))!
+        const flagged = { status: "approved", reasons: [], flags: [{ why: "face_mesh_before_stray_fix" }] }
+        seed({}, draftData({ faceMasking: MESHED, faceMaskJob: pendingJob({ settingsKey: meshKey }) }))
+        world.jobs.set(
+          FACE_MASK_JOB,
+          fmJob({}, { faceMasking: MESHED }, { recipe: { core: null, plugin: "1" }, stats: { coverage: 1 }, faceMesh: { facesDrawn: 40, recipe: "2026-11-02" } }),
+        )
+        const res = await approve()
+        expect(res.statusCode).toBe(200)
+        expect(mem.trends[0]!.versions[1]!.data.faceMask).toMatchObject({ settingsKey: meshKey, facesDrawn: 40, meshRecipe: "2026-11-02" })
+        expect(res.json().data.faceMaskState).toEqual(flagged)
+        // What the editor reads.
+        expect((await call("GET", `/v1/admin/trends/${T1}`)).json().data.faceMaskState).toEqual(flagged)
+
+        // Drawn after the fix: not flagged.
+        mem.trends = []
+        seed({}, draftData({ faceMasking: MESHED, faceMaskJob: pendingJob({ settingsKey: meshKey }) }))
+        world.jobs.set(
+          FACE_MASK_JOB,
+          fmJob({}, { faceMasking: MESHED }, { recipe: { core: null, plugin: "1" }, stats: { coverage: 1 }, faceMesh: { facesDrawn: 40, recipe: "2026-11-03" } }),
+        )
+        const after = await approve()
+        expect(after.statusCode).toBe(200)
+        expect(after.json().data.faceMaskState).toEqual({ status: "approved", reasons: [] })
       })
 
       it("a make the engine recorded in another clip preparation is refused (an older engine stripped `source`)", async () => {
@@ -3509,5 +3583,162 @@ describe("the stored face mask", () => {
       expect((await call("POST", `/v1/admin/trends/${T1}/test-runs`, { slots })).statusCode).toBe(202)
       expect(engine.calls[1]!.body).not.toHaveProperty("steps")
     })
+  })
+})
+
+// ── Full depth's smallest face with mesh lines: the platform hold ──────────
+
+/**
+ * Staging and production share one database (decided 2026-11-03). A platform
+ * that predates `faceMeshMinFaceHeightPct` computes a trend's settings key
+ * without it, so a trend saved or published with a value would have its runs
+ * there refused `face_mask_required`. So a draft save or a publish that carries
+ * a value is held (422 `platform_unsupported`) while any environment's platform
+ * has not claimed that it takes it (its claim, by its heartbeat), even when its engine
+ * declares the field. An absent field is never held, and a trend saved before
+ * stays readable either way.
+ */
+describe("the smallest face with mesh lines, held until every environment's platform takes it", () => {
+  const MIN = { mode: "always" as const, source: "full-depth" as const, faceMesh: true, faceMeshMinFaceHeightPct: 20 }
+  const ENGINE = { ...CAST_SWAP_ALL, faceMeshMinFaceHeightPct: true }
+  const TAKES = { faceMeshMinFaceHeightPct: true }
+  const save = async (faceMasking: unknown) =>
+    call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), faceMasking }, revision: await revisionOf() })
+
+  it("a draft save that carries a value is held while one environment's platform does not take it, naming it", async () => {
+    seed()
+    world.envs = [envRow("production", ENGINE), envRow("staging", ENGINE, TAKES)]
+    const before = structuredClone(mem.trends[0]!.versions[1]!.data)
+    const res = await save(MIN)
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error).toEqual({
+      code: "platform_unsupported",
+      envs: ["production"],
+      message:
+        "The platform in production does not take the smallest face with mesh lines yet, and trends are shared by every environment: empty it, or wait until production is updated.",
+    })
+    expect(mem.trends[0]!.versions[1]!.data).toEqual(before)
+    // Where it draws nothing too (the face mesh off): an older platform refuses the key itself.
+    expect((await save({ mode: "always", source: "full-depth", faceMeshMinFaceHeightPct: 20 })).statusCode).toBe(422)
+  })
+
+  it("once every environment's platform takes it, the draft saves it", async () => {
+    seed()
+    world.envs = [envRow("production", ENGINE, TAKES), envRow("staging", ENGINE, TAKES)]
+    const res = await save(MIN)
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    expect(mem.trends[0]!.versions[1]!.data.faceMasking).toEqual(MIN)
+  })
+
+  it("a draft save without it is never held, whatever the platforms record; only a carried value reads the environments for the hold", async () => {
+    seed()
+    world.envs = [envRow("production", ENGINE), envRow("staging", ENGINE)]
+    const { faceMeshMinFaceHeightPct: _none, ...without } = MIN
+    let envReads = 0
+    db.respond = (q) => {
+      if (q.table === "engine_environments") envReads++
+      return respond(q)
+    }
+    const res = await save(without)
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    expect(mem.trends[0]!.versions[1]!.data.faceMasking).toEqual(without)
+    // The reads every save makes already (its answer's face mask state); a carried value adds exactly one.
+    const ordinary = envReads
+    envReads = 0
+    world.envs = [envRow("production", ENGINE, TAKES), envRow("staging", ENGINE, TAKES)]
+    expect((await save(MIN)).statusCode).toBe(200)
+    expect(envReads).toBe(ordinary + 1)
+  })
+
+  it("an environments read that fails while a value is carried is a 500, never a save", async () => {
+    seed()
+    const before = structuredClone(mem.trends[0]!.versions[1]!.data)
+    db.respond = (q) => (q.table === "engine_environments" ? { data: null, error: { message: "down" } } : respond(q))
+    expect((await save(MIN)).statusCode).toBe(500)
+    expect(mem.trends[0]!.versions[1]!.data).toEqual(before)
+  })
+
+  it("a publish of a draft that carries a value is held while one environment's platform does not take it; nothing is published", async () => {
+    seed({}, draftData({ faceMasking: MIN }))
+    world.envs = [envRow("production", ENGINE, TAKES), envRow("staging", ENGINE)]
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error).toEqual({
+      code: "platform_unsupported",
+      envs: ["staging"],
+      message: "The platform in staging does not take the smallest face with mesh lines yet, so its runs of this trend would be refused: empty it, or wait until staging is updated.",
+    })
+    expect(mem.trends[0]!.status).toBe("draft")
+    expect(mem.trends[0]!.publishedVersion).toBeNull()
+    // Every platform takes it: past the hold, to the publish checks as before (here: no approved stored clip yet).
+    world.envs = [envRow("production", ENGINE, TAKES), envRow("staging", ENGINE, TAKES)]
+    const next = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(next.json().error?.code).not.toBe("platform_unsupported")
+  })
+
+  it("a publish without it is never held, whatever the platforms record", async () => {
+    seed()
+    world.envs = [envRow("production"), envRow("staging")]
+    const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    expect(mem.trends[0]!.status).toBe("published")
+  })
+
+  it("a stale claim is no claim: a draft save is held as if that platform never took it (its heartbeat stopped)", async () => {
+    seed()
+    const stale = new Date(Date.now() - 20 * 60_000).toISOString()
+    world.envs = [envRow("production", ENGINE, TAKES, stale), envRow("staging", ENGINE, TAKES)]
+    const res = await save(MIN)
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error).toMatchObject({ code: "platform_unsupported", envs: ["production"] })
+    expect(mem.trends[0]!.versions[1]!.data.faceMasking).toBeUndefined()
+    // Claimed again since (within the TTL): saved.
+    world.envs = [envRow("production", ENGINE, TAKES, new Date(Date.now() - 4 * 60_000).toISOString()), envRow("staging", ENGINE, TAKES)]
+    expect((await save(MIN)).statusCode).toBe(200)
+  })
+
+  it("the claim's own time decides, never the engine record's: a boot a minute ago does not freshen a stale claim (draft save and publish held)", async () => {
+    const stale = new Date(Date.now() - 20 * 60_000).toISOString()
+    const justBooted = { ...envRow("production", ENGINE, TAKES, stale), updated_at: new Date(Date.now() - 60_000).toISOString() }
+    seed()
+    world.envs = [justBooted, envRow("staging", ENGINE, TAKES)]
+    const held = await save(MIN)
+    expect(held.statusCode).toBe(422)
+    expect(held.json().error).toMatchObject({ code: "platform_unsupported", envs: ["production"] })
+    mem.trends = []
+    seed({}, draftData({ faceMasking: MIN }))
+    const publish = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(publish.statusCode).toBe(422)
+    expect(publish.json().error).toMatchObject({ code: "platform_unsupported", envs: ["production"] })
+    expect(mem.trends[0]!.status).toBe("draft")
+  })
+
+  it("GET /engine-environments shows a claim only while fresh: a stale one is left out (the editor greys it), the row kept", async () => {
+    const stale = new Date(Date.now() - 20 * 60_000).toISOString()
+    world.envs = [envRow("production", ENGINE, TAKES, stale), envRow("staging", ENGINE, TAKES)]
+    const res = await call("GET", "/v1/admin/trends/engine-environments")
+    expect(res.statusCode).toBe(200)
+    const rows = res.json().data as Array<{ env: string; supports: Record<string, unknown>; updatedAt: string }>
+    expect(rows.find((r) => r.env === "production")).toEqual({ env: "production", pluginBuildId: "b1", supports: { castSwap: ENGINE }, updatedAt: ENV_BOOT })
+    expect(rows.find((r) => r.env === "staging")!.supports).toEqual({ castSwap: ENGINE, platform: TAKES })
+  })
+
+  it("GET /engine-environments: Reported (`updatedAt`) is the engine record's time, its boot, never the claim's; nothing else of the claim's is sent", async () => {
+    world.envs = [envRow("production", ENGINE, TAKES), envRow("staging", ENGINE)]
+    const res = await call("GET", "/v1/admin/trends/engine-environments")
+    expect(res.statusCode).toBe(200)
+    const rows = res.json().data as Array<Record<string, unknown>>
+    expect(rows).toEqual([
+      { env: "production", pluginBuildId: "b1", supports: { castSwap: ENGINE, platform: TAKES }, updatedAt: ENV_BOOT },
+      { env: "staging", pluginBuildId: "b1", supports: { castSwap: ENGINE }, updatedAt: ENV_BOOT },
+    ])
+  })
+
+  it("a trend saved with a value before stays readable while a platform does not take it", async () => {
+    seed({}, draftData({ faceMasking: MIN }))
+    world.envs = [envRow("production", ENGINE), envRow("staging", ENGINE)]
+    const res = await call("GET", `/v1/admin/trends/${T1}`)
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.draft.faceMasking).toEqual(MIN)
   })
 })

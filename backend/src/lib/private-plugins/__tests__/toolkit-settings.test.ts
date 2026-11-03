@@ -522,6 +522,42 @@ describe("tk.settings: the depth blur and the face mesh's parts", () => {
   })
 })
 
+describe("tk.settings: Full depth's smallest face with mesh lines", () => {
+  beforeEach(() => {
+    h.masking = null
+    h.motion = null
+    h.failed = false
+  })
+
+  it("answers it only to an engine that declares it, and only where it applies (Full depth, the face mesh on)", async () => {
+    const MIN = { mode: "always", source: "full-depth", faceMesh: true, faceMeshMinFaceHeightPct: 20 }
+    h.motion = {
+      "motion-prism": { masking: MIN },
+      // The face mesh off: it draws nothing, so it is never answered.
+      "motion-pulse": { masking: { mode: "always", source: "full-depth", faceMeshMinFaceHeightPct: 20 } },
+    }
+    // A Precise row never holds it (its schema refuses it); one that did is answered without it.
+    h.masking = { "motion-prism": { mode: "always", faceMesh: true, faceMeshMinFaceHeightPct: 20 } }
+    try {
+      setPluginSupports({ castSwap: { ...CS, faceMesh: true, faceMeshMinFaceHeightPct: true } } as never)
+      const motion = await buildToolkit().settings!.nodaroMotionMotion!()
+      expect(motion!["motion-prism"]).toEqual({ masking: MIN })
+      expect(motion!["motion-pro"]).toEqual({ masking: MIN })
+      expect(motion!["motion-pulse"]).toEqual({ masking: { mode: "always", source: "full-depth" } })
+      expect((await buildToolkit().settings!.nodaroMotionMasking!())!["motion-prism"]).toEqual({ mode: "always", faceMesh: true })
+      // An engine from before it (0.436.1), or one without the mesh: the setting as it was before the key existed.
+      for (const castSwap of [{ ...CS, faceMesh: true }, { ...CS, faceMesh: true, faceMeshMinFaceHeightPct: false }, CS]) {
+        setPluginSupports({ castSwap } as never)
+        const older = await buildToolkit().settings!.nodaroMotionMotion!()
+        const mesh = (castSwap as { faceMesh?: boolean }).faceMesh === true ? { faceMesh: true } : {}
+        expect(older!["motion-prism"], JSON.stringify(castSwap)).toEqual({ masking: { mode: "always", source: "full-depth", ...mesh } })
+      }
+    } finally {
+      _resetPluginSupportsForTests()
+    }
+  })
+})
+
 describe("tk.settings: the fill none and a depth fill's blur", () => {
   beforeEach(() => {
     h.masking = null

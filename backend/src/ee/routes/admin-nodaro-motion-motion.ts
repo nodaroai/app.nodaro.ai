@@ -42,9 +42,19 @@
  * size (`depthModelSize`) while any environment's engine cannot draw with it
  * (`nodaro-motion-depth-model-size.ts`); one whose full depth blurs the depth
  * map (`depthBlur` above 0) while any environment's engine cannot
- * (`nodaro-motion-depth-blur.ts`); and one whose face mesh draws only some
+ * (`nodaro-motion-depth-blur.ts`); one whose face mesh draws only some
  * of its parts (`faceMeshParts`) while any environment's engine does not list
- * them (`nodaro-motion-face-mesh.ts`).
+ * them (`nodaro-motion-face-mesh.ts`); and one whose Full depth face mesh sets
+ * the smallest face it draws lines on (`faceMeshMinFaceHeightPct`, 0
+ * included) while any environment's engine does not declare it
+ * (`nodaro-motion-face-mesh.ts`).
+ *
+ * Before any of those, a save whose masking carries `faceMeshMinFaceHeightPct`
+ * at all is 422 `platform_unsupported` while any environment's PLATFORM (the
+ * app itself, not its engine) has not recorded that it takes it: the row is
+ * shared, and an older platform's strict schema drops the whole entry that
+ * carries the key (`platformHoldOfFaceMeshMinFaceHeight`). An absent field is
+ * never held.
  *
  * A save whose Faces hidden masking names the fill `"none"` or a blur on the
  * depth fill is 400 `validation_error`: both are the Precise setting's alone
@@ -80,11 +90,16 @@ import { fullDepthSceneOf, type FaceMaskingScene } from "../../lib/cast-swap-fac
 import { cannotHideBodiesMessage, environmentsThatCannotHideBodies, hidesWholePeople } from "../lib/nodaro-motion-hide-body.js"
 import {
   cannotDrawFaceMeshMessage,
+  cannotDrawFaceMeshMinFaceHeightMessage,
   cannotDrawFaceMeshPartsMessage,
   drawsFaceMesh,
   environmentsThatCannotDrawFaceMesh,
+  environmentsThatCannotDrawFaceMeshMinFaceHeight,
   environmentsThatCannotDrawFaceMeshParts,
+  faceMeshMinFaceHeightCarried,
+  faceMeshMinFaceHeightOfSetting,
   faceMeshPartsOfSetting,
+  platformHoldOfFaceMeshMinFaceHeight,
 } from "../lib/nodaro-motion-face-mesh.js"
 import { cannotBlurDepthMessage, depthBlurOfSetting, environmentsThatCannotBlurDepth } from "../lib/nodaro-motion-depth-blur.js"
 import { motionMaskingPreciseOnlyProblem } from "../lib/nodaro-motion-fill-none.js"
@@ -163,8 +178,16 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
       // A depth blur, and face mesh parts other than the full mesh (each named, once), likewise.
       const blurs = NODARO_MOTION_ENGINES.some((engine) => depthBlurOfSetting(parsed.data.motion[engine]?.masking) !== undefined)
       const parts = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => faceMeshPartsOfSetting(parsed.data.motion[engine]?.masking) ?? []))]
-      if (hides || meshes || scenes.length > 0 || colormaps.length > 0 || sizes.length > 0 || blurs || parts.length > 0) {
+      // Full depth's smallest face with mesh lines likewise (any value set, 0 included).
+      const minFaces = NODARO_MOTION_ENGINES.some((engine) => faceMeshMinFaceHeightOfSetting(parsed.data.motion[engine]?.masking) !== undefined)
+      // And carried at all (where it draws nothing too): held first while any environment's platform does not take it.
+      const maskings = NODARO_MOTION_ENGINES.map((engine) => parsed.data.motion[engine]?.masking)
+      const carried = maskings.some(faceMeshMinFaceHeightCarried)
+      if (hides || meshes || scenes.length > 0 || colormaps.length > 0 || sizes.length > 0 || blurs || parts.length > 0 || minFaces || carried) {
         const environments = await listEngineEnvironments()
+        // The platform hold: this row is shared, and an older platform drops an entry that carries the key.
+        const held = await platformHoldOfFaceMeshMinFaceHeight(maskings, "setting", environments)
+        if (held) return reply.status(422).send({ error: held })
         const bodies = hides ? environmentsThatCannotHideBodies(environments) : []
         if (bodies.length > 0) {
           return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotHideBodiesMessage(bodies), envs: bodies } })
@@ -203,6 +226,12 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
         const partsLacking = environmentsThatCannotDrawFaceMeshParts(environments, parts)
         if (partsLacking.length > 0) {
           return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawFaceMeshPartsMessage(parts, partsLacking), envs: partsLacking } })
+        }
+        const minFaceLacking = minFaces ? environmentsThatCannotDrawFaceMeshMinFaceHeight(environments) : []
+        if (minFaceLacking.length > 0) {
+          return reply.status(409).send({
+            error: { code: "engine_unsupported", message: cannotDrawFaceMeshMinFaceHeightMessage(minFaceLacking), envs: minFaceLacking },
+          })
         }
       }
       // The Motion overrides already saved are re-checked against the new shape (a mode or prompt style

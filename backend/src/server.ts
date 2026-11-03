@@ -42,6 +42,7 @@ import { pipelineEvents } from "./ee/pipelines/events.js"
 import { startEnforcementMirror } from "./lib/concurrency-lanes/enforcement.js"
 import { startLaneParking } from "./lib/concurrency-lanes/park.js"
 import { startServerOccupancyPublisher } from "./lib/concurrency-lanes/server-occupancy.js"
+import { startPlatformClaimHeartbeat } from "./ee/lib/engine-environments.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err)
@@ -65,6 +66,8 @@ async function main() {
   let stopStorageDeleteRetry: (() => Promise<void>) | undefined
   let stopWebhookDispatcher: (() => Promise<void>) | undefined
   let stopJobTrashPurge: (() => Promise<void>) | undefined
+  let stopPlatformClaimHeartbeat: (() => void) | undefined
+  app.addHook("onClose", async () => { stopPlatformClaimHeartbeat?.() })
   app.addHook("onClose", async () => { await stopScene3DArtifactCleanup?.() })
   app.addHook("onClose", async () => { await stopRetainedImageCleanup?.() })
   app.addHook("onClose", async () => { await stopSpeakerFramesCacheSweep?.() })
@@ -88,6 +91,12 @@ async function main() {
   await ensureStorageBucket()
 
   await app.listen({ port: config.PORT, host: config.HOST })
+
+  // Trends: this environment's platform claim (what this app takes of the shared data; its engine record is written
+  // at boot, by buildApp), made only now that the server listens, then every 5 minutes while it runs, and stopped
+  // first thing on SIGTERM; a claim lapses 15 minutes after its last beat (ee/lib/engine-environments.ts, the
+  // heartbeat; it never throws, and runs on cloud + Railway only).
+  stopPlatformClaimHeartbeat = startPlatformClaimHeartbeat()
 
   // One line, on boot: which ffmpeg does this process render with? Output is
   // version-dependent (see the Dockerfile FFMPEG_VERSION pin), and "which
@@ -306,6 +315,9 @@ async function main() {
   const shutdown = async () => {
     if (shuttingDown) return
     shuttingDown = true
+    // First: no platform claim from a process on its way out (a beat already in flight may still land; that claim
+    // then lapses within its TTL). The engine record is never the heartbeat's.
+    stopPlatformClaimHeartbeat?.()
     const hardExit = setTimeout(() => {
       console.error("[server] Shutdown timed out, forcing exit")
       process.exit(1)

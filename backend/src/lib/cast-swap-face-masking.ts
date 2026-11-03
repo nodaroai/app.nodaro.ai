@@ -213,6 +213,27 @@ export interface FaceMasking {
    * (`engineDrawsFaceMeshParts`): the key is stripped for one that does not.
    */
   faceMeshParts?: FaceMaskingFaceMeshParts
+  /**
+   * Full depth's face mesh: the smallest face it draws lines on (decided
+   * 2026-11-03), the face box's height as a % of the frame's (0–100; 0 = no
+   * size minimum). Left out = the engine's own default (10 %); whatever the
+   * value, the engine draws no lines on a face centred in the outer 10 % at
+   * the left and right.
+   * The Motion setting's and a trend's (the Precise setting is never Full
+   * depth): Full depth's alone (`sourceModeRules` refuses it elsewhere; a
+   * Faces hidden mesh draws only the masked heads, whose own
+   * `minFaceHeightPct` and `zone` apply). Read through
+   * `faceMeshMinFaceHeightSent` (the one normaliser: on, Full depth, the
+   * face mesh on): elsewhere, or left out, it is never sent nor hashed, so a
+   * setting without it is sent and hashed exactly as before it existed and
+   * every stored clip made then stays up to date. Any value SET is sent and
+   * hashed, the default's 10 included: only a value left out is the default.
+   * An engine draws it only when it declares
+   * `castSwap.faceMeshMinFaceHeightPct` (`engineDrawsFaceMeshMinFaceHeight`):
+   * the key is stripped for one that does not (a run, `tk.settings`), and a
+   * trend's make is refused there.
+   */
+  faceMeshMinFaceHeightPct?: number
 }
 
 /**
@@ -303,6 +324,8 @@ const faceMaskingShape = {
     .refine((c) => FACE_MASKING_DEPTH_COLORMAPS.includes(c), { message: "The depth provider does not offer this colormap." })
     .optional(),
   depthModelSize: z.enum(VIDEO_DEPTH_MODEL_SIZES).optional(),
+  // Full depth's alone (`sourceModeRules`), so the Precise setting (always Faces hidden) never holds it.
+  faceMeshMinFaceHeightPct: pct.optional(),
 }
 
 const faceHeightsInOrder = (m: Pick<FaceMasking, "minFaceHeightPct" | "maxFaceHeightPct">) =>
@@ -323,7 +346,9 @@ export const FACE_MESH_NOT_WITH_KEEP_PEOPLE = "face_mesh_not_with_keep_people"
  * whole-person target is never full depth's (it masks no one), a `"main"`
  * mark is keep-people's alone, and the face mesh is never keep people's (the
  * faces stay as filmed there: there is no masked head to draw on). Only
- * `faceMesh: true` is refused: `false` is the same as left out.
+ * `faceMesh: true` is refused: `false` is the same as left out. The smallest
+ * face with mesh lines is Full depth's alone, as its scene is (with the face
+ * mesh off it draws nothing, and is neither sent nor hashed).
  */
 function sourceModeRules(m: FaceMaskingWithMarks, ctx: z.RefinementCtx): void {
   const source = faceMaskingSourceOf(m)
@@ -332,6 +357,13 @@ function sourceModeRules(m: FaceMaskingWithMarks, ctx: z.RefinementCtx): void {
   }
   if (m.scene !== undefined && source !== "full-depth") {
     ctx.addIssue({ code: "custom", path: ["scene"], message: "Where the scene comes from is a Full depth setting only." })
+  }
+  if (m.faceMeshMinFaceHeightPct !== undefined && source !== "full-depth") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["faceMeshMinFaceHeightPct"],
+      message: "The smallest face with mesh lines is a Full depth setting only: a Faces hidden face mesh draws on the masked heads, which the smallest face height already chooses.",
+    })
   }
   if (m.target === "body" && source === "full-depth") {
     ctx.addIssue({ code: "custom", path: ["target"], message: 'Full depth masks no one: the whole-person target ("body") is for Faces hidden and Keep people.' })
@@ -927,6 +959,56 @@ export function withFaceMeshPartsFor<T extends FaceMasking>(m: T, cs: { readonly
   return (parts !== undefined && engineDrawsFaceMeshParts(cs, parts) ? { ...rest, faceMeshParts: parts } : rest) as T
 }
 
+/**
+ * THE normaliser of `faceMeshMinFaceHeightPct`: the value the setting names,
+ * only where it applies — on (not "off"), Full depth, the face mesh on
+ * (`faceMeshOn`). Any value set is named, 0 and the engine's default (10)
+ * included: only a value left out is the default. Else (or no setting)
+ * undefined: the setting is sent and hashed exactly as one without it.
+ */
+export function faceMeshMinFaceHeightSent(
+  m: Pick<FaceMasking, "mode" | "source" | "faceMesh" | "faceMeshMinFaceHeightPct"> | undefined,
+): number | undefined {
+  if (!m || m.mode === "off" || faceMaskingSourceOf(m) !== "full-depth" || !faceMeshOn(m)) return undefined
+  return typeof m.faceMeshMinFaceHeightPct === "number" ? m.faceMeshMinFaceHeightPct : undefined
+}
+
+/**
+ * Whether a (loaded or recorded) Cast Swap engine draws Full depth's face
+ * mesh from a smallest face (`castSwap.faceMeshMinFaceHeightPct`, engine
+ * 0.436.1). Absent ⇒ an engine from before it, which draws every face it
+ * finds and whose schema strips the unknown key: it is never sent one.
+ */
+export function engineDrawsFaceMeshMinFaceHeight(cs: { readonly faceMeshMinFaceHeightPct?: boolean } | undefined): boolean {
+  return cs?.faceMeshMinFaceHeightPct === true
+}
+
+/** Whether this process's Cast Swap engine draws Full depth's face mesh from a smallest face (`engineDrawsFaceMeshMinFaceHeight` its declaration). */
+export function loadedEngineDrawsFaceMeshMinFaceHeight(): boolean {
+  return engineDrawsFaceMeshMinFaceHeight(getPluginSupports().castSwap)
+}
+
+/** The setting with `faceMeshMinFaceHeightPct` only as `value` (left out when undefined). A new object. */
+function withFaceMeshMinFaceHeightNormalised<T extends FaceMasking>(m: T, value: number | undefined): T {
+  const { faceMeshMinFaceHeightPct: _v, ...rest } = m
+  return (value === undefined ? rest : { ...rest, faceMeshMinFaceHeightPct: value }) as T
+}
+
+/**
+ * The setting as an engine is sent it, smallest-face-wise:
+ * `faceMeshMinFaceHeightPct` only where it applies
+ * (`faceMeshMinFaceHeightSent`) AND the engine declares it
+ * (`engineDrawsFaceMeshMinFaceHeight`); else no key at all, exactly the
+ * setting before the key existed (the engine's default). A new object.
+ */
+export function withFaceMeshMinFaceHeightFor<T extends FaceMasking>(
+  m: T,
+  cs: { readonly faceMeshMinFaceHeightPct?: boolean } | undefined,
+): T {
+  const value = faceMeshMinFaceHeightSent(m)
+  return withFaceMeshMinFaceHeightNormalised(m, value !== undefined && engineDrawsFaceMeshMinFaceHeight(cs) ? value : undefined)
+}
+
 /** Whether this process's Cast Swap engine masks `target` under `source` (`engineMasksTarget` its declaration). */
 export function loadedEngineMasksTarget(target: FaceMaskingTarget, source: FaceMaskingSource): boolean {
   return engineMasksTarget(getPluginSupports().castSwap, target, source)
@@ -945,12 +1027,17 @@ export function defaultFaceMaskingZone(): Required<FaceMaskingZone> {
  * mesh is kept only when on (`withFaceMeshNormalised`: a `faceMesh: false`
  * is dropped, so it is sent and hashed exactly as a setting without it), and
  * the colormap only where it changes what is drawn (`depthColormapSent`), and
- * the depth model's size likewise (`depthModelSizeSent`). A new object; the
+ * the depth model's size likewise (`depthModelSizeSent`), and the smallest
+ * face with mesh lines only where it applies (`faceMeshMinFaceHeightSent`:
+ * Full depth's, so never on the face masks this resolves). A new object; the
  * input is not changed.
  */
 export function withResolvedZone(m: FaceMasking): FaceMasking {
   const mesh = withFaceMeshNormalised(m)
-  const n = withDepthModelSizeNormalised(withDepthColormapNormalised(mesh, depthColormapSent(mesh)), depthModelSizeSent(mesh))
+  const n = withFaceMeshMinFaceHeightNormalised(
+    withDepthModelSizeNormalised(withDepthColormapNormalised(mesh, depthColormapSent(mesh)), depthModelSizeSent(mesh)),
+    faceMeshMinFaceHeightSent(mesh),
+  )
   if (n.zone === undefined) return { ...n, zone: defaultFaceMaskingZone() }
   if (n.zone === null) return { ...n, zone: { leftPct: 0, rightPct: 0, topPct: 0, bottomPct: 0 } }
   return { ...n, zone: { ...n.zone } }
@@ -963,8 +1050,9 @@ export function withResolvedZone(m: FaceMasking): FaceMasking {
  *   a make sent before source modes existed;
  * - full depth: `{ mode, source }` only (nothing else applies), plus
  *   `faceMesh: true` when it draws the face mesh, `depthColormap` when it
- *   names one (`depthColormapSent`) and `depthModelSize` when it names one
- *   (`depthModelSizeSent`);
+ *   names one (`depthColormapSent`), `depthModelSize` when it names one
+ *   (`depthModelSizeSent`) and `faceMeshMinFaceHeightPct` when it sets one
+ *   for its face mesh (`faceMeshMinFaceHeightSent`);
  * - keep people: `withResolvedZone` without `fill` (and never a face mesh),
  *   with `source` and the target resolved (`"body"` when left out), named so
  *   an engine never applies a default of its own.
@@ -981,10 +1069,13 @@ export function faceMaskingSent(m: FaceMasking): FaceMasking {
   // The depth model's size likewise, read before `source` (and keep people's `fill`) is dropped below.
   const size = depthModelSizeSent(m)
   const withSize = size === undefined ? {} : { depthModelSize: size }
+  // Full depth's smallest face with mesh lines likewise (any value set; none = the engine's default).
+  const minFace = faceMeshMinFaceHeightSent(m)
+  const withMinFace = minFace === undefined ? {} : { faceMeshMinFaceHeightPct: minFace }
   // The scene is a run's, never a make's or the key's (`faceMaskingRunSent`).
   const { source: _source, scene: _scene, ...rest } = m
   if (source === "faces") return withResolvedZone(rest)
-  if (source === "full-depth") return { mode: m.mode, source, ...(faceMeshOn(m) ? { faceMesh: true } : {}), ...withColormap, ...withSize }
+  if (source === "full-depth") return { mode: m.mode, source, ...(faceMeshOn(m) ? { faceMesh: true } : {}), ...withColormap, ...withSize, ...withMinFace }
   const { fill: _fill, faceMesh: _faceMesh, depthColormap: _colormap, depthModelSize: _size, ...kept } = withResolvedZone(rest)
   return { ...kept, source, target: faceMaskTargetOf(m)!, ...withColormap, ...withSize }
 }
