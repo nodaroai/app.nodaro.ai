@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { DIRECTION_ID_MAX_CHARS } from "@nodaro/prompts/prompt-builder"
 import { newSession } from "../../session.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../../../private-plugins/supports-registry.js"
 import type { Scope } from "../../../scopes.js"
@@ -147,6 +148,121 @@ describe("cast_swap", () => {
     const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, style: "loose" })
     expect(res.isError).toBe(true)
     expect(calls).toEqual([])
+  })
+
+  it("refuses art_style before any quote or run where the loaded engine takes none, and runs as before without it", async () => {
+    const { fastify, calls } = stubFastify({
+      "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE },
+      "/v1/cast-swap": { statusCode: 202, body: { jobId: "00000000-0000-4000-8000-000000000004" } },
+    })
+    try {
+      // No declaration at all, an engine that predates art styles, and one that says it takes none.
+      for (const castSwap of [
+        undefined,
+        { engines: ["motion-prism", "motion-pulse"], engineAliases: true },
+        { engines: ["motion-prism", "motion-pulse"], engineAliases: true, artStyle: false },
+      ]) {
+        _resetPluginSupportsForTests()
+        if (castSwap) setPluginSupports({ castSwap: castSwap as never })
+        for (const confirm of [undefined, true]) {
+          const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, style: "motion", art_style: "pop-art", ...(confirm ? { confirm } : {}) })
+          expect(res.isError, JSON.stringify(castSwap)).toBe(true)
+          // Its own sentence, not the generic 503 wording of a model outage.
+          expect(res.content).toEqual([{ type: "text", text: "Nodaro: art styles are not available on this deployment yet. [art_style_unavailable]" }])
+        }
+      }
+      // An older engine would strip `direction` and run without the style: nothing is sent.
+      expect(calls).toEqual([])
+      // Without art_style the same engine quotes and runs as before.
+      await callTool(serverWith(fastify), "cast_swap", ARGS)
+      await callTool(serverWith(fastify), "cast_swap", { ...ARGS, confirm: true })
+      expect(calls.map((c) => c.url)).toEqual(["/v1/cast-swap/estimate", "/v1/cast-swap"])
+      for (const c of calls) expect(c.payload).toEqual(BODY)
+    } finally {
+      _resetPluginSupportsForTests()
+    }
+  })
+
+  describe("art_style, on an engine that takes one (castSwap.artStyle)", () => {
+    beforeEach(() => setPluginSupports({ castSwap: { artStyle: true } as never }))
+    afterEach(() => _resetPluginSupportsForTests())
+
+    it("sends art_style to the quote and the run as direction.style, and no direction without it", async () => {
+      const { fastify, calls } = stubFastify({
+        "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE },
+        "/v1/cast-swap": { statusCode: 202, body: { jobId: "00000000-0000-4000-8000-000000000002" } },
+      })
+      const server = serverWith(fastify)
+      await callTool(server, "cast_swap", { ...ARGS, style: "motion", art_style: "pop-art" })
+      await callTool(server, "cast_swap", { ...ARGS, style: "motion", art_style: "pop-art", confirm: true })
+      expect(calls.map((c) => c.url)).toEqual(["/v1/cast-swap/estimate", "/v1/cast-swap"])
+      for (const c of calls) expect(c.payload).toEqual({ ...BODY, style: "motion", direction: { style: "pop-art" } })
+      calls.length = 0
+      await callTool(server, "cast_swap", ARGS)
+      await callTool(server, "cast_swap", { ...ARGS, confirm: true })
+      expect(calls).toHaveLength(2)
+      // Without it the body is the one sent before art_style existed, byte for byte.
+      for (const c of calls) {
+        expect(c.payload).not.toHaveProperty("direction")
+        expect(JSON.stringify(c.payload)).toBe(JSON.stringify(BODY))
+      }
+    })
+
+    it("refuses a direction of the agent's own (the REST field) before any quote or run, pointing at art_style", async () => {
+      const { fastify, calls } = stubFastify({
+        "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE },
+        "/v1/cast-swap": { statusCode: 202, body: { jobId: "00000000-0000-4000-8000-000000000003" } },
+      })
+      const server = serverWith(fastify)
+      // Not a listed argument: the loose schema lets it reach the handler, where dropping it would run the clip unstyled.
+      for (const extra of [
+        { direction: { style: "pop-art" } },
+        { direction: { style: "watercolor", camera: "dolly-in" } },
+        { direction: { style: "watercolor" }, art_style: "pop-art" },
+        { direction: null },
+      ]) {
+        for (const confirm of [undefined, true]) {
+          const res = await callTool(server, "cast_swap", { ...ARGS, style: "motion", ...extra, ...(confirm ? { confirm } : {}) })
+          expect(res.isError, JSON.stringify(extra)).toBe(true)
+          expect(res.content[0]!.text).toBe(
+            'Nodaro rejected the request (400 use_art_style): cast_swap takes no direction. Give an art style as art_style instead, a "style" picker catalog id (get_picker_catalog "style").',
+          )
+        }
+      }
+      expect(calls).toEqual([])
+    })
+
+    it("refuses an empty art_style, one longer than a direction id, or not a string, before any call; one at the limit is sent", async () => {
+      const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+      const server = serverWith(fastify)
+      // As the route parses a direction id: 1 to DIRECTION_ID_MAX_CHARS characters.
+      for (const art_style of ["", "x".repeat(DIRECTION_ID_MAX_CHARS + 1), 7, { style: "pop-art" }]) {
+        const res = await callTool(server, "cast_swap", { ...ARGS, style: "motion", art_style })
+        expect(res.isError, JSON.stringify(art_style)).toBe(true)
+      }
+      expect(calls).toEqual([])
+      const atLimit = "x".repeat(DIRECTION_ID_MAX_CHARS)
+      await callTool(server, "cast_swap", { ...ARGS, style: "motion", art_style: atLimit })
+      expect(calls).toHaveLength(1)
+      expect(calls[0]!.payload).toMatchObject({ direction: { style: atLimit } })
+    })
+
+    it("leaves the art style's rules to the route: its refusal comes back as a tool error, quote and run alike", async () => {
+      const refused = { statusCode: 400, body: { error: { code: "art_style_needs_flex", message: "An art style is only available on a Flex run." } } }
+      const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": refused, "/v1/cast-swap": refused })
+      const server = serverWith(fastify)
+      // A Precise run (no style): sent as asked, for the route to refuse.
+      for (const confirm of [undefined, true]) {
+        const res = await callTool(server, "cast_swap", { ...ARGS, art_style: "pop-art", ...(confirm ? { confirm } : {}) })
+        expect(res.isError).toBe(true)
+        expect(res.content[0]!.text).toContain("art_style_needs_flex")
+        expect(res.content[0]!.text).toContain("An art style is only available on a Flex run.")
+      }
+      expect(calls.map((c) => `${c.url} ${JSON.stringify((c.payload as { direction?: unknown }).direction)}`)).toEqual([
+        '/v1/cast-swap/estimate {"style":"pop-art"}',
+        '/v1/cast-swap {"style":"pop-art"}',
+      ])
+    })
   })
 
   it("says when the final charge is expected to come out lower", async () => {
@@ -323,30 +439,33 @@ describe("cast_swap", () => {
 
   it("refuses a motion-pulse run (or an older id of it), sending nothing, where the loaded engine does not declare it (an older engine would run Prism)", async () => {
     const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
-    for (const castSwap of [
-      undefined,
-      { engines: ["seedance-2-5" as const] },
-      { engines: ["motion-pro" as const], engineAliases: true },
-      { engines: ["motion-prism" as const], engineAliases: true },
-    ]) {
-      _resetPluginSupportsForTests()
-      if (castSwap) setPluginSupports({ castSwap: castSwap as never })
-      for (const engine of ["motion-pulse", "motion-lite", "kling-4"]) {
-        for (const confirm of [undefined, true]) {
-          const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine, ...(confirm ? { confirm } : {}) })
-          expect(res.isError).toBe(true)
-          expect(res.content[0]!.text).toContain("engine_unavailable")
-          expect(res.content[0]!.text).not.toMatch(/kling/i)
+    try {
+      for (const castSwap of [
+        undefined,
+        { engines: ["seedance-2-5" as const] },
+        { engines: ["motion-pro" as const], engineAliases: true },
+        { engines: ["motion-prism" as const], engineAliases: true },
+      ]) {
+        _resetPluginSupportsForTests()
+        if (castSwap) setPluginSupports({ castSwap: castSwap as never })
+        for (const engine of ["motion-pulse", "motion-lite", "kling-4"]) {
+          for (const confirm of [undefined, true]) {
+            const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine, ...(confirm ? { confirm } : {}) })
+            expect(res.isError).toBe(true)
+            expect(res.content[0]!.text).toContain("engine_unavailable")
+            expect(res.content[0]!.text).not.toMatch(/kling/i)
+          }
         }
       }
+      expect(calls).toEqual([])
+      // Prism named outright, by any id, still runs anywhere, sent as the internal id.
+      await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-prism" })
+      await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-pro" })
+      await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "seedance-2-5" })
+      expect(calls.map((c) => (c.payload as { engine?: string }).engine)).toEqual(["seedance-2-5", "seedance-2-5", "seedance-2-5"])
+    } finally {
+      _resetPluginSupportsForTests()
     }
-    expect(calls).toEqual([])
-    // Prism named outright, by any id, still runs anywhere, sent as the internal id.
-    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-prism" })
-    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-pro" })
-    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "seedance-2-5" })
-    expect(calls.map((c) => (c.payload as { engine?: string }).engine)).toEqual(["seedance-2-5", "seedance-2-5", "seedance-2-5"])
-    _resetPluginSupportsForTests()
   })
 
   it("answers the quote's engine by its public id and name, whichever vocabulary the engine answered in", async () => {
