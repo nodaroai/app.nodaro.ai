@@ -341,6 +341,12 @@ export const queryKeys = {
       ["admin", "jobs-infinite", pageSize, filters, [...(excludeUserIds ?? [])].sort().join(",")] as const,
     /** The platform filter's choices. */
     jobSources: () => ["admin", "job-sources"] as const,
+    /**
+     * One job, whole (its full input and output), for the Jobs page's detail
+     * view — keyed by the state its list row shows, so a job that has moved on
+     * since (finished, failed) is read again rather than shown from the cache.
+     */
+    job: (id: string, status: string, completedAt: string | null) => ["admin", "job", id, status, completedAt ?? ""] as const,
     usersLite: () => ["admin", "users-lite"] as const,
     usageLogs: (
       page: number,

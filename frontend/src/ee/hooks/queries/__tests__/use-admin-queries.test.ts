@@ -41,6 +41,7 @@ vi.mock("@/lib/query-keys", () => ({
       jobsInfinite: (pageSize: number, filters: string, excludeUserIds?: ReadonlyArray<string>) =>
         ["admin", "jobs-infinite", pageSize, filters, [...(excludeUserIds ?? [])].sort().join(",")],
       jobSources: () => ["admin", "job-sources"],
+      job: (id: string, status: string, completedAt: string | null) => ["admin", "job", id, status, completedAt ?? ""],
       usersLite: () => ["admin", "users-lite"],
       usageLogs: (page: number, pageSize: number) => ["admin", "usage-logs", page, pageSize],
       models: () => ["admin", "models"],
@@ -67,6 +68,7 @@ import {
   useAdminJobs,
   useAdminJobsInfinite,
   useAdminJobSources,
+  useAdminJobDetail,
   jobSourceLabel,
   useAllAdminUsersLite,
   useAdminUsageLogs,
@@ -386,6 +388,46 @@ describe("useAdminJobSources", () => {
   it("jobSourceLabel keeps any other key as written", () => {
     expect(jobSourceLabel("unknown", new Map())).toBe("unknown")
     expect(jobSourceLabel("web:localhost:3000", new Map())).toBe("localhost:3000")
+  })
+})
+
+describe("useAdminJobDetail", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasAdmin.mockReturnValue(true)
+    mockUseQuery.mockReturnValue({ data: null })
+    mockGetAuthHeaders.mockResolvedValue({ Authorization: "Bearer tok" })
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+  })
+
+  it("reads the whole job each time the view opens, keyed by the state the row shows", () => {
+    useAdminJobDetail({ id: "j1", status: "processing", completed_at: null })
+    useAdminJobDetail({ id: "j1", status: "completed", completed_at: "2026-11-02T10:00:00Z" })
+    const [running, finished] = mockUseQuery.mock.calls.map(([opts]) => opts)
+    // A job the list now shows as finished is a different entry: never its earlier output.
+    expect(running.queryKey).toEqual(["admin", "job", "j1", "processing", ""])
+    expect(finished.queryKey).toEqual(["admin", "job", "j1", "completed", "2026-11-02T10:00:00Z"])
+    // No staleTime: reopening reads it again.
+    expect(running.staleTime).toBeUndefined()
+    expect(running.enabled).toBe(true)
+  })
+
+  it("holds the read while no job is open", () => {
+    useAdminJobDetail(null)
+    expect(mockUseQuery.mock.calls[0][0].enabled).toBe(false)
+  })
+
+  it("returns the job's full input and output", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { id: "j1", input_data: { type: "x", prompt: "p" }, output_data: { imageUrl: "https://cdn.test/a.png" } } }),
+    })
+    useAdminJobDetail({ id: "j1", status: "completed", completed_at: null })
+    await expect(mockUseQuery.mock.calls[0][0].queryFn()).resolves.toEqual({
+      input_data: { type: "x", prompt: "p" },
+      output_data: { imageUrl: "https://cdn.test/a.png" },
+    })
+    expect(String(mockFetch.mock.calls[0]![0])).toBe("/v1/admin/jobs/j1")
   })
 })
 

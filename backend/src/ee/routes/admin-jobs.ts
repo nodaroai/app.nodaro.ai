@@ -20,14 +20,26 @@ import { isMissingFunctionError } from "../../lib/postgrest-errors.js"
  * column privilege. PostgREST also answers 401 42501 for a `select` naming an
  * ungranted column rather than dropping it, so there is no degrade path.
  *
- * Every filter runs on the server: `public.admin_job_page` (migration 575)
- * returns the ids of one filtered page, newest first, and the rows are read by
- * id and put back in that order. A text search (`q`) always runs inside a date
+ * Every filter runs on the server, and one call reads the page:
+ * `public.admin_job_list` (migration 584) returns the rows of the page
+ * `public.admin_job_page` (migration 575) picks, newest first. Its rows are
+ * LIGHTER than a job: `input_data` is the job's `type` only and `output_data`
+ * a preview — the output's web addresses where they sit, and the start of its
+ * text (`admin_job_output_preview`) — which is everything the table and the
+ * gallery tiles read. The detail view loads the whole job,
+ * `GET /v1/admin/jobs/:jobId`, when it opens.
+ *
+ * A text search (`q`) always runs inside a date
  * range -- with no `from`, the 7 days before the range's end (`to`, else
  * today); a `q` that is a uuid is a job id, matched exactly over every date
- * (`from` / `to` are ignored). Until migration 575 is in the database the page
- * falls back to the pre-575 read (status / user / excluded accounts only) and
- * answers `filtersUnavailable: true` when a newer filter went unapplied.
+ * (`from` / `to` are ignored).
+ *
+ * Migrations reach the database only on a push to main, so the server can run
+ * ahead of them. Until migration 584 is in the database the page is read the
+ * pre-584 way — the ids from `admin_job_page`, then the whole rows by id — and
+ * until migration 575 is, the pre-575 way (status / user / excluded accounts
+ * only), answering `filtersUnavailable: true` when a newer filter went
+ * unapplied. Either fallback is logged.
  *
  * Core `GET /v1/jobs` could not be reused: it always narrows to one user
  * (routes/jobs.ts), pages by created_at cursor rather than offset, has no
@@ -45,9 +57,12 @@ import { isMissingFunctionError } from "../../lib/postgrest-errors.js"
  *
  * The response carries a `Server-Timing` header: how long the request waited
  * before the handler (`auth`: the key or session, then the admin check) and
- * each read it made (`user`, `page`, `rows`, then `runCreditsFor`'s `steps`,
- * `logs` and `side`), in ms, with `total`. Admin-only like the route itself;
- * it is how the page's load time is measured on the deployed server.
+ * each read it made, in ms, with `total`: `user` (an address filter), `list`
+ * (the page and its rows, one call) — or, before migration 584, `page` and
+ * `rows` after it — then `runCreditsFor`'s `steps` and its `logs` and `side`
+ * (those two run at the same time, so the request waits for the longer, not
+ * their sum). Admin-only like the route itself; it is how the page's load time
+ * is measured on the deployed server.
  *
  * `credits` is the job's HOLD. What it was charged comes beside it in
  * `credit` (`AdminJobCredit`), read off the usage logs through the one run
@@ -84,7 +99,12 @@ export function adminJobCredit(figures: RunCreditFigures | null): AdminJobCredit
   }
 }
 
-/** Exactly the columns the admin Jobs table + JobDetailDialog render (`usage_log_id` is read for the charge only and not returned). */
+/**
+ * The columns of a job the admin Jobs page renders (`usage_log_id` is read for
+ * the charge only and not returned). The list (`admin_job_list`) returns these
+ * with `input_data` / `output_data` reduced; the pre-584 page and the one-job
+ * read return them whole.
+ */
 const ADMIN_JOB_COLUMNS = [
   "id", "status", "job_type", "credits", "provider", "provider_cost", "display_cost",
   "error_message", "input_data", "output_data", "created_at", "started_at",
@@ -210,6 +230,69 @@ function exactIlikePattern(email: string): string {
   return email.replace(/[\\%_]/g, (c) => `\\${c}`)
 }
 
+/** A job row as the routes read it. */
+type Row = Record<string, unknown> & { id: string; usage_log_id?: string | null; credits?: number | null }
+
+/** `admin_job_list`'s and `admin_job_page`'s arguments (the two take the same). */
+interface PageArgs {
+  p_offset: number
+  p_limit: number
+  p_status: string | null
+  p_user_id: string | null
+  p_exclude_user_ids: string[] | null
+  p_types: string[] | null
+  p_models: string[] | null
+  p_sources: string[] | null
+  p_min_credits: number | null
+  p_from: string | null
+  p_to: string | null
+  p_q: string | null
+  p_q_is_id: boolean | null
+}
+
+/**
+ * The page as it was read before migration 584: `admin_job_page`'s ids, then
+ * the whole rows by id, put back in the page's order — and, before migration
+ * 575, one read filtered by status, user and the excluded accounts only.
+ * Removable once 584 is in the database.
+ */
+async function pageThenRows(
+  req: FastifyRequest,
+  args: PageArgs,
+  pre575: { status: string | undefined; userId: string | null; excludeUserIds: string[]; newerFilter: boolean },
+): Promise<{ rows: Row[]; filtersUnavailable: boolean } | { error: unknown }> {
+  const { data: pageIds, error: pageError } = await timed(req, "page", () => supabase.rpc("admin_job_page", args))
+  if (pageError && functionNotInDatabase(pageError, "admin_job_page")) {
+    // Migration 575 creates admin_job_page. Until it is in the database the
+    // page is served the way it was before 575: newest first, offset paged,
+    // filtered by status, user and the excluded accounts only — and says so
+    // when a newer filter was asked for.
+    req.log.warn({ err: pageError }, "admin_job_page is not in the database yet (migration 575) — serving the pre-575 page")
+    const { status, userId, excludeUserIds } = pre575
+    let query = supabase
+      .from("jobs")
+      .select(ADMIN_JOB_COLUMNS)
+      .order("created_at", { ascending: false })
+      .range(args.p_offset, args.p_offset + args.p_limit - 1)
+    if (status) query = query.eq("status", status)
+    if (userId) query = query.eq("user_id", userId)
+    // A URL-borne `not.in` list (up to 200 ids) is acceptable only in this temporary fallback.
+    if (excludeUserIds.length > 0) query = query.not("user_id", "in", `(${excludeUserIds.join(",")})`)
+    const { data, error } = await query
+    if (error) return { error }
+    return { rows: (data ?? []) as unknown as Row[], filtersUnavailable: pre575.newerFilter }
+  }
+  if (pageError) return { error: pageError }
+  const ids = ((pageIds ?? []) as Array<{ id: string }>).map((r) => r.id)
+  if (ids.length === 0) return { rows: [], filtersUnavailable: false }
+
+  const { data, error } = await timed(req, "rows", () => supabase.from("jobs").select(ADMIN_JOB_COLUMNS).in("id", ids))
+  if (error) return { error }
+  const byId = new Map(((data ?? []) as unknown as Row[]).map((r) => [r.id, r]))
+  // The page's order is the RPC's; a job deleted between the two reads drops out.
+  return { rows: ids.flatMap((id) => byId.get(id) ?? []), filtersUnavailable: false }
+}
+
 export async function adminJobsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/admin/jobs", { preHandler: requireAdmin, onSend: sendServerTiming }, async (req, reply) => {
     recordTiming(req, "auth", reply.elapsedTime)
@@ -223,7 +306,7 @@ export async function adminJobsRoutes(app: FastifyInstance): Promise<void> {
       })
     }
     const { page, pageSize, status, userEmail, excludeUserIds, types, models, sources, minCredits, from, to } = parsed.data
-    let userId = parsed.data.userId ?? null
+    let userId: string | null = parsed.data.userId ?? null
 
     if (userEmail) {
       // `ilike` with the LIKE wildcards escaped, then the same address exactly:
@@ -250,7 +333,7 @@ export async function adminJobsRoutes(app: FastifyInstance): Promise<void> {
     const fromAt = qIsId ? null : from ?? (q !== null ? new Date((to ?? today).getTime() - SEARCH_DEFAULT_WINDOW_MS) : null)
     const toAt = qIsId || !to ? null : new Date(to.getTime() + DAY_MS)
 
-    const { data: pageIds, error: pageError } = await timed(req, "page", () => supabase.rpc("admin_job_page", {
+    const args: PageArgs = {
       p_offset: page * pageSize,
       p_limit: pageSize,
       p_status: status ?? null,
@@ -265,53 +348,65 @@ export async function adminJobsRoutes(app: FastifyInstance): Promise<void> {
       p_q: q,
       // Only for a real uuid: the RPC casts the search when this is set.
       p_q_is_id: q === null ? null : qIsId,
-    }))
-    type Row = Record<string, unknown> & { id: string; usage_log_id?: string | null; credits?: number | null }
+    }
+
+    const { data: listed, error: listError } = await timed(req, "list", () => supabase.rpc("admin_job_list", args))
     let rows: Row[]
     let filtersUnavailable = false
-    if (pageError && functionNotInDatabase(pageError, "admin_job_page")) {
-      // Migration 575 creates admin_job_page, and migrations reach the shared
-      // database only on a push to main, so staging runs this code before the
-      // function exists. Until then the page is served the way it was before
-      // 575: newest first, offset paged, filtered by status, user and the
-      // excluded accounts only — and says so when a newer filter was asked
-      // for. Once 575 is applied the RPC exists and this branch never runs.
-      req.log.warn({ err: pageError }, "admin_job_page is not in the database yet (migration 575) — serving the pre-575 page")
-      let query = supabase
-        .from("jobs")
-        .select(ADMIN_JOB_COLUMNS)
-        .order("created_at", { ascending: false })
-        .range(page * pageSize, (page + 1) * pageSize - 1)
-      if (status) query = query.eq("status", status)
-      if (userId) query = query.eq("user_id", userId)
-      // A URL-borne `not.in` list (up to 200 ids) is acceptable only in this temporary fallback.
-      if (excludeUserIds.length > 0) query = query.not("user_id", "in", `(${excludeUserIds.join(",")})`)
-      const { data, error } = await query
-      if (error) return sendInternalError(reply, req, error, "Lookup failed")
-      rows = (data ?? []) as unknown as Row[]
-      filtersUnavailable = types.length > 0 || models.length > 0 || sources.length > 0 ||
-        minCredits !== undefined || from !== undefined || to !== undefined || q !== null
+    if (listError && functionNotInDatabase(listError, "admin_job_list")) {
+      // Migration 584 creates admin_job_list; until it reaches the database the
+      // page is read as before it: the ids, then the whole rows by id. Once 584
+      // is applied the function exists and this branch never runs.
+      req.log.warn({ err: listError }, "admin_job_list is not in the database yet (migration 584) — reading the page, then its rows")
+      const read = await pageThenRows(req, args, {
+        status, userId, excludeUserIds,
+        newerFilter: types.length > 0 || models.length > 0 || sources.length > 0 ||
+          minCredits !== undefined || from !== undefined || to !== undefined || q !== null,
+      })
+      if ("error" in read) return sendInternalError(reply, req, read.error, "Lookup failed")
+      rows = read.rows
+      filtersUnavailable = read.filtersUnavailable
     } else {
-      if (pageError) return sendInternalError(reply, req, pageError, "Lookup failed")
-      const ids = ((pageIds ?? []) as Array<{ id: string }>).map((r) => r.id)
-      if (ids.length === 0) return reply.send({ data: [] })
-
-      const { data, error } = await timed(req, "rows", () => supabase.from("jobs").select(ADMIN_JOB_COLUMNS).in("id", ids))
-      if (error) return sendInternalError(reply, req, error, "Lookup failed")
-      const byId = new Map(((data ?? []) as unknown as Row[]).map((r) => [r.id, r]))
-      // The page's order is the RPC's; a job deleted between the two reads drops out.
-      rows = ids.flatMap((id) => byId.get(id) ?? [])
+      if (listError) return sendInternalError(reply, req, listError, "Lookup failed")
+      rows = (listed ?? []) as unknown as Row[]
     }
     const unapplied = filtersUnavailable ? { filtersUnavailable: true as const } : {}
     if (rows.length === 0) return reply.send({ data: [], ...unapplied })
-    // One read per table for the page: each job's own figures and, for a
-    // parent, its run's (its steps included).
+    // Each job's own figures and, for a parent, its run's (its steps
+    // included): one read per table for the whole page, never one per job.
     const credits = await runCreditsFor(rows, [...new Set(rows.map((r) => r.user_id as string))], (read, ms) => recordTiming(req, read, ms))
     return reply.send({
       data: rows.map(({ usage_log_id: _log, ...row }) => ({ ...row, credit: adminJobCredit(runCreditsOf(row.id, credits)) })),
       ...unapplied,
     })
   })
+
+  /**
+   * GET /v1/admin/jobs/:jobId -- one job, whole: what the list's lighter rows
+   * leave out (`input_data` and `output_data` in full), for the detail view.
+   * Any job, the ones in the Trash included, like the list. Its charge is not
+   * read again: the list row the detail view opens from carries it.
+   */
+  app.get<{ Params: { jobId: string } }>(
+    "/v1/admin/jobs/:jobId",
+    { preHandler: requireAdmin, onSend: sendServerTiming },
+    async (req, reply) => {
+      recordTiming(req, "auth", reply.elapsedTime)
+      const jobId = req.params.jobId
+      if (!UUID_TEXT.test(jobId)) {
+        return reply.status(400).send({ error: { code: "validation_error", message: "Expected a job id" } })
+      }
+      const { data, error } = await timed(req, "job", () => supabase
+        .from("jobs")
+        .select(ADMIN_JOB_COLUMNS)
+        .eq("id", jobId)
+        .maybeSingle())
+      if (error) return sendInternalError(reply, req, error, "Lookup failed")
+      if (!data) return reply.status(404).send({ error: { code: "not_found", message: "Job not found" } })
+      const { usage_log_id: _log, ...job } = data as unknown as Row
+      return reply.send({ data: job })
+    },
+  )
 
   /**
    * GET /v1/admin/jobs/sources -- the platform filter's choices: every

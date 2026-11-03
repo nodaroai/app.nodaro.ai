@@ -21,6 +21,12 @@ vi.mock("@/lib/config.js", async (importOriginal) => ({
   hasCredits: () => cfg.credits,
 }))
 
+// The side-hold read runs only once the metered-LLM schema is known to be there.
+vi.mock("@/lib/llm-metered-schema-gate.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/llm-metered-schema-gate.js")>()),
+  llmMeteredSchemaReady: () => true,
+}))
+
 vi.mock("@/lib/supabase.js", () => ({
   supabase: {
     from: (...args: unknown[]) => mockFrom(...args),
@@ -64,6 +70,8 @@ function jobsChain(result: { data: unknown; error: unknown }) {
   chain.in = vi.fn().mockReturnValue(self())
   chain.ilike = vi.fn().mockReturnValue(self())
   chain.limit = vi.fn().mockReturnValue(self())
+  chain.is = vi.fn().mockReturnValue(self())
+  chain.maybeSingle = vi.fn().mockReturnValue(self())
   chain.then = vi.fn().mockImplementation((resolve: (v: unknown) => void) => resolve(result))
   return chain
 }
@@ -101,6 +109,22 @@ function adminGet(url: string, userId = ADMIN_UUID) {
   return app.inject({ method: "GET", url, headers: { "x-user-id": userId } })
 }
 
+/** The Server-Timing entries' names, in order; each entry is `<name>;dur=<ms>`. */
+function serverTimingNames(res: { headers: Record<string, unknown> }): string[] {
+  return String(res.headers["server-timing"]).split(", ").map((entry) => {
+    expect(entry).toMatch(/^[a-z]+;dur=\d+\.\d$/)
+    return entry.split(";")[0]!
+  })
+}
+
+/** What PostgREST answers when admin_job_list (migration 584) is not in its schema cache. */
+const LIST_MISSING = {
+  code: "PGRST202",
+  message: "Could not find the function public.admin_job_list(p_exclude_user_ids, p_from, p_limit, p_offset) in the schema cache",
+  details: "Searched for the function public.admin_job_list with parameters p_exclude_user_ids, p_from, p_limit, p_offset or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.",
+  hint: null,
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -136,11 +160,12 @@ describe("GET /v1/admin/jobs", () => {
         user_id: VALID_UUID,
       },
     ]
-    mockRpc.mockResolvedValue({ data: [{ id: "job-1" }], error: null })
-    mockFrom.mockReturnValue(jobsChain({ data: rows, error: null }))
+    mockRpc.mockResolvedValue({ data: rows, error: null })
 
     const res = await adminGet("/v1/admin/jobs?page=0&pageSize=50")
     expect(res.statusCode).toBe(200)
+    expect(mockRpc).toHaveBeenCalledTimes(1)
+    expect(mockRpc.mock.calls[0]![0]).toBe("admin_job_list")
     const body = res.json()
     // No usage log, no hold: every credit figure is unknown.
     expect(body.data).toEqual(rows.map((r) => ({ ...r, credit: { status: null, charged: null, held: null, released: null, run: null } })))
@@ -148,17 +173,41 @@ describe("GET /v1/admin/jobs", () => {
     expect(body.data[0].display_cost).toBe(0.01)
   })
 
-  it("times the wait before the handler and each read in a Server-Timing header", async () => {
-    mockRpc.mockResolvedValue({ data: [{ id: "job-1" }], error: null })
-    mockFrom.mockReturnValue(jobsChain({ data: [{ id: "job-1", status: "completed", user_id: VALID_UUID }], error: null }))
+  it("times the wait before the handler and each read in a Server-Timing header: the page and its rows are one read", async () => {
+    mockRpc.mockResolvedValue({ data: [{ id: "job-1", status: "completed", user_id: VALID_UUID }], error: null })
+    mockFrom.mockReturnValue(jobsChain({ data: [], error: null }))
 
     const res = await adminGet("/v1/admin/jobs?page=0&pageSize=50")
     expect(res.statusCode).toBe(200)
-    const names = String(res.headers["server-timing"]).split(", ").map((entry) => {
-      expect(entry).toMatch(/^[a-z]+;dur=\d+\.\d$/)
-      return entry.split(";")[0]
+    expect(serverTimingNames(res)).toEqual(["auth", "list", "steps", "logs", "side", "total"])
+  })
+
+  it("reads the usage logs and the side holds at the same time, and reports them in a fixed order", async () => {
+    cfg.credits = true
+    mockRpc.mockResolvedValue({ data: [{ id: "job-1", status: "completed", user_id: VALID_UUID, usage_log_id: "ul-1" }], error: null })
+    // Each read waits until the test lets it go: both are asked for before either answers.
+    const asked: string[] = []
+    const release: Array<() => void> = []
+    mockFrom.mockImplementation((table: string) => {
+      const chain: Record<string, unknown> = {}
+      for (const op of ["select", "order", "range", "eq", "not", "limit", "in"]) chain[op] = () => chain
+      chain.then = (resolve: (v: unknown) => unknown) => {
+        asked.push(table)
+        if (table === "jobs") return resolve({ data: [], error: null })
+        return new Promise((done) => release.push(() => done(resolve({ data: [], error: null }))))
+      }
+      return chain
     })
-    expect(names).toEqual(["auth", "page", "rows", "steps", "logs", "side", "total"])
+    const pending = adminGet("/v1/admin/jobs")
+    await vi.waitFor(() => expect(release).toHaveLength(2))
+    expect(asked).toEqual(["jobs", "usage_logs", "llm_side_holds"])
+    // The side holds answer first; the header still reads steps, logs, side.
+    release[1]!()
+    release[0]!()
+    const res = await pending
+    expect(res.statusCode).toBe(200)
+    expect(serverTimingNames(res)).toEqual(["auth", "list", "steps", "logs", "side", "total"])
+    cfg.credits = false
   })
 
   it("times an empty page and an address lookup too", async () => {
@@ -167,13 +216,13 @@ describe("GET /v1/admin/jobs", () => {
 
     const res = await adminGet("/v1/admin/jobs?userEmail=a@b.co")
     expect(res.statusCode).toBe(200)
-    expect(String(res.headers["server-timing"]).split(", ").map((e) => e.split(";")[0])).toEqual(["auth", "user", "page", "total"])
+    expect(serverTimingNames(res)).toEqual(["auth", "user", "list", "total"])
   })
 
-  it("pages by offset — page=2 pageSize=50 asks admin_job_page for offset 100, limit 50", async () => {
+  it("pages by offset — page=2 pageSize=50 asks admin_job_list for offset 100, limit 50", async () => {
     const res = await adminGet("/v1/admin/jobs?page=2&pageSize=50")
     expect(res.statusCode).toBe(200)
-    expect(mockRpc).toHaveBeenCalledWith("admin_job_page", expect.objectContaining({ p_offset: 100, p_limit: 50 }))
+    expect(mockRpc).toHaveBeenCalledWith("admin_job_list", expect.objectContaining({ p_offset: 100, p_limit: 50 }))
   })
 
   it("shows each job's settled charge beside its hold, and a parent's run total with its steps (never jobs.credits alone)", async () => {
@@ -185,7 +234,7 @@ describe("GET /v1/admin/jobs", () => {
       { id: "video", status: "completed", credits: 3564, usage_log_id: "ul-video", user_id: VALID_UUID },
       { id: "live", status: "processing", credits: 120, usage_log_id: "ul-live", user_id: VALID_UUID },
     ]
-    mockRpc.mockResolvedValue({ data: page.map((r) => ({ id: r.id })), error: null })
+    mockRpc.mockResolvedValue({ data: page, error: null })
     const steps = [{ id: "video", parent_job_id: "run", usage_log_id: "ul-video", credits: 3564 }]
     const logs = [
       { id: "ul-run", status: "committed", credits_used: 44, credits_charged: 44 },
@@ -200,7 +249,6 @@ describe("GET /v1/admin/jobs", () => {
       chain.then = (resolve: (v: unknown) => unknown) => {
         if (table === "usage_logs") return resolve({ data: logs.filter((l) => inArgs![1].includes(l.id)), error: null })
         if (table === "jobs" && inArgs?.[0] === "parent_job_id") return resolve({ data: steps.filter((st) => inArgs![1].includes(st.parent_job_id)), error: null })
-        if (table === "jobs") return resolve({ data: page, error: null })
         return resolve({ data: [], error: null })
       }
       return chain
@@ -220,15 +268,7 @@ describe("GET /v1/admin/jobs", () => {
     cfg.credits = false
   })
 
-  it("returns 500 when the rows lookup errors", async () => {
-    mockRpc.mockResolvedValue({ data: [{ id: "job-1" }], error: null })
-    mockFrom.mockReturnValue(jobsChain({ data: null, error: { message: "boom" } }))
-    const res = await adminGet("/v1/admin/jobs")
-    expect(res.statusCode).toBe(500)
-    expect(res.json().error.code).toBe("internal_error")
-  })
-
-  it("returns 500 when admin_job_page errors", async () => {
+  it("returns 500 when admin_job_list errors", async () => {
     mockRpc.mockResolvedValue({ data: null, error: { message: "boom" } })
     const res = await adminGet("/v1/admin/jobs")
     expect(res.statusCode).toBe(500)
@@ -244,7 +284,98 @@ describe("GET /v1/admin/jobs", () => {
     expect(mockFrom).not.toHaveBeenCalledWith("jobs")
   })
 
-  describe("before migration 575 reaches the database (admin_job_page missing)", () => {
+  describe("before migration 584 reaches the database (admin_job_list missing)", () => {
+    beforeEach(() => {
+      mockRpc.mockImplementation(async (fn: string) =>
+        fn === "admin_job_list" ? { data: null, error: LIST_MISSING } : { data: [{ id: "job-1" }], error: null },
+      )
+    })
+
+    it("reads the page's ids, then its whole rows by id, and logs the fallback", async () => {
+      const rows = [{ id: "job-1", status: "completed", user_id: VALID_UUID, input_data: { type: "x", prompt: "p" } }]
+      mockFrom.mockReturnValue(jobsChain({ data: rows, error: null }))
+      const res = await adminGet("/v1/admin/jobs?types=generate-image")
+      expect(res.statusCode).toBe(200)
+      expect(mockRpc.mock.calls.map(([fn]) => fn)).toEqual(["admin_job_list", "admin_job_page"])
+      // The same arguments, to the function that picks the page.
+      expect(mockRpc.mock.calls[1]![1]).toEqual(mockRpc.mock.calls[0]![1])
+      const body = res.json()
+      expect(body.data[0].input_data).toEqual({ type: "x", prompt: "p" })
+      // admin_job_page applies every filter: nothing went unapplied.
+      expect(body).not.toHaveProperty("filtersUnavailable")
+      expect(serverTimingNames(res)).toEqual(["auth", "list", "page", "rows", "steps", "logs", "side", "total"])
+      expect(warns).toEqual([[{ err: LIST_MISSING }, "admin_job_list is not in the database yet (migration 584) — reading the page, then its rows"]])
+    })
+
+    it("falls back also when PostgREST suggests the older function by name", async () => {
+      const missing = { ...LIST_MISSING, hint: "Perhaps you meant to call the function public.admin_job_page(p_from, p_limit, p_offset, p_to)" }
+      mockRpc.mockImplementation(async (fn: string) =>
+        fn === "admin_job_list" ? { data: null, error: missing } : { data: [], error: null },
+      )
+      const res = await adminGet("/v1/admin/jobs")
+      expect(res.statusCode).toBe(200)
+      expect(res.json()).toEqual({ data: [] })
+      expect(mockRpc.mock.calls.map(([fn]) => fn)).toEqual(["admin_job_list", "admin_job_page"])
+    })
+
+    it.each([
+      [
+        "PGRST202 for arguments the existing admin_job_list does not take",
+        {
+          code: "PGRST202",
+          message: "Could not find the function public.admin_job_list(p_limit) in the schema cache",
+          hint: "Perhaps you meant to call the function public.admin_job_list(p_from, p_limit, p_offset, p_to)",
+        },
+      ],
+      ["42883 for a function its body calls", { code: "42883", message: "function public.admin_job_output_preview(jsonb) does not exist" }],
+    ])("a %s is a 500, never the fallback", async (_what, error) => {
+      mockRpc.mockImplementation(async (fn: string) => (fn === "admin_job_list" ? { data: null, error } : { data: [], error: null }))
+      const res = await adminGet("/v1/admin/jobs")
+      expect(res.statusCode).toBe(500)
+      expect(mockRpc).toHaveBeenCalledTimes(1)
+      expect(warns).toEqual([])
+    })
+
+    it("keeps the order of the ids admin_job_page returned", async () => {
+      mockRpc.mockImplementation(async (fn: string) =>
+        fn === "admin_job_list"
+          ? { data: null, error: LIST_MISSING }
+          : { data: [{ id: "c" }, { id: "a" }, { id: "gone" }, { id: "b" }], error: null },
+      )
+      const chain = jobsChain({
+        data: [
+          { id: "a", user_id: VALID_UUID },
+          { id: "b", user_id: VALID_UUID },
+          { id: "c", user_id: VALID_UUID },
+        ],
+        error: null,
+      })
+      mockFrom.mockReturnValue(chain)
+      const res = await adminGet("/v1/admin/jobs")
+      expect(res.statusCode).toBe(200)
+      expect(chain.in).toHaveBeenCalledWith("id", ["c", "a", "gone", "b"])
+      // A job deleted between the two reads is simply not on the page.
+      expect(res.json().data.map((r: { id: string }) => r.id)).toEqual(["c", "a", "b"])
+    })
+
+    it("returns 500 when the rows lookup errors", async () => {
+      mockFrom.mockReturnValue(jobsChain({ data: null, error: { message: "boom" } }))
+      const res = await adminGet("/v1/admin/jobs")
+      expect(res.statusCode).toBe(500)
+      expect(res.json().error.code).toBe("internal_error")
+    })
+
+    it("returns 500 when admin_job_page errors", async () => {
+      mockRpc.mockImplementation(async (fn: string) =>
+        fn === "admin_job_list" ? { data: null, error: LIST_MISSING } : { data: null, error: { message: "boom" } },
+      )
+      const res = await adminGet("/v1/admin/jobs")
+      expect(res.statusCode).toBe(500)
+      expect(mockFrom).not.toHaveBeenCalledWith("jobs")
+    })
+  })
+
+  describe("before migrations 584 and 575 reach the database (admin_job_list and admin_job_page missing)", () => {
     // What PostgREST answers when the function is not in its schema cache at all.
     const MISSING = {
       code: "PGRST202",
@@ -254,17 +385,18 @@ describe("GET /v1/admin/jobs", () => {
     }
     const EXCLUDE = "00000000-0000-4000-8000-0000000000aa,00000000-0000-4000-8000-0000000000bb"
 
+    const pageMissing = (error: unknown) => async (fn: string) =>
+      fn === "admin_job_list" ? { data: null, error: LIST_MISSING } : fn === "admin_job_page" ? { data: null, error } : { data: [], error: null }
+
     beforeEach(() => {
-      mockRpc.mockImplementation(async (fn: string) =>
-        fn === "admin_job_page" ? { data: null, error: MISSING } : { data: [], error: null },
-      )
+      mockRpc.mockImplementation(pageMissing(MISSING))
     })
 
     it.each([
       ["PGRST202", MISSING],
       ["42883", { code: "42883", message: "function public.admin_job_page(...) does not exist" }],
     ])("serves the page the old way on %s: status, user and exclude applied, newest first, offset paged", async (_code, error) => {
-      mockRpc.mockImplementation(async (fn: string) => (fn === "admin_job_page" ? { data: null, error } : { data: [], error: null }))
+      mockRpc.mockImplementation(pageMissing(error))
       const rows = [
         { id: "job-2", status: "failed", user_id: VALID_UUID, usage_log_id: null },
         { id: "job-1", status: "failed", user_id: VALID_UUID, usage_log_id: null },
@@ -287,7 +419,10 @@ describe("GET /v1/admin/jobs", () => {
       // No new filter was asked for, so nothing went unapplied.
       expect(body).not.toHaveProperty("filtersUnavailable")
       // Every fallback is logged, so a post-release defect cannot hide in it.
-      expect(warns).toEqual([[{ err: error }, "admin_job_page is not in the database yet (migration 575) — serving the pre-575 page"]])
+      expect(warns).toEqual([
+        [{ err: LIST_MISSING }, "admin_job_list is not in the database yet (migration 584) — reading the page, then its rows"],
+        [{ err: error }, "admin_job_page is not in the database yet (migration 575) — serving the pre-575 page"],
+      ])
     })
 
     it.each([
@@ -307,12 +442,14 @@ describe("GET /v1/admin/jobs", () => {
       ["42883 for an operator inside the body", { code: "42883", message: "operator does not exist: text = uuid" }],
       ["42883 for a function the body calls", { code: "42883", message: "function public.unaccent_lower(text) does not exist" }],
     ])("a %s is a 500, never the unfiltered fallback", async (_what, error) => {
-      mockRpc.mockImplementation(async (fn: string) => (fn === "admin_job_page" ? { data: null, error } : { data: [], error: null }))
+      mockRpc.mockImplementation(pageMissing(error))
       const res = await adminGet("/v1/admin/jobs?types=generate-image")
       expect(res.statusCode).toBe(500)
       expect(res.json().error.code).toBe("internal_error")
       expect(mockFrom).not.toHaveBeenCalledWith("jobs")
-      expect(warns).toEqual([])
+      expect(warns.map(([, message]) => message)).toEqual([
+        "admin_job_list is not in the database yet (migration 584) — reading the page, then its rows",
+      ])
     })
 
     it("applies the user an address resolved to", async () => {
@@ -361,7 +498,7 @@ describe("GET /v1/admin/jobs", () => {
     })
   })
 
-  it("passes every filter to admin_job_page", async () => {
+  it("passes every filter to admin_job_list", async () => {
     const exclude = "00000000-0000-4000-8000-0000000000aa,00000000-0000-4000-8000-0000000000bb"
     const res = await adminGet(
       `/v1/admin/jobs?page=1&pageSize=20&status=failed&userId=${VALID_UUID}&excludeUserIds=${exclude}` +
@@ -371,7 +508,7 @@ describe("GET /v1/admin/jobs", () => {
     expect(res.statusCode).toBe(200)
     expect(mockRpc).toHaveBeenCalledTimes(1)
     const [fn, args] = mockRpc.mock.calls[0]!
-    expect(fn).toBe("admin_job_page")
+    expect(fn).toBe("admin_job_list")
     expect(args).toEqual({
       p_offset: 20,
       p_limit: 20,
@@ -503,24 +640,6 @@ describe("GET /v1/admin/jobs", () => {
     expect(mockRpc).not.toHaveBeenCalled()
   })
 
-  it("keeps order of the ids the RPC returned", async () => {
-    mockRpc.mockResolvedValue({ data: [{ id: "c" }, { id: "a" }, { id: "gone" }, { id: "b" }], error: null })
-    const chain = jobsChain({
-      data: [
-        { id: "a", user_id: VALID_UUID },
-        { id: "b", user_id: VALID_UUID },
-        { id: "c", user_id: VALID_UUID },
-      ],
-      error: null,
-    })
-    mockFrom.mockReturnValue(chain)
-    const res = await adminGet("/v1/admin/jobs")
-    expect(res.statusCode).toBe(200)
-    expect(chain.in).toHaveBeenCalledWith("id", ["c", "a", "gone", "b"])
-    // A job deleted between the two reads is simply not on the page.
-    expect(res.json().data.map((r: { id: string }) => r.id)).toEqual(["c", "a", "b"])
-  })
-
   it("takes the largest minimum and offset the database's integer holds", async () => {
     const res = await adminGet("/v1/admin/jobs?minCredits=2147483647&page=42949672&pageSize=50")
     expect(res.statusCode).toBe(200)
@@ -531,6 +650,58 @@ describe("GET /v1/admin/jobs", () => {
     const res = await adminGet("/v1/admin/jobs")
     expect(res.json()).toEqual({ data: [] })
     expect(mockFrom).not.toHaveBeenCalled()
+  })
+})
+
+describe("GET /v1/admin/jobs/:jobId", () => {
+  const JOB_ID = "00000000-0000-4000-8000-0000000000c1"
+
+  it("returns 403 for a non-admin", async () => {
+    const res = await adminGet(`/v1/admin/jobs/${JOB_ID}`, VALID_UUID)
+    expect(res.statusCode).toBe(403)
+    expect(mockFrom).not.toHaveBeenCalled()
+  })
+
+  it("rejects an id that is not a job id", async () => {
+    const res = await adminGet("/v1/admin/jobs/not-a-job")
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(mockFrom).not.toHaveBeenCalled()
+  })
+
+  it("returns the whole job — its full input and output — without the usage-log id, Trash included", async () => {
+    const row = {
+      id: JOB_ID, status: "completed", job_type: null, credits: 30, provider_cost: 0.004, display_cost: 0.01,
+      input_data: { type: "generate-image", prompt: "a red fox", provider: "gpt-image" },
+      output_data: { imageUrl: "https://cdn.test/fox.png", seed: 7 },
+      user_id: VALID_UUID, usage_log_id: "ul-1",
+    }
+    const chain = jobsChain({ data: row, error: null })
+    mockFrom.mockReturnValue(chain)
+    const res = await adminGet(`/v1/admin/jobs/${JOB_ID}`)
+    expect(res.statusCode).toBe(200)
+    const { usage_log_id: _log, ...expected } = row
+    expect(res.json()).toEqual({ data: expected })
+    expect(mockFrom).toHaveBeenCalledWith("jobs")
+    expect(chain.eq).toHaveBeenCalledWith("id", JOB_ID)
+    expect(chain.select.mock.calls[0]![0]).toContain("input_data")
+    // The list shows jobs in the Trash, so the detail view opens them too.
+    expect(chain.is).not.toHaveBeenCalled()
+    expect(serverTimingNames(res)).toEqual(["auth", "job", "total"])
+  })
+
+  it("answers 404 for a job that does not exist", async () => {
+    mockFrom.mockReturnValue(jobsChain({ data: null, error: null }))
+    const res = await adminGet(`/v1/admin/jobs/${JOB_ID}`)
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+  })
+
+  it("returns 500 when the read errors", async () => {
+    mockFrom.mockReturnValue(jobsChain({ data: null, error: { message: "boom" } }))
+    const res = await adminGet(`/v1/admin/jobs/${JOB_ID}`)
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
   })
 })
 
