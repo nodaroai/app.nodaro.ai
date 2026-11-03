@@ -13,6 +13,7 @@
 import { supabase } from "../../lib/supabase.js"
 import { listRestrictions, type ContentRestriction } from "../../lib/content-restrictions.js"
 import { readCaseRow, readComplainant, summaryOf, type ComplaintSummary } from "./complaint-case-rows.js"
+import { counterNoticesOfCase, type CaseCounterNotice } from "./counter-notice-cases.js"
 
 /** The log's newest entries a case view keeps; an older entry is past `eventsTruncated`. */
 export const CASE_EVENT_LIMIT = 500
@@ -23,7 +24,7 @@ const IN_CHUNK = 100
 /** Other cases read per account question, the most recent first: the history is counted, never listed. */
 export const HISTORY_LIMIT = 1000
 
-export type CaseSection = "events" | "files" | "confirmations" | "accounts" | "restrictions"
+export type CaseSection = "events" | "files" | "confirmations" | "accounts" | "restrictions" | "counterNotices"
 
 export interface ComplaintEvent {
   readonly id: string
@@ -96,6 +97,8 @@ export interface ComplaintCase extends ComplaintSummary {
   /** The accounts' other cases were counted from the most recent ones only: the counts may be low. */
   readonly historyTruncated: boolean
   readonly restrictions: readonly ContentRestriction[]
+  /** The counter-notices the case received (ee/lib/counter-notice-cases.ts), oldest first. */
+  readonly counterNotices: readonly CaseCounterNotice[]
   /** The sections that could not be read, shown empty. */
   readonly partial: readonly CaseSection[]
 }
@@ -232,12 +235,13 @@ export async function readComplaintCase(id: string): Promise<ComplaintCase> {
   const who = readComplainant(row)
   // The account the case names comes first: it is never past the cap.
   const userIds = [...new Set([...(row.user_id ? [row.user_id] : []), ...(row.matched_user_ids ?? [])])]
-  const [events, files, confirmations, accounts, restrictions] = await Promise.allSettled([
+  const [events, files, confirmations, accounts, restrictions, counterNotices] = await Promise.allSettled([
     eventsOf(id),
     matchedAssetsOf(row.matched_asset_ids ?? []),
     matchedConfirmationsOf(row.matched_confirmation_ids ?? []),
     matchedUsersOf(userIds, id),
     listRestrictions({ complaintId: id, limit: 200 }),
+    counterNoticesOfCase(id),
   ])
   const sections: ReadonlyArray<readonly [CaseSection, PromiseSettledResult<unknown>]> = [
     ["events", events],
@@ -245,6 +249,7 @@ export async function readComplaintCase(id: string): Promise<ComplaintCase> {
     ["confirmations", confirmations],
     ["accounts", accounts],
     ["restrictions", restrictions],
+    ["counterNotices", counterNotices],
   ]
   const log = valueOr(events, { events: [], truncated: false }, "events", id)
   const people = valueOr<AccountsRead>(accounts, { users: [], more: 0, historyTruncated: false }, "accounts", id)
@@ -276,6 +281,7 @@ export async function readComplaintCase(id: string): Promise<ComplaintCase> {
     moreAccounts: people.more,
     historyTruncated: people.historyTruncated,
     restrictions: valueOr(restrictions, [], "restrictions", id),
+    counterNotices: valueOr(counterNotices, [], "counterNotices", id),
     partial: sections.filter(([, result]) => result.status === "rejected").map(([section]) => section),
   }
 }

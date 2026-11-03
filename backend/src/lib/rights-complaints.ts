@@ -50,6 +50,19 @@ export const COMPLAINT_STATUSES = [
 ] as const
 export type ComplaintStatus = (typeof COMPLAINT_STATUSES)[number]
 
+/** The statuses that close a case: its hold on the matched files ends with them (migration 582). */
+export const CLOSED_COMPLAINT_STATUSES: ReadonlySet<ComplaintStatus> = new Set(["resolved", "closed"])
+
+/**
+ * Whether a case at `status` has not yet reached `target` in a case's course
+ * (the order of COMPLAINT_STATUSES): the moves the server makes on its own
+ * only ever go forward, never undoing one an administrator made.
+ */
+export function statusComesBefore(status: string, target: ComplaintStatus): boolean {
+  const at = COMPLAINT_STATUSES.indexOf(status as ComplaintStatus)
+  return at >= 0 && at < COMPLAINT_STATUSES.indexOf(target)
+}
+
 /** The two statements a copyright notice affirms, verbatim; the form shows them and the record hashes them. */
 export const GOOD_FAITH_STATEMENT =
   "I have a good-faith belief that the use of the material identified in this notice is not authorized by the copyright owner, its agent, or the law."

@@ -128,6 +128,7 @@ import { downloadVideoRoutes } from "./routes/download-video.js"
 import { videoMetadataRoutes } from "./routes/video-metadata.js"
 import { contentRightsRoutes } from "./routes/content-rights.js"
 import { contentComplaintsRoutes } from "./routes/content-complaints.js"
+import { counterNoticesRoutes } from "./routes/counter-notices.js"
 import { extractYouTubeAudioRoutes } from "./routes/extract-youtube-audio.js"
 import { textToAudioRoutes } from "./routes/text-to-audio.js"
 import { imageProxyRoutes } from "./routes/image-proxy.js"
@@ -173,6 +174,7 @@ import { adminSettingsRoutes } from "./ee/routes/admin-settings.js"
 import { adminImportSourcesRoutes } from "./ee/routes/admin-import-sources.js"
 import { adminContentRestrictionsRoutes } from "./ee/routes/admin-content-restrictions.js"
 import { adminComplaintsRoutes } from "./ee/routes/admin-complaints.js"
+import { adminCounterNoticesRoutes } from "./ee/routes/admin-counter-notices.js"
 import { adminAvailabilityRoutes } from "./ee/routes/admin-availability.js"
 import { consentRoutes } from "./ee/routes/consent.js"
 import { trendRoutes } from "./ee/routes/trends.js"
@@ -695,6 +697,7 @@ export async function buildApp() {
   await app.register(videoMetadataRoutes)
   await app.register(contentRightsRoutes)
   await app.register(contentComplaintsRoutes)
+  await app.register(counterNoticesRoutes)
   await app.register(extractYouTubeAudioRoutes)
   await app.register(textToAudioRoutes)
   await app.register(imageProxyRoutes)
@@ -745,6 +748,7 @@ export async function buildApp() {
   if (hasAdmin()) await app.register(adminImportSourcesRoutes)
   if (hasAdmin()) await app.register(adminContentRestrictionsRoutes)
   if (hasAdmin()) await app.register(adminComplaintsRoutes)
+  if (hasAdmin()) await app.register(adminCounterNoticesRoutes)
   if (hasAdmin()) await app.register(adminAvailabilityRoutes)
   await app.register(motionTransferRoutes)
   await app.register(videoUpscaleRoutes)

@@ -5270,7 +5270,9 @@ decision kept on the case), adds a note, names the account the case is
 about (one of the accounts its links matched), matches the links again
 (which adds what they match now and never removes an earlier match),
 restricts a file the case matched (see [Content
-restrictions](#13k-content-restrictions)) or lifts a restriction. A change
+restrictions](#13k-content-restrictions)) or lifts a restriction, and handles
+the counter-notifications the case receives (see
+[Counter-notices](#13l-counter-notices)). A change
 to the status, the decision or the account is made from the case as the
 administrator saw it: when another administrator changed the case
 meanwhile, it is refused and the screen reads the case again (a note is
@@ -5279,7 +5281,9 @@ administrator's action (a move, a restriction, a lift, and every read that
 shows a complainant's details) to the administrators' audit, which names
 the cases by their references and never copies the complainant's details
 or what was searched for. Closing a case (resolved or closed) ends its hold
-on the files it matched. These are the deployment's own routes
+on the files it matched; a case is not closed while a counter-notification
+on it waits for a decision (see [Counter-notices](#13l-counter-notices)).
+These are the deployment's own routes
 (`/v1/admin/complaints…`) and are not part of the public API: they answer
 an administrator signed in to the app only (an API key or an app's token of
 an administrator's account is refused with `403` and `code: "in_app_only"`),
@@ -5331,8 +5335,11 @@ it was matched to when it was received, and those an administrator's
 matching again adds to it; a job output with no library row of its own is
 held once an administrator restricts it.
 
-A restriction is lifted by an administrator (a counter-notice, a mistake),
-which restores each row to what it was, in one step. The records of
+A restriction is lifted by an administrator (a mistake, a complaint
+withdrawn, or a counter-notification: see [Counter-notices](#13l-counter-notices)),
+which restores each row to what it was, in one step; a lift is refused while
+a court action recorded on the restriction's counter-notification holds the
+content. The records of
 restrictions and lifts are the deployment's own and are not part of the
 public API: their routes answer an administrator signed in to the app only,
 like the Complaints screen's. An administrator restricts and lifts from a
@@ -5365,6 +5372,106 @@ edge that did not answer, is on record rather than assumed; a move left
 unfinished (a file that could not be moved, an edge that did not answer)
 is finished again by the server's hourly reconcile, and by an
 administrator's own action (`POST /v1/admin/content-restrictions/:id/bytes`).
+
+## 13l. Counter-notices
+
+A person whose content was restricted after a copyright notice can answer it
+with a **counter-notification** (17 U.S.C. § 512(g)(3)), from Settings →
+Content restrictions (`/settings/content-restrictions`). The page lists the
+restrictions a complaint led to on their own content: what was restricted
+and when, the complaint's reference, and the kind of complaint (a copyright
+notice, or a complaint under the content rules); never who complained, and
+never an administrator's own notes. The Settings page shows the way there
+only to a person who has one.
+
+A counter-notification gives the sender's full name, physical address, phone
+number and email, identifies what was restricted and where it was before,
+carries their signature (their typed full name), and affirms the
+declaration, shown verbatim, each statement on its own: the good-faith
+belief, under penalty of perjury, that the material was removed or disabled
+by mistake or misidentification; and the consent to the jurisdiction of the
+applicable United States Federal District Court and to service of process
+from the person who complained. Before the person sends it, the page says
+that their name, address, phone number and email are sent to the person who
+complained, as the law requires. One counter-notification answers one
+restriction, and only a restriction that a copyright complaint led to, that
+still stands, and whose complaint is open; it is sent by the person, signed
+in to the app (an API key, an app's token or an agent is refused with `403`
+and `code: "in_app_only"`). The details are plain text, sent to the
+complainant as typed: the one-line details (name, email, phone, signature)
+take no line break, and no detail takes a control character or an invisible
+direction mark (`400 validation_error`). What was restricted and where it
+was are prefilled in English, since the counter-notification is sent beside
+the declaration's English wording. The sender's details are stored
+encrypted, and nothing they submitted changes afterwards.
+
+**The restore window.** Content may be restored "not less than 10, nor more
+than 14, business days" after the counter-notification is received. The
+statute is read more than one way (whether a US federal holiday is a
+business day, and whether the 10th business day itself counts or only the
+day after ten full business days), so the window is where every reading
+agrees: it opens on the 11th business day after receipt with federal
+holidays not counted (ten full business days have then passed under any
+reading), and its last day is the 14th business day counting every weekday.
+Days are New York calendar dates, and day 1 is the first business day after
+the day of receipt. The window is fixed when the counter-notification is
+received, and always holds at least two weekdays. For example, a
+counter-notification received on Monday 23 November 2026 can be restored
+from Wednesday 9 December 2026 to Friday 11 December 2026 (Thanksgiving,
+26 November, is not counted for the opening).
+
+**Handling it.** The counter-notification appears on its complaint's case
+on the Complaints screen, with the sender's details, the day it was
+received in New York, and where today stands in the window. An
+administrator takes each step once, and each is written to the case's log:
+
+- **Sent to the complainant.** The administrator forwards the
+  counter-notification (its text, copied from the case, says when the
+  content will be restored unless a court action is reported first) and
+  records that it was sent. Nothing is sent automatically.
+- **Court action received.** When the complainant reports a court action to
+  restrain the activity, the administrator records it, with an optional
+  note (kept encrypted on the counter-notification; the log says only that
+  there is one). The content stays restricted on every route, a lift of the
+  restriction itself included, until the court action is recorded as ended;
+  the case moves to "Awaiting legal action".
+- **Court action ended.** When the court action ends (dismissed, withdrawn,
+  decided), the administrator records it, with an optional note. The
+  content may then be restored, whatever the window says, or kept
+  restricted as the outcome says.
+- **Declined.** A counter-notification that is not a valid one (it
+  identifies nothing that was restricted, say, or misses an element the law
+  requires) is declined, with a reason the sender is shown. The content
+  stays restricted.
+- **Restore.** The administrator restores the content from the
+  counter-notification (see [Content restrictions](#13k-content-restrictions)).
+  A restore is refused while anything holds it back: the
+  counter-notification was declined; a court action holds the content; it
+  was not yet sent to the complainant; the window has not opened (unless a
+  court action has ended); the case is closed; another restriction, of
+  another case, stands on the same content; or another open case concerns
+  the same content. Past the window's last day a restore is still allowed,
+  and the case says it is late. Once every counter-notification on the case
+  is restored or declined, the case moves to "Content restored" and stays
+  open.
+
+Lifting the restriction itself, from the case's restrictions, restores the
+content at once and settles its counter-notification, outside the steps
+above; it is refused while a court action holds the content. A case is not
+closed (resolved or closed) while a counter-notification on it waits for a
+decision (neither restored, held by a court action, nor declined), so a
+window never runs out on a closed case.
+
+The case's log also notes, by itself, the day the window opens and the
+weekday before its last day, for a counter-notification still waiting;
+where the deployment has an administrators' Slack, the same two moments are
+posted there, naming the counter-notification and its case by reference
+only. These routes are the deployment's own and are not part of the public
+API: the person's in their own session (`/v1/content-restrictions/mine`,
+`/v1/counter-notices/declaration`,
+`/v1/content-restrictions/:id/counter-notice`), and the administrator's
+signed in to the app (`/v1/admin/counter-notices/:id/forwarded`,
+`…/court-action`, `…/court-action-ended`, `…/decline`, `…/restore`).
 
 ## 14. Pipelines
 

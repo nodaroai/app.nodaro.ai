@@ -44,7 +44,7 @@ export { RESTRICTED_SET_TTL_MS } from "./content-restriction-set.js"
 /** A job may be restricted once its worker has nothing more to write. */
 export const FINISHED_JOB_STATUSES: ReadonlySet<string> = new Set(["completed", "failed", "cancelled", "pending_review"])
 
-export type ContentRestrictionErrorCode = "not_found" | "already_restricted" | "already_lifted" | "job_not_finished" | "unknown_complaint"
+export type ContentRestrictionErrorCode = "not_found" | "already_restricted" | "already_lifted" | "job_not_finished" | "unknown_complaint" | "court_action"
 
 export class ContentRestrictionError extends Error {
   constructor(
@@ -141,6 +141,12 @@ function mapRpcError(error: { code?: string; message?: string }, what: "restrict
       return new ContentRestrictionError("job_not_finished", "The job is not finished; restrict it once it is")
     case "23503":
       return new ContentRestrictionError("unknown_complaint", "No such complaint")
+    // Migration 587: a court action recorded on the restriction's counter-notice holds it, on every route.
+    case "55025":
+      return new ContentRestrictionError(
+        "court_action",
+        "A court action recorded on this restriction's counter-notice holds the content: record that the court action ended first",
+      )
     default:
       return null
   }

@@ -97,6 +97,19 @@ function eventLine(e: ComplaintEvent): string | null {
       return `restriction ${String(d.restrictionId ?? "")}`
     case "restriction_lifted":
       return `restriction ${String(d.restrictionId ?? "")}${d.reason ? ` — ${String(d.reason)}` : ""}`
+    case "counter_notice_received":
+    case "restore_window_opened":
+    case "restore_window_closing":
+      return `${String(d.reference ?? "")}: restorable ${String(d.opensOn ?? "?")} to ${String(d.closesOn ?? "?")}`
+    case "counter_notice_forwarded":
+    case "counter_notice_declined":
+      return String(d.reference ?? "")
+    // The note itself is kept encrypted on the counter-notice (a caption names people); the log says only that there is one.
+    case "court_action_received":
+    case "court_action_ended":
+      return `${String(d.reference ?? "")}${d.note === true ? " — with a note" : ""}`
+    case "content_restored":
+      return `${String(d.reference ?? "")}, restriction ${String(d.restrictionId ?? "")}`
     case "match_failed":
       return String(d.error ?? "")
     case DATABASE_ENTRY:

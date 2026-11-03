@@ -10,6 +10,7 @@ import {
   useNameComplaintUser,
   useRematchComplaint,
   useRestrictFromComplaint,
+  type CaseCounterNotice,
   type CaseRestriction,
   type ComplaintCase,
   type MatchedAsset,
@@ -232,11 +233,27 @@ function BytesLine({ restriction, onFinish, finishing, busy }: { readonly restri
   )
 }
 
+/**
+ * What lifting a restriction here does to its counter-notice: a court action
+ * on it holds the content on every route (the server refuses the lift), and
+ * a lift otherwise restores the content now and settles the counter-notice,
+ * outside its own steps (migration 587).
+ */
+function LiftWarning({ notice: n }: { readonly notice: CaseCounterNotice | undefined }) {
+  if (!n || n.restoredAt) return null
+  const text =
+    n.courtActionAt && !n.courtActionEndedAt
+      ? `A court action recorded on counter-notice ${n.reference} holds this content: record that the court action ended first.`
+      : `Counter-notice ${n.reference} answers this restriction: lifting it here restores the content now, outside the counter-notice's steps, and settles it.`
+  return <p className="text-xs text-amber-700 dark:text-amber-300">{text}</p>
+}
+
 function CaseRestrictions({ complaint: c }: { readonly complaint: ComplaintCase }) {
   const lift = useLiftCaseRestriction()
   const finish = useFinishRestrictionBytes()
   const [lifting, setLifting] = useState<string | null>(null)
   const [reason, setReason] = useState("")
+  const noticeOf = new Map(c.counterNotices.map((n) => [n.restrictionId, n]))
 
   function cancelLift() {
     setLifting(null)
@@ -286,6 +303,7 @@ function CaseRestrictions({ complaint: c }: { readonly complaint: ComplaintCase 
                 </div>
                 <p className="whitespace-pre-wrap text-xs text-muted-foreground">{r.reason}{r.liftReason ? ` — lifted: ${r.liftReason}` : ""}</p>
                 <BytesLine restriction={r} onFinish={() => finishBytes(r.id)} finishing={finishingThis} busy={finishingThis || liftingThis} />
+                {lifting === r.id && <LiftWarning notice={noticeOf.get(r.id)} />}
                 {lifting === r.id && (
                   <form
                     className="flex flex-wrap items-center gap-2"
@@ -297,7 +315,7 @@ function CaseRestrictions({ complaint: c }: { readonly complaint: ComplaintCase 
                     <Input
                       className="max-w-md"
                       aria-label={`Why the restriction of ${label} is lifted`}
-                      placeholder="Why (a counter-notice, a mistake)"
+                      placeholder="Why (a mistake, a complaint withdrawn)"
                       value={reason}
                       maxLength={4000}
                       autoFocus

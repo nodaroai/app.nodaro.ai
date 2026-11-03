@@ -11,7 +11,16 @@ import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { COMPLAINT_STATUSES, REFERENCE_SEARCH_MAX, searchProblem } from "@/ee/hooks/queries/use-admin-complaints-queries"
-import { CATEGORY_LABELS, STATUS_LABELS, historyLabel, mailtoHref, openableAddress, unreadableLabel } from "../complaint-labels"
+import { CATEGORY_LABELS, STATUS_LABELS, actorLabel, historyLabel, mailtoHref, openableAddress, unreadableLabel } from "../complaint-labels"
+
+describe("actorLabel", () => {
+  it("names who wrote a log entry: the content's owner (a counter-notice) is never taken for an administrator", () => {
+    expect(actorLabel("owner")).toBe("the content's owner")
+    expect(actorLabel("system")).toBe("system")
+    expect(actorLabel("complainant")).toBe("complainant")
+    expect(actorLabel("00000000-aaaa-4000-8000-000000000001")).toBe("admin 00000000")
+  })
+})
 
 const MIGRATION = join(import.meta.dirname, "../../../../../../../../supabase/migrations/580_rights_complaints.sql")
 

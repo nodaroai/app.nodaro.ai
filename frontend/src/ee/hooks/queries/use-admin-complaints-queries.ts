@@ -127,7 +127,53 @@ export interface CaseRestriction {
 }
 
 /** A part of the case the server could not read; it is shown empty. */
-export type CaseSection = "events" | "files" | "confirmations" | "accounts" | "restrictions"
+export type CaseSection = "events" | "files" | "confirmations" | "accounts" | "restrictions" | "counterNotices"
+
+/** A counter-notice's details and an administrator's notes, by name (the ones that could not be read are listed). */
+export type CounterNoticeField = "name" | "email" | "address" | "phone" | "signature" | "courtActionNote" | "courtActionEndedNote"
+
+/** A counter-notice the case received (backend ee/lib/counter-notice-cases.ts). */
+export interface CaseCounterNotice {
+  readonly id: string
+  readonly reference: string
+  readonly restrictionId: string
+  readonly receivedAt: string
+  /** The receipt's date in New York, which the window counts from. */
+  readonly receivedOn: string
+  /** The New York dates within which the content may be restored. */
+  readonly opensOn: string
+  readonly closesOn: string
+  /** Where today, in New York, stands against the window. */
+  readonly position: "before" | "open" | "after"
+  readonly name: string | null
+  readonly email: string | null
+  readonly address: string | null
+  readonly phone: string | null
+  readonly signature: string | null
+  readonly unreadable: readonly CounterNoticeField[]
+  readonly contentIdentification: string
+  readonly locationBefore: string
+  readonly forwardedAt: string | null
+  readonly forwardedBy: string | null
+  readonly courtActionAt: string | null
+  readonly courtActionBy: string | null
+  readonly courtActionNote: string | null
+  readonly courtActionEndedAt: string | null
+  readonly courtActionEndedBy: string | null
+  readonly courtActionEndedNote: string | null
+  readonly declinedAt: string | null
+  readonly declinedBy: string | null
+  /** Why it was declined: the sender is shown it too. */
+  readonly declinedReason: string | null
+  readonly restoredAt: string | null
+  readonly restoredBy: string | null
+  /** When its restriction was lifted, by whatever route; null while it stands. */
+  readonly restrictionLiftedAt: string | null
+  /** Restrictions of other cases standing on the same content: a restore waits for each of them. */
+  readonly otherRestrictionIds: readonly string[]
+  /** Other open cases about the same content: a restore waits for each of them. */
+  readonly otherCaseReferences: readonly string[]
+}
 
 export interface ComplaintCase extends ComplaintSummary {
   readonly claimantRole: "owner" | "agent" | null
@@ -154,6 +200,7 @@ export interface ComplaintCase extends ComplaintSummary {
   /** The accounts' other cases were counted from the most recent only: the counts may be low. */
   readonly historyTruncated: boolean
   readonly restrictions: readonly CaseRestriction[]
+  readonly counterNotices: readonly CaseCounterNotice[]
   readonly partial: readonly CaseSection[]
 }
 
@@ -329,4 +376,43 @@ export function useLiftCaseRestriction() {
     (i) => ({ reason: i.reason }),
     "Failed to lift the restriction",
   )
+}
+
+const counterNoticePath = (id: string, step: string) => `/v1/admin/counter-notices/${encodeURIComponent(id)}/${step}`
+
+/** The counter-notice was sent to the complainant (backend ee/routes/admin-counter-notices.ts). */
+export function useMarkCounterNoticeForwarded() {
+  return useCaseMove<{ counterNoticeId: string }>((i) => counterNoticePath(i.counterNoticeId, "forwarded"), () => undefined, "Failed to record the forwarding")
+}
+
+/** The complainant went to court: the content stays restricted until the court action is recorded as ended. */
+export function useRecordCourtAction() {
+  return useCaseMove<{ counterNoticeId: string; note: string | null }>(
+    (i) => counterNoticePath(i.counterNoticeId, "court-action"),
+    (i) => ({ note: i.note }),
+    "Failed to record the court action",
+  )
+}
+
+/** The court action ended: the content may then be restored, or kept restricted as the outcome says. */
+export function useRecordCourtActionEnded() {
+  return useCaseMove<{ counterNoticeId: string; note: string | null }>(
+    (i) => counterNoticePath(i.counterNoticeId, "court-action-ended"),
+    (i) => ({ note: i.note }),
+    "Failed to record the end of the court action",
+  )
+}
+
+/** Declines the counter-notice as not a valid one; the sender is shown the reason. */
+export function useDeclineCounterNotice() {
+  return useCaseMove<{ counterNoticeId: string; reason: string }>(
+    (i) => counterNoticePath(i.counterNoticeId, "decline"),
+    (i) => ({ reason: i.reason }),
+    "Failed to decline the counter-notice",
+  )
+}
+
+/** Restores the content a counter-notice answers, once nothing holds it back. */
+export function useRestoreFromCounterNotice() {
+  return useCaseMove<{ counterNoticeId: string }>((i) => counterNoticePath(i.counterNoticeId, "restore"), () => undefined, "Failed to restore the content")
 }

@@ -11,7 +11,7 @@
  * rest of the queue or case is answered.
  */
 import { supabase } from "../../lib/supabase.js"
-import { COMPLAINT_STATUSES, openComplainant, type ComplainantColumn, type ComplaintStatus } from "../../lib/rights-complaints.js"
+import { CLOSED_COMPLAINT_STATUSES, COMPLAINT_STATUSES, openComplainant, type ComplainantColumn, type ComplaintStatus } from "../../lib/rights-complaints.js"
 
 export type ComplaintCaseErrorCode = "not_found" | "invalid_status" | "invalid_move" | "conflict"
 
@@ -25,8 +25,7 @@ export class ComplaintCaseError extends Error {
   }
 }
 
-/** The statuses that close a case: its hold on the matched files ends with them (migration 582). */
-export const CLOSED_COMPLAINT_STATUSES: ReadonlySet<ComplaintStatus> = new Set(["resolved", "closed"])
+export { CLOSED_COMPLAINT_STATUSES }
 
 export const OPEN_COMPLAINT_STATUSES: readonly ComplaintStatus[] = COMPLAINT_STATUSES.filter((s) => !CLOSED_COMPLAINT_STATUSES.has(s))
 

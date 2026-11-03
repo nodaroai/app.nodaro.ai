@@ -284,6 +284,13 @@ export const queryKeys = {
     list: () => ["connected-apps", "list"] as const,
   },
 
+  // Content of mine a complaint led to restricting, and the counter-notification's declaration
+  myRestrictions: {
+    all: ["my-restrictions"] as const,
+    list: () => ["my-restrictions", "list"] as const,
+    declaration: () => ["my-restrictions", "declaration"] as const,
+  },
+
   // Content rights: the account's standing authorization for imports through its keys and agents
   contentRights: {
     all: ["content-rights"] as const,

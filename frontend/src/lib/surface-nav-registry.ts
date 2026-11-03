@@ -101,6 +101,10 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "/settings/developer-apps/:id",
   // Reached from the Settings page's "Connected apps" card (every edition).
   "/settings/connected-apps",
+  // Reached from the Settings page's "Content restrictions" card (shown when a
+  // complaint led to restricting the person's content) and from the notice
+  // the person is sent about a restriction.
+  "/settings/content-restrictions",
 
   // Organizations axis — gated by org membership / hasOrganizations(), not a nav entry.
   "/join",

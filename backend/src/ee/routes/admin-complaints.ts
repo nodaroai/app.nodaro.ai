@@ -2,12 +2,10 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { requireAdminInApp } from "../middleware/require-admin-in-app.js"
 import { audit } from "./admin-trends-lifecycle.js"
+import { caseFailure } from "./complaint-route-errors.js"
 import { formatZodError } from "../../lib/zod-error.js"
-import { sendInternalError } from "../../lib/http-errors.js"
 import { COMPLAINT_STATUSES } from "../../lib/rights-complaints.js"
-import { ContentRestrictionError } from "../../lib/content-restrictions.js"
 import {
-  ComplaintCaseError,
   addComplaintNote,
   countOpenComplaints,
   listComplaintCases,
@@ -81,28 +79,12 @@ const restrictBody = z
   })
   .refine((b) => (b.assetId ? 1 : 0) + (b.jobId ? 1 : 0) === 1, { message: "Name one of assetId or jobId" })
 
-function caseErrorStatus(e: ComplaintCaseError): number {
-  if (e.code === "not_found") return 404
-  if (e.code === "conflict") return 409
-  return 400
-}
-
 function invalid(reply: FastifyReply, error: z.ZodError) {
   return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(error) } })
 }
 
 function noSuchCase(reply: FastifyReply) {
   return reply.status(400).send({ error: { code: "validation_error", message: "Invalid complaint" } })
-}
-
-/** The module's refusals as answers; anything else is the server's. */
-function caseFailure(req: FastifyRequest, reply: FastifyReply, e: unknown, fallback: string) {
-  if (e instanceof ComplaintCaseError) return reply.status(caseErrorStatus(e)).send({ error: { code: e.code, message: e.message } })
-  if (e instanceof ContentRestrictionError) {
-    const status = e.code === "not_found" ? 404 : e.code === "unknown_complaint" ? 400 : 409
-    return reply.status(status).send({ error: { code: e.code, message: e.message } })
-  }
-  return sendInternalError(reply, req, e, fallback)
 }
 
 /**
