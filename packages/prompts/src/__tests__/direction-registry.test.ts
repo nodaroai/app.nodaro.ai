@@ -25,7 +25,7 @@ import { buildMoodHints } from "../mood.js"
 import { buildAestheticHints } from "../aesthetic.js"
 import { buildPhotographerHints } from "../photographer.js"
 import { buildAtmosphereHints } from "../atmosphere.js"
-import { getStylePromptHint, getStyleTerm } from "../style.js"
+import { getStylePromptHint, getStyleTerm, getStyleVideoPromptHint } from "../style.js"
 import { getCameraMotionPromptHint, getCameraMotionTerm } from "../camera-motions.js"
 
 /**
@@ -223,9 +223,9 @@ describe("renderDirectionHints — surface filtering", () => {
   })
 
   it("renders a `both` key on both surfaces", () => {
-    const expected = [getStylePromptHint("anime")]
-    expect(renderDirectionHints({ style: "anime" }, IMAGE)).toEqual(expected)
-    expect(renderDirectionHints({ style: "anime" }, VIDEO)).toEqual(expected)
+    // Each surface's own wording: the image wording on a still, the video wording on video.
+    expect(renderDirectionHints({ style: "anime" }, IMAGE)).toEqual([getStylePromptHint("anime")])
+    expect(renderDirectionHints({ style: "anime" }, VIDEO)).toEqual([getStyleVideoPromptHint("anime")])
   })
 
   it("folds in table order regardless of the caller's object-literal order", () => {
@@ -387,7 +387,7 @@ describe("hint modes", () => {
       { ...VIDEO, mode: VIDEO_HINT_MODE_DEFAULT },
     )
     // cameraMotion leads (motion → compact term); style follows (look → full).
-    expect(hints).toEqual([getCameraMotionTerm("handheld"), getStylePromptHint("anime")])
+    expect(hints).toEqual([getCameraMotionTerm("handheld"), getStyleVideoPromptHint("anime")])
     expect(hints[0]).not.toBe(getCameraMotionPromptHint("handheld"))
   })
 })

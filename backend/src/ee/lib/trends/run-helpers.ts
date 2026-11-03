@@ -19,7 +19,7 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
-import { fullDepthSceneDescribes } from "@nodaro/render-rules"
+import { CAST_SWAP_PROMPT_WORDING_PART_IDS, fullDepthSceneDescribes } from "@nodaro/render-rules"
 import { config } from "../../../lib/config.js"
 import { supabase } from "../../../lib/supabase.js"
 import { callerGrantOf, withJobSubmissionContext, type TrustedJobProvenance } from "../../../lib/job-submission-context.js"
@@ -49,6 +49,7 @@ import { engineTakesPromptStyle, engineTakesScene } from "./prompt-style.js"
 import { privacyOutcomeOf } from "../../../lib/nodaro-motion-quote.js"
 import { castSwapEnginesOf, withWireLengthKey } from "../../../lib/cast-swap-engines.js"
 import { engineTakesPulseAudio } from "../../../lib/cast-swap-pulse-audio.js"
+import { engineTakesPromptWording } from "../../../lib/nodaro-motion-prompt-wording.js"
 import { prismReferenceAudioByResolutionOf, prismReferenceAudioWire, prismRunResolution } from "../../../lib/cast-swap-prism-reference-audio.js"
 import type { ComposedTrendRun, TrendRunDisplay, TrendRunDisplaySlot } from "./compose.js"
 import {
@@ -493,6 +494,30 @@ export function withoutUnsupportedPromptParts(composed: ComposedTrendRun): void 
 }
 
 /**
+ * The body without `promptWording` when the loaded engine does not list it
+ * (`castSwap.promptWordings`): such an engine may refuse a key its strict
+ * schema does not know, and words the Flex prompt as today anyway. Its
+ * `promptParts` likewise lose any override of the new wording's parts
+ * (`CAST_SWAP_PROMPT_WORDING_PART_IDS`) for an engine that does not list "new".
+ * Publishing holds a trend on the new wording back from such an environment
+ * (`PROMPT_WORDING_NEED`), so only a draft's test run (or a published one,
+ * mid-deploy) gets here. Mutates `composed.body`.
+ */
+export function withoutUnsupportedPromptWording(composed: ComposedTrendRun): void {
+  const cs = getPluginSupports().castSwap
+  const wording = composed.body.promptWording
+  if (wording && !engineTakesPromptWording(cs, wording)) delete composed.body.promptWording
+  // An override of one of the new wording's parts, only to an engine that knows them (one from before
+  // the wording may refuse a part id it does not know); the overrides left empty are not sent at all.
+  const parts = composed.body.promptParts
+  if (parts && !engineTakesPromptWording(cs, "new") && CAST_SWAP_PROMPT_WORDING_PART_IDS.some((id) => id in parts)) {
+    const kept = Object.fromEntries(Object.entries(parts).filter(([id]) => !(CAST_SWAP_PROMPT_WORDING_PART_IDS as readonly string[]).includes(id)))
+    if (Object.keys(kept).length > 0) composed.body.promptParts = kept
+    else delete composed.body.promptParts
+  }
+}
+
+/**
  * The body without `promptStyle` when the loaded engine does not declare that
  * style (`castSwap.promptStyles`), and without full depth's
  * `faceMasking.scene` when it does not declare that scene
@@ -686,7 +711,7 @@ export function withPreparedPreview(composed: ComposedTrendRun): void {
 
 /**
  * Every field the loaded engine does not take, dropped (the stored mask, the
- * prompt parts, the prompt style and scene, the face mesh, the depth colormap and model size, the stored scene
+ * prompt parts, the prompt style and scene, the Flex wording, the face mesh, the depth colormap and model size, the stored scene
  * description, the preparation steps, the Pulse audio, the Prism reference
  * audio, the run's `sourceAsset`), and the
  * preview's prepared input clip put on the wire where the engine takes it
@@ -696,6 +721,7 @@ export function withoutUnsupportedFields(composed: ComposedTrendRun): void {
   withoutUnsupportedStoredMask(composed)
   withoutUnsupportedPromptParts(composed)
   withoutUnsupportedPromptStyle(composed)
+  withoutUnsupportedPromptWording(composed)
   withoutUnsupportedFaceMesh(composed)
   withoutUnsupportedDepthColormap(composed)
   withoutUnsupportedDepthModelSize(composed)

@@ -26,6 +26,16 @@ import { catalogPacksVersion, hasCatalogPacksFor } from "./catalog-packs.js"
  *     carry (typed extras a specific builder reads) survive from the base.
  *   - pack-ADDED id (no base entry)  → the composed option itself.
  *
+ * THE VIDEO WORDING (`videoPromptHint`, styles only) pairs with the image
+ * wording it was written beside, so it cannot simply survive from the base
+ * like a typed extra: a pack that rewrites a style's `promptHint` would then
+ * still inject the stock video text. The composed option's own
+ * `videoPromptHint` wins when it carries one; otherwise the base's is kept
+ * only while the composed `promptHint` is the stock one (a deny / extend pack,
+ * or the browser's `replace` copy of the server's composed catalog, which
+ * carries `promptHint` but not the video wording); a rewritten `promptHint`
+ * drops it, so video falls back to the pack's own wording.
+ *
  * LATE-BOUND RESOLVER, ON PURPOSE. The catalog modules cannot import
  * `getPickerCatalog`: picker-catalogs.ts imports every one of them to build
  * `PICKER_CATALOGS` at module scope, and a module-scope cycle is a TDZ error
@@ -91,7 +101,7 @@ export function overlayEntry<T extends { readonly id: string }>(
   const opt = composedOptionIndex(catalogId).get(id)
   if (!opt) return undefined
   if (!base) return opt as unknown as T
-  return {
+  const out: Record<string, unknown> = {
     ...base,
     label: opt.label,
     promptHint: opt.promptHint,
@@ -99,6 +109,10 @@ export function overlayEntry<T extends { readonly id: string }>(
     ...(opt.description !== undefined ? { description: opt.description } : {}),
     ...(opt.category !== undefined ? { category: opt.category } : {}),
   }
+  const baseFields = base as { readonly promptHint?: unknown; readonly videoPromptHint?: unknown }
+  if (opt.videoPromptHint !== undefined) out.videoPromptHint = opt.videoPromptHint
+  else if (baseFields.videoPromptHint !== undefined && opt.promptHint !== baseFields.promptHint) delete out.videoPromptHint
+  return out as unknown as T
 }
 
 /**

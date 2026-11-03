@@ -26,7 +26,7 @@ import { getCameraFormatPromptHint, getCameraFormatTerm } from "./camera-format.
 import { getColorLookPromptHint, getColorLookTerm } from "./color-look.js"
 import { buildAtmosphereHints } from "./atmosphere.js"
 import { buildActionFxHints } from "./action-fx.js"
-import { getStylePromptHint, getStyleTerm } from "./style.js"
+import { getStylePromptHint, getStyleTerm, getStyleVideoPromptHint } from "./style.js"
 import { getSettingPromptHint, getSettingTerm } from "./setting.js"
 import { getLoopSubjectPromptHint, getLoopSubjectTerm } from "./loop-subject.js"
 import { buildPersonHints } from "./person.js"
@@ -179,12 +179,26 @@ const MOTION_INTENSITY_HINTS: Readonly<Record<string, { readonly full: string; r
  * transition / camera-motion / character-fx timing and start-state/end-state
  * clauses, multi-pick joining and multi-dimension composition are emitted the
  * same way in both modes.
+ *
+ * SURFACE — `opts.surface: "video"` is for a caller folding the hint into ONE
+ * video consumer's prompt (the canvas's video nodes): a Style node then injects
+ * its video wording (`getStyleVideoPromptHint`). Absent (or `"image"`) is the
+ * output this function always returned — what a still, a `{Label}` reference
+ * and every preview of the node's own text read, since a node's own output
+ * text has no single consumer. Every other node type ignores it.
  */
 export function getParameterPromptHint(
   node: HintNodeLike | undefined,
   ctx?: HintGraphContext,
+  opts?: ParameterHintOptions,
 ): string {
-  return resolveParameterHint(node, ctx)
+  return resolveParameterHint(node, ctx, undefined, opts?.surface === "video" ? "video" : "image")
+}
+
+/** How `getParameterPromptHint` resolves a node. */
+export interface ParameterHintOptions {
+  /** The stage the hint is folded into. Absent = `"image"`. */
+  readonly surface?: "image" | "video"
 }
 
 /**
@@ -198,6 +212,7 @@ function resolveParameterHint(
   node: HintNodeLike | undefined,
   ctx?: HintGraphContext,
   inherited?: PickerHintMode,
+  surface: "image" | "video" = "image",
 ): string {
   if (!node?.type) return ""
   const data = (node.data ?? {}) as Record<string, unknown>
@@ -216,7 +231,7 @@ function resolveParameterHint(
       // themselves parameter nodes (framing/tone/etc.) that don't need graph
       // context, and avoiding recursion keeps the walk cycle-safe. The mode
       // rides down so the composed clause stays at one level of detail.
-      const hint = resolveParameterHint(src, undefined, mode)
+      const hint = resolveParameterHint(src, undefined, mode, surface)
       if (!hint) continue
       if (edge.targetHandle === "startState") startHints.push(hint)
       else if (edge.targetHandle === "endState") endHints.push(hint)
@@ -247,7 +262,7 @@ function resolveParameterHint(
       if (edge.target !== node.id) continue
       const src = ctx.nodes.find((n) => n.id === edge.source)
       if (!src) continue
-      const hint = resolveParameterHint(src, undefined, mode) // no ctx — cycle-safe
+      const hint = resolveParameterHint(src, undefined, mode, surface) // no ctx — cycle-safe
       if (!hint) continue
       if      (edge.targetHandle === "startState") startHints.push(hint)
       else if (edge.targetHandle === "endState")   endHints.push(hint)
@@ -301,7 +316,7 @@ function resolveParameterHint(
     )
   }
 
-  const base = resolveBaseHint(node.type, data, mode)
+  const base = resolveBaseHint(node.type, data, mode, surface)
   if (base) return base
   // Pack-extend fallback: a single-dim pack entry the per-catalog getter (which
   // reads the frozen base array) can't resolve. Resolve it against the
@@ -313,7 +328,7 @@ function resolveParameterHint(
   if (cat?.kind === "single" && cat.valueField) {
     const id = typeof data[cat.valueField] === "string" ? (data[cat.valueField] as string) : ""
     const opt = cat.options?.find((o) => o.id === id)
-    if (opt) return byMode(mode, opt.promptHint, resolveTerm(opt))
+    if (opt) return byMode(mode, surface === "video" ? (opt.videoPromptHint ?? opt.promptHint) : opt.promptHint, resolveTerm(opt))
   }
   return base
 }
@@ -333,6 +348,7 @@ function resolveBaseHint(
   type: string,
   data: Record<string, unknown>,
   mode: PickerHintMode = "full",
+  surface: "image" | "video" = "image",
 ): string {
   switch (type) {
     case "framing":
@@ -373,7 +389,7 @@ function resolveBaseHint(
     case "action-fx":
       return withCustomText(data, buildActionFxHints(data.actionFx, mode).join(", "))
     case "style":
-      return withCustomText(data, byMode(mode, getStylePromptHint, getStyleTerm)(asStr(data.style)))
+      return withCustomText(data, byMode(mode, surface === "video" ? getStyleVideoPromptHint : getStylePromptHint, getStyleTerm)(asStr(data.style)))
     case "setting":
       return withCustomText(data, byMode(mode, getSettingPromptHint, getSettingTerm)(asStr(data.setting)))
     case "loop-subject":

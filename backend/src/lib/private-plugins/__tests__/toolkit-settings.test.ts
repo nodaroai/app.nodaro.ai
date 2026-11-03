@@ -6,6 +6,7 @@ import type {
   NodaroMotionPromptParts as PluginNodaroMotionPromptParts,
   PluginFaceMasking,
   PluginNodaroMotionMasking,
+  PluginNodaroMotionPromptWording,
   PluginNodaroMotionStyle,
   PluginPromptPartId,
 } from "../types.js"
@@ -13,6 +14,7 @@ import type { NodaroMotionMotionForPlugin } from "../../nodaro-motion-motion.js"
 import type { NodaroMotionMaskingForPlugin } from "../../nodaro-motion-masking.js"
 import type { NodaroMotionPromptPartsForPlugin } from "../../nodaro-motion-prompt-parts.js"
 import type { NodaroMotionStyleForPlugin } from "../../nodaro-motion-style.js"
+import type { NodaroMotionPromptWordingForPlugin } from "../../nodaro-motion-prompt-wording.js"
 
 /**
  * `tk.settings.nodaroMotionMasking()` — the admin's face masking per Nodaro
@@ -20,7 +22,7 @@ import type { NodaroMotionStyleForPlugin } from "../../nodaro-motion-style.js"
  * the settings cache's own read (`getAppSettings`, ~60 s, cleared on an admin
  * write), handed out as a copy, and null when never saved.
  */
-const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, reads: 0, failed: false }))
+const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, reads: 0, failed: false }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("../../app-settings.js", async (importOriginal) => {
@@ -29,7 +31,7 @@ vi.mock("../../app-settings.js", async (importOriginal) => {
     ...orig,
     getAppSettings: async () => {
       h.reads++
-      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style }
+      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording }
     },
     settingsReadFailed: () => h.failed,
   }
@@ -439,6 +441,51 @@ describe("tk.settings.nodaroMotionStyle", () => {
 
   it("what the host answers is the plugin's PluginNodaroMotionStyle", () => {
     expectTypeOf<NodaroMotionStyleForPlugin>().toExtend<PluginNodaroMotionStyle>()
+  })
+})
+
+/**
+ * `tk.settings.nodaroMotionPromptWording()` — the admin's Flex prompt wording
+ * per Nodaro Motion engine, which the Cast Swap engine reads for every DIRECT
+ * Flex run: null when never saved or every engine is current (today's
+ * wording, exactly as before), else only the engines on the new wording.
+ */
+describe("tk.settings.nodaroMotionPromptWording", () => {
+  beforeEach(() => {
+    h.wording = null
+    h.reads = 0
+    h.failed = false
+  })
+
+  it("is advertised", () => {
+    expect(buildToolkit().capabilities?.nodaroMotionPromptWording).toBe(true)
+    expect(typeof buildToolkit().settings?.nodaroMotionPromptWording).toBe("function")
+  })
+
+  it("rejects when the settings could not be read, never answering null (the current wording)", async () => {
+    h.failed = true
+    await expect(buildToolkit().settings!.nodaroMotionPromptWording!()).rejects.toThrow(/could not be read/)
+  })
+
+  it("answers null when it was never saved, or every engine is current", async () => {
+    expect(await buildToolkit().settings!.nodaroMotionPromptWording!()).toBeNull()
+    h.wording = {}
+    expect(await buildToolkit().settings!.nodaroMotionPromptWording!()).toBeNull()
+    h.wording = { "motion-prism": "current" }
+    expect(await buildToolkit().settings!.nodaroMotionPromptWording!()).toBeNull()
+    expect(h.reads).toBe(3)
+  })
+
+  it("answers each engine on the new wording under the current and the earlier key, a copy the plugin may change", async () => {
+    h.wording = { "motion-pulse": "new" }
+    const got = await buildToolkit().settings!.nodaroMotionPromptWording!()
+    expect(got).toEqual({ "motion-pulse": "new", "motion-lite": "new" })
+    ;(got as Record<string, string>)["motion-pulse"] = "current"
+    expect(h.wording).toEqual({ "motion-pulse": "new" })
+  })
+
+  it("what the host answers is the plugin's PluginNodaroMotionPromptWording", () => {
+    expectTypeOf<NodaroMotionPromptWordingForPlugin>().toExtend<PluginNodaroMotionPromptWording>()
   })
 })
 

@@ -65,7 +65,14 @@ import { readNodaroMotionPromptParts } from "../../lib/nodaro-motion-prompt-part
 import { readNodaroMotionMasking } from "../../lib/nodaro-motion-masking-store.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 import { loadedEngineHasPromptParts } from "../lib/cast-swap-prompt-parts.js"
-import { directRunPromptPartsInvalid, directRunPromptProblems, loadedEngineHasPromptStyles, type DirectRunPromptProblem } from "../lib/nodaro-motion-prompt-check.js"
+import {
+  directRunPromptPartsInvalid,
+  directRunPromptProblems,
+  loadedEngineHasPromptStyles,
+  savedFlexWording,
+  type DirectRunPromptProblem,
+} from "../lib/nodaro-motion-prompt-check.js"
+import { promptWordingOf } from "../../lib/nodaro-motion-prompt-wording.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments } from "../lib/engine-environments.js"
 import { engineTakesScene } from "../lib/trends/prompt-style.js"
@@ -204,11 +211,24 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
         const saved = (await readNodaroMotionPromptParts()).promptParts
         // A Motion setting with no masking of its own falls back to the engine's masking setting (its face mesh too).
         const preciseMasking = (await readNodaroMotionMasking()).masking
+        // Worded as the engine's direct Flex runs are (the new wording is longer).
+        const wording = await savedFlexWording()
         const problems: DirectRunPromptProblem[] = []
         for (const engine of NODARO_MOTION_ENGINES) {
           const texts = saved?.[engine]?.motion
           if (!texts) continue
-          const found = await directRunPromptProblems(app, req, reply, engine, "motion", texts, parsed.data.motion[engine], preciseMasking?.[engine])
+          const found = await directRunPromptProblems(
+            app,
+            req,
+            reply,
+            engine,
+            "motion",
+            texts,
+            parsed.data.motion[engine],
+            preciseMasking?.[engine],
+            undefined,
+            promptWordingOf(wording, engine),
+          )
           if (!found) return reply
           problems.push(...found)
         }

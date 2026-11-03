@@ -20,7 +20,7 @@ import {
   renderDirectionHints,
 } from "../direction-registry.js"
 import { joinPromptHints } from "../prompt-hint-join.js"
-import { getStylePromptHint } from "../style.js"
+import { getStylePromptHint, getStyleVideoPromptHint } from "../style.js"
 import { getColorLookPromptHint } from "../color-look.js"
 import { getEraPromptHint } from "../era.js"
 import { getCameraFormatPromptHint } from "../camera-format.js"
@@ -98,7 +98,7 @@ describe("partitionStyleClauses — which slot a clause lands in", () => {
     )
     expect(slots.get(getCameraMotionTerm(CAMERA_MOTION))).toBe("body")
     expect(slots.get(renderTransitionBases([TRANSITION])[0])).toBe("body")
-    expect(slots.get(getStylePromptHint(STYLE))).toBe("film")
+    expect(slots.get(getStyleVideoPromptHint(STYLE))).toBe("film")
     expect(slots.get(getFramingPromptHint(SHOT_SIZE))).toBe("scene")
   })
 

@@ -72,7 +72,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `render-quality` | Render Quality | parameter | Pick a render-pipeline preset from 24 entries (raytracing, octane, unreal, blender, ...) | `in`:any | `out`:look | NO |
 | `scene-count` | Scene Count | parameter | Specify the number of scenes for script generation nodes | `in`:any | `scene_count`:param | NO |
 | `setting` | Setting | parameter | Pick a setting from 66 entries across 4 categories (indoor, urban, nature, fantastical) | `in`:any | `out`:look | NO |
-| `style` | Style | parameter | Pick a style preset from 48 entries (cinematic, anime, oil-painting, photoreal, ...) | `in`:any | `out`:look | NO |
+| `style` | Style | parameter | Pick a style preset from 49 entries (cinematic, anime, oil-painting, photorealistic, ...) | `in`:any | `out`:look | NO |
 | `style-guide` | Style Guide | parameter | Define visual style reference text for consistent aesthetics across AI generation nodes in a workflow | `in`:any | `style_guide`:param | NO |
 | `styling` | Styling | parameter | Multi-dim picker for makeup + eyewear + headwear + hair cut/treatment + jewelry + nails + face-paint + fabric (274 catalog options across 9 fields) | `in`:any, `picker-json`:picker-json | `out`:look | NO |
 | `suno-voice` | Suno Voice | parameter | Create a custom voice persona from a recording | — | `voicePersona`:identity | NO |

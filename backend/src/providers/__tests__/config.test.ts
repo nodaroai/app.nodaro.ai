@@ -134,7 +134,7 @@ describe("resolveMarkup", () => {
       providerChain: ["kie"],
       markupPercent: 50,
       activeProvider: "kie",
-      settings: { ai_provider: "kie", cost_markup_percent: 50, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null, nodaro_motion_pulse_audio: null, nodaro_motion_prism_reference_audio: null, nodaro_motion_steps: null, nodaro_motion_style: null, content_rights_required: false },
+      settings: { ai_provider: "kie", cost_markup_percent: 50, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null, nodaro_motion_pulse_audio: null, nodaro_motion_prism_reference_audio: null, nodaro_motion_steps: null, nodaro_motion_style: null, nodaro_motion_prompt_wording: null, content_rights_required: false },
     }
     expect(resolveMarkup(kieDecision, "kie")).toBe(50)
     // With replicate disabled, even replicate providerUsed returns the same KIE markup

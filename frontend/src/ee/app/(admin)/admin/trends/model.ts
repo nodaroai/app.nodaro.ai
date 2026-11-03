@@ -54,6 +54,7 @@ import type {
   TrendPublishBlocker,
   TrendSlotKind,
   CastSwapPromptStyleId,
+  CastSwapPromptWordingId,
   CastSwapPulseAudioId,
   CastSwapPrismReferenceAudioByResolution,
   CastSwapSteps,
@@ -186,6 +187,8 @@ export interface TrendForm {
   prismReferenceAudio: CastSwapPrismReferenceAudioByResolution | undefined
   /** As stored: undefined = the clip preparation's default (prompt-style.ts). */
   promptStyle: CastSwapPromptStyleId | undefined
+  /** As stored: undefined = "current" (prompt-wording.ts). Read only when the prompt style is Flexible. */
+  promptWording: CastSwapPromptWordingId | undefined
   /**
    * The 4 s preview's input clip as loaded, READ-ONLY: server-owned (made on
    * save), never sent by `fromForm`, so it never makes the form dirty. Read
@@ -219,6 +222,7 @@ export function toForm(draft: AdminTrendData): TrendForm {
     pulseAudio: draft.pulseAudio,
     prismReferenceAudio: prismReferenceAudioByResolutionOf(draft.prismReferenceAudio),
     promptStyle: draft.promptStyle,
+    promptWording: draft.promptWording,
     previewClip: draft.previewClip ? { ...draft.previewClip } : undefined,
     hideOriginal: draft.hideOriginal === true,
     ...(draft.steps ? { steps: structuredClone(draft.steps) } : {}),
@@ -400,6 +404,8 @@ export function fromForm(form: TrendForm): TrendDraftBody {
     ...(engineOfForm(form) === "seedance-2-5" && prismAudio ? { prismReferenceAudio: prismAudio } : {}),
     // Left out = the clip preparation's default, so loading an old draft is no change.
     ...(form.promptStyle ? { promptStyle: form.promptStyle } : {}),
+    // Left out = the current wording, so loading an old draft is no change (one stored as "current" stays so).
+    ...(form.promptWording ? { promptWording: form.promptWording } : {}),
     // Left out when off (the original shown), so loading an old draft is no change.
     ...(form.hideOriginal ? { hideOriginal: true } : {}),
     // Left out when nothing is set (`{}` included), so loading an old draft is no change.
@@ -644,6 +650,7 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   clipBodySheet: "the Body from the clip step",
   shotList: "the shot list step",
   styleRefs: "the Style the role pictures step",
+  "promptWording:new": "the new Flex prompt wording",
   promptParts: "engine prompt changes",
   trendPrePrompt: "pre prompts",
   "kling-4": "Nodaro Motion Pulse (Kling 4)",

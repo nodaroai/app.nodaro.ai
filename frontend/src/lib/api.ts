@@ -11326,6 +11326,8 @@ export type AdminTrendFaceMaskingSource = "faces" | "full-depth" | "keep-people"
 export type AdminTrendFullDepthScene = "description" | "original" | "none" | "description-and-original"
 /** How the engine words a run's prompt. */
 export type CastSwapPromptStyleId = "precise" | "flexible"
+/** How the engine words a FLEXIBLE prompt (absent = "current"; a Precise prompt ignores it). */
+export type CastSwapPromptWordingId = "current" | "new"
 
 /** Frame margins (0–49 % each); a face centred in one is not masked. */
 export interface AdminTrendFaceMaskingZone {
@@ -11616,6 +11618,8 @@ export interface AdminTrendData {
   promptParts?: AdminTrendPromptPartOverrides
   /** How the engine words the prompt (hidden). Absent = Flexible for full depth, Precise otherwise. */
   promptStyle?: CastSwapPromptStyleId
+  /** How the engine words a Flexible prompt (hidden). Absent = "current"; read only when the prompt style is Flexible. */
+  promptWording?: CastSwapPromptWordingId
   /**
    * The 4 s preview's input clip (hidden; server-owned: made on a draft save,
    * an upscale or crop applied, a face mask approved or cleared, and on
@@ -11929,6 +11933,8 @@ export interface TrendEngineEnvironment {
       maskFillNone?: boolean
       /** The engine blurs a Faces hidden depth fill (`faceMasking.depthBlur` with `fill: "depth"`); absent = it cannot. */
       depthFillBlur?: boolean
+      /** How the engine may word a Flexible prompt (`promptWording`); absent = the current wording only. */
+      promptWordings?: CastSwapPromptWordingId[]
     }
   } & Record<string, unknown>
   updatedAt: string
@@ -12846,6 +12852,8 @@ export async function previewNodaroMotionPromptParts(input: {
   engine: NodaroMotionEngine
   style: CastSwapStyleId
   overrides?: PromptPartTexts
+  /** The Flex wording to preview (left out: the engine's saved one). Read only for a Flex run worded Flexible. */
+  promptWording?: CastSwapPromptWordingId
 }): Promise<PromptPartsAnswer> {
   return (
     await apiRequest<{ data: PromptPartsAnswer }>(`${ADMIN_NODARO_MOTION_PROMPT_PARTS}/preview`, "apiErr.loadNodaroMotion", {
@@ -12930,6 +12938,36 @@ export async function saveNodaroMotionStyle(style: NodaroMotionStyle): Promise<N
     await apiRequest<{ data: NodaroMotionStyleView }>(ADMIN_NODARO_MOTION_STYLE, "apiErr.saveNodaroMotion", {
       method: "PUT",
       body: { style },
+    })
+  ).data
+}
+
+// ---- Admin: Nodaro Motion's Flex prompt wording for direct runs (/v1/admin/nodaro-motion/prompt-wording, admin-nodaro-motion-prompt-wording.ts) ----
+
+/** The Flex prompt wording per engine, keyed by public id; an engine left out (or "current") is on today's wording. */
+export type NodaroMotionPromptWording = Partial<Record<NodaroMotionEngine, CastSwapPromptWordingId>>
+
+export interface NodaroMotionPromptWordingView {
+  /** null = never saved: every engine on the current wording. Only the engines on "new" are listed. */
+  promptWording: NodaroMotionPromptWording | null
+  updatedAt: string | null
+  engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine }>
+  /** Whether this environment's Cast Swap engine words a Flex prompt the new way (`castSwap.promptWordings`). */
+  supported: boolean
+}
+
+const ADMIN_NODARO_MOTION_PROMPT_WORDING = "/v1/admin/nodaro-motion/prompt-wording"
+
+export async function fetchNodaroMotionPromptWording(): Promise<NodaroMotionPromptWordingView> {
+  return (await apiRequest<{ data: NodaroMotionPromptWordingView }>(ADMIN_NODARO_MOTION_PROMPT_WORDING, "apiErr.loadNodaroMotion")).data
+}
+
+/** Saves every engine's wording; "new" is refused (409 `engine_unsupported`) while an environment's engine cannot word it. */
+export async function saveNodaroMotionPromptWording(promptWording: NodaroMotionPromptWording): Promise<NodaroMotionPromptWordingView> {
+  return (
+    await apiRequest<{ data: NodaroMotionPromptWordingView }>(ADMIN_NODARO_MOTION_PROMPT_WORDING, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { promptWording },
     })
   ).data
 }

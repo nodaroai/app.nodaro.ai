@@ -2,18 +2,18 @@
 
 Nodaro's editor has a family of **parameter pickers** — curated, tile-grid selectors for things like Mood, Lens, Setting, Framing, Lighting, Person, Music Genre, Voice Character, and ~40 more. A picker never calls the API; it contributes a **descriptive clause** to a downstream node's prompt. (The deepest multi-dim picker, **Person**, defaults to a **Detailed** view that lays every dimension out open, grouped by topic, with a per-device **Compact** toggle for grouped pills; the view mode is purely presentational and never changes the emitted clause — see the [Person node page](./nodes/parameters/person.md).)
 
-Every picker's data — its options, the prompt fragment each option contributes, its categories, and its i18n keys — ships as **pure data in [`@nodaro/shared`](https://www.npmjs.com/package/@nodaro/shared)**. So you can build the exact same pickers in your own app, in your own styling, and assemble the exact same prompts, with **no API calls and no coupling to Nodaro's UI**.
+Every picker's data — its options, the prompt fragment each option contributes, its categories, and its i18n keys — ships as **pure data in [`@nodaro/prompts`](https://www.npmjs.com/package/@nodaro/prompts)**, with the pickers' localized labels in [`@nodaro/shared`](https://www.npmjs.com/package/@nodaro/shared) (see [Localization](#localization)). So you can build the exact same pickers in your own app, in your own styling, and assemble the exact same prompts, with **no API calls and no coupling to Nodaro's UI**.
 
 > **Library first.** Picker catalogs are static config + pure functions, so the preferred path is to `import` the data and run it locally — typed, offline, tree-shakeable, with no API round-trips. (The SDK/API is otherwise for *server state*: jobs, credits, uploads, workflows.) A read-only discovery endpoint also exists for clients that can't bundle the package (e.g. LLM agents over MCP): `GET /v1/picker-catalogs`, `client.pickerCatalogs.list()/get()`, `nodaro pickers`, and the MCP `get_picker_catalog` tool — see [API Integration §11](./api-integration.md#11-node-discovery), the [SDK Reference](./sdk-reference.md#clientpickercatalogs), the [CLI](./cli.md), and the [MCP tools](./mcp/tools.md). They return the same data this page documents.
 
 ```bash
-npm install @nodaro/shared @nodaro/sdk
+npm install @nodaro/prompts @nodaro/shared @nodaro/sdk
 ```
 
 ## The registry
 
 ```ts
-import { PICKER_CATALOGS, getPickerCatalog, listPickerCatalogs } from "@nodaro/shared"
+import { PICKER_CATALOGS, getPickerCatalog, listPickerCatalogs } from "@nodaro/prompts/picker-catalogs"
 ```
 
 | Export | Description |
@@ -30,6 +30,7 @@ interface PickerOption {
   category?: string         // group id (matches categoryOrder / categoryLabels)
   promptHint: string        // the clause this option contributes ("" for no-op options like "auto")
   term: string              // the short professional term compact hint mode injects ("" for no-op options); `label` is for display
+  videoPromptHint?: string  // Style only: the clause a VIDEO prompt injects in place of promptHint — see "Video prompts" below (the package only; the API does not return it)
   icon?: string             // reserved; an option's picture is served separately — see Visual
 }
 
@@ -58,7 +59,7 @@ interface PickerCatalog {
 A single picker is one choice from a flat (optionally grouped) list. `options` carries everything you need to render the grid.
 
 ```tsx
-import { getPickerCatalog, getParameterPromptHint } from "@nodaro/shared"
+import { getPickerCatalog, getParameterPromptHint } from "@nodaro/prompts/picker-catalogs"
 import { createClient } from "@nodaro/sdk"
 
 const client = createClient({ apiKey: process.env.NODARO_API_KEY })
@@ -82,7 +83,7 @@ function MoodPicker({ value, onChange }: { value?: string; onChange: (id: string
 
 // 2. Selection → prompt clause → run
 const selected = "serene"
-const clause = getParameterPromptHint({ type: "mood", data: { mood: selected } })
+const clause = getParameterPromptHint({ id: "mood-1", type: "mood", data: { mood: selected } })
 // (or just: mood.options!.find(o => o.id === selected)!.promptHint)
 
 const prompt = ["a portrait of a woman", clause].filter(Boolean).join(", ")
@@ -128,7 +129,7 @@ Show the control while the option is picked and store the chosen row id under `f
 Some pickers set **several** independent fields at once — Framing is shot size **and** angle **and** coverage **and** composition **and** vantage. Each catalog exposes `dimensions`, one `{ field, label, options }` per field.
 
 ```tsx
-import { getPickerCatalog, getParameterPromptHint } from "@nodaro/shared"
+import { getPickerCatalog, getParameterPromptHint } from "@nodaro/prompts/picker-catalogs"
 
 const framing = getPickerCatalog("framing")!
 // framing.dimensions = [
@@ -162,20 +163,36 @@ function FramingPicker({ value, onChange }: {
 
 // Selection → clause. getParameterPromptHint composes all the set fields:
 const value = { shotSize: "close-up", angle: "low-angle", composition: "rule-of-thirds" }
-const clause = getParameterPromptHint({ type: "framing", data: value })
+const clause = getParameterPromptHint({ id: "framing-1", type: "framing", data: value })
 // → "close-up shot, …, low-angle, …, rule-of-thirds composition, …"
 ```
 
-`getParameterPromptHint({ type, data })` is the **universal** way to turn any selection (single or multi) into its clause — the exact same function Nodaro runs server-side, so your output matches the editor's. (Per-catalog builders like `buildFramingHints(value)` exist too, if you prefer.)
+`getParameterPromptHint({ id, type, data })` is the **universal** way to turn any selection (single or multi) into its clause — the exact same function Nodaro runs server-side, so your output matches the editor's. (Per-catalog builders like `buildFramingHints(value)` exist too, if you prefer.)
+
+### Video prompts: the Style wording
+
+Every style carries two wordings: its `promptHint`, which still images read, and a video-only wording (`videoPromptHint`), written for moving shots: it names the medium first, then its techniques. Nodaro's video nodes and video routes inject the video wording; still images keep `promptHint`. To match them, pass the surface as the third argument when the clause goes into a video prompt — the Style picker then returns its video wording, and every other picker reads the same on both surfaces:
+
+```ts
+import { getParameterPromptHint } from "@nodaro/prompts/picker-catalogs"
+import { getStyleVideoPromptHint } from "@nodaro/prompts/pickers"
+
+const style = { id: "style-1", type: "style", data: { style: "anime" } }
+getParameterPromptHint(style)                                   // still image: the option's promptHint
+getParameterPromptHint(style, undefined, { surface: "video" })  // video: the style's video wording
+getStyleVideoPromptHint("anime")                                // the same video wording, by id
+```
+
+Absent (or `surface: "image"`) is the image wording, as before. `getStyleVideoPromptHint(id)` falls back to `promptHint` for a style with no video wording, and returns `""` for an unknown id.
 
 ## Putting it together
 
 ```ts
 // Compose several pickers into one prompt, then generate.
 const clauses = [
-  getParameterPromptHint({ type: "mood",    data: { mood: "serene" } }),
-  getParameterPromptHint({ type: "lens",    data: { lens: "portrait-85mm" } }),
-  getParameterPromptHint({ type: "framing", data: { shotSize: "close-up", angle: "eye-level" } }),
+  getParameterPromptHint({ id: "mood-1",    type: "mood",    data: { mood: "serene" } }),
+  getParameterPromptHint({ id: "lens-1",    type: "lens",    data: { lens: "portrait-85mm" } }),
+  getParameterPromptHint({ id: "framing-1", type: "framing", data: { shotSize: "close-up", angle: "eye-level" } }),
 ]
 const prompt = ["a portrait of a woman in a garden", ...clauses].filter(Boolean).join(", ")
 const { jobIds } = await client.nodes.run("generate-image", { prompt, model: "gpt-image" })
@@ -225,9 +242,10 @@ For every other picker, render your own visuals from `label`, `description` and 
 
 | | |
 |--------|-------------|
-| `getParameterPromptHint({ type, data })` | Selection → composed prompt clause (universal). |
+| `getParameterPromptHint({ id, type, data })` | Selection → composed prompt clause (universal). Pass `{ surface: "video" }` as the third argument for a video prompt. |
 | `build<Name>Hints(value)` | Per-catalog clause builder (e.g. `buildFramingHints`). |
 | `get<Name>PromptHint(id)` | Single option → clause (e.g. `getMoodPromptHint`). |
+| `getStyleVideoPromptHint(id)` | A style's video-only wording (its `promptHint` when it has none; `""` for an unknown id). |
 | `PICKER_CATALOGS` / `getPickerCatalog` / `listPickerCatalogs` | The registry. |
 
 See also: [SDK Quickstart](./sdk-quickstart.md) · [SDK Reference](./sdk-reference.md) · [Embed App Guide](./embed-app-guide.md)

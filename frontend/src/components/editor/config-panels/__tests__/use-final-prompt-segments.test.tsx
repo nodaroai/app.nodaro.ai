@@ -3,7 +3,8 @@ import { renderHook } from "@testing-library/react"
 import { useFinalPromptSegments } from "../use-final-prompt-segments"
 import { buildImageAssembleInput } from "../build-image-assemble-input"
 import { assembleImageInput } from "@nodaro/prompts/assembly"
-import { getFramingPromptHint } from "@nodaro/prompts/pickers"
+import { appendPromptHints } from "@nodaro/prompts/prompt-fields"
+import { getFramingPromptHint, getStylePromptHint, getStyleVideoPromptHint } from "@nodaro/prompts/pickers"
 import type { SnippetPoolItem } from "@/lib/snippet-pool"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
@@ -547,6 +548,97 @@ describe("useFinalPromptSegments — video-aware negative routing (videoProvider
     // Image path: gpt-image has no native negative → appended (NOT kling's native).
     expect(result.current.negativeRouting).toBe("appended")
     expect(result.current.promptText).toContain("Avoid: blurry")
+  })
+})
+
+describe("useFinalPromptSegments — a wired Style node on a video consumer reads its video wording", () => {
+  // A video consumer's run folds a wired Style node's VIDEO wording
+  // (`getStyleVideoPromptHint`), so its Final view shows that text and tints it
+  // as picker text, never as the user's own words. A still keeps `promptHint`.
+  const VIDEO = getStyleVideoPromptHint("low-poly")
+  const IMAGE = getStylePromptHint("low-poly")
+  const styleGraph = (consumerType: string) => ({
+    nodes: [
+      { id: "n1", type: consumerType, position: { x: 0, y: 0 }, data: { prompt: "a samurai walking" } },
+      { id: "st", type: "style", position: { x: 0, y: 0 }, data: { style: "low-poly" } },
+    ] as never[],
+    edges: [{ id: "es", source: "st", target: "n1", targetHandle: "look" }] as never[],
+  })
+  const textsOf = (segs: ReadonlyArray<{ text: string; origin: string }>, origin: string) =>
+    segs.filter((s) => s.origin === origin).map((s) => s.text)
+
+  it("has two different wordings to tell apart", () => {
+    expect(VIDEO.length).toBeGreaterThan(0)
+    expect(VIDEO).not.toBe(IMAGE)
+  })
+
+  it("video path (videoProvider): the video wording is picker text and the per-hint list", () => {
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({
+        userPrompt: "a samurai walking",
+        consumerNodeId: "n1",
+        ...styleGraph("image-to-video"),
+        videoProvider: "seedance-2-fast",
+      }),
+    )
+    expect(result.current.promptText).toContain(VIDEO)
+    expect(result.current.promptText).not.toContain(IMAGE)
+    expect(result.current.cineHints).toEqual([VIDEO])
+    expect(textsOf(result.current.promptSegments, "picker")).toContain(VIDEO)
+    expect(textsOf(result.current.promptSegments, "user").join("")).not.toContain(VIDEO)
+    expect(result.current.promptSegments.map((s) => s.text).join("")).toBe(result.current.promptText)
+  })
+
+  it("a video node previewed with no videoProvider (the provider-less path) folds the video wording too", () => {
+    // The quick-edit modal passes `videoProvider` only when the node has a
+    // provider set; the run folds the video wording either way.
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({
+        userPrompt: "a samurai walking",
+        consumerNodeId: "n1",
+        ...styleGraph("image-to-video"),
+      }),
+    )
+    expect(result.current.promptText).toBe(`a samurai walking. ${VIDEO}`)
+    expect(result.current.cineHints).toEqual([VIDEO])
+    expect(textsOf(result.current.promptSegments, "picker")).toEqual([VIDEO])
+    expect(result.current.promptSegments.map((s) => s.text).join("")).toBe(result.current.promptText)
+  })
+
+  it("a Style node then a second picker joins as the run does (appendPromptHints), on both video paths", () => {
+    // The video wording ends a sentence, so the next hint follows after a space,
+    // never ".," — the run's own joiner is the oracle.
+    const base = styleGraph("image-to-video")
+    const nodes = [
+      ...base.nodes,
+      { id: "pe", type: "person", position: { x: 0, y: 0 }, data: { label: "Person", preText: "shot on 85mm" } },
+    ] as never[]
+    const edges = [...base.edges, { id: "ep", source: "pe", target: "n1", targetHandle: "look" }] as never[]
+    const expected = appendPromptHints("a samurai walking", [VIDEO, "shot on 85mm"])
+    expect(expected).not.toContain(".,")
+    for (const videoProvider of ["seedance-2-fast", undefined]) {
+      const { result } = renderHook(() =>
+        useFinalPromptSegments({ userPrompt: "a samurai walking", consumerNodeId: "n1", nodes, edges, videoProvider }),
+      )
+      expect(result.current.promptText, String(videoProvider)).toBe(expected)
+      expect(textsOf(result.current.promptSegments, "picker"), String(videoProvider)).toEqual([VIDEO, "shot on 85mm"])
+      expect(result.current.promptSegments.map((s) => s.text).join(""), String(videoProvider)).toBe(result.current.promptText)
+    }
+  })
+
+  it("a still (image provider) keeps the image wording", () => {
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({
+        userPrompt: "a samurai walking",
+        consumerNodeId: "n1",
+        ...styleGraph("generate-image"),
+        provider: "gpt-image",
+      }),
+    )
+    expect(result.current.promptText).toContain(IMAGE)
+    expect(result.current.promptText).not.toContain(VIDEO)
+    expect(result.current.cineHints).toEqual([IMAGE])
+    expect(textsOf(result.current.promptSegments, "picker")).toContain(IMAGE)
   })
 })
 

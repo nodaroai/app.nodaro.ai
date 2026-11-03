@@ -21,6 +21,8 @@ import Fastify, { type FastifyInstance } from "fastify"
 const h = vi.hoisted(() => ({
   partsRow: null as { value: unknown; updated_at: string } | null,
   motionRow: null as { value: unknown; updated_at: string } | null,
+  /** The Flex prompt wording's row (`nodaro_motion_prompt_wording`). */
+  wordingRow: null as { value: unknown; updated_at: string } | null,
   upserts: [] as Array<{ key: string; value: unknown }>,
   calls: [] as Array<Record<string, unknown>>,
   /** The engine's answer for a request: its length, cap and problems. */
@@ -35,7 +37,10 @@ vi.mock("@/lib/supabase.js", () => ({
       const chain = {
         select: () => chain,
         eq: (_c: string, k: string) => ((key = k), chain),
-        maybeSingle: async () => ({ data: key === "nodaro_motion_motion" ? h.motionRow : h.partsRow, error: null }),
+        maybeSingle: async () => ({
+          data: key === "nodaro_motion_motion" ? h.motionRow : key === "nodaro_motion_prompt_wording" ? h.wordingRow : h.partsRow,
+          error: null,
+        }),
         upsert: async (row: { key: string; value: unknown; updated_at: string }) => {
           h.upserts.push(row)
           if (row.key === "nodaro_motion_motion") h.motionRow = { value: row.value, updated_at: row.updated_at }
@@ -63,6 +68,7 @@ let app: FastifyInstance
 beforeEach(async () => {
   h.partsRow = null
   h.motionRow = null
+  h.wordingRow = null
   h.upserts = []
   h.calls = []
   h.answerFor = null
@@ -185,6 +191,38 @@ describe("PUT /v1/admin/nodaro-motion/motion re-checks the saved Motion override
     setPluginSupports({ castSwap: { ...BASE } })
     expect((await putMotion({ "motion-prism": { promptStyle: "precise" } })).statusCode).toBe(200)
     expect(h.calls).toHaveLength(0)
+  })
+})
+
+describe("the saved Flex prompt wording in the checks", () => {
+  const NEW = { ...STYLED, promptWordings: ["current", "new"] as Array<"current" | "new"> }
+
+  it("a Motion save re-checks the Flex overrides worded as saved (the new wording is longer), Precise never worded", async () => {
+    setPluginSupports({ castSwap: NEW })
+    h.wordingRow = { value: { "motion-prism": "new" }, updated_at: "2026-11-03T00:00:00Z" }
+    h.partsRow = { value: { "motion-prism": { motion: { avoid: "x" } }, "motion-pulse": { motion: { avoid: "y" } } }, updated_at: "2026-10-27T00:00:00Z" }
+    h.answerFor = (b) => (b.promptWording === "new" ? { length: 31_000, max: 30_000, problems: [TOO_LONG] } : { length: 100, max: 30_000, problems: [] })
+    const res = await putMotion({ "motion-prism": { promptStyle: "flexible" }, "motion-pulse": { promptStyle: "flexible" } })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.problems).toEqual([{ ...TOO_LONG, engine: "motion-prism", style: "motion" }])
+    expect(h.calls.map((c) => [c.engine, c.promptWording])).toEqual([
+      ["seedance-2-5", "new"],
+      ["kling-4", "current"],
+    ])
+    // A Motion setting worded Precise never reads the wording.
+    h.calls = []
+    h.answerFor = null
+    expect((await putMotion({ "motion-prism": { promptStyle: "precise" } })).statusCode).toBe(200)
+    const prism = h.calls.filter((c) => c.engine === "seedance-2-5")
+    expect(prism).toHaveLength(1)
+    expect(prism[0]).not.toHaveProperty("promptWording")
+  })
+
+  it("is never read, nor sent, for an engine that does not list it", async () => {
+    h.wordingRow = { value: { "motion-prism": "new" }, updated_at: "2026-11-03T00:00:00Z" }
+    expect((await putParts({ "motion-prism": { motion: { avoid: "-" }, precise: { avoid: "-" } } })).statusCode).toBe(200)
+    expect(h.calls).toHaveLength(2)
+    expect(h.calls.every((c) => !("promptWording" in c))).toBe(true)
   })
 })
 

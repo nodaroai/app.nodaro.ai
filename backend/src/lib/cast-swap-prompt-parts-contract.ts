@@ -6,7 +6,13 @@
  * direct runs' (nodaro-motion-prompt-parts.ts).
  */
 import { z } from "zod"
-import { CAST_SWAP_PROMPT_PART_IDS, type CastSwapFullDepthScene, type CastSwapPromptPartId, type CastSwapPromptStyle } from "@nodaro/render-rules"
+import {
+  CAST_SWAP_PROMPT_PART_IDS,
+  type CastSwapFullDepthScene,
+  type CastSwapPromptPartId,
+  type CastSwapPromptStyle,
+  type CastSwapPromptWording,
+} from "@nodaro/render-rules"
 import { CAST_SWAP_KLING_MAX_IMAGES, type CastSwapEngine } from "@nodaro/shared/models"
 import type { FaceMaskingDepthColormap } from "./cast-swap-face-masking.js"
 
@@ -109,6 +115,18 @@ export interface PromptPartsRequest {
    * every other request is as before.
    */
   maskFill?: "depth" | "none"
+  /**
+   * How a Flexible prompt is worded (a trend's `promptWording`; a direct Flex
+   * run's from the `nodaro_motion_prompt_wording` setting, or the preview's
+   * choice), `"current"` included: the engine lists the new wording's three
+   * parts (`CAST_SWAP_PROMPT_WORDING_PART_IDS`) only when a request names a
+   * wording, so an editor can show, keep and reset an override of one under
+   * either wording. Named on every Flexible request, and on a Precise one only
+   * when its overrides hold one of the three; sent only to an engine whose
+   * `castSwap.promptWordings` lists the value (`askPromptParts`), so an older
+   * engine is asked exactly as before. A Precise prompt ignores it.
+   */
+  promptWording?: CastSwapPromptWording
   hasAudio: boolean
   roles: unknown[]
   references?: { images: string[]; line: string }[]
@@ -117,27 +135,46 @@ export interface PromptPartsRequest {
   overrides?: PromptPartTexts
 }
 
-const partId = z.enum(CAST_SWAP_PROMPT_PART_IDS)
+/** Whether `id` is a prompt part this app knows (`CAST_SWAP_PROMPT_PART_IDS`). */
+export function isKnownPromptPartId(id: string): id is CastSwapPromptPartId {
+  return (CAST_SWAP_PROMPT_PART_IDS as readonly string[]).includes(id)
+}
 
-/** The engine's answer (`POST /v1/cast-swap/prompt-parts` 200), as the contract fixes it. */
-export const promptPartsAnswerSchema = z.object({
-  set: z.enum(PROMPT_PART_SETS),
-  parts: z.array(
-    z.object({
-      id: partId,
-      default: z.string(),
-      defaultHash: z.string().regex(/^[0-9a-f]{16}$/),
-      placeholders: z.array(z.string()),
-      required: z.array(z.string()),
-      applies: z.boolean(),
-    }),
-  ),
-  assembled: z.string(),
-  length: z.number(),
-  max: z.number(),
-  problems: z.array(z.object({ part: partId.optional(), code: z.enum(PROMPT_PART_PROBLEM_CODES), message: z.string() })),
+const answerPartSchema = z.object({
+  id: z.string(),
+  default: z.string(),
+  defaultHash: z.string().regex(/^[0-9a-f]{16}$/),
+  placeholders: z.array(z.string()),
+  required: z.array(z.string()),
+  applies: z.boolean(),
 })
-export type PromptPartsAnswer = z.infer<typeof promptPartsAnswerSchema>
+type AnswerPart = Omit<z.infer<typeof answerPartSchema>, "id"> & { id: CastSwapPromptPartId }
+
+const answerProblemSchema = z.object({ part: z.string().optional(), code: z.enum(PROMPT_PART_PROBLEM_CODES), message: z.string() })
+type AnswerProblem = { part?: CastSwapPromptPartId; code: PromptPartProblemCode; message: string }
+
+/**
+ * The engine's answer (`POST /v1/cast-swap/prompt-parts` 200), as the
+ * contract fixes it. Read tolerantly of a NEWER engine: a part whose id this
+ * app does not know yet is left out (it cannot be edited or stored here), and
+ * a problem naming one is kept as a problem of the whole prompt, so an engine
+ * released ahead of the app never reads as off the contract.
+ */
+export const promptPartsAnswerSchema = z
+  .object({
+    set: z.enum(PROMPT_PART_SETS),
+    parts: z.array(answerPartSchema),
+    assembled: z.string(),
+    length: z.number(),
+    max: z.number(),
+    problems: z.array(answerProblemSchema),
+  })
+  .transform((a) => ({
+    ...a,
+    parts: a.parts.filter((p): p is AnswerPart => isKnownPromptPartId(p.id)),
+    problems: a.problems.map(({ part, ...rest }): AnswerProblem => (part !== undefined && isKnownPromptPartId(part) ? { part, ...rest } : rest)),
+  }))
+export type PromptPartsAnswer = z.output<typeof promptPartsAnswerSchema>
 
 /** A role picture's stand-in: one address per role and picture, so the engine numbers each once. */
 export function placeholderImageUrl(role: number, image: number): string {

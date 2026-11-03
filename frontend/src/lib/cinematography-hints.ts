@@ -17,8 +17,8 @@ import { collectCharacterElementInjections } from "@/components/editor/workflow-
  * Camera-motion is composed by `composeCameraMotionHintForNode` below; this
  * dispatcher only needs the static-text (data-only) variant.
  */
-export function getNodePromptHint(node: WorkflowNode | undefined): string {
-  return getParameterPromptHint(node)
+export function getNodePromptHint(node: WorkflowNode | undefined, surface?: "image" | "video"): string {
+  return getParameterPromptHint(node, undefined, surface ? { surface } : undefined)
 }
 
 /**
@@ -137,7 +137,12 @@ export function collectCinematographyHints(
   consumerNodeId: string,
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
-  options?: { excludeTypes?: ReadonlySet<string>; excludeCharacterElements?: boolean },
+  options?: {
+    excludeTypes?: ReadonlySet<string>
+    excludeCharacterElements?: boolean
+    /** `"video"` for a video consumer: a Style node injects its video wording. */
+    surface?: "image" | "video"
+  },
 ): string[] {
   // Prompt Injection off switches (config-panel section), gated BY HANDLE:
   //  - injectLook === false     → drop the Look family (look / cinematography / style)
@@ -186,12 +191,12 @@ export function collectCinematographyHints(
       // target's name — and preText/postText (withCustomText) is applied.
       // (composeCameraMotionHintForNode bypassed custom text, so it was dropped
       // at execution while the injection preview promised it.)
-      const composed = getParameterPromptHint(srcNode, { nodes, edges })
+      const composed = getParameterPromptHint(srcNode, { nodes, edges }, options?.surface ? { surface: options.surface } : undefined)
       if (composed) hints.push(composed)
       continue
     }
 
-    const hint = getNodePromptHint(srcNode)
+    const hint = getNodePromptHint(srcNode, options?.surface)
     if (hint) hints.push(hint)
   }
 

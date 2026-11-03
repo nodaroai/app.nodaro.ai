@@ -17,6 +17,8 @@ const h = vi.hoisted(() => ({
   motionRow: null as { value: unknown; updated_at: string } | null,
   /** The masking setting's row (`nodaro_motion_masking`): its face mesh shapes the check. */
   maskingRow: null as { value: unknown; updated_at: string } | null,
+  /** The Flex prompt wording's row (`nodaro_motion_prompt_wording`): a Flex run's check and preview are worded by it. */
+  wordingRow: null as { value: unknown; updated_at: string } | null,
   upserts: [] as unknown[],
   audits: [] as Record<string, unknown>[],
   admin: true,
@@ -36,8 +38,20 @@ vi.mock("@/lib/supabase.js", () => ({
       let key = ""
       const chain = {
         select: () => chain,
-        eq: (_c: string, k: string) => (expect(["nodaro_motion_prompt_parts", "nodaro_motion_motion", "nodaro_motion_masking"]).toContain(k), (key = k), chain),
-        maybeSingle: async () => ({ data: key === "nodaro_motion_motion" ? h.motionRow : key === "nodaro_motion_masking" ? h.maskingRow : h.row, error: null }),
+        eq: (_c: string, k: string) => (
+          expect(["nodaro_motion_prompt_parts", "nodaro_motion_motion", "nodaro_motion_masking", "nodaro_motion_prompt_wording"]).toContain(k), (key = k), chain
+        ),
+        maybeSingle: async () => ({
+          data:
+            key === "nodaro_motion_motion"
+              ? h.motionRow
+              : key === "nodaro_motion_masking"
+                ? h.maskingRow
+                : key === "nodaro_motion_prompt_wording"
+                  ? h.wordingRow
+                  : h.row,
+          error: null,
+        }),
         upsert: async (row: { key: string; value: unknown; updated_at: string }, opts: unknown) => {
           expect(row.key).toBe("nodaro_motion_prompt_parts")
           expect(opts).toEqual({ onConflict: "key" })
@@ -82,6 +96,7 @@ beforeEach(async () => {
   h.row = null
   h.motionRow = null
   h.maskingRow = null
+  h.wordingRow = null
   h.upserts = []
   h.audits = []
   h.admin = true
@@ -300,5 +315,66 @@ describe("the face mesh in a direct run's check", () => {
     h.maskingRow = { value: maskingWithMesh, updated_at: "2026-10-31T00:00:00.000Z" }
     await previewOf({ engine: "motion-prism", style: "precise" })
     expect(h.calls.at(-1)).not.toHaveProperty("faceMesh")
+  })
+})
+
+/**
+ * The Flex prompt wording (`nodaro_motion_prompt_wording`): the preview words
+ * a Flex run as asked (left out: the saved wording), a save's check words a
+ * Flex run's overrides as the saved wording does ("current" named too, so the
+ * engine lists the new wording's parts), and a Precise run is never worded —
+ * all only to an engine whose `castSwap.promptWordings` lists the value.
+ */
+describe("the Flex prompt wording", () => {
+  const CS = { roleKinds: ["person"], fixedReferences: true, fullQuality: true, resolutions: ["720p"], trendRun: true, promptParts: true, promptStyles: ["precise", "flexible"] }
+  const NEW_ENGINE = { ...CS, promptWordings: ["current", "new"] }
+
+  it("the preview passes the chosen wording on a Flex run, and never on Precise", async () => {
+    setPluginSupports({ castSwap: NEW_ENGINE } as never)
+    expect((await previewOf({ engine: "motion-prism", style: "motion", promptWording: "new" })).statusCode).toBe(200)
+    expect(h.calls.at(-1)).toMatchObject({ style: "motion", promptStyle: "flexible", promptWording: "new" })
+    expect((await previewOf({ engine: "motion-prism", style: "motion", promptWording: "current" })).statusCode).toBe(200)
+    expect(h.calls.at(-1)).toMatchObject({ style: "motion", promptWording: "current" })
+    expect((await previewOf({ engine: "motion-prism", style: "precise", promptWording: "new" })).statusCode).toBe(200)
+    expect(h.calls.at(-1)).not.toHaveProperty("promptWording")
+  })
+
+  it("the preview left without a wording takes the saved one", async () => {
+    setPluginSupports({ castSwap: NEW_ENGINE } as never)
+    h.wordingRow = { value: { "motion-pulse": "new" }, updated_at: "2026-11-03T00:00:00Z" }
+    await previewOf({ engine: "motion-pulse", style: "motion" })
+    expect(h.calls.at(-1)).toMatchObject({ engine: "kling-4", promptWording: "new" })
+    await previewOf({ engine: "motion-prism", style: "motion" })
+    expect(h.calls.at(-1)).toMatchObject({ engine: "seedance-2-5", promptWording: "current" })
+  })
+
+  it("refuses a wording it does not know", async () => {
+    expect((await previewOf({ engine: "motion-prism", style: "motion", promptWording: "newer" })).statusCode).toBe(400)
+  })
+
+  it("never sends a wording to an engine that does not list it", async () => {
+    setPluginSupports({ castSwap: CS } as never)
+    h.wordingRow = { value: { "motion-prism": "new" }, updated_at: "2026-11-03T00:00:00Z" }
+    await previewOf({ engine: "motion-prism", style: "motion", promptWording: "new" })
+    expect(h.calls.at(-1)).not.toHaveProperty("promptWording")
+    await previewOf({ engine: "motion-prism", style: "motion" })
+    expect(h.calls.at(-1)).not.toHaveProperty("promptWording")
+  })
+
+  it("a save checks a Flex run's overrides worded as saved, a Precise run's never worded", async () => {
+    setPluginSupports({ castSwap: NEW_ENGINE } as never)
+    h.wordingRow = { value: { "motion-prism": "new" }, updated_at: "2026-11-03T00:00:00Z" }
+    const res = await put({ "motion-prism": { precise: { face: "a" }, motion: { avoid: "b" } }, "motion-pulse": { motion: { avoid: "c" } } })
+    expect(res.statusCode).toBe(200)
+    const by = (engine: string, style: string) => h.calls.find((c) => c.engine === engine && c.style === style)
+    expect(by("seedance-2-5", "precise")).not.toHaveProperty("promptWording")
+    expect(by("seedance-2-5", "motion")).toMatchObject({ promptWording: "new" })
+    expect(by("kling-4", "motion")).toMatchObject({ promptWording: "current" })
+  })
+
+  it("a stale override of a new-wording part on Precise names the current wording, so the engine lists it", async () => {
+    setPluginSupports({ castSwap: NEW_ENGINE } as never)
+    await previewOf({ engine: "motion-prism", style: "precise", overrides: { restate: "Again." } })
+    expect(h.calls.at(-1)).toMatchObject({ style: "precise", promptWording: "current", overrides: { restate: "Again." } })
   })
 })

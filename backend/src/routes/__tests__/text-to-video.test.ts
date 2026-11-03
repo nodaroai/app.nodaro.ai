@@ -79,6 +79,7 @@ import { withJobSubmissionContext } from "../../lib/job-submission-context.js"
 import { assembleVideoConnectedReferences } from "../generate-video.js"
 import {
   getStylePromptHint,
+  getStyleVideoPromptHint,
 } from "@nodaro/prompts/pickers"
 import {
   composeVideoPromptText,
@@ -574,7 +575,9 @@ describe("POST /v1/text-to-video — the direction channel", () => {
       payload: { prompt: "a sunset timelapse", userId: USER, direction: { style: STYLE } },
     })
     expect(res.statusCode).toBe(200)
-    const folded = `a sunset timelapse\n\n[style]:\n${getStylePromptHint(STYLE)}`
+    // A video route folds the style's VIDEO wording, never its image wording.
+    expect(getStyleVideoPromptHint(STYLE)).not.toBe(getStylePromptHint(STYLE))
+    const folded = `a sunset timelapse\n\n[style]:\n${getStyleVideoPromptHint(STYLE)}`
     expect(vi.mocked(videoQueue.add).mock.calls.at(-1)![1].prompt).toBe(folded)
     expect(mockInsert.mock.calls.at(-1)![0].input_data).toEqual(
       expect.objectContaining({

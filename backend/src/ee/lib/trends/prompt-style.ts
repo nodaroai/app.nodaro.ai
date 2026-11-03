@@ -20,13 +20,26 @@
  * sends the original with a clip longer than the engines take
  * (`full_depth_clip_too_long`).
  *
- * HIDDEN: both are the trend's recipe; neither may reach a public response.
+ * - `promptWording` (`TrendVersionData.promptWording`, stored as given): how
+ *   the engine words a FLEXIBLE prompt, `"current"` (the default) or `"new"`.
+ *   A run says `"new"` only when the trend names it and its prompt style is
+ *   Flexible (`trendPromptWordingSent`), so every other run's body is exactly
+ *   as before; the engine prompt's request names the wording, "current"
+ *   included (`trendPromptWordingNamed`); both are stripped for an engine
+ *   whose `castSwap.promptWordings` does not list it (run-helpers.ts), and
+ *   publishing holds back a trend that says it from such an environment
+ *   (`PROMPT_WORDING_NEED`, publish-check.ts).
+ *
+ * HIDDEN: all three are the trend's recipe; none may reach a public response.
  */
 import {
   CAST_SWAP_FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC,
   defaultPromptStyleFor,
   fullDepthSceneSendsOriginal,
+  overridesWordingPart,
+  type CastSwapPromptPartId,
   type CastSwapPromptStyle,
+  type CastSwapPromptWording,
 } from "@nodaro/render-rules"
 import { faceMaskingOn, faceMaskingSourceOf, fullDepthSceneOf, type FaceMaskingScene, type FaceMaskingSource } from "../../../lib/cast-swap-face-masking.js"
 import type { TrendVersionData } from "./types.js"
@@ -45,6 +58,30 @@ export function trendSourceOf(data: Pick<TrendVersionData, "faceMasking">): Face
 /** The prompt style a trend that names none runs with (its clip preparation's). */
 export function defaultPromptStyleOf(data: Pick<TrendVersionData, "faceMasking">): CastSwapPromptStyle {
   return defaultPromptStyleFor(trendSourceOf(data))
+}
+
+/**
+ * The Flex wording a run of this trend says: `"new"` when the trend names it
+ * and its prompt style is Flexible (a Precise prompt never reads it);
+ * undefined otherwise (the current wording: no key is sent).
+ */
+export function trendPromptWordingSent(data: Pick<TrendVersionData, "faceMasking" | "promptStyle" | "promptWording">): "new" | undefined {
+  return data.promptWording === "new" && promptStyleOf(data) === "flexible" ? "new" : undefined
+}
+
+/**
+ * The wording the trend's engine prompt request names (`promptPartsRequestFor`):
+ * a Flexible trend's, "current" included (the engine lists the new wording's
+ * parts only when a request names one); a Precise trend's "current" only when
+ * `overrides` hold one of those parts (so it can be seen and reset); else
+ * none, the request of before.
+ */
+export function trendPromptWordingNamed(
+  data: Pick<TrendVersionData, "faceMasking" | "promptStyle" | "promptWording">,
+  overrides: Readonly<Partial<Record<CastSwapPromptPartId, string>>> | undefined,
+): CastSwapPromptWording | undefined {
+  if (promptStyleOf(data) === "flexible") return trendPromptWordingSent(data) ?? "current"
+  return overridesWordingPart(overrides) ? "current" : undefined
 }
 
 /** The trend's prompt style, resolved. */

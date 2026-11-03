@@ -20,6 +20,7 @@ import {
   CAST_SWAP_FACE_MASK_MARK_LIMITS,
   CAST_SWAP_PROMPT_PART_IDS,
   CAST_SWAP_PROMPT_STYLES,
+  CAST_SWAP_PROMPT_WORDINGS,
   ROLE_OUTLINE_COLOUR_RE,
   TREND_UPSCALE_RESOLUTIONS,
   faceMaskMarkSlot,
@@ -369,6 +370,8 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     promptParts: trendPromptPartsSchema.optional(),
     // Absent = the clip preparation's default (prompt-style.ts); stored as given.
     promptStyle: z.enum(CAST_SWAP_PROMPT_STYLES).optional(),
+    // Absent = "current" (prompt-style.ts `trendPromptWordingSent`). Read only when the prompt style is Flexible; stored as given.
+    promptWording: z.enum(CAST_SWAP_PROMPT_WORDINGS).optional(),
     // Absent = Seedance 2.5 (`engineOf`). Stored as given: a version that
     // names none is kept without the key, so re-saving an old draft is no change.
     // Nodaro Motion's public ids are taken too and stored as the internal id

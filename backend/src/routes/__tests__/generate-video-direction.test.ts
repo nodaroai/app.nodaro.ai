@@ -88,6 +88,7 @@ import {
 } from "@nodaro/prompts/person"
 import {
   getStylePromptHint,
+  getStyleVideoPromptHint,
   getStyleTerm,
   getTransitionTerm,
   getCameraMotionPromptHint,
@@ -197,7 +198,9 @@ describe("POST /v1/generate-video — the direction channel", () => {
       direction: { style: STYLE },
     })
     expect(res.statusCode).toBe(200)
-    const folded = `a knight rides\n\n[style]:\n${getStylePromptHint(STYLE)}`
+    // A video route folds the style's VIDEO wording, never its image wording.
+    expect(getStyleVideoPromptHint(STYLE)).not.toBe(getStylePromptHint(STYLE))
+    const folded = `a knight rides\n\n[style]:\n${getStyleVideoPromptHint(STYLE)}`
     expect(queued!.prompt).toBe(folded)
     expect(inputData!.prompt).toBe(folded)
   })
@@ -216,7 +219,7 @@ describe("POST /v1/generate-video — the direction channel", () => {
       direction: { style: STYLE },
     })
     expect(inputData!.userPrompt).toBe("a knight rides")
-    expect(inputData!.prompt).toBe(`a knight rides\n\n[style]:\n${getStylePromptHint(STYLE)}`)
+    expect(inputData!.prompt).toBe(`a knight rides\n\n[style]:\n${getStyleVideoPromptHint(STYLE)}`)
   })
 
   it("keeps userPrompt empty on a direction-only run with no submitted prompt", async () => {
@@ -224,7 +227,7 @@ describe("POST /v1/generate-video — the direction channel", () => {
     // into userPrompt and the channel would forge words the user never typed.
     // With no prose the section is the whole render — no leading blank line.
     const { queued, inputData } = await post({ ...BASE, direction: { style: STYLE } })
-    const render = `[style]:\n${getStylePromptHint(STYLE)}`
+    const render = `[style]:\n${getStyleVideoPromptHint(STYLE)}`
     expect(queued!.prompt).toBe(render)
     expect(inputData!.prompt).toBe(render)
     expect(inputData!.userPrompt).toBe("")
@@ -246,7 +249,7 @@ describe("POST /v1/generate-video — the direction channel", () => {
       direction: { style: STYLE, cameraMotion: CAMERA_MOTION },
     })
     const prompt = queued!.prompt as string
-    expect(prompt).toContain(getStylePromptHint(STYLE))
+    expect(prompt).toContain(getStyleVideoPromptHint(STYLE))
     expect(prompt).toContain(getCameraMotionTerm(CAMERA_MOTION))
     expect(prompt).not.toContain(getCameraMotionPromptHint(CAMERA_MOTION))
   })
@@ -270,7 +273,8 @@ describe("POST /v1/generate-video — the fold SITE relative to reference assemb
       ],
     })
     const prompt = queued!.prompt as string
-    const hint = getStylePromptHint(STYLE)
+    const hint = getStyleVideoPromptHint(STYLE)
+    expect(hint).not.toBe(getStylePromptHint(STYLE))
     expect(prompt).toContain("Use these characters:")
     expect(prompt).toContain(hint)
     // The fold ran on the BODY, so the resolver's framing wraps it.
@@ -299,7 +303,7 @@ describe("POST /v1/generate-video — the fold SITE relative to reference assemb
         ],
       })
       const prompt = queued!.prompt as string
-      const look = getStylePromptHint(STYLE)
+      const look = getStyleVideoPromptHint(STYLE)
       const motion = getTransitionTerm(TRANSITION)
       expect(prompt).toContain(look)
       expect(prompt).not.toContain("Use these characters:")
@@ -382,7 +386,7 @@ describe("POST /v1/generate-video — the fold SITE relative to reference assemb
       },
     })
     const prompt = vi.mocked(videoQueue.add).mock.calls.at(-1)![1].prompt as string
-    const hint = getStylePromptHint(STYLE)
+    const hint = getStyleVideoPromptHint(STYLE)
     expect(prompt).toContain(hint)
     expect(prompt.indexOf(hint)).toBeLessThan(prompt.indexOf("auburn hair, hazel eyes"))
   })
@@ -431,7 +435,8 @@ describe("POST /v1/generate-video — wire tolerance", () => {
       direction: { __not_a_dimension__: "x", style: STYLE },
     })
     expect(res.statusCode).toBe(200)
-    expect(queued!.prompt).toBe(`a knight rides\n\n[style]:\n${getStylePromptHint(STYLE)}`)
+    expect(getStyleVideoPromptHint(STYLE)).not.toBe(getStylePromptHint(STYLE))
+    expect(queued!.prompt).toBe(`a knight rides\n\n[style]:\n${getStyleVideoPromptHint(STYLE)}`)
     expect(inputData!.direction).toEqual({ style: STYLE })
   })
 
@@ -497,8 +502,9 @@ describe("POST /v1/generate-video — the subject channel", () => {
     expect(res.statusCode).toBe(200)
     // The video policy is compact for subject, full for the look family. Who is
     // in the shot is body prose; the look leaves for the `[style]` section.
+    expect(getStyleVideoPromptHint(STYLE)).not.toBe(getStylePromptHint(STYLE))
     expect(queued!.prompt).toBe(
-      `a knight rides. ${getPersonTerm("woman")}\n\n[style]:\n${getStylePromptHint(STYLE)}`,
+      `a knight rides. ${getPersonTerm("woman")}\n\n[style]:\n${getStyleVideoPromptHint(STYLE)}`,
     )
     expect(inputData!.prompt).toBe(queued!.prompt)
     // Non-vacuity: the compact term really is a different string from the clause.
