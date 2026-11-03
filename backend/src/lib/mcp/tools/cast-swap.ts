@@ -37,10 +37,13 @@
  * arguments and never carries `trendRun`. Any internal relay of a
  * user-supplied body to `/v1/cast-swap` must never forward `trendRun` — only
  * the platform's trend routes compose a run that sets it.
+ * `art_style` becomes `direction.style`, the only `direction` key it sends; a
+ * `direction` argument of the caller's own is refused (`use_art_style`).
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { DIRECTION_ID_MAX_CHARS } from "@nodaro/prompts/prompt-builder"
 import {
   CAST_SWAP_ENGINE_WHEN_OMITTED,
   CAST_SWAP_STYLES,
@@ -55,7 +58,7 @@ import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { registerTask } from "../tasks.js"
 import { isRouterNotFound } from "./_studio-helpers.js"
-import { castSwapLengthKey, loadedEngineRuns } from "../../cast-swap-engines.js"
+import { castSwapLengthKey, loadedEngineRuns, loadedEngineTakesArtStyle } from "../../cast-swap-engines.js"
 import { neutralBreakdown, privacyCreditsOf } from "../../nodaro-motion-quote.js"
 import { originalCdnImageUrls } from "../../cdn-original-url.js"
 import { clientRequestIdSchema, errorResult, GET_JOB_POLL_HINT, idempotencyHeaders, parseJobId } from "./_verb-helpers.js"
@@ -199,6 +202,12 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
           .enum(CAST_SWAP_STYLES)
           .optional()
           .describe('"precise" (default) follows the clip exactly; "motion" follows the clip\'s movement and takes the looks from the photos, more freely than precise. Its price may differ: the quote shows it. A style an admin forced for the engine overrides this.'),
+        art_style: z
+          .string()
+          .min(1)
+          .max(DIRECTION_ID_MAX_CHARS)
+          .optional()
+          .describe('An art style for a Flex run (style "motion") on Nodaro Motion Prism: a "style" picker catalog id (get_picker_catalog "style"), e.g. "pop-art". Line 1 of the prompt becomes the style\'s video wording. Nodaro Motion Pulse takes none.'),
         motion_length: z
           .enum(LENGTHS)
           .optional()
@@ -226,6 +235,28 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
           }),
         )
       }
+      // `direction` is the REST field, not this tool's: the loose schema lets it through, and dropping it
+      // would charge for a run without the style asked for. Refused, pointing at `art_style`.
+      if ((args as Record<string, unknown>).direction !== undefined) {
+        return errorResult(
+          400,
+          JSON.stringify({
+            error: {
+              code: "use_art_style",
+              message: 'cast_swap takes no direction. Give an art style as art_style instead, a "style" picker catalog id (get_picker_catalog "style").',
+            },
+          }),
+        )
+      }
+      // An engine that does not declare art styles strips a `direction` it does not know and runs without
+      // the style: never send it a body that names one (quote or run). Said directly, since `errorResult`
+      // words every 503 as a model outage.
+      if (args.art_style !== undefined && !loadedEngineTakesArtStyle()) {
+        return {
+          content: [{ type: "text" as const, text: "Nodaro: art styles are not available on this deployment yet. [art_style_unavailable]" }],
+          isError: true as const,
+        }
+      }
       // An older client's `kling_length` (not listed; checked as `motion_length` is).
       const legacyLength = (args as Record<string, unknown>).kling_length
       if (args.motion_length === undefined && legacyLength !== undefined && !LENGTHS.includes(legacyLength as never)) {
@@ -252,6 +283,8 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         ...(args.preview_start !== undefined ? { previewStart: args.preview_start } : {}),
         ...(engine !== undefined ? { engine } : {}),
         ...(args.style !== undefined ? { style: args.style } : {}),
+        // The art style's id alone, never another `direction` key; when one applies is the route's to say.
+        ...(args.art_style !== undefined ? { direction: { style: args.art_style } } : {}),
         // Under the key this environment's engine takes (`motionLength`, else the old `klingLength`).
         ...(length !== undefined ? { [castSwapLengthKey()]: length } : {}),
         ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),

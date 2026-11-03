@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { castSwapEnginesOf, castSwapLengthKey, loadedEngineRuns, withWireLengthKey } from "../cast-swap-engines.js"
+import { castSwapEnginesOf, castSwapLengthKey, loadedEngineRuns, loadedEngineTakesArtStyle, withWireLengthKey } from "../cast-swap-engines.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../private-plugins/supports-registry.js"
 
 /**
@@ -54,6 +54,20 @@ describe("castSwapEnginesOf", () => {
     setPluginSupports({ castSwap: { engines, engineAliases: true } as never })
     expect(loadedEngineRuns("seedance-2-5")).toBe(true)
     expect(loadedEngineRuns("kling-4")).toBe(true)
+  })
+})
+
+describe("loadedEngineTakesArtStyle", () => {
+  afterEach(() => _resetPluginSupportsForTests())
+
+  it("is true only where the loaded engine declares art styles (castSwap.artStyle, 0.417.0+)", () => {
+    expect(loadedEngineTakesArtStyle()).toBe(false)
+    setPluginSupports({ castSwap: { engines: ["motion-prism", "motion-pulse"], engineAliases: true } as never })
+    expect(loadedEngineTakesArtStyle()).toBe(false)
+    setPluginSupports({ castSwap: { engines: ["motion-prism", "motion-pulse"], engineAliases: true, artStyle: false } as never })
+    expect(loadedEngineTakesArtStyle()).toBe(false)
+    setPluginSupports({ castSwap: { engines: ["motion-prism", "motion-pulse"], engineAliases: true, artStyle: true } as never })
+    expect(loadedEngineTakesArtStyle()).toBe(true)
   })
 })
 

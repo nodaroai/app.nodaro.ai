@@ -621,6 +621,7 @@ export const ko: ChromeDict = {
   "legal.privacy": "개인정보 처리방침",
   "legal.refund": "환불 정책",
   "legal.accessibility": "접근성 성명",
+  "legal.complaints": "저작권 및 콘텐츠 신고",
   "a11y.skipToContent": "본문으로 건너뛰기",
   "a11yMenu.open": "접근성 메뉴",
   "a11yMenu.title": "접근성",

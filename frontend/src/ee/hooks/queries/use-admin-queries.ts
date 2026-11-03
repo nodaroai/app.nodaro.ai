@@ -82,7 +82,14 @@ import type { AppSettings } from "@/hooks/queries/use-app-settings-queries"
 
 // --- Types ---
 export interface AdminStats {
+  /** Exact count of profiles (migration 586; it was a planner estimate). */
   readonly totalUsers: number
+  /** Users whose marketing-email consent is granted right now. `null`: the
+   *  database's `get_admin_stats` predates migration 586 (staging runs dev code
+   *  on the shared database until promotion), so the count is unknown, not 0. */
+  readonly usersAcceptingEmail: number | null
+  /** Users with at least one completed job, of any job type. `null` as above. */
+  readonly usersWithGeneration: number | null
   readonly totalProjects: number
   readonly totalWorkflows: number
   readonly totalJobs: number
@@ -248,6 +255,8 @@ export function useAdminStats() {
       if (error) throw error
       const stats = data as unknown as {
         totalUsers: number
+        usersAcceptingEmail?: number
+        usersWithGeneration?: number
         totalProjects: number
         totalWorkflows: number
         totalJobs: number
@@ -256,6 +265,8 @@ export function useAdminStats() {
       }
       return {
         totalUsers: stats.totalUsers ?? 0,
+        usersAcceptingEmail: stats.usersAcceptingEmail ?? null,
+        usersWithGeneration: stats.usersWithGeneration ?? null,
         totalProjects: stats.totalProjects ?? 0,
         totalWorkflows: stats.totalWorkflows ?? 0,
         totalJobs: stats.totalJobs ?? 0,

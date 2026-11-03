@@ -644,6 +644,7 @@ export const en = {
   "legal.privacy": "Privacy Policy",
   "legal.refund": "Refund Policy",
   "legal.accessibility": "Accessibility statement",
+  "legal.complaints": "Copyright & content complaints",
   "a11y.skipToContent": "Skip to content",
   "a11yMenu.open": "Accessibility menu",
   "a11yMenu.title": "Accessibility",

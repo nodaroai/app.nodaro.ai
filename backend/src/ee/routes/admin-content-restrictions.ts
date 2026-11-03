@@ -1,23 +1,31 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { requireAdmin } from "../middleware/require-admin.js"
+import { requireAdminInApp } from "../middleware/require-admin-in-app.js"
 import { audit } from "./admin-trends-lifecycle.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"
 import { ContentRestrictionError, finishRestrictionBytes, liftRestriction, listRestrictions, restrictAsset, restrictJob } from "../../lib/content-restrictions.js"
+import { ComplaintCaseError, ensureCaseTarget } from "../lib/complaint-cases.js"
 
 /**
  * Admin → content restrictions (migration 581; lib/content-restrictions.ts):
  * a stored file or a job's output taken out of reach after a complaint, and
- * lifted or not. Admin session only; every restriction and lift is audited.
- * The handler's screen (the complaints queue) is a later change; these routes
- * are what it calls.
+ * lifted or not. An administrator signed in to the app only (an API or app
+ * token of theirs is refused: these act on other accounts' content), never
+ * cached; every restriction and lift is audited, and one made from a case is
+ * written on that case's log as well. The Complaints screen calls these for
+ * the lift and the bytes; a restriction from a case goes through the case's
+ * own route (admin-complaints.ts), which moves the case on too.
  *
  *   GET  /v1/admin/content-restrictions?active=1  — the records, newest first.
- *   POST /v1/admin/content-restrictions           — { assetId | jobId, reason, complaintId? }
+ *   POST /v1/admin/content-restrictions           — { assetId | jobId, reason, complaintId? }: with a
+ *        case, only a file it matched (or the job that made one)
  *   POST /v1/admin/content-restrictions/:id/lift  — { reason? }
  *   POST /v1/admin/content-restrictions/:id/bytes — finish the bytes' move (or move back) the record says is left
  */
+
+const READS = { rateLimit: { max: 120, timeWindow: "1 minute" } }
+const MOVES = { rateLimit: { max: 60, timeWindow: "1 minute" } }
 
 const restrictBody = z
   .strictObject({
@@ -33,7 +41,12 @@ const liftParams = z.object({ id: z.string().uuid() })
 const listQuery = z.object({ active: z.enum(["1", "0"]).optional() })
 
 export async function adminContentRestrictionsRoutes(app: FastifyInstance) {
-  app.get("/v1/admin/content-restrictions", { preHandler: requireAdmin }, async (req, reply) => {
+  // Records of other accounts' content, and the bytes' state: no cache keeps any of it.
+  app.addHook("onRequest", async (_req, reply) => {
+    reply.header("Cache-Control", "no-store")
+  })
+
+  app.get("/v1/admin/content-restrictions", { preHandler: requireAdminInApp, config: READS }, async (req, reply) => {
     const parsed = listQuery.safeParse(req.query)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
@@ -43,11 +56,13 @@ export async function adminContentRestrictionsRoutes(app: FastifyInstance) {
     }
   })
 
-  app.post("/v1/admin/content-restrictions", { preHandler: requireAdmin }, async (req, reply) => {
+  app.post("/v1/admin/content-restrictions", { preHandler: requireAdminInApp, config: MOVES }, async (req, reply) => {
     const parsed = restrictBody.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     const { assetId, jobId, reason, complaintId } = parsed.data
     try {
+      // In a case's name only what the case matched: a wrong id never restricts unrelated content under it.
+      if (complaintId) await ensureCaseTarget(complaintId, { assetId, jobId })
       const input = { reason, complaintId: complaintId ?? null, adminUserId: req.userId ?? null }
       const restriction = assetId ? await restrictAsset(assetId, input) : await restrictJob(jobId!, input)
       await audit(req, "content_restrict", assetId ? "asset" : "job", (assetId ?? jobId)!, {
@@ -57,6 +72,10 @@ export async function adminContentRestrictionsRoutes(app: FastifyInstance) {
       })
       return reply.status(201).send({ data: restriction })
     } catch (e) {
+      if (e instanceof ComplaintCaseError) {
+        const unknown = e.code === "not_found"
+        return reply.status(400).send({ error: { code: unknown ? "unknown_complaint" : e.code, message: unknown ? "No such complaint" : e.message } })
+      }
       if (e instanceof ContentRestrictionError) {
         const status = e.code === "not_found" ? 404 : e.code === "unknown_complaint" ? 400 : 409
         return reply.status(status).send({ error: { code: e.code, message: e.message } })
@@ -65,7 +84,7 @@ export async function adminContentRestrictionsRoutes(app: FastifyInstance) {
     }
   })
 
-  app.post("/v1/admin/content-restrictions/:id/lift", { preHandler: requireAdmin }, async (req, reply) => {
+  app.post("/v1/admin/content-restrictions/:id/lift", { preHandler: requireAdminInApp, config: MOVES }, async (req, reply) => {
     const params = liftParams.safeParse(req.params)
     const parsed = liftBody.safeParse(req.body ?? {})
     if (!params.success || !parsed.success) {
@@ -86,7 +105,7 @@ export async function adminContentRestrictionsRoutes(app: FastifyInstance) {
     }
   })
 
-  app.post("/v1/admin/content-restrictions/:id/bytes", { preHandler: requireAdmin }, async (req, reply) => {
+  app.post("/v1/admin/content-restrictions/:id/bytes", { preHandler: requireAdminInApp, config: MOVES }, async (req, reply) => {
     const params = liftParams.safeParse(req.params)
     if (!params.success) return reply.status(400).send({ error: { code: "validation_error", message: "Invalid restriction" } })
     try {

@@ -48,7 +48,9 @@ import {
   Clapperboard,
   PanelTop,
   Radar,
+  Gavel,
 } from "lucide-react"
+import { useAdminComplaintCount } from "@/ee/hooks/queries/use-admin-complaints-queries"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 import {
@@ -94,6 +96,7 @@ const ADMIN_NAV = [
   { href: "/admin/picker-gaps", label: "Picker Gaps", icon: Puzzle },
   ...(hasCredits() ? [{ href: "/admin/copilot-gaps", label: "Copilot Gaps", icon: GraduationCap }] : []),
   { href: "/admin/app-reports", label: "App Reports", icon: Inbox },
+  { href: "/admin/complaints", label: "Complaints", icon: Gavel },
   { href: "/admin/kie-credits", label: "KIE Credits", icon: Wallet },
   ...(hasCredits() ? [{ href: "/admin/hosted-deployments", label: "Hosted Deployments", icon: Server }] : []),
   { href: "/admin/subscriptions", label: "Subscriptions", icon: HeartPulse },
@@ -142,6 +145,7 @@ export default function AdminLayout() {
   const { data: pendingReportsCount = 0 } = useGalleryReportCount()
   const t = useT()
   const pendingReviewCount = useHeldJobCount(Boolean(user?.id) && isAdmin)
+  const { data: openComplaintsCount = 0 } = useAdminComplaintCount(Boolean(user?.id) && isAdmin)
 
   // Load collapsed state from localStorage on mount
   useEffect(() => {
@@ -267,11 +271,14 @@ export default function AdminLayout() {
 
               const isReportsItem = item.href === "/admin/reports"
               const isReviewItem = item.href === "/admin/review"
+              const isComplaintsItem = item.href === "/admin/complaints"
               const badgeCount = isReportsItem
                 ? pendingReportsCount
                 : isReviewItem
                   ? pendingReviewCount
-                  : 0
+                  : isComplaintsItem
+                    ? openComplaintsCount
+                    : 0
               const showBadge = badgeCount > 0
               // The rest of this nav is hardcoded English; the review entry is
               // translated because the page behind it is.

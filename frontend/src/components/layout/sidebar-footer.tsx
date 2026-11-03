@@ -13,6 +13,7 @@ import { useUpdateCheck } from "@/hooks/use-update-check"
 import { UpdateDialog } from "@/components/layout/update-dialog"
 import { surfacePlatformLinks } from "@/lib/surface-selectors"
 import { AccessibilityStatementLink } from "@/components/legal/accessibility-statement-link"
+import { ComplaintsLink } from "@/components/legal/complaints-link"
 
 interface SidebarFooterProps {
   readonly isCollapsed: boolean
@@ -201,10 +202,11 @@ export function SidebarFooter({ isCollapsed, isRtl, onToggleCollapsed, accountCo
         )}
       </div>
 
-      {/* The accessibility statement (Cloud only; renders nothing elsewhere). */}
+      {/* The accessibility statement (Cloud only) and the complaints form (where a case can be handled); each renders nothing elsewhere. */}
       {!isCollapsed && (
-        <div className="text-center">
+        <div className="flex flex-col items-center gap-1 text-center">
           <AccessibilityStatementLink className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground" />
+          <ComplaintsLink className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground" />
         </div>
       )}
 

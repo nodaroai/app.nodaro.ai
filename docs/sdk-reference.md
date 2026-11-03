@@ -2253,6 +2253,14 @@ const { engines } = await client.castSwap.styleChoice()
 const showStyle = engines["motion-pulse"] === "user"
 ```
 
+**The Advanced options on the Nodaro Motion page**
+(`GET /v1/cast-swap/advanced`, public): `{ show: boolean }`, whether the
+Nodaro Motion page shows `prepareReferences` and `prePrompt` under its
+Advanced options; `false` until Nodaro turns them on, one setting for the
+whole page. It describes the page only: `run()` and `estimate()` take both
+fields whatever it says. The answer may be up to a minute old. The SDK has no
+method for it yet; read it with `client.request()`.
+
 **Preparing the clip.** How the source clip is prepared for the video model
 (for one, whether faces are hidden first, and whether a clip the model
 refuses is retried once) is set by Nodaro for each engine; a run cannot

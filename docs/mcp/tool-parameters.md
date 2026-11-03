@@ -417,6 +417,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `preview_start` | number |  | Seconds, default 0; preview_start + 4 must fit the clip. At least 0. |
 | `engine` | string |  | Default "motion-prism" (Nodaro Motion Prism). "motion-pulse" (Nodaro Motion Pulse): 720p or 1080p only, no draft; its Full Quality is a new take. One of `motion-prism`, `motion-pulse`. |
 | `style` | string |  | "precise" (default) follows the clip exactly; "motion" follows the clip's movement and takes the looks from the photos, more freely than precise. Its price may differ: the quote shows it. A style an admin forced for the engine overrides this. One of `precise`, `motion`. |
+| `art_style` | string |  | An art style for a Flex run (style "motion") on Nodaro Motion Prism: a "style" picker catalog id (get_picker_catalog "style"), e.g. "pop-art". Line 1 of the prompt becomes the style's video wording. Nodaro Motion Pulse takes none. From 1 to 100 characters. |
 | `motion_length` | string |  | motion-pulse only: cut the clip to whole seconds at its end (default) or start. One of `cut-end`, `cut-start`. |
 | `resolution` | string |  | Default "480p" (motion-pulse: "720p"; no 480p). One of `480p`, `720p`, `1080p`. |
 | `draft` | boolean |  | Render as a draft, 480p motion-prism only. Default true at 480p, false above. |

@@ -32,6 +32,16 @@ export function loadedEngineRuns(engine: CastSwapEngine): boolean {
 }
 
 /**
+ * Whether this process's Cast Swap engine takes an art style (`direction.style`
+ * on a direct Flex run): it declares `castSwap.artStyle` (0.417.0+). An older
+ * one strips a `direction` it does not know and runs without the style, so a
+ * body naming one must be held back rather than sent.
+ */
+export function loadedEngineTakesArtStyle(): boolean {
+  return getPluginSupports().castSwap?.artStyle === true
+}
+
+/**
  * The request key for a Nodaro Motion Pulse run's length fit: `motionLength`
  * where the loaded engine takes Nodaro Motion's names (`engineAliases`,
  * 0.394.0+), else the old `klingLength` (an older engine knows only that one

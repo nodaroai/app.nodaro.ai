@@ -10,7 +10,12 @@ import { axeViolations } from "@/test/axe"
  */
 
 const edition = vi.hoisted(() => ({ cloud: true }))
-vi.mock("@/lib/edition", () => ({ isCloud: () => edition.cloud, hasCredits: () => edition.cloud }))
+vi.mock("@/lib/edition", async (orig) => ({
+  ...(await orig<typeof import("@/lib/edition")>()),
+  isCloud: () => edition.cloud,
+  hasCredits: () => edition.cloud,
+  hasAdmin: () => edition.cloud,
+}))
 vi.mock("@/hooks/use-auth", () => ({
   useAuth: () => ({ signInWithGoogle: vi.fn(), signInWithEmail: vi.fn() }),
 }))

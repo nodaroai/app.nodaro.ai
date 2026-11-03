@@ -12,9 +12,10 @@ import { useT } from "@/lib/i18n"
 /**
  * The public complaints page: a copyright notice (the twelve fields and the
  * two statements the policy names) or another complaint about content on
- * this service. Public: a complainant has no account here. Nothing is linked
- * to it yet; the footer link and the policy's reference open with the
- * handler's screen.
+ * this service. Public: a complainant has no account here. It is linked from
+ * sign-in, the sidebar and the account menu (components/legal/
+ * complaints-link.tsx) wherever the admin's Complaints screen handles the
+ * cases. What a complainant types is masked from session recordings.
  *
  * The two legal statements are read from the server and shown verbatim; the
  * page never carries their text. A submission answers a reference number and
@@ -229,7 +230,8 @@ export default function CopyrightComplaintsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    // A complainant types their name, address, phone and signature here: session recordings mask the page.
+    <div className="min-h-screen bg-background text-foreground" data-clarity-mask="true">
       <header className="border-b border-border px-6 py-4">
         <NodaroLogo />
       </header>

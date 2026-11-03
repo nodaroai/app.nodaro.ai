@@ -45,6 +45,8 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock)
   routes["GET /v1/admin/nodaro-motion/masking"] = () => ({ body: { data: { masking: null, updatedAt: null, engines: ENGINES } } })
   routes["GET /v1/admin/nodaro-motion/style"] = () => ({ body: { data: { style: null, updatedAt: null, engines: ENGINES, supported: true } } })
+  // The page's Advanced switch (advanced.test.tsx): never saved, hidden.
+  routes["GET /v1/admin/nodaro-motion/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
   routes[`GET ${PARTS}`] = () => ({ body: { data: { promptParts: null, updatedAt: null, engines: ENGINES, styles: ["precise", "motion"] } } })
   routes[`POST ${PARTS}/preview`] = (init) => {
     const body = JSON.parse(String(init?.body)) as { style: string; promptWording?: string }

@@ -388,6 +388,12 @@ export const queryKeys = {
       ["admin", "picker-gaps", "list", offset, picker, gapType, status] as const,
     appReports: (offset: number, kind: string, appSlug: string, status: string, userFilter: string) =>
       ["admin", "app-reports", "list", offset, kind, appSlug, status, userFilter] as const,
+    // Content complaints (Admin → Complaints): the queue, one case, the open count — all under
+    // ["admin", "complaints"], so a move on a case refreshes every one of them.
+    complaints: (status: string, kind: string, q: string, page: number) =>
+      ["admin", "complaints", "list", status, kind, q, page] as const,
+    complaint: (id: string) => ["admin", "complaints", "one", id] as const,
+    complaintsCount: () => ["admin", "complaints", "count"] as const,
     kieCredits: (days: number) =>
       ["admin", "kie-credits", days] as const,
     hostedDeployments: () => ["admin", "hosted-deployments"] as const,
@@ -457,6 +463,7 @@ export const queryKeys = {
     nodaroMotionPrismReferenceAudio: () => ["admin", "nodaro-motion", "prism-reference-audio"] as const,
     nodaroMotionStyle: () => ["admin", "nodaro-motion", "style"] as const,
     nodaroMotionPromptWording: () => ["admin", "nodaro-motion", "prompt-wording"] as const,
+    nodaroMotionAdvanced: () => ["admin", "nodaro-motion", "advanced"] as const,
     nodaroMotionPromptPreview: (engine: string, style: string, overrides: string) =>
       ["admin", "nodaro-motion", "prompt-parts", "preview", engine, style, overrides] as const,
   },
