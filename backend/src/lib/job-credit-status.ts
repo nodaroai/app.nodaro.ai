@@ -81,6 +81,9 @@ export function creditStatusOf(
  * `ownCharged ?? ownHeld ?? 0` gives the same figure. The SQL mirror is
  * `public.admin_job_own_credits` (migration 575), and all three are pinned to
  * one case table, `supabase/tests/fixtures/admin-job-own-credits-cases.json`.
+ * The list's credit minimum (`admin_job_page`, migration 584) joins the same
+ * figure in rather than calling the function per row; the behavior test holds
+ * it to the function over that table.
  */
 export function ownCreditFigure(
   log: { status: string | null; credits_used: number | null; credits_charged: number | null } | null,
@@ -158,40 +161,64 @@ const sumOrNull = (values: ReadonlyArray<number | null | undefined>): number | n
 const releasedOf = (held: number | null, charged: number | null): number | null =>
   held !== null && charged !== null && charged <= held ? held - charged : null
 
+/** The reads `runCreditsFor` makes, in the order they are reported to `onTiming`. */
+const RUN_CREDIT_READS = ["steps", "logs", "side"] as const
+export type RunCreditRead = (typeof RUN_CREDIT_READS)[number]
+
 /**
  * The figures of each job in `rows`, as a run: one read for its steps per level
- * of the tree, one usage-log read and one side-hold read for every job and step
- * (in batches) — never a read per job. Callers pass every row of the page and
- * whose jobs they are: one user, or — for a list mixing users (an admin's) —
- * the users it may hold, each row then naming its own (`user_id`; a row whose
- * owner is not among them gets no steps). Steps are read as that owner's only.
+ * of the tree, then one usage-log read and one side-hold read for every job and
+ * step (in batches), those two at the same time — never a read per job. Callers
+ * pass every row of the page and whose jobs they are: one user, or — for a list
+ * mixing users (an admin's) — the users it may hold, each row then naming its
+ * own (`user_id`; a row whose owner is not among them gets no steps). Steps are
+ * read as that owner's only.
+ *
+ * `onTiming` hears how long each read took, always in the order `steps`,
+ * `logs`, `side` (whichever of the last two finished first), and also when a
+ * read failed.
  */
 export async function runCreditsFor(
   rows: readonly JobChargeRow[],
   owners: string | readonly string[],
-  onTiming?: (read: "steps" | "logs" | "side", ms: number) => void,
+  onTiming?: (read: RunCreditRead, ms: number) => void,
 ): Promise<RunCredits> {
-  const timed = async <T>(read: "steps" | "logs" | "side", run: () => Promise<T>): Promise<T> => {
+  const took = new Map<RunCreditRead, number>()
+  const timed = async <T>(read: RunCreditRead, run: () => Promise<T>): Promise<T> => {
     if (!onTiming) return run()
     const start = performance.now()
     try {
       return await run()
     } finally {
-      onTiming(read, performance.now() - start)
+      took.set(read, performance.now() - start)
     }
   }
   const jobs = rows.filter((r): r is JobChargeRow => typeof r?.id === "string" && r.id.length > 0)
   const allowed = typeof owners === "string" ? null : new Set(owners)
   const ownerOf = (j: JobChargeRow): string | null =>
     typeof owners === "string" ? owners : j.user_id && allowed!.has(j.user_id) ? j.user_id : null
-  const { steps, incomplete } = await timed("steps", () => runStepsOf(jobs.flatMap((j) => {
+  const roots = jobs.flatMap((j) => {
     const owner = ownerOf(j)
     return owner ? [{ id: j.id, owner }] : []
-  })))
-  const everyStep = new Map<string, { usage_log_id: string | null }>()
-  for (const list of steps.values()) for (const s of list) everyStep.set(s.id, s)
-  const logs = await timed("logs", () => creditStatusMapFor([...jobs.map((j) => j.usage_log_id), ...[...everyStep.values()].map((s) => s.usage_log_id)]))
-  const side = await timed("side", () => sideHoldChargesFor([...jobs.map((j) => j.id), ...everyStep.keys()]))
+  })
+  const read = async () => {
+    const { steps, incomplete } = await timed("steps", () => runStepsOf(roots))
+    const everyStep = new Map<string, { usage_log_id: string | null }>()
+    for (const list of steps.values()) for (const s of list) everyStep.set(s.id, s)
+    // These two need only the jobs and their steps, not each other.
+    const [logs, side] = await Promise.all([
+      timed("logs", () => creditStatusMapFor([...jobs.map((j) => j.usage_log_id), ...[...everyStep.values()].map((s) => s.usage_log_id)])),
+      timed("side", () => sideHoldChargesFor([...jobs.map((j) => j.id), ...everyStep.keys()])),
+    ])
+    return { steps, incomplete, logs, side }
+  }
+  let figures: Awaited<ReturnType<typeof read>>
+  try {
+    figures = await read()
+  } finally {
+    if (onTiming) for (const name of RUN_CREDIT_READS) if (took.has(name)) onTiming(name, took.get(name)!)
+  }
+  const { steps, incomplete, logs, side } = figures
 
   const out = new Map<string, RunCreditFigures>()
   for (const job of jobs) {

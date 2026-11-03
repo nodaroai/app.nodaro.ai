@@ -61,6 +61,11 @@
  * declares that map (`castSwap.depthColormaps`, need `depthColormap:<map>`):
  * one from before the choice is sent no colormap and draws (and words) the
  * source's default.
+ * A trend that names a depth model size (`faceMasking.depthModelSize`, only
+ * when it changes the render: `depthModelSizeSent`) needs an engine that
+ * declares that size (`castSwap.depthModelSizes`, need
+ * `depthModelSize:<size>`): one from before the choice is sent none, and
+ * draws with the large model.
  * A Prism trend whose reference audio names a mode only some engines take
  * ("one-tone", "octave": `DECLARED_ONLY_PRISM_REFERENCE_AUDIO_MODES`) needs
  * an engine that lists it (`castSwap.prismReferenceAudioModes`, need
@@ -110,6 +115,7 @@
  * approved mask cannot make any) or `face_mask_variant_out_of_date`. Such a
  * trend, like one with erased marks, needs `storedFaceMaskRequired`.
  */
+import { VIDEO_DEPTH_MODEL_SIZES } from "@nodaro/shared/media"
 import type { EngineEnvironment } from "../engine-environments.js"
 import {
   declaredOnlyPrismReferenceAudioModesOf,
@@ -120,7 +126,9 @@ import {
 } from "../../../lib/cast-swap-prism-reference-audio.js"
 import {
   depthColormapSent,
+  depthModelSizeSent,
   engineDrawsDepthColormap,
+  engineDrawsDepthModelSize,
   engineDrawsFaceMesh,
   engineDrawsRoleOutlines,
   engineMasksTarget,
@@ -132,6 +140,7 @@ import {
   roleOutlinesOn,
   FACE_MASKING_DEPTH_COLORMAPS,
   type FaceMaskingDepthColormap,
+  type FaceMaskingDepthModelSize,
   type FaceMaskingSource,
 } from "../../../lib/cast-swap-face-masking.js"
 import { castSwapEnginesOf } from "../../../lib/cast-swap-engines.js"
@@ -192,7 +201,7 @@ export interface PublishBlocker {
   env?: string
   /**
    * What the engine lacks: a slot kind, "fixedReferences", "faceMasking",
-   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "roleOutlines", "depthColormap:<map>" (e.g. "depthColormap:inferno"), "prismReferenceAudio:<mode>" (e.g. "prismReferenceAudio:one-tone"), "steps", "clipBodySheet", "shotList", "styleRefs", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
+   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "roleOutlines", "depthColormap:<map>" (e.g. "depthColormap:inferno"), "depthModelSize:<size>" (e.g. "depthModelSize:small"), "prismReferenceAudio:<mode>" (e.g. "prismReferenceAudio:one-tone"), "steps", "clipBodySheet", "shotList", "styleRefs", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
    * "trendRun" or "castSwap".
    */
   need?: string
@@ -260,6 +269,19 @@ function depthColormapOfNeed(need: string): FaceMaskingDepthColormap | null {
   return (FACE_MASKING_DEPTH_COLORMAPS as readonly string[]).includes(colormap) ? (colormap as FaceMaskingDepthColormap) : null
 }
 
+/** The need of a trend that draws its depth with the model `size` (`faceMasking.depthModelSize`, `castSwap.depthModelSizes`). */
+export function depthModelSizeNeed(size: FaceMaskingDepthModelSize): string {
+  return `${DEPTH_MODEL_SIZE_NEED_PREFIX}${size}`
+}
+const DEPTH_MODEL_SIZE_NEED_PREFIX = "depthModelSize:"
+
+/** The model size a `depthModelSize:<size>` need names, or null for any other need. */
+function depthModelSizeOfNeed(need: string): FaceMaskingDepthModelSize | null {
+  if (!need.startsWith(DEPTH_MODEL_SIZE_NEED_PREFIX)) return null
+  const size = need.slice(DEPTH_MODEL_SIZE_NEED_PREFIX.length)
+  return (VIDEO_DEPTH_MODEL_SIZES as readonly string[]).includes(size) ? (size as FaceMaskingDepthModelSize) : null
+}
+
 /** The need of a Prism trend whose reference audio names `mode` (`prismReferenceAudio`, `castSwap.prismReferenceAudioModes`). */
 export function prismReferenceAudioModeNeed(mode: CastSwapPrismReferenceAudioDeclaredOnlyMode): string {
   return `${PRISM_REFERENCE_AUDIO_NEED_PREFIX}${mode}`
@@ -317,6 +339,8 @@ function needsOf(data: TrendVersionData): string[] {
     ...(roleOutlinesOn(data.faceMasking) ? [ROLE_OUTLINES_NEED] : []),
     // A depth colormap: an engine from before it is sent none, and draws the source's default.
     ...depthColormapNeeds(data),
+    // A depth model size: an engine from before it is sent none, and draws with the large model.
+    ...depthModelSizeNeeds(data),
     // Prism's newer reference audio modes: an engine from before them is sent the full audio.
     ...prismReferenceAudioModeNeeds(data),
     // The preparation steps: an engine from before them strips the key (and a run there is sent without it).
@@ -343,6 +367,12 @@ function depthColormapNeeds(data: TrendVersionData): string[] {
   return colormap === undefined ? [] : [depthColormapNeed(colormap)]
 }
 
+/** The draft's depth model size need, when its masking is on and names a size that changes the render. */
+function depthModelSizeNeeds(data: TrendVersionData): string[] {
+  const size = faceMaskingOn(data.faceMasking) ? depthModelSizeSent(data.faceMasking) : undefined
+  return size === undefined ? [] : [depthModelSizeNeed(size)]
+}
+
 /** A Prism draft's reference audio needs: each declared-only mode it names at some resolution. */
 function prismReferenceAudioModeNeeds(data: TrendVersionData): string[] {
   if (engineOf(data) !== "seedance-2-5") return []
@@ -366,6 +396,8 @@ function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
     if (need === ROLE_OUTLINES_NEED) return !engineDrawsRoleOutlines(cs)
     const colormap = depthColormapOfNeed(need)
     if (colormap !== null) return !engineDrawsDepthColormap(cs, colormap)
+    const size = depthModelSizeOfNeed(need)
+    if (size !== null) return !engineDrawsDepthModelSize(cs, size)
     const audioMode = prismReferenceAudioModeOfNeed(need)
     if (audioMode !== null) return !engineTakesPrismReferenceAudioMode(cs, audioMode)
     if (need === STEPS_NEED) return !engineTakesSteps(cs)

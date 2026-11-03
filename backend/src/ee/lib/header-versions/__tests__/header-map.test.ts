@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { GitHubError, type GitHubReader } from "../github.js"
 import { MAP_FILE, parseHeaderMap, readHeaderMap } from "../header-map.js"
-import type { ProbeLink } from "../world-links.js"
+import { askOnce, type AskLink } from "../world-links.js"
 
 /**
  * The header's explanations, read from its repository as they stand: a fixed
@@ -64,14 +64,13 @@ function reader(files: Record<string, string | Error>): { github: GitHubReader; 
   return { github, asked }
 }
 
-const answers =
-  (byHref: Record<string, number | Error>): ProbeLink =>
-  async (href) => {
+const answers = (byHref: Record<string, number | Error>): AskLink =>
+  askOnce(async (href) => {
     const answer = byHref[href]
     if (answer === undefined) throw new Error(`asked an address it should not: ${href}`)
     if (answer instanceof Error) throw answer
     return answer
-  }
+  })
 
 const timeout = () => Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" })
 
@@ -80,7 +79,15 @@ describe("parseHeaderMap", () => {
     const map = sample()
     map.figures.anatomy.heading = "  What the bar holds  "
     const read = parseHeaderMap(JSON.stringify(map))
-    expect(read).toEqual({ map: sample() })
+    const worlds = sample().worlds.map((world) => (world.id === "editor" ? { ...world, href: "https://editor.example.com/" } : world))
+    expect(read).toEqual({ map: { ...sample(), worlds } })
+  })
+
+  it("writes each world's address one way, as a site's own file is read: one place is one address", () => {
+    const map = sample()
+    map.worlds = [{ id: "editor", label: "Editor", href: "https://Editor.Example.com", group: "advanced" }]
+    const read = parseHeaderMap(JSON.stringify(map))
+    expect("map" in read && read.map.worlds[0]?.href).toBe("https://editor.example.com/")
   })
 
   it.each([
@@ -124,7 +131,7 @@ describe("readHeaderMap", () => {
 
   it("reads the header's file as it stands and asks every world's address", async () => {
     const { github, asked } = reader({ [FILE]: JSON.stringify(sample()) })
-    const result = await readHeaderMap(github, answers({ "https://example.com/gallery": 404, "https://editor.example.com": 200 }))
+    const result = await readHeaderMap(github, answers({ "https://example.com/gallery": 404, "https://editor.example.com/": 200 }))
     expect(asked).toEqual([FILE])
     expect(result).toEqual({
       status: "ok",
@@ -133,14 +140,14 @@ describe("readHeaderMap", () => {
       figures: sample().figures,
       worlds: [
         { id: "gallery", label: "Gallery", href: "https://example.com/gallery", group: "simple", answer: { status: "answered", code: 404 } },
-        { id: "editor", label: "Editor", href: "https://editor.example.com", group: "advanced", answer: { status: "answered", code: 200 } },
+        { id: "editor", label: "Editor", href: "https://editor.example.com/", group: "advanced", answer: { status: "answered", code: 200 } },
       ],
     })
   })
 
   it("an address that does not answer fails only its own world, and says why", async () => {
     const { github } = reader({ [FILE]: JSON.stringify(sample()) })
-    const result = await readHeaderMap(github, answers({ "https://example.com/gallery": timeout(), "https://editor.example.com": new TypeError("fetch failed") }))
+    const result = await readHeaderMap(github, answers({ "https://example.com/gallery": timeout(), "https://editor.example.com/": new TypeError("fetch failed") }))
     expect(result.status === "ok" && result.worlds.map((world) => world.answer)).toEqual([
       { status: "no_answer", message: "No answer within 8 seconds." },
       { status: "no_answer", message: "The address could not be reached." },

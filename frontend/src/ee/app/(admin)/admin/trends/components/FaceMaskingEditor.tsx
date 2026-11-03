@@ -40,10 +40,28 @@
 // Admin → Nodaro Motion's: every environment's, naming those that lack it);
 // with none offered the select is greyed out and says why. While role
 // outlines are on, a depth fill is fixed at grayscale, and says so.
+//
+// Depth model (wherever the setting draws depth, role outlines or not): the
+// size of the model that draws the depth (small, base, large). Large, the
+// default, is no key, exactly as before the choice existed. A size is offered
+// as a colormap is (a trend's: some environment's engine; Admin → Nodaro
+// Motion's: every environment's, naming those that lack it); with none
+// offered the select is greyed out and says why. A size already chosen
+// stays, to be set back to the default.
+//
+// Admin → Nodaro Motion's Precise column only (never a trend's, nor the Motion
+// column's Faces hidden): a third fill,
+// None — the faces are found as for the other fills but kept as filmed, and
+// only the face mesh is drawn on them. Choosing it turns the face mesh on,
+// which then stays on (and says why) while None is chosen; no depth is drawn,
+// so no colormap, depth model or depth blur. Offered once every environment's
+// engine draws it, greyed out naming those that cannot. The depth blur is
+// offered on its depth fill too (its own engine declaration, apart from Full
+// depth's).
 
 import { useId } from "react"
 import { ROLE_OUTLINE_PALETTE } from "@nodaro/render-rules"
-import type { VideoDepthColormap } from "@nodaro/shared/media"
+import { resolveVideoDepthModelSize, type VideoDepthColormap, type VideoDepthModelSize } from "@nodaro/shared/media"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import {
@@ -67,10 +85,14 @@ import type {
 import { DEPTH_BLUR_BOUNDS, FACE_MASKING_BOUNDS, FACE_MASKING_DEFAULTS, ZONE_SIDES, maskingUsesBlur } from "../model"
 import {
   DEPTH_COLORMAPS,
+  DEPTH_MODEL_SIZES,
+  DEPTH_MODEL_SIZE_DEFAULT,
   defaultTargetFor,
+  depthBlurKindOf,
   depthColormapApplies,
   depthColormapDefaultFor,
   depthColormapsSomeEngineDraws,
+  depthModelSizesSomeEngineDraws,
   isDepthPreparation,
   someEngineDrawsFaceMesh,
   someEngineDrawsRoleOutlines,
@@ -103,6 +125,8 @@ const KEEP_TARGETS: ReadonlyArray<{ value: AdminTrendFaceMaskingTarget; label: s
 const FILLS: ReadonlyArray<{ value: AdminTrendFaceMaskingFill; label: string }> = [
   { value: "blur", label: "Blur (default)" },
   { value: "depth", label: "Depth colors" },
+  // Admin → Nodaro Motion only (`fillNoneMissingIn`): never offered in a trend's editor.
+  { value: "none", label: "None (faces as filmed, face mesh only)" },
 ]
 
 /** What the face mesh draws (`faceMeshParts`; the full mesh is the default, saved as no key). */
@@ -118,6 +142,12 @@ const COLORMAP_LABELS: Readonly<Record<VideoDepthColormap, string>> = {
   inferno: "Inferno",
   magma: "Magma",
   viridis: "Viridis",
+}
+
+const MODEL_SIZE_LABELS: Readonly<Record<VideoDepthModelSize, string>> = {
+  small: "Small",
+  base: "Base",
+  large: "Large",
 }
 
 const ZONE_LABELS: Readonly<Record<keyof AdminTrendFaceMaskingZone, string>> = {
@@ -169,6 +199,14 @@ interface Props {
    */
   readonly depthColormapsMissingIn?: Readonly<Record<VideoDepthColormap, readonly string[]>>
   /**
+   * Admin → Nodaro Motion (a setting every environment shares): for each
+   * depth model size, the environments whose engine cannot draw with it
+   * (`environmentsThatCannotDrawModelSizes`). When given, a size is offered
+   * only while its list is empty; left out, once some environment's engine in
+   * `envs` draws with it.
+   */
+  readonly depthModelSizesMissingIn?: Readonly<Record<VideoDepthModelSize, readonly string[]>>
+  /**
    * Admin → Nodaro Motion's Motion column (a setting every environment
    * shares): offer Full depth's depth blur, naming the environments whose
    * engine cannot blur the map (`environmentsThatCannotBlurDepth`). Left out
@@ -182,6 +220,20 @@ interface Props {
    * (`environmentsThatCannotDrawFaceMeshParts`). Left out: no such control.
    */
   readonly faceMeshPartsMissingIn?: Readonly<Record<"features" | "mouth", readonly string[]>>
+  /**
+   * Admin → Nodaro Motion's Precise column: offer the fill None (the faces kept as filmed,
+   * only the face mesh drawn), naming the environments whose engine cannot
+   * draw it (`environmentsThatCannotFillNone`). Left out (a trend's editor):
+   * not offered.
+   */
+  readonly fillNoneMissingIn?: readonly string[]
+  /**
+   * Admin → Nodaro Motion's Precise column: offer the depth blur on a depth
+   * fill, naming the environments whose engine cannot blur a depth fill
+   * (`environmentsThatCannotBlurDepthFill`). Left out (a trend's editor): no
+   * such control.
+   */
+  readonly depthFillBlurMissingIn?: readonly string[]
   /** The source clip's length, when known: Full depth's original scene takes up to 27.5 s. */
   readonly clipSec?: number
   /** Each environment's engine, as reported (Full depth's scene names those that can't take it). */
@@ -201,8 +253,11 @@ export function FaceMaskingEditor({
   bodyMissingIn,
   faceMeshMissingIn,
   depthColormapsMissingIn,
+  depthModelSizesMissingIn,
   depthBlurMissingIn,
   faceMeshPartsMissingIn,
+  fillNoneMissingIn,
+  depthFillBlurMissingIn,
   clipSec,
   envs,
   offerRoleOutlines = false,
@@ -250,6 +305,12 @@ export function FaceMaskingEditor({
   const meshOn = value?.faceMesh === true
   const meshUnsupported = faceMeshMissingIn ? faceMeshMissingIn.length > 0 : !someEngineDrawsFaceMesh(envs)
   const meshShown = mode !== "off" && !keepPeople && (meshOn || faceMeshMissingIn !== undefined || !meshUnsupported)
+  // The fill None (Admin → Nodaro Motion's Faces hidden): the face mesh is all it draws, so the mesh stays on with it.
+  // Offered once every environment's engine draws it; one already chosen stays shown, to be set back.
+  const fillNone = source === "faces" && fill === "none"
+  const fillNoneShown = source === "faces" && (fillNoneMissingIn !== undefined || fill === "none")
+  const fillNoneUnsupported = (fillNoneMissingIn?.length ?? 0) > 0
+  const fills = FILLS.filter((f) => f.value !== "none" || fillNoneShown)
   // Role outlines: a trend's, Faces hidden only. One already on stays shown (and can be turned off).
   const outlinesOn = value?.roleOutlines === true
   const outlinesUnsupported = !someEngineDrawsRoleOutlines(envs)
@@ -267,12 +328,27 @@ export function FaceMaskingEditor({
   const colormapLacking = depthColormapsMissingIn
     ? [...new Set(DEPTH_COLORMAPS.filter((c) => c !== defaultColormap).flatMap((c) => depthColormapsMissingIn[c]))]
     : []
-  // The depth blur (Admin → Nodaro Motion's Motion column): Full depth only. One already set stays shown (and can be
-  // set back to 0) whatever the engines say; 0 is off, saved as no key.
+  // Depth model: wherever depth is drawn, role outlines or not (they fix the colours, not the model).
+  // An off-list stored value (not one the schema takes) reads as Large, as the server's normaliser reads it.
+  const modelSize: VideoDepthModelSize = resolveVideoDepthModelSize(value?.depthModelSize)
+  const modelSizesDrawnSomewhere = depthModelSizesSomeEngineDraws(envs)
+  const modelSizeOffered = (s: VideoDepthModelSize) =>
+    s === DEPTH_MODEL_SIZE_DEFAULT || (depthModelSizesMissingIn ? depthModelSizesMissingIn[s].length === 0 : modelSizesDrawnSomewhere.includes(s))
+  const noModelSizeOffered = DEPTH_MODEL_SIZES.every((s) => s === DEPTH_MODEL_SIZE_DEFAULT || !modelSizeOffered(s))
+  const modelSizeUnsupported = !modelSizeOffered(modelSize)
+  const modelSizeLacking = depthModelSizesMissingIn
+    ? [...new Set(DEPTH_MODEL_SIZES.filter((s) => s !== DEPTH_MODEL_SIZE_DEFAULT).flatMap((s) => depthModelSizesMissingIn[s]))]
+    : []
+  // The depth blur (Admin → Nodaro Motion): Full depth's (the Motion column) and a Faces hidden depth fill's (the
+  // Precise column), each its own engine declaration. One already set stays shown (and can be set back to 0) whatever the
+  // engines say; 0 is off, saved as no key.
   const depthBlur = value?.depthBlur
   const depthBlurOn = typeof depthBlur === "number" && depthBlur > 0
-  const depthBlurShown = source === "full-depth" && mode !== "off" && (depthBlurMissingIn !== undefined || depthBlurOn)
-  const depthBlurUnsupported = (depthBlurMissingIn?.length ?? 0) > 0
+  const blurKind = mode !== "off" ? depthBlurKindOf({ source, fill }) : null
+  const blurMissingIn = blurKind === "full-depth" ? depthBlurMissingIn : blurKind === "depth-fill" ? depthFillBlurMissingIn : undefined
+  const depthBlurShown = blurKind !== null && (blurMissingIn !== undefined || depthBlurOn)
+  const depthBlurUnsupported = (blurMissingIn?.length ?? 0) > 0
+  const blurred = blurKind === "depth-fill" ? "depth fill" : "depth map"
   // What the face mesh draws (Admin → Nodaro Motion's Motion column), under its switch while it is on.
   const meshParts: AdminFaceMeshParts = value?.faceMeshParts ?? "full"
   const meshPartsShown = meshOn && !keepPeople && (faceMeshPartsMissingIn !== undefined || meshParts !== "full")
@@ -290,6 +366,7 @@ export function FaceMaskingEditor({
   const faceMeshId = `${id}-face-mesh`
   const outlinesId = `${id}-role-outlines`
   const colormapId = `${id}-depth-colormap`
+  const modelSizeId = `${id}-depth-model-size`
   const meshPartsId = `${id}-face-mesh-parts`
 
   return (
@@ -319,18 +396,32 @@ export function FaceMaskingEditor({
             <label htmlFor={fillId} className="font-medium">
               Fill
             </label>
-            <Select value={fill} onValueChange={(f) => set({ fill: f as AdminTrendFaceMaskingFill })}>
-              <SelectTrigger id={fillId} className="h-9">
+            <Select
+              value={fill}
+              // None draws only the face mesh: choosing it turns the mesh on (the server refuses None without it).
+              onValueChange={(f) => set(f === "none" ? { fill: "none", faceMesh: true } : { fill: f as AdminTrendFaceMaskingFill })}
+            >
+              <SelectTrigger id={fillId} className="h-9" aria-describedby={fillNone ? `${fillId}-hint` : undefined}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {FILLS.map((f) => (
-                  <SelectItem key={f.value} value={f.value}>
-                    {f.label}
+                {fills.map((f) => (
+                  <SelectItem key={f.value} value={f.value} disabled={f.value === "none" && fillNoneUnsupported && !fillNone}>
+                    {f.value === "none" && fillNoneUnsupported && !fillNone ? `${f.label} (not supported yet: ${fillNoneMissingIn!.join(", ")})` : f.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {fillNone && (
+              <span id={`${fillId}-hint`} className="text-xs text-muted-foreground">
+                The faces are found as for the other fills but kept as filmed: only the face mesh is drawn on them.
+              </span>
+            )}
+            {fillNone && fillNoneUnsupported && (
+              <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+                {`The Cast Swap engine of ${fillNoneMissingIn!.join(", ")} cannot keep the faces as filmed with only the face mesh yet, and this setting is shared by every environment: choose Blur or Depth colors to save.`}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -385,11 +476,54 @@ export function FaceMaskingEditor({
         </div>
       )}
 
+      {colormapShown && (
+        <div className="flex flex-col gap-1 text-sm sm:w-1/2 sm:pr-1.5">
+          <label htmlFor={modelSizeId} className="font-medium">
+            Depth model
+          </label>
+          <Select
+            value={modelSize}
+            disabled={noModelSizeOffered && modelSize === DEPTH_MODEL_SIZE_DEFAULT}
+            // Large (the default) is no key: a setting without a size is saved exactly as before the choice existed.
+            onValueChange={(s) => set({ depthModelSize: s === DEPTH_MODEL_SIZE_DEFAULT ? undefined : (s as VideoDepthModelSize) })}
+          >
+            <SelectTrigger id={modelSizeId} className="h-9" aria-describedby={`${modelSizeId}-hint`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DEPTH_MODEL_SIZES.map((s) => (
+                <SelectItem key={s} value={s} disabled={!modelSizeOffered(s) && s !== modelSize}>
+                  {MODEL_SIZE_LABELS[s]}
+                  {s === DEPTH_MODEL_SIZE_DEFAULT ? " (default)" : !modelSizeOffered(s) ? " (not supported yet)" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span id={`${modelSizeId}-hint`} className="text-xs text-muted-foreground">
+            {`The size of the model that draws the depth map: Large is the model every clip used until now; Small and Base are smaller models.${offerRoleOutlines ? " Make the face mask again after a change." : ""}`}
+          </span>
+          {modelSizeUnsupported && (
+            <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+              {depthModelSizesMissingIn
+                ? `The Cast Swap engine of ${depthModelSizesMissingIn[modelSize].join(", ")} cannot draw the depth with the ${MODEL_SIZE_LABELS[modelSize]} model yet, and this setting is shared by every environment: choose the default to save.`
+                : `No environment's Cast Swap engine draws the depth with the ${MODEL_SIZE_LABELS[modelSize]} model yet: the engine is out of date.`}
+            </span>
+          )}
+          {!modelSizeUnsupported && noModelSizeOffered && (
+            <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+              {depthModelSizesMissingIn
+                ? `The Cast Swap engine of ${modelSizeLacking.join(", ")} cannot draw the depth with other model sizes yet, and this setting is shared by every environment.`
+                : "No environment's Cast Swap engine draws the depth with other model sizes yet: the engine is out of date."}
+            </span>
+          )}
+        </div>
+      )}
+
       {depthBlurShown && (
         <div className="flex flex-col gap-1 sm:w-1/2 sm:pr-1.5">
           <NumberField
             label="Depth blur"
-            help={`Blurs the depth map before its colours and the face mesh are drawn on it. 0 is off; the number is the blur's strength at 1080p (it scales with the clip's height), ${DEPTH_BLUR_BOUNDS.min}–${DEPTH_BLUR_BOUNDS.max}.`}
+            help={`Blurs the ${blurred} before its colours and the face mesh are drawn on it. 0 is off; the number is the blur's strength at 1080p (it scales with the clip's height), ${DEPTH_BLUR_BOUNDS.min}–${DEPTH_BLUR_BOUNDS.max}.`}
             value={depthBlur}
             placeholder={DEPTH_BLUR_BOUNDS.min}
             bounds={[DEPTH_BLUR_BOUNDS.min, DEPTH_BLUR_BOUNDS.max]}
@@ -400,7 +534,7 @@ export function FaceMaskingEditor({
           />
           {depthBlurUnsupported && (
             <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
-              {`The Cast Swap engine of ${depthBlurMissingIn!.join(", ")} cannot blur the depth map yet, and this setting is shared by every environment${depthBlurOn ? ": set it to 0 to save" : ""}.`}
+              {`The Cast Swap engine of ${blurMissingIn!.join(", ")} cannot blur the ${blurred} yet, and this setting is shared by every environment${depthBlurOn ? ": set it to 0 to save" : ""}.`}
             </span>
           )}
         </div>
@@ -416,7 +550,8 @@ export function FaceMaskingEditor({
             <Checkbox
               id={faceMeshId}
               checked={meshOn}
-              disabled={meshUnsupported && !meshOn}
+              // None draws only the face mesh: it cannot be turned off while None is the fill.
+              disabled={(meshUnsupported && !meshOn) || (fillNone && meshOn)}
               aria-describedby={`${faceMeshId}-hint`}
               // Off removes the key (and what the mesh draws): a setting without the mesh is saved exactly as before it existed.
               onCheckedChange={(checked) => set(checked === true ? { faceMesh: true } : { faceMesh: undefined, faceMeshParts: undefined })}
@@ -426,8 +561,9 @@ export function FaceMaskingEditor({
             </label>
           </div>
           <span id={`${faceMeshId}-hint`} className="text-xs text-muted-foreground">
-            Draws thin face lines (mesh, lips, eyes) on the {source === "full-depth" ? "faces in the depth clip" : "masked heads"} so the video model keeps the mouth
-            movements and the blinks (it costs a little more).
+            Draws thin face lines (mesh, lips, eyes) on the {source === "full-depth" ? "faces in the depth clip" : fillNone ? "faces found, kept as filmed" : "masked heads"} so the
+            video model keeps the mouth movements and the blinks (it costs a little more).
+            {fillNone && meshOn ? " The fill None draws only the face mesh, so it stays on: choose Blur or Depth colors to turn it off." : ""}
           </span>
           {meshUnsupported && (
             <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
@@ -542,7 +678,7 @@ export function FaceMaskingEditor({
           <div className="grid gap-3 sm:grid-cols-2">
             <NumberField
               label={`Smallest ${word} height (%)`}
-              help={keepPeople ? "Only people at least this tall are kept as filmed." : "Only faces at least this tall are covered."}
+              help={keepPeople ? "Only people at least this tall are kept as filmed." : fillNone ? "Only faces at least this tall get the face mesh." : "Only faces at least this tall are covered."}
               value={value?.minFaceHeightPct}
               placeholder={FACE_MASKING_DEFAULTS.minFaceHeightPct}
               bounds={FACE_MASKING_BOUNDS.faceHeightPct}
@@ -584,7 +720,7 @@ export function FaceMaskingEditor({
             <p className="text-xs text-muted-foreground">
               {keepPeople
                 ? `A person centred inside a margin becomes depth with the rest. Left empty: ${FACE_MASKING_DEFAULTS.zone.leftPct} % at the left and right (the default), so people at the edges of the frame are not kept.`
-                : `A face centred inside a margin is left as it is. Left empty: ${FACE_MASKING_DEFAULTS.zone.leftPct} % at the left and right (the default), so people at the edges of the frame are not covered.`}
+                : `A face centred inside a margin is left as it is. Left empty: ${FACE_MASKING_DEFAULTS.zone.leftPct} % at the left and right (the default), so people at the edges of the frame ${fillNone ? "do not get the face mesh" : "are not covered"}.`}
             </p>
             <div className="flex min-h-11 items-center gap-2 text-sm">
               <Checkbox
@@ -592,7 +728,13 @@ export function FaceMaskingEditor({
                 checked={noMargins}
                 onCheckedChange={(checked) => set({ zone: checked === true ? null : undefined })}
               />
-              <label htmlFor={noMarginsId}>{keepPeople ? "No margins: keep people anywhere in the frame" : "No margins: cover faces anywhere in the frame"}</label>
+              <label htmlFor={noMarginsId}>
+                {keepPeople
+                  ? "No margins: keep people anywhere in the frame"
+                  : fillNone
+                    ? "No margins: draw the face mesh on faces anywhere in the frame"
+                    : "No margins: cover faces anywhere in the frame"}
+              </label>
             </div>
             {!noMargins && (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

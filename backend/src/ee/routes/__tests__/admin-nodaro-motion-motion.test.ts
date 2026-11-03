@@ -218,6 +218,25 @@ describe("PUT /v1/admin/nodaro-motion/motion", () => {
     expect((await put({ "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "full" } } })).statusCode).toBe(200)
   })
 
+  it("refuses the fill none and a depth fill's blur on Faces hidden (the Precise setting's alone), writing nothing", async () => {
+    h.envs = [envRow("production", { ...HIDES, faceMesh: true, maskFillNone: true, depthFillBlur: true }), envRow("staging", { ...HIDES, faceMesh: true, maskFillNone: true, depthFillBlur: true })]
+    const none = await put({ "motion-pulse": { masking: { mode: "auto", fill: "none", faceMesh: true } } })
+    expect(none.statusCode).toBe(400)
+    expect(none.json().error).toMatchObject({ code: "validation_error", message: expect.stringMatching(/^motion\.motion-pulse\.masking\.fill: The fill "none" .* is the Precise setting's alone/) })
+    const blur = await put({ "motion-prism": { masking: { mode: "always", fill: "depth", depthBlur: 12 } } })
+    expect(blur.statusCode).toBe(400)
+    expect(blur.json().error).toMatchObject({ code: "validation_error", message: expect.stringMatching(/depthBlur: A blur on the depth fill is the Precise setting's alone/) })
+    expect(h.upserts).toEqual([])
+    // Not refused where nothing is read: a blur of 0 on a depth fill, a "none" left under Full depth, a Full depth blur.
+    for (const masking of [
+      { mode: "always", fill: "depth", depthBlur: 0 },
+      { mode: "always", source: "full-depth", fill: "none" },
+      { mode: "always", fill: "blur", depthBlur: 12 },
+    ]) {
+      expect((await put({ "motion-prism": { masking } })).statusCode, JSON.stringify(masking)).toBe(200)
+    }
+  })
+
   it("refuses a depth blur past 40, below 0 or not whole, and an unknown part, writing nothing", async () => {
     for (const masking of [
       { mode: "always", source: "full-depth", depthBlur: 41 },
@@ -229,6 +248,25 @@ describe("PUT /v1/admin/nodaro-motion/motion", () => {
       expect(res.statusCode, JSON.stringify(masking)).toBe(400)
     }
     expect(h.upserts).toEqual([])
+  })
+
+  it("takes a masking that names a depth model size only while every environment's engine draws with that size", async () => {
+    const SIZES = { ...HIDES, depthModelSizes: ["small", "base", "large"] }
+    h.envs = [envRow("production", SIZES), envRow("staging", SIZES)]
+    const motion = {
+      "motion-prism": { masking: { mode: "always", source: "full-depth", depthModelSize: "small" } },
+      "motion-pulse": { masking: { mode: "always", fill: "depth", depthModelSize: "base" } },
+    }
+    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion } })).statusCode).toBe(200)
+    h.envs = [envRow("production", SIZES), envRow("staging", { ...HIDES, depthModelSizes: ["small"] })]
+    const res = await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion } })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: ["staging"], message: expect.stringMatching(/small or base depth model/) })
+    expect(h.upserts).toHaveLength(1)
+    // A size that changes no render (large, a blur fill) asks no engine.
+    h.envs = []
+    const same = { "motion-prism": { masking: { mode: "always", source: "full-depth", depthModelSize: "large" } }, "motion-pulse": { masking: { mode: "always", depthModelSize: "small" } } }
+    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { motion: same } })).statusCode).toBe(200)
   })
 
   it("takes Full depth's description + original scene only while every environment's engine lists it", async () => {

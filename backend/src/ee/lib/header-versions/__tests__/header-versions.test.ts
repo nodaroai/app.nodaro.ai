@@ -65,14 +65,15 @@ function fakeGitHub(world: World) {
   return { github, calls }
 }
 
-/** Each site's own file, by host; a host not listed answers the SPA shell. */
+/** Each site's own files: `host` its shell-version.json, `host/<file>` any other; anything not listed answers the SPA shell. */
 function sites(files: Record<string, string>) {
   const asked: string[] = []
   const fetch: FetchLike = async (url) => {
     // https://<host>/<path>?t=… → host and path.
-    const [host = "", ...path] = url.replace(/^https:\/\//, "").split("?")[0]!.split("/")
-    asked.push(`${host}/${path.join("/")}`)
-    const body = files[host]
+    const [host = "", ...parts] = url.replace(/^https:\/\//, "").split("?")[0]!.split("/")
+    const path = parts.join("/")
+    asked.push(`${host}/${path}`)
+    const body = files[`${host}/${path}`] ?? (path === "shell-version.json" ? files[host] : undefined)
     return body === undefined ? new Response("<!doctype html><title>Nodaro.ai</title>", { headers: { "content-type": "text/html" } }) : new Response(body)
   }
   return { fetch, asked }
@@ -140,6 +141,8 @@ describe("createHeaderVersions", () => {
         standing: "behind",
         releasesBehind: 1,
       },
+      // The site does not say where its worlds row leads.
+      worlds: { status: "not_reported" },
     })
     // A newer staging deploy is still building: the site serves the last success, and says so.
     expect(tools?.sites.staging.result).toMatchObject({ status: "ok", version: "0.13.0", standing: "newest", deploy: { sha: "tStaging1", deploying: true } })
@@ -283,7 +286,9 @@ describe("createHeaderVersions", () => {
     expect(report.products[0]?.sites.production.result).toEqual({ status: "ok", version: "0.12.0", header: false, source: "site-file", deploy: null, standing: null, releasesBehind: null })
     expect(report.products[0]?.sites.staging.result).toEqual({ status: "error", message: "next.example.com does not publish /shell-version.json yet." })
     expect(report.products[1]?.sites.production.result).toEqual({ status: "not_configured" })
-    expect(asked.every((url) => url.endsWith("/shell-version.json"))).toBe(true)
+    // Only the sites' own files are asked.
+    expect(asked.length).toBeGreaterThan(0)
+    expect(asked.every((url) => /\/shell-(version|worlds)\.json$/.test(url))).toBe(true)
   })
 
   it("a repository the token cannot see fails its own row only, with a hint", async () => {
@@ -364,7 +369,59 @@ describe("createHeaderVersions", () => {
       worlds: [{ id: "gallery", answer: { status: "answered", code: 404 } }],
     })
     expect(probed).toEqual(["https://example.com/gallery"])
-    expect(asked).toEqual([])
+    // The sites' fetch asks only each site's own file, never a world's address.
+    expect(asked.sort()).toEqual(["next.tools.example.com/shell-worlds.json", "tools.example.com/shell-worlds.json"])
+  })
+
+  it("says where each site's worlds row leads, every address asked once through the probe", async () => {
+    const w = world()
+    w.current = {
+      "nodaroai/shell:docs/header-map.json": JSON.stringify({
+        asOf: "0.13.0",
+        figures: {},
+        worlds: [
+          { id: "gallery", label: "Gallery", href: "https://example.com/gallery", group: "simple" },
+          { id: "editor", label: "Editor", href: "https://editor.example.com", group: "advanced" },
+        ],
+      }),
+    }
+    const { github } = fakeGitHub(w)
+    const { fetch, asked } = sites({
+      "next.tools.example.com/shell-worlds.json": JSON.stringify({ worldsRow: true, worldHrefs: { gallery: "/gallery", editor: "https://next.example.com" } }),
+      // The header's own place for the editor, written another way.
+      "tools.example.com/shell-worlds.json": JSON.stringify({ worldsRow: true, worldHrefs: { editor: "https://EDITOR.example.com/" } }),
+      "app.example.com/shell-worlds.json": JSON.stringify({ worldsRow: false, worldHrefs: { editor: "/" } }),
+      "next.example.com/shell-worlds.json": JSON.stringify({ worldsRow: "no", worldHrefs: {} }),
+    })
+    const probed: string[] = []
+    const probe = async (href: string) => {
+      probed.push(href)
+      return href.startsWith("https://example.com/") ? 404 : 200
+    }
+    const report = await createHeaderVersions({ githubToken: "" }, { github, fetch, probe, products: [APP, TOOLS] }).report({ fresh: false })
+    const [app, tools] = report.products
+    expect(tools?.sites.staging.worlds).toEqual({
+      status: "reported",
+      worldsRow: true,
+      links: [
+        { id: "gallery", href: "https://next.tools.example.com/gallery", own: true, answer: { status: "answered", code: 200 } },
+        { id: "editor", href: "https://next.example.com/", own: true, answer: { status: "answered", code: 200 } },
+      ],
+    })
+    // A world the file leaves out keeps the header's own address.
+    expect(tools?.sites.production.worlds).toEqual({
+      status: "reported",
+      worldsRow: true,
+      links: [
+        { id: "gallery", href: "https://example.com/gallery", own: false, answer: { status: "answered", code: 404 } },
+        { id: "editor", href: "https://editor.example.com/", own: true, answer: { status: "answered", code: 200 } },
+      ],
+    })
+    expect(app?.sites.production.worlds).toEqual({ status: "reported", worldsRow: false, links: [] })
+    expect(app?.sites.staging.worlds).toMatchObject({ status: "invalid", message: expect.stringMatching(/worldsRow/) })
+    // Each place once, however many sites and the header's own list lead to it, however each writes it; never through the sites' fetch.
+    expect([...probed].sort()).toEqual(["https://editor.example.com/", "https://example.com/gallery", "https://next.example.com/", "https://next.tools.example.com/gallery"])
+    expect(asked.filter((ask) => !ask.endsWith(".json"))).toEqual([])
   })
 
   it("a header repository without explanations: the rest of the report is whole", async () => {

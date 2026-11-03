@@ -36,6 +36,7 @@ import {
   faceMaskingZoneSchema,
   loadedEngineDrawsFaceMesh,
   withDepthColormapFor,
+  withDepthModelSizeFor,
   withFaceMeshFor,
   withResolvedZone,
   type FaceMaskingZone,
@@ -541,6 +542,21 @@ export function withoutUnsupportedDepthColormap(composed: ComposedTrendRun): voi
 }
 
 /**
+ * The body's `faceMasking` without `depthModelSize` unless the loaded engine
+ * declares that size (`castSwap.depthModelSizes`, `withDepthModelSizeFor`):
+ * an engine from before the choice gets exactly the body it got before it
+ * existed, and draws with the large model. Publishing holds a trend that
+ * names one back from such an environment (`depthModelSize:<size>`), so only
+ * a draft's test run (or a published one, mid-deploy) gets here. Mutates
+ * `composed.body` (its `faceMasking` is its own copy).
+ */
+export function withoutUnsupportedDepthModelSize(composed: ComposedTrendRun): void {
+  const masking = composed.body.faceMasking
+  if (!masking || !Object.hasOwn(masking, "depthModelSize")) return
+  composed.body.faceMasking = withDepthModelSizeFor(masking, getPluginSupports().castSwap)
+}
+
+/**
  * The body's `steps` kept only when the loaded engine declares
  * `castSwap.steps`, its `clipBody` only when it also declares
  * `castSwap.clipBodySheet` and its `shotList` only when it also declares
@@ -670,7 +686,7 @@ export function withPreparedPreview(composed: ComposedTrendRun): void {
 
 /**
  * Every field the loaded engine does not take, dropped (the stored mask, the
- * prompt parts, the prompt style and scene, the face mesh, the depth colormap, the stored scene
+ * prompt parts, the prompt style and scene, the face mesh, the depth colormap and model size, the stored scene
  * description, the preparation steps, the Pulse audio, the Prism reference
  * audio, the run's `sourceAsset`), and the
  * preview's prepared input clip put on the wire where the engine takes it
@@ -682,6 +698,7 @@ export function withoutUnsupportedFields(composed: ComposedTrendRun): void {
   withoutUnsupportedPromptStyle(composed)
   withoutUnsupportedFaceMesh(composed)
   withoutUnsupportedDepthColormap(composed)
+  withoutUnsupportedDepthModelSize(composed)
   withoutUnsupportedSceneDescription(composed)
   withoutUnsupportedSteps(composed)
   withoutUnsupportedPulseAudio(composed)

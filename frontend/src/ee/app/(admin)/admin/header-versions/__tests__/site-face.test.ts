@@ -23,7 +23,10 @@ const product = (production: SiteResult, staging: SiteResult): ProductView => ({
   label: "p",
   repo: "acme/p",
   icon: null,
-  sites: { production: { host: "p.example.com", url: "https://p.example.com", result: production }, staging: { host: "n.example.com", url: "https://n.example.com", result: staging } },
+  sites: {
+    production: { host: "p.example.com", url: "https://p.example.com", result: production, worlds: { status: "not_reported" } },
+    staging: { host: "n.example.com", url: "https://n.example.com", result: staging, worlds: { status: "not_reported" } },
+  },
 })
 
 describe("siteFace", () => {

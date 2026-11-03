@@ -1,8 +1,8 @@
 import type { SiteWorldId } from "./types"
 
 /**
- * Where the shared header's links go from THIS build — the one module that
- * reads the origins (build-time, like every VITE_*):
+ * Where the shared header's links go from a build, given its origins
+ * (build-time, like every VITE_*):
  *
  *   - VITE_HOME_URL   — the wordmark's target (the home page);
  *   - VITE_TOOLS_URL  — the origin serving Explore and the simple worlds
@@ -15,6 +15,10 @@ import type { SiteWorldId } from "./types"
  * production build needs none of these; a preview points each at its matching
  * preview host. The App is the world on screen: its tab is this page's own
  * `/projects` (no redirect through `/`), so a preview stays on itself.
+ *
+ * No `import.meta.env` here: the build itself (`header-module-plugin.ts`)
+ * runs this too, to publish where the links go (`siteWorldsFile`); the page
+ * passes its build's values (`app-header.tsx`).
  */
 
 export interface SiteEnv {
@@ -23,7 +27,7 @@ export interface SiteEnv {
   readonly studio?: string
 }
 
-type RawEnv = Readonly<Record<string, string | undefined>>
+export type RawEnv = Readonly<Record<string, string | undefined>>
 
 /** An http(s) origin-like base, trimmed and without trailing slashes; anything else → undefined. */
 function base(value: string | undefined): string | undefined {
@@ -37,14 +41,7 @@ function base(value: string | undefined): string | undefined {
   }
 }
 
-/** This build's values, each read by name (Vite inlines them; the Dockerfile sync test finds them so). */
-const BUILD_ENV: RawEnv = {
-  VITE_HOME_URL: import.meta.env.VITE_HOME_URL,
-  VITE_TOOLS_URL: import.meta.env.VITE_TOOLS_URL,
-  VITE_STUDIO_URL: import.meta.env.VITE_STUDIO_URL,
-}
-
-export function readSiteEnv(env: RawEnv = BUILD_ENV): SiteEnv {
+export function readSiteEnv(env: RawEnv): SiteEnv {
   const entries = [
     ["home", base(env.VITE_HOME_URL)],
     ["tools", base(env.VITE_TOOLS_URL)],
@@ -64,11 +61,24 @@ const SIMPLE_WORLDS = [
   ["voice", "/video/voice"],
 ] as const
 
-/** The header's world links for a page on `here` (an origin). */
+/** The header's world links for a page on `here` (an origin; `""`: the page's own, as paths). */
 export function worldHrefsFor(here: string, site: SiteEnv): Partial<Record<SiteWorldId, string>> {
   const simple = site.tools ? Object.fromEntries(SIMPLE_WORLDS.map(([world, path]) => [world, `${site.tools}${path}`])) : {}
   const studio = site.studio ? { studio: `${site.studio}/` } : {}
   return { ...simple, ...studio, app: `${here.replace(/\/+$/, "")}/projects` }
+}
+
+/**
+ * What the built site publishes at `/shell-worlds.json` (read by the admin's
+ * Header versions page): where its worlds row leads — the same links the
+ * header gets, the App's as a path on the site itself — and whether the row
+ * is shown at all (`shown`: the build carries the header; the App never hides
+ * the row). Like `/shell-version.json`'s `header`, that is the build's
+ * answer: a page can still leave the header out at run time
+ * (`sharedHeaderActive()`).
+ */
+export function siteWorldsFile(site: SiteEnv, shown: boolean): string {
+  return `${JSON.stringify({ worldsRow: shown, worldHrefs: shown ? worldHrefsFor("", site) : {} }, null, 2)}\n`
 }
 
 /** The wordmark's target, or undefined for the header's own default. */

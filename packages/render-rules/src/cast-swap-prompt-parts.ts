@@ -20,6 +20,7 @@ export const CAST_SWAP_PROMPT_PART_IDS = [
   "face",
   "depthGuard",
   "faceMesh",
+  "faceMeshFillNone",
   "roleOutlines",
   "person",
   "pet",
@@ -50,6 +51,9 @@ export const CAST_SWAP_PROMPT_PART_PLACEHOLDERS: Readonly<Record<CastSwapPromptP
   depthGuard: ["{video}"],
   // Runs whose clip has the face mesh drawn on it only (`faceMasking.faceMesh`, faces drawn > 0): what the lines mean.
   faceMesh: ["{video}"],
+  // Runs whose Faces hidden fill is "none" only (the faces kept as filmed, the face mesh alone drawn on them): the
+  // mesh line in place of `faceMesh`'s. Listed only when the request carries `maskFill: "none"`.
+  faceMeshFillNone: ["{video}"],
   // Trends whose stored clip has role outlines drawn on it only (`faceMasking.roleOutlines`, a run sent
   // `storedFaceMask.outlines`): which colour is which role. `{outlines}` is the engine's list of them.
   roleOutlines: ["{video}", "{outlines}"],

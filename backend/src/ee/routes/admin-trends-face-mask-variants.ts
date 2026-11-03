@@ -50,7 +50,9 @@ import { withJobSubmissionContext } from "../../lib/job-submission-context.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 import {
   depthColormapSent,
+  depthModelSizeSent,
   engineDrawsDepthColormap,
+  engineDrawsDepthModelSize,
   engineDrawsFaceMesh,
   engineDrawsRoleOutlines,
   faceMeshOn,
@@ -275,6 +277,11 @@ export function registerTrendFaceMaskVariantRoutes(app: FastifyInstance, deps: T
       if (colormap !== undefined && !engineDrawsDepthColormap(castSwap, colormap)) {
         return err(reply, 503, "engine_unsupported", `This environment's Cast Swap engine cannot draw the depth in ${colormap} yet: person masks of a trend that uses it are made where it can.`)
       }
+      // The depth model size likewise: a person mask's depth fill is drawn with the base's model.
+      const modelSize = depthModelSizeSent(draft.faceMasking)
+      if (modelSize !== undefined && !engineDrawsDepthModelSize(castSwap, modelSize)) {
+        return err(reply, 503, "engine_unsupported", `This environment's Cast Swap engine cannot draw the depth with the ${modelSize} depth model yet: person masks of a trend that uses it are made where it can.`)
+      }
       if (state.baseProblem === "no_raw_mask" || !reusableFaceMaskBase(draft, castSwap.faceMaskRecipe)) {
         return err(reply, 409, "no_raw_mask", "The approved face mask kept no copy from before its marks: make the face mask again first.")
       }
@@ -430,6 +437,11 @@ export function registerTrendFaceMaskVariantRoutes(app: FastifyInstance, deps: T
           const colormap = depthColormapSent(pruned.data.faceMasking)
           if (colormap !== undefined && !engineDrawsDepthColormap(castSwap, colormap)) {
             await fail(job, `This environment's Cast Swap engine cannot draw the depth in ${colormap}: make the person masks where it can.`)
+            continue
+          }
+          const modelSize = depthModelSizeSent(pruned.data.faceMasking)
+          if (modelSize !== undefined && !engineDrawsDepthModelSize(castSwap, modelSize)) {
+            await fail(job, `This environment's Cast Swap engine cannot draw the depth with the ${modelSize} depth model: make the person masks where it can.`)
             continue
           }
           // Filled as the base was; with role outlines, ringed for the people it still covers only (those

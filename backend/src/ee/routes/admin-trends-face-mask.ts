@@ -38,6 +38,9 @@
  * what is drawn, `depthColormapSent`) is held back unless the loaded engine
  * declares that map (`castSwap.depthColormaps`): an older one's make strips
  * the key and would store the default render under the map's settings key.
+ * A depth model size (`depthModelSize`, decided 2026-11-02; only when it
+ * changes the render, `depthModelSizeSent`) likewise, unless the engine
+ * declares that size (`castSwap.depthModelSizes`).
  *
  * The scene description step (`steps.sceneDescription`): a make that
  * describes the clip (full depth, on an engine that stores a scene
@@ -80,6 +83,7 @@ import { supabase } from "../../lib/supabase.js"
 import { deriveJobSource } from "../../lib/job-source.js"
 import {
   depthColormapSent,
+  depthModelSizeSent,
   faceMaskMarksOf,
   faceMaskTargetOf,
   faceMaskingOn,
@@ -87,6 +91,7 @@ import {
   faceMaskingSourceOf,
   faceMeshOn,
   loadedEngineDrawsDepthColormap,
+  loadedEngineDrawsDepthModelSize,
   loadedEngineDrawsFaceMesh,
   loadedEngineDrawsRoleOutlines,
   loadedEngineMasksTarget,
@@ -312,6 +317,11 @@ export function registerTrendFaceMaskRoutes(app: FastifyInstance, deps: TrendFac
       const colormap = depthColormapSent(draft.faceMasking)
       if (colormap !== undefined && !loadedEngineDrawsDepthColormap(colormap)) {
         return err(reply, 503, "engine_unsupported", `This environment's Cast Swap engine cannot draw the depth in ${colormap} yet: choose the default colormap, or wait for the engine.`)
+      }
+      // A depth model size likewise: its make would draw with the large model under the size's settings key.
+      const modelSize = depthModelSizeSent(draft.faceMasking)
+      if (modelSize !== undefined && !loadedEngineDrawsDepthModelSize(modelSize)) {
+        return err(reply, 503, "engine_unsupported", `This environment's Cast Swap engine cannot draw the depth with the ${modelSize} depth model yet: choose the default (large), or wait for the engine.`)
       }
       const settingsKey = faceMaskSettingsKey(draft)!
       // Full depth on an engine that describes the original clip as it makes it: the roles to name

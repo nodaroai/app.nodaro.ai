@@ -14,6 +14,7 @@ import {
   SITE_HEADER_ID,
   SITE_LOCALE_ID,
   SITE_VERSION_FILE,
+  SITE_WORLDS_FILE,
   siteHeaderDecision,
   siteHeaderModule,
 } from "../header-module-plugin"
@@ -145,9 +146,38 @@ describe("the site's shell-version.json", () => {
       const p = plugin(installed, env)
       await runConfig(p, "build")
       const files = emitted(p)
-      expect(files.map((f) => [f.type, f.fileName])).toEqual([["asset", SITE_VERSION_FILE]])
+      expect(files.map((f) => [f.type, f.fileName])).toEqual([
+        ["asset", SITE_VERSION_FILE],
+        ["asset", SITE_WORLDS_FILE],
+      ])
       expect(JSON.parse(files[0]?.source ?? "")).toEqual(expected)
     }
+  })
+
+  it("beside it, where the worlds row leads: the build's own origins, the App's tab on the site itself", async () => {
+    const worlds = async (installed: boolean, env: Record<string, string>) => {
+      const p = plugin(installed, env)
+      await runConfig(p, "build")
+      return JSON.parse(emitted(p).find((f) => f.fileName === SITE_WORLDS_FILE)?.source ?? "null")
+    }
+    expect(await worlds(true, { ...ON, VITE_TOOLS_URL: "https://next.tools.example", VITE_STUDIO_URL: "https://studio.example" })).toEqual({
+      worldsRow: true,
+      worldHrefs: {
+        explore: "https://next.tools.example/explore",
+        image: "https://next.tools.example/image",
+        video: "https://next.tools.example/video",
+        music: "https://next.tools.example/music",
+        trends: "https://next.tools.example/trends",
+        motion: "https://next.tools.example/video/cast-swap",
+        voice: "https://next.tools.example/video/voice",
+        studio: "https://studio.example/",
+        app: "/projects",
+      },
+    })
+    // No origins set: the header keeps its own for the rest.
+    expect(await worlds(true, ON)).toEqual({ worldsRow: true, worldHrefs: { app: "/projects" } })
+    // A site that does not show the header shows no row.
+    expect(await worlds(true, { VITE_EDITION: "cloud", VITE_TOOLS_URL: "https://next.tools.example" })).toEqual({ worldsRow: false, worldHrefs: {} })
   })
 
   it("no other build, and no dev server, writes one", async () => {

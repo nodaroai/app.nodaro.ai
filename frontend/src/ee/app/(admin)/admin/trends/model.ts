@@ -35,7 +35,7 @@ import {
   type TrendPromptBudget,
   type TrendPromptSource,
 } from "@nodaro/render-rules"
-import { clipPreparationIssues, clipPreparationName, clipPreparationOf, depthColormapSaved, roleOutlinesOn } from "./clip-preparation"
+import { clipPreparationIssues, clipPreparationName, clipPreparationOf, depthBlurKindOf, depthColormapSaved, depthModelSizeSaved, roleOutlinesOn } from "./clip-preparation"
 import { FULL_DEPTH_SCENES } from "./prompt-style"
 import { normaliseShotList } from "./shot-list"
 import type {
@@ -286,8 +286,12 @@ export function cleanMasking(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
     // The depth colormap: only where it changes what is drawn (`depthColormapSaved`: depth drawn, not the
     // source's default, not under role outlines); else no key, as before the choice existed.
     ...(depthColormapSaved(m) ? { depthColormap: depthColormapSaved(m) } : {}),
-    // The depth blur: Full depth only, a whole number above 0 (0, or another preparation, is no key, as before it existed).
-    ...(clipPreparationOf(m) === "full-depth" && num(m.depthBlur) && m.depthBlur! > 0 ? { depthBlur: m.depthBlur } : {}),
+    // The depth model size: only where it changes the render (`depthModelSizeSaved`: depth drawn, not large;
+    // role outlines or not); else no key, as before the choice existed.
+    ...(depthModelSizeSaved(m) ? { depthModelSize: depthModelSizeSaved(m) } : {}),
+    // The depth blur: Full depth, or a Faces hidden depth fill, a whole number above 0 (0, or where no depth is drawn,
+    // is no key, as before it existed).
+    ...(depthBlurKindOf(m) !== null && num(m.depthBlur) && m.depthBlur! > 0 ? { depthBlur: m.depthBlur } : {}),
     // What the face mesh draws: only with the mesh on and not the full mesh (the default, no key), never with Keep people.
     ...(m.faceMesh === true && clipPreparationOf(m) !== "keep-people" && m.faceMeshParts && m.faceMeshParts !== "full" ? { faceMeshParts: m.faceMeshParts } : {}),
     // The trend's face mask marks, kept as they are (none = no key, as before marks existed).
@@ -608,6 +612,17 @@ export function maskingIssues(m: AdminTrendFaceMasking): string[] {
   // Keep people has no fill (outside the people is always depth): no blur strength either.
   if (clipPreparationOf(m) !== "keep-people" && maskingUsesBlur(m) && outside(m.blurStrengthPct, blurStrengthPct)) out.push(`Face masking: the blur strength is ${range(blurStrengthPct)} %.`)
   if (outside(m.threshold, threshold)) out.push(`Face masking: the detection threshold is ${range(threshold)}.`)
+  // A depth fill's depth blur (Admin → Nodaro Motion), as Full depth's.
+  if (depthBlurKindOf(m) === "depth-fill") {
+    const { min, max } = CAST_SWAP_DEPTH_BLUR_BOUNDS
+    if (m.depthBlur !== undefined && !(Number.isInteger(m.depthBlur) && m.depthBlur >= min && m.depthBlur <= max)) {
+      out.push(`Face masking: the depth blur is a whole number from ${min} to ${max}.`)
+    }
+  }
+  // The fill "None" (Admin → Nodaro Motion) keeps the faces as filmed: only the face mesh changes anything.
+  if (clipPreparationOf(m) === "faces" && m.fill === "none" && m.faceMesh !== true) {
+    out.push('Face masking: the fill "None" draws only the face mesh, so it needs the face mesh on.')
+  }
   return out
 }
 
@@ -645,6 +660,11 @@ function prismReferenceAudioNeedLabel(need: string): string | undefined {
 /** A `depthColormap:<map>` need's label ("the depth colormap inferno"), else undefined. */
 function depthColormapNeedLabel(need: string): string | undefined {
   return need.startsWith("depthColormap:") ? `the depth colormap ${need.slice("depthColormap:".length)}` : undefined
+}
+
+/** A `depthModelSize:<size>` need's label ("the small depth model"), else undefined. */
+function depthModelSizeNeedLabel(need: string): string | undefined {
+  return need.startsWith("depthModelSize:") ? `the ${need.slice("depthModelSize:".length)} depth model` : undefined
 }
 
 /** One publish blocker as a sentence ("production: pet slots not supported yet"). */
@@ -696,7 +716,7 @@ export function describeBlocker(r: TrendPublishBlocker): string {
       return `${r.env ?? "?"}: engine not reported yet`
     case "engine_unsupported": {
       const need = r.need ?? "?"
-      return `${r.env ?? "?"}: ${NEED_LABELS[need] ?? depthColormapNeedLabel(need) ?? prismReferenceAudioNeedLabel(need) ?? need} not supported yet`
+      return `${r.env ?? "?"}: ${NEED_LABELS[need] ?? depthColormapNeedLabel(need) ?? depthModelSizeNeedLabel(need) ?? prismReferenceAudioNeedLabel(need) ?? need} not supported yet`
     }
     default:
       return r.message ?? r.code

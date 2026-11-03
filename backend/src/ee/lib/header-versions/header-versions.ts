@@ -9,9 +9,10 @@ import { HEADER_REPO, parseHeaderProducts, type HeaderProduct, type ParsedProduc
 import { releasesOf, type Release } from "./read-version.js"
 import { createReleaseNotes, type ReleaseNotes, type SiteVersion } from "./release-notes.js"
 import { createReleaseSummaries, type Summarize } from "./release-summary.js"
-import type { HeaderVersionsReport, HeaderVersionsService, LatestResult, ProductView, ReleaseNotesResult, SiteResult, SiteView } from "./report-types.js"
+import type { HeaderVersionsReport, HeaderVersionsService, LatestResult, ProductView, ReleaseNotesResult, SiteResult, SiteView, SiteWorlds, WorldLink } from "./report-types.js"
 import { failure, ranked, readLockfileSite, readSiteFileSite } from "./site-readings.js"
-import { probeLink, type ProbeLink } from "./world-links.js"
+import { readWorldsFile, siteWorlds } from "./site-worlds.js"
+import { askOnce, probeLink, type AskLink, type ProbeLink } from "./world-links.js"
 
 export type {
   DeployView,
@@ -24,6 +25,7 @@ export type {
   ReleaseNotesResult,
   SiteResult,
   SiteView,
+  SiteWorlds,
   Standing,
   VersionSource,
 } from "./report-types.js"
@@ -39,7 +41,8 @@ export { ranked } from "./site-readings.js"
  * `github.ts`); what never changes is kept: a file at a commit, the commits
  * between two release tags, and a release's plain summary. The header's own
  * explanations are read as they stand on each build too, and its worlds'
- * addresses asked (`header-map.ts`).
+ * addresses asked (`header-map.ts`), with where each site's worlds row leads,
+ * as the site says (`site-worlds.ts`): every address once per build.
  */
 
 const REPORT_TTL_MS = 60_000
@@ -93,23 +96,38 @@ async function siteFileResult(src: Sources, product: HeaderProduct, environment:
   return readSiteFileSite(src, product, host, deployed, refusal)
 }
 
-async function siteView(src: Sources, product: HeaderProduct, environment: SiteEnvironment, listing: Listing): Promise<SiteView> {
-  const host = product.hosts[environment]
-  const view = (result: SiteResult): SiteView => ({ host, url: `https://${host}`, result })
+async function siteResult(src: Sources, product: HeaderProduct, environment: SiteEnvironment, listing: Listing): Promise<SiteResult> {
   try {
-    if (product.source === "site-file") return view(await siteFileResult(src, product, environment, listing))
-    if (!src.files) return view({ status: "not_configured" })
-    if (listing.refusal) return view(listing.refusal)
+    if (product.source === "site-file") return await siteFileResult(src, product, environment, listing)
+    if (!src.files) return { status: "not_configured" }
+    if (listing.refusal) return listing.refusal
     const deployed = await liveOf(src, product, environment, listing)
-    return view(deployed ? await readLockfileSite(src.files, product, deployed) : { status: "no_deploy" })
+    return deployed ? await readLockfileSite(src.files, product, deployed) : { status: "no_deploy" }
   } catch (error) {
-    return view(failure(error, `${host}'s header version`))
+    return failure(error, `${product.hosts[environment]}'s header version`)
   }
 }
 
-async function productView(src: Sources, product: HeaderProduct): Promise<ProductView> {
+/** One build's way to the worlds: each address asked once, and the header's list of worlds once it is read (`null`: unknown). */
+interface WorldsContext {
+  readonly ask: AskLink
+  readonly list: Promise<readonly WorldLink[] | null>
+}
+
+async function siteWorldsOf(src: Sources, host: string, worlds: WorldsContext): Promise<SiteWorlds> {
+  const file = await readWorldsFile(src.fetch, src.now, host)
+  return siteWorlds(file, await worlds.list, worlds.ask)
+}
+
+async function siteView(src: Sources, product: HeaderProduct, environment: SiteEnvironment, listing: Listing, worlds: WorldsContext): Promise<SiteView> {
+  const host = product.hosts[environment]
+  const [result, leads] = await Promise.all([siteResult(src, product, environment, listing), siteWorldsOf(src, host, worlds)])
+  return { host, url: `https://${host}`, result, worlds: leads }
+}
+
+async function productView(src: Sources, product: HeaderProduct, worlds: WorldsContext): Promise<ProductView> {
   const listing = await listDeployments(src, product.repo)
-  const [production, staging] = await Promise.all([siteView(src, product, "production", listing), siteView(src, product, "staging", listing)])
+  const [production, staging] = await Promise.all([siteView(src, product, "production", listing, worlds), siteView(src, product, "staging", listing, worlds)])
   return { id: product.id, label: product.label, repo: product.repo, icon: product.icon, sites: { production, staging } }
 }
 
@@ -148,11 +166,14 @@ async function headerPackage(src: Sources): Promise<string | null> {
 }
 
 async function build(src: Sources): Promise<HeaderVersionsReport> {
+  const ask = askOnce(src.probe)
+  const map = readHeaderMap(src.github, ask)
+  const worlds: WorldsContext = { ask, list: map.then((read) => (read.status === "ok" ? read.worlds : null)) }
   const [{ latest, releases }, views, packageName, headerMap] = await Promise.all([
     headerReleases(src),
-    Promise.all(src.products.products.map((product) => productView(src, product))),
+    Promise.all(src.products.products.map((product) => productView(src, product, worlds))),
     headerPackage(src),
-    readHeaderMap(src.github, src.probe),
+    map,
   ])
   const release = latest.status === "ok" ? latest.version : null
   const versions = releases.map((r) => r.version)

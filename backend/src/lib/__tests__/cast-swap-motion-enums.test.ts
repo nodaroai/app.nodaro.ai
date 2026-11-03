@@ -51,9 +51,9 @@ describe("Nodaro Motion enums", () => {
     expect(isMainFaceMaskMark({ label: { slot: "guest" } })).toBe(false)
   })
 
-  it("the 17 prompt parts, in the engine's assembly order (Flex's art style right after the opener, the face mesh after the depth guard, the role outlines after the mesh)", () => {
+  it("the 18 prompt parts, in the engine's assembly order (Flex's art style right after the opener, the face mesh after the depth guard, the fill-none mesh line right after it, the role outlines after them)", () => {
     expect(CAST_SWAP_PROMPT_PART_IDS).toEqual([
-      "opener", "artStyle", "original", "scene", "quality", "keep", "audio", "face", "depthGuard", "faceMesh", "roleOutlines",
+      "opener", "artStyle", "original", "scene", "quality", "keep", "audio", "face", "depthGuard", "faceMesh", "faceMeshFillNone", "roleOutlines",
       "person", "pet", "product", "location", "avoid", "postHeader",
     ])
   })
@@ -70,6 +70,7 @@ describe("Nodaro Motion enums", () => {
       face: [],
       depthGuard: ["{video}"],
       faceMesh: ["{video}"],
+      faceMeshFillNone: ["{video}"],
       roleOutlines: ["{video}", "{outlines}"],
       person: ["{name}", "{image}", "{face}", "{outfit}", "{body}", "{hair}"],
       pet: ["{name}", "{image}", "{body}", "{coat}"],

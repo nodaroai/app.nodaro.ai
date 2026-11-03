@@ -158,7 +158,17 @@ export interface AdminJob {
   readonly provider_cost: number | null
   readonly display_cost: number | null
   readonly error_message: string | null
+  /**
+   * In a list row, the job's `type` only (`GET /v1/admin/jobs` keeps the rows
+   * light). The whole input comes from `useAdminJobDetail`.
+   */
   readonly input_data: Record<string, unknown> | null
+  /**
+   * In a list row, a preview: the output's web addresses where they sit, plus
+   * `thumbnailUrl` / `imageUrl` and the start of `generatedText` / `text` /
+   * `result` — what a gallery tile reads. The whole output comes from
+   * `useAdminJobDetail`.
+   */
   readonly output_data: Record<string, unknown> | null
   readonly created_at: string
   readonly started_at: string | null
@@ -616,6 +626,34 @@ export function useAdminJobsInfinite(
     enabled: hasAdmin() && (options.enabled ?? true),
     staleTime: 15_000,
     refetchOnWindowFocus: false,
+  })
+}
+
+/** What the detail view reads of one job that a list row leaves out. */
+export interface AdminJobDetail {
+  readonly input_data: Record<string, unknown> | null
+  readonly output_data: Record<string, unknown> | null
+}
+
+/** One job, whole (`GET /v1/admin/jobs/:jobId`): its full input and output. */
+export async function fetchAdminJobDetail(jobId: string): Promise<AdminJobDetail> {
+  const res = await fetch(`/v1/admin/jobs/${encodeURIComponent(jobId)}`, { headers: await getAuthHeaders() })
+  if (!res.ok) throw await adminError(res, "Failed to load the job")
+  const body = (await res.json()) as { data: { input_data?: Record<string, unknown> | null; output_data?: Record<string, unknown> | null } }
+  return { input_data: body.data.input_data ?? null, output_data: body.data.output_data ?? null }
+}
+
+/**
+ * The full input and output of the job the detail view shows, read each time
+ * it opens (`job` null holds the read): the list's rows carry only previews.
+ * The cache is keyed by the row's status and completion time, so a job the
+ * list now shows as finished never opens on the output it had before.
+ */
+export function useAdminJobDetail(job: Pick<AdminJob, "id" | "status" | "completed_at"> | null) {
+  return useQuery({
+    queryKey: queryKeys.admin.job(job?.id ?? "", job?.status ?? "", job?.completed_at ?? null),
+    queryFn: () => fetchAdminJobDetail(job!.id),
+    enabled: hasAdmin() && job !== null,
   })
 }
 

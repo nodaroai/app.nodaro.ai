@@ -46,7 +46,12 @@ import type { SiteAccountPage, SiteHeaderHandle, SiteHeaderLanguage, SiteHeaderT
 
 /** The app's own phone/desktop switch (Tailwind `md`). */
 const PHONE_BREAKPOINT = 768
-const SITE = readSiteEnv()
+/** This build's origins, each read by name (Vite inlines them; the Dockerfile sync test finds them so). */
+const SITE = readSiteEnv({
+  VITE_HOME_URL: import.meta.env.VITE_HOME_URL,
+  VITE_TOOLS_URL: import.meta.env.VITE_TOOLS_URL,
+  VITE_STUDIO_URL: import.meta.env.VITE_STUDIO_URL,
+})
 
 /**
  * The header takes the SDK's FULL client (`NodaroClient`, every resource),

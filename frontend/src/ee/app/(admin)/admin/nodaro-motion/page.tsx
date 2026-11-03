@@ -62,9 +62,12 @@ import { prismReferenceAudioModesEveryEngineTakes, prismReferenceAudioTriple } f
 import { maskingIssues } from "../trends/model"
 import {
   environmentsThatCannotBlurDepth,
+  environmentsThatCannotBlurDepthFill,
   environmentsThatCannotDrawColormaps,
+  environmentsThatCannotDrawModelSizes,
   environmentsThatCannotDrawFaceMesh,
   environmentsThatCannotDrawFaceMeshParts,
+  environmentsThatCannotFillNone,
   environmentsThatCannotForceStyle,
   environmentsThatCannotHideBodies,
 } from "../trends/clip-preparation"
@@ -104,9 +107,15 @@ export default function AdminNodaroMotionPage() {
   const faceMeshMissingIn = environmentsThatCannotDrawFaceMesh(envs.data)
   // The depth colormaps likewise: each offered only once every environment's engine draws it.
   const depthColormapsMissingIn = environmentsThatCannotDrawColormaps(envs.data)
+  // The depth model sizes likewise (Precise and Motion alike).
+  const depthModelSizesMissingIn = environmentsThatCannotDrawModelSizes(envs.data)
   // The Motion column's depth blur and face mesh parts likewise (a Cast Swap engine from 0.430.0 declares them).
   const depthBlurMissingIn = environmentsThatCannotBlurDepth(envs.data)
   const faceMeshPartsMissingIn = environmentsThatCannotDrawFaceMeshParts(envs.data)
+  // The Precise column's fill None (the faces as filmed, the face mesh alone) and a depth fill's blur, likewise
+  // (the Motion column never offers them: a direct Motion run does not draw them).
+  const fillNoneMissingIn = environmentsThatCannotFillNone(envs.data)
+  const depthFillBlurMissingIn = environmentsThatCannotBlurDepthFill(envs.data)
   const saveMotion = useSaveNodaroMotionMotion()
   const pulseQuery = useNodaroMotionPulseAudio()
   const savePulse = useSaveNodaroMotionPulseAudio()
@@ -248,7 +257,10 @@ export default function AdminNodaroMotionPage() {
                       bodyMissingIn={bodyMissingIn}
                       faceMeshMissingIn={faceMeshMissingIn}
                       depthColormapsMissingIn={depthColormapsMissingIn}
+                      depthModelSizesMissingIn={depthModelSizesMissingIn}
                       faceMeshPartsMissingIn={faceMeshPartsMissingIn}
+                      fillNoneMissingIn={fillNoneMissingIn}
+                      depthFillBlurMissingIn={depthFillBlurMissingIn}
                       onChange={(m) =>
                         setDraft((d) => {
                           const out = { ...d }
@@ -269,6 +281,7 @@ export default function AdminNodaroMotionPage() {
                         bodyMissingIn={bodyMissingIn}
                         faceMeshMissingIn={faceMeshMissingIn}
                         depthColormapsMissingIn={depthColormapsMissingIn}
+                        depthModelSizesMissingIn={depthModelSizesMissingIn}
                         depthBlurMissingIn={depthBlurMissingIn}
                         faceMeshPartsMissingIn={faceMeshPartsMissingIn}
                         onChange={(entry) => setMotionDraft((d) => ({ ...d, [engine.id]: entry }))}

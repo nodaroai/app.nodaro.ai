@@ -2513,6 +2513,40 @@ describe("the stored face mask", () => {
       expect(mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey).toBe(faceMaskSettingsKey(draftData({ faceMasking: { ...MASKING, fill: "depth" } })))
     })
 
+    it("draws the depth with a chosen model size only on an engine that lists it (refused before anything is paid), sending it", async () => {
+      const SIZED = { ...MASKING, fill: "depth" as const, depthModelSize: "small" as const }
+      const supports = (extra: Record<string, unknown>) =>
+        setPluginSupports({ castSwap: { ...FM_SUPPORTS, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], ...extra } as never })
+      seed({}, draftData({ faceMasking: SIZED }))
+      for (const extra of [{}, { depthModelSizes: ["base", "large"] }]) {
+        supports(extra)
+        const held = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+        expect(held.statusCode, JSON.stringify(extra)).toBe(503)
+        expect(held.json().error).toMatchObject({ code: "engine_unsupported", message: expect.stringMatching(/small depth model/) })
+      }
+      expect(engine.calls).toEqual([])
+
+      supports({ depthModelSizes: ["small", "large"] })
+      const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+      expect(res.statusCode).toBe(202)
+      expect(engine.calls[0]!.body).toEqual({
+        videoUrl: `https://cdn.test/trends/${T1}/src.mp4`,
+        faceMasking: { ...withResolvedZone({ ...MASKING, fill: "depth" }), depthModelSize: "small" },
+      })
+      const key = mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey
+      expect(key).toBe(faceMaskSettingsKey(draftData({ faceMasking: SIZED })))
+      expect(key).not.toBe(faceMaskSettingsKey(draftData({ faceMasking: { ...MASKING, fill: "depth" } })))
+    })
+
+    it("the large depth model (the default) needs no engine support and is sent as no key", async () => {
+      setPluginSupports({ castSwap: { ...FM_SUPPORTS, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions] } as never })
+      seed({}, draftData({ faceMasking: { ...MASKING, fill: "depth", depthModelSize: "large" } }))
+      const res = await call("POST", `/v1/admin/trends/${T1}/face-mask`, { revision: await revisionOf() })
+      expect(res.statusCode).toBe(202)
+      expect(engine.calls[0]!.body).toEqual({ videoUrl: `https://cdn.test/trends/${T1}/src.mp4`, faceMasking: withResolvedZone({ ...MASKING, fill: "depth" }) })
+      expect(mem.trends[0]!.versions[1]!.data.faceMaskJob!.settingsKey).toBe(faceMaskSettingsKey(draftData({ faceMasking: { ...MASKING, fill: "depth" } })))
+    })
+
     it("draws role outlines only on an engine that declares them (refused before anything is paid), sending the flag and the outlines", async () => {
       const lead = { label: { slot: "lead" }, fromFrame: 0, toFrame: 359, leftPct: 0, topPct: 0, rightPct: 50, bottomPct: 100 }
       const OUTLINED = { ...MASKING, roleOutlines: true, marks: [lead] }

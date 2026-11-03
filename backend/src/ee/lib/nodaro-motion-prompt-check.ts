@@ -15,10 +15,10 @@
  * older one is asked exactly as before (its parts follow `style` alone).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
-import { CAST_SWAP_ENGINE_OF_NODARO_MOTION, type CastSwapStyle, type NodaroMotionEngine } from "@nodaro/shared/models"
+import { CAST_SWAP_ENGINE_OF_NODARO_MOTION, CAST_SWAP_FACE_MASKING_DEFAULTS, type CastSwapStyle, type NodaroMotionEngine } from "@nodaro/shared/models"
 import { largeDirectRun, type PromptPartTexts, type PromptPartsAnswer, type PromptPartsRequest } from "../../lib/cast-swap-prompt-parts-contract.js"
 import { directRunDepthLook, directRunDrawsFaceMesh, directRunPromptShape, type NodaroMotionMotionEntry } from "../../lib/nodaro-motion-motion.js"
-import type { FaceMasking } from "../../lib/cast-swap-face-masking.js"
+import { depthColormapSent, faceMeshOn, faceMeshPartsSent, type FaceMasking } from "../../lib/cast-swap-face-masking.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 import { loadedEngineTakesShotList, type CastSwapSteps } from "../../lib/cast-swap-steps.js"
 import { askPromptParts } from "./cast-swap-prompt-parts.js"
@@ -96,4 +96,32 @@ export function directRunPromptPartsInvalid(reply: FastifyReply, problems: reado
       problems,
     },
   })
+}
+
+/** What of an engine's Precise masking setting shapes its direct runs' prompt; null while it masks nothing (off). */
+function promptShapeOf(m: FaceMasking | undefined) {
+  if (!m || m.mode === "off") return null
+  const mesh = faceMeshOn(m)
+  return {
+    mesh,
+    fill: m.fill ?? CAST_SWAP_FACE_MASKING_DEFAULTS.fill,
+    colormap: depthColormapSent(m) ?? null,
+    parts: mesh ? (faceMeshPartsSent(m) ?? null) : null,
+  }
+}
+
+/**
+ * Whether saving `after` over `before` (an engine's Precise masking setting)
+ * may make its direct runs' prompt longer, so the saved prompt overrides are
+ * checked again: the masking turned on, the face mesh turned on, or the fill
+ * (a fill's guard; the fill none's mesh line in place of the masked heads'),
+ * the depth colormap or the face mesh's parts changed. Turning the mesh off,
+ * or the masking off, only shortens it: not checked.
+ */
+export function directRunPromptMayGrow(before: FaceMasking | undefined, after: FaceMasking | undefined): boolean {
+  const a = promptShapeOf(after)
+  if (!a) return false
+  const b = promptShapeOf(before)
+  if (!b) return true
+  return (a.mesh && !b.mesh) || a.fill !== b.fill || a.colormap !== b.colormap || a.parts !== b.parts
 }

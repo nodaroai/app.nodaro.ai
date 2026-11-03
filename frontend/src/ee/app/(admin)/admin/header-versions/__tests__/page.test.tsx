@@ -10,7 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import type { HeaderMapResult, HeaderVersionsReport, ProductView, ReleaseNote, SiteEnvironment, SiteResult } from "../types"
+import type { HeaderMapResult, HeaderVersionsReport, ProductView, ReleaseNote, SiteEnvironment, SiteResult, SiteWorldLink, SiteWorlds } from "../types"
 
 const edition = vi.hoisted(() => ({ cloud: true }))
 vi.mock("@/lib/api", () => ({ getAuthHeaders: async () => ({ Authorization: "Bearer t" }) }))
@@ -47,16 +47,34 @@ const ok = (version: string | null, extra: Partial<Extract<SiteResult, { status:
   ...extra,
 })
 
-const product = (id: string, production: SiteResult, staging: SiteResult, icon: string | null = null): ProductView => ({
+const NOT_REPORTED: SiteWorlds = { status: "not_reported" }
+
+const product = (
+  id: string,
+  production: SiteResult,
+  staging: SiteResult,
+  icon: string | null = null,
+  worlds: Partial<Record<SiteEnvironment, SiteWorlds>> = {},
+): ProductView => ({
   id,
   label: id,
   repo: `acme/${id}`,
   icon,
   sites: {
-    production: { host: `${id}.example.com`, url: `https://${id}.example.com`, result: production },
-    staging: { host: `next.${id}.example.com`, url: `https://next.${id}.example.com`, result: staging },
+    production: { host: `${id}.example.com`, url: `https://${id}.example.com`, result: production, worlds: worlds.production ?? NOT_REPORTED },
+    staging: { host: `next.${id}.example.com`, url: `https://next.${id}.example.com`, result: staging, worlds: worlds.staging ?? NOT_REPORTED },
   },
 })
+
+/** A world's link on a site; `code` null: no answer. */
+const lead = (id: string, href: string, own: boolean, code: number | null): SiteWorldLink => ({
+  id,
+  href,
+  own,
+  answer: code === null ? { status: "no_answer", message: "No answer within 8 seconds." } : { status: "answered", code },
+})
+
+const ROW = (links: SiteWorldLink[]): SiteWorlds => ({ status: "reported", worldsRow: true, links })
 
 const NOTE: ReleaseNote = {
   version: "0.13.0",
@@ -148,12 +166,43 @@ const REPORT: HeaderVersionsReport = {
       ok("0.12.0", { header: false, source: "site-file", standing: "behind", releasesBehind: 1 }),
       ok("0.12.0", { source: "site-file", standing: "behind", releasesBehind: 1 }),
       "workflow",
+      {
+        // Live: only its own tab is its own; the rest keep the header's addresses.
+        production: ROW([
+          lead("gallery", "https://example.com/gallery", false, 404),
+          lead("board", "https://board.example.com", false, 200),
+          lead("slow", "https://slow.example.com", false, null),
+          lead("editor", "https://app.example.com/projects", true, 200),
+        ]),
+        staging: ROW([
+          lead("gallery", "https://next.tools.example.com/gallery", true, 200),
+          lead("board", "https://next.tools.example.com/board", true, 200),
+          lead("slow", "https://slow.example.com", false, null),
+          lead("editor", "https://next.app.example.com/projects", true, 200),
+        ]),
+      },
     ),
-    product("studio", ok("0.6.2", { standing: "behind", releasesBehind: 7 }), ok("0.13.0", { standing: "newest", deploy: deploy("1234567890", { deploying: true }) }), "constructor"),
-    product("tools", ok("0.12.0", { standing: "behind", deploy: deploy("feedface00", { lastFailed: true }) }), { status: "error", message: "GitHub answered 404: Not Found" }),
+    product(
+      "studio",
+      ok("0.6.2", { standing: "behind", releasesBehind: 7 }),
+      ok("0.13.0", { standing: "newest", deploy: deploy("1234567890", { deploying: true }) }),
+      "constructor",
+      { production: { status: "reported", worldsRow: false, links: [] }, staging: { status: "reported", worldsRow: false, links: [] } },
+    ),
+    product("tools", ok("0.12.0", { standing: "behind", deploy: deploy("feedface00", { lastFailed: true }) }), { status: "error", message: "GitHub answered 404: Not Found" }, null, {
+      production: { status: "invalid", message: "/shell-worlds.json does not have the shape this page reads (worldsRow: expected boolean)." },
+    }),
     product("person", { status: "no_deploy" }, ok("^0.12.0", { source: "package-json" })),
-    product("recast", ok("0.8.0", { header: null, source: "pin" }), ok("0.12.0", { header: null, source: "pin" })),
-    product("voice", ok("0.13.0", { standing: "newest" }), ok("0.14.0", { standing: "ahead" })),
+    product("recast", ok("0.8.0", { header: null, source: "pin" }), ok("0.12.0", { header: null, source: "pin" }), null, { production: { status: "no_answer" } }),
+    product("voice", ok("0.13.0", { standing: "newest" }), ok("0.14.0", { standing: "ahead" }), null, {
+      // The same addresses as the App's live site: counted once in the verdict.
+      production: ROW([
+        lead("gallery", "https://example.com/gallery", false, 404),
+        lead("board", "https://board.example.com", false, 200),
+        lead("slow", "https://slow.example.com", false, null),
+        lead("editor", "https://app.example.com/projects", true, 200),
+      ]),
+    }),
   ],
 }
 
@@ -276,8 +325,8 @@ describe("HeaderVersionsPage", () => {
     // The list the header holds, its groups apart.
     expect(within(within(figure).getByRole("list", { name: "Own sites" })).getByText("Editor")).toBeInTheDocument()
     expect(within(figure).getByText("Default: example.com/<place>")).toBeInTheDocument()
-    // Which addresses a product passes is not reported yet: every product says so, none is drawn leading anywhere.
-    expect(within(figure).getAllByText("Not reported yet")).toHaveLength(REPORT.products.length)
+    // Every product is drawn, in the list's order.
+    expect(within(figure).getAllByTestId(/^routes-(?!quiet|verdict)/).map((row) => row.dataset.testid)).toEqual(REPORT.products.map((p) => `routes-${p.id}`))
     expect(within(figure).getByTestId("world-links-verdict")).toHaveTextContent("1 of 4 addresses answer “not found”; 2 of 4 could not be checked.")
     // Grouped by the site each address leads to; a site with a page not found is said so.
     const gallery = within(figure).getByTestId("host-example.com")
@@ -289,6 +338,81 @@ describe("HeaderVersionsPage", () => {
     expect(within(figure).getByTestId("host-editor.example.com")).toHaveTextContent("Some pages could not be checked")
     expect(within(figure).getByTestId("link-editor")).toHaveTextContent("Error 503")
     expect(within(gallery).getByRole("link", { name: /^\/gallery\s*\(opens in a new tab\)$/ })).toHaveAttribute("href", "https://example.com/gallery")
+  })
+
+  it("each product leads to where its own live site says: a wire to every site its links reach, each world coloured by its answer", async () => {
+    fetchMock.mockImplementation(() => answer(REPORT))
+    renderPage()
+    const figure = await screen.findByRole("figure", { name: "Where the links lead" })
+    // Live sites first.
+    expect(within(figure).getByRole("button", { name: "Live sites" })).toHaveAttribute("aria-pressed", "true")
+    expect(within(figure).getByRole("button", { name: "Test sites" })).toHaveAttribute("aria-pressed", "false")
+    const app = within(figure).getByTestId("routes-app")
+    // One branch per site, in the order its worlds come; a site with a page not found is said so.
+    expect(within(app).getByTestId("route-host-app-example.com")).toHaveTextContent("Pages not found here")
+    expect(within(app).getByTestId("route-host-app-slow.example.com")).toHaveTextContent("Some pages could not be checked")
+    expect(within(app).getByTestId("route-host-app-app.example.com")).toHaveTextContent("Every page here answers")
+    expect(within(app).getByTestId("route-host-app-app.example.com")).toHaveTextContent("/projects")
+    expect(within(within(app).getByRole("list", { name: "To example.com" })).getByText("Gallery")).toBeInTheDocument()
+    // The product's own address drawn apart from the header's.
+    expect(within(app).getByTestId("route-app-editor")).toHaveAttribute("data-own", "true")
+    expect(within(app).getByTestId("route-app-gallery")).toHaveAttribute("data-own", "false")
+    expect(within(app).getByTestId("route-app-editor").closest("a")).toHaveClass("border-solid")
+    expect(within(app).getByTestId("route-app-gallery").closest("a")).toHaveClass("border-dashed")
+    // Each world as its address answered, marked (not by colour alone) when it is not well.
+    expect(within(app).getByTestId("route-app-gallery")).toHaveAttribute("data-answer", "bad")
+    expect(within(app).getByTestId("route-app-slow")).toHaveAttribute("data-answer", "unchecked")
+    expect(within(app).getByTestId("route-app-editor")).toHaveAttribute("data-answer", "ok")
+    expect(within(app).getByTestId("route-app-gallery").closest("a")?.querySelector("svg")).not.toBeNull()
+    expect(within(app).getByTestId("route-app-editor").closest("a")?.querySelector("svg")).toBeNull()
+    expect(within(app).getByRole("link", { name: /^Editor: https:\/\/app\.example\.com\/projects, the product's own address, Answers/ })).toHaveAttribute("href", "https://app.example.com/projects")
+    // A site that says nothing, one whose file cannot be read, and a hidden row: no wire to anywhere, each said.
+    expect(within(figure).getByTestId("routes-quiet-person")).toHaveTextContent("Not reported yet")
+    expect(within(figure).getByTestId("routes-quiet-person")).toHaveTextContent("person.example.com does not publish /shell-worlds.json yet.")
+    expect(within(figure).getByTestId("routes-quiet-tools")).toHaveTextContent("Its file cannot be read")
+    expect(within(figure).getByTestId("routes-quiet-tools")).toHaveTextContent("worldsRow: expected boolean")
+    expect(within(figure).getByTestId("routes-quiet-studio")).toHaveTextContent("Worlds row hidden")
+    // A site that did not answer is not said to publish nothing.
+    expect(within(figure).getByTestId("routes-quiet-recast")).toHaveTextContent("No answer")
+    expect(within(figure).getByTestId("routes-quiet-recast")).not.toHaveTextContent("Not reported yet")
+    expect(within(figure).queryByTestId("routes-quiet-app")).not.toBeInTheDocument()
+    // Every address the live sites lead to, once.
+    expect(within(figure).getByTestId("routes-verdict")).toHaveTextContent("1 of 4 addresses answer “not found”; 1 of 4 could not be checked.")
+  })
+
+  it("the test sites, one press away: their own wires and their own verdict", async () => {
+    fetchMock.mockImplementation(() => answer(REPORT))
+    renderPage()
+    const figure = await screen.findByRole("figure", { name: "Where the links lead" })
+    fireEvent.click(within(figure).getByRole("button", { name: "Test sites" }))
+    expect(within(figure).getByRole("button", { name: "Test sites" })).toHaveAttribute("aria-pressed", "true")
+    const app = within(figure).getByTestId("routes-app")
+    expect(within(app).getByTestId("route-host-app-next.app.example.com")).toHaveTextContent("/projects")
+    expect(within(app).getByTestId("route-host-app-next.tools.example.com")).toHaveTextContent("Every page here answers")
+    expect(within(app).getByTestId("route-host-app-next.tools.example.com")).toHaveTextContent("/gallery /board")
+    expect(within(app).queryByTestId("route-host-app-example.com")).not.toBeInTheDocument()
+    // The test site of a product whose live file is unreadable says nothing yet.
+    expect(within(figure).getByTestId("routes-quiet-tools")).toHaveTextContent("Not reported yet")
+    expect(within(figure).getByTestId("routes-verdict")).toHaveTextContent("1 of 4 could not be checked.")
+  })
+
+  it("a header that lists no worlds: a site's row leads nowhere, and says so", async () => {
+    const headerMap = { ...MAP, worlds: [] }
+    const products = [product("app", ok("0.12.0"), ok("0.12.0"), null, { production: ROW([]) })]
+    fetchMock.mockImplementation(() => answer({ ...REPORT, headerMap, products }))
+    renderPage()
+    const figure = await screen.findByRole("figure", { name: "Where the links lead" })
+    expect(within(figure).getByTestId("routes-quiet-app")).toHaveTextContent("No worlds")
+    expect(within(figure).getByTestId("routes-quiet-app")).toHaveTextContent("The header lists no worlds.")
+  })
+
+  it("no site says where its links lead: no verdict over nothing", async () => {
+    const products = REPORT.products.map((p) => product(p.id, p.sites.production.result, p.sites.staging.result))
+    fetchMock.mockImplementation(() => answer({ ...REPORT, products }))
+    renderPage()
+    const figure = await screen.findByRole("figure", { name: "Where the links lead" })
+    expect(within(figure).getAllByText("Not reported yet")).toHaveLength(products.length)
+    expect(within(figure).queryByTestId("routes-verdict")).not.toBeInTheDocument()
   })
 
   it("every address answering: says no address answers not found", async () => {

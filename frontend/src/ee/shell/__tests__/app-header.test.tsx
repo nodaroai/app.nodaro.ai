@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter, useLocation } from "react-router-dom"
 import { ACCESSIBILITY_STATEMENT_PATH } from "@/lib/accessibility-statement"
 import { useSharedHeaderMounted } from "@/lib/shared-header"
+import { readSiteEnv, siteWorldsFile } from "../site"
 import type { SiteHeaderProps } from "../types"
 
 /**
@@ -39,6 +40,9 @@ vi.mock("@/hooks/use-ui-language", () => ({
   }),
 }))
 
+// A preview build's origins (read when the module loads): every world the header gets comes from somewhere.
+vi.stubEnv("VITE_TOOLS_URL", "https://next.tools.example")
+vi.stubEnv("VITE_STUDIO_URL", "https://next.studio.example")
 const { default: AppHeader } = await import("../app-header")
 
 let path = ""
@@ -84,11 +88,27 @@ describe("the app's header mount", () => {
   it("links: the App tab and the account pages are this origin; the others come from the build", () => {
     const { props } = mount()
     expect(props.worldHrefs?.app).toBe(`${window.location.origin}/projects`)
+    expect(props.worldHrefs?.image).toBe("https://next.tools.example/image")
+    expect(props.worldHrefs?.studio).toBe("https://next.studio.example/")
     expect(props.urls).toEqual({
       app: window.location.origin,
       login: "/login",
       accessibility: `${window.location.origin}/accessibility`,
     })
+  })
+
+  it("the built site's /shell-worlds.json says exactly the links the header gets, the row never hidden", () => {
+    const { props } = mount()
+    expect(props).not.toHaveProperty("worldsRow")
+    // What the build writes, from the same origins this build read.
+    const build = readSiteEnv({ VITE_HOME_URL: import.meta.env.VITE_HOME_URL, VITE_TOOLS_URL: import.meta.env.VITE_TOOLS_URL, VITE_STUDIO_URL: import.meta.env.VITE_STUDIO_URL })
+    const file = JSON.parse(siteWorldsFile(build, true)) as { worldsRow: boolean; worldHrefs: Record<string, string> }
+    expect(file.worldsRow).toBe(true)
+    const onThisSite = Object.fromEntries(Object.entries(file.worldHrefs).map(([world, href]) => [world, new URL(href, window.location.origin).href]))
+    const header = Object.fromEntries(Object.entries(props.worldHrefs ?? {}).map(([world, href]) => [world, new URL(href ?? "").href]))
+    // Every world, not only the App's.
+    expect(Object.keys(header)).toHaveLength(9)
+    expect(onThisSite).toEqual(header)
   })
 
   it("accessibility is the header's: its menu on, its statement link the app's one statement", () => {

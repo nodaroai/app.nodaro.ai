@@ -1,10 +1,11 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { createMemoryRouter, RouterProvider } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/ee/hooks/queries/use-admin-queries", () => ({
+  useAdminJobDetail: vi.fn(),
   useAdminJobs: vi.fn(),
   useAdminJobsInfinite: vi.fn(),
   useAdminJobSources: vi.fn(),
@@ -12,6 +13,7 @@ vi.mock("@/ee/hooks/queries/use-admin-queries", () => ({
 }))
 
 import {
+  useAdminJobDetail,
   useAdminJobs,
   useAdminJobsInfinite,
   useAdminJobSources,
@@ -50,6 +52,7 @@ beforeEach(() => {
     isLoading: false,
   } as unknown as ReturnType<typeof useAdminJobs>)
   vi.mocked(useAdminJobSources).mockReturnValue({ data: [] } as unknown as ReturnType<typeof useAdminJobSources>)
+  vi.mocked(useAdminJobDetail).mockReturnValue({ data: undefined, isError: false } as unknown as ReturnType<typeof useAdminJobDetail>)
   usersLoaded(true)
 })
 
@@ -136,5 +139,50 @@ describe("AdminJobsPage", () => {
     } as unknown as ReturnType<typeof useAdminJobsInfinite>)
     renderAt("/admin/jobs?view=gallery&kind=video")
     expect(screen.getByText(NOTICE)).toBeTruthy()
+  })
+
+  describe("the detail view", () => {
+    // A list row: its input and output are previews (the type; the output's addresses).
+    const ROW = {
+      id: "0b1c2d3e-0000-4000-8000-000000000001", status: "completed", job_type: null, credits: 30, credit: null,
+      provider: "kie", provider_cost: null, display_cost: null, error_message: null,
+      input_data: { type: "generate-image" }, output_data: { imageUrl: "https://cdn.test/fox.png" },
+      created_at: "2026-11-01T12:00:00Z", started_at: null, completed_at: null, user_id: "u1", user_email: "dana@x.test",
+      workflow_id: null, workflow_name: "Unknown", workflow_execution_id: null, source: null, source_detail: null,
+      source_app_name: null, workflow_project_id: null, provider_kind: null, provider_task_id: null,
+      reconcile_attempts: 0, reconcile_last_error: null, provider_call_started_at: null,
+    }
+
+    function openDetail() {
+      vi.mocked(useAdminJobs).mockReturnValue({
+        data: { jobs: [ROW], userNotFound: false, filtersUnavailable: false },
+        isLoading: false,
+      } as unknown as ReturnType<typeof useAdminJobs>)
+      renderAt("/admin/jobs")
+      const row = screen.getByText(ROW.id.slice(0, 8)).closest("tr")!
+      fireEvent.click(within(row).getAllByRole("button").at(-1)!)
+      return screen.getByRole("dialog")
+    }
+
+    it("reads the whole job when it opens, and shows a loader — never the list's preview — until it is in", () => {
+      const dialog = openDetail()
+      expect(vi.mocked(useAdminJobDetail).mock.lastCall?.[0]).toMatchObject({ id: ROW.id, status: ROW.status, completed_at: ROW.completed_at })
+      expect(within(dialog).getByLabelText("Loading the job's input and output")).toBeTruthy()
+    })
+
+    it("shows the whole input once it is read", () => {
+      vi.mocked(useAdminJobDetail).mockReturnValue({
+        data: { input_data: { type: "generate-image", prompt: "a red fox in the snow" }, output_data: { imageUrl: "https://cdn.test/fox.png", seed: 7 } },
+        isError: false,
+      } as unknown as ReturnType<typeof useAdminJobDetail>)
+      const dialog = openDetail()
+      expect(within(dialog).getByText("a red fox in the snow")).toBeTruthy()
+    })
+
+    it("says when the whole job could not be read", () => {
+      vi.mocked(useAdminJobDetail).mockReturnValue({ data: undefined, isError: true } as unknown as ReturnType<typeof useAdminJobDetail>)
+      const dialog = openDetail()
+      expect(within(dialog).getByText("Couldn't load the job's input and output.")).toBeTruthy()
+    })
   })
 })

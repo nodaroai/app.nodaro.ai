@@ -1,5 +1,6 @@
 -- ============================================================================
--- Behavioral proof: the admin Jobs list filters on the server (migration 575).
+-- Behavioral proof: the admin Jobs list filters on the server (migration 575)
+-- and reads one page in one call, with lighter rows (migration 584).
 --
 -- Runs AFTER the whole migration chain, as `postgres`, in a transaction that
 -- rolls back. Its own uuid range (...-000000574001 upward).
@@ -9,6 +10,12 @@
 --      case of the tables the backend's TypeScript twins are tested against
 --      (supabase/tests/fixtures/admin-job-own-credits-cases.json and
 --      job-platform-cases.json) — the SQL cannot drift from the TS.
+--   1b. `public.admin_job_page`'s credit minimum, which joins the figure in
+--      rather than calling `admin_job_own_credits` per row (migration 584),
+--      keeps exactly the jobs the function keeps, at every threshold around
+--      every case of the own-credits and usage-charge case tables (no usage
+--      log, reserved / committed / refunded, a missing charge, side holds
+--      committed, reserved and refunded).
 --   2. `public.admin_job_page` applies each filter alone, several together,
 --      a date range whose upper bound is exclusive, a search that matches `%`,
 --      `_` and `\` literally in any of the row's text fields (prompt,
@@ -18,7 +25,14 @@
 --      offset/limit over a stable newest-first order.
 --   3. `public.admin_job_sources` lists each platform key once with its count
 --      and a representative source, most jobs first, from a given time on.
---   4. None of the four is callable from a browser (anon / authenticated).
+--   4. `public.admin_job_output_preview` answers every case of the table the
+--      editor's gallery tile is tested against
+--      (supabase/tests/fixtures/admin-job-output-preview-cases.json): the
+--      tile a preview makes is the tile the full output makes.
+--   5. `public.admin_job_list` returns exactly the page `admin_job_page`
+--      picks, in its order, for each filter; every column is the job's own
+--      except `input_data` (its type only) and `output_data` (its preview).
+--   6. None of them is callable from a browser (anon / authenticated).
 --
 -- The case tables are read with psql's backquote expansion, relative to the
 -- working directory: run it from the repo root, as CI does.
@@ -31,7 +45,9 @@
 -- ============================================================================
 \set ON_ERROR_STOP on
 \set own_credits_cases `cat supabase/tests/fixtures/admin-job-own-credits-cases.json`
+\set charge_cases `cat supabase/tests/fixtures/usage-charge-cases.json`
 \set platform_cases `cat supabase/tests/fixtures/job-platform-cases.json`
+\set preview_cases `cat supabase/tests/fixtures/admin-job-output-preview-cases.json`
 BEGIN;
 
 CREATE FUNCTION pg_temp.assert_eq(label text, actual text, expected text) RETURNS void
@@ -117,6 +133,44 @@ SELECT pg_temp.assert_eq('admin_job_own_credits: an open or refunded side hold a
   FROM own_credit_cases c JOIN public.jobs j ON j.id = c.job_id
  WHERE c.label = 'committed + side 40';
 
+-- The usage-charge case table, as jobs whose own usage log is each case (a
+-- hold of 7 beside it, so an unsettled log reads as the hold).
+CREATE TEMP TABLE charge_cases AS
+  SELECT n, c->>'label' AS label, c->>'status' AS status,
+         (c->>'credits_used')::integer AS credits_used, (c->>'credits_charged')::integer AS credits_charged,
+         ('00000000-0000-4000-8000-000000574' || lpad((950 + n)::text, 3, '0'))::uuid AS job_id
+    FROM jsonb_array_elements(:'charge_cases'::jsonb) WITH ORDINALITY AS t(c, n);
+SELECT pg_temp.assert_eq('the usage-charge case table was read',
+  ((SELECT count(*) FROM charge_cases) >= 5)::text, 'true');
+INSERT INTO public.jobs (id, user_id, status, credits, usage_log_id, created_at)
+SELECT c.job_id, '00000000-0000-4000-8000-000000574009', 'completed', 7,
+       pg_temp.log('00000000-0000-4000-8000-000000574009', c.status, c.credits_used, c.credits_charged),
+       '2020-01-01T00:00:00Z'
+  FROM charge_cases c;
+
+-- The jobs the function keeps at a threshold, and the jobs the page keeps.
+CREATE FUNCTION pg_temp.kept_by_function(p_min int) RETURNS text LANGUAGE sql AS $$
+  SELECT coalesce(string_agg(right(j.id::text, 3), ',' ORDER BY j.id), '')
+    FROM public.jobs j
+   WHERE j.user_id = '00000000-0000-4000-8000-000000574009'
+     AND public.admin_job_own_credits(j.id, j.usage_log_id, j.credits) >= p_min
+$$;
+CREATE FUNCTION pg_temp.kept_by_page(p_min int) RETURNS text LANGUAGE sql AS $$
+  SELECT coalesce(string_agg(right(p.id::text, 3), ',' ORDER BY p.id), '')
+    FROM public.admin_job_page(p_user_id => '00000000-0000-4000-8000-000000574009', p_min_credits => p_min) AS p
+$$;
+CREATE TEMP TABLE thresholds AS
+  SELECT DISTINCT t
+    FROM (SELECT public.admin_job_own_credits(j.id, j.usage_log_id, j.credits) AS figure
+            FROM public.jobs j WHERE j.user_id = '00000000-0000-4000-8000-000000574009') AS f,
+         LATERAL (VALUES (f.figure - 1), (f.figure), (f.figure + 1)) AS v(t)
+   WHERE t >= 0;
+SELECT pg_temp.assert_eq('min credits: the join keeps what admin_job_own_credits keeps, at ' || t,
+  pg_temp.kept_by_page(t), pg_temp.kept_by_function(t))
+  FROM thresholds ORDER BY t;
+SELECT pg_temp.assert_eq('min credits: the thresholds split the case jobs (the proof is not vacuous)',
+  ((SELECT count(DISTINCT pg_temp.kept_by_function(t)) FROM thresholds) >= 8)::text, 'true');
+
 -- The case-table jobs are done with; the page proofs below see only theirs.
 DELETE FROM public.jobs WHERE user_id = '00000000-0000-4000-8000-000000574009';
 
@@ -148,6 +202,25 @@ SELECT pg_temp.assert_eq('job_platform_key: a host that does not END in .nodaro.
   public.job_platform_key('web', 'studio.nodaro.ai.'), 'web:studio.nodaro.ai.');
 SELECT pg_temp.assert_eq('job_platform_key: the host is trimmed',
   public.job_platform_key('web', '  Studio.Nodaro.ai '), 'web:studio');
+
+-- ---------------------------------------------------------------------------
+-- 1c. The output-preview case table (a JSON null is a job with no output).
+-- ---------------------------------------------------------------------------
+CREATE TEMP TABLE preview_cases AS
+  SELECT n, c->>'label' AS label,
+         CASE WHEN jsonb_typeof(c->'output') = 'null' THEN NULL ELSE c->'output' END AS output,
+         CASE WHEN jsonb_typeof(c->'expected') = 'null' THEN NULL ELSE c->'expected' END AS expected
+    FROM jsonb_array_elements(:'preview_cases'::jsonb) WITH ORDINALITY AS t(c, n);
+SELECT pg_temp.assert_eq('the output-preview case table was read',
+  ((SELECT count(*) FROM preview_cases) >= 10)::text, 'true');
+SELECT pg_temp.assert_eq('admin_job_output_preview: ' || label,
+  public.admin_job_output_preview(output)::text, expected::text)
+  FROM preview_cases ORDER BY n;
+SELECT pg_temp.assert_eq('admin_job_output_preview: a long text keeps its first 1000 characters after its leading whitespace; thumbnailUrl stays whole',
+  public.admin_job_output_preview(jsonb_build_object('text', repeat(' ', 1500) || E'\n' || repeat('é', 1500), 'thumbnailUrl', 'x' || repeat('y', 2000)))::text,
+  jsonb_build_object('text', repeat('é', 1000), 'thumbnailUrl', 'x' || repeat('y', 2000))::text);
+SELECT pg_temp.assert_eq('admin_job_url_skeleton: a scalar that is not an address is nothing',
+  coalesce(public.admin_job_url_skeleton('42'::jsonb)::text, '<none>'), '<none>');
 
 -- ---------------------------------------------------------------------------
 -- 2. admin_job_page over fourteen jobs, newest first:
@@ -419,6 +492,95 @@ SELECT pg_temp.assert_eq('models: a row without resolvedModel still matches on p
   pg_temp.page(p_models => ARRAY['gpt-image'], p_from => '2026-04-01T00:00:00Z', p_to => '2026-05-01T00:00:00Z'), '117');
 
 -- ---------------------------------------------------------------------------
+-- 2d. admin_job_list: the page admin_job_page picks, as lighter rows.
+-- ---------------------------------------------------------------------------
+UPDATE public.jobs
+   SET output_data = '{"imageUrl":"https://cdn.test/fox.png","seed":7,"words":[{"w":"a","s":0}]}'
+ WHERE id = '00000000-0000-4000-8000-000000574101';
+UPDATE public.jobs
+   SET output_data = '{"generatedText":"a plan","usage":{"input":12}}', workflow_execution_id = NULL,
+       provider_kind = 'kie-llm', provider_task_id = 'task-103', reconcile_attempts = 2,
+       reconcile_last_error = 'poll timeout', provider_call_started_at = '2026-06-01T09:00:00Z',
+       started_at = '2026-06-01T09:00:00Z', completed_at = '2026-06-01T09:00:05Z',
+       provider_cost = 0.0042, display_cost = 0.01
+ WHERE id = '00000000-0000-4000-8000-000000574103';
+
+CREATE FUNCTION pg_temp.list(
+  p_offset int DEFAULT 0, p_limit int DEFAULT 100,
+  p_status text DEFAULT NULL, p_user_id uuid DEFAULT NULL, p_exclude_user_ids uuid[] DEFAULT NULL,
+  p_types text[] DEFAULT NULL, p_models text[] DEFAULT NULL, p_min_credits int DEFAULT NULL,
+  p_sources text[] DEFAULT NULL,
+  p_from timestamptz DEFAULT '2026-05-01T00:00:00Z', p_to timestamptz DEFAULT '2026-07-01T00:00:00Z',
+  p_q text DEFAULT NULL, p_q_is_id boolean DEFAULT NULL
+) RETURNS text LANGUAGE sql AS $$
+  SELECT coalesce(string_agg(right(t.id::text, 3), ',' ORDER BY t.ord), '')
+    FROM public.admin_job_list(
+      p_offset => p_offset, p_limit => p_limit, p_status => p_status, p_user_id => p_user_id,
+      p_exclude_user_ids => p_exclude_user_ids, p_types => p_types, p_models => p_models,
+      p_min_credits => p_min_credits, p_sources => p_sources, p_from => p_from, p_to => p_to,
+      p_q => p_q, p_q_is_id => p_q_is_id
+    ) WITH ORDINALITY AS t(id, status, job_type, credits, provider, provider_cost, display_cost, error_message,
+                           input_data, output_data, created_at, started_at, completed_at, user_id, workflow_id,
+                           workflow_execution_id, source, source_detail, provider_kind, provider_task_id,
+                           reconcile_attempts, reconcile_last_error, provider_call_started_at, usage_log_id, ord)
+   WHERE t.id::text LIKE '00000000-0000-4000-8000-000000574%'
+$$;
+
+SELECT pg_temp.assert_eq('admin_job_list: the same page as admin_job_page, no filter',
+  pg_temp.list(), pg_temp.page());
+SELECT pg_temp.assert_eq('admin_job_list: a non-empty page', (pg_temp.list() <> '')::text, 'true');
+SELECT pg_temp.assert_eq('admin_job_list: status', pg_temp.list(p_status => 'failed'), pg_temp.page(p_status => 'failed'));
+SELECT pg_temp.assert_eq('admin_job_list: user',
+  pg_temp.list(p_user_id => '00000000-0000-4000-8000-000000574001'), pg_temp.page(p_user_id => '00000000-0000-4000-8000-000000574001'));
+SELECT pg_temp.assert_eq('admin_job_list: excluded users',
+  pg_temp.list(p_exclude_user_ids => ARRAY['00000000-0000-4000-8000-000000574003'::uuid]),
+  pg_temp.page(p_exclude_user_ids => ARRAY['00000000-0000-4000-8000-000000574003'::uuid]));
+SELECT pg_temp.assert_eq('admin_job_list: types', pg_temp.list(p_types => ARRAY['generate-video']), pg_temp.page(p_types => ARRAY['generate-video']));
+SELECT pg_temp.assert_eq('admin_job_list: models', pg_temp.list(p_models => ARRAY['gpt-image']), pg_temp.page(p_models => ARRAY['gpt-image']));
+SELECT pg_temp.assert_eq('admin_job_list: min credits', pg_temp.list(p_min_credits => 55), pg_temp.page(p_min_credits => 55));
+SELECT pg_temp.assert_eq('admin_job_list: sources', pg_temp.list(p_sources => ARRAY['mcp', 'cli']), pg_temp.page(p_sources => ARRAY['mcp', 'cli']));
+SELECT pg_temp.assert_eq('admin_job_list: a window',
+  pg_temp.list(p_from => '2026-06-01T02:00:00Z', p_to => '2026-06-01T04:00:00Z'),
+  pg_temp.page(p_from => '2026-06-01T02:00:00Z', p_to => '2026-06-01T04:00:00Z'));
+SELECT pg_temp.assert_eq('admin_job_list: search', pg_temp.list(p_q => 'FOX'), pg_temp.page(p_q => 'FOX'));
+SELECT pg_temp.assert_eq('admin_job_list: an id',
+  pg_temp.list(p_q => '00000000-0000-4000-8000-000000574105', p_q_is_id => true),
+  pg_temp.page(p_q => '00000000-0000-4000-8000-000000574105', p_q_is_id => true));
+SELECT pg_temp.assert_eq('admin_job_list: offset and limit, a timestamp tie included',
+  pg_temp.list(p_offset => 1, p_limit => 3), pg_temp.page(p_offset => 1, p_limit => 3));
+SELECT pg_temp.assert_eq('admin_job_list: several filters together',
+  pg_temp.list(p_types => ARRAY['generate-video'], p_models => ARRAY['kling-3'], p_min_credits => 100),
+  pg_temp.page(p_types => ARRAY['generate-video'], p_models => ARRAY['kling-3'], p_min_credits => 100));
+
+SELECT pg_temp.assert_eq('admin_job_list: input_data is the type only',
+  (SELECT l.input_data::text FROM public.admin_job_list(p_q => '00000000-0000-4000-8000-000000574101', p_q_is_id => true) l),
+  '{"type": "generate-image"}');
+SELECT pg_temp.assert_eq('admin_job_list: an input with no type is an empty object',
+  (SELECT l.input_data::text FROM public.admin_job_list(p_q => '00000000-0000-4000-8000-000000574105', p_q_is_id => true) l),
+  '{}');
+SELECT pg_temp.assert_eq('admin_job_list: output_data is the preview',
+  (SELECT l.output_data::text FROM public.admin_job_list(p_q => '00000000-0000-4000-8000-000000574101', p_q_is_id => true) l),
+  '{"imageUrl": "https://cdn.test/fox.png"}');
+SELECT pg_temp.assert_eq('admin_job_list: an LLM output keeps its text',
+  (SELECT l.output_data::text FROM public.admin_job_list(p_q => '00000000-0000-4000-8000-000000574103', p_q_is_id => true) l),
+  '{"generatedText": "a plan"}');
+SELECT pg_temp.assert_eq('admin_job_list: no output stays none',
+  (SELECT coalesce(l.output_data::text, '<null>') FROM public.admin_job_list(p_q => '00000000-0000-4000-8000-000000574102', p_q_is_id => true) l),
+  '<null>');
+SELECT pg_temp.assert_eq('admin_job_list: every other column is the job''s own',
+  (SELECT count(*) FILTER (WHERE (to_jsonb(l) - 'input_data' - 'output_data') IS DISTINCT FROM to_jsonb(x))
+            || '/' || count(*)
+     FROM public.admin_job_list(p_from => '2026-05-01T00:00:00Z', p_to => '2026-07-01T00:00:00Z') l
+     JOIN LATERAL (
+       SELECT j.id, j.status, j.job_type, j.credits, j.provider, j.provider_cost, j.display_cost, j.error_message,
+              j.created_at, j.started_at, j.completed_at, j.user_id, j.workflow_id, j.workflow_execution_id,
+              j.source, j.source_detail, j.provider_kind, j.provider_task_id, j.reconcile_attempts,
+              j.reconcile_last_error, j.provider_call_started_at, j.usage_log_id
+         FROM public.jobs j WHERE j.id = l.id) AS x ON true
+    WHERE l.id::text LIKE '00000000-0000-4000-8000-000000574%'),
+  '0/14');
+
+-- ---------------------------------------------------------------------------
 -- 3. Server only.
 -- ---------------------------------------------------------------------------
 SELECT pg_temp.assert_eq(f || ' closed to ' || r, has_function_privilege(r, f, 'EXECUTE')::text, 'false')
@@ -427,14 +589,20 @@ SELECT pg_temp.assert_eq(f || ' closed to ' || r, has_function_privilege(r, f, '
          'public.job_platform_key(text,text)',
          'public.admin_job_own_credits(uuid,uuid,integer)',
          'public.admin_job_page(integer,integer,text,uuid,uuid[],text[],text[],integer,text[],timestamptz,timestamptz,text,boolean)',
-         'public.admin_job_sources(timestamptz)'
+         'public.admin_job_sources(timestamptz)',
+         'public.admin_job_url_skeleton(jsonb)',
+         'public.admin_job_output_preview(jsonb)',
+         'public.admin_job_list(integer,integer,text,uuid,uuid[],text[],text[],integer,text[],timestamptz,timestamptz,text,boolean)'
        ]) AS f;
 SELECT pg_temp.assert_eq(f || ' open to service_role', has_function_privilege('service_role', f, 'EXECUTE')::text, 'true')
   FROM unnest(ARRAY[
          'public.job_platform_key(text,text)',
          'public.admin_job_own_credits(uuid,uuid,integer)',
          'public.admin_job_page(integer,integer,text,uuid,uuid[],text[],text[],integer,text[],timestamptz,timestamptz,text,boolean)',
-         'public.admin_job_sources(timestamptz)'
+         'public.admin_job_sources(timestamptz)',
+         'public.admin_job_url_skeleton(jsonb)',
+         'public.admin_job_output_preview(jsonb)',
+         'public.admin_job_list(integer,integer,text,uuid,uuid[],text[],text[],integer,text[],timestamptz,timestamptz,text,boolean)'
        ]) AS f;
 
 DO $$ BEGIN RAISE NOTICE 'ALL BEHAVIOR ASSERTIONS PASSED'; END $$;

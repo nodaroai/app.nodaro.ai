@@ -99,12 +99,16 @@ export interface PromptPartsRequest {
    */
   depthColormap?: FaceMaskingDepthColormap
   /**
-   * The Faces hidden fill the setting masks with, sent ONLY beside
-   * `depthColormap` on a depth fill (`"depth"`), so the engine words the
-   * fill's guard by the map (it reads a depth fill's look from the fill).
-   * Never sent otherwise, so every other request is as before.
+   * The Faces hidden fill the setting masks with: `"depth"` sent ONLY beside
+   * `depthColormap` on a depth fill, so the engine words the fill's guard by
+   * the map (it reads a depth fill's look from the fill); `"none"` on a
+   * setting whose fill is none (the faces kept as filmed, only the face mesh
+   * drawn), so the engine lists the `faceMeshFillNone` part in place of
+   * `faceMesh`'s line — sent only to an engine that declares
+   * `castSwap.maskFillNone` (`askPromptParts`). Never sent otherwise, so
+   * every other request is as before.
    */
-  maskFill?: "depth"
+  maskFill?: "depth" | "none"
   hasAudio: boolean
   roles: unknown[]
   references?: { images: string[]; line: string }[]

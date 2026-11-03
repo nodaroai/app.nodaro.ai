@@ -9,7 +9,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { UserFilter, type UserFilterValue } from "@/components/user-filter"
 import { JobAssetView } from "@/components/admin/job-asset-view"
 import { JobSourceBadge } from "@/components/admin/job-source-badge"
-import { useAdminJobs, useAdminJobSources, useAllAdminUsersLite, type AdminJob } from "@/ee/hooks/queries/use-admin-queries"
+import {
+  useAdminJobDetail,
+  useAdminJobs,
+  useAdminJobSources,
+  useAllAdminUsersLite,
+  type AdminJob,
+  type AdminJobDetail,
+} from "@/ee/hooks/queries/use-admin-queries"
 import { JobsGallery } from "./jobs-gallery"
 import { FiltersUnavailableNotice, JobsFilterBar } from "./jobs-filter-bar"
 import { ADMIN_JOB_STATUSES, jobFiltersKey, parseJobFilters, serializeJobFilters, type AdminJobFilters } from "./jobs-filters"
@@ -101,6 +108,20 @@ function JobDetailDialog({
   onTabChange: (v: string) => void
 }) {
   const hasError = !!job.error_message
+  // A list row carries previews of the input and output; the whole of both is
+  // read when the dialog opens, and only the whole is ever shown here.
+  const detail = useAdminJobDetail(open ? job : null)
+  const full = detail.data
+  const fullView = (pick: (d: AdminJobDetail) => Record<string, unknown> | null) =>
+    full ? (
+      <JobAssetView data={pick(full)} />
+    ) : detail.isError ? (
+      <p className="py-6 text-center text-sm text-destructive">Couldn&apos;t load the job&apos;s input and output.</p>
+    ) : (
+      <div className="flex justify-center py-6" aria-label="Loading the job's input and output">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    )
   const hasReconcileData =
     job.provider_kind != null ||
     job.provider_task_id != null ||
@@ -120,7 +141,7 @@ function JobDetailDialog({
           )}
         </DialogHeader>
 
-        <JobSkippedSteps output={job.output_data} />
+        {full && <JobSkippedSteps output={full.output_data} />}
         <JobStepOutputs job={job} />
 
         <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm border rounded-lg p-4">
@@ -128,7 +149,7 @@ function JobDetailDialog({
             <span className="text-muted-foreground">Provider</span>
             <p>{job.provider ?? "-"}</p>
           </div>
-          <JobGenerationDetails input={job.input_data} />
+          {full && <JobGenerationDetails input={full.input_data} />}
           <div>
             <span className="text-muted-foreground">Cost</span>
             <p>{job.display_cost != null ? `$${job.display_cost.toFixed(4)}` : "-"}</p>
@@ -234,10 +255,10 @@ function JobDetailDialog({
             {hasError && <TabsTrigger value="error">Error</TabsTrigger>}
           </TabsList>
           <TabsContent value="input">
-            <JobAssetView data={job.input_data} />
+            {fullView((d) => d.input_data)}
           </TabsContent>
           <TabsContent value="output">
-            <JobAssetView data={job.output_data} />
+            {fullView((d) => d.output_data)}
           </TabsContent>
           {hasError && (
             <TabsContent value="error">

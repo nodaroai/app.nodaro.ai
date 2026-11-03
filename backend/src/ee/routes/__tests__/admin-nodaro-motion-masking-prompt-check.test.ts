@@ -122,4 +122,33 @@ describe("PUT /v1/admin/nodaro-motion/masking — the face mesh and the saved pr
     expect((await put(MESH_ON)).statusCode).toBe(200)
     expect(h.calls).toEqual([])
   })
+
+  it("re-checks whenever the prompt may grow: the fill changed (None back to a blur or depth fill, the mesh still on), the masking turned on", async () => {
+    setPluginSupports({ castSwap: { roleKinds: ["person"], fixedReferences: true, fullQuality: true, resolutions: ["720p"], trendRun: true, promptParts: true, faceMesh: true, maskFillNone: true } as never })
+    savedOverrides()
+    h.rows.nodaro_motion_masking = { value: { "motion-prism": { mode: "always", fill: "none", faceMesh: true } }, updated_at: "2026-11-02T00:00:00.000Z" }
+    h.problemsFor = (b) => (b.maskFill === undefined ? [{ code: "prompt_too_long", message: "The prompt is 2,600 characters; the most is 2,500." }] : [])
+    const res = await put({ "motion-prism": { mode: "always", fill: "depth", faceMesh: true } })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error).toMatchObject({ code: "prompt_parts_invalid", message: expect.stringMatching(/^With this masking, the saved Nodaro Motion prompt no longer fits/) })
+    expect(h.calls.map((c) => c.style).sort()).toEqual(["motion", "precise"])
+    expect(h.upserts).toEqual([])
+    // Off → on (no mesh) is checked too; the fill none asks with maskFill "none".
+    h.problemsFor = null
+    h.calls = []
+    h.rows.nodaro_motion_masking = { value: { "motion-prism": { mode: "off" } }, updated_at: "2026-11-02T00:00:00.000Z" }
+    expect((await put({ "motion-prism": { mode: "always" } })).statusCode).toBe(200)
+    expect(h.calls).toHaveLength(2)
+    h.calls = []
+    // Every environment's engine draws the fill none (the save's own gate).
+    const cs = MESH_SUPPORTS.castSwap as Record<string, unknown>
+    cs.maskFillNone = true
+    try {
+      expect((await put({ "motion-prism": { mode: "always", fill: "none", faceMesh: true } })).statusCode).toBe(200)
+    } finally {
+      delete cs.maskFillNone
+    }
+    for (const c of h.calls) expect(c).toMatchObject({ faceMesh: true, maskFill: "none" })
+    expect(h.calls).toHaveLength(2)
+  })
 })
