@@ -283,7 +283,7 @@ export function TestPanel({ trendId, slots, hasPreview, previewInput, engine, di
             </label>
             {hasPreview && preview && (
               <span className="basis-full text-xs text-muted-foreground">
-                A preview run sends the preview's own role names, reference lines and prompts (each left empty: the full run's).
+                A preview run sends each role as "In the 4 s preview" describes it, and the preview's own reference lines and prompts (each left empty: the full run's).
               </span>
             )}
             {hasPreview && preview && previewInput && (

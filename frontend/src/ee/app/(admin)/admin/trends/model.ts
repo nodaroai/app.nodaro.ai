@@ -508,9 +508,9 @@ export function formIssues(form: TrendForm): string[] {
     if (!s.label.en.trim()) out.push(`${n}: the label needs English.`)
     else if (s.label.en.trim().length > 100) out.push(`${n}: the label is at most 100 characters.`)
     const role = s.roleName.trim()
-    if (!role) out.push(`${n}: the role name is required.`)
-    else if (role.length > 200) out.push(`${n}: the role name is at most 200 characters.`)
-    if ((s.previewRoleName?.trim().length ?? 0) > 200) out.push(`${n}: the role name in the 4 s preview is at most 200 characters.`)
+    if (!role) out.push(`${n}: "In the clip" is required: describe them as the clip shows them.`)
+    else if (role.length > 200) out.push(`${n}: "In the clip" is at most 200 characters.`)
+    if ((s.previewRoleName?.trim().length ?? 0) > 200) out.push(`${n}: "In the 4 s preview" is at most 200 characters.`)
     if (hasAnyText(s.hint) && !s.hint!.en.trim()) out.push(`${n}: the hint needs English when any language has text.`)
     const defaults = s.defaultImages?.length ?? 0
     if (defaults > 0 && s.required) out.push(`${n}: a required slot cannot have a default image. Remove its default images, or make it optional.`)

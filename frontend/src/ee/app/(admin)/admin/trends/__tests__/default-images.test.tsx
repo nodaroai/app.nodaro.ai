@@ -82,7 +82,7 @@ describe("where the section shows", { timeout: 20_000 }, () => {
     const user = userEvent.setup()
     serve({ slots: [slot(), { ...GUEST, defaultImages: [DEFAULT] }] })
     renderEditor()
-    const role = (await screen.findAllByLabelText(/^role name(?! in the 4 s preview)/i))[0]!
+    const role = (await screen.findAllByLabelText(/^in the clip/i))[0]!
     expect(screen.getByRole("button", { name: /save draft/i })).toBeDisabled()
     await user.type(role, "!")
     await user.click(screen.getByRole("button", { name: /save draft/i }))

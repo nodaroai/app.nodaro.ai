@@ -50,6 +50,14 @@ const KIND_LABELS: Readonly<Record<TrendSlotKind, string>> = {
   pet: "Pet",
 }
 
+/** What "In the clip" holds, per kind: a description of the role as the clip shows it, never a name. */
+const IN_THE_CLIP_EXAMPLES: Readonly<Record<TrendSlotKind, string>> = {
+  person: "the woman on the left",
+  location: "the bar",
+  product: "the red bottle",
+  pet: "the brown dog",
+}
+
 const CHOICES: ReadonlyArray<{ value: TrendChoice | "default"; label: string }> = [
   { value: "default", label: "Engine default" },
   { value: "new", label: "New" },
@@ -252,20 +260,20 @@ function SlotCard({ trendId, slot, index, count, hasPreview, fullDepth, original
       )}
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">Role name</span>
+        <span className="font-medium">In the clip</span>
         <Input
           value={slot.roleName}
           maxLength={200}
           aria-invalid={!slot.roleName.trim()}
-          placeholder="the woman on the left"
+          placeholder={IN_THE_CLIP_EXAMPLES[slot.kind]}
           onChange={(e) => onChange({ ...slot, roleName: e.target.value })}
           className="h-9"
         />
-        <span className="text-xs text-muted-foreground">Who this is in the source clip. Hidden from users; goes into the prompt.</span>
+        <span className="text-xs text-muted-foreground">Describe them as the source clip shows them, never by a name: "the singer", not "David". Hidden from users; goes into the prompt.</span>
       </label>
       {hasPreview && (
         <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Role name in the 4 s preview</span>
+          <span className="font-medium">In the 4 s preview</span>
           <Input
             value={slot.previewRoleName ?? ""}
             maxLength={200}
@@ -273,7 +281,7 @@ function SlotCard({ trendId, slot, index, count, hasPreview, fullDepth, original
             onChange={(e) => onChange({ ...slot, previewRoleName: e.target.value })}
             className="h-9"
           />
-          <span className="text-xs text-muted-foreground">Who this is in the 4 s preview, if it needs other words. Empty: the role name.</span>
+          <span className="text-xs text-muted-foreground">How the 4 s preview shows them, if it needs other words. Empty: as "In the clip".</span>
         </label>
       )}
 
