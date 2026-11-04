@@ -68,7 +68,7 @@ import type {
   CastSwapPrismReferenceAudioByResolution,
   CastSwapSteps,
 } from "@/lib/api"
-import { prismReferenceAudioByResolutionOf, prismReferenceAudioNotFull } from "./prism-reference-audio"
+import { prismReferenceAudioByResolutionOf, prismReferenceAudioNotDefault } from "./prism-reference-audio"
 
 export const MAX_TREND_IMAGES = 30
 export const MAX_IMAGES_PER_SLOT = 3
@@ -188,10 +188,12 @@ export interface TrendForm {
   /** As stored: undefined = none set ("original"). Saved only while the engine is Kling 4. */
   pulseAudio: CastSwapPulseAudioId | undefined
   /**
-   * Per output resolution: undefined, or a resolution left out, = "full" (a
-   * plain mode stored earlier is read as that mode at every resolution). Saved,
-   * its non-"full" resolutions only, only while the engine is Prism (Seedance
-   * 2.5, also a draft naming none).
+   * Per output resolution, a mode and a pitch shift (as stored, or as the
+   * select set it): undefined, or a resolution left out, = the default, the
+   * full mix at +4 (a plain id stored earlier is read as that id at every
+   * resolution). Saved, its resolutions off the default only, each as today's
+   * id where one says it, only while the engine is Prism (Seedance 2.5, also a
+   * draft naming none).
    */
   prismReferenceAudio: CastSwapPrismReferenceAudioByResolution | undefined
   /** As stored: undefined = the clip preparation's default (prompt-style.ts). */
@@ -390,7 +392,7 @@ export function withChipShown(s: FormSlot, chip: TrendChipKey, show: boolean): F
  * write them; nor the preview input clip, which the server makes on save).
  */
 export function fromForm(form: TrendForm): TrendDraftBody {
-  const prismAudio = prismReferenceAudioNotFull(form.prismReferenceAudio)
+  const prismAudio = prismReferenceAudioNotDefault(form.prismReferenceAudio)
   return {
     name: cleanText(form.name),
     ...(hasAnyText(form.description) ? { description: cleanText(form.description) } : {}),
@@ -412,7 +414,7 @@ export function fromForm(form: TrendForm): TrendDraftBody {
     ...(form.engine === "kling-4" && form.klingLength ? { klingLength: form.klingLength } : {}),
     ...(form.engine === "kling-4" && form.pulseAudio ? { pulseAudio: form.pulseAudio } : {}),
     // Read only on Prism (a draft naming no engine is one): kept out of a Kling 4 draft. Only the
-    // resolutions that are not the full audio, and none at all when every one is.
+    // resolutions off the default (the full mix at +4), and none at all when every one is.
     ...(engineOfForm(form) === "seedance-2-5" && prismAudio ? { prismReferenceAudio: prismAudio } : {}),
     // Left out = the clip preparation's default, so loading an old draft is no change.
     ...(form.promptStyle ? { promptStyle: form.promptStyle } : {}),
@@ -669,13 +671,14 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   "promptWording:new": "the new Flex prompt wording",
   promptParts: "engine prompt changes",
   trendPrePrompt: "pre prompts",
+  prismReferenceAudioPitch: "the Prism reference audio pitch shift",
   "kling-4": "Nodaro Motion Pulse (Kling 4)",
   fullQuality: "Full Quality",
   trendRun: "trend runs",
   castSwap: "Cast Swap",
 }
 
-/** A `prismReferenceAudio:<mode>` need's label ("the Prism reference audio one-tone"), else undefined. */
+/** A `prismReferenceAudio:<mode>` need's label ("the Prism reference audio one-tone", "… voice-one-tone"), else undefined. */
 function prismReferenceAudioNeedLabel(need: string): string | undefined {
   return need.startsWith("prismReferenceAudio:") ? `the Prism reference audio ${need.slice("prismReferenceAudio:".length)}` : undefined
 }

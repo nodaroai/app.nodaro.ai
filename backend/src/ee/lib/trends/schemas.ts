@@ -384,9 +384,9 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     klingLength: z.enum(CAST_SWAP_KLING_LENGTHS).optional(),
     // Absent = "original" (the original audio back on the result). Read only on a Kling 4 trend.
     pulseAudio: castSwapPulseAudioSchema.optional(),
-    // A mode per output resolution; absent (or a resolution left out) = "full" (the clip's audio in the
-    // reference). A plain mode, saved before the per-resolution setting, parses to that mode at every
-    // resolution. Read only on a Prism trend.
+    // A mode and a pitch shift per output resolution, stored as today's id where one says it; absent (or a
+    // resolution left out) = the default (the full mix at +4). A plain id, saved before the per-resolution
+    // setting, parses to that id at every resolution. Read only on a Prism trend.
     prismReferenceAudio: castSwapPrismReferenceAudioSchema.optional(),
     // The STORED reading (any model name): this schema is re-run on every face mask, upscale and crop save,
     // and a model later removed from the list must never break those. A draft save checks it as an admin

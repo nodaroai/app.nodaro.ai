@@ -20,6 +20,9 @@ interface ClampedNumberInputProps
   /** A blank field commits `undefined` (the "auto" sentinel) instead of
    *  restoring the stored value. */
   readonly allowEmpty?: boolean
+  /** Round a fractional `step` too: the value committed (and stepped to) is a
+   *  whole number of steps. A whole `step` always rounds. */
+  readonly snapToStep?: boolean
 }
 
 /** Plain decimal text, optionally signed: what the field reads as a number. */
@@ -56,6 +59,7 @@ export function ClampedNumberInput({
   max,
   step = 1,
   allowEmpty = false,
+  snapToStep = false,
   onFocus,
   onBlur,
   onKeyDown,
@@ -74,6 +78,7 @@ export function ClampedNumberInput({
   const clamp = (n: number): number => {
     let out = n
     if (Number.isInteger(step)) out = Math.round(out)
+    else if (snapToStep) out = Number((Math.round(out / step) * step).toFixed(10))
     if (min !== undefined) out = Math.max(min, out)
     if (max !== undefined) out = Math.min(max, out)
     return out

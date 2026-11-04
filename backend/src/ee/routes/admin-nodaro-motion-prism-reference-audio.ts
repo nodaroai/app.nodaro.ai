@@ -3,30 +3,39 @@
  * `adminNodaroMotionRoutes`, admin-nodaro-motion.ts, so it shares its edition
  * gate). Admin-only.
  *
- *   GET /v1/admin/nodaro-motion/prism-reference-audio   the setting (null = never saved: the full audio) and whether the engine takes it
- *   PUT /v1/admin/nodaro-motion/prism-reference-audio   { prismReferenceAudio: { "480p"?, "720p"?, "1080p"? } }: save it; audit-logged; 409 for a mode an environment's engine lacks
+ *   GET /v1/admin/nodaro-motion/prism-reference-audio   the setting (null = never saved: the default) and what the engine takes of it
+ *   PUT /v1/admin/nodaro-motion/prism-reference-audio   { prismReferenceAudio: { "480p"?, "720p"?, "1080p"? } }: save it; audit-logged; 422 for a value an environment's platform does not read, 409 for one its engine lacks
  *
  * The setting (`nodaro_motion_prism_reference_audio`,
  * lib/cast-swap-prism-reference-audio.ts) is what audio the reference video of
- * every DIRECT Prism run (either style) carries, per output resolution: the
- * clip's audio (`"full"`, the default and what a missing key means), only the
- * voice split from the music (`"voice"`), or none (`"none"`). A plain mode (the
- * setting's first shape) is still taken, and read, as that mode at every
- * resolution. The original audio
- * always goes back on the result. People running Nodaro Motion never set it;
- * a trend run keeps its own trend's choice. The `/v1/cast-swap` hook sends it
+ * every DIRECT Prism run (either style) carries, per output resolution: a mode
+ * (`"none"`, `"full"`, `"voice"`, `"full-one-tone"`, `"voice-one-tone"`) and a
+ * pitch shift in semitones (-24 to 24 in steps of 0.5, 0 = none; never on
+ * `"none"`), a resolution left out being the default (the full mix at +4). A
+ * resolution is written as one of today's ids (`"full"`, `"voice"`, `"none"`,
+ * `"one-tone"`, `"octave"`) or as `{ mode, semitones }`, and stored as the id
+ * where one says the value (`castSwapPrismReferenceAudioSchema`); a plain id
+ * (the setting's first shape) is still taken, and read, as that id at every
+ * resolution. The original audio always goes back on the result. People
+ * running Nodaro Motion never set it; a trend run keeps its own trend's
+ * choice. The `/v1/cast-swap` hook sends it
  * (middleware/nodaro-motion-prism-reference-audio.ts), only to an engine that
- * declares `castSwap.prismReferenceAudioPerResolution` (the object) or
- * `castSwap.prismReferenceAudio` (the run's own resolution's mode) —
- * `supported` answers whether this environment's declares either, and
- * `perResolution` whether it takes the object.
+ * declares `castSwap.prismReferenceAudioPitch` (the object form),
+ * `castSwap.prismReferenceAudioPerResolution` (the object of ids) or
+ * `castSwap.prismReferenceAudio` (the run's own resolution's id) —
+ * `supported` answers whether this environment's declares any, `perResolution`
+ * whether it takes the object, and `pitch` whether it takes the object form.
  *
- * A setting that names a mode only some engines take ("one-tone", "octave":
- * `DECLARED_ONLY_PRISM_REFERENCE_AUDIO_MODES`) is refused 409
- * `engine_unsupported` while any environment's engine does not list it in
- * `castSwap.prismReferenceAudioModes` (the row is shared by every
- * environment: nodaro-motion-prism-reference-audio-modes.ts). `modes`
- * answers the modes this environment's engine takes.
+ * A save that changes a resolution to what needs more of an engine
+ * (`prismReferenceAudioRequirementsOf`: "one-tone" or "octave", listed in
+ * `castSwap.prismReferenceAudioModes`, or a value no id says, which needs
+ * `castSwap.prismReferenceAudioPitch`) is refused 409 `engine_unsupported`
+ * while any environment's engine does not meet it; a value no id says, which
+ * older code cannot read, is first held 422 `platform_unsupported` while any
+ * environment's platform does not claim it (the row is shared by every
+ * environment: nodaro-motion-prism-reference-audio-modes.ts). What the save
+ * leaves as stored is never a reason to refuse it. `modes` answers the modes
+ * this environment's engine takes at some pitch shift.
  *
  * Each save writes an `admin_actions` row
  * (`update_nodaro_motion_prism_reference_audio`) with the setting before and
@@ -40,17 +49,17 @@ import {
   CAST_SWAP_PRISM_REFERENCE_AUDIO_MODES,
   NODARO_MOTION_PRISM_REFERENCE_AUDIO_KEY,
   castSwapPrismReferenceAudioSchema,
-  declaredOnlyPrismReferenceAudioModesOf,
   engineTakesPrismReferenceAudio,
-  engineTakesPrismReferenceAudioMode,
+  engineTakesPrismReferenceAudioModeAtAll,
   engineTakesPrismReferenceAudioPerResolution,
+  engineTakesPrismReferenceAudioPitch,
+  prismReferenceAudioChangedFrom,
+  prismReferenceAudioChoiceOf,
+  prismReferenceAudioRequirementsOf,
 } from "../../lib/cast-swap-prism-reference-audio.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 import { listEngineEnvironments } from "../lib/engine-environments.js"
-import {
-  cannotTakePrismReferenceAudioModesMessage,
-  environmentsThatCannotTakePrismReferenceAudioModes,
-} from "../lib/nodaro-motion-prism-reference-audio-modes.js"
+import { prismReferenceAudioRefusalOf } from "../lib/nodaro-motion-prism-reference-audio-modes.js"
 import { readNodaroMotionPrismReferenceAudio, saveNodaroMotionPrismReferenceAudio } from "../../lib/nodaro-motion-prism-reference-audio-store.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { audit } from "./admin-trends-lifecycle.js"
@@ -67,8 +76,9 @@ async function view() {
     updatedAt,
     supported: engineTakesPrismReferenceAudio(),
     perResolution: engineTakesPrismReferenceAudioPerResolution(),
-    // The modes this environment's engine takes ("full" always; none beyond it when it takes the setting at all).
-    modes: CAST_SWAP_PRISM_REFERENCE_AUDIO_MODES.filter((m) => engineTakesPrismReferenceAudioMode(getPluginSupports().castSwap, m)),
+    pitch: engineTakesPrismReferenceAudioPitch(),
+    // The modes this environment's engine takes at some pitch shift ("full" always; none beyond it when it takes the setting at all).
+    modes: CAST_SWAP_PRISM_REFERENCE_AUDIO_MODES.filter((m) => engineTakesPrismReferenceAudioModeAtAll(getPluginSupports().castSwap, m)),
   }
 }
 
@@ -85,17 +95,16 @@ export function registerNodaroMotionPrismReferenceAudioRoutes(app: FastifyInstan
     const parsed = putBody.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
-      // A mode only some engines take: every environment's engine must list it (the row is shared).
-      const modes = declaredOnlyPrismReferenceAudioModesOf(parsed.data.prismReferenceAudio)
-      if (modes.length > 0) {
-        const missing = environmentsThatCannotTakePrismReferenceAudioModes(await listEngineEnvironments(), modes)
-        if (missing.length > 0) {
-          return reply.status(409).send({
-            error: { code: "engine_unsupported", message: cannotTakePrismReferenceAudioModesMessage(modes, missing), envs: missing },
-          })
-        }
-      }
       const before = (await readNodaroMotionPrismReferenceAudio()).prismReferenceAudio
+      // What this save changes, only: a value only some engines (or platforms) take needs every environment's (the
+      // row is shared); what it leaves as stored is never a reason to refuse it. The environments are read only then.
+      const requirements = prismReferenceAudioRequirementsOf(
+        prismReferenceAudioChangedFrom(prismReferenceAudioChoiceOf(parsed.data.prismReferenceAudio), prismReferenceAudioChoiceOf(before)),
+      )
+      if (requirements.length > 0) {
+        const refusal = prismReferenceAudioRefusalOf(requirements, "setting", await listEngineEnvironments())
+        if (refusal) return reply.status(refusal.status).send({ error: refusal.error })
+      }
       await saveNodaroMotionPrismReferenceAudio(parsed.data.prismReferenceAudio, req.userId!)
       await audit(req, "update_nodaro_motion_prism_reference_audio", "app_setting", NODARO_MOTION_PRISM_REFERENCE_AUDIO_AUDIT_TARGET, {
         key: NODARO_MOTION_PRISM_REFERENCE_AUDIO_KEY,

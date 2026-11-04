@@ -385,12 +385,16 @@ describe("Admin → Nodaro Motion → Prism reference audio", () => {
   const HINT = "What the engine hears in the reference video, per output resolution. The original audio always goes back on the result."
   const RESOLUTIONS = ["480p", "720p", "1080p"]
   const audioGroup = async (prism: HTMLElement) => within(prism).findByRole("group", { name: "Prism reference audio" })
+  const pitchAt = (group: HTMLElement, r: string) => within(within(group).getByRole("group", { name: r })).getByRole("spinbutton", { name: "Pitch shift (semitones)" })
 
-  it("shows three selects, one per output resolution, in the Prism section only, Full audio until it is saved", async () => {
+  it("shows a mode and a pitch shift per output resolution, in the Prism section only, the full mix at +4 until it is saved", async () => {
     renderWith(<AdminNodaroMotionPage />)
     const prism = await section(/Prism/)
     const group = await audioGroup(prism)
-    for (const r of RESOLUTIONS) expect(within(group).getByRole("combobox", { name: r })).toHaveTextContent("Full audio")
+    for (const r of RESOLUTIONS) {
+      expect(within(group).getByRole("combobox", { name: r })).toHaveTextContent("Full mix")
+      expect(pitchAt(group, r)).toHaveValue("4")
+    }
     expect(within(group).getAllByRole("combobox")).toHaveLength(3)
     expect(within(prism).getByText(HINT)).toBeInTheDocument()
     expect(within(await section(/Pulse/)).queryByRole("group", { name: "Prism reference audio" })).not.toBeInTheDocument()
@@ -398,7 +402,7 @@ describe("Admin → Nodaro Motion → Prism reference audio", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
   })
 
-  it("offers the three choices per resolution and saves every resolution's mode on its own, and nothing else", async () => {
+  it("offers the modes per resolution and saves every resolution's choice on its own, as today's ids, and nothing else", async () => {
     const user = userEvent.setup()
     routes[`PUT ${PRISM_AUDIO_URL}`] = (init) => ({
       body: { data: { prismReferenceAudio: JSON.parse(String(init?.body)).prismReferenceAudio, updatedAt: "2026-10-29T12:00:00.000Z", supported: true } },
@@ -406,13 +410,13 @@ describe("Admin → Nodaro Motion → Prism reference audio", () => {
     renderWith(<AdminNodaroMotionPage />)
     const group = await audioGroup(await section(/Prism/))
     await user.click(within(group).getByRole("combobox", { name: "720p" }))
-    // One-tone and Octave are listed too, greyed out until every environment's engine takes them.
+    // The one-tone modes are listed too, greyed out until every environment's engine takes them.
     expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
-      "Full audio",
-      "Voice only",
       "No audio",
-      "One-tone (flattened, no melody) (not supported yet)",
-      "Octave (+12, one octave up) (not supported yet)",
+      "Full mix",
+      "Voice only",
+      "Full mix, one tone (not supported yet)",
+      "Voice only, one tone (not supported yet)",
     ])
     await user.click(screen.getByRole("option", { name: "No audio" }))
     await user.click(within(group).getByRole("combobox", { name: "1080p" }))
@@ -426,44 +430,190 @@ describe("Admin → Nodaro Motion → Prism reference audio", () => {
     expect(sentTo(`PUT ${PULSE_AUDIO_URL}`)).toEqual([])
   })
 
-  it("starts from what is stored, a resolution left out as Full audio, and says when this environment's engine does not take it yet", async () => {
+  it("starts from what is stored, a resolution left out as the full mix at +4, and says when this environment's engine does not take it yet", async () => {
     routes[`GET ${PRISM_AUDIO_URL}`] = () => ({
-      body: { data: { prismReferenceAudio: { "720p": "none" }, updatedAt: "2026-10-29T10:00:00.000Z", supported: false } },
+      body: { data: { prismReferenceAudio: { "720p": "none", "1080p": "octave" }, updatedAt: "2026-10-29T10:00:00.000Z", supported: false } },
     })
     renderWith(<AdminNodaroMotionPage />)
     const prism = await section(/Prism/)
     const group = await audioGroup(prism)
-    expect(within(group).getByRole("combobox", { name: "480p" })).toHaveTextContent("Full audio")
+    expect(within(group).getByRole("combobox", { name: "480p" })).toHaveTextContent("Full mix")
+    expect(pitchAt(group, "480p")).toHaveValue("4")
     expect(within(group).getByRole("combobox", { name: "720p" })).toHaveTextContent("No audio")
-    expect(within(group).getByRole("combobox", { name: "1080p" })).toHaveTextContent("Full audio")
+    expect(pitchAt(group, "720p")).toBeDisabled()
+    expect(within(group).getByRole("combobox", { name: "1080p" })).toHaveTextContent("Full mix")
+    expect(pitchAt(group, "1080p")).toHaveValue("12")
     expect(within(prism).getByText(/does not take it yet: its runs send the full audio/)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
   })
 
-  /** An engine that takes Prism's newer reference audio modes (`castSwap.prismReferenceAudioModes`), or some. */
-  const tones = (env: string, prismReferenceAudioModes: string[] = ["full", "voice", "none", "one-tone", "octave"]): TrendEngineEnvironment => ({
+  /**
+   * An engine that takes Prism's newer reference audio (`castSwap.prismReferenceAudioModes`, and the pitch shift), or
+   * some of it; and its platform's claim (`claim`, as the server sends a fresh one: `supports.platform`).
+   */
+  const tones = (env: string, prismReferenceAudioModes: string[] = ["full", "voice", "none", "one-tone", "octave"], pitch = false, claim = pitch): TrendEngineEnvironment => ({
     ...ENVIRONMENTS[0]!,
     env,
-    supports: { castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, prismReferenceAudioModes } as never },
+    supports: {
+      castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, prismReferenceAudioModes, ...(pitch ? { prismReferenceAudioPitch: true } : {}) } as never,
+      ...(claim ? { platform: { prismReferenceAudioPitch: true } } : {}),
+    },
+  })
+  const PITCH_MODES = ["full", "voice", "none", "one-tone", "octave", "full-one-tone", "voice-one-tone"]
+  const echo = () => {
+    routes[`PUT ${PRISM_AUDIO_URL}`] = (init) => ({
+      body: { data: { prismReferenceAudio: JSON.parse(String(init?.body)).prismReferenceAudio, updatedAt: "2026-11-03T12:00:00.000Z", supported: true } },
+    })
+  }
+  const stored = (prismReferenceAudio: unknown) => {
+    routes[`GET ${PRISM_AUDIO_URL}`] = () => ({ body: { data: { prismReferenceAudio, updatedAt: "2026-11-03T10:00:00.000Z", supported: true } } })
+  }
+  const statuses = (el: HTMLElement) => within(el).queryAllByRole("status").map((n) => n.textContent)
+
+  it("greys out the pitch shift and Voice only, one tone while an environment lacks the engine's flag or the platform's claim, saying which", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [tones("production", PITCH_MODES, true), tones("staging", undefined, false, true)] } })
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await audioGroup(await section(/Prism/))
+    expect(await within(group).findByText(/^The Cast Swap engine of staging cannot take a pitch shift/)).toBeInTheDocument()
+    for (const r of RESOLUTIONS) expect(pitchAt(group, r)).toBeDisabled()
+    expect(statuses(group)).toEqual(["The Cast Swap engine of staging cannot take a pitch shift or Voice only, one tone yet, and this setting is shared by every environment."])
+    await user.click(within(group).getByRole("combobox", { name: "480p" }))
+    expect(await screen.findByRole("option", { name: "Voice only, one tone (not supported yet)" })).toHaveAttribute("aria-disabled", "true")
   })
 
-  it("offers One-tone and Octave on this shared setting only once every environment's engine takes them, and saves them", async () => {
+  it("the platform's claim missing, the engine there: greyed out too, naming the platform", async () => {
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [tones("production", PITCH_MODES, true, false), tones("staging", PITCH_MODES, true)] } })
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await audioGroup(await section(/Prism/))
+    expect(await within(group).findByText(/^The platform in production does not take a pitch shift/)).toBeInTheDocument()
+    expect(pitchAt(group, "480p")).toBeDisabled()
+    expect(statuses(group)).toEqual(["The platform in production does not take a pitch shift or Voice only, one tone yet, and this setting is shared by every environment."])
+  })
+
+  it("offers Full mix, one tone where every environment's engine lists one-tone, and saves it at 0 as one-tone", async () => {
     const user = userEvent.setup()
     routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [tones("production"), tones("staging", ["full", "voice", "none", "one-tone"])] } })
-    routes[`PUT ${PRISM_AUDIO_URL}`] = (init) => ({
-      body: { data: { prismReferenceAudio: JSON.parse(String(init?.body)).prismReferenceAudio, updatedAt: "2026-11-01T12:00:00.000Z", supported: true } },
-    })
+    echo()
     renderWith(<AdminNodaroMotionPage />)
     const prism = await section(/Prism/)
     const group = await audioGroup(prism)
-    expect(within(prism).getByText(/not on every environment's engine yet: this setting is shared/)).toBeInTheDocument()
+    await within(group).findByText(/^The Cast Swap engine of staging, production cannot take a pitch shift/)
     await user.click(within(group).getByRole("combobox", { name: "480p" }))
-    expect(await screen.findByRole("option", { name: "Octave (+12, one octave up) (not supported yet)" })).toHaveAttribute("aria-disabled", "true")
-    await user.click(await screen.findByRole("option", { name: "One-tone (flattened, no melody)" }))
+    expect(await screen.findByRole("option", { name: "Voice only, one tone (not supported yet)" })).toHaveAttribute("aria-disabled", "true")
+    await user.click(await screen.findByRole("option", { name: "Full mix, one tone" }))
+    // A one-tone mode starts unpitched: today's one-tone, which every engine here takes.
+    expect(pitchAt(group, "480p")).toHaveValue("0")
+    expect(screen.queryByText(/480p: Full mix, one tone/)).not.toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "Save" }))
     await waitFor(() =>
       expect(sentTo(`PUT ${PRISM_AUDIO_URL}`)).toEqual([{ prismReferenceAudio: { "480p": "one-tone", "720p": "full", "1080p": "full" } }]),
     )
+  })
+
+  it("offers any pitch shift once every environment's engine and platform take it, and saves a value no id says as { mode, semitones }", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [tones("production", PITCH_MODES, true), tones("staging", PITCH_MODES, true)] } })
+    echo()
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await audioGroup(await section(/Prism/))
+    await waitFor(() => expect(pitchAt(group, "720p")).toBeEnabled())
+    expect(statuses(group)).toEqual([])
+    await user.click(within(group).getByRole("combobox", { name: "1080p" }))
+    await user.click(await screen.findByRole("option", { name: "Voice only, one tone" }))
+    await user.clear(pitchAt(group, "720p"))
+    await user.type(pitchAt(group, "720p"), "-3.5{Enter}")
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() =>
+      expect(sentTo(`PUT ${PRISM_AUDIO_URL}`)).toEqual([
+        { prismReferenceAudio: { "480p": "full", "720p": { mode: "full", semitones: -3.5 }, "1080p": { mode: "voice-one-tone", semitones: 0 } } },
+      ]),
+    )
+  })
+
+  it("holds Save while a changed value is not on every environment yet, saying what is missing", async () => {
+    const user = userEvent.setup()
+    stored({ "720p": "octave" })
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [tones("production", PITCH_MODES, true), tones("staging")] } })
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await audioGroup(await section(/Prism/))
+    await within(group).findByText(/^The Cast Swap engine of staging cannot take a pitch shift/)
+    // A stored Octave stays open, to be set back; anything typed there no id says waits.
+    await user.clear(pitchAt(group, "720p"))
+    await user.type(pitchAt(group, "720p"), "7{Enter}")
+    expect(within(within(group).getByRole("group", { name: "720p" })).getByText("This pitch shift is not supported yet.")).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        "Prism reference audio, 720p: Full mix at +7 semitones cannot be saved yet: the Cast Swap engine of staging cannot take it, and the platform in staging does not take it.",
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+    // Back as stored: nothing to hold, nothing changed.
+    await user.clear(pitchAt(group, "720p"))
+    await user.type(pitchAt(group, "720p"), "12{Enter}")
+    expect(screen.queryByText(/720p: Full mix at \+7 semitones/)).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+  })
+
+  it("never holds what was not changed: a stored value an environment does not take leaves the other resolutions, and the page's other saves, free", async () => {
+    const user = userEvent.setup()
+    stored({ "720p": { mode: "full", semitones: 7 } })
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [tones("production", PITCH_MODES, true), tones("staging")] } })
+    routes[`PUT ${PULSE_AUDIO_URL}`] = () => ({ body: { data: { pulseAudio: "generated", updatedAt: "2026-11-03T12:00:00.000Z", supported: true } } })
+    echo()
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await audioGroup(await section(/Prism/))
+    await within(group).findByText(/^The Cast Swap engine of staging cannot take a pitch shift/)
+    expect(within(within(group).getByRole("group", { name: "720p" })).getByText("This pitch shift is not supported yet.")).toBeInTheDocument()
+    expect(screen.queryByText(/720p: Full mix at \+7 semitones/)).not.toBeInTheDocument()
+    const pulse = await section(/Pulse/)
+    await user.click(await within(pulse).findByRole("combobox", { name: "Pulse audio" }))
+    await user.click(await screen.findByRole("option", { name: "Kling's audio" }))
+    await user.click(within(group).getByRole("combobox", { name: "1080p" }))
+    await user.click(await screen.findByRole("option", { name: "No audio" }))
+    expect(screen.queryByText(/720p: Full mix at \+7 semitones/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() => expect(sentTo(`PUT ${PULSE_AUDIO_URL}`)).toHaveLength(1))
+    await waitFor(() =>
+      expect(sentTo(`PUT ${PRISM_AUDIO_URL}`)).toEqual([{ prismReferenceAudio: { "480p": "full", "720p": { mode: "full", semitones: 7 }, "1080p": "none" } }]),
+    )
+  })
+
+  it("a stored value that is itself held stays open: typed to its mode's default it holds Save, and it can be typed back", async () => {
+    const user = userEvent.setup()
+    stored({ "720p": { mode: "voice-one-tone", semitones: 3 } })
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [tones("production", PITCH_MODES, true, false), tones("staging", PITCH_MODES, true)] } })
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await audioGroup(await section(/Prism/))
+    await within(group).findByText(/^The platform in production does not take a pitch shift/)
+    await user.clear(pitchAt(group, "720p"))
+    await user.type(pitchAt(group, "720p"), "0{Enter}")
+    expect(screen.getByText("Prism reference audio, 720p: Voice only, one tone at 0 semitones cannot be saved yet: the platform in production does not take it.")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+    expect(pitchAt(group, "720p")).toBeEnabled()
+    await user.clear(pitchAt(group, "720p"))
+    await user.type(pitchAt(group, "720p"), "3{Enter}")
+    expect(screen.queryByText(/720p: Voice only, one tone/)).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+  })
+
+  it("a failed read of the environments says so and names none, on the fields and on what Save holds", async () => {
+    const user = userEvent.setup()
+    stored({ "720p": { mode: "full", semitones: 7 }, "1080p": "one-tone" })
+    routes[`GET ${ENVS_URL}`] = () => ({ status: 500, body: { error: { code: "internal_error", message: "down" } } })
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await audioGroup(await section(/Prism/))
+    expect(await within(group).findByText("The environments could not be read, so a new pitch shift or one-tone mode can't be saved yet. Reload the page to try again.")).toBeInTheDocument()
+    // True beside a closed field, an open one and a held one.
+    expect(pitchAt(group, "480p")).toBeDisabled()
+    expect(pitchAt(group, "720p")).toBeEnabled()
+    expect(pitchAt(group, "1080p")).toBeEnabled()
+    await user.clear(pitchAt(group, "720p"))
+    await user.type(pitchAt(group, "720p"), "8{Enter}")
+    expect(screen.getByText("Prism reference audio, 720p: Full mix at +8 semitones cannot be saved yet: the environments could not be read.")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+    expect(screen.queryByText(/The Cast Swap engine of staging, production/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/The platform in staging, production/)).not.toBeInTheDocument()
   })
 
   it("reads a setting saved as one plain mode as that mode at every resolution, with no change to save", async () => {
@@ -471,6 +621,14 @@ describe("Admin → Nodaro Motion → Prism reference audio", () => {
     renderWith(<AdminNodaroMotionPage />)
     const group = await audioGroup(await section(/Prism/))
     for (const r of RESOLUTIONS) expect(within(group).getByRole("combobox", { name: r })).toHaveTextContent("Voice only")
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+  })
+
+  it("reads a stored { mode, semitones } as it is, with no change to save", async () => {
+    stored({ "720p": { mode: "full", semitones: 7 } })
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await audioGroup(await section(/Prism/))
+    expect(pitchAt(group, "720p")).toHaveValue("7")
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
   })
 })

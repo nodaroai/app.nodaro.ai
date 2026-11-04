@@ -57,6 +57,8 @@ const mem = vi.hoisted(() => ({
   ffmpegRuns: [] as string[][],
   /** When set, the next ffmpeg run fails with it. */
   ffmpegFails: null as null | Error,
+  /** When set, reading a trend's version by number (`getVersion`) fails. */
+  versionReadFails: false,
   /** When set, a download of a url it answers true for fails (the object is gone). */
   downloadFails: null as null | ((url: string) => boolean),
   /** The frame count a cut reads, by its output path (the preview clip's `clip.mp4`, its mask's `mask-clip.mp4`): one number for both when a number. */
@@ -100,6 +102,7 @@ vi.mock("../../lib/trends/store.js", async (importOriginal) => {
       return t ? strip(t) : null
     },
     getVersion: async (id: string, version: number) => {
+      if (mem.versionReadFails) throw new Error("down")
       const v = mem.trends.find((x) => x.id === id)?.versions[version]
       return v ? structuredClone(v.data) : null
     },
@@ -536,6 +539,7 @@ beforeEach(async () => {
   mem.durations = new Map()
   mem.ffmpegRuns = []
   mem.ffmpegFails = null
+  mem.versionReadFails = false
   mem.downloadFails = null
   mem.frames = 150
   mem.probeFails = null
@@ -3740,5 +3744,374 @@ describe("the smallest face with mesh lines, held until every environment's plat
     const res = await call("GET", `/v1/admin/trends/${T1}`)
     expect(res.statusCode).toBe(200)
     expect(res.json().data.draft.faceMasking).toEqual(MIN)
+  })
+})
+
+// ── Prism's reference audio, a value no id says: the hold ──────────────────
+
+/**
+ * A resolution's `{ mode, semitones }` that no id says is what older code cannot
+ * read: a build from before it reads the whole setting as never saved (every run
+ * sends the full audio) and its schema refuses the draft. Trends live in the
+ * database every environment shares. So a draft save or a publish that CHANGES a
+ * resolution to one waits for every environment's platform claim (422
+ * `platform_unsupported`) and engine flag (409). What was not changed is never
+ * refused, and a value an id says never is.
+ */
+describe("Prism's reference audio: a value no id says, held until every environment's platform and engine take it", () => {
+  const SEVEN = { "720p": { mode: "full" as const, semitones: 7 } }
+  const IDS = ["full", "voice", "none", "one-tone", "octave"]
+  const PITCH = { ...CAST_SWAP_ALL, prismReferenceAudioPerResolution: true, prismReferenceAudioPitch: true, prismReferenceAudioModes: [...IDS, "full-one-tone", "voice-one-tone"] }
+  const NO_PITCH = { ...CAST_SWAP_ALL, prismReferenceAudioPerResolution: true, prismReferenceAudioModes: IDS }
+  const TAKES = { prismReferenceAudioPitch: true }
+  const COVERED = () => [envRow("production", PITCH, TAKES), envRow("staging", PITCH, TAKES)]
+  const LACKING = () => [envRow("production", NO_PITCH), envRow("staging", NO_PITCH)]
+  const save = async (prismReferenceAudio: unknown, over: Partial<TrendVersionData> = {}) =>
+    call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(over), ...(prismReferenceAudio === undefined ? {} : { prismReferenceAudio }) }, revision: await revisionOf() })
+  const publish = () => call("POST", `/v1/admin/trends/${T1}/publish`)
+
+  describe("a draft save", () => {
+    it("is held while one environment's platform does not claim it, naming it; nothing is saved", async () => {
+      seed()
+      world.envs = [envRow("production", PITCH), envRow("staging", PITCH, TAKES)]
+      const before = structuredClone(mem.trends[0]!.versions[1]!.data)
+      const res = await save(SEVEN)
+      expect(res.statusCode).toBe(422)
+      expect(res.json().error).toEqual({
+        code: "platform_unsupported",
+        envs: ["production"],
+        message:
+          "The platform in production does not take this Prism reference audio yet, and trends are shared by every environment: choose No audio, Full mix at +4, Voice only at +4, or Full mix, one tone at 0, or wait until production is updated.",
+      })
+      expect(mem.trends[0]!.versions[1]!.data).toEqual(before)
+    })
+
+    it("is refused while one environment's engine lacks the flag, every platform claiming it; nothing is saved", async () => {
+      seed()
+      world.envs = [envRow("production", PITCH, TAKES), envRow("staging", NO_PITCH, TAKES)]
+      const before = structuredClone(mem.trends[0]!.versions[1]!.data)
+      const res = await save(SEVEN)
+      expect(res.statusCode).toBe(409)
+      expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: ["staging"] })
+      expect(res.json().error.message).toContain("trends are shared by every environment")
+      expect(mem.trends[0]!.versions[1]!.data).toEqual(before)
+    })
+
+    it("needs a one-tone mode listed too, and a fresh claim: a stale one is no claim", async () => {
+      seed()
+      world.envs = [envRow("production", PITCH, TAKES), envRow("staging", { ...PITCH, prismReferenceAudioModes: IDS }, TAKES)]
+      const unlisted = await save({ "480p": { mode: "voice-one-tone", semitones: 0 } })
+      expect(unlisted.statusCode).toBe(409)
+      expect(unlisted.json().error).toMatchObject({ code: "engine_unsupported", envs: ["staging"] })
+      const stale = new Date(Date.now() - 20 * 60_000).toISOString()
+      world.envs = [envRow("production", PITCH, TAKES, stale), envRow("staging", PITCH, TAKES)]
+      const held = await save(SEVEN)
+      expect(held.statusCode).toBe(422)
+      expect(held.json().error).toMatchObject({ code: "platform_unsupported", envs: ["production"] })
+    })
+
+    it("saves it once every environment's claim and flag cover it", async () => {
+      seed()
+      world.envs = COVERED()
+      const res = await save(SEVEN)
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+      expect(mem.trends[0]!.versions[1]!.data.prismReferenceAudio).toEqual(SEVEN)
+    })
+
+    it("never refuses what was not changed: an untouched draft saves whatever the environments say, reading them no more than any save", async () => {
+      seed({}, draftData({ prismReferenceAudio: SEVEN }))
+      world.envs = LACKING()
+      let envReads = 0
+      db.respond = (q) => {
+        if (q.table === "engine_environments") envReads++
+        return respond(q)
+      }
+      const res = await save(SEVEN, { name: { en: "Renamed" } })
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+      expect(mem.trends[0]!.versions[1]!.data.name).toEqual({ en: "Renamed" })
+      expect(mem.trends[0]!.versions[1]!.data.prismReferenceAudio).toEqual(SEVEN)
+      // A draft that never held it reads them the same; changing to it adds exactly one read.
+      const ordinary = envReads
+      envReads = 0
+      world.envs = COVERED()
+      expect((await save({ "720p": { mode: "full", semitones: 8 } })).statusCode).toBe(200)
+      expect(envReads).toBe(ordinary + 1)
+    })
+
+    it("carrying the smallest face with mesh lines too still reads the environments once", async () => {
+      seed()
+      const MIN_FACE = { mode: "always" as const, source: "full-depth" as const, faceMesh: true, faceMeshMinFaceHeightPct: 20 }
+      const ALL_OF_IT = { ...PITCH, faceMeshMinFaceHeightPct: true }
+      let envReads = 0
+      db.respond = (q) => {
+        if (q.table === "engine_environments") envReads++
+        return respond(q)
+      }
+      world.envs = COVERED()
+      expect((await save({})).statusCode).toBe(200)
+      const ordinary = envReads
+      envReads = 0
+      const both = { faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true }
+      world.envs = [envRow("production", ALL_OF_IT, both), envRow("staging", ALL_OF_IT, both)]
+      expect((await save(SEVEN, { faceMasking: MIN_FACE })).statusCode).toBe(200)
+      expect(envReads).toBe(ordinary + 1)
+    })
+
+    it("a resolution left untouched is no reason to refuse another's change; the one that moved is", async () => {
+      seed({}, draftData({ prismReferenceAudio: SEVEN }))
+      world.envs = LACKING()
+      const other = await save({ ...SEVEN, "1080p": "none" })
+      expect(other.statusCode, JSON.stringify(other.json())).toBe(200)
+      expect(mem.trends[0]!.versions[1]!.data.prismReferenceAudio).toEqual({ ...SEVEN, "1080p": "none" })
+      const moved = await save({ "720p": { mode: "full", semitones: 8 }, "1080p": "none" })
+      expect(moved.statusCode).toBe(422)
+      expect(mem.trends[0]!.versions[1]!.data.prismReferenceAudio).toEqual({ ...SEVEN, "1080p": "none" })
+    })
+
+    it("never refuses a value an id says, stored as that id, whatever the environments say", async () => {
+      seed()
+      world.envs = [envRow("production", CAST_SWAP_ALL), envRow("staging", CAST_SWAP_ALL)]
+      const res = await save({ "480p": { mode: "full", semitones: 12 }, "720p": { mode: "full-one-tone", semitones: 0 }, "1080p": { mode: "voice", semitones: 4 } })
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+      expect(mem.trends[0]!.versions[1]!.data.prismReferenceAudio).toEqual({ "480p": "octave", "720p": "one-tone", "1080p": "voice" })
+      expect((await save("none")).statusCode).toBe(200)
+      expect(mem.trends[0]!.versions[1]!.data.prismReferenceAudio).toEqual({ "480p": "none", "720p": "none", "1080p": "none" })
+    })
+
+    it("an environments read that fails while a value is asked is a 500, never a save", async () => {
+      seed()
+      const before = structuredClone(mem.trends[0]!.versions[1]!.data)
+      db.respond = (q) => (q.table === "engine_environments" ? { data: null, error: { message: "down" } } : respond(q))
+      expect((await save(SEVEN)).statusCode).toBe(500)
+      expect(mem.trends[0]!.versions[1]!.data).toEqual(before)
+    })
+  })
+
+  describe("a new version of a published trend", () => {
+    const published = () => seed({ status: "published", publishedVersion: 1, versions: { 1: { data: draftData({ prismReferenceAudio: SEVEN }), published: true } } })
+
+    it("a save that writes the next version with the value unchanged is never refused", async () => {
+      published()
+      world.envs = LACKING()
+      const res = await save(SEVEN, { name: { en: "Renamed" } })
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+      expect(mem.trends[0]!.draftVersion).toBe(2)
+      expect(mem.trends[0]!.versions[2]!.data.prismReferenceAudio).toEqual(SEVEN)
+      expect(mem.trends[0]!.versions[1]!.data.name).toEqual(draftData().name)
+    })
+
+    it("a save that changes it is held; no version is written", async () => {
+      published()
+      world.envs = LACKING()
+      const res = await save({ "720p": { mode: "full", semitones: 8 } })
+      expect(res.statusCode).toBe(422)
+      expect(res.json().error).toMatchObject({ code: "platform_unsupported", envs: ["staging", "production"] })
+      expect(mem.trends[0]!.draftVersion).toBe(1)
+      expect(Object.keys(mem.trends[0]!.versions)).toEqual(["1"])
+    })
+
+    it("every other draft write carries the stored value forward: never held", async () => {
+      const ex2 = { ...EXAMPLE, videoUrl: `https://cdn.test/trends/${T1}/ex2.mp4` }
+      seed({}, draftData({ prismReferenceAudio: SEVEN, examples: [EXAMPLE, ex2] }))
+      world.envs = LACKING()
+      const res = await call("PUT", `/v1/admin/trends/${T1}/examples/order`, { order: [1, 0], revision: await revisionOf() })
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+      expect(mem.trends[0]!.versions[1]!.data.prismReferenceAudio).toEqual(SEVEN)
+    })
+  })
+
+  describe("a publish", () => {
+    it("of a value never published is held while one environment's platform does not claim it; nothing is published", async () => {
+      seed({}, draftData({ prismReferenceAudio: SEVEN }))
+      world.envs = [envRow("production", PITCH, TAKES), envRow("staging", PITCH)]
+      const res = await publish()
+      expect(res.statusCode).toBe(422)
+      expect(res.json().error).toEqual({
+        code: "platform_unsupported",
+        envs: ["staging"],
+        message:
+          "The platform in staging does not take this Prism reference audio yet, so its runs of this trend would send the full audio: choose No audio, Full mix at +4, Voice only at +4, or Full mix, one tone at 0, or wait until staging is updated.",
+      })
+      expect(mem.trends[0]!.status).toBe("draft")
+      expect(mem.trends[0]!.publishedVersion).toBeNull()
+    })
+
+    it("is blocked while one environment's engine lacks the flag, every platform claiming it", async () => {
+      seed({}, draftData({ prismReferenceAudio: SEVEN }))
+      world.envs = [envRow("production", PITCH, TAKES), envRow("staging", NO_PITCH, TAKES)]
+      const res = await publish()
+      expect(res.statusCode).toBe(409)
+      expect(reasonsOf(res)).toContainEqual({ code: "engine_unsupported", env: "staging", need: "prismReferenceAudioPitch" })
+      expect(mem.trends[0]!.status).toBe("draft")
+    })
+
+    it("goes through once every environment's claim and flag cover it", async () => {
+      seed({}, draftData({ prismReferenceAudio: SEVEN }))
+      world.envs = COVERED()
+      const res = await publish()
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+      expect(mem.trends[0]!.status).toBe("published")
+    })
+
+    it("a stale claim is no claim", async () => {
+      seed({}, draftData({ prismReferenceAudio: SEVEN }))
+      world.envs = [envRow("production", PITCH, TAKES, new Date(Date.now() - 20 * 60_000).toISOString()), envRow("staging", PITCH, TAKES)]
+      const res = await publish()
+      expect(res.statusCode).toBe(422)
+      expect(res.json().error).toMatchObject({ code: "platform_unsupported", envs: ["production"] })
+    })
+
+    it("of a draft that changed it from the published version is held", async () => {
+      seed({
+        status: "published",
+        publishedVersion: 1,
+        draftVersion: 2,
+        versions: { 1: { data: draftData({ prismReferenceAudio: SEVEN }), published: true }, 2: { data: draftData({ prismReferenceAudio: { "720p": { mode: "full", semitones: 8 } } }), published: false } },
+      })
+      world.envs = LACKING()
+      const res = await publish()
+      expect(res.statusCode).toBe(422)
+      expect(mem.trends[0]!.publishedVersion).toBe(1)
+    })
+
+    it("never refuses a value the published version holds as it is: another edit of a live trend goes out, whatever the environments say", async () => {
+      seed({
+        status: "published",
+        publishedVersion: 1,
+        draftVersion: 2,
+        versions: { 1: { data: draftData({ prismReferenceAudio: SEVEN }), published: true }, 2: { data: draftData({ prismReferenceAudio: SEVEN, name: { en: "Renamed" } }), published: false } },
+      })
+      world.envs = LACKING()
+      const res = await publish()
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+      expect(mem.trends[0]!.publishedVersion).toBe(2)
+    })
+
+    it("publishing again what is already live is never refused", async () => {
+      seed({ status: "published", publishedVersion: 1, versions: { 1: { data: draftData({ prismReferenceAudio: SEVEN }), published: true } } })
+      world.envs = LACKING()
+      const res = await publish()
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    })
+
+    /**
+     * "Unchanged" means what people run now holds it: the published version of a
+     * trend that is published, on Prism. An unpublished or restored trend runs
+     * nothing, and a Pulse version never sent the value, so publishing either
+     * puts the value live anew, and it needs what any new value needs.
+     */
+    describe("judges \"unchanged\" only against a live version", () => {
+      const SAME = draftData({ prismReferenceAudio: SEVEN })
+      const EDITED = draftData({ prismReferenceAudio: SEVEN, name: { en: "Renamed" } })
+      const ONE_ENGINE_LOST_IT = () => [envRow("production", PITCH, TAKES), envRow("staging", NO_PITCH, TAKES)]
+
+      it("an unpublished trend whose draft is its published version is held; it stays unpublished", async () => {
+        seed({ status: "unpublished", publishedVersion: 1, versions: { 1: { data: SAME, published: true } } })
+        world.envs = LACKING()
+        const res = await publish()
+        expect(res.statusCode).toBe(422)
+        expect(res.json().error).toMatchObject({ code: "platform_unsupported", envs: ["staging", "production"] })
+        expect(mem.trends[0]!.status).toBe("unpublished")
+      })
+
+      it("an unpublished trend with a later draft holding the same value is held", async () => {
+        seed({ status: "unpublished", publishedVersion: 1, draftVersion: 2, versions: { 1: { data: SAME, published: true }, 2: { data: EDITED, published: false } } })
+        world.envs = LACKING()
+        const res = await publish()
+        expect(res.statusCode).toBe(422)
+        expect(res.json().error).toMatchObject({ code: "platform_unsupported", envs: ["staging", "production"] })
+        expect(mem.trends[0]!.status).toBe("unpublished")
+        expect(mem.trends[0]!.publishedVersion).toBe(1)
+      })
+
+      it("a trend archived and restored is held", async () => {
+        seed({ status: "published", publishedVersion: 1, versions: { 1: { data: SAME, published: true } } })
+        world.envs = LACKING()
+        expect((await call("POST", `/v1/admin/trends/${T1}/archive`)).statusCode).toBe(200)
+        expect((await call("POST", `/v1/admin/trends/${T1}/restore`)).statusCode).toBe(200)
+        expect(mem.trends[0]!.status).toBe("unpublished")
+        const res = await publish()
+        expect(res.statusCode).toBe(422)
+        expect(res.json().error).toMatchObject({ code: "platform_unsupported", envs: ["staging", "production"] })
+        expect(mem.trends[0]!.status).toBe("unpublished")
+      })
+
+      it("an unpublished trend with every platform claiming it and one engine that lost the flag is blocked by the publish checks", async () => {
+        seed({ status: "unpublished", publishedVersion: 1, versions: { 1: { data: SAME, published: true } } })
+        world.envs = ONE_ENGINE_LOST_IT()
+        const res = await publish()
+        expect(res.statusCode).toBe(409)
+        expect(res.json().error.code).toBe("publish_blocked")
+        expect(reasonsOf(res)).toContainEqual({ code: "engine_unsupported", env: "staging", need: "prismReferenceAudioPitch" })
+        expect(mem.trends[0]!.status).toBe("unpublished")
+      })
+
+      it("a published Pulse version holding the value, its draft moved to Prism: the engine need and the hold both stand", async () => {
+        const trend = () =>
+          seed({
+            status: "published",
+            publishedVersion: 1,
+            draftVersion: 2,
+            versions: { 1: { data: draftData({ engine: "kling-4", prismReferenceAudio: SEVEN }), published: true }, 2: { data: draftData({ engine: "seedance-2-5", prismReferenceAudio: SEVEN }), published: false } },
+          })
+        trend()
+        world.envs = [envRow("production", NO_PITCH, TAKES), envRow("staging", NO_PITCH, TAKES)]
+        const blocked = await publish()
+        expect(blocked.statusCode).toBe(409)
+        expect(reasonsOf(blocked)).toContainEqual({ code: "engine_unsupported", env: "production", need: "prismReferenceAudioPitch" })
+        expect(reasonsOf(blocked)).toContainEqual({ code: "engine_unsupported", env: "staging", need: "prismReferenceAudioPitch" })
+        expect(mem.trends[0]!.publishedVersion).toBe(1)
+        mem.trends = []
+        trend()
+        world.envs = LACKING()
+        const held = await publish()
+        expect(held.statusCode).toBe(422)
+        expect(held.json().error).toMatchObject({ code: "platform_unsupported" })
+        expect(mem.trends[0]!.publishedVersion).toBe(1)
+      })
+
+      it("an edit of a live Prism trend, the value as it is, still goes out whatever the environments say", async () => {
+        seed({ status: "published", publishedVersion: 1, draftVersion: 2, versions: { 1: { data: SAME, published: true }, 2: { data: EDITED, published: false } } })
+        world.envs = LACKING()
+        const res = await publish()
+        expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+        expect(mem.trends[0]!.status).toBe("published")
+        expect(mem.trends[0]!.publishedVersion).toBe(2)
+      })
+
+      it("a published version whose row is missing is no live version: held", async () => {
+        seed({ status: "published", publishedVersion: 1, draftVersion: 2, versions: { 2: { data: EDITED, published: false } } })
+        world.envs = LACKING()
+        const res = await publish()
+        expect(res.statusCode).toBe(422)
+        expect(res.json().error).toMatchObject({ code: "platform_unsupported", envs: ["staging", "production"] })
+        expect(mem.trends[0]!.publishedVersion).toBe(1)
+      })
+
+      it("a failed read of the published version is a 500; nothing is published", async () => {
+        seed({ status: "published", publishedVersion: 1, draftVersion: 2, versions: { 1: { data: SAME, published: true }, 2: { data: EDITED, published: false } } })
+        world.envs = LACKING()
+        mem.versionReadFails = true
+        const res = await publish()
+        expect(res.statusCode).toBe(500)
+        expect(mem.trends[0]!.publishedVersion).toBe(1)
+        expect(mem.trends[0]!.draftVersion).toBe(2)
+      })
+    })
+
+    it("a value an id says is never held by it", async () => {
+      seed({}, draftData({ prismReferenceAudio: { "480p": "octave", "720p": "voice", "1080p": "none" } }))
+      world.envs = LACKING()
+      const res = await publish()
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+      expect(mem.trends[0]!.status).toBe("published")
+    })
+  })
+
+  it("GET /engine-environments shows the claim while fresh, a stale one left out", async () => {
+    world.envs = [envRow("production", PITCH, TAKES, new Date(Date.now() - 20 * 60_000).toISOString()), envRow("staging", PITCH, TAKES)]
+    const rows = (await call("GET", "/v1/admin/trends/engine-environments")).json().data as Array<{ env: string; supports: Record<string, unknown> }>
+    expect(rows.find((r) => r.env === "production")!.supports).toEqual({ castSwap: PITCH })
+    expect(rows.find((r) => r.env === "staging")!.supports).toEqual({ castSwap: PITCH, platform: TAKES })
   })
 })

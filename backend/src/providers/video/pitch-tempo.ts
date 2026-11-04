@@ -30,8 +30,17 @@ import {
  * runner's default kill budget and memory reservation apply.
  */
 
+/**
+ * The widest pitch shift ONE rubberband pass takes here, either way: two
+ * octaves (a pitch ratio of 4 or 0.25, well inside the filter's 0.01–100),
+ * half steps included. A plugin's pitch shift (`tk.media.pitchTempo`, the
+ * `pitchTempoTwoOctaves` capability) takes it; the Pitch & Tempo node keeps
+ * its own ±12 (`PITCH_TEMPO_LIMITS`).
+ */
+export const PITCH_SHIFT_MAX_SEMITONES = 24
+
 export interface PitchTempoSettings {
-  /** −12 … +12 semitones (12 = one octave up). */
+  /** −12 … +12 semitones (12 = one octave up); up to ±24 where the caller asks for it (`maxSemitones`). */
   readonly semitones: number
   /** 0.5 … 2 speed factor, pitch kept. Ignored on a video input. */
   readonly tempo: number
@@ -42,6 +51,12 @@ export interface PitchTempoSettings {
 export type PitchTempoOptions = PitchTempoSettings & {
   readonly audioUrl?: string
   readonly videoUrl?: string
+  /**
+   * The widest shift this call takes, either way, at most
+   * `PITCH_SHIFT_MAX_SEMITONES`; a shift beyond it is clamped to it. Left out:
+   * the node's ±12 (`PITCH_TEMPO_LIMITS`), exactly as before.
+   */
+  readonly maxSemitones?: number
 }
 
 export interface PitchTempoResult {
@@ -65,20 +80,27 @@ const NO_RUBBERBAND_MESSAGE =
  * Settings held to the node's ranges with its defaults filled in. The route
  * validates its body, but a workflow run builds its payload from node data
  * (and field mappings) without that Zod pass, so the engine is the one funnel
- * every lane goes through.
+ * every lane goes through. `maxSemitones` widens the pitch range for a caller
+ * that asks for it (a plugin's pitch shift: up to `PITCH_SHIFT_MAX_SEMITONES`,
+ * one pass); beyond its range a shift is clamped, as the node's is.
  */
-export function normalizePitchTempoSettings(raw: {
-  readonly semitones?: unknown
-  readonly tempo?: unknown
-  readonly preserveFormants?: unknown
-}): PitchTempoSettings {
+export function normalizePitchTempoSettings(
+  raw: {
+    readonly semitones?: unknown
+    readonly tempo?: unknown
+    readonly preserveFormants?: unknown
+  },
+  maxSemitones?: number,
+): PitchTempoSettings {
   const finite = (v: unknown): number | undefined => {
     const n = typeof v === "string" && v.trim() !== "" ? Number(v) : v
     return typeof n === "number" && Number.isFinite(n) ? n : undefined
   }
   const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
+  const widest = maxSemitones === undefined ? undefined : Math.min(Math.abs(maxSemitones), PITCH_SHIFT_MAX_SEMITONES)
+  const [lo, hi] = widest === undefined ? [PITCH_TEMPO_LIMITS.SEMITONES_MIN, PITCH_TEMPO_LIMITS.SEMITONES_MAX] : [-widest, widest]
   return {
-    semitones: clamp(finite(raw.semitones) ?? 0, PITCH_TEMPO_LIMITS.SEMITONES_MIN, PITCH_TEMPO_LIMITS.SEMITONES_MAX),
+    semitones: clamp(finite(raw.semitones) ?? 0, lo, hi),
     tempo: clamp(finite(raw.tempo) ?? 1, PITCH_TEMPO_LIMITS.TEMPO_MIN, PITCH_TEMPO_LIMITS.TEMPO_MAX),
     preserveFormants: raw.preserveFormants !== false,
   }
@@ -163,7 +185,7 @@ export async function pitchTempo(options: PitchTempoOptions): Promise<PitchTempo
     if (!streams.hasAudio) throw new PitchTempoInputError(NO_AUDIO_MESSAGE)
     const lane: "audio" | "video" = streams.hasVideo ? "video" : "audio"
 
-    const settings = normalizePitchTempoSettings(options)
+    const settings = normalizePitchTempoSettings(options, options.maxSemitones)
     const filter = buildRubberbandFilter({ ...settings, tempo: lane === "video" ? 1 : settings.tempo })
     const outputPath = join(workDir, lane === "video" ? "output.mp4" : "output.mp3")
     const sourceSec = lane === "video" ? await getVideoStreamDuration(inputPath) : undefined

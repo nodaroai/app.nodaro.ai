@@ -22,7 +22,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { AdminTrendEngine, AdminTrendKlingLength, CastSwapPrismReferenceAudioByResolution, CastSwapPulseAudioId, TrendEngineEnvironment } from "@/lib/api"
-import { prismReferenceAudioModesSomeEngineTakes } from "../prism-reference-audio"
 import { engineOfForm } from "../model"
 import { PulseAudioSelect } from "./PulseAudioSelect"
 import { PrismReferenceAudioSelect } from "./PrismReferenceAudioSelect"
@@ -60,12 +59,11 @@ interface Props {
   readonly onKlingLengthChange: (next: AdminTrendKlingLength) => void
   readonly onPulseAudioChange: (next: CastSwapPulseAudioId) => void
   readonly onPrismReferenceAudioChange: (next: CastSwapPrismReferenceAudioByResolution) => void
-  /** Each environment's engine, as reported: One-tone and Octave are offered once some environment's engine takes them. */
+  /** Each environment's engine and platform, as reported: the Prism reference audio only some take is offered once every one does. */
   readonly envs?: readonly TrendEngineEnvironment[]
+  /** The environments could not be read: said in words, naming none. */
+  readonly envsUnreadable?: boolean
 }
-
-/** Why a Prism reference audio mode is greyed out in a trend's editor. */
-export const PRISM_REFERENCE_AUDIO_MODE_UNOFFERED = "A mode greyed out is not on any environment's engine yet; publishing needs it on every environment's."
 
 export function EngineEditor({
   value,
@@ -77,6 +75,7 @@ export function EngineEditor({
   onPulseAudioChange,
   onPrismReferenceAudioChange,
   envs,
+  envsUnreadable,
 }: Props) {
   const engine = engineOfForm({ engine: value })
   const hint = ENGINES.find((e) => e.value === engine)?.hint
@@ -87,7 +86,7 @@ export function EngineEditor({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1 text-sm">
           <label htmlFor={selectId} className="font-medium">
             Model
@@ -126,12 +125,15 @@ export function EngineEditor({
         )}
         {engine === "kling-4" && <PulseAudioSelect value={pulseAudio} onChange={onPulseAudioChange} />}
         {engine === "seedance-2-5" && (
-          <PrismReferenceAudioSelect
-            value={prismReferenceAudio}
-            onChange={onPrismReferenceAudioChange}
-            offered={prismReferenceAudioModesSomeEngineTakes(envs)}
-            unofferedNote={PRISM_REFERENCE_AUDIO_MODE_UNOFFERED}
-          />
+          <div className="sm:col-span-2">
+            <PrismReferenceAudioSelect
+              value={prismReferenceAudio}
+              onChange={onPrismReferenceAudioChange}
+              envs={envs}
+              envsUnreadable={envsUnreadable}
+              sharedBy="trend"
+            />
+          </div>
         )}
       </div>
       <p id={hintId} className="text-xs text-muted-foreground">

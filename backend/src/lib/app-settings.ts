@@ -112,10 +112,11 @@ export interface AppSettings {
    */
   nodaro_motion_pulse_audio: CastSwapPulseAudio | null
   /**
-   * The reference audio of every DIRECT Nodaro Motion Prism run, a mode per
-   * output resolution (cast-swap-prism-reference-audio.ts; a plain mode saved
-   * earlier reads as that mode at every resolution). null = never saved (or
-   * not a value this app knows): the full audio.
+   * The reference audio of every DIRECT Nodaro Motion Prism run, a mode and a
+   * pitch shift per output resolution, as stored (cast-swap-prism-reference-audio.ts:
+   * an id where one says the value; a plain id saved earlier reads as that id
+   * at every resolution). null = never saved (or not a value this app knows):
+   * the default, the full mix at +4.
    */
   nodaro_motion_prism_reference_audio: CastSwapPrismReferenceAudio | null
   /**

@@ -388,7 +388,7 @@ describe("the platform hold", () => {
   })
 
   it("this platform says it takes the field", () => {
-    expect(PLATFORM_SUPPORTS).toEqual({ faceMeshMinFaceHeightPct: true })
+    expect(PLATFORM_SUPPORTS).toEqual({ faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true })
     expect(Object.isFrozen(PLATFORM_SUPPORTS)).toBe(true)
   })
 

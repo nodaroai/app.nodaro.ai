@@ -94,7 +94,7 @@ describe("buildToolkit", () => {
     expect(typeof tk.media.pitchTempo).toBe("function")
   })
 
-  it("media.pitchTempo passes semitones and audioUrl, tempo 1", async () => {
+  it("media.pitchTempo passes semitones and audioUrl, tempo 1, and takes up to two octaves", async () => {
     mockPitchTempo.mockResolvedValueOnce({ outputPath: "/tmp/pitch-tempo-x/output.mp3", inputType: "audio" })
     const out = await tk.media.pitchTempo!({ audioUrl: "https://a/x.mp3", semitones: 3 })
     expect(mockPitchTempo).toHaveBeenCalledWith({
@@ -102,8 +102,17 @@ describe("buildToolkit", () => {
       semitones: 3,
       tempo: 1,
       preserveFormants: true,
+      maxSemitones: 24,
     })
     expect(out).toEqual({ audioPath: "/tmp/pitch-tempo-x/output.mp3" })
+  })
+
+  it("media.pitchTempo hands ±24 and half steps to the core as they are (one pass, pitch-tempo-two-octaves.test.ts)", async () => {
+    for (const semitones of [24, -24, 0.5, -13.5]) {
+      mockPitchTempo.mockResolvedValueOnce({ outputPath: "/tmp/pitch-tempo-x/output.mp3", inputType: "audio" })
+      await tk.media.pitchTempo!({ audioUrl: "https://a/x.mp3", semitones })
+      expect(mockPitchTempo).toHaveBeenLastCalledWith({ audioUrl: "https://a/x.mp3", semitones, tempo: 1, preserveFormants: true, maxSemitones: 24 })
+    }
   })
 
   it("media.pitchTempo re-throws PitchTempoInputError unchanged", async () => {

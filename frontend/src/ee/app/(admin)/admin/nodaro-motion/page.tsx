@@ -71,7 +71,7 @@ import {
 import { FaceMaskingEditor } from "../trends/components/FaceMaskingEditor"
 import { DEFAULT_PULSE_AUDIO, PulseAudioSelect } from "../trends/components/PulseAudioSelect"
 import { PrismReferenceAudioSelect } from "../trends/components/PrismReferenceAudioSelect"
-import { prismReferenceAudioModesEveryEngineTakes, prismReferenceAudioTriple } from "../trends/prism-reference-audio"
+import { prismReferenceAudioHeldIssues, prismReferenceAudioSaved, prismReferenceAudioTriple } from "../trends/prism-reference-audio"
 import { maskingIssues } from "../trends/model"
 import {
   environmentsThatCannotBlurDepth,
@@ -105,9 +105,6 @@ const PULSE_AUDIO_UNSUPPORTED = "This environment's engine does not take it yet:
 /** Said under the Prism reference audio select when this environment's engine does not take it yet. */
 const PRISM_REFERENCE_AUDIO_UNSUPPORTED = "This environment's engine does not take it yet: its runs send the full audio."
 
-/** Why One-tone or Octave is greyed out on this shared setting. */
-const PRISM_REFERENCE_AUDIO_MODE_SHARED_UNOFFERED = "A mode greyed out is not on every environment's engine yet: this setting is shared by every environment."
-
 /** Said after a save: runs read the engine settings within a minute. */
 export const SAVED_TOAST = "Saved. Runs pick it up within a minute."
 
@@ -124,6 +121,8 @@ export default function AdminNodaroMotionPage() {
   // The setting is shared by every environment: Body (the whole person hidden) is offered only once EVERY
   // environment's engine can hide whole people (the server refuses the save otherwise).
   const envs = useEngineEnvironments()
+  // Nothing is known of the environments: said in words where they are read (a refetch that fails keeps what it knew).
+  const envsUnreadable = !envs.data && envs.error != null
   const bodyMissingIn = environmentsThatCannotHideBodies(envs.data)
   // The face mesh likewise: shown, greyed out and naming the environments whose engine cannot draw it.
   const faceMeshMissingIn = environmentsThatCannotDrawFaceMesh(envs.data)
@@ -203,14 +202,20 @@ export default function AdminNodaroMotionPage() {
   const motionChanged = !!motionQuery.data && JSON.stringify(nextMotion) !== savedMotion
   // Never saved reads as the original audio: choosing it then is no change.
   const pulseChanged = !!pulseQuery.data && pulseDraft !== (pulseQuery.data.pulseAudio ?? DEFAULT_PULSE_AUDIO)
-  // Never saved (or a resolution left out) reads as the full audio: choosing it then is no change.
+  // Never saved (or a resolution left out) reads as the full mix at +4: choosing it then is no change. Compared as
+  // saved, so No audio's kept pitch shift, or a value written as its id, is no change either.
   const prismAudioChanged =
     !!prismAudioQuery.data &&
-    JSON.stringify(prismReferenceAudioTriple(prismAudioDraft)) !== JSON.stringify(prismReferenceAudioTriple(prismAudioQuery.data.prismReferenceAudio))
-  const issues = (data?.engines ?? []).flatMap((e) => {
-    const m = draft[e.id]
-    return [...(m ? maskingIssues(m) : []), ...motionIssues(motionDraft[e.id])].map((i) => `${e.name}: ${i}`)
-  })
+    JSON.stringify(prismReferenceAudioSaved(prismAudioDraft)) !== JSON.stringify(prismReferenceAudioSaved(prismAudioQuery.data.prismReferenceAudio))
+  const issues = [
+    ...(data?.engines ?? []).flatMap((e) => {
+      const m = draft[e.id]
+      return [...(m ? maskingIssues(m) : []), ...motionIssues(motionDraft[e.id])].map((i) => `${e.name}: ${i}`)
+    }),
+    // A setting every environment shares, held only at a resolution it changed (the server would refuse it): a stored
+    // value an environment lost never holds the other resolutions or the page's other saves.
+    ...(prismAudioQuery.data ? prismReferenceAudioHeldIssues(prismAudioDraft, prismAudioQuery.data.prismReferenceAudio, envs.data, { envsUnreadable }) : []),
+  ]
   // Never saved reads as no steps: a draft with none set is then no change.
   const nextSteps = stepsToSaved(stepsDraft)
   const stepsChanged = !!stepsQuery.data && JSON.stringify(nextSteps) !== JSON.stringify(stepsToSaved(stepsQuery.data.steps))
@@ -243,7 +248,7 @@ export default function AdminNodaroMotionPage() {
       if (changed) await save.mutateAsync(next)
       if (motionChanged) await saveMotion.mutateAsync(nextMotion)
       if (pulseChanged) await savePulse.mutateAsync(pulseDraft)
-      if (prismAudioChanged) await savePrismAudio.mutateAsync(prismReferenceAudioTriple(prismAudioDraft))
+      if (prismAudioChanged) await savePrismAudio.mutateAsync(prismReferenceAudioSaved(prismAudioDraft))
       if (stepsChanged) await saveSteps.mutateAsync(nextSteps)
       if (styleChanged) await saveStyle.mutateAsync(nextStyle)
       // Its refusal is also said under Prism's style-only runs (saveStyleOnly.error).
@@ -431,9 +436,8 @@ export default function AdminNodaroMotionPage() {
                         value={prismAudioDraft}
                         onChange={setPrismAudioDraft}
                         note={prismAudioQuery.data.supported ? undefined : PRISM_REFERENCE_AUDIO_UNSUPPORTED}
-                        // A setting every environment shares: a mode only some engines take, once every one does.
-                        offered={prismReferenceAudioModesEveryEngineTakes(envs.data)}
-                        unofferedNote={PRISM_REFERENCE_AUDIO_MODE_SHARED_UNOFFERED}
+                        envs={envs.data}
+                        envsUnreadable={envsUnreadable}
                       />
                     ) : prismAudioQuery.error ? (
                       <p className="text-xs text-destructive">{prismAudioQuery.error.message}</p>

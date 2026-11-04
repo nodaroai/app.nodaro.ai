@@ -11713,10 +11713,11 @@ export interface AdminTrendData {
   pulseAudio?: CastSwapPulseAudioId
   /**
    * Prism only: what audio the reference video sent to the video model
-   * carries, per output resolution (hidden). Absent, or a resolution left out,
-   * = `"full"`. A draft saved before the per-resolution setting may hold a
-   * plain mode, meaning that mode at every resolution
-   * (`prismReferenceAudioByResolutionOf`, trends/components/PrismReferenceAudioSelect.tsx).
+   * carries, per output resolution (hidden): a mode and a pitch shift, stored
+   * as today's id where one says it. Absent, or a resolution left out, = the
+   * full mix at +4. A draft saved before the per-resolution setting may hold a
+   * plain id, meaning that id at every resolution
+   * (`prismReferenceAudioByResolutionOf`, trends/prism-reference-audio.ts).
    */
   prismReferenceAudio?: CastSwapPrismReferenceAudioByResolution | CastSwapPrismReferenceAudioId
   /**
@@ -11788,17 +11789,41 @@ export type AdminTrendKlingLength = "cut-end" | "cut-start"
 export type CastSwapPulseAudioId = "original" | "generated"
 
 /**
- * What audio the reference video a Nodaro Motion Prism run sends to the video
- * model carries (admin only): the clip's full audio (the default), only the
- * voice split from the music, none, the audio flattened to one steady tone
- * (`"one-tone"`) or raised one octave (`"octave"`). The last two are offered
- * only where the engine lists them (`castSwap.prismReferenceAudioModes`). The
- * original audio always goes back on the result.
+ * The ids the Prism reference audio of a resolution held before it was a mode
+ * and a pitch shift (admin only), each read as the value it always sounded
+ * like: `"full"` the full mix at +4, `"voice"` the vocals at +4, `"one-tone"`
+ * the full mix flattened to one steady tone at 0, `"octave"` the full mix at
+ * +12, `"none"` silent. A value one of them says is stored and saved as it.
  */
 export type CastSwapPrismReferenceAudioId = "full" | "voice" | "none" | "one-tone" | "octave"
 
-/** The Prism reference audio per output resolution (admin only); a resolution left out is `"full"`. */
-export type CastSwapPrismReferenceAudioByResolution = Partial<Record<TrendResolution, CastSwapPrismReferenceAudioId>>
+/**
+ * What a Nodaro Motion Prism run's reference video carries (admin only): no
+ * audio, the clip's whole mix, only the vocals split from the music, or either
+ * flattened to one steady tone. The original audio always goes back on the
+ * result.
+ */
+export type CastSwapPrismReferenceAudioMode = "none" | "full" | "voice" | "full-one-tone" | "voice-one-tone"
+
+/**
+ * One resolution's Prism reference audio as a mode and a pitch shift in
+ * semitones (-24 to 24 in steps of 0.5; absent = 0, where the pitch step does
+ * not run; never on `"none"`). One no id says is what older code cannot read:
+ * saving a resolution changed to one waits until every environment's platform
+ * claims it (`supports.platform`; else 422 `platform_unsupported`) and its
+ * engine declares `castSwap.prismReferenceAudioPitch` (else 409
+ * `engine_unsupported`).
+ */
+export interface CastSwapPrismReferenceAudioValue {
+  mode: CastSwapPrismReferenceAudioMode
+  semitones?: number
+}
+
+/** A resolution as stored and saved: the id where one says the value, else the value. */
+export type CastSwapPrismReferenceAudioStored = CastSwapPrismReferenceAudioId | CastSwapPrismReferenceAudioValue
+
+/** The Prism reference audio per output resolution (admin only); a resolution left out is the default, the full mix at +4. */
+export type CastSwapPrismReferenceAudioByResolution = Partial<Record<TrendResolution, CastSwapPrismReferenceAudioStored>>
 
 /**
  * The engine a trend version stores, by its INTERNAL id (admin only): Seedance
@@ -12022,8 +12047,10 @@ export interface TrendEngineEnvironment {
       depthColormaps?: VideoDepthColormap[]
       /** The model sizes the engine draws depth with on request (`faceMasking.depthModelSize`); absent = none (large only). */
       depthModelSizes?: VideoDepthModelSize[]
-      /** The Prism reference audio modes the engine takes (`prismReferenceAudio`); absent = "full", "voice" and "none" only. */
-      prismReferenceAudioModes?: CastSwapPrismReferenceAudioId[]
+      /** The Prism reference audio ids (and, with the pitch shift, one-tone modes) the engine takes; absent = "full", "voice" and "none" only. */
+      prismReferenceAudioModes?: Array<CastSwapPrismReferenceAudioId | "full-one-tone" | "voice-one-tone">
+      /** The engine takes the Prism reference audio as a mode and a pitch shift per resolution; absent = only the ids above. */
+      prismReferenceAudioPitch?: boolean
       /** The engine takes the preparation steps (`steps`); absent = it cannot. */
       steps?: boolean
       /** With `steps`, the engine takes "Body from the clip" (`steps.clipBody`); absent = it cannot. */
@@ -12057,6 +12084,8 @@ export interface TrendEngineEnvironment {
     platform?: {
       /** Full depth's smallest face with mesh lines (`faceMasking.faceMeshMinFaceHeightPct`). */
       faceMeshMinFaceHeightPct?: boolean
+      /** Prism's reference audio as a mode and a pitch shift (`prismReferenceAudio`'s `{ mode, semitones }` no id says). */
+      prismReferenceAudioPitch?: boolean
     }
   } & Record<string, unknown>
   updatedAt: string
@@ -13208,8 +13237,10 @@ export interface NodaroMotionPrismReferenceAudioView {
   supported: boolean
   /** Whether it takes a mode per resolution (`castSwap.prismReferenceAudioPerResolution`); else it is sent the run's own resolution's mode. */
   perResolution?: boolean
-  /** The modes this environment's engine takes ("full" always); "one-tone" and "octave" only where it lists them. */
-  modes?: CastSwapPrismReferenceAudioId[]
+  /** Whether it takes a mode and a pitch shift per resolution (`castSwap.prismReferenceAudioPitch`); else only today's ids. */
+  pitch?: boolean
+  /** The modes this environment's engine takes at some pitch shift ("full" always). */
+  modes?: CastSwapPrismReferenceAudioMode[]
 }
 
 const ADMIN_NODARO_MOTION_PRISM_REFERENCE_AUDIO = "/v1/admin/nodaro-motion/prism-reference-audio"

@@ -44,10 +44,18 @@ export interface PlatformSupports {
    * sent to an engine that declares it (lib/cast-swap-face-masking.ts).
    */
   readonly faceMeshMinFaceHeightPct?: boolean
+  /**
+   * Prism's reference audio as a mode and a pitch shift per resolution
+   * (`prismReferenceAudio`'s `{ mode, semitones }`, lib/cast-swap-prism-reference-audio.ts):
+   * its schemas take the value no id says and its runs send it. A build from
+   * before reads a setting or a version holding one as never saved (every run
+   * the full audio), and its schema refuses that draft.
+   */
+  readonly prismReferenceAudioPitch?: boolean
 }
 
 /** This build's `PlatformSupports`, claimed by the heartbeat (frozen: a fact about this build). */
-export const PLATFORM_SUPPORTS: PlatformSupports = Object.freeze({ faceMeshMinFaceHeightPct: true })
+export const PLATFORM_SUPPORTS: PlatformSupports = Object.freeze({ faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true })
 
 /**
  * An environment's platform claim as its heartbeat last wrote it: what its
