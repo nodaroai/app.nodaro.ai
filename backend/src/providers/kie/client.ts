@@ -992,6 +992,35 @@ export async function pollKieTask(
 }
 
 /**
+ * What a KIE task was asked to do, as KIE recorded it: its model and its input
+ * (`param`, whose `input` is a JSON string). Null when the record is out of reach
+ * or carries neither: the caller goes on as it would without one.
+ */
+export async function readKieTaskRequest(
+  taskId: string,
+): Promise<{ model: string; input: Record<string, unknown> } | null> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) return null
+  try {
+    const response = await providerFetch(
+      { provider: "kie", operation: "jobs.recordInfo", modelKey: null, body: undefined, dimensions: {} },
+      `${KIE_API_BASE}/api/v1/jobs/recordInfo?taskId=${taskId}`,
+      { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) },
+    )
+    if (!response.ok) return null
+    const record = (await response.json()) as { data?: { model?: unknown; param?: unknown } }
+    if (typeof record.data?.param !== "string") return null
+    const param = JSON.parse(record.data.param) as { input?: unknown; model?: unknown }
+    const input: unknown = typeof param.input === "string" ? JSON.parse(param.input) : param.input
+    const model = record.data.model ?? param.model
+    if (typeof model !== "string" || typeof input !== "object" || input === null || Array.isArray(input)) return null
+    return { model, input: input as Record<string, unknown> }
+  } catch {
+    return null
+  }
+}
+
+/**
  * Submit a task to KIE.ai and poll for completion.
  *
  * Backwards-compatible wrapper: create → opts.onTaskCreated → poll.

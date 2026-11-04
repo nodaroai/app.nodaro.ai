@@ -36,11 +36,11 @@ describe("the canvas quote of a clip just past a whole second", () => {
   it.each([
     [15, 15],
     [15.015, 15],
-    [15.051, 30],
+    [15.051, 16],
     [30.03, 30],
     [60.0266, 60],
-    [60.06, 120],
-  ])("Depth Anything per frame: %s s is the %i s price step", (sec, step) => {
+    [60.06, 61],
+  ])("Depth Anything per frame: %s s is the %i s row", (sec, step) => {
     const frames = node("d", "video-depth", { provider: "depth-anything-frames" })
     expect(getModelIdentifier(frames, [wire("d", "video")], [upload(sec), frames])).toBe(`depth-anything-frames:${step}s`)
   })

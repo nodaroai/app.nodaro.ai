@@ -220,9 +220,10 @@ export function createVideoWorker() {
     // bumpAttempts is safe to repeat), so the cron remains the safety net if
     // this inline pass throws or KIE is still processing.
     //
-    // It runs BEFORE admission and holds no concurrency slot: it only polls
-    // the provider for a task that already ran, and a stalled job's old
-    // lease simply expires. Accepted on purpose.
+    // It runs BEFORE admission and holds no concurrency slot: it polls the
+    // provider for a task that already ran (and at most resends one Seedance
+    // rejected as an edit, `seedance-edit-resubmit.ts`), and a stalled job's
+    // old lease simply expires. Accepted on purpose.
     // A handler that re-attaches to its saved task itself (the background
     // scrapes: the plan to settle with is in its payload, which the inline
     // reconcile never sees) is run instead, below — never a second task.

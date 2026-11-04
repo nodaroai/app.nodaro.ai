@@ -195,10 +195,14 @@ const INSERTED_VALUES = extractInsertedValues()
 // `video-depth-anything`: one row per second of the clip, `:1s` … `:300s`
 // (migration 590's row list; the 15/30/60/120/300 s ones seeded by 502 at the
 // same values), plus the bare 300 s ceiling row (502).
+// `depth-anything-frames`: one row per second of the clip, `:1s` … `:80s`
+// (migration 595's row list; the 15/30/60 s ones seeded by 502 at the same
+// values), the rows past its cap (`:120s`, `:300s`, both 502) and the bare row
+// (repriced 600 → 160 by 595's guarded UPDATE).
 // `cast-swap` / `cast-swap-full-quality`: Nodaro Motion's two per-second fee
 // rates (migration 591), which the plugin reads through `tk.http.unitRatePrice`.
-const VALUE_SYNCED_FAMILIES = ["wan-3", "wan-3-prime", "gemini-omni-flash", "apply-edl", "elevenlabs-sfx", "speaker-view", "speaker-frames", "vidu-q4", "video-depth-anything", "cast-swap", "cast-swap-full-quality"] as const
-const VALUE_SYNCED_ROW_COUNT = 599 // 88 wan-3 + 88 wan-3-prime + 11 gemini-omni-flash + 2 apply-edl + 31 elevenlabs-sfx + 4 speaker-view + 1 speaker-frames + 71 vidu-q4 + 301 video-depth-anything + 1 cast-swap + 1 cast-swap-full-quality
+const VALUE_SYNCED_FAMILIES = ["wan-3", "wan-3-prime", "gemini-omni-flash", "apply-edl", "elevenlabs-sfx", "speaker-view", "speaker-frames", "vidu-q4", "video-depth-anything", "depth-anything-frames", "cast-swap", "cast-swap-full-quality"] as const
+const VALUE_SYNCED_ROW_COUNT = 682 // 88 wan-3 + 88 wan-3-prime + 11 gemini-omni-flash + 2 apply-edl + 31 elevenlabs-sfx + 4 speaker-view + 1 speaker-frames + 71 vidu-q4 + 301 video-depth-anything + 83 depth-anything-frames + 1 cast-swap + 1 cast-swap-full-quality
 
 function familyOf(key: string): string | undefined {
   return VALUE_SYNCED_FAMILIES.find((f) => key === f || key.startsWith(`${f}:`))
@@ -498,6 +502,45 @@ describe("row-list model_pricing inserts: literal ids and prices, switches read 
     const inserts = modelPricingInserts(SQL_419)
     expect(inserts.length).toBeGreaterThan(0)
     for (const { statement } of inserts) expect(rowListInsert(statement)).toBeNull()
+  })
+})
+
+describe("row-list model_pricing inserts: Depth Anything per frame's per-second rows (migration 595)", () => {
+  const SQL_FRAMES = readFileSync(join(MIGRATIONS_DIR, "595_depth_anything_frames_per_second_pricing.sql"), "utf8")
+
+  it("is one row list: a row per second, :1s … :80s, each at 2 credits × n", () => {
+    const lists = modelPricingInserts(SQL_FRAMES).map(({ statement }) => rowListInsert(statement))
+    expect(lists).toHaveLength(1)
+    const rows = lists[0]!.rows
+    expect(rows.map((r) => r.id)).toEqual(Array.from({ length: 80 }, (_, i) => `depth-anything-frames:${i + 1}s`))
+    expect(rows.map((r) => r.cost)).toEqual(Array.from({ length: 80 }, (_, i) => 2 * (i + 1)))
+    expect(lists[0]!.conflict).toMatch(/^ON\s+CONFLICT\s*\(model_identifier\)\s*DO\s+NOTHING/i)
+  })
+
+  it("its rows count as seeded, with their prices, and the rows past the cap keep theirs", () => {
+    expect(INSERTED_VALUES.get("depth-anything-frames:4s")).toBe(8)
+    expect(INSERTED_VALUES.get("depth-anything-frames:80s")).toBe(160)
+    expect(INSERTED_VALUES.get("depth-anything-frames:120s")).toBe(240)
+    expect(INSERTED_VALUES.get("depth-anything-frames:300s")).toBe(600)
+  })
+
+  it("moves the bare row to the 80 s price, only from the price 502 seeded", () => {
+    expect(INSERTED_VALUES.get("depth-anything-frames")).toBe(160)
+    expect(STATIC_CREDIT_COSTS["depth-anything-frames"]).toBe(STATIC_CREDIT_COSTS["depth-anything-frames:80s"])
+    const updates = [...SQL_FRAMES.matchAll(/^UPDATE[^\n]*$/gim)].map((m) => m[0])
+    expect(updates).toEqual(["UPDATE public.model_pricing SET credit_cost = 160 WHERE model_identifier = 'depth-anything-frames' AND credit_cost = 600;"])
+  })
+
+  it("takes each second's switches from the bucket that priced it before (the rule supabase/tests/depth-anything-frames-per-second-pricing.behavior.sql proves on a database)", () => {
+    const rows = [...SQL_FRAMES.matchAll(/\('depth-anything-frames:(\d+)s',\s*(\d+),\s*'([^']+)'\)/g)]
+    expect(rows).toHaveLength(80)
+    for (const [, seconds, , bucket] of rows) {
+      const priced = VIDEO_DEPTH_BUCKETS.find((b) => Number(seconds) <= b)
+      expect(bucket, `${seconds}s`).toBe(`depth-anything-frames:${priced}s`)
+    }
+    expect(SQL_FRAMES).toMatch(/LEFT JOIN public\.model_pricing AS bucket ON bucket\.model_identifier = per_second\.bucket_identifier/)
+    expect(SQL_FRAMES).toMatch(/CASE WHEN bucket\.model_identifier IS NULL THEN true ELSE bucket\.is_enabled END/)
+    expect(SQL_FRAMES).toMatch(/\bbucket\.tier_restriction\b/)
   })
 })
 

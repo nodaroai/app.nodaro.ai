@@ -2817,10 +2817,10 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     ],
   },
   // ── Video Depth ── (video-depth node; priced by the input clip's length via
-  // videoDepthCreditId in video-depth.ts — `<provider>:<n>s`, bare row = the
-  // 300 s ceiling. Video Depth Anything: one row per whole second of the clip
-  // (`:1s` … `:300s`, `pricedClipSeconds`), representative rows below; Depth Anything
-  // per frame: one row per length bucket, same shape as volcengine-lipsync.)
+  // videoDepthCreditId in video-depth.ts — `<provider>:<n>s`, one row per whole
+  // second of the clip (`pricedClipSeconds`), representative rows below: `:1s` …
+  // `:300s` on Video Depth Anything, `:1s` … `:80s` on Depth Anything per frame.
+  // Bare row = the provider's longest clip: 300 s and 80 s.)
   "video-depth-anything": {
     id: "video-depth-anything",
     kind: "video",
@@ -2850,12 +2850,11 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Depth Anything v1 run on each frame. Grayscale or inferno colormap; may flicker between frames. Up to 80 s.",
     useCases: ["depth", "video-to-video"],
     pricing: [
-      { identifier: "depth-anything-frames", credits: 600, note: "5-min ceiling (no duration given)" },
-      { identifier: "depth-anything-frames:15s", credits: 30 },
-      { identifier: "depth-anything-frames:30s", credits: 60 },
-      { identifier: "depth-anything-frames:60s", credits: 120 },
-      { identifier: "depth-anything-frames:120s", credits: 240 },
-      { identifier: "depth-anything-frames:300s", credits: 600, note: "5-min ceiling" },
+      { identifier: "depth-anything-frames", credits: 160, note: "80s ceiling (no duration given)" },
+      { identifier: "depth-anything-frames:1s", credits: 2, note: "1s (min) — priced per second of the clip at this row's credits, the length rounded up after ignoring up to 0.05 s past a whole second" },
+      { identifier: "depth-anything-frames:15s", credits: 30, note: "15s" },
+      { identifier: "depth-anything-frames:60s", credits: 120, note: "1 min" },
+      { identifier: "depth-anything-frames:80s", credits: 160, note: "80s ceiling (max)" },
     ],
   },
   // ── Gemini video analysis ── (Gemini-only; billed per duration bucket — the

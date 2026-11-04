@@ -12,7 +12,6 @@ import {
   videoDepthNeedsGrayscalePass,
   VIDEO_DEPTH_COLORMAPS,
   VIDEO_DEPTH_LIMITS,
-  VIDEO_DEPTH_BUCKETS,
   resolveVideoDepthProvider,
   resolveVideoDepthModelSize,
 } from "../video-depth.js"
@@ -118,11 +117,19 @@ describe("videoDepthCreditId", () => {
       expect(videoDepthCreditId("video-depth-anything", Math.ceil(sec))).toBe(videoDepthCreditId("video-depth-anything", sec))
     }
   })
-  it("Replicate keeps its length buckets, boundaries inclusive", () => {
-    expect(videoDepthCreditId("depth-anything-frames", 5)).toBe("depth-anything-frames:15s")
+  // Depth Anything per frame (Replicate) follows the same rule (decided
+  // 2026-11-04), up to its own 80 s limit.
+  it("Replicate: one row per whole second of the clip, rounded up", () => {
+    expect(videoDepthCreditId("depth-anything-frames", 4)).toBe("depth-anything-frames:4s")
+    expect(videoDepthCreditId("depth-anything-frames", 4.1)).toBe("depth-anything-frames:5s")
+    expect(videoDepthCreditId("depth-anything-frames", 5)).toBe("depth-anything-frames:5s")
     expect(videoDepthCreditId("depth-anything-frames", 15)).toBe("depth-anything-frames:15s")
     expect(videoDepthCreditId("depth-anything-frames", 15.01)).toBe("depth-anything-frames:15s")
-    expect(videoDepthCreditId("depth-anything-frames", 61)).toBe("depth-anything-frames:120s")
+    expect(videoDepthCreditId("depth-anything-frames", 61)).toBe("depth-anything-frames:61s")
+    expect(videoDepthCreditId("depth-anything-frames", 79.5)).toBe("depth-anything-frames:80s")
+  })
+  it("Replicate: a clip under one second pays for one second", () => {
+    expect(videoDepthCreditId("depth-anything-frames", 0.4)).toBe("depth-anything-frames:1s")
   })
   it("unknown, non-positive or over-cap duration prices the provider's highest REACHABLE row", () => {
     // fal: capped at 300 s → the 300 s row (a longer clip is refused before anything is reserved).
@@ -133,17 +140,22 @@ describe("videoDepthCreditId", () => {
     expect(videoDepthCreditId("video-depth-anything", Number.NaN)).toBe("video-depth-anything:300s")
     expect(videoDepthCreditId("video-depth-anything", 300.01)).toBe("video-depth-anything:300s")
     expect(videoDepthCreditId("video-depth-anything", 900)).toBe("video-depth-anything:300s")
-    // Replicate: capped at 80 s → the 120 s row; a longer clip is refused, so the 300 s row is unreachable.
-    expect(videoDepthCreditId("depth-anything-frames", undefined)).toBe("depth-anything-frames:120s")
-    expect(videoDepthCreditId("depth-anything-frames", -1)).toBe("depth-anything-frames:120s")
-    expect(videoDepthCreditId("depth-anything-frames", Number.NaN)).toBe("depth-anything-frames:120s")
-    expect(videoDepthCreditId("depth-anything-frames", 200)).toBe("depth-anything-frames:120s")
-    expect(videoDepthCreditId("depth-anything-frames", 80)).toBe("depth-anything-frames:120s")
+    // Replicate: capped at 80 s → the 80 s row; a longer clip is refused, so no row past it is reachable.
+    expect(videoDepthCreditId("depth-anything-frames", undefined)).toBe("depth-anything-frames:80s")
+    expect(videoDepthCreditId("depth-anything-frames", -1)).toBe("depth-anything-frames:80s")
+    expect(videoDepthCreditId("depth-anything-frames", Number.NaN)).toBe("depth-anything-frames:80s")
+    expect(videoDepthCreditId("depth-anything-frames", 200)).toBe("depth-anything-frames:80s")
+    expect(videoDepthCreditId("depth-anything-frames", 80)).toBe("depth-anything-frames:80s")
   })
-  it("derives each reachable ceiling from the limits: Replicate's smallest bucket at or above its longest clip, fal's longest clip itself", () => {
-    const ceilingFor = (maxSec: number) => VIDEO_DEPTH_BUCKETS.find((b) => b >= maxSec)
-    expect(videoDepthCreditId("depth-anything-frames", undefined)).toBe(`depth-anything-frames:${ceilingFor(VIDEO_DEPTH_LIMITS.REPLICATE_MAX_SECONDS)}s`)
+  it("derives each reachable ceiling from the limits: the provider's longest clip itself", () => {
+    expect(videoDepthCreditId("depth-anything-frames", undefined)).toBe(`depth-anything-frames:${VIDEO_DEPTH_LIMITS.REPLICATE_MAX_SECONDS}s`)
     expect(videoDepthCreditId("video-depth-anything", undefined)).toBe(`video-depth-anything:${VIDEO_DEPTH_LIMITS.FAL_MAX_SECONDS}s`)
+  })
+  it("Replicate: every length it accepts names one of exactly REPLICATE_MAX_SECONDS rows, `:1s` … `:80s`", () => {
+    const ids = new Set<string>()
+    for (let tenth = 1; tenth <= VIDEO_DEPTH_LIMITS.REPLICATE_MAX_SECONDS * 10; tenth++) ids.add(videoDepthCreditId("depth-anything-frames", tenth / 10))
+    expect(ids.size).toBe(VIDEO_DEPTH_LIMITS.REPLICATE_MAX_SECONDS)
+    for (let n = 1; n <= VIDEO_DEPTH_LIMITS.REPLICATE_MAX_SECONDS; n++) expect(ids.has(`depth-anything-frames:${n}s`), String(n)).toBe(true)
   })
   it("fal: every length it accepts names one of exactly FAL_MAX_SECONDS rows, `:1s` … `:300s`", () => {
     const ids = new Set<string>()

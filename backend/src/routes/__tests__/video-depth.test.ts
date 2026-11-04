@@ -227,7 +227,7 @@ describe("POST /v1/video-depth", () => {
       expect(record).not.toHaveProperty("sideBySide")
       expect(record).not.toHaveProperty("resolution")
     }
-    expect(reserveCalls[0].model).toBe("depth-anything-frames:15s")
+    expect(reserveCalls[0].model).toBe("depth-anything-frames:10s")
   })
 
   it("passes inferno through on Replicate", async () => {

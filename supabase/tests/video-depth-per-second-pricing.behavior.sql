@@ -22,8 +22,8 @@
 -- migration ships, never a copy of it.
 --
 -- A DELIBERATE TRIPWIRE: it pins chain-wide prices (20 × n on every second,
--- the bare ceiling, every Depth Anything (per frame) row), so a later reprice
--- of either family updates this proof in the same change.
+-- the bare ceiling, Depth Anything (per frame)'s rows from 502), so a later
+-- reprice of either family updates this proof in the same change.
 --
 -- Run locally (throwaway container, same image as CI):
 --   docker run -d --rm --name mig-test -e POSTGRES_PASSWORD=postgres -p 5433:5432 supabase/postgres:15.8.1.085
@@ -143,8 +143,8 @@ SELECT pg_temp.assert_eq('the bucket rows keep their own prices and switches',
   'video-depth-anything:60s=1200/true/<null>/proof-category video-depth-anything:300s=6000/<null>/<null>/video');
 SELECT pg_temp.assert_eq('the bare ceiling row and Depth Anything (per frame) are not touched',
   (SELECT string_agg(model_identifier || '=' || credit_cost, ' ' ORDER BY model_identifier)
-     FROM model_pricing WHERE model_identifier = 'video-depth-anything' OR model_identifier LIKE 'depth-anything-frames%'),
-  'depth-anything-frames=600 depth-anything-frames:120s=240 depth-anything-frames:15s=30 depth-anything-frames:300s=600 '
+     FROM model_pricing WHERE model_identifier IN ('video-depth-anything', 'depth-anything-frames', 'depth-anything-frames:15s', 'depth-anything-frames:30s', 'depth-anything-frames:60s', 'depth-anything-frames:120s', 'depth-anything-frames:300s')),
+  'depth-anything-frames=160 depth-anything-frames:120s=240 depth-anything-frames:15s=30 depth-anything-frames:300s=600 '
   'depth-anything-frames:30s=60 depth-anything-frames:60s=120 video-depth-anything=6000');
 
 -- ---------------------------------------------------------------------------

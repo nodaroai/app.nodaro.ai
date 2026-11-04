@@ -44,15 +44,19 @@ Billed by the input clip's length. The clip is measured before the run; the chip
 | 1 min | 60 s | 1,320<!-- credits: video-depth-anything:60s --> |
 | 5 min (maximum) | 300 s | 6,600<!-- credits: video-depth-anything:300s --> |
 
-**Depth Anything (per frame)** is billed by length tier, with the clip's length rounded up to the next tier, after ignoring the same 0.05 s: a 15 s cut of a 29.97 fps clip comes out 15.015 s long and stays in the 15 s tier.
+**Depth Anything (per frame)** is billed the same way: 2.2<!-- credits-rate: depth-anything-frames:1s --> credits per second of the clip, with the length rounded **up** to whole seconds after ignoring the same 0.05 s, and each total rounded up to a whole credit. A clip under 1 s costs the same as 1 s, 4.1 s costs the same as 5 s, and a 15 s cut of a 29.97 fps clip comes out 15.015 s long and costs the same as 15 s. Each length has its own price row, `depth-anything-frames:<n>s` (`depth-anything-frames:1s` … `depth-anything-frames:80s`). It accepts clips up to 80 seconds, so 80 s is the most a run can cost.
 
-| Provider | 15s | 30s | 1min | 2min |
-|----------|----:|----:|-----:|-----:|
-| `depth-anything-frames` | 33<!-- credits: depth-anything-frames:15s --> | 66<!-- credits: depth-anything-frames:30s --> | 132<!-- credits: depth-anything-frames:60s --> | 264<!-- credits: depth-anything-frames:120s --> |
+| Clip | Billed as | Credits |
+|------|-----------|--------:|
+| 0.5 s | 1 s | 3<!-- credits: depth-anything-frames:1s --> |
+| 4 s | 4 s | 9<!-- credits: depth-anything-frames:4s --> |
+| 4.1 s | 5 s | 11<!-- credits: depth-anything-frames:5s --> |
+| 15 s | 15 s | 33<!-- credits: depth-anything-frames:15s --> |
+| 15.015 s | 15 s | 33<!-- credits: depth-anything-frames:15s --> |
+| 1 min | 60 s | 132<!-- credits: depth-anything-frames:60s --> |
+| 80 s (maximum) | 80 s | 176<!-- credits: depth-anything-frames:80s --> |
 
-Depth Anything (per frame) accepts clips up to 80 seconds, so its 2-minute tier is the most a run can cost. Worked examples: a 5 s clip → 15s tier; 15 s → 15s tier; 15.01 s → 30s tier; 61 s → 2min tier.
-
-The clip is always measured before the run. A clip that cannot be read is refused (`video_unreadable`) before any credits are reserved — the run is never priced at a guessed length. The editor reads a connected video's length from the clip itself, so the node and the run estimate show that clip's price. The server's workflow estimates (`POST /v1/credits/estimate-workflow` and a published app's listed price) read an uploaded clip's length from the file too, unless the app's user replaces that upload. Until the length is known — nothing connected, the clip not read yet, or a clip that cannot be read — the node and the estimates show the provider's highest price (5 minutes on Video Depth Anything, the 2-minute tier on Depth Anything per frame), the most a run can cost; the run itself is always charged the measured clip's price.
+The clip is always measured before the run. A clip that cannot be read is refused (`video_unreadable`) before any credits are reserved — the run is never priced at a guessed length. The editor reads a connected video's length from the clip itself, so the node and the run estimate show that clip's price. The server's workflow estimates (`POST /v1/credits/estimate-workflow` and a published app's listed price) read an uploaded clip's length from the file too, unless the app's user replaces that upload. Until the length is known — nothing connected, the clip not read yet, or a clip that cannot be read — the node and the estimates show the provider's highest price (5 minutes on Video Depth Anything, 80 seconds on Depth Anything per frame), the most a run can cost; the run itself is always charged the measured clip's price.
 
 ## Tips
 

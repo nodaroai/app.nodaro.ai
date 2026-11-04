@@ -121,8 +121,8 @@ describe("Depth Anything per frame", () => {
     expect(STATIC_CREDIT_COSTS[measured.creditId]).toBe(base)
   })
 
-  it("past the grace is the next price step, in the estimate too", () => {
-    expect(framesQuote(upload(15.051))).toBe(STATIC_CREDIT_COSTS["depth-anything-frames:30s"])
-    expect(framesQuote(upload(60.06))).toBe(STATIC_CREDIT_COSTS["depth-anything-frames:120s"])
+  it("past the grace is the next second's price, in the estimate too", () => {
+    expect(framesQuote(upload(15.051))).toBe(STATIC_CREDIT_COSTS["depth-anything-frames:16s"])
+    expect(framesQuote(upload(60.06))).toBe(STATIC_CREDIT_COSTS["depth-anything-frames:61s"])
   })
 })

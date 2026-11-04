@@ -38,6 +38,7 @@ import { applyDraftAudioMux, draftAudioWarningOutputData, type DraftAudioMuxResu
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 import { isEntityMediaJobType, recoverEntityJob } from "./entity-recovery.js"
+import { resubmitSeedanceEdit } from "./seedance-edit-resubmit.js"
 
 export interface KieJobRow {
   id: string
@@ -355,6 +356,12 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
     // poll clients now set the flag (createUpstreamFailureError), so every
     // provider fails fast here — not just kie-standard.
     if (isUpstreamKieFailure(err)) {
+      // The worker's one retry on this rejection died with the worker: it is done here instead.
+      const resubmit = await resubmitSeedanceEdit(row, err)
+      if (resubmit.outcome === "taken") return
+      if (resubmit.outcome === "resent") {
+        return reconcileKieJob({ ...row, provider_task_id: resubmit.taskId, reconcile_attempts: 0 }, opts)
+      }
       await markFailed(row.id, msg, providerDetailOf(err), refusalHintOf(err, row))
       await refundReservedCreditsForJob(row.id)
     } else {

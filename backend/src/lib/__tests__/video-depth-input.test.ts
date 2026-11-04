@@ -31,10 +31,13 @@ describe("measureVideoDepthInput", () => {
     expect(await measureVideoDepthInput("video-depth-anything", "https://x/v.mp4"))
       .toEqual({ ok: true, durationSec: 1, creditId: "video-depth-anything:1s" })
   })
-  it("a Replicate clip keeps its length bucket", async () => {
+  it("a Replicate clip is priced at the row of its length rounded up to whole seconds too", async () => {
     mockProbe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 9.2, fps: 24 })
     expect(await measureVideoDepthInput("depth-anything-frames", "https://x/v.mp4"))
-      .toEqual({ ok: true, durationSec: 10, creditId: "depth-anything-frames:15s" })
+      .toEqual({ ok: true, durationSec: 10, creditId: "depth-anything-frames:10s" })
+    mockProbe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 0.4, fps: 24 })
+    expect(await measureVideoDepthInput("depth-anything-frames", "https://x/v.mp4"))
+      .toEqual({ ok: true, durationSec: 1, creditId: "depth-anything-frames:1s" })
   })
   it("rejects over 2,400 frames as video_too_long", async () => {
     mockProbe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 101, fps: 24 })

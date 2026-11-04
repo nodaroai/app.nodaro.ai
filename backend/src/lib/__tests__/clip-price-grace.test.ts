@@ -47,22 +47,23 @@ describe("what the Video Depth route and a workflow run reserve", () => {
   })
 
   it.each([
-    [4.004, 4, 15],
-    [15, 15, 15],
-    [15.015, 15, 15],
-    [15.051, 16, 30],
-    [30.03, 30, 30],
-    [30.051, 31, 60],
-    [60.0266, 60, 60],
-    [60.06, 61, 120],
-  ])("depth-anything-frames: %s s is %i s, the %i s price step", async (sec, whole, step) => {
+    [4.004, 4],
+    [4.1, 5],
+    [15, 15],
+    [15.015, 15],
+    [15.051, 16],
+    [30.03, 30],
+    [30.051, 31],
+    [60.0266, 60],
+    [60.06, 61],
+  ])("depth-anything-frames: %s s is the %i s price row", async (sec, whole) => {
     clip(sec, 29.97)
-    expect(await measureVideoDepthInput("depth-anything-frames", URL)).toEqual({ ok: true, durationSec: whole, creditId: `depth-anything-frames:${step}s` })
+    expect(await measureVideoDepthInput("depth-anything-frames", URL)).toEqual({ ok: true, durationSec: whole, creditId: `depth-anything-frames:${whole}s` })
   })
 
   it("depth-anything-frames' 80 s limit still reads the file: 80 s is priced, 80.02 s is refused", async () => {
     clip(80, 29.97)
-    expect(await measureVideoDepthInput("depth-anything-frames", URL)).toEqual({ ok: true, durationSec: 80, creditId: "depth-anything-frames:120s" })
+    expect(await measureVideoDepthInput("depth-anything-frames", URL)).toEqual({ ok: true, durationSec: 80, creditId: "depth-anything-frames:80s" })
     clip(80.02, 29.97)
     expect(await measureVideoDepthInput("depth-anything-frames", URL)).toMatchObject({ ok: false, code: "video_too_long" })
   })

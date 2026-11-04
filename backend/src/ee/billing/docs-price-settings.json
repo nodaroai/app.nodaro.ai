@@ -10,8 +10,11 @@
   },
   "charged": {
     "gpt-image-2": 21,
-    "gpt-image-2:2K": 42,
-    "gpt-image-2:4K": 84,
+    "gpt-image-2-i2i": 21,
+    "gpt-image-2-i2i:2K": 35,
+    "gpt-image-2-i2i:4K": 56,
+    "gpt-image-2:2K": 35,
+    "gpt-image-2:4K": 56,
     "ugc-finish": 33
   }
 }
