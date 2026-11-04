@@ -614,6 +614,8 @@ async function ensureVideoDuration(
 
 // Accepted image formats per provider family (from KIE API docs).
 // Kling 3.0 (both I2V and motion control) only accepts JPEG/PNG — NOT WebP.
+// Kling 4.0 neither: its docs name no format, but KIE fails a task with a WebP
+// reference ("Unsupported file format. Images must be JPG or PNG.").
 // Most other models accept JPEG/PNG/WebP.
 const JPEG_PNG_ONLY = new Set(["jpeg", "png"])
 const JPEG_PNG_WEBP = new Set(["jpeg", "png", "webp"])
@@ -621,7 +623,7 @@ const JPEG_PNG_WEBP = new Set(["jpeg", "png", "webp"])
 // Providers that only accept JPEG/PNG (no WebP).
 // Kling 2.6 motion control also rejects WebP but its I2V endpoint accepts it.
 // Motion-transfer always goes through this check; I2V only for kling-3.0 and wan-i2v.
-const JPEG_PNG_ONLY_PROVIDERS = new Set(["kling-3.0"])
+const JPEG_PNG_ONLY_PROVIDERS = new Set(["kling-3.0", "kling-4", "kling-4-keyframes"])
 
 // Max image file size (10 MB per KIE docs, applies to all models)
 const IMAGE_MAX_BYTES = 10 * 1024 * 1024
@@ -691,7 +693,7 @@ interface ImageConstraints {
 /**
  * Ensure the image is in a format/size accepted by the target provider.
  *
- * - Kling 3.0: JPEG/PNG only (auto-converts WebP/GIF to JPEG)
+ * - Kling 3.0 and 4.0: JPEG/PNG only (auto-converts WebP/GIF to JPEG)
  * - Wan 2.6 I2V: min 256×256px
  * - Kling 2.6 motion: min 300px, aspect ratio 2:5–5:2
  * - Hailuo/MiniMax I2V: re-encode to JPEG (drops alpha) — backend 500s on large RGBA PNGs

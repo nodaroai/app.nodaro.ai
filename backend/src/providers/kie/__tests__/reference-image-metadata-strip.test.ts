@@ -149,7 +149,7 @@ describe("reference images reach the provider without metadata", () => {
     expect(imageHasMetadata(tagged, "webp")).toBe(true)
     serve(tagged)
 
-    await ensureImageForProvider(URL_IN, "kling-4", { context: "Video generation" })
+    await ensureImageForProvider(URL_IN, "seedance-2-5", { context: "Video generation" })
 
     const [buf, key] = uploaded()
     expect(key).toMatch(/provider-stripped.*\.webp$/)
