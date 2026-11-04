@@ -162,6 +162,20 @@ export function environmentsThatCannotRunStyleOnly(envs: readonly TrendEngineEnv
 }
 
 /**
+ * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
+ * in that order) whose engine cannot take an art style on a Precise run —
+ * none recorded, or one that does not declare `castSwap.preciseArtStyle`.
+ * Unknown while the environments are (undefined). The Precise art-style
+ * setting (`nodaro_motion_precise_art_style`) saves a change once ANY
+ * environment takes it (this is shorter than the list): an engine without
+ * the flag never reads that row.
+ */
+export function environmentsThatCannotTakePreciseArtStyle(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+  if (!envs) return undefined
+  return SHARED_SETTING_ENVIRONMENTS.filter((name) => envs.find((e) => e.env === name)?.supports.castSwap?.preciseArtStyle !== true)
+}
+
+/**
  * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose
  * engine cannot take "Body from the clip" (`steps.clipBody`) — none
  * recorded, or one that does not declare `castSwap.steps` and

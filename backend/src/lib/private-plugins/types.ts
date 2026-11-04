@@ -3450,6 +3450,13 @@ export interface PluginCapabilities {
    */
   readonly nodaroMotionStyleOnly?: boolean
   /**
+   * `tk.settings.nodaroMotionPreciseArtStyle()` exists: the opener an admin set
+   * per Nodaro Motion engine for a DIRECT Precise run with an art style
+   * ("restyle" or "edit"). An older host has no such member: a plugin reads
+   * that as never saved ("restyle").
+   */
+  readonly nodaroMotionPreciseArtStyle?: boolean
+  /**
    * The host reads `NodaroPrivatePlugin.jobLanes()`: the concurrency lane each
    * of a plugin's job types runs in (see `PluginJobLaneClass`). An older host
    * never calls it, and runs every plugin job type as a coordinator.
@@ -3769,6 +3776,30 @@ export interface PluginSettingsToolkit {
    * `capabilities.nodaroMotionStyleOnly`.
    */
   nodaroMotionStyleOnly?(): Promise<PluginNodaroMotionStyleOnly | null>
+  /**
+   * The admin's setting per Nodaro Motion engine for a DIRECT Precise run with
+   * an art style (its opener, and its own "Style the role pictures"): only the
+   * engines with something saved (an opener "edit", a style-refs step), each answered under its current AND its earlier key, or null
+   * when it was never saved, nothing differs, or this host's engine does not
+   * declare `castSwap.preciseArtStyle`. Returns a copy the plugin may change
+   * freely. REJECTS when the settings could not be read. Advertised as
+   * `capabilities.nodaroMotionPreciseArtStyle`.
+   */
+  nodaroMotionPreciseArtStyle?(): Promise<PluginNodaroMotionPreciseArtStyle | null>
+}
+
+/**
+ * Nodaro Motion's setting for a Precise run with an art style per engine,
+ * keyed by the PUBLIC engine ids (current and earlier): an engine listed
+ * differs from the default; one left out opens with "restyle". Absent
+ * `opener`: "restyle".
+ */
+export type PluginNodaroMotionPreciseArtStyle = {
+  readonly [publicEngineId: string]: {
+    readonly opener?: "edit" | "restyle"
+    /** These runs' own "Style the role pictures" (the steps' shape); absent or Off: none. Never the steps' `styleRefs`. */
+    readonly styleRefs?: { readonly mode: "on" | "off"; readonly send?: "styled-and-original" | "styled"; readonly prompt?: string }
+  }
 }
 
 /**
@@ -4244,6 +4275,15 @@ export interface PluginSupports {
    *   answers it the setting as null, and never saves the setting while no
    *   environment declares it (lib/nodaro-motion-style-only.ts
    *   `engineTakesStyleOnly`).
+   * - `preciseArtStyle`: a DIRECT Precise run on Nodaro Motion Prism takes an
+   *   art style (`direction.style`), as a Flex run does: the Precise prompt
+   *   with the art style's lines, its opener the admin's per-engine setting
+   *   (`tk.settings.nodaroMotionPreciseArtStyle`: "restyle", the default, or
+   *   "edit"). Additive-optional: absent ⇒ the engine refuses an art style on
+   *   a Precise run (`art_style_needs_flex`); the platform never offers one
+   *   there, answers it the setting as null, and never saves the setting while
+   *   no environment declares it (lib/nodaro-motion-precise-art-style.ts
+   *   `engineTakesPreciseArtStyle`).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -4295,6 +4335,7 @@ export interface PluginSupports {
     readonly faceMeshMinFaceHeightPct?: boolean
     readonly promptWordings?: readonly ("current" | "new")[]
     readonly styleOnly?: boolean
+    readonly preciseArtStyle?: boolean
   }
 }
 

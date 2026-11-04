@@ -12075,6 +12075,8 @@ export interface TrendEngineEnvironment {
       promptWordings?: CastSwapPromptWordingId[]
       /** The engine runs style-only runs (a Prism Flex run with an art style and nothing to swap); absent = it refuses them. */
       styleOnly?: boolean
+      /** The engine takes an art style on a direct Precise run (Prism); absent = it refuses one there. */
+      preciseArtStyle?: boolean
     }
     /**
      * What that environment's platform (the app itself, apart from its engine)
@@ -13173,6 +13175,50 @@ export async function saveNodaroMotionStyleOnly(styleOnly: NodaroMotionStyleOnly
     await apiRequest<{ data: NodaroMotionStyleOnlyView }>(ADMIN_NODARO_MOTION_STYLE_ONLY, "apiErr.saveNodaroMotion", {
       method: "PUT",
       body: { styleOnly },
+    })
+  ).data
+}
+
+// ---- Admin: Nodaro Motion's Precise art-style setting (/v1/admin/nodaro-motion/precise-art-style, admin-nodaro-motion-precise-art-style.ts) ----
+
+/** How a Precise run with an art style opens its prompt: "restyle {video:1} as follows:" (the default) or the edit opener of before. */
+export type NodaroMotionPreciseOpener = "edit" | "restyle"
+
+/** One engine's Precise art-style setting; a key left out takes its default ("restyle"; no picture styled). Never null. */
+export interface NodaroMotionPreciseArtStyleEntry {
+  opener?: NodaroMotionPreciseOpener
+  /** These runs' own "Style the role pictures" (Off by default); never the preparation steps' switch, which is Flex's. */
+  styleRefs?: StyleRefsSetting
+}
+
+/** The Precise art-style setting per engine, keyed by public id; only what differs from the default is listed. */
+export type NodaroMotionPreciseArtStyle = Partial<Record<NodaroMotionEngine, NodaroMotionPreciseArtStyleEntry>>
+
+export interface NodaroMotionPreciseArtStyleView {
+  /** null = never saved: every engine on the default. */
+  preciseArtStyle: NodaroMotionPreciseArtStyle | null
+  updatedAt: string | null
+  engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine }>
+  /** Whether this environment's Cast Swap engine takes an art style on a Precise run (`castSwap.preciseArtStyle`). */
+  supported: boolean
+}
+
+const ADMIN_NODARO_MOTION_PRECISE_ART_STYLE = "/v1/admin/nodaro-motion/precise-art-style"
+
+export async function fetchNodaroMotionPreciseArtStyle(): Promise<NodaroMotionPreciseArtStyleView> {
+  return (await apiRequest<{ data: NodaroMotionPreciseArtStyleView }>(ADMIN_NODARO_MOTION_PRECISE_ART_STYLE, "apiErr.loadNodaroMotion")).data
+}
+
+/**
+ * Saves the whole setting. A change (Edit, or the style-refs step On) is refused (409 `engine_unsupported`) while no
+ * environment's engine takes an art style on a Precise run; a Pulse entry is refused (400 `precise_art_style_engine`):
+ * Pulse takes no art style; an unusable image instruction is a 400 `validation_error` with `issues`.
+ */
+export async function saveNodaroMotionPreciseArtStyle(preciseArtStyle: NodaroMotionPreciseArtStyle): Promise<NodaroMotionPreciseArtStyleView> {
+  return (
+    await apiRequest<{ data: NodaroMotionPreciseArtStyleView }>(ADMIN_NODARO_MOTION_PRECISE_ART_STYLE, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { preciseArtStyle },
     })
   ).data
 }

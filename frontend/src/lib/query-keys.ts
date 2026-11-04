@@ -474,6 +474,7 @@ export const queryKeys = {
     nodaroMotionPromptWording: () => ["admin", "nodaro-motion", "prompt-wording"] as const,
     nodaroMotionAdvanced: () => ["admin", "nodaro-motion", "advanced"] as const,
     nodaroMotionStyleOnly: () => ["admin", "nodaro-motion", "style-only"] as const,
+    nodaroMotionPreciseArtStyle: () => ["admin", "nodaro-motion", "precise-art-style"] as const,
     nodaroMotionPromptPreview: (engine: string, style: string, overrides: string) =>
       ["admin", "nodaro-motion", "prompt-parts", "preview", engine, style, overrides] as const,
     /**

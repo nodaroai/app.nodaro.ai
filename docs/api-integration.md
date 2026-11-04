@@ -4636,7 +4636,7 @@ served by the Nodaro Cloud plugin and answer 404 on self-hosted installs
 |---|---|---|
 | `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged. |
 | `POST` | `/v1/cast-swap` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
-| `GET` | `/v1/cast-swap/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed, and whether the engine takes a style-only run (see Style below). Public: no sign-in needed. |
+| `GET` | `/v1/cast-swap/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed, whether the engine takes a style-only run, and whether a Precise run takes an art style (see Style below). Public: no sign-in needed. |
 | `GET` | `/v1/cast-swap/advanced` | Whether the Nodaro Motion page shows its Advanced options (see below). Public: no sign-in needed. |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
@@ -4707,14 +4707,17 @@ sign-in needed) says which, per engine:
 `style: "motion"`). An app shows its style choice only for an engine answered
 `"user"`. The same answer carries
 `styleOnly: { "motion-prism": boolean, "motion-pulse": boolean }`: whether the
-engine takes style-only runs (below). It follows the engine alone, so read it
-with `engines`: a forced Precise drops a Motion run's art style. On an engine
-answered `"precise"`, a request with nothing else to change is refused as
-`400 validation_error`; with anything else to change (a role with images, a
+engine takes style-only runs (below), and
+`preciseArtStyle: { "motion-prism": boolean, "motion-pulse": boolean }`:
+whether a Precise run takes an art style there (below). Both follow the engine
+alone, so read them with `engines`: a forced Precise keeps a Motion run's art
+style where `preciseArtStyle` is `true`, and drops it where it is not. On an
+engine answered `"precise"`, a request with nothing else to change is refused
+as `400 validation_error`; with anything else to change (a role with images, a
 fixed reference, a `prePrompt` or `postPrompt`) it answers `202` and runs and
-is quoted as Precise, without the art style. Nodaro Motion Pulse is always
-`false`, and a server from before it leaves `styleOnly` out: read that as
-`false` for every engine.
+is quoted as Precise, with the art style where `preciseArtStyle` is `true`.
+Nodaro Motion Pulse is always `false` in both, and a server from before them
+leaves them out: read that as `false` for every engine.
 The answer may be up to a minute old. Trends are not
 affected.
 
@@ -4740,14 +4743,32 @@ before offering it: while Nodaro Motion Prism is answered `false`, an art style
 with nothing else to change is refused as `400 validation_error`, and one with
 a `prePrompt` or `postPrompt` is accepted but runs as any other art-style run,
 not as described here. `styleOnly: true` says the engine takes such runs, and a
-run must still be Motion: on an engine answered `"precise"` the art style is
-dropped, so the request is refused as `400 validation_error` or, with anything
-else to change, runs as Precise (see A forced style). Nodaro Motion Pulse takes
-no art style (`400 art_style_needs_prism`). `400 art_style_needs_flex` answers
-an art style on a request with no `style: "motion"` or on a trend run, and on a
-Motion run whose prompt is made Precise by Nodaro's setting for how Motion runs
-are prepared. That setting is not the forced style, and `style-choice` does not
-show it.
+run must still be Motion: on an engine answered `"precise"` the request is
+refused as `400 validation_error` or, with anything else to change, runs as
+Precise (see A forced style). Nodaro Motion Pulse takes no art style
+(`400 art_style_needs_prism`). `400 art_style_needs_flex` answers an art style
+on a trend run, on a Motion run whose prompt is made Precise by Nodaro's
+setting for how Motion runs are prepared, and on a Precise run where the engine
+takes none there (below). That setting is not the forced style, and
+`style-choice` does not show it.
+
+**An art style on a Precise run.** Where `GET /v1/cast-swap/style-choice`
+answers `preciseArtStyle` `true` for the engine (Nodaro Motion Prism only), a
+Precise run (no `style`, or `style: "precise"`) also takes an art style,
+`direction: { style: "<id>" }`, from the same catalog and refused the same way
+(`400 unknown_art_style`, `400 art_style_not_supported`). The run stays
+Precise: the clip is edited as a Precise run edits it, the people swapped as
+Precise swaps them, and the whole video is drawn in the art style. It is not a
+change on its own: a Precise run with nothing else to change (no role with
+images, no fixed reference, no `prePrompt` or `postPrompt`) is still refused as
+`400 validation_error`; restyling a whole clip alone is a Motion run's (Style
+only, above). The price changes only where Nodaro's setting for these runs
+first redraws the role pictures in the art style (its own setting, not the one
+Motion runs use); the estimate (sent with the same body) shows it. The job records it in `input_data.direction`. Where
+`preciseArtStyle` is `false` (or a server from before it leaves it out), a
+Precise run with an art style answers `400 art_style_needs_flex`. Nodaro Motion
+Pulse takes none (`400 art_style_needs_prism`, on a Precise run as on a Motion
+one).
 
 **The Advanced options on the Nodaro Motion page.** The Nodaro Motion page
 offers two of the body's fields, `prepareReferences` (see Reference
@@ -4827,7 +4848,7 @@ Refusals, all before anything is charged (bodies are
 | `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s. |
 | `400` | `unnamed_role_needs_picture` | A person, pet or product role with no `name` (left out or empty) and no image: an unnamed role is named by its first picture, so it needs one. |
 | `400` | `role_name_required` | A trend run with an unnamed role: a trend's roles are always named (only a direct run's may leave `name` out). |
-| `400` | `no_roles_in_preview` | A preview that would change nothing, judged on what it sends: no role kept in it (`inPreview` not `false`) that has images, no fixed reference, no `prePrompt` or `postPrompt` and no art style. Each of those counts, so a preview with every role left out is still run when it has a reference, a prompt or, where `styleOnly` is answered `true`, an art style (an engine from before style-only runs refuses that last one, with a message that does not name an art style). An engine answered `"precise"` drops the art style, so there a preview whose only change was the art style answers this refusal; one with a prompt or a reference runs, as Precise. "The preview would change nothing: keep a role with images in it (inPreview), or add a fixed reference, a pre or post prompt, or an art style (Flex on Nodaro Motion Prism)." |
+| `400` | `no_roles_in_preview` | A preview that would change nothing, judged on what it sends: no role kept in it (`inPreview` not `false`) that has images, no fixed reference, no `prePrompt` or `postPrompt` and no art style. Each of those counts, so a preview with every role left out is still run when it has a reference, a prompt or, where `styleOnly` is answered `true`, an art style (an engine from before style-only runs refuses that last one, with a message that does not name an art style). An engine answered `"precise"` runs it as Precise, where an art style is no change on its own, so there a preview whose only change was the art style answers this refusal; one with a prompt or a reference runs, as Precise (with the art style where `preciseArtStyle` is `true`). "The preview would change nothing: keep a role with images in it (inPreview), or add a fixed reference, a pre or post prompt, or an art style (Flex on Nodaro Motion Prism)." |
 | `400` | `prompt_too_long` | The prompt would build too long. A `{role:N}` reads as the role's name when it sends no images, so prompts within their own 4,000 characters can still add up past the engine's limit (Nodaro Motion Pulse's is 8,000 characters). |
 | `400` | `clip_too_long_for_style` | `style: "motion"` only, and only while the way Nodaro prepares Motion runs for the engine (a setting of Nodaro's, not of the run) limits the clip: a full run (not a preview) whose clip is over 27.9 s (on Nodaro Motion Pulse, once it is cut to whole seconds). "This clip is too long for Motion. Use a shorter clip or choose Precise." |
 | `400` | `prompt_parts_not_allowed` | The body sends `promptParts`: only the Nodaro platform itself may (a trend's engine prompt). |

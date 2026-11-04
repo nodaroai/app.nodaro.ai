@@ -146,6 +146,7 @@ import { withEarlierMotionKeys } from "../nodaro-motion-motion.js"
 import { styleForPlugin } from "../nodaro-motion-style.js"
 import { promptWordingForPlugin } from "../nodaro-motion-prompt-wording.js"
 import { engineTakesStyleOnly, styleOnlyForPlugin } from "../nodaro-motion-style-only.js"
+import { engineTakesPreciseArtStyle, preciseArtStyleForPlugin } from "../nodaro-motion-precise-art-style.js"
 import { anyStepsSet, stepsForLoadedEngine, withEarlierStepsKeys } from "../nodaro-motion-steps.js"
 import { loadedEngineTakesSteps } from "../cast-swap-steps.js"
 import { KieVideoProvider } from "../../providers/kie/video.js"
@@ -1651,6 +1652,8 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   nodaroMotionPromptWording: true,
   // tk.settings.nodaroMotionStyleOnly(): the admin's style-only setting (path, engine prompt) per Nodaro Motion engine.
   nodaroMotionStyleOnly: true,
+  // tk.settings.nodaroMotionPreciseArtStyle(): the admin's opener for a Precise run with an art style per Nodaro Motion engine.
+  nodaroMotionPreciseArtStyle: true,
   jobLanes: true,
   // tk.jobs.waitForJob leaves the time the awaited job waits for a slot
   // (`queued`) out of the plugin's timeout (`queueAware` below).
@@ -2327,6 +2330,16 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_style_only: the app settings could not be read")
         if (!engineTakesStyleOnly(getPluginSupports().castSwap)) return null
         return styleOnlyForPlugin(settings.nodaro_motion_style_only)
+      },
+      // Same rules: a failed read throws (null would give every Precise art-style run the default opener).
+      // Null when never saved or nothing differs from the default, AND to an engine that does not declare
+      // `castSwap.preciseArtStyle` (it refuses an art style on a Precise run, so it never asks); else each
+      // changed engine under its current AND its earlier key (the masking setting's shim).
+      nodaroMotionPreciseArtStyle: async () => {
+        const settings = await getAppSettings()
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_precise_art_style: the app settings could not be read")
+        if (!engineTakesPreciseArtStyle(getPluginSupports().castSwap)) return null
+        return preciseArtStyleForPlugin(settings.nodaro_motion_precise_art_style)
       },
     },
     deployment: { publicUrl: appBaseUrl() },

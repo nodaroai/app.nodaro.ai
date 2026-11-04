@@ -9,6 +9,7 @@ import type {
   PluginNodaroMotionPromptWording,
   PluginNodaroMotionStyle,
   PluginNodaroMotionStyleOnly,
+  PluginNodaroMotionPreciseArtStyle,
   PluginPromptPartId,
 } from "../types.js"
 import type { NodaroMotionMotionForPlugin } from "../../nodaro-motion-motion.js"
@@ -17,6 +18,7 @@ import type { NodaroMotionPromptPartsForPlugin } from "../../nodaro-motion-promp
 import type { NodaroMotionStyleForPlugin } from "../../nodaro-motion-style.js"
 import type { NodaroMotionPromptWordingForPlugin } from "../../nodaro-motion-prompt-wording.js"
 import type { NodaroMotionStyleOnlyEntry } from "../../nodaro-motion-style-only.js"
+import type { NodaroMotionPreciseArtStyleForPlugin } from "../../nodaro-motion-precise-art-style.js"
 import type { ByEngineForPlugin } from "../../nodaro-motion-engine-keys.js"
 
 /**
@@ -25,7 +27,7 @@ import type { ByEngineForPlugin } from "../../nodaro-motion-engine-keys.js"
  * the settings cache's own read (`getAppSettings`, ~60 s, cleared on an admin
  * write), handed out as a copy, and null when never saved.
  */
-const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, reads: 0, failed: false }))
+const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, reads: 0, failed: false }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("../../app-settings.js", async (importOriginal) => {
@@ -34,7 +36,7 @@ vi.mock("../../app-settings.js", async (importOriginal) => {
     ...orig,
     getAppSettings: async () => {
       h.reads++
-      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly }
+      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle }
     },
     settingsReadFailed: () => h.failed,
   }
@@ -546,6 +548,60 @@ describe("tk.settings.nodaroMotionStyleOnly", () => {
 
   it("what the host answers is the plugin's PluginNodaroMotionStyleOnly", () => {
     expectTypeOf<ByEngineForPlugin<NodaroMotionStyleOnlyEntry>>().toExtend<PluginNodaroMotionStyleOnly>()
+  })
+})
+
+/**
+ * `tk.settings.nodaroMotionPreciseArtStyle()` — the admin's opener per Nodaro Motion engine for a DIRECT Precise run
+ * with an art style: null when never saved, nothing differs from the default ("restyle"), or this host's engine does
+ * not declare `castSwap.preciseArtStyle`.
+ */
+describe("tk.settings.nodaroMotionPreciseArtStyle", () => {
+  beforeEach(() => {
+    h.preciseArtStyle = null
+    h.reads = 0
+    h.failed = false
+    _resetPluginSupportsForTests()
+  })
+  const preciseArtStyleEngine = () => setPluginSupports({ castSwap: { ...CS, preciseArtStyle: true } } as never)
+
+  it("advertises nodaroMotionPreciseArtStyle and answers null to an engine without castSwap.preciseArtStyle", async () => {
+    expect(buildToolkit().capabilities?.nodaroMotionPreciseArtStyle).toBe(true)
+    expect(typeof buildToolkit().settings?.nodaroMotionPreciseArtStyle).toBe("function")
+    h.preciseArtStyle = { "motion-prism": { opener: "edit" } }
+    expect(await buildToolkit().settings!.nodaroMotionPreciseArtStyle!()).toBeNull()
+    setPluginSupports({ castSwap: { ...CS, preciseArtStyle: false } } as never)
+    expect(await buildToolkit().settings!.nodaroMotionPreciseArtStyle!()).toBeNull()
+    expect(h.reads).toBe(2)
+  })
+
+  it("rejects when the settings could not be read, never answering null (the default opener)", async () => {
+    preciseArtStyleEngine()
+    h.failed = true
+    await expect(buildToolkit().settings!.nodaroMotionPreciseArtStyle!()).rejects.toThrow(/could not be read/)
+  })
+
+  it("answers null when it was never saved, or nothing differs from the default", async () => {
+    preciseArtStyleEngine()
+    expect(await buildToolkit().settings!.nodaroMotionPreciseArtStyle!()).toBeNull()
+    h.preciseArtStyle = { "motion-prism": { opener: "restyle" } }
+    expect(await buildToolkit().settings!.nodaroMotionPreciseArtStyle!()).toBeNull()
+  })
+
+  it("answers each changed engine under its current and its earlier key, a copy the plugin may change", async () => {
+    preciseArtStyleEngine()
+    h.preciseArtStyle = { "motion-prism": { opener: "edit", styleRefs: { mode: "on", send: "styled" } } }
+    const got = await buildToolkit().settings!.nodaroMotionPreciseArtStyle!()
+    expect(got).toStrictEqual({
+      "motion-prism": { opener: "edit", styleRefs: { mode: "on", send: "styled" } },
+      "motion-pro": { opener: "edit", styleRefs: { mode: "on", send: "styled" } },
+    })
+    ;(got as Record<string, { opener?: string }>)["motion-prism"]!.opener = "restyle"
+    expect(h.preciseArtStyle).toEqual({ "motion-prism": { opener: "edit", styleRefs: { mode: "on", send: "styled" } } })
+  })
+
+  it("what the host answers is the plugin's PluginNodaroMotionPreciseArtStyle", () => {
+    expectTypeOf<NodaroMotionPreciseArtStyleForPlugin>().toExtend<PluginNodaroMotionPreciseArtStyle>()
   })
 })
 
