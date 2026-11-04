@@ -71,7 +71,6 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Qwen Edit | Alibaba | Standard | 15<!-- credits: qwen-edit --> | edit | Qwen image edit endpoint with native negative prompt. |
 | Seedream 5 Lite | Bytedance | Standard | 16<!-- credits: seedream-5-lite --> | t2i | Newer Seedream 5 Lite — instruction-based generation, visual reasoning. |
 | Seedream 5 Lite (I2I) | Bytedance | Standard | 16<!-- credits: seedream-5-lite-i2i --> | i2i | Image-to-image with Seedream 5 Lite. |
-| GPT Image 2 (I2I) | OpenAI | Standard | 17<!-- credits: gpt-image-2-i2i --> | i2i | Image-to-image with GPT Image 2. |
 | GPT Image 2.5 Flare | OpenAI | Standard | 17<!-- credits: gpt-image-2-5-flare --> | t2i | Fast everyday GPT Image 2.5 - higher quality than GPT Image 2 at about half the latency. The default of the pair: social and creator content, campaign variants, thumbnails, rapid iteration, high-volume work. |
 | GPT Image 2.5 Flare (I2I) | OpenAI | Standard | 17<!-- credits: gpt-image-2-5-flare-i2i --> | i2i | Fast GPT Image 2.5 edits (up to 16 source images) - the default when you are iterating rather than finishing. |
 | GPT Image 2.5 Sunburst | OpenAI | Standard | 17<!-- credits: gpt-image-2-5-sunburst --> | t2i | Precision GPT Image 2.5 - trades generation time for tighter control and detail fidelity. Pick it for brand-sensitive and production work: packaging, diagrams, ecommerce retouching, polished campaign creative. |
@@ -79,6 +78,7 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Ideogram V3 | Ideogram | Standard | 20<!-- credits: ideogram-v3 --> | t2i | Strong typography and stylized illustration. Speed/quality tiered (TURBO/BALANCED/QUALITY). |
 | Seedream 5 Pro | Bytedance | Standard | 20<!-- credits: seedream-5-pro --> | t2i | Flagship Seedream 5 Pro — strongest instruction following and visual reasoning. Basic = 1K, high = 2K. |
 | ⭐ GPT Image 2 | OpenAI | Premium | 21<!-- credits: gpt-image-2 --> | t2i | Next-gen GPT Image — broader aspect ratios, resolution-based pricing (1K/2K/4K). |
+| GPT Image 2 (I2I) | OpenAI | Premium | 21<!-- credits: gpt-image-2-i2i --> | i2i | Image-to-image with GPT Image 2. |
 | Seedream 5 Pro (I2I) | Bytedance | Premium | 21<!-- credits: seedream-5-pro-i2i --> | i2i | Image-to-image with Seedream 5 Pro — multi-reference instruction edits. Basic = 1K, high = 2K. |
 | Imagen 4 | Google | Premium | 22<!-- credits: imagen4 --> | t2i | Google's Imagen 4 — strong photographic quality and prompt fidelity. |
 | Nano Banana 2 | Google | Premium | 22<!-- credits: nano-banana-2 --> | t2i, i2i | Newer Nano Banana with native resolution control (1K/2K/4K) and Google Search context. |
