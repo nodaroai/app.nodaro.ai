@@ -104,9 +104,11 @@ describe("NOT_GENERIC_RECOVERABLE", () => {
   // Video Face Mesh (local drawing, its own markJobCompleted) to 69, and
   // Mask Outline (local drawing, its own markJobCompleted) to 70, and the
   // four background scrapes (web-scrape, site-capture, meta-ads-scrape,
-  // instagram-scrape: run to the end in the handler, own markJobCompleted) to 74.
-  it("has exactly 74 members", () => {
-    expect(NOT_GENERIC_RECOVERABLE.size).toBe(74)
+  // instagram-scrape: run to the end in the handler, own markJobCompleted) to 74,
+  // and Shot Cuts (a worker unit declaring finalize:own-writer: a local analysis
+  // that writes its own completion) to 75.
+  it("has exactly 75 members", () => {
+    expect(NOT_GENERIC_RECOVERABLE.size).toBe(75)
   })
 
   it("denies generate-script and no other entity handler key", () => {

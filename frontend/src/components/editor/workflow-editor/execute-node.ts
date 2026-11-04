@@ -8316,22 +8316,31 @@ function executeNodeCore(
     const d = node.data as SplitMediaData;
     const videoUrl = inputs.videoUrl;
     const audioUrl = inputs.audioUrl;
+    const shotsMode = d.mode === "shots";
     if (!videoUrl && !audioUrl) {
       toast.error(nodeRunError(d.label, "nodeRun.noVideoOrAudioInput"));
       return Promise.reject(new Error("No input"));
+    }
+    // Shots mode cuts a video at its shots: a sound file alone has none, and a
+    // separate one is not cut at the video's (the server refuses both the same way).
+    if (shotsMode && (!videoUrl || audioUrl)) {
+      toast.error(nodeRunError(d.label, videoUrl ? "nodeRun.splitShotsNoAudio" : "nodeRun.noVideoInput"));
+      return Promise.reject(new Error(videoUrl ? "Shots mode takes no audio input" : "No video"));
     }
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, { ...RUN_START_RESET });
     setUserPromptTemplate(undefined);
     return new Promise<string>((resolve, reject) => {
-      splitMediaApi({
-        videoUrl: videoUrl || undefined,
-        audioUrl: audioUrl || undefined,
-        chunkDuration: d.chunkDuration || 10,
-        minPartDuration: d.minPartDuration,
-        audioFormat: d.audioFormat || "mp3",
-        userId: ctx.userId,
-      }).then(({ jobId }) => {
+      splitMediaApi(shotsMode
+        ? { videoUrl: videoUrl || undefined, mode: "shots", userId: ctx.userId }
+        : {
+          videoUrl: videoUrl || undefined,
+          audioUrl: audioUrl || undefined,
+          chunkDuration: d.chunkDuration || 10,
+          minPartDuration: d.minPartDuration,
+          audioFormat: d.audioFormat || "mp3",
+          userId: ctx.userId,
+        }).then(({ jobId }) => {
         toast.info(tx("nodeRun.splitIntoChunksStarted"), { description: tx("run.jobIdLine", { id: jobId }) });
         updateNodeData(node.id, { currentJobId: jobId });
         const poll = setInterval(async () => {
@@ -8359,6 +8368,7 @@ function executeNodeCore(
                 executionStatus: "completed",
                 generatedVideoUrls: videoUrls,
                 generatedAudioUrls: audioUrls,
+                generatedShots: Array.isArray(od.shots) ? (od.shots as SplitMediaData["generatedShots"]) : undefined,
                 generatedItems: [...(audioUrls ?? []), ...(videoUrls ?? [])],
                 currentJobId: undefined,
                 currentJobProgress: undefined,

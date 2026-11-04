@@ -61,6 +61,7 @@ export const RUN_RESULT_EXTRA_KEYS: readonly string[] = [
   "generatedMaskUrl",
   "generatedVideoUrls",
   "generatedAudioUrls",
+  "generatedShots",
   "generatedPickerJson",
   "generatedPickerRunId",
   "generatedGaps",

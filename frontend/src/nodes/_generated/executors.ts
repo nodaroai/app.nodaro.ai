@@ -4,10 +4,12 @@
 import type { UnitExecutor } from "../exec-kit"
 import { executor as unit_gif_to_video } from "../gif-to-video/exec" // unit:gif-to-video
 import { executor as unit_remove_audio } from "../remove-audio/exec" // unit:remove-audio
+import { executor as unit_shot_cuts } from "../shot-cuts/exec" // unit:shot-cuts
 import { executor as unit_speaker_map } from "../speaker-map/exec" // unit:speaker-map
 
 export const UNIT_EXECUTORS: Readonly<Record<string, UnitExecutor>> = Object.assign(Object.create(null), {
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
   "remove-audio": unit_remove_audio, // unit:remove-audio
+  "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-map": unit_speaker_map, // unit:speaker-map
 })

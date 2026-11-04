@@ -44,7 +44,7 @@ import {
 import { mediaLengthSecOf, type EditPlanOutputReader, type EstimateGraphNode } from "./apply-edl-estimate"
 import { bypassTeleports } from "./teleport-bypass"
 import { editPlanClipFanOut, heldBatchFanOut, inheritedClipFanOut, selectedFanOutCount, type FanOutGraphEdge } from "./clip-fan-out"
-import { SPLIT_MEDIA_ASSUMED_SOURCE_SEC, splitMediaPartCount, splitMediaParts } from "./split-media-parts"
+import { SPLIT_MEDIA_ASSUMED_SOURCE_SEC, SPLIT_SHOTS_ASSUMED_SHOT_SEC, splitMediaPartCount, splitMediaParts } from "./split-media-parts"
 import { runWireLengthSec } from "./utility-wire-length"
 
 /** Downstream runs one run of a producer makes the node after it run. */
@@ -122,7 +122,8 @@ function socialReaderFanOut(data: Record<string, unknown>, reruns: boolean, sele
  * input's length at its part length allows (`splitMediaPartCount`), the input
  * being the one the pip splits (video, else audio when the wire names no
  * pip); a length nothing records is quoted at a typical source length
- * (`SPLIT_MEDIA_ASSUMED_SOURCE_SEC`).
+ * (`SPLIT_MEDIA_ASSUMED_SOURCE_SEC`). Split at the shots (`mode: "shots"`), its
+ * parts are quoted at one per `SPLIT_SHOTS_ASSUMED_SHOT_SEC` of the input.
  * A pip with no input wired carries nothing and multiplies nothing.
  */
 function splitMediaFanOut(
@@ -146,7 +147,9 @@ function splitMediaFanOut(
     : pip === "video" ? inputs.find((e) => !isAudioIn(e))
     : inputs.find((e) => !isAudioIn(e)) ?? inputs.find(isAudioIn)
   if (!input) return 1
-  const chunkSec = typeof data.chunkDuration === "number" && data.chunkDuration > 0 ? data.chunkDuration : 10
+  // At the shots, the parts are the video's shots: quoted at the assumed shot length.
+  const chunkSec = data.mode === "shots" ? SPLIT_SHOTS_ASSUMED_SHOT_SEC
+    : typeof data.chunkDuration === "number" && data.chunkDuration > 0 ? data.chunkDuration : 10
   const lengthSec = runWireLengthSec(input.source, nodes, edges, rerunIds, {
     planOutputOf,
     otherSec: (origin) => mediaLengthSecOf(dataOf(origin)),

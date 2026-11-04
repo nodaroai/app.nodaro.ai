@@ -1,7 +1,7 @@
 ---
 node_type: split-media
-generated_at: 2026-10-14T00:02:35.102Z
-generated_from: b83a9467d
+generated_at: 2026-11-04T12:55:54.221Z
+generated_from: 2cad74fa7
 ---
 
 # Split Media
@@ -20,12 +20,14 @@ generated_from: b83a9467d
 
 **Optional data fields:**
 - `currentJobProgress?: number`
+- `mode?: "duration" | "shots"`
 - `minPartDuration?: number`
 - `audioFormat?: "mp3" | "wav" | "aac"`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedVideoUrls?: string[]`
 - `generatedAudioUrls?: string[]`
+- `generatedShots?: ReadonlyArray<{ index: number; startSec: number; endSec: number; durationSec: number }>`
 - `selectedAudioChunks?: number[]`
 - `selectedVideoChunks?: number[]`
 - `outputChunkIndex?: number`
@@ -57,6 +59,7 @@ Cut a long video or audio file into consecutive parts so the next node runs once
 - `video_asset_id`
 - `audio_url`
 - `audio_asset_id`
+- `mode`
 - `chunk_duration`
 - `min_part_duration`
 - `audio_format`

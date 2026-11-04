@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-10-20T02:37:31.296Z
-generated_from: caf9fb638
+generated_at: 2026-11-04T12:55:49.174Z
+generated_from: 2cad74fa7
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -212,6 +212,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `schedule-trigger` — Schedule Trigger
 - `selector` — Selector
 - `setting` — Setting
+- `shot-cuts` — Shot Cuts
 - `silence-detect` — Silence Detect
 - `site-capture` — Site Capture
 - `slideshow` — Slideshow

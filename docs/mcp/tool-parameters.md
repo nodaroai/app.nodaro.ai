@@ -2809,6 +2809,16 @@ Needs `workflows:write` · Nodaro Cloud only.
 | `production_id` | string | yes | The production. |
 | `shared` | boolean | yes | true publishes the link; false takes it back. |
 
+## `shot_cuts`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `video_url` | string (URL) |  | Video to measure. |
+| `video_asset_id` | string |  | Video to measure, as a Nodaro video job id or an uploaded video's id. |
+| `frames` | boolean |  | Also save each shot's first and last frame as images. Default false. |
+
 ## `silence_detect`
 
 Needs `workflows:execute`.
@@ -2921,7 +2931,8 @@ Needs `workflows:execute`.
 | `video_asset_id` | string |  | Video to split, as a Nodaro video job id or an uploaded video's id. |
 | `audio_url` | string (URL) |  | Audio file to split. |
 | `audio_asset_id` | string |  | Audio to split, as a Nodaro audio job id or an uploaded audio's id. |
-| `chunk_duration` | number | yes | Longest a part may be, in seconds (every part is at most this). At least 1. |
+| `mode` | string |  | "duration" (default): parts of at most chunk_duration. "shots": one part per shot of the video (video only; chunk_duration, min_part_duration and audio_format are not used). One of `duration`, `shots`. |
+| `chunk_duration` | number |  | Longest a part may be, in seconds (every part is at most this). Required unless mode is "shots". At least 1. |
 | `min_part_duration` | number |  | Shortest a part may be, in seconds (default 4); must not exceed chunk_duration. At least 0. |
 | `audio_format` | string |  | Format of the audio parts. Default mp3. One of `mp3`, `wav`, `aac`. |
 

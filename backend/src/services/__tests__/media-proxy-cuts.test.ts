@@ -6,6 +6,7 @@ import {
   findSceneCuts,
   isSceneCutList,
   mergeSceneCuts,
+  readNumberedSceneScores,
   readSceneScores,
   sceneCutFilter,
   segmentCutsToSourceMs,
@@ -68,6 +69,17 @@ describe("readSceneScores", () => {
 
   it("an empty file is no frames", async () => {
     expect(await readSceneScores(lines(""))).toEqual([])
+  })
+
+  it("readNumberedSceneScores reads the same frames with each one's number from its header", async () => {
+    expect(await readNumberedSceneScores(lines(PRINTED))).toEqual([
+      { n: 0, t: 0, score: 0, mafd: 0 },
+      { n: 1, t: 0.033367, score: 0.412, mafd: 0.412 },
+      { n: 299704, t: 10000.123467, score: 30.838, mafd: 31.25 },
+    ])
+    const text = "frame:3    pts:NOPTS   pts_time:NOPTS\nlavfi.scd.mafd=40\nlavfi.scd.score=40\nframe:4    pts:4004   pts_time:0.1335\nlavfi.scd.mafd=1\nlavfi.scd.score=1\n"
+    // A NOPTS frame is skipped; the frame after it keeps its own number.
+    expect(await readNumberedSceneScores(lines(text))).toEqual([{ n: 4, t: 0.1335, score: 1, mafd: 1 }])
   })
 
   it("skips a frame with no time (NOPTS) or a missing score rather than inventing one", async () => {

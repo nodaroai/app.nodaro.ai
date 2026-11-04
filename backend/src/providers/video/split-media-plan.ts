@@ -28,6 +28,7 @@ import {
   canvasPixelFactor,
   type RenderCanvas,
 } from "./apply-edl-budget.js"
+import { SHOT_CUTS_MAX_DURATION_SEC, shotCutsDecodeTimeoutMs } from "./shot-cuts-plan.js"
 
 export { SPLIT_MEDIA_MAX_PARTS, SPLIT_MEDIA_MAX_SOURCE_SEC }
 
@@ -346,6 +347,7 @@ export function splitPartTimeoutMs(partSec: number): number {
  */
 export function splitMediaJobBudgetMs(data: unknown): number | undefined {
   if (!data || typeof data !== "object") return undefined
+  if (isShotsMode(data as { mode?: unknown })) return splitShotsJobBudgetMs(data)
   const d = data as { videoUrl?: unknown; audioUrl?: unknown; chunkDuration?: unknown }
   const settings = splitSettingsOf(d)
   if (!settings) return undefined
@@ -365,4 +367,77 @@ export function splitMediaJobBudgetMs(data: unknown): number | undefined {
     ms += DOWNLOAD_MAX_MS + FFPROBE_TIMEOUT_MS + splitCopyTimeoutMs(maxSourceSec) + parts
   }
   return ms
+}
+
+// --- shots mode ------------------------------------------------------------------
+
+/**
+ * SHOTS MODE (`mode: "shots"`): one part per shot instead of parts of a fixed
+ * length. The cuts are the platform's measured rule (`detectShotCuts`, the one
+ * Shot Cuts and Video Mask use), found on the SOURCE — every decoded frame
+ * scored — and then placed on the constant-rate picture the parts are cut
+ * from: a cut at s seconds from the first frame starts the part at frame
+ * ⌊s · fps⌉ (`unitsNearest`; exact for a constant-rate source, the nearest
+ * frame for a variable-rate one). The rest is the fixed mode's: keyframes
+ * forced at the cuts, the picture cut by stream copy, each part's sound under
+ * its picture. A video only (the shots are the picture's), and no minimum
+ * length: a one-frame shot is a one-frame part.
+ */
+export type SplitMediaMode = "duration" | "shots"
+
+/** Whether a job (or a node, or a request) splits at the shots. */
+export const isShotsMode = (data: { readonly mode?: unknown }): boolean => data.mode === "shots"
+
+/** The longest source shots mode takes: Shot Cuts' 30 minutes (its scoring decode reads every frame). */
+export const SPLIT_SHOTS_MAX_SOURCE_SEC = SHOT_CUTS_MAX_DURATION_SEC
+
+/** The frames the shots start on, on the constant-rate grid: each cut's nearest frame, never 0, each once, ascending. */
+export function shotCutFramesOnGrid(cutsSec: readonly number[], fps: UnitRate): number[] {
+  const out = new Set<number>()
+  for (const sec of cutsSec) {
+    if (!Number.isFinite(sec) || sec <= 0) continue
+    const frame = unitsNearest(sec * 1000, fps)
+    if (frame > 0) out.add(frame)
+  }
+  return [...out].sort((a, b) => a - b)
+}
+
+/** The parts (frames each) of `totalFrames` cut at `cutFrames` — the cuts inside the picture only. Empty for no frames. */
+export function shotPartsOf(cutFrames: readonly number[], totalFrames: number): number[] {
+  if (!Number.isSafeInteger(totalFrames) || totalFrames < 1) return []
+  const inside = [...new Set(cutFrames)].filter((c) => Number.isSafeInteger(c) && c > 0 && c < totalFrames).sort((a, b) => a - b)
+  const bounds = [0, ...inside, totalFrames]
+  return bounds.slice(1).map((b, i) => b - bounds[i]!)
+}
+
+/** The refusal for a source past shots mode's 30 minutes; `sec` undefined when the file stated no length. */
+export function shotsSourceTooLongMessage(sec: number | undefined): string {
+  const limit = `${SPLIT_SHOTS_MAX_SOURCE_SEC / 60} minutes`
+  const length = sec === undefined ? `longer than ${limit}` : `${formatLength(sec)} long`
+  return `This video is ${length}; Split into Chunks cuts at the shots of videos up to ${limit} — trim it first.`
+}
+
+/** The refusal for more shots than the part cap. */
+export function tooManyShotsMessage(shotCount: number): string {
+  return `This video has ${shotCount.toLocaleString("en-US")} shots; the limit is ${SPLIT_MEDIA_MAX_PARTS} parts. Trim the video first, or split it by part length instead.`
+}
+
+/**
+ * The liveness budget of one shots-mode job, for the longest source it takes
+ * (`SPLIT_SHOTS_MAX_SOURCE_SEC`, at `LIVENESS_CANVAS`): the big-media download,
+ * the probe, the scoring decode, the encode and its frame count, the copy cut,
+ * and every part's finish — at most `SPLIT_MEDIA_MAX_PARTS` parts whose lengths
+ * add up to the source, so at most 200 × the per-part floor plus the finish of
+ * the whole source. `undefined` when the payload names no video.
+ */
+export function splitShotsJobBudgetMs(data: unknown): number | undefined {
+  if (!data || typeof data !== "object") return undefined
+  const d = data as { videoUrl?: unknown }
+  if (typeof d.videoUrl !== "string" || d.videoUrl.length === 0) return undefined
+  const sourceSec = SPLIT_SHOTS_MAX_SOURCE_SEC
+  return DOWNLOAD_MAX_MS + FFPROBE_TIMEOUT_MS
+    + shotCutsDecodeTimeoutMs(sourceSec)
+    + splitEncodeTimeoutMs(sourceSec, LIVENESS_CANVAS) + FFPROBE_TIMEOUT_MS
+    + splitCopyTimeoutMs(sourceSec)
+    + SPLIT_MEDIA_MAX_PARTS * SPLIT_PART_TIMEOUT_FLOOR_MS + splitPartTimeoutMs(sourceSec)
 }

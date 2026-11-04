@@ -4448,6 +4448,8 @@ export type SplitMediaData = {
   currentJobProgress?: number
   [key: string]: unknown
   label: string
+  /** How the parts are cut: "duration" (the default) — parts of at most chunkDuration seconds; "shots" — one part per shot of the video, at its measured cuts (a video only; chunkDuration, minPartDuration and audioFormat are not used). */
+  mode?: "duration" | "shots"
   /** The longest a part may be, in seconds: every part is at most this long. */
   chunkDuration: number
   /** The shortest a part may be, in seconds (default 4, never above chunkDuration). */
@@ -4458,6 +4460,8 @@ export type SplitMediaData = {
   errorMessage?: string
   generatedVideoUrls?: string[]
   generatedAudioUrls?: string[]
+  /** Shots mode: each part's shot (seconds on the picture), in part order. */
+  generatedShots?: ReadonlyArray<{ index: number; startSec: number; endSec: number; durationSec: number }>
   selectedAudioChunks?: number[]
   selectedVideoChunks?: number[]
   outputChunkIndex?: number

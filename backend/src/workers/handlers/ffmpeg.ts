@@ -1125,13 +1125,20 @@ const handleSocialMediaFormat: HandlerFn = async function handleSocialMediaForma
 // The output keys `videoUrls` / `audioUrls` / `chunkCount` are what the engine
 // and the editor read; `partDurationsSec` is each part's exact length (the
 // video parts' when there is a video, else the audio parts'), and
-// `audioPartDurationsSec` the audio parts' when BOTH inputs were split.
+// `audioPartDurationsSec` the audio parts' when BOTH inputs were split. In
+// shots mode (`mode: "shots"`, a video only) there is one part per shot, and
+// `shotCount` / `shots` give each part's start and end on the picture.
 const handleSplitMedia: HandlerFn = async function handleSplitMedia(job, ctx) {
-  const { videoUrl, audioUrl, chunkDuration, minPartDuration, audioFormat } = job.data as {
-    jobId: string; videoUrl?: string; audioUrl?: string; chunkDuration: number; minPartDuration?: number; audioFormat?: "mp3" | "wav" | "aac"
+  const { videoUrl, audioUrl, mode, chunkDuration, minPartDuration, audioFormat } = job.data as {
+    jobId: string; videoUrl?: string; audioUrl?: string; mode?: "duration" | "shots"; chunkDuration: number; minPartDuration?: number; audioFormat?: "mp3" | "wav" | "aac"
   }
-  console.log(`[worker] split-media ${ctx.jobId} (chunkDuration: ${chunkDuration}s, minPartDuration: ${minPartDuration ?? "default"})`)
-  const result = await splitMedia({ videoUrl, audioUrl, chunkDuration, minPartDuration, audioFormat })
+  const shotsMode = mode === "shots"
+  console.log(shotsMode
+    ? `[worker] split-media ${ctx.jobId} (at the shots)`
+    : `[worker] split-media ${ctx.jobId} (chunkDuration: ${chunkDuration}s, minPartDuration: ${minPartDuration ?? "default"})`)
+  const result = shotsMode
+    ? await splitMedia({ videoUrl, audioUrl, mode })
+    : await splitMedia({ videoUrl, audioUrl, chunkDuration, minPartDuration, audioFormat })
   await setJobProgress(job, ctx.jobId, 70)
 
   const videoUrls: string[] = []
@@ -1157,6 +1164,8 @@ const handleSplitMedia: HandlerFn = async function handleSplitMedia(job, ctx) {
       chunkCount: Math.max(videoUrls.length, audioUrls.length),
       partDurationsSec,
       audioPartDurationsSec: result.videoPartDurationsSec && result.audioPartDurationsSec ? result.audioPartDurationsSec : undefined,
+      // Shots mode: one part per shot, each part's shot on the picture.
+      ...(result.shots ? { shotCount: result.shots.length, shots: result.shots } : {}),
     },
   })
   if (!ok) return

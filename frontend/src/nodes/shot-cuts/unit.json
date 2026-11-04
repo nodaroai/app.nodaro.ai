@@ -1,0 +1,55 @@
+{
+  "$schema": "../../../../tools/units/unit.schema.json",
+  "schemaVersion": 1,
+  "type": "shot-cuts",
+  "label": "Shot Cuts",
+  "category": "processing",
+  "position": {
+    "after": "split-media"
+  },
+  "picker": {
+    "family": "video-cut-assemble",
+    "after": "split-media",
+    "pickerCategory": "Processing",
+    "keywords": ["shot cuts", "scene detection", "scene cuts", "shot detection", "cut detection", "shots", "shot list", "first frame", "last frame", "keyframes"]
+  },
+  "handles": {
+    "inputs": [
+      { "id": "in", "label": "Video", "accepts": ["video"], "field": "videoUrl" }
+    ],
+    "outputs": [
+      { "id": "json", "label": "Shots", "kind": "look", "from": "generatedJson" },
+      { "id": "firstFrames", "label": "First frames", "kind": "look", "from": "generatedFirstFrames" },
+      { "id": "lastFrames", "label": "Last frames", "kind": "look", "from": "generatedLastFrames" }
+    ]
+  },
+  "defaultData": {
+    "label": "Shot Cuts",
+    "frames": false,
+    "fieldMappings": {}
+  },
+  "execution": {
+    "kind": "worker",
+    "queue": "video",
+    "requires": {
+      "anyOf": ["videoUrl"],
+      "kind": "video",
+      "noun": "a video"
+    }
+  },
+  "capabilities": ["ffmpeg-media", "panel:generate-button", "finalize:own-writer", "lane:local"],
+  "registry": {
+    "description": "Find where every shot of a video starts and ends, measured from the file (every decoded frame scored; clips up to 30 minutes). Optionally saves each shot's first and last frame as images.",
+    "outputType": "data"
+  },
+  "contract": {
+    "jsonPips": { "json": "other", "firstFrames": "other", "lastFrames": "other" }
+  },
+  "mcp": {
+    "widgetModelFor": ["shot_cuts"]
+  },
+  "docs": {
+    "page": "docs/nodes/processing-video/shot-cuts.md",
+    "useCase": "Get a clip's shot list — every shot's start, end and length — and, on request, each shot's first and last frame"
+  }
+}

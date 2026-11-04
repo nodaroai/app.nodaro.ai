@@ -465,6 +465,8 @@ describe("every registered budgeted job is dispatched under its node type's own 
       node: { id: "silence", type: "silence-detect", data: { label: "Silence Detect" } },
       inputs: { audioUrl: "https://media.test/episode.m4a" },
     }),
+    // Shot Cuts (a worker unit): one video; its budget is sized for the 30-minute cap.
+    "shot-cuts": () => ({ node: { id: "shots", type: "shot-cuts", data: { label: "Shot Cuts" } }, inputs: { videoUrl: "https://media.test/v.mp4" } }),
   }
 
   // A budgeted job registered before its node exists (Speaker Frames' node

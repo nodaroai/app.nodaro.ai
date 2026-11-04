@@ -6815,6 +6815,17 @@ export function buildPayload(
       })
 
     case "split-media":
+      // Shots mode: one part per shot of the video (no part length). A video
+      // only: refused before anything is reserved when there is none, or when a
+      // separate audio is wired (the route and the canvas refuse the same).
+      if (data.mode === "shots") {
+        const videoUrl = resolvedInputs.videoUrl || data.videoUrl
+        if (!videoUrl) throw new Error("Split into Chunks: cutting at the shots needs a video — connect one to the video input.")
+        if (resolvedInputs.audioUrl || data.audioUrl) {
+          throw new Error("Split into Chunks: cutting at the shots splits a video and keeps its own sound — disconnect the audio input, or cut by part length.")
+        }
+        return ffmpegResult("split-media", { jobId, videoUrl, mode: "shots", usageLogId })
+      }
       return ffmpegResult("split-media", {
         jobId,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,

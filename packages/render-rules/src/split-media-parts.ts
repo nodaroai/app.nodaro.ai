@@ -36,6 +36,15 @@ export const SPLIT_MEDIA_MAX_SOURCE_SEC = 3 * 60 * 60
  */
 export const SPLIT_MEDIA_ASSUMED_SOURCE_SEC = 10 * 60
 
+/**
+ * The average shot length a run estimate assumes for a split at the shots
+ * (`mode: "shots"`), in seconds: the shots are only known once the video is
+ * measured, so before a run the parts are quoted at one every 4 seconds of the
+ * input (a typical edit's pace), capped at {@link SPLIT_MEDIA_MAX_PARTS}. The
+ * run is charged by the parts it really makes.
+ */
+export const SPLIT_SHOTS_ASSUMED_SHOT_SEC = 4
+
 /** The minimum part length when a node sets none, in seconds (never more than the part length). */
 export const SPLIT_MEDIA_DEFAULT_MIN_PART_SEC = 4
 

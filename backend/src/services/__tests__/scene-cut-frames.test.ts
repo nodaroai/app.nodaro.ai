@@ -3,7 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { execFileSync } from "node:child_process"
-import { cutTimesFromFirstFrame, cutTimesToFrames, detectCutFrames, detectCutTimes } from "../scene-cut-frames.js"
+import { cutTimesFromFirstFrame, cutTimesToFrames, detectCutFrames, detectCutTimes, detectShotCuts, numberedCutsOf } from "../scene-cut-frames.js"
+import { findSceneCuts } from "../media-proxy-cuts.js"
 
 describe("cutTimesToFrames", () => {
   it("counts frames from the first decoded frame's time (a source may start past 0), at the clip's rate", () => {
@@ -93,5 +94,57 @@ describe("detectCutFrames (real ffmpeg)", () => {
     ], async (path) => {
       expect(await detectCutFrames(path, "24/1")).toEqual([24, 48])
     })
+  }, 60_000)
+})
+
+describe("numberedCutsOf — the same cuts as detectCutTimes, each with the frame it starts on", () => {
+  /** A 24 fps run of numbered frames: quiet motion unless `at` says otherwise. */
+  const run = (frames: number, at: Record<number, { score: number; mafd: number }> = {}, start = 0) =>
+    Array.from({ length: frames }, (_, k) => ({ n: k, t: start + k / 24, ...(at[k] ?? { score: k === 0 ? 0 : 0.3, mafd: k === 0 ? 0 : 0.4 }) }))
+
+  it("a hard cut at frame 24 is 1 s and frame 24; the clip's frames are counted from its numbers", () => {
+    const scan = numberedCutsOf(run(48, { 24: { score: 40, mafd: 40 } }))
+    expect(scan.cuts).toEqual([{ sec: 1, frame: 24 }])
+    expect(scan.frameCount).toBe(48)
+    expect(scan.firstFrameTimeS).toBe(0)
+    expect(scan.lastFrameSec).toBe(1.958)
+  })
+
+  it("times count from the first decoded frame, exactly as cutTimesFromFirstFrame does", () => {
+    const frames = run(72, { 24: { score: 40, mafd: 40 }, 60: { score: 35, mafd: 36 } }, 0.5)
+    const scan = numberedCutsOf(frames)
+    expect(scan.cuts.map((c) => c.sec)).toEqual(cutTimesFromFirstFrame(findSceneCuts(frames, { isolatedSpikeIsCut: true }), 0.5))
+    expect(scan.cuts.map((c) => c.frame)).toEqual([24, 60])
+  })
+
+  it("a frame skipped by the reader (NOPTS) never shifts the frame numbers after it", () => {
+    const frames = run(48, { 30: { score: 40, mafd: 40 } }).filter((f) => f.n !== 10)
+    expect(numberedCutsOf(frames).cuts).toEqual([{ sec: 1.25, frame: 30 }])
+  })
+
+  it("no frames is no cuts and no frames", () => {
+    expect(numberedCutsOf([])).toEqual({ cuts: [], frameCount: 0, firstFrameTimeS: null, lastFrameSec: 0 })
+  })
+})
+
+describe("detectShotCuts (real ffmpeg)", () => {
+  it("answers detectCutTimes' cuts with the frames they start on, and the clip's frame count", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "shot-cuts-scan-"))
+    try {
+      const path = join(dir, "three.mp4")
+      execFileSync("ffmpeg", [
+        "-v", "error", "-y",
+        "-f", "lavfi", "-i", "color=red:s=160x90:r=24:d=1",
+        "-f", "lavfi", "-i", "color=blue:s=160x90:r=24:d=1.5",
+        "-f", "lavfi", "-i", "color=green:s=160x90:r=24:d=1",
+        "-filter_complex", "[0][1][2]concat=n=3:v=1", "-c:v", "libx264", "-pix_fmt", "yuv420p", path,
+      ])
+      const scan = await detectShotCuts(path)
+      expect(scan.cuts).toEqual([{ sec: 1, frame: 24 }, { sec: 2.5, frame: 60 }])
+      expect(scan.cuts.map((c) => c.sec)).toEqual((await detectCutTimes(path)).cutsSec)
+      expect(scan.frameCount).toBe(84)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   }, 60_000)
 })

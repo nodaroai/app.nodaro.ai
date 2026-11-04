@@ -6409,13 +6409,17 @@ to `[startTime, endTime]` seconds, in `audioFormat` (`mp3` default).
 #### `splitMedia(input)`
 
 ```ts
-splitMedia(input: {
-  videoUrl?: string
-  audioUrl?: string
-  chunkDuration: number
-  minPartDuration?: number
-  audioFormat?: "mp3" | "wav" | "aac"
-}): Promise<{ jobId: string }>
+splitMedia(input:
+  | {
+      videoUrl?: string
+      audioUrl?: string
+      mode?: "duration"
+      chunkDuration: number
+      minPartDuration?: number
+      audioFormat?: "mp3" | "wav" | "aac"
+    }
+  | { videoUrl: string; mode: "shots" }
+): Promise<{ jobId: string }>
 ```
 
 Cut a video and/or an audio file into consecutive parts (`POST /v1/split-media`).
@@ -6433,12 +6437,64 @@ interface SplitMediaOutput {
   chunkCount: number               // the larger of the two lists
   partDurationsSec?: number[]      // each part's exact length (video parts', else audio parts')
   audioPartDurationsSec?: number[] // the audio parts' lengths, only when both were split
+  shotCount?: number               // shots mode: the number of shots (= parts)
+  shots?: Array<{ index: number; startSec: number; endSec: number; durationSec: number }> // shots mode: each part on the video
 }
 ```
 
 How the parts are cut (on whole frames, a short leftover evened out with the
 parts before it, sources up to 3 hours, at most 200 parts per input) is on the
 [Split into Chunks](./nodes/processing-audio/split-media.md) node page.
+
+With `mode: "shots"` a video is cut into **one part per shot** instead, at the
+cuts measured from the file (the [Shot Cuts](./nodes/processing-video/shot-cuts.md)
+rule): no part length, a video only (a separate `audioUrl` is a `400`; each part
+keeps the video's own sound), videos up to 30 minutes and at most 200 shots. The
+price is the same.
+
+```ts
+const { jobId } = await client.media.splitMedia({ videoUrl: "https://example.com/ad.mp4", mode: "shots" })
+```
+
+#### `shotCuts(input)`
+
+```ts
+shotCuts(input: { videoUrl: string; frames?: boolean }): Promise<{ jobId: string }>
+```
+
+**Not yet enabled on nodaro.ai.** Where every shot of a video starts and ends
+(`POST /v1/shot-cuts`), measured from the file: every decoded frame is scored and
+each hard cut starts a new shot (dissolves and fades are not cuts). Videos up to
+30 minutes. `frames: true` also saves each shot's exact first and last frame as PNG
+images (up to 1,000 shots). 2 credits<!-- credits: shot-cuts --> per run on Nodaro
+Cloud, with or without frames. Poll `jobs.get(jobId)`; the completed job's
+`output_data` is a `ShotCutsOutput`:
+
+```ts
+interface ShotCutsOutput {
+  json: {
+    shotCount: number
+    cutsSec: number[]        // where each new shot starts: ascending, never 0; [] for one shot
+    durationSec: number      // the video's length
+    shots: Array<{
+      index: number
+      startSec: number       // seconds from the first frame, to the millisecond
+      endSec: number         // the next shot's start, or the video's end
+      durationSec: number
+      firstFrameUrl?: string // with frames: the shot's first frame (PNG)
+      lastFrameUrl?: string  // with frames: its last frame
+    }>
+  }
+  firstFrames?: string[]     // with frames: each shot's first frame, in shot order
+  lastFrames?: string[]      // with frames: each shot's last frame, in shot order
+}
+```
+
+```ts
+const { jobId } = await client.media.shotCuts({ videoUrl: "https://example.com/ad.mp4", frames: true })
+```
+
+Full reference: [Shot Cuts](./nodes/processing-video/shot-cuts.md).
 
 #### `stillToVideo(input)`
 

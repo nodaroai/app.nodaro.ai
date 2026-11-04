@@ -123,18 +123,45 @@ export interface SceneFrameScore {
  * both scores is skipped rather than given made-up values.
  */
 export async function readSceneScores(input: Readable): Promise<SceneFrameScore[]> {
-  const out: SceneFrameScore[] = []
+  return parseSceneScores(input, false)
+}
+
+/** One decoded frame's scores and its number `n`: its place in decode order
+ *  from 0, as the metadata filter counts it (`frame:<n>`), so a skipped frame
+ *  never shifts the numbers of the frames after it. */
+export interface NumberedSceneFrameScore extends SceneFrameScore {
+  readonly n: number
+}
+
+/**
+ * `readSceneScores` with each frame's number (`frame:<n>`): the frame a select
+ * filter's `n` names in a later decode of the same stream. The same frames,
+ * skipped by the same rule; a frame whose header carries no number is skipped too.
+ */
+export async function readNumberedSceneScores(input: Readable): Promise<NumberedSceneFrameScore[]> {
+  return parseSceneScores(input, true) as Promise<NumberedSceneFrameScore[]>
+}
+
+async function parseSceneScores(input: Readable, numbered: boolean): Promise<Array<SceneFrameScore | NumberedSceneFrameScore>> {
+  const out: Array<SceneFrameScore | NumberedSceneFrameScore> = []
+  let n = Number.NaN
   let t = Number.NaN
   let score = Number.NaN
   let mafd = Number.NaN
   const flush = () => {
-    if (Number.isFinite(t) && Number.isFinite(score) && Number.isFinite(mafd)) out.push({ t, score, mafd })
+    if (!(Number.isFinite(t) && Number.isFinite(score) && Number.isFinite(mafd))) return
+    if (!numbered) out.push({ t, score, mafd })
+    else if (Number.isSafeInteger(n)) out.push({ n, t, score, mafd })
   }
   for await (const line of createInterface({ input, crlfDelay: Number.POSITIVE_INFINITY })) {
     if (line.startsWith("frame:")) {
       flush()
       const m = /pts_time:(\S+)/.exec(line)
       t = m ? Number(m[1]) : Number.NaN
+      if (numbered) {
+        const k = /^frame:(\d+)/.exec(line)
+        n = k ? Number(k[1]) : Number.NaN
+      }
       score = Number.NaN
       mafd = Number.NaN
     } else if (line.startsWith("lavfi.scd.score=")) {

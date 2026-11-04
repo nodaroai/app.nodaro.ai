@@ -42,6 +42,8 @@ import {
   runFfprobe,
 } from "./ffmpeg-utils.js"
 import { audioPeakMemoryMiB, cameraMegapixelsOf, canvasPeakMemoryMiB, UHD_CANVAS } from "./ffmpeg-memory-model.js"
+import { detectShotCuts } from "../../services/scene-cut-frames.js"
+import { shotCutsDecodeTimeoutMs } from "./shot-cuts-plan.js"
 import { ffmpegEffectiveThreads } from "./ffmpeg-threads.js"
 import {
   AAC_FRAME_SAMPLES,
@@ -57,6 +59,13 @@ import {
   overCapOfUnknownLength,
   sourceTooLongMessage,
   planSplit,
+  isShotsMode,
+  shotCutFramesOnGrid,
+  shotPartsOf,
+  shotsSourceTooLongMessage,
+  SPLIT_SHOTS_MAX_SOURCE_SEC,
+  tooManyShotsMessage,
+  type SplitMediaMode,
   SPLIT_MEDIA_MAX_PARTS,
   splitCopyTimeoutMs,
   splitEncodeTimeoutMs,
@@ -77,7 +86,10 @@ export { SPLIT_MEDIA_DEFAULT_MIN_PART_SEC } from "@nodaro/render-rules"
 export interface SplitMediaOptions {
   readonly videoUrl?: string
   readonly audioUrl?: string
-  readonly chunkDuration: number
+  /** "shots": one part per shot of the video (no part length; a video only). Default "duration". */
+  readonly mode?: SplitMediaMode
+  /** Seconds; required unless `mode` is "shots". */
+  readonly chunkDuration?: number
   /** Seconds; absent → `splitMediaMinPartSec`'s default (4 s, never above x). */
   readonly minPartDuration?: number
   readonly audioFormat?: "mp3" | "wav" | "aac"
@@ -93,6 +105,16 @@ export interface SplitMediaResult {
   readonly videoPartDurationsSec?: number[]
   /** Each audio part's exact length: samples / rate. */
   readonly audioPartDurationsSec?: number[]
+  /** Shots mode: each part's shot, its start and end on the picture (seconds, to the millisecond). */
+  readonly shots?: SplitShot[]
+}
+
+/** One shot of a shots-mode split: its part's place on the constant-rate picture. */
+export interface SplitShot {
+  readonly index: number
+  readonly startSec: number
+  readonly endSec: number
+  readonly durationSec: number
 }
 
 /** The picture-rate ceiling a probed rate must stay under to be believed:
@@ -275,27 +297,14 @@ async function splitVideo(
   const firstFrame = unitsNearest(videoStart * 1000, fps)
   const firstSample = pcm ? audioSamplesForFrames(firstFrame, firstFrame, fps, pcm.sampleRate).start : 0
 
-  const canvas = { width: video.width ?? UHD_CANVAS.width, height: video.height ?? UHD_CANVAS.height }
-  const encodeLaunch = {
-    peakMemoryMiB: canvasPeakMemoryMiB(canvas, 1, ffmpegEffectiveThreads(), { inputs: 1, cameraMegapixels: cameraMegapixelsOf(canvas) }),
-  }
-  const encodeTimeoutMs = splitEncodeTimeoutMs(sourceSec, { ...canvas, fps: fps.num / fps.den })
+  const canvas = canvasOf(video)
   const cfrPath = join(workDir, "picture-cfr.mp4")
-  const encode = async (keyframes: readonly number[], withSound: boolean) => {
-    await runFfmpeg([
-      ...LOG_ARGS, "-i", inputPath,
-      "-map", `0:${video.index}`,
-      "-vf", `fps=fps=${fps.num}/${fps.den}`,
-      "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-      "-force_key_frames", forcedKeyframeTimes(keyframes, fps),
-      ...(estimate === undefined ? ["-frames:v", String(Math.min(frameCap, sourceFrameCap) + 1)] : []),
-      cfrPath,
-      ...(withSound && audio && pcm
-        ? ["-map", `0:${audio.index}`, "-af", `aresample=async=1:first_pts=${firstSample}`, ...pcmOutputArgs(pcm), pcmPath]
-        : []),
-    ], encodeTimeoutMs, encodeLaunch)
-    return countVideoFrames(cfrPath)
-  }
+  const encode = pictureEncoder({
+    inputPath, video, audio, pcm, pcmPath, fps, firstSample, cfrPath,
+    encodeTimeoutMs: splitEncodeTimeoutMs(sourceSec, { ...canvas, fps: fps.num / fps.den }),
+    peakMemoryMiB: canvasMemoryMiB(canvas),
+    frameLimit: estimate === undefined ? Math.min(frameCap, sourceFrameCap) + 1 : undefined,
+  })
 
   // No estimate: key every multiple of the part length — every cut but a
   // rebalanced tail's — and let the fallback below handle the tail.
@@ -320,6 +329,134 @@ async function splitVideo(
     cuts = cutPointsOf(parts)
   }
 
+  return cutPictureIntoParts({ workDir, cfrPath, parts, cuts, fps, audio, pcm, pcmPath, sourceSec })
+}
+
+/**
+ * SHOTS MODE (`split-media-plan.ts` "shots mode"): the video cut into one part
+ * per shot. The cuts are measured on the SOURCE (`detectShotCuts`, every
+ * decoded frame of the picture stream scored), placed on the constant-rate
+ * grid, keyed in the one encode, then cut and finished exactly as the fixed
+ * mode's parts (`cutPictureIntoParts`).
+ */
+async function splitVideoAtShots(inputPath: string, workDir: string): Promise<{ paths: string[]; durationsSec: number[]; shots: SplitShot[] }> {
+  const probe = await probeSplitSource(inputPath)
+  const video = videoStreamOf(probe)
+  if (!video) refuse("This file has no video stream to split.")
+  const fps = pickSplitFrameRate(video.r_frame_rate, video.avg_frame_rate)
+  const formatStart = num(probe.format.start_time) ?? 0
+  const videoStart = Math.max(0, (num(video.start_time) ?? formatStart) - formatStart)
+  const formatSec = num(probe.format.duration)
+  const probedSec = num(video.duration) ?? (formatSec === undefined ? undefined : formatSec - videoStart)
+  const knownSec = probedSec !== undefined && probedSec > 0 ? probedSec : undefined
+  if (knownSec !== undefined && knownSec > SPLIT_SHOTS_MAX_SOURCE_SEC) refuse(shotsSourceTooLongMessage(knownSec))
+
+  const canvas = canvasOf(video)
+  const peakMemoryMiB = canvasMemoryMiB(canvas)
+  const scan = await detectShotCuts(inputPath, {
+    timeoutMs: shotCutsDecodeTimeoutMs(knownSec ?? SPLIT_SHOTS_MAX_SOURCE_SEC),
+    peakMemoryMiB,
+    map: `0:${video.index}`,
+  })
+  // A file that stated no length: the scan's last frame says how long it is.
+  if (scan.lastFrameSec > SPLIT_SHOTS_MAX_SOURCE_SEC) refuse(shotsSourceTooLongMessage(knownSec === undefined ? undefined : scan.lastFrameSec))
+  const cutFrames = shotCutFramesOnGrid(scan.cuts.map((c) => c.sec), fps)
+  if (cutFrames.length + 1 > SPLIT_MEDIA_MAX_PARTS) refuse(tooManyShotsMessage(cutFrames.length + 1))
+
+  const sourceSec = videoStart + (knownSec ?? SPLIT_SHOTS_MAX_SOURCE_SEC)
+  const sourceFrameCap = unitsAtMost(SPLIT_SHOTS_MAX_SOURCE_SEC * 1000, fps)
+  const audio = audioStreamOf(probe)
+  const pcm = audio ? pcmFormatOf(audio) : undefined
+  const pcmPath = join(workDir, "audio.pcm")
+  const firstFrame = unitsNearest(videoStart * 1000, fps)
+  const firstSample = pcm ? audioSamplesForFrames(firstFrame, firstFrame, fps, pcm.sampleRate).start : 0
+  const cfrPath = join(workDir, "picture-cfr.mp4")
+  const encode = pictureEncoder({
+    inputPath, video, audio, pcm, pcmPath, fps, firstSample, cfrPath,
+    encodeTimeoutMs: splitEncodeTimeoutMs(sourceSec, { ...canvas, fps: fps.num / fps.den }),
+    peakMemoryMiB,
+    frameLimit: knownSec === undefined ? sourceFrameCap + 1 : undefined,
+  })
+  const frames = await encode([0, ...cutFrames], true)
+  if (frames > sourceFrameCap) refuse(shotsSourceTooLongMessage(knownSec === undefined ? undefined : unitsToSec(frames, fps)))
+  const parts = shotPartsOf(cutFrames, frames)
+  if (parts.length === 0) refuse("This video is empty — there is nothing to split.")
+  const cuts = cutPointsOf(parts)
+  const out = await cutPictureIntoParts({ workDir, cfrPath, parts, cuts, fps, audio, pcm, pcmPath, sourceSec })
+  const sec = (frame: number) => Math.round(unitsToSec(frame, fps) * 1000) / 1000
+  const shots = parts.map((_, i) => {
+    const startSec = sec(cuts[i]!)
+    const endSec = sec(cuts[i + 1]!)
+    return { index: i, startSec, endSec, durationSec: Math.round((endSec - startSec) * 1000) / 1000 }
+  })
+  return { ...out, shots }
+}
+
+interface PictureEncoderInput {
+  readonly inputPath: string
+  readonly video: ProbedStream
+  readonly audio: ProbedStream | undefined
+  readonly pcm: PcmFormat | undefined
+  readonly pcmPath: string
+  readonly fps: UnitRate
+  readonly firstSample: number
+  readonly cfrPath: string
+  readonly encodeTimeoutMs: number
+  readonly peakMemoryMiB: number
+  /** `-frames:v`: stop one frame past the cap when the file stated no length. */
+  readonly frameLimit: number | undefined
+}
+
+/**
+ * The ONE decode of the source: the picture re-encoded at the constant rate
+ * with keyframes forced at `keyframes`, and (with `withSound`) the sound as raw
+ * PCM aligned to the picture's first frame. Resolves with the picture's frame
+ * count.
+ */
+function pictureEncoder(e: PictureEncoderInput) {
+  return async (keyframes: readonly number[], withSound: boolean): Promise<number> => {
+    await runFfmpeg([
+      ...LOG_ARGS, "-i", e.inputPath,
+      "-map", `0:${e.video.index}`,
+      "-vf", `fps=fps=${e.fps.num}/${e.fps.den}`,
+      "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+      "-force_key_frames", forcedKeyframeTimes(keyframes, e.fps),
+      ...(e.frameLimit !== undefined ? ["-frames:v", String(e.frameLimit)] : []),
+      e.cfrPath,
+      ...(withSound && e.audio && e.pcm
+        ? ["-map", `0:${e.audio.index}`, "-af", `aresample=async=1:first_pts=${e.firstSample}`, ...pcmOutputArgs(e.pcm), e.pcmPath]
+        : []),
+    ], e.encodeTimeoutMs, { peakMemoryMiB: e.peakMemoryMiB })
+    return countVideoFrames(e.cfrPath)
+  }
+}
+
+const canvasOf = (video: ProbedStream) => ({ width: video.width ?? UHD_CANVAS.width, height: video.height ?? UHD_CANVAS.height })
+
+const canvasMemoryMiB = (canvas: { width: number; height: number }): number =>
+  canvasPeakMemoryMiB(canvas, 1, ffmpegEffectiveThreads(), { inputs: 1, cameraMegapixels: cameraMegapixelsOf(canvas) })
+
+interface PictureParts {
+  readonly workDir: string
+  readonly cfrPath: string
+  /** Frames per part, in order. */
+  readonly parts: readonly number[]
+  /** `cutPointsOf(parts)`: every cut but the last is a keyframe of the picture. */
+  readonly cuts: readonly number[]
+  readonly fps: UnitRate
+  readonly audio: ProbedStream | undefined
+  readonly pcm: PcmFormat | undefined
+  readonly pcmPath: string
+  readonly sourceSec: number
+}
+
+/**
+ * The constant-rate picture cut into its parts by STREAM COPY at the cuts
+ * (every one a keyframe), then each part finished with the sound under its
+ * picture. The parts' files, in order, and their exact lengths.
+ */
+async function cutPictureIntoParts(p: PictureParts): Promise<{ paths: string[]; durationsSec: number[] }> {
+  const { workDir, cfrPath, parts, cuts, fps, audio, pcm, pcmPath, sourceSec } = p
   const segPrefix = "picture-part"
   if (parts.length === 1) {
     await fs.rename(cfrPath, partPath(workDir, segPrefix, 0, "mp4"))
@@ -366,7 +503,7 @@ async function splitVideo(
     paths.push(out)
   }
   await fs.rm(pcmPath, { force: true })
-  return { paths, durationsSec: parts.map((p) => unitsToSec(p, fps)) }
+  return { paths, durationsSec: parts.map((n) => unitsToSec(n, fps)) }
 }
 
 /**
@@ -448,6 +585,7 @@ async function splitAudio(
 }
 
 export async function splitMedia(options: SplitMediaOptions): Promise<SplitMediaResult> {
+  if (isShotsMode(options)) return splitMediaAtShots(options)
   const { videoUrl, audioUrl, audioFormat = "mp3" } = options
   const settings = splitSettingsOf(options)
   if (!settings) refuse("The part length must be a positive number of seconds.")
@@ -477,6 +615,25 @@ export async function splitMedia(options: SplitMediaOptions): Promise<SplitMedia
       videoPartDurationsSec: video?.durationsSec,
       audioPartDurationsSec: sound?.durationsSec,
     }
+  } catch (err) {
+    await cleanupWorkDir(workDir)
+    throw err
+  }
+}
+
+/** Shots mode: a video only — a separate sound file has no shots to cut at. */
+async function splitMediaAtShots(options: SplitMediaOptions): Promise<SplitMediaResult> {
+  const { videoUrl } = options
+  if (!videoUrl) refuse("Splitting at the shots needs a video: connect one to the video input.")
+  if (options.audioUrl) refuse("Splitting at the shots cuts a video (its own sound stays in every part); disconnect the audio input, or split it by part length.")
+  const workDir = await createWorkDir("split-media")
+  try {
+    const inputPath = join(workDir, "input-video")
+    console.log("[splitMedia] Downloading video (shots)")
+    await downloadFile(videoUrl, inputPath, { limits: BIG_MEDIA_DOWNLOAD_LIMITS })
+    const video = await splitVideoAtShots(inputPath, workDir)
+    await fs.rm(inputPath, { force: true })
+    return { workDir, videoPaths: video.paths, videoPartDurationsSec: video.durationsSec, shots: video.shots }
   } catch (err) {
     await cleanupWorkDir(workDir)
     throw err
