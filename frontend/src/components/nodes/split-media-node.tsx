@@ -116,7 +116,7 @@ function SplitMediaNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           <span className="text-xs text-muted-foreground">
-            {t("node.splitSecondsChunks", { n: nodeData.chunkDuration })}
+            {nodeData.mode === "shots" ? t("node.splitAtShots") : t("node.splitSecondsChunks", { n: nodeData.chunkDuration })}
           </span>
         </div>
       </BaseNode>

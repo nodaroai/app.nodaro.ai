@@ -112,6 +112,50 @@ describe("split_media", () => {
     expect(JSON.stringify(result.content)).toContain("video_asset_id")
   })
 
+  it("mode \"shots\": posts { videoUrl, mode } only (no part length), and returns the job id", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/split-media", { jobId: "j-split-shots" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "split_media", { video_url: "https://cdn.example/ad.mp4", mode: "shots", chunk_duration: 10, audio_format: "wav" })
+    expect(result.isError).toBeUndefined()
+    expect(received.body).toEqual({ videoUrl: "https://cdn.example/ad.mp4", mode: "shots", mcp_client: "Claude", userId: "u1" })
+  })
+
+  it("mode \"shots\" refuses no video, and a separate audio, before anything is dispatched", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/split-media", { jobId: "never" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const noVideo = await callTool(server, "split_media", { audio_url: "https://cdn.example/a.mp3", mode: "shots" })
+    expect(noVideo.isError).toBe(true)
+    expect(JSON.stringify(noVideo.content)).toMatch(/splits a video/)
+    const withAudio = await callTool(server, "split_media", { video_url: "https://cdn.example/ad.mp4", audio_url: "https://cdn.example/a.mp3", mode: "shots" })
+    expect(withAudio.isError).toBe(true)
+    expect(JSON.stringify(withAudio.content)).toMatch(/leave out audio_url/)
+    expect(received.body).toBeUndefined()
+  })
+
+  it("without shots mode a part length is still required, and mode \"duration\" is the default split", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/split-media", { jobId: "j-split-d" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const missing = await callTool(server, "split_media", { video_url: "https://cdn.example/talk.mp4" })
+    expect(missing.isError).toBe(true)
+    expect(JSON.stringify(missing.content)).toMatch(/chunk_duration is required/)
+    expect(received.body).toBeUndefined()
+    await callTool(server, "split_media", { video_url: "https://cdn.example/talk.mp4", mode: "duration", chunk_duration: 30 })
+    expect(received.body).toEqual({ videoUrl: "https://cdn.example/talk.mp4", chunkDuration: 30, mcp_client: "Claude", userId: "u1" })
+  })
+
+  it("declares mode and the shots wording in its schema and description", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "split_media")
+    const props = (tool?.inputSchema as { properties: Record<string, { enum?: string[] }>; required?: string[] })
+    expect(props.properties.mode?.enum).toEqual(["duration", "shots"])
+    expect(props.required ?? []).not.toContain("chunk_duration")
+    expect(tool?.description).toMatch(/mode: "shots"/)
+  })
+
   it("is omitted without workflows:execute", async () => {
     const server = buildServer()
     registerVerbs({

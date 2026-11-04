@@ -375,12 +375,28 @@ export class MediaResource {
    * short leftover is evened out with the parts before it. Video is cut on
    * whole frames with each part's sound matching its picture; audio parts are
    * sample-exact, in `audioFormat` (`mp3` default / `wav` / `aac`). With both
-   * sources each is split on its own. At most 200 parts per input. Poll
-   * `jobs.get(jobId)`; the parts are on the completed job's `output_data` —
-   * see {@link SplitMediaOutput}.
+   * sources each is split on its own. At most 200 parts per input. With
+   * `mode: "shots"` a video is instead cut into one part per shot, at the cuts
+   * measured from the file (no part length; a video only, up to 30 minutes and
+   * 200 shots; each part keeps the video's own sound). Poll `jobs.get(jobId)`;
+   * the parts are on the completed job's `output_data` — see
+   * {@link SplitMediaOutput}.
    */
   splitMedia(input: SplitMediaInput): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/split-media", { body: input })
+  }
+
+  /**
+   * Where every shot of a video starts and ends (`POST /v1/shot-cuts`),
+   * measured from the file: every decoded frame is scored and each hard cut
+   * starts a new shot (dissolves and fades are not cuts). Videos up to 30
+   * minutes. `frames: true` also saves each shot's exact first and last frame
+   * as PNG images (up to 1,000 shots; same price). Poll `jobs.get(jobId)`; the
+   * completed job's `output_data.json` is a {@link ShotCutsResult} — see
+   * {@link ShotCutsOutput}.
+   */
+  shotCuts(input: ShotCutsInput): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/shot-cuts", { body: input })
   }
 
   /**
@@ -594,18 +610,38 @@ export interface VideoMetadata {
   [key: string]: unknown
 }
 
-/** Body of {@link MediaResource.splitMedia} (`POST /v1/split-media`). At least one of `videoUrl` / `audioUrl`. */
-export interface SplitMediaInput {
+/** Body of {@link MediaResource.splitMedia} (`POST /v1/split-media`): parts of a set length, or one part per shot of a video. */
+export type SplitMediaInput = SplitMediaByDurationInput | SplitMediaByShotsInput
+
+/** {@link SplitMediaInput} cutting parts of at most `chunkDuration` seconds. At least one of `videoUrl` / `audioUrl`. */
+export interface SplitMediaByDurationInput {
   /** Video to split. */
   videoUrl?: string
   /** Audio file to split (split on its own when a video is given too). */
   audioUrl?: string
+  /** The default: parts of a set length. */
+  mode?: "duration"
   /** The longest a part may be, in seconds (at least 1). Every part is at most this long. */
   chunkDuration: number
   /** The shortest a part may be, in seconds (0 or more, default 4). Must not exceed `chunkDuration` (400 otherwise). */
   minPartDuration?: number
   /** Format of the audio parts. Default `mp3`. */
   audioFormat?: "mp3" | "wav" | "aac"
+}
+
+/** {@link SplitMediaInput} cutting a video into one part per shot, at its measured cuts. */
+export interface SplitMediaByShotsInput {
+  /** The video to split (up to 30 minutes). A separate audio file is refused (each part keeps the video's own sound). */
+  videoUrl: string
+  mode: "shots"
+}
+
+/** One part's shot in a shots-mode split: its place on the video, seconds to the millisecond. */
+export interface SplitMediaShot {
+  index: number
+  startSec: number
+  endSec: number
+  durationSec: number
 }
 
 /** A completed split-media job's `output_data`. */
@@ -620,6 +656,50 @@ export interface SplitMediaOutput {
   partDurationsSec?: number[]
   /** The audio parts' lengths, only when BOTH a video and an audio file were split. */
   audioPartDurationsSec?: number[]
+  /** Shots mode: the number of shots (= parts). */
+  shotCount?: number
+  /** Shots mode: each part's shot, in part order. */
+  shots?: SplitMediaShot[]
+}
+
+/** Body of {@link MediaResource.shotCuts} (`POST /v1/shot-cuts`). */
+export interface ShotCutsInput {
+  /** The video to measure: MP4, MOV, MKV or WebM, up to 30 minutes. */
+  videoUrl: string
+  /** Also save each shot's first and last frame as images (up to 1,000 shots). Default false. */
+  frames?: boolean
+}
+
+/** One shot of a {@link ShotCutsResult}: seconds from the video's first frame, to the millisecond. */
+export interface ShotCutsShot {
+  index: number
+  startSec: number
+  /** Where the next shot starts, or the video's end. */
+  endSec: number
+  durationSec: number
+  /** With `frames`: the shot's first decoded frame (PNG). */
+  firstFrameUrl?: string
+  /** With `frames`: its last decoded frame — the one before the next cut, or the video's last. */
+  lastFrameUrl?: string
+}
+
+/** What a Shot Cuts run measured (`output_data.json`). */
+export interface ShotCutsResult {
+  shotCount: number
+  /** Where each new shot starts: ascending, never 0; `[]` for a single shot. */
+  cutsSec: number[]
+  /** The video's length. */
+  durationSec: number
+  shots: ShotCutsShot[]
+}
+
+/** A completed shot-cuts job's `output_data`. */
+export interface ShotCutsOutput {
+  json: ShotCutsResult
+  /** With `frames`: each shot's first frame, in shot order. */
+  firstFrames?: string[]
+  /** With `frames`: each shot's last frame, in shot order. */
+  lastFrames?: string[]
 }
 
 export interface MediaProcessInput {

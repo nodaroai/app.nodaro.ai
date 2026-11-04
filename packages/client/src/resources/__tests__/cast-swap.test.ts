@@ -454,5 +454,20 @@ describe("castSwap resource", () => {
     expect(got).toEqual(answer)
     expect(got.styleOnly).toBeUndefined()
     expect(got.styleOnly?.["motion-prism"] === true).toBe(false)
+    expect(got.preciseArtStyle?.["motion-prism"] === true).toBe(false)
+  })
+
+  it("styleChoice passes preciseArtStyle through, per engine, typed", async () => {
+    const answer: CastSwapStyleChoice = {
+      engines: { "motion-prism": "user", "motion-pulse": "user" },
+      styleOnly: { "motion-prism": true, "motion-pulse": false },
+      preciseArtStyle: { "motion-prism": true, "motion-pulse": false },
+    }
+    const client = make(vi.fn().mockReturnValueOnce(mockOk(answer)))
+    const got = await client.castSwap.styleChoice()
+    expect(got).toEqual(answer)
+    const prism: boolean | undefined = got.preciseArtStyle?.["motion-prism"]
+    expect(prism).toBe(true)
+    expect(got.preciseArtStyle?.["motion-pulse"]).toBe(false)
   })
 })

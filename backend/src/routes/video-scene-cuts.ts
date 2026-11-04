@@ -38,9 +38,9 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { createsChildJob } from "../lib/job-submission-context.js"
-import { cleanupWorkDir, createWorkDir, downloadFile, runFfprobe } from "../providers/video/ffmpeg-utils.js"
+import { cleanupWorkDir, createWorkDir, downloadFile } from "../providers/video/ffmpeg-utils.js"
 import { maskGeometryPeakMemoryMiB, videoMaskFfmpegTimeoutMs } from "../providers/video/video-mask.js"
-import { detectCutTimes } from "../services/scene-cut-frames.js"
+import { SCENE_CUTS_INPUT_ARGS, detectCutTimes, probeSceneCutsClip } from "../services/scene-cut-frames.js"
 
 /** The largest clip downloaded, bytes (a recast clip is far smaller). */
 export const SCENE_CUTS_MAX_BYTES = 500 * 1024 * 1024
@@ -49,24 +49,9 @@ export const SCENE_CUTS_MAX_DURATION_SEC = 300
 /** The longest the decode waits for an ffmpeg slot before answering busy (the run goes on without cut times). */
 export const SCENE_CUTS_SLOT_WAIT_MS = 60_000
 
-/** ffprobe / ffmpeg input options: the local file only, through the containers a recast clip comes in. */
-export const SCENE_CUTS_INPUT_ARGS: readonly string[] = ["-protocol_whitelist", "file", "-format_whitelist", "mov,mp4,m4a,matroska,webm"]
-
-/** The clip's first video stream: its size and length (the stream's, else the container's). Throws when it has none. */
-export async function probeSceneCutsClip(localPath: string): Promise<{ width: number; height: number; durationSec: number }> {
-  const out = await runFfprobe([
-    "-v", "error", ...SCENE_CUTS_INPUT_ARGS,
-    "-select_streams", "v:0", "-show_entries", "stream=width,height,duration:format=duration", "-of", "json", localPath,
-  ])
-  const parsed = JSON.parse(out) as { streams?: Array<{ width?: unknown; height?: unknown; duration?: unknown }>; format?: { duration?: unknown } }
-  const stream = parsed.streams?.[0]
-  const width = Number(stream?.width)
-  const height = Number(stream?.height)
-  if (!stream || !Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) throw new Error("not a video")
-  const streamSec = Number(stream.duration)
-  const durationSec = Number.isFinite(streamSec) && streamSec > 0 ? streamSec : Number(parsed.format?.duration)
-  return { width, height, durationSec }
-}
+// The probe and the input confinement live beside the rule (Shot Cuts and Split
+// into Chunks' shots mode read clips the same way); re-exported here unchanged.
+export { SCENE_CUTS_INPUT_ARGS, probeSceneCutsClip } from "../services/scene-cut-frames.js"
 
 export const videoSceneCutsBody = z.strictObject({ videoUrl: safeUrlSchema })
 

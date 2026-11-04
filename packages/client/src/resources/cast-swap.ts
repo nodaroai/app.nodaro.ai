@@ -288,17 +288,20 @@ export interface CastSwapParams {
    */
   style?: CastSwapStyle
   /**
-   * Flex only (`style: "motion"`, a direct run): an art style that restyles
-   * the whole video, as a `direction.style` id of the platform's `style`
-   * picker catalog (the same ids an image's `direction.style` takes); the
-   * platform words it. Refused with 400 `unknown_art_style` (not in the
-   * catalog), `art_style_not_supported` (a saved moodboard, `moodboard:…`)
-   * or `art_style_needs_flex` (a request with no `style: "motion"`, a trend
-   * run, or a Flex run whose prompt is made Precise by Nodaro's setting for how
-   * Flex runs are prepared; a forced Precise instead drops the art style, see
-   * {@link CastSwapStyleChoice.styleOnly}), and on Nodaro Motion Pulse with
-   * `art_style_needs_prism`. The estimate (sent with the same
-   * `direction`) shows the price.
+   * A direct run on Nodaro Motion Prism: an art style that restyles the whole
+   * video, as a `direction.style` id of the platform's `style` picker catalog
+   * (the same ids an image's `direction.style` takes); the platform words it.
+   * A Flex run (`style: "motion"`) takes one, and so does a Precise run where
+   * {@link CastSwapResource.styleChoice} answers `preciseArtStyle` true for the
+   * engine: Precise's edit of the clip, drawn in the art style. Refused with
+   * 400 `unknown_art_style` (not in the catalog), `art_style_not_supported` (a
+   * saved moodboard, `moodboard:…`) or `art_style_needs_flex` (a trend run, a
+   * Flex run whose prompt is made Precise by Nodaro's setting for how Flex
+   * runs are prepared, or a Precise request on an engine from before Precise
+   * runs took one), and on Nodaro Motion Pulse with `art_style_needs_prism`.
+   * The estimate (sent with the same `direction`) shows the price: it changes
+   * only where Nodaro's setting for such runs first redraws the role pictures
+   * in the art style.
    *
    * Style only: with no role with images and no fixed reference, the art style
    * alone is the run's change (a pre or post prompt is still added). It
@@ -307,11 +310,11 @@ export interface CastSwapParams {
    * `privacy` part). By default a black-and-white art style comes out
    * monochrome. Nodaro may run it the way other art-style runs run instead,
    * priced as those are and not made monochrome.
-   * A preview takes its full run's path. Runs this way only where
-   * {@link CastSwapResource.styleChoice} answers `styleOnly` true for the
-   * engine; elsewhere on Nodaro Motion Prism an art style alone is refused, and
-   * one with a pre or post prompt runs as any other art-style run. The job
-   * records it in `input_data.direction`.
+   * A preview takes its full run's path. Runs this way only on a Flex run, and
+   * only where {@link CastSwapResource.styleChoice} answers `styleOnly` true
+   * for the engine; elsewhere on Nodaro Motion Prism an art style alone is
+   * refused (on a Precise run too), and one with a pre or post prompt runs as
+   * any other art-style run. The job records it in `input_data.direction`.
    */
   direction?: { style: string }
   /**
@@ -563,6 +566,16 @@ export interface CastSwapStyleChoice {
    * an engine missing from it: `false`.
    */
   styleOnly?: Partial<Record<CastSwapEngine, boolean>>
+  /**
+   * Per engine, whether a Precise run (no `style`, or `"precise"`) takes an
+   * art style (`direction`), as a Flex run does: Precise's edit of the clip,
+   * drawn in the art style. Not on its own: a Precise run with nothing else to
+   * change is still refused. Where it is `true`, an engine answered
+   * `"precise"` keeps a Flex request's art style. Nodaro Motion Pulse is always
+   * `false` (it takes no art style). Absent from an older server, and an engine
+   * missing from it: `false` (offer an art style on Flex runs alone).
+   */
+  preciseArtStyle?: Partial<Record<CastSwapEngine, boolean>>
 }
 
 export class CastSwapResource {
@@ -591,7 +604,8 @@ export class CastSwapResource {
    * nothing to swap restyles the whole clip there. Where it is not `true`
    * (absent, or an engine missing from it, included) on Nodaro Motion Prism, an
    * art style alone is refused, and one with a pre or post prompt runs as any
-   * other art-style run.
+   * other art-style run. Its `preciseArtStyle` says, per engine, whether a
+   * Precise run takes an art style there too.
    * Public (no sign-in needed); the answer may be up to a minute old.
    */
   styleChoice(): Promise<CastSwapStyleChoice> {

@@ -1054,6 +1054,19 @@ const RETRY_APP_RUN_BYTES = 1_374
 // +63 B (2026-10-19, measured on the same tree: 460_990 − 460_927): the description names the
 // result's full shape (`{ version, speakerMap, confidence, notes, edl? }`) and a source's `kind`.
 const SPEAKER_MAP_TOOL_BYTES = 3_371 + 63
+// RAISED 2026-11-04 by one NEW tool: `shot_cuts` (the Shot Cuts node's verb — where every shot of
+// a video starts and ends, measured from the file), registered beside `split_media` and ungated
+// like it (core, keyless), so BOTH the cloud/all AND the community/all fixtures move by exactly
+// that name. Measured by this suite on the same tree: the tool alone is 2_172 B, far under the
+// per-tool budget. The list had no headroom left before it.
+// +2 B (2026-11-04, measured on the same tree: 513_263 − 513_261): the frames cap rose from 200 to
+// 1,000 shots ("up to 1,000 shots").
+const SHOT_CUTS_TOOL_BYTES = 2_172 + 2
+// RAISED 2026-11-04 by `split_media` gaining `mode: "shots"` (one part per shot, the cuts measured
+// from the file) and saying so in its description; chunk_duration is now optional. No tool was
+// added. Measured by this suite on the same tree with and without the change (dev's
+// verbs-split-media.ts swapped in): 3_349 B − 2_710 B = 639 B.
+const SPLIT_MEDIA_SHOTS_MODE_BYTES = 639
 // RAISED 2026-10-19 by `switch_cameras` taking a Speaker Map result (`speaker_map_result`, folded
 // by the canvas's own rule) and saying what "" means in `speaker_map`. No tool was added, so the
 // fixture does NOT move. Measured by this suite: 455_060 total − 454_570 = 490 B.
@@ -1530,6 +1543,8 @@ export const TOOL_WIRE_BUDGET = {
     VIDEO_MASK_REDETECT_BYTES +
     SPEAKER_MAP_TOOL_BYTES +
     SWITCH_CAMERAS_SPEAKER_MAP_RESULT_BYTES +
+    SHOT_CUTS_TOOL_BYTES +
+    SPLIT_MEDIA_SHOTS_MODE_BYTES +
     TIGHTEN_RECORDINGS_BYTES +
     TIGHTEN_CAMERA_CAP_BYTES +
     TRAILER_RECORDINGS_BYTES +

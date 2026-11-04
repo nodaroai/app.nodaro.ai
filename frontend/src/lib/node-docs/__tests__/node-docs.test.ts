@@ -46,6 +46,7 @@ const AWAITING_DOCS_PAGE: Readonly<Record<string, string>> = {
   "site-capture": "new node; the in-repo page is docs/nodes/input/site-capture.md and the docs-site page follows its release",
   "speaker-map": "new node (podcast primitive, hidden in production until availability enables it); the in-repo page is docs/nodes/processing-audio/speaker-map.md and the docs-site page follows its release",
   "speaker-layout": "new node (podcast use-case, hidden in production until availability enables it); the in-repo page is docs/nodes/processing-video/speaker-layout.md and the docs-site page follows its release",
+  "shot-cuts": "new node (hidden in production until availability enables it); the in-repo page is docs/nodes/processing-video/shot-cuts.md and the docs-site page follows its release",
 }
 
 const hasPage = (type: string) => type in NODE_DOCS_SECTIONS || type in NODE_DOCS_ALIASES

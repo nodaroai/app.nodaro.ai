@@ -123,6 +123,8 @@ function computeOutputs(): Record<string, unknown> {
       "speaker-frames": fromJobRow("speaker-frames"),
       // Speaker Map (a worker unit): the result on json, the whole-recording edit on its own edl output.
       "speaker-map": fromJobRow("speaker-map"),
+      // Shot Cuts (a worker unit): the result on json, the frames in shot order on their own outputs.
+      "shot-cuts": fromJobRow("shot-cuts"),
       "extract-field:text": inline("extract-field", { field: "title" }, (n, e, ns, s) => executeExtractField(n, e, ns, s)),
       "extract-field:list": inline("extract-field", { field: "title", outputType: "list" }, (n, e, ns, s) => executeExtractField(n, e, ns, s)),
       // A list of links: a lane must not add them to the node's results either.

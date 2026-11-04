@@ -417,7 +417,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `preview_start` | number |  | Seconds, default 0; preview_start + 4 must fit the clip. At least 0. |
 | `engine` | string |  | Default "motion-prism" (Nodaro Motion Prism). "motion-pulse" (Nodaro Motion Pulse): 720p or 1080p only, no draft; its Full Quality is a new take. One of `motion-prism`, `motion-pulse`. |
 | `style` | string |  | "precise" (default) follows the clip exactly; "motion" follows the clip's movement and takes the looks from the photos, more freely than precise. Its price may differ: the quote shows it. A style an admin forced for the engine overrides this. One of `precise`, `motion`. |
-| `art_style` | string |  | An art style for a Flex run (style "motion") on Nodaro Motion Prism: a "style" picker catalog id (get_picker_catalog "style"), e.g. "pop-art". Line 1 of the prompt becomes the style's video wording. With no role images and no references it restyles the whole clip, where the engine takes style-only runs. Nodaro Motion Pulse takes none. From 1 to 100 characters. |
+| `art_style` | string |  | An art style on Nodaro Motion Prism (Flex, or Precise where the engine takes it): a "style" picker catalog id (get_picker_catalog "style"), e.g. "pop-art". The prompt takes its video wording. With no role images and no references it restyles the whole clip, where the engine takes style-only runs (Flex). Pulse takes none. From 1 to 100 characters. |
 | `motion_length` | string |  | motion-pulse only: cut the clip to whole seconds at its end (default) or start. One of `cut-end`, `cut-start`. |
 | `resolution` | string |  | Default "480p" (motion-pulse: "720p"; no 480p). One of `480p`, `720p`, `1080p`. |
 | `draft` | boolean |  | Render as a draft, 480p motion-prism only. Default true at 480p, false above. |
@@ -2809,6 +2809,16 @@ Needs `workflows:write` · Nodaro Cloud only.
 | `production_id` | string | yes | The production. |
 | `shared` | boolean | yes | true publishes the link; false takes it back. |
 
+## `shot_cuts`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `video_url` | string (URL) |  | Video to measure. |
+| `video_asset_id` | string |  | Video to measure, as a Nodaro video job id or an uploaded video's id. |
+| `frames` | boolean |  | Also save each shot's first and last frame as images. Default false. |
+
 ## `silence_detect`
 
 Needs `workflows:execute`.
@@ -2921,7 +2931,8 @@ Needs `workflows:execute`.
 | `video_asset_id` | string |  | Video to split, as a Nodaro video job id or an uploaded video's id. |
 | `audio_url` | string (URL) |  | Audio file to split. |
 | `audio_asset_id` | string |  | Audio to split, as a Nodaro audio job id or an uploaded audio's id. |
-| `chunk_duration` | number | yes | Longest a part may be, in seconds (every part is at most this). At least 1. |
+| `mode` | string |  | "duration" (default): parts of at most chunk_duration. "shots": one part per shot of the video (video only; chunk_duration, min_part_duration and audio_format are not used). One of `duration`, `shots`. |
+| `chunk_duration` | number |  | Longest a part may be, in seconds (every part is at most this). Required unless mode is "shots". At least 1. |
 | `min_part_duration` | number |  | Shortest a part may be, in seconds (default 4); must not exceed chunk_duration. At least 0. |
 | `audio_format` | string |  | Format of the audio parts. Default mp3. One of `mp3`, `wav`, `aac`. |
 

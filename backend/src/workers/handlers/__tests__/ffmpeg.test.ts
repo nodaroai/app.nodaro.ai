@@ -921,6 +921,32 @@ describe("split-media handler", () => {
     expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
   })
 
+  it("shots mode: splits at the shots (no part length sent on) and adds shotCount and each part's shot", async () => {
+    const shots = [{ index: 0, startSec: 0, endSec: 1, durationSec: 1 }, { index: 1, startSec: 1, endSec: 2.5, durationSec: 1.5 }]
+    mocks.mockSplitMedia.mockResolvedValueOnce({
+      workDir: "/tmp/split-work",
+      videoPaths: ["/tmp/split-work/video-part-00000.mp4", "/tmp/split-work/video-part-00001.mp4"],
+      videoPartDurationsSec: [1, 1.5],
+      shots,
+    })
+    mocks.mockUploadFileToR2.mockImplementation(async (_p: string, id: string) => `https://r2.example.com/${id}`)
+    await handler(makeJob("split-media", { videoUrl: "https://v", mode: "shots" }) as never, makeCtx())
+    expect(mocks.mockSplitMedia).toHaveBeenCalledWith({ videoUrl: "https://v", audioUrl: undefined, mode: "shots" })
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", {
+      output_data: {
+        videoUrls: ["https://r2.example.com/job-1-video-0", "https://r2.example.com/job-1-video-1"],
+        audioUrls: undefined,
+        chunkCount: 2,
+        partDurationsSec: [1, 1.5],
+        audioPartDurationsSec: undefined,
+        shotCount: 2,
+        shots,
+      },
+    })
+    // its budget is the shots-mode budget (no part length needed)
+    expect(handler.livenessBudgetMs!(makeJob("split-media", { videoUrl: "https://v", mode: "shots" }) as never)!).toBeGreaterThan(90 * 60_000)
+  })
+
   it("declares the registry's budget — past the 90-minute default, growing with the part length", () => {
     const data = { videoUrl: "https://v", chunkDuration: 10 }
     const budget = handler.livenessBudgetMs!(makeJob("split-media", data) as never)

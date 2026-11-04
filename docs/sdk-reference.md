@@ -2154,7 +2154,7 @@ interface CastSwapParams {
   previewStart?: number            // seconds, default 0
   engine?: CastSwapEngine          // "motion-prism" (default) | "motion-pulse" (see below)
   style?: CastSwapStyle            // "precise" (default) | "motion" (see below)
-  direction?: { style: string }    // an art style, a `style` picker id: Flex on motion-prism only (see Style only)
+  direction?: { style: string }    // an art style, a `style` picker id, motion-prism only: Flex (see Style only), or Precise where styleChoice() says so
   motionLength?: "cut-end" | "cut-start" // CastSwapMotionLength, motion-pulse only; default "cut-end"
   resolution?: "480p" | "720p" | "1080p" // default "480p"; motion-pulse: "720p" (default) or "1080p"
   draft?: boolean                  // default true at 480p, false above; true above 480p is a 400;
@@ -2228,9 +2228,11 @@ on what it sends (no role kept in it that has images, no fixed reference, no
 `400 no_roles_in_preview`; a preview with every role left out still runs when
 it has a reference, a prompt or, where `styleOnly` is answered `true`, an art
 style (an engine from before style-only runs refuses that last one, with a
-message that does not name an art style). An engine answered `"precise"` drops
-the art style, so there a preview whose only change was the art style answers
-`400 no_roles_in_preview`; one with a prompt or a reference runs, as Precise.
+message that does not name an art style). An engine answered `"precise"` runs
+it as Precise, where an art style is no change on its own, so there a preview
+whose only change was the art style answers `400 no_roles_in_preview`; one with
+a prompt or a reference runs, as Precise (with the art style where
+`preciseArtStyle` is `true`).
 
 **Reference preparation** (`prepareReferences`, on by default): before the
 video, each person, pet and product role's images are turned into one clean
@@ -2252,24 +2254,28 @@ clip_too_long_for_style` ("Use a shorter clip or choose Precise").
 **A forced style** (`styleChoice()`, `CastSwapStyleChoice`): Nodaro may fix
 an engine's style for everyone, and every `run()` and `estimate()` on it then
 uses that style whatever `style` says. `styleChoice()` answers
-`{ engines: { "motion-prism": CastSwapStyleChoiceOption, "motion-pulse": CastSwapStyleChoiceOption }, styleOnly?: { "motion-prism"?: boolean, "motion-pulse"?: boolean } }`,
+`{ engines: { "motion-prism": CastSwapStyleChoiceOption, "motion-pulse": CastSwapStyleChoiceOption }, styleOnly?: { "motion-prism"?: boolean, "motion-pulse"?: boolean }, preciseArtStyle?: { "motion-prism"?: boolean, "motion-pulse"?: boolean } }`,
 each engine `"user"` (the caller chooses), `"precise"` or `"flex"`
 (`style: "motion"`); show a style control only for an engine answered
 `"user"`. `styleOnly` says, per engine, whether the engine takes style-only
-runs (below). It follows the engine alone, so read it with `engines`: a forced
-Precise drops a Motion run's art style. On an engine answered `"precise"`, a
+runs (below), and `preciseArtStyle` whether a Precise run takes an art style
+there (below). Both follow the engine alone, so read them with `engines`: a
+forced Precise keeps a Motion run's art style where `preciseArtStyle` is
+`true`, and drops it where it is not. On an engine answered `"precise"`, a
 request with nothing else to change is refused as `400 validation_error`; with
 anything else to change (a role with images, a fixed reference, a `prePrompt`
-or `postPrompt`) it answers `202` and runs and is quoted as Precise, without the
-art style. Nodaro Motion Pulse is always `false`, and an older server leaves `styleOnly` out (read
-it as `false` for every engine). Public (works signed
+or `postPrompt`) it answers `202` and runs and is quoted as Precise, with the
+art style where `preciseArtStyle` is `true`. Nodaro Motion Pulse is always
+`false` in both, and an older server leaves them out (read them as `false` for
+every engine). Public (works signed
 out); the answer may be up to a minute old. A trend run keeps its trend's
 style.
 
 ```ts
-const { engines, styleOnly } = await client.castSwap.styleChoice()
+const { engines, styleOnly, preciseArtStyle } = await client.castSwap.styleChoice()
 const showStyle = engines["motion-pulse"] === "user"
 const offerStyleOnly = styleOnly?.["motion-prism"] === true && engines["motion-prism"] !== "precise"
+const offerPreciseArtStyle = preciseArtStyle?.["motion-prism"] === true
 ```
 
 **Style only** (`direction`): a Motion run (`style: "motion"`) on Nodaro
@@ -2293,14 +2299,14 @@ engine; while Nodaro Motion Prism is answered `false`, an art style with
 nothing else to change answers `400 validation_error`, and one with a
 `prePrompt` or `postPrompt` is accepted but runs as any other art-style run,
 not as described here. `styleOnly` `true` says the engine takes such runs, and a
-run must still be Motion: on an engine answered `"precise"` the art style is
-dropped, so the request is refused as `400 validation_error` or, with anything
-else to change, runs as Precise (see A forced style). Nodaro Motion Pulse takes
-no art style (`400 art_style_needs_prism`). `400 art_style_needs_flex` answers
-an art style on a request with no `style: "motion"` or on a trend run, and on a
-Motion run whose prompt is made Precise by Nodaro's setting for how Motion runs
-are prepared. That setting is not the forced style, and `styleChoice()` does not
-show it.
+run must still be Motion: on an engine answered `"precise"` the request is
+refused as `400 validation_error` or, with anything else to change, runs as
+Precise (see A forced style). Nodaro Motion Pulse takes no art style
+(`400 art_style_needs_prism`). `400 art_style_needs_flex` answers an art style
+on a trend run, on a Motion run whose prompt is made Precise by Nodaro's
+setting for how Motion runs are prepared, and on a Precise run where the engine
+takes none there (below). That setting is not the forced style, and
+`styleChoice()` does not show it.
 
 ```ts
 await client.castSwap.run({
@@ -2310,6 +2316,24 @@ await client.castSwap.run({
   direction: { style: "pop-art" },
 })
 ```
+
+**An art style on a Precise run** (`direction`): where `styleChoice()`
+answers `preciseArtStyle` `true` for the engine (Nodaro Motion Prism only), a
+Precise run (no `style`, or `style: "precise"`) also takes an art style,
+`direction: { style: "<id>" }`, from the same catalog and refused the same way
+(`400 unknown_art_style`, `400 art_style_not_supported`). The run stays
+Precise: the clip is edited as a Precise run edits it, the people swapped as
+Precise swaps them, and the whole video is drawn in the art style. It is not a
+change on its own: a Precise run with nothing else to change (no role with
+images, no fixed reference, no `prePrompt` or `postPrompt`) is still refused as
+`400 validation_error`; restyling a whole clip alone is a Motion run's (Style
+only, above). The price changes only where Nodaro's setting for these runs
+first redraws the role pictures in the art style (its own setting, not the one
+Motion runs use); `estimate()` with the same params shows it. The job records it in `input_data.direction`. Where
+`preciseArtStyle` is `false` (or a server from before it leaves it out), a
+Precise run with an art style answers `400 art_style_needs_flex`. Nodaro Motion
+Pulse takes none (`400 art_style_needs_prism`, on a Precise run as on a Motion
+one).
 
 **The Advanced options on the Nodaro Motion page**
 (`GET /v1/cast-swap/advanced`, public): `{ show: boolean }`, whether the
@@ -6409,13 +6433,17 @@ to `[startTime, endTime]` seconds, in `audioFormat` (`mp3` default).
 #### `splitMedia(input)`
 
 ```ts
-splitMedia(input: {
-  videoUrl?: string
-  audioUrl?: string
-  chunkDuration: number
-  minPartDuration?: number
-  audioFormat?: "mp3" | "wav" | "aac"
-}): Promise<{ jobId: string }>
+splitMedia(input:
+  | {
+      videoUrl?: string
+      audioUrl?: string
+      mode?: "duration"
+      chunkDuration: number
+      minPartDuration?: number
+      audioFormat?: "mp3" | "wav" | "aac"
+    }
+  | { videoUrl: string; mode: "shots" }
+): Promise<{ jobId: string }>
 ```
 
 Cut a video and/or an audio file into consecutive parts (`POST /v1/split-media`).
@@ -6433,12 +6461,64 @@ interface SplitMediaOutput {
   chunkCount: number               // the larger of the two lists
   partDurationsSec?: number[]      // each part's exact length (video parts', else audio parts')
   audioPartDurationsSec?: number[] // the audio parts' lengths, only when both were split
+  shotCount?: number               // shots mode: the number of shots (= parts)
+  shots?: Array<{ index: number; startSec: number; endSec: number; durationSec: number }> // shots mode: each part on the video
 }
 ```
 
 How the parts are cut (on whole frames, a short leftover evened out with the
 parts before it, sources up to 3 hours, at most 200 parts per input) is on the
 [Split into Chunks](./nodes/processing-audio/split-media.md) node page.
+
+With `mode: "shots"` a video is cut into **one part per shot** instead, at the
+cuts measured from the file (the [Shot Cuts](./nodes/processing-video/shot-cuts.md)
+rule): no part length, a video only (a separate `audioUrl` is a `400`; each part
+keeps the video's own sound), videos up to 30 minutes and at most 200 shots. The
+price is the same.
+
+```ts
+const { jobId } = await client.media.splitMedia({ videoUrl: "https://example.com/ad.mp4", mode: "shots" })
+```
+
+#### `shotCuts(input)`
+
+```ts
+shotCuts(input: { videoUrl: string; frames?: boolean }): Promise<{ jobId: string }>
+```
+
+**Not yet enabled on nodaro.ai.** Where every shot of a video starts and ends
+(`POST /v1/shot-cuts`), measured from the file: every decoded frame is scored and
+each hard cut starts a new shot (dissolves and fades are not cuts). Videos up to
+30 minutes. `frames: true` also saves each shot's exact first and last frame as PNG
+images (up to 1,000 shots). 2 credits<!-- credits: shot-cuts --> per run on Nodaro
+Cloud, with or without frames. Poll `jobs.get(jobId)`; the completed job's
+`output_data` is a `ShotCutsOutput`:
+
+```ts
+interface ShotCutsOutput {
+  json: {
+    shotCount: number
+    cutsSec: number[]        // where each new shot starts: ascending, never 0; [] for one shot
+    durationSec: number      // the video's length
+    shots: Array<{
+      index: number
+      startSec: number       // seconds from the first frame, to the millisecond
+      endSec: number         // the next shot's start, or the video's end
+      durationSec: number
+      firstFrameUrl?: string // with frames: the shot's first frame (PNG)
+      lastFrameUrl?: string  // with frames: its last frame
+    }>
+  }
+  firstFrames?: string[]     // with frames: each shot's first frame, in shot order
+  lastFrames?: string[]      // with frames: each shot's last frame, in shot order
+}
+```
+
+```ts
+const { jobId } = await client.media.shotCuts({ videoUrl: "https://example.com/ad.mp4", frames: true })
+```
+
+Full reference: [Shot Cuts](./nodes/processing-video/shot-cuts.md).
 
 #### `stillToVideo(input)`
 

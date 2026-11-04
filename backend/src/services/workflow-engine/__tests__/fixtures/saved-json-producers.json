@@ -17,6 +17,7 @@
   "instagram-scrape": "generatedJson",
   "json-process": "processedResult",
   "meta-ads-scrape": "generatedJson",
+  "shot-cuts": "generatedJson",
   "silence-detect": "generatedJson",
   "site-capture": "generatedJson",
   "social-search": "generatedJson",

@@ -26,9 +26,30 @@ const splitMediaBody = z.object({
   path: ["minPartDuration"],
 })
 
+/**
+ * Shots mode: one part per shot of the video, at the platform's measured cuts
+ * (a video only; no part length). Chosen by `mode: "shots"`; every other body
+ * is the part-length split above, parsed exactly as before.
+ */
+const splitMediaShotsBody = z.object({
+  videoUrl: safeUrlSchema,
+  audioUrl: safeUrlSchema.optional(),
+  mode: z.literal("shots"),
+  userId: z.string().uuid().optional(),
+}).refine((d) => d.audioUrl === undefined, {
+  message: "Shots mode splits a video (its own sound stays in every part); a separate audioUrl cannot be cut at its shots",
+  path: ["audioUrl"],
+})
+
+const isShotsBody = (body: unknown): boolean =>
+  !!body && typeof body === "object" && (body as { mode?: unknown }).mode === "shots"
+
+const parseSplitMediaBody = (body: unknown) =>
+  isShotsBody(body) ? splitMediaShotsBody.safeParse(body) : splitMediaBody.safeParse(body)
+
 export async function splitMediaRoutes(app: FastifyInstance) {
   app.post("/v1/split-media", { preHandler: creditGuard(() => "split-media") }, async (req, reply) => {
-    const parsed = splitMediaBody.safeParse(req.body)
+    const parsed = parseSplitMediaBody(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
         error: { code: "validation_error", ...formatZodError(parsed.error) },

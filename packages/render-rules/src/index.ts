@@ -484,6 +484,7 @@ export {
   SPLIT_MEDIA_DEFAULT_MIN_PART_SEC,
   SPLIT_MEDIA_MAX_PARTS,
   SPLIT_MEDIA_MAX_SOURCE_SEC,
+  SPLIT_SHOTS_ASSUMED_SHOT_SEC,
   splitMediaMinPartSec,
   splitMediaPartAt,
   splitMediaPartCount,

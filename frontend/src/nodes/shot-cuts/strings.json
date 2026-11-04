@@ -1,0 +1,18 @@
+{
+  "keys": {
+    "node.shotCutsShots": {"en": "Shots", "he": "שוטים", "ja": "ショット", "ko": "샷", "pt-br": "Planos"},
+    "node.shotCutsFirstFrames": {"en": "First frames", "he": "פריימים ראשונים", "ja": "最初のフレーム", "ko": "첫 프레임", "pt-br": "Primeiros quadros"},
+    "node.shotCutsLastFrames": {"en": "Last frames", "he": "פריימים אחרונים", "ja": "最後のフレーム", "ko": "마지막 프레임", "pt-br": "Últimos quadros"},
+    "node.shotCutsCount": {"en": "Shots: {count}", "he": "שוטים: {count}", "ja": "ショット数：{count}", "ko": "샷: {count}", "pt-br": "Planos: {count}"},
+    "node.shotCutsLine": {"en": "Shot {n}: {start} – {end}", "he": "שוט {n}: {start} – {end}", "ja": "ショット {n}：{start} – {end}", "ko": "샷 {n}: {start} – {end}", "pt-br": "Plano {n}: {start} – {end}"},
+    "node.shotCutsMore": {"en": "+{count} more", "he": "ועוד {count}", "ja": "ほか {count} 件", "ko": "외 {count}개", "pt-br": "+{count} a mais"},
+    "node.shotCutsConnect": {"en": "Connect a video to find its shots", "he": "חברו וידאו כדי למצוא את השוטים שלו", "ja": "動画を接続してショットを検出します", "ko": "동영상을 연결하면 샷을 찾습니다", "pt-br": "Conecte um vídeo para encontrar os planos"},
+    "apiErr.startShotCuts": {"en": "Could not start Shot Cuts", "he": "לא ניתן להפעיל את חיתוכי השוטים", "ja": "ショットカットを開始できませんでした", "ko": "샷 컷을 시작할 수 없습니다", "pt-br": "Não foi possível iniciar os Cortes de plano"},
+    "proccfg.shotCutsHint": {"en": "Finds where every shot starts and ends, measured from the video itself: every frame is scored and each hard cut starts a new shot. Clips up to 30 minutes. Gradual transitions (dissolves, fades) are not cuts.", "he": "מוצא היכן כל שוט מתחיל ונגמר, לפי הווידאו עצמו: כל פריים נבדק וכל חיתוך חד פותח שוט חדש. קטעים של עד 30 דקות. מעברים הדרגתיים (הצלבות, דהיות) אינם חיתוכים.", "ja": "動画そのものから各ショットの開始と終了を測定します。すべてのフレームを評価し、ハードカットごとに新しいショットが始まります。30 分までのクリップに対応。ディゾルブやフェードなどの緩やかな切り替えはカットになりません。", "ko": "동영상 자체를 측정해 각 샷이 시작하고 끝나는 지점을 찾습니다. 모든 프레임을 평가하며 하드 컷마다 새 샷이 시작됩니다. 최대 30분 길이의 클립. 디졸브, 페이드 같은 점진적 전환은 컷이 아닙니다.", "pt-br": "Encontra onde cada plano começa e termina, medido no próprio vídeo: cada quadro é avaliado e cada corte seco inicia um novo plano. Clipes de até 30 minutos. Transições graduais (fusões, fades) não são cortes."},
+    "proccfg.shotCutsFrames": {"en": "Save first and last frames", "he": "שמירת פריים ראשון ואחרון", "ja": "最初と最後のフレームを保存", "ko": "첫 프레임과 마지막 프레임 저장", "pt-br": "Salvar primeiro e último quadro"},
+    "proccfg.shotCutsFramesHint": {"en": "Also saves each shot's exact first and last frame as an image (up to 1,000 shots). Same price.", "he": "שומר גם את הפריים הראשון והאחרון המדויקים של כל שוט כתמונה (עד 1,000 שוטים). אותו מחיר.", "ja": "各ショットの正確な最初と最後のフレームも画像として保存します（1,000 ショットまで）。料金は同じです。", "ko": "각 샷의 정확한 첫 프레임과 마지막 프레임도 이미지로 저장합니다(최대 1,000개 샷). 가격은 같습니다.", "pt-br": "Também salva o primeiro e o último quadro exatos de cada plano como imagem (até 1.000 planos). Mesmo preço."}
+  },
+  "labels": {
+    "Shot Cuts": {"he": "חיתוכי שוטים", "ja": "ショットカット", "ko": "샷 컷", "pt-br": "Cortes de plano"}
+  }
+}

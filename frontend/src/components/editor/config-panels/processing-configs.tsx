@@ -1190,8 +1190,22 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
   // What the run uses: the node's own minimum, else the default — never above the max.
   const minSec = splitMediaMinPartSec(maxSec, data.minPartDuration)
   const partCount = Math.max(data.generatedVideoUrls?.length ?? 0, data.generatedAudioUrls?.length ?? 0)
+  const shotsMode = data.mode === "shots"
+  const shotOf = (i: number) => data.generatedShots?.[i]
   return (
     <div className="flex flex-col gap-3">
+      <div>
+        <Label>{t("proccfg.splitMode")}</Label>
+        <Select value={shotsMode ? "shots" : "duration"} onValueChange={(v) => onUpdate({ mode: v === "shots" ? "shots" : undefined })}>
+          <SelectTrigger aria-label={t("proccfg.splitMode")}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="duration">{t("proccfg.splitModeDuration")}</SelectItem>
+            <SelectItem value="shots">{t("proccfg.splitModeShots")}</SelectItem>
+          </SelectContent>
+        </Select>
+        {shotsMode && <p className="text-[11px] text-muted-foreground mt-1">{t("proccfg.splitModeShotsHint")}</p>}
+      </div>
+      {!shotsMode && (<>
       <div>
         <Label htmlFor="chunk-duration">{t("proccfg.chunkDurationSeconds")}</Label>
         <Input
@@ -1236,6 +1250,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
           </SelectContent>
         </Select>
       </div>
+      </>)}
       {partCount > 0 && (
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-muted-foreground">{t("proccfg.outputChunk")}</label>
@@ -1247,9 +1262,14 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
             }}
             className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
           >
-            {Array.from({ length: partCount }, (_, i) => (
-              <option key={i} value={i}>{t("proccfg.chunk", { n: i + 1 })}</option>
-            ))}
+            {Array.from({ length: partCount }, (_, i) => {
+              const shot = shotOf(i)
+              return (
+                <option key={i} value={i}>
+                  {t("proccfg.chunk", { n: i + 1 })}{shot ? ` (${shot.startSec}s – ${shot.endSec}s)` : ""}
+                </option>
+              )
+            })}
           </select>
           <p className="text-[11px] text-muted-foreground">{t("proccfg.selectWhichChunkToOutputWhen")}</p>
         </div>

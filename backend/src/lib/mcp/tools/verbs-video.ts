@@ -9,6 +9,7 @@ import { registerOverlayImagesVerb } from "./verbs-video-overlay.js"
 import { registerVideoMaskVerbs } from "./verbs-video-mask.js"
 import { registerUseCaseVerbs } from "./verbs-use-case.js"
 import { registerSplitMediaVerb } from "./verbs-split-media.js"
+import { registerShotCutsVerb } from "./verbs-shot-cuts.js"
 import { registerSpeakerMapVerb } from "./verbs-speaker-map.js"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../../connected-reference-schema.js"
 import {
@@ -2531,6 +2532,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
 
   // ── split_media (Split into Chunks) — its own module ──
   registerSplitMediaVerb({ server, session, fastify })
+
+  // ── shot_cuts (Shot Cuts) — its own module ──
+  registerShotCutsVerb({ server, session, fastify })
 
   // ── motion_transfer ──
   // Drives a character image with the motion of a driver video. KIE provides

@@ -18,6 +18,7 @@ Wire a part output into another node in **Each** mode (the default for a new wir
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
+| Cut by (`mode`) | select | Part length | **Part length** cuts parts between the min and max below. **Shots** cuts a video into one part per shot (see [Cutting at the shots](#cutting-at-the-shots)); the length fields and Audio Format are then hidden and not used. |
 | Max chunk length | number (seconds) | 10 | The longest a part may be (minimum 1). Every part is at most this long. |
 | Min chunk length | number (seconds) | 4 | The shortest a part may be (0 or more, never above the max). |
 | Audio Format | select | `mp3` | Format of audio parts: `MP3`, `WAV`, or `AAC` (saved as `.m4a`) |
@@ -34,6 +35,16 @@ Wire a part output into another node in **Each** mode (the default for a new wir
 - A file shorter than the min, or one that cannot be cut into parts between the min and the max (for example 11 s with a 6 s min and a 10 s max), fails with a message saying so.
 
 **Example:** a 60 s phone video at 29.97 fps (1,798 frames), max 10 s, min 4 s → 7 parts: five of 299 frames (9.98 s), then 152 and 151 frames (5.07 s and 5.04 s). Without the min, the last part would be 4 frames long.
+
+### Cutting at the shots
+
+With **Cut by: Shots** (`mode: "shots"`), a video is cut into **one part per shot**, at the cuts measured from the video itself — the same rule as the [Shot Cuts](../processing-video/shot-cuts.md) node: every decoded frame is scored and each hard cut starts a new shot. Dissolves and fades are not cuts, and a flash that returns to the same picture is not one either.
+
+- Each part is cut on whole frames, exactly as above, and keeps the video's own sound (never past its picture). There is no minimum length: a one-frame shot is a one-frame part.
+- A video only: the audio input is not used — with an audio file connected the run fails with a message (disconnect it, or cut by part length).
+- Videos up to **30 minutes**, and at most **200 shots**; a longer video or one with more shots fails with a message saying so (trim it first).
+- Besides the parts, the job's output lists each part's shot: `shotCount` and `shots: [{ index, startSec, endSec, durationSec }]`, seconds on the video to the millisecond. The **Output Chunk** list shows each part's start and end.
+- A shot's start is placed on the nearest frame of the constant-rate picture: exact for a constant-frame-rate video, within half a frame for a variable-rate one.
 
 ## Inputs & Outputs
 
@@ -64,13 +75,16 @@ To keep the parts as rows, wire a part output into a [List](../input/list.md): d
 
 22 credits<!-- credits: split-media --> per run, whatever the number of parts. Nodes after it on an Each wire are charged once per part they run for.
 
-Before the run, the editor's estimate counts the parts from the input's recorded length: the length divided by the max, allowing for the frame rounding above (so it may count one part more than the run makes, never fewer). When the input's length is not known (a Video URL, or a published app run on the user's own file), the estimate assumes a 10-minute file. Once the node has run, its parts are counted exactly.
+Before the run, the editor's estimate counts the parts from the input's recorded length: the length divided by the max, allowing for the frame rounding above (so it may count one part more than the run makes, never fewer). When cutting at the shots, the shots are only known once the video is measured, so the estimate assumes one shot every 4 seconds of the input (at most 200). When the input's length is not known (a Video URL, or a published app run on the user's own file), the estimate assumes a 10-minute file. Once the node has run, its parts are counted exactly.
+
+Cutting at the shots costs the same per run.
 
 ## Common Use Cases
 
 - Batch transcription: split a 60-minute recording into 5-minute parts, then wire Each into Transcribe
 - Long-form dubbing: split a video, dub each part, then recombine with Combine Videos
 - Clips for social: cut a talk into 30–60 s parts and caption each
+- Shot by shot: cut an ad or a music video at its shots, then restyle or upscale each shot on an Each wire
 
 ## Tips
 

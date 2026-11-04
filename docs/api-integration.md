@@ -4636,7 +4636,7 @@ served by the Nodaro Cloud plugin and answer 404 on self-hosted installs
 |---|---|---|
 | `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged. |
 | `POST` | `/v1/cast-swap` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
-| `GET` | `/v1/cast-swap/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed, and whether the engine takes a style-only run (see Style below). Public: no sign-in needed. |
+| `GET` | `/v1/cast-swap/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed, whether the engine takes a style-only run, and whether a Precise run takes an art style (see Style below). Public: no sign-in needed. |
 | `GET` | `/v1/cast-swap/advanced` | Whether the Nodaro Motion page shows its Advanced options (see below). Public: no sign-in needed. |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
@@ -4707,14 +4707,17 @@ sign-in needed) says which, per engine:
 `style: "motion"`). An app shows its style choice only for an engine answered
 `"user"`. The same answer carries
 `styleOnly: { "motion-prism": boolean, "motion-pulse": boolean }`: whether the
-engine takes style-only runs (below). It follows the engine alone, so read it
-with `engines`: a forced Precise drops a Motion run's art style. On an engine
-answered `"precise"`, a request with nothing else to change is refused as
-`400 validation_error`; with anything else to change (a role with images, a
+engine takes style-only runs (below), and
+`preciseArtStyle: { "motion-prism": boolean, "motion-pulse": boolean }`:
+whether a Precise run takes an art style there (below). Both follow the engine
+alone, so read them with `engines`: a forced Precise keeps a Motion run's art
+style where `preciseArtStyle` is `true`, and drops it where it is not. On an
+engine answered `"precise"`, a request with nothing else to change is refused
+as `400 validation_error`; with anything else to change (a role with images, a
 fixed reference, a `prePrompt` or `postPrompt`) it answers `202` and runs and
-is quoted as Precise, without the art style. Nodaro Motion Pulse is always
-`false`, and a server from before it leaves `styleOnly` out: read that as
-`false` for every engine.
+is quoted as Precise, with the art style where `preciseArtStyle` is `true`.
+Nodaro Motion Pulse is always `false` in both, and a server from before them
+leaves them out: read that as `false` for every engine.
 The answer may be up to a minute old. Trends are not
 affected.
 
@@ -4740,14 +4743,32 @@ before offering it: while Nodaro Motion Prism is answered `false`, an art style
 with nothing else to change is refused as `400 validation_error`, and one with
 a `prePrompt` or `postPrompt` is accepted but runs as any other art-style run,
 not as described here. `styleOnly: true` says the engine takes such runs, and a
-run must still be Motion: on an engine answered `"precise"` the art style is
-dropped, so the request is refused as `400 validation_error` or, with anything
-else to change, runs as Precise (see A forced style). Nodaro Motion Pulse takes
-no art style (`400 art_style_needs_prism`). `400 art_style_needs_flex` answers
-an art style on a request with no `style: "motion"` or on a trend run, and on a
-Motion run whose prompt is made Precise by Nodaro's setting for how Motion runs
-are prepared. That setting is not the forced style, and `style-choice` does not
-show it.
+run must still be Motion: on an engine answered `"precise"` the request is
+refused as `400 validation_error` or, with anything else to change, runs as
+Precise (see A forced style). Nodaro Motion Pulse takes no art style
+(`400 art_style_needs_prism`). `400 art_style_needs_flex` answers an art style
+on a trend run, on a Motion run whose prompt is made Precise by Nodaro's
+setting for how Motion runs are prepared, and on a Precise run where the engine
+takes none there (below). That setting is not the forced style, and
+`style-choice` does not show it.
+
+**An art style on a Precise run.** Where `GET /v1/cast-swap/style-choice`
+answers `preciseArtStyle` `true` for the engine (Nodaro Motion Prism only), a
+Precise run (no `style`, or `style: "precise"`) also takes an art style,
+`direction: { style: "<id>" }`, from the same catalog and refused the same way
+(`400 unknown_art_style`, `400 art_style_not_supported`). The run stays
+Precise: the clip is edited as a Precise run edits it, the people swapped as
+Precise swaps them, and the whole video is drawn in the art style. It is not a
+change on its own: a Precise run with nothing else to change (no role with
+images, no fixed reference, no `prePrompt` or `postPrompt`) is still refused as
+`400 validation_error`; restyling a whole clip alone is a Motion run's (Style
+only, above). The price changes only where Nodaro's setting for these runs
+first redraws the role pictures in the art style (its own setting, not the one
+Motion runs use); the estimate (sent with the same body) shows it. The job records it in `input_data.direction`. Where
+`preciseArtStyle` is `false` (or a server from before it leaves it out), a
+Precise run with an art style answers `400 art_style_needs_flex`. Nodaro Motion
+Pulse takes none (`400 art_style_needs_prism`, on a Precise run as on a Motion
+one).
 
 **The Advanced options on the Nodaro Motion page.** The Nodaro Motion page
 offers two of the body's fields, `prepareReferences` (see Reference
@@ -4827,7 +4848,7 @@ Refusals, all before anything is charged (bodies are
 | `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s. |
 | `400` | `unnamed_role_needs_picture` | A person, pet or product role with no `name` (left out or empty) and no image: an unnamed role is named by its first picture, so it needs one. |
 | `400` | `role_name_required` | A trend run with an unnamed role: a trend's roles are always named (only a direct run's may leave `name` out). |
-| `400` | `no_roles_in_preview` | A preview that would change nothing, judged on what it sends: no role kept in it (`inPreview` not `false`) that has images, no fixed reference, no `prePrompt` or `postPrompt` and no art style. Each of those counts, so a preview with every role left out is still run when it has a reference, a prompt or, where `styleOnly` is answered `true`, an art style (an engine from before style-only runs refuses that last one, with a message that does not name an art style). An engine answered `"precise"` drops the art style, so there a preview whose only change was the art style answers this refusal; one with a prompt or a reference runs, as Precise. "The preview would change nothing: keep a role with images in it (inPreview), or add a fixed reference, a pre or post prompt, or an art style (Flex on Nodaro Motion Prism)." |
+| `400` | `no_roles_in_preview` | A preview that would change nothing, judged on what it sends: no role kept in it (`inPreview` not `false`) that has images, no fixed reference, no `prePrompt` or `postPrompt` and no art style. Each of those counts, so a preview with every role left out is still run when it has a reference, a prompt or, where `styleOnly` is answered `true`, an art style (an engine from before style-only runs refuses that last one, with a message that does not name an art style). An engine answered `"precise"` runs it as Precise, where an art style is no change on its own, so there a preview whose only change was the art style answers this refusal; one with a prompt or a reference runs, as Precise (with the art style where `preciseArtStyle` is `true`). "The preview would change nothing: keep a role with images in it (inPreview), or add a fixed reference, a pre or post prompt, or an art style (Flex on Nodaro Motion Prism)." |
 | `400` | `prompt_too_long` | The prompt would build too long. A `{role:N}` reads as the role's name when it sends no images, so prompts within their own 4,000 characters can still add up past the engine's limit (Nodaro Motion Pulse's is 8,000 characters). |
 | `400` | `clip_too_long_for_style` | `style: "motion"` only, and only while the way Nodaro prepares Motion runs for the engine (a setting of Nodaro's, not of the run) limits the clip: a full run (not a preview) whose clip is over 27.9 s (on Nodaro Motion Pulse, once it is cut to whole seconds). "This clip is too long for Motion. Use a shorter clip or choose Precise." |
 | `400` | `prompt_parts_not_allowed` | The body sends `promptParts`: only the Nodaro platform itself may (a trend's engine prompt). |
@@ -6439,7 +6460,8 @@ for the formulas). Off Cloud, the four `voice-changer-pro*` routes are absent (4
 | `POST` | `/v1/video-metadata` | Probe duration/dimensions/title without downloading (`{ url }`). Direct read, not a job. |
 | `POST` | `/v1/trim-video` | Trim a video (`{ videoUrl, startTime?/endTime? \| keepFirstSeconds? \| keepLastSeconds? \| trim*Frames/Seconds }`) → job. |
 | `POST` | `/v1/trim-audio` | Trim/extract audio (`{ videoUrl? \| audioUrl?, startTime?, endTime?, audioFormat?: mp3\|wav\|aac }`) → job. |
-| `POST` | `/v1/split-media` | Cut a video and/or an audio file into consecutive parts, local FFmpeg, **22 credits**<!-- credits: split-media --> per run whatever the number of parts (`{ videoUrl?, audioUrl? (at least one; both are each split on their own), chunkDuration: ≥ 1 (seconds, the longest a part may be), minPartDuration?: ≥ 0 (seconds, default 4; above `chunkDuration` is a `400 validation_error`), audioFormat?: mp3\|wav\|aac — aac parts are `.m4a` files }`; `output_data` = `{ videoUrls?: string[], audioUrls?: string[], chunkCount, partDurationsSec?: number[], audioPartDurationsSec?: number[] (only when both were split) }`). Video is cut on whole frames, each part's sound ending at most ~21 ms before its picture; audio-only parts are sample-exact in mp3/wav and on whole AAC frames in aac; sources up to 3 hours, at most 200 parts per input — a source that needs more, is shorter than the minimum, or cannot be cut into parts between the two lengths fails with a message saying so. Full rules: [Split into Chunks](./nodes/processing-audio/split-media.md). → job. |
+| `POST` | `/v1/split-media` | Cut a video and/or an audio file into consecutive parts, local FFmpeg, **22 credits**<!-- credits: split-media --> per run whatever the number of parts (`{ videoUrl?, audioUrl? (at least one; both are each split on their own), chunkDuration: ≥ 1 (seconds, the longest a part may be), minPartDuration?: ≥ 0 (seconds, default 4; above `chunkDuration` is a `400 validation_error`), audioFormat?: mp3\|wav\|aac — aac parts are `.m4a` files }`; `output_data` = `{ videoUrls?: string[], audioUrls?: string[], chunkCount, partDurationsSec?: number[], audioPartDurationsSec?: number[] (only when both were split) }`). Video is cut on whole frames, each part's sound ending at most ~21 ms before its picture; audio-only parts are sample-exact in mp3/wav and on whole AAC frames in aac; sources up to 3 hours, at most 200 parts per input — a source that needs more, is shorter than the minimum, or cannot be cut into parts between the two lengths fails with a message saying so. `{ videoUrl, mode: "shots" }` instead cuts a video into one part per shot at the cuts measured from the file (no part length, a video only — a separate `audioUrl` is a `400 validation_error`; up to 30 minutes and 200 shots; the same price), and `output_data` adds `shotCount` and `shots: [{ index, startSec, endSec, durationSec }]`. Full rules: [Split into Chunks](./nodes/processing-audio/split-media.md). → job. |
+| `POST` | `/v1/shot-cuts` | **Not yet enabled on nodaro.ai.** Where every shot of a video starts and ends, measured from the file — local FFmpeg, keyless, **2 credits**<!-- credits: shot-cuts --> flat per run, with or without frames (`{ videoUrl, frames?: boolean }`; videos up to 30 minutes, MP4/MOV/MKV/WebM). Every decoded frame is scored and each hard cut starts a new shot (dissolves and fades are not cuts). `output_data.json` = `{ shotCount, cutsSec: number[] (ascending, never 0, [] for one shot), durationSec, shots: [{ index, startSec, endSec, durationSec, firstFrameUrl?, lastFrameUrl? }] }` (seconds from the first frame, to the millisecond); with `frames: true` each shot's exact first and last frame are saved as PNG (up to 1,000 shots) and also listed in shot order on `output_data.firstFrames` / `output_data.lastFrames`. A file that is not a readable video, a video past 30 minutes, or more than 1,000 shots with frames on fails and is refunded. Full reference: [Shot Cuts](./nodes/processing-video/shot-cuts.md). → job. |
 | `POST` | `/v1/add-captions` | Burn captions into a video (`{ videoUrl, text? \| captions?[] \| transcript? \| auto_transcribe?, transcribe_provider?: incredibly-fast-whisper\|elevenlabs-stt\|whisper, style?: subtitle\|word-highlight\|karaoke\|tiktok-words\|word-pop\|bouncy, position?, positionY?, fontSize?, color?, backgroundColor?, look?: outline\|clean, fontFamily?, fontWeight?, strokeColor?, strokeWidth?, uppercase?, maxWordsPerLine?, highlightColor?, animate?, wordLevel?, segments?[] }`) → job. Caption-source precedence: `captions[]` > `transcript` > `text` on `subtitle` > auto-transcription. On a top-level `subtitle` (no `segments`) `text` is burned as-is as ONE static block for the whole video — never transcribed over, with or without styling levers; omit it to caption the speech. On a kinetic style `text` is only the fallback (used when transcription returns nothing or `auto_transcribe` is `false`, spread evenly across the video). An unset `look` is `outline` on the kinetic styles and `clean` on `subtitle`. `maxWordsPerLine` (integer 1–20, optional) caps the words on one caption line — or one `tiktok-words` page — **on top of** the frame-width budget, sentence ends and ≥0.5 s pauses (`1`–`2` = the punchy CapCut read, unset = fit the width); it counts words, not caption entries (a phrase-level entry holding more than N words is split into sub-phrases of at most N words; on a `text` subtitle it only sets the line breaks of the one static block); it exists top-level and per `segments[]` entry (a segment inherits the top-level value) and is inert on `word-pop`. `word-highlight`, `karaoke` and `bouncy` show one held line at a time. `highlightColor` and `animate` are kinetic-only (`400` on `subtitle`); every other lever, `maxWordsPerLine` included, also styles a `subtitle`. A kinetic style needs a `transcribe_provider` that returns word timings (`incredibly-fast-whisper`, the default, or `elevenlabs-stt`) — `whisper` is a `400` on `transcribe_provider` there when transcription is the render's only caption source; `subtitle` needs phrase timing only and works with any engine. A bare plain-text `subtitle` is the cheap FFmpeg burn; a kinetic style, any styling lever, timed captions, auto-transcription or `segments` renders via Remotion, bills at the kinetic price and keeps the source frame rate (whole number, 15–60 fps; a variable-frame-rate or very long source renders at 30 fps). Full reference: [Add Captions](./nodes/processing-video/add-captions.md). |
 | `POST` | `/v1/silence-detect` | Detect silent spans in an audio or video source, local FFmpeg, **11 credits**<!-- credits: silence-detect -->, keyless (`{ audioUrl, thresholdDb?: -35, minSilenceMs?: 700, padMs?: 120 }`; `output_data.json` = `{ version, ranges: [{ startMs, endMs }], durationMs }`) → job. |
 | `POST` | `/v1/audio-sync` | Measure how far apart the clocks of 2–6 recordings of one conversation are, from their sound, local FFmpeg + correlation, **10 × (sources − 1) credits** (2 → 10, 4 → 30, 6 → 50), keyless (`{ sources: [{ id, url }] (2–6, unique ids, audio or video), reference?: <one of the ids, default the first> }`; a repeated id or a `reference` that is not one of the ids is a `400 validation_error` naming it; `output_data.json` = `{ version, reference, offsets: [{ sourceId, offsetMs, confidence, driftMsPerHour }], notes }` with `referenceMs = sourceMs + offsetMs`; drift is measured and warned in `notes` past 33 ms over the shared stretch, never corrected). Full reference: [Audio Sync](./nodes/processing-audio/audio-sync.md). → job. |

@@ -79,6 +79,7 @@ vi.mock("@/lib/api", async (importOriginal) => ({
 }))
 // A node unit's run posts through its own api.ts, not @/lib/api.
 vi.mock("@/nodes/speaker-map/api", () => ({ speakerMapApi: vi.fn(startJob) }))
+vi.mock("@/nodes/shot-cuts/api", () => ({ shotCutsApi: vi.fn(startJob) }))
 vi.mock("../poll-job", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../poll-job")>()),
   getJobStatusLeanForNode: vi.fn(() => Promise.resolve({ status: "completed", output_data: job.row })),
@@ -163,6 +164,8 @@ const SCENARIOS: Record<string, Scenario> = {
       },
     },
   },
+  // Shot Cuts: one video in (frames on, so its three outputs all land).
+  "shot-cuts": { inputs: { videoUrl: MEDIA }, data: { frames: true } },
   // Speaker Frames: the edit folded onto its `edl` wire (one JSON string per edit).
   "speaker-frames": {
     inputs: {

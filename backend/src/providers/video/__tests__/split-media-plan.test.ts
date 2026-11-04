@@ -308,3 +308,46 @@ describe("the 3-hour source cap", () => {
     expect(sourceTooLongMessage("audio", undefined)).toBe("This audio is longer than 3 hours; Split into Chunks takes up to 3 hours — trim it first.")
   })
 })
+
+describe("shots mode", () => {
+  it("places each cut on the constant-rate grid at its nearest frame: exact for a constant-rate source", async () => {
+    const { shotCutFramesOnGrid, unitRate } = await import("../split-media-plan.js")
+    expect(shotCutFramesOnGrid([1, 2.5], unitRate(24))).toEqual([24, 60])
+    // NTSC: frame 30 is at 1.001 s, frame 61 at 2.035 s (to the millisecond)
+    expect(shotCutFramesOnGrid([1.001, 2.035], unitRate(30000, 1001))).toEqual([30, 61])
+    // never 0, each once, ascending
+    expect(shotCutFramesOnGrid([2, 0, 0.01, 1, 1.01], unitRate(24))).toEqual([24, 48])
+  })
+
+  it("parts are the gaps between the cuts inside the picture", async () => {
+    const { shotPartsOf } = await import("../split-media-plan.js")
+    expect(shotPartsOf([24, 60], 84)).toEqual([24, 36, 24])
+    expect(shotPartsOf([], 48)).toEqual([48])
+    // a cut at or past the last frame starts no part
+    expect(shotPartsOf([24, 84, 90], 84)).toEqual([24, 60])
+    expect(shotPartsOf([24], 0)).toEqual([])
+  })
+
+  it("its budget counts the scoring decode, the encode, the copy and up to 200 parts of a 30-minute source; the fixed budget is unchanged", async () => {
+    const plan = await import("../split-media-plan.js")
+    const { shotCutsDecodeTimeoutMs } = await import("../shot-cuts-plan.js")
+    const { DOWNLOAD_MAX_MS, FFPROBE_TIMEOUT_MS } = await import("../ffmpeg-timeouts.js")
+    const { LIVENESS_CANVAS } = await import("../apply-edl-budget.js")
+    const sec = plan.SPLIT_SHOTS_MAX_SOURCE_SEC
+    expect(sec).toBe(1800)
+    const expected = DOWNLOAD_MAX_MS + FFPROBE_TIMEOUT_MS + shotCutsDecodeTimeoutMs(sec)
+      + plan.splitEncodeTimeoutMs(sec, LIVENESS_CANVAS) + FFPROBE_TIMEOUT_MS + plan.splitCopyTimeoutMs(sec)
+      + plan.SPLIT_MEDIA_MAX_PARTS * plan.SPLIT_PART_TIMEOUT_FLOOR_MS + plan.splitPartTimeoutMs(sec)
+    expect(plan.splitMediaJobBudgetMs({ videoUrl: "https://v", mode: "shots" })).toBe(expected)
+    expect(plan.splitMediaJobBudgetMs({ audioUrl: "https://a", mode: "shots" })).toBeUndefined()
+    // the part-length budget reads the same with or without a mode it does not know
+    expect(plan.splitMediaJobBudgetMs({ videoUrl: "https://v", chunkDuration: 10, mode: "duration" })).toBe(plan.splitMediaJobBudgetMs({ videoUrl: "https://v", chunkDuration: 10 }))
+  })
+
+  it("the refusals name the limit", async () => {
+    const { shotsSourceTooLongMessage, tooManyShotsMessage } = await import("../split-media-plan.js")
+    expect(shotsSourceTooLongMessage(1900)).toBe("This video is 31 min 40 s long; Split into Chunks cuts at the shots of videos up to 30 minutes — trim it first.")
+    expect(shotsSourceTooLongMessage(undefined)).toMatch(/longer than 30 minutes/)
+    expect(tooManyShotsMessage(1234)).toMatch(/1,234 shots; the limit is 200 parts/)
+  })
+})

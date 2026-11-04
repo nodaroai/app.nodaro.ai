@@ -24,7 +24,8 @@
  *   an engine that declares `castSwap.shotList` (`stepsForEngine`); the
  *   defaults need no engine (`shotListNeedsEngine`).
  * - `styleRefs` ("Style the role pictures"): for a run that chose an art
- *   style (Flex only, `direction.style`), each role's reference picture is
+ *   style (`direction.style`: this switch is a Flex run's; a Precise run with
+ *   an art style has its own, `nodaro-motion-precise-art-style.ts`), each role's reference picture is
  *   first redrawn in that style by an image model, so the video model sees
  *   every person already drawn in it. `{ mode, send?, prompt? }`: `send` is
  *   what the role then sends (`"styled-and-original"`: the styled picture as
