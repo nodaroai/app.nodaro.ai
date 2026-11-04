@@ -52,6 +52,11 @@ const map: LocaleCatalogMap = {
 
   // --- picker-gaps 2026-09-01 ---
   "early-color-photo": { label: "早期彩色照片", description: "普罗库金-戈尔斯基 / Autochrome 微粒彩屏,1900 年代早期彩色" },
+  "felt-puppet": { label: "毛毡玩偶", description: "针毡定格动画玩偶与场景" },
+  "knitted-yarn": { label: "毛线编织世界", description: "用毛线编织的世界" },
+  "toy-figure-3d": { label: "玩具手办 3D", description: "圆润的搪胶玩具人偶" },
+  "painterly-3d": { label: "绘画风 3D", description: "手绘质感的绘本风 3D" },
+  "painted-clay": { label: "彩绘黏土", description: "彩绘的雕塑黏土" },
 }
 
 export default map

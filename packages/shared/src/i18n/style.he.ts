@@ -52,6 +52,11 @@ const map: LocaleCatalogMap = {
 
   // --- picker-gaps 2026-09-01 ---
   "early-color-photo": { label: "צילום צבע מוקדם", description: "צבע מוקדם של תחילת המאה ה-20 בסגנון פרוקודין-גורסקי / אוטוכרום" },
+  "felt-puppet": { label: "בובות לבד", description: "בובות לבד וסט בהנפשת סטופ-מושן" },
+  "knitted-yarn": { label: "עולם סרוג", description: "עולם סרוג מחוטי צמר" },
+  "toy-figure-3d": { label: "בובת צעצוע תלת-ממד", description: "דמויות צעצוע עגולות מוויניל" },
+  "painterly-3d": { label: "תלת-ממד ציורי", description: "תלת-ממד בסגנון ספר אגדה עם גימור צבוע ביד" },
+  "painted-clay": { label: "חימר צבוע", description: "חימר מפוסל עם גימור צבוע" },
 }
 
 export default map

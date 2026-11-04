@@ -52,6 +52,11 @@ const map: LocaleCatalogMap = {
 
   // --- picker-gaps 2026-09-01 ---
   "early-color-photo": { label: "初期のカラー写真", description: "Prokudin-Gorsky／オートクロームによる1900年代初頭のカラー" },
+  "felt-puppet": { label: "フェルト人形", description: "ニードルフェルトのストップモーション人形とセット" },
+  "knitted-yarn": { label: "ニットの世界", description: "毛糸で編んだ世界" },
+  "toy-figure-3d": { label: "トイフィギュア3D", description: "丸みのあるソフビ人形" },
+  "painterly-3d": { label: "ペインタリー3D", description: "手描き風仕上げの絵本調3D" },
+  "painted-clay": { label: "彩色クレイ", description: "彩色仕上げの粘土造形" },
 }
 
 export default map

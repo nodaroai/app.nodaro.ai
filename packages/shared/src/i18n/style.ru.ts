@@ -51,6 +51,11 @@ const map: LocaleCatalogMap = {
   "manga": { label: "Манга", description: "Чёрно-белые панели тушью с тонированием скринтонами" },
   // --- picker-gaps 2026-09-01 ---
   "early-color-photo": { label: "Ранняя цветная фотография", description: "Цвет начала 1900-х в духе Прокудина-Горского / автохрома" },
+  "felt-puppet": { label: "Войлочная кукла", description: "Кукольная анимация из валяного войлока" },
+  "knitted-yarn": { label: "Вязаный мир", description: "Мир, связанный из шерстяной пряжи" },
+  "toy-figure-3d": { label: "Игрушечная фигурка 3D", description: "Округлые виниловые фигурки" },
+  "painterly-3d": { label: "Живописное 3D", description: "Сказочное 3D с ручной росписью" },
+  "painted-clay": { label: "Расписная глина", description: "Лепка из глины с росписью" },
 }
 
 export default map

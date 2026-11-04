@@ -49,6 +49,7 @@ import {
   PanelTop,
   Radar,
   Gavel,
+  Receipt,
 } from "lucide-react"
 import { useAdminComplaintCount } from "@/ee/hooks/queries/use-admin-complaints-queries"
 import { Button } from "@/components/ui/button"
@@ -105,6 +106,7 @@ const ADMIN_NAV = [
   ...(hasCredits() ? [{ href: "/admin/trends", label: "Trends", icon: TrendingUp }] : []),
   ...(hasCredits() ? [{ href: "/admin/trend-radar", label: "Trend Radar", icon: Radar }] : []),
   ...(hasCredits() ? [{ href: "/admin/nodaro-motion", label: "Nodaro Motion", icon: Clapperboard }] : []),
+  ...(hasCredits() ? [{ href: "/admin/motion-price-check", label: "Motion price check", icon: Receipt }] : []),
   { href: "/admin/tutorial-categories", label: "Tutorial Categories", icon: FolderTree },
   { href: "/admin/tutorials", label: "Tutorials", icon: PlayCircle },
   { href: "/admin/settings", label: "Settings", icon: Settings },

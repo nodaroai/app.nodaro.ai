@@ -141,6 +141,15 @@ export interface PickerOption {
    */
   readonly videoPromptHint?: string
   /**
+   * Style only: the outputs the style is offered for. Present only on a style
+   * offered for one of them (`["video"]`: a look that only works in motion);
+   * absent means both. Carried to the wire (`projectPickerCatalog`). An image style list leaves out an option without
+   * "image".
+   */
+  readonly media?: ReadonlyArray<"image" | "video">
+  /** Style only: `false` on a style restyle lists leave out (`Style.restyle`); absent means offered. Carried to the wire. */
+  readonly restyle?: false
+  /**
    * Transitions only: present (`true`) on a row whose mechanism is a CUT, so
    * it takes no duration and no intensity — see `Transition.instant` /
    * `isInstantTransition`. A consumer that only reads this catalog (Studio
@@ -231,6 +240,10 @@ interface BaseCatalogEntry {
   readonly term?: string
   /** Style: see `Style.videoPromptHint`. Propagated verbatim into the flattened option. */
   readonly videoPromptHint?: string
+  /** Style: see `Style.media`. Propagated verbatim into the flattened option. */
+  readonly media?: ReadonlyArray<"image" | "video">
+  /** Style: see `Style.restyle`. Propagated verbatim into the flattened option. */
+  readonly restyle?: false
   /** W1-a: see Person.adultOnly. Propagated verbatim into the flattened option. */
   readonly adultOnly?: true
   /** Transitions: see `Transition.instant`. Propagated into the flattened option as `instant: true`. */
@@ -278,6 +291,8 @@ function toOptions<T extends BaseCatalogEntry>(
     }
     if (e.description) opt.description = e.description
     if (e.videoPromptHint) opt.videoPromptHint = e.videoPromptHint
+    if (e.media) opt.media = e.media
+    if (e.restyle === false) opt.restyle = false
     if (categoryField) opt.category = e[categoryField] as unknown as string
     if (e.adultOnly) opt.adultOnly = true
     if (e.instant) opt.instant = true
@@ -1077,6 +1092,10 @@ function projectOptionFields(o: PickerOption, detail: PickerCatalogDetail, image
   // present only when the option has a picture (a srcset only for a CDN render).
   const extras = {
     ...(o.motion ? { motion: o.motion } : {}),
+    // A style's media rides at both detail levels: a thin client filters its image style list by it.
+    ...(o.media ? { media: [...o.media] } : {}),
+    // A style restyle lists leave out says so at both detail levels too.
+    ...(o.restyle === false ? { restyle: false as const } : {}),
     ...(image ? { imageUrl: image.url } : {}),
     ...(image?.srcSet ? { imageSrcSet: image.srcSet } : {}),
   }

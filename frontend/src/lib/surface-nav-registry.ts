@@ -169,6 +169,8 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "trends/:id",
   // Nodaro Motion — admin-only (and only where credits exist): its face masking per engine.
   "nodaro-motion",
+  // Motion price check — admin-only, where credits exist.
+  "motion-price-check",
   // Trend Radar — admin-only (and only where credits exist): the queue, its settings and one candidate.
   "trend-radar",
   "trend-radar/settings",

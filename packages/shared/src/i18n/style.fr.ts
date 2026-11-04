@@ -51,6 +51,11 @@ const map: LocaleCatalogMap = {
   "manga": { label: "Manga", description: "Art encré N&B en cases, ombrage à trame" },
   // --- picker-gaps 2026-09-01 ---
   "early-color-photo": { label: "Photo couleur ancienne", description: "Couleur du début des années 1900, autochrome / Prokoudine-Gorski" },
+  "felt-puppet": { label: "Marionnette en feutre", description: "Marionnettes et décor en feutre, en stop-motion" },
+  "knitted-yarn": { label: "Monde tricoté", description: "Un monde tricoté en laine" },
+  "toy-figure-3d": { label: "Figurine 3D", description: "Figurines en vinyle aux formes arrondies" },
+  "painterly-3d": { label: "3D pictural", description: "3D de livre illustré à la finition peinte à la main" },
+  "painted-clay": { label: "Argile peinte", description: "Argile sculptée à la finition peinte" },
 }
 
 export default map

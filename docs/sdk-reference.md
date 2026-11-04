@@ -9567,7 +9567,7 @@ not two.
 
 - `PickerCatalogSummary` — one row of `pickerCatalogs.list()`: `{ nodeType, label, catalogId, kind, valueField?, fields?, optionCount }`
 - `PickerCatalog` — full catalog from `pickerCatalogs.get()`: single-dim carries `options`, multi-dim carries `dimensions`
-- `PickerOption` — one selectable id: `{ id, label, description?, category?, promptHint?, term?, icon? }` (`promptHint` present only with `detail: "full"`; `term` — the short professional term to inject, `label` being display-only — present at both detail levels)
+- `PickerOption` — one selectable id: `{ id, label, description?, category?, promptHint?, term?, icon? }` (`promptHint` present only with `detail: "full"`; `term` — the short professional term to inject, `label` being display-only — present at both detail levels); `media?: ("image" | "video")[]` — on a `style` option offered for one kind of output only (`["video"]` on the video-only styles; absent means both), at both detail levels, so an image style list can leave it out; `restyle?: false` — on a `style` option a restyle list leaves out (absent means offered)
 - `PickerDimension` — a multi-dim field: `{ field, label, options }`
 - `GetPickerCatalogOptions` — `get()` options: `{ detail?, category?, field? }`
 

@@ -1,0 +1,241 @@
+[
+  {
+    "label": "A: a 4 s preview, every step settled",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593101", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 44, "log": { "status": "committed", "used": 44, "charged": 44 }, "status": "completed", "input": { "resolution": "720p", "preview": true } },
+      { "key": "picture-1", "id": "00000000-0000-4000-8000-000000593102", "parent": "00000000-0000-4000-8000-000000593101", "type": "generate-image", "credits": 66, "log": { "status": "committed", "used": 66, "charged": 66 }, "status": "completed", "providerCost": 0.10, "taskId": "kie-a1", "stepKey": "mpc-a:picture-1" },
+      { "key": "picture-2", "id": "00000000-0000-4000-8000-000000593103", "parent": "00000000-0000-4000-8000-000000593101", "type": "generate-image", "credits": 66, "log": { "status": "committed", "used": 66, "charged": 66 }, "status": "completed", "providerCost": 0.10, "taskId": "kie-a2", "stepKey": "mpc-a:picture-2" },
+      { "key": "mask", "id": "00000000-0000-4000-8000-000000593104", "parent": "00000000-0000-4000-8000-000000593101", "type": "video-mask", "credits": 33, "log": { "status": "committed", "used": 33, "charged": 33 }, "status": "completed", "providerCost": 0.05, "stepKey": "mpc-a:mask" },
+      { "key": "render", "id": "00000000-0000-4000-8000-000000593105", "parent": "00000000-0000-4000-8000-000000593101", "type": "image-to-video", "credits": 3564, "log": { "status": "committed", "used": 3564, "charged": 854 }, "status": "completed", "providerCost": 1.00, "taskId": "kie-a3", "stepKey": "mpc-a:render" }
+    ],
+    "expect": {
+      "run": { "held": 3773, "taken": 1063, "settled": true, "takenUsd": 2.126, "recordedUsd": 1.25, "kieUsd": null, "paidUsd": 1.25, "marginUsd": 0.876, "marginPct": 41.2041, "steps": 4, "stepsWithoutCost": 0, "quoteTotal": null, "quoteAllowed": null, "flags": [], "fullQuality": false, "draftJobId": null, "kind": "hand", "engine": "prism", "style": "precise", "resolution": "720p", "draft": false, "lengthSec": 4 }
+    }
+  },
+  {
+    "label": "B: A as a trend run, with KIE's own figures for two of its tasks",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593111", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 44, "log": { "status": "committed", "used": 44, "charged": 44 }, "status": "completed", "input": { "resolution": "720p", "preview": true, "trend": { "id": "00000000-0000-4000-8000-000000593911", "slug": "neon", "name": "Neon", "version": 1 }, "__videoUrl": "https://cdn.test/trends/neon/source.mp4", "__promptStyle": "flexible" } },
+      { "key": "picture-1", "id": "00000000-0000-4000-8000-000000593112", "parent": "00000000-0000-4000-8000-000000593111", "type": "generate-image", "credits": 66, "log": { "status": "committed", "used": 66, "charged": 66 }, "status": "completed", "providerCost": 0.10, "taskId": "kie-b1" },
+      { "key": "picture-2", "id": "00000000-0000-4000-8000-000000593113", "parent": "00000000-0000-4000-8000-000000593111", "type": "generate-image", "credits": 66, "log": { "status": "committed", "used": 66, "charged": 66 }, "status": "completed", "providerCost": 0.10, "taskId": "kie-b2" },
+      { "key": "mask", "id": "00000000-0000-4000-8000-000000593114", "parent": "00000000-0000-4000-8000-000000593111", "type": "video-mask", "credits": 33, "log": { "status": "committed", "used": 33, "charged": 33 }, "status": "completed", "providerCost": 0.05 },
+      { "key": "render", "id": "00000000-0000-4000-8000-000000593115", "parent": "00000000-0000-4000-8000-000000593111", "type": "image-to-video", "credits": 3564, "log": { "status": "committed", "used": 3564, "charged": 854 }, "status": "completed", "providerCost": 1.00, "taskId": "kie-b3" }
+    ],
+    "kieUsd": { "kie-b3": 1.50, "kie-b1": 0.12 },
+    "expect": {
+      "run": { "held": 3773, "taken": 1063, "settled": true, "takenUsd": 2.126, "recordedUsd": 1.25, "kieUsd": 1.62, "paidUsd": 1.77, "marginUsd": 0.356, "marginPct": 16.7451, "steps": 4, "stepsWithoutCost": 0, "quoteTotal": null, "quoteAllowed": null, "flags": [], "kind": "trend", "trendName": "Neon", "engine": "prism", "style": "flex", "lengthSec": 4 }
+    }
+  },
+  {
+    "label": "C: the run's own hold still open",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593121", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "reserved", "used": 40, "charged": null }, "status": "processing", "input": { "resolution": "720p" } },
+      { "key": "picture", "id": "00000000-0000-4000-8000-000000593122", "parent": "00000000-0000-4000-8000-000000593121", "type": "generate-image", "credits": 66, "log": { "status": "committed", "used": 66, "charged": 66 }, "status": "completed", "providerCost": 0.10 }
+    ],
+    "expect": {
+      "run": { "held": 106, "taken": null, "settled": false, "takenUsd": null, "recordedUsd": 0.10, "kieUsd": null, "paidUsd": 0.10, "marginUsd": null, "marginPct": null, "steps": 1, "stepsWithoutCost": 0, "quoteTotal": null, "quoteAllowed": null, "flags": [] }
+    }
+  },
+  {
+    "label": "D: a step's hold still open",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593131", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "committed", "used": 40, "charged": 40 }, "status": "processing", "input": { "resolution": "720p" } },
+      { "key": "picture", "id": "00000000-0000-4000-8000-000000593132", "parent": "00000000-0000-4000-8000-000000593131", "type": "generate-image", "credits": 66, "log": { "status": "committed", "used": 66, "charged": 66 }, "status": "completed", "providerCost": 0.10 },
+      { "key": "render", "id": "00000000-0000-4000-8000-000000593133", "parent": "00000000-0000-4000-8000-000000593131", "type": "image-to-video", "credits": 3564, "log": { "status": "reserved", "used": 3564, "charged": null }, "status": "processing" }
+    ],
+    "expect": {
+      "run": { "held": 3670, "taken": 106, "settled": false, "takenUsd": 0.212, "recordedUsd": 0.10, "kieUsd": null, "paidUsd": 0.10, "marginUsd": null, "marginPct": null, "steps": 2, "stepsWithoutCost": 0, "quoteTotal": null, "quoteAllowed": null, "flags": [] }
+    }
+  },
+  {
+    "label": "D2: a run in flight is never flagged, though a step completed with no cost and its partial charge is above its quote",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593136", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "committed", "used": 40, "charged": 40 }, "status": "processing", "input": { "resolution": "720p", "__castSwapQuote": { "v": 1, "totalCredits": 100, "breakdown": { "base": 40, "motion": 60 } } } },
+      { "key": "picture", "id": "00000000-0000-4000-8000-000000593137", "parent": "00000000-0000-4000-8000-000000593136", "type": "generate-image", "credits": 66, "log": { "status": "committed", "used": 66, "charged": 66 }, "status": "completed" },
+      { "key": "render", "id": "00000000-0000-4000-8000-000000593138", "parent": "00000000-0000-4000-8000-000000593136", "type": "image-to-video", "credits": 3564, "log": { "status": "reserved", "used": 3564, "charged": null }, "status": "processing" }
+    ],
+    "expect": {
+      "run": { "held": 3670, "taken": 106, "settled": false, "takenUsd": 0.212, "recordedUsd": null, "kieUsd": null, "paidUsd": 0, "marginUsd": null, "marginPct": null, "steps": 2, "stepsWithoutCost": 1, "quoteTotal": 100, "quoteAllowed": 100, "flags": [] }
+    }
+  },
+  {
+    "label": "E: the run refunded, a step committed",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593141", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "refunded", "used": 40, "charged": 0 }, "status": "failed", "input": { "resolution": "720p" } },
+      { "key": "picture", "id": "00000000-0000-4000-8000-000000593142", "parent": "00000000-0000-4000-8000-000000593141", "type": "generate-image", "credits": 66, "log": { "status": "committed", "used": 66, "charged": 66 }, "status": "completed", "providerCost": 0.10 }
+    ],
+    "expect": {
+      "run": { "held": 106, "taken": 66, "settled": true, "takenUsd": 0.132, "recordedUsd": 0.10, "kieUsd": null, "paidUsd": 0.10, "marginUsd": 0.032, "marginPct": 24.2424, "steps": 1, "stepsWithoutCost": 0, "quoteTotal": null, "quoteAllowed": null, "flags": [] }
+    }
+  },
+  {
+    "label": "F: the run and its step refunded, the step failed with no cost",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593151", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "refunded", "used": 40, "charged": 0 }, "status": "failed", "input": { "resolution": "720p" } },
+      { "key": "picture", "id": "00000000-0000-4000-8000-000000593152", "parent": "00000000-0000-4000-8000-000000593151", "type": "generate-image", "credits": 66, "log": { "status": "refunded", "used": 66, "charged": 0 }, "status": "failed" }
+    ],
+    "expect": {
+      "run": { "held": 106, "taken": 0, "settled": true, "takenUsd": 0, "recordedUsd": null, "kieUsd": null, "paidUsd": 0, "marginUsd": 0, "marginPct": null, "steps": 1, "stepsWithoutCost": 0, "quoteTotal": null, "quoteAllowed": null, "flags": [] }
+    }
+  },
+  {
+    "label": "G: the tree: a grandchild, a trashed step, another owner's job, a chain past the depth limit",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593161", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "committed", "used": 40, "charged": 40 }, "status": "completed", "input": { "resolution": "720p" } },
+      { "key": "child", "id": "00000000-0000-4000-8000-000000593162", "parent": "00000000-0000-4000-8000-000000593161", "jobType": "image-step", "type": "generate-image", "credits": 10, "log": { "status": "committed", "used": 10, "charged": 10 }, "status": "completed", "providerCost": 0.01, "stepKey": "mpc-g:child", "input": { "resolvedModel": "gpt-image-2", "model": "an-older-name" } },
+      { "key": "grandchild", "id": "00000000-0000-4000-8000-000000593163", "parent": "00000000-0000-4000-8000-000000593162", "jobType": "video-mask", "type": "", "credits": 10, "log": { "status": "committed", "used": 10, "charged": 10 }, "status": "completed", "providerCost": 0.01, "stepKey": "mpc-g:grandchild" },
+      { "key": "trashed", "id": "00000000-0000-4000-8000-000000593164", "parent": "00000000-0000-4000-8000-000000593161", "type": "generate-image", "credits": 10, "log": { "status": "committed", "used": 10, "charged": 10 }, "status": "completed", "providerCost": 0.01, "trashed": true },
+      { "key": "other-owner", "id": "00000000-0000-4000-8000-000000593165", "parent": "00000000-0000-4000-8000-000000593161", "type": "image-to-video", "credits": 500, "log": { "status": "committed", "used": 500, "charged": 500 }, "status": "completed", "providerCost": 5.00, "taskId": "kie-g-other", "owner": "other" },
+      { "key": "chain-1", "id": "00000000-0000-4000-8000-000000593166", "parent": "00000000-0000-4000-8000-000000593161", "type": "generate-image", "credits": 1, "log": { "status": "committed", "used": 1, "charged": 1 }, "status": "completed", "providerCost": 0.001 },
+      { "key": "chain-2", "id": "00000000-0000-4000-8000-000000593167", "parent": "00000000-0000-4000-8000-000000593166", "type": "generate-image", "credits": 1, "log": { "status": "committed", "used": 1, "charged": 1 }, "status": "completed", "providerCost": 0.001 },
+      { "key": "chain-3", "id": "00000000-0000-4000-8000-000000593168", "parent": "00000000-0000-4000-8000-000000593167", "type": "generate-image", "credits": 1, "log": { "status": "committed", "used": 1, "charged": 1 }, "status": "completed", "providerCost": 0.001 },
+      { "key": "chain-4", "id": "00000000-0000-4000-8000-000000593169", "parent": "00000000-0000-4000-8000-000000593168", "type": "generate-image", "credits": 1, "log": { "status": "committed", "used": 1, "charged": 1 }, "status": "completed", "providerCost": 0.001 },
+      { "key": "chain-5", "id": "00000000-0000-4000-8000-000000593170", "parent": "00000000-0000-4000-8000-000000593169", "type": "generate-image", "credits": 1, "log": { "status": "committed", "used": 1, "charged": 1 }, "status": "completed", "providerCost": 0.001, "taskId": "kie-g-5" },
+      { "key": "chain-6", "id": "00000000-0000-4000-8000-000000593171", "parent": "00000000-0000-4000-8000-000000593170", "type": "generate-image", "credits": 1, "log": { "status": "committed", "used": 1, "charged": 1 }, "status": "completed", "providerCost": 0.001, "taskId": "kie-g-6" }
+    ],
+    "expect": {
+      "run": { "held": 75, "taken": 75, "settled": true, "takenUsd": 0.15, "recordedUsd": 0.035, "kieUsd": null, "paidUsd": 0.035, "marginUsd": 0.115, "marginPct": 76.6667, "steps": 8, "stepsWithoutCost": 0, "quoteTotal": null, "quoteAllowed": null, "flags": [] }
+    }
+  },
+  {
+    "label": "H: an LLM step's ledger, never its provider_cost, and its committed side hold",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593181", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "committed", "used": 40, "charged": 40 }, "status": "completed", "input": { "resolution": "720p" } },
+      { "key": "llm", "id": "00000000-0000-4000-8000-000000593182", "parent": "00000000-0000-4000-8000-000000593181", "type": "llm-chat", "credits": 5, "log": { "status": "committed", "used": 5, "charged": 3 }, "status": "completed", "providerCost": 0.009, "ledger": { "costUsd": 0.004, "calls": 1 } }
+    ],
+    "side": [
+      { "job": "llm", "status": "committed", "used": 2, "charged": 2, "ledgerUsd": 0.001 }
+    ],
+    "expect": {
+      "run": { "held": 45, "taken": 45, "settled": true, "takenUsd": 0.09, "recordedUsd": 0.005, "kieUsd": null, "paidUsd": 0.005, "marginUsd": 0.085, "marginPct": 94.4444, "steps": 1, "stepsWithoutCost": 0, "quoteTotal": null, "quoteAllowed": null, "flags": [] }
+    }
+  },
+  {
+    "label": "H2: an LLM step whose ledger could not compute its cost",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593186", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "committed", "used": 40, "charged": 40 }, "status": "completed", "input": { "resolution": "720p" } },
+      { "key": "llm", "id": "00000000-0000-4000-8000-000000593187", "parent": "00000000-0000-4000-8000-000000593186", "type": "llm-chat", "credits": 5, "log": { "status": "committed", "used": 5, "charged": 5 }, "status": "completed", "providerCost": 0.009, "ledger": { "costUsd": null, "calls": 1 } }
+    ],
+    "expect": {
+      "run": { "held": 45, "taken": 45, "settled": true, "takenUsd": 0.09, "recordedUsd": null, "kieUsd": null, "paidUsd": 0, "marginUsd": 0.09, "marginPct": 100.0000, "steps": 1, "stepsWithoutCost": 1, "quoteTotal": null, "quoteAllowed": null, "flags": ["missing_cost"] }
+    }
+  },
+  {
+    "label": "H3: a refunded side hold's ledger cost is paid, never taken",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593183", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "committed", "used": 40, "charged": 40 }, "status": "completed", "input": { "resolution": "720p" } },
+      { "key": "llm", "id": "00000000-0000-4000-8000-000000593184", "parent": "00000000-0000-4000-8000-000000593183", "type": "llm-chat", "credits": 5, "log": { "status": "committed", "used": 5, "charged": 5 }, "status": "completed", "ledger": { "costUsd": 0.004, "calls": 1 } }
+    ],
+    "side": [
+      { "job": "llm", "status": "refunded", "used": 3, "charged": 0, "ledgerUsd": 0.002 }
+    ],
+    "expect": {
+      "run": { "held": 45, "taken": 45, "settled": true, "takenUsd": 0.09, "recordedUsd": 0.006, "kieUsd": null, "paidUsd": 0.006, "marginUsd": 0.084, "marginPct": 93.3333, "steps": 1, "stepsWithoutCost": 0, "quoteTotal": null, "quoteAllowed": null, "flags": [] }
+    }
+  },
+  {
+    "label": "H4: a step whose own cost is unknown has no recorded cost, though its side hold's cost is known and paid",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593188", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "committed", "used": 40, "charged": 40 }, "status": "completed", "input": { "resolution": "720p" } },
+      { "key": "llm", "id": "00000000-0000-4000-8000-000000593189", "parent": "00000000-0000-4000-8000-000000593188", "type": "llm-chat", "credits": 5, "log": { "status": "committed", "used": 5, "charged": 5 }, "status": "completed", "ledger": { "costUsd": null, "calls": 1 } }
+    ],
+    "side": [
+      { "job": "llm", "status": "committed", "used": 2, "charged": 2, "ledgerUsd": 0.001 }
+    ],
+    "expect": {
+      "run": { "held": 45, "taken": 47, "settled": true, "takenUsd": 0.094, "recordedUsd": 0.001, "kieUsd": null, "paidUsd": 0.001, "marginUsd": 0.093, "marginPct": 98.9362, "steps": 1, "stepsWithoutCost": 1, "quoteTotal": null, "quoteAllowed": null, "flags": ["missing_cost"] }
+    }
+  },
+  {
+    "label": "I: a local step, a completed step with no cost, a failed step with no cost",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593191", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "committed", "used": 40, "charged": 40 }, "status": "completed", "input": { "resolution": "720p" } },
+      { "key": "composite", "id": "00000000-0000-4000-8000-000000593192", "parent": "00000000-0000-4000-8000-000000593191", "type": "mask-composite", "credits": 9, "log": { "status": "committed", "used": 9, "charged": 9 }, "status": "completed" },
+      { "key": "picture", "id": "00000000-0000-4000-8000-000000593193", "parent": "00000000-0000-4000-8000-000000593191", "type": "generate-image", "credits": 66, "log": { "status": "committed", "used": 66, "charged": 66 }, "status": "completed" },
+      { "key": "failed-picture", "id": "00000000-0000-4000-8000-000000593194", "parent": "00000000-0000-4000-8000-000000593191", "type": "generate-image", "credits": 66, "log": { "status": "refunded", "used": 66, "charged": 0 }, "status": "failed" }
+    ],
+    "expect": {
+      "run": { "held": 181, "taken": 115, "settled": true, "takenUsd": 0.23, "recordedUsd": null, "kieUsd": null, "paidUsd": 0, "marginUsd": 0.23, "marginPct": 100.0000, "steps": 3, "stepsWithoutCost": 1, "quoteTotal": null, "quoteAllowed": null, "flags": ["missing_cost"] }
+    }
+  },
+  {
+    "label": "J: paid above taken",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593201", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "committed", "used": 40, "charged": 40 }, "status": "completed", "input": { "resolution": "720p" } },
+      { "key": "render", "id": "00000000-0000-4000-8000-000000593202", "parent": "00000000-0000-4000-8000-000000593201", "type": "image-to-video", "credits": 100, "log": { "status": "committed", "used": 100, "charged": 100 }, "status": "completed", "providerCost": 5.00 }
+    ],
+    "expect": {
+      "run": { "held": 140, "taken": 140, "settled": true, "takenUsd": 0.28, "recordedUsd": 5.00, "kieUsd": null, "paidUsd": 5.00, "marginUsd": -4.72, "marginPct": -1685.7143, "steps": 1, "stepsWithoutCost": 0, "quoteTotal": null, "quoteAllowed": null, "flags": ["paid_above_taken"] }
+    }
+  },
+  {
+    "label": "K: a Pulse run taken above its recorded quote",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593211", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "committed", "used": 40, "charged": 40 }, "status": "completed", "input": { "resolution": "720p", "engine": "motion-pulse", "__castSwapQuote": { "v": 1, "totalCredits": 100, "expectedCredits": 90, "breakdown": { "base": 40, "motion": 60 } } } },
+      { "key": "render", "id": "00000000-0000-4000-8000-000000593212", "parent": "00000000-0000-4000-8000-000000593211", "type": "image-to-video", "credits": 120, "log": { "status": "committed", "used": 120, "charged": 120 }, "status": "completed", "providerCost": 0.10 }
+    ],
+    "expect": {
+      "run": { "held": 160, "taken": 160, "settled": true, "takenUsd": 0.32, "recordedUsd": 0.10, "kieUsd": null, "paidUsd": 0.10, "marginUsd": 0.22, "marginPct": 68.7500, "steps": 1, "stepsWithoutCost": 0, "quoteTotal": 100, "quoteAllowed": 100, "flags": ["above_quote"], "engine": "pulse" }
+    }
+  },
+  {
+    "label": "K2: the quoted masking retry ran, so its credits are allowed",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593221", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "committed", "used": 40, "charged": 40 }, "status": "completed", "input": { "resolution": "720p", "__castSwapQuote": { "v": 1, "totalCredits": 100, "breakdown": { "base": 40, "motion": 60 }, "privacyCredits": 50 } }, "output": { "__castSwapExtras": { "v": 1, "ran": ["privacyCredits"] } } },
+      { "key": "render", "id": "00000000-0000-4000-8000-000000593222", "parent": "00000000-0000-4000-8000-000000593221", "type": "image-to-video", "credits": 100, "log": { "status": "committed", "used": 100, "charged": 100 }, "status": "completed", "providerCost": 0.10 }
+    ],
+    "expect": {
+      "run": { "held": 140, "taken": 140, "settled": true, "takenUsd": 0.28, "recordedUsd": 0.10, "kieUsd": null, "paidUsd": 0.10, "marginUsd": 0.18, "marginPct": 64.2857, "steps": 1, "stepsWithoutCost": 0, "quoteTotal": 100, "quoteAllowed": 150, "flags": [] }
+    }
+  },
+  {
+    "label": "K3: the quoted masking retry did not run",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593231", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "committed", "used": 40, "charged": 40 }, "status": "completed", "input": { "resolution": "720p", "__castSwapQuote": { "v": 1, "totalCredits": 100, "breakdown": { "base": 40, "motion": 60 }, "privacyCredits": 50 } } },
+      { "key": "render", "id": "00000000-0000-4000-8000-000000593232", "parent": "00000000-0000-4000-8000-000000593231", "type": "image-to-video", "credits": 100, "log": { "status": "committed", "used": 100, "charged": 100 }, "status": "completed", "providerCost": 0.10 }
+    ],
+    "expect": {
+      "run": { "held": 140, "taken": 140, "settled": true, "takenUsd": 0.28, "recordedUsd": 0.10, "kieUsd": null, "paidUsd": 0.10, "marginUsd": 0.18, "marginPct": 64.2857, "steps": 1, "stepsWithoutCost": 0, "quoteTotal": 100, "quoteAllowed": 100, "flags": ["above_quote"] }
+    }
+  },
+  {
+    "label": "K4: the sheet retry ran, the masking retry did not",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593241", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "committed", "used": 40, "charged": 40 }, "status": "completed", "input": { "resolution": "720p", "__castSwapQuote": { "v": 1, "totalCredits": 100, "breakdown": { "base": 40, "motion": 60 }, "privacyCredits": 50, "referencesRetryCredits": 30 } }, "output": { "__castSwapExtras": { "v": 1, "ran": ["referencesRetryCredits"] } } },
+      { "key": "render", "id": "00000000-0000-4000-8000-000000593242", "parent": "00000000-0000-4000-8000-000000593241", "type": "image-to-video", "credits": 100, "log": { "status": "committed", "used": 100, "charged": 100 }, "status": "completed", "providerCost": 0.10 }
+    ],
+    "expect": {
+      "run": { "held": 140, "taken": 140, "settled": true, "takenUsd": 0.28, "recordedUsd": 0.10, "kieUsd": null, "paidUsd": 0.10, "marginUsd": 0.18, "marginPct": 64.2857, "steps": 1, "stepsWithoutCost": 0, "quoteTotal": 100, "quoteAllowed": 130, "flags": ["above_quote"] }
+    }
+  },
+  {
+    "label": "L: a Flex draft and two Full Quality tries, the second reusing the first's render",
+    "jobs": [
+      { "key": "draft", "id": "00000000-0000-4000-8000-000000593251", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "committed", "used": 40, "charged": 40 }, "status": "completed", "input": { "style": "motion", "sourceDurationSec": 12.5, "resolution": "480p", "draft": true } },
+      { "key": "fq1", "id": "00000000-0000-4000-8000-000000593252", "parent": null, "jobType": "cast-swap-full-quality", "type": "cast-swap", "credits": 40, "log": { "status": "refunded", "used": 40, "charged": 0 }, "status": "failed", "input": { "fullQualityOf": "00000000-0000-4000-8000-000000593251", "resolution": "1080p", "draft": false, "preview": false } },
+      { "key": "fq1-render", "id": "00000000-0000-4000-8000-000000593253", "parent": "00000000-0000-4000-8000-000000593252", "type": "video-upscale", "credits": 500, "log": { "status": "committed", "used": 500, "charged": 500 }, "status": "completed", "providerCost": 1.00, "taskId": "kie-r1" },
+      { "key": "fq2", "id": "00000000-0000-4000-8000-000000593254", "parent": null, "jobType": "cast-swap-full-quality", "type": "cast-swap", "credits": 40, "log": { "status": "committed", "used": 40, "charged": 40 }, "status": "completed", "input": { "fullQualityOf": "00000000-0000-4000-8000-000000593251", "resolution": "1080p", "draft": false, "preview": false }, "output": { "__castSwapReuse": { "v": 1, "entries": [{ "step": "render", "jobId": "00000000-0000-4000-8000-000000593253" }] } } }
+    ],
+    "expect": {
+      "draft": { "held": 40, "taken": 40, "settled": true, "takenUsd": 0.08, "recordedUsd": null, "kieUsd": null, "paidUsd": 0, "marginUsd": 0.08, "marginPct": 100.0000, "steps": 0, "stepsWithoutCost": 0, "quoteTotal": null, "quoteAllowed": null, "flags": [], "fullQuality": false, "draftJobId": null, "kind": "hand", "engine": "prism", "style": "flex", "resolution": "480p", "draft": true, "lengthSec": 12.5 },
+      "fq1": { "held": 540, "taken": 500, "settled": true, "takenUsd": 1.00, "recordedUsd": 1.00, "kieUsd": null, "paidUsd": 1.00, "marginUsd": 0, "marginPct": 0.0000, "steps": 1, "stepsWithoutCost": 0, "quoteTotal": null, "quoteAllowed": null, "flags": [], "fullQuality": true, "draftJobId": "00000000-0000-4000-8000-000000593251", "kind": "hand", "engine": "prism", "style": "flex", "resolution": "1080p", "draft": false, "lengthSec": 12.5 },
+      "fq2": { "held": 40, "taken": 40, "settled": true, "takenUsd": 0.08, "recordedUsd": null, "kieUsd": null, "paidUsd": 0, "marginUsd": 0.08, "marginPct": 100.0000, "steps": 0, "stepsWithoutCost": 0, "quoteTotal": null, "quoteAllowed": null, "flags": [], "fullQuality": true, "draftJobId": "00000000-0000-4000-8000-000000593251", "kind": "hand", "engine": "prism", "style": "flex", "resolution": "1080p", "draft": false, "lengthSec": 12.5 }
+    }
+  },
+  {
+    "label": "Q: a run still queued, its job type not set yet, with no resolution",
+    "jobs": [
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593261", "parent": null, "type": "cast-swap", "credits": 40, "log": { "status": "reserved", "used": 40, "charged": null }, "status": "pending", "input": {} }
+    ],
+    "expect": {
+      "run": { "held": 40, "taken": null, "settled": false, "takenUsd": null, "recordedUsd": null, "kieUsd": null, "paidUsd": 0, "marginUsd": null, "marginPct": null, "steps": 0, "stepsWithoutCost": 0, "quoteTotal": null, "quoteAllowed": null, "flags": [], "fullQuality": false, "resolution": null }
+    }
+  },
+  {
+    "label": "X: a trend's face-mask make is not a run",
+    "jobs": [
+      { "key": "make", "id": "00000000-0000-4000-8000-000000593271", "parent": null, "jobType": "cast-swap-face-mask", "type": "cast-swap-face-mask", "credits": null, "log": null, "status": "completed", "taskId": "kie-x" }
+    ],
+    "expect": {}
+  }
+]

@@ -33,8 +33,13 @@ afterEach(() => resetCatalogPacks())
 
 const LOW_POLY_VIDEO =
   "Stylised low poly 3D animation, computer-generated: every person, face, vehicle and room built from large flat-shaded triangles, visible facets on every surface, flat untextured colours, crisp shadow edges between facets."
-/** The three wordings tested on video (Seedance 2.5), word for word. */
+/** The wordings tested on video (Seedance 2.5), word for word. */
 const TESTED_ON_VIDEO: Readonly<Record<string, string>> = {
+  "felt-puppet": "Needle-felted stop-motion puppet animation, handmade: every person a felt puppet with soft fuzzy wool-felt skin, simple stitched features, small bead-like eyes and hair of felted wool strands, clothes sewn from real fabric with visible weave. The whole set is a handmade felt miniature: every car a fuzzy felt-covered model with felt seats, every wall, floor, curtain, table, chair and plant made of felt or wool fabric with visible fibres, the street and sky felt too; warm soft studio light on a tabletop miniature set, a slight stop-motion step to the motion.",
+  "knitted-yarn": "Knitted yarn stop-motion animation, handmade: every person a knitted doll with yarn skin in visible knit loops, hair of chunky yarn strands, clothes knitted in cable and rib stitch; every car, building, road, tree and sky knitted from wool yarn with visible stitches; soft warm studio light on a tabletop miniature set, a slight stop-motion step to the motion.",
+  "toy-figure-3d": "Stylised 3D toy animation, computer-generated: every person a rounded vinyl toy figure with smooth glossy plastic skin, a simplified oversized head, small dot eyes and moulded plastic hair, clothes as moulded painted plastic; every car, room and prop a chunky rounded toy model with soft bevelled edges; bright clean colours, soft studio lighting.",
+  "painterly-3d": "Painterly 3D animation, computer-generated with a hand-painted finish: every person a stylised 3D character with soft rounded features and expressive eyes, skin, hair and clothes textured with visible painted brush strokes; every room and landscape a 3D set painted like a storybook illustration; warm glowing light, rich soft colours.",
+  "painted-clay": "Sculpted clay animation with a painted finish, handmade: every person sculpted from matte clay with visible thumbprints and tool marks, painted in soft gouache colour; every car, room and prop sculpted and hand-painted the same way; warm painterly light, a slight stop-motion step to the motion.",
   "pop-art": "Flat 2D cel-shaded comic illustration, hand-drawn: thick uniform black ink outlines, flat colour fills, Ben-Day dot shading, bold saturated primary colours, high contrast.",
   claymation: "Stop-motion claymation, handmade: every person, vehicle and set sculpted from matte plasticine clay with visible fingerprints and tool marks, rounded simplified forms, miniature handcrafted diorama sets, soft warm studio lighting.",
   anime: "2D Japanese anime, hand-drawn cel animation: clean thin ink line art, flat cel shading with one hard shadow tone, large expressive eyes, hair drawn as solid shapes, saturated colours, painted backgrounds.",
@@ -58,9 +63,19 @@ const LOW_POLY_IMAGE =
 
 const styleNode = (style: string) => ({ id: "s1", type: "style", data: { style } })
 
+/** The styles offered for video alone (`media: ["video"]`). */
+const VIDEO_ONLY = ["felt-puppet", "knitted-yarn", "toy-figure-3d", "painterly-3d", "painted-clay"]
+/**
+ * A video wording's length cap. A style offered for images too names its medium and its techniques in one short line;
+ * a video-only style also names what the whole set is made of (cars, rooms, props), and the felt line that felted
+ * the whole set of a live-action clip on Seedance 2.5 (people, car, street and curtains) is 562 characters.
+ */
+const capOf = (id: string) => (VIDEO_ONLY.includes(id) ? 600 : 240)
+
 describe("the catalog", () => {
-  it("has 49 styles, and every one carries its own video wording, different from its image wording", () => {
-    expect(STYLES).toHaveLength(49)
+  it("has 54 styles (49 for images and video, 5 for video alone), and every one carries its own video wording, different from its image wording", () => {
+    expect(STYLES).toHaveLength(54)
+    expect(STYLES.filter((s) => s.media?.length === 1 && s.media[0] === "video").map((s) => s.id)).toEqual(VIDEO_ONLY)
     for (const s of STYLES) {
       expect(s.videoPromptHint, s.id).toEqual(expect.any(String))
       expect(s.videoPromptHint, s.id).not.toBe(s.promptHint)
@@ -71,11 +86,11 @@ describe("the catalog", () => {
     for (const s of STYLES) {
       const v = s.videoPromptHint!
       expect(v, s.id).toMatch(/^[^:]+: \S[^\n]*\.$/)
-      expect(v.length, s.id).toBeLessThanOrEqual(240)
+      expect(v.length, s.id).toBeLessThanOrEqual(capOf(s.id))
     }
   })
 
-  it("the three wordings tested on video are word for word", () => {
+  it("the wordings tested on video are word for word", () => {
     for (const [id, wording] of Object.entries(TESTED_ON_VIDEO)) expect(getStyleVideoPromptHint(id), id).toBe(wording)
   })
 
@@ -106,7 +121,7 @@ describe("the catalog", () => {
   })
 })
 
-describe("image surfaces read only promptHint, for all 49 styles", () => {
+describe("image surfaces read only promptHint, for every style (a video-only one wired into an image included)", () => {
   it("the direction fold on image", () => {
     for (const s of STYLES) {
       expect(renderDirectionHints({ style: s.id }, { surface: "image" }), s.id).toEqual([s.promptHint])
@@ -185,7 +200,7 @@ describe("catalog packs", () => {
 
   it("the composed catalog carries every style's video wording", () => {
     const options = styleCatalog().options!
-    expect(options).toHaveLength(49)
+    expect(options).toHaveLength(54)
     for (const o of options) expect(o.videoPromptHint, o.id).toBe(videoOf(o.id))
   })
 
