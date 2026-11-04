@@ -2,7 +2,7 @@ import { curatedNodeDefaults } from "@/lib/curated-node-defaults"
 import { surfaceFactoryPresets } from "@/lib/surface-selectors"
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
 import { Check, ChevronDown, ChevronRight, Download, Folder, FolderOpen, Layers, Plus, RotateCcw, Settings2, Star, Trash2, Upload } from "lucide-react"
-import { buildNodePresetExport, extractPresetData, parseNodePresetExport, presetApplyClearKeys, presetDataMatches, presetLeverClearKeys } from "@nodaro/shared/nodes"
+import { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, buildNodePresetExport, extractPresetData, parseNodePresetExport, presetApplyClearKeys, presetDataMatches, presetLeverClearKeys } from "@nodaro/shared/nodes"
 import { getFactoryPresets, groupFactoryPresets, type FactoryPreset } from "@nodaro/prompts/presets"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -79,12 +79,45 @@ export function buildPresetApplyPatch(
   presetData: Record<string, unknown>,
   presetId: string,
   nodeType?: string,
+  from?: PresetApplyFrom,
 ): Record<string, unknown> {
   return {
     ...Object.fromEntries(presetApplyClearKeys(presetData, nodeType).map((k) => [k, undefined])),
+    ...(from ? leftoverPresetPromptClear(presetData, from) : {}),
     ...presetData,
     __activePresetId: presetId,
   }
+}
+
+/** What the node holds before a preset is applied: its data and the data of the preset active on it, if any. */
+export interface PresetApplyFrom {
+  readonly nodeData: Readonly<Record<string, unknown>>
+  readonly previousPresetData?: Readonly<Record<string, unknown>>
+}
+
+/** The fields a node's prompt body lives in (each node type uses one). */
+const PROMPT_BODY_KEYS = ["prompt", "scenePrompt", "editPrompt"] as const
+
+/**
+ * A preset that ships only pre/post text (Remove Faces, Remove People: a whole instruction) applied over another
+ * preset: the prompt the previous preset wrote is not the user's, so it would run inside the new instruction. Each
+ * prompt body the new preset does not set is emptied when it still holds the previous preset's own text, word for
+ * word; a prompt the user typed or edited is kept, wrapped, as before. A settings-only preset (no prompt content)
+ * clears nothing. Exported pure for unit testing.
+ */
+export function leftoverPresetPromptClear(
+  presetData: Readonly<Record<string, unknown>>,
+  from: PresetApplyFrom,
+): Record<string, unknown> {
+  const shipsAffixes = presetData[PROMPT_PREFIX_KEY] !== undefined || presetData[PROMPT_SUFFIX_KEY] !== undefined
+  if (!shipsAffixes || !from.previousPresetData) return {}
+  const out: Record<string, unknown> = {}
+  for (const key of PROMPT_BODY_KEYS) {
+    if (presetData[key] !== undefined) continue
+    const previous = from.previousPresetData[key]
+    if (typeof previous === "string" && previous !== "" && from.nodeData[key] === previous) out[key] = ""
+  }
+  return out
 }
 
 /**
@@ -299,7 +332,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
       toast.error(t("preset.cantApplyRunning"))
       return
     }
-    updateNodeData(nodeId, buildPresetApplyPatch(p.data, p.id, nodeType))
+    updateNodeData(nodeId, buildPresetApplyPatch(p.data, p.id, nodeType, { nodeData: data, previousPresetData: activePreset?.data }))
     toast.success(t("preset.applied", { name: presetDisplayName(p) }))
   }
 
