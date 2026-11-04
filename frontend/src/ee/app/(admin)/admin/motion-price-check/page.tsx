@@ -6,7 +6,8 @@
  * Every figure is computed by the platform (POST /v1/admin/motion-price-check/*);
  * the page filters, sorts, pages and rounds for display, nothing more.
  *
- * - A filter change goes back to the first page.
+ * - A filter change goes back to the first page, and so do KIE's figures
+ *   landing: they sort the runs anew and can clear the flags under a later page.
  * - KIE's own figures live in this page's state only: read once with a
  *   pasted token (the token lives in the KIE bar alone), sent back with each
  *   request, and dropped when the range moves. An answer for a range no
@@ -108,7 +109,10 @@ export default function AdminMotionPriceCheck() {
     setKieError(null)
     try {
       const result = await kieFetch.mutateAsync({ token, from: range.from, to: range.to })
-      if (kieTurn.current === turn) setKie(result)
+      if (kieTurn.current === turn) {
+        setKie(result)
+        setOffset(0)
+      }
     } catch (error) {
       if (kieTurn.current === turn) setKieError(messageOf(error))
     } finally {

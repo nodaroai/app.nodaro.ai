@@ -12,11 +12,15 @@
  *
  * A step's KIE task may start after the range ends (a run started at its last
  * minute), so the logs are read up to `KIE_WINDOW_TAIL_MS` past it, never
- * past now. Every record of a Motion task counts, in any state: a task that
- * failed may still have consumed credits.
+ * past now.
+ *
+ * Only a task KIE has finished supplies a cost, its failure included: a task
+ * that failed may still have consumed credits. A task still running may read
+ * 0 credits, and the map outlives the read, so that 0 would beat what the step
+ * records once it settles (`finishedCredits`).
  */
 import { z } from "zod"
-import { fetchAllKieLogs } from "../../../providers/kie/credit-lookup.js"
+import { fetchAllKieLogs, type KieLogRecord } from "../../../providers/kie/credit-lookup.js"
 import { KIE_CREDIT_USD } from "../../../providers/kie/models.js"
 import type { KieRealResult } from "./wire.js"
 
@@ -47,6 +51,29 @@ const NUMERIC = /^\d+(?:\.\d+)?$/
 function creditsOf(v: unknown): number | null {
   const n = typeof v === "number" ? v : typeof v === "string" && NUMERIC.test(v) ? Number(v) : Number.NaN
   return Number.isFinite(n) && n >= 0 ? n : null
+}
+
+/** How a record says its task succeeded, as Credit Audit reads it. */
+const SUCCEEDED: ReadonlySet<string> = new Set(["success", "completed", "done", "1"])
+/** How a record says its task failed, as the KIE clients' polls read it. */
+const FAILED: ReadonlySet<string> = new Set(["fail", "failed", "error"])
+
+/**
+ * What a record's task cost in KIE's credits, once KIE has finished it; else
+ * none, so the step's recorded cost stands. Read from the log reader's `state`:
+ * a word known to end a task counts, and any other (`waiting`, `queuing`,
+ * `generating`, a word not known here, none at all) does not.
+ *
+ * The reader folds whatever it cannot read as a success into "fail", a running
+ * VEO task's `successFlag: 0` and a `status` of "pending" among them, so a fail
+ * with nothing consumed may be a task still running. It supplies no cost: a
+ * failed task's credits count only when it has some.
+ */
+function finishedCredits(record: KieLogRecord): number | null {
+  const state = String(record.state ?? "").toLowerCase()
+  const credits = creditsOf(record.consumeCredits)
+  if (SUCCEEDED.has(state)) return credits
+  return FAILED.has(state) && credits !== null && credits > 0 ? credits : null
 }
 
 /** The window's end: `KIE_WINDOW_TAIL_MS` past the range's end, never past now. */
@@ -101,12 +128,12 @@ export function noMotionTasks(o: { from: Date; to: Date; now?: Date }): KieRealR
 }
 
 /**
- * KIE's figures for `motionTaskIds`: each task's first record, at its credits
- * × `KIE_CREDIT_USD`. `matched` counts every Motion task found; the map keeps
- * the first `MAX_KIE_TASKS` of them (`truncated` when there were more), so it
- * is always a valid `kieUsd`. `capped` lists the endpoints at the page cap,
- * `errors` the endpoints that failed (a token expired on some of them still
- * gives a partial map). No records at all with errors is `{ failed }`.
+ * KIE's figures for `motionTaskIds`: each task's first finished record, at its
+ * credits × `KIE_CREDIT_USD`. `matched` counts every Motion task with a figure;
+ * the map keeps the first `MAX_KIE_TASKS` of them (`truncated` when there were
+ * more), so it is always a valid `kieUsd`. `capped` lists the endpoints at the
+ * page cap, `errors` the endpoints that failed (a token expired on some of them
+ * still gives a partial map). No records at all with errors is `{ failed }`.
  *
  * The token is used trimmed, for KIE and for the scrub alike: fetch trims a
  * header value before it checks it and quotes the trimmed value in its
@@ -126,7 +153,7 @@ export async function readKieReal(
   for (const record of records) {
     const taskId = record.taskId
     if (!usableTaskId(taskId) || !o.motionTaskIds.has(taskId) || found.has(taskId)) continue
-    const credits = creditsOf(record.consumeCredits)
+    const credits = finishedCredits(record)
     if (credits !== null) found.set(taskId, credits * KIE_CREDIT_USD)
   }
   return {

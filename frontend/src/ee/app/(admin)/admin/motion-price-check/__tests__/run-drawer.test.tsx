@@ -9,8 +9,9 @@
  *   figures are in; a run in flight reads In progress.
  * - The quote: a row per line; a line beside the hold says so, and an extra
  *   says whether it ran (an auto masking quote's privacy line, beside the
- *   hold, says neither); then what the run was allowed. A run with no
- *   recorded quote says so.
+ *   hold, says neither); then its hold, the settlement it expected when it
+ *   carries one, and what the run was allowed. A run with no recorded quote
+ *   says so.
  * - The steps: the run's own row first, then each step indented by its
  *   depth, its role counted from 1, tagged local, no recorded cost or hold
  *   open, and its quote line ("—" for none, or for a line the quote lacks).
@@ -462,6 +463,29 @@ describe("Admin → Motion price check: a run's drill-down", () => {
     expect(within(dialog).queryByText(/^No quote recorded/)).toBeNull()
   })
 
+  describe("the quote's hold and expected settlement", () => {
+    const sentences = (dialog: HTMLElement) =>
+      within(dialog).getAllByText(/^(Quoted hold|Expected settlement|Allowed):/).map((el) => el.textContent)
+
+    it("reads them above what was allowed", async () => {
+      expect(sentences(await openDrawer(DETAIL))).toEqual([
+        "Quoted hold: 1,200",
+        "Expected settlement: 1,150",
+        "Allowed: 1,250 (the hold plus the extras that ran)",
+      ])
+    })
+
+    it("a quote that carries no expected settlement reads its hold alone", async () => {
+      const dialog = await openDrawer(FULL_QUALITY, "Rooftop Full Quality")
+      expect(sentences(dialog)).toEqual(["Quoted hold: 335", "Allowed: 1,250 (the hold plus the extras that ran)"])
+    })
+
+    it("a quote that expected to settle at 0 says so", async () => {
+      const dialog = await openDrawer({ ...DETAIL, quote: { ...DETAIL.quote!, expectedCredits: 0 } })
+      expect(sentences(dialog)).toContain("Expected settlement: 0")
+    })
+  })
+
   it("an auto masking quote's privacy line is beside the hold, and says nothing about running", async () => {
     const dialog = await openDrawer(AUTO_MASKING)
     expect(rowHeadersOf(tableOf(dialog, "Quote")).map((c) => c.textContent)).toEqual([
@@ -476,7 +500,7 @@ describe("Admin → Motion price check: a run's drill-down", () => {
     const dialog = await openDrawer(NO_QUOTE)
     expect(within(dialog).getByText("No quote recorded — a run from before quotes were recorded")).toBeInTheDocument()
     expect(within(dialog).queryByRole("region", { name: "Quote" })).toBeNull()
-    expect(within(dialog).queryByText(/^Allowed:/)).toBeNull()
+    expect(within(dialog).queryByText(/^(Quoted hold|Expected settlement|Allowed):/)).toBeNull()
     const steps = tableOf(dialog, "Steps")
     for (const row of within(steps).getAllByRole("row").slice(1)) expect(cellsOf(row).at(-1)).toBe("—")
   })

@@ -16,7 +16,8 @@
 --      (backend/src/lib/__tests__/motion-price-run-cases.test.ts) holds the same
 --      table's hold, taken and settlement to `runCreditsFor`, the one loader of
 --      a run's figures: the SQL cannot drift from it. A job no case expects
---      (a trend's face-mask make) is not a run.
+--      (a trend's face-mask make) is not a run, nor is a job of a run's own
+--      type below another job, by its id, in a range or for a range's tasks.
 --   2. `public.admin_motion_engine` answers every case of
 --      supabase/tests/fixtures/motion-engine-cases.json (the twin holds the same
 --      table to `castSwapEngineFrom`).
@@ -668,6 +669,35 @@ SELECT pg_temp.assert_eq('no usage log anywhere: settled, nothing taken, no diff
   (SELECT concat_ws(' ', r->>'settled', coalesce(r->>'taken', '-'), coalesce(r->>'margin_usd', '-'),
                     r->>'flag_paid_above_taken', r->>'flagged', r->>'held')
      FROM pg_temp.run('00000000-0000-4000-8000-000000593201') AS r), 'true - - false false 140');
+
+-- A run in flight (D) whose paid so far is above what it has taken so far: a
+-- step's cost recorded while another step's hold is open. No flag until the
+-- last hold settles, and then the same figures raise it.
+UPDATE public.jobs SET provider_cost = 1 WHERE id = '00000000-0000-4000-8000-000000593132';
+SELECT pg_temp.assert_eq('in flight, paid so far above taken so far: never flagged',
+  (SELECT concat_ws(' ', r->>'settled', r->>'taken_usd', r->>'paid_usd', r->>'flag_paid_above_taken', r->>'flagged')
+     FROM pg_temp.run('00000000-0000-4000-8000-000000593131') AS r), 'false 0.212 1.000000 false false');
+UPDATE public.usage_logs SET status = 'refunded', credits_charged = 0
+ WHERE id = (SELECT usage_log_id FROM public.jobs WHERE id = '00000000-0000-4000-8000-000000593133');
+SELECT pg_temp.assert_eq('the same run once its last hold settles: flagged',
+  (SELECT concat_ws(' ', r->>'settled', r->>'taken_usd', r->>'paid_usd', r->>'flag_paid_above_taken', r->>'flagged')
+     FROM pg_temp.run('00000000-0000-4000-8000-000000593131') AS r), 'true 0.212 1.000000 true true');
+
+-- A job of a run's own type below another job (X's make, which no run holds)
+-- is a step, never a run: not by its id, not in the range, and its task is not
+-- one of the range's.
+SELECT pg_temp.insert_job(
+  '{"id": "00000000-0000-4000-8000-000000593901", "parent": "00000000-0000-4000-8000-000000593271", "jobType": "cast-swap",
+    "type": "cast-swap", "credits": 40, "status": "completed", "taskId": "kie-own-type"}',
+  '00000000-0000-4000-8000-000000593001', '2020-03-02T00:00:00Z');
+SELECT pg_temp.assert_eq('a step of a run''s own type is not a run by its id',
+  (SELECT count(*) FROM public.admin_motion_runs(NULL, NULL, '00000000-0000-4000-8000-000000593901', 0.002))::text, '0');
+SELECT pg_temp.assert_eq('a step of a run''s own type is not a run of the range',
+  (SELECT count(*) FROM public.admin_motion_runs('2020-03-01T00:00:00Z', '2020-03-08T00:00:00Z', NULL, 0.002) r
+    WHERE r.id = '00000000-0000-4000-8000-000000593901')::text, '0');
+SELECT pg_temp.assert_eq('a step of a run''s own type is not on the list', pg_temp.list()->>'total', '22');
+SELECT pg_temp.assert_eq('a step of a run''s own type under no run: its task is not one of the range''s',
+  array_position(public.admin_motion_task_ids('2020-03-01T00:00:00Z', '2020-03-08T00:00:00Z'), 'kie-own-type')::text, NULL);
 
 -- ---------------------------------------------------------------------------
 -- 7. Server only.

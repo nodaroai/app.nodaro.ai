@@ -1,5 +1,5 @@
-// @test-watches backend/src/app.ts
-import { readFileSync } from "node:fs"
+// @test-watches backend/src/app.ts supabase/migrations/*.sql
+import { readdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -403,15 +403,54 @@ describe("POST /kie-real", () => {
     ["no token", { from: FROM, to: TO }],
     ["an empty token", { token: "", from: FROM, to: TO }],
     ["a token of whitespace only", { token: " \n\t ", from: FROM, to: TO }],
-    ["a token past 4,000 characters", { token: "t".repeat(4_001), from: FROM, to: TO }],
+    // Past the limit and still carrying the token, so what follows can fail on this row too.
+    ["a token past 4,000 characters", { token: TOKEN.padEnd(4_001, TOKEN), from: FROM, to: TO }],
     ["from after to", { token: TOKEN, from: TO, to: FROM }],
     ["a 32-day range", { token: TOKEN, from: "2026-10-01T00:00:00Z", to: "2026-11-02T00:00:00Z" }],
   ])("400 for %s, and nothing is read", async (_label, body) => {
     const res = await post("/kie-real", body)
     expect(res.statusCode).toBe(400)
     expect(res.body).not.toContain(TOKEN)
+    expect(logLines.join("")).not.toContain(TOKEN)
     expect(state.rpc).not.toHaveBeenCalled()
     expect(state.fetchLogs).not.toHaveBeenCalled()
+  })
+})
+
+describe("the arguments the routes send, against the functions' own signatures", () => {
+  /** Every migration, oldest first, so a function's newest definition is its last. */
+  const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "..", "supabase", "migrations")
+  const migrations = readdirSync(MIGRATIONS_DIR)
+    .filter((file) => /^\d+_.*\.sql$/.test(file))
+    .sort((a, b) => Number.parseInt(a, 10) - Number.parseInt(b, 10))
+    .map((file) => readFileSync(join(MIGRATIONS_DIR, file), "utf8"))
+    .join("\n")
+
+  /** The parameters of a function's newest definition: their names, and which have no default. */
+  function signatureOf(fn: string): { names: string[]; required: string[] } {
+    const definitions = [...migrations.matchAll(new RegExp(String.raw`CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+public\.${fn}\s*\(([^)]*)\)`, "gi"))]
+    const parameters = (definitions.at(-1)?.[1] ?? "").split(",").map((p) => p.trim()).filter((p) => p !== "")
+    const nameOf = (p: string) => p.split(/\s+/)[0]!
+    return { names: parameters.map(nameOf), required: parameters.filter((p) => !/\bDEFAULT\b/i.test(p)).map(nameOf) }
+  }
+
+  // PostgREST finds a function by the names it is sent: one it lacks, or a parameter
+  // with no default left out, reads as no such function, which the routes answer as their 503.
+  it("every argument is a parameter of the newest definition, and every parameter with no default is sent", async () => {
+    state.rpc.mockResolvedValue({ data: [], error: null })
+    await post("/runs", { from: FROM, to: TO })
+    await post(`/runs/${RUN}`, {})
+    await post("/kie-real", { token: TOKEN, from: FROM, to: TO })
+
+    const calls = state.rpc.mock.calls as [string, Record<string, unknown>][]
+    expect(calls.map(([fn]) => fn).sort()).toEqual(["admin_motion_run_list", "admin_motion_runs", "admin_motion_task_ids", "admin_motion_tree"])
+    for (const [fn, args] of calls) {
+      const { names, required } = signatureOf(fn)
+      expect(names.length, `no definition of ${fn} in the migrations`).toBeGreaterThan(0)
+      const sent = Object.keys(args)
+      expect(sent.filter((name) => !names.includes(name)), `${fn}: sent, but no such parameter`).toEqual([])
+      expect(required.filter((name) => !sent.includes(name)), `${fn}: a parameter with no default, not sent`).toEqual([])
+    }
   })
 })
 

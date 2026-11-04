@@ -9,8 +9,8 @@
  * - A run still in flight reads "In progress" under Taken and Margin and
  *   never shows a flag.
  * - KIE: Fetch waits for a token; the result asks for the runs again with
- *   its map and reads "N of M tasks matched" (and, past the map's cap, how
- *   many were applied); a new range drops it.
+ *   its map, from the first page, and reads "N of M tasks matched" (and, past
+ *   the map's cap, how many were applied); a new range drops it.
  * - Loading, updating and the KIE fetch are said in live regions; every
  *   control is a 44 px target; the totals list resolutions by number.
  * - The 503 while the database lacks the functions is said in the server's
@@ -556,6 +556,34 @@ describe("Admin → Motion price check", () => {
       expect(JSON.stringify(listCalls())).not.toContain(TOKEN)
     })
 
+    it("its figures landing go back to the first page: flags cleared under a later page never read as no runs", async () => {
+      const user = userEvent.setup()
+      const rows = Array.from({ length: 130 }, (_, i) => run({ id: idOf(1_000 + i), trendName: `Run ${i + 1}` }))
+      // The server's own paging: with KIE's figures, 30 of the 130 flagged runs are still flagged.
+      h.fetchMotionPriceRuns.mockImplementation(async (params: { offset: number; limit: number }, kieUsd?: Record<string, number>) => {
+        const flagged = kieUsd === undefined ? rows : rows.slice(0, 30)
+        return { ...LIST, total: flagged.length, runs: flagged.slice(params.offset, params.offset + params.limit) }
+      })
+      renderPage()
+      await runsTable()
+      await user.click(screen.getByLabelText("Flagged only"))
+      await waitFor(() => expect(lastParams()).toMatchObject({ flaggedOnly: true, offset: 0 }))
+      await user.click(await screen.findByRole("button", { name: "Next" }))
+      await screen.findByText("51–100 of 130")
+      await user.click(screen.getByRole("button", { name: "Next" }))
+      await screen.findByText("101–130 of 130")
+
+      await user.type(screen.getByLabelText("KIE dashboard token"), TOKEN)
+      await user.click(screen.getByRole("button", { name: "Fetch KIE real costs" }))
+
+      expect(await screen.findByText("1–30 of 30")).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: "Run 1" })).toBeInTheDocument()
+      expect(screen.queryByText("No Motion runs match these filters.")).toBeNull()
+      expect(screen.getByRole("button", { name: "Prev" })).toBeDisabled()
+      // Asked once with the figures, and never for a page past the end.
+      expect(listCalls().filter(([, kieUsd]) => kieUsd !== undefined).map(([params]) => params.offset)).toEqual([0])
+    })
+
     it("changing From brings back Not fetched", async () => {
       const user = userEvent.setup()
       renderPage()
@@ -588,10 +616,16 @@ describe("Admin → Motion price check", () => {
       await waitFor(() => expect(h.fetchKieReal).toHaveBeenCalledTimes(1))
 
       fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-10-29" } })
+      await waitFor(() => expect(lastParams()).toMatchObject({ ...rangeToIso("2026-10-29", "2026-11-03"), offset: 0 }))
+      await user.click(await screen.findByRole("button", { name: "Next" }))
+      await screen.findByText("51–100 of 312")
       answer(KIE)
       await pause(20)
       expect(screen.getByText(NOT_FETCHED)).toBeInTheDocument()
       expect(listCalls().every(([, kieUsd]) => kieUsd === undefined)).toBe(true)
+      // Dropped, it moves nothing: the page stays where the admin went.
+      expect(lastParams()).toMatchObject({ offset: 50 })
+      expect(screen.getByText("51–100 of 312")).toBeInTheDocument()
     })
 
     it("shows a failed fetch's message as it comes", async () => {

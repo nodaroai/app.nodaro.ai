@@ -11,8 +11,9 @@
  *   steps held and took. A line beside the hold is tagged so; an extra (a
  *   retry quoted beside the hold) also says whether it ran, and only an
  *   extra does: `ran` is null on every other line, an "auto" masking
- *   quote's privacy line included. Then what the run was allowed: the hold
- *   plus the extras that ran.
+ *   quote's privacy line included. Then the quote's hold, the settlement it
+ *   expected when it carries one, and what the run was allowed: the hold plus
+ *   the extras that ran.
  * - The steps: the run's own row first, then each step as the platform
  *   orders them, indented by its depth (a step of a step also says, to a
  *   screen reader, which step it is under), tagged local, no recorded cost
@@ -249,6 +250,10 @@ function QuoteSection({ run, quote }: { run: MotionPriceRun; quote: MotionPriceR
         </table>
       }
     >
+      <p className="text-sm tabular-nums">{`Quoted hold: ${formatCredits(quote.totalCredits)}`}</p>
+      {quote.expectedCredits !== null && (
+        <p className="text-sm tabular-nums">{`Expected settlement: ${formatCredits(quote.expectedCredits)}`}</p>
+      )}
       <p className="text-sm tabular-nums">{`Allowed: ${formatCredits(run.quoteAllowed)} (the hold plus the extras that ran)`}</p>
     </Section>
   )
