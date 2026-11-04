@@ -38,8 +38,8 @@ describe("video-face-mesh workflow estimate", () => {
 
   it("a fast clip is quoted at the 30 fps basis, as the route charges it", () => {
     expect(meshPart(upload({ duration: 6, fps: 60 }))).toBe(STATIC_CREDIT_COSTS["video-face-mesh:15s"])
-    // A 30 s clip at 60 fps: about 60.03 s priced, the 120 s row.
-    expect(meshPart(upload({ duration: 30.02, fps: 60 }))).toBe(STATIC_CREDIT_COSTS["video-face-mesh:120s"])
+    // A 30 s clip at 60 fps: about 60.03 s priced, within 0.05 s of the 60 s row.
+    expect(meshPart(upload({ duration: 30.02, fps: 60 }))).toBe(STATIC_CREDIT_COSTS["video-face-mesh:60s"])
   })
 
   it("a clip whose length the graph does not tell is quoted at the longest row, never 0", () => {

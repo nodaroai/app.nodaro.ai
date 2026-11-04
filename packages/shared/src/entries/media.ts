@@ -8,6 +8,7 @@
 export * from "../freecut-protocol.js"
 export { describeMaskRegion } from "../inpaint-region.js"
 export type { MaskRegionDescriptor, PixelBox } from "../inpaint-region.js"
+export * from "../priced-clip-seconds.js"
 export * from "../video-depth.js"
 export {
   applySlots,

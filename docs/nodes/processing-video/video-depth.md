@@ -31,7 +31,7 @@ Video Depth Anything accepts up to **2,400 frames** (≈80 s at 30 fps, 100 s at
 
 Billed by the input clip's length. The clip is measured before the run; the chip on the node shows the most a run can cost until a video with a known length is connected.
 
-**Video Depth Anything** is billed per second of the clip: 22<!-- credits: video-depth-anything:1s --> credits a second, with the length rounded **up** to whole seconds, so a clip under 1 s costs the same as 1 s and 9.2 s costs the same as 10 s. Each length has its own price row, `video-depth-anything:<n>s` (`video-depth-anything:1s` … `video-depth-anything:300s`). The editor's cost badge, a single-node run, a run inside a workflow, and API / MCP / SDK calls all charge the same row for the same clip, and the amount reserved when the job starts is the amount charged.
+**Video Depth Anything** is billed per second of the clip: 22<!-- credits: video-depth-anything:1s --> credits a second, with the length rounded **up** to whole seconds, so a clip under 1 s costs the same as 1 s and 9.2 s costs the same as 10 s. Up to 0.05 s past a whole second is ignored first: a 12 s cut of a 29.97 fps clip comes out 12.012 s long and costs the same as 12 s. Each length has its own price row, `video-depth-anything:<n>s` (`video-depth-anything:1s` … `video-depth-anything:300s`). The editor's cost badge, a single-node run, a run inside a workflow, and API / MCP / SDK calls all charge the same row for the same clip, and the amount reserved when the job starts is the amount charged.
 
 | Clip | Billed as | Credits |
 |------|-----------|--------:|
@@ -39,11 +39,12 @@ Billed by the input clip's length. The clip is measured before the run; the chip
 | 4 s | 4 s | 88<!-- credits: video-depth-anything:4s --> |
 | 9 s | 9 s | 198<!-- credits: video-depth-anything:9s --> |
 | 9.2 s | 10 s | 220<!-- credits: video-depth-anything:10s --> |
+| 12.012 s | 12 s | 264<!-- credits: video-depth-anything:12s --> |
 | 15 s | 15 s | 330<!-- credits: video-depth-anything:15s --> |
 | 1 min | 60 s | 1,320<!-- credits: video-depth-anything:60s --> |
 | 5 min (maximum) | 300 s | 6,600<!-- credits: video-depth-anything:300s --> |
 
-**Depth Anything (per frame)** is billed by length tier, with the clip's length rounded up to the next tier:
+**Depth Anything (per frame)** is billed by length tier, with the clip's length rounded up to the next tier, after ignoring the same 0.05 s: a 15 s cut of a 29.97 fps clip comes out 15.015 s long and stays in the 15 s tier.
 
 | Provider | 15s | 30s | 1min | 2min |
 |----------|----:|----:|-----:|-----:|

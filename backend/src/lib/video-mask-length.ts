@@ -1,5 +1,6 @@
 import {
   VIDEO_MASK_LIMITS,
+  pricedClipSeconds,
   resolveVideoMaskProvider,
   videoMaskBilledSeconds,
   videoMaskCreditId,
@@ -46,7 +47,7 @@ export async function measureVideoMaskLength(videoUrl: string, provider?: unknow
         `Video Mask takes up to ${VIDEO_MASK_LIMITS.MAX_BILLED_SEC} seconds at ${VIDEO_MASK_LIMITS.FPS_BASIS} fps — trim it first.`,
     }
   }
-  const billedSec = Math.ceil(billed)
+  const billedSec = pricedClipSeconds(billed)
   return { ok: true, billedSec, creditId: videoMaskCreditId(billedSec, resolveVideoMaskProvider(provider)) }
 }
 

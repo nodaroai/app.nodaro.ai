@@ -59,10 +59,11 @@ Priced by the clip's length at the 30 fps basis, in steps — one price row per 
 | up to 4 min | `sam-3.1-video:240s` | 2486<!-- credits: sam-3.1-video:240s --> | `sam-3-video:240s` | 1243<!-- credits: sam-3-video:240s --> |
 | up to 5 min | `sam-3.1-video:300s` | 3108<!-- credits: sam-3.1-video:300s --> | `sam-3-video:300s` | 1555<!-- credits: sam-3-video:300s --> |
 
-**Formula:** priced length = clip seconds × max(1, frame rate ÷ 30), rounded up to a whole second; the run is charged the smallest row of its model that covers it.
+**Formula:** priced length = clip seconds × max(1, frame rate ÷ 30), rounded up to a whole second after ignoring up to 0.05 s past one; the run is charged the smallest row of its model that covers it.
 
 **Worked examples:**
 - 4 s at 30 fps → priced at 4 s → `sam-3.1-video:5s` (55 credits<!-- credits: sam-3.1-video:5s -->).
+- A 5 s cut at 29.97 fps, 5.005 s long → priced at 5 s → `sam-3.1-video:5s` (55 credits<!-- credits: sam-3.1-video:5s -->).
 - 12 s at 24 fps → priced at 12 s → `sam-3.1-video:15s` (160 credits<!-- credits: sam-3.1-video:15s -->).
 - 10 s at 60 fps → priced at 20 s → `sam-3.1-video:30s` (314 credits<!-- credits: sam-3.1-video:30s -->).
 - 45 s at 30 fps → priced at 45 s → `sam-3.1-video:60s` (622 credits<!-- credits: sam-3.1-video:60s -->).

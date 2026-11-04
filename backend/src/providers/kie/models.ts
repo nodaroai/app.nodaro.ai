@@ -314,25 +314,25 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // Constraints: 1:1 cannot be 4K; "auto" aspect_ratio limited to 1K
   "gpt-image-2": {
     model: "gpt-image-2-text-to-image",
-    credits: 4,
-    cost: 0.02,  // 1K default; pricing calibrated from credit-anomalies once usage data exists
+    credits: 6,
+    cost: 0.03,  // 1K. KIE: 6 cr @1K / 10 cr @2K / 16 cr @4K
     // NOTE: 2K, 4K = — handled via composite identifiers "gpt-image-2:2K" and "gpt-image-2:4K"
     extraParams: { aspect_ratio: "16:9", resolution: "1K" },
   },
   "gpt-image-2-i2i": {
     model: "gpt-image-2-image-to-image",
-    credits: 4,
-    cost: 0.02,  // 1K default
+    credits: 6,
+    cost: 0.03,  // 1K. KIE: 6 cr @1K / 10 cr @2K / 16 cr @4K
     // NOTE: 2K, 4K = — handled via composite identifiers "gpt-image-2-i2i:2K" and "gpt-image-2-i2i:4K"
     inputType: "image-to-image",
     imageParam: "input_urls",  // Array, max 16
     extraParams: { aspect_ratio: "16:9", resolution: "1K" },
   },
 
-  // GPT Image 2.5 — Flare + Sunburst. Same resolution-based pricing shape as
-  // GPT Image 2 but CHEAPER at 2K/4K, and a wider 13-ratio set (adds 3:2/2:3,
-  // 21:9, 27:16, 16:27, 9:8, 8:9). Unlike GPT Image 2, the 2.5 docs state NO
-  // aspect_ratio x resolution restriction.
+  // GPT Image 2.5 — Flare + Sunburst. Same resolution-based pricing as GPT
+  // Image 2, and a wider 13-ratio set (adds 3:2/2:3, 21:9, 27:16, 16:27, 9:8,
+  // 8:9). Unlike GPT Image 2, the 2.5 docs state NO aspect_ratio x resolution
+  // restriction.
   // See: docs.kie.ai/market/gpt/gpt-image-2-5-{flare,sunburst}-{text,image}-to-image.md
   "gpt-image-2-5-flare": {
     model: "gpt-image-2-5-flare-text-to-image",
@@ -814,7 +814,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
 
   // Seedance 2.5 — docs.kie.ai/market/bytedance/seedance-2-5
   // Next generation, NOT a tier of the 2.0 ladder. Per-second pricing:
-  // 480p no-ref 28 cr/s, 480p ref 17 cr/s; 720p 63 / 38; 1080p 114 / 68.5.
+  // 480p no-ref 28 cr/s, 480p ref 17 cr/s; 720p 63 / 38; 1080p 158 / 95.
   // Per-second composites in credits.ts are authoritative.
   //
   // Live-probe findings vs. the published schema (api.kie.ai, 2026-08-08;

@@ -46,7 +46,7 @@ It is a local, deterministic FFmpeg step — no model, no provider key — so it
 
 ## Credit Cost
 
-**11 credits<!-- credits-rate: mask-composite --> per started 5 seconds of the result** (the foreground's length — the background's with Pixelate or Blur), the run's units priced together as one charge — the node's price row is one 5-second unit.
+**11 credits<!-- credits-rate: mask-composite --> per started 5 seconds of the result** (the foreground's length — the background's with Pixelate or Blur), the run's units priced together as one charge — the node's price row is one 5-second unit. Up to 0.05 s past a whole second is ignored first, so a 10.01 s result is 2 units, not 3.
 
 | Result length | Units | Credits |
 |---|---|---|
@@ -55,7 +55,7 @@ It is a local, deterministic FFmpeg step — no model, no provider key — so it
 | 61 s | 13 | 143<!-- credits: mask-composite@13 --> |
 | 5 minutes | 60 | 660<!-- credits: mask-composite@60 --> |
 
-**Formula:** credits = 10 × ceil(foreground seconds ÷ 5), at least 10 (with Pixelate or Blur, the background's seconds). The route measures that video before anything is charged (unreadable → `invalid_video_duration`, over 300 s → `video_duration_exceeds_limit`). Before a run, a foreground whose length the graph does not tell shows the range **10–600** on the node, and a workflow estimate counts 600.
+**Formula:** credits = 11<!-- credits-rate: mask-composite --> × ceil(priced seconds ÷ 5). Priced seconds are the foreground's (with Pixelate or Blur, the background's), rounded up to a whole second after ignoring up to 0.05 s past one, at least 1. The route measures that video before anything is charged (unreadable → `invalid_video_duration`, over 300 s → `video_duration_exceeds_limit`). Before a run, a foreground whose length the graph does not tell shows the range **10–600** on the node, and a workflow estimate counts 600.
 
 ## Typical Workflow
 

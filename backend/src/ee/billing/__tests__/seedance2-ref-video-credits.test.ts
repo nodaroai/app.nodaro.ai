@@ -27,9 +27,9 @@ import {
 import { seedance2RefVideoQuote } from "../seedance2-ref-video-quote.js"
 import { applyServiceMarkup } from "../service-margin.js"
 
-// seedance-2-5:8s:1080p-ref = 1370 → 171.25/s; seedance-2-5:8s:720p-ref = 760 → 95/s;
+// seedance-2-5:8s:1080p-ref = 1900 → 237.5/s; seedance-2-5:8s:720p-ref = 760 → 95/s;
 // seedance-2:8s:720p-ref = 500 → 62.5/s.
-const S25_1080P_PER_SEC = 1370 / 8
+const S25_1080P_PER_SEC = 1900 / 8
 const S25_720P_PER_SEC = 760 / 8
 const S2_720P_PER_SEC = 500 / 8
 
@@ -48,11 +48,11 @@ describe("seedance2RefVideoBaseCredits", () => {
     const mini720 = seedance2RefVideoBaseCredits({ provider: "seedance-2-mini", resolution: "720p", outputDurationSec: 8, inputVideoDurationSec: 0 })
     expect(mini).toBe(mini720)
   })
-  it("seedance-2-5 1080p (2026-08-17 tier) per-sec base = 1370/8: 8s out + 5s in = ceil(171.25 × 13) = 2227", () => {
-    expect(seedance2RefVideoBaseCredits({ provider: "seedance-2-5", resolution: "1080p", outputDurationSec: 8, inputVideoDurationSec: 5 })).toBe(2227)
+  it("seedance-2-5 1080p (2026-08-17 tier) per-sec base = 1900/8: 8s out + 5s in = ceil(237.5 × 13) = 3088", () => {
+    expect(seedance2RefVideoBaseCredits({ provider: "seedance-2-5", resolution: "1080p", outputDurationSec: 8, inputVideoDurationSec: 5 })).toBe(3088)
   })
-  it("seedance-2-5 1080p no input video → equals the plain -ref composite (8s = 1370)", () => {
-    expect(seedance2RefVideoBaseCredits({ provider: "seedance-2-5", resolution: "1080p", outputDurationSec: 8, inputVideoDurationSec: 0 })).toBe(1370)
+  it("seedance-2-5 1080p no input video → equals the plain -ref composite (8s = 1900)", () => {
+    expect(seedance2RefVideoBaseCredits({ provider: "seedance-2-5", resolution: "1080p", outputDurationSec: 8, inputVideoDurationSec: 0 })).toBe(1900)
   })
 })
 
@@ -65,13 +65,13 @@ describe("seedance2RefVideoBaseCredits", () => {
  * longer of the two. The settlement below measures what was delivered.
  */
 describe("seedance2RefVideoBaseCreditsFromDurations (the reservation)", () => {
-  it("a clip shorter than the requested duration changes nothing: 2.5 1080p, 8s out + 5s in = 2227", () => {
-    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "1080p", outputDurationSec: 8, requestedDuration: 8, durationsSec: [5] })).toBe(2227)
+  it("a clip shorter than the requested duration changes nothing: 2.5 1080p, 8s out + 5s in = 3088", () => {
+    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "1080p", outputDurationSec: 8, requestedDuration: 8, durationsSec: [5] })).toBe(3088)
   })
 
-  it("a clip LONGER than the requested duration bills the output at the clip's length (an edit renders it): 12s requested + 30s clip = ceil(171.25 × (30 + 30)) = 10275", () => {
-    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "1080p", outputDurationSec: 12, requestedDuration: 12, durationsSec: [30] })).toBe(10275)
-    expect(Math.ceil(S25_1080P_PER_SEC * 60)).toBe(10275)
+  it("a clip LONGER than the requested duration bills the output at the clip's length (an edit renders it): 12s requested + 30s clip = ceil(237.5 × (30 + 30)) = 14250", () => {
+    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "1080p", outputDurationSec: 12, requestedDuration: 12, durationsSec: [30] })).toBe(14250)
+    expect(Math.ceil(S25_1080P_PER_SEC * 60)).toBe(14250)
   })
 
   it("several clips: every clip is input, the LONGEST is the output worst case: 720p, 8s + [5, 20] = ceil(95 × (25 + 20)) = 4275", () => {
@@ -223,21 +223,21 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
     probe.probeMediaDuration.mockClear()
   })
 
-  it("a style run delivered at the requested 12s with a 30s clip wired settles to ceil(171.25 × (30 + 12)) = 7193 — below the 10275 reserved", async () => {
+  it("a style run delivered at the requested 12s with a 30s clip wired settles to ceil(237.5 × (30 + 12)) = 9975 — below the 14250 reserved", async () => {
     probe.durations.set(OUT, 12)
     probe.durations.set(REF, 30)
     await expect(
       seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "1080p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF] }),
-    ).resolves.toBe(7193)
-    expect(Math.ceil(S25_1080P_PER_SEC * 42)).toBe(7193)
+    ).resolves.toBe(9975)
+    expect(Math.ceil(S25_1080P_PER_SEC * 42)).toBe(9975)
   })
 
-  it("an edit that rendered the full 30s clip settles at the reservation (10275)", async () => {
+  it("an edit that rendered the full 30s clip settles at the reservation (14250)", async () => {
     probe.durations.set(OUT, 30)
     probe.durations.set(REF, 30)
     await expect(
       seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "1080p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF] }),
-    ).resolves.toBe(10275)
+    ).resolves.toBe(14250)
   })
 
   it("a reference clip that cannot be re-probed counts as the per-clip cap (never lowers the charge): 720p, 12s delivered + [failed] = ceil(95 × (30 + 12)) = 3990", async () => {

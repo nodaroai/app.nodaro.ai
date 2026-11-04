@@ -1,4 +1,4 @@
-import { VIDEO_FACE_MESH_LIMITS, videoFaceMeshCreditId, videoMaskBilledSeconds } from "@nodaro/shared/media"
+import { VIDEO_FACE_MESH_LIMITS, pricedClipSeconds, videoFaceMeshCreditId, videoMaskBilledSeconds } from "@nodaro/shared/media"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
 
 /**
@@ -6,8 +6,8 @@ import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
  * at, and so which price row a run is charged from — its length at Video
  * Mask's 30 fps basis (`videoMaskBilledSeconds`: a 60 fps clip is priced at
  * twice its length, since the work is per frame), rounded up to a
- * `video-face-mesh:<n>s` row (`videoFaceMeshCreditId`, one base credit a
- * second of the bucket).
+ * `video-face-mesh:<n>s` row (`pricedClipSeconds`, `videoFaceMeshCreditId`, one
+ * base credit a second of the bucket).
  *
  * A clip that cannot be measured, or is past the cap
  * (`VIDEO_FACE_MESH_LIMITS.MAX_BILLED_SEC`), is REFUSED before anything is
@@ -41,6 +41,6 @@ export async function measureVideoFaceMeshLength(videoUrl: string): Promise<Vide
       message: `The video is ${Math.ceil(probed.durationSeconds)} seconds (priced as ${Math.ceil(billed)} s at 30 fps). Video Face Mesh takes up to ${VIDEO_FACE_MESH_LIMITS.MAX_BILLED_SEC} seconds.`,
     }
   }
-  const billedSec = Math.max(1, Math.ceil(billed))
+  const billedSec = pricedClipSeconds(billed)
   return { ok: true, billedSec, creditId: videoFaceMeshCreditId(billedSec) }
 }

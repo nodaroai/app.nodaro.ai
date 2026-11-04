@@ -10,6 +10,7 @@
  * Priced by the clip's length at the 30 fps basis Video Mask uses
  * (`videoMaskBilledSeconds`), one row per length bucket.
  */
+import { pricedClipSeconds } from "./priced-clip-seconds.js"
 import { VIDEO_MASK_LIMITS, type VideoMaskZone } from "./video-mask.js"
 import type { VideoDepthColormap } from "./video-depth.js"
 
@@ -63,14 +64,16 @@ export function videoFaceMeshCreditIds(): string[] {
 
 /**
  * The price row for a clip priced at `billedSec` seconds: the smallest bucket
- * that holds it. An unknown or non-positive length, or one past the cap,
+ * that holds it, after `pricedClipSeconds` (up to 0.05 s past a bucket's length
+ * stays in that bucket). An unknown or non-positive length, or one past the cap,
  * prices the LONGEST row (the route measures every clip and refuses one past
  * the cap, so this is only ever a ceiling).
  */
 export function videoFaceMeshCreditId(billedSec: number | null | undefined): string {
   const ids = videoFaceMeshCreditIds()
   if (typeof billedSec !== "number" || !Number.isFinite(billedSec) || billedSec <= 0) return ids[ids.length - 1]!
-  const i = VIDEO_FACE_MESH_BUCKETS_SEC.findIndex((b) => billedSec <= b)
+  const priced = pricedClipSeconds(billedSec)
+  const i = VIDEO_FACE_MESH_BUCKETS_SEC.findIndex((b) => priced <= b)
   return ids[i === -1 ? ids.length - 1 : i]!
 }
 

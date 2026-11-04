@@ -19,7 +19,7 @@
  */
 import { VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING } from "@nodaro/shared/credits"
 import { extractVideoDurationFromNode } from "@nodaro/shared/video"
-import { MASK_COMPOSITE_BOUNDS, maskCompositeLeadHandle, videoMaskBilledSeconds } from "@nodaro/shared/media"
+import { MASK_COMPOSITE_BOUNDS, maskCompositeLeadHandle, pricedClipSeconds, videoMaskBilledSeconds } from "@nodaro/shared/media"
 import { isRenderNodeType } from "@nodaro/shared/nodes"
 import {
   renderLengthSec,
@@ -155,7 +155,9 @@ function clipWireIndex(inputs: ReadonlyArray<{ targetHandle?: string | null }>, 
  * clip {@link videoSfxClipSec} reads, at the 30 fps basis billing charges by
  * (`videoMaskBilledSeconds`) when that same wire carries a frame rate
  * (`fpss`, in the order of `inputs`; {@link forwardedVideoFps}), else its own
- * length, as before. `undefined` when no length is known: the longest row.
+ * length, as before, through `pricedClipSeconds` as a run is priced. A length
+ * that is not positive stays as it is, and `undefined` when no length is known:
+ * the longest row.
  */
 export function videoMaskClipSec(
   inputs: ReadonlyArray<{ targetHandle?: string | null }>,
@@ -163,7 +165,8 @@ export function videoMaskClipSec(
   fpss: ReadonlyArray<number | undefined>,
 ): number | undefined {
   const sec = videoSfxClipSec(inputs, secs)
-  return sec === undefined ? undefined : Math.ceil(videoMaskBilledSeconds(sec, fpss[clipWireIndex(inputs, secs)]))
+  if (sec === undefined || sec <= 0) return sec
+  return pricedClipSeconds(videoMaskBilledSeconds(sec, fpss[clipWireIndex(inputs, secs)]))
 }
 
 /**

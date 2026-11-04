@@ -95,7 +95,7 @@ describe("measured worked examples", () => {
     const direct1080 = STATIC_CREDIT_COSTS["seedance-2-5:4s:1080p"]!
     const finalize = STATIC_CREDIT_COSTS["seedance-2-5-hd:4s"]!
     expect(draft480).toBe(280)
-    expect(direct1080).toBe(1140)
+    expect(direct1080).toBe(1580)
     // One attempt: a direct 1080p is cheaper. Two attempts: drafting first wins.
     expect(draft480 + finalize).toBeGreaterThan(direct1080)
     expect(2 * draft480 + finalize).toBeLessThan(2 * direct1080)
