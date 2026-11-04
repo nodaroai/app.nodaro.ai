@@ -629,14 +629,17 @@ export function withoutUnsupportedPulseAudio(composed: ComposedTrendRun): void {
 }
 
 /**
- * The body's `prismReferenceAudio` (composed as a mode per output resolution)
- * as the loaded engine takes it (`prismReferenceAudioWire`): kept as the
- * object for an engine declaring `castSwap.prismReferenceAudioPerResolution`;
- * the mode of the run's own resolution (a draft is 480p) for one declaring
- * only `castSwap.prismReferenceAudio`, dropped when that is the full audio;
- * dropped for any other engine, which always sends the clip's full audio in
- * the reference and so gets exactly the body it got before the setting
- * existed. Mutates `composed.body`.
+ * The body's `prismReferenceAudio` (composed as a value per output resolution,
+ * as stored) as the loaded engine takes it (`prismReferenceAudioWire`): the
+ * object form (`{ mode, semitones }` per resolution) for an engine declaring
+ * `castSwap.prismReferenceAudioPitch`; the object of ids for one declaring
+ * `castSwap.prismReferenceAudioPerResolution`; the id of the run's own
+ * resolution (a draft is 480p) for one declaring only
+ * `castSwap.prismReferenceAudio`, dropped when that is the default; dropped
+ * for any other engine, which always sends the clip's full audio in the
+ * reference and so gets exactly the body it got before the setting existed.
+ * A value an engine does not take is the default there. Mutates
+ * `composed.body`.
  */
 export function withoutUnsupportedPrismReferenceAudio(composed: ComposedTrendRun): void {
   const { body } = composed

@@ -51,6 +51,7 @@ import {
 import {
   MAX_PRE_PROMPT,
   TREND_DETAILS_MAX,
+  engineOfForm,
   formIssues,
   promptBudget,
   fromForm,
@@ -61,6 +62,7 @@ import {
   previewPromptBudget,
   type TrendForm,
 } from "../model"
+import { prismReferenceAudioHeldIssues } from "../prism-reference-audio"
 import { fullDepthSceneDescribes, roleOutlineColour, slotMarkAllowed } from "@nodaro/render-rules"
 import { SourceClipEditor } from "../components/SourceClipEditor"
 import { HideOriginalToggle } from "../components/HideOriginalToggle"
@@ -124,6 +126,8 @@ export default function AdminTrendEditorPage() {
   const publish = usePublishTrend(id)
   const unpublish = useUnpublishTrend(id)
   const envs = useEngineEnvironments()
+  // Nothing is known of the environments: said in words where they are read (a refetch that fails keeps what it knew).
+  const envsUnreadable = !envs.data && envs.error != null
 
   const [form, setForm] = useState<TrendForm | null>(null)
   const [baseline, setBaseline] = useState("")
@@ -170,7 +174,12 @@ export default function AdminTrendEditorPage() {
   const server = query.data
   const dirty = snapshot(form) !== baseline
   latest.current = { baseline, dirty }
-  const issues = formIssues(form)
+  const issues = [
+    ...formIssues(form),
+    // Prism's reference audio, a value no id says, at a resolution this draft changed: the server holds the save until
+    // every environment takes it (the value is sent only while the model is Prism).
+    ...(engineOfForm(form) === "seedance-2-5" ? prismReferenceAudioHeldIssues(form.prismReferenceAudio, server.draft.prismReferenceAudio, envs.data, { idsToo: false, envsUnreadable }) : []),
+  ]
   const images = imagesSentAtMost(form)
   const maxImages = maxImagesFor(form)
   const over = images > maxImages
@@ -528,6 +537,7 @@ export default function AdminTrendEditorPage() {
               onPulseAudioChange={(pulseAudio) => set({ pulseAudio })}
               onPrismReferenceAudioChange={(prismReferenceAudio) => set({ prismReferenceAudio })}
               envs={envs.data}
+              envsUnreadable={envsUnreadable}
             />
           </Section>
           <Section title="6. Face masking" description="Covers the faces in the source clip before the video model sees it. Hidden from users.">

@@ -24,11 +24,12 @@ describe("video face mesh pricing rows", () => {
   it("a clip is priced at the smallest bucket that holds it", () => {
     expect(videoFaceMeshCreditId(0.5)).toBe("video-face-mesh:5s")
     expect(videoFaceMeshCreditId(5)).toBe("video-face-mesh:5s")
-    expect(videoFaceMeshCreditId(5.01)).toBe("video-face-mesh:10s")
+    expect(videoFaceMeshCreditId(5.01)).toBe("video-face-mesh:5s")
     expect(videoFaceMeshCreditId(15)).toBe("video-face-mesh:15s")
     expect(videoFaceMeshCreditId(21)).toBe("video-face-mesh:30s")
     expect(videoFaceMeshCreditId(60)).toBe("video-face-mesh:60s")
-    // A 30 s clip at 60 fps (1,801 frames) is priced at about 60.03 s.
+    // A 30 s clip at 60 fps (1,801 frames) is priced at about 60.03 s: within 0.05 s of the 60 s row.
+    expect(videoFaceMeshCreditId(60.03)).toBe("video-face-mesh:60s")
     expect(videoFaceMeshCreditId(61)).toBe("video-face-mesh:120s")
     expect(videoFaceMeshCreditId(121)).toBe("video-face-mesh:300s")
     expect(videoFaceMeshCreditId(300)).toBe("video-face-mesh:300s")

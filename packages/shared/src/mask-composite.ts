@@ -27,6 +27,7 @@
  *
  * Wire contract only — no I/O.
  */
+import { pricedClipSeconds } from "./priced-clip-seconds.js"
 
 /** How the background is fitted to the foreground's frame. */
 export const MASK_COMPOSITE_BACKGROUND_FITS = ["cover", "contain", "stretch"] as const
@@ -68,17 +69,17 @@ export const MASK_COMPOSITE_UNIT_SEC = 5
 
 /**
  * Pricing units for a result `durationSec` long: one per started 5 seconds,
- * at least one. An unknown length counts the longest result a run accepts
- * (an upper bound — the pre-run quote for a clip whose length is not known
- * yet; every run measures its foreground).
+ * at least one, after `pricedClipSeconds` (up to 0.05 s past a whole second is
+ * ignored, so a 10.01 s result is 2 units, not 3). An unknown length counts the
+ * longest result a run accepts (an upper bound — the pre-run quote for a clip
+ * whose length is not known yet; every run measures its foreground).
  */
 export function maskCompositeUnits(durationSec: number | null | undefined): number {
   const sec =
     typeof durationSec === "number" && Number.isFinite(durationSec) && durationSec > 0
       ? Math.min(durationSec, MASK_COMPOSITE_BOUNDS.MAX_DURATION_SEC)
       : MASK_COMPOSITE_BOUNDS.MAX_DURATION_SEC
-  // The epsilon absorbs float noise (a 10.0000001 s probe is 2 units, not 3).
-  return Math.max(1, Math.ceil(sec / MASK_COMPOSITE_UNIT_SEC - 1e-6))
+  return Math.ceil(pricedClipSeconds(sec) / MASK_COMPOSITE_UNIT_SEC)
 }
 
 export const MASK_COMPOSITE_DEFAULTS = {

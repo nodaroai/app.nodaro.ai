@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-10-28T07:59:43.688Z
-generated_from: 5f6b6e634
+generated_at: 2026-11-04T00:41:25.139Z
+generated_from: 69f655303
 ---
 
 # Text to Video
@@ -9,7 +9,7 @@ generated_from: 5f6b6e634
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `text-to-video`
 **Category:** ai
-**Credit cost:** `11-9405` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
+**Credit cost:** `11-13035` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `video`
 

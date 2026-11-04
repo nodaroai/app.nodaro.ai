@@ -309,6 +309,26 @@ describe("the model (engine) in the form", () => {
     expect(fromForm(toForm(draft({})))).not.toHaveProperty("prismReferenceAudio")
   })
 
+  it("keeps a mode and a pitch shift as today's id where one says it, else as { mode, semitones }; the default left out", () => {
+    const form = {
+      ...toForm(draft({})),
+      prismReferenceAudio: {
+        "480p": { mode: "full", semitones: 4 },
+        "720p": { mode: "full", semitones: 7 },
+        "1080p": { mode: "none", semitones: 4 },
+      },
+    } as const
+    expect(fromForm(form).prismReferenceAudio).toEqual({ "720p": { mode: "full", semitones: 7 }, "1080p": "none" })
+    expect(fromForm({ ...form, prismReferenceAudio: { "720p": { mode: "full-one-tone", semitones: 0 }, "1080p": { mode: "voice", semitones: 4 } } }).prismReferenceAudio).toEqual({
+      "720p": "one-tone",
+      "1080p": "voice",
+    })
+    // A stored { mode, semitones } reads back as it is, and saves unchanged.
+    const stored = { "720p": { mode: "voice-one-tone", semitones: -2.5 } } as const
+    expect(toForm(draft({ prismReferenceAudio: stored })).prismReferenceAudio).toEqual(stored)
+    expect(fromForm(toForm(draft({ prismReferenceAudio: stored }))).prismReferenceAudio).toEqual(stored)
+  })
+
   it("reads a plain prismReferenceAudio saved before the per-resolution setting as that mode at every resolution", () => {
     for (const mode of ["voice", "none"] as const) {
       expect(toForm(draft({ prismReferenceAudio: mode })).prismReferenceAudio).toEqual({ "480p": mode, "720p": mode, "1080p": mode })

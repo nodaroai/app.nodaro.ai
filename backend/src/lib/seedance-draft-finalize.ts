@@ -272,6 +272,49 @@ export async function seedanceDraftFinalizeBaseCredits(
   return seedanceDraftFinalizeRefBaseCredits({ outputSec: plan.outputSec, refVideoDurationsSec: plan.refVideoDurationsSec })
 }
 
+/**
+ * The seconds a finalize's charge bills — the draft's output seconds, or for a
+ * draft made with a reference video input + output (the ee rule) — so the
+ * 1080p render records what the provider bills for them as its provider cost.
+ * The route sends them on the queue only (`draftBilledSec`); for a workflow run
+ * the worker derives them from the draft's fields the stamp already carries
+ * (`draftOutputSec`, `draftHasRefVideo`, `draftRefVideoDurationsSec`), so the
+ * job's input_data gains nothing. Undefined in an edition without credits.
+ * Core shim over the ee helper (dynamic import), like
+ * {@link seedanceDraftFinalizeBaseCredits}.
+ */
+export async function seedanceDraftFinalizeBilledSec(
+  plan: Pick<SeedanceDraftFinalizePlan, "hasRefVideo" | "outputSec" | "refVideoDurationsSec">,
+): Promise<number | undefined> {
+  if (!hasCredits()) return undefined
+  if (!plan.hasRefVideo) return plan.outputSec
+  const { seedanceDraftFinalizeRefBilledSec } = await import("../ee/billing/seedance2-ref-video-credits.js")
+  return seedanceDraftFinalizeRefBilledSec({ outputSec: plan.outputSec, refVideoDurationsSec: plan.refVideoDurationsSec })
+}
+
+/** A count of seconds read off a payload: a finite positive number, else undefined. */
+export const positiveSeconds = (v: unknown): number | undefined =>
+  typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined
+
+/**
+ * The seconds a QUEUED finalize's charge bills, as the worker reads them off
+ * its payload: the route's `draftBilledSec` as sent, else — a workflow run,
+ * whose payload carries the stamp's draft fields — derived from those fields
+ * by {@link seedanceDraftFinalizeBilledSec}. Undefined when neither is usable
+ * (a payload queued before either existed) or in an edition without credits.
+ */
+export async function seedanceDraftFinalizeQueuedBilledSec(payload: Readonly<Record<string, unknown>>): Promise<number | undefined> {
+  const sent = positiveSeconds(payload.draftBilledSec)
+  if (sent !== undefined) return sent
+  const outputSec = positiveSeconds(payload.draftOutputSec)
+  if (outputSec === undefined) return undefined
+  return positiveSeconds(await seedanceDraftFinalizeBilledSec({
+    hasRefVideo: payload.draftHasRefVideo === true,
+    outputSec,
+    refVideoDurationsSec: Array.isArray(payload.draftRefVideoDurationsSec) ? payload.draftRefVideoDurationsSec : [],
+  }))
+}
+
 // ── Workflow run (node-executor) ─────────────────────────────────────────────
 
 /** True when a video-upscale payload is a Seedance draft finalize. */

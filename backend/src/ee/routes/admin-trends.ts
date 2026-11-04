@@ -68,6 +68,16 @@
  * that it takes it (an older one keys the stored clip without it, so its runs
  * of the trend would be refused; `platformHoldOfFaceMeshMinFaceHeight`). Every
  * other draft write only carries the draft's own face masking forward.
+ *
+ * Likewise Prism's reference audio, a value no id says (`{ mode, semitones }`,
+ * which older code cannot read): a draft save that changes a resolution to one
+ * is 422 `platform_unsupported` while any environment's platform does not claim
+ * it, then 409 `engine_unsupported` while any environment's engine lacks it; a
+ * publish that changes one from the live version (the published version of a
+ * trend that is published, on Prism) is held the same way (its engine by the
+ * publish checks). What was not changed is never refused, a value an id says is
+ * never held, and every other draft write only carries the draft's own value
+ * forward (nodaro-motion-prism-reference-audio-modes.ts).
  */
 import { CHILD_JOB_COLUMN } from "../../lib/public-job-data.js"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
@@ -80,7 +90,13 @@ import { afterKeyset, findOwnSession } from "../../lib/generation-sessions.js"
 import { deriveJobSource } from "../../lib/job-source.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments, withFreshPlatform } from "../lib/engine-environments.js"
-import { platformHoldOfFaceMeshMinFaceHeight } from "../lib/nodaro-motion-face-mesh.js"
+import { faceMeshMinFaceHeightCarried, platformHoldOfFaceMeshMinFaceHeight } from "../lib/nodaro-motion-face-mesh.js"
+import { prismReferenceAudioPlatformHold, prismReferenceAudioRefusalOf } from "../lib/nodaro-motion-prism-reference-audio-modes.js"
+import {
+  prismReferenceAudioByResolutionOf,
+  prismReferenceAudioChangedFrom,
+  prismReferenceAudioUnreadableRequirementsOf,
+} from "../../lib/cast-swap-prism-reference-audio.js"
 import {
   DraftConflictError,
   TrendSlugTakenError,
@@ -95,7 +111,7 @@ import {
   unpublish,
   updateTrendMeta,
 } from "../lib/trends/store.js"
-import { trendRunRequestSchema, trendVersionDataSchema, withSavedSteps } from "../lib/trends/schemas.js"
+import { engineOf, trendRunRequestSchema, trendVersionDataSchema, withSavedSteps } from "../lib/trends/schemas.js"
 import type { CastSwapStepsProblem } from "../../lib/cast-swap-steps.js"
 import { pickText } from "../lib/trends/localize.js"
 import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/trends/compose.js"
@@ -639,11 +655,22 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       // Validated BEFORE the preview clip is cut: a draft that cannot save pays for no ffmpeg run.
       const valid = trendVersionDataSchema.safeParse(marked)
       if (!valid.success) return badRequest(reply, valid.error)
+      // What this save changes of Prism's reference audio that older code cannot read (none: a value an id says, or
+      // the draft's own left as it is).
+      const audioRequirements = prismReferenceAudioUnreadableRequirementsOf(
+        prismReferenceAudioChangedFrom(prismReferenceAudioByResolutionOf(valid.data.prismReferenceAudio), prismReferenceAudioByResolutionOf(loaded.draft.prismReferenceAudio)),
+      )
+      // Read only when the draft needs them for a hold (once, for both); a failed read is a 500, never a save.
+      const environments = audioRequirements.length > 0 || faceMeshMinFaceHeightCarried(valid.data.faceMasking) ? await listEngineEnvironments() : undefined
       // Full depth's smallest face with mesh lines, held while any environment's platform does not take it: trends are
       // in the database every environment shares, and an older platform keys the stored clip without it (its runs
-      // refused). Read only when the draft carries it; a failed read is a 500, never a save.
-      const held = await platformHoldOfFaceMeshMinFaceHeight([valid.data.faceMasking], "trend")
+      // refused).
+      const held = await platformHoldOfFaceMeshMinFaceHeight([valid.data.faceMasking], "trend", environments)
       if (held) return reply.status(422).send({ error: held })
+      // Prism's reference audio likewise, and its engine: an older platform reads the whole setting as never saved
+      // (the full audio at every resolution), and its schema refuses this draft on every save.
+      const audioRefusal = environments ? prismReferenceAudioRefusalOf(audioRequirements, "trend", environments) : null
+      if (audioRefusal) return reply.status(audioRefusal.status).send({ error: audioRefusal.error })
       // The preview's input clip, cut (again) when the source, the window or the face mask moved. A cut that
       // fails never loses the save: the draft is saved as it is (its clip missing or stale, which blocks
       // publish — the blocker carries the reason — but not the admin's other edits), and the answer says why.
@@ -908,6 +935,22 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       // its publish (a draft saved while they did, then one going back to an older build), before anything is made.
       const held = await platformHoldOfFaceMeshMinFaceHeight([loaded.draft.faceMasking], "publish")
       if (held) return reply.status(422).send({ error: held })
+      // Prism's reference audio, a value no id says, likewise; but only where this publish changes what is live: a value
+      // the live version holds as it is goes out as it is (another edit of a live trend is never held for it). Live is
+      // the published version of a trend that is published, on Prism: an unpublished or restored trend runs nothing, and
+      // a Pulse version never sent the value, so publishing either puts it live anew (as a row that is gone does; a
+      // failed read is a 500). The live version and the environments are read only for a draft that holds one.
+      const draftAudio = prismReferenceAudioByResolutionOf(loaded.draft.prismReferenceAudio)
+      let liveAudio: unknown
+      if (prismReferenceAudioUnreadableRequirementsOf(draftAudio).length > 0) {
+        if (trend.status === "published" && trend.publishedVersion !== null) {
+          const live = trend.publishedVersion === trend.draftVersion ? loaded.draft : await getVersion(trend.id, trend.publishedVersion)
+          if (live && engineOf(live) === "seedance-2-5") liveAudio = live.prismReferenceAudio
+        }
+        const changed = prismReferenceAudioUnreadableRequirementsOf(prismReferenceAudioChangedFrom(draftAudio, prismReferenceAudioByResolutionOf(liveAudio)))
+        const audioHeld = changed.length > 0 ? prismReferenceAudioPlatformHold(changed, "publish", await listEngineEnvironments()) : null
+        if (audioHeld) return reply.status(422).send({ error: audioHeld })
+      }
       // The preview's input clip, made (again) first so a stale or missing one never blocks on its own:
       // saved as its own write (guarded on the revision read; on a published draft that is a new
       // version), and the checks run on what was saved. A make that fails (a clip ffmpeg cannot cut, a
@@ -935,7 +978,7 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       // The engine prompt changes, checked by this environment's engine against the draft as it is now.
       const parts = await trendPromptPartProblems(app, req, draft)
       if (parts && "failure" in parts) return replyPromptPartsFailure(reply, parts.failure)
-      const reasons = publishBlockers(draft, environments, TREND_PUBLISH_ENVIRONMENTS, parts?.problems).map((r) =>
+      const reasons = publishBlockers(draft, environments, TREND_PUBLISH_ENVIRONMENTS, parts?.problems, liveAudio).map((r) =>
         makeFailed && (r.code === "preview_clip_missing" || r.code === "preview_clip_out_of_date")
           ? { ...r, message: `${r.message ?? ""} Making it failed: ${makeFailed}`.trim() }
           : r,

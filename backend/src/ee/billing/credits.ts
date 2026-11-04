@@ -637,10 +637,11 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "grok-2": 10,                   // Grok Imagine Image 2.0 t2i ($0.02)
   "gpt-image": 10,                // (medium default)
   "gpt-image:high": 60,
-  "gpt-image-2": 15,              // (1K default; estimated, recalibrate from anomalies)
-  "gpt-image-2:2K": 30,           // (estimated)
-  "gpt-image-2:4K": 60,           // (estimated)
-  // GPT Image 2.5 (Flare + Sunburst) — KIE 6/10/16 cr at 1K/2K/4K.
+  // GPT Image 2 — KIE 6/10/16 cr at 1K/2K/4K.
+  "gpt-image-2": 15,              // 1K default
+  "gpt-image-2:2K": 25,
+  "gpt-image-2:4K": 40,
+  // GPT Image 2.5 (Flare + Sunburst) — the same KIE rates.
   "gpt-image-2-5-flare": 15,            // 1K default
   "gpt-image-2-5-flare:2K": 25,
   "gpt-image-2-5-flare:4K": 40,
@@ -742,9 +743,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "grok-i2i": 10,
   "gpt-image-i2i": 10,            // (medium default)
   "gpt-image-i2i:high": 60,
-  "gpt-image-2-i2i": 15,          // (1K default; estimated)
-  "gpt-image-2-i2i:2K": 30,       // (estimated)
-  "gpt-image-2-i2i:4K": 60,       // (estimated)
+  "gpt-image-2-i2i": 15,          // 1K default
+  "gpt-image-2-i2i:2K": 25,
+  "gpt-image-2-i2i:4K": 40,
   // GPT Image 2.5 i2i — same ladder as the t2i siblings.
   "gpt-image-2-5-flare-i2i": 15,             // 1K default
   "gpt-image-2-5-flare-i2i:2K": 25,
@@ -934,8 +935,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "seedance-2-mini:15s:720p-ref": 470,
   // ── Seedance 2.5 — per-second billing, resolution × video-ref, 4-30s ──
   // KIE rates (kie.ai/model/bytedance/seedance-2-5, 2026-08-08), KIE cr/s:
-  //   480p 28 no-video-ref / 17 with-video-ref; 720p 63 / 38; 1080p 114 / 68.5
-  //   (1080p tier added 2026-08-17; 4k/2k/1440p still rejected).
+  //   480p 28 no-video-ref / 17 with-video-ref; 720p 63 / 38; 1080p 158 / 95
+  //   (1080p tier added 2026-08-17, at these rates since 2026-11-04;
+  //   4k/2k/1440p still rejected).
   // Nodaro = ceil(rate x duration / 4) x 10 — the same credit conversion the
   // rest of the Seedance 2 family and minimax-h3 use.
   //
@@ -1065,61 +1067,61 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "seedance-2-5:29s:720p-ref":  2760,
   "seedance-2-5:30s:720p-ref":  2850,
   // 1080p no video ref (/s) — added 2026-08-17 (KIE 1080P release)
-  "seedance-2-5:4s:1080p":  1140,
-  "seedance-2-5:5s:1080p":  1430,
-  "seedance-2-5:6s:1080p":  1710,
-  "seedance-2-5:7s:1080p":  2000,
-  "seedance-2-5:8s:1080p":  2280,
-  "seedance-2-5:9s:1080p":  2570,
-  "seedance-2-5:10s:1080p":  2850,
-  "seedance-2-5:11s:1080p":  3140,
-  "seedance-2-5:12s:1080p":  3420,
-  "seedance-2-5:13s:1080p":  3710,
-  "seedance-2-5:14s:1080p":  3990,
-  "seedance-2-5:15s:1080p":  4280,
-  "seedance-2-5:16s:1080p":  4560,
-  "seedance-2-5:17s:1080p":  4850,
-  "seedance-2-5:18s:1080p":  5130,
-  "seedance-2-5:19s:1080p":  5420,
-  "seedance-2-5:20s:1080p":  5700,
-  "seedance-2-5:21s:1080p":  5990,
-  "seedance-2-5:22s:1080p":  6270,
-  "seedance-2-5:23s:1080p":  6560,
-  "seedance-2-5:24s:1080p":  6840,
-  "seedance-2-5:25s:1080p":  7130,
-  "seedance-2-5:26s:1080p":  7410,
-  "seedance-2-5:27s:1080p":  7700,
-  "seedance-2-5:28s:1080p":  7980,
-  "seedance-2-5:29s:1080p":  8270,
-  "seedance-2-5:30s:1080p":  8550,
+  "seedance-2-5:4s:1080p":  1580,
+  "seedance-2-5:5s:1080p":  1980,
+  "seedance-2-5:6s:1080p":  2370,
+  "seedance-2-5:7s:1080p":  2770,
+  "seedance-2-5:8s:1080p":  3160,
+  "seedance-2-5:9s:1080p":  3560,
+  "seedance-2-5:10s:1080p":  3950,
+  "seedance-2-5:11s:1080p":  4350,
+  "seedance-2-5:12s:1080p":  4740,
+  "seedance-2-5:13s:1080p":  5140,
+  "seedance-2-5:14s:1080p":  5530,
+  "seedance-2-5:15s:1080p":  5930,
+  "seedance-2-5:16s:1080p":  6320,
+  "seedance-2-5:17s:1080p":  6720,
+  "seedance-2-5:18s:1080p":  7110,
+  "seedance-2-5:19s:1080p":  7510,
+  "seedance-2-5:20s:1080p":  7900,
+  "seedance-2-5:21s:1080p":  8300,
+  "seedance-2-5:22s:1080p":  8690,
+  "seedance-2-5:23s:1080p":  9090,
+  "seedance-2-5:24s:1080p":  9480,
+  "seedance-2-5:25s:1080p":  9880,
+  "seedance-2-5:26s:1080p": 10270,
+  "seedance-2-5:27s:1080p": 10670,
+  "seedance-2-5:28s:1080p": 11060,
+  "seedance-2-5:29s:1080p": 11460,
+  "seedance-2-5:30s:1080p": 11850,
   // 1080p with video ref (/s)
-  "seedance-2-5:4s:1080p-ref":   690,
-  "seedance-2-5:5s:1080p-ref":   860,
-  "seedance-2-5:6s:1080p-ref":  1030,
-  "seedance-2-5:7s:1080p-ref":  1200,
-  "seedance-2-5:8s:1080p-ref":  1370,
-  "seedance-2-5:9s:1080p-ref":  1550,
-  "seedance-2-5:10s:1080p-ref":  1720,
-  "seedance-2-5:11s:1080p-ref":  1890,
-  "seedance-2-5:12s:1080p-ref":  2060,
-  "seedance-2-5:13s:1080p-ref":  2230,
-  "seedance-2-5:14s:1080p-ref":  2400,
-  "seedance-2-5:15s:1080p-ref":  2570,
-  "seedance-2-5:16s:1080p-ref":  2740,
-  "seedance-2-5:17s:1080p-ref":  2920,
-  "seedance-2-5:18s:1080p-ref":  3090,
-  "seedance-2-5:19s:1080p-ref":  3260,
-  "seedance-2-5:20s:1080p-ref":  3430,
-  "seedance-2-5:21s:1080p-ref":  3600,
-  "seedance-2-5:22s:1080p-ref":  3770,
-  "seedance-2-5:23s:1080p-ref":  3940,
-  "seedance-2-5:24s:1080p-ref":  4110,
-  "seedance-2-5:25s:1080p-ref":  4290,
-  "seedance-2-5:26s:1080p-ref":  4460,
-  "seedance-2-5:27s:1080p-ref":  4630,
-  "seedance-2-5:28s:1080p-ref":  4800,
-  "seedance-2-5:29s:1080p-ref":  4970,
-  "seedance-2-5:30s:1080p-ref":  5140,
+  "seedance-2-5:4s:1080p-ref":   950,
+  "seedance-2-5:5s:1080p-ref":  1190,
+  "seedance-2-5:6s:1080p-ref":  1430,
+  "seedance-2-5:7s:1080p-ref":  1670,
+  "seedance-2-5:8s:1080p-ref":  1900,
+  "seedance-2-5:9s:1080p-ref":  2140,
+  "seedance-2-5:10s:1080p-ref":  2380,
+  "seedance-2-5:11s:1080p-ref":  2620,
+  "seedance-2-5:12s:1080p-ref":  2850,
+  "seedance-2-5:13s:1080p-ref":  3090,
+  "seedance-2-5:14s:1080p-ref":  3330,
+  "seedance-2-5:15s:1080p-ref":  3570,
+  "seedance-2-5:16s:1080p-ref":  3800,
+  "seedance-2-5:17s:1080p-ref":  4040,
+  "seedance-2-5:18s:1080p-ref":  4280,
+  "seedance-2-5:19s:1080p-ref":  4520,
+  "seedance-2-5:20s:1080p-ref":  4750,
+  "seedance-2-5:21s:1080p-ref":  4990,
+  "seedance-2-5:22s:1080p-ref":  5230,
+  "seedance-2-5:23s:1080p-ref":  5470,
+  "seedance-2-5:24s:1080p-ref":  5700,
+  "seedance-2-5:25s:1080p-ref":  5940,
+  "seedance-2-5:26s:1080p-ref":  6180,
+  "seedance-2-5:27s:1080p-ref":  6420,
+  "seedance-2-5:28s:1080p-ref":  6650,
+  "seedance-2-5:29s:1080p-ref":  6890,
+  "seedance-2-5:30s:1080p-ref":  7130,
   // ── Seedance 2.5 HD (from draft) — the 1080p finalize of a Seedance 2.5 draft ──
   // Per-second rows over the draft's OUTPUT length (4-30s), same conversion
   // as the generation ladder above: ceil(rate x seconds / 4) x 10. The `-ref`
@@ -1127,8 +1129,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // input + output seconds, reserved by seedanceDraftFinalizeRefBaseCredits from
   // the 8s `-ref` row (the generation lane's exact rule). KIE rates (paid probes
   // 2026-10-12, model bytedance/seedance-2-5-draft), KIE cr/s: 158 no-video-ref,
-  // 95 with-video-ref on input + output — the 1080p generation rate x ~1.386 in
-  // both shapes. Bare id = 8s no-ref, the generation ladder's default length.
+  // 95 with-video-ref on input + output — the 1080p generation rate in both
+  // shapes. Bare id = 8s no-ref, the generation ladder's default length.
   "seedance-2-5-hd": 3160,
   "seedance-2-5-hd:4s": 1580,
   "seedance-2-5-hd:5s": 1980,
@@ -6748,9 +6750,9 @@ export function getNodeModelIdentifier(
   // measures it can be charged (decided 2026-10-13).
   if (nodeType === "video-sfx") return videoSfxQuoteCreditId(graph.videoSfxSec)
 
-  // Video Depth: a price row per provider and input-clip length (a whole
-  // second on fal, rounded up; a length bucket on Replicate), chosen when the
-  // run measures the clip (lib/video-depth-input.ts). Before a run, a clip
+  // Video Depth: a price row per provider and input-clip length, after
+  // `pricedClipSeconds` (a whole second on fal; a length bucket on Replicate),
+  // chosen when the run measures the clip (lib/video-depth-input.ts). Before a run, a clip
   // whose length the graph tells is quoted at that length's row; any other
   // clip at the provider's highest reachable row (fal 300 s, Replicate 120 s) —
   // the most a run can be charged, since a clip the provider cannot take is

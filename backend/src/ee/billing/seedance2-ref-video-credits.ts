@@ -301,8 +301,27 @@ export async function seedance2RefVideoBaseCreditsFromUrls(args: {
  *
  * Throws when the delivered clip cannot be measured — the caller then commits
  * the reservation, which is today's behaviour and never under-bills.
+ *
+ * The seconds are {@link seedance2RefVideoActualSeconds}'s. A caller that has
+ * already measured them (the settle shim, which also records the run's
+ * provider cost from them) passes that measurement in, so the delivered clip
+ * is probed — and an over-run alerted — once.
  */
-export async function seedance2RefVideoActualBaseCredits(args: {
+export async function seedance2RefVideoActualBaseCredits(
+  args: Seedance2RefVideoActualArgs,
+  measured?: Pick<Seedance2RefVideoActualSeconds, "chargedOutputSec" | "inputSec">,
+): Promise<number> {
+  const { chargedOutputSec, inputSec } = measured ?? await seedance2RefVideoActualSeconds(args)
+  return seedance2RefVideoBaseCredits({
+    provider: args.provider,
+    resolution: args.resolution,
+    outputDurationSec: chargedOutputSec,
+    inputVideoDurationSec: inputSec,
+  })
+}
+
+/** What {@link seedance2RefVideoActualSeconds} measures a delivered reference-video run with. */
+export interface Seedance2RefVideoActualArgs {
   provider: string
   resolution: string
   outputUrl: string
@@ -313,8 +332,33 @@ export async function seedance2RefVideoActualBaseCredits(args: {
   requestedDuration: unknown
   /** For the over-run alert only. */
   jobId?: string
-}): Promise<number> {
-  const { provider, resolution, outputUrl, referenceVideoUrls, requestedDuration } = args
+}
+
+/** The seconds a delivered reference-video run bills — see {@link seedance2RefVideoActualSeconds}. */
+export interface Seedance2RefVideoActualSeconds {
+  /** What was rendered: the measured length (Kling 4.0's rounded to the whole second it bills), never capped. */
+  deliveredSec: number
+  /** `deliveredSec` capped at an Auto edit's hold — the output seconds the charge bills. */
+  chargedOutputSec: number
+  /** The reference clips' seconds, as the run bills them ({@link billedInputSeconds}). */
+  inputSec: number
+}
+
+/**
+ * The seconds the settlement ({@link seedance2RefVideoActualBaseCredits})
+ * prices, measured from the delivered clip and the reservation's probe of the
+ * reference clips (re-probed only when the job carries none). Exported so the
+ * run's recorded provider cost reads the very seconds its charge was measured
+ * from.
+ *
+ * A delivered clip longer than an Auto edit's hold is charged at the hold
+ * (`chargedOutputSec`) and logs the `[ALERT]` naming the job, the held and the
+ * delivered seconds; `deliveredSec` stays what was rendered.
+ *
+ * Throws when the delivered clip cannot be measured.
+ */
+export async function seedance2RefVideoActualSeconds(args: Seedance2RefVideoActualArgs): Promise<Seedance2RefVideoActualSeconds> {
+  const { provider, outputUrl, referenceVideoUrls, requestedDuration } = args
   const [measuredOutputSec, durationsSec] = await Promise.all([
     probeMediaDuration(outputUrl),
     Array.isArray(args.durationsSec) ? args.durationsSec : probeRefVideoDurations({ provider, referenceVideoUrls }),
@@ -326,19 +370,14 @@ export async function seedance2RefVideoActualBaseCredits(args: {
     : Math.max(1, Math.round(measuredOutputSec))
   if (!isUsableDuration(deliveredSec)) throw new Error(`unusable output duration: ${measuredOutputSec}`)
   const heldSec = autoEditHeldOutputSec(provider, requestedDuration, durationsSec)
-  let outputDurationSec = deliveredSec
+  let chargedOutputSec = deliveredSec
   if (heldSec !== undefined && deliveredSec > heldSec) {
     console.error(
       `[ALERT] [billing] Seedance Auto edit delivered more than it held; charging the hold: job=${args.jobId ?? "unknown"} provider=${provider} heldSec=${heldSec} deliveredSec=${deliveredSec}`,
     )
-    outputDurationSec = heldSec
+    chargedOutputSec = heldSec
   }
-  return seedance2RefVideoBaseCredits({
-    provider,
-    resolution,
-    outputDurationSec,
-    inputVideoDurationSec: billedInputSeconds(provider, durationsSec).totalSec,
-  })
+  return { deliveredSec, chargedOutputSec, inputSec: billedInputSeconds(provider, durationsSec).totalSec }
 }
 
 /**
@@ -357,19 +396,37 @@ export async function seedance2RefVideoActualBaseCredits(args: {
  *
  * Throws when the clip cannot be measured or the tier is unpriced — the caller
  * then commits the reservation (never under-bills).
+ *
+ * The seconds are {@link seedance2AutoDurationActualSeconds}'s; a caller that
+ * has already measured them (the settle shim) passes them in, so the clip is
+ * probed once.
  */
-export async function seedance2AutoDurationActualBaseCredits(args: {
-  provider: string
-  resolution: string | undefined
-  outputUrl: string
-}): Promise<number> {
-  const measured = await probeMediaDuration(args.outputUrl)
-  if (!isUsableDuration(measured)) throw new Error(`unusable output duration: ${measured}`)
-  const seconds = Math.max(1, Math.ceil(measured - 0.25))
+export async function seedance2AutoDurationActualBaseCredits(
+  args: {
+    provider: string
+    resolution: string | undefined
+    outputUrl: string
+  },
+  measuredSec?: number,
+): Promise<number> {
+  const seconds = measuredSec ?? await seedance2AutoDurationActualSeconds(args)
   const identifier = buildVideoCreditModelIdentifier(
     args.provider, seconds, undefined, undefined, undefined, args.resolution, /* hasVideoRef */ false,
   )
   return (await getModelCreditBaseCost(identifier)).creditCost
+}
+
+/**
+ * The whole seconds an AUTO-duration run with no reference video bills (see
+ * {@link seedance2AutoDurationActualBaseCredits}): the delivered clip's
+ * length, rounded UP only past a quarter second. Exported so the run's
+ * recorded provider cost reads the very seconds its charge was priced from.
+ * Throws when the clip cannot be measured.
+ */
+export async function seedance2AutoDurationActualSeconds(args: { outputUrl: string }): Promise<number> {
+  const measured = await probeMediaDuration(args.outputUrl)
+  if (!isUsableDuration(measured)) throw new Error(`unusable output duration: ${measured}`)
+  return Math.max(1, Math.ceil(measured - 0.25))
 }
 
 /**
@@ -392,19 +449,35 @@ export async function seedance2AutoDurationActualBaseCredits(args: {
  *
  * Throws `PriceNotConfiguredError` when the 8 s `-ref` row is missing.
  */
-export function seedanceDraftFinalizeRefBaseCredits(args: {
+export function seedanceDraftFinalizeRefBaseCredits(args: SeedanceDraftFinalizeRefArgs): number {
+  const identifier = `${SEEDANCE_DRAFT_FINALIZE_PROVIDER}:8s-ref`
+  const composite8s = STATIC_CREDIT_COSTS[identifier]
+  if (composite8s === undefined) throw new PriceNotConfiguredError(identifier)
+  return Math.ceil((composite8s / 8) * seedanceDraftFinalizeRefBilledSec(args))
+}
+
+/** A reference-video draft's finalize, as {@link seedanceDraftFinalizeRefBaseCredits} prices it. */
+export interface SeedanceDraftFinalizeRefArgs {
   /** The draft's delivered length, in whole billable seconds. */
   outputSec: number
   /** The draft's own reservation probe of its reference clips (`refVideoDurationsSec`). */
   refVideoDurationsSec: readonly unknown[]
-}): number {
-  const identifier = `${SEEDANCE_DRAFT_FINALIZE_PROVIDER}:8s-ref`
-  const composite8s = STATIC_CREDIT_COSTS[identifier]
-  if (composite8s === undefined) throw new PriceNotConfiguredError(identifier)
+}
+
+/**
+ * The seconds a reference-video draft's finalize bills — what
+ * {@link seedanceDraftFinalizeRefBaseCredits} prices: each usable probe in
+ * whole seconds (`seedanceDraftFinalizeBillableSec`'s rule), an unusable one
+ * passed through to {@link billedInputSeconds}'s per-clip worst case, the
+ * input capped at the provider's total, plus the draft's output seconds.
+ * Exported so the finalize's recorded provider cost reads the very seconds its
+ * charge bills.
+ */
+export function seedanceDraftFinalizeRefBilledSec(args: SeedanceDraftFinalizeRefArgs): number {
   const wholeSec = args.refVideoDurationsSec.map((d) =>
     typeof d === "number" && isUsableDuration(d) ? Math.max(1, Math.ceil(d - 0.25)) : d,
   )
   // The draft's model decides the input-side bounds (per-clip cap, total cap).
   const { totalSec } = billedInputSeconds(SEEDANCE_DRAFT_MODELS[0], wholeSec)
-  return Math.ceil((composite8s / 8) * (totalSec + args.outputSec))
+  return totalSec + args.outputSec
 }

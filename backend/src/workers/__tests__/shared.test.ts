@@ -225,6 +225,7 @@ import {
   _resetJobProgressMap,
 } from "../shared.js"
 import { PostProcessingError } from "../../lib/post-processing-error.js"
+import { heldCommitArgs } from "../../lib/job-policy.js"
 import { withOutputImageDimensions } from "../../lib/job-output-dimensions.js"
 
 // ---------------------------------------------------------------------------
@@ -805,6 +806,21 @@ describe("commitJobCredits", () => {
     // reserved amount.
     await commitJobCredits("u1", "j1", 0.4) // metered defaults false
     expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1")
+  })
+
+  // A step's recorded provider cost (`jobs.provider_cost`) reaches the commit
+  // as `providerCostUsd`, never as a reason to recompute: a fixed-priced run
+  // commits its reserved tier whatever the figure, and a measured count wins
+  // over it outright — so recording a cost can never move a charge.
+  it("a recorded provider cost never moves a fixed-priced charge: (log, job, 5.7, 0, false) commits the reserved tier", async () => {
+    await commitJobCredits("u1", "j1", 5.7, 0, false)
+    expect(mocks.mockCommitCredits).toHaveBeenCalledTimes(1)
+    expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1")
+  })
+
+  it("with a measured count, heldCommitArgs hands the commit no USD cost at all", () => {
+    expect(heldCommitArgs({ meteredBaseCredits: 1900, meteredCost: 5.7 }, 5.7)).toEqual([null, 1900, true])
+    expect(heldCommitArgs({ meteredBaseCredits: 1900 }, 0.63)[0]).toBeNull()
   })
 
   it("adds extraNonProviderCredits (loop-trim addon) on top of provider-derived credits — METERED path", async () => {

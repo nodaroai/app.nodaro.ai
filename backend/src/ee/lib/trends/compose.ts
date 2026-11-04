@@ -100,11 +100,12 @@
  * A Kling 4 trend that delivers Kling's own audio sends `pulseAudio: "generated"`
  * (the original audio, the default, sends no key); dropped for an engine that
  * does not declare it (`withoutUnsupportedPulseAudio`, run-helpers.ts).
- * A Prism trend whose reference video carries only the voice, or no audio, at
- * some output resolution sends `prismReferenceAudio` as those resolutions'
- * modes (`{ "720p": "none" }`; the full audio everywhere, the default, sends no
- * key); shaped for the loaded engine — the object, the run's own resolution's
- * mode, or nothing — by `withoutUnsupportedPrismReferenceAudio`
+ * A Prism trend whose reference audio is off the default (the full mix at +4)
+ * at some output resolution sends `prismReferenceAudio` as those resolutions'
+ * values, as stored (`{ "720p": "none" }`, `{ "720p": { mode: "full",
+ * semitones: 7 } }`; the default everywhere sends no key); shaped for the
+ * loaded engine — the object form, the object of ids, the run's own
+ * resolution's id, or nothing — by `withoutUnsupportedPrismReferenceAudio`
  * (run-helpers.ts).
  *
  * Every run names what it edits (`sourceAsset`, provenance the engine stamps
@@ -160,7 +161,8 @@ import type { PromptPartTexts } from "../../../lib/cast-swap-prompt-parts-contra
 import { normaliseSteps, type CastSwapSteps } from "../../../lib/cast-swap-steps.js"
 import {
   prismReferenceAudioByResolutionOf,
-  prismReferenceAudioNotFull,
+  prismReferenceAudioNotDefault,
+  type CastSwapPrismReferenceAudio,
   type CastSwapPrismReferenceAudioSent,
 } from "../../../lib/cast-swap-prism-reference-audio.js"
 import { originalCdnImageUrls } from "../../../lib/cdn-original-url.js"
@@ -282,13 +284,14 @@ export interface TrendRunBody {
    */
   pulseAudio?: "generated"
   /**
-   * Only on Prism, and only when the trend's reference video carries the
-   * voice alone or no audio at some output resolution (absent = the full
-   * audio). Composed as the object of those resolutions; turned into what the
-   * loaded engine takes — the object, the run's own resolution's mode, or
-   * nothing — by `withoutUnsupportedPrismReferenceAudio` (run-helpers.ts).
+   * Only on Prism, and only when the trend's reference audio is off the
+   * default (the full mix at +4) at some output resolution (absent = the
+   * default). Composed as the object of those resolutions, as stored (an id
+   * where one says the value); turned into what the loaded engine takes — the
+   * object form, the object of ids, the run's own resolution's id, or nothing
+   * — by `withoutUnsupportedPrismReferenceAudio` (run-helpers.ts).
    */
-  prismReferenceAudio?: CastSwapPrismReferenceAudioSent
+  prismReferenceAudio?: CastSwapPrismReferenceAudio | CastSwapPrismReferenceAudioSent
   /**
    * The trend's prompt part overrides, text only (`{ [part]: text }`; `"-"`
    * removes a part), only when it has some. Dropped for an engine that does
@@ -662,7 +665,7 @@ export function composeTrendRun(
 
   const parts = promptPartTexts(data.promptParts)
   const wording = trendPromptWordingSent(data)
-  const prismAudio = prismReferenceAudioNotFull(prismReferenceAudioByResolutionOf(data.prismReferenceAudio))
+  const prismAudio = prismReferenceAudioNotDefault(prismReferenceAudioByResolutionOf(data.prismReferenceAudio))
   // The stored description belongs to the stored clip: sent only beside it (a full-depth run always is).
   const scene = storedFaceMask ? storedSceneDescriptionFor(data, runMasking, req.preview === true) : undefined
   const steps = normaliseSteps(data.steps)
@@ -694,8 +697,8 @@ export function composeTrendRun(
     ...(engine === "kling-4" && data.klingLength ? { klingLength: data.klingLength } : {}),
     // Kling 4's own audio, when the trend asks for it (the original audio sends no key).
     ...(engine === "kling-4" && data.pulseAudio === "generated" ? { pulseAudio: "generated" as const } : {}),
-    // Prism's reference audio, per output resolution, where the trend asks for the voice alone or none
-    // (the full audio everywhere sends no key). A plain mode stored earlier reads as every resolution.
+    // Prism's reference audio, per output resolution, where the trend's is off the default (the full mix at +4;
+    // the default everywhere sends no key). A plain id stored earlier reads as every resolution.
     ...(engine === "seedance-2-5" && prismAudio ? { prismReferenceAudio: prismAudio } : {}),
     // The admin's overrides of the engine's prompt parts, the texts only (the hashes are the editor's).
     ...(parts ? { promptParts: parts } : {}),

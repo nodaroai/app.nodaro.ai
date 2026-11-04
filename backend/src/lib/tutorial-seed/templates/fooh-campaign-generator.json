@@ -18,7 +18,7 @@
     "web-research"
   ],
   "complexity": "advanced",
-  "estimatedCredits": 1980,
+  "estimatedCredits": 1955,
   "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "text-prompt",

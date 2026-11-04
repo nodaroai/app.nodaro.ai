@@ -15,6 +15,7 @@ import sharp from "sharp"
 import { KieError, createSanitizedError, runKieTask, type KieResultJson } from "./client.js"
 import { runFluxKontextTask } from "./kontext-client.js"
 import { KIE_IMAGE_MODELS, kieSeedForWire, type KieModelConfig } from "./models.js"
+import { kieImageCostUsd } from "./image-cost.js"
 import { ensureImageForProvider } from "./video.js"
 import { TASK_CHAINED_EDIT_PROVIDERS, getMaxImagePromptChars } from "@nodaro/shared/models"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
@@ -449,6 +450,9 @@ export class KieImageProvider
       JSON.stringify(input, null, 2)
     )
 
+    const resolution = wireResolution(modelConfig, input)
+    const cost = kieImageCostUsd(provider, modelConfig, resolution)
+
     // Egress money-metadata: OUR Nodaro key is `provider` (NOT modelConfig.model,
     // the KIE id two of our keys can collapse onto); the resolution/quality lever
     // rides `dimensions` (the wire `input` carries the same values as `body`).
@@ -457,7 +461,7 @@ export class KieImageProvider
       modelKey: provider,
       dimensions: {
         ...reconcileOpts?.dimensions,
-        resolution: wireResolution(modelConfig, input),
+        resolution,
         quality: input.quality as string | number | undefined,
       },
     }
@@ -482,7 +486,7 @@ export class KieImageProvider
     const extraUrls = allUrls.slice(1)
 
     console.log(
-      `[KIE.ai] Image completed: ${imageUrl}${extraUrls.length ? ` (+${extraUrls.length} variants)` : ""} (cost: $${modelConfig.cost.toFixed(4)})`
+      `[KIE.ai] Image completed: ${imageUrl}${extraUrls.length ? ` (+${extraUrls.length} variants)` : ""} (cost: $${cost.toFixed(4)})`
     )
 
     // Log credit audit entry (fire-and-forget)
@@ -508,7 +512,7 @@ export class KieImageProvider
     return {
       url: imageUrl,
       ...(extraUrls.length ? { extraUrls } : {}),
-      cost: modelConfig.cost,
+      cost,
       ...(kieTaskId && { kieTaskId }),
       ...(providerMs !== undefined && { providerMs }),
     }
@@ -706,6 +710,8 @@ export class KieImageProvider
       JSON.stringify(input, null, 2)
     )
 
+    const resolution = wireResolution(modelConfig, input)
+    const cost = kieImageCostUsd(provider, modelConfig, resolution)
     const { resultJson, providerMs, taskId } = await runKieTask(
       modelConfig.model,
       input,
@@ -716,7 +722,7 @@ export class KieImageProvider
         modelKey: provider,
         dimensions: {
           ...reconcileOpts?.dimensions,
-          resolution: wireResolution(modelConfig, input),
+          resolution,
           quality: input.quality as string | number | undefined,
         },
       },
@@ -740,7 +746,7 @@ export class KieImageProvider
       return {
         url: segments[0].maskUrl,
         ...(segments.length > 1 ? { extraUrls: segments.slice(1).map((s) => s.maskUrl) } : {}),
-        cost: modelConfig.cost,
+        cost,
         segments: segments.map(({ index, name }) => ({ index, name })),
         ...(taskId ? { kieTaskId: taskId } : {}),
         ...(providerMs !== undefined && { providerMs }),
@@ -758,13 +764,13 @@ export class KieImageProvider
     const extraUrls = allUrls.slice(1)
 
     console.log(
-      `[KIE.ai] Edit image completed: ${outputUrl}${extraUrls.length ? ` (+${extraUrls.length} variants)` : ""} (cost: $${modelConfig.cost.toFixed(4)})`
+      `[KIE.ai] Edit image completed: ${outputUrl}${extraUrls.length ? ` (+${extraUrls.length} variants)` : ""} (cost: $${cost.toFixed(4)})`
     )
 
     return {
       url: outputUrl,
       ...(extraUrls.length ? { extraUrls } : {}),
-      cost: modelConfig.cost,
+      cost,
       ...(taskId ? { kieTaskId: taskId } : {}),
       ...(providerMs !== undefined && { providerMs }),
     }

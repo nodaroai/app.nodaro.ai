@@ -49,7 +49,7 @@ import { downloadYouTubeVideo, ytMetadataProbe, YtUrlNotAllowedError } from "../
 import { downloadSocialPostVideo, probeSocialPostVideo, socialPostOf } from "../../providers/video/social-post-video.js"
 import { trimVideo as trimVideoCore } from "../../providers/video/trim-video.js"
 import { removeAudio } from "../../providers/video/remove-audio.js"
-import { pitchTempo } from "../../providers/video/pitch-tempo.js"
+import { PITCH_SHIFT_MAX_SEMITONES, pitchTempo } from "../../providers/video/pitch-tempo.js"
 import { mixAudio } from "../../providers/video/mix-audio.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { applyAudioFx } from "../../providers/video/audio-fx.js"
@@ -1667,6 +1667,9 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   // POST /v1/video-face-mesh draws only the parts a child asks for (`parts`: the eye and lip outlines, or the lip
   // outline) and answers them (routes/video-face-mesh.ts).
   videoFaceMeshParts: true,
+  // tk.media.pitchTempo takes -24..24 semitones, half steps included, in one pass (providers/video/pitch-tempo.ts
+  // `PITCH_SHIFT_MAX_SEMITONES`).
+  pitchTempoTwoOctaves: true,
 })
 
 export interface BuildToolkitOptions {
@@ -1843,9 +1846,10 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       withMemorySlot: withPluginMemorySlot,
       extractAudio,
       removeAudio: ({ videoUrl }) => removeAudio({ videoUrl, workDirPrefix: "cast-swap" }),
-      // A pitch shift only; a PitchTempoInputError reaches the plugin unchanged.
+      // A pitch shift only, up to two octaves either way in one pass (`pitchTempoTwoOctaves`); a
+      // PitchTempoInputError reaches the plugin unchanged.
       pitchTempo: async ({ audioUrl, semitones }) => {
-        const { outputPath } = await pitchTempo({ audioUrl, semitones, tempo: 1, preserveFormants: true })
+        const { outputPath } = await pitchTempo({ audioUrl, semitones, tempo: 1, preserveFormants: true, maxSemitones: PITCH_SHIFT_MAX_SEMITONES })
         return { audioPath: outputPath }
       },
       mixAudio,

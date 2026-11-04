@@ -66,11 +66,17 @@
  * declares that size (`castSwap.depthModelSizes`, need
  * `depthModelSize:<size>`): one from before the choice is sent none, and
  * draws with the large model.
- * A Prism trend whose reference audio names a mode only some engines take
- * ("one-tone", "octave": `DECLARED_ONLY_PRISM_REFERENCE_AUDIO_MODES`) needs
- * an engine that lists it (`castSwap.prismReferenceAudioModes`, need
- * `prismReferenceAudio:<mode>`): one from before it is sent the full audio
- * (the song) for that resolution.
+ * A Prism trend whose reference audio needs more of an engine
+ * (`prismReferenceAudioRequirementsOf`) needs an engine that meets it: an id
+ * only some engines list ("one-tone", "octave", in
+ * `castSwap.prismReferenceAudioModes`; need `prismReferenceAudio:<id>`), and
+ * for a value no id says the pitch shift (`castSwap.prismReferenceAudioPitch`,
+ * need `PRISM_REFERENCE_AUDIO_PITCH_NEED`) with its one-tone mode listed
+ * (need `prismReferenceAudio:<mode>`): one that does not is sent the full
+ * audio (the song) for that resolution. A value no id says that the live
+ * version (the published version of a trend that is published, on Prism)
+ * already holds at that resolution is not changed by this publish, so it raises
+ * no need (`livePrismReferenceAudio`); an id always does.
  * A trend that sets its preparation steps (`steps`, anything but `{}`:
  * `stepsSet`) likewise needs an engine that declares them (`castSwap.steps`,
  * need `STEPS_NEED`): an older engine's body schema strips the key silently,
@@ -122,11 +128,13 @@
 import { VIDEO_DEPTH_MODEL_SIZES } from "@nodaro/shared/media"
 import type { EngineEnvironment } from "../engine-environments.js"
 import {
-  declaredOnlyPrismReferenceAudioModesOf,
-  engineTakesPrismReferenceAudioMode,
-  isDeclaredOnlyPrismReferenceAudioMode,
+  PRISM_REFERENCE_AUDIO_REQUIREMENTS,
+  engineMeetsPrismReferenceAudioRequirement,
   prismReferenceAudioByResolutionOf,
-  type CastSwapPrismReferenceAudioDeclaredOnlyMode,
+  prismReferenceAudioChangedFrom,
+  prismReferenceAudioRequirementsOf,
+  prismReferenceAudioUnreadableRequirementsOf,
+  type PrismReferenceAudioRequirement,
 } from "../../../lib/cast-swap-prism-reference-audio.js"
 import {
   depthColormapSent,
@@ -206,7 +214,7 @@ export interface PublishBlocker {
   env?: string
   /**
    * What the engine lacks: a slot kind, "fixedReferences", "faceMasking",
-   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "roleOutlines", "depthColormap:<map>" (e.g. "depthColormap:inferno"), "depthModelSize:<size>" (e.g. "depthModelSize:small"), "prismReferenceAudio:<mode>" (e.g. "prismReferenceAudio:one-tone"), "steps", "clipBodySheet", "shotList", "styleRefs", "promptWording:new", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
+   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "roleOutlines", "depthColormap:<map>" (e.g. "depthColormap:inferno"), "depthModelSize:<size>" (e.g. "depthModelSize:small"), "prismReferenceAudio:<mode>" (e.g. "prismReferenceAudio:one-tone"), "prismReferenceAudioPitch", "steps", "clipBodySheet", "shotList", "styleRefs", "promptWording:new", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
    * "trendRun" or "castSwap".
    */
   need?: string
@@ -287,17 +295,26 @@ function depthModelSizeOfNeed(need: string): FaceMaskingDepthModelSize | null {
   return (VIDEO_DEPTH_MODEL_SIZES as readonly string[]).includes(size) ? (size as FaceMaskingDepthModelSize) : null
 }
 
-/** The need of a Prism trend whose reference audio names `mode` (`prismReferenceAudio`, `castSwap.prismReferenceAudioModes`). */
-export function prismReferenceAudioModeNeed(mode: CastSwapPrismReferenceAudioDeclaredOnlyMode): string {
+/** The need of a Prism trend whose reference audio names an id or a one-tone mode only some engines take (`castSwap.prismReferenceAudioModes`). */
+export function prismReferenceAudioModeNeed(mode: Exclude<PrismReferenceAudioRequirement, "pitch">): string {
   return `${PRISM_REFERENCE_AUDIO_NEED_PREFIX}${mode}`
 }
 const PRISM_REFERENCE_AUDIO_NEED_PREFIX = "prismReferenceAudio:"
 
-/** The mode a `prismReferenceAudio:<mode>` need names, or null for any other need. */
-function prismReferenceAudioModeOfNeed(need: string): CastSwapPrismReferenceAudioDeclaredOnlyMode | null {
+/** The need of a Prism trend holding a value no id says: an engine that takes the pitch shift (`castSwap.prismReferenceAudioPitch`). */
+export const PRISM_REFERENCE_AUDIO_PITCH_NEED = "prismReferenceAudioPitch"
+
+/** The need of a reference audio requirement. */
+export function prismReferenceAudioNeedOf(requirement: PrismReferenceAudioRequirement): string {
+  return requirement === "pitch" ? PRISM_REFERENCE_AUDIO_PITCH_NEED : prismReferenceAudioModeNeed(requirement)
+}
+
+/** The requirement a `prismReferenceAudio:<mode>` or `prismReferenceAudioPitch` need names, or null for any other need. */
+function prismReferenceAudioRequirementOfNeed(need: string): PrismReferenceAudioRequirement | null {
+  if (need === PRISM_REFERENCE_AUDIO_PITCH_NEED) return "pitch"
   if (!need.startsWith(PRISM_REFERENCE_AUDIO_NEED_PREFIX)) return null
   const mode = need.slice(PRISM_REFERENCE_AUDIO_NEED_PREFIX.length)
-  return isDeclaredOnlyPrismReferenceAudioMode(mode) ? mode : null
+  return PRISM_REFERENCE_AUDIO_REQUIREMENTS.find((r) => r !== "pitch" && r === mode) ?? null
 }
 
 /** The need of a trend that sets its preparation steps (`steps`, `castSwap.steps`). */
@@ -323,8 +340,12 @@ const SOURCE_MODE_NAMES: Readonly<Record<FaceMaskingSource, string>> = {
 
 export { castSwapEnginesOf }
 
-/** What every environment's engine must support for this draft, in report order. */
-function needsOf(data: TrendVersionData): string[] {
+/**
+ * What every environment's engine must support for this draft, in report order
+ * (`livePrismReferenceAudio`: the live version's reference audio, as stored; left
+ * out: nothing live on Prism).
+ */
+function needsOf(data: TrendVersionData, livePrismReferenceAudio?: unknown): string[] {
   const engine = engineOf(data)
   const kinds: TrendSlotKind[] = []
   for (const s of data.slots) if (!kinds.includes(s.kind)) kinds.push(s.kind)
@@ -349,8 +370,8 @@ function needsOf(data: TrendVersionData): string[] {
     ...depthColormapNeeds(data),
     // A depth model size: an engine from before it is sent none, and draws with the large model.
     ...depthModelSizeNeeds(data),
-    // Prism's newer reference audio modes: an engine from before them is sent the full audio.
-    ...prismReferenceAudioModeNeeds(data),
+    // Prism's reference audio beyond what every engine takes: an engine from before it is sent the full audio.
+    ...prismReferenceAudioModeNeeds(data, livePrismReferenceAudio),
     // The preparation steps: an engine from before them strips the key (and a run there is sent without it).
     // ("Body from the clip" Off, or On with no prompt, is safe everywhere: not a need.)
     ...(stepsSet(stepsThatNeedTheEngine(data.steps)) ? [STEPS_NEED] : []),
@@ -383,10 +404,19 @@ function depthModelSizeNeeds(data: TrendVersionData): string[] {
   return size === undefined ? [] : [depthModelSizeNeed(size)]
 }
 
-/** A Prism draft's reference audio needs: each declared-only mode it names at some resolution. */
-function prismReferenceAudioModeNeeds(data: TrendVersionData): string[] {
+/**
+ * A Prism draft's reference audio needs: each requirement of what it holds at
+ * some resolution, less a value no id says that the live version holds there as
+ * it is (publishing it changes nothing, so it is no reason to refuse).
+ */
+function prismReferenceAudioModeNeeds(data: TrendVersionData, livePrismReferenceAudio?: unknown): string[] {
   if (engineOf(data) !== "seedance-2-5") return []
-  return declaredOnlyPrismReferenceAudioModesOf(prismReferenceAudioByResolutionOf(data.prismReferenceAudio)).map(prismReferenceAudioModeNeed)
+  const choice = prismReferenceAudioByResolutionOf(data.prismReferenceAudio)
+  const unreadable = prismReferenceAudioUnreadableRequirementsOf(choice)
+  const changed = prismReferenceAudioUnreadableRequirementsOf(prismReferenceAudioChangedFrom(choice, prismReferenceAudioByResolutionOf(livePrismReferenceAudio)))
+  return prismReferenceAudioRequirementsOf(choice)
+    .filter((r) => !unreadable.includes(r) || changed.includes(r))
+    .map(prismReferenceAudioNeedOf)
 }
 
 function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
@@ -408,8 +438,8 @@ function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
     if (colormap !== null) return !engineDrawsDepthColormap(cs, colormap)
     const size = depthModelSizeOfNeed(need)
     if (size !== null) return !engineDrawsDepthModelSize(cs, size)
-    const audioMode = prismReferenceAudioModeOfNeed(need)
-    if (audioMode !== null) return !engineTakesPrismReferenceAudioMode(cs, audioMode)
+    const audio = prismReferenceAudioRequirementOfNeed(need)
+    if (audio !== null) return !engineMeetsPrismReferenceAudioRequirement(cs, audio)
     if (need === STEPS_NEED) return !engineTakesSteps(cs)
     if (need === CLIP_BODY_NEED) return !engineTakesClipBodySheet(cs)
     if (need === SHOT_LIST_NEED) return !engineTakesShotList(cs)
@@ -435,6 +465,7 @@ export function publishBlockers(
   environments: readonly EngineEnvironment[],
   required: readonly string[],
   promptPartProblems: readonly TrendPromptPartProblem[] = [],
+  livePrismReferenceAudio?: unknown,
 ): PublishBlocker[] {
   const out: PublishBlocker[] = []
   if (!data.source) out.push({ code: "source_missing" })
@@ -526,7 +557,7 @@ export function publishBlockers(
     out.push(...variantBlockers(data, mask.status === "approved"))
   }
 
-  const needs = needsOf(data)
+  const needs = needsOf(data, livePrismReferenceAudio)
   for (const env of required) {
     const row = environments.find((e) => e.env === env)
     if (!row) {

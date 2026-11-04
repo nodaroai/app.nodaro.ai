@@ -23,7 +23,7 @@ import type { LocaleId } from "@nodaro/shared/i18n"
 import type { CastSwapEngine, CastSwapKlingLength } from "@nodaro/shared/models"
 import type { FaceMasking, FaceMaskingWithMarks } from "../../../lib/cast-swap-face-masking.js"
 import type { CastSwapPulseAudio } from "../../../lib/cast-swap-pulse-audio.js"
-import type { CastSwapPrismReferenceAudio, CastSwapPrismReferenceAudioMode } from "../../../lib/cast-swap-prism-reference-audio.js"
+import type { CastSwapPrismReferenceAudio, CastSwapPrismReferenceAudioId } from "../../../lib/cast-swap-prism-reference-audio.js"
 import type { CastSwapPromptPartId, CastSwapPromptStyle, CastSwapPromptWording, TrendCropAspect, TrendUpscaleResolution } from "@nodaro/render-rules"
 import type { CastSwapSteps } from "../../../lib/cast-swap-steps.js"
 
@@ -484,16 +484,18 @@ export interface TrendVersionData {
   /**
    * HIDDEN. What audio the reference video a Prism run sends to the video
    * model carries, per output resolution (`{ "480p"?, "720p"?, "1080p"? }`):
-   * `"full"` (the default, and what a missing key or a missing field means:
-   * the clip's audio), `"voice"` (only the voice, split from the music) or
-   * `"none"` (silent). The original audio goes back on the result in every
+   * a mode and a pitch shift (lib/cast-swap-prism-reference-audio.ts), a
+   * missing key or a missing field being the default (the full mix at +4).
+   * Stored as one of today's ids where one says the value (`"full"`,
+   * `"voice"`, `"none"`, `"one-tone"`, `"octave"`), else as
+   * `{ mode, semitones }`. The original audio goes back on the result in every
    * mode. A version saved before the per-resolution setting may still hold a
-   * plain mode, which reads as that mode at every resolution: read it through
+   * plain id, which reads as that id at every resolution: read it through
    * `prismReferenceAudioByResolutionOf` (a save through the schema writes the
    * object). Read only on a Prism trend; not part of the face mask's
    * settings, so changing it needs no new mask.
    */
-  prismReferenceAudio?: CastSwapPrismReferenceAudio | CastSwapPrismReferenceAudioMode
+  prismReferenceAudio?: CastSwapPrismReferenceAudio | CastSwapPrismReferenceAudioId
   /**
    * HIDDEN. The preparation steps of every run of this trend (reference
    * sheets by rules, the engine prompt and the scene description as Template

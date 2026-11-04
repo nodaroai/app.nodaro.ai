@@ -164,4 +164,30 @@ describe("ClampedNumberInput", () => {
     fireEvent.blur(el)
     expect(onCommit).not.toHaveBeenCalled()
   })
+
+  it("snaps to a fractional step only when asked, on commit and with the arrow keys", async () => {
+    const onCommit = vi.fn()
+    render(<ClampedNumberInput aria-label="Pitch" value={4} min={-24} max={24} step={0.5} snapToStep onCommit={onCommit} />)
+    const el = screen.getByRole("spinbutton", { name: "Pitch" }) as HTMLInputElement
+    for (const [typed, kept] of [["1.3", 1.5], ["-3.7", -3.5], ["7.25", 7.5], ["30", 24]] as const) {
+      await userEvent.clear(el)
+      await userEvent.type(el, `${typed}{Enter}`)
+      expect(onCommit, typed).toHaveBeenLastCalledWith(kept)
+      expect(el.value, typed).toBe(String(kept))
+    }
+    el.focus()
+    await userEvent.clear(el)
+    await userEvent.type(el, "0.2")
+    await userEvent.keyboard("{ArrowUp}")
+    expect(el.value).toBe("0.5")
+  })
+
+  it("leaves a fractional step unsnapped by default", async () => {
+    const onCommit = vi.fn()
+    render(<ClampedNumberInput aria-label="Gain" value={1} min={0} max={10} step={0.5} onCommit={onCommit} />)
+    const el = screen.getByRole("spinbutton", { name: "Gain" }) as HTMLInputElement
+    await userEvent.clear(el)
+    await userEvent.type(el, "1.3{Enter}")
+    expect(onCommit).toHaveBeenLastCalledWith(1.3)
+  })
 })

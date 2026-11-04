@@ -10,12 +10,13 @@
  *     charged from. The credit amounts live in the rows, never here.
  *
  * Worked examples (repeated in docs/nodes/ai-video/video-mask.md):
- *   4 s at 30 fps → `sam-3.1-video:5s`,  12 s at 24 fps → `sam-3.1-video:15s`,
+ *   4 s at 30 fps → `sam-3.1-video:5s`,  5.005 s at 29.97 fps → `sam-3.1-video:5s`,  12 s at 24 fps → `sam-3.1-video:15s`,
  *   10 s at 60 fps (priced as 20 s) → `sam-3.1-video:30s`,  45 s at 30 fps → `sam-3.1-video:60s`,
  *   100 s at 30 fps → `sam-3.1-video:120s`,  4 min at 30 fps on SAM 3 → `sam-3-video:240s`.
  *
  * Wire contract only — no I/O.
  */
+import { pricedClipSeconds } from "./priced-clip-seconds.js"
 
 /** Segmentation models a Video Mask run can use. SAM 3.1 (the default)
  *  tracks several objects in one pass and runs faster; SAM 3 costs half. */
@@ -166,7 +167,8 @@ export function videoMaskCreditIds(provider: VideoMaskProvider = DEFAULT_VIDEO_M
 /**
  * The length a clip is priced at: its duration at the 30 fps basis. A clip
  * at or under 30 fps is priced at its own length; a 60 fps clip at twice it.
- * An unknown frame rate counts as the basis.
+ * An unknown frame rate counts as the basis. The cap reads this figure; the
+ * price row reads it through `pricedClipSeconds`.
  */
 export function videoMaskBilledSeconds(durationSec: number, fps?: number | null): number {
   const rate = typeof fps === "number" && Number.isFinite(fps) && fps > 0 ? fps : VIDEO_MASK_LIMITS.FPS_BASIS
@@ -174,10 +176,12 @@ export function videoMaskBilledSeconds(durationSec: number, fps?: number | null)
 }
 
 /**
- * The price row for a clip priced at `billedSec` seconds. An unknown or
- * non-positive length prices the LONGEST row (a clip the route could not
- * measure is refused, so this is only the pre-run quote for a clip whose
- * length is not known yet); anything past the cap prices the last row.
+ * The price row for a clip priced at `billedSec` seconds: the smallest that
+ * holds it, after `pricedClipSeconds` (up to 0.05 s past a row's length stays in
+ * that row). An unknown or non-positive length prices the LONGEST row (a clip
+ * the route could not measure is refused, so this is only the pre-run quote for
+ * a clip whose length is not known yet); anything past the cap prices the last
+ * row.
  */
 export function videoMaskCreditId(
   billedSec: number | null | undefined,
@@ -185,7 +189,8 @@ export function videoMaskCreditId(
 ): string {
   const ids = videoMaskCreditIds(provider)
   if (typeof billedSec !== "number" || !Number.isFinite(billedSec) || billedSec <= 0) return ids[ids.length - 1]!
-  const i = VIDEO_MASK_BUCKETS_SEC.findIndex((b) => billedSec <= b)
+  const priced = pricedClipSeconds(billedSec)
+  const i = VIDEO_MASK_BUCKETS_SEC.findIndex((b) => priced <= b)
   return ids[i === -1 ? ids.length - 1 : i]!
 }
 

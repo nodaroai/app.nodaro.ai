@@ -88,6 +88,15 @@ describe.skipIf(!RUBBERBAND)("pitchTempo (real rubberband)", () => {
     await fs.rm(dirname(outputPath), { recursive: true, force: true })
   })
 
+  it("audio: two octaves either way, and a half step, run in one pass and keep the length", async () => {
+    for (const semitones of [24, -24, 0.5]) {
+      const { outputPath, inputType } = await pitchTempo({ audioUrl: toneWav, semitones, tempo: 1, preserveFormants: true, maxSemitones: 24 })
+      expect(inputType, String(semitones)).toBe("audio")
+      expect(formatDuration(outputPath), String(semitones)).toBeCloseTo(4, 1)
+      await fs.rm(dirname(outputPath), { recursive: true, force: true })
+    }
+  })
+
   it("audio: tempo 0.5 doubles the length", async () => {
     const { outputPath } = await pitchTempo({ audioUrl: toneWav, semitones: 0, tempo: 0.5, preserveFormants: false })
     expect(formatDuration(outputPath)).toBeCloseTo(8, 0)

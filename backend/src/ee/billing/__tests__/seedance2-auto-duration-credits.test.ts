@@ -17,7 +17,7 @@ vi.mock("../credits.js", async (importOriginal) => ({
 }))
 
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
-import { seedance2AutoDurationActualBaseCredits } from "../seedance2-ref-video-credits.js"
+import { seedance2AutoDurationActualBaseCredits, seedance2AutoDurationActualSeconds } from "../seedance2-ref-video-credits.js"
 
 const OUT = "https://kie.example/out.mp4"
 const pricedId = () => pricing.getModelCreditBaseCost.mock.calls.at(-1)![0]
@@ -60,5 +60,43 @@ describe("seedance2AutoDurationActualBaseCredits", () => {
       ).rejects.toThrow(/unusable/)
     }
     expect(pricing.getModelCreditBaseCost).not.toHaveBeenCalled()
+  })
+
+  it("priced from a measurement already taken: the same tier, and the clip is not probed again", async () => {
+    await seedance2AutoDurationActualBaseCredits({ provider: "seedance-2-5", resolution: "480p", outputUrl: OUT }, 9)
+    expect(pricedId()).toBe("seedance-2-5:9s:480p")
+    expect(probe.probeMediaDuration).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * The seconds that settlement prices, exported so the run's recorded provider
+ * cost reads the very seconds its charge bills — today's rounding rule.
+ */
+describe("seedance2AutoDurationActualSeconds (what the settlement measures)", () => {
+  it.each([
+    [5.04, 5],
+    [5.0, 5],
+    [5.3, 6],
+    [29.97, 30],
+    [0.1, 1],
+  ])("a %ss delivery bills %ss", async (measured, seconds) => {
+    probe.probeMediaDuration.mockResolvedValue(measured)
+    await expect(seedance2AutoDurationActualSeconds({ outputUrl: OUT })).resolves.toBe(seconds)
+    expect(probe.probeMediaDuration).toHaveBeenCalledWith(OUT)
+  })
+
+  it("is the length the settlement prices", async () => {
+    probe.probeMediaDuration.mockResolvedValue(12.3)
+    const seconds = await seedance2AutoDurationActualSeconds({ outputUrl: OUT })
+    await seedance2AutoDurationActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", outputUrl: OUT })
+    expect(pricedId()).toBe(`seedance-2-5:${seconds}s:720p`)
+  })
+
+  it("throws on an unusable measurement", async () => {
+    for (const bad of [NaN, 0, -1]) {
+      probe.probeMediaDuration.mockResolvedValue(bad)
+      await expect(seedance2AutoDurationActualSeconds({ outputUrl: OUT })).rejects.toThrow(/unusable/)
+    }
   })
 })

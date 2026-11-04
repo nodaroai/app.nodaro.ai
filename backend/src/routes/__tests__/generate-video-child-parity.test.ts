@@ -112,7 +112,10 @@ vi.mock("@/workers/shared.js", async (importOriginal) => ({
   startProgressRamp: vi.fn(() => ({ stop: vi.fn() })),
 }))
 vi.mock("@/lib/job-finalize.js", () => ({ finalizeJobWithMedia: mocks.finalize }))
-vi.mock("@/lib/seedance2-ref-video-settle.js", () => ({ measureSeedance2RefVideoBaseCredits: vi.fn(async () => undefined) }))
+vi.mock("@/lib/seedance2-ref-video-settle.js", () => ({
+  measureSeedance2RefVideoBaseCredits: vi.fn(async () => undefined),
+  measureSeedance2Settle: vi.fn(async () => ({ baseCredits: undefined, seconds: undefined })),
+}))
 vi.mock("@/lib/seedance-draft-finalize.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/seedance-draft-finalize.js")>()),
   measureSeedanceDraftRenderSec: vi.fn(async () => undefined),

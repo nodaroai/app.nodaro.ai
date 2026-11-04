@@ -1,4 +1,4 @@
-import { checkVideoDepthLength, resolveVideoDepthProvider, videoDepthCreditId } from "@nodaro/shared/media"
+import { checkVideoDepthLength, pricedClipSeconds, resolveVideoDepthProvider, videoDepthCreditId } from "@nodaro/shared/media"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
 import { safeUrlSchema } from "./url-validator.js"
 
@@ -39,7 +39,7 @@ export async function measureVideoDepthInput(
   }
   const length = checkVideoDepthLength(provider, { durationSec: probe.durationSeconds, fps: probe.fps })
   if (!length.ok) return { ok: false, code: "video_too_long", message: length.message }
-  const durationSec = Math.ceil(probe.durationSeconds)
+  const durationSec = pricedClipSeconds(probe.durationSeconds)
   return { ok: true, durationSec, creditId: videoDepthCreditId(provider, durationSec) }
 }
 

@@ -46,7 +46,7 @@ describe("Video Mask pricing", () => {
     expect(videoMaskCreditId(0)).toBe("sam-3.1-video:300s")
     expect(videoMaskCreditId(500)).toBe("sam-3.1-video:300s")
     expect(videoMaskCreditId(5)).toBe("sam-3.1-video:5s")
-    expect(videoMaskCreditId(5.01)).toBe("sam-3.1-video:10s")
+    expect(videoMaskCreditId(5.01)).toBe("sam-3.1-video:5s")
     expect(videoMaskCreditId(61)).toBe("sam-3.1-video:90s")
   })
 

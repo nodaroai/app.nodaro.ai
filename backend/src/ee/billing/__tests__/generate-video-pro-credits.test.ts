@@ -72,8 +72,8 @@ describe("golden-table composite sanity (seedance-2 family, credits.ts)", () => 
   })
   it("gpt-image-2:2K anchor-image row (keyframes default anchor reserve)", () => {
     // The COMPOSITE, not the bare id — bare gpt-image-2 is the 1K price (15)
-    // and would under-reserve every anchor by half.
-    expect(STATIC_CREDIT_COSTS["gpt-image-2:2K"]).toBe(30)
+    // and would under-reserve every anchor.
+    expect(STATIC_CREDIT_COSTS["gpt-image-2:2K"]).toBe(25)
     expect(STATIC_CREDIT_COSTS["gpt-image-2"]).toBe(15)
   })
 })

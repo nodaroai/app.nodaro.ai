@@ -123,11 +123,11 @@ describe("POST /v1/video-face-mesh — a child step", () => {
     expect(res.statusCode).toBe(202)
     expect(res.json()).toEqual({ jobId: "job-fm-1" })
     expect(probe).toHaveBeenCalledWith(CLIP)
-    // 21.04 s at 24 fps → 22 s priced → the 30 s row.
+    // 21.04 s at 24 fps → 21 s priced (within 0.05 s of it) → the 30 s row.
     expect(guardedId).toBe("video-face-mesh:30s")
     expect(reserve).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-fm-1", "video-face-mesh:30s")
     expect(inserted).toMatchObject({ force_private: true, user_id: USER, status: "pending" })
-    expect(inserted!.input_data).toMatchObject({ type: "video-face-mesh", videoUrl: CLIP, billedSec: 22, bucketKey: "video-face-mesh:30s" })
+    expect(inserted!.input_data).toMatchObject({ type: "video-face-mesh", videoUrl: CLIP, billedSec: 21, bucketKey: "video-face-mesh:30s" })
     expect(videoQueue.add).toHaveBeenCalledWith("video-face-mesh", {
       jobId: "job-fm-1",
       videoUrl: CLIP,
@@ -156,10 +156,10 @@ describe("POST /v1/video-face-mesh — a child step", () => {
     expect(guardedId).toBe("video-face-mesh:15s")
   })
 
-  it("a 30 s clip at 60 fps (1,801 frames) is taken, at the 120 s row", async () => {
+  it("a 30 s clip at 60 fps (1,801 frames) is taken, at the 60 s row: 60.03 s priced is within 0.05 s of it", async () => {
     probe.mockResolvedValue({ width: 720, height: 1280, durationSeconds: 30.0167, fps: 60 })
     expect((await asChild(BODY)).statusCode).toBe(202)
-    expect(guardedId).toBe("video-face-mesh:120s")
+    expect(guardedId).toBe("video-face-mesh:60s")
   })
 
   it("refuses a clip past 300 s (priced, Video Mask's cap), or one it cannot read, 400 before anything is reserved", async () => {

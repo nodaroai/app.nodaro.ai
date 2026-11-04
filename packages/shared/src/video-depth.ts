@@ -12,9 +12,11 @@
  * live there, never here. Video Depth Anything has one row per whole second of
  * the clip, Depth Anything (per frame) one per length bucket. Worked examples
  * (repeated in docs/nodes/processing-video/video-depth.md):
- *   video-depth-anything:  0.4 s → `:1s`,  9 s → `:9s`,  9.2 s → `:10s`,  15.01 s → `:16s`.
- *   depth-anything-frames: 5 s → `:15s`,  15 s → `:15s`,  15.01 s → `:30s`,  61 s → `:120s`.
+ *   video-depth-anything:  0.4 s → `:1s`,  9 s → `:9s`,  9.2 s → `:10s`,  15.015 s → `:15s`,  15.06 s → `:16s`.
+ *   depth-anything-frames: 5 s → `:15s`,  15 s → `:15s`,  15.015 s → `:15s`,  15.06 s → `:30s`,  61 s → `:120s`.
  */
+
+import { pricedClipSeconds } from "./priced-clip-seconds.js"
 
 export const VIDEO_DEPTH_PROVIDERS = ["video-depth-anything", "depth-anything-frames"] as const
 export type VideoDepthProvider = (typeof VIDEO_DEPTH_PROVIDERS)[number]
@@ -140,11 +142,12 @@ function videoDepthMaxSeconds(provider: string): number {
 /**
  * The price row for a clip of `durationSec`.
  *
- * The fal lane (Video Depth Anything) has one row per whole second of the clip
- * (`video-depth-anything:1s` … `:300s`, decided 2026-11-03): the length rounded
- * UP, so a clip under one second is priced as one. The Replicate lane (Depth
- * Anything per frame) has one row per length bucket (`VIDEO_DEPTH_BUCKETS`,
- * boundaries inclusive).
+ * Both lanes price the clip's length rounded UP (`pricedClipSeconds`: up to
+ * 0.05 s past a whole second is ignored first), so a clip under one second is
+ * priced as one. The fal lane (Video Depth Anything) has one row per whole second
+ * of the clip (`video-depth-anything:1s` … `:300s`, decided 2026-11-03). The
+ * Replicate lane (Depth Anything per frame) has one row per length bucket
+ * (`VIDEO_DEPTH_BUCKETS`, boundaries inclusive).
  *
  * Unknown, non-positive or longer than the provider accepts → the provider's
  * highest REACHABLE row: fal's longest clip (300 s → `:300s`), Replicate's
@@ -154,9 +157,8 @@ function videoDepthMaxSeconds(provider: string): number {
 export function videoDepthCreditId(provider: string, durationSec: number | null | undefined): string {
   const maxSec = videoDepthMaxSeconds(provider)
   const known = typeof durationSec === "number" && Number.isFinite(durationSec) && durationSec > 0 && durationSec <= maxSec
-  if (FAL_VIDEO_DEPTH_PROVIDERS.has(provider)) return `${provider}:${known ? Math.ceil(durationSec) : maxSec}s`
+  const priced = known ? pricedClipSeconds(durationSec) : maxSec
+  if (FAL_VIDEO_DEPTH_PROVIDERS.has(provider)) return `${provider}:${priced}s`
   const top = VIDEO_DEPTH_BUCKETS[VIDEO_DEPTH_BUCKETS.length - 1]
-  const reachableCeiling = VIDEO_DEPTH_BUCKETS.find((b) => b >= maxSec) ?? top
-  const bucket = known ? (VIDEO_DEPTH_BUCKETS.find((b) => durationSec <= b) ?? top) : reachableCeiling
-  return `${provider}:${bucket}s`
+  return `${provider}:${VIDEO_DEPTH_BUCKETS.find((b) => priced <= b) ?? top}s`
 }

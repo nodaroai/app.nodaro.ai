@@ -104,7 +104,7 @@ describe("videoDepthCreditId", () => {
     expect(videoDepthCreditId("video-depth-anything", 9)).toBe("video-depth-anything:9s")
     expect(videoDepthCreditId("video-depth-anything", 9.2)).toBe("video-depth-anything:10s")
     expect(videoDepthCreditId("video-depth-anything", 15)).toBe("video-depth-anything:15s")
-    expect(videoDepthCreditId("video-depth-anything", 15.01)).toBe("video-depth-anything:16s")
+    expect(videoDepthCreditId("video-depth-anything", 15.01)).toBe("video-depth-anything:15s")
     expect(videoDepthCreditId("video-depth-anything", 30)).toBe("video-depth-anything:30s")
     expect(videoDepthCreditId("video-depth-anything", 299.5)).toBe("video-depth-anything:300s")
     expect(videoDepthCreditId("video-depth-anything", 300)).toBe("video-depth-anything:300s")
@@ -121,7 +121,7 @@ describe("videoDepthCreditId", () => {
   it("Replicate keeps its length buckets, boundaries inclusive", () => {
     expect(videoDepthCreditId("depth-anything-frames", 5)).toBe("depth-anything-frames:15s")
     expect(videoDepthCreditId("depth-anything-frames", 15)).toBe("depth-anything-frames:15s")
-    expect(videoDepthCreditId("depth-anything-frames", 15.01)).toBe("depth-anything-frames:30s")
+    expect(videoDepthCreditId("depth-anything-frames", 15.01)).toBe("depth-anything-frames:15s")
     expect(videoDepthCreditId("depth-anything-frames", 61)).toBe("depth-anything-frames:120s")
   })
   it("unknown, non-positive or over-cap duration prices the provider's highest REACHABLE row", () => {

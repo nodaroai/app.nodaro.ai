@@ -838,8 +838,8 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     resolutions: ["1K", "2K", "4K"],
     pricing: [
       { identifier: "gpt-image-2", credits: 15, note: "1K default" },
-      { identifier: "gpt-image-2:2K", credits: 30, note: "2K" },
-      { identifier: "gpt-image-2:4K", credits: 60, note: "4K" },
+      { identifier: "gpt-image-2:2K", credits: 25, note: "2K" },
+      { identifier: "gpt-image-2:4K", credits: 40, note: "4K" },
     ],
     safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
     featured: true,
@@ -860,8 +860,8 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     resolutions: ["1K", "2K", "4K"],
     pricing: [
       { identifier: "gpt-image-2-i2i", credits: 15, note: "1K default" },
-      { identifier: "gpt-image-2-i2i:2K", credits: 30, note: "2K" },
-      { identifier: "gpt-image-2-i2i:4K", credits: 60, note: "4K" },
+      { identifier: "gpt-image-2-i2i:2K", credits: 25, note: "2K" },
+      { identifier: "gpt-image-2-i2i:4K", credits: 40, note: "4K" },
     ],
   },
 
@@ -2029,13 +2029,13 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "seedance-2-5", credits: 1260, note: "default 8s 720p — see :Ns:res variants for exact" },
       { identifier: "seedance-2-5:8s:480p", credits: 560, note: "8s 480p" },
       { identifier: "seedance-2-5:8s:720p", credits: 1260, note: "8s 720p" },
-      { identifier: "seedance-2-5:8s:1080p", credits: 2280, note: "8s 1080p" },
+      { identifier: "seedance-2-5:8s:1080p", credits: 3160, note: "8s 1080p" },
       { identifier: "seedance-2-5:8s:480p-ref", credits: 340, note: "8s 480p with reference video" },
       { identifier: "seedance-2-5:8s:720p-ref", credits: 760, note: "8s 720p with reference video" },
-      { identifier: "seedance-2-5:8s:1080p-ref", credits: 1370, note: "8s 1080p with reference video" },
+      { identifier: "seedance-2-5:8s:1080p-ref", credits: 1900, note: "8s 1080p with reference video" },
       { identifier: "seedance-2-5:30s:480p", credits: 2100, note: "30s 480p (max)" },
       { identifier: "seedance-2-5:30s:720p", credits: 4730, note: "30s 720p (max)" },
-      { identifier: "seedance-2-5:30s:1080p", credits: 8550, note: "30s 1080p (max)" },
+      { identifier: "seedance-2-5:30s:1080p", credits: 11850, note: "30s 1080p (max)" },
     ],
   },
 
@@ -2819,7 +2819,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   // ── Video Depth ── (video-depth node; priced by the input clip's length via
   // videoDepthCreditId in video-depth.ts — `<provider>:<n>s`, bare row = the
   // 300 s ceiling. Video Depth Anything: one row per whole second of the clip
-  // (`:1s` … `:300s`, rounded up), representative rows below; Depth Anything
+  // (`:1s` … `:300s`, `pricedClipSeconds`), representative rows below; Depth Anything
   // per frame: one row per length bucket, same shape as volcengine-lipsync.)
   "video-depth-anything": {
     id: "video-depth-anything",
@@ -2833,7 +2833,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["depth", "video-to-video", "compositing"],
     pricing: [
       { identifier: "video-depth-anything", credits: 6000, note: "5-min ceiling (no duration given)" },
-      { identifier: "video-depth-anything:1s", credits: 20, note: "1s (min) — priced per second of the clip at this row's credits, the length rounded up" },
+      { identifier: "video-depth-anything:1s", credits: 20, note: "1s (min) — priced per second of the clip at this row's credits, the length rounded up after ignoring up to 0.05 s past a whole second" },
       { identifier: "video-depth-anything:15s", credits: 300, note: "15s" },
       { identifier: "video-depth-anything:60s", credits: 1200, note: "1 min" },
       { identifier: "video-depth-anything:300s", credits: 6000, note: "5-min ceiling (max)" },

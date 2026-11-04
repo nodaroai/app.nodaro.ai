@@ -14,8 +14,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
  * A trend run (`trendRun` on an internal request) keeps the body its trend
  * composed.
  */
+import type { CastSwapPrismReferenceAudio } from "../../lib/cast-swap-prism-reference-audio.js"
+
 type Mode = "full" | "voice" | "none" | "one-tone" | "octave"
-type ByRes = { "480p"?: Mode; "720p"?: Mode; "1080p"?: Mode }
+type ByRes = CastSwapPrismReferenceAudio
 const h = vi.hoisted(() => ({ choice: null as ByRes | null, failed: false, reads: 0 }))
 
 vi.mock("../../lib/app-settings.js", () => {
@@ -260,5 +262,49 @@ describe("registerNodaroMotionPrismReferenceAudioHook — an engine that takes o
     const body = { engine: "motion-prism", prismReferenceAudio: "none" }
     expect(await seen(body, "/v1/cast-swap/j-1/full-quality")).toEqual(body)
     expect(await seen(body, "/v1/generate-video")).toEqual(body)
+  })
+})
+
+describe("registerNodaroMotionPrismReferenceAudioHook — a mode and a pitch shift per resolution", () => {
+  const PITCH = {
+    ...CS,
+    prismReferenceAudioPerResolution: true,
+    prismReferenceAudioPitch: true,
+    prismReferenceAudioModes: ["full", "voice", "none", "one-tone", "octave", "full-one-tone", "voice-one-tone"] as const,
+  }
+
+  it("sends an engine with the pitch shift the object form, a run and its quote alike, the default left out", async () => {
+    setPluginSupports({ castSwap: PITCH })
+    h.choice = parseNodaroMotionPrismReferenceAudio({ "480p": "full", "720p": { mode: "full", semitones: 7 }, "1080p": "none" })
+    for (const url of URLS) {
+      expect(await seen({ videoUrl: "x", resolution: "720p" }, url)).toEqual({
+        videoUrl: "x",
+        resolution: "720p",
+        prismReferenceAudio: { "720p": { mode: "full", semitones: 7 }, "1080p": { mode: "none" } },
+      })
+    }
+    // Today's ids too, as the values they always were.
+    h.choice = { "480p": "voice", "720p": "octave" }
+    expect(await seen({ videoUrl: "x" })).toEqual({ videoUrl: "x", prismReferenceAudio: { "480p": { mode: "voice", semitones: 4 }, "720p": { mode: "full", semitones: 12 } } })
+    // Every resolution at the default: no key.
+    h.choice = every("full")
+    expect(await seen({ videoUrl: "x" })).toEqual({ videoUrl: "x" })
+  })
+
+  it("sends an engine without it the ids a value is, and the full audio where none says it", async () => {
+    h.choice = parseNodaroMotionPrismReferenceAudio({ "480p": { mode: "voice", semitones: 4 }, "720p": { mode: "full", semitones: 7 }, "1080p": { mode: "voice-one-tone" } })
+    setPluginSupports({ castSwap: { ...CS, prismReferenceAudioPerResolution: true, prismReferenceAudioModes: ["full", "voice", "none", "one-tone", "octave"] as const } })
+    for (const url of URLS) expect(await seen({ videoUrl: "x", resolution: "720p" }, url)).toEqual({ videoUrl: "x", resolution: "720p", prismReferenceAudio: { "480p": "voice" } })
+    setPluginSupports({ castSwap: { ...CS, prismReferenceAudio: true } })
+    expect(await seen({ videoUrl: "x", resolution: "720p" })).toEqual({ videoUrl: "x", resolution: "720p" })
+    expect(await seen({ videoUrl: "x", draft: true })).toEqual({ videoUrl: "x", draft: true, prismReferenceAudio: "voice" })
+  })
+
+  it("never sends it on a Pulse run, and drops a caller's object form", async () => {
+    setPluginSupports({ castSwap: PITCH })
+    h.choice = parseNodaroMotionPrismReferenceAudio({ "480p": { mode: "full", semitones: 7 } })
+    expect(await seen({ videoUrl: "x", engine: "motion-pulse" })).toEqual({ videoUrl: "x", engine: "motion-pulse" })
+    h.choice = null
+    expect(await seen({ videoUrl: "x", prismReferenceAudio: { "480p": { mode: "none" } } })).toEqual({ videoUrl: "x" })
   })
 })

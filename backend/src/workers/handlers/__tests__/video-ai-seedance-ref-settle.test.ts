@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
  * post-process — and hand it to finalize as `meteredBaseCredits`, which is what
  * turns the worst-case reservation into the exact charge.
  *
- * The measurement itself (`measureSeedance2RefVideoBaseCredits`) is tested in
+ * The measurement itself (`measureSeedance2Settle`) is tested in
  * `lib/__tests__/seedance2-ref-video-settle.test.ts` and the maths next to the
  * ee helper; this pins the PLUMBING: called with the run's own inputs
  * (including the reservation's probe of the reference clips, carried on the
@@ -67,7 +67,7 @@ vi.mock("../../../lib/job-finalize.js", () => ({
 }))
 
 vi.mock("../../../lib/seedance2-ref-video-settle.js", () => ({
-  measureSeedance2RefVideoBaseCredits: mocks.mockMeasure,
+  measureSeedance2Settle: mocks.mockMeasure,
 }))
 
 vi.mock("../../../lib/seedance-draft-finalize.js", async (importOriginal) => {
@@ -93,6 +93,8 @@ vi.mock("../../shared.js", async (importOriginal) => {
 })
 
 import { videoAIHandlers } from "../video-ai.js"
+import { seedance25CostUsd } from "../../../providers/kie/seedance-cost.js"
+import { KIE_CREDIT_USD } from "../../../providers/kie/models.js"
 
 function makeJob(name: string, data: Record<string, unknown> = {}) {
   return { name, data: { jobId: "job-1", ...data }, id: "bull-1", updateProgress: vi.fn() }
@@ -105,12 +107,16 @@ const REFS = ["https://r2.example.com/videos/ref.mp4"]
 const RESULT = { url: RAW_URL, providerUsed: "seedance-2-5", cost: 1.25, displayCost: 1.5625 }
 
 const finalizeArg = () => mocks.mockFinalizeJobWithMedia.mock.calls[0]![0] as Record<string, unknown>
+/** What the settle shim answers when it measured nothing (or the measurement failed). */
+const NOT_MEASURED = { baseCredits: undefined, seconds: undefined }
+/** A settle that measured: the credits the charge commits and the seconds behind them. */
+const measured = (baseCredits: number, outputSec: number, inputSec: number) => ({ baseCredits, seconds: { outputSec, inputSec } })
 
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.mockImageToVideo.mockResolvedValue(RESULT)
   mocks.mockTextToVideo.mockResolvedValue(RESULT)
-  mocks.mockMeasure.mockResolvedValue(undefined)
+  mocks.mockMeasure.mockResolvedValue(NOT_MEASURED)
   mocks.mockDraftMeasure.mockResolvedValue(undefined)
   mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })
   mocks.mockUploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
@@ -121,7 +127,7 @@ describe("image-to-video handler — Seedance reference-video settlement", () =>
   const handler = videoAIHandlers["image-to-video"]
 
   it("measures the RAW provider output with the run's own provider / resolution / reference clips / reservation probe, and finalize gets the answer", async () => {
-    mocks.mockMeasure.mockResolvedValueOnce(7193)
+    mocks.mockMeasure.mockResolvedValueOnce(measured(7193, 12, 30))
     await handler(
       makeJob("image-to-video", {
         imageUrl: "https://x.png", provider: "seedance-2-5", resolution: "1080p", duration: 12,
@@ -136,7 +142,7 @@ describe("image-to-video handler — Seedance reference-video settlement", () =>
   })
 
   it("measures BEFORE the smart-loop-cut shortens the kept clip — the provider billed the raw length", async () => {
-    mocks.mockMeasure.mockResolvedValueOnce(7193)
+    mocks.mockMeasure.mockResolvedValueOnce(measured(7193, 8, 5))
     mocks.mockApplySmartLoopCut.mockResolvedValueOnce("https://r2.example.com/trimmed.mp4")
     await handler(
       makeJob("image-to-video", {
@@ -165,7 +171,7 @@ describe("text-to-video handler — Seedance reference-video settlement", () => 
   const handler = videoAIHandlers["text-to-video"]
 
   it("measures the RAW provider output and finalize gets the answer", async () => {
-    mocks.mockMeasure.mockResolvedValueOnce(3990)
+    mocks.mockMeasure.mockResolvedValueOnce(measured(3990, 12, 30))
     await handler(
       makeJob("text-to-video", {
         prompt: "make it black and white", provider: "seedance-2-5", resolution: "720p", duration: 12,
@@ -242,5 +248,152 @@ describe("Seedance draft — the RAW take length is recorded for the 1080p final
     )
     expect(finalizeArg().extraOutputData).not.toHaveProperty("draftRenderSec")
     expect(finalizeArg().extraOutputData).not.toHaveProperty("draftAudioMux")
+  })
+})
+
+/**
+ * A Seedance 2.5 render records what KIE billed for it as its provider cost:
+ * the rate of the tier it rendered at × the seconds its charge was measured
+ * from (`seedance25CostUsd`). Recorded only: finalize gets the same
+ * `meteredBaseCredits` (the charge), media and output as before, and only
+ * `result.cost` differs.
+ */
+describe("Seedance 2.5 — the recorded provider cost", () => {
+  const i2v = videoAIHandlers["image-to-video"]
+  const t2v = videoAIHandlers["text-to-video"]
+  const finalResult = () => finalizeArg().result as Record<string, unknown>
+
+  it("image-to-video at 720p, a 10 s clip delivered as 10 s: the reference rate on input + output", async () => {
+    mocks.mockMeasure.mockResolvedValueOnce(measured(1900, 10, 10))
+    await i2v(
+      makeJob("image-to-video", {
+        imageUrl: "https://x.png", provider: "seedance-2-5", resolution: "720p", duration: 10,
+        referenceVideoUrls: REFS, refVideoDurationsSec: [10],
+      }) as never,
+      ctx as never,
+    )
+    expect(finalResult().cost).toBe(seedance25CostUsd({ resolution: "720p", draft: false, hasVideoRef: true, outputSec: 10, inputSec: 10 }))
+    expect(finalResult().cost).toBeCloseTo(38 * 20 * KIE_CREDIT_USD, 12)
+    // The charge is the measured count, exactly as before.
+    expect(finalizeArg().meteredBaseCredits).toBe(1900)
+    // Only the cost differs: the rest of the result, the media and the output are as before.
+    expect(finalResult()).toEqual({ ...RESULT, cost: finalResult().cost })
+    expect(finalizeArg().mediaUrl).toBe("https://r2.example.com/videos/job-1.mp4")
+    expect(finalizeArg().extraOutputData).toEqual({ thumbnailUrl: "https://r2.example.com/thumbnails/job-1.png" })
+    expect(finalizeArg()).not.toHaveProperty("result.meteredCost")
+  })
+
+  it("image-to-video at 1080p, 6 s, records its own figure", async () => {
+    mocks.mockMeasure.mockResolvedValueOnce(measured(2055, 6, 6))
+    await i2v(
+      makeJob("image-to-video", {
+        imageUrl: "https://x.png", provider: "seedance-2-5", resolution: "1080p", duration: 6,
+        referenceVideoUrls: REFS, refVideoDurationsSec: [6],
+      }) as never,
+      ctx as never,
+    )
+    expect(finalResult().cost).toBe(seedance25CostUsd({ resolution: "1080p", draft: false, hasVideoRef: true, outputSec: 6, inputSec: 6 }))
+    expect(finalResult().cost).toBeCloseTo(95 * 12 * KIE_CREDIT_USD, 12)
+    expect(finalizeArg().meteredBaseCredits).toBe(2055)
+  })
+
+  it("a draft renders and bills at 480p, whatever resolution its payload names", async () => {
+    await i2v(
+      makeJob("image-to-video", { imageUrl: "https://x.png", provider: "seedance-2-5", resolution: "720p", duration: 4, draft: true }) as never,
+      ctx as never,
+    )
+    // No reference video and a fixed duration: nothing to measure, the 4 s it was asked for.
+    expect(finalResult().cost).toBe(seedance25CostUsd({ resolution: "720p", draft: true, hasVideoRef: false, outputSec: 4, inputSec: 0 }))
+    expect(finalResult().cost).toBeCloseTo(28 * 4 * KIE_CREDIT_USD, 12)
+    expect(finalizeArg().meteredBaseCredits).toBeUndefined()
+  })
+
+  it("text-to-video with a reference video records its figure too", async () => {
+    mocks.mockMeasure.mockResolvedValueOnce(measured(3990, 12, 30))
+    await t2v(
+      makeJob("text-to-video", {
+        prompt: "make it black and white", provider: "seedance-2-5", resolution: "720p", duration: 12,
+        referenceVideoUrls: REFS, refVideoDurationsSec: [30],
+      }) as never,
+      ctx as never,
+    )
+    expect(finalResult().cost).toBe(seedance25CostUsd({ resolution: "720p", draft: false, hasVideoRef: true, outputSec: 12, inputSec: 30 }))
+    expect(finalizeArg().meteredBaseCredits).toBe(3990)
+    expect(finalResult()).toEqual({ ...RESULT, cost: finalResult().cost })
+  })
+
+  it("text-to-video with no reference video and a fixed duration bills that duration", async () => {
+    await t2v(makeJob("text-to-video", { prompt: "a sunset", provider: "seedance-2-5", resolution: "1080p", duration: 8 }) as never, ctx as never)
+    expect(finalResult().cost).toBe(seedance25CostUsd({ resolution: "1080p", draft: false, hasVideoRef: false, outputSec: 8, inputSec: 0 }))
+    expect(finalResult().cost).toBeCloseTo(158 * 8 * KIE_CREDIT_USD, 12)
+    expect(finalizeArg().meteredBaseCredits).toBeUndefined()
+  })
+
+  it("an Auto run with nothing wired bills the length it chose", async () => {
+    mocks.mockMeasure.mockResolvedValueOnce(measured(311, 9, 0))
+    await t2v(makeJob("text-to-video", { prompt: "a sunset", provider: "seedance-2-5", resolution: "480p", duration: -1 }) as never, ctx as never)
+    expect(finalResult().cost).toBe(seedance25CostUsd({ resolution: "480p", draft: false, hasVideoRef: false, outputSec: 9, inputSec: 0 }))
+    expect(finalizeArg().meteredBaseCredits).toBe(311)
+  })
+
+  it("a seedance-2 run keeps the adapter's cost (no rate table for it)", async () => {
+    mocks.mockMeasure.mockResolvedValueOnce(measured(813, 8, 5))
+    await i2v(
+      makeJob("image-to-video", {
+        imageUrl: "https://x.png", provider: "seedance-2", resolution: "720p", duration: 8,
+        referenceVideoUrls: REFS, refVideoDurationsSec: [5],
+      }) as never,
+      ctx as never,
+    )
+    expect(finalResult()).toEqual(RESULT)
+    expect(finalizeArg().meteredBaseCredits).toBe(813)
+  })
+
+  it("a failed measurement keeps the adapter's cost: the length is unknown", async () => {
+    await i2v(
+      makeJob("image-to-video", {
+        imageUrl: "https://x.png", provider: "seedance-2-5", resolution: "720p", duration: 10,
+        referenceVideoUrls: REFS, refVideoDurationsSec: [10],
+      }) as never,
+      ctx as never,
+    )
+    expect(finalResult()).toEqual(RESULT)
+    expect(finalizeArg().meteredBaseCredits).toBeUndefined()
+    // An Auto run with nothing wired and an unmeasured length: the same.
+    mocks.mockFinalizeJobWithMedia.mockClear()
+    await t2v(makeJob("text-to-video", { prompt: "p", provider: "seedance-2-5", resolution: "720p", duration: -1 }) as never, ctx as never)
+    expect(finalResult()).toEqual(RESULT)
+  })
+
+  it("a length measured but not priced: the reservation is committed, and the cost is still recorded from the seconds", async () => {
+    mocks.mockMeasure.mockResolvedValueOnce({ baseCredits: undefined, seconds: { outputSec: 10, inputSec: 10 } })
+    await i2v(
+      makeJob("image-to-video", {
+        imageUrl: "https://x.png", provider: "seedance-2-5", resolution: "720p", duration: 10,
+        referenceVideoUrls: REFS, refVideoDurationsSec: [10],
+      }) as never,
+      ctx as never,
+    )
+    expect(finalResult().cost).toBe(seedance25CostUsd({ resolution: "720p", draft: false, hasVideoRef: true, outputSec: 10, inputSec: 10 }))
+    expect(finalizeArg().meteredBaseCredits).toBeUndefined()
+  })
+
+  it("a relayed run records no cost: the far end's account paid, not this install", async () => {
+    const relayed = { url: RAW_URL, providerUsed: "nodaro", cost: null, displayCost: null, relayJobId: "far-job", relayCredits: 120 }
+    mocks.mockImageToVideo.mockResolvedValueOnce(relayed)
+    mocks.mockMeasure.mockResolvedValueOnce(measured(1900, 10, 10))
+    await i2v(
+      makeJob("image-to-video", {
+        imageUrl: "https://x.png", provider: "seedance-2-5", resolution: "720p", duration: 10,
+        referenceVideoUrls: REFS, refVideoDurationsSec: [10],
+      }) as never,
+      ctx as never,
+    )
+    expect(finalResult()).toEqual(relayed)
+    // A fixed-duration run with nothing wired is not given one either.
+    mocks.mockFinalizeJobWithMedia.mockClear()
+    mocks.mockTextToVideo.mockResolvedValueOnce(relayed)
+    await t2v(makeJob("text-to-video", { prompt: "p", provider: "seedance-2-5", resolution: "720p", duration: 8 }) as never, ctx as never)
+    expect(finalResult()).toEqual(relayed)
   })
 })

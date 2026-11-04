@@ -84,6 +84,11 @@ describe("tk.capabilities", () => {
     expect(buildToolkit().capabilities?.videoFaceMeshParts).toBe(true)
   })
 
+  it("advertises a pitch shift of up to two octaves in one pass", () => {
+    // providers/video/__tests__/pitch-tempo-two-octaves.test.ts proves the filter: ±24 and the half steps, one pass.
+    expect(buildToolkit().capabilities?.pitchTempoTwoOctaves).toBe(true)
+  })
+
   it("is a stable, frozen snapshot, not a per-call mutable object", () => {
     const caps = buildToolkit().capabilities
     expect(caps).toBeDefined()

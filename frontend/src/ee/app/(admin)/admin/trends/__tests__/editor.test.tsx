@@ -24,7 +24,7 @@ vi.mock("@/lib/edition", async (orig) => ({
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() } }))
 
 import { toast } from "sonner"
-import type { AdminTrendPreviewClip, AdminTrendSlot } from "@/lib/api"
+import type { AdminTrendPreviewClip, AdminTrendSlot, TrendEngineEnvironment } from "@/lib/api"
 import {
   detail,
   ENVIRONMENTS,
@@ -222,14 +222,14 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     expect(screen.queryByRole("combobox", { name: "Pulse audio" })).not.toBeInTheDocument()
   })
 
-  it("shows Prism reference audio, one select per output resolution, only for Prism (Full audio by default), and saves the ones chosen", async () => {
+  it("shows Prism reference audio, a mode and a pitch shift per output resolution, only for Prism (the full mix at +4 by default), and saves the ones chosen", async () => {
     const user = userEvent.setup()
     routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
     renderEditor()
     await screen.findByRole("combobox", { name: "Model" })
     // A draft naming no engine is Prism: the selects are there from the start.
     const group = screen.getByRole("group", { name: "Prism reference audio" })
-    for (const r of ["480p", "720p", "1080p"]) expect(within(group).getByRole("combobox", { name: r })).toHaveTextContent("Full audio")
+    for (const r of ["480p", "720p", "1080p"]) expect(within(group).getByRole("combobox", { name: r })).toHaveTextContent("Full mix")
     expect(
       screen.getByText("What the engine hears in the reference video, per output resolution. The original audio always goes back on the result."),
     ).toBeInTheDocument()
@@ -246,6 +246,120 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     await user.click(screen.getByRole("combobox", { name: "Model" }))
     await user.click(screen.getByRole("option", { name: "Nodaro Motion Pulse (Kling 4)" }))
     expect(screen.queryByRole("group", { name: "Prism reference audio" })).not.toBeInTheDocument()
+  })
+
+  describe("Prism reference audio: a value no id says waits for every environment", () => {
+    const IDS = ["full", "voice", "none", "one-tone", "octave"]
+    const PITCH_MODES = [...IDS, "full-one-tone", "voice-one-tone"]
+    const env = (name: string, modes: string[], flag: boolean, claim: boolean): TrendEngineEnvironment => ({
+      ...ENVIRONMENTS[0]!,
+      env: name,
+      supports: {
+        castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, prismReferenceAudioModes: modes, ...(flag ? { prismReferenceAudioPitch: true } : {}) } as never,
+        ...(claim ? { platform: { prismReferenceAudioPitch: true } } : {}),
+      },
+    })
+    const envs = (...rows: TrendEngineEnvironment[]) => {
+      routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: rows } })
+    }
+    const pitch = (group: HTMLElement, r: string) => within(within(group).getByRole("group", { name: r })).getByRole("spinbutton", { name: "Pitch shift (semitones)" })
+    const saveButton = () => screen.getByRole("button", { name: /save draft/i })
+
+    it("greys the pitch shift out until every environment's engine and platform take it, each named", async () => {
+      envs(env("production", IDS, false, true), env("staging", PITCH_MODES, true, false))
+      renderEditor()
+      const group = await screen.findByRole("group", { name: "Prism reference audio" })
+      expect(await within(group).findByText(/^The Cast Swap engine of production cannot take a pitch shift/)).toBeInTheDocument()
+      expect(within(group).getByText(/^The platform in staging does not take a pitch shift/)).toHaveTextContent("trends are shared by every environment")
+      for (const r of ["480p", "720p", "1080p"]) expect(pitch(group, r)).toBeDisabled()
+    })
+
+    it("once every environment takes it, saves a value no id says as { mode, semitones }", async () => {
+      const user = userEvent.setup()
+      envs(env("production", PITCH_MODES, true, true), env("staging", PITCH_MODES, true, true))
+      routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+      renderEditor()
+      const group = await screen.findByRole("group", { name: "Prism reference audio" })
+      await waitFor(() => expect(pitch(group, "720p")).toBeEnabled())
+      await user.clear(pitch(group, "720p"))
+      await user.type(pitch(group, "720p"), "7{Enter}")
+      await user.click(saveButton())
+      await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+      const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+      expect(body.data.prismReferenceAudio).toEqual({ "720p": { mode: "full", semitones: 7 } })
+    })
+
+    it("holds Save for a changed value an environment does not take yet, saying what is missing", async () => {
+      const user = userEvent.setup()
+      envs(env("production", PITCH_MODES, true, true), env("staging", IDS, false, false))
+      routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { prismReferenceAudio: { "720p": { mode: "full", semitones: 7 } } }) } })
+      renderEditor()
+      const group = await screen.findByRole("group", { name: "Prism reference audio" })
+      await within(group).findByText(/^The Cast Swap engine of staging cannot take a pitch shift/)
+      // As stored: nothing to hold.
+      expect(screen.queryByText("Fix before saving:")).not.toBeInTheDocument()
+      await user.clear(pitch(group, "720p"))
+      await user.type(pitch(group, "720p"), "8{Enter}")
+      expect(screen.getByText("Fix before saving:")).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          "Prism reference audio, 720p: Full mix at +8 semitones cannot be saved yet: the Cast Swap engine of staging cannot take it, and the platform in staging does not take it.",
+        ),
+      ).toBeInTheDocument()
+      expect(saveButton()).toBeDisabled()
+    })
+
+    it("never holds what was not changed: a stored value an environment does not take leaves the rest of the draft free to save", async () => {
+      const user = userEvent.setup()
+      envs(env("production", IDS, false, false), env("staging", IDS, false, false))
+      routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { prismReferenceAudio: { "720p": { mode: "full", semitones: 7 } } }) } })
+      routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+      renderEditor()
+      const group = await screen.findByRole("group", { name: "Prism reference audio" })
+      await within(group).findByText(/^The Cast Swap engine of staging, production cannot take a pitch shift/)
+      const roleName = screen.getByLabelText(ROLE_NAME)
+      await user.clear(roleName)
+      await user.type(roleName, "the man in the hat")
+      expect(screen.queryByText("Fix before saving:")).not.toBeInTheDocument()
+      await user.click(saveButton())
+      await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+      const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+      expect(body.data.prismReferenceAudio).toEqual({ "720p": { mode: "full", semitones: 7 } })
+    })
+
+    it("a failed read of the environments says so and names none, on the fields and on what Save holds", async () => {
+      const user = userEvent.setup()
+      routes["GET /v1/admin/trends/engine-environments"] = () => ({ status: 500, body: { error: { code: "internal_error", message: "down" } } })
+      routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { prismReferenceAudio: { "720p": { mode: "full", semitones: 7 }, "1080p": "one-tone" } }) } })
+      renderEditor()
+      const group = await screen.findByRole("group", { name: "Prism reference audio" })
+      expect(await within(group).findByText("The environments could not be read, so a new pitch shift (other than Full mix at +12) or one-tone mode can't be saved yet. Reload the page to try again.")).toBeInTheDocument()
+      // True beside a closed field, an open one and a held one.
+      expect(pitch(group, "480p")).toBeDisabled()
+      expect(pitch(group, "720p")).toBeEnabled()
+      expect(pitch(group, "1080p")).toBeEnabled()
+      expect(saveButton()).toBeDisabled()
+      await user.clear(pitch(group, "720p"))
+      await user.type(pitch(group, "720p"), "8{Enter}")
+      expect(screen.getByText("Prism reference audio, 720p: Full mix at +8 semitones cannot be saved yet: the environments could not be read.")).toBeInTheDocument()
+      expect(saveButton()).toBeDisabled()
+      expect(screen.queryByText(/The Cast Swap engine of staging, production/)).not.toBeInTheDocument()
+    })
+
+    it("a Pulse draft holds nothing: the value is not sent there", async () => {
+      const user = userEvent.setup()
+      envs(env("production", PITCH_MODES, true, true), env("staging", IDS, false, false))
+      routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { prismReferenceAudio: { "720p": { mode: "full", semitones: 7 } } }) } })
+      renderEditor()
+      const group = await screen.findByRole("group", { name: "Prism reference audio" })
+      await within(group).findByText(/^The Cast Swap engine of staging cannot take a pitch shift/)
+      await user.clear(pitch(group, "720p"))
+      await user.type(pitch(group, "720p"), "8{Enter}")
+      expect(screen.getByText("Fix before saving:")).toBeInTheDocument()
+      await user.click(screen.getByRole("combobox", { name: "Model" }))
+      await user.click(screen.getByRole("option", { name: "Nodaro Motion Pulse (Kling 4)" }))
+      expect(screen.queryByText("Fix before saving:")).not.toBeInTheDocument()
+    })
   })
 
 

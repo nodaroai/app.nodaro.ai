@@ -1161,6 +1161,10 @@ export interface PluginMediaToolkit {
    * file carries, and only an audio input comes back as MP3. `audioPath` is a
    * local file in its own work dir; the caller removes `dirname(audioPath)`.
    * A bad input rejects with the core's `PitchTempoInputError`, unchanged.
+   * `semitones` is held to -12..12 on an older host, and to -24..24 (two
+   * octaves, half steps included, one pass, the speed unchanged) where
+   * `tk.capabilities?.pitchTempoTwoOctaves === true`; beyond either range it
+   * is clamped.
    * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
    */
   pitchTempo?(options: { readonly audioUrl: string; readonly semitones: number }): Promise<{ readonly audioPath: string }>
@@ -3510,6 +3514,13 @@ export interface PluginCapabilities {
    * mesh.
    */
   readonly videoFaceMeshParts?: boolean
+  /**
+   * `tk.media.pitchTempo` takes `semitones` from -24 to 24 (two octaves either
+   * way, half steps included) in ONE rubberband pass, at the same speed, and
+   * clamps beyond that. False (or absent): an older host, which clamps the
+   * shift to -12..12 silently, so a wider shift there needs two calls.
+   */
+  readonly pitchTempoTwoOctaves?: boolean
 }
 
 /**
@@ -3998,7 +4009,7 @@ export interface PluginSupports {
    *   at all when every resolution is the full audio. Wins over
    *   `prismReferenceAudio` when both are declared. Additive-optional: absent
    *   ⇒ `false` — the string of `prismReferenceAudio` above (or nothing).
-   * - `prismReferenceAudioModes` (cast-swap 0.426.0): the modes
+   * - `prismReferenceAudioModes` (cast-swap 0.426.0): the ids
    *   `prismReferenceAudio` may name for this engine, in either shape above:
    *   `"full" | "voice" | "none"` and the newer `"one-tone"` (the clip's
    *   audio flattened to one steady tone, unpitched) and `"octave"` (the
@@ -4007,7 +4018,28 @@ export interface PluginSupports {
    *   audio for them (no key). Absent ⇒ none of the newer ones; "voice" and
    *   "none" keep the flags' rule, so the wire is byte-identical for every
    *   choice made before them (lib/cast-swap-prism-reference-audio.ts
-   *   `engineTakesPrismReferenceAudioMode`).
+   *   `engineTakesPrismReferenceAudioId`). An engine with
+   *   `prismReferenceAudioPitch` also lists the one-tone modes of the object
+   *   form it takes (`"full-one-tone"`, `"voice-one-tone"`), and keeps the
+   *   ids listed, since it still takes them.
+   * - `prismReferenceAudioPitch`: a Prism run also takes `prismReferenceAudio`
+   *   as the OBJECT FORM, `{ "480p"?, "720p"?, "1080p"? }` of
+   *   `{ mode, semitones? }` — a mode (`"none"`, `"full"`, `"voice"`,
+   *   `"full-one-tone"`, `"voice-one-tone"`: silent, the whole mix, the vocals
+   *   split from the music, either flattened to one steady tone) and a pitch
+   *   shift in semitones (-24 to 24 in steps of 0.5; absent ⇒ 0, where the
+   *   pitch step does not run; applied before the flattening; never sent on
+   *   `"none"`), a missing key being the full mix at +4. Each id reads as the
+   *   value it always sounded like: `"full"` = full +4, `"voice"` = voice +4,
+   *   `"one-tone"` = full-one-tone +0, `"octave"` = full +12, `"none"` =
+   *   none. The host sends the object form only to an engine declaring this
+   *   flag, only the resolutions off the full mix at +4, and no key when every
+   *   one is; any other engine is sent the id a value is, and a value no id
+   *   says is the full audio there (a shared setting or a published trend
+   *   holding one needs every environment's engine to declare the flag).
+   *   Additive-optional: absent ⇒ `false` — today's ids above, so the wire is
+   *   byte-identical (lib/cast-swap-prism-reference-audio.ts
+   *   `prismReferenceAudioWire`).
    * - `faceMesh`: a `faceMasking` setting (a run's, a stored clip's make, and
    *   the Nodaro Motion settings read through `tk.settings`) takes
    *   `faceMesh: true` — thin face lines (a mesh, the lip outline, the eye
@@ -4244,7 +4276,8 @@ export interface PluginSupports {
     readonly pulseAudio?: boolean
     readonly prismReferenceAudio?: boolean
     readonly prismReferenceAudioPerResolution?: boolean
-    readonly prismReferenceAudioModes?: readonly ("full" | "voice" | "none" | "one-tone" | "octave")[]
+    readonly prismReferenceAudioModes?: readonly ("full" | "voice" | "none" | "one-tone" | "octave" | "full-one-tone" | "voice-one-tone")[]
+    readonly prismReferenceAudioPitch?: boolean
     readonly artStyle?: boolean
     readonly faceMesh?: boolean
     readonly roleOutlines?: boolean

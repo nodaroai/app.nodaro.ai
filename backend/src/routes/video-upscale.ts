@@ -42,6 +42,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import {
   resolveSeedanceDraftFinalize,
   seedanceDraftFinalizeBaseCredits,
+  seedanceDraftFinalizeBilledSec,
 } from "../lib/seedance-draft-finalize.js"
 
 export const videoUpscaleBody = z.object({
@@ -216,6 +217,10 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
 
     const creditModel = draft ? draft.creditId : upscaleCreditModel(provider)
     const mcpClient = extractMcpClient(req.body)
+    // The seconds the finalize's charge bills, so the worker records the
+    // render's provider cost from them (queue only — never the job record).
+    // Read before the job row and the hold: a failure here leaves neither.
+    const draftBilledSec = draft ? await seedanceDraftFinalizeBilledSec(draft) : undefined
 
     const { data: job, error } = await insertJob(req, {
         workflow_id: extractWorkflowId(req.body),
@@ -260,7 +265,8 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
       ...(topaz ? { targetResolution: topaz.resolution, targetFps: topaz.fps } : {}),
       provider,
       kieTaskId,
-      ...(draft ? { sourceJobId: draft.sourceJobId } : {}),
+      ...(draft ? { sourceJobId: draft.sourceJobId, draftHasRefVideo: draft.hasRefVideo } : {}),
+      ...(draftBilledSec !== undefined ? { draftBilledSec } : {}),
       // The audio mux the draft got after rendering, re-applied to the 1080p
       // render (read from the SOURCE job by the preHandler, never the body).
       ...(draft?.audioMux ? { draftAudioMux: draft.audioMux } : {}),
