@@ -84,6 +84,14 @@ export class KieError extends Error {
    *  duck-typed by `lib/safety-block.ts` (`inputImageRefusedOf`) to name the
    *  input on the job's `error_hint` (`subject: "input_image"`). */
   public readonly inputImageRefused: boolean
+  /** True when the provider refused the REQUEST as it was sent: a 400/422 that
+   *  named a fault of the request, so the same inputs are refused again (see
+   *  `createSanitizedError`). Never a content block, a failed upload or a bare
+   *  "Generation failed". Read duck-typed by `lib/safety-block.ts`
+   *  (`requestRefusedOf`) to mark the job's `error_hint`, so whatever wraps this
+   *  job (a plugin's run) can say the same; this flag never changes the
+   *  user-facing message. */
+  public readonly requestRefused: boolean
 
   constructor(
     sanitizedMessage: string,
@@ -94,6 +102,7 @@ export class KieError extends Error {
     contentPolicyClass: ContentPolicyClass | null = null,
     inputVideoRefused = false,
     inputImageRefused = false,
+    requestRefused = false,
   ) {
     super(sanitizedMessage)
     this.name = "KieError"
@@ -104,6 +113,7 @@ export class KieError extends Error {
     this.contentPolicyClass = contentPolicy ? contentPolicyClass : null
     this.inputVideoRefused = inputVideoRefused
     this.inputImageRefused = this.contentPolicyClass === "copyright" && inputImageRefused
+    this.requestRefused = requestRefused && !contentPolicy
   }
 
   /** Get full error message including internal details (for logging/debugging) */
@@ -139,15 +149,24 @@ export function isRequestRejectStatus(status: UpstreamStatus): boolean {
 const GENERIC_PROVIDER_FAILURE_RE =
   /^(?:(?:generation|task|request) failed|unknown error)?(?:[.,!:]?\s*(?:please\s+)?try again(?:\s+later)?)?[.!]?$/i
 
+/**
+ * KIE's own failures that also name no fault of the request, whatever their
+ * status: whole sentences seen in production (job c05ccfd7; logs, October 2026).
+ * Each new one is added here: a 400/422 otherwise reads as a refused request.
+ */
+const NO_FAULT_PROVIDER_FAILURE_RE =
+  /^(?:something went wrong\. please try again, or change your input files or prompt\.?|generate playground failed, task id is blank|record result error)$/i
+
 /** The provider's own words inside one of our wrapped internal messages:
- *  `task failed: [400] <failMsg>` (pollKieTask) or
- *  `<op> error (code 422): {"code":422,"msg":"<msg>",…}` (createTask paths).
+ *  `task failed: [400] <failMsg>` (pollKieTask), or
+ *  `<op> error (code 422): {"code":422,"msg":"<msg>",…}` and
+ *  `<op> failed: 422 - {"code":422,"msg":"<msg>",…}` (createTask paths).
  *  Anything else is returned trimmed, as is. */
 function providerWordsOf(internalMessage: string): string {
   const polled = /^task failed:\s*\[[^\]]*\]\s*([\s\S]*)$/i.exec(internalMessage)
   if (polled) return polled[1]!.trim()
   const brace = internalMessage.indexOf("{")
-  if (brace !== -1 && /\(code \d+\):\s*\{/.test(internalMessage)) {
+  if (brace !== -1 && /(?:\(code \d+\):|failed: \d+ -)\s*\{/.test(internalMessage)) {
     try {
       const body = JSON.parse(internalMessage.slice(brace)) as { msg?: unknown; message?: unknown }
       const msg = typeof body.msg === "string" ? body.msg : typeof body.message === "string" ? body.message : null
@@ -162,7 +181,8 @@ function providerWordsOf(internalMessage: string): string {
 /** True when a failure carries only the provider's generic sentence: no named
  *  parameter, limit or policy. Exported for tests. */
 export function isGenericProviderFailure(internalMessage: string): boolean {
-  return GENERIC_PROVIDER_FAILURE_RE.test(providerWordsOf(internalMessage).replace(/\s+/g, " "))
+  const words = providerWordsOf(internalMessage).replace(/\s+/g, " ")
+  return GENERIC_PROVIDER_FAILURE_RE.test(words) || NO_FAULT_PROVIDER_FAILURE_RE.test(words)
 }
 
 /**
@@ -197,11 +217,18 @@ export function createSanitizedError(
   const lowerMsg = internalMessage.toLowerCase()
 
   let sanitizedMessage: string
+  // The provider's status says the request was refused (`KieError.requestRefused`):
+  // each branch that names a fault of the request claims it. A timeout, our key,
+  // a rate limit, our balance, a content block, a failed upload and a catch-all
+  // sentence never do, whatever the status.
+  const rejectStatus = isRequestRejectStatus(opts?.upstreamStatus)
+  let requestRefused = false
 
   if (
     lowerMsg.includes("aspect_ratio") ||
     lowerMsg.includes("aspect ratio")
   ) {
+    requestRefused = rejectStatus
     sanitizedMessage =
       "Invalid aspect ratio setting. Please try a different option."
   } else if (
@@ -249,9 +276,11 @@ export function createSanitizedError(
     lowerMsg.includes("invalid") ||
     lowerMsg.includes("validation")
   ) {
+    requestRefused = rejectStatus
     sanitizedMessage =
       "Invalid input parameters. Please check your settings and try again."
   } else if (lowerMsg.includes("not support")) {
+    requestRefused = rejectStatus
     sanitizedMessage =
       "This operation is not supported with the current provider."
   } else if (
@@ -269,6 +298,7 @@ export function createSanitizedError(
     // "too long" is deliberate wording: it is one of the INPUT_LIMIT_PATTERNS
     // in lib/mcp/tools/_job-error.ts, so this stays NON-retryable — re-running
     // the same prompt fails identically.
+    requestRefused = rejectStatus
     sanitizedMessage =
       "That prompt is too long for this model. Shorten it, or pick a model with a larger prompt limit."
   } else if (
@@ -283,6 +313,7 @@ export function createSanitizedError(
     lowerMsg.includes("file size") ||
     lowerMsg.includes("duration limit")
   ) {
+    requestRefused = rejectStatus
     sanitizedMessage =
       "Input file exceeds the size or duration limit. Please use a shorter or smaller file."
   } else if (
@@ -347,7 +378,9 @@ export function createSanitizedError(
     // when the request was wrong. Prod 2026-10-31 (job d3736b0d) and 2026-11-01
     // (job 57c29d77): two Kling 4 runs, each told "rejected these settings…
     // will fail again", each succeeded on the same request moments later.
-    /\bupload failed\b/.test(lowerMsg)
+    // "[400] Image fetch failed. Check access settings…" is the same failure
+    // (logs, October 2026).
+    /\b(?:upload|image fetch) failed\b/.test(lowerMsg)
   ) {
     sanitizedMessage =
       `${context} failed: the provider couldn't load the input media. ` +
@@ -376,6 +409,7 @@ export function createSanitizedError(
     // and sends the user after duration/aspect/resolution. Say only what is
     // known. The words "gave no reason" keep MCP `retryable: false` exactly as
     // before (lib/mcp/tools/_job-error.ts) — that classification is unchanged.
+    requestRefused = !isGenericProviderFailure(internalMessage)
     sanitizedMessage = isGenericProviderFailure(internalMessage)
       ? `${context} failed: the provider couldn't produce a result and gave no reason. ` +
         "It may be a temporary problem on their side, or something about the input media " +
@@ -388,7 +422,12 @@ export function createSanitizedError(
     sanitizedMessage = `${context} failed. Please try again or contact support if the issue persists.`
   }
 
-  return new KieError(sanitizedMessage, internalMessage, context, isUpstreamFailure, contentPolicy, null, inputVideoRefused)
+  // The createTask paths classify no content, and a keyword branch above can
+  // claim a content block's words ("Invalid input: NSFW…"): never a refused request.
+  return new KieError(
+    sanitizedMessage, internalMessage, context, isUpstreamFailure, contentPolicy, null, inputVideoRefused, false,
+    requestRefused && classifyContentPolicyClass(internalMessage) === null,
+  )
 }
 
 /** Construct a KieError for a TERMINAL upstream provider failure (KIE reported

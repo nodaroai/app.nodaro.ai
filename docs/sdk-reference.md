@@ -1428,7 +1428,11 @@ without naming a content-policy class (`kind: "input-refused"`, `subject:
 "input_video"` — send a different clip; a `safety-block` carries the same
 `subject` when the refused input video also has a class, and `subject:
 "input_image"` on a `copyright` block when the provider refused one of the
-input images as possibly copyrighted — send a different picture), or that never
+input images as possibly copyrighted — send a different picture), or whose
+request the provider refused as it was sent, naming a fault of it, so the same
+request is refused again (`kind: "request-refused"` — change the input images,
+the video, the prompt or the settings; on a Nodaro Motion or trend run this is
+one step's refusal), or that never
 got one of the account's concurrency slots and did not run (`kind:
 "queue-timeout"`, carrying `reason` — `"timeout"`, `"lost"` or `"live-wait"` —
 and `waitedMinutes`; the job was refunded, so run it again — it only occurs
@@ -2552,7 +2556,7 @@ interface TrendEstimate {
 
 interface TrendRun {
   jobId: string; status: string; progress: number | null
-  error: { code?: string; message: string } | null  // code: safety-block | policy-block | credits | cancelled | failed
+  error: { code?: string; message: string } | null  // code: safety-block | policy-block | credits | input-refused | request-refused | cancelled | failed
   createdAt: string; completedAt: string | null
   trend: { id: string; slug: string; version: number; name: string } // the version it ran
   example?: number                   // 1-based, as the page listed the examples for the run's version; 0 = the trend had no example (none was used); absent when it used the example shown as the original of a trend that hides it

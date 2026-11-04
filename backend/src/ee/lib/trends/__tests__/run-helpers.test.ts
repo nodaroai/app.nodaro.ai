@@ -450,6 +450,29 @@ describe.each(Object.keys(DECLARED) as (keyof typeof DECLARED)[])("Nodaro Motion
     expect(fullQualityEligible({ engine: prism, resolution: "720p" })).toBe(false)
   })
 
+  it("a public failure names a refusal by its kind, and hides any kind it does not list (toTrendRun)", () => {
+    const NO_RUN_CREDITS = new Map() as unknown as RunCredits
+    const failed = (error_hint: unknown): RunJobRow => ({
+      id: "j-1",
+      status: "failed",
+      progress: 25,
+      input_data: { type: "cast-swap", trend: { id: "t", slug: "s", version: 1, name: "N" }, engine: "motion-pulse", resolution: "720p" },
+      output_data: {},
+      error_message: "The video model declined this run as it is. Change the pictures or the settings.",
+      error_hint: error_hint as RunJobRow["error_hint"],
+      created_at: "2026-11-04T13:11:12.000Z",
+      started_at: null,
+      completed_at: "2026-11-04T13:12:39.000Z",
+      usage_log_id: null,
+    })
+    expect(toTrendRun(failed({ kind: "request-refused" }), undefined, NO_RUN_CREDITS)!.error).toEqual({
+      code: "request-refused",
+      message: "This run didn't finish.",
+    })
+    expect(toTrendRun(failed({ kind: "input-refused", subject: "input_video" }), undefined, NO_RUN_CREDITS)!.error?.code).toBe("input-refused")
+    expect(toTrendRun(failed({ kind: "something-new" }), undefined, NO_RUN_CREDITS)!.error?.code).toBe("failed")
+  })
+
   it("labels a recorded run by the current public id and name (toTrendRun)", () => {
     // No run figures loaded (lib/job-credit-status.ts `runCreditsFor`): the charge reads null.
     const NO_RUN_CREDITS = new Map() as unknown as RunCredits

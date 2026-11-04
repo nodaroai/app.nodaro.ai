@@ -409,6 +409,32 @@ describe("video worker — input-video refusal hint", () => {
     expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
   })
 
+  it("a provider's refusal of the request → request-refused hint, the message unchanged and refunded once", async () => {
+    const message = "The video model declined this run as it is. Change the pictures, the clip or the settings."
+    mocks.mockHandler.mockRejectedValueOnce(Object.assign(new Error(message), { requestRefused: true, userSafeMessage: true }))
+
+    await processor(makeBullJob("text-to-video", {})).catch(() => {})
+
+    expect(failedUpdate()).toEqual(expect.objectContaining({ error_message: message, error_hint: { kind: "request-refused" } }))
+    expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
+  })
+
+  it("reads a refused request off the cause chain", async () => {
+    mocks.mockHandler.mockRejectedValueOnce(new Error("outer", { cause: Object.assign(new Error("inner"), { requestRefused: true }) }))
+
+    await processor(makeBullJob("text-to-video", {})).catch(() => {})
+
+    expect(failedUpdate()?.error_hint).toEqual({ kind: "request-refused" })
+  })
+
+  it("a content block outranks a refused request", async () => {
+    mocks.mockHandler.mockRejectedValueOnce(Object.assign(inputCopyright(), { requestRefused: true }))
+
+    await processor(makeBullJob("text-to-video", withRefVideo)).catch(() => {})
+
+    expect(failedUpdate()?.error_hint).toEqual(expect.objectContaining({ kind: "safety-block", class: "copyright" }))
+  })
+
   it("an unclassified refusal of the input video → input-refused hint, message unchanged", async () => {
     mocks.mockHandler.mockRejectedValueOnce(fileProcessingFailed())
 

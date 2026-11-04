@@ -170,6 +170,89 @@ describe("a 4xx with only the provider's generic failMsg claims no verdict it wa
   })
 })
 
+describe("a request the provider refused is marked on the error, for the job's error_hint", () => {
+  const sanitized = (internalMessage: string, status: number | string) =>
+    createSanitizedError(internalMessage, "Generation", true, false, { upstreamStatus: status })
+
+  it.each(REQUEST_REJECT_4XX)("$internalMessage is marked", ({ internalMessage, status }) => {
+    expect(sanitized(internalMessage, status).requestRefused).toBe(true)
+  })
+
+  it.each([
+    // Prod 2026-11-04, jobs 62182ea6 and 074197fe: a WebP sent to Kling 4.0.
+    ["task failed: [400] Unsupported file format. Images must be JPG or PNG. Please convert the file and try again.", 400],
+    ["task failed: [422] video_urls total duration must not exceed 30 seconds", 422],
+    ["task failed: [422] The prompt is too long", 422],
+    ["task failed: [400] aspect_ratio must be one of 16:9, 9:16", 400],
+    ["task failed: [400] Invalid duration", 400],
+    ["task failed: [400] This model does not support reference audio", 400],
+    // Production logs, October 2026.
+    ['createTask error (code 422): {"code":422,"msg":"seed is not supported by Seedance 2.5","data":null}', 422],
+    ['createTask error (code 422): {"code":422,"msg":"video_url is required","data":null}', 422],
+    ['createTask error (code 422): {"code":422,"msg":"The total duration of the video cannot exceed 15 seconds","data":null}', 422],
+    ["task failed: [400] Invalid value for parameter: content[3].", 400],
+    ["task failed: [400] No valid characters detected in the video", 400],
+    ["task failed: [400] Not enough speech in the voice audio. Please use a 5-30 second clip with clear speech and no long pauses.", 400],
+  ] as const)("%s is marked, whichever sentence it gets", (internalMessage, status) => {
+    expect(sanitized(internalMessage, status).requestRefused).toBe(true)
+  })
+
+  it.each(GENERIC_4XX_NO_REASON)("$internalMessage names no reason: not marked", ({ internalMessage, status }) => {
+    expect(sanitized(internalMessage, status).requestRefused).toBe(false)
+  })
+
+  it.each(TRANSIENT_500_WITH_VALIDATION_WORDING)("$internalMessage is a 5xx: not marked", ({ internalMessage, status }) => {
+    expect(sanitized(internalMessage, status).requestRefused).toBe(false)
+  })
+
+  it.each([
+    ["task failed: [400] upload failed", 400],
+    ["task failed: [400] Image fetch failed. Check access settings or use our File Upload API instead.", 400],
+    ["task failed: [400] The request timed out", 400],
+    ["task failed: [400] rate limit reached", 400],
+    ["task failed: [400] Credits insufficient", 400],
+    ["task failed: [400] The generated images appear to be unsafe. Try modifying the prompts.", 400],
+    ["task failed: [400] Request blocked: flagged by Google safety review.", 400],
+    ["task failed: [400] Input video may be related to copyright restrictions.", 400],
+    ['createTask error (code 400): {"code":400,"msg":"Invalid input: NSFW content detected","data":null}', 400],
+  ] as const)("%s is not the request's fault or is a content block: not marked", (internalMessage, status) => {
+    expect(sanitized(internalMessage, status).requestRefused).toBe(false)
+  })
+
+  it("an unreadable status is not marked, whatever the words", () => {
+    expect(createSanitizedError("task failed: Invalid duration", "Generation", true).requestRefused).toBe(false)
+  })
+
+  it("a proxy's own marked message is not marked", () => {
+    const err = createSanitizedError("task failed: [400] Invalid duration", "Generation", true, false, {
+      upstreamStatus: 400,
+      userSafeMessage: "The proxy says no.",
+    })
+    expect(err.requestRefused).toBe(false)
+  })
+
+  it("a terminal task failure carries it through createUpstreamFailureError", () => {
+    const refused = createUpstreamFailureError(
+      "task failed: [400] Unsupported file format. Images must be JPG or PNG. Please convert the file and try again.",
+      "Generation",
+      { upstreamStatus: 400 },
+    )
+    expect(refused.requestRefused).toBe(true)
+    expect(createUpstreamFailureError("task failed: [501] Input video may be related to copyright restrictions.", "Generation", { upstreamStatus: 400 }).requestRefused).toBe(false)
+  })
+})
+
+describe("KIE's \"Image fetch failed\" is the provider failing to fetch the media, not a rejected request", () => {
+  it("says the media could not be loaded, and stays retryable", () => {
+    const err = createSanitizedError("task failed: [400] Image fetch failed. Check access settings or use our File Upload API instead.", "Generation", true, false, {
+      upstreamStatus: 400,
+    })
+    expect(err.message).toContain("couldn't load the input media")
+    expect(err.message).not.toContain(REJECT_PHRASE)
+    expect(isRetryableFailure(err.message)).toBe(true)
+  })
+})
+
 describe("a 5xx keeps the retry message however validation-shaped its wording", () => {
   it.each(TRANSIENT_500_WITH_VALIDATION_WORDING)("$internalMessage", ({ internalMessage, status }) => {
     const err = createSanitizedError(internalMessage, "Generation", true, false, {

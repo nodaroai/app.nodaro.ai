@@ -137,6 +137,9 @@ export interface PluginHandlerCtx {
  *   one of the job's INPUT IMAGES as possibly copyrighted. Honoured only on a
  *   `copyright` block: `error_hint` then carries `subject: "input_image"`.
  *   ADDITIVE-OPTIONAL.
+ * - `requestRefused: true` (error or `cause` chain) — the provider refused the
+ *   request as it was sent, so the same inputs fail again: `error_hint` is
+ *   `{ kind: "request-refused" }`. ADDITIVE-OPTIONAL.
  */
 export type PluginHandlerFn = (job: PluginJob, ctx: PluginHandlerCtx) => Promise<void>
 
@@ -1440,6 +1443,14 @@ export type PluginJobErrorHint =
       kind: "queue-timeout"
       reason: "timeout" | "lost" | "live-wait"
       waitedMinutes: number
+    }
+  | {
+      /**
+       * The provider refused the request as it was sent, naming a fault of it
+       * (its status was 400 or 422): the same inputs are refused again, so only
+       * a change to them can succeed. Not a content block. ADDITIVE-OPTIONAL.
+       */
+      kind: "request-refused"
     }
 
 /** One job row as `readJobsOwnedBy` returns it, `output_data` already redacted. */

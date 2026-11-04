@@ -8,6 +8,7 @@ import {
   safetyBlockOf,
   inputVideoRefusedOf,
   inputImageRefusedOf,
+  requestRefusedOf,
   sentVideoInput,
   refusalHintFor,
   jobModelIdOf,
@@ -291,7 +292,7 @@ async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promis
  *  acts on the hint (offer the fallback model, send a different clip) must see
  *  the same verdict either way. The thrown poll error carries the provider's
  *  classification (`contentPolicyClass` / `inputVideoRefused`, decided on its
- *  bare failMsg by the poll client); the job's `input_data` is the request it
+ *  bare failMsg by the poll client; `requestRefused`, on its status); the job's `input_data` is the request it
  *  was enqueued with, so it answers the worker's model + "sent a video" reads.
  *  `retried` is false: the re-picked job never ran the worker's inline retry. */
 function refusalHintOf(err: unknown, row: KieJobRow): ErrorHint | null {
@@ -301,6 +302,7 @@ function refusalHintOf(err: unknown, row: KieJobRow): ErrorHint | null {
     false,
     inputVideoRefusedOf(err) && sentVideoInput(input),
     inputImageRefusedOf(err),
+    requestRefusedOf(err),
   )
 }
 

@@ -196,6 +196,10 @@ export function isRetryableFailure(errorMessage: string | null | undefined): boo
  * `subject: "input_video"`. The provider refused the clip itself, so the same
  * clip is refused again on any retry — `retryable: false`, and the guidance
  * names the input to change instead of the prompt or a fallback model.
+ *
+ * `kind: "request-refused"` is the same case once more: the provider refused
+ * the request as it was sent. A run built of steps words that itself, in a
+ * sentence the classifier reads as transient, so the hint decides.
  */
 export function failureGuidance(job: {
   error_message?: string | null
@@ -235,6 +239,19 @@ export function failureGuidance(job: {
         (code ? ` (${code})` : "") +
         ", so it stopped and its credits were refunded. Ask the user to top up (check_balance shows the balance) " +
         "or raise the plan or workspace cap, then run the same request again.",
+    }
+  }
+
+  // The provider refused the request as it was sent, naming a fault of it: the
+  // same inputs are refused again. Which of them can change depends on the job
+  // (a trend run's clip is the trend's), which only the caller knows.
+  if (hint && hint.kind === "request-refused") {
+    return {
+      retryable: false,
+      guidance:
+        "The provider refused this request as it was sent, and the same request will be refused again. Change what " +
+        "you can of its inputs (its images, video, prompt or settings), or ask the user to, before running it again. " +
+        "A run made of steps can charge for them again.",
     }
   }
 

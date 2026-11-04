@@ -135,6 +135,14 @@ export type QueueTimeoutHint = {
   waitedMinutes: number
 }
 
+/** A PROVIDER refused the request as it was sent, naming a fault of the request
+ *  (its status was 400 or 422): the same inputs are refused the same way, so
+ *  only a change to them can succeed. Not a content block. On a plugin's run,
+ *  one step's refusal: the run carries it, in a sentence of its own. */
+export type RequestRefusedHint = {
+  kind: "request-refused"
+}
+
 /** One jsonb column, several verdict sources. A DISCRIMINATED UNION on `kind` —
  *  which was already the discriminant every reader tested
  *  (`hint.kind === "safety-block"`), so widening it breaks none of them.
@@ -145,7 +153,7 @@ export type QueueTimeoutHint = {
  *  `lib/private-plugins/types.ts` `PluginJobErrorHint` (and the plugin repo's
  *  copy of that contract).
  *  `packages/client/dist/index.d.ts` is REBUILT, never hand-edited. */
-export type ErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint | QueueTimeoutHint
+export type ErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint | QueueTimeoutHint | RequestRefusedHint
 
 /** A credits refusal code as a route sends it; anything else is not passed on. */
 const CREDITS_CODE_RE = /^[a-z0-9_]{1,64}$/
@@ -219,6 +227,25 @@ export function policyBlockHint(
   hookPoint: "request" | "result",
 ): PolicyBlockHint {
   return { kind: "policy-block", policyId, reason, hookPoint }
+}
+
+/** True when the thrown error (or anything on its `cause` chain) says the
+ *  provider refused the request as it was sent: a duck-typed
+ *  `requestRefused === true` own property (`KieError.requestRefused`, or a
+ *  plugin's error carrying the same flag across the plugin boundary, when its
+ *  run failed on such a child). Never throws, for the same reason as
+ *  `creditsHintOf`. */
+export function requestRefusedOf(err: unknown): boolean {
+  try {
+    let cur: unknown = err
+    for (let depth = 0; depth < 8 && typeof cur === "object" && cur !== null; depth++) {
+      if ((cur as { requestRefused?: unknown }).requestRefused === true) return true
+      cur = (cur as { cause?: unknown }).cause
+    }
+    return false
+  } catch {
+    return false
+  }
 }
 
 /** Constructor for the input-refused arm (same reason as `policyBlockHint`). */
@@ -299,7 +326,7 @@ export function errorHintFor(
 /** The `jobs.error_hint` for a provider's refusal of a job, or null when it was
  *  not one: a classified content-policy block (naming the input video or the
  *  input image when the provider refused that), else a refused input video
- *  with no class. The
+ *  with no class, else a refused request. The
  *  ONE mapping shared by every writer that fails a job on a provider's
  *  verdict — the worker's catch path and the reconcile path (a job re-picked
  *  after a worker restart is failed there, and must carry the same hint).
@@ -310,9 +337,11 @@ export function refusalHintFor(
   retried: boolean,
   inputVideoRefused: boolean,
   inputImageRefused = false,
-): SafetyBlockHint | InputRefusedHint | null {
+  requestRefused = false,
+): SafetyBlockHint | InputRefusedHint | RequestRefusedHint | null {
   if (block) return errorHintFor(block, retried, { inputVideoRefused, inputImageRefused })
-  return inputVideoRefused ? inputRefusedHint() : null
+  if (inputVideoRefused) return inputRefusedHint()
+  return requestRefused ? { kind: "request-refused" } : null
 }
 
 /** The model a job runs under, read off its payload (the BullMQ data or the

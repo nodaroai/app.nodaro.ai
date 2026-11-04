@@ -280,6 +280,20 @@ describe("failureGuidance (PR9 — offers the safety-block fallback)", () => {
     expect(result.guidance).not.toContain("<b>")
   })
 
+  it("a request-refused hint is not retryable, even when the run's own sentence reads as transient", () => {
+    const message = "The video model declined this run as it is. Change the pictures, the clip or the settings."
+    // Proof the hint is load-bearing: the classifier alone says "retry this".
+    expect(isRetryableFailure(message)).toBe(true)
+    expect(failureGuidance({ error_message: message }).guidance).toMatch(/may be transient/)
+
+    const result = failureGuidance({ error_message: message, error_hint: { kind: "request-refused" } })
+    expect(result.retryable).toBe(false)
+    expect(result.suggestedProvider).toBeUndefined()
+    expect(result.guidance).toMatch(/refused again/)
+    expect(result.guidance).toMatch(/images, video, prompt or settings/)
+    expect(result.guidance).not.toMatch(/transient/)
+  })
+
   it("an input-refused hint is not retryable and asks for a different clip, even when the message reads as transient", () => {
     const message = "File processing failed"
     // Proof the hint is load-bearing: the classifier alone says "retry this".
