@@ -625,6 +625,10 @@ const JPEG_PNG_WEBP = new Set(["jpeg", "png", "webp"])
 // Motion-transfer always goes through this check; I2V only for kling-3.0 and wan-i2v.
 const JPEG_PNG_ONLY_PROVIDERS = new Set(["kling-3.0", "kling-4", "kling-4-keyframes"])
 
+// Of those, the ones that get a WebP as a PNG rather than a JPEG: a WebP is
+// already lossy, so a PNG adds no further loss and keeps its transparency.
+const WEBP_AS_PNG_PROVIDERS = new Set(["kling-4", "kling-4-keyframes"])
+
 // Max image file size (10 MB per KIE docs, applies to all models)
 const IMAGE_MAX_BYTES = 10 * 1024 * 1024
 
@@ -693,7 +697,8 @@ interface ImageConstraints {
 /**
  * Ensure the image is in a format/size accepted by the target provider.
  *
- * - Kling 3.0 and 4.0: JPEG/PNG only (auto-converts WebP/GIF to JPEG)
+ * - Kling 3.0: JPEG/PNG only (auto-converts WebP/GIF to JPEG)
+ * - Kling 4.0: JPEG/PNG only (auto-converts WebP to PNG, GIF to JPEG)
  * - Wan 2.6 I2V: min 256×256px
  * - Kling 2.6 motion: min 300px, aspect ratio 2:5–5:2
  * - Hailuo/MiniMax I2V: re-encode to JPEG (drops alpha) — backend 500s on large RGBA PNGs
@@ -833,9 +838,11 @@ async function prepareImageForProvider(
     return imageUrl
   }
 
+  const webpAsPng = format === "webp" && WEBP_AS_PNG_PROVIDERS.has(provider)
+
   console.log(
     `[KIE.ai] Image preprocessing for ${provider}: format=${format}, size=${(buffer.length / 1024 / 1024).toFixed(1)}MB, ${width}×${height}` +
-    `${needsConversion ? ` → converting to JPEG${acceptedFormats.has(format) ? " (forced)" : ` (${format} not accepted)`}` : ""}` +
+    `${needsConversion ? ` → converting to ${webpAsPng ? "PNG" : "JPEG"}${acceptedFormats.has(format) ? " (forced)" : ` (${format} not accepted)`}` : ""}` +
     `${needsResize ? ` → downscaling to ≤${maxDim}px` : ""}` +
     `${needsCompress ? ` → compressing (>${IMAGE_MAX_BYTES / 1024 / 1024}MB)` : ""}` +
     `${needsStrip ? " → stripping metadata" : ""}`
@@ -900,7 +907,8 @@ async function prepareImageForProvider(
     }
   }
 
-  // Lossless first, where the lane asked for it and the SKU will take it.
+  // Lossless first, where the lane asked for it and the SKU will take it, or
+  // where the provider takes a WebP as a PNG (`WEBP_AS_PNG_PROVIDERS`).
   // JPEG is lossy, drops alpha and re-compresses exactly the detail an
   // image-EDIT or UPSCALE lane was hired to preserve — normalising the format
   // must not quietly cost the user the fidelity they are paying for. WebP is
@@ -910,7 +918,7 @@ async function prepareImageForProvider(
   // fit under the cap we fall through to the JPEG ladder unchanged, so this
   // can only ever improve on the old behaviour, never fail where it succeeded.
   const losslessFormat: "webp" | "png" | null =
-    constraints?.preferLossless === true && constraints?.forceJpeg !== true
+    (constraints?.preferLossless === true || webpAsPng) && constraints?.forceJpeg !== true
       ? acceptedFormats.has("webp")
         ? "webp"
         : acceptedFormats.has("png")
