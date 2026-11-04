@@ -1,5 +1,26 @@
 # @nodaro/sdk
 
+## 2.64.0
+
+### Minor Changes
+
+- 1c1ae1f: `castSwap.styleChoice()` answers `preciseArtStyle` per engine: whether a Precise run (no `style`, or `"precise"`) takes an art style (`direction`) there, as a Flex run does — Precise's edit of the clip, drawn in the art style. `CastSwapStyleChoice` gains `preciseArtStyle?: Partial<Record<CastSwapEngine, boolean>>`; Nodaro Motion Pulse is always `false` (it takes no art style), and an older server leaves it out (read it as `false` for every engine). An art style is not a Precise run's change on its own: a Precise run with nothing else to change is still refused. Where it is `true`, an engine whose style is forced to Precise keeps a Flex request's art style. The doc comment of `CastSwapParams.direction` now says which runs take one and which codes refuse it.
+- 2fd6dcd: `castSwap.styleChoice()` answers `styleOnly` per engine: whether a Flex run with an art style and nothing to swap restyles the whole clip there. Elsewhere on Nodaro Motion Prism an art style alone is refused, and one with a pre or post prompt runs as any other art-style run. It follows the engine alone: an engine answered `"precise"` drops the art style, so such a request is refused as `validation_error` and, with anything else to change, runs as Precise. `CastSwapStyleChoice` gains `styleOnly?: Partial<Record<CastSwapEngine, boolean>>`; Nodaro Motion Pulse is always `false` (it takes no art style), and an older server leaves it out (read it as `false` for every engine). Such a run (`style: "motion"` on Nodaro Motion Prism, a `direction.style`, no role with images and no fixed reference) restyles the whole clip, keeping its people, places, motion and sound. The doc comments of `CastSwapParams.roles`, `direction` and `inPreview` and the `no_roles_in_preview` refusal now say what the engine accepts: a role with images, a fixed reference, a pre or post prompt, or an art style. `CastSwapEstimate.breakdown` names `referenceAudio`, a part the server already answers when that step runs.
+- a58b50a: Shot Cuts and Split into Chunks' shots mode:
+
+  - `client.media.shotCuts({ videoUrl, frames? })` (`POST /v1/shot-cuts`): where every shot of a video starts and ends, measured from the file; with `frames: true` each shot's first and last frame as images. Types `ShotCutsInput`, `ShotCutsResult`, `ShotCutsShot` and `ShotCutsOutput` from `@nodaro/sdk/media`.
+  - `client.media.splitMedia({ videoUrl, mode: "shots" })` cuts a video into one part per shot; the completed job adds `shotCount` and `shots` (each part's start and end on the video). `SplitMediaInput` is now the union of `SplitMediaByDurationInput` (unchanged fields) and `SplitMediaByShotsInput`; `SplitMediaShot` is the shot type.
+
+  Shot Cuts is not yet enabled on nodaro.ai.
+
+### Patch Changes
+
+- Updated dependencies [8b0420f]
+- Updated dependencies [8b0420f]
+- Updated dependencies [a58b50a]
+- Updated dependencies [731b67b]
+  - @nodaro/shared@3.54.0
+
 ## 2.63.0
 
 ### Minor Changes
