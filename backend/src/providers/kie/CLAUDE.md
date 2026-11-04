@@ -177,8 +177,8 @@ which is why it has a bespoke runner instead of the generic `createTask` builder
   `audio_too_long` before credits are reserved.
 - `duration: -1`, `reference_file_urls`, `reference_link_urls` and
   `nsfw_checker` are deliberately never emitted **on the Wan wire**. `-1` IS
-  emitted in exactly one place platform-wide — the Seedance 2.5 edit-mode
-  resubmit below.
+  emitted platform-wide only by the Seedance 2.5 edit-mode resubmit below, and
+  its recovery-lane twin (`lib/reconcile/seedance-edit-resubmit.ts`).
 
 ### Vidu Q4 wire notes (`vidu-q4`, bespoke `runViduQ4`)
 

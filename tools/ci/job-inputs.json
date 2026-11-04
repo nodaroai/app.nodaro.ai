@@ -749,6 +749,7 @@
         "backend/src/providers/kie/runway-client.ts",
         "backend/src/providers/kie/seedance-cost.ts",
         "backend/src/providers/kie/seedance-draft.ts",
+        "backend/src/providers/kie/seedance-edit-mode.ts",
         "backend/src/providers/kie/suno-client.ts",
         "backend/src/providers/kie/suno-stem-fields.ts",
         "backend/src/providers/kie/video.ts",

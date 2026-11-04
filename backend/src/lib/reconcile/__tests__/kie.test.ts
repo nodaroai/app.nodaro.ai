@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => {
   const finalizeMock = vi.fn().mockResolvedValue({ ok: true })
   const refundMock = vi.fn().mockResolvedValue(undefined)
   const recoverEntityMock = vi.fn().mockResolvedValue(undefined)
+  const resubmitMock = vi.fn().mockResolvedValue({ outcome: "stands" })
 
   // KieError subclass — matches the real one's name property so the runtime
   // check `err instanceof KieError` works inside the handler.
@@ -89,6 +90,7 @@ const mocks = vi.hoisted(() => {
     finalizeMock,
     refundMock,
     recoverEntityMock,
+    resubmitMock,
     FakeKieError,
     jobsUpdateMock,
     jobsUpdateInMock,
@@ -108,6 +110,10 @@ vi.mock("../../../providers/kie/client.js", () => ({
   KieError: mocks.FakeKieError,
   isUpstreamKieFailure: (err: unknown) =>
     err instanceof mocks.FakeKieError && err.isUpstreamFailure,
+}))
+
+vi.mock("../seedance-edit-resubmit.js", () => ({
+  resubmitSeedanceEdit: mocks.resubmitMock,
 }))
 
 vi.mock("../../../providers/kie/kling3-client.js", () => ({
@@ -457,6 +463,48 @@ describe("reconcileKieJob", () => {
     await reconcileKieJob(row)
     expect(mocks.refundMock).toHaveBeenCalledWith("j-veo-failed")
     expect(mocks.finalizeMock).not.toHaveBeenCalled()
+  })
+
+  // The worker's one retry on Seedance's edit-mode rejection died with the worker.
+  describe("an edit-mode rejection", () => {
+    const row: KieJobRow = {
+      id: "j-edit",
+      provider_kind: "kie-standard",
+      provider_task_id: "t-edit-1",
+      reconcile_attempts: 4,
+      job_type: "image-to-video",
+      input_data: { provider: "seedance-2-5" },
+    }
+    const rejected = () => new mocks.FakeKieError("Invalid input parameters.", true, "ratio must be adaptive")
+
+    it("resent: the job goes on with its new task, on the caller's own poll budget", async () => {
+      mocks.pollKieTaskMock
+        .mockRejectedValueOnce(rejected())
+        .mockResolvedValueOnce({ resultJson: { resultUrls: ["https://cdn.example/out.mp4"] } })
+      mocks.resubmitMock.mockResolvedValueOnce({ outcome: "resent", taskId: "t-edit-2" })
+      await reconcileKieJob(row, { claimant: "worker", pollAttempts: 7 })
+      expect(mocks.pollKieTaskMock).toHaveBeenNthCalledWith(1, "t-edit-1", 7)
+      expect(mocks.pollKieTaskMock).toHaveBeenNthCalledWith(2, "t-edit-2", 7)
+      expect(mocks.refundMock).not.toHaveBeenCalled()
+      expect(mocks.finalizeMock).toHaveBeenCalledTimes(1)
+      expect(mocks.finalizeMock.mock.calls[0]![0]).toMatchObject({ claimant: "worker" })
+    })
+
+    it("taken: another reconciler has it, so nothing is failed or refunded", async () => {
+      mocks.pollKieTaskMock.mockRejectedValueOnce(rejected())
+      mocks.resubmitMock.mockResolvedValueOnce({ outcome: "taken" })
+      await reconcileKieJob(row)
+      expect(mocks.refundMock).not.toHaveBeenCalled()
+      expect(mocks.jobsUpdateInMock).not.toHaveBeenCalled()
+      expect(mocks.finalizeMock).not.toHaveBeenCalled()
+    })
+
+    it("stands: it fails and refunds", async () => {
+      mocks.pollKieTaskMock.mockRejectedValueOnce(rejected())
+      mocks.resubmitMock.mockResolvedValueOnce({ outcome: "stands" })
+      await reconcileKieJob(row)
+      expect(mocks.refundMock).toHaveBeenCalledWith("j-edit")
+    })
   })
 
   // A job re-picked after a worker restart ends HERE, not in the worker's

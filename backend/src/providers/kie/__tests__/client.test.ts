@@ -523,3 +523,42 @@ describe("VEO onTaskCreated", () => {
     expect(result.resultJson.resultUrls).toEqual(["https://veo.example/already-4k.mp4"])
   })
 })
+
+describe("readKieTaskRequest", () => {
+  const recordWith = (data: unknown, ok = true) =>
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ code: 200, data }), { status: ok ? 200 : 500 }))
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("reads the model and the input KIE recorded, its input a JSON string", async () => {
+    const input = { duration: 4, aspect_ratio: "9:16", reference_video_urls: ["https://cdn.example/a.mov"] }
+    recordWith({ model: "bytedance/seedance-2-5", param: JSON.stringify({ input: JSON.stringify(input), model: "bytedance/seedance-2-5" }) })
+    const { readKieTaskRequest } = await import("../client.js")
+    await expect(readKieTaskRequest("t-1")).resolves.toEqual({ model: "bytedance/seedance-2-5", input })
+  })
+
+  it("reads an input that is an object, and the model from the param", async () => {
+    recordWith({ param: JSON.stringify({ input: { duration: 4 }, model: "m" }) })
+    const { readKieTaskRequest } = await import("../client.js")
+    await expect(readKieTaskRequest("t-1")).resolves.toEqual({ model: "m", input: { duration: 4 } })
+  })
+
+  it.each([
+    ["no param", { model: "m" }],
+    ["a param that is not JSON", { model: "m", param: "not json" }],
+    ["no model", { param: JSON.stringify({ input: {} }) }],
+    ["an input that is no object", { model: "m", param: JSON.stringify({ input: "[1]" }) }],
+  ])("answers null on %s", async (_name, data) => {
+    recordWith(data)
+    const { readKieTaskRequest } = await import("../client.js")
+    await expect(readKieTaskRequest("t-1")).resolves.toBeNull()
+  })
+
+  it("answers null when the record cannot be read", async () => {
+    recordWith({}, false)
+    const { readKieTaskRequest } = await import("../client.js")
+    await expect(readKieTaskRequest("t-1")).resolves.toBeNull()
+  })
+})
