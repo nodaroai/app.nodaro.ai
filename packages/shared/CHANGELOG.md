@@ -1,5 +1,17 @@
 # @nodaro/shared
 
+## 3.54.0
+
+### Minor Changes
+
+- 8b0420f: `pricedClipSeconds` and `CLIP_PRICE_GRACE_SEC`: the whole seconds Video Depth (both providers), Video Mask, Mask Composite and the face mesh price a clip at, its length rounded up after ignoring up to 0.05 s past a whole second. `videoDepthCreditId`, `videoMaskCreditId`, `videoFaceMeshCreditId` and `maskCompositeUnits` read it. A 12 s cut of a 29.97 fps clip can come out 12.012 s long and is priced as 12 s; a 15 s cut, 15.015 s long, stays in Depth Anything per frame's 15 s tier.
+- a58b50a: Shot Cuts' JSON pips (`shot-cuts`: `json`, `firstFrames` and `lastFrames`, each other JSON) join the published unit contracts (`UNIT_JSON_PIPS`), so a wire from any of its outputs is read as JSON.
+
+### Patch Changes
+
+- 8b0420f: Model catalog: the listed prices of Seedance 2.5 at 1080p (8 s 3160, with a reference video 1900; 30 s 11850) and of GPT Image 2 at 2K and 4K (25 and 40, image-to-image too) follow the platform's price table.
+- 731b67b: Video Depth: `videoDepthCreditId` names one price row per whole second of the clip for Depth Anything per frame too (`depth-anything-frames:<n>s`, the length rounded up after ignoring up to 0.05 s past a whole second, `:1s` … `:80s`) in place of its length buckets; a length that is unknown, not positive or past 80 s names the `:80s` row. The model catalog's `depth-anything-frames` pricing lists representative per-second rows, and its bare row is now the price of the 80 s row. `VIDEO_DEPTH_BUCKETS` stays exported; no price row is picked from it any more.
+
 ## 3.53.0
 
 ### Minor Changes
