@@ -81,42 +81,42 @@ describe("Video Depth Anything", () => {
 
 describe("Depth Anything per frame", () => {
   it.each([
-    [4.004, 15],
+    [4.004, 4],
+    [4.1, 5],
     [15, 15],
     [15.015, 15],
     [15.05, 15],
-    [15.051, 30],
+    [15.051, 16],
     [30, 30],
     [30.03, 30],
     [30.05, 30],
-    [30.051, 60],
+    [30.051, 31],
     [60, 60],
     [60.0266, 60],
     [60.05, 60],
-    [60.051, 120],
-    [61, 120],
-    [80, 120],
-    [0.02, 15],
-  ])("%s s is the %i s price step", (sec, step) => {
-    expect(videoDepthCreditId(FRAMES, sec)).toBe(`${FRAMES}:${step}s`)
+    [60.051, 61],
+    [61, 61],
+    [80, 80],
+    [0.02, 1],
+  ])("%s s is the %i s price row", (sec, whole) => {
+    expect(videoDepthCreditId(FRAMES, sec)).toBe(`${FRAMES}:${whole}s`)
   })
 
-  it("the rule is the one every step has: 60.06 s is 0.06 s past 60, so it is the next step", () => {
-    expect(videoDepthCreditId(FRAMES, 60.06)).toBe(`${FRAMES}:120s`)
+  it("the rule is the one every step has: 60.06 s is 0.06 s past 60, so it is the next second", () => {
+    expect(videoDepthCreditId(FRAMES, 60.06)).toBe(`${FRAMES}:61s`)
   })
 
   it("whole seconds are unchanged, at every length it accepts", () => {
     for (let n = 1; n <= VIDEO_DEPTH_LIMITS.REPLICATE_MAX_SECONDS; n++) {
-      const step = n <= 15 ? 15 : n <= 30 ? 30 : n <= 60 ? 60 : 120
-      expect(videoDepthCreditId(FRAMES, n), `${n}`).toBe(`${FRAMES}:${step}s`)
+      expect(videoDepthCreditId(FRAMES, n), `${n}`).toBe(`${FRAMES}:${n}s`)
     }
   })
 
-  it("its limit still reads the file: 80 s is taken, 80.02 s is refused; unknown or past it is the highest reachable step", () => {
+  it("its limit still reads the file: 80 s is taken, 80.02 s is refused; unknown or past it is the highest reachable row", () => {
     expect(checkVideoDepthLength(FRAMES, { durationSec: 80 }).ok).toBe(true)
     expect(checkVideoDepthLength(FRAMES, { durationSec: 80.02 }).ok).toBe(false)
-    expect(videoDepthCreditId(FRAMES, 80.02)).toBe(`${FRAMES}:120s`)
-    expect(videoDepthCreditId(FRAMES, undefined)).toBe(`${FRAMES}:120s`)
+    expect(videoDepthCreditId(FRAMES, 80.02)).toBe(`${FRAMES}:80s`)
+    expect(videoDepthCreditId(FRAMES, undefined)).toBe(`${FRAMES}:80s`)
   })
 })
 

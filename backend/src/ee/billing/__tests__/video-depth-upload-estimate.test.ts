@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 /**
  * The server's workflow estimates price a Video Depth fed by an upload at the
  * upload's probed length — the row the run's reservation measures (a whole
- * second on Video Depth Anything, a length tier on Depth Anything per frame) —
+ * second on either provider) —
  * instead of the provider's ceiling row. A clip the estimate cannot read, or an upload
  * the app user replaces, stays at the ceiling: never below the reserve.
  */
@@ -61,9 +61,9 @@ describe("server run estimate — Video Depth on an uploaded clip", () => {
     expect(await depthPart([upload, depth()])).toBe(await charged("video-depth-anything:10s"))
   })
 
-  it("on the Replicate provider, its own tier", async () => {
+  it("on the Replicate provider, its own row", async () => {
     probe.durations.set(CLIP, 40)
-    expect(await depthPart([upload, depth({ provider: "depth-anything-frames" })])).toBe(await charged("depth-anything-frames:60s"))
+    expect(await depthPart([upload, depth({ provider: "depth-anything-frames" })])).toBe(await charged("depth-anything-frames:40s"))
   })
 
   it("a clip the probe cannot read stays at the ceiling", async () => {

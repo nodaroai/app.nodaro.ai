@@ -292,7 +292,7 @@ describe("getModelIdentifier", () => {
     expect(getModelIdentifier(pt)).toBe("pitch-tempo:30m")
   })
 
-  it("prices Video Depth at the row for the wired clip's length (a whole second on fal, a tier on Replicate), the ceiling when it is unknown", () => {
+  it("prices Video Depth at the row for the wired clip's length (a whole second on either provider), the ceiling when it is unknown", () => {
     const depth = (data: Record<string, unknown> = {}) =>
       makeNode({ id: "vd", type: "video-depth", data: { label: "Video Depth", modelSize: "large", ...data } as any })
     const clip = makeNode({ id: "clip", type: "upload-video", data: { label: "Clip", durationSeconds: 40 } as any })
@@ -304,9 +304,10 @@ describe("getModelIdentifier", () => {
     const short = { ...clip, data: { ...clip.data, durationSeconds: 9.2 } }
     expect(getModelIdentifier(fal, [wire], [short, fal])).toBe("video-depth-anything:10s")
     const replicate = depth({ provider: "depth-anything-frames" })
-    expect(getModelIdentifier(replicate, [wire], [clip, replicate])).toBe("depth-anything-frames:60s")
+    expect(getModelIdentifier(replicate, [wire], [clip, replicate])).toBe("depth-anything-frames:40s")
+    expect(getModelIdentifier(replicate, [wire], [short, replicate])).toBe("depth-anything-frames:10s")
     // Unknown length on Replicate: its highest reachable row (it refuses clips over 80 s), not :300s.
-    expect(getModelIdentifier(replicate)).toBe("depth-anything-frames:120s")
+    expect(getModelIdentifier(replicate)).toBe("depth-anything-frames:80s")
     // An unknown / missing provider is priced as the default one, as the server estimates it.
     const stray = depth({ provider: "not-a-depth-model" })
     expect(getModelIdentifier(stray, [wire], [clip, stray])).toBe("video-depth-anything:40s")

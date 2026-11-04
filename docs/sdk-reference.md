@@ -3374,8 +3374,7 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > default) — nothing is reserved on any of them. The vocabularies are re-exported from
 > `@nodaro/shared` as `VideoDepthProvider`, `VideoDepthModelSize`,
 > `VideoDepthColormap` and `VideoDepthResolution`. Pricing is by the input
-> clip's length — per whole second on `video-depth-anything`, per length tier
-> on `depth-anything-frames`; see the [Video Depth node docs](nodes/processing-video/video-depth.md#credit-cost).
+> clip's length, per whole second on both providers; see the [Video Depth node docs](nodes/processing-video/video-depth.md#credit-cost).
 >
 > ```ts
 > const { videoUrl } = await client.nodes.runAndWait("video-depth", {

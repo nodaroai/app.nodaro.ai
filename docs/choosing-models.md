@@ -119,6 +119,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Grok Imagine (I2V) | xAI | Everyday | 165<!-- credits: grok-i2v --> | i2v | Grok image-to-video — stylized motion. Up to 15s. |
 | Kling 2.6 Motion Transfer | Kuaishou | Everyday | 165<!-- credits: motion-transfer --> | motion-transfer | Transfer the motion from a driving video onto a still subject. Kling 2.6 base. |
 | ⭐ VEO 3.1 Fast | Google | Everyday | 165<!-- credits: veo3.1 --> | i2v, t2v | VEO 3.1 Fast — cheaper VEO 3.1 tier, 4/6/8s with audio. Good balance for most uses. Flat per-generation pricing across durations. |
+| Depth Anything (per frame) | Depth Anything | Everyday | 176<!-- credits: depth-anything-frames --> | video-depth | Depth Anything v1 run on each frame. Grayscale or inferno colormap; may flicker between frames. Up to 80 s. |
 | Bytedance Pro I2V | Bytedance | Everyday | 193<!-- credits: bytedance-pro --> | i2v, t2v | Pro Bytedance video tier — better quality. |
 | Wan 2.6 | Alibaba | Everyday | 193<!-- credits: wan --> | v2v, t2v | Wan 2.6 — text-to-video and video-to-video under a single id. |
 | Wan 2.6 I2V | Alibaba | Everyday | 193<!-- credits: wan-i2v --> | i2v | Wan 2.6 image-to-video — 5/10/15s at 720p/1080p. |
@@ -148,8 +149,8 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Wan 3.0 Prime | Alibaba | Standard | 352<!-- credits: wan-3-prime --> | i2v, t2v | Wan 3.0 Prime — Alibaba's high-speed Wan 3.0 tier: same multimodal surface and 2-30s range, faster turnaround at a higher per-second rate. |
 | HappyHorse Edit | HappyHorse | Standard | 385<!-- credits: happyhorse-edit --> | v2v | HappyHorse video-edit — video-to-video transformation, up to 60s input, 720p/1080p output. |
 | Runway Aleph V2V | Runway | Standard | 385<!-- credits: runway-aleph --> | v2v | Runway Aleph — video-to-video conversion. |
-| Kling 4.0 | Kuaishou | Standard | 396<!-- credits: kling-4 --> | i2v, t2v | Kling 4.0 — up to 30s with native audio and lip-sync; reference images, videos, characters and voices, or plain text. |
-| Kling 4.0 Keyframes | Kuaishou | Standard | 396<!-- credits: kling-4-keyframes --> | i2v, t2v | Kling 4.0 Keyframes — start frame, up to 8 in-between frames and an end frame; up to 30s with native audio. |
+| Kling 4.0 | Kuaishou | Premium | 396<!-- credits: kling-4 --> | i2v, t2v | Kling 4.0 — up to 30s with native audio and lip-sync; reference images, videos, characters and voices, or plain text. |
+| Kling 4.0 Keyframes | Kuaishou | Premium | 396<!-- credits: kling-4-keyframes --> | i2v, t2v | Kling 4.0 Keyframes — start frame, up to 8 in-between frames and an end frame; up to 30s with native audio. |
 | Seedance 2 | Bytedance | Premium | 418<!-- credits: seedance-2 --> | i2v, t2v | Seedance 2 — premium tier with native audio. Per-second pricing by resolution. |
 | VEO 4K Upscale | Google | Premium | 418<!-- credits: veo-4k --> | video-upscale | Upscale VEO output to 4K. |
 | Kling 2.1 Master | Kuaishou | Premium | 440<!-- credits: kling-master --> | i2v | Master tier I2V — strong cinematic quality. |
@@ -158,7 +159,6 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Seedance 2 Extend | Bytedance | Premium | 583<!-- credits: seedance-2-extend --> | extend | Extend ANY video: generates the continuation (audio included) and trim-stitches it into one seamless clip. |
 | minimax-h3 | MiniMax | Premium | 605<!-- credits: minimax-h3 --> | i2v, t2v | MiniMax H3 — premium multimodal tier: first/last frame + image/video/audio references, native audio, 2K (default) or 768P output, 4-15s per-second pricing. |
 | Kling Avatar Pro | Kuaishou | Premium | 616<!-- credits: kling-avatar-pro --> | lip-sync | Premium lip-sync — better mouth shape and timing. |
-| Depth Anything (per frame) | Depth Anything | Premium | 660<!-- credits: depth-anything-frames --> | video-depth | Depth Anything v1 run on each frame. Grayscale or inferno colormap; may flicker between frames. Up to 80 s. |
 | Video Analysis (Fast) | Nodaro | Premium | 933<!-- credits: video-analysis:gemini-3-flash --> | video-analysis | Analyze a video into a structured shot list (scenes, camera, audio) — fast, economy tier. Billed per duration bucket. |
 | Video Analysis (Fast — legacy) | Nodaro | Premium | 1092<!-- credits: video-analysis:gemini-3.6-flash --> | video-analysis | Legacy fast-tier analysis model (backed the fast tier from 2026-07 until 2026-07-29). Kept so stored raw-model configs keep running and keep pricing under their own identifier; new fast-tier runs use the current fast model. |
 | ⭐ VEO 3.1 Quality | Google | Premium | 1100<!-- credits: veo3 --> | i2v, t2v | Google VEO 3.1 Quality — premium cinematic video. 4/6/8s clips, optional end frame, native audio. No reference-to-video mode (Fast/Lite only). Flat per-generation pricing across durations. |

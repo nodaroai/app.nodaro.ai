@@ -4,7 +4,7 @@ import { STATIC_CREDIT_COSTS, CreditsService } from "../credits.js"
 // The pre-run estimate quotes Video Depth the way a run is charged: the row for
 // the input clip's length. Before a run the length is known only when the graph
 // tells it (a render's output, a chain of length-priced steps); any other clip
-// is quoted at the provider's highest reachable row (fal 300 s, Replicate 120 s:
+// is quoted at the provider's highest reachable row (fal 300 s, Replicate 80 s:
 // it refuses clips over 80 s) — the most a run can be charged, so the estimate
 // never quotes under the reservation, nor at a row no run can reach.
 
@@ -18,9 +18,9 @@ describe("video-depth workflow estimate", () => {
     expect(est([{ type: "video-depth", data: {} }])).toBe(STATIC_CREDIT_COSTS["video-depth-anything:300s"])
   })
 
-  it("the Replicate provider quotes its highest reachable row (120 s — it refuses clips over 80 s)", () => {
+  it("the Replicate provider quotes its highest reachable row (80 s — it refuses clips over 80 s)", () => {
     expect(est([{ type: "video-depth", data: { provider: "depth-anything-frames" } }])).toBe(
-      STATIC_CREDIT_COSTS["depth-anything-frames:120s"],
+      STATIC_CREDIT_COSTS["depth-anything-frames:80s"],
     )
   })
 
@@ -48,12 +48,13 @@ describe("video-depth workflow estimate", () => {
       expect(depthPart(endTime)).toBe(credits)
     })
 
-    it("on the Replicate provider, its own bucket", () => {
-      expect(depthPart(20, { provider: "depth-anything-frames" })).toBe(STATIC_CREDIT_COSTS["depth-anything-frames:30s"])
+    it("on the Replicate provider, its own row for that second", () => {
+      expect(depthPart(20, { provider: "depth-anything-frames" })).toBe(STATIC_CREDIT_COSTS["depth-anything-frames:20s"])
+      expect(depthPart(20, { provider: "depth-anything-frames" })).toBe(40)
     })
 
     it("a window longer than Replicate accepts quotes its highest reachable row, not the 300 s row", () => {
-      expect(depthPart(200, { provider: "depth-anything-frames" })).toBe(STATIC_CREDIT_COSTS["depth-anything-frames:120s"])
+      expect(depthPart(200, { provider: "depth-anything-frames" })).toBe(STATIC_CREDIT_COSTS["depth-anything-frames:80s"])
     })
   })
 })

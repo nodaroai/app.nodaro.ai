@@ -615,6 +615,24 @@ const VIDEO_DEPTH_ANYTHING_PER_SECOND_ROWS: Record<string, number> = Object.from
   ]),
 )
 
+/**
+ * Depth Anything per frame (the Video Depth node's Replicate provider) is priced
+ * per whole second of the input clip too (decided 2026-11-04): BASE credits per
+ * second of the probed length, rounded up, 1–80 s (the provider's cap; a longer
+ * clip is refused before anything is reserved). One row per second,
+ * `depth-anything-frames:1s` … `:80s`, seeded by migration 595 and value-checked
+ * against this table. The bare row is the 80 s price, repriced by the same
+ * migration. No run reaches the older `:120s` and `:300s` rows, both past the
+ * cap; they stay at the values migration 502 seeded.
+ */
+const DEPTH_ANYTHING_FRAMES_CREDITS_PER_SECOND = 2
+const DEPTH_ANYTHING_FRAMES_PER_SECOND_ROWS: Record<string, number> = Object.fromEntries(
+  Array.from({ length: VIDEO_DEPTH_LIMITS.REPLICATE_MAX_SECONDS }, (_, i) => [
+    videoDepthCreditId("depth-anything-frames", i + 1),
+    (i + 1) * DEPTH_ANYTHING_FRAMES_CREDITS_PER_SECOND,
+  ]),
+)
+
 export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC_CREDIT_COSTS", {
   // Credits = ceil(kieCredits / 4) at 0% markup.
   // Markup % is configurable in admin settings (app_settings.cost_markup_percent).
@@ -1665,18 +1683,18 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "volcengine-lipsync:300s": 6000,        // 300s × — 5-min ceiling
   // Video Depth — fal Video Depth Anything + Replicate Depth Anything (run per
   // frame), priced by the probed clip length via videoDepthCreditId; each bare
-  // id is the 300s ceiling. The reserved row is committed verbatim as the charge.
+  // id is the provider's longest clip. The reserved row is committed verbatim as the charge.
   // Video Depth Anything: one row per whole second of the clip, `:1s` … `:300s`
   // (VIDEO_DEPTH_ANYTHING_PER_SECOND_ROWS above).
   "video-depth-anything": VIDEO_DEPTH_LIMITS.FAL_MAX_SECONDS * VIDEO_DEPTH_ANYTHING_CREDITS_PER_SECOND, // bare = 300s ceiling
   ...VIDEO_DEPTH_ANYTHING_PER_SECOND_ROWS,
-  // Depth Anything (per frame): one row per length bucket (15/30/60/120/300 s).
-  "depth-anything-frames": 600,           // bare = 300s ceiling
-  "depth-anything-frames:15s": 30,
-  "depth-anything-frames:30s": 60,
-  "depth-anything-frames:60s": 120,
+  // Depth Anything (per frame): one row per whole second of the clip, `:1s` …
+  // `:80s` (DEPTH_ANYTHING_FRAMES_PER_SECOND_ROWS above). Its cap is 80 s, so no
+  // run reaches `:120s` or `:300s`.
+  "depth-anything-frames": VIDEO_DEPTH_LIMITS.REPLICATE_MAX_SECONDS * DEPTH_ANYTHING_FRAMES_CREDITS_PER_SECOND, // bare = 80s ceiling
+  ...DEPTH_ANYTHING_FRAMES_PER_SECOND_ROWS,
   "depth-anything-frames:120s": 240,
-  "depth-anything-frames:300s": 600,      // 5-min ceiling
+  "depth-anything-frames:300s": 600,
   // ── Replicate MMAudio (video-sfx node) ──
   // BASE credits (pre-markup). creditGuard applies cost_markup_percent at request time.
   "replicate-mmaudio":       10,  // base/legacy default (8s bucket)
@@ -2782,9 +2800,9 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
   // Video Depth: `<provider>:<n>s` from a request-shaped record (the job's
   // input_data, stamped by the input gate with `provider` + `duration_seconds`)
   // — the same videoDepthCreditId the route guard, the orchestrator stamp and
-  // the estimator use (a whole second on fal, a length bucket on Replicate). No
-  // duration → the provider's highest reachable row (fal :300s, Replicate :120s
-  // — it refuses clips over 80 s; never under-quote).
+  // the estimator use (a row per whole second). No duration → the provider's
+  // highest reachable row (fal :300s, Replicate :80s — it refuses clips over
+  // 80 s; never under-quote).
   "video-depth": (data) => videoDepthCreditId(resolveVideoDepthProvider(data.provider), Number(data.duration_seconds)),
 // A unit with a creditId resolver (price.ee.ts); a flat-priced unit has none and reserves the row of its type.
 }, Object.fromEntries(Object.entries(UNIT_PRICES).flatMap(([type, p]) => {
@@ -6750,11 +6768,11 @@ export function getNodeModelIdentifier(
   // measures it can be charged (decided 2026-10-13).
   if (nodeType === "video-sfx") return videoSfxQuoteCreditId(graph.videoSfxSec)
 
-  // Video Depth: a price row per provider and input-clip length, after
-  // `pricedClipSeconds` (a whole second on fal; a length bucket on Replicate),
-  // chosen when the run measures the clip (lib/video-depth-input.ts). Before a run, a clip
+  // Video Depth: a price row per provider and whole second of the input clip,
+  // after `pricedClipSeconds`, chosen when the run measures the clip
+  // (lib/video-depth-input.ts). Before a run, a clip
   // whose length the graph tells is quoted at that length's row; any other
-  // clip at the provider's highest reachable row (fal 300 s, Replicate 120 s) —
+  // clip at the provider's highest reachable row (fal 300 s, Replicate 80 s) —
   // the most a run can be charged, since a clip the provider cannot take is
   // refused before anything is reserved.
   // The provider resolves as the run resolves it (unset/unknown → the default).
