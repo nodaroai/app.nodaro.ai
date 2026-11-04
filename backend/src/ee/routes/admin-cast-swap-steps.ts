@@ -4,17 +4,21 @@
  *
  *   GET /v1/admin/jobs/:jobId/cast-swap-steps
  *
- * Replies `{ data: { stepOutputs, sceneText, skippedSteps } }`:
+ * Replies `{ data: { stepOutputs, sceneText, skippedSteps, styleOnly } }`:
  * - `stepOutputs`: what a run with `steps` recorded of each step (the labels,
  *   the condition, the layout and sheet per role; the engine prompt's mode and
  *   the LLM-written body; the scene step's mode, whether it made the shot
  *   list and the cut times it was told; "Body from the clip"'s frame,
  *   redrawn sheet and image prompt per role; "Style the role pictures"'s
- *   styled picture and what each role sent, and the roles it skipped), from the server-only
+ *   styled picture and what each role sent, and the roles it skipped; a
+ *   style-only run's path and whether its video was made gray), from the server-only
  *   `output_data.__castSwapStepOutputs`. null when the run recorded none (a
  *   run with no `steps`: today's steps), or the record is of another version.
  * - `sceneText`: the scene description the run used (`__castSwapSceneText`).
  * - `skippedSteps`: the steps the run went on without (`output_data.skippedSteps`).
+ * - `styleOnly`: a style-only run's path ("original" or "flex"): its record's, else
+ *   its input's `__styleOnly` (a Full Quality version records no steps of its own);
+ *   null for any other run.
  *
  * The `__` keys are server-only: every normal job read strips them
  * (`withoutServerOnlyKeys`, lib/job-output-visibility.ts), so this route reads
@@ -36,11 +40,13 @@ import {
   SHEET_LAYOUTS,
   SKIP_REASONS,
   SKIPPABLE_STEPS,
+  STYLE_ONLY_PATHS,
   STYLE_REFS_SENDS,
   type ClipBodyOutput,
   type PhotoLabel,
   type SkippedStep,
   type StepOutputs,
+  type StyleOnlyPath,
   type StyleRefsOutput,
 } from "../../lib/cast-swap-steps.js"
 
@@ -49,6 +55,8 @@ export interface JobCastSwapSteps {
   stepOutputs: StepOutputs | null
   sceneText: string | null
   skippedSteps: SkippedStep[]
+  /** A style-only run's path; null for any other run. */
+  styleOnly: StyleOnlyPath | null
 }
 
 /** The job types a Cast Swap run carries: a run, and a Full Quality version (its own queue name). */
@@ -150,6 +158,12 @@ export function readStyleRefs(v: unknown): StyleRefsOutput | null {
   return { roles, ...(skipped.length > 0 ? { skipped } : {}) }
 }
 
+/** A style-only run's record: a known path, and `grayscale` only as `true`; null without a known path. */
+export function readStyleOnly(v: unknown): NonNullable<StepOutputs["styleOnly"]> | null {
+  if (!isRec(v) || !oneOf(STYLE_ONLY_PATHS, v.path)) return null
+  return { path: v.path, ...(v.grayscale === true ? { grayscale: true as const } : {}) }
+}
+
 /**
  * The step outputs record; null unless it is version 1 with a roles list (a record that carries only
  * "Style the role pictures" may leave the roles out: read as none).
@@ -166,6 +180,8 @@ export function readStepOutputs(v: unknown): StepOutputs | null {
   if (isRec(v.scene) && oneOf(STEP_MODES, v.scene.mode)) out.scene = readScene(v.scene, v.scene.mode)
   const styleRefs = readStyleRefs(v.styleRefs)
   if (styleRefs) out.styleRefs = styleRefs
+  const styleOnly = readStyleOnly(v.styleOnly)
+  if (styleOnly) out.styleOnly = styleOnly
   return out
 }
 
@@ -200,10 +216,13 @@ export async function adminCastSwapStepsRoutes(app: FastifyInstance): Promise<vo
       return reply.status(404).send({ error: { code: "not_found", message: "Cast Swap job not found" } })
     }
     const output = isRec(row.output_data) ? row.output_data : {}
+    const input = isRec(row.input_data) ? row.input_data : {}
+    const stepOutputs = readStepOutputs(output.__castSwapStepOutputs)
     const out: JobCastSwapSteps = {
-      stepOutputs: readStepOutputs(output.__castSwapStepOutputs),
+      stepOutputs,
       sceneText: typeof output.__castSwapSceneText === "string" ? output.__castSwapSceneText : null,
       skippedSteps: readSkippedSteps(output.skippedSteps),
+      styleOnly: stepOutputs?.styleOnly?.path ?? (oneOf(STYLE_ONLY_PATHS, input.__styleOnly) ? input.__styleOnly : null),
     }
     return reply.send({ data: out })
   })

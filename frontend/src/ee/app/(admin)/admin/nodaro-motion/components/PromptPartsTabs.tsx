@@ -25,6 +25,16 @@
 // overrides are then checked worded as the runs will be. "New" is greyed out
 // until every environment's engine words it (the setting is shared; the
 // server refuses the save otherwise). Precise never reads it.
+//
+// Prism also has a "Style only" tab (the key `styleOnly`): the parts of a
+// style-only run (a video and an art style, nothing swapped, on the original
+// clip), its own set, never the Motion tab's. It is listed while this
+// environment's engine lists the key (`styles`), hidden on Pulse (it takes no
+// art style), and greyed out, naming the environments, until EVERY
+// environment's engine runs style-only runs: an app from before the key drops
+// the engine's whole entry when it reads one, so the server refuses a change
+// until then. Its preview never sends a wording. Save sends the whole draft
+// either way, so stored style-only parts are kept (a key left out is deleted).
 
 import { useEffect, useMemo, useState } from "react"
 import { Loader2 } from "lucide-react"
@@ -39,6 +49,7 @@ import {
   type CastSwapPromptWordingId,
   type CastSwapStyleId,
   type NodaroMotionEngine,
+  type NodaroMotionPromptPartsKey,
   type NodaroMotionMotionEntry,
   type NodaroMotionPromptParts,
   type NodaroMotionPromptWording,
@@ -57,10 +68,22 @@ import { AssembledPrompt, PromptPartRow, nonEmpty, partsShown } from "../../tren
 import { ENGINE_OUT_OF_DATE } from "../../trends/components/EnginePromptParts"
 import { PromptWordingSelect } from "../../trends/components/PromptWordingSelect"
 import { DIRECT_WORDING_NOTE, environmentsThatCannotUseNewWording } from "../../trends/prompt-wording"
+import { environmentsThatCannotRunStyleOnly } from "../../trends/clip-preparation"
 
-const STYLE_LABELS: Readonly<Record<CastSwapStyleId, { label: string; hint: string }>> = {
+const STYLE_LABELS: Readonly<Record<NodaroMotionPromptPartsKey, { label: string; hint: string }>> = {
   precise: { label: "Precise", hint: "Follows the clip exactly (the default)." },
   motion: { label: "Motion", hint: "Follows the clip's movement and takes the looks from the photos, more freely than Precise." },
+  styleOnly: { label: "Style only", hint: "A run with a video and an art style and nothing to swap, sent as the Original clip: its own parts, never the Motion tab's." },
+}
+
+/** Why the Style only tab is greyed out: an environment's engine does not run style-only runs yet. */
+export function STYLE_ONLY_TAB_UNOFFERED(missing: readonly string[]): string {
+  return `Style only is not editable yet: the Cast Swap engine of ${missing.join(", ")} does not run style-only runs, and these prompts are shared by every environment.`
+}
+
+/** The keys an engine's tabs show: Pulse takes no art style, so it has no Style only tab. */
+export function tabsOf(engine: NodaroMotionEngine, styles: readonly NodaroMotionPromptPartsKey[]): NodaroMotionPromptPartsKey[] {
+  return styles.filter((s) => s !== "styleOnly" || engine === "motion-prism")
 }
 
 const PROMPT_STYLE_NAMES: Readonly<Record<CastSwapPromptStyleId, string>> = { precise: "Precise", flexible: "Flexible" }
@@ -70,8 +93,9 @@ export function promptStyleOfRun(style: CastSwapStyleId, motion: NodaroMotionMot
   return style === "precise" ? "precise" : (motion?.promptStyle ?? "flexible")
 }
 
-/** A tab's name: the run's style, and for Motion the prompt style its parts are. */
-export function styleTabLabel(style: CastSwapStyleId, motion: NodaroMotionMotionEntry | undefined): string {
+/** A tab's name: the run's style, and for Motion the prompt style its parts are; Style only as it is. */
+export function styleTabLabel(style: NodaroMotionPromptPartsKey, motion: NodaroMotionMotionEntry | undefined): string {
+  if (style === "styleOnly") return STYLE_LABELS.styleOnly.label
   const label = STYLE_LABELS[style]?.label ?? style
   return style === "motion" ? `${label} (${PROMPT_STYLE_NAMES[promptStyleOfRun(style, motion)]} prompt)` : label
 }
@@ -97,12 +121,15 @@ function useDebounced<T>(value: T, ms: number): T {
   return v
 }
 
-/** The setting as it is saved: each engine and style's non-empty texts, the empty ones left out. */
+/**
+ * The setting as it is saved: each engine and key's non-empty texts, the empty ones left out. Every key of the draft
+ * is kept, `styleOnly` included whether or not its tab is shown: the PUT replaces the whole setting.
+ */
 export function promptPartsToSave(draft: NodaroMotionPromptParts): NodaroMotionPromptParts {
   const out: NodaroMotionPromptParts = {}
-  for (const [engine, styles] of Object.entries(draft) as Array<[NodaroMotionEngine, Partial<Record<CastSwapStyleId, PromptPartTexts>> | undefined]>) {
-    const entry: Partial<Record<CastSwapStyleId, PromptPartTexts>> = {}
-    for (const [style, texts] of Object.entries(styles ?? {}) as Array<[CastSwapStyleId, PromptPartTexts | undefined]>) {
+  for (const [engine, styles] of Object.entries(draft) as Array<[NodaroMotionEngine, Partial<Record<NodaroMotionPromptPartsKey, PromptPartTexts>> | undefined]>) {
+    const entry: Partial<Record<NodaroMotionPromptPartsKey, PromptPartTexts>> = {}
+    for (const [style, texts] of Object.entries(styles ?? {}) as Array<[NodaroMotionPromptPartsKey, PromptPartTexts | undefined]>) {
       const kept = nonEmpty(texts ?? {})
       if (Object.keys(kept).length > 0) entry[style] = kept
     }
@@ -132,6 +159,9 @@ export function PromptPartsTabs({ internalNames }: { readonly internalNames: Rea
   const saveWording = useSaveNodaroMotionPromptWording()
   const envs = useEngineEnvironments()
   const newWordingMissingIn = environmentsThatCannotUseNewWording(envs.data)
+  // The style-only set is edited only once every environment's engine runs style-only runs.
+  const styleOnlyMissingIn = environmentsThatCannotRunStyleOnly(envs.data)
+  const styleOnlyOffered = styleOnlyMissingIn !== undefined && styleOnlyMissingIn.length === 0
   const [wordingDraft, setWordingDraft] = useState<NodaroMotionPromptWording>({})
   useEffect(() => {
     if (wordingQuery.data) setWordingDraft({ ...(wordingQuery.data.promptWording ?? {}) })
@@ -140,9 +170,14 @@ export function PromptPartsTabs({ internalNames }: { readonly internalNames: Rea
   // Never saved reads as the current wording: choosing it then is no change.
   const wordingChanged = !!wordingQuery.data && JSON.stringify(nextWording) !== JSON.stringify(promptWordingToSave(wordingQuery.data.promptWording))
   const changed = partsChanged || wordingChanged
+  // A save that sets or changes style-only parts can be refused for the environments (409 `engine_unsupported`, its
+  // sentence naming them): that sentence is said as it is, never read as this engine being out of date.
+  const styleOnlyEdited = (data?.engines ?? []).some(
+    (e) => JSON.stringify(next[e.id]?.styleOnly ?? null) !== JSON.stringify(promptPartsToSave(data?.promptParts ?? {})[e.id]?.styleOnly ?? null),
+  )
   const pending = save.isPending || saveWording.isPending
 
-  const setTexts = (engine: NodaroMotionEngine, style: CastSwapStyleId, texts: PromptPartTexts) =>
+  const setTexts = (engine: NodaroMotionEngine, style: NodaroMotionPromptPartsKey, texts: PromptPartTexts) =>
     setDraft((d) => ({ ...d, [engine]: { ...(d[engine] ?? {}), [style]: texts } }))
 
   // The wording first: the overrides' check then words a Flex run as its runs will be.
@@ -156,7 +191,7 @@ export function PromptPartsTabs({ internalNames }: { readonly internalNames: Rea
       if (err instanceof PromptPartsInvalidError) setProblems(err.problems)
       else {
         const e = err instanceof Error ? err : new Error(String(err))
-        toast.error(isPromptPartsEngineOutOfDate(e) && !wordingChanged ? ENGINE_OUT_OF_DATE : e.message)
+        toast.error(isPromptPartsEngineOutOfDate(e) && !wordingChanged && !styleOnlyEdited ? ENGINE_OUT_OF_DATE : e.message)
       }
     }
   }
@@ -189,49 +224,60 @@ export function PromptPartsTabs({ internalNames }: { readonly internalNames: Rea
           {data.promptParts === null ? "Never saved: every run uses the engine's defaults." : data.updatedAt ? `Saved ${new Date(data.updatedAt).toLocaleString()}.` : "Saved."}
         </p>
       )}
-      {data?.engines.map((engine) => (
-        <section key={engine.id} aria-labelledby={`prompt-${engine.id}`} className="rounded-lg border p-4">
-          <h3 id={`prompt-${engine.id}`} className="mb-3 text-base font-semibold">
-            Engine prompt: {engine.name}{" "}
-            <span className="font-normal text-muted-foreground">({internalNames[engine.internal] ?? engine.internal})</span>
-          </h3>
-          <Tabs defaultValue={data.styles[0] ?? "precise"}>
-            <TabsList aria-label={`${engine.name} styles`}>
-              {data.styles.map((style) => {
-                const n = problems.filter((p) => p.engine === engine.id && p.style === style).length
-                return (
-                  <TabsTrigger key={style} value={style}>
-                    {styleTabLabel(style, motion?.[engine.id])}
-                    {n > 0 ? ` (${n})` : ""}
-                  </TabsTrigger>
-                )
-              })}
-            </TabsList>
-            {data.styles.map((style) => (
-              <TabsContent key={style} value={style}>
-                <StylePanel
-                  engine={engine.id}
-                  style={style}
-                  motion={style === "motion" ? motion?.[engine.id] : undefined}
-                  texts={draft[engine.id]?.[style] ?? {}}
-                  onChange={(texts) => setTexts(engine.id, style, texts)}
-                  saveProblems={problems.filter((p) => p.engine === engine.id && p.style === style)}
-                  disabled={pending}
-                  wording={
-                    style === "motion" && wordingQuery.data
-                      ? {
-                          value: wordingDraft[engine.id] ?? "current",
-                          missingIn: newWordingMissingIn,
-                          onChange: (w) => setWordingDraft((d) => ({ ...d, [engine.id]: w })),
-                        }
-                      : undefined
-                  }
-                />
-              </TabsContent>
-            ))}
-          </Tabs>
-        </section>
-      ))}
+      {data?.engines.map((engine) => {
+        const tabs = tabsOf(engine.id, data.styles)
+        return (
+          <section key={engine.id} aria-labelledby={`prompt-${engine.id}`} className="rounded-lg border p-4">
+            <h3 id={`prompt-${engine.id}`} className="mb-3 text-base font-semibold">
+              Engine prompt: {engine.name}{" "}
+              <span className="font-normal text-muted-foreground">({internalNames[engine.internal] ?? engine.internal})</span>
+            </h3>
+            <Tabs defaultValue={tabs[0] ?? "precise"}>
+              <TabsList aria-label={`${engine.name} styles`}>
+                {tabs.map((style) => {
+                  const n = problems.filter((p) => p.engine === engine.id && p.style === style).length
+                  return (
+                    <TabsTrigger key={style} value={style} disabled={style === "styleOnly" && !styleOnlyOffered}>
+                      {styleTabLabel(style, motion?.[engine.id])}
+                      {n > 0 ? ` (${n})` : ""}
+                    </TabsTrigger>
+                  )
+                })}
+              </TabsList>
+              {tabs.includes("styleOnly") && styleOnlyMissingIn === undefined && (
+                <p className="mt-2 text-xs text-muted-foreground">Style only: checking the environments…</p>
+              )}
+              {tabs.includes("styleOnly") && styleOnlyMissingIn && styleOnlyMissingIn.length > 0 && (
+                <p role="status" className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                  {STYLE_ONLY_TAB_UNOFFERED(styleOnlyMissingIn)}
+                </p>
+              )}
+              {tabs.map((style) => (
+                <TabsContent key={style} value={style}>
+                  <StylePanel
+                    engine={engine.id}
+                    style={style}
+                    motion={style === "motion" ? motion?.[engine.id] : undefined}
+                    texts={draft[engine.id]?.[style] ?? {}}
+                    onChange={(texts) => setTexts(engine.id, style, texts)}
+                    saveProblems={problems.filter((p) => p.engine === engine.id && p.style === style)}
+                    disabled={pending}
+                    wording={
+                      style === "motion" && wordingQuery.data
+                        ? {
+                            value: wordingDraft[engine.id] ?? "current",
+                            missingIn: newWordingMissingIn,
+                            onChange: (w) => setWordingDraft((d) => ({ ...d, [engine.id]: w })),
+                          }
+                        : undefined
+                    }
+                  />
+                </TabsContent>
+              ))}
+            </Tabs>
+          </section>
+        )
+      })}
     </section>
   )
 }
@@ -247,7 +293,7 @@ function StylePanel({
   wording,
 }: {
   readonly engine: NodaroMotionEngine
-  readonly style: CastSwapStyleId
+  readonly style: NodaroMotionPromptPartsKey
   /** Motion: the saved Motion setting's entry (its parts follow it). */
   readonly motion?: NodaroMotionMotionEntry
   readonly texts: PromptPartTexts
@@ -263,6 +309,7 @@ function StylePanel({
   }
 }) {
   const overrides = useDebounced(nonEmpty(texts), PREVIEW_DEBOUNCE_MS)
+  // Style only has no wording: only a Motion tab worded Flexible reads one.
   const flexible = style === "motion" && promptStyleOfRun(style, motion) === "flexible"
   // The saved Motion setting is part of the question: its prompt style and clip preparation decide the parts.
   // The Flex wording as chosen here (a Precise prompt never reads it, so none is sent for it).

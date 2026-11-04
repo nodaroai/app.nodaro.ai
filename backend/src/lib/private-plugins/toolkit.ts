@@ -145,6 +145,7 @@ import { withEarlierPromptPartKeys } from "../nodaro-motion-prompt-parts.js"
 import { withEarlierMotionKeys } from "../nodaro-motion-motion.js"
 import { styleForPlugin } from "../nodaro-motion-style.js"
 import { promptWordingForPlugin } from "../nodaro-motion-prompt-wording.js"
+import { engineTakesStyleOnly, styleOnlyForPlugin } from "../nodaro-motion-style-only.js"
 import { anyStepsSet, stepsForLoadedEngine, withEarlierStepsKeys } from "../nodaro-motion-steps.js"
 import { loadedEngineTakesSteps } from "../cast-swap-steps.js"
 import { KieVideoProvider } from "../../providers/kie/video.js"
@@ -1648,6 +1649,8 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   nodaroMotionStyle: true,
   // tk.settings.nodaroMotionPromptWording(): the admin's Flex prompt wording per Nodaro Motion engine.
   nodaroMotionPromptWording: true,
+  // tk.settings.nodaroMotionStyleOnly(): the admin's style-only setting (path, engine prompt) per Nodaro Motion engine.
+  nodaroMotionStyleOnly: true,
   jobLanes: true,
   // tk.jobs.waitForJob leaves the time the awaited job waits for a slot
   // (`queued`) out of the plugin's timeout (`queueAware` below).
@@ -2310,6 +2313,16 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         const settings = await getAppSettings()
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_prompt_wording: the app settings could not be read")
         return promptWordingForPlugin(settings.nodaro_motion_prompt_wording)
+      },
+      // Same rules: a failed read throws (null would send every style-only run down the original path).
+      // Null when never saved or nothing differs from the defaults, AND to an engine that does not
+      // declare `castSwap.styleOnly` (it refuses style-only runs, so it never asks); else each changed
+      // engine under its current AND its earlier key (the masking setting's shim).
+      nodaroMotionStyleOnly: async () => {
+        const settings = await getAppSettings()
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_style_only: the app settings could not be read")
+        if (!engineTakesStyleOnly(getPluginSupports().castSwap)) return null
+        return styleOnlyForPlugin(settings.nodaro_motion_style_only)
       },
     },
     deployment: { publicUrl: appBaseUrl() },

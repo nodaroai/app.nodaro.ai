@@ -132,7 +132,16 @@ export interface StepOutputs {
   scene?: { mode: "template" | "llm"; shotList?: true; cuts?: number[] }
   /** "Style the role pictures": each role's picture redrawn in the run's art style, and the roles it went on without. */
   styleRefs?: StyleRefsOutput
+  /**
+   * A style-only run: the path it took — "original" (the original clip alone, restyled) or "flex" (as any art-style
+   * Flex run) — and `grayscale` when its delivered video was made gray (the original path under a black-and-white style).
+   */
+  styleOnly?: { path: StyleOnlyPath; grayscale?: true }
 }
+
+/** The paths a style-only run may take: the original clip restyled (the default), or the depth path of any art-style Flex run. */
+export const STYLE_ONLY_PATHS = ["original", "flex"] as const
+export type StyleOnlyPath = (typeof STYLE_ONLY_PATHS)[number]
 
 /** What "Style the role pictures" recorded: per role the styled picture and what the role sent; the roles skipped. */
 export interface StyleRefsOutput {

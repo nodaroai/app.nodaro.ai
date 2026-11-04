@@ -1388,6 +1388,13 @@ const CAST_SWAP_STYLE_FORCED_BYTES = 41
 // per-tool budget; no headroom left).
 const CAST_SWAP_ART_STYLE_BYTES = 315
 
+// RAISED 2026-11-03 by Nodaro Motion's style-only runs, and nothing else: `cast_swap`'s `roles`
+// says an art style alone is enough on a motion-prism Flex run where the engine takes style-only
+// runs, and `art_style` says it then restyles the whole clip. No tool was added, so the fixture
+// does NOT move. Measured by this suite: 510_450 total − 510_229 = 221 B, all of it cast_swap's
+// (under the per-tool budget; no headroom left).
+const CAST_SWAP_STYLE_ONLY_BYTES = 221
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES,
   totalBytes:
@@ -1560,7 +1567,8 @@ export const TOOL_WIRE_BUDGET = {
     TRENDS_EXAMPLE_NUMBERING_BYTES +
     JOB_QUEUE_WORDING_BYTES +
     CAST_SWAP_STYLE_FORCED_BYTES +
-    CAST_SWAP_ART_STYLE_BYTES,
+    CAST_SWAP_ART_STYLE_BYTES +
+    CAST_SWAP_STYLE_ONLY_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

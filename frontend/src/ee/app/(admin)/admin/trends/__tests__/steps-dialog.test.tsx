@@ -49,6 +49,7 @@ const STEPS: JobCastSwapSteps = {
   },
   sceneText: "test scene text",
   skippedSteps: [{ step: "reference-sheet", reason: "failed", role: 1 }],
+  styleOnly: null,
 }
 
 beforeEach(() => {
@@ -115,6 +116,7 @@ describe("StepsDialog", () => {
       },
       sceneText: null,
       skippedSteps: [{ step: "clip-body", reason: "no_frame", role: 1 }],
+      styleOnly: null,
     })
     renderWith(<StepsDialog jobId={RUN_ID} onClose={() => {}} />)
     const dialog = await screen.findByRole("dialog")
@@ -148,6 +150,7 @@ describe("StepsDialog", () => {
       },
       sceneText: null,
       skippedSteps: [{ step: "style-refs", reason: "failed", role: 2 }],
+      styleOnly: null,
     })
     renderWith(<StepsDialog jobId={RUN_ID} onClose={() => {}} />)
     const dialog = await screen.findByRole("dialog")
@@ -175,7 +178,7 @@ describe("StepsDialog", () => {
   })
 
   it("a run with no step outputs used today's steps; its scene text still shows", async () => {
-    vi.mocked(fetchJobCastSwapSteps).mockResolvedValue({ stepOutputs: null, sceneText: "test scene text", skippedSteps: [] })
+    vi.mocked(fetchJobCastSwapSteps).mockResolvedValue({ stepOutputs: null, sceneText: "test scene text", skippedSteps: [], styleOnly: null })
     renderWith(<StepsDialog jobId={RUN_ID} onClose={() => {}} />)
     const dialog = await screen.findByRole("dialog")
     expect(await within(dialog).findByText("This run used today's steps.")).toBeInTheDocument()

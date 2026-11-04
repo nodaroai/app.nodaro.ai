@@ -9,6 +9,7 @@ import {
   SKIPPABLE_STEPS,
   type ClipBodyOutput,
   type JobCastSwapSteps,
+  type NodaroMotionStyleOnlyPath,
   type PhotoLabel,
   type SheetCondition,
   type SkipReason,
@@ -240,17 +241,31 @@ function StyleRefsOutputs({ out }: { out: NonNullable<StepOutputs["styleRefs"]> 
   </div>
 }
 
+const STYLE_ONLY_PATH_LABELS: Readonly<Record<NodaroMotionStyleOnlyPath, string>> = {
+  original: "Style only: original clip",
+  flex: "Style only: like other styles",
+}
+
+/** A style-only run's path and, when its video was made black and white, that it was. */
+function StyleOnlyLine({ path, grayscale }: { path: NodaroMotionStyleOnlyPath; grayscale: boolean }) {
+  return <div className="flex flex-col gap-1" data-testid="style-only-path">
+    <h3 className="text-sm font-semibold">{STYLE_ONLY_PATH_LABELS[path] ?? path}</h3>
+    {grayscale && <p className="text-xs text-muted-foreground">The video was turned black and white.</p>}
+  </div>
+}
+
 /**
  * The body shared by the trend test run's "Steps" dialog and the admin Jobs
- * page: per role its photo labels, what they cover, the layout and the sheet;
+ * page: a style-only run's path; per role its photo labels, what they cover, the layout and the sheet;
  * the engine prompt's mode and, when an LLM wrote it, its body (the full sent
  * prompt is "Show prompt"'s); the scene step and text; the styled role
  * pictures; the skipped steps.
  */
 export function CastSwapStepsBody({ data, showSkipped }: { data: JobCastSwapSteps; showSkipped: boolean }) {
-  const { stepOutputs: out, sceneText, skippedSteps } = data
+  const { stepOutputs: out, sceneText, skippedSteps, styleOnly } = data
   return <div className="flex min-w-0 flex-col gap-3 text-sm">
     {showSkipped && <JobSkippedSteps output={{ skippedSteps }} />}
+    {styleOnly && <StyleOnlyLine path={styleOnly} grayscale={out?.styleOnly?.grayscale === true} />}
     {out === null ? <p className="text-muted-foreground">This run used today's steps.</p> : <>
       {out.roles.length > 0 && <div className="flex flex-col gap-2">
         <h3 className="text-sm font-semibold">Reference sheets</h3>

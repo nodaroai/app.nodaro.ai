@@ -45,7 +45,7 @@ import type { SurroundDirection } from "@nodaro/shared/entities"
 import type { PluginScene3DEngine, PluginStageToolkit } from "./scene3d-contract.js"
 import type { FrameFit, FrameDelivery } from "@nodaro/shared/video"
 import type { Edl, EdlRegion, EdlSegment } from "@nodaro/shared/edl"
-import type { CastSwapSteps } from "../cast-swap-steps.js"
+import type { CastSwapSteps, TextStepSetting } from "../cast-swap-steps.js"
 import type {
   PluginAccountSecretsToolkit,
   PluginDaemon,
@@ -3438,6 +3438,14 @@ export interface PluginCapabilities {
    */
   readonly nodaroMotionPromptWording?: boolean
   /**
+   * `tk.settings.nodaroMotionStyleOnly()` exists: the style-only setting an
+   * admin set per Nodaro Motion engine for DIRECT style-only runs (the path,
+   * "original" or "flex", and the engine-prompt step). An older host has no
+   * such member: a plugin reads that as never saved (the original path, the
+   * template).
+   */
+  readonly nodaroMotionStyleOnly?: boolean
+  /**
    * The host reads `NodaroPrivatePlugin.jobLanes()`: the concurrency lane each
    * of a plugin's job types runs in (see `PluginJobLaneClass`). An older host
    * never calls it, and runs every plugin job type as a coordinator.
@@ -3647,6 +3655,8 @@ export type NodaroMotionPromptParts = {
   readonly [publicEngineId: string]: {
     readonly precise?: Partial<Record<PluginPromptPartId, string>>
     readonly motion?: Partial<Record<PluginPromptPartId, string>>
+    /** A style-only run's own parts on the "original" path (`castSwap.styleOnly`); never the depth path's `motion` set, nor read by it. */
+    readonly styleOnly?: Partial<Record<PluginPromptPartId, string>>
   }
 }
 
@@ -3736,6 +3746,31 @@ export interface PluginSettingsToolkit {
    * `capabilities.nodaroMotionPromptWording`.
    */
   nodaroMotionPromptWording?(): Promise<PluginNodaroMotionPromptWording | null>
+  /**
+   * The admin's style-only setting per Nodaro Motion engine, for DIRECT
+   * style-only runs (a Prism Flex run with an art style and nothing to swap):
+   * only the engines that differ from the defaults (the original path, the
+   * engine prompt on the template), each answered under its current AND its
+   * earlier key, or null when it was never saved, nothing differs, or this
+   * host's engine does not declare `castSwap.styleOnly`. Unset keys are
+   * omitted, never null. Returns a copy the plugin may change freely. REJECTS
+   * when the settings could not be read. Advertised as
+   * `capabilities.nodaroMotionStyleOnly`.
+   */
+  nodaroMotionStyleOnly?(): Promise<PluginNodaroMotionStyleOnly | null>
+}
+
+/**
+ * Nodaro Motion's style-only setting per engine, keyed by the PUBLIC engine
+ * ids (current and earlier): an engine listed differs from the defaults; one
+ * left out takes the original path with the template engine prompt. Absent
+ * `path`: "original"; absent `enginePrompt`: the template.
+ */
+export type PluginNodaroMotionStyleOnly = {
+  readonly [publicEngineId: string]: {
+    readonly path?: "original" | "flex"
+    readonly enginePrompt?: TextStepSetting
+  }
 }
 
 /**
@@ -4165,6 +4200,18 @@ export interface PluginSupports {
    *   there and refuses to save "new" in the shared setting while any
    *   environment lacks it (lib/nodaro-motion-prompt-wording.ts
    *   `engineTakesPromptWording`).
+   * - `styleOnly`: a style-only run is accepted — a DIRECT Prism Flex run with
+   *   an art style and nothing to swap (no role with pictures, no fixed
+   *   reference; a pre or post prompt still allowed), its preview too. Its
+   *   path is the admin's per-engine setting
+   *   (`tk.settings.nodaroMotionStyleOnly`): "original" (the default) sends
+   *   the original clip as the reference, with no depth and no face masking;
+   *   "flex" runs it as any art-style Flex run. Only the platform may send a
+   *   path itself. Additive-optional: absent ⇒ the engine refuses a
+   *   style-only run (nothing to swap); the platform never offers one there,
+   *   answers it the setting as null, and never saves the setting while no
+   *   environment declares it (lib/nodaro-motion-style-only.ts
+   *   `engineTakesStyleOnly`).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -4214,6 +4261,7 @@ export interface PluginSupports {
     readonly depthFillBlur?: boolean
     readonly faceMeshMinFaceHeightPct?: boolean
     readonly promptWordings?: readonly ("current" | "new")[]
+    readonly styleOnly?: boolean
   }
 }
 

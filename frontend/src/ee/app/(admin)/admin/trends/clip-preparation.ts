@@ -145,6 +145,23 @@ export function environmentsThatCannotForceStyle(envs: readonly TrendEngineEnvir
 }
 
 /**
+ * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
+ * in that order) whose engine cannot run a style-only run — none recorded, or
+ * one that does not declare `castSwap.styleOnly`. Unknown while the
+ * environments are (undefined). Two rules read it (the server's):
+ * - the style-only switch (`nodaro_motion_style_only`) saves a change once ANY
+ *   environment runs it (this is shorter than the list): an engine without
+ *   the flag never reads that row;
+ * - the style-only prompt parts (the prompt-parts `styleOnly` key) save only
+ *   once EVERY environment runs it (this is empty): an older app drops the
+ *   engine's whole prompt-parts entry when it reads the key.
+ */
+export function environmentsThatCannotRunStyleOnly(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+  if (!envs) return undefined
+  return SHARED_SETTING_ENVIRONMENTS.filter((name) => envs.find((e) => e.env === name)?.supports.castSwap?.styleOnly !== true)
+}
+
+/**
  * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose
  * engine cannot take "Body from the clip" (`steps.clipBody`) — none
  * recorded, or one that does not declare `castSwap.steps` and

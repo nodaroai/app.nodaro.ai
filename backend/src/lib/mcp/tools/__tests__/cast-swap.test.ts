@@ -425,6 +425,17 @@ describe("cast_swap", () => {
     expect(JSON.stringify(tool)).not.toMatch(/mask|blur|depth|seedance|kling|SAM\b|Motion (Pro|Lite)\b|motion-(pro|lite)\b/i)
   })
 
+  it("says an art style alone is enough on a motion-prism Flex run where the engine takes style-only runs, and what it does", async () => {
+    const { fastify } = stubFastify({})
+    const tool = (await listTools(serverWith(fastify))).find((t) => t.name === "cast_swap")!
+    const properties = (tool.inputSchema as { properties: Record<string, { description?: string }> }).properties
+    expect(properties.roles.description).toContain("a pre_prompt or post_prompt")
+    expect(properties.roles.description).toContain("on a motion-prism Flex run where the engine takes style-only runs, an art_style alone")
+    expect(properties.roles.description).toContain("restyles the whole clip")
+    expect(properties.art_style.description).toContain("With no role images and no references it restyles the whole clip")
+    expect(properties.art_style.description).toContain("where the engine takes style-only runs")
+  })
+
   it("takes an older client's kling_length as motion_length (unlisted), and refuses one that is not a length fit", async () => {
     const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
     await callTool(serverWith(fastify), "cast_swap", { ...ARGS, kling_length: "cut-start" })

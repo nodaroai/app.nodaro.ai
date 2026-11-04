@@ -11,7 +11,7 @@ vi.mock("@/lib/api", async (orig) => ({
 }))
 import type { ReactElement } from "react"
 import { fetchJobCastSwapSteps } from "@/lib/api"
-import { JobGenerationDetails, JobSkippedSteps, JobStepOutputs } from "../job-generation-details"
+import { CastSwapStepsBody, JobGenerationDetails, JobSkippedSteps, JobStepOutputs } from "../job-generation-details"
 afterEach(cleanup)
 beforeEach(() => vi.mocked(fetchJobCastSwapSteps).mockReset())
 it("shows recorded model and generation parameters above the JSON", () => {
@@ -86,6 +86,7 @@ it("JobStepOutputs shows a Cast Swap job's steps, and reads nothing for any othe
     stepOutputs: { v: 1, roles: [{ role: 0, kind: "product", condition: "head-only", layout: "turnaround" }], enginePrompt: { mode: "llm", text: "test prompt body" } },
     sceneText: null,
     skippedSteps: [{ step: "reference-sheet", reason: "failed", role: 0 }],
+    styleOnly: null,
   })
   const { container, unmount } = withQuery(<JobStepOutputs job={{ id: "job-1", job_type: "video", input_data: { type: "generate-video" } }} />)
   expect(container.textContent).toBe("")
@@ -103,7 +104,37 @@ it("JobStepOutputs shows a Cast Swap job's steps, and reads nothing for any othe
   expect(fetchJobCastSwapSteps).toHaveBeenCalledWith("job-2")
 })
 it("JobStepOutputs reads a Full Quality version (its own job type) too", async () => {
-  vi.mocked(fetchJobCastSwapSteps).mockResolvedValue({ stepOutputs: null, sceneText: null, skippedSteps: [] })
+  vi.mocked(fetchJobCastSwapSteps).mockResolvedValue({ stepOutputs: null, sceneText: null, skippedSteps: [], styleOnly: null })
   withQuery(<JobStepOutputs job={{ id: "job-3", job_type: "cast-swap-full-quality", input_data: null }} />)
   expect(await screen.findByText("This run used today's steps.")).toBeTruthy()
+  expect(screen.queryByTestId("style-only-path")).toBeNull()
+})
+it("CastSwapStepsBody says a style-only run's path above its engine prompt, and when the video was made black and white", () => {
+  const { rerender } = render(<CastSwapStepsBody showSkipped={false} data={{
+    stepOutputs: { v: 1, roles: [], enginePrompt: { mode: "template" }, styleOnly: { path: "original", grayscale: true } },
+    sceneText: null,
+    skippedSteps: [],
+    styleOnly: "original",
+  }} />)
+  const line = screen.getByTestId("style-only-path")
+  expect(line.textContent).toContain("Style only: original clip")
+  expect(line.textContent).toContain("The video was turned black and white.")
+  const heading = screen.getByRole("heading", { name: /Engine prompt/ })
+  expect(line.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+  rerender(<CastSwapStepsBody showSkipped={false} data={{
+    stepOutputs: { v: 1, roles: [], styleOnly: { path: "flex" } },
+    sceneText: null,
+    skippedSteps: [],
+    styleOnly: "flex",
+  }} />)
+  expect(screen.getByTestId("style-only-path").textContent).toBe("Style only: like other styles")
+})
+it("CastSwapStepsBody says a Full Quality version's style-only path though it recorded no steps", () => {
+  render(<CastSwapStepsBody showSkipped={false} data={{ stepOutputs: null, sceneText: null, skippedSteps: [], styleOnly: "original" }} />)
+  expect(screen.getByTestId("style-only-path").textContent).toBe("Style only: original clip")
+})
+it("CastSwapStepsBody says nothing of style-only for any other run", () => {
+  render(<CastSwapStepsBody showSkipped={false} data={{ stepOutputs: { v: 1, roles: [], enginePrompt: { mode: "template" } }, sceneText: null, skippedSteps: [], styleOnly: null }} />)
+  expect(screen.queryByTestId("style-only-path")).toBeNull()
 })

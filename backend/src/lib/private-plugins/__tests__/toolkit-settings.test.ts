@@ -8,6 +8,7 @@ import type {
   PluginNodaroMotionMasking,
   PluginNodaroMotionPromptWording,
   PluginNodaroMotionStyle,
+  PluginNodaroMotionStyleOnly,
   PluginPromptPartId,
 } from "../types.js"
 import type { NodaroMotionMotionForPlugin } from "../../nodaro-motion-motion.js"
@@ -15,6 +16,8 @@ import type { NodaroMotionMaskingForPlugin } from "../../nodaro-motion-masking.j
 import type { NodaroMotionPromptPartsForPlugin } from "../../nodaro-motion-prompt-parts.js"
 import type { NodaroMotionStyleForPlugin } from "../../nodaro-motion-style.js"
 import type { NodaroMotionPromptWordingForPlugin } from "../../nodaro-motion-prompt-wording.js"
+import type { NodaroMotionStyleOnlyEntry } from "../../nodaro-motion-style-only.js"
+import type { ByEngineForPlugin } from "../../nodaro-motion-engine-keys.js"
 
 /**
  * `tk.settings.nodaroMotionMasking()` — the admin's face masking per Nodaro
@@ -22,7 +25,7 @@ import type { NodaroMotionPromptWordingForPlugin } from "../../nodaro-motion-pro
  * the settings cache's own read (`getAppSettings`, ~60 s, cleared on an admin
  * write), handed out as a copy, and null when never saved.
  */
-const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, reads: 0, failed: false }))
+const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, reads: 0, failed: false }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("../../app-settings.js", async (importOriginal) => {
@@ -31,7 +34,7 @@ vi.mock("../../app-settings.js", async (importOriginal) => {
     ...orig,
     getAppSettings: async () => {
       h.reads++
-      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording }
+      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly }
     },
     settingsReadFailed: () => h.failed,
   }
@@ -486,6 +489,63 @@ describe("tk.settings.nodaroMotionPromptWording", () => {
 
   it("what the host answers is the plugin's PluginNodaroMotionPromptWording", () => {
     expectTypeOf<NodaroMotionPromptWordingForPlugin>().toExtend<PluginNodaroMotionPromptWording>()
+  })
+})
+
+/**
+ * `tk.settings.nodaroMotionStyleOnly()` — the admin's style-only setting per
+ * Nodaro Motion engine (its path and its engine-prompt step), read by the Cast
+ * Swap engine for a DIRECT style-only run: null when never saved, nothing
+ * differs from the defaults, or this host's engine does not declare
+ * `castSwap.styleOnly`.
+ */
+describe("tk.settings.nodaroMotionStyleOnly", () => {
+  beforeEach(() => {
+    h.styleOnly = null
+    h.reads = 0
+    h.failed = false
+    _resetPluginSupportsForTests()
+  })
+  const styleOnlyEngine = () => setPluginSupports({ castSwap: { ...CS, styleOnly: true } } as never)
+
+  it("advertises nodaroMotionStyleOnly and answers null to an engine without castSwap.styleOnly", async () => {
+    expect(buildToolkit().capabilities?.nodaroMotionStyleOnly).toBe(true)
+    expect(typeof buildToolkit().settings?.nodaroMotionStyleOnly).toBe("function")
+    h.styleOnly = { "motion-prism": { path: "flex" } }
+    expect(await buildToolkit().settings!.nodaroMotionStyleOnly!()).toBeNull()
+    setPluginSupports({ castSwap: { ...CS, styleOnly: false } } as never)
+    expect(await buildToolkit().settings!.nodaroMotionStyleOnly!()).toBeNull()
+    expect(h.reads).toBe(2)
+  })
+
+  it("rejects when the settings could not be read, never answering null (the original path)", async () => {
+    styleOnlyEngine()
+    h.failed = true
+    await expect(buildToolkit().settings!.nodaroMotionStyleOnly!()).rejects.toThrow(/could not be read/)
+  })
+
+  it("answers null when it was never saved, or nothing differs from the defaults", async () => {
+    styleOnlyEngine()
+    expect(await buildToolkit().settings!.nodaroMotionStyleOnly!()).toBeNull()
+    h.styleOnly = {}
+    expect(await buildToolkit().settings!.nodaroMotionStyleOnly!()).toBeNull()
+    h.styleOnly = { "motion-prism": { path: "original", enginePrompt: { mode: "template" } } }
+    expect(await buildToolkit().settings!.nodaroMotionStyleOnly!()).toBeNull()
+  })
+
+  it("answers each changed engine under its current and its earlier key, a copy the plugin may change", async () => {
+    styleOnlyEngine()
+    const llm = { mode: "llm", llm: { model: "gemini-3.8-flash", inputs: ["clip"], maxChars: 900 } }
+    h.styleOnly = { "motion-prism": { path: "flex", enginePrompt: llm } }
+    const got = await buildToolkit().settings!.nodaroMotionStyleOnly!()
+    expect(got).toStrictEqual({ "motion-prism": { path: "flex", enginePrompt: llm }, "motion-pro": { path: "flex", enginePrompt: llm } })
+    ;(got as Record<string, { path?: string }>)["motion-prism"]!.path = "original"
+    expect(h.styleOnly).toEqual({ "motion-prism": { path: "flex", enginePrompt: llm } })
+    expect(got!["motion-pro"]!.path).toBe("flex")
+  })
+
+  it("what the host answers is the plugin's PluginNodaroMotionStyleOnly", () => {
+    expectTypeOf<ByEngineForPlugin<NodaroMotionStyleOnlyEntry>>().toExtend<PluginNodaroMotionStyleOnly>()
   })
 })
 

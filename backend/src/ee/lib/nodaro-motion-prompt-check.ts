@@ -30,10 +30,11 @@ import { loadedEngineTakesShotList, type CastSwapSteps } from "../../lib/cast-sw
 import { overridesWordingPart, type CastSwapPromptWording } from "@nodaro/render-rules"
 import { engineTakesPromptWording, type NodaroMotionPromptWording } from "../../lib/nodaro-motion-prompt-wording.js"
 import { readNodaroMotionPromptWording } from "../../lib/nodaro-motion-prompt-wording-store.js"
+import type { NodaroMotionPromptPartsKey } from "../../lib/nodaro-motion-prompt-parts.js"
 import { askPromptParts } from "./cast-swap-prompt-parts.js"
 
-/** One problem, naming the engine and style it was found for. */
-export type DirectRunPromptProblem = PromptPartsAnswer["problems"][number] & { engine: NodaroMotionEngine; style: CastSwapStyle }
+/** One problem, naming the engine and the key (a style, or `styleOnly`) it was found for. */
+export type DirectRunPromptProblem = PromptPartsAnswer["problems"][number] & { engine: NodaroMotionEngine; style: NodaroMotionPromptPartsKey }
 
 /** Whether the loaded engine words a direct run's prompt from the Motion setting (`castSwap.promptStyles`). */
 export function loadedEngineHasPromptStyles(): boolean {
@@ -56,16 +57,24 @@ export function loadedEngineHasPromptStyles(): boolean {
  * never for Precise — and the request names its wording
  * (`promptWordingNamed`), reaching only an engine that lists it
  * (`forLoadedEngine`).
+ *
+ * `"styleOnly"` (a style-only run's own set): a Flex run with the Flexible
+ * prompt style and `styleOnly: true`, no role and no fixed reference (it has
+ * none), with a clip with sound and `body`'s pre and post prompts and
+ * overrides. Nothing else shapes it: no masking, no face mesh, no depth look,
+ * no shot list and no wording (the "new" Flex wording never reaches it), so
+ * `entry`, `preciseMasking`, `steps` and `wording` are not read.
  */
 export function directRunRequest(
   engine: NodaroMotionEngine,
-  style: CastSwapStyle,
+  style: NodaroMotionPromptPartsKey,
   entry: NodaroMotionMotionEntry | undefined,
   body: Omit<PromptPartsRequest, "engine" | "style">,
   preciseMasking?: FaceMasking,
   steps?: CastSwapSteps,
   wording?: CastSwapPromptWording,
 ): PromptPartsRequest {
+  if (style === "styleOnly") return styleOnlyRunRequest(engine, body)
   const shotList = loadedEngineTakesShotList()
   const named = promptWordingNamed(style, entry, wording, body.overrides)
   return {
@@ -80,6 +89,21 @@ export function directRunRequest(
     // The Flex wording a run of this style is worded with (named so the engine lists the new wording's parts).
     ...(named ? { promptWording: named } : {}),
     ...body,
+  }
+}
+
+/** The style-only set's request (`directRunRequest`'s `"styleOnly"`): `body`'s prompts and overrides, never its roles or references. */
+function styleOnlyRunRequest(engine: NodaroMotionEngine, body: Omit<PromptPartsRequest, "engine" | "style">): PromptPartsRequest {
+  return {
+    engine: CAST_SWAP_ENGINE_OF_NODARO_MOTION[engine],
+    style: "motion",
+    promptStyle: "flexible",
+    styleOnly: true,
+    hasAudio: true,
+    roles: [],
+    ...(body.prePrompt !== undefined ? { prePrompt: body.prePrompt } : {}),
+    ...(body.postPrompt !== undefined ? { postPrompt: body.postPrompt } : {}),
+    ...(body.overrides ? { overrides: body.overrides } : {}),
   }
 }
 
@@ -132,7 +156,9 @@ export async function savedFlexWording(): Promise<NodaroMotionPromptWording | nu
 /**
  * The problems of `texts` for this engine and style on a large direct run
  * (empty = they may be saved), worded in `wording` (the engine's saved Flex
- * wording, `savedFlexWording`; a Precise check ignores it). Null after replying (the engine could not
+ * wording, `savedFlexWording`; a Precise check ignores it). For `"styleOnly"`
+ * the large run is its pre and post prompts alone (a style-only run has no
+ * role or reference). Null after replying (the engine could not
  * be asked or answered unusably).
  */
 export async function directRunPromptProblems(
@@ -140,7 +166,7 @@ export async function directRunPromptProblems(
   req: FastifyRequest,
   reply: FastifyReply,
   engine: NodaroMotionEngine,
-  style: CastSwapStyle,
+  style: NodaroMotionPromptPartsKey,
   texts: PromptPartTexts,
   entry: NodaroMotionMotionEntry | undefined,
   preciseMasking?: FaceMasking,
