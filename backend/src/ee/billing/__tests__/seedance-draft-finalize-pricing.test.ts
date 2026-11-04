@@ -3,7 +3,7 @@ import { join } from "node:path"
 import { describe, it, expect } from "vitest"
 import { MODEL_CATALOG, seedanceDraftFinalizeCreditId } from "@nodaro/shared/model-catalog"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
-import { seedanceDraftFinalizeRefBaseCredits } from "../seedance2-ref-video-credits.js"
+import { seedanceDraftFinalizeRefBaseCredits, seedanceDraftFinalizeRefBilledSec } from "../seedance2-ref-video-credits.js"
 
 /**
  * Seedance 2.5 Draft finalize (`seedance-2-5-hd`) pricing guard.
@@ -99,5 +99,40 @@ describe("measured worked examples", () => {
     // One attempt: a direct 1080p is cheaper. Two attempts: drafting first wins.
     expect(draft480 + finalize).toBeGreaterThan(direct1080)
     expect(2 * draft480 + finalize).toBeLessThan(2 * direct1080)
+  })
+})
+
+/**
+ * The seconds a reference-video finalize's charge bills — exported so the
+ * finalize's recorded provider cost reads the very same seconds. Whole input
+ * seconds per clip (the provider bills a 4.6 s clip as 5 s), an unreadable
+ * probe at the per-clip worst case, the total capped, plus the draft's output.
+ */
+describe("seedanceDraftFinalizeRefBilledSec", () => {
+  it("a 4.6 s reference clip into a 4 s draft bills 5 + 4 = 9 s", () => {
+    expect(seedanceDraftFinalizeRefBilledSec({ outputSec: 4, refVideoDurationsSec: [4.6] })).toBe(9)
+  })
+
+  it("a hair over a whole second is that second: 4.04 s in + 4 s out = 8 s", () => {
+    expect(seedanceDraftFinalizeRefBilledSec({ outputSec: 4, refVideoDurationsSec: [4.04] })).toBe(8)
+  })
+
+  it("an unreadable probe counts as the per-clip worst case, never rounded", () => {
+    const worst = seedanceDraftFinalizeRefBilledSec({ outputSec: 4, refVideoDurationsSec: [null] })
+    expect(worst).toBeGreaterThan(seedanceDraftFinalizeRefBilledSec({ outputSec: 4, refVideoDurationsSec: [4] }))
+    expect(seedanceDraftFinalizeRefBilledSec({ outputSec: 4, refVideoDurationsSec: [Number.NaN] })).toBe(worst)
+  })
+
+  it("is what seedanceDraftFinalizeRefBaseCredits prices, at the 8 s -ref row's per-second base", () => {
+    const perSec = STATIC_CREDIT_COSTS["seedance-2-5-hd:8s-ref"]! / 8
+    for (const args of [
+      { outputSec: 4, refVideoDurationsSec: [4.6] },
+      { outputSec: 10, refVideoDurationsSec: [10] },
+      { outputSec: 4, refVideoDurationsSec: [2] },
+      { outputSec: 4, refVideoDurationsSec: [null] },
+      { outputSec: 12, refVideoDurationsSec: [4.04, 9.5] },
+    ]) {
+      expect(seedanceDraftFinalizeRefBaseCredits(args)).toBe(Math.ceil(perSec * seedanceDraftFinalizeRefBilledSec(args)))
+    }
   })
 })

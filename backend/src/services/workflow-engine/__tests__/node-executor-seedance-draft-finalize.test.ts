@@ -20,6 +20,8 @@ const {
   mockUpdate,
   mockStamp,
   built,
+  real,
+  draftDb,
 } = vi.hoisted(() => ({
   mockCheckCredits: vi.fn(),
   mockReserveCredits: vi.fn(),
@@ -28,6 +30,10 @@ const {
   mockUpdate: vi.fn(),
   mockStamp: vi.fn(),
   built: { result: {} as Record<string, unknown> },
+  // The real stamp, for the case that runs it instead of the mock.
+  real: { stamp: undefined as unknown as (...args: unknown[]) => Promise<unknown> },
+  // The rows the real stamp's draft lookup reads (`jobs` by task id).
+  draftDb: { rows: [] as Array<Record<string, unknown>> },
 }))
 
 vi.mock("@/lib/config.js", () => ({
@@ -46,9 +52,13 @@ vi.mock("@/lib/supabase.js", () => {
   const singleFn = vi.fn().mockResolvedValue({ data: { id: "test-job-id" }, error: null })
   const selectFn = vi.fn().mockReturnValue({ single: singleFn })
   const insertFn = vi.fn().mockReturnValue({ select: selectFn })
+  // Only the real stamp reads: its draft lookup, `select(...).eq(...).limit(n)`.
+  const draftQuery: Record<string, unknown> = {}
+  draftQuery.eq = () => draftQuery
+  draftQuery.limit = async () => ({ data: draftDb.rows, error: null })
   return {
     supabase: {
-      from: vi.fn().mockReturnValue({ insert: insertFn, update: updateFn, delete: deleteFn, select: vi.fn() }),
+      from: vi.fn().mockReturnValue({ insert: insertFn, update: updateFn, delete: deleteFn, select: vi.fn(() => draftQuery) }),
     },
   }
 })
@@ -66,10 +76,11 @@ vi.mock("@/lib/private-plugins/edit-plan-per-minute.js", () => ({ editPlanPerMin
 
 // The draft lookup itself is covered in lib/__tests__/seedance-draft-finalize.test.ts;
 // here only what the executor does with the stamp it returns.
-vi.mock("@/lib/seedance-draft-finalize.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/seedance-draft-finalize.js")>()),
-  seedanceDraftFinalizeStamp: mockStamp,
-}))
+vi.mock("@/lib/seedance-draft-finalize.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/seedance-draft-finalize.js")>()
+  real.stamp = actual.seedanceDraftFinalizeStamp as unknown as typeof real.stamp
+  return { ...actual, seedanceDraftFinalizeStamp: mockStamp }
+})
 
 vi.mock("../payload-builder.js", () => ({
   buildPayload: vi.fn((..._args: unknown[]) => built.result),
@@ -194,5 +205,73 @@ describe("node-executor — the Seedance draft-finalize stamp is merged, never m
     expect(mockDeleteEq).toHaveBeenCalledWith("id", "test-job-id")
     expect(mockReserveCredits).not.toHaveBeenCalled()
     expect(writtenInputData()).toBeUndefined()
+  })
+})
+
+/**
+ * The same run with the REAL stamp (the mock above returns a fixed patch, so it
+ * cannot see what the stamp itself adds). node-executor builds input_data from
+ * the payload the patch is merged into, so the job record may carry only the
+ * stamp's established fields: the run writes exactly what the established patch
+ * for the same draft writes, with no field of its own (the worker derives the
+ * finalize's billed seconds from these fields).
+ */
+describe("node-executor — the REAL Seedance draft-finalize stamp adds nothing to input_data", () => {
+  const DRAFT_ID = "00000000-0000-4000-8000-0000000000d1"
+  const draftRow = (input: Record<string, unknown>) => ({
+    id: DRAFT_ID,
+    user_id: "user-1",
+    status: "completed",
+    provider_task_id: "task-draft",
+    provider_kind: "kie-standard",
+    relay_job_id: null,
+    parent_job_id: null,
+    input_data: { provider: "seedance-2-5", draft: true, resolution: "480p", duration: 4, ...input },
+    output_data: { videoUrl: "https://cdn.example/draft.mp4", draftRenderSec: 4.04, draftAudioMux: null },
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockDeleteEq.mockResolvedValue({ error: null })
+    mockGetAppSettings.mockResolvedValue({ cost_markup_percent: 0 })
+    mockCheckCredits.mockResolvedValue({ allowed: true, balance: 50000, watermark: false })
+    mockReserveCredits.mockRejectedValue(new Error("reservation-sentinel"))
+    built.result = {
+      jobName: "video-upscale",
+      queueName: "video-generation",
+      modelIdentifier: "seedance-2-5-hd",
+      payload: { jobId: "test-job-id", provider: "seedance-2-5-hd", kieTaskId: "task-draft" },
+    }
+  })
+
+  /** The input_data one run writes, with the given stamp. */
+  async function inputDataWith(stamp: (...args: unknown[]) => Promise<unknown>): Promise<Record<string, unknown>> {
+    mockUpdate.mockClear()
+    mockStamp.mockImplementation(stamp)
+    await expect(executeNode(node, {}, [], [], {}, makeCtx())).rejects.toThrow(/reservation-sentinel|Credit reservation failed/)
+    return writtenInputData()!
+  }
+
+  it.each([
+    {
+      name: "a plain draft",
+      input: {},
+      established: { draftOutputSec: 4, draftHasRefVideo: false, draftRefVideoDurationsSec: [], reservedCreditId: "seedance-2-5-hd:4s" },
+    },
+    {
+      name: "a reference-video draft",
+      input: { referenceVideoUrls: ["https://cdn.example/in.mp4"], refVideoDurationsSec: [4.6] },
+      established: { draftOutputSec: 4, draftHasRefVideo: true, draftRefVideoDurationsSec: [4.6], reservedCreditId: "seedance-2-5-hd:4s-ref" },
+    },
+  ])("$name: input_data is exactly the established patch's", async ({ input, established }) => {
+    draftDb.rows = [draftRow(input)]
+    const withRealStamp = await inputDataWith(real.stamp)
+    const withEstablishedPatch = await inputDataWith(async () => ({
+      ok: true,
+      patch: { sourceJobId: DRAFT_ID, kieTaskId: "task-draft", ...established },
+    }))
+    expect(withRealStamp).not.toHaveProperty("draftBilledSec")
+    expect(Object.keys(withRealStamp).sort()).toEqual(Object.keys(withEstablishedPatch).sort())
+    expect(withRealStamp).toStrictEqual(withEstablishedPatch)
   })
 })

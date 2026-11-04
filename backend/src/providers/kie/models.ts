@@ -17,6 +17,17 @@
 /** 1 KIE credit = $0.005 USD */
 export const KIE_CREDIT_USD = 0.005
 
+/**
+ * What KIE bills for one GPT Image 2 picture, text-to-image and image-to-image
+ * alike, in KIE credits, by the resolution sent. The `gpt-image-2` entries below
+ * state the 1K figure; `kieImageCostUsd` (image-cost.ts) records the one sent.
+ */
+export const GPT_IMAGE_2_KIE_CREDITS: Readonly<Record<"1K" | "2K" | "4K", number>> = {
+  "1K": 6,
+  "2K": 10,
+  "4K": 16,
+}
+
 /** Vidu Q4's second KIE endpoint — `runViduQ4` swaps to it whenever a reference
  *  image or reference audio is wired (the `vidu-q4` config's own model is the
  *  image-to-video endpoint). Exported so every reverse map of KIE ids (the

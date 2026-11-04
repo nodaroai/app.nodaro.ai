@@ -747,6 +747,7 @@
         "backend/src/providers/kie/omni-character.ts",
         "backend/src/providers/kie/reference-video-size.ts",
         "backend/src/providers/kie/runway-client.ts",
+        "backend/src/providers/kie/seedance-cost.ts",
         "backend/src/providers/kie/seedance-draft.ts",
         "backend/src/providers/kie/suno-client.ts",
         "backend/src/providers/kie/suno-stem-fields.ts",

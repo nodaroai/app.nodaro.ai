@@ -61,7 +61,8 @@ import { rawExtensionObjectId, rawExtensionReferenceObjectId, silentVideoKey } f
 import { discardFailedRunCopies } from "../../lib/discard-job-copies.js"
 import { seedance25OutputFormat } from "../../providers/kie/video.js"
 import { runSeedanceDraftFinalize } from "../../providers/kie/seedance-draft.js"
-import { measureSeedanceDraftRenderSec, draftRenderOutputData } from "../../lib/seedance-draft-finalize.js"
+import { seedance25CostUsd } from "../../providers/kie/seedance-cost.js"
+import { measureSeedanceDraftRenderSec, draftRenderOutputData, positiveSeconds, seedanceDraftFinalizeQueuedBilledSec } from "../../lib/seedance-draft-finalize.js"
 import { generateVideoAudioMergeRecipe, voiceTrackMuxRecipe, draftAudioMuxMergeArgs, draftAudioMuxOutputData, readDraftAudioMux, type DraftAudioMux } from "../../lib/seedance-draft-audio.js"
 import { applyDraftAudioMux, draftAudioWarningOutputData } from "../../lib/seedance-draft-audio-apply.js"
 import {
@@ -125,7 +126,7 @@ import {
   withProgressRamp,
   type HandlerFn,
 } from "../shared.js"
-import { measureSeedance2RefVideoBaseCredits } from "../../lib/seedance2-ref-video-settle.js"
+import { measureSeedance2RefVideoBaseCredits, measureSeedance2Settle, type Seedance2Settle } from "../../lib/seedance2-ref-video-settle.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 import { handleAiAvatar } from "./heygen-avatar.js"
 import { handleCinematicAvatar } from "./heygen-cinematic.js"
@@ -262,6 +263,39 @@ async function dispatchLtxIfRequested(
     )
   }
   return true
+}
+
+/**
+ * A Seedance 2.5 render's result with the cost KIE billed for it, from the
+ * seconds its charge was measured from (`measureSeedance2Settle`) — or, for a
+ * run with no reference video and a fixed duration, that duration. Recorded
+ * only: finalize hands `result.cost` to the commit, where neither the reserved
+ * tier nor the measured `meteredBaseCredits` reads it. Shared by the i2v and
+ * t2v lanes.
+ *
+ * Unchanged: every other model; a result with no cost of its own (a relayed
+ * run, billed to the far end's account); and a length that could not be
+ * measured, which keeps the adapter's figure.
+ */
+function withSeedance25RenderCost<R extends { cost: number | null }>(
+  result: R,
+  run: {
+    provider: string
+    resolution: string | undefined
+    draft: boolean | undefined
+    referenceVideoUrls: readonly unknown[] | undefined
+    /** The request's own duration (Auto = -1). */
+    duration: unknown
+    settle: Seedance2Settle
+  },
+): R {
+  if (run.provider !== "seedance-2-5" || typeof result.cost !== "number") return result
+  const hasVideoRef = Array.isArray(run.referenceVideoUrls) && run.referenceVideoUrls.length > 0
+  const fixedSec = hasVideoRef ? undefined : positiveSeconds(run.duration)
+  const outputSec = run.settle.seconds?.outputSec ?? fixedSec
+  if (outputSec === undefined) return result
+  const inputSec = run.settle.seconds?.inputSec ?? 0
+  return { ...result, cost: seedance25CostUsd({ resolution: run.resolution, draft: run.draft === true, hasVideoRef, outputSec, inputSec }) }
 }
 
 /** VEO direct-4K generates the base at 1080p, then chains get-4k-video (see
@@ -418,8 +452,9 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   // and only the provider knows which). Measure what was actually delivered,
   // from the RAW provider output before any post-process, and let finalize
   // settle to it. `undefined` = not such a run, or unmeasurable → the
-  // reservation is committed as before.
-  const meteredBaseCredits = await measureSeedance2RefVideoBaseCredits({
+  // reservation is committed as before. The same measurement prices the
+  // render's recorded provider cost (Seedance 2.5).
+  const settle = await measureSeedance2Settle({
     provider: resolvedI2vProvider,
     resolution,
     outputUrl: result.url,
@@ -428,6 +463,8 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     duration,
     jobId: ctx.jobId,
   })
+  const meteredBaseCredits = settle.baseCredits
+  const recorded = withSeedance25RenderCost(result, { provider: resolvedI2vProvider, resolution, draft, referenceVideoUrls, duration, settle })
   // A Seedance DRAFT records its RAW take length — before the loop-cut / audio
   // merge below — because the 1080p finalize re-renders (and bills) that take.
   const draftRenderSec = await measureSeedanceDraftRenderSec({ draft, provider: resolvedI2vProvider, outputUrl: result.url })
@@ -536,7 +573,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "image-to-video",
-    result,
+    result: recorded,
     mediaUrl: finalVideoUrl,
     // Charge the loop-trim addon on top of provider cost when smart-loop-cut
     // succeeded; take it OFF the commit when it failed. Exactly one of these
@@ -553,7 +590,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     },
   })
   if (!ok) return
-  console.log(`[worker] Job ${ctx.jobId} completed: ${finalVideoUrl} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${finalVideoUrl} (provider: ${result.providerUsed}, cost: $${recorded.cost?.toFixed(6) ?? "N/A"})`)
 }
 
 const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx) {
@@ -742,8 +779,9 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   let providerOutputUrl = result.url
 
   // Seedance reference-video runs: settle to the delivered clip (see the
-  // image-to-video handler above for why the reservation is a worst case).
-  const meteredBaseCredits = await measureSeedance2RefVideoBaseCredits({
+  // image-to-video handler above for why the reservation is a worst case),
+  // and record the render's provider cost from the same measurement.
+  const settle = await measureSeedance2Settle({
     provider: resolvedT2vProvider,
     resolution,
     outputUrl: result.url,
@@ -752,6 +790,8 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     duration,
     jobId: ctx.jobId,
   })
+  const meteredBaseCredits = settle.baseCredits
+  const recorded = withSeedance25RenderCost(result, { provider: resolvedT2vProvider, resolution, draft, referenceVideoUrls, duration, settle })
   // Seedance DRAFT: record the raw take length the 1080p finalize bills.
   const draftRenderSec = await measureSeedanceDraftRenderSec({ draft, provider: resolvedT2vProvider, outputUrl: result.url })
 
@@ -781,7 +821,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "text-to-video",
-    result,
+    result: recorded,
     mediaUrl: r2Url,
     meteredBaseCredits,
     extraOutputData: {
@@ -795,7 +835,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     },
   })
   if (!ok) return
-  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${recorded.cost?.toFixed(6) ?? "N/A"})`)
 }
 
 const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
@@ -1134,7 +1174,7 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
 }
 
 const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx) {
-  const { videoUrl, upscaleFactor, targetResolution, targetFps, provider, kieTaskId, draftAudioMux, draftVideoUrl } = job.data as {
+  const { videoUrl, upscaleFactor, targetResolution, targetFps, provider, kieTaskId, draftAudioMux, draftVideoUrl, draftHasRefVideo } = job.data as {
     jobId: string
     videoUrl?: string
     /** Legacy relative lever — mapped onto a target over the clip's size. */
@@ -1148,6 +1188,12 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
     draftAudioMux?: unknown
     /** Seedance draft finalize: the stored draft clip (audio-copy fallback). */
     draftVideoUrl?: string
+    /** Seedance draft finalize: whether the draft had a reference video. */
+    draftHasRefVideo?: boolean
+    /** Seedance draft finalize, route only (queue only): the seconds its charge bills. A
+     *  workflow run carries the draft's `draftOutputSec` / `draftRefVideoDurationsSec`
+     *  instead, and the seconds are derived from those (`seedanceDraftFinalizeQueuedBilledSec`). */
+    draftBilledSec?: unknown
   }
   const upscaleProvider = provider ?? VIDEO_UPSCALE_DEFAULT_PROVIDER
   console.log(`[worker] video-upscale ${ctx.jobId} (provider: ${upscaleProvider})`)
@@ -1161,6 +1207,8 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
   // is discarded with the rest of the result. NodaroCloud serves the topaz
   // branch only — the two VEO branches are KIE-direct and leave it undefined.
   let upscaleMeta: ProviderResult | undefined
+  // The draft finalize's result, kept the same way: it carries the render's cost.
+  let finalizeMeta: Awaited<ReturnType<typeof runSeedanceDraftFinalize>> | undefined
   const outputUrl: string = await withProgressRamp(
     job,
     ctx.jobId,
@@ -1180,10 +1228,19 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
         const onProgress: ProgressCallback = async (progress: number) => {
           await setJobProgress(job, ctx.jobId, progress)
         }
+        // The seconds the charge bills (the route's, or derived from a workflow
+        // run's draft fields): the render records what the provider bills for
+        // them. None usable records no cost; working them out never fails the run.
+        const billedSec = await seedanceDraftFinalizeQueuedBilledSec(job.data).catch((err: unknown) => {
+          console.warn(`[worker] video-upscale ${ctx.jobId}: could not read the finalize's billed seconds; no provider cost is recorded:`, err)
+          return undefined
+        })
         const result = await runSeedanceDraftFinalize(kieTaskId, {
           onProgress,
           reconcile: { onTaskCreated: makeOnTaskCreated(ctx.jobId, "kie-seedance-draft") },
+          ...(billedSec !== undefined ? { billing: { billedSec, hasRefVideo: draftHasRefVideo === true } } : {}),
         })
+        finalizeMeta = result
         return result.url
       } else if (upscaleProvider === "veo-1080p" && kieTaskId) {
         const veo1080OnTaskCreated = makeOnTaskCreated(ctx.jobId, "kie-veo-1080p")
@@ -1253,7 +1310,9 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
     result: {
       url: outputUrl,
       // Topaz: Replicate's bill for the run (recorded; the charge is the units above).
-      cost: isTopaz ? upscaleMeta?.cost ?? null : null,
+      // A draft finalize: what the provider bills for its render (recorded; the
+      // charge is the reserved row). VEO: none.
+      cost: isTopaz ? upscaleMeta?.cost ?? null : finalizeMeta?.cost ?? null,
       providerUsed: upscaleProvider,
       // Same rebuilt-literal carry as lip-sync above, same reason.
       ...(upscaleMeta?.relayJobId && { relayJobId: upscaleMeta.relayJobId, relayCredits: upscaleMeta.relayCredits ?? null }),

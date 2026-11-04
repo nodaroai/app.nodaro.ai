@@ -44,13 +44,22 @@ vi.mock("../../providers/video/ffmpeg-utils.js", () => ({
   },
 }))
 vi.mock("../ref-video-probe.js", () => ({ probeRefVideoDurations: async () => [6] }))
+// Credits on by default (the cloud edition, as every test runs); one case turns them off.
+const edition = vi.hoisted(() => ({ credits: true }))
+vi.mock("../config.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../config.js")>()),
+  hasCredits: () => edition.credits,
+}))
 
 import {
   measureSeedanceDraftRenderSec,
   resolveSeedanceDraftFinalize,
+  seedanceDraftFinalizeBilledSec,
+  seedanceDraftFinalizeQueuedBilledSec,
   seedanceDraftFinalizeStamp,
   seedanceDraftFinalizeReserveId,
 } from "../seedance-draft-finalize.js"
+import { seedanceDraftFinalizeRefBilledSec } from "../../ee/billing/seedance2-ref-video-credits.js"
 
 const USER = "user-a"
 const DRAFT_ID = "11111111-2222-4333-8444-555555555555"
@@ -73,6 +82,7 @@ beforeEach(() => {
   db.filters = []
   probe.fn = async () => 4.04
   probe.urls = []
+  edition.credits = true
 })
 
 describe("resolveSeedanceDraftFinalize — refusals", () => {
@@ -296,5 +306,98 @@ describe("measureSeedanceDraftRenderSec (recorded when a draft completes)", () =
   it("is undefined when the clip cannot be measured (the gate then reads the stored clip)", async () => {
     probe.fn = async () => { throw new Error("ffprobe failed") }
     expect(await measureSeedanceDraftRenderSec({ draft: true, provider: "seedance-2-5", outputUrl: "u" })).toBeUndefined()
+  })
+})
+
+/**
+ * The seconds a finalize's charge bills, carried to the worker so the 1080p
+ * render records what the provider bills for them: the draft's output seconds
+ * without a reference video, input + output (the ee rule) with one, nothing in
+ * an edition without credits.
+ */
+describe("seedanceDraftFinalizeBilledSec", () => {
+  it("without a reference video: the draft's output seconds", async () => {
+    await expect(seedanceDraftFinalizeBilledSec({ hasRefVideo: false, outputSec: 8, refVideoDurationsSec: [] })).resolves.toBe(8)
+  })
+
+  it("with one: the ee figure, input + output", async () => {
+    const plan = { hasRefVideo: true, outputSec: 4, refVideoDurationsSec: [4.6] }
+    await expect(seedanceDraftFinalizeBilledSec(plan)).resolves.toBe(seedanceDraftFinalizeRefBilledSec(plan))
+    await expect(seedanceDraftFinalizeBilledSec(plan)).resolves.toBe(9)
+  })
+
+  it("an edition without credits: undefined, whatever the draft", async () => {
+    edition.credits = false
+    await expect(seedanceDraftFinalizeBilledSec({ hasRefVideo: false, outputSec: 8, refVideoDurationsSec: [] })).resolves.toBeUndefined()
+    await expect(seedanceDraftFinalizeBilledSec({ hasRefVideo: true, outputSec: 4, refVideoDurationsSec: [4.6] })).resolves.toBeUndefined()
+  })
+})
+
+/**
+ * The workflow run's patch lands in the job's input_data (node-executor builds
+ * it from the payload the patch is merged into), so it carries no billed
+ * seconds of its own: the worker derives them from the draft's fields the
+ * patch already carries, by the same rule the route uses.
+ */
+describe("seedanceDraftFinalizeStamp — the worker derives the billed seconds from the patch's own fields", () => {
+  const stampFor = async () => {
+    const stamp = await seedanceDraftFinalizeStamp("video-upscale", { provider: "seedance-2-5-hd", kieTaskId: "task-draft" }, USER)
+    if (!stamp.ok) throw new Error("expected a stamp")
+    return stamp.patch as { draftOutputSec: number; draftHasRefVideo: boolean; draftRefVideoDurationsSec: unknown[] }
+  }
+  const derived = (patch: Awaited<ReturnType<typeof stampFor>>) => seedanceDraftFinalizeBilledSec({
+    hasRefVideo: patch.draftHasRefVideo,
+    outputSec: patch.draftOutputSec,
+    refVideoDurationsSec: patch.draftRefVideoDurationsSec,
+  })
+
+  it("a plain draft: no billed seconds in the patch; its output seconds derive to 4", async () => {
+    db.rows = [draftRow()]
+    const patch = await stampFor()
+    expect(patch).not.toHaveProperty("draftBilledSec")
+    await expect(derived(patch)).resolves.toBe(4)
+  })
+
+  it("a reference-video draft: none in the patch either; its whole input seconds + its output derive to 8", async () => {
+    db.rows = [draftRow({}, { referenceVideoUrls: ["https://cdn.example/in.mp4"], refVideoDurationsSec: [4.04], duration: -1 })]
+    const patch = await stampFor()
+    expect(patch).not.toHaveProperty("draftBilledSec")
+    await expect(derived(patch)).resolves.toBe(8)
+  })
+})
+
+/**
+ * What the worker reads off a queued finalize: the route's billed seconds as
+ * sent (queue only), else — a workflow run — derived from the stamp's draft
+ * fields by the same rule. Nothing usable: none.
+ */
+describe("seedanceDraftFinalizeQueuedBilledSec", () => {
+  it("a route payload: its billed seconds as sent, whatever else it carries", async () => {
+    await expect(seedanceDraftFinalizeQueuedBilledSec({ draftBilledSec: 12, draftHasRefVideo: true })).resolves.toBe(12)
+    await expect(seedanceDraftFinalizeQueuedBilledSec({ draftBilledSec: 12, draftOutputSec: 4, draftHasRefVideo: true, draftRefVideoDurationsSec: [4.6] })).resolves.toBe(12)
+  })
+
+  it("a workflow run's plain draft: its output seconds", async () => {
+    await expect(seedanceDraftFinalizeQueuedBilledSec({ draftOutputSec: 4, draftHasRefVideo: false, draftRefVideoDurationsSec: [] })).resolves.toBe(4)
+  })
+
+  it("a workflow run's reference-video draft: whole input seconds + output, the route's own figure", async () => {
+    const fields = { draftOutputSec: 4, draftHasRefVideo: true, draftRefVideoDurationsSec: [4.6] }
+    await expect(seedanceDraftFinalizeQueuedBilledSec(fields)).resolves.toBe(9)
+    await expect(seedanceDraftFinalizeQueuedBilledSec(fields)).resolves.toBe(
+      await seedanceDraftFinalizeBilledSec({ hasRefVideo: true, outputSec: 4, refVideoDurationsSec: [4.6] }),
+    )
+  })
+
+  it("nothing usable: none (a payload queued before either existed, or unusable seconds)", async () => {
+    await expect(seedanceDraftFinalizeQueuedBilledSec({})).resolves.toBeUndefined()
+    for (const bad of [0, -4, Number.NaN, "4", null]) {
+      await expect(seedanceDraftFinalizeQueuedBilledSec({ draftBilledSec: bad, draftOutputSec: bad, draftHasRefVideo: false })).resolves.toBeUndefined()
+    }
+  })
+
+  it("an edition without credits derives none (the route sends none there either)", async () => {
+    edition.credits = false
+    await expect(seedanceDraftFinalizeQueuedBilledSec({ draftOutputSec: 4, draftHasRefVideo: false, draftRefVideoDurationsSec: [] })).resolves.toBeUndefined()
   })
 })

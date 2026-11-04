@@ -1021,7 +1021,12 @@ const handleAudioSeparation: HandlerFn = async function handleAudioSeparation(jo
 
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, { output_data: outputData })
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: outputData,
+    // What Replicate billed for the run, recorded only: the separation is
+    // fixed-priced, so the commit below takes the reserved tier whatever it is.
+    ...(result.cost != null ? { provider_cost: result.cost } : {}),
+  })
   if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${uploaded.length} stem(s) uploaded`)

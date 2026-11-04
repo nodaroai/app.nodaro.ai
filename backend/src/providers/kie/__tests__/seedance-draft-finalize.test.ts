@@ -24,6 +24,7 @@ import {
   runSeedanceDraftFinalize,
 } from "../seedance-draft.js"
 import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
+import { seedanceDraftFinalizeCostUsd } from "../seedance-cost.js"
 
 beforeEach(() => {
   kie.calls = []
@@ -45,6 +46,30 @@ describe("Seedance draft finalize — KIE wire", () => {
     expect(kie.calls).toEqual([{ model: SEEDANCE_DRAFT_FINALIZE_KIE_MODEL, input: buildSeedanceDraftFinalizeInput("task-draft") }])
     expect(SEEDANCE_DRAFT_FINALIZE_KIE_MODEL).toBe("bytedance/seedance-2-5-draft")
     expect(r).toMatchObject({ url: "https://kie.example/hd.mp4", kieTaskId: "task-final" })
+  })
+})
+
+describe("Seedance draft finalize — the recorded provider cost", () => {
+  it("returns what KIE bills for the seconds the finalize's charge bills, by whether the draft had a reference video", async () => {
+    const ref = await runSeedanceDraftFinalize("task-draft", { billing: { billedSec: 12, hasRefVideo: true } })
+    expect(ref.cost).toBe(seedanceDraftFinalizeCostUsd(12, true))
+    const plain = await runSeedanceDraftFinalize("task-draft", { billing: { billedSec: 8, hasRefVideo: false } })
+    expect(plain.cost).toBe(seedanceDraftFinalizeCostUsd(8, false))
+    expect(ref.cost).not.toBe(plain.cost)
+  })
+
+  it("without billing there is no cost key at all", async () => {
+    const r = await runSeedanceDraftFinalize("task-draft")
+    expect(r).not.toHaveProperty("cost")
+    expect(r).toEqual({ url: "https://kie.example/hd.mp4", kieTaskId: "task-final", providerMs: undefined })
+  })
+
+  it("the KIE request is the same in all three", async () => {
+    await runSeedanceDraftFinalize("task-draft", { billing: { billedSec: 12, hasRefVideo: true } })
+    await runSeedanceDraftFinalize("task-draft", { billing: { billedSec: 8, hasRefVideo: false } })
+    await runSeedanceDraftFinalize("task-draft")
+    const sent = { model: SEEDANCE_DRAFT_FINALIZE_KIE_MODEL, input: buildSeedanceDraftFinalizeInput("task-draft") }
+    expect(kie.calls).toEqual([sent, sent, sent])
   })
 })
 

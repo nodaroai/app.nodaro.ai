@@ -3,6 +3,7 @@ import type { ReconcileOpts } from "../provider.interface.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { KieError, runKieTask, type ProgressCallback } from "./client.js"
 import { seedance25OutputFormat } from "./video.js"
+import { seedanceDraftFinalizeCostUsd } from "./seedance-cost.js"
 
 /**
  * Seedance 2.5 Draft finalize on KIE: a SEPARATE market task that re-renders a
@@ -51,11 +52,20 @@ export function isSeedanceDraftUnavailableError(err: unknown): boolean {
  * Run the finalize task for `draftTaskId` and return the 1080p clip. An expired
  * or unknown draft fails DETERMINISTICALLY (no queue retry — the same id fails
  * the same way) with {@link SEEDANCE_DRAFT_UNAVAILABLE_MESSAGE}.
+ *
+ * `billing` — the seconds the finalize's charge bills and whether the draft had
+ * a reference video — makes it also return `cost`, what KIE bills for the
+ * render (`seedanceDraftFinalizeCostUsd`), recorded as the job's provider
+ * cost. Without it there is no `cost` key. The request is the same either way.
  */
 export async function runSeedanceDraftFinalize(
   draftTaskId: string,
-  opts: { onProgress?: ProgressCallback; reconcile?: ReconcileOpts } = {},
-): Promise<{ url: string; kieTaskId?: string; providerMs?: number }> {
+  opts: {
+    onProgress?: ProgressCallback
+    reconcile?: ReconcileOpts
+    billing?: { billedSec: number; hasRefVideo: boolean }
+  } = {},
+): Promise<{ url: string; kieTaskId?: string; providerMs?: number; cost?: number }> {
   try {
     const r = await runKieTask(
       SEEDANCE_DRAFT_FINALIZE_KIE_MODEL,
@@ -70,7 +80,12 @@ export async function runSeedanceDraftFinalize(
     )
     const url = r.resultJson.resultUrls?.[0] ?? r.resultJson.videoUrl
     if (!url) throw new Error("Seedance draft finalize succeeded but returned no video URL")
-    return { url, kieTaskId: r.taskId, providerMs: r.providerMs }
+    return {
+      url,
+      kieTaskId: r.taskId,
+      providerMs: r.providerMs,
+      ...(opts.billing ? { cost: seedanceDraftFinalizeCostUsd(opts.billing.billedSec, opts.billing.hasRefVideo) } : {}),
+    }
   } catch (err) {
     if (isSeedanceDraftUnavailableError(err)) {
       throw new DeterministicJobError(SEEDANCE_DRAFT_UNAVAILABLE_MESSAGE, { cause: err })

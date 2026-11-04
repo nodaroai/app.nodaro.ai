@@ -19,6 +19,7 @@ import { VIDEO_REF_RATE_PROVIDERS, billsReferenceVideoSeconds, pricedOutputDurat
 import {
   refVideoWorstCaseSecFor,
   seedance2RefVideoActualBaseCredits,
+  seedance2RefVideoActualSeconds,
   seedance2RefVideoBaseCredits,
   seedance2RefVideoExpectedBaseCredits,
   seedance2RefVideoBaseCreditsFromDurations,
@@ -26,6 +27,7 @@ import {
 } from "../seedance2-ref-video-credits.js"
 import { seedance2RefVideoQuote } from "../seedance2-ref-video-quote.js"
 import { applyServiceMarkup } from "../service-margin.js"
+import { measureSeedance2RefVideoBaseCredits, measureSeedance2Settle } from "../../../lib/seedance2-ref-video-settle.js"
 
 // seedance-2-5:8s:1080p-ref = 1900 → 237.5/s; seedance-2-5:8s:720p-ref = 760 → 95/s;
 // seedance-2:8s:720p-ref = 500 → 62.5/s.
@@ -325,6 +327,122 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
       await expect(seedance2RefVideoActualBaseCredits({ ...auto, durationsSec: [null] })).resolves.toBe(3990)
       expect(alert).not.toHaveBeenCalled()
     })
+  })
+})
+
+/**
+ * The seconds the settlement measures, exported so a run's recorded provider
+ * cost reads the very seconds its charge bills: `deliveredSec` is what was
+ * rendered (never capped), `chargedOutputSec` what the charge bills for the
+ * output (an Auto edit past its hold is charged at the hold), `inputSec` the
+ * reference clips as billed. The settlement above prices these, so its
+ * figures are unchanged.
+ */
+describe("seedance2RefVideoActualSeconds (what the settlement measures)", () => {
+  const OUT = "https://kie.example/out.mp4"
+  const REF = "https://r2.example.com/videos/ref.mp4"
+  const run = { provider: "seedance-2-5", resolution: "1080p", requestedDuration: 12, outputUrl: OUT, referenceVideoUrls: [REF] }
+
+  beforeEach(() => {
+    probe.durations.clear()
+    probe.probeMediaDuration.mockClear()
+  })
+
+  it("a style run: rendered as asked, charged as rendered, the reference clips as the input", async () => {
+    probe.durations.set(OUT, 12)
+    await expect(seedance2RefVideoActualSeconds({ ...run, durationsSec: [30] }))
+      .resolves.toEqual({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 30 })
+  })
+
+  it("a Seedance length is kept as measured; Kling 4.0's rounds to the whole second it billed", async () => {
+    probe.durations.set(OUT, 12.04)
+    await expect(seedance2RefVideoActualSeconds({ ...run, durationsSec: [30] })).resolves.toMatchObject({ deliveredSec: 12.04, chargedOutputSec: 12.04 })
+    probe.durations.set(OUT, 3.04)
+    await expect(seedance2RefVideoActualSeconds({ ...run, provider: "kling-4", resolution: "720p", requestedDuration: 3, durationsSec: [5] }))
+      .resolves.toMatchObject({ deliveredSec: 3, chargedOutputSec: 3 })
+  })
+
+  it("with no stored probe, the reference clips are probed under the same worst-case rule", async () => {
+    probe.durations.set(OUT, 12)
+    probe.durations.set(REF, new Error("ffprobe: connection reset"))
+    await expect(seedance2RefVideoActualSeconds({ ...run, resolution: "720p" }))
+      .resolves.toEqual({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 30 })
+  })
+
+  it("a delivery past an Auto edit's hold: deliveredSec > chargedOutputSec, and its credits are the hold's, as today", async () => {
+    const alert = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      probe.durations.set(OUT, 9.5)
+      const auto = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [4.1], requestedDuration: VIDEO_DURATION_AUTO, jobId: "job-evidence" }
+      const seconds = await seedance2RefVideoActualSeconds(auto)
+      expect(seconds).toEqual({ deliveredSec: 9.5, chargedOutputSec: 6, inputSec: 4.1 })
+      expect(seconds.deliveredSec).toBeGreaterThan(seconds.chargedOutputSec)
+      expect(alert).toHaveBeenCalledTimes(1)
+      expect(String(alert.mock.calls[0]?.[0])).toContain("job=job-evidence")
+      // The settlement priced from that measurement: the hold's 960, with no
+      // second probe and no second alert.
+      probe.probeMediaDuration.mockClear()
+      await expect(seedance2RefVideoActualBaseCredits(auto, seconds)).resolves.toBe(960)
+      expect(probe.probeMediaDuration).not.toHaveBeenCalled()
+      expect(alert).toHaveBeenCalledTimes(1)
+    } finally {
+      alert.mockRestore()
+    }
+  })
+
+  it("the settlement priced from a measurement already taken probes nothing and answers what it answers alone", async () => {
+    probe.durations.set(OUT, 12)
+    const args = { ...run, durationsSec: [30] }
+    const alone = await seedance2RefVideoActualBaseCredits(args)
+    const measured = await seedance2RefVideoActualSeconds(args)
+    probe.probeMediaDuration.mockClear()
+    await expect(seedance2RefVideoActualBaseCredits(args, measured)).resolves.toBe(alone)
+    expect(alone).toBe(Math.ceil(S25_1080P_PER_SEC * 42))
+    expect(probe.probeMediaDuration).not.toHaveBeenCalled()
+  })
+
+  it("a delivered clip that cannot be measured THROWS, as the settlement does", async () => {
+    probe.durations.set(OUT, new Error("ffprobe: 403"))
+    await expect(seedance2RefVideoActualSeconds({ ...run, durationsSec: [30] })).rejects.toThrow("ffprobe: 403")
+  })
+})
+
+/**
+ * The core shim over this settlement (`lib/seedance2-ref-video-settle.ts`),
+ * run against the real thing with ffprobe counted: ONE measurement of the
+ * delivered clip gives both the credits the charge commits and the seconds
+ * behind them.
+ */
+describe("measureSeedance2Settle over the real settlement", () => {
+  const OUT = "https://kie.example/out.mp4"
+  const REF = "https://r2.example.com/videos/ref.mp4"
+
+  beforeEach(() => {
+    probe.durations.clear()
+    probe.probeMediaDuration.mockClear()
+  })
+
+  it("probes the delivered clip once and returns the settlement's credits with its seconds", async () => {
+    probe.durations.set(OUT, 12)
+    const args = { provider: "seedance-2-5", resolution: "1080p", outputUrl: OUT, referenceVideoUrls: [REF], refVideoDurationsSec: [30], duration: 12, jobId: "job-1" }
+    const baseCredits = Math.ceil(S25_1080P_PER_SEC * 42)
+    await expect(measureSeedance2Settle(args)).resolves.toEqual({ baseCredits, seconds: { outputSec: 12, inputSec: 30 } })
+    expect(probe.probeMediaDuration.mock.calls.map((c) => c[0])).toEqual([OUT])
+    // The old entry point (the reconcile cron's) answers the same credits.
+    await expect(measureSeedance2RefVideoBaseCredits(args)).resolves.toBe(baseCredits)
+  })
+
+  it("an Auto edit past its hold: the credits are the hold's, the seconds what was rendered; one probe, one alert", async () => {
+    const alert = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      probe.durations.set(OUT, 9.5)
+      const args = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], refVideoDurationsSec: [4.1], duration: VIDEO_DURATION_AUTO, jobId: "job-evidence" }
+      await expect(measureSeedance2Settle(args)).resolves.toEqual({ baseCredits: 960, seconds: { outputSec: 9.5, inputSec: 4.1 } })
+      expect(probe.probeMediaDuration).toHaveBeenCalledTimes(1)
+      expect(alert).toHaveBeenCalledTimes(1)
+    } finally {
+      alert.mockRestore()
+    }
   })
 })
 

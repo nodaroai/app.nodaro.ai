@@ -11,6 +11,8 @@ import Fastify, { type FastifyInstance } from "fastify"
 const resolver = vi.hoisted(() => ({
   result: { ok: true } as Record<string, unknown>,
   calls: [] as Array<Record<string, unknown>>,
+  // The seconds the finalize's charge bills (the lib's own rule is tested next to it).
+  billedSec: vi.fn(async (plan: { hasRefVideo: boolean; outputSec: number }) => (plan.hasRefVideo ? 9 : plan.outputSec) as number | undefined),
 }))
 // Topaz measures its source before the guard; the plan is stubbed (no network probe).
 vi.mock("@/lib/topaz-video-plan.js", async (importOriginal) => ({
@@ -24,6 +26,7 @@ vi.mock("@/lib/seedance-draft-finalize.js", () => ({
     return resolver.result
   },
   seedanceDraftFinalizeBaseCredits: async () => 1900,
+  seedanceDraftFinalizeBilledSec: resolver.billedSec,
 }))
 vi.mock("@/lib/insert-job.js", () => ({
   insertJob: vi.fn().mockResolvedValue({ data: { id: "job-hd" }, error: null }),
@@ -180,10 +183,57 @@ describe("POST /v1/video-upscale — seedance-2-5-hd", () => {
     expect(guardSeen).toEqual([{ id: "seedance-2-5-hd:4s-ref", computes: true }])
   })
 
+  it("the worker gets the draft's reference-video flag and the seconds the charge bills; the job row and the reservation are as before", async () => {
+    const res = await post({ sourceJobId: PLAN.sourceJobId })
+    expect(res.statusCode).toBe(200)
+    expect(resolver.billedSec).toHaveBeenCalledWith(PLAN)
+    expect(vi.mocked(videoQueue.add)).toHaveBeenCalledWith("video-upscale", expect.objectContaining({ draftHasRefVideo: false, draftBilledSec: 4 }))
+    // input_data: exactly today's fields, never the new queue ones.
+    const row = vi.mocked(insertJob).mock.calls[0]![1] as { input_data: Record<string, unknown> }
+    expect(row.input_data).not.toHaveProperty("draftBilledSec")
+    expect(row.input_data).toMatchObject({ taskId: "task-draft", sourceJobId: PLAN.sourceJobId, draftOutputSec: 4, draftHasRefVideo: false })
+    // The reservation: one call, the same job and credit id.
+    expect(vi.mocked(reserveCreditsForJob)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]!.slice(2)).toEqual(["job-hd", "seedance-2-5-hd:4s"])
+  })
+
+  it("a reference-video draft: the worker gets the flag and its input + output seconds", async () => {
+    resolver.result = { ...PLAN, hasRefVideo: true, refVideoDurationsSec: [4.6], creditId: "seedance-2-5-hd:4s-ref" }
+    const res = await post({ taskId: "task-draft" })
+    expect(res.statusCode).toBe(200)
+    expect(vi.mocked(videoQueue.add)).toHaveBeenCalledWith("video-upscale", expect.objectContaining({ draftHasRefVideo: true, draftBilledSec: 9 }))
+    const row = vi.mocked(insertJob).mock.calls[0]![1] as { input_data: Record<string, unknown> }
+    expect(row.input_data).not.toHaveProperty("draftBilledSec")
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("seedance-2-5-hd:4s-ref")
+  })
+
+  it("an edition that bills nothing sends no billed seconds (the key is absent)", async () => {
+    resolver.billedSec.mockResolvedValueOnce(undefined)
+    const res = await post({ sourceJobId: PLAN.sourceJobId })
+    expect(res.statusCode).toBe(200)
+    const payload = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
+    expect(payload).not.toHaveProperty("draftBilledSec")
+    expect(payload.draftHasRefVideo).toBe(false)
+  })
+
+  it("the billed seconds are read before the job row and the hold: a failure there leaves neither", async () => {
+    resolver.billedSec.mockRejectedValueOnce(new Error("no figure"))
+    const res = await post({ sourceJobId: PLAN.sourceJobId })
+    expect(res.statusCode).toBe(500)
+    expect(vi.mocked(insertJob)).not.toHaveBeenCalled()
+    expect(vi.mocked(reserveCreditsForJob)).not.toHaveBeenCalled()
+    expect(vi.mocked(videoQueue.add)).not.toHaveBeenCalled()
+  })
+
   it("leaves Topaz and VEO on their own rows, without asking the draft gate", async () => {
     await app.inject({ method: "POST", url: "/v1/video-upscale", payload: { provider: "topaz", videoUrl: "https://x/v.mp4", userId: "user-a" } })
     await app.inject({ method: "POST", url: "/v1/video-upscale", payload: { provider: "veo-1080p", taskId: "veo-task", userId: "user-a" } })
     expect(resolver.calls).toEqual([])
     expect(guardSeen.map((g) => g.id)).toEqual(["topaz-video:per-unit", "veo-1080p"])
+    for (const [, payload] of vi.mocked(videoQueue.add).mock.calls) {
+      expect(payload).not.toHaveProperty("draftHasRefVideo")
+      expect(payload).not.toHaveProperty("draftBilledSec")
+    }
+    expect(resolver.billedSec).not.toHaveBeenCalled()
   })
 })

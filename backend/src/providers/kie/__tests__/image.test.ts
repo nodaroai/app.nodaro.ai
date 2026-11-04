@@ -36,6 +36,7 @@ vi.mock("../models.js", async (importOriginal) => {
       "seedream-5-flash": actual.KIE_IMAGE_MODELS["seedream-5-flash"],
       "seedream-5-flash-i2i": actual.KIE_IMAGE_MODELS["seedream-5-flash-i2i"],
       "nano-banana": { model: "nano-banana-pro", cost: 0.02, inputType: "text-to-image", extraParams: { output_format: "png" } },
+      "nano-banana-pro": actual.KIE_IMAGE_MODELS["nano-banana-pro"],
       "flux": { model: "flux-2/pro-text-to-image", cost: 0.05, inputType: "text-to-image", extraParams: {} },
       // Flux Kontext — the REAL configs: their camelCase `extraParams`
       // (`aspectRatio`, `outputFormat`) are what the aspect-ratio rename is tested against.
@@ -47,6 +48,8 @@ vi.mock("../models.js", async (importOriginal) => {
       "gpt-image": { model: "gpt-image/1.5-text-to-image", cost: 0.02, extraParams: { aspect_ratio: "3:2", quality: "medium" } },
       "gpt-image-i2i": { model: "gpt-image/1.5-image-to-image", cost: 0.02, inputType: "image-to-image", imageParam: "input_urls", extraParams: { aspect_ratio: "3:2", quality: "medium" } },
       // GPT Image 2 — same quirk; resolution-based pricing instead of quality.
+      // `cost` differs from every figure KIE bills on purpose: a picture's
+      // recorded cost must come from GPT_IMAGE_2_KIE_CREDITS, not from here.
       "gpt-image-2": { model: "gpt-image-2-text-to-image", cost: 0.02, extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
       "gpt-image-2-i2i": { model: "gpt-image-2-image-to-image", cost: 0.02, inputType: "image-to-image", imageParam: "input_urls", extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
       // GPT Image 2.5 Flare — same family quirk; widest ratio set, no cross-field limit.
@@ -86,7 +89,7 @@ import sharp from "sharp"
 import { KieError } from "../client.js"
 import { KieImageProvider } from "../image.js"
 import { getMaxImagePromptChars } from "@nodaro/shared/models"
-import { KIE_IMAGE_MODELS } from "../models.js"
+import { GPT_IMAGE_2_KIE_CREDITS, KIE_CREDIT_USD, KIE_IMAGE_MODELS } from "../models.js"
 
 let provider: KieImageProvider
 let pngFixture: Buffer
@@ -226,7 +229,7 @@ describe("KieImageProvider.generateImage — GPT Image t2i → i2i anchor routin
     expect(body).toMatchObject({ input_urls: ["https://anchor.png"] })
     expect(body).not.toHaveProperty("image_input")
     // pricing parity: the i2i sibling costs the same as the t2i base
-    expect(result.cost).toBe(0.02)
+    expect(result.cost).toBe(GPT_IMAGE_2_KIE_CREDITS["1K"] * KIE_CREDIT_USD)
   })
 
   it("gpt-image-2 WITHOUT an anchor stays on gpt-image-2-text-to-image", async () => {
@@ -292,6 +295,87 @@ describe("KieImageProvider.generateImage — GPT Image t2i → i2i anchor routin
     expect(modelId).toBe("gpt-image-2-5-flare-image-to-image")
     expect(body).toMatchObject({ input_urls: urls, resolution: "4K" })
     expect((body as { input_urls: string[] }).input_urls).toHaveLength(16)
+  })
+})
+
+describe("KieImageProvider: gpt-image-2 records its provider cost by the resolution it sends", () => {
+  it("image-to-image at 4K and at 2K: each its own figure", async () => {
+    const at4k = await provider.generateImage("a sheet", ["https://ref.png"], "gpt-image-2-i2i", { resolution: "4K" })
+    const at2k = await provider.generateImage("a body", ["https://ref.png"], "gpt-image-2-i2i", { resolution: "2K" })
+
+    expect(at4k.cost).toBe(GPT_IMAGE_2_KIE_CREDITS["4K"] * KIE_CREDIT_USD)
+    expect(at2k.cost).toBe(GPT_IMAGE_2_KIE_CREDITS["2K"] * KIE_CREDIT_USD)
+    expect(at4k.cost).toBe(16 * KIE_CREDIT_USD)
+    expect(at2k.cost).toBe(10 * KIE_CREDIT_USD)
+  })
+
+  it("text-to-image at 2K", async () => {
+    const result = await provider.generateImage("a castle", undefined, "gpt-image-2", { resolution: "2K" })
+    expect(mocks.mockRunKieTask.mock.calls[0]![0]).toBe("gpt-image-2-text-to-image")
+    expect(result.cost).toBe(10 * KIE_CREDIT_USD)
+  })
+
+  it("the text-to-image id with a reference, swapped to its image-to-image sibling, at 4K", async () => {
+    const result = await provider.generateImage("a sheet", ["https://ref.png"], "gpt-image-2", { resolution: "4K" })
+    expect(mocks.mockRunKieTask.mock.calls[0]![0]).toBe("gpt-image-2-image-to-image")
+    expect(result.cost).toBe(16 * KIE_CREDIT_USD)
+  })
+
+  it("1K, asked for or left to the model's default: 6 KIE credits", async () => {
+    const asked = await provider.generateImage("a sheet", ["https://ref.png"], "gpt-image-2-i2i", { resolution: "1K" })
+    const byDefault = await provider.generateImage("a castle", undefined, "gpt-image-2")
+
+    expect(asked.cost).toBe(0.03)
+    expect(asked.cost).toBe(6 * KIE_CREDIT_USD)
+    expect(byDefault.cost).toBe(6 * KIE_CREDIT_USD)
+  })
+
+  it("the edit lane records the same figures", async () => {
+    const at4k = await provider.editImage("https://input.png", undefined, "gpt-image-2-i2i", { resolution: "4K" })
+    const at2k = await provider.editImage("https://input.png", undefined, "gpt-image-2-i2i", { resolution: "2K" })
+    const at1k = await provider.editImage("https://input.png", undefined, "gpt-image-2-i2i")
+
+    expect(at4k.cost).toBe(16 * KIE_CREDIT_USD)
+    expect(at2k.cost).toBe(10 * KIE_CREDIT_USD)
+    expect(at1k.cost).toBe(6 * KIE_CREDIT_USD)
+  })
+
+  it("another model keeps its config's figure at any resolution, on both lanes", async () => {
+    const pro = KIE_IMAGE_MODELS["nano-banana-pro"]!.cost
+    expect((await provider.generateImage("a cat", undefined, "nano-banana-pro", { resolution: "4K" })).cost).toBe(pro)
+    expect((await provider.generateImage("a cat", undefined, "nano-banana-pro", { resolution: "1K" })).cost).toBe(pro)
+    expect((await provider.editImage("https://input.png", "a cat", "nano-banana-pro", { resolution: "4K" })).cost).toBe(pro)
+    // A sibling family whose id starts the same way is not caught by the table.
+    const flare = KIE_IMAGE_MODELS["gpt-image-2-5-flare"]!.cost
+    expect((await provider.generateImage("a cat", undefined, "gpt-image-2-5-flare", { resolution: "4K" })).cost).toBe(flare)
+  })
+
+  it("a resolution the table does not name keeps the config's figure, never NaN", async () => {
+    const result = await provider.generateImage("a cat", undefined, "gpt-image-2", { resolution: "1 MP" })
+    expect(result.cost).toBe(KIE_IMAGE_MODELS["gpt-image-2"]!.cost)
+  })
+
+  it("the KIE request is the one it was: the exact body, on both lanes", async () => {
+    await provider.generateImage("a sheet", ["https://ref.png"], "gpt-image-2", { resolution: "4K", aspect_ratio: "4:3" })
+    await provider.editImage("https://input.png", undefined, "gpt-image-2-i2i", { resolution: "2K", aspect_ratio: "4:3" })
+
+    const [generate, edit] = mocks.mockRunKieTask.mock.calls
+    expect(generate![0]).toBe("gpt-image-2-image-to-image")
+    expect(generate![1]).toEqual({ prompt: "a sheet", aspect_ratio: "4:3", resolution: "4K", input_urls: ["https://ref.png"] })
+    expect(generate![4].dimensions).toMatchObject({ resolution: "4K" })
+    expect(edit![0]).toBe("gpt-image-2-image-to-image")
+    expect(edit![1]).toEqual({ aspect_ratio: "4:3", resolution: "2K", input_urls: ["https://input.png"] })
+    expect(edit![4].dimensions).toMatchObject({ resolution: "2K" })
+  })
+
+  it("the cost is all that is added: no meteredCost, so the job commits its reserved tier", async () => {
+    const generated = await provider.generateImage("a sheet", ["https://ref.png"], "gpt-image-2-i2i", { resolution: "4K" })
+    const edited = await provider.editImage("https://input.png", undefined, "gpt-image-2-i2i", { resolution: "4K" })
+
+    expect(generated).toEqual({ url: "https://kie.example.com/result.png", cost: 16 * KIE_CREDIT_USD })
+    expect(edited).toEqual({ url: "https://kie.example.com/result.png", cost: 16 * KIE_CREDIT_USD })
+    expect(generated).not.toHaveProperty("meteredCost")
+    expect(edited).not.toHaveProperty("meteredCost")
   })
 })
 
