@@ -447,7 +447,7 @@ describe("the 4 s preview's own prompt parts in the form", () => {
     const form = toForm(withPreview())
     expect(formIssues(form)).toEqual([])
     const long = { ...form, slots: form.slots.map((s) => ({ ...s, previewRoleName: "r".repeat(201) })) }
-    expect(formIssues(long)).toContain("Slot 1: the role name in the 4 s preview is at most 200 characters.")
+    expect(formIssues(long)).toContain('Slot 1: "In the 4 s preview" is at most 200 characters.')
     const longLine = { ...form, references: form.references.map((r) => ({ ...r, previewLine: "l".repeat(501) })) }
     expect(formIssues(longLine)).toContain("Reference 1: the prompt line in the 4 s preview is at most 500 characters.")
     expect(formIssues({ ...form, previewPrePrompt: "p".repeat(MAX_PRE_PROMPT + 1) })).toContain(

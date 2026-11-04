@@ -47,7 +47,7 @@ vi.mock("@/hooks/queries/use-node-presets-queries", () => ({
 vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ user: { id: "user-1" } }) }))
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
-import { PresetDropdown, buildPresetApplyPatch, buildPresetMatchPatch } from "../node-preset-dropdown"
+import { PresetDropdown, buildPresetApplyPatch, buildPresetMatchPatch, leftoverPresetPromptClear } from "../node-preset-dropdown"
 import { PRESET_APPLY_CLEAR_KEYS } from "@nodaro/shared/nodes"
 
 function wrap(ui: ReactNode) {
@@ -339,5 +339,33 @@ describe("buildPresetMatchPatch", () => {
     for (const k of ["promptPrefix", "promptSuffix", "prompt", "style"]) expect(k in patch, k).toBe(false)
     expect(patch.__activePresetId).toBe("u8")
     for (const k of PRESET_APPLY_CLEAR_KEYS) expect(patch[k], `${k} not cleared`).toBeUndefined()
+  })
+})
+
+// A preset that ships only pre/post text, applied over a preset that wrote the prompt (Remove Faces after
+// Cinematic Still): the previous preset's prompt is not the user's and must not run inside the new instruction.
+describe("leftoverPresetPromptClear", () => {
+  const STILL = { provider: "gpt-image-2", prompt: "cinematic film still of {subject || a detective}" }
+  const REMOVE_FACES = { provider: "gpt-image-2", promptPrefix: "remove persons faces from {image:1}, keep everything else the same" }
+
+  it("empties the prompt the previous preset wrote, word for word", () => {
+    expect(leftoverPresetPromptClear(REMOVE_FACES, { nodeData: { prompt: STILL.prompt }, previousPresetData: STILL })).toEqual({ prompt: "" })
+    const patch = buildPresetApplyPatch(REMOVE_FACES, "remove-faces", "generate-image", { nodeData: { prompt: STILL.prompt }, previousPresetData: STILL })
+    expect(patch.prompt).toBe("")
+    expect(patch.promptPrefix).toBe(REMOVE_FACES.promptPrefix)
+  })
+
+  it("keeps a prompt the user typed or edited", () => {
+    expect(leftoverPresetPromptClear(REMOVE_FACES, { nodeData: { prompt: STILL.prompt + " at dawn" }, previousPresetData: STILL })).toEqual({})
+    expect(leftoverPresetPromptClear(REMOVE_FACES, { nodeData: { prompt: "my own words" } })).toEqual({})
+  })
+
+  it("clears nothing for a preset that ships its own prompt, or no prompt content at all", () => {
+    expect(leftoverPresetPromptClear({ prompt: "new" , promptPrefix: "x" }, { nodeData: { prompt: STILL.prompt }, previousPresetData: STILL })).toEqual({})
+    expect(leftoverPresetPromptClear({ provider: "flux" }, { nodeData: { prompt: STILL.prompt }, previousPresetData: STILL })).toEqual({})
+  })
+
+  it("covers each prompt body a node type uses", () => {
+    expect(leftoverPresetPromptClear({ promptSuffix: "y" }, { nodeData: { editPrompt: "a", scenePrompt: "b" }, previousPresetData: { editPrompt: "a", scenePrompt: "c" } })).toEqual({ editPrompt: "" })
   })
 })

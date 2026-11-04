@@ -41,8 +41,8 @@ import {
 import AdminTrendEditorPage from "../detail/page"
 
 const BASE = `/v1/admin/trends/${TREND_ID}`
-/** The slot's role name field (its label holds its help line too), not its 4 s preview one. */
-const ROLE_NAME = /^role name(?! in the 4 s preview)/i
+/** The slot's "In the clip" field (its label holds its help line too), not its 4 s preview one. */
+const ROLE_NAME = /^in the clip/i
 
 function renderEditor() {
   return renderWith(<AdminTrendEditorPage />, `/admin/trends/${TREND_ID}`, "/admin/trends/:id")
@@ -1117,7 +1117,7 @@ describe("the original's display copy and a slot's hint picture", { timeout: 20_
 })
 
 describe("the 4 s preview's own prompt parts", { timeout: 20_000 }, () => {
-  const PREVIEW_ROLE = /^role name in the 4 s preview/i
+  const PREVIEW_ROLE = /^in the 4 s preview/i
   const PREVIEW_LINE = /^prompt line in the 4 s preview/i
   const REFERENCE = { images: ["https://cdn.test/r.png"], line: "the neon sign" }
 
@@ -1200,7 +1200,7 @@ describe("the 4 s preview's own prompt parts", { timeout: 20_000 }, () => {
   it("a test run's 4 s preview says it sends the preview's own parts", async () => {
     renderEditor()
     expect(await screen.findByRole("switch", { name: "4 s preview" })).toBeChecked()
-    expect(screen.getByText(/A preview run sends the preview's own role names, reference lines and prompts/)).toBeInTheDocument()
+    expect(screen.getByText(/A preview run sends each role as "In the 4 s preview" describes it, and the preview's own reference lines and prompts/)).toBeInTheDocument()
   })
 })
 
