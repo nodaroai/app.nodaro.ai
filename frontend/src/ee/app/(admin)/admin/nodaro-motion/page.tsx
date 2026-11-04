@@ -22,6 +22,12 @@
 // always Flex, which hides the Style choice in Nodaro Motion
 // (PUT /v1/admin/nodaro-motion/style); the forced choices are greyed out until
 // every environment's engine enforces them.
+// Prism also has its style-only runs (StyleOnlyColumn.tsx, under its Motion
+// column): what a direct run with a video and an art style and nothing to
+// swap sends — the original clip (the default) or the path of any art-style
+// run — and its own engine prompt (PUT /v1/admin/nodaro-motion/style-only); a
+// change is offered once one environment's engine runs such runs, and the
+// server's refusal is said in place. Pulse takes no art style.
 // Each engine also has its preparation steps (StepsColumn.tsx: the reference
 // sheets, the engine prompt and the scene description), for every direct run
 // of either style (PUT /v1/admin/nodaro-motion/steps), greyed out until every
@@ -49,6 +55,7 @@ import type {
   NodaroMotionMotion,
   NodaroMotionSteps,
   NodaroMotionStyle,
+  NodaroMotionStyleOnly,
 } from "@/lib/api"
 import { useEngineEnvironments, useNodaroMotionMasking, useSaveNodaroMotionMasking } from "@/ee/hooks/queries/use-admin-queries"
 import { useNodaroMotionMotion, useSaveNodaroMotionMotion } from "@/ee/hooks/queries/use-nodaro-motion-motion"
@@ -56,6 +63,7 @@ import { useNodaroMotionPulseAudio, useSaveNodaroMotionPulseAudio } from "@/ee/h
 import { useNodaroMotionSteps, useSaveNodaroMotionSteps } from "@/ee/hooks/queries/use-nodaro-motion-steps"
 import { useNodaroMotionStyle, useSaveNodaroMotionStyle } from "@/ee/hooks/queries/use-nodaro-motion-style"
 import { useNodaroMotionAdvanced, useSaveNodaroMotionAdvanced } from "@/ee/hooks/queries/use-nodaro-motion-advanced"
+import { useNodaroMotionStyleOnly, useSaveNodaroMotionStyleOnly } from "@/ee/hooks/queries/use-nodaro-motion-style-only"
 import {
   useNodaroMotionPrismReferenceAudio,
   useSaveNodaroMotionPrismReferenceAudio,
@@ -83,6 +91,7 @@ import { MotionColumn } from "./components/MotionColumn"
 import { StepsColumn, stepsToSaved } from "./components/StepsColumn"
 import { StyleChoiceSelect, styleToSaved } from "./components/StyleChoiceSelect"
 import { AdvancedSwitch } from "./components/AdvancedSwitch"
+import { StyleOnlyColumn, styleOnlyToSaved } from "./components/StyleOnlyColumn"
 
 /** The model each engine runs on, shown to admins beside the public name. */
 const INTERNAL_NAMES: Readonly<Record<AdminTrendEngine, string>> = {
@@ -147,6 +156,9 @@ export default function AdminNodaroMotionPage() {
   // The page's Advanced switch: one for the whole page, needing no engine (a page option only).
   const advancedQuery = useNodaroMotionAdvanced()
   const saveAdvanced = useSaveNodaroMotionAdvanced()
+  // Prism's style-only runs: a change is offered once one environment's engine runs them (StyleOnlyColumn).
+  const styleOnlyQuery = useNodaroMotionStyleOnly()
+  const saveStyleOnly = useSaveNodaroMotionStyleOnly()
   const [draft, setDraft] = useState<NodaroMotionMasking>({})
   const [motionDraft, setMotionDraft] = useState<NodaroMotionMotion>({})
   const [pulseDraft, setPulseDraft] = useState<CastSwapPulseAudioId>(DEFAULT_PULSE_AUDIO)
@@ -154,6 +166,7 @@ export default function AdminNodaroMotionPage() {
   const [stepsDraft, setStepsDraft] = useState<NodaroMotionSteps>({})
   const [styleDraft, setStyleDraft] = useState<NodaroMotionStyle>({})
   const [advancedDraft, setAdvancedDraft] = useState(false)
+  const [styleOnlyDraft, setStyleOnlyDraft] = useState<NodaroMotionStyleOnly>({})
 
   // The drafts start from what is stored, and again after each save.
   useEffect(() => {
@@ -177,6 +190,9 @@ export default function AdminNodaroMotionPage() {
   useEffect(() => {
     if (advancedQuery.data) setAdvancedDraft(advancedQuery.data.show)
   }, [advancedQuery.data])
+  useEffect(() => {
+    if (styleOnlyQuery.data) setStyleOnlyDraft(structuredClone(styleOnlyQuery.data.styleOnly ?? {}))
+  }, [styleOnlyQuery.data])
 
   const saved = useMemo(() => JSON.stringify(toSaved(data?.masking ?? {})), [data])
   const next = toSaved(draft)
@@ -201,12 +217,23 @@ export default function AdminNodaroMotionPage() {
   // Never saved reads as people choosing: choosing "Users choose" then is no change.
   const nextStyle = styleToSaved(styleDraft)
   const styleChanged = !!styleQuery.data && JSON.stringify(nextStyle) !== JSON.stringify(styleToSaved(styleQuery.data.style))
+  // Never saved reads as the defaults (Original clip, Template): choosing them then is no change.
+  const nextStyleOnly = styleOnlyToSaved(styleOnlyDraft)
+  const styleOnlyChanged = !!styleOnlyQuery.data && JSON.stringify(nextStyleOnly) !== JSON.stringify(styleOnlyToSaved(styleOnlyQuery.data.styleOnly))
   // Never saved reads as hidden: leaving the switch off then is no change.
   const advancedChanged = !!advancedQuery.data && advancedDraft !== advancedQuery.data.show
   // Only the page's switch changed: it is the page that picks it up, not runs.
-  const onlyAdvancedChanged = advancedChanged && !changed && !motionChanged && !pulseChanged && !prismAudioChanged && !stepsChanged && !styleChanged
+  const onlyAdvancedChanged =
+    advancedChanged && !changed && !motionChanged && !pulseChanged && !prismAudioChanged && !stepsChanged && !styleChanged && !styleOnlyChanged
   const pending =
-    save.isPending || saveMotion.isPending || savePulse.isPending || savePrismAudio.isPending || saveSteps.isPending || saveStyle.isPending || saveAdvanced.isPending
+    save.isPending ||
+    saveMotion.isPending ||
+    savePulse.isPending ||
+    savePrismAudio.isPending ||
+    saveSteps.isPending ||
+    saveStyle.isPending ||
+    saveStyleOnly.isPending ||
+    saveAdvanced.isPending
 
   if (!hasAdmin()) return null
 
@@ -219,6 +246,8 @@ export default function AdminNodaroMotionPage() {
       if (prismAudioChanged) await savePrismAudio.mutateAsync(prismReferenceAudioTriple(prismAudioDraft))
       if (stepsChanged) await saveSteps.mutateAsync(nextSteps)
       if (styleChanged) await saveStyle.mutateAsync(nextStyle)
+      // Its refusal is also said under Prism's style-only runs (saveStyleOnly.error).
+      if (styleOnlyChanged) await saveStyleOnly.mutateAsync(nextStyleOnly)
       if (advancedChanged) await saveAdvanced.mutateAsync(advancedDraft)
       toast.success(onlyAdvancedChanged ? SAVED_PAGE_ONLY_TOAST : SAVED_TOAST)
     } catch (err) {
@@ -236,7 +265,11 @@ export default function AdminNodaroMotionPage() {
             Precise and the Motion style. People never see or set these engine settings. A trend keeps its own setting.
           </p>
         </div>
-        <Button size="sm" className="min-h-9" disabled={(!changed && !motionChanged && !pulseChanged && !prismAudioChanged && !stepsChanged && !styleChanged && !advancedChanged) || issues.length > 0 || pending} onClick={() => void onSave()}>
+        <Button size="sm" className="min-h-9" disabled={
+            (!changed && !motionChanged && !pulseChanged && !prismAudioChanged && !stepsChanged && !styleChanged && !styleOnlyChanged && !advancedChanged) ||
+            issues.length > 0 ||
+            pending
+          } onClick={() => void onSave()}>
           {pending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
           Save
         </Button>
@@ -330,6 +363,27 @@ export default function AdminNodaroMotionPage() {
                       <p className="text-xs text-destructive">{motionQuery.error.message}</p>
                     ) : (
                       <p className="text-xs text-muted-foreground">Loading…</p>
+                    )}
+                    {engine.id === "motion-prism" && (
+                      <div className="mt-2 border-t pt-3">
+                        {styleOnlyQuery.data ? (
+                          <StyleOnlyColumn
+                            engine={engine.id}
+                            value={styleOnlyDraft[engine.id]}
+                            envs={envs.data}
+                            supported={styleOnlyQuery.data.supported}
+                            error={saveStyleOnly.error?.message}
+                            onChange={(entry) => {
+                              saveStyleOnly.reset()
+                              setStyleOnlyDraft((d) => ({ ...d, [engine.id]: entry }))
+                            }}
+                          />
+                        ) : styleOnlyQuery.error ? (
+                          <p className="text-xs text-destructive">{styleOnlyQuery.error.message}</p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">Loading…</p>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

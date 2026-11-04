@@ -433,4 +433,26 @@ describe("castSwap resource", () => {
     expect(init.method).toBe("GET")
     expect(init.body).toBeUndefined()
   })
+
+  it("styleChoice passes styleOnly through, per engine, typed", async () => {
+    const answer: CastSwapStyleChoice = {
+      engines: { "motion-prism": "user", "motion-pulse": "user" },
+      styleOnly: { "motion-prism": true, "motion-pulse": false },
+    }
+    const client = make(vi.fn().mockReturnValueOnce(mockOk(answer)))
+    const got = await client.castSwap.styleChoice()
+    expect(got).toEqual(answer)
+    const prism: boolean | undefined = got.styleOnly?.["motion-prism"]
+    expect(prism).toBe(true)
+    expect(got.styleOnly?.["motion-pulse"]).toBe(false)
+  })
+
+  it("styleChoice from an older server has no styleOnly: every engine reads as false", async () => {
+    const answer = { engines: { "motion-prism": "user", "motion-pulse": "user" } }
+    const client = make(vi.fn().mockReturnValueOnce(mockOk(answer)))
+    const got = await client.castSwap.styleChoice()
+    expect(got).toEqual(answer)
+    expect(got.styleOnly).toBeUndefined()
+    expect(got.styleOnly?.["motion-prism"] === true).toBe(false)
+  })
 })

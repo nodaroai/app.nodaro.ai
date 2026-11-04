@@ -9,7 +9,8 @@
  * style (admin-nodaro-motion-prompt-parts.ts).
  *
  * `maskFill: "none"` only to an engine that declares `castSwap.maskFillNone`;
- * `promptWording` only to one whose `castSwap.promptWordings` lists it.
+ * `promptWording` only to one whose `castSwap.promptWordings` lists it;
+ * `styleOnly` only to one that declares `castSwap.styleOnly`.
  * `promptStyle`, `scene`, `faceMesh`, `roleOutlines` and `shotList` are sent
  * only to an engine that declares them (`castSwap.promptStyles`,
  * `castSwap.fullDepthScenes`, `.faceMesh`, `.roleOutlines`, `.shotList`): one from before them
@@ -28,6 +29,7 @@ import { CAST_SWAP_PROMPT_PART_IDS } from "@nodaro/render-rules"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 import { engineDrawsDepthColormap, engineDrawsFillNone } from "../../lib/cast-swap-face-masking.js"
 import { engineTakesPromptWording } from "../../lib/nodaro-motion-prompt-wording.js"
+import { engineTakesStyleOnly } from "../../lib/nodaro-motion-style-only.js"
 import { engineRequest, isRec, parseJson, relay } from "./trends/run-helpers.js"
 import { promptPartsAnswerSchema, type PromptPartTexts, type PromptPartsAnswer, type PromptPartsRequest } from "../../lib/cast-swap-prompt-parts-contract.js"
 
@@ -41,7 +43,7 @@ export function loadedEngineHasPromptParts(): boolean {
 /** The request without the keys the loaded engine does not declare (a new object). */
 export function forLoadedEngine(body: PromptPartsRequest): PromptPartsRequest {
   const cs = getPluginSupports().castSwap
-  const { promptStyle, scene, faceMesh, roleOutlines, shotList, depthColormap, maskFill, promptWording, ...rest } = body
+  const { promptStyle, scene, faceMesh, roleOutlines, shotList, depthColormap, maskFill, promptWording, styleOnly, ...rest } = body
   // The depth look by its map (and the fill it rides with) only to an engine that draws that map.
   const colormap = depthColormap !== undefined && engineDrawsDepthColormap(cs, depthColormap) ? depthColormap : undefined
   // The fill none (the fill-none mesh line) only to an engine that draws it; a depth fill rides with its map as before.
@@ -57,6 +59,8 @@ export function forLoadedEngine(body: PromptPartsRequest): PromptPartsRequest {
     ...(scene && (cs?.fullDepthScenes ?? []).includes(scene) ? { scene } : {}),
     // The Flex wording (either one) only to an engine that lists it: an older one is asked as before.
     ...(promptWording && engineTakesPromptWording(cs, promptWording) ? { promptWording } : {}),
+    // The style-only set only to an engine that runs style-only runs (the callers refuse to ask any other).
+    ...(styleOnly === true && engineTakesStyleOnly(cs) ? { styleOnly } : {}),
   }
 }
 

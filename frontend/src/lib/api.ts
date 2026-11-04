@@ -12046,6 +12046,8 @@ export interface TrendEngineEnvironment {
       faceMeshMinFaceHeightPct?: boolean
       /** How the engine may word a Flexible prompt (`promptWording`); absent = the current wording only. */
       promptWordings?: CastSwapPromptWordingId[]
+      /** The engine runs style-only runs (a Prism Flex run with an art style and nothing to swap); absent = it refuses them. */
+      styleOnly?: boolean
     }
     /**
      * What that environment's platform (the app itself, apart from its engine)
@@ -12252,6 +12254,8 @@ export interface StepOutputs {
     roles: Array<{ role: number; styledUrl: string; sent: StyleRefsSend }>
     skipped?: Array<{ role: number; reason: SkipReason }>
   }
+  /** A style-only run: its path, and `grayscale` when its delivered video was made black and white. */
+  styleOnly?: { path: NodaroMotionStyleOnlyPath; grayscale?: true }
 }
 
 /** A refusal of a steps setting: where, the code, and why. */
@@ -12304,6 +12308,8 @@ export interface JobCastSwapSteps {
   stepOutputs: StepOutputs | null
   sceneText: string | null
   skippedSteps: SkippedStep[]
+  /** A style-only run's path (a Full Quality version's included, which records no steps); null for any other run. */
+  styleOnly: NodaroMotionStyleOnlyPath | null
 }
 
 const ADMIN_NODARO_MOTION_STEPS = "/v1/admin/nodaro-motion/steps"
@@ -12872,9 +12878,9 @@ export interface PromptPartProblem {
   part?: CastSwapPromptPartId
   code: string
   message: string
-  /** Admin → Nodaro Motion's save: the engine and style it is about. */
+  /** Admin → Nodaro Motion's save: the engine and key (a style, or `styleOnly`) it is about. */
   engine?: NodaroMotionEngine
-  style?: CastSwapStyleId
+  style?: NodaroMotionPromptPartsKey
 }
 
 /** The engine's answer: every part, the prompt it assembles (with its length and limit) and its problems. */
@@ -12940,15 +12946,22 @@ export async function saveAdminTrendEnginePrompt(
 /** How a direct run follows its clip. */
 export type CastSwapStyleId = "precise" | "motion"
 
-/** Nodaro Motion's direct-run overrides: per engine (public id), per style, the text per part. */
-export type NodaroMotionPromptParts = Partial<Record<NodaroMotionEngine, Partial<Record<CastSwapStyleId, PromptPartTexts>>>>
+/**
+ * One key of an engine's prompt-parts entry: a run style (`precise`, `motion`), or `styleOnly` — a style-only run's
+ * own parts (a direct Prism Flex run with an art style and nothing to swap, on the original clip).
+ */
+export type NodaroMotionPromptPartsKey = CastSwapStyleId | "styleOnly"
+
+/** Nodaro Motion's direct-run overrides: per engine (public id), per key, the text per part. */
+export type NodaroMotionPromptParts = Partial<Record<NodaroMotionEngine, Partial<Record<NodaroMotionPromptPartsKey, PromptPartTexts>>>>
 
 export interface NodaroMotionPromptPartsView {
   /** null = never saved: every run uses the engine's defaults. */
   promptParts: NodaroMotionPromptParts | null
   updatedAt: string | null
   engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine }>
-  styles: CastSwapStyleId[]
+  /** The keys this environment's engine shows: the styles, and `styleOnly` while it runs style-only runs. */
+  styles: NodaroMotionPromptPartsKey[]
 }
 
 const ADMIN_NODARO_MOTION_PROMPT_PARTS = "/v1/admin/nodaro-motion/prompt-parts"
@@ -12957,7 +12970,7 @@ export async function fetchNodaroMotionPromptParts(): Promise<NodaroMotionPrompt
   return (await apiRequest<{ data: NodaroMotionPromptPartsView }>(ADMIN_NODARO_MOTION_PROMPT_PARTS, "apiErr.loadNodaroMotion")).data
 }
 
-/** Save the whole setting; every engine and style with overrides is checked by the engine first. */
+/** Save the WHOLE setting (a key left out is deleted); every engine and key with overrides is checked by the engine first. */
 export async function saveNodaroMotionPromptParts(promptParts: NodaroMotionPromptParts): Promise<NodaroMotionPromptPartsView> {
   return (
     await apiRequest<{ data: NodaroMotionPromptPartsView }>(ADMIN_NODARO_MOTION_PROMPT_PARTS, "apiErr.saveNodaroMotion", {
@@ -12970,7 +12983,7 @@ export async function saveNodaroMotionPromptParts(promptParts: NodaroMotionPromp
 /** The engine's parts and assembled prompt for a sample direct run of `engine` and `style`; `overrides` left out = the saved ones. */
 export async function previewNodaroMotionPromptParts(input: {
   engine: NodaroMotionEngine
-  style: CastSwapStyleId
+  style: NodaroMotionPromptPartsKey
   overrides?: PromptPartTexts
   /** The Flex wording to preview (left out: the engine's saved one). Read only for a Flex run worded Flexible. */
   promptWording?: CastSwapPromptWordingId
@@ -13088,6 +13101,49 @@ export async function saveNodaroMotionPromptWording(promptWording: NodaroMotionP
     await apiRequest<{ data: NodaroMotionPromptWordingView }>(ADMIN_NODARO_MOTION_PROMPT_WORDING, "apiErr.saveNodaroMotion", {
       method: "PUT",
       body: { promptWording },
+    })
+  ).data
+}
+
+// ---- Admin: Nodaro Motion's style-only setting (/v1/admin/nodaro-motion/style-only, admin-nodaro-motion-style-only.ts) ----
+
+/** What a style-only run sends: the original clip restyled, with no depth (the default), or the depth path of any art-style Flex run. */
+export type NodaroMotionStyleOnlyPath = "original" | "flex"
+
+/** One engine's style-only setting; each key left out takes its default ("original", the template). Never null. */
+export interface NodaroMotionStyleOnlyEntry {
+  path?: NodaroMotionStyleOnlyPath
+  /** The style-only run's own engine prompt step; left out = the template. */
+  enginePrompt?: TextStepSetting
+}
+
+/** The style-only setting per engine, keyed by public id; only what differs from the defaults is listed. */
+export type NodaroMotionStyleOnly = Partial<Record<NodaroMotionEngine, NodaroMotionStyleOnlyEntry>>
+
+export interface NodaroMotionStyleOnlyView {
+  /** null = never saved: every engine on the defaults. */
+  styleOnly: NodaroMotionStyleOnly | null
+  updatedAt: string | null
+  engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine }>
+  /** Whether this environment's Cast Swap engine runs style-only runs (`castSwap.styleOnly`). */
+  supported: boolean
+}
+
+const ADMIN_NODARO_MOTION_STYLE_ONLY = "/v1/admin/nodaro-motion/style-only"
+
+export async function fetchNodaroMotionStyleOnly(): Promise<NodaroMotionStyleOnlyView> {
+  return (await apiRequest<{ data: NodaroMotionStyleOnlyView }>(ADMIN_NODARO_MOTION_STYLE_ONLY, "apiErr.loadNodaroMotion")).data
+}
+
+/**
+ * Saves the whole setting. A change is refused (409 `engine_unsupported`) while no environment's engine runs
+ * style-only runs; a Pulse entry is refused (400 `style_only_engine`): Pulse takes no art style.
+ */
+export async function saveNodaroMotionStyleOnly(styleOnly: NodaroMotionStyleOnly): Promise<NodaroMotionStyleOnlyView> {
+  return (
+    await apiRequest<{ data: NodaroMotionStyleOnlyView }>(ADMIN_NODARO_MOTION_STYLE_ONLY, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { styleOnly },
     })
   ).data
 }

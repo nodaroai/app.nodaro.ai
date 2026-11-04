@@ -108,6 +108,7 @@ describe("GET /v1/admin/jobs/:jobId/cast-swap-steps", () => {
         stepOutputs: STEP_OUTPUTS,
         sceneText: "test scene text",
         skippedSteps: [{ step: "reference-sheet", reason: "failed", role: 1 }],
+        styleOnly: null,
       },
     })
     // Read raw from the jobs table (the server-only keys are stripped on every normal read).
@@ -130,7 +131,7 @@ describe("GET /v1/admin/jobs/:jobId/cast-swap-steps", () => {
     )
     const res = await get()
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ data: { stepOutputs: null, sceneText: null, skippedSteps: [] } })
+    expect(res.json()).toEqual({ data: { stepOutputs: null, sceneText: null, skippedSteps: [], styleOnly: null } })
   })
 
   it("404s for a job that is not a Cast Swap job, or none at all", async () => {
@@ -214,6 +215,7 @@ describe("GET /v1/admin/jobs/:jobId/cast-swap-steps", () => {
         { step: "head-crop", reason: "no_face" },
         { step: "engine-prompt", reason: "too_long" },
       ],
+      styleOnly: null,
     })
   })
 
@@ -258,6 +260,7 @@ describe("GET /v1/admin/jobs/:jobId/cast-swap-steps", () => {
         { step: "clip-body", reason: "no_frame", role: 1 },
         { step: "clip-body", reason: "failed", role: 2 },
       ],
+      styleOnly: null,
     })
   })
 
@@ -313,7 +316,64 @@ describe("GET /v1/admin/jobs/:jobId/cast-swap-steps", () => {
       mockFrom.mockReturnValue(jobChain({ data: castSwapRow({ __castSwapStepOutputs: record, skippedSteps: "nope" }), error: null }))
       const res = await get()
       expect(res.statusCode).toBe(200)
-      expect(res.json().data).toEqual({ stepOutputs: null, sceneText: null, skippedSteps: [] })
+      expect(res.json().data).toEqual({ stepOutputs: null, sceneText: null, skippedSteps: [], styleOnly: null })
     }
+  })
+
+  it("a style-only run's record names its path, and whether its video was made gray", async () => {
+    const read = async (styleOnly: unknown) => {
+      mockFrom.mockReturnValue(jobChain({ data: castSwapRow({ __castSwapStepOutputs: { v: 1, roles: [], styleOnly } }), error: null }))
+      return (await get()).json().data
+    }
+    expect(await read({ path: "original" })).toEqual({
+      stepOutputs: { v: 1, roles: [], styleOnly: { path: "original" } },
+      sceneText: null,
+      skippedSteps: [],
+      styleOnly: "original",
+    })
+    expect(await read({ path: "original", grayscale: true })).toEqual({
+      stepOutputs: { v: 1, roles: [], styleOnly: { path: "original", grayscale: true } },
+      sceneText: null,
+      skippedSteps: [],
+      styleOnly: "original",
+    })
+    expect(await read({ path: "flex", grayscale: "yes", extra: 1 })).toEqual({
+      stepOutputs: { v: 1, roles: [], styleOnly: { path: "flex" } },
+      sceneText: null,
+      skippedSteps: [],
+      styleOnly: "flex",
+    })
+  })
+
+  it("a style-only path outside the vocabulary is no path, and the record keeps the rest", async () => {
+    for (const styleOnly of [{ path: "x" }, { grayscale: true }, "original", null]) {
+      mockFrom.mockReturnValue(
+        jobChain({ data: castSwapRow({ __castSwapStepOutputs: { v: 1, roles: [], enginePrompt: { mode: "template" }, styleOnly } }), error: null }),
+      )
+      expect((await get()).json().data).toEqual({
+        stepOutputs: { v: 1, roles: [], enginePrompt: { mode: "template" } },
+        sceneText: null,
+        skippedSteps: [],
+        styleOnly: null,
+      })
+    }
+  })
+
+  it("a Full Quality version, which records no steps of its own, reads its path from its input", async () => {
+    const read = async (inputStyleOnly: unknown, output: Record<string, unknown> = {}) => {
+      mockFrom.mockReturnValue(
+        jobChain({
+          data: castSwapRow(output, { job_type: "cast-swap-full-quality", input_data: { type: "cast-swap", fullQualityOf: USER_UUID, __styleOnly: inputStyleOnly } }),
+          error: null,
+        }),
+      )
+      return (await get()).json().data
+    }
+    expect(await read("flex")).toEqual({ stepOutputs: null, sceneText: null, skippedSteps: [], styleOnly: "flex" })
+    expect(await read("original")).toEqual({ stepOutputs: null, sceneText: null, skippedSteps: [], styleOnly: "original" })
+    expect((await read("bogus")).styleOnly).toBeNull()
+    expect((await read(true)).styleOnly).toBeNull()
+    // The run's own record wins over the input marker.
+    expect((await read("flex", { __castSwapStepOutputs: { v: 1, roles: [], styleOnly: { path: "original" } } })).styleOnly).toBe("original")
   })
 })

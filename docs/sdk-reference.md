@@ -2154,6 +2154,7 @@ interface CastSwapParams {
   previewStart?: number            // seconds, default 0
   engine?: CastSwapEngine          // "motion-prism" (default) | "motion-pulse" (see below)
   style?: CastSwapStyle            // "precise" (default) | "motion" (see below)
+  direction?: { style: string }    // an art style, a `style` picker id: Flex on motion-prism only (see Style only)
   motionLength?: "cut-end" | "cut-start" // CastSwapMotionLength, motion-pulse only; default "cut-end"
   resolution?: "480p" | "720p" | "1080p" // default "480p"; motion-pulse: "720p" (default) or "1080p"
   draft?: boolean                  // default true at 480p, false above; true above 480p is a 400;
@@ -2173,11 +2174,12 @@ interface CastSwapEstimate {
   engine?: CastSwapEngine // the engine quoted
   totalCredits: number    // held when the run starts
   expectedCredits?: number // what it is expected to be charged; never above totalCredits
-  breakdown: { base?: number; references: number; motion?: number; motionExpected?: number; privacy?: number; prompt?: number } & Record<string, number>
+  breakdown: { base?: number; references: number; motion?: number; motionExpected?: number; privacy?: number; prompt?: number; referenceAudio?: number } & Record<string, number>
                           // the parts, for display only: base (the run itself), references (preparing
                           // the reference pictures; 0 when off), motion (what the video holds), motionExpected
                           // (what it is expected to be charged; Prism), privacy (preparing the clip), prompt
-                          // (a prompt written by a language model, when the engine's setting asks for one) —
+                          // (a prompt written by a language model, when the engine's setting asks for one),
+                          // referenceAudio (preparing the clip's sound, when the engine's setting runs that step) —
                           // motion and motionExpected are alternatives, so read the totals, never the sum
   privacyCredits?: number // charged only if the clip is refused and the run is retried; not in the totals
   settlesLower: boolean   // Auto length (Prism): the final charge is expected to be lower
@@ -2202,8 +2204,9 @@ A role with no images (empty or `null`) is skipped: that subject or place
 stays as in the video. A person, pet or product role of a direct run may leave
 `name` out (or empty): it is then named by its first picture, matched to the
 subject in the video it fits best, and needs at least one image (`400
-unnamed_role_needs_picture` otherwise); a trend run's roles are always named. At least one role with images, a reference, or a
-`prePrompt` or `postPrompt`, is required. Each trait (`body`, `outfit`, `hair`; a pet's `body`, `coat`; a
+unnamed_role_needs_picture` otherwise); a trend run's roles are always named. At least one role with images, a reference, a
+`prePrompt` or `postPrompt`, or an art style (`direction`, Flex on Nodaro
+Motion Prism; see Style only below) is required. Each trait (`body`, `outfit`, `hair`; a pet's `body`, `coat`; a
 product's `shape`, `finish`) is `"new"`, from your images, or `"original"`,
 kept from the video.
 
@@ -2219,9 +2222,15 @@ a raw `{image:` / `{video:` / `{audio:` token in a line answers `400`.
 `previewName` is the name used instead of `name` in a preview, and
 `inPreview: false` leaves the role out of the preview (its images are not sent,
 prepared or charged; `{role:N}` keeps its numbering and reads as its
-`previewName`, else its `name`). A preview with every role left out (always,
-even with a `prePrompt` or `postPrompt`), or with no role kept in it that has
-images and no `prePrompt` or `postPrompt`, answers `400 no_roles_in_preview`.
+`previewName`, else its `name`). A preview that would change nothing, judged
+on what it sends (no role kept in it that has images, no fixed reference, no
+`prePrompt` or `postPrompt` and no art style), answers
+`400 no_roles_in_preview`; a preview with every role left out still runs when
+it has a reference, a prompt or, where `styleOnly` is answered `true`, an art
+style (an engine from before style-only runs refuses that last one, with a
+message that does not name an art style). An engine answered `"precise"` drops
+the art style, so there a preview whose only change was the art style answers
+`400 no_roles_in_preview`; one with a prompt or a reference runs, as Precise.
 
 **Reference preparation** (`prepareReferences`, on by default): before the
 video, each person, pet and product role's images are turned into one clean
@@ -2243,15 +2252,63 @@ clip_too_long_for_style` ("Use a shorter clip or choose Precise").
 **A forced style** (`styleChoice()`, `CastSwapStyleChoice`): Nodaro may fix
 an engine's style for everyone, and every `run()` and `estimate()` on it then
 uses that style whatever `style` says. `styleChoice()` answers
-`{ engines: { "motion-prism": CastSwapStyleChoiceOption, "motion-pulse": CastSwapStyleChoiceOption } }`,
-each `"user"` (the caller chooses), `"precise"` or `"flex"` (`style: "motion"`);
-show a style control only for an engine answered `"user"`. Public (works
-signed out); the answer may be up to a minute old. A trend run keeps its
-trend's style.
+`{ engines: { "motion-prism": CastSwapStyleChoiceOption, "motion-pulse": CastSwapStyleChoiceOption }, styleOnly?: { "motion-prism"?: boolean, "motion-pulse"?: boolean } }`,
+each engine `"user"` (the caller chooses), `"precise"` or `"flex"`
+(`style: "motion"`); show a style control only for an engine answered
+`"user"`. `styleOnly` says, per engine, whether the engine takes style-only
+runs (below). It follows the engine alone, so read it with `engines`: a forced
+Precise drops a Motion run's art style. On an engine answered `"precise"`, a
+request with nothing else to change is refused as `400 validation_error`; with
+anything else to change (a role with images, a fixed reference, a `prePrompt`
+or `postPrompt`) it answers `202` and runs and is quoted as Precise, without the
+art style. Nodaro Motion Pulse is always `false`, and an older server leaves `styleOnly` out (read
+it as `false` for every engine). Public (works signed
+out); the answer may be up to a minute old. A trend run keeps its trend's
+style.
 
 ```ts
-const { engines } = await client.castSwap.styleChoice()
+const { engines, styleOnly } = await client.castSwap.styleChoice()
 const showStyle = engines["motion-pulse"] === "user"
+const offerStyleOnly = styleOnly?.["motion-prism"] === true && engines["motion-prism"] !== "precise"
+```
+
+**Style only** (`direction`): a Motion run (`style: "motion"`) on Nodaro
+Motion Prism may take an art style, `direction: { style: "<id>" }`, an id of
+the `style` picker catalog. With an art style and nothing to swap (no role
+with images and no fixed reference) the run is still accepted: the art style
+is its change, and a `prePrompt` or `postPrompt` is still added. It restyles
+the whole clip, keeping the people, the places, the motion and the sound. It
+is charged for what it runs: the base fee and the video, with no
+clip-preparation (`privacy`) part; a `referenceAudio` part appears only when
+Nodaro's setting for the engine runs that step, and a `prompt` part only when
+its setting has a language model write the prompt; `estimate()` with the same
+params shows the price. By default a black-and-white art style comes out
+monochrome. Nodaro may instead run these the way it runs other art-style runs,
+priced as those are and not made monochrome.
+A preview takes the same path as its full run: whether a run is style only is
+judged on all its roles, so a preview that leaves out every role with images
+takes its full run's path, with the art style counting as the preview's
+change. Offer it only where `styleChoice()` answers `styleOnly` `true` for the
+engine; while Nodaro Motion Prism is answered `false`, an art style with
+nothing else to change answers `400 validation_error`, and one with a
+`prePrompt` or `postPrompt` is accepted but runs as any other art-style run,
+not as described here. `styleOnly` `true` says the engine takes such runs, and a
+run must still be Motion: on an engine answered `"precise"` the art style is
+dropped, so the request is refused as `400 validation_error` or, with anything
+else to change, runs as Precise (see A forced style). Nodaro Motion Pulse takes
+no art style (`400 art_style_needs_prism`). `400 art_style_needs_flex` answers
+an art style on a request with no `style: "motion"` or on a trend run, and on a
+Motion run whose prompt is made Precise by Nodaro's setting for how Motion runs
+are prepared. That setting is not the forced style, and `styleChoice()` does not
+show it.
+
+```ts
+await client.castSwap.run({
+  videoUrl,
+  roles: [],
+  style: "motion",
+  direction: { style: "pop-art" },
+})
 ```
 
 **The Advanced options on the Nodaro Motion page**

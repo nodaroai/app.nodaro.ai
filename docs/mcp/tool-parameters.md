@@ -396,7 +396,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `video_url` | string (URL) | yes | The source clip, 4–30 s. |
-| `roles` | object[] | yes | At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, a reference, or a pre_prompt or post_prompt. |
+| `roles` | object[] | yes | At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, a reference, a pre_prompt or post_prompt — or, on a motion-prism Flex run where the engine takes style-only runs, an art_style alone (restyles the whole clip). |
 | `roles[].kind` | string | yes | One of `person`, `pet`, `product`, `location`. |
 | `roles[].name` | string |  | Who in the video, e.g. "the woman that attacks". Unset: named by its first image (needs one). At most 200 characters. |
 | `roles[].images` | string (URL)[] or null |  | At most 3 items. |
@@ -417,7 +417,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `preview_start` | number |  | Seconds, default 0; preview_start + 4 must fit the clip. At least 0. |
 | `engine` | string |  | Default "motion-prism" (Nodaro Motion Prism). "motion-pulse" (Nodaro Motion Pulse): 720p or 1080p only, no draft; its Full Quality is a new take. One of `motion-prism`, `motion-pulse`. |
 | `style` | string |  | "precise" (default) follows the clip exactly; "motion" follows the clip's movement and takes the looks from the photos, more freely than precise. Its price may differ: the quote shows it. A style an admin forced for the engine overrides this. One of `precise`, `motion`. |
-| `art_style` | string |  | An art style for a Flex run (style "motion") on Nodaro Motion Prism: a "style" picker catalog id (get_picker_catalog "style"), e.g. "pop-art". Line 1 of the prompt becomes the style's video wording. Nodaro Motion Pulse takes none. From 1 to 100 characters. |
+| `art_style` | string |  | An art style for a Flex run (style "motion") on Nodaro Motion Prism: a "style" picker catalog id (get_picker_catalog "style"), e.g. "pop-art". Line 1 of the prompt becomes the style's video wording. With no role images and no references it restyles the whole clip, where the engine takes style-only runs. Nodaro Motion Pulse takes none. From 1 to 100 characters. |
 | `motion_length` | string |  | motion-pulse only: cut the clip to whole seconds at its end (default) or start. One of `cut-end`, `cut-start`. |
 | `resolution` | string |  | Default "480p" (motion-pulse: "720p"; no 480p). One of `480p`, `720p`, `1080p`. |
 | `draft` | boolean |  | Render as a draft, 480p motion-prism only. Default true at 480p, false above. |

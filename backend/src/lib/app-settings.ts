@@ -7,6 +7,7 @@ import { NODARO_MOTION_PROMPT_PARTS_KEY, parseNodaroMotionPromptParts, type Noda
 import { NODARO_MOTION_MOTION_KEY, parseNodaroMotionMotion, type NodaroMotionMotion } from "./nodaro-motion-motion.js"
 import { NODARO_MOTION_STYLE_KEY, parseNodaroMotionStyle, type NodaroMotionStyle } from "./nodaro-motion-style.js"
 import { NODARO_MOTION_PROMPT_WORDING_KEY, parseNodaroMotionPromptWording, type NodaroMotionPromptWording } from "./nodaro-motion-prompt-wording.js"
+import { NODARO_MOTION_STYLE_ONLY_KEY, parseNodaroMotionStyleOnly, type NodaroMotionStyleOnly } from "./nodaro-motion-style-only.js"
 import { NODARO_MOTION_ADVANCED_KEY, parseNodaroMotionAdvanced, type NodaroMotionAdvanced } from "./nodaro-motion-advanced.js"
 import { NODARO_MOTION_STEPS_KEY, parseNodaroMotionSteps, type NodaroMotionSteps } from "./nodaro-motion-steps.js"
 import { NODARO_MOTION_PULSE_AUDIO_KEY, parseNodaroMotionPulseAudio, type CastSwapPulseAudio } from "./cast-swap-pulse-audio.js"
@@ -138,6 +139,13 @@ export interface AppSettings {
    */
   nodaro_motion_prompt_wording: NodaroMotionPromptWording | null
   /**
+   * Nodaro Motion's style-only setting per engine (nodaro-motion-style-only.ts),
+   * for direct style-only runs: each engine's path and engine-prompt step where
+   * an admin changed them. null = never saved (the original path, the template).
+   * Each engine's entry is validated on its own; an invalid one is dropped.
+   */
+  nodaro_motion_style_only: NodaroMotionStyleOnly | null
+  /**
    * Whether a Nodaro Motion page shows its Advanced options (Prepare
    * references and the pre-prompt; nodaro-motion-advanced.ts): one switch for
    * the whole page. null = never saved, or not a value this app knows: hidden.
@@ -206,7 +214,7 @@ async function refreshSettings(): Promise<AppSettings> {
   if (error) {
     console.error("[getAppSettings] Error fetching settings:", error.message)
     // Return defaults on error
-    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null, nodaro_motion_pulse_audio: null, nodaro_motion_prism_reference_audio: null, nodaro_motion_steps: null, nodaro_motion_style: null, nodaro_motion_prompt_wording: null, nodaro_motion_advanced: null, content_rights_required: false, rights_repeat_infringer_policy: DEFAULT_REPEAT_INFRINGER_POLICY }
+    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null, nodaro_motion_pulse_audio: null, nodaro_motion_prism_reference_audio: null, nodaro_motion_steps: null, nodaro_motion_style: null, nodaro_motion_prompt_wording: null, nodaro_motion_style_only: null, nodaro_motion_advanced: null, content_rights_required: false, rights_repeat_infringer_policy: DEFAULT_REPEAT_INFRINGER_POLICY }
     readFailures.add(fallback)
     return fallback
   }
@@ -236,6 +244,7 @@ async function refreshSettings(): Promise<AppSettings> {
     nodaro_motion_steps: null,
     nodaro_motion_style: null,
     nodaro_motion_prompt_wording: null,
+    nodaro_motion_style_only: null,
     nodaro_motion_advanced: null,
     content_rights_required: false,
     rights_repeat_infringer_policy: DEFAULT_REPEAT_INFRINGER_POLICY,
@@ -268,6 +277,10 @@ async function refreshSettings(): Promise<AppSettings> {
     }
     if (row.key === NODARO_MOTION_PROMPT_WORDING_KEY) {
       settings.nodaro_motion_prompt_wording = parseNodaroMotionPromptWording(row.value)
+      continue
+    }
+    if (row.key === NODARO_MOTION_STYLE_ONLY_KEY) {
+      settings.nodaro_motion_style_only = parseNodaroMotionStyleOnly(row.value)
       continue
     }
     if (row.key === NODARO_MOTION_ADVANCED_KEY) {

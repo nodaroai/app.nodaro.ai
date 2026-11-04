@@ -127,6 +127,15 @@ export interface PromptPartsRequest {
    * engine is asked exactly as before. A Precise prompt ignores it.
    */
   promptWording?: CastSwapPromptWording
+  /**
+   * A style-only run's set (a direct Prism Flex run with an art style and
+   * nothing to swap, on the "original" path): the engine answers that set's
+   * parts. Only ever `true`, only beside `style: "motion"` and a Flexible
+   * prompt style, and sent only to an engine that declares
+   * `castSwap.styleOnly` (`askPromptParts`); an engine without it would read
+   * the request as a plain Flex one.
+   */
+  styleOnly?: true
   hasAudio: boolean
   roles: unknown[]
   references?: { images: string[]; line: string }[]

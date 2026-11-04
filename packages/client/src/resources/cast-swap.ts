@@ -37,7 +37,8 @@ import type { NodaroClientCore } from "../core.js"
  *
  * Refusals (thrown as a `NodaroError` subclass; body `{ error: { code, message } }`), before
  * anything is charged: 400 `validation_error` (the body: no role with images,
- * no reference and no `prePrompt` or `postPrompt`, more roles of a kind
+ * no reference, no `prePrompt` or `postPrompt` and no art style (Flex on
+ * Nodaro Motion Prism), more roles of a kind
  * than allowed, more than 30 images in all, `draft: true` above 480p, a
  * `prePrompt` or `postPrompt` over 4,000 characters); on Nodaro Motion Pulse,
  * `draft_unsupported` (`draft: true`), `resolution_unsupported` (480p),
@@ -47,9 +48,9 @@ import type { NodaroClientCore } from "../core.js"
  * `invalid_role_mention` (also any `{role:N}` in a reference's `line`),
  * `unsafe_url`, `video_unreadable`, `clip_out_of_range` (4–30 s),
  * `preview_out_of_range`, `unnamed_role_needs_picture` (a role with no name
- * and no image), `no_roles_in_preview` (a preview with every role
- * `inPreview: false`, always refused even with a prompt, or with no role kept
- * in it that has images and no `prePrompt` or `postPrompt`), `prompt_too_long`
+ * and no image), `no_roles_in_preview` (a preview that would change nothing,
+ * judged on what it sends: no role kept in it with images, no fixed
+ * reference, no `prePrompt` or `postPrompt` and no art style), `prompt_too_long`
  * (the prompt would build too long: a `{role:N}` reads as the role's name when
  * it sends no images; Nodaro Motion Pulse's cap is 8,000 characters); 401; 402 `insufficient_credits` (`run()` only); 404
  * (a `sessionId` you may not use, `run()` only); 422 `job_blocked` (`run()`
@@ -114,9 +115,9 @@ export interface CastSwapRolePreviewSettings {
   /**
    * `false` leaves this role out of the preview: its reference images are not
    * sent, not prepared and not charged, and a `{role:N}` naming it reads as its
-   * `previewName`, else its `name`. Default `true`. A preview with every role
-   * left out (always refused, even with a prompt), or with no role kept in it
-   * that has images and no pre / post prompt, answers 400 `no_roles_in_preview`.
+   * `previewName`, else its `name`. Default `true`. A preview that would
+   * change nothing (no role kept in it with images, no fixed reference, no pre
+   * or post prompt and no art style) answers 400 `no_roles_in_preview`.
    */
   inPreview?: boolean
 }
@@ -241,7 +242,9 @@ export interface CastSwapParams {
    * Who and what to swap: at most 6 person roles, 1 location role, 3 pet roles
    * and 3 product roles, with at most 30 images in all. A role with no images
    * is skipped (that subject or place stays as in the video). At least one role
-   * with images, or a `prePrompt` or `postPrompt`, is required.
+   * with images, a fixed reference, a `prePrompt` or `postPrompt`, or an art
+   * style (`direction`, Flex on Nodaro Motion Prism) is required. With an art
+   * style and nothing to swap, a run restyles the whole clip (see `direction`).
    */
   roles: CastSwapRole[]
   /**
@@ -290,8 +293,25 @@ export interface CastSwapParams {
    * picker catalog (the same ids an image's `direction.style` takes); the
    * platform words it. Refused with 400 `unknown_art_style` (not in the
    * catalog), `art_style_not_supported` (a saved moodboard, `moodboard:…`)
-   * or `art_style_needs_flex` (Precise, a trend run). It never changes the
-   * price. The job records it in `input_data.direction`.
+   * or `art_style_needs_flex` (a request with no `style: "motion"`, a trend
+   * run, or a Flex run whose prompt is made Precise by Nodaro's setting for how
+   * Flex runs are prepared; a forced Precise instead drops the art style, see
+   * {@link CastSwapStyleChoice.styleOnly}), and on Nodaro Motion Pulse with
+   * `art_style_needs_prism`. The estimate (sent with the same
+   * `direction`) shows the price.
+   *
+   * Style only: with no role with images and no fixed reference, the art style
+   * alone is the run's change (a pre or post prompt is still added). It
+   * restyles the whole clip, keeping the people, places, motion and sound, and
+   * is charged for what it runs (the estimate shows it; no clip-preparation
+   * `privacy` part). By default a black-and-white art style comes out
+   * monochrome. Nodaro may run it the way other art-style runs run instead,
+   * priced as those are and not made monochrome.
+   * A preview takes its full run's path. Runs this way only where
+   * {@link CastSwapResource.styleChoice} answers `styleOnly` true for the
+   * engine; elsewhere on Nodaro Motion Prism an art style alone is refused, and
+   * one with a pre or post prompt runs as any other art-style run. The job
+   * records it in `input_data.direction`.
    */
   direction?: { style: string }
   /**
@@ -372,6 +392,8 @@ export interface CastSwapEstimate {
    *   (`privacyCredits`).
    * - `prompt`: the prompt written for the run by a language model, when
    *   Nodaro's setting for the engine does so (absent otherwise).
+   * - `referenceAudio`: preparing the clip's sound for the video model, when
+   *   Nodaro's setting for the engine runs that step (absent otherwise).
    *
    * `motion` and `motionExpected` are alternatives, so the parts sum to more
    * than either total: read `totalCredits` and `expectedCredits`, never the
@@ -386,6 +408,7 @@ export interface CastSwapEstimate {
     motionExpected?: number
     privacy?: number
     prompt?: number
+    referenceAudio?: number
   } & Record<string, number>
   /**
    * The extra credits charged only if the video model refuses the clip and
@@ -529,6 +552,17 @@ export type CastSwapStyleChoiceOption = "user" | "precise" | "flex"
 /** What {@link CastSwapResource.styleChoice} answers: every engine's choice, by its public id. */
 export interface CastSwapStyleChoice {
   engines: Record<CastSwapEngine, CastSwapStyleChoiceOption>
+  /**
+   * Per engine, whether the engine takes style-only runs: a Flex run
+   * (`style: "motion"`) with an art style (`direction`) and nothing to swap
+   * (no role with images, no fixed reference). It follows the engine alone, so
+   * read it with {@link engines}: an engine answered `"precise"` drops the art
+   * style, so such a request is refused as `validation_error` and, with anything
+   * else to change, runs and is quoted as Precise. Nodaro Motion Pulse is always
+   * `false` (it takes no art style). Absent from an older server, and
+   * an engine missing from it: `false`.
+   */
+  styleOnly?: Partial<Record<CastSwapEngine, boolean>>
 }
 
 export class CastSwapResource {
@@ -552,8 +586,13 @@ export class CastSwapResource {
    * Whether people choose a direct run's style, per engine
    * (`GET /v1/cast-swap/style-choice`): `"user"` = show a Style control;
    * `"precise"` / `"flex"` = an admin forced that style for the engine, so a
-   * run's `style` is overridden and the control is best hidden. Public (no
-   * sign-in needed); the answer may be up to a minute old.
+   * run's `style` is overridden and the control is best hidden. Its
+   * `styleOnly` says, per engine, whether a Flex run with an art style and
+   * nothing to swap restyles the whole clip there. Where it is not `true`
+   * (absent, or an engine missing from it, included) on Nodaro Motion Prism, an
+   * art style alone is refused, and one with a pre or post prompt runs as any
+   * other art-style run.
+   * Public (no sign-in needed); the answer may be up to a minute old.
    */
   styleChoice(): Promise<CastSwapStyleChoice> {
     return this.client.request("GET", "/v1/cast-swap/style-choice")

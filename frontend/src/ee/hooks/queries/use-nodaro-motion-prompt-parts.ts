@@ -16,7 +16,7 @@ import {
   saveNodaroMotionPromptParts,
   type AdminTrendEnginePrompt,
   type CastSwapPromptWordingId,
-  type CastSwapStyleId,
+  type NodaroMotionPromptPartsKey,
   type NodaroMotionEngine,
   type PromptPartTexts,
 } from "@/lib/api"
@@ -79,7 +79,7 @@ export function useSaveNodaroMotionPromptParts() {
 }
 
 /**
- * One engine and style's parts and assembled prompt with `overrides` (the
+ * One engine and key's (a style, or `styleOnly`) parts and assembled prompt with `overrides` (the
  * screen's edits). `shape`: what else decides the answer server-side (the
  * saved Motion setting's entry, as JSON), so a change of it asks again.
  * `promptWording`: the Flex wording to preview (the screen's choice; left
@@ -87,7 +87,7 @@ export function useSaveNodaroMotionPromptParts() {
  */
 export function useNodaroMotionPromptPreview(
   engine: NodaroMotionEngine,
-  style: CastSwapStyleId,
+  style: NodaroMotionPromptPartsKey,
   overrides: PromptPartTexts,
   shape = "",
   enabled = true,
