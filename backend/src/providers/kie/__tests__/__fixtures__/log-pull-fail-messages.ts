@@ -130,4 +130,12 @@ export const GENERIC_4XX_NO_REASON: readonly { readonly internalMessage: string;
     internalMessage: 'createTask error (code 422): {"code":422,"msg":"Generation failed. Please try again later.","data":null}',
     status: 422,
   },
+  {
+    internalMessage: 'createTask failed: 422 - {"code":422,"msg":"Generation failed. Please try again later.","data":null}',
+    status: 422,
+  },
+  // Production logs, October 2026: KIE's own failures, which name no fault of the request.
+  { internalMessage: "task failed: [422] Something went wrong. Please try again, or change your input files or prompt.", status: "422" },
+  { internalMessage: "task failed: [422] generate playground failed, task id is blank", status: "422" },
+  { internalMessage: 'createTask error (code 422): {"code":422,"msg":"record result error","data":null}', status: 422 },
 ]

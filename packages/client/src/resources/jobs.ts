@@ -110,6 +110,17 @@ export type QueueTimeoutHint = {
 }
 
 /**
+ * The provider refused the request as it was sent, naming a fault of it (a
+ * setting, a file's format or size, the prompt's length). The same request is
+ * refused the same way, so do not run it again unchanged: change the input
+ * images, the video, the prompt or the settings. Not a content-policy block. On a
+ * job made of steps (a Nodaro Motion or trend run), one step's refusal.
+ */
+export type RequestRefusedHint = {
+  kind: "request-refused"
+}
+
+/**
  * A job's `jobs.error_hint` (migration 376) — a user-safe, machine-readable
  * failure verdict, so a caller can act on it without parsing `error_message`
  * prose. One column, several verdict sources; `kind` is the discriminant.
@@ -120,7 +131,7 @@ export type QueueTimeoutHint = {
  * pasted here verbatim in the same change, with a changeset.
  * `packages/client/dist/index.d.ts` is REBUILT, never hand-edited.
  */
-export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint | QueueTimeoutHint
+export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint | QueueTimeoutHint | RequestRefusedHint
 
 /**
  * The billing lifecycle of a job's credit reservation — `usage_logs.status`

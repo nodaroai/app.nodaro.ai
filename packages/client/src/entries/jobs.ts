@@ -27,6 +27,7 @@ export type {
   CreditsHint,
   InputRefusedHint,
   QueueTimeoutHint,
+  RequestRefusedHint,
   CreditStatus,
   // The `queue` field of a job or workflow-run read, present while it waits for a slot.
   JobQueueInfo,

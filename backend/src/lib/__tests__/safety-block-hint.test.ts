@@ -29,6 +29,8 @@ import {
   inputRefusedHint,
   policyBlockHint,
   queueTimeoutHintOf,
+  refusalHintFor,
+  requestRefusedOf,
   safetyBlockOf,
   type CreditsHint,
   type ErrorHint,
@@ -87,6 +89,8 @@ describe("ErrorHint is a discriminated union on `kind`", () => {
           return `input:${hint.subject}`
         case "queue-timeout":
           return `queue:${hint.reason}:${hint.waitedMinutes}`
+        case "request-refused":
+          return "request"
         default: {
           const exhaustive: never = hint
           return exhaustive
@@ -98,6 +102,7 @@ describe("ErrorHint is a discriminated union on `kind`", () => {
     expect(describeHint({ kind: "credits", code: "insufficient_credits" })).toBe("credits:insufficient_credits")
     expect(describeHint(inputRefusedHint())).toBe("input:input_video")
     expect(describeHint({ kind: "queue-timeout", reason: "timeout", waitedMinutes: 120 })).toBe("queue:timeout:120")
+    expect(describeHint({ kind: "request-refused" })).toBe("request")
   })
 
   it("keeps errorHintFor producing the safety arm (migration 376 readers unchanged)", () => {
@@ -191,6 +196,34 @@ describe("safetyBlockOf never throws", () => {
   ])("a throwing %s reads as not a block", (_label, make) => {
     expect(() => safetyBlockOf(make(), "gpt-image-2")).not.toThrow()
     expect(safetyBlockOf(make(), "gpt-image-2")).toBeNull()
+  })
+})
+
+describe("a request the provider refused, read off the thrown error", () => {
+  const refused = () => Object.assign(new Error("x"), { requestRefused: true })
+
+  it("reads the flag off the error and off its cause chain", () => {
+    expect(requestRefusedOf(refused())).toBe(true)
+    expect(requestRefusedOf(new Error("outer", { cause: refused() }))).toBe(true)
+  })
+
+  it("a flag that is not exactly true, or no flag, is no refusal", () => {
+    expect(requestRefusedOf(new Error("x"))).toBe(false)
+    expect(requestRefusedOf(Object.assign(new Error("x"), { requestRefused: "yes" }))).toBe(false)
+    expect(requestRefusedOf(Object.assign(new Error("x"), { requestRefused: false }))).toBe(false)
+    expect(requestRefusedOf(null)).toBe(false)
+  })
+
+  it("never throws", () => {
+    expect(requestRefusedOf(Object.defineProperty(new Error("x"), "requestRefused", { get() { throw new Error("boom") } }))).toBe(false)
+  })
+
+  it("files the hint with no other field, under a content block and a refused input video", () => {
+    expect(refusalHintFor(null, false, false, false, true)).toEqual({ kind: "request-refused" })
+    expect(refusalHintFor(null, false, false, false, false)).toBeNull()
+    expect(refusalHintFor(null, false, false)).toBeNull()
+    expect(refusalHintFor(null, false, true, false, true)).toEqual({ kind: "input-refused", subject: "input_video" })
+    expect(refusalHintFor({ class: "safety", maxAttempts: 2 }, true, false, false, true)).toEqual({ kind: "safety-block", class: "safety", retried: true })
   })
 })
 

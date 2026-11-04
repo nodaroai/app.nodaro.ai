@@ -24,6 +24,7 @@ import {
   jobModelIdOf,
   inputVideoRefusedOf,
   inputImageRefusedOf,
+  requestRefusedOf,
   sentVideoInput,
   creditsHintOf,
   queueTimeoutHintOf,
@@ -711,9 +712,11 @@ export function createVideoWorker() {
         // class when there is one), so a caller can send a different clip.
         // Likewise an input image refused as possibly copyrighted
         // (`subject: "input_image"`), so a caller can send a different picture.
+        // Likewise a request the provider refused as it was sent, so a caller
+        // knows the same inputs fail again.
         // Shared with the reconcile path (lib/reconcile/kie.ts).
         const errorHint =
-          refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err)) ?? creditsHintOf(err) ?? queueTimeoutHintOf(err)
+          refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err), requestRefusedOf(err)) ?? creditsHintOf(err) ?? queueTimeoutHintOf(err)
         const flipped = await markJobFailed(jobId, {
           error_message: errorMessage,
           // W0: the provider's own error, redacted — the sanitized message
@@ -722,7 +725,7 @@ export function createVideoWorker() {
           // Migration 376: a user-safe, machine-readable hint the editor/MCP
           // can act on (offer the fallback model, say "top up") without
           // parsing prose. A classified content-policy block, else a
-          // refused input video, else a handler's credits refusal (`failureHint` on the error or its
+          // refused input video, else a refused request, else a handler's credits refusal (`failureHint` on the error or its
           // cause chain — a plugin's child job refused for credits), else a
           // wait for a concurrency slot that ran out; NULL for anything
           // else. The refund below is unchanged either way.

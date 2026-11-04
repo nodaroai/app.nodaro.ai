@@ -1630,6 +1630,18 @@ content-policy class (its message is about the file, not a policy):
 Treat it like any other failure — no fallback model is offered — except that
 the input to change is known: send a different clip.
 
+Or, when the provider refused the request as it was sent, naming a fault of it
+(a setting, a file's format or size, the prompt's length):
+
+```json
+{ "kind": "request-refused" }
+```
+
+The same request is refused the same way, so do not run it again unchanged:
+change the input images, the video, the prompt or the settings. It is not a
+content-policy block. On a job made of steps (a Nodaro Motion or trend run) this
+is one step's refusal.
+
 Or, when the job never got one of your account's concurrency slots, so it did
 not run:
 
@@ -5095,7 +5107,10 @@ A run in `GET /v1/trends/runs` that did not finish has
 (the job's own failure text is never passed on), and the code is
 `safety-block` or `policy-block` when the job was blocked, `credits` when the
 run ran out of credits partway (it was refunded: top up, then run it again),
-else `cancelled` or `failed`. The message stays the fixed sentence for every
+`input-refused` when the video provider refused the trend's own clip,
+`request-refused` when it refused the run as it was sent (the same run is refused
+again: change the images or the settings), else `cancelled` or `failed`. The
+message stays the fixed sentence for every
 code, `credits` included — branch on the code, not the text. A run that did
 not fail or get cancelled has `error: null`.
 

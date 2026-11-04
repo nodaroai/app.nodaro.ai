@@ -231,7 +231,7 @@ export function outputVideo(output: unknown): { videoUrl: string | null; posterU
  * the hidden data.
  */
 const RUN_FAILED_MESSAGE = "This run didn't finish."
-const PUBLIC_FAILURE_KINDS: ReadonlySet<string> = new Set(["safety-block", "policy-block", "credits"])
+const PUBLIC_FAILURE_KINDS: ReadonlySet<string> = new Set(["safety-block", "policy-block", "credits", "input-refused", "request-refused"])
 
 export type RunAudience = "public" | "admin"
 

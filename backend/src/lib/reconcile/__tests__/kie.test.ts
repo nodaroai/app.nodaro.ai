@@ -582,6 +582,17 @@ describe("reconcileKieJob", () => {
       expect(failedUpdate()).not.toHaveProperty("error_hint")
     })
 
+    it("a refused request (a real KIE error's flag) → the request-refused hint, whether or not the job sent a video", async () => {
+      const refused = Object.assign(
+        new mocks.FakeKieError("Generation failed: the provider rejected these settings for this model.", true, "task failed: [400] Unsupported file format."),
+        { requestRefused: true },
+      )
+      mocks.pollKieTaskMock.mockRejectedValueOnce(refused)
+      await reconcileKieJob(videoRow({ provider: "kling-4", referenceVideoUrls: ["https://cdn.example/src.mp4"] }))
+      expect(failedUpdate().error_hint).toEqual({ kind: "request-refused" })
+      expect(mocks.refundMock).toHaveBeenCalledWith("j-refused")
+    })
+
     it("a failure that is not a refusal → no hint, even on a job that sent a video", async () => {
       mocks.pollKieTaskMock.mockRejectedValueOnce(await kieTaskFailure("internal error, please retry"))
       await reconcileKieJob(videoRow({ provider: "seedance-2", referenceVideoUrls: ["https://cdn.example/src.mp4"] }))

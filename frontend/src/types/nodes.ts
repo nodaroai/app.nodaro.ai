@@ -290,6 +290,15 @@ export interface QueueTimeoutHint {
 }
 
 /**
+ * The provider refused the request as it was sent, naming a fault of it: the
+ * same inputs are refused again. Shown like any unclassified failure. Mirrors
+ * `RequestRefusedHint` in `backend/src/lib/safety-block.ts`.
+ */
+export interface RequestRefusedHint {
+  readonly kind: "request-refused"
+}
+
+/**
  * Structured hint attached to a job's failure. One jsonb column, several verdict
  * sources — a DISCRIMINATED UNION on `kind`, which was already the
  * discriminant every reader tested, so widening it breaks none of them.
@@ -300,7 +309,7 @@ export interface QueueTimeoutHint {
  * `backend/src/lib/safety-block.ts`'s `ErrorHint`; update both in the same
  * change (that file's comment says the same thing).
  */
-export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint | QueueTimeoutHint
+export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint | QueueTimeoutHint | RequestRefusedHint
 
 /** Named region from a grok-2 segment map (RefineRegionsSection). */
 export interface GrokSegmentInfo {

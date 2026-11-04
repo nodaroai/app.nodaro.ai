@@ -394,7 +394,10 @@ export interface TrendRun {
    * Why a failed or cancelled run did not finish; `null` otherwise. `code` is
    * `safety-block` or `policy-block` when the job was blocked, `credits` when
    * it ran out of credits partway (it was refunded: ask the person to top up,
-   * then run it again), else `cancelled` or `failed`. `message` is the same
+   * then run it again), `input-refused` when the video provider refused the
+   * trend's own clip, `request-refused` when it refused the run as it was sent
+   * (the same run is refused again: change the images or the settings), else
+   * `cancelled` or `failed`. `message` is the same
    * fixed sentence for every code — branch on `code`, not on the text.
    */
   error: { code?: string; message: string } | null
