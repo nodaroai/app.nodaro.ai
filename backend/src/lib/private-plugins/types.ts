@@ -1463,7 +1463,7 @@ export type PluginJobErrorHint =
        * The provider refused the request as it was sent, naming a fault of it
        * (its status was 400 or 422): the same inputs are refused again, so only
        * a change to them can succeed. Not a content block. `subject`: its
-       * words name the input video (its length, its size). ADDITIVE-OPTIONAL.
+       * words name the input video as the fault. ADDITIVE-OPTIONAL.
        */
       kind: "request-refused"
       subject?: "input_video"

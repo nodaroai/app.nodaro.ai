@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 const store = { nodes: [] as unknown[], edges: [] as unknown[] }
 vi.mock("@/hooks/use-workflow-store", () => ({
@@ -24,6 +24,7 @@ vi.mock("sonner", () => ({ toast: toastApi }))
 import { CHOOSE_PART_TOAST_MS, choosePartMessage, ensureVideoLinksBeforeRun, videoLinkAudioNodesFeeding, videoLinkNodesFeeding } from "../video-link-run-gate"
 import { FOCUS_NODES_EVENT } from "@/lib/canvas-focus-event"
 import { translate } from "@/lib/i18n"
+import { clearNodeLinkRights, tickNodeLinkRights } from "@/lib/node-link-rights"
 
 const YT = "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
 const FILE = "https://cdn.nodaro.ai/videos/yt-1.mp4"
@@ -139,6 +140,37 @@ describe("videoLinkNodesFeeding", () => {
 })
 
 describe("ensureVideoLinksBeforeRun", () => {
+  describe("a node whose own link the run hands on (the Dubbing node's Source link)", () => {
+    const LINK = "https://example.com/talks/keynote"
+    afterEach(() => clearNodeLinkRights())
+
+    it("stops the run before anything is fetched when its box is not ticked, and names the node", async () => {
+      store.nodes = [link("src"), node("dub", "dubbing", { label: "French dub", sourceUrl: LINK }), node("run")]
+      store.edges = [edge("src", "run")]
+      const setIsRunning = vi.fn()
+      expect(await ensureVideoLinksBeforeRun(["dub", "run"], setIsRunning)).toBe(false)
+      expect(toastApi.error).toHaveBeenCalledWith(translate("en", "run.videoLinkConfirm", { label: "French dub" }), expect.anything())
+      expect(ensureVideoLinksDownloaded).not.toHaveBeenCalled()
+      expect(setIsRunning).not.toHaveBeenCalled()
+    })
+
+    it("lets the run go once its box is ticked for that link, and not for another", async () => {
+      store.nodes = [node("dub", "dubbing", { sourceUrl: LINK })]
+      tickNodeLinkRights("dub", "https://example.com/another")
+      expect(await ensureVideoLinksBeforeRun(["dub"], vi.fn())).toBe(false)
+      tickNodeLinkRights("dub", LINK)
+      vi.clearAllMocks()
+      expect(await ensureVideoLinksBeforeRun(["dub"], vi.fn())).toBe(true)
+      expect(toastApi.error).not.toHaveBeenCalled()
+    })
+
+    it("a Dubbing node that is not about to run, or has no link of its own, stops nothing", async () => {
+      store.nodes = [node("dub", "dubbing", { sourceUrl: LINK }), node("wired", "dubbing"), node("run")]
+      expect(await ensureVideoLinksBeforeRun(["run", "wired"], vi.fn())).toBe(true)
+      expect(toastApi.error).not.toHaveBeenCalled()
+    })
+  })
+
   it("costs nothing when no link needs fetching — no toast, no running flag, no call", async () => {
     store.nodes = [node("run")]
     const setIsRunning = vi.fn()

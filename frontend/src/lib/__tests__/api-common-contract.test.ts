@@ -503,6 +503,24 @@ describe("dubbingApi", () => {
     })
   })
 
+  it("a source link carries its content rights confirmation", async () => {
+    sessionWith("tok-dub")
+    const mock = mockFetchJson({ jobId: "jdub3" })
+    vi.stubGlobal("fetch", mock)
+
+    await dubbingApi({ sourceUrl: "https://example.com/talk" }, "fr", undefined, undefined, undefined, { confirmationId: "conf-1" })
+    expect(parseBody(mock)).toEqual({ sourceUrl: "https://example.com/talk", targetLanguage: "fr", confirmationId: "conf-1" })
+  })
+
+  it("a wired file never carries a confirmation: it imports nothing", async () => {
+    sessionWith("tok-dub")
+    const mock = mockFetchJson({ jobId: "jdub4" })
+    vi.stubGlobal("fetch", mock)
+
+    await dubbingApi({ videoUrl: "http://clip.mp4" }, "fr", undefined, undefined, undefined, { confirmationId: "conf-2" })
+    expect(parseBody(mock)).toEqual({ videoUrl: "http://clip.mp4", targetLanguage: "fr" })
+  })
+
   it("POSTs a bare sourceUrl (link mode)", async () => {
     sessionWith("tok-dub")
     const mock = mockFetchJson({ jobId: "jdub3" })

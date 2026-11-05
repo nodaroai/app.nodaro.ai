@@ -318,6 +318,7 @@ describe("a refused request that names the input video says so", () => {
     ['createTask error (code 422): {"code":422,"msg":"The total duration of the video cannot exceed 15 seconds","data":null}', 422],
     ['createTask error (code 422): {"code":422,"msg":"reference_video_urls duration must be between 1 and 15 seconds","data":null}', 422],
     ["task failed: [400] Each reference video must be between 2 and 30 seconds", 400],
+    ["task failed: [400] No valid characters detected in the video", 400],
     ["task failed: [400] video_1 duration must be between 2 and 30 seconds, got 45", 400],
     ["task failed: [400] content[1].video_url: invalid param: video duration 52838 ms, expected [2000, 15000] ms", 400],
     ["task failed: [400] Invalid parameters: the 'duration' parameter must be -1, and the input video duration must be between 4 and 30 seconds", 400],

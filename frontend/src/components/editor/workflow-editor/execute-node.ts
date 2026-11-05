@@ -271,6 +271,7 @@ import {
   defaultImageModel
 } from "@nodaro/shared/model-catalog";
 import { tx } from "@/lib/i18n";
+import { confirmNodeLink, hasOwnLinkBox, isNodeLinkRightsTicked } from "@/lib/node-link-rights";
 import { previewSingleRunRefusal } from "./preview-gate";
 import { completeAsPassThrough } from "./pass-through";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
@@ -4005,6 +4006,17 @@ function executeNodeCore(
       toast.error(nodeRunError(d.label, "nodeRun.noTargetLanguageSelected"));
       return Promise.reject(new Error("No target language"));
     }
+    // The dubbing service fetches a Source link itself: an import of that link,
+    // made under the box ticked for it in the node's settings
+    // (`node-link-rights.ts`) and confirmed for this request right before it is
+    // sent. The pre-run gate stops a run for an unticked box first. A node of a
+    // sub-workflow has no box on this canvas (`hasOwnLinkBox`): it sends no
+    // confirmation, and the server answers it as any request without one.
+    const boxedLink = sourceUrl && hasOwnLinkBox(node) ? sourceUrl : undefined;
+    if (boxedLink && !isNodeLinkRightsTicked(node.id, boxedLink)) {
+      toast.error(tx("run.videoLinkConfirm", { label: d.label || "Dubbing" }));
+      return Promise.reject(new Error("Content rights not confirmed"));
+    }
     setUserPromptTemplate(undefined);
 
     // Switching modes (audio↔video) drops stale results of the other media
@@ -4023,8 +4035,14 @@ function executeNodeCore(
       });
     }
 
-    const callApi = () =>
-      dubbingApi(
+    const callApi = async () => {
+      const confirmationId = boxedLink ? await confirmNodeLink(node.id, boxedLink) : undefined;
+      // Re-apply sync after the confirmation's await so dubbingApi's body build
+      // consumes this node's flags, not another parallel executeNode's.
+      setForcePrivate(forcePrivate);
+      setCurrentNodeId(node.id);
+      setUserPromptTemplate(undefined);
+      return dubbingApi(
         { audioUrl, videoUrl, sourceUrl },
         d.targetLanguage,
         ctx.userId,
@@ -4039,8 +4057,10 @@ function executeNodeCore(
           useProfanityFilter: d.useProfanityFilter,
           targetAccent: d.targetAccent,
           watermark: d.watermark,
+          ...(confirmationId ? { confirmationId } : {}),
         },
       );
+    };
 
     if (targetIsVideo) {
       return runProcessingNode(

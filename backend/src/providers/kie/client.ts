@@ -92,8 +92,8 @@ export class KieError extends Error {
    *  job (a plugin's run) can say the same; this flag never changes the
    *  user-facing message. */
   public readonly requestRefused: boolean
-  /** What a refused request's words name, when they name the input video (its
-   *  length, its size): the input that has to change. Read duck-typed beside
+  /** What a refused request's words name, when they name the input video as the
+   *  fault: the input that has to change. Read duck-typed beside
    *  `requestRefused`. Null otherwise. */
   public readonly requestRefusedSubject: "input_video" | null
 
@@ -173,10 +173,11 @@ const NO_FAULT_PROVIDER_FAILURE_RE =
 const MEDIA_LOAD_FAILED_RE =
   /\b(?:upload|image fetch) failed\b|\bfile processing failed\b.*\b(?:check the url|asset link|re-?upload)\b/i
 
-/** A refused request's words naming the input video's length or size. The
- *  field's name alone is no limit on the clip ("video_url is required"). */
+/** A refused request's words naming the input video as the fault: its length, its
+ *  size, or no character found in it. The field's name alone is no fault of the
+ *  clip ("video_url is required"). */
 const REFUSED_INPUT_VIDEO_RE =
-  /video_urls?\b[^.]*\b(?:duration|length|long|size|seconds)\b|\bvideo_\d+ duration\b|\bduration of the video\b|\b(?:input|reference) video (?:duration|must)\b|\bvideo pixel count\b/i
+  /video_urls?\b[^.]*\b(?:duration|length|long|size|seconds)\b|\bvideo_\d+ duration\b|\bduration of the video\b|\b(?:input|reference) video (?:duration|must)\b|\bvideo pixel count\b|\bno valid characters detected in the video\b/i
 
 /** The provider's own words inside one of our wrapped internal messages:
  *  `task failed: [400] <failMsg>` (pollKieTask), or

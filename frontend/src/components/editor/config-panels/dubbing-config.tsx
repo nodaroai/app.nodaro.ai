@@ -16,12 +16,18 @@ import {
 } from "@/components/ui/select"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 import { useT } from "@/lib/i18n"
+import { tickNodeLinkRights, untickNodeLinkRights, useNodeLinkRightsTicked } from "@/lib/node-link-rights"
+import { RightsDeclarationBox } from "@/components/content-rights/rights-declaration-box"
 import type { DubbingData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 
-export function DubbingConfig({ data, onUpdate }: ConfigProps<DubbingData>) {
+export function DubbingConfig({ data, onUpdate, nodeId }: ConfigProps<DubbingData> & { readonly nodeId?: string | null }) {
   const localizeOption = useLocalizeOptionLabel()
   const t = useT()
+  // The dubbing service fetches the Source link itself: an import of that
+  // link, confirmed under this box (session state, `node-link-rights.ts`).
+  const sourceLink = data.sourceUrl?.trim() ?? ""
+  const rightsTicked = useNodeLinkRightsTicked(nodeId ?? "", sourceLink)
   return (
     <div className="flex flex-col gap-3">
       <div>
@@ -61,9 +67,18 @@ export function DubbingConfig({ data, onUpdate }: ConfigProps<DubbingData>) {
           type="url"
           value={data.sourceUrl ?? ""}
           onChange={(e) => onUpdate({ sourceUrl: e.target.value || undefined })}
-          placeholder="https://youtube.com/watch?v=..."
+          placeholder="https://…"
         />
         <p className="text-[11px] text-muted-foreground mt-1">{t("audiocfg.hintDubSourceUrl")}</p>
+        {nodeId && sourceLink && (
+          <div className="mt-2">
+            <RightsDeclarationBox
+              checked={rightsTicked}
+              onCheckedChange={(checked) => (checked ? tickNodeLinkRights(nodeId, sourceLink) : untickNodeLinkRights(nodeId))}
+              textClass="text-[11px]"
+            />
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-2">

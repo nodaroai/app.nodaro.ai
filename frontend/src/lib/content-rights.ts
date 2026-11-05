@@ -13,6 +13,7 @@
 import { useEffect, useSyncExternalStore } from "react"
 import type { ContentRightsConfirmation, ContentRightsDeclaration } from "@nodaro/sdk/content-rights"
 import { nodaroClient } from "@/lib/nodaro-client"
+import { declarationChanged } from "@/lib/declaration-changes"
 
 export type RightsDeclarationState =
   | { readonly status: "loading" }
@@ -32,6 +33,8 @@ const LOADING: RightsDeclarationState = { status: "loading" }
 let state: RightsDeclarationState = LOADING
 let asked = false
 let inflight: Promise<ContentRightsDeclaration> | null = null
+/** The version last read: a read that finds another one means every box was ticked under replaced text. */
+let heldVersion: number | null = null
 const listeners = new Set<() => void>()
 
 function publish(next: RightsDeclarationState): void {
@@ -49,7 +52,12 @@ export function loadDeclaration(): Promise<ContentRightsDeclaration> {
     (declaration) => {
       if (inflight === request) {
         inflight = null
+        const replaced = heldVersion !== null && heldVersion !== declaration.version
+        heldVersion = declaration.version
         publish({ status: "ready", declaration })
+        // Whoever read it again (a stale confirmation, the Settings card's stale
+        // answer), every box on the page was ticked under the text it replaces.
+        if (replaced) declarationChanged()
       }
       return declaration
     },
@@ -80,8 +88,9 @@ function isStale(err: unknown): boolean {
  * Records that the person confirmed the declaration, as read, for `url`, and
  * answers the confirmation (its `id` is what a download carries; `expiresAt`
  * is when it stops opening one). Called once per download, by the download. A
- * changed declaration is read again and thrown as `DeclarationChangedError`,
- * so the caller unticks the box.
+ * changed declaration is read again, every box on the page is unticked
+ * (`declaration-changes.ts`: each was ticked under the old text), and it is
+ * thrown as `DeclarationChangedError`.
  */
 export async function confirmLink(url: string): Promise<ContentRightsConfirmation> {
   const declaration = await loadDeclaration()
@@ -90,6 +99,7 @@ export async function confirmLink(url: string): Promise<ContentRightsConfirmatio
   } catch (err) {
     if (!isStale(err)) throw err
     reloadDeclaration()
+    declarationChanged()
     throw new DeclarationChangedError()
   }
 }
@@ -116,5 +126,6 @@ export function __resetContentRightsForTests(): void {
   state = LOADING
   asked = false
   inflight = null
+  heldVersion = null
   listeners.clear()
 }

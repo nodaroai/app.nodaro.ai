@@ -27,6 +27,7 @@ import { previewRunnable } from "./preview-gate"
 import type { UgcRunPriced } from "./ugc-run-estimate"
 import { usecaseRenderFinalRun } from "./use-case-render-final-set"
 import { ensureVideoLinksBeforeRun } from "./video-link-run-gate"
+import { withRunLinkConfirmations } from "./run-link-confirmations"
 import {
   attachToRunningExecution,
   checkRunBalance,
@@ -132,8 +133,9 @@ export async function runUseCaseRenderFinal(
   toast.info(tx("renderFinal.toastFinal"), { description: tx("run.nodesToRun", { count: executableNodes.length }) })
   try {
     const idempotencyKey = generateIdempotencyKey()
+    const inputOverrides = await withRunLinkConfirmations([...run.runSet], run.overrides)
     const result = await withDedupRaceRetry(() =>
-      runWorkflow(workflowId, [...run.runSet], idempotencyKey, { inputOverrides: run.overrides }),
+      runWorkflow(workflowId, [...run.runSet], idempotencyKey, { inputOverrides }),
     )
     onExecutionStarted?.(result.executionId)
     streamBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded)

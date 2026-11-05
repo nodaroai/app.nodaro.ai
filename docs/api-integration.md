@@ -1637,8 +1637,9 @@ Or, when the provider refused the request as it was sent, naming a fault of it
 { "kind": "request-refused", "subject": "input_video" }
 ```
 
-`subject` is there only when the provider's words name the input video (its
-length or size), so a different clip is what can change.
+`subject` is there only when the provider's words name the input video as the
+fault (its length or size, or no character found in it), so a different clip is
+what can change.
 
 The same request is refused the same way, so do not run it again unchanged:
 change the input images, the video, the prompt or the settings. It is not a
@@ -5116,6 +5117,9 @@ again: change the images or the settings), else `cancelled` or `failed`. The
 message stays the fixed sentence for every
 code, `credits` included — branch on the code, not the text. A run that did
 not fail or get cancelled has `error: null`.
+A Full Quality version the provider refused, or blocked for a copyright or a
+likeness, also carries `refused: true`: another try fails the same way, and
+deleting it offers Full Quality again.
 
 A run's `example` is the example whose pictures filled its empty optional
 slots, numbered as the trend page listed its examples for the version the run
@@ -5145,7 +5149,8 @@ try failed or was cancelled and the draft was tried again, the older tries are
 left out of `GET /v1/trends/runs` (with or without `?trend=`), and
 `GET /v1/trends/runs/:jobId` still reads one by its id. The draft's
 `fullQuality` is only a pointer to that newest try (`{ jobId, status }`, with
-`refused: true` when the provider refused it, so another try fails the same way, or
+`refused: true` when the provider refused it, or blocked it for a copyright or a
+likeness, so another try fails the same way, or
 `null` when none was started): its video and charge are read from its own run,
 never from the draft.
 
@@ -5318,6 +5323,19 @@ Video URL node), or from the account's standing authorization for a run
 started through a key or an agent. A repeated node dubs its one link in every
 iteration, all under that one confirmation for that run. An `audioUrl` or
 `videoUrl` is a media input like any node's: the server fetches it as a file.
+In the editor, the Dubbing node shows the content rights box under its Source
+link: a run stops until it is ticked for that link, and each run confirms the
+link anew (a run of the node in the page sends `confirmationId` with its
+request; a run on the server carries the node's `rightsConfirmationId`). The
+tick covers the link it was given for: a run whose request puts another link
+in its place does not start. When the page finds the declaration changed (a
+confirmation, or the standing authorization in Settings, answered that it
+moved), every box on the page is unticked, not only that node's: each was
+ticked under the old text. A frozen Dubbing node is never run, so it is not
+asked about. A published app's run has no box for a Dubbing node's own link,
+and neither does a Dubbing node inside a sub-workflow (its box is in the
+sub-workflow's own editor, not on the canvas that runs it), so with the
+setting on either is refused.
 
 **Links two parsers read differently.** These routes refuse a link with a
 backslash or a control character (a tab, a line break) with
@@ -5341,8 +5359,8 @@ each is refused (or, for a picture, kept as the link itself instead of being
 copied into storage): a picture added from a link (the Upload Image node and
 a published app's picture input), a Transcribe node given a link to a video's
 page directly rather than through a Video URL node, the Music node's
-reference link, a Suno node given a link directly, and the Dubbing node's
-link. A later change adds the box to each.
+reference link, and a Suno node given a link directly. A later change adds the
+box to each.
 
 **Import source policies.** Before the confirmation is checked, the link's
 site is held to what an administrator decided about it (Admin → Settings →

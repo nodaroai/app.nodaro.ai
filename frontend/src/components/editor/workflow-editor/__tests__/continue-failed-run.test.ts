@@ -63,6 +63,9 @@ vi.mock("../run-handlers", () => ({
 vi.mock("../execution-graph", () => ({ collapseExpandedClones: () => ({ nodes: mockNodes, edges: mockEdges }) }))
 vi.mock("../execute-node", () => ({ rejectAllManualEdits: vi.fn() }))
 vi.mock("../video-link-run-gate", () => ({ ensureVideoLinksBeforeRun: vi.fn().mockResolvedValue(true) }))
+// The confirmations of the nodes whose own link the run hands on: none by default.
+const mockLinkConfirmations = vi.hoisted(() => vi.fn(async (_ids: unknown, overrides: unknown) => overrides))
+vi.mock("../run-link-confirmations", () => ({ withRunLinkConfirmations: (...a: [unknown, unknown]) => mockLinkConfirmations(...a) }))
 vi.mock("../run-from-here-set", () => ({ liveExecutable: (nodes: TestNode[]) => nodes.filter((x) => x.type !== "text") }))
 vi.mock("../preview-gate", () => ({ previewRunnable: (exec: TestNode[]) => exec }))
 
@@ -193,6 +196,14 @@ describe("Continue from failed", () => {
     expect(resetIds()).toEqual(["vid", "cut"])
     expect(mockReset.mock.invocationCallOrder[0]!).toBeGreaterThan(mockRunWorkflow.mock.invocationCallOrder[0]!)
     expect(mockReset.mock.invocationCallOrder[0]!).toBeLessThan(mockStream.mock.invocationCallOrder[0]!)
+  })
+
+  it("carries this run's confirmations for the nodes it runs whose own link it hands on", async () => {
+    mockLinkConfirmations.mockImplementationOnce(async (_ids: unknown, overrides: unknown) => ({ ...(overrides as object), dub: { rightsConfirmationId: "conf-1" } }))
+    await handleContinueFailedRun("exec-1", deps())
+    expect(mockLinkConfirmations.mock.calls[0]![0]).toEqual(["vid", "cut"])
+    const [, , , opts] = mockRunWorkflow.mock.calls[0]!
+    expect(opts).toEqual({ inputOverrides: { dub: { rightsConfirmationId: "conf-1" } }, continueFromExecutionId: "exec-1", continueMode: "from-failed" })
   })
 
   it("always asks, naming what runs and what is kept, whatever the figure", async () => {
