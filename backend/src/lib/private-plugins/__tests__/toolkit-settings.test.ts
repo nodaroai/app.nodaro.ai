@@ -852,4 +852,10 @@ describe("tk.settings.nodaroMotionPreciseStyleRoute", () => {
     ;(got as { bypassEmails: string[] }).bypassEmails.push("b@example.com")
     expect(h.preciseStyleRoute).toEqual({ routing: "off", bypassEmails: ["a@example.com"] })
   })
+
+  it("answers a routed run's own depth blur when set", async () => {
+    routingEngine()
+    h.preciseStyleRoute = { routedDepthBlur: 10, describeColours: false, faceMesh: true }
+    expect(await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).toStrictEqual({ routedDepthBlur: 10, describeColours: false, faceMesh: true })
+  })
 })

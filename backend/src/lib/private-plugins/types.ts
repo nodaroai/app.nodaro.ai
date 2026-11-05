@@ -3880,6 +3880,12 @@ export type PluginNodaroMotionNoPerson = {
 export type PluginNodaroMotionPreciseStyleRoute = {
   readonly routing?: "on" | "off"
   readonly bypassEmails?: readonly string[]
+  /** A routed run's own depth blur, 0–40; absent: none (never the Motion masking's). */
+  readonly routedDepthBlur?: number
+  /** A routed run's shot list is told the colours from the video; absent: on. */
+  readonly describeColours?: boolean
+  /** A routed run's face mesh; absent: off (never the Flex masking's). */
+  readonly faceMesh?: boolean
 }
 
 /**

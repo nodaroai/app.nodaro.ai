@@ -21,6 +21,9 @@ import type { TrendEngineEnvironment } from "@/lib/api"
 import { ENVIRONMENTS, fetchMock, renderWith, resetRoutes, routes, sentTo } from "../../trends/__tests__/harness"
 import AdminNodaroMotionPage from "../page"
 import {
+  PRECISE_STYLE_ROUTE_COLOURS_LABEL,
+  PRECISE_STYLE_ROUTE_FACE_MESH_LABEL,
+  PRECISE_STYLE_ROUTE_DEPTH_BLUR_LABEL,
   PRECISE_STYLE_ROUTE_EMAILS_LABEL,
   PRECISE_STYLE_ROUTE_LEGEND,
   preciseStyleRouteDraftOf,
@@ -149,22 +152,126 @@ describe("the page", { timeout: 20_000 }, () => {
   })
 })
 
+describe("the routed depth blur", { timeout: 20_000 }, () => {
+  it("never saved reads as 0, with a hint that it is the routed runs' alone", async () => {
+    renderWith(<AdminNodaroMotionPage />)
+    const route = await section()
+    const field = route.getByLabelText(PRECISE_STYLE_ROUTE_DEPTH_BLUR_LABEL)
+    expect(field).toHaveValue(0)
+    expect(field).toHaveAccessibleDescription(/only.*routed to Flex.*0 means no blur/i)
+  })
+
+  it("a value saves, 0 sends nothing for it, and one out of bounds holds Save", async () => {
+    const user = userEvent.setup()
+    routes[`PUT ${URL_}`] = (init) => view(JSON.parse(String(init?.body)).preciseStyleRoute)
+    renderWith(<AdminNodaroMotionPage />)
+    const route = await section()
+    const field = route.getByLabelText(PRECISE_STYLE_ROUTE_DEPTH_BLUR_LABEL)
+    await user.clear(field)
+    await user.type(field, "41")
+    expect(saveButton()).toBeDisabled()
+    expect(route.getByRole("alert")).toHaveTextContent("40")
+    await user.clear(field)
+    await user.type(field, "10")
+    await user.click(saveButton())
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseStyleRoute: { routedDepthBlur: 10 } }]))
+    await user.clear(field)
+    await user.type(field, "0")
+    await waitFor(() => expect(saveButton()).toBeEnabled())
+    await user.click(saveButton())
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseStyleRoute: { routedDepthBlur: 10 } }, { preciseStyleRoute: {} }]))
+  })
+
+  it("shows what is saved", async () => {
+    routes[`GET ${URL_}`] = () => view({ routedDepthBlur: 12 })
+    renderWith(<AdminNodaroMotionPage />)
+    const route = await section()
+    await waitFor(() => expect(route.getByLabelText(PRECISE_STYLE_ROUTE_DEPTH_BLUR_LABEL)).toHaveValue(12))
+    expect(saveButton()).toBeDisabled()
+  })
+})
+
+describe("the routed colour switch", { timeout: 20_000 }, () => {
+  it("never saved reads as on, with a hint that it is the routed runs' alone", async () => {
+    renderWith(<AdminNodaroMotionPage />)
+    const route = await section()
+    const box = route.getByRole("checkbox", { name: PRECISE_STYLE_ROUTE_COLOURS_LABEL })
+    expect(box).toBeChecked()
+    expect(box).toHaveAccessibleDescription(/only.*routed to Flex.*colours from the video/i)
+  })
+
+  it("off saves describeColours: false; on again sends {}", async () => {
+    const user = userEvent.setup()
+    routes[`PUT ${URL_}`] = (init) => view(JSON.parse(String(init?.body)).preciseStyleRoute)
+    renderWith(<AdminNodaroMotionPage />)
+    const route = await section()
+    await user.click(route.getByRole("checkbox", { name: PRECISE_STYLE_ROUTE_COLOURS_LABEL }))
+    await user.click(saveButton())
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseStyleRoute: { describeColours: false } }]))
+    await user.click(route.getByRole("checkbox", { name: PRECISE_STYLE_ROUTE_COLOURS_LABEL }))
+    await waitFor(() => expect(saveButton()).toBeEnabled())
+    await user.click(saveButton())
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseStyleRoute: { describeColours: false } }, { preciseStyleRoute: {} }]))
+  })
+
+  it("shows a saved off", async () => {
+    routes[`GET ${URL_}`] = () => view({ describeColours: false })
+    renderWith(<AdminNodaroMotionPage />)
+    const route = await section()
+    await waitFor(() => expect(route.getByRole("checkbox", { name: PRECISE_STYLE_ROUTE_COLOURS_LABEL })).not.toBeChecked())
+  })
+})
+
+describe("the routed face mesh switch", { timeout: 20_000 }, () => {
+  it("never saved reads as off, with a hint that it is the routed runs' alone", async () => {
+    renderWith(<AdminNodaroMotionPage />)
+    const route = await section()
+    const box = route.getByRole("checkbox", { name: PRECISE_STYLE_ROUTE_FACE_MESH_LABEL })
+    expect(box).not.toBeChecked()
+    expect(box).toHaveAccessibleDescription(/only.*routed to Flex.*Off sends the depth map without the face mesh/i)
+  })
+
+  it("on saves faceMesh: true; off again sends {}", async () => {
+    const user = userEvent.setup()
+    routes[`PUT ${URL_}`] = (init) => view(JSON.parse(String(init?.body)).preciseStyleRoute)
+    renderWith(<AdminNodaroMotionPage />)
+    const route = await section()
+    await user.click(route.getByRole("checkbox", { name: PRECISE_STYLE_ROUTE_FACE_MESH_LABEL }))
+    await user.click(saveButton())
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseStyleRoute: { faceMesh: true } }]))
+    await user.click(route.getByRole("checkbox", { name: PRECISE_STYLE_ROUTE_FACE_MESH_LABEL }))
+    await waitFor(() => expect(saveButton()).toBeEnabled())
+    await user.click(saveButton())
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseStyleRoute: { faceMesh: true } }, { preciseStyleRoute: {} }]))
+  })
+
+  it("shows a saved on", async () => {
+    routes[`GET ${URL_}`] = () => view({ faceMesh: true })
+    renderWith(<AdminNodaroMotionPage />)
+    const route = await section()
+    await waitFor(() => expect(route.getByRole("checkbox", { name: PRECISE_STYLE_ROUTE_FACE_MESH_LABEL })).toBeChecked())
+  })
+})
+
 describe("the pure helpers", () => {
   it("preciseStyleRouteToSaved: Off and a list that is not empty alone", () => {
     expect(preciseStyleRouteToSaved(preciseStyleRouteDraftOf(null))).toEqual({})
-    expect(preciseStyleRouteToSaved({ routing: "on", emailsText: " \n, " })).toEqual({})
-    expect(preciseStyleRouteToSaved({ routing: "off", emailsText: "A@x.co\na@x.co,b@x.co" })).toEqual({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"] })
+    expect(preciseStyleRouteToSaved({ routing: "on", emailsText: " \n, ", depthBlurText: "", describeColours: true, faceMesh: false })).toEqual({})
+    expect(preciseStyleRouteToSaved({ routing: "on", emailsText: "", depthBlurText: "0", describeColours: true, faceMesh: false })).toEqual({})
+    expect(preciseStyleRouteToSaved({ routing: "off", emailsText: "A@x.co\na@x.co,b@x.co", depthBlurText: "10", describeColours: false, faceMesh: true })).toEqual({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"], routedDepthBlur: 10, describeColours: false, faceMesh: true })
   })
 
   it("preciseStyleRouteDraftOf: what is saved, one address per line", () => {
-    expect(preciseStyleRouteDraftOf({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"] })).toEqual({ routing: "off", emailsText: "a@x.co\nb@x.co" })
-    expect(preciseStyleRouteDraftOf(null)).toEqual({ routing: "on", emailsText: "" })
+    expect(preciseStyleRouteDraftOf({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"], routedDepthBlur: 10, describeColours: false, faceMesh: true })).toEqual({ routing: "off", emailsText: "a@x.co\nb@x.co", depthBlurText: "10", describeColours: false, faceMesh: true })
+    expect(preciseStyleRouteDraftOf({ routedDepthBlur: 10 })).toMatchObject({ depthBlurText: "10", describeColours: true, faceMesh: false })
+    expect(preciseStyleRouteDraftOf(null)).toEqual({ routing: "on", emailsText: "", depthBlurText: "0", describeColours: true, faceMesh: false })
   })
 
   it("preciseStyleRouteIssues names what is not an email", () => {
-    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "a@x.co\nnope, also nope" })).toHaveLength(1)
-    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "a@x.co" })).toEqual([])
-    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "" })).toEqual([])
+    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "a@x.co\nnope, also nope", depthBlurText: "0", describeColours: true, faceMesh: false })).toHaveLength(1)
+    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "a@x.co", depthBlurText: "0", describeColours: true, faceMesh: false })).toEqual([])
+    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "", depthBlurText: "", describeColours: true, faceMesh: false })).toEqual([])
+    for (const bad of ["41", "-1", "2.5", "x"]) expect(preciseStyleRouteIssues({ routing: "on", emailsText: "", depthBlurText: bad, describeColours: true, faceMesh: false })).toHaveLength(1)
   })
 
   it("environmentsThatCannotRoutePreciseStyle: unknown while loading, else those without the flag", () => {

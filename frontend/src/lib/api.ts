@@ -13305,6 +13305,12 @@ export async function saveNodaroMotionNoPerson(noPerson: NodaroMotionNoPerson): 
 export interface NodaroMotionPreciseStyleRoute {
   routing?: "on" | "off"
   bypassEmails?: string[]
+  /** A routed run's own depth blur, 0–40 (the Motion masking's bounds); absent or 0: none. */
+  routedDepthBlur?: number
+  /** A routed run's shot list writer is told to describe the colours from the video; absent: on. */
+  describeColours?: boolean
+  /** A routed run's depth map carries the face mesh; absent: off. */
+  faceMesh?: boolean
 }
 
 export interface NodaroMotionPreciseStyleRouteView {
@@ -13321,7 +13327,7 @@ export async function fetchNodaroMotionPreciseStyleRoute(): Promise<NodaroMotion
   return (await apiRequest<{ data: NodaroMotionPreciseStyleRouteView }>(ADMIN_NODARO_MOTION_PRECISE_STYLE_ROUTE, "apiErr.loadNodaroMotion")).data
 }
 
-/** Saves the whole setting, whatever the engines. Something that is not an email is a 400 `validation_error`. */
+/** Saves the whole setting, whatever the engines. Something that is not an email, or a blur outside 0–40, is a 400 `validation_error`. */
 export async function saveNodaroMotionPreciseStyleRoute(preciseStyleRoute: NodaroMotionPreciseStyleRoute): Promise<NodaroMotionPreciseStyleRouteView> {
   return (
     await apiRequest<{ data: NodaroMotionPreciseStyleRouteView }>(ADMIN_NODARO_MOTION_PRECISE_STYLE_ROUTE, "apiErr.saveNodaroMotion", {

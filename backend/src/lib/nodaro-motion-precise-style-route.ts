@@ -7,13 +7,24 @@
  * running it.
  *
  * The `app_settings` row `nodaro_motion_precise_style_route`:
- * `{ routing?: "on" | "off"; bypassEmails?: string[] }`.
+ * `{ routing?: "on" | "off"; bypassEmails?: string[]; routedDepthBlur?: number; describeColours?: boolean; faceMesh?: boolean }`.
  *
  * - `routing`: "on" (the default; absent means it) runs such a run as Flex;
  *   "off" leaves it the Precise run of `nodaro-motion-precise-art-style.ts`.
  * - `bypassEmails`: the accounts that skip the route and run real Precise with
  *   a style, for testing. Stored trimmed, lowercased and without repeats; the
  *   engine compares them against the account's email as the server reads it.
+ * - `routedDepthBlur`: a routed run's OWN depth blur, in the Motion masking's
+ *   `depthBlur` bounds (`CAST_SWAP_DEPTH_BLUR_BOUNDS`: 0–40 whole steps, the
+ *   sigma at 1080 px tall). Absent or 0 is no blur. It applies only to a run the
+ *   route makes Flex, in place of the Motion masking's blur; every other Flex
+ *   run keeps that one. An engine from before it reads no blur either.
+ * - `describeColours`: on (the default; absent means it) tells a routed run's
+ *   shot list writer to describe, from the video, the colours the depth map it
+ *   sends cannot carry. Only a run the route makes Flex. Stored only when off.
+ * - `faceMesh`: whether a routed run's depth map carries the face mesh. Off by
+ *   default (absent means off, and so does an engine from before it): the run's
+ *   masking has no mesh, whatever the Flex masking says. Stored only when on.
  *
  * A Precise run without a style, every Flex run, every Pulse run and every
  * trend run never read it. Prism alone takes an art style on a Precise run, so
@@ -38,6 +49,7 @@
  * This module is pure (no database).
  */
 import { z } from "zod"
+import { CAST_SWAP_DEPTH_BLUR_BOUNDS } from "@nodaro/render-rules"
 
 export const NODARO_MOTION_PRECISE_STYLE_ROUTE_KEY = "nodaro_motion_precise_style_route"
 
@@ -52,23 +64,36 @@ export const PRECISE_STYLE_ROUTE_MAX_EMAILS = 200
 export interface NodaroMotionPreciseStyleRoute {
   routing?: PreciseStyleRouting
   bypassEmails?: string[]
+  /** A routed run's own depth blur (`CAST_SWAP_DEPTH_BLUR_BOUNDS`); absent or 0: none. */
+  routedDepthBlur?: number
+  /** A routed run's shot list is told the colours from the video; absent: on. */
+  describeColours?: boolean
+  /** A routed run's face mesh; absent: off. */
+  faceMesh?: boolean
 }
 
 const normalizeEmail = (email: string): string => email.trim().toLowerCase()
 const withoutRepeats = (emails: readonly string[]): string[] => [...new Set(emails)]
 const emailSchema = z.string().transform(normalizeEmail).pipe(z.email().max(254))
+const routedDepthBlurSchema = z.int().min(CAST_SWAP_DEPTH_BLUR_BOUNDS.min).max(CAST_SWAP_DEPTH_BLUR_BOUNDS.max)
 
 /** What an admin saves: strict (an unknown key, a third value or something that is not an email is refused), the emails normalized. */
 export const nodaroMotionPreciseStyleRouteSchema = z.strictObject({
   routing: z.enum(PRECISE_STYLE_ROUTINGS).optional(),
   bypassEmails: z.array(emailSchema).max(PRECISE_STYLE_ROUTE_MAX_EMAILS).transform(withoutRepeats).optional(),
+  routedDepthBlur: routedDepthBlurSchema.optional(),
+  describeColours: z.boolean().optional(),
+  faceMesh: z.boolean().optional(),
 })
 
-/** The setting as stored and sent: `routing` only when "off", the list only when it is not empty. New objects. */
+/** The setting as stored and sent: `routing` only when "off", the list only when it is not empty, the blur only above 0, the colours only when off, the mesh only when on. New objects. */
 export function withoutDefaultPreciseStyleRoute(setting: NodaroMotionPreciseStyleRoute | null | undefined): NodaroMotionPreciseStyleRoute {
   const out: NodaroMotionPreciseStyleRoute = {}
   if (setting?.routing === "off") out.routing = "off"
   if (setting?.bypassEmails && setting.bypassEmails.length > 0) out.bypassEmails = [...setting.bypassEmails]
+  if (typeof setting?.routedDepthBlur === "number" && setting.routedDepthBlur > 0) out.routedDepthBlur = setting.routedDepthBlur
+  if (setting?.describeColours === false) out.describeColours = false
+  if (setting?.faceMesh === true) out.faceMesh = true
   return out
 }
 
@@ -87,7 +112,13 @@ export function preciseStyleRouteForPlugin(setting: NodaroMotionPreciseStyleRout
  */
 export function parseNodaroMotionPreciseStyleRoute(value: unknown, warn: (msg: string) => void = (msg) => console.warn(msg)): NodaroMotionPreciseStyleRoute | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null
-  const { routing, bypassEmails } = value as { routing?: unknown; bypassEmails?: unknown }
+  const { routing, bypassEmails, routedDepthBlur, describeColours, faceMesh } = value as {
+    routing?: unknown
+    bypassEmails?: unknown
+    routedDepthBlur?: unknown
+    describeColours?: unknown
+    faceMesh?: unknown
+  }
   const out: NodaroMotionPreciseStyleRoute = {}
   if (routing === "off" || routing === "on") out.routing = routing
   else if (routing !== undefined && routing !== null) warn(`[${NODARO_MOTION_PRECISE_STYLE_ROUTE_KEY}] the switch is not valid: it reads as on`)
@@ -98,6 +129,15 @@ export function parseNodaroMotionPreciseStyleRoute(value: unknown, warn: (msg: s
   } else if (bypassEmails !== undefined && bypassEmails !== null) {
     warn(`[${NODARO_MOTION_PRECISE_STYLE_ROUTE_KEY}] the bypass list is not a list: nobody is bypassed`)
   }
+  if (routedDepthBlur !== undefined && routedDepthBlur !== null) {
+    const blur = routedDepthBlurSchema.safeParse(routedDepthBlur)
+    if (blur.success) out.routedDepthBlur = blur.data
+    else warn(`[${NODARO_MOTION_PRECISE_STYLE_ROUTE_KEY}] the routed depth blur is not a whole number from ${CAST_SWAP_DEPTH_BLUR_BOUNDS.min} to ${CAST_SWAP_DEPTH_BLUR_BOUNDS.max}: routed runs take no blur`)
+  }
+  if (typeof describeColours === "boolean") out.describeColours = describeColours
+  else if (describeColours !== undefined && describeColours !== null) warn(`[${NODARO_MOTION_PRECISE_STYLE_ROUTE_KEY}] the colour switch is not a boolean: it reads as on`)
+  if (typeof faceMesh === "boolean") out.faceMesh = faceMesh
+  else if (faceMesh !== undefined && faceMesh !== null) warn(`[${NODARO_MOTION_PRECISE_STYLE_ROUTE_KEY}] the face mesh switch is not a boolean: it reads as off`)
   return withoutDefaultPreciseStyleRoute(out)
 }
 
