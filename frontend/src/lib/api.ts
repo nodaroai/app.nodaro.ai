@@ -5003,6 +5003,8 @@ export interface DubbingApiOptions {
   useProfanityFilter?: boolean
   targetAccent?: string
   watermark?: boolean
+  /** The content rights confirmation for `source.sourceUrl` (the dubbing service fetches that link). */
+  confirmationId?: string
 }
 
 /** Exactly one of source.audioUrl / source.videoUrl / source.sourceUrl. */
@@ -5029,6 +5031,7 @@ export async function dubbingApi(
   if (options?.useProfanityFilter != null) body.useProfanityFilter = options.useProfanityFilter
   if (options?.targetAccent) body.targetAccent = options.targetAccent
   if (options?.watermark != null) body.watermark = options.watermark
+  if (source.sourceUrl && options?.confirmationId) body.confirmationId = options.confirmationId
   return apiJson("/v1/dubbing", {
     body,
     workflowId: true,

@@ -21,6 +21,7 @@ const mockHasCredits = vi.fn()
 const mockGetJobStatusLean = vi.fn()
 const mockRunWorkflow = vi.fn()
 const mockGetWorkflowExecution = vi.fn()
+const mockConfirmLink = vi.fn()
 let mockNodes: any[] = []
 let mockEdges: any[] = []
 
@@ -34,6 +35,12 @@ vi.mock("sonner", () => ({
     success: (...args: unknown[]) => mockToastSuccess(...args),
     info: (...args: unknown[]) => mockToastInfo(...args),
   },
+}))
+
+// A content rights confirmation is recorded on the server: the call is the test's.
+vi.mock("@/lib/content-rights", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/content-rights")>()),
+  confirmLink: (...args: unknown[]) => mockConfirmLink(...args),
 }))
 
 vi.mock("@/hooks/use-workflow-store", () => ({
@@ -127,6 +134,7 @@ vi.mock("../types", () => ({
       "generate-video",
       "generate-script",
       "text-to-speech",
+      "dubbing",
     ])
     return EXECUTABLE.has(n.type ?? "")
   },
@@ -186,6 +194,7 @@ import {
 // would meet a run "already followed" and its Run would (rightly) refuse.
 afterEach(() => detachActiveWorkflowStream())
 import { getCachedCredits } from "@/ee/hooks/use-model-credits"
+import { clearNodeLinkRights, tickNodeLinkRights } from "@/lib/node-link-rights"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -337,9 +346,37 @@ describe("handleRun", () => {
 
     await handleRun(ctx, "p1", "wf-1", save, setIsRunning)
 
-    // Third arg is the per-click idempotency key (UUID generated in handler).
-    expect(mockRunWorkflow).toHaveBeenCalledWith("wf-1", undefined, expect.any(String))
+    // Third arg is the per-click idempotency key (UUID generated in handler);
+    // the fourth, no overrides: no node of this run hands its own link on.
+    expect(mockRunWorkflow).toHaveBeenCalledWith("wf-1", undefined, expect.any(String), undefined)
     expect(setIsRunning).toHaveBeenCalledWith(true)
+  })
+
+  describe("a Dubbing node's Source link (node-link-rights.ts)", () => {
+    const LINK = "https://example.com/talks/keynote"
+    const dub = () => makeNode("d1", "dubbing", { data: { label: "French dub", targetLanguage: "fr", sourceUrl: LINK } })
+    afterEach(() => clearNodeLinkRights())
+
+    it("its box ticked: the run carries this run's confirmation for it as the node's override", async () => {
+      const node = dub()
+      mockNodes.push(node)
+      mockCollapseExpandedClones.mockReturnValue({ nodes: [node], edges: [] })
+      mockConfirmLink.mockResolvedValue({ id: "conf-1", declarationVersion: 1, expiresAt: "2026-11-04T12:00:00Z" })
+      tickNodeLinkRights("d1", LINK)
+      await handleRun(makeCtx(), "p1", "wf-1", vi.fn().mockResolvedValue(undefined), vi.fn())
+      expect(mockConfirmLink).toHaveBeenCalledWith(LINK)
+      expect(mockRunWorkflow).toHaveBeenCalledWith("wf-1", undefined, expect.any(String), { inputOverrides: { d1: { rightsConfirmationId: "conf-1" } } })
+    })
+
+    it("its box not ticked: the run does not start, and the node is named", async () => {
+      const node = dub()
+      mockNodes.push(node)
+      mockCollapseExpandedClones.mockReturnValue({ nodes: [node], edges: [] })
+      await handleRun(makeCtx(), "p1", "wf-1", vi.fn().mockResolvedValue(undefined), vi.fn())
+      expect(mockRunWorkflow).not.toHaveBeenCalled()
+      expect(mockConfirmLink).not.toHaveBeenCalled()
+      expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining("French dub"), expect.anything())
+    })
   })
 
   it("marks nodes as pending before calling backend", async () => {
@@ -531,6 +568,7 @@ describe("handleRunFromHere", () => {
       "wf-mock-1",
       expect.arrayContaining(["a", "b", "c"]),
       expect.any(String),
+      undefined,
     )
   })
 
@@ -554,6 +592,7 @@ describe("handleRunFromHere", () => {
       "wf-mock-1",
       expect.arrayContaining(["a", "b"]),
       expect.any(String),
+      undefined,
     )
   })
 
@@ -606,6 +645,24 @@ describe("handleRunFromHere", () => {
 // ---------------------------------------------------------------------------
 
 describe("handleRunSelected", () => {
+  it("a selected Dubbing node's ticked Source link rides the run as its confirmation; one not selected is not confirmed", async () => {
+    const LINK = "https://example.com/talks/keynote"
+    const picked = makeNode("d1", "dubbing", { selected: true, data: { label: "Dub", targetLanguage: "fr", sourceUrl: LINK } })
+    const other = makeNode("d2", "dubbing", { selected: false, data: { label: "Other", targetLanguage: "de", sourceUrl: LINK } })
+    mockNodes.push(picked, other)
+    mockCollapseExpandedClones.mockReturnValue({ nodes: [picked, other], edges: [] })
+    mockConfirmLink.mockResolvedValue({ id: "conf-1", declarationVersion: 1, expiresAt: "2026-11-04T12:00:00Z" })
+    tickNodeLinkRights("d1", LINK)
+    tickNodeLinkRights("d2", LINK)
+    try {
+      await handleRunSelected(makeCtx(), "p1", vi.fn().mockResolvedValue(undefined), vi.fn())
+      expect(mockConfirmLink).toHaveBeenCalledTimes(1)
+      expect(mockRunWorkflow).toHaveBeenCalledWith("wf-mock-1", ["d1"], expect.any(String), { inputOverrides: { d1: { rightsConfirmationId: "conf-1" } } })
+    } finally {
+      clearNodeLinkRights()
+    }
+  })
+
   it("shows error when no nodes selected", async () => {
     const node = makeNode("n1", "generate-image", { selected: false })
     mockCollapseExpandedClones.mockReturnValue({
@@ -644,6 +701,7 @@ describe("handleRunSelected", () => {
       "wf-mock-1",
       expect.arrayContaining(["a", "c"]),
       expect.any(String),
+      undefined,
     )
     const calledIds = mockRunWorkflow.mock.calls[0][1]
     expect(calledIds).toHaveLength(2)
@@ -669,6 +727,7 @@ describe("handleRunSelected", () => {
       "wf-mock-1",
       expect.arrayContaining(["a", "b"]),
       expect.any(String),
+      undefined,
     )
   })
 

@@ -15,6 +15,7 @@
 import { useSyncExternalStore } from "react"
 import { isSocialVideoUrl, videoLinkRunNeeds, type VideoLinkGraphEdge, type VideoLinkGraphNode } from "@nodaro/shared/video"
 import { DeclarationChangedError, confirmLink } from "@/lib/content-rights"
+import { onDeclarationChanged } from "@/lib/declaration-changes"
 
 const ticked = new Map<string, string>()
 const listeners = new Set<() => void>()
@@ -73,12 +74,15 @@ export function useVideoLinkRightsVersion(): number {
   return useSyncExternalStore(subscribeVideoLinkRights, currentVersion, currentVersion)
 }
 
-/** Every box unticked: another workflow, another account, a test. */
+/** Every box unticked: another workflow, another account, a changed declaration, a test. */
 export function clearVideoLinkRights(): void {
   if (ticked.size === 0) return
   ticked.clear()
   notify()
 }
+
+// Every box was ticked under the text a changed declaration replaced.
+onDeclarationChanged(clearVideoLinkRights)
 
 type Overrides = Record<string, Record<string, unknown>>
 

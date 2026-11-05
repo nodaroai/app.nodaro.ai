@@ -51,6 +51,7 @@ import type { ExecutionContext } from "./types"
 import { collapseExpandedClones } from "./execution-graph"
 import { rejectAllManualEdits } from "./execute-node"
 import { ensureVideoLinksBeforeRun } from "./video-link-run-gate"
+import { withRunLinkConfirmations } from "./run-link-confirmations"
 import { liveExecutable } from "./run-from-here-set"
 import { previewRunnable } from "./preview-gate"
 import type { UgcRunPriced } from "./ugc-run-estimate"
@@ -286,9 +287,10 @@ async function runContinuation(d: ContinueRunDeps, workflowId: string, alive: ()
   let result: { executionId: string; continuedFrom?: string }
   try {
     const idempotencyKey = generateIdempotencyKey()
+    const inputOverrides = await withRunLinkConfirmations(markedIds, plan.inputOverrides)
     result = await withDedupRaceRetry(() =>
       runWorkflow(workflowId, plan.nodeIds ? [...plan.nodeIds] : undefined, idempotencyKey, {
-        ...(plan.inputOverrides ? { inputOverrides: plan.inputOverrides } : {}),
+        ...(inputOverrides ? { inputOverrides } : {}),
         continueFromExecutionId: plan.continueFrom,
         ...(plan.continueMode ? { continueMode: plan.continueMode } : {}),
       }),

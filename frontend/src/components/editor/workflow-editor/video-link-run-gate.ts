@@ -26,6 +26,7 @@ import { useLocaleStore } from "@/lib/locale-store"
 import { FOCUS_NODES_EVENT, type FocusNodesDetail } from "@/lib/canvas-focus-event"
 import { DOWNLOAD_ERROR_KEYS, formatTimecode } from "@/lib/video-link"
 import { ensureVideoLinkAudio, ensureVideoLinksDownloaded, findUnconfirmedVideoLink, type EnsureVideoLinksResult } from "@/lib/video-link-ingest"
+import { findUnconfirmedNodeLink } from "@/lib/node-link-rights"
 import { videoLinkLengthLimit } from "@/lib/video-link-length-limits"
 import { NODE_DEF_MAP, type WorkflowEdge, type WorkflowNode } from "@/types/nodes"
 
@@ -96,12 +97,21 @@ export function videoLinkAudioNodesFeeding(
  * The wait can always be left: a download has no upper bound the editor
  * controls, and a Run button held with no way out is worse than the wait.
  * Cancel abandons the WAIT only; the download carries on and the node shows it.
+ *
+ * A node about to run whose OWN link the run hands to a service that fetches it
+ * (the Dubbing node's Source link, `node-link-rights.ts`) needs its box ticked
+ * too: the run stops on it first, before anything is fetched or started.
  */
 export async function ensureVideoLinksBeforeRun(
   scopeIds: readonly string[],
   setIsRunning: (running: boolean) => void,
 ): Promise<boolean> {
   const { nodes, edges } = runGraph()
+  const untickedLink = findUnconfirmedNodeLink(nodes, scopeIds)
+  if (untickedLink) {
+    showNodeMessage(untickedLink.nodeId, tx("run.videoLinkConfirm", { label: untickedLink.label }))
+    return false
+  }
   const needed = videoLinkNodesFeeding(scopeIds, nodes, edges)
   const tracks = videoLinkAudioNodesFeeding(scopeIds, nodes, edges)
   if (needed.length === 0 && tracks.length === 0) return true

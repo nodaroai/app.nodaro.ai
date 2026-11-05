@@ -21,6 +21,8 @@ const mockUnchanged = vi.fn()
 const mockListExecutions = vi.fn()
 const mockUpdateNodeData = vi.fn()
 const mockGate = vi.fn()
+// The confirmations of the nodes whose own link the run hands on: none by default.
+const mockLinkConfirmations = vi.fn(async (_ids: unknown, overrides: unknown) => overrides)
 const mockToastWarning = vi.fn()
 const mockSetRenderCheck = vi.fn()
 const mockUgcEstimate = vi.fn()
@@ -108,6 +110,7 @@ vi.mock("../execute-node", () => ({ executeNode: vi.fn(), rejectAllManualEdits: 
 vi.mock("../list-execution", () => ({ executeNodeForList: vi.fn(), expandLoopResults: vi.fn() }))
 vi.mock("../sub-workflow-preflight", () => ({ nestedRunPreflight: vi.fn().mockResolvedValue(null) }))
 vi.mock("../video-link-run-gate", () => ({ ensureVideoLinksBeforeRun: (...a: unknown[]) => mockGate(...a) }))
+vi.mock("../run-link-confirmations", () => ({ withRunLinkConfirmations: (...a: [unknown, unknown]) => mockLinkConfirmations(...a) }))
 vi.mock("../render-final-checks", () => ({
   renderRuleVerdict: (...a: unknown[]) => mockRule(...a),
   newerRunPatches: (...a: unknown[]) => mockNewerPatches(...a),
@@ -185,6 +188,15 @@ describe("Render final on a Tighten Episode node", () => {
     expect(workflowId).toBe("wf-1")
     expect([...(ids as string[])].sort()).toEqual(["fmt", "post", "t1"])
     expect(opts).toEqual({ inputOverrides: { t1: { useCaseContinue: { mode: "render-final", jobId: "00000000-0000-4000-8000-000000000001" } } } })
+  })
+
+  it("the run carries this run's confirmations for the nodes whose own link it hands on, beside the continuation", async () => {
+    mockLinkConfirmations.mockImplementationOnce(async (_ids: unknown, overrides: unknown) => ({ ...(overrides as object), dub: { rightsConfirmationId: "conf-1" } }))
+    await run("final")
+    const [ids] = mockLinkConfirmations.mock.calls[0]!
+    expect([...(ids as string[])].sort()).toEqual(["fmt", "post", "t1"])
+    const opts = mockRunWorkflow.mock.calls[0]![3] as { inputOverrides: Record<string, unknown> }
+    expect(opts.inputOverrides).toMatchObject({ t1: { useCaseContinue: { mode: "render-final" } }, dub: { rightsConfirmationId: "conf-1" } })
   })
 
   it("never sends the render nodes' quality override, and saves nothing on the node", async () => {

@@ -10,6 +10,7 @@ vi.mock("@/lib/nodaro-client", () => ({
 }))
 
 import { DeclarationChangedError, __resetContentRightsForTests, confirmLink, loadDeclaration, reloadDeclaration, useRightsDeclaration } from "../content-rights"
+import { onDeclarationChanged } from "../declaration-changes"
 
 const TIKTOK = "https://www.tiktok.com/@someone/video/7676964064458738952"
 const TEXT = { version: 3, text: "I hold the rights." }
@@ -75,19 +76,45 @@ describe("confirmLink", () => {
     expect(confirm).toHaveBeenCalledWith({ url: TIKTOK, declarationVersion: 3 })
   })
 
-  it("a declaration that changed under the page is read again, and the caller is told to untick", async () => {
+  it("a declaration that changed under the page is read again, every box is told at once, and the caller is told to untick", async () => {
+    const boxes = vi.fn()
+    const stop = onDeclarationChanged(boxes)
     await loadDeclaration()
+    const newer = deferred<{ version: number; text: string }>()
     confirm.mockRejectedValueOnce(Object.assign(new Error("stale"), { code: "rights_confirmation_stale" }))
-    declaration.mockResolvedValueOnce({ version: 4, text: "New text." })
+    declaration.mockReturnValueOnce(newer.promise)
     await expect(confirmLink(TIKTOK)).rejects.toBeInstanceOf(DeclarationChangedError)
+    // Told before the new text arrives: no box stays ticked while it loads.
+    expect(boxes).toHaveBeenCalledTimes(1)
+    newer.resolve({ version: 4, text: "New text." })
     expect(await loadDeclaration()).toEqual({ version: 4, text: "New text." })
     expect(declaration).toHaveBeenCalledTimes(2)
+    stop()
   })
 
-  it("any other refusal is passed on as it is, and the declaration kept", async () => {
+  it("any read that finds another version tells every box (the Settings card's stale answer reads it again too); the same version tells none", async () => {
+    const boxes = vi.fn()
+    const stop = onDeclarationChanged(boxes)
+    await loadDeclaration()
+    declaration.mockResolvedValueOnce(TEXT)
+    reloadDeclaration()
+    expect(await loadDeclaration()).toEqual(TEXT)
+    expect(boxes).not.toHaveBeenCalled()
+    declaration.mockResolvedValueOnce({ version: 4, text: "New text." })
+    reloadDeclaration()
+    expect(await loadDeclaration()).toEqual({ version: 4, text: "New text." })
+    expect(boxes).toHaveBeenCalledTimes(1)
+    stop()
+  })
+
+  it("any other refusal is passed on as it is, the declaration kept and no box told", async () => {
+    const boxes = vi.fn()
+    const stop = onDeclarationChanged(boxes)
     await loadDeclaration()
     confirm.mockRejectedValueOnce(new Error("Authentication required"))
     await expect(confirmLink(TIKTOK)).rejects.toThrow("Authentication required")
     expect(declaration).toHaveBeenCalledTimes(1)
+    expect(boxes).not.toHaveBeenCalled()
+    stop()
   })
 })

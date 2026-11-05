@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import {
   SCENE3D_LAYOUT_REFERENCE_SCOPING_FIXTURE,
   SCENE3D_LAYOUT_REFERENCE_SCOPING_LINE,
@@ -48,6 +48,7 @@ const mockImageToTextApi = vi.fn()
 const mockTextToDialogueApi = vi.fn()
 const mockVoiceChangerApi = vi.fn()
 const mockDubbingApi = vi.fn()
+const mockConfirmLink = vi.fn()
 const mockVoiceRemixApi = vi.fn()
 const mockVoiceDesignApi = vi.fn()
 const mockForcedAlignmentApi = vi.fn()
@@ -73,6 +74,12 @@ vi.mock("sonner", () => ({
     success: (...args: unknown[]) => mockToastSuccess(...args),
     info: (...args: unknown[]) => mockToastInfo(...args),
   },
+}))
+
+// A content rights confirmation is recorded on the server: the call is the test's.
+vi.mock("@/lib/content-rights", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/content-rights")>()),
+  confirmLink: (...args: unknown[]) => mockConfirmLink(...args),
 }))
 
 vi.mock("@/hooks/use-workflow-store", () => ({
@@ -275,7 +282,8 @@ import {
   rejectManualEdit,
   rejectAllManualEdits,
 } from "../execute-node"
-import { generateMusicApi, sunoSeparateApi } from "@/lib/api"
+import { generateMusicApi, setCurrentNodeId, setForcePrivate, setUserPromptTemplate, sunoSeparateApi } from "@/lib/api"
+import { clearNodeLinkRights, tickNodeLinkRights } from "@/lib/node-link-rights"
 import sunoSeparateSourceCases from "../../../../../../packages/render-rules/fixtures/suno-separate-source.cases.json"
 
 // ---------------------------------------------------------------------------
@@ -3062,6 +3070,7 @@ describe("dubbing", () => {
   it("a panel source link needs no wired input and is treated as potentially-video", async () => {
     mockResolveNodeInputs.mockReturnValue({})
     mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    tickNodeLinkRights("n1", "https://youtube.com/watch?v=x")
     await executeNode(
       makeNode("dubbing", { targetLanguage: "he", sourceUrl: "https://youtube.com/watch?v=x" }),
       makeCtx(),
@@ -3074,6 +3083,96 @@ describe("dubbing", () => {
       expect.anything(),
       expect.any(Function),
     )
+  })
+
+  describe("the content rights box of the source link (node-link-rights.ts)", () => {
+    const LINK = "https://example.com/talks/keynote"
+    afterEach(() => clearNodeLinkRights())
+
+    it("a source link whose box is not ticked stops the run before any request", async () => {
+      mockResolveNodeInputs.mockReturnValue({})
+      const promise = executeNode(makeNode("dubbing", { targetLanguage: "fr", sourceUrl: LINK }), makeCtx())
+      promise.catch(() => {})
+      await expect(promise).rejects.toThrow("Content rights not confirmed")
+      expect(mockToastError).toHaveBeenCalled()
+      expect(mockPollJobWithNodeUpdate).not.toHaveBeenCalled()
+      expect(mockConfirmLink).not.toHaveBeenCalled()
+    })
+
+    it("a box ticked for another link does not count", async () => {
+      mockResolveNodeInputs.mockReturnValue({})
+      tickNodeLinkRights("n1", "https://example.com/another")
+      const promise = executeNode(makeNode("dubbing", { targetLanguage: "fr", sourceUrl: LINK }), makeCtx())
+      promise.catch(() => {})
+      await expect(promise).rejects.toThrow("Content rights not confirmed")
+    })
+
+    it("the request carries this run's confirmation, made right before it is sent", async () => {
+      mockResolveNodeInputs.mockReturnValue({})
+      mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+      mockConfirmLink.mockResolvedValue({ id: "conf-1", declarationVersion: 1, expiresAt: "2026-11-04T12:00:00Z" })
+      mockDubbingApi.mockResolvedValue({ jobId: "j1" })
+      tickNodeLinkRights("n1", LINK)
+      await executeNode(makeNode("dubbing", { targetLanguage: "fr", sourceUrl: LINK }), makeCtx())
+      // Nothing is confirmed until the request is about to go out.
+      expect(mockConfirmLink).not.toHaveBeenCalled()
+      const callApi = mockPollJobWithNodeUpdate.mock.calls[0]![1] as () => Promise<unknown>
+      await callApi()
+      expect(mockConfirmLink).toHaveBeenCalledWith(LINK)
+      const args = mockDubbingApi.mock.calls[0]!
+      expect(args[0]).toEqual({ audioUrl: undefined, videoUrl: undefined, sourceUrl: LINK })
+      expect(args[5]).toMatchObject({ confirmationId: "conf-1" })
+    })
+
+    it("a wired upload asks for no box and no confirmation", async () => {
+      mockResolveNodeInputs.mockReturnValue({ videoUrl: "https://cdn.nodaro.ai/videos/v.mp4" })
+      mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+      mockDubbingApi.mockResolvedValue({ jobId: "j1" })
+      await executeNode(makeNode("dubbing", { targetLanguage: "fr" }), makeCtx())
+      const callApi = mockPollJobWithNodeUpdate.mock.calls[0]![1] as () => Promise<unknown>
+      await callApi()
+      expect(mockConfirmLink).not.toHaveBeenCalled()
+      expect(mockDubbingApi.mock.calls[0]![5]).not.toHaveProperty("confirmationId")
+    })
+
+    it("a node of a sub-workflow has no box on this canvas: its link goes with no confirmation, for the server to answer", async () => {
+      mockResolveNodeInputs.mockReturnValue({})
+      mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+      mockDubbingApi.mockResolvedValueOnce({ jobId: "j1" })
+      const child = { ...makeNode("dubbing", { targetLanguage: "fr", sourceUrl: LINK }), id: "__sub_parent_n1" }
+      await executeNode(child, makeCtx())
+      const callApi = mockPollJobWithNodeUpdate.mock.calls[0]![1] as () => Promise<unknown>
+      await callApi()
+      expect(mockToastError).not.toHaveBeenCalled()
+      expect(mockConfirmLink).not.toHaveBeenCalled()
+      expect(mockDubbingApi.mock.calls[0]![0]).toMatchObject({ sourceUrl: LINK })
+      expect(mockDubbingApi.mock.calls[0]![5]).not.toHaveProperty("confirmationId")
+    })
+
+    it("the flags another node's run set while this one awaited its confirmation are put back before the request is built", async () => {
+      mockResolveNodeInputs.mockReturnValue({})
+      mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+      mockConfirmLink.mockImplementationOnce(async () => {
+        vi.mocked(setForcePrivate)(true)
+        vi.mocked(setCurrentNodeId)("n2")
+        vi.mocked(setUserPromptTemplate)("another node's template")
+        return { id: "conf-1", declarationVersion: 1, expiresAt: "2026-11-04T12:00:00Z" }
+      })
+      let flagsAtRequest: unknown[] = []
+      mockDubbingApi.mockImplementationOnce(async () => {
+        flagsAtRequest = [
+          vi.mocked(setForcePrivate).mock.calls.at(-1)?.[0],
+          vi.mocked(setCurrentNodeId).mock.calls.at(-1)?.[0],
+          vi.mocked(setUserPromptTemplate).mock.calls.at(-1)?.[0],
+        ]
+        return { jobId: "j1" }
+      })
+      tickNodeLinkRights("n1", LINK)
+      await executeNode(makeNode("dubbing", { targetLanguage: "fr", sourceUrl: LINK }), makeCtx())
+      const callApi = mockPollJobWithNodeUpdate.mock.calls[0]![1] as () => Promise<unknown>
+      await callApi()
+      expect(flagsAtRequest).toEqual([false, "n1", undefined])
+    })
   })
 })
 

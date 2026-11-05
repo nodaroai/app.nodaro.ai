@@ -464,7 +464,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "text-to-dialogue": return <TextToDialogueConfig {...configProps} />
     case "voice-changer": return <VoiceChangerConfig {...configProps} />
     case "voice-changer-pro": return <VoiceChangerProConfig {...configProps} />
-    case "dubbing": return <DubbingConfig {...configProps} />
+    case "dubbing": return <DubbingConfig {...configProps} nodeId={selectedNodeId} />
     case "voice-remix": return <VoiceRemixConfig {...configProps} nodeId={selectedNodeId} />
     case "voice-design": return <VoiceDesignConfig {...configProps} nodeId={selectedNodeId} />
     case "forced-alignment": return <ForcedAlignmentConfig {...configProps} nodeId={selectedNodeId} />

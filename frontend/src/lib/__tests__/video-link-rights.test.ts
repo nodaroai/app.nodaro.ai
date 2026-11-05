@@ -10,6 +10,7 @@ const { confirmLink, DeclarationChangedError } = vi.hoisted(() => ({
 }))
 vi.mock("@/lib/content-rights", () => ({ confirmLink: (...a: unknown[]) => confirmLink(...a), DeclarationChangedError }))
 
+import { declarationChanged } from "@/lib/declaration-changes"
 import {
   clearVideoLinkRights,
   isVideoLinkRightsTicked,
@@ -51,6 +52,15 @@ describe("the box", () => {
     act(() => tickVideoLinkRights("v1", YT))
     act(() => clearVideoLinkRights())
     expect(result.current).toBe(false)
+  })
+
+  it("a changed declaration unticks every box, telling the hook", () => {
+    const { result } = renderHook(() => useVideoLinkRightsTicked("v1", YT))
+    act(() => tickVideoLinkRights("v1", YT))
+    tickVideoLinkRights("v2", TIKTOK)
+    act(() => declarationChanged())
+    expect(result.current).toBe(false)
+    expect(isVideoLinkRightsTicked("v2", TIKTOK)).toBe(false)
   })
 })
 

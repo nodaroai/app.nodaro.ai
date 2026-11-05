@@ -80,6 +80,7 @@ import {
   setVideoLinkUrl,
   VIDEO_LINK_INGEST_DEBOUNCE_MS,
 } from "../video-link-ingest"
+import { isNodeLinkRightsTicked, tickNodeLinkRights } from "../node-link-rights"
 
 const YT = "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
 const TIKTOK = "https://www.tiktok.com/@someone/video/7676964064458738952"
@@ -567,6 +568,15 @@ describe("the content rights box (rule 4)", () => {
     seed({ youtubeUrl: TIKTOK })
     workflowListeners.forEach((l) => l({ workflowId: null }, { workflowId: "w2" }))
     expect(isVideoLinkConfirmed("n1")).toBe(false)
+  })
+
+  it("the box of a node's own link (a Dubbing node's Source link) goes with the workflow too", () => {
+    const LINK = "https://example.com/talks/keynote"
+    tickNodeLinkRights("d1", LINK)
+    workflowListeners.forEach((l) => l({ workflowId: "w1" }, { workflowId: null }))
+    expect(isNodeLinkRightsTicked("d1", LINK)).toBe(true)
+    workflowListeners.forEach((l) => l({ workflowId: "w2" }, { workflowId: "w1" }))
+    expect(isNodeLinkRightsTicked("d1", LINK)).toBe(false)
   })
 
   describe("findUnconfirmedVideoLink — the question the Run gate asks before it fetches anything", () => {

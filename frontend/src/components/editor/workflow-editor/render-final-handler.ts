@@ -59,6 +59,7 @@ import type { ExecutionContext } from "./types"
 import { collapseExpandedClones } from "./execution-graph"
 import { rejectAllManualEdits } from "./execute-node"
 import { ensureVideoLinksBeforeRun } from "./video-link-run-gate"
+import { withRunLinkConfirmations } from "./run-link-confirmations"
 import { previewRunnable } from "./preview-gate"
 import { liveExecutable } from "./run-from-here-set"
 import { renderFinalRunSet, renderRunOverrides } from "./render-final-set"
@@ -312,11 +313,15 @@ export async function handleRenderFinal(
     })
 
     try {
+      // One confirmation per node whose own link this run hands on, made once:
+      // a continuation the server refuses created nothing, so the fallback run
+      // sends the same one.
+      const inputOverrides = await withRunLinkConfirmations([...runSet], overrides)
       const send = (from: string | undefined) => {
         const idempotencyKey = generateIdempotencyKey()
         return withDedupRaceRetry(() =>
           runWorkflow(workflowId, [...runSet], idempotencyKey, {
-            inputOverrides: overrides,
+            inputOverrides,
             ...(from ? { continueFromExecutionId: from } : {}),
           }),
         )

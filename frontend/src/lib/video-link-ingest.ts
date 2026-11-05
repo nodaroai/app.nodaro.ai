@@ -46,6 +46,7 @@ import {
   type VideoDownloadSection,
 } from "@/lib/api"
 import { DeclarationChangedError, confirmLink } from "@/lib/content-rights"
+import { clearNodeLinkRights } from "@/lib/node-link-rights"
 import {
   clearVideoLinkRights,
   isVideoLinkRightsTicked,
@@ -212,10 +213,14 @@ function settlePending(nodeId: string): void {
 
 // Another workflow is another set of nodes: every box starts unticked there,
 // even when a node id repeats (a template opened twice). A NEW canvas getting
-// its id on its first save is the same canvas: its boxes stay.
+// its id on its first save is the same canvas: its boxes stay. The boxes of the
+// nodes whose own link a run hands on (`node-link-rights.ts`) go the same way.
 ;(useWorkflowStore as { subscribe?: (listener: (state: { workflowId?: unknown }, previous: { workflowId?: unknown }) => void) => void }).subscribe?.(
   (state, previous) => {
-    if (previous.workflowId != null && state.workflowId !== previous.workflowId) clearVideoLinkRights()
+    if (previous.workflowId != null && state.workflowId !== previous.workflowId) {
+      clearVideoLinkRights()
+      clearNodeLinkRights()
+    }
   },
 )
 

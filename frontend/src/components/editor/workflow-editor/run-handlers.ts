@@ -72,6 +72,7 @@ import { executeNode, rejectAllManualEdits } from "./execute-node";
 import { executeNodeForList } from "./list-execution";
 import { cascadeAutoExecute } from "./auto-execute";
 import { ensureVideoLinksBeforeRun } from "./video-link-run-gate";
+import { withRunLinkConfirmations } from "./run-link-confirmations";
 import { buildVariantResults } from "./variant-results";
 // The restore poller shares the canvas loops' one flag writer. No cycle:
 // poll-job.ts imports nothing from this file.
@@ -751,7 +752,8 @@ export async function handleRun(
     // backend's DB UNIQUE constraint on (user_id, idempotency_key) ensures
     // React StrictMode / network retry can't create a duplicate execution.
     const idempotencyKey = generateIdempotencyKey();
-    const result = await withDedupRaceRetry(() => runWorkflow(workflowId, undefined, idempotencyKey));
+    const inputOverrides = await withRunLinkConfirmations(executableIds);
+    const result = await withDedupRaceRetry(() => runWorkflow(workflowId, undefined, idempotencyKey, inputOverrides ? { inputOverrides } : undefined));
     onExecutionStarted?.(result.executionId);
     streamBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
   } catch (err: unknown) {
@@ -1305,7 +1307,8 @@ async function startSubsetRun(o: {
 
   try {
     const idempotencyKey = generateIdempotencyKey();
-    const result = await withDedupRaceRetry(() => runWorkflow(workflowId, ids, idempotencyKey));
+    const inputOverrides = await withRunLinkConfirmations(ids);
+    const result = await withDedupRaceRetry(() => runWorkflow(workflowId, ids, idempotencyKey, inputOverrides ? { inputOverrides } : undefined));
     onExecutionStarted?.(result.executionId);
     streamBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
   } catch (err: unknown) {
