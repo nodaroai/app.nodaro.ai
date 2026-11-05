@@ -12106,6 +12106,8 @@ export interface TrendEngineEnvironment {
       styleOnly?: boolean
       /** The engine takes an art style on a direct Precise run (Prism); absent = it refuses one there. */
       preciseArtStyle?: boolean
+      /** The engine runs a direct Prism Precise run with an art style as Flex while the admin's switch is on; absent = it runs it as Precise. */
+      preciseStyleRoute?: boolean
     }
     /**
      * What that environment's platform (the app itself, apart from its engine)
@@ -12370,6 +12372,8 @@ export interface JobCastSwapSteps {
   skippedSteps: SkippedStep[]
   /** A style-only run's path (a Full Quality version's included, which records no steps); null for any other run. */
   styleOnly: NodaroMotionStyleOnlyPath | null
+  /** It resolved to Precise with an art style, and the Precise art-style route ran it as Flex; absent otherwise. */
+  preciseStyleRouted?: true
 }
 
 const ADMIN_NODARO_MOTION_STEPS = "/v1/admin/nodaro-motion/steps"
@@ -13248,6 +13252,38 @@ export async function saveNodaroMotionPreciseArtStyle(preciseArtStyle: NodaroMot
     await apiRequest<{ data: NodaroMotionPreciseArtStyleView }>(ADMIN_NODARO_MOTION_PRECISE_ART_STYLE, "apiErr.saveNodaroMotion", {
       method: "PUT",
       body: { preciseArtStyle },
+    })
+  ).data
+}
+
+// ---- Admin: Nodaro Motion's Precise art-style route (/v1/admin/nodaro-motion/precise-style-route, admin-nodaro-motion-precise-style-route.ts) ----
+
+/** Whether a direct Prism Precise run with an art style runs as Flex, and the accounts that skip it. A key left out takes its default (on; nobody). */
+export interface NodaroMotionPreciseStyleRoute {
+  routing?: "on" | "off"
+  bypassEmails?: string[]
+}
+
+export interface NodaroMotionPreciseStyleRouteView {
+  /** null = never saved: routing on, nobody bypassed. */
+  preciseStyleRoute: NodaroMotionPreciseStyleRoute | null
+  updatedAt: string | null
+  /** Whether this environment's Cast Swap engine runs such a run as Flex (`castSwap.preciseStyleRoute`). */
+  supported: boolean
+}
+
+const ADMIN_NODARO_MOTION_PRECISE_STYLE_ROUTE = "/v1/admin/nodaro-motion/precise-style-route"
+
+export async function fetchNodaroMotionPreciseStyleRoute(): Promise<NodaroMotionPreciseStyleRouteView> {
+  return (await apiRequest<{ data: NodaroMotionPreciseStyleRouteView }>(ADMIN_NODARO_MOTION_PRECISE_STYLE_ROUTE, "apiErr.loadNodaroMotion")).data
+}
+
+/** Saves the whole setting, whatever the engines. Something that is not an email is a 400 `validation_error`. */
+export async function saveNodaroMotionPreciseStyleRoute(preciseStyleRoute: NodaroMotionPreciseStyleRoute): Promise<NodaroMotionPreciseStyleRouteView> {
+  return (
+    await apiRequest<{ data: NodaroMotionPreciseStyleRouteView }>(ADMIN_NODARO_MOTION_PRECISE_STYLE_ROUTE, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { preciseStyleRoute },
     })
   ).data
 }

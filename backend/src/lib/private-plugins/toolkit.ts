@@ -147,6 +147,7 @@ import { styleForPlugin } from "../nodaro-motion-style.js"
 import { promptWordingForPlugin } from "../nodaro-motion-prompt-wording.js"
 import { engineTakesStyleOnly, styleOnlyForPlugin } from "../nodaro-motion-style-only.js"
 import { engineTakesPreciseArtStyle, preciseArtStyleForPlugin } from "../nodaro-motion-precise-art-style.js"
+import { engineRoutesPreciseStyle, preciseStyleRouteForPlugin } from "../nodaro-motion-precise-style-route.js"
 import { anyStepsSet, stepsForLoadedEngine, withEarlierStepsKeys } from "../nodaro-motion-steps.js"
 import { loadedEngineTakesSteps } from "../cast-swap-steps.js"
 import { KieVideoProvider } from "../../providers/kie/video.js"
@@ -1656,6 +1657,8 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   nodaroMotionStyleOnly: true,
   // tk.settings.nodaroMotionPreciseArtStyle(): the admin's opener for a Precise run with an art style per Nodaro Motion engine.
   nodaroMotionPreciseArtStyle: true,
+  // tk.settings.nodaroMotionPreciseStyleRoute(): whether a direct Prism Precise run with an art style runs as Flex, and who skips it.
+  nodaroMotionPreciseStyleRoute: true,
   jobLanes: true,
   // tk.jobs.waitForJob leaves the time the awaited job waits for a slot
   // (`queued`) out of the plugin's timeout (`queueAware` below).
@@ -2326,6 +2329,15 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_precise_art_style: the app settings could not be read")
         if (!engineTakesPreciseArtStyle(getPluginSupports().castSwap)) return null
         return preciseArtStyleForPlugin(settings.nodaro_motion_precise_art_style)
+      },
+      // Same rules: a failed read throws (the engine reads that as its default, with an alert). Null when never
+      // saved or nothing differs from the defaults (routing on, nobody bypassed), AND to an engine that does not
+      // declare `castSwap.preciseStyleRoute` (it never asks); else what differs, a copy.
+      nodaroMotionPreciseStyleRoute: async () => {
+        const settings = await getAppSettings()
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_precise_style_route: the app settings could not be read")
+        if (!engineRoutesPreciseStyle(getPluginSupports().castSwap)) return null
+        return preciseStyleRouteForPlugin(settings.nodaro_motion_precise_style_route)
       },
     },
     deployment: { publicUrl: appBaseUrl() },

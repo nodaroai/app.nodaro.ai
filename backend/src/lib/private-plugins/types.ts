@@ -3484,6 +3484,13 @@ export interface PluginCapabilities {
    */
   readonly nodaroMotionPreciseArtStyle?: boolean
   /**
+   * `tk.settings.nodaroMotionPreciseStyleRoute()` exists: whether a DIRECT run
+   * on Nodaro Motion Prism that resolves to Precise and carries an art style
+   * runs as Flex, and which accounts skip that. An older host has no such
+   * member: a plugin routes nothing there.
+   */
+  readonly nodaroMotionPreciseStyleRoute?: boolean
+  /**
    * The host reads `NodaroPrivatePlugin.jobLanes()`: the concurrency lane each
    * of a plugin's job types runs in (see `PluginJobLaneClass`). An older host
    * never calls it, and runs every plugin job type as a coordinator.
@@ -3813,6 +3820,22 @@ export interface PluginSettingsToolkit {
    * `capabilities.nodaroMotionPreciseArtStyle`.
    */
   nodaroMotionPreciseArtStyle?(): Promise<PluginNodaroMotionPreciseArtStyle | null>
+  /**
+   * The admin's Precise art-style route: `routing` "off" when an admin switched
+   * it off, the accounts' emails that skip it (`bypassEmails`, trimmed and
+   * lowercased). Null when it was never saved, nothing differs from the defaults
+   * (routing on, nobody bypassed), or this host's engine does not declare
+   * `castSwap.preciseStyleRoute`. Returns a copy the plugin may change freely.
+   * REJECTS when the settings could not be read. Advertised as
+   * `capabilities.nodaroMotionPreciseStyleRoute`.
+   */
+  nodaroMotionPreciseStyleRoute?(): Promise<PluginNodaroMotionPreciseStyleRoute | null>
+}
+
+/** Nodaro Motion's Precise art-style route. Absent `routing`: on; absent `bypassEmails`: nobody. */
+export type PluginNodaroMotionPreciseStyleRoute = {
+  readonly routing?: "on" | "off"
+  readonly bypassEmails?: readonly string[]
 }
 
 /**
@@ -4311,6 +4334,15 @@ export interface PluginSupports {
    *   there, answers it the setting as null, and never saves the setting while
    *   no environment declares it (lib/nodaro-motion-precise-art-style.ts
    *   `engineTakesPreciseArtStyle`).
+   * - `preciseStyleRoute`: the engine runs a DIRECT run on Nodaro Motion Prism
+   *   that resolves to Precise and carries an art style as Flex, its estimate
+   *   alike, while the admin's switch is on
+   *   (`tk.settings.nodaroMotionPreciseStyleRoute`; never saved reads as on), an
+   *   account on its bypass list excepted. The job keeps the style that ran and
+   *   the hidden `input_data.__preciseStyleRouted`. Additive-optional: absent ⇒
+   *   the engine runs such a run as Precise; the platform answers it the setting
+   *   as null and says which environments do not route yet
+   *   (lib/nodaro-motion-precise-style-route.ts `engineRoutesPreciseStyle`).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -4363,6 +4395,7 @@ export interface PluginSupports {
     readonly promptWordings?: readonly ("current" | "new")[]
     readonly styleOnly?: boolean
     readonly preciseArtStyle?: boolean
+    readonly preciseStyleRoute?: boolean
   }
 }
 

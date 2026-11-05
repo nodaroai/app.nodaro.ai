@@ -27,7 +27,7 @@ import type { ByEngineForPlugin } from "../../nodaro-motion-engine-keys.js"
  * the settings cache's own read (`getAppSettings`, ~60 s, cleared on an admin
  * write), handed out as a copy, and null when never saved.
  */
-const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, reads: 0, failed: false }))
+const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, preciseStyleRoute: null as unknown, reads: 0, failed: false }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("../../app-settings.js", async (importOriginal) => {
@@ -36,7 +36,7 @@ vi.mock("../../app-settings.js", async (importOriginal) => {
     ...orig,
     getAppSettings: async () => {
       h.reads++
-      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle }
+      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle, nodaro_motion_precise_style_route: h.preciseStyleRoute }
     },
     settingsReadFailed: () => h.failed,
   }
@@ -738,5 +738,51 @@ describe("tk.settings: the fill none and a depth fill's blur", () => {
     } finally {
       _resetPluginSupportsForTests()
     }
+  })
+})
+
+/**
+ * `tk.settings.nodaroMotionPreciseStyleRoute()`: the admin's switch and bypass list for running a direct Prism Precise run
+ * with an art style as Flex: null when never saved, nothing differs from the defaults (on, nobody bypassed), or this
+ * host's engine does not declare `castSwap.preciseStyleRoute`.
+ */
+describe("tk.settings.nodaroMotionPreciseStyleRoute", () => {
+  beforeEach(() => {
+    h.preciseStyleRoute = null
+    h.reads = 0
+    h.failed = false
+    _resetPluginSupportsForTests()
+  })
+  const routingEngine = () => setPluginSupports({ castSwap: { ...CS, preciseStyleRoute: true } } as never)
+
+  it("advertises nodaroMotionPreciseStyleRoute and answers null to an engine without castSwap.preciseStyleRoute", async () => {
+    expect(buildToolkit().capabilities?.nodaroMotionPreciseStyleRoute).toBe(true)
+    expect(typeof buildToolkit().settings?.nodaroMotionPreciseStyleRoute).toBe("function")
+    h.preciseStyleRoute = { routing: "off" }
+    expect(await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).toBeNull()
+    setPluginSupports({ castSwap: { ...CS, preciseStyleRoute: false } } as never)
+    expect(await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).toBeNull()
+  })
+
+  it("rejects when the settings could not be read, never answering null (routing on, nobody bypassed)", async () => {
+    routingEngine()
+    h.failed = true
+    await expect(buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).rejects.toThrow(/could not be read/)
+  })
+
+  it("answers null when it was never saved, or nothing differs from the defaults", async () => {
+    routingEngine()
+    expect(await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).toBeNull()
+    h.preciseStyleRoute = { routing: "on", bypassEmails: [] }
+    expect(await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).toBeNull()
+  })
+
+  it("answers what differs, a copy the plugin may change", async () => {
+    routingEngine()
+    h.preciseStyleRoute = { routing: "off", bypassEmails: ["a@example.com"] }
+    const got = await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()
+    expect(got).toStrictEqual({ routing: "off", bypassEmails: ["a@example.com"] })
+    ;(got as { bypassEmails: string[] }).bypassEmails.push("b@example.com")
+    expect(h.preciseStyleRoute).toEqual({ routing: "off", bypassEmails: ["a@example.com"] })
   })
 })
