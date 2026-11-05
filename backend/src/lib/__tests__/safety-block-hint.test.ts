@@ -30,7 +30,7 @@ import {
   policyBlockHint,
   queueTimeoutHintOf,
   refusalHintFor,
-  requestRefusedOf,
+  requestRefusedHintOf,
   safetyBlockOf,
   type CreditsHint,
   type ErrorHint,
@@ -90,7 +90,7 @@ describe("ErrorHint is a discriminated union on `kind`", () => {
         case "queue-timeout":
           return `queue:${hint.reason}:${hint.waitedMinutes}`
         case "request-refused":
-          return "request"
+          return `request:${hint.subject ?? "as sent"}`
         default: {
           const exhaustive: never = hint
           return exhaustive
@@ -102,7 +102,8 @@ describe("ErrorHint is a discriminated union on `kind`", () => {
     expect(describeHint({ kind: "credits", code: "insufficient_credits" })).toBe("credits:insufficient_credits")
     expect(describeHint(inputRefusedHint())).toBe("input:input_video")
     expect(describeHint({ kind: "queue-timeout", reason: "timeout", waitedMinutes: 120 })).toBe("queue:timeout:120")
-    expect(describeHint({ kind: "request-refused" })).toBe("request")
+    expect(describeHint({ kind: "request-refused" })).toBe("request:as sent")
+    expect(describeHint({ kind: "request-refused", subject: "input_video" })).toBe("request:input_video")
   })
 
   it("keeps errorHintFor producing the safety arm (migration 376 readers unchanged)", () => {
@@ -200,30 +201,41 @@ describe("safetyBlockOf never throws", () => {
 })
 
 describe("a request the provider refused, read off the thrown error", () => {
-  const refused = () => Object.assign(new Error("x"), { requestRefused: true })
+  const refused = (over = {}) => Object.assign(new Error("x"), { requestRefused: true, ...over })
 
   it("reads the flag off the error and off its cause chain", () => {
-    expect(requestRefusedOf(refused())).toBe(true)
-    expect(requestRefusedOf(new Error("outer", { cause: refused() }))).toBe(true)
+    expect(requestRefusedHintOf(refused())).toEqual({ kind: "request-refused" })
+    expect(requestRefusedHintOf(new Error("outer", { cause: refused() }))).toEqual({ kind: "request-refused" })
+  })
+
+  it("carries the input video as its subject, and nothing else", () => {
+    const sentAVideo = { referenceVideoUrls: ["https://cdn.example/src.mp4"] }
+    expect(requestRefusedHintOf(refused({ requestRefusedSubject: "input_video" }), sentAVideo)).toEqual({ kind: "request-refused", subject: "input_video" })
+    expect(requestRefusedHintOf(refused({ requestRefusedSubject: "the moon", detail: "secret" }), sentAVideo)).toEqual({ kind: "request-refused" })
+  })
+
+  it("names no input video on a job that sent none", () => {
+    expect(requestRefusedHintOf(refused({ requestRefusedSubject: "input_video" }), {})).toEqual({ kind: "request-refused" })
   })
 
   it("a flag that is not exactly true, or no flag, is no refusal", () => {
-    expect(requestRefusedOf(new Error("x"))).toBe(false)
-    expect(requestRefusedOf(Object.assign(new Error("x"), { requestRefused: "yes" }))).toBe(false)
-    expect(requestRefusedOf(Object.assign(new Error("x"), { requestRefused: false }))).toBe(false)
-    expect(requestRefusedOf(null)).toBe(false)
+    expect(requestRefusedHintOf(new Error("x"))).toBeNull()
+    expect(requestRefusedHintOf(Object.assign(new Error("x"), { requestRefused: "yes" }))).toBeNull()
+    expect(requestRefusedHintOf(Object.assign(new Error("x"), { requestRefused: false, requestRefusedSubject: "input_video" }))).toBeNull()
+    expect(requestRefusedHintOf(null)).toBeNull()
   })
 
   it("never throws", () => {
-    expect(requestRefusedOf(Object.defineProperty(new Error("x"), "requestRefused", { get() { throw new Error("boom") } }))).toBe(false)
+    expect(requestRefusedHintOf(Object.defineProperty(new Error("x"), "requestRefused", { get() { throw new Error("boom") } }))).toBeNull()
   })
 
-  it("files the hint with no other field, under a content block and a refused input video", () => {
-    expect(refusalHintFor(null, false, false, false, true)).toEqual({ kind: "request-refused" })
-    expect(refusalHintFor(null, false, false, false, false)).toBeNull()
+  it("files the hint under a content block and a refused input video", () => {
+    const hint = { kind: "request-refused" } as const
+    expect(refusalHintFor(null, false, false, false, hint)).toEqual(hint)
+    expect(refusalHintFor(null, false, false, false, null)).toBeNull()
     expect(refusalHintFor(null, false, false)).toBeNull()
-    expect(refusalHintFor(null, false, true, false, true)).toEqual({ kind: "input-refused", subject: "input_video" })
-    expect(refusalHintFor({ class: "safety", maxAttempts: 2 }, true, false, false, true)).toEqual({ kind: "safety-block", class: "safety", retried: true })
+    expect(refusalHintFor(null, false, true, false, hint)).toEqual({ kind: "input-refused", subject: "input_video" })
+    expect(refusalHintFor({ class: "safety", maxAttempts: 2 }, true, false, false, hint)).toEqual({ kind: "safety-block", class: "safety", retried: true })
   })
 })
 

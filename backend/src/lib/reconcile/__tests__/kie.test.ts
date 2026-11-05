@@ -593,6 +593,21 @@ describe("reconcileKieJob", () => {
       expect(mocks.refundMock).toHaveBeenCalledWith("j-refused")
     })
 
+    it("a refused request naming the input video keeps it only on a job that sent one", async () => {
+      const refused = () => Object.assign(
+        new mocks.FakeKieError("Input file exceeds the size or duration limit.", true, "task failed: [400] video_1 duration must be between 2 and 30 seconds"),
+        { requestRefused: true, requestRefusedSubject: "input_video" },
+      )
+      mocks.pollKieTaskMock.mockRejectedValueOnce(refused())
+      await reconcileKieJob(videoRow({ provider: "kling-4", referenceVideoUrls: ["https://cdn.example/src.mp4"] }))
+      expect(failedUpdate().error_hint).toEqual({ kind: "request-refused", subject: "input_video" })
+
+      mocks.jobsUpdateMock.mockClear()
+      mocks.pollKieTaskMock.mockRejectedValueOnce(refused())
+      await reconcileKieJob(videoRow({ provider: "kling-4" }))
+      expect(failedUpdate().error_hint).toEqual({ kind: "request-refused" })
+    })
+
     it("a failure that is not a refusal → no hint, even on a job that sent a video", async () => {
       mocks.pollKieTaskMock.mockRejectedValueOnce(await kieTaskFailure("internal error, please retry"))
       await reconcileKieJob(videoRow({ provider: "seedance-2", referenceVideoUrls: ["https://cdn.example/src.mp4"] }))

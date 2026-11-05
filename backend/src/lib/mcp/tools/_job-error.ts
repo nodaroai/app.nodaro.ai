@@ -246,6 +246,15 @@ export function failureGuidance(job: {
   // same inputs are refused again. Which of them can change depends on the job
   // (a trend run's clip is the trend's), which only the caller knows.
   if (hint && hint.kind === "request-refused") {
+    if (hint.subject === "input_video") {
+      return {
+        retryable: false,
+        guidance:
+          "The provider refused the input video as it was sent (its length or size), and the same clip will be refused " +
+          "again. Send a different clip, or ask the user for one; a trend run or a Full Quality has no clip of the " +
+          "caller's to change, so report it to the user. A run made of steps can charge for them again.",
+      }
+    }
     return {
       retryable: false,
       guidance:

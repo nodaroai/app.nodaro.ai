@@ -88,10 +88,14 @@ export class KieError extends Error {
    *  named a fault of the request, so the same inputs are refused again (see
    *  `createSanitizedError`). Never a content block, a failed upload or a bare
    *  "Generation failed". Read duck-typed by `lib/safety-block.ts`
-   *  (`requestRefusedOf`) to mark the job's `error_hint`, so whatever wraps this
+   *  (`requestRefusedHintOf`) to mark the job's `error_hint`, so whatever wraps this
    *  job (a plugin's run) can say the same; this flag never changes the
    *  user-facing message. */
   public readonly requestRefused: boolean
+  /** What a refused request's words name, when they name the input video (its
+   *  length, its size): the input that has to change. Read duck-typed beside
+   *  `requestRefused`. Null otherwise. */
+  public readonly requestRefusedSubject: "input_video" | null
 
   constructor(
     sanitizedMessage: string,
@@ -103,6 +107,7 @@ export class KieError extends Error {
     inputVideoRefused = false,
     inputImageRefused = false,
     requestRefused = false,
+    requestRefusedSubject: "input_video" | null = null,
   ) {
     super(sanitizedMessage)
     this.name = "KieError"
@@ -114,6 +119,7 @@ export class KieError extends Error {
     this.inputVideoRefused = inputVideoRefused
     this.inputImageRefused = this.contentPolicyClass === "copyright" && inputImageRefused
     this.requestRefused = requestRefused && !contentPolicy
+    this.requestRefusedSubject = this.requestRefused ? requestRefusedSubject : null
   }
 
   /** Get full error message including internal details (for logging/debugging) */
@@ -156,6 +162,21 @@ const GENERIC_PROVIDER_FAILURE_RE =
  */
 const NO_FAULT_PROVIDER_FAILURE_RE =
   /^(?:something went wrong\. please try again, or change your input files or prompt\.?|generate playground failed, task id is blank|record result error)$/i
+
+/**
+ * KIE could not load a file it was sent, whatever the status: "[400] upload
+ * failed" (prod 2026-10-31 and 2026-11-01: each succeeded on the same request
+ * moments later), "[400] Image fetch failed. Check access settings…", and
+ * "[400] File processing failed" when it goes on to ask to check the link
+ * (staging, 2026-10-20). Neither a refused request nor a refused clip.
+ */
+const MEDIA_LOAD_FAILED_RE =
+  /\b(?:upload|image fetch) failed\b|\bfile processing failed\b.*\b(?:check the url|asset link|re-?upload)\b/i
+
+/** A refused request's words naming the input video's length or size. The
+ *  field's name alone is no limit on the clip ("video_url is required"). */
+const REFUSED_INPUT_VIDEO_RE =
+  /video_urls?\b[^.]*\b(?:duration|length|long|size|seconds)\b|\bvideo_\d+ duration\b|\bduration of the video\b|\b(?:input|reference) video (?:duration|must)\b|\bvideo pixel count\b/i
 
 /** The provider's own words inside one of our wrapped internal messages:
  *  `task failed: [400] <failMsg>` (pollKieTask), or
@@ -378,9 +399,7 @@ export function createSanitizedError(
     // when the request was wrong. Prod 2026-10-31 (job d3736b0d) and 2026-11-01
     // (job 57c29d77): two Kling 4 runs, each told "rejected these settings…
     // will fail again", each succeeded on the same request moments later.
-    // "[400] Image fetch failed. Check access settings…" is the same failure
-    // (logs, October 2026).
-    /\b(?:upload|image fetch) failed\b/.test(lowerMsg)
+    MEDIA_LOAD_FAILED_RE.test(lowerMsg)
   ) {
     sanitizedMessage =
       `${context} failed: the provider couldn't load the input media. ` +
@@ -424,9 +443,10 @@ export function createSanitizedError(
 
   // The createTask paths classify no content, and a keyword branch above can
   // claim a content block's words ("Invalid input: NSFW…"): never a refused request.
+  const refused = requestRefused && classifyContentPolicyClass(internalMessage) === null
   return new KieError(
     sanitizedMessage, internalMessage, context, isUpstreamFailure, contentPolicy, null, inputVideoRefused, false,
-    requestRefused && classifyContentPolicyClass(internalMessage) === null,
+    refused, refused && REFUSED_INPUT_VIDEO_RE.test(providerWordsOf(internalMessage)) ? "input_video" : null,
   )
 }
 
@@ -572,9 +592,10 @@ export function classifyContentPolicyClass(failMsg: string): ContentPolicyClass 
  *  failed" (no class). */
 const INPUT_VIDEO_REFUSAL_RE = /input video may be related to copyright|file processing failed/i
 
-/** True when a provider `failMsg` says the input video itself was refused. */
+/** True when a provider `failMsg` says the input video itself was refused.
+ *  Not when it asks to check the file's link: it could not load the file. */
 export function isInputVideoRefusal(failMsg: string): boolean {
-  return INPUT_VIDEO_REFUSAL_RE.test(failMsg)
+  return INPUT_VIDEO_REFUSAL_RE.test(failMsg) && !MEDIA_LOAD_FAILED_RE.test(failMsg)
 }
 
 /** Which INPUT a copyright refusal names, when it names one. The provider
