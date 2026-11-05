@@ -6173,6 +6173,7 @@ export const ptBR: ChromeDict = {
   "node.connectAudioNodeHint": "Conecte um nó de áudio à entrada “Áudio” — o avatar sincroniza os lábios com ele. Para digitar um texto, mude a barra para “Texto (TTS)”.",
   "node.urlCopied": "URL copiada",
   "linkImport.addedAsIs": "O link foi adicionado como está. Não foi possível abri-lo para ajuste.",
+  "linkImport.refused": "Este link não pode ser adicionado.",
   "node.copied": "Copiado",
   "node.promptCopied": "Prompt copiado",
   "node.failed": "Com falha",

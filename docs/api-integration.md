@@ -5380,10 +5380,23 @@ copy of it, a reload) waits for its box again. A run, and a published app, read
 the stored file and never fetch these links. An uploaded file or a direct file
 link needs no box.
 
-**Not covered yet** — a picture added from a link (the Upload Image node and
-a published app's picture input) is still fetched by the editor or the app
-page without asking for the declaration; with the setting on, it is kept as
-the link itself instead of being copied into storage.
+**A picture added from a link.** The Upload Image node and a published app's
+picture input copy a pasted picture link into storage
+(`POST /v1/media/import-url`) before it opens in Adjust Image: an import of
+the link, so the content rights box shows under the link and the copy waits
+for it, ticked for that link. In the editor, ticking the box starts the copy;
+on an app page, Set waits for it. The copy confirms the declaration for that
+one link right before it (`confirmationId`), and the box covers the link that
+is fetched (a resized variant the editor rewrites to its original is
+confirmed as that original). A tick is one copy's: the next link asks for the
+box again. A link whose box is not ticked is not added at all. A changed
+declaration (found when the confirmation is made, or by the copy itself)
+unticks every box on the page, and the link waits for a new tick. A link the
+copy refuses (`403`: the site's policy, the account's measures, a
+confirmation it does not accept) is not added either, and the page says so.
+A link that cannot be copied for another reason (unreachable, too large, not
+a picture, full storage) is still added as it is, with a notice. An uploaded
+file needs no box.
 
 **Import source policies.** Before the confirmation is checked, the link's
 site is held to what an administrator decided about it (Admin → Settings →

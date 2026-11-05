@@ -6239,6 +6239,7 @@ export const ja: ChromeDict = {
   "node.connectAudioNodeHint": "オーディオノードを「オーディオ」入力に接続してください。アバターがそのオーディオに合わせてリップシンクします。スクリプトを入力する場合は、ツールバーで「テキスト（TTS）」に切り替えてください。",
   "node.urlCopied": "URL をコピーしました",
   "linkImport.addedAsIs": "リンクをそのまま追加しました。調整用に開けませんでした。",
+  "linkImport.refused": "このリンクは追加できません。",
   "node.copied": "コピーしました",
   "node.promptCopied": "プロンプトをコピーしました",
   "node.failed": "失敗",

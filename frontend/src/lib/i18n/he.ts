@@ -6319,6 +6319,7 @@ export const he: ChromeDict = {
   "node.connectAudioNodeHint": "חברו רכיב אודיו למחבר האודיו — האווטאר יסנכרן אליו שפתיים. החליפו את הרצועה לטקסט (TTS) כדי להקליד תסריט במקום.",
   "node.urlCopied": "הכתובת הועתקה",
   "linkImport.addedAsIs": "הקישור נוסף כפי שהוא. לא ניתן היה לפתוח אותו להתאמה.",
+  "linkImport.refused": "אי אפשר להוסיף את הקישור הזה.",
   "node.copied": "הועתק",
   "node.promptCopied": "הפרומפט הועתק",
   "node.failed": "נכשל",

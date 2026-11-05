@@ -1,11 +1,14 @@
 /**
  * A link typed into the upload image node's URL box is imported into the
  * person's storage, read back as a File and opened in the "Adjust image"
- * editor, as a picked file is. The editor works from that in-memory File, so
- * the imported copy is discarded as soon as it is read back, before the editor
- * opens, and whatever the editor then does discards nothing more. A
- * link that cannot be imported, for any reason, is added as it is (as before
- * links were imported) with one notice.
+ * editor, as a picked file is. An import of someone's link, so it waits for
+ * the content rights box under the link, ticked for that link on this node
+ * (ticking it starts the import), and confirms the declaration for that one
+ * import. The editor works from that in-memory File, so the imported copy is
+ * discarded as soon as it is read back, before the editor opens, and whatever
+ * the editor then does discards nothing more. A link that cannot be imported,
+ * for any reason, is added as it is (as before links were imported) with one
+ * notice; a link whose box is not ticked is not added at all.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
@@ -16,8 +19,10 @@ const h = vi.hoisted(() => ({
   openEditor: vi.fn(),
   moderate: vi.fn(),
   toastWarning: vi.fn(),
+  toastError: vi.fn(),
   editorOptions: null as null | { onComplete: (results: unknown[]) => void; onCancel?: () => void },
 }))
+const rights = vi.hoisted(() => ({ confirm: vi.fn(), declaration: vi.fn() }))
 
 vi.mock("@/lib/supabase", () => ({
   createClient: () => ({ auth: { getSession: async () => ({ data: { session: null } }) } }),
@@ -27,6 +32,18 @@ vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>()
   return { ...actual, importMediaUrl: vi.fn(), discardMedia: vi.fn() }
 })
+
+// The platform's side of a confirmation: the real box store and declaration
+// module run above it, so a changed declaration really unticks the box.
+vi.mock("@/lib/nodaro-client", () => ({
+  nodaroClient: { contentRights: { confirm: rights.confirm, declaration: rights.declaration } },
+}))
+
+vi.mock("@/components/content-rights/rights-declaration-box", () => ({
+  RightsDeclarationBox: ({ checked, onCheckedChange }: { checked: boolean; onCheckedChange: (checked: boolean) => void }) => (
+    <input type="checkbox" aria-label="rights" checked={checked} onChange={(e) => onCheckedChange(e.target.checked)} />
+  ),
+}))
 
 vi.mock("@xyflow/react", () => ({
   Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
@@ -77,7 +94,7 @@ vi.mock("@/components/editor/media-editor", () => ({
   MediaEditorModal: () => null,
 }))
 
-vi.mock("sonner", () => ({ toast: { warning: h.toastWarning, error: vi.fn(), success: vi.fn(), info: vi.fn() } }))
+vi.mock("sonner", () => ({ toast: { warning: h.toastWarning, error: h.toastError, success: vi.fn(), info: vi.fn() } }))
 
 vi.mock("../upload-moderation", () => ({
   useUploadModeration: () => ({ moderate: h.moderate }),
@@ -96,12 +113,15 @@ vi.mock("../handle-with-popover", () => ({ HandleWithPopover: () => null, HANDLE
 vi.mock("../editable-node-label", () => ({ EditableNodeLabel: () => null }))
 
 import * as api from "@/lib/api"
+import { __resetContentRightsForTests } from "@/lib/content-rights"
+import { clearNodeLinkRights, isNodeLinkRightsTicked, tickNodeLinkRights } from "@/lib/node-link-rights"
 import { UploadImageNode } from "../upload-image-node"
 
 const importMediaUrl = vi.mocked(api.importMediaUrl)
 const discardMedia = vi.mocked(api.discardMedia)
 
 const LINK = "https://example.test/photos/cat.png"
+const CONFIRMED = { confirmationId: "conf-1" }
 const IMPORTED: api.ImportedMedia = {
   url: "https://r2.example.test/uploads/images/abc.png",
   thumbnailUrl: null,
@@ -118,25 +138,40 @@ function renderNode() {
   return render(<UploadImageNode {...props} />)
 }
 
+const urlBox = () => screen.getByPlaceholderText("or paste image URL...") as HTMLInputElement
+const rightsBox = () => screen.queryByRole("checkbox", { name: "rights" }) as HTMLInputElement | null
+
+function typeLink(link = LINK) {
+  fireEvent.change(urlBox(), { target: { value: link } })
+}
+
+/** Type the link and tick its box: the tick starts the import. */
 function submitLink(link = LINK) {
-  const box = screen.getByPlaceholderText("or paste image URL...")
-  fireEvent.change(box, { target: { value: link } })
-  fireEvent.keyDown(box, { key: "Enter" })
-  return box
+  typeLink(link)
+  fireEvent.click(rightsBox()!)
 }
 
 beforeEach(() => {
+  __resetContentRightsForTests()
   h.updateNodeData.mockReset()
   h.openEditor.mockReset()
   h.moderate.mockReset()
   h.toastWarning.mockReset()
+  h.toastError.mockReset()
+  rights.declaration.mockReset()
+  rights.declaration.mockResolvedValue({ version: 1, text: "The declaration." })
+  rights.confirm.mockReset()
+  rights.confirm.mockResolvedValue({ id: "conf-1", expiresAt: "2026-11-05T12:00:00Z" })
   h.editorOptions = null
   importMediaUrl.mockReset()
   discardMedia.mockReset()
   discardMedia.mockResolvedValue(undefined)
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(["png"], { type: "image/png" }) }))
 })
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  clearNodeLinkRights()
+})
 
 describe("UploadImageNode — a link opens the Adjust image editor", () => {
   it("imports the link, reads the copy back and opens the editor with one File", async () => {
@@ -145,7 +180,7 @@ describe("UploadImageNode — a link opens the Adjust image editor", () => {
     submitLink()
 
     await waitFor(() => expect(h.openEditor).toHaveBeenCalledTimes(1))
-    expect(importMediaUrl).toHaveBeenCalledWith(LINK)
+    expect(importMediaUrl).toHaveBeenCalledWith(LINK, CONFIRMED)
     expect(fetch).toHaveBeenCalledWith(IMPORTED.url)
     const files = h.openEditor.mock.calls[0]![0] as File[]
     expect(files).toHaveLength(1)
@@ -242,13 +277,14 @@ describe("UploadImageNode — a link opens the Adjust image editor", () => {
     await waitFor(() => expectStoredAsIs())
   })
 
-  it("keeps a Pinterest link as its original, as before", async () => {
+  it("keeps a Pinterest link as its original, as before, and confirms the link it fetches", async () => {
     importMediaUrl.mockRejectedValue(new Error("media import refused: 422 fetch_failed"))
     renderNode()
     submitLink("https://i.pinimg.com/236x/ab/cd/ef/abcdef.jpg")
 
     await waitFor(() => expectStoredAsIs("https://i.pinimg.com/originals/ab/cd/ef/abcdef.jpg"))
-    expect(importMediaUrl).toHaveBeenCalledWith("https://i.pinimg.com/originals/ab/cd/ef/abcdef.jpg")
+    expect(rights.confirm).toHaveBeenCalledWith({ url: "https://i.pinimg.com/originals/ab/cd/ef/abcdef.jpg", declarationVersion: 1 })
+    expect(importMediaUrl).toHaveBeenCalledWith("https://i.pinimg.com/originals/ab/cd/ef/abcdef.jpg", CONFIRMED)
   })
 
   it("a copy that cannot be read back is discarded and the link kept as it is", async () => {
@@ -286,5 +322,91 @@ describe("UploadImageNode — a link opens the Adjust image editor", () => {
     await waitFor(() => expect(discardMedia).toHaveBeenCalledWith(IMPORTED.url))
     expect(h.openEditor).not.toHaveBeenCalled()
     expect(h.updateNodeData).not.toHaveBeenCalled()
+  })
+})
+
+describe("UploadImageNode — a link waits for its content rights box", () => {
+  it("shows the box, unticked, only once a link is typed", () => {
+    renderNode()
+    expect(rightsBox()).toBeNull()
+    typeLink()
+    expect(rightsBox()?.checked).toBe(false)
+  })
+
+  it("Enter or leaving the box with the box unticked imports nothing and adds nothing; the link stays", async () => {
+    renderNode()
+    typeLink()
+    fireEvent.keyDown(urlBox(), { key: "Enter" })
+    fireEvent.blur(urlBox())
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(rights.confirm).not.toHaveBeenCalled()
+    expect(importMediaUrl).not.toHaveBeenCalled()
+    expect(h.updateNodeData).not.toHaveBeenCalled()
+    expect(h.toastWarning).not.toHaveBeenCalled()
+    expect(urlBox().value).toBe(LINK)
+  })
+
+  it("ticking the box starts the import under a confirmation for that link; once tried, the box is unticked for the next link", async () => {
+    importMediaUrl.mockResolvedValue(IMPORTED)
+    renderNode()
+    submitLink()
+
+    await waitFor(() => expect(h.openEditor).toHaveBeenCalled())
+    expect(rights.confirm).toHaveBeenCalledWith({ url: LINK, declarationVersion: 1 })
+    expect(rights.confirm.mock.invocationCallOrder[0]!).toBeLessThan(importMediaUrl.mock.invocationCallOrder[0]!)
+    expect(isNodeLinkRightsTicked("node-1", LINK)).toBe(false)
+    typeLink()
+    expect(rightsBox()?.checked).toBe(false)
+  })
+
+  it("a link the platform refuses to import is not added, and the node says so", async () => {
+    importMediaUrl.mockRejectedValue(new api.MediaImportError(403, "import_source_disabled"))
+    renderNode()
+    submitLink()
+
+    await waitFor(() => expect(h.toastError).toHaveBeenCalledWith("This link can't be added."))
+    expect(h.updateNodeData).not.toHaveBeenCalled()
+    expect(h.toastWarning).not.toHaveBeenCalled()
+    expect(h.openEditor).not.toHaveBeenCalled()
+  })
+
+  it("a box ticked for another link is not this link's: shown unticked, and Enter imports nothing", async () => {
+    tickNodeLinkRights("node-1", "https://example.test/photos/other.png")
+    renderNode()
+    typeLink()
+    expect(rightsBox()?.checked).toBe(false)
+    fireEvent.keyDown(urlBox(), { key: "Enter" })
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(importMediaUrl).not.toHaveBeenCalled()
+  })
+
+  it("a box already ticked for the link lets Enter import it", async () => {
+    importMediaUrl.mockResolvedValue(IMPORTED)
+    tickNodeLinkRights("node-1", LINK)
+    renderNode()
+    typeLink()
+    expect(rightsBox()?.checked).toBe(true)
+    fireEvent.keyDown(urlBox(), { key: "Enter" })
+
+    await waitFor(() => expect(h.openEditor).toHaveBeenCalled())
+    expect(importMediaUrl).toHaveBeenCalledWith(LINK, CONFIRMED)
+  })
+
+  it.each([
+    ["before the confirmation", () => rights.confirm.mockRejectedValueOnce({ code: "rights_confirmation_stale" })],
+    ["between the confirmation and the import", () => importMediaUrl.mockRejectedValueOnce(new api.MediaImportError(403, "rights_confirmation_stale"))],
+  ])("a declaration changed %s adds nothing and says nothing: the link waits in the box, unticked, for a new tick", async (_label, arrange) => {
+    arrange()
+    renderNode()
+    submitLink()
+
+    await waitFor(() => expect(urlBox().value).toBe(LINK))
+    expect(rightsBox()?.checked).toBe(false)
+    expect(h.updateNodeData).not.toHaveBeenCalled()
+    expect(h.toastWarning).not.toHaveBeenCalled()
+    expect(h.toastError).not.toHaveBeenCalled()
+    expect(h.openEditor).not.toHaveBeenCalled()
   })
 })

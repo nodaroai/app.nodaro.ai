@@ -4737,6 +4737,11 @@ export async function processMedia(params: MediaProcessParams): Promise<MediaPro
   return json.data
 }
 
+export interface MediaImportOptions {
+  /** The content rights confirmation this import is made under (`nodaroClient.contentRights.confirm`, for this link). */
+  readonly confirmationId?: string
+}
+
 /** A link copied into the person's storage by `POST /v1/media/import-url`. */
 export interface ImportedMedia {
   readonly url: string
@@ -4750,22 +4755,38 @@ export interface ImportedMedia {
 }
 
 /**
- * Copy the picture at a link into the person's storage (`POST
- * /v1/media/import-url`), so it can be read and cropped like an upload. Any
- * refusal or network failure throws; the caller does not word it (a link that
- * cannot be imported is kept as it is), so the error carries only the
- * platform's code, for debugging.
+ * A refusal of `POST /v1/media/import-url`: its status and the platform's
+ * code, never the server's text (which can quote the remote host's own
+ * error). A `403` is the import gate's: the site's policy, the account's
+ * measures, or a confirmation it did not accept.
  */
-export async function importMediaUrl(url: string): Promise<ImportedMedia> {
+export class MediaImportError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+  ) {
+    super(`media import refused: ${status} ${code}`)
+    this.name = "MediaImportError"
+  }
+}
+
+/**
+ * Copy the picture at a link into the person's storage (`POST
+ * /v1/media/import-url`), so it can be read and cropped like an upload. An
+ * import of the link, so it carries the content rights confirmation made for
+ * it (`options.confirmationId`). A refusal throws `MediaImportError`; a
+ * network failure throws as it is.
+ */
+export async function importMediaUrl(url: string, options: MediaImportOptions = {}): Promise<ImportedMedia> {
   const authHeaders = await getAuthHeaders()
   const res = await fetch(`${API_BASE_URL}/v1/media/import-url`, {
     method: "POST",
     headers: { ...authHeaders, "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url, ...(options.confirmationId ? { confirmationId: options.confirmationId } : {}) }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(`media import refused: ${res.status} ${err?.error?.code ?? "unknown"}`)
+    throw new MediaImportError(res.status, err?.error?.code ?? "unknown")
   }
   const json = await res.json()
   return json.data

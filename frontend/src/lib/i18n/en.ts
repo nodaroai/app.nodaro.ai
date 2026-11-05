@@ -6366,6 +6366,7 @@ export const en = {
   "node.urlCopied": "URL copied",
   // A picture link imported, then adjusted like an upload (upload image node, image input card).
   "linkImport.addedAsIs": "Added the link as it is. It couldn't be opened for adjusting.",
+  "linkImport.refused": "This link can't be added.",
   "node.copied": "Copied",
   "node.promptCopied": "Prompt copied",
   "node.failed": "Failed",
