@@ -41,11 +41,12 @@ function originOf(baseUrl: string): string | undefined {
 
 /**
  * A still, 480px-wide picture of a rendered look preview: the image resized by
- * the CDN, or — for a clip (camera motion) — a frame taken 1s in. The same
- * transforms the editor's tiles use. A URL off the transforming CDN is kept
- * as is for an image, and dropped for a clip (no still to offer).
+ * the CDN, or — for a clip (camera motion) — a frame taken 1s in (or at
+ * `clipSeconds`). The same transforms the editor's tiles use. A URL off the
+ * transforming CDN is kept as is for an image, and dropped for a clip (no still
+ * to offer).
  */
-export function lookPreviewStillUrl(url: string, width = STILL_WIDTH): string | undefined {
+export function lookPreviewStillUrl(url: string, width = STILL_WIDTH, clipSeconds = 1): string | undefined {
   let parsed: URL
   try {
     parsed = new URL(url)
@@ -55,7 +56,7 @@ export function lookPreviewStillUrl(url: string, width = STILL_WIDTH): string | 
   const clip = /\.(mp4|webm|mov)$/i.test(parsed.pathname)
   if (!TRANSFORM_HOSTS.has(parsed.hostname)) return clip ? undefined : url
   return clip
-    ? `${parsed.origin}/cdn-cgi/media/mode=frame,time=1s,width=${width}${parsed.pathname}`
+    ? `${parsed.origin}/cdn-cgi/media/mode=frame,time=${clipSeconds}s,width=${width}${parsed.pathname}`
     : `${parsed.origin}/cdn-cgi/image/width=${width},format=auto,quality=80${parsed.pathname}`
 }
 
