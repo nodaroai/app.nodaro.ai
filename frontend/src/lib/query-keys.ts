@@ -383,6 +383,8 @@ export const queryKeys = {
     settings: () => ["admin", "settings"] as const,
     /** Admin → Settings → Content rights: the import source policies (migration 578). */
     importSources: () => ["admin", "import-sources"] as const,
+    /** Admin → Settings → Content rights: imports with and without a declaration over a window of days (migration 597). */
+    importShare: (days: number) => ["admin", "import-share", days] as const,
     messageTemplates: () => ["admin", "message-templates"] as const,
     userMessages: (userId: string) =>
       ["admin", "user-messages", userId] as const,

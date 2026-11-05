@@ -5372,6 +5372,28 @@ submitted, before any redirect; a listed site covers its subdomains. A change
 takes effect within a minute. The list is the deployment's own and is not part
 of the public API.
 
+**How many imports carry a declaration.** Admin → Settings → Content rights
+shows, for the last 7, 30 or 90 days, how many imports of a link started and
+how many of them carried a confirmation (a ticked box, or one derived from a
+standing authorization), and the imports without one by way in (a person's
+session, an API key, a connected app, an agent, or none), by where they were
+made (a direct request, a workflow run, an agent's inputs, an administrator's
+import, a plugin's download) and by connected app. With the setting on, each
+import without a confirmation is refused: this is what to read before turning
+it on. Counting
+began when the count was added to the deployment: a window that reaches back
+past that day starts there, and the screen says so. An import without a
+confirmation is never counted twice for the same request and site (a job tried
+again is the same import; a plugin's download outside any job has no request,
+so each attempt of it is counted); only the host of its link is kept, with no account,
+for 90 days, and the request only as a keyed hash that cannot be matched to a
+job or a run. One account adds at most 120 imports a minute to the count of
+each server process (a plugin's downloads outside any job, which have no
+account, share one such limit), so a flood from one account is counted only
+in part. The
+screen shows counts only, never a link, a site or an account. Like the import
+source list, it is the deployment's own and not part of the public API.
+
 **An account's measures.** Before the site's policy, the account itself is
 asked: while imports of links are blocked on the account under the
 deployment's repeat-infringer policy (see

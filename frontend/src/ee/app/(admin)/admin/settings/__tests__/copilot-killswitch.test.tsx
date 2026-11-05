@@ -33,8 +33,10 @@ vi.mock("@/lib/edition", () => ({
   // Off, so the provider/markup rows do not render and cannot muddy the diff.
   isFeatureEnabled: () => false,
 }))
-// The import sources card has its own query client and its own test.
+// The import sources card and the imports-with-a-declaration card each have
+// their own query client and their own test.
 vi.mock("../import-sources-card", () => ({ ImportSourcesCard: () => null }))
+vi.mock("../import-share-card", () => ({ ImportShareCard: () => null }))
 
 const AdminSettingsPage = (await import("../page")).default
 

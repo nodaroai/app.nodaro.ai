@@ -86,6 +86,10 @@ vi.mock("@/lib/content-rights.js", () => ({
   contentHashOf: vi.fn().mockResolvedValue("ab".repeat(32)),
 }))
 
+// The count of imports without a confirmation (lib/unconfirmed-imports.ts) has
+// its own tests; here a fake, so these tests pin which downloads are counted.
+vi.mock("@/lib/unconfirmed-imports.js", () => ({ recordUnconfirmedImport: vi.fn().mockResolvedValue(undefined) }))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -102,6 +106,7 @@ import { setDownloadSlotsForTests } from "../../lib/download-slots-instance.js"
 import { RedisDownloadLedger } from "../../lib/download-slot-ledger.js"
 import { makeFakeDownloadClient, makeFakeDownloadStore } from "../../lib/__tests__/fake-download-redis.js"
 import { ContentRightsError, checkRightsConfirmation, consumeRightsConfirmation, deriveAndConsumeConfirmation, recordEvent } from "../../lib/content-rights.js"
+import { recordUnconfirmedImport } from "../../lib/unconfirmed-imports.js"
 
 const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
 const YT_URL = "https://www.youtube.com/watch?v=abc123"
@@ -619,6 +624,8 @@ describe("POST /v1/download-video — asset bookkeeping", () => {
     await vi.waitFor(() => expect(insertSpy).toHaveBeenCalledTimes(1))
     expect(insertSpy.mock.calls[0][0]).toMatchObject({ rights_confirmation_id: confirmationId, content_hash: "ab".repeat(32) })
     await vi.waitFor(() => expect(recordEvent).toHaveBeenCalledWith(expect.objectContaining({ confirmationId, kind: "download_completed" })))
+    // A download that carried one is not among the ones counted without.
+    expect(recordUnconfirmedImport).not.toHaveBeenCalled()
   })
 
   it("a site an admin disabled is refused with 403 before anything else, naming no site", async () => {
@@ -647,11 +654,19 @@ describe("POST /v1/download-video — asset bookkeeping", () => {
     expect(downloadYouTubeVideo).not.toHaveBeenCalled()
   })
 
-  it("a download without a confirmation records none, and is refused with 403 when the check refuses it", async () => {
+  it("a download without a confirmation records none, is counted as one, and is refused with 403 when the check refuses it", async () => {
     const res = await post({ url: YT_URL })
     expect(res.statusCode).toBe(200)
     await vi.waitFor(() => expect(insertSpy).toHaveBeenCalledTimes(1))
     expect(insertSpy.mock.calls[0][0]).toMatchObject({ rights_confirmation_id: null })
+    expect(recordUnconfirmedImport).toHaveBeenCalledExactlyOnceWith({
+      userId: TEST_USER_ID,
+      url: YT_URL,
+      lane: "route",
+      via: "session",
+      appId: null,
+      requestId: expect.any(String),
+    })
 
     vi.mocked(checkRightsConfirmation).mockRejectedValueOnce(new ContentRightsError("rights_confirmation_required", "Confirm first"))
     const refused = await post({ url: YT_URL })
@@ -673,10 +688,11 @@ describe("POST /v1/download-video — asset bookkeeping", () => {
     await vi.waitFor(() => expect(insertSpy).toHaveBeenCalledTimes(1))
     expect(insertSpy.mock.calls[0][0]).toMatchObject({ rights_confirmation_id: derived })
     await vi.waitFor(() => expect(recordEvent).toHaveBeenCalledWith(expect.objectContaining({ confirmationId: derived, kind: "download_completed" })))
-    // A session's download derives nothing.
+    // A session's download derives nothing, and is the only one counted without.
     await post({ url: YT_URL })
     expect(checkRightsConfirmation).toHaveBeenLastCalledWith(expect.objectContaining({ via: "session" }))
     expect(deriveAndConsumeConfirmation).toHaveBeenCalledTimes(1)
+    expect(recordUnconfirmedImport).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ via: "session" }))
   })
 
   it("a connected app imports only with a scope that lets it write: one granted read scopes alone is refused before the rights check, one with a write scope stands on the authorization as the app", async () => {

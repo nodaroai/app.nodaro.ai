@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { Loader2, Settings, Server, Percent, Check, AlertCircle, Film, Plus, Trash2, Bot, Mail, Bell, ShieldCheck } from "lucide-react"
 import { useAdminSettings } from "@/ee/hooks/queries/use-admin-queries"
+import { ImportShareCard } from "./import-share-card"
 import { ImportSourcesCard } from "./import-sources-card"
 import { useUpdateSettingMutation, type AppSettings } from "@/hooks/queries/use-app-settings-queries"
 import { isFeatureEnabled, isCloud } from "@/lib/edition"
@@ -877,9 +878,8 @@ export default function AdminSettingsPage() {
               <Label htmlFor="content-rights-required">Require a rights confirmation before a link is imported</Label>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Off: the server records a confirmation when a client sends one and refuses nothing.
-                On: a video link import without one is refused. Turn it on only once every client
-                sends a confirmation — including runs started from the API, MCP, the SDK and
-                published apps, which do not send one yet.
+                On: an import of a link without one is refused. Turn it on only once every client
+                sends a confirmation: the count below shows how many imports started without one.
               </p>
             </div>
             <Switch
@@ -889,6 +889,7 @@ export default function AdminSettingsPage() {
             />
           </div>
 
+          <ImportShareCard />
           <ImportSourcesCard />
         </div>
 
