@@ -464,9 +464,9 @@ describe("podcast editing templates — structural validity", () => {
       ])
     })
 
-    it("names its attributes: a beginner template tagged for vertical podcast clips", async () => {
+    it("names its attributes: a simple template tagged for vertical podcast clips", async () => {
       const t = await loadTemplate(SLUG)
-      expect(t.complexity).toBe("beginner")
+      expect(t.complexity).toBe("simple")
       expect(t.tags).toEqual(expect.arrayContaining(["podcast", "vertical", "shorts", "video"]))
     })
 
