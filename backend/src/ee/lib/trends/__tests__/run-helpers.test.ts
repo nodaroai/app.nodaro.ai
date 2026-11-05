@@ -496,11 +496,40 @@ describe.each(Object.keys(DECLARED) as (keyof typeof DECLARED)[])("Nodaro Motion
     expect(pointer("failed", { kind: "request-refused" })).toEqual({ jobId: "fq-1", status: "failed", refused: true })
     expect(pointer("failed", { kind: "request-refused", subject: "input_video" })).toEqual({ jobId: "fq-1", status: "failed", refused: true })
     expect(pointer("failed", { kind: "input-refused", subject: "input_video" })).toEqual({ jobId: "fq-1", status: "failed", refused: true })
+    // A content block that doesn't change on the same inputs.
+    expect(pointer("failed", { kind: "safety-block", class: "copyright", retried: false })).toEqual({ jobId: "fq-1", status: "failed", refused: true })
+    expect(pointer("failed", { kind: "safety-block", class: "likeness", retried: false })).toEqual({ jobId: "fq-1", status: "failed", refused: true })
     // Anything else leaves the pointer as it was: another try stays on offer.
     expect(pointer("failed", null)).toEqual({ jobId: "fq-1", status: "failed" })
     expect(pointer("failed", { kind: "credits", code: "insufficient_credits" })).toEqual({ jobId: "fq-1", status: "failed" })
     expect(pointer("failed", { kind: "safety-block", class: "safety", retried: false })).toEqual({ jobId: "fq-1", status: "failed" })
     expect(pointer("completed", null)).toEqual({ jobId: "fq-1", status: "completed" })
+  })
+
+  it("a Full Quality try another can't get past says so on its own error, so its card can say how to try again (toTrendRun)", () => {
+    const NO_RUN_CREDITS = new Map() as unknown as RunCredits
+    const run = (error_hint: unknown, over: Record<string, unknown> = { fullQualityOf: "draft-1" }): RunJobRow => ({
+      id: "fq-1",
+      status: "failed",
+      progress: 25,
+      input_data: { type: "cast-swap", trend: { id: "t", slug: "s", version: 1, name: "N" }, engine: "motion-prism", resolution: "1080p", ...over },
+      output_data: {},
+      error_message: "x",
+      error_hint: error_hint as RunJobRow["error_hint"],
+      created_at: "2026-11-04T13:11:12.000Z",
+      started_at: null,
+      completed_at: "2026-11-04T13:12:39.000Z",
+      usage_log_id: null,
+    })
+    const errorOf = (hint: unknown, over?: Record<string, unknown>) => toTrendRun(run(hint, over), undefined, NO_RUN_CREDITS)!.error
+    expect(errorOf({ kind: "request-refused" })).toEqual({ code: "request-refused", message: "This run didn't finish.", refused: true })
+    expect(errorOf({ kind: "input-refused" })).toEqual({ code: "input-refused", message: "This run didn't finish.", refused: true })
+    expect(errorOf({ kind: "safety-block", class: "copyright", retried: false })).toEqual({ code: "safety-block", message: "This run didn't finish.", refused: true })
+    expect(errorOf({ kind: "safety-block", class: "likeness", retried: false })).toEqual({ code: "safety-block", message: "This run didn't finish.", refused: true })
+    // Anything else, and any run that is not a Full Quality try, has nothing to say.
+    expect(errorOf({ kind: "safety-block", class: "safety", retried: false })).toEqual({ code: "safety-block", message: "This run didn't finish." })
+    expect(errorOf(null)).toEqual({ code: "failed", message: "This run didn't finish." })
+    expect(errorOf({ kind: "request-refused" }, {})).toEqual({ code: "request-refused", message: "This run didn't finish." })
   })
 
   it("labels a recorded run by the current public id and name (toTrendRun)", () => {

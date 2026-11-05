@@ -142,9 +142,9 @@ export type QueueTimeoutHint = {
  *  one step's refusal: the run carries it, in a sentence of its own. */
 export type RequestRefusedHint = {
   kind: "request-refused"
-  /** The provider's words name the input video's length or size, on a job that
-   *  sent one: that is the input to change. Absent ⇒ not named. Not the
-   *  input-refused hint: the file was read and judged against a limit. */
+  /** The provider's words name the input video as the fault, on a job that sent
+   *  one: that is the input to change. Absent ⇒ not named. Not the input-refused
+   *  hint: the file was read and judged. */
   subject?: "input_video"
 }
 

@@ -11970,7 +11970,7 @@ export interface AdminTrendRun {
   jobId: string
   status: string
   progress: number | null
-  error: { code?: string; message: string } | null
+  error: { code?: string; message: string; refused?: true } | null
   createdAt: string
   completedAt: string | null
   trend: { id: string; slug: string; version: number; name: string }

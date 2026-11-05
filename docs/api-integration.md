@@ -1637,8 +1637,9 @@ Or, when the provider refused the request as it was sent, naming a fault of it
 { "kind": "request-refused", "subject": "input_video" }
 ```
 
-`subject` is there only when the provider's words name the input video (its
-length or size), so a different clip is what can change.
+`subject` is there only when the provider's words name the input video as the
+fault (its length or size, or no character found in it), so a different clip is
+what can change.
 
 The same request is refused the same way, so do not run it again unchanged:
 change the input images, the video, the prompt or the settings. It is not a
@@ -5116,6 +5117,9 @@ again: change the images or the settings), else `cancelled` or `failed`. The
 message stays the fixed sentence for every
 code, `credits` included — branch on the code, not the text. A run that did
 not fail or get cancelled has `error: null`.
+A Full Quality version the provider refused, or blocked for a copyright or a
+likeness, also carries `refused: true`: another try fails the same way, and
+deleting it offers Full Quality again.
 
 A run's `example` is the example whose pictures filled its empty optional
 slots, numbered as the trend page listed its examples for the version the run
@@ -5145,7 +5149,8 @@ try failed or was cancelled and the draft was tried again, the older tries are
 left out of `GET /v1/trends/runs` (with or without `?trend=`), and
 `GET /v1/trends/runs/:jobId` still reads one by its id. The draft's
 `fullQuality` is only a pointer to that newest try (`{ jobId, status }`, with
-`refused: true` when the provider refused it, so another try fails the same way, or
+`refused: true` when the provider refused it, or blocked it for a copyright or a
+likeness, so another try fails the same way, or
 `null` when none was started): its video and charge are read from its own run,
 never from the draft.
 

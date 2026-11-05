@@ -250,8 +250,8 @@ export function failureGuidance(job: {
       return {
         retryable: false,
         guidance:
-          "The provider refused the input video as it was sent (its length or size), and the same clip will be refused " +
-          "again. Send a different clip, or ask the user for one; a trend run or a Full Quality has no clip of the " +
+          "The provider refused the input video as it was sent (for example its length or size, or no character found " +
+          "in it), and the same clip will be refused again. Send a different clip, or ask the user for one; a trend run or a Full Quality has no clip of the " +
           "caller's to change, so report it to the user. A run made of steps can charge for them again.",
       }
     }

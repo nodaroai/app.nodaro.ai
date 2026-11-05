@@ -68,7 +68,7 @@ export interface TrendRun {
   jobId: string
   status: string
   progress: number | null
-  error: { code?: string; message: string } | null
+  error: { code?: string; message: string; refused?: true } | null
   createdAt: string
   completedAt: string | null
   trend: TrendRunDisplay["trend"]
@@ -235,11 +235,17 @@ const PUBLIC_FAILURE_KINDS: ReadonlySet<string> = new Set(["safety-block", "poli
 
 export type RunAudience = "public" | "admin"
 
-/** A Full Quality try the provider refused as it was sent, or whose clip it refused: another try fails the same way. */
+/**
+ * A Full Quality try another try can't get past: the provider refused it as it
+ * was sent, or refused its clip, or blocked it for a copyright or a likeness,
+ * which don't change on the same inputs. A plain `safety` block can pass on
+ * another try, so it stays on offer.
+ */
 function wasRefused(row: RunJobRow): boolean {
   if (row.status !== "failed" || !isRec(row.error_hint)) return false
   const kind = str(row.error_hint.kind)
-  return kind === "request-refused" || kind === "input-refused"
+  if (kind === "request-refused" || kind === "input-refused") return true
+  return kind === "safety-block" && (row.error_hint.class === "copyright" || row.error_hint.class === "likeness")
 }
 
 function runError(row: RunJobRow, audience: RunAudience): TrendRun["error"] {
@@ -249,7 +255,9 @@ function runError(row: RunJobRow, audience: RunAudience): TrendRun["error"] {
   // A refused request that names the clip reads, to whoever branches on the code, as a refused clip.
   const named = kind === "request-refused" && isRec(row.error_hint) && row.error_hint.subject === "input_video" ? "input-refused" : kind
   const code = named && PUBLIC_FAILURE_KINDS.has(named) ? named : row.status === "cancelled" ? "cancelled" : "failed"
-  return { code, message: RUN_FAILED_MESSAGE }
+  // Deleting such a try is what offers Full Quality again, which its card says.
+  const fullQualityTry = isRec(row.input_data) && str(row.input_data.fullQualityOf) !== null
+  return { code, message: RUN_FAILED_MESSAGE, ...(fullQualityTry && wasRefused(row) ? { refused: true as const } : {}) }
 }
 
 /** A Cast Swap job row → `TrendRun`, or null when it is not a trend run. */

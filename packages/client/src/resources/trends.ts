@@ -399,8 +399,10 @@ export interface TrendRun {
    * (the same run is refused again: change the images or the settings), else
    * `cancelled` or `failed`. `message` is the same
    * fixed sentence for every code — branch on `code`, not on the text.
+   * `refused: true` on a Full Quality try another try can't get past (see
+   * `fullQuality`): deleting it offers Full Quality again.
    */
-  error: { code?: string; message: string } | null
+  error: { code?: string; message: string; refused?: true } | null
   createdAt: string
   completedAt: string | null
   /** The trend and version it ran (name in English). */
@@ -444,7 +446,8 @@ export interface TrendRun {
    * read it there (`getRun(fullQuality.jobId)`). Older tries of the draft (a
    * failed or cancelled one tried again) are not listed by `runs()`;
    * `getRun()` still reads one by its id. `refused`: the provider refused that
-   * try as it was sent, or its clip, so another try fails the same way.
+   * try as it was sent, or its clip, or blocked it for a copyright or a likeness,
+   * so another try fails the same way.
    */
   fullQuality: { jobId: string; status: string; refused?: true } | null
   /**

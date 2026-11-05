@@ -115,8 +115,9 @@ export type QueueTimeoutHint = {
  * refused the same way, so do not run it again unchanged: change the input
  * images, the video, the prompt or the settings. Not a content-policy block. On a
  * job made of steps (a Nodaro Motion or trend run), one step's refusal.
- * `subject: "input_video"`: the provider's words name the input video (its
- * length or size), so a different clip is what can change.
+ * `subject: "input_video"`: the provider's words name the input video as the
+ * fault (its length or size, or no character found in it), so a different clip
+ * is what can change.
  */
 export type RequestRefusedHint = {
   kind: "request-refused"

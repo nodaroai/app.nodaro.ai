@@ -1432,8 +1432,8 @@ input images as possibly copyrighted — send a different picture), or whose
 request the provider refused as it was sent, naming a fault of it, so the same
 request is refused again (`kind: "request-refused"` — change the input images,
 the video, the prompt or the settings; with `subject: "input_video"` when the
-provider's words name the clip's length or size, so a different clip is what can
-change; on a Nodaro Motion or trend run this is one step's refusal), or that never
+provider's words name the clip as the fault (its length or size, or no character
+found in it), so a different clip is what can change; on a Nodaro Motion or trend run this is one step's refusal), or that never
 got one of the account's concurrency slots and did not run (`kind:
 "queue-timeout"`, carrying `reason` — `"timeout"`, `"lost"` or `"live-wait"` —
 and `waitedMinutes`; the job was refunded, so run it again — it only occurs
@@ -2557,7 +2557,7 @@ interface TrendEstimate {
 
 interface TrendRun {
   jobId: string; status: string; progress: number | null
-  error: { code?: string; message: string } | null  // code: safety-block | policy-block | credits | input-refused | request-refused | cancelled | failed
+  error: { code?: string; message: string; refused?: true } | null  // code: safety-block | policy-block | credits | input-refused | request-refused | cancelled | failed; refused: a Full Quality try another try can't get past, and deleting it offers Full Quality again
   createdAt: string; completedAt: string | null
   trend: { id: string; slug: string; version: number; name: string } // the version it ran
   example?: number                   // 1-based, as the page listed the examples for the run's version; 0 = the trend had no example (none was used); absent when it used the example shown as the original of a trend that hides it
@@ -2571,7 +2571,7 @@ interface TrendRun {
   creditsHeld?: number | null        // the run's hold, its steps' included
   creditsReleased?: number | null    // what went back from creditsHeld once every hold in the run settled; null until then
   fullQualityOf: string | null       // a Full Quality version: the draft run it was made from; else null
-  fullQuality: { jobId: string; status: string; refused?: true } | null // a draft's newest Full Quality try: a pointer only; refused: the provider refused it, so another try fails the same way
+  fullQuality: { jobId: string; status: string; refused?: true } | null // a draft's newest Full Quality try: a pointer only; refused: the provider refused it, or blocked it for a copyright or a likeness, so another try fails the same way
   fullQualityUntil: string | null    // until when a completed draft (or motion-pulse 720p run) can be redone in Full Quality
 }
 
