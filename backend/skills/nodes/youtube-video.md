@@ -46,8 +46,10 @@ by `downloadedFromUrl`), and that file is what the `video` handle emits.
   or app) fetches a post link saved in the workflow, or set by the request in
   `inputOverrides`, BEFORE the first node runs, whenever a node that runs reads
   the file (or only its sound: Transcribe and Suno Cover take just the audio
-  track; Dubbing and Content Recipe take the page address and need nothing). The
-  fetched file is kept on that run's execution, not written to `downloadedVideoUrl`
+  track; Content Recipe takes the page address and needs nothing; Dubbing dubs
+  the file, so the video is downloaded for it, unless the Dubbing node has its
+  own `sourceUrl`, which it dubs instead of anything wired into it). The fetched
+  file is kept on that run's execution, not written to `downloadedVideoUrl`
   on the saved node: Render final after the run, and a run picked up again after a
   deploy, use the same file instead of downloading it again, while a repeated run
   (a new execution) downloads it afresh. To reuse one file across runs, import it

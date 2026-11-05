@@ -75,19 +75,19 @@ describe("withVideoLinkRightsConfirmations — what a run request carries", () =
   it("nothing for an unticked link, a stored track, a link the page downloads, a page-address reader, or a file link", async () => {
     tickVideoLinkRights("watched", TIKTOK)
     tickVideoLinkRights("tracked", YT)
-    tickVideoLinkRights("dubbed", TIKTOK)
+    tickVideoLinkRights("cited", TIKTOK)
     tickVideoLinkRights("direct", FILE)
     const nodes = [
       link("unticked", { youtubeUrl: TIKTOK }),
       link("tracked", { youtubeUrl: YT, downloadedAudioUrl: "https://cdn.nodaro.ai/audios/a.mp3" }),
       link("watched", { youtubeUrl: TIKTOK }),
-      link("dubbed", { youtubeUrl: TIKTOK }),
+      link("cited", { youtubeUrl: TIKTOK }),
       link("direct", { youtubeUrl: FILE }),
       reader("tr", "transcribe"),
       reader("va", "video-analysis"),
-      reader("dub", "dubbing"),
+      reader("rec", "content-recipe"),
     ]
-    const edges = [edge("unticked", "tr"), edge("tracked", "tr"), edge("watched", "va"), edge("dubbed", "dub"), edge("direct", "tr")]
+    const edges = [edge("unticked", "tr"), edge("tracked", "tr"), edge("watched", "va"), edge("cited", "rec"), edge("direct", "tr")]
     expect(await withVideoLinkRightsConfirmations(nodes, edges, undefined)).toBeUndefined()
     expect(confirmLink).not.toHaveBeenCalled()
   })

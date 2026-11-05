@@ -82,8 +82,12 @@ describe("areAllInputsFilled — a Video URL input read only for its sound or it
     expect(areAllInputsFilled([link], { v1: { youtubeUrl: "https://youtu.be/BBBBBBBBBBB" } }, graph("transcribe"))).toBe(false)
   })
 
-  it("Dubbing alone (the page address): filled as soon as the link is valid, no box", () => {
-    expect(areAllInputsFilled([link], { v1: { youtubeUrl: YT } }, graph("dubbing"))).toBe(true)
+  it("Content Recipe alone (the page address): filled as soon as the link is valid, no box", () => {
+    expect(areAllInputsFilled([link], { v1: { youtubeUrl: YT } }, graph("content-recipe"))).toBe(true)
+  })
+
+  it("Dubbing dubs the file: the downloaded video is awaited", () => {
+    expect(areAllInputsFilled([link], { v1: { youtubeUrl: YT } }, graph("dubbing"))).toBe(false)
   })
 
   it("a node that watches the video beside it: the file is still awaited", () => {

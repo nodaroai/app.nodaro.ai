@@ -11,8 +11,8 @@
  *
  *  - what is fetched follows what the nodes after the link READ
  *    (`videoLinkRunNeeds`, the one reading the editor's gate and the card share):
- *    the video, only its sound (Transcribe, Suno Cover), or nothing (Dubbing,
- *    Content Recipe take the page address);
+ *    the video, only its sound (Transcribe, Suno Cover), or nothing (Content
+ *    Recipe takes the page address);
  *  - a YouTube video under `AUTO_DOWNLOAD_MAX_SEC` downloads whole at up to
  *    `YOUTUBE_MAX_HEIGHT` rows; a longer one (or one whose length cannot be read)
  *    is downloaded only as the PART the node names (`sectionStartSec` /

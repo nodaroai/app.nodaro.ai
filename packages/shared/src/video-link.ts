@@ -98,27 +98,27 @@ export function detectVideoLinkPlatform(url: string): VideoLinkPlatform {
 /**
  * Node types that can use a Video URL node WITHOUT its downloaded file, because
  * they never read the video: `suno-cover` and `transcribe` take the node's
- * separately-fetched audio track (`downloadedAudioUrl`), `dubbing` hands the
- * page link to a provider that fetches it itself, and `content-recipe` cites the
- * post's page link on its `link` input (`videoLinkPageUrl`, both resolvers) —
- * a Video URL can reach it on no other input. A run whose only consumers of a
- * link are these must not be made to download — or to choose a part of — a
- * video nobody will look at. Structural vocabulary: it mirrors those
- * server-side readers; add a type here only together with its reader.
+ * separately-fetched audio track (`downloadedAudioUrl`), and `content-recipe`
+ * cites the post's page link on its `link` input (`videoLinkPageUrl`, both
+ * resolvers) — a Video URL can reach it on no other input. A run whose only
+ * consumers of a link are these must not be made to download — or to choose a
+ * part of — a video nobody will look at. Structural vocabulary: it mirrors
+ * those server-side readers; add a type here only together with its reader.
+ * Dubbing is not one: it dubs the file wired into it, and a page link wired in
+ * place of the file is not something its service can read as one.
  */
 export const VIDEO_LINK_TOLERANT_CONSUMER_TYPES: ReadonlySet<string> = new Set([
   "suno-cover",
   "transcribe",
-  "dubbing",
   "content-recipe",
 ])
 
 /**
  * The tolerant consumers that DO read something fetched from the link — the
  * separately-fetched audio track (`downloadedAudioUrl`): Transcribe and Suno
- * Cover. The rest of the tolerant set (Dubbing, Content Recipe) read only the
- * page link and need nothing fetched. A subset of the tolerant set by
- * construction (guard test).
+ * Cover. The rest of the tolerant set (Content Recipe) reads only the page
+ * link and needs nothing fetched. A subset of the tolerant set by construction
+ * (guard test).
  */
 export const VIDEO_LINK_AUDIO_CONSUMER_TYPES: ReadonlySet<string> = new Set(["suno-cover", "transcribe"])
 
@@ -139,6 +139,23 @@ export function videoLinkNeedOf(consumerTypes: Iterable<string>): VideoLinkNeed 
     if (VIDEO_LINK_AUDIO_CONSUMER_TYPES.has(type)) audio = true
   }
   return audio ? "audio" : "none"
+}
+
+/**
+ * Node types that set aside every wired media input while a field of their own
+ * holds a link, and that field: a Dubbing node with a Source link dubs that
+ * link (the dubbing service fetches it) and reads nothing wired into it. It
+ * mirrors both engines' source precedence for the type (the payload builder
+ * and the editor's runner).
+ */
+const WIRE_SETTING_ASIDE_FIELDS: ReadonlyMap<string, string> = new Map([["dubbing", "sourceUrl"]])
+
+/** True when this node, as it stands, reads nothing wired into it (its own link field is filled). */
+function setsAsideWiredMedia(node: VideoLinkGraphNode | undefined): boolean {
+  const field = node?.type === undefined ? undefined : WIRE_SETTING_ASIDE_FIELDS.get(node.type)
+  if (!field) return false
+  const value = (node?.data as Record<string, unknown> | undefined)?.[field]
+  return typeof value === "string" && value.trim() !== ""
 }
 
 /** The node shape the graph readers need — open on purpose, both engines' nodes fit. */
@@ -195,10 +212,13 @@ export function videoLinkRunNeeds(
   const consumers = new Map<string, string[]>()
   for (const edge of edges) {
     if (byId.get(edge.source)?.type !== "youtube-video" || !inRun.has(edge.target)) continue
-    const list = consumers.get(edge.source)
-    const type = byId.get(edge.target)?.type ?? ""
-    if (list) list.push(type)
-    else consumers.set(edge.source, [type])
+    const target = byId.get(edge.target)
+    const list = consumers.get(edge.source) ?? []
+    consumers.set(edge.source, list)
+    // A reader that sets the wire aside (a Dubbing node with its own Source
+    // link) reads nothing from the link: it asks nothing to be fetched, and a
+    // link read by it alone needs nothing (the entry stays, with no reader).
+    if (!setsAsideWiredMedia(target)) list.push(target?.type ?? "")
   }
   const needs = new Map<string, VideoLinkNeed>()
   for (const [id, types] of consumers) needs.set(id, videoLinkNeedOf(types))
