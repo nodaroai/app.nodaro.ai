@@ -74,7 +74,7 @@ import {
  * the screen as "Failed to adjust credits". The fallback stays for responses
  * with no body (a proxy 502, a network-shaped failure).
  */
-async function adminError(res: Response, fallback: string): Promise<Error> {
+export async function adminError(res: Response, fallback: string): Promise<Error> {
   const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
   return new Error(body?.error?.message || fallback)
 }
@@ -472,7 +472,8 @@ export interface AdminJobsPage {
 }
 
 // workflow_execution_id column exists in DB but not in generated Supabase types
-interface JobRow {
+/** An admin job row as the server sends it, before the browser enriches it. */
+export interface JobRow {
   id: string
   status: string
   job_type: string | null
@@ -508,12 +509,11 @@ export async function fetchAdminJobsPage(
   filters: AdminJobFilters,
   excludeUserIds?: ReadonlyArray<string>,
 ): Promise<AdminJobsPage> {
-  const supabase = createClient()
   // `jobs` is no longer column-readable from the browser: migration 347
   // revoked table-level SELECT from `authenticated` down to the four columns
   // Realtime needs, so provider_cost / display_cost (and 17 other fields
   // this table renders) are service-role-only. The listing comes over REST
-  // from GET /v1/admin/jobs (requireAdmin). The enrichment reads below are
+  // from GET /v1/admin/jobs (requireAdmin). The enrichment reads (enrichAdminJobRows) are
   // unaffected — those tables keep their admin RLS policies.
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
   for (const [key, value] of serverParams(filters, new Date())) params.set(key, value)
@@ -527,6 +527,17 @@ export async function fetchAdminJobsPage(
   const jobs = body.data
   const filtersUnavailable = body.filtersUnavailable === true
   if (!jobs || jobs.length === 0) return { jobs: [], userNotFound: body.userNotFound === true, filtersUnavailable }
+  return { jobs: await enrichAdminJobRows(jobs), userNotFound: false, filtersUnavailable }
+}
+
+/**
+ * The browser-side enrichment of admin job rows (the account's address, the
+ * workflow and its project, a developer app's name): one implementation for
+ * the Jobs page's table and gallery and the job page (`use-admin-job-page.ts`).
+ */
+export async function enrichAdminJobRows(jobs: readonly JobRow[]): Promise<AdminJob[]> {
+  if (jobs.length === 0) return []
+  const supabase = createClient()
   const userIds = [...new Set(jobs.map((j) => j.user_id))]
   // Orchestrator-created rows carry only workflow_execution_id (their
   // workflow_id is null), so the owning workflow is resolved through the
@@ -590,7 +601,7 @@ export async function fetchAdminJobsPage(
     reconcile_last_error: j.reconcile_last_error ?? null,
     provider_call_started_at: j.provider_call_started_at ?? null,
   }))
-  return { jobs: enriched, userNotFound: false, filtersUnavailable }
+  return enriched
 }
 
 /** `enabled: false` holds the request, e.g. until the admins' ids it must exclude have loaded. */

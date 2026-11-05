@@ -1,13 +1,11 @@
-import { JobGenerationDetails, JobSkippedSteps, JobStepOutputs } from "./job-generation-details"
 import { useCallback, useMemo, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
-import { Loader2, Info, Copy, Check, ExternalLink } from "lucide-react"
+import { Loader2, Info, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { UserFilter, type UserFilterValue } from "@/components/user-filter"
-import { JobAssetView } from "@/components/admin/job-asset-view"
 import { JobSourceBadge } from "@/components/admin/job-source-badge"
 import {
   useAdminJobDetail,
@@ -21,24 +19,10 @@ import { JobsGallery } from "./jobs-gallery"
 import { FiltersUnavailableNotice, JobsFilterBar } from "./jobs-filter-bar"
 import { ADMIN_JOB_STATUSES, jobFiltersKey, parseJobFilters, serializeJobFilters, type AdminJobFilters } from "./jobs-filters"
 import { rowJobType } from "./job-kinds"
-import { creditCell, creditDetailLines } from "./admin-job-credits"
+import { creditCell } from "./admin-job-credits"
+import { CopyButton, JobDataView, JobInfoSections, JobPageLink, statusVariant } from "./job-detail-view"
 
 const STATUS_OPTIONS = ["all", ...ADMIN_JOB_STATUSES] as const
-
-function statusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
-  switch (status) {
-    case "completed":
-      return "default"
-    case "failed":
-    case "cancelled":
-      return "destructive"
-    case "processing":
-    case "queued":
-      return "secondary"
-    default:
-      return "outline"
-  }
-}
 
 function timeAgo(dateStr: string): string {
   const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
@@ -49,36 +33,6 @@ function timeAgo(dateStr: string): string {
   if (hours < 24) return `${hours}h ago`
   const days = Math.floor(hours / 24)
   return `${days}d ago`
-}
-
-function formatDuration(startedAt: string | null, completedAt: string | null): string {
-  if (!startedAt || !completedAt) return "-"
-  const ms = new Date(completedAt).getTime() - new Date(startedAt).getTime()
-  if (ms < 1000) return `${ms}ms`
-  const secs = Math.floor(ms / 1000)
-  if (secs < 60) return `${secs}s`
-  return `${Math.floor(secs / 60)}m ${secs % 60}s`
-}
-
-function formatDateTime(dateStr: string | null): string {
-  if (!dateStr) return "-"
-  return new Date(dateStr).toLocaleString()
-}
-
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false)
-  return (
-    <button
-      className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-      onClick={() => {
-        navigator.clipboard.writeText(text)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 1500)
-      }}
-    >
-      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-    </button>
-  )
 }
 
 /** The charge as the figure, the hold (and a parent's run total) as secondary text; the full sentence on hover. */
@@ -112,21 +66,10 @@ function JobDetailDialog({
   // read when the dialog opens, and only the whole is ever shown here.
   const detail = useAdminJobDetail(open ? job : null)
   const full = detail.data
-  const fullView = (pick: (d: AdminJobDetail) => Record<string, unknown> | null) =>
-    full ? (
-      <JobAssetView data={pick(full)} />
-    ) : detail.isError ? (
-      <p className="py-6 text-center text-sm text-destructive">Couldn&apos;t load the job&apos;s input and output.</p>
-    ) : (
-      <div className="flex justify-center py-6" aria-label="Loading the job's input and output">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-      </div>
-    )
-  const hasReconcileData =
-    job.provider_kind != null ||
-    job.provider_task_id != null ||
-    job.reconcile_attempts > 0 ||
-    job.reconcile_last_error != null
+  const dataState = (pick: (d: AdminJobDetail) => Record<string, unknown> | null) => ({
+    data: full ? pick(full) : undefined,
+    isError: detail.isError,
+  })
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
@@ -134,6 +77,7 @@ function JobDetailDialog({
           <DialogTitle className="flex flex-wrap items-center gap-3">
             <span className="min-w-0 break-all font-mono text-sm">{job.id}</span>
             <CopyButton text={job.id} />
+            <JobPageLink jobId={job.id} />
             <Badge variant={statusVariant(job.status)}>{job.status}</Badge>
           </DialogTitle>
           {rowJobType(job) && (
@@ -141,112 +85,7 @@ function JobDetailDialog({
           )}
         </DialogHeader>
 
-        {full && <JobSkippedSteps output={full.output_data} />}
-        <JobStepOutputs job={job} />
-
-        <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm border rounded-lg p-4">
-          <div>
-            <span className="text-muted-foreground">Provider</span>
-            <p>{job.provider ?? "-"}</p>
-          </div>
-          {full && <JobGenerationDetails input={full.input_data} />}
-          <div>
-            <span className="text-muted-foreground">Cost</span>
-            <p>{job.display_cost != null ? `$${job.display_cost.toFixed(4)}` : "-"}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Provider Cost</span>
-            <p>{job.provider_cost != null ? `$${job.provider_cost.toFixed(4)}` : "-"}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Credits</span>
-            {/* The settled charge beside the hold (jobs.credits is the hold), and a parent's run with its steps. */}
-            {creditDetailLines(job).length > 0
-              ? creditDetailLines(job).map((line) => <p key={line}>{line}</p>)
-              : <p>-</p>}
-          </div>
-          <div>
-            <span className="text-muted-foreground">Created</span>
-            <p>{formatDateTime(job.created_at)}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Started</span>
-            <p>{formatDateTime(job.started_at)}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Completed</span>
-            <p>{formatDateTime(job.completed_at)}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Processing time</span>
-            <p>{formatDuration(job.started_at, job.completed_at)}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">User</span>
-            <p>{job.user_email}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Workflow</span>
-            <p>
-              {job.workflow_id ? (
-                <Link
-                  to={job.workflow_project_id ? `/projects/${job.workflow_project_id}/workflows/${job.workflow_id}` : `/projects`}
-                  target="_blank"
-                  className="text-blue-400 hover:underline inline-flex items-center gap-1"
-                >
-                  {job.workflow_name} <ExternalLink className="h-3 w-3" />
-                </Link>
-              ) : "-"}
-            </p>
-          </div>
-          <div className="col-span-2">
-            <span className="text-muted-foreground">Source</span>
-            <p>
-              <JobSourceBadge source={job.source} sourceDetail={job.source_detail} appName={job.source_app_name} />
-              {job.workflow_execution_id && (
-                <span className="ml-2">Workflow Execution <span className="font-mono text-xs text-muted-foreground">({job.workflow_execution_id.slice(0, 8)})</span></span>
-              )}
-            </p>
-          </div>
-        </div>
-
-        {hasReconcileData && (
-          <div className="border rounded-lg p-4">
-            <div className="text-sm font-medium mb-2">Reconciliation</div>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-              <div>
-                <span className="text-muted-foreground">Provider Kind</span>
-                <p className="font-mono text-xs">{job.provider_kind ?? "-"}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Provider Task ID</span>
-                <p className="font-mono text-xs break-all">{job.provider_task_id ?? "-"}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Reconcile Attempts</span>
-                <p>
-                  {job.reconcile_attempts === 0 ? (
-                    <span className="text-muted-foreground">0</span>
-                  ) : job.reconcile_last_error === "exhausted" ? (
-                    <Badge variant="destructive" className="text-xs">{job.reconcile_attempts} — exhausted</Badge>
-                  ) : (
-                    <Badge variant="secondary" className="text-xs">{job.reconcile_attempts}</Badge>
-                  )}
-                </p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Provider Call Started</span>
-                <p>{formatDateTime(job.provider_call_started_at)}</p>
-              </div>
-              {job.reconcile_last_error && (
-                <div className="col-span-2">
-                  <span className="text-muted-foreground">Last Error</span>
-                  <p className="font-mono text-xs whitespace-pre-wrap break-words">{job.reconcile_last_error}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        <JobInfoSections job={job} full={full} />
 
         <Tabs value={tab} onValueChange={onTabChange}>
           <TabsList>
@@ -255,10 +94,10 @@ function JobDetailDialog({
             {hasError && <TabsTrigger value="error">Error</TabsTrigger>}
           </TabsList>
           <TabsContent value="input">
-            {fullView((d) => d.input_data)}
+            <JobDataView state={dataState((d) => d.input_data)} />
           </TabsContent>
           <TabsContent value="output">
-            {fullView((d) => d.output_data)}
+            <JobDataView state={dataState((d) => d.output_data)} />
           </TabsContent>
           {hasError && (
             <TabsContent value="error">
@@ -416,7 +255,7 @@ export default function AdminJobsPage() {
               <th className="text-left px-3 py-2 font-medium" title="Reconciliation attempts (Phase 1-5)">Recon</th>
               <th className="text-left px-3 py-2 font-medium">Error</th>
               <th className="text-left px-3 py-2 font-medium">Created</th>
-              <th className="px-3 py-2 font-medium w-10" />
+              <th className="px-3 py-2 font-medium w-20" />
             </tr>
           </thead>
           <tbody>
@@ -477,9 +316,24 @@ export default function AdminJobsPage() {
                 </td>
                 <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">{timeAgo(job.created_at)}</td>
                 <td className="px-3 py-2">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelectedJob(job)}>
-                    <Info className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-0.5">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      aria-label="Job details"
+                      title="Job details"
+                      onClick={() => setSelectedJob(job)}
+                    >
+                      <Info className="h-4 w-4" />
+                    </Button>
+                    <JobPageLink
+                      jobId={job.id}
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </JobPageLink>
+                  </div>
                 </td>
               </tr>
             ))}

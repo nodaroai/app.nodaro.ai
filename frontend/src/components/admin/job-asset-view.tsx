@@ -8,9 +8,20 @@ import { useT } from "@/lib/i18n"
 
 interface JobAssetViewProps {
   readonly data: Record<string, unknown> | null
+  /** "large" on the admin job page, which has the room: media and the raw JSON shown bigger. */
+  readonly size?: "compact" | "large"
 }
 
-export function JobAssetView({ data }: JobAssetViewProps) {
+/** The media and raw-JSON height caps per size. */
+const SIZES = {
+  compact: { video: "max-h-64", image: "max-h-48", json: "max-h-64", text: "text-xs" },
+  large: { video: "max-h-[70vh]", image: "max-h-[60vh]", json: "max-h-[60vh]", text: "text-sm" },
+} as const
+
+type Sizes = (typeof SIZES)[keyof typeof SIZES]
+
+export function JobAssetView({ data, size = "compact" }: JobAssetViewProps) {
+  const sizes = SIZES[size]
   const t = useT()
   if (data === null) {
     return <p className="text-xs text-muted-foreground">{t("misc.noData")}</p>
@@ -27,7 +38,7 @@ export function JobAssetView({ data }: JobAssetViewProps) {
           {textFields.map((tf) => (
             <div key={tf.label} className="flex flex-col gap-1">
               <span className="text-xs text-muted-foreground font-mono">{tf.label}</span>
-              <div className="text-xs whitespace-pre-wrap rounded-md bg-muted/50 p-3">{tf.value}</div>
+              <div className={`whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 ${sizes.text}`}>{tf.value}</div>
             </div>
           ))}
         </div>
@@ -36,7 +47,7 @@ export function JobAssetView({ data }: JobAssetViewProps) {
       {assets.length > 0 && (
         <div className="flex flex-col gap-3">
           {assets.map((a, i) => (
-            <AssetRow key={i} asset={a} />
+            <AssetRow key={i} asset={a} sizes={sizes} />
           ))}
         </div>
       )}
@@ -45,7 +56,7 @@ export function JobAssetView({ data }: JobAssetViewProps) {
         <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground select-none mb-2">
           {t("misc.rawJson")}
         </summary>
-        <pre className="text-xs bg-muted/50 rounded-lg p-4 overflow-auto max-h-64 whitespace-pre-wrap">
+        <pre className={`text-xs bg-muted/50 rounded-lg p-4 overflow-auto ${sizes.json} whitespace-pre-wrap`}>
           {JSON.stringify(data, null, 2)}
         </pre>
       </details>
@@ -53,23 +64,23 @@ export function JobAssetView({ data }: JobAssetViewProps) {
   )
 }
 
-function AssetRow({ asset }: { readonly asset: ExtractedAsset }) {
+function AssetRow({ asset, sizes }: { readonly asset: ExtractedAsset; readonly sizes: Sizes }) {
   return (
     <div className="flex flex-col gap-1">
       <span className="text-xs text-muted-foreground font-mono break-all">{asset.path}</span>
-      {renderAsset(asset)}
+      {renderAsset(asset, sizes)}
     </div>
   )
 }
 
-function renderAsset(asset: ExtractedAsset) {
+function renderAsset(asset: ExtractedAsset, sizes: Sizes) {
   switch (asset.kind) {
     case "video":
       return (
         <video
           controls
           preload="metadata"
-          className="max-h-64 max-w-full rounded-md bg-muted"
+          className={`${sizes.video} max-w-full rounded-md bg-muted`}
           src={asset.url}
         />
       )
@@ -77,7 +88,7 @@ function renderAsset(asset: ExtractedAsset) {
       return (
         <a href={asset.url} target="_blank" rel="noopener noreferrer">
           <img
-            className="max-h-48 max-w-full rounded-md object-contain"
+            className={`${sizes.image} max-w-full rounded-md object-contain`}
             loading="lazy"
             src={asset.url}
             alt={asset.path}

@@ -355,6 +355,10 @@ export const queryKeys = {
      * since (finished, failed) is read again rather than shown from the cache.
      */
     job: (id: string, status: string, completedAt: string | null) => ["admin", "job", id, status, completedAt ?? ""] as const,
+    /** One job for its own page (`/admin/job/:id`), opened from a link with no list row behind it. */
+    jobPage: (id: string) => ["admin", "job-page", id] as const,
+    /** Every job below one, in flow order, for the job page's child-jobs view. */
+    jobChildren: (id: string) => ["admin", "job-page", id, "children"] as const,
     usersLite: () => ["admin", "users-lite"] as const,
     usageLogs: (
       page: number,

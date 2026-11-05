@@ -6,6 +6,8 @@ import { JOB_STATUSES } from "../../lib/job-status.js"
 import { runCreditsFor, runCreditsOf, type RunCreditFigures } from "../../lib/job-credit-status.js"
 import { sendInternalError } from "../../lib/http-errors.js"
 import { isMissingFunctionError } from "../../lib/postgrest-errors.js"
+import { CHILD_JOB_COLUMN } from "../../lib/public-job-data.js"
+import { adminChildJobs } from "./admin-job-children.js"
 
 /**
  * GET /v1/admin/jobs -- the admin Jobs table's data source.
@@ -27,7 +29,8 @@ import { isMissingFunctionError } from "../../lib/postgrest-errors.js"
  * a preview — the output's web addresses where they sit, and the start of its
  * text (`admin_job_output_preview`) — which is everything the table and the
  * gallery tiles read. The detail view loads the whole job,
- * `GET /v1/admin/jobs/:jobId`, when it opens.
+ * `GET /v1/admin/jobs/:jobId`, when it opens; the job page (`/admin/job/:id`)
+ * reads the same, and its child jobs from `GET /v1/admin/jobs/:jobId/children`.
  *
  * A text search (`q`) always runs inside a date
  * range -- with no `from`, the 7 days before the range's end (`to`, else
@@ -112,6 +115,20 @@ const ADMIN_JOB_COLUMNS = [
   "source_detail", "provider_kind", "provider_task_id", "reconcile_attempts",
   "reconcile_last_error", "provider_call_started_at", "usage_log_id",
 ].join(", ")
+
+/** The one-job reads': every column the page renders, and the job's parent. */
+const ONE_JOB_COLUMNS = `${ADMIN_JOB_COLUMNS}, parent_job_id`
+
+/** How many child jobs a job has (its owner's only, like every walk down `parent_job_id`); null when the count fails. */
+async function countChildJobs(row: { id: string; user_id: string }): Promise<number | null> {
+  // Admin read: a child in the Trash still counts as a step of the run.
+  const { count, error } = await supabase
+    .from("jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", row.user_id)
+    .eq(CHILD_JOB_COLUMN, row.id)
+  return error ? null : count ?? 0
+}
 
 /** A type, model or platform key as the list filters take it — sources may carry a host (`web:localhost:3000`). */
 const LIST_ITEM = /^[a-z0-9:._@-]{1,120}$/i
@@ -383,9 +400,12 @@ export async function adminJobsRoutes(app: FastifyInstance): Promise<void> {
 
   /**
    * GET /v1/admin/jobs/:jobId -- one job, whole: what the list's lighter rows
-   * leave out (`input_data` and `output_data` in full), for the detail view.
-   * Any job, the ones in the Trash included, like the list. Its charge is not
-   * read again: the list row the detail view opens from carries it.
+   * leave out (`input_data` and `output_data` in full), for the detail dialog
+   * and the job page (`/admin/job/:id`). Any job, the ones in the Trash
+   * included, like the list. The page opens from a link with no list row
+   * behind it, so the job comes with its charge (`credit`, read like the
+   * list's), its `parent_job_id` and how many child jobs it has
+   * (`child_count`, null when the count failed).
    */
   app.get<{ Params: { jobId: string } }>(
     "/v1/admin/jobs/:jobId",
@@ -398,13 +418,56 @@ export async function adminJobsRoutes(app: FastifyInstance): Promise<void> {
       }
       const { data, error } = await timed(req, "job", () => supabase
         .from("jobs")
-        .select(ADMIN_JOB_COLUMNS)
+        .select(ONE_JOB_COLUMNS)
         .eq("id", jobId)
         .maybeSingle())
       if (error) return sendInternalError(reply, req, error, "Lookup failed")
       if (!data) return reply.status(404).send({ error: { code: "not_found", message: "Job not found" } })
-      const { usage_log_id: _log, ...job } = data as unknown as Row
-      return reply.send({ data: job })
+      const row = data as unknown as Row & { user_id: string }
+      const [credits, childCount] = await Promise.all([
+        runCreditsFor([row], [row.user_id], (read, ms) => recordTiming(req, read, ms)),
+        timed(req, "children", () => countChildJobs(row)),
+      ])
+      const { usage_log_id: _log, ...job } = row
+      return reply.send({ data: { ...job, credit: adminJobCredit(runCreditsOf(row.id, credits)), child_count: childCount } })
+    },
+  )
+
+  /**
+   * GET /v1/admin/jobs/:jobId/children -- every job below one (its steps,
+   * theirs, …) in flow order, each whole and with its own charge and its
+   * `depth` below the job (`admin-job-children.ts`). `truncated` when the tree
+   * is bigger than the page lists.
+   */
+  app.get<{ Params: { jobId: string } }>(
+    "/v1/admin/jobs/:jobId/children",
+    { preHandler: requireAdmin, onSend: sendServerTiming },
+    async (req, reply) => {
+      recordTiming(req, "auth", reply.elapsedTime)
+      const jobId = req.params.jobId
+      if (!UUID_TEXT.test(jobId)) {
+        return reply.status(400).send({ error: { code: "validation_error", message: "Expected a job id" } })
+      }
+      const { data, error } = await timed(req, "job", () => supabase
+        .from("jobs")
+        .select("id, user_id")
+        .eq("id", jobId)
+        .maybeSingle())
+      if (error) return sendInternalError(reply, req, error, "Lookup failed")
+      if (!data) return reply.status(404).send({ error: { code: "not_found", message: "Job not found" } })
+      const root = data as unknown as { id: string; user_id: string }
+      let children: Awaited<ReturnType<typeof adminChildJobs>>
+      try {
+        children = await timed(req, "tree", () => adminChildJobs(root, ONE_JOB_COLUMNS))
+      } catch (err) {
+        return sendInternalError(reply, req, err, "Lookup failed")
+      }
+      const rows = children.rows as unknown as Array<Row & { depth: number }>
+      const credits = await runCreditsFor(rows, [root.user_id], (read, ms) => recordTiming(req, read, ms))
+      return reply.send({
+        data: rows.map(({ usage_log_id: _log, ...row }) => ({ ...row, credit: adminJobCredit(runCreditsOf(row.id, credits)) })),
+        truncated: children.truncated,
+      })
     },
   )
 
