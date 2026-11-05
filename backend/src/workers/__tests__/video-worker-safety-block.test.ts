@@ -409,6 +409,50 @@ describe("video worker — input-video refusal hint", () => {
     expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
   })
 
+  it("a copyright refusal whose provider words name the prompt → safety-block hint with subject prompt, final and refunded", async () => {
+    const message = "The provider declined this generation."
+    mocks.mockHandler.mockRejectedValueOnce(
+      Object.assign(
+        new KieError(
+          message,
+          "task failed: [501] The prompt may be related to copyright restrictions",
+          "Generation", true, true, "copyright",
+        ),
+        { promptRefused: true },
+      ),
+    )
+
+    await processor(makeBullJob("image-to-video", { provider: "seedance-2", imageUrl: "https://cdn.example/a.png" })).catch(() => {})
+
+    expect(failedUpdate()).toEqual(expect.objectContaining({
+      error_message: message,
+      error_hint: { kind: "safety-block", class: "copyright", retried: false, subject: "prompt" },
+    }))
+    expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
+  })
+
+  it("a copyright refusal whose provider words blame the generated audio → safety-block hint with subject audio, final and refunded", async () => {
+    const message = "The provider declined this generation."
+    mocks.mockHandler.mockRejectedValueOnce(
+      Object.assign(
+        new KieError(
+          message,
+          "task failed: [400] The generated audio may involve copyright restrictions",
+          "Generation", true, true, "copyright",
+        ),
+        { audioRefused: true },
+      ),
+    )
+
+    await processor(makeBullJob("image-to-video", { provider: "seedance-2", imageUrl: "https://cdn.example/a.png" })).catch(() => {})
+
+    expect(failedUpdate()).toEqual(expect.objectContaining({
+      error_message: message,
+      error_hint: { kind: "safety-block", class: "copyright", retried: false, subject: "audio" },
+    }))
+    expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
+  })
+
   it("a provider's refusal of the request → request-refused hint, the message unchanged and refunded once", async () => {
     const message = "The video model declined this run as it is. Change the pictures, the clip or the settings."
     mocks.mockHandler.mockRejectedValueOnce(Object.assign(new Error(message), { requestRefused: true, userSafeMessage: true }))

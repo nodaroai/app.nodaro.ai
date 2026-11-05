@@ -92,6 +92,123 @@ describe("createUpstreamFailureError — contentPolicy + userMessage options", (
   })
 })
 
+describe("createUpstreamFailureError — a refusal whose provider words name the prompt", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+  })
+
+  it("a copyright refusal naming the prompt carries promptRefused", () => {
+    const e = createUpstreamFailureError(
+      "task failed: [501] The prompt may be related to copyright restrictions",
+      "Generation",
+      { contentPolicy: true, contentPolicyClass: "copyright", upstreamStatus: "501" },
+    )
+    expect(e.promptRefused).toBe(true)
+    expect(e.contentPolicyClass).toBe("copyright")
+  })
+
+  it("the word in the wrapper text is not the provider's", () => {
+    expect(
+      createUpstreamFailureError(
+        "task failed: [501] Output may resemble protected content",
+        "prompt builder",
+        { contentPolicy: true, contentPolicyClass: "copyright" },
+      ).promptRefused,
+    ).toBe(false)
+  })
+
+  it("no class, no flag", () => {
+    expect(
+      createUpstreamFailureError("task failed: [500] bad prompt format", "Generation", { contentPolicy: false }).promptRefused,
+    ).toBe(false)
+  })
+
+  it("the plural counts, whatever the case", () => {
+    expect(
+      createUpstreamFailureError("task failed: [400] Prompts may involve copyright restrictions", "Generation", {
+        contentPolicy: true,
+        contentPolicyClass: "copyright",
+      }).promptRefused,
+    ).toBe(true)
+  })
+
+  it("only the whole word counts", () => {
+    expect(
+      createUpstreamFailureError("task failed: [400] The promptly generated video may involve copyright restrictions", "Generation", {
+        contentPolicy: true,
+        contentPolicyClass: "copyright",
+      }).promptRefused,
+    ).toBe(false)
+  })
+
+  it("reads the provider's message out of a createTask wrapper, not the wrapper around it", () => {
+    const wrapped = (msg: string) => `prompt submit failed: 422 - ${JSON.stringify({ code: 422, msg })}`
+    const refused = (msg: string) =>
+      createUpstreamFailureError(wrapped(msg), "Generation", { contentPolicy: true, contentPolicyClass: "copyright" })
+    expect(refused("The prompt may involve copyright restrictions").promptRefused).toBe(true)
+    expect(refused("The generated video may involve copyright restrictions").promptRefused).toBe(false)
+  })
+
+  it("a plain constructor call never carries the flag", () => {
+    expect(new KieError("msg", "The prompt may involve copyright", "Generation", true, true, "copyright").promptRefused).toBe(false)
+  })
+})
+
+describe("createUpstreamFailureError — a refusal whose provider words blame the generated audio", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+  })
+  const refused = (words: string, context = "Generation") =>
+    createUpstreamFailureError(`task failed: [400] ${words}`, context, { contentPolicy: true, contentPolicyClass: "copyright" })
+
+  it("the generated audio, whatever the case", () => {
+    expect(refused("The generated audio may involve copyright restrictions").audioRefused).toBe(true)
+    expect(refused("THE GENERATED AUDIO may involve copyright restrictions").audioRefused).toBe(true)
+  })
+
+  it("a refusal about the video that only mentions sound does not count", () => {
+    for (const words of [
+      "The generated video may involve copyright restrictions",
+      "The generated video and its audio may involve copyright restrictions",
+      "The generated video may involve copyright restrictions on its sound or music",
+      "The audio in the generated video may involve copyright restrictions",
+      "The input audio may involve copyright restrictions",
+      "The generated audiobook cover may involve copyright restrictions",
+    ]) {
+      expect(refused(words).audioRefused, words).toBe(false)
+    }
+  })
+
+  it("the word in the wrapper text is not the provider's", () => {
+    expect(refused("Output may resemble protected content", "generated audio step").audioRefused).toBe(false)
+  })
+
+  it("no class, no flag", () => {
+    expect(
+      createUpstreamFailureError("task failed: [500] generated audio was empty", "Generation", { contentPolicy: false }).audioRefused,
+    ).toBe(false)
+  })
+
+  it("a string naming both sets both flags: the hint decides between them", () => {
+    const err = refused("The prompt's generated audio may involve copyright restrictions")
+    expect(err.promptRefused).toBe(true)
+    expect(err.audioRefused).toBe(true)
+  })
+
+  it("reads the provider's message out of a createTask wrapper", () => {
+    const err = createUpstreamFailureError(
+      `submit failed: 422 - ${JSON.stringify({ code: 422, msg: "The generated audio may involve copyright restrictions" })}`,
+      "Generation",
+      { contentPolicy: true, contentPolicyClass: "copyright" },
+    )
+    expect(err.audioRefused).toBe(true)
+  })
+
+  it("a plain constructor call never carries the flag", () => {
+    expect(new KieError("msg", "The generated audio may involve copyright", "Generation", true, true, "copyright").audioRefused).toBe(false)
+  })
+})
+
 describe("KieError.contentPolicy", () => {
   it("defaults to false for a plain constructor call (existing 3-arg / 4-arg call sites unaffected)", () => {
     const threeArg = new KieError("msg", "internal details", "context")
@@ -595,11 +712,32 @@ describe('pollKieTask — state:"fail" input-image copyright refusal', () => {
     expect(err.message).not.toMatch(/prompt/i)
   })
 
+  it("a poll refusal whose failMsg names the prompt carries promptRefused, and keeps its sentence", async () => {
+    const err = await failWith("The prompt may be related to copyright restrictions.", "501")
+
+    expect(err.contentPolicyClass).toBe("copyright")
+    expect(err.promptRefused).toBe(true)
+    expect(err.inputImageRefused).toBe(false)
+    expect(err.message).toBe(CONTENT_POLICY_MESSAGES.copyright)
+  })
+
+  it("a poll refusal whose failMsg blames the generated audio carries audioRefused, and keeps its sentence", async () => {
+    const err = await failWith("The generated audio may involve copyright restrictions", "400")
+
+    expect(err.contentPolicyClass).toBe("copyright")
+    expect(err.audioRefused).toBe(true)
+    expect(err.promptRefused).toBe(false)
+    expect(err.inputVideoRefused).toBe(false)
+    expect(err.message).toBe(CONTENT_POLICY_MESSAGES.copyright)
+  })
+
   it("the output-resemblance case is unchanged", async () => {
     const err = await failWith(OUTPUT_VIDEO_COPYRIGHT, "500")
 
     expect(err.contentPolicyClass).toBe("copyright")
     expect(err.inputImageRefused).toBe(false)
+    expect(err.promptRefused).toBe(false)
+    expect(err.audioRefused).toBe(false)
     expect(err.message).toBe(CONTENT_POLICY_MESSAGES.copyright)
     expect(err.message).toBe(
       "The provider declined this generation: the output may resemble protected (copyrighted) content. Rephrasing the prompt usually resolves this.",

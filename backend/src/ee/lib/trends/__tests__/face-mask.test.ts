@@ -350,6 +350,36 @@ describe("publishBlockers — a masked trend", () => {
   })
 })
 
+describe("a trend that sends its source clip first (noPersonSourceClip)", () => {
+  const ROOM = {
+    slots: [{ key: "room", kind: "location" as const, label: { en: "Room" }, required: true, roleName: "the room" }],
+    examples: [{ videoUrl: "https://cdn.example/ex.mp4", width: 720, height: 1280, durationSec: 12, sourceJobId: "j", slots: { room: ["https://cdn.example/r.png"] } }],
+  }
+  const LOCATION_ENVS = [env("staging", { ...ALL, roleKinds: ["location"] }), env("production", { ...ALL, roleKinds: ["location"] })]
+
+  it("does not move the settings key, whatever the slots", () => {
+    expect(faceMaskSettingsKey(data({ noPersonSourceClip: true }))).toBe(faceMaskSettingsKey(data()))
+    expect(faceMaskSettingsKey(data({ ...ROOM, noPersonSourceClip: true }))).toBe(faceMaskSettingsKey(data(ROOM)))
+    expect(faceMaskSettingsKey(data({ ...ROOM, noPersonSourceClip: true }))).not.toBeNull()
+  })
+
+  it("leaves an approved mask approved", () => {
+    const flagged = data({ ...ROOM, faceMask: mask({ settingsKey: faceMaskSettingsKey(data(ROOM))! }), noPersonSourceClip: true })
+    expect(faceMaskState(flagged, LOCATION_ENVS, REQUIRED)).toEqual({ status: "approved", reasons: [] })
+  })
+
+  it("adds no publish blocker, masked or with masking off", () => {
+    const faceMask = mask({ settingsKey: faceMaskSettingsKey(data(ROOM))! })
+    expect(publishBlockers(data({ ...ROOM, faceMask, noPersonSourceClip: true }), LOCATION_ENVS, REQUIRED)).toEqual([])
+    expect(publishBlockers(data({ ...ROOM, faceMasking: undefined, noPersonSourceClip: true }), LOCATION_ENVS, REQUIRED)).toEqual([])
+    expect(publishBlockers(data({ ...ROOM, faceMasking: { mode: "off" }, noPersonSourceClip: true }), LOCATION_ENVS, REQUIRED)).toEqual([])
+  })
+
+  it("does not waive the approved mask a masked trend needs", () => {
+    expect(publishBlockers(data({ ...ROOM, noPersonSourceClip: true }), LOCATION_ENVS, REQUIRED)).toEqual([{ code: "face_mask_missing", message: expect.any(String) }])
+  })
+})
+
 describe("publishBlockers — a Nodaro Motion Pulse trend, whatever ids the engine declares", () => {
   const PULSE = { faceMasking: { mode: "off" as const }, engine: "kling-4" as const }
   it.each([

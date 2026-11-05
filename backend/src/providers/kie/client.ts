@@ -96,6 +96,18 @@ export class KieError extends Error {
    *  fault: the input that has to change. Read duck-typed beside
    *  `requestRefused`. Null otherwise. */
   public readonly requestRefusedSubject: "input_video" | null
+  /** True when a content-policy refusal's own words name the PROMPT (see
+   *  `createUpstreamFailureError`): changing the prompt is the fix. Read
+   *  duck-typed by `lib/safety-block.ts` (`promptRefusedOf`) to name it on the
+   *  job's `error_hint` (`subject: "prompt"`); this flag never changes the
+   *  user-facing message. */
+  public promptRefused = false
+  /** True when a content-policy refusal's own words blame the GENERATED AUDIO
+   *  (see `GENERATED_AUDIO_RE`), not the picture. Read duck-typed by
+   *  `lib/safety-block.ts` (`audioRefusedOf`) to name it on the job's
+   *  `error_hint` (`subject: "audio"`); this flag never changes the user-facing
+   *  message. */
+  public audioRefused = false
 
   constructor(
     sanitizedMessage: string,
@@ -178,6 +190,11 @@ const MEDIA_LOAD_FAILED_RE =
  *  clip ("video_url is required"). */
 const REFUSED_INPUT_VIDEO_RE =
   /video_urls?\b[^.]*\b(?:duration|length|long|size|seconds)\b|\bvideo_\d+ duration\b|\bduration of the video\b|\b(?:input|reference) video (?:duration|must)\b|\bvideo pixel count\b|\bno valid characters detected in the video\b/i
+
+/** A content refusal's words blaming the audio the model made. Deliberately this
+ *  phrase only: a refusal about the video that mentions its sound, or the audio
+ *  it was sent, is not this. */
+const GENERATED_AUDIO_RE = /\bgenerated audio\b/i
 
 /** The provider's own words inside one of our wrapped internal messages:
  *  `task failed: [400] <failMsg>` (pollKieTask), or
@@ -506,10 +523,16 @@ export function createUpstreamFailureError(
     // (its generic pattern matching would clobber the caller-supplied
     // userMessage), so log here instead to keep the same Railway visibility.
     console.error(`[KIE.ai INTERNAL ERROR] ${context}: ${internalMessage}`)
-    return new KieError(
+    const err = new KieError(
       userMessage, internalMessage, context, true, contentPolicy, cls, inputVideoRefused,
       copyrightSubject === "input_image",
     )
+    // The provider's words only, never our wrapper or `context`. The plural
+    // counts: reading too much here errs toward treating it as the prompt's fault.
+    const providerWords = providerWordsOf(internalMessage)
+    err.promptRefused = cls !== null && /\bprompts?\b/i.test(providerWords)
+    err.audioRefused = cls !== null && GENERATED_AUDIO_RE.test(providerWords)
+    return err
   }
   return createSanitizedError(internalMessage, context, true, contentPolicy, {
     upstreamStatus: options?.upstreamStatus,

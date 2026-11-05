@@ -147,6 +147,7 @@ import { styleForPlugin } from "../nodaro-motion-style.js"
 import { promptWordingForPlugin } from "../nodaro-motion-prompt-wording.js"
 import { engineTakesStyleOnly, styleOnlyForPlugin } from "../nodaro-motion-style-only.js"
 import { engineTakesPreciseArtStyle, preciseArtStyleForPlugin } from "../nodaro-motion-precise-art-style.js"
+import { engineTakesNoPersonSourceClip, noPersonForPlugin } from "../nodaro-motion-no-person.js"
 import { engineRoutesPreciseStyle, preciseStyleRouteForPlugin } from "../nodaro-motion-precise-style-route.js"
 import { anyStepsSet, stepsForLoadedEngine, withEarlierStepsKeys } from "../nodaro-motion-steps.js"
 import { loadedEngineTakesSteps } from "../cast-swap-steps.js"
@@ -1657,6 +1658,10 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   nodaroMotionStyleOnly: true,
   // tk.settings.nodaroMotionPreciseArtStyle(): the admin's opener for a Precise run with an art style per Nodaro Motion engine.
   nodaroMotionPreciseArtStyle: true,
+  // tk.settings.nodaroMotionNoPerson(): whether a direct Precise run with no pictured person sends its source clip, per Nodaro Motion engine.
+  nodaroMotionNoPerson: true,
+  // A safety-block error_hint carries `subject: "prompt"` or `"audio"` when the provider's own words named the prompt or blamed the generated audio (lib/safety-block.ts).
+  errorHintPromptSubject: true,
   // tk.settings.nodaroMotionPreciseStyleRoute(): whether a direct Prism Precise run with an art style runs as Flex, and who skips it.
   nodaroMotionPreciseStyleRoute: true,
   jobLanes: true,
@@ -2329,6 +2334,16 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_precise_art_style: the app settings could not be read")
         if (!engineTakesPreciseArtStyle(getPluginSupports().castSwap)) return null
         return preciseArtStyleForPlugin(settings.nodaro_motion_precise_art_style)
+      },
+      // Same rules: a failed read throws (null would read as on for every engine).
+      // Null when never saved or nothing is switched off, AND to an engine that does not declare
+      // `castSwap.noPersonSourceClip`; else each changed engine under its current AND its earlier key
+      // (the masking setting's shim).
+      nodaroMotionNoPerson: async () => {
+        const settings = await getAppSettings()
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_no_person: the app settings could not be read")
+        if (!engineTakesNoPersonSourceClip(getPluginSupports().castSwap)) return null
+        return noPersonForPlugin(settings.nodaro_motion_no_person)
       },
       // Same rules: a failed read throws (the engine reads that as its default, with an alert). Null when never
       // saved or nothing differs from the defaults (routing on, nobody bypassed), AND to an engine that does not

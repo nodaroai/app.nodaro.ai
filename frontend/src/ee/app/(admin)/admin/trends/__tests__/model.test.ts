@@ -224,6 +224,15 @@ describe("face masking and the pre prompt in the form", () => {
   })
 })
 
+describe("sending the clip as it is first, in the form", () => {
+  it("on round-trips; off sends no key", () => {
+    expect(toForm(draft()).noPersonSourceClip).toBe(false)
+    expect(fromForm(toForm(draft({ noPersonSourceClip: true }))).noPersonSourceClip).toBe(true)
+    expect(fromForm(toForm(draft()))).not.toHaveProperty("noPersonSourceClip")
+    expect(fromForm({ ...toForm(draft({ noPersonSourceClip: true })), noPersonSourceClip: false })).not.toHaveProperty("noPersonSourceClip")
+  })
+})
+
 describe("the chips a slot shows to people", () => {
   const lead = (over: Record<string, unknown> = {}) =>
     ({ key: "lead", label: { en: "Lead" }, kind: "person", required: true, roleName: "the woman", ...over }) as AdminTrendData["slots"][number]

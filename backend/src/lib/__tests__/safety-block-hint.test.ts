@@ -24,10 +24,12 @@
 
 import { describe, expect, it } from "vitest"
 import {
+  audioRefusedOf,
   creditsHintOf,
   errorHintFor,
   inputRefusedHint,
   policyBlockHint,
+  promptRefusedOf,
   queueTimeoutHintOf,
   refusalHintFor,
   requestRefusedHintOf,
@@ -236,6 +238,92 @@ describe("a request the provider refused, read off the thrown error", () => {
     expect(refusalHintFor(null, false, false)).toBeNull()
     expect(refusalHintFor(null, false, true, false, hint)).toEqual({ kind: "input-refused", subject: "input_video" })
     expect(refusalHintFor({ class: "safety", maxAttempts: 2 }, true, false, false, hint)).toEqual({ kind: "safety-block", class: "safety", retried: true })
+  })
+})
+
+describe("a refusal whose provider words named the prompt", () => {
+  const block = (cls: SafetyBlock["class"]): SafetyBlock => ({ class: cls, maxAttempts: 1 })
+
+  it("the hint says so, on any class", () => {
+    expect(errorHintFor(block("copyright"), false, { promptRefused: true }).subject).toBe("prompt")
+    expect(errorHintFor(block("likeness"), false, { promptRefused: true }).subject).toBe("prompt")
+    expect(errorHintFor(block("safety"), false, { promptRefused: true }).subject).toBe("prompt")
+  })
+
+  it("a named input wins over the prompt", () => {
+    expect(errorHintFor(block("copyright"), false, { inputVideoRefused: true, promptRefused: true }).subject).toBe("input_video")
+    expect(errorHintFor(block("copyright"), false, { inputImageRefused: true, promptRefused: true }).subject).toBe("input_image")
+  })
+
+  it("a hint with no flag has no subject", () => {
+    expect(errorHintFor(block("copyright"), false).subject).toBeUndefined()
+    expect(errorHintFor(block("copyright"), false, { promptRefused: false }).subject).toBeUndefined()
+  })
+
+  it("the writers' one mapping takes it as its last argument, and only beside a block", () => {
+    expect(refusalHintFor(block("copyright"), false, false, false, null, true)).toMatchObject({ kind: "safety-block", subject: "prompt" })
+    expect(refusalHintFor(block("copyright"), false, false, false, null)).toEqual({ kind: "safety-block", class: "copyright", retried: false })
+    expect(refusalHintFor(null, false, false, false, null, true)).toBeNull()
+  })
+})
+
+describe("a refusal whose provider words blamed the generated audio", () => {
+  const block = (cls: SafetyBlock["class"]): SafetyBlock => ({ class: cls, maxAttempts: 1 })
+
+  it("the hint says so, on any class", () => {
+    expect(errorHintFor(block("copyright"), false, { audioRefused: true }).subject).toBe("audio")
+    expect(errorHintFor(block("likeness"), false, { audioRefused: true }).subject).toBe("audio")
+    expect(errorHintFor(block("safety"), false, { audioRefused: true }).subject).toBe("audio")
+  })
+
+  it("the prompt and a named input win over the audio", () => {
+    expect(errorHintFor(block("copyright"), false, { promptRefused: true, audioRefused: true }).subject).toBe("prompt")
+    expect(errorHintFor(block("copyright"), false, { inputVideoRefused: true, audioRefused: true }).subject).toBe("input_video")
+    expect(errorHintFor(block("copyright"), false, { inputImageRefused: true, audioRefused: true }).subject).toBe("input_image")
+  })
+
+  it("a hint with no flag has no subject", () => {
+    expect(errorHintFor(block("copyright"), false, { audioRefused: false }).subject).toBeUndefined()
+  })
+
+  it("the writers' one mapping takes it as its last argument, and only beside a block", () => {
+    expect(refusalHintFor(block("copyright"), false, false, false, null, false, true)).toEqual({
+      kind: "safety-block", class: "copyright", retried: false, subject: "audio",
+    })
+    expect(refusalHintFor(block("copyright"), false, false, false, null, true, true)).toMatchObject({ subject: "prompt" })
+    expect(refusalHintFor(null, false, false, false, null, false, true)).toBeNull()
+  })
+})
+
+describe("audioRefusedOf", () => {
+  it("reads the flag on the error or its cause chain", () => {
+    const inner = Object.assign(new Error("inner"), { audioRefused: true })
+    expect(audioRefusedOf(inner)).toBe(true)
+    expect(audioRefusedOf(new Error("outer", { cause: inner }))).toBe(true)
+  })
+
+  it("is false for anything else, and never throws", () => {
+    expect(audioRefusedOf(new Error("The generated audio was refused"))).toBe(false)
+    expect(audioRefusedOf(Object.assign(new Error("x"), { audioRefused: "true" }))).toBe(false)
+    expect(audioRefusedOf(null)).toBe(false)
+    const hostile = Object.defineProperty(new Error("x"), "audioRefused", { get() { throw new Error("boom") } })
+    expect(audioRefusedOf(hostile)).toBe(false)
+  })
+})
+
+describe("promptRefusedOf", () => {
+  it("reads the flag on the error or its cause chain", () => {
+    const inner = Object.assign(new Error("inner"), { promptRefused: true })
+    expect(promptRefusedOf(inner)).toBe(true)
+    expect(promptRefusedOf(new Error("outer", { cause: inner }))).toBe(true)
+  })
+
+  it("is false for anything else, and never throws", () => {
+    expect(promptRefusedOf(new Error("The prompt was refused"))).toBe(false)
+    expect(promptRefusedOf(Object.assign(new Error("x"), { promptRefused: "true" }))).toBe(false)
+    expect(promptRefusedOf(null)).toBe(false)
+    const hostile = Object.defineProperty(new Error("x"), "promptRefused", { get() { throw new Error("boom") } })
+    expect(promptRefusedOf(hostile)).toBe(false)
   })
 })
 

@@ -231,11 +231,12 @@ export interface SafetyBlockHint {
   readonly class: "copyright" | "likeness" | "safety"
   readonly retried: boolean
   readonly suggestedProvider?: string
-  /** Present when the provider named the INPUT it refused (not the prompt or
-   *  the output): `"input_video"` — the input video itself; `"input_image"` —
-   *  one of the input images, as possibly copyrighted. Mirrors
-   *  `SafetyBlockHint` in `backend/src/lib/safety-block.ts`. */
-  readonly subject?: "input_video" | "input_image"
+  /** Present when the provider named what it refused: `"input_video"` — the
+   *  input video itself; `"input_image"` — one of the input images, as possibly
+   *  copyrighted; `"prompt"` — its own words named the prompt; `"audio"` — its
+   *  own words blamed the generated audio. Mirrors `SafetyBlockHint` in
+   *  `backend/src/lib/safety-block.ts`. */
+  readonly subject?: "input_video" | "input_image" | "prompt" | "audio"
 }
 
 /**

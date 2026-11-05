@@ -66,6 +66,7 @@ import { prismReferenceAudioHeldIssues } from "../prism-reference-audio"
 import { fullDepthSceneDescribes, roleOutlineColour, slotMarkAllowed } from "@nodaro/render-rules"
 import { SourceClipEditor } from "../components/SourceClipEditor"
 import { HideOriginalToggle } from "../components/HideOriginalToggle"
+import { NoPersonSourceClipToggle } from "../components/NoPersonSourceClipToggle"
 import { SlotsEditor } from "../components/SlotsEditor"
 import { ReferencesEditor } from "../components/ReferencesEditor"
 import { TextsEditor } from "../components/TextsEditor"
@@ -84,7 +85,7 @@ import {
 } from "../clip-preparation"
 import { FaceMaskPanel } from "../components/FaceMaskPanel"
 import { StepsEditor } from "../components/StepsEditor"
-import { defaultPromptStyleOf, sceneOf } from "../prompt-style"
+import { defaultPromptStyleOf, noPersonSourceClipOffered, sceneOf } from "../prompt-style"
 import { EngineEditor } from "../components/EngineEditor"
 import { TestPanel } from "../components/TestPanel"
 import { ExamplesPanel } from "../components/ExamplesPanel"
@@ -405,6 +406,9 @@ export default function AdminTrendEditorPage() {
               examples={server.draft.examples.length}
               onChange={(hideOriginal) => set({ hideOriginal })}
             />
+            {noPersonSourceClipOffered(form) && (
+              <NoPersonSourceClipToggle checked={form.noPersonSourceClip} onChange={(noPersonSourceClip) => set({ noPersonSourceClip })} />
+            )}
             {savedSource && (
               <CropPanel
                 trendId={id}

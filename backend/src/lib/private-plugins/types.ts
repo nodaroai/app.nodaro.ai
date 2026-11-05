@@ -137,6 +137,12 @@ export interface PluginHandlerCtx {
  *   one of the job's INPUT IMAGES as possibly copyrighted. Honoured only on a
  *   `copyright` block: `error_hint` then carries `subject: "input_image"`.
  *   ADDITIVE-OPTIONAL.
+ * - `promptRefused: true` (error or `cause` chain) — the provider's own words
+ *   named the PROMPT in a content block: `error_hint` then carries
+ *   `subject: "prompt"`, unless a named input wins. ADDITIVE-OPTIONAL.
+ * - `audioRefused: true` (error or `cause` chain) — the provider's own words
+ *   blamed the GENERATED AUDIO in a content block: `error_hint` then carries
+ *   `subject: "audio"`, unless a named input or the prompt wins. ADDITIVE-OPTIONAL.
  * - `requestRefused: true` (error or `cause` chain) — the provider refused the
  *   request as it was sent, so the same inputs fail again: `error_hint` is
  *   `{ kind: "request-refused" }`, with `subject: "input_video"` when
@@ -1421,10 +1427,11 @@ export type PluginJobErrorHint =
        * What was blocked, when the provider named it: `"input_video"` = the
        * job's input video (not its prompt); `"input_image"` = one of the job's
        * input images, refused as possibly copyrighted (only with
-       * `class: "copyright"`). Absent ⇒ unknown. ADDITIVE-OPTIONAL — the union
-       * may grow; treat an unknown subject as absent.
+       * `class: "copyright"`); `"prompt"` = the provider's own words named the
+       * prompt; `"audio"` = they blamed the generated audio. Absent ⇒ unknown.
+       * ADDITIVE-OPTIONAL — the union may grow; treat an unknown subject as absent.
        */
-      subject?: "input_video" | "input_image"
+      subject?: "input_video" | "input_image" | "prompt" | "audio"
     }
   | {
       /**
@@ -3484,6 +3491,20 @@ export interface PluginCapabilities {
    */
   readonly nodaroMotionPreciseArtStyle?: boolean
   /**
+   * `tk.settings.nodaroMotionNoPerson()` exists: whether a DIRECT Precise run
+   * with no pictured person sends its source clip, as an admin set it per
+   * Nodaro Motion engine. An older host has no such member: its runs stay as
+   * they were (off).
+   */
+  readonly nodaroMotionNoPerson?: boolean
+  /**
+   * A `safety-block` `error_hint` carries `subject: "prompt"` when the
+   * provider's own words named the prompt, and `subject: "audio"` when they
+   * blamed the generated audio. On an older host a hint with no `subject` may
+   * still be such a refusal, so a plugin cannot read its absence as "neither".
+   */
+  readonly errorHintPromptSubject?: boolean
+  /**
    * `tk.settings.nodaroMotionPreciseStyleRoute()` exists: whether a DIRECT run
    * on Nodaro Motion Prism that resolves to Precise and carries an art style
    * runs as Flex, and which accounts skip that. An older host has no such
@@ -3821,6 +3842,16 @@ export interface PluginSettingsToolkit {
    */
   nodaroMotionPreciseArtStyle?(): Promise<PluginNodaroMotionPreciseArtStyle | null>
   /**
+   * The admin's no-person setting per Nodaro Motion engine, for a DIRECT
+   * Precise run with no pictured person: only the engines switched off, each
+   * answered under its current AND its earlier key, or null when it was never
+   * saved, nothing is switched off, or this host's engine does not declare
+   * `castSwap.noPersonSourceClip`. Returns a copy the plugin may change freely.
+   * REJECTS when the settings could not be read. Advertised as
+   * `capabilities.nodaroMotionNoPerson`.
+   */
+  nodaroMotionNoPerson?(): Promise<PluginNodaroMotionNoPerson | null>
+  /**
    * The admin's Precise art-style route: `routing` "off" when an admin switched
    * it off, the accounts' emails that skip it (`bypassEmails`, trimmed and
    * lowercased). Null when it was never saved, nothing differs from the defaults
@@ -3830,6 +3861,18 @@ export interface PluginSettingsToolkit {
    * `capabilities.nodaroMotionPreciseStyleRoute`.
    */
   nodaroMotionPreciseStyleRoute?(): Promise<PluginNodaroMotionPreciseStyleRoute | null>
+}
+
+/**
+ * Nodaro Motion's no-person setting per engine, keyed by the PUBLIC engine ids
+ * (current and earlier): an engine listed is switched off; one left out sends
+ * the source clip on a Precise run with no pictured person. `sourceClip` is
+ * only ever `false`.
+ */
+export type PluginNodaroMotionNoPerson = {
+  readonly [publicEngineId: string]: {
+    readonly sourceClip?: false
+  }
 }
 
 /** Nodaro Motion's Precise art-style route. Absent `routing`: on; absent `bypassEmails`: nobody. */
@@ -4334,6 +4377,18 @@ export interface PluginSupports {
    *   there, answers it the setting as null, and never saves the setting while
    *   no environment declares it (lib/nodaro-motion-precise-art-style.ts
    *   `engineTakesPreciseArtStyle`).
+   * - `noPersonSourceClip`: a DIRECT Precise run with no pictured person sends
+   *   its source clip as it is, and masks only if the provider refuses that
+   *   clip, unless the admin's per-engine setting
+   *   (`tk.settings.nodaroMotionNoPerson`) switches that off. Additive-optional:
+   *   absent ⇒ the engine prepares these runs as any Precise run; the platform
+   *   answers it the setting as null, and never saves a change while no
+   *   environment declares it (lib/nodaro-motion-no-person.ts
+   *   `engineTakesNoPersonSourceClip`).
+   * - `preciseArtStyleAlone`: an art style is a change on its own on a DIRECT
+   *   Precise run on Nodaro Motion Prism, so such a run needs no role, reference
+   *   or prompt. Additive-optional: absent ⇒ the engine refuses that run as
+   *   having nothing to change, and the platform does not offer it.
    * - `preciseStyleRoute`: the engine runs a DIRECT run on Nodaro Motion Prism
    *   that resolves to Precise and carries an art style as Flex, its estimate
    *   alike, while the admin's switch is on
@@ -4395,6 +4450,8 @@ export interface PluginSupports {
     readonly promptWordings?: readonly ("current" | "new")[]
     readonly styleOnly?: boolean
     readonly preciseArtStyle?: boolean
+    readonly noPersonSourceClip?: boolean
+    readonly preciseArtStyleAlone?: boolean
     readonly preciseStyleRoute?: boolean
   }
 }

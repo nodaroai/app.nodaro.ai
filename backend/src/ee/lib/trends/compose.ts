@@ -93,7 +93,11 @@
  * display slots carry no `fromDefault` key.
  *
  * Masking off (absent, or `mode: "off"`) sends no `faceMasking` key at all, so
- * the body is exactly what it was before trends had masking. Likewise the
+ * the body is exactly what it was before trends had masking, unless the trend
+ * sends its source clip first (`noPersonSourceClip`, `sendsSourceClipFirst`). A
+ * trend that does sends `mode: "auto"` (its other settings as they are; masking
+ * off, the defaults) and `sourceClip: true`, beside its stored mask as usual: the
+ * first attempt goes out unmasked and the one retry uses that mask. Likewise the
  * engine: a Seedance 2.5 trend (the default) sends no `engine` key; a Kling 4
  * trend sends `engine: "kling-4"` (and its `klingLength` when it sets one), renders 720p unless 1080p is asked, and
  * refuses a draft (`draft_unsupported`) and 480p (`resolution_unsupported`).
@@ -154,7 +158,7 @@ import { runOutlinesFor } from "./role-outlines.js"
 import { currentPreviewClip } from "./preview-clip.js"
 import { withPromptsFor } from "./prompt-parts.js"
 import { promptPartTexts } from "./prompt-parts-store.js"
-import { promptStyleOf, trendPromptWordingSent } from "./prompt-style.js"
+import { promptStyleOf, sendsSourceClipFirst, trendPromptWordingSent } from "./prompt-style.js"
 import { storedSceneDescriptionFor, type SceneDescriptionWindow } from "./scene-description.js"
 import type { CastSwapPromptStyle } from "@nodaro/render-rules"
 import type { PromptPartTexts } from "../../../lib/cast-swap-prompt-parts-contract.js"
@@ -247,6 +251,13 @@ export interface TrendRunBody {
   prePrompt?: string
   postPrompt?: string
   faceMasking?: FaceMasking
+  /**
+   * The first attempt sends the source clip (`sendsSourceClipFirst`): beside
+   * `faceMasking.mode: "auto"`, it tells the engine this is such a run, so the
+   * one masked retry also fires on what the model refuses to make. An engine
+   * from before the key drops it and retries on its usual refusals.
+   */
+  sourceClip?: true
   /**
    * The trend's approved face mask, while it matches the masking sent (never
    * without `faceMasking`). `required: true` (a trend with marks): the engine
@@ -573,9 +584,13 @@ export function composeTrendRun(
     )
   }
 
+  // A trend with no person that sends its source clip first runs as "auto": the first attempt goes
+  // out unmasked, and the one retry uses the trend's own mask and settings (a masking-off trend's: the defaults).
+  const sourceFirst = sendsSourceClipFirst(data)
   // The run's masking never carries the marks: they shape the STORED mask only (face-mask.ts).
-  const masking = faceMaskingOn(data.faceMasking) ? withoutMarks(data.faceMasking) : undefined
-  const stored = masking ? storedFaceMaskFor(data) : undefined
+  const own = faceMaskingOn(data.faceMasking) ? withoutMarks(data.faceMasking) : undefined
+  const masking = sourceFirst ? ({ ...own, mode: "auto" } as FaceMasking) : own
+  const stored = own ? storedFaceMaskFor(data) : undefined
   // A trend with erased marks runs on its approved mask, made with them, and nothing else: masking per
   // run would mask the faces the marks leave out (decided 2026-10-26). A depth mode's clip likewise:
   // it is made once and approved, never per run.
@@ -606,7 +621,7 @@ export function composeTrendRun(
     return outlines.length > 0 ? { outlines } : {}
   }
   // The colormap the stored clip was drawn with, when not its source's default (a variant: its base's).
-  const drawnColormap = masking ? storedDepthColormapOf(data.faceMasking!) : undefined
+  const drawnColormap = own ? storedDepthColormapOf(data.faceMasking!) : undefined
   const withDrawnColormap = <T extends object>(mask: T | undefined): T | undefined =>
     mask && drawnColormap ? { ...mask, depthColormap: drawnColormap } : mask
   const storedFaceMask = withDrawnColormap(
@@ -689,6 +704,7 @@ export function composeTrendRun(
     // A depth mode is sent what it reads (`faceMaskingRunSent`: full depth with its scene, resolved);
     // faces exactly as before modes existed.
     ...(runMasking ? { faceMasking: faceMaskingRunSent(structuredClone(runMasking)) } : {}),
+    ...(sourceFirst ? { sourceClip: true as const } : {}),
     // A trend with erased marks, or a person variant: the run must use it — the engine fails rather
     // than masks per run.
     ...(storedFaceMask ? { storedFaceMask } : {}),

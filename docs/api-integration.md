@@ -1588,7 +1588,7 @@ plus, for five classes of failure, a structured `error_hint`.
 A provider content-policy block:
 
 ```json
-{ "kind": "safety-block", "class": "copyright" | "likeness" | "safety", "retried": boolean, "suggestedProvider"?: string, "subject"?: "input_video" | "input_image" }
+{ "kind": "safety-block", "class": "copyright" | "likeness" | "safety", "retried": boolean, "suggestedProvider"?: string, "subject"?: "input_video" | "input_image" | "prompt" | "audio" }
 ```
 
 `subject: "input_video"` is present when the provider refused the job's input
@@ -1596,6 +1596,9 @@ video itself — not the prompt, a reference image or the output; send a
 different clip. `subject: "input_image"` (always with `class: "copyright"`) is
 present when the provider refused one of the job's input images as possibly
 copyrighted; send a different picture — rephrasing the prompt will not help.
+`subject: "prompt"` is present when the provider's own words named the prompt;
+changing the prompt is the fix. `subject: "audio"` is present when the
+provider's own words blamed the generated audio, not the picture.
 Treat a `subject` you do not know as absent.
 
 Or, on a deployment that registers a job policy, a rejection by that policy:
@@ -4723,20 +4726,24 @@ sign-in needed) says which, per engine:
 `style: "motion"`). An app shows its style choice only for an engine answered
 `"user"`. The same answer carries
 `styleOnly: { "motion-prism": boolean, "motion-pulse": boolean }`: whether the
-engine takes style-only runs (below), and
+engine takes style-only runs (below),
 `preciseArtStyle: { "motion-prism": boolean, "motion-pulse": boolean }`:
-whether a Precise run takes an art style there (below). Both follow the engine
-alone, so read them with `engines`: a forced Precise keeps a Motion run's art
-style where `preciseArtStyle` is `true`, and drops it where it is not. On an
-engine answered `"precise"`, a request with nothing else to change is refused
-as `400 validation_error`; with anything else to change (a role with images, a
-fixed reference, a `prePrompt` or `postPrompt`) it answers `202` and runs and
-is quoted as Precise, with the art style where `preciseArtStyle` is `true`.
+whether a Precise run takes an art style there (below), and
+`preciseArtStyleAlone: { "motion-prism": boolean, "motion-pulse": boolean }`:
+whether an art style alone is a Precise run's change there, with no role,
+reference or prompt (Nodaro may run such a request as a Motion run, which this
+does not say: see An art style on a Precise run below); it answers `false`
+until the engine takes such runs. All three follow the engine alone, so read them with `engines`: a forced Precise
+keeps a Motion run's art style where `preciseArtStyle` is `true`, and drops it
+where it is not. On an engine answered `"precise"`, a request with nothing else
+to change is refused as `400 validation_error`; with anything else to change (a
+role with images, a fixed reference, a `prePrompt` or `postPrompt`) it answers
+`202` and runs and is quoted as Precise, with the art style where `preciseArtStyle` is `true`.
 While Nodaro runs a Precise run with an art style as a Motion run (see An art
 style on a Precise run below), a request that keeps one on such an engine runs
 and is quoted as Motion instead, and one with nothing else to change is accepted.
-Nodaro Motion Pulse is always `false` in both, and a server from before them
-leaves them out: read that as `false` for every engine.
+Nodaro Motion Pulse is always `false` in all three, and a server from before
+them leaves them out: read that as `false` for every engine.
 The answer may be up to a minute old. Trends are not
 affected.
 

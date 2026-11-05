@@ -764,6 +764,18 @@ describe("create → build → publish → edit (copy-on-write, Review Focus 3)"
     expect(read.draft.source?.display).toEqual(DISPLAY)
   })
 
+  it("noPersonSourceClip saves through the draft PUT, a draft that names none keeps no key, and false is refused", async () => {
+    seed()
+    const put = async (data: TrendVersionData) =>
+      call("PUT", `/v1/admin/trends/${T1}/draft`, { data, revision: await revisionOf() })
+    const draft = async () => ((await call("GET", `/v1/admin/trends/${T1}`)).json().data as { draft: TrendVersionData }).draft
+    expect((await put(draftData({ noPersonSourceClip: true }))).statusCode).toBe(200)
+    expect((await draft()).noPersonSourceClip).toBe(true)
+    expect((await put({ ...draftData(), noPersonSourceClip: false } as unknown as TrendVersionData)).statusCode).toBe(400)
+    expect((await put(draftData())).statusCode).toBe(200)
+    expect(await draft()).not.toHaveProperty("noPersonSourceClip")
+  })
+
   it("hideOriginal saves through the draft PUT, round-trips, and a draft that names none keeps no key", async () => {
     seed()
     const put = async (data: TrendVersionData) =>

@@ -89,6 +89,15 @@ export function promptStyleOf(data: Pick<TrendVersionData, "faceMasking" | "prom
   return data.promptStyle ?? defaultPromptStyleOf(data)
 }
 
+/**
+ * Whether a run of this trend sends the source clip on its first attempt: the
+ * flag is on, no slot is a person, the prompt style is Precise and the clip
+ * hides faces (masking off reads as that). Anywhere else the flag has no effect.
+ */
+export function sendsSourceClipFirst(data: Pick<TrendVersionData, "noPersonSourceClip" | "slots" | "faceMasking" | "promptStyle">): boolean {
+  return data.noPersonSourceClip === true && !data.slots.some((s) => s.kind === "person") && promptStyleOf(data) === "precise" && trendSourceOf(data) === "faces"
+}
+
 /** A full-depth trend's scene source, resolved; null for any other preparation (or none). */
 export function trendSceneOf(data: Pick<TrendVersionData, "faceMasking">): FaceMaskingScene | null {
   return faceMaskingOn(data.faceMasking) ? fullDepthSceneOf(data.faceMasking) : null

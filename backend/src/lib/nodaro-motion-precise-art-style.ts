@@ -168,3 +168,12 @@ export function parseNodaroMotionPreciseArtStyle(
 export function engineTakesPreciseArtStyle(cs: { readonly preciseArtStyle?: boolean } | undefined): boolean {
   return cs?.preciseArtStyle === true
 }
+
+/**
+ * Whether a (loaded or recorded) Cast Swap engine takes an art style as a change
+ * on its own on a Precise run (`castSwap.preciseArtStyleAlone`). An engine
+ * without it refuses such a run as having nothing to change.
+ */
+export function engineTakesPreciseArtStyleAlone(cs: { readonly preciseArtStyleAlone?: boolean } | undefined): boolean {
+  return cs?.preciseArtStyleAlone === true
+}

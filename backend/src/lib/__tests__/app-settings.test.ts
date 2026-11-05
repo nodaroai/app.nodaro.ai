@@ -151,6 +151,19 @@ describe("getAppSettings", () => {
   })
 
 
+  it("reads the no-person setting per engine: an earlier key as the current one, a bad entry dropped, no row or a failed read as never saved", async () => {
+    mockSelect.mockResolvedValueOnce({ data: [{ key: "nodaro_motion_no_person", value: { "motion-pro": { sourceClip: false }, "motion-pulse": { sourceClip: true } } }], error: null })
+    expect((await getAppSettings()).nodaro_motion_no_person).toEqual({ "motion-prism": { sourceClip: false } })
+
+    invalidateSettingsCache()
+    mockSelect.mockResolvedValueOnce({ data: [], error: null })
+    expect((await getAppSettings()).nodaro_motion_no_person).toBeNull()
+
+    invalidateSettingsCache()
+    mockSelect.mockResolvedValueOnce({ data: null, error: { message: "fail" } })
+    expect((await getAppSettings()).nodaro_motion_no_person).toBeNull()
+  })
+
   it("returns cached result on second call within TTL", async () => {
     mockSelect.mockResolvedValueOnce({
       data: [

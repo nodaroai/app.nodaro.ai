@@ -208,6 +208,8 @@ export interface TrendForm {
   previewClip: AdminTrendPreviewClip | undefined
   /** Visitors see Example 1 as the original; the original clip is never shown. Saved only when on. */
   hideOriginal: boolean
+  /** With no person to replace, the first try sends the source clip. Saved only when on. */
+  noPersonSourceClip: boolean
   /** The preparation steps, as stored: undefined (or `{}`) = none set, today's run; saved only when something is set. */
   steps?: CastSwapSteps
 }
@@ -236,6 +238,7 @@ export function toForm(draft: AdminTrendData): TrendForm {
     promptWording: draft.promptWording,
     previewClip: draft.previewClip ? { ...draft.previewClip } : undefined,
     hideOriginal: draft.hideOriginal === true,
+    noPersonSourceClip: draft.noPersonSourceClip === true,
     ...(draft.steps ? { steps: structuredClone(draft.steps) } : {}),
   }
 }
@@ -422,6 +425,8 @@ export function fromForm(form: TrendForm): TrendDraftBody {
     ...(form.promptWording ? { promptWording: form.promptWording } : {}),
     // Left out when off (the original shown), so loading an old draft is no change.
     ...(form.hideOriginal ? { hideOriginal: true } : {}),
+    // Left out when off, so loading an old draft is no change. Kept while the switch is hidden: a run ignores it there.
+    ...(form.noPersonSourceClip ? { noPersonSourceClip: true as const } : {}),
     // Left out when nothing is set (`{}` included), so loading an old draft is no change.
     ...(stepsOfForm(form.steps) ? { steps: stepsOfForm(form.steps) } : {}),
   }

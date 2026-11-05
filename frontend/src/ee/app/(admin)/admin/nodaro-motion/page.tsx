@@ -34,6 +34,11 @@
 // default; the preparation steps' switch stays the Flex runs')
 // (PUT /v1/admin/nodaro-motion/precise-art-style); a change is offered once one
 // environment's engine takes such runs, and the server's refusal is said in place.
+// Each engine also has its runs with no person (NoPersonColumn.tsx, under its
+// Precise column): whether a Precise run with no person role with pictures sends
+// the clip as it is, on by default (PUT /v1/admin/nodaro-motion/no-person); a change
+// is offered once one environment's engine reads it, and the server's refusal is
+// said in place.
 // Beside them, whether such a run runs as Flex at all (PreciseStyleRouteColumn.tsx,
 // PUT /v1/admin/nodaro-motion/precise-style-route): On (the default) or Off, and the
 // accounts' emails that skip it. It saves whatever the engines, and a note names
@@ -63,6 +68,7 @@ import type {
   CastSwapPulseAudioId,
   NodaroMotionMasking,
   NodaroMotionMotion,
+  NodaroMotionNoPerson,
   NodaroMotionSteps,
   NodaroMotionStyle,
   NodaroMotionStyleOnly,
@@ -76,6 +82,7 @@ import { useNodaroMotionStyle, useSaveNodaroMotionStyle } from "@/ee/hooks/queri
 import { useNodaroMotionAdvanced, useSaveNodaroMotionAdvanced } from "@/ee/hooks/queries/use-nodaro-motion-advanced"
 import { useNodaroMotionStyleOnly, useSaveNodaroMotionStyleOnly } from "@/ee/hooks/queries/use-nodaro-motion-style-only"
 import { useNodaroMotionPreciseArtStyle, useSaveNodaroMotionPreciseArtStyle } from "@/ee/hooks/queries/use-nodaro-motion-precise-art-style"
+import { useNodaroMotionNoPerson, useSaveNodaroMotionNoPerson } from "@/ee/hooks/queries/use-nodaro-motion-no-person"
 import { useNodaroMotionPreciseStyleRoute, useSaveNodaroMotionPreciseStyleRoute } from "@/ee/hooks/queries/use-nodaro-motion-precise-style-route"
 import {
   useNodaroMotionPrismReferenceAudio,
@@ -106,6 +113,7 @@ import { StyleChoiceSelect, styleToSaved } from "./components/StyleChoiceSelect"
 import { AdvancedSwitch } from "./components/AdvancedSwitch"
 import { StyleOnlyColumn, styleOnlyToSaved } from "./components/StyleOnlyColumn"
 import { PreciseArtStyleColumn, preciseArtStyleToSaved } from "./components/PreciseArtStyleColumn"
+import { NoPersonColumn, noPersonToSaved } from "./components/NoPersonColumn"
 import { PreciseStyleRouteColumn, preciseStyleRouteDraftOf, preciseStyleRouteIssues, preciseStyleRouteToSaved, type PreciseStyleRouteDraft } from "./components/PreciseStyleRouteColumn"
 
 /** The model each engine runs on, shown to admins beside the public name. */
@@ -176,6 +184,9 @@ export default function AdminNodaroMotionPage() {
   // Prism's Precise runs with an art style: a change is offered once one environment's engine takes them (PreciseArtStyleColumn).
   const preciseArtStyleQuery = useNodaroMotionPreciseArtStyle()
   const savePreciseArtStyle = useSaveNodaroMotionPreciseArtStyle()
+  // Each engine's runs with no person: a change is offered once one environment's engine reads it (NoPersonColumn).
+  const noPersonQuery = useNodaroMotionNoPerson()
+  const saveNoPerson = useSaveNodaroMotionNoPerson()
   // Whether such a run runs as Flex at all: saved whatever the engines (PreciseStyleRouteColumn).
   const preciseStyleRouteQuery = useNodaroMotionPreciseStyleRoute()
   const savePreciseStyleRoute = useSaveNodaroMotionPreciseStyleRoute()
@@ -188,6 +199,7 @@ export default function AdminNodaroMotionPage() {
   const [advancedDraft, setAdvancedDraft] = useState(false)
   const [styleOnlyDraft, setStyleOnlyDraft] = useState<NodaroMotionStyleOnly>({})
   const [preciseArtStyleDraft, setPreciseArtStyleDraft] = useState<NodaroMotionPreciseArtStyle>({})
+  const [noPersonDraft, setNoPersonDraft] = useState<NodaroMotionNoPerson>({})
   const [preciseStyleRouteDraft, setPreciseStyleRouteDraft] = useState<PreciseStyleRouteDraft>(() => preciseStyleRouteDraftOf(null))
 
   // The drafts start from what is stored, and again after each save.
@@ -218,6 +230,9 @@ export default function AdminNodaroMotionPage() {
   useEffect(() => {
     if (preciseArtStyleQuery.data) setPreciseArtStyleDraft(structuredClone(preciseArtStyleQuery.data.preciseArtStyle ?? {}))
   }, [preciseArtStyleQuery.data])
+  useEffect(() => {
+    if (noPersonQuery.data) setNoPersonDraft(structuredClone(noPersonQuery.data.noPerson ?? {}))
+  }, [noPersonQuery.data])
   useEffect(() => {
     if (preciseStyleRouteQuery.data) setPreciseStyleRouteDraft(preciseStyleRouteDraftOf(preciseStyleRouteQuery.data.preciseStyleRoute))
   }, [preciseStyleRouteQuery.data])
@@ -258,6 +273,9 @@ export default function AdminNodaroMotionPage() {
   const nextPreciseArtStyle = preciseArtStyleToSaved(preciseArtStyleDraft)
   const preciseArtStyleChanged =
     !!preciseArtStyleQuery.data && JSON.stringify(nextPreciseArtStyle) !== JSON.stringify(preciseArtStyleToSaved(preciseArtStyleQuery.data.preciseArtStyle))
+  // Never saved reads as the default (on): choosing it then is no change.
+  const nextNoPerson = noPersonToSaved(noPersonDraft)
+  const noPersonChanged = !!noPersonQuery.data && JSON.stringify(nextNoPerson) !== JSON.stringify(noPersonToSaved(noPersonQuery.data.noPerson))
   // Never saved reads as On with nobody on the list: choosing that then is no change. Something that is not an email holds Save.
   const nextPreciseStyleRoute = preciseStyleRouteToSaved(preciseStyleRouteDraft)
   const preciseStyleRouteChanged =
@@ -277,6 +295,7 @@ export default function AdminNodaroMotionPage() {
     !styleChanged &&
     !styleOnlyChanged &&
     !preciseArtStyleChanged &&
+    !noPersonChanged &&
     !preciseStyleRouteChanged
   const pending =
     save.isPending ||
@@ -287,6 +306,7 @@ export default function AdminNodaroMotionPage() {
     saveStyle.isPending ||
     saveStyleOnly.isPending ||
     savePreciseArtStyle.isPending ||
+    saveNoPerson.isPending ||
     savePreciseStyleRoute.isPending ||
     saveAdvanced.isPending
 
@@ -305,6 +325,8 @@ export default function AdminNodaroMotionPage() {
       if (styleOnlyChanged) await saveStyleOnly.mutateAsync(nextStyleOnly)
       // Its refusal is also said under Prism's Precise column (savePreciseArtStyle.error).
       if (preciseArtStyleChanged) await savePreciseArtStyle.mutateAsync(nextPreciseArtStyle)
+      // Its refusal is also said under each engine's Precise column (saveNoPerson.error).
+      if (noPersonChanged) await saveNoPerson.mutateAsync(nextNoPerson)
       // Its refusal is also said beside them (savePreciseStyleRoute.error).
       if (preciseStyleRouteChanged) await savePreciseStyleRoute.mutateAsync(nextPreciseStyleRoute)
       if (advancedChanged) await saveAdvanced.mutateAsync(advancedDraft)
@@ -333,6 +355,7 @@ export default function AdminNodaroMotionPage() {
               !styleChanged &&
               !styleOnlyChanged &&
               !preciseArtStyleChanged &&
+              !noPersonChanged &&
               !preciseStyleRouteChanged &&
               !advancedChanged) ||
             issues.length > 0 ||
@@ -452,6 +475,25 @@ export default function AdminNodaroMotionPage() {
                         )}
                       </div>
                     )}
+                    <div className="mt-2 border-t pt-3">
+                      {noPersonQuery.data ? (
+                        <NoPersonColumn
+                          engine={engine.id}
+                          value={noPersonDraft[engine.id]}
+                          envs={envs.data}
+                          supported={noPersonQuery.data.supported}
+                          error={saveNoPerson.error?.message}
+                          onChange={(entry) => {
+                            saveNoPerson.reset()
+                            setNoPersonDraft((d) => ({ ...d, [engine.id]: entry }))
+                          }}
+                        />
+                      ) : noPersonQuery.error ? (
+                        <p className="text-xs text-destructive">{noPersonQuery.error.message}</p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">Loading…</p>
+                      )}
+                    </div>
                   </div>
                   <div role="group" aria-label={`${engine.name} Motion`} className="flex min-w-0 flex-col gap-2">
                     <h3 className="text-sm font-semibold">Motion</h3>
