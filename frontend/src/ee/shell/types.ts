@@ -47,8 +47,8 @@ export type SiteHeaderTranslate = {
   translate(key: string, vars?: Readonly<Record<string, string | number>>): string | undefined
 }["translate"]
 
-/** The account pages the header opens (Upgrade's plans, the credit pill, the account menu). */
-export type SiteAccountPage = "pricing" | "billing" | "settings" | "usage"
+/** The account pages the header opens (Upgrade's plans, the credit pill, the account menu, the MCP menu's Manage connections). */
+export type SiteAccountPage = "pricing" | "billing" | "settings" | "usage" | "connections"
 
 export interface SiteHeaderProps {
   readonly sdk: NodaroClient
