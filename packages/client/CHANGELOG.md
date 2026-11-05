@@ -1,5 +1,25 @@
 # @nodaro/sdk
 
+## 2.65.0
+
+### Minor Changes
+
+- 9682d99: `JobErrorHint` gains `RequestRefusedHint` (`kind: "request-refused"`): the provider refused the request as it was sent, naming a fault of it, so the same request is refused again. Change the input images, the video, the prompt or the settings before running it again. `TrendRun.error.code` can carry the same value, and `input-refused` when the video provider refused the trend's own clip.
+- 0d720ba: `SafetyBlockHint.subject` gains `"prompt"`: the provider's own words named the prompt in its refusal, so changing the prompt is the fix. It also gains `"audio"`: the provider's own words blamed the generated audio, not the picture. Treat a `subject` you do not know as absent. `CastSwapStyleChoice` gains `preciseArtStyleAlone`: per engine, whether an art style alone is a Precise run's change; Nodaro may run such a request as a Flex run, which it does not say; it answers `false` until the engine takes such runs, and a server from before it leaves it out (read as `false`).
+- d0f74f3: `audio.transcribe()` and `voices.dub()` take `confirmationId`: the content rights confirmation for a link someone else's video is fetched from (a transcription's `audioUrl` that is a link to a video's page, a dub's `sourceUrl`).
+- 76d9772: `TrendRun.error` gains an optional `refused: true` on a Full Quality version another try can't get past: deleting that try offers Full Quality again. `TrendRun.fullQuality.refused` now also covers a block for a copyright or a likeness, and `RequestRefusedHint.subject` a refusal that names the clip for having no character in it.
+- ad946be: `RequestRefusedHint` gains an optional `subject: "input_video"`, when the provider's words name the input video's length or size. `TrendRun.fullQuality` gains an optional `refused: true`, when the provider refused that Full Quality try as it was sent or refused its clip, so another try fails the same way.
+
+### Patch Changes
+
+- c73e7e4: `client.castSwap`: the docs of `direction` and `CastSwapStyleChoice.preciseArtStyle` say that Nodaro may run a Precise run with an art style on Nodaro Motion Prism as a Flex run, its estimate alike (its engine does by default, unless Nodaro turns that off).
+- Updated dependencies [acf8184]
+- Updated dependencies [1877e5b]
+- Updated dependencies [a1160d5]
+- Updated dependencies [a1160d5]
+  - @nodaro/shared@3.54.1
+  - @nodaro/prompts@1.50.0
+
 ## 2.64.0
 
 ### Minor Changes

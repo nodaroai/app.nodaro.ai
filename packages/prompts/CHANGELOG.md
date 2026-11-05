@@ -1,5 +1,18 @@
 # @nodaro/prompts
 
+## 1.50.0
+
+### Minor Changes
+
+- 1877e5b: `RESTYLE_PREVIEWS` (`@nodaro/prompts/picker-art`): for an art style in the `style` catalog, a short clip of real footage wiping into that style, for a picker that restyles a video. An entry exists only for an approved clip, and can name the moment its still is cut from. `restylePreviewStillUrl` gives that still, and `lookPreviewStillUrl` takes an optional time for a clip (default 1 s, so every existing still is the same URL). `LOOK_PREVIEW_SETS.style` and the public catalogs do not change.
+
+### Patch Changes
+
+- a1160d5: The 3D animated film style's display name is now "3D Animated Film", and the factory presets that used the old wording have neutral names and descriptions. The style's id, its prompt hints and its term are unchanged, so prompts stay byte-identical. A style can carry an optional `promptLabel`: the name the analyzers' list reads where it differs from `label`.
+- Updated dependencies [acf8184]
+- Updated dependencies [a1160d5]
+  - @nodaro/shared@3.54.1
+
 ## 1.49.0
 
 ### Minor Changes
