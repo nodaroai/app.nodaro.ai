@@ -294,6 +294,16 @@ describe("failureGuidance (PR9 — offers the safety-block fallback)", () => {
     expect(result.guidance).not.toMatch(/transient/)
   })
 
+  it("a request-refused hint on the input video asks for a different clip", () => {
+    const result = failureGuidance({ error_message: "The video model declined this clip. Try a different clip.", error_hint: { kind: "request-refused", subject: "input_video" } })
+    expect(result.retryable).toBe(false)
+    expect(result.guidance).toMatch(/refused the input video/)
+    expect(result.guidance).toMatch(/different clip/)
+    // A trend run and a Full Quality take no clip of the caller's.
+    expect(result.guidance).toMatch(/trend run or a Full Quality/)
+    expect(result.guidance).not.toMatch(/prompt or settings/)
+  })
+
   it("an input-refused hint is not retryable and asks for a different clip, even when the message reads as transient", () => {
     const message = "File processing failed"
     // Proof the hint is load-bearing: the classifier alone says "retry this".

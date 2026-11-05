@@ -8,6 +8,8 @@
  * every 4xx string here must stop saying "try again", and the 5xx string must
  * keep saying it — no matter how validation-shaped its wording is.
  */
+import { requestRefusedHintOf } from "../../../lib/safety-block.js"
+import { isSeedance2EditModeRejection } from "../seedance-edit-mode.js"
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 vi.mock("@/lib/config.js", () => ({
@@ -18,6 +20,7 @@ import {
   classifyContentPolicyClass,
   createSanitizedError,
   createUpstreamFailureError,
+  isInputVideoRefusal,
   isRequestRejectStatus,
 } from "../client.js"
 import { isContentRejection, isRetryableFailure, failureGuidance } from "@/lib/mcp/tools/_job-error.js"
@@ -250,6 +253,101 @@ describe("KIE's \"Image fetch failed\" is the provider failing to fetch the medi
     expect(err.message).toContain("couldn't load the input media")
     expect(err.message).not.toContain(REJECT_PHRASE)
     expect(isRetryableFailure(err.message)).toBe(true)
+  })
+})
+
+describe("KIE's \"File processing failed\" that asks to check the link is the provider failing to load a file", () => {
+  // Staging, 2026-10-20: the only two wordings of it in the logs.
+  it.each([
+    "task failed: [400] File processing failed, please check the URL",
+    "task failed: [400] File processing failed. Please check the asset link or re-upload",
+  ])("%s says the media could not be loaded: retryable, not a refusal", (internalMessage) => {
+    const err = createSanitizedError(internalMessage, "Generation", true, false, { upstreamStatus: 400 })
+    expect(err.message).toContain("couldn't load the input media")
+    expect(err.requestRefused).toBe(false)
+    expect(isRetryableFailure(err.message)).toBe(true)
+    expect(isInputVideoRefusal(internalMessage.replace("task failed: [400] ", ""))).toBe(false)
+  })
+
+  it("the bare sentence stays a refusal of the input video", () => {
+    expect(isInputVideoRefusal("File processing failed")).toBe(true)
+  })
+})
+
+describe("beside a demand for -1, the clip is named only if the request already said -1", () => {
+  const hintOf = (internalMessage: string, job: Record<string, unknown>) =>
+    requestRefusedHintOf(createSanitizedError(internalMessage, "Generation", true, false, { upstreamStatus: 400 }), job)
+  const NAMES_THE_CLIP = { kind: "request-refused", subject: "input_video" }
+  const NAMES_NOTHING = { kind: "request-refused" }
+  const referenceVideoUrls = ["https://cdn.example/clip.mp4"]
+  const DEMANDS_MINUS_ONE =
+    "task failed: [400] Invalid parameters: the 'duration' parameter must be -1, and the input video duration must be between 4 and 30 seconds"
+
+  it("a request with a length of its own: that length may be what is wrong (job 6a75d7d3 sent 4)", () => {
+    expect(hintOf(DEMANDS_MINUS_ONE, { referenceVideoUrls, aspectRatio: "adaptive", duration: 4 })).toEqual(NAMES_NOTHING)
+    expect(hintOf(DEMANDS_MINUS_ONE, { referenceVideoUrls, aspectRatio: "adaptive" })).toEqual(NAMES_NOTHING)
+  })
+
+  it("a request that said -1, as a Cast Swap edit does: only the clip is left", () => {
+    expect(hintOf(DEMANDS_MINUS_ONE, { referenceVideoUrls, aspectRatio: "adaptive", duration: -1 })).toEqual(NAMES_THE_CLIP)
+  })
+
+  it("words the resubmit knows stand only after it, so the request had the shape whatever the job asked", () => {
+    const resubmitted =
+      "task failed: [400] Parameter validation failed: ratio must be adaptive, duration must be -1, and the input video duration must be between 4 and 30 seconds"
+    expect(isSeedance2EditModeRejection(resubmitted)).toBe(true)
+    expect(hintOf(resubmitted, { referenceVideoUrls, aspectRatio: "16:9", duration: 12 })).toEqual(NAMES_THE_CLIP)
+  })
+
+  it("a limit with no demand beside it is the clip's, whatever length the job asked", () => {
+    const limit = 'createTask error (code 422): {"code":422,"msg":"video_urls total duration must not exceed 30 seconds","data":null}'
+    expect(hintOf(limit, { referenceVideoUrls, duration: 12 })).toEqual(NAMES_THE_CLIP)
+  })
+
+  it("a job that sent no video has none to name", () => {
+    expect(hintOf(DEMANDS_MINUS_ONE, { duration: -1 })).toEqual(NAMES_NOTHING)
+  })
+})
+
+describe("a refused request that names the input video says so", () => {
+  const sanitized = (internalMessage: string, status: number | string) =>
+    createSanitizedError(internalMessage, "Generation", true, false, { upstreamStatus: status })
+
+  it.each([
+    ['createTask error (code 422): {"code":422,"msg":"video_urls total duration must not exceed 30 seconds","data":null}', 422],
+    ['createTask error (code 422): {"code":422,"msg":"The total duration of the video cannot exceed 15 seconds","data":null}', 422],
+    ['createTask error (code 422): {"code":422,"msg":"reference_video_urls duration must be between 1 and 15 seconds","data":null}', 422],
+    ["task failed: [400] Each reference video must be between 2 and 30 seconds", 400],
+    ["task failed: [400] video_1 duration must be between 2 and 30 seconds, got 45", 400],
+    ["task failed: [400] content[1].video_url: invalid param: video duration 52838 ms, expected [2000, 15000] ms", 400],
+    ["task failed: [400] Invalid parameters: the 'duration' parameter must be -1, and the input video duration must be between 4 and 30 seconds", 400],
+    ["task failed: [400] Parameter validation failed: ratio must be adaptive, duration must be -1, and the input video duration must be between 4 and 30 seconds", 400],
+    ["task failed: [400] The parameter `content[1]` specified in the request is not valid: the parameter video pixel count specified in the request must be greater than 409600", 400],
+  ] as const)("%s names the clip", (internalMessage, status) => {
+    const err = sanitized(internalMessage, status)
+    expect(err.requestRefused).toBe(true)
+    expect(err.requestRefusedSubject).toBe("input_video")
+  })
+
+  it.each([
+    ["task failed: [400] Unsupported file format. Images must be JPG or PNG. Please convert the file and try again.", 400],
+    ["task failed: [400] Not enough speech in the voice audio. Please use a 5-30 second clip with clear speech and no long pauses.", 400],
+    ['createTask error (code 422): {"code":422,"msg":"seed is not supported by Seedance 2.5","data":null}', 422],
+    ["task failed: [400] The parameters `ratio` and `duration` specified in the request are not valid. Seedance identified your task as video editing.", 400],
+    ["task failed: [400] Invalid value for parameter: content[3].", 400],
+    // The field's name is not a limit on the clip.
+    ['createTask error (code 422): {"code":422,"msg":"video_url is required","data":null}', 422],
+    // Job c007fd87: the words for the request's own length, with no limit named on the clip.
+    ["task failed: [400] Based on your prompt (and reference video), the model classified this as video editing rather than normal generation. Set duration to -1, and ensure the reference video is 4\u201330 seconds.", 400],
+  ] as const)("%s names no clip", (internalMessage, status) => {
+    const err = sanitized(internalMessage, status)
+    expect(err.requestRefused).toBe(true)
+    expect(err.requestRefusedSubject).toBeNull()
+  })
+
+  it("is never set without the refusal", () => {
+    expect(sanitized("task failed: [500] video_urls total duration must not exceed 30 seconds", 500).requestRefusedSubject).toBeNull()
+    expect(sanitized("task failed: [400] Generation failed. Please try again later.", 400).requestRefusedSubject).toBeNull()
   })
 })
 

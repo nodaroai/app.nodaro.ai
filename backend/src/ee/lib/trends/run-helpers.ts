@@ -5,8 +5,8 @@
  * - reading a run back: the `TrendRun` whitelist mapper over a Cast Swap job
  *   row (redacted first, then mapped field by field). A Full Quality version
  *   of a draft is a run of its own (`fullQualityOf` names the draft); a draft
- *   only points at it (`fullQuality`: its job id and status, never its
- *   result);
+ *   only points at it (`fullQuality`: its job id and status, and `refused` when
+ *   another try would fail the same way, never its result);
  * - listing runs: only the NEWEST Full Quality try of each draft is listed
  *   (running, done, or its last failure); an older, superseded try is left out
  *   of every list (`listedRunsPage`) and stays readable only by its id;
@@ -118,7 +118,7 @@ export interface TrendRun {
    * Its result and charge are on that run, listed on its own; older tries of
    * the draft are not listed.
    */
-  fullQuality: { jobId: string; status: string } | null
+  fullQuality: { jobId: string; status: string; refused?: true } | null
   fullQualityUntil: string | null
 }
 
@@ -235,11 +235,20 @@ const PUBLIC_FAILURE_KINDS: ReadonlySet<string> = new Set(["safety-block", "poli
 
 export type RunAudience = "public" | "admin"
 
+/** A Full Quality try the provider refused as it was sent, or whose clip it refused: another try fails the same way. */
+function wasRefused(row: RunJobRow): boolean {
+  if (row.status !== "failed" || !isRec(row.error_hint)) return false
+  const kind = str(row.error_hint.kind)
+  return kind === "request-refused" || kind === "input-refused"
+}
+
 function runError(row: RunJobRow, audience: RunAudience): TrendRun["error"] {
   if (row.status !== "failed" && row.status !== "cancelled") return null
   const kind = isRec(row.error_hint) ? str(row.error_hint.kind) : null
   if (audience === "admin") return { ...(kind ? { code: kind } : {}), message: row.error_message || RUN_FAILED_MESSAGE }
-  const code = kind && PUBLIC_FAILURE_KINDS.has(kind) ? kind : row.status === "cancelled" ? "cancelled" : "failed"
+  // A refused request that names the clip reads, to whoever branches on the code, as a refused clip.
+  const named = kind === "request-refused" && isRec(row.error_hint) && row.error_hint.subject === "input_video" ? "input-refused" : kind
+  const code = named && PUBLIC_FAILURE_KINDS.has(named) ? named : row.status === "cancelled" ? "cancelled" : "failed"
   return { code, message: RUN_FAILED_MESSAGE }
 }
 
@@ -291,7 +300,7 @@ export function toTrendRun(
     creditsHeld: runCreditsOf(row.id, credits)?.held ?? null,
     creditsReleased: runCreditsOf(row.id, credits)?.released ?? null,
     fullQualityOf: str(input.fullQualityOf),
-    fullQuality: fqRow ? { jobId: fqRow.id, status: fqRow.status } : null,
+    fullQuality: fqRow ? { jobId: fqRow.id, status: fqRow.status, ...(wasRefused(fqRow) ? { refused: true as const } : {}) } : null,
     fullQualityUntil,
   }
 }

@@ -1431,8 +1431,9 @@ without naming a content-policy class (`kind: "input-refused"`, `subject:
 input images as possibly copyrighted — send a different picture), or whose
 request the provider refused as it was sent, naming a fault of it, so the same
 request is refused again (`kind: "request-refused"` — change the input images,
-the video, the prompt or the settings; on a Nodaro Motion or trend run this is
-one step's refusal), or that never
+the video, the prompt or the settings; with `subject: "input_video"` when the
+provider's words name the clip's length or size, so a different clip is what can
+change; on a Nodaro Motion or trend run this is one step's refusal), or that never
 got one of the account's concurrency slots and did not run (`kind:
 "queue-timeout"`, carrying `reason` — `"timeout"`, `"lost"` or `"live-wait"` —
 and `waitedMinutes`; the job was refunded, so run it again — it only occurs
@@ -2570,7 +2571,7 @@ interface TrendRun {
   creditsHeld?: number | null        // the run's hold, its steps' included
   creditsReleased?: number | null    // what went back from creditsHeld once every hold in the run settled; null until then
   fullQualityOf: string | null       // a Full Quality version: the draft run it was made from; else null
-  fullQuality: { jobId: string; status: string } | null // a draft's newest Full Quality try: a pointer only
+  fullQuality: { jobId: string; status: string; refused?: true } | null // a draft's newest Full Quality try: a pointer only; refused: the provider refused it, so another try fails the same way
   fullQualityUntil: string | null    // until when a completed draft (or motion-pulse 720p run) can be redone in Full Quality
 }
 

@@ -471,6 +471,36 @@ describe.each(Object.keys(DECLARED) as (keyof typeof DECLARED)[])("Nodaro Motion
     })
     expect(toTrendRun(failed({ kind: "input-refused", subject: "input_video" }), undefined, NO_RUN_CREDITS)!.error?.code).toBe("input-refused")
     expect(toTrendRun(failed({ kind: "something-new" }), undefined, NO_RUN_CREDITS)!.error?.code).toBe("failed")
+    // A refusal that names the input video is, to whoever reads the code, a refused clip.
+    expect(toTrendRun(failed({ kind: "request-refused", subject: "input_video" }), undefined, NO_RUN_CREDITS)!.error?.code).toBe("input-refused")
+  })
+
+  it("a draft's pointer says when its Full Quality was refused, so the next try isn't offered (toTrendRun)", () => {
+    const NO_RUN_CREDITS = new Map() as unknown as RunCredits
+    const row = (over: Partial<RunJobRow>): RunJobRow => ({
+      id: "j-1",
+      status: "completed",
+      progress: 100,
+      input_data: { type: "cast-swap", trend: { id: "t", slug: "s", version: 1, name: "N" }, engine: "motion-prism", resolution: "480p", draft: true },
+      output_data: { videoUrl: "https://cdn.example/out.mp4" },
+      error_message: null,
+      error_hint: null,
+      created_at: "2026-11-04T13:11:12.000Z",
+      started_at: null,
+      completed_at: "2026-11-04T13:12:39.000Z",
+      usage_log_id: null,
+      ...over,
+    })
+    const fq = (status: string, error_hint: unknown) => row({ id: "fq-1", status, error_hint: error_hint as RunJobRow["error_hint"] })
+    const pointer = (status: string, hint: unknown) => toTrendRun(row({}), fq(status, hint), NO_RUN_CREDITS)!.fullQuality
+    expect(pointer("failed", { kind: "request-refused" })).toEqual({ jobId: "fq-1", status: "failed", refused: true })
+    expect(pointer("failed", { kind: "request-refused", subject: "input_video" })).toEqual({ jobId: "fq-1", status: "failed", refused: true })
+    expect(pointer("failed", { kind: "input-refused", subject: "input_video" })).toEqual({ jobId: "fq-1", status: "failed", refused: true })
+    // Anything else leaves the pointer as it was: another try stays on offer.
+    expect(pointer("failed", null)).toEqual({ jobId: "fq-1", status: "failed" })
+    expect(pointer("failed", { kind: "credits", code: "insufficient_credits" })).toEqual({ jobId: "fq-1", status: "failed" })
+    expect(pointer("failed", { kind: "safety-block", class: "safety", retried: false })).toEqual({ jobId: "fq-1", status: "failed" })
+    expect(pointer("completed", null)).toEqual({ jobId: "fq-1", status: "completed" })
   })
 
   it("labels a recorded run by the current public id and name (toTrendRun)", () => {

@@ -1634,8 +1634,11 @@ Or, when the provider refused the request as it was sent, naming a fault of it
 (a setting, a file's format or size, the prompt's length):
 
 ```json
-{ "kind": "request-refused" }
+{ "kind": "request-refused", "subject": "input_video" }
 ```
+
+`subject` is there only when the provider's words name the input video (its
+length or size), so a different clip is what can change.
 
 The same request is refused the same way, so do not run it again unchanged:
 change the input images, the video, the prompt or the settings. It is not a
@@ -5141,7 +5144,8 @@ try per draft is the one listed (running, done, or its last failure): when a
 try failed or was cancelled and the draft was tried again, the older tries are
 left out of `GET /v1/trends/runs` (with or without `?trend=`), and
 `GET /v1/trends/runs/:jobId` still reads one by its id. The draft's
-`fullQuality` is only a pointer to that newest try (`{ jobId, status }`, or
+`fullQuality` is only a pointer to that newest try (`{ jobId, status }`, with
+`refused: true` when the provider refused it, so another try fails the same way, or
 `null` when none was started): its video and charge are read from its own run,
 never from the draft.
 

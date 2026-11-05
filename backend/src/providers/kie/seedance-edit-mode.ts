@@ -64,3 +64,18 @@ export function isSeedance2EditModeInput(input: Record<string, unknown>): boolea
     Number(input.duration) === SEEDANCE_2_EDIT_MODE_PARAMS.duration
   )
 }
+
+/** Asking for a length of -1 in words the signals above don't hold, so nothing re-sends on them. */
+const SEEDANCE_2_UNSIGNALLED_LENGTH_DEMAND = /\bparameter must be -1\b|\bduration to -1\b/i
+
+/**
+ * Whether a refusal naming the input video's length leaves the clip as the thing
+ * to change, on a job with this input. Beside a demand for -1 it may not: a request
+ * with a length of its own is refused for that, and another clip fails the same way
+ * (jobs 6a75d7d3 and c007fd87 sent `duration: 4`). Words the signals hold stand only
+ * after the re-send, so that request had the shape whatever the job asked.
+ */
+export function refusalLeavesOnlyTheClip(message: string, jobInput: unknown): boolean {
+  if (!SEEDANCE_2_UNSIGNALLED_LENGTH_DEMAND.test(message)) return true
+  return Number((jobInput as { duration?: unknown } | null | undefined)?.duration) === SEEDANCE_2_EDIT_MODE_PARAMS.duration
+}

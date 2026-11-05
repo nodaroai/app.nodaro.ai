@@ -284,5 +284,6 @@ describe("add-node-popup ↔ node-toolbar parity", () => {
     expect(popupModule.NODE_OPTIONS).toBe(shared.NODE_OPTIONS)
     expect(popupModule.getNodeOptions).toBe(shared.getNodeOptions)
     expect(toolbarModule.getNodeOptions).toBe(shared.getNodeOptions)
-  })
+    // Three cold imports of the editor's biggest modules: well over the default 5 s on a loaded CI runner.
+  }, 60_000)
 })
