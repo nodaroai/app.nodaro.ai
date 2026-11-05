@@ -19,9 +19,9 @@
 --       and the money account's sign-in is refused. Assertion 1 is that write,
 --       verbatim; assertion 5 is the invariant it was aimed at.
 --
---   (b) THE REGRESSION IT MUST NOT BE. This policy is the ONLY thing standing
---       between the browser and every column of `profiles`, and the product
---       does perform one write through it: `last_workspace_id`
+--   (b) THE REGRESSION IT MUST NOT BE. The product does perform one browser
+--       write through this policy, the only column granted to the browser since
+--       migration 598: `last_workspace_id`
 --       (`frontend/src/lib/workspace-context.ts`). A denylist entry is one
 --       argument in a twenty-argument call — mis-order it, or drop the old
 --       overload badly, and the policy stops accepting that write with no
@@ -172,14 +172,14 @@ DO $$ BEGIN
 EXCEPTION WHEN insufficient_privilege OR check_violation THEN
   RAISE NOTICE 'ok  a user cannot clear their own welcome_consent_pending (refused)';
 END $$;
--- welcome_offer_seen_at is deliberately NOT denylisted: hiding one's own popup
--- is harmless, and the browser's own write must keep landing.
+-- welcome_offer_seen_at is not on the denylist, but the browser does not write it:
+-- POST /v1/credits/welcome-offer/seen does, as the service role. Since 598 the
+-- column grant refuses it here.
 DO $$ BEGIN
   UPDATE profiles SET welcome_offer_seen_at = now() WHERE id = '00000000-0000-4000-8000-000000000991';
-  IF (SELECT welcome_offer_seen_at FROM profiles WHERE id = '00000000-0000-4000-8000-000000000991') IS NULL THEN
-    RAISE EXCEPTION 'ASSERT FAIL: a user could not stamp their own welcome_offer_seen_at';
-  END IF;
-  RAISE NOTICE 'ok  the user can still stamp their own welcome_offer_seen_at';
+  RAISE EXCEPTION 'ASSERT FAIL: a user stamped their own welcome_offer_seen_at';
+EXCEPTION WHEN insufficient_privilege THEN
+  RAISE NOTICE 'ok  the user cannot stamp their own welcome_offer_seen_at (refused)';
 END $$;
 RESET ROLE;
 SELECT pg_temp.assert_eq('the mark survived the user''s attempt',
