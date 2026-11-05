@@ -37,7 +37,7 @@ const map: LocaleCatalogMap = {
   "chalkboard": { label: "Tafel", description: "Weiße Kreide auf Schiefer" },
   "paper-cutout": { label: "Papierausschnitt", description: "Geschichtetes Schnittpapier + Schatten" },
   "illuminated": { label: "Illuminierte Handschrift", description: "Blattgold + Kalligrafie" },
-  "pixar-3d": { description: "Polierte Charakteranimations-CG" },
+  "pixar-3d": { label: "3D-Animationsfilm", description: "Polierte Charakteranimations-CG" },
   "caricature": { label: "Karikatur", description: "Übertriebenes stilisiertes Porträt" },
   "fresco": { label: "Fresko", description: "Wandmalerei auf Putz im Stil einer Renaissance-Decke" },
   "mosaic": { label: "Mosaik", description: "Aus kleinen Kacheln tesseliertes byzantinisches Kunstwerk" },

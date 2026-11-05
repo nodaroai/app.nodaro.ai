@@ -5,7 +5,7 @@
  * shop, forest clearing, cyberpunk alley, cathedral, etc.). Orthogonal to the
  * other cinematography dimensions:
  *
- *  - Style      = artistic medium (Oil Painting, Pixar 3D, Photorealistic)
+ *  - Style      = artistic medium (Oil Painting, 3D Animated Film, Photorealistic)
  *  - Atmosphere = what's in the air (Fog, Rain, God rays, Dust)
  *  - Lighting   = direction / quality of light
  *  - Setting    = *where* (this file)

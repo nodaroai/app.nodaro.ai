@@ -37,7 +37,7 @@ const map: LocaleCatalogMap = {
   "chalkboard": { label: "Quadro de giz", description: "Giz branco em ardósia" },
   "paper-cutout": { label: "Recorte de papel", description: "Papel recortado em camadas + sombras" },
   "illuminated": { label: "Manuscrito iluminado", description: "Folha de ouro + caligrafia" },
-  "pixar-3d": { description: "CG polido de animação de personagens" },
+  "pixar-3d": { label: "Filme de animação 3D", description: "CG polido de animação de personagens" },
   "caricature": { label: "Caricatura", description: "Retrato estilizado e exagerado" },
 
   // Additional styles

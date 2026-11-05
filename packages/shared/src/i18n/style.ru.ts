@@ -37,7 +37,7 @@ const map: LocaleCatalogMap = {
   "chalkboard": { label: "Меловая доска", description: "Белый мел на сланце" },
   "paper-cutout": { label: "Бумажная вырезка", description: "Слои вырезанной бумаги и тени" },
   "illuminated": { label: "Иллюминированная рукопись", description: "Сусальное золото и каллиграфия" },
-  "pixar-3d": { description: "Отполированная анимация персонажей CG" },
+  "pixar-3d": { label: "Анимационный 3D-фильм", description: "Отполированная анимация персонажей CG" },
   "caricature": { label: "Карикатура", description: "Преувеличенный стилизованный портрет" },
   "fresco": { label: "Фреска", description: "Настенная роспись по штукатурке в духе ренессансного потолка" },
   "mosaic": { label: "Мозаика", description: "Мозаика из мелкой плитки, византийская" },

@@ -37,7 +37,7 @@ const map: LocaleCatalogMap = {
   "chalkboard":     { label: "黑板画",         description: "石板上的白色粉笔画" },
   "paper-cutout":   { label: "纸艺剪贴",       description: "层叠剪纸加投影" },
   "illuminated":    { label: "彩饰手稿",       description: "金箔加书法的中世纪手稿" },
-  "pixar-3d":       { label: "皮克斯 3D",      description: "精致的角色动画 CG" },
+  "pixar-3d":       { label: "3D 动画电影",     description: "精致的角色动画 CG" },
   "caricature":     { label: "漫画肖像",       description: "夸张风格化的人物肖像" },
   "fresco":         { label: "湿壁画",         description: "文艺复兴风格的灰泥天顶画" },
   "mosaic":         { label: "马赛克",         description: "拜占庭风格的小块镶嵌艺术" },

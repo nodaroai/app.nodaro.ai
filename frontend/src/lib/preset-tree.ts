@@ -59,6 +59,17 @@ export function presetMatchesQuery(preset: NodePreset, query: string): boolean {
 }
 
 /**
+ * Whether a query matches a factory preset's id. Only the part after the node-type prefix counts
+ * (`<nodeType>/<slug>`): every preset in a node's list shares the prefix, so "image" would otherwise
+ * match all of Create Image's presets.
+ */
+export function factoryPresetIdMatchesQuery(id: string, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  return id.slice(id.indexOf("/") + 1).toLowerCase().includes(q)
+}
+
+/**
  * Build the `updateNodeData` payload that resets a node to its DEFAULT config and clears the active
  * preset ("go back to no preset"). It:
  *  - sets every config field the node default defines back to that default value,

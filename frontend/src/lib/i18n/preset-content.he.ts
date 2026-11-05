@@ -120,7 +120,7 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "generate-image/flat-vector-illustration": { name: "איור וקטורי שטוח", description: "אמנות שטוחה מודרנית בסגנון תוכנה." },
   "generate-image/isometric-illustration": { name: "איור איזומטרי", description: "סצנה אקסונומטרית ב־3/4." },
   "generate-image/pixel-art": { name: "סצנת פיקסל ארט", description: "רשת פיקסלים רטרו ברזולוציה נמוכה." },
-  "generate-image/pixar-3d": { name: "אנימציית תלת־ממד", description: "מראה דמות ממוחשבת ומלוטשת." },
+  "generate-image/pixar-3d": { name: "סרט אנימציה בתלת־ממד", description: "מראה דמות ממוחשבת ומלוטשת." },
   "generate-image/line-art-coloring": { name: "דף צביעה (קווי מתאר)", description: "קווי מתאר נקיים בשחור־לבן, ללא הצללה." },
   "generate-image/tattoo-flash": { name: "סקיצת קעקוע", description: "קווים בולטים, מבודד." },
   "generate-image/concept-art-env": { name: "אמנות קונספט (סביבה)", description: "אמנות ציורית לקדם־הפקה." },

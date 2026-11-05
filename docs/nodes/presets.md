@@ -43,7 +43,7 @@ the same idea**:
 | **Branding & Logos** | Wordmark / Emblem / Mascot logo, App Icon, Monogram |
 | **Marketing & Social** | YouTube Thumbnail, Instagram Post, Story/Reel, Ad Creative, Quote Card, Web Banner |
 | **Print & Posters** | Movie Poster, Event Poster, Book Cover, T-Shirt/POD, Die-Cut Sticker, Album Cover |
-| **Illustration & Art Styles** | Anime, Comic, Manga, Watercolor, Oil, Flat Vector, Isometric, Pixel Art, Pixar-3D, Coloring Page, Tattoo Flash, Concept Art |
+| **Illustration & Art Styles** | Anime, Comic, Manga, Watercolor, Oil, Flat Vector, Isometric, Pixel Art, 3D Animated Film, Coloring Page, Tattoo Flash, Concept Art |
 | **Handmade & Stop-Motion** | Claymation Scene, Needle-Felt, Sock Puppet, Cardboard Diorama, Embroidered Art, Faux-Food (Clay) — tactile crafted looks held by an in-prompt "NOT digital CG, NOT a 3D render" clause |
 | **Film & Storyboard** | Storyboard Frame, Cinematic Keyframe, Matte Painting, Mood Board Tile, Establishing Shot |
 | **Architecture & Interiors** | Exterior, Interior, Real Estate Hero, Skyscraper |

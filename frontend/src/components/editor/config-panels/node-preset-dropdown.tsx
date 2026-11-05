@@ -27,7 +27,7 @@ import {
   useNodePresetFavoriteMutations,
 } from "@/hooks/queries/use-node-presets-queries"
 import { NodePresetNameTakenError, type NodePreset, type NodePresetGroup } from "@/lib/api"
-import { buildPresetTree, presetMatchesQuery, buildResetToDefaultData } from "@/lib/preset-tree"
+import { buildPresetTree, factoryPresetIdMatchesQuery, presetMatchesQuery, buildResetToDefaultData } from "@/lib/preset-tree"
 import { NodePresetManageDialog } from "./node-preset-manage-dialog"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import { cn } from "@/lib/utils"
@@ -276,9 +276,11 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
       factory.filter((p) => {
         if (!q) return true
         // Match the localized copy the row actually shows AND the English
-        // catalog name, so a factory preset is findable by either spelling.
+        // catalog name, so a factory preset is findable by either spelling,
+        // and its id, which outlives a change of display name.
         const copy = localizeCopy(p.id, p.name, p.description)
         return (
+          factoryPresetIdMatchesQuery(p.id, q) ||
           copy.name.toLowerCase().includes(q) ||
           (copy.description ?? "").toLowerCase().includes(q) ||
           p.name.toLowerCase().includes(q) ||

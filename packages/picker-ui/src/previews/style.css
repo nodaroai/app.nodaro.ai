@@ -975,7 +975,7 @@
   box-shadow: inset 0 1px 0 #d4a13a;
 }
 
-/* ===== Pixar 3D: polished CG with soft subsurface + key light ===== */
+/* ===== 3D Animated Film: polished CG with soft subsurface + key light ===== */
 .style-preview--pixar-3d .style-preview__sky {
   background: linear-gradient(180deg, #a8d4ee 0%, #ffc88e 70%, #f08e68 100%);
 }

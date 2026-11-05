@@ -50,9 +50,16 @@ import { VOICE_PACES, VOICE_EMOTIONS, VOICE_ARCHETYPES } from "./voice-delivery.
 interface AnalyzerEntry {
   readonly id: string
   readonly label: string
+  /** What the analyzers' list calls this entry where it differs from `label` (`Style.promptLabel`). */
+  readonly promptLabel?: string
   readonly description: string
   readonly dimension?: string
   readonly category?: string
+}
+
+/** An entry's row in the system-prompt legend: a list only models read. */
+function legendRow(e: AnalyzerEntry): { id: string; label: string; description: string } {
+  return { id: e.id, label: e.promptLabel ?? e.label, description: e.description }
 }
 
 export type PickerApplyMode = "override" | "overwrite-detected" | "fill-empty"
@@ -362,7 +369,7 @@ export function buildPickerAnalyzerSpec(pickerType: PickerType): PickerAnalyzerS
           label: d.label,
           limit: 1,
           entryIds: d.entries.map((e) => e.id),
-          legend: d.entries.map((e) => ({ id: e.id, label: e.label, description: e.description })),
+          legend: d.entries.map(legendRow),
         },
       ],
     }
@@ -379,7 +386,7 @@ export function buildPickerAnalyzerSpec(pickerType: PickerType): PickerAnalyzerS
       label: d.labels[key] ?? key,
       limit: d.limitFn(key),
       entryIds: entries.map((e) => e.id),
-      legend: entries.map((e) => ({ id: e.id, label: e.label, description: e.description })),
+      legend: entries.map(legendRow),
     }
   })
   return { pickerType, toolName: d.toolName, dimensions, cleanup: d.cleanup }
