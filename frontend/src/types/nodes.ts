@@ -296,6 +296,7 @@ export interface QueueTimeoutHint {
  */
 export interface RequestRefusedHint {
   readonly kind: "request-refused"
+  readonly subject?: "input_video"
 }
 
 /**

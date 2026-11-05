@@ -419,6 +419,22 @@ describe("video worker — input-video refusal hint", () => {
     expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
   })
 
+  it("a refused request that names the input video carries it, not the input-refused hint", async () => {
+    mocks.mockHandler.mockRejectedValueOnce(Object.assign(new Error("x"), { requestRefused: true, requestRefusedSubject: "input_video" }))
+
+    await processor(makeBullJob("text-to-video", withRefVideo)).catch(() => {})
+
+    expect(failedUpdate()?.error_hint).toEqual({ kind: "request-refused", subject: "input_video" })
+  })
+
+  it("names no input video on a job that sent none", async () => {
+    mocks.mockHandler.mockRejectedValueOnce(Object.assign(new Error("x"), { requestRefused: true, requestRefusedSubject: "input_video" }))
+
+    await processor(makeBullJob("text-to-video", {})).catch(() => {})
+
+    expect(failedUpdate()?.error_hint).toEqual({ kind: "request-refused" })
+  })
+
   it("reads a refused request off the cause chain", async () => {
     mocks.mockHandler.mockRejectedValueOnce(new Error("outer", { cause: Object.assign(new Error("inner"), { requestRefused: true }) }))
 

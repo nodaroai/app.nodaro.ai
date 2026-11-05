@@ -13,6 +13,7 @@
  * this file never executes `providers/kie/client.ts`'s module body.
  */
 import type { KieError } from "../providers/kie/client.js"
+import { providerErrorText, refusalLeavesOnlyTheClip } from "../providers/kie/seedance-edit-mode.js"
 import { safetyRetryPolicy, getModel } from "@nodaro/shared/model-catalog"
 
 export type SafetyBlock = {
@@ -141,6 +142,10 @@ export type QueueTimeoutHint = {
  *  one step's refusal: the run carries it, in a sentence of its own. */
 export type RequestRefusedHint = {
   kind: "request-refused"
+  /** The provider's words name the input video's length or size, on a job that
+   *  sent one: that is the input to change. Absent ⇒ not named. Not the
+   *  input-refused hint: the file was read and judged against a limit. */
+  subject?: "input_video"
 }
 
 /** One jsonb column, several verdict sources. A DISCRIMINATED UNION on `kind` —
@@ -229,22 +234,31 @@ export function policyBlockHint(
   return { kind: "policy-block", policyId, reason, hookPoint }
 }
 
-/** True when the thrown error (or anything on its `cause` chain) says the
+/** The hint when the thrown error (or anything on its `cause` chain) says the
  *  provider refused the request as it was sent: a duck-typed
  *  `requestRefused === true` own property (`KieError.requestRefused`, or a
  *  plugin's error carrying the same flag across the plugin boundary, when its
- *  run failed on such a child). Never throws, for the same reason as
- *  `creditsHintOf`. */
-export function requestRefusedOf(err: unknown): boolean {
+ *  run failed on such a child), with `requestRefusedSubject: "input_video"`
+ *  beside it when the refusal names the clip, kept only when the clip is what can
+ *  change on this job: it sent a video (`sentVideoInput`, the gate the input-refused
+ *  arm has) and the words leave nothing else (`refusalLeavesOnlyTheClip`). A FRESH
+ *  object of exactly those fields, as `creditsHintOf`'s; never throws, for the same
+ *  reason. */
+export function requestRefusedHintOf(err: unknown, jobInput?: unknown): RequestRefusedHint | null {
   try {
     let cur: unknown = err
     for (let depth = 0; depth < 8 && typeof cur === "object" && cur !== null; depth++) {
-      if ((cur as { requestRefused?: unknown }).requestRefused === true) return true
+      const { requestRefused, requestRefusedSubject } = cur as { requestRefused?: unknown; requestRefusedSubject?: unknown }
+      if (requestRefused === true) {
+        const namesClip =
+          requestRefusedSubject === "input_video" && sentVideoInput(jobInput) && refusalLeavesOnlyTheClip(providerErrorText(cur), jobInput)
+        return namesClip ? { kind: "request-refused", subject: "input_video" } : { kind: "request-refused" }
+      }
       cur = (cur as { cause?: unknown }).cause
     }
-    return false
+    return null
   } catch {
-    return false
+    return null
   }
 }
 
@@ -337,11 +351,11 @@ export function refusalHintFor(
   retried: boolean,
   inputVideoRefused: boolean,
   inputImageRefused = false,
-  requestRefused = false,
+  requestRefused: RequestRefusedHint | null = null,
 ): SafetyBlockHint | InputRefusedHint | RequestRefusedHint | null {
   if (block) return errorHintFor(block, retried, { inputVideoRefused, inputImageRefused })
   if (inputVideoRefused) return inputRefusedHint()
-  return requestRefused ? { kind: "request-refused" } : null
+  return requestRefused
 }
 
 /** The model a job runs under, read off its payload (the BullMQ data or the

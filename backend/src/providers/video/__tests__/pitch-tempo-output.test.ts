@@ -95,7 +95,8 @@ describe.skipIf(!RUBBERBAND)("pitchTempo (real rubberband)", () => {
       expect(formatDuration(outputPath), String(semitones)).toBeCloseTo(4, 1)
       await fs.rm(dirname(outputPath), { recursive: true, force: true })
     }
-  })
+    // Three real rubberband passes: well over the default 5 s on a loaded CI runner.
+  }, 60_000)
 
   it("audio: tempo 0.5 doubles the length", async () => {
     const { outputPath } = await pitchTempo({ audioUrl: toneWav, semitones: 0, tempo: 0.5, preserveFormants: false })

@@ -8,7 +8,7 @@ import {
   safetyBlockOf,
   inputVideoRefusedOf,
   inputImageRefusedOf,
-  requestRefusedOf,
+  requestRefusedHintOf,
   sentVideoInput,
   refusalHintFor,
   jobModelIdOf,
@@ -302,7 +302,7 @@ function refusalHintOf(err: unknown, row: KieJobRow): ErrorHint | null {
     false,
     inputVideoRefusedOf(err) && sentVideoInput(input),
     inputImageRefusedOf(err),
-    requestRefusedOf(err),
+    requestRefusedHintOf(err, input),
   )
 }
 

@@ -443,9 +443,10 @@ export interface TrendRun {
    * that run, listed on its own (its `fullQualityOf` is this run's `jobId`) —
    * read it there (`getRun(fullQuality.jobId)`). Older tries of the draft (a
    * failed or cancelled one tried again) are not listed by `runs()`;
-   * `getRun()` still reads one by its id.
+   * `getRun()` still reads one by its id. `refused`: the provider refused that
+   * try as it was sent, or its clip, so another try fails the same way.
    */
-  fullQuality: { jobId: string; status: string } | null
+  fullQuality: { jobId: string; status: string; refused?: true } | null
   /**
    * Until when a completed run can be redone in Full Quality — a Nodaro Motion
    * Prism draft (the same take at 1080p) or a Nodaro Motion Pulse run at 720p (a new take at

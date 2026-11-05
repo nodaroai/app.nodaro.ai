@@ -139,7 +139,8 @@ export interface PluginHandlerCtx {
  *   ADDITIVE-OPTIONAL.
  * - `requestRefused: true` (error or `cause` chain) — the provider refused the
  *   request as it was sent, so the same inputs fail again: `error_hint` is
- *   `{ kind: "request-refused" }`. ADDITIVE-OPTIONAL.
+ *   `{ kind: "request-refused" }`, with `subject: "input_video"` when
+ *   `requestRefusedSubject: "input_video"` sits beside the flag. ADDITIVE-OPTIONAL.
  */
 export type PluginHandlerFn = (job: PluginJob, ctx: PluginHandlerCtx) => Promise<void>
 
@@ -1448,9 +1449,11 @@ export type PluginJobErrorHint =
       /**
        * The provider refused the request as it was sent, naming a fault of it
        * (its status was 400 or 422): the same inputs are refused again, so only
-       * a change to them can succeed. Not a content block. ADDITIVE-OPTIONAL.
+       * a change to them can succeed. Not a content block. `subject`: its
+       * words name the input video (its length, its size). ADDITIVE-OPTIONAL.
        */
       kind: "request-refused"
+      subject?: "input_video"
     }
 
 /** One job row as `readJobsOwnedBy` returns it, `output_data` already redacted. */

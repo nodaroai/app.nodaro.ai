@@ -24,7 +24,7 @@ import {
   jobModelIdOf,
   inputVideoRefusedOf,
   inputImageRefusedOf,
-  requestRefusedOf,
+  requestRefusedHintOf,
   sentVideoInput,
   creditsHintOf,
   queueTimeoutHintOf,
@@ -716,7 +716,7 @@ export function createVideoWorker() {
         // knows the same inputs fail again.
         // Shared with the reconcile path (lib/reconcile/kie.ts).
         const errorHint =
-          refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err), requestRefusedOf(err)) ?? creditsHintOf(err) ?? queueTimeoutHintOf(err)
+          refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err), requestRefusedHintOf(err, job.data)) ?? creditsHintOf(err) ?? queueTimeoutHintOf(err)
         const flipped = await markJobFailed(jobId, {
           error_message: errorMessage,
           // W0: the provider's own error, redacted — the sanitized message

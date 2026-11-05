@@ -11996,7 +11996,7 @@ export interface AdminTrendRun {
   /** A Full Quality version: the draft run it was made from. Listed as its own run. */
   fullQualityOf: string | null
   /** A draft's Full Quality version: a pointer only; its result is on its own run. */
-  fullQuality: { jobId: string; status: string } | null
+  fullQuality: { jobId: string; status: string; refused?: true } | null
   fullQualityUntil: string | null
   ownerIsAdmin: boolean
 }
