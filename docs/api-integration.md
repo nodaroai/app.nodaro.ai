@@ -5507,7 +5507,36 @@ about (one of the accounts its links matched), matches the links again
 restricts a file the case matched (see [Content
 restrictions](#13k-content-restrictions)) or lifts a restriction, and handles
 the counter-notifications the case receives (see
-[Counter-notices](#13l-counter-notices)). A change
+[Counter-notices](#13l-counter-notices)).
+
+**The case's emails.** From the case the administrator also sends the
+policy's two notices, each shown first as it will be sent and sent only
+from that preview: the send names the preview's digest, and an email that
+changed since (another administrator saved a decision, the account's
+address changed) is refused with `409` until it is previewed again.
+**Content access restricted** goes to the account whose content a
+restriction from a copyright complaint covers: its own restricted file (its
+name, kind and the day it was stored; several files by count; another
+account's copy of the same bytes is never named), the link it was imported
+from (or "Not available"), a reason the administrator writes for the
+account (the restriction's own reason is the record's and is never sent),
+the case's reference, and the page the account sends a counter-notification
+from. It is offered for each restriction in force on a copyright case that
+is not closed (a closed case takes no counter-notification); another
+complaint's account is written to with a general message from the users'
+screen. **Complaint update** goes to the complainant once they have proven
+their email and the case has a decision: the reference, the case's status in
+words, and the decision as what was done. Neither is ever sent on its own.
+Each send is written to the case's log without the address it went to:
+sent (with the mail service's id), not sent (with why), or unknown when the
+mail service did not answer in time and may have taken it, which is never
+counted as a failure (`504`, so the administrator checks before sending it
+again). A notice delivered to the account moves a case that stands earlier
+on to "user notified". A deployment with no mailer, no template
+(`LOOPS_CONTENT_RESTRICTED_ID` and `LOOPS_COMPLAINT_UPDATE_ID`, Cloud) or no
+`PUBLIC_URL` (the counter-notification link) answers that the email cannot
+be sent (`503`), and the mail service refusing it is a `502`; the case is
+unchanged either way. A change
 to the status, the decision or the account is made from the case as the
 administrator saw it: when another administrator changed the case
 meanwhile, it is refused and the screen reads the case again (a note is

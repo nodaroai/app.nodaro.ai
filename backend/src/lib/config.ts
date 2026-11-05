@@ -252,6 +252,14 @@ export const envSchema = z.object({
    *  the handler sees it was never mailed. */
   LOOPS_COMPLAINT_VERIFY_ID: z.string().default(""),
   LOOPS_COMPLAINT_RECEIVED_ID: z.string().default(""),
+  /** The Loops transactional templates a complaint's handler sends from the
+   *  case (ee/lib/complaint-notices.ts): "Content access restricted", to the
+   *  account whose content a copyright complaint's restriction covers (data
+   *  variables `content`, `source`, `reason`, `reference`, `counterNoticeUrl`),
+   *  and "Complaint update", to the complainant (`reference`, `status`,
+   *  `action`). Empty = the case's screen says that email cannot be sent. */
+  LOOPS_CONTENT_RESTRICTED_ID: z.string().default(""),
+  LOOPS_COMPLAINT_UPDATE_ID: z.string().default(""),
   PORT: z.coerce.number().default(8000),
   HOST: z.string().default("0.0.0.0"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),

@@ -4,7 +4,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { useAddComplaintNote, type ComplaintCase, type ComplaintEvent } from "@/ee/hooks/queries/use-admin-complaints-queries"
-import { EVENT_LABELS, actorLabel, formatWhen, statusLabel } from "./complaint-labels"
+import { EVENT_LABELS, actorLabel, emailOutcome, formatWhen, statusLabel } from "./complaint-labels"
 
 /** The database's own record of each change to the case (which columns, never their values): there on request. */
 const DATABASE_ENTRY = "row_updated"
@@ -95,6 +95,10 @@ function eventLine(e: ComplaintEvent): string | null {
       return d.to ? `account ${String(d.to)}` : "no account"
     case "content_restricted":
       return `restriction ${String(d.restrictionId ?? "")}`
+    case "user_notified":
+      return `restriction ${String(d.restrictionId ?? "")}: ${emailOutcome(d)}`
+    case "complainant_notified":
+      return `told "${statusLabel(String(d.status ?? ""))}": ${emailOutcome(d)}`
     case "restriction_lifted":
       return `restriction ${String(d.restrictionId ?? "")}${d.reason ? ` — ${String(d.reason)}` : ""}`
     case "counter_notice_received":

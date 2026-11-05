@@ -56,6 +56,15 @@ export const EVENT_LABELS: Readonly<Record<string, string>> = {
   infringement_withdrawn: "Infringement withdrawn",
   measure_applied: "Measure taken on the account",
   measure_lifted: "Measure lifted",
+  user_notified: "Email to the account (content restricted)",
+  complainant_notified: "Update email to the complainant",
+}
+
+/** What became of one of the case's emails, as its log entry recorded it (backend ee/lib/complaint-notices.ts). */
+export function emailOutcome(data: Readonly<Record<string, unknown>>): string {
+  if (data.sent === true) return "sent"
+  if (data.sent === "unknown") return "may have been sent: the mail service did not answer in time"
+  return `not sent: ${String(data.reason ?? "unknown")}${data.error ? ` (${String(data.error)})` : ""}`
 }
 
 /** A measure on an account, as the handler reads it. */
