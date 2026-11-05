@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { buildPresetTree, presetMatchesQuery, buildResetToDefaultData } from "../preset-tree"
+import { buildPresetTree, factoryPresetIdMatchesQuery, presetMatchesQuery, buildResetToDefaultData } from "../preset-tree"
 import type { NodePreset, NodePresetGroup } from "@/lib/api"
 
 const preset = (over: Partial<NodePreset> & { id: string; name: string }): NodePreset => ({
@@ -109,5 +109,22 @@ describe("buildResetToDefaultData", () => {
     const payload = buildResetToDefaultData({ prompt: "x", __activePresetId: "u1" }, undefined)
     expect(payload.prompt).toBeUndefined()
     expect(payload.__activePresetId).toBeUndefined()
+  })
+})
+
+describe("factoryPresetIdMatchesQuery", () => {
+  it("finds a preset by a query only its id contains", () => {
+    expect(factoryPresetIdMatchesQuery("generate-image/old-word-look", "old-word")).toBe(true)
+    expect(factoryPresetIdMatchesQuery("generate-image/old-word-look", "  WORD ")).toBe(true)
+  })
+
+  it("does not match the node-type prefix every preset in the list shares", () => {
+    expect(factoryPresetIdMatchesQuery("generate-image/old-word-look", "image")).toBe(false)
+    expect(factoryPresetIdMatchesQuery("generate-image/old-word-look", "generate")).toBe(false)
+  })
+
+  it("reads an id with no prefix whole, and matches everything on an empty query", () => {
+    expect(factoryPresetIdMatchesQuery("old-word-look", "old")).toBe(true)
+    expect(factoryPresetIdMatchesQuery("generate-image/old-word-look", " ")).toBe(true)
   })
 })

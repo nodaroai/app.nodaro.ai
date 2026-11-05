@@ -74,12 +74,15 @@ export type SafetyBlockHint = {
   class: SafetyBlock["class"]
   retried: boolean
   suggestedProvider?: string
-  /** Present when the provider named the INPUT it refused, not the prompt or
-   *  the output: `"input_video"` — the input video itself, so a caller can
-   *  send a different clip; `"input_image"` — one of the input images, refused
-   *  as possibly copyrighted (always with `class: "copyright"`), so a caller
-   *  can send a different picture. Absent ⇒ not known. The union may grow. */
-  subject?: "input_video" | "input_image"
+  /** Present when the provider named what it refused: `"input_video"` — the
+   *  input video itself, so a caller can send a different clip; `"input_image"`
+   *  — one of the input images, refused as possibly copyrighted (always with
+   *  `class: "copyright"`), so a caller can send a different picture;
+   *  `"prompt"` — the provider's own words named the prompt, so changing the
+   *  prompt is the fix; `"audio"` — its own words blamed the generated audio,
+   *  not the picture. A named input wins over the prompt, and the prompt over
+   *  the audio. Absent ⇒ not known. The union may grow. */
+  subject?: "input_video" | "input_image" | "prompt" | "audio"
 }
 
 /** A NODARO-side policy decision, not a provider's — written by the job-policy
@@ -304,6 +307,40 @@ export function inputImageRefusedOf(err: unknown): boolean {
   }
 }
 
+/** True when the thrown error (or anything on its `cause` chain) says the
+ *  provider's own words named the PROMPT in a content-policy refusal: a
+ *  duck-typed `promptRefused === true` own property (`KieError.promptRefused`,
+ *  or a plugin's error carrying the same flag). Never throws. */
+export function promptRefusedOf(err: unknown): boolean {
+  try {
+    let cur: unknown = err
+    for (let depth = 0; depth < 8 && typeof cur === "object" && cur !== null; depth++) {
+      if ((cur as { promptRefused?: unknown }).promptRefused === true) return true
+      cur = (cur as { cause?: unknown }).cause
+    }
+    return false
+  } catch {
+    return false
+  }
+}
+
+/** True when the thrown error (or anything on its `cause` chain) says the
+ *  provider's own words blamed the GENERATED AUDIO in a content-policy refusal:
+ *  a duck-typed `audioRefused === true` own property (`KieError.audioRefused`,
+ *  or a plugin's error carrying the same flag). Never throws. */
+export function audioRefusedOf(err: unknown): boolean {
+  try {
+    let cur: unknown = err
+    for (let depth = 0; depth < 8 && typeof cur === "object" && cur !== null; depth++) {
+      if ((cur as { audioRefused?: unknown }).audioRefused === true) return true
+      cur = (cur as { cause?: unknown }).cause
+    }
+    return false
+  } catch {
+    return false
+  }
+}
+
 const nonBlank = (v: unknown): boolean => typeof v === "string" && v.trim() !== ""
 
 /** True when the job's payload sent a video to the provider: a source video
@@ -325,7 +362,7 @@ export function sentVideoInput(data: unknown): boolean {
 export function errorHintFor(
   block: SafetyBlock,
   retried: boolean,
-  opts?: { inputVideoRefused?: boolean; inputImageRefused?: boolean },
+  opts?: { inputVideoRefused?: boolean; inputImageRefused?: boolean; promptRefused?: boolean; audioRefused?: boolean },
 ): SafetyBlockHint {
   const hint: SafetyBlockHint = block.fallback
     ? { kind: "safety-block", class: block.class, retried, suggestedProvider: block.fallback }
@@ -334,12 +371,15 @@ export function errorHintFor(
   // Only a copyright block names an input image (KieError sets the flag only
   // beside that class); a stray flag on another class is not passed on.
   if (opts?.inputImageRefused && block.class === "copyright") return { ...hint, subject: "input_image" }
+  if (opts?.promptRefused) return { ...hint, subject: "prompt" }
+  if (opts?.audioRefused) return { ...hint, subject: "audio" }
   return hint
 }
 
 /** The `jobs.error_hint` for a provider's refusal of a job, or null when it was
  *  not one: a classified content-policy block (naming the input video or the
- *  input image when the provider refused that), else a refused input video
+ *  input image when the provider refused that, else the prompt or the generated
+ *  audio when the provider's words named it), else a refused input video
  *  with no class, else a refused request. The
  *  ONE mapping shared by every writer that fails a job on a provider's
  *  verdict — the worker's catch path and the reconcile path (a job re-picked
@@ -352,8 +392,10 @@ export function refusalHintFor(
   inputVideoRefused: boolean,
   inputImageRefused = false,
   requestRefused: RequestRefusedHint | null = null,
+  promptRefused = false,
+  audioRefused = false,
 ): SafetyBlockHint | InputRefusedHint | RequestRefusedHint | null {
-  if (block) return errorHintFor(block, retried, { inputVideoRefused, inputImageRefused })
+  if (block) return errorHintFor(block, retried, { inputVideoRefused, inputImageRefused, promptRefused, audioRefused })
   if (inputVideoRefused) return inputRefusedHint()
   return requestRefused
 }

@@ -356,6 +356,36 @@ describe("failureGuidance (PR9 — offers the safety-block fallback)", () => {
     expect(result.guidance).toMatch(/different image/)
   })
 
+  it("a safety-block naming the prompt gets the class's guidance, retryable unchanged", () => {
+    const error_message =
+      "The provider declined this generation: the output may resemble protected (copyrighted) content. Rephrasing the prompt usually resolves this."
+    const named = failureGuidance({
+      error_message,
+      error_hint: { kind: "safety-block", class: "copyright", retried: false, subject: "prompt" },
+    })
+    const unnamed = failureGuidance({
+      error_message,
+      error_hint: { kind: "safety-block", class: "copyright", retried: false },
+    })
+    expect(named.guidance).toBe("The provider's safety filter blocked this output; change the prompt or the input image.")
+    expect(named.retryable).toBe(unnamed.retryable)
+  })
+
+  it("a safety-block blaming the generated audio matches no input reader: the class's guidance, retryable unchanged", () => {
+    const error_message =
+      "The provider declined this generation: the output may resemble protected (copyrighted) content. Rephrasing the prompt usually resolves this."
+    const blamed = failureGuidance({
+      error_message,
+      error_hint: { kind: "safety-block", class: "copyright", retried: false, subject: "audio" },
+    })
+    const unnamed = failureGuidance({
+      error_message,
+      error_hint: { kind: "safety-block", class: "copyright", retried: false },
+    })
+    expect(blamed).toEqual(unnamed)
+    expect(blamed.guidance).toBe("The provider's safety filter blocked this output; change the prompt or the input image.")
+  })
+
   it("a safety-block WITHOUT subject keeps today's guidance", () => {
     const plain = failureGuidance({
       error_message: "Blocked for copyright: the provider refused this generation.",

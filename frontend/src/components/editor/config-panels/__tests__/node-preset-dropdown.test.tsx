@@ -162,6 +162,24 @@ describe("PresetDropdown", () => {
     expect(screen.getByText(/Cinematic Portrait/i)).toBeInTheDocument()
   })
 
+  it("search finds a factory preset by its id when only the id contains the query", async () => {
+    wrap(<PresetDropdown nodeId="n1" variant="panel" />)
+    fireEvent.click(screen.getByRole("button", { name: /presets/i }))
+    await screen.findByText(/My Look/i)
+    fireEvent.change(screen.getByPlaceholderText(/search/i), { target: { value: "pixar" } })
+    expect(screen.getByText("3D Animated Film")).toBeInTheDocument()
+    expect(screen.queryByText(/Cinematic Portrait/i)).toBeNull()
+  })
+
+  it("search does not match the node type every preset's id starts with", async () => {
+    wrap(<PresetDropdown nodeId="n1" variant="panel" />)
+    fireEvent.click(screen.getByRole("button", { name: /presets/i }))
+    await screen.findByText(/My Look/i)
+    fireEvent.change(screen.getByPlaceholderText(/search/i), { target: { value: "generate" } })
+    expect(screen.queryByText("3D Animated Film")).toBeNull()
+    expect(screen.queryByText(/Cinematic Portrait/i)).toBeNull()
+  })
+
   it("renders factory presets as folders, collapsed by default, expanding on click", async () => {
     wrap(<PresetDropdown nodeId="n1" variant="panel" />)
     fireEvent.click(screen.getByRole("button", { name: /presets/i }))

@@ -11,7 +11,7 @@
  * `TrendSlot.roleName` and `previewRoleName`, `references` (their `line` and
  * `previewLine` too), `trendPrompt`, `prePrompt`, `previewTrendPrompt`,
  * `previewPrePrompt`, `faceMasking`, `faceMask`, `faceMaskJob`, `upscaleJobs`,
- * `sourceCrop`, `klingLength`, `pulseAudio`, `prismReferenceAudio`, `promptParts`, `promptStyle`, `promptWording`, `steps` and `previewClip` never leave the server — public responses
+ * `sourceCrop`, `klingLength`, `pulseAudio`, `prismReferenceAudio`, `promptParts`, `promptStyle`, `promptWording`, `steps`, `noPersonSourceClip` and `previewClip` never leave the server — public responses
  * are built from the other fields. The source's display copy
  * (`source.display`, a browser-safe re-encode in its own file) is public: the
  * trend's page shows it as the original, unless the trend hides its original
@@ -522,6 +522,15 @@ export interface TrendVersionData {
    * publishes only with at least one example (`hide_original_needs_example`).
    */
   hideOriginal?: boolean
+  /**
+   * HIDDEN. With no person to replace, the first attempt sends the source clip
+   * and the one masked retry uses the approved stored mask, when the trend has
+   * one (`sendsSourceClipFirst`, prompt-style.ts). Read only on a Precise trend
+   * that hides faces or does not mask, with no person slot; elsewhere it has no
+   * effect. Absent = off. Outside `faceMasking`, so the mask's settings key does
+   * not move and an approved mask stays approved, flag on or off.
+   */
+  noPersonSourceClip?: true
   examples: TrendExample[]
 }
 

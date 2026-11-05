@@ -65,6 +65,20 @@ export function promptStyleOfForm(form: { promptStyle?: CastSwapPromptStyleId; f
   return form.promptStyle ?? defaultPromptStyleOf(form.faceMasking)
 }
 
+/**
+ * Where "Send the clip as it is first" shows: a trend that hides faces or does
+ * not mask, with the Precise prompt style and no person slot (the server's
+ * `sendsSourceClipFirst`, whose other half is the flag itself).
+ */
+export function noPersonSourceClipOffered(form: {
+  slots: readonly { kind: string }[]
+  promptStyle?: CastSwapPromptStyleId
+  faceMasking?: AdminTrendFaceMasking
+}): boolean {
+  const source = form.faceMasking && form.faceMasking.mode !== "off" ? clipPreparationOf(form.faceMasking) : "faces"
+  return !form.slots.some((s) => s.kind === "person") && promptStyleOfForm(form) === "precise" && source === "faces"
+}
+
 /** Full depth's scene, resolved (a description when left out). */
 export function sceneOf(m: Pick<AdminTrendFaceMasking, "scene"> | undefined): AdminTrendFullDepthScene {
   return m?.scene ?? CAST_SWAP_FULL_DEPTH_SCENE_DEFAULT

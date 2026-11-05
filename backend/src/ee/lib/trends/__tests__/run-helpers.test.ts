@@ -22,8 +22,9 @@ import {
 } from "../run-helpers.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../../../../lib/private-plugins/supports-registry.js"
 import { PREVIEW_CLIP_RECIPE } from "../preview-clip.js"
-import type { ComposedTrendRun } from "../compose.js"
-import type { TrendPreviewClip } from "../types.js"
+import { composeTrendRun, type ComposedTrendRun } from "../compose.js"
+import { faceMaskSettingsKey } from "../face-mask.js"
+import type { TrendFaceMask, TrendPreviewClip, TrendVersionData } from "../types.js"
 import type { RunCredits } from "../../../../lib/job-credit-status.js"
 
 const PREVIEW_JOB = "0b7d4b8e-3f1e-4c55-9d1a-6f2c1e9a7b10"
@@ -117,6 +118,26 @@ describe("the stored face mask on the wire", () => {
     const c = withStored({ mode: "auto" })
     await followPreviewMasking(c, { userId: "u", trendId: "t", previewJobId: PREVIEW_JOB })
     expect(c.body.faceMasking).toMatchObject({ mode: "auto" })
+  })
+
+  it("a full run that follows its masked preview starts on the mask: always, its stored mask kept, not sent as a source-clip run", async () => {
+    previewJob({ fill: "blur" })
+    const c = withStored({ mode: "auto" })
+    c.body.sourceClip = true
+    await followPreviewMasking(c, { userId: "u", trendId: "t", previewJobId: PREVIEW_JOB })
+    expect(c.body.faceMasking).toMatchObject({ mode: "always" })
+    expect(c.body.storedFaceMask).toEqual(STORED)
+    expect("sourceClip" in c.body).toBe(false)
+  })
+
+  it("a preview that did not mask leaves a source-clip run's body as it is", async () => {
+    previewJob({ fill: "blur" }, { privacy: { applied: false } })
+    const c = withStored({ mode: "auto" })
+    c.body.sourceClip = true
+    const before = structuredClone(c.body)
+    await followPreviewMasking(c, { userId: "u", trendId: "t", previewJobId: PREVIEW_JOB })
+    expect(c.body).toEqual(before)
+    expect(c.body.sourceClip).toBe(true)
   })
 
   it("a full run that follows its masked preview keeps the trend's target", async () => {
@@ -234,6 +255,51 @@ describe("prismReferenceAudio on the wire", () => {
 })
 
 describe("withPreparedPreview — the preview's prepared input clip on the wire", () => {
+  it("a source-clip trend's preview still swaps in the clip and its cut of the mask, with sourceClip beside them", () => {
+    setPluginSupports({ castSwap: { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: [], trendRun: true, storedFaceMask: true, preparedPreview: true } })
+    const SOURCE = "https://cdn.example/source.mp4"
+    const masked: TrendVersionData = {
+      name: { en: "A place" },
+      source: { videoUrl: SOURCE, durationSec: 12 },
+      previewStart: 2,
+      slots: [{ key: "place", kind: "location", label: { en: "Place" }, required: false, roleName: "the floor" }],
+      references: [],
+      examples: [],
+      faceMasking: { mode: "always", threshold: 0.4 },
+      noPersonSourceClip: true,
+    }
+    const faceMask: TrendFaceMask = {
+      url: "https://cdn.example/mask.mp4",
+      frames: 360,
+      recipe: { core: "2026-10-25", plugin: "1" },
+      settingsKey: faceMaskSettingsKey(masked)!,
+      jobId: "fm-1",
+      stats: { shots: 1, heldFrames: 0, coverage: 0.01, droppedRegions: 0 },
+      approvedAt: "2026-10-25T10:00:00.000Z",
+      approvedBy: "admin",
+    }
+    const previewClip: TrendPreviewClip = {
+      videoUrl: "https://cdn.example/preview.mp4",
+      durationSec: 5,
+      width: 720,
+      height: 1280,
+      frames: 150,
+      sha256: "b".repeat(64),
+      sourceVideoUrl: SOURCE,
+      startSec: 2,
+      recipe: PREVIEW_CLIP_RECIPE,
+      madeAt: "2026-10-27T10:00:00.000Z",
+      faceMask: { url: "https://cdn.example/preview-mask.mp4", frames: 150, sha256: "c".repeat(64), sourceMaskUrl: faceMask.url },
+    }
+    const c = composeTrendRun({ id: "t", slug: "s", version: 1, data: { ...masked, faceMask, previewClip } }, { slots: {}, preview: true })
+    withPreparedPreview(c)
+    expect(c.body.videoUrl).toBe(previewClip.videoUrl)
+    expect(c.body.preparedPreview).toBe(true)
+    expect(c.body.storedFaceMask).toMatchObject({ url: previewClip.faceMask!.url, frames: 150 })
+    expect(c.body.faceMasking?.mode).toBe("auto")
+    expect(c.body.sourceClip).toBe(true)
+  })
+
   beforeEach(() => _resetPluginSupportsForTests())
   const BASE = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["480p" as const], trendRun: true, faceMasking: true, storedFaceMask: true, storedFaceMaskRequired: true }
   const SOURCE = "https://cdn.example/clip.mp4"
@@ -499,6 +565,9 @@ describe.each(Object.keys(DECLARED) as (keyof typeof DECLARED)[])("Nodaro Motion
     // A content block that doesn't change on the same inputs.
     expect(pointer("failed", { kind: "safety-block", class: "copyright", retried: false })).toEqual({ jobId: "fq-1", status: "failed", refused: true })
     expect(pointer("failed", { kind: "safety-block", class: "likeness", retried: false })).toEqual({ jobId: "fq-1", status: "failed", refused: true })
+    // A subject that names no input changes nothing: the class decides.
+    expect(pointer("failed", { kind: "safety-block", class: "copyright", retried: false, subject: "audio" })).toEqual({ jobId: "fq-1", status: "failed", refused: true })
+    expect(pointer("failed", { kind: "safety-block", class: "copyright", retried: false, subject: "prompt" })).toEqual({ jobId: "fq-1", status: "failed", refused: true })
     // Anything else leaves the pointer as it was: another try stays on offer.
     expect(pointer("failed", null)).toEqual({ jobId: "fq-1", status: "failed" })
     expect(pointer("failed", { kind: "credits", code: "insufficient_credits" })).toEqual({ jobId: "fq-1", status: "failed" })
@@ -526,6 +595,9 @@ describe.each(Object.keys(DECLARED) as (keyof typeof DECLARED)[])("Nodaro Motion
     expect(errorOf({ kind: "input-refused" })).toEqual({ code: "input-refused", message: "This run didn't finish.", refused: true })
     expect(errorOf({ kind: "safety-block", class: "copyright", retried: false })).toEqual({ code: "safety-block", message: "This run didn't finish.", refused: true })
     expect(errorOf({ kind: "safety-block", class: "likeness", retried: false })).toEqual({ code: "safety-block", message: "This run didn't finish.", refused: true })
+    // A subject that names no input reads as no subject: never as a refused clip.
+    expect(errorOf({ kind: "safety-block", class: "copyright", retried: false, subject: "audio" })).toEqual({ code: "safety-block", message: "This run didn't finish.", refused: true })
+    expect(errorOf({ kind: "safety-block", class: "copyright", retried: false, subject: "prompt" })).toEqual({ code: "safety-block", message: "This run didn't finish.", refused: true })
     // Anything else, and any run that is not a Full Quality try, has nothing to say.
     expect(errorOf({ kind: "safety-block", class: "safety", retried: false })).toEqual({ code: "safety-block", message: "This run didn't finish." })
     expect(errorOf(null)).toEqual({ code: "failed", message: "This run didn't finish." })

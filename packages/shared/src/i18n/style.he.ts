@@ -37,7 +37,7 @@ const map: LocaleCatalogMap = {
   "chalkboard": { label: "לוח גיר", description: "גיר לבן על צפחה" },
   "paper-cutout": { label: "חיתוך נייר", description: "נייר חתוך בשכבות + צללים" },
   "illuminated": { label: "כתב יד מעוטר", description: "עלי זהב + קליגרפיה" },
-  "pixar-3d": { label: "תלת-ממד Pixar", description: "אנימציית דמות מלוטשת CG" },
+  "pixar-3d": { label: "סרט אנימציה בתלת-ממד", description: "אנימציית דמות מלוטשת CG" },
   "caricature": { label: "קריקטורה", description: "פורטרט מסוגנן ומוגזם" },
   "fresco": { label: "פרסקו", description: "ציור קיר על טיח מתקופת הרנסנס" },
   "mosaic": { label: "פסיפס", description: "אמנות אריחים קטנים בטכניקת פסיפס ביזנטי" },

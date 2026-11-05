@@ -37,7 +37,7 @@ const map: LocaleCatalogMap = {
   "chalkboard": { label: "Tableau noir", description: "Craie blanche sur ardoise" },
   "paper-cutout": { label: "Découpage en papier", description: "Papier découpé en couches + ombres" },
   "illuminated": { label: "Manuscrit enluminé", description: "Feuille d'or + calligraphie" },
-  "pixar-3d": { description: "CG d'animation de personnages soigné" },
+  "pixar-3d": { label: "Film d'animation 3D", description: "CG d'animation de personnages soigné" },
   "caricature": { description: "Portrait stylisé exagéré" },
   "fresco": { label: "Fresque", description: "Peinture murale sur plâtre style plafond Renaissance" },
   "mosaic": { label: "Mosaïque", description: "Œuvre tessellée à petits carreaux, byzantine" },

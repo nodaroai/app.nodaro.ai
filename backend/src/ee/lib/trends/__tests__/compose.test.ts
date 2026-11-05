@@ -992,3 +992,96 @@ describe("composeTrendRun — the 4 s preview's own prompt parts", () => {
     expect(trendVersionDataSchema.safeParse(empty).success).toBe(true)
   })
 })
+
+describe("composeTrendRun — a trend with no person that sends its source clip first", () => {
+  const PLACE: TrendSlot = { key: "place", kind: "location", label: { en: "Place" }, required: false, roleName: "the dance floor" }
+  const MASKING = { mode: "always" as const, threshold: 0.4, fill: "blur" as const }
+  const none: TrendRunRequest = { slots: {} }
+  const noPerson = (over: Partial<TrendVersionData> = {}) =>
+    version({
+      slots: [PLACE],
+      examples: [{ videoUrl: img("ex1v"), width: 720, height: 1280, durationSec: 12, sourceJobId: "j1", slots: { place: [img("ex1-place")] } }],
+      ...over,
+    })
+  /** `d` with an approved mask made from its own settings. */
+  const approved = (d: TrendVersionData): TrendVersionData => ({
+    ...d,
+    faceMask: {
+      url: "https://cdn.example.com/trends/t-1/mask.mp4",
+      frames: 360,
+      recipe: { core: "2026-10-25", plugin: "1" },
+      settingsKey: faceMaskSettingsKey(d)!,
+      jobId: "fm-1",
+      stats: { shots: 1, heldFrames: 0, coverage: 0.01, droppedRegions: 0 },
+      approvedAt: "2026-10-25T10:00:00.000Z",
+      approvedBy: "admin",
+    },
+  })
+  const on = (d: TrendVersionData): TrendVersionData => ({ ...d, noPersonSourceClip: true })
+  const body = (d: TrendVersionData) => composeTrendRun(trend(d), none).body
+
+  it("an approved Faces trend asks for auto and the source clip, and still sends its approved mask", () => {
+    const d = approved(noPerson({ faceMasking: MASKING }))
+    const sent = body(on(d))
+    expect(sent.faceMasking?.mode).toBe("auto")
+    expect(sent.sourceClip).toBe(true)
+    expect(sent.storedFaceMask).toEqual(body(d).storedFaceMask)
+    expect(sent.storedFaceMask).toBeDefined()
+  })
+
+  it("every other masking field is the flag-off body's", () => {
+    const d = approved(noPerson({ faceMasking: { ...MASKING, target: "face", zone: { topPct: 5 } } }))
+    const { mode: _on, ...sentOn } = body(on(d)).faceMasking!
+    const { mode: _off, ...sentOff } = body(d).faceMasking!
+    expect(sentOn).toEqual(sentOff)
+    expect(sentOn).toMatchObject({ threshold: 0.4, fill: "blur", target: "face" })
+  })
+
+  it.each([
+    ["left out", undefined],
+    ["off", { mode: "off" as const }],
+    ["off, naming a fill and a depth source", { mode: "off" as const, fill: "depth" as const, source: "full-depth" as const }],
+  ])("a trend whose masking is %s does not throw: the defaults at auto, with no stored mask", (_name, faceMasking) => {
+    const { body: sent, needs } = composeTrendRun(trend(on(noPerson({ faceMasking }))), none)
+    expect(sent.faceMasking).toEqual(withResolvedZone({ mode: "auto" }))
+    expect(sent.sourceClip).toBe(true)
+    expect(sent).not.toHaveProperty("storedFaceMask")
+    expect(needs.faceMasking).toBe(true)
+  })
+
+  it("erased marks still need their approved mask, sent as required", () => {
+    const MARK = { label: "erased" as const, fromFrame: 0, toFrame: 100, leftPct: 50, topPct: 0, rightPct: 100, bottomPct: 50 }
+    const marked = noPerson({ faceMasking: { ...MASKING, marks: [MARK] } })
+    expect(codeOf(() => body(on(marked)))).toMatchObject({ code: "face_mask_required" })
+    const sent = body(on(approved(marked)))
+    expect(sent.storedFaceMask?.required).toBe(true)
+    expect(sent.faceMasking?.mode).toBe("auto")
+    expect(sent.sourceClip).toBe(true)
+  })
+
+  it.each<[string, TrendVersionData]>([
+    ["a person slot", approved(version({ faceMasking: MASKING }))],
+    ["a Flexible prompt style", approved(noPerson({ faceMasking: MASKING, promptStyle: "flexible" }))],
+    ["a Flexible prompt style with masking off", noPerson({ promptStyle: "flexible" })],
+    ["a Full depth source", approved(noPerson({ faceMasking: { mode: "always", source: "full-depth" } }))],
+    ["a Keep people source", approved(noPerson({ faceMasking: { mode: "always", source: "keep-people" } }))],
+  ])("with %s the flag changes nothing", (_name, d) => {
+    const request = d.slots.some((s) => s.kind === "person") ? req() : none
+    const sentOn = composeTrendRun(trend(on(d)), request).body
+    expect(sentOn).toEqual(composeTrendRun(trend(d), request).body)
+    expect(sentOn).not.toHaveProperty("sourceClip")
+  })
+
+  it("flag off, the body has no sourceClip key", () => {
+    expect("sourceClip" in body(approved(noPerson({ faceMasking: MASKING })))).toBe(false)
+    expect("sourceClip" in body(noPerson())).toBe(false)
+  })
+
+  it("an out-of-date mask is not sent, and the flag still asks for the source clip", () => {
+    const stale = { ...approved(noPerson({ faceMasking: MASKING })), faceMasking: { ...MASKING, threshold: 0.6 } }
+    const sent = body(on(stale))
+    expect(sent).not.toHaveProperty("storedFaceMask")
+    expect(sent.faceMasking).toMatchObject({ mode: "auto", threshold: 0.6 })
+    expect(sent.sourceClip).toBe(true)
+  })
+})

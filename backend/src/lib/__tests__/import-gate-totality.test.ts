@@ -158,6 +158,11 @@ describe("import-gate totality", () => {
     expect(strays, "a new lane that fetches a link must run through an engine (lib/import-gate.ts)").toEqual([])
   })
 
+  it("only the plugin toolkit's engine uses the exempt lane (lib/import-gate.ts: the plugin lane skips the declaration and the count)", () => {
+    const EXEMPT_LANE_USE = /\blane\s*:\s*["']plugin["']|requireAccountlessImportAllowed\([^)]*["']plugin["']/
+    expect(files.filter((f) => EXEMPT_LANE_USE.test(f.source)).map((f) => f.rel)).toEqual(["lib/private-plugins/toolkit-downloads.ts"])
+  })
+
   it("the allowlist names only files that exist and still reach a runner (an engine may fetch without one)", () => {
     for (const [rel, why] of MAY_REACH_A_RUNNER) {
       const file = files.find((f) => f.rel === rel)

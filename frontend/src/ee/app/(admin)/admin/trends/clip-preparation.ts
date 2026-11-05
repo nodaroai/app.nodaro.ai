@@ -176,6 +176,20 @@ export function environmentsThatCannotTakePreciseArtStyle(envs: readonly TrendEn
 }
 
 /**
+ * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
+ * in that order) whose engine cannot send a run's clip as it is — none
+ * recorded, or one that does not declare `castSwap.noPersonSourceClip`.
+ * Unknown while the environments are (undefined). The no-person setting
+ * (`nodaro_motion_no_person`) saves a change once ANY environment reads it
+ * (this is shorter than the list): an engine without the flag never reads
+ * that row.
+ */
+export function environmentsThatCannotSendSourceClip(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+  if (!envs) return undefined
+  return SHARED_SETTING_ENVIRONMENTS.filter((name) => envs.find((e) => e.env === name)?.supports.castSwap?.noPersonSourceClip !== true)
+}
+
+/**
  * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose
  * engine does not run a direct Prism Precise run with an art style as Flex
  * (`castSwap.preciseStyleRoute`): none recorded, or one without the flag.

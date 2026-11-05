@@ -1354,6 +1354,46 @@ If you take Postgres down for migration or recovery, the backend will
 crash-loop until it's reachable. That's fine — once Postgres is back,
 restart the Nodaro container and it'll pick up.
 
+### Restoring into a new Supabase project
+
+A restore into a new project does not preserve privileges: a server-only
+function can come back executable by the browser roles, and a table or column
+that migrations closed can come back readable or writable. After any restore,
+list the `SECURITY DEFINER` functions those roles can run:
+
+```sql
+SELECT p.oid::regprocedure AS function,
+       has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
+       has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated
+  FROM pg_proc p
+ WHERE p.pronamespace = 'public'::regnamespace
+   AND p.prosecdef
+   AND p.prorettype NOT IN ('trigger'::regtype, 'event_trigger'::regtype)
+   AND (has_function_privilege('anon', p.oid, 'EXECUTE')
+        OR has_function_privilege('authenticated', p.oid, 'EXECUTE'))
+ ORDER BY 1;
+```
+
+The result must hold only the functions declared in `browser_callable` in
+`supabase/tests/server-only-function-privileges.behavior.sql`. Close anything
+else, naming `PUBLIC` as well, since `anon` and `authenticated` inherit its
+default `EXECUTE`:
+
+```sql
+REVOKE EXECUTE ON FUNCTION public.<name>(<args>) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.<name>(<args>) TO service_role;
+```
+
+`supabase/migrations/598_server_only_functions_revoke_public.sql` closes the
+server-only functions and restores the table and column privileges the
+migrations up to it leave in place, and is safe to run again. To check a restored database against the expected
+privileges, run the test file above with `psql`. It rolls itself back and stops
+at the first thing that is open:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/server-only-function-privileges.behavior.sql
+```
+
 ## 9. Troubleshooting
 
 **Start at `/setup`.** Self-hosted (community/business) installs serve a

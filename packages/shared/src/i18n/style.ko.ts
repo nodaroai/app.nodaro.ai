@@ -37,7 +37,7 @@ const map: LocaleCatalogMap = {
   "chalkboard": { label: "칠판", description: "칠판 위에 흰 분필로 그린 그림" },
   "paper-cutout": { label: "종이 컷아웃", description: "겹겹이 오려 붙인 종이와 그림자" },
   "illuminated": { label: "채식 필사본", description: "금박과 캘리그래피" },
-  "pixar-3d": { description: "세련된 캐릭터 애니메이션 CG" },
+  "pixar-3d": { label: "3D 애니메이션 영화", description: "세련된 캐릭터 애니메이션 CG" },
   "caricature": { label: "캐리커처", description: "과장되고 양식화된 인물화" },
   "fresco": { label: "프레스코", description: "회반죽 위에 그린 르네상스 벽화" },
   "mosaic": { label: "모자이크", description: "작은 타일을 이어 붙인 비잔틴풍 모자이크" },

@@ -8,6 +8,8 @@ import {
   safetyBlockOf,
   inputVideoRefusedOf,
   inputImageRefusedOf,
+  promptRefusedOf,
+  audioRefusedOf,
   requestRefusedHintOf,
   sentVideoInput,
   refusalHintFor,
@@ -303,6 +305,8 @@ function refusalHintOf(err: unknown, row: KieJobRow): ErrorHint | null {
     inputVideoRefusedOf(err) && sentVideoInput(input),
     inputImageRefusedOf(err),
     requestRefusedHintOf(err, input),
+    promptRefusedOf(err),
+    audioRefusedOf(err),
   )
 }
 

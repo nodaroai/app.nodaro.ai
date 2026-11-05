@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => {
     contentPolicyClass: "copyright" | "likeness" | "safety" | null = null
     inputVideoRefused = false
     inputImageRefused = false
+    promptRefused = false
+    audioRefused = false
     constructor(message: string, isUpstreamFailure = false, internalDetails = "task failed: [500] raw provider text") {
       super(message)
       this.name = "KieError"
@@ -561,6 +563,24 @@ describe("reconcileKieJob", () => {
       )
       await reconcileKieJob(videoRow({ provider: "seedance-2", imageUrl: "https://cdn.example/a.png" }))
       expect(failedUpdate().error_hint).toEqual({ kind: "safety-block", class: "copyright", retried: false, subject: "input_image" })
+      expect(mocks.refundMock).toHaveBeenCalledWith("j-refused")
+    })
+
+    it("a copyright refusal whose provider words name the prompt → the copyright hint names the prompt", async () => {
+      const err = await kieTaskFailure("The prompt may be related to copyright restrictions")
+      err.promptRefused = true
+      mocks.pollKieTaskMock.mockRejectedValueOnce(err)
+      await reconcileKieJob(videoRow({ provider: "seedance-2", imageUrl: "https://cdn.example/a.png" }))
+      expect(failedUpdate().error_hint).toEqual({ kind: "safety-block", class: "copyright", retried: false, subject: "prompt" })
+      expect(mocks.refundMock).toHaveBeenCalledWith("j-refused")
+    })
+
+    it("a copyright refusal whose provider words blame the generated audio → the copyright hint names the audio", async () => {
+      const err = await kieTaskFailure("The generated audio may involve copyright restrictions")
+      err.audioRefused = true
+      mocks.pollKieTaskMock.mockRejectedValueOnce(err)
+      await reconcileKieJob(videoRow({ provider: "seedance-2", imageUrl: "https://cdn.example/a.png" }))
+      expect(failedUpdate().error_hint).toEqual({ kind: "safety-block", class: "copyright", retried: false, subject: "audio" })
       expect(mocks.refundMock).toHaveBeenCalledWith("j-refused")
     })
 

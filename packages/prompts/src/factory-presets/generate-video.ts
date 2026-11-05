@@ -591,7 +591,7 @@ export const GENERATE_VIDEO_PRESETS: readonly FactoryPreset[] = [
   {
     id: "generate-video/cartoon-3d",
     name: "3D Cartoon",
-    description: "Playful Pixar-like motion.",
+    description: "Playful animated-film motion.",
     group: "Animation & Style",
     data: {
       provider: "kling-3.0",

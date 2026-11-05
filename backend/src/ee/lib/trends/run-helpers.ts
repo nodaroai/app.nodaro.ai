@@ -795,7 +795,8 @@ export function withoutUnsupportedFields(composed: ComposedTrendRun): void {
  * Anything else (no such job, another user's, another trend's, a full run, not
  * completed, not masked, a database error) leaves the body as it is: no
  * error, and nothing that tells whether the job exists. Mutates
- * `composed.body.faceMasking` (its own copy, from `composeTrendRun`).
+ * `composed.body.faceMasking` (its own copy, from `composeTrendRun`), and drops
+ * `composed.body.sourceClip`: a run that follows a masked preview starts masked.
  */
 export async function followPreviewMasking(
   composed: ComposedTrendRun,
@@ -835,6 +836,8 @@ export async function followPreviewMasking(
     ...(fill ? { fill } : {}),
     ...(zone !== undefined ? { zone } : {}),
   })
+  // This run starts masked: it no longer sends the source clip first.
+  delete composed.body.sourceClip
 }
 
 /**

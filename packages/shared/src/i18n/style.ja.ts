@@ -37,7 +37,7 @@ const map: LocaleCatalogMap = {
   "chalkboard": { label: "黒板", description: "黒板に白いチョークで描いた絵" },
   "paper-cutout": { label: "ペーパーカット", description: "層になった切り紙とドロップシャドウ" },
   "illuminated": { label: "彩色写本", description: "金箔とカリグラフィー" },
-  "pixar-3d": { label: "Pixar 3D", description: "磨かれたキャラクター・アニメーションCG" },
+  "pixar-3d": { label: "3Dアニメーション映画", description: "磨かれたキャラクター・アニメーションCG" },
   "caricature": { label: "カリカチュア", description: "誇張してデフォルメした似顔絵" },
   "fresco": { label: "フレスコ画", description: "漆喰の上に描くルネサンス様式の天井画風" },
   "mosaic": { label: "モザイク", description: "小さなタイルを敷き詰めたビザンチン風モザイク" },

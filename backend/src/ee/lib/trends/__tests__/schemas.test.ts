@@ -41,6 +41,12 @@ function messages(r: { success: boolean; error?: { issues: Array<{ message: stri
 }
 
 describe("trendVersionDataSchema", () => {
+  it("takes noPersonSourceClip as true alone; none stays absent, false is refused", () => {
+    expect(trendVersionDataSchema.parse(data({ noPersonSourceClip: true })).noPersonSourceClip).toBe(true)
+    expect(trendVersionDataSchema.parse(data())).not.toHaveProperty("noPersonSourceClip")
+    expect(trendVersionDataSchema.safeParse(data({ noPersonSourceClip: false })).success).toBe(false)
+  })
+
   it("takes hideOriginal as an optional boolean, read back as written; none stays absent", () => {
     for (const hideOriginal of [true, false]) {
       const r = trendVersionDataSchema.safeParse(data({ hideOriginal }))

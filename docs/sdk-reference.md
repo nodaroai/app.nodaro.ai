@@ -1428,7 +1428,10 @@ without naming a content-policy class (`kind: "input-refused"`, `subject:
 "input_video"` — send a different clip; a `safety-block` carries the same
 `subject` when the refused input video also has a class, and `subject:
 "input_image"` on a `copyright` block when the provider refused one of the
-input images as possibly copyrighted — send a different picture), or whose
+input images as possibly copyrighted — send a different picture, `subject:
+"prompt"` on any class when the provider's own words named the prompt — changing
+the prompt is the fix, and `subject: "audio"` on any class when they blamed the
+generated audio, not the picture), or whose
 request the provider refused as it was sent, naming a fault of it, so the same
 request is refused again (`kind: "request-refused"` — change the input images,
 the video, the prompt or the settings; with `subject: "input_video"` when the
@@ -2261,31 +2264,35 @@ clip_too_long_for_style` ("Use a shorter clip or choose Precise").
 **A forced style** (`styleChoice()`, `CastSwapStyleChoice`): Nodaro may fix
 an engine's style for everyone, and every `run()` and `estimate()` on it then
 uses that style whatever `style` says. `styleChoice()` answers
-`{ engines: { "motion-prism": CastSwapStyleChoiceOption, "motion-pulse": CastSwapStyleChoiceOption }, styleOnly?: { "motion-prism"?: boolean, "motion-pulse"?: boolean }, preciseArtStyle?: { "motion-prism"?: boolean, "motion-pulse"?: boolean } }`,
+`{ engines: { "motion-prism": CastSwapStyleChoiceOption, "motion-pulse": CastSwapStyleChoiceOption }, styleOnly?: { "motion-prism"?: boolean, "motion-pulse"?: boolean }, preciseArtStyle?: { "motion-prism"?: boolean, "motion-pulse"?: boolean }, preciseArtStyleAlone?: { "motion-prism"?: boolean, "motion-pulse"?: boolean } }`,
 each engine `"user"` (the caller chooses), `"precise"` or `"flex"`
 (`style: "motion"`); show a style control only for an engine answered
 `"user"`. `styleOnly` says, per engine, whether the engine takes style-only
-runs (below), and `preciseArtStyle` whether a Precise run takes an art style
-there (below). Both follow the engine alone, so read them with `engines`: a
-forced Precise keeps a Motion run's art style where `preciseArtStyle` is
-`true`, and drops it where it is not. On an engine answered `"precise"`, a
-request with nothing else to change is refused as `400 validation_error`; with
+runs (below), `preciseArtStyle` whether a Precise run takes an art style there
+(below), and `preciseArtStyleAlone` whether an art style alone is a Precise
+run's change there, with no role, reference or prompt (Nodaro may run such a
+request as a Motion run, which this does not say: see An art style on a Precise
+run below); it answers `false` until the engine takes such runs. All three follow the engine alone, so read them
+with `engines`: a forced Precise keeps a Motion run's art style where
+`preciseArtStyle` is `true`, and drops it where it is not. On an engine answered
+`"precise"`, a request with nothing else to change is refused as `400 validation_error`; with
 anything else to change (a role with images, a fixed reference, a `prePrompt`
 or `postPrompt`) it answers `202` and runs and is quoted as Precise, with the
 art style where `preciseArtStyle` is `true`. While Nodaro runs a Precise run
 with an art style as a Motion run (see An art style on a Precise run below), a
 request that keeps one on such an engine runs and is quoted as Motion instead,
 and one with nothing else to change is accepted. Nodaro Motion Pulse is always
-`false` in both, and an older server leaves them out (read them as `false` for
-every engine). Public (works signed
+`false` in all three, and an older server leaves them out (read them as `false`
+for every engine). Public (works signed
 out); the answer may be up to a minute old. A trend run keeps its trend's
 style.
 
 ```ts
-const { engines, styleOnly, preciseArtStyle } = await client.castSwap.styleChoice()
+const { engines, styleOnly, preciseArtStyle, preciseArtStyleAlone } = await client.castSwap.styleChoice()
 const showStyle = engines["motion-pulse"] === "user"
 const offerStyleOnly = styleOnly?.["motion-prism"] === true && engines["motion-prism"] !== "precise"
 const offerPreciseArtStyle = preciseArtStyle?.["motion-prism"] === true
+const offerPreciseArtStyleAlone = preciseArtStyleAlone?.["motion-prism"] === true
 ```
 
 **Style only** (`direction`): a Motion run (`style: "motion"`) on Nodaro

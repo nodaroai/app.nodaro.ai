@@ -44,6 +44,12 @@ function versionOf(file: string): number {
   return Number(/^(\d+)_/.exec(file)?.[1] ?? NaN)
 }
 
+/** A table-level REVOKE removes column grants, so this migration has to restate the column grant. */
+const RESTATED_COLUMN_GRANTS: Readonly<Record<string, string>> = {
+  "598_server_only_functions_revoke_public.sql":
+    "grant update (input_values, name, hidden_nodes, node_states) on table public.app_runs to authenticated;",
+}
+
 describe("app_runs: the browser roles write only the PATCH's fields", () => {
   const sql = sqlOf(LOCK_MIGRATION)
 
@@ -68,9 +74,11 @@ describe("app_runs: the browser roles write only the PATCH's fields", () => {
     const later = readdirSync(MIGRATIONS_DIR)
       .filter((f) => f.endsWith(".sql") && versionOf(f) > versionOf(LOCK_MIGRATION))
     for (const file of later) {
-      const text = sqlOf(file)
+      const whole = sqlOf(file)
+      const restated = RESTATED_COLUMN_GRANTS[file]
+      const text = restated ? whole.replace(restated, "") : whole
       expect(text, `${file} grants a write on app_runs`).not.toMatch(
-        /grant [^;]*\b(insert|update|delete|all)\b[^;]* on (public\.)?app_runs to [^;]*\b(anon|authenticated|public)\b/,
+        /grant [^;]*\b(insert|update|delete|all)\b[^;]* on (table )?(public\.)?app_runs to [^;]*\b(anon|authenticated|public)\b/,
       )
       expect(text, `${file} grants writes on every table, app_runs included`).not.toMatch(
         /grant [^;]* on all tables in schema public to [^;]*\b(anon|authenticated|public)\b/,

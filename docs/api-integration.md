@@ -1588,7 +1588,7 @@ plus, for five classes of failure, a structured `error_hint`.
 A provider content-policy block:
 
 ```json
-{ "kind": "safety-block", "class": "copyright" | "likeness" | "safety", "retried": boolean, "suggestedProvider"?: string, "subject"?: "input_video" | "input_image" }
+{ "kind": "safety-block", "class": "copyright" | "likeness" | "safety", "retried": boolean, "suggestedProvider"?: string, "subject"?: "input_video" | "input_image" | "prompt" | "audio" }
 ```
 
 `subject: "input_video"` is present when the provider refused the job's input
@@ -1596,6 +1596,9 @@ video itself — not the prompt, a reference image or the output; send a
 different clip. `subject: "input_image"` (always with `class: "copyright"`) is
 present when the provider refused one of the job's input images as possibly
 copyrighted; send a different picture — rephrasing the prompt will not help.
+`subject: "prompt"` is present when the provider's own words named the prompt;
+changing the prompt is the fix. `subject: "audio"` is present when the
+provider's own words blamed the generated audio, not the picture.
 Treat a `subject` you do not know as absent.
 
 Or, on a deployment that registers a job policy, a rejection by that policy:
@@ -4723,20 +4726,24 @@ sign-in needed) says which, per engine:
 `style: "motion"`). An app shows its style choice only for an engine answered
 `"user"`. The same answer carries
 `styleOnly: { "motion-prism": boolean, "motion-pulse": boolean }`: whether the
-engine takes style-only runs (below), and
+engine takes style-only runs (below),
 `preciseArtStyle: { "motion-prism": boolean, "motion-pulse": boolean }`:
-whether a Precise run takes an art style there (below). Both follow the engine
-alone, so read them with `engines`: a forced Precise keeps a Motion run's art
-style where `preciseArtStyle` is `true`, and drops it where it is not. On an
-engine answered `"precise"`, a request with nothing else to change is refused
-as `400 validation_error`; with anything else to change (a role with images, a
-fixed reference, a `prePrompt` or `postPrompt`) it answers `202` and runs and
-is quoted as Precise, with the art style where `preciseArtStyle` is `true`.
+whether a Precise run takes an art style there (below), and
+`preciseArtStyleAlone: { "motion-prism": boolean, "motion-pulse": boolean }`:
+whether an art style alone is a Precise run's change there, with no role,
+reference or prompt (Nodaro may run such a request as a Motion run, which this
+does not say: see An art style on a Precise run below); it answers `false`
+until the engine takes such runs. All three follow the engine alone, so read them with `engines`: a forced Precise
+keeps a Motion run's art style where `preciseArtStyle` is `true`, and drops it
+where it is not. On an engine answered `"precise"`, a request with nothing else
+to change is refused as `400 validation_error`; with anything else to change (a
+role with images, a fixed reference, a `prePrompt` or `postPrompt`) it answers
+`202` and runs and is quoted as Precise, with the art style where `preciseArtStyle` is `true`.
 While Nodaro runs a Precise run with an art style as a Motion run (see An art
 style on a Precise run below), a request that keeps one on such an engine runs
 and is quoted as Motion instead, and one with nothing else to change is accepted.
-Nodaro Motion Pulse is always `false` in both, and a server from before them
-leaves them out: read that as `false` for every engine.
+Nodaro Motion Pulse is always `false` in all three, and a server from before
+them leaves them out: read that as `false` for every engine.
 The answer may be up to a minute old. Trends are not
 affected.
 
@@ -5355,14 +5362,15 @@ and the rights check must judge the link that is fetched.
 
 **A private plugin's own download.** A private plugin that fetches a link
 itself (a video analysis given a link, or a source fetched again because its
-stored copy is gone) passes the same gate: the account's measures, the site's
-policy, and the confirmation the plugin passes for that link, spent right
-before the download. A link the download would not read is refused before the
-confirmation is spent. A plugin's job carries no way in, so a standing
-authorization never covers it: with the setting on, such a download without a
-confirmation is refused. A plugin's download outside any job has no account
-behind it: the site's policy and the setting decide, and with the setting on it
-is refused.
+stored copy is gone) passes the account's measures and the site's policy like
+every other import, and nothing else: the plugin lane is exempt from the
+declaration, with the setting off or on. No confirmation is read or spent for
+it (one a plugin passes is ignored), and such a download is not counted among
+the imports without a confirmation. A plugin's download outside any job has no
+account behind it: the site's policy alone decides. The exemption is for the
+plugin's own fetch of a link; a plugin's request to one of the import routes
+above, or a job it queues on the server, is held to the declaration like any
+other import.
 
 **A link to where a video is, as a node's sound.** Transcribe and Suno Cover
 take a link to where a video is through a Video URL node: that node asks for
@@ -5425,18 +5433,17 @@ how many of them carried a confirmation (a ticked box, or one derived from a
 standing authorization), and the imports without one by way in (a person's
 session, an API key, a connected app, an agent, or none), by where they were
 made (a direct request, a workflow run, an agent's inputs, an administrator's
-import, a plugin's download) and by connected app. With the setting on, each
+import) and by connected app. With the setting on, each
 import without a confirmation is refused: this is what to read before turning
-it on. Counting
+it on. A private plugin's own downloads are not counted: that lane is exempt
+from the declaration, so the setting never refuses them. Counting
 began when the count was added to the deployment: a window that reaches back
 past that day starts there, and the screen says so. An import without a
 confirmation is never counted twice for the same request and site (a job tried
-again is the same import; a plugin's download outside any job has no request,
-so each attempt of it is counted); only the host of its link is kept, with no account,
+again is the same import); only the host of its link is kept, with no account,
 for 90 days, and the request only as a keyed hash that cannot be matched to a
 job or a run. One account adds at most 120 imports a minute to the count of
-each server process (a plugin's downloads outside any job, which have no
-account, share one such limit), so a flood from one account is counted only
+each server process, so a flood from one account is counted only
 in part. The
 screen shows counts only, never a link, a site or an account. Like the import
 source list, it is the deployment's own and not part of the public API.
@@ -5447,7 +5454,8 @@ deployment's repeat-infringer policy (see
 [Repeat infringers](#13m-repeat-infringers)), every import of a link, in every
 lane above, is refused with `403 imports_blocked` and a message saying until
 when (a date in UTC, or until an administrator lifts the block). A run's
-import fails the same way, and so does a private plugin's download of a link.
+import fails the same way, and so does a private plugin's download in a job
+(one outside any job has no account to ask).
 The account is asked again right
 before the fetch starts, so a block placed while a download waited for its
 turn refuses it too; a block lifted takes effect at once. A suspended account,

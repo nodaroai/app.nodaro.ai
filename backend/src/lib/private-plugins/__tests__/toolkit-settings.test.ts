@@ -10,7 +10,9 @@ import type {
   PluginNodaroMotionStyle,
   PluginNodaroMotionStyleOnly,
   PluginNodaroMotionPreciseArtStyle,
+  PluginNodaroMotionNoPerson,
   PluginPromptPartId,
+  PluginSupports,
 } from "../types.js"
 import type { NodaroMotionMotionForPlugin } from "../../nodaro-motion-motion.js"
 import type { NodaroMotionMaskingForPlugin } from "../../nodaro-motion-masking.js"
@@ -19,6 +21,7 @@ import type { NodaroMotionStyleForPlugin } from "../../nodaro-motion-style.js"
 import type { NodaroMotionPromptWordingForPlugin } from "../../nodaro-motion-prompt-wording.js"
 import type { NodaroMotionStyleOnlyEntry } from "../../nodaro-motion-style-only.js"
 import type { NodaroMotionPreciseArtStyleForPlugin } from "../../nodaro-motion-precise-art-style.js"
+import type { NodaroMotionNoPersonEntry } from "../../nodaro-motion-no-person.js"
 import type { ByEngineForPlugin } from "../../nodaro-motion-engine-keys.js"
 
 /**
@@ -27,7 +30,7 @@ import type { ByEngineForPlugin } from "../../nodaro-motion-engine-keys.js"
  * the settings cache's own read (`getAppSettings`, ~60 s, cleared on an admin
  * write), handed out as a copy, and null when never saved.
  */
-const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, preciseStyleRoute: null as unknown, reads: 0, failed: false }))
+const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, noPerson: null as unknown, preciseStyleRoute: null as unknown, reads: 0, failed: false }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("../../app-settings.js", async (importOriginal) => {
@@ -36,7 +39,7 @@ vi.mock("../../app-settings.js", async (importOriginal) => {
     ...orig,
     getAppSettings: async () => {
       h.reads++
-      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle, nodaro_motion_precise_style_route: h.preciseStyleRoute }
+      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle, nodaro_motion_no_person: h.noPerson, nodaro_motion_precise_style_route: h.preciseStyleRoute }
     },
     settingsReadFailed: () => h.failed,
   }
@@ -552,6 +555,66 @@ describe("tk.settings.nodaroMotionStyleOnly", () => {
 })
 
 /**
+ * `tk.settings.nodaroMotionNoPerson()` — whether a DIRECT Precise run with no
+ * pictured person sends its source clip, per Nodaro Motion engine: null when
+ * never saved, nothing is switched off, or this host's engine does not declare
+ * `castSwap.noPersonSourceClip`.
+ */
+describe("tk.settings.nodaroMotionNoPerson", () => {
+  beforeEach(() => {
+    h.noPerson = null
+    h.reads = 0
+    h.failed = false
+    _resetPluginSupportsForTests()
+  })
+  const noPersonEngine = () => setPluginSupports({ castSwap: { ...CS, noPersonSourceClip: true } } as never)
+
+  it("advertises nodaroMotionNoPerson and answers null to an engine without castSwap.noPersonSourceClip", async () => {
+    expect(buildToolkit().capabilities?.nodaroMotionNoPerson).toBe(true)
+    expect(typeof buildToolkit().settings?.nodaroMotionNoPerson).toBe("function")
+    h.noPerson = { "motion-prism": { sourceClip: false } }
+    expect(await buildToolkit().settings!.nodaroMotionNoPerson!()).toBeNull()
+    setPluginSupports({ castSwap: { ...CS, noPersonSourceClip: false } } as never)
+    expect(await buildToolkit().settings!.nodaroMotionNoPerson!()).toBeNull()
+    expect(h.reads).toBe(2)
+  })
+
+  it("rejects when the settings could not be read, never answering null (on for every engine)", async () => {
+    noPersonEngine()
+    h.failed = true
+    await expect(buildToolkit().settings!.nodaroMotionNoPerson!()).rejects.toThrow(/could not be read/)
+  })
+
+  it("answers null when it was never saved, or nothing is switched off", async () => {
+    noPersonEngine()
+    expect(await buildToolkit().settings!.nodaroMotionNoPerson!()).toBeNull()
+    h.noPerson = {}
+    expect(await buildToolkit().settings!.nodaroMotionNoPerson!()).toBeNull()
+    h.noPerson = { "motion-prism": {} }
+    expect(await buildToolkit().settings!.nodaroMotionNoPerson!()).toBeNull()
+  })
+
+  it("answers each engine switched off under its current and its earlier key, a copy the plugin may change", async () => {
+    noPersonEngine()
+    h.noPerson = { "motion-pulse": { sourceClip: false } }
+    const got = await buildToolkit().settings!.nodaroMotionNoPerson!()
+    expect(got).toStrictEqual({ "motion-pulse": { sourceClip: false }, "motion-lite": { sourceClip: false } })
+    delete (got as Record<string, { sourceClip?: false }>)["motion-pulse"]!.sourceClip
+    expect(h.noPerson).toEqual({ "motion-pulse": { sourceClip: false } })
+    expect(got!["motion-lite"]!.sourceClip).toBe(false)
+  })
+
+  it("what the host answers is the plugin's PluginNodaroMotionNoPerson", () => {
+    expectTypeOf<ByEngineForPlugin<NodaroMotionNoPersonEntry>>().toExtend<PluginNodaroMotionNoPerson>()
+  })
+
+  it("the engine's two flags are part of what it declares", () => {
+    expectTypeOf<NonNullable<PluginSupports["castSwap"]>["noPersonSourceClip"]>().toEqualTypeOf<boolean | undefined>()
+    expectTypeOf<NonNullable<PluginSupports["castSwap"]>["preciseArtStyleAlone"]>().toEqualTypeOf<boolean | undefined>()
+  })
+})
+
+/**
  * `tk.settings.nodaroMotionPreciseArtStyle()` — the admin's opener per Nodaro Motion engine for a DIRECT Precise run
  * with an art style: null when never saved, nothing differs from the default ("restyle"), or this host's engine does
  * not declare `castSwap.preciseArtStyle`.
@@ -564,6 +627,10 @@ describe("tk.settings.nodaroMotionPreciseArtStyle", () => {
     _resetPluginSupportsForTests()
   })
   const preciseArtStyleEngine = () => setPluginSupports({ castSwap: { ...CS, preciseArtStyle: true } } as never)
+
+  it("advertises errorHintPromptSubject: a safety-block hint may say the provider named the prompt", () => {
+    expect(buildToolkit().capabilities?.errorHintPromptSubject).toBe(true)
+  })
 
   it("advertises nodaroMotionPreciseArtStyle and answers null to an engine without castSwap.preciseArtStyle", async () => {
     expect(buildToolkit().capabilities?.nodaroMotionPreciseArtStyle).toBe(true)

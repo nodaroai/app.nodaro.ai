@@ -6,7 +6,8 @@
  *
  *   GET /v1/cast-swap/style-choice   { engines: { "motion-prism": Choice, "motion-pulse": Choice },
  *                                      styleOnly: { "motion-prism": boolean, "motion-pulse": boolean },
- *                                      preciseArtStyle: { "motion-prism": boolean, "motion-pulse": boolean } }
+ *                                      preciseArtStyle: { "motion-prism": boolean, "motion-pulse": boolean },
+ *                                      preciseArtStyleAlone: { "motion-prism": boolean, "motion-pulse": boolean } }
  *
  * `Choice = "user" | "precise" | "flex"`: `"user"` = people choose a direct
  * run's style (Precise or Flex) as before; `"precise"` / `"flex"` = every
@@ -37,13 +38,23 @@
  * finds none and offers an art style on Flex alone. The request is taken either
  * way: while the admin's Precise art-style route is on (lib/nodaro-motion-precise-style-route.ts)
  * the engine runs it as Flex, which this does not say and the estimate shows.
+ *
+ * `preciseArtStyleAlone` says, per engine, whether an art style alone is a
+ * direct Precise run's change there, so the run needs no role, reference or
+ * prompt: Nodaro Motion Prism while this environment's engine declares
+ * `castSwap.preciseArtStyleAlone`, Nodaro Motion Pulse never (it takes no art
+ * style). It too follows the engine alone and is in every answer; a client
+ * reading a server from before it finds none and treats every engine as false.
+ * Such a request may run as Flex all the same: while the admin's Precise
+ * art-style route is on the engine runs it as Flex, which this does not say and
+ * the estimate shows.
  */
 import type { FastifyInstance } from "fastify"
 import type { NodaroMotionEngine } from "@nodaro/shared/models"
 import { getAppSettings, settingsReadFailed } from "../../lib/app-settings.js"
 import { engineTakesStyleChoice, styleChoices } from "../../lib/nodaro-motion-style.js"
 import { engineTakesStyleOnly } from "../../lib/nodaro-motion-style-only.js"
-import { engineTakesPreciseArtStyle } from "../../lib/nodaro-motion-precise-art-style.js"
+import { engineTakesPreciseArtStyle, engineTakesPreciseArtStyleAlone } from "../../lib/nodaro-motion-precise-art-style.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 
 /** How long a client (or a CDN) may keep the answer: about the settings cache's own life. */
@@ -59,15 +70,21 @@ function preciseArtStyleEngines(castSwap: Parameters<typeof engineTakesPreciseAr
   return { "motion-prism": engineTakesPreciseArtStyle(castSwap), "motion-pulse": false }
 }
 
+/** Whether an art style alone is a Precise run's change on each engine: Prism as its engine declares, Pulse never (no art style). A new object. */
+function preciseArtStyleAloneEngines(castSwap: Parameters<typeof engineTakesPreciseArtStyleAlone>[0]): Record<NodaroMotionEngine, boolean> {
+  return { "motion-prism": engineTakesPreciseArtStyleAlone(castSwap), "motion-pulse": false }
+}
+
 export async function castSwapStyleChoiceRoutes(app: FastifyInstance) {
   app.get("/v1/cast-swap/style-choice", async (req, reply) => {
     const castSwap = getPluginSupports().castSwap
     const styleOnly = styleOnlyEngines(castSwap)
     const preciseArtStyle = preciseArtStyleEngines(castSwap)
+    const preciseArtStyleAlone = preciseArtStyleAloneEngines(castSwap)
     if (!engineTakesStyleChoice(castSwap)) {
       return reply
         .header("Cache-Control", `public, max-age=${STYLE_CHOICE_MAX_AGE_SECONDS}`)
-        .send({ engines: styleChoices(null), styleOnly, preciseArtStyle })
+        .send({ engines: styleChoices(null), styleOnly, preciseArtStyle, preciseArtStyleAlone })
     }
     let settings: Awaited<ReturnType<typeof getAppSettings>> | null = null
     try {
@@ -76,10 +93,10 @@ export async function castSwapStyleChoiceRoutes(app: FastifyInstance) {
       req.log.warn({ err: e }, "cast-swap style-choice: the app settings could not be read")
     }
     if (!settings || settingsReadFailed(settings)) {
-      return reply.header("Cache-Control", "no-store").send({ engines: styleChoices(null), styleOnly, preciseArtStyle })
+      return reply.header("Cache-Control", "no-store").send({ engines: styleChoices(null), styleOnly, preciseArtStyle, preciseArtStyleAlone })
     }
     return reply
       .header("Cache-Control", `public, max-age=${STYLE_CHOICE_MAX_AGE_SECONDS}`)
-      .send({ engines: styleChoices(settings.nodaro_motion_style), styleOnly, preciseArtStyle })
+      .send({ engines: styleChoices(settings.nodaro_motion_style), styleOnly, preciseArtStyle, preciseArtStyleAlone })
   })
 }

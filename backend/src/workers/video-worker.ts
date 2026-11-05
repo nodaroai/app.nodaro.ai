@@ -24,6 +24,8 @@ import {
   jobModelIdOf,
   inputVideoRefusedOf,
   inputImageRefusedOf,
+  promptRefusedOf,
+  audioRefusedOf,
   requestRefusedHintOf,
   sentVideoInput,
   creditsHintOf,
@@ -713,10 +715,12 @@ export function createVideoWorker() {
         // Likewise an input image refused as possibly copyrighted
         // (`subject: "input_image"`), so a caller can send a different picture.
         // Likewise a request the provider refused as it was sent, so a caller
-        // knows the same inputs fail again.
+        // knows the same inputs fail again. And a block whose provider words
+        // named the prompt (`subject: "prompt"`), so a caller changes that, or
+        // blamed the generated audio (`subject: "audio"`), not the picture.
         // Shared with the reconcile path (lib/reconcile/kie.ts).
         const errorHint =
-          refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err), requestRefusedHintOf(err, job.data)) ?? creditsHintOf(err) ?? queueTimeoutHintOf(err)
+          refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err), requestRefusedHintOf(err, job.data), promptRefusedOf(err), audioRefusedOf(err)) ?? creditsHintOf(err) ?? queueTimeoutHintOf(err)
         const flipped = await markJobFailed(jobId, {
           error_message: errorMessage,
           // W0: the provider's own error, redacted — the sanitized message

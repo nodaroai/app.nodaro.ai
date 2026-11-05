@@ -149,13 +149,13 @@ describe("recordUnconfirmedImport", () => {
     expect(db.insert).toHaveBeenCalledTimes(COUNT_CAP_PER_MINUTE + 2)
   })
 
-  it("downloads with no account (a plugin's outside any job) share one cap apart from every account's, and each attempt is its own row", async () => {
+  it("downloads with no account (an accountless lane the declaration reaches) share one cap apart from every account's, and each attempt is its own row", async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-11-04T12:00:00Z"))
-    const accountless = { userId: "", url: "https://example.com/a.mp4", lane: "plugin", via: null, appId: null, requestId: null } as const
+    const accountless = { userId: "", url: "https://example.com/a.mp4", lane: "route", via: null, appId: null, requestId: null } as const
     for (let i = 0; i < COUNT_CAP_PER_MINUTE + 5; i++) await recordUnconfirmedImport(accountless)
     expect(db.insert).toHaveBeenCalledTimes(COUNT_CAP_PER_MINUTE)
-    expect(db.insert).toHaveBeenLastCalledWith({ lane: "plugin", via: null, app_id: null, request_id: null, host: "example.com" })
+    expect(db.insert).toHaveBeenLastCalledWith({ lane: "route", via: null, app_id: null, request_id: null, host: "example.com" })
     await recordUnconfirmedImport(IMPORT)
     expect(db.insert).toHaveBeenCalledTimes(COUNT_CAP_PER_MINUTE + 1)
   })

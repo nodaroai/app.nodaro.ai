@@ -1,5 +1,12 @@
 # @nodaro/shared
 
+## 3.54.1
+
+### Patch Changes
+
+- acf8184: `VIDEO_LINK_TOLERANT_CONSUMER_TYPES` no longer lists `dubbing`: Dubbing dubs the file wired into it, so `videoLinkNeedOf` and `videoLinkRunNeeds` answer `file` for a Video URL node it reads, and that video is downloaded first. A Dubbing node with its own `sourceUrl` reads nothing wired into it, so `videoLinkRunNeeds` does not count it as a reader.
+- a1160d5: The 3D animated film style has a translated display name in every locale. `entryMatchesQuery` also matches an entry's id, so an entry stays findable by it after its display name changes.
+
 ## 3.54.0
 
 ### Minor Changes

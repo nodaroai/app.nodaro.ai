@@ -11772,6 +11772,12 @@ export interface AdminTrendData {
    * (`hide_original_needs_example`).
    */
   hideOriginal?: boolean
+  /**
+   * With no person to replace, the first try sends the source clip (hidden).
+   * Absent = off. Read only on a Precise trend that hides faces or does not
+   * mask, with no person slot (`noPersonSourceClipOffered`).
+   */
+  noPersonSourceClip?: true
   /** The preparation steps (hidden). Absent = today's run. Sent only to an engine that takes them. */
   steps?: CastSwapSteps
   examples: AdminTrendExample[]
@@ -12106,6 +12112,8 @@ export interface TrendEngineEnvironment {
       styleOnly?: boolean
       /** The engine takes an art style on a direct Precise run (Prism); absent = it refuses one there. */
       preciseArtStyle?: boolean
+      /** The engine reads the no-person setting (`nodaro_motion_no_person`) and can send a run's clip as it is; absent = it never does. */
+      noPersonSourceClip?: boolean
       /** The engine runs a direct Prism Precise run with an art style as Flex while the admin's switch is on; absent = it runs it as Precise. */
       preciseStyleRoute?: boolean
     }
@@ -13252,6 +13260,41 @@ export async function saveNodaroMotionPreciseArtStyle(preciseArtStyle: NodaroMot
     await apiRequest<{ data: NodaroMotionPreciseArtStyleView }>(ADMIN_NODARO_MOTION_PRECISE_ART_STYLE, "apiErr.saveNodaroMotion", {
       method: "PUT",
       body: { preciseArtStyle },
+    })
+  ).data
+}
+
+// ---- Admin: Nodaro Motion's no-person setting (/v1/admin/nodaro-motion/no-person, admin-nodaro-motion-no-person.ts) ----
+
+/** One engine's no-person setting. Absent `sourceClip` means on (the default); `false` is the only value stored. */
+export interface NodaroMotionNoPersonEntry {
+  sourceClip?: false
+}
+
+/** The no-person setting per engine, keyed by public id; only an engine switched off is listed. */
+export type NodaroMotionNoPerson = Partial<Record<NodaroMotionEngine, NodaroMotionNoPersonEntry>>
+
+export interface NodaroMotionNoPersonView {
+  /** null = never saved: every engine on the default. */
+  noPerson: NodaroMotionNoPerson | null
+  updatedAt: string | null
+  engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine }>
+  /** Whether this environment's Cast Swap engine reads the setting (`castSwap.noPersonSourceClip`). */
+  supported: boolean
+}
+
+const ADMIN_NODARO_MOTION_NO_PERSON = "/v1/admin/nodaro-motion/no-person"
+
+export async function fetchNodaroMotionNoPerson(): Promise<NodaroMotionNoPersonView> {
+  return (await apiRequest<{ data: NodaroMotionNoPersonView }>(ADMIN_NODARO_MOTION_NO_PERSON, "apiErr.loadNodaroMotion")).data
+}
+
+/** Saves the whole setting. A change is refused (409 `engine_unsupported`) while no environment's engine reads it; the default always saves. */
+export async function saveNodaroMotionNoPerson(noPerson: NodaroMotionNoPerson): Promise<NodaroMotionNoPersonView> {
+  return (
+    await apiRequest<{ data: NodaroMotionNoPersonView }>(ADMIN_NODARO_MOTION_NO_PERSON, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { noPerson },
     })
   ).data
 }

@@ -5,6 +5,7 @@ import {
   PRECISE_ART_STYLE_OPENER_DEFAULT,
   anyPreciseArtStyleChange,
   engineTakesPreciseArtStyle,
+  engineTakesPreciseArtStyleAlone,
   parseNodaroMotionPreciseArtStyle,
   nodaroMotionPreciseArtStyleSchema,
   preciseArtStyleEntryProblems,
@@ -91,5 +92,12 @@ describe("nodaro-motion-precise-art-style", () => {
     expect(engineTakesPreciseArtStyle({})).toBe(false)
     expect(engineTakesPreciseArtStyle({ preciseArtStyle: false })).toBe(false)
     expect(engineTakesPreciseArtStyle({ preciseArtStyle: true })).toBe(true)
+  })
+
+  it("an engine takes an art style alone only when it declares castSwap.preciseArtStyleAlone", () => {
+    expect(engineTakesPreciseArtStyleAlone(undefined)).toBe(false)
+    expect(engineTakesPreciseArtStyleAlone({})).toBe(false)
+    expect(engineTakesPreciseArtStyleAlone({ preciseArtStyleAlone: false })).toBe(false)
+    expect(engineTakesPreciseArtStyleAlone({ preciseArtStyleAlone: true })).toBe(true)
   })
 })

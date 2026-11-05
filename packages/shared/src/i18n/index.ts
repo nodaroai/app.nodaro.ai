@@ -12,7 +12,7 @@
  * ```
  *
  * For search filtering, use `entryMatchesQuery(entry, locale, query)` which
- * filters across BOTH the canonical English text AND the localized text.
+ * filters across the entry's id, the canonical English text AND the localized text.
  */
 
 import type { I18nCatalogId, LocaleCatalogMap, LocaleId, LocalizedEntry } from "./types.js"
@@ -147,9 +147,10 @@ export function resolveDescription(
 }
 
 /**
- * Search predicate: returns true if `query` matches either the canonical
- * English label/description or the localized label/description for the
- * current locale.
+ * Search predicate: returns true if `query` matches the entry's id, the
+ * canonical English label/description, or the localized label/description for
+ * the current locale. An id is a stable name no display text has to repeat, so
+ * an entry stays findable by it after its display name changes.
  *
  * Empty query always matches.
  */
@@ -163,6 +164,7 @@ export function entryMatchesQuery(
 ): boolean {
   const q = query.trim().toLowerCase()
   if (!q) return true
+  if (id.toLowerCase().includes(q)) return true
   if (englishLabel.toLowerCase().includes(q)) return true
   if (englishDescription.toLowerCase().includes(q)) return true
   if (locale === "en") return false

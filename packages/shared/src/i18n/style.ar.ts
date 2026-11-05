@@ -37,7 +37,7 @@ const map: LocaleCatalogMap = {
   "chalkboard": { label: "سبورة طباشير", description: "طباشير أبيض على أردواز" },
   "paper-cutout": { label: "قصاصة ورقية", description: "ورق مقصوص متراكب + ظلال" },
   "illuminated": { label: "مخطوطة منيرة", description: "ورق ذهبي + خط عربي" },
-  "pixar-3d": { label: "Pixar ثلاثي الأبعاد", description: "CG شخصية Animation مصقول" },
+  "pixar-3d": { label: "فيلم رسوم متحركة ثلاثي الأبعاد", description: "CG شخصية Animation مصقول" },
   "caricature": { label: "كاريكاتير", description: "بورتريه مبالغ فيه ومنمق" },
 
   "fresco": { label: "فريسكو", description: "رسم جداري على جص بأسلوب أسقف عصر النهضة" },

@@ -4,13 +4,13 @@
  * only through `downloadSocialPostVideo`; the plain `downloadYouTubeVideo`
  * member drops the host-internal `hardening` option (raw yt-dlp arguments
  * among them), whatever a plugin passes. Before anything is fetched:
- *  - a link the runner itself would refuse is refused before the gate, so it
- *    never uses up the person's confirmation;
- *  - in a job, the gate is read and then spent with the job's owner, the job
- *    as the request, the plugin's confirmation and no way in (a plugin's job
- *    carries none), and the confirmation never reaches the runner;
- *  - outside any job, the accountless gate decides (the site's policy and the
- *    deployment's rule), and nothing is spent.
+ *  - a link the runner itself would refuse is refused before the gate;
+ *  - in a job, both halves of the gate are asked with the job's owner, the
+ *    job as the request, the `confirmationId` the plugin passed (the gate
+ *    ignores it: the plugin lane is exempt from the declaration) and no way
+ *    in (a plugin's job carries none), and the confirmation never reaches
+ *    the runner;
+ *  - outside any job, the accountless gate decides (the site's policy).
  * The gate's own decisions are the gate's tests (import-gate.test.ts); here
  * it is mocked, so these tests prove what the toolkit hands it.
  */
@@ -94,7 +94,7 @@ describe("tk.providers.downloadYouTubeVideo", () => {
     expect(yt.steps).toEqual(["read", "spend", "fetch"])
   })
 
-  it("a link the runner would refuse is refused before the gate, so no confirmation is used up", async () => {
+  it("a link the runner would refuse is refused before the gate", async () => {
     const tk = buildToolkit()
     await runWithJobCancellation("job-1", OWNER, async () => {
       await expect(plain(tk)({ url: "https://example.com/a-page", outPath: "/tmp/x.mp4", confirmationId: CONFIRMATION })).rejects.toBeInstanceOf(YtUrlNotAllowedError)

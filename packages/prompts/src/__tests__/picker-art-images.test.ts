@@ -13,15 +13,18 @@ import {
   SOUND_RENDER_SETS,
   PERSON_DIMENSION_SECTIONS,
   PERSON_FIELD_BY_DIMENSION,
+  RESTYLE_PREVIEWS,
   STYLING_DIMENSION_ORDER,
   STYLING_DIMENSION_SECTIONS,
   STYLING_FIELD_BY_DIMENSION,
   characterArtPath,
+  getPickerCatalog,
   getRegisteredPickerCatalogs,
   lookPreviewStillUrl,
   pickerOptionImage,
   pickerOptionImageUrl,
   projectPickerCatalog,
+  restylePreviewStillUrl,
   soundArtPath,
   summarizePickerCatalogs,
   type PickerCatalog,
@@ -237,6 +240,13 @@ describe("every picker render lives under the platform-owned prefix", () => {
     expect(urls.filter((u) => !/^https:\/\/cdn\.nodaro\.ai\/picker-renders\/[0-9a-f-]{36}\.(png|mp4)$/.test(u))).toEqual([])
   })
 
+  it("restyle previews too, each a clip of its own", () => {
+    const urls = Object.values(RESTYLE_PREVIEWS).map((preview) => preview.url)
+    expect(urls.length).toBeGreaterThan(0)
+    expect(urls.filter((u) => !/^https:\/\/cdn\.nodaro\.ai\/picker-renders\/[0-9a-f-]{36}\.mp4$/.test(u))).toEqual([])
+    expect(new Set(urls).size).toBe(urls.length)
+  })
+
   it("replace the emoji and flags on Cloud only", () => {
     const genre = { nodeType: "music-genre", catalogId: "music-genre" }
     expect(pickerOptionImageUrl(genre, "genre", "hip-hop", CLOUD)).toBe(lookPreviewStillUrl(SOUND_RENDER_SETS["music-genre"]["hip-hop"]))
@@ -278,5 +288,34 @@ describe("picker option imageSrcSet", () => {
       }
     }
     expect(wrong).toEqual([])
+  })
+})
+
+describe("restyle previews (RESTYLE_PREVIEWS)", () => {
+  it("cover only styles a restyle list offers: offered for video, and not left out of restyles", () => {
+    const options = getPickerCatalog("style")?.options ?? []
+    const offered = new Set(options.filter((o) => o.restyle !== false && (!o.media || o.media.includes("video"))).map((o) => o.id))
+    expect(offered.size).toBeGreaterThan(0)
+    expect(Object.keys(RESTYLE_PREVIEWS).filter((id) => !offered.has(id))).toEqual([])
+  })
+
+  it("give each clip a still, a frame the CDN cuts from it at the clip's own time", () => {
+    expect(restylePreviewStillUrl(RESTYLE_PREVIEWS.anime)).toBe("https://cdn.nodaro.ai/cdn-cgi/media/mode=frame,time=7s,width=480/picker-renders/7fbad6e4-023f-4282-ac3d-d186f2cbb37b.mp4")
+    expect(restylePreviewStillUrl(RESTYLE_PREVIEWS.watercolor)).toBe("https://cdn.nodaro.ai/cdn-cgi/media/mode=frame,time=1s,width=480/picker-renders/61a26588-d09a-4959-b677-ee8b32e3281a.mp4")
+    expect(restylePreviewStillUrl(RESTYLE_PREVIEWS.claymation)).toBe("https://cdn.nodaro.ai/cdn-cgi/media/mode=frame,time=1s,width=480/picker-renders/2916a2f7-114c-4c7e-9be0-5bf229d76133.mp4")
+    expect(restylePreviewStillUrl(RESTYLE_PREVIEWS["comic-book"])).toBe("https://cdn.nodaro.ai/cdn-cgi/media/mode=frame,time=1s,width=480/picker-renders/7a2cd17c-b02f-4ae4-9723-ef48d0eda52a.mp4")
+    expect(restylePreviewStillUrl(RESTYLE_PREVIEWS["felt-puppet"])).toBe("https://cdn.nodaro.ai/cdn-cgi/media/mode=frame,time=1s,width=480/picker-renders/3aa3c81b-ba19-4776-becc-e0c47c700699.mp4")
+    expect(restylePreviewStillUrl(RESTYLE_PREVIEWS["pixar-3d"])).toBe("https://cdn.nodaro.ai/cdn-cgi/media/mode=frame,time=1s,width=480/picker-renders/c5ea2111-3283-4f80-ab05-8ab4450946ce.mp4")
+  })
+
+  it("a clip with no time of its own is cut where every other clip's still is, and every other still stays as it was", () => {
+    const url = RESTYLE_PREVIEWS["felt-puppet"].url
+    expect(restylePreviewStillUrl({ url })).toBe(lookPreviewStillUrl(url))
+    expect(lookPreviewStillUrl(url, 960)).toBe("https://cdn.nodaro.ai/cdn-cgi/media/mode=frame,time=1s,width=960/picker-renders/3aa3c81b-ba19-4776-becc-e0c47c700699.mp4")
+    expect(restylePreviewStillUrl({ url, stillAtSeconds: 7 }, 960)).toBe("https://cdn.nodaro.ai/cdn-cgi/media/mode=frame,time=7s,width=960/picker-renders/3aa3c81b-ba19-4776-becc-e0c47c700699.mp4")
+  })
+
+  it("leave the style picker's pictures alone: LOOK_PREVIEW_SETS holds stills only", () => {
+    expect(Object.values(LOOK_PREVIEW_SETS.style).filter((u) => !u.endsWith(".png"))).toEqual([])
   })
 })

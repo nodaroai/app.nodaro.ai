@@ -27,6 +27,18 @@
  * calls both halves itself, so a caller cannot forget: the compiler names a
  * call without one, and `import-gate-totality.test.ts` names a new yt-dlp
  * lane that does not run through an engine.
+ *
+ * THE PLUGIN LANE IS EXEMPT from the rights part (decided 2026-11-05): a
+ * private plugin's own download of a link asks the account's measures and
+ * the site's policy like every other, but never the declaration — not with
+ * the setting off, not with it on — and a confirmation a plugin passes is
+ * ignored rather than read or spent. Such a download is not counted among
+ * the imports without a confirmation either: the count measures what the
+ * setting will refuse, and these it never will. The exemption is the lane's,
+ * and only the toolkit's own downloads (`toolkit-downloads.ts`) are on it —
+ * `import-gate-totality.test.ts` holds that file to be its only user. A
+ * plugin's request to an import route, or a host job it queues, reaches the
+ * gate as any other import does and is held to the declaration like one.
  */
 import {
   ContentRightsError,
@@ -81,11 +93,20 @@ function requireAccount(rights: ImportRights): void {
   if (!rights.userId) throw new ImportOwnerUnknownError()
 }
 
+/** The lanes the declaration never reaches (see the header): the gate neither reads, spends nor counts a confirmation for them. */
+const RIGHTS_EXEMPT_LANES: ReadonlySet<RightsLane> = new Set<RightsLane>(["plugin"])
+
+/** True for a lane whose imports pass the gate without the rights part: a private plugin's own download. */
+export function laneExemptFromRights(lane: RightsLane): boolean {
+  return RIGHTS_EXEMPT_LANES.has(lane)
+}
+
 /** The read half: throws an `ImportRefusal` when the link may not be imported by this account now. */
 export async function requireImportAllowed(url: string, rights: ImportRights): Promise<void> {
   requireAccount(rights)
   await assertImportsAllowed(rights.userId)
   await assertImportSourceAllowed(url)
+  if (laneExemptFromRights(rights.lane)) return
   await checkRightsConfirmation({ url, userId: rights.userId, confirmationId: rights.confirmationId, lane: rights.lane, via: rights.via ?? null })
 }
 
@@ -99,13 +120,16 @@ function unconfirmedOf(url: string, rights: ImportRights): UnconfirmedImport {
  * then spends the confirmation on the download that starts now — the one
  * sent, or one derived from a standing authorization for a key's or an
  * agent's import — and answers it; null when the download runs under none,
- * which is counted. A download under none is refused here too once the
- * deployment requires a confirmation, even when it did not at the read (the
- * switch turned on while the download waited for its slot).
+ * which is counted (an exempt lane runs under none and is not). A download
+ * under none is refused here too once the deployment requires a
+ * confirmation, even when it did not at the read (the switch turned on while
+ * the download waited for its slot).
  */
 export async function spendImportConfirmation(url: string, rights: ImportRights): Promise<string | null> {
   requireAccount(rights)
   await assertImportsAllowed(rights.userId)
+  // An exempt lane runs under no confirmation: nothing was read at the read half, nothing is spent or counted here.
+  if (laneExemptFromRights(rights.lane)) return null
   if (rights.confirmationId) {
     await consumeRightsConfirmation({ confirmationId: rights.confirmationId, url, lane: rights.lane, requestId: rights.requestId ?? null })
     return rights.confirmationId
@@ -141,14 +165,15 @@ export async function spendImportConfirmation(url: string, rights: ImportRights)
 
 /**
  * An import with no account at all: a private plugin's own download outside
- * any job (its route, its daemon). There are no measures to ask and no
- * confirmation that could be its own, so the site's policy and the
- * deployment's rule decide: refused while a confirmation is required, and
- * nothing is spent. One that goes ahead (the download follows at once) is
- * counted like any other import without a confirmation, with no account.
+ * any job (its route, its daemon). There are no measures to ask, so the
+ * site's policy decides, and for an exempt lane (the plugin's) that is all.
+ * Any other accountless lane meets the deployment's rule with no
+ * confirmation and no way in — refused while one is required, nothing
+ * spent — and is counted, with no account, when it goes ahead.
  */
 export async function requireAccountlessImportAllowed(url: string, lane: RightsLane): Promise<void> {
   await assertImportSourceAllowed(url)
+  if (laneExemptFromRights(lane)) return
   await checkRightsConfirmation({ url, userId: "", confirmationId: null, lane, via: null })
   // Counted on the side: the download never waits for the count (it never throws).
   void recordUnconfirmedImport({ userId: "", url, lane, via: null, appId: null, requestId: null })

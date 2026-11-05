@@ -395,6 +395,8 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     previewClip: trendPreviewClipSchema.optional(),
     // Absent = the original is shown. Stored as given, so re-saving a draft that names none is no change.
     hideOriginal: z.boolean().optional(),
+    // Absent = off. Only `true` is stored, so re-saving a draft that names none is no change.
+    noPersonSourceClip: z.literal(true).optional(),
     examples: z.array(trendExampleSchema),
   })
   .superRefine((d, ctx) => {

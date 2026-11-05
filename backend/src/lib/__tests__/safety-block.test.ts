@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest"
-import { KieError } from "../../providers/kie/client.js"
+import { createUpstreamFailureError, KieError } from "../../providers/kie/client.js"
 import {
+  audioRefusedOf,
+  promptRefusedOf,
   safetyBlockOf,
   isFinalAttemptFor,
   errorHintFor,
@@ -281,6 +283,26 @@ describe("refusalHintFor", () => {
     const safety: SafetyBlock = { class: "safety", maxAttempts: 2 }
     expect(refusalHintFor(safety, true, false, true)).toEqual({ kind: "safety-block", class: "safety", retried: true })
     expect(refusalHintFor(null, false, false, true)).toBeNull()
+  })
+})
+
+describe("a real refusal, from the funnel to the hint", () => {
+  const hintOf = (words: string) => {
+    const err = createUpstreamFailureError(`task failed: [400] ${words}`, "Generation")
+    return refusalHintFor(safetyBlockOf(err, "seedance-2"), false, false, false, null, promptRefusedOf(err), audioRefusedOf(err))
+  }
+  const hint = (subject?: "prompt" | "audio") => ({
+    kind: "safety-block", class: "copyright", retried: false, ...(subject ? { subject } : {}),
+  })
+
+  it("names the prompt, or the generated audio, or neither", () => {
+    expect(hintOf("The prompt may involve copyright restrictions")).toEqual(hint("prompt"))
+    expect(hintOf("The generated audio may involve copyright restrictions")).toEqual(hint("audio"))
+    expect(hintOf("The generated video may involve copyright restrictions")).toEqual(hint())
+  })
+
+  it("the prompt wins when a string names both", () => {
+    expect(hintOf("The prompt's generated audio may involve copyright restrictions")).toEqual(hint("prompt"))
   })
 })
 

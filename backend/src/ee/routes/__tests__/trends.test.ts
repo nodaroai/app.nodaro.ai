@@ -1192,6 +1192,29 @@ describe("POST /v1/trends/:slug/runs", () => {
     expect(engine.calls).toHaveLength(0)
   })
 
+  it("a trend with no person that sends its source clip first says so to the engine, on the estimate and the run, and never to the public", async () => {
+    mem.trends.push(trend("00000000-0000-4000-8000-0000000000a5", "empty-room", "published", 1, versionData({
+      slots: [{ key: "room", label: { en: "Room" }, kind: "location", required: true, roleName: "HIDDEN-ROLE the room" }],
+      examples: [{ ...versionData().examples[0]!, slots: { room: ["https://cdn.example/room.png"] } }],
+      noPersonSourceClip: true,
+    })))
+    const payload = { slots: { room: { images: ["https://u.example/room.png"] } } }
+    for (const [url, engineUrl, status] of [
+      ["/v1/trends/empty-room/estimate", "/v1/cast-swap/estimate", 200],
+      ["/v1/trends/empty-room/runs", "/v1/cast-swap", 202],
+    ] as const) {
+      const res = await app.inject({ method: "POST", url, headers: as(), payload })
+      expect(res.statusCode, url).toBe(status)
+      const call = engine.calls.at(-1)!
+      expect(call.url).toBe(engineUrl)
+      expect(call.body).toMatchObject({ sourceClip: true, faceMasking: { mode: "auto" } })
+    }
+    const page = await app.inject({ method: "GET", url: "/v1/trends/empty-room", headers: as() })
+    expect(page.statusCode).toBe(200)
+    expect(page.body).not.toContain("noPersonSourceClip")
+    expect(page.body).not.toContain("sourceClip")
+  })
+
   it("an engine lacking pet is a 503 engine_unsupported, with no internal POST", async () => {
     mem.trends.push(trend(T_PET, "pet-party", "published", 1, versionData({
       slots: [{ key: "dog", label: { en: "Dog" }, kind: "pet", required: true, roleName: "HIDDEN-ROLE the dog" }],

@@ -1117,7 +1117,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
   },
   {
     id: "generate-image/pixar-3d",
-    name: "3D Animated (Pixar-style)",
+    name: "3D Animated Film",
     description: "Polished CG character look.",
     group: "Illustration & Art Styles",
     data: {

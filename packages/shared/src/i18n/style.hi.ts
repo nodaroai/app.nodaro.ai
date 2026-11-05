@@ -37,7 +37,7 @@ const map: LocaleCatalogMap = {
   "chalkboard": { label: "Chalkboard", description: "Slate पर सफ़ेद chalk" },
   "paper-cutout": { label: "Paper Cutout", description: "Layered cut paper + shadows" },
   "illuminated": { label: "Illuminated Manuscript", description: "Gold leaf + calligraphy" },
-  "pixar-3d": { label: "Pixar 3D", description: "Polished character animation CG" },
+  "pixar-3d": { label: "3D एनिमेटेड फ़िल्म", description: "Polished character animation CG" },
   "caricature": { label: "Caricature", description: "Exaggerated stylized portrait" },
   "fresco": { label: "Fresco", description: "Plaster पर Renaissance छत-शैली की दीवार चित्रकारी" },
   "mosaic": { label: "Mosaic", description: "छोटे-tile tessellated कलाकृति, Byzantine" },
