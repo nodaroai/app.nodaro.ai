@@ -12,6 +12,7 @@ import {
   constantRateOf,
   planMaskChunks,
   buildSplitArgs,
+  buildFrameRangeArgs,
   splitMaskSource,
   countVideoFrames,
   videoMaskFfmpegTimeoutMs,
@@ -530,6 +531,16 @@ describe("chunking a long clip", () => {
     ])
     expect(planMaskChunks(9000).reduce((n, c) => n + c.frames, 0)).toBe(9000)
   })
+  it("builds the frame range cut", () => {
+    const argv = buildFrameRangeArgs("a", "b", 30, 18)
+    expect(argv).toContain("trim=start_frame=30:end_frame=48,setpts=PTS-STARTPTS")
+    const at = argv.indexOf("-fps_mode")
+    expect(argv[at + 1]).toBe("passthrough")
+    expect(argv).toContain("-an")
+    expect(argv.join(" ")).toContain("-c:v libx264 -preset veryfast -crf 16 -pix_fmt yuv420p")
+    expect(argv.at(-1)).toBe("b")
+    expect(argv[argv.indexOf("-i") + 1]).toBe("a")
+  })
   it("split argv forces a keyframe on every boundary and cuts exactly there", () => {
     const argv = buildSplitArgs("in.mp4", "out-%03d.mp4", planMaskChunks(4000, 1800)).join(" ")
     expect(argv).toContain("-force_key_frames expr:eq(mod(n,1800),0)")
@@ -581,6 +592,27 @@ describe("chunking a long clip", () => {
     const argv = buildSplitArgs("in.mp4", "out-%03d.mp4", planMaskChunks(97, 40, [31])).join(" ")
     expect(argv).toContain("-force_key_frames expr:eq(n,31)+eq(n,71)")
     expect(argv).toContain("-segment_frames 31,71")
+  })
+  it("cuts exactly the frames asked for, starting on the first of them (real ffmpeg)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "video-mask-range-"))
+    try {
+      // Each frame's brightness says which frame it is.
+      const src = join(dir, "src.mp4"), out = join(dir, "out.mp4")
+      execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "color=c=black:s=160x90:r=24:d=3",
+        "-vf", "format=gray,geq=lum='N*3'", "-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv420p", src])
+      execFileSync("ffmpeg", ["-v", "error", ...buildFrameRangeArgs(src, out, 30, 18)])
+      expect(await countVideoFrames(out)).toBe(18)
+      const brightness = (path: string): number[] => {
+        const raw = execFileSync("ffmpeg", ["-v", "error", "-i", path, "-f", "rawvideo", "-pix_fmt", "gray", "-"], { maxBuffer: 64 * 1024 * 1024 })
+        return Array.from({ length: raw.length / (160 * 90) }, (_, f) => raw[f * 160 * 90]!)
+      }
+      const [source, cut] = [brightness(src), brightness(out)]
+      expect(cut).toHaveLength(18)
+      // Neighbouring frames differ by 3 levels; the encode moves a level by at most 1.
+      cut.forEach((level, i) => expect(Math.abs(level - source[30 + i]!)).toBeLessThanOrEqual(1))
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
   it("cuts a real clip at uneven shot boundaries into exactly the planned frames (real ffmpeg)", async () => {
     const dir = await mkdtemp(join(tmpdir(), "video-mask-split-shots-"))

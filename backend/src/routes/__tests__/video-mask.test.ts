@@ -150,6 +150,18 @@ describe("POST /v1/video-mask", () => {
     for (const v of ["yes", 1, null]) expect((await post({ ...body, perShot: v })).statusCode).toBe(400)
   })
 
+  it("accepts steadyRegions and stores nothing for it when left out", async () => {
+    probe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 3, fps: 30 })
+    const body = { videoUrl: "https://example.com/c.mp4", prompt: "the face", userId: USER }
+    expect((await post(body)).statusCode).toBe(200)
+    expect(vi.mocked(videoQueue.add).mock.lastCall?.[1]).not.toHaveProperty("steadyRegions")
+    expect(inserted?.input_data).not.toHaveProperty("steadyRegions")
+    expect((await post({ ...body, steadyRegions: true })).statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenLastCalledWith("video-mask", expect.objectContaining({ steadyRegions: true }))
+    expect(inserted?.input_data).toMatchObject({ steadyRegions: true })
+    for (const v of ["yes", 1, null]) expect((await post({ ...body, steadyRegions: v })).statusCode).toBe(400)
+  })
+
   it("redetectEverySec defaults to 0 (off), passes 0 and 1–10 through (onto the job's input too), refuses anything else", async () => {
     probe.mockResolvedValue({ width: 640, height: 360, durationSeconds: 3, fps: 30 })
     const body = { videoUrl: "https://example.com/c.mp4", prompt: "the face", userId: USER }

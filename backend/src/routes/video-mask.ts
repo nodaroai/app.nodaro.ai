@@ -56,6 +56,9 @@ export const videoMaskBody = z.object({
     })
     .optional()
     .default(VIDEO_MASK_DEFAULTS.redetectEverySec),
+  // Follow the mask's regions across frames: short gaps filled, pops removed and a subject lost for longer looked
+  // for again (at most 3 extra model requests), in place of holdLastMask. Left out, the job carries no such field.
+  steadyRegions: z.boolean().optional(),
 })
 
 /**

@@ -161,6 +161,15 @@ export function redetectChunkFrames(frameRate: string, sec: number): number {
   return Math.min(VIDEO_MASK_CHUNK_FRAMES, Math.max(VIDEO_MASK_MIN_SHOT_FRAMES, Math.round(fps * sec)))
 }
 
+/** How the source's chunks are encoded. */
+const MASK_CHUNK_ENCODE_ARGS = [
+  "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p",
+  // Frame for frame: the segment muxer would otherwise pad a picture that starts after the sound
+  // (0.041 s into a trimmed 23.976 fps clip) with a copy of its first frame, and every cut — counted
+  // in frames — would land one frame early, opening a shot's chunk on the shot before it.
+  "-fps_mode", "passthrough",
+] as const
+
 /**
  * The split's argv: ONE re-encode with a keyframe forced on every chunk
  * boundary, cut by the segment muxer at exactly those frames (it cuts only on
@@ -177,14 +186,24 @@ export function buildSplitArgs(inputPath: string, outputPattern: string, chunks:
   const keyframes = evenGrid ? `expr:eq(mod(n,${n}),0)` : `expr:${starts.map((start) => `eq(n,${start})`).join("+")}`
   return [
     "-y", "-i", inputPath, "-an",
-    "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p",
-    // Frame for frame: the segment muxer would otherwise pad a picture that starts after the sound
-    // (0.041 s into a trimmed 23.976 fps clip) with a copy of its first frame, and every cut — counted
-    // in frames — would land one frame early, opening a shot's chunk on the shot before it.
-    "-fps_mode", "passthrough",
+    ...MASK_CHUNK_ENCODE_ARGS,
     "-force_key_frames", keyframes,
     "-f", "segment", "-segment_frames", starts.join(","), "-reset_timestamps", "1",
     outputPattern,
+  ]
+}
+
+/**
+ * Cut `frames` frames from `startFrame` out of the prepared source, for a second
+ * look at part of it: encoded like a chunk of the split, so the model reads the
+ * same picture. Pure.
+ */
+export function buildFrameRangeArgs(inputPath: string, outputPath: string, startFrame: number, frames: number): string[] {
+  return [
+    "-y", "-i", inputPath, "-an",
+    "-vf", `trim=start_frame=${startFrame}:end_frame=${startFrame + frames},setpts=PTS-STARTPTS`,
+    ...MASK_CHUNK_ENCODE_ARGS,
+    outputPath,
   ]
 }
 
@@ -362,7 +381,7 @@ export function maskRleCoveredPixels(rle: string): number {
 const MASK_PASS_SLICE_MS = 8
 
 /** Give the event loop a turn when the current slice has run its time; returns the new slice start. */
-async function yieldIfDue(sliceStart: number): Promise<number> {
+export async function yieldIfDue(sliceStart: number): Promise<number> {
   if (performance.now() - sliceStart < MASK_PASS_SLICE_MS) return sliceStart
   await new Promise<void>((resolve) => setImmediate(resolve))
   return performance.now()

@@ -13,6 +13,12 @@
  * cut into requests of at most that many seconds, so the model detects its
  * subjects again at each — a face that turns to the camera mid-shot is found
  * there. Those boundaries are not cuts: `holdLastMask` holds across them.
+ * With `steadyRegions`, a pass that follows the mask's regions across frames
+ * (providers/video/video-mask-steady.ts) replaces `holdLastMask`: it fills short
+ * gaps (up to HOLD_MAX_SEC when the mask holds nothing at all and a subject seen
+ * for long enough returns), removes pops, and sends the largest subjects lost for longer to the
+ * model once more (at most 3 requests, each kept for a retry like a chunk). An
+ * extra request that fails only leaves that subject lost; it never fails the job.
  * The fal request is NOT registered with the reconcile cron (see
  * providers/fal/sam3-video.ts): a crash re-runs the job on its BullMQ retry,
  * the pre-task sweep is the backstop. Masks are intermediate artifacts — never
@@ -33,12 +39,15 @@ import { listObjectsByPrefixWithMeta, readR2ObjectBuffer, uploadFileToR2 } from 
 import { jobScratchPrefix, uploadJobScratchBuffer, uploadJobScratchFile } from "../../lib/job-scratch.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
+import { withinTimeout } from "../../lib/concurrency-lanes/within-timeout.js"
 import { runSam3Video } from "../../providers/fal/sam3-video.js"
 import { detectCutFrames } from "../../services/scene-cut-frames.js"
-import { cleanupWorkDir, createWorkDir } from "../../providers/video/ffmpeg-utils.js"
+import { cleanupWorkDir, createWorkDir, runFfmpeg } from "../../providers/video/ffmpeg-utils.js"
 import {
   VIDEO_MASK_CHUNK_FRAMES,
   VIDEO_MASK_MIN_SHOT_FRAMES,
+  buildFrameRangeArgs,
+  maskRleCoveredPixels,
   planMaskChunks,
   redetectChunkFrames,
   prepareVideoMaskSource,
@@ -54,7 +63,9 @@ import {
   videoMaskFfmpegTimeoutMs,
   type MaskChunk,
   type MaskGeometry,
+  type MaskZone,
 } from "../../providers/video/video-mask.js"
+import { mergeRecoveredFace, pickLostFaces, steadyGapLimitFrames, steadyMaskPass, type SteadyPlan } from "../../providers/video/video-mask-steady.js"
 import { maskComposite } from "../../providers/video/mask-composite.js"
 import { eraseMaskVideo, type MaskEraseBoxInput } from "../../providers/video/mask-erase.js"
 import { maskOutlineHandlers } from "./mask-outline.js"
@@ -96,6 +107,12 @@ const rleCacheName = (chunk: number) => `sam3-rle-c${chunk}`
 
 /** Model requests in flight at once for one long clip (each ≤ 1,800 frames). */
 const CHUNK_CONCURRENCY = 3
+
+/** How long one extra request of a steady pass may take, from asking for an ffmpeg slot to the model's answer; past that its subject stays lost. */
+const STEADY_EXTRA_REQUEST_TIMEOUT_MS = 120_000
+
+/** The kill budget of an extra request's cut. Its deadline can only stop the wait for a slot, never a launch already admitted. */
+const STEADY_EXTRA_CUT_TIMEOUT_MS = 60_000
 
 interface CachedChunk {
   readonly model: string
@@ -176,8 +193,147 @@ async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) 
   return out
 }
 
+/** What the mask job has at hand for a steady pass's extra requests. */
+interface SteadyPassJob {
+  readonly job: Parameters<HandlerFn>[0]
+  readonly jobId: string
+  readonly model: ReturnType<typeof resolveVideoMaskProvider>
+  readonly prompt: string
+  readonly threshold: number
+  readonly localPath: string
+  readonly workDir: string
+  readonly geometry: MaskGeometry
+  readonly chunks: readonly MaskChunk[]
+  readonly cutFrames: readonly number[]
+  readonly perShot: boolean
+  readonly redetectEverySec: number
+  /** The job's region filters, each 0 / null = off. */
+  readonly minPct: number
+  readonly maxPct: number
+  readonly zone: MaskZone | null
+}
+
+/**
+ * Ask the model about one window of the clip again: cut it, upload it, send it.
+ * An optional step must not stall a job whose main answers are paid for, so one
+ * deadline covers all of it, and rejects when it passes. The cut already running
+ * by then has its own short kill budget and is not raced: left running, it would
+ * still be writing into a work dir the job's end empties. No request is sent
+ * once the deadline has passed.
+ */
+async function requestExtraAnswer(chunk: MaskChunk, s: SteadyPassJob) {
+  const { jobId, geometry } = s
+  const passed = () => new Error(`past its ${STEADY_EXTRA_REQUEST_TIMEOUT_MS / 1000} s deadline`)
+  const deadline = Date.now() + STEADY_EXTRA_REQUEST_TIMEOUT_MS
+  const timeLeft = () => deadline - Date.now()
+  const controller = new AbortController()
+  const { signal } = controller
+  const timer = setTimeout(() => controller.abort(passed()), STEADY_EXTRA_REQUEST_TIMEOUT_MS)
+  try {
+    const clipPath = join(s.workDir, `steady-${chunk.startFrame}.mp4`)
+    await runFfmpeg(buildFrameRangeArgs(s.localPath, clipPath, chunk.startFrame, chunk.frames), STEADY_EXTRA_CUT_TIMEOUT_MS, {
+      peakMemoryMiB: maskGeometryPeakMemoryMiB(geometry),
+      signal,
+    })
+    signal.throwIfAborted()
+    const videoUrl = await withinTimeout(uploadJobScratchFile(clipPath, `mask-src-c${chunk.index}`, "mp4", "video/mp4", jobId), timeLeft(), passed)
+    signal.throwIfAborted()
+    return await withinTimeout(
+      runSam3Video({ model: s.model, videoUrl, prompt: s.prompt, threshold: s.threshold, frameCount: chunk.frames }),
+      timeLeft(),
+      passed,
+    )
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * The steady pass over a whole clip, with its second look at the subjects it
+ * lost. Each look is cut, sent and kept like a chunk; everything that can go
+ * wrong with one (the cut, the upload, the model, a timeout, an answer of the
+ * wrong length or a malformed one) is logged and leaves that subject lost. An
+ * answer is kept before it is judged, so a retry reads the same verdict without
+ * paying again; `cost` holds every answer the model gave, used or not. An answer
+ * goes through the job's region filters like the clip's own frames, so a subject
+ * the filters dropped is not painted back.
+ */
+async function runSteadyPass(rle: readonly string[], s: SteadyPassJob) {
+  const { jobId, model, geometry, chunks, perShot, redetectEverySec, minPct, maxPct, zone } = s
+  const { width, height } = geometry
+  const plan: SteadyPlan = {
+    width,
+    height,
+    cutFrames: s.cutFrames,
+    detectionFrames: chunks.map((c) => c.startFrame),
+    gapLimit: steadyGapLimitFrames(geometry.frameRate),
+    emptyGapLimit: holdMaxFrames(geometry.frameRate),
+  }
+  const first = await steadyMaskPass(rle, plan)
+  const faces = pickLostFaces(first.lost)
+  const counts = { filledFrames: first.filledFrames, removedRegions: first.removedRegions }
+  if (faces.length === 0) return { rle: first.rle, counts: { ...counts, extraRequests: 0, extraFound: 0 }, cost: null }
+
+  // A window is decided by the frame it opens on, so faces lost on one frame share one look (and one answer).
+  const looks = [...new Map(faces.map((f): [number, MaskChunk] => [
+    f.startFrame,
+    { index: 10_000 + f.startFrame, startFrame: f.startFrame, frames: f.endFrame - f.startFrame },
+  ])).values()]
+  const kept = await readCachedChunks(jobId, model, geometry, looks, perShot, redetectEverySec)
+  if (kept.size > 0) console.log(`[worker] video-mask ${jobId}: drawing ${kept.size}/${looks.length} extra request(s) an earlier attempt paid for`)
+  const answers = await withProgressRamp(s.job, jobId, { start: 80, cap: 88 }, () =>
+    mapLimit(looks, CHUNK_CONCURRENCY, async (chunk): Promise<{ readonly startFrame: number; readonly rle?: readonly string[]; readonly cost: number | null }> => {
+      let cost: number | null = null
+      try {
+        let answer: { readonly rle: readonly string[]; readonly cost: number | null } | undefined = kept.get(chunk.index)
+        if (!answer) {
+          answer = await requestExtraAnswer(chunk, s)
+          await cacheChunk(jobId, { model, geometry, chunk, ...(perShot ? { perShot } : {}), ...(redetectEverySec > 0 ? { redetectEverySec } : {}), rle: answer.rle, cost: answer.cost })
+        }
+        cost = answer.cost
+        assertFrameCountMatches(answer.rle.length, chunk.frames)
+        const fitted = fitMaskFrames(answer.rle, chunk.frames)
+        // On a copy: the filter replaces frames in place, and the fit can hand back the answer's own array.
+        const rle = minPct > 0 || maxPct > 0 || zone
+          ? (await dropMaskRegions([...fitted], geometry, { minSubjectHeightPct: minPct, maxSubjectHeightPct: maxPct, zone })).rle
+          : fitted
+        return { startFrame: chunk.startFrame, rle, cost }
+      } catch (err) {
+        console.warn(`[worker] video-mask ${jobId}: skipped the extra request at frame ${chunk.startFrame}: ${err instanceof Error ? err.message : String(err)}`)
+        return { startFrame: chunk.startFrame, cost }
+      }
+    }),
+  )
+  const paid = answers.filter((a) => a.cost !== null)
+  const cost = paid.length > 0 ? paid.reduce((sum, a) => sum + a.cost!, 0) : null
+
+  let merged: readonly string[] = first.rle
+  let extraFound = 0
+  for (const face of faces) {
+    const answer = answers.find((a) => a.startFrame === face.startFrame)?.rle
+    if (!answer) continue
+    try {
+      const result = await mergeRecoveredFace(merged, face, answer, { width, height }, plan.gapLimit)
+      merged = result.rle
+      if (result.found) extraFound++
+    } catch (err) {
+      console.warn(`[worker] video-mask ${jobId}: skipped the extra answer at frame ${face.startFrame}: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+  const extras = { extraRequests: looks.length, extraFound }
+  if (extraFound === 0) return { rle: first.rle, counts: { ...counts, ...extras }, cost }
+
+  // A recovered face can come back with a short gap to fill, or as a pop. Each pass counts only what it changed itself.
+  const second = await steadyMaskPass(merged, plan)
+  return {
+    rle: second.rle,
+    counts: { filledFrames: counts.filledFrames + second.filledFrames, removedRegions: counts.removedRegions + second.removedRegions, ...extras },
+    cost,
+  }
+}
+
 const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
-  const { videoUrl, prompt, threshold, provider, holdLastMask, minSubjectHeightPct, maxSubjectHeightPct, zone: rawZone, perShot: rawPerShot, redetectEverySec: rawRedetect } = job.data as {
+  const { videoUrl, prompt, threshold, provider, holdLastMask, minSubjectHeightPct, maxSubjectHeightPct, zone: rawZone, perShot: rawPerShot, redetectEverySec: rawRedetect, steadyRegions } = job.data as {
     jobId: string
     videoUrl: string
     prompt: string
@@ -189,6 +345,7 @@ const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
     zone?: unknown
     perShot?: boolean
     redetectEverySec?: number
+    steadyRegions?: boolean
   }
   // Absent (a job queued before perShot existed) = one pass over the whole clip.
   const perShot = rawPerShot === true
@@ -285,14 +442,26 @@ const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
     // In place, yielding to the event loop like the region filters. Per shot: a held mask never crosses a cut
     // — the CUTS only, never the re-detection boundaries (a subject hidden across one stays held);
     // and never for longer than HOLD_MAX_SEC (a cut the scan missed, a subject that left).
-    const held = holdLastMask === true
+    // steadyRegions: the steady pass takes the hold's place, so a subject is never both held and filled.
+    const steady = steadyRegions === true
+      ? await runSteadyPass(afterFilters, { job, jobId: ctx.jobId, model, prompt, threshold: detection, localPath: prepared.localPath, workDir, geometry: prepared.geometry, chunks, cutFrames, perShot, redetectEverySec, minPct, maxPct, zone })
+      : undefined
+    const held = !steady && holdLastMask === true
       ? await holdLastMaskFrames(afterFilters, prepared.geometry.width * prepared.geometry.height, cutFrames, holdMaxFrames(prepared.geometry.frameRate))
       : undefined
-    const rle = held?.rle ?? afterFilters
+    const rle = steady?.rle ?? held?.rle ?? afterFilters
     if (held) console.log(`[worker] video-mask ${ctx.jobId}: held the last mask over ${held.heldFrames} empty frame(s)`)
+    if (steady) {
+      const { filledFrames, removedRegions, extraRequests, extraFound } = steady.counts
+      console.log(`[worker] video-mask ${ctx.jobId}: steady regions — filled ${filledFrames} frame(s), removed ${removedRegions} pop region(s), ${extraRequests} extra request(s) found ${extraFound} subject(s)`)
+    }
+    const covers = (frames: readonly string[]) => frames.some((f) => maskRleCoveredPixels(f) > 0)
+    // The model matched something and the steady pass left nothing: every region was a pop. `afterFilters` is the
+    // model's own mask when no filter ran; a filter ran in place on it, and says for itself what the model matched.
+    const emptiedBySteady = steady !== undefined && (filtered?.matched ?? covers(afterFilters)) && !covers(rle)
 
     const maskPath = join(workDir, "mask.mp4")
-    const { coveredFraction } = noneLeft
+    const { coveredFraction } = noneLeft || emptiedBySteady
       ? await renderMaskVideo(rle, prepared.geometry, maskPath, { allowEmpty: true })
       : await renderMaskVideo(rle, prepared.geometry, maskPath)
     await setJobProgress(job, ctx.jobId, 90)
@@ -313,16 +482,17 @@ const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
         shots,
         coverage: Number(coveredFraction.toFixed(4)),
         // Any region kept on any frame after the filters (exact: `coverage` is rounded to 4 decimals, so a
-        // mask of a few pixels reads 0 there). false only when the filters left an empty mask.
+        // mask of a few pixels reads 0 there). false only when the filters or the steady pass left an empty mask.
         kept: coveredFraction > 0,
         ...(held ? { heldFrames: held.heldFrames } : {}),
+        ...(steady ? { steady: steady.counts } : {}),
         // Size and zone together (a region dropped by both counts once).
         ...(filtered ? { droppedRegions: filtered.droppedRegions } : {}),
         // What made this mask: a mask stored and reused later is out of date once it changes.
         recipe: VIDEO_MASK_RECIPE,
       },
       provider: model,
-      provider_cost: cost,
+      provider_cost: steady?.cost != null ? (cost ?? 0) + steady.cost : cost,
     })
     if (!ok) return
     await commitJobCredits(ctx.usageLogId, ctx.jobId)
