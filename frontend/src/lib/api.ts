@@ -493,7 +493,13 @@ export function setUserPromptTemplate(template: string | undefined) {
   _userPromptTemplate = template
 }
 
-/** Spread workflowId / forcePrivate / userPrompt into a body object. */
+/**
+ * Spread workflowId / forcePrivate / userPrompt / nodeId into a body object.
+ * Call it before the request's first `await`: the one-shot values are the
+ * starting node's only until another node's run sets its own, which can happen
+ * during any await (two nodes start together). Kept private so
+ * `__tests__/api-run-context-order.test.ts` sees every call.
+ */
 function withWorkflowId<T extends Record<string, unknown>>(body: T): T {
   let result = body
   if (_currentWorkflowId) {
@@ -523,6 +529,7 @@ function withWorkflowId<T extends Record<string, unknown>>(body: T): T {
  * - `body` is JSON-stringified; omit it for body-less calls (no `Content-Type`).
  * - `workflowId: true` wraps the body in `withWorkflowId(...)` (workflowId /
  *   forcePrivate / userPrompt injection) — opt-in so non-job calls don't get it.
+ *   The body is built as the call starts, before it waits for anything.
  * - `idempotencyKey` adds the `Idempotency-Key` header when present.
  *
  * Behavior is identical to the inline form (pinned by
@@ -545,18 +552,16 @@ export async function apiJson<T>(
   },
 ): Promise<T> {
   const { method = "POST", body, label, labelVars, workflowId, idempotencyKey, signal } = opts
-  const hasBody = body !== undefined
+  const payload = body !== undefined ? JSON.stringify(workflowId ? withWorkflowId(body) : body) : undefined
   const authHeaders = await getAuthHeaders()
-  let headers: Record<string, string> = hasBody
+  let headers: Record<string, string> = payload !== undefined
     ? { "Content-Type": "application/json", ...authHeaders }
     : authHeaders
   if (idempotencyKey) headers = withIdempotencyHeader(headers, idempotencyKey)
   const res = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers,
-    ...(hasBody
-      ? { body: JSON.stringify(workflowId ? withWorkflowId(body) : body) }
-      : {}),
+    ...(payload !== undefined ? { body: payload } : {}),
     ...(signal ? { signal } : {}),
   })
   if (!res.ok) {
@@ -645,13 +650,14 @@ async function ugcApi<T>(
   opts: { method?: "GET" | "POST"; body?: Record<string, unknown>; workflowId?: boolean; label: MessageKey; idempotencyKey?: string; signal?: AbortSignal },
 ): Promise<T> {
   const { method = "POST", body, workflowId, label, idempotencyKey, signal } = opts
+  const payload = body !== undefined ? JSON.stringify(workflowId ? withWorkflowId(body) : body) : undefined
   const authHeaders = await getAuthHeaders()
-  let headers: Record<string, string> = body !== undefined ? { "Content-Type": "application/json", ...authHeaders } : authHeaders
+  let headers: Record<string, string> = payload !== undefined ? { "Content-Type": "application/json", ...authHeaders } : authHeaders
   if (idempotencyKey) headers = withIdempotencyHeader(headers, idempotencyKey)
   const res = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers,
-    ...(body !== undefined ? { body: JSON.stringify(workflowId ? withWorkflowId(body) : body) } : {}),
+    ...(payload !== undefined ? { body: payload } : {}),
     ...(signal ? { signal } : {}),
   })
   // A result the editor lands after this call is stamped on the server's clock (lib/server-clock.ts).
@@ -3742,11 +3748,12 @@ export async function continueUseCase(params: {
 }, idempotencyKey?: string): Promise<UseCaseContinueAnswer> {
   const label: MessageKey = "apiErr.continueUseCase"
   const { nodeType, ...ask } = params
+  // An explicit nodeId wins over (and outlives) the one-shot pending one.
+  const payload = JSON.stringify({ ...withWorkflowId({ ...ask }), ...(ask.nodeId ? { nodeId: ask.nodeId } : {}) })
   const res = await fetch(`${API_BASE_URL}${usecaseContinuePath(nodeType)}`, {
     method: "POST",
     headers: withIdempotencyHeader({ "Content-Type": "application/json", ...(await getAuthHeaders()) }, idempotencyKey),
-    // An explicit nodeId wins over (and outlives) the one-shot pending one.
-    body: JSON.stringify({ ...withWorkflowId({ ...ask }), ...(ask.nodeId ? { nodeId: ask.nodeId } : {}) }),
+    body: payload,
   })
   const body = (await res.json().catch(() => null)) as Record<string, unknown> | null
   if (res.ok) {
@@ -7087,13 +7094,14 @@ async function llmStreamGeneric(
   // SSE streaming must bypass the Vite rewrite proxy (which buffers the
   // response body) and call the backend directly so tokens arrive in real-time.
   const sseBaseUrl = runtimeApiUrl()
+  const payload = withWorkflowId(body)
 
   try {
     const { streamRequest } = await import("@/lib/sse-client")
     const authHeaders = await getAuthHeaders()
 
     for await (const event of streamRequest(endpoint, {
-      body: withWorkflowId(body),
+      body: payload,
       signal,
       baseUrl: sseBaseUrl || undefined,
       headers: authHeaders,
