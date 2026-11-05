@@ -5353,6 +5353,20 @@ confirmation is refused. A plugin's download outside any job has no account
 behind it: the site's policy and the setting decide, and with the setting on it
 is refused.
 
+**A link to where a video is, as a node's sound.** Transcribe and Suno Cover
+take a link to where a video is through a Video URL node: that node asks for
+the declaration and fetches the sound under it, and a run, in the editor or on
+the server, reads that track and never fetches the link again. In the editor a
+run stops, before anything starts, when one of these nodes would be given such
+a link directly: in its own link field, or from a Text node mapped into Suno
+Cover's link. The message names the node and says to connect a Video URL node
+in place of the link. A value made during a run (an AI step's answer, say), a
+link written into Suno Upload Extend (which takes an audio file, and into
+which the canvas wires no Video URL node), and a request through the API or an
+agent are the server's to answer: a confirmation, or the account's standing
+authorization for a key or an agent, and with the setting on it is otherwise
+refused.
+
 **The Music node's reference link and the Reference Audio node.** Both fetch
 a link's sound in the editor: the Music node when you press Get, the
 Reference Audio node on its own as soon as its box is ticked (on its card or
@@ -5366,13 +5380,10 @@ copy of it, a reload) waits for its box again. A run, and a published app, read
 the stored file and never fetch these links. An uploaded file or a direct file
 link needs no box.
 
-**Not covered yet** — these places in the editor and on an app page fetch a
-link themselves without asking for the declaration yet; with the setting on,
-each is refused (or, for a picture, kept as the link itself instead of being
-copied into storage): a picture added from a link (the Upload Image node and
-a published app's picture input), a Transcribe node given a link to a video's
-page directly rather than through a Video URL node, and a Suno node given a
-link directly. A later change adds the box to each.
+**Not covered yet** — a picture added from a link (the Upload Image node and
+a published app's picture input) is still fetched by the editor or the app
+page without asking for the declaration; with the setting on, it is kept as
+the link itself instead of being copied into storage.
 
 **Import source policies.** Before the confirmation is checked, the link's
 site is held to what an administrator decided about it (Admin → Settings →

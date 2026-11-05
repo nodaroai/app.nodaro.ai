@@ -887,6 +887,37 @@ describe("suno-cover", () => {
     expect(mockToastError).toHaveBeenCalled()
   })
 
+  it("a link to where a video is, given directly (its own field or a mapped one), stops the run before anything starts", async () => {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "rock cover" })
+    await expect(executeNode(makeNode("suno-cover", { uploadUrl: "https://www.youtube.com/watch?v=abc" }), makeCtx())).rejects.toThrow("Video URL node")
+    mockResolveNodeInputs.mockReturnValue({ prompt: "rock cover", uploadUrl: "https://www.tiktok.com/@a/video/1" })
+    await expect(executeNode(makeNode("suno-cover", {}), makeCtx())).rejects.toThrow("Video URL node")
+    expect(mockPollJobWithNodeUpdate).not.toHaveBeenCalled()
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining("Video URL node"))
+  })
+
+  it("a Video URL node wired in gives its track: sent as the source, never stopped on its link", async () => {
+    // The real resolver hands on the page link through the audio pip when the node holds no video file.
+    mockResolveNodeInputs.mockReturnValue({ prompt: "rock cover", audioUrl: "https://www.youtube.com/watch?v=abc" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    const cover = makeNode("suno-cover", {})
+    mockNodes = [{ id: "vid1", type: "youtube-video", position: { x: 0, y: 0 }, data: { youtubeUrl: "https://www.youtube.com/watch?v=abc", downloadedAudioUrl: "https://cdn.example.com/track.mp3" } }, cover]
+    mockEdges = [{ id: "e1", source: "vid1", target: "n1", targetHandle: "audio" }]
+    await executeNode(cover, makeCtx())
+    expect(mockToastError).not.toHaveBeenCalled()
+    const startJob = mockPollJobWithNodeUpdate.mock.calls[0]![1] as () => Promise<unknown>
+    mockSunoCoverApi.mockResolvedValue({ jobId: "cover-track" })
+    await startJob()
+    expect(mockSunoCoverApi).toHaveBeenCalledWith(expect.objectContaining({ uploadUrl: "https://cdn.example.com/track.mp3" }))
+  })
+
+  it("Upload Extend is the server's to answer: it takes an audio file, and its run is not stopped here", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "https://www.youtube.com/watch?v=abc" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("suno-upload-extend", {}), makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalled()
+  })
+
   it("calls sunoCoverApi via pollJobWithNodeUpdate with correct params", async () => {
     mockResolveNodeInputs.mockReturnValue({
       prompt: "rock cover",
@@ -1253,24 +1284,37 @@ describe("transcribe", () => {
     vi.useRealTimers()
   })
 
-  it("extracts the sound of a link to a video's page first, and transcribes the extracted file", async () => {
+  it("a link to where a video is, given directly, stops the run before anything starts: no fetch with no box, no transcription", async () => {
     mockResolveNodeInputs.mockReturnValue({ audioUrl: "https://www.youtube.com/watch?v=abc" })
-    vi.mocked(downloadYouTubeAudio).mockResolvedValue({ url: "https://cdn.example.com/extracted.mp3" } as never)
-    mockTranscribeApi.mockResolvedValue({ jobId: "tr-page" })
+    const transcribeNode = makeNode("transcribe", { provider: "whisper" })
+    mockNodes = [transcribeNode]
+    await expect(executeNode(transcribeNode, makeCtx())).rejects.toThrow("Video URL node")
+    expect(vi.mocked(downloadYouTubeAudio)).not.toHaveBeenCalled()
+    expect(mockTranscribeApi).not.toHaveBeenCalled()
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining("Video URL node"))
+    expect(mockUpdateNodeData).not.toHaveBeenCalledWith("n1", expect.objectContaining({ executionStatus: "running" }))
+  })
+
+  it("a Video URL node's sound is the track it fetched under its own box: transcribed as it is, never fetched again", async () => {
+    // The real resolver hands on the page link through the audio pip when the node fetched only its track.
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "https://www.youtube.com/watch?v=abc" })
+    mockTranscribeApi.mockResolvedValue({ jobId: "tr-track" })
     mockGetJobStatus.mockResolvedValue({ status: "completed", output_data: { text: "Hi", language: "en" } })
     vi.useFakeTimers()
     const transcribeNode = makeNode("transcribe", { provider: "whisper" })
-    mockNodes = [transcribeNode]
+    const link = { id: "vid1", type: "youtube-video", position: { x: 0, y: 0 }, data: { youtubeUrl: "https://www.youtube.com/watch?v=abc", downloadedAudioUrl: "https://cdn.example.com/track.mp3" } }
+    mockNodes = [link, transcribeNode]
+    mockEdges = [{ id: "e1", source: "vid1", target: "n1", targetHandle: "audio" }]
     const promise = executeNode(transcribeNode, makeCtx())
     await vi.advanceTimersByTimeAsync(0)
-    expect(vi.mocked(downloadYouTubeAudio)).toHaveBeenCalledWith("https://www.youtube.com/watch?v=abc")
-    expect(mockTranscribeApi).toHaveBeenCalledWith("https://cdn.example.com/extracted.mp3", "whisper", undefined, "u1", undefined, undefined, undefined)
+    expect(vi.mocked(downloadYouTubeAudio)).not.toHaveBeenCalled()
+    expect(mockTranscribeApi).toHaveBeenCalledWith("https://cdn.example.com/track.mp3", "whisper", undefined, "u1", undefined, undefined, undefined)
     await vi.advanceTimersByTimeAsync(2000)
     await promise
     vi.useRealTimers()
   })
 
-  it("extracts a link's sound first only for a video's page: a host that merely contains a platform's name is a file", async () => {
+  it("a host that merely contains a platform's name is a file: transcribed as it is", async () => {
     mockResolveNodeInputs.mockReturnValue({ audioUrl: "https://dropbox.com/s/abc/talk.mp3" })
     mockTranscribeApi.mockResolvedValue({ jobId: "tr-file" })
     mockGetJobStatus.mockResolvedValue({ status: "completed", output_data: { text: "Hi", language: "en" } })

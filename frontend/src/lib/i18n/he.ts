@@ -6120,6 +6120,7 @@ export const he: ChromeDict = {
   "run.videoLinkFailed": "\"{label}\": לא הצלחנו להוריד את הסרטון מהקישור.",
   "run.videoLinkChanged": "\\\"{label}\\\": הקישור השתנה במהלך ההורדה — הריצו שוב.",
   "run.videoLinkConfirm": "“{label}”: אשרו את הצהרת זכויות התוכן ברכיב, ואז הריצו שוב.",
+  "run.soundPageLink": "“{label}”: קישור למקום שבו נמצא סרטון נכנס דרך רכיב כתובת וידאו, שמבקש את הצהרת זכויות התוכן ומוריד את הקול. חברו רכיב כזה במקום הקישור, ואז הריצו שוב.",
   "run.runningFromHere": "מריץ מכאן…",
   "run.runningSelected": "מריץ את הרכיבים שנבחרו…",
   "run.runningUpToHere": "מריץ עד כאן…",

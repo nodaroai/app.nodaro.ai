@@ -10,7 +10,7 @@ Suno Cover takes a source audio track and generates a new cover version of it. Y
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Prompt | string | `""` | Description of how the cover should differ from the original. Max length is per-version: **5000** for the V6 family (V6 / V6_WILD / V6_MINI) and V4.5 / V4.5PLUS / V4.5ALL / V5 / V5.5, **3000** for V4; **3000** in non-custom mode on every version. Over-long input is truncated to the model's limit — the editor warns first. |
-| Source Audio URL | URL | `""` | URL of the source audio to cover. Can be connected from an upstream node. |
+| Source Audio URL | URL | `""` | URL of the source audio to cover. Can be connected from an upstream node. A link to where a video is goes in through a Video URL node, which asks for the content rights declaration and fetches its sound: given here directly, a run in the editor stops and says so. |
 | Model | enum | `"V6"` | Suno model version: `V6` (greater musical expression, more natural vocals, richer details), `V6_WILD` (bolder, more distinctive, less predictable), `V6_MINI` (lightweight and fast), `V5_5`, `V5`, `V4_5PLUS`, `V4_5ALL`, `V4_5`, `V4`. |
 | Title | string (max 80) | `""` | Title for the cover version. |
 | Lyrics | string | `""` | Custom lyrics for the cover. Supports Suno metatags. Same per-version max as Prompt. |

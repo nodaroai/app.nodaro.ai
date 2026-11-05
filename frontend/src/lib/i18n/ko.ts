@@ -5976,6 +5976,7 @@ export const ko: ChromeDict = {
   "run.videoLinkFailed": "“{label}”: 링크된 동영상을 다운로드하지 못했습니다.",
   "run.videoLinkChanged": "“{label}”: 다운로드하는 동안 링크가 변경되었습니다. 다시 실행하세요.",
   "run.videoLinkConfirm": "“{label}”: 노드에서 콘텐츠 권리 선언문을 확인한 다음 다시 실행하세요.",
+  "run.soundPageLink": "“{label}”: 동영상이 있는 곳의 링크는 동영상 URL 노드를 통해 들어갑니다. 이 노드가 콘텐츠 권리 선언문을 요청하고 소리를 가져옵니다. 링크 대신 이 노드를 연결한 다음 다시 실행하세요.",
   "run.runningFromHere": "여기서부터 실행 중…",
   "run.runningSelected": "선택한 노드 실행 중…",
   "run.runningUpToHere": "여기까지 실행 중…",

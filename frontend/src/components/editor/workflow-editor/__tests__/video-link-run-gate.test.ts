@@ -171,6 +171,27 @@ describe("ensureVideoLinksBeforeRun", () => {
     })
   })
 
+  describe("a link to where a video is given directly as a node's sound (`sound-page-links.ts`)", () => {
+    it("stops the run before anything is fetched, names the node and points at the Video URL node", async () => {
+      store.nodes = [link("src"), node("cover", "suno-cover", { label: "My cover", uploadUrl: YT }), node("run")]
+      store.edges = [edge("src", "run")]
+      const setIsRunning = vi.fn()
+      expect(await ensureVideoLinksBeforeRun(["cover", "run"], setIsRunning)).toBe(false)
+      expect(toastApi.error).toHaveBeenCalledWith(translate("en", "run.soundPageLink", { label: "My cover" }), expect.anything())
+      expect(ensureVideoLinksDownloaded).not.toHaveBeenCalled()
+      expect(setIsRunning).not.toHaveBeenCalled()
+    })
+
+    it("a file, a node not about to run, or a link that comes in through a Video URL node stops nothing", async () => {
+      store.nodes = [node("cover", "suno-cover", { uploadUrl: FILE }), node("idle", "suno-cover", { uploadUrl: YT }), node("run")]
+      expect(await ensureVideoLinksBeforeRun(["cover", "run"], vi.fn())).toBe(true)
+      store.nodes = [link("src", { youtubeUrl: YT, downloadedAudioUrl: FILE }), node("words", "transcribe")]
+      store.edges = [{ ...edge("src", "words"), targetHandle: "audio" }]
+      expect(await ensureVideoLinksBeforeRun(["words"], vi.fn())).toBe(true)
+      expect(toastApi.error).not.toHaveBeenCalled()
+    })
+  })
+
   it("costs nothing when no link needs fetching — no toast, no running flag, no call", async () => {
     store.nodes = [node("run")]
     const setIsRunning = vi.fn()

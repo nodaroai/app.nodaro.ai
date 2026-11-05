@@ -6042,6 +6042,7 @@ export const ja: ChromeDict = {
   "run.videoLinkFailed": "「{label}」：リンク先の動画をダウンロードできませんでした。",
   "run.videoLinkChanged": "「{label}」：ダウンロード中にリンクが変更されました。もう一度実行してください。",
   "run.videoLinkConfirm": "「{label}」：ノードでコンテンツ権利の宣言を確認してから、もう一度実行してください。",
+  "run.soundPageLink": "「{label}」：動画がある場所へのリンクは、動画 URL ノードを通して入れます。このノードがコンテンツ権利の宣言を求め、音声を取得します。リンクの代わりにこのノードをつないでから、もう一度実行してください。",
   "run.runningFromHere": "ここから実行中…",
   "run.runningSelected": "選択したノードを実行中…",
   "run.runningUpToHere": "ここまで実行中…",
