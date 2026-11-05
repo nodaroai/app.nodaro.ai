@@ -9,6 +9,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { buildPayload } from "../payload-builder.js"
 import { executeWebhookOutput } from "../inline-executor.js"
+import { isAllowedSocialVideoUrl } from "../../../lib/url-validator.js"
+import { isSocialVideoUrl } from "@nodaro/shared/video"
 import type { SimpleNode, SimpleEdge, NodeExecutionState, OrchestratorContext } from "../types.js"
 
 // executeWebhookOutput now routes through safeFetch (SSRF gate), not global fetch.
@@ -132,19 +134,15 @@ describe("webhook-output — emits audit fields on node output", () => {
 })
 
 // ---------------------------------------------------------------------------
-// Fix 4: transcribe — social URL regex detection
+// Fix 4: transcribe — social URL detection
 // ---------------------------------------------------------------------------
-// The worker-level change lives in backend/src/workers/handlers/audio-ai.ts
-// (outside the service boundary tested here); this test guards the regex
-// so future edits to `SOCIAL_VIDEO_URL_RE` keep platform coverage intact.
+// The transcribe worker (workers/handlers/audio-ai.ts) extracts a link's audio
+// when `isSocialUrl` says it is a video's page, and the route checks the
+// import against the same test: the platform hosts' own
+// (`isAllowedSocialVideoUrl`), matched on the host, so a host that merely
+// contains a platform's name is a plain file.
 
 describe("transcribe — social video URL detection", () => {
-  // Re-declare the regex here to avoid importing from a worker module (which
-  // pulls in BullMQ). This duplicates the pattern intentionally — when the
-  // worker regex is updated, this test must be updated too, and the diff
-  // makes the drift visible.
-  const SOCIAL_VIDEO_URL_RE = /(?:youtube\.com|youtu\.be|tiktok\.com|instagram\.com|twitter\.com|x\.com)/i
-
   it.each([
     "https://www.youtube.com/watch?v=abc",
     "https://youtu.be/abc",
@@ -152,16 +150,41 @@ describe("transcribe — social video URL detection", () => {
     "https://www.instagram.com/reel/abc",
     "https://twitter.com/user/status/123",
     "https://x.com/user/status/123",
+    "https://www.facebook.com/watch/?v=123",
   ])("detects %s as a social video URL", (url) => {
-    expect(SOCIAL_VIDEO_URL_RE.test(url)).toBe(true)
+    expect(isAllowedSocialVideoUrl(url)).toBe(true)
   })
 
   it.each([
     "https://r2.cloudflarestorage.com/bucket/audio.mp3",
     "https://example.com/podcast.wav",
     "https://my.cdn.io/a.m4a",
+    // A platform's name inside another host, or in the path, is not that platform.
+    "https://dropbox.com/s/abc/talk.mp3",
+    "https://box.com/shared/talk.wav",
+    "https://cdn.example.com/youtube.com/a.mp3",
   ])("does not match direct audio URL %s", (url) => {
-    expect(SOCIAL_VIDEO_URL_RE.test(url)).toBe(false)
+    expect(isAllowedSocialVideoUrl(url)).toBe(false)
+  })
+
+  // The editor decides on its own whether to extract a link's sound before
+  // calling the route (`isSocialVideoUrl`, shared); the route and the worker
+  // ask `isAllowedSocialVideoUrl`. They must agree on every link.
+  it.each([
+    "https://www.youtube.com/watch?v=abc",
+    "https://youtu.be/abc",
+    "https://m.youtube.com/watch?v=abc",
+    "https://www.tiktok.com/@user/video/123",
+    "https://www.facebook.com/watch/?v=123",
+    "https://x.com/user/status/123",
+    "https://dropbox.com/s/abc/talk.mp3",
+    "https://notyoutube.com/watch?v=abc",
+    "https://youtube.com.evil.example/watch?v=abc",
+    "https://www.youtube.com/watch?v=abc\n",
+    "https://www.youtube.com\\@10.0.0.1/watch?v=abc",
+    "ftp://www.youtube.com/watch?v=abc",
+  ])("the editor's test and the server's agree on %s", (url) => {
+    expect(isSocialVideoUrl(url)).toBe(isAllowedSocialVideoUrl(url))
   })
 })
 

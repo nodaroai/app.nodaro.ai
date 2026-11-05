@@ -112,6 +112,7 @@ import {
   uiResolutionFill,
   characterReferencesFromWired,
   videoCharacterRefCap,
+  isSocialVideoUrl,
 } from "@nodaro/shared/video";
 import {
   generateMusicApi,
@@ -5235,10 +5236,9 @@ function executeNodeCore(
       generatedText: undefined,
     });
 
-    const isVideoUrl =
-      /(?:youtube\.com|youtu\.be|tiktok\.com|instagram\.com|twitter\.com|x\.com)/.test(
-        audioUrl,
-      );
+    // The platform hosts' own test, the server's too (the transcribe worker
+    // extracts on it): a host that merely contains a platform's name is a file.
+    const isVideoUrl = isSocialVideoUrl(audioUrl as string);
 
     const getTranscribeAudioUrl = async (): Promise<string> => {
       if (!isVideoUrl) return audioUrl as string;

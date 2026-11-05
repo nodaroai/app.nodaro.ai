@@ -60,9 +60,11 @@ vi.mock("@/lib/config.js", () => ({
   hasAdmin: () => true,
 }))
 
-vi.mock("@/lib/url-validator.js", async () => {
+// The real checks of a link (the transcription route asks whether it is a
+// video's page), with a plain URL schema in place of the SSRF one.
+vi.mock("@/lib/url-validator.js", async (importOriginal) => {
   const { z } = await import("zod")
-  return { safeUrlSchema: z.string().url() }
+  return { ...(await importOriginal<Record<string, unknown>>()), safeUrlSchema: z.string().url() }
 })
 
 vi.mock("@/lib/app-settings.js", () => ({

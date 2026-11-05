@@ -50,8 +50,16 @@ import {
   generateAndUploadThumbnail,
   createAssetFromJob,
   importRightsOf,
+  isSocialUrl,
+  downloadAudioToR2,
   type HandlerFn,
 } from "../shared.js"
+import { YOUTUBE_HOSTS, isAllowedSocialVideoUrl } from "../../lib/url-validator.js"
+import { requireImportAllowed, spendImportConfirmation } from "../../lib/import-gate.js"
+import { dubbingSourceIsImport } from "../../lib/dubbing-source.js"
+import { PROJECT_DUBBING_NEEDS_UPLOAD, dubsAsProject } from "../../lib/dubbing-model.js"
+import { UNUSABLE_LINK_MESSAGE } from "../../lib/unusable-link.js"
+import { hasUrlParserHazard } from "@nodaro/shared/video"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 import { makeOnTaskCreated, markProviderCallStart } from "../../lib/reconcile/persistence.js"
 
@@ -355,21 +363,24 @@ const handleTextToAudio: HandlerFn = async function handleTextToAudio(job, ctx) 
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${provider})`)
 }
 
-// URLs for social platforms that need audio extraction before the STT provider
-// can consume them. Matches the frontend regex in execute-node.ts so both
-// paths (single-node HTTP + orchestrator BullMQ) accept the same inputs.
-const SOCIAL_VIDEO_URL_RE = /(?:youtube\.com|youtu\.be|tiktok\.com|instagram\.com|twitter\.com|x\.com)/i
-
 const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
   const { audioUrl: rawAudioUrl, provider, language, diarize, tagAudioEvents, wordTimestamps } = job.data as { jobId: string; audioUrl: string; provider?: TranscribeProvider; language?: string; diarize?: boolean; tagAudioEvents?: boolean; wordTimestamps?: boolean }
   console.log(`[worker] transcribe ${ctx.jobId} (provider: ${provider ?? "whisper"}, language: ${language ?? "auto"})`)
 
-  // If the caller passed a social-platform video URL, extract audio first.
-  // STT providers can't consume a youtube/tiktok/etc. page URL directly.
+  // A link to a video's page on a social platform: extract its audio first
+  // (an STT provider cannot read a page). The test is the platform hosts' own
+  // (`isSocialUrl`), the one the route checks the import against and the editor
+  // uses, so a host that merely contains a platform's name is a plain file.
+  // The YouTube extractor keeps its own lane; every other platform's page goes
+  // through the worker's audio download (the engine Suno's cover uses). Both
+  // pass the import gate under the job's confirmation and way in.
   let audioUrl = rawAudioUrl
-  if (SOCIAL_VIDEO_URL_RE.test(audioUrl)) {
+  if (isSocialUrl(audioUrl)) {
     console.log(`[worker] transcribe ${ctx.jobId}: extracting audio from social video URL`)
-    audioUrl = await extractYouTubeAudio(audioUrl, importRightsOf(job, ctx))
+    const rights = importRightsOf(job, ctx)
+    audioUrl = isAllowedSocialVideoUrl(audioUrl, YOUTUBE_HOSTS)
+      ? await extractYouTubeAudio(audioUrl, rights)
+      : await downloadAudioToR2(audioUrl, rights, { scratchJobId: ctx.jobId })
     await setJobProgress(job, ctx.jobId, 20)
   }
 
@@ -772,6 +783,24 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
     sourceExt = source.hasVideo ? "mp4" : "mp3"
   }
   console.log(`[worker] dubbing ${ctx.jobId} (target: ${d.targetLanguage}, mode: ${uploadedUrl ? (videoMode ? "video" : "audio") : "source-url"})`)
+
+  // A link handed to the dubbing service is fetched by the service. A link two
+  // URL parsers would read differently is never handed on (the same answer on
+  // every attempt). Any other link but a file of ours is an import of that
+  // link (lib/dubbing-source.ts): it passes the gate here, read again and its
+  // confirmation spent right before the service is asked (the route, or the
+  // run, read it before the job). A dub into Hebrew takes an uploaded file only
+  // (startDubbing refuses a link): refused first, so no confirmation is spent
+  // on a dub that cannot start.
+  if (!uploadedUrl && d.sourceUrl) {
+    if (hasUrlParserHazard(d.sourceUrl)) throw new DeterministicJobError(UNUSABLE_LINK_MESSAGE)
+    if (dubsAsProject(d.targetLanguage)) throw new DeterministicJobError(PROJECT_DUBBING_NEEDS_UPLOAD)
+    if (dubbingSourceIsImport(d.sourceUrl)) {
+      const rights = importRightsOf(job, ctx)
+      await requireImportAllowed(d.sourceUrl, rights)
+      await spendImportConfirmation(d.sourceUrl, rights)
+    }
+  }
 
   const dubbingOnTaskCreated = makeOnTaskCreated(ctx.jobId, "elevenlabs-async")
   const { dubbingId, expectedDurationSec } = await startDubbing(

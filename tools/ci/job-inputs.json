@@ -598,6 +598,7 @@
         "backend/src/lib/private-plugins/social-toolkit.ts",
         "backend/src/lib/private-plugins/stage-journal.ts",
         "backend/src/lib/private-plugins/supports-registry.ts",
+        "backend/src/lib/private-plugins/toolkit-downloads.ts",
         "backend/src/lib/private-plugins/toolkit-lanes.ts",
         "backend/src/lib/private-plugins/toolkit.ts",
         "backend/src/lib/private-plugins/tts-capabilities-toolkit.ts",

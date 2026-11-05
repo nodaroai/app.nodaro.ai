@@ -503,17 +503,28 @@ export interface VoiceRemixInput {
 
 /** Input for {@link VoicesResource.dub}. Provide exactly ONE source:
  *  `audioUrl` (dubbed audio out), `videoUrl` (the dubbed VIDEO out, plus the
- *  dubbed audio track as `output_data.audioUrl`), or `sourceUrl` (a public
- *  YouTube/TikTok/direct link ElevenLabs fetches itself). Priced per minute
- *  of the dubbed span; the span is capped at 30 minutes — use
- *  `startTime`/`endTime` to dub part of a longer source. */
+ *  dubbed audio track as `output_data.audioUrl`), or `sourceUrl` (a link to
+ *  a video's page, or a direct link to a file, that the dubbing service
+ *  fetches itself). Priced per minute of the dubbed span; the span is capped
+ *  at 30 minutes — use `startTime`/`endTime` to dub part of a longer source. */
 export interface DubbingInput {
   /** URL of the audio to dub (audio mode). */
   audioUrl?: string
   /** URL of the video to dub — the result is the dubbed VIDEO (+ audio track). */
   videoUrl?: string
-  /** Public page/media URL (YouTube, TikTok, or a direct link) — ElevenLabs fetches it directly. */
+  /**
+   * A link to a video's page, or a direct link to a file, that the dubbing
+   * service fetches itself: an import of that link, made under the content
+   * rights declaration (see `confirmationId`).
+   */
   sourceUrl?: string
+  /**
+   * The content rights confirmation for `sourceUrl` (`contentRights.confirm()`).
+   * Without one, a deployment that requires a confirmation refuses the dub with
+   * `403`, unless the request comes through a key or an agent whose account
+   * holds a standing authorization.
+   */
+  confirmationId?: string
   /** Target language ISO code (2–10 chars), e.g. `"es"`, `"pt-BR"`. */
   targetLanguage: string
   /** Source language ISO code; auto-detected when omitted. */

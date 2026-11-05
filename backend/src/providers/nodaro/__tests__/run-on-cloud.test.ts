@@ -458,4 +458,10 @@ describe("INSTANCE_ONLY_FIELDS — instance-local identifiers never leave the in
     await runJobOnCloud("suno-generate", { prompt: "a song", laneParent: { kind: "director", id: "00000000-0000-4000-8000-0000000000d1" } })
     expect(createCloudJob).toHaveBeenLastCalledWith("/v1/suno/generate", { prompt: "a song" })
   })
+
+  it("strips a content rights confirmation: it is a row of this database, and the cloud would refuse the import it names", async () => {
+    expect(INSTANCE_ONLY_FIELDS.has("confirmationId")).toBe(true)
+    await runJobOnCloud("suno-generate", { prompt: "a song", confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01" })
+    expect(createCloudJob).toHaveBeenLastCalledWith("/v1/suno/generate", { prompt: "a song" })
+  })
 })

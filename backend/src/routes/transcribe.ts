@@ -1,13 +1,15 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { safeUrlSchema } from "../lib/url-validator.js"
+import { isAllowedSocialVideoUrl, safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
+import { isImportRefusal, requireImportAllowed } from "../lib/import-gate.js"
+import { unusableLinkError } from "../lib/unusable-link.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
-import { importJobFields } from "../lib/import-via.js"
+import { importJobFields, importViaOf } from "../lib/import-via.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import {
@@ -35,6 +37,11 @@ export const transcribeBody = z.object({
   tagAudioEvents: z.boolean().optional(),
   wordTimestamps: z.boolean().optional(),
   userId: z.string().uuid().optional(),
+  // The content rights confirmation (`POST /v1/content-rights/confirm`) a
+  // SOCIAL link's sound is imported under: checked here, spent by the worker
+  // right before the fetch. Optional until `content_rights_required` is on; a
+  // direct file needs none.
+  confirmationId: z.string().uuid().optional(),
 }).superRefine((v, ctx) => {
   // Word timings are a per-provider capability, and the incapable lane fails
   // SILENTLY: `openai/whisper` has no `word_timestamps` input in any published
@@ -77,13 +84,28 @@ export async function transcribeRoutes(app: FastifyInstance) {
       })
     }
 
-    const { audioUrl, provider, language, diarize, tagAudioEvents } = parsed.data
+    const { audioUrl, provider, language, diarize, tagAudioEvents, confirmationId } = parsed.data
+    const unusable = unusableLinkError(audioUrl)
+    if (unusable) return reply.status(400).send({ error: unusable })
     const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
       })
+    }
+
+    // A social link's sound is an import of the link (the worker extracts it
+    // first, on the same test): the site's policy and the rights check (reads)
+    // answer here, before any job row exists or credits are held; the worker
+    // spends the confirmation when it fetches.
+    if (isAllowedSocialVideoUrl(audioUrl)) {
+      try {
+        await requireImportAllowed(audioUrl, { userId, confirmationId, lane: "route", requestId: req.id, via: importViaOf(req) })
+      } catch (e) {
+        if (isImportRefusal(e)) return reply.status(403).send({ error: { code: e.code, message: e.message } })
+        throw e
+      }
     }
 
     // Determine model identifier for credit reservation
@@ -118,7 +140,9 @@ export async function transcribeRoutes(app: FastifyInstance) {
       tagAudioEvents,
       wordTimestamps: parsed.data.wordTimestamps,
       usageLogId,
-      // A link's sound is an import of the link: the way in (and the connected app), for the worker's gate (`importRightsOf`).
+      // A link's sound is an import of the link: the confirmation, the way in
+      // (and the connected app), for the worker's gate (`importRightsOf`).
+      ...(confirmationId ? { confirmationId } : {}),
       ...importJobFields(req),
     })
 

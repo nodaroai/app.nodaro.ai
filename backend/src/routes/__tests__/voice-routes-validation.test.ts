@@ -42,6 +42,13 @@ vi.mock("@/lib/url-validator.js", async (importOriginal) => {
   return { ...(await importOriginal<Record<string, unknown>>()), safeUrlSchema: z.string().url() }
 })
 
+// A dub of a link reads the content rights gate first; the gate's own rules
+// are dubbing-pricing-route.test.ts's. Here every link passes it.
+vi.mock("@/lib/import-gate.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  requireImportAllowed: vi.fn(async () => undefined),
+}))
+
 vi.mock("@/lib/request-helpers.js", () => ({
   extractWorkflowId: vi.fn().mockReturnValue(null),
   extractNodeId: vi.fn().mockReturnValue(null),

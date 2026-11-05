@@ -10,6 +10,7 @@ import { pipeline } from "node:stream/promises"
 import { lookup as dnsLookup } from "node:dns/promises"
 import { isIP } from "node:net"
 import { safeFetch, isPrivateOrReservedIP } from "../../lib/safe-fetch.js"
+import { hasUrlParserHazard } from "@nodaro/shared/video"
 import { csvFields } from "./ffprobe-csv.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { watchTransferBody, type TransferRateLimits, type TransferWatch } from "../../lib/transfer-watchdog.js"
@@ -807,6 +808,12 @@ export async function getVideoStreamDuration(filePath: string): Promise<number> 
  */
 export async function assertSafeProbeSource(src: string): Promise<void> {
   if (!src.includes("://")) return // local filesystem path — no network I/O
+  // The host below is read the WHATWG way, but ffprobe is handed the raw
+  // string and parses it itself: a link the two would read differently (a
+  // backslash, a control character) is refused before either reads it.
+  if (hasUrlParserHazard(src)) {
+    throw new Error("probeVideoSource: blocked — a link two URL parsers read differently")
+  }
   let parsed: URL
   try {
     parsed = new URL(src)

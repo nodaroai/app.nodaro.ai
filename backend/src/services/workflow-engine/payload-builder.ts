@@ -6110,6 +6110,12 @@ export function buildPayload(
         useProfanityFilter: data.useProfanityFilter,
         targetAccent: data.targetAccent,
         watermark: data.watermark,
+        // A link to a page is an import the service makes for this run: the
+        // confirmation this run's own request put on the node (a run-only
+        // field), for the run's read (node-executor) and the worker's spend.
+        ...(dubSourceUrl && typeof data.rightsConfirmationId === "string" && data.rightsConfirmationId.trim()
+          ? { confirmationId: data.rightsConfirmationId.trim() }
+          : {}),
         usageLogId,
       })
     }

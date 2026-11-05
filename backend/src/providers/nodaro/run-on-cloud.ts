@@ -147,6 +147,11 @@ export const INSTANCE_ONLY_FIELDS = new Set([
   // The concurrency lanes' marker naming a coordinator on THIS instance
   // (lib/concurrency-lanes/lane-parent.ts): its id means nothing on the cloud.
   "laneParent",
+  // A content rights confirmation recorded in THIS database
+  // (`POST /v1/content-rights/confirm`): the cloud holds no such row, so sent
+  // along it would refuse the import it names. The cloud's own import stands
+  // on the connected account, as any request made with its key does.
+  "confirmationId",
 ])
 
 

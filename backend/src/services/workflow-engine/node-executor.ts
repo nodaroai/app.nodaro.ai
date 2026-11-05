@@ -1,4 +1,5 @@
 import { projectDubbingCreditOverride, stampDubbingDuration } from "../../lib/dubbing-pricing.js"
+import { dubbingRunImportRequest, dubbingSourceRefusal } from "../../lib/dubbing-source.js"
 import { SYNC_ROUTE_LANE_RULES } from "../../lib/concurrency-lanes/sync-route-lanes.js"
 import type { LeafLane } from "../../lib/concurrency-lanes/leaf-lanes.js"
 import { withSyncNodeSlot } from "./sync-node-slot.js"
@@ -2380,6 +2381,25 @@ async function executeWorkerNode(
     throw err
   }
 
+  // 2b''-. Dubbing given a link that is not a file of ours: the dubbing service
+  // fetches it, an import of someone else's link (lib/dubbing-source.ts). Before the stamp
+  // below probes the link, a link two URL parsers would read differently is
+  // refused and the gate is read with the confirmation this run's request put
+  // on the node and the run's way in; the worker spends it right before the
+  // service is asked. A refusal leaves no jobs row and nothing reserved, and so
+  // does a gate that could not answer.
+  const dubSourceRefusal = await dubbingSourceRefusal(jobName, payload, { userId: ctx.userId, via: ctx.importVia ?? null })
+    .catch(async (err: unknown) => {
+      await supabase.from("jobs").delete().eq("id", jobId)
+      throw err
+    })
+  if (dubSourceRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(dubSourceRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = dubSourceRefusal.code
+    throw err
+  }
+
   // 2b''. Dubbing (every language but Hebrew, which probes in its credit
   // override): measure the source by the route's own rule and stamp the span,
   // or the 30-minute ceiling hold, before input_data is written — the
@@ -2618,13 +2638,19 @@ async function executeWorkerNode(
   // fetches a link reads it through `importRightsOf` (workers/shared.ts), so a
   // key's or an agent's run stands on the account's standing authorization in
   // its worker-queued nodes as it does in its routes; every other handler
-  // ignores the key.
+  // ignores the key. An import such a handler makes is recorded as the run's
+  // (`importLane`), not a route's. A dub of the node's own link spends the
+  // run's one confirmation for the node under the run and node, so every
+  // iteration of a repeated node passes (`importRequestId`, dubbing-source.ts).
+  const importRequestId = dubbingRunImportRequest(jobName, payload, ctx.executionId, node.id)
   const enrichedPayload = {
     ...payload,
     usageLogId,
     ...(refVideoDurationsSec ? { refVideoDurationsSec } : {}),
     ...(ctx.cheapLanesOnly ? { cheapLanesOnly: true } : {}),
     ...(ctx.importVia ? { importVia: ctx.importVia } : {}),
+    importLane: "run" as const,
+    ...(importRequestId ? { importRequestId } : {}),
   }
 
   // 5. Enqueue to BullMQ (lower priority than interactive single-node runs)

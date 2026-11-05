@@ -24,6 +24,7 @@ import {
   type JobContext,
 } from "../shared.js"
 import { applyPromptPolicies } from "../../lib/prompt-policy.js"
+import { requireImportAllowed, spendImportConfirmation } from "../../lib/import-gate.js"
 import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 import { providerKindForSuno } from "../../lib/reconcile/provider-kind.js"
 import { cloudTaskId, maybeSunoCloudOutput, shouldRunSunoOnCloud, type SunoProviderUsed } from "./suno-cloud.js"
@@ -145,20 +146,42 @@ async function finalizeSunoJob(
  * A helper rather than eight copies of the same branch — every operation here
  * shares the same finalizer, so the only thing that varies is the job type and
  * the empty-result label. A local KIE key always wins; keyed installs never
- * reach this.
+ * reach this. `relay` is the decision a handler already made for this job (so
+ * it is asked once); absent, it is asked here.
  */
 async function maybeRunSunoOnCloud(
   job: Job,
   ctx: JobContext,
   jobType: string,
   emptyTracksLabel: string,
+  relay?: boolean,
 ): Promise<boolean> {
-  if (!(await shouldRunSunoOnCloud())) return false
+  if (!(relay ?? (await shouldRunSunoOnCloud()))) return false
   const result = await runSunoOnCloud(jobType, job.data as Record<string, unknown>, (p) =>
     setJobProgress(job, ctx.jobId, Math.min(45, Math.round(p * 0.45))),
   )
   await finalizeSunoJob(job, ctx, result, emptyTracksLabel, "nodaro")
   return true
+}
+
+/**
+ * Whether this job relays to the connected cloud (no key of its own), asked
+ * once. When it does and the source is a social link, the cloud fetches that
+ * link on this account's behalf, so the import is read again and its
+ * confirmation spent here, right before the relay, as the local download
+ * would. The job id is the request, so a spend the local download repeats
+ * later is the same one. The answer is the relay decision the handler passes
+ * on, so a connection that changes between two asks never relays a link this
+ * did not read.
+ */
+async function admitRelayedSource(job: Job, ctx: JobContext, uploadUrl: string): Promise<boolean> {
+  const relay = await shouldRunSunoOnCloud()
+  if (relay && isSocialUrl(uploadUrl)) {
+    const rights = importRightsOf(job, ctx)
+    await requireImportAllowed(uploadUrl, rights)
+    await spendImportConfirmation(uploadUrl, rights)
+  }
+  return relay
 }
 
 const handleSunoGenerate: HandlerFn = async function handleSunoGenerate(job, ctx) {
@@ -199,7 +222,8 @@ const handleSunoCover: HandlerFn = async function handleSunoCover(job, ctx) {
   // same download, and the local copy's URL is on a private host it could not
   // fetch anyway — downloading here first would cost bandwidth for a file we
   // then never send.
-  if (await maybeRunSunoOnCloud(job, ctx, "suno-cover", "Suno cover returned no tracks")) return
+  const relay = await admitRelayedSource(job, ctx, uploadUrl)
+  if (await maybeRunSunoOnCloud(job, ctx, "suno-cover", "Suno cover returned no tracks", relay)) return
 
   // If upload_url is a social media URL, download audio to R2 first
   let resolvedUploadUrl = uploadUrl
@@ -436,7 +460,8 @@ const handleSunoUploadExtend: HandlerFn = async function handleSunoUploadExtend(
   // same download, and the local copy's URL is on a private host it could not
   // fetch anyway — downloading here first would cost bandwidth for a file we
   // then never send.
-  if (await maybeRunSunoOnCloud(job, ctx, "suno-upload-extend", "Suno upload-extend returned no tracks")) return
+  const relay = await admitRelayedSource(job, ctx, uploadUrl)
+  if (await maybeRunSunoOnCloud(job, ctx, "suno-upload-extend", "Suno upload-extend returned no tracks", relay)) return
 
   // If upload_url is a social media URL, download audio to R2 first
   let resolvedUploadUrl = uploadUrl

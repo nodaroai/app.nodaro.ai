@@ -19,6 +19,7 @@ const GOES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
     segments: "caption words and times a run may write: content",
   },
   "apply-edl": { transcript: "the episode's words: content" },
+  dubbing: { rightsConfirmationId: "the content rights confirmation a run's own request puts on the node for its link: one run's, never saved (RUN_ONLY_NODE_FIELDS)" },
   "speaker-frames": { edl: "an edit list read inline only when no wire brings one: content", transcript: "the episode's words: content" },
   "image-collage": { imageLabels: "label text that may come from a run: content" },
   "text-to-dialogue": { script: "the words spoken, read only as an older spelling of the dialogue: content" },

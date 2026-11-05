@@ -175,6 +175,14 @@ export class AudioResource {
    * `media.addCaptions()` as `captions` with `autoTranscribe: false` and the
    * render uses those exact words (correct the `text` of an entry in between
    * and the fix is what burns in).
+   *
+   * An `audioUrl` that is a link to a video's page on a social platform is an
+   * import of that link: its sound is fetched first, under the content rights
+   * declaration. Pass the `confirmationId` that `contentRights.confirm()`
+   * answered for that link; without one the deployment refuses it (`403`) once
+   * it requires a confirmation, unless the request comes through a key or an
+   * agent whose account holds a standing authorization
+   * (`contentRights.authorize()`).
    */
   transcribe(input: {
     audioUrl: string
@@ -183,6 +191,8 @@ export class AudioResource {
     diarize?: boolean
     tagAudioEvents?: boolean
     wordTimestamps?: boolean
+    /** The content rights confirmation for `audioUrl` when it is a social link (`contentRights.confirm`). */
+    confirmationId?: string
   }): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/transcribe", { body: input })
   }

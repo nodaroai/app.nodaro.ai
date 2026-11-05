@@ -65,4 +65,14 @@ describe("extractYouTubeAudioWithMeta", () => {
     await expect(extractYouTubeAudio("https://example.com/v", rights)).rejects.toThrow("host not allowed")
     expect(mocks.requireImportAllowed).not.toHaveBeenCalled()
   })
+
+  it("a link the URL parser and yt-dlp would read differently is refused before the gate or any fetch", async () => {
+    // The browser-style parser drops a line break and reads a backslash as a
+    // slash, so the host test alone would pass these; yt-dlp parses the raw string.
+    for (const url of [`${URL_}\n`, "http://www.youtube.com\\@169.254.169.254/watch?v=abc"]) {
+      await expect(extractYouTubeAudio(url, rights)).rejects.toThrow("invalid url")
+    }
+    expect(mocks.requireImportAllowed).not.toHaveBeenCalled()
+    expect(mocks.spawnYtDlpDownload).not.toHaveBeenCalled()
+  })
 })

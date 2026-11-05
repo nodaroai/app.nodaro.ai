@@ -45,8 +45,9 @@ import {
   needsContainerRemux,
   remuxToMp4,
 } from "../../providers/video/ffmpeg-utils.js"
-import { downloadYouTubeVideo, ytMetadataProbe, YtUrlNotAllowedError } from "../../providers/video/youtube-video.js"
-import { downloadSocialPostVideo, probeSocialPostVideo, socialPostOf } from "../../providers/video/social-post-video.js"
+import { ytMetadataProbe, YtUrlNotAllowedError } from "../../providers/video/youtube-video.js"
+import { probeSocialPostVideo, socialPostOf } from "../../providers/video/social-post-video.js"
+import { pluginDownloadSocialPostVideo, pluginDownloadYouTubeVideo } from "./toolkit-downloads.js"
 import { trimVideo as trimVideoCore } from "../../providers/video/trim-video.js"
 import { removeAudio } from "../../providers/video/remove-audio.js"
 import { PITCH_SHIFT_MAX_SEMITONES, pitchTempo } from "../../providers/video/pitch-tempo.js"
@@ -120,8 +121,7 @@ import { firePluginTrigger, listActivePluginTriggers } from "../plugin-triggers.
 import { readJobExecution } from "./job-execution.js"
 import { sendTelegramBotTextFor } from "./social-toolkit.js"
 import { jobSourceColumns } from "../job-source.js"
-import { getJobId, getJobUserId, throwIfJobCancelled } from "../job-cancellation.js"
-import { assertImportsAllowed } from "../account-measures.js"
+import { getJobId, throwIfJobCancelled } from "../job-cancellation.js"
 import { jobFileObjectId } from "../job-output-keys.js"
 import { hasCredits, hasOrganizations, llmMeteredPricing } from "../config.js"
 import { LlmSpend, reserveLlmCall, settleLlmJob, type LlmReserveResult } from "../llm-billing.js"
@@ -1512,13 +1512,15 @@ const HOST_OWNED_HEADER = new RegExp(
  * one set here. What remains (an `idempotency-key`, say) passes through.
  */
 // A worker job's import rights are its route's (`importRightsOf`,
-// workers/shared.ts): the way the caller came in, and the connected app and
-// grant it came through. A plugin enqueues jobs with free-form data, so these
-// keys are dropped from it as the host-owned headers are from its requests: a
-// plugin cannot name a way in it does not have. (`confirmationId` stays: a
-// confirmation is checked against the job's owner, so it names nothing a
-// plugin could forge.)
-const IMPORT_WAY_IN_JOB_KEYS: ReadonlySet<string> = new Set(["importVia", "importAppId", "importAuthorizationId"])
+// workers/shared.ts): the way the caller came in, the connected app and grant
+// it came through, the lane a run's own job is recorded in, and the request a
+// run's dub spends its confirmation under (one request across its jobs would
+// let one confirmation open several imports). A plugin enqueues jobs with
+// free-form data, so these keys are dropped from it as the host-owned headers
+// are from its requests: a plugin cannot name a way in it does not have.
+// (`confirmationId` stays: a confirmation is checked against the job's owner,
+// so it names nothing a plugin could forge.)
+const IMPORT_WAY_IN_JOB_KEYS: ReadonlySet<string> = new Set(["importVia", "importAppId", "importAuthorizationId", "importLane", "importRequestId"])
 
 /** A plugin's job data as the queue receives it: without the import way-in keys only a route sets. */
 export function pluginJobData(data: Record<string, unknown>): Record<string, unknown> {
@@ -1692,17 +1694,6 @@ export interface BuildToolkitOptions {
   workerApp?: () => Promise<FastifyInstance>
 }
 
-/**
- * A plugin's download of a link refuses an account whose imports are blocked,
- * or that is closed (account-measures.ts), as the import gate does: the
- * account is the running job's; outside a job there is none to ask. (The
- * content rights confirmation is not asked in this lane yet.)
- */
-async function refuseBlockedImports(): Promise<void> {
-  const userId = getJobUserId()
-  if (userId) await assertImportsAllowed(userId)
-}
-
 export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
   const sceneArtifacts = createScene3DArtifactToolkit()
   // Queue and asset authorization modules join the graph only when this lane runs.
@@ -1802,21 +1793,16 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       },
       getVideoTaskStatus,
       // The contract narrows `downloadYouTubeVideo`'s opts to {url,outPath,
-      // maxFilesizeBytes?}. Its `hardening` (raw yt-dlp arguments among them)
-      // stays internal: a plugin reaches the hardened lane only through
-      // `downloadSocialPostVideo`, whatever it passes here.
-      downloadYouTubeVideo: async ({ hardening: _internal, ...opts }: Parameters<typeof downloadYouTubeVideo>[0]) => {
-        await refuseBlockedImports()
-        return downloadYouTubeVideo(opts)
-      },
+      // maxFilesizeBytes?, confirmationId?}. Its `hardening` (raw yt-dlp
+      // arguments among them) stays internal: a plugin reaches the hardened
+      // lane only through `downloadSocialPostVideo`, whatever it passes here.
+      // Both downloads pass the import gate first (toolkit-downloads.ts).
+      downloadYouTubeVideo: pluginDownloadYouTubeVideo,
       ytMetadataProbe,
       YtUrlNotAllowedError,
       socialPostVideoUrl: (url: string) => socialPostOf(url)?.url ?? null,
       probeSocialPostVideo,
-      downloadSocialPostVideo: async (...args: Parameters<typeof downloadSocialPostVideo>) => {
-        await refuseBlockedImports()
-        return downloadSocialPostVideo(...args)
-      },
+      downloadSocialPostVideo: pluginDownloadSocialPostVideo,
     }, PROVIDER_MEMBER_LANES),
     ffmpeg: withMemberSlots<PluginFfmpegToolkit>("ffmpeg", {
       runFfmpeg,

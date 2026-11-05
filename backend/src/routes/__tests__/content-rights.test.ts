@@ -84,10 +84,22 @@ describe("GET /v1/content-rights/declaration", () => {
 describe("POST /v1/content-rights/confirm", () => {
   it("needs a signed-in account and a usable link", async () => {
     expect((await app.inject({ method: "POST", url: "/v1/content-rights/confirm", payload: { url: "https://youtu.be/abc", declarationVersion: 1 } })).statusCode).toBe(401)
-    const bad = await app.inject({ method: "POST", url: "/v1/content-rights/confirm", headers: { "x-user-id": "u1" }, payload: { url: "https://example.com/page", declarationVersion: 1 } })
-    expect(bad.statusCode).toBe(400)
-    expect(JSON.stringify(bad.json().error)).toContain("link to a video's page")
+    const backslash = String.fromCharCode(0x5c)
+    const tab = String.fromCharCode(9)
+    for (const url of ["ftp://example.com/talk.mp4", "http://127.0.0.1/talk.mp4", `https://example.com${backslash}@10.0.0.1/talk.mp4`, `https://example.com/ta${tab}lk.mp4`]) {
+      const bad = await app.inject({ method: "POST", url: "/v1/content-rights/confirm", headers: { "x-user-id": "u1" }, payload: { url, declarationVersion: 1 } })
+      expect(bad.statusCode, url).toBe(400)
+      expect(bad.json().error.code).toBe("validation_error")
+    }
     expect(fake.createConfirmation).not.toHaveBeenCalled()
+  })
+
+  it("any link a lane imports can be confirmed: a page, a sound file, a picture, not only a video's page", async () => {
+    for (const url of ["https://example.com/talks/keynote", "https://files.example.com/talk.mp3", "https://images.example.com/photo.jpg"]) {
+      const res = await app.inject({ method: "POST", url: "/v1/content-rights/confirm", headers: { "x-user-id": "u1" }, payload: { url, declarationVersion: 1 } })
+      expect(res.statusCode, url).toBe(201)
+      expect(fake.createConfirmation).toHaveBeenLastCalledWith(expect.objectContaining({ userId: "u1", url }))
+    }
   })
 
   it("records the confirmation with the caller's address, agent and app grant, and answers its id", async () => {

@@ -54,10 +54,18 @@ vi.mock("@/lib/config.js", () => ({
   hasAdmin: () => true,
 }))
 
-vi.mock("@/lib/url-validator.js", async () => {
+vi.mock("@/lib/url-validator.js", async (importOriginal) => {
   const { z } = await import("zod")
-  return { safeUrlSchema: z.string().url() }
+  // The real platform-host test: the route asks the gate exactly when the worker will import.
+  const { isAllowedSocialVideoUrl } = await importOriginal<typeof import("@/lib/url-validator.js")>()
+  return { safeUrlSchema: z.string().url(), isAllowedSocialVideoUrl }
 })
+
+const gate = vi.hoisted(() => ({ requireImportAllowed: vi.fn() }))
+vi.mock("@/lib/import-gate.js", () => ({
+  isImportRefusal: (e: unknown) => e instanceof Error && "code" in e,
+  requireImportAllowed: gate.requireImportAllowed,
+}))
 
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
@@ -88,6 +96,9 @@ beforeEach(async () => {
       req.userId = body.userId
       req.userRole = undefined
     }
+    // How the request signed in, as the auth hook would set it (the import's way in).
+    const kind = req.headers["x-auth-kind"]
+    if (typeof kind === "string") req.authKind = kind as typeof req.authKind
   })
 
   await app.register(async (instance) => {
@@ -438,5 +449,77 @@ describe("POST /v1/transcribe — wordTimestamps capability gate", () => {
     const body = res.json()
     expect(body.error.code).toBe("validation_error")
     expect(body.error.issues.map((i: { path: string }) => i.path)).toContain("provider")
+  })
+})
+
+describe("POST /v1/transcribe — a link to a video's page is an import of the link", () => {
+  const SOCIAL = "https://www.youtube.com/watch?v=abc"
+  const CONFIRMATION = "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01"
+  const post = (payload: Record<string, unknown>) =>
+    app.inject({ method: "POST", url: "/v1/transcribe", payload: { userId: VALID_UUID, ...payload } })
+
+  it("a refusal by the gate is 403 with its code, before any job or credit hold", async () => {
+    const refusal = Object.assign(new Error("Confirm that you hold the rights to this content before it is imported."), { code: "rights_confirmation_required" })
+    gate.requireImportAllowed.mockRejectedValueOnce(refusal)
+    const { mockFrom } = mockJobInsert()
+    const res = await post({ audioUrl: SOCIAL })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error).toEqual({ code: "rights_confirmation_required", message: refusal.message })
+    expect(gate.requireImportAllowed).toHaveBeenCalledWith(SOCIAL, expect.objectContaining({ userId: VALID_UUID, confirmationId: undefined, lane: "route" }))
+    expect(mockFrom).not.toHaveBeenCalled()
+    expect(vi.mocked(reserveCreditsForJob)).not.toHaveBeenCalled()
+    expect(vi.mocked(videoQueue.add)).not.toHaveBeenCalled()
+  })
+
+  it("the confirmation is checked at the route and rides in the job data for the worker to spend", async () => {
+    mockJobInsert()
+    const res = await post({ audioUrl: SOCIAL, confirmationId: CONFIRMATION })
+    expect(res.statusCode).toBe(200)
+    expect(gate.requireImportAllowed).toHaveBeenCalledWith(SOCIAL, expect.objectContaining({ userId: VALID_UUID, confirmationId: CONFIRMATION, lane: "route" }))
+    expect(vi.mocked(videoQueue.add)).toHaveBeenCalledWith("transcribe", expect.objectContaining({ audioUrl: SOCIAL, confirmationId: CONFIRMATION }))
+  })
+
+  it("a file link never asks the gate, even on a host whose name contains a platform's", async () => {
+    mockJobInsert()
+    for (const audioUrl of ["https://example.com/audio.mp3", "https://dropbox.com/s/a/talk.mp3"]) {
+      const res = await post({ audioUrl })
+      expect(res.statusCode).toBe(200)
+    }
+    expect(gate.requireImportAllowed).not.toHaveBeenCalled()
+    const payloads = vi.mocked(videoQueue.add).mock.calls.map((c) => c[1] as Record<string, unknown>)
+    expect(payloads.every((p) => !("confirmationId" in p))).toBe(true)
+  })
+
+  it("the gate is asked with the way the request came in, so a key's import can stand on a standing authorization", async () => {
+    mockJobInsert()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/transcribe",
+      headers: { "x-auth-kind": "api_token" },
+      payload: { userId: VALID_UUID, audioUrl: SOCIAL },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(gate.requireImportAllowed).toHaveBeenCalledWith(SOCIAL, expect.objectContaining({ userId: VALID_UUID, via: "api" }))
+  })
+
+  it("a link two URL parsers would read differently is a 400 before the gate, and no job", async () => {
+    const { mockFrom } = mockJobInsert()
+    // A control character inside the link (one at either end is trimmed by the
+    // schema, so the link that passes is the link everything reads), or a backslash.
+    for (const audioUrl of ["https://www.youtube.com/watch?v=ab\ncd", "https://www.you\ttube.com/watch?v=abc", "https://www.youtube.com\\@10.0.0.1/watch?v=abc"]) {
+      const res = await post({ audioUrl, provider: "elevenlabs-stt" })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+    }
+    expect(gate.requireImportAllowed).not.toHaveBeenCalled()
+    expect(mockFrom).not.toHaveBeenCalled()
+    expect(vi.mocked(videoQueue.add)).not.toHaveBeenCalled()
+  })
+
+  it("a confirmation that is not an id is a 400, before the gate", async () => {
+    const res = await post({ audioUrl: SOCIAL, confirmationId: "not-an-id" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.issues.map((i: { path: string }) => i.path)).toContain("confirmationId")
+    expect(gate.requireImportAllowed).not.toHaveBeenCalled()
   })
 })
