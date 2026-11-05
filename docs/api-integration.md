@@ -5353,14 +5353,26 @@ confirmation is refused. A plugin's download outside any job has no account
 behind it: the site's policy and the setting decide, and with the setting on it
 is refused.
 
+**The Music node's reference link and the Reference Audio node.** Both fetch
+a link's sound in the editor: the Music node when you press Get, the
+Reference Audio node on its own as soon as its box is ticked (on its card or
+in its panel, whoever wrote the link) and again when you press Extract. Each
+such fetch is an import of the link, so it waits for the content rights box
+under the link, ticked for that link, and confirms the declaration for that one
+fetch: the `confirmationId` of `POST /v1/youtube-audio` and of
+`POST /v1/extract-youtube-audio`. A changed declaration unticks the box and
+nothing is fetched. A Reference Audio node saved while it was extracting (a
+copy of it, a reload) waits for its box again. A run, and a published app, read
+the stored file and never fetch these links. An uploaded file or a direct file
+link needs no box.
+
 **Not covered yet** — these places in the editor and on an app page fetch a
 link themselves without asking for the declaration yet; with the setting on,
 each is refused (or, for a picture, kept as the link itself instead of being
 copied into storage): a picture added from a link (the Upload Image node and
 a published app's picture input), a Transcribe node given a link to a video's
-page directly rather than through a Video URL node, the Music node's
-reference link, and a Suno node given a link directly. A later change adds the
-box to each.
+page directly rather than through a Video URL node, and a Suno node given a
+link directly. A later change adds the box to each.
 
 **Import source policies.** Before the confirmation is checked, the link's
 site is held to what an administrator decided about it (Admin → Settings →

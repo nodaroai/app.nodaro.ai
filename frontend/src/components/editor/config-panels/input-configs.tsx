@@ -40,9 +40,11 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { toast } from "sonner"
 import { spliceDelimitedRows, NO_SPLIT_DELIMITER } from "@nodaro/shared/workflow"
 import { uploadAudio, fetchYouTubeOEmbed } from "@/lib/api"
-import { runYouTubeAudioExtraction, referenceAudioMediaPatch } from "@/lib/youtube-audio-extraction"
+import { extractReferenceAudio, referenceAudioMediaPatch, useReferenceAudioExtracting } from "@/lib/youtube-audio-extraction"
+import { tickNodeLinkRights, untickNodeLinkRights, useNodeLinkRightsTicked } from "@/lib/node-link-rights"
 import { setVideoLinkUrl } from "@/lib/video-link-ingest"
 import { VideoLinkStatus } from "@/components/nodes/video-link-status"
+import { RightsDeclarationBox } from "@/components/content-rights/rights-declaration-box"
 import {
   LOOP_COLUMN_TYPE_META,
   TEXT_CELL_DEFAULT_MAX_LINES,
@@ -1223,10 +1225,18 @@ export function YouTubeVideoConfig({ data, nodeId }: ConfigProps<YouTubeVideoDat
 }
 
 
-export function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAudioData>) {
+export function ReferenceAudioConfig({ data, onUpdate, nodeId }: ConfigProps<ReferenceAudioData> & { readonly nodeId?: string | null }) {
   const t = useT()
   const [extracting, setExtracting] = useState(false)
   const [fetchingMeta, setFetchingMeta] = useState(false)
+  // Extracting the link's sound fetches it: an import of that link, made only
+  // under this box ticked for it (session state, `node-link-rights.ts`). The
+  // node itself extracts as soon as the box is ticked, here or on its card.
+  // Whether it is extracting is this page's to say, never the node's saved
+  // status (a copy or a reload keeps "extracting" with nothing running).
+  const sourceLink = data.youtubeUrl?.trim() ?? ""
+  const rightsTicked = useNodeLinkRightsTicked(nodeId ?? "", sourceLink) && Boolean(nodeId)
+  const extractingHere = useReferenceAudioExtracting(nodeId ?? "")
 
   const handleYouTubeUrlChange = useCallback(async (url: string) => {
     onUpdate({ youtubeUrl: url })
@@ -1250,18 +1260,17 @@ export function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAu
 
   const handleExtract = useCallback(async () => {
     const url = data.youtubeUrl?.trim()
-    if (!url) return
+    if (!url || !nodeId) return
     setExtracting(true)
-    onUpdate({ extractionStatus: "extracting" })
     try {
-      const { audioUrl, durationSeconds } = await runYouTubeAudioExtraction(url)
-      onUpdate(referenceAudioMediaPatch(audioUrl, durationSeconds))
+      // The shared flow writes the node's status and media, and how it ended.
+      await extractReferenceAudio(nodeId, url, onUpdate)
     } catch {
-      onUpdate({ extractionStatus: "failed" })
+      // Not ticked for this link: nothing was asked, written or fetched.
     } finally {
       setExtracting(false)
     }
-  }, [data.youtubeUrl, onUpdate])
+  }, [data.youtubeUrl, nodeId, onUpdate])
 
   const handleFileUpload = useCallback(async (file: File) => {
     setExtracting(true)
@@ -1318,12 +1327,18 @@ export function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAu
               {data.videoTitle && <p className="text-xs px-2 py-1.5 truncate text-foreground">{data.videoTitle}</p>}
             </div>
           )}
+          {nodeId && sourceLink && (
+            <RightsDeclarationBox
+              checked={rightsTicked}
+              onCheckedChange={(checked) => (checked ? tickNodeLinkRights(nodeId, sourceLink) : untickNodeLinkRights(nodeId))}
+            />
+          )}
           <Button
             size="sm"
             onClick={handleExtract}
-            disabled={extracting || !data.youtubeUrl?.trim()}
+            disabled={extracting || extractingHere || !sourceLink || !rightsTicked}
           >
-            {extracting ? t("inputcfg.extracting") : t("inputcfg.extractAudio")}
+            {extracting || extractingHere ? t("inputcfg.extracting") : t("inputcfg.extractAudio")}
           </Button>
         </div>
       )}

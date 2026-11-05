@@ -16,7 +16,10 @@ The Reference Audio node provides audio from multiple sources: extract from a Yo
 | Field | Type | Description |
 |-------|------|-------------|
 | YouTube URL | Text input | Video URL to extract audio from |
-| Extract Button | Action | Fetches metadata and extracts audio track |
+| Content rights box | Checkbox | Confirms the content rights declaration for this link; shown under the link and on the node's card |
+| Extract Button | Action | Fetches metadata and extracts audio track; waits for the content rights box |
+
+Extracting the sound fetches the link: an import of it, so it waits for the content rights box ticked for that link. The box stays ticked only for that link and only for this session, and each extraction confirms the declaration anew; a changed declaration unticks it. The node extracts as soon as the box is ticked, on its card or in the panel, so a link written into it by an assistant, an import or a template is handled the same way; Extract fetches again on request. A node saved while it was extracting (a copy of it, a reload) waits for its box again. A run never fetches the link: it reads the extracted file. An upload or a direct link to a file needs no box.
 
 ### Source: Upload File
 | Field | Type | Description |

@@ -20,7 +20,7 @@ The Generate Music node produces original music with MiniMax, steered by a **ref
 | Lyrics | `string` | `""` | Optional lyrics for vocal tracks (ignored when Instrumental is true) |
 | Reference Source | `"none" \| "upload" \| "youtube"` | `"none"` | **Required** -- where the reference audio comes from. A wired upstream audio node satisfies it too |
 | Reference Audio URL | `string` | `""` | URL of uploaded reference audio (when Reference Source is "upload"). Also the API field (`referenceAudioUrl`), which `POST /v1/generate-music` requires for `minimax` |
-| Reference YouTube URL | `string` | `""` | YouTube URL for style reference (when Reference Source is "youtube") |
+| Reference YouTube URL | `string` | `""` | A link to where the reference is (when Reference Source is "youtube", shown as **Link**). **Get** fetches its sound once the content rights box under the link is ticked for that link, and each Get confirms the declaration anew; a run reads the stored file and never fetches the link |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ### Providers

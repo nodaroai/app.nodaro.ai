@@ -6282,13 +6282,10 @@ export async function generateMusicApi(prompt: string, provider?: string, durati
   })
 }
 
-export async function extractYouTubeAudioApi(youtubeUrl: string, userId?: string): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { youtubeUrl }
-  if (userId) {
-    body.userId = userId
-  }
+/** The sound of a video link, extracted by a job (`POST /v1/extract-youtube-audio`). An import of the link, so it carries a confirmation like the video download. */
+export async function extractYouTubeAudioApi(youtubeUrl: string, options: DownloadAudioOptions = {}): Promise<{ jobId: string }> {
   return apiJson("/v1/extract-youtube-audio", {
-    body,
+    body: { youtubeUrl, ...(options.confirmationId !== undefined ? { confirmationId: options.confirmationId } : {}) },
     workflowId: true,
     label: "apiErr.startYouTubeAudioExtraction",
   })
