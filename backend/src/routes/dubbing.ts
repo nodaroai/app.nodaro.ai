@@ -1,4 +1,4 @@
-import { dubbingModelIdentifier } from "../lib/dubbing-model.js"
+import { PROJECT_DUBBING_NEEDS_UPLOAD, dubbingModelIdentifier, dubsAsProject } from "../lib/dubbing-model.js"
 import { usesDubbingProject, validateProjectDubbing } from "../providers/elevenlabs/dubbing-project.js"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
@@ -14,6 +14,10 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { hasCredits } from "../lib/config.js"
 import { dubbingBaseCredits, dubbingReservePlan, effectiveDubbedSeconds, measureDubbingSourceSec } from "../lib/dubbing-duration.js"
+import { isImportRefusal, requireImportAllowed } from "../lib/import-gate.js"
+import { importJobFields, importViaOf } from "../lib/import-via.js"
+import { dubbingSourceIsImport } from "../lib/dubbing-source.js"
+import { unusableLinkError } from "../lib/unusable-link.js"
 // Duration policy constants live beside the provider (the worker enforces the
 // same cap post-start against ElevenLabs' media_metadata — one source, two
 // seams). A span that can be measured is reserved exactly (and committed as
@@ -33,7 +37,10 @@ const dubbingBody = z.object({
    * server. Deliberate policy delta (stated in the PR): unlike the yt-dlp
    * ingest paths, this is NOT gated on the SOCIAL_VIDEO_HOSTS allowlist —
    * there is no SSRF exposure on our side, and which hosts work is
-   * ElevenLabs' problem surface.
+   * ElevenLabs' problem surface. It IS an import of someone else's link,
+   * though: the content rights gate holds every sourceUrl that is not a file
+   * of our own storage (lib/dubbing-source.ts; probeDubbingDurationPreHandler
+   * reads it, the worker spends the confirmation).
    */
   sourceUrl: safeUrlSchema.optional(),
   targetLanguage: z.string().min(2).max(10),
@@ -56,6 +63,14 @@ const dubbingBody = z.object({
   /** ElevenLabs' own watermark on video dubs (cheaper on some plans). */
   watermark: z.boolean().optional(),
   userId: z.string().uuid().optional(),
+  /**
+   * The content rights confirmation (`POST /v1/content-rights/confirm`) the
+   * `sourceUrl` is imported under: the service fetches someone else's link on
+   * this account's behalf. Checked before anything reads the link, spent by
+   * the worker right before the service is asked. Optional until
+   * `content_rights_required` is on; a file of our own storage needs none.
+   */
+  confirmationId: z.string().uuid().optional(),
 }).refine(
   (b) => [b.audioUrl, b.videoUrl, b.sourceUrl].filter(Boolean).length === 1,
   { message: "Provide exactly one source: audioUrl, videoUrl, or sourceUrl" },
@@ -77,6 +92,45 @@ const dubbingBody = z.object({
  */
 export async function probeDubbingDurationPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const body = (req.body ?? {}) as Record<string, unknown>
+  // A link handed to the dubbing service is an import of that link: refused
+  // when two URL parsers would read it differently, then held to the gate
+  // (read) before anything touches it, the length probe below included. The
+  // worker spends the confirmation right before the service is asked.
+  if (typeof body.sourceUrl === "string" && body.sourceUrl) {
+    // Nothing touches a link for a request with no account behind it.
+    if (!req.userId) {
+      return void reply.code(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+    }
+    const parsed = dubbingBody.safeParse(body)
+    if (!parsed.success) {
+      return void reply.code(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
+    }
+    const sourceUrl = parsed.data.sourceUrl ?? ""
+    const unusable = unusableLinkError(sourceUrl)
+    if (unusable) return void reply.code(400).send({ error: unusable })
+    // A dub into Hebrew takes an uploaded file only (the settings check below
+    // says the same for any source): refused before the gate reads the link.
+    if (dubsAsProject(body.targetLanguage)) {
+      return void reply.code(400).send({ error: { code: "unsupported_dubbing_settings", message: PROJECT_DUBBING_NEEDS_UPLOAD } })
+    }
+    // From here on the link is the one the gate judged (the schema trims the
+    // ends): the length probe below reads it from the body too.
+    body.sourceUrl = sourceUrl
+    if (dubbingSourceIsImport(sourceUrl)) {
+      try {
+        await requireImportAllowed(sourceUrl, {
+          userId: req.userId,
+          confirmationId: parsed.data.confirmationId,
+          lane: "route",
+          requestId: req.id,
+          via: importViaOf(req),
+        })
+      } catch (e) {
+        if (isImportRefusal(e)) return void reply.code(403).send({ error: { code: e.code, message: e.message } })
+        throw e
+      }
+    }
+  }
   // Reject unsupported project settings before credit reservation or dispatch.
   if (typeof body.targetLanguage === "string" && usesDubbingProject(body.targetLanguage)) {
     const parsed = dubbingBody.safeParse(body)
@@ -159,7 +213,7 @@ export async function dubbingRoutes(app: FastifyInstance) {
     const {
       audioUrl, videoUrl, sourceUrl, targetLanguage, sourceLanguage, numSpeakers,
       disableVoiceCloning, dropBackgroundAudio, startTime, endTime,
-      highestResolution, useProfanityFilter, targetAccent, watermark,
+      highestResolution, useProfanityFilter, targetAccent, watermark, confirmationId,
     } = parsed.data
     const userId = req.userId
 
@@ -215,6 +269,11 @@ export async function dubbingRoutes(app: FastifyInstance) {
       probedDurationSec: typeof stashedDuration === "number" ? stashedDuration : undefined,
       ...(typeof stashedDuration === "number" ? {} : { reservedCeiling: true }),
       usageLogId,
+      // A link handed to the service is an import of the link: the
+      // confirmation, the way in (and the connected app), for the worker's
+      // gate (`importRightsOf`).
+      ...(confirmationId ? { confirmationId } : {}),
+      ...importJobFields(req),
     })
 
     return { jobId: job.id }

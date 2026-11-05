@@ -62,8 +62,27 @@ export type ImportRefusal = AccountMeasureError | ImportSourceError | ContentRig
 export function isImportRefusal(e: unknown): e is ImportRefusal {
   return e instanceof AccountMeasureError || e instanceof ImportSourceError || e instanceof ContentRightsError
 }
+
+/**
+ * An import that reached the gate with no account behind it: a job whose
+ * owner could not be read. Never a pass, whatever the database would answer
+ * for an empty id; and not a refusal of the person either, so the job can be
+ * tried again once its owner reads.
+ */
+export class ImportOwnerUnknownError extends Error {
+  constructor() {
+    super("The account behind this import could not be read, so nothing was imported.")
+    this.name = "ImportOwnerUnknownError"
+  }
+}
+
+function requireAccount(rights: ImportRights): void {
+  if (!rights.userId) throw new ImportOwnerUnknownError()
+}
+
 /** The read half: throws an `ImportRefusal` when the link may not be imported by this account now. */
 export async function requireImportAllowed(url: string, rights: ImportRights): Promise<void> {
+  requireAccount(rights)
   await assertImportsAllowed(rights.userId)
   await assertImportSourceAllowed(url)
   await checkRightsConfirmation({ url, userId: rights.userId, confirmationId: rights.confirmationId, lane: rights.lane, via: rights.via ?? null })
@@ -76,6 +95,7 @@ export async function requireImportAllowed(url: string, rights: ImportRights): P
  * agent's import — and answers it; null when the download runs under none.
  */
 export async function spendImportConfirmation(url: string, rights: ImportRights): Promise<string | null> {
+  requireAccount(rights)
   await assertImportsAllowed(rights.userId)
   if (rights.confirmationId) {
     await consumeRightsConfirmation({ confirmationId: rights.confirmationId, url, lane: rights.lane, requestId: rights.requestId ?? null })
@@ -100,4 +120,16 @@ export async function spendImportConfirmation(url: string, rights: ImportRights)
     )
   }
   return derived
+}
+
+/**
+ * An import with no account at all: a private plugin's own download outside
+ * any job (its route, its daemon). There are no measures to ask and no
+ * confirmation that could be its own, so the site's policy and the
+ * deployment's rule decide: refused while a confirmation is required, and
+ * nothing is spent.
+ */
+export async function requireAccountlessImportAllowed(url: string, lane: RightsLane): Promise<void> {
+  await assertImportSourceAllowed(url)
+  await checkRightsConfirmation({ url, userId: "", confirmationId: null, lane, via: null })
 }

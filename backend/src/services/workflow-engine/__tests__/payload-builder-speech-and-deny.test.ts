@@ -346,6 +346,27 @@ describe("payload-builder-dubbing.test.ts", () => {
     })
   })
 
+  describe("buildPayload — the run's own content rights confirmation", () => {
+    const CONFIRMATION = "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01"
+
+    it("a link carries the confirmation the run's request put on the node, trimmed", () => {
+      const result = buildPayload(node({ sourceUrl: "https://youtube.com/watch?v=x", rightsConfirmationId: ` ${CONFIRMATION} ` }), "job1", {}, "usage1")
+      expect(result.payload.confirmationId).toBe(CONFIRMATION)
+    })
+
+    it("a wired upload imports nothing: no confirmation rides it", () => {
+      const result = buildPayload(node({ rightsConfirmationId: CONFIRMATION }), "job1", { videoUrl: "https://x/c.mp4" }, "usage1")
+      expect(result.payload).not.toHaveProperty("confirmationId")
+    })
+
+    it("a confirmation that is blank or not text is not one", () => {
+      for (const rightsConfirmationId of ["   ", 42, null]) {
+        const result = buildPayload(node({ sourceUrl: "https://youtube.com/watch?v=x", rightsConfirmationId }), "job1", {}, "usage1")
+        expect(result.payload).not.toHaveProperty("confirmationId")
+      }
+    })
+  })
+
   it("uses the project model for Hebrew billing as well as generation", () => {
     const result = buildPayload(node({ targetLanguage: "he" }), "job1", { videoUrl: "https://x/c.mp4" }, "usage1")
     expect(result.modelIdentifier).toBe("elevenlabs-dubbing-v2")

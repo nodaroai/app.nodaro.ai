@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { promises as fs } from "node:fs"
 import { uploadFileToR2 } from "../../lib/storage.js"
 import { YOUTUBE_HOSTS, hostnameMatchesAllowlist } from "../../lib/url-validator.js"
+import { hasUrlParserHazard } from "@nodaro/shared/video"
 import { requireImportAllowed, spendImportConfirmation, type ImportRights } from "../../lib/import-gate.js"
 import { resolveAttemptChain } from "../video/yt-proxy.js"
 import { probeMediaDuration } from "../video/ffmpeg-utils.js"
@@ -77,7 +78,10 @@ export interface ExtractedYouTubeAudio {
 export async function extractYouTubeAudioWithMeta(youtubeUrl: string, rights: ImportRights): Promise<ExtractedYouTubeAudio> {
   // SSRF gate, same as the video lane's in-function check: the worker calls
   // this directly and yt-dlp does its own DNS+HTTP (bypassing safeFetch), so
-  // the allowlist here is defense-in-depth beyond the route's Zod.
+  // the allowlist here is defense-in-depth beyond the route's Zod. A link the
+  // URL parser below and yt-dlp's own would read differently (a backslash, a
+  // control character) is refused before either reads it.
+  if (hasUrlParserHazard(youtubeUrl)) throw new YtUrlNotAllowedError("invalid url")
   let host: string
   try {
     host = new URL(youtubeUrl).hostname

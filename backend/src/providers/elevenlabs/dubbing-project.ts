@@ -1,5 +1,5 @@
 // @reads-none reads only the dub it renders into a work dir
-import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
+import { PROJECT_DUBBING_NEEDS_UPLOAD, dubsAsProject } from "../../lib/dubbing-model.js"
 import { readFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { ELEVENLABS_BASE_URL, getElevenLabsHeaders } from "./client.js"
@@ -13,10 +13,10 @@ import { runPostProcessing } from "../../lib/post-processing-error.js"
 // recovered by reading that project; recovery must never create another target.
 export const DUBBING_PROJECT_PREFIX = "project:"
 export const isDubbingProject = (id: string): boolean => id.startsWith(DUBBING_PROJECT_PREFIX)
-export const usesDubbingProject = (language: string): boolean => dubbingModelIdentifier(language) === "elevenlabs-dubbing-v2"
+export const usesDubbingProject = (language: string): boolean => dubsAsProject(language)
 
 export function validateProjectDubbing(source: DubbingSource, options?: DubbingOptions): void {
-  if (!source.url) throw new Error("Hebrew dubbing requires an uploaded audio or video file. Import the video first.")
+  if (!source.url) throw new Error(PROJECT_DUBBING_NEEDS_UPLOAD)
   const unsupported = [
     options?.disableVoiceCloning && "disableVoiceCloning",
     options?.dropBackgroundAudio && "dropBackgroundAudio",

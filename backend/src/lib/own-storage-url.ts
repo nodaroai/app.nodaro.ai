@@ -1,3 +1,5 @@
+import { hasUrlParserHazard } from "@nodaro/shared/video"
+
 /**
  * True when `url` lives inside this install's OWN configured public-storage
  * subtree — i.e. under `R2_PUBLIC_URL/` exactly.
@@ -44,4 +46,28 @@ export function isConfiguredStorageUrl(url: string | URL): boolean {
   if (candidate.protocol !== "http:" && candidate.protocol !== "https:") return false
   const baseHref = base.href.replace(/\/+$/, "")
   return candidate.href.startsWith(baseHref + "/")
+}
+
+/**
+ * Strictly a file of this install's own storage, for exempting a link from a
+ * check that holds someone else's links: an http(s) link with no character
+ * two URL parsers read differently (a backslash, a control character), written
+ * already in its one normal form with no escape in its path (another reader
+ * may decode `cdn%2Dcgi`, a dot segment or a case the parser here normalises,
+ * and the raw link is what is handed on), under `R2_PUBLIC_URL/`, and not a
+ * transform of the content network (`/cdn-cgi/…`, which can name a remote
+ * source). The fallback host, a rendition or a transform is not exempt: the
+ * strict direction is the safe one.
+ */
+export function isOwnStoredFileUrl(url: string): boolean {
+  if (hasUrlParserHazard(url)) return false
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+  if (parsed.href !== url || parsed.pathname.includes("%")) return false
+  if (/\/cdn-cgi\//i.test(parsed.pathname)) return false
+  return isConfiguredStorageUrl(parsed)
 }

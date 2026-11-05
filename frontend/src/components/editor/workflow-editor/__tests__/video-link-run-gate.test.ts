@@ -105,14 +105,19 @@ describe("videoLinkNodesFeeding", () => {
     expect(videoLinkNodesFeeding(["b"], nodes as never, edges as never)).toEqual(["src"])
   })
 
-  describe("a run that only needs the SOUND", () => {
-    it.each(["transcribe", "suno-cover", "dubbing"])(
+  describe("a run that only needs the SOUND, or only the page link", () => {
+    it.each(["transcribe", "suno-cover", "content-recipe"])(
       "does not ask for the video when %s is the only reader — a podcast → Transcribe run must not download an hour of video",
       (consumer) => {
         const nodes = [link("src"), node("reader", consumer)]
         expect(videoLinkNodesFeeding(["reader"], nodes as never, [edge("src", "reader")] as never)).toEqual([])
       },
     )
+
+    it("asks for the video when Dubbing reads it: Dubbing dubs the file", () => {
+      const nodes = [link("src"), node("reader", "dubbing")]
+      expect(videoLinkNodesFeeding(["reader"], nodes as never, [edge("src", "reader")] as never)).toEqual(["src"])
+    })
 
     it("asks for it as soon as ONE reader in the run looks at the video", () => {
       const nodes = [link("src"), node("words", "transcribe"), node("cut", "trim-video")]

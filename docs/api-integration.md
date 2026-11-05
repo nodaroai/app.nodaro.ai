@@ -5202,7 +5202,7 @@ text, when, from where) and of the download made under it.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/v1/content-rights/declaration` | The current declaration: `{ data: { version, text } }`. Public — a client shows it before anyone signs in. |
-| `POST` | `/v1/content-rights/confirm` | Records that the signed-in account confirmed the declaration for one link (`{ url, declarationVersion }`) → `201 { data: { id, declarationVersion, expiresAt } }`. `409 rights_confirmation_stale` when the declaration changed since the client read it: read it again and ask again. |
+| `POST` | `/v1/content-rights/confirm` | Records that the signed-in account confirmed the declaration for one link (`{ url, declarationVersion }`) → `201 { data: { id, declarationVersion, expiresAt } }`. Any `http(s)` link an import takes can be confirmed: a video's page, a file, a picture, a page the dubbing service reads (a link with a backslash or a control character is a `400`). `409 rights_confirmation_stale` when the declaration changed since the client read it: read it again and ask again. |
 | `GET` | `/v1/content-rights/authorization` | The account's standing authorization for imports through its API keys and AI agents: `{ data: { id, declarationVersion, createdAt } }`, or `{ data: null }` when there is none (never given, revoked, or given under an older declaration). |
 | `POST` | `/v1/content-rights/authorization` | Records one for the current declaration (`{ declarationVersion }`) → `201 { data: { id, declarationVersion, createdAt } }`. The person's own session only: a key, an agent or a connected app answers `403 forbidden`. `409 rights_confirmation_stale` when the declaration changed since. |
 | `DELETE` | `/v1/content-rights/authorization` | Revokes it (the record stays) → `{ data: { revoked } }`. The person's own session only. |
@@ -5251,8 +5251,8 @@ graph (a confirmation is one download's, within an hour, so a saved one could
 only refuse a later run), and a link swap in `inputOverrides` drops it with
 the rest of the old link's fields. The run spends the confirmation under
 `<executionId>:<nodeId>`, so the same fetch tried again (an execution picked
-up after a deploy) passes the one-use lock. The editor's and the app page's own
-downloads confirm as they go, one confirmation per download; a published app's
+up after a deploy) passes the one-use lock. The Video URL node's and the app
+page's own downloads confirm as they go, one confirmation per download; a published app's
 page confirms a link whose sound the run fetches when Run is pressed, for that
 run.
 
@@ -5291,12 +5291,58 @@ import from no way in at all (a schedule's or a webhook's run, a server's own
 relay) is covered by no authorization and, with the setting on, refused like a
 person who did not tick.
 
-**Not covered yet** — these lanes run the check but have no way to send a
-confirmation, so with the setting on each one is refused unless it came
-through a key or an agent with a standing authorization: `POST /v1/transcribe`
-and the Suno cover and upload-extend routes given a link, the editor's own
-picture-link import, and a private plugin's own download. Those lanes are a
-later change.
+**Transcription and Suno given a link.** `POST /v1/transcribe` (its
+`audioUrl`) and the Suno cover and upload-extend routes (`POST /v1/suno/cover`,
+`POST /v1/suno/upload-extend`, their `uploadUrl`) given a link to a video's
+page fetch that link's sound first, so they take the confirmation the same
+way: `confirmationId` in the body, checked before the job is created (a
+refusal is a `403` with the gate's code, and nothing is charged) and spent by
+the job right before the sound is fetched. A direct file link needs none. A
+link is a video's page when its host is one of the platforms' own hosts; a
+host that merely contains a platform's name is a plain file. A transcription
+of any of these platforms' pages is fetched by the server and then
+transcribed. On an install that runs Suno through its connection to the
+cloud, the confirmation is spent when the job is handed to the cloud, which
+fetches the link for the connected account.
+
+**Dubbing given a link.** `POST /v1/dubbing` with a `sourceUrl` hands that link
+to the dubbing service, which fetches it itself: an import of that link, held
+like the Video URL node's own download (a video's page and a direct file
+alike). Any `sourceUrl` that is not a file of the deployment's own storage
+takes `confirmationId`, read before anything touches the link (the length
+probe included; a refusal is a `403` before the job is created) and spent
+right before the service is asked. A run's Dubbing node given a link is held
+the same way before its job is created: its confirmation comes from the run
+request (`rightsConfirmationId` in `inputOverrides` on the node, as for a
+Video URL node), or from the account's standing authorization for a run
+started through a key or an agent. A repeated node dubs its one link in every
+iteration, all under that one confirmation for that run. An `audioUrl` or
+`videoUrl` is a media input like any node's: the server fetches it as a file.
+
+**Links two parsers read differently.** These routes refuse a link with a
+backslash or a control character (a tab, a line break) with
+`400 validation_error`, before anything reads it: no real link contains one,
+and the rights check must judge the link that is fetched.
+
+**A private plugin's own download.** A private plugin that fetches a link
+itself (a video analysis given a link, or a source fetched again because its
+stored copy is gone) passes the same gate: the account's measures, the site's
+policy, and the confirmation the plugin passes for that link, spent right
+before the download. A link the download would not read is refused before the
+confirmation is spent. A plugin's job carries no way in, so a standing
+authorization never covers it: with the setting on, such a download without a
+confirmation is refused. A plugin's download outside any job has no account
+behind it: the site's policy and the setting decide, and with the setting on it
+is refused.
+
+**Not covered yet** — these places in the editor and on an app page fetch a
+link themselves without asking for the declaration yet; with the setting on,
+each is refused (or, for a picture, kept as the link itself instead of being
+copied into storage): a picture added from a link (the Upload Image node and
+a published app's picture input), a Transcribe node given a link to a video's
+page directly rather than through a Video URL node, the Music node's
+reference link, a Suno node given a link directly, and the Dubbing node's
+link. A later change adds the box to each.
 
 **Import source policies.** Before the confirmation is checked, the link's
 site is held to what an administrator decided about it (Admin → Settings →
@@ -5314,8 +5360,8 @@ deployment's repeat-infringer policy (see
 [Repeat infringers](#13m-repeat-infringers)), every import of a link, in every
 lane above, is refused with `403 imports_blocked` and a message saying until
 when (a date in UTC, or until an administrator lifts the block). A run's
-import fails the same way, and so does a private plugin's download of a link
-(which does not ask for a confirmation yet). The account is asked again right
+import fails the same way, and so does a private plugin's download of a link.
+The account is asked again right
 before the fetch starts, so a block placed while a download waited for its
 turn refuses it too; a block lifted takes effect at once. A suspended account,
 and a closed one (whose account is blocked), is refused every request first,
@@ -6450,7 +6496,7 @@ until `status` is `completed`, read the result from `output_data`.
 | `DELETE` | `/v1/voice-clones/:id` | Delete an existing clone. |
 | `POST` | `/v1/voice-design` | Design a synthetic voice from a description (`{ text, voiceDescription, model?, loudness?, guidanceScale?, seed?, quality?, shouldEnhance? }`) → job. |
 | `POST` | `/v1/voice-remix` | Speak a text in a described voice, no cloning (`{ text, voiceDescription }`) → job. |
-| `POST` | `/v1/dubbing` | Translate-and-revoice audio OR video (`{ audioUrl \| videoUrl \| sourceUrl (exactly one), targetLanguage, sourceLanguage?, numSpeakers? (0=auto), disableVoiceCloning?, dropBackgroundAudio?, startTime?, endTime?, highestResolution?, useProfanityFilter?, targetAccent?, watermark? }`) → job. Video mode delivers `output_data.videoUrl` + the dubbed `audioUrl`. Priced per minute of the dubbed span (min 1); span capped at 30 minutes (413 past it — the start/end window is the lever). |
+| `POST` | `/v1/dubbing` | Translate-and-revoice audio OR video (`{ audioUrl \| videoUrl \| sourceUrl (exactly one), targetLanguage, sourceLanguage?, numSpeakers? (0=auto), disableVoiceCloning?, dropBackgroundAudio?, startTime?, endTime?, highestResolution?, useProfanityFilter?, targetAccent?, watermark?, confirmationId? }`) → job. Video mode delivers `output_data.videoUrl` + the dubbed `audioUrl`. Priced per minute of the dubbed span (min 1); span capped at 30 minutes (413 past it — the start/end window is the lever). A `sourceUrl` is fetched by the dubbing service on your behalf, so it is an import of that link: send the `confirmationId` confirmed for it ([Content rights](#13i-content-rights-import-confirmations)). |
 
 The id to use everywhere a voice is accepted is the clone's
 `elevenlabsVoiceId` (create/list responses) or the catalog's `voice_id`.
@@ -6544,7 +6590,7 @@ Connect flows are popup-based and meant for the web app; publishing is available
 | `POST` | `/v1/adjust-volume` | Level/normalize/fade (`{ audioUrl? \| videoUrl?, volume?, normalize?, fadeIn?, fadeOut? }`) → job. |
 | `POST` | `/v1/pitch-tempo` | Pitch shift + time-stretch with Rubber Band (`{ audioUrl \| videoUrl (exactly one), semitones?: -12..12, tempo?: 0.5..2, preserveFormants?: boolean }`) → job; a video keeps its picture (tempo fixed at 1). Priced per started input minute (22 credits<!-- credits-rate: pitch-tempo -->/min, inputs up to 30 min); the input is measured first — `400 invalid_media_duration` / `media_duration_exceeds_limit` before any charge. See [Pitch & Tempo](./nodes/processing-audio/pitch-tempo.md). |
 | `POST` | `/v1/combine-audio` | Concatenate segments (`{ segments: [{ url, startTime?, endTime? }] }`) → job. |
-| `POST` | `/v1/transcribe` | Speech → text (`{ audioUrl, provider?: elevenlabs-stt\|incredibly-fast-whisper\|whisper, language?, diarize?, tagAudioEvents?, wordTimestamps? }`) → job; `output_data` = `{ text, language?, words? (ms), json? (the normalized Transcript, ms), segments? (seconds, legacy lanes) }`. All three engines are accepted. Word timings: `elevenlabs-stt` always (and it is the lane that honours `diarize` / `tagAudioEvents`), `incredibly-fast-whisper` with `wordTimestamps: true`, `whisper` never — it returns phrase segments only, and `wordTimestamps: true` on it is a `400 validation_error` on `wordTimestamps`, before the job is created (nothing charged). Omitting `provider` still runs the legacy `whisper` lane, so name an engine whenever you need word timings. `words` is the `captions[]` shape `/v1/add-captions` takes. Full reference: [Transcribe](./nodes/ai-text/transcribe.md#word-timestamps-which-engine-can-do-it). |
+| `POST` | `/v1/transcribe` | Speech → text (`{ audioUrl, provider?: elevenlabs-stt\|incredibly-fast-whisper\|whisper, language?, diarize?, tagAudioEvents?, wordTimestamps?, confirmationId? }`) → job; `output_data` = `{ text, language?, words? (ms), json? (the normalized Transcript, ms), segments? (seconds, legacy lanes) }`. All three engines are accepted. Word timings: `elevenlabs-stt` always (and it is the lane that honours `diarize` / `tagAudioEvents`), `incredibly-fast-whisper` with `wordTimestamps: true`, `whisper` never — it returns phrase segments only, and `wordTimestamps: true` on it is a `400 validation_error` on `wordTimestamps`, before the job is created (nothing charged). Omitting `provider` still runs the legacy `whisper` lane, so name an engine whenever you need word timings. `words` is the `captions[]` shape `/v1/add-captions` takes. An `audioUrl` that is a link to a video's page is an import of that link: send the `confirmationId` confirmed for it ([Content rights](#13i-content-rights-import-confirmations)). Full reference: [Transcribe](./nodes/ai-text/transcribe.md#word-timestamps-which-engine-can-do-it). |
 
 ### Worked example: recast a multi-speaker interview end-to-end
 

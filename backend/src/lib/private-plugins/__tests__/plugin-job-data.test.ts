@@ -15,7 +15,7 @@ import { buildToolkit, pluginJobData } from "../toolkit.js"
 
 describe("pluginJobData", () => {
   it("drops the way-in keys and keeps everything else, without touching the input", () => {
-    const data = { jobId: "j1", url: "https://youtu.be/abc", confirmationId: "c1", importVia: "mcp", importAppId: "app-1", importAuthorizationId: "a1" }
+    const data = { jobId: "j1", url: "https://youtu.be/abc", confirmationId: "c1", importVia: "mcp", importAppId: "app-1", importAuthorizationId: "a1", importLane: "run", importRequestId: "exec-1:n1" }
     expect(pluginJobData(data)).toEqual({ jobId: "j1", url: "https://youtu.be/abc", confirmationId: "c1" })
     expect(data).toHaveProperty("importVia", "mcp")
   })

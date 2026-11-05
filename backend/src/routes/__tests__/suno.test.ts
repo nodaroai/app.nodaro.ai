@@ -72,10 +72,18 @@ vi.mock("@/lib/queue.js", () => ({
   tryRemoveFromQueue: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock("@/lib/url-validator.js", async () => {
+vi.mock("@/lib/url-validator.js", async (importOriginal) => {
   const { z } = await import("zod")
-  return { safeUrlSchema: z.string().url() }
+  // The real platform-host test: the route asks the gate exactly when the worker will import.
+  const { isAllowedSocialVideoUrl } = await importOriginal<typeof import("@/lib/url-validator.js")>()
+  return { safeUrlSchema: z.string().url(), isAllowedSocialVideoUrl }
 })
+
+const gate = vi.hoisted(() => ({ requireImportAllowed: vi.fn() }))
+vi.mock("@/lib/import-gate.js", () => ({
+  isImportRefusal: (e: unknown) => e instanceof Error && "code" in e,
+  requireImportAllowed: gate.requireImportAllowed,
+}))
 
 vi.mock("@/providers/kie/suno-client.js", async (importActual) => ({
   ...(await importActual<typeof import("@/providers/kie/suno-client.js")>()),
@@ -120,6 +128,9 @@ beforeEach(async () => {
       req.userId = header
       req.userRole = undefined
     }
+    // How the request signed in, as the auth hook would set it (the import's way in).
+    const kind = req.headers["x-auth-kind"]
+    if (typeof kind === "string") req.authKind = kind as typeof req.authKind
   })
 
   await app.register(async (instance) => {
@@ -891,6 +902,70 @@ describe("POST /v1/suno/upload-extend", () => {
       "suno-upload-extend",
       expect.objectContaining({ instrumental: true }),
     )
+  })
+})
+
+// ==========================================================================
+// A link to a video's page as the source (cover, upload-extend)
+// ==========================================================================
+
+describe("Suno given a link to a video's page: an import of the link", () => {
+  const SOCIAL = "https://www.youtube.com/watch?v=abc"
+  const CONFIRMATION = "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01"
+  const ROUTES = [
+    { url: "/v1/suno/cover", jobType: "suno-cover", body: { prompt: "A cover song" } },
+    { url: "/v1/suno/upload-extend", jobType: "suno-upload-extend", body: { continueAt: 30 } },
+  ] as const
+
+  it.each(ROUTES)("$url: a refusal by the gate is 403 with its code, before any job or credit hold", async ({ url, body }) => {
+    const refusal = Object.assign(new Error("This link can't be imported here."), { code: "import_source_disabled" })
+    gate.requireImportAllowed.mockRejectedValueOnce(refusal)
+    const res = await authedPost(url, { ...body, uploadUrl: SOCIAL })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error).toEqual({ code: "import_source_disabled", message: refusal.message })
+    expect(gate.requireImportAllowed).toHaveBeenCalledWith(SOCIAL, expect.objectContaining({ userId: TEST_USER_ID, confirmationId: undefined, lane: "route" }))
+    expect(mockJobInsert).not.toHaveBeenCalled()
+    expect(mockReserveCreditsForJob).not.toHaveBeenCalled()
+    expect(mockVideoQueueAdd).not.toHaveBeenCalled()
+  })
+
+  it.each(ROUTES)("$url: the confirmation is checked at the route and rides in the job data for the worker to spend", async ({ url, jobType, body }) => {
+    const res = await authedPost(url, { ...body, uploadUrl: SOCIAL, confirmationId: CONFIRMATION })
+    expect(res.statusCode).toBe(200)
+    expect(gate.requireImportAllowed).toHaveBeenCalledWith(SOCIAL, expect.objectContaining({ userId: TEST_USER_ID, confirmationId: CONFIRMATION, lane: "route" }))
+    expect(mockVideoQueueAdd).toHaveBeenCalledWith(jobType, expect.objectContaining({ uploadUrl: SOCIAL, confirmationId: CONFIRMATION }))
+  })
+
+  it.each(ROUTES)("$url: the gate is asked with the way the request came in", async ({ url, body }) => {
+    const res = await app.inject({
+      method: "POST",
+      url,
+      headers: { "x-user-id": TEST_USER_ID, "x-auth-kind": "app_token" },
+      payload: { ...body, uploadUrl: SOCIAL },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(gate.requireImportAllowed).toHaveBeenCalledWith(SOCIAL, expect.objectContaining({ userId: TEST_USER_ID, via: "app" }))
+  })
+
+  it.each(ROUTES)("$url: a link two URL parsers would read differently is a 400 before the gate, and no job", async ({ url, body }) => {
+    for (const uploadUrl of ["https://www.youtube.com/watch?v=ab\ncd", "https://www.youtube.com\\@10.0.0.1/watch?v=abc"]) {
+      const res = await authedPost(url, { ...body, uploadUrl })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+    }
+    expect(gate.requireImportAllowed).not.toHaveBeenCalled()
+    expect(mockJobInsert).not.toHaveBeenCalled()
+    expect(mockVideoQueueAdd).not.toHaveBeenCalled()
+  })
+
+  it.each(ROUTES)("$url: a file link never asks the gate, even on a host whose name contains a platform's", async ({ url, body }) => {
+    for (const uploadUrl of ["https://example.com/audio.mp3", "https://dropbox.com/s/a/song.mp3"]) {
+      const res = await authedPost(url, { ...body, uploadUrl })
+      expect(res.statusCode).toBe(200)
+    }
+    expect(gate.requireImportAllowed).not.toHaveBeenCalled()
+    const payloads = mockVideoQueueAdd.mock.calls.map((c) => c[1] as Record<string, unknown>)
+    expect(payloads.every((p) => !("confirmationId" in p))).toBe(true)
   })
 })
 

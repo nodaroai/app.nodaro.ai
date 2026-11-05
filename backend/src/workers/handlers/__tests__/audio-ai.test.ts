@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
+const gate = vi.hoisted(() => ({
+  downloadAudioToR2: vi.fn(async (_url: string, _rights: unknown, _opts?: unknown): Promise<string> => "https://r2.example.com/scratch/cover-src.mp3"),
+  requireImportAllowed: vi.fn(async (_url: string, _rights: unknown): Promise<void> => undefined),
+  spendImportConfirmation: vi.fn(async (_url: string, _rights: unknown): Promise<string | null> => null),
+}))
+
 const mocks = vi.hoisted(() => {
   const mockGenerateMusic = vi.fn()
   const mockTextToAudio = vi.fn()
@@ -163,8 +169,16 @@ vi.mock("../../shared.js", async (importOriginal) => {
     generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,
     createAssetFromJob: mocks.mockCreateAssetFromJob,
     watermarkLocalVideoAndUpload: mocks.mockWatermarkLocalVideoAndUpload,
+    downloadAudioToR2: gate.downloadAudioToR2,
   }
 })
+
+// The import gate. The deployment's own storage is the env's (the dubbing tests set it).
+vi.mock("../../../lib/import-gate.js", () => ({
+  isImportRefusal: (e: unknown) => e instanceof Error && "code" in e,
+  requireImportAllowed: gate.requireImportAllowed,
+  spendImportConfirmation: gate.spendImportConfirmation,
+}))
 
 vi.mock("../../../lib/nodaro-connect.js", () => ({
   isNodaroConnected: mocks.mockIsNodaroConnected,
@@ -872,6 +886,31 @@ describe("transcribe handler", () => {
     await handler(job as never, makeCtx())
     expect(mocks.mockTranscribe).toHaveBeenCalledWith("https://example.com/audio.mp3", undefined, "fr", { diarize: undefined, tagAudioEvents: undefined, onTaskCreated: expect.any(Function) })
   })
+
+  it("a link to a video's page has its sound extracted first, under the confirmation the route put in the job", async () => {
+    const confirmationId = "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01"
+    const job = makeJob("transcribe", { audioUrl: "https://www.youtube.com/watch?v=abc", confirmationId })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockExtractYouTubeAudio).toHaveBeenCalledWith("https://www.youtube.com/watch?v=abc", { userId: "user-1", confirmationId, lane: "route", requestId: "job-1", via: null, appId: null, authorizationId: null })
+  })
+
+  it("a file on a host whose name merely contains a platform's is transcribed as it is", async () => {
+    const job = makeJob("transcribe", { audioUrl: "https://dropbox.com/s/abc/talk.mp3" })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockExtractYouTubeAudio).not.toHaveBeenCalled()
+    expect(gate.downloadAudioToR2).not.toHaveBeenCalled()
+    expect(mocks.mockTranscribe).toHaveBeenCalledWith("https://dropbox.com/s/abc/talk.mp3", undefined, undefined, { diarize: undefined, tagAudioEvents: undefined, onTaskCreated: expect.any(Function) })
+  })
+
+  it("another platform's page is fetched by the worker's audio download under the same rights, then transcribed", async () => {
+    const confirmationId = "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01"
+    const page = "https://www.tiktok.com/@someone/video/123"
+    const job = makeJob("transcribe", { audioUrl: page, confirmationId })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockExtractYouTubeAudio).not.toHaveBeenCalled()
+    expect(gate.downloadAudioToR2).toHaveBeenCalledWith(page, { userId: "user-1", confirmationId, lane: "route", requestId: "job-1", via: null, appId: null, authorizationId: null }, { scratchJobId: "job-1" })
+    expect(mocks.mockTranscribe).toHaveBeenCalledWith("https://r2.example.com/scratch/cover-src.mp3", undefined, undefined, expect.anything())
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -999,6 +1038,16 @@ describe("audio-isolation handler", () => {
 
 describe("dubbing handler — modes, parking, post-hoc cap", () => {
   const handler = audioAIHandlers["dubbing"]
+  // The deployment's own storage (lib/own-storage-url.ts reads it from the env).
+  const OWN_STORAGE = "https://cdn.nodaro.test"
+  const originalPublicUrl = process.env.R2_PUBLIC_URL
+  beforeEach(() => {
+    process.env.R2_PUBLIC_URL = OWN_STORAGE
+  })
+  afterEach(() => {
+    if (originalPublicUrl === undefined) delete process.env.R2_PUBLIC_URL
+    else process.env.R2_PUBLIC_URL = originalPublicUrl
+  })
 
   it("audio upload: classified audio mode, real mime, delivered as mp3", async () => {
     const job = makeJob("dubbing", { audioUrl: "https://example.com/in.mp3", targetLanguage: "es", probedDurationSec: 60 })
@@ -1056,6 +1105,78 @@ describe("dubbing handler — modes, parking, post-hoc cap", () => {
       expect.anything(),
     )
     expect(mocks.mockDownloadDubbedMedia).toHaveBeenCalledWith("dub-id", "de", true, undefined)
+  })
+
+  it("sourceUrl: an import of someone else's link — read again and its confirmation spent right before the service is asked", async () => {
+    const confirmationId = "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01"
+    const job = makeJob("dubbing", { sourceUrl: "https://youtube.com/watch?v=x", targetLanguage: "de", confirmationId, importVia: "api" })
+    await handler(job as never, makeCtx())
+    const rights = { userId: "user-1", confirmationId, lane: "route", requestId: "job-1", via: "api", appId: null, authorizationId: null }
+    expect(gate.requireImportAllowed).toHaveBeenCalledWith("https://youtube.com/watch?v=x", rights)
+    expect(gate.spendImportConfirmation).toHaveBeenCalledWith("https://youtube.com/watch?v=x", rights)
+    expect(gate.requireImportAllowed.mock.invocationCallOrder[0]).toBeLessThan(gate.spendImportConfirmation.mock.invocationCallOrder[0]!)
+    expect(gate.spendImportConfirmation.mock.invocationCallOrder[0]).toBeLessThan(mocks.mockStartDubbing.mock.invocationCallOrder[0]!)
+  })
+
+  it("sourceUrl: a refusal by the gate asks the service nothing", async () => {
+    gate.requireImportAllowed.mockRejectedValueOnce(Object.assign(new Error("This link can't be imported here."), { code: "import_source_disabled" }))
+    const job = makeJob("dubbing", { sourceUrl: "https://youtube.com/watch?v=x", targetLanguage: "de" })
+    await expect(handler(job as never, makeCtx())).rejects.toMatchObject({ code: "import_source_disabled" })
+    expect(gate.spendImportConfirmation).not.toHaveBeenCalled()
+    expect(mocks.mockStartDubbing).not.toHaveBeenCalled()
+  })
+
+  it("any link the service would fetch is held to the gate: any page, a direct file, a platform's page that ends like a file", async () => {
+    const links = [
+      "https://example.com/talks/keynote",
+      "https://files.example.com/talk.mp4",
+      "https://www.youtube.com/shorts/dQw4w9WgXcQ.mp4",
+    ]
+    for (const sourceUrl of links) {
+      await handler(makeJob("dubbing", { sourceUrl, targetLanguage: "de" }) as never, makeCtx())
+    }
+    expect(gate.requireImportAllowed.mock.calls.map((c) => c[0])).toEqual(links)
+    expect(gate.spendImportConfirmation.mock.calls.map((c) => c[0])).toEqual(links)
+  })
+
+  it("a run's dub spends under the request the run named for the node, so every iteration of a repeated node is one request", async () => {
+    const data = { sourceUrl: "https://example.com/talks/keynote", targetLanguage: "de", importLane: "run", importRequestId: "exec-1:n1" }
+    await handler(makeJob("dubbing", data) as never, makeCtx({ jobId: "job-1" }))
+    await handler(makeJob("dubbing", data) as never, makeCtx({ jobId: "job-2" }))
+    for (const call of gate.spendImportConfirmation.mock.calls) expect(call[1]).toMatchObject({ requestId: "exec-1:n1", lane: "run" })
+    expect(gate.spendImportConfirmation).toHaveBeenCalledTimes(2)
+  })
+
+  it("a file of our own storage, and an upload, are not someone else's link: no gate", async () => {
+    await handler(makeJob("dubbing", { sourceUrl: `${OWN_STORAGE}/uploads/clip-without-an-ending`, targetLanguage: "de" }) as never, makeCtx())
+    await handler(makeJob("dubbing", { audioUrl: "https://example.com/in.mp3", targetLanguage: "es", probedDurationSec: 60 }) as never, makeCtx())
+    expect(gate.requireImportAllowed).not.toHaveBeenCalled()
+    expect(gate.spendImportConfirmation).not.toHaveBeenCalled()
+    expect(mocks.mockStartDubbing).toHaveBeenCalledTimes(2)
+  })
+
+  it("a job a run queued records its import as the run's", async () => {
+    await handler(makeJob("dubbing", { sourceUrl: "https://example.com/talks/keynote", targetLanguage: "de", importLane: "run" }) as never, makeCtx())
+    expect(gate.requireImportAllowed).toHaveBeenCalledWith("https://example.com/talks/keynote", expect.objectContaining({ lane: "run" }))
+    expect(gate.spendImportConfirmation).toHaveBeenCalledWith("https://example.com/talks/keynote", expect.objectContaining({ lane: "run" }))
+  })
+
+  it("a dub into Hebrew of a link is refused before the gate: no confirmation is spent on a dub that cannot start", async () => {
+    const job = makeJob("dubbing", { sourceUrl: "https://www.youtube.com/watch?v=abc", targetLanguage: "he" })
+    const err = await handler(job as never, makeCtx()).then(() => null, (e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect((err as Error).message).toMatch(/uploaded audio or video file/)
+    expect(gate.requireImportAllowed).not.toHaveBeenCalled()
+    expect(gate.spendImportConfirmation).not.toHaveBeenCalled()
+    expect(mocks.mockStartDubbing).not.toHaveBeenCalled()
+  })
+
+  it("a link two URL parsers would read differently is never handed on: the same failure on every attempt, nothing asked", async () => {
+    const job = makeJob("dubbing", { sourceUrl: "https://www.youtube.com\\@10.0.0.1/watch?v=abc", targetLanguage: "de" })
+    const err = await handler(job as never, makeCtx()).then(() => null, (e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(gate.requireImportAllowed).not.toHaveBeenCalled()
+    expect(mocks.mockStartDubbing).not.toHaveBeenCalled()
   })
 
   it("sourceUrl race: an EMPTY early probe is corrected by the FINAL status's media_metadata (video not delivered as .mp3)", async () => {

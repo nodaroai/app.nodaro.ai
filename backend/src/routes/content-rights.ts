@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { safeUrlSchema, isAllowedSocialVideoUrl, isDirectVideoFileUrl } from "../lib/url-validator.js"
+import { hasUrlParserHazard } from "@nodaro/shared/video"
+import { safeUrlSchema } from "../lib/url-validator.js"
+import { UNUSABLE_LINK_MESSAGE } from "../lib/unusable-link.js"
 import {
   ContentRightsError,
   createConfirmation,
@@ -40,10 +42,14 @@ import type { RightsLane } from "../lib/content-rights.js"
  * agent's import never has a box: with a standing authorization each of its
  * imports is recorded as a confirmation derived from it (`lib/import-gate.ts`).
  */
+/**
+ * Any http(s) link the SSRF check accepts: which links an import needs a
+ * confirmation for is each lane's own rule (a video's page, a file, a picture,
+ * every link the dubbing service fetches), so each of them can be confirmed.
+ * A link two URL parsers read differently is refused, as by every lane.
+ */
 const confirmBody = z.strictObject({
-  url: safeUrlSchema.refine((url) => isAllowedSocialVideoUrl(url) || isDirectVideoFileUrl(url), {
-    message: "Must be a link to a video's page or a direct video file URL",
-  }),
+  url: safeUrlSchema.refine((url) => !hasUrlParserHazard(url), { message: UNUSABLE_LINK_MESSAGE }),
   declarationVersion: z.number().int().min(1),
 })
 

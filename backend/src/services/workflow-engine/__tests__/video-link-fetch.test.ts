@@ -277,9 +277,27 @@ describe("fetching a Video URL node's link on the server — the card's rules, b
       expect(d.downloadAudio).not.toHaveBeenCalled()
     })
 
-    it("only nodes that take the page link (Dubbing, Content Recipe): nothing is fetched", async () => {
+    it("only a node that takes the page link (Content Recipe): nothing is fetched", async () => {
       const d = deps()
-      const result = await run([link("src"), node("dub", "dubbing"), node("rec", "content-recipe")], [edge("src", "dub"), edge("src", "rec")], d)
+      const result = await run([link("src"), node("rec", "content-recipe")], [edge("src", "rec")], d)
+      expect(d.downloadVideo).not.toHaveBeenCalled()
+      expect(d.downloadAudio).not.toHaveBeenCalled()
+      expect(result).toMatchObject({ ok: true })
+    })
+
+    it("Dubbing dubs the file wired into it: the video is downloaded first", async () => {
+      const d = deps()
+      const result = await run([link("src"), node("dub", "dubbing")], [edge("src", "dub")], d)
+      expect(d.downloadVideo).toHaveBeenCalledTimes(1)
+      expect(d.downloadAudio).not.toHaveBeenCalled()
+      if (!result.ok) throw new Error("unreachable")
+      expect(result.patches.get("src")?.data).toMatchObject({ downloadedVideoUrl: FILE, downloadedFromUrl: YT })
+    })
+
+    it("a Dubbing node with its own Source link reads nothing wired into it: nothing is fetched", async () => {
+      const d = deps()
+      const dub = { ...node("dub", "dubbing"), data: { sourceUrl: "https://example.com/talks/keynote" } }
+      const result = await run([link("src"), dub], [edge("src", "dub")], d)
       expect(d.downloadVideo).not.toHaveBeenCalled()
       expect(d.downloadAudio).not.toHaveBeenCalled()
       expect(result).toMatchObject({ ok: true })

@@ -37,8 +37,8 @@ import { NODE_DEF_MAP, type WorkflowEdge, type WorkflowNode } from "@/types/node
  *    never blocks an unrelated Run with "choose a part";
  *  - read by at least one consumer IN the run that actually looks at the video.
  *    Transcribe and Suno Cover take the node's separately-fetched audio track,
- *    and Dubbing hands the page link to its provider — a "podcast → Transcribe"
- *    run must not be made to download (or pick a part of) an hour of video;
+ *    and Content Recipe cites the page link — a "podcast → Transcribe" run must
+ *    not be made to download (or pick a part of) an hour of video;
  *  - with no file for their current link.
  *
  * Skipped nodes are not part of the run and pull nothing in.

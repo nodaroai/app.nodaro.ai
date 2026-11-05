@@ -357,12 +357,22 @@ describe("the Video URL app input card", () => {
       expect(downloadVideoLink).toHaveBeenCalledWith(TIKTOK, AUTO, expect.anything())
     })
 
-    it("only nodes that take the page link (Dubbing): nothing is fetched, no audio note and no box", async () => {
-      setup({ values: { youtubeUrl: TIKTOK }, ...graph("dubbing") })
+    it("only a node that takes the page link (Content Recipe): nothing is fetched, no audio note and no box", async () => {
+      setup({ values: { youtubeUrl: TIKTOK }, ...graph("content-recipe") })
       await flush()
       expect(downloadVideoLink).not.toHaveBeenCalled()
       expect(screen.queryByText(/Only the sound of this video is used/)).not.toBeInTheDocument()
       expect(screen.queryByRole("checkbox")).toBeNull()
+    })
+
+    it("Dubbing after it dubs the file: the box is shown and the video is downloaded once it is ticked", async () => {
+      setup({ values: { youtubeUrl: TIKTOK }, ...graph("dubbing") })
+      await flush()
+      expect(downloadVideoLink).not.toHaveBeenCalled()
+      expect(screen.getByRole("checkbox")).toBeInTheDocument()
+      await tick()
+      await flush()
+      expect(downloadVideoLink).toHaveBeenCalledWith(TIKTOK, AUTO, expect.anything())
     })
 
     // The canvas preview writes to the node itself, and on the canvas a Transcribe-only graph skips

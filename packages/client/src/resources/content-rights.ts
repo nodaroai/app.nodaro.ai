@@ -55,8 +55,10 @@ export class ContentRightsResource {
 
   /**
    * `POST /v1/content-rights/confirm` → the confirmation for one link, under
-   * the declaration version the person saw. `409 rights_confirmation_stale`
-   * when the declaration changed since: read it again and ask again.
+   * the declaration version the person saw. Any `http(s)` link an import takes
+   * can be confirmed (a video's page, a file, a picture). `409
+   * rights_confirmation_stale` when the declaration changed since: read it
+   * again and ask again.
    */
   async confirm(input: { url: string; declarationVersion: number }): Promise<ContentRightsConfirmation> {
     const res = await this.client.request<{ data: ContentRightsConfirmation }>("POST", "/v1/content-rights/confirm", { body: input })

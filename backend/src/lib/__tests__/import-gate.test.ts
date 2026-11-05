@@ -32,7 +32,13 @@ vi.mock("../content-rights.js", () => ({
   deriveAndConsumeConfirmation: vi.fn().mockResolvedValue("derived-1"),
 }))
 
-import { isImportRefusal, requireImportAllowed, spendImportConfirmation } from "../import-gate.js"
+import {
+  ImportOwnerUnknownError,
+  isImportRefusal,
+  requireAccountlessImportAllowed,
+  requireImportAllowed,
+  spendImportConfirmation,
+} from "../import-gate.js"
 import { assertImportsAllowed } from "../account-measures.js"
 import { AccountMeasureError } from "../account-measure-error.js"
 import { ImportSourceError, assertImportSourceAllowed } from "../import-source-policy.js"
@@ -150,5 +156,37 @@ describe("isImportRefusal", () => {
     expect(isImportRefusal(new ContentRightsError("rights_confirmation_used", "x"))).toBe(true)
     expect(isImportRefusal(new Error("yt-dlp failed"))).toBe(false)
     expect(isImportRefusal(null)).toBe(false)
+    // An import whose account could not be read is not the person's refusal: it may be tried again.
+    expect(isImportRefusal(new ImportOwnerUnknownError())).toBe(false)
+  })
+})
+
+describe("an import with no account behind it", () => {
+  it("a job whose owner could not be read never passes either half, and nothing is read or spent", async () => {
+    await expect(requireImportAllowed(URL_, { userId: "", confirmationId: ID, lane: "route" })).rejects.toBeInstanceOf(ImportOwnerUnknownError)
+    await expect(spendImportConfirmation(URL_, { userId: "", confirmationId: ID, lane: "route" })).rejects.toBeInstanceOf(ImportOwnerUnknownError)
+    expect(assertImportsAllowed).not.toHaveBeenCalled()
+    expect(assertImportSourceAllowed).not.toHaveBeenCalled()
+    expect(checkRightsConfirmation).not.toHaveBeenCalled()
+    expect(consumeRightsConfirmation).not.toHaveBeenCalled()
+    expect(deriveAndConsumeConfirmation).not.toHaveBeenCalled()
+  })
+
+  it("an accountless import (a plugin's download outside any job) asks the site's policy, then the rule with no confirmation and no way in, and spends nothing", async () => {
+    await requireAccountlessImportAllowed(URL_, "plugin")
+    expect(assertImportsAllowed).not.toHaveBeenCalled()
+    expect(assertImportSourceAllowed).toHaveBeenCalledWith(URL_)
+    expect(checkRightsConfirmation).toHaveBeenCalledWith({ url: URL_, userId: "", confirmationId: null, lane: "plugin", via: null })
+    expect(vi.mocked(assertImportSourceAllowed).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(checkRightsConfirmation).mock.invocationCallOrder[0]!)
+    expect(consumeRightsConfirmation).not.toHaveBeenCalled()
+    expect(deriveAndConsumeConfirmation).not.toHaveBeenCalled()
+  })
+
+  it("an accountless import refused by the site's policy or by the rule is the gate's own refusal", async () => {
+    vi.mocked(assertImportSourceAllowed).mockRejectedValueOnce(new ImportSourceError())
+    await expect(requireAccountlessImportAllowed(URL_, "plugin")).rejects.toBeInstanceOf(ImportSourceError)
+    expect(checkRightsConfirmation).not.toHaveBeenCalled()
+    vi.mocked(checkRightsConfirmation).mockRejectedValueOnce(new ContentRightsError("rights_confirmation_required", "Confirm first."))
+    await expect(requireAccountlessImportAllowed(URL_, "plugin")).rejects.toMatchObject({ code: "rights_confirmation_required" })
   })
 })

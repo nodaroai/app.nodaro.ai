@@ -39,6 +39,15 @@ const mocks = vi.hoisted(() => {
   }
 })
 
+const gate = vi.hoisted(() => ({
+  steps: [] as string[],
+  requireImportAllowed: vi.fn(async (_url: string, _rights: unknown): Promise<void> => undefined),
+  spendImportConfirmation: vi.fn(async (_url: string, _rights: unknown): Promise<string | null> => null),
+}))
+vi.mock("../../../lib/import-gate.js", () => ({
+  requireImportAllowed: gate.requireImportAllowed,
+  spendImportConfirmation: gate.spendImportConfirmation,
+}))
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.mockFrom } }))
 vi.mock("@/lib/storage.js", () => ({ uploadToR2: mocks.mockUploadToR2 }))
 vi.mock("@/lib/nodaro-connect.js", () => ({ isNodaroConnected: mocks.mockIsNodaroConnected }))
@@ -556,6 +565,61 @@ describe("bespoke operations replay on the connected cloud when this install has
     expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { audioUrl: "https://r2.example.com/audio/job-1.mp3", sunoTaskId: "cloud-task-9" },
     }))
+  })
+
+  it.each(["suno-cover", "suno-upload-extend"] as const)("%s: a social link as the source is read and its confirmation spent before the relay (the cloud fetches it on this account's behalf)", async (jobType) => {
+    const confirmationId = "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01"
+    const page = "https://www.youtube.com/watch?v=abc"
+    mocks.mockIsSocialUrl.mockReturnValue(true)
+    gate.steps.length = 0
+    gate.requireImportAllowed.mockImplementationOnce(async () => { gate.steps.push("read") })
+    gate.spendImportConfirmation.mockImplementationOnce(async () => { gate.steps.push("spend"); return confirmationId })
+    mocks.mockRunJobOnCloud.mockImplementationOnce(async () => {
+      gate.steps.push("relay")
+      return { sunoTracks: [{ id: "t1", audioUrl: "https://cloud.example.com/a.mp3" }], sunoTaskId: "cloud-task-9" }
+    })
+    const data = jobType === "suno-cover"
+      ? { prompt: "jazz cover", uploadUrl: page, confirmationId }
+      : { uploadUrl: page, continueAt: 30, confirmationId }
+    await sunoHandlers[jobType]!(makeJob(jobType, data) as never, makeCtx() as never)
+    const rights = { userId: "user-1", confirmationId, lane: "route", requestId: "job-1", via: null, appId: null, authorizationId: null }
+    expect(gate.requireImportAllowed).toHaveBeenCalledWith(page, rights)
+    expect(gate.spendImportConfirmation).toHaveBeenCalledWith(page, rights)
+    expect(gate.steps).toEqual(["read", "spend", "relay"])
+    expect(mocks.mockDownloadAudioToR2).not.toHaveBeenCalled()
+    mocks.mockIsSocialUrl.mockReturnValue(false)
+  })
+
+  it("a refusal before the relay sends nothing to the cloud", async () => {
+    mocks.mockIsSocialUrl.mockReturnValue(true)
+    gate.requireImportAllowed.mockRejectedValueOnce(Object.assign(new Error("Confirm first."), { code: "rights_confirmation_required" }))
+    await expect(
+      sunoHandlers["suno-cover"]!(makeJob("suno-cover", { prompt: "jazz cover", uploadUrl: "https://www.youtube.com/watch?v=abc" }) as never, makeCtx() as never),
+    ).rejects.toMatchObject({ code: "rights_confirmation_required" })
+    expect(gate.spendImportConfirmation).not.toHaveBeenCalled()
+    expect(mocks.mockRunJobOnCloud).not.toHaveBeenCalled()
+    mocks.mockIsSocialUrl.mockReturnValue(false)
+  })
+
+  it("a file as the source is relayed without the gate", async () => {
+    mocks.mockRunJobOnCloud.mockResolvedValueOnce({ sunoTracks: [{ id: "t1", audioUrl: "https://cloud.example.com/a.mp3" }], sunoTaskId: "cloud-task-9" })
+    await sunoHandlers["suno-cover"]!(makeJob("suno-cover", { prompt: "jazz cover", uploadUrl: "https://example.com/song.mp3" }) as never, makeCtx() as never)
+    expect(gate.requireImportAllowed).not.toHaveBeenCalled()
+    expect(mocks.mockRunJobOnCloud).toHaveBeenCalled()
+  })
+
+  it.each(["suno-cover", "suno-upload-extend"] as const)("%s: whether to relay is asked once, so a connection that comes up mid-job never relays a link the gate did not read", async (jobType) => {
+    mocks.mockIsSocialUrl.mockReturnValue(true)
+    // Not connected when asked, connected a moment later.
+    mocks.mockIsNodaroConnected.mockResolvedValueOnce(false).mockResolvedValue(true)
+    const data = jobType === "suno-cover"
+      ? { prompt: "jazz cover", uploadUrl: "https://www.youtube.com/watch?v=abc" }
+      : { uploadUrl: "https://www.youtube.com/watch?v=abc", continueAt: 30 }
+    // The local path takes over from here; how it ends is not this test's.
+    await sunoHandlers[jobType]!(makeJob(jobType, data) as never, makeCtx() as never).catch(() => undefined)
+    expect(mocks.mockIsNodaroConnected).toHaveBeenCalledOnce()
+    expect(mocks.mockRunJobOnCloud).not.toHaveBeenCalled()
+    mocks.mockIsSocialUrl.mockReturnValue(false)
   })
 
   it("a keyed install never calls the cloud — a local key always wins", async () => {

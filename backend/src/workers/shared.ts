@@ -135,20 +135,24 @@ export function isSocialUrl(url: string): boolean {
  * (`confirmationId`), and the job id as the request id, so a retry of the
  * same job after a transient fetch failure spends the same confirmation
  * again and passes (`consumeRightsConfirmation` is idempotent per request).
- * A job with no owner can match no confirmation, and passes only while the
- * deployment does not require one. The lane is the route's: every job that
- * fetches a link is enqueued by its route (the orchestrator calls routes too).
+ * A job whose owner could not be read imports nothing: the gate refuses an
+ * import with no account (`ImportOwnerUnknownError`), and the job may be tried
+ * again. The lane is the route's, or the run's for a job a run queued itself
+ * (it says so in the job data, `importLane`; a run's own dub of a link is read
+ * by the run before its job is queued, and names its request, `importRequestId`:
+ * the run and node, so every iteration of a repeated node spends the run's one
+ * confirmation).
  * The route also puts the way in (`importVia`, `lib/import-via.ts`) in the job
  * data, so a key's or an agent's job stands on the account's standing
  * authorization like its direct imports do.
  */
 export function importRightsOf(job: Pick<Job, "data">, ctx: Pick<JobContext, "jobId" | "jobUserId">): ImportRights {
-  const data = job.data as { confirmationId?: unknown; importVia?: unknown; importAppId?: unknown; importAuthorizationId?: unknown }
+  const data = job.data as { confirmationId?: unknown; importVia?: unknown; importAppId?: unknown; importAuthorizationId?: unknown; importLane?: unknown; importRequestId?: unknown }
   return {
     userId: ctx.jobUserId ?? "",
     confirmationId: typeof data.confirmationId === "string" ? data.confirmationId : null,
-    lane: "route",
-    requestId: ctx.jobId,
+    lane: data.importLane === "run" ? "run" : "route",
+    requestId: typeof data.importRequestId === "string" && data.importRequestId ? data.importRequestId : ctx.jobId,
     via: parseImportVia(data.importVia),
     appId: typeof data.importAppId === "string" ? data.importAppId : null,
     authorizationId: typeof data.importAuthorizationId === "string" ? data.importAuthorizationId : null,

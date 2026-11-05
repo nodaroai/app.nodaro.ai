@@ -1,13 +1,15 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { safeUrlSchema } from "../lib/url-validator.js"
+import { isAllowedSocialVideoUrl, safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob, insertSyncJob } from "../lib/insert-job.js"
+import { isImportRefusal, requireImportAllowed } from "../lib/import-gate.js"
+import { unusableLinkError } from "../lib/unusable-link.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
-import { importJobFields } from "../lib/import-via.js"
+import { importJobFields, importViaOf } from "../lib/import-via.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import {
@@ -126,6 +128,11 @@ const sunoCoverBody = z.object({
   personaId: z.string().min(1).max(200).optional(),
   personaModel: personaModelEnum.optional(),
   userId: z.string().uuid().optional(),
+  // The content rights confirmation (`POST /v1/content-rights/confirm`) a
+  // SOCIAL link as the source is imported under: checked here, spent by the
+  // worker right before the fetch. Optional until `content_rights_required` is
+  // on; a direct file needs none.
+  confirmationId: z.string().uuid().optional(),
 })
 
 const sunoExtendBody = z.object({
@@ -294,7 +301,39 @@ const sunoUploadExtendBody = z.object({
   negativeStyle: z.string().max(500).optional(),
   vocalGender: z.enum(["male", "female"]).optional(),
   userId: z.string().uuid().optional(),
+  // As on the cover: the confirmation a SOCIAL link as the source is imported under.
+  confirmationId: z.string().uuid().optional(),
 })
+
+/**
+ * A social link as the source is an import of the link (the worker downloads
+ * its sound first, on the same test): the site's policy and the rights check
+ * (reads) answer here, before any job row exists or credits are held, and the
+ * worker spends the confirmation when it fetches. A link two parsers would
+ * read differently is refused first (400). True once a refusal is sent.
+ */
+async function refusedSourceImport(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  uploadUrl: string,
+  userId: string,
+  confirmationId: string | undefined,
+): Promise<boolean> {
+  const unusable = unusableLinkError(uploadUrl)
+  if (unusable) {
+    reply.status(400).send({ error: unusable })
+    return true
+  }
+  if (!isAllowedSocialVideoUrl(uploadUrl)) return false
+  try {
+    await requireImportAllowed(uploadUrl, { userId, confirmationId, lane: "route", requestId: req.id, via: importViaOf(req) })
+    return false
+  } catch (e) {
+    if (!isImportRefusal(e)) throw e
+    reply.status(403).send({ error: { code: e.code, message: e.message } })
+    return true
+  }
+}
 
 /**
  * Return a COPY of the parsed Suno body with every text field trimmed to the
@@ -440,6 +479,9 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      const confirmationId = parsed.data.confirmationId
+      if (await refusedSourceImport(req, reply, uploadUrl, userId, confirmationId)) return reply
+
       const mcpClient = extractMcpClient(req.body)
 
       const { data: job, error } = await insertJob(req, {
@@ -463,7 +505,9 @@ export async function sunoRoutes(app: FastifyInstance) {
 
       await videoQueue.add("suno-cover", {
         jobId: job.id,
-        // A link as the source is an import of the link: the way in (and the connected app), for the worker's gate (`importRightsOf`).
+        // A link as the source is an import of the link: the confirmation, the
+        // way in (and the connected app), for the worker's gate (`importRightsOf`).
+        ...(confirmationId ? { confirmationId } : {}),
         ...importJobFields(req),
         prompt,
         uploadUrl,
@@ -1149,6 +1193,9 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      const confirmationId = parsed.data.confirmationId
+      if (await refusedSourceImport(req, reply, uploadUrl, userId, confirmationId)) return reply
+
       const mcpClient = extractMcpClient(req.body)
 
       const { data: job, error } = await insertJob(req, {
@@ -1181,6 +1228,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         negativeStyle,
         vocalGender,
         usageLogId,
+        ...(confirmationId ? { confirmationId } : {}),
         ...importJobFields(req),
       })
 

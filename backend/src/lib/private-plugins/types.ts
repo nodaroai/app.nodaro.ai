@@ -472,12 +472,22 @@ export interface PluginProvidersToolkit {
    * narrowed to the three fields the video-analysis worker passes. Downloads
    * (yt-dlp, UA-spoofed + client-ladder) to `outPath`, size-capped by
    * `maxFilesizeBytes`. SSRF-gated internally (throws `YtUrlNotAllowedError`
-   * on a non-allowlisted host).
+   * on a non-allowlisted host). Like every import of a link it passes the
+   * host's import gate first (see `confirmationId`), and rejects with the
+   * gate's refusal before anything is fetched.
    */
   downloadYouTubeVideo(opts: {
     url: string
     outPath: string
     maxFilesizeBytes?: number
+    /**
+     * The content rights confirmation (`POST /v1/content-rights/confirm`) the
+     * person made for this link: checked against the running job's owner and
+     * spent right before the download. Without one, the download passes only
+     * while the deployment does not require a confirmation
+     * (`content_rights_required`); an older host ignores the field.
+     */
+    confirmationId?: string
   }): Promise<void>
   /**
    * Mirrors `ytMetadataProbe` (`providers/video/youtube-video.ts`) — yt-dlp
@@ -523,7 +533,8 @@ export interface PluginProvidersToolkit {
    * with an Error whose `name` is `"YtDlpHaltError"` and whose `reason` is
    * `"refused"` (live, or past `maxDurationSec`), `"aborted"`,
    * `"out_of_time"` or `"too_much_output"` — match it by that shape; the class
-   * lives in the host. Optional: absent on an older host.
+   * lives in the host. Optional: absent on an older host. Passes the host's
+   * import gate first, like `downloadYouTubeVideo` (see `confirmationId`).
    */
   downloadSocialPostVideo?(opts: {
     url: string
@@ -532,6 +543,8 @@ export interface PluginProvidersToolkit {
     maxFilesizeBytes?: number
     maxHeight?: number
     signal?: AbortSignal
+    /** The content rights confirmation for this link, as on `downloadYouTubeVideo`. */
+    confirmationId?: string
   }): Promise<void>
 }
 

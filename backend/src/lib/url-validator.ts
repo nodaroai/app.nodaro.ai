@@ -4,9 +4,9 @@ import {
   YOUTUBE_HOSTS,
   INSTAGRAM_HOSTS,
   hostnameMatchesAllowlist,
-  hasUrlParserHazard,
   DIRECT_VIDEO_EXTENSIONS,
   isDirectVideoFileUrl,
+  isSocialVideoUrl,
 } from "@nodaro/shared/video"
 import {
   isLocalOrPrivateHostname,
@@ -88,14 +88,12 @@ export { SOCIAL_VIDEO_HOSTS, YOUTUBE_HOSTS, INSTAGRAM_HOSTS, hostnameMatchesAllo
  * RAW string and parses it itself, and a parser that ends the authority at "/"
  * alone reads host `10.0.0.1`. The allowlist is only a gate if both readers
  * agree on what it admitted — so a string they can disagree on is not admitted.
+ * Only http(s) links are links to a page. It is the editor's own test
+ * (`isSocialVideoUrl`, shared), so the editor and the server never disagree
+ * on which link is a video's page.
  */
 export function isAllowedSocialVideoUrl(url: string, domains: readonly string[] = SOCIAL_VIDEO_HOSTS): boolean {
-  if (hasUrlParserHazard(url)) return false
-  try {
-    return hostnameMatchesAllowlist(new URL(url).hostname, domains)
-  } catch {
-    return false
-  }
+  return isSocialVideoUrl(url, domains)
 }
 
 // The direct-file rule lives in `@nodaro/shared` too (`video-link.ts`): the app

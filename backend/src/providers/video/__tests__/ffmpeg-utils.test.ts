@@ -997,6 +997,18 @@ describe("probeVideoSource", () => {
     expect(mocks.execFile).not.toHaveBeenCalled()
   })
 
+  it("rejects a link the guard and ffprobe would read differently (a backslash, a control character) before either reads it", async () => {
+    // Built from code points: the WHATWG parser reads a backslash as a slash
+    // and drops a tab, so the guard would judge a public host ffprobe never reads.
+    const backslash = String.fromCharCode(0x5c)
+    const tab = String.fromCharCode(9)
+    for (const src of [`https://public.example${backslash}@10.0.0.5/v.mp4`, `https://public.example/v${tab}.mp4`]) {
+      await expect(probeVideoSource(src)).rejects.toThrow(/read differently/)
+    }
+    expect(mocks.dnsLookup).not.toHaveBeenCalled()
+    expect(mocks.execFile).not.toHaveBeenCalled()
+  })
+
   it("passes -protocol_whitelist to ffprobe (blocks protocol pivots)", async () => {
     execFileOnce(JSON.stringify({ streams: [{ width: 1920, height: 1080 }], format: { duration: "10.0" } }))
     await probeVideoSource("/tmp/v.mp4")

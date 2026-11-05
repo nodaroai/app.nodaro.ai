@@ -6140,7 +6140,8 @@ Generate speech in a voice described in natural language, without cloning
 dub(input: {
   audioUrl?: string          // exactly ONE source of the three
   videoUrl?: string          // video in → the dubbed VIDEO out (+ audio track)
-  sourceUrl?: string         // public YouTube/TikTok/direct link — ElevenLabs fetches it
+  sourceUrl?: string         // a link to a video's page, or a direct file link — the dubbing service fetches it
+  confirmationId?: string    // the content rights confirmation for sourceUrl
   targetLanguage: string     // ISO code, e.g. "es", "pt-BR"
   sourceLanguage?: string    // auto-detected when omitted
   numSpeakers?: number       // 0 = auto; 1–20 — improves separation when known
@@ -6161,6 +6162,13 @@ speaker's voice (`POST /v1/dubbing`). Video mode completes with
 dubbed track alone). Priced per minute of the dubbed span (minimum 1 minute);
 the span is capped at 30 minutes — use `startTime`/`endTime` for longer
 sources.
+
+A `sourceUrl` is fetched by the dubbing service on your behalf: an import of
+that link, under the content rights declaration. Pass the `confirmationId` that
+`contentRights.confirm()` answered for it. Without one, a deployment that
+requires a confirmation refuses the dub with `403` before the job is created,
+unless the request comes through a key or an agent whose account holds a
+standing authorization (`contentRights.authorize()`).
 
 #### `textToDialogue(input)`
 
@@ -6911,10 +6919,12 @@ confirm(input: { url: string; declarationVersion: number }): Promise<{
 ```
 
 Records that the signed-in account confirmed the declaration for one link
-(`POST /v1/content-rights/confirm`) and answers the confirmation. Pass its
-`id` as `confirmationId` to `media.downloadVideo`: one confirmation opens one
-download of that link, by the same account, under the current declaration,
-within an hour. A `409 rights_confirmation_stale` means the declaration
+(`POST /v1/content-rights/confirm`) and answers the confirmation. Any `http(s)`
+link an import takes can be confirmed: a video's page, a file, a picture, a
+page the dubbing service reads. Pass its `id` as `confirmationId` to
+`media.downloadVideo` (or to the import that fetches the link): one
+confirmation opens one download of that link, by the same account, under the
+current declaration, within an hour. A `409 rights_confirmation_stale` means the declaration
 changed since it was read — read it again and ask again.
 
 ```ts
@@ -7127,10 +7137,19 @@ transcribe(input: {
   diarize?: boolean               // label who spoke each word (elevenlabs-stt)
   tagAudioEvents?: boolean        // tag laughter / applause / … (elevenlabs-stt)
   wordTimestamps?: boolean        // ask for per-word timings
+  confirmationId?: string         // the content rights confirmation, for a link to a video's page
 }): Promise<{ jobId: string }>
 ```
 
 Transcribe an audio (or video) track to text (`POST /v1/transcribe`).
+
+An `audioUrl` that is a link to a video's page on a social platform is an
+import of that link: its sound is fetched first, under the content rights
+declaration. Pass the `confirmationId` that `contentRights.confirm()` answered
+for that link. Without one, a deployment that requires a confirmation refuses
+it with `403` before the job is created, unless the request comes through a
+key or an agent whose account holds a standing authorization
+(`contentRights.authorize()`). A direct file link needs none.
 
 Three engines are accepted:
 

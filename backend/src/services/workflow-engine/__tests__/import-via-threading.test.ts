@@ -45,6 +45,15 @@ vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: mockQueueAdd } }))
 vi.mock("@/lib/render-queue.js", () => ({ renderQueue: { add: vi.fn().mockResolvedValue(undefined) } }))
 vi.mock("@/workers/shared.js", () => ({ refundJobCredits: vi.fn().mockResolvedValue(undefined) }))
 vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: mockGetAppSettings }))
+// A dub of a link reads the gate and measures the link before its job: both are this test's to pass.
+vi.mock("@/lib/import-gate.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  requireImportAllowed: vi.fn(async () => undefined),
+}))
+vi.mock("@/lib/dubbing-pricing.js", () => ({
+  stampDubbingDuration: vi.fn(async () => null),
+  projectDubbingCreditOverride: vi.fn(async () => null),
+}))
 
 vi.mock("../payload-builder.js", () => ({
   buildPayload: vi.fn().mockReturnValue({
@@ -70,6 +79,7 @@ vi.mock("../sub-workflow-handler.js", () => ({ executeSubWorkflow: vi.fn() }))
 vi.mock("../reference-sheet-stage-a.js", () => ({ ensureWorkflowSheetPanels: vi.fn() }))
 
 import { executeNode } from "../node-executor.js"
+import { buildPayload } from "../payload-builder.js"
 import type { SimpleNode, OrchestratorContext } from "../types.js"
 
 function makeCtx(importVia?: OrchestratorContext["importVia"]): OrchestratorContext {
@@ -111,5 +121,26 @@ describe("the way in rides every worker-queued payload", () => {
     await expect(executeNode(node, {}, [], [], {}, makeCtx())).rejects.toThrow(/enqueue-sentinel/)
     const [, payload] = mockQueueAdd.mock.calls[0] as [string, Record<string, unknown>]
     expect(payload).not.toHaveProperty("importVia")
+  })
+
+  it("every job a run queues says an import it makes is the run's, not a route's", async () => {
+    await expect(executeNode(node, {}, [], [], {}, makeCtx())).rejects.toThrow(/enqueue-sentinel/)
+    const [, payload] = mockQueueAdd.mock.calls[0] as [string, Record<string, unknown>]
+    expect(payload).toHaveProperty("importLane", "run")
+    expect(payload).not.toHaveProperty("importRequestId")
+  })
+
+  it("a dub of the node's own link names the run and node as its request, for every iteration to spend the run's one confirmation", async () => {
+    vi.mocked(buildPayload).mockReturnValueOnce({
+      jobName: "dubbing",
+      queueName: "video-generation",
+      modelIdentifier: "elevenlabs-dubbing",
+      payload: { jobId: "test-job-id", sourceUrl: "https://example.com/talks/keynote", targetLanguage: "fr", confirmationId: "conf-1" },
+    } as never)
+    const dub: SimpleNode = { id: "dub1", type: "dubbing", data: { targetLanguage: "fr", sourceUrl: "https://example.com/talks/keynote" } }
+    await expect(executeNode(dub, {}, [], [], {}, makeCtx())).rejects.toThrow(/enqueue-sentinel/)
+    const [jobName, payload] = mockQueueAdd.mock.calls[0] as [string, Record<string, unknown>]
+    expect(jobName).toBe("dubbing")
+    expect(payload).toMatchObject({ importRequestId: "exec-1:dub1", confirmationId: "conf-1", importLane: "run" })
   })
 })

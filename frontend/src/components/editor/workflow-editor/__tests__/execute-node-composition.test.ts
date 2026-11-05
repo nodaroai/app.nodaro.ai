@@ -245,6 +245,7 @@ vi.mock("../types", () => ({
 // ---------------------------------------------------------------------------
 
 import { executeNode } from "../execute-node"
+import { downloadYouTubeAudio } from "@/lib/api"
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
 
 // ---------------------------------------------------------------------------
@@ -1249,6 +1250,39 @@ describe("transcribe", () => {
     )
     expect(mockToastSuccess).toHaveBeenCalledWith("Transcription complete")
 
+    vi.useRealTimers()
+  })
+
+  it("extracts the sound of a link to a video's page first, and transcribes the extracted file", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "https://www.youtube.com/watch?v=abc" })
+    vi.mocked(downloadYouTubeAudio).mockResolvedValue({ url: "https://cdn.example.com/extracted.mp3" } as never)
+    mockTranscribeApi.mockResolvedValue({ jobId: "tr-page" })
+    mockGetJobStatus.mockResolvedValue({ status: "completed", output_data: { text: "Hi", language: "en" } })
+    vi.useFakeTimers()
+    const transcribeNode = makeNode("transcribe", { provider: "whisper" })
+    mockNodes = [transcribeNode]
+    const promise = executeNode(transcribeNode, makeCtx())
+    await vi.advanceTimersByTimeAsync(0)
+    expect(vi.mocked(downloadYouTubeAudio)).toHaveBeenCalledWith("https://www.youtube.com/watch?v=abc")
+    expect(mockTranscribeApi).toHaveBeenCalledWith("https://cdn.example.com/extracted.mp3", "whisper", undefined, "u1", undefined, undefined, undefined)
+    await vi.advanceTimersByTimeAsync(2000)
+    await promise
+    vi.useRealTimers()
+  })
+
+  it("extracts a link's sound first only for a video's page: a host that merely contains a platform's name is a file", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "https://dropbox.com/s/abc/talk.mp3" })
+    mockTranscribeApi.mockResolvedValue({ jobId: "tr-file" })
+    mockGetJobStatus.mockResolvedValue({ status: "completed", output_data: { text: "Hi", language: "en" } })
+    vi.useFakeTimers()
+    const transcribeNode = makeNode("transcribe", { provider: "whisper" })
+    mockNodes = [transcribeNode]
+    const promise = executeNode(transcribeNode, makeCtx())
+    await vi.advanceTimersByTimeAsync(0)
+    expect(vi.mocked(downloadYouTubeAudio)).not.toHaveBeenCalled()
+    expect(mockTranscribeApi).toHaveBeenCalledWith("https://dropbox.com/s/abc/talk.mp3", "whisper", undefined, "u1", undefined, undefined, undefined)
+    await vi.advanceTimersByTimeAsync(2000)
+    await promise
     vi.useRealTimers()
   })
 

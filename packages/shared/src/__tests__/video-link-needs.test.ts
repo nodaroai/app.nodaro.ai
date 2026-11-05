@@ -24,8 +24,14 @@ describe("what a Video URL node must fetch for the nodes that read it", () => {
     expect(videoLinkNeedOf(["transcribe", "video-to-video"])).toBe("file")
     expect(videoLinkNeedOf(["transcribe"])).toBe("audio")
     expect(videoLinkNeedOf(["suno-cover", "content-recipe"])).toBe("audio")
-    expect(videoLinkNeedOf(["dubbing", "content-recipe"])).toBe("none")
+    expect(videoLinkNeedOf(["content-recipe"])).toBe("none")
     expect(videoLinkNeedOf([])).toBe("none")
+  })
+
+  it("Dubbing dubs the file wired into it: a link it reads is downloaded first", () => {
+    expect(videoLinkNeedOf(["dubbing"])).toBe("file")
+    expect(videoLinkNeedOf(["dubbing", "content-recipe"])).toBe("file")
+    expect(videoLinkNeedOf(["transcribe", "dubbing"])).toBe("file")
   })
 
   it("the card's and the server's constants are the same numbers the editor used", () => {
@@ -60,8 +66,21 @@ describe("videoLinkRunNeeds — one reading of the graph for the editor's gate, 
   })
 
   it("a null scope is the whole graph (the app runner's view)", () => {
-    const nodes = [link("src"), node("tx", "transcribe"), node("dub", "dubbing")]
-    expect(videoLinkRunNeeds(null, nodes, [edge("src", "tx"), edge("src", "dub")]).get("src")).toBe("audio")
-    expect(videoLinkRunNeeds(null, [link("src"), node("dub", "dubbing")], [edge("src", "dub")]).get("src")).toBe("none")
+    const nodes = [link("src"), node("tx", "transcribe"), node("rec", "content-recipe")]
+    expect(videoLinkRunNeeds(null, nodes, [edge("src", "tx"), edge("src", "rec")]).get("src")).toBe("audio")
+    expect(videoLinkRunNeeds(null, [link("src"), node("rec", "content-recipe")], [edge("src", "rec")]).get("src")).toBe("none")
+    expect(videoLinkRunNeeds(null, [link("src"), node("dub", "dubbing")], [edge("src", "dub")]).get("src")).toBe("file")
+  })
+
+  it("a Dubbing node with its own Source link reads nothing wired into it: a link it alone reads needs nothing", () => {
+    const own = { sourceUrl: "https://example.com/talks/keynote" }
+    expect(videoLinkRunNeeds(null, [link("src"), node("dub", "dubbing", own)], [edge("src", "dub")]).get("src")).toBe("none")
+    // A blank Source link is no link: the wired video is dubbed.
+    expect(videoLinkRunNeeds(null, [link("src"), node("dub", "dubbing", { sourceUrl: "  " })], [edge("src", "dub")]).get("src")).toBe("file")
+    // Another reader beside it still decides for itself.
+    const nodes = [link("src"), node("dub", "dubbing", own), node("va", "video-analysis")]
+    expect(videoLinkRunNeeds(null, nodes, [edge("src", "dub"), edge("src", "va")]).get("src")).toBe("file")
+    const tx = [link("src"), node("dub", "dubbing", own), node("tx", "transcribe")]
+    expect(videoLinkRunNeeds(null, tx, [edge("src", "dub"), edge("src", "tx")]).get("src")).toBe("audio")
   })
 })

@@ -11,3 +11,11 @@ export function dubbingModelIdentifier(targetLanguage: unknown): string {
   return typeof targetLanguage === "string" && /^(he|heb)$/i.test(targetLanguage)
     ? DUBBING_MODEL_IDENTIFIERS[1] : DUBBING_MODEL_IDENTIFIERS[0]
 }
+
+/** True when a dub into this language runs on the project API (Hebrew). */
+export function dubsAsProject(targetLanguage: unknown): boolean {
+  return dubbingModelIdentifier(targetLanguage) === DUBBING_MODEL_IDENTIFIERS[1]
+}
+
+/** The project API takes an uploaded audio or video file only, never a link the service fetches. */
+export const PROJECT_DUBBING_NEEDS_UPLOAD = "Hebrew dubbing requires an uploaded audio or video file. Import the video first."

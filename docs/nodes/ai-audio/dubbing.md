@@ -7,7 +7,8 @@ The Dubbing node uses ElevenLabs Dubbing to translate media from one language to
 
 - **Audio in → dubbed audio out** (the classic mode).
 - **Video in → dubbed VIDEO out**, plus the dubbed audio track on the audio output handle. The dubbed clip keeps the original visuals with the translated dialogue.
-- **Source link** — instead of wiring an input, paste a public link (YouTube, TikTok, or a direct media URL) in the panel. ElevenLabs fetches the link itself; the file never passes through Nodaro's servers. The result mode (audio/video) follows what the link points at.
+- **Source link** — instead of wiring an input, paste a public link (a link to where the video is, or a direct link to a media file) in the panel. ElevenLabs fetches the link itself; the file never passes through Nodaro's servers. The result mode (audio/video) follows what the link points at.
+- **A Video URL node** wired into the `video` input gives Dubbing the video it downloaded: the Video URL node downloads it first, under its own content rights box and by its own rules (a long video from a site whose length is read first asks for a part, or the whole video, before it downloads). The downloaded video counts as an uploaded file, so the 500 MB limit below applies. To dub a whole long video from its link without downloading it, paste the link in Source link instead (not for Hebrew, which takes an uploaded file only). A Dubbing node with a Source link dubs that link and reads nothing wired into it, so a run downloads nothing for a Video URL node wired to it.
 
 The process is asynchronous — the node submits the dubbing job, polls for completion, and returns the translated media when ready. Long sources are delivered by the platform's background recovery lane; the job completes even if it outlives the initial polling window.
 
@@ -19,7 +20,7 @@ The process is asynchronous — the node submits the dubbing job, polls for comp
 | Maximum uploaded file size | 500 MB (source links are exempt — ElevenLabs fetches those directly) |
 | Price | **44 credits<!-- credits-rate: elevenlabs-dubbing --> per minute** of the dubbed span, minimum 1 minute, the total rounded up to a whole credit |
 
-The dubbed span is the Start/End window when set, otherwise the whole source. Its length is measured before the run starts: an uploaded file is read directly, a link to a YouTube, TikTok, Instagram, X or Facebook post is read from the post, and a direct media link is read from the file. A span longer than 30 minutes is rejected before anything is charged.
+The dubbed span is the Start/End window when set, otherwise the whole source. Its length is measured before the run starts: an uploaded file is read directly, a link to a post on a supported site is read from the post, and a direct media link is read from the file. A span longer than 30 minutes is rejected before anything is charged.
 
 When the length cannot be read up front (a link that cannot be read, or a file that cannot be probed), the run holds the 30-minute price (**1,320 credits**<!-- credits: elevenlabs-dubbing@30 -->, so that amount has to be available to start). When the dub is delivered, it is charged for the span that was actually dubbed, from ElevenLabs' own reading of the media or the length of the delivered file, and the rest of the hold is refunded automatically. A single-node run, a run inside a workflow, and MCP or SDK calls are all charged this way.
 
@@ -47,7 +48,7 @@ This target preserves voices and background audio and detects speakers automatic
 |-------|------|---------|-------------|
 | Target Language | `string` | `"es"` | Language code for the desired output language (required) |
 | Source Language | `string` (optional) | auto-detect | Language code of the input audio. Leave empty for automatic detection |
-| Source Link | `string` (optional) | — | Public YouTube/TikTok/direct URL — ElevenLabs fetches it directly. Overrides any wired input |
+| Source Link | `string` (optional) | — | A public link to where the video is, or a direct media link — ElevenLabs fetches it directly. Overrides any wired input |
 | Start / End (sec) | `number` (optional) | whole source | Dub only this window of the source |
 | Number of Speakers | `number` (0-20, optional) | 0 = auto | Number of distinct speakers in the input; 0 or empty = auto-detect |
 | Native voice | `boolean` | `false` | By default the dub **clones the original speaker** — they speak the target language with their own voice and accent. Enable to use a similar **native-sounding Voice Library voice** instead (clean target-language accent) |
@@ -62,7 +63,7 @@ The default mode preserves speaker identity: a Hebrew speaker dubbed to English 
 
 ## Inputs & Outputs
 
-- **Inputs**: `audio` — source audio to dub; `video` — source video to dub (video wins when both are wired; a Source Link overrides both)
+- **Inputs**: `audio` — source audio to dub; `video` — source video to dub (video wins when both are wired; a Source Link overrides both). A Video URL node wired in gives the video it downloaded, never its page link
 - **Outputs**: `audio` — the dubbed audio track (URL; always produced); `video` — the dubbed video (URL; video mode only)
 
 The mode is decided by the **media**, not the slot: an audio-only file wired into the video input is dubbed as audio; a video wired into the audio input is treated as a request for audio.
@@ -78,7 +79,7 @@ The mode is decided by the **media**, not the slot: an audio-only file wired int
 ## Common Use Cases
 
 - Localizing podcast episodes or full videos for international audiences
-- Dubbing a YouTube/TikTok link into another language without downloading it first
+- Dubbing a video from its link into another language without downloading it first (Source link)
 - Creating multilingual versions of training or educational content
 - Dubbing interview audio for cross-language content repurposing
 - Translating voiceover tracks for marketing videos

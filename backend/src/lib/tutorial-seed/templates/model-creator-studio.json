@@ -14,7 +14,7 @@
     "identity",
     "e-commerce"
   ],
-  "complexity": "beginner",
+  "complexity": "simple",
   "estimatedCredits": 120,
   "nodeTypesUsed": [
     "person",

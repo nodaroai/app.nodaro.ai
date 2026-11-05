@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 /**
  * Worker handler test for Video Mask + Mask Composite. Mocks the provider, the
@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   shouldSaveJobResult: vi.fn(async () => true),
   completeFfmpegVideoJob: vi.fn(async () => {}),
   detectCutFrames: vi.fn(async (): Promise<number[]> => []),
+  runFfmpeg: vi.fn(async (_args: readonly string[], _timeoutMs?: number, _launch?: unknown) => ""),
 }))
 
 vi.mock("@/providers/video/video-mask.js", async (importOriginal) => ({
@@ -55,6 +56,7 @@ vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
   parseFrameRate: (await importOriginal<typeof import("@/providers/video/ffmpeg-utils.js")>()).parseFrameRate,
   createWorkDir: mocks.createWorkDir,
   cleanupWorkDir: mocks.cleanupWorkDir,
+  runFfmpeg: mocks.runFfmpeg,
 }))
 vi.mock("@/workers/shared.js", () => ({
   markJobCompleted: mocks.markJobCompleted,
@@ -69,6 +71,8 @@ vi.mock("@/workers/shared.js", () => ({
 import { gzipSync } from "node:zlib"
 import { videoMaskHandlers } from "../video-mask.js"
 import { VIDEO_MASK_RECIPE } from "@nodaro/shared/media"
+import { encodeMaskRle } from "@/providers/video/video-mask-steady.js"
+import { maskGeometryPeakMemoryMiB } from "@/providers/video/video-mask.js"
 
 const ctx = { jobId: "00000000-0000-4000-8000-0000000000aa", jobUserId: "user1", usageLogId: "ul1", shouldWatermark: true }
 const job = (data: Record<string, unknown>) => ({ data: { jobId: ctx.jobId, ...data }, updateProgress: vi.fn() }) as never
@@ -635,6 +639,601 @@ describe("video-mask handler — redetectEverySec", () => {
       const stored = JSON.parse((await import("node:zlib")).gunzipSync((mocks.uploadJobScratchBuffer.mock.calls[0] as unknown as [Buffer])[0]).toString()) as Record<string, unknown>
       expect(stored).not.toHaveProperty("redetectEverySec")
     })
+  })
+})
+
+describe("video-mask handler — steadyRegions", () => {
+  const { width, height } = geometry
+  /** One frame with a white box per entry; none = an empty frame. */
+  const frame = (...boxes: ReadonlyArray<{ top: number; left: number; size: number }>) => {
+    const pixels = new Uint8Array(width * height)
+    for (const { top, left, size } of boxes) {
+      for (let row = top; row < top + size; row++) pixels.fill(255, row * width + left, row * width + left + size)
+    }
+    return encodeMaskRle(pixels, width, height)
+  }
+  /** `total` frames holding each face from frame 0 up to (not including) its `until`. */
+  const clip = (total: number, faces: ReadonlyArray<{ top: number; left: number; size: number; until: number }>) =>
+    Array.from({ length: total }, (_, f) => frame(...faces.filter((face) => f < face.until)))
+
+  const face = { top: 100, left: 100, size: 40, until: 20 }
+  /** The clip's own request answers the whole clip; a look at part of it answers through `extra`. */
+  const answerWith = (main: readonly string[], extra: (p: { frameCount: number }) => unknown = (p) => ({ rle: Array(p.frameCount).fill(""), requestId: "e", cost: 0.01 })) => {
+    mocks.runSam3Video.mockImplementation(async (p: { frameCount: number }) =>
+      p.frameCount === main.length ? { rle: main, requestId: "m", cost: 0.03 } : extra(p))
+  }
+  const prepare = (frameCount: number) => mocks.prepareVideoMaskSource.mockResolvedValue({ localPath: "/tmp/vm/source.mp4", frameCount, geometry })
+  const completed = () => (mocks.markJobCompleted.mock.calls[0] as unknown as [string, { output_data: Record<string, unknown>; provider_cost: number | null }])[1]
+  const rendered = () => (mocks.renderMaskVideo.mock.calls[0] as unknown as [string[]])[0]
+  /** The frame ranges cut for a second look, in the order they were asked for. */
+  const cuts = () => mocks.runFfmpeg.mock.calls.map((c) => /trim=start_frame=(\d+):end_frame=(\d+)/.exec((c[0] as string[]).join(" "))!.slice(1).map(Number))
+
+  it("with the field off, renders the model's mask through the hold exactly as before", async () => {
+    prepare(40)
+    answerWith(clip(40, [face]))
+    await run({ holdLastMask: true })
+    expect(mocks.runSam3Video).toHaveBeenCalledTimes(1)
+    expect(mocks.runFfmpeg).not.toHaveBeenCalled()
+    // Held from the face's last frame on, for the 20 frames it is gone.
+    expect(rendered()).toEqual(Array(40).fill(frame(face)))
+    expect(completed().output_data).toMatchObject({ heldFrames: 20 })
+    expect(completed().output_data).not.toHaveProperty("steady")
+    expect(completed().provider_cost).toBe(0.03)
+  })
+
+  it("with the field off, a false value is off too", async () => {
+    prepare(40)
+    answerWith(clip(40, [face]))
+    await run({ steadyRegions: false })
+    expect(mocks.runSam3Video).toHaveBeenCalledTimes(1)
+    expect(rendered()).toEqual(clip(40, [face]))
+    expect(completed().output_data).not.toHaveProperty("steady")
+  })
+
+  it("with the field on, skips the hold and reports steady counts", async () => {
+    prepare(30)
+    // Blinks for 3 frames (a gap it fills), and a speck shows for one frame (a pop it removes).
+    const main = clip(30, [{ ...face, until: 30 }])
+    main[10] = main[11] = main[12] = ""
+    main[20] = frame(face, { top: 300, left: 500, size: 10 })
+    answerWith(main)
+    await run({ steadyRegions: true, holdLastMask: true })
+    expect(rendered()).toEqual(Array(30).fill(frame(face)))
+    expect(completed().output_data.steady).toEqual({ filledFrames: 3, removedRegions: 1, extraRequests: 0, extraFound: 0 })
+    expect(completed().output_data).not.toHaveProperty("heldFrames")
+  })
+
+  it("makes no extra request when nothing is lost", async () => {
+    prepare(30)
+    answerWith(clip(30, [{ ...face, until: 30 }]))
+    await run({ steadyRegions: true })
+    expect(mocks.runSam3Video).toHaveBeenCalledTimes(1)
+    expect(mocks.runFfmpeg).not.toHaveBeenCalled()
+    expect(completed().provider_cost).toBe(0.03)
+  })
+
+  it("makes at most 3 extra requests, largest first", async () => {
+    prepare(90)
+    // Five faces apart from one another, each gone at its own frame: the larger, the later.
+    const faces = [10, 14, 18, 22, 26].map((size, i) => ({ top: 20 + i * 60, left: 20 + i * 100, size, until: 10 + i * 5 }))
+    answerWith(clip(90, faces))
+    await run({ steadyRegions: true })
+    expect(mocks.runSam3Video).toHaveBeenCalledTimes(4)
+    expect(cuts()).toEqual([[30, 90], [25, 90], [20, 90]])
+    expect(mocks.uploadJobScratchFile.mock.calls.map((c) => c[1])).toEqual(["mask-src-c10030", "mask-src-c10025", "mask-src-c10020"])
+    expect(completed().output_data.steady).toMatchObject({ extraRequests: 3, extraFound: 0 })
+  })
+
+  it("cuts a look at the clip's own frames, under the request's deadline", async () => {
+    prepare(40)
+    answerWith(clip(40, [face]))
+    await run({ steadyRegions: true })
+    const [args, timeoutMs, launch] = mocks.runFfmpeg.mock.calls[0]!
+    expect(args).toContain("/tmp/vm/source.mp4")
+    // A short kill budget of its own, and a signal that gives up waiting for a slot.
+    expect(timeoutMs).toBe(60_000)
+    expect(launch).toEqual({ peakMemoryMiB: maskGeometryPeakMemoryMiB(geometry), signal: expect.any(AbortSignal) })
+    expect(mocks.runSam3Video).toHaveBeenLastCalledWith({ model: "sam-3.1", videoUrl: "https://r2/tmp/mask-src-c10020.mp4", prompt: "the dog", threshold: 0.5, frameCount: 20 })
+  })
+
+  it("asks once for two faces lost on the same frame, and looks for both in the answer", async () => {
+    const a = { top: 100, left: 100, size: 40, until: 20 }
+    const b = { top: 100, left: 400, size: 30, until: 20 }
+    prepare(40)
+    answerWith(clip(40, [a, b]), () => ({ rle: Array(20).fill(frame(a, b)), requestId: "e", cost: 0.01 }))
+    await run({ steadyRegions: true })
+    expect(mocks.runSam3Video).toHaveBeenCalledTimes(2)
+    expect(cuts()).toEqual([[20, 40]])
+    expect(rendered()).toEqual(Array(40).fill(frame(a, b)))
+    expect(completed().output_data.steady).toMatchObject({ extraRequests: 1, extraFound: 2 })
+  })
+
+  it("adds an extra request's answer and cost", async () => {
+    prepare(40)
+    answerWith(clip(40, [face]), () => ({ rle: Array(20).fill(frame(face)), requestId: "e", cost: 0.01 }))
+    await run({ steadyRegions: true })
+    expect(rendered()).toEqual(Array(40).fill(frame(face)))
+    expect(completed().provider_cost).toBeCloseTo(0.04)
+    expect(completed().output_data.steady).toEqual({ filledFrames: 0, removedRegions: 0, extraRequests: 1, extraFound: 1 })
+  })
+
+  it("fills a short gap the recovered face leaves, in a second pass", async () => {
+    prepare(40)
+    // Gone for longer than the limit beside another face: a new track at frame 34, and the old one reported lost. The
+    // answer holds the face for its first 5 frames only, which brings the gap down to 9 frames: short enough to fill.
+    const other = { top: 250, left: 400, size: 40 }
+    const main = clip(40, [{ ...other, until: 40 }, face])
+    for (let f = 34; f < 40; f++) main[f] = frame(other, face)
+    answerWith(main, () => ({ rle: Array.from({ length: 20 }, (_, i) => (i < 5 ? frame(face) : "")), requestId: "e", cost: 0.01 }))
+    await run({ steadyRegions: true })
+    expect(rendered()).toEqual(Array(40).fill(frame(other, face)))
+    expect(completed().output_data.steady).toMatchObject({ filledFrames: 9, extraFound: 1 })
+  })
+
+  describe("a face that blinks in the extra answer", () => {
+    const other = { top: 250, left: 400, size: 40 }
+    const main = () => clip(40, [{ ...other, until: 40 }, face])
+    const look = (missing: readonly number[]) => () => ({
+      rle: Array.from({ length: 20 }, (_, i) => (missing.includes(i) ? "" : frame(face))),
+      requestId: "e",
+      cost: 0.01,
+    })
+
+    it("recovers the window of a face found one frame late", async () => {
+      prepare(40)
+      answerWith(main(), look([0]))
+      await run({ steadyRegions: true })
+      expect(rendered()).toEqual(Array(40).fill(frame(other, face)))
+      expect(completed().output_data.steady).toMatchObject({ extraFound: 1, filledFrames: 1 })
+    })
+
+    it("recovers the window through a one-frame blink", async () => {
+      prepare(40)
+      answerWith(main(), look([3]))
+      await run({ steadyRegions: true })
+      expect(rendered()).toEqual(Array(40).fill(frame(other, face)))
+      expect(completed().output_data.steady).toMatchObject({ extraFound: 1, filledFrames: 1 })
+    })
+
+    it("holds a blink to the clip's gap limit", async () => {
+      prepare(40)
+      // 11 frames missing at 30 fps, one past the limit of 10: the follow ends on them.
+      answerWith(main(), look([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]))
+      await run({ steadyRegions: true })
+      const shown = rendered()
+      for (let f = 20; f < 23; f++) expect(shown[f]).toBe(frame(other, face))
+      for (let f = 23; f < 40; f++) expect(shown[f]).toBe(frame(other))
+    })
+  })
+
+  describe("a lone face in an empty mask, at 30 fps", () => {
+    const backAfter = (gone: number) => Array.from({ length: 90 }, (_, f) => (f >= 20 && f < 20 + gone ? "" : frame(face)))
+
+    it("fills a gap of one second and asks the model nothing more", async () => {
+      prepare(90)
+      answerWith(backAfter(30))
+      await run({ steadyRegions: true })
+      expect(rendered()).toEqual(Array(90).fill(frame(face)))
+      expect(completed().output_data.steady).toEqual({ filledFrames: 30, removedRegions: 0, extraRequests: 0, extraFound: 0 })
+      expect(mocks.runSam3Video).toHaveBeenCalledTimes(1)
+    })
+
+    it("does not fill a gap of more than a second", async () => {
+      prepare(90)
+      answerWith(backAfter(31))
+      await run({ steadyRegions: true })
+      expect(rendered()).toEqual(backAfter(31))
+      expect(completed().output_data.steady).toMatchObject({ filledFrames: 0 })
+    })
+
+    it("reads an unreadable frame rate as the basis rate for both limits", async () => {
+      mocks.prepareVideoMaskSource.mockResolvedValue({ localPath: "/tmp/vm/source.mp4", frameCount: 90, geometry: { ...geometry, frameRate: "bad" } })
+      answerWith(backAfter(30))
+      await run({ steadyRegions: true })
+      expect(rendered()).toEqual(Array(90).fill(frame(face)))
+    })
+  })
+
+  describe("an extra answer goes through the region filters", () => {
+    // Frame height 360: 20 % is 72 rows. A stable face above the minimum, a second one shrinking under it at frame 20.
+    const stable = { top: 20, left: 20, size: 100 }
+    const large = { top: 200, left: 400, size: 80 }
+    const small = { top: 200, left: 400, size: 40 }
+
+    it("does not paint back a face the size filter dropped", async () => {
+      prepare(40)
+      const main = Array.from({ length: 40 }, (_, f) => frame(stable, f < 20 ? large : small))
+      // The look sees what the clip's own request saw: the face at its shrunk size, which the filter drops again.
+      answerWith(main, (p) => ({ rle: Array(p.frameCount).fill(frame(stable, small)), requestId: "e", cost: 0.01 }))
+      await run({ steadyRegions: true, minSubjectHeightPct: 20 })
+      const shown = rendered()
+      expect(shown.slice(0, 20)).toEqual(Array(20).fill(frame(stable, large)))
+      expect(shown.slice(20)).toEqual(Array(20).fill(frame(stable)))
+      expect(completed().output_data.steady).toMatchObject({ extraFound: 0 })
+    })
+
+    it("does not paint back a face that left the zone", async () => {
+      prepare(40)
+      // Margins of 25 % each side: the box's centre has to stay within 160–480 across.
+      const zone = { leftPct: 25, rightPct: 25, topPct: 0, bottomPct: 0 }
+      const centre = { top: 20, left: 200, size: 100 }
+      const inside = { top: 200, left: 400, size: 70 }
+      const outside = { top: 200, left: 460, size: 70 }
+      const main = Array.from({ length: 40 }, (_, f) => frame(centre, f < 20 ? inside : outside))
+      // `outside` overlaps the box the face was last seen in, so unfiltered it would be painted; its centre is out of the zone.
+      answerWith(main, (p) => ({ rle: Array(p.frameCount).fill(frame(centre, outside)), requestId: "e", cost: 0.01 }))
+      await run({ steadyRegions: true, zone })
+      const shown = rendered()
+      expect(shown.slice(0, 20)).toEqual(Array(20).fill(frame(centre, inside)))
+      expect(shown.slice(20)).toEqual(Array(20).fill(frame(centre)))
+      expect(completed().output_data.steady).toMatchObject({ extraFound: 0 })
+    })
+
+    it("a filter still leaves a face that passes it to be added", async () => {
+      prepare(40)
+      const main = Array.from({ length: 40 }, (_, f) => frame(stable, ...(f < 20 ? [large] : [])))
+      answerWith(main, (p) => ({ rle: Array(p.frameCount).fill(frame(stable, large)), requestId: "e", cost: 0.01 }))
+      await run({ steadyRegions: true, minSubjectHeightPct: 20 })
+      expect(rendered()).toEqual(Array(40).fill(frame(stable, large)))
+      expect(completed().output_data.steady).toMatchObject({ extraFound: 1 })
+    })
+
+    it("a malformed answer stays a skipped failure with a filter on", async () => {
+      prepare(40)
+      const main = Array.from({ length: 40 }, (_, f) => frame(stable, ...(f < 20 ? [large] : [])))
+      answerWith(main, (p) => ({ rle: Array(p.frameCount).fill(`${width * height} 50`), requestId: "e", cost: 0.01 }))
+      await run({ steadyRegions: true, minSubjectHeightPct: 20 })
+      expect(rendered()).toEqual(main)
+      expect(completed().provider_cost).toBeCloseTo(0.04)
+      expect(mocks.commitJobCredits).toHaveBeenCalledWith("ul1", ctx.jobId)
+    })
+  })
+
+  it("a look that finds nothing leaves the clip as it was", async () => {
+    prepare(40)
+    answerWith(clip(40, [face]))
+    await run({ steadyRegions: true })
+    expect(rendered()).toEqual(clip(40, [face]))
+    expect(completed().provider_cost).toBeCloseTo(0.04)
+    expect(completed().output_data.steady).toMatchObject({ extraRequests: 1, extraFound: 0 })
+  })
+
+  describe("a failed look never fails the job", () => {
+    const failsSoftly = async () => {
+      expect(mocks.renderMaskVideo).toHaveBeenCalledTimes(1)
+      expect(rendered()).toEqual(clip(40, [face]))
+      expect(completed().output_data.steady).toMatchObject({ extraRequests: 1, extraFound: 0 })
+      expect(mocks.commitJobCredits).toHaveBeenCalledWith("ul1", ctx.jobId)
+    }
+
+    it("carries on when an extra request throws", async () => {
+      prepare(40)
+      answerWith(clip(40, [face]), () => { throw new Error("fal says no") })
+      await run({ steadyRegions: true })
+      await failsSoftly()
+      expect(completed().provider_cost).toBe(0.03)
+    })
+
+    it("carries on when the cut throws, asking nothing of the model", async () => {
+      prepare(40)
+      answerWith(clip(40, [face]))
+      mocks.runFfmpeg.mockRejectedValueOnce(new Error("ffmpeg died"))
+      await run({ steadyRegions: true })
+      await failsSoftly()
+      expect(mocks.runSam3Video).toHaveBeenCalledTimes(1)
+    })
+
+    it("carries on when the upload throws, asking nothing of the model", async () => {
+      prepare(40)
+      answerWith(clip(40, [face]))
+      mocks.uploadJobScratchFile.mockRejectedValueOnce(new Error("r2 is down"))
+      await run({ steadyRegions: true })
+      await failsSoftly()
+      expect(mocks.runSam3Video).toHaveBeenCalledTimes(1)
+    })
+
+    describe("one 120 s deadline covers the whole request", () => {
+      /** Run with the clock in the test's hands, up to the moment the first step of the extra request begins. */
+      const withClock = async (test: (finished: Promise<unknown>) => Promise<void>, started: Promise<unknown>) => {
+        const finished = run({ steadyRegions: true })
+        await started
+        await test(finished)
+      }
+      /** A promise for the next time `fn` is asked, and what it was asked with. */
+      const whenAsked = () => {
+        let asked: () => void = () => {}
+        const promise = new Promise<void>((resolve) => { asked = resolve })
+        return { asked, promise }
+      }
+      const advance = (ms: number) => vi.advanceTimersByTimeAsync(ms)
+      const lookNotAsked = () => expect(mocks.runSam3Video).toHaveBeenCalledTimes(1)
+
+      beforeEach(() => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] })
+        prepare(40)
+      })
+      afterEach(() => { vi.useRealTimers() })
+
+      it("carries on when an extra request times out", async () => {
+        const model = whenAsked()
+        answerWith(clip(40, [face]), () => { model.asked(); return new Promise(() => {}) })
+        await withClock(async (finished) => {
+          await advance(119_000)
+          expect(mocks.renderMaskVideo).not.toHaveBeenCalled()
+          await advance(1_001)
+          await finished
+          await failsSoftly()
+          expect(completed().provider_cost).toBe(0.03)
+        }, model.promise)
+      })
+
+      it("abandons a request stuck in the ffmpeg queue at 120 s, and the job completes", async () => {
+        answerWith(clip(40, [face]))
+        const queued = whenAsked()
+        // What a launch waiting for its slot does: nothing, until its signal aborts.
+        mocks.runFfmpeg.mockImplementationOnce((_a, _t, launch) => new Promise<string>((_, reject) => {
+          const { signal } = launch as { signal: AbortSignal }
+          signal.addEventListener("abort", () => reject(signal.reason as Error))
+          queued.asked()
+        }))
+        await withClock(async (finished) => {
+          await advance(119_000)
+          expect(mocks.renderMaskVideo).not.toHaveBeenCalled()
+          await advance(1_001)
+          await finished
+          await failsSoftly()
+          expect(mocks.uploadJobScratchFile).not.toHaveBeenCalled()
+          lookNotAsked()
+        }, queued.promise)
+      })
+
+      it("time spent in the cut reduces what is left for the model", async () => {
+        const cut = whenAsked()
+        mocks.runFfmpeg.mockImplementationOnce(() => new Promise<string>((resolve) => {
+          cut.asked()
+          setTimeout(() => resolve(""), 50_000)
+        }))
+        answerWith(clip(40, [face]), () => new Promise(() => {}))
+        await withClock(async (finished) => {
+          await advance(50_000)
+          expect(mocks.runSam3Video).toHaveBeenCalledTimes(2)
+          await advance(69_000)
+          expect(mocks.renderMaskVideo).not.toHaveBeenCalled()
+          await advance(1_001)
+          await finished
+          await failsSoftly()
+        }, cut.promise)
+      })
+
+      it("a deadline passing during the upload means the model is not called", async () => {
+        answerWith(clip(40, [face]))
+        const upload = whenAsked()
+        mocks.uploadJobScratchFile.mockImplementationOnce(() => { upload.asked(); return new Promise(() => {}) })
+        await withClock(async (finished) => {
+          await advance(119_000)
+          expect(mocks.renderMaskVideo).not.toHaveBeenCalled()
+          await advance(1_001)
+          await finished
+          await failsSoftly()
+          lookNotAsked()
+        }, upload.promise)
+      })
+
+      it("an upload that ends after the deadline does not reach the model", async () => {
+        answerWith(clip(40, [face]))
+        const upload = whenAsked()
+        mocks.uploadJobScratchFile.mockImplementationOnce(() => new Promise<string>((resolve) => {
+          upload.asked()
+          setTimeout(() => resolve("https://r2/tmp/late.mp4"), 120_000)
+        }))
+        await withClock(async (finished) => {
+          await advance(120_001)
+          await finished
+          await failsSoftly()
+          lookNotAsked()
+        }, upload.promise)
+      })
+
+      it("a cut admitted late and ending after the deadline sends nothing on", async () => {
+        answerWith(clip(40, [face]))
+        const cut = whenAsked()
+        // A signal never stops a launch already admitted: this one runs on past the deadline.
+        mocks.runFfmpeg.mockImplementationOnce(() => new Promise<string>((resolve) => {
+          cut.asked()
+          setTimeout(() => resolve(""), 130_000)
+        }))
+        await withClock(async (finished) => {
+          await advance(130_001)
+          await finished
+          await failsSoftly()
+          expect(mocks.uploadJobScratchFile).not.toHaveBeenCalled()
+          lookNotAsked()
+        }, cut.promise)
+      })
+
+      it("leaves no deadline running behind a request that finished in time", async () => {
+        answerWith(clip(40, [face]))
+        await run({ steadyRegions: true })
+        const { signal } = mocks.runFfmpeg.mock.calls[0]![2] as { signal: AbortSignal }
+        await advance(121_000)
+        expect(signal.aborted).toBe(false)
+      })
+
+      it("a kept answer needs no deadline: no cut, no upload, no timer", async () => {
+        const prefix = `tmp/provider-input/${ctx.jobId}/`
+        answerWith(clip(40, [face]))
+        mocks.listObjectsByPrefixWithMeta.mockResolvedValue([{ key: `${prefix}sam3-rle-c10020-aa.gz` }])
+        mocks.readR2ObjectBuffer.mockResolvedValue(gzipSync(JSON.stringify({ model: "sam-3.1", geometry, chunk: { index: 10020, startFrame: 20, frames: 20 }, rle: Array(20).fill(frame(face)), cost: 0.01 })))
+        await run({ steadyRegions: true })
+        expect(mocks.runFfmpeg).not.toHaveBeenCalled()
+        expect(vi.getTimerCount()).toBe(0)
+        expect(rendered()).toEqual(Array(40).fill(frame(face)))
+      })
+    })
+
+    it("carries on when an answer's frame count is far off, charging what it cost and keeping it from a retry", async () => {
+      prepare(40)
+      answerWith(clip(40, [face]), () => ({ rle: Array(5).fill(frame(face)), requestId: "e", cost: 0.01 }))
+      await run({ steadyRegions: true })
+      await failsSoftly()
+      expect(completed().provider_cost).toBeCloseTo(0.04)
+      expect(mocks.uploadJobScratchBuffer.mock.calls.map((c) => (c as unknown as unknown[])[1])).toContain("sam3-rle-c10020")
+    })
+
+    it("carries on when an answer is malformed, charging what it cost", async () => {
+      prepare(40)
+      answerWith(clip(40, [face]), () => ({ rle: Array(20).fill(`${width * height} 50`), requestId: "e", cost: 0.01 }))
+      await run({ steadyRegions: true })
+      await failsSoftly()
+      expect(completed().provider_cost).toBeCloseTo(0.04)
+    })
+
+    it("one failed look does not cost the others their answers", async () => {
+      const a = { top: 100, left: 100, size: 40, until: 20 }
+      const b = { top: 100, left: 400, size: 30, until: 15 }
+      prepare(40)
+      answerWith(clip(40, [a, b]), (p) => {
+        if (p.frameCount === 25) throw new Error("fal says no")
+        return { rle: Array(p.frameCount).fill(frame(a)), requestId: "e", cost: 0.01 }
+      })
+      await run({ steadyRegions: true })
+      expect(rendered()[30]).toBe(frame(a))
+      expect(rendered()[17]).toBe(frame(a))
+      expect(completed().output_data.steady).toMatchObject({ extraRequests: 2, extraFound: 1 })
+    })
+  })
+
+  describe("a retry", () => {
+    /** Run once, then hand the second attempt what the first kept in the job's scratch folder. */
+    const retryWithKept = async (data: Record<string, unknown>) => {
+      await run({ steadyRegions: true, ...data })
+      const kept = mocks.uploadJobScratchBuffer.mock.calls.map((c) => {
+        const [body, name] = c as unknown as [Buffer, string]
+        return { key: `tmp/provider-input/${ctx.jobId}/${name}-n0.gz`, body }
+      })
+      const first = { calls: mocks.runSam3Video.mock.calls.length, output: completed(), cuts: cuts() }
+      mocks.runSam3Video.mockClear()
+      mocks.runFfmpeg.mockClear()
+      mocks.uploadJobScratchFile.mockClear()
+      mocks.markJobCompleted.mockClear()
+      mocks.renderMaskVideo.mockClear()
+      mocks.listObjectsByPrefixWithMeta.mockResolvedValue(kept.map(({ key }) => ({ key })))
+      mocks.readR2ObjectBuffer.mockImplementation(async (key: string) => kept.find((k) => k.key === key)?.body ?? null)
+      await run({ steadyRegions: true, ...data })
+      return first
+    }
+
+    it("reuses a kept extra answer on a retry", async () => {
+      prepare(40)
+      answerWith(clip(40, [face]), () => ({ rle: Array(20).fill(frame(face)), requestId: "e", cost: 0.01 }))
+      const first = await retryWithKept({})
+      expect(first.calls).toBe(2)
+      expect(mocks.runSam3Video).not.toHaveBeenCalled()
+      expect(mocks.runFfmpeg).not.toHaveBeenCalled()
+      expect(mocks.uploadJobScratchFile).not.toHaveBeenCalled()
+      expect(rendered()).toEqual(Array(40).fill(frame(face)))
+      // The retry reports and charges what the first attempt did.
+      expect(completed().provider_cost).toBeCloseTo(0.04)
+      expect(completed().output_data.steady).toEqual(first.output.output_data.steady)
+    })
+
+    it("reuses a kept extra answer under perShot and redetectEverySec too", async () => {
+      prepare(100)
+      // Re-detecting every 2 s at 30 fps: chunks at 0 and 60; the face is lost inside the first.
+      mocks.runSam3Video.mockImplementation(async (p: { frameCount: number; videoUrl: string }) =>
+        /c10\d+/.test(p.videoUrl)
+          ? { rle: Array(p.frameCount).fill(frame(face)), requestId: "e", cost: 0.01 }
+          : { rle: clip(p.frameCount, /-c0/.test(p.videoUrl) ? [{ ...face, until: 10 }] : []), requestId: "m", cost: 0.03 })
+      const first = await retryWithKept({ perShot: true, redetectEverySec: 2 })
+      // Two chunks and one look, which stops at the next detection (frame 60) and not at the clip's end.
+      expect(first.calls).toBe(3)
+      expect(first.cuts).toEqual([[10, 60]])
+      expect(cuts()).toEqual([])
+      expect(mocks.runSam3Video).not.toHaveBeenCalled()
+      expect(completed().output_data.steady).toEqual(first.output.output_data.steady)
+    })
+
+    it("does not reuse a kept answer for another window", async () => {
+      prepare(40)
+      answerWith(clip(40, [face]))
+      const prefix = `tmp/provider-input/${ctx.jobId}/`
+      mocks.listObjectsByPrefixWithMeta.mockResolvedValue([{ key: `${prefix}sam3-rle-c10020-aa.gz` }])
+      mocks.readR2ObjectBuffer.mockResolvedValue(gzipSync(JSON.stringify({ model: "sam-3.1", geometry, chunk: { index: 10020, startFrame: 20, frames: 15 }, rle: Array(15).fill(frame(face)), cost: 0.5 })))
+      await run({ steadyRegions: true })
+      expect(mocks.runSam3Video).toHaveBeenCalledTimes(2)
+      expect(completed().provider_cost).toBeCloseTo(0.04)
+    })
+  })
+
+  it("delivers an empty mask when every region was a pop", async () => {
+    prepare(5)
+    answerWith([frame(face), "", "", "", ""])
+    mocks.renderMaskVideo.mockResolvedValueOnce({ coveredFraction: 0 })
+    await run({ steadyRegions: true })
+    expect(mocks.renderMaskVideo).toHaveBeenCalledWith(["", "", "", "", ""], geometry, "/tmp/vm/mask.mp4", { allowEmpty: true })
+    expect(completed().output_data).toMatchObject({ coverage: 0, kept: false })
+    expect(completed().output_data.steady).toMatchObject({ removedRegions: 1 })
+    expect(mocks.commitJobCredits).toHaveBeenCalledWith("ul1", ctx.jobId)
+  })
+
+  it("delivers an empty mask when the filters kept only pops", async () => {
+    prepare(5)
+    // The small one the size cut drops on every frame; the tall one is a pop.
+    const tall = { top: 20, left: 300, size: 300 }
+    const small = { top: 100, left: 100, size: 10 }
+    answerWith([frame(small, tall), frame(small), frame(small), frame(small), frame(small)])
+    mocks.renderMaskVideo.mockResolvedValueOnce({ coveredFraction: 0 })
+    await run({ steadyRegions: true, minSubjectHeightPct: 50 })
+    expect(mocks.renderMaskVideo).toHaveBeenCalledWith(["", "", "", "", ""], geometry, "/tmp/vm/mask.mp4", { allowEmpty: true })
+  })
+
+  it("still fails when the model matched nothing", async () => {
+    prepare(5)
+    answerWith(["", "", "", "", ""])
+    await run({ steadyRegions: true }).catch(() => {})
+    expect(mocks.renderMaskVideo).toHaveBeenCalledWith(["", "", "", "", ""], geometry, "/tmp/vm/mask.mp4")
+  })
+
+  it("still fails when the model matched nothing, with a filter on", async () => {
+    prepare(5)
+    answerWith(["", "", "", "", ""])
+    await run({ steadyRegions: true, minSubjectHeightPct: 50 }).catch(() => {})
+    expect(mocks.renderMaskVideo).toHaveBeenCalledWith(["", "", "", "", ""], geometry, "/tmp/vm/mask.mp4")
+  })
+
+  it("does not change VIDEO_MASK_RECIPE", async () => {
+    prepare(30)
+    answerWith(clip(30, [{ ...face, until: 30 }]))
+    await run({ steadyRegions: true })
+    expect(completed().output_data.recipe).toBe("2026-10-25")
+  })
+
+  it("fills no gap across a cut", async () => {
+    mocks.detectCutFrames.mockResolvedValue([50])
+    prepare(100)
+    mocks.runSam3Video.mockImplementation(async (p: { frameCount: number; videoUrl: string }) => ({
+      rle: /-c0/.test(p.videoUrl)
+        ? clip(p.frameCount, [{ ...face, until: 47 }])
+        : Array.from({ length: p.frameCount }, (_, f) => (f >= 2 ? frame(face) : "")),
+      requestId: "r",
+      cost: 0.01,
+    }))
+    await run({ steadyRegions: true, perShot: true })
+    expect(rendered().slice(47, 52)).toEqual(["", "", "", "", ""])
+    expect(rendered()[52]).toBe(frame(face))
+    expect(completed().output_data.steady).toMatchObject({ filledFrames: 0, extraRequests: 0 })
+  })
+
+  it("no extra request reaches past a cut", async () => {
+    mocks.detectCutFrames.mockResolvedValue([50])
+    prepare(100)
+    mocks.runSam3Video.mockImplementation(async (p: { frameCount: number; videoUrl: string }) => ({
+      rle: clip(p.frameCount, /c10\d+/.test(p.videoUrl) ? [] : [/-c0/.test(p.videoUrl) ? face : { ...face, until: p.frameCount }]),
+      requestId: "r",
+      cost: 0.01,
+    }))
+    await run({ steadyRegions: true, perShot: true })
+    expect(cuts()).toEqual([[20, 50]])
   })
 })
 

@@ -1,3 +1,7 @@
+/** What the `workflow_templates.complexity` CHECK accepts (migration 076). */
+export const TEMPLATE_COMPLEXITIES = ["simple", "intermediate", "advanced"] as const
+export type TemplateComplexity = (typeof TEMPLATE_COMPLEXITIES)[number]
+
 /** Shape of one seeded tutorial — a `workflow_templates` row's content. The
  *  in-tree base templates and operator-supplied pack templates share it. */
 export interface TutorialTemplateDoc {
@@ -8,7 +12,7 @@ export interface TutorialTemplateDoc {
   category?: string
   outputTypes?: string[]
   tags?: string[]
-  complexity?: string
+  complexity?: TemplateComplexity
   /** Money/facet metadata the Tutorials tab surfaces on the card. Authored on
    *  the doc rather than derived: estimated credits depends on EE credit code
    *  (`ee/billing/credits.ts`) core must not import, so all three are declared

@@ -4,6 +4,7 @@ import type {
   TutorialPackManifest,
   TutorialTemplateDoc,
 } from "./types.js"
+import { TEMPLATE_COMPLEXITIES } from "./types.js"
 import { unknownStopRuleNoteIds } from "./preview-gate.js"
 
 // --- manifest schema --------------------------------------------------------
@@ -51,7 +52,7 @@ const DocSchema = z.object({
   category: z.string().optional(),
   outputTypes: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
-  complexity: z.string().optional(),
+  complexity: z.enum(TEMPLATE_COMPLEXITIES).optional(),
   estimatedCredits: z.number().int().nonnegative().optional(),
   estimatedPerMinuteCredits: z.number().int().nonnegative().optional(),
   withoutPreviewStopRule: z
