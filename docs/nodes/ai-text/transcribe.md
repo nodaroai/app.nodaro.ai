@@ -20,7 +20,7 @@ On a self-hosted install the chosen engine runs on your own key (`ELEVENLABS_API
 
 ## Inputs & Outputs
 
-- **Input**: `audio` -- audio file to transcribe
+- **Input**: `audio` -- audio file to transcribe. To transcribe a video from a link to where it is, connect a Video URL node: it asks for the content rights declaration and fetches the sound, and the node transcribes that track. A link to where a video is given to the node any other way stops a run in the editor, which says so.
 - **Output**: `text` -- full transcript text string
 - **Output**: `json` -- a normalized `Transcript` object (word/segment timings)
 

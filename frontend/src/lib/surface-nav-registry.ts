@@ -125,6 +125,8 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "users",
   "blocks",
   "jobs",
+  // One job on a page of its own, opened from the Jobs page (admin-only).
+  "job/:id",
   "usage",
   "live-usage",
   "alerts",

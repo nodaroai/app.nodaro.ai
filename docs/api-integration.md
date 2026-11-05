@@ -4732,6 +4732,9 @@ engine answered `"precise"`, a request with nothing else to change is refused
 as `400 validation_error`; with anything else to change (a role with images, a
 fixed reference, a `prePrompt` or `postPrompt`) it answers `202` and runs and
 is quoted as Precise, with the art style where `preciseArtStyle` is `true`.
+While Nodaro runs a Precise run with an art style as a Motion run (see An art
+style on a Precise run below), a request that keeps one on such an engine runs
+and is quoted as Motion instead, and one with nothing else to change is accepted.
 Nodaro Motion Pulse is always `false` in both, and a server from before them
 leaves them out: read that as `false` for every engine.
 The answer may be up to a minute old. Trends are not
@@ -4772,9 +4775,17 @@ takes none there (below). That setting is not the forced style, and
 answers `preciseArtStyle` `true` for the engine (Nodaro Motion Prism only), a
 Precise run (no `style`, or `style: "precise"`) also takes an art style,
 `direction: { style: "<id>" }`, from the same catalog and refused the same way
-(`400 unknown_art_style`, `400 art_style_not_supported`). The run stays
+(`400 unknown_art_style`, `400 art_style_not_supported`). Nodaro may run it as a
+Motion run, where an art style holds across the whole picture far more reliably
+(its engine does by default, unless Nodaro turns that off). It is then treated
+exactly as if you had sent `style: "motion"`: its estimate (sent with the same
+body), its price, its Full Quality and Style only above are a Motion run's, the
+job records `input_data.style: "motion"`, and with nothing else to change it is
+accepted, as a style-only run. `style-choice` does not show which applies: read
+the estimate for what a run costs, and the job's `input_data.style` for what ran.
+Otherwise the run stays
 Precise: the clip is edited as a Precise run edits it, the people swapped as
-Precise swaps them, and the whole video is drawn in the art style. It is not a
+Precise swaps them, and the whole video is drawn in the art style. There it is not a
 change on its own: a Precise run with nothing else to change (no role with
 images, no fixed reference, no `prePrompt` or `postPrompt`) is still refused as
 `400 validation_error`; restyling a whole clip alone is a Motion run's (Style
@@ -4864,7 +4875,7 @@ Refusals, all before anything is charged (bodies are
 | `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s. |
 | `400` | `unnamed_role_needs_picture` | A person, pet or product role with no `name` (left out or empty) and no image: an unnamed role is named by its first picture, so it needs one. |
 | `400` | `role_name_required` | A trend run with an unnamed role: a trend's roles are always named (only a direct run's may leave `name` out). |
-| `400` | `no_roles_in_preview` | A preview that would change nothing, judged on what it sends: no role kept in it (`inPreview` not `false`) that has images, no fixed reference, no `prePrompt` or `postPrompt` and no art style. Each of those counts, so a preview with every role left out is still run when it has a reference, a prompt or, where `styleOnly` is answered `true`, an art style (an engine from before style-only runs refuses that last one, with a message that does not name an art style). An engine answered `"precise"` runs it as Precise, where an art style is no change on its own, so there a preview whose only change was the art style answers this refusal; one with a prompt or a reference runs, as Precise (with the art style where `preciseArtStyle` is `true`). "The preview would change nothing: keep a role with images in it (inPreview), or add a fixed reference, a pre or post prompt, or an art style (Flex on Nodaro Motion Prism)." |
+| `400` | `no_roles_in_preview` | A preview that would change nothing, judged on what it sends: no role kept in it (`inPreview` not `false`) that has images, no fixed reference, no `prePrompt` or `postPrompt` and no art style. Each of those counts, so a preview with every role left out is still run when it has a reference, a prompt or, where `styleOnly` is answered `true`, an art style (an engine from before style-only runs refuses that last one, with a message that does not name an art style). An engine answered `"precise"` runs it as Precise, where an art style is no change on its own, so there a preview whose only change was the art style answers this refusal; one with a prompt or a reference runs, as Precise (with the art style where `preciseArtStyle` is `true`). While Nodaro runs a Precise run with an art style as a Motion run (see An art style on a Precise run), such a preview runs as Motion too. "The preview would change nothing: keep a role with images in it (inPreview), or add a fixed reference, a pre or post prompt, or an art style (Flex on Nodaro Motion Prism)." |
 | `400` | `prompt_too_long` | The prompt would build too long. A `{role:N}` reads as the role's name when it sends no images, so prompts within their own 4,000 characters can still add up past the engine's limit (Nodaro Motion Pulse's is 8,000 characters). |
 | `400` | `clip_too_long_for_style` | `style: "motion"` only, and only while the way Nodaro prepares Motion runs for the engine (a setting of Nodaro's, not of the run) limits the clip: a full run (not a preview) whose clip is over 27.9 s (on Nodaro Motion Pulse, once it is cut to whole seconds). "This clip is too long for Motion. Use a shorter clip or choose Precise." |
 | `400` | `prompt_parts_not_allowed` | The body sends `promptParts`: only the Nodaro platform itself may (a trend's engine prompt). |
@@ -5353,14 +5364,50 @@ confirmation is refused. A plugin's download outside any job has no account
 behind it: the site's policy and the setting decide, and with the setting on it
 is refused.
 
-**Not covered yet** — these places in the editor and on an app page fetch a
-link themselves without asking for the declaration yet; with the setting on,
-each is refused (or, for a picture, kept as the link itself instead of being
-copied into storage): a picture added from a link (the Upload Image node and
-a published app's picture input), a Transcribe node given a link to a video's
-page directly rather than through a Video URL node, the Music node's
-reference link, and a Suno node given a link directly. A later change adds the
-box to each.
+**A link to where a video is, as a node's sound.** Transcribe and Suno Cover
+take a link to where a video is through a Video URL node: that node asks for
+the declaration and fetches the sound under it, and a run, in the editor or on
+the server, reads that track and never fetches the link again. In the editor a
+run stops, before anything starts, when one of these nodes would be given such
+a link directly: in its own link field, or from a Text node mapped into Suno
+Cover's link. The message names the node and says to connect a Video URL node
+in place of the link. A value made during a run (an AI step's answer, say), a
+link written into Suno Upload Extend (which takes an audio file, and into
+which the canvas wires no Video URL node), and a request through the API or an
+agent are the server's to answer: a confirmation, or the account's standing
+authorization for a key or an agent, and with the setting on it is otherwise
+refused.
+
+**The Music node's reference link and the Reference Audio node.** Both fetch
+a link's sound in the editor: the Music node when you press Get, the
+Reference Audio node on its own as soon as its box is ticked (on its card or
+in its panel, whoever wrote the link) and again when you press Extract. Each
+such fetch is an import of the link, so it waits for the content rights box
+under the link, ticked for that link, and confirms the declaration for that one
+fetch: the `confirmationId` of `POST /v1/youtube-audio` and of
+`POST /v1/extract-youtube-audio`. A changed declaration unticks the box and
+nothing is fetched. A Reference Audio node saved while it was extracting (a
+copy of it, a reload) waits for its box again. A run, and a published app, read
+the stored file and never fetch these links. An uploaded file or a direct file
+link needs no box.
+
+**A picture added from a link.** The Upload Image node and a published app's
+picture input copy a pasted picture link into storage
+(`POST /v1/media/import-url`) before it opens in Adjust Image: an import of
+the link, so the content rights box shows under the link and the copy waits
+for it, ticked for that link. In the editor, ticking the box starts the copy;
+on an app page, Set waits for it. The copy confirms the declaration for that
+one link right before it (`confirmationId`), and the box covers the link that
+is fetched (a resized variant the editor rewrites to its original is
+confirmed as that original). A tick is one copy's: the next link asks for the
+box again. A link whose box is not ticked is not added at all. A changed
+declaration (found when the confirmation is made, or by the copy itself)
+unticks every box on the page, and the link waits for a new tick. A link the
+copy refuses (`403`: the site's policy, the account's measures, a
+confirmation it does not accept) is not added either, and the page says so.
+A link that cannot be copied for another reason (unreachable, too large, not
+a picture, full storage) is still added as it is, with a notice. An uploaded
+file needs no box.
 
 **Import source policies.** Before the confirmation is checked, the link's
 site is held to what an administrator decided about it (Admin → Settings →
@@ -5371,6 +5418,28 @@ is no way to ask for a permission yet). The site is the host of the link as
 submitted, before any redirect; a listed site covers its subdomains. A change
 takes effect within a minute. The list is the deployment's own and is not part
 of the public API.
+
+**How many imports carry a declaration.** Admin → Settings → Content rights
+shows, for the last 7, 30 or 90 days, how many imports of a link started and
+how many of them carried a confirmation (a ticked box, or one derived from a
+standing authorization), and the imports without one by way in (a person's
+session, an API key, a connected app, an agent, or none), by where they were
+made (a direct request, a workflow run, an agent's inputs, an administrator's
+import, a plugin's download) and by connected app. With the setting on, each
+import without a confirmation is refused: this is what to read before turning
+it on. Counting
+began when the count was added to the deployment: a window that reaches back
+past that day starts there, and the screen says so. An import without a
+confirmation is never counted twice for the same request and site (a job tried
+again is the same import; a plugin's download outside any job has no request,
+so each attempt of it is counted); only the host of its link is kept, with no account,
+for 90 days, and the request only as a keyed hash that cannot be matched to a
+job or a run. One account adds at most 120 imports a minute to the count of
+each server process (a plugin's downloads outside any job, which have no
+account, share one such limit), so a flood from one account is counted only
+in part. The
+screen shows counts only, never a link, a site or an account. Like the import
+source list, it is the deployment's own and not part of the public API.
 
 **An account's measures.** Before the site's policy, the account itself is
 asked: while imports of links are blocked on the account under the
@@ -5449,7 +5518,36 @@ about (one of the accounts its links matched), matches the links again
 restricts a file the case matched (see [Content
 restrictions](#13k-content-restrictions)) or lifts a restriction, and handles
 the counter-notifications the case receives (see
-[Counter-notices](#13l-counter-notices)). A change
+[Counter-notices](#13l-counter-notices)).
+
+**The case's emails.** From the case the administrator also sends the
+policy's two notices, each shown first as it will be sent and sent only
+from that preview: the send names the preview's digest, and an email that
+changed since (another administrator saved a decision, the account's
+address changed) is refused with `409` until it is previewed again.
+**Content access restricted** goes to the account whose content a
+restriction from a copyright complaint covers: its own restricted file (its
+name, kind and the day it was stored; several files by count; another
+account's copy of the same bytes is never named), the link it was imported
+from (or "Not available"), a reason the administrator writes for the
+account (the restriction's own reason is the record's and is never sent),
+the case's reference, and the page the account sends a counter-notification
+from. It is offered for each restriction in force on a copyright case that
+is not closed (a closed case takes no counter-notification); another
+complaint's account is written to with a general message from the users'
+screen. **Complaint update** goes to the complainant once they have proven
+their email and the case has a decision: the reference, the case's status in
+words, and the decision as what was done. Neither is ever sent on its own.
+Each send is written to the case's log without the address it went to:
+sent (with the mail service's id), not sent (with why), or unknown when the
+mail service did not answer in time and may have taken it, which is never
+counted as a failure (`504`, so the administrator checks before sending it
+again). A notice delivered to the account moves a case that stands earlier
+on to "user notified". A deployment with no mailer, no template
+(`LOOPS_CONTENT_RESTRICTED_ID` and `LOOPS_COMPLAINT_UPDATE_ID`, Cloud) or no
+`PUBLIC_URL` (the counter-notification link) answers that the email cannot
+be sent (`503`), and the mail service refusing it is a `502`; the case is
+unchanged either way. A change
 to the status, the decision or the account is made from the case as the
 administrator saw it: when another administrator changed the case
 meanwhile, it is refused and the screen reads the case again (a note is

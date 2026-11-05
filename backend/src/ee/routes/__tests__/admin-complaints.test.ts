@@ -16,6 +16,7 @@ const ids = vi.hoisted(() => ({
   UNKNOWN: "00000000-0000-4000-8000-00000000dead",
   RACED: "00000000-0000-4000-8000-0000000000ee",
   TAKEN: "00000000-0000-4000-8000-0000000000aa",
+  SLOW: "00000000-0000-4000-8000-0000000000bb",
 }))
 const state = vi.hoisted(() => ({
   admin: true,
@@ -91,6 +92,41 @@ vi.mock("../../lib/complaint-cases.js", async () => {
         throw new ContentRestrictionError("already_restricted", "The content is already restricted")
       }
       return { restriction: { id: "r-1" }, case: summary({ status: "content_restricted" }) }
+    }),
+  }
+})
+
+vi.mock("../../lib/complaint-notices.js", async () => {
+  const real = await vi.importActual<typeof import("../../lib/complaint-notices.js")>("../../lib/complaint-notices.js")
+  const { ComplaintCaseError } = await vi.importActual<typeof import("../../lib/complaint-case-rows.js")>("../../lib/complaint-case-rows.js")
+  const refuse = (key: string) => {
+    if (key === ids.UNKNOWN) throw new ComplaintCaseError("not_found", "No such complaint")
+    if (key === ids.RACED) throw new real.ComplaintNoticeError("failed", "The mail service did not take the email; try again later")
+    if (key === ids.TAKEN) throw new real.ComplaintNoticeError("no_template", "This email's template is not set on this deployment")
+    if (key === ids.SLOW) throw new real.ComplaintNoticeError("unknown", "The mail service did not answer in time: the email may have been sent. Check before sending it again")
+  }
+  const preview = { to: "owner@example.test", values: { content: "clip.mp4 (video, stored 2 Nov 2026)" }, digest: "d-1" }
+  return {
+    ...real,
+    previewAccountNotice: vi.fn(async (id: string, restrictionId: string, reason: string) => {
+      state.calls.push(["preview-account", id, restrictionId, reason])
+      refuse(id)
+      return preview
+    }),
+    sendAccountNotice: vi.fn(async (id: string, restrictionId: string, reason: string, digest: string, admin: string) => {
+      state.calls.push(["send-account", id, restrictionId, reason, digest, admin])
+      refuse(id)
+      return { id, reference: "CR-2026-000007", status: "user_notified" }
+    }),
+    previewComplainantUpdate: vi.fn(async (id: string) => {
+      state.calls.push(["preview-complainant", id])
+      refuse(id)
+      return { to: "dana@example.test", values: { status: "Content restricted" }, digest: "d-2" }
+    }),
+    sendComplainantUpdate: vi.fn(async (id: string, digest: string, admin: string) => {
+      state.calls.push(["send-complainant", id, digest, admin])
+      refuse(id)
+      return { id, reference: "CR-2026-000007", status: "content_restricted" }
     }),
   }
 })
@@ -273,5 +309,82 @@ describe("the moves", () => {
     expect((await post(`/v1/admin/complaints/${CASE}/restrict`, { reason: "x" })).statusCode).toBe(400)
     expect((await post(`/v1/admin/complaints/${CASE}/restrict`, { assetId: ASSET, jobId: ASSET, reason: "x" })).statusCode).toBe(400)
     expect((await post(`/v1/admin/complaints/${CASE}/restrict`, { assetId: TAKEN, reason: "x" })).statusCode).toBe(409)
+  })
+})
+
+describe("the case's emails", () => {
+  const RESTRICTION = "00000000-0000-4000-8000-0000000000e1"
+
+  const REASON = "The rights holder of the original film reported this file."
+
+  it("previews the account's notice with the reason written for it (nothing sent), then sends what the preview showed, audited by the case's reference and never the address or the reason", async () => {
+    const shown = await post(`/v1/admin/complaints/${CASE}/notify-account`, { restrictionId: RESTRICTION, reason: REASON, preview: true })
+    expect(shown.statusCode).toBe(200)
+    expect(shown.json().data.preview).toEqual({ to: "owner@example.test", values: { content: "clip.mp4 (video, stored 2 Nov 2026)" }, digest: "d-1" })
+    const sent = await post(`/v1/admin/complaints/${CASE}/notify-account`, { restrictionId: RESTRICTION, reason: REASON, digest: "d-1" })
+    expect(sent.statusCode).toBe(200)
+    expect(sent.json().data.case).toMatchObject({ status: "user_notified" })
+    expect(state.calls).toEqual([
+      ["preview-account", CASE, RESTRICTION, REASON],
+      ["send-account", CASE, RESTRICTION, REASON, "d-1", USER],
+    ])
+    expect(state.audits).toEqual([
+      ["complaint_notice_preview", "complaint", CASE, { notice: "account", restrictionId: RESTRICTION }],
+      ["complaint_notify_account", "complaint", CASE, { reference: "CR-2026-000007", restrictionId: RESTRICTION }],
+    ])
+    expect(JSON.stringify(state.audits)).not.toContain("owner@example.test")
+    expect(JSON.stringify(state.audits)).not.toContain(REASON)
+  })
+
+  it("previews the complainant's update, then sends what the preview showed", async () => {
+    expect((await post(`/v1/admin/complaints/${CASE}/notify-complainant`, { preview: true })).json().data.preview).toMatchObject({ to: "dana@example.test", digest: "d-2" })
+    const sent = await post(`/v1/admin/complaints/${CASE}/notify-complainant`, { digest: "d-2" })
+    expect(sent.statusCode).toBe(200)
+    expect(state.calls).toEqual([
+      ["preview-complainant", CASE],
+      ["send-complainant", CASE, "d-2", USER],
+    ])
+    expect(state.audits).toEqual([
+      ["complaint_notice_preview", "complaint", CASE, { notice: "complainant" }],
+      ["complaint_notify_complainant", "complaint", CASE, { reference: "CR-2026-000007", status: "content_restricted" }],
+    ])
+    expect(JSON.stringify(state.audits)).not.toContain("dana@example.test")
+  })
+
+  it("refuses, before anything is read, a request with no restriction, no reason for the account, a send that names no preview, or more than it takes", async () => {
+    const account = (body: Record<string, unknown>) => post(`/v1/admin/complaints/${CASE}/notify-account`, body)
+    expect((await account({ reason: REASON, preview: true })).statusCode).toBe(400)
+    expect((await account({ restrictionId: "r-1", reason: REASON, preview: true })).statusCode).toBe(400)
+    expect((await account({ restrictionId: RESTRICTION, preview: true })).statusCode).toBe(400)
+    expect((await account({ restrictionId: RESTRICTION, reason: "   ", preview: true })).statusCode).toBe(400)
+    expect((await account({ restrictionId: RESTRICTION, reason: REASON })).statusCode).toBe(400)
+    expect((await account({ restrictionId: RESTRICTION, reason: REASON, digest: "d-1", extra: 1 })).statusCode).toBe(400)
+    expect((await post(`/v1/admin/complaints/${CASE}/notify-complainant`, {})).statusCode).toBe(400)
+    expect((await app.inject({ method: "POST", url: `/v1/admin/complaints/${CASE}/notify-complainant`, headers: asAdmin })).statusCode).toBe(400)
+    expect((await post(`/v1/admin/complaints/${CASE}/notify-complainant`, { digest: "d-2", to: "someone@example.test" })).statusCode).toBe(400)
+    expect(state.calls).toEqual([])
+  })
+
+  it("answers an unknown case 404, an email the mail service did not take 502, a wait that ran out 504, and one this deployment cannot send 503; audits none of them", async () => {
+    const send = { restrictionId: RESTRICTION, reason: REASON, digest: "d-1" }
+    expect((await post(`/v1/admin/complaints/${UNKNOWN}/notify-account`, send)).statusCode).toBe(404)
+    const failed = await post(`/v1/admin/complaints/${RACED}/notify-account`, send)
+    expect(failed.statusCode).toBe(502)
+    expect(failed.json().error).toMatchObject({ code: "notice_failed" })
+    const slow = await post(`/v1/admin/complaints/${ids.SLOW}/notify-account`, send)
+    expect(slow.statusCode).toBe(504)
+    expect(slow.json().error).toMatchObject({ code: "notice_unconfirmed" })
+    expect(slow.json().error.message).toMatch(/may have been sent/)
+    const unavailable = await post(`/v1/admin/complaints/${TAKEN}/notify-complainant`, { digest: "d-2" })
+    expect(unavailable.statusCode).toBe(503)
+    expect(unavailable.json().error).toMatchObject({ code: "notice_unavailable", message: "This email's template is not set on this deployment" })
+    expect(state.audits).toEqual([])
+  })
+
+  it("is refused to a non-admin", async () => {
+    state.admin = false
+    expect((await post(`/v1/admin/complaints/${CASE}/notify-account`, { restrictionId: RESTRICTION, reason: REASON, digest: "d-1" })).statusCode).toBe(403)
+    expect((await post(`/v1/admin/complaints/${CASE}/notify-complainant`, { digest: "d-2" })).statusCode).toBe(403)
+    expect(state.calls).toEqual([])
   })
 })

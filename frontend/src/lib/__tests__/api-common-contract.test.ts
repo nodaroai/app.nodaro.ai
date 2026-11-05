@@ -37,6 +37,7 @@ import {
   dubbingApi,
   voiceDesignApi,
   forcedAlignmentApi,
+  extractYouTubeAudioApi,
   // music / suno
   sunoMusicVideoApi,
   sunoMashupApi,
@@ -519,6 +520,17 @@ describe("dubbingApi", () => {
 
     await dubbingApi({ videoUrl: "http://clip.mp4" }, "fr", undefined, undefined, undefined, { confirmationId: "conf-2" })
     expect(parseBody(mock)).toEqual({ videoUrl: "http://clip.mp4", targetLanguage: "fr" })
+  })
+
+  it("a link's sound extraction carries its content rights confirmation, and sends none without one", async () => {
+    sessionWith("tok-ref")
+    const mock = mockFetchJson({ jobId: "jref1" })
+    vi.stubGlobal("fetch", mock)
+
+    await extractYouTubeAudioApi("https://youtu.be/x", { confirmationId: "conf-3" })
+    expect(parseBody(mock)).toEqual({ youtubeUrl: "https://youtu.be/x", confirmationId: "conf-3" })
+    await extractYouTubeAudioApi("https://youtu.be/x")
+    expect(JSON.parse(mock.mock.calls[1]![1].body as string)).toEqual({ youtubeUrl: "https://youtu.be/x" })
   })
 
   it("POSTs a bare sourceUrl (link mode)", async () => {

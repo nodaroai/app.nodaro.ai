@@ -15,6 +15,8 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useUpstreamUrl } from "@/hooks/use-upstream-url"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { useLinkImport } from "@/hooks/use-link-import"
+import { isNodeLinkRightsTicked, tickNodeLinkRights, untickNodeLinkRights, useNodeLinkRightsTicked } from "@/lib/node-link-rights"
+import { RightsDeclarationBox } from "@/components/content-rights/rights-declaration-box"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
 import { StorageExceededModal } from "@/ee/components/credits/StorageExceededModal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -41,10 +43,13 @@ interface PickerProps {
   readonly urlValue: string
   readonly onUrlChange: (v: string) => void
   readonly onUrlSubmit: () => void
+  /** The content rights box under a link: ticked for this link on this node. */
+  readonly rightsTicked: boolean
+  readonly onRightsChange: (checked: boolean) => void
   readonly compact?: boolean
 }
 
-function UploadPicker({ isDragOver, setIsDragOver, onFileClick, onDrop, urlValue, onUrlChange, onUrlSubmit, compact }: PickerProps) {
+function UploadPicker({ isDragOver, setIsDragOver, onFileClick, onDrop, urlValue, onUrlChange, onUrlSubmit, rightsTicked, onRightsChange, compact }: PickerProps) {
   const t = useT()
   return (
     <div className={`flex flex-col gap-2 ${compact ? "" : "p-3"}`}>
@@ -79,6 +84,9 @@ function UploadPicker({ isDragOver, setIsDragOver, onFileClick, onDrop, urlValue
           className="w-full bg-transparent border-b border-muted-foreground/20 text-xs py-1 outline-none focus:border-[#38BDF8] transition-colors placeholder:text-muted-foreground/30"
         />
       </div>
+      {urlValue.trim() && (
+        <RightsDeclarationBox checked={rightsTicked} onCheckedChange={onRightsChange} textClass="text-[11px]" contained />
+      )}
       <button
         type="button"
         onClick={(e) => {
@@ -108,7 +116,11 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const openImageEdit = useWorkflowStore((s) => s.openImageEdit)
   const { isUploading, uploadError, clearError, storageExceeded, clearStorageExceeded } = useFileUpload()
-  const linkImport = useLinkImport()
+  const linkImport = useLinkImport(id)
+  // The link as it would be fetched (a Pinterest variant rewritten to its
+  // original): the one the content rights box is ticked for and confirms.
+  const pendingLink = normalizePinterestUrl(pendingUrl.trim())
+  const rightsTicked = useNodeLinkRightsTicked(id, pendingLink)
   const mediaEditor = useMediaEditor({
     onComplete: async (results) => {
       const result = results[0]
@@ -238,21 +250,39 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
 
   // A link is imported into the person's storage and opened in the same
   // "Adjust image" editor as a picked file; the editor's onComplete then
-  // adds it (and moderates it) exactly as it does an upload. A link that
-  // cannot be imported is added as it is, with a notice.
+  // adds it (and moderates it) exactly as it does an upload. An import of
+  // someone's link, so it waits for the content rights box ticked for that
+  // link; until then the link stays in the box. A link that cannot be copied
+  // is added as it is, with a notice; one the platform refuses to import is
+  // not added at all.
   const handleAddUrl = async () => {
     // Pinterest CDN URLs land in /236x/ /474x/ etc. variants by default;
     // rewrite to /originals/ so downstream describe-image / image-to-image
     // get the highest-resolution source.
-    const url = normalizePinterestUrl(pendingUrl.trim())
-    if (!url || linkImport.isImporting) return
+    const url = pendingLink
+    if (!url || linkImport.isImporting || !isNodeLinkRightsTicked(id, url)) return
+    const typed = pendingUrl
     setPendingUrl("")
     clearError()
     const outcome = await linkImport.importLink(url, mediaEditor.openEditor)
+    // A changed declaration unticked the box: the link waits for it again.
+    if (outcome === "unconfirmed") setPendingUrl(typed)
+    // The platform will not import this link: it is not added as it is either.
+    if (outcome === "refused") toast.error(t("linkImport.refused"))
     if (outcome !== "failed") return
     addLinkAsIs(url)
     // The node now shows the picture, where its inline notice is not drawn.
     toast.warning(t("linkImport.addedAsIs"))
+  }
+
+  // Ticking the box for a link starts its import: the link is all it waited for.
+  const handleRightsChange = (checked: boolean) => {
+    if (!checked) {
+      untickNodeLinkRights(id)
+      return
+    }
+    tickNodeLinkRights(id, pendingLink)
+    void handleAddUrl()
   }
 
   // An import started from the "add another" overlay spins inside it.
@@ -420,6 +450,8 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
                 urlValue={pendingUrl}
                 onUrlChange={setPendingUrl}
                 onUrlSubmit={handleAddUrl}
+                rightsTicked={rightsTicked}
+                onRightsChange={handleRightsChange}
               />
             )}
 
@@ -460,6 +492,8 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
                     urlValue={pendingUrl}
                     onUrlChange={setPendingUrl}
                     onUrlSubmit={handleAddUrl}
+                    rightsTicked={rightsTicked}
+                    onRightsChange={handleRightsChange}
                     compact
                   />
                 )}

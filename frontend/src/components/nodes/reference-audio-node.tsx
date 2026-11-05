@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useEffect, useRef } from "react"
+import { memo, useEffect } from "react"
 import { useT } from "@/lib/i18n"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Music, Volume2, Loader2, AlertCircle, CheckCircle2 } from "lucide-react"
@@ -10,7 +10,9 @@ import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-wi
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { runYouTubeAudioExtraction, referenceAudioMediaPatch } from "@/lib/youtube-audio-extraction"
+import { extractReferenceAudio, referenceAudioMediaPatch, useReferenceAudioExtracting } from "@/lib/youtube-audio-extraction"
+import { tickNodeLinkRights, untickNodeLinkRights, useNodeLinkRightsTicked } from "@/lib/node-link-rights"
+import { RightsDeclarationBox } from "@/components/content-rights/rights-declaration-box"
 import type { ReferenceAudioData } from "@/types/nodes"
 
 const HANDLES = [
@@ -23,7 +25,13 @@ function ReferenceAudioNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ReferenceAudioData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const useFull = useFullResolution(id)
-  const status = nodeData.extractionStatus ?? "idle"
+  // A link's saved "extracting" with nothing extracting on this page (a copy
+  // of the node, a reload, a closed tab) is idle: the node waits for its box
+  // again instead of spinning for good. An upload keeps its own status.
+  const sourceType = nodeData.sourceType || "youtube"
+  const extractingHere = useReferenceAudioExtracting(id)
+  const savedStatus = nodeData.extractionStatus ?? "idle"
+  const status = sourceType === "youtube" && savedStatus === "extracting" && !extractingHere ? "idle" : savedStatus
   const hasAudio = Boolean(nodeData.extractedAudioUrl)
   const hasThumbnail = Boolean(nodeData.videoThumbnail)
 
@@ -34,28 +42,25 @@ function ReferenceAudioNodeComponent({ id, data, selected }: NodeProps) {
   // to nothing at run time. This runs wherever the node is rendered. Fires
   // from "idle" only: a failed extraction keeps its manual retry (no loop),
   // and an edited URL keeps the panel's explicit re-extract behavior.
-  const extractingRef = useRef(false)
+  // Extracting fetches the link: an import of it, so it waits for the content
+  // rights box ticked for that link (here on the card, or in the panel), and
+  // starts as soon as it is ticked; a changed declaration unticks the box and
+  // the node waits again. The shared flow writes the node's status and keeps
+  // one extraction per node on this page.
   const youtubeUrl = nodeData.youtubeUrl?.trim()
   const directUrl = nodeData.directUrl?.trim()
-  const sourceType = nodeData.sourceType || "youtube"
+  const rightsTicked = useNodeLinkRightsTicked(id, youtubeUrl ?? "")
   useEffect(() => {
-    if (hasAudio || status !== "idle") return
+    if (hasAudio || status !== "idle" || extractingHere) return
     // A direct file link needs no job — the panel's Set button just copies it.
     if (sourceType === "url" && directUrl) {
       updateNodeData(id, referenceAudioMediaPatch(directUrl))
       return
     }
-    if (sourceType !== "youtube" || !youtubeUrl) return
-    if (extractingRef.current) return
-    extractingRef.current = true
-    updateNodeData(id, { extractionStatus: "extracting" })
-    void runYouTubeAudioExtraction(youtubeUrl)
-      .then(({ audioUrl, durationSeconds }) => updateNodeData(id, referenceAudioMediaPatch(audioUrl, durationSeconds)))
-      .catch(() => updateNodeData(id, { extractionStatus: "failed" }))
-      .finally(() => {
-        extractingRef.current = false
-      })
-  }, [sourceType, youtubeUrl, directUrl, hasAudio, status, id, updateNodeData])
+    if (sourceType !== "youtube" || !youtubeUrl || !rightsTicked) return
+    extractReferenceAudio(id, youtubeUrl, (patch) => updateNodeData(id, patch)).catch(() => undefined)
+  }, [sourceType, youtubeUrl, directUrl, hasAudio, status, extractingHere, rightsTicked, id, updateNodeData])
+  const awaitingRights = sourceType === "youtube" && Boolean(youtubeUrl) && !hasAudio && status === "idle" && !extractingHere
 
   return (
     <div className="relative max-w-[220px]">
@@ -96,6 +101,14 @@ function ReferenceAudioNodeComponent({ id, data, selected }: NodeProps) {
               {nodeData.sourceType === "youtube" ? "YT" : t("node.sourceFile")}
             </span>
           </div>
+          {awaitingRights && youtubeUrl && (
+            <RightsDeclarationBox
+              checked={rightsTicked}
+              onCheckedChange={(checked) => (checked ? tickNodeLinkRights(id, youtubeUrl) : untickNodeLinkRights(id))}
+              textClass="text-[11px]"
+              contained
+            />
+          )}
         </div>
       </BaseNode>
       <HandleWithPopover nodeId={id} nodeType="reference-audio" handleId="in"    type="target" position={Position.Left}  label="URL"   color={TEXT_HANDLE_COLOR} icon={<Music />}   side="left"  top="calc(100% - 24px)" />

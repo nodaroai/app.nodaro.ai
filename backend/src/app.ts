@@ -172,6 +172,7 @@ import { generateSurroundContinuationRoutes } from "./routes/generate-surround-c
 import { generateLocationMotionRoutes } from "./routes/generate-location-motion.js"
 import { adminSettingsRoutes } from "./ee/routes/admin-settings.js"
 import { adminImportSourcesRoutes } from "./ee/routes/admin-import-sources.js"
+import { adminImportShareRoutes } from "./ee/routes/admin-import-share.js"
 import { adminContentRestrictionsRoutes } from "./ee/routes/admin-content-restrictions.js"
 import { adminComplaintsRoutes } from "./ee/routes/admin-complaints.js"
 import { adminCounterNoticesRoutes } from "./ee/routes/admin-counter-notices.js"
@@ -748,6 +749,7 @@ export async function buildApp() {
   await app.register(generateLocationMotionRoutes)
   if (hasAdmin()) await app.register(adminSettingsRoutes)
   if (hasAdmin()) await app.register(adminImportSourcesRoutes)
+  if (hasAdmin()) await app.register(adminImportShareRoutes)
   if (hasAdmin()) await app.register(adminContentRestrictionsRoutes)
   if (hasAdmin()) await app.register(adminComplaintsRoutes)
   if (hasAdmin()) await app.register(adminCounterNoticesRoutes)

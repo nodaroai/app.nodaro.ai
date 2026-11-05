@@ -376,4 +376,15 @@ describe("GET /v1/admin/jobs/:jobId/cast-swap-steps", () => {
     // The run's own record wins over the input marker.
     expect((await read("flex", { __castSwapStepOutputs: { v: 1, roles: [], styleOnly: { path: "original" } } })).styleOnly).toBe("original")
   })
+
+  it("says when the Precise art-style route ran the run as Flex, a Full Quality version's included; only a true flag", async () => {
+    const read = async (input: Record<string, unknown>, jobType?: string) => {
+      mockFrom.mockReturnValue(jobChain({ data: castSwapRow({ videoUrl: "https://cdn.x/v.mp4" }, { ...(jobType ? { job_type: jobType } : {}), input_data: { type: "cast-swap", ...input } }), error: null }))
+      return (await get()).json().data
+    }
+    expect((await read({ __preciseStyleRouted: true })).preciseStyleRouted).toBe(true)
+    expect((await read({ fullQualityOf: USER_UUID, __preciseStyleRouted: true }, "cast-swap-full-quality")).preciseStyleRouted).toBe(true)
+    expect(await read({})).not.toHaveProperty("preciseStyleRouted")
+    expect(await read({ __preciseStyleRouted: "yes" })).not.toHaveProperty("preciseStyleRouted")
+  })
 })

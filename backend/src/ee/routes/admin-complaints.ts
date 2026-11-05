@@ -18,6 +18,7 @@ import {
   type ListComplaintsInput,
   type StatusMove,
 } from "../lib/complaint-cases.js"
+import { previewAccountNotice, previewComplainantUpdate, sendAccountNotice, sendComplainantUpdate } from "../lib/complaint-notices.js"
 
 /**
  * Admin → content complaints (migration 580; ee/lib/complaint-cases.ts):
@@ -38,9 +39,17 @@ import {
  *   POST /v1/admin/complaints/:id/user         — { userId | null, seen }
  *   POST /v1/admin/complaints/:id/rematch      — add what the case's links match now
  *   POST /v1/admin/complaints/:id/restrict     — { assetId | jobId, reason }: a file the case matched
+ *   POST /v1/admin/complaints/:id/notify-account     — { restrictionId, reason, preview? | digest }:
+ *        "Content access restricted" to the account one of the case's restrictions covers, with
+ *        the reason the handler writes for it
+ *   POST /v1/admin/complaints/:id/notify-complainant — { preview? | digest }: "Complaint update" to the complainant
  *
  * `seen` is the case's `updatedAt` as the screen showed it: a change is made
- * from it or refused (409), so one handler never overwrites another.
+ * from it or refused (409), so one handler never overwrites another. An email
+ * is previewed (`preview: true`: where it goes, what it says and its digest,
+ * nothing sent) and then sent by naming that digest: an email that changed
+ * since its preview is refused (409). Both are built by
+ * ee/lib/complaint-notices.ts.
  */
 
 const READS = { rateLimit: { max: 120, timeWindow: "1 minute" } }
@@ -78,6 +87,14 @@ const restrictBody = z
     reason: z.string().trim().min(1).max(4000),
   })
   .refine((b) => (b.assetId ? 1 : 0) + (b.jobId ? 1 : 0) === 1, { message: "Name one of assetId or jobId" })
+/** A preview, or the send of what a preview showed: its `digest`. */
+const previewOrSend = { preview: z.boolean().optional(), digest: z.string().min(1).max(64).optional() }
+const sendsWhatWasPreviewed = (b: { preview?: boolean; digest?: string }) => b.preview === true || b.digest !== undefined
+const NAME_THE_PREVIEW = { message: "Send the email a preview showed: name its digest", path: ["digest"] }
+const accountNoticeBody = z
+  .strictObject({ restrictionId: z.string().uuid(), reason: z.string().trim().min(1).max(2000), ...previewOrSend })
+  .refine(sendsWhatWasPreviewed, NAME_THE_PREVIEW)
+const complainantUpdateBody = z.strictObject(previewOrSend).refine(sendsWhatWasPreviewed, NAME_THE_PREVIEW)
 
 function invalid(reply: FastifyReply, error: z.ZodError) {
   return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(error) } })
@@ -228,6 +245,45 @@ export async function adminComplaintsRoutes(app: FastifyInstance) {
       return reply.status(201).send({ data: { restriction, case: moved } })
     } catch (e) {
       return caseFailure(req, reply, e, "Failed to restrict the content")
+    }
+  })
+
+  app.post("/v1/admin/complaints/:id/notify-account", { preHandler: requireAdminInApp, config: MOVES }, async (req, reply) => {
+    const params = idParams.safeParse(req.params)
+    if (!params.success) return noSuchCase(reply)
+    const parsed = accountNoticeBody.safeParse(req.body)
+    if (!parsed.success) return invalid(reply, parsed.error)
+    const { restrictionId, reason, preview, digest } = parsed.data
+    try {
+      if (preview) {
+        const notice = await previewAccountNotice(params.data.id, restrictionId, reason)
+        await audit(req, "complaint_notice_preview", "complaint", params.data.id, { notice: "account", restrictionId })
+        return { data: { preview: notice } }
+      }
+      const moved = await sendAccountNotice(params.data.id, restrictionId, reason, digest!, req.userId!)
+      await audit(req, "complaint_notify_account", "complaint", moved.id, { reference: moved.reference, restrictionId })
+      return { data: { case: moved } }
+    } catch (e) {
+      return caseFailure(req, reply, e, "Failed to email the account")
+    }
+  })
+
+  app.post("/v1/admin/complaints/:id/notify-complainant", { preHandler: requireAdminInApp, config: MOVES }, async (req, reply) => {
+    const params = idParams.safeParse(req.params)
+    if (!params.success) return noSuchCase(reply)
+    const parsed = complainantUpdateBody.safeParse(req.body ?? {})
+    if (!parsed.success) return invalid(reply, parsed.error)
+    try {
+      if (parsed.data.preview) {
+        const notice = await previewComplainantUpdate(params.data.id)
+        await audit(req, "complaint_notice_preview", "complaint", params.data.id, { notice: "complainant" })
+        return { data: { preview: notice } }
+      }
+      const moved = await sendComplainantUpdate(params.data.id, parsed.data.digest!, req.userId!)
+      await audit(req, "complaint_notify_complainant", "complaint", moved.id, { reference: moved.reference, status: moved.status })
+      return { data: { case: moved } }
+    } catch (e) {
+      return caseFailure(req, reply, e, "Failed to email the complainant")
     }
   })
 }

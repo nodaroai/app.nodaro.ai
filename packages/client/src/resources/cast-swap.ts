@@ -293,7 +293,11 @@ export interface CastSwapParams {
    * (the same ids an image's `direction.style` takes); the platform words it.
    * A Flex run (`style: "motion"`) takes one, and so does a Precise run where
    * {@link CastSwapResource.styleChoice} answers `preciseArtStyle` true for the
-   * engine: Precise's edit of the clip, drawn in the art style. Refused with
+   * engine. Nodaro may run such a Precise request as a Flex run (its engine does
+   * by default, unless Nodaro turns that off), exactly as if `style: "motion"` had
+   * been sent: its estimate, price and Full Quality are then a Flex run's, and the
+   * job records `input_data.style: "motion"`. Otherwise it is Precise's edit of
+   * the clip, drawn in the art style. Refused with
    * 400 `unknown_art_style` (not in the catalog), `art_style_not_supported` (a
    * saved moodboard, `moodboard:…`) or `art_style_needs_flex` (a trend run, a
    * Flex run whose prompt is made Precise by Nodaro's setting for how Flex
@@ -313,8 +317,9 @@ export interface CastSwapParams {
    * A preview takes its full run's path. Runs this way only on a Flex run, and
    * only where {@link CastSwapResource.styleChoice} answers `styleOnly` true
    * for the engine; elsewhere on Nodaro Motion Prism an art style alone is
-   * refused (on a Precise run too), and one with a pre or post prompt runs as
-   * any other art-style run. The job records it in `input_data.direction`.
+   * refused (on a Precise run that stays Precise too), and one with a pre or
+   * post prompt runs as any other art-style run. The job records it in
+   * `input_data.direction`.
    */
   direction?: { style: string }
   /**
@@ -568,9 +573,11 @@ export interface CastSwapStyleChoice {
   styleOnly?: Partial<Record<CastSwapEngine, boolean>>
   /**
    * Per engine, whether a Precise run (no `style`, or `"precise"`) takes an
-   * art style (`direction`), as a Flex run does: Precise's edit of the clip,
-   * drawn in the art style. Not on its own: a Precise run with nothing else to
-   * change is still refused. Where it is `true`, an engine answered
+   * art style (`direction`), as a Flex run does. Nodaro may run such a request as
+   * a Flex run (see {@link CastSwapParams}'s `direction`), which this does not
+   * say; otherwise it is Precise's edit of the clip, drawn in the art style, and
+   * not on its own: a Precise run with nothing else to change is then refused.
+   * Where it is `true`, an engine answered
    * `"precise"` keeps a Flex request's art style. Nodaro Motion Pulse is always
    * `false` (it takes no art style). Absent from an older server, and an engine
    * missing from it: `false` (offer an art style on Flex runs alone).

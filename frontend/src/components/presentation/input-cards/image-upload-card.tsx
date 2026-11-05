@@ -73,7 +73,7 @@ export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues,
             />
           )}
           {media.showUrlInput && !media.effectiveUrl && (
-            <UrlInputRow urlValue={media.urlValue} onChange={media.setUrlValue} onSubmit={media.handleUrlSubmit} />
+            <UrlInputRow urlValue={media.urlValue} onChange={media.setUrlValue} onSubmit={media.handleUrlSubmit} rights={media.rights} />
           )}
         </div>
         <MediaEditorModal editor={media.mediaEditor} />
@@ -149,6 +149,7 @@ export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues,
             urlValue={media.urlValue}
             onChange={media.setUrlValue}
             onSubmit={media.handleUrlSubmit}
+            rights={media.rights}
           />
         )}
       </GlassCard>

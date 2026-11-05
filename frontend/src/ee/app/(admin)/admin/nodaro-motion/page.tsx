@@ -34,6 +34,10 @@
 // default; the preparation steps' switch stays the Flex runs')
 // (PUT /v1/admin/nodaro-motion/precise-art-style); a change is offered once one
 // environment's engine takes such runs, and the server's refusal is said in place.
+// Beside them, whether such a run runs as Flex at all (PreciseStyleRouteColumn.tsx,
+// PUT /v1/admin/nodaro-motion/precise-style-route): On (the default) or Off, and the
+// accounts' emails that skip it. It saves whatever the engines, and a note names
+// the environments that do not route yet.
 // Each engine also has its preparation steps (StepsColumn.tsx: the reference
 // sheets, the engine prompt and the scene description), for every direct run
 // of either style (PUT /v1/admin/nodaro-motion/steps), greyed out until every
@@ -72,6 +76,7 @@ import { useNodaroMotionStyle, useSaveNodaroMotionStyle } from "@/ee/hooks/queri
 import { useNodaroMotionAdvanced, useSaveNodaroMotionAdvanced } from "@/ee/hooks/queries/use-nodaro-motion-advanced"
 import { useNodaroMotionStyleOnly, useSaveNodaroMotionStyleOnly } from "@/ee/hooks/queries/use-nodaro-motion-style-only"
 import { useNodaroMotionPreciseArtStyle, useSaveNodaroMotionPreciseArtStyle } from "@/ee/hooks/queries/use-nodaro-motion-precise-art-style"
+import { useNodaroMotionPreciseStyleRoute, useSaveNodaroMotionPreciseStyleRoute } from "@/ee/hooks/queries/use-nodaro-motion-precise-style-route"
 import {
   useNodaroMotionPrismReferenceAudio,
   useSaveNodaroMotionPrismReferenceAudio,
@@ -101,6 +106,7 @@ import { StyleChoiceSelect, styleToSaved } from "./components/StyleChoiceSelect"
 import { AdvancedSwitch } from "./components/AdvancedSwitch"
 import { StyleOnlyColumn, styleOnlyToSaved } from "./components/StyleOnlyColumn"
 import { PreciseArtStyleColumn, preciseArtStyleToSaved } from "./components/PreciseArtStyleColumn"
+import { PreciseStyleRouteColumn, preciseStyleRouteDraftOf, preciseStyleRouteIssues, preciseStyleRouteToSaved, type PreciseStyleRouteDraft } from "./components/PreciseStyleRouteColumn"
 
 /** The model each engine runs on, shown to admins beside the public name. */
 const INTERNAL_NAMES: Readonly<Record<AdminTrendEngine, string>> = {
@@ -170,6 +176,9 @@ export default function AdminNodaroMotionPage() {
   // Prism's Precise runs with an art style: a change is offered once one environment's engine takes them (PreciseArtStyleColumn).
   const preciseArtStyleQuery = useNodaroMotionPreciseArtStyle()
   const savePreciseArtStyle = useSaveNodaroMotionPreciseArtStyle()
+  // Whether such a run runs as Flex at all: saved whatever the engines (PreciseStyleRouteColumn).
+  const preciseStyleRouteQuery = useNodaroMotionPreciseStyleRoute()
+  const savePreciseStyleRoute = useSaveNodaroMotionPreciseStyleRoute()
   const [draft, setDraft] = useState<NodaroMotionMasking>({})
   const [motionDraft, setMotionDraft] = useState<NodaroMotionMotion>({})
   const [pulseDraft, setPulseDraft] = useState<CastSwapPulseAudioId>(DEFAULT_PULSE_AUDIO)
@@ -179,6 +188,7 @@ export default function AdminNodaroMotionPage() {
   const [advancedDraft, setAdvancedDraft] = useState(false)
   const [styleOnlyDraft, setStyleOnlyDraft] = useState<NodaroMotionStyleOnly>({})
   const [preciseArtStyleDraft, setPreciseArtStyleDraft] = useState<NodaroMotionPreciseArtStyle>({})
+  const [preciseStyleRouteDraft, setPreciseStyleRouteDraft] = useState<PreciseStyleRouteDraft>(() => preciseStyleRouteDraftOf(null))
 
   // The drafts start from what is stored, and again after each save.
   useEffect(() => {
@@ -208,6 +218,9 @@ export default function AdminNodaroMotionPage() {
   useEffect(() => {
     if (preciseArtStyleQuery.data) setPreciseArtStyleDraft(structuredClone(preciseArtStyleQuery.data.preciseArtStyle ?? {}))
   }, [preciseArtStyleQuery.data])
+  useEffect(() => {
+    if (preciseStyleRouteQuery.data) setPreciseStyleRouteDraft(preciseStyleRouteDraftOf(preciseStyleRouteQuery.data.preciseStyleRoute))
+  }, [preciseStyleRouteQuery.data])
 
   const saved = useMemo(() => JSON.stringify(toSaved(data?.masking ?? {})), [data])
   const next = toSaved(draft)
@@ -245,6 +258,12 @@ export default function AdminNodaroMotionPage() {
   const nextPreciseArtStyle = preciseArtStyleToSaved(preciseArtStyleDraft)
   const preciseArtStyleChanged =
     !!preciseArtStyleQuery.data && JSON.stringify(nextPreciseArtStyle) !== JSON.stringify(preciseArtStyleToSaved(preciseArtStyleQuery.data.preciseArtStyle))
+  // Never saved reads as On with nobody on the list: choosing that then is no change. Something that is not an email holds Save.
+  const nextPreciseStyleRoute = preciseStyleRouteToSaved(preciseStyleRouteDraft)
+  const preciseStyleRouteChanged =
+    !!preciseStyleRouteQuery.data &&
+    JSON.stringify(nextPreciseStyleRoute) !== JSON.stringify(preciseStyleRouteToSaved(preciseStyleRouteDraftOf(preciseStyleRouteQuery.data.preciseStyleRoute)))
+  const preciseStyleRouteHeld = preciseStyleRouteIssues(preciseStyleRouteDraft).length > 0
   // Never saved reads as hidden: leaving the switch off then is no change.
   const advancedChanged = !!advancedQuery.data && advancedDraft !== advancedQuery.data.show
   // Only the page's switch changed: it is the page that picks it up, not runs.
@@ -257,7 +276,8 @@ export default function AdminNodaroMotionPage() {
     !stepsChanged &&
     !styleChanged &&
     !styleOnlyChanged &&
-    !preciseArtStyleChanged
+    !preciseArtStyleChanged &&
+    !preciseStyleRouteChanged
   const pending =
     save.isPending ||
     saveMotion.isPending ||
@@ -267,6 +287,7 @@ export default function AdminNodaroMotionPage() {
     saveStyle.isPending ||
     saveStyleOnly.isPending ||
     savePreciseArtStyle.isPending ||
+    savePreciseStyleRoute.isPending ||
     saveAdvanced.isPending
 
   if (!hasAdmin()) return null
@@ -284,6 +305,8 @@ export default function AdminNodaroMotionPage() {
       if (styleOnlyChanged) await saveStyleOnly.mutateAsync(nextStyleOnly)
       // Its refusal is also said under Prism's Precise column (savePreciseArtStyle.error).
       if (preciseArtStyleChanged) await savePreciseArtStyle.mutateAsync(nextPreciseArtStyle)
+      // Its refusal is also said beside them (savePreciseStyleRoute.error).
+      if (preciseStyleRouteChanged) await savePreciseStyleRoute.mutateAsync(nextPreciseStyleRoute)
       if (advancedChanged) await saveAdvanced.mutateAsync(advancedDraft)
       toast.success(onlyAdvancedChanged ? SAVED_PAGE_ONLY_TOAST : SAVED_TOAST)
     } catch (err) {
@@ -310,8 +333,10 @@ export default function AdminNodaroMotionPage() {
               !styleChanged &&
               !styleOnlyChanged &&
               !preciseArtStyleChanged &&
+              !preciseStyleRouteChanged &&
               !advancedChanged) ||
             issues.length > 0 ||
+            preciseStyleRouteHeld ||
             pending
           } onClick={() => void onSave()}>
           {pending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
@@ -386,6 +411,26 @@ export default function AdminNodaroMotionPage() {
                         })
                       }
                     />
+                    {engine.id === "motion-prism" && (
+                      <div className="mt-2 border-t pt-3">
+                        {preciseStyleRouteQuery.data ? (
+                          <PreciseStyleRouteColumn
+                            value={preciseStyleRouteDraft}
+                            envs={envs.data}
+                            supported={preciseStyleRouteQuery.data.supported}
+                            error={savePreciseStyleRoute.error?.message}
+                            onChange={(draft) => {
+                              savePreciseStyleRoute.reset()
+                              setPreciseStyleRouteDraft(draft)
+                            }}
+                          />
+                        ) : preciseStyleRouteQuery.error ? (
+                          <p className="text-xs text-destructive">{preciseStyleRouteQuery.error.message}</p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">Loading…</p>
+                        )}
+                      </div>
+                    )}
                     {engine.id === "motion-prism" && (
                       <div className="mt-2 border-t pt-3">
                         {preciseArtStyleQuery.data ? (

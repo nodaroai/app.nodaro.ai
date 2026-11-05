@@ -422,3 +422,46 @@ export function useDeclineCounterNotice() {
 export function useRestoreFromCounterNotice() {
   return useCaseMove<{ counterNoticeId: string }>((i) => counterNoticePath(i.counterNoticeId, "restore"), () => undefined, "Failed to restore the content")
 }
+
+/**
+ * An email the case sends, as previewed: where it goes, each value as the
+ * recipient reads it, and the digest the send names, so that what is sent is
+ * what was shown (backend ee/lib/complaint-notices.ts).
+ */
+export interface ComplaintNoticePreview {
+  readonly to: string
+  readonly values: Readonly<Record<string, string>>
+  readonly digest: string
+}
+
+/** What "Content access restricted" says for one of the case's restrictions, with the reason written for the account, and to whom; nothing is sent. */
+export function previewAccountNotice(id: string, restrictionId: string, reason: string): Promise<ComplaintNoticePreview> {
+  return send<{ data: { preview: ComplaintNoticePreview } }>(
+    casePath(id, "notify-account"),
+    { method: "POST", body: JSON.stringify({ restrictionId, reason, preview: true }) },
+    "Failed to preview the email",
+  ).then((r) => r.data.preview)
+}
+
+/** What "Complaint update" says to the complainant; nothing is sent. */
+export function previewComplainantUpdate(id: string): Promise<ComplaintNoticePreview> {
+  return send<{ data: { preview: ComplaintNoticePreview } }>(
+    casePath(id, "notify-complainant"),
+    { method: "POST", body: JSON.stringify({ preview: true }) },
+    "Failed to preview the email",
+  ).then((r) => r.data.preview)
+}
+
+/** Sends the "Content access restricted" its preview showed (its digest); the case's log records it. */
+export function useSendAccountNotice() {
+  return useCaseMove<{ id: string; restrictionId: string; reason: string; digest: string }>(
+    (i) => casePath(i.id, "notify-account"),
+    (i) => ({ restrictionId: i.restrictionId, reason: i.reason, digest: i.digest }),
+    "Failed to email the account",
+  )
+}
+
+/** Sends the "Complaint update" its preview showed (its digest); the case's log records it. */
+export function useSendComplainantUpdate() {
+  return useCaseMove<{ id: string; digest: string }>((i) => casePath(i.id, "notify-complainant"), (i) => ({ digest: i.digest }), "Failed to email the complainant")
+}

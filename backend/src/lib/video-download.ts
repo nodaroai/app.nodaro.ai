@@ -366,6 +366,8 @@ export interface RunDownloadOptions extends Omit<TrackedDownloadRequest, "requir
   readonly requestId?: string | null
   /** How the run was started (`lib/import-via.ts`): a key's or an agent's run stands on a standing authorization. */
   readonly importVia?: ImportVia | null
+  /** Where the download is made: a run's (the default), or an administrator's own (the trend radar's clip). */
+  readonly lane?: "run" | "admin"
 }
 
 /**
@@ -379,7 +381,7 @@ export interface RunDownloadOptions extends Omit<TrackedDownloadRequest, "requir
  * when it ends.
  */
 export async function downloadVideoForRun(options: RunDownloadOptions): Promise<{ videoUrl: string; thumbnailUrl?: string }> {
-  const rights = { userId: options.userId, confirmationId: options.rightsConfirmationId, lane: "run" as const, requestId: options.requestId ?? null, via: options.importVia ?? null }
+  const rights = { userId: options.userId, confirmationId: options.rightsConfirmationId, lane: options.lane ?? "run", requestId: options.requestId ?? null, via: options.importVia ?? null }
   try {
     await requireImportAllowed(options.url, rights)
   } catch (e) {

@@ -5,6 +5,8 @@ import { toast } from "sonner"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { useLinkImport } from "@/hooks/use-link-import"
 import { useMediaEditor } from "@/components/editor/media-editor"
+import { RightsDeclarationBox } from "@/components/content-rights/rights-declaration-box"
+import { isNodeLinkRightsTicked, tickNodeLinkRights, untickNodeLinkRights, useNodeLinkRightsTicked } from "@/lib/node-link-rights"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { cn } from "@/lib/utils"
 import type { InputMode } from "@/types/nodes"
@@ -64,7 +66,9 @@ export function useMediaUpload({ mimePrefix, nodeId, isFullscreen, inputValues, 
     }
   }, [nodeId, isFullscreen, onUpdateInput])
 
-  const linkImport = useLinkImport()
+  const linkImport = useLinkImport(nodeId)
+  const pendingLink = urlValue.trim()
+  const rightsTicked = useNodeLinkRightsTicked(nodeId, pendingLink)
   const mediaEditor = useMediaEditor({
     onComplete: async (results) => {
       const result = results[0]
@@ -91,25 +95,45 @@ export function useMediaUpload({ mimePrefix, nodeId, isFullscreen, inputValues, 
   const handleUrlSubmit = useCallback(async () => {
     const link = urlValue.trim()
     if (!link) return
-    setUrlValue("")
-    setShowUrlInput(false)
-    // A picture link is imported and opened in the "Adjust image" editor, as
-    // a picked file is; a video or audio link is used as it is, and so is a
-    // picture link that cannot be imported (with a notice).
+    // A video or audio link is used as it is. A picture link is imported and
+    // opened in the "Adjust image" editor, as a picked file is: an import of
+    // someone's link, so it waits for the content rights box ticked for it.
+    // A picture link that cannot be copied is used as it is (with a notice);
+    // one the platform refuses to import is not used at all.
     if (mimePrefix !== "image/") {
+      setUrlValue("")
+      setShowUrlInput(false)
       updateUrl(link)
       return
     }
-    if (await importLink(link, openEditor) !== "failed") return
+    if (!isNodeLinkRightsTicked(nodeId, link)) return
+    setUrlValue("")
+    setShowUrlInput(false)
+    const outcome = await importLink(link, openEditor)
+    if (outcome === "unconfirmed") {
+      // A changed declaration unticked the box: the link waits for it again.
+      setUrlValue(link)
+      setShowUrlInput(true)
+      return
+    }
+    // The platform will not import this link: it is not used as it is either.
+    if (outcome === "refused") toast.error(tx("linkImport.refused"))
+    if (outcome !== "failed") return
     updateUrl(link)
     toast.warning(tx("linkImport.addedAsIs"))
-  }, [urlValue, updateUrl, mimePrefix, importLink, openEditor])
+  }, [urlValue, updateUrl, mimePrefix, importLink, openEditor, nodeId])
 
   const handleRemove = useCallback(() => {
     updateUrl("")
   }, [updateUrl])
 
+  // The content rights box under a picture link; a video or audio link, used as it is, has none.
+  const rights: UrlRights | undefined = mimePrefix === "image/" && pendingLink
+    ? { checked: rightsTicked, onCheckedChange: (checked) => (checked ? tickNodeLinkRights(nodeId, pendingLink) : untickNodeLinkRights(nodeId)) }
+    : undefined
+
   return {
+    rights,
     effectiveUrl,
     isUploading: isUploading || linkImport.isImporting,
     isDragOver,
@@ -127,35 +151,47 @@ export function useMediaUpload({ mimePrefix, nodeId, isFullscreen, inputValues, 
   }
 }
 
-/** Inline URL input row shared across upload cards */
+/** The content rights box under a picture link: ticked for this link on this card. */
+export interface UrlRights {
+  readonly checked: boolean
+  readonly onCheckedChange: (checked: boolean) => void
+}
+
+/** Inline URL input row shared across upload cards; with `rights` (a picture link), Set waits for its box. */
 export function UrlInputRow({
   urlValue,
   onChange,
   onSubmit,
+  rights,
 }: {
   urlValue: string
   onChange: (value: string) => void
   onSubmit: () => void
+  rights?: UrlRights
 }) {
   const t = useT()
   return (
-    <div className="mt-2 flex gap-2">
-      <input
-        type="text"
-        value={urlValue}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && onSubmit()}
-        placeholder={t("apps.previewMediaPlaceholder")}
-        className="flex-1 bg-muted/30 border border-border rounded-lg px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-[#ff0073]/50"
-        autoFocus
-      />
-      <button
-        type="button"
-        onClick={onSubmit}
-        className="px-3 py-1.5 text-xs bg-muted hover:bg-muted/80 text-muted-foreground rounded-lg transition-colors"
-      >
-        {t("present.set")}
-      </button>
+    <div className="mt-2 flex flex-col gap-2">
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={urlValue}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && onSubmit()}
+          placeholder={t("apps.previewMediaPlaceholder")}
+          className="flex-1 bg-muted/30 border border-border rounded-lg px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-[#ff0073]/50"
+          autoFocus
+        />
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={rights !== undefined && !rights.checked}
+          className="px-3 py-1.5 text-xs bg-muted hover:bg-muted/80 text-muted-foreground rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {t("present.set")}
+        </button>
+      </div>
+      {rights && <RightsDeclarationBox checked={rights.checked} onCheckedChange={rights.onCheckedChange} />}
     </div>
   )
 }

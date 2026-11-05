@@ -1,4 +1,4 @@
-// @test-watches supabase/migrations/*.sql backend/src/ee/lib/repeat-infringers.ts
+// @test-watches supabase/migrations/*.sql backend/src/ee/lib/repeat-infringers.ts backend/src/ee/lib/complaint-notices.ts
 /**
  * The Complaints screen's words for what the database holds: every status and
  * category the table allows (migration 580) has its label and its place in
@@ -21,6 +21,7 @@ import {
   MEASURE_LABELS,
   STATUS_LABELS,
   actorLabel,
+  emailOutcome,
   historyLabel,
   mailtoHref,
   measureLabel,
@@ -158,5 +159,21 @@ describe("historyLabel", () => {
   it("reads the verified cases by status and the unverified as a count", () => {
     expect(historyLabel({ verified: { under_review: 1, closed: 2 }, unverified: { received: 3 } })).toBe("other cases: 1 under review, 2 closed, 3 unverified")
     expect(historyLabel({ verified: {}, unverified: {} })).toBe("no other cases")
+  })
+})
+
+describe("the case's emails in its log", () => {
+  it("every entry a case's email writes to its log has its words", () => {
+    const source = readFileSync(join(ROOT, "backend/src/ee/lib/complaint-notices.ts"), "utf8")
+    const kinds = [...source.matchAll(/recordComplaintEventQuietly\([^,]+,\s*"([a-z_]+)"/g)].map((m) => m[1]!)
+    expect(kinds.sort()).toEqual(["complainant_notified", "user_notified"])
+    for (const kind of kinds) expect(EVENT_LABELS[kind], kind).toBeTruthy()
+  })
+
+  it("says whether the email went: sent, not sent and why, or perhaps sent when the mail service did not answer in time", () => {
+    expect(emailOutcome({ sent: true, messageId: "m-1" })).toBe("sent")
+    expect(emailOutcome({ sent: false, reason: "no_template" })).toBe("not sent: no_template")
+    expect(emailOutcome({ sent: false, reason: "failed", error: "Invalid recipient [address]" })).toBe("not sent: failed (Invalid recipient [address])")
+    expect(emailOutcome({ sent: "unknown" })).toMatch(/^may have been sent/)
   })
 })

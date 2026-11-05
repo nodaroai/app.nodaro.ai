@@ -13,11 +13,91 @@ vi.mock("@/lib/api", () => ({
   getJobStatusLean: mocks.getJobStatusLean,
 }))
 
-import { runYouTubeAudioExtraction, referenceAudioMediaPatch } from "../youtube-audio-extraction"
+// The node's content rights box (`node-link-rights.ts`): which link it is ticked for, and the confirmation made for one fetch.
+const rights = vi.hoisted(() => ({ ticked: new Map<string, string>(), confirmNodeLink: vi.fn() }))
+vi.mock("@/lib/node-link-rights", () => ({
+  isNodeLinkRightsTicked: (nodeId: string, link: string) => link.trim() !== "" && rights.ticked.get(nodeId) === link.trim(),
+  confirmNodeLink: rights.confirmNodeLink,
+}))
+vi.mock("@/lib/content-rights", () => ({
+  DeclarationChangedError: class DeclarationChangedError extends Error {},
+}))
+
+import { DeclarationChangedError } from "@/lib/content-rights"
+import {
+  ReferenceAudioNotConfirmedError,
+  extractReferenceAudio,
+  isReferenceAudioExtracting,
+  runYouTubeAudioExtraction,
+  referenceAudioMediaPatch,
+} from "../youtube-audio-extraction"
+
+const LINK = "https://youtu.be/x"
+const DONE = { id: "job-1", status: "completed", output_data: { audioUrl: "https://cdn/a.mp3" } }
+const patches = (write: ReturnType<typeof vi.fn>) => write.mock.calls.map(([patch]) => patch)
 
 beforeEach(() => {
   vi.clearAllMocks()
+  rights.ticked.clear()
   mocks.extractYouTubeAudioApi.mockResolvedValue({ jobId: "job-1" })
+})
+
+describe("extractReferenceAudio — the reference-audio node's import of its link", () => {
+  it("asks, writes and fetches nothing while the node's box is not ticked for that link", async () => {
+    const write = vi.fn()
+    await expect(extractReferenceAudio("r1", LINK, write)).rejects.toBeInstanceOf(ReferenceAudioNotConfirmedError)
+    rights.ticked.set("r1", "https://youtu.be/other")
+    rights.ticked.set("r2", LINK)
+    await expect(extractReferenceAudio("r1", LINK, write)).rejects.toBeInstanceOf(ReferenceAudioNotConfirmedError)
+    expect(write).not.toHaveBeenCalled()
+    expect(rights.confirmNodeLink).not.toHaveBeenCalled()
+    expect(mocks.extractYouTubeAudioApi).not.toHaveBeenCalled()
+    expect(isReferenceAudioExtracting("r1")).toBe(false)
+  })
+
+  it("marks the node extracting, confirms the link on that node for this one fetch, extracts under it, then writes the media", async () => {
+    rights.ticked.set("r1", LINK)
+    rights.confirmNodeLink.mockResolvedValueOnce("conf-1")
+    mocks.getJobStatusLean.mockResolvedValueOnce(DONE)
+    const write = vi.fn()
+    await extractReferenceAudio("r1", LINK, write)
+    expect(patches(write)).toEqual([{ extractionStatus: "extracting" }, referenceAudioMediaPatch("https://cdn/a.mp3")])
+    expect(rights.confirmNodeLink).toHaveBeenCalledWith("r1", LINK)
+    expect(mocks.extractYouTubeAudioApi).toHaveBeenCalledWith(LINK, { confirmationId: "conf-1" })
+    expect(rights.confirmNodeLink.mock.invocationCallOrder[0]).toBeLessThan(mocks.extractYouTubeAudioApi.mock.invocationCallOrder[0]!)
+  })
+
+  it("a changed declaration writes idle (the node waits for a new tick), any other failure writes failed, and neither fetches past it", async () => {
+    rights.ticked.set("r1", LINK)
+    rights.confirmNodeLink.mockRejectedValueOnce(new DeclarationChangedError())
+    const changed = vi.fn()
+    await extractReferenceAudio("r1", LINK, changed)
+    expect(patches(changed)).toEqual([{ extractionStatus: "extracting" }, { extractionStatus: "idle" }])
+    expect(mocks.extractYouTubeAudioApi).not.toHaveBeenCalled()
+
+    rights.confirmNodeLink.mockRejectedValueOnce(new Error("refused"))
+    const refused = vi.fn()
+    await extractReferenceAudio("r1", LINK, refused)
+    expect(patches(refused)).toEqual([{ extractionStatus: "extracting" }, { extractionStatus: "failed" }])
+    expect(mocks.extractYouTubeAudioApi).not.toHaveBeenCalled()
+  })
+
+  it("one extraction per node on this page: a second call while it runs gets it, and the node counts as extracting until its end is written", async () => {
+    rights.ticked.set("r1", LINK)
+    let confirm: (id: string) => void = () => undefined
+    rights.confirmNodeLink.mockReturnValueOnce(new Promise<string>((resolve) => { confirm = resolve }))
+    mocks.getJobStatusLean.mockResolvedValueOnce(DONE)
+    const seen: Array<[unknown, boolean]> = []
+    const first = extractReferenceAudio("r1", LINK, (patch) => seen.push([patch, isReferenceAudioExtracting("r1")]))
+    expect(isReferenceAudioExtracting("r1")).toBe(true)
+    expect(extractReferenceAudio("r1", LINK, vi.fn())).toBe(first)
+    confirm("conf-1")
+    await first
+    expect(rights.confirmNodeLink).toHaveBeenCalledTimes(1)
+    expect(mocks.extractYouTubeAudioApi).toHaveBeenCalledTimes(1)
+    expect(seen.at(-1)).toEqual([referenceAudioMediaPatch("https://cdn/a.mp3"), true])
+    expect(isReferenceAudioExtracting("r1")).toBe(false)
+  })
 })
 
 describe("runYouTubeAudioExtraction", () => {
@@ -53,6 +133,15 @@ describe("runYouTubeAudioExtraction", () => {
   it("rejects on a failed job", async () => {
     mocks.getJobStatusLean.mockResolvedValueOnce({ id: "job-1", status: "failed", error_message: "private video" })
     await expect(runYouTubeAudioExtraction("https://youtu.be/x")).rejects.toThrow("private video")
+  })
+
+  it("hands the confirmation it is given to the request, and none when it has none", async () => {
+    const done = { id: "job-1", status: "completed", output_data: { audioUrl: "https://cdn/a.mp3" } }
+    mocks.getJobStatusLean.mockResolvedValueOnce(done).mockResolvedValueOnce(done)
+    await runYouTubeAudioExtraction("https://youtu.be/x", { confirmationId: "conf-9" })
+    expect(mocks.extractYouTubeAudioApi).toHaveBeenLastCalledWith("https://youtu.be/x", { confirmationId: "conf-9" })
+    await runYouTubeAudioExtraction("https://youtu.be/x")
+    expect(mocks.extractYouTubeAudioApi).toHaveBeenLastCalledWith("https://youtu.be/x", {})
   })
 })
 

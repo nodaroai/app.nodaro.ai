@@ -177,6 +177,18 @@ export function environmentsThatCannotTakePreciseArtStyle(envs: readonly TrendEn
 
 /**
  * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose
+ * engine does not run a direct Prism Precise run with an art style as Flex
+ * (`castSwap.preciseStyleRoute`): none recorded, or one without the flag.
+ * Unknown while the environments are (undefined). Nothing waits for it: an
+ * engine without the flag never reads the row, and runs such a run as Precise.
+ */
+export function environmentsThatCannotRoutePreciseStyle(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+  if (!envs) return undefined
+  return SHARED_SETTING_ENVIRONMENTS.filter((name) => envs.find((e) => e.env === name)?.supports.castSwap?.preciseStyleRoute !== true)
+}
+
+/**
+ * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose
  * engine cannot take "Body from the clip" (`steps.clipBody`) — none
  * recorded, or one that does not declare `castSwap.steps` and
  * `castSwap.clipBodySheet`. Unknown while the environments are (undefined).

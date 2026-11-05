@@ -6166,6 +6166,7 @@ export const en = {
   "run.videoLinkFailed": "\"{label}\": the linked video couldn't be downloaded.",
   "run.videoLinkChanged": "\"{label}\": the link changed while it was downloading — run again.",
   "run.videoLinkConfirm": "\"{label}\": confirm the content rights declaration in the node, then run again.",
+  "run.soundPageLink": "\"{label}\": a link to where a video is goes in through a Video URL node, which asks for the content rights declaration and fetches its sound. Connect one in place of the link, then run again.",
   "run.runningFromHere": "Running from here...",
   "run.runningSelected": "Running selected nodes...",
   "run.runningUpToHere": "Running up to here...",
@@ -6365,6 +6366,7 @@ export const en = {
   "node.urlCopied": "URL copied",
   // A picture link imported, then adjusted like an upload (upload image node, image input card).
   "linkImport.addedAsIs": "Added the link as it is. It couldn't be opened for adjusting.",
+  "linkImport.refused": "This link can't be added.",
   "node.copied": "Copied",
   "node.promptCopied": "Prompt copied",
   "node.failed": "Failed",

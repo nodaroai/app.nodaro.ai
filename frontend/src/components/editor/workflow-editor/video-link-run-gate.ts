@@ -27,6 +27,7 @@ import { FOCUS_NODES_EVENT, type FocusNodesDetail } from "@/lib/canvas-focus-eve
 import { DOWNLOAD_ERROR_KEYS, formatTimecode } from "@/lib/video-link"
 import { ensureVideoLinkAudio, ensureVideoLinksDownloaded, findUnconfirmedVideoLink, type EnsureVideoLinksResult } from "@/lib/video-link-ingest"
 import { findUnconfirmedNodeLink } from "@/lib/node-link-rights"
+import { findSoundPageLink } from "@/lib/sound-page-links"
 import { videoLinkLengthLimit } from "@/lib/video-link-length-limits"
 import { NODE_DEF_MAP, type WorkflowEdge, type WorkflowNode } from "@/types/nodes"
 
@@ -100,7 +101,10 @@ export function videoLinkAudioNodesFeeding(
  *
  * A node about to run whose OWN link the run hands to a service that fetches it
  * (the Dubbing node's Source link, `node-link-rights.ts`) needs its box ticked
- * too: the run stops on it first, before anything is fetched or started.
+ * too: the run stops on it first, before anything is fetched or started. So
+ * does a node given a link to where a video is as its sound, directly rather
+ * than through a Video URL node (`sound-page-links.ts`): there is no box for
+ * that link, and the message says to connect a Video URL node instead.
  */
 export async function ensureVideoLinksBeforeRun(
   scopeIds: readonly string[],
@@ -110,6 +114,11 @@ export async function ensureVideoLinksBeforeRun(
   const untickedLink = findUnconfirmedNodeLink(nodes, scopeIds)
   if (untickedLink) {
     showNodeMessage(untickedLink.nodeId, tx("run.videoLinkConfirm", { label: untickedLink.label }))
+    return false
+  }
+  const soundPageLink = findSoundPageLink(nodes, edges, scopeIds)
+  if (soundPageLink) {
+    showNodeMessage(soundPageLink.nodeId, tx("run.soundPageLink", { label: soundPageLink.label }))
     return false
   }
   const needed = videoLinkNodesFeeding(scopeIds, nodes, edges)

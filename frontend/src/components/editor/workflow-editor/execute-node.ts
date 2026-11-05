@@ -112,8 +112,8 @@ import {
   uiResolutionFill,
   characterReferencesFromWired,
   videoCharacterRefCap,
-  isSocialVideoUrl,
 } from "@nodaro/shared/video";
+import { isSoundPageLink, videoLinkTrackInto } from "@/lib/sound-page-links";
 import {
   generateMusicApi,
   textToAudioApi,
@@ -142,7 +142,6 @@ import {
   voiceRemixApi,
   voiceDesignApi,
   forcedAlignmentApi,
-  downloadYouTubeAudio,
   lipSyncApi,
   speechToVideoApi,
   runAiAvatar,
@@ -4756,11 +4755,23 @@ function executeNodeCore(
       toast.error(nodeRunError(d.label, "nodeRun.noPromptFound"));
       return Promise.reject(new Error("No prompt"));
     }
+    // A Video URL node wired in gives the track it fetched under its own
+    // content rights box, as the server reads it: its link is never sent.
+    const coverTrack = (() => {
+      const { nodes: graphNodes, edges: graphEdges } = runGraph();
+      return videoLinkTrackInto(node.id, graphNodes, graphEdges);
+    })();
     const uploadUrl =
-      inputs.uploadUrl ?? inputs.audioUrl ?? d.uploadUrl?.trim();
+      coverTrack ?? inputs.uploadUrl ?? inputs.audioUrl ?? d.uploadUrl?.trim();
     if (!uploadUrl) {
       toast.error(nodeRunError(d.label, "nodeRun.noSourceAudioURLFound"));
       return Promise.reject(new Error("No upload URL"));
+    }
+    // Any other link to where a video is would be an import with no box to
+    // confirm it (`sound-page-links.ts`): the run stops before anything starts.
+    if (isSoundPageLink(uploadUrl)) {
+      toast.error(tx("run.soundPageLink", { label: d.label }));
+      return Promise.reject(new Error("A link to where a video is goes in through a Video URL node"));
     }
     const hasCoverCustomFields = !!(d.style || d.title || d.lyrics);
     setUserPromptTemplate(d.prompt?.trim() || undefined);
@@ -5234,6 +5245,20 @@ function executeNodeCore(
       return Promise.reject(new Error("No audio input"));
     }
     const d = node.data as TranscribeData;
+    // The sound of a Video URL node wired in is the track it fetched under its
+    // own content rights box, as the server reads it: the link is never
+    // fetched again here.
+    {
+      const { nodes: graphNodes, edges: graphEdges } = runGraph();
+      const track = videoLinkTrackInto(node.id, graphNodes, graphEdges);
+      if (track) audioUrl = track;
+    }
+    // Any other link to where a video is would be an import with no box to
+    // confirm it (`sound-page-links.ts`): the run stops before anything starts.
+    if (isSoundPageLink(audioUrl as string)) {
+      toast.error(tx("run.soundPageLink", { label: d.label }));
+      return Promise.reject(new Error("A link to where a video is goes in through a Video URL node"));
+    }
     // An EXPLICIT word-timings request the selected lane cannot honour is
     // refused HERE — before the node flips to running, before any YouTube audio
     // extraction, and before the API call reserves credits. The lane still runs
@@ -5256,38 +5281,8 @@ function executeNodeCore(
       generatedText: undefined,
     });
 
-    // The platform hosts' own test, the server's too (the transcribe worker
-    // extracts on it): a host that merely contains a platform's name is a file.
-    const isVideoUrl = isSocialVideoUrl(audioUrl as string);
-
-    const getTranscribeAudioUrl = async (): Promise<string> => {
-      if (!isVideoUrl) return audioUrl as string;
-      guardedToast.info(tx("nodeRun.extractingAudioFromVideo"));
-      const result = await downloadYouTubeAudio(audioUrl as string);
-
-      if (result.thumbnailUrl) {
-        const { edges: curEdges, nodes: currentNodes } = runGraph();
-        const incomingEdge = curEdges.find((e) => e.target === node.id);
-        if (incomingEdge) {
-          const sourceNode = currentNodes.find(
-            (n) => n.id === incomingEdge.source,
-          );
-          if (
-            sourceNode?.type === "youtube-video" &&
-            !(sourceNode.data as Record<string, unknown>).thumbnailUrl
-          ) {
-            updateNodeData(sourceNode.id, {
-              thumbnailUrl: result.thumbnailUrl,
-            });
-          }
-        }
-      }
-
-      return result.url;
-    };
-
     return new Promise<string>((resolve, reject) => {
-      getTranscribeAudioUrl()
+      Promise.resolve(audioUrl as string)
         .then((resolvedAudioUrl) => {
           audioUrl = resolvedAudioUrl;
           // Re-apply sync so transcribeApi's body build consumes the flag

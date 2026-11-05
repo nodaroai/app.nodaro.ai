@@ -6,6 +6,7 @@ import { startReconcileCron } from "./lib/reconcile/start.js"
 import { startAppReportSweepCron } from "./lib/app-report-sweep.js"
 import { startScene3DArtifactCleanup } from "./lib/scene3d-artifact-cleanup.js"
 import { startRetainedImageCleanup } from "./lib/retained-image-cleanup.js"
+import { startUnconfirmedImportsSweep } from "./lib/unconfirmed-imports.js"
 import { startSpeakerFramesCacheSweep } from "./lib/speaker-frames-cache-sweep.js"
 import { startTemplateKeptSweep } from "./lib/template-kept-sweep.js"
 import { startCastSwapDepthClipsSweep } from "./lib/cast-swap-depth-clips-sweep.js"
@@ -66,6 +67,7 @@ async function main() {
   let stopStorageDeleteRetry: (() => Promise<void>) | undefined
   let stopWebhookDispatcher: (() => Promise<void>) | undefined
   let stopJobTrashPurge: (() => Promise<void>) | undefined
+  let stopUnconfirmedImportsSweep: (() => Promise<void>) | undefined
   let stopPlatformClaimHeartbeat: (() => void) | undefined
   app.addHook("onClose", async () => { stopPlatformClaimHeartbeat?.() })
   app.addHook("onClose", async () => { await stopScene3DArtifactCleanup?.() })
@@ -77,6 +79,7 @@ async function main() {
   app.addHook("onClose", async () => { await stopStorageDeleteRetry?.() })
   app.addHook("onClose", async () => { await stopWebhookDispatcher?.() })
   app.addHook("onClose", async () => { await stopJobTrashPurge?.() })
+  app.addHook("onClose", async () => { await stopUnconfirmedImportsSweep?.() })
 
   // Load Telegram routing table before accepting traffic
   try {
@@ -138,6 +141,9 @@ async function main() {
   // editions, where scheduled workflows fire (on Railway, production only:
   // staging shares its database). Idempotent; the age is re-checked under a lock.
   stopJobTrashPurge = startJobTrashPurge((message) => app.log.warn(message))
+  // The count of imports without a declaration, past the 90 days the admin
+  // screen reads — admin editions, the only ones that count.
+  stopUnconfirmedImportsSweep = startUnconfirmedImportsSweep((message) => app.log.warn(message))
   // Storage deletes that failed, retried — ALL editions: every delete path
   // records into storage_delete_retries (lib/storage-delete.ts).
   stopStorageDeleteRetry = startStorageDeleteRetry((message) => app.log.warn(message))

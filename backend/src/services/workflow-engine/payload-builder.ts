@@ -2744,6 +2744,26 @@ function applyEdlPlanBasis(node: SimpleNode, buildCtx: PayloadBuildContext | und
   )
 }
 
+/**
+ * The audio track a Video URL node wired into this node fetched under its own
+ * content rights confirmation (`downloadedAudioUrl`, written by the run's
+ * pre-fetch, `video-link-fetch.ts`): the sound Transcribe and Suno Cover take
+ * from it (`VIDEO_LINK_AUDIO_CONSUMER_TYPES`), so its page link is never fetched
+ * again without one. The editor reads it the same way (`sound-page-links.ts`).
+ * Undefined outside a run's graph, or when no such node holds a track.
+ */
+function videoLinkTrackInto(nodeId: string, buildCtx: PayloadBuildContext | undefined): string | undefined {
+  if (!buildCtx?.edges || !buildCtx.nodes || !buildCtx.nodeStates) return undefined
+  for (const edge of buildCtx.edges) {
+    if (edge.target !== nodeId) continue
+    const source = buildCtx.nodes.find((n) => n.id === edge.source)
+    if (!source || source.type !== "youtube-video") continue
+    const track = (source.data.downloadedAudioUrl as string | undefined)?.trim()
+    if (track) return track
+  }
+  return undefined
+}
+
 export function buildPayload(
   rawNode: SimpleNode,
   jobId: string,
@@ -6188,9 +6208,10 @@ export function buildPayload(
       // fast before reserving credits (mirrors AI Audit's video_required
       // above) instead of letting an orchestrated run with nothing wired
       // reach KIE with `undefined` (the node's own defaultData seeds
-      // uploadUrl: "", which is equally falsy here).
+      // uploadUrl: "", which is equally falsy here). A Video URL node wired in
+      // gives the track it fetched (videoLinkTrackInto), never its page link.
       const coverUploadUrl =
-        resolvedInputs.uploadUrl || resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl
+        videoLinkTrackInto(node.id, buildCtx) || resolvedInputs.uploadUrl || resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl
       if (!coverUploadUrl) {
         throw codedMediaRefusal("audio_required", "connect an audio track to the Suno Cover node")
       }
@@ -6385,22 +6406,9 @@ export function buildPayload(
     // --- Transcription / OCR ---
     case "transcribe": {
       const provider = (data.provider as string) ?? DEFAULT_TRANSCRIBE_NODE_PROVIDER
-      let transcribeAudioUrl = resolvedInputs.audioUrl || resolvedInputs.videoUrl || data.audioUrl
-
-      // If the audio source is a youtube-video node, prefer its downloadedAudioUrl
-      // (matches frontend logic that calls downloadYouTubeAudio before transcribing)
-      if (buildCtx?.edges && buildCtx?.nodes && buildCtx?.nodeStates) {
-        const transcribeInEdges = buildCtx.edges.filter((e) => e.target === node.id)
-        for (const edge of transcribeInEdges) {
-          const srcNode = buildCtx.nodes.find((n) => n.id === edge.source)
-          if (!srcNode || srcNode.type !== "youtube-video") continue
-          const ytAudio = (srcNode.data.downloadedAudioUrl as string | undefined)?.trim()
-          if (ytAudio) {
-            transcribeAudioUrl = ytAudio
-            break
-          }
-        }
-      }
+      // A Video URL node wired in gives the track it fetched (videoLinkTrackInto).
+      const transcribeAudioUrl =
+        videoLinkTrackInto(node.id, buildCtx) || resolvedInputs.audioUrl || resolvedInputs.videoUrl || data.audioUrl
 
       // Word timings only make the `json` (Transcript) handle useful, and the
       // two whisper providers omit them unless asked (elevenlabs-stt is always

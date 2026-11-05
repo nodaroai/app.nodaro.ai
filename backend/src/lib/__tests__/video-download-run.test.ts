@@ -35,6 +35,9 @@ vi.mock("@/lib/content-rights.js", () => ({
   recordEvent: vi.fn().mockResolvedValue(true),
   contentHashOf: vi.fn().mockResolvedValue("ab".repeat(32)),
 }))
+// The count of imports without a confirmation has its own tests; a fake here,
+// so a run's download never waits on a database these tests do not have.
+vi.mock("@/lib/unconfirmed-imports.js", () => ({ recordUnconfirmedImport: vi.fn().mockResolvedValue(undefined) }))
 
 import {
   MAX_ACTIVE_DOWNLOADS_PER_USER,
@@ -116,6 +119,14 @@ describe("a run's download goes through the route's downloader", () => {
     expect(deriveAndConsumeConfirmation).toHaveBeenCalledWith(expect.objectContaining({ userId: "u1", url: URL_, via: "mcp", requestId: "exec-1:src" }))
     expect(consumeRightsConfirmation).not.toHaveBeenCalled()
     expect(recordDownloadedVideoAsset).toHaveBeenCalledWith(expect.objectContaining({ rightsConfirmationId: derived }))
+  })
+
+  it("an administrator's own download (the trend radar's clip) is checked and spent as the administrator's, not a run's", async () => {
+    const confirmationId = "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e05"
+    vi.mocked(checkRightsConfirmation).mockResolvedValueOnce({ id: confirmationId } as never)
+    await downloadVideoForRun({ url: URL_, userId: "u1", rightsConfirmationId: confirmationId, lane: "admin" })
+    expect(checkRightsConfirmation).toHaveBeenCalledWith(expect.objectContaining({ userId: "u1", lane: "admin" }))
+    expect(consumeRightsConfirmation).toHaveBeenCalledWith(expect.objectContaining({ confirmationId, lane: "admin" }))
   })
 
   it("a provider failure is a `failed` error carrying the provider's message", async () => {

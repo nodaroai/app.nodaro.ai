@@ -983,6 +983,50 @@ describe("buildPayload", () => {
       expect(() => buildPayload(n, jobId, {})).toThrow(/audio_required/)
     })
 
+    describe("a Video URL node wired in gives the track it fetched under its box, never its page link", () => {
+      const PAGE = "https://www.youtube.com/watch?v=abc"
+      const TRACK = "https://cdn.example.com/track.mp3"
+      const link = node("v", "youtube-video", { youtubeUrl: PAGE, downloadedAudioUrl: ` ${TRACK} ` })
+      const graph = (target: SimpleNode) => ({
+        nodes: [link, target],
+        edges: [{ id: "e1", source: "v", target: target.id, sourceHandle: null, targetHandle: "audio" }],
+        nodeStates: {},
+      })
+
+      it("suno-cover: the track, over the page link the resolver hands on, and it satisfies the requirement alone", () => {
+        const n = node("n1", "suno-cover", { prompt: "pop" })
+        expect(buildPayload(n, jobId, { audioUrl: PAGE }, undefined, graph(n)).payload.uploadUrl).toBe(TRACK)
+        expect(buildPayload(n, jobId, {}, undefined, graph(n)).payload.uploadUrl).toBe(TRACK)
+      })
+
+      it("transcribe: the track, over the page link the resolver hands on", () => {
+        const n = node("n1", "transcribe", { provider: "whisper" })
+        expect(buildPayload(n, jobId, { videoUrl: PAGE }, undefined, graph(n)).payload.audioUrl).toBe(TRACK)
+      })
+
+      it("outside a run's graph, with no track fetched, or from another kind of node, what was resolved stands", () => {
+        const cover = node("n1", "suno-cover", { prompt: "pop" })
+        expect(buildPayload(cover, jobId, { audioUrl: "https://cover.mp3" }).payload.uploadUrl).toBe("https://cover.mp3")
+        const bare = { ...graph(cover), nodes: [node("v", "youtube-video", { youtubeUrl: PAGE }), cover] }
+        expect(buildPayload(cover, jobId, { audioUrl: "https://cover.mp3" }, undefined, bare).payload.uploadUrl).toBe("https://cover.mp3")
+        const upload = { ...graph(cover), nodes: [node("v", "upload-audio", { downloadedAudioUrl: TRACK }), cover] }
+        expect(buildPayload(cover, jobId, { audioUrl: "https://cover.mp3" }, undefined, upload).payload.uploadUrl).toBe("https://cover.mp3")
+      })
+
+      it("the first wired Video URL node that holds a track gives it", () => {
+        const cover = node("n1", "suno-cover", { prompt: "pop" })
+        const two = {
+          nodes: [node("v0", "youtube-video", { youtubeUrl: PAGE }), link, cover],
+          edges: [
+            { id: "e0", source: "v0", target: "n1", sourceHandle: null, targetHandle: "audio" },
+            { id: "e1", source: "v", target: "n1", sourceHandle: null, targetHandle: "audio" },
+          ],
+          nodeStates: {},
+        }
+        expect(buildPayload(cover, jobId, { audioUrl: PAGE }, undefined, two).payload.uploadUrl).toBe(TRACK)
+      })
+    })
+
     it("suno-upload-extend", () => {
       const n = node("n1", "suno-upload-extend", {})
       const inputs: ResolvedInputs = { audioUrl: "https://extend.mp3" }

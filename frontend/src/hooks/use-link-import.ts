@@ -1,14 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { discardMedia, importMediaUrl } from "@/lib/api"
+import { MediaImportError, discardMedia, importMediaUrl } from "@/lib/api"
+import { DeclarationChangedError, reloadDeclaration } from "@/lib/content-rights"
+import { declarationChanged } from "@/lib/declaration-changes"
+import { confirmNodeLink, isNodeLinkRightsTicked, untickNodeLinkRights } from "@/lib/node-link-rights"
 
 /**
  * What became of a link handed to `importLink`:
  * - `opened`: the editor is open on the picture;
- * - `failed`: it could not be imported (any reason), so the caller keeps the
- *   link as it is, as before there was an import;
+ * - `failed`: it could not be copied (unreachable, too large, not a picture,
+ *   full storage, the network), so the caller keeps the link as it is, as
+ *   before there was an import;
+ * - `refused`: the platform refused to import it (the site's policy, the
+ *   account's measures, a confirmation it did not accept): the caller adds
+ *   nothing and says so;
+ * - `unconfirmed`: the content rights box is not ticked for this link, or the
+ *   declaration changed (which unticks every box): nothing was fetched, and
+ *   the caller keeps the link where the person can tick the box;
  * - `ignored`: another link is already on its way, or the page went away.
  */
-export type LinkImportOutcome = "opened" | "failed" | "ignored"
+export type LinkImportOutcome = "opened" | "failed" | "refused" | "unconfirmed" | "ignored"
 
 /** The extension a picture of each type the platform imports is named with. */
 const EXTENSION_BY_TYPE: Readonly<Record<string, string>> = {
@@ -47,12 +57,18 @@ export function fileNameForType(name: string, mimeType: string): string {
  * person's storage (`importMediaUrl`), the copy is read back as a File and
  * handed to the "Adjust image" editor, exactly as a picked file is.
  *
+ * An import of someone's link, so it waits for the content rights box ticked
+ * for that link on this node or app card (`nodeId`), and confirms the
+ * declaration for that one import right before it (`node-link-rights.ts`:
+ * session state, never saved). A tick is one import's: once the import was
+ * tried, the box is unticked, and the next link waits for it again.
+ *
  * The editor works only from that in-memory File and uploads what the person
  * confirms, so the imported copy is discarded as soon as it is read back,
  * before the editor opens: it never holds storage while the editor's own
  * upload needs it, and nothing is left behind whatever the editor does.
  */
-export function useLinkImport() {
+export function useLinkImport(nodeId: string) {
   const [isImporting, setIsImporting] = useState(false)
   const inFlightRef = useRef(false)
   const mountedRef = useRef(false)
@@ -65,10 +81,19 @@ export function useLinkImport() {
   /** Import `url` and, once it is read back, open it in the editor. */
   const importLink = useCallback(async (url: string, openEditor: (files: File[]) => unknown): Promise<LinkImportOutcome> => {
     if (inFlightRef.current) return "ignored"
+    if (!isNodeLinkRightsTicked(nodeId, url)) return "unconfirmed"
     inFlightRef.current = true
     setIsImporting(true)
     try {
-      const imported = await importMediaUrl(url)
+      let confirmationId: string
+      try {
+        confirmationId = await confirmNodeLink(nodeId, url)
+      } catch (err) {
+        // A changed declaration unticked the box: nothing is fetched until it is ticked again.
+        if (!(err instanceof DeclarationChangedError)) throw err
+        return mountedRef.current ? "unconfirmed" : "ignored"
+      }
+      const imported = await importMediaUrl(url, { confirmationId })
       let file: File | null = null
       try {
         const res = await fetch(imported.url)
@@ -86,13 +111,20 @@ export function useLinkImport() {
       if (!file) return "failed"
       openEditor([file])
       return "opened"
-    } catch {
-      return mountedRef.current ? "failed" : "ignored"
+    } catch (err) {
+      if (!mountedRef.current) return "ignored"
+      if (!(err instanceof MediaImportError) || err.status !== 403) return "failed"
+      if (err.code !== "rights_confirmation_stale") return "refused"
+      // The declaration changed after this confirmation was made: every box was ticked under the old text.
+      reloadDeclaration()
+      declarationChanged()
+      return "unconfirmed"
     } finally {
+      untickNodeLinkRights(nodeId)
       inFlightRef.current = false
       if (mountedRef.current) setIsImporting(false)
     }
-  }, [])
+  }, [nodeId])
 
   return { importLink, isImporting }
 }

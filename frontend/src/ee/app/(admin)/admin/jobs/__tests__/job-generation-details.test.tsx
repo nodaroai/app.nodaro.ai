@@ -11,7 +11,7 @@ vi.mock("@/lib/api", async (orig) => ({
 }))
 import type { ReactElement } from "react"
 import { fetchJobCastSwapSteps } from "@/lib/api"
-import { CastSwapStepsBody, JobGenerationDetails, JobSkippedSteps, JobStepOutputs } from "../job-generation-details"
+import { CastSwapStepsBody, JobGenerationDetails, JobSkippedSteps, JobStepOutputs, PRECISE_STYLE_ROUTED_LINE } from "../job-generation-details"
 afterEach(cleanup)
 beforeEach(() => vi.mocked(fetchJobCastSwapSteps).mockReset())
 it("shows recorded model and generation parameters above the JSON", () => {
@@ -137,4 +137,16 @@ it("CastSwapStepsBody says a Full Quality version's style-only path though it re
 it("CastSwapStepsBody says nothing of style-only for any other run", () => {
   render(<CastSwapStepsBody showSkipped={false} data={{ stepOutputs: { v: 1, roles: [], enginePrompt: { mode: "template" } }, sceneText: null, skippedSteps: [], styleOnly: null }} />)
   expect(screen.queryByTestId("style-only-path")).toBeNull()
+})
+
+it("says when the Precise art-style route ran the run as Flex, and says nothing otherwise", async () => {
+  const steps = { stepOutputs: null, sceneText: null, skippedSteps: [], styleOnly: null }
+  vi.mocked(fetchJobCastSwapSteps).mockResolvedValue({ ...steps, preciseStyleRouted: true })
+  const { unmount } = withQuery(<JobStepOutputs job={{ id: "job-routed", job_type: null, input_data: { type: "cast-swap" } }} />)
+  expect((await screen.findByTestId("precise-style-routed")).textContent).toBe(PRECISE_STYLE_ROUTED_LINE)
+  unmount()
+  vi.mocked(fetchJobCastSwapSteps).mockResolvedValue(steps)
+  withQuery(<JobStepOutputs job={{ id: "job-plain", job_type: null, input_data: { type: "cast-swap" } }} />)
+  await screen.findByText("This run used today's steps.")
+  expect(screen.queryByTestId("precise-style-routed")).toBeNull()
 })

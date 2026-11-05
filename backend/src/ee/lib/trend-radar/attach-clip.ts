@@ -28,11 +28,18 @@ export interface AttachClipDeps {
   note: (candidateId: string, event: string, detail: string | null) => Promise<unknown>
 }
 
+/**
+ * The top post's clip, downloaded as the administrator's own import, never as
+ * a run's. The import gate (lib/import-gate.ts) is inside the downloader: the
+ * site's policy and the admin's confirmation for this link, or a
+ * `source_failed` note with the gate's message.
+ */
+export function downloadTopPostClip(url: string, userId: string, confirmationId: string | null): Promise<{ videoUrl: string }> {
+  return downloadVideoForRun({ url, userId, maxHeight: 1080, maxMs: ATTACH_CLIP_MAX_MS, rightsConfirmationId: confirmationId, lane: "admin" })
+}
+
 const DEFAULT_DEPS: AttachClipDeps = {
-  // The import gate (lib/import-gate.ts) is inside the downloader: the site's
-  // policy and the admin's confirmation for this link, or a `source_failed`
-  // note with the gate's message.
-  download: (url, userId, confirmationId) => downloadVideoForRun({ url, userId, maxHeight: 1080, maxMs: ATTACH_CLIP_MAX_MS, rightsConfirmationId: confirmationId }),
+  download: downloadTopPostClip,
   copy: (trendId, videoUrl) => copyToTrendStorage(trendId, videoUrl, "video", { durationSec: TREND_SOURCE_SECONDS, display: true }),
   readDraft: async (trendId) => {
     const state = await getDraftState(trendId)

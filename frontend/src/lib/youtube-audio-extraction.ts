@@ -7,8 +7,19 @@
  * node whose `youtubeUrl` arrived without the panel ever mounting — written by
  * the copilot, an import, or a template). A panel-only flow is the classic
  * fail-safe trap: effects in a panel run only while that panel is open.
+ *
+ * The extraction fetches the link: an import of it, so both callers go through
+ * `extractReferenceAudio`, which asks for the node's content rights box ticked
+ * for that link and confirms it for this one fetch (`node-link-rights.ts`). It
+ * also keeps which nodes are extracting on THIS page: the node's saved
+ * `extractionStatus` outlives the page (a copy of the node, a reload, a closed
+ * tab keep "extracting" with nothing running), so "running now" is read here,
+ * never from the node.
  */
-import { extractYouTubeAudioApi, getJobStatusLean } from "@/lib/api"
+import { useSyncExternalStore } from "react"
+import { extractYouTubeAudioApi, getJobStatusLean, type DownloadAudioOptions } from "@/lib/api"
+import { DeclarationChangedError } from "@/lib/content-rights"
+import { confirmNodeLink, isNodeLinkRightsTicked } from "@/lib/node-link-rights"
 
 const POLL_INTERVAL_MS = 2000
 
@@ -22,9 +33,78 @@ export interface ExtractedAudio {
 const positiveSeconds = (v: unknown): number | undefined =>
   typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined
 
+/** Thrown by `extractReferenceAudio` when the node's box is not ticked for the link: nothing was confirmed or fetched. */
+export class ReferenceAudioNotConfirmedError extends Error {
+  constructor() {
+    super("Tick the content rights box for this link first.")
+    this.name = "ReferenceAudioNotConfirmedError"
+  }
+}
+
+/** What an extraction writes onto its node: "extracting", then the media, or how it ended without it. */
+export type ReferenceAudioWrite = (
+  patch: ReturnType<typeof referenceAudioMediaPatch> | { readonly extractionStatus: "extracting" | "failed" | "idle" },
+) => void
+
+/** The extractions running on this page, by node: one fetch per node at a time. */
+const running = new Map<string, Promise<void>>()
+const listeners = new Set<() => void>()
+
+function notify(): void {
+  for (const listener of listeners) listener()
+}
+
+function subscribeExtractions(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
+/** Whether this page is extracting the node's sound now (not what the node saved). */
+export function isReferenceAudioExtracting(nodeId: string): boolean {
+  return running.has(nodeId)
+}
+
+export function useReferenceAudioExtracting(nodeId: string): boolean {
+  return useSyncExternalStore(subscribeExtractions, () => running.has(nodeId), () => false)
+}
+
+/**
+ * The reference-audio node's import of its link: refused before anything is
+ * asked or written while the node's box is not ticked for exactly that link.
+ * Otherwise the node is marked extracting, the declaration is confirmed now,
+ * for this one fetch, and the extraction runs under it; its end is written
+ * before the node stops counting as extracting here: the media, "idle" when the
+ * declaration changed (the box is unticked: the node waits for a new tick), or
+ * "failed". A node already extracting here gets that extraction, never a
+ * second fetch.
+ */
+export function extractReferenceAudio(nodeId: string, youtubeUrl: string, write: ReferenceAudioWrite): Promise<void> {
+  if (!isNodeLinkRightsTicked(nodeId, youtubeUrl)) return Promise.reject(new ReferenceAudioNotConfirmedError())
+  const current = running.get(nodeId)
+  if (current) return current
+  write({ extractionStatus: "extracting" })
+  const extraction = (async () => {
+    try {
+      const confirmationId = await confirmNodeLink(nodeId, youtubeUrl)
+      const { audioUrl, durationSeconds } = await runYouTubeAudioExtraction(youtubeUrl, { confirmationId })
+      write(referenceAudioMediaPatch(audioUrl, durationSeconds))
+    } catch (err) {
+      write({ extractionStatus: err instanceof DeclarationChangedError ? "idle" : "failed" })
+    } finally {
+      running.delete(nodeId)
+      notify()
+    }
+  })()
+  running.set(nodeId, extraction)
+  notify()
+  return extraction
+}
+
 /** Resolves with the extracted audio (+ its length); rejects on a failed job. */
-export async function runYouTubeAudioExtraction(youtubeUrl: string): Promise<ExtractedAudio> {
-  const { jobId } = await extractYouTubeAudioApi(youtubeUrl)
+export async function runYouTubeAudioExtraction(youtubeUrl: string, options: DownloadAudioOptions = {}): Promise<ExtractedAudio> {
+  const { jobId } = await extractYouTubeAudioApi(youtubeUrl, options)
   for (;;) {
     const status = await getJobStatusLean(jobId)
     if (status.status === "completed" && status.output_data?.audioUrl) {

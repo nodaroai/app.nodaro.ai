@@ -31,6 +31,7 @@ vi.mock("../content-rights.js", () => ({
   coversStandingAuthorization: (via: unknown) => via === "api" || via === "app" || via === "mcp",
   deriveAndConsumeConfirmation: vi.fn().mockResolvedValue("derived-1"),
 }))
+vi.mock("../unconfirmed-imports.js", () => ({ recordUnconfirmedImport: vi.fn().mockResolvedValue(undefined) }))
 
 import {
   ImportOwnerUnknownError,
@@ -39,6 +40,7 @@ import {
   requireImportAllowed,
   spendImportConfirmation,
 } from "../import-gate.js"
+import { recordUnconfirmedImport } from "../unconfirmed-imports.js"
 import { assertImportsAllowed } from "../account-measures.js"
 import { AccountMeasureError } from "../account-measure-error.js"
 import { ImportSourceError, assertImportSourceAllowed } from "../import-source-policy.js"
@@ -118,6 +120,16 @@ describe("spendImportConfirmation", () => {
     expect(deriveAndConsumeConfirmation).not.toHaveBeenCalled()
   })
 
+  it("without one: a session's import is refused, and not counted, once the setting is on (it turned on while the download waited)", async () => {
+    vi.mocked(contentRightsRequired).mockResolvedValueOnce(true)
+    const refused = spendImportConfirmation(URL_, { userId: "u1", lane: "route", via: "session" })
+    await expect(refused).rejects.toBeInstanceOf(ContentRightsError)
+    await expect(spendImportConfirmation(URL_, { userId: "u1", lane: "route", via: "session" })).resolves.toBeNull()
+    vi.mocked(contentRightsRequired).mockResolvedValueOnce(true)
+    await expect(spendImportConfirmation(URL_, { userId: "u1", lane: "run" })).rejects.toMatchObject({ code: "rights_confirmation_required" })
+    expect(recordUnconfirmedImport).toHaveBeenCalledTimes(1)
+  })
+
   it("without one: a key's, an app's or an agent's import derives one from the standing authorization, with the app grant and the request", async () => {
     for (const via of ["api", "app", "mcp"] as const) {
       vi.mocked(deriveAndConsumeConfirmation).mockClear()
@@ -147,6 +159,44 @@ describe("spendImportConfirmation", () => {
     await expect(spendImportConfirmation(URL_, { userId: "u1", lane: "run", via: "mcp" })).resolves.toBe("derived-1")
     expect(contentRightsRequired).not.toHaveBeenCalled()
   })
+
+  describe("an import that goes ahead with no confirmation is counted (lib/unconfirmed-imports.ts)", () => {
+    it("a session's or an unnamed import: counted with its account (for the count's cap), link, lane, way in, app and request", async () => {
+      await spendImportConfirmation(URL_, { userId: "u1", lane: "route", requestId: "req-1", via: "session" })
+      expect(recordUnconfirmedImport).toHaveBeenCalledWith({ userId: "u1", url: URL_, lane: "route", via: "session", appId: null, requestId: "req-1" })
+      await spendImportConfirmation(URL_, { userId: "u1", lane: "run" })
+      expect(recordUnconfirmedImport).toHaveBeenLastCalledWith({ userId: "u1", url: URL_, lane: "run", via: null, appId: null, requestId: null })
+    })
+
+    it("a key's, an app's or an agent's import with no standing authorization, while the setting is off: counted", async () => {
+      vi.mocked(deriveAndConsumeConfirmation).mockResolvedValueOnce(null)
+      await spendImportConfirmation(URL_, { userId: "u1", lane: "route", requestId: "job-1", via: "app", appId: "app-1" })
+      expect(recordUnconfirmedImport).toHaveBeenCalledWith({ userId: "u1", url: URL_, lane: "route", via: "app", appId: "app-1", requestId: "job-1" })
+    })
+
+    it("an import that carried one, sent or derived, or that is refused, is not counted", async () => {
+      await spendImportConfirmation(URL_, { userId: "u1", confirmationId: ID, lane: "route" })
+      await spendImportConfirmation(URL_, { userId: "u1", lane: "route", via: "api" })
+      vi.mocked(deriveAndConsumeConfirmation).mockResolvedValueOnce(null)
+      vi.mocked(contentRightsRequired).mockResolvedValueOnce(true)
+      await expect(spendImportConfirmation(URL_, { userId: "u1", lane: "run", via: "mcp" })).rejects.toMatchObject({ code: "rights_authorization_required" })
+      vi.mocked(assertImportsAllowed).mockRejectedValueOnce(new AccountMeasureError(null, "closed"))
+      await expect(spendImportConfirmation(URL_, { userId: "u1", lane: "route" })).rejects.toMatchObject({ code: "imports_blocked" })
+      expect(recordUnconfirmedImport).not.toHaveBeenCalled()
+    })
+
+    it("the import never waits for the count: a count that never answers holds up no step", async () => {
+      const never = (): Promise<void> => new Promise(() => undefined)
+      const settles = (step: Promise<unknown>) =>
+        Promise.race([step.then(() => "settled"), new Promise((resolve) => setTimeout(() => resolve("held up"), 100))])
+      vi.mocked(recordUnconfirmedImport).mockReturnValueOnce(never()).mockReturnValueOnce(never()).mockReturnValueOnce(never())
+      await expect(settles(spendImportConfirmation(URL_, { userId: "u1", lane: "route", via: "session" }))).resolves.toBe("settled")
+      vi.mocked(deriveAndConsumeConfirmation).mockResolvedValueOnce(null)
+      await expect(settles(spendImportConfirmation(URL_, { userId: "u1", lane: "route", via: "api" }))).resolves.toBe("settled")
+      await expect(settles(requireAccountlessImportAllowed(URL_, "plugin"))).resolves.toBe("settled")
+      expect(recordUnconfirmedImport).toHaveBeenCalledTimes(3)
+    })
+  })
 })
 
 describe("isImportRefusal", () => {
@@ -162,17 +212,19 @@ describe("isImportRefusal", () => {
 })
 
 describe("an import with no account behind it", () => {
-  it("a job whose owner could not be read never passes either half, and nothing is read or spent", async () => {
+  it("a job whose owner could not be read never passes either half, and nothing is read, spent or counted", async () => {
     await expect(requireImportAllowed(URL_, { userId: "", confirmationId: ID, lane: "route" })).rejects.toBeInstanceOf(ImportOwnerUnknownError)
     await expect(spendImportConfirmation(URL_, { userId: "", confirmationId: ID, lane: "route" })).rejects.toBeInstanceOf(ImportOwnerUnknownError)
+    await expect(spendImportConfirmation(URL_, { userId: "", lane: "run" })).rejects.toBeInstanceOf(ImportOwnerUnknownError)
     expect(assertImportsAllowed).not.toHaveBeenCalled()
     expect(assertImportSourceAllowed).not.toHaveBeenCalled()
     expect(checkRightsConfirmation).not.toHaveBeenCalled()
     expect(consumeRightsConfirmation).not.toHaveBeenCalled()
     expect(deriveAndConsumeConfirmation).not.toHaveBeenCalled()
+    expect(recordUnconfirmedImport).not.toHaveBeenCalled()
   })
 
-  it("an accountless import (a plugin's download outside any job) asks the site's policy, then the rule with no confirmation and no way in, and spends nothing", async () => {
+  it("an accountless import (a plugin's download outside any job) asks the site's policy, then the rule with no confirmation and no way in, spends nothing, and is counted with no account", async () => {
     await requireAccountlessImportAllowed(URL_, "plugin")
     expect(assertImportsAllowed).not.toHaveBeenCalled()
     expect(assertImportSourceAllowed).toHaveBeenCalledWith(URL_)
@@ -180,13 +232,16 @@ describe("an import with no account behind it", () => {
     expect(vi.mocked(assertImportSourceAllowed).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(checkRightsConfirmation).mock.invocationCallOrder[0]!)
     expect(consumeRightsConfirmation).not.toHaveBeenCalled()
     expect(deriveAndConsumeConfirmation).not.toHaveBeenCalled()
+    expect(recordUnconfirmedImport).toHaveBeenCalledWith({ userId: "", url: URL_, lane: "plugin", via: null, appId: null, requestId: null })
+    expect(vi.mocked(checkRightsConfirmation).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(recordUnconfirmedImport).mock.invocationCallOrder[0]!)
   })
 
-  it("an accountless import refused by the site's policy or by the rule is the gate's own refusal", async () => {
+  it("an accountless import refused by the site's policy or by the rule is the gate's own refusal, and is not counted", async () => {
     vi.mocked(assertImportSourceAllowed).mockRejectedValueOnce(new ImportSourceError())
     await expect(requireAccountlessImportAllowed(URL_, "plugin")).rejects.toBeInstanceOf(ImportSourceError)
     expect(checkRightsConfirmation).not.toHaveBeenCalled()
     vi.mocked(checkRightsConfirmation).mockRejectedValueOnce(new ContentRightsError("rights_confirmation_required", "Confirm first."))
     await expect(requireAccountlessImportAllowed(URL_, "plugin")).rejects.toMatchObject({ code: "rights_confirmation_required" })
+    expect(recordUnconfirmedImport).not.toHaveBeenCalled()
   })
 })

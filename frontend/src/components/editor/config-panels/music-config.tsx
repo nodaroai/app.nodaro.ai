@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useMemo, useEffect } from "react"
 import { resolveMusicProvider } from "@nodaro/shared/models"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -14,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { CachedImage } from "@/components/ui/cached-image"
-import { uploadAudio, downloadYouTubeAudio } from "@/lib/api"
+import { uploadAudio } from "@/lib/api"
 import { useT } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import type { GenerateMusicData, WorkflowEdge } from "@/types/nodes"
@@ -28,6 +27,7 @@ import { useFinalPromptSegments } from "./use-final-prompt-segments"
 import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import { ConnectedAudioSources } from "./connected-audio-sources"
 import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
+import { MusicReferenceLink } from "./music-reference-link"
 import type { ConfigProps } from "./types"
 
 // Hoisted to avoid creating a fresh empty array on every render — preserves
@@ -49,8 +49,6 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
     edges: edges ?? EMPTY_EDGES,
     snippets: promptSnippets,
   })
-  const [ytStatus, setYtStatus] = useState<"idle" | "downloading" | "error">("idle")
-
   const connectedRef = sources.find((s) => s.targetHandle === "ref-audio")
 
   const handleFileUpload = useCallback(async (file: File) => {
@@ -64,18 +62,10 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
     }
   }, [onUpdate])
 
-  const handleYouTubeDownload = useCallback(async () => {
-    const url = data.referenceYouTubeUrl?.trim()
-    if (!url) return
-    setYtStatus("downloading")
-    try {
-      const result = await downloadYouTubeAudio(url)
-      onUpdate({ referenceAudioUrl: result.url, referenceSource: "youtube" })
-      setYtStatus("idle")
-    } catch {
-      setYtStatus("error")
-    }
-  }, [data.referenceYouTubeUrl, onUpdate])
+  const handleReferenceFetched = useCallback(
+    (audioUrl: string) => onUpdate({ referenceAudioUrl: audioUrl, referenceSource: "youtube" }),
+    [onUpdate],
+  )
 
   // The model the node runs: a node saved with a model that is gone (or the
   // "suno" new nodes used to start on) runs the default one.
@@ -223,25 +213,16 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
             )}
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="radio" name="ref-source" checked={data.referenceSource === "youtube"} onChange={() => onUpdate({ referenceSource: "youtube" })} />
-              {t("vidcfg.youtubeUrl")}
+              {t("common.link")}
             </label>
             {data.referenceSource === "youtube" && (
-              <div className="ms-6 flex flex-col gap-1">
-                <div className="flex gap-1">
-                  <Input
-                    value={data.referenceYouTubeUrl || ""}
-                    onChange={(e) => onUpdate({ referenceYouTubeUrl: e.target.value })}
-                    placeholder="https://youtube.com/watch?v=..."
-                    className="flex-1"
-                  />
-                  <Button size="sm" variant="outline" onClick={handleYouTubeDownload} disabled={ytStatus === "downloading" || !data.referenceYouTubeUrl?.trim()}>
-                    {ytStatus === "downloading" ? "..." : t("cfgext.musicGet")}
-                  </Button>
-                </div>
-                {ytStatus === "downloading" && <p className="text-xs text-muted-foreground">{t("cfgext.musicDownloadingAudio")}</p>}
-                {ytStatus === "error" && <p className="text-xs text-red-500">{t("inputcfg.downloadFailed")}</p>}
-                {data.referenceSource === "youtube" && hasReference && <p className="text-xs text-green-600">{t("cfgext.musicReady")}</p>}
-              </div>
+              <MusicReferenceLink
+                nodeId={nodeId}
+                link={data.referenceYouTubeUrl || ""}
+                ready={hasReference}
+                onLinkChange={(link) => onUpdate({ referenceYouTubeUrl: link })}
+                onFetched={handleReferenceFetched}
+              />
             )}
           </div>
           </>

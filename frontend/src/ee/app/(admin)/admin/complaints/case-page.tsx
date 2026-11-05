@@ -7,6 +7,7 @@ import { categoryLabel, formatWhen, statusLabel, statusTone } from "./complaint-
 import { CaseStatusPanel } from "./case-status-panel"
 import { CaseDetails } from "./case-details"
 import { CaseMatches } from "./case-matches"
+import { CaseEmails } from "./case-emails"
 import { CaseCounterNotices } from "./case-counter-notices"
 import { CaseAccountRecord } from "./case-account-record"
 import { CaseTimeline } from "./case-timeline"
@@ -73,6 +74,7 @@ export default function AdminComplaintCasePage() {
       <CaseStatusPanel complaint={c} />
       <CaseDetails complaint={c} />
       <CaseMatches complaint={c} />
+      <CaseEmails complaint={c} />
       <CaseCounterNotices complaint={c} />
       <CaseAccountRecord complaint={c} />
       <CaseTimeline complaint={c} />

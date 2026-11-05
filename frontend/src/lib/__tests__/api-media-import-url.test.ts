@@ -46,6 +46,18 @@ describe("importMediaUrl", () => {
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer tok")
   })
 
+  it("carries the content rights confirmation made for the link, and only when there is one", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(answer(200, { data: imported }))
+    vi.stubGlobal("fetch", fetchMock)
+    await importMediaUrl("https://example.test/a.png", { confirmationId: "conf-1" })
+    await importMediaUrl("https://example.test/a.png", {})
+    const bodies = fetchMock.mock.calls.map(([, init]) => JSON.parse((init as RequestInit).body as string))
+    expect(bodies).toEqual([
+      { url: "https://example.test/a.png", confirmationId: "conf-1" },
+      { url: "https://example.test/a.png" },
+    ])
+  })
+
   it.each([
     [400, "validation_error"],
     [422, "fetch_failed"],

@@ -207,7 +207,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
           .min(1)
           .max(DIRECTION_ID_MAX_CHARS)
           .optional()
-          .describe('An art style on Nodaro Motion Prism (Flex, or Precise where the engine takes it): a "style" picker catalog id (get_picker_catalog "style"), e.g. "pop-art". The prompt takes its video wording. With no role images and no references it restyles the whole clip, where the engine takes style-only runs (Flex). Pulse takes none.'),
+          .describe('An art style on Nodaro Motion Prism (Flex; a Precise call may run as Flex): a "style" picker catalog id (get_picker_catalog "style"), e.g. "pop-art". The prompt takes its video wording. With no role images and no references it restyles the whole clip, where the engine takes style-only runs (Flex). Pulse takes none.'),
         motion_length: z
           .enum(LENGTHS)
           .optional()

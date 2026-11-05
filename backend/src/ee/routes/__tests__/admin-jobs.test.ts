@@ -669,25 +669,50 @@ describe("GET /v1/admin/jobs/:jobId", () => {
     expect(mockFrom).not.toHaveBeenCalled()
   })
 
-  it("returns the whole job — its full input and output — without the usage-log id, Trash included", async () => {
+  it("returns the whole job — its full input and output, its charge, its parent and child count — without the usage-log id, Trash included", async () => {
     const row = {
       id: JOB_ID, status: "completed", job_type: null, credits: 30, provider_cost: 0.004, display_cost: 0.01,
       input_data: { type: "generate-image", prompt: "a red fox", provider: "gpt-image" },
       output_data: { imageUrl: "https://cdn.test/fox.png", seed: 7 },
-      user_id: VALID_UUID, usage_log_id: "ul-1",
+      user_id: VALID_UUID, usage_log_id: "ul-1", parent_job_id: null,
     }
-    const chain = jobsChain({ data: row, error: null })
-    mockFrom.mockReturnValue(chain)
+    const job = jobsChain({ data: row, error: null })
+    const count = Object.assign(jobsChain({ data: null, error: null }), {})
+    count.then = vi.fn().mockImplementation((resolve: (v: unknown) => void) => resolve({ count: 3, error: null }))
+    mockFrom.mockImplementation((table: string) => {
+      if (table !== "jobs") return jobsChain({ data: [], error: null })
+      return mockFrom.mock.calls.filter(([t]) => t === "jobs").length === 1 ? job : count
+    })
     const res = await adminGet(`/v1/admin/jobs/${JOB_ID}`)
     expect(res.statusCode).toBe(200)
     const { usage_log_id: _log, ...expected } = row
-    expect(res.json()).toEqual({ data: expected })
-    expect(mockFrom).toHaveBeenCalledWith("jobs")
-    expect(chain.eq).toHaveBeenCalledWith("id", JOB_ID)
-    expect(chain.select.mock.calls[0]![0]).toContain("input_data")
+    expect(res.json()).toEqual({
+      data: { ...expected, credit: { status: null, charged: null, held: 30, released: null, run: null }, child_count: 3 },
+    })
+    expect(job.eq).toHaveBeenCalledWith("id", JOB_ID)
+    expect(job.select.mock.calls[0]![0]).toContain("input_data")
+    expect(job.select.mock.calls[0]![0]).toContain("parent_job_id")
+    // The count is of the job's own children, its owner's only.
+    expect(count.eq).toHaveBeenCalledWith("user_id", VALID_UUID)
+    expect(count.eq).toHaveBeenCalledWith("parent_job_id", JOB_ID)
     // The list shows jobs in the Trash, so the detail view opens them too.
-    expect(chain.is).not.toHaveBeenCalled()
-    expect(serverTimingNames(res)).toEqual(["auth", "job", "total"])
+    expect(job.is).not.toHaveBeenCalled()
+    expect(count.is).not.toHaveBeenCalled()
+    // The charge and the count are read at the same time; each is timed.
+    const names = serverTimingNames(res)
+    expect(names.slice(0, 2)).toEqual(["auth", "job"])
+    expect(names.at(-1)).toBe("total")
+    expect(names.slice(2, -1).sort()).toEqual(["children", "logs", "side", "steps"])
+  })
+
+  it("a failed child count reads as unknown, never as none", async () => {
+    const job = jobsChain({ data: { id: JOB_ID, status: "completed", user_id: VALID_UUID }, error: null })
+    const count = jobsChain({ data: null, error: null })
+    count.then = vi.fn().mockImplementation((resolve: (v: unknown) => void) => resolve({ count: null, error: { message: "boom" } }))
+    mockFrom.mockImplementation(() => (mockFrom.mock.calls.length === 1 ? job : count))
+    const res = await adminGet(`/v1/admin/jobs/${JOB_ID}`)
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.child_count).toBeNull()
   })
 
   it("answers 404 for a job that does not exist", async () => {
@@ -700,6 +725,118 @@ describe("GET /v1/admin/jobs/:jobId", () => {
   it("returns 500 when the read errors", async () => {
     mockFrom.mockReturnValue(jobsChain({ data: null, error: { message: "boom" } }))
     const res = await adminGet(`/v1/admin/jobs/${JOB_ID}`)
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
+  })
+})
+
+describe("GET /v1/admin/jobs/:jobId/children", () => {
+  const ROOT = "00000000-0000-4000-8000-0000000000d1"
+  const at = (n: number) => `2026-11-05T10:00:0${n}.000Z`
+
+  /** A `jobs` table answering the filters a query asks for: by id, by owner, by parent. */
+  function jobsTable(rows: Array<Record<string, unknown>>) {
+    const reads: Array<{ eq: Array<[string, unknown]>; in: [string, unknown[]] | null; limit: number | null }> = []
+    mockFrom.mockImplementation((table: string) => {
+      const q = { eq: [] as Array<[string, unknown]>, in: null as [string, unknown[]] | null, limit: null as number | null, single: false }
+      const chain: Record<string, unknown> = {}
+      chain.select = () => chain
+      chain.order = () => chain
+      chain.eq = (c: string, v: unknown) => (q.eq.push([c, v]), chain)
+      chain.in = (c: string, v: unknown[]) => ((q.in = [c, v]), chain)
+      chain.limit = (n: number) => ((q.limit = n), chain)
+      chain.maybeSingle = () => ((q.single = true), chain)
+      chain.then = (resolve: (v: unknown) => unknown) => {
+        if (table !== "jobs") return resolve({ data: [], error: null })
+        reads.push({ eq: q.eq, in: q.in, limit: q.limit })
+        let found = rows.filter((r) => q.eq.every(([c, v]) => r[c] === v) && (!q.in || q.in[1].includes(r[q.in[0]])))
+        found = [...found].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
+        if (q.limit != null) found = found.slice(0, q.limit)
+        return resolve({ data: q.single ? found[0] ?? null : found, error: null })
+      }
+      return chain
+    })
+    return reads
+  }
+
+  it("returns 403 for a non-admin and 400 for an id that is not a job id", async () => {
+    expect((await adminGet(`/v1/admin/jobs/${ROOT}/children`, VALID_UUID)).statusCode).toBe(403)
+    expect((await adminGet("/v1/admin/jobs/nope/children")).statusCode).toBe(400)
+    expect(mockFrom).not.toHaveBeenCalled()
+  })
+
+  it("answers 404 for a job that does not exist", async () => {
+    jobsTable([])
+    const res = await adminGet(`/v1/admin/jobs/${ROOT}/children`)
+    expect(res.statusCode).toBe(404)
+  })
+
+  it("lists every job below in flow order — each job, then its own children, oldest first — whole, with depth and charge", async () => {
+    const reads = jobsTable([
+      { id: ROOT, user_id: VALID_UUID, parent_job_id: null, created_at: at(0) },
+      { id: "video", user_id: VALID_UUID, parent_job_id: ROOT, created_at: at(5), credits: 300, input_data: { prompt: "p" } },
+      { id: "refs", user_id: VALID_UUID, parent_job_id: ROOT, created_at: at(1), credits: 20 },
+      { id: "sheet", user_id: VALID_UUID, parent_job_id: "refs", created_at: at(2), usage_log_id: "ul-sheet" },
+      // Another user's row naming the root as its parent is never read.
+      { id: "foreign", user_id: ADMIN_UUID, parent_job_id: ROOT, created_at: at(3) },
+    ])
+    const res = await adminGet(`/v1/admin/jobs/${ROOT}/children`)
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.truncated).toBe(false)
+    expect(body.data.map((r: { id: string; depth: number }) => [r.id, r.depth])).toEqual([["refs", 1], ["sheet", 2], ["video", 1]])
+    expect(body.data[2].input_data).toEqual({ prompt: "p" })
+    expect(body.data[0].credit).toEqual({ status: null, charged: null, held: 20, released: null, run: null })
+    expect(body.data[1]).not.toHaveProperty("usage_log_id")
+    // One read per level, each its owner's only.
+    const levels = reads.filter((r) => r.in?.[0] === "parent_job_id")
+    expect(levels.map((r) => r.in![1])).toEqual([[ROOT], ["refs", "video"], ["sheet"]])
+    for (const r of levels) expect(r.eq).toContainEqual(["user_id", VALID_UUID])
+    expect(serverTimingNames(res)).toEqual(["auth", "job", "tree", "steps", "logs", "side", "total"])
+  })
+
+  it("says the list is cut short past the page's limit", async () => {
+    const { adminChildJobs } = await import("../admin-job-children.js")
+    jobsTable([
+      { id: "a", user_id: VALID_UUID, parent_job_id: ROOT, created_at: at(1) },
+      { id: "b", user_id: VALID_UUID, parent_job_id: ROOT, created_at: at(2) },
+      { id: "c", user_id: VALID_UUID, parent_job_id: ROOT, created_at: at(3) },
+    ])
+    const out = await adminChildJobs({ id: ROOT, user_id: VALID_UUID }, "*", 2)
+    expect(out.rows.map((r) => r.id)).toEqual(["a", "b"])
+    expect(out.truncated).toBe(true)
+  })
+
+  it("a tree exactly as deep as the walk goes is whole; one deeper is cut short", async () => {
+    const { adminChildJobs } = await import("../admin-job-children.js")
+    const { MAX_CHILD_JOB_DEPTH } = await import("../../../lib/public-job-data.js")
+    const chain = (levels: number) => Array.from({ length: levels }, (_, i) => ({
+      id: `d${i + 1}`, user_id: VALID_UUID, parent_job_id: i === 0 ? ROOT : `d${i}`, created_at: at(1),
+    }))
+    jobsTable(chain(MAX_CHILD_JOB_DEPTH))
+    const whole = await adminChildJobs({ id: ROOT, user_id: VALID_UUID }, "*")
+    expect(whole.rows).toHaveLength(MAX_CHILD_JOB_DEPTH)
+    expect(whole.truncated).toBe(false)
+    jobsTable(chain(MAX_CHILD_JOB_DEPTH + 1))
+    const deeper = await adminChildJobs({ id: ROOT, user_id: VALID_UUID }, "*")
+    expect(deeper.rows).toHaveLength(MAX_CHILD_JOB_DEPTH)
+    expect(deeper.truncated).toBe(true)
+  })
+
+  it("never follows a loop in parent_job_id", async () => {
+    const { flowOrder } = await import("../admin-job-children.js")
+    expect(flowOrder(ROOT, [
+      { id: "x", parent_job_id: ROOT, created_at: at(1) },
+      { id: "y", parent_job_id: "x", created_at: at(2) },
+      { id: ROOT, parent_job_id: "y", created_at: at(3) },
+    ]).map((r) => r.id)).toEqual(["x", "y"])
+  })
+
+  it("returns 500 when a level cannot be read", async () => {
+    const root = jobsChain({ data: { id: ROOT, user_id: VALID_UUID }, error: null })
+    const broken = jobsChain({ data: null, error: { message: "boom" } })
+    mockFrom.mockImplementation(() => (mockFrom.mock.calls.length === 1 ? root : broken))
+    const res = await adminGet(`/v1/admin/jobs/${ROOT}/children`)
     expect(res.statusCode).toBe(500)
     expect(res.json().error.code).toBe("internal_error")
   })

@@ -493,7 +493,13 @@ export function setUserPromptTemplate(template: string | undefined) {
   _userPromptTemplate = template
 }
 
-/** Spread workflowId / forcePrivate / userPrompt into a body object. */
+/**
+ * Spread workflowId / forcePrivate / userPrompt / nodeId into a body object.
+ * Call it before the request's first `await`: the one-shot values are the
+ * starting node's only until another node's run sets its own, which can happen
+ * during any await (two nodes start together). Kept private so
+ * `__tests__/api-run-context-order.test.ts` sees every call.
+ */
 function withWorkflowId<T extends Record<string, unknown>>(body: T): T {
   let result = body
   if (_currentWorkflowId) {
@@ -523,6 +529,7 @@ function withWorkflowId<T extends Record<string, unknown>>(body: T): T {
  * - `body` is JSON-stringified; omit it for body-less calls (no `Content-Type`).
  * - `workflowId: true` wraps the body in `withWorkflowId(...)` (workflowId /
  *   forcePrivate / userPrompt injection) — opt-in so non-job calls don't get it.
+ *   The body is built as the call starts, before it waits for anything.
  * - `idempotencyKey` adds the `Idempotency-Key` header when present.
  *
  * Behavior is identical to the inline form (pinned by
@@ -545,18 +552,16 @@ export async function apiJson<T>(
   },
 ): Promise<T> {
   const { method = "POST", body, label, labelVars, workflowId, idempotencyKey, signal } = opts
-  const hasBody = body !== undefined
+  const payload = body !== undefined ? JSON.stringify(workflowId ? withWorkflowId(body) : body) : undefined
   const authHeaders = await getAuthHeaders()
-  let headers: Record<string, string> = hasBody
+  let headers: Record<string, string> = payload !== undefined
     ? { "Content-Type": "application/json", ...authHeaders }
     : authHeaders
   if (idempotencyKey) headers = withIdempotencyHeader(headers, idempotencyKey)
   const res = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers,
-    ...(hasBody
-      ? { body: JSON.stringify(workflowId ? withWorkflowId(body) : body) }
-      : {}),
+    ...(payload !== undefined ? { body: payload } : {}),
     ...(signal ? { signal } : {}),
   })
   if (!res.ok) {
@@ -645,13 +650,14 @@ async function ugcApi<T>(
   opts: { method?: "GET" | "POST"; body?: Record<string, unknown>; workflowId?: boolean; label: MessageKey; idempotencyKey?: string; signal?: AbortSignal },
 ): Promise<T> {
   const { method = "POST", body, workflowId, label, idempotencyKey, signal } = opts
+  const payload = body !== undefined ? JSON.stringify(workflowId ? withWorkflowId(body) : body) : undefined
   const authHeaders = await getAuthHeaders()
-  let headers: Record<string, string> = body !== undefined ? { "Content-Type": "application/json", ...authHeaders } : authHeaders
+  let headers: Record<string, string> = payload !== undefined ? { "Content-Type": "application/json", ...authHeaders } : authHeaders
   if (idempotencyKey) headers = withIdempotencyHeader(headers, idempotencyKey)
   const res = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers,
-    ...(body !== undefined ? { body: JSON.stringify(workflowId ? withWorkflowId(body) : body) } : {}),
+    ...(payload !== undefined ? { body: payload } : {}),
     ...(signal ? { signal } : {}),
   })
   // A result the editor lands after this call is stamped on the server's clock (lib/server-clock.ts).
@@ -3742,11 +3748,12 @@ export async function continueUseCase(params: {
 }, idempotencyKey?: string): Promise<UseCaseContinueAnswer> {
   const label: MessageKey = "apiErr.continueUseCase"
   const { nodeType, ...ask } = params
+  // An explicit nodeId wins over (and outlives) the one-shot pending one.
+  const payload = JSON.stringify({ ...withWorkflowId({ ...ask }), ...(ask.nodeId ? { nodeId: ask.nodeId } : {}) })
   const res = await fetch(`${API_BASE_URL}${usecaseContinuePath(nodeType)}`, {
     method: "POST",
     headers: withIdempotencyHeader({ "Content-Type": "application/json", ...(await getAuthHeaders()) }, idempotencyKey),
-    // An explicit nodeId wins over (and outlives) the one-shot pending one.
-    body: JSON.stringify({ ...withWorkflowId({ ...ask }), ...(ask.nodeId ? { nodeId: ask.nodeId } : {}) }),
+    body: payload,
   })
   const body = (await res.json().catch(() => null)) as Record<string, unknown> | null
   if (res.ok) {
@@ -4730,6 +4737,11 @@ export async function processMedia(params: MediaProcessParams): Promise<MediaPro
   return json.data
 }
 
+export interface MediaImportOptions {
+  /** The content rights confirmation this import is made under (`nodaroClient.contentRights.confirm`, for this link). */
+  readonly confirmationId?: string
+}
+
 /** A link copied into the person's storage by `POST /v1/media/import-url`. */
 export interface ImportedMedia {
   readonly url: string
@@ -4743,22 +4755,38 @@ export interface ImportedMedia {
 }
 
 /**
- * Copy the picture at a link into the person's storage (`POST
- * /v1/media/import-url`), so it can be read and cropped like an upload. Any
- * refusal or network failure throws; the caller does not word it (a link that
- * cannot be imported is kept as it is), so the error carries only the
- * platform's code, for debugging.
+ * A refusal of `POST /v1/media/import-url`: its status and the platform's
+ * code, never the server's text (which can quote the remote host's own
+ * error). A `403` is the import gate's: the site's policy, the account's
+ * measures, or a confirmation it did not accept.
  */
-export async function importMediaUrl(url: string): Promise<ImportedMedia> {
+export class MediaImportError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+  ) {
+    super(`media import refused: ${status} ${code}`)
+    this.name = "MediaImportError"
+  }
+}
+
+/**
+ * Copy the picture at a link into the person's storage (`POST
+ * /v1/media/import-url`), so it can be read and cropped like an upload. An
+ * import of the link, so it carries the content rights confirmation made for
+ * it (`options.confirmationId`). A refusal throws `MediaImportError`; a
+ * network failure throws as it is.
+ */
+export async function importMediaUrl(url: string, options: MediaImportOptions = {}): Promise<ImportedMedia> {
   const authHeaders = await getAuthHeaders()
   const res = await fetch(`${API_BASE_URL}/v1/media/import-url`, {
     method: "POST",
     headers: { ...authHeaders, "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url, ...(options.confirmationId ? { confirmationId: options.confirmationId } : {}) }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throw new Error(`media import refused: ${res.status} ${err?.error?.code ?? "unknown"}`)
+    throw new MediaImportError(res.status, err?.error?.code ?? "unknown")
   }
   const json = await res.json()
   return json.data
@@ -6282,13 +6310,10 @@ export async function generateMusicApi(prompt: string, provider?: string, durati
   })
 }
 
-export async function extractYouTubeAudioApi(youtubeUrl: string, userId?: string): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { youtubeUrl }
-  if (userId) {
-    body.userId = userId
-  }
+/** The sound of a video link, extracted by a job (`POST /v1/extract-youtube-audio`). An import of the link, so it carries a confirmation like the video download. */
+export async function extractYouTubeAudioApi(youtubeUrl: string, options: DownloadAudioOptions = {}): Promise<{ jobId: string }> {
   return apiJson("/v1/extract-youtube-audio", {
-    body,
+    body: { youtubeUrl, ...(options.confirmationId !== undefined ? { confirmationId: options.confirmationId } : {}) },
     workflowId: true,
     label: "apiErr.startYouTubeAudioExtraction",
   })
@@ -7090,13 +7115,14 @@ async function llmStreamGeneric(
   // SSE streaming must bypass the Vite rewrite proxy (which buffers the
   // response body) and call the backend directly so tokens arrive in real-time.
   const sseBaseUrl = runtimeApiUrl()
+  const payload = withWorkflowId(body)
 
   try {
     const { streamRequest } = await import("@/lib/sse-client")
     const authHeaders = await getAuthHeaders()
 
     for await (const event of streamRequest(endpoint, {
-      body: withWorkflowId(body),
+      body: payload,
       signal,
       baseUrl: sseBaseUrl || undefined,
       headers: authHeaders,
@@ -12080,6 +12106,8 @@ export interface TrendEngineEnvironment {
       styleOnly?: boolean
       /** The engine takes an art style on a direct Precise run (Prism); absent = it refuses one there. */
       preciseArtStyle?: boolean
+      /** The engine runs a direct Prism Precise run with an art style as Flex while the admin's switch is on; absent = it runs it as Precise. */
+      preciseStyleRoute?: boolean
     }
     /**
      * What that environment's platform (the app itself, apart from its engine)
@@ -12344,6 +12372,8 @@ export interface JobCastSwapSteps {
   skippedSteps: SkippedStep[]
   /** A style-only run's path (a Full Quality version's included, which records no steps); null for any other run. */
   styleOnly: NodaroMotionStyleOnlyPath | null
+  /** It resolved to Precise with an art style, and the Precise art-style route ran it as Flex; absent otherwise. */
+  preciseStyleRouted?: true
 }
 
 const ADMIN_NODARO_MOTION_STEPS = "/v1/admin/nodaro-motion/steps"
@@ -13222,6 +13252,38 @@ export async function saveNodaroMotionPreciseArtStyle(preciseArtStyle: NodaroMot
     await apiRequest<{ data: NodaroMotionPreciseArtStyleView }>(ADMIN_NODARO_MOTION_PRECISE_ART_STYLE, "apiErr.saveNodaroMotion", {
       method: "PUT",
       body: { preciseArtStyle },
+    })
+  ).data
+}
+
+// ---- Admin: Nodaro Motion's Precise art-style route (/v1/admin/nodaro-motion/precise-style-route, admin-nodaro-motion-precise-style-route.ts) ----
+
+/** Whether a direct Prism Precise run with an art style runs as Flex, and the accounts that skip it. A key left out takes its default (on; nobody). */
+export interface NodaroMotionPreciseStyleRoute {
+  routing?: "on" | "off"
+  bypassEmails?: string[]
+}
+
+export interface NodaroMotionPreciseStyleRouteView {
+  /** null = never saved: routing on, nobody bypassed. */
+  preciseStyleRoute: NodaroMotionPreciseStyleRoute | null
+  updatedAt: string | null
+  /** Whether this environment's Cast Swap engine runs such a run as Flex (`castSwap.preciseStyleRoute`). */
+  supported: boolean
+}
+
+const ADMIN_NODARO_MOTION_PRECISE_STYLE_ROUTE = "/v1/admin/nodaro-motion/precise-style-route"
+
+export async function fetchNodaroMotionPreciseStyleRoute(): Promise<NodaroMotionPreciseStyleRouteView> {
+  return (await apiRequest<{ data: NodaroMotionPreciseStyleRouteView }>(ADMIN_NODARO_MOTION_PRECISE_STYLE_ROUTE, "apiErr.loadNodaroMotion")).data
+}
+
+/** Saves the whole setting, whatever the engines. Something that is not an email is a 400 `validation_error`. */
+export async function saveNodaroMotionPreciseStyleRoute(preciseStyleRoute: NodaroMotionPreciseStyleRoute): Promise<NodaroMotionPreciseStyleRouteView> {
+  return (
+    await apiRequest<{ data: NodaroMotionPreciseStyleRouteView }>(ADMIN_NODARO_MOTION_PRECISE_STYLE_ROUTE, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { preciseStyleRoute },
     })
   ).data
 }

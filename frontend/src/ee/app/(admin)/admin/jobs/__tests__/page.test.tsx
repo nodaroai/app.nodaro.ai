@@ -179,6 +179,23 @@ describe("AdminJobsPage", () => {
       expect(within(dialog).getByText("a red fox in the snow")).toBeTruthy()
     })
 
+    it("a row has two info buttons: the dialog, and the job's page in a new tab; the dialog links the page too", () => {
+      vi.mocked(useAdminJobs).mockReturnValue({
+        data: { jobs: [ROW], userNotFound: false, filtersUnavailable: false },
+        isLoading: false,
+      } as unknown as ReturnType<typeof useAdminJobs>)
+      renderAt("/admin/jobs")
+      const row = screen.getByText(ROW.id.slice(0, 8)).closest("tr")!
+      expect(within(row).getByRole("button", { name: "Job details" })).toBeTruthy()
+      const page = within(row).getByRole("link", { name: "Open the job page in a new tab" })
+      expect(page.getAttribute("href")).toBe(`/admin/job/${ROW.id}`)
+      expect(page.getAttribute("target")).toBe("_blank")
+      expect(page.getAttribute("rel")).toContain("noopener")
+      fireEvent.click(within(row).getByRole("button", { name: "Job details" }))
+      const inDialog = within(screen.getByRole("dialog")).getByRole("link", { name: "Open the job page in a new tab" })
+      expect(inDialog.getAttribute("href")).toBe(`/admin/job/${ROW.id}`)
+    })
+
     it("says when the whole job could not be read", () => {
       vi.mocked(useAdminJobDetail).mockReturnValue({ data: undefined, isError: true } as unknown as ReturnType<typeof useAdminJobDetail>)
       const dialog = openDetail()

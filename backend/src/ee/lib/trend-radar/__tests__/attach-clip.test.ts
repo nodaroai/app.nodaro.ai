@@ -7,7 +7,11 @@
  * candidate. It never throws.
  */
 import { describe, it, expect, vi } from "vitest"
-import { attachTopPostClip, type AttachClipDeps } from "../attach-clip.js"
+
+vi.mock("../../../../lib/video-download.js", () => ({ downloadVideoForRun: vi.fn(async () => ({ videoUrl: "https://cdn.test/library/clip.mp4" })) }))
+
+import { attachTopPostClip, downloadTopPostClip, type AttachClipDeps } from "../attach-clip.js"
+import { downloadVideoForRun } from "../../../../lib/video-download.js"
 import type { TrendVersionData } from "../../trends/types.js"
 
 const DRAFT = { name: { en: "phone on train" }, source: null, previewStart: 0, slots: [], references: [], examples: [] } as unknown as TrendVersionData
@@ -33,6 +37,13 @@ function deps(over: Partial<AttachClipDeps> = {}) {
 const input = { trendId: "t1", candidateId: "c1", post: { url: "https://www.tiktok.com/@a/video/7300000000000000001", author: "a", platform: "tiktok" as const }, userId: "admin" }
 
 describe("attachTopPostClip", () => {
+  it("the clip is downloaded as the administrator's own import, never as a run's, with the admin's confirmation", async () => {
+    await downloadTopPostClip(input.post.url, "admin", "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01")
+    expect(downloadVideoForRun).toHaveBeenCalledWith(
+      expect.objectContaining({ url: input.post.url, userId: "admin", rightsConfirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01", lane: "admin" }),
+    )
+  })
+
   it("the admin's confirmation for the link rides into the downloader (the import gate is inside it)", async () => {
     const { d } = deps()
     await attachTopPostClip({ ...input, confirmationId: "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01" }, d)

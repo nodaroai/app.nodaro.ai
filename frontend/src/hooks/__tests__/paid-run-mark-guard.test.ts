@@ -106,7 +106,6 @@ const FREE: ReadonlyMap<string, string> = new Map([
   ["setUserPromptTemplate", "sets a header for later requests; sends nothing"],
   ["withDedupRaceRetry", "retries the request it is handed; sends nothing of its own"],
   ["quotePro3DRender", "a price quote (`/v1/pro-3d-render/quote` reserves nothing)"],
-  ["downloadYouTubeAudio", "`/v1/youtube-audio` charges no credits"],
   ["extractYouTubeAudioApi", "`/v1/extract-youtube-audio` charges no credits"],
   ["grokSegmentMap", "Grok region detection is priced at 0 credits (`grok-2-segment`)"],
   ["ugcCategoriesApi", "`/v1/ugc/categories` charges no credits: the product categories, read by UGC Cards' check that the route is served and by UGC Creator's panel"],

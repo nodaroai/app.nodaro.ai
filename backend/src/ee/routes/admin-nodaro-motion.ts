@@ -20,6 +20,8 @@
  *                                         what a direct style-only run does per engine: its path and engine prompt (admin-nodaro-motion-style-only.ts)
  *   GET/PUT /v1/admin/nodaro-motion/precise-art-style
  *                                         how a direct Precise run with an art style opens its prompt per engine: "restyle" or "edit" (admin-nodaro-motion-precise-art-style.ts)
+ *   GET/PUT /v1/admin/nodaro-motion/precise-style-route
+ *                                         whether a direct Prism Precise run with an art style runs as Flex, and the accounts that skip it (admin-nodaro-motion-precise-style-route.ts)
  *   GET/PUT /v1/admin/nodaro-motion/advanced
  *                                         whether a Nodaro Motion page shows its Advanced options, one switch for the page (admin-nodaro-motion-advanced.ts)
  *
@@ -98,6 +100,7 @@ import { registerNodaroMotionStyleRoutes } from "./admin-nodaro-motion-style.js"
 import { registerNodaroMotionPromptWordingRoutes } from "./admin-nodaro-motion-prompt-wording.js"
 import { registerNodaroMotionStyleOnlyRoutes } from "./admin-nodaro-motion-style-only.js"
 import { registerNodaroMotionPreciseArtStyleRoutes } from "./admin-nodaro-motion-precise-art-style.js"
+import { registerNodaroMotionPreciseStyleRouteRoutes } from "./admin-nodaro-motion-precise-style-route.js"
 import { registerNodaroMotionAdvancedRoutes } from "./admin-nodaro-motion-advanced.js"
 
 /**
@@ -148,6 +151,7 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
   registerNodaroMotionPromptWordingRoutes(app)
   registerNodaroMotionStyleOnlyRoutes(app)
   registerNodaroMotionPreciseArtStyleRoutes(app)
+  registerNodaroMotionPreciseStyleRouteRoutes(app)
   registerNodaroMotionAdvancedRoutes(app)
   app.get("/v1/admin/nodaro-motion/masking", { preHandler: requireAdmin }, async (req, reply) => {
     try {

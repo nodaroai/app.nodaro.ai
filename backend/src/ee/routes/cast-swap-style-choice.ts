@@ -34,7 +34,9 @@
  * environment's engine declares `castSwap.preciseArtStyle`, Nodaro Motion
  * Pulse never (it takes no art style). Like `styleOnly` it follows the engine
  * alone and is in every answer; a client reading a server from before it
- * finds none and offers an art style on Flex alone.
+ * finds none and offers an art style on Flex alone. The request is taken either
+ * way: while the admin's Precise art-style route is on (lib/nodaro-motion-precise-style-route.ts)
+ * the engine runs it as Flex, which this does not say and the estimate shows.
  */
 import type { FastifyInstance } from "fastify"
 import type { NodaroMotionEngine } from "@nodaro/shared/models"
