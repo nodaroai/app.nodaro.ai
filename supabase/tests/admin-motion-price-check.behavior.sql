@@ -329,6 +329,16 @@ SELECT pg_temp.assert_eq('style: a __videoUrl that is not a string does not make
 SELECT pg_temp.assert_eq('style: a trend that is not an object does not make a trend run',
   public.admin_motion_style('{"trend": "neon", "style": "motion"}'), 'flex');
 SELECT pg_temp.assert_eq('style: no input at all is precise', public.admin_motion_style(NULL), 'precise');
+-- 602: a Precise run with an art style that the Precise art-style route made the Flex way keeps its asked style
+-- (none, or 'precise') and the hidden __preciseStyleRouted: it is flex, as it was made. A trend run is never routed.
+SELECT pg_temp.assert_eq('style: a routed hand run, its style none, is flex',
+  public.admin_motion_style('{"__preciseStyleRouted": true}'), 'flex');
+SELECT pg_temp.assert_eq('style: a routed hand run that asked for precise is flex',
+  public.admin_motion_style('{"style": "precise", "__preciseStyleRouted": true, "__faceMasking": {"source": "full-depth"}}'), 'flex');
+SELECT pg_temp.assert_eq('style: a routed flag that is not true does not make a run flex',
+  public.admin_motion_style('{"style": "precise", "__preciseStyleRouted": "yes"}'), 'precise');
+SELECT pg_temp.assert_eq('style: a trend run reads its recipe, never the routed flag',
+  public.admin_motion_style('{"trend": {"id": "t"}, "__preciseStyleRouted": true}'), 'precise');
 
 -- ---------------------------------------------------------------------------
 -- 4. The tree.

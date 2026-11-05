@@ -4739,9 +4739,11 @@ where it is not. On an engine answered `"precise"`, a request with nothing else
 to change is refused as `400 validation_error`; with anything else to change (a
 role with images, a fixed reference, a `prePrompt` or `postPrompt`) it answers
 `202` and runs and is quoted as Precise, with the art style where `preciseArtStyle` is `true`.
-While Nodaro runs a Precise run with an art style as a Motion run (see An art
-style on a Precise run below), a request that keeps one on such an engine runs
-and is quoted as Motion instead, and one with nothing else to change is accepted.
+While Nodaro makes a Precise run with an art style the way a Motion run is
+made (see An art style on a Precise run below), a request that keeps one on such
+an engine is made and quoted as a Motion run, its job recording the style sent; a
+`style: "motion"` request is then not overridden at all (no `styleForced`), and
+one with nothing else to change is accepted.
 Nodaro Motion Pulse is always `false` in all three, and a server from before
 them leaves them out: read that as `false` for every engine.
 The answer may be up to a minute old. Trends are not
@@ -4782,15 +4784,16 @@ takes none there (below). That setting is not the forced style, and
 answers `preciseArtStyle` `true` for the engine (Nodaro Motion Prism only), a
 Precise run (no `style`, or `style: "precise"`) also takes an art style,
 `direction: { style: "<id>" }`, from the same catalog and refused the same way
-(`400 unknown_art_style`, `400 art_style_not_supported`). Nodaro may run it as a
-Motion run, where an art style holds across the whole picture far more reliably
-(its engine does by default, unless Nodaro turns that off). It is then treated
-exactly as if you had sent `style: "motion"`: its estimate (sent with the same
-body), its price, its Full Quality and Style only above are a Motion run's, the
-job records `input_data.style: "motion"`, and with nothing else to change it is
+(`400 unknown_art_style`, `400 art_style_not_supported`). Nodaro may make it the
+way a Motion run is made, where an art style holds across the whole picture far
+more reliably (its engine does by default, unless Nodaro turns that off). The
+job still records the style you sent (`input_data.style` absent, or
+`"precise"`), so reading it back, or sending the same body again, asks for the
+same run. Its estimate (sent with the same body), its price, its Full Quality and
+Style only above are then a Motion run's, and with nothing else to change it is
 accepted, as a style-only run. `style-choice` does not show which applies: read
-the estimate for what a run costs, and the job's `input_data.style` for what ran.
-Otherwise the run stays
+the estimate for what a run costs. (Jobs made this way before the style was kept
+record `input_data.style: "motion"`.) Otherwise the run is made as
 Precise: the clip is edited as a Precise run edits it, the people swapped as
 Precise swaps them, and the whole video is drawn in the art style. There it is not a
 change on its own: a Precise run with nothing else to change (no role with
