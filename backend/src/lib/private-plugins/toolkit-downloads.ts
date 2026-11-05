@@ -5,16 +5,13 @@
  * toolkit hands a plugin no runner that skips the gate
  * (`import-gate-totality.test.ts` holds this file to both halves).
  *
- * The link is first held to the runner's own test, so a link the runner would
- * refuse never uses up the person's confirmation. Then the gate
- * (`lib/import-gate.ts`) is read and the confirmation spent for the running
- * job's owner, the job being the request, so a retry of the same job spends
- * the same confirmation again. The confirmation is the one the plugin passes,
- * made by the person for that link. A plugin's job carries no way in (its
- * host-owned keys are dropped), so a standing authorization never covers this
- * lane. Outside any job there is no account: only the site's policy and the
- * deployment's rule decide, and a confirmation passed there is ignored, since
- * it could be nobody's.
+ * The link is first held to the runner's own test. Then the gate
+ * (`lib/import-gate.ts`) is asked for the running job's owner: the account's
+ * measures and the site's policy. The plugin lane is exempt from the
+ * declaration (decided 2026-11-05), so the gate never reads or spends a
+ * confirmation here; the `confirmationId` a plugin passes is accepted for an
+ * older contract and ignored. Outside any job there is no account: the
+ * site's policy alone decides.
  */
 import { downloadYouTubeVideo, YtUrlNotAllowedError } from "../../providers/video/youtube-video.js"
 import { downloadSocialPostVideo, socialPostOf } from "../../providers/video/social-post-video.js"

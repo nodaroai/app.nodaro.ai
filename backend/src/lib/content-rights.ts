@@ -28,7 +28,7 @@ import { getAppSettings } from "./app-settings.js"
 /** How long a confirmation may wait for its download. */
 export const CONFIRMATION_TTL_MS = 60 * 60 * 1000
 
-/** Where an import was made from; `plugin` is a private plugin's own download (the plugin toolkit). */
+/** Where an import was made from; `plugin` is a private plugin's own download (the plugin toolkit), the one lane the gate exempts from the declaration (`laneExemptFromRights`, lib/import-gate.ts). */
 export type RightsLane = "editor" | "app" | "api" | "mcp" | "admin" | "run" | "route" | "plugin"
 
 /**

@@ -6,14 +6,17 @@
  * Written by the import gate's spend half (`lib/import-gate.ts`), the one
  * funnel every import passes right before its fetch, for an import that goes
  * ahead with no confirmation (only possible while the setting is off), and by
- * its check of a plugin's own download outside any job, which has no spend
- * half and no account (those share one cap, under the empty account). Only
+ * its check of an accountless import in a lane the declaration reaches (those
+ * would share one cap, under the empty account; today no such lane exists —
+ * the branch is the fail-closed default for one). A private plugin's own
+ * download is NOT counted: its lane is exempt from the declaration
+ * (2026-11-05), so the setting will never refuse it, and the count measures
+ * what the setting will refuse. Only
  * the link's host is kept, and no account: a full link can carry a name or a
  * token, and nothing reads who imported. The request is kept only as a hash
  * under a key of the server's, the same for every retry of it (a retry is the
  * same import: one row per request and host), which no job or run id can be
- * matched against. A download with no request (a plugin's outside any job) is
- * a row for each attempt.
+ * matched against. A download with no request is a row for each attempt.
  *
  * Counting is best effort and bounded: an import never waits for it or fails
  * because of it; one account adds at most `COUNT_CAP_PER_MINUTE` rows a minute
@@ -112,7 +115,7 @@ export async function recordUnconfirmedImport(input: UnconfirmedImport): Promise
 export interface ImportShareRow {
   /** The confirmation the imports carried: `checkbox`, `derived` (from a standing authorization), or `none`. */
   readonly declaration: string
-  /** Where imports without a confirmation were made (route, run, mcp, admin, plugin); null for the ones that carried one. */
+  /** Where imports without a confirmation were made (route, run, mcp, admin; `plugin` only in rows from before that lane's exemption); null for the ones that carried one. */
   readonly lane: string | null
   readonly via: ImportVia | null
   readonly appId: string | null

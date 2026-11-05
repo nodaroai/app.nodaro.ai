@@ -479,19 +479,20 @@ export interface PluginProvidersToolkit {
    * (yt-dlp, UA-spoofed + client-ladder) to `outPath`, size-capped by
    * `maxFilesizeBytes`. SSRF-gated internally (throws `YtUrlNotAllowedError`
    * on a non-allowlisted host). Like every import of a link it passes the
-   * host's import gate first (see `confirmationId`), and rejects with the
-   * gate's refusal before anything is fetched.
+   * host's import gate first — the account's measures and the site's policy;
+   * the plugin lane is exempt from the declaration (see `confirmationId`) —
+   * and rejects with the gate's refusal before anything is fetched.
    */
   downloadYouTubeVideo(opts: {
     url: string
     outPath: string
     maxFilesizeBytes?: number
     /**
-     * The content rights confirmation (`POST /v1/content-rights/confirm`) the
-     * person made for this link: checked against the running job's owner and
-     * spent right before the download. Without one, the download passes only
-     * while the deployment does not require a confirmation
-     * (`content_rights_required`); an older host ignores the field.
+     * Accepted and ignored: a plugin's own download is exempt from the
+     * content rights declaration (the host's import gate never reads or
+     * spends a confirmation for the plugin lane, with the deployment's
+     * `content_rights_required` on or off). Kept so a plugin built against an
+     * older host, which checked and spent it, still passes it without error.
      */
     confirmationId?: string
   }): Promise<void>
@@ -549,7 +550,7 @@ export interface PluginProvidersToolkit {
     maxFilesizeBytes?: number
     maxHeight?: number
     signal?: AbortSignal
-    /** The content rights confirmation for this link, as on `downloadYouTubeVideo`. */
+    /** Accepted and ignored, as on `downloadYouTubeVideo`: the plugin lane is exempt from the declaration. */
     confirmationId?: string
   }): Promise<void>
 }
