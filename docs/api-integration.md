@@ -228,6 +228,27 @@ node offers, a Suno model) is held to that list: a value outside it returns
 default applies; a `null` flat input is dropped, so the saved value applies
 (see [Clearing a field](./embed-app-guide.md#clearing-a-field)).
 
+<a id="an-app-with-a-creators-fee"></a>**An app with a creator's fee.** (Cloud edition only.) A run of a
+monetized app is checked against the runner's balance before anything is
+written or run: the balance must cover the app's listed run price with the
+fee, that is the listed price the fee applies to (the preview part, see
+[the app's listed price](./app-view-modes.md)) plus the flat fee plus the
+percentage of it, rounded up to a whole credit. The flat fee counts in full
+even when the listed price is 0. A run the balance cannot cover is refused with
+`402 { "error": { "code": "insufficient_credits", "message": "This app costs about <n> credits to run, including the creator's fee of <fee> credits; your balance is <balance>." } }`.
+The creator running their own app pays no fee and is not checked. A run paid
+by an organization workspace is not refused here: the workspace budget is
+checked when each step reserves its credits. The fee is settled once the run
+completes. When the runner pays it (a run on their own credits, or a
+workspace run of an app the organization has not approved, which is not
+checked before it starts) and their balance then holds less than the fee,
+only what it holds is collected (the balance never goes below zero for the
+fee), and the creator is credited exactly the amount collected. The
+creator's earnings record keeps the fee that was asked (`flatFee`,
+`percentFee`) beside what was collected (`totalEarned`). On an app the
+organization has approved, the workspace pays the fee as described in
+[Budgets and credits](./organizations.md#budgets-and-credits).
+
 One class of field is refused on every run path (`/v1/app/:slug/run`,
 `/v1/workflows/:id/run`, `/v1/present/:token/run`, `/v1/component/execute`,
 `/v1/api/run`): a **destination on an outbound node**. Outbound nodes are
@@ -896,14 +917,14 @@ The [SDK](./sdk-reference.md#clientwithworkspaceworkspaceid) sends it for you
 scoped to one workspace. The [CLI](./cli.md#working-in-a-workspace) takes
 `--workspace`, `NODARO_WORKSPACE`, or a saved profile selection. For the full
 organization surface — members, invitations, join codes, the audit log — see
-[Organizations](./organizations.md).
+[Budgets and credits](./organizations.md#budgets-and-credits).
 
 The header has no effect unless organizations are enabled on the instance you
 are calling; self-hosted builds ignore it.
 
 The organization, workspace and membership endpoints themselves — creating an
 organization, adding people, archiving a class — are documented in
-[Organizations](./organizations.md).
+[Budgets and credits](./organizations.md#budgets-and-credits).
 
 ## 4d. Parameter corrections (`adjustments`)
 

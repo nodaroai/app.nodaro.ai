@@ -116,6 +116,13 @@ const CLASSIFICATION: Record<string, { authenticated: string[]; serviceRole: str
     authenticated: [],
     serviceRole: ["commit_credits_metered"],
   },
+  // The app fee settles only what the runner paid: 352's function restated
+  // (personal branch clamped to the runner's balance), same signature, the
+  // full grant block restated. Service-role only, as in 352.
+  "599_app_fee_collected_only.sql": {
+    authenticated: [],
+    serviceRole: ["process_app_monetization"],
+  },
   "369_orgs_usage_reporting.sql": {
     authenticated: [],
     serviceRole: ["org_usage_report", "org_usage_rows", "org_usage_totals", "org_usage_variance", "org_usage_window"],
@@ -128,7 +135,7 @@ const CLASSIFICATION: Record<string, { authenticated: string[]; serviceRole: str
  * the organizations axis's payer from the usage_logs row. Named explicitly —
  * a file listed here that is missing on disk fails the on-disk check below.
  */
-const SETTLEMENT_MIGRATIONS: readonly string[] = ["551_commit_credits_metered.sql"]
+const SETTLEMENT_MIGRATIONS: readonly string[] = ["551_commit_credits_metered.sql", "599_app_fee_collected_only.sql"]
 
 const orgMigrations = readdirSync(MIGRATIONS_DIR)
   .filter((f) => /^\d+_orgs[_-].*\.sql$/.test(f) || SETTLEMENT_MIGRATIONS.includes(f))

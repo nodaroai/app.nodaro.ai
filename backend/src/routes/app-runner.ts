@@ -13,7 +13,7 @@ import { ugcSumPerNode } from "@nodaro/render-rules"
  */
 
 import { perMinuteOf, selectWithPerMinute } from "../lib/listing-per-minute-columns.js"
-import { storedListingRange, storedListingRunPrice, type StoredAppListing } from "../lib/app-listing-price.js"
+import { appRunFeeCover, storedListingRange, storedListingRunPrice, type StoredAppListing } from "../lib/app-listing-price.js"
 import { selectWithMax } from "../lib/listing-max-columns.js"
 import { LISTING_ESTIMATE_FLAG_COLUMN, selectWithEstimateFlag } from "../lib/listing-estimate-flag-column.js"
 import { refuseIfRunUnpriced } from "../lib/llm-unpriced-refusal.js"
@@ -406,7 +406,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
     }
 
-    const appRow = await loadAppVersion(workflowId, "id, workflow_id, creator_id, max_runs_per_user_per_day, snapshot_nodes, snapshot_edges, snapshot_settings, publish_type", version)
+    const appRow = await loadAppVersion(workflowId, "id, workflow_id, creator_id, max_runs_per_user_per_day, snapshot_nodes, snapshot_edges, snapshot_settings, publish_type, monetization_enabled, monetization_flat_fee, monetization_percent, base_estimated_credits", version)
     if (!appRow) {
       return reply.status(404).send({
         error: { code: "not_found", message: version ? `Version ${version} not found` : "App not found" },
@@ -588,6 +588,27 @@ export async function appRunnerRoutes(app: FastifyInstance) {
           }
         } catch (err) {
           if (!(err instanceof UgcEstimateUnavailable)) throw err
+        }
+      }
+    }
+
+    // A monetized app's creator fee is settled from the runner's balance after
+    // the run, and only what that balance then holds is collected: a runner who
+    // cannot pay the run's listed price with the fee is refused here, before
+    // anything runs (lib/app-listing-price.ts `appRunFeeCover`). The creator's
+    // own run carries no fee. The payer is read as every balance check reads it
+    // (`checkBalanceCovers`: a workspace payer passes).
+    if (hasCredits()) {
+      const feeCover = appRunFeeCover(appRow as StoredAppListing & { creator_id?: string | null }, req.userId)
+      if (feeCover) {
+        const cover = await CreditsService.checkBalanceCovers(req.userId, feeCover.required, req.billingContext, await resolveWebSurfaceFlag(req))
+        if (!cover.ok) {
+          return reply.status(402).send({
+            error: {
+              code: "insufficient_credits",
+              message: `This app costs about ${feeCover.required} credits to run, including the creator's fee of ${feeCover.fee} credits; your balance is ${cover.balance}.`,
+            },
+          })
         }
       }
     }
