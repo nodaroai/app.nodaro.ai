@@ -11,7 +11,8 @@ import {
   type BillingCycle,
   type TierFeature,
 } from "@/lib/pricing-data"
-import { startCheckout, startLoadCheckout } from "@/lib/checkout"
+import { openStripePage, startCheckout, startLoadCheckout } from "@/lib/checkout"
+import { PlanChangePaymentRequiredError } from "@/lib/api"
 import { toast } from "sonner"
 import { useSubscription, useChangePlanMutation } from "@/ee/hooks/queries/use-billing-queries"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
@@ -165,6 +166,13 @@ export default function PricingPage() {
         await startCheckout({ priceId, mode: "subscription" })
       }
     } catch (err) {
+      // An upgrade waits on its payment: send the user to the invoice, where
+      // paying it applies the new plan.
+      if (err instanceof PlanChangePaymentRequiredError && err.invoiceUrl) {
+        toast.info(t("pricing.planChangePaymentRequired"))
+        openStripePage(err.invoiceUrl)
+        return
+      }
       const message = err instanceof Error ? err.message : t("pricing.somethingWentWrong")
       toast.error(message)
     } finally {

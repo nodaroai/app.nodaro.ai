@@ -10,6 +10,7 @@ vi.mock("@/lib/supabase.js", () => {
   return {
     supabase: {
       from: mockFrom,
+      rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
       auth: {
         getUser: vi.fn().mockResolvedValue({
           data: { user: { id: "user-123" } },
@@ -44,6 +45,8 @@ const mockStripe = {
   },
   invoices: {
     list: vi.fn(),
+    retrieve: vi.fn(),
+    listLineItems: vi.fn(),
   },
 }
 
@@ -57,7 +60,12 @@ vi.mock("@/ee/billing/stripe-config.js", () => ({
     "pri_standard": { plan: "standard", interval: "monthly" },
     "pri_pro": { plan: "pro", interval: "monthly" },
   } as Record<string, { plan: string; interval: string }>,
-  TOP_UPS: {} as Record<string, number>,
+  PRICE_TO_PLAN: {
+    "pri_basic": { plan: "basic", interval: "monthly" },
+    "pri_standard": { plan: "standard", interval: "monthly" },
+    "pri_pro": { plan: "pro", interval: "monthly" },
+  } as Record<string, { plan: string; interval: string }>,
+  TOP_UPS: { "pri_pack": 8500 } as Record<string, number>,
   getTierFromPriceId: (priceId: string) => {
     const map: Record<string, string> = {
       "pri_basic": "basic",
@@ -133,7 +141,7 @@ vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: 
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { billingRoutes } from "../billing.js"
+import { billingRoutes, CHANGE_PLAN_DAILY_LIMIT, CHANGE_PLAN_RATE_LIMIT } from "../billing.js"
 import { supabase } from "../../../lib/supabase.js"
 import { getStripe } from "../../billing/stripe-client.js"
 
@@ -167,6 +175,49 @@ function createSupabaseChain(overrides: Record<string, unknown> = {}) {
   }
 
   return chain
+}
+
+/**
+ * Per-table chains: `single()` answers `single`, awaiting the chain answers
+ * `list` (or a successful write), and every update payload is recorded.
+ */
+function mockTables(spec: Record<string, { single?: unknown; list?: unknown[] }>) {
+  const recorded: Array<{ table: string; payload: Record<string, unknown> }> = []
+  vi.mocked(supabase.from).mockImplementation(((table: string) => {
+    const conf = spec[table] ?? {}
+    const chain: Record<string, unknown> = {}
+    const self = () => chain
+    for (const m of ["select", "eq", "is", "in", "order", "limit", "insert", "upsert"]) chain[m] = vi.fn(self)
+    chain.update = vi.fn((payload: Record<string, unknown>) => {
+      recorded.push({ table, payload })
+      return chain
+    })
+    chain.single = vi.fn(() => Promise.resolve(conf.single === undefined ? { data: null, error: { message: "Not found" } } : { data: conf.single, error: null }))
+    chain.maybeSingle = chain.single
+    chain.then = (resolve: (v: unknown) => unknown) => Promise.resolve({ data: conf.list ?? null, error: null }).then(resolve)
+    return chain
+  }) as never)
+  return { updates: (table: string) => recorded.filter((r) => r.table === table).map((r) => r.payload) }
+}
+
+const activeBasic = { stripe_subscription_id: "sub_existing", stripe_price_id: "pri_basic", status: "active" }
+
+function liveSub(overrides: Record<string, unknown> = {}) {
+  return { id: "sub_existing", status: "active", pending_update: null, items: { data: [{ id: "si_item_1" }] }, ...overrides }
+}
+
+const paidUpgradeInvoice = {
+  id: "in_up_1",
+  status: "paid",
+  billing_reason: "subscription_update",
+  amount_paid: 1850,
+  lines: {
+    has_more: false,
+    data: [
+      { amount: -650, pricing: { price_details: { price: "pri_basic" } } },
+      { amount: 2500, pricing: { price_details: { price: "pri_pro" } } },
+    ],
+  },
 }
 
 beforeEach(async () => {
@@ -415,49 +466,12 @@ describe("POST /v1/billing/change-plan", () => {
     expect(res.json()).toEqual({ error: "Invalid price ID" })
   })
 
-  it("returns success with new tier on valid plan change", async () => {
-    const mockFrom = vi.mocked(supabase.from)
-    let callCount = 0
-
-    mockFrom.mockImplementation(() => {
-      callCount++
-      if (callCount === 1) {
-        // subscriptions select (find active subscription)
-        const chain = createSupabaseChain({
-          single: vi.fn().mockResolvedValue({
-            data: {
-              stripe_subscription_id: "sub_existing",
-              stripe_price_id: "pri_basic",
-              status: "active",
-            },
-            error: null,
-          }),
-        })
-        return chain as never
-      }
-      if (callCount === 2) {
-        // subscriptions update
-        const chain = createSupabaseChain({
-          eq: vi.fn().mockResolvedValue({ error: null, count: 1 }),
-        })
-        return chain as never
-      }
-      // profiles update
-      const chain = createSupabaseChain({
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      })
-      return chain as never
-    })
-
-    // stripe.subscriptions.retrieve returns subscription with items
-    vi.mocked(stripe.subscriptions.retrieve).mockResolvedValue({
-      id: "sub_existing",
-      items: { data: [{ id: "si_item_1" }] },
-    } as never)
-
-    vi.mocked(stripe.subscriptions.update).mockResolvedValue({
-      id: "sub_existing",
-    } as never)
+  it("an upgrade invoices the difference now and applies only once paid; credits come from the paid invoice, never a SET", async () => {
+    const tables = mockTables({ subscriptions: { single: activeBasic } })
+    vi.mocked(stripe.subscriptions.retrieve).mockResolvedValue(liveSub() as never)
+    vi.mocked(stripe.subscriptions.update).mockResolvedValue({ id: "sub_existing", pending_update: null, latest_invoice: "in_up_1" } as never)
+    vi.mocked(stripe.invoices.retrieve).mockResolvedValue(paidUpgradeInvoice as never)
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: [{ claimed: true, granted_credits: 18500 }], error: null } as never)
 
     const res = await app.inject({
       method: "POST",
@@ -466,17 +480,185 @@ describe("POST /v1/billing/change-plan", () => {
     })
 
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({
-      data: { subscriptionId: "sub_existing", tier: "pro" },
+    expect(res.json()).toEqual({ data: { subscriptionId: "sub_existing", tier: "pro" } })
+    expect(stripe.subscriptions.update).toHaveBeenCalledWith("sub_existing", {
+      items: [{ id: "si_item_1", price: "pri_pro" }],
+      proration_behavior: "always_invoice",
+      payment_behavior: "pending_if_incomplete",
+    })
+    // Credits are ADDED by the keyed grant on the paid invoice — the gap only.
+    expect(supabase.rpc).toHaveBeenCalledWith("grant_plan_change_credits", {
+      p_user_id: "user-123",
+      p_invoice_id: "in_up_1",
+      p_from_credits: 4500,
+      p_to_credits: 23000,
+      p_amount_usd: 18.5,
+      p_tier: "pro",
+    })
+    expect(tables.updates("profiles").some((p) => "subscription_credits" in p)).toBe(false)
+    expect(tables.updates("profiles")).toContainEqual(expect.objectContaining({ subscription_tier: "pro" }))
+  })
+
+  it("an upgrade whose payment did not complete changes nothing locally and answers 409 with the invoice to pay", async () => {
+    const tables = mockTables({ subscriptions: { single: activeBasic } })
+    vi.mocked(stripe.subscriptions.retrieve).mockResolvedValue(liveSub() as never)
+    vi.mocked(stripe.subscriptions.update).mockResolvedValue({
+      id: "sub_existing",
+      pending_update: { expires_at: 1_900_000_000, subscription_items: [] },
+      latest_invoice: "in_up_2",
+    } as never)
+    vi.mocked(stripe.invoices.retrieve).mockResolvedValue({ id: "in_up_2", status: "open", hosted_invoice_url: "https://invoice.stripe.com/i/2" } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/billing/change-plan",
+      payload: { userId: "user-123", newPriceId: "pri_pro" },
     })
 
-    expect(stripe.subscriptions.update).toHaveBeenCalledWith(
-      "sub_existing",
-      {
-        items: [{ id: "si_item_1", price: "pri_pro" }],
-        proration_behavior: "create_prorations",
-      },
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toMatchObject({
+      code: "plan_change_payment_required",
+      message: expect.any(String),
+      invoiceUrl: "https://invoice.stripe.com/i/2",
+    })
+    expect(tables.updates("subscriptions")).toEqual([])
+    expect(tables.updates("profiles")).toEqual([])
+    expect(supabase.rpc).not.toHaveBeenCalledWith("grant_plan_change_credits", expect.anything())
+  })
+
+  it("refuses a subscription that is not active (past_due), before Stripe is touched", async () => {
+    mockTables({ subscriptions: { single: { ...activeBasic, status: "past_due" } } })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/billing/change-plan",
+      payload: { userId: "user-123", newPriceId: "pri_pro" },
+    })
+
+    expect(res.statusCode).toBe(409)
+    expect(stripe.subscriptions.update).not.toHaveBeenCalled()
+  })
+
+  it("refuses while Stripe holds the subscription in another state, or a change awaits payment", async () => {
+    mockTables({ subscriptions: { single: activeBasic } })
+    vi.mocked(stripe.subscriptions.retrieve).mockResolvedValue(liveSub({ status: "past_due" }) as never)
+    const notActive = await app.inject({ method: "POST", url: "/v1/billing/change-plan", payload: { userId: "user-123", newPriceId: "pri_pro" } })
+    expect(notActive.statusCode).toBe(409)
+
+    vi.mocked(stripe.subscriptions.retrieve).mockResolvedValue(liveSub({ pending_update: { expires_at: 1 }, latest_invoice: "in_waiting" }) as never)
+    vi.mocked(stripe.invoices.retrieve).mockResolvedValue({ id: "in_waiting", status: "open", hosted_invoice_url: "https://invoice.stripe.com/i/w" } as never)
+    const pending = await app.inject({ method: "POST", url: "/v1/billing/change-plan", payload: { userId: "user-123", newPriceId: "pri_pro" } })
+    expect(pending.statusCode).toBe(409)
+    // The change already waiting: the same answer, pointing at its invoice.
+    expect(pending.json().error).toMatchObject({ code: "plan_change_payment_required", invoiceUrl: "https://invoice.stripe.com/i/w" })
+    expect(stripe.subscriptions.update).not.toHaveBeenCalled()
+  })
+
+  it("a downgrade keeps today's terms (credited at the next invoice, no clawback) and notes the plan held this period", async () => {
+    const tables = mockTables({ subscriptions: { single: { ...activeBasic, stripe_price_id: "pri_pro" } } })
+    vi.mocked(stripe.subscriptions.retrieve).mockResolvedValue(liveSub() as never)
+    vi.mocked(stripe.subscriptions.update).mockResolvedValue({ id: "sub_existing", pending_update: null, latest_invoice: "in_cycle_0" } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/billing/change-plan",
+      payload: { userId: "user-123", newPriceId: "pri_basic" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(stripe.subscriptions.update).toHaveBeenCalledWith("sub_existing", {
+      items: [{ id: "si_item_1", price: "pri_basic" }],
+      proration_behavior: "create_prorations",
+    })
+    expect(supabase.rpc).toHaveBeenCalledWith("note_plan_credit_peak", { p_user_id: "user-123", p_credits: 23000 })
+    expect(supabase.rpc).not.toHaveBeenCalledWith("grant_plan_change_credits", expect.anything())
+    const profileWrites = tables.updates("profiles")
+    expect(profileWrites.some((p) => "subscription_credits" in p)).toBe(false)
+    expect(profileWrites.some((p) => "storage_limit_bytes" in p)).toBe(false)
+  })
+})
+
+describe("POST /v1/billing/change-plan — a few changes per account per day", () => {
+  it(`allows ${CHANGE_PLAN_DAILY_LIMIT} a day per account, keyed on the account rather than the session token`, async () => {
+    const { default: rateLimit } = await import("@fastify/rate-limit")
+    const limited = Fastify({ logger: false })
+    await limited.register(rateLimit, { global: false })
+    limited.addHook("preHandler", async (req) => {
+      const body = req.body as Record<string, unknown> | undefined
+      if (typeof body?.userId === "string") req.userId = body.userId
+    })
+    await limited.register(async (instance) => {
+      await billingRoutes(instance)
+    })
+    await limited.ready()
+    // Every attempt is refused before Stripe (unknown price): refusals count too.
+    const attempt = (userId: string, token: string) =>
+      limited.inject({
+        method: "POST",
+        url: "/v1/billing/change-plan",
+        headers: { authorization: `Bearer ${token}` },
+        payload: { userId, newPriceId: "pri_unknown_invalid" },
+      })
+
+    for (let i = 0; i < CHANGE_PLAN_DAILY_LIMIT; i++) {
+      expect((await attempt("user-a", `token-${i}`)).statusCode).toBe(400)
+    }
+    expect((await attempt("user-a", "token-fresh")).statusCode).toBe(429)
+    // Another account has its own allowance.
+    expect((await attempt("user-b", "token-b")).statusCode).toBe(400)
+    await limited.close()
+  })
+
+  it("declares the limit on the route: per day, after auth", () => {
+    expect(CHANGE_PLAN_RATE_LIMIT.rateLimit).toMatchObject({ max: CHANGE_PLAN_DAILY_LIMIT, timeWindow: "24 hours", hook: "preHandler" })
+    expect(CHANGE_PLAN_DAILY_LIMIT).toBe(5)
+  })
+})
+
+describe("POST /v1/billing/create-checkout-session — one subscription per account, promotion codes on plans only", () => {
+  it("refuses a second subscription while one is active or past_due, before Stripe is touched", async () => {
+    for (const status of ["active", "past_due"]) {
+      mockTables({ subscriptions: { list: [{ id: "sub-row", status }] }, stripe_customers: { single: { stripe_customer_id: "cus_123" } } })
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/billing/create-checkout-session",
+        payload: { userId: "user-123", priceId: "pri_pro" },
+      })
+      expect(res.statusCode, status).toBe(409)
+    }
+    expect(stripe.checkout.sessions.create).not.toHaveBeenCalled()
+  })
+
+  it("a first subscription opens Checkout with promotion codes allowed", async () => {
+    mockTables({ subscriptions: { list: [] }, stripe_customers: { single: { stripe_customer_id: "cus_123" } } })
+    vi.mocked(stripe.checkout.sessions.create).mockResolvedValue({ url: "https://checkout.stripe.com/c/sub" } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/billing/create-checkout-session",
+      payload: { userId: "user-123", priceId: "pri_pro" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(stripe.checkout.sessions.create).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "subscription", allow_promotion_codes: true }),
     )
+  })
+
+  it("a credit pack opens Checkout without promotion codes, whatever subscription the account has", async () => {
+    mockTables({ subscriptions: { list: [{ id: "sub-row", status: "active" }] }, stripe_customers: { single: { stripe_customer_id: "cus_123" } } })
+    vi.mocked(stripe.checkout.sessions.create).mockResolvedValue({ url: "https://checkout.stripe.com/c/pack" } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/billing/create-checkout-session",
+      payload: { userId: "user-123", priceId: "pri_pack" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const params = vi.mocked(stripe.checkout.sessions.create).mock.calls[0][0] as Record<string, unknown>
+    expect(params.mode).toBe("payment")
+    expect("allow_promotion_codes" in params && params.allow_promotion_codes !== undefined).toBe(false)
   })
 })
 

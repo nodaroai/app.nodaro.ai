@@ -211,6 +211,7 @@
         "backend/src/ee/billing/model-availability.ts",
         "backend/src/ee/billing/org-customer.ts",
         "backend/src/ee/billing/org-entitlements.ts",
+        "backend/src/ee/billing/plan-change-credits.ts",
         "backend/src/ee/billing/provision-credits.ts",
         "backend/src/ee/billing/public-email-providers.ts",
         "backend/src/ee/billing/purchase-on-record.ts",

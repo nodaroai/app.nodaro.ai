@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { createClient, StaticTokenAuth, NotFoundError, UnauthorizedError, ForbiddenError } from "../../index.js"
+import { createClient, StaticTokenAuth, NotFoundError, UnauthorizedError, ForbiddenError, NodaroError, InsufficientCreditsError, RateLimitedError } from "../../index.js"
 import type {
   Auth,
   BillingPlansResult,
@@ -200,6 +200,27 @@ describe("the signed-in-session methods", () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { subscriptionId: "sub_1", tier: "pro" } }))
     expect(await client(fetchMock).billing.changePlan({ newPriceId: "price_pro" })).toEqual({ subscriptionId: "sub_1", tier: "pro" })
     expect(call(fetchMock)).toEqual({ url: "https://api.example.com/v1/billing/change-plan", method: "POST", body: { newPriceId: "price_pro" } })
+  })
+
+  it("changePlan(): an upgrade waiting on its payment is a 409 NodaroError carrying the invoice to pay, never a credits error", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockErr(409, {
+        error: {
+          code: "plan_change_payment_required",
+          message: "The payment for the new plan has not gone through, so your plan has not changed yet.",
+          invoiceUrl: "https://invoice.stripe.com/i/abc",
+        },
+      }),
+    )
+    const err = await client(fetchMock).billing.changePlan({ newPriceId: "price_pro" }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(NodaroError)
+    expect(err).not.toBeInstanceOf(InsufficientCreditsError)
+    expect(err).toMatchObject({ status: 409, code: "plan_change_payment_required", details: { invoiceUrl: "https://invoice.stripe.com/i/abc" } })
+  })
+
+  it("changePlan(): the daily limit is a RateLimitedError", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockErr(429, { error: { code: "rate_limit_exceeded", message: "Too many requests. Retry in 3600s." } }))
+    await expect(client(fetchMock).billing.changePlan({ newPriceId: "price_pro" })).rejects.toBeInstanceOf(RateLimitedError)
   })
 
   it("surfaces the route's refusal of an API key as ForbiddenError", async () => {

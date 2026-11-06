@@ -53,6 +53,20 @@ export async function startCheckout(params: {
 }
 
 /**
+ * Take the user to a Stripe page the server handed back (an invoice to pay
+ * before a plan change applies). Same embed handling and URL guard as
+ * startCheckout: a new tab inside another app's iframe, in place otherwise.
+ */
+export function openStripePage(url: string): void {
+  const trusted = assertTrustedCheckoutUrl(url)
+  if (isEmbedded()) {
+    window.open(trusted, "_blank", "noopener,noreferrer")
+  } else {
+    window.location.href = trusted
+  }
+}
+
+/**
  * Start a pay-as-you-go load Checkout for an arbitrary whole-dollar amount.
  * Same embed handling and URL guard as startCheckout.
  */

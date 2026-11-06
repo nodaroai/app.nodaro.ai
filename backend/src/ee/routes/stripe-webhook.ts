@@ -22,6 +22,7 @@ import {
   resolveUserId,
 } from "../billing/provision-credits.js"
 import { handleOrgPackCompleted, routeClawback } from "../billing/org-customer.js"
+import { invoicePriceLines } from "../billing/plan-change-credits.js"
 import { config } from "../../lib/config.js"
 import type Stripe from "stripe"
 
@@ -91,17 +92,28 @@ export async function stripeWebhookRoutes(app: FastifyInstance) {
         case "checkout.session.completed":
         case "checkout.session.async_payment_succeeded": {
           const session = event.data.object as Stripe.Checkout.Session
-          // One-time payment (top-up). Only grant once funds have SETTLED: card
-          // pays "paid" on `completed`; async methods (bank debit / some wallets)
-          // fire `completed` with payment_status "unpaid"/"processing" and settle
-          // later via `async_payment_succeeded`. Granting on an unsettled
-          // `completed` would hand out credits a later payment failure can't claw
-          // back. "no_payment_required" (100%-off promo) is treated as settled to
-          // preserve the prior coupon behavior. The idempotency mutex
-          // (transactionId = payment_intent) makes the two events grant exactly once.
-          const settled =
-            session.payment_status === "paid" ||
-            session.payment_status === "no_payment_required"
+          // One-time payment (a credit pack). Only grant once funds have
+          // SETTLED: card pays "paid" on `completed`; async methods (bank
+          // debit / some wallets) fire `completed` with payment_status
+          // "unpaid"/"processing" and settle later via
+          // `async_payment_succeeded`. Granting on an unsettled `completed`
+          // would hand out credits a later payment failure can't claw back.
+          // The idempotency mutex (transactionId = payment_intent) makes the
+          // two events grant exactly once.
+          //
+          // Credits are sold, never discounted to nothing: a pack session
+          // that needed no payment, or settled for 0, grants nothing (pack
+          // checkouts no longer accept promotion codes; this holds whatever
+          // a session was created with).
+          const settled = session.payment_status === "paid"
+          const settledForNothing =
+            session.payment_status === "no_payment_required" || (settled && !((session.amount_total ?? 0) > 0))
+          if (session.mode === "payment" && settledForNothing) {
+            console.warn(
+              `[stripe-webhook] ${event.type}: credit purchase ${session.id} settled for nothing (payment_status=${session.payment_status}, amount_total=${session.amount_total ?? "null"}), nothing granted`,
+            )
+            break
+          }
           // An ORGANIZATION pack (E2/P13): the org-owned customer bought a
           // prepaid pack. Branch BEFORE the personal handler — resolveUserId's
           // metadata fallback and customer upsert assume a person and would
@@ -251,12 +263,17 @@ export async function stripeWebhookRoutes(app: FastifyInstance) {
           const invoice = event.data.object as Stripe.Invoice
           const subDetails = invoice.parent?.subscription_details
           if (subDetails) {
+            // A plan change's paid invoice sizes its grant from its lines
+            // (plan-change-credits.ts); no other invoice reads them.
+            const isPlanChange = invoice.billing_reason === "subscription_update"
             await handleInvoicePaid({
               invoiceId: invoice.id,
               subscriptionId: subDetails.subscription as string,
               stripeCustomerId: invoice.customer as string,
               amountPaid: invoice.amount_paid,
               metadata: subDetails.metadata ?? null,
+              billingReason: invoice.billing_reason ?? null,
+              lines: isPlanChange ? await invoicePriceLines(invoice) : [],
             })
           }
           break

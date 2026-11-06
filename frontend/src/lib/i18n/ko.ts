@@ -3260,6 +3260,7 @@ export const ko: ChromeDict = {
   "pricing.processing": "처리 중…",
   "pricing.switchPlan": "요금제 변경",
   "pricing.planChanged": "요금제가 변경되었습니다! 변경 사항은 곧 적용됩니다.",
+  "pricing.planChangePaymentRequired": "요금제를 변경하려면 결제를 완료하세요. 청구서를 여는 중…",
   "pricing.somethingWentWrong": "문제가 발생했습니다",
   "pricing.terms": "이용약관",
   "pricing.privacy": "개인정보 처리방침",

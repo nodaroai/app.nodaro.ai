@@ -230,7 +230,10 @@ const STRIPE_EVENT_SHAPES: Record<string, z.ZodType> = {
 
   // case "invoice.paid":
   //   reads: invoice.id, invoice.parent.subscription_details.subscription,
-  //          invoice.customer, invoice.amount_paid, subDetails.metadata
+  //          invoice.customer, invoice.amount_paid, subDetails.metadata,
+  //          invoice.billing_reason, and for a plan change (billing_reason
+  //          "subscription_update") invoice.lines.has_more + each line's
+  //          amount and pricing.price_details.price
   "invoice.paid": z
     .object({
       data: z.object({
@@ -238,6 +241,31 @@ const STRIPE_EVENT_SHAPES: Record<string, z.ZodType> = {
           id: z.string(),
           customer: z.string().nullable().optional(),
           amount_paid: z.number(),
+          billing_reason: z.string().nullable().optional(),
+          lines: z
+            .object({
+              has_more: z.boolean(),
+              data: z.array(
+                z
+                  .object({
+                    amount: z.number(),
+                    pricing: z
+                      .object({
+                        price_details: z
+                          .object({ price: z.union([z.string(), z.object({ id: z.string() }).passthrough()]) })
+                          .passthrough()
+                          .nullable()
+                          .optional(),
+                      })
+                      .passthrough()
+                      .nullable()
+                      .optional(),
+                  })
+                  .passthrough(),
+              ),
+            })
+            .passthrough()
+            .optional(),
           parent: z
             .object({
               subscription_details: z
@@ -400,6 +428,14 @@ const STRIPE_FIXTURES: Record<string, unknown> = {
         id: "in_test_1",
         customer: "cus_test_xyz",
         amount_paid: 2400,
+        billing_reason: "subscription_update",
+        lines: {
+          has_more: false,
+          data: [
+            { amount: -650, pricing: { price_details: { price: "price_basic_monthly" } } },
+            { amount: 3050, pricing: { price_details: { price: "price_pro_monthly" } } },
+          ],
+        },
         parent: {
           subscription_details: {
             subscription: "sub_test_1",

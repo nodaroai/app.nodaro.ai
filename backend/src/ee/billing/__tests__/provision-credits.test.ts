@@ -376,7 +376,7 @@ describe("provision-credits", () => {
       metadata: null,
     }
 
-    it("handles tier upgrade (sets credits to new tier amount)", async () => {
+    it("handles tier upgrade (moves the tier, never SETs credits — the paid invoice grants the gap)", async () => {
       mockSelect("stripe_customers", { user_id: "user-001" })
       // Existing subscription is basic tier, same period (not a renewal)
       mockSelect("subscriptions", {
@@ -388,13 +388,10 @@ describe("provision-credits", () => {
 
       await handleSubscriptionUpdated(baseUpdatedData)
 
-      expect(mockLogTransaction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: "user-001",
-          amount: TIER_CREDITS.pro,
-          description: expect.stringContaining("upgrade"),
-        })
-      )
+      expect(updatePayloadsFor("profiles").some((p) => "subscription_credits" in p)).toBe(false)
+      expect(updatePayloadsFor("profiles")).toContainEqual(expect.objectContaining({ subscription_tier: "pro" }))
+      // The plan being left is recorded as held this period.
+      expect(mockRpc).toHaveBeenCalledWith("note_plan_credit_peak", { p_user_id: "user-001", p_credits: TIER_CREDITS.basic })
 
       expect(mockInvalidateBalanceCache).toHaveBeenCalledWith("user-001")
     })

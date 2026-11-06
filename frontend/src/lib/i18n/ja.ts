@@ -3326,6 +3326,7 @@ export const ja: ChromeDict = {
   "pricing.processing": "処理中…",
   "pricing.switchPlan": "プランを変更",
   "pricing.planChanged": "プランを変更しました。まもなく反映されます。",
+  "pricing.planChangePaymentRequired": "プランを切り替えるには支払いを完了してください。請求書を開いています…",
   "pricing.somethingWentWrong": "問題が発生しました",
   "pricing.terms": "利用規約",
   "pricing.privacy": "プライバシーポリシー",

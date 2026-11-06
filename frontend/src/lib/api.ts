@@ -7692,6 +7692,17 @@ export async function getManageSubscriptionUrl(userId: string): Promise<string |
   return json.data?.url ?? json.url ?? null
 }
 
+/**
+ * An upgrade that waits on its payment (`plan_change_payment_required`): the
+ * plan changes once the invoice at `invoiceUrl` is paid.
+ */
+export class PlanChangePaymentRequiredError extends Error {
+  constructor(message: string, readonly invoiceUrl: string | null) {
+    super(message)
+    this.name = "PlanChangePaymentRequiredError"
+  }
+}
+
 export async function changePlan(
   userId: string,
   newPriceId: string
@@ -7702,8 +7713,16 @@ export async function changePlan(
     body: JSON.stringify({ userId, newPriceId }),
   })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(apiErrorMessage({ serverMessage: (err as Record<string, string>).error, fallbackKey: "apiErr.changePlan" }))
+    const body = (await res.json().catch(() => ({}))) as { error?: unknown }
+    const raw = body.error
+    const envelope = raw && typeof raw === "object" ? (raw as { code?: unknown; message?: unknown; invoiceUrl?: unknown }) : null
+    const serverMessage = typeof raw === "string" ? raw : typeof envelope?.message === "string" ? envelope.message : undefined
+    const code = typeof envelope?.code === "string" ? envelope.code : undefined
+    const message = apiErrorMessage({ code, serverMessage, fallbackKey: "apiErr.changePlan" })
+    if (code === "plan_change_payment_required") {
+      throw new PlanChangePaymentRequiredError(message, typeof envelope?.invoiceUrl === "string" ? envelope.invoiceUrl : null)
+    }
+    throw new Error(message)
   }
   const json = await res.json()
   return (json as Record<string, unknown>).data as { subscriptionId: string; tier: string }
