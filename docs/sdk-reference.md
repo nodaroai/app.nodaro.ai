@@ -2213,9 +2213,8 @@ stays as in the video. A person, pet or product role of a direct run may leave
 `name` out (or empty): it is then named by its first picture, matched to the
 subject in the video it fits best, and needs at least one image (`400
 unnamed_role_needs_picture` otherwise); a trend run's roles are always named. At least one role with images, a reference, a
-`prePrompt` or `postPrompt`, or an art style (`direction`, on Nodaro Motion
-Prism; see Style only and An art style on a Precise run below) is required. A
-prompt counts when it has text: one of spaces alone is no change. Each trait (`body`, `outfit`, `hair`; a pet's `body`, `coat`; a
+`prePrompt` or `postPrompt`, or an art style (`direction`, Flex on Nodaro
+Motion Prism; see Style only below) is required. Each trait (`body`, `outfit`, `hair`; a pet's `body`, `coat`; a
 product's `shape`, `finish`) is `"new"`, from your images, or `"original"`,
 kept from the video.
 
@@ -2238,10 +2237,10 @@ on what it sends (no role kept in it that has images, no fixed reference, no
 it has a reference, a prompt or, where `styleOnly` is answered `true`, an art
 style (an engine from before style-only runs refuses that last one, with a
 message that does not name an art style). An engine answered `"precise"` runs
-it as Precise: there a preview whose only change is the art style runs where
-`preciseArtStyleAlone` is `true` and answers `400 no_roles_in_preview` where it
-is not; one with a prompt or a reference runs, as Precise (with the art style
-where `preciseArtStyle` is `true`). While Nodaro runs a Precise run with an art style
+it as Precise, where an art style is no change on its own, so there a preview
+whose only change was the art style answers `400 no_roles_in_preview`; one with
+a prompt or a reference runs, as Precise (with the art style where
+`preciseArtStyle` is `true`). While Nodaro runs a Precise run with an art style
 as a Motion run, such a preview runs as Motion too (see An art style on a Precise
 run below).
 
@@ -2273,12 +2272,10 @@ runs (below), `preciseArtStyle` whether a Precise run takes an art style there
 (below), and `preciseArtStyleAlone` whether an art style alone is a Precise
 run's change there, with no role, reference or prompt (Nodaro may run such a
 request as a Motion run, which this does not say: see An art style on a Precise
-run below); an engine from before such runs answers `false`. All three follow the engine alone, so read them
+run below); it answers `false` until the engine takes such runs. All three follow the engine alone, so read them
 with `engines`: a forced Precise keeps a Motion run's art style where
 `preciseArtStyle` is `true`, and drops it where it is not. On an engine answered
-`"precise"`, a request whose only change is the art style runs as Precise, with
-the art style as its change, where `preciseArtStyleAlone` is `true`, and is
-refused as `400 validation_error` where it is not; with
+`"precise"`, a request with nothing else to change is refused as `400 validation_error`; with
 anything else to change (a role with images, a fixed reference, a `prePrompt`
 or `postPrompt`) it answers `202` and runs and is quoted as Precise, with the
 art style where `preciseArtStyle` is `true`. While Nodaro makes a Precise run with an art style the way a Motion run is
@@ -2353,32 +2350,17 @@ run's, and with nothing else to change it is accepted, as a style-only run.
 costs. (Jobs made this way before the style was kept record
 `input_data.style: "motion"`.) Otherwise the run is made as
 Precise: the clip is edited as a Precise run edits it, the people swapped as
-Precise swaps them, and the whole video is drawn in the art style. Where
-`styleChoice()` answers `preciseArtStyleAlone` `true` for the engine, the art
-style is a change on its own there: a Precise run with nothing else to change
-(no role with images, no fixed reference, no `prePrompt` or `postPrompt`) is
-accepted, swaps no one, and draws the clip in the art style; with no person
-role with images it sends the source clip as it is (see Preparing the clip
-below). Where `preciseArtStyleAlone` is `false` (or left out), such a run is
-refused as `400 validation_error`, and restyling a whole clip alone is a Motion
-run's (Style only, above). The price changes only where Nodaro's setting for these runs
+Precise swaps them, and the whole video is drawn in the art style. There it is not a
+change on its own: a Precise run with nothing else to change (no role with
+images, no fixed reference, no `prePrompt` or `postPrompt`) is still refused as
+`400 validation_error`; restyling a whole clip alone is a Motion run's (Style
+only, above). The price changes only where Nodaro's setting for these runs
 first redraws the role pictures in the art style (its own setting, not the one
 Motion runs use); `estimate()` with the same params shows it. The job records it in `input_data.direction`. Where
 `preciseArtStyle` is `false` (or a server from before it leaves it out), a
 Precise run with an art style answers `400 art_style_needs_flex`. Nodaro Motion
 Pulse takes none (`400 art_style_needs_prism`, on a Precise run as on a Motion
 one).
-
-```ts
-// A Precise run whose only change is the art style.
-const { preciseArtStyleAlone } = await client.castSwap.styleChoice()
-if (preciseArtStyleAlone?.["motion-prism"] === true) {
-  const params: CastSwapParams = { videoUrl, roles: [], direction: { style: "oil-painting" } }
-  const quote = await client.castSwap.estimate(params)
-  // quote.privacyCredits, when present: the masked retry, charged only if it runs
-  const { jobId } = await client.castSwap.run(params)
-}
-```
 
 **The Advanced options on the Nodaro Motion page**
 (`GET /v1/cast-swap/advanced`, public): `{ show: boolean }`, whether the
@@ -2393,23 +2375,6 @@ method for it yet; read it with `client.request()`.
 refuses is retried once) is set by Nodaro for each engine; a run cannot
 change it. `faceMasking` (`CastSwapFaceMasking`) is deprecated: it is still
 typed and sent, so older code keeps working, and the server ignores it.
-
-**A Precise run with no person** (a direct run made as Precise whose roles
-picture no person: no `person` role with images; a person role with no images,
-a pet, a product or a location does not count, and a preview is judged on its
-full run's roles) sends the source clip as it is: no face is hidden and the clip is
-not otherwise changed, so the people in the clip are kept. If the video model
-refuses that clip, the run hides the faces and is retried once. The quote holds that retry apart: the estimate
-carries its cost as `breakdown.privacy` and as `privacyCredits`, which is in
-neither `totalCredits` nor `expectedCredits` and is charged only if the retry
-runs; `run()` needs credits for both the hold and it (`402
-insufficient_credits` otherwise). A refusal that hiding faces cannot change (one
-that names the prompt, the generated audio or one of your images, or a block of
-class `safety`) is not retried, and nothing more is charged. This holds on both engines
-unless Nodaro's setting for the engine turns it off; its runs are then prepared
-as any Precise run. Runs with a person role with images and runs made as Motion (a Precise
-request with an art style that Nodaro makes the way a Motion run is made
-included) are prepared as before, and a trend run as its trend sets.
 
 Both routes answer `400` before charging for more roles of a kind than allowed
 or more than 30 images in all (`validation_error`), `draft: true` with

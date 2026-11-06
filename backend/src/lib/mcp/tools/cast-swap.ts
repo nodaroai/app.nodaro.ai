@@ -177,7 +177,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
               }),
             ]),
           )
-          .describe("At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, a reference, a pre_prompt or post_prompt, or (motion-prism) an art_style alone. A Precise run with no person role images sends the clip as it is."),
+          .describe("At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, a reference, a pre_prompt or post_prompt — or, on a motion-prism Flex run where the engine takes style-only runs, an art_style alone (restyles the whole clip)."),
         references: z
           .array(reference)
           .max(5)
@@ -207,7 +207,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
           .min(1)
           .max(DIRECTION_ID_MAX_CHARS)
           .optional()
-          .describe('An art style on Nodaro Motion Prism (Flex; a Precise call may run as Flex): a "style" picker catalog id (get_picker_catalog "style"), e.g. "pop-art". The prompt takes its video wording. With no role images and no references it restyles the whole clip: Flex where the engine takes style-only runs, Precise where it takes one alone. Pulse takes none.'),
+          .describe('An art style on Nodaro Motion Prism (Flex; a Precise call may run as Flex): a "style" picker catalog id (get_picker_catalog "style"), e.g. "pop-art". The prompt takes its video wording. With no role images and no references it restyles the whole clip, where the engine takes style-only runs (Flex). Pulse takes none.'),
         motion_length: z
           .enum(LENGTHS)
           .optional()
