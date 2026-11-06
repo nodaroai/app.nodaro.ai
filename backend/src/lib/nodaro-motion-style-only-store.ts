@@ -24,7 +24,7 @@ export async function readNodaroMotionStyleOnly(): Promise<{ styleOnly: NodaroMo
  * Save the whole setting (already validated by `nodaroMotionStyleOnlySchema`
  * and `styleOnlyEntryProblems`), the defaults left out and no unset key
  * written, under the current keys only, and clear this process's settings
- * cache; the other servers converge on their own cache expiry (about 60 s).
+ * cache; the other servers see the save within about a second (app-settings-version.ts).
  * Throws on a database error.
  */
 export async function saveNodaroMotionStyleOnly(styleOnly: NodaroMotionStyleOnly, adminId: string): Promise<void> {

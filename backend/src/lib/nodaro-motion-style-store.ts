@@ -24,8 +24,7 @@ export async function readNodaroMotionStyle(): Promise<{ style: NodaroMotionStyl
  * Save the whole setting (already validated by `nodaroMotionStyleSchema`),
  * `"user"` entries left out, under the current keys only (as the Motion row
  * is: the toolkit answers the earlier keys too), and clear this process's
- * settings cache; the other servers converge on their own cache expiry
- * (about 60 s). Throws on a database error.
+ * settings cache; the other servers see the save within about a second (app-settings-version.ts). Throws on a database error.
  */
 export async function saveNodaroMotionStyle(style: NodaroMotionStyle, adminId: string): Promise<void> {
   const { error } = await supabase

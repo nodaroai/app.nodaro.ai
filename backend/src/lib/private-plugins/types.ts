@@ -3764,8 +3764,9 @@ export type NodaroMotionMotion = {
 
 /**
  * Deployment-wide settings a plugin feature reads (host → plugin), each a
- * short in-process cached read of an `app_settings` row (about 60 s, cleared
- * on this process's own admin write). Grows one optional member at a time.
+ * short in-process cached read of an `app_settings` row (read again within
+ * about a second of a save on any process, 60 s at most; at once after this
+ * process's own admin write). Grows one optional member at a time.
  */
 export interface PluginSettingsToolkit {
   /**

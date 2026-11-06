@@ -28,8 +28,7 @@ export async function readNodaroMotionPreciseStyleRoute(): Promise<{ preciseStyl
 /**
  * Save the whole setting (already validated by
  * `nodaroMotionPreciseStyleRouteSchema`), the defaults left out, and clear this
- * process's settings cache; the other servers converge on their own cache
- * expiry (about 60 s). Throws on a database error.
+ * process's settings cache; the other servers see the save within about a second (app-settings-version.ts). Throws on a database error.
  */
 export async function saveNodaroMotionPreciseStyleRoute(preciseStyleRoute: NodaroMotionPreciseStyleRoute, adminId: string): Promise<void> {
   const { error } = await supabase

@@ -3,6 +3,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 // Mutable holder the mocked query resolves from, so each test can stage rows.
 const state = { rows: [] as Array<{ key: string; value: unknown }>, error: null as unknown }
 
+// The app_settings version read unreadable: the TTL-only behaviour, and no
+// extra `from()` call in the mocked sequence (the version itself:
+// ee/lib/__tests__/app-settings-config-caches.test.ts).
+vi.mock("@/lib/app-settings-version.js", () => ({
+  appSettingsVersion: async () => null,
+  appSettingsChangedSince: async () => false,
+  forgetAppSettingsVersion: () => {},
+}))
 vi.mock("@/lib/supabase.js", () => {
   const inFn = vi.fn(async () => ({ data: state.rows, error: state.error }))
   const select = vi.fn(() => ({ in: inFn }))

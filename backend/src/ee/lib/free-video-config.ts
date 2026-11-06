@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase.js"
+import { appSettingsChangedSince, appSettingsVersion, forgetAppSettingsVersion } from "../../lib/app-settings-version.js"
 import { FREE_VIDEO_LIMITS_DEFAULTS, type FreeVideoLimits } from "../billing/free-video-limits.js"
 
 /**
@@ -20,6 +21,8 @@ const CACHE_TTL_MS = 60_000
 const ERROR_RETRY_MS = 5_000
 let cached: FreeVideoLimits | null = null
 let cachedAt = 0
+/** The app_settings version the cached rows were read at (app-settings-version.ts): a save anywhere re-reads them. */
+let cachedVersion: number | null = null
 let inflight: Promise<FreeVideoLimits> | null = null
 
 /** Only an integer from 1 to 60 counts; anything else is the default. */
@@ -31,7 +34,8 @@ export function parseFreeVideoMaxSeconds(value: unknown): number {
 
 export async function getFreeVideoLimits(): Promise<FreeVideoLimits> {
   const now = Date.now()
-  if (cached && now - cachedAt < CACHE_TTL_MS) return cached
+  const hit = cached
+  if (hit && now - cachedAt < CACHE_TTL_MS && !(await appSettingsChangedSince(cachedVersion)) && cached === hit) return hit
   if (inflight) return inflight
   inflight = refresh()
   try {
@@ -60,15 +64,19 @@ async function readRows(): Promise<FreeVideoLimits | null> {
 }
 
 async function refresh(): Promise<FreeVideoLimits> {
+  // The version before the rows, so rows are never filed under a newer version than they were read at.
+  const version = await appSettingsVersion()
   const read = await readRows()
   if (read) {
     cached = read
     cachedAt = Date.now()
+    cachedVersion = version
     return cached
   }
   const fallback = cached ?? { ...FREE_VIDEO_LIMITS_DEFAULTS }
   cached = fallback
   cachedAt = Date.now() - CACHE_TTL_MS + ERROR_RETRY_MS
+  cachedVersion = version
   return fallback
 }
 
@@ -76,4 +84,6 @@ async function refresh(): Promise<FreeVideoLimits> {
 export function invalidateFreeVideoLimitsCache(): void {
   cached = null
   cachedAt = 0
+  cachedVersion = null
+  forgetAppSettingsVersion()
 }

@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase.js"
+import { appSettingsChangedSince, appSettingsVersion, forgetAppSettingsVersion } from "../../lib/app-settings-version.js"
 
 /**
  * Admin-tunable knobs for the marketing-consent prompt. Stored as individual
@@ -42,6 +43,8 @@ export const CONSENT_CONFIG_DEFAULTS: ConsentConfig = {
 const CACHE_TTL_MS = 60_000
 let cached: ConsentConfig | null = null
 let cachedAt = 0
+/** The app_settings version the cached rows were read at (app-settings-version.ts): a save anywhere re-reads them. */
+let cachedVersion: number | null = null
 let inflight: Promise<ConsentConfig> | null = null
 
 const KEYS = [
@@ -56,7 +59,8 @@ const KEYS = [
 
 export async function getConsentConfig(): Promise<ConsentConfig> {
   const now = Date.now()
-  if (cached && now - cachedAt < CACHE_TTL_MS) return cached
+  const hit = cached
+  if (hit && now - cachedAt < CACHE_TTL_MS && !(await appSettingsChangedSince(cachedVersion)) && cached === hit) return hit
   if (inflight) return inflight
   inflight = refresh()
   try {
@@ -67,6 +71,8 @@ export async function getConsentConfig(): Promise<ConsentConfig> {
 }
 
 async function refresh(): Promise<ConsentConfig> {
+  // The version before the rows, so rows are never filed under a newer version than they were read at.
+  const version = await appSettingsVersion()
   const cfg: ConsentConfig = { ...CONSENT_CONFIG_DEFAULTS }
 
   // A missing table / any read error leaves `enabled: false` — dormant, never a
@@ -79,6 +85,7 @@ async function refresh(): Promise<ConsentConfig> {
   if (error) {
     cached = cfg
     cachedAt = Date.now()
+    cachedVersion = version
     return cfg
   }
 
@@ -111,6 +118,7 @@ async function refresh(): Promise<ConsentConfig> {
 
   cached = cfg
   cachedAt = Date.now()
+  cachedVersion = version
   return cfg
 }
 
@@ -119,4 +127,6 @@ async function refresh(): Promise<ConsentConfig> {
 export function invalidateConsentConfigCache(): void {
   cached = null
   cachedAt = 0
+  cachedVersion = null
+  forgetAppSettingsVersion()
 }

@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase.js"
+import { appSettingsChangedSince, appSettingsVersion, forgetAppSettingsVersion } from "../../lib/app-settings-version.js"
 
 /**
  * The free-grant gate's runtime knobs — two `app_settings` rows, read with a
@@ -36,6 +37,8 @@ const ERROR_RETRY_MS = 5_000
 const DOMAIN_OTHERS_MAX_CEILING = 1_000
 let cached: SignupGrantConfig | null = null
 let cachedAt = 0
+/** The app_settings version the cached rows were read at (app-settings-version.ts): a save anywhere re-reads them. */
+let cachedVersion: number | null = null
 let inflight: Promise<SignupGrantConfig> | null = null
 
 /** Only a non-negative integer counts; anything else (a string, a float, a huge number) is the default. */
@@ -59,7 +62,8 @@ export function parsePublicEmailDomains(value: unknown): ReadonlySet<string> {
 
 export async function getSignupGrantConfig(): Promise<SignupGrantConfig> {
   const now = Date.now()
-  if (cached && now - cachedAt < CACHE_TTL_MS) return cached
+  const hit = cached
+  if (hit && now - cachedAt < CACHE_TTL_MS && !(await appSettingsChangedSince(cachedVersion)) && cached === hit) return hit
   if (inflight) return inflight
   inflight = refresh()
   try {
@@ -91,15 +95,19 @@ async function readRows(): Promise<Read> {
 }
 
 async function refresh(): Promise<SignupGrantConfig> {
+  // The version before the rows, so rows are never filed under a newer version than they were read at.
+  const version = await appSettingsVersion()
   const read = await readRows()
   if (read.ok) {
     cached = read.config
     cachedAt = Date.now()
+    cachedVersion = version
     return cached
   }
   const fallback = cached ?? { ...SIGNUP_GRANT_CONFIG_DEFAULTS }
   cached = fallback
   cachedAt = Date.now() - CACHE_TTL_MS + ERROR_RETRY_MS
+  cachedVersion = version
   return fallback
 }
 
@@ -107,4 +115,6 @@ async function refresh(): Promise<SignupGrantConfig> {
 export function invalidateSignupGrantConfigCache(): void {
   cached = null
   cachedAt = 0
+  cachedVersion = null
+  forgetAppSettingsVersion()
 }

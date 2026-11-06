@@ -29,7 +29,7 @@ export async function readNodaroMotionMasking(): Promise<{ masking: NodaroMotion
  * `"motion-lite"` — a save that wrote the current keys alone would turn off
  * every masking setting there. The current parse prefers the current keys.
  * Write the current keys only once every environment runs the renamed app; the worker and the other servers
- * converge on their own cache expiry (about 60 s). Lives here, not in the
+ * see the save within about a second (app-settings-version.ts). Lives here, not in the
  * route, as `saveNodaroProviderPrefs` does: app_settings is instance-global
  * config written with the service-role client. Throws on a database error.
  */

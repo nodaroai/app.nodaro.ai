@@ -24,7 +24,7 @@ export async function readNodaroMotionSteps(): Promise<{ steps: NodaroMotionStep
  * Save the whole setting (already validated by `nodaroMotionStepsSaveSchema`),
  * empty entries left out, under the current AND the earlier engine keys (the
  * masking row's transition shim), and clear this process's settings cache;
- * the other servers converge on their own cache expiry (about 60 s). Throws
+ * the other servers see the save within about a second (app-settings-version.ts). Throws
  * on a database error.
  */
 export async function saveNodaroMotionSteps(steps: NodaroMotionSteps, adminId: string): Promise<void> {

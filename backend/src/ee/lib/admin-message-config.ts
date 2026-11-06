@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase.js"
+import { appSettingsChangedSince, appSettingsVersion, forgetAppSettingsVersion } from "../../lib/app-settings-version.js"
 
 /**
  * The one admin-tunable knob for admin → user email: how many messages a single
@@ -31,11 +32,14 @@ export const ADMIN_MESSAGES_DAILY_LIMIT_MAX = 1000
 const CACHE_TTL_MS = 60_000
 let cached: number | null = null
 let cachedAt = 0
+/** The app_settings version the cached rows were read at (app-settings-version.ts): a save anywhere re-reads them. */
+let cachedVersion: number | null = null
 let inflight: Promise<number> | null = null
 
 export async function getAdminMessagesDailyLimit(): Promise<number> {
   const now = Date.now()
-  if (cached !== null && now - cachedAt < CACHE_TTL_MS) return cached
+  const hit = cached
+  if (hit !== null && now - cachedAt < CACHE_TTL_MS && !(await appSettingsChangedSince(cachedVersion)) && cached === hit) return hit
   if (inflight) return inflight
   inflight = refresh()
   try {
@@ -46,6 +50,8 @@ export async function getAdminMessagesDailyLimit(): Promise<number> {
 }
 
 async function refresh(): Promise<number> {
+  // The version before the rows, so rows are never filed under a newer version than they were read at.
+  const version = await appSettingsVersion()
   let limit = ADMIN_MESSAGES_DAILY_LIMIT_DEFAULT
   const { data, error } = await supabase
     .from("app_settings")
@@ -69,12 +75,15 @@ async function refresh(): Promise<number> {
 
   cached = limit
   cachedAt = Date.now()
+  cachedVersion = version
   return limit
 }
 
 export function invalidateAdminMessageConfigCache(): void {
   cached = null
   cachedAt = 0
+  cachedVersion = null
+  forgetAppSettingsVersion()
 }
 
 /**

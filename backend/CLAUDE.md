@@ -206,6 +206,13 @@ app.post("/v1/my-route", {
 
 ---
 
+## App settings caches (`lib/app-settings-version.ts`)
+- Every process (API, workers, replicas) keeps `app_settings` in memory. A save must reach all of them on the next run, so a cache trusts its copy only while the app_settings version it read with its rows is current: read `appSettingsVersion()` BEFORE the rows, keep it with them, and serve the copy only while `!(await appSettingsChangedSince(kept))` (and inside the TTL, the safety net). `getAppSettings()` is the reference.
+- The database moves the version on every write (trigger of migration 605, proven by `supabase/tests/app-settings-version.behavior.sql`), so writers need nothing extra; `invalidateSettingsCache()` after a save still makes the saving process's next read immediate.
+- `lib/__tests__/app-settings-caches-guard.test.ts` fails a new file that reads `app_settings` and keeps module state without the check (or a reason in its `UNVERSIONED` list).
+
+---
+
 ## CORS Configuration
 - Backend CORS in `backend/src/app.ts`: whitelist `http://localhost:3000`, `https://app.nodaro.ai`, plus `CORS_ORIGIN` env var (comma-separated)
 - SSE responses validate origin against the same allowlist (in `sse.ts`) because `reply.raw.writeHead()` bypasses Fastify's `onSend` hooks
