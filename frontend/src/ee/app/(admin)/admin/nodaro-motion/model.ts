@@ -16,8 +16,9 @@ export function toSaved(draft: NodaroMotionMasking): NodaroMotionMasking {
 
 /**
  * The Motion setting as it is saved: each engine's masking cleaned and its
- * prompt style, an engine with neither left out (the defaults: the Precise
- * masking, the Flexible prompt).
+ * prompt style, an engine with neither left out (the defaults: Full depth,
+ * the scene from a description, the Flexible prompt). A masking the engine
+ * ignores (saved before Flex was always Full depth) is kept as it is.
  */
 export function motionToSaved(draft: NodaroMotionMotion): NodaroMotionMotion {
   const out: NodaroMotionMotion = {}

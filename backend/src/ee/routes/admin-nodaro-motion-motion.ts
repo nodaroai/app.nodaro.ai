@@ -9,9 +9,11 @@
  * The setting (`nodaro_motion_motion`, lib/nodaro-motion-motion.ts) is how
  * the Cast Swap engine prepares the clip and words the prompt of every DIRECT
  * run with `style: "motion"`: per engine, its masking (a face mask, or full
- * depth with its scene source) and its prompt style. An engine left out runs
- * Motion on its Precise masking with the Flexible prompt. A trend run keeps
- * its own trend's setting.
+ * depth with its scene source) and its prompt style. On an engine with the
+ * shot list (every current one) a Flex run is always Full depth with a shot
+ * list: an engine left out, or a masking other than Full depth, runs Full
+ * depth with its scene from a description, with the Flexible prompt when none
+ * is set. A trend run keeps its own trend's setting.
  *
  * A save first re-checks the Motion prompt part overrides already saved
  * (`nodaro_motion_prompt_parts`, each engine's `motion` entry) against the

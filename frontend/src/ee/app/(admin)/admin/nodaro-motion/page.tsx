@@ -6,9 +6,10 @@
 // Each engine (Prism, Pulse) has two columns, edited with the trend editor's
 // own controls:
 // - Precise: the face masking of a Precise run (PUT /v1/admin/nodaro-motion/masking).
-// - Motion: a Motion run's masking (Same as Precise, Faces hidden, or Full
-//   depth with its scene source) and its prompt style (left out: Flexible),
-//   PUT /v1/admin/nodaro-motion/motion (MotionColumn.tsx).
+// - Motion: a Flex run's masking — always Full depth with a shot list, its
+//   scene a description or a description + the original; a masking saved
+//   before that is shown as ignored, to be cleared — and its prompt style
+//   (left out: Flexible), PUT /v1/admin/nodaro-motion/motion (MotionColumn.tsx).
 // Pulse also has its audio, for every direct Pulse run of either style: the
 // original audio back on the result (the default) or Kling's own track
 // (PUT /v1/admin/nodaro-motion/pulse-audio).
@@ -530,7 +531,6 @@ export default function AdminNodaroMotionPage() {
                         value={motionDraft[engine.id]}
                         supports={motionQuery.data.supports}
                         envs={envs.data}
-                        bodyMissingIn={bodyMissingIn}
                         faceMeshMissingIn={faceMeshMissingIn}
                         depthColormapsMissingIn={depthColormapsMissingIn}
                         depthModelSizesMissingIn={depthModelSizesMissingIn}

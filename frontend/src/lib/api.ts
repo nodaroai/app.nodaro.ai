@@ -13108,7 +13108,7 @@ export async function previewNodaroMotionPromptParts(input: {
 
 /** One engine's Motion setting: its masking (a face mask, or full depth) and prompt style; each left out takes its default. */
 export interface NodaroMotionMotionEntry {
-  /** Left out = the engine's Precise masking. Never Keep people. */
+  /** Left out = Full depth, the scene from a description (a Flex run is always Full depth; a masking other than Full depth is ignored). Never Keep people. */
   masking?: AdminTrendFaceMasking
   /** Left out = "flexible". */
   promptStyle?: CastSwapPromptStyleId
@@ -13117,7 +13117,7 @@ export interface NodaroMotionMotionEntry {
 export type NodaroMotionMotion = Partial<Record<NodaroMotionEngine, NodaroMotionMotionEntry>>
 
 export interface NodaroMotionMotionView {
-  /** null = never saved: every engine runs Motion on its Precise masking with the Flexible prompt. */
+  /** null = never saved: every engine runs Flex as Full depth, the scene from a description, with the Flexible prompt. */
   motion: NodaroMotionMotion | null
   updatedAt: string | null
   engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine }>

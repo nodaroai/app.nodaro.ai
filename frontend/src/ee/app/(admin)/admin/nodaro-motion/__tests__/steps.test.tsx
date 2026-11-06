@@ -115,6 +115,17 @@ describe("Admin → Nodaro Motion → preparation steps", { timeout: 20_000 }, (
     expect(sentTo("PUT /v1/admin/nodaro-motion/masking")).toEqual([])
   })
 
+  it("the scene description applies to every Flex run, a Motion masking saved as Faces hidden included (Flex is always Full depth)", async () => {
+    routes["GET /v1/admin/nodaro-motion/motion"] = () => ({
+      body: { data: { motion: { "motion-prism": { masking: { mode: "auto", target: "face" } } }, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } },
+    })
+    routes[`GET ${STEPS_URL}`] = () => view({ "motion-prism": { sceneDescription: { mode: "template" } } })
+    renderWith(<AdminNodaroMotionPage />)
+    const prism = await stepsOf("Prism")
+    expect(await within(prism).findByRole("region", { name: "Scene description step" })).toBeInTheDocument()
+    expect(within(prism).queryByText(/writes no scene description, so it is not used/)).toBeNull()
+  })
+
   it("removing every step sends an empty setting", async () => {
     const user = userEvent.setup()
     const saved = { "motion-prism": { sheets: { rules: RULES } } }

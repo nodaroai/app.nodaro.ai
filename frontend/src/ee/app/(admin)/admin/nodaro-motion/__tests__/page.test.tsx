@@ -90,6 +90,8 @@ afterEach(() => vi.unstubAllGlobals())
 
 const section = async (name: RegExp) =>
   (await screen.findByRole("heading", { name: new RegExp(`^Nodaro Motion ${name.source}`) })).closest("section") as HTMLElement
+/** An engine's Precise column (the Motion column beside it always shows Full depth's own face mesh and depth controls). */
+const preciseOf = async (name: RegExp) => within(await section(name)).getByRole("group", { name: new RegExp(`${name.source} Precise$`) })
 
 describe("Admin → Nodaro Motion", () => {
   it("shows both engines by name, with the model each runs on, Off until saved", async () => {
@@ -145,7 +147,7 @@ describe("Admin → Nodaro Motion", () => {
     const user = userEvent.setup()
     routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [meshes("production"), hides("staging")] } })
     renderWith(<AdminNodaroMotionPage />)
-    const prism = await section(/Prism/)
+    const prism = await preciseOf(/Prism/)
     expect(within(prism).queryByRole("checkbox", { name: "Face mesh" })).not.toBeInTheDocument()
     await user.click(within(prism).getByRole("combobox", { name: "Mode" }))
     await user.click(screen.getByRole("option", { name: "Always" }))
@@ -160,7 +162,7 @@ describe("Admin → Nodaro Motion", () => {
       body: { data: { masking: JSON.parse(String(init?.body)).masking, updatedAt: "2026-10-31T12:00:00.000Z", engines: ENGINES } },
     })
     renderWith(<AdminNodaroMotionPage />)
-    const prism = await section(/Prism/)
+    const prism = await preciseOf(/Prism/)
     await user.click(within(prism).getByRole("combobox", { name: "Mode" }))
     await user.click(screen.getByRole("option", { name: "Always" }))
     const mesh = await within(prism).findByRole("checkbox", { name: "Face mesh" })
@@ -221,30 +223,11 @@ describe("Admin → Nodaro Motion", () => {
     await waitFor(() => expect(sentTo(`PUT ${URL}`).at(-1)).toEqual({ masking: { "motion-prism": { mode: "always", fill: "depth", faceMesh: true, depthBlur: 6 } } }))
   })
 
-  it("the Motion column's Faces hidden never offers the fill None nor a depth fill's blur (the Precise setting's alone)", async () => {
-    const user = userEvent.setup()
-    const draws = (env: string): TrendEngineEnvironment => {
-      const base = meshes(env)
-      return { ...base, supports: { ...base.supports, castSwap: { ...base.supports.castSwap, maskFillNone: true, depthFillBlur: true } } }
-    }
-    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [draws("production"), draws("staging")] } })
-    renderWith(<AdminNodaroMotionPage />)
-    const motion = await within(await section(/Pulse/)).findByRole("group", { name: /Pulse Motion$/ })
-    await user.click(within(motion).getByRole("combobox", { name: "Motion masking" }))
-    await user.click(screen.getByRole("option", { name: "Faces hidden" }))
-    await user.click(within(motion).getByRole("combobox", { name: "Mode" }))
-    await user.click(screen.getByRole("option", { name: "Always" }))
-    await user.click(within(motion).getByRole("combobox", { name: "Fill" }))
-    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Blur (default)", "Depth colors"])
-    await user.click(screen.getByRole("option", { name: "Depth colors" }))
-    expect(within(motion).queryByRole("spinbutton", { name: "Depth blur" })).toBeNull()
-  })
-
   it("a face mesh saved on stays shown and can be turned off while an environment lacks it", async () => {
     routes[`GET ${URL}`] = () => ({ body: { data: { masking: { "motion-prism": { mode: "always", faceMesh: true } }, updatedAt: "2026-10-31T12:00:00.000Z", engines: ENGINES } } })
     routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [meshes("production")] } })
     renderWith(<AdminNodaroMotionPage />)
-    const prism = await section(/Prism/)
+    const prism = await preciseOf(/Prism/)
     const mesh = await within(prism).findByRole("checkbox", { name: "Face mesh" })
     expect(mesh).toBeChecked()
     expect(mesh).toBeEnabled()
@@ -258,7 +241,7 @@ describe("Admin → Nodaro Motion", () => {
       body: { data: { masking: JSON.parse(String(init?.body)).masking, updatedAt: "2026-11-01T12:00:00.000Z", engines: ENGINES } },
     })
     renderWith(<AdminNodaroMotionPage />)
-    const prism = await section(/Prism/)
+    const prism = await preciseOf(/Prism/)
     await user.click(within(prism).getByRole("combobox", { name: "Mode" }))
     await user.click(screen.getByRole("option", { name: "Always" }))
     expect(within(prism).queryByRole("combobox", { name: "Depth colormap" })).not.toBeInTheDocument()
@@ -275,7 +258,7 @@ describe("Admin → Nodaro Motion", () => {
     routes[`GET ${URL}`] = () => ({ body: { data: { masking: { "motion-prism": { mode: "always", fill: "depth" } }, updatedAt: "2026-11-01T12:00:00.000Z", engines: ENGINES } } })
     routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [maps("production"), maps("staging", ["inferno"])] } })
     renderWith(<AdminNodaroMotionPage />)
-    const prism = await section(/Prism/)
+    const prism = await preciseOf(/Prism/)
     await user.click(await within(prism).findByRole("combobox", { name: "Depth colormap" }))
     await waitFor(() => expect(screen.getByRole("option", { name: "Magma (not supported yet)" })).toHaveAttribute("aria-disabled", "true"))
     expect(screen.getByRole("option", { name: "Inferno" })).not.toHaveAttribute("aria-disabled")
@@ -288,7 +271,7 @@ describe("Admin → Nodaro Motion", () => {
       body: { data: { masking: JSON.parse(String(init?.body)).masking, updatedAt: "2026-11-02T12:00:00.000Z", engines: ENGINES } },
     })
     renderWith(<AdminNodaroMotionPage />)
-    const prism = await section(/Prism/)
+    const prism = await preciseOf(/Prism/)
     await user.click(within(prism).getByRole("combobox", { name: "Mode" }))
     await user.click(screen.getByRole("option", { name: "Always" }))
     expect(within(prism).queryByRole("combobox", { name: "Depth model" })).not.toBeInTheDocument()
@@ -643,34 +626,94 @@ describe("toSaved", () => {
 describe("Admin → Nodaro Motion → Motion column", () => {
   const motionOf = async (name: RegExp) => within(await section(name)).findByRole("group", { name: new RegExp(`${name.source} Motion$`) })
 
-  it("reads Same as Precise, Flexible prompt until it is set", async () => {
+  it("reads Full depth, the scene from a description, Flexible prompt until it is set, with no masking choice", async () => {
     renderWith(<AdminNodaroMotionPage />)
     const motion = await motionOf(/Prism/)
-    expect(within(motion).getByText("Same as Precise, Flexible prompt.")).toBeInTheDocument()
-    expect(within(motion).getByRole("combobox", { name: "Motion masking" })).toHaveTextContent("Same as Precise")
+    expect(within(motion).getByText("Full depth, the scene from a description, Flexible prompt.")).toBeInTheDocument()
+    expect(within(motion).queryByRole("combobox", { name: "Motion masking" })).toBeNull()
+    expect(within(motion).queryByText(/Same as Precise/)).toBeNull()
     expect(within(motion).getByRole("combobox", { name: "Motion prompt style" })).toHaveTextContent("Flexible (default)")
   })
 
-  it("saves Full depth with its scene, and the prompt style, under the Motion setting only", async () => {
+  it("offers Full depth alone while the environments load or cannot be read", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${ENVS_URL}`] = () => ({ status: 500, body: { error: { code: "internal_error", message: "down" } } })
+    renderWith(<AdminNodaroMotionPage />)
+    const motion = await motionOf(/Pulse/)
+    expect(within(motion).getByText(/Full depth with a shot list/)).toBeInTheDocument()
+    expect(within(motion).queryByRole("combobox", { name: "Motion masking" })).toBeNull()
+    await user.click(within(motion).getByRole("combobox", { name: "Scene from" }))
+    const offered = screen.getAllByRole("option").map((o) => o.textContent)
+    expect(offered).toEqual(["Description (automatic)"])
+  })
+
+  it("a prompt style chosen on an engine with nothing saved also saves Full depth (what Flex runs)", async () => {
     const user = userEvent.setup()
     routes[`PUT ${MOTION_URL}`] = (init) => ({
       body: { data: { motion: JSON.parse(String(init?.body)).motion, updatedAt: "2026-10-27T12:00:00.000Z", engines: ENGINES, promptStyles: ["precise", "flexible"] } },
     })
     renderWith(<AdminNodaroMotionPage />)
     const motion = await motionOf(/Pulse/)
-    await user.click(within(motion).getByRole("combobox", { name: "Motion masking" }))
-    await user.click(screen.getByRole("option", { name: "Full depth" }))
-    await user.click(within(motion).getByRole("combobox", { name: "Scene from" }))
-    await user.click(screen.getByRole("option", { name: "None (write it yourself)" }))
     await user.click(within(motion).getByRole("combobox", { name: "Motion prompt style" }))
     await user.click(screen.getByRole("option", { name: "Precise" }))
     await user.click(screen.getByRole("button", { name: "Save" }))
     await waitFor(() =>
-      expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([
-        { motion: { "motion-pulse": { masking: { mode: "always", source: "full-depth", scene: "none" }, promptStyle: "precise" } } },
-      ]),
+      expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([{ motion: { "motion-pulse": { masking: { mode: "always", source: "full-depth" }, promptStyle: "precise" } } }]),
     )
     expect(sentTo(`PUT ${URL}`)).toEqual([])
+  })
+
+  it.each([
+    ["Faces hidden", { masking: { mode: "auto", target: "face" } }],
+    ["Off", { masking: { mode: "off" } }],
+    ["Off", { masking: { mode: "off", source: "full-depth" } }],
+    ["Same as Precise", { promptStyle: "precise" }],
+  ] as const)("a saved %s is shown as saved and ignored, and can be cleared to Full depth", async (label, entry) => {
+    const user = userEvent.setup()
+    routes[`GET ${MOTION_URL}`] = () => ({
+      body: { data: { motion: { "motion-prism": entry }, updatedAt: "2026-10-20T12:00:00.000Z", engines: ENGINES, promptStyles: ["precise", "flexible"] } },
+    })
+    routes[`PUT ${MOTION_URL}`] = (init) => ({
+      body: { data: { motion: JSON.parse(String(init?.body)).motion, updatedAt: "2026-11-06T12:00:00.000Z", engines: ENGINES, promptStyles: ["precise", "flexible"] } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const motion = await motionOf(/Prism/)
+    const notice = await within(motion).findByText(new RegExp(`^Saved: ${label} — ignored`))
+    expect(notice).toHaveTextContent(/every Flex run is Full depth with a shot list/)
+    expect(within(motion).queryByRole("combobox", { name: "Motion masking" })).toBeNull()
+    // Nothing is rewritten until the admin clears it.
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+    await user.click(within(motion).getByRole("button", { name: "Clear it (Full depth)" }))
+    expect(within(motion).queryByText(/ignored/)).toBeNull()
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    const promptStyle = "promptStyle" in entry ? { promptStyle: entry.promptStyle } : {}
+    await waitFor(() =>
+      expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([{ motion: { "motion-prism": { masking: { mode: "always", source: "full-depth" }, ...promptStyle } } }]),
+    )
+  })
+
+  it("a legacy value on one engine is sent back as it is when another engine is saved", async () => {
+    const user = userEvent.setup()
+    const legacy = { masking: { mode: "always", target: "body", fill: "depth" } } as const
+    routes[`GET ${MOTION_URL}`] = () => ({
+      body: { data: { motion: { "motion-prism": legacy }, updatedAt: "2026-10-20T12:00:00.000Z", engines: ENGINES, promptStyles: ["precise", "flexible"] } },
+    })
+    routes[`PUT ${MOTION_URL}`] = (init) => ({
+      body: { data: { motion: JSON.parse(String(init?.body)).motion, updatedAt: "2026-11-06T12:00:00.000Z", engines: ENGINES, promptStyles: ["precise", "flexible"] } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    expect(await within(await motionOf(/Prism/)).findByText(/^Saved: Faces hidden — ignored/)).toBeInTheDocument()
+    const pulse = await motionOf(/Pulse/)
+    await user.click(within(pulse).getByRole("combobox", { name: "Motion prompt style" }))
+    await user.click(screen.getByRole("option", { name: "Precise" }))
+    const save = screen.getByRole("button", { name: "Save" })
+    expect(save).toBeEnabled()
+    await user.click(save)
+    await waitFor(() =>
+      expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([
+        { motion: { "motion-prism": legacy, "motion-pulse": { masking: { mode: "always", source: "full-depth" }, promptStyle: "precise" } } },
+      ]),
+    )
   })
 
   it("once every environment runs the shot list: Full depth alone, its scene a description or a description + the original", async () => {
@@ -773,82 +816,6 @@ describe("Admin → Nodaro Motion → Motion column", () => {
     renderWith(<AdminNodaroMotionPage />)
     expect(await within(await motionOf(/Prism/)).findByText(/Flex runs it as Description \+ original/)).toBeInTheDocument()
     expect(await within(await motionOf(/Pulse/)).findByText(/Flex runs it as Description \(automatic\)/)).toBeInTheDocument()
-  })
-
-  it("before every environment runs the shot list, the shared column never offers a scene only some engines take", async () => {
-    const user = userEvent.setup()
-    const both = (env: string): TrendEngineEnvironment => ({
-      ...ENVIRONMENTS[0]!,
-      env,
-      supports: { castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, fullDepthScenes: ["description", "original", "none", "description-and-original"] } },
-    })
-    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [ENVIRONMENTS[0]!, both("staging")] } })
-    renderWith(<AdminNodaroMotionPage />)
-    const motion = await motionOf(/Pulse/)
-    await user.click(within(motion).getByRole("combobox", { name: "Motion masking" }))
-    await user.click(screen.getByRole("option", { name: "Full depth" }))
-    await user.click(within(motion).getByRole("combobox", { name: "Scene from" }))
-    expect(screen.getAllByRole("option").map((o) => o.textContent)).not.toContain("Description + original (up to 27.5 s)")
-  })
-
-  it("once every environment runs the shot list, a stored Faces hidden says it no longer does anything", async () => {
-    const user = userEvent.setup()
-    const shotList = (env: string): TrendEngineEnvironment => ({
-      ...ENVIRONMENTS[0]!,
-      env,
-      supports: { castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, steps: true, shotList: true } },
-    })
-    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [shotList("production"), shotList("staging")] } })
-    routes[`GET ${MOTION_URL}`] = () => ({
-      body: { data: { motion: { "motion-prism": { masking: { mode: "auto", target: "face" } } }, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } },
-    })
-    renderWith(<AdminNodaroMotionPage />)
-    const motion = await motionOf(/Prism/)
-    expect(await within(motion).findByText(/The saved Motion masking \(Faces hidden\) no longer does anything/)).toBeInTheDocument()
-    await user.click(within(motion).getByRole("button", { name: "Set Full depth" }))
-    expect(within(motion).queryByText(/no longer does anything/)).toBeNull()
-  })
-
-  it("starts from the stored setting", async () => {
-    routes[`GET ${MOTION_URL}`] = () => ({
-      body: { data: { motion: { "motion-prism": { masking: { mode: "auto", target: "face" } } }, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } },
-    })
-    renderWith(<AdminNodaroMotionPage />)
-    const motion = await motionOf(/Prism/)
-    await waitFor(() => expect(within(motion).getByRole("combobox", { name: "Motion masking" })).toHaveTextContent("Faces hidden"))
-    expect(within(motion).getByRole("combobox", { name: "Covers" })).toHaveTextContent("Face")
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
-  })
-
-  it("the Motion column's face mask keeps Body greyed out until every environment's engine hides whole people", async () => {
-    const user = userEvent.setup()
-    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [hides("production"), keepsOnly("staging")] } })
-    routes[`GET ${MOTION_URL}`] = () => ({
-      body: { data: { motion: { "motion-prism": { masking: { mode: "always" } } }, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } },
-    })
-    renderWith(<AdminNodaroMotionPage />)
-    const motion = await motionOf(/Prism/)
-    await waitFor(() => expect(within(motion).getByRole("combobox", { name: "Covers" })).toBeInTheDocument())
-    await user.click(within(motion).getByRole("combobox", { name: "Covers" }))
-    await waitFor(() => expect(screen.getByRole("option", { name: "Body (not supported yet: staging)" })).toHaveAttribute("aria-disabled", "true"))
-  })
-
-  it("the Motion column's face mask offers Body once every environment's engine hides whole people", async () => {
-    const user = userEvent.setup()
-    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: HIDE_ENVS } })
-    routes[`GET ${MOTION_URL}`] = () => ({
-      body: { data: { motion: { "motion-prism": { masking: { mode: "always" } } }, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } },
-    })
-    routes[`PUT ${MOTION_URL}`] = (init) => ({
-      body: { data: { motion: JSON.parse(String(init?.body)).motion, updatedAt: "2026-10-29T12:00:00.000Z", engines: ENGINES, promptStyles: ["precise", "flexible"] } },
-    })
-    renderWith(<AdminNodaroMotionPage />)
-    const motion = await motionOf(/Prism/)
-    await waitFor(() => expect(within(motion).getByRole("combobox", { name: "Covers" })).toBeInTheDocument())
-    await user.click(within(motion).getByRole("combobox", { name: "Covers" }))
-    await user.click(await screen.findByRole("option", { name: "Body" }))
-    await user.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([{ motion: { "motion-prism": { masking: { mode: "always", target: "body" } } } }]))
   })
 
   it("says under the Motion column when this environment's engine plugin is out of date for it", async () => {
