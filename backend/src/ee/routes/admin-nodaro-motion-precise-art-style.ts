@@ -28,7 +28,7 @@
  * environment's engine declares it. Each save writes an `admin_actions` row
  * (`update_nodaro_motion_precise_art_style`) with the setting before and after.
  */
-import type { FastifyInstance, FastifyReply } from "fastify"
+import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"
@@ -52,6 +52,7 @@ import {
 } from "../lib/nodaro-motion-precise-art-style-gate.js"
 import type { CastSwapStepsProblem } from "../../lib/cast-swap-steps.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { defineNodaroMotionSettingsSection, sendRefusal, type NodaroMotionSaveRefusal } from "../lib/nodaro-motion-settings-section.js"
 import { audit } from "./admin-trends-lifecycle.js"
 import type { NodaroMotionAdminEngine } from "./admin-nodaro-motion.js"
 
@@ -64,12 +65,43 @@ const BODY_KEY = "preciseArtStyle"
 const putBody = z.strictObject({ [BODY_KEY]: nodaroMotionPreciseArtStyleSchema })
 
 /** 400 naming each problem of the setting, in the steps route's shape (`issues`) and `formatZodError`'s message style. */
-function problemsRefused(reply: FastifyReply, problems: CastSwapStepsProblem[]) {
+function problemsRefusal(problems: CastSwapStepsProblem[]): NodaroMotionSaveRefusal {
   const first = problems[0]
   const head = first ? `${first.path}: ${first.message}` : "Invalid Precise art-style setting"
   const message = problems.length > 1 ? `${head} (+${problems.length - 1} more)` : head
-  return reply.status(400).send({ error: { code: "validation_error", message, issues: problems } })
+  return { status: 400, error: { code: "validation_error", message, issues: problems } }
 }
+
+/** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): what differs from the defaults. */
+export const NODARO_MOTION_PRECISE_ART_STYLE_SECTION = defineNodaroMotionSettingsSection({
+  key: "precise-art-style",
+  path: "/v1/admin/nodaro-motion/precise-art-style",
+  label: "Precise runs with an art style",
+  body: putBody,
+  prepare: (body) => {
+    const preciseArtStyle = withoutDefaultPreciseArtStyle(body[BODY_KEY])
+    // Art styles are Prism's: a Pulse entry would never be read.
+    if (preciseArtStyle["motion-pulse"]) {
+      return { refusal: { status: 400, error: { code: "precise_art_style_engine", message: PULSE_TAKES_NO_PRECISE_ART_STYLE_MESSAGE } } }
+    }
+    // The store validates nothing: the save-time step rules (the style-refs instruction's) are applied here.
+    const problems = NODARO_MOTION_ENGINES.flatMap((engine) => {
+      const entry = preciseArtStyle[engine]
+      return entry ? preciseArtStyleEntryProblems(`${BODY_KEY}.${engine}`, entry) : []
+    })
+    if (problems.length > 0) return { refusal: problemsRefusal(problems) }
+    return { value: { [BODY_KEY]: preciseArtStyle } }
+  },
+  // A change is saved once one environment's engine takes an art style on a Precise run (an engine without it never reads the row).
+  engineRefusal: async (value) =>
+    anyPreciseArtStyleChange(value[BODY_KEY]) && noEnvironmentRunsPreciseArtStyle(await listEngineEnvironments())
+      ? { status: 409, error: { code: "engine_unsupported", message: NO_ENGINE_RUNS_PRECISE_ART_STYLE_MESSAGE, envs: [] } }
+      : null,
+  readLive: async () => {
+    const { preciseArtStyle } = await readNodaroMotionPreciseArtStyle()
+    return preciseArtStyle === null ? null : { [BODY_KEY]: preciseArtStyle }
+  },
+})
 
 export interface NodaroMotionPreciseArtStyleView {
   /** null = never saved: every engine on the default. Only what differs from it is listed. */
@@ -100,24 +132,14 @@ export function registerNodaroMotionPreciseArtStyleRoutes(app: FastifyInstance):
   })
 
   app.put("/v1/admin/nodaro-motion/precise-art-style", { preHandler: requireAdmin }, async (req, reply) => {
-    const parsed = putBody.safeParse(req.body)
+    const parsed = NODARO_MOTION_PRECISE_ART_STYLE_SECTION.body.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
-      const preciseArtStyle = withoutDefaultPreciseArtStyle(parsed.data[BODY_KEY])
-      // Art styles are Prism's: a Pulse entry would never be read.
-      if (preciseArtStyle["motion-pulse"]) {
-        return reply.status(400).send({ error: { code: "precise_art_style_engine", message: PULSE_TAKES_NO_PRECISE_ART_STYLE_MESSAGE } })
-      }
-      // The store validates nothing: the save-time step rules (the style-refs instruction's) are applied here.
-      const problems = NODARO_MOTION_ENGINES.flatMap((engine) => {
-        const entry = preciseArtStyle[engine]
-        return entry ? preciseArtStyleEntryProblems(`${BODY_KEY}.${engine}`, entry) : []
-      })
-      if (problems.length > 0) return problemsRefused(reply, problems)
-      // A change is saved once one environment's engine takes an art style on a Precise run (an engine without it never reads the row).
-      if (anyPreciseArtStyleChange(preciseArtStyle) && noEnvironmentRunsPreciseArtStyle(await listEngineEnvironments())) {
-        return reply.status(409).send({ error: { code: "engine_unsupported", message: NO_ENGINE_RUNS_PRECISE_ART_STYLE_MESSAGE, envs: [] } })
-      }
+      const prepared = NODARO_MOTION_PRECISE_ART_STYLE_SECTION.prepare(parsed.data)
+      if ("refusal" in prepared) return sendRefusal(reply, prepared.refusal)
+      const preciseArtStyle = prepared.value[BODY_KEY]
+      const refusal = await NODARO_MOTION_PRECISE_ART_STYLE_SECTION.engineRefusal!(prepared.value, null)
+      if (refusal) return sendRefusal(reply, refusal)
       const before = (await readNodaroMotionPreciseArtStyle()).preciseArtStyle
       await saveNodaroMotionPreciseArtStyle(preciseArtStyle, req.userId!)
       await audit(req, "update_nodaro_motion_precise_art_style", "app_setting", NODARO_MOTION_PRECISE_ART_STYLE_AUDIT_TARGET, {

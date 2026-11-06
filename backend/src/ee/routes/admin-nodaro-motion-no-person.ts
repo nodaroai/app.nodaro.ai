@@ -38,6 +38,7 @@ import { getPluginSupports } from "../../lib/private-plugins/supports-registry.j
 import { listEngineEnvironments } from "../lib/engine-environments.js"
 import { NO_ENGINE_READS_NO_PERSON_MESSAGE, noEnvironmentRunsNoPerson } from "../lib/nodaro-motion-no-person-gate.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { defineNodaroMotionSettingsSection, sendRefusal } from "../lib/nodaro-motion-settings-section.js"
 import { audit } from "./admin-trends-lifecycle.js"
 import type { NodaroMotionAdminEngine } from "./admin-nodaro-motion.js"
 
@@ -45,6 +46,24 @@ import type { NodaroMotionAdminEngine } from "./admin-nodaro-motion.js"
 export const NODARO_MOTION_NO_PERSON_AUDIT_TARGET = "00000000-0000-4000-8000-00000000a0fc"
 
 const putBody = z.strictObject({ noPerson: nodaroMotionNoPersonSchema })
+
+/** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): what differs from the default. */
+export const NODARO_MOTION_NO_PERSON_SECTION = defineNodaroMotionSettingsSection({
+  key: "no-person",
+  path: "/v1/admin/nodaro-motion/no-person",
+  label: "Runs with no person",
+  body: putBody,
+  prepare: (body) => ({ value: { noPerson: withoutDefaultNoPerson(body.noPerson) } }),
+  // A change is saved once one environment's engine reads the row (an engine without the flag never does).
+  engineRefusal: async ({ noPerson }) =>
+    anyNoPersonChange(noPerson) && noEnvironmentRunsNoPerson(await listEngineEnvironments())
+      ? { status: 409, error: { code: "engine_unsupported", message: NO_ENGINE_READS_NO_PERSON_MESSAGE, envs: [] } }
+      : null,
+  readLive: async () => {
+    const { noPerson } = await readNodaroMotionNoPerson()
+    return noPerson === null ? null : { noPerson }
+  },
+})
 
 export interface NodaroMotionNoPersonView {
   /** null = never saved: every engine on the default. Only what differs from it is listed. */
@@ -75,14 +94,14 @@ export function registerNodaroMotionNoPersonRoutes(app: FastifyInstance): void {
   })
 
   app.put("/v1/admin/nodaro-motion/no-person", { preHandler: requireAdmin }, async (req, reply) => {
-    const parsed = putBody.safeParse(req.body)
+    const parsed = NODARO_MOTION_NO_PERSON_SECTION.body.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
-      const noPerson = withoutDefaultNoPerson(parsed.data.noPerson)
-      // A change is saved once one environment's engine reads the row (an engine without the flag never does).
-      if (anyNoPersonChange(noPerson) && noEnvironmentRunsNoPerson(await listEngineEnvironments())) {
-        return reply.status(409).send({ error: { code: "engine_unsupported", message: NO_ENGINE_READS_NO_PERSON_MESSAGE, envs: [] } })
-      }
+      const prepared = NODARO_MOTION_NO_PERSON_SECTION.prepare(parsed.data)
+      if ("refusal" in prepared) return sendRefusal(reply, prepared.refusal)
+      const { noPerson } = prepared.value
+      const refusal = await NODARO_MOTION_NO_PERSON_SECTION.engineRefusal!(prepared.value, null)
+      if (refusal) return sendRefusal(reply, refusal)
       const before = (await readNodaroMotionNoPerson()).noPerson
       await saveNodaroMotionNoPerson(noPerson, req.userId!)
       await audit(req, "update_nodaro_motion_no_person", "app_setting", NODARO_MOTION_NO_PERSON_AUDIT_TARGET, {

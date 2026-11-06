@@ -32,6 +32,7 @@ import { getPluginSupports } from "../../lib/private-plugins/supports-registry.j
 import { listEngineEnvironments } from "../lib/engine-environments.js"
 import { cannotForceStyleMessage, environmentsThatCannotForceStyle } from "../lib/nodaro-motion-style-gate.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { defineNodaroMotionSettingsSection, sendRefusal } from "../lib/nodaro-motion-settings-section.js"
 import { audit } from "./admin-trends-lifecycle.js"
 import type { NodaroMotionAdminEngine } from "./admin-nodaro-motion.js"
 
@@ -39,6 +40,25 @@ import type { NodaroMotionAdminEngine } from "./admin-nodaro-motion.js"
 export const NODARO_MOTION_STYLE_AUDIT_TARGET = "00000000-0000-4000-8000-00000000a0f7"
 
 const putBody = z.strictObject({ style: nodaroMotionStyleSchema })
+
+/** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): the forced engines only. */
+export const NODARO_MOTION_STYLE_SECTION = defineNodaroMotionSettingsSection({
+  key: "style",
+  path: "/v1/admin/nodaro-motion/style",
+  label: "Style choice",
+  body: putBody,
+  prepare: (body) => ({ value: { style: forcedStyles(body.style) } }),
+  // A forced style is saved only once every environment's engine enforces it (the row is shared by every environment).
+  engineRefusal: async ({ style }) => {
+    if (!anyStyleForced(style)) return null
+    const envs = environmentsThatCannotForceStyle(await listEngineEnvironments())
+    return envs.length > 0 ? { status: 409, error: { code: "engine_unsupported", message: cannotForceStyleMessage(envs), envs } } : null
+  },
+  readLive: async () => {
+    const { style } = await readNodaroMotionStyle()
+    return style === null ? null : { style }
+  },
+})
 
 export interface NodaroMotionStyleView {
   /** null = never saved: people choose on every engine. Only the forced engines are listed. */
@@ -69,17 +89,14 @@ export function registerNodaroMotionStyleRoutes(app: FastifyInstance): void {
   })
 
   app.put("/v1/admin/nodaro-motion/style", { preHandler: requireAdmin }, async (req, reply) => {
-    const parsed = putBody.safeParse(req.body)
+    const parsed = NODARO_MOTION_STYLE_SECTION.body.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
-      const style = forcedStyles(parsed.data.style)
-      // A forced style is saved only once every environment's engine enforces it (the row is shared by every environment).
-      if (anyStyleForced(style)) {
-        const envs = environmentsThatCannotForceStyle(await listEngineEnvironments())
-        if (envs.length > 0) {
-          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotForceStyleMessage(envs), envs } })
-        }
-      }
+      const prepared = NODARO_MOTION_STYLE_SECTION.prepare(parsed.data)
+      if ("refusal" in prepared) return sendRefusal(reply, prepared.refusal)
+      const { style } = prepared.value
+      const refusal = await NODARO_MOTION_STYLE_SECTION.engineRefusal!(prepared.value, null)
+      if (refusal) return sendRefusal(reply, refusal)
       const before = (await readNodaroMotionStyle()).style
       await saveNodaroMotionStyle(style, req.userId!)
       await audit(req, "update_nodaro_motion_style", "app_setting", NODARO_MOTION_STYLE_AUDIT_TARGET, {

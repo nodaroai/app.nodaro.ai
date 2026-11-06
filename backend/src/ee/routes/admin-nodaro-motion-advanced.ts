@@ -21,10 +21,21 @@ import { sendInternalError } from "../../lib/http-errors.js"
 import { NODARO_MOTION_ADVANCED_KEY, advancedShown, nodaroMotionAdvancedSchema } from "../../lib/nodaro-motion-advanced.js"
 import { readNodaroMotionAdvanced, saveNodaroMotionAdvanced } from "../../lib/nodaro-motion-advanced-store.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { defineNodaroMotionSettingsSection, sendRefusal } from "../lib/nodaro-motion-settings-section.js"
 import { audit } from "./admin-trends-lifecycle.js"
 
 /** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Nodaro Motion settings'). */
 export const NODARO_MOTION_ADVANCED_AUDIT_TARGET = "00000000-0000-4000-8000-00000000a0f9"
+
+/** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): the switch alone. */
+export const NODARO_MOTION_ADVANCED_SECTION = defineNodaroMotionSettingsSection({
+  key: "advanced",
+  path: "/v1/admin/nodaro-motion/advanced",
+  label: "Advanced options",
+  body: nodaroMotionAdvancedSchema,
+  prepare: (body) => ({ value: { show: body.show } }),
+  readLive: async () => (await readNodaroMotionAdvanced()).advanced,
+})
 
 export interface NodaroMotionAdvancedView {
   /** Whether a Nodaro Motion page shows its Advanced options; false until an admin turns them on. */
@@ -48,10 +59,12 @@ export function registerNodaroMotionAdvancedRoutes(app: FastifyInstance): void {
   })
 
   app.put("/v1/admin/nodaro-motion/advanced", { preHandler: requireAdmin }, async (req, reply) => {
-    const parsed = nodaroMotionAdvancedSchema.safeParse(req.body)
+    const parsed = NODARO_MOTION_ADVANCED_SECTION.body.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
-      const advanced = { show: parsed.data.show }
+      const prepared = NODARO_MOTION_ADVANCED_SECTION.prepare(parsed.data)
+      if ("refusal" in prepared) return sendRefusal(reply, prepared.refusal)
+      const advanced = prepared.value
       const before = (await readNodaroMotionAdvanced()).advanced
       await saveNodaroMotionAdvanced(advanced, req.userId!)
       await audit(req, "update_nodaro_motion_advanced", "app_setting", NODARO_MOTION_ADVANCED_AUDIT_TARGET, {

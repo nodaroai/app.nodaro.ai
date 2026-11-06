@@ -37,6 +37,7 @@ import { getPluginSupports } from "../../lib/private-plugins/supports-registry.j
 import { listEngineEnvironments } from "../lib/engine-environments.js"
 import { cannotUseNewWordingMessage, environmentsThatCannotUseNewWording } from "../lib/nodaro-motion-prompt-wording-gate.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { defineNodaroMotionSettingsSection, sendRefusal } from "../lib/nodaro-motion-settings-section.js"
 import { audit } from "./admin-trends-lifecycle.js"
 import type { NodaroMotionAdminEngine } from "./admin-nodaro-motion.js"
 
@@ -44,6 +45,25 @@ import type { NodaroMotionAdminEngine } from "./admin-nodaro-motion.js"
 export const NODARO_MOTION_PROMPT_WORDING_AUDIT_TARGET = "00000000-0000-4000-8000-00000000a0f8"
 
 const putBody = z.strictObject({ promptWording: nodaroMotionPromptWordingSchema })
+
+/** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): the engines on "new" only. */
+export const NODARO_MOTION_PROMPT_WORDING_SECTION = defineNodaroMotionSettingsSection({
+  key: "prompt-wording",
+  path: "/v1/admin/nodaro-motion/prompt-wording",
+  label: "Flex prompt wording",
+  body: putBody,
+  prepare: (body) => ({ value: { promptWording: newWordings(body.promptWording) } }),
+  // The new wording is saved only once every environment's engine words it (the row is shared by every environment).
+  engineRefusal: async ({ promptWording }) => {
+    if (!anyNewWording(promptWording)) return null
+    const envs = environmentsThatCannotUseNewWording(await listEngineEnvironments())
+    return envs.length > 0 ? { status: 409, error: { code: "engine_unsupported", message: cannotUseNewWordingMessage(envs), envs } } : null
+  },
+  readLive: async () => {
+    const { promptWording } = await readNodaroMotionPromptWording()
+    return promptWording === null ? null : { promptWording }
+  },
+})
 
 export interface NodaroMotionPromptWordingView {
   /** null = never saved: every engine on the current wording. Only the engines on "new" are listed. */
@@ -74,17 +94,14 @@ export function registerNodaroMotionPromptWordingRoutes(app: FastifyInstance): v
   })
 
   app.put("/v1/admin/nodaro-motion/prompt-wording", { preHandler: requireAdmin }, async (req, reply) => {
-    const parsed = putBody.safeParse(req.body)
+    const parsed = NODARO_MOTION_PROMPT_WORDING_SECTION.body.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
-      const promptWording = newWordings(parsed.data.promptWording)
-      // The new wording is saved only once every environment's engine words it (the row is shared by every environment).
-      if (anyNewWording(promptWording)) {
-        const envs = environmentsThatCannotUseNewWording(await listEngineEnvironments())
-        if (envs.length > 0) {
-          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotUseNewWordingMessage(envs), envs } })
-        }
-      }
+      const prepared = NODARO_MOTION_PROMPT_WORDING_SECTION.prepare(parsed.data)
+      if ("refusal" in prepared) return sendRefusal(reply, prepared.refusal)
+      const { promptWording } = prepared.value
+      const refusal = await NODARO_MOTION_PROMPT_WORDING_SECTION.engineRefusal!(prepared.value, null)
+      if (refusal) return sendRefusal(reply, refusal)
       const before = (await readNodaroMotionPromptWording()).promptWording
       await saveNodaroMotionPromptWording(promptWording, req.userId!)
       await audit(req, "update_nodaro_motion_prompt_wording", "app_setting", NODARO_MOTION_PROMPT_WORDING_AUDIT_TARGET, {

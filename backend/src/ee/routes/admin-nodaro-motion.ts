@@ -26,6 +26,8 @@
  *                                         whether a direct Prism Precise run with an art style runs as Flex, and the accounts that skip it (admin-nodaro-motion-precise-style-route.ts)
  *   GET/PUT /v1/admin/nodaro-motion/advanced
  *                                         whether a Nodaro Motion page shows its Advanced options, one switch for the page (admin-nodaro-motion-advanced.ts)
+ *   GET/POST /v1/admin/nodaro-motion/settings-sets, PUT/DELETE …/settings-sets/:id, POST …/settings-sets/check, …/export, …/:id/live
+ *                                         named copies of every setting above, kept to load as a draft (admin-nodaro-motion-settings-sets.ts)
  *
  * The setting (`nodaro_motion_masking`, lib/nodaro-motion-masking.ts) is how
  * the Cast Swap engine masks faces on every DIRECT run of each engine —
@@ -93,18 +95,20 @@ import { cannotBlurDepthFillMessage, depthFillBlurOfSetting, environmentsThatCan
 import { cannotFillNoneMessage, environmentsThatCannotFillNone, fillsNone } from "../lib/nodaro-motion-fill-none.js"
 import { cannotDrawModelSizesMessage, depthModelSizeOfSetting, environmentsThatCannotDrawModelSizes } from "../lib/nodaro-motion-depth-model-size.js"
 import { audit } from "./admin-trends-lifecycle.js"
-import { registerNodaroMotionPromptPartRoutes } from "./admin-nodaro-motion-prompt-parts.js"
-import { registerNodaroMotionMotionRoutes } from "./admin-nodaro-motion-motion.js"
-import { registerNodaroMotionPulseAudioRoutes } from "./admin-nodaro-motion-pulse-audio.js"
-import { registerNodaroMotionPrismReferenceAudioRoutes } from "./admin-nodaro-motion-prism-reference-audio.js"
-import { registerNodaroMotionStepsRoutes } from "./admin-nodaro-motion-steps.js"
-import { registerNodaroMotionStyleRoutes } from "./admin-nodaro-motion-style.js"
-import { registerNodaroMotionPromptWordingRoutes } from "./admin-nodaro-motion-prompt-wording.js"
-import { registerNodaroMotionStyleOnlyRoutes } from "./admin-nodaro-motion-style-only.js"
-import { registerNodaroMotionPreciseArtStyleRoutes } from "./admin-nodaro-motion-precise-art-style.js"
-import { registerNodaroMotionNoPersonRoutes } from "./admin-nodaro-motion-no-person.js"
-import { registerNodaroMotionPreciseStyleRouteRoutes } from "./admin-nodaro-motion-precise-style-route.js"
-import { registerNodaroMotionAdvancedRoutes } from "./admin-nodaro-motion-advanced.js"
+import { defineNodaroMotionSettingsSection, sendRefusal, type AnyNodaroMotionSettingsSection } from "../lib/nodaro-motion-settings-section.js"
+import { NODARO_MOTION_PROMPT_PARTS_SECTION, registerNodaroMotionPromptPartRoutes } from "./admin-nodaro-motion-prompt-parts.js"
+import { NODARO_MOTION_MOTION_SECTION, registerNodaroMotionMotionRoutes } from "./admin-nodaro-motion-motion.js"
+import { NODARO_MOTION_PULSE_AUDIO_SECTION, registerNodaroMotionPulseAudioRoutes } from "./admin-nodaro-motion-pulse-audio.js"
+import { NODARO_MOTION_PRISM_REFERENCE_AUDIO_SECTION, registerNodaroMotionPrismReferenceAudioRoutes } from "./admin-nodaro-motion-prism-reference-audio.js"
+import { NODARO_MOTION_STEPS_SECTION, registerNodaroMotionStepsRoutes } from "./admin-nodaro-motion-steps.js"
+import { NODARO_MOTION_STYLE_SECTION, registerNodaroMotionStyleRoutes } from "./admin-nodaro-motion-style.js"
+import { NODARO_MOTION_PROMPT_WORDING_SECTION, registerNodaroMotionPromptWordingRoutes } from "./admin-nodaro-motion-prompt-wording.js"
+import { NODARO_MOTION_STYLE_ONLY_SECTION, registerNodaroMotionStyleOnlyRoutes } from "./admin-nodaro-motion-style-only.js"
+import { NODARO_MOTION_PRECISE_ART_STYLE_SECTION, registerNodaroMotionPreciseArtStyleRoutes } from "./admin-nodaro-motion-precise-art-style.js"
+import { NODARO_MOTION_NO_PERSON_SECTION, registerNodaroMotionNoPersonRoutes } from "./admin-nodaro-motion-no-person.js"
+import { NODARO_MOTION_PRECISE_STYLE_ROUTE_SECTION, registerNodaroMotionPreciseStyleRouteRoutes } from "./admin-nodaro-motion-precise-style-route.js"
+import { NODARO_MOTION_ADVANCED_SECTION, registerNodaroMotionAdvancedRoutes } from "./admin-nodaro-motion-advanced.js"
+import { registerNodaroMotionSettingsSetsRoutes } from "./admin-nodaro-motion-settings-sets.js"
 
 /**
  * `admin_actions.target_id` is a NOT NULL uuid, and a deployment-wide setting
@@ -114,6 +118,88 @@ import { registerNodaroMotionAdvancedRoutes } from "./admin-nodaro-motion-advanc
 export const NODARO_MOTION_MASKING_AUDIT_TARGET = "00000000-0000-4000-8000-00000000a0f1"
 
 const putBody = z.strictObject({ masking: nodaroMotionMaskingSchema })
+
+/** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): saved as sent. */
+export const NODARO_MOTION_MASKING_SECTION = defineNodaroMotionSettingsSection({
+  key: "masking",
+  path: "/v1/admin/nodaro-motion/masking",
+  label: "Precise masking",
+  body: putBody,
+  prepare: (body) => ({ value: { masking: body.masking } }),
+  engineRefusal: async ({ masking }) => {
+    // A whole-person entry, or one that draws the face mesh, is saved only once every environment's
+    // engine can do it (the row is shared by every environment).
+    const hides = NODARO_MOTION_ENGINES.some((engine) => hidesWholePeople(masking[engine]))
+    const meshes = NODARO_MOTION_ENGINES.some((engine) => drawsFaceMesh(masking[engine]))
+    // A depth colormap likewise (each map named, once).
+    const colormaps = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => depthColormapOfSetting(masking[engine]) ?? []))]
+    // A depth model size likewise (each size named, once), and the face mesh's parts when not the full mesh.
+    const sizes = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => depthModelSizeOfSetting(masking[engine]) ?? []))]
+    const parts = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => faceMeshPartsOfSetting(masking[engine]) ?? []))]
+    // A blurred depth fill, and the fill "none" (the faces as filmed, the face mesh alone), likewise.
+    const fillBlurs = NODARO_MOTION_ENGINES.some((engine) => depthFillBlurOfSetting(masking[engine]) !== undefined)
+    const nones = NODARO_MOTION_ENGINES.some((engine) => fillsNone(masking[engine]))
+    if (hides || meshes || colormaps.length > 0 || sizes.length > 0 || parts.length > 0 || fillBlurs || nones) {
+      const environments = await listEngineEnvironments()
+      const bodies = hides ? environmentsThatCannotHideBodies(environments) : []
+      if (bodies.length > 0) {
+        return { status: 409, error: { code: "engine_unsupported", message: cannotHideBodiesMessage(bodies), envs: bodies } }
+      }
+      const mesh = meshes ? environmentsThatCannotDrawFaceMesh(environments) : []
+      if (mesh.length > 0) {
+        return { status: 409, error: { code: "engine_unsupported", message: cannotDrawFaceMeshMessage(mesh), envs: mesh } }
+      }
+      const maps = environmentsThatCannotDrawColormaps(environments, colormaps)
+      if (maps.length > 0) {
+        return { status: 409, error: { code: "engine_unsupported", message: cannotDrawColormapsMessage(colormaps, maps), envs: maps } }
+      }
+      const models = environmentsThatCannotDrawModelSizes(environments, sizes)
+      if (models.length > 0) {
+        return { status: 409, error: { code: "engine_unsupported", message: cannotDrawModelSizesMessage(sizes, models), envs: models } }
+      }
+      const partsLacking = environmentsThatCannotDrawFaceMeshParts(environments, parts)
+      if (partsLacking.length > 0) {
+        return { status: 409, error: { code: "engine_unsupported", message: cannotDrawFaceMeshPartsMessage(parts, partsLacking), envs: partsLacking } }
+      }
+      const fillBlur = fillBlurs ? environmentsThatCannotBlurDepthFill(environments) : []
+      if (fillBlur.length > 0) {
+        return { status: 409, error: { code: "engine_unsupported", message: cannotBlurDepthFillMessage(fillBlur), envs: fillBlur } }
+      }
+      const none = nones ? environmentsThatCannotFillNone(environments) : []
+      if (none.length > 0) {
+        return { status: 409, error: { code: "engine_unsupported", message: cannotFillNoneMessage(none), envs: none } }
+      }
+    }
+    return null
+  },
+  readLive: async () => {
+    const { masking } = await readNodaroMotionMasking()
+    return masking === null ? null : { masking }
+  },
+})
+
+/**
+ * Every setting the Admin → Nodaro Motion page edits, one section per save route, in the order a loaded settings set
+ * saves them (admin-nodaro-motion-settings-sets.ts): the Flex wording first (the prompt checks word a Flex run as it
+ * will run), the engine prompt last (its check reads the masking, Motion and steps settings it runs with). A set that
+ * holds both a longer prompt and a masking that makes it longer is saved again once the others are; the page reports
+ * each section's result. `nodaro-motion-settings-sections.test.ts` fails when a Nodaro Motion admin PUT is missing here.
+ */
+export const NODARO_MOTION_SETTINGS_SECTIONS: readonly AnyNodaroMotionSettingsSection[] = [
+  NODARO_MOTION_PROMPT_WORDING_SECTION,
+  NODARO_MOTION_MASKING_SECTION,
+  NODARO_MOTION_MOTION_SECTION,
+  NODARO_MOTION_STEPS_SECTION,
+  NODARO_MOTION_STYLE_SECTION,
+  NODARO_MOTION_PULSE_AUDIO_SECTION,
+  NODARO_MOTION_PRISM_REFERENCE_AUDIO_SECTION,
+  NODARO_MOTION_STYLE_ONLY_SECTION,
+  NODARO_MOTION_PRECISE_ART_STYLE_SECTION,
+  NODARO_MOTION_NO_PERSON_SECTION,
+  NODARO_MOTION_PRECISE_STYLE_ROUTE_SECTION,
+  NODARO_MOTION_ADVANCED_SECTION,
+  NODARO_MOTION_PROMPT_PARTS_SECTION,
+]
 
 /** The engines as the admin screen lists them: public id, name, and the internal engine it runs on. */
 export interface NodaroMotionAdminEngine {
@@ -157,6 +243,7 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
   registerNodaroMotionNoPersonRoutes(app)
   registerNodaroMotionPreciseStyleRouteRoutes(app)
   registerNodaroMotionAdvancedRoutes(app)
+  registerNodaroMotionSettingsSetsRoutes(app, NODARO_MOTION_SETTINGS_SECTIONS)
   app.get("/v1/admin/nodaro-motion/masking", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       return { data: await view() }
@@ -166,52 +253,13 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
   })
 
   app.put("/v1/admin/nodaro-motion/masking", { preHandler: requireAdmin }, async (req, reply) => {
-    const parsed = putBody.safeParse(req.body)
+    const parsed = NODARO_MOTION_MASKING_SECTION.body.safeParse(req.body)
     if (!parsed.success) return badRequest(reply, parsed.error)
     try {
-      // A whole-person entry, or one that draws the face mesh, is saved only once every environment's
-      // engine can do it (the row is shared by every environment).
-      const hides = NODARO_MOTION_ENGINES.some((engine) => hidesWholePeople(parsed.data.masking[engine]))
-      const meshes = NODARO_MOTION_ENGINES.some((engine) => drawsFaceMesh(parsed.data.masking[engine]))
-      // A depth colormap likewise (each map named, once).
-      const colormaps = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => depthColormapOfSetting(parsed.data.masking[engine]) ?? []))]
-      // A depth model size likewise (each size named, once), and the face mesh's parts when not the full mesh.
-      const sizes = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => depthModelSizeOfSetting(parsed.data.masking[engine]) ?? []))]
-      const parts = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => faceMeshPartsOfSetting(parsed.data.masking[engine]) ?? []))]
-      // A blurred depth fill, and the fill "none" (the faces as filmed, the face mesh alone), likewise.
-      const fillBlurs = NODARO_MOTION_ENGINES.some((engine) => depthFillBlurOfSetting(parsed.data.masking[engine]) !== undefined)
-      const nones = NODARO_MOTION_ENGINES.some((engine) => fillsNone(parsed.data.masking[engine]))
-      if (hides || meshes || colormaps.length > 0 || sizes.length > 0 || parts.length > 0 || fillBlurs || nones) {
-        const environments = await listEngineEnvironments()
-        const bodies = hides ? environmentsThatCannotHideBodies(environments) : []
-        if (bodies.length > 0) {
-          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotHideBodiesMessage(bodies), envs: bodies } })
-        }
-        const mesh = meshes ? environmentsThatCannotDrawFaceMesh(environments) : []
-        if (mesh.length > 0) {
-          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawFaceMeshMessage(mesh), envs: mesh } })
-        }
-        const maps = environmentsThatCannotDrawColormaps(environments, colormaps)
-        if (maps.length > 0) {
-          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawColormapsMessage(colormaps, maps), envs: maps } })
-        }
-        const models = environmentsThatCannotDrawModelSizes(environments, sizes)
-        if (models.length > 0) {
-          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawModelSizesMessage(sizes, models), envs: models } })
-        }
-        const partsLacking = environmentsThatCannotDrawFaceMeshParts(environments, parts)
-        if (partsLacking.length > 0) {
-          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawFaceMeshPartsMessage(parts, partsLacking), envs: partsLacking } })
-        }
-        const fillBlur = fillBlurs ? environmentsThatCannotBlurDepthFill(environments) : []
-        if (fillBlur.length > 0) {
-          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotBlurDepthFillMessage(fillBlur), envs: fillBlur } })
-        }
-        const none = nones ? environmentsThatCannotFillNone(environments) : []
-        if (none.length > 0) {
-          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotFillNoneMessage(none), envs: none } })
-        }
-      }
+      const prepared = NODARO_MOTION_MASKING_SECTION.prepare(parsed.data)
+      if ("refusal" in prepared) return sendRefusal(reply, prepared.refusal)
+      const refusal = await NODARO_MOTION_MASKING_SECTION.engineRefusal!(prepared.value, null)
+      if (refusal) return sendRefusal(reply, refusal)
       const before = (await readNodaroMotionMasking()).masking
       // An engine whose masking may lengthen its direct runs' prompt — the masking or the face mesh turning
       // on, or its fill (a fill's guard, the fill none's mesh line), colormap or mesh parts changing

@@ -97,6 +97,7 @@ import type { CastSwapSteps } from "../../lib/cast-swap-steps.js"
 
 /** Whether an engine's steps turn its Precise shot list on (its marker in the Precise prompt). */
 const preciseShotListOn = (s: CastSwapSteps | undefined): boolean => s?.shotList?.precise?.mode === "on"
+import { defineNodaroMotionSettingsSection, sendRefusal } from "../lib/nodaro-motion-settings-section.js"
 import { audit } from "./admin-trends-lifecycle.js"
 import type { NodaroMotionAdminEngine } from "./admin-nodaro-motion.js"
 
@@ -203,6 +204,56 @@ function forLoadedEngine(steps: unknown): unknown {
   return rest
 }
 
+/**
+ * The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): empty entries left out. Its
+ * body is the PUT's envelope around the save's own schema (the PUT parses the two apart to name each problem).
+ */
+export const NODARO_MOTION_STEPS_SECTION = defineNodaroMotionSettingsSection({
+  key: "steps",
+  path: "/v1/admin/nodaro-motion/steps",
+  label: "Preparation steps",
+  body: z.strictObject({ steps: nodaroMotionStepsSaveSchema }),
+  prepare: (body) => ({ value: { steps: withoutEmptySteps(body.steps) } }),
+  engineRefusal: async ({ steps }) => {
+    // Anything set is saved only once every environment's engine takes steps (the row is shared by every environment).
+    // "Body from the clip" Off is safe everywhere and needs nothing.
+    const needing = Object.values(steps).map((entry) => stepsThatNeedTheEngine(entry))
+    if (needing.some((entry) => entry !== undefined)) {
+      const environments = await listEngineEnvironments()
+      const envs = environmentsThatCannotTakeSteps(environments)
+      if (envs.length > 0) {
+        return { status: 409, error: { code: "engine_unsupported", message: cannotTakeStepsMessage(envs), envs } }
+      }
+      // "Body from the clip" On with a prompt of its own likewise, once any engine's entry sets it.
+      if (needing.some((entry) => clipBodyNeedsEngine(entry?.clipBody))) {
+        const lacking = environmentsThatCannotTakeClipBody(environments)
+        if (lacking.length > 0) {
+          return { status: 409, error: { code: "engine_unsupported", message: cannotTakeClipBodyMessage(lacking), envs: lacking } }
+        }
+      }
+      // The shot list away from its defaults likewise.
+      if (needing.some((entry) => shotListNeedsEngine(entry?.shotList))) {
+        const lacking = environmentsThatCannotTakeShotList(environments)
+        if (lacking.length > 0) {
+          return { status: 409, error: { code: "engine_unsupported", message: cannotTakeShotListMessage(lacking), envs: lacking } }
+        }
+      }
+      // "Style the role pictures" On likewise (Off is its default everywhere).
+      if (needing.some((entry) => styleRefsNeedsEngine(entry?.styleRefs))) {
+        const lacking = environmentsThatCannotTakeStyleRefs(environments)
+        if (lacking.length > 0) {
+          return { status: 409, error: { code: "engine_unsupported", message: cannotTakeStyleRefsMessage(lacking), envs: lacking } }
+        }
+      }
+    }
+    return null
+  },
+  readLive: async () => {
+    const { steps } = await readNodaroMotionSteps()
+    return steps === null ? null : { steps }
+  },
+})
+
 export function registerNodaroMotionStepsRoutes(app: FastifyInstance): void {
   app.get("/v1/admin/nodaro-motion/steps", { preHandler: requireAdmin }, async (req, reply) => {
     try {
@@ -218,38 +269,11 @@ export function registerNodaroMotionStepsRoutes(app: FastifyInstance): void {
     const parsed = nodaroMotionStepsSaveSchema.safeParse(envelope.data.steps)
     if (!parsed.success) return stepsRefused(reply, stepsProblems(parsed.error, STEPS_PATH))
     try {
-      const steps = withoutEmptySteps(parsed.data)
-      // Anything set is saved only once every environment's engine takes steps (the row is shared by every environment).
-      // "Body from the clip" Off is safe everywhere and needs nothing.
-      const needing = Object.values(steps).map((entry) => stepsThatNeedTheEngine(entry))
-      if (needing.some((entry) => entry !== undefined)) {
-        const environments = await listEngineEnvironments()
-        const envs = environmentsThatCannotTakeSteps(environments)
-        if (envs.length > 0) {
-          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotTakeStepsMessage(envs), envs } })
-        }
-        // "Body from the clip" On with a prompt of its own likewise, once any engine's entry sets it.
-        if (needing.some((entry) => clipBodyNeedsEngine(entry?.clipBody))) {
-          const lacking = environmentsThatCannotTakeClipBody(environments)
-          if (lacking.length > 0) {
-            return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotTakeClipBodyMessage(lacking), envs: lacking } })
-          }
-        }
-        // The shot list away from its defaults likewise.
-        if (needing.some((entry) => shotListNeedsEngine(entry?.shotList))) {
-          const lacking = environmentsThatCannotTakeShotList(environments)
-          if (lacking.length > 0) {
-            return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotTakeShotListMessage(lacking), envs: lacking } })
-          }
-        }
-        // "Style the role pictures" On likewise (Off is its default everywhere).
-        if (needing.some((entry) => styleRefsNeedsEngine(entry?.styleRefs))) {
-          const lacking = environmentsThatCannotTakeStyleRefs(environments)
-          if (lacking.length > 0) {
-            return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotTakeStyleRefsMessage(lacking), envs: lacking } })
-          }
-        }
-      }
+      const prepared = NODARO_MOTION_STEPS_SECTION.prepare({ steps: parsed.data })
+      if ("refusal" in prepared) return sendRefusal(reply, prepared.refusal)
+      const { steps } = prepared.value
+      const refusal = await NODARO_MOTION_STEPS_SECTION.engineRefusal!(prepared.value, null)
+      if (refusal) return sendRefusal(reply, refusal)
       const before = (await readNodaroMotionSteps()).steps
       // An engine whose Precise shot list turns on adds the list to its Precise runs' prompt: the saved Precise
       // prompt overrides are checked again on a large run (the masking save's rule), refused when they no longer fit.

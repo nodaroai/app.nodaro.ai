@@ -36,7 +36,7 @@
 // until then. Its preview never sends a wording. Save sends the whole draft
 // either way, so stored style-only parts are kept (a key left out is deleted).
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -138,17 +138,29 @@ export function promptPartsToSave(draft: NodaroMotionPromptParts): NodaroMotionP
   return out
 }
 
-export function PromptPartsTabs({ internalNames }: { readonly internalNames: Readonly<Record<AdminTrendEngine, string>> }) {
+export function PromptPartsTabs({
+  internalNames,
+  draft,
+  onDraft: setDraft,
+  wordingDraft,
+  onWordingDraft: setWordingDraft,
+  held = false,
+}: {
+  readonly internalNames: Readonly<Record<AdminTrendEngine, string>>
+  /** The prompt parts' draft, held by the page (a stored set loads it; it starts from what is stored). */
+  readonly draft: NodaroMotionPromptParts
+  readonly onDraft: Dispatch<SetStateAction<NodaroMotionPromptParts>>
+  /** The Flex wording's draft, likewise. */
+  readonly wordingDraft: NodaroMotionPromptWording
+  readonly onWordingDraft: Dispatch<SetStateAction<NodaroMotionPromptWording>>
+  /** A stored set is loaded: it saves whole, through Save all in its banner, never from here. */
+  readonly held?: boolean
+}) {
   const query = useNodaroMotionPromptParts()
   const save = useSaveNodaroMotionPromptParts()
   const motion = useNodaroMotionMotion().data?.motion ?? null
-  const [draft, setDraft] = useState<NodaroMotionPromptParts>({})
   const [problems, setProblems] = useState<PromptPartProblem[]>([])
   const data = query.data
-
-  useEffect(() => {
-    if (data) setDraft(structuredClone(data.promptParts ?? {}))
-  }, [data])
 
   const saved = useMemo(() => JSON.stringify(promptPartsToSave(data?.promptParts ?? {})), [data])
   const next = promptPartsToSave(draft)
@@ -162,10 +174,6 @@ export function PromptPartsTabs({ internalNames }: { readonly internalNames: Rea
   // The style-only set is edited only once every environment's engine runs style-only runs.
   const styleOnlyMissingIn = environmentsThatCannotRunStyleOnly(envs.data)
   const styleOnlyOffered = styleOnlyMissingIn !== undefined && styleOnlyMissingIn.length === 0
-  const [wordingDraft, setWordingDraft] = useState<NodaroMotionPromptWording>({})
-  useEffect(() => {
-    if (wordingQuery.data) setWordingDraft({ ...(wordingQuery.data.promptWording ?? {}) })
-  }, [wordingQuery.data])
   const nextWording = promptWordingToSave(wordingDraft)
   // Never saved reads as the current wording: choosing it then is no change.
   const wordingChanged = !!wordingQuery.data && JSON.stringify(nextWording) !== JSON.stringify(promptWordingToSave(wordingQuery.data.promptWording))
@@ -208,7 +216,10 @@ export function PromptPartsTabs({ internalNames }: { readonly internalNames: Rea
             part. A trend keeps its own.
           </p>
         </div>
-        <Button size="sm" className="min-h-9" disabled={!changed || pending || !data} onClick={() => void onSave()}>
+        <Button size="sm" className="min-h-9" disabled={!changed || pending || !data || held}
+          title={held ? "A stored set is loaded: save it with Save all, or discard it." : undefined}
+          onClick={() => void onSave()}
+        >
           {pending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
           Save engine prompts
         </Button>

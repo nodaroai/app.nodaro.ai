@@ -105,6 +105,7 @@ import { cannotBlurDepthMessage, depthBlurOfSetting, environmentsThatCannotBlurD
 import { motionMaskingPreciseOnlyProblem } from "../lib/nodaro-motion-fill-none.js"
 import { cannotDrawColormapsMessage, depthColormapOfSetting, environmentsThatCannotDrawColormaps } from "../lib/nodaro-motion-depth-colormap.js"
 import { cannotDrawModelSizesMessage, depthModelSizeOfSetting, environmentsThatCannotDrawModelSizes } from "../lib/nodaro-motion-depth-model-size.js"
+import { defineNodaroMotionSettingsSection, sendRefusal } from "../lib/nodaro-motion-settings-section.js"
 import { audit } from "./admin-trends-lifecycle.js"
 import { withCanonicalFaceMeshLayers } from "../../lib/cast-swap-face-mesh-layers.js"
 import {
@@ -155,6 +156,111 @@ function canonicalLayersOf(motion: NodaroMotionMotion): NodaroMotionMotion {
   ) as NodaroMotionMotion
 }
 
+/** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): face mesh layers saved canonically. */
+export const NODARO_MOTION_MOTION_SECTION = defineNodaroMotionSettingsSection({
+  key: "motion",
+  path: "/v1/admin/nodaro-motion/motion",
+  label: "Motion style",
+  body: putBody,
+  prepare: (body) => {
+    // A set of face mesh layers a parts value names is saved as that value (the full mesh: neither key).
+    const motion = canonicalLayersOf(body.motion)
+    // The fill "none" and a depth fill's blur are the Precise setting's alone: refused here, never stored unused.
+    const preciseOnly = NODARO_MOTION_ENGINES.flatMap((engine) => {
+      const problem = motionMaskingPreciseOnlyProblem(motion[engine]?.masking)
+      return problem ? [{ path: `motion.${engine}.masking.${problem.field}`, message: problem.message }] : []
+    })
+    if (preciseOnly.length > 0) {
+      const first = preciseOnly[0]!
+      return { refusal: { status: 400, error: { code: "validation_error", message: `${first.path}: ${first.message}`, issues: preciseOnly } } }
+    }
+    return { value: { motion } }
+  },
+  engineRefusal: async ({ motion }) => {
+    // A whole-person masking, or one that draws the face mesh, is saved only once every environment's
+    // engine can do it (the row is shared by every environment).
+    const hides = NODARO_MOTION_ENGINES.some((engine) => hidesWholePeople(motion[engine]?.masking))
+    const meshes = NODARO_MOTION_ENGINES.some((engine) => drawsFaceMesh(motion[engine]?.masking))
+    const scenes = NODARO_MOTION_ENGINES.flatMap((engine) => {
+      const scene = motion[engine]?.masking ? fullDepthSceneOf(motion[engine]!.masking!) : null
+      return scene && DECLARED_ONLY_SCENES.includes(scene) ? [scene] : []
+    })
+    // A depth colormap likewise (each map named, once).
+    const colormaps = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => depthColormapOfSetting(motion[engine]?.masking) ?? []))]
+    // A depth model size likewise (each size named, once).
+    const sizes = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => depthModelSizeOfSetting(motion[engine]?.masking) ?? []))]
+    // A depth blur, and face mesh parts other than the full mesh (each named, once), likewise.
+    const blurs = NODARO_MOTION_ENGINES.some((engine) => depthBlurOfSetting(motion[engine]?.masking) !== undefined)
+    const parts = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => faceMeshPartsOfSetting(motion[engine]?.masking) ?? []))]
+    // Full depth's smallest face with mesh lines likewise (any value set, 0 included).
+    const minFaces = NODARO_MOTION_ENGINES.some((engine) => faceMeshMinFaceHeightOfSetting(motion[engine]?.masking) !== undefined)
+    // Face mesh layers no parts value names: the engine must draw them, and (carried at all) the platform take them.
+    const layers = NODARO_MOTION_ENGINES.some((engine) => faceMeshLayersOfSetting(motion[engine]?.masking) !== undefined)
+    // And carried at all (where it draws nothing too): held first while any environment's platform does not take it.
+    const maskings = NODARO_MOTION_ENGINES.map((engine) => motion[engine]?.masking)
+    const carried = maskings.some(faceMeshMinFaceHeightCarried) || maskings.some((m) => m?.faceMeshLayers !== undefined)
+    if (hides || meshes || scenes.length > 0 || colormaps.length > 0 || sizes.length > 0 || blurs || parts.length > 0 || minFaces || layers || carried) {
+      const environments = await listEngineEnvironments()
+      // The platform hold: this row is shared, and an older platform drops an entry that carries the key.
+      const held = (await platformHoldOfFaceMeshMinFaceHeight(maskings, "setting", environments)) ?? platformHoldOfFaceMeshLayers(maskings, environments)
+      if (held) return { status: 422, error: held }
+      const bodies = hides ? environmentsThatCannotHideBodies(environments) : []
+      if (bodies.length > 0) {
+        return { status: 409, error: { code: "engine_unsupported", message: cannotHideBodiesMessage(bodies), envs: bodies } }
+      }
+      const mesh = meshes ? environmentsThatCannotDrawFaceMesh(environments) : []
+      if (mesh.length > 0) {
+        return { status: 409, error: { code: "engine_unsupported", message: cannotDrawFaceMeshMessage(mesh), envs: mesh } }
+      }
+      for (const scene of new Set(scenes)) {
+        const lacking = TREND_PUBLISH_ENVIRONMENTS.filter((name) => {
+          const env = environments.find((e) => e.env === name)
+          return !env || !engineTakesScene(env.supports.castSwap, scene)
+        })
+        if (lacking.length > 0) {
+          return {
+            status: 409,
+            error: {
+              code: "engine_unsupported",
+              message: `The Cast Swap engine in ${lacking.join(" and ")} cannot take the scene "${scene}" yet, and this setting is shared by every environment: choose another scene, or wait for the engine.`,
+              envs: lacking,
+            },
+          }
+        }
+      }
+      const maps = environmentsThatCannotDrawColormaps(environments, colormaps)
+      if (maps.length > 0) {
+        return { status: 409, error: { code: "engine_unsupported", message: cannotDrawColormapsMessage(colormaps, maps), envs: maps } }
+      }
+      const models = environmentsThatCannotDrawModelSizes(environments, sizes)
+      if (models.length > 0) {
+        return { status: 409, error: { code: "engine_unsupported", message: cannotDrawModelSizesMessage(sizes, models), envs: models } }
+      }
+      const blur = blurs ? environmentsThatCannotBlurDepth(environments) : []
+      if (blur.length > 0) {
+        return { status: 409, error: { code: "engine_unsupported", message: cannotBlurDepthMessage(blur), envs: blur } }
+      }
+      const partsLacking = environmentsThatCannotDrawFaceMeshParts(environments, parts)
+      if (partsLacking.length > 0) {
+        return { status: 409, error: { code: "engine_unsupported", message: cannotDrawFaceMeshPartsMessage(parts, partsLacking), envs: partsLacking } }
+      }
+      const layersLacking = layers ? environmentsThatCannotDrawFaceMeshLayers(environments) : []
+      if (layersLacking.length > 0) {
+        return { status: 409, error: { code: "engine_unsupported", message: cannotDrawFaceMeshLayersMessage(layersLacking), envs: layersLacking } }
+      }
+      const minFaceLacking = minFaces ? environmentsThatCannotDrawFaceMeshMinFaceHeight(environments) : []
+      if (minFaceLacking.length > 0) {
+        return { status: 409, error: { code: "engine_unsupported", message: cannotDrawFaceMeshMinFaceHeightMessage(minFaceLacking), envs: minFaceLacking } }
+      }
+    }
+    return null
+  },
+  readLive: async () => {
+    const { motion } = await readNodaroMotionMotion()
+    return motion === null ? null : { motion }
+  },
+})
+
 export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
   app.get("/v1/admin/nodaro-motion/motion", { preHandler: requireAdmin }, async (req, reply) => {
     try {
@@ -165,97 +271,14 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
   })
 
   app.put("/v1/admin/nodaro-motion/motion", { preHandler: requireAdmin }, async (req, reply) => {
-    const raw = putBody.safeParse(req.body)
+    const raw = NODARO_MOTION_MOTION_SECTION.body.safeParse(req.body)
     if (!raw.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(raw.error) } })
-    // A set of face mesh layers a parts value names is saved as that value (the full mesh: neither key).
-    const parsed = { data: { motion: canonicalLayersOf(raw.data.motion) } }
-    // The fill "none" and a depth fill's blur are the Precise setting's alone: refused here, never stored unused.
-    const preciseOnly = NODARO_MOTION_ENGINES.flatMap((engine) => {
-      const problem = motionMaskingPreciseOnlyProblem(parsed.data.motion[engine]?.masking)
-      return problem ? [{ path: `motion.${engine}.masking.${problem.field}`, message: problem.message }] : []
-    })
-    if (preciseOnly.length > 0) {
-      const first = preciseOnly[0]!
-      return reply.status(400).send({ error: { code: "validation_error", message: `${first.path}: ${first.message}`, issues: preciseOnly } })
-    }
+    const prepared = NODARO_MOTION_MOTION_SECTION.prepare(raw.data)
+    if ("refusal" in prepared) return sendRefusal(reply, prepared.refusal)
+    const parsed = { data: prepared.value }
     try {
-      // A whole-person masking, or one that draws the face mesh, is saved only once every environment's
-      // engine can do it (the row is shared by every environment).
-      const hides = NODARO_MOTION_ENGINES.some((engine) => hidesWholePeople(parsed.data.motion[engine]?.masking))
-      const meshes = NODARO_MOTION_ENGINES.some((engine) => drawsFaceMesh(parsed.data.motion[engine]?.masking))
-      const scenes = NODARO_MOTION_ENGINES.flatMap((engine) => {
-        const scene = parsed.data.motion[engine]?.masking ? fullDepthSceneOf(parsed.data.motion[engine]!.masking!) : null
-        return scene && DECLARED_ONLY_SCENES.includes(scene) ? [scene] : []
-      })
-      // A depth colormap likewise (each map named, once).
-      const colormaps = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => depthColormapOfSetting(parsed.data.motion[engine]?.masking) ?? []))]
-      // A depth model size likewise (each size named, once).
-      const sizes = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => depthModelSizeOfSetting(parsed.data.motion[engine]?.masking) ?? []))]
-      // A depth blur, and face mesh parts other than the full mesh (each named, once), likewise.
-      const blurs = NODARO_MOTION_ENGINES.some((engine) => depthBlurOfSetting(parsed.data.motion[engine]?.masking) !== undefined)
-      const parts = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => faceMeshPartsOfSetting(parsed.data.motion[engine]?.masking) ?? []))]
-      // Full depth's smallest face with mesh lines likewise (any value set, 0 included).
-      const minFaces = NODARO_MOTION_ENGINES.some((engine) => faceMeshMinFaceHeightOfSetting(parsed.data.motion[engine]?.masking) !== undefined)
-      // Face mesh layers no parts value names: the engine must draw them, and (carried at all) the platform take them.
-      const layers = NODARO_MOTION_ENGINES.some((engine) => faceMeshLayersOfSetting(parsed.data.motion[engine]?.masking) !== undefined)
-      // And carried at all (where it draws nothing too): held first while any environment's platform does not take it.
-      const maskings = NODARO_MOTION_ENGINES.map((engine) => parsed.data.motion[engine]?.masking)
-      const carried = maskings.some(faceMeshMinFaceHeightCarried) || maskings.some((m) => m?.faceMeshLayers !== undefined)
-      if (hides || meshes || scenes.length > 0 || colormaps.length > 0 || sizes.length > 0 || blurs || parts.length > 0 || minFaces || layers || carried) {
-        const environments = await listEngineEnvironments()
-        // The platform hold: this row is shared, and an older platform drops an entry that carries the key.
-        const held = (await platformHoldOfFaceMeshMinFaceHeight(maskings, "setting", environments)) ?? platformHoldOfFaceMeshLayers(maskings, environments)
-        if (held) return reply.status(422).send({ error: held })
-        const bodies = hides ? environmentsThatCannotHideBodies(environments) : []
-        if (bodies.length > 0) {
-          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotHideBodiesMessage(bodies), envs: bodies } })
-        }
-        const mesh = meshes ? environmentsThatCannotDrawFaceMesh(environments) : []
-        if (mesh.length > 0) {
-          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawFaceMeshMessage(mesh), envs: mesh } })
-        }
-        for (const scene of new Set(scenes)) {
-          const lacking = TREND_PUBLISH_ENVIRONMENTS.filter((name) => {
-            const env = environments.find((e) => e.env === name)
-            return !env || !engineTakesScene(env.supports.castSwap, scene)
-          })
-          if (lacking.length > 0) {
-            return reply.status(409).send({
-              error: {
-                code: "engine_unsupported",
-                message: `The Cast Swap engine in ${lacking.join(" and ")} cannot take the scene "${scene}" yet, and this setting is shared by every environment: choose another scene, or wait for the engine.`,
-                envs: lacking,
-              },
-            })
-          }
-        }
-        const maps = environmentsThatCannotDrawColormaps(environments, colormaps)
-        if (maps.length > 0) {
-          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawColormapsMessage(colormaps, maps), envs: maps } })
-        }
-        const models = environmentsThatCannotDrawModelSizes(environments, sizes)
-        if (models.length > 0) {
-          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawModelSizesMessage(sizes, models), envs: models } })
-        }
-        const blur = blurs ? environmentsThatCannotBlurDepth(environments) : []
-        if (blur.length > 0) {
-          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotBlurDepthMessage(blur), envs: blur } })
-        }
-        const partsLacking = environmentsThatCannotDrawFaceMeshParts(environments, parts)
-        if (partsLacking.length > 0) {
-          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawFaceMeshPartsMessage(parts, partsLacking), envs: partsLacking } })
-        }
-        const layersLacking = layers ? environmentsThatCannotDrawFaceMeshLayers(environments) : []
-        if (layersLacking.length > 0) {
-          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawFaceMeshLayersMessage(layersLacking), envs: layersLacking } })
-        }
-        const minFaceLacking = minFaces ? environmentsThatCannotDrawFaceMeshMinFaceHeight(environments) : []
-        if (minFaceLacking.length > 0) {
-          return reply.status(409).send({
-            error: { code: "engine_unsupported", message: cannotDrawFaceMeshMinFaceHeightMessage(minFaceLacking), envs: minFaceLacking },
-          })
-        }
-      }
+      const refusal = await NODARO_MOTION_MOTION_SECTION.engineRefusal!(prepared.value, null)
+      if (refusal) return sendRefusal(reply, refusal)
       // The Motion overrides already saved are re-checked against the new shape (a mode or prompt style
       // change can leave a part unused, or the prompt too long): any problem refuses the save.
       if (loadedEngineHasPromptParts() && loadedEngineHasPromptStyles()) {

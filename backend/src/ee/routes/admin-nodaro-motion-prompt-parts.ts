@@ -97,6 +97,7 @@ import { getPluginSupports } from "../../lib/private-plugins/supports-registry.j
 import { listEngineEnvironments } from "../lib/engine-environments.js"
 import { PULSE_RUNS_NO_STYLE_ONLY_MESSAGE, cannotRunStyleOnlyMessage, environmentsThatCannotRunStyleOnly } from "../lib/nodaro-motion-style-only-gate.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { defineNodaroMotionSettingsSection, sendRefusal, type NodaroMotionSaveRefusal } from "../lib/nodaro-motion-settings-section.js"
 import { audit } from "./admin-trends-lifecycle.js"
 
 /**
@@ -189,16 +190,21 @@ function loadedEngineTakesStyleOnly(): boolean {
   return engineTakesStyleOnly(getPluginSupports().castSwap)
 }
 
-/** Reply 503 for a style-only preview or check on an engine without style-only runs (it would answer the plain Flex set). */
-function styleOnlyUnsupported(reply: FastifyReply) {
-  return reply.status(503).send({
-    error: { code: "engine_unsupported", message: "This environment's Cast Swap engine cannot run style-only runs yet, so it cannot show or check their prompt parts." },
-  })
+/** 503 for a style-only preview or check on an engine without style-only runs (it would answer the plain Flex set). */
+const STYLE_ONLY_UNSUPPORTED: NodaroMotionSaveRefusal = {
+  status: 503,
+  error: { code: "engine_unsupported", message: "This environment's Cast Swap engine cannot run style-only runs yet, so it cannot show or check their prompt parts." },
 }
 
-/** Reply 400 for anything style-only on Pulse (it takes no art style, so the entry would never be read). */
+/** 400 for anything style-only on Pulse (it takes no art style, so the entry would never be read). */
+const PULSE_RUNS_NO_STYLE_ONLY: NodaroMotionSaveRefusal = { status: 400, error: { code: "style_only_engine", message: PULSE_RUNS_NO_STYLE_ONLY_MESSAGE } }
+
+function styleOnlyUnsupported(reply: FastifyReply) {
+  return sendRefusal(reply, STYLE_ONLY_UNSUPPORTED)
+}
+
 function pulseRunsNoStyleOnly(reply: FastifyReply) {
-  return reply.status(400).send({ error: { code: "style_only_engine", message: PULSE_RUNS_NO_STYLE_ONLY_MESSAGE } })
+  return sendRefusal(reply, PULSE_RUNS_NO_STYLE_ONLY)
 }
 
 /** Whether `a` and `b` hold the same texts (both absent counts as the same). */
@@ -225,6 +231,30 @@ async function view() {
     styles: loadedEngineTakesStyleOnly() ? [...NODARO_MOTION_PROMPT_PARTS_KEYS] : [...CAST_SWAP_STYLES],
   }
 }
+
+/** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): the non-empty texts only. */
+export const NODARO_MOTION_PROMPT_PARTS_SECTION = defineNodaroMotionSettingsSection({
+  key: "prompt-parts",
+  path: "/v1/admin/nodaro-motion/prompt-parts",
+  label: "Engine prompt",
+  body: putBody,
+  prepare: (body) => {
+    const next = savedFrom(body.promptParts)
+    if (next["motion-pulse"]?.styleOnly) return { refusal: PULSE_RUNS_NO_STYLE_ONLY }
+    return { value: { promptParts: next } }
+  },
+  // A new or changed style-only entry waits for every environment's engine (an older app drops the entry it holds).
+  engineRefusal: async ({ promptParts }, before) => {
+    if (!setsOrChangesStyleOnly(promptParts, before?.promptParts ?? null)) return null
+    const envs = environmentsThatCannotRunStyleOnly(await listEngineEnvironments())
+    if (envs.length > 0) return { status: 409, error: { code: "engine_unsupported", message: cannotRunStyleOnlyMessage(envs), envs } }
+    return loadedEngineTakesStyleOnly() ? null : STYLE_ONLY_UNSUPPORTED
+  },
+  readLive: async () => {
+    const { promptParts } = await readNodaroMotionPromptParts()
+    return promptParts === null ? null : { promptParts }
+  },
+})
 
 export function registerNodaroMotionPromptPartRoutes(app: FastifyInstance): void {
   app.get("/v1/admin/nodaro-motion/prompt-parts", { preHandler: requireAdmin }, async (req, reply) => {
@@ -266,18 +296,15 @@ export function registerNodaroMotionPromptPartRoutes(app: FastifyInstance): void
   })
 
   app.put("/v1/admin/nodaro-motion/prompt-parts", { preHandler: requireAdmin }, async (req, reply) => {
-    const parsed = putBody.safeParse(req.body)
+    const parsed = NODARO_MOTION_PROMPT_PARTS_SECTION.body.safeParse(req.body)
     if (!parsed.success) return badRequest(reply, parsed.error)
     try {
-      const next = savedFrom(parsed.data.promptParts)
-      if (next["motion-pulse"]?.styleOnly) return pulseRunsNoStyleOnly(reply)
+      const prepared = NODARO_MOTION_PROMPT_PARTS_SECTION.prepare(parsed.data)
+      if ("refusal" in prepared) return sendRefusal(reply, prepared.refusal)
+      const next = prepared.value.promptParts
       const before = (await readNodaroMotionPromptParts()).promptParts
-      // A new or changed style-only entry waits for every environment's engine (an older app drops the entry it holds).
-      if (setsOrChangesStyleOnly(next, before)) {
-        const envs = environmentsThatCannotRunStyleOnly(await listEngineEnvironments())
-        if (envs.length > 0) return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotRunStyleOnlyMessage(envs), envs } })
-        if (!loadedEngineTakesStyleOnly()) return styleOnlyUnsupported(reply)
-      }
+      const refusal = await NODARO_MOTION_PROMPT_PARTS_SECTION.engineRefusal!(prepared.value, before === null ? null : { promptParts: before })
+      if (refusal) return sendRefusal(reply, refusal)
       const problems: DirectRunPromptProblem[] = []
       const motion = (await readNodaroMotionMotion()).motion
       const masking = (await readNodaroMotionMasking()).masking
