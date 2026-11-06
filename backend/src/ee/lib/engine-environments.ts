@@ -52,10 +52,17 @@ export interface PlatformSupports {
    * the full audio), and its schema refuses that draft.
    */
   readonly prismReferenceAudioPitch?: boolean
+  /**
+   * The Motion setting's face mesh layers (`faceMasking.faceMeshLayers`,
+   * lib/cast-swap-face-mesh-layers.ts): its Motion schema takes the key, and
+   * it is sent to an engine that declares it. A build from before refuses the
+   * key, and with it the engine's whole Motion entry.
+   */
+  readonly faceMeshLayers?: boolean
 }
 
 /** This build's `PlatformSupports`, claimed by the heartbeat (frozen: a fact about this build). */
-export const PLATFORM_SUPPORTS: PlatformSupports = Object.freeze({ faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true })
+export const PLATFORM_SUPPORTS: PlatformSupports = Object.freeze({ faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true, faceMeshLayers: true })
 
 /**
  * An environment's platform claim as its heartbeat last wrote it: what its

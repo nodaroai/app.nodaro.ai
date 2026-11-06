@@ -40,6 +40,64 @@ export const VIDEO_FACE_MESH_PARTS = ["full", "features", "mouth", "contours"] a
 export type VideoFaceMeshParts = (typeof VIDEO_FACE_MESH_PARTS)[number]
 
 /**
+ * The face mesh's layers (`VideoFaceMeshRequest.layers`), each drawn or not
+ * on its own:
+ *   - `wireframe`: the thin mesh over the whole face;
+ *   - `eyes`: the eye outlines; `lips`: the lip outline, outer and inner;
+ *   - `contours`: the face oval, both eyebrows and the nose. With it on, every
+ *     line drawn leaves out what the face hides (a turned face's far side);
+ *     with it off, nothing is left out;
+ *   - `irises`: a circle round each iris and a dot at its centre, drawn only
+ *     inside the eye's opening (an eyelid covers it, a closed eye hides it);
+ *   - `bold`: the lines drawn thicker and in a deeper tone. It draws nothing
+ *     of its own: it changes the lines of the other layers.
+ * Every `parts` value is one set of layers (`videoFaceMeshLayersOfParts`),
+ * drawn exactly as that value is.
+ */
+export const VIDEO_FACE_MESH_LAYERS = ["wireframe", "eyes", "lips", "contours", "irises", "bold"] as const
+export type VideoFaceMeshLayer = (typeof VIDEO_FACE_MESH_LAYERS)[number]
+/** The layers that draw lines of their own (all but `bold`): a set needs at least one. */
+export const VIDEO_FACE_MESH_LINE_LAYERS = ["wireframe", "eyes", "lips", "contours", "irises"] as const satisfies readonly VideoFaceMeshLayer[]
+/** A set of layers: each one on when `true`; left out or `false` is off. */
+export type VideoFaceMeshLayers = { readonly [K in VideoFaceMeshLayer]?: boolean }
+
+const PARTS_LAYERS: Readonly<Record<VideoFaceMeshParts, readonly VideoFaceMeshLayer[]>> = {
+  full: ["wireframe", "eyes", "lips"],
+  features: ["eyes", "lips"],
+  mouth: ["lips"],
+  contours: ["eyes", "lips", "contours"],
+}
+
+/** The set of layers a `parts` value draws (left out: `"full"`), a new object with only its layers, each `true`. */
+export function videoFaceMeshLayersOfParts(parts: VideoFaceMeshParts = "full"): VideoFaceMeshLayers {
+  return Object.fromEntries(PARTS_LAYERS[parts].map((l) => [l, true]))
+}
+
+/** The set with only its layers that are on, each `true`, in `VIDEO_FACE_MESH_LAYERS` order: a new object. */
+export function videoFaceMeshLayersOn(layers: VideoFaceMeshLayers | null | undefined): VideoFaceMeshLayers {
+  return Object.fromEntries(VIDEO_FACE_MESH_LAYERS.filter((l) => layers?.[l] === true).map((l) => [l, true]))
+}
+
+/** Whether the set draws any line (a layer other than `bold` on). */
+export function videoFaceMeshLayersDrawLines(layers: VideoFaceMeshLayers | null | undefined): boolean {
+  return VIDEO_FACE_MESH_LINE_LAYERS.some((l) => layers?.[l] === true)
+}
+
+/**
+ * The `parts` value that draws exactly this set of layers, or undefined when
+ * none does (a set only layers can name: the irises, bold lines, the eyes
+ * alone…). `among` limits the values it may answer (a setting that takes only
+ * some of them).
+ */
+export function videoFaceMeshPartsOfLayers(
+  layers: VideoFaceMeshLayers | null | undefined,
+  among: readonly VideoFaceMeshParts[] = VIDEO_FACE_MESH_PARTS,
+): VideoFaceMeshParts | undefined {
+  const on = VIDEO_FACE_MESH_LAYERS.filter((l) => layers?.[l] === true)
+  return among.find((p) => PARTS_LAYERS[p].length === on.length && PARTS_LAYERS[p].every((l) => on.includes(l)))
+}
+
+/**
  * The version of what a face mesh run draws for a given clip and settings:
  * every finished `video-face-mesh` job reports it as `output_data.recipe`,
  * for the caller to record beside a clip it stores with the lines on it (a
@@ -115,6 +173,12 @@ export interface VideoFaceMeshRequest {
    * are drawn as they are in the full mesh (the same tone and width).
    */
   readonly parts?: VideoFaceMeshParts
+  /**
+   * What is drawn, layer by layer (`VIDEO_FACE_MESH_LAYERS`), in place of
+   * `parts` (never both). At least one layer other than `bold`. A set that is
+   * a `parts` value's draws exactly as that value does.
+   */
+  readonly layers?: VideoFaceMeshLayers
 }
 
 /** A finished `video-face-mesh` job's `output_data`. */
@@ -132,5 +196,7 @@ export interface VideoFaceMeshOutput {
   readonly colormap?: VideoDepthColormap
   /** What was drawn when it was not the full mesh (a request with `parts` `"features"` or `"mouth"`); absent = the full mesh. */
   readonly parts?: Exclude<VideoFaceMeshParts, "full">
+  /** The layers drawn, for a request that named `layers` (only those on, each `true`); absent: `parts` says. */
+  readonly layers?: VideoFaceMeshLayers
   readonly recipe: string
 }

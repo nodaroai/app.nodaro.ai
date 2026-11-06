@@ -297,6 +297,7 @@
         "backend/src/lib/cancel-job.ts",
         "backend/src/lib/canvas-result-ids.ts",
         "backend/src/lib/cast-swap-face-masking.ts",
+        "backend/src/lib/cast-swap-face-mesh-layers.ts",
         "backend/src/lib/cast-swap-prism-reference-audio.ts",
         "backend/src/lib/cast-swap-prompt-parts-contract.ts",
         "backend/src/lib/cast-swap-pulse-audio.ts",

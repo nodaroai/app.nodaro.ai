@@ -143,6 +143,32 @@ describe("drawFaceMeshVideo", () => {
     expect(darkenedPixels(join(dir, "contours.mp4"), FACES, 3)).toBeGreaterThan(darkenedPixels(join(dir, "contours-features.mp4"), FACES, 3))
   }, 180_000)
 
+  it("layers: a parts value's set draws that value's exact frames; every layer on draws more than the full mesh", async () => {
+    const decoded = (path: string) => framesOf(path).frames
+    for (const [parts, layers] of [["full", { wireframe: true, eyes: true, lips: true }], ["contours", { eyes: true, lips: true, contours: true }]] as const) {
+      const a = join(dir, `layers-parts-${parts}.mp4`)
+      const b = join(dir, `layers-${parts}.mp4`)
+      const byParts = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, parts, filters: OFF, outputPath: a })
+      const byLayers = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, layers, filters: OFF, outputPath: b })
+      expect([byLayers.frames, byLayers.framesWithFaces, byLayers.facesDrawn]).toEqual([byParts.frames, byParts.framesWithFaces, byParts.facesDrawn])
+      expect(decoded(b)).toEqual(decoded(a))
+    }
+    const all = join(dir, "layers-all.mp4")
+    const r = await drawFaceMeshVideo({
+      videoPath: FACES, drawOnPath: FACES, filters: OFF, outputPath: all,
+      layers: { wireframe: true, eyes: true, lips: true, contours: true, irises: true, bold: true },
+    })
+    expect(r.frames).toBe(26)
+    expect(frames(all)).toBe(26)
+    expect(darkenedPixels(all, FACES, 3)).toBeGreaterThan(darkenedPixels(join(dir, "layers-full.mp4"), FACES, 3))
+    // The irises alone: lines drawn (inside the open eyes), and far fewer than the full mesh's.
+    const irises = join(dir, "layers-irises.mp4")
+    await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, layers: { irises: true }, filters: OFF, outputPath: irises })
+    const irisPixels = changedPerFrame(irises, FACES).reduce((s, n) => s + n, 0)
+    expect(irisPixels).toBeGreaterThan(0)
+    expect(irisPixels).toBeLessThan(changedPerFrame(join(dir, "layers-full.mp4"), FACES).reduce((s, n) => s + n, 0) / 4)
+  }, 300_000)
+
   it("draws nothing outside the mask: an all-black mask draws no face, an all-white one every face", async () => {
     const none = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, maskPath: maskClip("black.mp4", "black", 26), filters: OFF, outputPath: join(dir, "none.mp4") })
     expect(none.facesDrawn).toBe(0)

@@ -25,7 +25,10 @@ import {
   videoDepthColormaps,
   type VideoDepthColormap,
   type VideoDepthModelSize,
+  type VideoFaceMeshLayers,
   type VideoFaceMeshParts,
+  VIDEO_FACE_MESH_LAYERS,
+  videoFaceMeshLayersDrawLines,
 } from "@nodaro/shared/media"
 // Internal only (render-rules, not an Apache grant): a trend face mask's marks and source modes.
 import {
@@ -216,6 +219,19 @@ export interface FaceMasking {
    * (`engineDrawsFaceMeshParts`): the key is stripped for one that does not.
    */
   faceMeshParts?: FaceMaskingFaceMeshParts
+  /**
+   * What the face mesh draws, layer by layer (decided 2026-11-06; the Motion
+   * setting's alone — the Flex runs): any set of `VIDEO_FACE_MESH_LAYERS`
+   * (the wireframe, the eye outlines, the lip outline, the contours, the
+   * irises, bold lines), in place of `faceMeshParts` (never both). Absent =
+   * `faceMeshParts` decides, exactly as before the key existed. Read through
+   * `faceMeshLayersSent` (cast-swap-face-mesh-layers.ts): the face mesh on, a
+   * set that draws a line, and not one a `faceMeshParts` value names (that
+   * one is sent as the value). An engine draws it only when it declares
+   * `castSwap.faceMeshLayers` (`engineDrawsFaceMeshLayers`): the key is
+   * stripped for one that does not.
+   */
+  faceMeshLayers?: VideoFaceMeshLayers
   /**
    * Full depth's face mesh: the smallest face it draws lines on (decided
    * 2026-11-03), the face box's height as a % of the frame's (0–100; 0 = no
@@ -410,6 +426,26 @@ const nodaroMotionShape = {
   faceMeshParts: z.enum(FACE_MASKING_FACE_MESH_PARTS).optional(),
 }
 
+/** A set of face mesh layers (`FaceMasking.faceMeshLayers`): each layer a boolean, nothing else. */
+export const faceMeshLayersSchema = z.strictObject(
+  Object.fromEntries(VIDEO_FACE_MESH_LAYERS.map((l) => [l, z.boolean().optional()])) as { [K in (typeof VIDEO_FACE_MESH_LAYERS)[number]]: z.ZodOptional<z.ZodBoolean> },
+)
+
+/** `faceMeshLayers` never beside `faceMeshParts`, and always a set that draws a line (a layer other than bold). */
+function faceMeshLayersRules(m: FaceMasking, ctx: z.RefinementCtx): void {
+  if (m.faceMeshLayers === undefined) return
+  if (m.faceMeshParts !== undefined) {
+    ctx.addIssue({ code: "custom", path: ["faceMeshLayers"], message: "The face mesh's layers say what it draws in place of its parts: send one of them." })
+  }
+  if (!videoFaceMeshLayersDrawLines(m.faceMeshLayers)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["faceMeshLayers"],
+      message: "The face mesh's layers draw nothing: turn on the wireframe, the eyes, the lips, the contours or the irises (bold only changes their lines).",
+    })
+  }
+}
+
 /**
  * A face masking setting without marks: what a run takes, and Nodaro Motion's
  * defaults (`nodaro_motion_masking`). A direct run's setting masks faces only:
@@ -435,17 +471,19 @@ export const faceMaskingSchema: z.ZodType<FaceMasking> = z
  * `masking`): a face mask, or full depth (with its `scene`), never keep
  * people (a trend's alone) and never marks. Its own keys beside the shared
  * ones (decided 2026-11-02): full depth's `depthBlur` (whole steps within
- * `CAST_SWAP_DEPTH_BLUR_BOUNDS`) and the face mesh's `faceMeshParts`. The
+ * `CAST_SWAP_DEPTH_BLUR_BOUNDS`) and the face mesh's `faceMeshParts`, or
+ * (2026-11-06) its `faceMeshLayers` in their place (this setting's alone). The
  * shape also reads the fill `"none"` and a depth fill's blur (the Precise
  * setting's keys), but its save refuses both on Faces hidden (400,
  * `motionMaskingPreciseOnlyProblem` in ee/lib/nodaro-motion-fill-none.ts): a
  * direct Motion run does not draw them.
  */
 export const faceMaskingMotionSchema: z.ZodType<FaceMasking> = z
-  .strictObject({ ...faceMaskingShape, ...nodaroMotionShape })
+  .strictObject({ ...faceMaskingShape, ...nodaroMotionShape, faceMeshLayers: faceMeshLayersSchema.optional() })
   .refine(faceHeightsInOrder, faceHeightsMessage)
   .superRefine(sourceModeRules)
   .superRefine(fillNoneRules)
+  .superRefine(faceMeshLayersRules)
   .refine((m) => faceMaskingSourceOf(m) !== "keep-people", { path: ["source"], message: "A direct Motion run hides faces or uses full depth: Keep people is a trend setting." })
 
 /** The issue code of role outlines asked for with a depth mode (`faceMaskingWithMarksSchema`), in the issue's `params.code`. */

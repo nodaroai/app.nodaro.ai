@@ -148,6 +148,30 @@ describe("handleVideoFaceMesh", () => {
     }
   })
 
+  it("layers: drawn as named (only those on) and named in the output; none that draws a line, or not an object: parts decides", async () => {
+    const run = async (extra: Record<string, unknown>) => {
+      vi.clearAllMocks()
+      mocks.createWorkDir.mockResolvedValue("/w")
+      mocks.drawFaceMeshVideo.mockResolvedValue({ outputPath: "/w/face-mesh.mp4", width: 720, height: 1280, frames: 505, framesWithFaces: 491, facesDrawn: 841, cpuMs: 20_000 })
+      mocks.shouldSaveJobResult.mockResolvedValue(true)
+      mocks.markJobCompleted.mockResolvedValue(true)
+      await handleVideoFaceMesh(job({ videoUrl: "https://x/clip.mp4", ...extra }), ctx)
+      return { drawn: mocks.drawFaceMeshVideo.mock.calls[0]![0], output: mocks.markJobCompleted.mock.calls[0]![1].output_data }
+    }
+    const named = await run({ layers: { irises: true, eyes: false, bold: true, wireframe: true } })
+    expect(named.drawn).toMatchObject({ layers: { wireframe: true, irises: true, bold: true } })
+    expect(named.drawn.layers).not.toHaveProperty("eyes")
+    expect(named.drawn).not.toHaveProperty("parts")
+    expect(named.output).toMatchObject({ layers: { wireframe: true, irises: true, bold: true }, recipe: VIDEO_FACE_MESH_RECIPE })
+    expect(named.output).not.toHaveProperty("parts")
+    for (const layers of [{ bold: true }, {}, "eyes", null]) {
+      const r = await run({ layers, parts: "mouth" })
+      expect(r.drawn).not.toHaveProperty("layers")
+      expect(r.drawn).toMatchObject({ parts: "mouth" })
+      expect(r.output).not.toHaveProperty("layers")
+    }
+  })
+
   it("a coloured map with no depth render fails deterministically, before anything is downloaded", async () => {
     await expect(handleVideoFaceMesh(job({ videoUrl: "https://x/clip.mp4", colormap: "inferno" }), ctx)).rejects.toBeInstanceOf(DeterministicJobError)
     expect(mocks.downloadFile).not.toHaveBeenCalled()

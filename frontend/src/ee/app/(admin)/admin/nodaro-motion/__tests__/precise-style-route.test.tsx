@@ -22,6 +22,7 @@ import { ENVIRONMENTS, fetchMock, renderWith, resetRoutes, routes, sentTo } from
 import AdminNodaroMotionPage from "../page"
 import {
   PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL,
+  PRECISE_STYLE_ROUTE_MESH_LAYERS_LEGEND,
   PRECISE_STYLE_ROUTE_MESH_WORDING_LABEL,
   PRECISE_STYLE_ROUTE_COLOURS_LABEL,
   PRECISE_STYLE_ROUTE_FACE_MESH_LABEL,
@@ -265,7 +266,7 @@ describe("the routed mesh's parts and wording", { timeout: 20_000 }, () => {
     expect(wording).toHaveValue("motion")
     expect(parts).toHaveAccessibleDescription(/only.*routed to Flex/i)
     expect(wording).toHaveAccessibleDescription(/only.*routed to Flex/i)
-    expect([...(parts as HTMLSelectElement).options].map((o) => o.value)).toEqual(["", "full", "features", "mouth", "contours"])
+    expect([...(parts as HTMLSelectElement).options].map((o) => o.value)).toEqual(["", "full", "features", "mouth", "contours", "layers"])
     expect([...(wording as HTMLSelectElement).options].map((o) => o.value)).toEqual(["motion", "shape"])
   })
 
@@ -294,25 +295,67 @@ describe("the routed mesh's parts and wording", { timeout: 20_000 }, () => {
   })
 })
 
+describe("the routed mesh's layers", { timeout: 20_000 }, () => {
+  it("Choose the layers shows one switch per layer, from the lines chosen before; a set no parts value names saves as layers", async () => {
+    const user = userEvent.setup()
+    routes[`PUT ${URL_}`] = (init) => view(JSON.parse(String(init?.body)).preciseStyleRoute)
+    renderWith(<AdminNodaroMotionPage />)
+    const route = await section()
+    expect(route.queryByRole("group", { name: PRECISE_STYLE_ROUTE_MESH_LAYERS_LEGEND })).not.toBeInTheDocument()
+    await user.selectOptions(route.getByLabelText(PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL), "contours")
+    await user.selectOptions(route.getByLabelText(PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL), "layers")
+    const switches = route.getByRole("group", { name: PRECISE_STYLE_ROUTE_MESH_LAYERS_LEGEND })
+    expect(within(switches).getAllByRole("switch").map((s) => s.getAttribute("aria-checked"))).toEqual(["false", "true", "true", "true", "false", "false"])
+    // A parts value's set (the contours) needs no engine of its own; a set only layers name does.
+    expect(within(switches).queryByRole("status")).not.toBeInTheDocument()
+    await user.click(within(switches).getByRole("switch", { name: "Irises" }))
+    expect(within(switches).getByRole("status")).toHaveTextContent("The Cast Swap engine of staging, production does not draw face mesh layers yet: its routed runs draw the Motion masking's lines until it does.")
+    await user.click(saveButton())
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseStyleRoute: { faceMeshLayers: { eyes: true, lips: true, contours: true, irises: true } } }]))
+  })
+
+  it("a set a parts value names saves as that value (the whole mesh too: it is not the default here)", async () => {
+    const user = userEvent.setup()
+    routes[`PUT ${URL_}`] = (init) => view(JSON.parse(String(init?.body)).preciseStyleRoute)
+    renderWith(<AdminNodaroMotionPage />)
+    const route = await section()
+    await user.selectOptions(route.getByLabelText(PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL), "layers")
+    await user.click(saveButton())
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseStyleRoute: { faceMeshParts: "full" } }]))
+  })
+
+  it("shows saved layers on their switches; bold alone holds Save", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${URL_}`] = () => view({ faceMesh: true, faceMeshLayers: { irises: true, bold: true } })
+    renderWith(<AdminNodaroMotionPage />)
+    const route = await section()
+    await waitFor(() => expect(route.getByLabelText(PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL)).toHaveValue("layers"))
+    const switches = route.getByRole("group", { name: PRECISE_STYLE_ROUTE_MESH_LAYERS_LEGEND })
+    expect(within(switches).getAllByRole("switch").map((s) => s.getAttribute("aria-checked"))).toEqual(["false", "false", "false", "false", "true", "true"])
+    await user.click(within(switches).getByRole("switch", { name: "Irises" }))
+    expect(route.getAllByRole("alert").map((a) => a.textContent)).toContain("The routed face mesh layers draw nothing: turn on a layer other than Bold lines.")
+  })
+})
+
 describe("the pure helpers", () => {
   it("preciseStyleRouteToSaved: Off and a list that is not empty alone", () => {
     expect(preciseStyleRouteToSaved(preciseStyleRouteDraftOf(null))).toEqual({})
-    expect(preciseStyleRouteToSaved({ routing: "on", emailsText: " \n, ", depthBlurText: "", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshWording: "motion" })).toEqual({})
-    expect(preciseStyleRouteToSaved({ routing: "on", emailsText: "", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshWording: "motion" })).toEqual({})
-    expect(preciseStyleRouteToSaved({ routing: "off", emailsText: "A@x.co\na@x.co,b@x.co", depthBlurText: "10", describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" })).toEqual({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"], routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" })
+    expect(preciseStyleRouteToSaved({ routing: "on", emailsText: " \n, ", depthBlurText: "", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toEqual({})
+    expect(preciseStyleRouteToSaved({ routing: "on", emailsText: "", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toEqual({})
+    expect(preciseStyleRouteToSaved({ routing: "off", emailsText: "A@x.co\na@x.co,b@x.co", depthBlurText: "10", describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshLayers: {}, faceMeshWording: "shape" })).toEqual({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"], routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" })
   })
 
   it("preciseStyleRouteDraftOf: what is saved, one address per line", () => {
-    expect(preciseStyleRouteDraftOf({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"], routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "features", faceMeshWording: "shape" })).toEqual({ routing: "off", emailsText: "a@x.co\nb@x.co", depthBlurText: "10", describeColours: false, faceMesh: true, faceMeshParts: "features", faceMeshWording: "shape" })
-    expect(preciseStyleRouteDraftOf({ routedDepthBlur: 10 })).toMatchObject({ depthBlurText: "10", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshWording: "motion" })
-    expect(preciseStyleRouteDraftOf(null)).toEqual({ routing: "on", emailsText: "", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshWording: "motion" })
+    expect(preciseStyleRouteDraftOf({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"], routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "features", faceMeshWording: "shape" })).toEqual({ routing: "off", emailsText: "a@x.co\nb@x.co", depthBlurText: "10", describeColours: false, faceMesh: true, faceMeshParts: "features", faceMeshLayers: { eyes: true, lips: true }, faceMeshWording: "shape" })
+    expect(preciseStyleRouteDraftOf({ routedDepthBlur: 10 })).toMatchObject({ depthBlurText: "10", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })
+    expect(preciseStyleRouteDraftOf(null)).toEqual({ routing: "on", emailsText: "", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: { wireframe: true, eyes: true, lips: true }, faceMeshWording: "motion" })
   })
 
   it("preciseStyleRouteIssues names what is not an email", () => {
-    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "a@x.co\nnope, also nope", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshWording: "motion" })).toHaveLength(1)
-    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "a@x.co", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshWording: "motion" })).toEqual([])
-    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "", depthBlurText: "", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshWording: "motion" })).toEqual([])
-    for (const bad of ["41", "-1", "2.5", "x"]) expect(preciseStyleRouteIssues({ routing: "on", emailsText: "", depthBlurText: bad, describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshWording: "motion" })).toHaveLength(1)
+    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "a@x.co\nnope, also nope", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toHaveLength(1)
+    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "a@x.co", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toEqual([])
+    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "", depthBlurText: "", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toEqual([])
+    for (const bad of ["41", "-1", "2.5", "x"]) expect(preciseStyleRouteIssues({ routing: "on", emailsText: "", depthBlurText: bad, describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toHaveLength(1)
   })
 
   it("environmentsThatCannotRoutePreciseStyle: unknown while loading, else those without the flag", () => {

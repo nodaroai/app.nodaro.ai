@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest"
 import {
+  VIDEO_FACE_MESH_LAYERS,
   VIDEO_FACE_MESH_LIMITS,
+  VIDEO_FACE_MESH_LINE_LAYERS,
   VIDEO_FACE_MESH_PARTS,
   VIDEO_FACE_MESH_PATH,
   VIDEO_FACE_MESH_RECIPE,
   videoFaceMeshCreditId,
   videoFaceMeshCreditIds,
+  videoFaceMeshLayersDrawLines,
+  videoFaceMeshLayersOfParts,
+  videoFaceMeshLayersOn,
+  videoFaceMeshPartsOfLayers,
 } from "../video-face-mesh.js"
 
 describe("video face mesh pricing rows", () => {
@@ -55,5 +61,42 @@ describe("video face mesh pricing rows", () => {
 describe("video face mesh parts", () => {
   it("the full mesh first (the default), then the eye and lip outlines, the lip outline, and the contours", () => {
     expect(VIDEO_FACE_MESH_PARTS).toEqual(["full", "features", "mouth", "contours"])
+  })
+})
+
+describe("video face mesh layers", () => {
+  it("six layers, bold the one that draws no line of its own", () => {
+    expect(VIDEO_FACE_MESH_LAYERS).toEqual(["wireframe", "eyes", "lips", "contours", "irises", "bold"])
+    expect(VIDEO_FACE_MESH_LINE_LAYERS).toEqual(["wireframe", "eyes", "lips", "contours", "irises"])
+  })
+
+  it("every parts value is one set of layers", () => {
+    expect(videoFaceMeshLayersOfParts()).toEqual({ wireframe: true, eyes: true, lips: true })
+    expect(videoFaceMeshLayersOfParts("full")).toEqual({ wireframe: true, eyes: true, lips: true })
+    expect(videoFaceMeshLayersOfParts("features")).toEqual({ eyes: true, lips: true })
+    expect(videoFaceMeshLayersOfParts("mouth")).toEqual({ lips: true })
+    expect(videoFaceMeshLayersOfParts("contours")).toEqual({ eyes: true, lips: true, contours: true })
+  })
+
+  it("a set names its parts value back, whatever its key order or its false keys; one only layers name has none", () => {
+    for (const p of VIDEO_FACE_MESH_PARTS) expect(videoFaceMeshPartsOfLayers(videoFaceMeshLayersOfParts(p))).toBe(p)
+    expect(videoFaceMeshPartsOfLayers({ lips: true, wireframe: true, eyes: true, irises: false })).toBe("full")
+    expect(videoFaceMeshPartsOfLayers({ eyes: true })).toBeUndefined()
+    expect(videoFaceMeshPartsOfLayers({ eyes: true, lips: true, bold: true })).toBeUndefined()
+    expect(videoFaceMeshPartsOfLayers({ eyes: true, lips: true, irises: true })).toBeUndefined()
+    expect(videoFaceMeshPartsOfLayers({})).toBeUndefined()
+    expect(videoFaceMeshPartsOfLayers({ eyes: true, lips: true, contours: true }, ["full", "features", "mouth"])).toBeUndefined()
+  })
+
+  it("the layers on, in order, as a new object; lines need a layer other than bold", () => {
+    const given = { bold: true, eyes: false, wireframe: true }
+    const on = videoFaceMeshLayersOn(given)
+    expect(on).toEqual({ wireframe: true, bold: true })
+    expect(Object.keys(on)).toEqual(["wireframe", "bold"])
+    expect(given).toEqual({ bold: true, eyes: false, wireframe: true })
+    expect(videoFaceMeshLayersOn(undefined)).toEqual({})
+    expect(videoFaceMeshLayersDrawLines({ bold: true })).toBe(false)
+    expect(videoFaceMeshLayersDrawLines({ irises: true })).toBe(true)
+    expect(videoFaceMeshLayersDrawLines(null)).toBe(false)
   })
 })

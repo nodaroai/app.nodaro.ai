@@ -140,6 +140,7 @@ import {
   withFillNoneFor,
   type FaceMasking,
 } from "../cast-swap-face-masking.js"
+import { engineDrawsFaceMeshLayers, withFaceMeshLayersFor } from "../cast-swap-face-mesh-layers.js"
 import { getPluginSupports } from "./supports-registry.js"
 import { withEarlierPromptPartKeys } from "../nodaro-motion-prompt-parts.js"
 import { withEarlierMotionKeys } from "../nodaro-motion-motion.js"
@@ -1622,7 +1623,7 @@ function assertNotLeaseKey(key: string): void {
  * A Nodaro Motion masking setting as this process's Cast Swap engine is
  * answered it (`tk.settings`): the face mesh only for an engine that draws it
  * (`withFaceMeshFor`), and the depth colormap, the depth model size, the
- * depth blur, the face mesh's parts and Full depth's smallest face with mesh
+ * depth blur, the face mesh's parts (or its layers) and Full depth's smallest face with mesh
  * lines only where they change what is drawn AND the engine declares them —
  * else no key, exactly the setting before each existed. The fill `"none"`
  * first (`withFillNoneFor`): to an engine that cannot draw it (or the face
@@ -1631,7 +1632,7 @@ function assertNotLeaseKey(key: string): void {
 function forLoadedEngine<T extends FaceMasking>(m: T, drawsFaceMesh: boolean, cs: ReturnType<typeof getPluginSupports>["castSwap"]): T {
   const fill = withFillNoneFor(m, cs, drawsFaceMesh)
   const parts = withFaceMeshPartsFor(withDepthBlurFor(withDepthModelSizeFor(withDepthColormapFor(withFaceMeshFor(fill, drawsFaceMesh), cs), cs), cs), cs)
-  return withFaceMeshMinFaceHeightFor(parts, cs)
+  return withFaceMeshMinFaceHeightFor(withFaceMeshLayersFor(parts, cs), cs)
 }
 
 /**
@@ -1682,6 +1683,9 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   videoFaceMeshParts: true,
   // POST /v1/video-face-mesh also draws parts "contours" (the face oval, brows, nose, eyes and lips; no wireframe).
   videoFaceMeshContours: true,
+  // POST /v1/video-face-mesh also takes `layers` (any set of the wireframe, eyes, lips, contours, irises and bold
+  // lines) in place of `parts`, and answers them as `output_data.layers`.
+  videoFaceMeshLayers: true,
   // tk.media.pitchTempo takes -24..24 semitones, half steps included, in one pass (providers/video/pitch-tempo.ts
   // `PITCH_SHIFT_MAX_SEMITONES`).
   pitchTempoTwoOctaves: true,
@@ -2353,8 +2357,14 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       nodaroMotionPreciseStyleRoute: async () => {
         const settings = await getAppSettings()
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_precise_style_route: the app settings could not be read")
-        if (!engineRoutesPreciseStyle(getPluginSupports().castSwap)) return null
-        return preciseStyleRouteForPlugin(settings.nodaro_motion_precise_style_route)
+        const cs = getPluginSupports().castSwap
+        if (!engineRoutesPreciseStyle(cs)) return null
+        const route = preciseStyleRouteForPlugin(settings.nodaro_motion_precise_style_route)
+        // Its face mesh layers only to an engine that draws them (one that does not would ignore them): else no key,
+        // and the routed run draws the Flex masking's lines, as before the key existed.
+        if (!route || route.faceMeshLayers === undefined || engineDrawsFaceMeshLayers(cs)) return route
+        const { faceMeshLayers: _layers, ...rest } = route
+        return Object.keys(rest).length > 0 ? rest : null
       },
     },
     deployment: { publicUrl: appBaseUrl() },

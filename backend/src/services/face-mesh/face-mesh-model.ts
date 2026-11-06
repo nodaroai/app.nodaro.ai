@@ -35,7 +35,7 @@ export const FACE_MESH_MODEL_PATH = fileURLToPath(new URL("./model/face_landmark
 export const FACE_MESH_INPUT_SIZE = 256
 /** Points the model answers per face: the face's 468, then the two irises' 5 each (468–477). */
 export const FACE_MESH_MODEL_POINTS = 478
-/** Points drawn per face: the model's first 468, the face mesh's topology (`face-mesh-topology.ts`). The irises are not drawn. */
+/** Points drawn per face: the model's first 468, the face mesh's topology (`face-mesh-topology.ts`); the irises' 10 after them only when the irises are drawn (`face-mesh-irises.ts`). */
 export const FACE_MESH_POINTS = 468
 
 /** The host cannot run the mesh: the model file or the native module is

@@ -46,6 +46,7 @@ import {
   roleOutlinesOn,
 } from "./clip-preparation"
 import { FULL_DEPTH_SCENES } from "./prompt-style"
+import { faceMeshLinesSaved } from "./face-mesh-layers"
 import { normaliseShotList } from "./shot-list"
 import type {
   AdminTrendData,
@@ -310,8 +311,8 @@ export function cleanMasking(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
     // The depth blur: Full depth, or a Faces hidden depth fill, a whole number above 0 (0, or where no depth is drawn,
     // is no key, as before it existed).
     ...(depthBlurKindOf(m) !== null && num(m.depthBlur) && m.depthBlur! > 0 ? { depthBlur: m.depthBlur } : {}),
-    // What the face mesh draws: only with the mesh on and not the full mesh (the default, no key), never with Keep people.
-    ...(m.faceMesh === true && clipPreparationOf(m) !== "keep-people" && m.faceMeshParts && m.faceMeshParts !== "full" ? { faceMeshParts: m.faceMeshParts } : {}),
+    // What the face mesh draws: its parts (not the full mesh, the default) or its layers, only with the mesh on, never Keep people's.
+    ...faceMeshLinesSaved(m, m.faceMesh === true && clipPreparationOf(m) !== "keep-people"),
     // Full depth's smallest face with mesh lines: only with the mesh on, and only when set (empty is the engine's default,
     // no key, as before it existed; 0 and 10 are values).
     ...(faceMeshMinFaceHeightSaved(m) !== undefined ? { faceMeshMinFaceHeightPct: faceMeshMinFaceHeightSaved(m) } : {}),

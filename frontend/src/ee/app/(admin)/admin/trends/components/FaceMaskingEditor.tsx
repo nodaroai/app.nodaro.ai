@@ -84,7 +84,6 @@ import {
 } from "@/components/ui/select"
 import type {
   TrendEngineEnvironment,
-  AdminFaceMeshParts,
   AdminTrendFaceMasking,
   AdminTrendFaceMaskingFill,
   AdminTrendFaceMaskingMode,
@@ -111,6 +110,7 @@ import {
   type FaceMeshMinFaceHeightMissing,
 } from "../clip-preparation"
 import { FullDepthSceneSelect } from "./FullDepthSceneSelect"
+import { FaceMeshLinesChoice } from "./FaceMeshLinesChoice"
 
 const MODES: ReadonlyArray<{ value: AdminTrendFaceMaskingMode; label: string; hint: string }> = [
   { value: "off", label: "Off", hint: "Runs as before: the clip goes to the video model as it is." },
@@ -140,13 +140,6 @@ const FILLS: ReadonlyArray<{ value: AdminTrendFaceMaskingFill; label: string }> 
   { value: "depth", label: "Depth colors" },
   // Admin → Nodaro Motion only (`fillNoneMissingIn`): never offered in a trend's editor.
   { value: "none", label: "None (faces as filmed, face mesh only)" },
-]
-
-/** What the face mesh draws (`faceMeshParts`; the full mesh is the default, saved as no key). */
-const FACE_MESH_PARTS: ReadonlyArray<{ value: AdminFaceMeshParts; label: string; name: string }> = [
-  { value: "full", label: "Full (default)", name: "the full face mesh" },
-  { value: "features", label: "Eyes and mouth", name: "only the eyes and mouth" },
-  { value: "mouth", label: "Mouth only", name: "only the mouth" },
 ]
 
 const COLORMAP_LABELS: Readonly<Record<VideoDepthColormap, string>> = {
@@ -234,6 +227,14 @@ interface Props {
    */
   readonly faceMeshPartsMissingIn?: Readonly<Record<"features" | "mouth", readonly string[]>>
   /**
+   * Admin → Nodaro Motion's Motion column: also offer "Choose the layers"
+   * (one switch per face mesh layer, `faceMeshLayers`) in the face mesh lines'
+   * choice, with the environments that cannot take a set no parts value names
+   * yet — by their engine and by their platform
+   * (`environmentsThatCannotDrawFaceMeshLayers`). Left out: no such choice.
+   */
+  readonly faceMeshLayersMissing?: { readonly engine: readonly string[]; readonly platform: readonly string[] }
+  /**
    * Admin → Nodaro Motion's Motion column and a trend's editor: offer Full
    * depth's smallest face with mesh lines while the face mesh is on, with the
    * environments that cannot take it yet (`faceMeshMinFaceHeightMissing`): by
@@ -280,6 +281,7 @@ export function FaceMaskingEditor({
   depthModelSizesMissingIn,
   depthBlurMissingIn,
   faceMeshPartsMissingIn,
+  faceMeshLayersMissing,
   faceMeshMinFaceHeightMissing,
   fillNoneMissingIn,
   depthFillBlurMissingIn,
@@ -375,12 +377,7 @@ export function FaceMaskingEditor({
   const depthBlurUnsupported = (blurMissingIn?.length ?? 0) > 0
   const blurred = blurKind === "depth-fill" ? "depth fill" : "depth map"
   // What the face mesh draws (Admin → Nodaro Motion's Motion column), under its switch while it is on.
-  const meshParts: AdminFaceMeshParts = value?.faceMeshParts ?? "full"
-  const meshPartsShown = meshOn && !keepPeople && (faceMeshPartsMissingIn !== undefined || meshParts !== "full")
-  const meshPartOffered = (p: AdminFaceMeshParts) => p === "full" || (faceMeshPartsMissingIn ? faceMeshPartsMissingIn[p].length === 0 : false)
-  const meshPartsUnsupported = !meshPartOffered(meshParts)
-  const noMeshPartOffered = FACE_MESH_PARTS.every((p) => p.value === "full" || !meshPartOffered(p.value))
-  const meshPartsLacking = faceMeshPartsMissingIn ? [...new Set([...faceMeshPartsMissingIn.features, ...faceMeshPartsMissingIn.mouth])] : []
+  const meshPartsShown = meshOn && !keepPeople && (faceMeshPartsMissingIn !== undefined || (value?.faceMeshParts ?? "full") !== "full" || value?.faceMeshLayers !== undefined)
   // Full depth's smallest face with mesh lines, under the switch while it is on. One already set stays shown (and can be
   // emptied) whatever the engines say; empty is the engine's default, saved as no key.
   const minFace = value?.faceMeshMinFaceHeightPct
@@ -401,7 +398,6 @@ export function FaceMaskingEditor({
   const outlinesId = `${id}-role-outlines`
   const colormapId = `${id}-depth-colormap`
   const modelSizeId = `${id}-depth-model-size`
-  const meshPartsId = `${id}-face-mesh-parts`
 
   return (
     <div className="flex flex-col gap-3">
@@ -590,7 +586,11 @@ export function FaceMaskingEditor({
               // Off removes the key (and what the mesh draws, and its smallest face): a setting without the mesh is saved
               // exactly as before it existed.
               onCheckedChange={(checked) =>
-                set(checked === true ? { faceMesh: true } : { faceMesh: undefined, faceMeshParts: undefined, faceMeshMinFaceHeightPct: undefined })
+                set(
+                  checked === true
+                    ? { faceMesh: true }
+                    : { faceMesh: undefined, faceMeshParts: undefined, faceMeshLayers: undefined, faceMeshMinFaceHeightPct: undefined },
+                )
               }
             />
             <label htmlFor={faceMeshId} className="font-medium">
@@ -610,42 +610,7 @@ export function FaceMaskingEditor({
             </span>
           )}
           {meshPartsShown && (
-            <div className="flex flex-col gap-1 sm:w-1/2 sm:pr-1.5">
-              <label htmlFor={meshPartsId} className="font-medium">
-                Face mesh lines
-              </label>
-              <Select
-                value={meshParts}
-                disabled={noMeshPartOffered && meshParts === "full"}
-                // The full mesh is no key: a setting without the choice is saved exactly as before it existed.
-                onValueChange={(p) => set({ faceMeshParts: p === "full" ? undefined : (p as AdminFaceMeshParts) })}
-              >
-                <SelectTrigger id={meshPartsId} className="h-9" aria-describedby={`${meshPartsId}-hint`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {FACE_MESH_PARTS.map((p) => (
-                    <SelectItem key={p.value} value={p.value} disabled={!meshPartOffered(p.value) && p.value !== meshParts}>
-                      {p.label}
-                      {!meshPartOffered(p.value) ? " (not supported yet)" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <span id={`${meshPartsId}-hint`} className="text-xs text-muted-foreground">
-                What is drawn on each face: the full mesh, only the eye and lip outlines, or only the lip outline. The prompt names only what is drawn.
-              </span>
-              {meshPartsUnsupported && (
-                <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
-                  {`The Cast Swap engine of ${faceMeshPartsMissingIn ? faceMeshPartsMissingIn[meshParts as "features" | "mouth"].join(", ") : "an environment"} cannot draw ${FACE_MESH_PARTS.find((p) => p.value === meshParts)!.name} of the face mesh yet, and this setting is shared by every environment: choose Full to save.`}
-                </span>
-              )}
-              {!meshPartsUnsupported && noMeshPartOffered && meshPartsLacking.length > 0 && (
-                <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
-                  {`The Cast Swap engine of ${meshPartsLacking.join(", ")} cannot draw only parts of the face mesh yet, and this setting is shared by every environment.`}
-                </span>
-              )}
-            </div>
+            <FaceMeshLinesChoice value={value} set={set} faceMeshPartsMissingIn={faceMeshPartsMissingIn} faceMeshLayersMissing={faceMeshLayersMissing} />
           )}
           {minFaceShown && (
             <div className="flex flex-col gap-1 sm:w-1/2 sm:pr-1.5">

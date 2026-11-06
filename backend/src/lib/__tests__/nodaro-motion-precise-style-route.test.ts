@@ -206,3 +206,34 @@ describe("nodaro-motion-precise-style-route: faceMeshParts and faceMeshWording",
     expect(warn).toHaveBeenCalledTimes(2)
   })
 })
+
+describe("nodaro-motion-precise-style-route: faceMeshLayers", () => {
+  const parse = (v: unknown) => nodaroMotionPreciseStyleRouteSchema.safeParse(v)
+
+  it("saves a set of layers; never beside parts, never a set that draws nothing, never an unknown layer", () => {
+    expect(parse({ faceMesh: true, faceMeshLayers: { irises: true, bold: true } }).data).toEqual({ faceMesh: true, faceMeshLayers: { irises: true, bold: true } })
+    for (const bad of [
+      { faceMeshLayers: { eyes: true }, faceMeshParts: "full" },
+      { faceMeshLayers: { bold: true } },
+      { faceMeshLayers: {} },
+      { faceMeshLayers: { nose: true } },
+    ]) expect(parse(bad).success, JSON.stringify(bad)).toBe(false)
+  })
+
+  it("stores and answers a set a parts value names as that value (contours included); any other with only its layers on", () => {
+    expect(withoutDefaultPreciseStyleRoute({ faceMeshLayers: { wireframe: true, eyes: true, lips: true } })).toEqual({ faceMeshParts: "full" })
+    expect(withoutDefaultPreciseStyleRoute({ faceMeshLayers: { eyes: true, lips: true, contours: true, irises: false } })).toEqual({ faceMeshParts: "contours" })
+    expect(withoutDefaultPreciseStyleRoute({ faceMeshLayers: { contours: true, irises: true, wireframe: false } })).toEqual({ faceMeshLayers: { contours: true, irises: true } })
+    expect(withoutDefaultPreciseStyleRoute({ faceMeshLayers: { bold: true } })).toEqual({})
+    expect(preciseStyleRouteForPlugin({ faceMesh: true, faceMeshLayers: { irises: true } })).toEqual({ faceMesh: true, faceMeshLayers: { irises: true } })
+  })
+
+  it("reads tolerantly: unknown layers ignored, a set that draws nothing dropped with a warning", () => {
+    const warn = vi.fn()
+    expect(parseNodaroMotionPreciseStyleRoute({ faceMeshLayers: { irises: true, nose: true } }, warn)).toEqual({ faceMeshLayers: { irises: true } })
+    expect(warn).not.toHaveBeenCalled()
+    expect(parseNodaroMotionPreciseStyleRoute({ routing: "off", faceMeshLayers: { bold: true } }, warn)).toEqual({ routing: "off" })
+    expect(parseNodaroMotionPreciseStyleRoute({ faceMeshLayers: "irises" }, warn)).toEqual({})
+    expect(warn).toHaveBeenCalled()
+  })
+})

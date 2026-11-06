@@ -69,7 +69,7 @@ import { CAST_SWAP_PROMPT_STYLES } from "@nodaro/render-rules"
 import { CAST_SWAP_ENGINE_OF_NODARO_MOTION, NODARO_MOTION_ENGINES, NODARO_MOTION_ENGINE_NAMES } from "@nodaro/shared/models"
 import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"
-import { NODARO_MOTION_MOTION_KEY, nodaroMotionMotionSchema } from "../../lib/nodaro-motion-motion.js"
+import { NODARO_MOTION_MOTION_KEY, nodaroMotionMotionSchema, type NodaroMotionMotion } from "../../lib/nodaro-motion-motion.js"
 import { readNodaroMotionMotion, saveNodaroMotionMotion } from "../../lib/nodaro-motion-motion-store.js"
 import { readNodaroMotionPromptParts } from "../../lib/nodaro-motion-prompt-parts-store.js"
 import { readNodaroMotionMasking } from "../../lib/nodaro-motion-masking-store.js"
@@ -106,6 +106,13 @@ import { motionMaskingPreciseOnlyProblem } from "../lib/nodaro-motion-fill-none.
 import { cannotDrawColormapsMessage, depthColormapOfSetting, environmentsThatCannotDrawColormaps } from "../lib/nodaro-motion-depth-colormap.js"
 import { cannotDrawModelSizesMessage, depthModelSizeOfSetting, environmentsThatCannotDrawModelSizes } from "../lib/nodaro-motion-depth-model-size.js"
 import { audit } from "./admin-trends-lifecycle.js"
+import { withCanonicalFaceMeshLayers } from "../../lib/cast-swap-face-mesh-layers.js"
+import {
+  cannotDrawFaceMeshLayersMessage,
+  environmentsThatCannotDrawFaceMeshLayers,
+  faceMeshLayersOfSetting,
+  platformHoldOfFaceMeshLayers,
+} from "../lib/nodaro-motion-face-mesh-layers.js"
 
 /** The Full depth scenes an engine must list before a shared setting may name them (newer than the setting's scenes). */
 const DECLARED_ONLY_SCENES: readonly FaceMaskingScene[] = ["description-and-original"]
@@ -141,6 +148,13 @@ function engineSupports() {
   }
 }
 
+/** The setting with each engine's face mesh layers saved canonically (`withCanonicalFaceMeshLayers`). A new object. */
+function canonicalLayersOf(motion: NodaroMotionMotion): NodaroMotionMotion {
+  return Object.fromEntries(
+    Object.entries(motion).map(([engine, entry]) => [engine, entry?.masking ? { ...entry, masking: withCanonicalFaceMeshLayers(entry.masking) } : entry]),
+  ) as NodaroMotionMotion
+}
+
 export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
   app.get("/v1/admin/nodaro-motion/motion", { preHandler: requireAdmin }, async (req, reply) => {
     try {
@@ -151,8 +165,10 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
   })
 
   app.put("/v1/admin/nodaro-motion/motion", { preHandler: requireAdmin }, async (req, reply) => {
-    const parsed = putBody.safeParse(req.body)
-    if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
+    const raw = putBody.safeParse(req.body)
+    if (!raw.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(raw.error) } })
+    // A set of face mesh layers a parts value names is saved as that value (the full mesh: neither key).
+    const parsed = { data: { motion: canonicalLayersOf(raw.data.motion) } }
     // The fill "none" and a depth fill's blur are the Precise setting's alone: refused here, never stored unused.
     const preciseOnly = NODARO_MOTION_ENGINES.flatMap((engine) => {
       const problem = motionMaskingPreciseOnlyProblem(parsed.data.motion[engine]?.masking)
@@ -180,13 +196,15 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
       const parts = [...new Set(NODARO_MOTION_ENGINES.flatMap((engine) => faceMeshPartsOfSetting(parsed.data.motion[engine]?.masking) ?? []))]
       // Full depth's smallest face with mesh lines likewise (any value set, 0 included).
       const minFaces = NODARO_MOTION_ENGINES.some((engine) => faceMeshMinFaceHeightOfSetting(parsed.data.motion[engine]?.masking) !== undefined)
+      // Face mesh layers no parts value names: the engine must draw them, and (carried at all) the platform take them.
+      const layers = NODARO_MOTION_ENGINES.some((engine) => faceMeshLayersOfSetting(parsed.data.motion[engine]?.masking) !== undefined)
       // And carried at all (where it draws nothing too): held first while any environment's platform does not take it.
       const maskings = NODARO_MOTION_ENGINES.map((engine) => parsed.data.motion[engine]?.masking)
-      const carried = maskings.some(faceMeshMinFaceHeightCarried)
-      if (hides || meshes || scenes.length > 0 || colormaps.length > 0 || sizes.length > 0 || blurs || parts.length > 0 || minFaces || carried) {
+      const carried = maskings.some(faceMeshMinFaceHeightCarried) || maskings.some((m) => m?.faceMeshLayers !== undefined)
+      if (hides || meshes || scenes.length > 0 || colormaps.length > 0 || sizes.length > 0 || blurs || parts.length > 0 || minFaces || layers || carried) {
         const environments = await listEngineEnvironments()
         // The platform hold: this row is shared, and an older platform drops an entry that carries the key.
-        const held = await platformHoldOfFaceMeshMinFaceHeight(maskings, "setting", environments)
+        const held = (await platformHoldOfFaceMeshMinFaceHeight(maskings, "setting", environments)) ?? platformHoldOfFaceMeshLayers(maskings, environments)
         if (held) return reply.status(422).send({ error: held })
         const bodies = hides ? environmentsThatCannotHideBodies(environments) : []
         if (bodies.length > 0) {
@@ -226,6 +244,10 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
         const partsLacking = environmentsThatCannotDrawFaceMeshParts(environments, parts)
         if (partsLacking.length > 0) {
           return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawFaceMeshPartsMessage(parts, partsLacking), envs: partsLacking } })
+        }
+        const layersLacking = layers ? environmentsThatCannotDrawFaceMeshLayers(environments) : []
+        if (layersLacking.length > 0) {
+          return reply.status(409).send({ error: { code: "engine_unsupported", message: cannotDrawFaceMeshLayersMessage(layersLacking), envs: layersLacking } })
         }
         const minFaceLacking = minFaces ? environmentsThatCannotDrawFaceMeshMinFaceHeight(environments) : []
         if (minFaceLacking.length > 0) {

@@ -77,6 +77,21 @@ describe("cropToFrame", () => {
     expect(out[2 * 467 + 1]).toBeCloseTo(y / H)
   })
 
+  it("landmarksToFrame reads all 478 points when asked (the irises drawn), the face's 468 the same as without", () => {
+    const roi = { cx: 200, cy: 100, size: 100, angle: 0.3 }
+    const lm = Float32Array.from({ length: FACE_MESH_MODEL_POINTS * 3 }, (_, i) => (i * 7) % 256)
+    const face = landmarksToFrame(lm, roi, W, H)
+    const all = landmarksToFrame(lm, roi, W, H, 256, FACE_MESH_MODEL_POINTS)
+    expect(all).toHaveLength(478 * 2)
+    expect(all.subarray(0, 468 * 2)).toEqual(face)
+    const [x, y] = cropToFrame(roi, lm[3 * 473]!, lm[3 * 473 + 1]!)
+    expect(all[2 * 473]).toBeCloseTo(x / W)
+    expect(all[2 * 473 + 1]).toBeCloseTo(y / H)
+    const depths = landmarkDepths(lm, roi, 256, FACE_MESH_MODEL_POINTS)
+    expect(depths).toHaveLength(478)
+    expect(depths.subarray(0, 468)).toEqual(landmarkDepths(lm, roi))
+  })
+
   it("landmarksToFrame refuses the former model's 468-point layout (or any other length)", () => {
     const roi = { cx: 200, cy: 100, size: 100, angle: 0 }
     expect(() => landmarksToFrame(new Float32Array(468 * 3), roi, W, H)).toThrow(/478/)

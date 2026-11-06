@@ -17,7 +17,10 @@
 import { useId } from "react"
 import type { NodaroMotionPreciseStyleRoute, TrendEngineEnvironment } from "@/lib/api"
 import { DEPTH_BLUR_BOUNDS } from "../../trends/model"
-import { environmentsThatCannotRoutePreciseStyle } from "../../trends/clip-preparation"
+import { environmentsThatCannotDrawFaceMeshLayers, environmentsThatCannotRoutePreciseStyle } from "../../trends/clip-preparation"
+import type { VideoFaceMeshLayers } from "@nodaro/shared/media"
+import { layersDrawLines, layersOfSetting, savedFormOfLayers } from "../../trends/face-mesh-layers"
+import { FaceMeshLayerSwitches } from "../../trends/components/FaceMeshLayerSwitches"
 
 export const PRECISE_STYLE_ROUTE_LEGEND = "Precise runs with an art style: run as Flex"
 
@@ -51,7 +54,7 @@ const PRECISE_STYLE_ROUTE_FACE_MESH_HINT =
 export const PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL = "What the routed face mesh draws"
 
 const PRECISE_STYLE_ROUTE_MESH_PARTS_HINT =
-  "Applies only to Precise runs with an art style that are routed to Flex, while their face mesh is on. Contours: the face outline, eyebrows, nose, eyes and lips, without the wireframe."
+  "Applies only to Precise runs with an art style that are routed to Flex, while their face mesh is on. Contours: the face outline, eyebrows, nose, eyes and lips, without the wireframe. Choose the layers: one switch per layer, any combination."
 
 const MESH_PARTS_OPTIONS: ReadonlyArray<{ value: PreciseStyleRouteDraft["faceMeshParts"]; label: string }> = [
   { value: "", label: "As the Motion masking (today's)" },
@@ -59,7 +62,10 @@ const MESH_PARTS_OPTIONS: ReadonlyArray<{ value: PreciseStyleRouteDraft["faceMes
   { value: "features", label: "Eye and lip outlines" },
   { value: "mouth", label: "Lip outline" },
   { value: "contours", label: "Contours" },
+  { value: "layers", label: "Choose the layers" },
 ]
+
+export const PRECISE_STYLE_ROUTE_MESH_LAYERS_LEGEND = "Routed face mesh layers"
 
 export const PRECISE_STYLE_ROUTE_MESH_WORDING_LABEL = "How the prompt words the routed face mesh"
 
@@ -83,8 +89,10 @@ export interface PreciseStyleRouteDraft {
   depthBlurText: string
   describeColours: boolean
   faceMesh: boolean
-  /** "" = as the Motion masking (nothing saved). */
-  faceMeshParts: "" | NonNullable<NodaroMotionPreciseStyleRoute["faceMeshParts"]>
+  /** "" = as the Motion masking (nothing saved); "layers" = the switches (`faceMeshLayers`). */
+  faceMeshParts: "" | "layers" | NonNullable<NodaroMotionPreciseStyleRoute["faceMeshParts"]>
+  /** The switches' layers (read only with "layers"); they start from what is drawn. */
+  faceMeshLayers: VideoFaceMeshLayers
   faceMeshWording: "motion" | "shape"
 }
 
@@ -92,7 +100,8 @@ export interface PreciseStyleRouteDraft {
 export function preciseStyleRouteDraftOf(saved: NodaroMotionPreciseStyleRoute | null | undefined): PreciseStyleRouteDraft {
   return { routing: saved?.routing === "off" ? "off" : "on", emailsText: (saved?.bypassEmails ?? []).join("\n"), depthBlurText: String(saved?.routedDepthBlur ?? 0), describeColours: saved?.describeColours !== false,
     faceMesh: saved?.faceMesh === true,
-    faceMeshParts: saved?.faceMeshParts ?? "",
+    faceMeshParts: saved?.faceMeshLayers ? "layers" : (saved?.faceMeshParts ?? ""),
+    faceMeshLayers: layersOfSetting(saved),
     faceMeshWording: saved?.faceMeshWording === "shape" ? "shape" : "motion",
   }
 }
@@ -125,7 +134,9 @@ export function preciseStyleRouteToSaved(draft: PreciseStyleRouteDraft): NodaroM
   if (blur !== undefined && blur > 0) out.routedDepthBlur = blur
   if (!draft.describeColours) out.describeColours = false
   if (draft.faceMesh) out.faceMesh = true
-  if (draft.faceMeshParts !== "") out.faceMeshParts = draft.faceMeshParts
+  // The layers are saved as the parts value that names them (the whole mesh too: it is not the default here).
+  if (draft.faceMeshParts === "layers") Object.assign(out, savedFormOfLayers(draft.faceMeshLayers, ["full", "features", "mouth", "contours"], { fullIsDefault: false }))
+  else if (draft.faceMeshParts !== "") out.faceMeshParts = draft.faceMeshParts
   if (draft.faceMeshWording === "shape") out.faceMeshWording = "shape"
   return out
 }
@@ -136,6 +147,7 @@ export function preciseStyleRouteIssues(draft: PreciseStyleRouteDraft): string[]
   return [
     ...(bad.length > 0 ? [`Not an email: ${bad.join(", ")}`] : []),
     ...(depthBlurOf(draft.depthBlurText) === undefined ? [`The depth blur must be a whole number from ${DEPTH_BLUR_BOUNDS.min} to ${DEPTH_BLUR_BOUNDS.max}.`] : []),
+    ...(draft.faceMeshParts === "layers" && !layersDrawLines(draft.faceMeshLayers) ? ["The routed face mesh layers draw nothing: turn on a layer other than Bold lines."] : []),
   ]
 }
 
@@ -154,6 +166,9 @@ export function PreciseStyleRouteColumn({ value, onChange, envs, supported, erro
   const id = useId()
   const missing = environmentsThatCannotRoutePreciseStyle(envs)
   const issues = preciseStyleRouteIssues(value)
+  // A set only layers name reaches only an engine that draws layers: elsewhere routed runs draw the Motion masking's lines.
+  const onlyLayers = value.faceMeshParts === "layers" && savedFormOfLayers(value.faceMeshLayers, ["full", "features", "mouth", "contours"]).faceMeshLayers !== undefined
+  const layersMissing = onlyLayers ? (environmentsThatCannotDrawFaceMeshLayers(envs)?.engine ?? []) : []
   return (
     <fieldset className="flex min-w-0 flex-col gap-2 text-sm" data-testid="precise-style-route-column">
       <legend className="font-medium">{PRECISE_STYLE_ROUTE_LEGEND}</legend>
@@ -265,7 +280,12 @@ export function PreciseStyleRouteColumn({ value, onChange, envs, supported, erro
           className="h-11 w-full min-w-0 rounded-md border bg-background px-2 text-base sm:h-9 sm:w-auto sm:text-sm"
           aria-describedby={`${id}-mesh-parts-hint`}
           value={value.faceMeshParts}
-          onChange={(e) => onChange({ ...value, faceMeshParts: e.target.value as PreciseStyleRouteDraft["faceMeshParts"] })}
+          onChange={(e) => {
+            const next = e.target.value as PreciseStyleRouteDraft["faceMeshParts"]
+            // "Choose the layers" starts from the lines chosen before it (the whole mesh after "as the Motion masking").
+            const from = value.faceMeshParts === "layers" ? value.faceMeshLayers : layersOfSetting({ faceMeshParts: value.faceMeshParts === "" ? undefined : value.faceMeshParts })
+            onChange({ ...value, faceMeshParts: next, faceMeshLayers: from })
+          }}
         >
           {MESH_PARTS_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -277,6 +297,19 @@ export function PreciseStyleRouteColumn({ value, onChange, envs, supported, erro
           {PRECISE_STYLE_ROUTE_MESH_PARTS_HINT}
         </span>
       </div>
+      {value.faceMeshParts === "layers" && (
+        <FaceMeshLayerSwitches
+          legend={PRECISE_STYLE_ROUTE_MESH_LAYERS_LEGEND}
+          value={value.faceMeshLayers}
+          onChange={(faceMeshLayers) => onChange({ ...value, faceMeshLayers })}
+        >
+          {layersMissing.length > 0 && (
+            <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+              {`The Cast Swap engine of ${layersMissing.join(", ")} does not draw face mesh layers yet: its routed runs draw the Motion masking's lines until it does.`}
+            </span>
+          )}
+        </FaceMeshLayerSwitches>
+      )}
       <div className="flex min-w-0 flex-col gap-1">
         <label htmlFor={`${id}-mesh-wording`} className="font-medium">
           {PRECISE_STYLE_ROUTE_MESH_WORDING_LABEL}

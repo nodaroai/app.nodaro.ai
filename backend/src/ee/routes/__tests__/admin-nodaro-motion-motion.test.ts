@@ -239,6 +239,42 @@ describe("PUT /v1/admin/nodaro-motion/motion", () => {
     expect((await put({ "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "full" } } })).statusCode).toBe(200)
   })
 
+  it("face mesh layers: a set a parts value names is saved as that value; any other only while every engine and platform take layers", async () => {
+    const LAYERS = { ...HIDES, faceMesh: true, faceMeshParts: ["full", "features", "mouth"], faceMeshLayers: true }
+    const lastMasking = () => (h.upserts.at(-1) as { value: Record<string, { masking: unknown }> }).value["motion-prism"]!.masking
+    const TAKES_LAYERS = { faceMeshLayers: true }
+    const mesh = (faceMeshLayers: Record<string, boolean>) => ({ "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshLayers } } })
+    // The full mesh's set: saved as no key at all (the setting before the switches), asking only for the mesh.
+    h.envs = [envRow("production", { ...HIDES, faceMesh: true }), envRow("staging", { ...HIDES, faceMesh: true })]
+    expect((await put(mesh({ wireframe: true, eyes: true, lips: true, irises: false }))).statusCode).toBe(200)
+    expect(lastMasking()).toEqual({ mode: "always", source: "full-depth", faceMesh: true })
+    // The eyes and lips: saved as the parts value.
+    h.envs = [envRow("production", LAYERS, TAKES_LAYERS), envRow("staging", LAYERS, TAKES_LAYERS)]
+    expect((await put(mesh({ eyes: true, lips: true }))).statusCode).toBe(200)
+    expect(lastMasking()).toEqual({ mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "features" })
+    // Any other set: saved as layers, only those on.
+    expect((await put(mesh({ eyes: true, irises: true, bold: true, lips: false }))).statusCode).toBe(200)
+    expect(lastMasking()).toEqual({ mode: "always", source: "full-depth", faceMesh: true, faceMeshLayers: { eyes: true, irises: true, bold: true } })
+    const saved = h.upserts.length
+    // An engine without layers: refused, naming it.
+    h.envs = [envRow("production", { ...LAYERS, faceMeshLayers: undefined }, TAKES_LAYERS), envRow("staging", LAYERS, TAKES_LAYERS)]
+    const engine = await put(mesh({ contours: true, eyes: true, lips: true }))
+    expect(engine.statusCode).toBe(409)
+    expect(engine.json().error).toMatchObject({ code: "engine_unsupported", envs: ["production"], message: expect.stringMatching(/cannot draw these face mesh layers/) })
+    // A platform that does not take the key: held (it would drop the whole entry), before any engine is asked.
+    h.envs = [envRow("production", LAYERS), envRow("staging", LAYERS, TAKES_LAYERS)]
+    const held = await put(mesh({ irises: true }))
+    expect(held.statusCode).toBe(422)
+    expect(held.json().error).toMatchObject({ code: "platform_unsupported", envs: ["production"], message: expect.stringMatching(/does not take face mesh layers/) })
+    expect(h.upserts).toHaveLength(saved)
+    // Refused outright: beside parts, or a set that draws nothing.
+    h.envs = [envRow("production", LAYERS, TAKES_LAYERS), envRow("staging", LAYERS, TAKES_LAYERS)]
+    const both = await put({ "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "mouth", faceMeshLayers: { eyes: true } } } })
+    expect(both.statusCode).toBe(400)
+    expect((await put(mesh({ bold: true }))).statusCode).toBe(400)
+    expect(h.upserts).toHaveLength(saved)
+  })
+
   it("takes Full depth's smallest face with mesh lines only while every environment's engine declares it; none set asks no engine", async () => {
     const MIN = { ...HIDES, faceMesh: true, faceMeshMinFaceHeightPct: true }
     // Every environment's platform takes it (the hold below), so only the engines decide here.

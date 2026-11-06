@@ -8,7 +8,7 @@
  *
  * The `app_settings` row `nodaro_motion_precise_style_route`:
  * `{ routing?: "on" | "off"; bypassEmails?: string[]; routedDepthBlur?: number; describeColours?: boolean; faceMesh?: boolean;
- * faceMeshParts?: "full" | "features" | "mouth" | "contours"; faceMeshWording?: "motion" | "shape" }`.
+ * faceMeshParts?: "full" | "features" | "mouth" | "contours"; faceMeshLayers?: VideoFaceMeshLayers; faceMeshWording?: "motion" | "shape" }`.
  *
  * - `routing`: "on" (the default; absent means it) runs such a run as Flex;
  *   "off" leaves it the Precise run of `nodaro-motion-precise-art-style.ts`.
@@ -32,6 +32,12 @@
  *   eyes and lips; absent: the Flex masking's, as before) and how the prompt
  *   words its line ("motion", the default and stored as nothing, or "shape").
  *   An engine from before them reads neither.
+ * - `faceMeshLayers` (2026-11-06): what that mesh draws, layer by layer
+ *   (`VIDEO_FACE_MESH_LAYERS`: the wireframe, eyes, lips, contours, irises,
+ *   bold lines), in place of `faceMeshParts` (never both). A set a parts value
+ *   names is stored and sent as that value; any other as layers. An engine
+ *   from before them never reads the key (the row is read field by field), and
+ *   draws the Flex masking's parts.
  *
  * A Precise run without a style, every Flex run, every Pulse run and every
  * trend run never read it. Prism alone takes an art style on a Precise run, so
@@ -57,7 +63,16 @@
  */
 import { z } from "zod"
 import { CAST_SWAP_DEPTH_BLUR_BOUNDS } from "@nodaro/render-rules"
-import { VIDEO_FACE_MESH_PARTS, type VideoFaceMeshParts } from "@nodaro/shared/media"
+import {
+  VIDEO_FACE_MESH_LAYERS,
+  VIDEO_FACE_MESH_PARTS,
+  videoFaceMeshLayersDrawLines,
+  videoFaceMeshLayersOn,
+  videoFaceMeshPartsOfLayers,
+  type VideoFaceMeshLayer,
+  type VideoFaceMeshLayers,
+  type VideoFaceMeshParts,
+} from "@nodaro/shared/media"
 
 export const NODARO_MOTION_PRECISE_STYLE_ROUTE_KEY = "nodaro_motion_precise_style_route"
 
@@ -80,6 +95,8 @@ export interface NodaroMotionPreciseStyleRoute {
   faceMesh?: boolean
   /** What a routed run's mesh draws; absent: the Flex masking's. */
   faceMeshParts?: VideoFaceMeshParts
+  /** What a routed run's mesh draws, layer by layer, in place of `faceMeshParts`; absent: `faceMeshParts` decides. */
+  faceMeshLayers?: VideoFaceMeshLayers
   /** How a routed run's mesh line is worded; absent: "motion". */
   faceMeshWording?: FaceMeshWording
 }
@@ -94,15 +111,29 @@ const emailSchema = z.string().transform(normalizeEmail).pipe(z.email().max(254)
 const routedDepthBlurSchema = z.int().min(CAST_SWAP_DEPTH_BLUR_BOUNDS.min).max(CAST_SWAP_DEPTH_BLUR_BOUNDS.max)
 
 /** What an admin saves: strict (an unknown key, a third value or something that is not an email is refused), the emails normalized. */
-export const nodaroMotionPreciseStyleRouteSchema = z.strictObject({
-  routing: z.enum(PRECISE_STYLE_ROUTINGS).optional(),
-  bypassEmails: z.array(emailSchema).max(PRECISE_STYLE_ROUTE_MAX_EMAILS).transform(withoutRepeats).optional(),
-  routedDepthBlur: routedDepthBlurSchema.optional(),
-  describeColours: z.boolean().optional(),
-  faceMesh: z.boolean().optional(),
-  faceMeshParts: z.enum(VIDEO_FACE_MESH_PARTS).optional(),
-  faceMeshWording: z.enum(FACE_MESH_WORDINGS).optional(),
-})
+const faceMeshLayersSchema = z.strictObject(
+  Object.fromEntries(VIDEO_FACE_MESH_LAYERS.map((l) => [l, z.boolean().optional()])) as Record<VideoFaceMeshLayer, z.ZodOptional<z.ZodBoolean>>,
+)
+
+export const nodaroMotionPreciseStyleRouteSchema = z
+  .strictObject({
+    routing: z.enum(PRECISE_STYLE_ROUTINGS).optional(),
+    bypassEmails: z.array(emailSchema).max(PRECISE_STYLE_ROUTE_MAX_EMAILS).transform(withoutRepeats).optional(),
+    routedDepthBlur: routedDepthBlurSchema.optional(),
+    describeColours: z.boolean().optional(),
+    faceMesh: z.boolean().optional(),
+    faceMeshParts: z.enum(VIDEO_FACE_MESH_PARTS).optional(),
+    faceMeshLayers: faceMeshLayersSchema.optional(),
+    faceMeshWording: z.enum(FACE_MESH_WORDINGS).optional(),
+  })
+  .refine((s) => s.faceMeshParts === undefined || s.faceMeshLayers === undefined, {
+    path: ["faceMeshLayers"],
+    message: "The face mesh's layers say what it draws in place of its parts: send one of them.",
+  })
+  .refine((s) => s.faceMeshLayers === undefined || videoFaceMeshLayersDrawLines(s.faceMeshLayers), {
+    path: ["faceMeshLayers"],
+    message: "The face mesh's layers draw nothing: turn on the wireframe, the eyes, the lips, the contours or the irises (bold only changes their lines).",
+  })
 
 /** The setting as stored and sent: `routing` only when "off", the list only when it is not empty, the blur only above 0, the colours only when off, the mesh only when on. New objects. */
 export function withoutDefaultPreciseStyleRoute(setting: NodaroMotionPreciseStyleRoute | null | undefined): NodaroMotionPreciseStyleRoute {
@@ -112,7 +143,11 @@ export function withoutDefaultPreciseStyleRoute(setting: NodaroMotionPreciseStyl
   if (typeof setting?.routedDepthBlur === "number" && setting.routedDepthBlur > 0) out.routedDepthBlur = setting.routedDepthBlur
   if (setting?.describeColours === false) out.describeColours = false
   if (setting?.faceMesh === true) out.faceMesh = true
-  if (setting?.faceMeshParts !== undefined) out.faceMeshParts = setting.faceMeshParts
+  // Layers in place of the parts (a set a parts value names is that value); a set that draws nothing is no set.
+  const layers = setting?.faceMeshLayers !== undefined && videoFaceMeshLayersDrawLines(setting.faceMeshLayers) ? setting.faceMeshLayers : undefined
+  const parts = layers ? videoFaceMeshPartsOfLayers(layers) : setting?.faceMeshParts
+  if (parts !== undefined) out.faceMeshParts = parts
+  else if (layers) out.faceMeshLayers = videoFaceMeshLayersOn(layers)
   if (setting?.faceMeshWording === "shape") out.faceMeshWording = "shape"
   return out
 }
@@ -132,13 +167,14 @@ export function preciseStyleRouteForPlugin(setting: NodaroMotionPreciseStyleRout
  */
 export function parseNodaroMotionPreciseStyleRoute(value: unknown, warn: (msg: string) => void = (msg) => console.warn(msg)): NodaroMotionPreciseStyleRoute | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null
-  const { routing, bypassEmails, routedDepthBlur, describeColours, faceMesh, faceMeshParts, faceMeshWording } = value as {
+  const { routing, bypassEmails, routedDepthBlur, describeColours, faceMesh, faceMeshParts, faceMeshLayers, faceMeshWording } = value as {
     routing?: unknown
     bypassEmails?: unknown
     routedDepthBlur?: unknown
     describeColours?: unknown
     faceMesh?: unknown
     faceMeshParts?: unknown
+    faceMeshLayers?: unknown
     faceMeshWording?: unknown
   }
   const out: NodaroMotionPreciseStyleRoute = {}
@@ -162,6 +198,12 @@ export function parseNodaroMotionPreciseStyleRoute(value: unknown, warn: (msg: s
   else if (faceMesh !== undefined && faceMesh !== null) warn(`[${NODARO_MOTION_PRECISE_STYLE_ROUTE_KEY}] the face mesh switch is not a boolean: it reads as off`)
   if ((VIDEO_FACE_MESH_PARTS as readonly unknown[]).includes(faceMeshParts)) out.faceMeshParts = faceMeshParts as VideoFaceMeshParts
   else if (faceMeshParts !== undefined && faceMeshParts !== null) warn(`[${NODARO_MOTION_PRECISE_STYLE_ROUTE_KEY}] the face mesh parts are not known: the Flex masking's are drawn`)
+  if (faceMeshLayers !== undefined && faceMeshLayers !== null) {
+    // Each known layer read on its own (an unknown one ignored); a set that draws nothing reads as none.
+    const known = typeof faceMeshLayers === "object" && !Array.isArray(faceMeshLayers) ? videoFaceMeshLayersOn(faceMeshLayers as VideoFaceMeshLayers) : {}
+    if (videoFaceMeshLayersDrawLines(known)) out.faceMeshLayers = known
+    else warn(`[${NODARO_MOTION_PRECISE_STYLE_ROUTE_KEY}] the face mesh layers draw nothing: the parts decide`)
+  }
   if ((FACE_MESH_WORDINGS as readonly unknown[]).includes(faceMeshWording)) out.faceMeshWording = faceMeshWording as FaceMeshWording
   else if (faceMeshWording !== undefined && faceMeshWording !== null) warn(`[${NODARO_MOTION_PRECISE_STYLE_ROUTE_KEY}] the face mesh wording is not known: it reads as Motion`)
   return withoutDefaultPreciseStyleRoute(out)

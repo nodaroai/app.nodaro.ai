@@ -6,7 +6,8 @@
  * centred inside it are drawn) → the drawn clip, frame for frame
  * (services/face-mesh/draw-face-mesh.ts): a thin wireframe and darker eye and
  * lip outlines (or, by `parts`, only the eye and lip outlines, or only the lip
- * outline), each a tone of the picture under it — gray, or, on a coloured
+ * outline; or, by `layers`, any set of the wireframe, the eye outlines, the lip
+ * outline, the contours, the irises and bold lines), each a tone of the picture under it — gray, or, on a coloured
  * depth map (`colormap` + `depthUrl`), a colour of that map — so the video
  * model still sees where the mouth and the eyes are under a mask. Nodaro Motion's face masking reaches it as a
  * CHILD job of its own (`tk.http.workerRequest` with a parent job); nothing
@@ -20,7 +21,15 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { VIDEO_DEPTH_COLORMAPS, VIDEO_FACE_MESH_LIMITS, VIDEO_FACE_MESH_PARTS, videoFaceMeshCreditIds } from "@nodaro/shared/media"
+import {
+  VIDEO_DEPTH_COLORMAPS,
+  VIDEO_FACE_MESH_LAYERS,
+  VIDEO_FACE_MESH_LIMITS,
+  VIDEO_FACE_MESH_PARTS,
+  videoFaceMeshCreditIds,
+  videoFaceMeshLayersDrawLines,
+  type VideoFaceMeshLayer,
+} from "@nodaro/shared/media"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"
@@ -42,7 +51,9 @@ const margin = z.number().min(L.ZONE_MARGIN_PCT_MIN).max(L.ZONE_MARGIN_PCT_MAX).
  * a line is read from the gray depth); a `depthUrl` with no `colormap` is
  * grayscale. `parts` left out (or `"full"`) draws the whole mesh, as before;
  * `"features"` only the eye and lip outlines, `"mouth"` only the lip outline.
- * Never defaulted: a body without it is stored and queued exactly as before.
+ * `layers` names what is drawn layer by layer instead (`VIDEO_FACE_MESH_LAYERS`:
+ * never with `parts`, at least one layer other than `bold`). Neither is ever
+ * defaulted: a body without them is stored and queued exactly as before.
  * `forcePrivate` is what every child sends; the job is private whatever it
  * says.
  */
@@ -57,7 +68,18 @@ export const videoFaceMeshBody = z
     colormap: z.enum(VIDEO_DEPTH_COLORMAPS).optional(),
     depthUrl: safeUrlSchema.optional(),
     parts: z.enum(VIDEO_FACE_MESH_PARTS).optional(),
+    layers: z
+      .strictObject(Object.fromEntries(VIDEO_FACE_MESH_LAYERS.map((l) => [l, z.boolean().optional()])) as Record<VideoFaceMeshLayer, z.ZodOptional<z.ZodBoolean>>)
+      .optional(),
     forcePrivate: z.literal(true).optional(),
+  })
+  .refine((b) => b.parts === undefined || b.layers === undefined, {
+    path: ["layers"],
+    message: "layers names what is drawn in place of parts: send one of them",
+  })
+  .refine((b) => b.layers === undefined || videoFaceMeshLayersDrawLines(b.layers), {
+    path: ["layers"],
+    message: "layers draws nothing: turn on at least one of wireframe, eyes, lips, contours or irises (bold only changes their lines)",
   })
   .refine((b) => b.colormap === undefined || b.colormap === "grayscale" || b.depthUrl !== undefined, {
     path: ["depthUrl"],
