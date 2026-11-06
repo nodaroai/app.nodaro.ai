@@ -251,6 +251,9 @@ export interface UsageReportRow {
  * `metered_overrun` (a metered run's overrun beyond the budget — it HAS a
  * settled usage_logs counterpart) and an `app_markup` shortfall (an
  * approved-app markup the budget could not cover — it has NO usage_logs row).
+ * An `app_markup` row is only ever an earlier one: an approved app's fee is
+ * now collected only up to the budget's headroom, and the creator is credited
+ * only that, so nothing new is absorbed.
  * `other` is a future/unrecognised origin.
  */
 export interface UsageVarianceRow {
@@ -272,7 +275,12 @@ export interface UsageReportTotals {
   inFlightCredits: number
   /** Metered-overrun variance in the window — a run's overrun the platform absorbed. */
   platformAbsorbedCredits: number
-  /** Approved-app markup shortfall the platform absorbed. It has NO usage_logs run, so it is not in the figures above. */
+  /**
+   * Approved-app markup shortfall the platform absorbed. It has NO usage_logs
+   * run, so it is not in the figures above. New runs no longer add to it: an
+   * approved app's fee is collected only up to the budget's headroom and the
+   * creator is credited only that, so this totals earlier runs only.
+   */
   appMarkupAbsorbedCredits: number
   /**
    * settledCredits − platformAbsorbedCredits: the METERED settlement that

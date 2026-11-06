@@ -35,6 +35,12 @@ vi.mock("@/lib/orchestration-queue.js", () => ({
   orchestrationQueue: { add: vi.fn().mockResolvedValue({}) },
 }))
 
+const afford = vi.hoisted(() => ({ fn: vi.fn() }))
+vi.mock("@/middleware/credit-guard.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/middleware/credit-guard.js")>()),
+  checkPayerCanAfford: afford.fn,
+}))
+
 const mockExecuteAppRun = vi.hoisted(() => vi.fn())
 vi.mock("@/services/app-execution.js", async (importOriginal) => {
   const orig = (await importOriginal()) as Record<string, unknown>
@@ -83,7 +89,12 @@ function createChainMock(resolveValue: unknown, onSelect?: (cols: unknown) => vo
   return new Proxy({}, handler)
 }
 
-function setupApp(row: Record<string, unknown>) {
+/** The workspace payer the auth hook stamps when set (P14's resolved context). */
+const stamp = vi.hoisted(() => ({ workspace: false }))
+const ORG_ID = "00000000-0000-4000-8000-000000000050"
+const WORKSPACE_ID = "00000000-0000-4000-8000-000000000060"
+
+function setupApp(row: Record<string, unknown>, approval: { approved?: boolean; error?: boolean } = {}) {
   const tables: string[] = []
   const selects: unknown[] = []
   let callCount = 0
@@ -92,6 +103,9 @@ function setupApp(row: Record<string, unknown>) {
     callCount++
     if (callCount === 1) return createChainMock({ data: { workflow_id: WORKFLOW_ID }, error: null }) as never
     if (callCount === 2) return createChainMock({ data: row, error: null }, (cols) => selects.push(cols)) as never
+    if (table === "organization_approved_apps") {
+      return createChainMock(approval.error ? { data: null, error: { message: "boom" } } : { data: approval.approved ? [{ workflow_id: WORKFLOW_ID }] : [], error: null }) as never
+    }
     if (table === "workflow_executions") return createChainMock({ data: { id: EXECUTION_ID }, error: null }) as never
     if (table === "app_runs") return createChainMock({ data: { id: RUN_ID }, error: null }) as never
     return createChainMock({ data: null, error: null }) as never
@@ -106,11 +120,16 @@ let eligibility: ReturnType<typeof vi.spyOn>
 beforeEach(async () => {
   vi.clearAllMocks()
   edition.credits = true
+  stamp.workspace = false
+  afford.fn.mockResolvedValue({ ok: true })
   invalidateAppCache(SLUG)
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
     const header = req.headers["x-user-id"]
     if (typeof header === "string") req.userId = header
+    if (typeof header === "string" && stamp.workspace) {
+      req.billingContext = { payer: "workspace", userId: header, workspaceId: WORKSPACE_ID, orgId: ORG_ID, entitlements: {} } as never
+    }
   })
   await app.register(async (instance) => {
     await appRunnerRoutes(instance)
@@ -205,5 +224,75 @@ describe("runs that carry no fee are not checked", () => {
     const res = await run(RUNNER)
     expect(res.statusCode).toBe(202)
     expect(covers).not.toHaveBeenCalled()
+  })
+})
+
+describe("a workspace-paid run of an app with the creator's fee", () => {
+  const BUDGET_REFUSAL = { error: { code: "budget_exceeded", message: "The workspace budget cannot cover this." } }
+
+  it("an app the organization approved: the workspace budget must cover the run and the fee, refused in its own words", async () => {
+    stamp.workspace = true
+    const { tables } = setupApp(APP_ROW, { approved: true })
+    afford.fn.mockResolvedValue({ ok: false, statusCode: 402, body: BUDGET_REFUSAL })
+    const res = await run(RUNNER)
+    expect(res.statusCode).toBe(402)
+    expect(res.json()).toEqual(BUDGET_REFUSAL)
+    expect(afford.fn).toHaveBeenCalledWith(expect.anything(), 1050)
+    expect(covers).not.toHaveBeenCalled()
+    expect(tables).toContain("organization_approved_apps")
+    expect(tables).not.toContain("workflow_executions")
+    expect(mockExecuteAppRun).not.toHaveBeenCalled()
+  })
+
+  it("an approved app whose budget covers it runs", async () => {
+    stamp.workspace = true
+    setupApp(APP_ROW, { approved: true })
+    const res = await run(RUNNER)
+    expect(res.statusCode).toBe(202)
+    expect(afford.fn).toHaveBeenCalledTimes(1)
+  })
+
+  it("an app the organization has not approved: the runner's own balance must cover the fee alone", async () => {
+    stamp.workspace = true
+    const { tables } = setupApp(APP_ROW, { approved: false })
+    covers.mockResolvedValue({ ok: false, balance: 300 })
+    const res = await run(RUNNER)
+    expect(res.statusCode).toBe(402)
+    expect(res.json()).toEqual({
+      error: {
+        code: "insufficient_credits",
+        message: "This app's creator fee of 1010 credits is paid from your own balance, as your organization has not approved this app; your balance is 300.",
+      },
+    })
+    // The runner's own pools (no workspace context), for the fee only: the workspace pays the run.
+    expect(covers).toHaveBeenCalledWith(RUNNER, 1010, undefined, expect.any(Boolean))
+    expect(afford.fn).not.toHaveBeenCalled()
+    expect(tables).not.toContain("workflow_executions")
+  })
+
+  it("an unapproved app whose fee the runner can pay runs", async () => {
+    stamp.workspace = true
+    setupApp(APP_ROW, { approved: false })
+    const res = await run(RUNNER)
+    expect(res.statusCode).toBe(202)
+    expect(covers).toHaveBeenCalledTimes(1)
+  })
+
+  it("an approval that cannot be read is no check (the settlement still collects only what is there)", async () => {
+    stamp.workspace = true
+    setupApp(APP_ROW, { error: true })
+    const res = await run(RUNNER)
+    expect(res.statusCode).toBe(202)
+    expect(covers).not.toHaveBeenCalled()
+    expect(afford.fn).not.toHaveBeenCalled()
+  })
+
+  it("the creator's own workspace run is not checked", async () => {
+    stamp.workspace = true
+    const { tables } = setupApp(APP_ROW, { approved: true })
+    const res = await run(CREATOR)
+    expect(res.statusCode).toBe(202)
+    expect(tables).not.toContain("organization_approved_apps")
+    expect(afford.fn).not.toHaveBeenCalled()
   })
 })

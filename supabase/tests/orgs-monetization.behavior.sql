@@ -5,10 +5,11 @@
 -- transaction it rolls back. The assertions that matter most:
 --   * an app the org has NOT approved bills its markup to the RUNNER
 --     personally — the workspace payer changes nothing for it;
---   * an APPROVED app bills the WORKSPACE: budget spent rises (clamped to
---     headroom, shortfall absorbed as an org_usage_variance row), and the
---     runner's own `profiles` row never moves;
---   * the creator is paid IN FULL on every path, clamp or not;
+--   * an APPROVED app bills the WORKSPACE: budget spent rises, clamped to
+--     headroom, and the runner's own `profiles` row never moves;
+--   * the creator is credited exactly what the budget paid (migration 604):
+--     the part beyond the headroom is collected from nobody, paid to nobody,
+--     and written as no variance row;
 --   * the run-id mutex still deduplicates re-entry on both branches;
 --   * the approval survives a REPUBLISH (workflow-keyed — owner decision);
 --   * app_earnings records who actually paid (payer_workspace_id);
@@ -142,40 +143,51 @@ SELECT pg_temp.assert_eq('S4: budget unchanged on re-entry',
 SELECT pg_temp.assert_eq('S4: creator not double-paid',
   (SELECT topup_credits::text FROM profiles WHERE id = '00000000-0000-4000-8000-000000000702'), '90');
 
--- ------------- S5: markup beyond headroom CLAMPS; the shortfall is absorbed
--- as an org_usage_variance row; the creator is still paid in full; the
+-- ------------- S5: markup beyond headroom CLAMPS: the budget pays its
+-- headroom (160 of 500) and the creator is credited exactly that. The
+-- uncovered 340 is collected from nobody and written as no variance row; the
 -- schema CHECK (reserved + spent <= allocated) survives by construction.
-SELECT pg_temp.assert_eq('S5 clamp: returns the full markup (creator-facing)',
+SELECT pg_temp.assert_eq('S5 clamp: the creator is credited only what the budget paid (returns it)',
   process_app_monetization('00000000-0000-4000-8000-000000000701', '00000000-0000-4000-8000-000000000702',
-    500, 'f0000000-0000-4000-8000-000000000701', '90000000-0000-4000-8000-000000000704', 10, 0, 0,
-    'b0000000-0000-4000-8000-000000000701')::text, '500');
+    500, 'f0000000-0000-4000-8000-000000000701', '90000000-0000-4000-8000-000000000704', 10, 500, 0,
+    'b0000000-0000-4000-8000-000000000701')::text, '160');
+SELECT pg_temp.assert_eq('S5: creator credited the 160 collected, not the 500 asked',
+  (SELECT topup_credits::text FROM profiles WHERE id = '00000000-0000-4000-8000-000000000702'), '250');
 SELECT pg_temp.assert_eq('S5: spent clamped to the allocation',
   (SELECT spent_credits::text FROM workspace_budgets WHERE workspace_id = 'b0000000-0000-4000-8000-000000000701'), '200');
-SELECT pg_temp.assert_eq('S5: the shortfall is one variance row of 340',
-  (SELECT amount::text FROM credit_transactions
-   WHERE source = 'org_usage_variance' AND workspace_id = 'b0000000-0000-4000-8000-000000000701'
-     AND description LIKE '%90000000-0000-4000-8000-000000000704%'), '340');
-SELECT pg_temp.assert_eq('S5: creator paid in full despite the clamp',
-  (SELECT topup_credits::text FROM profiles WHERE id = '00000000-0000-4000-8000-000000000702'), '590');
+SELECT pg_temp.assert_eq('S5: no variance row: nothing was absorbed',
+  (SELECT count(*)::text FROM credit_transactions
+   WHERE source = 'org_usage_variance' AND workspace_id = 'b0000000-0000-4000-8000-000000000701'), '0');
+SELECT pg_temp.assert_eq('S5: the earnings row keeps the fee asked and records what was collected',
+  (SELECT flat_fee || '/' || total_earned || '/' || total_charged FROM app_earnings
+   WHERE run_id = '90000000-0000-4000-8000-000000000704'), '500/160/170');
+SELECT pg_temp.assert_eq('S5: the creator''s credit rows so far are the amounts collected (S1, S2, S3, S5)',
+  (SELECT string_agg(amount::text, ',' ORDER BY balance_after) FROM credit_transactions
+   WHERE user_id = '00000000-0000-4000-8000-000000000702' AND source = 'app_earnings'), '30,20,40,160');
 SELECT pg_temp.assert_eq('S5: runner still untouched',
   (SELECT (subscription_credits + topup_credits)::text FROM profiles WHERE id = '00000000-0000-4000-8000-000000000701'), '100');
-SELECT pg_temp.assert_eq('S5: exactly ONE variance row for the workspace — none from the covered runs',
-  (SELECT count(*)::text FROM credit_transactions
-   WHERE source = 'org_usage_variance' AND workspace_id = 'b0000000-0000-4000-8000-000000000701'), '1');
 
--- ------ S6: an approved app in a workspace with NO budget row — everything
--- is variance, the creator is whole, nobody's profiles move.
-SELECT pg_temp.assert_eq('S6 no-budget-row: returns the markup',
+-- ------ S6: an approved app in a workspace with NO budget row — nothing is
+-- chargeable, so nothing is collected: the creator is credited nothing, no
+-- variance row is written, nobody's profiles move.
+SELECT pg_temp.assert_eq('S6 no-budget-row: nothing collected (returns 0)',
   process_app_monetization('00000000-0000-4000-8000-000000000701', '00000000-0000-4000-8000-000000000702',
-    25, 'f0000000-0000-4000-8000-000000000701', '90000000-0000-4000-8000-000000000705', 10, 0, 0,
-    'b0000000-0000-4000-8000-000000000702')::text, '25');
-SELECT pg_temp.assert_eq('S6: whole markup absorbed as variance',
-  (SELECT amount::text FROM credit_transactions
-   WHERE source = 'org_usage_variance' AND workspace_id = 'b0000000-0000-4000-8000-000000000702'), '25');
-SELECT pg_temp.assert_eq('S6: creator whole',
-  (SELECT topup_credits::text FROM profiles WHERE id = '00000000-0000-4000-8000-000000000702'), '615');
-SELECT pg_temp.assert_eq('S6: total_earnings tracks every path',
-  (SELECT total_earnings::text FROM profiles WHERE id = '00000000-0000-4000-8000-000000000702'), '615');
+    25, 'f0000000-0000-4000-8000-000000000701', '90000000-0000-4000-8000-000000000705', 10, 25, 0,
+    'b0000000-0000-4000-8000-000000000702')::text, '0');
+SELECT pg_temp.assert_eq('S6: no variance row',
+  (SELECT count(*)::text FROM credit_transactions
+   WHERE source = 'org_usage_variance' AND workspace_id = 'b0000000-0000-4000-8000-000000000702'), '0');
+SELECT pg_temp.assert_eq('S6: creator credited nothing',
+  (SELECT topup_credits::text FROM profiles WHERE id = '00000000-0000-4000-8000-000000000702'), '250');
+SELECT pg_temp.assert_eq('S6: total_earnings tracks what was collected on every path',
+  (SELECT total_earnings::text FROM profiles WHERE id = '00000000-0000-4000-8000-000000000702'), '250');
+SELECT pg_temp.assert_eq('S6: the earnings row records nothing collected',
+  (SELECT total_earned || '/' || total_charged FROM app_earnings
+   WHERE run_id = '90000000-0000-4000-8000-000000000705'), '0/10');
+SELECT pg_temp.assert_eq('S6: re-entry is still a no-op',
+  process_app_monetization('00000000-0000-4000-8000-000000000701', '00000000-0000-4000-8000-000000000702',
+    25, 'f0000000-0000-4000-8000-000000000701', '90000000-0000-4000-8000-000000000705', 10, 25, 0,
+    'b0000000-0000-4000-8000-000000000702')::text, '0');
 
 -- ------ S7: REPUBLISH SURVIVAL (owner decision): v2 is a NEW published_apps
 -- row; the workflow-keyed approval must still route the markup to the

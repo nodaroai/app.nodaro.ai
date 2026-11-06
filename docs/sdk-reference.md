@@ -8758,11 +8758,12 @@ so far — settled where the run finished, the held reservation otherwise — an
 `settledCredits` and `inFlightCredits` split it. A metered run that overran the
 workspace's headroom has the excess absorbed by the platform; the totals report
 it as `platformAbsorbedCredits`, and `chargedToBudget = settledCredits −
-platformAbsorbedCredits` is the metered settlement that reached the budget. An
-approved-app markup the budget could not cover is absorbed separately as
-`appMarkupAbsorbedCredits`; it has no run in the report, so it is not in
-`chargedToBudget` (which is therefore not, by itself, the workspace's spent
-figure). Totals cover the whole window even when a grouping is `truncated`.
+platformAbsorbedCredits` is the metered settlement that reached the budget.
+`appMarkupAbsorbedCredits` totals approved-app fees the platform absorbed
+before an app's fee came to be collected only up to the budget's headroom;
+new runs no longer add to it (the creator is credited only what the budget
+paid). It has no run in the report, so it is not in `chargedToBudget`
+(which is therefore not, by itself, the workspace's spent figure). Totals cover the whole window even when a grouping is `truncated`.
 
 ---
 

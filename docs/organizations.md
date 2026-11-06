@@ -397,11 +397,19 @@ A metered run that cost more than the workspace had left is charged up to the
 headroom; the rest is **absorbed by the platform** and listed on its own line,
 never against a member. The report totals metered overruns as
 `platformAbsorbedCredits`, so `chargedToBudget = settledCredits −
-platformAbsorbedCredits` is the metered settlement that reached the budget. An
-approved-app markup the budget could not cover is absorbed too, but it has no
-run in this report; it is totalled separately as `appMarkupAbsorbedCredits` and
-is not folded into `chargedToBudget` — so `chargedToBudget` is not, on its own,
-`workspace_budgets.spent`. Totals and the platform-absorbed lines cover the
+platformAbsorbedCredits` is the metered settlement that reached the budget.
+
+A creator's fee on an app the organization approved is charged to the
+workspace budget up to its headroom, and the app's creator is credited
+exactly what the budget paid; the rest is collected from nobody and paid to
+nobody, so nothing is absorbed. A run of such an app is refused up front
+(`budget_exceeded`) when the headroom cannot cover the app's listed price
+with the fee. Before this rule, a fee the budget could not cover was
+absorbed by the platform and the creator was paid in full; those earlier
+amounts are still totalled as `appMarkupAbsorbedCredits`, which new runs no
+longer add to. Neither the fee charged to the budget nor that total has a
+run in this report, and neither is folded into `chargedToBudget` — so
+`chargedToBudget` is not, on its own, `workspace_budgets.spent`. Totals and the platform-absorbed lines cover the
 WHOLE window; only the grouped rows can be truncated.
 
 A plain workspace member sees their OWN usage: the workspace report is narrowed

@@ -236,18 +236,24 @@ fee, that is the listed price the fee applies to (the preview part, see
 percentage of it, rounded up to a whole credit. The flat fee counts in full
 even when the listed price is 0. A run the balance cannot cover is refused with
 `402 { "error": { "code": "insufficient_credits", "message": "This app costs about <n> credits to run, including the creator's fee of <fee> credits; your balance is <balance>." } }`.
-The creator running their own app pays no fee and is not checked. A run paid
-by an organization workspace is not refused here: the workspace budget is
-checked when each step reserves its credits. The fee is settled once the run
-completes. When the runner pays it (a run on their own credits, or a
-workspace run of an app the organization has not approved, which is not
-checked before it starts) and their balance then holds less than the fee,
-only what it holds is collected (the balance never goes below zero for the
-fee), and the creator is credited exactly the amount collected. The
-creator's earnings record keeps the fee that was asked (`flatFee`,
-`percentFee`) beside what was collected (`totalEarned`). On an app the
-organization has approved, the workspace pays the fee as described in
-[Budgets and credits](./organizations.md#budgets-and-credits).
+The creator running their own app pays no fee and is not checked. On a run
+paid by an organization workspace, the fee is paid by the workspace when its
+organization has approved the app, and by the runner otherwise. An approved
+app's run is refused with the workspace's own `402 budget_exceeded` when the
+budget's headroom cannot cover the listed price with the fee. An app the
+organization has not approved is refused with `402 insufficient_credits`
+("This app's creator fee of <fee> credits is paid from your own balance, as
+your organization has not approved this app; your balance is <balance>.")
+when the runner's own balance cannot cover the fee; the workspace pays the
+run itself.
+
+The fee is settled once the run completes, and only what its payer then
+holds is collected: at most the runner's balance (which never goes below
+zero for the fee), or at most the workspace budget's headroom. The creator
+is credited exactly the amount collected; the rest is collected from nobody
+and paid to nobody. The creator's earnings record keeps the fee that was
+asked (`flatFee`, `percentFee`) beside what was collected (`totalEarned`).
+See [Budgets and credits](./organizations.md#budgets-and-credits).
 
 One class of field is refused on every run path (`/v1/app/:slug/run`,
 `/v1/workflows/:id/run`, `/v1/present/:token/run`, `/v1/component/execute`,
