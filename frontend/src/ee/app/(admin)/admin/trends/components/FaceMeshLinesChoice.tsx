@@ -2,13 +2,18 @@
 // the mesh is on): the full mesh, the eye and lip outlines, the lip outline —
 // each offered once every environment's engine draws it — and, in the Motion
 // column, "Choose the layers": one switch per layer (`faceMeshLayers`), a set no
-// parts value names saved only once every environment takes layers.
+// parts value names saved only once every environment takes layers. Each
+// choice shows its lines drawn on a depth face ("Choose the layers": the set
+// chosen); the picture stays in the list, not in the closed box.
 
 import { useId } from "react"
+import { videoFaceMeshLayersOfParts } from "@nodaro/shared/media"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { AdminFaceMeshParts, AdminTrendFaceMasking } from "@/lib/api"
 import { FaceMeshLayerSwitches } from "./FaceMeshLayerSwitches"
 import { layersOfSetting, savedFormOfLayers } from "../face-mesh-layers"
+import { faceMeshLayersThumbnail } from "../face-mesh-thumbnails"
+import { FaceMeshThumbnail } from "./FaceMeshThumbnail"
 
 /** What the face mesh draws (`faceMeshParts`; the full mesh is the default, saved as no key). */
 const FACE_MESH_PARTS: ReadonlyArray<{ value: AdminFaceMeshParts; label: string; name: string }> = [
@@ -53,17 +58,23 @@ export function FaceMeshLinesChoice({ value, set, faceMeshPartsMissingIn, faceMe
           )
         }
       >
-        <SelectTrigger id={meshPartsId} className="h-9" aria-describedby={`${meshPartsId}-hint`}>
+        <SelectTrigger id={meshPartsId} className="h-9 [&_img]:hidden" aria-describedby={`${meshPartsId}-hint`}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
           {FACE_MESH_PARTS.map((p) => (
             <SelectItem key={p.value} value={p.value} disabled={!meshPartOffered(p.value) && p.value !== meshParts}>
+              <FaceMeshThumbnail thumbnail={faceMeshLayersThumbnail(videoFaceMeshLayersOfParts(p.value))} decorative />
               {p.label}
               {!meshPartOffered(p.value) ? " (not supported yet)" : ""}
             </SelectItem>
           ))}
-          {faceMeshLayersMissing && <SelectItem value="layers">Choose the layers</SelectItem>}
+          {faceMeshLayersMissing && (
+            <SelectItem value="layers">
+              <FaceMeshThumbnail thumbnail={faceMeshLayersThumbnail(layersOfSetting(value))} decorative />
+              Choose the layers
+            </SelectItem>
+          )}
         </SelectContent>
       </Select>
       <span id={`${meshPartsId}-hint`} className="text-xs text-muted-foreground">

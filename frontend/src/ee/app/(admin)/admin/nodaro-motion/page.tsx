@@ -93,6 +93,7 @@ import { DEFAULT_PULSE_AUDIO, PulseAudioSelect } from "../trends/components/Puls
 import { PrismReferenceAudioSelect } from "../trends/components/PrismReferenceAudioSelect"
 import { prismReferenceAudioHeldIssues, prismReferenceAudioSaved, prismReferenceAudioTriple } from "../trends/prism-reference-audio"
 import { maskingIssues } from "../trends/model"
+import { layersOfSetting } from "../trends/face-mesh-layers"
 import {
   environmentsThatCannotBlurDepth,
   environmentsThatCannotBlurDepthFill,
@@ -445,6 +446,7 @@ export default function AdminNodaroMotionPage() {
                             envs={envs.data}
                             supported={preciseStyleRouteQuery.data.supported}
                             error={savePreciseStyleRoute.error?.message}
+                            flexMaskingLayers={layersOfSetting(motionDraft[engine.id]?.masking ?? draft[engine.id])}
                             onChange={(draft) => {
                               savePreciseStyleRoute.reset()
                               setPreciseStyleRouteDraft(draft)

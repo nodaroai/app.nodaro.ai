@@ -13,14 +13,20 @@
 // `castSwap.preciseStyleRoute` reads it; one without it runs such a run as
 // Precise whatever this says, so nothing here waits for an engine: a note names
 // the environments that do not route yet.
+//
+// Beside what the routed face mesh draws, its lines on a depth face
+// (`face-mesh-thumbnails.ts`): "As the Motion masking" shows the Flex masking's
+// own lines (`flexMaskingLayers`), "Choose the layers" the switches' set.
 
 import { useId } from "react"
 import type { NodaroMotionPreciseStyleRoute, TrendEngineEnvironment } from "@/lib/api"
 import { DEPTH_BLUR_BOUNDS } from "../../trends/model"
 import { environmentsThatCannotDrawFaceMeshLayers, environmentsThatCannotRoutePreciseStyle } from "../../trends/clip-preparation"
-import type { VideoFaceMeshLayers } from "@nodaro/shared/media"
+import { videoFaceMeshLayersOfParts, type VideoFaceMeshLayers } from "@nodaro/shared/media"
 import { layersDrawLines, layersOfSetting, savedFormOfLayers } from "../../trends/face-mesh-layers"
+import { faceMeshLayersThumbnail, type FaceMeshThumbnail as Thumbnail } from "../../trends/face-mesh-thumbnails"
 import { FaceMeshLayerSwitches } from "../../trends/components/FaceMeshLayerSwitches"
+import { FaceMeshThumbnail } from "../../trends/components/FaceMeshThumbnail"
 
 export const PRECISE_STYLE_ROUTE_LEGEND = "Precise runs with an art style: run as Flex"
 
@@ -76,6 +82,17 @@ const MESH_WORDING_OPTIONS: ReadonlyArray<{ value: PreciseStyleRouteDraft["faceM
   { value: "motion", label: "Motion (default)" },
   { value: "shape", label: "Shape" },
 ]
+
+/**
+ * The picture of what the routed face mesh draws (null with "Choose the layers": the switches show theirs): "As the
+ * Motion masking" is the Flex masking's lines (`flexMaskingLayers`; the whole mesh when unknown).
+ */
+export function routedMeshThumbnail(parts: PreciseStyleRouteDraft["faceMeshParts"], flexMaskingLayers: VideoFaceMeshLayers | undefined): Thumbnail | null {
+  if (parts === "layers") return null
+  if (parts !== "") return faceMeshLayersThumbnail(videoFaceMeshLayersOfParts(parts))
+  const t = faceMeshLayersThumbnail(flexMaskingLayers ?? layersOfSetting(undefined))
+  return { ...t, alt: `As the Motion masking: ${t.alt.charAt(0).toLowerCase()}${t.alt.slice(1)}` }
+}
 
 /** Said when some environments' engines do not route yet (they never read this setting). */
 export function preciseStyleRouteMissingNote(missing: readonly string[]): string {
@@ -160,15 +177,18 @@ interface Props {
   readonly supported: boolean
   /** The last save's refusal, said in place. */
   readonly error?: string
+  /** The lines the Flex masking draws (`layersOfSetting`): what "As the Motion masking" shows. */
+  readonly flexMaskingLayers?: VideoFaceMeshLayers
 }
 
-export function PreciseStyleRouteColumn({ value, onChange, envs, supported, error }: Props) {
+export function PreciseStyleRouteColumn({ value, onChange, envs, supported, error, flexMaskingLayers }: Props) {
   const id = useId()
   const missing = environmentsThatCannotRoutePreciseStyle(envs)
   const issues = preciseStyleRouteIssues(value)
   // A set only layers name reaches only an engine that draws layers: elsewhere routed runs draw the Motion masking's lines.
   const onlyLayers = value.faceMeshParts === "layers" && savedFormOfLayers(value.faceMeshLayers, ["full", "features", "mouth", "contours"]).faceMeshLayers !== undefined
   const layersMissing = onlyLayers ? (environmentsThatCannotDrawFaceMeshLayers(envs)?.engine ?? []) : []
+  const meshThumbnail = routedMeshThumbnail(value.faceMeshParts, flexMaskingLayers)
   return (
     <fieldset className="flex min-w-0 flex-col gap-2 text-sm" data-testid="precise-style-route-column">
       <legend className="font-medium">{PRECISE_STYLE_ROUTE_LEGEND}</legend>
@@ -275,24 +295,27 @@ export function PreciseStyleRouteColumn({ value, onChange, envs, supported, erro
         <label htmlFor={`${id}-mesh-parts`} className="font-medium">
           {PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL}
         </label>
-        <select
-          id={`${id}-mesh-parts`}
-          className="h-11 w-full min-w-0 rounded-md border bg-background px-2 text-base sm:h-9 sm:w-auto sm:text-sm"
-          aria-describedby={`${id}-mesh-parts-hint`}
-          value={value.faceMeshParts}
-          onChange={(e) => {
-            const next = e.target.value as PreciseStyleRouteDraft["faceMeshParts"]
-            // "Choose the layers" starts from the lines chosen before it (the whole mesh after "as the Motion masking").
-            const from = value.faceMeshParts === "layers" ? value.faceMeshLayers : layersOfSetting({ faceMeshParts: value.faceMeshParts === "" ? undefined : value.faceMeshParts })
-            onChange({ ...value, faceMeshParts: next, faceMeshLayers: from })
-          }}
-        >
-          {MESH_PARTS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+        <div className="flex min-w-0 items-start gap-2">
+          <select
+            id={`${id}-mesh-parts`}
+            className="h-11 w-full min-w-0 rounded-md border bg-background px-2 text-base sm:h-9 sm:w-auto sm:text-sm"
+            aria-describedby={`${id}-mesh-parts-hint`}
+            value={value.faceMeshParts}
+            onChange={(e) => {
+              const next = e.target.value as PreciseStyleRouteDraft["faceMeshParts"]
+              // "Choose the layers" starts from the lines chosen before it (the whole mesh after "as the Motion masking").
+              const from = value.faceMeshParts === "layers" ? value.faceMeshLayers : layersOfSetting({ faceMeshParts: value.faceMeshParts === "" ? undefined : value.faceMeshParts })
+              onChange({ ...value, faceMeshParts: next, faceMeshLayers: from })
+            }}
+          >
+            {MESH_PARTS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {meshThumbnail && <FaceMeshThumbnail thumbnail={meshThumbnail} />}
+        </div>
         <span id={`${id}-mesh-parts-hint`} className="text-xs text-muted-foreground">
           {PRECISE_STYLE_ROUTE_MESH_PARTS_HINT}
         </span>

@@ -35,6 +35,7 @@ import {
   preciseStyleRouteToSaved,
 } from "../components/PreciseStyleRouteColumn"
 import { environmentsThatCannotRoutePreciseStyle } from "../../trends/clip-preparation"
+import { FACE_MESH_THUMBNAIL_FILES } from "../../trends/face-mesh-thumbnail-files"
 
 const URL_ = "/v1/admin/nodaro-motion/precise-style-route"
 const ENGINES = [
@@ -292,6 +293,33 @@ describe("the routed mesh's parts and wording", { timeout: 20_000 }, () => {
     const route = await section()
     await waitFor(() => expect(route.getByLabelText(PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL)).toHaveValue("features"))
     expect(route.getByLabelText(PRECISE_STYLE_ROUTE_MESH_WORDING_LABEL)).toHaveValue("shape")
+  })
+})
+
+describe("the routed mesh's picture", { timeout: 20_000 }, () => {
+  const beside = (route: ReturnType<typeof within>) => route.getByLabelText(PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL).parentElement!
+
+  it("beside the choice, its lines on a depth face; as the Motion masking, the Flex masking's own lines", async () => {
+    const user = userEvent.setup()
+    routes["GET /v1/admin/nodaro-motion/motion"] = () => ({
+      body: { data: { motion: { "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "mouth" } } }, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const route = await section()
+    await waitFor(() => expect(within(beside(route)).getByRole("img")).toHaveAttribute("src", FACE_MESH_THUMBNAIL_FILES.lips))
+    expect(within(beside(route)).getByRole("img")).toHaveAccessibleName("As the Motion masking: a depth face with the lip outline drawn")
+    await user.selectOptions(route.getByLabelText(PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL), "contours")
+    expect(within(beside(route)).getByRole("img")).toHaveAttribute("src", FACE_MESH_THUMBNAIL_FILES["eyes+lips+contours"])
+    // Choose the layers: the switches show the set, nothing beside the choice.
+    await user.selectOptions(route.getByLabelText(PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL), "layers")
+    expect(within(beside(route)).queryByRole("img")).toBeNull()
+    expect(within(route.getByTestId("face-mesh-layers-preview")).getByRole("img")).toHaveAttribute("src", FACE_MESH_THUMBNAIL_FILES["eyes+lips+contours"])
+  })
+
+  it("as the Motion masking with no Motion setting: the Precise masking's lines, the whole mesh when it names none", async () => {
+    renderWith(<AdminNodaroMotionPage />)
+    const route = await section()
+    expect(within(beside(route)).getByRole("img")).toHaveAttribute("src", FACE_MESH_THUMBNAIL_FILES["wireframe+eyes+lips"])
   })
 })
 
