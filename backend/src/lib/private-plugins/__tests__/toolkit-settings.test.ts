@@ -672,6 +672,58 @@ describe("tk.settings.nodaroMotionPreciseArtStyle", () => {
   })
 })
 
+describe("tk.settings: the face mesh's layers", () => {
+  beforeEach(() => {
+    h.masking = null
+    h.motion = null
+    h.failed = false
+  })
+
+  it("answers layers only to an engine that declares them; a set a parts value names as that value; none with the mesh off", async () => {
+    h.motion = {
+      "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshLayers: { eyes: true, irises: true, bold: true } } },
+      "motion-pulse": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshLayers: { lips: true } } },
+    }
+    try {
+      setPluginSupports({ castSwap: { ...CS, faceMesh: true, faceMeshParts: ["full", "features", "mouth"], faceMeshLayers: true } } as never)
+      const motion = await buildToolkit().settings!.nodaroMotionMotion!()
+      expect(motion!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshLayers: { eyes: true, irises: true, bold: true } } })
+      expect(motion!["motion-pulse"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "mouth" } })
+      // An engine without layers: no key (it draws the full mesh), a parts set still as its value where it draws parts.
+      setPluginSupports({ castSwap: { ...CS, faceMesh: true, faceMeshParts: ["full", "features", "mouth"] } } as never)
+      const older = await buildToolkit().settings!.nodaroMotionMotion!()
+      expect(older!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true } })
+      expect(older!["motion-pulse"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "mouth" } })
+      // The mesh off: never answered.
+      h.motion = { "motion-prism": { masking: { mode: "always", source: "full-depth", faceMeshLayers: { irises: true } } } }
+      setPluginSupports({ castSwap: { ...CS, faceMesh: true, faceMeshLayers: true } } as never)
+      const off = await buildToolkit().settings!.nodaroMotionMotion!()
+      expect(off!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth" } })
+    } finally {
+      _resetPluginSupportsForTests()
+    }
+  })
+
+  it("the routed setting's layers only to an engine that draws them", async () => {
+    try {
+      h.preciseStyleRoute = { faceMesh: true, faceMeshLayers: { irises: true } }
+      setPluginSupports({ castSwap: { ...CS, preciseStyleRoute: true, faceMeshLayers: true } } as never)
+      expect(await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).toStrictEqual({ faceMesh: true, faceMeshLayers: { irises: true } })
+      setPluginSupports({ castSwap: { ...CS, preciseStyleRoute: true } } as never)
+      expect(await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).toStrictEqual({ faceMesh: true })
+      h.preciseStyleRoute = { faceMeshLayers: { irises: true } }
+      expect(await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).toBeNull()
+    } finally {
+      h.preciseStyleRoute = null
+      _resetPluginSupportsForTests()
+    }
+  })
+
+  it("the capability is declared", () => {
+    expect(buildToolkit().capabilities?.videoFaceMeshLayers).toBe(true)
+  })
+})
+
 describe("tk.settings: the depth blur and the face mesh's parts", () => {
   beforeEach(() => {
     h.masking = null
@@ -851,5 +903,17 @@ describe("tk.settings.nodaroMotionPreciseStyleRoute", () => {
     expect(got).toStrictEqual({ routing: "off", bypassEmails: ["a@example.com"] })
     ;(got as { bypassEmails: string[] }).bypassEmails.push("b@example.com")
     expect(h.preciseStyleRoute).toEqual({ routing: "off", bypassEmails: ["a@example.com"] })
+  })
+
+  it("answers a routed run's own depth blur when set", async () => {
+    routingEngine()
+    h.preciseStyleRoute = { routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" }
+    expect(await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).toStrictEqual({ routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" })
+  })
+})
+
+describe("capabilities.videoFaceMeshContours", () => {
+  it("is advertised: the face mesh route draws the contours", () => {
+    expect(buildToolkit().capabilities?.videoFaceMeshContours).toBe(true)
   })
 })

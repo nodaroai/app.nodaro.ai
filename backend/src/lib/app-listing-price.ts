@@ -37,7 +37,7 @@
  *
  * The parts come from the listing estimator (`estimateWorkflowListingCredits`).
  */
-import { calculateMonetizedCost } from "@nodaro/shared/credits"
+import { calculateMonetizationMarkup, calculateMonetizedCost } from "@nodaro/shared/credits"
 
 export interface AppListingSplit {
   /** The whole graph at its saved settings (each render set to Preview at Preview): fixed credits. */
@@ -187,6 +187,42 @@ export function storedListingRunPrice(row: StoredAppListing): { fixed: number; p
     perMinute: perMinute - storedListingFinalPerMinute(row),
     perItem: perItem - storedListingFinalPerItem(row),
   }
+}
+
+/** What a runner must hold before an app run with a creator's fee starts — see {@link appRunFeeCover}. */
+export interface AppRunFeeCover {
+  /** The run's fee base as listed (the preview part, `base_estimated_credits`). */
+  readonly base: number
+  /** The creator's fee on that base: the flat fee and the percentage, rounded up. */
+  readonly fee: number
+  /** The base with the fee (`calculateMonetizedCost`). */
+  readonly required: number
+}
+
+/**
+ * What a runner must be able to pay before an app run that carries the
+ * creator's fee starts. The fee is settled from the runner's balance after the
+ * run, and only what the balance then holds is collected and passed to the
+ * creator; a run the runner cannot pay for is refused up front instead.
+ *
+ * Priced on the stored listing, as the Run button shows it: the run's fee base
+ * (`base_estimated_credits`, the preview part a run is charged on) with the fee
+ * on it. The flat fee is counted even when the listed base is 0, since any run
+ * that charges a credit settles it. The per-minute and per-item parts are not
+ * known until the run reads its inputs, so they are not counted here.
+ *
+ * Null when the run carries no fee: monetization off, no fee set, or the
+ * creator running their own app (the run settles no fee for them).
+ */
+export function appRunFeeCover(row: StoredAppListing & { readonly creator_id?: string | null }, runnerId: string): AppRunFeeCover | null {
+  if (!row.monetization_enabled) return null
+  if (row.creator_id != null && row.creator_id === runnerId) return null
+  const flatFee = row.monetization_flat_fee ?? 0
+  const percent = row.monetization_percent ?? 0
+  const base = Math.max(0, row.base_estimated_credits ?? 0)
+  const fee = calculateMonetizationMarkup(base, flatFee, percent)
+  if (fee <= 0) return null
+  return { base, fee, required: calculateMonetizedCost(base, flatFee, percent) }
 }
 
 /**

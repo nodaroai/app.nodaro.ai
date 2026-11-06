@@ -7,8 +7,9 @@
  * (https://github.com/google-ai-edge/mediapipe), Copyright 2021 The MediaPipe
  * Authors, licensed under the Apache License, Version 2.0 (`model/LICENSE.mediapipe.txt`):
  * FACEMESH_TESSELATION, FACEMESH_LIPS (outer and inner outline),
- * FACEMESH_LEFT_EYE and FACEMESH_RIGHT_EYE. Only these four are drawn: no
- * brows or iris beyond what the tesselation draws.
+ * FACEMESH_LEFT_EYE and FACEMESH_RIGHT_EYE, and (the "contours" parts, 2026-11-06)
+ * FACEMESH_FACE_OVAL, FACEMESH_LEFT_EYEBROW, FACEMESH_RIGHT_EYEBROW and
+ * FACEMESH_NOSE. No iris beyond what the tesselation draws.
  */
 
 // FACEMESH_TESSELATION: 2556 edges
@@ -291,3 +292,91 @@ export const FACEMESH_RIGHT_EYE: readonly number[] = [
   161, 160, 160, 159, 159, 158, 158, 157, 157, 173, 173, 133,
 ]
 
+// FACEMESH_FACE_OVAL: 36 edges
+export const FACEMESH_FACE_OVAL: readonly number[] = [
+  10, 338, 338, 297, 297, 332, 332, 284, 284, 251, 251, 389, 389, 356, 356, 454, 454, 323, 323, 361,
+  361, 288, 288, 397, 397, 365, 365, 379, 379, 378, 378, 400, 400, 377, 377, 152, 152, 148, 148, 176,
+  176, 149, 149, 150, 150, 136, 136, 172, 172, 58, 58, 132, 132, 93, 93, 234, 234, 127, 127, 162,
+  162, 21, 21, 54, 54, 103, 103, 67, 67, 109, 109, 10,
+]
+
+// FACEMESH_LEFT_EYEBROW: 8 edges
+export const FACEMESH_LEFT_EYEBROW: readonly number[] = [
+  276, 283, 283, 282, 282, 295, 295, 285, 300, 293, 293, 334, 334, 296, 296, 336,
+]
+
+// FACEMESH_RIGHT_EYEBROW: 8 edges
+export const FACEMESH_RIGHT_EYEBROW: readonly number[] = [
+  46, 53, 53, 52, 52, 65, 65, 55, 70, 63, 63, 105, 105, 66, 66, 107,
+]
+
+// FACEMESH_NOSE: 25 edges (the bridge, from between the eyes to the tip, and the base around the nostrils)
+export const FACEMESH_NOSE: readonly number[] = [
+  168, 6, 6, 197, 197, 195, 195, 5, 5, 4, 4, 1, 1, 19, 19, 94, 94, 2, 98, 97,
+  97, 2, 2, 326, 326, 327, 327, 294, 294, 278, 278, 344, 344, 440, 440, 275,
+  275, 4, 4, 45, 45, 220, 220, 115, 115, 48, 48, 64, 64, 98,
+]
+
+/**
+ * The mesh's 852 triangles, `[a0, b0, c0, a1, …]` — read off FACEMESH_TESSELATION, which lists each triangle as its
+ * three edges in turn (`a, b, b, c, c, a`; pinned by the topology test), not a second list. The contours' hidden
+ * sides are worked out against them (`face-mesh-visibility.ts`).
+ */
+export const FACEMESH_TRIANGLES: Uint16Array = (() => {
+  const out = new Uint16Array(FACEMESH_TESSELATION.length / 2)
+  for (let i = 0, t = 0; i + 5 < FACEMESH_TESSELATION.length; i += 6, t += 3) {
+    out[t] = FACEMESH_TESSELATION[i]!
+    out[t + 1] = FACEMESH_TESSELATION[i + 2]!
+    out[t + 2] = FACEMESH_TESSELATION[i + 4]!
+  }
+  return out
+})()
+
+/**
+ * The mesh's openings — the two eyes and the mouth, which the tesselation leaves open — closed, as triangles
+ * `[a0, b0, c0, …]` wound as the mesh is (each shares its rim edge with a mesh triangle in the opposite direction).
+ * Found, not listed: the rims are the tesselation's boundary loops (edges of one triangle only) other than the face
+ * oval, each fanned from its first point (the openings are near-convex). An eyeball or the mouth's inside hides what
+ * is behind it as the skin does, so the hidden-side test counts them as surface (`face-mesh-visibility.ts`).
+ */
+export const FACEMESH_OPENINGS: Uint16Array = (() => {
+  const T = FACEMESH_TRIANGLES
+  // Each directed edge of a triangle, and how many triangles each undirected edge is in.
+  const directed = new Set<number>()
+  const uses = new Map<number, number>()
+  const key = (a: number, b: number) => a * 1000 + b
+  for (let t = 0; t < T.length; t += 3) {
+    for (const [a, b] of [[T[t]!, T[t + 1]!], [T[t + 1]!, T[t + 2]!], [T[t + 2]!, T[t]!]] as const) {
+      directed.add(key(a, b))
+      const u = key(Math.min(a, b), Math.max(a, b))
+      uses.set(u, (uses.get(u) ?? 0) + 1)
+    }
+  }
+  const next = new Map<number, number[]>()
+  for (const [u, n] of uses) {
+    if (n !== 1) continue
+    const a = Math.floor(u / 1000), b = u % 1000
+    next.set(a, [...(next.get(a) ?? []), b])
+    next.set(b, [...(next.get(b) ?? []), a])
+  }
+  const oval = new Set(FACEMESH_FACE_OVAL)
+  const seen = new Set<number>()
+  const out: number[] = []
+  for (const start of next.keys()) {
+    if (seen.has(start) || oval.has(start)) continue
+    const loop = [start]
+    seen.add(start)
+    for (let prev = -1, cur = start; ; ) {
+      const step = next.get(cur)!.find((p) => p !== prev && !seen.has(p))
+      if (step === undefined) break
+      loop.push(step)
+      seen.add(step)
+      prev = cur
+      cur = step
+    }
+    // The mesh runs the rim's first edge loop[0] → loop[1]: the cap runs it the other way.
+    if (directed.has(key(loop[0]!, loop[1]!))) loop.reverse()
+    for (let i = 1; i + 1 < loop.length; i++) out.push(loop[0]!, loop[i]!, loop[i + 1]!)
+  }
+  return Uint16Array.from(out)
+})()

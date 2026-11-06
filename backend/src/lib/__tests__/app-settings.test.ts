@@ -6,6 +6,14 @@ vi.mock("@/lib/supabase.js", () => {
   return { supabase: { from: mockFrom } }
 })
 
+// The parsing and caching here are read with the version unreadable, the
+// TTL-only behaviour; the version itself is app-settings-cross-process.test.ts.
+vi.mock("@/lib/app-settings-version.js", () => ({
+  appSettingsVersion: async () => null,
+  appSettingsChangedSince: async () => false,
+  forgetAppSettingsVersion: () => {},
+}))
+
 import {
   getAppSettings,
   calculateDisplayCost,

@@ -2315,7 +2315,9 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
               // through the workspace; the approved/unapproved MARKUP fork
               // lives entirely in the RPC (migration 352). Args built by the
               // pure helper so the routing is pinned by unit tests.
-              await supabase.rpc("process_app_monetization", monetizationRpcArgs({
+              // Returns what was collected: on the runner-pays path, at most
+              // the runner's balance (migration 599); 0 on a repeat call.
+              const { data: collected } = await supabase.rpc("process_app_monetization", monetizationRpcArgs({
                 runnerId: ctx.userId,
                 creatorId: appVersion.creator_id as string,
                 markupAmount: markup,
@@ -2326,7 +2328,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
                 percentFee,
                 billingContext: ctx.billingContext,
               }))
-              console.log(`[monetization] Credited ${markup} CR to creator ${appVersion.creator_id} from runner ${ctx.userId}`)
+              console.log(`[monetization] Credited ${typeof collected === "number" ? collected : 0} of ${markup} CR to creator ${appVersion.creator_id} from runner ${ctx.userId}`)
             }
           }
         }

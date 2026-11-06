@@ -100,11 +100,16 @@ export function TemplateMarketplaceCard({ template, isFavorited, onToggleFavorit
     <article className="group relative rounded-[14px] border border-[var(--home-line-2)] bg-[var(--home-card)] p-2 transition-colors hover:border-[var(--home-muted)] focus-within:border-[var(--home-muted)]">
       <TemplateCover template={template} className="aspect-video">
         {chips.length > 0 && (
-          <span className="absolute end-2 top-2 flex gap-1">
+          // One row along the bottom end, clear of the heart and of the faces a
+          // still tends to carry up top. The row is one chip tall and clips
+          // what wraps below it, so a chip never breaks across lines: the
+          // chips that fit show whole, in order, and the rest stay out of
+          // sight. A lone chip wider than the row truncates instead.
+          <span className="absolute start-2 end-2 bottom-2 flex h-[22px] flex-wrap content-start justify-end gap-1 overflow-hidden">
             {chips.map((chip) => (
               <span
                 key={chip}
-                className="rounded-full border border-[var(--home-line-2)] bg-[var(--home-panel)] px-[7px] py-0.5 text-[11px] font-semibold text-[var(--home-fg-2)]"
+                className="max-w-full truncate rounded-full border border-[var(--home-line-2)] bg-[var(--home-panel)] px-[7px] text-[11px] font-semibold leading-5 text-[var(--home-fg-2)]"
               >
                 {chip}
               </span>

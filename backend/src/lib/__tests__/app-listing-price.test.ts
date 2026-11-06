@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { appListingPrice, appListingFinalCredits, appListingFinalPerMinute, relistedAppPrices, storedListingFinalPerMinute, storedListingFinalPerItem, storedListingRunPrice } from "../app-listing-price.js"
+import { appListingPrice, appListingFinalCredits, appListingFinalPerMinute, appRunFeeCover, relistedAppPrices, storedListingFinalPerMinute, storedListingFinalPerItem, storedListingRunPrice } from "../app-listing-price.js"
 
 /**
  * A published app's listed price (decided 2026-10-06): the preview run WITH
@@ -176,5 +176,52 @@ describe("a per-item listing", () => {
   it("a row stored before the per-item columns reads as none", () => {
     expect(storedListingFinalPerItem({ estimated_credits: 140 })).toBe(0)
     expect(storedListingRunPrice({ estimated_credits: 140 }).perItem).toBe(0)
+  })
+})
+
+describe("appRunFeeCover — what a runner must hold before a run with the creator's fee", () => {
+  const RUNNER = "runner-1"
+  const CREATOR = "creator-1"
+  const row = (over: Record<string, unknown> = {}) => ({
+    creator_id: CREATOR,
+    monetization_enabled: true,
+    monetization_flat_fee: 10,
+    monetization_percent: 25,
+    base_estimated_credits: 40,
+    estimated_credits: 175,
+    ...over,
+  })
+
+  it("is the listed fee base with the fee on it, priced as the run settles it", () => {
+    // 40 + 10 + ceil(40 * 25 / 100) = 60
+    expect(appRunFeeCover(row(), RUNNER)).toEqual({ base: 40, fee: 20, required: 60 })
+  })
+
+  it("matches the Run button's figure for a listing with a fee base", () => {
+    const r = row()
+    expect(appRunFeeCover(r, RUNNER)?.required).toBe(storedListingRunPrice(r).fixed)
+  })
+
+  it("counts the flat fee even when the listed base is 0 (any charged run settles it)", () => {
+    expect(appRunFeeCover(row({ base_estimated_credits: 0, monetization_percent: 0 }), RUNNER)).toEqual({ base: 0, fee: 10, required: 10 })
+  })
+
+  it("holds a fee of any size: the whole flat fee is required", () => {
+    expect(appRunFeeCover(row({ monetization_flat_fee: 1_000_000, monetization_percent: 0 }), RUNNER)).toEqual({ base: 40, fee: 1_000_000, required: 1_000_040 })
+  })
+
+  it("is null when the run carries no fee", () => {
+    expect(appRunFeeCover(row({ monetization_enabled: false }), RUNNER)).toBeNull()
+    expect(appRunFeeCover(row({ monetization_flat_fee: 0, monetization_percent: 0 }), RUNNER)).toBeNull()
+    // A percentage of a free run is nothing.
+    expect(appRunFeeCover(row({ monetization_flat_fee: 0, base_estimated_credits: 0 }), RUNNER)).toBeNull()
+  })
+
+  it("is null for the creator running their own app", () => {
+    expect(appRunFeeCover(row(), CREATOR)).toBeNull()
+  })
+
+  it("reads missing columns as none", () => {
+    expect(appRunFeeCover({ monetization_enabled: true, monetization_flat_fee: 5 }, RUNNER)).toEqual({ base: 0, fee: 5, required: 5 })
   })
 })

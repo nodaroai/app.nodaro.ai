@@ -228,6 +228,33 @@ node offers, a Suno model) is held to that list: a value outside it returns
 default applies; a `null` flat input is dropped, so the saved value applies
 (see [Clearing a field](./embed-app-guide.md#clearing-a-field)).
 
+<a id="an-app-with-a-creators-fee"></a>**An app with a creator's fee.** (Cloud edition only.) A run of a
+monetized app is checked against the runner's balance before anything is
+written or run: the balance must cover the app's listed run price with the
+fee, that is the listed price the fee applies to (the preview part, see
+[the app's listed price](./app-view-modes.md)) plus the flat fee plus the
+percentage of it, rounded up to a whole credit. The flat fee counts in full
+even when the listed price is 0. A run the balance cannot cover is refused with
+`402 { "error": { "code": "insufficient_credits", "message": "This app costs about <n> credits to run, including the creator's fee of <fee> credits; your balance is <balance>." } }`.
+The creator running their own app pays no fee and is not checked. On a run
+paid by an organization workspace, the fee is paid by the workspace when its
+organization has approved the app, and by the runner otherwise. An approved
+app's run is refused with the workspace's own `402 budget_exceeded` when the
+budget's headroom cannot cover the listed price with the fee. An app the
+organization has not approved is refused with `402 insufficient_credits`
+("This app's creator fee of <fee> credits is paid from your own balance, as
+your organization has not approved this app; your balance is <balance>.")
+when the runner's own balance cannot cover the fee; the workspace pays the
+run itself.
+
+The fee is settled once the run completes, and only what its payer then
+holds is collected: at most the runner's balance (which never goes below
+zero for the fee), or at most the workspace budget's headroom. The creator
+is credited exactly the amount collected; the rest is collected from nobody
+and paid to nobody. The creator's earnings record keeps the fee that was
+asked (`flatFee`, `percentFee`) beside what was collected (`totalEarned`).
+See [Budgets and credits](./organizations.md#budgets-and-credits).
+
 One class of field is refused on every run path (`/v1/app/:slug/run`,
 `/v1/workflows/:id/run`, `/v1/present/:token/run`, `/v1/component/execute`,
 `/v1/api/run`): a **destination on an outbound node**. Outbound nodes are
@@ -896,14 +923,14 @@ The [SDK](./sdk-reference.md#clientwithworkspaceworkspaceid) sends it for you
 scoped to one workspace. The [CLI](./cli.md#working-in-a-workspace) takes
 `--workspace`, `NODARO_WORKSPACE`, or a saved profile selection. For the full
 organization surface — members, invitations, join codes, the audit log — see
-[Organizations](./organizations.md).
+[Budgets and credits](./organizations.md#budgets-and-credits).
 
 The header has no effect unless organizations are enabled on the instance you
 are calling; self-hosted builds ignore it.
 
 The organization, workspace and membership endpoints themselves — creating an
 organization, adding people, archiving a class — are documented in
-[Organizations](./organizations.md).
+[Budgets and credits](./organizations.md#budgets-and-credits).
 
 ## 4d. Parameter corrections (`adjustments`)
 
@@ -3833,9 +3860,9 @@ that calls these through the SDK (`client.billing`).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/billing/create-checkout-session` | Opens Stripe Checkout for a plan or a credit pack: `{ priceId, mode?, embedded?, returnPath? }` → `{ data: { url } }`. |
+| `POST` | `/v1/billing/create-checkout-session` | Opens Stripe Checkout for a plan or a credit pack: `{ priceId, mode?, embedded?, returnPath? }` → `{ data: { url } }`. A plan's Checkout accepts promotion codes; a credit pack's does not, and a pack purchase that settles for nothing grants no credits. `409` for a plan while the account already has a subscription (active or past due): change it with `change-plan` instead. |
 | `POST` | `/v1/billing/create-load-session` | Opens Stripe Checkout to load a whole amount as credits: `{ amountUsd, embedded?, returnPath? }` → `{ data: { url, credits } }`. |
-| `POST` | `/v1/billing/change-plan` | Moves an active subscription to another plan: `{ newPriceId }` → `{ data: { subscriptionId, tier } }`. |
+| `POST` | `/v1/billing/change-plan` | Moves an active subscription to another plan: `{ newPriceId }` → `{ data: { subscriptionId, tier } }`. **Upgrade:** the price difference for the rest of the billing period is charged at once, and the new plan applies only when that payment succeeds; the credits added are the difference between the two plans' monthly credits, once per billing period — moving down and back up within one period adds nothing more. An upgrade invoice settled for 0 (a 100%-off coupon, or a balance that covered it) adds no credits. If the payment does not go through, the plan is unchanged and the answer is `409` with `{ error: { code: "plan_change_payment_required", message, invoiceUrl } }` — `invoiceUrl` is Stripe's page for paying that invoice, and the change applies if it is paid before it expires; the same answer comes back while an earlier change is still waiting for its payment. **Downgrade:** the unused time is credited on the next invoice and the current credits stay until the period ends. **Monthly ↔ yearly:** switching restarts the billing period but adds no credits; the next monthly credits come a month after the switch. `409` when the subscription is not active (for example a failed renewal payment); `404` with no subscription; `429` after 5 plan-change requests from one account in 24 hours (refused ones count). |
 | `POST` | `/v1/billing/manage-subscription` | A link to the Stripe Customer Portal: `{ returnPath? }` → `{ data: { url } }`. `404` before a first purchase (Stripe does not know the account yet). |
 | `GET` | `/v1/billing/auto-recharge` | The automatic top-up setting: `{ data: { enabled, thresholdCredits, amountUsd, failureCount, lastAttemptAt, hasSavedCard } }`. |
 | `PUT` | `/v1/billing/auto-recharge` | Changes it: `{ enabled, thresholdCredits?, amountUsd? }` (both required to enable). |
@@ -4739,9 +4766,11 @@ where it is not. On an engine answered `"precise"`, a request with nothing else
 to change is refused as `400 validation_error`; with anything else to change (a
 role with images, a fixed reference, a `prePrompt` or `postPrompt`) it answers
 `202` and runs and is quoted as Precise, with the art style where `preciseArtStyle` is `true`.
-While Nodaro runs a Precise run with an art style as a Motion run (see An art
-style on a Precise run below), a request that keeps one on such an engine runs
-and is quoted as Motion instead, and one with nothing else to change is accepted.
+While Nodaro makes a Precise run with an art style the way a Motion run is
+made (see An art style on a Precise run below), a request that keeps one on such
+an engine is made and quoted as a Motion run, its job recording the style sent; a
+`style: "motion"` request is then not overridden at all (no `styleForced`), and
+one with nothing else to change is accepted.
 Nodaro Motion Pulse is always `false` in all three, and a server from before
 them leaves them out: read that as `false` for every engine.
 The answer may be up to a minute old. Trends are not
@@ -4782,15 +4811,16 @@ takes none there (below). That setting is not the forced style, and
 answers `preciseArtStyle` `true` for the engine (Nodaro Motion Prism only), a
 Precise run (no `style`, or `style: "precise"`) also takes an art style,
 `direction: { style: "<id>" }`, from the same catalog and refused the same way
-(`400 unknown_art_style`, `400 art_style_not_supported`). Nodaro may run it as a
-Motion run, where an art style holds across the whole picture far more reliably
-(its engine does by default, unless Nodaro turns that off). It is then treated
-exactly as if you had sent `style: "motion"`: its estimate (sent with the same
-body), its price, its Full Quality and Style only above are a Motion run's, the
-job records `input_data.style: "motion"`, and with nothing else to change it is
+(`400 unknown_art_style`, `400 art_style_not_supported`). Nodaro may make it the
+way a Motion run is made, where an art style holds across the whole picture far
+more reliably (its engine does by default, unless Nodaro turns that off). The
+job still records the style you sent (`input_data.style` absent, or
+`"precise"`), so reading it back, or sending the same body again, asks for the
+same run. Its estimate (sent with the same body), its price, its Full Quality and
+Style only above are then a Motion run's, and with nothing else to change it is
 accepted, as a style-only run. `style-choice` does not show which applies: read
-the estimate for what a run costs, and the job's `input_data.style` for what ran.
-Otherwise the run stays
+the estimate for what a run costs. (Jobs made this way before the style was kept
+record `input_data.style: "motion"`.) Otherwise the run is made as
 Precise: the clip is edited as a Precise run edits it, the people swapped as
 Precise swaps them, and the whole video is drawn in the art style. There it is not a
 change on its own: a Precise run with nothing else to change (no role with

@@ -184,7 +184,7 @@ describe("POST /v1/video-face-mesh — a child step", () => {
   })
 
   it("parts: the eye and lip outlines, or the lip outline, ride to the worker and the job as sent; an unknown value is refused", async () => {
-    for (const parts of ["features", "mouth", "full"] as const) {
+    for (const parts of ["features", "mouth", "contours", "full"] as const) {
       vi.mocked(videoQueue.add).mockClear()
       const res = await asChild({ ...BODY, parts })
       expect(res.statusCode).toBe(202)
@@ -196,10 +196,31 @@ describe("POST /v1/video-face-mesh — a child step", () => {
     expect(videoQueue.add).not.toHaveBeenCalled()
   })
 
+  it("layers: ride to the worker and the job as sent; never with parts, never a set that draws no line, never an unknown layer", async () => {
+    const layers = { wireframe: true, irises: true, bold: true, eyes: false }
+    vi.mocked(videoQueue.add).mockClear()
+    expect((await asChild({ ...BODY, layers })).statusCode).toBe(202)
+    expect(videoQueue.add).toHaveBeenCalledWith("video-face-mesh", expect.objectContaining({ layers }))
+    expect(inserted!.input_data).toMatchObject({ layers })
+    vi.mocked(videoQueue.add).mockClear()
+    for (const bad of [
+      { ...BODY, layers, parts: "full" },
+      { ...BODY, layers: { bold: true } },
+      { ...BODY, layers: {} },
+      { ...BODY, layers: { nose: true } },
+      { ...BODY, layers: { eyes: "yes" } },
+    ]) {
+      const res = await asChild(bad)
+      expect(res.statusCode, JSON.stringify(bad.layers)).toBe(400)
+    }
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
   it("no parts: never defaulted — the job and the queue as before the key existed", async () => {
     expect((await asChild(BODY)).statusCode).toBe(202)
     expect(vi.mocked(videoQueue.add).mock.calls[0]![1]).not.toHaveProperty("parts")
     expect(inserted!.input_data).not.toHaveProperty("parts")
+    expect(inserted!.input_data).not.toHaveProperty("layers")
   })
 
   it("grayscale needs no depth render; a depth render alone is taken (grayscale)", async () => {

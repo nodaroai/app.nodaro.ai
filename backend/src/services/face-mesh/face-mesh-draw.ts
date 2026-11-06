@@ -2,14 +2,28 @@
  * The lines drawn on a frame — rasterised from SVG with sharp, then toned
  * against the picture under them.
  *
- * Per face (its 468 points as fractions of the frame):
- *   - the tesselation: a thin wireframe (`FACE_MESH_STYLE.mesh`);
- *   - the eye outlines and the lip outline, outer and inner: darker and a
- *     little thicker (`FACE_MESH_STYLE.outline`).
- * What is drawn is the request's `parts` (`VideoFaceMeshParts`): `"full"`
- * (the default) both layers; `"features"` the eye and lip outlines alone;
- * `"mouth"` the lip outline alone. An outline is drawn exactly as in the
- * full mesh (its tone, its width, the face's box), so `"full"` is unchanged.
+ * Per face (its 468 points as fractions of the frame, 478 with the irises),
+ * the layers the request draws (`face-mesh-layers.ts`: a `parts` value is one
+ * set of them):
+ *   - the wireframe: the tesselation, thin (`FACE_MESH_STYLE.mesh`);
+ *   - the outlines, darker and a little thicker (`FACE_MESH_STYLE.outline`):
+ *     the eyes', the lips' (outer and inner), and the contours (the face
+ *     oval, both eyebrows and the nose), each its own layer;
+ *   - the irises: a circle and a centre dot each, in the outlines' tone and
+ *     width, clipped to the eye's opening (`face-mesh-irises.ts`);
+ *   - bold (a modifier, no line of its own): every line `FACE_MESH_STYLE.bold`
+ *     × as wide, in a deeper tone (`boldMesh`, `boldOutline`).
+ * `"full"` (the default) is the wireframe and the eye and lip outlines;
+ * `"features"` the eye and lip outlines; `"mouth"` the lip outline;
+ * `"contours"` (2026-11-06) the eye and lip outlines and the contours. An
+ * outline is drawn exactly as in the full mesh (its tone, its width, the
+ * face's box), whatever else is drawn.
+ * With the contours on, every line is drawn only where the face does not hide
+ * it (given each face's visibility, `edgeVisibility` in
+ * `face-mesh-visibility.ts`, over `visibilityLayoutOf`'s edges): a turned
+ * face's far side is left out, and a line slipping behind the cheek or the
+ * nose is drawn fainter as it goes (`CONTOUR_FADE_LEVELS`); an iris fades as
+ * its eye's outline does. With the contours off nothing is left out.
  * No colour of their own (decided by the admin 2026-11-01: a video model
  * copied the former blue / green lines into its result): every line is a tone
  * of the picture under it (`lineTone`) — the wireframe × 0.6, the outlines
@@ -24,8 +38,9 @@
  * drifts across it).
  *
  * Widths: the wireframe is 1 px at 720p (the frame's SHORT side), scaled with
- * the resolution, never thicker than 1 px per 100 px of the face's height,
- * never under 1 px; the outlines 1.5 × that.
+ * the resolution, never thicker than 1 px per 100 px of the face's height
+ * (`widthPerFacePx`), never under 1 px; the outlines 1.5 × that; bold lines
+ * twice each.
  *
  * Each layer is ONE `<path>` per face, rasterised to a coverage (a stroke is
  * painted once where its segments overlap, so the mesh's shared edges never
@@ -33,8 +48,20 @@
  * through untouched.
  */
 import sharp from "sharp"
-import type { VideoFaceMeshParts } from "@nodaro/shared/media"
-import { FACEMESH_LEFT_EYE, FACEMESH_LIPS, FACEMESH_RIGHT_EYE, FACEMESH_TESSELATION } from "./face-mesh-topology.js"
+import { FACE_MESH_VISIBILITY } from "./face-mesh-visibility.js"
+import { FACE_MESH_POINTS } from "./face-mesh-model.js"
+import { irisSvg } from "./face-mesh-irises.js"
+import {
+  MESH_EDGES,
+  layerSetOf,
+  outlineEdgesOf,
+  visibilityLayoutOf,
+  type EdgeSpan,
+  type FaceMeshDrawing,
+  type FaceMeshLayerSet,
+} from "./face-mesh-layers.js"
+
+export type { FaceMeshDrawing } from "./face-mesh-layers.js"
 
 /** How one layer's gray is worked out from the luminance `L` (0–255) under it (`lineTone`). */
 export interface FaceMeshTone {
@@ -59,6 +86,15 @@ export const FACE_MESH_STYLE = {
   widthPerFacePx: 0.01,
   /** No line is thinner than this, px. */
   minWidth: 1,
+  /**
+   * Bold lines (the `bold` layer): every width × `widthScale` (the wireframe 2 px at 720p, at most 2 px per 100 px of
+   * face height), and deeper tones — the wireframe about as deep as the usual outlines, the outlines near black.
+   */
+  bold: {
+    widthScale: 2,
+    mesh: { factor: 0.4, minDarken: 28, lighten: 32 },
+    outline: { factor: 0.15, minDarken: 56, lighten: 64 },
+  },
 } as const
 
 const smoothstep = (t: number): number => {
@@ -85,45 +121,61 @@ export function lineTone(l: number, tone: FaceMeshTone): number {
 /** The luminance (Rec. 709 weights) of an RGB pixel, 0–255. */
 export const lumaOf = (r: number, g: number, b: number): number => 0.2126 * r + 0.7152 * g + 0.0722 * b
 
-/** Each layer's tone for every whole luminance. */
+/** Each layer's tone for every whole luminance, and bold's. */
 const MESH_TONES = Float32Array.from({ length: 256 }, (_, l) => lineTone(l, FACE_MESH_STYLE.mesh))
 const OUTLINE_TONES = Float32Array.from({ length: 256 }, (_, l) => lineTone(l, FACE_MESH_STYLE.outline))
+const BOLD_MESH_TONES = Float32Array.from({ length: 256 }, (_, l) => lineTone(l, FACE_MESH_STYLE.bold.mesh))
+const BOLD_OUTLINE_TONES = Float32Array.from({ length: 256 }, (_, l) => lineTone(l, FACE_MESH_STYLE.bold.outline))
 
-/** Each undirected edge once (the tesselation lists the edge two triangles share twice). */
-function uniqueEdges(flat: readonly number[]): Uint16Array {
-  const seen = new Set<number>()
-  const out: number[] = []
-  for (let i = 0; i + 1 < flat.length; i += 2) {
-    const a = Math.min(flat[i]!, flat[i + 1]!)
-    const b = Math.max(flat[i]!, flat[i + 1]!)
-    const key = a * 1000 + b
-    if (a === b || seen.has(key)) continue
-    seen.add(key)
-    out.push(a, b)
-  }
-  return Uint16Array.from(out)
-}
-
-const MESH_EDGES = uniqueEdges(FACEMESH_TESSELATION)
-const OUTLINE_EDGES = uniqueEdges([...FACEMESH_LIPS, ...FACEMESH_LEFT_EYE, ...FACEMESH_RIGHT_EYE])
-/** The lip outline alone, outer and inner (`parts: "mouth"`). */
-const LIP_EDGES = uniqueEdges(FACEMESH_LIPS)
+/**
+ * The contours (`parts: "contours"`): the eye and lip outlines first, as drawn in the full mesh, then the oval, the
+ * brows and the nose. A face's visibility (`edgeVisibility`, `face-mesh-visibility.ts`) is given per piece of these,
+ * in this order, for that value (`visibilityLayoutOf`'s for its set).
+ */
+export const CONTOUR_EDGES = outlineEdgesOf(layerSetOf("contours"))
 
 /**
  * Where the lines go on the frame: two SVGs over the same box, white on
  * transparent — the wireframe (`meshSvg`; empty when the request draws no
- * wireframe: `parts` `"features"` or `"mouth"`) and the outlines
- * (`outlineSvg`: the eyes' and the lips', or the lips' alone for `"mouth"`) —
- * whose coverage `compositeFaceMesh` tones.
+ * wireframe) and the outlines (`outlineSvg`: the eyes', the lips', the
+ * contours' and the irises', as drawn) — whose coverage `compositeFaceMesh`
+ * tones.
  */
 export interface FaceMeshOverlay {
   readonly meshSvg: string
   readonly outlineSvg: string
+  /**
+   * The outlines' fading pieces (the contours on, with a visibility): one
+   * SVG per strength present, white on transparent over the same box, drawn
+   * as part of the outlines at `alpha` × their coverage — where one meets a
+   * line of the outlines, the stronger wins (never darker than either).
+   * Absent when nothing fades.
+   */
+  readonly fadedSvgs?: readonly FaceMeshFadedLayer[]
+  /** The wireframe's fading pieces, as `fadedSvgs` are the outlines'. Absent when nothing of it fades. */
+  readonly meshFadedSvgs?: readonly FaceMeshFadedLayer[]
+  /** Bold lines (`FACE_MESH_STYLE.bold`): toned deeper. Absent: the usual tones. */
+  readonly bold?: true
   readonly left: number
   readonly top: number
   readonly width: number
   readonly height: number
 }
+
+/** A layer of fading pieces, all at one strength. */
+export interface FaceMeshFadedLayer {
+  readonly svg: string
+  /** 1 / `CONTOUR_FADE_LEVELS` … (`CONTOUR_FADE_LEVELS` − 1) / `CONTOUR_FADE_LEVELS`. */
+  readonly alpha: number
+}
+
+/**
+ * A piece's visibility is drawn at the nearest of this many strengths: the
+ * nearest to 1 with its layer, 0 (under half a step) not at all, each one
+ * between in a layer of its own (`FaceMeshFadedLayer`) — so a fade is a
+ * handful of paths, not one per piece.
+ */
+export const CONTOUR_FADE_LEVELS = 8
 
 const r1 = (v: number): string => (Math.round(v * 10) / 10).toString()
 
@@ -136,20 +188,90 @@ function pathOf(edges: Uint16Array, px: Float64Array, dx: number, dy: number): s
   return d
 }
 
+const levelOf = (v: number | undefined): number => Math.round(Math.min(1, Math.max(0, v ?? 1)) * CONTOUR_FADE_LEVELS)
+
+/**
+ * The `edges` of one face drawn as far as `visibility` says, its pieces for
+ * those edges starting at edge `from` of the layout: `d` for each strength
+ * level, index `CONTOUR_FADE_LEVELS` the whole lines. Each edge's pieces at
+ * one level in a row are one segment, so an edge drawn whole is its own
+ * "M a L b", exactly as `pathOf` draws it.
+ */
+function fadingPathsOf(edges: Uint16Array, visibility: ArrayLike<number>, from: number, px: Float64Array, dx: number, dy: number): string[] {
+  const pieces = FACE_MESH_VISIBILITY.pieces
+  const d: string[] = Array.from({ length: CONTOUR_FADE_LEVELS + 1 }, () => "")
+  const at = (a: number, b: number, t: number, k: 0 | 1): number => (t === 0 ? px[2 * a + k]! : t === 1 ? px[2 * b + k]! : px[2 * a + k]! + (px[2 * b + k]! - px[2 * a + k]!) * t)
+  for (let e = 0; e < edges.length; e += 2) {
+    const a = edges[e]!, b = edges[e + 1]!
+    const base = (from + (e >> 1)) * pieces
+    for (let k = 0; k < pieces; ) {
+      const level = levelOf(visibility[base + k])
+      let end = k + 1
+      while (end < pieces && levelOf(visibility[base + end]) === level) end++
+      if (level > 0) {
+        const t0 = k / pieces, t1 = end / pieces
+        d[level] += `M${r1(at(a, b, t0, 0) - dx)} ${r1(at(a, b, t0, 1) - dy)}L${r1(at(a, b, t1, 0) - dx)} ${r1(at(a, b, t1, 1) - dy)}`
+      }
+      k = end
+    }
+  }
+  return d
+}
+
+/**
+ * The wireframe of one face drawn as far as its points' visibility (one value
+ * per point, from `from`) says: each edge whole, at the strength of the less
+ * visible of its two points; `d` for each strength level as `fadingPathsOf`.
+ */
+function meshPathsOf(visibility: ArrayLike<number>, from: number, px: Float64Array, dx: number, dy: number): string[] {
+  const d: string[] = Array.from({ length: CONTOUR_FADE_LEVELS + 1 }, () => "")
+  for (let e = 0; e < MESH_EDGES.length; e += 2) {
+    const a = MESH_EDGES[e]!, b = MESH_EDGES[e + 1]!
+    const level = Math.min(levelOf(visibility[from + a]), levelOf(visibility[from + b]))
+    if (level > 0) d[level] += `M${r1(px[2 * a]! - dx)} ${r1(px[2 * a + 1]! - dy)}L${r1(px[2 * b]! - dx)} ${r1(px[2 * b + 1]! - dy)}`
+  }
+  return d
+}
+
+/** The strength an iris is drawn at: the mean of its eye's pieces (`span` of the layout), as a level. */
+function irisLevelOf(visibility: ArrayLike<number>, span: EdgeSpan | undefined): number {
+  if (!span) return CONTOUR_FADE_LEVELS
+  const pieces = FACE_MESH_VISIBILITY.pieces
+  let sum = 0
+  for (let i = span[0] * pieces; i < span[1] * pieces; i++) sum += Math.min(1, Math.max(0, visibility[i] ?? 1))
+  return levelOf(sum / ((span[1] - span[0]) * pieces))
+}
+
 const svgOf = (w: number, h: number, body: string): string =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
   `<g fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">${body}</g></svg>`
 
+/** Each strength level's body as a faded layer (levels 1 … `CONTOUR_FADE_LEVELS` − 1 that hold anything). */
+const fadedLayersOf = (bodies: readonly string[], w: number, h: number): FaceMeshFadedLayer[] =>
+  bodies.flatMap((body, level) => (body && level > 0 && level < CONTOUR_FADE_LEVELS ? [{ svg: svgOf(w, h, body), alpha: level / CONTOUR_FADE_LEVELS }] : []))
+
 /**
- * The overlay for `faces` (each `[x0, y0, …]` fractions) on a `width × height`
- * frame, or null when there is nothing to draw on it (no face, or every face
- * entirely off the frame). `parts` (left out: `"full"`) decides which layers
- * are drawn; the box and the widths are worked out from every point either
- * way, so an outline is the same line in each.
+ * The overlay for `faces` (each `[x0, y0, …]` fractions: 468 points, or 478
+ * with the irises) on a `width × height` frame, or null when there is nothing
+ * to draw on it (no face, or every face entirely off the frame). `drawing`
+ * (left out: `"full"`) decides which layers are drawn (`layerSetOf`); the box
+ * and the widths are worked out from the face's 468 points either way, so an
+ * outline is the same line in each. `visibility` (per face, in `faces`'
+ * order; `edgeVisibility` over `visibilityLayoutOf`'s edges) is read only
+ * with the contours on: what a face hides is left out, what fades is drawn
+ * fainter (`fadedSvgs`, `meshFadedSvgs`). A face with none is drawn whole.
  */
-export function faceMeshOverlay(faces: readonly ArrayLike<number>[], width: number, height: number, parts: VideoFaceMeshParts = "full"): FaceMeshOverlay | null {
+export function faceMeshOverlay(
+  faces: readonly ArrayLike<number>[],
+  width: number,
+  height: number,
+  drawing: FaceMeshDrawing = "full",
+  visibility?: readonly (ArrayLike<number> | undefined)[],
+): FaceMeshOverlay | null {
   if (faces.length === 0) return null
+  const set: FaceMeshLayerSet = layerSetOf(drawing)
   const frameWidth = Math.min(width, height) * FACE_MESH_STYLE.widthPerShortSidePx
+  const scale = set.bold ? FACE_MESH_STYLE.bold.widthScale : 1
   const drawn = faces.map((f) => {
     const px = new Float64Array(f.length)
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
@@ -157,12 +279,14 @@ export function faceMeshOverlay(faces: readonly ArrayLike<number>[], width: numb
       const x = f[i]! * width, y = f[i + 1]! * height
       px[i] = x
       px[i + 1] = y
+      // The box is the face's 468 points' (the irises are inside it).
+      if (i >= 2 * FACE_MESH_POINTS) continue
       if (x < x0) x0 = x
       if (x > x1) x1 = x
       if (y < y0) y0 = y
       if (y > y1) y1 = y
     }
-    const mesh = Math.max(FACE_MESH_STYLE.minWidth, Math.min(frameWidth, (y1 - y0) * FACE_MESH_STYLE.widthPerFacePx))
+    const mesh = Math.max(FACE_MESH_STYLE.minWidth, Math.min(frameWidth, (y1 - y0) * FACE_MESH_STYLE.widthPerFacePx)) * scale
     return { px, mesh, box: [x0, y0, x1, y1] as const }
   })
   // The faces' box, widened by the thickest line, clipped to the frame.
@@ -174,15 +298,59 @@ export function faceMeshOverlay(faces: readonly ArrayLike<number>[], width: numb
   if (right - left < 1 || bottom - top < 1) return null
   const w = right - left
   const h = bottom - top
-  const wireframe = parts === "full"
-  const outlineEdges = parts === "mouth" ? LIP_EDGES : OUTLINE_EDGES
+  const outlineEdges = outlineEdgesOf(set)
+  const layout = set.contours ? visibilityLayoutOf(set) : undefined
   let mesh = ""
   let outline = ""
-  for (const d of drawn) {
-    if (wireframe) mesh += `<path d="${pathOf(MESH_EDGES, d.px, left, top)}" stroke-width="${r1(d.mesh)}"/>`
-    outline += `<path d="${pathOf(outlineEdges, d.px, left, top)}" stroke-width="${r1(d.mesh * FACE_MESH_STYLE.outline.widthFactor)}"/>`
+  const faded: string[] = Array.from({ length: CONTOUR_FADE_LEVELS }, () => "")
+  const meshFaded: string[] = Array.from({ length: CONTOUR_FADE_LEVELS }, () => "")
+  drawn.forEach((d, i) => {
+    const outlineWidth = d.mesh * FACE_MESH_STYLE.outline.widthFactor
+    const stroke = `stroke-width="${r1(outlineWidth)}"`
+    const meshStroke = `stroke-width="${r1(d.mesh)}"`
+    const seen = layout ? visibility?.[i] : undefined
+    if (set.wireframe) {
+      if (seen && layout?.meshPointsFrom !== undefined) {
+        const paths = meshPathsOf(seen, layout.meshPointsFrom, d.px, left, top)
+        mesh += `<path d="${paths[CONTOUR_FADE_LEVELS]}" ${meshStroke}/>`
+        for (let level = 1; level < CONTOUR_FADE_LEVELS; level++) if (paths[level]) meshFaded[level] += `<path d="${paths[level]}" ${meshStroke}/>`
+      } else {
+        mesh += `<path d="${pathOf(MESH_EDGES, d.px, left, top)}" ${meshStroke}/>`
+      }
+    }
+    if (outlineEdges.length > 0) {
+      if (!seen) {
+        outline += `<path d="${pathOf(outlineEdges, d.px, left, top)}" ${stroke}/>`
+      } else {
+        const paths = fadingPathsOf(outlineEdges, seen, 0, d.px, left, top)
+        outline += `<path d="${paths[CONTOUR_FADE_LEVELS]}" ${stroke}/>`
+        for (let level = 1; level < CONTOUR_FADE_LEVELS; level++) if (paths[level]) faded[level] += `<path d="${paths[level]}" ${stroke}/>`
+      }
+    }
+    if (set.irises) {
+      for (const side of ["left", "right"] as const) {
+        const level = seen ? irisLevelOf(seen, side === "left" ? layout?.leftIris : layout?.rightIris) : CONTOUR_FADE_LEVELS
+        if (level === 0) continue
+        // Each SVG it may go in gets its own copy of the clip, so the ids are unique per SVG.
+        const svg = irisSvg(d.px, side, left, top, outlineWidth, `iris-${i}-${side}`)
+        if (level === CONTOUR_FADE_LEVELS) outline += svg
+        else faded[level] += svg
+      }
+    }
+  })
+  const fadedSvgs = fadedLayersOf(faded, w, h)
+  const meshFadedSvgs = fadedLayersOf(meshFaded, w, h)
+  return {
+    meshSvg: set.wireframe ? svgOf(w, h, mesh) : "",
+    outlineSvg: svgOf(w, h, outline),
+    ...(fadedSvgs.length > 0 ? { fadedSvgs } : {}),
+    ...(meshFadedSvgs.length > 0 ? { meshFadedSvgs } : {}),
+    ...(set.bold ? { bold: true as const } : {}),
+    left,
+    top,
+    width: w,
+    height: h,
   }
-  return { meshSvg: wireframe ? svgOf(w, h, mesh) : "", outlineSvg: svgOf(w, h, outline), left, top, width: w, height: h }
 }
 
 /** An SVG's coverage (its alpha, 0–255) at exactly `width × height`. */
@@ -192,6 +360,25 @@ async function coverageOf(svg: string, width: number, height: number): Promise<B
     throw new Error(`face mesh: the lines rasterised to ${out.info.width}×${out.info.height}×${out.info.channels}, not ${width}×${height}×1`)
   }
   return out.data
+}
+
+/**
+ * A layer's coverage with its fading pieces in it: each layer's
+ * coverage × its strength, the stronger of the two at each pixel — so where a
+ * faint piece meets a whole line (or another faint one) it is never painted
+ * twice, never darker than the stronger.
+ */
+async function withFaded(outline: Buffer, layers: readonly FaceMeshFadedLayer[], w: number, h: number): Promise<Buffer> {
+  const out = Buffer.from(outline)
+  const coverages = await Promise.all(layers.map((l) => coverageOf(l.svg, w, h)))
+  layers.forEach((l, j) => {
+    const c = coverages[j]!
+    for (let i = 0; i < out.length; i++) {
+      const v = Math.round(c[i]! * l.alpha)
+      if (v > out[i]!) out[i] = v
+    }
+  })
+  return out
 }
 
 /**
@@ -242,8 +429,12 @@ export async function compositeFaceMesh(
   if (left < 0 || top < 0 || left + w > width || top + h > height) {
     throw new Error(`face mesh: the lines' box ${w}×${h} at ${left},${top} is outside the ${width}×${height} frame`)
   }
-  // No wireframe (`parts` other than "full"): no coverage of it — every pixel's wireframe share is 0.
-  const [mesh, outline] = await Promise.all([overlay.meshSvg ? coverageOf(overlay.meshSvg, w, h) : null, coverageOf(overlay.outlineSvg, w, h)])
+  // No wireframe: no coverage of it — every pixel's wireframe share is 0.
+  const [meshLines, lines] = await Promise.all([overlay.meshSvg ? coverageOf(overlay.meshSvg, w, h) : null, coverageOf(overlay.outlineSvg, w, h)])
+  const mesh = meshLines && overlay.meshFadedSvgs ? await withFaded(meshLines, overlay.meshFadedSvgs, w, h) : meshLines
+  const outline = overlay.fadedSvgs ? await withFaded(lines, overlay.fadedSvgs, w, h) : lines
+  const meshTones = overlay.bold ? BOLD_MESH_TONES : MESH_TONES
+  const outlineTones = overlay.bold ? BOLD_OUTLINE_TONES : OUTLINE_TONES
   const out = Buffer.from(rgb)
   for (let y = 0; y < h; y++) {
     const dy = depth ? Math.min(depth.height - 1, Math.floor(((top + y + 0.5) * depth.height) / height)) : 0
@@ -257,8 +448,8 @@ export async function compositeFaceMesh(
         const dx = Math.min(depth.width - 1, Math.floor(((left + x + 0.5) * depth.width) / width))
         const d = (dy * depth.width + dx) * 3
         const g = Math.round(lumaOf(depth.rgb[d]!, depth.rgb[d + 1]!, depth.rgb[d + 2]!))
-        const withMesh = g + (MESH_TONES[g]! - g) * am
-        const idx = withMesh + (OUTLINE_TONES[g]! - withMesh) * ao
+        const withMesh = g + (meshTones[g]! - g) * am
+        const idx = withMesh + (outlineTones[g]! - withMesh) * ao
         // The map's colour at `idx` (between two neighbouring entries: still a colour of it), applied as
         // the step from the map's colour at `g`: the clip's own pixel where nothing covers it, the map's
         // colour at the line's tone where a line covers it whole (the pixel being the map's colour at `g`).
@@ -272,8 +463,8 @@ export async function compositeFaceMesh(
         continue
       }
       const l = Math.round(lumaOf(rgb[i]!, rgb[i + 1]!, rgb[i + 2]!))
-      const tm = MESH_TONES[l]!
-      const to = OUTLINE_TONES[l]!
+      const tm = meshTones[l]!
+      const to = outlineTones[l]!
       for (let k = 0; k < 3; k++) {
         const v = rgb[i + k]!
         const withMesh = v + (tm - v) * am

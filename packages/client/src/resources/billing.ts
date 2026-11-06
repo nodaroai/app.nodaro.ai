@@ -289,9 +289,11 @@ export class BillingResource {
    * the person to `url`. Pass `returnPath` (a path on your own origin, such
    * as `"/billing"`) to have Stripe bring them back to your app with
    * `checkout=success` or `checkout=cancelled` in the query; without it the
-   * Nodaro app's own pages are used. `ForbiddenError` with the code
-   * `self_serve_disabled` on a deployment that does not sell to its users.
-   * **Signed-in session only.**
+   * Nodaro app's own pages are used. Promotion codes apply to plans only. A
+   * plan's checkout answers `409` while the account already has a
+   * subscription: use {@link BillingResource.changePlan}. `ForbiddenError`
+   * with the code `self_serve_disabled` on a deployment that does not sell to
+   * its users. **Signed-in session only.**
    */
   async checkout(input: BillingCheckoutInput): Promise<BillingCheckoutSession> {
     const res = await this.client.request<{ data: BillingCheckoutSession }>("POST", "/v1/billing/create-checkout-session", { body: input })
@@ -324,10 +326,19 @@ export class BillingResource {
 
   /**
    * `POST /v1/billing/change-plan` → moves the active subscription to another
-   * plan's price (`newPriceId`, a subscription price from the plans list),
-   * prorated by Stripe; the new tier applies at once. `NotFoundError` with no
-   * active subscription; `400` on a pack's price or the current one.
-   * **Signed-in session only.**
+   * plan's price (`newPriceId`, a subscription price from the plans list).
+   * An upgrade charges the price difference for the rest of the billing
+   * period at once and applies only when that payment succeeds; it adds the
+   * difference between the two plans' monthly credits, once per billing
+   * period. A downgrade applies at once and keeps the current credits until
+   * the period ends. An upgrade invoice settled for 0 adds no credits, and a
+   * monthly <-> yearly switch adds none either. `NotFoundError` with no
+   * active subscription; `400` on a pack's price or the current one; `409`
+   * when the subscription is not active. A `NodaroError` with status `409`
+   * and code `plan_change_payment_required` when the upgrade waits on its
+   * payment: the plan is unchanged and `details.invoiceUrl` is Stripe's page
+   * for paying it. `RateLimitedError` after 5 plan-change requests from one
+   * account in 24 hours. **Signed-in session only.**
    */
   async changePlan(input: BillingChangePlanInput): Promise<BillingChangePlanResult> {
     const res = await this.client.request<{ data: BillingChangePlanResult }>("POST", "/v1/billing/change-plan", { body: input })

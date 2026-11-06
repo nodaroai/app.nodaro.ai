@@ -74,6 +74,11 @@ describe("cast-swap job budget", () => {
     expect(castSwapJobBudgetMs({ style: "motion", preview: true })).toBe(240 * MINUTE)
     expect(declaredJobBudgetMs("cast-swap", { style: "motion" })).toBe(240 * MINUTE)
     expect(castSwapJobBudgetMs({ style: "motion", faceMasking: { mode: "always" } })).toBe(240 * MINUTE)
+    // A Precise run with an art style that the route makes the Flex way keeps its style: its Full depth (or, on the
+    // original path, its style-only mark) gives it the Flex run's bound, as `style: "motion"` gave it before.
+    expect(castSwapJobBudgetMs({ faceMasking: { mode: "always", source: "full-depth" } })).toBe(240 * MINUTE)
+    expect(castSwapJobBudgetMs({ styleOnly: "original", promptStyle: "flexible" })).toBe(castSwapJobBudgetMs({ style: "motion", styleOnly: "original" }))
+    expect(castSwapJobBudgetMs({ styleOnly: "original" })).toBe(240 * MINUTE)
     // A full-depth trend run: the queue payload, and its saved input_data.
     expect(castSwapJobBudgetMs({ faceMasking: { mode: "always", source: "full-depth" } })).toBe(240 * MINUTE)
     expect(castSwapJobBudgetMs({ __faceMasking: { mode: "always", source: "full-depth" }, preview: true })).toBe(240 * MINUTE)

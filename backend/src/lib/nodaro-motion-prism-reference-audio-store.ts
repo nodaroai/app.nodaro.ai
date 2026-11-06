@@ -32,7 +32,7 @@ export async function readNodaroMotionPrismReferenceAudio(): Promise<{
 
 /**
  * Save the setting (already validated) and clear this process's settings
- * cache; the other servers converge on their own cache expiry (about 60 s).
+ * cache; the other servers see the save within about a second (app-settings-version.ts).
  * Throws on a database error.
  */
 export async function saveNodaroMotionPrismReferenceAudio(prismReferenceAudio: CastSwapPrismReferenceAudio, adminId: string): Promise<void> {

@@ -12,6 +12,14 @@ const { mockOrchestrationQueueAdd, mockTryRemoveFromQueue, mockCheckIsAdmin, moc
   mockResolveBillingContext: vi.fn(async (input: { userId: string }) => ({ payer: "user" as const, userId: input.userId })),
 }))
 
+// The app_settings version read unreadable: the TTL-only behaviour, and no
+// extra `from()` call in the mocked sequence (the version itself:
+// lib/__tests__/app-settings-cross-process.test.ts, ee/lib/__tests__/app-settings-config-caches.test.ts).
+vi.mock("@/lib/app-settings-version.js", () => ({
+  appSettingsVersion: async () => null,
+  appSettingsChangedSince: async () => false,
+  forgetAppSettingsVersion: () => {},
+}))
 vi.mock("@/lib/supabase.js", () => {
   const mockFrom = vi.fn()
   return {

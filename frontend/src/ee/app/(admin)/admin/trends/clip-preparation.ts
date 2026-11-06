@@ -450,6 +450,23 @@ export function environmentsThatCannotDrawFaceMeshParts(
   ) as Record<(typeof FACE_MESH_PARTIAL)[number], string[]>
 }
 
+/**
+ * The environments (of `SHARED_SETTING_ENVIRONMENTS`) that cannot take a set
+ * of layers no parts value names: by their engine (`castSwap.faceMeshLayers`)
+ * and by their platform (the app itself, which refuses the key otherwise).
+ * Unknown while the environments are (undefined).
+ */
+export function environmentsThatCannotDrawFaceMeshLayers(
+  envs: readonly TrendEngineEnvironment[] | undefined,
+): { engine: string[]; platform: string[] } | undefined {
+  if (!envs) return undefined
+  const of = (name: string) => envs.find((e) => e.env === name)
+  return {
+    engine: SHARED_SETTING_ENVIRONMENTS.filter((name) => of(name)?.supports.castSwap?.faceMeshLayers !== true),
+    platform: SHARED_SETTING_ENVIRONMENTS.filter((name) => of(name)?.supports.platform?.faceMeshLayers !== true),
+  }
+}
+
 /** A trend's editor: whether some environment's engine draws the face mesh (unknown while the environments are: false). */
 export function someEngineDrawsFaceMesh(envs: readonly TrendEngineEnvironment[] | undefined): boolean {
   return (envs ?? []).some((e) => e.supports.castSwap?.faceMesh === true)
@@ -547,6 +564,7 @@ export function withClipPreparation(
   if (source === "keep-people") {
     delete next.faceMesh
     delete next.faceMeshParts
+    delete next.faceMeshLayers
   }
   if (source !== "faces") delete next.roleOutlines
   let removedMain = 0

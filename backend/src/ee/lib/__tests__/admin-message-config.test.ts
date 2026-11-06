@@ -10,6 +10,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 const mockFrom = vi.fn()
+// The app_settings version read unreadable: the TTL-only behaviour, and no
+// extra `from()` call in the mocked sequence (the version itself:
+// ee/lib/__tests__/app-settings-config-caches.test.ts).
+vi.mock("@/lib/app-settings-version.js", () => ({
+  appSettingsVersion: async () => null,
+  appSettingsChangedSince: async () => false,
+  forgetAppSettingsVersion: () => {},
+}))
 vi.mock("@/lib/supabase.js", () => ({
   supabase: { from: (...a: unknown[]) => mockFrom(...a) },
 }))

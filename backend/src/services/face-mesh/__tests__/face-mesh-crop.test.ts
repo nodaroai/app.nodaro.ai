@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { cropToFrame, fillFaceMeshInput, landmarksToFrame, roiOfFace, sigmoid, FACE_MESH_ROI_SCALE } from "../face-mesh-crop.js"
+import { cropToFrame, fillFaceMeshInput, landmarkDepths, landmarksToFrame, roiOfFace, sigmoid, FACE_MESH_ROI_SCALE } from "../face-mesh-crop.js"
 import { FACE_MESH_INPUT_SIZE, FACE_MESH_MODEL_POINTS, FACE_MESH_POINTS } from "../face-mesh-model.js"
 
 const W = 400
@@ -77,10 +77,47 @@ describe("cropToFrame", () => {
     expect(out[2 * 467 + 1]).toBeCloseTo(y / H)
   })
 
+  it("landmarksToFrame reads all 478 points when asked (the irises drawn), the face's 468 the same as without", () => {
+    const roi = { cx: 200, cy: 100, size: 100, angle: 0.3 }
+    const lm = Float32Array.from({ length: FACE_MESH_MODEL_POINTS * 3 }, (_, i) => (i * 7) % 256)
+    const face = landmarksToFrame(lm, roi, W, H)
+    const all = landmarksToFrame(lm, roi, W, H, 256, FACE_MESH_MODEL_POINTS)
+    expect(all).toHaveLength(478 * 2)
+    expect(all.subarray(0, 468 * 2)).toEqual(face)
+    const [x, y] = cropToFrame(roi, lm[3 * 473]!, lm[3 * 473 + 1]!)
+    expect(all[2 * 473]).toBeCloseTo(x / W)
+    expect(all[2 * 473 + 1]).toBeCloseTo(y / H)
+    const depths = landmarkDepths(lm, roi, 256, FACE_MESH_MODEL_POINTS)
+    expect(depths).toHaveLength(478)
+    expect(depths.subarray(0, 468)).toEqual(landmarkDepths(lm, roi))
+  })
+
   it("landmarksToFrame refuses the former model's 468-point layout (or any other length)", () => {
     const roi = { cx: 200, cy: 100, size: 100, angle: 0 }
     expect(() => landmarksToFrame(new Float32Array(468 * 3), roi, W, H)).toThrow(/478/)
     expect(() => landmarksToFrame(new Float32Array(478 * 3 + 1), roi, W, H)).toThrow(/478/)
+  })
+})
+
+describe("landmarkDepths", () => {
+  it("the 468 points' z, scaled to the frame as x and y are (the crop's side over the model's), whatever the turn", () => {
+    const lm = new Float32Array(FACE_MESH_MODEL_POINTS * 3)
+    for (let i = 0; i < FACE_MESH_POINTS; i++) lm[3 * i + 2] = i - 100
+    lm.fill(Number.NaN, FACE_MESH_POINTS * 3) // the irises: never read
+    const roi = { cx: 200, cy: 100, size: 512, angle: 0 }
+    const out = landmarkDepths(lm, roi)
+    expect(out).toHaveLength(FACE_MESH_POINTS)
+    expect(out[0]).toBe(-200)
+    expect(out[467]).toBe(734)
+    expect(landmarkDepths(lm, { ...roi, angle: 1.2 })).toEqual(out)
+    // A depth of one crop pixel is as long as a step of one crop pixel across the frame.
+    const [x0] = cropToFrame(roi, 0, 0)
+    const [x1] = cropToFrame(roi, 1, 0)
+    expect(landmarkDepths(Float32Array.from({ length: FACE_MESH_MODEL_POINTS * 3 }, (_, i) => (i % 3 === 2 ? 1 : 0)), roi)[0]).toBeCloseTo(x1 - x0)
+  })
+
+  it("refuses another layout", () => {
+    expect(() => landmarkDepths(new Float32Array(468 * 3), { cx: 0, cy: 0, size: 100, angle: 0 })).toThrow(/478/)
   })
 })
 

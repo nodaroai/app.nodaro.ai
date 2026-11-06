@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase.js"
+import { appSettingsChangedSince, appSettingsVersion, forgetAppSettingsVersion } from "../../lib/app-settings-version.js"
 
 /**
  * Admin-tunable knobs for the internal founder notifications, stored as
@@ -35,6 +36,8 @@ export const NOTIFY_CONFIG_DEFAULTS: NotifyConfig = {
 const CACHE_TTL_MS = 60_000
 let cached: NotifyConfig | null = null
 let cachedAt = 0
+/** The app_settings version the cached rows were read at (app-settings-version.ts): a save anywhere re-reads them. */
+let cachedVersion: number | null = null
 let inflight: Promise<NotifyConfig> | null = null
 
 const CONFIG_KEYS = [
@@ -49,7 +52,8 @@ const CONFIG_KEYS = [
 
 export async function getNotifyConfig(): Promise<NotifyConfig> {
   const now = Date.now()
-  if (cached && now - cachedAt < CACHE_TTL_MS) return cached
+  const hit = cached
+  if (hit && now - cachedAt < CACHE_TTL_MS && !(await appSettingsChangedSince(cachedVersion)) && cached === hit) return hit
   if (inflight) return inflight
   inflight = refresh()
   try {
@@ -60,6 +64,8 @@ export async function getNotifyConfig(): Promise<NotifyConfig> {
 }
 
 async function refresh(): Promise<NotifyConfig> {
+  // The version before the rows, so rows are never filed under a newer version than they were read at.
+  const version = await appSettingsVersion()
   const cfg: NotifyConfig = { ...NOTIFY_CONFIG_DEFAULTS }
   const { data, error } = await supabase
     .from("app_settings")
@@ -69,6 +75,7 @@ async function refresh(): Promise<NotifyConfig> {
     // Missing table / read error → dormant defaults (webhook empty = off).
     cached = cfg
     cachedAt = Date.now()
+    cachedVersion = version
     return cfg
   }
   for (const row of data ?? []) {
@@ -99,12 +106,15 @@ async function refresh(): Promise<NotifyConfig> {
   }
   cached = cfg
   cachedAt = Date.now()
+  cachedVersion = version
   return cfg
 }
 
 export function invalidateNotifyConfigCache(): void {
   cached = null
   cachedAt = 0
+  cachedVersion = null
+  forgetAppSettingsVersion()
 }
 
 // ---------------------------------------------------------------------------

@@ -43,6 +43,14 @@ describe("modelChipLabels", () => {
   it("caps the chips and drops duplicates", () => {
     expect(modelChipLabels(["a", "a", "b", "c", "d"], 3)).toEqual(["a", "b", "c"])
   })
+
+  it("names a model once across its text-to-image and image-to-image entries", () => {
+    expect(modelChipLabels(["gpt-image-2", "gpt-image-2-i2i"])).toEqual(["GPT Image 2"])
+  })
+
+  it("keeps a parenthetical that tells models apart", () => {
+    expect(modelChipLabels(["gemini-3-flash-video-analysis"])).toEqual(["Video Analysis (Fast)"])
+  })
 })
 
 describe("flowSteps", () => {

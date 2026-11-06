@@ -1,5 +1,6 @@
 import type { ModelMakerId } from "@nodaro/shared/model-catalog"
 import { supabase } from "./supabase.js"
+import { appSettingsChangedSince, appSettingsVersion, forgetAppSettingsVersion } from "./app-settings-version.js"
 import type { GalleryWordEntry } from "./gallery-word-filter.js"
 import { MODEL_MAKER_LOGOS_KEY, parseModelMakerLogos } from "./maker-logo-settings.js"
 import { NODARO_MOTION_MASKING_KEY, parseNodaroMotionMasking, type NodaroMotionMasking } from "./nodaro-motion-masking.js"
@@ -195,13 +196,20 @@ export interface AppSettings {
   rights_repeat_infringer_policy: RepeatInfringerPolicy
 }
 
-// Cache settings for 60 seconds to avoid hitting the DB on every job
+// The settings are kept in memory so a job does not read every row each time.
+// The kept copy is trusted while the app_settings version it was read at is
+// still current (app-settings-version.ts: a save through ANY process moves it,
+// and every process sees that within about a second), and for 60 s at most:
+// the safety net, and the whole rule while the version cannot be read.
 let cachedSettings: AppSettings | null = null
 let cacheTimestamp = 0
+let cachedVersion: number | null = null
 const CACHE_TTL_MS = 60_000
 
 // Stampede protection: if a refresh is in-flight, share the promise
 let inflight: Promise<AppSettings> | null = null
+// Moves with every invalidateSettingsCache(): a read it overtook is not kept.
+let cacheGeneration = 0
 
 // The defaults handed out when the settings could not be read — so a reader
 // that must not fall back to empty rules (the gallery's moderation) can tell.
@@ -213,25 +221,30 @@ export function settingsReadFailed(settings: AppSettings): boolean {
 }
 
 export async function getAppSettings(): Promise<AppSettings> {
-  const now = Date.now()
-
-  // Return cached settings if still valid
-  if (cachedSettings && now - cacheTimestamp < CACHE_TTL_MS) {
-    return cachedSettings
+  // Return cached settings if still valid: inside the TTL, and no save since
+  const cached = cachedSettings
+  if (cached && Date.now() - cacheTimestamp < CACHE_TTL_MS && !(await appSettingsChangedSince(cachedVersion))) {
+    // A save in this process while the version was checked dropped the copy.
+    if (cachedSettings === cached) return cached
   }
 
   // If another call is already refreshing, await it
   if (inflight) return inflight
 
-  inflight = refreshSettings()
+  const refresh = refreshSettings()
+  inflight = refresh
   try {
-    return await inflight
+    return await refresh
   } finally {
-    inflight = null
+    if (inflight === refresh) inflight = null
   }
 }
 
 async function refreshSettings(): Promise<AppSettings> {
+  // The version BEFORE the rows: rows newer than their version only cost one
+  // more read later, while rows older than it would be trusted as current.
+  const version = await appSettingsVersion()
+  const generation = cacheGeneration
   const { data, error } = await supabase
     .from("app_settings")
     .select("key, value")
@@ -400,9 +413,13 @@ async function refreshSettings(): Promise<AppSettings> {
     }
   }
 
-  // Update cache
-  cachedSettings = settings
-  cacheTimestamp = Date.now()
+  // Update cache — unless this process saved a setting while the rows were
+  // being read (they may predate the save): then they serve this call only.
+  if (generation === cacheGeneration) {
+    cachedSettings = settings
+    cacheTimestamp = Date.now()
+    cachedVersion = version
+  }
 
   return settings
 }
@@ -418,11 +435,18 @@ export function calculateDisplayCost(providerCost: number, markupPercent: number
 }
 
 /**
- * Invalidate the settings cache (call after updating settings)
+ * Invalidate this process's settings cache (call after updating settings).
+ * The next read on this process reads the rows at once, and every other
+ * app_settings cache here checks the version at once. Other processes need
+ * nothing from this: the database moved the version with the write.
  */
 export function invalidateSettingsCache(): void {
+  cacheGeneration += 1
   cachedSettings = null
   cacheTimestamp = 0
+  cachedVersion = null
+  inflight = null
+  forgetAppSettingsVersion()
 }
 
 /**
@@ -430,7 +454,7 @@ export function invalidateSettingsCache(): void {
  * because app_settings is instance-global config that genuinely requires the
  * service-role client, and lib/ is the sanctioned home for those writes
  * (routes are tenant-scope linted). Invalidates this process's settings
- * cache; the worker converges on its own ≤60s cache expiry.
+ * cache; the others see the write through the app_settings version.
  */
 export async function saveNodaroProviderPrefs(prefs: NodaroProviderPrefs): Promise<void> {
   const { error } = await supabase

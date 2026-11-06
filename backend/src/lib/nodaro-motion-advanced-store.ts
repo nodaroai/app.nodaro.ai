@@ -22,8 +22,7 @@ export async function readNodaroMotionAdvanced(): Promise<{ advanced: NodaroMoti
 
 /**
  * Save the switch (already validated by `nodaroMotionAdvancedSchema`) and
- * clear this process's settings cache; the other servers converge on their
- * own cache expiry (about 60 s). Throws on a database error.
+ * clear this process's settings cache; the other servers see the save within about a second (app-settings-version.ts). Throws on a database error.
  */
 export async function saveNodaroMotionAdvanced(advanced: NodaroMotionAdvanced, adminId: string): Promise<void> {
   const { error } = await supabase

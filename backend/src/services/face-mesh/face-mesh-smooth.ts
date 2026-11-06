@@ -18,8 +18,17 @@
  * forgotten — drawn again later, it starts afresh too (never pulled toward
  * where it was). The same match links found faces into the tracks that decide
  * which faces are drawn at all (`face-mesh-tracks.ts`).
+ *
+ * A face may also carry its points' DEPTHS (the contours: which of its lines
+ * it hides, `face-mesh-visibility.ts`): they are smoothed by the same filters,
+ * point for point, and what the face hides is worked out from the smoothed
+ * points and depths, then held steady per piece by a low-pass of its own
+ * (`FACE_MESH_VISIBILITY.smoothingCutoffHz`), so a line fades in and out over
+ * a few frames and never flickers. The points themselves are smoothed exactly
+ * as without them.
  */
 import type { FaceBox } from "./face-mesh-filters.js"
+import { FACE_MESH_VISIBILITY } from "./face-mesh-visibility.js"
 
 export const FACE_MESH_ONE_EURO = {
   /** Hz: the cut-off of a still point. */
@@ -41,9 +50,9 @@ export class OneEuroFilter {
   private prevDerivative = 0
 
   constructor(
-    private readonly minCutoff = FACE_MESH_ONE_EURO.minCutoff,
-    private readonly beta = FACE_MESH_ONE_EURO.beta,
-    private readonly derivativeCutoff = FACE_MESH_ONE_EURO.derivativeCutoff,
+    private readonly minCutoff: number = FACE_MESH_ONE_EURO.minCutoff,
+    private readonly beta: number = FACE_MESH_ONE_EURO.beta,
+    private readonly derivativeCutoff: number = FACE_MESH_ONE_EURO.derivativeCutoff,
   ) {}
 
   /** The filtered value of `x`, `dt` seconds after the last one; `scale` is the size speed is measured in. */
@@ -104,12 +113,32 @@ export interface MeshedFace {
   readonly box: FaceBox
   /** `[x0, y0, x1, y1, …]`, pixels. */
   readonly points: Float64Array
+  /** Each point's depth, in the same pixels (smaller = nearer the camera): carried only when the drawing needs it. */
+  readonly depth?: Float64Array
 }
+
+/** A face as the tracker answers it: smoothed. */
+export interface TrackedFace {
+  /** The smoothed points, `[x0, y0, …]`, pixels. */
+  readonly points: Float64Array
+  /** The smoothed depths, when the face carried them. */
+  readonly depth?: Float64Array
+  /** What the `visibility` asked answered for the smoothed face, held steady over time (when asked, and the face carried depths). */
+  readonly visibility?: Float32Array
+}
+
+/** What a face hides, per piece (`edgeVisibility` over a list of edges), from its points and depths. */
+export type VisibilityOf = (points: Float64Array, depth: Float64Array) => Float32Array
 
 interface Track {
   box: FaceBox
   readonly filters: OneEuroFilter[]
+  depthFilters?: OneEuroFilter[]
+  visibilityFilters?: OneEuroFilter[]
 }
+
+/** The low-pass a piece's visibility is held with: a fixed cut-off (no speed term — a flicker must not open it). */
+const visibilityFilter = (): OneEuroFilter => new OneEuroFilter(FACE_MESH_VISIBILITY.smoothingCutoffHz, 0)
 
 /** The faces of a clip, tracked from frame to frame, each point smoothed. */
 export class FaceMeshTracker {
@@ -126,15 +155,31 @@ export class FaceMeshTracker {
    * the input's order. Faces not in `faces` are forgotten.
    */
   next(faces: readonly MeshedFace[]): Float64Array[] {
+    return this.track(faces).map((f) => f.points)
+  }
+
+  /**
+   * As `next`, with each face's depths smoothed too (when it carries them),
+   * and, given `visibility`, what the smoothed face hides, held steady per
+   * piece over time. The points are exactly `next`'s.
+   */
+  track(faces: readonly MeshedFace[], visibility?: VisibilityOf): TrackedFace[] {
     const trackOf = matchFaceBoxes(faces.map((f) => f.box), this.tracks.map((t) => t.box))
     const next: Track[] = []
-    const out = faces.map((f, i) => {
+    const out = faces.map((f, i): TrackedFace => {
       const j = trackOf[i]!
-      const track = j >= 0 ? this.tracks[j]! : { box: f.box, filters: Array.from({ length: f.points.length }, () => new OneEuroFilter()) }
+      const track: Track = j >= 0 ? this.tracks[j]! : { box: f.box, filters: Array.from({ length: f.points.length }, () => new OneEuroFilter()) }
       track.box = f.box
       next.push(track)
       const scale = faceScale(f.points)
-      return f.points.map((v, k) => track.filters[k]!.filter(v, this.dt, scale))
+      const points = f.points.map((v, k) => track.filters[k]!.filter(v, this.dt, scale))
+      if (!f.depth) return { points }
+      const depthFilters = (track.depthFilters ??= Array.from({ length: f.depth.length }, () => new OneEuroFilter()))
+      const depth = f.depth.map((v, k) => depthFilters[k]!.filter(v, this.dt, scale))
+      if (!visibility) return { points, depth }
+      const raw = visibility(points, depth)
+      const filters = (track.visibilityFilters ??= Array.from({ length: raw.length }, visibilityFilter))
+      return { points, depth, visibility: raw.map((v, k) => Math.min(1, Math.max(0, filters[k]!.filter(v, this.dt)))) }
     })
     this.tracks = next
     return out

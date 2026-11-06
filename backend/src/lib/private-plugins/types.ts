@@ -3578,6 +3578,23 @@ export interface PluginCapabilities {
    */
   readonly videoFaceMeshParts?: boolean
   /**
+   * `POST /v1/video-face-mesh` also takes `parts: "contours"` — the face oval,
+   * both eyebrows, the nose and the eye and lip outlines, no wireframe — and
+   * answers it as `output_data.parts`. False (or absent): an older host, whose
+   * route refuses the value; the engine draws the whole mesh there.
+   */
+  readonly videoFaceMeshContours?: boolean
+  /**
+   * `POST /v1/video-face-mesh` also takes `layers` in place of `parts`: any
+   * set of `wireframe`, `eyes`, `lips`, `contours` (the face oval, brows and
+   * nose; with it on every line leaves out what the face hides), `irises` (a
+   * circle and centre dot per iris, clipped to the eye's opening) and `bold`
+   * (thicker, deeper lines), at least one other than `bold` — and answers it
+   * as `output_data.layers`. A set a `parts` value names draws exactly as that
+   * value. False (or absent): an older host, whose route refuses the key.
+   */
+  readonly videoFaceMeshLayers?: boolean
+  /**
    * `tk.media.pitchTempo` takes `semitones` from -24 to 24 (two octaves either
    * way, half steps included) in ONE rubberband pass, at the same speed, and
    * clamps beyond that. False (or absent): an older host, which clamps the
@@ -3663,6 +3680,15 @@ export interface PluginFaceMasking {
    * only to an engine that lists it in `supports.castSwap.faceMeshParts`.
    */
   faceMeshParts?: "full" | "features" | "mouth"
+  /**
+   * What the face mesh draws, layer by layer (the Nodaro Motion Motion
+   * setting's alone), in place of `faceMeshParts` (`capabilities.videoFaceMeshLayers`'s
+   * layers, only those on). Answered by `tk.settings` only when the face mesh
+   * is on and the set is not one a `faceMeshParts` value names (that one is
+   * answered as the value), and only to an engine that declares
+   * `supports.castSwap.faceMeshLayers`.
+   */
+  faceMeshLayers?: { readonly wireframe?: boolean; readonly eyes?: boolean; readonly lips?: boolean; readonly contours?: boolean; readonly irises?: boolean; readonly bold?: boolean }
   /**
    * Full depth's face mesh (the Nodaro Motion Motion setting's, and a
    * trend's make): the smallest face it draws lines on, the face box's height
@@ -3757,8 +3783,9 @@ export type NodaroMotionMotion = {
 
 /**
  * Deployment-wide settings a plugin feature reads (host → plugin), each a
- * short in-process cached read of an `app_settings` row (about 60 s, cleared
- * on this process's own admin write). Grows one optional member at a time.
+ * short in-process cached read of an `app_settings` row (read again within
+ * about a second of a save on any process, 60 s at most; at once after this
+ * process's own admin write). Grows one optional member at a time.
  */
 export interface PluginSettingsToolkit {
   /**
@@ -3880,6 +3907,21 @@ export type PluginNodaroMotionNoPerson = {
 export type PluginNodaroMotionPreciseStyleRoute = {
   readonly routing?: "on" | "off"
   readonly bypassEmails?: readonly string[]
+  /** A routed run's own depth blur, 0–40; absent: none (never the Motion masking's). */
+  readonly routedDepthBlur?: number
+  /** A routed run's shot list is told the colours from the video; absent: on. */
+  readonly describeColours?: boolean
+  /** A routed run's face mesh; absent: off (never the Flex masking's). */
+  readonly faceMesh?: boolean
+  /** What a routed run's mesh draws; absent: the Flex masking's. */
+  readonly faceMeshParts?: "full" | "features" | "mouth" | "contours"
+  /**
+   * What a routed run's mesh draws, layer by layer, in place of `faceMeshParts` (never both; a set a parts value
+   * names is answered as that value); absent: `faceMeshParts` decides.
+   */
+  readonly faceMeshLayers?: { readonly wireframe?: boolean; readonly eyes?: boolean; readonly lips?: boolean; readonly contours?: boolean; readonly irises?: boolean; readonly bold?: boolean }
+  /** How a routed run's mesh line is worded; absent: "motion". */
+  readonly faceMeshWording?: "motion" | "shape"
 }
 
 /**
@@ -4312,6 +4354,13 @@ export interface PluginSupports {
    *   — the platform answers the settings without the key and refuses to save
    *   a shared Nodaro Motion setting with one while any environment lacks it
    *   (lib/cast-swap-face-masking.ts `engineDrawsFaceMeshParts`).
+   * - `faceMeshLayers`: a Motion masking setting's face mesh may draw a set of
+   *   layers (`faceMeshLayers`) in place of its parts; the engine sends
+   *   `layers` to `/v1/video-face-mesh` (`capabilities.videoFaceMeshLayers`)
+   *   and words its `faceMesh` prompt line by what was drawn. Additive-optional:
+   *   absent ⇒ the platform answers the settings without the key and refuses
+   *   to save a shared Nodaro Motion setting with one while any environment
+   *   lacks it (lib/cast-swap-face-mesh-layers.ts `engineDrawsFaceMeshLayers`).
    * - `maskFillNone`: a faces hidden masking setting (the Nodaro Motion
    *   Precise setting, read through `tk.settings`) may name
    *   `fill: "none"` (always with `faceMesh: true`): the engine finds the
@@ -4445,6 +4494,7 @@ export interface PluginSupports {
     readonly styleChoice?: boolean
     readonly depthBlur?: boolean
     readonly faceMeshParts?: readonly ("full" | "features" | "mouth")[]
+    readonly faceMeshLayers?: boolean
     readonly maskFillNone?: boolean
     readonly depthFillBlur?: boolean
     readonly faceMeshMinFaceHeightPct?: boolean

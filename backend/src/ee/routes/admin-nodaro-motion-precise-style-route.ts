@@ -9,11 +9,16 @@
  * The setting (`nodaro_motion_precise_style_route`,
  * lib/nodaro-motion-precise-style-route.ts) says whether a DIRECT run on Nodaro
  * Motion Prism that resolves to Precise and carries an art style runs as Flex
- * (`routing`, on by default), and which accounts' emails skip that
- * (`bypassEmails`).
+ * (`routing`, on by default), which accounts' emails skip that
+ * (`bypassEmails`), and the depth blur of a run it makes Flex
+ * (`routedDepthBlur`, 0–40, absent or 0: none; every other Flex run keeps the
+ * Motion masking's), and whether such a run's shot list writer is told to
+ * describe the colours from the video (`describeColours`, on by default), and
+ * whether its depth map carries the face mesh (`faceMesh`, off by default).
  *
  * A PUT is refused 400 `validation_error` on the body's shape (strict: an
- * unknown key, a third value, something that is not an email, too many). Any
+ * unknown key, a third value, something that is not an email, too many, a blur
+ * that is not a whole number from 0 to 40). Any
  * value saves whatever the engines: an engine that does not declare
  * `castSwap.preciseStyleRoute` never reads the row and runs such a run as
  * Precise, so no 409 waits for one. `supported` is whether THIS environment's

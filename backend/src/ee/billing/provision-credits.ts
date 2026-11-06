@@ -24,6 +24,7 @@ import { CreditsService } from "./credits.js"
 import { invalidateBalanceCache } from "./balance-cache.js"
 import { activateSignupGrantOnPurchase } from "./signup-grant.js"
 import { releaseQuietStopOnPurchase } from "../lib/account-blocking.js"
+import { grantPaidPlanChange, notePlanCreditPeak, restartPlanCreditPeriod, type InvoicePriceLine } from "./plan-change-credits.js"
 
 /**
  * The free-grant exit by purchase: a withheld signup grant leaves 'withheld'
@@ -258,6 +259,24 @@ function billingPeriodMoved(stored: string | null, incoming: string | null): boo
   return a !== b
 }
 
+/**
+ * Stripe moves the billing period part-way through it only when the period
+ * RESTARTS — a switch between monthly and yearly billing resets the billing
+ * anchor to the moment of the switch. A renewal starts the next period where
+ * the stored one ends. True only when the new period starts more than
+ * PERIOD_RESTART_MARGIN_MS before the stored period's end; an unknown end
+ * (older rows) is never read as a restart, so it renews as before.
+ */
+const PERIOD_RESTART_MARGIN_MS = 60 * 60 * 1000
+
+function billingPeriodRestarted(storedEnd: string | null | undefined, incomingStart: string | null): boolean {
+  if (!storedEnd || !incomingStart) return false
+  const end = new Date(storedEnd).getTime()
+  const start = new Date(incomingStart).getTime()
+  if (Number.isNaN(end) || Number.isNaN(start)) return false
+  return start < end - PERIOD_RESTART_MARGIN_MS
+}
+
 // ── Subscription Updated ─────────────────────────────────────────
 
 interface SubscriptionUpdatedData {
@@ -301,7 +320,7 @@ export async function handleSubscriptionUpdated(
   // Look up existing subscription
   const { data: existing } = await supabase
     .from("subscriptions")
-    .select("id, stripe_price_id, tier, current_period_start, cancel_at_period_end")
+    .select("id, stripe_price_id, tier, current_period_start, current_period_end, cancel_at_period_end")
     .eq("stripe_subscription_id", data.subscriptionId)
     .single()
 
@@ -324,33 +343,23 @@ export async function handleSubscriptionUpdated(
   // computes toISOString()'s ".000Z", so a string compare flags EVERY
   // subscription.updated (portal cancel request, payment-method change,
   // Stripe redelivery) as a renewal and refills subscription_credits for free.
-  const isRenewal = billingPeriodMoved(existing.current_period_start, data.currentPeriodStart)
+  const periodMoved = billingPeriodMoved(existing.current_period_start, data.currentPeriodStart)
+  // A period that restarted part-way through (a monthly <-> yearly switch) is
+  // not a renewal: the current period has already granted its credits.
+  const isRestart = periodMoved && billingPeriodRestarted(existing.current_period_end, data.currentPeriodStart)
+  const isRenewal = periodMoved && !isRestart
 
   if (tierChanged) {
-    const isUpgrade = newCredits > oldCredits
+    // A tier change moves no credits here. An upgrade's credits come with its
+    // PAID invoice (handleInvoicePaid → grantPaidPlanChange: the gap only,
+    // once per invoice and never above what the period already granted); a
+    // downgrade keeps the current credits until the period ends. Either way
+    // the plan being left was held this period: record it, so moving back up
+    // inside the period starts from it instead of refilling.
+    await notePlanCreditPeak(userId, oldCredits)
 
-    if (isUpgrade) {
-      // Idempotent SET (not ADD) — safe if change-plan endpoint already updated credits
-      const { error: creditError } = await supabase
-        .from("profiles")
-        .update({ subscription_credits: newCredits })
-        .eq("id", userId)
-
-      if (creditError) {
-        console.error("[stripe] subscription.updated: credit SET failed:", creditError.message)
-      }
-
-      // Audit log: upgrade
-      await CreditsService.logTransaction({
-        userId,
-        amount: newCredits,
-        creditType: "subscription",
-        source: "subscription_renewal",
-        description: `Tier upgrade: ${oldTier} → ${newTier} (credits set to ${newCredits})`,
-        balanceAfter: newCredits,
-      })
-
-      console.log(`[stripe] subscription.updated: upgrade ${oldTier}->${newTier}, set credits to ${newCredits}`)
+    if (newCredits > oldCredits) {
+      console.log(`[stripe] subscription.updated: upgrade ${oldTier}->${newTier}, credits follow the paid invoice`)
     } else {
       // Downgrade: don't reduce credits immediately — let user keep current credits until next renewal
       await CreditsService.logTransaction({
@@ -364,6 +373,14 @@ export async function handleSubscriptionUpdated(
 
       console.log(`[stripe] subscription.updated: downgrade ${oldTier}->${newTier}, credits unchanged until renewal`)
     }
+  }
+
+  if (isRestart) {
+    // No grant: start the new credit period from what this one already paid
+    // out. The stamp also keeps a yearly plan's monthly grant from treating
+    // the restarted period's first day as unpaid.
+    await restartPlanCreditPeriod(userId, oldCredits)
+    console.log(`[stripe] subscription.updated: billing period restarted (${oldTier}->${newTier}), credits unchanged until the next renewal`)
   }
 
   if (isRenewal) {
@@ -561,6 +578,10 @@ interface InvoicePaidData {
   readonly stripeCustomerId: string
   readonly amountPaid: number
   readonly metadata: Record<string, string> | null
+  /** Stripe's `billing_reason`: `subscription_update` is a plan change. */
+  readonly billingReason?: string | null
+  /** The invoice's priced lines; read for a plan change only. */
+  readonly lines?: readonly InvoicePriceLine[]
 }
 
 export async function handleInvoicePaid(
@@ -575,6 +596,19 @@ export async function handleInvoicePaid(
 
   if (!sub) {
     console.log("[stripe] invoice.paid: subscription not found, skipping", data.subscriptionId)
+    return
+  }
+
+  // A plan change paid for: grant the gap it bought. The RPC writes this
+  // invoice's transactions row itself — that row is its idempotency claim, so
+  // the generic record below must not be written first.
+  if (data.billingReason === "subscription_update") {
+    await grantPaidPlanChange({
+      userId: sub.user_id,
+      invoiceId: data.invoiceId,
+      lines: data.lines ?? [],
+      amountPaidCents: data.amountPaid,
+    })
     return
   }
 
@@ -609,6 +643,14 @@ export async function handleTransactionCompleted(
   // Skip subscription-related transactions (handled by subscription events)
   if (data.subscriptionId) {
     console.log("[stripe] transaction.completed: subscription tx, skipping", data.transactionId)
+    return
+  }
+
+  // Credits are sold, never given away by a discount: a purchase that settled
+  // for nothing grants nothing (the webhook route refuses it first; this is
+  // the same rule where the grant is sized).
+  if (!(data.totalAmount > 0)) {
+    console.warn("[stripe] transaction.completed: settled amount is 0, nothing granted", data.transactionId)
     return
   }
 

@@ -3366,6 +3366,7 @@ export const en = {
   "pricing.processing": "Processing...",
   "pricing.switchPlan": "Switch Plan",
   "pricing.planChanged": "Plan changed successfully! Changes will apply shortly.",
+  "pricing.planChangePaymentRequired": "Complete the payment to switch plans. Opening the invoice…",
   "pricing.somethingWentWrong": "Something went wrong",
   "pricing.terms": "Terms of Service",
   "pricing.privacy": "Privacy Policy",

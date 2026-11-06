@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest"
-import { assertTrustedCheckoutUrl } from "../checkout"
+import { afterEach, describe, expect, it, vi } from "vitest"
+
+const embed = vi.hoisted(() => ({ embedded: false }))
+vi.mock("@/hooks/use-embed-session-handoff", () => ({ isEmbedded: () => embed.embedded }))
+vi.mock("@/lib/api", () => ({ createCheckoutSession: vi.fn(), createLoadSession: vi.fn() }))
+
+import { assertTrustedCheckoutUrl, openStripePage } from "../checkout"
 
 describe("assertTrustedCheckoutUrl (redirect sink guard)", () => {
   it("passes real Stripe HTTPS checkout URLs through unchanged", () => {
@@ -22,5 +27,28 @@ describe("assertTrustedCheckoutUrl (redirect sink guard)", () => {
     ]) {
       expect(() => assertTrustedCheckoutUrl(bad)).toThrow()
     }
+  })
+})
+
+describe("openStripePage (an invoice to pay before a plan change applies)", () => {
+  afterEach(() => {
+    embed.embedded = false
+    vi.unstubAllGlobals()
+  })
+
+  it("opens a new tab when embedded in another app's iframe", () => {
+    const open = vi.fn()
+    vi.stubGlobal("open", open)
+    embed.embedded = true
+    openStripePage("https://invoice.stripe.com/i/abc")
+    expect(open).toHaveBeenCalledWith("https://invoice.stripe.com/i/abc", "_blank", "noopener,noreferrer")
+  })
+
+  it("refuses a non-HTTPS target before navigating", () => {
+    const open = vi.fn()
+    vi.stubGlobal("open", open)
+    embed.embedded = true
+    expect(() => openStripePage("javascript:alert(1)")).toThrow()
+    expect(open).not.toHaveBeenCalled()
   })
 })

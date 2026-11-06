@@ -66,9 +66,14 @@ function faceMaskingMode(data: object): "always" | "auto" | undefined {
   return mode === "always" || mode === "auto" ? mode : undefined
 }
 
-/** A run that may be a depth reference: a direct Motion run, or a trend run whose clip is full depth (the "auto" bound covers either). */
+/**
+ * A run that may be a depth reference: a direct Motion run, a run whose clip is full depth (a trend's, or a Precise
+ * run with an art style the engine makes the Flex way, which keeps its asked style), or a style-only run (a direct
+ * one, made the Flex way whatever style it keeps). The "auto" bound covers each.
+ */
 function depthReference(data: object): boolean {
-  return (data as { style?: unknown }).style === "motion" || faceMaskingOf(data)?.source === "full-depth"
+  const d = data as { style?: unknown; styleOnly?: unknown }
+  return d.style === "motion" || faceMaskingOf(data)?.source === "full-depth" || typeof d.styleOnly === "string"
 }
 
 /** The budget of one cast-swap job: the "auto" bound when face masking is

@@ -293,11 +293,12 @@ export interface CastSwapParams {
    * (the same ids an image's `direction.style` takes); the platform words it.
    * A Flex run (`style: "motion"`) takes one, and so does a Precise run where
    * {@link CastSwapResource.styleChoice} answers `preciseArtStyle` true for the
-   * engine. Nodaro may run such a Precise request as a Flex run (its engine does
-   * by default, unless Nodaro turns that off), exactly as if `style: "motion"` had
-   * been sent: its estimate, price and Full Quality are then a Flex run's, and the
-   * job records `input_data.style: "motion"`. Otherwise it is Precise's edit of
-   * the clip, drawn in the art style. Refused with
+   * engine. Nodaro may make such a Precise request the way a Flex run is made
+   * (its engine does by default, unless Nodaro turns that off): its estimate,
+   * price and Full Quality are then a Flex run's, while the job still records
+   * the style sent (`input_data.style` absent, or `"precise"`; jobs made so
+   * before the style was kept record `"motion"`). Otherwise it is Precise's edit
+   * of the clip, drawn in the art style. Refused with
    * 400 `unknown_art_style` (not in the catalog), `art_style_not_supported` (a
    * saved moodboard, `moodboard:…`) or `art_style_needs_flex` (a trend run, a
    * Flex run whose prompt is made Precise by Nodaro's setting for how Flex

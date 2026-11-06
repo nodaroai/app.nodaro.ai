@@ -272,7 +272,6 @@
   "src/lib/__tests__/canvas-focus-event.test.ts",
   "src/lib/__tests__/canvas-navigation.test.ts",
   "src/lib/__tests__/catalog-bootstrap.test.tsx",
-  "src/lib/__tests__/checkout.test.ts",
   "src/lib/__tests__/cinematography-hints-character-motion.test.ts",
   "src/lib/__tests__/cinematography-hints-character.test.ts",
   "src/lib/__tests__/cinematography-hints-transition-fx.test.ts",

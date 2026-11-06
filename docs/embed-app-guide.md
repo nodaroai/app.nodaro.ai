@@ -575,6 +575,8 @@ All errors have shape `{ "error": { "code": "...", "message": "..." } }`.
 | 401 | `unauthorized` | Missing/expired/revoked token | Re-mint or re-authorize |
 | 402 | `insufficient_app_credits` | Token's account is out of credits | Top up credits or switch plan |
 | 402 | `insufficient_credits` | An app that makes a UGC video: the balance does not cover what the video can hold while its clips render (`This video can hold up to about <n> credits while it renders; your balance is <balance>.`) | Top up credits, or make a shorter video |
+| 402 | `insufficient_credits` | An app with a creator's fee: the balance does not cover the app's listed run price with the fee (`This app costs about <n> credits to run, including the creator's fee of <fee> credits; your balance is <balance>.`), or, on a workspace run of an app the organization has not approved, the runner's own balance does not cover the fee (`This app's creator fee of <fee> credits is paid from your own balance, as your organization has not approved this app; your balance is <balance>.`). Not checked for the creator's own run | Top up credits |
+| 402 | `budget_exceeded` | A workspace run of an app with a creator's fee that the organization approved: the workspace budget cannot cover the app's listed run price with the fee | Ask a workspace admin for headroom |
 | 403 | `insufficient_scope` (with `missingScope` field) | OAuth token doesn't have required scope | Re-do `/oauth/authorize` with broader scopes |
 | 404 | `not_found` | Slug or runId doesn't exist (or app deactivated), or the run's execution is not the run owner's | Check the slug; surface "App unavailable" |
 | 429 | `rate_limit_exceeded` | Daily run cap (`maxRunsPerUserPerDay`) reached | Show "Daily limit reached" UI |

@@ -16,9 +16,13 @@
  *      (`FACE_MESH_LOOKAHEAD_FRAMES`), then goes on to be drawn and written,
  *      in order (the end of the clip decides the last ones);
  *   4. the points of the faces drawn are smoothed over time per face
- *      (`face-mesh-smooth.ts`: every frame, in order, only the faces drawn);
- *   5. the lines (all of them, or only the eye and lip outlines, or only the
- *      lip outline: `parts`) are drawn on the clip they go on (`drawOnPath`:
+ *      (`face-mesh-smooth.ts`: every frame, in order, only the faces drawn;
+ *      the irises' 10 points too when they are drawn); with the contours on,
+ *      their depths too, and what each face hides of its lines
+ *      (`face-mesh-visibility.ts`) is worked out from them and held steady
+ *      the same way;
+ *   5. the lines of the layers asked for (`parts`, or `layers`:
+ *      `face-mesh-layers.ts`) are drawn on the clip they go on (`drawOnPath`:
  *      the masked or depth clip) at their place (`face-mesh-draw.ts`), as fractions of the
  *      frame — the clips may differ in size — in tones of the picture under
  *      them: a gray of the pixel's own luminance, or, given the gray depth
@@ -40,7 +44,7 @@
 import { once } from "node:events"
 import { join } from "node:path"
 import type { Writable } from "node:stream"
-import type { VideoDepthColormap, VideoFaceMeshParts } from "@nodaro/shared/media"
+import type { VideoDepthColormap, VideoFaceMeshLayers, VideoFaceMeshParts } from "@nodaro/shared/media"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { ffmpegFailureMessage, probeVideoOverlayBase, runFfprobe, withFfmpegSlot, type VideoOverlayBaseProbe } from "../../providers/video/ffmpeg-utils.js"
 import { spawnFfmpeg } from "../../providers/video/ffmpeg-process.js"
@@ -48,13 +52,14 @@ import { ffmpegEffectiveThreads } from "../../providers/video/ffmpeg-threads.js"
 import { countVideoFrames } from "../../providers/video/video-mask.js"
 import { decodeYunet, fillYunetInput, paddedSize, type YunetFace } from "../face-detect/yunet-decode.js"
 import { yunetSession } from "../face-detect/yunet-session.js"
-import { FACE_MESH_INPUT_SIZE } from "./face-mesh-model.js"
+import { FACE_MESH_INPUT_SIZE, FACE_MESH_MODEL_POINTS, FACE_MESH_POINTS } from "./face-mesh-model.js"
 import { faceMeshSession } from "./face-mesh-session.js"
-import { FACE_MESH_MIN_PRESENCE, fillFaceMeshInput, landmarksToFrame, roiOfFace, sigmoid } from "./face-mesh-crop.js"
+import { FACE_MESH_MIN_PRESENCE, fillFaceMeshInput, landmarkDepths, landmarksToFrame, roiOfFace, sigmoid } from "./face-mesh-crop.js"
 import { faceGetsMesh, type FaceMeshFilters } from "./face-mesh-filters.js"
 import { FaceMeshTracker, type MeshedFace } from "./face-mesh-smooth.js"
 import { FaceMeshLookahead, type DecidedFrame } from "./face-mesh-tracks.js"
-import { compositeFaceMesh, faceMeshOverlay } from "./face-mesh-draw.js"
+import { compositeFaceMesh, faceMeshOverlay, type FaceMeshDrawing } from "./face-mesh-draw.js"
+import { drawsIrises, hidesFarSide, layerSetOf, visibilityLayoutOf, visibilityOfLayout } from "./face-mesh-layers.js"
 import { depthColormapTable } from "./depth-colormaps.js"
 import { faceMeshPeakMemoryMiB, faceMeshTimeoutMs } from "./face-mesh-budget.js"
 import { frameTimesOf, maskFramesForClip, sameSpan } from "./face-mesh-timing.js"
@@ -82,9 +87,13 @@ export interface DrawFaceMeshInput {
   /**
    * What is drawn on each face (`VideoFaceMeshParts`): left out or `"full"`,
    * the wireframe and the eye and lip outlines, as before; `"features"`, the
-   * eye and lip outlines alone; `"mouth"`, the lip outline alone.
+   * eye and lip outlines alone; `"mouth"`, the lip outline alone;
+   * `"contours"`, the eye and lip outlines, the oval, the brows and the nose,
+   * each only where the face does not hide it.
    */
   readonly parts?: VideoFaceMeshParts
+  /** What is drawn, layer by layer (`VideoFaceMeshLayers`), in place of `parts`. */
+  readonly layers?: VideoFaceMeshLayers
   readonly filters: FaceMeshFilters
   /** Where the output is written. */
   readonly outputPath: string
@@ -410,6 +419,14 @@ export async function drawFaceMeshVideo(input: DrawFaceMeshInput): Promise<DrawF
       return maskGray
     }
     const tracker = new FaceMeshTracker(fpsOf(frameRate))
+    const drawing: FaceMeshDrawing = input.layers ? { layers: input.layers } : (input.parts ?? "full")
+    const layers = layerSetOf(drawing)
+    // With the contours on, every line leaves out what the face hides: only then are the depths needed.
+    const contours = hidesFarSide(layers)
+    const layout = contours ? visibilityLayoutOf(layers) : undefined
+    const contourVisibility = (points: Float64Array, depth: Float64Array) => visibilityOfLayout(points, depth, layout!)
+    // The irises' points (468–477) are read only when they are drawn.
+    const points = drawsIrises(layers) ? FACE_MESH_MODEL_POINTS : FACE_MESH_POINTS
     // Each frame is held until its faces' tracks are decided (only a face found in enough frames is drawn).
     const lookahead = new FaceMeshLookahead<HeldFrame, MeshedFace>()
     const small = k < 1 ? new Uint8Array(dw * dh * 3) : undefined
@@ -425,8 +442,9 @@ export async function drawFaceMeshVideo(input: DrawFaceMeshInput): Promise<DrawF
      * forgotten), and the counts are what is drawn.
      */
     const writeDecided = async ({ item, drawn }: DecidedFrame<HeldFrame, MeshedFace>): Promise<void> => {
-      const smoothed = tracker.next(drawn).map((p) => p.map((v, i) => v / (i % 2 === 0 ? det.width : det.height)))
-      const overlay = faceMeshOverlay(smoothed, draw.width, draw.height, input.parts ?? "full")
+      const tracked = tracker.track(drawn, contours ? contourVisibility : undefined)
+      const smoothed = tracked.map((f) => f.points.map((v, i) => v / (i % 2 === 0 ? det.width : det.height)))
+      const overlay = faceMeshOverlay(smoothed, draw.width, draw.height, drawing, contours ? tracked.map((f) => f.visibility) : undefined)
       if (overlay) {
         framesWithFaces++
         facesDrawn += smoothed.length
@@ -462,9 +480,10 @@ export async function drawFaceMeshVideo(input: DrawFaceMeshInput): Promise<DrawF
           fillFaceMeshInput(bgr, det.width, det.height, roi, meshInput)
           const out = await mesh.run(meshInput)
           if (sigmoid(out.presenceLogit) < FACE_MESH_MIN_PRESENCE) continue
-          const fractions = landmarksToFrame(out.landmarks, roi, det.width, det.height)
-          // The tracker smooths in pixels of the found clip.
-          found.push({ box: face, points: fractions.map((v, i) => v * (i % 2 === 0 ? det.width : det.height)) })
+          const fractions = landmarksToFrame(out.landmarks, roi, det.width, det.height, FACE_MESH_INPUT_SIZE, points)
+          // The tracker smooths in pixels of the found clip (the depths too: `landmarkDepths` is in the same pixels).
+          const pixels = fractions.map((v, i) => v * (i % 2 === 0 ? det.width : det.height))
+          found.push(contours ? { box: face, points: pixels, depth: landmarkDepths(out.landmarks, roi, FACE_MESH_INPUT_SIZE, points) } : { box: face, points: pixels })
         }
         // Held as copies (the decoders reuse their buffers); a frame with no face found never gets lines, so no depth.
         const held: HeldFrame = { rgb: Buffer.from(rgb), ...(depthRgb && found.length > 0 ? { depth: Buffer.from(depthRgb) } : {}) }

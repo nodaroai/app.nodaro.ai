@@ -157,3 +157,58 @@ describe("PUT /v1/admin/nodaro-motion/precise-style-route", () => {
     expect(res.statusCode).toBe(400)
   })
 })
+
+describe("PUT /v1/admin/nodaro-motion/precise-style-route: the routed depth blur", () => {
+  it("saves it, and 0 stores nothing", async () => {
+    expect((await put({ routedDepthBlur: 10 })).json().data.preciseStyleRoute).toEqual({ routedDepthBlur: 10 })
+    expect(h.upserts[0]!.value).toEqual({ routedDepthBlur: 10 })
+    await put({ routedDepthBlur: 0 })
+    expect(h.upserts[1]!.value).toEqual({})
+  })
+
+  it.each([[41], [-1], [2.5], ["10"]])("refuses %j with a 400, nothing saved", async (v) => {
+    const res = await put({ routedDepthBlur: v })
+    expect(res.statusCode).toBe(400)
+    expect(h.upserts).toEqual([])
+  })
+})
+
+describe("PUT /v1/admin/nodaro-motion/precise-style-route: the routed colour switch", () => {
+  it("saves off, and on stores nothing", async () => {
+    expect((await put({ describeColours: false })).json().data.preciseStyleRoute).toEqual({ describeColours: false })
+    await put({ describeColours: true })
+    expect(h.upserts[1]!.value).toEqual({})
+  })
+
+  it("refuses a value that is not a boolean", async () => {
+    expect((await put({ describeColours: "off" })).statusCode).toBe(400)
+    expect(h.upserts).toEqual([])
+  })
+})
+
+describe("PUT /v1/admin/nodaro-motion/precise-style-route: the routed face mesh", () => {
+  it("saves on, and off stores nothing", async () => {
+    expect((await put({ faceMesh: true })).json().data.preciseStyleRoute).toEqual({ faceMesh: true })
+    await put({ faceMesh: false })
+    expect(h.upserts[1]!.value).toEqual({})
+  })
+
+  it("refuses a value that is not a boolean", async () => {
+    expect((await put({ faceMesh: "on" })).statusCode).toBe(400)
+    expect(h.upserts).toEqual([])
+  })
+})
+
+describe("PUT /v1/admin/nodaro-motion/precise-style-route: the routed mesh's parts and wording", () => {
+  it("saves them; Motion stores nothing", async () => {
+    expect((await put({ faceMeshParts: "contours", faceMeshWording: "shape" })).json().data.preciseStyleRoute).toEqual({ faceMeshParts: "contours", faceMeshWording: "shape" })
+    await put({ faceMeshWording: "motion" })
+    expect(h.upserts[1]!.value).toEqual({})
+  })
+
+  it("refuses an unknown part or wording", async () => {
+    expect((await put({ faceMeshParts: "wire" })).statusCode).toBe(400)
+    expect((await put({ faceMeshWording: "loud" })).statusCode).toBe(400)
+    expect(h.upserts).toEqual([])
+  })
+})

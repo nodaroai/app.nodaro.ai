@@ -3345,6 +3345,7 @@ export const he: ChromeDict = {
   "pricing.processing": "מעבד…",
   "pricing.switchPlan": "החלפת תוכנית",
   "pricing.planChanged": "התוכנית הוחלפה בהצלחה! השינויים ייכנסו לתוקף בקרוב.",
+  "pricing.planChangePaymentRequired": "כדי להחליף תוכנית יש להשלים את התשלום. פותחים את החשבונית…",
   "pricing.somethingWentWrong": "משהו השתבש",
   "pricing.terms": "תנאי שימוש",
   "pricing.privacy": "מדיניות פרטיות",

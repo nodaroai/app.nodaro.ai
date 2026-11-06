@@ -23,8 +23,7 @@ export async function readNodaroMotionNoPerson(): Promise<{ noPerson: NodaroMoti
 /**
  * Save the whole setting (already validated by `nodaroMotionNoPersonSchema`),
  * the defaults left out, under the current keys only, and clear this process's
- * settings cache; the other servers converge on their own cache expiry (about
- * 60 s). Throws on a database error.
+ * settings cache; the other servers see the save within about a second (app-settings-version.ts). Throws on a database error.
  */
 export async function saveNodaroMotionNoPerson(noPerson: NodaroMotionNoPerson, adminId: string): Promise<void> {
   const { error } = await supabase

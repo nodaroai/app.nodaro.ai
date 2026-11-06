@@ -9,7 +9,8 @@
  * face pipeline gives its landmark model. The crop is sampled bilinearly into
  * the model's 256 × 256 RGB input (`FACE_MESH_INPUT_SIZE`; outside the frame
  * reads black), and the first 468 of the 478 points the model answers in crop
- * pixels (the face; the irises are not drawn) map back through the same turn.
+ * pixels (the face) map back through the same turn — all 478 when the irises
+ * are drawn (`count`).
  */
 import type { YunetFace } from "../face-detect/yunet-decode.js"
 import { FACE_MESH_INPUT_SIZE, FACE_MESH_MODEL_POINTS, FACE_MESH_POINTS } from "./face-mesh-model.js"
@@ -98,11 +99,14 @@ export function fillFaceMeshInput(
   }
 }
 
+/** How many of the model's points are read: the face's 468, or all 478 with the irises (468–477). */
+export type FaceMeshPointCount = typeof FACE_MESH_POINTS | typeof FACE_MESH_MODEL_POINTS
+
 /**
  * The face's 468 points of the model's 478 (x, y in pixels of the `n × n`
  * crop; z ignored) as fractions of a `width × height` frame, interleaved
  * `[x0, y0, x1, y1, …]`: the first 468 (x, y, z) triples are read, the
- * irises after them (468–477) never.
+ * irises after them (468–477) only when `count` is all 478.
  */
 export function landmarksToFrame(
   landmarks: ArrayLike<number>,
@@ -110,16 +114,35 @@ export function landmarksToFrame(
   width: number,
   height: number,
   n = FACE_MESH_INPUT_SIZE,
+  count: FaceMeshPointCount = FACE_MESH_POINTS,
 ): Float64Array {
   if (landmarks.length !== FACE_MESH_MODEL_POINTS * 3) {
     throw new Error(`face mesh: ${landmarks.length} landmark values are not the model's ${FACE_MESH_MODEL_POINTS} × 3`)
   }
-  const out = new Float64Array(FACE_MESH_POINTS * 2)
-  for (let i = 0; i < FACE_MESH_POINTS; i++) {
+  const out = new Float64Array(count * 2)
+  for (let i = 0; i < count; i++) {
     const [x, y] = cropToFrame(roi, landmarks[3 * i]!, landmarks[3 * i + 1]!, n)
     out[2 * i] = x / width
     out[2 * i + 1] = y / height
   }
+  return out
+}
+
+/**
+ * The depths of the face's 468 points (all 478 with `count`; the model's z, in pixels of the crop)
+ * in pixels of the frame, `[z0, z1, …]`: scaled as `landmarksToFrame` scales
+ * x and y (the crop's side over the model's), so a depth and a distance
+ * across the frame are in the same units. Smaller is nearer the camera (the
+ * model's own convention: the nose tip is the least). A turn of the crop
+ * (`roi.angle`) is about the camera's axis, so it leaves z as it is.
+ */
+export function landmarkDepths(landmarks: ArrayLike<number>, roi: FaceRoi, n = FACE_MESH_INPUT_SIZE, count: FaceMeshPointCount = FACE_MESH_POINTS): Float64Array {
+  if (landmarks.length !== FACE_MESH_MODEL_POINTS * 3) {
+    throw new Error(`face mesh: ${landmarks.length} landmark values are not the model's ${FACE_MESH_MODEL_POINTS} × 3`)
+  }
+  const k = roi.size / n
+  const out = new Float64Array(count)
+  for (let i = 0; i < count; i++) out[i] = landmarks[3 * i + 2]! * k
   return out
 }
 

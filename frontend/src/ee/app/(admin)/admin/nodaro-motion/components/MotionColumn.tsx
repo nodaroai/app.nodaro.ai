@@ -112,6 +112,8 @@ interface Props {
   readonly depthBlurMissingIn?: readonly string[]
   /** For each face mesh part but the full mesh, the environments whose engine cannot draw it (`environmentsThatCannotDrawFaceMeshParts`); unknown when left out (no control). */
   readonly faceMeshPartsMissingIn?: Readonly<Record<"features" | "mouth", readonly string[]>>
+  /** The environments that cannot take a set of face mesh layers no parts value names, by engine and by platform (`environmentsThatCannotDrawFaceMeshLayers`); unknown when left out (no "Choose the layers"). */
+  readonly faceMeshLayersMissing?: { readonly engine: readonly string[]; readonly platform: readonly string[] }
   /**
    * The environments that cannot take Full depth's smallest face with mesh lines yet, by their engine and by their
    * platform (`faceMeshMinFaceHeightMissing`: the setting is shared, and an older platform drops an entry that carries
@@ -131,6 +133,7 @@ export function MotionColumn({
   depthModelSizesMissingIn,
   depthBlurMissingIn,
   faceMeshPartsMissingIn,
+  faceMeshLayersMissing,
   faceMeshMinFaceHeightMissing,
 }: Props) {
   const shotList = flexIsFullDepth(envs)
@@ -146,6 +149,7 @@ export function MotionColumn({
           depthModelSizesMissingIn={depthModelSizesMissingIn}
           depthBlurMissingIn={depthBlurMissingIn}
           faceMeshPartsMissingIn={faceMeshPartsMissingIn}
+          faceMeshLayersMissing={faceMeshLayersMissing}
           faceMeshMinFaceHeightMissing={faceMeshMinFaceHeightMissing}
         />
       ) : (
@@ -158,6 +162,7 @@ export function MotionColumn({
           depthModelSizesMissingIn={depthModelSizesMissingIn}
           depthBlurMissingIn={depthBlurMissingIn}
           faceMeshPartsMissingIn={faceMeshPartsMissingIn}
+          faceMeshLayersMissing={faceMeshLayersMissing}
           faceMeshMinFaceHeightMissing={faceMeshMinFaceHeightMissing}
         />
       )}
@@ -188,6 +193,7 @@ type MaskingProps = Pick<
   | "depthModelSizesMissingIn"
   | "depthBlurMissingIn"
   | "faceMeshPartsMissingIn"
+  | "faceMeshLayersMissing"
   | "faceMeshMinFaceHeightMissing"
 >
 
@@ -201,6 +207,7 @@ function FullDepthMasking({
   depthModelSizesMissingIn,
   depthBlurMissingIn,
   faceMeshPartsMissingIn,
+  faceMeshLayersMissing,
   faceMeshMinFaceHeightMissing,
 }: MaskingProps) {
   const m = value?.masking
@@ -240,6 +247,7 @@ function FullDepthMasking({
         depthModelSizesMissingIn={depthModelSizesMissingIn}
         depthBlurMissingIn={depthBlurMissingIn}
         faceMeshPartsMissingIn={faceMeshPartsMissingIn}
+        faceMeshLayersMissing={faceMeshLayersMissing}
         faceMeshMinFaceHeightMissing={faceMeshMinFaceHeightMissing}
         envs={envs}
         scenes={SHOT_LIST_SCENES}
@@ -261,6 +269,7 @@ function ChoiceMasking({
   depthModelSizesMissingIn,
   depthBlurMissingIn,
   faceMeshPartsMissingIn,
+  faceMeshLayersMissing,
   faceMeshMinFaceHeightMissing,
 }: MaskingProps) {
   const id = useId()
@@ -299,6 +308,7 @@ function ChoiceMasking({
           depthModelSizesMissingIn={depthModelSizesMissingIn}
           depthBlurMissingIn={depthBlurMissingIn}
           faceMeshPartsMissingIn={faceMeshPartsMissingIn}
+          faceMeshLayersMissing={faceMeshLayersMissing}
           faceMeshMinFaceHeightMissing={faceMeshMinFaceHeightMissing}
           // No `envs`: a scene only some engines declare is never offered on this shared setting
           // (the server refuses it until every environment's engine lists it).

@@ -2278,10 +2278,11 @@ with `engines`: a forced Precise keeps a Motion run's art style where
 `"precise"`, a request with nothing else to change is refused as `400 validation_error`; with
 anything else to change (a role with images, a fixed reference, a `prePrompt`
 or `postPrompt`) it answers `202` and runs and is quoted as Precise, with the
-art style where `preciseArtStyle` is `true`. While Nodaro runs a Precise run
-with an art style as a Motion run (see An art style on a Precise run below), a
-request that keeps one on such an engine runs and is quoted as Motion instead,
-and one with nothing else to change is accepted. Nodaro Motion Pulse is always
+art style where `preciseArtStyle` is `true`. While Nodaro makes a Precise run with an art style the way a Motion run is
+made (see An art style on a Precise run below), a request that keeps one on such
+an engine is made and quoted as a Motion run, its job recording the style sent; a
+`style: "motion"` request is then not overridden at all (no `styleForced`), and
+one with nothing else to change is accepted. Nodaro Motion Pulse is always
 `false` in all three, and an older server leaves them out (read them as `false`
 for every engine). Public (works signed
 out); the answer may be up to a minute old. A trend run keeps its trend's
@@ -2338,15 +2339,16 @@ await client.castSwap.run({
 answers `preciseArtStyle` `true` for the engine (Nodaro Motion Prism only), a
 Precise run (no `style`, or `style: "precise"`) also takes an art style,
 `direction: { style: "<id>" }`, from the same catalog and refused the same way
-(`400 unknown_art_style`, `400 art_style_not_supported`). Nodaro may run it as a
-Motion run, where an art style holds across the whole picture far more reliably
-(its engine does by default, unless Nodaro turns that off). It is then treated
-exactly as if you had sent `style: "motion"`: its `estimate()`, its price, its
-Full Quality and Style only above are a Motion run's, the job records
-`input_data.style: "motion"`, and with nothing else to change it is accepted, as
-a style-only run. `styleChoice()` does not show which applies: read the estimate
-for what a run costs, and the job's `input_data.style` for what ran. Otherwise
-the run stays
+(`400 unknown_art_style`, `400 art_style_not_supported`). Nodaro may make it the way a
+Motion run is made, where an art style holds across the whole picture far more
+reliably (its engine does by default, unless Nodaro turns that off). The job
+still records the style you sent (`input_data.style` absent, or `"precise"`), so
+reading it back, or sending the same params again, asks for the same run. Its
+`estimate()`, its price, its Full Quality and Style only above are then a Motion
+run's, and with nothing else to change it is accepted, as a style-only run.
+`styleChoice()` does not show which applies: read the estimate for what a run
+costs. (Jobs made this way before the style was kept record
+`input_data.style: "motion"`.) Otherwise the run is made as
 Precise: the clip is edited as a Precise run edits it, the people swapped as
 Precise swaps them, and the whole video is drawn in the art style. There it is not a
 change on its own: a Precise run with nothing else to change (no role with
@@ -7584,10 +7586,10 @@ const current = plans.find((p) => p.id === effectiveTier) // undefined: pay-as-y
 | `paymentMethod()` | `Promise<BillingPaymentMethod>` | `GET /v1/billing/payment-method`. **Session only.** `{ card, billingDetails }` — `card` is `{ brand, last4, expMonth, expYear }` or `null`; `billingDetails` is `{ name, email, country }` or `null`. Both `null` for an account that has not bought yet; never an error. |
 | `autoRecharge()` | `Promise<BillingAutoRecharge>` | `GET /v1/billing/auto-recharge`. **Session only.** `{ enabled, thresholdCredits, amountUsd, failureCount, lastAttemptAt, hasSavedCard }` — when the balance falls under the threshold, the amount is loaded from the saved card. |
 | `setAutoRecharge(input)` | `Promise<BillingAutoRechargeSaved>` | `PUT /v1/billing/auto-recharge`. **Session only.** `{ enabled, thresholdCredits?, amountUsd? }`; enabling needs both figures (`thresholdCredits` 100–100,000; `amountUsd` a whole amount within `topUpRange`), else a `NodaroError` with status 400. Saving clears the failure count. |
-| `checkout(input)` | `Promise<BillingCheckoutSession>` | `POST /v1/billing/create-checkout-session`. **Session only.** `{ priceId, mode?, returnPath?, embedded? }` → `{ url }`, a Stripe Checkout page for a plan's price or a credit pack (`BillingTopUp.id`): send the person there. `returnPath` is a path on your own origin (`"/billing"`, a query allowed; one leading `/`, no host, no `#`) Stripe brings them back to, with `checkout=success` or `checkout=cancelled` in the query; it wins over `embedded`, and without it the Nodaro app's pages are used. `ForbiddenError` with code `self_serve_disabled` where the deployment does not sell to its users. |
+| `checkout(input)` | `Promise<BillingCheckoutSession>` | `POST /v1/billing/create-checkout-session`. **Session only.** `{ priceId, mode?, returnPath?, embedded? }` → `{ url }`, a Stripe Checkout page for a plan's price or a credit pack (`BillingTopUp.id`): send the person there. Promotion codes apply to plans only; a pack purchase that settles for nothing grants no credits. Status 409 for a plan while the account already has a subscription — use `changePlan()`. `returnPath` is a path on your own origin (`"/billing"`, a query allowed; one leading `/`, no host, no `#`) Stripe brings them back to, with `checkout=success` or `checkout=cancelled` in the query; it wins over `embedded`, and without it the Nodaro app's pages are used. `ForbiddenError` with code `self_serve_disabled` where the deployment does not sell to its users. |
 | `loadCredits(input)` | `Promise<BillingLoadSession>` | `POST /v1/billing/create-load-session`. **Session only.** `{ amountUsd, returnPath?, embedded? }` → `{ url, credits }`: a Checkout page loading a whole amount within `topUpRange` as credits at the packs' rate, `credits` being what it grants. The card is saved for the automatic top-up. |
 | `portal(input?)` | `Promise<BillingPortalSession>` | `POST /v1/billing/manage-subscription`. **Session only.** `{ returnPath? }` → `{ url }`, a Stripe Customer Portal page (the card, the billing address, the invoices, cancelling); `returnPath` is where its Back goes. `NotFoundError` before a first purchase. |
-| `changePlan(input)` | `Promise<BillingChangePlanResult>` | `POST /v1/billing/change-plan`. **Session only.** `{ newPriceId }` → `{ subscriptionId, tier }`: moves the active subscription to another plan's price, prorated by Stripe; the tier applies at once. `NotFoundError` with no active subscription; status 400 on a pack's price or the current one. |
+| `changePlan(input)` | `Promise<BillingChangePlanResult>` | `POST /v1/billing/change-plan`. **Session only.** `{ newPriceId }` → `{ subscriptionId, tier }`: moves the active subscription to another plan's price. An upgrade charges the price difference for the rest of the billing period at once and applies only when that payment succeeds; it adds the difference between the two plans' monthly credits, once per billing period (moving down and back up within a period adds nothing more). An upgrade invoice settled for 0 adds no credits. A downgrade applies at once, credits the unused time on the next invoice, and keeps the current credits until the period ends; a monthly ↔ yearly switch adds no credits (the next monthly credits come a month after it). `NotFoundError` with no active subscription; status 400 on a pack's price or the current one; status 409 when the subscription is not active; a `NodaroError` with status 409 and code `plan_change_payment_required` when the upgrade waits on its payment (the plan is unchanged; `details.invoiceUrl` is Stripe's page for paying it); `RateLimitedError` after 5 plan-change requests from one account in 24 hours. |
 
 ```ts
 // A billing screen in a first-party app (signed in with supabaseAuth).
@@ -8756,11 +8758,12 @@ so far — settled where the run finished, the held reservation otherwise — an
 `settledCredits` and `inFlightCredits` split it. A metered run that overran the
 workspace's headroom has the excess absorbed by the platform; the totals report
 it as `platformAbsorbedCredits`, and `chargedToBudget = settledCredits −
-platformAbsorbedCredits` is the metered settlement that reached the budget. An
-approved-app markup the budget could not cover is absorbed separately as
-`appMarkupAbsorbedCredits`; it has no run in the report, so it is not in
-`chargedToBudget` (which is therefore not, by itself, the workspace's spent
-figure). Totals cover the whole window even when a grouping is `truncated`.
+platformAbsorbedCredits` is the metered settlement that reached the budget.
+`appMarkupAbsorbedCredits` totals approved-app fees the platform absorbed
+before an app's fee came to be collected only up to the budget's headroom;
+new runs no longer add to it (the creator is credited only what the budget
+paid). It has no run in the report, so it is not in `chargedToBudget`
+(which is therefore not, by itself, the workspace's spent figure). Totals cover the whole window even when a grouping is `truncated`.
 
 ---
 

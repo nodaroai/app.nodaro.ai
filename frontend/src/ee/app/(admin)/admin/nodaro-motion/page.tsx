@@ -93,6 +93,7 @@ import { DEFAULT_PULSE_AUDIO, PulseAudioSelect } from "../trends/components/Puls
 import { PrismReferenceAudioSelect } from "../trends/components/PrismReferenceAudioSelect"
 import { prismReferenceAudioHeldIssues, prismReferenceAudioSaved, prismReferenceAudioTriple } from "../trends/prism-reference-audio"
 import { maskingIssues } from "../trends/model"
+import { layersOfSetting } from "../trends/face-mesh-layers"
 import {
   environmentsThatCannotBlurDepth,
   environmentsThatCannotBlurDepthFill,
@@ -104,6 +105,7 @@ import {
   environmentsThatCannotForceStyle,
   environmentsThatCannotHideBodies,
   faceMeshMinFaceHeightMissing,
+  environmentsThatCannotDrawFaceMeshLayers,
 } from "../trends/clip-preparation"
 import { motionIssues, motionToSaved, toSaved } from "./model"
 import { PromptPartsTabs } from "./components/PromptPartsTabs"
@@ -156,6 +158,8 @@ export default function AdminNodaroMotionPage() {
   // The Motion column's depth blur and face mesh parts likewise (a Cast Swap engine from 0.430.0 declares them).
   const depthBlurMissingIn = environmentsThatCannotBlurDepth(envs.data)
   const faceMeshPartsMissingIn = environmentsThatCannotDrawFaceMeshParts(envs.data)
+  // The Motion column's face mesh layers: a set no parts value names needs every environment's engine and platform.
+  const faceMeshLayersMissing = environmentsThatCannotDrawFaceMeshLayers(envs.data)
   // Full depth's smallest face with mesh lines likewise (a Cast Swap engine from 0.436.1), and every environment's
   // PLATFORM too (one shared database: an older app drops an entry that carries it); the Motion column's alone, as the
   // Precise column is never Full depth.
@@ -442,6 +446,7 @@ export default function AdminNodaroMotionPage() {
                             envs={envs.data}
                             supported={preciseStyleRouteQuery.data.supported}
                             error={savePreciseStyleRoute.error?.message}
+                            flexMaskingLayers={layersOfSetting(motionDraft[engine.id]?.masking ?? draft[engine.id])}
                             onChange={(draft) => {
                               savePreciseStyleRoute.reset()
                               setPreciseStyleRouteDraft(draft)
@@ -508,6 +513,7 @@ export default function AdminNodaroMotionPage() {
                         depthModelSizesMissingIn={depthModelSizesMissingIn}
                         depthBlurMissingIn={depthBlurMissingIn}
                         faceMeshPartsMissingIn={faceMeshPartsMissingIn}
+                        faceMeshLayersMissing={faceMeshLayersMissing}
                         faceMeshMinFaceHeightMissing={minFaceMissing}
                         onChange={(entry) => setMotionDraft((d) => ({ ...d, [engine.id]: entry }))}
                       />

@@ -32,6 +32,7 @@ import type {
   MaskCompositeBackgroundFit,
   MaskCompositeAudioSource,
   MaskCompositeFill,
+  VideoFaceMeshLayers,
 } from "@nodaro/shared/media"
 import type { Pro3DRenderQuote, Pro3DRenderSource } from "@nodaro/shared/scene3d"
 import type { ReduceMeta, WorkflowExport, WorkflowImportReport } from "@nodaro/shared/workflow"
@@ -7692,6 +7693,17 @@ export async function getManageSubscriptionUrl(userId: string): Promise<string |
   return json.data?.url ?? json.url ?? null
 }
 
+/**
+ * An upgrade that waits on its payment (`plan_change_payment_required`): the
+ * plan changes once the invoice at `invoiceUrl` is paid.
+ */
+export class PlanChangePaymentRequiredError extends Error {
+  constructor(message: string, readonly invoiceUrl: string | null) {
+    super(message)
+    this.name = "PlanChangePaymentRequiredError"
+  }
+}
+
 export async function changePlan(
   userId: string,
   newPriceId: string
@@ -7702,8 +7714,16 @@ export async function changePlan(
     body: JSON.stringify({ userId, newPriceId }),
   })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(apiErrorMessage({ serverMessage: (err as Record<string, string>).error, fallbackKey: "apiErr.changePlan" }))
+    const body = (await res.json().catch(() => ({}))) as { error?: unknown }
+    const raw = body.error
+    const envelope = raw && typeof raw === "object" ? (raw as { code?: unknown; message?: unknown; invoiceUrl?: unknown }) : null
+    const serverMessage = typeof raw === "string" ? raw : typeof envelope?.message === "string" ? envelope.message : undefined
+    const code = typeof envelope?.code === "string" ? envelope.code : undefined
+    const message = apiErrorMessage({ code, serverMessage, fallbackKey: "apiErr.changePlan" })
+    if (code === "plan_change_payment_required") {
+      throw new PlanChangePaymentRequiredError(message, typeof envelope?.invoiceUrl === "string" ? envelope.invoiceUrl : null)
+    }
+    throw new Error(message)
   }
   const json = await res.json()
   return (json as Record<string, unknown>).data as { subscriptionId: string; tier: string }
@@ -11530,6 +11550,14 @@ export interface AdminTrendFaceMasking {
    */
   faceMeshParts?: AdminFaceMeshParts
   /**
+   * The Motion setting's alone: what the face mesh draws, layer by layer
+   * (`VideoFaceMeshLayers`), in place of `faceMeshParts` (never both). A set
+   * a parts value names is saved as that value; any other only once every
+   * environment's engine declares `castSwap.faceMeshLayers` and its platform
+   * takes it.
+   */
+  faceMeshLayers?: VideoFaceMeshLayers
+  /**
    * Full depth's face mesh (Admin → Nodaro Motion's Motion setting and a
    * trend's): the smallest face it draws lines on, the face box's height as a
    * % of the frame's, 0–100 (0 = no size minimum; the side margins still
@@ -12100,6 +12128,8 @@ export interface TrendEngineEnvironment {
       depthBlur?: boolean
       /** The face mesh parts the engine draws (`faceMasking.faceMeshParts`); absent = the full mesh only. */
       faceMeshParts?: AdminFaceMeshParts[]
+      /** The engine draws the face mesh layer by layer (`faceMasking.faceMeshLayers`); absent = it cannot. */
+      faceMeshLayers?: boolean
       /** The engine keeps the faces as filmed with only the face mesh (`faceMasking.fill: "none"`); absent = it cannot. */
       maskFillNone?: boolean
       /** The engine blurs a Faces hidden depth fill (`faceMasking.depthBlur` with `fill: "depth"`); absent = it cannot. */
@@ -12127,6 +12157,8 @@ export interface TrendEngineEnvironment {
       faceMeshMinFaceHeightPct?: boolean
       /** Prism's reference audio as a mode and a pitch shift (`prismReferenceAudio`'s `{ mode, semitones }` no id says). */
       prismReferenceAudioPitch?: boolean
+      /** The Motion setting's face mesh layers (`faceMasking.faceMeshLayers`). */
+      faceMeshLayers?: boolean
     }
   } & Record<string, unknown>
   updatedAt: string
@@ -13305,6 +13337,18 @@ export async function saveNodaroMotionNoPerson(noPerson: NodaroMotionNoPerson): 
 export interface NodaroMotionPreciseStyleRoute {
   routing?: "on" | "off"
   bypassEmails?: string[]
+  /** A routed run's own depth blur, 0–40 (the Motion masking's bounds); absent or 0: none. */
+  routedDepthBlur?: number
+  /** A routed run's shot list writer is told to describe the colours from the video; absent: on. */
+  describeColours?: boolean
+  /** A routed run's depth map carries the face mesh; absent: off. */
+  faceMesh?: boolean
+  /** What that mesh draws; absent: as the Motion masking's. */
+  faceMeshParts?: "full" | "features" | "mouth" | "contours"
+  /** What a routed run's mesh draws, layer by layer, in place of `faceMeshParts` (a set a parts value names is saved as it). */
+  faceMeshLayers?: VideoFaceMeshLayers
+  /** How the prompt words that mesh's line; absent: "motion". */
+  faceMeshWording?: "motion" | "shape"
 }
 
 export interface NodaroMotionPreciseStyleRouteView {
@@ -13321,7 +13365,7 @@ export async function fetchNodaroMotionPreciseStyleRoute(): Promise<NodaroMotion
   return (await apiRequest<{ data: NodaroMotionPreciseStyleRouteView }>(ADMIN_NODARO_MOTION_PRECISE_STYLE_ROUTE, "apiErr.loadNodaroMotion")).data
 }
 
-/** Saves the whole setting, whatever the engines. Something that is not an email is a 400 `validation_error`. */
+/** Saves the whole setting, whatever the engines. Something that is not an email, or a blur outside 0–40, is a 400 `validation_error`. */
 export async function saveNodaroMotionPreciseStyleRoute(preciseStyleRoute: NodaroMotionPreciseStyleRoute): Promise<NodaroMotionPreciseStyleRouteView> {
   return (
     await apiRequest<{ data: NodaroMotionPreciseStyleRouteView }>(ADMIN_NODARO_MOTION_PRECISE_STYLE_ROUTE, "apiErr.saveNodaroMotion", {

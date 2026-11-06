@@ -6,7 +6,7 @@
  * GET  /v1/billing/transactions           - Get transaction history
  * POST /v1/billing/create-checkout-session - Create Stripe Checkout session
  * POST /v1/billing/manage-subscription    - Get Stripe Customer Portal URL
- * POST /v1/billing/change-plan            - Change subscription tier
+ * POST /v1/billing/change-plan            - Change subscription tier (an upgrade is charged now, applied when paid)
  * GET  /v1/billing/payment-method         - The card and billing details on file
  * GET  /v1/billing/invoices               - Invoices (subscriptions) and receipts (credit purchases), newest first
  *
@@ -17,7 +17,7 @@
  * load add `checkout=success` or `checkout=cancelled` to it.
  */
 
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyRequest } from "fastify"
 import { resolveEffectiveTier, resolveStoredTier } from "@nodaro/shared/credits"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
@@ -28,11 +28,13 @@ import { creditsForLoadUsd, LOAD_CURRENCY, MIN_LOAD_USD, MAX_LOAD_USD } from "..
 import { readBillingPlans } from "../billing/plans.js"
 import { ensureStripeCustomer } from "../billing/provision-credits.js"
 import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
+import { rateLimitAddressKey } from "../../lib/client-address.js"
 import { tierColumns } from "../billing/tier-columns.js"
 import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
 import { deploymentPayerId } from "../../lib/deployment-payer.js"
 import { byNewest, invoiceDocument, paymentMethodView, receiptDocument, type PurchaseRow } from "../billing/billing-documents.js"
 import { stripeCustomerIdOf } from "../billing/stripe-customer.js"
+import { grantPaidPlanChange, invoicePriceLines, notePlanCreditPeak } from "../billing/plan-change-credits.js"
 
 /** Extract origin from request headers for redirect URLs. */
 function getOrigin(req: { headers: Record<string, string | string[] | undefined> }): string {
@@ -107,6 +109,46 @@ const BILLING_JWT_ONLY_MSG = "Billing management is only available from a logged
 function selfServePurchaseAllowed(userId: string): boolean {
   return runtimeSurfaceProfile().billing.selfServe || userId === deploymentPayerId()
 }
+
+/**
+ * Plan changes per account per day. Each upgrade is a real charge, so a few a
+ * day covers a person trying plans out; refused attempts count too. Keyed
+ * after the auth hook (`preHandler`) on the account, never on the raw
+ * Authorization header, so a fresh session token does not open a new bucket.
+ */
+export const CHANGE_PLAN_DAILY_LIMIT = 5
+
+export const CHANGE_PLAN_RATE_LIMIT = {
+  rateLimit: {
+    max: CHANGE_PLAN_DAILY_LIMIT,
+    timeWindow: "24 hours",
+    hook: "preHandler" as const,
+    keyGenerator: (req: FastifyRequest) => (req.userId ? `change-plan:user:${req.userId}` : `change-plan:ip:${rateLimitAddressKey(req)}`),
+  },
+}
+
+/**
+ * The upgrade waits on a payment: `invoiceUrl` is Stripe's page for paying
+ * that invoice (the change applies once it is paid, before it expires).
+ */
+function paymentRequired(message: string, invoiceUrl: string | null) {
+  return { error: { code: "plan_change_payment_required", message, invoiceUrl } }
+}
+
+/** Stripe's hosted page for an invoice, or null when it cannot be read. */
+async function hostedInvoiceUrl(invoice: string | { id: string } | null | undefined): Promise<string | null> {
+  const id = typeof invoice === "string" ? invoice : invoice?.id
+  if (!id) return null
+  try {
+    return (await getStripe().invoices.retrieve(id)).hosted_invoice_url ?? null
+  } catch (err) {
+    console.error("[billing] change-plan: could not read the unpaid invoice:", (err as Error).message)
+    return null
+  }
+}
+
+const PLAN_CHANGE_NOT_ACTIVE =
+  "Your subscription has a payment problem. Update your payment method under Manage subscription, then change plans."
 
 const SELF_SERVE_DISABLED = {
   error: {
@@ -253,6 +295,27 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: "Invalid top-up price ID" })
     }
 
+    // One subscription per account: a plan change goes through change-plan
+    // (charged now, applied when paid), never a second checkout. past_due
+    // counts — it is still the account's subscription.
+    if (checkoutMode === "subscription") {
+      const { data: currentSubs, error: currentSubsError } = await supabase
+        .from("subscriptions")
+        .select("id, status")
+        .eq("user_id", userId)
+        .in("status", ["active", "past_due"])
+        .limit(1)
+      if (currentSubsError) {
+        console.error("[billing] checkout: subscription lookup failed:", currentSubsError.message)
+        return reply.status(500).send({ error: "Failed to create checkout session" })
+      }
+      if ((currentSubs ?? []).length > 0) {
+        return reply.status(409).send({
+          error: "You already have a subscription. Change your plan from the billing page instead of starting a new one.",
+        })
+      }
+    }
+
     try {
       // Ensure Stripe customer exists
       let stripeCustomerId: string | null = null
@@ -308,7 +371,10 @@ export async function billingRoutes(app: FastifyInstance) {
         // errors → [] → 0 credits granted on a paid top-up, with no retry).
         metadata: checkoutMode === "payment" ? { userId, topupPriceId: priceId } : { userId },
         subscription_data: checkoutMode === "subscription" ? { metadata: { userId } } : undefined,
-        allow_promotion_codes: true,
+        // Promotion codes apply to plans only. A credit pack is sold at its
+        // price: its credits are fixed by the price, so a discount would buy
+        // the same credits for less (and a 100%-off one for nothing).
+        ...(checkoutMode === "subscription" ? { allow_promotion_codes: true } : {}),
         success_url: successUrl,
         cancel_url: cancelUrl,
       })
@@ -554,8 +620,17 @@ export async function billingRoutes(app: FastifyInstance) {
     }
   })
 
-  // Change subscription plan (upgrade/downgrade via Stripe API)
-  app.post("/v1/billing/change-plan", async (req, reply) => {
+  // Change subscription plan (upgrade/downgrade via Stripe API).
+  //
+  // An UPGRADE is invoiced now (`always_invoice`) and applies only once that
+  // invoice is paid (`pending_if_incomplete`: until then Stripe keeps the
+  // subscription on its current price as a pending update, discarded if it
+  // is not paid in time). Its credits are ADDED by the paid invoice — the gap
+  // between the plan held this period and the new one, once per invoice
+  // (plan-change-credits.ts) — never SET here. A DOWNGRADE keeps today's
+  // terms: the unused time is credited on the next invoice and the current
+  // credits stay until the period ends.
+  app.post("/v1/billing/change-plan", { config: CHANGE_PLAN_RATE_LIMIT }, async (req, reply) => {
     const userId = req.userId
     if (!userId) {
       return reply.status(400).send({ error: "Authentication and newPriceId are required" })
@@ -574,7 +649,8 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: "Invalid price ID" })
     }
 
-    // Find active subscription
+    // The account's newest subscription. past_due is read too, so that it is
+    // refused below rather than an older active row being changed instead.
     const { data: sub } = await supabase
       .from("subscriptions")
       .select("stripe_subscription_id, stripe_price_id, status")
@@ -588,6 +664,10 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: "No active subscription found" })
     }
 
+    if (sub.status !== "active") {
+      return reply.status(409).send({ error: PLAN_CHANGE_NOT_ACTIVE })
+    }
+
     if (sub.stripe_price_id === newPriceId) {
       return reply.status(400).send({ error: "Already on this plan" })
     }
@@ -595,24 +675,68 @@ export async function billingRoutes(app: FastifyInstance) {
     try {
       // Get the subscription to find the item ID
       const stripeSub = await getStripe().subscriptions.retrieve(sub.stripe_subscription_id)
+      if (stripeSub.status !== "active") {
+        return reply.status(409).send({ error: PLAN_CHANGE_NOT_ACTIVE })
+      }
+      if (stripeSub.pending_update) {
+        return reply.status(409).send(
+          paymentRequired(
+            "A plan change is waiting for its payment. Pay its invoice, or wait for it to expire, before changing plans again.",
+            await hostedInvoiceUrl(stripeSub.latest_invoice),
+          ),
+        )
+      }
       const itemId = stripeSub.items.data[0]?.id
       if (!itemId) {
         return reply.status(500).send({ error: "Could not find subscription item" })
       }
 
-      const updated = await getStripe().subscriptions.update(
-        sub.stripe_subscription_id,
-        {
-          items: [{ id: itemId, price: newPriceId }],
-          proration_behavior: "create_prorations",
-        }
-      )
-
       const newTier = getTierFromPriceId(newPriceId)
       const newCredits = TIER_CREDITS[newTier] ?? 0
       const newStorageLimit = TIER_STORAGE_LIMITS[newTier] ?? TIER_STORAGE_LIMITS.free
       const oldTier = getTierFromPriceId(sub.stripe_price_id)
-      const isUpgrade = newCredits > (TIER_CREDITS[oldTier] ?? 0)
+      const oldCredits = TIER_CREDITS[oldTier] ?? 0
+      const isUpgrade = newCredits > oldCredits
+
+      // Leaving a plan: record it as held this period, before the change, so
+      // moving back up inside the period grants only above it.
+      if (!isUpgrade) await notePlanCreditPeak(userId, oldCredits)
+
+      // Upgrade: invoice the difference now, and let Stripe apply the new
+      // price only once that invoice is paid. Downgrade: today's request,
+      // unchanged (nothing is charged; the unused time is credited on the
+      // next invoice).
+      const updated = await getStripe().subscriptions.update(
+        sub.stripe_subscription_id,
+        isUpgrade
+          ? {
+              items: [{ id: itemId, price: newPriceId }],
+              proration_behavior: "always_invoice",
+              payment_behavior: "pending_if_incomplete",
+            }
+          : {
+              items: [{ id: itemId, price: newPriceId }],
+              proration_behavior: "create_prorations",
+            }
+      )
+
+      const latestInvoiceId =
+        typeof updated.latest_invoice === "string" ? updated.latest_invoice : updated.latest_invoice?.id ?? null
+
+      if (updated.pending_update) {
+        // Not paid: Stripe left the subscription on its current plan. Nothing
+        // changes here either; the webhook applies it if the invoice is paid.
+        // 409, not 402: a 402 reads as "out of credits" to every client (the
+        // SDK maps it to InsufficientCreditsError), and the account's credits
+        // are not the problem — the change now waits on its invoice.
+        console.warn(`[billing] change-plan: payment incomplete for user=${userId}, plan unchanged`)
+        return reply.status(409).send(
+          paymentRequired(
+            "The payment for the new plan has not gone through, so your plan has not changed yet. Complete the payment to switch.",
+            await hostedInvoiceUrl(latestInvoiceId),
+          ),
+        )
+      }
 
       // Immediate local DB update so users see changes right away
       // (webhook will reconcile later as a backup)
@@ -628,15 +752,12 @@ export async function billingRoutes(app: FastifyInstance) {
         console.error("[billing] change-plan: subscriptions update failed:", subUpdateError.message)
       }
 
-      // Tier flips immediately for both directions. But ONLY raise credits +
-      // storage on an UPGRADE — on a downgrade, keep the current (higher) credits
-      // and storage until next renewal, matching handleSubscriptionUpdated's
-      // downgrade policy in stripe-webhook. Reducing them here charged the user
-      // back the credits they already paid for this period and could shove them
-      // over the new (smaller) storage quota mid-cycle.
+      // Tier flips immediately for both directions. Storage rises only on an
+      // UPGRADE — on a downgrade the current (higher) storage stays until the
+      // next renewal, matching handleSubscriptionUpdated, so nobody is pushed
+      // over a smaller quota mid-cycle. Credits are never written here.
       const profileUpdate: Record<string, unknown> = { ...tierColumns(newTier) }
       if (isUpgrade) {
-        profileUpdate.subscription_credits = newCredits
         profileUpdate.storage_limit_bytes = newStorageLimit
       }
       const { error: profileUpdateError } = await supabase
@@ -647,7 +768,28 @@ export async function billingRoutes(app: FastifyInstance) {
       if (profileUpdateError) {
         console.error("[billing] change-plan: profiles update failed:", profileUpdateError.message)
       }
-      console.log(`[billing] change-plan: profile updated for user=${userId}, tier=${newTier}, isUpgrade=${isUpgrade}${isUpgrade ? `, credits=${newCredits}` : " (credits kept until renewal)"}`)
+
+      // The upgrade's invoice is paid (Stripe applied the change): grant the
+      // gap now rather than waiting for the webhook. Same keyed grant as
+      // invoice.paid, so whichever runs second is a no-op.
+      if (isUpgrade && latestInvoiceId) {
+        try {
+          const invoice = await getStripe().invoices.retrieve(latestInvoiceId)
+          if (invoice.status === "paid" && invoice.billing_reason === "subscription_update") {
+            await grantPaidPlanChange({
+              userId,
+              invoiceId: invoice.id,
+              lines: await invoicePriceLines(invoice),
+              amountPaidCents: invoice.amount_paid,
+            })
+          }
+        } catch (err) {
+          // The webhook's invoice.paid grants it; nothing is lost here.
+          console.error("[billing] change-plan: immediate grant skipped:", (err as Error).message)
+        }
+      }
+
+      console.log(`[billing] change-plan: user=${userId}, tier=${newTier}, isUpgrade=${isUpgrade}`)
 
       return reply.send({
         data: { subscriptionId: updated.id, tier: newTier },

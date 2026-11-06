@@ -3260,6 +3260,7 @@ export const ptBR: ChromeDict = {
   "pricing.processing": "Processando…",
   "pricing.switchPlan": "Trocar de plano",
   "pricing.planChanged": "Plano alterado com sucesso! As mudanças entram em vigor em breve.",
+  "pricing.planChangePaymentRequired": "Conclua o pagamento para trocar de plano. Abrindo a fatura…",
   "pricing.somethingWentWrong": "Algo deu errado",
   "pricing.terms": "Termos de serviço",
   "pricing.privacy": "Política de privacidade",

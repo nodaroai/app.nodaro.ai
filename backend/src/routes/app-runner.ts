@@ -13,7 +13,8 @@ import { ugcSumPerNode } from "@nodaro/render-rules"
  */
 
 import { perMinuteOf, selectWithPerMinute } from "../lib/listing-per-minute-columns.js"
-import { storedListingRange, storedListingRunPrice, type StoredAppListing } from "../lib/app-listing-price.js"
+import { appFeeWorkspacePays } from "../lib/app-fee-payer.js"
+import { appRunFeeCover, storedListingRange, storedListingRunPrice, type StoredAppListing } from "../lib/app-listing-price.js"
 import { selectWithMax } from "../lib/listing-max-columns.js"
 import { LISTING_ESTIMATE_FLAG_COLUMN, selectWithEstimateFlag } from "../lib/listing-estimate-flag-column.js"
 import { refuseIfRunUnpriced } from "../lib/llm-unpriced-refusal.js"
@@ -27,7 +28,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { isUserBlocked } from "../lib/access-blocks.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
-import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
+import { checkPayerCanAfford, resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { hasCredits, llmMeteredPricing } from "../lib/config.js"
 import { editPlanPerMinuteActive } from "../lib/private-plugins/edit-plan-per-minute.js"
@@ -406,7 +407,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
     }
 
-    const appRow = await loadAppVersion(workflowId, "id, workflow_id, creator_id, max_runs_per_user_per_day, snapshot_nodes, snapshot_edges, snapshot_settings, publish_type", version)
+    const appRow = await loadAppVersion(workflowId, "id, workflow_id, creator_id, max_runs_per_user_per_day, snapshot_nodes, snapshot_edges, snapshot_settings, publish_type, monetization_enabled, monetization_flat_fee, monetization_percent, base_estimated_credits", version)
     if (!appRow) {
       return reply.status(404).send({
         error: { code: "not_found", message: version ? `Version ${version} not found` : "App not found" },
@@ -588,6 +589,47 @@ export async function appRunnerRoutes(app: FastifyInstance) {
           }
         } catch (err) {
           if (!(err instanceof UgcEstimateUnavailable)) throw err
+        }
+      }
+    }
+
+    // A monetized app's creator fee is settled after the run, and only what
+    // its payer then holds is collected and passed to the creator: a run whose
+    // payer cannot cover the run's listed price with the fee is refused here,
+    // before anything runs (lib/app-listing-price.ts `appRunFeeCover`). The
+    // creator's own run carries no fee. On a workspace-paid run the payer of
+    // the fee is the workspace when its organization approved the app (its
+    // budget headroom must cover the run and the fee), and the runner
+    // personally otherwise (their own balance must cover the fee; the
+    // workspace pays the run). An approval that cannot be read is no check.
+    if (hasCredits()) {
+      const feeCover = appRunFeeCover(appRow as StoredAppListing & { creator_id?: string | null }, req.userId)
+      const ctx = req.billingContext
+      if (feeCover && ctx?.payer === "workspace") {
+        const workspacePays = await appFeeWorkspacePays(ctx.orgId, appRow.workflow_id as string)
+        if (workspacePays === true) {
+          const afford = await checkPayerCanAfford(req, feeCover.required)
+          if (!afford.ok) return reply.status(afford.statusCode).send(afford.body)
+        } else if (workspacePays === false) {
+          const own = await CreditsService.checkBalanceCovers(req.userId, feeCover.fee, undefined, await resolveWebSurfaceFlag(req))
+          if (!own.ok) {
+            return reply.status(402).send({
+              error: {
+                code: "insufficient_credits",
+                message: `This app's creator fee of ${feeCover.fee} credits is paid from your own balance, as your organization has not approved this app; your balance is ${own.balance}.`,
+              },
+            })
+          }
+        }
+      } else if (feeCover) {
+        const cover = await CreditsService.checkBalanceCovers(req.userId, feeCover.required, ctx, await resolveWebSurfaceFlag(req))
+        if (!cover.ok) {
+          return reply.status(402).send({
+            error: {
+              code: "insufficient_credits",
+              message: `This app costs about ${feeCover.required} credits to run, including the creator's fee of ${feeCover.fee} credits; your balance is ${cover.balance}.`,
+            },
+          })
         }
       }
     }

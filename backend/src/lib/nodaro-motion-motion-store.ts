@@ -27,7 +27,7 @@ export async function readNodaroMotionMotion(): Promise<{ motion: NodaroMotionMo
  * reads this row (the masking row's two-key write has no reason here), while
  * a plugin that looks up the earlier keys still finds them through the
  * toolkit's answer (`withEarlierMotionKeys`). The worker and the other
- * servers converge on their own cache expiry (about 60 s). Throws on a
+ * servers see the save within about a second (app-settings-version.ts). Throws on a
  * database error.
  */
 export async function saveNodaroMotionMotion(motion: NodaroMotionMotion, adminId: string): Promise<void> {

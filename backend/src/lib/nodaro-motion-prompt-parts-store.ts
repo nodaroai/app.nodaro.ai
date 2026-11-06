@@ -25,7 +25,7 @@ export async function readNodaroMotionPromptParts(): Promise<{ promptParts: Noda
  * and checked by the engine) and clear this process's settings cache. Written
  * under the current keys only: no app from before the 2026-10-26 rename reads
  * this row (the masking row's two-key write has no reason here). The worker
- * and the other servers converge on their own cache expiry (about 60 s).
+ * and the other servers see the save within about a second (app-settings-version.ts).
  * Throws on a database error.
  */
 export async function saveNodaroMotionPromptParts(promptParts: NodaroMotionPromptParts, adminId: string): Promise<void> {

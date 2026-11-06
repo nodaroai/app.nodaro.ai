@@ -103,3 +103,137 @@ describe("nodaro-motion-precise-style-route", () => {
     expect(engineRoutesPreciseStyle({ preciseStyleRoute: true })).toBe(true)
   })
 })
+
+// A routed run's own depth blur (`routedDepthBlur`, 0–40 whole steps, the Motion masking's bounds): absent or 0 is none,
+// stored only when above 0.
+describe("nodaro-motion-precise-style-route: routedDepthBlur", () => {
+  const parse = (v: unknown) => nodaroMotionPreciseStyleRouteSchema.safeParse(v)
+
+  it("saves a whole number from 0 to 40, and leaves 0 out", () => {
+    expect(parse({ routedDepthBlur: 10 }).data).toEqual({ routedDepthBlur: 10 })
+    expect(parse({ routedDepthBlur: 40 }).success).toBe(true)
+    expect(withoutDefaultPreciseStyleRoute({ routedDepthBlur: 0 })).toEqual({})
+    expect(withoutDefaultPreciseStyleRoute({ routedDepthBlur: 10 })).toEqual({ routedDepthBlur: 10 })
+    for (const bad of [41, -1, 2.5, "10", null]) expect(parse({ routedDepthBlur: bad }).success).toBe(false)
+  })
+
+  it("is answered to the engine when set, and makes the setting differ from the defaults", () => {
+    expect(preciseStyleRouteForPlugin({ routedDepthBlur: 10 })).toEqual({ routedDepthBlur: 10 })
+    expect(preciseStyleRouteForPlugin({ routedDepthBlur: 0 })).toBeNull()
+  })
+
+  it("reads tolerantly: a value out of bounds is dropped with a warning, the other fields kept", () => {
+    const warn = vi.fn()
+    expect(parseNodaroMotionPreciseStyleRoute({ routing: "off", routedDepthBlur: 12 }, warn)).toEqual({ routing: "off", routedDepthBlur: 12 })
+    expect(warn).not.toHaveBeenCalled()
+    expect(parseNodaroMotionPreciseStyleRoute({ routing: "off", routedDepthBlur: 99 }, warn)).toEqual({ routing: "off" })
+    expect(parseNodaroMotionPreciseStyleRoute({ routedDepthBlur: "10" }, warn)).toEqual({})
+    expect(warn).toHaveBeenCalledTimes(2)
+  })
+})
+
+// A routed run's shot list told the colours (`describeColours`): on when absent; stored only when off.
+describe("nodaro-motion-precise-style-route: describeColours", () => {
+  const parse = (v: unknown) => nodaroMotionPreciseStyleRouteSchema.safeParse(v)
+
+  it("saves a boolean, and leaves on (the default) out", () => {
+    expect(parse({ describeColours: false }).data).toEqual({ describeColours: false })
+    expect(withoutDefaultPreciseStyleRoute({ describeColours: true })).toEqual({})
+    expect(withoutDefaultPreciseStyleRoute({ describeColours: false })).toEqual({ describeColours: false })
+    for (const bad of ["no", 0, null]) expect(parse({ describeColours: bad }).success).toBe(false)
+  })
+
+  it("is answered to the engine when off; on is no difference", () => {
+    expect(preciseStyleRouteForPlugin({ describeColours: false })).toEqual({ describeColours: false })
+    expect(preciseStyleRouteForPlugin({ describeColours: true })).toBeNull()
+  })
+
+  it("reads tolerantly: a value that is not a boolean is dropped (on) with a warning", () => {
+    const warn = vi.fn()
+    expect(parseNodaroMotionPreciseStyleRoute({ describeColours: false }, warn)).toEqual({ describeColours: false })
+    expect(parseNodaroMotionPreciseStyleRoute({ describeColours: "off", routing: "off" }, warn)).toEqual({ routing: "off" })
+    expect(warn).toHaveBeenCalledTimes(1)
+  })
+})
+
+// A routed run's face mesh (`faceMesh`): off when absent; stored only when on.
+describe("nodaro-motion-precise-style-route: faceMesh", () => {
+  const parse = (v: unknown) => nodaroMotionPreciseStyleRouteSchema.safeParse(v)
+
+  it("saves a boolean, and leaves off (the default) out", () => {
+    expect(parse({ faceMesh: true }).data).toEqual({ faceMesh: true })
+    expect(withoutDefaultPreciseStyleRoute({ faceMesh: false })).toEqual({})
+    expect(withoutDefaultPreciseStyleRoute({ faceMesh: true })).toEqual({ faceMesh: true })
+    for (const bad of ["on", 1, null]) expect(parse({ faceMesh: bad }).success).toBe(false)
+  })
+
+  it("is answered to the engine when on; off is no difference", () => {
+    expect(preciseStyleRouteForPlugin({ faceMesh: true })).toEqual({ faceMesh: true })
+    expect(preciseStyleRouteForPlugin({ faceMesh: false })).toBeNull()
+  })
+
+  it("reads tolerantly: a value that is not a boolean is dropped (off) with a warning", () => {
+    const warn = vi.fn()
+    expect(parseNodaroMotionPreciseStyleRoute({ faceMesh: true }, warn)).toEqual({ faceMesh: true })
+    expect(parseNodaroMotionPreciseStyleRoute({ faceMesh: "on", routing: "off" }, warn)).toEqual({ routing: "off" })
+    expect(warn).toHaveBeenCalledTimes(1)
+  })
+})
+
+// A routed run's mesh parts and wording (2026-11-06): what the mesh draws (absent: the Flex masking's, today's) and how
+// its line is worded (absent: Motion). Stored only when set; read tolerantly.
+describe("nodaro-motion-precise-style-route: faceMeshParts and faceMeshWording", () => {
+  const parse = (v: unknown) => nodaroMotionPreciseStyleRouteSchema.safeParse(v)
+
+  it("saves the four parts and the two wordings, Motion (the default) left out", () => {
+    for (const faceMeshParts of ["full", "features", "mouth", "contours"]) expect(parse({ faceMeshParts }).data).toEqual({ faceMeshParts })
+    expect(parse({ faceMeshWording: "shape" }).data).toEqual({ faceMeshWording: "shape" })
+    expect(withoutDefaultPreciseStyleRoute({ faceMeshWording: "motion" })).toEqual({})
+    expect(withoutDefaultPreciseStyleRoute({ faceMeshWording: "shape", faceMeshParts: "contours" })).toEqual({ faceMeshWording: "shape", faceMeshParts: "contours" })
+    for (const bad of [{ faceMeshParts: "wire" }, { faceMeshWording: "loud" }, { faceMeshParts: 1 }]) expect(parse(bad).success).toBe(false)
+  })
+
+  it("is answered to the engine when set", () => {
+    expect(preciseStyleRouteForPlugin({ faceMeshParts: "contours", faceMeshWording: "shape" })).toEqual({ faceMeshParts: "contours", faceMeshWording: "shape" })
+    expect(preciseStyleRouteForPlugin({ faceMeshWording: "motion" })).toBeNull()
+  })
+
+  it("reads tolerantly: a value of neither kind is dropped with a warning, the other fields kept", () => {
+    const warn = vi.fn()
+    expect(parseNodaroMotionPreciseStyleRoute({ faceMeshParts: "contours", faceMeshWording: "shape" }, warn)).toEqual({ faceMeshParts: "contours", faceMeshWording: "shape" })
+    expect(warn).not.toHaveBeenCalled()
+    expect(parseNodaroMotionPreciseStyleRoute({ routing: "off", faceMeshParts: "wire", faceMeshWording: 3 }, warn)).toEqual({ routing: "off" })
+    expect(warn).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe("nodaro-motion-precise-style-route: faceMeshLayers", () => {
+  const parse = (v: unknown) => nodaroMotionPreciseStyleRouteSchema.safeParse(v)
+
+  it("saves a set of layers; never beside parts, never a set that draws nothing, never an unknown layer", () => {
+    expect(parse({ faceMesh: true, faceMeshLayers: { irises: true, bold: true } }).data).toEqual({ faceMesh: true, faceMeshLayers: { irises: true, bold: true } })
+    for (const bad of [
+      { faceMeshLayers: { eyes: true }, faceMeshParts: "full" },
+      { faceMeshLayers: { bold: true } },
+      { faceMeshLayers: {} },
+      { faceMeshLayers: { nose: true } },
+    ]) expect(parse(bad).success, JSON.stringify(bad)).toBe(false)
+  })
+
+  it("stores and answers a set a parts value names as that value (contours included); any other with only its layers on", () => {
+    expect(withoutDefaultPreciseStyleRoute({ faceMeshLayers: { wireframe: true, eyes: true, lips: true } })).toEqual({ faceMeshParts: "full" })
+    expect(withoutDefaultPreciseStyleRoute({ faceMeshLayers: { eyes: true, lips: true, contours: true, irises: false } })).toEqual({ faceMeshParts: "contours" })
+    expect(withoutDefaultPreciseStyleRoute({ faceMeshLayers: { contours: true, irises: true, wireframe: false } })).toEqual({ faceMeshLayers: { contours: true, irises: true } })
+    expect(withoutDefaultPreciseStyleRoute({ faceMeshLayers: { bold: true } })).toEqual({})
+    expect(preciseStyleRouteForPlugin({ faceMesh: true, faceMeshLayers: { irises: true } })).toEqual({ faceMesh: true, faceMeshLayers: { irises: true } })
+  })
+
+  it("reads tolerantly: unknown layers ignored, a set that draws nothing dropped with a warning", () => {
+    const warn = vi.fn()
+    expect(parseNodaroMotionPreciseStyleRoute({ faceMeshLayers: { irises: true, nose: true } }, warn)).toEqual({ faceMeshLayers: { irises: true } })
+    expect(warn).not.toHaveBeenCalled()
+    expect(parseNodaroMotionPreciseStyleRoute({ routing: "off", faceMeshLayers: { bold: true } }, warn)).toEqual({ routing: "off" })
+    expect(parseNodaroMotionPreciseStyleRoute({ faceMeshLayers: "irises" }, warn)).toEqual({})
+    expect(warn).toHaveBeenCalled()
+  })
+})
