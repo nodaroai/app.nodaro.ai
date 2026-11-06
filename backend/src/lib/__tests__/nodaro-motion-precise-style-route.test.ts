@@ -179,3 +179,30 @@ describe("nodaro-motion-precise-style-route: faceMesh", () => {
     expect(warn).toHaveBeenCalledTimes(1)
   })
 })
+
+// A routed run's mesh parts and wording (2026-11-06): what the mesh draws (absent: the Flex masking's, today's) and how
+// its line is worded (absent: Motion). Stored only when set; read tolerantly.
+describe("nodaro-motion-precise-style-route: faceMeshParts and faceMeshWording", () => {
+  const parse = (v: unknown) => nodaroMotionPreciseStyleRouteSchema.safeParse(v)
+
+  it("saves the four parts and the two wordings, Motion (the default) left out", () => {
+    for (const faceMeshParts of ["full", "features", "mouth", "contours"]) expect(parse({ faceMeshParts }).data).toEqual({ faceMeshParts })
+    expect(parse({ faceMeshWording: "shape" }).data).toEqual({ faceMeshWording: "shape" })
+    expect(withoutDefaultPreciseStyleRoute({ faceMeshWording: "motion" })).toEqual({})
+    expect(withoutDefaultPreciseStyleRoute({ faceMeshWording: "shape", faceMeshParts: "contours" })).toEqual({ faceMeshWording: "shape", faceMeshParts: "contours" })
+    for (const bad of [{ faceMeshParts: "wire" }, { faceMeshWording: "loud" }, { faceMeshParts: 1 }]) expect(parse(bad).success).toBe(false)
+  })
+
+  it("is answered to the engine when set", () => {
+    expect(preciseStyleRouteForPlugin({ faceMeshParts: "contours", faceMeshWording: "shape" })).toEqual({ faceMeshParts: "contours", faceMeshWording: "shape" })
+    expect(preciseStyleRouteForPlugin({ faceMeshWording: "motion" })).toBeNull()
+  })
+
+  it("reads tolerantly: a value of neither kind is dropped with a warning, the other fields kept", () => {
+    const warn = vi.fn()
+    expect(parseNodaroMotionPreciseStyleRoute({ faceMeshParts: "contours", faceMeshWording: "shape" }, warn)).toEqual({ faceMeshParts: "contours", faceMeshWording: "shape" })
+    expect(warn).not.toHaveBeenCalled()
+    expect(parseNodaroMotionPreciseStyleRoute({ routing: "off", faceMeshParts: "wire", faceMeshWording: 3 }, warn)).toEqual({ routing: "off" })
+    expect(warn).toHaveBeenCalledTimes(2)
+  })
+})

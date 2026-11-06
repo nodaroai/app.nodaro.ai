@@ -3578,6 +3578,13 @@ export interface PluginCapabilities {
    */
   readonly videoFaceMeshParts?: boolean
   /**
+   * `POST /v1/video-face-mesh` also takes `parts: "contours"` — the face oval,
+   * both eyebrows, the nose and the eye and lip outlines, no wireframe — and
+   * answers it as `output_data.parts`. False (or absent): an older host, whose
+   * route refuses the value; the engine draws the whole mesh there.
+   */
+  readonly videoFaceMeshContours?: boolean
+  /**
    * `tk.media.pitchTempo` takes `semitones` from -24 to 24 (two octaves either
    * way, half steps included) in ONE rubberband pass, at the same speed, and
    * clamps beyond that. False (or absent): an older host, which clamps the
@@ -3886,6 +3893,10 @@ export type PluginNodaroMotionPreciseStyleRoute = {
   readonly describeColours?: boolean
   /** A routed run's face mesh; absent: off (never the Flex masking's). */
   readonly faceMesh?: boolean
+  /** What a routed run's mesh draws; absent: the Flex masking's. */
+  readonly faceMeshParts?: "full" | "features" | "mouth" | "contours"
+  /** How a routed run's mesh line is worded; absent: "motion". */
+  readonly faceMeshWording?: "motion" | "shape"
 }
 
 /**

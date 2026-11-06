@@ -53,7 +53,7 @@ describe("video face mesh pricing rows", () => {
 })
 
 describe("video face mesh parts", () => {
-  it("the full mesh first (the default), then the eye and lip outlines, then the lip outline", () => {
-    expect(VIDEO_FACE_MESH_PARTS).toEqual(["full", "features", "mouth"])
+  it("the full mesh first (the default), then the eye and lip outlines, the lip outline, and the contours", () => {
+    expect(VIDEO_FACE_MESH_PARTS).toEqual(["full", "features", "mouth", "contours"])
   })
 })

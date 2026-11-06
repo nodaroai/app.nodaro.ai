@@ -7,8 +7,9 @@
  * (https://github.com/google-ai-edge/mediapipe), Copyright 2021 The MediaPipe
  * Authors, licensed under the Apache License, Version 2.0 (`model/LICENSE.mediapipe.txt`):
  * FACEMESH_TESSELATION, FACEMESH_LIPS (outer and inner outline),
- * FACEMESH_LEFT_EYE and FACEMESH_RIGHT_EYE. Only these four are drawn: no
- * brows or iris beyond what the tesselation draws.
+ * FACEMESH_LEFT_EYE and FACEMESH_RIGHT_EYE, and (the "contours" parts, 2026-11-06)
+ * FACEMESH_FACE_OVAL, FACEMESH_LEFT_EYEBROW, FACEMESH_RIGHT_EYEBROW and
+ * FACEMESH_NOSE. No iris beyond what the tesselation draws.
  */
 
 // FACEMESH_TESSELATION: 2556 edges
@@ -291,3 +292,27 @@ export const FACEMESH_RIGHT_EYE: readonly number[] = [
   161, 160, 160, 159, 159, 158, 158, 157, 157, 173, 173, 133,
 ]
 
+// FACEMESH_FACE_OVAL: 36 edges
+export const FACEMESH_FACE_OVAL: readonly number[] = [
+  10, 338, 338, 297, 297, 332, 332, 284, 284, 251, 251, 389, 389, 356, 356, 454, 454, 323, 323, 361,
+  361, 288, 288, 397, 397, 365, 365, 379, 379, 378, 378, 400, 400, 377, 377, 152, 152, 148, 148, 176,
+  176, 149, 149, 150, 150, 136, 136, 172, 172, 58, 58, 132, 132, 93, 93, 234, 234, 127, 127, 162,
+  162, 21, 21, 54, 54, 103, 103, 67, 67, 109, 109, 10,
+]
+
+// FACEMESH_LEFT_EYEBROW: 8 edges
+export const FACEMESH_LEFT_EYEBROW: readonly number[] = [
+  276, 283, 283, 282, 282, 295, 295, 285, 300, 293, 293, 334, 334, 296, 296, 336,
+]
+
+// FACEMESH_RIGHT_EYEBROW: 8 edges
+export const FACEMESH_RIGHT_EYEBROW: readonly number[] = [
+  46, 53, 53, 52, 52, 65, 65, 55, 70, 63, 63, 105, 105, 66, 66, 107,
+]
+
+// FACEMESH_NOSE: 25 edges (the bridge, from between the eyes to the tip, and the base around the nostrils)
+export const FACEMESH_NOSE: readonly number[] = [
+  168, 6, 6, 197, 197, 195, 195, 5, 5, 4, 4, 1, 1, 19, 19, 94, 94, 2, 98, 97,
+  97, 2, 2, 326, 326, 327, 327, 294, 294, 278, 278, 344, 344, 440, 440, 275,
+  275, 4, 4, 45, 45, 220, 220, 115, 115, 48, 48, 64, 64, 98,
+]

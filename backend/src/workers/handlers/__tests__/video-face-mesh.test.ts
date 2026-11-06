@@ -123,7 +123,7 @@ describe("handleVideoFaceMesh", () => {
   })
 
   it("parts: only the eye and lip outlines, or only the lip outline, drawn and named in the output", async () => {
-    for (const parts of ["features", "mouth"] as const) {
+    for (const parts of ["features", "mouth", "contours"] as const) {
       vi.clearAllMocks()
       mocks.createWorkDir.mockResolvedValue("/w")
       mocks.drawFaceMeshVideo.mockResolvedValue({ outputPath: "/w/face-mesh.mp4", width: 720, height: 1280, frames: 505, framesWithFaces: 491, facesDrawn: 841, cpuMs: 20_000 })

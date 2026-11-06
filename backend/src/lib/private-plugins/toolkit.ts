@@ -1680,6 +1680,8 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   // POST /v1/video-face-mesh draws only the parts a child asks for (`parts`: the eye and lip outlines, or the lip
   // outline) and answers them (routes/video-face-mesh.ts).
   videoFaceMeshParts: true,
+  // POST /v1/video-face-mesh also draws parts "contours" (the face oval, brows, nose, eyes and lips; no wireframe).
+  videoFaceMeshContours: true,
   // tk.media.pitchTempo takes -24..24 semitones, half steps included, in one pass (providers/video/pitch-tempo.ts
   // `PITCH_SHIFT_MAX_SEMITONES`).
   pitchTempoTwoOctaves: true,

@@ -13311,6 +13311,10 @@ export interface NodaroMotionPreciseStyleRoute {
   describeColours?: boolean
   /** A routed run's depth map carries the face mesh; absent: off. */
   faceMesh?: boolean
+  /** What that mesh draws; absent: as the Motion masking's. */
+  faceMeshParts?: "full" | "features" | "mouth" | "contours"
+  /** How the prompt words that mesh's line; absent: "motion". */
+  faceMeshWording?: "motion" | "shape"
 }
 
 export interface NodaroMotionPreciseStyleRouteView {

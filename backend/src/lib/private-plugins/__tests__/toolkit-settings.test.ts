@@ -855,7 +855,13 @@ describe("tk.settings.nodaroMotionPreciseStyleRoute", () => {
 
   it("answers a routed run's own depth blur when set", async () => {
     routingEngine()
-    h.preciseStyleRoute = { routedDepthBlur: 10, describeColours: false, faceMesh: true }
-    expect(await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).toStrictEqual({ routedDepthBlur: 10, describeColours: false, faceMesh: true })
+    h.preciseStyleRoute = { routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" }
+    expect(await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).toStrictEqual({ routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" })
+  })
+})
+
+describe("capabilities.videoFaceMeshContours", () => {
+  it("is advertised: the face mesh route draws the contours", () => {
+    expect(buildToolkit().capabilities?.videoFaceMeshContours).toBe(true)
   })
 })

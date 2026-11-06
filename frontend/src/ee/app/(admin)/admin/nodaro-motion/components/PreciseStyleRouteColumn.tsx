@@ -48,6 +48,29 @@ export const PRECISE_STYLE_ROUTE_FACE_MESH_LABEL = "Face mesh for routed runs"
 const PRECISE_STYLE_ROUTE_FACE_MESH_HINT =
   "Applies only to Precise runs with an art style that are routed to Flex. Off sends the depth map without the face mesh lines; it is the default."
 
+export const PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL = "What the routed face mesh draws"
+
+const PRECISE_STYLE_ROUTE_MESH_PARTS_HINT =
+  "Applies only to Precise runs with an art style that are routed to Flex, while their face mesh is on. Contours: the face outline, eyebrows, nose, eyes and lips, without the wireframe."
+
+const MESH_PARTS_OPTIONS: ReadonlyArray<{ value: PreciseStyleRouteDraft["faceMeshParts"]; label: string }> = [
+  { value: "", label: "As the Motion masking (today's)" },
+  { value: "full", label: "The whole mesh" },
+  { value: "features", label: "Eye and lip outlines" },
+  { value: "mouth", label: "Lip outline" },
+  { value: "contours", label: "Contours" },
+]
+
+export const PRECISE_STYLE_ROUTE_MESH_WORDING_LABEL = "How the prompt words the routed face mesh"
+
+const PRECISE_STYLE_ROUTE_MESH_WORDING_HINT =
+  "Applies only to Precise runs with an art style that are routed to Flex, while their face mesh is on. Shape tells the engine the lines map the face's 3D shape; it is worded for the whole mesh in gray only, and any other case keeps the Motion wording."
+
+const MESH_WORDING_OPTIONS: ReadonlyArray<{ value: PreciseStyleRouteDraft["faceMeshWording"]; label: string }> = [
+  { value: "motion", label: "Motion (default)" },
+  { value: "shape", label: "Shape" },
+]
+
 /** Said when some environments' engines do not route yet (they never read this setting). */
 export function preciseStyleRouteMissingNote(missing: readonly string[]): string {
   return `The Cast Swap engine of ${missing.join(", ")} does not route yet: its Precise runs with an art style stay Precise whatever this says.`
@@ -60,11 +83,18 @@ export interface PreciseStyleRouteDraft {
   depthBlurText: string
   describeColours: boolean
   faceMesh: boolean
+  /** "" = as the Motion masking (nothing saved). */
+  faceMeshParts: "" | NonNullable<NodaroMotionPreciseStyleRoute["faceMeshParts"]>
+  faceMeshWording: "motion" | "shape"
 }
 
 /** The draft of what is stored (null = never saved: on, nobody), one address per line. */
 export function preciseStyleRouteDraftOf(saved: NodaroMotionPreciseStyleRoute | null | undefined): PreciseStyleRouteDraft {
-  return { routing: saved?.routing === "off" ? "off" : "on", emailsText: (saved?.bypassEmails ?? []).join("\n"), depthBlurText: String(saved?.routedDepthBlur ?? 0), describeColours: saved?.describeColours !== false, faceMesh: saved?.faceMesh === true }
+  return { routing: saved?.routing === "off" ? "off" : "on", emailsText: (saved?.bypassEmails ?? []).join("\n"), depthBlurText: String(saved?.routedDepthBlur ?? 0), describeColours: saved?.describeColours !== false,
+    faceMesh: saved?.faceMesh === true,
+    faceMeshParts: saved?.faceMeshParts ?? "",
+    faceMeshWording: saved?.faceMeshWording === "shape" ? "shape" : "motion",
+  }
 }
 
 /** The addresses in the draft, trimmed and lowercased, without repeats. */
@@ -95,6 +125,8 @@ export function preciseStyleRouteToSaved(draft: PreciseStyleRouteDraft): NodaroM
   if (blur !== undefined && blur > 0) out.routedDepthBlur = blur
   if (!draft.describeColours) out.describeColours = false
   if (draft.faceMesh) out.faceMesh = true
+  if (draft.faceMeshParts !== "") out.faceMeshParts = draft.faceMeshParts
+  if (draft.faceMeshWording === "shape") out.faceMeshWording = "shape"
   return out
 }
 
@@ -223,6 +255,48 @@ export function PreciseStyleRouteColumn({ value, onChange, envs, supported, erro
             {PRECISE_STYLE_ROUTE_FACE_MESH_HINT}
           </span>
         </div>
+      </div>
+      <div className="flex min-w-0 flex-col gap-1">
+        <label htmlFor={`${id}-mesh-parts`} className="font-medium">
+          {PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL}
+        </label>
+        <select
+          id={`${id}-mesh-parts`}
+          className="h-11 w-full min-w-0 rounded-md border bg-background px-2 text-base sm:h-9 sm:w-auto sm:text-sm"
+          aria-describedby={`${id}-mesh-parts-hint`}
+          value={value.faceMeshParts}
+          onChange={(e) => onChange({ ...value, faceMeshParts: e.target.value as PreciseStyleRouteDraft["faceMeshParts"] })}
+        >
+          {MESH_PARTS_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <span id={`${id}-mesh-parts-hint`} className="text-xs text-muted-foreground">
+          {PRECISE_STYLE_ROUTE_MESH_PARTS_HINT}
+        </span>
+      </div>
+      <div className="flex min-w-0 flex-col gap-1">
+        <label htmlFor={`${id}-mesh-wording`} className="font-medium">
+          {PRECISE_STYLE_ROUTE_MESH_WORDING_LABEL}
+        </label>
+        <select
+          id={`${id}-mesh-wording`}
+          className="h-11 w-full min-w-0 rounded-md border bg-background px-2 text-base sm:h-9 sm:w-auto sm:text-sm"
+          aria-describedby={`${id}-mesh-wording-hint`}
+          value={value.faceMeshWording}
+          onChange={(e) => onChange({ ...value, faceMeshWording: e.target.value === "shape" ? "shape" : "motion" })}
+        >
+          {MESH_WORDING_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <span id={`${id}-mesh-wording-hint`} className="text-xs text-muted-foreground">
+          {PRECISE_STYLE_ROUTE_MESH_WORDING_HINT}
+        </span>
       </div>
       {missing && missing.length > 0 && (
         <p role="status" className="text-xs text-amber-700 dark:text-amber-400">

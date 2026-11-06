@@ -184,7 +184,7 @@ describe("POST /v1/video-face-mesh — a child step", () => {
   })
 
   it("parts: the eye and lip outlines, or the lip outline, ride to the worker and the job as sent; an unknown value is refused", async () => {
-    for (const parts of ["features", "mouth", "full"] as const) {
+    for (const parts of ["features", "mouth", "contours", "full"] as const) {
       vi.mocked(videoQueue.add).mockClear()
       const res = await asChild({ ...BODY, parts })
       expect(res.statusCode).toBe(202)

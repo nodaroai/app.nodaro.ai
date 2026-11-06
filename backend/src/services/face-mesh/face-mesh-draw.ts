@@ -8,7 +8,9 @@
  *     little thicker (`FACE_MESH_STYLE.outline`).
  * What is drawn is the request's `parts` (`VideoFaceMeshParts`): `"full"`
  * (the default) both layers; `"features"` the eye and lip outlines alone;
- * `"mouth"` the lip outline alone. An outline is drawn exactly as in the
+ * `"mouth"` the lip outline alone; `"contours"` (2026-11-06) the eye and lip
+ * outlines, the face oval, both eyebrows and the nose, all in the outline
+ * layer's tone and width, no wireframe. An outline is drawn exactly as in the
  * full mesh (its tone, its width, the face's box), so `"full"` is unchanged.
  * No colour of their own (decided by the admin 2026-11-01: a video model
  * copied the former blue / green lines into its result): every line is a tone
@@ -34,7 +36,16 @@
  */
 import sharp from "sharp"
 import type { VideoFaceMeshParts } from "@nodaro/shared/media"
-import { FACEMESH_LEFT_EYE, FACEMESH_LIPS, FACEMESH_RIGHT_EYE, FACEMESH_TESSELATION } from "./face-mesh-topology.js"
+import {
+  FACEMESH_FACE_OVAL,
+  FACEMESH_LEFT_EYE,
+  FACEMESH_LEFT_EYEBROW,
+  FACEMESH_LIPS,
+  FACEMESH_NOSE,
+  FACEMESH_RIGHT_EYE,
+  FACEMESH_RIGHT_EYEBROW,
+  FACEMESH_TESSELATION,
+} from "./face-mesh-topology.js"
 
 /** How one layer's gray is worked out from the luminance `L` (0–255) under it (`lineTone`). */
 export interface FaceMeshTone {
@@ -108,12 +119,23 @@ const MESH_EDGES = uniqueEdges(FACEMESH_TESSELATION)
 const OUTLINE_EDGES = uniqueEdges([...FACEMESH_LIPS, ...FACEMESH_LEFT_EYE, ...FACEMESH_RIGHT_EYE])
 /** The lip outline alone, outer and inner (`parts: "mouth"`). */
 const LIP_EDGES = uniqueEdges(FACEMESH_LIPS)
+/** The contours (`parts: "contours"`): the eye and lip outlines first, as drawn above, then the oval, the brows and the nose. */
+const CONTOUR_EDGES = uniqueEdges([
+  ...FACEMESH_LIPS,
+  ...FACEMESH_LEFT_EYE,
+  ...FACEMESH_RIGHT_EYE,
+  ...FACEMESH_FACE_OVAL,
+  ...FACEMESH_LEFT_EYEBROW,
+  ...FACEMESH_RIGHT_EYEBROW,
+  ...FACEMESH_NOSE,
+])
 
 /**
  * Where the lines go on the frame: two SVGs over the same box, white on
  * transparent — the wireframe (`meshSvg`; empty when the request draws no
- * wireframe: `parts` `"features"` or `"mouth"`) and the outlines
- * (`outlineSvg`: the eyes' and the lips', or the lips' alone for `"mouth"`) —
+ * wireframe: `parts` `"features"`, `"mouth"` or `"contours"`) and the outlines
+ * (`outlineSvg`: the eyes' and the lips', the lips' alone for `"mouth"`, and
+ * also the oval, brows and nose for `"contours"`) —
  * whose coverage `compositeFaceMesh` tones.
  */
 export interface FaceMeshOverlay {
@@ -175,7 +197,7 @@ export function faceMeshOverlay(faces: readonly ArrayLike<number>[], width: numb
   const w = right - left
   const h = bottom - top
   const wireframe = parts === "full"
-  const outlineEdges = parts === "mouth" ? LIP_EDGES : OUTLINE_EDGES
+  const outlineEdges = parts === "mouth" ? LIP_EDGES : parts === "contours" ? CONTOUR_EDGES : OUTLINE_EDGES
   let mesh = ""
   let outline = ""
   for (const d of drawn) {

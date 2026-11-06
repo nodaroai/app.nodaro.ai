@@ -21,7 +21,6 @@ import {
 import {
   VIDEO_DEPTH_COLORMAPS,
   VIDEO_DEPTH_MODEL_SIZES,
-  VIDEO_FACE_MESH_PARTS,
   resolveVideoDepthModelSize,
   videoDepthColormaps,
   type VideoDepthColormap,
@@ -90,11 +89,15 @@ export type FaceMaskingDepthColormap = VideoDepthColormap
 export type FaceMaskingDepthModelSize = VideoDepthModelSize
 
 /**
- * What the face mesh draws (`faceMeshParts`, decided 2026-11-02): the full
- * mesh (`"full"`, left out), the eye and lip outlines only (`"features"`), or
- * the lip outline only (`"mouth"`) — `/v1/video-face-mesh`'s `parts`.
+ * What a face masking SETTING's mesh draws (`faceMeshParts`, decided
+ * 2026-11-02): the full mesh (`"full"`, left out), the eye and lip outlines
+ * only (`"features"`), or the lip outline only (`"mouth"`) — of
+ * `/v1/video-face-mesh`'s `parts`. Its `"contours"` (2026-11-06) are the
+ * Precise art-style route's choice for its routed runs alone
+ * (nodaro-motion-precise-style-route.ts), never a masking setting's.
  */
-export type FaceMaskingFaceMeshParts = VideoFaceMeshParts
+export const FACE_MASKING_FACE_MESH_PARTS = ["full", "features", "mouth"] as const satisfies readonly VideoFaceMeshParts[]
+export type FaceMaskingFaceMeshParts = (typeof FACE_MASKING_FACE_MESH_PARTS)[number]
 
 /** The provider Nodaro Motion draws its depth with: its colormaps are the ones a setting may name. */
 const DEPTH_PROVIDER = "video-depth-anything"
@@ -404,7 +407,7 @@ const nodaroMotionShape = {
   // Beside the blur and the depth fill, `"none"`: the faces found but kept as filmed (`fillNoneRules`).
   fill: z.enum(["blur", "depth", "none"]).optional(),
   depthBlur: z.int().min(CAST_SWAP_DEPTH_BLUR_BOUNDS.min).max(CAST_SWAP_DEPTH_BLUR_BOUNDS.max).optional(),
-  faceMeshParts: z.enum(VIDEO_FACE_MESH_PARTS).optional(),
+  faceMeshParts: z.enum(FACE_MASKING_FACE_MESH_PARTS).optional(),
 }
 
 /**

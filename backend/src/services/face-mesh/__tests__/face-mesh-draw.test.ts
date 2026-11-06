@@ -319,7 +319,7 @@ describe("compositeFaceMesh on a coloured depth map", () => {
   })
 })
 
-describe("parts: the full mesh, the eye and lip outlines, or the lip outline", () => {
+describe("parts: the full mesh, the eye and lip outlines, the lip outline, or the contours", () => {
   const faces = () => [face(0.3, 0.2, 0.4, 0.6)]
   const gray = () => frame(W, H, () => [128, 128, 128])
   const changedAt = (a: Buffer, b: Buffer): Set<number> => {
@@ -370,6 +370,37 @@ describe("parts: the full mesh, the eye and lip outlines, or the lip outline", (
     // An outline pixel the wireframe does not touch is the same in each.
     const outlineOnly = await compositeFaceMesh(rgb, W, H, { ...faceMeshOverlay(faces(), W, H)!, meshSvg: "" })
     for (const p of featuresAt) expect([...features.subarray(3 * p, 3 * p + 3)]).toEqual([...outlineOnly.subarray(3 * p, 3 * p + 3)])
+  })
+
+  it('"contours": no wireframe; the face oval, both brows, the nose and the eye and lip outlines, in the outlines\' width', () => {
+    const full = faceMeshOverlay(faces(), W, H)!
+    const contours = faceMeshOverlay(faces(), W, H, "contours")!
+    expect(contours.meshSvg).toBe("")
+    const segments = (svg: string) => (svg.match(/M/g) ?? []).length
+    // The eye and lip outlines' 72 edges, then the oval's 36, the brows' 8 + 8 and the nose's 25.
+    expect(segments(contours.outlineSvg)).toBe(72 + 36 + 8 + 8 + 25)
+    const pathOf = (svg: string) => /d="([^"]*)"/.exec(svg)![1]!
+    // The features' outlines first, exactly as the full mesh draws them, the contours after them.
+    expect(pathOf(contours.outlineSvg).startsWith(pathOf(full.outlineSvg))).toBe(true)
+    expect(contours.outlineSvg.match(/stroke-width="[^"]*"/)![0]).toBe(full.outlineSvg.match(/stroke-width="[^"]*"/)![0])
+    expect([contours.left, contours.top, contours.width, contours.height]).toEqual([full.left, full.top, full.width, full.height])
+  })
+
+  it('"contours" draws more than "features" and nothing the features draw differently; never the wireframe', async () => {
+    const rgb = gray()
+    const features = await compositeFaceMesh(rgb, W, H, faceMeshOverlay(faces(), W, H, "features")!)
+    const contours = await compositeFaceMesh(rgb, W, H, faceMeshOverlay(faces(), W, H, "contours")!)
+    const full = await compositeFaceMesh(rgb, W, H, faceMeshOverlay(faces(), W, H)!)
+    const featuresAt = changedAt(rgb, features)
+    const contoursAt = changedAt(rgb, contours)
+    expect(contoursAt.size).toBeGreaterThan(featuresAt.size)
+    // Every features pixel is drawn by the contours too, but for the odd anti-aliased edge pixel one level off (the
+    // longer path rasterises a hair differently at a segment's end).
+    const missing = [...featuresAt].filter((p) => !contoursAt.has(p))
+    expect(missing.length).toBeLessThanOrEqual(Math.ceil(featuresAt.size * 0.001))
+    for (const p of missing) expect(Math.abs(features[3 * p]! - rgb[3 * p]!)).toBeLessThanOrEqual(1)
+    // Fewer pixels than the whole mesh: the wireframe is not drawn.
+    expect(contoursAt.size).toBeLessThan(changedAt(rgb, full).size)
   })
 
   it("on a coloured depth map too: no wireframe drawn, the outlines in the map's tones", async () => {

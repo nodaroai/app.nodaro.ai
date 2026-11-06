@@ -21,6 +21,8 @@ import type { TrendEngineEnvironment } from "@/lib/api"
 import { ENVIRONMENTS, fetchMock, renderWith, resetRoutes, routes, sentTo } from "../../trends/__tests__/harness"
 import AdminNodaroMotionPage from "../page"
 import {
+  PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL,
+  PRECISE_STYLE_ROUTE_MESH_WORDING_LABEL,
   PRECISE_STYLE_ROUTE_COLOURS_LABEL,
   PRECISE_STYLE_ROUTE_FACE_MESH_LABEL,
   PRECISE_STYLE_ROUTE_DEPTH_BLUR_LABEL,
@@ -253,25 +255,64 @@ describe("the routed face mesh switch", { timeout: 20_000 }, () => {
   })
 })
 
+describe("the routed mesh's parts and wording", { timeout: 20_000 }, () => {
+  it("never saved: as the Motion masking, and Motion wording, each with a hint that it is the routed runs' alone", async () => {
+    renderWith(<AdminNodaroMotionPage />)
+    const route = await section()
+    const parts = route.getByLabelText(PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL)
+    const wording = route.getByLabelText(PRECISE_STYLE_ROUTE_MESH_WORDING_LABEL)
+    expect(parts).toHaveValue("")
+    expect(wording).toHaveValue("motion")
+    expect(parts).toHaveAccessibleDescription(/only.*routed to Flex/i)
+    expect(wording).toHaveAccessibleDescription(/only.*routed to Flex/i)
+    expect([...(parts as HTMLSelectElement).options].map((o) => o.value)).toEqual(["", "full", "features", "mouth", "contours"])
+    expect([...(wording as HTMLSelectElement).options].map((o) => o.value)).toEqual(["motion", "shape"])
+  })
+
+  it("contours and Shape save; back to the defaults sends {}", async () => {
+    const user = userEvent.setup()
+    routes[`PUT ${URL_}`] = (init) => view(JSON.parse(String(init?.body)).preciseStyleRoute)
+    renderWith(<AdminNodaroMotionPage />)
+    const route = await section()
+    await user.selectOptions(route.getByLabelText(PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL), "contours")
+    await user.selectOptions(route.getByLabelText(PRECISE_STYLE_ROUTE_MESH_WORDING_LABEL), "shape")
+    await user.click(saveButton())
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseStyleRoute: { faceMeshParts: "contours", faceMeshWording: "shape" } }]))
+    await user.selectOptions(route.getByLabelText(PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL), "")
+    await user.selectOptions(route.getByLabelText(PRECISE_STYLE_ROUTE_MESH_WORDING_LABEL), "motion")
+    await waitFor(() => expect(saveButton()).toBeEnabled())
+    await user.click(saveButton())
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseStyleRoute: { faceMeshParts: "contours", faceMeshWording: "shape" } }, { preciseStyleRoute: {} }]))
+  })
+
+  it("shows what is saved", async () => {
+    routes[`GET ${URL_}`] = () => view({ faceMeshParts: "features", faceMeshWording: "shape" })
+    renderWith(<AdminNodaroMotionPage />)
+    const route = await section()
+    await waitFor(() => expect(route.getByLabelText(PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL)).toHaveValue("features"))
+    expect(route.getByLabelText(PRECISE_STYLE_ROUTE_MESH_WORDING_LABEL)).toHaveValue("shape")
+  })
+})
+
 describe("the pure helpers", () => {
   it("preciseStyleRouteToSaved: Off and a list that is not empty alone", () => {
     expect(preciseStyleRouteToSaved(preciseStyleRouteDraftOf(null))).toEqual({})
-    expect(preciseStyleRouteToSaved({ routing: "on", emailsText: " \n, ", depthBlurText: "", describeColours: true, faceMesh: false })).toEqual({})
-    expect(preciseStyleRouteToSaved({ routing: "on", emailsText: "", depthBlurText: "0", describeColours: true, faceMesh: false })).toEqual({})
-    expect(preciseStyleRouteToSaved({ routing: "off", emailsText: "A@x.co\na@x.co,b@x.co", depthBlurText: "10", describeColours: false, faceMesh: true })).toEqual({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"], routedDepthBlur: 10, describeColours: false, faceMesh: true })
+    expect(preciseStyleRouteToSaved({ routing: "on", emailsText: " \n, ", depthBlurText: "", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshWording: "motion" })).toEqual({})
+    expect(preciseStyleRouteToSaved({ routing: "on", emailsText: "", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshWording: "motion" })).toEqual({})
+    expect(preciseStyleRouteToSaved({ routing: "off", emailsText: "A@x.co\na@x.co,b@x.co", depthBlurText: "10", describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" })).toEqual({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"], routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" })
   })
 
   it("preciseStyleRouteDraftOf: what is saved, one address per line", () => {
-    expect(preciseStyleRouteDraftOf({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"], routedDepthBlur: 10, describeColours: false, faceMesh: true })).toEqual({ routing: "off", emailsText: "a@x.co\nb@x.co", depthBlurText: "10", describeColours: false, faceMesh: true })
-    expect(preciseStyleRouteDraftOf({ routedDepthBlur: 10 })).toMatchObject({ depthBlurText: "10", describeColours: true, faceMesh: false })
-    expect(preciseStyleRouteDraftOf(null)).toEqual({ routing: "on", emailsText: "", depthBlurText: "0", describeColours: true, faceMesh: false })
+    expect(preciseStyleRouteDraftOf({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"], routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "features", faceMeshWording: "shape" })).toEqual({ routing: "off", emailsText: "a@x.co\nb@x.co", depthBlurText: "10", describeColours: false, faceMesh: true, faceMeshParts: "features", faceMeshWording: "shape" })
+    expect(preciseStyleRouteDraftOf({ routedDepthBlur: 10 })).toMatchObject({ depthBlurText: "10", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshWording: "motion" })
+    expect(preciseStyleRouteDraftOf(null)).toEqual({ routing: "on", emailsText: "", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshWording: "motion" })
   })
 
   it("preciseStyleRouteIssues names what is not an email", () => {
-    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "a@x.co\nnope, also nope", depthBlurText: "0", describeColours: true, faceMesh: false })).toHaveLength(1)
-    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "a@x.co", depthBlurText: "0", describeColours: true, faceMesh: false })).toEqual([])
-    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "", depthBlurText: "", describeColours: true, faceMesh: false })).toEqual([])
-    for (const bad of ["41", "-1", "2.5", "x"]) expect(preciseStyleRouteIssues({ routing: "on", emailsText: "", depthBlurText: bad, describeColours: true, faceMesh: false })).toHaveLength(1)
+    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "a@x.co\nnope, also nope", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshWording: "motion" })).toHaveLength(1)
+    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "a@x.co", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshWording: "motion" })).toEqual([])
+    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "", depthBlurText: "", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshWording: "motion" })).toEqual([])
+    for (const bad of ["41", "-1", "2.5", "x"]) expect(preciseStyleRouteIssues({ routing: "on", emailsText: "", depthBlurText: bad, describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshWording: "motion" })).toHaveLength(1)
   })
 
   it("environmentsThatCannotRoutePreciseStyle: unknown while loading, else those without the flag", () => {

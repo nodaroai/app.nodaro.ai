@@ -198,3 +198,17 @@ describe("PUT /v1/admin/nodaro-motion/precise-style-route: the routed face mesh"
     expect(h.upserts).toEqual([])
   })
 })
+
+describe("PUT /v1/admin/nodaro-motion/precise-style-route: the routed mesh's parts and wording", () => {
+  it("saves them; Motion stores nothing", async () => {
+    expect((await put({ faceMeshParts: "contours", faceMeshWording: "shape" })).json().data.preciseStyleRoute).toEqual({ faceMeshParts: "contours", faceMeshWording: "shape" })
+    await put({ faceMeshWording: "motion" })
+    expect(h.upserts[1]!.value).toEqual({})
+  })
+
+  it("refuses an unknown part or wording", async () => {
+    expect((await put({ faceMeshParts: "wire" })).statusCode).toBe(400)
+    expect((await put({ faceMeshWording: "loud" })).statusCode).toBe(400)
+    expect(h.upserts).toEqual([])
+  })
+})

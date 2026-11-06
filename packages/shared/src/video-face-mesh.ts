@@ -4,8 +4,8 @@
  * tone of the picture under it — drawn on the faces of a clip, frame for
  * frame. An internal step of Nodaro Motion's face masking: the lines go on
  * the masked (or depth) clip so the video model still sees where the mouth
- * and the eyes are. A request may draw only the eye and lip outlines, or
- * only the lip outline (`parts`).
+ * and the eyes are. A request may draw only the eye and lip outlines, only
+ * the lip outline, or the face's contours (`parts`).
  *
  * Priced by the clip's length at the 30 fps basis Video Mask uses
  * (`videoMaskBilledSeconds`), one row per length bucket.
@@ -32,9 +32,11 @@ export const VIDEO_FACE_MESH_LIMITS = {
  * What a face mesh run draws on each face (`VideoFaceMeshRequest.parts`):
  * `"full"` (the default) the thin wireframe and the darker eye and lip
  * outlines; `"features"` the eye outlines and the lip outline only, no
- * wireframe; `"mouth"` the lip outline only.
+ * wireframe; `"mouth"` the lip outline only; `"contours"` the face oval,
+ * both eyebrows, the nose and the eye and lip outlines, no wireframe (a host
+ * that draws them says so to its engine: `videoFaceMeshContours`).
  */
-export const VIDEO_FACE_MESH_PARTS = ["full", "features", "mouth"] as const
+export const VIDEO_FACE_MESH_PARTS = ["full", "features", "mouth", "contours"] as const
 export type VideoFaceMeshParts = (typeof VIDEO_FACE_MESH_PARTS)[number]
 
 /**
