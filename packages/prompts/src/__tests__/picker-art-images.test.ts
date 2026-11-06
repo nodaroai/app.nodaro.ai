@@ -301,7 +301,7 @@ describe("restyle previews (RESTYLE_PREVIEWS)", () => {
 
   it("give each clip a still, a frame the CDN cuts from it at the clip's own time", () => {
     expect(restylePreviewStillUrl(RESTYLE_PREVIEWS.anime)).toBe("https://cdn.nodaro.ai/cdn-cgi/media/mode=frame,time=7s,width=480/picker-renders/7fbad6e4-023f-4282-ac3d-d186f2cbb37b.mp4")
-    expect(restylePreviewStillUrl(RESTYLE_PREVIEWS["oil-painting"])).toBe("https://cdn.nodaro.ai/cdn-cgi/media/mode=frame,time=1s,width=480/picker-renders/367ba750-ec46-4e2a-8b81-25c4d07bb6ea.mp4")
+    expect(restylePreviewStillUrl(RESTYLE_PREVIEWS["oil-painting"])).toBe("https://cdn.nodaro.ai/cdn-cgi/media/mode=frame,time=1s,width=480/picker-renders/73c98260-9444-45e7-bccb-040b5d33fb53.mp4")
     expect(restylePreviewStillUrl(RESTYLE_PREVIEWS.watercolor)).toBe("https://cdn.nodaro.ai/cdn-cgi/media/mode=frame,time=1s,width=480/picker-renders/61a26588-d09a-4959-b677-ee8b32e3281a.mp4")
     expect(restylePreviewStillUrl(RESTYLE_PREVIEWS.claymation)).toBe("https://cdn.nodaro.ai/cdn-cgi/media/mode=frame,time=1s,width=480/picker-renders/2916a2f7-114c-4c7e-9be0-5bf229d76133.mp4")
     expect(restylePreviewStillUrl(RESTYLE_PREVIEWS["comic-book"])).toBe("https://cdn.nodaro.ai/cdn-cgi/media/mode=frame,time=1s,width=480/picker-renders/7a2cd17c-b02f-4ae4-9723-ef48d0eda52a.mp4")

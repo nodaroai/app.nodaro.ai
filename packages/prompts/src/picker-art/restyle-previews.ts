@@ -33,9 +33,9 @@ export const RESTYLE_PREVIEWS: Readonly<Record<string, RestylePreview>> = {
   // Source shot: https://cdn.nodaro.ai/picker-renders/4a70c22d-04f0-4b5a-90d4-e9dd7ddb01c4.mp4
   // Generated, no wipe: https://cdn.nodaro.ai/picker-renders/5ab33529-ef2a-42bc-a625-d6b1abfeef1c.mp4
   "felt-puppet": { url: "https://cdn.nodaro.ai/picker-renders/3aa3c81b-ba19-4776-becc-e0c47c700699.mp4" },
-  // Source shot: https://cdn.nodaro.ai/picker-renders/9f8462c9-74ac-4205-a855-bf5d0ca899a4.mp4
-  // Generated, no wipe: https://cdn.nodaro.ai/picker-renders/7d63ab2a-debe-43a9-966b-be5117a23906.mp4
-  "oil-painting": { url: "https://cdn.nodaro.ai/picker-renders/367ba750-ec46-4e2a-8b81-25c4d07bb6ea.mp4" },
+  // Source shot: https://cdn.nodaro.ai/picker-renders/b1e77bdc-7c58-4cd8-a2d6-fd49379fee9e.mp4
+  // Generated, no wipe: https://cdn.nodaro.ai/picker-renders/a9aeca2d-bcd6-477b-80d7-5e6454ee2c25.mp4
+  "oil-painting": { url: "https://cdn.nodaro.ai/picker-renders/73c98260-9444-45e7-bccb-040b5d33fb53.mp4" },
   // Source shot: https://cdn.nodaro.ai/picker-renders/d9e12a4a-677e-4e36-8f44-8503f14dd6b8.mp4
   // Generated, no wipe: https://cdn.nodaro.ai/picker-renders/d4dad451-802a-4795-9cc3-71ff3ed70c69.mp4
   "pixar-3d": { url: "https://cdn.nodaro.ai/picker-renders/c5ea2111-3283-4f80-ab05-8ab4450946ce.mp4" },
