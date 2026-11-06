@@ -14,14 +14,21 @@
  * (`routedDepthBlur`, 0–40, absent or 0: none; every other Flex run keeps the
  * Motion masking's), and whether such a run's shot list writer is told to
  * describe the colours from the video (`describeColours`, on by default), and
- * whether its depth map carries the face mesh (`faceMesh`, off by default).
+ * whether its depth map carries the face mesh (`faceMesh`, off by default),
+ * and which path a run whose art style is photographic takes
+ * (`photographicStyles`: "flex", the default, routed as every style, or
+ * "precise", left the Precise run routing "off" makes).
  *
  * A PUT is refused 400 `validation_error` on the body's shape (strict: an
  * unknown key, a third value, something that is not an email, too many, a blur
  * that is not a whole number from 0 to 40). Any
  * value saves whatever the engines: an engine that does not declare
  * `castSwap.preciseStyleRoute` never reads the row and runs such a run as
- * Precise, so no 409 waits for one. `supported` is whether THIS environment's
+ * Precise, so no 409 waits for one; likewise "precise" for the photographic
+ * styles reaches only an engine that declares
+ * `castSwap.preciseStyleRoutePhotographic` (one without it routes every style,
+ * as before), and the admin screen names the environments that do not take it
+ * yet. `supported` is whether THIS environment's
  * engine declares it. Each save writes an `admin_actions` row
  * (`update_nodaro_motion_precise_style_route`) with the setting before and after.
  */

@@ -237,3 +237,38 @@ describe("nodaro-motion-precise-style-route: faceMeshLayers", () => {
     expect(warn).toHaveBeenCalled()
   })
 })
+
+// Which path a run with a photographic art style takes (`photographicStyles`, 2026-11-06): "flex" (the default, routed
+// as every style) or "precise" (not routed, the Precise run routing "off" makes). Stored only when "precise".
+describe("nodaro-motion-precise-style-route: photographicStyles", () => {
+  const parse = (v: unknown) => nodaroMotionPreciseStyleRouteSchema.safeParse(v)
+
+  it("saves the two paths, Flex (the default) left out", () => {
+    expect(parse({ photographicStyles: "precise" }).data).toEqual({ photographicStyles: "precise" })
+    expect(parse({ photographicStyles: "flex" }).data).toEqual({ photographicStyles: "flex" })
+    expect(withoutDefaultPreciseStyleRoute({ photographicStyles: "flex" })).toEqual({})
+    expect(withoutDefaultPreciseStyleRoute({ photographicStyles: "precise", routing: "off" })).toEqual({ routing: "off", photographicStyles: "precise" })
+    for (const bad of ["Precise", "motion", true, null]) expect(parse({ photographicStyles: bad }).success).toBe(false)
+  })
+
+  it("is answered to the engine when Precise; Flex is no difference", () => {
+    expect(preciseStyleRouteForPlugin({ photographicStyles: "precise" })).toEqual({ photographicStyles: "precise" })
+    expect(preciseStyleRouteForPlugin({ photographicStyles: "flex" })).toBeNull()
+    expect(preciseStyleRouteForPlugin(null)).toBeNull()
+  })
+
+  it("survives the whole trip: saved, stored, read back and answered to the engine", () => {
+    const saved = withoutDefaultPreciseStyleRoute(parse({ photographicStyles: "precise", bypassEmails: ["A@example.com"] }).data)
+    const stored = JSON.parse(JSON.stringify(saved)) as unknown
+    expect(preciseStyleRouteForPlugin(parseNodaroMotionPreciseStyleRoute(stored))).toEqual({ bypassEmails: ["a@example.com"], photographicStyles: "precise" })
+  })
+
+  it("reads tolerantly: a value of neither kind is dropped (Flex) with a warning, the other fields kept", () => {
+    const warn = vi.fn()
+    expect(parseNodaroMotionPreciseStyleRoute({ photographicStyles: "precise" }, warn)).toEqual({ photographicStyles: "precise" })
+    expect(parseNodaroMotionPreciseStyleRoute({ photographicStyles: "flex" }, warn)).toEqual({})
+    expect(warn).not.toHaveBeenCalled()
+    expect(parseNodaroMotionPreciseStyleRoute({ photographicStyles: "real", routing: "off" }, warn)).toEqual({ routing: "off" })
+    expect(warn).toHaveBeenCalledTimes(1)
+  })
+})

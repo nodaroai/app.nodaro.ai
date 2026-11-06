@@ -12146,6 +12146,8 @@ export interface TrendEngineEnvironment {
       noPersonSourceClip?: boolean
       /** The engine runs a direct Prism Precise run with an art style as Flex while the admin's switch is on; absent = it runs it as Precise. */
       preciseStyleRoute?: boolean
+      /** The engine keeps a run whose art style is photographic Precise when the route's setting says so; absent = it routes every style. */
+      preciseStyleRoutePhotographic?: boolean
     }
     /**
      * What that environment's platform (the app itself, apart from its engine)
@@ -12159,6 +12161,8 @@ export interface TrendEngineEnvironment {
       prismReferenceAudioPitch?: boolean
       /** The Motion setting's face mesh layers (`faceMasking.faceMeshLayers`). */
       faceMeshLayers?: boolean
+      /** The Precise art-style route's photographic path (`photographicStyles`): it keeps the key and answers it to its engine. */
+      preciseStyleRoutePhotographic?: boolean
     }
   } & Record<string, unknown>
   updatedAt: string
@@ -13337,6 +13341,8 @@ export async function saveNodaroMotionNoPerson(noPerson: NodaroMotionNoPerson): 
 export interface NodaroMotionPreciseStyleRoute {
   routing?: "on" | "off"
   bypassEmails?: string[]
+  /** Which path a run whose art style is photographic takes: routed as Flex ("flex", absent) or kept Precise ("precise"). */
+  photographicStyles?: "flex" | "precise"
   /** A routed run's own depth blur, 0–40 (the Motion masking's bounds); absent or 0: none. */
   routedDepthBlur?: number
   /** A routed run's shot list writer is told to describe the colours from the video; absent: on. */

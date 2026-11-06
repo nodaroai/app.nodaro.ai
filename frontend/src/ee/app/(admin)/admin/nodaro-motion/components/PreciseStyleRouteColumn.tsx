@@ -14,14 +14,21 @@
 // Precise whatever this says, so nothing here waits for an engine: a note names
 // the environments that do not route yet.
 //
+// Under the switch, which path a run whose art style is photographic takes
+// (`photographicStyles`): routed as Flex with every other style (the default),
+// or kept Precise, the run Off makes, for those styles alone. The styles are
+// named from the style catalog (its medium "photo"), the reading the engine
+// routes by; a note names the environments that still route them.
+//
 // Beside what the routed face mesh draws, its lines on a depth face
 // (`face-mesh-thumbnails.ts`): "As the Motion masking" shows the Flex masking's
 // own lines (`flexMaskingLayers`), "Choose the layers" the switches' set.
 
 import { useId } from "react"
+import { STYLES, getStyleMedium } from "@nodaro/prompts/pickers"
 import type { NodaroMotionPreciseStyleRoute, TrendEngineEnvironment } from "@/lib/api"
 import { DEPTH_BLUR_BOUNDS } from "../../trends/model"
-import { environmentsThatCannotDrawFaceMeshLayers, environmentsThatCannotRoutePreciseStyle } from "../../trends/clip-preparation"
+import { environmentsThatCannotDrawFaceMeshLayers, environmentsThatCannotRoutePreciseStyle, environmentsThatRouteEveryStyle } from "../../trends/clip-preparation"
 import { videoFaceMeshLayersOfParts, type VideoFaceMeshLayers } from "@nodaro/shared/media"
 import { layersDrawLines, layersOfSetting, savedFormOfLayers } from "../../trends/face-mesh-layers"
 import { faceMeshLayersThumbnail, type FaceMeshThumbnail as Thumbnail } from "../../trends/face-mesh-thumbnails"
@@ -34,10 +41,31 @@ const ROUTINGS = [
   {
     value: "on",
     label: "On (default)",
-    hint: "A direct Prism run that resolves to Precise and carries an art style runs as Flex, its estimate alike. The Precise settings below then serve only the accounts on the list.",
+    hint: "A direct Prism run that resolves to Precise and carries an art style runs as Flex, its estimate alike. The Precise settings below then serve only the accounts on the list, and the photographic styles when they stay Precise.",
   },
   { value: "off", label: "Off", hint: "Such a run stays Precise, with the settings below." },
 ] as const
+
+/** The photographic art styles' names, from the style catalog (medium "photo"): the styles the engine keeps Precise on "precise". */
+export function photographicStyleNames(): string[] {
+  return STYLES.filter((s) => getStyleMedium(s.id) === "photo").map((s) => s.label)
+}
+
+export const photographicStylesLegend = (): string => `Photographic art styles (${photographicStyleNames().join(", ")})`
+
+const PHOTOGRAPHIC_PATHS = [
+  { value: "flex", label: "Run as Flex (default)", hint: "Routed with every other art style." },
+  {
+    value: "precise",
+    label: "Stay Precise (real footage)",
+    hint: "These styles run as Precise, as with the switch Off: it keeps likeness and may restyle less. Users can still pick Flex for more style.",
+  },
+] as const
+
+/** Said when "Stay Precise" is chosen and some environments still route these styles. */
+export function photographicStylesMissingNote(missing: readonly string[]): string {
+  return `${missing.join(", ")} cannot keep photographic styles Precise yet (an older engine or platform): there they still run as Flex.`
+}
 
 export const PRECISE_STYLE_ROUTE_EMAILS_LABEL = "Accounts that skip this and run real Precise (test emails)"
 
@@ -102,6 +130,8 @@ export function preciseStyleRouteMissingNote(missing: readonly string[]): string
 /** The draft: the emails and the blur as typed, so a half-typed value stays as it is. */
 export interface PreciseStyleRouteDraft {
   routing: "on" | "off"
+  /** Which path a run whose art style is photographic takes. */
+  photographicStyles: "flex" | "precise"
   emailsText: string
   depthBlurText: string
   describeColours: boolean
@@ -115,7 +145,7 @@ export interface PreciseStyleRouteDraft {
 
 /** The draft of what is stored (null = never saved: on, nobody), one address per line. */
 export function preciseStyleRouteDraftOf(saved: NodaroMotionPreciseStyleRoute | null | undefined): PreciseStyleRouteDraft {
-  return { routing: saved?.routing === "off" ? "off" : "on", emailsText: (saved?.bypassEmails ?? []).join("\n"), depthBlurText: String(saved?.routedDepthBlur ?? 0), describeColours: saved?.describeColours !== false,
+  return { routing: saved?.routing === "off" ? "off" : "on", photographicStyles: saved?.photographicStyles === "precise" ? "precise" : "flex", emailsText: (saved?.bypassEmails ?? []).join("\n"), depthBlurText: String(saved?.routedDepthBlur ?? 0), describeColours: saved?.describeColours !== false,
     faceMesh: saved?.faceMesh === true,
     faceMeshParts: saved?.faceMeshLayers ? "layers" : (saved?.faceMeshParts ?? ""),
     faceMeshLayers: layersOfSetting(saved),
@@ -145,6 +175,7 @@ function depthBlurOf(text: string): number | undefined {
 export function preciseStyleRouteToSaved(draft: PreciseStyleRouteDraft): NodaroMotionPreciseStyleRoute {
   const out: NodaroMotionPreciseStyleRoute = {}
   if (draft.routing === "off") out.routing = "off"
+  if (draft.photographicStyles === "precise") out.photographicStyles = "precise"
   const emails = emailsOf(draft.emailsText)
   if (emails.length > 0) out.bypassEmails = emails
   const blur = depthBlurOf(draft.depthBlurText)
@@ -184,6 +215,7 @@ interface Props {
 export function PreciseStyleRouteColumn({ value, onChange, envs, supported, error, flexMaskingLayers }: Props) {
   const id = useId()
   const missing = environmentsThatCannotRoutePreciseStyle(envs)
+  const photoMissing = value.photographicStyles === "precise" ? (environmentsThatRouteEveryStyle(envs) ?? []) : []
   const issues = preciseStyleRouteIssues(value)
   // A set only layers name reaches only an engine that draws layers: elsewhere routed runs draw the Motion masking's lines.
   const onlyLayers = value.faceMeshParts === "layers" && savedFormOfLayers(value.faceMeshLayers, ["full", "features", "mouth", "contours"]).faceMeshLayers !== undefined
@@ -216,6 +248,41 @@ export function PreciseStyleRouteColumn({ value, onChange, envs, supported, erro
           </div>
         )
       })}
+      <fieldset className="flex min-w-0 flex-col gap-1 ps-6" disabled={value.routing === "off"} aria-describedby={`${id}-photo-hint`}>
+        <legend className="font-medium">{photographicStylesLegend()}</legend>
+        {PHOTOGRAPHIC_PATHS.map((o) => {
+          const optionId = `${id}-photo-${o.value}`
+          return (
+            <div key={o.value} className="flex min-h-11 items-start gap-2">
+              <input
+                id={optionId}
+                type="radio"
+                name={`${id}-photographic`}
+                className="mt-1 h-4 w-4"
+                checked={value.photographicStyles === o.value}
+                aria-describedby={`${optionId}-hint`}
+                onChange={() => onChange({ ...value, photographicStyles: o.value })}
+              />
+              <div className="flex min-w-0 flex-col">
+                <label htmlFor={optionId} className="font-medium">
+                  {o.label}
+                </label>
+                <span id={`${optionId}-hint`} className="text-xs text-muted-foreground">
+                  {o.hint}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+        <span id={`${id}-photo-hint`} className="text-xs text-muted-foreground">
+          Applies only while the switch is On.
+        </span>
+        {photoMissing.length > 0 && (
+          <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+            {photographicStylesMissingNote(photoMissing)}
+          </span>
+        )}
+      </fieldset>
       <div className="flex min-w-0 flex-col gap-1">
         <label htmlFor={`${id}-emails`} className="font-medium">
           {PRECISE_STYLE_ROUTE_EMAILS_LABEL}

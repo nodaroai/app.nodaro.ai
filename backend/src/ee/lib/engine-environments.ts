@@ -59,10 +59,23 @@ export interface PlatformSupports {
    * key, and with it the engine's whole Motion entry.
    */
   readonly faceMeshLayers?: boolean
+  /**
+   * The Precise art-style route's photographic path (`photographicStyles` of
+   * `nodaro_motion_precise_style_route`, lib/nodaro-motion-precise-style-route.ts):
+   * its schemas take the key, and it is answered to its engine. A build from
+   * before drops the key when it reads the row, so its engine routes every
+   * style alike, and its admin's save of the row loses it.
+   */
+  readonly preciseStyleRoutePhotographic?: boolean
 }
 
 /** This build's `PlatformSupports`, claimed by the heartbeat (frozen: a fact about this build). */
-export const PLATFORM_SUPPORTS: PlatformSupports = Object.freeze({ faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true, faceMeshLayers: true })
+export const PLATFORM_SUPPORTS: PlatformSupports = Object.freeze({
+  faceMeshMinFaceHeightPct: true,
+  prismReferenceAudioPitch: true,
+  faceMeshLayers: true,
+  preciseStyleRoutePhotographic: true,
+})
 
 /**
  * An environment's platform claim as its heartbeat last wrote it: what its

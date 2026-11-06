@@ -326,7 +326,7 @@ describe("recordPlatformClaim (the heartbeat's write)", () => {
     expect(db.log).toHaveLength(1)
     expect(db.log[0]!.table).toBe("engine_environments")
     expect(db.log[0]!.ops).toEqual([
-      { m: "update", a: [{ platform_supports: { faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true, faceMeshLayers: true }, platform_claimed_at: "2026-11-03T12:00:00.000Z" }] },
+      { m: "update", a: [{ platform_supports: { faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true, faceMeshLayers: true, preciseStyleRoutePhotographic: true }, platform_claimed_at: "2026-11-03T12:00:00.000Z" }] },
       { m: "eq", a: ["env", "staging"] },
       { m: "select", a: ["env"] },
     ])
@@ -418,7 +418,7 @@ describe("the platform claim's heartbeat", () => {
     expect(withFreshPlatform(env!)).toEqual({
       env: "staging",
       pluginBuildId: "@nodaroai/cloud-plugins@2.0.0",
-      supports: { ...SUPPORTS, platform: { faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true, faceMeshLayers: true } },
+      supports: { ...SUPPORTS, platform: { faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true, faceMeshLayers: true, preciseStyleRoutePhotographic: true } },
       updatedAt: "2026-11-03T12:00:00.000Z",
     })
   })
