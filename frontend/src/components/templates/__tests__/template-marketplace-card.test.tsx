@@ -46,6 +46,11 @@ describe("TemplateMarketplaceCard", () => {
     expect(screen.getByText("some-new-model")).toBeInTheDocument()
   })
 
+  it("names an image-to-image model by the model alone", () => {
+    renderCard({ providersUsed: ["gpt-image-2-i2i"] })
+    expect(screen.getByText("GPT Image 2")).toBeInTheDocument()
+  })
+
   it("wears the New badge inside the window and no badge outside it", () => {
     renderCard()
     expect(screen.getByText("New")).toBeInTheDocument()

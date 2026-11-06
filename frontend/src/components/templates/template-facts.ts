@@ -41,12 +41,21 @@ export function templateBadge(
 }
 
 /**
+ * A catalog label's trailing mode marker — "(I2I)", "(I2V)" — names the
+ * operation the entry runs, not the model. Other parentheticals ("(Fast)",
+ * "(Pro)") tell models apart and stay.
+ */
+const MODE_MARKER = /\s*\([A-Z]2[A-Z]\)$/
+
+/**
  * Display names for the models a template runs, from the catalog when the id is
  * known and the raw id otherwise — a provider the catalog has not met yet is
- * still named rather than dropped. Duplicate names collapse.
+ * still named rather than dropped. A label loses its mode marker, so the
+ * text-to-image and image-to-image entries of one model read as that model,
+ * once: duplicate names collapse.
  */
 export function modelChipLabels(providers: readonly string[], max = 3): string[] {
-  const labels = providers.map((id) => getModel(id)?.label ?? id)
+  const labels = providers.map((id) => getModel(id)?.label.replace(MODE_MARKER, "") ?? id)
   return [...new Set(labels)].slice(0, max)
 }
 
