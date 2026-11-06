@@ -123,6 +123,24 @@ export function landmarksToFrame(
   return out
 }
 
+/**
+ * The depths of the face's 468 points (the model's z, in pixels of the crop)
+ * in pixels of the frame, `[z0, z1, …]`: scaled as `landmarksToFrame` scales
+ * x and y (the crop's side over the model's), so a depth and a distance
+ * across the frame are in the same units. Smaller is nearer the camera (the
+ * model's own convention: the nose tip is the least). A turn of the crop
+ * (`roi.angle`) is about the camera's axis, so it leaves z as it is.
+ */
+export function landmarkDepths(landmarks: ArrayLike<number>, roi: FaceRoi, n = FACE_MESH_INPUT_SIZE): Float64Array {
+  if (landmarks.length !== FACE_MESH_MODEL_POINTS * 3) {
+    throw new Error(`face mesh: ${landmarks.length} landmark values are not the model's ${FACE_MESH_MODEL_POINTS} × 3`)
+  }
+  const k = roi.size / n
+  const out = new Float64Array(FACE_MESH_POINTS)
+  for (let i = 0; i < FACE_MESH_POINTS; i++) out[i] = landmarks[3 * i + 2]! * k
+  return out
+}
+
 /** The logistic function: the presence logit as a probability. */
 export function sigmoid(x: number): number {
   return 1 / (1 + Math.exp(-x))

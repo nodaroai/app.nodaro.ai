@@ -135,6 +135,14 @@ describe("drawFaceMeshVideo", () => {
     expect(drawnFeatures).toBeLessThan(drawnFull)
   }, 180_000)
 
+  it("parts: the contours — the same faces, the features' lines and more (the oval, brows and nose where each face shows them)", async () => {
+    const features = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, parts: "features", filters: OFF, outputPath: join(dir, "contours-features.mp4") })
+    const contours = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, parts: "contours", filters: OFF, outputPath: join(dir, "contours.mp4") })
+    expect([contours.frames, contours.framesWithFaces, contours.facesDrawn]).toEqual([features.frames, features.framesWithFaces, features.facesDrawn])
+    expect(frames(join(dir, "contours.mp4"))).toBe(26)
+    expect(darkenedPixels(join(dir, "contours.mp4"), FACES, 3)).toBeGreaterThan(darkenedPixels(join(dir, "contours-features.mp4"), FACES, 3))
+  }, 180_000)
+
   it("draws nothing outside the mask: an all-black mask draws no face, an all-white one every face", async () => {
     const none = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, maskPath: maskClip("black.mp4", "black", 26), filters: OFF, outputPath: join(dir, "none.mp4") })
     expect(none.facesDrawn).toBe(0)
