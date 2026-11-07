@@ -1,5 +1,20 @@
 # @nodaro/sdk
 
+## 2.65.1
+
+### Patch Changes
+
+- 1b11030: `billing.changePlan()` and `billing.checkout()` document how plan changes are billed: an upgrade is charged at once and applies only when paid, adding the difference between the plans' monthly credits once per billing period; a plan's checkout answers 409 while the account already has a subscription; promotion codes apply to plans, not credit packs. An upgrade waiting on its payment answers a 409 `NodaroError` with code `plan_change_payment_required` and `details.invoiceUrl`; plan changes are limited to 5 per account per day.
+- d1f5a26: `client.castSwap`: the doc comment of `direction` says that a Precise run with an art style that Nodaro makes the way a Flex run is made keeps the style it was sent with in its job (`input_data.style` absent, or `"precise"`), while its estimate, price and Full Quality are a Flex run's.
+- Updated dependencies [7bcf459]
+- Updated dependencies [878e2b4]
+- Updated dependencies [a683c9d]
+- Updated dependencies [e2bd3c7]
+- Updated dependencies [2783ed0]
+- Updated dependencies [03168b3]
+  - @nodaro/shared@3.55.0
+  - @nodaro/prompts@1.50.1
+
 ## 2.65.0
 
 ### Minor Changes
