@@ -202,6 +202,23 @@ export function environmentsThatCannotRoutePreciseStyle(envs: readonly TrendEngi
 }
 
 /**
+ * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) that do
+ * not keep a run whose art style is photographic Precise when the route's
+ * setting says so (`photographicStyles: "precise"`): its engine does not
+ * declare `castSwap.preciseStyleRoutePhotographic`, or its platform (the app,
+ * whose read of the row would drop the key) does not claim it. Such an
+ * environment routes every style, as before. Unknown while the environments
+ * are (undefined). Nothing waits for it.
+ */
+export function environmentsThatRouteEveryStyle(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+  if (!envs) return undefined
+  return SHARED_SETTING_ENVIRONMENTS.filter((name) => {
+    const supports = envs.find((e) => e.env === name)?.supports
+    return supports?.castSwap?.preciseStyleRoutePhotographic !== true || supports.platform?.preciseStyleRoutePhotographic !== true
+  })
+}
+
+/**
  * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose
  * engine cannot take "Body from the clip" (`steps.clipBody`) — none
  * recorded, or one that does not declare `castSwap.steps` and

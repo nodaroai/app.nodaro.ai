@@ -2,19 +2,20 @@
 // themselves with the Flex style (internally "motion") prepares its clip and
 // words its prompt (the `nodaro_motion_motion` setting's entry for the engine).
 //
-// Two rules, by what every environment's Cast Swap engine declares (the
-// setting is shared by every environment):
+// Flex is Full depth with a shot list on every engine that runs it (the Cast
+// Swap engine from 0.425.0, which declares `castSwap.shotList`; every
+// environment the setting is shared by runs one). The engine reads any other
+// masking as its default (Full depth, the scene from a description), so the
+// column offers Full depth alone, its scene a description or a description +
+// the original, whatever the environments report, and while they load or
+// cannot be read.
 //
-// - The shot list (`castSwap.shotList` in every environment): Flex is Full
-//   depth with a shot list. The engine reads any other masking as its default
-//   (Full depth, the scene from a description), so the column offers Full
-//   depth alone, its scene a description or a description + the original.
-//   "Same as Precise" and "Faces hidden" do nothing for these runs: a stored
-//   one is shown with that reason and a button to set Full depth instead.
-// - Before it (any environment's engine without it, or unknown): the masking
-//   is "Same as Precise" (left out: the engine's Precise masking, on one
-//   video), Faces hidden (its own face mask, the trend editor's controls), or
-//   Full depth (the whole clip as depth, with where the scene comes from).
+// A masking saved before that rule — "Same as Precise" (an entry with no
+// masking), Faces hidden, or Off — is never rewritten on its own: the column
+// says it is saved and ignored, with a button that clears it to Full depth,
+// and Save sends it back as it is until then. A prompt style chosen on an
+// engine with nothing saved is saved with Full depth beside it, so a new save
+// never stores a masking the engine ignores.
 //
 // Keep people is a trend's alone. Prompt style: left out = Flexible; Precise
 // with Full depth stays allowed.
@@ -23,34 +24,21 @@
 // setting (`supports`, from the setting's GET; `motionEngineGaps`) is said
 // under it: the engine plugin is out of date.
 //
-// Two controls are this column's alone (the trend editor and the Precise
-// column have neither): Full depth's depth blur (0–40, 0 = off) and what the
-// face mesh draws (Full, Eyes and mouth, Mouth only), each naming the
-// environments whose engine cannot do it yet (the setting is shared). Full
-// depth's face mesh also takes the smallest face with mesh lines here, as in
-// a trend's editor (the Precise column is never Full depth). The
-// Precise column's own Faces hidden choices — the fill None and a blur on the
-// depth fill — are never offered here: a direct Motion run does not draw them
-// (the server refuses them on this setting).
+// Full depth's depth blur (0–40, 0 = off) and what its face mesh draws (Full,
+// Eyes and mouth, Mouth only) are set here, each naming the environments whose
+// engine cannot do it yet (the setting is shared), as is the smallest face
+// with mesh lines, as in a trend's editor. The Precise column's own Faces
+// hidden choices — the fill None and a blur on the depth fill — are never
+// offered here: a direct Flex run is never Faces hidden.
 
-import { useId } from "react"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { VideoDepthColormap, VideoDepthModelSize } from "@nodaro/shared/media"
 import type { AdminTrendFaceMasking, AdminTrendFullDepthScene, NodaroMotionEngineSupports, NodaroMotionMotionEntry, TrendEngineEnvironment } from "@/lib/api"
 import { FaceMaskingEditor } from "../../trends/components/FaceMaskingEditor"
 import { PromptStyleSelect } from "../../trends/components/PromptStyleSelect"
-import { clipPreparationOf, environmentsThatCannotTakeShotList, withClipPreparation, type FaceMeshMinFaceHeightMissing } from "../../trends/clip-preparation"
+import { clipPreparationOf, type FaceMeshMinFaceHeightMissing } from "../../trends/clip-preparation"
 import { motionEngineGaps } from "../model"
 import { FULL_DEPTH_SCENES, sceneOf } from "../../trends/prompt-style"
-
-type MaskingChoice = "same" | "faces" | "full-depth"
-
-const MASKING_CHOICES: ReadonlyArray<{ value: MaskingChoice; label: string; hint: string }> = [
-  { value: "same", label: "Same as Precise", hint: "The Precise column's masking, on one video: no clip preparation of its own." },
-  { value: "faces", label: "Faces hidden", hint: "Its own face masking (the settings below)." },
-  { value: "full-depth", label: "Full depth", hint: "The whole clip becomes one depth video on every run (charged as clip preparation); the scene comes from below." },
-]
 
 /** The scenes a Flex run with a shot list takes: the shot list alone, or beside the original. */
 export const SHOT_LIST_SCENES: readonly AdminTrendFullDepthScene[] = ["description", "description-and-original"]
@@ -68,29 +56,29 @@ export function shotListSceneOf(scene: AdminTrendFullDepthScene): AdminTrendFull
 const sceneLabel = (scene: AdminTrendFullDepthScene) => FULL_DEPTH_SCENES.find((s) => s.value === scene)?.label ?? scene
 
 /** Full depth, its scene from a description: what the engine runs Flex with when nothing usable is set. */
-const FLEX_DEFAULT_MASKING: AdminTrendFaceMasking = { mode: "always", source: "full-depth" }
+export const FLEX_DEFAULT_MASKING: AdminTrendFaceMasking = { mode: "always", source: "full-depth" }
 
-/** What the column's masking select shows for the entry's masking. */
-export function maskingChoiceOf(m: AdminTrendFaceMasking | undefined): MaskingChoice {
-  if (!m) return "same"
-  return clipPreparationOf(m) === "full-depth" ? "full-depth" : "faces"
-}
-
-/** The entry with its masking chosen another way (a new object; empty keys left out). */
-export function withMaskingChoice(entry: NodaroMotionMotionEntry | undefined, choice: MaskingChoice): NodaroMotionMotionEntry {
-  const { masking, ...rest } = entry ?? {}
-  if (choice === "same") return rest
-  if (choice === "faces") return { ...rest, masking: withClipPreparation(masking, "faces").masking ?? { mode: "off" } }
-  return { ...rest, masking: withClipPreparation(masking, "full-depth").masking }
+/** Whether a masking is one a Flex run uses: Full depth, switched on. */
+export function isFlexMasking(m: AdminTrendFaceMasking | undefined): m is AdminTrendFaceMasking {
+  return !!m && m.mode !== "off" && clipPreparationOf(m) === "full-depth"
 }
 
 /**
- * Whether the column follows the shot list's rule (Flex = Full depth + shot list): every environment's
- * engine declares `castSwap.shotList`. Unknown environments (undefined): the rule before it.
+ * What a saved entry holds that the engine ignores, by the name the column used to give it: "Same as Precise" (an
+ * entry with no masking), "Off" (switched off, Full depth too) or "Faces hidden"; null for an entry Flex runs as
+ * saved, or nothing saved.
  */
-export function flexIsFullDepth(envs: readonly TrendEngineEnvironment[] | undefined): boolean {
-  const missing = environmentsThatCannotTakeShotList(envs)
-  return missing !== undefined && missing.length === 0
+export function ignoredMaskingOf(entry: NodaroMotionMotionEntry | undefined): "Same as Precise" | "Off" | "Faces hidden" | null {
+  if (!entry || Object.keys(entry).length === 0) return null
+  const m = entry.masking
+  if (!m) return "Same as Precise"
+  if (m.mode === "off") return "Off"
+  return clipPreparationOf(m) === "full-depth" ? null : "Faces hidden"
+}
+
+/** The entry with its masking cleared to Flex's default, Full depth (a new object; the prompt style kept). */
+export function withFlexDefaultMasking(entry: NodaroMotionMotionEntry | undefined): NodaroMotionMotionEntry {
+  return { ...entry, masking: FLEX_DEFAULT_MASKING }
 }
 
 interface Props {
@@ -98,11 +86,9 @@ interface Props {
   readonly onChange: (next: NodaroMotionMotionEntry) => void
   /** This environment's engine (unknown when left out: nothing is said). */
   readonly supports?: NodaroMotionEngineSupports
-  /** The environments whose engine cannot hide whole people (`environmentsThatCannotHideBodies`); unknown when left out. */
-  readonly bodyMissingIn?: readonly string[]
   /** The environments whose engine cannot draw the face mesh (`environmentsThatCannotDrawFaceMesh`); unknown when left out. */
   readonly faceMeshMissingIn?: readonly string[]
-  /** Each environment's engine, as reported (decides the shot list's rule; unknown when left out: the rule before it). */
+  /** Each environment's engine, as reported (the scenes and controls offered; unknown when left out). */
   readonly envs?: readonly TrendEngineEnvironment[]
   /** For each depth colormap, the environments whose engine cannot draw it (`environmentsThatCannotDrawColormaps`); unknown when left out. */
   readonly depthColormapsMissingIn?: Readonly<Record<VideoDepthColormap, readonly string[]>>
@@ -126,7 +112,6 @@ export function MotionColumn({
   value,
   onChange,
   supports,
-  bodyMissingIn,
   faceMeshMissingIn,
   envs,
   depthColormapsMissingIn,
@@ -136,85 +121,13 @@ export function MotionColumn({
   faceMeshLayersMissing,
   faceMeshMinFaceHeightMissing,
 }: Props) {
-  const shotList = flexIsFullDepth(envs)
+  const m = value?.masking
+  const full = isFlexMasking(m)
+  const ignored = ignoredMaskingOf(value)
+  const runsAs = full ? shotListSceneOf(sceneOf(m)) : null
+  const empty = !value || Object.keys(value).length === 0
   return (
     <div className="flex flex-col gap-3">
-      {shotList ? (
-        <FullDepthMasking
-          value={value}
-          onChange={onChange}
-          faceMeshMissingIn={faceMeshMissingIn}
-          envs={envs}
-          depthColormapsMissingIn={depthColormapsMissingIn}
-          depthModelSizesMissingIn={depthModelSizesMissingIn}
-          depthBlurMissingIn={depthBlurMissingIn}
-          faceMeshPartsMissingIn={faceMeshPartsMissingIn}
-          faceMeshLayersMissing={faceMeshLayersMissing}
-          faceMeshMinFaceHeightMissing={faceMeshMinFaceHeightMissing}
-        />
-      ) : (
-        <ChoiceMasking
-          value={value}
-          onChange={onChange}
-          bodyMissingIn={bodyMissingIn}
-          faceMeshMissingIn={faceMeshMissingIn}
-          depthColormapsMissingIn={depthColormapsMissingIn}
-          depthModelSizesMissingIn={depthModelSizesMissingIn}
-          depthBlurMissingIn={depthBlurMissingIn}
-          faceMeshPartsMissingIn={faceMeshPartsMissingIn}
-          faceMeshLayersMissing={faceMeshLayersMissing}
-          faceMeshMinFaceHeightMissing={faceMeshMinFaceHeightMissing}
-        />
-      )}
-      <PromptStyleSelect
-        label="Motion prompt style"
-        value={value?.promptStyle}
-        faceMasking={value?.masking ?? (shotList ? FLEX_DEFAULT_MASKING : undefined)}
-        defaultStyle="flexible"
-        onChange={(promptStyle) => {
-          const rest: NodaroMotionMotionEntry = { ...(value ?? {}) }
-          delete rest.promptStyle
-          onChange(promptStyle ? { ...rest, promptStyle } : rest)
-        }}
-      />
-      <MotionGaps value={value} supports={supports} />
-    </div>
-  )
-}
-
-type MaskingProps = Pick<
-  Props,
-  | "value"
-  | "onChange"
-  | "bodyMissingIn"
-  | "faceMeshMissingIn"
-  | "envs"
-  | "depthColormapsMissingIn"
-  | "depthModelSizesMissingIn"
-  | "depthBlurMissingIn"
-  | "faceMeshPartsMissingIn"
-  | "faceMeshLayersMissing"
-  | "faceMeshMinFaceHeightMissing"
->
-
-/** The shot list's rule: Full depth alone, its scene a description or a description + the original. */
-function FullDepthMasking({
-  value,
-  onChange,
-  faceMeshMissingIn,
-  envs,
-  depthColormapsMissingIn,
-  depthModelSizesMissingIn,
-  depthBlurMissingIn,
-  faceMeshPartsMissingIn,
-  faceMeshLayersMissing,
-  faceMeshMinFaceHeightMissing,
-}: MaskingProps) {
-  const m = value?.masking
-  const full = !!m && m.mode !== "off" && clipPreparationOf(m) === "full-depth"
-  const runsAs = full ? shotListSceneOf(sceneOf(m)) : null
-  return (
-    <>
       <div className="flex flex-col gap-1 text-sm">
         <span className="font-medium">Motion masking</span>
         <span className="text-xs text-muted-foreground">
@@ -222,14 +135,14 @@ function FullDepthMasking({
           described shot by shot.
         </span>
       </div>
-      {m && !full && (
+      {ignored && (
         <div role="status" className="flex flex-col items-start gap-2 text-xs text-amber-700 dark:text-amber-400">
           <span>
-            The saved Motion masking ({m.mode === "off" ? "Off" : "Faces hidden"}) no longer does anything: Flex runs are Full depth with a shot
-            list, so they use the default (the scene from a description) until Full depth is set here.
+            Saved: {ignored} — ignored: every Flex run is Full depth with a shot list, so this engine's Flex runs use the default below until it
+            is cleared.
           </span>
-          <Button type="button" size="sm" variant="outline" onClick={() => onChange(withMaskingChoice(value, "full-depth"))}>
-            Set Full depth
+          <Button type="button" size="sm" variant="outline" onClick={() => onChange(withFlexDefaultMasking(value))}>
+            Clear it (Full depth)
           </Button>
         </div>
       )}
@@ -254,70 +167,22 @@ function FullDepthMasking({
         // A change sets the engine's own Full depth (left unset, the default is the same setting).
         onChange={(next) => onChange({ ...value, masking: next ?? FLEX_DEFAULT_MASKING })}
       />
-      {!m && !value?.promptStyle && <p className="text-xs text-muted-foreground">Full depth, the scene from a description, Flexible prompt.</p>}
-    </>
-  )
-}
-
-/** The rule before the shot list: Same as Precise, Faces hidden or Full depth. */
-function ChoiceMasking({
-  value,
-  onChange,
-  bodyMissingIn,
-  faceMeshMissingIn,
-  depthColormapsMissingIn,
-  depthModelSizesMissingIn,
-  depthBlurMissingIn,
-  faceMeshPartsMissingIn,
-  faceMeshLayersMissing,
-  faceMeshMinFaceHeightMissing,
-}: MaskingProps) {
-  const id = useId()
-  const choice = maskingChoiceOf(value?.masking)
-  const hint = MASKING_CHOICES.find((c) => c.value === choice)?.hint
-  const empty = !value?.masking && !value?.promptStyle
-  return (
-    <>
-      <div className="flex flex-col gap-1 text-sm sm:w-1/2 sm:pr-1.5">
-        <label htmlFor={id} className="font-medium">
-          Motion masking
-        </label>
-        <Select value={choice} onValueChange={(v) => onChange(withMaskingChoice(value, v as MaskingChoice))}>
-          <SelectTrigger id={id} className="h-9" aria-describedby={`${id}-hint`}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {MASKING_CHOICES.map((c) => (
-              <SelectItem key={c.value} value={c.value}>
-                {c.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <span id={`${id}-hint`} className="text-xs text-muted-foreground">
-          {hint}
-        </span>
-      </div>
-      {value?.masking && (
-        <FaceMaskingEditor
-          value={value.masking}
-          source={choice === "full-depth" ? "full-depth" : "faces"}
-          bodyMissingIn={bodyMissingIn}
-          faceMeshMissingIn={faceMeshMissingIn}
-          depthColormapsMissingIn={depthColormapsMissingIn}
-          depthModelSizesMissingIn={depthModelSizesMissingIn}
-          depthBlurMissingIn={depthBlurMissingIn}
-          faceMeshPartsMissingIn={faceMeshPartsMissingIn}
-          faceMeshLayersMissing={faceMeshLayersMissing}
-          faceMeshMinFaceHeightMissing={faceMeshMinFaceHeightMissing}
-          // No `envs`: a scene only some engines declare is never offered on this shared setting
-          // (the server refuses it until every environment's engine lists it).
-          // Off is kept as Off ({ mode: "off" }), never read as "Same as Precise".
-          onChange={(m) => onChange({ ...value, masking: m ?? { mode: "off" } })}
-        />
-      )}
-      {empty && <p className="text-xs text-muted-foreground">Same as Precise, Flexible prompt.</p>}
-    </>
+      {empty && <p className="text-xs text-muted-foreground">Full depth, the scene from a description, Flexible prompt.</p>}
+      <PromptStyleSelect
+        label="Motion prompt style"
+        value={value?.promptStyle}
+        faceMasking={full ? m : FLEX_DEFAULT_MASKING}
+        defaultStyle="flexible"
+        onChange={(promptStyle) => {
+          const rest: NodaroMotionMotionEntry = { ...(value ?? {}) }
+          delete rest.promptStyle
+          if (!promptStyle) return onChange(rest)
+          // Nothing saved yet: the prompt style is saved with Full depth beside it (an entry with no masking is one the engine ignores).
+          onChange(empty ? { masking: FLEX_DEFAULT_MASKING, promptStyle } : { ...rest, promptStyle })
+        }}
+      />
+      <MotionGaps value={value} supports={supports} />
+    </div>
   )
 }
 

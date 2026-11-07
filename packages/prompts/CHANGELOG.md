@@ -1,5 +1,17 @@
 # @nodaro/prompts
 
+## 1.50.1
+
+### Patch Changes
+
+- 878e2b4: `RESTYLE_PREVIEWS` has an approved clip for the `cyberpunk` style, its still at 7 s, where the styled grin is in frame.
+- a683c9d: `RESTYLE_PREVIEWS` has an approved clip for the `oil-painting` style, its still at the default 1 s.
+- Updated dependencies [7bcf459]
+- Updated dependencies [e2bd3c7]
+- Updated dependencies [2783ed0]
+- Updated dependencies [03168b3]
+  - @nodaro/shared@3.55.0
+
 ## 1.50.0
 
 ### Minor Changes

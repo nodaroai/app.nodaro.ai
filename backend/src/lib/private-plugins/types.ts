@@ -3907,6 +3907,8 @@ export type PluginNodaroMotionNoPerson = {
 export type PluginNodaroMotionPreciseStyleRoute = {
   readonly routing?: "on" | "off"
   readonly bypassEmails?: readonly string[]
+  /** "precise": a run whose art style is photographic is not routed (the Precise run of routing "off"); absent ("flex" is never sent): routed as every style. */
+  readonly photographicStyles?: "flex" | "precise"
   /** A routed run's own depth blur, 0–40; absent: none (never the Motion masking's). */
   readonly routedDepthBlur?: number
   /** A routed run's shot list is told the colours from the video; absent: on. */
@@ -4448,6 +4450,12 @@ export interface PluginSupports {
    *   the engine runs such a run as Precise; the platform answers it the setting
    *   as null and says which environments do not route yet
    *   (lib/nodaro-motion-precise-style-route.ts `engineRoutesPreciseStyle`).
+   * - `preciseStyleRoutePhotographic`: that route reads its setting's
+   *   `photographicStyles`: "precise" leaves a run whose art style is
+   *   photographic (the catalog's medium "photo") unrouted, the Precise run of
+   *   routing "off"; every other style routes as before. Additive-optional:
+   *   absent ⇒ the engine routes every style alike, whatever the setting says,
+   *   and the admin screen names that environment.
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -4503,6 +4511,7 @@ export interface PluginSupports {
     readonly preciseArtStyle?: boolean
     readonly noPersonSourceClip?: boolean
     readonly preciseArtStyleAlone?: boolean
+    readonly preciseStyleRoutePhotographic?: boolean
     readonly preciseStyleRoute?: boolean
   }
 }

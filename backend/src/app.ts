@@ -29,11 +29,20 @@ import { WORKSPACE_HEADER } from "@nodaro/shared/organizations"
  * adding it here is a fleet-wide outage: `__tests__/cors-allowed-headers.test.ts`
  * fails on any header literal the SDK sends that this list does not carry.
  */
+/**
+ * How long a browser may reuse a preflight answer, in seconds. Without it the
+ * browser asks again after 5 s, and every call the SDK makes from another
+ * origin is preflighted (it always sends CLIENT_HEADER), so most calls from
+ * the client apps paid a second round trip. 7200 is Chromium's ceiling.
+ */
+export const CORS_PREFLIGHT_MAX_AGE_SECONDS = 7200
+
 export function buildCorsOptions(mcpIframeRe: RegExp) {
   const base = {
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", CLIENT_HEADER, WORKSPACE_HEADER, POLL_KEY_HEADER, IDEMPOTENCY_HEADER],
     credentials: true,
+    maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,
   }
   return {
     // Per-request options. The one-argument form is the promise delegator —

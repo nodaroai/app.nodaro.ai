@@ -14,14 +14,21 @@
  * (`routedDepthBlur`, 0–40, absent or 0: none; every other Flex run keeps the
  * Motion masking's), and whether such a run's shot list writer is told to
  * describe the colours from the video (`describeColours`, on by default), and
- * whether its depth map carries the face mesh (`faceMesh`, off by default).
+ * whether its depth map carries the face mesh (`faceMesh`, off by default),
+ * and which path a run whose art style is photographic takes
+ * (`photographicStyles`: "flex", the default, routed as every style, or
+ * "precise", left the Precise run routing "off" makes).
  *
  * A PUT is refused 400 `validation_error` on the body's shape (strict: an
  * unknown key, a third value, something that is not an email, too many, a blur
  * that is not a whole number from 0 to 40). Any
  * value saves whatever the engines: an engine that does not declare
  * `castSwap.preciseStyleRoute` never reads the row and runs such a run as
- * Precise, so no 409 waits for one. `supported` is whether THIS environment's
+ * Precise, so no 409 waits for one; likewise "precise" for the photographic
+ * styles reaches only an engine that declares
+ * `castSwap.preciseStyleRoutePhotographic` (one without it routes every style,
+ * as before), and the admin screen names the environments that do not take it
+ * yet. `supported` is whether THIS environment's
  * engine declares it. Each save writes an `admin_actions` row
  * (`update_nodaro_motion_precise_style_route`) with the setting before and after.
  */
@@ -39,12 +46,31 @@ import {
 import { readNodaroMotionPreciseStyleRoute, saveNodaroMotionPreciseStyleRoute } from "../../lib/nodaro-motion-precise-style-route-store.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { defineNodaroMotionSettingsSection, sendRefusal } from "../lib/nodaro-motion-settings-section.js"
 import { audit } from "./admin-trends-lifecycle.js"
 
 /** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Nodaro Motion settings'). */
 export const NODARO_MOTION_PRECISE_STYLE_ROUTE_AUDIT_TARGET = "00000000-0000-4000-8000-00000000a0fc"
 
 const putBody = z.strictObject({ preciseStyleRoute: nodaroMotionPreciseStyleRouteSchema })
+
+/**
+ * The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): what differs from the defaults.
+ * Saved whatever the engines (no engine refusal). The accounts that skip the route are people's emails: kept in a
+ * stored set, left out of an exported file.
+ */
+export const NODARO_MOTION_PRECISE_STYLE_ROUTE_SECTION = defineNodaroMotionSettingsSection({
+  key: "precise-style-route",
+  path: "/v1/admin/nodaro-motion/precise-style-route",
+  label: "Precise art-style route",
+  body: putBody,
+  prepare: (body) => ({ value: { preciseStyleRoute: withoutDefaultPreciseStyleRoute(body.preciseStyleRoute) } }),
+  readLive: async () => {
+    const { preciseStyleRoute } = await readNodaroMotionPreciseStyleRoute()
+    return preciseStyleRoute === null ? null : { preciseStyleRoute }
+  },
+  privateFields: ["preciseStyleRoute.bypassEmails"],
+})
 
 export interface NodaroMotionPreciseStyleRouteView {
   /** null = never saved: routing on, nobody bypassed. Only what differs from that is listed. */
@@ -69,10 +95,12 @@ export function registerNodaroMotionPreciseStyleRouteRoutes(app: FastifyInstance
   })
 
   app.put("/v1/admin/nodaro-motion/precise-style-route", { preHandler: requireAdmin }, async (req, reply) => {
-    const parsed = putBody.safeParse(req.body)
+    const parsed = NODARO_MOTION_PRECISE_STYLE_ROUTE_SECTION.body.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
-      const preciseStyleRoute = withoutDefaultPreciseStyleRoute(parsed.data.preciseStyleRoute)
+      const prepared = NODARO_MOTION_PRECISE_STYLE_ROUTE_SECTION.prepare(parsed.data)
+      if ("refusal" in prepared) return sendRefusal(reply, prepared.refusal)
+      const { preciseStyleRoute } = prepared.value
       const before = (await readNodaroMotionPreciseStyleRoute()).preciseStyleRoute
       await saveNodaroMotionPreciseStyleRoute(preciseStyleRoute, req.userId!)
       await audit(req, "update_nodaro_motion_precise_style_route", "app_setting", NODARO_MOTION_PRECISE_STYLE_ROUTE_AUDIT_TARGET, {

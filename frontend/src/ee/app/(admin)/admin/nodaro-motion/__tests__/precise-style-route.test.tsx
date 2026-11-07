@@ -33,8 +33,11 @@ import {
   preciseStyleRouteIssues,
   preciseStyleRouteMissingNote,
   preciseStyleRouteToSaved,
+  photographicStyleNames,
+  photographicStylesLegend,
+  photographicStylesMissingNote,
 } from "../components/PreciseStyleRouteColumn"
-import { environmentsThatCannotRoutePreciseStyle } from "../../trends/clip-preparation"
+import { environmentsThatCannotRoutePreciseStyle, environmentsThatRouteEveryStyle } from "../../trends/clip-preparation"
 import { FACE_MESH_THUMBNAIL_FILES } from "../../trends/face-mesh-thumbnail-files"
 
 const URL_ = "/v1/admin/nodaro-motion/precise-style-route"
@@ -365,25 +368,97 @@ describe("the routed mesh's layers", { timeout: 20_000 }, () => {
   })
 })
 
+// Which path a run whose art style is photographic takes (`photographicStyles`): routed as Flex (the default) or kept
+// Precise. Named from the style catalog; saved whatever the engines, with a note naming where it does not hold yet.
+describe("the photographic styles' path", { timeout: 20_000 }, () => {
+  const keeps = (env: string, engine: boolean, platform: boolean): TrendEngineEnvironment => {
+    const base = routes_(env, true)
+    return {
+      ...base,
+      supports: {
+        ...base.supports,
+        castSwap: { ...base.supports.castSwap, ...(engine ? { preciseStyleRoutePhotographic: true } : {}) },
+        ...(platform ? { platform: { preciseStyleRoutePhotographic: true } } : {}),
+      },
+    }
+  }
+  const photo = async () => within(await screen.findByRole("group", { name: photographicStylesLegend() }))
+
+  it("names the catalog's photographic styles; never saved reads as Flex, and there is nothing to save", async () => {
+    expect(photographicStyleNames()).toEqual(expect.arrayContaining(["Photorealistic", "Cinematic", "Noir", "Early Color Photo", "Cyberpunk", "Steampunk", "Glitch Art"]))
+    expect(photographicStyleNames()).toHaveLength(8)
+    expect(photographicStyleNames()).not.toContain("Anime")
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await photo()
+    expect(group.getByRole("radio", { name: /^Run as Flex/ })).toBeChecked()
+    expect(group.getByRole("radio", { name: /^Stay Precise/ })).not.toBeChecked()
+    expect(group.getByText(/keeps likeness and may restyle less/)).toBeInTheDocument()
+    expect(saveButton()).toBeDisabled()
+  })
+
+  it("Stay Precise saves photographicStyles: precise; Flex again sends {}", async () => {
+    const user = userEvent.setup()
+    routes[`PUT ${URL_}`] = (init) => view(JSON.parse(String(init?.body)).preciseStyleRoute)
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await photo()
+    await user.click(group.getByRole("radio", { name: /^Stay Precise/ }))
+    await user.click(saveButton())
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseStyleRoute: { photographicStyles: "precise" } }]))
+    await user.click(group.getByRole("radio", { name: /^Run as Flex/ }))
+    await waitFor(() => expect(saveButton()).toBeEnabled())
+    await user.click(saveButton())
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseStyleRoute: { photographicStyles: "precise" } }, { preciseStyleRoute: {} }]))
+  })
+
+  it("shows a saved Stay Precise; with the switch Off the choice is kept but cannot be changed", async () => {
+    routes[`GET ${URL_}`] = () => view({ routing: "off", photographicStyles: "precise" })
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await photo()
+    await waitFor(() => expect(group.getByRole("radio", { name: /^Stay Precise/ })).toBeChecked())
+    expect(group.getByRole("radio", { name: /^Stay Precise/ })).toBeDisabled()
+    expect(saveButton()).toBeDisabled()
+  })
+
+  it("names the environments that still route these styles once Stay Precise is chosen, and still saves", async () => {
+    const user = userEvent.setup()
+    routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: [keeps("production", true, false), keeps("staging", true, true)] } })
+    routes[`PUT ${URL_}`] = (init) => view(JSON.parse(String(init?.body)).preciseStyleRoute)
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await photo()
+    expect(group.queryByText(photographicStylesMissingNote(["production"]))).not.toBeInTheDocument()
+    await user.click(group.getByRole("radio", { name: /^Stay Precise/ }))
+    expect(await group.findByText(photographicStylesMissingNote(["production"]))).toBeInTheDocument()
+    await user.click(saveButton())
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toHaveLength(1))
+  })
+
+  it("environmentsThatRouteEveryStyle: unknown while loading, else those whose engine or platform lacks the flag", () => {
+    expect(environmentsThatRouteEveryStyle(undefined)).toBeUndefined()
+    expect(environmentsThatRouteEveryStyle([keeps("production", true, true), keeps("staging", true, true)])).toEqual([])
+    expect(environmentsThatRouteEveryStyle([keeps("production", false, true), keeps("staging", true, false)])).toEqual(["staging", "production"])
+    expect(environmentsThatRouteEveryStyle([keeps("staging", true, true)])).toEqual(["production"])
+  })
+})
+
 describe("the pure helpers", () => {
   it("preciseStyleRouteToSaved: Off and a list that is not empty alone", () => {
     expect(preciseStyleRouteToSaved(preciseStyleRouteDraftOf(null))).toEqual({})
-    expect(preciseStyleRouteToSaved({ routing: "on", emailsText: " \n, ", depthBlurText: "", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toEqual({})
-    expect(preciseStyleRouteToSaved({ routing: "on", emailsText: "", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toEqual({})
-    expect(preciseStyleRouteToSaved({ routing: "off", emailsText: "A@x.co\na@x.co,b@x.co", depthBlurText: "10", describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshLayers: {}, faceMeshWording: "shape" })).toEqual({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"], routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" })
+    expect(preciseStyleRouteToSaved({ routing: "on", photographicStyles: "flex", emailsText: " \n, ", depthBlurText: "", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toEqual({})
+    expect(preciseStyleRouteToSaved({ routing: "on", photographicStyles: "flex", emailsText: "", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toEqual({})
+    expect(preciseStyleRouteToSaved({ routing: "off", photographicStyles: "flex", emailsText: "A@x.co\na@x.co,b@x.co", depthBlurText: "10", describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshLayers: {}, faceMeshWording: "shape" })).toEqual({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"], routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" })
   })
 
   it("preciseStyleRouteDraftOf: what is saved, one address per line", () => {
-    expect(preciseStyleRouteDraftOf({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"], routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "features", faceMeshWording: "shape" })).toEqual({ routing: "off", emailsText: "a@x.co\nb@x.co", depthBlurText: "10", describeColours: false, faceMesh: true, faceMeshParts: "features", faceMeshLayers: { eyes: true, lips: true }, faceMeshWording: "shape" })
+    expect(preciseStyleRouteDraftOf({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"], routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "features", faceMeshWording: "shape" })).toEqual({ routing: "off", photographicStyles: "flex", emailsText: "a@x.co\nb@x.co", depthBlurText: "10", describeColours: false, faceMesh: true, faceMeshParts: "features", faceMeshLayers: { eyes: true, lips: true }, faceMeshWording: "shape" })
     expect(preciseStyleRouteDraftOf({ routedDepthBlur: 10 })).toMatchObject({ depthBlurText: "10", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })
-    expect(preciseStyleRouteDraftOf(null)).toEqual({ routing: "on", emailsText: "", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: { wireframe: true, eyes: true, lips: true }, faceMeshWording: "motion" })
+    expect(preciseStyleRouteDraftOf(null)).toEqual({ routing: "on", photographicStyles: "flex", emailsText: "", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: { wireframe: true, eyes: true, lips: true }, faceMeshWording: "motion" })
   })
 
   it("preciseStyleRouteIssues names what is not an email", () => {
-    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "a@x.co\nnope, also nope", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toHaveLength(1)
-    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "a@x.co", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toEqual([])
-    expect(preciseStyleRouteIssues({ routing: "on", emailsText: "", depthBlurText: "", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toEqual([])
-    for (const bad of ["41", "-1", "2.5", "x"]) expect(preciseStyleRouteIssues({ routing: "on", emailsText: "", depthBlurText: bad, describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toHaveLength(1)
+    expect(preciseStyleRouteIssues({ routing: "on", photographicStyles: "flex", emailsText: "a@x.co\nnope, also nope", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toHaveLength(1)
+    expect(preciseStyleRouteIssues({ routing: "on", photographicStyles: "flex", emailsText: "a@x.co", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toEqual([])
+    expect(preciseStyleRouteIssues({ routing: "on", photographicStyles: "flex", emailsText: "", depthBlurText: "", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toEqual([])
+    for (const bad of ["41", "-1", "2.5", "x"]) expect(preciseStyleRouteIssues({ routing: "on", photographicStyles: "flex", emailsText: "", depthBlurText: bad, describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toHaveLength(1)
   })
 
   it("environmentsThatCannotRoutePreciseStyle: unknown while loading, else those without the flag", () => {

@@ -105,9 +105,9 @@ export interface AppSettings {
   nodaro_motion_prompt_parts: NodaroMotionPromptParts | null
   /**
    * Nodaro Motion's Motion setting per engine (nodaro-motion-motion.ts), for
-   * direct runs with `style: "motion"`. null = never saved (the Precise
-   * masking with the Flexible prompt). Each engine's entry is validated on
-   * its own; an invalid one is dropped.
+   * direct runs with `style: "motion"`. null = never saved (Full depth with
+   * its scene from a description, the Flexible prompt). Each engine's entry
+   * is validated on its own; an invalid one is dropped.
    */
   nodaro_motion_motion: NodaroMotionMotion | null
   /**

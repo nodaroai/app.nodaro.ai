@@ -6,9 +6,10 @@
 // Each engine (Prism, Pulse) has two columns, edited with the trend editor's
 // own controls:
 // - Precise: the face masking of a Precise run (PUT /v1/admin/nodaro-motion/masking).
-// - Motion: a Motion run's masking (Same as Precise, Faces hidden, or Full
-//   depth with its scene source) and its prompt style (left out: Flexible),
-//   PUT /v1/admin/nodaro-motion/motion (MotionColumn.tsx).
+// - Motion: a Flex run's masking — always Full depth with a shot list, its
+//   scene a description or a description + the original; a masking saved
+//   before that is shown as ignored, to be cleared — and its prompt style
+//   (left out: Flexible), PUT /v1/admin/nodaro-motion/motion (MotionColumn.tsx).
 // Pulse also has its audio, for every direct Pulse run of either style: the
 // original audio back on the result (the default) or Kling's own track
 // (PUT /v1/admin/nodaro-motion/pulse-audio).
@@ -56,24 +57,19 @@
 //
 // Below it, the engine prompt per engine and style (PromptPartsTabs.tsx),
 // saved on its own.
+//
+// At the top, the stored settings sets (SettingsSetsManager.tsx): every
+// setting on this page saved under a name, loaded back as a draft (nothing is
+// live until Save all), exported and imported as JSON. Each section's draft is
+// held through `useSectionDraft` and bound in `bindings`, one per section of
+// settings-sections.ts: a section left out there does not compile.
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { hasAdmin } from "@/lib/edition"
-import type {
-  AdminTrendEngine,
-  CastSwapPrismReferenceAudioByResolution,
-  CastSwapPulseAudioId,
-  NodaroMotionMasking,
-  NodaroMotionMotion,
-  NodaroMotionNoPerson,
-  NodaroMotionSteps,
-  NodaroMotionStyle,
-  NodaroMotionStyleOnly,
-  NodaroMotionPreciseArtStyle,
-} from "@/lib/api"
+import type { AdminTrendEngine } from "@/lib/api"
 import { useEngineEnvironments, useNodaroMotionMasking, useSaveNodaroMotionMasking } from "@/ee/hooks/queries/use-admin-queries"
 import { useNodaroMotionMotion, useSaveNodaroMotionMotion } from "@/ee/hooks/queries/use-nodaro-motion-motion"
 import { useNodaroMotionPulseAudio, useSaveNodaroMotionPulseAudio } from "@/ee/hooks/queries/use-nodaro-motion-pulse-audio"
@@ -90,8 +86,10 @@ import {
 } from "@/ee/hooks/queries/use-nodaro-motion-prism-reference-audio"
 import { FaceMaskingEditor } from "../trends/components/FaceMaskingEditor"
 import { DEFAULT_PULSE_AUDIO, PulseAudioSelect } from "../trends/components/PulseAudioSelect"
+import { useNodaroMotionPromptParts, useSaveNodaroMotionPromptParts } from "@/ee/hooks/queries/use-nodaro-motion-prompt-parts"
+import { useNodaroMotionPromptWording, useSaveNodaroMotionPromptWording } from "@/ee/hooks/queries/use-nodaro-motion-prompt-wording"
 import { PrismReferenceAudioSelect } from "../trends/components/PrismReferenceAudioSelect"
-import { prismReferenceAudioHeldIssues, prismReferenceAudioSaved, prismReferenceAudioTriple } from "../trends/prism-reference-audio"
+import { prismReferenceAudioHeldIssues, prismReferenceAudioSaved } from "../trends/prism-reference-audio"
 import { maskingIssues } from "../trends/model"
 import { layersOfSetting } from "../trends/face-mesh-layers"
 import {
@@ -116,7 +114,26 @@ import { AdvancedSwitch } from "./components/AdvancedSwitch"
 import { StyleOnlyColumn, styleOnlyToSaved } from "./components/StyleOnlyColumn"
 import { PreciseArtStyleColumn, preciseArtStyleToSaved } from "./components/PreciseArtStyleColumn"
 import { NoPersonColumn, noPersonToSaved } from "./components/NoPersonColumn"
-import { PreciseStyleRouteColumn, preciseStyleRouteDraftOf, preciseStyleRouteIssues, preciseStyleRouteToSaved, type PreciseStyleRouteDraft } from "./components/PreciseStyleRouteColumn"
+import { PreciseStyleRouteColumn, preciseStyleRouteDraftOf, preciseStyleRouteIssues, preciseStyleRouteToSaved } from "./components/PreciseStyleRouteColumn"
+import { SettingsSetsManager } from "./components/SettingsSetsManager"
+import type { MotionDraftOrigin } from "./components/DraftBanner"
+import { useSectionDraft } from "./use-section-draft"
+import {
+  ADVANCED_SPEC,
+  MASKING_SPEC,
+  MOTION_SPEC,
+  NO_PERSON_SPEC,
+  PRECISE_ART_STYLE_SPEC,
+  PRECISE_STYLE_ROUTE_SPEC,
+  PRISM_REFERENCE_AUDIO_SPEC,
+  PROMPT_PARTS_SPEC,
+  PROMPT_WORDING_SPEC,
+  PULSE_AUDIO_SPEC,
+  STEPS_SPEC,
+  STYLE_ONLY_SPEC,
+  STYLE_SPEC,
+  type MotionSettingsBindings,
+} from "./settings-sections"
 
 /** The model each engine runs on, shown to admins beside the public name. */
 const INTERNAL_NAMES: Readonly<Record<AdminTrendEngine, string>> = {
@@ -194,52 +211,55 @@ export default function AdminNodaroMotionPage() {
   // Whether such a run runs as Flex at all: saved whatever the engines (PreciseStyleRouteColumn).
   const preciseStyleRouteQuery = useNodaroMotionPreciseStyleRoute()
   const savePreciseStyleRoute = useSaveNodaroMotionPreciseStyleRoute()
-  const [draft, setDraft] = useState<NodaroMotionMasking>({})
-  const [motionDraft, setMotionDraft] = useState<NodaroMotionMotion>({})
-  const [pulseDraft, setPulseDraft] = useState<CastSwapPulseAudioId>(DEFAULT_PULSE_AUDIO)
-  const [prismAudioDraft, setPrismAudioDraft] = useState<CastSwapPrismReferenceAudioByResolution>(() => prismReferenceAudioTriple(null))
-  const [stepsDraft, setStepsDraft] = useState<NodaroMotionSteps>({})
-  const [styleDraft, setStyleDraft] = useState<NodaroMotionStyle>({})
-  const [advancedDraft, setAdvancedDraft] = useState(false)
-  const [styleOnlyDraft, setStyleOnlyDraft] = useState<NodaroMotionStyleOnly>({})
-  const [preciseArtStyleDraft, setPreciseArtStyleDraft] = useState<NodaroMotionPreciseArtStyle>({})
-  const [noPersonDraft, setNoPersonDraft] = useState<NodaroMotionNoPerson>({})
-  const [preciseStyleRouteDraft, setPreciseStyleRouteDraft] = useState<PreciseStyleRouteDraft>(() => preciseStyleRouteDraftOf(null))
-
-  // The drafts start from what is stored, and again after each save.
-  useEffect(() => {
-    if (data) setDraft(structuredClone(data.masking ?? {}))
-  }, [data])
-  useEffect(() => {
-    if (motionQuery.data) setMotionDraft(structuredClone(motionQuery.data.motion ?? {}))
-  }, [motionQuery.data])
-  useEffect(() => {
-    if (pulseQuery.data) setPulseDraft(pulseQuery.data.pulseAudio ?? DEFAULT_PULSE_AUDIO)
-  }, [pulseQuery.data])
-  useEffect(() => {
-    if (prismAudioQuery.data) setPrismAudioDraft(prismReferenceAudioTriple(prismAudioQuery.data.prismReferenceAudio))
-  }, [prismAudioQuery.data])
-  useEffect(() => {
-    if (stepsQuery.data) setStepsDraft(structuredClone(stepsQuery.data.steps ?? {}))
-  }, [stepsQuery.data])
-  useEffect(() => {
-    if (styleQuery.data) setStyleDraft({ ...(styleQuery.data.style ?? {}) })
-  }, [styleQuery.data])
-  useEffect(() => {
-    if (advancedQuery.data) setAdvancedDraft(advancedQuery.data.show)
-  }, [advancedQuery.data])
-  useEffect(() => {
-    if (styleOnlyQuery.data) setStyleOnlyDraft(structuredClone(styleOnlyQuery.data.styleOnly ?? {}))
-  }, [styleOnlyQuery.data])
-  useEffect(() => {
-    if (preciseArtStyleQuery.data) setPreciseArtStyleDraft(structuredClone(preciseArtStyleQuery.data.preciseArtStyle ?? {}))
-  }, [preciseArtStyleQuery.data])
-  useEffect(() => {
-    if (noPersonQuery.data) setNoPersonDraft(structuredClone(noPersonQuery.data.noPerson ?? {}))
-  }, [noPersonQuery.data])
-  useEffect(() => {
-    if (preciseStyleRouteQuery.data) setPreciseStyleRouteDraft(preciseStyleRouteDraftOf(preciseStyleRouteQuery.data.preciseStyleRoute))
-  }, [preciseStyleRouteQuery.data])
+  // The prompt parts and the Flex wording (edited in PromptPartsTabs, held here so a stored set reaches them).
+  const promptPartsQuery = useNodaroMotionPromptParts()
+  const savePromptParts = useSaveNodaroMotionPromptParts()
+  const wordingQuery = useNodaroMotionPromptWording()
+  const saveWording = useSaveNodaroMotionPromptWording()
+  // A stored set or a file loaded as a draft (SettingsSetsManager): while it is, no draft follows live by itself.
+  const [origin, setOrigin] = useState<MotionDraftOrigin | null>(null)
+  const held = origin !== null
+  // Each draft starts from what is stored, and again after each save (use-section-draft.ts).
+  const masking = useSectionDraft(MASKING_SPEC, data, (v) => v.masking, save.mutateAsync, held)
+  const motion = useSectionDraft(MOTION_SPEC, motionQuery.data, (v) => v.motion, saveMotion.mutateAsync, held)
+  const pulse = useSectionDraft(PULSE_AUDIO_SPEC, pulseQuery.data, (v) => v.pulseAudio, savePulse.mutateAsync, held)
+  const prismAudio = useSectionDraft(PRISM_REFERENCE_AUDIO_SPEC, prismAudioQuery.data, (v) => v.prismReferenceAudio, savePrismAudio.mutateAsync, held)
+  const steps = useSectionDraft(STEPS_SPEC, stepsQuery.data, (v) => v.steps, saveSteps.mutateAsync, held)
+  const style = useSectionDraft(STYLE_SPEC, styleQuery.data, (v) => v.style, saveStyle.mutateAsync, held)
+  const advanced = useSectionDraft(ADVANCED_SPEC, advancedQuery.data, (v) => v.show, saveAdvanced.mutateAsync, held)
+  const styleOnly = useSectionDraft(STYLE_ONLY_SPEC, styleOnlyQuery.data, (v) => v.styleOnly, saveStyleOnly.mutateAsync, held)
+  const preciseArtStyle = useSectionDraft(PRECISE_ART_STYLE_SPEC, preciseArtStyleQuery.data, (v) => v.preciseArtStyle, savePreciseArtStyle.mutateAsync, held)
+  const noPerson = useSectionDraft(NO_PERSON_SPEC, noPersonQuery.data, (v) => v.noPerson, saveNoPerson.mutateAsync, held)
+  const preciseStyleRoute = useSectionDraft(PRECISE_STYLE_ROUTE_SPEC, preciseStyleRouteQuery.data, (v) => v.preciseStyleRoute, savePreciseStyleRoute.mutateAsync, held)
+  const promptParts = useSectionDraft(PROMPT_PARTS_SPEC, promptPartsQuery.data, (v) => v.promptParts, savePromptParts.mutateAsync, held)
+  const wording = useSectionDraft(PROMPT_WORDING_SPEC, wordingQuery.data, (v) => v.promptWording, saveWording.mutateAsync, held)
+  // Every section, for the stored sets: the record type fails to compile without each one (settings-sections.ts).
+  const bindings: MotionSettingsBindings = {
+    "prompt-wording": wording.binding,
+    masking: masking.binding,
+    motion: motion.binding,
+    steps: steps.binding,
+    style: style.binding,
+    "pulse-audio": pulse.binding,
+    "prism-reference-audio": prismAudio.binding,
+    "style-only": styleOnly.binding,
+    "precise-art-style": preciseArtStyle.binding,
+    "no-person": noPerson.binding,
+    "precise-style-route": preciseStyleRoute.binding,
+    advanced: advanced.binding,
+    "prompt-parts": promptParts.binding,
+  }
+  const [draft, setDraft] = [masking.draft, masking.setDraft]
+  const [motionDraft, setMotionDraft] = [motion.draft, motion.setDraft]
+  const [pulseDraft, setPulseDraft] = [pulse.draft, pulse.setDraft]
+  const [prismAudioDraft, setPrismAudioDraft] = [prismAudio.draft, prismAudio.setDraft]
+  const [stepsDraft, setStepsDraft] = [steps.draft, steps.setDraft]
+  const [styleDraft, setStyleDraft] = [style.draft, style.setDraft]
+  const [advancedDraft, setAdvancedDraft] = [advanced.draft, advanced.setDraft]
+  const [styleOnlyDraft, setStyleOnlyDraft] = [styleOnly.draft, styleOnly.setDraft]
+  const [preciseArtStyleDraft, setPreciseArtStyleDraft] = [preciseArtStyle.draft, preciseArtStyle.setDraft]
+  const [noPersonDraft, setNoPersonDraft] = [noPerson.draft, noPerson.setDraft]
+  const [preciseStyleRouteDraft, setPreciseStyleRouteDraft] = [preciseStyleRoute.draft, preciseStyleRoute.setDraft]
 
   const saved = useMemo(() => JSON.stringify(toSaved(data?.masking ?? {})), [data])
   const next = toSaved(draft)
@@ -364,12 +384,16 @@ export default function AdminNodaroMotionPage() {
               !advancedChanged) ||
             issues.length > 0 ||
             preciseStyleRouteHeld ||
-            pending
-          } onClick={() => void onSave()}>
+            pending ||
+            // A loaded set saves whole, through Save all in its banner (never half of it from here).
+            held
+          } title={held ? "A stored set is loaded: save it with Save all, or discard it." : undefined} onClick={() => void onSave()}>
           {pending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
           Save
         </Button>
       </div>
+
+      <SettingsSetsManager bindings={bindings} origin={origin} onOrigin={setOrigin} />
 
       <div role="group" aria-label="Nodaro Motion page" className="mb-6 rounded-lg border p-4">
         {advancedQuery.data ? (
@@ -507,7 +531,6 @@ export default function AdminNodaroMotionPage() {
                         value={motionDraft[engine.id]}
                         supports={motionQuery.data.supports}
                         envs={envs.data}
-                        bodyMissingIn={bodyMissingIn}
                         faceMeshMissingIn={faceMeshMissingIn}
                         depthColormapsMissingIn={depthColormapsMissingIn}
                         depthModelSizesMissingIn={depthModelSizesMissingIn}
@@ -611,7 +634,14 @@ export default function AdminNodaroMotionPage() {
           )}
         </>
       )}
-      <PromptPartsTabs internalNames={INTERNAL_NAMES} />
+      <PromptPartsTabs
+        internalNames={INTERNAL_NAMES}
+        draft={promptParts.draft}
+        onDraft={promptParts.setDraft}
+        wordingDraft={wording.draft}
+        onWordingDraft={wording.setDraft}
+        held={held}
+      />
     </div>
   )
 }

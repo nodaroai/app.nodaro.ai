@@ -483,6 +483,7 @@ export const queryKeys = {
     nodaroMotionPreciseArtStyle: () => ["admin", "nodaro-motion", "precise-art-style"] as const,
     nodaroMotionNoPerson: () => ["admin", "nodaro-motion", "no-person"] as const,
     nodaroMotionPreciseStyleRoute: () => ["admin", "nodaro-motion", "precise-style-route"] as const,
+    nodaroMotionSettingsSets: () => ["admin", "nodaro-motion", "settings-sets"] as const,
     nodaroMotionPromptPreview: (engine: string, style: string, overrides: string) =>
       ["admin", "nodaro-motion", "prompt-parts", "preview", engine, style, overrides] as const,
     /**

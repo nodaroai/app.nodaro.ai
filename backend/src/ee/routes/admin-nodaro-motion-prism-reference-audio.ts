@@ -62,12 +62,35 @@ import { listEngineEnvironments } from "../lib/engine-environments.js"
 import { prismReferenceAudioRefusalOf } from "../lib/nodaro-motion-prism-reference-audio-modes.js"
 import { readNodaroMotionPrismReferenceAudio, saveNodaroMotionPrismReferenceAudio } from "../../lib/nodaro-motion-prism-reference-audio-store.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { defineNodaroMotionSettingsSection, sendRefusal } from "../lib/nodaro-motion-settings-section.js"
 import { audit } from "./admin-trends-lifecycle.js"
 
 /** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Nodaro Motion settings'). */
 export const NODARO_MOTION_PRISM_REFERENCE_AUDIO_AUDIT_TARGET = "00000000-0000-4000-8000-00000000a0f5"
 
 const putBody = z.strictObject({ prismReferenceAudio: castSwapPrismReferenceAudioSchema })
+
+/** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): saved as sent. */
+export const NODARO_MOTION_PRISM_REFERENCE_AUDIO_SECTION = defineNodaroMotionSettingsSection({
+  key: "prism-reference-audio",
+  path: "/v1/admin/nodaro-motion/prism-reference-audio",
+  label: "Prism reference audio",
+  body: putBody,
+  prepare: (body) => ({ value: { prismReferenceAudio: body.prismReferenceAudio } }),
+  // What this save changes, only: a value only some engines (or platforms) take needs every environment's (the
+  // row is shared); what it leaves as stored is never a reason to refuse it. The environments are read only then.
+  engineRefusal: async ({ prismReferenceAudio }, before) => {
+    const requirements = prismReferenceAudioRequirementsOf(
+      prismReferenceAudioChangedFrom(prismReferenceAudioChoiceOf(prismReferenceAudio), prismReferenceAudioChoiceOf(before?.prismReferenceAudio ?? null)),
+    )
+    if (requirements.length === 0) return null
+    return prismReferenceAudioRefusalOf(requirements, "setting", await listEngineEnvironments())
+  },
+  readLive: async () => {
+    const { prismReferenceAudio } = await readNodaroMotionPrismReferenceAudio()
+    return prismReferenceAudio === null ? null : { prismReferenceAudio }
+  },
+})
 
 async function view() {
   const { prismReferenceAudio, updatedAt } = await readNodaroMotionPrismReferenceAudio()
@@ -92,24 +115,19 @@ export function registerNodaroMotionPrismReferenceAudioRoutes(app: FastifyInstan
   })
 
   app.put("/v1/admin/nodaro-motion/prism-reference-audio", { preHandler: requireAdmin }, async (req, reply) => {
-    const parsed = putBody.safeParse(req.body)
+    const parsed = NODARO_MOTION_PRISM_REFERENCE_AUDIO_SECTION.body.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
+      const prepared = NODARO_MOTION_PRISM_REFERENCE_AUDIO_SECTION.prepare(parsed.data)
+      if ("refusal" in prepared) return sendRefusal(reply, prepared.refusal)
       const before = (await readNodaroMotionPrismReferenceAudio()).prismReferenceAudio
-      // What this save changes, only: a value only some engines (or platforms) take needs every environment's (the
-      // row is shared); what it leaves as stored is never a reason to refuse it. The environments are read only then.
-      const requirements = prismReferenceAudioRequirementsOf(
-        prismReferenceAudioChangedFrom(prismReferenceAudioChoiceOf(parsed.data.prismReferenceAudio), prismReferenceAudioChoiceOf(before)),
-      )
-      if (requirements.length > 0) {
-        const refusal = prismReferenceAudioRefusalOf(requirements, "setting", await listEngineEnvironments())
-        if (refusal) return reply.status(refusal.status).send({ error: refusal.error })
-      }
-      await saveNodaroMotionPrismReferenceAudio(parsed.data.prismReferenceAudio, req.userId!)
+      const refusal = await NODARO_MOTION_PRISM_REFERENCE_AUDIO_SECTION.engineRefusal!(prepared.value, before === null ? null : { prismReferenceAudio: before })
+      if (refusal) return sendRefusal(reply, refusal)
+      await saveNodaroMotionPrismReferenceAudio(prepared.value.prismReferenceAudio, req.userId!)
       await audit(req, "update_nodaro_motion_prism_reference_audio", "app_setting", NODARO_MOTION_PRISM_REFERENCE_AUDIO_AUDIT_TARGET, {
         key: NODARO_MOTION_PRISM_REFERENCE_AUDIO_KEY,
         before,
-        after: parsed.data.prismReferenceAudio,
+        after: prepared.value.prismReferenceAudio,
       })
       return { data: await view() }
     } catch (e) {

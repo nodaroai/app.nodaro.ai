@@ -23,7 +23,7 @@
  * THIS environment's engine declares it. Each save writes an `admin_actions`
  * row (`update_nodaro_motion_style_only`) with the setting before and after.
  */
-import type { FastifyInstance, FastifyReply } from "fastify"
+import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"
@@ -43,6 +43,7 @@ import { getPluginSupports } from "../../lib/private-plugins/supports-registry.j
 import { listEngineEnvironments } from "../lib/engine-environments.js"
 import { NO_ENGINE_RUNS_STYLE_ONLY_MESSAGE, PULSE_RUNS_NO_STYLE_ONLY_MESSAGE, noEnvironmentRunsStyleOnly } from "../lib/nodaro-motion-style-only-gate.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { defineNodaroMotionSettingsSection, sendRefusal, type NodaroMotionSaveRefusal } from "../lib/nodaro-motion-settings-section.js"
 import { audit } from "./admin-trends-lifecycle.js"
 import type { NodaroMotionAdminEngine } from "./admin-nodaro-motion.js"
 
@@ -74,12 +75,43 @@ async function view(): Promise<NodaroMotionStyleOnlyView> {
 }
 
 /** 400 naming each problem of the setting, in the steps route's shape (`issues`) and `formatZodError`'s message style. */
-function problemsRefused(reply: FastifyReply, problems: CastSwapStepsProblem[]) {
+function problemsRefusal(problems: CastSwapStepsProblem[]): NodaroMotionSaveRefusal {
   const first = problems[0]
   const head = first ? `${first.path}: ${first.message}` : "Invalid style-only setting"
   const message = problems.length > 1 ? `${head} (+${problems.length - 1} more)` : head
-  return reply.status(400).send({ error: { code: "validation_error", message, issues: problems } })
+  return { status: 400, error: { code: "validation_error", message, issues: problems } }
 }
+
+/** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): what differs from the defaults. */
+export const NODARO_MOTION_STYLE_ONLY_SECTION = defineNodaroMotionSettingsSection({
+  key: "style-only",
+  path: "/v1/admin/nodaro-motion/style-only",
+  label: "Style-only runs",
+  body: putBody,
+  prepare: (body) => {
+    const styleOnly = withoutDefaultStyleOnly(body[BODY_KEY])
+    // Art styles are Prism's: Pulse never gets a style-only run, so a change for it would never be read.
+    if (styleOnly["motion-pulse"]) {
+      return { refusal: { status: 400, error: { code: "style_only_engine", message: PULSE_RUNS_NO_STYLE_ONLY_MESSAGE } } }
+    }
+    // The store validates nothing: the save-time step rules (a known model that can see what it is shown) are applied here.
+    const problems = NODARO_MOTION_ENGINES.flatMap((engine) => {
+      const entry = styleOnly[engine]
+      return entry ? styleOnlyEntryProblems(`${BODY_KEY}.${engine}`, entry) : []
+    })
+    if (problems.length > 0) return { refusal: problemsRefusal(problems) }
+    return { value: { [BODY_KEY]: styleOnly } }
+  },
+  // A change is saved once one environment's engine runs style-only runs (an engine without it never reads the row).
+  engineRefusal: async (value) =>
+    anyStyleOnlyChange(value[BODY_KEY]) && noEnvironmentRunsStyleOnly(await listEngineEnvironments())
+      ? { status: 409, error: { code: "engine_unsupported", message: NO_ENGINE_RUNS_STYLE_ONLY_MESSAGE, envs: [] } }
+      : null,
+  readLive: async () => {
+    const { styleOnly } = await readNodaroMotionStyleOnly()
+    return styleOnly === null ? null : { [BODY_KEY]: styleOnly }
+  },
+})
 
 export function registerNodaroMotionStyleOnlyRoutes(app: FastifyInstance): void {
   app.get("/v1/admin/nodaro-motion/style-only", { preHandler: requireAdmin }, async (req, reply) => {
@@ -91,24 +123,14 @@ export function registerNodaroMotionStyleOnlyRoutes(app: FastifyInstance): void 
   })
 
   app.put("/v1/admin/nodaro-motion/style-only", { preHandler: requireAdmin }, async (req, reply) => {
-    const parsed = putBody.safeParse(req.body)
+    const parsed = NODARO_MOTION_STYLE_ONLY_SECTION.body.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
-      const styleOnly = withoutDefaultStyleOnly(parsed.data[BODY_KEY])
-      // Art styles are Prism's: Pulse never gets a style-only run, so a change for it would never be read.
-      if (styleOnly["motion-pulse"]) {
-        return reply.status(400).send({ error: { code: "style_only_engine", message: PULSE_RUNS_NO_STYLE_ONLY_MESSAGE } })
-      }
-      // The store validates nothing: the save-time step rules (a known model that can see what it is shown) are applied here.
-      const problems = NODARO_MOTION_ENGINES.flatMap((engine) => {
-        const entry = styleOnly[engine]
-        return entry ? styleOnlyEntryProblems(`${BODY_KEY}.${engine}`, entry) : []
-      })
-      if (problems.length > 0) return problemsRefused(reply, problems)
-      // A change is saved once one environment's engine runs style-only runs (an engine without it never reads the row).
-      if (anyStyleOnlyChange(styleOnly) && noEnvironmentRunsStyleOnly(await listEngineEnvironments())) {
-        return reply.status(409).send({ error: { code: "engine_unsupported", message: NO_ENGINE_RUNS_STYLE_ONLY_MESSAGE, envs: [] } })
-      }
+      const prepared = NODARO_MOTION_STYLE_ONLY_SECTION.prepare(parsed.data)
+      if ("refusal" in prepared) return sendRefusal(reply, prepared.refusal)
+      const styleOnly = prepared.value[BODY_KEY]
+      const refusal = await NODARO_MOTION_STYLE_ONLY_SECTION.engineRefusal!(prepared.value, null)
+      if (refusal) return sendRefusal(reply, refusal)
       const before = (await readNodaroMotionStyleOnly()).styleOnly
       await saveNodaroMotionStyleOnly(styleOnly, req.userId!)
       await audit(req, "update_nodaro_motion_style_only", "app_setting", NODARO_MOTION_STYLE_ONLY_AUDIT_TARGET, {

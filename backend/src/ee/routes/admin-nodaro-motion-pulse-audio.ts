@@ -24,12 +24,26 @@ import { sendInternalError } from "../../lib/http-errors.js"
 import { NODARO_MOTION_PULSE_AUDIO_KEY, castSwapPulseAudioSchema, engineTakesPulseAudio } from "../../lib/cast-swap-pulse-audio.js"
 import { readNodaroMotionPulseAudio, saveNodaroMotionPulseAudio } from "../../lib/nodaro-motion-pulse-audio-store.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { defineNodaroMotionSettingsSection, sendRefusal } from "../lib/nodaro-motion-settings-section.js"
 import { audit } from "./admin-trends-lifecycle.js"
 
 /** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Nodaro Motion settings'). */
 export const NODARO_MOTION_PULSE_AUDIO_AUDIT_TARGET = "00000000-0000-4000-8000-00000000a0f4"
 
 const putBody = z.strictObject({ pulseAudio: castSwapPulseAudioSchema })
+
+/** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): saved as sent. */
+export const NODARO_MOTION_PULSE_AUDIO_SECTION = defineNodaroMotionSettingsSection({
+  key: "pulse-audio",
+  path: "/v1/admin/nodaro-motion/pulse-audio",
+  label: "Pulse audio",
+  body: putBody,
+  prepare: (body) => ({ value: { pulseAudio: body.pulseAudio } }),
+  readLive: async () => {
+    const { pulseAudio } = await readNodaroMotionPulseAudio()
+    return pulseAudio === null ? null : { pulseAudio }
+  },
+})
 
 async function view() {
   const { pulseAudio, updatedAt } = await readNodaroMotionPulseAudio()
@@ -46,15 +60,18 @@ export function registerNodaroMotionPulseAudioRoutes(app: FastifyInstance): void
   })
 
   app.put("/v1/admin/nodaro-motion/pulse-audio", { preHandler: requireAdmin }, async (req, reply) => {
-    const parsed = putBody.safeParse(req.body)
+    const parsed = NODARO_MOTION_PULSE_AUDIO_SECTION.body.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
+      const prepared = NODARO_MOTION_PULSE_AUDIO_SECTION.prepare(parsed.data)
+      if ("refusal" in prepared) return sendRefusal(reply, prepared.refusal)
+      const { pulseAudio } = prepared.value
       const before = (await readNodaroMotionPulseAudio()).pulseAudio
-      await saveNodaroMotionPulseAudio(parsed.data.pulseAudio, req.userId!)
+      await saveNodaroMotionPulseAudio(pulseAudio, req.userId!)
       await audit(req, "update_nodaro_motion_pulse_audio", "app_setting", NODARO_MOTION_PULSE_AUDIO_AUDIT_TARGET, {
         key: NODARO_MOTION_PULSE_AUDIO_KEY,
         before,
-        after: parsed.data.pulseAudio,
+        after: pulseAudio,
       })
       return { data: await view() }
     } catch (e) {

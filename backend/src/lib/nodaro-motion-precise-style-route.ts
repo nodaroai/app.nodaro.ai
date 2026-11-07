@@ -7,7 +7,7 @@
  * running it.
  *
  * The `app_settings` row `nodaro_motion_precise_style_route`:
- * `{ routing?: "on" | "off"; bypassEmails?: string[]; routedDepthBlur?: number; describeColours?: boolean; faceMesh?: boolean;
+ * `{ routing?: "on" | "off"; bypassEmails?: string[]; photographicStyles?: "flex" | "precise"; routedDepthBlur?: number; describeColours?: boolean; faceMesh?: boolean;
  * faceMeshParts?: "full" | "features" | "mouth" | "contours"; faceMeshLayers?: VideoFaceMeshLayers; faceMeshWording?: "motion" | "shape" }`.
  *
  * - `routing`: "on" (the default; absent means it) runs such a run as Flex;
@@ -15,6 +15,17 @@
  * - `bypassEmails`: the accounts that skip the route and run real Precise with
  *   a style, for testing. Stored trimmed, lowercased and without repeats; the
  *   engine compares them against the account's email as the server reads it.
+ * - `photographicStyles` (2026-11-06): which path such a run takes when its
+ *   art style is photographic (the style catalog's medium "photo",
+ *   `@nodaro/prompts` `getStyleMedium`: Photorealistic, Cinematic, Noir, Early
+ *   Color Photo, Retro / Vintage, Cyberpunk, Steampunk, Glitch Art). "flex"
+ *   (the default; absent means it) routes it as every other style; "precise"
+ *   leaves it the Precise run routing "off" makes, for that run alone, so an
+ *   admin can compare both paths on the same sources (a person who wants more
+ *   style can still choose Flex). Stored only when "precise". The engine
+ *   decides it on the run's own style (`castSwap.preciseStyleRoutePhotographic`);
+ *   one without the flag, or a platform from before it (its tolerant read drops
+ *   the key), routes every style alike.
  * - `routedDepthBlur`: a routed run's OWN depth blur, in the Motion masking's
  *   `depthBlur` bounds (`CAST_SWAP_DEPTH_BLUR_BOUNDS`: 0–40 whole steps, the
  *   sigma at 1080 px tall). Absent or 0 is no blur. It applies only to a run the
@@ -80,6 +91,10 @@ export const NODARO_MOTION_PRECISE_STYLE_ROUTE_KEY = "nodaro_motion_precise_styl
 export const PRECISE_STYLE_ROUTINGS = ["on", "off"] as const
 export type PreciseStyleRouting = (typeof PRECISE_STYLE_ROUTINGS)[number]
 
+/** Which path a run with a photographic art style takes: routed as Flex ("flex", the default) or kept Precise. */
+export const PHOTOGRAPHIC_STYLE_PATHS = ["flex", "precise"] as const
+export type PhotographicStylePath = (typeof PHOTOGRAPHIC_STYLE_PATHS)[number]
+
 /** How many accounts the bypass list holds: it is a test list, not an audience. */
 export const PRECISE_STYLE_ROUTE_MAX_EMAILS = 200
 
@@ -87,6 +102,8 @@ export const PRECISE_STYLE_ROUTE_MAX_EMAILS = 200
 export interface NodaroMotionPreciseStyleRoute {
   routing?: PreciseStyleRouting
   bypassEmails?: string[]
+  /** Which path a run with a photographic art style takes; absent: "flex" (routed as every style). */
+  photographicStyles?: PhotographicStylePath
   /** A routed run's own depth blur (`CAST_SWAP_DEPTH_BLUR_BOUNDS`); absent or 0: none. */
   routedDepthBlur?: number
   /** A routed run's shot list is told the colours from the video; absent: on. */
@@ -119,6 +136,7 @@ export const nodaroMotionPreciseStyleRouteSchema = z
   .strictObject({
     routing: z.enum(PRECISE_STYLE_ROUTINGS).optional(),
     bypassEmails: z.array(emailSchema).max(PRECISE_STYLE_ROUTE_MAX_EMAILS).transform(withoutRepeats).optional(),
+    photographicStyles: z.enum(PHOTOGRAPHIC_STYLE_PATHS).optional(),
     routedDepthBlur: routedDepthBlurSchema.optional(),
     describeColours: z.boolean().optional(),
     faceMesh: z.boolean().optional(),
@@ -135,11 +153,12 @@ export const nodaroMotionPreciseStyleRouteSchema = z
     message: "The face mesh's layers draw nothing: turn on the wireframe, the eyes, the lips, the contours or the irises (bold only changes their lines).",
   })
 
-/** The setting as stored and sent: `routing` only when "off", the list only when it is not empty, the blur only above 0, the colours only when off, the mesh only when on. New objects. */
+/** The setting as stored and sent: `routing` only when "off", the list only when it is not empty, the photographic path only when "precise", the blur only above 0, the colours only when off, the mesh only when on. New objects. */
 export function withoutDefaultPreciseStyleRoute(setting: NodaroMotionPreciseStyleRoute | null | undefined): NodaroMotionPreciseStyleRoute {
   const out: NodaroMotionPreciseStyleRoute = {}
   if (setting?.routing === "off") out.routing = "off"
   if (setting?.bypassEmails && setting.bypassEmails.length > 0) out.bypassEmails = [...setting.bypassEmails]
+  if (setting?.photographicStyles === "precise") out.photographicStyles = "precise"
   if (typeof setting?.routedDepthBlur === "number" && setting.routedDepthBlur > 0) out.routedDepthBlur = setting.routedDepthBlur
   if (setting?.describeColours === false) out.describeColours = false
   if (setting?.faceMesh === true) out.faceMesh = true
@@ -167,9 +186,10 @@ export function preciseStyleRouteForPlugin(setting: NodaroMotionPreciseStyleRout
  */
 export function parseNodaroMotionPreciseStyleRoute(value: unknown, warn: (msg: string) => void = (msg) => console.warn(msg)): NodaroMotionPreciseStyleRoute | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null
-  const { routing, bypassEmails, routedDepthBlur, describeColours, faceMesh, faceMeshParts, faceMeshLayers, faceMeshWording } = value as {
+  const { routing, bypassEmails, photographicStyles, routedDepthBlur, describeColours, faceMesh, faceMeshParts, faceMeshLayers, faceMeshWording } = value as {
     routing?: unknown
     bypassEmails?: unknown
+    photographicStyles?: unknown
     routedDepthBlur?: unknown
     describeColours?: unknown
     faceMesh?: unknown
@@ -187,6 +207,8 @@ export function parseNodaroMotionPreciseStyleRoute(value: unknown, warn: (msg: s
   } else if (bypassEmails !== undefined && bypassEmails !== null) {
     warn(`[${NODARO_MOTION_PRECISE_STYLE_ROUTE_KEY}] the bypass list is not a list: nobody is bypassed`)
   }
+  if ((PHOTOGRAPHIC_STYLE_PATHS as readonly unknown[]).includes(photographicStyles)) out.photographicStyles = photographicStyles as PhotographicStylePath
+  else if (photographicStyles !== undefined && photographicStyles !== null) warn(`[${NODARO_MOTION_PRECISE_STYLE_ROUTE_KEY}] the photographic art-style path is not known: those runs are routed as Flex`)
   if (routedDepthBlur !== undefined && routedDepthBlur !== null) {
     const blur = routedDepthBlurSchema.safeParse(routedDepthBlur)
     if (blur.success) out.routedDepthBlur = blur.data

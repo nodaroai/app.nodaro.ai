@@ -1,5 +1,17 @@
 # @nodaro/shared
 
+## 3.55.0
+
+### Minor Changes
+
+- 2783ed0: Video Face Mesh: `VIDEO_FACE_MESH_PARTS` gains `"contours"`, which draws the face oval, both eyebrows, the nose and the eye and lip outlines, with no wireframe. `VideoFaceMeshParts`, `VideoFaceMeshRequest.parts` and `VideoFaceMeshResponse.parts` take it. `"full"` stays the default.
+- 03168b3: Video Face Mesh takes `layers` in place of `parts`: any set of the wireframe, the eye outlines, the lip outline, the contours (with them on, every line leaves out what a turned face hides), the irises and bold lines (`VIDEO_FACE_MESH_LAYERS`, `VideoFaceMeshLayers`, on `VideoFaceMeshRequest.layers` and `VideoFaceMeshOutput.layers`). Every `parts` value is one set of layers (`videoFaceMeshLayersOfParts`, `videoFaceMeshPartsOfLayers`) and draws exactly as before.
+
+### Patch Changes
+
+- 7bcf459: The usage report's doc comments (`UsageReportTotals`, `UsageVarianceRow`) now say that its absorbed app-fee total covers earlier runs only: an organization-approved app's creator fee is collected only up to the workspace budget's headroom, and the creator is credited only that, so new runs absorb nothing.
+- e2bd3c7: The art style catalog's Brazilian Portuguese and Korean translations now name every style. Brazilian Portuguese keeps the loanwords its speakers use ("Anime", "Noir", "Pixel art", "Pop art", "Concept art", "Cyberpunk", "Steampunk", "Vaporwave", "Low poly", "Ukiyo-e", "Glitch art") as explicit names, and gives "Animação em massinha", "Arte ASCII" and "Planta técnica" for claymation, ASCII art and blueprint. Korean adds "우키요에" and "아스키 아트".
+
 ## 3.54.1
 
 ### Patch Changes

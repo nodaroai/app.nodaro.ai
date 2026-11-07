@@ -905,10 +905,10 @@ describe("tk.settings.nodaroMotionPreciseStyleRoute", () => {
     expect(h.preciseStyleRoute).toEqual({ routing: "off", bypassEmails: ["a@example.com"] })
   })
 
-  it("answers a routed run's own depth blur when set", async () => {
+  it("answers the photographic path and a routed run's own depth blur when set", async () => {
     routingEngine()
-    h.preciseStyleRoute = { routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" }
-    expect(await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).toStrictEqual({ routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" })
+    h.preciseStyleRoute = { photographicStyles: "precise", routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" }
+    expect(await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).toStrictEqual({ photographicStyles: "precise", routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" })
   })
 })
 

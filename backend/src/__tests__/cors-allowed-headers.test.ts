@@ -111,6 +111,15 @@ describe("CORS preflight", () => {
     expect(allowed).toContain(POLL_KEY_HEADER)
   })
 
+  // Without a max age the browser re-asks after 5 s, and every SDK call from
+  // another origin is preflighted, so most calls from the client apps paid a
+  // second round trip.
+  it("lets the browser keep a preflight answer for two hours", async () => {
+    const res = await preflight(`authorization,${CLIENT_HEADER}`)
+    expect(res.statusCode).toBeLessThan(300)
+    expect(String(res.headers["access-control-max-age"])).toBe("7200")
+  })
+
   it("allows the workspace header on its own", async () => {
     const res = await preflight(WORKSPACE_HEADER)
     expect(String(res.headers["access-control-allow-headers"] ?? "").toLowerCase()).toContain(

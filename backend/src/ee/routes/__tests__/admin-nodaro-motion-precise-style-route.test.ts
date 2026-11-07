@@ -212,3 +212,18 @@ describe("PUT /v1/admin/nodaro-motion/precise-style-route: the routed mesh's par
     expect(h.upserts).toEqual([])
   })
 })
+
+describe("PUT /v1/admin/nodaro-motion/precise-style-route: the photographic styles' path", () => {
+  it("saves Precise whatever the engines (one without the flag routes every style, as today); Flex stores nothing", async () => {
+    expect((await put({ photographicStyles: "precise" })).json().data.preciseStyleRoute).toEqual({ photographicStyles: "precise" })
+    expect(h.upserts[0]!.value).toEqual({ photographicStyles: "precise" })
+    await put({ photographicStyles: "flex" })
+    expect(h.upserts[1]!.value).toEqual({})
+    expect(h.audits[1]!.payload).toEqual({ key: "nodaro_motion_precise_style_route", before: { photographicStyles: "precise" }, after: {} })
+  })
+
+  it("refuses a third path", async () => {
+    expect((await put({ photographicStyles: "motion" })).statusCode).toBe(400)
+    expect(h.upserts).toEqual([])
+  })
+})

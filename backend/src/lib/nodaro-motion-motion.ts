@@ -9,13 +9,19 @@
  * Motion's PUBLIC engine ids, each entry
  * `{ masking?: FaceMasking (source "faces" | "full-depth"), promptStyle?: "precise" | "flexible" }`.
  *
- * - `masking` left out: the engine's Precise masking (`nodaro_motion_masking`),
- *   on one video. Full depth is used only when an admin says so here
- *   (`source: "full-depth"`, mode "always", with its `scene`); keep people is a
- *   trend's alone, and marks are a trend's stored mask's alone.
+ * - `masking`: on an engine with the shot list (`castSwap.shotList`, every
+ *   Cast Swap engine from 0.425.0) a Flex run is always Full depth with a shot
+ *   list — this masking when it is a Full depth that is on (its scene made to
+ *   carry a shot list, `shotListFlexMasking`), else, left out or a masking
+ *   saved before that rule (Faces hidden, Off), the engine's default: Full
+ *   depth with its scene from a description. Such a stored value is still
+ *   accepted and kept as it is; the admin page shows it as ignored. On an
+ *   engine before the shot list, left out was the engine's Precise masking
+ *   (`nodaro_motion_masking`), on one video. Keep people is a trend's alone,
+ *   and marks are a trend's stored mask's alone.
  * - `promptStyle` left out: `"flexible"`.
- * - No row, or an engine left out: both defaults ("Same as Precise, Flexible
- *   prompt") — no clip-preparation charge of its own and no length limit.
+ * - No row, or an engine left out: Full depth with its scene from a
+ *   description, the Flexible prompt.
  *
  * A row keyed by the earlier ids (`"motion-pro"`, `"motion-lite"`) reads as
  * the new ones (`parseByEngine`). Who reads it: the Cast Swap engine, through
