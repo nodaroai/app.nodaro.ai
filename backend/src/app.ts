@@ -267,6 +267,7 @@ import { adminOnlineUsersRoutes } from "./ee/routes/admin-online-users.js"
 import { adminUserLookupRoutes } from "./ee/routes/admin-user-lookup.js"
 import { adminLanesRoutes } from "./ee/routes/admin-lanes.js"
 import { recordPresence } from "./ee/lib/presence-instance.js"
+import { recordUserSurface } from "./ee/lib/user-surfaces-instance.js"
 import { recordThisEngineEnvironment } from "./ee/lib/engine-environments.js"
 import { adminStuckPipelinesRoutes } from "./ee/routes/admin-stuck-pipelines.js"
 import { adminMessagesRoutes } from "./ee/routes/admin-messages.js"
@@ -606,6 +607,8 @@ export async function buildApp() {
   // the response, in the background, at most one note per user and surface per
   // 30 s. Only where an admin panel can show it.
   if (hasAdmin()) app.addHook("onResponse", async (req, reply) => recordPresence(req, reply.statusCode))
+  // The same note, kept for good: which surfaces each account has used (migration 607).
+  if (hasAdmin()) app.addHook("onResponse", async (req, reply) => recordUserSurface(req, reply.statusCode))
   // App-token scopes for routes a private plugin serves (it cannot see the grant).
   registerPluginRouteScopeHook(app)
   // A personal API key limited to some workflows reaches only the routes that

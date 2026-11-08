@@ -81,6 +81,16 @@ export interface PresenceRecorderOptions {
   /** How many (user, surface) pairs this process remembers writing — the least recent are forgotten first. */
   readonly maxTracked?: number
   readonly log?: (message: string) => void
+  /** Names the recorder in what it logs; the durable one (user-surfaces.ts) is told apart from this list's. */
+  readonly label?: string
+  /**
+   * After a failed write, how long before the same user and surface is tried
+   * again. 0 (the default) is the next request, right for a store whose
+   * failures pass (this list's Redis); a store whose failures last (a database
+   * behind a migration not yet applied) would otherwise be called once per
+   * request, and the log says so only once.
+   */
+  readonly retryAfterMs?: number
 }
 
 /**
@@ -88,11 +98,18 @@ export interface PresenceRecorderOptions {
  * once per `writeEveryMs`, in the background. Never throws and never waits:
  * a store that is down costs nothing but the list, and says so once. A
  * refused request (401, 403 — a blocked account) is not someone being here.
+ * The store only has to take a note: the durable one (user-surfaces.ts) is
+ * written through the same recorder, with an hour's throttle.
  */
-export function createPresenceRecorder(store: () => Promise<PresenceStore | null>, opts: PresenceRecorderOptions = {}) {
+export function createPresenceRecorder(
+  store: () => Promise<Pick<PresenceStore, "put"> | null>,
+  opts: PresenceRecorderOptions = {},
+) {
   const now = opts.now ?? Date.now
   const writeEveryMs = opts.writeEveryMs ?? PRESENCE_WRITE_EVERY_MS
   const maxTracked = opts.maxTracked ?? 10_000
+  const label = opts.label ?? "presence"
+  const retryAfterMs = opts.retryAfterMs ?? 0
   const log = opts.log ?? ((message: string) => console.warn(message))
   // Insertion order is recency: a write moves its pair to the end, so the first is the least recent.
   const lastWrite = new Map<string, number>()
@@ -116,9 +133,13 @@ export function createPresenceRecorder(store: () => Promise<PresenceStore | null
           failing = false
         },
         (error: unknown) => {
-          // Not written: the next request may try again rather than wait out the throttle.
-          if (lastWrite.get(key) === at) lastWrite.delete(key)
-          if (!failing) log(`[presence] could not note a signed-in visit: ${error instanceof Error ? error.message : String(error)}`)
+          // Not written: the next request may try again rather than wait out
+          // the throttle — or, where failures last, after `retryAfterMs`.
+          if (lastWrite.get(key) === at) {
+            if (retryAfterMs > 0) lastWrite.set(key, at - writeEveryMs + retryAfterMs)
+            else lastWrite.delete(key)
+          }
+          if (!failing) log(`[${label}] could not note a signed-in visit: ${error instanceof Error ? error.message : String(error)}`)
           failing = true
         },
       )
