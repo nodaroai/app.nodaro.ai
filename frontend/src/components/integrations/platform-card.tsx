@@ -18,6 +18,7 @@ import { BrandTile } from "./brand-tile"
 import { AccountRow } from "./account-row"
 import { describeProvider } from "./platform-meta"
 import { TelegramConnectDialog, FieldsConnectDialog } from "./connect-dialogs"
+import { classifySocialConnectMessage } from "./social-connect-message"
 
 /**
  * One connectable network. Everything about it comes from the registry entry,
@@ -76,17 +77,24 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
         clearInterval(interval)
         window.removeEventListener("message", handler)
       }
+      // Only the pop-up opened above, on this app's own origin (the one target
+      // the callback page posts to), can finish the connect. Any other message
+      // is ignored and changes nothing, so the real result still lands.
       const handler = (e: MessageEvent) => {
-        if (e.data?.type === "social-auth-success" && e.data.platform === provider.id) {
-          cleanup()
+        const verdict = classifySocialConnectMessage(e, {
+          popup,
+          expectedOrigin: window.location.origin,
+          platform: provider.id,
+        })
+        if (verdict.kind === "ignore") return
+        cleanup()
+        if (verdict.kind === "connected") {
           toast.success(t("integ.connectedTo", { name: provider.label }))
           onConnectionChange()
-          setConnecting(false)
-        } else if (e.data?.type === "social-auth-error") {
-          cleanup()
-          toast.error(e.data.message || t("integ.connectionFailed"))
-          setConnecting(false)
+        } else {
+          toast.error(verdict.message ?? t("integ.connectionFailed"))
         }
+        setConnecting(false)
       }
       window.addEventListener("message", handler)
 

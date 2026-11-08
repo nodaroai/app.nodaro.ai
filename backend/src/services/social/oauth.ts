@@ -11,9 +11,33 @@ import { saveOAuthState } from "./state-store.js"
  * Redis (`state-store.ts`), so any instance can serve the callback.
  */
 
+/** The base every callback URL hangs off: this deployment's public URL. */
+function callbackBase(): string {
+  return config.PUBLIC_URL || process.env.PUBLIC_URL || "http://localhost:8000"
+}
+
 export function getRedirectUri(providerId: string): string {
-  const base = config.PUBLIC_URL || process.env.PUBLIC_URL || "http://localhost:8000"
-  return `${base}/v1/social/callback/${providerId}`
+  return `${callbackBase()}/v1/social/callback/${providerId}`
+}
+
+/**
+ * The origin the callback pages are served on: the origin of every redirect
+ * URI above, so the two cannot disagree. Those pages hand their result to the
+ * window that opened the pop-up with `postMessage`, and this is the ONLY origin
+ * they name as its target. With the app and its API on one origin, that is the
+ * app's own; a page on any other origin receives nothing (it still sees the
+ * pop-up close, and re-reads its connections).
+ *
+ * Null when PUBLIC_URL is not an http(s) URL: `postMessage` would refuse such a
+ * target, so the pages then post nothing.
+ */
+export function getCallbackOrigin(): string | null {
+  try {
+    const url = new URL(callbackBase())
+    return url.protocol === "https:" || url.protocol === "http:" ? url.origin : null
+  } catch {
+    return null
+  }
 }
 
 function requireOAuth(provider: SocialProvider): OAuth2Config {

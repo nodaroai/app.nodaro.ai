@@ -20,6 +20,7 @@ import { hasCredits } from "@/lib/edition"
 import { spendableCredits } from "@/lib/spendable-credits"
 import { useBillingSurface } from "@/hooks/use-billing-surface"
 import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
+import { readLoginPopupSession } from "@/lib/popup-message"
 import {
   getInputNodes,
   getOutputNodes,
@@ -654,14 +655,14 @@ export function MobileAppShell({
       navigate(`/login?redirect=${encodeURIComponent(returnUrl)}`)
       return
     }
+    // Only the pop-up opened above, on this origin, may hand over a session.
     const handleAuthMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return
-      if (event.data?.type === "nodaro:authComplete" && event.data.access_token) {
-        window.removeEventListener("message", handleAuthMessage)
-        clearInterval(interval)
-        setAuthFromTokens(event.data.access_token, event.data.refresh_token)
-        onSuccess?.()
-      }
+      const session = readLoginPopupSession(event, popup, window.location.origin)
+      if (!session) return
+      window.removeEventListener("message", handleAuthMessage)
+      clearInterval(interval)
+      setAuthFromTokens(session.accessToken, session.refreshToken)
+      onSuccess?.()
     }
     window.addEventListener("message", handleAuthMessage)
     const interval = setInterval(() => {

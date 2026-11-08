@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, fireEvent, screen, waitFor, within } from "@testing-library/react"
+import { act, render, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { toast } from "sonner"
 import { PlatformCard } from "../platform-card"
 import { disconnectSocial, type SocialProviderInfo } from "@/lib/api"
@@ -275,6 +275,122 @@ describe("PlatformCard (reconnect surfacing)", () => {
     )
     fireEvent.click(screen.getByRole("button", { name: /Reconnect/i }))
     await waitFor(() => expect(getSocialAuthUrl).toHaveBeenCalledWith("facebook"))
+  })
+})
+
+/**
+ * The OAuth pop-up reports its result with a `message` event. Any window able
+ * to post to this page can send one: a frame embedded in it, or another tab
+ * holding a reference to it. Only the pop-up the card opened, on this page's
+ * own origin (the callback page posts to that origin and no other), may
+ * finish the connect. Anything else is ignored silently and changes nothing,
+ * so the real result is still taken when it arrives.
+ */
+describe("PlatformCard (the connect pop-up's result)", () => {
+  const meta = (): SocialProviderInfo =>
+    provider({
+      id: "facebook",
+      label: "Facebook",
+      connectKind: "oauth2",
+      customFields: undefined,
+      capabilities: { schedule: true, comment: false, media: ["image", "video"], refresh: "reconnect" },
+    })
+
+  /** What the stubbed `window.open` returned: the real pop-up. A fresh one per test. */
+  let popup: { closed: boolean }
+
+  beforeEach(() => {
+    vi.mocked(toast.success).mockClear()
+    vi.mocked(toast.error).mockClear()
+    popup = { closed: false }
+    vi.stubGlobal("open", vi.fn(() => popup))
+  })
+
+  /** Deliver a `message` event the way the browser does: `source` is the window that sent it. */
+  function deliver(data: unknown, { origin = window.location.origin, source = popup as unknown } = {}) {
+    const event = new MessageEvent("message", { data, origin })
+    // jsdom's constructor only takes a real window as `source`.
+    Object.defineProperty(event, "source", { value: source })
+    act(() => {
+      window.dispatchEvent(event)
+    })
+  }
+
+  async function startConnect() {
+    const onConnectionChange = vi.fn()
+    render(<PlatformCard provider={meta()} connections={[]} onConnectionChange={onConnectionChange} />)
+    fireEvent.click(screen.getByRole("button", { name: /^Connect$/ }))
+    await waitFor(() => expect(window.open).toHaveBeenCalledTimes(1))
+    return onConnectionChange
+  }
+
+  const connected = { type: "social-auth-success", platform: "facebook" }
+
+  it("ignores a forged result from another origin, and still takes the pop-up's own", async () => {
+    const onConnectionChange = await startConnect()
+
+    deliver(connected, { origin: "https://attacker.example" })
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(onConnectionChange).not.toHaveBeenCalled()
+
+    deliver(connected)
+    expect(toast.success).toHaveBeenCalledTimes(1)
+    expect(toast.success).toHaveBeenCalledWith("Connected to Facebook!")
+    expect(onConnectionChange).toHaveBeenCalledTimes(1)
+  })
+
+  it("ignores a result from this origin that another window sent", async () => {
+    const onConnectionChange = await startConnect()
+    const anotherWindow = { closed: false }
+
+    deliver(connected, { source: anotherWindow })
+    deliver({ type: "social-auth-error", message: "Your session expired. Sign in again." }, { source: anotherWindow })
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(onConnectionChange).not.toHaveBeenCalled()
+
+    deliver(connected)
+    expect(toast.success).toHaveBeenCalledTimes(1)
+    expect(onConnectionChange).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not let a forged error show its text or end the wait", async () => {
+    const onConnectionChange = await startConnect()
+
+    deliver({ type: "social-auth-error", message: "Your session expired. Sign in again." }, { origin: "https://attacker.example" })
+    expect(toast.error).not.toHaveBeenCalled()
+
+    // The listener is still there: the real result still lands.
+    deliver(connected)
+    expect(toast.success).toHaveBeenCalledTimes(1)
+    expect(onConnectionChange).toHaveBeenCalledTimes(1)
+  })
+
+  it("shows the pop-up's own error, or the generic one when it carries no text", async () => {
+    await startConnect()
+    deliver({ type: "social-auth-error", message: "No Facebook pages found." })
+    expect(toast.error).toHaveBeenCalledTimes(1)
+    expect(toast.error).toHaveBeenCalledWith("No Facebook pages found.")
+  })
+
+  it("falls back to the generic error when the pop-up's error carries no text", async () => {
+    await startConnect()
+    deliver({ type: "social-auth-error" })
+    expect(toast.error).toHaveBeenCalledTimes(1)
+    expect(toast.error).toHaveBeenCalledWith("Connection failed")
+  })
+
+  it("takes only the expected shape, even from the pop-up", async () => {
+    const onConnectionChange = await startConnect()
+
+    deliver({ type: "social-auth-success", platform: "instagram" }) // another network's result
+    deliver({ type: "social-auth-success" })
+    deliver({ type: "something-else", platform: "facebook" })
+    deliver("social-auth-success")
+    deliver(null)
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(onConnectionChange).not.toHaveBeenCalled()
   })
 })
 

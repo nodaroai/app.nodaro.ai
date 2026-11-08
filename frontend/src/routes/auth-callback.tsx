@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { createClient } from "@/lib/supabase"
 import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
 import { isBlockedCallback } from "@/lib/sign-in-error"
+import { LOGIN_POPUP_MESSAGE_TYPE } from "@/lib/popup-message"
 
 export default function AuthCallback() {
   const navigate = useNavigate()
@@ -38,7 +39,7 @@ export default function AuthCallback() {
         supabase.auth.getSession().then(({ data: { session } }) => {
           if (session && window.opener) {
             window.opener.postMessage({
-              type: "nodaro:authComplete",
+              type: LOGIN_POPUP_MESSAGE_TYPE,
               access_token: session.access_token,
               refresh_token: session.refresh_token,
             }, window.location.origin)
