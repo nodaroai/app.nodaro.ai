@@ -145,8 +145,11 @@ build on one.
 
 ## Scope notes
 
-- **The canvas editor's preset menu** reads the bundled catalog in the browser,
-  as before, and does not list a deployment's pack. Clients that read
-  `GET /v1/node-presets/factory` do.
+- **The canvas editor's preset menu** reads `GET /v1/node-presets/factory`
+  like any other client, so it lists a deployment's pack after the bundled
+  presets, or alone. Until that answer arrives, and whenever it cannot be
+  read, the menu shows the bundled presets the profile allows (none with
+  `factoryPresets: false`), so it opens at once and works offline. Without a
+  pack the served catalog is the bundled one, and the menu is unchanged.
 - **Localization.** A pack preset's name and description are served as written.
   The bundled presets' translations do not cover them.

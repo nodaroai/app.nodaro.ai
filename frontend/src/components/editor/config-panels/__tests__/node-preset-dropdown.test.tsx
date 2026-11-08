@@ -30,6 +30,9 @@ vi.mock("@/hooks/queries/use-node-presets-queries", () => ({
     data: [{ id: "u1", nodeType: "generate-image", name: "My Look", data: { prompt: "z" }, tags: [], sortOrder: 0, createdAt: "", updatedAt: "" }],
     isLoading: false,
   }),
+  // The served factory catalog not landed yet: the menu shows the bundled one
+  // (node-preset-dropdown-served.test.tsx covers the served catalog).
+  useFactoryPresets: () => ({ data: undefined }),
   useNodePresetGroups: () => ({ data: [], isLoading: false }),
   useNodePresetMutations: () => ({
     create: { mutateAsync: createMut, isPending: false },

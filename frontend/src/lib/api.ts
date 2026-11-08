@@ -1894,6 +1894,54 @@ export async function listNodePresets(nodeType?: string): Promise<NodePreset[]> 
   return res.data
 }
 
+/** One preset of the deployment's factory catalog, as the preset menu uses it. */
+export interface FactoryNodePreset {
+  readonly id: string
+  readonly name: string
+  readonly description?: string
+  readonly group?: string
+  readonly groupKind?: "folder" | "section"
+  readonly data: Record<string, unknown>
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+/**
+ * The entries of `GET /v1/node-presets/factory` the menu can show, in the
+ * order served: an entry without an id, a name or an object `data` is left
+ * out, and only the fields the menu reads are kept.
+ */
+export function toFactoryNodePresets(body: unknown): FactoryNodePreset[] {
+  const entries = isRecord(body) && Array.isArray(body.data) ? body.data : []
+  return entries.flatMap((entry): FactoryNodePreset[] => {
+    if (!isRecord(entry) || typeof entry.id !== "string" || typeof entry.name !== "string" || !isRecord(entry.data)) return []
+    const groupKind = entry.groupKind === "folder" || entry.groupKind === "section" ? entry.groupKind : undefined
+    return [{
+      id: entry.id,
+      name: entry.name,
+      ...(typeof entry.description === "string" ? { description: entry.description } : {}),
+      ...(typeof entry.group === "string" ? { group: entry.group } : {}),
+      ...(groupKind ? { groupKind } : {}),
+      data: entry.data,
+    }]
+  })
+}
+
+/**
+ * The deployment's factory catalog for `nodeType` (`GET /v1/node-presets/factory`):
+ * the bundled presets, unless the deployment switched them off, then any
+ * presets the deployment registered of its own.
+ */
+export async function listFactoryNodePresets(nodeType: string): Promise<FactoryNodePreset[]> {
+  const res = await apiJson<unknown>(`/v1/node-presets/factory?nodeType=${encodeURIComponent(nodeType)}`, {
+    method: "GET",
+    label: "apiErr.loadPresets",
+  })
+  return toFactoryNodePresets(res)
+}
+
 // ---- Node preset favorites (per-user; powers the dropdown's Favorites band) ----
 // `presetId` is a factory id ("generate-image/character-board") OR a user-preset uuid.
 

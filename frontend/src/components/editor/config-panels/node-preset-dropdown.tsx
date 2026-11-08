@@ -21,12 +21,13 @@ import { useAuth } from "@/hooks/use-auth"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import {
   useNodePresets,
+  useFactoryPresets,
   useNodePresetGroups,
   useNodePresetMutations,
   useNodePresetFavorites,
   useNodePresetFavoriteMutations,
 } from "@/hooks/queries/use-node-presets-queries"
-import { NodePresetNameTakenError, type NodePreset, type NodePresetGroup } from "@/lib/api"
+import { NodePresetNameTakenError, type FactoryNodePreset, type NodePreset, type NodePresetGroup } from "@/lib/api"
 import { buildPresetTree, factoryPresetIdMatchesQuery, presetMatchesQuery, buildResetToDefaultData } from "@/lib/preset-tree"
 import { NodePresetManageDialog } from "./node-preset-manage-dialog"
 import { NODE_DEF_MAP } from "@/types/nodes"
@@ -204,15 +205,13 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
   const [saving, setSaving] = useState(false)
   const [newName, setNewName] = useState("")
   const [manageOpen, setManageOpen] = useState(false)
-  // Factory folders start collapsed (there can be ~10 of them) so the menu opens
-  // as a scannable list of category headers; user folders default expanded.
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => {
-    const init = new Set<string>()
-    for (const g of groupFactoryPresets((surfaceFactoryPresets() ? getFactoryPresets(nodeType) : []))) {
-      if (g.group !== null && g.groupKind === "folder") init.add(`factory:${g.key}`)
-    }
-    return init
-  })
+  // The folders opened or closed on this menu, each flipped from where it
+  // starts: factory folders start collapsed (there can be ~10 of them) so the
+  // menu opens as a scannable list of category headers, whenever they appear
+  // (the served catalog lands after the menu may have opened); user folders
+  // start expanded.
+  const [flipped, setFlipped] = useState<ReadonlySet<string>>(() => new Set())
+  const isFolderCollapsed = (key: string, startsCollapsed: boolean) => flipped.has(key) !== startsCollapsed
   const [confirm, setConfirm] = useState<
     { kind: "select"; preset: MergedPreset } | { kind: "override" } | { kind: "reset" } | null
   >(null)
@@ -222,9 +221,14 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
   const { data: groups = [] } = useNodePresetGroups(nodeType, user?.id)
   const { create, update, remove, importMany } = useNodePresetMutations()
 
+  // The deployment's factory catalog as the server serves it: the bundled
+  // presets (unless it switched them off), then its own preset packs. Until
+  // that answer lands, and whenever it cannot be read (offline), the bundled
+  // presets the deployment allows — what the menu always showed.
+  const { data: served } = useFactoryPresets(nodeType)
   const factory = useMemo<MergedPreset[]>(
     () =>
-      (surfaceFactoryPresets() ? getFactoryPresets(nodeType ?? "") : []).map((p: FactoryPreset) => ({
+      (served ?? (surfaceFactoryPresets() ? getFactoryPresets(nodeType ?? "") : [])).map((p: FactoryPreset | FactoryNodePreset) => ({
         source: "factory" as const,
         id: p.id,
         name: p.name,
@@ -233,7 +237,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
         groupKind: p.groupKind,
         data: p.data as Record<string, unknown>,
       })),
-    [nodeType],
+    [served, nodeType],
   )
   // Factory presets bucketed into folders/sections for the browse (non-search) view.
   const factoryGroups = useMemo(() => groupFactoryPresets(factory), [factory])
@@ -321,7 +325,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
   }, [open, confirm, manageOpen, onOpenChange])
 
   const toggleCollapsed = (id: string) => {
-    setCollapsed((prev) => {
+    setFlipped((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -547,7 +551,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                       }
                       const g = node.group
                       const isFolder = g.kind === "folder"
-                      const isCollapsed = isFolder && collapsed.has(g.id)
+                      const isCollapsed = isFolder && isFolderCollapsed(g.id, false)
                       const rows = node.presets.map((p) => {
                         const mp = toMerged(p)
                         return (
@@ -607,7 +611,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                       const isRoot = g.group === null
                       const folderKey = `factory:${g.key}`
                       const isFolder = !isRoot && g.groupKind === "folder"
-                      const isCollapsed = isFolder && collapsed.has(folderKey)
+                      const isCollapsed = isFolder && isFolderCollapsed(folderKey, true)
                       return (
                         <div key={folderKey}>
                           {/* Root (ungrouped) presets render directly under the Factory header. */}

@@ -1215,9 +1215,10 @@ deployments do not show unverified bundled voice placeholders.
 A deployment can also ship presets of its own, registered at its composition
 root as preset packs. The API's factory catalog (`GET /v1/node-presets/factory`
 and the MCP preset tools) serves them after the bundled presets, or alone when
-`factoryPresets` is `false`. The canvas editor's preset menu does not list
-them: it reads the bundled presets in the browser. Each pack preset is checked
-at boot: it may name only
+`factoryPresets` is `false`. The canvas editor's preset menu reads that
+catalog too, so it lists them; until the catalog arrives, or when it cannot be
+read, the menu shows the bundled presets the profile allows. Each pack preset
+is checked at boot: it may name only
 models this profile's `models` lists offer, only picker IDs the curated
 catalogs offer, and an https example picture or none. A deployment whose packs
 fail the check refuses to start. Design note:
