@@ -53,7 +53,18 @@ export interface RuntimeSurfaceBrand {
   readonly platformLinks?: boolean
   /** A same-site path (`/brand/logo.svg`) or an https URL. */
   readonly logo?: string
+  /** The page's icons, each a path on this site (`/brand/favicon.svg`): see `isSameSitePath`. */
+  readonly favicon?: readonly string[]
 }
+
+/**
+ * Overrides of a product's UI strings, `product → locale id → message key →
+ * text`. Each product reads only its own namespace (`UI_STRING_PRODUCTS`). The
+ * platform checks every entry against that product's dictionary before it
+ * reaches a page: the key exists, the locale is one the deployment offers, the
+ * text is plain and keeps the base string's `{placeholders}`.
+ */
+export type RuntimeSurfaceStrings = Readonly<Record<string, Readonly<Record<string, Readonly<Record<string, string>>>>>>
 
 /** The display side of billing. The server-only billing keys never reach a page. */
 export interface RuntimeSurfaceBilling {
@@ -90,6 +101,8 @@ export interface RuntimeSurface {
   readonly imports: { readonly links: boolean }
   readonly header: SurfaceHeaderMode
   readonly worlds: SurfaceWorlds
+  /** The deployment's own wording for UI strings; `{}` = none. Read with `surfaceStringOverride`. */
+  readonly strings: RuntimeSurfaceStrings
   /** Carried as given; no reader acts on it. */
   readonly catalogPolicy?: unknown
 }
@@ -154,6 +167,79 @@ export function isBrandLogoRef(value: unknown): value is string {
   } catch {
     return false
   }
+}
+
+// Quotes, angle brackets and backticks would end an HTML attribute that holds
+// the path, and none belongs in a path anyway.
+const HTML_SPECIAL_CHARS = /["'<>`]/
+
+/**
+ * A path on the page's own site (`/brand/favicon.svg`, `/icon.png?v=2`): what
+ * `brand.favicon` holds, written into the page's `<head>` as a link. Stricter
+ * than `isBrandLogoRef`: no URL to another site at all, and no character that
+ * could end an HTML attribute.
+ */
+export function isSameSitePath(value: unknown): value is string {
+  return typeof value === "string" && value.startsWith("/") && !HTML_SPECIAL_CHARS.test(value) && isBrandLogoRef(value)
+}
+
+/**
+ * The products whose UI strings a deployment may override, each keyed in
+ * `surface.strings` by its id and checked against that product's own
+ * dictionary. `flow`: the platform's workflow editor. A product adopts the
+ * overrides by adding its id here and giving the platform its key manifest.
+ */
+export const UI_STRING_PRODUCTS = Object.freeze(["flow"] as const)
+export type UiStringProduct = (typeof UI_STRING_PRODUCTS)[number]
+
+/**
+ * What a product's build emits beside its output so the platform can check a
+ * deployment's overrides at boot: every key of its base (English) dictionary
+ * with the placeholder names that key's text uses, and the locales the product
+ * offers. Keys and names only, never the text.
+ */
+export interface UiStringManifest {
+  /** The `surface.strings` namespace the dictionary answers to (`UI_STRING_PRODUCTS`). */
+  readonly product: string
+  /** The locales overrides may target when the deployment sets no `locale.offered`. */
+  readonly locales: readonly string[]
+  /** Every key a deployment may override → the placeholder names its base text uses, sorted. */
+  readonly keys: Readonly<Record<string, readonly string[]>>
+}
+
+/** The manifest's file name, at the root of the product's build output. */
+export function uiStringManifestFile(product: string): string {
+  return `ui-strings-manifest.${product}.json`
+}
+
+// `{name}`: anything else in braces (`{{now}}`, `{image:1}`, `{ variables`) is
+// text, the same way the dictionaries' interpolation reads it.
+const UI_STRING_PLACEHOLDER = /\{(\w+)\}/g
+
+/** The placeholder names `text` uses, each once, sorted. */
+export function uiStringPlaceholders(text: string): string[] {
+  return [...new Set(Array.from(text.matchAll(UI_STRING_PLACEHOLDER), (m) => m[1]))].sort()
+}
+
+/**
+ * The manifest of a base dictionary. A key whose base text is blank is left
+ * out: it is grammar data (a word's grammatical gender, the gap between two
+ * joined fragments), not wording, and overriding it would only break the
+ * sentences built from it.
+ */
+export function buildUiStringManifest(product: string, dict: Readonly<Record<string, string>>, locales: readonly string[]): UiStringManifest {
+  const keys = Object.entries(dict)
+    .filter(([, text]) => text.trim() !== "")
+    .map(([key, text]): [string, string[]] => [key, uiStringPlaceholders(text)])
+  return { product, locales: [...locales], keys: Object.fromEntries(keys) }
+}
+
+/** The deployment's text for `key` in `locale` of `product`, or undefined. */
+export function surfaceStringOverride(strings: RuntimeSurfaceStrings | undefined, product: string, locale: string, key: string): string | undefined {
+  const byLocale = strings && Object.hasOwn(strings, product) ? strings[product] : undefined
+  const texts = byLocale && Object.hasOwn(byLocale, locale) ? byLocale[locale] : undefined
+  const text = texts && Object.hasOwn(texts, key) ? texts[key] : undefined
+  return typeof text === "string" ? text : undefined
 }
 
 /**
@@ -223,6 +309,11 @@ function siblingApps(value: unknown): RuntimeSurfaceSibling[] {
   })
 }
 
+function faviconsOf(value: unknown): string[] | undefined {
+  const paths = (Array.isArray(value) ? value : [value]).filter(isSameSitePath)
+  return paths.length ? [...new Set(paths)] : undefined
+}
+
 function brandOf(value: unknown): RuntimeSurfaceBrand {
   const b = record(value)
   return {
@@ -231,7 +322,26 @@ function brandOf(value: unknown): RuntimeSurfaceBrand {
     ...optional("wordmark", asString(b.wordmark)),
     ...optional("platformLinks", asBoolean(b.platformLinks)),
     ...optional("logo", isBrandLogoRef(b.logo) ? b.logo : undefined),
+    ...optional("favicon", faviconsOf(b.favicon)),
   }
+}
+
+/**
+ * `surface.strings`, keeping only text: a product, locale or key whose value
+ * has the wrong type is left out, and an emptied level with it. Built from
+ * entries, so a `"__proto__"` key stays an ordinary key. Never throws.
+ */
+export function parseRuntimeStrings(raw: unknown): RuntimeSurfaceStrings {
+  const products: [string, Record<string, Record<string, string>>][] = []
+  for (const [product, byLocale] of Object.entries(record(raw))) {
+    const locales: [string, Record<string, string>][] = []
+    for (const [locale, texts] of Object.entries(record(byLocale))) {
+      const kept = Object.entries(record(texts)).filter((e): e is [string, string] => typeof e[1] === "string")
+      if (kept.length) locales.push([locale, Object.fromEntries(kept)])
+    }
+    if (locales.length) products.push([product, Object.fromEntries(locales)])
+  }
+  return Object.fromEntries(products)
 }
 
 function localeOf(value: unknown): RuntimeSurface["locale"] {
@@ -307,6 +417,7 @@ export function parseRuntimeSurface(raw: unknown): RuntimeSurface {
     imports: { links: linksAllowed(s.imports) },
     header: headerModeOf(s.header),
     worlds: worldsOf(s.worlds),
+    strings: parseRuntimeStrings(s.strings),
     ...optional("catalogPolicy", s.catalogPolicy),
   }
 }

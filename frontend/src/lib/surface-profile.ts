@@ -1,4 +1,4 @@
-import type { SurfaceCatalogImages, SurfaceHeaderMode, WorldId } from "@nodaro/shared/runtime-config"
+import type { RuntimeSurfaceStrings, SurfaceCatalogImages, SurfaceHeaderMode, WorldId } from "@nodaro/shared/runtime-config"
 
 /**
  * Frontend mirror of backend/src/lib/surface-profile.ts. Two copies + a drift
@@ -62,7 +62,8 @@ export interface SurfaceProfile {
   /** `requireSignIn` absent: derived (true exactly when sign-in is SSO-only). */
   auth: { methods: AuthMethod[]; ssoLabel?: string; requireSignIn?: boolean }
   siblings: { apps: SurfaceSibling[] }
-  brand: { productName: string; description?: string; wordmark?: string; platformLinks?: boolean; logo?: string }
+  /** `favicon`: the page's icons; the container writes them into index.html at boot, nothing here reads them. */
+  brand: { productName: string; description?: string; wordmark?: string; platformLinks?: boolean; logo?: string; favicon?: string[] }
   locale: { default?: string; picker: boolean; offered?: string[] }
   outputs: { allowPublic: boolean }
   voice: { allowedGenders: string[] } // B4c — [] = all genders allowed (narrowing only)
@@ -73,6 +74,8 @@ export interface SurfaceProfile {
   worlds?: SurfaceWorlds
   imports?: { links: boolean }
   header?: SurfaceHeaderMode
+  /** UI-string overrides, validated by the backend; `lib/i18n` lays them over the dictionaries (see `localeText`). */
+  strings?: RuntimeSurfaceStrings
 }
 
 export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
@@ -117,6 +120,7 @@ export function runtimeSurfaceProfile(): SurfaceProfile {
     ...(o.worlds ? { worlds: o.worlds } : {}),
     ...(o.imports ? { imports: o.imports } : {}),
     ...(o.header ? { header: o.header } : {}),
+    ...(o.strings ? { strings: o.strings } : {}),
   }
 }
 

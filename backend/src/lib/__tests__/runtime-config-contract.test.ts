@@ -1,13 +1,20 @@
-// @test-watches tools/build-runtime-config.mjs
-import { describe, it, expect, afterEach } from "vitest"
+// @test-watches tools/build-runtime-config.mjs frontend/src/lib/i18n/en.{ts,js} frontend/src/lib/i18n/platform-languages.{ts,js}
+import { describe, it, expect, afterEach, vi } from "vitest"
 import { readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { RUNTIME_CONFIG_KEYS, parseRuntimeConfig } from "@nodaro/shared/runtime-config"
-// @ts-expect-error — untyped .mjs tooling module (the container's /config.js writer)
-import { buildRuntimeConfig } from "../../../../tools/build-runtime-config.mjs"
+import { RUNTIME_CONFIG_KEYS, RUNTIME_SURFACE_DEFAULT, buildUiStringManifest, isSameSitePath, parseRuntimeConfig } from "@nodaro/shared/runtime-config"
+import { en } from "../../../../frontend/src/lib/i18n/en.js"
+import { PLATFORM_LANGUAGES } from "../../../../frontend/src/lib/i18n/platform-languages.js"
+import {
+  PLATFORM_PRODUCT_NAME,
+  brandHeadRequest,
+  buildRuntimeConfig,
+  isSameSitePath as writerIsSameSitePath,
+  // @ts-expect-error — untyped .mjs tooling module (the container's /config.js writer)
+} from "../../../../tools/build-runtime-config.mjs"
 import { config } from "../config.js"
-import { __resetSurfaceProfileCacheForTests } from "../surface-profile.js"
+import { SURFACE_PROFILE_DEFAULT, __resetSurfaceProfileCacheForTests } from "../surface-profile.js"
 import { renderMediaOriginForRuntimeConfig, renderSurfaceProfileForRuntimeConfig } from "../surface-profile-runtime-config.js"
 
 /**
@@ -52,7 +59,8 @@ describe("the backend's surface projection reaches a reader whole", () => {
     config.EDITION = "cloud"
     process.env.NODARO_SURFACE_PROFILE = JSON.stringify(profile)
     __resetSurfaceProfileCacheForTests()
-    const rendered = JSON.parse(renderSurfaceProfileForRuntimeConfig()) as Record<string, unknown>
+    const manifest = buildUiStringManifest("flow", en, PLATFORM_LANGUAGES)
+    const rendered = JSON.parse(renderSurfaceProfileForRuntimeConfig(() => ({ manifest }))) as Record<string, unknown>
     // The writer passes the printed profile through verbatim (build-runtime-config.test.mjs).
     const read = parseRuntimeConfig(buildRuntimeConfig({ RUNTIME_SURFACE_PROFILE: JSON.stringify(rendered) })).surface
     return { rendered, read }
@@ -67,7 +75,7 @@ describe("the backend's surface projection reaches a reader whole", () => {
       models: { deny: ["veo3"], allow: [] },
       auth: { methods: ["sso"], ssoLabel: "Continue", requireSignIn: true },
       siblings: { apps: [{ label: "Chat", url: "https://chat.example", urlByHost: { "studio.b.example": "https://chat.b.example" } }] },
-      brand: { productName: "Acme", description: "Acme studio", wordmark: "Studio", platformLinks: false, logo: "/brand/logo.svg" },
+      brand: { productName: "Acme", description: "Acme studio", wordmark: "Studio", platformLinks: false, logo: "/brand/logo.svg", favicon: ["/brand/favicon.svg", "/brand/favicon.png"] },
       locale: { default: "he", picker: true, offered: ["he", "en"] },
       outputs: { allowPublic: false },
       voice: { allowedGenders: ["male"] },
@@ -87,7 +95,9 @@ describe("the backend's surface projection reaches a reader whole", () => {
       worlds: { allow: ["image", "video", "app"], home: "app", order: ["app", "image"] },
       imports: { links: false },
       header: "white-label",
+      strings: { flow: { he: { "credits.allowanceExceeded": "נגמרה לכם המכסה." }, en: { "credits.allowanceExceeded": "Your allowance is used up." } } },
     })
+    expect(rendered.strings).toEqual({ flow: { he: { "credits.allowanceExceeded": "נגמרה לכם המכסה." }, en: { "credits.allowanceExceeded": "Your allowance is used up." } } })
     expect(read).toEqual(rendered)
     // The server-only billing keys were stripped before either side saw them.
     expect(JSON.stringify(read)).not.toMatch(/payerAccount|defaultAllowanceUnits|allowances|billing@acme/)
@@ -107,6 +117,7 @@ describe("the backend's surface projection reaches a reader whole", () => {
     expect(rendered).not.toHaveProperty("worlds")
     expect(rendered).not.toHaveProperty("imports")
     expect(rendered).not.toHaveProperty("header")
+    expect(rendered).not.toHaveProperty("strings")
     expect(read).toEqual({
       ...rendered,
       auth: { methods: ["sso"], ssoLabel: "Continue", requireSignIn: true },
@@ -114,6 +125,59 @@ describe("the backend's surface projection reaches a reader whole", () => {
       imports: { links: true },
       header: "default",
       worlds: {},
+      strings: {},
     })
+  })
+})
+
+/**
+ * The writer also puts the brand into index.html's head at boot. It imports no
+ * package (the image copies it alone), so two of its rules are restated there;
+ * these hold them to the originals.
+ */
+describe("the brand head the writer derives from what the backend renders", () => {
+  const REAL_EDITION = config.EDITION
+  const REAL_ENV = process.env.NODARO_SURFACE_PROFILE
+  afterEach(() => {
+    config.EDITION = REAL_EDITION
+    if (REAL_ENV === undefined) delete process.env.NODARO_SURFACE_PROFILE
+    else process.env.NODARO_SURFACE_PROFILE = REAL_ENV
+    __resetSurfaceProfileCacheForTests()
+  })
+
+  function renderedBrand(profile: unknown): unknown {
+    config.EDITION = "business"
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify(profile)
+    __resetSurfaceProfileCacheForTests()
+    const cfg = buildRuntimeConfig({ RUNTIME_SURFACE_PROFILE: renderSurfaceProfileForRuntimeConfig() }) as { surface?: { brand?: unknown } }
+    return cfg.surface?.brand
+  }
+
+  it("the name it leaves alone is the platform's default product name", () => {
+    expect(PLATFORM_PRODUCT_NAME).toBe(RUNTIME_SURFACE_DEFAULT.brand.productName)
+    expect(PLATFORM_PRODUCT_NAME).toBe(SURFACE_PROFILE_DEFAULT.brand.productName)
+  })
+
+  it("its isSameSitePath is the contract's", () => {
+    const cases: unknown[] = [
+      "/brand/favicon.svg", "/icon.png?v=2", "/a/b/c.ico#x", "/", "/%2F%2Fevil", "/brand/../favicon.svg",
+      "//evil.example/x.svg", "/\\evil.example", "https://x.example/a.svg", "http://x.example/a.svg", "a.svg", "./a.svg",
+      '/a".svg', "/a'.svg", "/a<b>.svg", "/a`b`.svg", "/a b.svg", "/a\tb.svg", "/a\u0000b.svg", "/a\u007fb.svg", "", " /a.svg", 7, null, undefined, ["/a.svg"],
+    ]
+    for (const value of cases) expect(writerIsSameSitePath(value), JSON.stringify(value)).toBe(isSameSitePath(value))
+  })
+
+  it("INERT end to end: a profile that sets no brand asks nothing of the head", () => {
+    expect(renderedBrand({ nav: { hide: ["gallery"] } })).toEqual({ productName: "Nodaro" })
+    expect(brandHeadRequest(renderedBrand({ nav: { hide: ["gallery"] } }))).toBeUndefined()
+    expect(brandHeadRequest(renderedBrand({ brand: { productName: "Nodaro" } }))).toBeUndefined()
+  })
+
+  it("a brand reaches the head as the backend resolved it — a refused icon never does", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    expect(
+      brandHeadRequest(renderedBrand({ brand: { productName: "Example Studio", description: "Workflows by Example Studio", favicon: ["/brand/favicon.svg", "https://cdn.example.com/x.png"] } })),
+    ).toEqual({ title: "Example Studio", description: "Workflows by Example Studio", favicon: ["/brand/favicon.svg"] })
+    warn.mockRestore()
   })
 })

@@ -1228,6 +1228,100 @@ The editor's own brand **assets** (favicon, logo files) are overridden by a
 Docker static-asset layer, not this JSON; `brand.logo` names a logo for the
 client apps that read it.
 
+### Wording and the page head (`strings`, `brand.favicon`)
+
+Two keys change what the editor shows without a rebuild. Both are **absent
+unless you set them**. With neither set, `/config.js` and `index.html` are byte
+for byte what they are without this feature.
+
+**`strings`: your own wording for any of the editor's UI strings, per
+language.**
+
+```json
+"strings": {
+  "flow": {
+    "en": { "credits.allowanceExceeded": "Your Example Studio allowance is used up. Ask your administrator for more." },
+    "he": { "credits.allowanceExceeded": "נגמרה לכם המכסה. פנו למנהל המערכת שלכם." }
+  }
+}
+```
+
+- The first level names the product whose strings you override. `flow` is the
+  workflow editor; it is the only product that reads them so far.
+- The keys are the editor's message keys (`frontend/src/lib/i18n/en.ts`): every
+  key whose English text is not blank. The blank ones are grammar data (a
+  word's grammatical gender, the gap between joined fragments) and cannot be
+  overridden.
+- An override replaces that one string in that one language. An `en` override
+  is also the English that a language without its own translation of the key
+  falls back to.
+- Every entry is checked at container boot, when the container writes
+  `/config.js`. An entry that fails a check is **dropped, with a
+  `[surface-profile] strings…` warning** in the log. The rest are kept, and a
+  bad entry never stops the deployment from starting. An entry is dropped when:
+  - its key is not one of the editor's;
+  - its language is not one you offer: `locale.offered`, or, without it, the
+    editor's languages (`en`, `he`, `ja`, `ko`, `pt-BR`);
+  - its text is blank, longer than 1,000 characters, or not plain text. Plain
+    text has no HTML (no tag such as `<b>` or `</a>`, no comment, no character
+    reference such as `&amp;`: the editor shows text exactly as written), no
+    control character other than a line break, and no bidi embedding or
+    override character (U+202A to U+202E). The marks and isolates that
+    right-to-left text uses are fine;
+  - its `{placeholders}` are not exactly those of the English string. Every
+    placeholder stays and none is added; their order may change.
+- The list of keys comes from the editor's own build, which leaves
+  `ui-strings-manifest.flow.json` beside `index.html` (keys and placeholder names
+  only, no text). If that file is missing, as on a local development run, the
+  deployment still starts, and every override is dropped with a warning.
+- One product's overrides may hold at most 64 KiB of text; a larger block is
+  dropped as a whole. `/config.js` loads before every page renders, and the
+  container hands the whole profile to its writer as a single environment
+  variable, which Linux caps at 128 KiB. So if the profile with its overrides
+  would pass 120 KiB, the overrides are dropped, and only them.
+- `/config.js` loads before the app, so the editor shows your wording from its
+  first render. Messages the server sends, and the label tables keyed by
+  English text (node headers, handle names, model descriptions), are not
+  message keys and are not covered.
+- A platform upgrade can remove or rename a key. Your override for it is then
+  dropped, with a warning at boot, so check the boot log after an upgrade.
+
+**`brand.favicon`, and the brand in the page head.** At container start, right
+after it writes `/config.js`, the container writes your brand into the built
+`index.html`, so crawlers, link previews and the browser tab show it before any
+script runs:
+
+- `<title>` takes `brand.productName` (left alone while it is `Nodaro`);
+- `<meta name="description">` takes `brand.description`;
+- the icon links take `brand.favicon`: one path on this site, or a list of up to
+  four (`["/brand/favicon.svg", "/brand/favicon.png"]`). Each path becomes a
+  `<link rel="icon">`, typed from its extension, and every platform icon link
+  is removed, the home-screen `apple-touch-icon` included. A path to another
+  site (`https://…`, `//…`), or one with spaces, quotes or angle brackets, is
+  dropped with a warning. You still ship the icon files yourself (the
+  static-asset layer above). Give them versioned names, because static images
+  are cached for a year.
+
+Only those three are touched; every other byte of the built file, Vite's hashed
+asset references included, stays as built. A file that has lost one of them (no
+`<title>`, two descriptions, no icon link) is left exactly as built, and the log
+says `[start.sh] brand head NOT applied: …`. With no brand set, the file is not
+written at all. Notes:
+
+- `brand` needs its `productName`: a `brand` block without one is ignored as a
+  whole.
+- A request for `/favicon.ico` itself (some crawlers send one) is still answered
+  with the platform's icon.
+- The head is written on each container start. A new container (every deploy
+  makes one) starts again from the built file.
+
+Example (a Hebrew-first deployment with its own name, description, icons and
+out-of-credits wording):
+
+```bash
+NODARO_SURFACE_PROFILE={"brand":{"productName":"Example Studio","description":"Workflows by Example Studio","favicon":["/brand/favicon.svg","/brand/favicon.png"]},"locale":{"default":"he","offered":["he","en"]},"strings":{"flow":{"en":{"credits.allowanceExceeded":"Your Example Studio allowance is used up. Ask your administrator for more."},"he":{"credits.allowanceExceeded":"נגמרה לכם המכסה. פנו למנהל המערכת שלכם."}}}}
+```
+
 ### Keys read by client apps
 
 These keys are for the other products served from the same site as the

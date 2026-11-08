@@ -3,6 +3,7 @@ import { LANGUAGES } from "@nodaro/shared/i18n"
 import {
   SURFACE_CATALOG_IMAGES,
   isBrandLogoRef,
+  isSameSitePath,
   isWorldId,
   type SurfaceCatalogImages,
   type SurfaceHeaderMode,
@@ -130,7 +131,7 @@ export const catalogImagesSchema = z
   })
 
 /** A locale id as the platform ships it ("pt-br" → "pt-BR"), or undefined. Read lazily: some suites mock the i18n entry empty. */
-function canonicalLocaleId(v: unknown): string | undefined {
+export function canonicalLocaleId(v: unknown): string | undefined {
   if (typeof v !== "string") return undefined
   const lower = v.trim().toLowerCase()
   return (LANGUAGES ?? []).find((l) => l.id.toLowerCase() === lower)?.id
@@ -177,6 +178,34 @@ export const brandLogoSchema = z
     if (isBrandLogoRef(ref)) return ref
     console.warn('[surface-profile] brand.logo dropped — must be a path on this site ("/…") or an https URL')
     return undefined
+  })
+
+/** The most icons `brand.favicon` may list; the platform's own head has three. */
+export const MAX_BRAND_FAVICONS = 4
+
+/**
+ * The page's icons: one path on this site, or a list (`/brand/favicon.svg`,
+ * `/brand/favicon.png`). A path that is not one is dropped alone, with a
+ * warning. Nothing usable leaves the key out, and the platform's icons stay.
+ */
+export const brandFaviconSchema = z
+  .unknown()
+  .optional()
+  .transform((v): string[] | undefined => {
+    if (v === undefined) return undefined
+    const kept: string[] = []
+    const dropped: unknown[] = []
+    for (const x of Array.isArray(v) ? v : [v]) {
+      const path = typeof x === "string" ? x.trim() : x
+      if (!isSameSitePath(path)) dropped.push(x)
+      else if (!kept.includes(path)) kept.push(path)
+    }
+    if (dropped.length) console.warn(`[surface-profile] brand.favicon dropped ${JSON.stringify(dropped)} — each icon must be a path on this site ("/…")`)
+    if (kept.length > MAX_BRAND_FAVICONS) {
+      console.warn(`[surface-profile] brand.favicon keeps its first ${MAX_BRAND_FAVICONS} icons of ${kept.length}`)
+      kept.length = MAX_BRAND_FAVICONS
+    }
+    return kept.length ? kept : undefined
   })
 
 export const requireSignInSchema = z

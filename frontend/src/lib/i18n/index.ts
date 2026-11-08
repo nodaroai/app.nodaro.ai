@@ -8,6 +8,7 @@ import { useLocaleStore } from "@/lib/locale-store"
 import type { LocaleId } from "@nodaro/shared/i18n"
 import { en, type MessageKey, type ChromeDict } from "./en"
 import { DICTS } from "./dicts"
+import { stringOverride } from "./overrides"
 
 export {
   CHROME_COMPLETE_RATIO,
@@ -46,9 +47,25 @@ export function labelOf<K extends string>(labels: Readonly<Record<K, MessageKey>
   return Object.hasOwn(labels, id) ? t(labels[id as K]) : id
 }
 
-/** Resolve a message for a given locale (pure — for tests + non-hook callers). */
+/**
+ * The text `locale` has of its own for `key`: the deployment's override
+ * (`strings.flow` in the surface profile, see ./overrides.ts), else the
+ * locale's dictionary entry; undefined when it has neither, and the caller
+ * falls back to English. Ask this, never `DICTS` directly, whether a locale
+ * "has its own text", so an override counts wherever a translation does.
+ */
+export function localeText(locale: LocaleId, key: MessageKey): string | undefined {
+  return stringOverride(locale, key) ?? DICTS[locale]?.[key]
+}
+
+/**
+ * Resolve a message for a given locale (pure — for tests + non-hook callers):
+ * the locale's own text, else English (the deployment's English override
+ * included), else the raw key. With no overrides configured this is exactly
+ * `DICTS[locale]?.[key] ?? en[key] ?? key`.
+ */
 export function translate(locale: LocaleId, key: MessageKey, vars?: Record<string, string | number>): string {
-  const s = DICTS[locale]?.[key] ?? en[key] ?? key
+  const s = localeText(locale, key) ?? stringOverride("en", key) ?? en[key] ?? key
   return interpolate(s, vars)
 }
 

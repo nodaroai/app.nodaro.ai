@@ -7,6 +7,10 @@ import { pathToFileURL } from "node:url"
  *
  *     RUNTIME_SURFACE_PROFILE="$(node /app/backend/dist/lib/print-surface-profile.js)"
  *
+ * `--ui-strings-dir <dir>` reads the UI-string key manifest from `dir` instead
+ * of the frontend's build output. start.sh never passes it; it is how a test
+ * boots this CLI against a build that has no manifest, whatever is on disk.
+ *
  * stdout IS the payload, so it must be exactly the JSON or nothing. Two things
  * conspire to put a stray line there, and both are handled here rather than
  * trusted to the caller:
@@ -31,7 +35,14 @@ if (isCli) {
   process.env.DOTENV_CONFIG_QUIET ??= "true"
   try {
     const { renderMediaOriginForRuntimeConfig, renderSurfaceProfileForRuntimeConfig } = await import("./surface-profile-runtime-config.js")
-    process.stdout.write(process.argv[2] === "--media-origin" ? renderMediaOriginForRuntimeConfig() : renderSurfaceProfileForRuntimeConfig())
+    const { readUiStringManifest } = await import("./surface-strings.js")
+    const flag = process.argv.indexOf("--ui-strings-dir")
+    const dir = flag === -1 ? undefined : process.argv[flag + 1]
+    process.stdout.write(
+      process.argv[2] === "--media-origin"
+        ? renderMediaOriginForRuntimeConfig()
+        : renderSurfaceProfileForRuntimeConfig(dir ? (product) => readUiStringManifest(product, dir) : undefined),
+    )
   } catch (err) {
     console.error("[print-surface-profile] could not resolve the surface profile:", (err as Error).message)
     process.exitCode = 1

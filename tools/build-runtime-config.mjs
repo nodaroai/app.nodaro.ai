@@ -1,5 +1,12 @@
 // Standalone (no TS import): builds window.__NODARO_RUNTIME__ for /config.js at
-// container boot.
+// container boot, then writes the deployment's brand into index.html's head.
+//
+// SELF-CONTAINED ON PURPOSE: the image copies this one file (Dockerfile step
+// 7b), so it may import only Node built-ins. A sibling module it imported
+// would be missing in the image, and the import error would leave /config.js
+// empty on every install.
+import { readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs"
+import { fileURLToPath } from "node:url"
 
 const pick = (v) => (typeof v === "string" && v.trim() ? v.trim() : undefined)
 
@@ -56,9 +63,232 @@ export function buildRuntimeConfig(env) {
   return cfg
 }
 
-// CLI entry: `node build-runtime-config.mjs` prints the /config.js line.
+// ── The brand in index.html's head ───────────────────────────────────────────
+//
+// Crawlers, link previews and the browser's tab read index.html's static
+// <title>, meta description and icon links before any script runs. The
+// pre-paint script and BrandDocumentHead fix the title and description only
+// afterwards, and nothing fixes the icons. So at boot, right after
+// /config.js, the same resolved brand is written into the built file:
+//
+//   <title>                     ← brand.productName (left alone while it is the
+//                                 platform's own name, which the resolved profile
+//                                 always carries when no brand is set)
+//   <meta name="description">   ← brand.description
+//   the icon <link>s            ← one <link rel="icon"> per brand.favicon path;
+//                                 every platform icon link goes, the home-screen
+//                                 apple-touch-icon included
+//
+// Each is a targeted replacement inside <head>: every other byte, Vite's
+// hashed asset references included, stays as built. All or nothing. When an
+// anchor is missing or appears more than once, the file is left as built and
+// the reason is logged (to stderr: stdout is /config.js). With no brand set,
+// the file is not even read. The anchors are structural, so a restarted
+// container, whose file already carries the brand, rewrites it to the same
+// bytes.
+
+/** RUNTIME_SURFACE_DEFAULT.brand.productName (cross-checked in backend/src/lib/__tests__/runtime-config-contract.test.ts). */
+export const PLATFORM_PRODUCT_NAME = "Nodaro"
+const MAX_FAVICONS = 4
+
+const UNSAFE_REF_CHARS = /[\s\u0000-\u001f\u007f\\]/
+const HTML_SPECIAL_CHARS = /["'<>`]/
+const PROBE_ORIGIN = "https://origin.invalid"
+
+/** isSameSitePath from @nodaro/shared/runtime-config, restated (this file imports no package); the contract test holds the two equal. */
+export function isSameSitePath(value) {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) return false
+  if (UNSAFE_REF_CHARS.test(value) || HTML_SPECIAL_CHARS.test(value)) return false
+  try {
+    return new URL(value, PROBE_ORIGIN).origin === PROBE_ORIGIN
+  } catch {
+    return false
+  }
+}
+
+const ICON_TYPES = { svg: "image/svg+xml", png: "image/png", ico: "image/x-icon", webp: "image/webp", gif: "image/gif", jpg: "image/jpeg", jpeg: "image/jpeg", avif: "image/avif" }
+
+function iconType(path) {
+  const name = path.split(/[?#]/, 1)[0].split("/").pop() ?? ""
+  const dot = name.lastIndexOf(".")
+  return dot > 0 ? ICON_TYPES[name.slice(dot + 1).toLowerCase()] : undefined
+}
+
+const escapeText = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+const escapeAttr = (s) => escapeText(s).replace(/"/g, "&quot;")
+
+/** What the brand asks of the head: only the parts it actually sets, or undefined for none. */
+export function brandHeadRequest(brand) {
+  if (!brand || typeof brand !== "object" || Array.isArray(brand)) return undefined
+  const want = {}
+  const name = typeof brand.productName === "string" ? brand.productName.trim() : ""
+  if (name && name !== PLATFORM_PRODUCT_NAME) want.title = name
+  const description = typeof brand.description === "string" ? brand.description.trim() : ""
+  if (description) want.description = description
+  const icons = [...new Set((Array.isArray(brand.favicon) ? brand.favicon : [brand.favicon]).filter(isSameSitePath))]
+  if (icons.length) want.favicon = icons.slice(0, MAX_FAVICONS)
+  return Object.keys(want).length ? want : undefined
+}
+
+const TITLE = /<title>[^<]*<\/title>/g
+const DESCRIPTION = /<meta\b[^>]*\bname=["']description["'][^>]*>/gi
+const CONTENT_ATTR = /\bcontent="[^"]*"/g
+const ICON_LINK = /<link\b[^>]*\brel=["'](?:icon|shortcut icon|apple-touch-icon)["'][^>]*>/gi
+
+/** A match's span, widened to its whole line when nothing else shares that line. */
+function lineSpan(text, start, end) {
+  let from = start
+  while (from > 0 && (text[from - 1] === " " || text[from - 1] === "\t")) from--
+  let to = end
+  if (from === 0 || text[from - 1] === "\n") {
+    if (text.startsWith("\r\n", to)) to += 2
+    else if (text[to] === "\n") to += 1
+    else from = start
+  } else {
+    from = start
+  }
+  return [from, to]
+}
+
+/**
+ * `html` with the brand written into its head: `{ html, applied, problems }`.
+ * Pure. On any problem `html` comes back unchanged (all or nothing).
+ */
+export function applyBrandHead(html, brand) {
+  const want = brandHeadRequest(brand)
+  if (!want) return { html, applied: [], problems: [] }
+  const open = /<head\b[^>]*>/i.exec(html)
+  const close = open ? html.indexOf("</head>", open.index) : -1
+  if (!open || close < 0) return { html, applied: [], problems: ["no <head>…</head>"] }
+  const start = open.index + open[0].length
+  let head = html.slice(start, close)
+  const problems = []
+  const applied = []
+
+  if (want.title !== undefined) {
+    const n = (head.match(TITLE) ?? []).length
+    if (n !== 1) problems.push(`<title> found ${n} times`)
+    else {
+      head = head.replace(TITLE, () => `<title>${escapeText(want.title)}</title>`)
+      applied.push("title")
+    }
+  }
+
+  if (want.description !== undefined) {
+    const tags = head.match(DESCRIPTION) ?? []
+    const contents = tags.length === 1 ? (tags[0].match(CONTENT_ATTR) ?? []).length : 0
+    if (tags.length !== 1) problems.push(`<meta name="description"> found ${tags.length} times`)
+    else if (contents !== 1) problems.push('<meta name="description"> has no single content="…"')
+    else {
+      head = head.replace(DESCRIPTION, (tag) => tag.replace(CONTENT_ATTR, () => `content="${escapeAttr(want.description)}"`))
+      applied.push("description")
+    }
+  }
+
+  if (want.favicon !== undefined) {
+    const links = [...head.matchAll(ICON_LINK)]
+    if (links.length === 0) problems.push("no icon <link>")
+    else {
+      const first = links[0]
+      const indent = /[ \t]*$/.exec(head.slice(0, first.index))[0]
+      const lines = want.favicon.map((path) => {
+        const type = iconType(path)
+        return `<link rel="icon"${type ? ` type="${type}"` : ""} href="${escapeAttr(path)}" />`
+      })
+      // Later links first, so the earlier spans keep their offsets.
+      for (const link of links.slice(1).reverse()) {
+        const [from, to] = lineSpan(head, link.index, link.index + link[0].length)
+        head = head.slice(0, from) + head.slice(to)
+      }
+      head = head.slice(0, first.index) + lines.join(`\n${indent}`) + head.slice(first.index + first[0].length)
+      applied.push("favicon")
+    }
+  }
+
+  if (problems.length) return { html, applied: [], problems }
+  return { html: html.slice(0, start) + head + html.slice(close), applied, problems: [] }
+}
+
+/**
+ * Replaces `file`'s content: atomically when its directory is writable (a
+ * temporary file renamed over it), else in place. The image may leave the
+ * directory to root while the file belongs to this user. In place is safe at
+ * boot, because nothing serves the file yet (start.sh starts Caddy after this
+ * step). A failed in-place write puts the original bytes back.
+ */
+function replaceFile(file, next, original) {
+  const tmp = `${file}.brand-${process.pid}.tmp`
+  try {
+    writeFileSync(tmp, next)
+    renameSync(tmp, file)
+    return
+  } catch {
+    try {
+      unlinkSync(tmp)
+    } catch {
+      // never created, or already renamed
+    }
+  }
+  try {
+    writeFileSync(file, next)
+  } catch (err) {
+    try {
+      writeFileSync(file, original)
+    } catch {
+      // nothing more to try; the caller logs the first error
+    }
+    throw err
+  }
+}
+
+/**
+ * Writes the brand into the index.html at `file`. Never throws: a failure
+ * logs, and the file stays as built. Returns what happened, for tests.
+ */
+export function writeBrandHead(file, brand, log = (line) => console.error(line)) {
+  try {
+    if (!brandHeadRequest(brand)) return "inert"
+    let html
+    try {
+      html = readFileSync(file, "utf8")
+    } catch (err) {
+      log(`[start.sh] brand head NOT applied: cannot read ${file} (${err.code ?? err.message}); the page keeps the platform's head`)
+      return "unreadable"
+    }
+    const { html: next, applied, problems } = applyBrandHead(html, brand)
+    if (problems.length) {
+      log(`[start.sh] brand head NOT applied: ${problems.join("; ")} in ${file}; it is left as built`)
+      return "anchors-missing"
+    }
+    if (next === html) {
+      log(`[start.sh] brand head already in ${file} (${applied.join(", ")})`)
+      return "unchanged"
+    }
+    replaceFile(file, next, html)
+    log(`[start.sh] brand head applied to ${file}: ${applied.join(", ")}`)
+    return "applied"
+  } catch (err) {
+    log(`[start.sh] brand head NOT applied: ${err.message}; ${file} is left as built`)
+    return "failed"
+  }
+}
+
+/** `--index-html <path>` / `--index-html=<path>`, else the image's layout: /app/tools → /app/frontend/dist/index.html. */
+export function indexHtmlPath(argv) {
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--index-html" && argv[i + 1]) return argv[i + 1]
+    if (argv[i].startsWith("--index-html=")) return argv[i].slice("--index-html=".length)
+  }
+  return fileURLToPath(new URL("../frontend/dist/index.html", import.meta.url))
+}
+
+// CLI entry: `node build-runtime-config.mjs [--index-html <path>]` prints the
+// /config.js line, then writes the brand into the page's head. The head step
+// never touches stdout or the exit code: start.sh reads a non-zero exit as
+// "could not write /config.js".
 if (import.meta.url === `file://${process.argv[1]}`) {
   const cfg = buildRuntimeConfig(process.env)
   process.stdout.write("window.__NODARO_RUNTIME__=" + JSON.stringify(cfg) + ";\n")
   console.error("[start.sh] frontend runtime config:", Object.keys(cfg).join(",") || "(none — build-time values)")
+  writeBrandHead(indexHtmlPath(process.argv.slice(2)), cfg.surface?.brand)
 }

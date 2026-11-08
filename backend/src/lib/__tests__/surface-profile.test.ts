@@ -1,4 +1,8 @@
+// @test-watches frontend/src/lib/i18n/en.{ts,js} frontend/src/lib/i18n/platform-languages.{ts,js}
 import { describe, it, expect, afterEach, vi } from "vitest"
+import { buildUiStringManifest } from "@nodaro/shared/runtime-config"
+import { en } from "../../../../frontend/src/lib/i18n/en.js"
+import { PLATFORM_LANGUAGES } from "../../../../frontend/src/lib/i18n/platform-languages.js"
 import { config } from "../config.js"
 import {
   SURFACE_PROFILE_DEFAULT,
@@ -532,9 +536,11 @@ describe("new keys — absent unless configured", () => {
       expect(p.catalogs?.images).toBeUndefined()
       expect(p.locale.offered).toBeUndefined()
       expect(p.brand.logo).toBeUndefined()
+      expect(p.brand.favicon).toBeUndefined()
       expect(p.auth.requireSignIn).toBeUndefined()
+      expect(p.strings).toBeUndefined()
     }
-    expect(JSON.stringify(parseSurfaceProfile("{}"))).not.toMatch(/"worlds"|"imports"|"header"|"images"|"offered"|"logo"|"requireSignIn"/)
+    expect(JSON.stringify(parseSurfaceProfile("{}"))).not.toMatch(/"worlds"|"imports"|"header"|"images"|"offered"|"logo"|"favicon"|"requireSignIn"|"strings"/)
   })
 })
 
@@ -777,5 +783,137 @@ describe("the new keys reach /config.js; the server-only billing keys still neve
     expect(out.brand.logo).toBe("/brand/logo.svg")
     expect(out.auth.requireSignIn).toBe(true)
     expect(out.billing.payerAccount).toBeUndefined()
+  })
+})
+
+describe("brand.favicon — the page's icons, paths on this site", () => {
+  const warn = () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    return { calls: () => spy.mock.calls.map((c) => String(c[0])) }
+  }
+  afterEach(() => vi.restoreAllMocks())
+  const brand = (favicon: unknown) =>
+    parseSurfaceProfile(JSON.stringify({ brand: { productName: "Example Studio", description: "Example Studio workflows", favicon } })).brand
+
+  it("takes one path or a list, trimmed, each once", () => {
+    expect(brand("/brand/favicon.svg").favicon).toEqual(["/brand/favicon.svg"])
+    expect(brand([" /brand/favicon.svg ", "/brand/favicon.png?v=2", "/brand/favicon.svg"]).favicon).toEqual(["/brand/favicon.svg", "/brand/favicon.png?v=2"])
+  })
+
+  it.each([
+    ["another site", "https://cdn.example.com/favicon.svg"],
+    ["a protocol-relative URL", "//evil.example/favicon.svg"],
+    ["a relative path", "favicon.svg"],
+    ["an attribute breaker", '/brand/x".svg'],
+    ["a tag breaker", "/brand/<x>.svg"],
+    ["a number", 7],
+  ])("drops %s alone, loudly; the rest of the brand stays", (_label, favicon) => {
+    const { calls } = warn()
+    expect(brand(["/brand/favicon.svg", favicon])).toEqual({ productName: "Example Studio", description: "Example Studio workflows", favicon: ["/brand/favicon.svg"] })
+    expect(calls().some((m) => m.includes("brand.favicon dropped"))).toBe(true)
+    expect(brand(favicon)).toEqual({ productName: "Example Studio", description: "Example Studio workflows" })
+  })
+
+  it("keeps the first four icons", () => {
+    const { calls } = warn()
+    expect(brand(["/a.svg", "/b.png", "/c.png", "/d.ico", "/e.png"]).favicon).toEqual(["/a.svg", "/b.png", "/c.png", "/d.ico"])
+    expect(calls().some((m) => m.includes("first 4 icons"))).toBe(true)
+  })
+})
+
+describe("strings — carried raw by the server, validated only on the way to /config.js", () => {
+  const REAL_EDITION = config.EDITION
+  const REAL_ENV = process.env.NODARO_SURFACE_PROFILE
+  afterEach(() => {
+    config.EDITION = REAL_EDITION
+    if (REAL_ENV === undefined) delete process.env.NODARO_SURFACE_PROFILE
+    else process.env.NODARO_SURFACE_PROFILE = REAL_ENV
+    __resetSurfaceProfileCacheForTests()
+    vi.restoreAllMocks()
+  })
+  const KEY = "credits.allowanceExceeded"
+  const EN_TEXT = "Your Example Studio allowance is used up. Ask your administrator for more."
+  const HE_TEXT = "נגמרה לכם המכסה. פנו למנהל המערכת שלכם."
+  const FLOW = buildUiStringManifest("flow", en, PLATFORM_LANGUAGES)
+  const fromBuild = vi.fn(() => ({ manifest: FLOW }))
+
+  async function render(profile: unknown, readManifest: typeof fromBuild | (() => { problem: string }) = fromBuild): Promise<{ text: string; out: Record<string, unknown> }> {
+    const { renderSurfaceProfileForRuntimeConfig } = await import("../surface-profile-runtime-config.js")
+    config.EDITION = "business"
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify(profile)
+    __resetSurfaceProfileCacheForTests()
+    const text = renderSurfaceProfileForRuntimeConfig(readManifest)
+    return { text, out: JSON.parse(text) as Record<string, unknown> }
+  }
+
+  it("the server's own profile keeps strings exactly as given, valid or not (it never reads them)", () => {
+    const raw = { flow: { he: { [KEY]: "<b>x</b>" } }, junk: 1 }
+    expect(parseSurfaceProfile(JSON.stringify({ strings: raw })).strings).toEqual(raw)
+  })
+
+  it("/config.js carries only what validates; every refused entry stays out", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const { text, out } = await render({
+      locale: { default: "he", offered: ["he", "en"] },
+      strings: { flow: { he: { [KEY]: HE_TEXT, "no.such.key": "x" }, en: { [KEY]: "<b>Call us</b>" }, ja: { [KEY]: "クレジットがありません。" } } },
+    })
+    expect(out.strings).toEqual({ flow: { he: { [KEY]: HE_TEXT } } })
+    expect(text).not.toMatch(/no\.such\.key|<b>|クレジット/)
+  })
+
+  it("a profile whose every override is refused carries no strings key at all", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const { out } = await render({ brand: { productName: "Example Studio" }, strings: { flow: { en: { "no.such.key": "x" } } } })
+    expect(out).not.toHaveProperty("strings")
+    expect(out.brand).toEqual({ productName: "Example Studio" })
+  })
+
+  it("INERT: without strings, /config.js is the same single JSON.stringify(profile) as before, and the manifest is never opened", async () => {
+    fromBuild.mockClear()
+    const { text } = await render({ nav: { hide: ["gallery"] }, brand: { productName: "Example Studio" } })
+    expect(text).toBe(JSON.stringify(runtimeSurfaceProfile()))
+    expect(text).not.toContain("strings")
+    expect(fromBuild).not.toHaveBeenCalled()
+  })
+
+  it("a build with no manifest: every override dropped with a warning, every other key intact", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const { out } = await render(
+      { nav: { hide: ["gallery"] }, brand: { productName: "Example Studio" }, strings: { flow: { en: { [KEY]: EN_TEXT } } } },
+      () => ({ problem: "there is no key manifest at /x (a local dev run, or a build that did not emit it)" }),
+    )
+    expect(out).not.toHaveProperty("strings")
+    expect(out.nav).toEqual({ hide: ["gallery"] })
+    expect(out.brand).toEqual({ productName: "Example Studio" })
+    expect(warn).toHaveBeenCalledWith("[surface-profile] strings.flow: every override dropped — there is no key manifest at /x (a local dev run, or a build that did not emit it), so none can be checked")
+  })
+
+  it("a surface that would outgrow one environment variable sheds its strings, never the rest", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const { RUNTIME_SURFACE_MAX_BYTES } = await import("../surface-profile-runtime-config.js")
+    const { UI_STRINGS_MAX_BYTES } = await import("../surface-strings.js")
+    // Two products' worth is impossible today (one product), so fill Flow to its own
+    // budget in two locales: each block passes, together they are over the surface limit.
+    const plain = Object.entries(FLOW.keys).filter(([, names]) => names.length === 0).map(([key]) => key)
+    const perLocale = Math.floor(UI_STRINGS_MAX_BYTES / 2 / 1000)
+    const fill = (from: number) => Object.fromEntries(plain.slice(from, from + perLocale).map((key) => [key, "x".repeat(1000)]))
+    const blocks = { en: fill(0), he: fill(perLocale) }
+    expect(2 * perLocale * 1000).toBeLessThanOrEqual(UI_STRINGS_MAX_BYTES)
+    const bigBrand = "y".repeat(RUNTIME_SURFACE_MAX_BYTES - UI_STRINGS_MAX_BYTES / 2)
+    const { text, out } = await render({ nav: { hide: ["gallery"] }, brand: { productName: "Example Studio", description: bigBrand }, strings: { flow: blocks } })
+    expect(out).not.toHaveProperty("strings")
+    expect(out.nav).toEqual({ hide: ["gallery"] })
+    expect(Buffer.byteLength(text, "utf8")).toBeLessThan(RUNTIME_SURFACE_MAX_BYTES)
+    expect(warn.mock.calls.some((c) => /strings dropped — the surface with them is \d+ bytes/.test(String(c[0])))).toBe(true)
+  })
+
+  it("rides beside the billing redaction: both apply", async () => {
+    const { out } = await render({
+      billing: { unitLabel: "units", unitRate: 2000, payerAccount: "billing@example.com" },
+      strings: { flow: { en: { [KEY]: EN_TEXT } } },
+    })
+    expect(out.strings).toEqual({ flow: { en: { [KEY]: EN_TEXT } } })
+    expect(out.billing).toEqual({ costTab: "inherit", sidebarCard: "inherit", selfServe: true, unitLabel: "units", unitRate: 2000 })
+    expect(JSON.stringify(out)).not.toContain("billing@example.com")
   })
 })

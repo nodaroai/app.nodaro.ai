@@ -2,19 +2,26 @@ import { describe, expect, it } from "vitest"
 import {
   RUNTIME_CONFIG_GLOBAL,
   RUNTIME_SURFACE_DEFAULT,
+  UI_STRING_PRODUCTS,
   WORLD_IDS,
+  buildUiStringManifest,
+  uiStringManifestFile,
+  uiStringPlaceholders,
   WORLD_REQUIRED_NODE_TYPES,
   isBrandLogoRef,
+  isSameSitePath,
   isHttpsOrigin,
   isSsoOnly,
   isWorldId,
   orderWorlds,
   parseRuntimeConfig,
+  parseRuntimeStrings,
   parseRuntimeSurface,
   readRuntimeConfig,
   resolveRuntimeApiBase,
   resolveRuntimeSupabaseUrl,
   surfaceRequiresSignIn,
+  surfaceStringOverride,
   worldAllowed,
 } from "../entries/runtime-config.js"
 
@@ -208,6 +215,7 @@ describe("parseRuntimeSurface — every default applied", () => {
       imports: { links: true },
       header: "default",
       worlds: {},
+      strings: {},
     })
     expect(Object.isFrozen(RUNTIME_SURFACE_DEFAULT.auth)).toBe(true)
   })
@@ -266,5 +274,96 @@ describe("parseRuntimeSurface — every default applied", () => {
   it("is idempotent: parsing what it returned changes nothing", () => {
     const once = parseRuntimeSurface({ auth: { methods: ["sso"] }, worlds: { allow: ["image"] }, catalogPolicy: { a: 1 } })
     expect(parseRuntimeSurface(once)).toEqual(once)
+  })
+})
+
+describe("isSameSitePath — a brand.favicon entry", () => {
+  it.each(["/brand/favicon.svg", "/icon.png?v=2", "/favicon.ico"])("accepts %s", (path) => {
+    expect(isSameSitePath(path)).toBe(true)
+  })
+
+  it.each([
+    "https://media.example.com/favicon.svg",
+    "//evil.example/favicon.svg",
+    "/\\evil.example/favicon.svg",
+    "favicon.svg",
+    '/brand/"onload="x.svg',
+    "/brand/<x>.svg",
+    "/brand/'x'.svg",
+    "/brand/`x`.svg",
+    "/brand/fav icon.svg",
+    "",
+    7,
+    undefined,
+  ])("refuses %j", (path) => {
+    expect(isSameSitePath(path)).toBe(false)
+  })
+
+  it("the brand keeps its same-site icons, each once, and drops the rest", () => {
+    expect(parseRuntimeSurface({ brand: { productName: "Example Studio", favicon: ["/brand/a.svg", "https://x.example/b.png", "/brand/a.svg"] } }).brand).toEqual({
+      productName: "Example Studio",
+      favicon: ["/brand/a.svg"],
+    })
+    expect(parseRuntimeSurface({ brand: { productName: "Example Studio", favicon: "/brand/a.svg" } }).brand.favicon).toEqual(["/brand/a.svg"])
+    expect(parseRuntimeSurface({ brand: { productName: "Example Studio", favicon: ["//x.example/a.svg"] } }).brand).toEqual({ productName: "Example Studio" })
+  })
+})
+
+describe("UI-string overrides — surface.strings", () => {
+  it("names the products that read their own namespace", () => {
+    expect([...UI_STRING_PRODUCTS]).toEqual(["flow"])
+    expect(Object.isFrozen(UI_STRING_PRODUCTS)).toBe(true)
+  })
+
+  it("keeps text only, and leaves out a level the parse empties", () => {
+    expect(
+      parseRuntimeStrings({
+        flow: { he: { "credits.allowanceExceeded": "טקסט", "common.cancel": 7 }, en: { "common.cancel": null }, ja: "x" },
+        tools: "x",
+        voice: {},
+      }),
+    ).toEqual({ flow: { he: { "credits.allowanceExceeded": "טקסט" } } })
+    expect(parseRuntimeStrings(undefined)).toEqual({})
+    expect(parseRuntimeStrings([1])).toEqual({})
+  })
+
+  it("a __proto__ key stays an ordinary key and changes no prototype", () => {
+    const parsed = parseRuntimeStrings(JSON.parse('{"flow":{"__proto__":{"common.cancel":"x"},"en":{"__proto__":"y"}}}'))
+    expect(Object.getPrototypeOf(parsed.flow)).toBe(Object.prototype)
+    expect(Object.keys(parsed.flow)).toEqual(["__proto__", "en"])
+    expect(surfaceStringOverride(parsed, "flow", "en", "__proto__")).toBe("y")
+  })
+
+  it("reads one override, and nothing an object inherits", () => {
+    const strings = parseRuntimeStrings({ flow: { he: { "credits.allowanceExceeded": "טקסט" } } })
+    expect(surfaceStringOverride(strings, "flow", "he", "credits.allowanceExceeded")).toBe("טקסט")
+    expect(surfaceStringOverride(strings, "flow", "en", "credits.allowanceExceeded")).toBeUndefined()
+    expect(surfaceStringOverride(strings, "flow", "he", "toString")).toBeUndefined()
+    expect(surfaceStringOverride(strings, "voice", "he", "credits.allowanceExceeded")).toBeUndefined()
+    expect(surfaceStringOverride(undefined, "flow", "he", "credits.allowanceExceeded")).toBeUndefined()
+  })
+
+  it("rides parseRuntimeSurface, and a surface that sets none has none", () => {
+    expect(parseRuntimeSurface({ strings: { flow: { en: { "common.cancel": "Back out" } } } }).strings).toEqual({ flow: { en: { "common.cancel": "Back out" } } })
+    expect(parseRuntimeSurface({ nav: { hide: ["gallery"] } }).strings).toEqual({})
+  })
+})
+
+describe("the UI-string key manifest", () => {
+  it("names one file per product", () => {
+    expect(uiStringManifestFile("flow")).toBe("ui-strings-manifest.flow.json")
+  })
+
+  it("reads {name} placeholders only, each once, sorted", () => {
+    expect(uiStringPlaceholders("{b} and {a} and {b}")).toEqual(["a", "b"])
+    expect(uiStringPlaceholders("no placeholders")).toEqual([])
+    expect(uiStringPlaceholders("{image:1} and { spaced } stay text")).toEqual([])
+    expect(uiStringPlaceholders("{{now}}")).toEqual(["now"])
+  })
+
+  it("keeps every key with visible text and its placeholders, and no text", () => {
+    const manifest = buildUiStringManifest("flow", { "a.plain": "Plain", "a.one": "{n} left of {max}", "a.gender": "", "a.gap": " " }, ["en", "he"])
+    expect(manifest).toEqual({ product: "flow", locales: ["en", "he"], keys: { "a.plain": [], "a.one": ["max", "n"] } })
+    expect(JSON.stringify(manifest)).not.toContain("left of")
   })
 })

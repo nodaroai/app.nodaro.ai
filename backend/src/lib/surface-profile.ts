@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs"
 import { isSsoOnly, type SurfaceCatalogImages, type SurfaceHeaderMode, type WorldId } from "@nodaro/shared/runtime-config"
 import { isBusiness, isCloud } from "./config.js"
 import {
+  brandFaviconSchema,
   brandLogoSchema,
   catalogImagesSchema,
   localeOfferedSchema,
@@ -151,7 +152,8 @@ export interface SurfaceProfile {
   /** `requireSignIn` absent: readers derive it (true exactly when sign-in is SSO-only). */
   auth: { methods: AuthMethod[]; ssoLabel?: string; requireSignIn?: boolean }
   siblings: { apps: SurfaceSibling[] }
-  brand: { productName: string; description?: string; wordmark?: string; platformLinks?: boolean; logo?: string }
+  /** `favicon`: the page's icons, paths on this site; boot writes them into index.html's head (tools/build-runtime-config.mjs). */
+  brand: { productName: string; description?: string; wordmark?: string; platformLinks?: boolean; logo?: string; favicon?: string[] }
   locale: { default?: string; picker: boolean; offered?: string[] }
   outputs: { allowPublic: boolean }
   voice: { allowedGenders: string[] } // B4c — [] = all genders allowed (narrowing only)
@@ -162,6 +164,12 @@ export interface SurfaceProfile {
   worlds?: SurfaceWorlds
   imports?: { links: boolean }
   header?: SurfaceHeaderMode
+  /**
+   * UI-string overrides, `product → locale → key → text`. Carried RAW and never
+   * read by the server. The /config.js projection is what validates them,
+   * against the key manifest each product's build emits (surface-strings.ts).
+   */
+  strings?: unknown
 }
 
 export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
@@ -406,7 +414,14 @@ export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
     })
     .catch({ apps: [] }),
   brand: z
-    .object({ productName: z.string().min(1), description: z.string().optional(), wordmark: z.string().optional(), platformLinks: z.boolean().optional().catch(false), logo: brandLogoSchema.optional() })
+    .object({
+      productName: z.string().min(1),
+      description: z.string().optional(),
+      wordmark: z.string().optional(),
+      platformLinks: z.boolean().optional().catch(false),
+      logo: brandLogoSchema.optional(),
+      favicon: brandFaviconSchema.optional(),
+    })
     .catch({ productName: "Nodaro" }),
   catalogs: z
     .object({ required: z.boolean().catch(true), factoryPresets: z.boolean().catch(false), images: catalogImagesSchema.optional() })
@@ -438,6 +453,7 @@ export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
   worlds: surfaceWorldsSchema.optional(),
   imports: surfaceImportsSchema.optional(),
   header: surfaceHeaderSchema.optional(),
+  strings: z.unknown().optional(),
 }) as z.ZodType<SurfaceProfile>
 
 /** One-level-deep merge: each override sub-object replaces the default's, keys
@@ -463,6 +479,7 @@ function mergeOverDefault(override: Partial<SurfaceProfile>): SurfaceProfile {
     ...(override.worlds ? { worlds: override.worlds } : {}),
     ...(override.imports ? { imports: override.imports } : {}),
     ...(override.header ? { header: override.header } : {}),
+    ...(override.strings !== undefined ? { strings: override.strings } : {}),
   }
 }
 

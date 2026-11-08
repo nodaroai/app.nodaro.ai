@@ -1,5 +1,4 @@
-import { tx, type MessageKey } from "@/lib/i18n"
-import { DICTS } from "@/lib/i18n/dicts"
+import { localeText, tx, type MessageKey } from "@/lib/i18n"
 import { useLocaleStore } from "@/lib/locale-store"
 import { USE_CASE_RECORDINGS_REASON_KEYS } from "@/lib/use-case-recordings-copy"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
@@ -136,7 +135,7 @@ export function apiErrorReasonKey(code: string | undefined): MessageKey | undefi
  */
 function speaksOwnLanguage(key: MessageKey): boolean {
   const locale = useLocaleStore.getState().locale
-  return locale !== "en" && DICTS[locale]?.[key] !== undefined
+  return locale !== "en" && localeText(locale, key) !== undefined
 }
 
 export interface ApiErrorCopyInput {

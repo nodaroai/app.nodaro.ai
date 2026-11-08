@@ -1,7 +1,13 @@
+// @test-watches frontend/src/lib/i18n/en.{ts,js} frontend/src/lib/i18n/platform-languages.{ts,js}
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import { spawnSync } from "node:child_process"
-import { dirname, resolve } from "node:path"
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
+import { buildUiStringManifest, uiStringManifestFile } from "@nodaro/shared/runtime-config"
+import { en } from "../../../../frontend/src/lib/i18n/en.js"
+import { PLATFORM_LANGUAGES } from "../../../../frontend/src/lib/i18n/platform-languages.js"
 import { config } from "../config.js"
 import { runtimeSurfaceProfile, __resetSurfaceProfileCacheForTests } from "../surface-profile.js"
 import { renderMediaOriginForRuntimeConfig, renderSurfaceProfileForRuntimeConfig } from "../surface-profile-runtime-config.js"
@@ -185,6 +191,41 @@ describe("print-surface-profile CLI — stdout is exactly the payload", () => {
     const res = run({ EDITION: "community", NODARO_SURFACE_PROFILE: JSON.stringify(AUTHORED) })
     expect(res.status).toBe(0)
     expect(res.stdout).toBe("")
+  })
+
+  describe("UI-string overrides at boot", () => {
+    const KEY = "credits.allowanceExceeded"
+    const TEXT = "Your Example Studio allowance is used up."
+    const PROFILE = JSON.stringify({ ...AUTHORED, strings: { flow: { en: { [KEY]: TEXT, "no.such.key": "x" } } } })
+    let dir: string
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), "print-surface-profile-"))
+    })
+    afterEach(() => rmSync(dir, { recursive: true, force: true }))
+
+    it("checks them against the file the build emitted, and prints only what passed", () => {
+      writeFileSync(join(dir, uiStringManifestFile("flow")), JSON.stringify(buildUiStringManifest("flow", en, PLATFORM_LANGUAGES)))
+      const res = run({ EDITION: "business", NODARO_SURFACE_PROFILE: PROFILE }, ["--ui-strings-dir", dir])
+      expect(res.status).toBe(0)
+      expect(JSON.parse(res.stdout).strings).toEqual({ flow: { en: { [KEY]: TEXT } } })
+      expect(res.stderr).toMatch(/strings\.flow\.en\."no\.such\.key" dropped/)
+    }, 60_000)
+
+    it("a build with no manifest still boots: every override dropped, loudly on stderr, the rest of the profile printed", () => {
+      const res = run({ EDITION: "business", NODARO_SURFACE_PROFILE: PROFILE }, ["--ui-strings-dir", dir])
+      expect(res.status).toBe(0)
+      expect(res.stdout).toBe(JSON.stringify(JSON.parse(res.stdout)))
+      const parsed = JSON.parse(res.stdout)
+      expect(parsed).not.toHaveProperty("strings")
+      expect(parsed.nav.hide).toEqual(["gallery"])
+      expect(res.stderr).toMatch(/\[surface-profile\] strings\.flow: every override dropped — there is no key manifest at /)
+    }, 60_000)
+
+    it("with no strings key it never looks for the file", () => {
+      const res = run({ EDITION: "business", NODARO_SURFACE_PROFILE: JSON.stringify(AUTHORED) }, ["--ui-strings-dir", dir])
+      expect(res.status).toBe(0)
+      expect(res.stderr).not.toMatch(/key manifest/)
+    }, 60_000)
   })
 
   it("--media-origin prints exactly the origin on a white-label surface, and nothing else", () => {
