@@ -31,6 +31,7 @@
 | `credits` | `balance()`, `modelCosts(ids)`; `transactions()` (runs), `history()` / `exportHistory()` (every movement of the balance, a CSV), `usageSummary()` (totals, by model, over time, by session) |
 | `userSettings` | The person's own settings: `get()` / `update(patch)` — the interface language, gallery visibility, node-menu and canvas preferences, the monthly statement opt-in |
 | `billing` | `plans()` — plans and credit packs on sale, with prices and Stripe price ids (public, Cloud); `subscription()`; `surface()` / `account()` — how the deployment bills, and the caller's plan and balance in its unit; signed-in session only: `purchases()`, `invoices()`, `paymentMethod()`, `autoRecharge()` / `setAutoRecharge()`, `checkout()`, `loadCredits()`, `portal()`, `changePlan()` |
+| `surface` | `availability()` — what the deployment offers the caller: the node types and models it does not offer, the Web Scrape sources it withdraws, and every world of the shared site header with whether the caller is offered it (`worlds: [{ id, enabled }]`) |
 | `uploads` | Signed upload URLs for image / video / audio |
 | `library` | Generated-media library |
 | `gallery` | The public gallery (`browse`) and your favorites: `toggleFavorite`, `favorites` |

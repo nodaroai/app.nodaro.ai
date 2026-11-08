@@ -27,6 +27,7 @@ import { AudioResource } from "./resources/audio.js"
 import { CreditsResource } from "./resources/credits.js"
 import { BillingResource } from "./resources/billing.js"
 import { UserSettingsResource } from "./resources/user-settings.js"
+import { SurfaceResource } from "./resources/surface.js"
 import { UploadsResource } from "./resources/uploads.js"
 import { LibraryResource } from "./resources/library.js"
 import { GalleryResource } from "./resources/gallery.js"
@@ -98,6 +99,8 @@ export class NodaroClient extends NodaroClientCore {
   readonly userSettings: UserSettingsResource
   /** Plans and prices, the subscription, and how this deployment bills. */
   readonly billing: BillingResource
+  /** What this deployment offers the caller: node types, models and the worlds of the shared header. */
+  readonly surface: SurfaceResource
   readonly uploads: UploadsResource
   readonly library: LibraryResource
   /** The public gallery and your favorites. */
@@ -162,6 +165,7 @@ export class NodaroClient extends NodaroClientCore {
     this.credits = new CreditsResource(this)
     this.userSettings = new UserSettingsResource(this)
     this.billing = new BillingResource(this)
+    this.surface = new SurfaceResource(this)
     this.uploads = new UploadsResource(this)
     this.library = new LibraryResource(this)
     this.gallery = new GalleryResource(this)

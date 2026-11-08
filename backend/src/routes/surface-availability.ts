@@ -3,6 +3,7 @@ import {
   effectiveDeniedNodeTypes,
   effectiveDeniedModelIds,
   effectiveDeniedWebScrapeSources,
+  effectiveWorlds,
   nodesHiddenFromUsers,
   webScrapeSourcesHiddenFromUsers,
 } from "../lib/surface-deny.js"
@@ -28,6 +29,12 @@ import { viewerForUser } from "../lib/availability-viewer.js"
  * node: Web Scrape's Instagram source follows the Instagram node, and the
  * source dropdown hides what this lists. The rule itself stays here, in
  * lib/surface-deny.ts — the browser is told the result, never the mapping.
+ *
+ * `worlds` is the same answer for the shared header's worlds: every world, in
+ * the profile's display order, enabled when the profile's `worlds.allow` lets
+ * it through and every node type it runs is available to this viewer (the
+ * table of which node types each world runs is shared data,
+ * @nodaro/shared/runtime-config).
  */
 export async function surfaceAvailabilityRoutes(app: FastifyInstance) {
   app.get("/v1/surface/availability", async (req, reply) => {
@@ -42,6 +49,7 @@ export async function surfaceAvailabilityRoutes(app: FastifyInstance) {
         denied: effectiveDeniedWebScrapeSources(viewer),
         hiddenFromUsers: viewer.admin ? webScrapeSourcesHiddenFromUsers() : [],
       },
+      worlds: effectiveWorlds(viewer),
     })
   })
 }

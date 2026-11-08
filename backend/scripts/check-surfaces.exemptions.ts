@@ -212,6 +212,19 @@ export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
     atom: "GET /v1/user/settings",
     reason: "a person's own preferences on a settings screen; an agent's own defaults are written through save_image_defaults and read back by the tools that use them",
   },
+  // What this deployment offers the person on screen: read by the editor's pickers and the shared header.
+  {
+    feature: "surface",
+    surface: "cli",
+    atom: "GET /v1/surface/availability",
+    reason: "an app's view of what to show the person on screen (its pickers, the shared header's worlds); the CLI reads what a deployment offers through `nodes list` and `models list`, which already leave out what it does not offer",
+  },
+  {
+    feature: "surface",
+    surface: "mcp",
+    atom: "GET /v1/surface/availability",
+    reason: "an app's view of what to show the person on screen (its pickers, the shared header's worlds); an agent learns what a deployment offers from list_models and the MCP tool list, which already leave out what it does not offer",
+  },
   {
     feature: "credits",
     surface: "mcp",

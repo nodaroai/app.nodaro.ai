@@ -1147,6 +1147,12 @@ logo is dropped with a warning and the rest of `brand` is kept.
     warning, when `allow` does not include it.
   - `order`: the display order; worlds it leaves out follow in the order
     above.
+
+  A world is also offered only while every node type it runs is available to
+  the viewer (`video`, for example, runs `generate-video` and `text-to-video`).
+  `GET /v1/surface/availability` answers both conditions per viewer, as
+  `worlds: [{ id, enabled }]` in this order (see
+  [api-integration.md](./api-integration.md#what-this-deployment-offers-the-caller)).
 - `imports.links`: `false` = media may not be imported from a link to another
   site. Default `true`. Accepts `true` / `false` / `"true"` / `"false"` /
   `"1"` / `"0"`; any other value, or an `imports` value that is not an object,

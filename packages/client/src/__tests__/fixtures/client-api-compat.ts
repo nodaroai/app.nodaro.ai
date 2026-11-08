@@ -41,7 +41,7 @@ type PublicMembers =
   | "withWorkspace"
   | "workflows" | "projects" | "sessions" | "trash" | "jobs" | "videoPro" | "executions" | "nodes" | "scene3d"
   | "developerApps" | "oauth" | "webhooks" | "apps" | "characters" | "locations" | "objects" | "creatures"
-  | "pipelines" | "reduce" | "promptHelper" | "voices" | "llm" | "media" | "contentRights" | "audio" | "credits" | "billing"
+  | "pipelines" | "reduce" | "promptHelper" | "voices" | "llm" | "media" | "contentRights" | "audio" | "credits" | "billing" | "surface"
   | "uploads" | "library" | "gallery" | "presets" | "savedPosts" | "collections" | "palettes" | "moodboards"
   | "competitors" | "pickerCatalogs" | "catalogs" | "models" | "shots" | "recast" | "castSwap" | "trends" | "studio" | "copilot"
   | "community" | "templates" | "tutorials" | "organizations" | "workspaces" | "edit" | "keepers" | "userSettings" | "trendRadar"

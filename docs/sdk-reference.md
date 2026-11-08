@@ -58,6 +58,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.templates`](#clienttemplates)
   - [`client.tutorials`](#clienttutorials)
   - [`client.organizations`](#clientorganizations)
+  - [`client.surface`](#clientsurface)
   - [`client.workspaces`](#clientworkspaces)
   - [`client.edit`](#clientedit)
 - [Type re-exports](#type-re-exports)
@@ -70,7 +71,7 @@ The root `@nodaro/sdk` exports everything on this page. Each resource is also
 published as its own entry point, `@nodaro/sdk/<entry>`, which loads only that
 resource's module and the types it takes and returns:
 
-`/apps`, `/audio`, `/billing`, `/cast-swap`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/content-rights`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/trash`, `/trend-radar`, `/trends`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
+`/apps`, `/audio`, `/billing`, `/cast-swap`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/content-rights`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/surface`, `/templates`, `/trash`, `/trend-radar`, `/trends`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
 
 `/client` holds `createClient`, `NodaroClient` and the auth providers;
 `/core` holds `NodaroClientCore` (see below) and the same auth providers;
@@ -8804,6 +8805,23 @@ const { monthlyStatementEmail } = await client.userSettings.get()
 await client.userSettings.update({ monthlyStatementEmail: !monthlyStatementEmail })
 ```
 
+### `client.surface`
+
+What this deployment offers the caller: the node types, models, Web Scrape
+sources and worlds an app should show the person on screen. The answer depends
+on who asks (an admin is still offered a node the admin switch withholds from
+users), so it is never shared-cached. Signed out, the answer is a user's.
+
+| Method | Endpoint | Notes |
+|--------|----------|-------|
+| `availability()` | `GET /v1/surface/availability` | `SurfaceAvailability`: `{ nodes: { denied, hiddenFromUsers }, models: { denied }, webScrapeSources: { denied, hiddenFromUsers }, worlds }`. `hiddenFromUsers` is empty for anyone but an admin. `worlds` lists every world (`SurfaceAvailabilityWorld`: `{ id, enabled }`) in the deployment's display order: `explore`, `image`, `video`, `music`, `trends`, `motion`, `voice`, `app`, `studio`; a newer server may add one. A world is `enabled` when the deployment lets it through and every node type it runs is available to the caller. |
+
+```ts
+// The shared header shows only the worlds this person can use.
+const { worlds } = await client.surface.availability()
+const tabs = worlds.filter((w) => w.enabled).map((w) => w.id)
+```
+
 ### `client.workspaces`
 
 Workspaces — the inner tenancy axis, where work lives. Belonging to a
@@ -9494,6 +9512,10 @@ Every type used in a public method signature is re-exported from
 ### User settings
 
 - `UserSettings` / `UserSettingsPatch` / `UserSettingsSaved` / `UserSettingsLocale` / `UserTextTemplate` / `UserMcpPreferences` / `VariableDisplayMode` / `NodeDoubleClickAction` — `userSettings.get()` / `userSettings.update()`
+
+### Surface
+
+- `SurfaceAvailability` / `SurfaceAvailabilityWorld` — `surface.availability()`
 
 ### Client identity
 

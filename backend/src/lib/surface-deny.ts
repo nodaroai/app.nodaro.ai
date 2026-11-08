@@ -1,3 +1,4 @@
+import { WORLD_REQUIRED_NODE_TYPES, orderWorlds, worldAllowed, type WorldId } from "@nodaro/shared/runtime-config"
 import { runtimeSurfaceProfile } from "./surface-profile.js"
 import { parseSiteCaptureEnabled } from "./site-capture-switch.js"
 import {
@@ -307,4 +308,25 @@ export function effectiveDeniedModelIds(): string[] {
   // gateable universe is listed too — the browser hides exactly what runs refuse.
   for (const id of switchedOffModelIds()) if (isModelDenied(id)) denied.add(id)
   return [...denied]
+}
+
+// ── Worlds ───────────────────────────────────────────────────────────────────
+
+/**
+ * The worlds this deployment offers `viewer` (the shared header's tabs), every
+ * one listed, in the profile's display order. A world is enabled when the
+ * profile's `worlds.allow` lets it through (when set) AND every node type it
+ * runs passes `isNodeDenied` for this viewer, the predicate the write and run
+ * guards apply to those node types. Which node types a world runs is shared
+ * data (WORLD_REQUIRED_NODE_TYPES).
+ *
+ * Edition gates (Cloud-only and Nodaro-exclusive nodes) are their own layer
+ * and are not folded in here, as everywhere in this module.
+ */
+export function effectiveWorlds(viewer: AvailabilityViewer): Array<{ id: WorldId; enabled: boolean }> {
+  const worlds = runtimeSurfaceProfile().worlds
+  return orderWorlds(worlds?.order).map((id) => ({
+    id,
+    enabled: worldAllowed(worlds, id) && WORLD_REQUIRED_NODE_TYPES[id].every((type) => !isNodeDenied(type, viewer)),
+  }))
 }

@@ -245,6 +245,11 @@
       "import": "./dist/entries/studio.js",
       "require": "./dist/entries/studio.cjs"
     },
+    "./surface": {
+      "types": "./dist/entries/surface.d.ts",
+      "import": "./dist/entries/surface.js",
+      "require": "./dist/entries/surface.cjs"
+    },
     "./templates": {
       "types": "./dist/entries/templates.d.ts",
       "import": "./dist/entries/templates.js",

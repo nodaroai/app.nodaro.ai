@@ -62,6 +62,8 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "billing", cli: ["billing"], routePrefixes: ["/v1/billing"], mcpFiles: [] },
   // The person's own settings; a first-party app reads and changes them through the SDK.
   { id: "userSettings", cli: [], routePrefixes: ["/v1/user/settings"], mcpFiles: [] },
+  // What this deployment offers the caller (node types, models, worlds); the pickers and the shared header read it.
+  { id: "surface", cli: [], routePrefixes: ["/v1/surface"], mcpFiles: [] },
   { id: "uploads", cli: [], routePrefixes: ["/v1/upload", "/v1/upload-json", "/v1/upload-page", "/v1/upload-proxy"], mcpFiles: ["upload.ts"] },
   { id: "library", cli: [], routePrefixes: ["/v1/library"], mcpFiles: ["gallery.ts"] },
   { id: "gallery", cli: ["gallery"], routePrefixes: ["/v1/gallery"], mcpFiles: ["gallery.ts"] },
@@ -171,7 +173,6 @@ export const ROUTE_ONLY_FAMILIES: Readonly<Record<string, string>> = {
   stats: "usage statistics",
   storage: "storage usage",
   suno: "Suno music generation and editing",
-  surface: "the deployment's surface profile",
   telegram: "Telegram triggers",
   "telegram-channel": "the Telegram Channel Feed node's routes",
   ugc: "UGC video building (Cloud plugin)",
