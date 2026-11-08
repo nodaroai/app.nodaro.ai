@@ -2493,6 +2493,15 @@ analysis call per item. Ask for the whole analysis as one id,
 The answer is that run's figure: the estimate times the items, rounded up and
 marked up once. The served one-call estimate times the items can come to more.
 
+**In the deployment's own unit.** A deployment can show its own unit instead of
+credits. There `POST /v1/credits/model-costs` also answers
+`display: { unit, decimals, data }` — `data` maps the same identifiers to their
+price in that unit, converted by the server (`null` = unavailable) — and
+`GET /v1/credits/model-cost` adds `display: { unit, decimals, creditCost }` to
+its `data`. An identifier listed in `estimates` is an estimate in both. Render
+these as they are rather than converting credits yourself. `display` is absent
+where no unit is configured, and every other field is unchanged.
+
 Cancelling a metered LLM job never charges its whole hold. A job whose call
 has started is charged what it used and the rest is refunded. A job cancelled
 before its call starts is refunded, except for what an earlier attempt of the
@@ -3710,7 +3719,7 @@ are not registered and return 404.
 | Method | Path | Query | Purpose |
 |---|---|---|---|
 | `GET` | `/v1/credits/balance` | — | Return `{ total, subscription, topup, tier, effectiveTier }`. `total = subscription + topup`. `effectiveTier` is the entitlement tier actually enforced — `"payg"` = no subscription but purchased credits (all models unlocked, no watermark, no daily cap). On a deployment-payer instance this is the caller's own pool, which does not fund their runs — read the allowance below instead. |
-| `GET` | `/v1/user/credits` | — | The fuller balance payload. On a deployment-payer instance it adds `allowance: { granted, remaining, enforced } \| null` — the caller's per-user allowance in credits, `enforced` telling you whether the deployment refuses runs beyond it (`false` = shown, not enforced). `null` for the billing account itself (it holds the real pool) or when the figure could not be read; never treat `null` as zero. |
+| `GET` | `/v1/user/credits` | — | The fuller balance payload. On a deployment-payer instance it adds `allowance: { granted, remaining, enforced } \| null` — the caller's per-user allowance in credits, `enforced` telling you whether the deployment refuses runs beyond it (`false` = shown, not enforced). `null` for the billing account itself (it holds the real pool) or when the figure could not be read; never treat `null` as zero. On a deployment that shows its own unit instead of credits it also carries `display`: the same figures converted by the server, `{ unit, decimals, total, subscription, topup, dailySpent, dailyLimit, monthlyAllocation, appCreditsAllowance }` plus `allowance: { granted, remaining }`, `externalWallet: { available }` and `welcomeOffer: { credits }` exactly when the raw keys are present. `unit` is the unit's label and `decimals` the places its figures carry; render them as they are and never convert credits yourself (`null` = unavailable). Absent where no unit is configured, and for the billing account's own read on a deployment-payer instance (its balance is the deployment's pool, kept in credits). Every raw field is unchanged. |
 | `GET` | `/v1/credits/transactions` | `limit` (1–50, default 20), `cursor` (ISO timestamp for page-forward) | Return `{ data: Transaction[], nextCursor }`. Cursor is the `created_at` of the last row; pass it as `?cursor=` on the next request. `nextCursor` is `null` when there are no more rows. |
 | `GET` | `/v1/credits/usage-summary` | `from` / `to` (an ISO timestamp, or a date alone — `2026-10-01` is that whole UTC day; inclusive; default the last 30 days up to now; at most a year apart, else `400`), `bucket` (`day`, `week` or `month`; default `day`) | The period's usage summed for a billing screen: `{ data: UsageSummary }`. On a deployment-payer instance the billing account's own session only (`403 payer_balance_jwt_only` to its tokens). |
 

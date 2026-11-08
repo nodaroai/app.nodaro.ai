@@ -31,6 +31,7 @@ import {
 } from "../billing/signup-grant.js"
 import { withheldForKeylessOnly } from "../billing/signup-grant-policy.js"
 import { getCachedBalance, invalidateBalanceCache, setCachedBalance } from "../billing/balance-cache.js"
+import { modelCostDisplay, modelCostsDisplay, withBalanceDisplay } from "../billing/credit-display.js"
 import { welcomeClaimOptions } from "../billing/welcome-offer-claim-options.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
 import { TIER_CREDITS } from "../billing/stripe-config.js"
@@ -241,6 +242,12 @@ export async function creditsRoutes(app: FastifyInstance) {
         .describe("Why each identifier in `errors` has no price. Omitted when `errors` is empty."),
       estimates: zOpenApi.array(zOpenApi.string()).optional()
         .describe("The identifiers in `data` whose figure is an estimate (a metered LLM price key, `<feature>:<model>[:direct]`) — show it as `≈N`. Omitted when there are none."),
+      display: zOpenApi.object({
+        unit: zOpenApi.string(),
+        decimals: zOpenApi.number().int(),
+        data: zOpenApi.record(zOpenApi.string(), zOpenApi.number().nullable()),
+      }).optional()
+        .describe("On a deployment that shows its own unit instead of credits: the same identifiers' prices in that unit, converted by the server (`null` = unavailable), with the unit's label and decimals. Omitted where no unit is configured."),
     }) } } } },
   })
   /**
@@ -261,9 +268,12 @@ export async function creditsRoutes(app: FastifyInstance) {
     // so the payer's own session warms an entry an app_token would be handed.
     if (refusePayerBalanceToProgrammaticCaller(req, reply)) return reply
 
+    // The display unit (credit-display.ts) is applied on the way OUT, on both
+    // paths: the cache holds the raw payload, so a cached read and a fresh one
+    // cannot differ and a unit change reaches the next read.
     const cached = externalWalletActive() ? null : getCachedBalance(userId)
     if (cached) {
-      return { data: cached }
+      return { data: withBalanceDisplay(cached as UserBalance, userId) }
     }
 
     try {
@@ -369,7 +379,7 @@ export async function creditsRoutes(app: FastifyInstance) {
         : data
 
       setCachedBalance(userId, payload)
-      return { data: payload }
+      return { data: withBalanceDisplay(payload, userId) }
     } catch (error) {
       console.error("[credits] Failed to get balance:", error)
       return reply.status(500).send({
@@ -448,12 +458,14 @@ export async function creditsRoutes(app: FastifyInstance) {
         if (quote) {
           reply.header("Cache-Control", "no-store")
           if (quote.kind === "unpriced") return sendLlmModelUnpriced(reply, quote.error)
-          return reply.send({ data: { model, creditCost: quote.credits, estimate: true } })
+          const display = modelCostDisplay(quote.credits)
+          return reply.send({ data: { model, creditCost: quote.credits, estimate: true, ...(display ? { display } : {}) } })
         }
       }
       const creditCost = await CreditsService.getModelCreditCost(model)
       reply.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400")
-      return reply.send({ data: { model, creditCost } })
+      const display = modelCostDisplay(creditCost)
+      return reply.send({ data: { model, creditCost, ...(display ? { display } : {}) } })
     } catch (error) {
       if (handlePriceNotConfigured(error, reply, "GET /v1/credits/model-cost")) return
       console.error("[credits] Failed to get model cost:", error)
@@ -524,12 +536,15 @@ export async function creditsRoutes(app: FastifyInstance) {
       if (errors.length > 0) {
         console.warn(`[credits] model-costs: ${errors.length} LLM model(s) with no rate: ${errors.join(", ")}`)
       }
+      // The same figures in the deployment's display unit; absent without one.
+      const display = modelCostsDisplay(costs)
       return {
         data: costs,
         missing,
         errors,
         ...(errors.length > 0 ? { errorCodes } : {}),
         ...(estimates.length > 0 ? { estimates } : {}),
+        ...(display ? { display } : {}),
       }
     } catch (err) {
       return sendInternalError(reply, req, err, "Failed to get model costs")

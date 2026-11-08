@@ -7233,6 +7233,15 @@ Throws `UnauthorizedError` (401) when signed out.
 | `freeGrantState` | `FreeGrantState?` | Where the free signup grant stands: `"unclaimed"`, `"granted"`, `"withheld"` (the account works but the grant did not land — show the activation path) or `"revoked"`. Absent where the deployment has no signup grant. |
 | `freeGrantNotice` | `"browser_unmeasured"?` | Only with `freeGrantState: "withheld"`, when the claim showed no browser signals at all: the app may say free credits need a regular browser and a reload. |
 | `welcomeOffer` | `WelcomeOfferState?` | Present only while the deployment has the welcome offer switched on — absent means no popup, no banner, no block. See [`claimWelcomeOffer`](#claimwelcomeofferinput). |
+| `allowance` | `BalanceAllowance \| null?` | Deployment-payer instances only: `{ granted, remaining, enforced }`, the caller's own allowance in credits — the figure to show there, since `total` is the personal balance, which does not fund runs on such a deployment. `enforced: false` means it is shown, not enforced. `null` for the billing account itself or when it could not be read (never 0). Absent elsewhere. |
+| `display` | `BalanceDisplay?` | On a deployment that shows its own unit instead of credits: the same figures converted by the server. Render these as they are; never convert credits yourself. Absent where no unit is configured, and for the billing account's own read on a deployment-payer instance (its balance is the deployment's pool, kept in credits). |
+
+**`BalanceDisplay`:** `unit` (the unit's label), `decimals` (the places its
+figures carry, 0–4), then `total`, `subscription`, `topup`, `dailySpent`,
+`dailyLimit`, `monthlyAllocation` and `appCreditsAllowance` in that unit, each
+`number | null` (`null` = unavailable — show an em dash, never 0). Plus
+`allowance: { granted, remaining } | null`, `externalWallet: { available }` and
+`welcomeOffer: { credits }`, each present exactly when the raw key is.
 
 **`WelcomeOfferState`:**
 
@@ -7294,6 +7303,7 @@ the convert is charged the sum, rounded once). `@nodaro/shared` builds it:
 | `errors` | `string[]` | Identifiers where the lookup itself failed. |
 | `estimates` | `string[]?` | The identifiers in `data` whose figure is an **estimate**, not a fixed price: metered LLM price keys (`<feature>:<model>[:direct]`, built by `llmPriceKey` from `@nodaro/shared/llm-models`), charged for the tokens the call actually uses. Show these as `≈N`. Omitted when there are none. A metered key in `missing` means the server is not pricing LLM calls per model — show no price for it. |
 | `errorCodes` | `Record<string, { code, message }>?` | Why each identifier in `errors` has no price — today `llm_model_unpriced`: a model with no rate on the lane it would be served on (it cannot be run). Omitted when `errors` is empty. |
+| `display` | `ModelCostsDisplay?` | On a deployment that shows its own unit instead of credits: `{ unit, decimals, data }`, where `data` maps the same identifiers to their price in that unit, converted by the server (`null` = unavailable). An identifier in `estimates` is an estimate here too. Absent where no unit is configured. |
 
 ```ts
 const { data, missing } = await client.credits.modelCosts(["nano-banana-pro", "seedance-2-fast"])
@@ -7313,7 +7323,9 @@ const shown = estimates?.includes(key) ? `≈${data[key]}` : String(data[key])
 ```
 
 `GET /v1/credits/model-cost?model=<id>` answers one identifier as
-`ModelCostResult` — `{ model, creditCost, estimate?: true }`.
+`ModelCostResult` — `{ model, creditCost, estimate?: true, display? }`, where
+`display` is `{ unit, decimals, creditCost }` on a deployment that shows its own
+unit instead of credits.
 
 #### `transactions(options?)`
 
