@@ -242,15 +242,25 @@ export function nodeNotAvailableError(types: readonly string[]): Error & { code:
   return Object.assign(new Error(deniedNodeRejectionMessage(types)), { code: "node_not_available" as const })
 }
 
+/**
+ * The FACTORY layer alone for a model (profile allow/deny), ignoring the admin
+ * override and the admin's model switch: what this deployment offers by its own
+ * configuration. What a boot-time check judges against — the admin layers change
+ * at run time, are loaded only later in boot, and asking them kicks a load.
+ */
+export function isModelFactoryDenied(id: string): boolean {
+  const { deny, allow } = runtimeSurfaceProfile().models
+  if (allow.length && GATEABLE_MODEL_IDS.has(id) && !allow.includes(id)) return true
+  return deny.includes(id)
+}
+
 /** True when this deployment does not offer this model id. */
 export function isModelDenied(id: string): boolean {
   // Layer 4 first: the admin's switch is not something an override can lift.
   if (isModelSwitchedOff(id)) return true
   const override = availabilityOverride("models")
   if (override) return GATEABLE_MODEL_IDS.has(id) && !override.has(id)
-  const { deny, allow } = runtimeSurfaceProfile().models
-  if (allow.length && GATEABLE_MODEL_IDS.has(id) && !allow.includes(id)) return true
-  return deny.includes(id)
+  return isModelFactoryDenied(id)
 }
 
 /** Shared refusal text for a denied model, parallel to the node message. */

@@ -12,6 +12,7 @@ import {
   resetPersonPacks,
   PEOPLE,
 } from "@nodaro/prompts/person"
+import { getRegisteredPresetPacks, resetPresetPacks } from "../../presets/app-presets.js"
 
 afterEach(() => {
   delete process.env.NODARO_OVERLAY_PACKAGE
@@ -20,6 +21,7 @@ afterEach(() => {
   clearPromptPolicies()
   resetCatalogPacks()
   resetPersonPacks()
+  resetPresetPacks()
 })
 
 describe("overlay boot-smoke — unset env is byte-identical, inert boot", () => {
@@ -35,6 +37,7 @@ describe("overlay boot-smoke — unset env is byte-identical, inert boot", () =>
     // catalog pack, which the length check below also catches.
     expect(getRegisteredCatalogPacks()).toHaveLength(0)
     expect(getRegisteredPeople()).toBe(PEOPLE)
+    expect(getRegisteredPresetPacks()).toHaveLength(0)
     const p = applyPromptPolicies({ prompt: "x", negativePrompt: "", kind: "image" })
     expect(p).toEqual({ prompt: "x", negativePrompt: "", kind: "image" })
   })

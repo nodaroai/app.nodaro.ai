@@ -1078,6 +1078,17 @@ from imported or previously saved workflows. Voice gender restrictions apply
 to picker filters and cached results as well as server results; restricted
 deployments do not show unverified bundled voice placeholders.
 
+A deployment can also ship presets of its own, registered at its composition
+root as preset packs. The API's factory catalog (`GET /v1/node-presets/factory`
+and the MCP preset tools) serves them after the bundled presets, or alone when
+`factoryPresets` is `false`. The canvas editor's preset menu does not list
+them: it reads the bundled presets in the browser. Each pack preset is checked
+at boot: it may name only
+models this profile's `models` lists offer, only picker IDs the curated
+catalogs offer, and an https example picture or none. A deployment whose packs
+fail the check refuses to start. Design note:
+[`docs/design/preset-pack-seam.md`](design/preset-pack-seam.md).
+
 Brand **assets** (favicon, logos) are overridden by a Docker static-asset layer,
 not this JSON.
 
