@@ -726,6 +726,7 @@
         "backend/src/lib/voice-policy.ts",
         "backend/src/lib/warm-video-copies.ts",
         "backend/src/lib/web-url-input.ts",
+        "backend/src/lib/withheld-objects-private.ts",
         "backend/src/lib/worker-drain.ts",
         "backend/src/lib/workflow-access.ts",
         "backend/src/lib/workflow-route-access.ts",
