@@ -269,12 +269,38 @@ function isLegalHoldRefusal(err: unknown): boolean {
  * the module graph of every route that imports this file. Only a 4xx with a
  * coded body qualifies: nothing here can turn into a server error's answer.
  */
-function toolkitRefusalOf(err: unknown): { statusCode: number; body: { error: { code: string; message: string } } } | null {
+function toolkitRefusalOf(err: unknown): ClientRefusal | null {
   if (!(err instanceof Error) || err.name !== "PluginHttpError") return null
   const { statusCode, body } = err as Error & { statusCode?: unknown; body?: { error?: { code?: unknown; message?: unknown } } }
   if (typeof statusCode !== "number" || statusCode < 400 || statusCode > 499) return null
   if (typeof body?.error?.code !== "string" || typeof body.error.message !== "string") return null
   return { statusCode, body: body as { error: { code: string; message: string } } }
+}
+
+/** A refusal shaped to be sent as itself: its own 4xx and the `{ error: { code, message } }` envelope. */
+interface ClientRefusal {
+  statusCode: number
+  body: { error: { code: string; message: string } }
+}
+
+/**
+ * The voice lock's own coded refusal: `VoiceNotAvailableError`
+ * (`lib/voice-policy.ts`), which the lanes with no reply to send throw. A 400
+ * `voice_not_available` with its own sentence, the answer a route gives for
+ * the same voice. Recognised by name and shape, like a toolkit refusal:
+ * voice-policy reads the surface profile, and this module stays free of
+ * imports that need a configured environment.
+ */
+function voiceLockRefusalOf(err: unknown): ClientRefusal | null {
+  if (!(err instanceof Error) || err.name !== "VoiceNotAvailableError") return null
+  const code = (err as { code?: unknown }).code
+  if (code !== "voice_not_available" || err.message.length === 0) return null
+  return { statusCode: 400, body: { error: { code, message: err.message } } }
+}
+
+/** A refusal that answers as itself wherever it surfaces: a toolkit member's, or the voice lock's. */
+function clientRefusalOf(err: unknown): ClientRefusal | null {
+  return toolkitRefusalOf(err) ?? voiceLockRefusalOf(err)
 }
 
 export function sendInternalError(
@@ -284,10 +310,11 @@ export function sendInternalError(
   clientMessage = GENERIC_INTERNAL_MESSAGE,
 ): FastifyReply {
   // A plugin route that catches a toolkit refusal (a job-policy block, a
-  // session or origin the request may not use) and hands it here gets the
-  // refusal it carries, exactly as if it had sent `err.body` itself — a
-  // client outcome, logged at info, never a 500.
-  const refusal = toolkitRefusalOf(err)
+  // session or origin the request may not use, a voice the lock refuses) and
+  // hands it here gets the refusal it carries, exactly as if it had sent
+  // `err.body` itself — a client outcome, logged at info, never a 500. The
+  // voice lock's own error answers the same way.
+  const refusal = clientRefusalOf(err)
   if (refusal) {
     req.log.info({ code: refusal.body.error.code }, "request refused")
     return reply.status(refusal.statusCode).send(refusal.body)
@@ -354,9 +381,39 @@ export function sendInternalError(
  */
 export function registerErrorTelemetry(app: FastifyInstance): void {
   app.addHook("onError", async (req, _reply, error) => {
+    // A refusal is answered as its own 4xx (registerRefusalErrorHandler): a
+    // client outcome, even when the error carries no status of its own.
+    if (clientRefusalOf(error)) return
     const status = (error as { statusCode?: number }).statusCode ?? 500
     if (status < 500) return // 4xx = client errors (validation, auth) — not telemetry
     reportServerError(req, errorMessageOf(error) ?? "Unknown error", "uncaught", error)
+  })
+}
+
+/**
+ * The root error handler, for a refusal that ESCAPES a route handler: a plugin
+ * route that lets `tk.voices.assertAllowed`'s (or any toolkit member's)
+ * `PluginHttpError` propagate instead of sending it, or the voice lock's own
+ * `VoiceNotAvailableError`. It is answered as the refusal it carries — its own
+ * 4xx, `{ error: { code, message } }` — exactly as `sendInternalError` answers
+ * it. Fastify's default handler would send `{ statusCode, error: "Bad Request",
+ * message }` instead, which drops the code: the SDK then reads it as
+ * `internal_error`, and a client cannot tell a locked voice from a failure.
+ *
+ * Every other error is re-thrown, which hands it to Fastify's own default
+ * handler (this one's parent), so it answers byte for byte as it always has;
+ * the `onError` hooks do not run a second time. The handler is async on
+ * purpose: Fastify sends a REJECTED handler's value down the error path
+ * whatever it is, while a value thrown synchronously that is not an `Error`
+ * (a thrown string) would be sent as a 200 body. Register it before any
+ * route: a route keeps the error handler its context had when it registered.
+ */
+export function registerRefusalErrorHandler(app: FastifyInstance): void {
+  app.setErrorHandler(async (error, req, reply) => {
+    const refusal = clientRefusalOf(error)
+    if (!refusal) throw error
+    req.log.info({ code: refusal.body.error.code }, "request refused")
+    void reply.status(refusal.statusCode).send(refusal.body)
   })
 }
 

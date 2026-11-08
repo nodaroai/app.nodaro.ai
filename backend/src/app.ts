@@ -402,7 +402,7 @@ import { internalRequestUser } from "./lib/internal-caller.js"
 import rateLimit from "@fastify/rate-limit"
 import formbody from "@fastify/formbody"
 import { installTolerantJsonParser } from "./lib/tolerant-json-parser.js"
-import { registerInternalErrorSanitizer, registerErrorTelemetry } from "./lib/http-errors.js"
+import { registerInternalErrorSanitizer, registerErrorTelemetry, registerRefusalErrorHandler } from "./lib/http-errors.js"
 
 /**
  * Rate-limit key derivation.
@@ -539,6 +539,13 @@ export async function buildApp() {
   // may wait for a slot and when its client left (lib/concurrency-lanes/
   // request-scope.ts). An onRoute hook: before any plugin or route registers.
   installLaneRequestScope(app)
+
+  // A refusal that escapes a route (a plugin route that lets a toolkit
+  // refusal propagate, or the voice lock's own error) answers as itself:
+  // `{ error: { code, message } }` with its 4xx. Everything else falls through
+  // to Fastify's default handler unchanged. Before any plugin or route
+  // registers: a route keeps the error handler of the moment it registered.
+  registerRefusalErrorHandler(app)
 
   // application/x-www-form-urlencoded body parser — required by OAuth-spec
   // clients (Claude.ai etc.) that POST to /v1/oauth/token with form-encoded
