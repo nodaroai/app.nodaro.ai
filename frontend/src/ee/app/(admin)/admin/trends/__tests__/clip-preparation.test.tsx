@@ -25,7 +25,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: v
 import type { AdminTrendFaceMask, AdminTrendFaceMaskMark, TrendEngineEnvironment } from "@/lib/api"
 import { detail, ENVIRONMENTS, fetchMock, renderWith, resetRoutes, routes, run, sentTo, TREND_ID } from "./harness"
 import AdminTrendEditorPage from "../detail/page"
-import { clipPreparationIssues, environmentsThatCannotHideBodies, supportedTargetsFor, withClipPreparation } from "../clip-preparation"
+import { clipPreparationIssues, environmentsThatCannotHideBodies, environmentsThatCannotRoutePerStyle, supportedTargetsFor, withClipPreparation } from "../clip-preparation"
 import { cleanMasking, describeBlocker, maskingIssues } from "../model"
 import { labelOf, labelValue, markCounts, markFromDrag, markWho } from "../components/FaceMaskMarks"
 import { unmarkedPeople } from "../components/FaceMaskPanel"
@@ -101,6 +101,26 @@ describe("the clip preparation's rules", () => {
     expect(environmentsThatCannotHideBodies([...at("production", HIDE_ENVS)])).toEqual(["staging"])
     expect(environmentsThatCannotHideBodies([...at("production", HIDE_ENVS), ...at("staging", DEPTH_ENVS)])).toEqual(["staging"])
     expect(environmentsThatCannotHideBodies([...at("production", HIDE_ENVS), ...at("staging", HIDE_ENVS)])).toEqual([])
+  })
+
+  it("Nodaro Motion's Precise style route: the environments that cannot route per style (engine or platform without it), a missing one included", () => {
+    const perStyle = (env: string, engine: boolean, platform = engine): TrendEngineEnvironment => ({
+      ...ENVIRONMENTS[0]!,
+      env,
+      supports: {
+        castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, preciseStyleRoute: true, ...(engine ? { preciseStyleRoutePerStyle: true } : {}) },
+        ...(platform ? { platform: { preciseStyleRoutePerStyle: true } } : {}),
+      },
+    })
+    expect(environmentsThatCannotRoutePerStyle(undefined)).toBeUndefined()
+    expect(environmentsThatCannotRoutePerStyle([perStyle("production", true), perStyle("staging", false)])).toEqual(["staging"])
+    expect(environmentsThatCannotRoutePerStyle([perStyle("production", false), perStyle("staging", true)])).toEqual(["production"])
+    expect(environmentsThatCannotRoutePerStyle([perStyle("production", true)])).toEqual(["staging"])
+    expect(environmentsThatCannotRoutePerStyle([perStyle("production", false), perStyle("staging", false)])).toEqual(["staging", "production"])
+    expect(environmentsThatCannotRoutePerStyle([perStyle("production", true), perStyle("staging", true)])).toEqual([])
+    // Both flags are needed: an engine that reads the map behind a platform that drops it, and the reverse.
+    expect(environmentsThatCannotRoutePerStyle([perStyle("production", true, false), perStyle("staging", true)])).toEqual(["production"])
+    expect(environmentsThatCannotRoutePerStyle([perStyle("production", true), perStyle("staging", false, true)])).toEqual(["staging"])
   })
 
   it("names what the server would refuse", () => {

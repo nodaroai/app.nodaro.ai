@@ -33,10 +33,10 @@ import {
   preciseStyleRouteIssues,
   preciseStyleRouteMissingNote,
   preciseStyleRouteToSaved,
-  photographicStyleNames,
-  photographicStylesLegend,
-  photographicStylesMissingNote,
+  type PreciseStyleRouteDraft,
 } from "../components/PreciseStyleRouteColumn"
+import { STYLE_ROUTES_LEGEND, styleRoutesMissingNote } from "../components/StyleRoutesTable"
+import { STYLES, getStyleMedium } from "@nodaro/prompts/pickers"
 import { environmentsThatCannotRoutePreciseStyle, environmentsThatRouteEveryStyle } from "../../trends/clip-preparation"
 import { FACE_MESH_THUMBNAIL_FILES } from "../../trends/face-mesh-thumbnail-files"
 
@@ -368,71 +368,147 @@ describe("the routed mesh's layers", { timeout: 20_000 }, () => {
   })
 })
 
-// Which path a run whose art style is photographic takes (`photographicStyles`): routed as Flex (the default) or kept
-// Precise. Named from the style catalog; saved whatever the engines, with a note naming where it does not hold yet.
-describe("the photographic styles' path", { timeout: 20_000 }, () => {
-  const keeps = (env: string, engine: boolean, platform: boolean): TrendEngineEnvironment => {
-    const base = routes_(env, true)
+// The route of each art style (`styleRoutes`): the Flex way (the default, never saved), Precise, or Precise in black
+// and white, in one table grouped by the catalog's medium. Saved whatever the engines, with a note naming where it does
+// not hold yet. A stored `photographicStyles: "precise"` reads as Precise for the photographic styles.
+describe("the route per art style", { timeout: 20_000 }, () => {
+  /** An environment whose engine routes (unless `routes` is false), and reads the map with its platform when `yes`. */
+  const perStyle = (env: string, yes: boolean, routes = true): TrendEngineEnvironment => {
+    const base = routes_(env, routes)
     return {
       ...base,
       supports: {
         ...base.supports,
-        castSwap: { ...base.supports.castSwap, ...(engine ? { preciseStyleRoutePhotographic: true } : {}) },
-        ...(platform ? { platform: { preciseStyleRoutePhotographic: true } } : {}),
+        castSwap: { ...base.supports.castSwap, ...(yes ? { preciseStyleRoutePerStyle: true } : {}) },
+        ...(yes ? { platform: { preciseStyleRoutePerStyle: true } } : {}),
       },
     }
   }
-  const photo = async () => within(await screen.findByRole("group", { name: photographicStylesLegend() }))
+  const table = async () => within(await screen.findByRole("group", { name: STYLE_ROUTES_LEGEND }))
+  const photoIds = STYLES.filter((s) => getStyleMedium(s.id) === "photo").map((s) => s.id)
 
-  it("names the catalog's photographic styles; never saved reads as Flex, and there is nothing to save", async () => {
-    expect(photographicStyleNames()).toEqual(expect.arrayContaining(["Photorealistic", "Cinematic", "Noir", "Early Color Photo", "Cyberpunk", "Steampunk", "Glitch Art"]))
-    expect(photographicStyleNames()).toHaveLength(8)
-    expect(photographicStyleNames()).not.toContain("Anime")
+  it("one select per catalog style under Drawn, Rendered and Filmed; never saved reads as the Flex way, and there is nothing to save", async () => {
     renderWith(<AdminNodaroMotionPage />)
-    const group = await photo()
-    expect(group.getByRole("radio", { name: /^Run as Flex/ })).toBeChecked()
-    expect(group.getByRole("radio", { name: /^Stay Precise/ })).not.toBeChecked()
-    expect(group.getByText(/keeps likeness and may restyle less/)).toBeInTheDocument()
+    const t = await table()
+    expect(t.getByText("How a Precise run with this art style is made. A Flex run is always made the Flex way.")).toBeInTheDocument()
+    const groups = ["Drawn", "Rendered", "Filmed"].map((name) => t.getByRole("group", { name }))
+    expect(groups).toHaveLength(3)
+    const perStyleSelects = STYLES.map((s) => t.getByRole("combobox", { name: s.label }))
+    expect(perStyleSelects).toHaveLength(STYLES.length)
+    for (const select of perStyleSelects) expect(select).toHaveValue("flex")
+    expect([...(perStyleSelects[0] as HTMLSelectElement).options].map((o) => o.textContent)).toEqual(["Flex way (depth)", "Precise", "Precise, in black and white"])
+    // Each style sits under its medium's heading.
+    expect(within(groups[2]!).getAllByRole("combobox").length).toBe(photoIds.length + 1)
+    expect(within(groups[0]!).getByRole("combobox", { name: "Anime" })).toBeInTheDocument()
+    expect(within(groups[1]!).getByRole("combobox", { name: "3D Render" })).toBeInTheDocument()
+    expect(within(groups[2]!).getByRole("combobox", { name: "Noir" })).toBeInTheDocument()
+    const warning = "These come back real on the Precise route; keep them on the Flex way."
+    expect(within(groups[0]!).getByText(warning)).toBeInTheDocument()
+    expect(within(groups[1]!).getByText(warning)).toBeInTheDocument()
+    expect(within(groups[2]!).queryByText(warning)).not.toBeInTheDocument()
     expect(saveButton()).toBeDisabled()
   })
 
-  it("Stay Precise saves photographicStyles: precise; Flex again sends {}", async () => {
+  it("a style's choice saves only that style; the Flex way again sends {}", async () => {
     const user = userEvent.setup()
     routes[`PUT ${URL_}`] = (init) => view(JSON.parse(String(init?.body)).preciseStyleRoute)
     renderWith(<AdminNodaroMotionPage />)
-    const group = await photo()
-    await user.click(group.getByRole("radio", { name: /^Stay Precise/ }))
+    const t = await table()
+    await user.selectOptions(t.getByRole("combobox", { name: "Cyberpunk" }), "precise-gray")
     await user.click(saveButton())
-    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseStyleRoute: { photographicStyles: "precise" } }]))
-    await user.click(group.getByRole("radio", { name: /^Run as Flex/ }))
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseStyleRoute: { styleRoutes: { cyberpunk: "precise-gray" } } }]))
+    await user.selectOptions(t.getByRole("combobox", { name: "Cyberpunk" }), "flex")
     await waitFor(() => expect(saveButton()).toBeEnabled())
     await user.click(saveButton())
-    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseStyleRoute: { photographicStyles: "precise" } }, { preciseStyleRoute: {} }]))
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseStyleRoute: { styleRoutes: { cyberpunk: "precise-gray" } } }, { preciseStyleRoute: {} }]))
   })
 
-  it("shows a saved Stay Precise; with the switch Off the choice is kept but cannot be changed", async () => {
-    routes[`GET ${URL_}`] = () => view({ routing: "off", photographicStyles: "precise" })
-    renderWith(<AdminNodaroMotionPage />)
-    const group = await photo()
-    await waitFor(() => expect(group.getByRole("radio", { name: /^Stay Precise/ })).toBeChecked())
-    expect(group.getByRole("radio", { name: /^Stay Precise/ })).toBeDisabled()
-    expect(saveButton()).toBeDisabled()
-  })
-
-  it("names the environments that still route these styles once Stay Precise is chosen, and still saves", async () => {
+  it("Set all to… sets every style of its group; the Flex way on Filmed after a stored photographicStyles saves no styleRoutes", async () => {
     const user = userEvent.setup()
-    routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: [keeps("production", true, false), keeps("staging", true, true)] } })
+    routes[`GET ${URL_}`] = () => view({ photographicStyles: "precise" })
     routes[`PUT ${URL_}`] = (init) => view(JSON.parse(String(init?.body)).preciseStyleRoute)
     renderWith(<AdminNodaroMotionPage />)
-    const group = await photo()
-    expect(group.queryByText(photographicStylesMissingNote(["production"]))).not.toBeInTheDocument()
-    await user.click(group.getByRole("radio", { name: /^Stay Precise/ }))
-    expect(await group.findByText(photographicStylesMissingNote(["production"]))).toBeInTheDocument()
+    const t = await table()
+    const filmed = within(t.getByRole("group", { name: "Filmed" }))
+    await waitFor(() => expect(filmed.getByRole("combobox", { name: "Noir" })).toHaveValue("precise"))
+    expect(t.getByRole("combobox", { name: "Anime" })).toHaveValue("flex")
+    const setAll = filmed.getByRole("combobox", { name: /Set all to…/ })
+    expect([...(setAll as HTMLSelectElement).options].map((o) => o.textContent)).toEqual(["Set all to…", "Flex way (depth)", "Precise", "Precise, in black and white"])
+    await user.selectOptions(setAll, "flex")
+    for (const id of photoIds) expect(filmed.getByRole("combobox", { name: STYLES.find((s) => s.id === id)!.label })).toHaveValue("flex")
+    expect(setAll).toHaveValue("")
+    await user.click(saveButton())
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseStyleRoute: {} }]))
+  })
+
+  it("keeps a stored map when another field is saved", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${URL_}`] = () => view({ styleRoutes: { cyberpunk: "precise-gray" } })
+    routes[`PUT ${URL_}`] = (init) => view(JSON.parse(String(init?.body)).preciseStyleRoute)
+    renderWith(<AdminNodaroMotionPage />)
+    const t = await table()
+    await waitFor(() => expect(t.getByRole("combobox", { name: "Cyberpunk" })).toHaveValue("precise-gray"))
+    expect(saveButton()).toBeDisabled()
+    await user.click((await section()).getByRole("radio", { name: /^Off/ }))
+    await user.click(saveButton())
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseStyleRoute: { routing: "off", styleRoutes: { cyberpunk: "precise-gray" } } }]))
+  })
+
+  it("with the switch Off the choices are kept but cannot be changed", async () => {
+    routes[`GET ${URL_}`] = () => view({ routing: "off", styleRoutes: { noir: "precise" } })
+    renderWith(<AdminNodaroMotionPage />)
+    const t = await table()
+    await waitFor(() => expect(t.getByRole("combobox", { name: "Noir" })).toHaveValue("precise"))
+    expect(t.getByRole("combobox", { name: "Noir" })).toBeDisabled()
+  })
+
+  it("names the environments that cannot route per style once a style is not the Flex way, and still saves", async () => {
+    const user = userEvent.setup()
+    routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: [perStyle("production", false), perStyle("staging", true)] } })
+    routes[`PUT ${URL_}`] = (init) => view(JSON.parse(String(init?.body)).preciseStyleRoute)
+    renderWith(<AdminNodaroMotionPage />)
+    const t = await table()
+    const note = styleRoutesMissingNote(["production"])
+    expect(note).toBe("production cannot route per style yet; there every style is made the Flex way.")
+    expect(t.queryByText(note)).not.toBeInTheDocument()
+    await user.selectOptions(t.getByRole("combobox", { name: "Noir" }), "precise")
+    expect(await t.findByText(note)).toBeInTheDocument()
     await user.click(saveButton())
     await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toHaveLength(1))
   })
 
+  it("the note names only environments that route at all: one whose engine does not route has its own note", async () => {
+    const user = userEvent.setup()
+    routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: [perStyle("production", false, false), perStyle("staging", false)] } })
+    renderWith(<AdminNodaroMotionPage />)
+    const t = await table()
+    await user.selectOptions(t.getByRole("combobox", { name: "Noir" }), "precise")
+    expect(await t.findByText(styleRoutesMissingNote(["staging"]))).toBeInTheDocument()
+    expect(t.queryByText(styleRoutesMissingNote(["staging", "production"]))).not.toBeInTheDocument()
+    expect((await section()).getByText(preciseStyleRouteMissingNote(["production"]))).toBeInTheDocument()
+  })
+
+  it("an entry only for a style this catalog lacks shows no note: every visible style reads the Flex way", async () => {
+    routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: [perStyle("production", false), perStyle("staging", false)] } })
+    routes[`GET ${URL_}`] = () => view({ styleRoutes: { "a-future-style": "precise" } })
+    renderWith(<AdminNodaroMotionPage />)
+    const t = await table()
+    await waitFor(() => expect(t.getByRole("combobox", { name: "Noir" })).toHaveValue("flex"))
+    expect(t.queryByRole("status")).not.toBeInTheDocument()
+  })
+
   it("environmentsThatRouteEveryStyle: unknown while loading, else those whose engine or platform lacks the flag", () => {
+    const keeps = (env: string, engine: boolean, platform: boolean): TrendEngineEnvironment => {
+      const base = routes_(env, true)
+      return {
+        ...base,
+        supports: {
+          ...base.supports,
+          castSwap: { ...base.supports.castSwap, ...(engine ? { preciseStyleRoutePhotographic: true } : {}) },
+          ...(platform ? { platform: { preciseStyleRoutePhotographic: true } } : {}),
+        },
+      }
+    }
     expect(environmentsThatRouteEveryStyle(undefined)).toBeUndefined()
     expect(environmentsThatRouteEveryStyle([keeps("production", true, true), keeps("staging", true, true)])).toEqual([])
     expect(environmentsThatRouteEveryStyle([keeps("production", false, true), keeps("staging", true, false)])).toEqual(["staging", "production"])
@@ -441,24 +517,59 @@ describe("the photographic styles' path", { timeout: 20_000 }, () => {
 })
 
 describe("the pure helpers", () => {
+  const draft = (over: Partial<PreciseStyleRouteDraft>): PreciseStyleRouteDraft => ({ ...preciseStyleRouteDraftOf(null), ...over })
+
   it("preciseStyleRouteToSaved: Off and a list that is not empty alone", () => {
     expect(preciseStyleRouteToSaved(preciseStyleRouteDraftOf(null))).toEqual({})
-    expect(preciseStyleRouteToSaved({ routing: "on", photographicStyles: "flex", emailsText: " \n, ", depthBlurText: "", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toEqual({})
-    expect(preciseStyleRouteToSaved({ routing: "on", photographicStyles: "flex", emailsText: "", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toEqual({})
-    expect(preciseStyleRouteToSaved({ routing: "off", photographicStyles: "flex", emailsText: "A@x.co\na@x.co,b@x.co", depthBlurText: "10", describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshLayers: {}, faceMeshWording: "shape" })).toEqual({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"], routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" })
+    expect(preciseStyleRouteToSaved(draft({ emailsText: " \n, ", depthBlurText: "", faceMeshLayers: {} }))).toEqual({})
+    expect(preciseStyleRouteToSaved(draft({ depthBlurText: "0", faceMeshLayers: {} }))).toEqual({})
+    expect(preciseStyleRouteToSaved(draft({ routing: "off", emailsText: "A@x.co\na@x.co,b@x.co", depthBlurText: "10", describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshLayers: {}, faceMeshWording: "shape" }))).toEqual({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"], routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" })
   })
 
   it("preciseStyleRouteDraftOf: what is saved, one address per line", () => {
-    expect(preciseStyleRouteDraftOf({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"], routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "features", faceMeshWording: "shape" })).toEqual({ routing: "off", photographicStyles: "flex", emailsText: "a@x.co\nb@x.co", depthBlurText: "10", describeColours: false, faceMesh: true, faceMeshParts: "features", faceMeshLayers: { eyes: true, lips: true }, faceMeshWording: "shape" })
+    const flex = Object.fromEntries(STYLES.map((s) => [s.id, "flex"]))
+    expect(preciseStyleRouteDraftOf({ routing: "off", bypassEmails: ["a@x.co", "b@x.co"], routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "features", faceMeshWording: "shape" })).toEqual({ routing: "off", styleRoutes: flex, emailsText: "a@x.co\nb@x.co", depthBlurText: "10", describeColours: false, faceMesh: true, faceMeshParts: "features", faceMeshLayers: { eyes: true, lips: true }, faceMeshWording: "shape" })
     expect(preciseStyleRouteDraftOf({ routedDepthBlur: 10 })).toMatchObject({ depthBlurText: "10", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })
-    expect(preciseStyleRouteDraftOf(null)).toEqual({ routing: "on", photographicStyles: "flex", emailsText: "", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: { wireframe: true, eyes: true, lips: true }, faceMeshWording: "motion" })
+    expect(preciseStyleRouteDraftOf(null)).toEqual({ routing: "on", styleRoutes: flex, emailsText: "", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: { wireframe: true, eyes: true, lips: true }, faceMeshWording: "motion" })
+  })
+
+  it("the draft holds every catalog style; a stored photographicStyles: precise fills Precise for the photographic styles", () => {
+    const d = preciseStyleRouteDraftOf({ photographicStyles: "precise" })
+    expect(Object.keys(d.styleRoutes)).toEqual(STYLES.map((s) => s.id))
+    expect(d.styleRoutes.noir).toBe("precise")
+    expect(d.styleRoutes.anime).toBe("flex")
+    // An entry of its own wins over photographicStyles.
+    expect(preciseStyleRouteDraftOf({ photographicStyles: "precise", styleRoutes: { noir: "precise-gray" } }).styleRoutes.noir).toBe("precise-gray")
+  })
+
+  it("saving writes only the styles not on the Flex way, and never photographicStyles", () => {
+    const d = preciseStyleRouteDraftOf({ photographicStyles: "precise" })
+    const saved = preciseStyleRouteToSaved({ ...d, styleRoutes: { ...d.styleRoutes, cyberpunk: "precise-gray" } })
+    const photoIds = STYLES.filter((s) => getStyleMedium(s.id) === "photo").map((s) => s.id)
+    expect(photoIds).toHaveLength(8)
+    expect(saved).not.toHaveProperty("photographicStyles")
+    expect(Object.keys(saved.styleRoutes ?? {}).sort()).toEqual([...photoIds].sort())
+    expect(Object.values(saved.styleRoutes ?? {}).filter((v) => v === "precise")).toHaveLength(7)
+    expect(saved.styleRoutes?.cyberpunk).toBe("precise-gray")
+    expect(Object.values(saved.styleRoutes ?? {})).not.toContain("flex")
+  })
+
+  it("a stored entry for a style this catalog lacks is kept through the draft and saved back", () => {
+    const d = preciseStyleRouteDraftOf({ styleRoutes: { "a-future-style": "precise", noir: "precise-gray" } })
+    expect(preciseStyleRouteToSaved(d)).toEqual({ styleRoutes: { noir: "precise-gray", "a-future-style": "precise" } })
+  })
+
+  it("the saved map is in one order whatever order it was stored in", () => {
+    const a = preciseStyleRouteToSaved(preciseStyleRouteDraftOf({ styleRoutes: { noir: "precise", anime: "precise-gray", "z-new": "precise", "a-new": "precise" } }))
+    const b = preciseStyleRouteToSaved(preciseStyleRouteDraftOf({ styleRoutes: { "a-new": "precise", "z-new": "precise", anime: "precise-gray", noir: "precise" } }))
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b))
   })
 
   it("preciseStyleRouteIssues names what is not an email", () => {
-    expect(preciseStyleRouteIssues({ routing: "on", photographicStyles: "flex", emailsText: "a@x.co\nnope, also nope", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toHaveLength(1)
-    expect(preciseStyleRouteIssues({ routing: "on", photographicStyles: "flex", emailsText: "a@x.co", depthBlurText: "0", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toEqual([])
-    expect(preciseStyleRouteIssues({ routing: "on", photographicStyles: "flex", emailsText: "", depthBlurText: "", describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toEqual([])
-    for (const bad of ["41", "-1", "2.5", "x"]) expect(preciseStyleRouteIssues({ routing: "on", photographicStyles: "flex", emailsText: "", depthBlurText: bad, describeColours: true, faceMesh: false, faceMeshParts: "", faceMeshLayers: {}, faceMeshWording: "motion" })).toHaveLength(1)
+    expect(preciseStyleRouteIssues(draft({ emailsText: "a@x.co\nnope, also nope", faceMeshLayers: {} }))).toHaveLength(1)
+    expect(preciseStyleRouteIssues(draft({ emailsText: "a@x.co", faceMeshLayers: {} }))).toEqual([])
+    expect(preciseStyleRouteIssues(draft({ depthBlurText: "", faceMeshLayers: {} }))).toEqual([])
+    for (const bad of ["41", "-1", "2.5", "x"]) expect(preciseStyleRouteIssues(draft({ depthBlurText: bad, faceMeshLayers: {} }))).toHaveLength(1)
   })
 
   it("environmentsThatCannotRoutePreciseStyle: unknown while loading, else those without the flag", () => {

@@ -11,7 +11,7 @@ vi.mock("@/lib/api", async (orig) => ({
 }))
 import type { ReactElement } from "react"
 import { fetchJobCastSwapSteps } from "@/lib/api"
-import { CastSwapStepsBody, JobGenerationDetails, JobSkippedSteps, JobStepOutputs, PRECISE_STYLE_ROUTED_LINE } from "../job-generation-details"
+import { CastSwapStepsBody, JobGenerationDetails, JobSkippedSteps, JobStepOutputs, PRECISE_STYLE_ROUTED_LINE, PRECISE_STYLE_SENT_GRAY_LINE } from "../job-generation-details"
 afterEach(cleanup)
 beforeEach(() => vi.mocked(fetchJobCastSwapSteps).mockReset())
 it("shows recorded model and generation parameters above the JSON", () => {
@@ -149,4 +149,17 @@ it("says when the Precise art-style route ran the run as Flex, and says nothing 
   withQuery(<JobStepOutputs job={{ id: "job-plain", job_type: null, input_data: { type: "cast-swap" } }} />)
   await screen.findByText("This run used today's steps.")
   expect(screen.queryByTestId("precise-style-routed")).toBeNull()
+})
+
+it("says when the Precise art-style route kept the run Precise and sent its clip in black and white, and says nothing otherwise", async () => {
+  const steps = { stepOutputs: null, sceneText: null, skippedSteps: [], styleOnly: null }
+  vi.mocked(fetchJobCastSwapSteps).mockResolvedValue({ ...steps, preciseStyleSentGray: true })
+  const { unmount } = withQuery(<JobStepOutputs job={{ id: "job-sent-gray", job_type: null, input_data: { type: "cast-swap" } }} />)
+  expect((await screen.findByTestId("precise-style-sent-gray")).textContent).toBe(PRECISE_STYLE_SENT_GRAY_LINE)
+  expect(PRECISE_STYLE_SENT_GRAY_LINE).toBe("Kept Precise by the art-style route, its clip sent in black and white.")
+  unmount()
+  vi.mocked(fetchJobCastSwapSteps).mockResolvedValue(steps)
+  withQuery(<JobStepOutputs job={{ id: "job-not-gray", job_type: null, input_data: { type: "cast-swap" } }} />)
+  await screen.findByText("This run used today's steps.")
+  expect(screen.queryByTestId("precise-style-sent-gray")).toBeNull()
 })

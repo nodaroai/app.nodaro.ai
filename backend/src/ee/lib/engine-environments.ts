@@ -67,6 +67,14 @@ export interface PlatformSupports {
    * style alike, and its admin's save of the row loses it.
    */
   readonly preciseStyleRoutePhotographic?: boolean
+  /**
+   * The Precise art-style route's per-style map (`styleRoutes` of
+   * `nodaro_motion_precise_style_route`, lib/nodaro-motion-precise-style-route.ts):
+   * its schemas take the key, and it is answered to its engine. A build from
+   * before drops the map when it reads the row, so its engine gets none, and
+   * its admin's save of the row erases the map for every environment.
+   */
+  readonly preciseStyleRoutePerStyle?: boolean
 }
 
 /** This build's `PlatformSupports`, claimed by the heartbeat (frozen: a fact about this build). */
@@ -75,6 +83,7 @@ export const PLATFORM_SUPPORTS: PlatformSupports = Object.freeze({
   prismReferenceAudioPitch: true,
   faceMeshLayers: true,
   preciseStyleRoutePhotographic: true,
+  preciseStyleRoutePerStyle: true,
 })
 
 /**

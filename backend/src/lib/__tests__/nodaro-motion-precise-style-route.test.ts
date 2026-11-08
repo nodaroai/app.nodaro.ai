@@ -272,3 +272,54 @@ describe("nodaro-motion-precise-style-route: photographicStyles", () => {
     expect(warn).toHaveBeenCalledTimes(1)
   })
 })
+
+// Which path each art style takes (`styleRoutes`): a style's id to "precise" (kept Precise) or "precise-gray" (kept
+// Precise, its sent clip in black and white); a style left out takes "flex", the default, which is never stored. Beside the older
+// `photographicStyles`, which stays readable.
+describe("nodaro-motion-precise-style-route: styleRoutes", () => {
+  const parse = (v: unknown) => nodaroMotionPreciseStyleRouteSchema.safeParse(v)
+
+  it("saves a style's route; refuses Flex (the default, never stored) and a key that is not a style id", () => {
+    expect(parse({ styleRoutes: { cyberpunk: "precise-gray", noir: "precise" } }).data).toEqual({ styleRoutes: { cyberpunk: "precise-gray", noir: "precise" } })
+    expect(parse({ styleRoutes: {} }).success).toBe(true)
+    expect(parse({ styleRoutes: { cyberpunk: "flex" } }).success).toBe(false)
+    for (const key of ["Bad Id", "", "UPPER", "a".repeat(65), "under_score"]) expect(parse({ styleRoutes: { [key]: "precise" } }).success).toBe(false)
+    expect(parse({ styleRoutes: { ["a".repeat(64)]: "precise" } }).success).toBe(true)
+    expect(parse({ styleRoutes: ["precise"] }).success).toBe(false)
+  })
+
+  it("keeps the older photographic path beside it", () => {
+    expect(parse({ photographicStyles: "precise", styleRoutes: { cyberpunk: "precise" } }).data).toEqual({ photographicStyles: "precise", styleRoutes: { cyberpunk: "precise" } })
+  })
+
+  it("leaves an empty map out, and copies a kept one", () => {
+    expect(withoutDefaultPreciseStyleRoute({ styleRoutes: {} })).toEqual({})
+    const given = { styleRoutes: { cyberpunk: "precise-gray" as const } }
+    const kept = withoutDefaultPreciseStyleRoute(given)
+    expect(kept).toEqual(given)
+    expect(kept.styleRoutes).not.toBe(given.styleRoutes)
+  })
+
+  it("is answered to the engine; an empty map is no difference", () => {
+    expect(preciseStyleRouteForPlugin({ styleRoutes: { cyberpunk: "precise-gray" } })).toEqual({ styleRoutes: { cyberpunk: "precise-gray" } })
+    expect(preciseStyleRouteForPlugin({ styleRoutes: {}, photographicStyles: "precise" })).toEqual({ photographicStyles: "precise" })
+    expect(preciseStyleRouteForPlugin({ styleRoutes: {} })).toBeNull()
+  })
+
+  it("reads tolerantly: valid entries kept, bad ones dropped with a warning, the other fields kept", () => {
+    const warn = vi.fn()
+    expect(parseNodaroMotionPreciseStyleRoute({ styleRoutes: { cyberpunk: "precise", noir: "precise-gray" } }, warn)).toEqual({ styleRoutes: { cyberpunk: "precise", noir: "precise-gray" } })
+    expect(warn).not.toHaveBeenCalled()
+    expect(parseNodaroMotionPreciseStyleRoute({ styleRoutes: { cyberpunk: "precise", x: 1, noir: "flex", "Bad Id": "precise" } }, warn)).toEqual({ styleRoutes: { cyberpunk: "precise" } })
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(parseNodaroMotionPreciseStyleRoute({ styleRoutes: { x: 1 }, routing: "off" }, warn)).toEqual({ routing: "off" })
+    for (const bad of ["precise", ["cyberpunk"], 3]) expect(parseNodaroMotionPreciseStyleRoute({ styleRoutes: bad, routing: "off" }, warn)).toEqual({ routing: "off" })
+    expect(parseNodaroMotionPreciseStyleRoute({ styleRoutes: null }, warn)).toEqual({})
+  })
+
+  it("survives the whole trip: saved, stored, read back and answered to the engine", () => {
+    const saved = withoutDefaultPreciseStyleRoute(parse({ styleRoutes: { cyberpunk: "precise-gray" }, photographicStyles: "precise" }).data)
+    const stored = JSON.parse(JSON.stringify(saved)) as unknown
+    expect(preciseStyleRouteForPlugin(parseNodaroMotionPreciseStyleRoute(stored))).toEqual({ photographicStyles: "precise", styleRoutes: { cyberpunk: "precise-gray" } })
+  })
+})

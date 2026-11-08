@@ -288,6 +288,22 @@ describe("export and import", () => {
     expect(res.json().data.notes.join(" ")).not.toMatch(/bypassEmails/)
   })
 
+  it("imports an older file whose route section holds only the photographic path", async () => {
+    const res = await send("POST", `${BASE}/check`, { document: doc({ settings: { "precise-style-route": { preciseStyleRoute: { photographicStyles: "precise" } } } }) })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.valid).toBe(true)
+    expect(res.json().data.settings["precise-style-route"]).toEqual({ preciseStyleRoute: { photographicStyles: "precise" } })
+  })
+
+  it("imports the route of each art style, and refuses Flex there", async () => {
+    const ok = (await send("POST", `${BASE}/check`, { document: doc({ settings: { "precise-style-route": { preciseStyleRoute: { styleRoutes: { cyberpunk: "precise-gray" } } } } }) })).json().data
+    expect(ok.valid).toBe(true)
+    expect(ok.settings["precise-style-route"]).toEqual({ preciseStyleRoute: { styleRoutes: { cyberpunk: "precise-gray" } } })
+    const bad = (await send("POST", `${BASE}/check`, { document: doc({ settings: { "precise-style-route": { preciseStyleRoute: { styleRoutes: { cyberpunk: "flex" } } } } }) })).json().data
+    expect(bad.valid).toBe(false)
+    expect(h.appSettingsWrites).toBe(0)
+  })
+
   it("lists every problem of a file, and refuses one of another format or a newer version", async () => {
     const bad = (await send("POST", `${BASE}/check`, { document: doc({ settings: { "pulse-audio": { pulseAudio: "loud" }, colour: {} } }) })).json().data
     expect(bad.valid).toBe(false)

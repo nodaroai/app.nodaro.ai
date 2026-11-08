@@ -3909,6 +3909,11 @@ export type PluginNodaroMotionPreciseStyleRoute = {
   readonly bypassEmails?: readonly string[]
   /** "precise": a run whose art style is photographic is not routed (the Precise run of routing "off"); absent ("flex" is never sent): routed as every style. */
   readonly photographicStyles?: "flex" | "precise"
+  /**
+   * Which path a run takes, art style by art style: a style's id to "precise" (not routed, the Precise run of routing
+   * "off") or "precise-gray" (Precise, its sent clip in black and white); a style left out ("flex" is never sent): routed as every style.
+   */
+  readonly styleRoutes?: { readonly [styleId: string]: "precise" | "precise-gray" }
   /** A routed run's own depth blur, 0–40; absent: none (never the Motion masking's). */
   readonly routedDepthBlur?: number
   /** A routed run's shot list is told the colours from the video; absent: on. */
@@ -4456,6 +4461,12 @@ export interface PluginSupports {
    *   routing "off"; every other style routes as before. Additive-optional:
    *   absent ⇒ the engine routes every style alike, whatever the setting says,
    *   and the admin screen names that environment.
+   * - `preciseStyleRoutePerStyle`: that route reads its setting's
+   *   `styleRoutes`, a style's id to "precise" or "precise-gray": a run whose
+   *   art style has an entry takes that path, one without routes as Flex (a
+   *   photographic style without an entry still follows
+   *   `photographicStyles`). Additive-optional: absent ⇒ the engine ignores
+   *   the map, and the admin screen names that environment.
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -4512,6 +4523,7 @@ export interface PluginSupports {
     readonly noPersonSourceClip?: boolean
     readonly preciseArtStyleAlone?: boolean
     readonly preciseStyleRoutePhotographic?: boolean
+    readonly preciseStyleRoutePerStyle?: boolean
     readonly preciseStyleRoute?: boolean
   }
 }

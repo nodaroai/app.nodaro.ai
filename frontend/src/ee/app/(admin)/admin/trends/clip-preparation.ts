@@ -219,6 +219,25 @@ export function environmentsThatRouteEveryStyle(envs: readonly TrendEngineEnviro
 }
 
 /**
+ * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) that do
+ * not route by the route's per-style map (`styleRoutes`): none recorded, or
+ * one whose engine does not declare `castSwap.preciseStyleRoutePerStyle`, or
+ * whose platform (the app, whose read of the row would drop the map, and whose
+ * admin's save would erase it) does not claim it. Such an environment ignores
+ * the map: its engine routes every style as Flex, except that one with only
+ * `castSwap.preciseStyleRoutePhotographic` still keeps photographic styles
+ * Precise on a stored `photographicStyles: "precise"`. Unknown while the
+ * environments are (undefined). Nothing waits for it.
+ */
+export function environmentsThatCannotRoutePerStyle(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+  if (!envs) return undefined
+  return SHARED_SETTING_ENVIRONMENTS.filter((name) => {
+    const supports = envs.find((e) => e.env === name)?.supports
+    return supports?.castSwap?.preciseStyleRoutePerStyle !== true || supports.platform?.preciseStyleRoutePerStyle !== true
+  })
+}
+
+/**
  * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose
  * engine cannot take "Body from the clip" (`steps.clipBody`) — none
  * recorded, or one that does not declare `castSwap.steps` and

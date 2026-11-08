@@ -227,3 +227,24 @@ describe("PUT /v1/admin/nodaro-motion/precise-style-route: the photographic styl
     expect(h.upserts).toEqual([])
   })
 })
+
+describe("PUT /v1/admin/nodaro-motion/precise-style-route: the route of each art style", () => {
+  it("saves a style's route, and GET answers it", async () => {
+    const res = await put({ styleRoutes: { cyberpunk: "precise-gray" } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.preciseStyleRoute).toEqual({ styleRoutes: { cyberpunk: "precise-gray" } })
+    expect(h.upserts[0]!.value).toEqual({ styleRoutes: { cyberpunk: "precise-gray" } })
+    expect((await get()).json().data.preciseStyleRoute).toEqual({ styleRoutes: { cyberpunk: "precise-gray" } })
+  })
+
+  it("refuses Flex (the default, never stored) and a key that is not a style id", async () => {
+    expect((await put({ styleRoutes: { cyberpunk: "flex" } })).statusCode).toBe(400)
+    expect((await put({ styleRoutes: { "Bad Id": "precise" } })).statusCode).toBe(400)
+    expect(h.upserts).toEqual([])
+  })
+
+  it("an empty map stores nothing", async () => {
+    await put({ styleRoutes: {} })
+    expect(h.upserts[0]!.value).toEqual({})
+  })
+})
