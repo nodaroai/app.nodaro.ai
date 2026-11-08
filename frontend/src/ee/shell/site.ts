@@ -8,7 +8,7 @@ import type { SiteWorldId } from "./types"
  *   - VITE_TOOLS_URL  — the origin serving Explore and the simple worlds
  *                       (`/explore`, `/image`, `/video`, `/music`, `/trends`,
  *                       Nodaro Motion `/video/cast-swap`, Voice Changer
- *                       `/video/voice`);
+ *                       `/voice-changer`);
  *   - VITE_STUDIO_URL — Studio.
  *
  * Unset, the header keeps its own canonical targets (it ships them), so a
@@ -58,7 +58,7 @@ const SIMPLE_WORLDS = [
   ["music", "/music"],
   ["trends", "/trends"],
   ["motion", "/video/cast-swap"],
-  ["voice", "/video/voice"],
+  ["voice", "/voice-changer"],
 ] as const
 
 /** The header's world links for a page on `here` (an origin; `""`: the page's own, as paths). */

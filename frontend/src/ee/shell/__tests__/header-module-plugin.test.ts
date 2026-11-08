@@ -169,7 +169,7 @@ describe("the site's shell-version.json", () => {
         music: "https://next.tools.example/music",
         trends: "https://next.tools.example/trends",
         motion: "https://next.tools.example/video/cast-swap",
-        voice: "https://next.tools.example/video/voice",
+        voice: "https://next.tools.example/voice-changer",
         studio: "https://studio.example/",
         app: "/projects",
       },
