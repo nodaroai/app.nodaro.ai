@@ -2,6 +2,14 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { useState } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+
+// The account lookups (the suggestions under the search box) answer nothing here;
+// page.test.tsx covers them.
+vi.mock("@/ee/hooks/queries/use-admin-user-lookup", () => ({
+  useAdminUserSearch: () => ({ data: [], isFetching: false }),
+  useAdminUserByEmail: () => ({ data: undefined, isFetching: false, isError: false }),
+  useDebouncedValue: <T,>(v: T) => v,
+}))
 import { JobsFilterBar } from "../jobs-filter-bar"
 import { DEFAULT_JOB_FILTERS, type AdminJobFilters } from "../jobs-filters"
 

@@ -738,40 +738,6 @@ function excludedUserIds(filters: AdminJobFilters, excludeUserIds?: ReadonlyArra
   return filters.excludeAdmins && !filters.userEmail ? (excludeUserIds ?? []) : []
 }
 
-const ADMIN_USER_FILTER_LIMIT = 1000
-
-export interface AdminUserLite {
-  readonly id: string
-  readonly email: string
-  readonly fullName: string | null
-  readonly role: "user" | "admin" | "super_admin"
-}
-
-export function useAllAdminUsersLite(options: { enabled?: boolean } = {}) {
-  return useQuery({
-    queryKey: queryKeys.admin.usersLite(),
-    queryFn: async (): Promise<ReadonlyArray<AdminUserLite>> => {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, email, full_name, role")
-        .limit(ADMIN_USER_FILTER_LIMIT)
-      if (error) throw error
-      const users = (data ?? []).map((row) => ({
-        id: row.id as string,
-        email: row.email as string,
-        fullName: (row.full_name as string | null) ?? null,
-        role: (row.role as "user" | "admin" | "super_admin") ?? "user",
-      }))
-      return [...users].sort((a, b) =>
-        a.email.localeCompare(b.email, undefined, { sensitivity: "base" }),
-      )
-    },
-    enabled: hasAdmin() && (options.enabled ?? true),
-    staleTime: 60_000,
-  })
-}
-
 // published_apps and app_runs tables exist in DB but not in generated Supabase types
 interface AppRow {
   id: string
@@ -1495,12 +1461,13 @@ export function useAdminAppReports(
   appSlug: string,
   status: string,
   userScope: AppReportsUserScope = {},
+  options: { enabled?: boolean } = {},
 ) {
   const userFilterKey = userScope.userId ?? (userScope.excludeUserIds?.length ? `excl:${userScope.excludeUserIds.length}` : "all")
   return useQuery({
     queryKey: queryKeys.admin.appReports(offset, kind, appSlug, status, userFilterKey),
     queryFn: () => fetchAdminAppReportsPage(offset, 50, kind, appSlug, status, userScope),
-    enabled: hasAdmin(),
+    enabled: hasAdmin() && (options.enabled ?? true),
     staleTime: 15_000,
   })
 }

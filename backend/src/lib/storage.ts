@@ -13,6 +13,7 @@ import { safeFetch } from "./safe-fetch.js"
 import { assertOrdinaryMediaKey } from "./retained-image-keys.js"
 import { keptStoragePrefix, type KeptStoragePrefix } from "./kept-storage-prefixes.js"
 import { heldAmong, LegalHoldUnavailableError } from "./legal-hold.js"
+import { STORAGE_DELETES_OFF, storageDeletesSkipped } from "./storage-deletes-setting.js"
 import { evidenceKeyOf, isEvidenceKey, EVIDENCE_STORAGE_PREFIX } from "./evidence-keys.js"
 import { r2KeyFromPublicUrl } from "./r2-public-key.js"
 import { templateKeptKey, templatePreviewKey } from "./template-preview-key.js"
@@ -1218,8 +1219,24 @@ function warnHeld(keys: readonly string[]): void {
   if (keys.length > 0) console.warn(`[storage] not deleting ${keys.length} key(s) held as evidence of a complaint`)
 }
 
+/**
+ * A deployment that deletes nothing (STORAGE_DELETES=skip,
+ * lib/storage-deletes-setting.ts) skips EVERY key the way a kept prefix's key
+ * is skipped: with a warning, answered as kept and never as failed, so the
+ * funnel records nothing for the retry pass. The key is still validated
+ * first — a retained snapshot's key is refused in both modes. No hold is
+ * asked: nothing is deleted anyway.
+ */
+function warnDeletesSkipped(count: number): void {
+  if (count > 0) console.warn(`[storage] not deleting ${count} key(s): ${STORAGE_DELETES_OFF}`)
+}
+
 export async function deleteFromR2(key: string): Promise<void> {
   if (isKeptKey(key)) return warnKept([key])
+  if (storageDeletesSkipped()) {
+    assertOrdinaryMediaKey(key)
+    return warnDeletesSkipped(1)
+  }
   if ((await heldAmong([key])).has(key)) return warnHeld([key])
   assertOrdinaryMediaKey(key)
   await s3.send(
@@ -1242,10 +1259,16 @@ export async function deleteFromR2(key: string): Promise<void> {
  * Idempotent, so a move cut short is finished by the next call: a copy
  * already at the destination is not copied again, a source already gone is
  * not an error. Answers what it did.
+ *
+ * A move ends in a delete, so a deployment that deletes nothing
+ * (STORAGE_DELETES=skip) refuses it before any storage call: no copy is
+ * written either. lib/content-restriction-bytes.ts records such a key as
+ * skipped and never asks.
  */
 export type ObjectMoveOutcome = "moved" | "already_there" | "missing"
 
 async function moveObject(from: string, to: string): Promise<ObjectMoveOutcome> {
+  if (storageDeletesSkipped()) throw new Error(`[storage] not moving ${from} to ${to}: ${STORAGE_DELETES_OFF}`)
   const [source, destination] = await Promise.all([headR2Object(from), headR2Object(to)])
   if (!destination.exists) {
     if (!source.exists) return "missing"
@@ -1311,13 +1334,22 @@ function refuseEvidenceKey(key: string): void {
  *
  * `kept` names the keys among them under a kept prefix (`KEPT_STORAGE_PREFIXES`)
  * or held as evidence (migration 582) — skipped on purpose and never deleted,
- * so a caller that retries failed deletes leaves these out.
+ * so a caller that retries failed deletes leaves these out. On a deployment
+ * that deletes nothing (STORAGE_DELETES=skip) that is every key: nothing is
+ * sent, and every key is answered as kept and not deleted.
  */
 export async function batchDeleteFromR2(
   requested: string[],
 ): Promise<{ deleted: number; errors: number; notDeleted: string[]; kept: string[] }> {
   const prefixKept = requested.filter(isKeptKey)
   warnKept(prefixKept)
+  if (storageDeletesSkipped()) {
+    // Validated as a real batch is (a refusal stays a refusal), then kept whole.
+    const rest = requested.filter((key) => !isKeptKey(key))
+    rest.forEach(assertOrdinaryMediaKey)
+    warnDeletesSkipped(rest.length)
+    return { deleted: 0, errors: 0, notDeleted: [...requested], kept: [...requested] }
+  }
   let held: Set<string>
   try {
     held = await heldAmong(requested.filter((key) => !isKeptKey(key)))

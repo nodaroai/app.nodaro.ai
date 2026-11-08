@@ -25,7 +25,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: v
 import type { AdminTrendFaceMask, AdminTrendFaceMaskMark, TrendEngineEnvironment } from "@/lib/api"
 import { detail, ENVIRONMENTS, fetchMock, renderWith, resetRoutes, routes, run, sentTo, TREND_ID } from "./harness"
 import AdminTrendEditorPage from "../detail/page"
-import { clipPreparationIssues, environmentsThatCannotHideBodies, supportedTargetsFor, withClipPreparation } from "../clip-preparation"
+import { clipPreparationIssues, environmentsThatCannotHideBodies, environmentsThatCannotRouteStyles, supportedTargetsFor, withClipPreparation } from "../clip-preparation"
 import { cleanMasking, describeBlocker, maskingIssues } from "../model"
 import { labelOf, labelValue, markCounts, markFromDrag, markWho } from "../components/FaceMaskMarks"
 import { unmarkedPeople } from "../components/FaceMaskPanel"
@@ -101,6 +101,30 @@ describe("the clip preparation's rules", () => {
     expect(environmentsThatCannotHideBodies([...at("production", HIDE_ENVS)])).toEqual(["staging"])
     expect(environmentsThatCannotHideBodies([...at("production", HIDE_ENVS), ...at("staging", DEPTH_ENVS)])).toEqual(["staging"])
     expect(environmentsThatCannotHideBodies([...at("production", HIDE_ENVS), ...at("staging", HIDE_ENVS)])).toEqual([])
+  })
+
+  it("Nodaro Motion's Precise style route: the environments that cannot take a flag of it (engine or platform without it), a missing one included", () => {
+    for (const flag of ["preciseStyleRoutePerStyle", "preciseStyleRoutePhotographic"] as const) {
+      const other = flag === "preciseStyleRoutePerStyle" ? "preciseStyleRoutePhotographic" : "preciseStyleRoutePerStyle"
+      const at = (env: string, engine: boolean, platform = engine): TrendEngineEnvironment => ({
+        ...ENVIRONMENTS[0]!,
+        env,
+        supports: {
+          // The other flag, everywhere: it never stands in for this one.
+          castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, preciseStyleRoute: true, [other]: true, ...(engine ? { [flag]: true } : {}) },
+          platform: { [other]: true, ...(platform ? { [flag]: true } : {}) },
+        },
+      })
+      expect(environmentsThatCannotRouteStyles(undefined, flag)).toBeUndefined()
+      expect(environmentsThatCannotRouteStyles([at("production", true), at("staging", false)], flag), flag).toEqual(["staging"])
+      expect(environmentsThatCannotRouteStyles([at("production", false), at("staging", true)], flag), flag).toEqual(["production"])
+      expect(environmentsThatCannotRouteStyles([at("production", true)], flag), flag).toEqual(["staging"])
+      expect(environmentsThatCannotRouteStyles([at("production", false), at("staging", false)], flag), flag).toEqual(["staging", "production"])
+      expect(environmentsThatCannotRouteStyles([at("production", true), at("staging", true)], flag), flag).toEqual([])
+      // Both are needed: an engine that declares it behind a platform that does not claim it, and the reverse.
+      expect(environmentsThatCannotRouteStyles([at("production", true, false), at("staging", true)], flag), flag).toEqual(["production"])
+      expect(environmentsThatCannotRouteStyles([at("production", true), at("staging", false, true)], flag), flag).toEqual(["staging"])
+    }
   })
 
   it("names what the server would refuse", () => {

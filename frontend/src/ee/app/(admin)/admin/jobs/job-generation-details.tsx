@@ -244,6 +244,9 @@ function StyleRefsOutputs({ out }: { out: NonNullable<StepOutputs["styleRefs"]> 
 /** Said on a run the Precise art-style route ran as Flex (its input's `__preciseStyleRouted`). */
 export const PRECISE_STYLE_ROUTED_LINE = "Run as Flex by the Precise art-style route."
 
+/** Said on a run the Precise art-style route kept Precise and sent its clip in black and white (its steps' `preciseStyleSentGray`). */
+export const PRECISE_STYLE_SENT_GRAY_LINE = "Kept Precise by the art-style route, its clip sent in black and white."
+
 const STYLE_ONLY_PATH_LABELS: Readonly<Record<NodaroMotionStyleOnlyPath, string>> = {
   original: "Style only: original clip",
   flex: "Style only: like other styles",
@@ -265,10 +268,11 @@ function StyleOnlyLine({ path, grayscale }: { path: NodaroMotionStyleOnlyPath; g
  * pictures; the skipped steps.
  */
 export function CastSwapStepsBody({ data, showSkipped }: { data: JobCastSwapSteps; showSkipped: boolean }) {
-  const { stepOutputs: out, sceneText, skippedSteps, styleOnly, preciseStyleRouted } = data
+  const { stepOutputs: out, sceneText, skippedSteps, styleOnly, preciseStyleRouted, preciseStyleSentGray } = data
   return <div className="flex min-w-0 flex-col gap-3 text-sm">
     {showSkipped && <JobSkippedSteps output={{ skippedSteps }} />}
     {preciseStyleRouted && <p className="text-xs text-muted-foreground" data-testid="precise-style-routed">{PRECISE_STYLE_ROUTED_LINE}</p>}
+    {preciseStyleSentGray && <p className="text-xs text-muted-foreground" data-testid="precise-style-sent-gray">{PRECISE_STYLE_SENT_GRAY_LINE}</p>}
     {styleOnly && <StyleOnlyLine path={styleOnly} grayscale={out?.styleOnly?.grayscale === true} />}
     {out === null ? <p className="text-muted-foreground">This run used today's steps.</p> : <>
       {out.roles.length > 0 && <div className="flex flex-col gap-2">

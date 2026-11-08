@@ -552,9 +552,12 @@ export type CastSwapFullQualityRefusalCode =
  * Who decides a direct run's style on one engine:
  * - `"user"`: the person (the request's `style`, left out = `"precise"`);
  *   show a Style control;
- * - `"precise"` / `"flex"`: an admin forced it — every direct run and quote
- *   of that engine runs Precise / Flex (`style: "motion"`) whatever the
- *   request's `style` says; show no Style control.
+ * - `"precise"`: Nodaro's own apps run Precise on that engine and show no
+ *   Style control; it changes no request: a direct run and quote take the
+ *   request's `style`, as on `"user"`;
+ * - `"flex"`: an admin forced it — every direct run and quote of that engine
+ *   runs Flex (`style: "motion"`) whatever the request's `style` says; show
+ *   no Style control.
  *
  * A trend run keeps its own trend's style.
  */
@@ -567,9 +570,9 @@ export interface CastSwapStyleChoice {
    * Per engine, whether the engine takes style-only runs: a Flex run
    * (`style: "motion"`) with an art style (`direction`) and nothing to swap
    * (no role with images, no fixed reference). It follows the engine alone, so
-   * read it with {@link engines}: an engine answered `"precise"` drops the art
-   * style, so such a request is refused as `validation_error` and, with anything
-   * else to change, runs and is quoted as Precise. Nodaro Motion Pulse is always
+   * read it with {@link engines}: an engine answered `"flex"` makes a Precise
+   * request Flex too, and one answered `"precise"` changes no request, so a
+   * Flex request there runs as on `"user"`. Nodaro Motion Pulse is always
    * `false` (it takes no art style). Absent from an older server, and
    * an engine missing from it: `false`.
    */
@@ -581,10 +584,9 @@ export interface CastSwapStyleChoice {
    * say; otherwise it is Precise's edit of the clip, drawn in the art style, and,
    * where {@link CastSwapStyleChoice.preciseArtStyleAlone} is not true for the
    * engine, not on its own: a Precise run with nothing else to change is then refused.
-   * Where it is `true`, an engine answered
-   * `"precise"` keeps a Flex request's art style. Nodaro Motion Pulse is always
-   * `false` (it takes no art style). Absent from an older server, and an engine
-   * missing from it: `false` (offer an art style on Flex runs alone).
+   * Nodaro Motion Pulse is always `false` (it takes no art style). Absent from
+   * an older server, and an engine missing from it: `false` (offer an art style
+   * on Flex runs alone).
    */
   preciseArtStyle?: Partial<Record<CastSwapEngine, boolean>>
   /**
@@ -619,8 +621,10 @@ export class CastSwapResource {
   /**
    * Whether people choose a direct run's style, per engine
    * (`GET /v1/cast-swap/style-choice`): `"user"` = show a Style control;
-   * `"precise"` / `"flex"` = an admin forced that style for the engine, so a
-   * run's `style` is overridden and the control is best hidden. Its
+   * `"precise"` = Nodaro's own apps run Precise on that engine and hide the
+   * control, while a run's `style` is still taken as sent; `"flex"` = an admin
+   * forced Flex for the engine, so a run's `style` is overridden and the
+   * control is best hidden. Its
    * `styleOnly` says, per engine, whether a Flex run with an art style and
    * nothing to swap restyles the whole clip there. Where it is not `true`
    * (absent, or an engine missing from it, included) on Nodaro Motion Prism, an

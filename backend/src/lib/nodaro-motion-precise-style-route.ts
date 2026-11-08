@@ -7,7 +7,7 @@
  * running it.
  *
  * The `app_settings` row `nodaro_motion_precise_style_route`:
- * `{ routing?: "on" | "off"; bypassEmails?: string[]; photographicStyles?: "flex" | "precise"; routedDepthBlur?: number; describeColours?: boolean; faceMesh?: boolean;
+ * `{ routing?: "on" | "off"; bypassEmails?: string[]; photographicStyles?: "flex" | "precise"; styleRoutes?: Record<string, "precise" | "precise-gray">; routedDepthBlur?: number; describeColours?: boolean; faceMesh?: boolean;
  * faceMeshParts?: "full" | "features" | "mouth" | "contours"; faceMeshLayers?: VideoFaceMeshLayers; faceMeshWording?: "motion" | "shape" }`.
  *
  * - `routing`: "on" (the default; absent means it) runs such a run as Flex;
@@ -26,6 +26,18 @@
  *   decides it on the run's own style (`castSwap.preciseStyleRoutePhotographic`);
  *   one without the flag, or a platform from before it (its tolerant read drops
  *   the key), routes every style alike.
+ * - `styleRoutes`: which path such a run takes, art style by art style: a
+ *   style's id (the style catalog's, `/^[a-z0-9][a-z0-9-]{0,63}$/`) to "precise"
+ *   (left the Precise run, as routing "off" makes it, for that style alone) or
+ *   "precise-gray" (left Precise, its sent clip in black and white). A style left out takes
+ *   "flex", the default, routed as every style: "flex" is never stored, and
+ *   the admin's save refuses it. Stored only when the map is not empty. The
+ *   older `photographicStyles` stays readable beside it. The tolerant read
+ *   keeps each valid entry and drops the others alone. Only an engine that
+ *   declares `castSwap.preciseStyleRoutePerStyle` is answered the map; any
+ *   other is answered `photographicStyles: "precise"` in its place when every
+ *   Filmed style (`filmedStyleIds`) is "precise" in it, and nothing for it
+ *   otherwise (`styleRoutesForEngine`, in nodaro-motion-precise-style-route-engine.ts).
  * - `routedDepthBlur`: a routed run's OWN depth blur, in the Motion masking's
  *   `depthBlur` bounds (`CAST_SWAP_DEPTH_BLUR_BOUNDS`: 0–40 whole steps, the
  *   sigma at 1080 px tall). Absent or 0 is no blur. It applies only to a run the
@@ -95,6 +107,13 @@ export type PreciseStyleRouting = (typeof PRECISE_STYLE_ROUTINGS)[number]
 export const PHOTOGRAPHIC_STYLE_PATHS = ["flex", "precise"] as const
 export type PhotographicStylePath = (typeof PHOTOGRAPHIC_STYLE_PATHS)[number]
 
+/** What an art style can be routed to, besides "flex" (the default, never stored). */
+export const STYLE_ROUTES = ["precise", "precise-gray"] as const
+export type StyleRoute = (typeof STYLE_ROUTES)[number]
+
+/** An art style's id, as the style catalog spells it: 1–64 of a–z, 0–9 and -, starting with a letter or digit. */
+export const STYLE_ROUTE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/
+
 /** How many accounts the bypass list holds: it is a test list, not an audience. */
 export const PRECISE_STYLE_ROUTE_MAX_EMAILS = 200
 
@@ -104,6 +123,8 @@ export interface NodaroMotionPreciseStyleRoute {
   bypassEmails?: string[]
   /** Which path a run with a photographic art style takes; absent: "flex" (routed as every style). */
   photographicStyles?: PhotographicStylePath
+  /** Which path a run takes, art style by art style; a style left out (or no map): "flex". */
+  styleRoutes?: Record<string, StyleRoute>
   /** A routed run's own depth blur (`CAST_SWAP_DEPTH_BLUR_BOUNDS`); absent or 0: none. */
   routedDepthBlur?: number
   /** A routed run's shot list is told the colours from the video; absent: on. */
@@ -137,6 +158,7 @@ export const nodaroMotionPreciseStyleRouteSchema = z
     routing: z.enum(PRECISE_STYLE_ROUTINGS).optional(),
     bypassEmails: z.array(emailSchema).max(PRECISE_STYLE_ROUTE_MAX_EMAILS).transform(withoutRepeats).optional(),
     photographicStyles: z.enum(PHOTOGRAPHIC_STYLE_PATHS).optional(),
+    styleRoutes: z.record(z.string().regex(STYLE_ROUTE_ID_PATTERN), z.enum(STYLE_ROUTES)).optional(),
     routedDepthBlur: routedDepthBlurSchema.optional(),
     describeColours: z.boolean().optional(),
     faceMesh: z.boolean().optional(),
@@ -153,12 +175,13 @@ export const nodaroMotionPreciseStyleRouteSchema = z
     message: "The face mesh's layers draw nothing: turn on the wireframe, the eyes, the lips, the contours or the irises (bold only changes their lines).",
   })
 
-/** The setting as stored and sent: `routing` only when "off", the list only when it is not empty, the photographic path only when "precise", the blur only above 0, the colours only when off, the mesh only when on. New objects. */
+/** The setting as stored and sent: `routing` only when "off", the list only when it is not empty, the photographic path only when "precise", the per-style routes only when there is one, the blur only above 0, the colours only when off, the mesh only when on. New objects. */
 export function withoutDefaultPreciseStyleRoute(setting: NodaroMotionPreciseStyleRoute | null | undefined): NodaroMotionPreciseStyleRoute {
   const out: NodaroMotionPreciseStyleRoute = {}
   if (setting?.routing === "off") out.routing = "off"
   if (setting?.bypassEmails && setting.bypassEmails.length > 0) out.bypassEmails = [...setting.bypassEmails]
   if (setting?.photographicStyles === "precise") out.photographicStyles = "precise"
+  if (setting?.styleRoutes && Object.keys(setting.styleRoutes).length > 0) out.styleRoutes = { ...setting.styleRoutes }
   if (typeof setting?.routedDepthBlur === "number" && setting.routedDepthBlur > 0) out.routedDepthBlur = setting.routedDepthBlur
   if (setting?.describeColours === false) out.describeColours = false
   if (setting?.faceMesh === true) out.faceMesh = true
@@ -181,15 +204,17 @@ export function preciseStyleRouteForPlugin(setting: NodaroMotionPreciseStyleRout
  * The tolerant read of the stored row, field by field: an unknown key is
  * ignored, a switch of neither value reads as on, a list that is not one as
  * empty, an entry that is not an email is dropped alone (each with a warning
- * naming no email), the defaults left out. Not an object reads as never saved
+ * naming no email), a per-style route that is not a style id to a known route
+ * dropped alone too, the defaults left out. Not an object reads as never saved
  * (null).
  */
 export function parseNodaroMotionPreciseStyleRoute(value: unknown, warn: (msg: string) => void = (msg) => console.warn(msg)): NodaroMotionPreciseStyleRoute | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null
-  const { routing, bypassEmails, photographicStyles, routedDepthBlur, describeColours, faceMesh, faceMeshParts, faceMeshLayers, faceMeshWording } = value as {
+  const { routing, bypassEmails, photographicStyles, styleRoutes, routedDepthBlur, describeColours, faceMesh, faceMeshParts, faceMeshLayers, faceMeshWording } = value as {
     routing?: unknown
     bypassEmails?: unknown
     photographicStyles?: unknown
+    styleRoutes?: unknown
     routedDepthBlur?: unknown
     describeColours?: unknown
     faceMesh?: unknown
@@ -209,6 +234,14 @@ export function parseNodaroMotionPreciseStyleRoute(value: unknown, warn: (msg: s
   }
   if ((PHOTOGRAPHIC_STYLE_PATHS as readonly unknown[]).includes(photographicStyles)) out.photographicStyles = photographicStyles as PhotographicStylePath
   else if (photographicStyles !== undefined && photographicStyles !== null) warn(`[${NODARO_MOTION_PRECISE_STYLE_ROUTE_KEY}] the photographic art-style path is not known: those runs are routed as Flex`)
+  if (typeof styleRoutes === "object" && styleRoutes !== null && !Array.isArray(styleRoutes)) {
+    const entries = Object.entries(styleRoutes as Record<string, unknown>)
+    const valid = entries.filter((e): e is [string, StyleRoute] => STYLE_ROUTE_ID_PATTERN.test(e[0]) && (STYLE_ROUTES as readonly unknown[]).includes(e[1]))
+    if (valid.length < entries.length) warn(`[${NODARO_MOTION_PRECISE_STYLE_ROUTE_KEY}] ${entries.length - valid.length} per-style routes are not a style id to a known route: those styles are routed as Flex`)
+    out.styleRoutes = Object.fromEntries(valid)
+  } else if (styleRoutes !== undefined && styleRoutes !== null) {
+    warn(`[${NODARO_MOTION_PRECISE_STYLE_ROUTE_KEY}] the per-style routes are not a map: every style is routed as Flex`)
+  }
   if (routedDepthBlur !== undefined && routedDepthBlur !== null) {
     const blur = routedDepthBlurSchema.safeParse(routedDepthBlur)
     if (blur.success) out.routedDepthBlur = blur.data
@@ -234,4 +267,9 @@ export function parseNodaroMotionPreciseStyleRoute(value: unknown, warn: (msg: s
 /** Whether a (loaded or recorded) Cast Swap engine runs such a run as Flex (`castSwap.preciseStyleRoute`). An engine without it never reads the row. */
 export function engineRoutesPreciseStyle(cs: { readonly preciseStyleRoute?: boolean } | undefined): boolean {
   return cs?.preciseStyleRoute === true
+}
+
+/** Whether a (loaded or recorded) Cast Swap engine reads the per-style map (`castSwap.preciseStyleRoutePerStyle`). */
+export function engineRoutesPerStyle(cs: { readonly preciseStyleRoutePerStyle?: boolean } | undefined): boolean {
+  return cs?.preciseStyleRoutePerStyle === true
 }

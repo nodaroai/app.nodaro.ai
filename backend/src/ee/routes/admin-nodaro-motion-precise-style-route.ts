@@ -17,11 +17,14 @@
  * whether its depth map carries the face mesh (`faceMesh`, off by default),
  * and which path a run whose art style is photographic takes
  * (`photographicStyles`: "flex", the default, routed as every style, or
- * "precise", left the Precise run routing "off" makes).
+ * "precise", left the Precise run routing "off" makes), and the path of each
+ * art style (`styleRoutes`: a style's id to "precise" or "precise-gray"; a
+ * style left out is routed as Flex, the default, which is never stored).
  *
  * A PUT is refused 400 `validation_error` on the body's shape (strict: an
  * unknown key, a third value, something that is not an email, too many, a blur
- * that is not a whole number from 0 to 40). Any
+ * that is not a whole number from 0 to 40, a per-style route of "flex" or to a
+ * key that is not a style id). Any
  * value saves whatever the engines: an engine that does not declare
  * `castSwap.preciseStyleRoute` never reads the row and runs such a run as
  * Precise, so no 409 waits for one; likewise "precise" for the photographic

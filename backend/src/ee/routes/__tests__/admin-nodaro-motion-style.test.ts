@@ -3,7 +3,7 @@ import Fastify, { type FastifyInstance } from "fastify"
 
 /**
  * `/v1/admin/nodaro-motion/style` — who chooses a direct Nodaro Motion run's
- * style, per engine: people ("user", the default), or always Precise / Flex.
+ * style, per engine: people ("user", the default), or Precise in Nodaro Motion / always Flex.
  *
  * What must hold:
  *  - both routes are admin-only;

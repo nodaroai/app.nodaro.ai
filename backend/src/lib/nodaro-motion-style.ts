@@ -10,11 +10,15 @@
  *
  * - No row, an engine left out, or `"user"`: people choose (the request's
  *   `style`, left out = Precise), exactly as before the setting.
- * - `"precise"` / `"flex"`: every direct run and quote of that engine runs in
- *   that style, whatever the request's `style` says (`"flex"` is the wire's
- *   `style: "motion"`). The Cast Swap engine enforces it (it ignores the
- *   request's `style`), and clients hide their Style control
- *   (`GET /v1/cast-swap/style-choice`).
+ * - `"flex"` ("Always Flex", the wire's `style: "motion"`): enforced for every
+ *   direct run and quote of that engine, API and agents too, whatever the
+ *   request's `style` says. The Cast Swap engine enforces it, and clients hide
+ *   their Style control (`GET /v1/cast-swap/style-choice`).
+ * - `"precise"` ("Precise in Nodaro Motion"): clients hide their Style control
+ *   and run Precise; the engine (from plugin 0.456.0) makes a request that asks
+ *   for Flex (`style: "motion"`) a Flex run, so an API or agent caller that
+ *   asks for Flex gets it. An engine before it runs every direct run of that
+ *   engine as Precise.
  *
  * A row keyed by the earlier ids (`"motion-pro"`, `"motion-lite"`) reads as
  * the new ones (`parseByEngine`). What is stored: only the forced engines
@@ -32,7 +36,7 @@ import { parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPl
 
 export const NODARO_MOTION_STYLE_KEY = "nodaro_motion_style"
 
-/** Who decides a direct run's style: people (`"user"`), or always Precise / always Flex. */
+/** Who decides a direct run's style: people (`"user"`), or Precise in Nodaro Motion (`"precise"`) / always Flex (`"flex"`). */
 export const NODARO_MOTION_STYLE_CHOICES = ["user", "precise", "flex"] as const
 export type NodaroMotionStyleChoice = (typeof NODARO_MOTION_STYLE_CHOICES)[number]
 

@@ -14,6 +14,8 @@ export function createClient() {
       url: runtimeSupabaseUrl(),
       anonKey: runtimeSupabaseAnonKey(),
       cookieDomain: '.nodaro.ai',
+      // The project production used before its move; remove after 2027-11, when every such cookie has expired.
+      retiredSupabaseUrls: ['https://kvitmiiswsbtxvjgvbkw.supabase.co'],
     })
   }
   return cachedClient

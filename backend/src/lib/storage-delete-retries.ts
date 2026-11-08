@@ -65,6 +65,13 @@
  * pass needs nothing edition-gated (no credits, no admin; the relay guard is
  * inert without a relay target). Without object storage it does not start.
  *
+ * A DEPLOYMENT THAT DELETES NOTHING (STORAGE_DELETES=skip,
+ * lib/storage-deletes-setting.ts): the pass stands down before it reads,
+ * claims or counts anything, and every record stays as it is. Its
+ * bookkeeping would read a skipped delete as a failed one (an attempt counted
+ * on every record, then given up), and the records a database copy came with
+ * belong to the deployment that wrote them. The funnel records nothing there.
+ *
  * STAGING: dev code runs on the shared database before `main` applies 496. A
  * missing table (42P01 / PGRST205) or column (42703 / PGRST204) makes the
  * pass a no-op.
@@ -76,6 +83,7 @@ import { keysHeldByOtherLibraryRows } from "./key-ownership.js"
 import { blankUrlsInEveryJobOutput, urlsLinkedByJobsSince } from "./job-output-references.js"
 import { isMissingColumnError, isMissingTableError } from "./postgrest-errors.js"
 import { isRetryableDeleteKey, STORAGE_DELETE_RETRIES_TABLE as TABLE, type DeleteSource } from "./storage-delete.js"
+import { STORAGE_DELETES_OFF, storageDeletesSkipped } from "./storage-deletes-setting.js"
 
 /**
  * The sources whose failed delete a job made after the failure keeps: the
@@ -139,6 +147,10 @@ function notOnThisDatabase(error: { code?: string | null } | null | undefined): 
  * at the first failed lookup or write; everything it does is safe to repeat.
  */
 export async function retryFailedStorageDeletes(): Promise<RetryResult> {
+  if (storageDeletesSkipped()) {
+    console.warn(`[storage-delete] the failed-delete retry pass does not run: ${STORAGE_DELETES_OFF}`)
+    return { retried: 0, deleted: 0, failed: 0, gaveUp: 0, released: 0, errors: 0 }
+  }
   // At most one attempt per record per ~day, however many replicas run the
   // pass and however often a deploy restarts it (each start runs one pass):
   // a record is worked only by the pass whose claim stamped it.

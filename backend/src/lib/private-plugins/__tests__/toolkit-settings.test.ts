@@ -47,6 +47,7 @@ vi.mock("../../app-settings.js", async (importOriginal) => {
 
 const { buildToolkit } = await import("../toolkit.js")
 const { _resetPluginSupportsForTests, setPluginSupports } = await import("../../private-plugins/supports-registry.js")
+const { filmedStyleIds } = await import("../../nodaro-motion-precise-style-route-engine.js")
 
 /** A loaded Cast Swap engine that draws the face mesh, or one from before it (`castSwap.faceMesh` absent). */
 const CS = { roleKinds: ["person"], fixedReferences: true, fullQuality: true, resolutions: ["480p"], trendRun: true } as const
@@ -909,6 +910,21 @@ describe("tk.settings.nodaroMotionPreciseStyleRoute", () => {
     routingEngine()
     h.preciseStyleRoute = { photographicStyles: "precise", routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" }
     expect(await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).toStrictEqual({ photographicStyles: "precise", routedDepthBlur: 10, describeColours: false, faceMesh: true, faceMeshParts: "contours", faceMeshWording: "shape" })
+  })
+
+  it("answers the per-style map only to an engine that reads it; any other the photographic path when every Filmed style is Precise", async () => {
+    const filmed = Object.fromEntries(filmedStyleIds().map((id) => [id, "precise"]))
+    h.preciseStyleRoute = { styleRoutes: { ...filmed, anime: "precise-gray" } }
+    setPluginSupports({ castSwap: { ...CS, preciseStyleRoute: true, preciseStyleRoutePerStyle: true } } as never)
+    expect(await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).toStrictEqual({ styleRoutes: { ...filmed, anime: "precise-gray" } })
+    routingEngine()
+    expect(await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).toStrictEqual({ photographicStyles: "precise" })
+    // A Filmed style in black and white: such an engine cannot make it, so it stays Flex there, and nothing is left.
+    h.preciseStyleRoute = { styleRoutes: { ...filmed, noir: "precise-gray" } }
+    expect(await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).toBeNull()
+    // Nothing left once the map and the layers (an engine that does not draw them) are taken out.
+    h.preciseStyleRoute = { styleRoutes: { anime: "precise" }, faceMeshLayers: { irises: true } }
+    expect(await buildToolkit().settings!.nodaroMotionPreciseStyleRoute!()).toBeNull()
   })
 })
 

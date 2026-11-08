@@ -1361,7 +1361,11 @@ export interface PluginStorageToolkit {
   downloadR2ObjectToFile(key: string, dest: string): Promise<void>
   /** Mirrors `readR2ObjectBuffer` (`lib/storage.ts`) — S3-origin read of an R2 object into a Buffer, or null if absent. */
   readR2ObjectBuffer(key: string): Promise<Buffer | null>
-  /** Mirrors `deleteFromR2` (`lib/storage.ts`) — deletes an R2 object by key. */
+  /**
+   * Mirrors `deleteFromR2` (`lib/storage.ts`) — deletes an R2 object by key.
+   * On a deployment that deletes nothing (`STORAGE_DELETES=skip`) it resolves
+   * without deleting, with a warning, as it does for a key it keeps.
+   */
   deleteFromR2(key: string): Promise<void>
   /** Host-aware inverse of `r2Url`; rejects foreign/user-owned URLs. */
   r2KeyFromOurUrl(url: string): string | null
@@ -3464,8 +3468,8 @@ export interface PluginCapabilities {
   readonly nodaroMotionSteps?: boolean
   /**
    * `tk.settings.nodaroMotionStyle()` exists: the Style choice an admin set
-   * per Nodaro Motion engine for DIRECT runs (people choose, or always
-   * Precise / always Flex). An older host has no such member: a plugin reads
+   * per Nodaro Motion engine for DIRECT runs (people choose, or Precise in
+   * Nodaro Motion / always Flex). An older host has no such member: a plugin reads
    * that as never saved (people choose, the request's `style`).
    */
   readonly nodaroMotionStyle?: boolean
@@ -3830,8 +3834,11 @@ export interface PluginSettingsToolkit {
    * their quotes (a trend run keeps its own trend's style): only the engines
    * whose style is forced, each answered under its current AND its earlier
    * key, or null when it was never saved or nothing is forced (then the
-   * request's `style` decides, as before). A forced engine's runs take that
-   * style whatever the request's `style` says (`"flex"` = `style: "motion"`).
+   * request's `style` decides, as before). An engine forced to `"flex"`
+   * (`style: "motion"`) runs Flex whatever the request's `style` says; one
+   * forced to `"precise"` runs Precise, except that the engine (from plugin
+   * 0.456.0) makes a request that asks for Flex a Flex run (clients hide their
+   * Style control either way).
    * Returns a copy the plugin may change freely. REJECTS when the settings
    * could not be read. Advertised as `capabilities.nodaroMotionStyle`.
    */
@@ -3909,6 +3916,11 @@ export type PluginNodaroMotionPreciseStyleRoute = {
   readonly bypassEmails?: readonly string[]
   /** "precise": a run whose art style is photographic is not routed (the Precise run of routing "off"); absent ("flex" is never sent): routed as every style. */
   readonly photographicStyles?: "flex" | "precise"
+  /**
+   * Which path a run takes, art style by art style: a style's id to "precise" (not routed, the Precise run of routing
+   * "off") or "precise-gray" (Precise, its sent clip in black and white); a style left out ("flex" is never sent): routed as every style.
+   */
+  readonly styleRoutes?: { readonly [styleId: string]: "precise" | "precise-gray" }
   /** A routed run's own depth blur, 0–40; absent: none (never the Motion masking's). */
   readonly routedDepthBlur?: number
   /** A routed run's shot list is told the colours from the video; absent: on. */
@@ -4331,8 +4343,10 @@ export interface PluginSupports {
    *   while any environment lacks it (lib/cast-swap-steps.ts
    *   `engineTakesStyleRefs`).
    * - `styleChoice`: a DIRECT run and its estimate read the admin's Style
-   *   choice per engine (`tk.settings.nodaroMotionStyle`) and, for an engine
-   *   an admin forced, run in that style whatever the request's `style` says.
+   *   choice per engine (`tk.settings.nodaroMotionStyle`): for an engine an
+   *   admin forced to `"flex"`, run Flex whatever the request's `style` says;
+   *   for one forced to `"precise"`, run Precise, except that from plugin
+   *   0.456.0 a request that asks for Flex runs Flex.
    *   Additive-optional: absent ⇒ `false` — the engine takes the request's
    *   `style` as before; the platform then answers every engine as "user"
    *   (`GET /v1/cast-swap/style-choice`, so clients keep their Style control)
@@ -4456,6 +4470,14 @@ export interface PluginSupports {
    *   routing "off"; every other style routes as before. Additive-optional:
    *   absent ⇒ the engine routes every style alike, whatever the setting says,
    *   and the admin screen names that environment.
+   * - `preciseStyleRoutePerStyle`: that route reads its setting's
+   *   `styleRoutes`, a style's id to "precise" or "precise-gray": a run whose
+   *   art style has an entry takes that path, one without routes as Flex (a
+   *   photographic style without an entry still follows
+   *   `photographicStyles`). Additive-optional: absent ⇒ the platform answers
+   *   the engine no map, and `photographicStyles: "precise"` in its place when
+   *   every Filmed style is "precise" in it (lib/nodaro-motion-precise-style-route.ts
+   *   `styleRoutesForEngine`); the admin screen names that environment.
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -4512,6 +4534,7 @@ export interface PluginSupports {
     readonly noPersonSourceClip?: boolean
     readonly preciseArtStyleAlone?: boolean
     readonly preciseStyleRoutePhotographic?: boolean
+    readonly preciseStyleRoutePerStyle?: boolean
     readonly preciseStyleRoute?: boolean
   }
 }

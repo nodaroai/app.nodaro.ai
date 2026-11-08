@@ -1,6 +1,6 @@
 /**
  * Admin → Nodaro Motion's Style choice: per engine, whether people choose a
- * direct run's style or it is always Precise / always Flex
+ * direct run's style or it is Precise in Nodaro Motion / always Flex
  * (GET/PUT /v1/admin/nodaro-motion/style). Never saved (`style: null`) =
  * people choose on every engine.
  */

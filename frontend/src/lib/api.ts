@@ -12148,6 +12148,8 @@ export interface TrendEngineEnvironment {
       preciseStyleRoute?: boolean
       /** The engine keeps a run whose art style is photographic Precise when the route's setting says so; absent = it routes every style. */
       preciseStyleRoutePhotographic?: boolean
+      /** The engine reads the route's per-style map (`styleRoutes`); absent = it is answered no map: it routes every style as Flex, except that one with `preciseStyleRoutePhotographic` keeps photographic styles Precise on `photographicStyles: "precise"`, stored or answered in the map's place when every Filmed style is "precise" in it. */
+      preciseStyleRoutePerStyle?: boolean
     }
     /**
      * What that environment's platform (the app itself, apart from its engine)
@@ -12163,6 +12165,10 @@ export interface TrendEngineEnvironment {
       faceMeshLayers?: boolean
       /** The Precise art-style route's photographic path (`photographicStyles`): it keeps the key and answers it to its engine. */
       preciseStyleRoutePhotographic?: boolean
+      /** The Precise art-style route's per-style map (`styleRoutes`): it keeps the map and answers it to its engine. */
+      preciseStyleRoutePerStyle?: boolean
+      /** The Precise art-style route's Filmed fallback: to an engine that cannot read the per-style map it answers `photographicStyles: "precise"` when every Filmed style is "precise" in the map. */
+      preciseStyleRouteFilmedFallback?: boolean
     }
   } & Record<string, unknown>
   updatedAt: string
@@ -12418,6 +12424,8 @@ export interface JobCastSwapSteps {
   styleOnly: NodaroMotionStyleOnlyPath | null
   /** It resolved to Precise with an art style, and the Precise art-style route ran it as Flex; absent otherwise. */
   preciseStyleRouted?: true
+  /** The Precise art-style route kept it Precise and sent its clip in black and white; absent otherwise. */
+  preciseStyleSentGray?: true
 }
 
 const ADMIN_NODARO_MOTION_STEPS = "/v1/admin/nodaro-motion/steps"
@@ -13152,7 +13160,7 @@ export async function saveNodaroMotionMotion(motion: NodaroMotionMotion): Promis
 
 // ---- Admin: Nodaro Motion's Style choice for direct runs (/v1/admin/nodaro-motion/style, admin-nodaro-motion-style.ts) ----
 
-/** Who decides a direct run's style on an engine: people (the default), or always Precise / always Flex. */
+/** Who decides a direct run's style on an engine: people (the default), or Precise in Nodaro Motion (`"precise"`) / always Flex (`"flex"`). */
 export type NodaroMotionStyleChoice = "user" | "precise" | "flex"
 
 /** The Style choice per engine, keyed by public id; an engine left out (or "user") lets people choose. */
@@ -13343,6 +13351,8 @@ export interface NodaroMotionPreciseStyleRoute {
   bypassEmails?: string[]
   /** Which path a run whose art style is photographic takes: routed as Flex ("flex", absent) or kept Precise ("precise"). */
   photographicStyles?: "flex" | "precise"
+  /** Which path a run takes, art style by art style: kept Precise ("precise") or Precise with its sent clip in black and white ("precise-gray"); a style left out is routed as Flex (the default, never saved). */
+  styleRoutes?: Record<string, "precise" | "precise-gray">
   /** A routed run's own depth blur, 0–40 (the Motion masking's bounds); absent or 0: none. */
   routedDepthBlur?: number
   /** A routed run's shot list writer is told to describe the colours from the video; absent: on. */
@@ -13371,7 +13381,7 @@ export async function fetchNodaroMotionPreciseStyleRoute(): Promise<NodaroMotion
   return (await apiRequest<{ data: NodaroMotionPreciseStyleRouteView }>(ADMIN_NODARO_MOTION_PRECISE_STYLE_ROUTE, "apiErr.loadNodaroMotion")).data
 }
 
-/** Saves the whole setting, whatever the engines. Something that is not an email, or a blur outside 0–40, is a 400 `validation_error`. */
+/** Saves the whole setting, whatever the engines. Something that is not an email, a blur outside 0–40, or a per-style route of "flex" or to a key that is not a style id, is a 400 `validation_error`. */
 export async function saveNodaroMotionPreciseStyleRoute(preciseStyleRoute: NodaroMotionPreciseStyleRoute): Promise<NodaroMotionPreciseStyleRouteView> {
   return (
     await apiRequest<{ data: NodaroMotionPreciseStyleRouteView }>(ADMIN_NODARO_MOTION_PRECISE_STYLE_ROUTE, "apiErr.saveNodaroMotion", {

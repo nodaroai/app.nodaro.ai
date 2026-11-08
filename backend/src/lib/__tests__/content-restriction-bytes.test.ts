@@ -20,6 +20,7 @@ const fake = vi.hoisted(() => ({
   alreadyThere: new Set<string>(),
   purge: { status: "done" } as { status: string; error?: string },
   purged: [] as string[],
+  config: { R2_PUBLIC_URL: "https://cdn.example.test/", R2_PUBLIC_FALLBACK_DOMAIN: " fallback.example.test ", STORAGE_DELETES: "on" },
 }))
 
 vi.mock("../supabase.js", () => ({
@@ -44,7 +45,7 @@ vi.mock("../supabase.js", () => ({
     }),
   },
 }))
-vi.mock("../config.js", () => ({ config: { R2_PUBLIC_URL: "https://cdn.example.test/", R2_PUBLIC_FALLBACK_DOMAIN: " fallback.example.test " } }))
+vi.mock("../config.js", () => ({ config: fake.config }))
 vi.mock("../asset-delete.js", () => ({
   relayOwnedKeysStrict: vi.fn(async (keys: string[]) => {
     if (fake.relayFails) throw new Error("relay provenance could not be read")
@@ -85,6 +86,7 @@ beforeEach(() => {
   fake.failKey = null
   fake.alreadyThere.clear()
   fake.purge = { status: "done" }
+  fake.config.STORAGE_DELETES = "on"
   vi.spyOn(console, "error").mockImplementation(() => undefined)
   vi.spyOn(console, "warn").mockImplementation(() => undefined)
 })
@@ -183,5 +185,34 @@ describe("restoreRestrictedBytes", () => {
     expect(fake.moves).toEqual([])
     expect(out.bytes.lift?.keys["videos/a.mp4"]).toMatchObject({ state: "failed", error: "the other restrictions could not be read" })
     expect(bytesSettled(out)).toBe(false)
+  })
+})
+
+describe("a deployment that deletes nothing (STORAGE_DELETES=skip)", () => {
+  // A move ends in a delete, so neither phase moves anything: every key is
+  // recorded skipped, naming the setting, and the phase is settled — a key
+  // recorded failed or deferred would be tried again every hour by the sweep.
+  // On a database copy a lift matters most: the evidence copy it would delete
+  // is the one another deployment's restriction relies on.
+  beforeEach(() => {
+    fake.config.STORAGE_DELETES = "skip"
+  })
+
+  it("a restriction moves no key to evidence, and says why", async () => {
+    const out = await relocateRestrictedBytes(restriction)
+    expect(fake.moves).toEqual([])
+    for (const key of ["videos/a.mp4", "thumbs/a.jpg"]) {
+      expect(out.bytes.restrict?.keys[key]).toMatchObject({ state: "skipped", why: expect.stringContaining("STORAGE_DELETES=skip") })
+    }
+    expect(bytesSettled(out)).toBe(true)
+  })
+
+  it("a lift moves no key back, and says why", async () => {
+    const out = await restoreRestrictedBytes({ ...restriction, liftedAt: "2026-11-02T00:00:00Z" })
+    expect(fake.moves).toEqual([])
+    for (const key of ["videos/a.mp4", "thumbs/a.jpg"]) {
+      expect(out.bytes.lift?.keys[key]).toMatchObject({ state: "skipped", why: expect.stringContaining("STORAGE_DELETES=skip") })
+    }
+    expect(bytesSettled(out)).toBe(true)
   })
 })

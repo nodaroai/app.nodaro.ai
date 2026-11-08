@@ -16,7 +16,7 @@ import {
  * choose, exactly as before the setting.
  */
 describe("nodaro_motion_style", () => {
-  it("offers exactly users choose, always Precise and always Flex", () => {
+  it("offers exactly users choose, Precise in Nodaro Motion and always Flex", () => {
     expect(NODARO_MOTION_STYLE_CHOICES).toEqual(["user", "precise", "flex"])
   })
 

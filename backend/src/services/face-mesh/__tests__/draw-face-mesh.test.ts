@@ -7,11 +7,11 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { execFileSync } from "node:child_process"
-import { mkdtempSync, rmSync } from "node:fs"
+import { copyFileSync, mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { drawFaceMeshVideo, buildFaceMeshEncodeArgs, clipColourOf, FaceMeshInputError } from "../draw-face-mesh.js"
+import { drawFaceMeshVideo, buildFaceMeshEncodeArgs, clipColourOf, FaceMeshInputError, type DrawFaceMeshInput, type DrawFaceMeshResult } from "../draw-face-mesh.js"
 import { releaseFaceMeshSession } from "../face-mesh-session.js"
 import { releaseYunetSession } from "../../face-detect/yunet-session.js"
 
@@ -31,6 +31,27 @@ const maskClip = (name: string, color: "black" | "white", n: number) => {
   const out = join(dir, name)
   ff("-f", "lavfi", "-i", `color=${color}:s=960x540:r=2`, "-frames:v", String(n), "-c:v", "libx264", "-pix_fmt", "yuv420p", out)
   return out
+}
+const drawn = new Map<string, Promise<DrawFaceMeshResult>>()
+/**
+ * The faces' clip drawn on itself with these settings (no mask, no filter) at
+ * `outputPath`. A render takes seconds, and some cases ask for the same one:
+ * each exact set of settings is drawn ONCE per file, and a later case gets a
+ * copy of the clip at its own path with the same result (the same inputs draw
+ * the same bytes). A failed render is not kept: the next case draws it again.
+ */
+async function drawFacesOnce(settings: Pick<DrawFaceMeshInput, "parts" | "layers">, outputPath: string): Promise<DrawFaceMeshResult> {
+  const key = JSON.stringify(settings)
+  let first = drawn.get(key)
+  if (!first) {
+    first = drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, ...settings, filters: OFF, outputPath })
+    drawn.set(key, first)
+    first.catch(() => drawn.delete(key))
+  }
+  const r = await first
+  if (r.outputPath === outputPath) return r
+  copyFileSync(r.outputPath, outputPath)
+  return { ...r, outputPath }
 }
 /** A frame of a clip at time `t`, packed RGB. */
 function frameAt(path: string, t: number): { rgb: Buffer; w: number; h: number } {
@@ -106,7 +127,7 @@ afterAll(async () => {
 describe("drawFaceMeshVideo", () => {
   it("draws the faces it finds, keeping the clip's frame count, size and rate", async () => {
     const out = join(dir, "faces.mp4")
-    const r = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, filters: OFF, outputPath: out })
+    const r = await drawFacesOnce({}, out)
     expect(r.frames).toBe(26)
     expect(frames(out)).toBe(26)
     expect(probe(out, "stream=width,height,r_frame_rate")).toBe("960,540,2/1")
@@ -119,9 +140,9 @@ describe("drawFaceMeshVideo", () => {
   }, 120_000)
 
   it("parts: the eye and lip outlines alone, or the lip outline alone — the same faces, fewer lines drawn on them", async () => {
-    const full = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, filters: OFF, outputPath: join(dir, "parts-full.mp4") })
-    const features = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, parts: "features", filters: OFF, outputPath: join(dir, "parts-features.mp4") })
-    const mouth = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, parts: "mouth", filters: OFF, outputPath: join(dir, "parts-mouth.mp4") })
+    const full = await drawFacesOnce({}, join(dir, "parts-full.mp4"))
+    const features = await drawFacesOnce({ parts: "features" }, join(dir, "parts-features.mp4"))
+    const mouth = await drawFacesOnce({ parts: "mouth" }, join(dir, "parts-mouth.mp4"))
     // The same faces found and drawn on, frame for frame.
     for (const r of [features, mouth]) {
       expect([r.frames, r.framesWithFaces, r.facesDrawn]).toEqual([full.frames, full.framesWithFaces, full.facesDrawn])
@@ -136,8 +157,8 @@ describe("drawFaceMeshVideo", () => {
   }, 180_000)
 
   it("parts: the contours — the same faces, the features' lines and more (the oval, brows and nose where each face shows them)", async () => {
-    const features = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, parts: "features", filters: OFF, outputPath: join(dir, "contours-features.mp4") })
-    const contours = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, parts: "contours", filters: OFF, outputPath: join(dir, "contours.mp4") })
+    const features = await drawFacesOnce({ parts: "features" }, join(dir, "contours-features.mp4"))
+    const contours = await drawFacesOnce({ parts: "contours" }, join(dir, "contours.mp4"))
     expect([contours.frames, contours.framesWithFaces, contours.facesDrawn]).toEqual([features.frames, features.framesWithFaces, features.facesDrawn])
     expect(frames(join(dir, "contours.mp4"))).toBe(26)
     expect(darkenedPixels(join(dir, "contours.mp4"), FACES, 3)).toBeGreaterThan(darkenedPixels(join(dir, "contours-features.mp4"), FACES, 3))
@@ -148,26 +169,27 @@ describe("drawFaceMeshVideo", () => {
     for (const [parts, layers] of [["full", { wireframe: true, eyes: true, lips: true }], ["contours", { eyes: true, lips: true, contours: true }]] as const) {
       const a = join(dir, `layers-parts-${parts}.mp4`)
       const b = join(dir, `layers-${parts}.mp4`)
-      const byParts = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, parts, filters: OFF, outputPath: a })
-      const byLayers = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, layers, filters: OFF, outputPath: b })
+      const byParts = await drawFacesOnce({ parts }, a)
+      const byLayers = await drawFacesOnce({ layers }, b)
       expect([byLayers.frames, byLayers.framesWithFaces, byLayers.facesDrawn]).toEqual([byParts.frames, byParts.framesWithFaces, byParts.facesDrawn])
-      expect(decoded(b)).toEqual(decoded(a))
+      // Every frame, byte for byte. Not `toEqual` on the frames: vitest walks a Buffer a byte at a time and builds an
+      // entry per byte (about 30 s per clip pair on a dev machine, minutes on a busy runner); `equals` compares the bytes natively.
+      const [fromLayers, fromParts] = [decoded(b), decoded(a)]
+      expect(fromLayers.length).toBe(fromParts.length)
+      expect(fromLayers.flatMap((f, i) => (f.equals(fromParts[i]!) ? [] : [i])), "the frames that differ").toEqual([])
     }
     const all = join(dir, "layers-all.mp4")
-    const r = await drawFaceMeshVideo({
-      videoPath: FACES, drawOnPath: FACES, filters: OFF, outputPath: all,
-      layers: { wireframe: true, eyes: true, lips: true, contours: true, irises: true, bold: true },
-    })
+    const r = await drawFacesOnce({ layers: { wireframe: true, eyes: true, lips: true, contours: true, irises: true, bold: true } }, all)
     expect(r.frames).toBe(26)
     expect(frames(all)).toBe(26)
     expect(darkenedPixels(all, FACES, 3)).toBeGreaterThan(darkenedPixels(join(dir, "layers-full.mp4"), FACES, 3))
     // The irises alone: lines drawn (inside the open eyes), and far fewer than the full mesh's.
     const irises = join(dir, "layers-irises.mp4")
-    await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, layers: { irises: true }, filters: OFF, outputPath: irises })
+    await drawFacesOnce({ layers: { irises: true } }, irises)
     const irisPixels = changedPerFrame(irises, FACES).reduce((s, n) => s + n, 0)
     expect(irisPixels).toBeGreaterThan(0)
     expect(irisPixels).toBeLessThan(changedPerFrame(join(dir, "layers-full.mp4"), FACES).reduce((s, n) => s + n, 0) / 4)
-  }, 300_000)
+  }, 180_000) // ~10 s alone on a dev machine (6 renders); CI's busiest runners ran this file's cases up to 6x slower: 180 s is 3x that
 
   it("draws nothing outside the mask: an all-black mask draws no face, an all-white one every face", async () => {
     const none = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, maskPath: maskClip("black.mp4", "black", 26), filters: OFF, outputPath: join(dir, "none.mp4") })
@@ -310,7 +332,7 @@ describe("drawFaceMeshVideo: a face gets lines only when it is found in at least
   it("faces found in only one or two frames beside faces found in every frame: only the steady ones get lines", async () => {
     // No filter at all, as a run with no size or zone filter sends it.
     const out = join(dir, "steady.mp4")
-    const r = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, filters: OFF, outputPath: out })
+    const r = await drawFacesOnce({}, out)
     expect([r.frames, r.framesWithFaces, r.facesDrawn]).toEqual([26, 26, 52])
     expect(framesWithLines(out, FACES)).toEqual(range(0, 25))
     // Where the outer faces are found (pixels: the left one in frames 2 and 21, the right one in frames 2 and 3): no line.

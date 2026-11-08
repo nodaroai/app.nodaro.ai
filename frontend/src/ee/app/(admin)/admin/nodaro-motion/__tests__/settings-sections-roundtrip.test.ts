@@ -33,6 +33,8 @@ const STORED: Readonly<Record<string, unknown>> = {
   "precise-style-route": {
     preciseStyleRoute: {
       routing: "off",
+      // The styles' routes in the catalog's order, as the page saves them.
+      styleRoutes: { anime: "precise", cyberpunk: "precise-gray" },
       bypassEmails: ["tester@example.com", "second@example.com"],
       routedDepthBlur: 12,
       describeColours: false,
@@ -61,6 +63,12 @@ describe("the page reads a stored set back unchanged", () => {
   it("keeps the route's face mesh layers when they are saved as layers", () => {
     const spec = MOTION_SETTINGS_SPECS["precise-style-route"]
     const body = { preciseStyleRoute: { faceMesh: true, faceMeshLayers: { eyes: true, lips: true, bold: true } } }
+    expect(spec.bodyOf(spec.draftOf(spec.storedOfBody(body)))).toEqual(body)
+  })
+
+  it("keeps the route's per-style map, an entry for a style this catalog lacks included", () => {
+    const spec = MOTION_SETTINGS_SPECS["precise-style-route"]
+    const body = { preciseStyleRoute: { styleRoutes: { cyberpunk: "precise-gray", "a-future-style": "precise" } } }
     expect(spec.bodyOf(spec.draftOf(spec.storedOfBody(body)))).toEqual(body)
   })
 })

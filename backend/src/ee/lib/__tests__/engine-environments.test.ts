@@ -326,7 +326,7 @@ describe("recordPlatformClaim (the heartbeat's write)", () => {
     expect(db.log).toHaveLength(1)
     expect(db.log[0]!.table).toBe("engine_environments")
     expect(db.log[0]!.ops).toEqual([
-      { m: "update", a: [{ platform_supports: { faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true, faceMeshLayers: true, preciseStyleRoutePhotographic: true }, platform_claimed_at: "2026-11-03T12:00:00.000Z" }] },
+      { m: "update", a: [{ platform_supports: { faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true, faceMeshLayers: true, preciseStyleRoutePhotographic: true, preciseStyleRoutePerStyle: true, preciseStyleRouteFilmedFallback: true }, platform_claimed_at: "2026-11-03T12:00:00.000Z" }] },
       { m: "eq", a: ["env", "staging"] },
       { m: "select", a: ["env"] },
     ])
@@ -418,7 +418,7 @@ describe("the platform claim's heartbeat", () => {
     expect(withFreshPlatform(env!)).toEqual({
       env: "staging",
       pluginBuildId: "@nodaroai/cloud-plugins@2.0.0",
-      supports: { ...SUPPORTS, platform: { faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true, faceMeshLayers: true, preciseStyleRoutePhotographic: true } },
+      supports: { ...SUPPORTS, platform: { faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true, faceMeshLayers: true, preciseStyleRoutePhotographic: true, preciseStyleRoutePerStyle: true, preciseStyleRouteFilmedFallback: true } },
       updatedAt: "2026-11-03T12:00:00.000Z",
     })
   })
@@ -602,5 +602,16 @@ describe("a platform claim counts only while its own time is fresh, whatever the
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+// The Precise art-style route's Filmed fallback (`styleRoutesForEngine`): this build answers an engine that cannot read
+// the per-style map the photographic path in its place, and claims so, so the admin page names an environment's Filmed
+// styles Precise only where its platform does this.
+describe("PLATFORM_SUPPORTS: the Precise art-style route's Filmed fallback", () => {
+  it("this platform claims it, beside the per-style map and the photographic path", () => {
+    expect(PLATFORM_SUPPORTS.preciseStyleRouteFilmedFallback).toBe(true)
+    expect(PLATFORM_SUPPORTS.preciseStyleRoutePerStyle).toBe(true)
+    expect(PLATFORM_SUPPORTS.preciseStyleRoutePhotographic).toBe(true)
   })
 })

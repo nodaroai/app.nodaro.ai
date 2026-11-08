@@ -1,5 +1,5 @@
 /**
- * A forced Nodaro Motion Style (Always Precise / Always Flex) is saved only
+ * A forced Nodaro Motion Style (Precise in Nodaro Motion / Always Flex) is saved only
  * once every environment's engine enforces it (`castSwap.styleChoice`).
  *
  * The Nodaro Motion settings are one row each, which staging and production

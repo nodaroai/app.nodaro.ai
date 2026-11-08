@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import { Loader2, History, Coins, Plus, Minus, HardDrive, MapPin } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -32,8 +33,30 @@ interface CreditTransaction {
   readonly credit_type: "subscription" | "topup"
   readonly source: string
   readonly description: string | null
+  /** The job the line was charged for (usage, refunds); null for a grant or a purchase. */
+  readonly job_id?: string | null
   readonly balance_after: number
   readonly created_at: string
+}
+
+/**
+ * A ledger line's description. A line charged for a job links to that job's
+ * own page (its id is in the text, which the narrow column cuts); the whole
+ * text shows on hover either way. (The address is `adminJobPath`'s, written
+ * here so the Users page does not load the Jobs page's detail view.)
+ */
+export function TransactionDescription({ tx }: { tx: Pick<CreditTransaction, "description" | "job_id"> }) {
+  const text = tx.description ?? "-"
+  if (!tx.job_id) return <span title={tx.description ?? undefined}>{text}</span>
+  return (
+    <Link
+      to={`/admin/job/${encodeURIComponent(tx.job_id)}`}
+      title={tx.description ?? undefined}
+      className="text-foreground underline-offset-2 hover:underline"
+    >
+      {text}
+    </Link>
+  )
 }
 
 const SOURCE_COLORS: Record<string, string> = {
@@ -476,7 +499,7 @@ export function UserExpandedRow({
                             </span>
                           </td>
                           <td className="px-3 py-1.5 text-muted-foreground max-w-[200px] truncate">
-                            {tx.description ?? "-"}
+                            <TransactionDescription tx={tx} />
                           </td>
                         </tr>
                       ))}

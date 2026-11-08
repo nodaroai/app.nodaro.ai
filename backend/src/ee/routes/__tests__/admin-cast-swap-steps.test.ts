@@ -387,4 +387,19 @@ describe("GET /v1/admin/jobs/:jobId/cast-swap-steps", () => {
     expect(await read({})).not.toHaveProperty("preciseStyleRouted")
     expect(await read({ __preciseStyleRouted: "yes" })).not.toHaveProperty("preciseStyleRouted")
   })
+
+  it("says when a Precise run's clip was sent in black and white, a Full Quality version's included; only a true flag", async () => {
+    const read = async (input: Record<string, unknown>, jobType?: string) => {
+      mockFrom.mockReturnValue(jobChain({ data: castSwapRow({ videoUrl: "https://cdn.x/v.mp4" }, { ...(jobType ? { job_type: jobType } : {}), input_data: { type: "cast-swap", ...input } }), error: null }))
+      return (await get()).json().data
+    }
+    expect((await read({ __preciseStyleSentGray: true })).preciseStyleSentGray).toBe(true)
+    expect((await read({ fullQualityOf: USER_UUID, __preciseStyleSentGray: true }, "cast-swap-full-quality")).preciseStyleSentGray).toBe(true)
+    expect(await read({})).not.toHaveProperty("preciseStyleSentGray")
+    expect(await read({ __preciseStyleSentGray: "yes" })).not.toHaveProperty("preciseStyleSentGray")
+    expect(await read({ __preciseStyleSentGray: false })).not.toHaveProperty("preciseStyleSentGray")
+    // Beside the routed flag, never in place of it.
+    expect(await read({ __preciseStyleSentGray: true })).not.toHaveProperty("preciseStyleRouted")
+    expect(await read({ __preciseStyleRouted: true })).not.toHaveProperty("preciseStyleSentGray")
+  })
 })

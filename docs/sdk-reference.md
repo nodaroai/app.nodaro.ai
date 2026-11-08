@@ -348,11 +348,12 @@ const supabase = createSharedSupabaseClient({
   url: SUPABASE_URL,
   anonKey: SUPABASE_ANON_KEY,
   cookieDomain: ".example.com", // optional — omit for host-only cookies
+  retiredSupabaseUrls: [PREVIOUS_SUPABASE_URL], // optional — projects this app no longer uses
 })
 const auth = supabaseAuth(supabase)
 ```
 
-**Signature:** `createSharedSupabaseClient<Db = any>(options: { url: string; anonKey: string; cookieDomain?: string }): SupabaseClient<Db>`
+**Signature:** `createSharedSupabaseClient<Db = any>(options: { url: string; anonKey: string; cookieDomain?: string; retiredSupabaseUrls?: readonly string[] }): SupabaseClient<Db>`
 
 - `cookieDomain` is applied only when the page's hostname is that domain or a
   subdomain of it; on any other host (`localhost`, preview URLs) cookies stay
@@ -360,6 +361,16 @@ const auth = supabaseAuth(supabase)
 - On first load it adopts an existing localStorage session (the storage
   supabase-js used previously) into the cookie, then removes the old key — an
   already-signed-in user survives the switch. Dead tokens are discarded.
+- `retiredSupabaseUrls` lists Supabase projects the app has moved away from.
+  Each time the client is created in a browser, it deletes every cookie such a
+  project left (`sb-<project-ref>-…`: the session and its chunks, the code
+  verifiers, the stored user), on `cookieDomain` and host-only. Nothing reads
+  those cookies any more, but the browser keeps sending them with every request
+  until they expire. The current project's cookies are never deleted, even if
+  its URL is listed. The option takes an explicit list rather than clearing
+  every project but the current one, because two projects in use at the same
+  time (production and staging on one parent domain, say) can share a cookie
+  domain, and each would delete the other's sessions.
 - Ships as a separate subpath so the base SDK stays Supabase-free.
   `@supabase/ssr` and `@supabase/supabase-js` are **optional peer
   dependencies** — install both to use this export.
@@ -2236,13 +2247,7 @@ on what it sends (no role kept in it that has images, no fixed reference, no
 `400 no_roles_in_preview`; a preview with every role left out still runs when
 it has a reference, a prompt or, where `styleOnly` is answered `true`, an art
 style (an engine from before style-only runs refuses that last one, with a
-message that does not name an art style). An engine answered `"precise"` runs
-it as Precise, where an art style is no change on its own, so there a preview
-whose only change was the art style answers `400 no_roles_in_preview`; one with
-a prompt or a reference runs, as Precise (with the art style where
-`preciseArtStyle` is `true`). While Nodaro runs a Precise run with an art style
-as a Motion run, such a preview runs as Motion too (see An art style on a Precise
-run below).
+message that does not name an art style).
 
 **Reference preparation** (`prepareReferences`, on by default): before the
 video, each person, pet and product role's images are turned into one clean
@@ -2262,27 +2267,21 @@ full Motion run of a clip over 27.9 s is refused as `400
 clip_too_long_for_style` ("Use a shorter clip or choose Precise").
 
 **A forced style** (`styleChoice()`, `CastSwapStyleChoice`): Nodaro may fix
-an engine's style for everyone, and every `run()` and `estimate()` on it then
+an engine's style for everyone as Motion, and every `run()` and `estimate()` on it then
 uses that style whatever `style` says. `styleChoice()` answers
 `{ engines: { "motion-prism": CastSwapStyleChoiceOption, "motion-pulse": CastSwapStyleChoiceOption }, styleOnly?: { "motion-prism"?: boolean, "motion-pulse"?: boolean }, preciseArtStyle?: { "motion-prism"?: boolean, "motion-pulse"?: boolean }, preciseArtStyleAlone?: { "motion-prism"?: boolean, "motion-pulse"?: boolean } }`,
 each engine `"user"` (the caller chooses), `"precise"` or `"flex"`
-(`style: "motion"`); show a style control only for an engine answered
+(`style: "motion"`, fixed as above). `"precise"` changes no request: Nodaro's
+own apps run Precise on that engine and hide their style control, and every
+`run()` and `estimate()` there takes the `style` it sends, as on `"user"`.
+Show a style control only for an engine answered
 `"user"`. `styleOnly` says, per engine, whether the engine takes style-only
 runs (below), `preciseArtStyle` whether a Precise run takes an art style there
 (below), and `preciseArtStyleAlone` whether an art style alone is a Precise
 run's change there, with no role, reference or prompt (Nodaro may run such a
 request as a Motion run, which this does not say: see An art style on a Precise
 run below); it answers `false` until the engine takes such runs. All three follow the engine alone, so read them
-with `engines`: a forced Precise keeps a Motion run's art style where
-`preciseArtStyle` is `true`, and drops it where it is not. On an engine answered
-`"precise"`, a request with nothing else to change is refused as `400 validation_error`; with
-anything else to change (a role with images, a fixed reference, a `prePrompt`
-or `postPrompt`) it answers `202` and runs and is quoted as Precise, with the
-art style where `preciseArtStyle` is `true`. While Nodaro makes a Precise run with an art style the way a Motion run is
-made (see An art style on a Precise run below), a request that keeps one on such
-an engine is made and quoted as a Motion run, its job recording the style sent; a
-`style: "motion"` request is then not overridden at all (no `styleForced`), and
-one with nothing else to change is accepted. Nodaro Motion Pulse is always
+with `engines`: on an engine answered `"flex"` every run is a Motion run. Nodaro Motion Pulse is always
 `false` in all three, and an older server leaves them out (read them as `false`
 for every engine). Public (works signed
 out); the answer may be up to a minute old. A trend run keeps its trend's
@@ -2291,7 +2290,7 @@ style.
 ```ts
 const { engines, styleOnly, preciseArtStyle, preciseArtStyleAlone } = await client.castSwap.styleChoice()
 const showStyle = engines["motion-pulse"] === "user"
-const offerStyleOnly = styleOnly?.["motion-prism"] === true && engines["motion-prism"] !== "precise"
+const offerStyleOnly = styleOnly?.["motion-prism"] === true
 const offerPreciseArtStyle = preciseArtStyle?.["motion-prism"] === true
 const offerPreciseArtStyleAlone = preciseArtStyleAlone?.["motion-prism"] === true
 ```
@@ -2317,9 +2316,9 @@ engine; while Nodaro Motion Prism is answered `false`, an art style with
 nothing else to change answers `400 validation_error`, and one with a
 `prePrompt` or `postPrompt` is accepted but runs as any other art-style run,
 not as described here. `styleOnly` `true` says the engine takes such runs, and a
-run must still be Motion: on an engine answered `"precise"` the request is
-refused as `400 validation_error` or, with anything else to change, runs as
-Precise (see A forced style). Nodaro Motion Pulse takes no art style
+run must still be Motion; an engine answered `"precise"` changes no request, so
+a Motion run there restyles the clip as on an engine answered `"user"` (see A
+forced style). Nodaro Motion Pulse takes no art style
 (`400 art_style_needs_prism`). `400 art_style_needs_flex` answers an art style
 on a trend run, on a Motion run whose prompt is made Precise by Nodaro's
 setting for how Motion runs are prepared, and on a Precise run where the engine

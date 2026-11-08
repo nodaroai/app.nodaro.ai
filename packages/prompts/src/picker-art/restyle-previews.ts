@@ -42,6 +42,9 @@ export const RESTYLE_PREVIEWS: Readonly<Record<string, RestylePreview>> = {
   // Source shot: https://cdn.nodaro.ai/picker-renders/d9e12a4a-677e-4e36-8f44-8503f14dd6b8.mp4
   // Generated, no wipe: https://cdn.nodaro.ai/picker-renders/d4dad451-802a-4795-9cc3-71ff3ed70c69.mp4
   "pixar-3d": { url: "https://cdn.nodaro.ai/picker-renders/c5ea2111-3283-4f80-ab05-8ab4450946ce.mp4" },
+  // Source shot: https://cdn.nodaro.ai/picker-renders/71d9ab7a-7396-48ff-8bc3-80454b0edd07.mp4
+  // Generated, no wipe: https://cdn.nodaro.ai/picker-renders/b11ab600-ec62-4cb6-82b4-b0006374164b.mp4
+  "pop-art": { url: "https://cdn.nodaro.ai/picker-renders/0659dbe5-9dfe-45d8-9abd-6ccf88481dd8.mp4", stillAtSeconds: 7 },
   // Source shot: https://cdn.nodaro.ai/picker-renders/789f4330-660b-42bd-8d11-6e638e8c7c88.mp4
   // Generated, no wipe: https://cdn.nodaro.ai/picker-renders/10471107-b26a-42e9-a3a5-068a42436d3c.mp4
   watercolor: { url: "https://cdn.nodaro.ai/picker-renders/61a26588-d09a-4959-b677-ee8b32e3281a.mp4" },

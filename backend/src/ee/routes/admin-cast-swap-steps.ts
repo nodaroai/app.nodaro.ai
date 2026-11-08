@@ -22,6 +22,9 @@
  * - `preciseStyleRouted`: true when it resolved to Precise with an art style (the
  *   request, or the admin's forced Style) and the Precise art-style route ran it as Flex (its input's
  *   `__preciseStyleRouted`, a Full Quality version's included); absent otherwise.
+ * - `preciseStyleSentGray`: true when the Precise art-style route kept it Precise
+ *   and sent its clip in black and white (its art style's route "precise-gray"; its
+ *   input's `__preciseStyleSentGray`, a Full Quality version's included); absent otherwise.
  *
  * The `__` keys are server-only: every normal job read strips them
  * (`withoutServerOnlyKeys`, lib/job-output-visibility.ts), so this route reads
@@ -62,6 +65,8 @@ export interface JobCastSwapSteps {
   styleOnly: StyleOnlyPath | null
   /** It resolved to Precise with an art style, and the Precise art-style route ran it as Flex (`__preciseStyleRouted`). Absent otherwise. */
   preciseStyleRouted?: true
+  /** The Precise art-style route kept it Precise and sent its clip in black and white (`__preciseStyleSentGray`). Absent otherwise. */
+  preciseStyleSentGray?: true
 }
 
 /** The job types a Cast Swap run carries: a run, and a Full Quality version (its own queue name). */
@@ -229,6 +234,7 @@ export async function adminCastSwapStepsRoutes(app: FastifyInstance): Promise<vo
       skippedSteps: readSkippedSteps(output.skippedSteps),
       styleOnly: stepOutputs?.styleOnly?.path ?? (oneOf(STYLE_ONLY_PATHS, input.__styleOnly) ? input.__styleOnly : null),
       ...(input.__preciseStyleRouted === true ? { preciseStyleRouted: true as const } : {}),
+      ...(input.__preciseStyleSentGray === true ? { preciseStyleSentGray: true as const } : {}),
     }
     return reply.send({ data: out })
   })

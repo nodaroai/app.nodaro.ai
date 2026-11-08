@@ -1,7 +1,7 @@
 /**
  * Admin → Nodaro Motion → Style: per engine, people choose Precise or Flex
- * (the default, never saved) or every direct run is always Precise / always
- * Flex. The forced choices are greyed out, naming the environments, until
+ * (the default, never saved), or the style is Precise in Nodaro Motion or
+ * always Flex. The forced choices are greyed out, naming the environments, until
  * every environment's engine enforces them (`castSwap.styleChoice`); "Users
  * choose" is always offered. Save sends only the forced engines, keyed by
  * public id.
@@ -56,6 +56,16 @@ const section = async (name: RegExp) =>
 const styleSelect = async (name: RegExp) => within(await section(name)).findByRole("combobox", { name: "Style" })
 
 describe("Admin → Nodaro Motion → Style", () => {
+  it("offers Users choose, Precise in Nodaro Motion and Always Flex, with its hint word for word", async () => {
+    const user = userEvent.setup()
+    expect(STYLE_CHOICE_HINT).toBe(
+      "Hides the Style choice in Nodaro Motion. Always Flex also makes API and agent runs Flex; with Precise in Nodaro Motion, an API or agent request that asks for Flex gets Flex. Trends keep their own style.",
+    )
+    renderWith(<AdminNodaroMotionPage />)
+    await user.click(await styleSelect(/Prism/))
+    expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual(["Users choose (Precise or Flex)", "Precise in Nodaro Motion", "Always Flex"])
+  })
+
   it("shows Users choose on each engine until saved, with the hint, and Save off", async () => {
     renderWith(<AdminNodaroMotionPage />)
     for (const name of [/Prism/, /Pulse/]) {
@@ -84,7 +94,7 @@ describe("Admin → Nodaro Motion → Style", () => {
     routes[`GET ${STYLE_URL}`] = () => view({ "motion-prism": "precise", "motion-pulse": "flex" })
     routes[`PUT ${STYLE_URL}`] = (init) => view(JSON.parse(String(init?.body)).style)
     renderWith(<AdminNodaroMotionPage />)
-    expect(await styleSelect(/Prism/)).toHaveTextContent("Always Precise")
+    expect(await styleSelect(/Prism/)).toHaveTextContent("Precise in Nodaro Motion")
     await user.click(await styleSelect(/Prism/))
     await user.click(await screen.findByRole("option", { name: "Users choose (Precise or Flex)" }))
     await user.click(screen.getByRole("button", { name: "Save" }))
@@ -98,9 +108,9 @@ describe("Admin → Nodaro Motion → Style", () => {
     routes[`PUT ${STYLE_URL}`] = (init) => view(JSON.parse(String(init?.body)).style)
     renderWith(<AdminNodaroMotionPage />)
     const pulse = await styleSelect(/Pulse/)
-    await waitFor(() => expect(pulse).toHaveAccessibleDescription(/wait for the engine in staging: this setting is shared by every environment/))
+    await waitFor(() => expect(pulse).toHaveAccessibleDescription(`${STYLE_CHOICE_HINT} Precise in Nodaro Motion and Always Flex wait for the engine in staging: this setting is shared by every environment.`))
     await user.click(pulse)
-    expect(await screen.findByRole("option", { name: "Always Precise (not supported yet: staging)" })).toHaveAttribute("aria-disabled", "true")
+    expect(await screen.findByRole("option", { name: "Precise in Nodaro Motion (not supported yet: staging)" })).toHaveAttribute("aria-disabled", "true")
     expect(screen.getByRole("option", { name: "Always Flex (not supported yet: staging)" })).toHaveAttribute("aria-disabled", "true")
     const users = screen.getByRole("option", { name: "Users choose (Precise or Flex)" })
     expect(users).not.toHaveAttribute("aria-disabled", "true")

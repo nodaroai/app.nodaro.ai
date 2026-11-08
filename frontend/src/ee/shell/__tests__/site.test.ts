@@ -33,7 +33,7 @@ describe("worldHrefsFor", () => {
       music: "https://tools.example/music",
       trends: "https://tools.example/trends",
       motion: "https://tools.example/video/cast-swap",
-      voice: "https://tools.example/video/voice",
+      voice: "https://tools.example/voice-changer",
       studio: "https://studio.example/",
       app: "https://next.nodaro.ai/projects",
     })

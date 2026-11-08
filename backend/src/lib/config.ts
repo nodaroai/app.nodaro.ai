@@ -181,6 +181,30 @@ export const envSchema = z.object({
    * "on" / "off" decide for any edition. Needs storage configured either way.
    */
   SITE_ASSET_ARCHIVE: z.enum(["auto", "on", "off"]).default("auto"),
+  /**
+   * Whether this deployment deletes objects from storage at all. `on` (the
+   * default) deletes as every install always has. `skip`: every storage
+   * delete is skipped with a warning instead of sent — the media bucket's
+   * (`deleteFromR2` / `batchDeleteFromR2`, so every path through the funnel
+   * in lib/storage-delete.ts), the retained snapshots' collection and the
+   * private scene bucket's cleanup — the way a key under a kept prefix is
+   * skipped: answered as kept, never as failed, so nothing is recorded for the
+   * failed-delete retry pass, which stands down. Rows, links and quotas are
+   * kept as before; only the objects stay.
+   *
+   * For a deployment that shares its media storage with another deployment
+   * but runs on its own copy of the database (for example a staging
+   * environment restored from production): its rows name files the other
+   * deployment still references, so it must not delete them.
+   *
+   * Blank = unset. Anything but `on` / `skip` (any case) refuses to boot — a
+   * typo must not silently delete. Read through `storageDeletesSkipped()`
+   * (lib/storage-deletes-setting.ts).
+   */
+  STORAGE_DELETES: z.preprocess(
+    (v) => (typeof v === "string" ? v.trim().toLowerCase() || undefined : v),
+    z.enum(["on", "skip"]).default("on"),
+  ),
   REPLICATE_API_TOKEN: z.string().default(""),
   /** Replicate Standard Webhooks signing secret. Required in Cloud edition for character LoRA training callbacks. */
   REPLICATE_WEBHOOK_SECRET: z.string().default(""),

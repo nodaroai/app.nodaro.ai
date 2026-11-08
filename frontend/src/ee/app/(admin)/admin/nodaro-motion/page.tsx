@@ -19,8 +19,9 @@
 // original audio always back on the result
 // (PUT /v1/admin/nodaro-motion/prism-reference-audio).
 // Each engine also has its Style choice (StyleChoiceSelect.tsx): people choose
-// Precise or Flex (the default), or every direct run is always Precise or
-// always Flex, which hides the Style choice in Nodaro Motion
+// Precise or Flex (the default), or Precise in Nodaro Motion (an API or agent
+// request that asks for Flex still gets Flex) or Always Flex (every direct
+// run), each of which hides the Style choice in Nodaro Motion
 // (PUT /v1/admin/nodaro-motion/style); the forced choices are greyed out until
 // every environment's engine enforces them.
 // Prism also has its style-only runs (StyleOnlyColumn.tsx, under its Motion

@@ -8,8 +8,9 @@ const state = vi.hoisted(() => ({
   objects: new Map<string, Buffer>(),
   rpc: vi.fn(), send: vi.fn(), read: vi.fn(), queries: [] as Array<[string, unknown]>,
   row: {} as Record<string, unknown>,
+  config: { R2_BUCKET_NAME: "media", STORAGE_DELETES: "on" },
 }))
-vi.mock("../config.js", () => ({ config: { R2_BUCKET_NAME: "media" }, hasCredits: () => state.credits }))
+vi.mock("../config.js", () => ({ config: state.config, hasCredits: () => state.credits }))
 vi.mock("../deployment-payer.js", () => ({ deploymentPayerActive: () => state.deploymentPayer }))
 vi.mock("../storage.js", () => ({
   isStorageConfigured: () => state.configured,
@@ -38,6 +39,7 @@ beforeEach(async () => {
   clearUploadPolicies()
   vi.clearAllMocks()
   state.configured = true; state.credits = true; state.deploymentPayer = false
+  state.config.STORAGE_DELETES = "on"
   state.objects.clear(); state.queries.length = 0
   body = Buffer.from("fixed video bytes")
   state.row = { id: ID, user_id: "owner", workflow_id: "film", width: 3, height: 2,
@@ -189,5 +191,20 @@ describe("retained canonical video bytes", () => {
     expect(state.rpc).toHaveBeenCalledTimes(1)
     expect(await collectRetainedVideos()).toEqual({ deleted: 1, failed: 0 })
     expect(state.rpc).toHaveBeenLastCalledWith("complete_retained_video_gc", { p_id: ID })
+  })
+  it("on a deployment that deletes nothing (STORAGE_DELETES=skip) leaves the object and still resolves its task", async () => {
+    // The claim also clears expired reservations, and a task left open would be
+    // claimed again every five minutes: only the physical delete is skipped.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    state.config.STORAGE_DELETES = "skip"
+    state.objects.set(KEY, body)
+    state.rpc.mockImplementation(async (name: string) => ({ data: name === "claim_retained_video_gc" ? [{ id: ID }] : true, error: null }))
+    expect(await collectRetainedVideos()).toEqual({ deleted: 0, failed: 0 })
+    expect(state.send).not.toHaveBeenCalled()
+    expect(state.objects.get(KEY)).toEqual(body)
+    expect(state.rpc).toHaveBeenCalledWith("claim_retained_video_gc", { p_limit: 50 })
+    expect(state.rpc).toHaveBeenLastCalledWith("complete_retained_video_gc", { p_id: ID })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("STORAGE_DELETES=skip"))
+    warn.mockRestore()
   })
 })
