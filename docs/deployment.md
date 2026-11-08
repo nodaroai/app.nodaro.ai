@@ -840,7 +840,10 @@ optional; each array empty = "keep the default"):
   `productName` still drives the document title and accessibility name.
 - `brand.description`: replaces the `<meta name="description">` (absent = the
   built-in default is kept)
-- `locale.default` / `locale.picker`
+- `brand.logo`: see [keys read by client apps](#keys-read-by-client-apps) below
+- `locale.default` / `locale.picker` (plus `locale.offered`, below). `picker`
+  may be left out beside the other locale keys and then means shown; before,
+  leaving it out discarded the whole `locale` block, `default` included
 - `outputs.allowPublic`: `false` forces every output private regardless of the
   user's preference, and every listing of other people's work answers as if
   there were none: the public view of `GET /v1/gallery`, the community listings
@@ -1089,8 +1092,63 @@ catalogs offer, and an https example picture or none. A deployment whose packs
 fail the check refuses to start. Design note:
 [`docs/design/preset-pack-seam.md`](design/preset-pack-seam.md).
 
-Brand **assets** (favicon, logos) are overridden by a Docker static-asset layer,
-not this JSON.
+The editor's own brand **assets** (favicon, logo files) are overridden by a
+Docker static-asset layer, not this JSON; `brand.logo` names a logo for the
+client apps that read it.
+
+### Keys read by client apps
+
+These keys are for the other products served from the same site as the
+editor — the shared header, its worlds and their pickers — which read
+`/config.js` through the published `@nodaro/shared/runtime-config` contract.
+Each is **absent unless you set it**, so `/config.js` stays exactly as it was
+until you do, and an absent key keeps today's behaviour. **The platform does
+not enforce them itself yet**: `imports.links: false`, for example, does not on
+its own refuse a link import. A malformed value of a key that limits what
+visitors can do falls to its restrictive side, with a warning; a malformed
+logo is dropped with a warning and the rest of `brand` is kept.
+
+- `worlds`: `{ "allow": [...], "home": "...", "order": [...] }` — the worlds the
+  shared header offers. World ids: `explore`, `image`, `video`, `music`,
+  `trends`, `motion`, `voice`, `app` (the workflow editor) and `studio`.
+  - `allow`: when present, exactly the worlds offered. Unlike the lists above,
+    **presence is what narrows**: `[]` offers no world, and so does a list whose
+    ids are all unknown (unknown ids are dropped with a warning). Leave `allow`
+    out to offer every world. A `worlds` value that is not an object, or an
+    `allow` that is not a list, offers no world.
+  - `home`: the world a visit to the site's root lands on. Dropped, with a
+    warning, when `allow` does not include it.
+  - `order`: the display order; worlds it leaves out follow in the order
+    above.
+- `imports.links`: `false` = media may not be imported from a link to another
+  site. Default `true`. Accepts `true` / `false` / `"true"` / `"false"` /
+  `"1"` / `"0"`; any other value, or an `imports` value that is not an object,
+  reads as `false`.
+- `catalogs.images`: the pictures on picker options — `"default"` (the
+  platform's), `"none"` or `"own"` (the deployment's own). Default
+  `"default"`; any other value reads as `"none"`.
+- `locale.offered`: the languages a visitor may pick from, as locale ids
+  (`["he","en"]`), read in the platform's own spelling (`pt-br` becomes
+  `pt-BR`). Unknown ids are dropped with a warning, and a list with none left
+  is ignored (every language stays offered). A `locale.default` the list does
+  not include is warned about at boot.
+- `header`: `"default"`, or `"white-label"` for the deployment's own header
+  without platform links. Any other value reads as `"white-label"`.
+- `brand.logo`: the deployment's logo, as a path on this site
+  (`/brand/logo.svg`) or an `https://` URL. A protocol-relative `//host/…`
+  reference, any other scheme (`http:`, `data:`, `javascript:`), and anything
+  with spaces or backslashes is dropped.
+- `auth.requireSignIn`: `true` = no guest visits; a visitor signs in before a
+  product loads. Left out, it is `true` exactly when `auth.methods` names only
+  `sso`. Accepts the same forms as `imports.links`; any other value reads as
+  `true`.
+
+Example (a single-sign-on deployment with its own header, three worlds and
+no link imports):
+
+```bash
+NODARO_SURFACE_PROFILE={"auth":{"methods":["sso"],"ssoLabel":"Continue"},"header":"white-label","brand":{"productName":"Studio","logo":"/brand/logo.svg","platformLinks":false},"worlds":{"allow":["image","video","app"],"home":"app"},"imports":{"links":false},"catalogs":{"required":true,"factoryPresets":false,"images":"none"},"locale":{"default":"he","offered":["he","en"]}}
+```
 
 ## 6. Updating
 

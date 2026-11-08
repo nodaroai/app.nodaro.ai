@@ -1,0 +1,228 @@
+import { describe, expect, it } from "vitest"
+import {
+  RUNTIME_CONFIG_GLOBAL,
+  RUNTIME_SURFACE_DEFAULT,
+  WORLD_IDS,
+  WORLD_REQUIRED_NODE_TYPES,
+  isBrandLogoRef,
+  isSsoOnly,
+  isWorldId,
+  orderWorlds,
+  parseRuntimeConfig,
+  parseRuntimeSurface,
+  readRuntimeConfig,
+  resolveRuntimeApiBase,
+  resolveRuntimeSupabaseUrl,
+  surfaceRequiresSignIn,
+  worldAllowed,
+} from "../entries/runtime-config.js"
+
+describe("worlds", () => {
+  it("lists every world once, in the shared header's display order", () => {
+    expect([...WORLD_IDS]).toEqual(["explore", "image", "video", "music", "trends", "motion", "voice", "app", "studio"])
+    expect(Object.keys(WORLD_REQUIRED_NODE_TYPES).sort()).toEqual([...WORLD_IDS].sort())
+    expect(isWorldId("image")).toBe(true)
+    expect(isWorldId("ads")).toBe(false)
+    expect(isWorldId(undefined)).toBe(false)
+  })
+
+  it("names the node types each world runs", () => {
+    expect(WORLD_REQUIRED_NODE_TYPES).toEqual({
+      explore: [],
+      image: ["generate-image"],
+      video: ["generate-video", "text-to-video"],
+      music: ["suno-generate"],
+      trends: ["cast-swap"],
+      motion: ["cast-swap"],
+      voice: ["voice-changer-pro"],
+      app: [],
+      studio: [],
+    })
+    expect(Object.isFrozen(WORLD_REQUIRED_NODE_TYPES)).toBe(true)
+    expect(Object.isFrozen(WORLD_REQUIRED_NODE_TYPES.video)).toBe(true)
+  })
+
+  it("an absent allowlist lets every world through; a present one exactly its members — [] none", () => {
+    expect(worldAllowed(undefined, "explore")).toBe(true)
+    expect(worldAllowed({}, "explore")).toBe(true)
+    expect(worldAllowed({ allow: ["image"] }, "image")).toBe(true)
+    expect(worldAllowed({ allow: ["image"] }, "explore")).toBe(false)
+    expect(worldAllowed({ allow: [] }, "image")).toBe(false)
+  })
+
+  it("orders the deployment's choice first, then the rest canonically, each world once", () => {
+    expect(orderWorlds(undefined)).toEqual([...WORLD_IDS])
+    expect(orderWorlds(["voice", "image", "voice", "bogus"])).toEqual(["voice", "image", "explore", "video", "music", "trends", "motion", "app", "studio"])
+  })
+})
+
+describe("sign-in rules", () => {
+  it("SSO-only means SSO is the one method offered", () => {
+    expect(isSsoOnly(["sso"])).toBe(true)
+    expect(isSsoOnly(["sso", "email"])).toBe(false)
+    expect(isSsoOnly([])).toBe(false)
+  })
+
+  it("an explicit requireSignIn wins; absent, it follows SSO-only", () => {
+    expect(surfaceRequiresSignIn({ methods: ["sso"] })).toBe(true)
+    expect(surfaceRequiresSignIn({ methods: ["email", "sso"] })).toBe(false)
+    expect(surfaceRequiresSignIn({ methods: ["sso"], requireSignIn: false })).toBe(false)
+    expect(surfaceRequiresSignIn({ methods: [], requireSignIn: true })).toBe(true)
+    expect(surfaceRequiresSignIn(undefined)).toBe(false)
+  })
+})
+
+describe("isBrandLogoRef — a path on the page's own site, or an https URL", () => {
+  it.each(["/brand/logo.svg", "/logo.png?v=2", "https://media.example.com/logo.svg"])("accepts %s", (ref) => {
+    expect(isBrandLogoRef(ref)).toBe(true)
+  })
+
+  it.each([
+    "//evil.example/logo.svg",
+    "/\\evil.example/logo.svg",
+    "http://media.example.com/logo.svg",
+    "data:image/svg+xml;base64,PHN2Zy8+",
+    "javascript:alert(1)",
+    "logo.svg",
+    "https://user:pass@media.example.com/logo.svg",
+    " /logo.svg",
+    "/logo .svg",
+    "",
+    42,
+    undefined,
+  ])("refuses %j", (ref) => {
+    expect(isBrandLogoRef(ref)).toBe(false)
+  })
+})
+
+describe("the same-origin sentinels never become an absolute URL", () => {
+  it('apiUrl "/" resolves to relative (""); absent to undefined; anything else verbatim', () => {
+    expect(resolveRuntimeApiBase({ apiUrl: "/" })).toBe("")
+    expect(resolveRuntimeApiBase({ apiUrl: "  /  " })).toBe("")
+    expect(resolveRuntimeApiBase({})).toBeUndefined()
+    expect(resolveRuntimeApiBase({ apiUrl: "   " })).toBeUndefined()
+    expect(resolveRuntimeApiBase(undefined)).toBeUndefined()
+    expect(resolveRuntimeApiBase({ apiUrl: "https://api.example.com" })).toBe("https://api.example.com")
+    expect(resolveRuntimeApiBase({ apiUrl: "/api" })).toBe("/api")
+  })
+
+  it('supabaseUrl "/supabase" resolves against the page origin it is given', () => {
+    expect(resolveRuntimeSupabaseUrl({ supabaseUrl: "/supabase" }, "https://studio.example.com")).toBe("https://studio.example.com/supabase")
+    expect(resolveRuntimeSupabaseUrl({ supabaseUrl: "/supabase" }, "https://studio.example.com/")).toBe("https://studio.example.com/supabase")
+    expect(resolveRuntimeSupabaseUrl({ supabaseUrl: "https://x.supabase.co" }, "https://studio.example.com")).toBe("https://x.supabase.co")
+    expect(resolveRuntimeSupabaseUrl({}, "https://studio.example.com")).toBeUndefined()
+  })
+})
+
+describe("parseRuntimeConfig — typed, lenient, never throws", () => {
+  it("keeps each top-level key only with its expected type", () => {
+    expect(
+      parseRuntimeConfig({
+        apiUrl: "/",
+        supabaseUrl: " /supabase ",
+        supabaseAnonKey: "anon",
+        defaultLocale: "",
+        freecutUrl: 7,
+        moderation: { uploadImage: true },
+        previewStopRule: "true",
+        unknownKey: "x",
+      }),
+    ).toEqual({ apiUrl: "/", supabaseUrl: "/supabase", supabaseAnonKey: "anon", moderation: { uploadImage: true } })
+  })
+
+  it.each([undefined, null, "x", 42, [1, 2]])("anything but an object is an empty config (%j)", (raw) => {
+    expect(() => parseRuntimeConfig(raw)).not.toThrow()
+    expect(parseRuntimeConfig(raw)).toEqual({})
+  })
+
+  it("no surface key ⇒ no surface (the deployment configured none)", () => {
+    expect("surface" in parseRuntimeConfig({ apiUrl: "/" })).toBe(false)
+    expect(parseRuntimeConfig({ surface: "x" }).surface).toBeUndefined()
+  })
+
+  it("readRuntimeConfig reads the global /config.js sets", () => {
+    expect(readRuntimeConfig({ [RUNTIME_CONFIG_GLOBAL]: { apiUrl: "/" } })).toEqual({ apiUrl: "/" })
+    expect(readRuntimeConfig({})).toEqual({})
+    expect(readRuntimeConfig(undefined)).toEqual({})
+  })
+})
+
+describe("parseRuntimeSurface — every default applied", () => {
+  it("the stock surface: nothing narrowed, the new keys at their defaults", () => {
+    expect(RUNTIME_SURFACE_DEFAULT).toEqual({
+      nav: { hide: [] },
+      features: { hide: [] },
+      dashboard: { tabs: [] },
+      nodes: { deny: [], allow: [] },
+      models: { deny: [], allow: [] },
+      auth: { methods: [], requireSignIn: false },
+      siblings: { apps: [] },
+      brand: { productName: "Nodaro" },
+      locale: { picker: true },
+      outputs: { allowPublic: true },
+      voice: { allowedGenders: [] },
+      billing: { costTab: "inherit", sidebarCard: "inherit", selfServe: true },
+      catalogs: { required: false, factoryPresets: true, images: "default" },
+      imports: { links: true },
+      header: "default",
+      worlds: {},
+    })
+    expect(Object.isFrozen(RUNTIME_SURFACE_DEFAULT.auth)).toBe(true)
+  })
+
+  it("keeps a deployment's values, and derives requireSignIn from SSO-only when it is absent", () => {
+    const s = parseRuntimeSurface({
+      auth: { methods: ["sso"], ssoLabel: "Continue" },
+      brand: { productName: "Acme", platformLinks: false, logo: "/brand/logo.svg" },
+      locale: { default: "he", picker: true, offered: ["he", "en"] },
+      catalogs: { required: true, factoryPresets: false, images: "own" },
+      imports: { links: false },
+      header: "white-label",
+      worlds: { allow: ["image", "app"], home: "app", order: ["app", "image"] },
+    })
+    expect(s.auth).toEqual({ methods: ["sso"], ssoLabel: "Continue", requireSignIn: true })
+    expect(s.brand).toEqual({ productName: "Acme", platformLinks: false, logo: "/brand/logo.svg" })
+    expect(s.locale).toEqual({ default: "he", picker: true, offered: ["he", "en"] })
+    expect(s.catalogs).toEqual({ required: true, factoryPresets: false, images: "own" })
+    expect(s.imports).toEqual({ links: false })
+    expect(s.header).toBe("white-label")
+    expect(s.worlds).toEqual({ allow: ["image", "app"], home: "app", order: ["app", "image"] })
+  })
+
+  it("never carries the server-only billing keys, even if they were sent", () => {
+    const s = parseRuntimeSurface({
+      billing: { unitLabel: "units", unitRate: 2000, selfServe: false, payerAccount: "billing@acme.example", defaultAllowanceUnits: 400000, allowances: "enforce" },
+    })
+    expect(s.billing).toEqual({ costTab: "inherit", sidebarCard: "inherit", selfServe: false, unitLabel: "units", unitRate: 2000 })
+    expect(JSON.stringify(s)).not.toMatch(/payerAccount|defaultAllowanceUnits|allowances|billing@acme/)
+  })
+
+  it("the unit label and rate come both or neither", () => {
+    expect(parseRuntimeSurface({ billing: { unitLabel: "units" } }).billing.unitLabel).toBeUndefined()
+    expect(parseRuntimeSurface({ billing: { unitRate: 2000 } }).billing.unitRate).toBeUndefined()
+  })
+
+  it("a value it does not know falls to the restrictive side, never to more", () => {
+    // A reader older than its platform must not show what a newer value hides.
+    expect(parseRuntimeSurface({ catalogs: { images: "reviewed" } }).catalogs.images).toBe("none")
+    expect(parseRuntimeSurface({ imports: { links: "no" } }).imports.links).toBe(false)
+    expect(parseRuntimeSurface({ imports: "off" }).imports.links).toBe(false)
+    expect(parseRuntimeSurface({ header: "minimal" }).header).toBe("white-label")
+    expect(parseRuntimeSurface({ worlds: "image" }).worlds).toEqual({ allow: [] })
+    expect(parseRuntimeSurface({ worlds: { allow: "image" } }).worlds).toEqual({ allow: [] })
+  })
+
+  it("a home the allowlist does not let through is dropped; unknown order ids too", () => {
+    expect(parseRuntimeSurface({ worlds: { allow: ["image"], home: "explore" } }).worlds).toEqual({ allow: ["image"] })
+    expect(parseRuntimeSurface({ worlds: { home: "nowhere", order: ["bogus"] } }).worlds).toEqual({})
+  })
+
+  it("an unsafe logo is dropped and the rest of the brand stays", () => {
+    expect(parseRuntimeSurface({ brand: { productName: "Acme", logo: "//evil.example/x.svg" } }).brand).toEqual({ productName: "Acme" })
+  })
+
+  it("is idempotent: parsing what it returned changes nothing", () => {
+    const once = parseRuntimeSurface({ auth: { methods: ["sso"] }, worlds: { allow: ["image"] }, catalogPolicy: { a: 1 } })
+    expect(parseRuntimeSurface(once)).toEqual(once)
+  })
+})

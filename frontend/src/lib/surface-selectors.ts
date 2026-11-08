@@ -1,4 +1,11 @@
 import {
+  surfaceRequiresSignIn,
+  worldAllowed,
+  type SurfaceCatalogImages,
+  type SurfaceHeaderMode,
+  type WorldId,
+} from "@nodaro/shared/runtime-config"
+import {
   runtimeSurfaceProfile,
   runtimeConfiguredBrandName,
   type NavKey,
@@ -221,4 +228,45 @@ export function surfaceFactoryPresets(): boolean {
 export function surfaceVoiceGenderAllowed(gender: string | undefined): boolean {
   const allowed = runtimeSurfaceProfile().voice.allowedGenders
   return allowed.length === 0 || allowed.some((g) => g.toLowerCase() === gender?.toLowerCase())
+}
+
+// ── The keys the client apps read through /config.js ─────────────────────────
+//
+// Absent unless the deployment set them, and each default below is what the
+// platform does today, so an unconfigured deployment reads its current
+// behaviour. The rules every reader shares (sign-in, worlds) come from
+// @nodaro/shared/runtime-config, the contract those apps read too.
+
+/** No guest visits: an explicit `auth.requireSignIn`, else true exactly when sign-in is SSO-only. */
+export function surfaceRequireSignIn(): boolean {
+  return surfaceRequiresSignIn(runtimeSurfaceProfile().auth)
+}
+
+/** Whether media may be imported from a link to another site. */
+export function surfaceLinkImportsAllowed(): boolean {
+  return runtimeSurfaceProfile().imports?.links !== false
+}
+
+/** Pictures on picker options: the platform's, none, or the deployment's own. */
+export function surfaceCatalogImages(): SurfaceCatalogImages {
+  return runtimeSurfaceProfile().catalogs?.images ?? "default"
+}
+
+/** The languages a visitor may pick from; undefined = every language the product ships. */
+export function surfaceLocaleOffered(): readonly string[] | undefined {
+  return runtimeSurfaceProfile().locale.offered
+}
+
+export function surfaceHeaderMode(): SurfaceHeaderMode {
+  return runtimeSurfaceProfile().header ?? "default"
+}
+
+/** The deployment's own logo (a same-site path or an https URL), or undefined for the product's. */
+export function surfaceBrandLogo(): string | undefined {
+  return runtimeSurfaceProfile().brand.logo
+}
+
+/** Whether the profile lets this world through. Its node types are the server's call (GET /v1/surface/availability). */
+export function surfaceWorldAllowed(id: WorldId): boolean {
+  return worldAllowed(runtimeSurfaceProfile().worlds, id)
 }
