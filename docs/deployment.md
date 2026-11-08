@@ -526,6 +526,48 @@ CORS_ORIGIN=https://nodaro.example.com
 …and restart the stack so the frontend's Vite build picks up the new
 `PUBLIC_URL`.
 
+### Serving other apps on the same host
+
+The container's Caddy also reads every `*.caddy` file in
+`/etc/caddy/sites.d/` as part of its one site
+(`import /etc/caddy/sites.d/*.caddy` in `frontend/Caddyfile`). A deployment
+that serves other web apps beside the editor on the same host adds their
+routes there, in an image built on this one, instead of editing the
+Caddyfile:
+
+```dockerfile
+FROM <this image>
+COPY --from=<other app's build> /dist /srv/other-app
+COPY other-app.caddy /etc/caddy/sites.d/other-app.caddy
+```
+
+```caddy
+# /etc/caddy/sites.d/other-app.caddy
+@other_app path /other /other/*
+handle @other_app {
+	root * /srv/other-app
+	encode zstd gzip
+	try_files {path} /index.html
+	file_server
+}
+```
+
+- A file holds directives of the site itself (`handle`, `redir`, …), not a
+  site of its own. Caddy orders `handle` blocks by their paths, so a route
+  here is answered before the editor's own catch-all.
+- Choose paths that do not overlap the editor's: the API (`/v1/*`), the auth
+  and storage proxies (`/supabase/*`, `/storage/*`), `/.well-known/*`,
+  `/config.js`, `/assets/*` and the editor's own pages. Keep an app's files
+  under its own path too.
+- Match a path exactly and with `/*` (`/other /other/*`), never by a bare
+  prefix: `/other*` would also take `/other-thing`.
+- With no file there (the default; the directory need not exist) the site is
+  exactly as before, and Caddy logs one warning at start, `No files matching
+  import glob pattern`, which is expected.
+- A file Caddy cannot parse keeps Caddy from starting, and then nothing
+  answers on port 3000. Check the layered image with
+  `caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`.
+
 ## 4. First user + admin promotion
 
 Community edition has no admin panel, but Business and Cloud do. To

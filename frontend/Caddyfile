@@ -267,6 +267,14 @@
 			}
 		}
 	}
+	# Other apps served on this host: a deployment's image adds their routes as
+	# files in /etc/caddy/sites.d/ (directives of this site, such as a `handle`
+	# per app), never by editing this file. Caddy orders `handle` blocks by
+	# path, so theirs are answered before the catch-all below. With no file
+	# there, the default, the site is unchanged: the directory need not exist,
+	# and Caddy logs one warning at start that the pattern matched nothing.
+	# See docs/deployment.md, "Serving other apps on the same host".
+	import /etc/caddy/sites.d/*.caddy
 	handle {
 		# zstd + gzip: Caddy negotiates the best supported encoding per request.
 		# zstd shaves ~15-25% more off JS/CSS than gzip alone.
