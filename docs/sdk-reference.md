@@ -348,11 +348,12 @@ const supabase = createSharedSupabaseClient({
   url: SUPABASE_URL,
   anonKey: SUPABASE_ANON_KEY,
   cookieDomain: ".example.com", // optional — omit for host-only cookies
+  retiredSupabaseUrls: [PREVIOUS_SUPABASE_URL], // optional — projects this app no longer uses
 })
 const auth = supabaseAuth(supabase)
 ```
 
-**Signature:** `createSharedSupabaseClient<Db = any>(options: { url: string; anonKey: string; cookieDomain?: string }): SupabaseClient<Db>`
+**Signature:** `createSharedSupabaseClient<Db = any>(options: { url: string; anonKey: string; cookieDomain?: string; retiredSupabaseUrls?: readonly string[] }): SupabaseClient<Db>`
 
 - `cookieDomain` is applied only when the page's hostname is that domain or a
   subdomain of it; on any other host (`localhost`, preview URLs) cookies stay
@@ -360,6 +361,16 @@ const auth = supabaseAuth(supabase)
 - On first load it adopts an existing localStorage session (the storage
   supabase-js used previously) into the cookie, then removes the old key — an
   already-signed-in user survives the switch. Dead tokens are discarded.
+- `retiredSupabaseUrls` lists Supabase projects the app has moved away from.
+  Each time the client is created in a browser, it deletes every cookie such a
+  project left (`sb-<project-ref>-…`: the session and its chunks, the code
+  verifiers, the stored user), on `cookieDomain` and host-only. Nothing reads
+  those cookies any more, but the browser keeps sending them with every request
+  until they expire. The current project's cookies are never deleted, even if
+  its URL is listed. The option takes an explicit list rather than clearing
+  every project but the current one, because two projects in use at the same
+  time (production and staging on one parent domain, say) can share a cookie
+  domain, and each would delete the other's sessions.
 - Ships as a separate subpath so the base SDK stays Supabase-free.
   `@supabase/ssr` and `@supabase/supabase-js` are **optional peer
   dependencies** — install both to use this export.
