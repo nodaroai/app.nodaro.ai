@@ -465,6 +465,35 @@ export async function insertJobIdempotent<T = { id: string }>(
 }
 
 /**
+ * Race-proof insert for a row that arrives ALREADY STAMPED by its creator:
+ * the plugin toolkit's own lane (`tk.http.insertJobWithIdempotencyKey`,
+ * `lib/private-plugins/toolkit.ts`), whose row carries the calling surface
+ * under the plugin's columns and the P14 payer pair over them. This helper
+ * stamps nothing (no session, no origin, no request columns): the row is
+ * inserted as given.
+ *
+ * It asks the SAME request gate as every other helper, before the row
+ * exists: the two platform rules (a blocked account, a restricted input) and
+ * every registered request policy — one that throws blocks
+ * (`applyJobRequestPolicies` fails closed). An allow is recorded like any
+ * other.
+ *
+ * THROWS `JobBlockedError` on a block and on a DB error, like
+ * `insertJobIdempotent`.
+ */
+export async function insertStampedJobIdempotent<T = { id: string }>(
+  row: Record<string, unknown> & { user_id: string },
+  idempotencyKey: string | null | undefined,
+  selectColumns = "id",
+): Promise<IdempotentInsertResult<T>> {
+  const gate = await gateJobInsert([row])
+  if (gate && "block" in gate) throw new JobBlockedError(gate.block)
+  const result = await insertWithIdempotencyKey<T>("jobs", row, idempotencyKey, selectColumns)
+  if (gate) await recordAllowedInsert(gate, result.row)
+  return result
+}
+
+/**
  * `insertJobIdempotent` for a SYNCHRONOUS route — the `insertSyncJob` rule
  * (`job_type` derived from `input_data.type`, `started_at` stamped; a caller's
  * own `started_at` wins) on the race-proof lane. Throws like the function it

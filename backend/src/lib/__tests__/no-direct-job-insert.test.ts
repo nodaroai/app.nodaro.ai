@@ -28,14 +28,13 @@ import { unitRouteFiles } from "../unit-source-files.js"
 const SRC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..")
 const ROUTES_DIR = join(SRC_DIR, "routes")
 
-/** The files allowed to touch the raw jobs-insert helpers:
- *  - lib/insert-job.ts — the helpers themselves live there.
- *  - lib/private-plugins/toolkit.ts — the plugin contract's own insert
- *    lane (`insertJobWithIdempotencyKey`), which stamps the P14 payer
- *    pair itself and whose callers supply their own provenance columns.
+/** The ONE file allowed to touch the raw jobs-insert calls: lib/insert-job.ts,
+ *  where the helpers live and where each of them asks the request gate first.
  *  Everything else goes through insertJob / insertInternalJob /
- *  insertJobIdempotent. */
-const ALLOWLIST = new Set(["lib/insert-job.ts", "lib/private-plugins/toolkit.ts"])
+ *  insertJobIdempotent / insertStampedJobIdempotent — the plugin toolkit too:
+ *  its own insert lane (`tk.http.insertJobWithIdempotencyKey`) stamps its
+ *  provenance itself and inserts through insertStampedJobIdempotent. */
+const ALLOWLIST = new Set(["lib/insert-job.ts"])
 
 function tsFiles(dir: string): string[] {
   const out: string[] = []
@@ -48,10 +47,20 @@ function tsFiles(dir: string): string[] {
   return out
 }
 
-/** `.from("jobs")` followed by `.insert(` — allowing the newline-and-indent
- *  chain style the routes are written in. `.update(` / `.select(` on jobs are
- *  untouched by this rule and must not match. */
-const DIRECT_INSERT = /\.from\(\s*["']jobs["']\s*\)\s*\.insert\s*\(|insertWithIdempotencyKey\s*(?:<[^>]*>)?\s*\(\s*["']jobs["']/
+/** `.from("jobs")` followed by `.insert(` or `.upsert(` (both create rows) —
+ *  allowing the newline-and-indent chain style the routes are written in.
+ *  `.update(` / `.select(` on jobs are untouched by this rule and must not
+ *  match. */
+const DIRECT_INSERT = /\.from\(\s*["']jobs["']\s*\)\s*\.(?:insert|upsert)\s*\(|insertWithIdempotencyKey\s*(?:<[^>]*>)?\s*\(\s*["']jobs["']/
+
+/** Comments blanked with byte offsets kept, so a doc comment quoting an insert
+ *  is not an insert (same approach as job-policy-request-totality). */
+function blankComments(src: string): string {
+  const blank = (m: string) => m.replace(/[^\n]/g, " ")
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, blank)
+    .replace(/(^|[^:])\/\/[^\n]*/g, (m, p1: string) => p1 + blank(m.slice(p1.length)))
+}
 
 describe("all job inserts go through insert-job.ts", () => {
   const files = tsFiles(SRC_DIR)
@@ -89,7 +98,7 @@ describe("all job inserts go through insert-job.ts", () => {
    */
   it("every exported insert helper runs the request gate", () => {
     const src = readFileSync(join(SRC_DIR, "lib", "insert-job.ts"), "utf8")
-    const helpers = ["insertJob", "insertInternalJob", "insertJobs", "insertJobIdempotent"]
+    const helpers = ["insertJob", "insertInternalJob", "insertJobs", "insertJobIdempotent", "insertStampedJobIdempotent"]
     const missing = helpers.filter((name) => {
       const start = src.indexOf(`export async function ${name}<`)
       if (start < 0) return true
@@ -108,6 +117,51 @@ describe("all job inserts go through insert-job.ts", () => {
       src.includes("applyJobRequestPolicies("),
       "gateJobInsert() must actually ask the registry — otherwise the guard above is vacuous.",
     ).toBe(true)
+  })
+
+  /**
+   * The same rule, derived rather than listed: inside the funnel, EVERY raw
+   * jobs write (`.insert(` / `insertWithIdempotencyKey(`) sits in a function
+   * that asked `gateJobInsert(` before it. A helper added tomorrow is covered
+   * without anyone remembering to extend the list above.
+   */
+  it("inside the funnel, every raw jobs write is preceded by the request gate in its own function", () => {
+    const src = blankComments(readFileSync(join(SRC_DIR, "lib", "insert-job.ts"), "utf8"))
+    const starts = [...src.matchAll(/\n(?:export\s+)?(?:async\s+)?function\s+(\w+)/g)].map((m) => ({ name: m[1]!, at: m.index }))
+    const ungated: string[] = []
+    let writes = 0
+    for (const m of src.matchAll(/\.(?:insert|upsert)\s*\(|\binsertWithIdempotencyKey\s*(?:<[^>]*>)?\s*\(/g)) {
+      writes++
+      const owner = starts.filter((s) => s.at < m.index).at(-1)
+      if (!owner || !src.slice(owner.at, m.index).includes("gateJobInsert(")) ungated.push(owner?.name ?? "<module scope>")
+    }
+    expect(writes, "found no raw jobs write in insert-job.ts — the scan is wired to nothing").toBeGreaterThanOrEqual(4)
+    expect(
+      ungated,
+      `These functions in lib/insert-job.ts write jobs without asking gateJobInsert() first, so a blocked ` +
+        `account, a restricted input and every registered request policy are skipped for the jobs they create.`,
+    ).toEqual([])
+  })
+
+  /**
+   * The plugin toolkit is checked on its own, whatever ALLOWLIST says: the
+   * toolkit's insert members are how private plugin routes create jobs, so a
+   * raw write there is a plugin lane past the request gate (the hole this
+   * guard closed). Its members insert through the insert-job.ts helpers.
+   */
+  it("the plugin toolkit has no raw jobs write of its own", () => {
+    const pluginDir = join(SRC_DIR, "lib", "private-plugins")
+    const files = tsFiles(pluginDir)
+    expect(files.map((f) => relative(SRC_DIR, f).split("\\").join("/"))).toContain("lib/private-plugins/toolkit.ts")
+    const offenders = files
+      .filter((f) => DIRECT_INSERT.test(blankComments(readFileSync(f, "utf8"))))
+      .map((f) => relative(SRC_DIR, f).split("\\").join("/"))
+    expect(
+      offenders,
+      `These plugin-toolkit files write jobs directly, past the request gate: ${offenders.join(", ")}. ` +
+        `Insert through lib/insert-job.ts (insertJobIdempotent for a request's job, insertStampedJobIdempotent ` +
+        `for a row that carries its own provenance).`,
+    ).toEqual([])
   })
 
   it("insertJob is actually used by routes (the rule isn't vacuous)", () => {

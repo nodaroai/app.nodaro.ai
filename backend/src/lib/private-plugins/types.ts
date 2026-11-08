@@ -2252,10 +2252,25 @@ export interface PluginHttpToolkit {
   /** Public HTTP bytes, SSRF checked, 30s timeout and streaming cap (1–25 MiB).
    * Caller must separately authorize the source. No storage credentials. */
   safeFetchBytes?(url: string, maxBytes: number): Promise<Buffer>
-  /** Mirrors `insertWithIdempotencyKey` (`lib/idempotent-insert.ts:33`).
-   *  P14: the optional context stamps the payer pair (workspace_id/org_id)
-   *  onto the row — which also trips the DB privacy clamp for workspace
-   *  work. Additive-optional: an older plugin's rows stay personal-shaped. */
+  /**
+   * Inserts the plugin's own row into `jobs`, race-proof on `idempotencyKey`
+   * (`insertStampedJobIdempotent`, `lib/insert-job.ts`).
+   * P14: the optional context stamps the payer pair (workspace_id/org_id)
+   * onto the row — which also trips the DB privacy clamp for workspace work.
+   * Additive-optional: an older plugin's rows stay personal-shaped. No
+   * session or origin is stamped; that is `insertJobWithProvenance`.
+   *
+   * The row passes the same request gate as every core job before it exists:
+   * a blocked account, an input naming a restricted file, and every request
+   * policy the deployment registered (one that throws blocks: fail-closed).
+   * A refusal rejects with a `PluginHttpError` (identify it by
+   * `.name === "PluginHttpError"`): 422 `job_blocked`, the same refusal
+   * `insertJobWithProvenance` throws. Send it verbatim
+   * (`reply.status(err.statusCode).send(err.body)`) or hand it to
+   * `sendInternalError`, which answers it the same way. Any other failure
+   * (the database) is re-thrown unchanged. With nothing registered and an
+   * unblocked account the row is written exactly as before.
+   */
   insertJobWithIdempotencyKey(
     data: Record<string, unknown> & { user_id: string },
     idempotencyKey: string | null | undefined,
@@ -2482,7 +2497,10 @@ export interface PluginHttpToolkit {
    * Mirrors `sendInternalError` (`lib/http-errors.ts`) — logs `err` server-side
    * and sends a sanitized `internal_error` 500 with the curated `clientMessage`
    * (marked so the global onSend net leaves it intact). The video-analysis route
-   * uses it for the job-insert failure path.
+   * uses it for the job-insert failure path. A refusal the toolkit itself
+   * shaped (a `PluginHttpError`: a job-policy block, a session or origin the
+   * request may not use) is answered as that refusal — its own 4xx status and
+   * body, logged at info — never as a 500.
    */
   sendInternalError(reply: FastifyReply, req: FastifyRequest, err: unknown, clientMessage?: string): FastifyReply
   /**

@@ -261,12 +261,37 @@ function isLegalHoldRefusal(err: unknown): boolean {
   return code === "55000" && typeof message === "string" && /held as evidence/i.test(message)
 }
 
+/**
+ * A refusal a plugin toolkit member already shaped to be sent: a
+ * `PluginHttpError` (`lib/private-plugins/types.ts`), whose status and body
+ * are, by construction, what this function answers for its cause. Recognised
+ * by name and shape rather than imported, so the plugin contract stays out of
+ * the module graph of every route that imports this file. Only a 4xx with a
+ * coded body qualifies: nothing here can turn into a server error's answer.
+ */
+function toolkitRefusalOf(err: unknown): { statusCode: number; body: { error: { code: string; message: string } } } | null {
+  if (!(err instanceof Error) || err.name !== "PluginHttpError") return null
+  const { statusCode, body } = err as Error & { statusCode?: unknown; body?: { error?: { code?: unknown; message?: unknown } } }
+  if (typeof statusCode !== "number" || statusCode < 400 || statusCode > 499) return null
+  if (typeof body?.error?.code !== "string" || typeof body.error.message !== "string") return null
+  return { statusCode, body: body as { error: { code: string; message: string } } }
+}
+
 export function sendInternalError(
   reply: FastifyReply,
   req: FastifyRequest,
   err: unknown,
   clientMessage = GENERIC_INTERNAL_MESSAGE,
 ): FastifyReply {
+  // A plugin route that catches a toolkit refusal (a job-policy block, a
+  // session or origin the request may not use) and hands it here gets the
+  // refusal it carries, exactly as if it had sent `err.body` itself — a
+  // client outcome, logged at info, never a 500.
+  const refusal = toolkitRefusalOf(err)
+  if (refusal) {
+    req.log.info({ code: refusal.body.error.code }, "request refused")
+    return reply.status(refusal.statusCode).send(refusal.body)
+  }
   // This exact server-defined database refusal is a conflict, not a 500.
   // Never forward arbitrary database messages through this exception.
   if (err && typeof err === "object" && "code" in err && err.code === "PT409"

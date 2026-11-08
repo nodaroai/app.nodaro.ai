@@ -112,9 +112,8 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../reques
 import { extractMcpClient } from "../extract-mcp-client.js"
 import { buildJobInputData } from "../job-input-data.js"
 import { formatZodError } from "../zod-error.js"
-import { insertWithIdempotencyKey } from "../idempotent-insert.js"
 import { warmCompletedJobVideo } from "../warm-video-copies.js"
-import { billingPairColumns, insertJobIdempotent } from "../insert-job.js"
+import { billingPairColumns, insertJobIdempotent, insertStampedJobIdempotent } from "../insert-job.js"
 import { isGenerationSessionNotFound } from "../generation-session-error.js"
 import { CLIENT_ORIGIN_RULE, isInvalidClientOrigin } from "../client-origin-error.js"
 import { jobBlockOf, jobBlockedBody } from "../job-policy.js"
@@ -188,7 +187,7 @@ import { promises as fs } from "node:fs"
 import type { ZodType } from "zod"
 import type { PluginEdlTimelineOptions, PluginEdlTimelineResult } from "./types.js"
 import { PluginHttpError } from "./types.js"
-import type { PluginCapabilities, PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginJobErrorHint, PluginOwnedJobRow, PluginOwnedRawJob } from "./types.js"
+import type { PluginBillingContext, PluginCapabilities, PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginJobErrorHint, PluginOwnedJobRow, PluginOwnedRawJob } from "./types.js"
 import type { PluginFfmpegToolkit, PluginLlmToolkit, PluginMediaToolkit, PluginProvidersToolkit } from "./types.js"
 import type { PluginToolkit, PluginLlmRequest, PluginLlmSpend, PluginLlmSideHoldPayer, PluginLlmSideHoldToolkit, PluginLlmMultimodalRequest, PluginVideoGenOptions, PluginVideoGenResult, PluginImageGenOptions, PluginImageGenResult, PluginMusicGenOptions, PluginMusicGenResult, PipelineSnapshot } from "./types.js"
 import { applyFrameFitAndDelivery } from "../video-frame-dispatch.js"
@@ -1061,6 +1060,35 @@ async function insertJobWithProvenance(
 ): Promise<{ id: string; created: boolean }> {
   try {
     const result = await insertJobIdempotent<{ id: string }>(req, row, idempotencyKey)
+    return { id: result.row.id, created: result.created }
+  }
+  catch (err) {
+    throw pluginHttpRefusalOf(err) ?? err
+  }
+}
+
+/**
+ * `tk.http.insertJobWithIdempotencyKey` — the plugin contract's own insert
+ * lane. The row is the plugin's: the calling surface (`lib/job-source.ts`,
+ * when `req` is given) goes UNDER it, so the plugin's own columns win, as in
+ * `insertJob`; the P14 payer pair from `billingContext` goes OVER it, the ONE
+ * exception to caller-wins, as in `withJobProvenance`. No session or origin is
+ * stamped: that is `insertJobWithProvenance`.
+ *
+ * The row passes the same request gate as every other job
+ * (`insertStampedJobIdempotent`) before it exists. A refusal rejects with the
+ * `PluginHttpError` the provenance funnel throws for it (422 job_blocked);
+ * anything else (the database) is re-thrown unchanged.
+ */
+async function insertJobWithIdempotencyKey(
+  data: Record<string, unknown> & { user_id: string },
+  idempotencyKey: string | null | undefined,
+  billingContext?: PluginBillingContext,
+  req?: FastifyRequest,
+): Promise<{ id: string; created: boolean }> {
+  const row = { ...(req ? jobSourceColumns(req) : {}), ...data, ...billingPairColumns(billingContext) }
+  try {
+    const result = await insertStampedJobIdempotent<{ id: string }>(row, idempotencyKey)
     return { id: result.row.id, created: result.created }
   }
   catch (err) {
@@ -1997,19 +2025,8 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       formatZodError,
       safeFetch,
       safeFetchBytes,
-      // Mirrors `insertWithIdempotencyKey` (`lib/idempotent-insert.ts:33`),
-      // narrowed to the "jobs" table + the one column the contract needs.
-      insertJobWithIdempotencyKey: async (data, idempotencyKey, billingContext, req) => {
-        // The calling surface goes UNDER the plugin's row (caller wins, as in
-        // `insertJob`); the P14 payer pair is spread AFTER it — the ONE
-        // exception to caller-wins, same as withJobProvenance.
-        const { row, created } = await insertWithIdempotencyKey<{ id: string }>(
-          "jobs",
-          { ...(req ? jobSourceColumns(req) : {}), ...data, ...billingPairColumns(billingContext) },
-          idempotencyKey,
-        )
-        return { id: row.id, created }
-      },
+      // Both insert lanes ask the request gate (lib/insert-job.ts); see each function.
+      insertJobWithIdempotencyKey,
       insertJobWithProvenance,
       computeVoiceChangerProPricing: async (args) => {
         if (!hasCredits()) {
