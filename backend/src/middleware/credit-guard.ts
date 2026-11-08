@@ -6,7 +6,13 @@ import {
   deniedModelRejectionMessage,
   deniedNodeRejectionMessage,
 } from "../lib/surface-deny.js"
-import { deniedCapabilityForUser } from "../lib/availability-viewer.js"
+import { deniedRouteCapabilityForUser } from "../lib/availability-viewer.js"
+import {
+  refusesUnclassifiedRoutes,
+  reportUnclassifiedRoute,
+  routeNodeGate,
+  unclassifiedRouteMessage,
+} from "../lib/route-node-gate.js"
 import { findForeignCatalogIdsInBody, foreignCatalogIdMessage } from "@nodaro/prompts/picker-catalogs"
 import {
   computeFingerprint,
@@ -204,14 +210,14 @@ function requestedModels(body: unknown): string[] {
 export function creditGuard(
   modelResolver: (req: FastifyRequest) => string,
   opts?: CreditGuardOpts,
-) {
+): CreditGuardPreHandler {
   // Kick off the cloud impl import eagerly at route-registration time so
   // per-request await is just promise-resolution after the first call.
   const cloud = hasCredits()
   if (cloud) warmCloudImpl(loadCreditGuardImpl)
   const dedupEnabled = opts?.dedup !== false
 
-  return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
+  const guard = async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
     // Surface-profile deny at the SECOND front door (B1 / SAI-1 / H9).
     // models.deny / nodes.deny are already enforced at discovery (GET
     // /v1/models, /v1/nodes), at the workflow write guards, and at the DAG
@@ -267,7 +273,12 @@ export function creditGuard(
           })
         }
       }
-      const nodeType = (req.routeOptions?.url ?? "").replace(/^\/v1\//, "")
+      // The node this route RUNS (lib/route-node-gate.ts) — not its path: a
+      // nested route (`/v1/suno/generate`) runs a node its path does not name,
+      // and a plugin route reaches this same guard through the toolkit.
+      const route = req.routeOptions?.url ?? ""
+      const gate = routeNodeGate(route, req.body)
+      const nodeType = gate.kind === "node" ? gate.types[0] : undefined
       // Per USER, not per credential: the admin switch hides a node from users,
       // and an admin's run reaches this door three ways — their browser session,
       // their API token, and the orchestrator's internal call, which carries only
@@ -276,7 +287,8 @@ export function creditGuard(
       // host a capability another node governs: Web Scrape's Instagram source
       // follows the Instagram node, and this guard is the one place every run
       // of it passes (editor, SDK, orchestrator, a keyless install's relay).
-      const deniedCapability = nodeType ? await deniedCapabilityForUser(nodeType, req.body, req.userId) : undefined
+      const deniedCapability =
+        gate.kind === "node" ? await deniedRouteCapabilityForUser(gate.types, req.body, req.userId, gate.since) : undefined
       if (deniedCapability) {
         return reply.code(403).send({
           error: {
@@ -285,6 +297,18 @@ export function creditGuard(
           },
         })
       }
+      // A credit-spending route no node accounts for: a whitelist deployment
+      // never allowed it (its rule is "not listed ⇒ unavailable"), and every
+      // deployment is told once, loudly, so the route gets its node named.
+      if (gate.kind === "unclassified" && route) {
+        const refused = refusesUnclassifiedRoutes()
+        reportUnclassifiedRoute(route, refused)
+        if (refused) {
+          return reply.code(403).send({
+            error: { code: "node_not_available", message: unclassifiedRouteMessage(route) },
+          })
+        }
+      }
       // Catalog curation, single-node lane. Three routes (generate-image,
       // generate-video, text-to-video) accept folded `direction` / `subject`
       // records whose values are picker ids, with schemas that tolerate
@@ -292,7 +316,7 @@ export function creditGuard(
       // deployment an unknown id is exactly what must be rejected — the
       // orchestrator wall covers the graph lane; this is the same door for
       // the wire lane. Inert without catalog packs.
-      const foreign = findForeignCatalogIdsInBody(nodeType, req.body as { direction?: unknown; subject?: unknown } | undefined)
+      const foreign = findForeignCatalogIdsInBody(nodeType ?? "", req.body as { direction?: unknown; subject?: unknown } | undefined)
       if (foreign.length > 0) {
         console.warn(
           `[catalog-guard] ${req.routeOptions?.url ?? nodeType} REFUSED for user ${req.userId ?? "anonymous"} — ` +
@@ -373,6 +397,24 @@ export function creditGuard(
     const impl = await loadCreditGuardImpl()
     return impl.creditGuardImpl(modelResolver, opts)(req, reply)
   }
+  return Object.assign(guard, { [CREDIT_GUARD]: true as const })
+}
+
+/**
+ * Marks every preHandler {@link creditGuard} returns, so a test that boots the
+ * app can find each route that attaches one (src/__tests__/credit-guard-route-nodes.test.ts
+ * holds every such route to the node it runs).
+ */
+export const CREDIT_GUARD: unique symbol = Symbol.for("nodaro.creditGuard")
+
+/** What {@link creditGuard} returns: the preHandler, marked. */
+export type CreditGuardPreHandler = ((req: FastifyRequest, reply: FastifyReply) => Promise<void>) & {
+  readonly [CREDIT_GUARD]: true
+}
+
+/** Is `fn` a preHandler built by {@link creditGuard}? */
+export function isCreditGuard(fn: unknown): fn is CreditGuardPreHandler {
+  return typeof fn === "function" && (fn as { [CREDIT_GUARD]?: unknown })[CREDIT_GUARD] === true
 }
 
 /** Postgres SQLSTATE for unique-constraint violations. PostgREST surfaces

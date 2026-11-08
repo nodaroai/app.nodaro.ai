@@ -1,12 +1,15 @@
+import type { FastifyReply, FastifyRequest } from "fastify"
 import {
   ADMIN_VIEWER,
   USER_VIEWER,
   availabilityChecksFor,
+  deniedNodeRejectionMessage,
   findDeniedNodeTypes,
   isNodeDenied,
   nodeNotAvailableError,
   type AvailabilityViewer,
 } from "./surface-deny.js"
+import { ROUTE_GATES_GENERATION } from "./availability-override.js"
 import { hasAdmin } from "./config.js"
 
 /**
@@ -74,17 +77,65 @@ export async function isNodeDeniedForUser(type: string, userId: string | null | 
  * the label a refusal names, or undefined. Covers the node's own type and a
  * capability it hosts that another node governs (Web Scrape's Instagram source
  * follows the Instagram node — lib/surface-deny.ts). `data` is the node's data
- * or the direct route's body: same keys.
+ * or the direct route's body: same keys. `gateSince` is the asking door's
+ * gating generation (`isNodeDenied`).
  */
 export async function deniedCapabilityForUser(
   hostType: string,
   data: unknown,
   userId: string | null | undefined,
+  gateSince = 0,
 ): Promise<string | undefined> {
-  const hiddenFromUsers = availabilityChecksFor(hostType, data).filter((c) => isNodeDenied(c.governedBy, USER_VIEWER))
+  const hiddenFromUsers = availabilityChecksFor(hostType, data).filter((c) => isNodeDenied(c.governedBy, USER_VIEWER, gateSince))
   if (hiddenFromUsers.length === 0) return undefined
   const viewer = await viewerForUser(userId)
-  return hiddenFromUsers.find((c) => isNodeDenied(c.governedBy, viewer))?.label
+  return hiddenFromUsers.find((c) => isNodeDenied(c.governedBy, viewer, gateSince))?.label
+}
+
+/**
+ * The refusal label for a request a route runs as ANY of `types` (one, nearly
+ * always; Publish to Social's route runs the platform's own post node or the
+ * unified one — lib/route-node-gate.ts), or undefined when one of them is
+ * available to THIS user. Names the first type's refusal.
+ */
+export async function deniedRouteCapabilityForUser(
+  types: readonly string[],
+  data: unknown,
+  userId: string | null | undefined,
+  gateSince = 0,
+): Promise<string | undefined> {
+  let first: string | undefined
+  for (const type of types) {
+    const denied = await deniedCapabilityForUser(type, data, userId, gateSince)
+    if (denied === undefined) return undefined
+    first ??= denied
+  }
+  return first
+}
+
+/** Marks the preHandler {@link requireNodeAvailable} builds, with the node it asks about. */
+export const NODE_AVAILABILITY_GATE: unique symbol = Symbol.for("nodaro.nodeAvailabilityGate")
+
+/**
+ * A preHandler that refuses (403 `node_not_available`, the credit guard's
+ * shape) when `type` is not available to the caller — for a route that starts
+ * a node's run without passing that node's credit guard itself (a trend run is
+ * composed here and dispatched to Nodaro Motion, `cast-swap`, as an internal
+ * request). Asked as a door of route gating (`ROUTE_GATES_GENERATION`): an
+ * override stored before such doors existed never decided it.
+ */
+export function requireNodeAvailable(
+  type: string,
+): ((req: FastifyRequest, reply: FastifyReply) => Promise<FastifyReply | void>) & { readonly [NODE_AVAILABILITY_GATE]: string } {
+  // RETURNS the reply on a refusal: in a Fastify async hook that is what halts
+  // the lifecycle (a bare `await reply.send()` lets the handler run anyway).
+  const gate = async (req: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | void> => {
+    const denied = await deniedCapabilityForUser(type, req.body, req.userId, ROUTE_GATES_GENERATION)
+    if (denied) {
+      return reply.code(403).send({ error: { code: "node_not_available", message: deniedNodeRejectionMessage([denied]) } })
+    }
+  }
+  return Object.assign(gate, { [NODE_AVAILABILITY_GATE]: type })
 }
 
 /** Throws the coded `node_not_available` error when this deployment does not

@@ -34,7 +34,8 @@ import { LLM_MODELS } from "@nodaro/shared/llm-models"
 export type AvailabilityKind = "nodes" | "models"
 
 /**
- * Node types an allow-list / override can gate (registry minus utility).
+ * Node types an allow-list / override can gate (registry minus utility, plus
+ * the {@link GATEABLE_FEATURES}).
  *
  * Filled LAZILY via dynamic import: node-registry.ts statically imports
  * `ee/billing/credits.js`, and a static import here drags that chain into
@@ -50,15 +51,129 @@ const gateableNodeTypes = new Set<string>()
 export const GATEABLE_NODE_TYPES: ReadonlySet<string> = gateableNodeTypes
 
 /**
+ * Every node type this build knows, gateable or not: the whole registry
+ * (utility nodes and {@link NOT_OVERRIDE_GATED_NODE_TYPES} included) plus the
+ * {@link GATEABLE_FEATURES}. What lib/route-node-gate.ts accepts as the node a
+ * `POST /v1/<type>` route runs. Filled with the gateable set, in place.
+ */
+const knownNodeTypes = new Set<string>()
+export const KNOWN_NODE_TYPES: ReadonlySet<string> = knownNodeTypes
+
+/** A gateable id with no canvas node: see {@link GATEABLE_FEATURES}. */
+export interface GateableFeature {
+  readonly type: string
+  readonly label: string
+  readonly category: string
+}
+
+/**
+ * Gateable ids that are NOT canvas nodes: a capability served by routes (and
+ * MCP tools) of its own, with no node anyone can place in a workflow, that a
+ * deployment offers or withholds exactly like a node — `nodes.allow` /
+ * `nodes.deny` and Admin → Availability list it, and the routes that run it
+ * (lib/route-node-gate.ts) are refused while it is withheld.
+ *
+ * Never in NODE_REGISTRY: that list is the canvas (`GET /v1/nodes`, the
+ * workflow guards, the node skills), and an id there must be a node a workflow
+ * can hold.
+ */
+export const GATEABLE_FEATURES: readonly GateableFeature[] = Object.freeze([
+  // `POST /v1/cast-swap` and the routes of the same engine; every trend run is one.
+  Object.freeze({ type: "cast-swap", label: "Nodaro Motion (Cast Swap)", category: "ai-video" }),
+])
+
+for (const f of GATEABLE_FEATURES) {
+  gateableNodeTypes.add(f.type)
+  knownNodeTypes.add(f.type)
+}
+
+/**
  * Registry node types an allow-list / override does NOT gate by omission. Site
  * Capture shipped as a route and an MCP tool (capture_site, which asks
  * `isNodeDenied("site-capture")`) before it had a canvas node; making the node
  * gateable would hide the live tool on every install whose stored override was
  * saved without it. It stays governed by its install switch
  * (SITE_CAPTURE_ENABLED, surface-deny.ts) and an explicit profile `deny`, as
- * the tool always was.
+ * the tool always was. (It predates the gating generations below, which are
+ * how a live capability now joins the universe without that cost.)
  */
 export const NOT_OVERRIDE_GATED_NODE_TYPES: ReadonlySet<string> = new Set(["site-capture"])
+
+// ── Gating generations ─────────────────────────────────────────────────────
+//
+// A stored override is an ENABLED-SET: a gateable id it does not list is
+// withheld. That is the release switch — a brand-new node stays hidden from
+// users until an admin ticks it — and it is right for an id that is new. It is
+// wrong for a gate that is new on something already LIVE: an override stored
+// before `cast-swap` was gateable does not list it, so reading it as an
+// enabled-set would switch Nodaro Motion off on every deployment that ever
+// saved Admin → Availability. Same for a route that was never refused before
+// and now follows its node (lib/route-node-gate.ts): an override stored before
+// that never decided the route.
+//
+// So every gate carries the GENERATION it arrived in, and a stored override
+// records the generation of the code that saved it. A gate newer than the
+// override is one the override never decided, and the FACTORY layer (the
+// profile's allow/deny) answers for it — on a deployment without lists that is
+// "available", exactly as before the gate existed; on a whitelist deployment
+// it is "not listed ⇒ unavailable", as the whitelist says. The next save in
+// Admin → Availability is made from a page that shows the gate, so it records
+// the current generation and decides it.
+//
+// A brand-new node is generation 0 — gated by any override from its first day,
+// the release switch unchanged. Only an id that was live and UNGATED before it
+// joined the universe gets a generation: bump GATING_GENERATION and list the id
+// at the new number.
+
+/** The generation this code saves an override at. */
+export const GATING_GENERATION = 1
+
+/** The generation route gating arrived in: a route refused under a node the
+ *  old path derivation never named (lib/route-node-gate.ts). */
+export const ROUTE_GATES_GENERATION = 1
+
+/** Ids that joined the gateable universe while live, by generation. */
+const GATED_SINCE: ReadonlyMap<string, number> = new Map([
+  // Nodaro Motion (POST /v1/cast-swap, every trend run): live long before it was gateable.
+  ["cast-swap", 1],
+])
+
+/** The generation `type` became gateable in (0 = since the beginning). */
+export function gateGeneration(type: string): number {
+  return GATED_SINCE.get(type) ?? 0
+}
+
+/**
+ * The generation travels INSIDE the stored enabled set, as one entry no node
+ * id can collide with (ids never start with "@"). On purpose, not a column of
+ * its own: staging runs newer code against the SAME database as production,
+ * and an older build that saves rewrites `enabled` from the ids it knows —
+ * dropping this entry — so its save reads back as generation 0, the safe
+ * direction (every newer gate falls back to the factory set). A separate
+ * column would survive that save and vouch for an enabled-set it never saw.
+ */
+const GENERATION_ENTRY_PREFIX = "@gating-generation:"
+
+/** The stored enabled set of a nodes override saved at `generation`. */
+export function storedNodesEnabled(ids: Iterable<string>, generation: number = GATING_GENERATION): string[] {
+  return [...ids, `${GENERATION_ENTRY_PREFIX}${generation}`]
+}
+
+/** A stored enabled set back to its ids and the generation it was saved at. */
+function parseStoredNodes(stored: Iterable<unknown>): { ids: Set<string>; generation: number } {
+  const ids = new Set<string>()
+  let generation = 0
+  for (const entry of stored) {
+    if (typeof entry !== "string") continue
+    if (entry.startsWith(GENERATION_ENTRY_PREFIX)) {
+      const n = Number(entry.slice(GENERATION_ENTRY_PREFIX.length))
+      if (Number.isInteger(n) && n > generation) generation = n
+      continue
+    }
+    ids.add(entry)
+  }
+  return { ids, generation }
+}
 
 /**
  * The fill, MEMOISED and started on demand rather than at module scope.
@@ -79,16 +194,28 @@ export const NOT_OVERRIDE_GATED_NODE_TYPES: ReadonlySet<string> = new Set(["site
  * process and `GATEABLE_NODE_TYPES` is still filled in place.
  */
 let nodeUniverseReady: Promise<void> | null = null
+let nodeUniverseFilled = false
 
 function fillNodeUniverse(): Promise<void> {
   nodeUniverseReady ??= import("./node-registry.js")
     .then((m) => {
-      for (const n of m.NODE_REGISTRY) if (n.category !== "utility" && !NOT_OVERRIDE_GATED_NODE_TYPES.has(n.type)) gateableNodeTypes.add(n.type)
+      for (const n of m.NODE_REGISTRY) {
+        knownNodeTypes.add(n.type)
+        if (n.category !== "utility" && !NOT_OVERRIDE_GATED_NODE_TYPES.has(n.type)) gateableNodeTypes.add(n.type)
+      }
+      nodeUniverseFilled = true
     })
     .catch((err) => {
       console.error("[availability-override] node universe load failed — allow-inversion stays inert:", (err as Error).message)
     })
   return nodeUniverseReady
+}
+
+/** True once the registry has filled the node universe (never inside a test
+ *  that did not ask for it). Until then a caller must not read "not in the
+ *  universe" as "unknown". */
+export function nodeUniverseLoaded(): boolean {
+  return nodeUniverseFilled
 }
 
 // EAGER IN EVERY REAL PROCESS — deliberately kept, and this is the load-bearing
@@ -129,9 +256,11 @@ const CACHE_TTL_MS = 60_000
 interface OverrideCache {
   nodes: ReadonlySet<string> | null
   models: ReadonlySet<string> | null
+  /** The generation the stored nodes override was saved at (0 = before generations). */
+  nodesGeneration: number
 }
 
-let cache: OverrideCache = { nodes: null, models: null }
+let cache: OverrideCache = { nodes: null, models: null, nodesGeneration: 0 }
 let cacheLoadedAt = 0
 let everLoaded = false
 let inflight: Promise<void> | null = null
@@ -146,10 +275,15 @@ async function refresh(): Promise<void> {
     console.error("[availability-override] load failed — serving factory/stale sets:", error.message)
     return
   }
-  const next: OverrideCache = { nodes: null, models: null }
+  const next: OverrideCache = { nodes: null, models: null, nodesGeneration: 0 }
   for (const row of data ?? []) {
-    if ((row.kind === "nodes" || row.kind === "models") && Array.isArray(row.enabled)) {
-      next[row.kind as AvailabilityKind] = new Set(row.enabled.filter((x: unknown): x is string => typeof x === "string"))
+    if (!Array.isArray(row.enabled)) continue
+    if (row.kind === "nodes") {
+      const { ids, generation } = parseStoredNodes(row.enabled)
+      next.nodes = ids
+      next.nodesGeneration = generation
+    } else if (row.kind === "models") {
+      next.models = new Set(row.enabled.filter((x: unknown): x is string => typeof x === "string"))
     }
   }
   cache = next
@@ -219,10 +353,27 @@ export function availabilityOverride(kind: AvailabilityKind): ReadonlySet<string
   return cache[kind]
 }
 
+/**
+ * The gating generation the stored NODES override was saved at — 0 for one
+ * saved before generations existed (or none stored). Read with
+ * `availabilityOverride("nodes")`, whose staleness rules it shares.
+ */
+export function nodesOverrideGeneration(): number {
+  return cache.nodes ? cache.nodesGeneration : 0
+}
+
 /** Test hook: with args, inject an override cache; with none, restore the
- *  pristine never-loaded state (no background refresh fires). */
-export function __resetAvailabilityOverridesForTests(next?: Partial<OverrideCache>): void {
-  cache = { nodes: null, models: null, ...next }
+ *  pristine never-loaded state (no background refresh fires). A `nodes` set is
+ *  read exactly as a stored row is: build one saved by this code with
+ *  `new Set(storedNodesEnabled(ids))`, or pass bare ids for a row saved before
+ *  gating generations. */
+export function __resetAvailabilityOverridesForTests(next?: Partial<Pick<OverrideCache, "nodes" | "models">>): void {
+  const nodes = next?.nodes ? parseStoredNodes(next.nodes) : null
+  cache = {
+    nodes: nodes ? nodes.ids : null,
+    models: next?.models ?? null,
+    nodesGeneration: nodes ? nodes.generation : 0,
+  }
   cacheLoadedAt = Date.now()
   everLoaded = next !== undefined
   lastKickAt = 0
@@ -231,14 +382,16 @@ export function __resetAvailabilityOverridesForTests(next?: Partial<OverrideCach
 /**
  * Persist an override (admin PUT). `enabled: null` deletes the row — reset to
  * factory. Ids outside the gateable universe are dropped (a typo must not
- * linger invisibly in the stored set). Updates the in-process cache
- * immediately; sibling instances converge on the 60s TTL.
+ * linger invisibly in the stored set). A nodes override is stored at the
+ * current gating generation: it was saved from a page that showed every gate
+ * this code has. Updates the in-process cache immediately; sibling instances
+ * converge on the 60s TTL.
  */
 export async function saveAvailabilityOverride(kind: AvailabilityKind, enabled: readonly string[] | null): Promise<void> {
   if (enabled === null) {
     const { error } = await (await db()).from("availability_overrides").delete().eq("kind", kind)
     if (error) throw new Error(`availability override reset failed: ${error.message}`)
-    cache = { ...cache, [kind]: null }
+    cache = kind === "nodes" ? { ...cache, nodes: null, nodesGeneration: 0 } : { ...cache, models: null }
     return
   }
   // The node universe is filtered against below, so make sure it exists: boot
@@ -248,9 +401,12 @@ export async function saveAvailabilityOverride(kind: AvailabilityKind, enabled: 
   await fillNodeUniverse()
   const universe = kind === "nodes" ? GATEABLE_NODE_TYPES : GATEABLE_MODEL_IDS
   const cleaned = [...new Set(enabled.filter((id) => universe.has(id)))]
+  const stored = kind === "nodes" ? storedNodesEnabled(cleaned) : cleaned
   const { error } = await (await db())
     .from("availability_overrides")
-    .upsert({ kind, enabled: cleaned, updated_at: new Date().toISOString() }, { onConflict: "kind" })
+    .upsert({ kind, enabled: stored, updated_at: new Date().toISOString() }, { onConflict: "kind" })
   if (error) throw new Error(`availability override save failed: ${error.message}`)
-  cache = { ...cache, [kind]: new Set(cleaned) }
+  cache = kind === "nodes"
+    ? { ...cache, nodes: new Set(cleaned), nodesGeneration: GATING_GENERATION }
+    : { ...cache, models: new Set(cleaned) }
 }

@@ -782,7 +782,23 @@ optional; each array empty = "keep the default"):
   unavailable until the deployment lists it, instead of available by omission.
   The inversion is scoped to gateable ids — utility nodes (`sticky-note`,
   `preview`) and workflow-internal pseudo-types are never denied by omission,
-  only by an explicit `deny` entry. An admin can further adjust availability at
+  only by an explicit `deny` entry.
+
+  The lists hold on the direct API too: every route that spends credits is
+  checked as the node it runs, whatever its path — `POST /v1/suno/generate` as
+  `suno-generate`, `POST /v1/edit-image` as Upscale Image, Remove Background or
+  Modify Image by its `provider`, `POST /v1/social/publish` as the platform's
+  post node or Publish to Social, an entity's sheet, motion and caption routes
+  as that entity's node, a node's `/continue` and streaming routes as the node.
+  One gateable id has no canvas node: `cast-swap` is Nodaro Motion —
+  `POST /v1/cast-swap` and its routes, and every trend run
+  (`POST /v1/trends/:slug/estimate` and `/runs` answer `node_not_available`
+  where it is not offered, and the MCP tools `cast_swap`, the Full Quality pair
+  and the trend tools are not listed). With `nodes.allow` set, a credit-spending route that
+  is linked to no node is refused with `node_not_available` (the whitelist never
+  allowed it) and logged once; the few routes that run no node (Copilot, which
+  `features.hide` governs; Video Director; a pipeline's stage actions) are not
+  node-gated. An admin can further adjust availability at
   runtime from **Admin → Availability** (full list with per-item toggles); a
   stored runtime override replaces this factory set until "Reset to factory".
   The two layers differ in who they apply to. A **node type left off in Admin →
@@ -795,6 +811,16 @@ optional; each array empty = "keep the default"):
   **on** in Admin → Availability releases it to everyone; a hoster who must
   prevent that should not grant the admin role. Models have no admin exception
   at all: a model turned off is off for admins too.
+
+  A stored override decides only what it was saved knowing. An id that became
+  gateable after the override was stored (`cast-swap`), and a route that is
+  checked as its node only since then (the nested routes above), keep their
+  factory state until the override is saved again — so upgrading never turns
+  off something users had. Admin → Availability says when the stored override
+  predates them; saving it from that page applies its list to them too,
+  including the routes of any node left off. A brand-new node is not such an
+  id: an override that does not list it withholds it from users until it is
+  ticked, as before.
 
   What follows from "hidden from users, kept for admins":
   - A run is judged as the user it executes as. An app or presentation run

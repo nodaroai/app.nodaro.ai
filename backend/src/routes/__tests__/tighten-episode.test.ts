@@ -11,7 +11,7 @@
  *  - a run that cannot start unwinds: wrapper failed, fee refunded.
  */
 import { USER, graph, m, routeConfigs, makeApp, media, ok, post } from "./helpers/tighten-episode-route-harness.js"
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest"
 import Fastify from "fastify"
 import {
   EPISODE_CHAPTERS_DEFAULTS,
@@ -615,6 +615,16 @@ describe("Clip Pack through the same factory", () => {
 // its reviewer, so the verb forwards it — through the REAL route here, never
 // a mocked reply.
 describe("MCP tighten_episode through the real route", () => {
+  // The MCP verbs are a cold import of over a second on an idle machine and
+  // several on a loaded CI runner. Loaded here, under a budget of their own,
+  // so the first test does not spend its 5 s timeout on them: a test that
+  // times out leaves its call running, and that call lands in the next test.
+  beforeAll(async () => {
+    await import("@/lib/mcp/tools/verbs-use-case.js")
+    await import("@/lib/mcp/tools/__tests__/_helpers.js")
+    await import("@/lib/mcp/session.js")
+  }, 60_000)
+
   async function mcpApp() {
     const app = Fastify({ logger: false })
     app.addHook("preHandler", async (req) => {

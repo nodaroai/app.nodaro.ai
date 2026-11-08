@@ -3,6 +3,8 @@ import { runtimeSurfaceProfile } from "./surface-profile.js"
 import { parseSiteCaptureEnabled } from "./site-capture-switch.js"
 import {
   availabilityOverride,
+  gateGeneration,
+  nodesOverrideGeneration,
   GATEABLE_NODE_TYPES,
   GATEABLE_MODEL_IDS,
 } from "./availability-override.js"
@@ -27,7 +29,11 @@ import { isModelSwitchedOff, switchedOffModelIds } from "./model-switch.js"
  *      recommended shape for a curated deployment: a node the profile never
  *      heard of is unavailable by default instead of available by omission.
  *   3. admin override (availability-override.ts) — a stored enabled-set that
- *      REPLACES layer 2 while present; "reset to factory" deletes it.
+ *      REPLACES layer 2 while present; "reset to factory" deletes it. It
+ *      replaces it only for the gates it was saved knowing: a gate newer than
+ *      the stored override (an id that was live before it became gateable, a
+ *      route that follows its node only since route gating) is answered by
+ *      layer 2 until the next save ("Gating generations" there).
  *   4. the admin's model switch (model-switch.ts, models only) —
  *      `model_pricing.is_enabled` off on the admin models page. It wins over
  *      every layer below it: a model nobody can run is not offered, whatever
@@ -89,12 +95,21 @@ export function isNodeFactoryDenied(type: string): boolean {
   return deny.includes(type)
 }
 
-/** True when this deployment does not offer this node type to `viewer`. */
-export function isNodeDenied(type: string, viewer: AvailabilityViewer): boolean {
+/**
+ * True when this deployment does not offer this node type to `viewer`.
+ *
+ * `gateSince` is the gating generation of the DOOR asking, when that door is
+ * newer than the type itself — a route refused under a node only since route
+ * gating (lib/route-node-gate.ts). A stored override older than the door, or
+ * than the type's own gate (`gateGeneration`), never decided it, so the factory
+ * layer answers instead (lib/availability-override.ts, "Gating generations").
+ */
+export function isNodeDenied(type: string, viewer: AvailabilityViewer, gateSince = 0): boolean {
   // An install switch is no availability setting: no override hands the node back.
   if (switchedOffNodeTypes().includes(type)) return true
   const override = availabilityOverride("nodes")
   if (!override) return isNodeFactoryDenied(type)
+  if (Math.max(gateSince, gateGeneration(type)) > nodesOverrideGeneration()) return isNodeFactoryDenied(type)
   const hiddenByOverride = GATEABLE_NODE_TYPES.has(type) && !override.has(type)
   if (!hiddenByOverride) return false
   // Left OFF by the admin switch: hidden from users. An admin keeps it only if
@@ -160,6 +175,12 @@ const GOVERNED_CAPABILITIES: ReadonlyMap<
 function hostedCapability(hostType: string, data: unknown): { governedBy: string; label: string } | undefined {
   if (!data || typeof data !== "object") return undefined
   return GOVERNED_CAPABILITIES.get(hostType)?.(data as Readonly<Record<string, unknown>>)
+}
+
+/** True when `hostType` hosts a capability another node governs — a type the
+ *  availability funnel knows even when it is no registry node (competitor-scan). */
+export function isCapabilityHost(hostType: string): boolean {
+  return GOVERNED_CAPABILITIES.has(hostType)
 }
 
 /** The node type whose availability governs the capability `hostType` is
