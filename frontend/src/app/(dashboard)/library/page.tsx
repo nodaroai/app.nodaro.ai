@@ -209,6 +209,9 @@ export default function LibraryPage() {
   const { data: storageData } = useStorageProfile(user?.id)
   const storageUsed = storageData?.storageUsed ?? 0
   const storageLimit = storageData?.storageLimit ?? 0
+  // A deployment with a payer enforces no per-user ceiling: the limit is null,
+  // and the summary shows the usage alone (useStorageProfile).
+  const storageUncapped = storageData?.storageLimit === null
 
   // Infinite asset list (auto-refetches when filter changes via query key)
   const {
@@ -383,7 +386,7 @@ export default function LibraryPage() {
     setFilter(next)
   }, [cancelDeepLink])
 
-  const usagePercent = storageLimit > 0 ? Math.min(100, Math.round((storageUsed / storageLimit) * 100)) : 0
+  const usagePercent = !storageUncapped && storageLimit > 0 ? Math.min(100, Math.round((storageUsed / storageLimit) * 100)) : 0
 
   const FILTER_LABELS: Record<string, string> = {
     all: t("lib.filterAll"),
@@ -411,10 +414,11 @@ export default function LibraryPage() {
           <HardDrive className="h-5 w-5 text-primary-ink" />
           <h2 className="text-lg font-semibold">{t("lib.storage")}</h2>
           <span className="text-sm text-muted-foreground ms-auto">
-            {formatBytes(storageUsed)} / {formatBytes(storageLimit)}
+            {storageUncapped ? formatBytes(storageUsed) : `${formatBytes(storageUsed)} / ${formatBytes(storageLimit)}`}
           </span>
         </div>
 
+        {!storageUncapped && (
         <div className="space-y-1.5">
           <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
             <div
@@ -430,6 +434,7 @@ export default function LibraryPage() {
             <span>{t("lib.available", { size: formatBytes(Math.max(0, storageLimit - storageUsed)) })}</span>
           </div>
         </div>
+        )}
 
         {usagePercent > 70 && (
           <div className="flex items-center justify-between p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">

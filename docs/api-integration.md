@@ -3756,8 +3756,8 @@ are not registered and return 404.
 
 | Method | Path | Query | Purpose |
 |---|---|---|---|
-| `GET` | `/v1/credits/balance` | — | Return `{ total, subscription, topup, tier, effectiveTier }`. `total = subscription + topup`. `effectiveTier` is the entitlement tier actually enforced — `"payg"` = no subscription but purchased credits (all models unlocked, no watermark, no daily cap). On a deployment-payer instance this is the caller's own pool, which does not fund their runs — read the allowance below instead. |
-| `GET` | `/v1/user/credits` | — | The fuller balance payload. On a deployment-payer instance it adds `allowance: { granted, remaining, enforced } \| null` — the caller's per-user allowance in credits, `enforced` telling you whether the deployment refuses runs beyond it (`false` = shown, not enforced). `null` for the billing account itself (it holds the real pool) or when the figure could not be read; never treat `null` as zero. On a deployment that shows its own unit instead of credits it also carries `display`: the same figures converted by the server, `{ unit, decimals, total, subscription, topup, dailySpent, dailyLimit, monthlyAllocation, appCreditsAllowance }` plus `allowance: { granted, remaining }`, `externalWallet: { available }` and `welcomeOffer: { credits }` exactly when the raw keys are present. `unit` is the unit's label and `decimals` the places its figures carry; render them as they are and never convert credits yourself (`null` = unavailable). Absent where no unit is configured, and for the billing account's own read on a deployment-payer instance (its balance is the deployment's pool, kept in credits). Every raw field is unchanged. |
+| `GET` | `/v1/credits/balance` | — | Return `{ total, subscription, topup, tier, effectiveTier }`. `total = subscription + topup`. `effectiveTier` is the entitlement tier actually enforced — `"payg"` = no subscription but purchased credits (all models unlocked, no watermark, no daily cap). On a deployment-payer instance this is the caller's own pool, which does not fund their runs — read the allowance below instead; `tier` and `effectiveTier` there are the deployment's plan, the billing account's grade (a pay-as-you-go billing account reads `free` / `payg`). |
+| `GET` | `/v1/user/credits` | — | The fuller balance payload. On a deployment-payer instance `tier`, `effectiveTier` and `features` report the deployment's plan (the billing account's grade, `tier` in its stored form), `dailyLimit` is `null` (no daily cap applies there), and it adds `allowance: { granted, remaining, enforced } \| null` — the caller's per-user allowance in credits, `enforced` telling you whether the deployment refuses runs beyond it (`false` = shown, not enforced). `null` for the billing account itself (it holds the real pool) or when the figure could not be read; never treat `null` as zero. On a deployment that shows its own unit instead of credits it also carries `display`: the same figures converted by the server, `{ unit, decimals, total, subscription, topup, dailySpent, dailyLimit, monthlyAllocation, appCreditsAllowance }` plus `allowance: { granted, remaining }`, `externalWallet: { available }` and `welcomeOffer: { credits }` exactly when the raw keys are present. `unit` is the unit's label and `decimals` the places its figures carry; render them as they are and never convert credits yourself (`null` = unavailable). Absent where no unit is configured, and for the billing account's own read on a deployment-payer instance (its balance is the deployment's pool, kept in credits). Every raw field is unchanged. |
 | `GET` | `/v1/credits/transactions` | `limit` (1–50, default 20), `cursor` (ISO timestamp for page-forward) | Return `{ data: Transaction[], nextCursor }`. Cursor is the `created_at` of the last row; pass it as `?cursor=` on the next request. `nextCursor` is `null` when there are no more rows. |
 | `GET` | `/v1/credits/usage-summary` | `from` / `to` (an ISO timestamp, or a date alone — `2026-10-01` is that whole UTC day; inclusive; default the last 30 days up to now; at most a year apart, else `400`), `bucket` (`day`, `week` or `month`; default `day`) | The period's usage summed for a billing screen: `{ data: UsageSummary }`. On a deployment-payer instance the billing account's own session only (`403 payer_balance_jwt_only` to its tokens). |
 
@@ -3847,7 +3847,9 @@ settings, `{ data: { tier, publicOutputs, promptTemplates, textTemplates,
 preferredLocale, mcpPreferences, showRecentNodes, showMostUsedNodes,
 variableDisplayMode, nodeDoubleClickAction, monthlyStatementEmail } }`, and
 `PATCH /v1/user/settings` changes the fields sent (any subset of the same,
-without `tier`) and answers them as saved. `promptTemplates` and
+without `tier`) and answers them as saved. On a deployment-payer instance
+`tier` is the deployment's plan (the billing account's grade), and turning
+`publicOutputs` off follows that plan. `promptTemplates` and
 `textTemplates` replace the stored value whole; `mcpPreferences` merges one
 axis at a time. `publicOutputs: false` needs the Standard plan or above on
 Nodaro Cloud (`403`); an invalid value is `400 validation_error`, a patch with
@@ -4117,8 +4119,10 @@ subscribed. `effectiveTier` is the tier the account's entitlements follow:
 usually a plan `id` from the list above; `"payg"` (no subscription, credits
 bought — every model, no watermark); or a tier that is not on sale, such as
 `"enterprise"`. Match it against `data[].id` to mark the current plan — no
-match means pay-as-you-go or such a tier. SDK: `client.billing.subscription()`;
-CLI: `nodaro billing subscription`.
+match means pay-as-you-go or such a tier. On a deployment-payer instance
+`effectiveTier` is the deployment's plan (the billing account's grade), and
+`data` is the caller's own subscription, normally `null`. SDK:
+`client.billing.subscription()`; CLI: `nodaro billing subscription`.
 
 ## 13. Job batch polling
 

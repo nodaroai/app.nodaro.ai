@@ -24,6 +24,7 @@ import {
 } from "@nodaro/shared/credits"
 import { supabase } from "./supabase.js"
 import { config, hasCredits } from "./config.js"
+import { payerCoverage } from "./deployment-payer.js"
 import { isMissingColumnError, isMissingTableError } from "./postgrest-errors.js"
 
 /**
@@ -255,8 +256,9 @@ export async function setRecordUsed(opts: {
 }
 
 /**
- * The caller's limits: by effective tier on Nodaro Cloud; the two env
- * ceilings elsewhere (unset = no limit). A limits lookup that FAILS, or a
+ * The caller's limits: by effective tier on Nodaro Cloud (under a deployment
+ * payer, the payer account's grade); the two env ceilings elsewhere (unset =
+ * no limit). A limits lookup that FAILS, or a
  * tier the caps table does not know, is NO limit for this request — the cap
  * is enforced by deleting records, so it must never fall back to free's. Only
  * a missing profile row reads as free.
@@ -268,6 +270,23 @@ export async function limitsFor(req: FastifyRequest, userId: string): Promise<Co
       records: config.COLLECTIONS_MAX_RECORDS_PER_COLLECTION ?? null,
     }
   }
+  const tier = payerCoverage()?.tier ?? (await ownTier(req, userId))
+  if (tier === null) return { collections: null, records: null }
+  const caps = collectionCapsForTier(tier)
+  if (!caps) {
+    req.log.warn({ tier, userId }, "collections: no caps for this tier; holding the account to no cap (add the tier to COLLECTION_TIER_CAPS)")
+    return { collections: null, records: null }
+  }
+  return { collections: caps.collections, records: caps.records }
+}
+
+/**
+ * The account's own effective tier, for `limitsFor`. Under a deployment payer
+ * the caps follow the payer account's grade (`payerCoverage`, decided
+ * 2026-11-08), and this is never asked. A failed read is null, which means no
+ * cap for this request; a missing row reads as free.
+ */
+async function ownTier(req: FastifyRequest, userId: string): Promise<string | null> {
   const { data, error } = await supabase
     .from("profiles")
     .select("tier, subscription_tier, lifetime_topup_credits")
@@ -275,21 +294,15 @@ export async function limitsFor(req: FastifyRequest, userId: string): Promise<Co
     .maybeSingle()
   if (error) {
     req.log.warn({ err: error, userId }, "collections: tier lookup failed; holding the account to no cap for this request")
-    return { collections: null, records: null }
+    return null
   }
-  const tier = data
+  return data
     ? resolveEffectiveTier({
         tier: (data.tier as string | null) ?? null,
         subscription_tier: (data.subscription_tier as string | null) ?? null,
         lifetime_topup_credits: Number(data.lifetime_topup_credits ?? 0),
       })
     : "free"
-  const caps = collectionCapsForTier(tier)
-  if (!caps) {
-    req.log.warn({ tier, userId }, "collections: no caps for this tier; holding the account to no cap (add the tier to COLLECTION_TIER_CAPS)")
-    return { collections: null, records: null }
-  }
-  return { collections: caps.collections, records: caps.records }
 }
 
 export type Lookup<R> = { row?: R; missingTable?: boolean; error?: unknown }

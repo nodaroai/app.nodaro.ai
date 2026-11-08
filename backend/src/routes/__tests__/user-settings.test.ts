@@ -52,6 +52,7 @@ vi.mock("@/config/prompt-templates.js", () => ({
 
 import { userSettingsRoutes } from "../user-settings.js"
 import { supabase } from "../../lib/supabase.js"
+import { __resetDeploymentPayerForTests, __setDeploymentPayerForTests } from "../../lib/deployment-payer.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -347,5 +348,46 @@ describe("PATCH /v1/user/settings", () => {
     const body = res.json()
     expect(body.data.textTemplates).toEqual(textTemplates)
     expect(mockUpdate).toHaveBeenCalledWith({ text_templates: textTemplates })
+  })
+})
+
+describe("plan gates under a deployment payer (decided 2026-11-08)", () => {
+  const PAYER = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+  afterEach(() => __resetDeploymentPayerForTests())
+
+  /** Every user on a payer deployment is stored on the free tier. */
+  function storedFreeProfile() {
+    const mockSingle = vi.fn().mockResolvedValue({ data: { tier: "free", public_outputs: true, prompt_templates: {} }, error: null })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) })
+    vi.mocked(supabase.from).mockReturnValue({
+      select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single: mockSingle }) }),
+      update: mockUpdate,
+    } as never)
+    return { mockUpdate }
+  }
+  const disablePublicOutputs = () =>
+    app.inject({ method: "PATCH", url: "/v1/user/settings", payload: { userId: TEST_USER_ID, publicOutputs: false } })
+
+  it("private mode follows the payer account's plan: a Standard payer lets a covered user turn it on", async () => {
+    __setDeploymentPayerForTests(PAYER, { tierForGates: "standard" })
+    const { mockUpdate } = storedFreeProfile()
+    const res = await disablePublicOutputs()
+    expect(res.statusCode).toBe(200)
+    expect(mockUpdate).toHaveBeenCalledWith({ public_outputs: false })
+  })
+
+  it("a payer below Standard keeps the gate closed, as its own plan would", async () => {
+    __setDeploymentPayerForTests(PAYER, { tierForGates: "basic" })
+    storedFreeProfile()
+    const res = await disablePublicOutputs()
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error).toContain("Private mode")
+  })
+
+  it("GET reports the payer account's plan as the tier", async () => {
+    __setDeploymentPayerForTests(PAYER, { tierForGates: "pro" })
+    storedFreeProfile()
+    const res = await app.inject({ method: "GET", url: `/v1/user/settings?userId=${TEST_USER_ID}` })
+    expect(res.json().data.tier).toBe("pro")
   })
 })

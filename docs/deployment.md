@@ -1020,7 +1020,18 @@ optional; each array empty = "keep the default"):
     Consequences when set: every reservation debits the payer account
     (ownership and galleries stay the requester's); requester tier gates run
     at the payer account's grade, with watermarking and daily caps off;
-    per-user storage quotas stop enforcing (usage is still tracked); a
+    **every user's plan is the payer account's** (decided 2026-11-08). Every
+    user on the instance is stored on the free tier, so the plan the API
+    reports for a user (`tier` and `effectiveTier` on `GET /v1/user/credits`,
+    `GET /v1/credits/balance`, `GET /v1/me`, `GET /v1/user/settings` and
+    `GET /v1/billing/subscription`) is the payer account's grade instead. A
+    pay-as-you-go billing account reads `tier: "free"`, `effectiveTier:
+    "payg"`. The plan's features follow it too: private outputs, collection
+    caps, and pipeline budgets and limits. The free-tier rules never apply:
+    no daily cap (`dailyLimit: null`), and no app-credit requirement on
+    running a published app. Balances, allocations and billing are unchanged;
+    per-user storage quotas stop enforcing (usage is still tracked, and
+    `GET /v1/storage/status` reports `limitBytes: null`, unlimited); a
     requester's own card is never auto-recharged (see the billing page below
     for the payer's); and `/usage` shows each user their own
     consumption for the period, plus their own allowance as soon as a payer is

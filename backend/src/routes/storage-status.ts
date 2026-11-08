@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { hasCredits } from "../lib/config.js"
-import { checkStorageQuota } from "../utils/file-validation.js"
+import { payerCoverage } from "../lib/deployment-payer.js"
+import { checkStorageQuota, readTrackedStorageBytes } from "../utils/file-validation.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { recordStorageWarnCrossing } from "../lib/storage-warn.js"
 
@@ -37,6 +38,19 @@ export async function storageStatusRoutes(app: FastifyInstance) {
       return { usedBytes: 0, limitBytes: null }
     }
 
+    // Deployment payer (decided 2026-11-08): media lives in the deployment's
+    // own bucket and no per-user ceiling is enforced, so `checkStorageQuota`
+    // answers "allowed" with no figures there. Report the usage still tracked
+    // per user and no limit. The meter then shows usage, never an upgrade for
+    // space nothing sells, and no warning crossing is stamped against a limit
+    // that does not exist.
+    if (payerCoverage()) {
+      const usedBytes = await readTrackedStorageBytes(userId)
+      if (usedBytes === null) {
+        return sendInternalError(reply, req, new Error("storage usage unavailable"), "Failed to load storage status")
+      }
+      return { usedBytes, limitBytes: null }
+    }
     const quota = await checkStorageQuota(userId, 0)
     if (quota.usedBytes === undefined || quota.quotaBytes === undefined) {
       return sendInternalError(

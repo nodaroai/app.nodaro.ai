@@ -1,14 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mockGetMyLanes = vi.fn()
-const edition = vi.hoisted(() => ({ credits: true, tier: "pro" }))
+const edition = vi.hoisted(() => ({ credits: true, tier: "pro", userId: "u-1" as string | undefined }))
 
 vi.mock("@/lib/api", () => ({ getMyLanes: (...a: unknown[]) => mockGetMyLanes(...a) }))
 vi.mock("@/lib/edition", () => ({ hasCredits: () => edition.credits }))
-vi.mock("@/hooks/use-auth", () => ({ getCachedTier: () => edition.tier }))
+vi.mock("@/hooks/use-auth", () => ({ getCachedTier: () => edition.tier, getCachedUserId: () => edition.userId }))
 
 import { LANE_SIZES_REFRESH_MS, listFanOutWidth, refreshLaneSizes, resetLaneSizesForTests } from "../list-fan-out-width"
 import { TIER_PARALLELISM } from "@/lib/pricing-data"
+import { queryClient } from "@/lib/query-client"
+import { queryKeys } from "@/lib/query-keys"
+import { BILLING_SURFACE_DEFAULT, BILLING_SURFACE_QUERY_KEY } from "@/lib/billing-surface"
 
 const sizes = (provider: number) => ({ provider, llm: 24, local: 24, run: 12 })
 const enforcedAt = (provider: number) => ({ enforced: true, lines: [{ payer: "user:me", current: true, sizes: sizes(provider) }] })
@@ -22,6 +25,8 @@ describe("list fan-out width", () => {
     mockGetMyLanes.mockReset()
     edition.credits = true
     edition.tier = "pro"
+    edition.userId = "u-1"
+    queryClient.clear()
   })
 
   it("list fan-out reads the lane size from /v1/me/lanes when enforced", async () => {
@@ -133,5 +138,34 @@ describe("list fan-out width", () => {
     expect(mockGetMyLanes).toHaveBeenCalledTimes(2)
     await settle()
     expect(listFanOutWidth("wf-1")).toBe(TIER_PARALLELISM.pro)
+  })
+})
+
+describe("list fan-out width on a deployment with a payer (decided 2026-11-08)", () => {
+  beforeEach(() => {
+    resetLaneSizesForTests()
+    mockGetMyLanes.mockReset()
+    mockGetMyLanes.mockReturnValue(new Promise(() => {}))
+    edition.credits = true
+    edition.tier = "free" // every user there is stored free; the payer holds the plan
+    edition.userId = "u-1"
+    queryClient.clear()
+  })
+
+  it("runs at the plan the balance reports (the payer account's grade), not the session's own free row", () => {
+    queryClient.setQueryData(BILLING_SURFACE_QUERY_KEY, { ...BILLING_SURFACE_DEFAULT, deploymentPayer: true })
+    queryClient.setQueryData(queryKeys.credits.balance("u-1"), { effectiveTier: "pro" })
+    expect(listFanOutWidth("wf-1")).toBe(TIER_PARALLELISM.pro)
+  })
+
+  it("with no balance cached yet, the session's own tier, never a failed run", () => {
+    queryClient.setQueryData(BILLING_SURFACE_QUERY_KEY, { ...BILLING_SURFACE_DEFAULT, deploymentPayer: true })
+    expect(listFanOutWidth("wf-1")).toBe(TIER_PARALLELISM.free)
+  })
+
+  it("without a payer the session's own tier, whatever a cached balance says (inert on mainline)", () => {
+    queryClient.setQueryData(BILLING_SURFACE_QUERY_KEY, { ...BILLING_SURFACE_DEFAULT, deploymentPayer: false })
+    queryClient.setQueryData(queryKeys.credits.balance("u-1"), { effectiveTier: "pro" })
+    expect(listFanOutWidth("wf-1")).toBe(TIER_PARALLELISM.free)
   })
 })

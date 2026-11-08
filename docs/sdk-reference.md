@@ -211,7 +211,7 @@ Returns `UserIdentity`:
 | `email` | `string` | The user's email. |
 | `displayName` | `string \| null` | Human-readable display name (from `profiles.full_name`); `null` if unset. |
 | `avatarUrl` | `string \| null` | Avatar URL; `null` if unset. |
-| `tier` | `string` | Stored subscription tier (e.g. `"free"`, `"pro"`). For the entitlement tier actually enforced (including `"payg"`), read `effectiveTier` from [`client.credits.balance()`](#clientcredits). |
+| `tier` | `string` | Stored subscription tier (e.g. `"free"`, `"pro"`). For the entitlement tier actually enforced (including `"payg"`), read `effectiveTier` from [`client.credits.balance()`](#clientcredits). On a deployment-payer instance, the deployment's plan: the billing account's tier. |
 | `isAdmin` | `boolean` | Whether the user holds an admin role. **Descriptive only** — use it to decide whether to render admin UI instead of capability-probing an admin endpoint; every admin API stays enforced server-side regardless. |
 
 On an instance with [organizations](./organizations.md) the same object also

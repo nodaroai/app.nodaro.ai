@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
 import { roleIsAdmin, warmAdminCache } from "../lib/admin-check.js"
 import { hasOrganizations } from "../lib/config.js"
+import { payerCoverage } from "../lib/deployment-payer.js"
 import { getPluginServices } from "../lib/private-plugins/load.js"
 
 /**
@@ -55,8 +56,10 @@ export async function meRoutes(app: FastifyInstance) {
       // `tier` first: it is the column the Stripe paths write, so it tracks
       // reality; `subscription_tier` is the fallback for rows predating it.
       // Inlined rather than importing ee/billing/tier-columns.ts — core may
-      // not statically import from ee/ (tools/check-ee-imports.mjs).
-      tier: profile.tier ?? profile.subscription_tier ?? "free",
+      // not statically import from ee/ (tools/check-ee-imports.mjs). Under a
+      // deployment payer, the plan is the payer account's grade, in its stored
+      // form (`payerCoverage`, decided 2026-11-08).
+      tier: payerCoverage()?.storedTier ?? profile.tier ?? profile.subscription_tier ?? "free",
       isAdmin: roleIsAdmin(profile.role),
     }
 

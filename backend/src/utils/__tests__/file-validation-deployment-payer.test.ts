@@ -17,7 +17,7 @@ vi.mock("../../lib/supabase.js", () => ({
 }))
 vi.mock("../../lib/config.js", () => ({ hasCredits: () => true }))
 
-import { checkStorageQuota, reserveStorageIfWithinLimit } from "../file-validation.js"
+import { checkStorageQuota, readTrackedStorageBytes, reserveStorageIfWithinLimit } from "../file-validation.js"
 import { __setDeploymentPayerForTests, __resetDeploymentPayerForTests } from "../../lib/deployment-payer.js"
 
 beforeEach(() => {
@@ -45,5 +45,34 @@ describe("storage under a deployment payer", () => {
     mockRpc.mockResolvedValueOnce({ data: false, error: null })
     expect(await reserveStorageIfWithinLimit("u-1", 1234)).toBe(false)
     expect(mockRpc).toHaveBeenCalledWith("reserve_storage_if_within_limit", { p_user_id: "u-1", p_bytes: 1234 })
+  })
+})
+
+describe("readTrackedStorageBytes — the usage counter, on its own (GET /v1/storage/status under a payer)", () => {
+  function profileRow(result: { data: unknown; error: unknown }) {
+    const eq = vi.fn(() => ({ maybeSingle: async () => result }))
+    const select = vi.fn(() => ({ eq }))
+    mockFrom.mockReturnValue({ select })
+    return { select, eq }
+  }
+
+  it("reads the one counter off the user's own profile row", async () => {
+    const { select, eq } = profileRow({ data: { storage_used_bytes: 4096 }, error: null })
+    expect(await readTrackedStorageBytes("u-1")).toBe(4096)
+    expect(mockFrom).toHaveBeenCalledWith("profiles")
+    expect(select).toHaveBeenCalledWith("storage_used_bytes")
+    expect(eq).toHaveBeenCalledWith("id", "u-1")
+  })
+
+  it("a counter nothing has written yet reads as zero", async () => {
+    profileRow({ data: { storage_used_bytes: null }, error: null })
+    expect(await readTrackedStorageBytes("u-1")).toBe(0)
+  })
+
+  it("a failed read and a missing row are null, never a figure", async () => {
+    profileRow({ data: null, error: { message: "connection reset" } })
+    expect(await readTrackedStorageBytes("u-1")).toBeNull()
+    profileRow({ data: null, error: null })
+    expect(await readTrackedStorageBytes("u-1")).toBeNull()
   })
 })

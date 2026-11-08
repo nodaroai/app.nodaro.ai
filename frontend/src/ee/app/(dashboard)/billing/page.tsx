@@ -207,7 +207,7 @@ export default function BillingPage() {
           balance={balance}
           subscription={subscription}
           subLoading={subLoading}
-          storageLimitBytes={storage?.storageLimit}
+          storageLimitBytes={storage?.storageLimit ?? undefined}
           onManageSubscription={handleManageSubscription}
           managePending={manageMutation.isPending}
         />

@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import ts from "typescript"
 import { relPath, SCAN_TIMEOUT_MS, sourceFiles } from "../../../lib/__tests__/source-scan.js"
+import { chainTable, importedNames, isDeclarationName, literalText, parseWithParents, topLevelFunctions } from "./census-ast.js"
 
 /**
  * Every sweep that clears media by a user's OWN plan asks the deployment-payer
@@ -99,66 +100,6 @@ export interface FunctionVerdict {
   readonly asks: boolean
 }
 
-function parse(file: string, text: string): ts.SourceFile {
-  return ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
-}
-
-function isDeclarationName(id: ts.Identifier): boolean {
-  const p = id.parent
-  if (ts.isImportSpecifier(p) || ts.isImportClause(p) || ts.isNamespaceImport(p) || ts.isBindingElement(p)) return true
-  return (
-    (ts.isFunctionDeclaration(p) ||
-      ts.isVariableDeclaration(p) ||
-      ts.isMethodDeclaration(p) ||
-      ts.isPropertyAssignment(p) ||
-      ts.isPropertySignature(p) ||
-      ts.isMethodSignature(p) ||
-      ts.isPropertyDeclaration(p) ||
-      ts.isParameter(p) ||
-      ts.isPropertyAccessExpression(p)) &&
-    (p as { name?: ts.Node }).name === id
-  )
-}
-
-/** Each local name the file binds to an imported one: `import { a as b }`, `const { a: b } = await import(…)`. */
-function importedNames(sf: ts.SourceFile): Map<string, string> {
-  const names = new Map<string, string>()
-  const visit = (n: ts.Node): void => {
-    if (ts.isImportSpecifier(n)) names.set(n.name.text, (n.propertyName ?? n.name).text)
-    if (ts.isBindingElement(n) && n.propertyName && ts.isIdentifier(n.propertyName) && ts.isIdentifier(n.name)) {
-      names.set(n.name.text, n.propertyName.text)
-    }
-    ts.forEachChild(n, visit)
-  }
-  visit(sf)
-  return names
-}
-
-/** The table a query chain reads (`supabase.from("t")…`), or null when the scan cannot see it. */
-function chainTable(expr: ts.Expression): string | null {
-  let e: ts.Node = expr
-  for (;;) {
-    if (ts.isParenthesizedExpression(e) || ts.isAwaitExpression(e) || ts.isNonNullExpression(e) || ts.isAsExpression(e)) {
-      e = e.expression
-    } else if (ts.isCallExpression(e) && ts.isPropertyAccessExpression(e.expression)) {
-      const first = e.arguments[0]
-      if (e.expression.name.text === "from" && first && ts.isStringLiteralLike(first)) return first.text
-      e = e.expression.expression
-    } else if (ts.isPropertyAccessExpression(e)) {
-      e = e.expression
-    } else {
-      return null
-    }
-  }
-}
-
-/** A string or template argument's literal text (a substitution reads as a break). */
-function literalText(e: ts.Expression): string | null {
-  if (ts.isStringLiteralLike(e)) return e.text
-  if (ts.isTemplateExpression(e)) return e.head.text + e.templateSpans.map((s) => `\u0000${s.literal.text}`).join("")
-  return null
-}
-
 /** The columns a filter call names. */
 function filterColumns(call: ts.CallExpression, method: string): string[] {
   const first = call.arguments[0]
@@ -196,29 +137,6 @@ function asksTheRule(stmt: ts.Statement | undefined, canonical: (name: string) =
   if (!named) return false
   const then = stmt.thenStatement
   return ts.isReturnStatement(then) || (ts.isBlock(then) && then.statements.some(ts.isReturnStatement))
-}
-
-/** The file's top-level functions by name: declarations, and `const f = (…) => …` / `function` expressions. */
-function topLevelFunctions(sf: ts.SourceFile): Map<string, ts.FunctionLikeDeclaration> {
-  const fns = new Map<string, ts.FunctionLikeDeclaration>()
-  const unwrap = (e: ts.Expression): ts.Expression =>
-    ts.isParenthesizedExpression(e) || ts.isAsExpression(e) || ts.isSatisfiesExpression(e) ? unwrap(e.expression) : e
-  for (const stmt of sf.statements) {
-    if (ts.isFunctionDeclaration(stmt) && stmt.body) fns.set(stmt.name?.text ?? "default", stmt)
-    if (ts.isVariableStatement(stmt)) {
-      for (const d of stmt.declarationList.declarations) {
-        if (!ts.isIdentifier(d.name) || !d.initializer) continue
-        const init = unwrap(d.initializer)
-        if (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) fns.set(d.name.text, init)
-      }
-    }
-    if (ts.isClassDeclaration(stmt) && stmt.name) {
-      for (const m of stmt.members) {
-        if (ts.isMethodDeclaration(m) && m.body && ts.isIdentifier(m.name)) fns.set(`${stmt.name.text}.${m.name.text}`, m)
-      }
-    }
-  }
-  return fns
 }
 
 function directOf(fn: ts.FunctionLikeDeclaration, local: ReadonlySet<string>, canonical: (name: string) => string): Direct {
@@ -259,7 +177,7 @@ function directOf(fn: ts.FunctionLikeDeclaration, local: ReadonlySet<string>, ca
 
 /** Each top-level function of `text`, with what it reaches through the file's own calls. */
 export function scanFunctions(file: string, text: string): Map<string, FunctionVerdict> {
-  const sf = parse(file, text)
+  const sf = parseWithParents(file, text)
   const aliases = importedNames(sf)
   const canonical = (name: string): string => aliases.get(name) ?? name
   const fns = topLevelFunctions(sf)

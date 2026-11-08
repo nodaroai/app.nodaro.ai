@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { PIPELINE_STAGE_NAMES, type JsonPatch, type PipelineStageName } from "@nodaro/shared/pipeline"
 import { resolveEffectiveTier } from "@nodaro/shared/credits"
+import { coverageOf } from "../../lib/deployment-payer.js"
 import { runScriptStage } from "./stages/script.js"
 import { pipelineEvents } from "./events.js"
 import { incrementCriticRetry, failPipelineWithCriticReason } from "./stage-utils.js"
@@ -161,7 +162,7 @@ export async function drivePipeline(args: DriveArgs): Promise<void> {
   }
 
   // Dispatch.
-  const userTier = await resolveUserTier(supabase, pipeline.user_id)
+  const userTier = await resolveUserTier(supabase, pipelineId, pipeline.user_id)
 
   if (stageToRun === "script") {
     await runScriptAndPersist(args, pipeline, userTier)
@@ -500,7 +501,16 @@ export async function rejectScriptStage(
   return { ok: true }
 }
 
-async function resolveUserTier(supabase: SupabaseClient, userId: string): Promise<string> {
+/**
+ * The tier a pipeline's stages are sized at: the creator's effective tier, or,
+ * under a deployment payer, the payer account's grade. That grade is read off
+ * the payer stamped on the pipeline (`coverageOf`, decided 2026-11-08): this
+ * runs in the pipeline worker, which brings no payer up of its own.
+ */
+async function resolveUserTier(supabase: SupabaseClient, pipelineId: string, userId: string): Promise<string> {
+  const { getPipelineBillingContext } = await import("./pipeline-payer.js")
+  const covered = coverageOf(await getPipelineBillingContext(supabase, pipelineId, userId))
+  if (covered) return covered.tier
   const { data } = await supabase
     .from("profiles")
     .select("tier, subscription_tier, lifetime_topup_credits")

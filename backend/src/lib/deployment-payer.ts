@@ -31,7 +31,7 @@
  */
 import { runtimeSurfaceProfile } from "./surface-profile.js"
 import { hasCredits } from "./config.js"
-import type { DeploymentBillingContext, DeploymentEntitlements } from "./billing-context.js"
+import type { BillingContext, DeploymentBillingContext, DeploymentEntitlements } from "./billing-context.js"
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -425,8 +425,27 @@ export function deploymentPayerId(): string | null {
 export interface PayerCoverage {
   /** The account that holds the plan and pays. */
   readonly payerId: string
-  /** The payer account's grade (`resolveEffectiveTier` over its row): what every covered user runs at. */
+  /**
+   * The payer account's grade (`resolveEffectiveTier` over its row). A covered
+   * user's tier-ladder features run at it, and every client is told it.
+   * Free-tier SEMANTICS are not read off it. Under a payer, the free-tier model
+   * blocklist, the app-credit allowance, the watermark and the daily cap are
+   * off, whatever the grade (`applyOrgEntitlements`' deployment branch). A site
+   * asking "is this free-tier work?" asks whether a coverage exists, never
+   * whether this says `free`.
+   */
   readonly tier: string
+  /** The grade's STORED form, for a `tier` field: `payg` is derived from a stored `free` and is never stored. */
+  readonly storedTier: string
+}
+
+/** A grade's stored form: `resolveEffectiveTier` derives `payg` from a stored `free` only, and passes every other tier through. */
+function storedFormOf(grade: string): string {
+  return grade === "payg" ? "free" : grade
+}
+
+function coverageAt(id: string, grade: string): PayerCoverage {
+  return { payerId: id, tier: grade, storedTier: storedFormOf(grade) }
 }
 
 /**
@@ -436,11 +455,27 @@ export interface PayerCoverage {
  * SYNC, from the cached grade. A stale grade kicks a background refresh and
  * answers with the current value, the same discipline as
  * `deploymentBillingContext`: ≤60s of drift after the payer's tier changes.
+ *
+ * FOR A RESOLVE POINT IN A PROCESS THAT BROUGHT THE PAYER UP: the API (app.ts),
+ * and a worker only when the deployment runs an external wallet
+ * (lib/external-wallet.ts). Code below a resolve point reads the context it was
+ * handed, with `coverageOf`.
  */
 export function payerCoverage(): PayerCoverage | null {
   if (!payerId || !entitlements) return null
   kickRefreshIfStale()
-  return { payerId, tier: entitlements.tierForGates }
+  return coverageAt(payerId, entitlements.tierForGates)
+}
+
+/**
+ * The coverage a resolved billing context carries. It is the same answer as
+ * `payerCoverage()`, for code below a resolve point: a worker reads the context
+ * stamped on its payload, never this process's state. A worker process brings
+ * no payer up unless the deployment runs an external wallet. Null for a
+ * personal or workspace context, and for none.
+ */
+export function coverageOf(ctx: BillingContext | undefined): PayerCoverage | null {
+  return ctx?.payer === "deployment" ? coverageAt(ctx.payerId, ctx.entitlements.tierForGates) : null
 }
 
 /**
@@ -457,7 +492,7 @@ export function payerCoverage(): PayerCoverage | null {
 export async function freshPayerCoverage(): Promise<{ coverage: PayerCoverage; read: boolean } | null> {
   if (!payerId) return null
   const read = await refreshNow(payerId)
-  const coverage = payerId && entitlements ? { payerId, tier: entitlements.tierForGates } : null
+  const coverage = payerId && entitlements ? coverageAt(payerId, entitlements.tierForGates) : null
   return coverage ? { coverage, read } : null
 }
 
