@@ -7,6 +7,7 @@ import { supabase } from "./supabase.js"
 import { isStorageConfigured, withObjectAcl, readR2Object, r2Url, s3 } from "./storage.js"
 import { retainedImageKey } from "./retained-image-keys.js"
 import { applyUploadPolicies, UploadBlockedError } from "./upload-policy.js"
+import { STORAGE_DELETES_OFF, storageDeletesSkipped } from "./storage-deletes-setting.js"
 
 const MAX_BYTES = 25 * 1024 * 1024
 const WRITE_TIMEOUT_MS = 30_000
@@ -117,18 +118,27 @@ export async function copyRetainedImage(args: {
   return image
 }
 
-/** Only durable tombstones reach the exceptional physical-delete lane. */
+/**
+ * Only durable tombstones reach the exceptional physical-delete lane. On a
+ * deployment that deletes nothing (STORAGE_DELETES=skip,
+ * lib/storage-deletes-setting.ts) the object stays and its task is still
+ * completed: the claim also clears expired reservations, and a task left open
+ * would be claimed again every five minutes.
+ */
 export async function collectRetainedImages(): Promise<{ deleted: number; failed: number }> {
   const { data, error } = await supabase.rpc("claim_retained_image_gc", { p_limit: 50 })
   if (error) throw new Error("Failed to claim retained image cleanup")
-  let deleted = 0, failed = 0
+  const skipDeletes = storageDeletesSkipped()
+  let deleted = 0, failed = 0, skipped = 0
   for (const task of (data ?? []) as Array<{ id: string }>) {
     try {
-      await s3.send(new DeleteObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: retainedImageKey(task.id) }))
+      if (!skipDeletes) await s3.send(new DeleteObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: retainedImageKey(task.id) }))
       const completed = await supabase.rpc("complete_retained_image_gc", { p_id: task.id })
       if (completed.error || completed.data !== true) throw new Error("Cleanup was not recorded")
-      deleted += 1
+      if (skipDeletes) skipped += 1
+      else deleted += 1
     } catch { failed += 1 }
   }
+  if (skipped > 0) console.warn(`[retained-images] not deleting ${skipped} retained image(s): ${STORAGE_DELETES_OFF}`)
   return { deleted, failed }
 }

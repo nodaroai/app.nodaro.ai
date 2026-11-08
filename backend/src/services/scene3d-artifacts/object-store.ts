@@ -1,5 +1,6 @@
 import { GetObjectCommand, DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { boundedStorageClientConfig } from "../../lib/storage-timeouts.js"
+import { STORAGE_DELETES_OFF, storageDeletesSkipped } from "../../lib/storage-deletes-setting.js"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { Readable } from "node:stream"
 import { Scene3DArtifactError } from "./types.js"
@@ -202,6 +203,13 @@ export function createS3ObjectStore(cfg: Scene3DPrivateStorageConfig): Scene3DOb
     },
 
     async delete(objectKey) {
+      // A deployment that deletes nothing (STORAGE_DELETES=skip,
+      // lib/storage-deletes-setting.ts): the object stays, and the cleanup
+      // task that asked is resolved as after a delete (services/scene3d-artifacts/gc.ts).
+      if (storageDeletesSkipped()) {
+        console.warn(`[scene3d-artifacts] not deleting ${objectKey} from the private scene bucket: ${STORAGE_DELETES_OFF}`)
+        return
+      }
       await client.send(new DeleteObjectCommand({ Bucket: cfg.bucket, Key: objectKey }))
     },
   }

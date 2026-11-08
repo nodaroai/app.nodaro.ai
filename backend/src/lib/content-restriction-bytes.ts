@@ -23,7 +23,11 @@
  * relay ownership cannot be read is left where it is and recorded as
  * failed — "unknown" is not "ours". On a lift, a key another active
  * restriction still covers stays in evidence, deferred until that one is
- * lifted too.
+ * lifted too. And nothing moves at all on a deployment that deletes nothing
+ * (STORAGE_DELETES=skip, lib/storage-deletes-setting.ts): a move ends in a
+ * delete, so every key of either phase is recorded skipped, saying so — the
+ * evidence copy a lift there would delete may be the one another
+ * deployment's restriction relies on.
  *
  * The record keeps both phases apart (`restrict`, `lift`), each written by
  * a merge on the row (`merge_restriction_bytes`), so a lift never erases
@@ -37,6 +41,7 @@ import { relayOwnedKeysStrict } from "./asset-delete.js"
 import { keptStoragePrefix } from "./kept-storage-prefixes.js"
 import { moveObjectToEvidence, restoreObjectFromEvidence, type ObjectMoveOutcome } from "./storage.js"
 import { purgeEdgeUrls, type EdgePurgeOutcome } from "./edge-purge.js"
+import { STORAGE_DELETES_OFF, storageDeletesSkipped } from "./storage-deletes-setting.js"
 
 /**
  * `moved` / `restored`: done. `skipped`: nothing to do, ever (a kept prefix,
@@ -136,7 +141,14 @@ async function moveEach(
   const earlier = restriction.bytes[phase]?.keys ?? {}
   const done = phase === "restrict" ? "moved" : "restored"
   const out: Record<string, RestrictionKeyRecord> = {}
+  // Skipped, not deferred or failed: the hourly sweep would run the phase
+  // again (its edge purge included) for as long as the setting stays.
+  const deletesOff = storageDeletesSkipped()
   for (const key of keys) {
+    if (deletesOff) {
+      out[key] = record("skipped", { why: STORAGE_DELETES_OFF })
+      continue
+    }
     const kept = keptStoragePrefix(key)
     if (kept) {
       out[key] = record("skipped", { why: `under a kept prefix: ${kept.why}` })

@@ -1361,7 +1361,11 @@ export interface PluginStorageToolkit {
   downloadR2ObjectToFile(key: string, dest: string): Promise<void>
   /** Mirrors `readR2ObjectBuffer` (`lib/storage.ts`) — S3-origin read of an R2 object into a Buffer, or null if absent. */
   readR2ObjectBuffer(key: string): Promise<Buffer | null>
-  /** Mirrors `deleteFromR2` (`lib/storage.ts`) — deletes an R2 object by key. */
+  /**
+   * Mirrors `deleteFromR2` (`lib/storage.ts`) — deletes an R2 object by key.
+   * On a deployment that deletes nothing (`STORAGE_DELETES=skip`) it resolves
+   * without deleting, with a warning, as it does for a key it keeps.
+   */
   deleteFromR2(key: string): Promise<void>
   /** Host-aware inverse of `r2Url`; rejects foreign/user-owned URLs. */
   r2KeyFromOurUrl(url: string): string | null

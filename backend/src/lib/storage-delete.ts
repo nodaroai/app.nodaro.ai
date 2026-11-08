@@ -15,6 +15,10 @@
  * `lib/__tests__/storage-delete-census.test.ts` fails the build when a raw
  * storage delete appears outside this funnel without a listed reason.
  *
+ * A deployment that deletes nothing (STORAGE_DELETES=skip,
+ * lib/storage-deletes-setting.ts): the storage helpers answer every key as
+ * kept, so nothing is recorded here — a skipped delete is not a failed one.
+ *
  * STAGING: dev code runs on the shared database before `main` applies 496. A
  * missing table (42P01 / PGRST205) or column (42703 / PGRST204) means "not
  * recorded yet": the record logs and the caller carries on as before.

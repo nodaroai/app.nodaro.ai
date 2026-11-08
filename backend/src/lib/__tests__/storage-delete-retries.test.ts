@@ -90,6 +90,8 @@ const h = vi.hoisted(() => {
   return {
     state,
     from,
+    /** Mutable: a test sets STORAGE_DELETES on it, and beforeEach resets it. */
+    config: { R2_PUBLIC_URL: "https://cdn.example.com", STORAGE_DELETES: "on" },
     batchDeleteFromR2: vi.fn(),
     deleteFromR2: vi.fn(),
     headR2Object: vi.fn(),
@@ -113,7 +115,7 @@ vi.mock("@/lib/job-output-references.js", () => ({
   blankUrlsInEveryJobOutput: h.blankUrlsInEveryJobOutput,
   urlsLinkedByJobsSince: h.urlsLinkedByJobsSince,
 }))
-vi.mock("@/lib/config.js", () => ({ config: { R2_PUBLIC_URL: "https://cdn.example.com" } }))
+vi.mock("@/lib/config.js", () => ({ config: h.config }))
 
 import { CLOCK_SKEW_MS, MAX_DELETE_RETRIES, retryFailedStorageDeletes, startStorageDeleteRetry } from "../storage-delete-retries.js"
 import {
@@ -188,6 +190,7 @@ beforeEach(() => {
     table: undefined,
     storageConfigured: true,
   })
+  h.config.STORAGE_DELETES = "on"
   h.keysHeldByOtherLibraryRows.mockResolvedValue(new Set())
   h.deletableKeys.mockImplementation(async (keys: string[]) => keys)
   h.batchDeleteFromR2.mockImplementation(async (keys: string[]) => ({ deleted: keys.length, errors: 0, notDeleted: [] }))
@@ -296,6 +299,28 @@ describe("recordFailedDeletes", () => {
 })
 
 describe("retryFailedStorageDeletes", () => {
+  it("stands down on a deployment that deletes nothing (STORAGE_DELETES=skip): it reads, claims, deletes and counts nothing, so every record stays as it is", async () => {
+    // Its bookkeeping would read a skipped delete as a failed one — an attempt
+    // counted on every record, then given up — and the records a database copy
+    // came with belong to the deployment that wrote them.
+    const warnLog = vi.spyOn(console, "warn").mockImplementation(() => {})
+    h.config.STORAGE_DELETES = "skip"
+    h.state.selectAnswers = [{ data: [row(MAX_DELETE_RETRIES - 1)], error: null }]
+
+    const result = await retryFailedStorageDeletes()
+
+    expect(result).toEqual({ retried: 0, deleted: 0, failed: 0, gaveUp: 0, released: 0, errors: 0 })
+    expect(h.from).not.toHaveBeenCalled()
+    expect(h.state.claims).toEqual([])
+    expect(h.state.updates).toEqual([])
+    expect(h.state.deletes).toEqual([])
+    expect(h.headR2Object).not.toHaveBeenCalled()
+    expect(h.batchDeleteFromR2).not.toHaveBeenCalled()
+    expect(h.blankUrlsInEveryJobOutput).not.toHaveBeenCalled()
+    expect(warnLog).toHaveBeenCalledWith(expect.stringContaining("STORAGE_DELETES=skip"))
+    warnLog.mockRestore()
+  })
+
   it("a retried delete that succeeds blanks the file's links everywhere, then drops the record", async () => {
     h.state.selectAnswers = [{ data: [row(0)], error: null }]
 
