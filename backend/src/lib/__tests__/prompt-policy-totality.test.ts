@@ -24,6 +24,16 @@ import { unitRouteFiles } from "../unit-source-files.js"
  * media-generation prompt (segmentation targets, LLM/plan lanes, spoken TTS
  * content) must NOT be policed — a modesty clause inside a mask target or a
  * structured-output system prompt is corruption, not enforcement.
+ *
+ * The PLUGIN lane (Cloud plugins: the gvp/evp pipelines, Nodaro Motion,
+ * trends) assembles its prompts in the private plugin package, which this
+ * repo cannot scan. Its door into the same registry is the toolkit member
+ * `tk.prompts.applyPolicies` (`lib/private-plugins/toolkit.ts`), which runs
+ * `applyPromptPolicies` at call time; half (d) pins that wiring here. Whether
+ * every plugin provider dispatch actually calls it is enforced by the plugin
+ * repo's own totality test, never by this file. A plugin prompt that goes on
+ * through `tk.http.internalRequest` to a core route is policed again there,
+ * which the policy author's idempotence contract makes a no-op.
  */
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -79,7 +89,7 @@ const EXCLUDED_ROUTES: Readonly<Record<string, string>> = {
   "generate-face.ts": "polices at the entity image chokepoint (workers/handlers/entity.ts makeEntityImageHandler)",
   "generate-music.ts": "polices at the music assembly point (workers/handlers/suno.ts)",
   "suno.ts": "voice-persona routes; every music prompt assembles + polices in workers/handlers/suno.ts",
-  "pipelines.ts": "film-studio pipeline — assembly lives in the Cloud plugin lane (documented gvp/evp caveat)",
+  "pipelines.ts": "film-studio pipeline — assembly lives in the Cloud plugin lane, which polices through tk.prompts.applyPolicies (half (d))",
   "after-effects-ai.ts": "LLM plan lane — structured output, not a media-generation prompt",
   "generate-script.ts": "LLM lane — script text, not a media-generation prompt",
   "image-critic.ts": "LLM analysis lane",
@@ -136,5 +146,17 @@ describe("prompt-policy totality — every media-prompt lane polices at its asse
     const pb = readFileSync(resolve(ENGINE, "payload-builder.ts"), "utf8")
     expect(pb.includes("withImagePromptPolicy")).toBe(true)
     expect(pb.includes("applyPromptPolicies(")).toBe(true)
+  })
+
+  it("(d) the plugin lane's toolkit door runs the same registry", () => {
+    // The member a plugin calls at its own assembly point. It must DELEGATE to
+    // the registry (read at call time), never carry a copy of a policy.
+    // Behaviour is proven in private-plugins/__tests__/toolkit-prompt-policy.test.ts.
+    const toolkit = readFileSync(resolve(SRC, "lib", "private-plugins", "toolkit.ts"), "utf8")
+    expect(toolkit, "toolkit.ts no longer wires tk.prompts.applyPolicies to applyPromptPolicies").toMatch(
+      /prompts:\s*\{\s*applyPolicies:\s*\([^)]*\)\s*=>\s*applyPromptPolicies\(/,
+    )
+    const contract = readFileSync(resolve(SRC, "lib", "private-plugins", "types.ts"), "utf8")
+    expect(contract, "types.ts no longer declares the tk.prompts group").toMatch(/\bprompts\?:\s*PluginPromptsToolkit\b/)
   })
 })

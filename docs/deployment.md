@@ -998,7 +998,10 @@ packages rather than read from the environment.) The clause lives in the
 deployment's own registered `PromptPolicy` module, applied by the backend
 registry in `backend/src/lib/prompt-policy.ts`; the published `@nodaro/prompts`
 package stays content-free, enforced by its `content-free-contract` guard test
-(the package source may not read `process.env`).
+(the package source may not read `process.env`). A prompt that a Cloud plugin
+assembles itself reaches the same registry through the plugin toolkit's
+`tk.prompts.applyPolicies`; such a lane is policed once its plugin calls that
+member at its final assembly point.
 
 **Job policy (generation gates).** A deployment that must judge generations —
 before they run, or before their output is published — registers a backend

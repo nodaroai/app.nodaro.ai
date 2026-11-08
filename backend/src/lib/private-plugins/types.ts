@@ -3196,6 +3196,53 @@ export interface PluginSseToolkit {
 }
 
 // ============================================================================
+// tk.prompts — backend/src/lib/prompt-policy.ts
+// ============================================================================
+
+/**
+ * Mirrors `PromptAssembly` (`lib/prompt-policy.ts`) field for field: a
+ * media-generation prompt as it stands just before it is sent to a provider.
+ */
+export interface PluginPromptAssembly {
+  prompt: string
+  /** "" when the provider takes none. A policy may add terms to it. */
+  negativePrompt: string
+  kind: "image" | "video" | "audio"
+  /** Suno vocal gender (audio only); a policy may force it. */
+  vocalGender?: string
+  /** True when the subject of an IMAGE assembly is a minor; absent elsewhere. */
+  subjectMinor?: boolean
+}
+
+/**
+ * The deployment's content policy for prompts a plugin assembles itself.
+ * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard the group; an
+ * older host has no such member.
+ */
+export interface PluginPromptsToolkit {
+  /**
+   * Runs every prompt policy the deployment registered, in registration
+   * order, over one assembly and returns the result: the prompt to send, the
+   * negative prompt to send, and (audio) the vocal gender to send. Exactly the
+   * transform a core route applies at its assembly point
+   * (`applyPromptPolicies`), read at call time.
+   *
+   * With no policy registered it is the identity: a plugin that calls it
+   * changes nothing on an install without a content policy. Synchronous and
+   * pure; the caller's object is never mutated.
+   *
+   * Call it ONCE per media-generation prompt, at the plugin's final assembly
+   * point, right before the provider dispatch (`tk.providers.*`), and send what
+   * it returns. Never call it on a prompt that is not a media-generation prompt
+   * (a segmentation target, an LLM system prompt, spoken text): a policy clause
+   * there is corruption, not enforcement. A prompt the plugin hands on to a core
+   * route through `tk.http.internalRequest` is policed by that route as well; a
+   * policy is idempotent by contract, so the second pass is a no-op.
+   */
+  applyPolicies(assembly: PluginPromptAssembly): PluginPromptAssembly
+}
+
+// ============================================================================
 // PluginToolkit — the full dependency-injection surface handed to every plugin
 // ============================================================================
 
@@ -3219,6 +3266,12 @@ export interface PluginToolkit {
    * member and the plugin keeps its tier billing.
    */
   llmBilling?: PluginLlmBillingToolkit
+  /**
+   * The deployment's prompt policy, for media-generation prompts a plugin
+   * assembles itself (`PluginPromptsToolkit`). ADDITIVE-OPTIONAL (no
+   * CONTRACT_VERSION bump) — `?.`-guard it; an older host has no such member.
+   */
+  prompts?: PluginPromptsToolkit
   pipelines: PluginPipelinesToolkit
   redis: PluginRedisToolkit
   auth: PluginAuthToolkit

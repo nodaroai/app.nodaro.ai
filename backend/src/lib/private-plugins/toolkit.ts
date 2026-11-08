@@ -16,6 +16,7 @@ import { createSceneRenderingToolkit } from "./scene3d-render-toolkit.js"
 import { completeStructuredMetered } from "./llm-metered.js"
 import { FFMPEG_MEMBER_LANES, LLM_MEMBER_LANES, MEDIA_MEMBER_LANES, PROVIDER_MEMBER_LANES, withMemberSlots, withSideHoldSlot } from "./toolkit-lanes.js"
 import { createSSEStream } from "../sse.js"
+import { applyPromptPolicies } from "../prompt-policy.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { directElevenLabsTTS } from "../../providers/elevenlabs/direct-tts.js"
 import { hostTtsCapabilities } from "./tts-capabilities-toolkit.js"
@@ -2216,6 +2217,13 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
           (await reserveLlmSideHold(args as Parameters<typeof reserveLlmSideHold>[0])) as unknown as Awaited<ReturnType<PluginLlmSideHoldToolkit["reserve"]>>,
         () => sideHoldsAvailable()),
       },
+    },
+    // The deployment's prompt policy for prompts a plugin assembles itself.
+    // Delegates at CALL time (a policy registered after this toolkit was built
+    // still applies) and hands the registry a copy, so a policy that edits its
+    // argument never reaches the plugin's own object.
+    prompts: {
+      applyPolicies: (assembly) => applyPromptPolicies({ ...assembly }),
     },
     pipelines: {
       // Core (`lib/private-plugins/`) may not STATICALLY import `ee/`
