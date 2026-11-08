@@ -6,10 +6,10 @@ import { spawnSync } from 'node:child_process'
 const workflow = readFileSync('.github/workflows/ci.yml', 'utf8')
 const jobs = Object.fromEntries([...workflow.matchAll(/^  ([\w-]+):\n([\s\S]*?)(?=^  [\w-]+:\n|$(?![\s\S]))/gm)]
   .map(([, name, body]) => [name, body]))
-const consumers = ['frontend-test-shards', 'backend-test-shards', 'typecheck', 'remotion-tests', 'characterize', 'ffmpeg-ledger-redis', 'build-backend', 'backend-boot-smoke']
+const consumers = ['frontend-test-shards', 'backend-test-shards', 'typecheck', 'remotion-tests', 'characterize', 'ffmpeg-ledger-redis', 'media-e2e', 'build-backend', 'backend-boot-smoke']
 // Skipped on an unrelated diff once preparation succeeded: the suites by the
 // Diff Gate's tree classification, the gated jobs by tools/ci/job-inputs.json.
-const diffGated = ['frontend-test-shards', 'backend-test-shards', 'remotion-tests', 'characterize', 'ffmpeg-ledger-redis']
+const diffGated = ['frontend-test-shards', 'backend-test-shards', 'remotion-tests', 'characterize', 'ffmpeg-ledger-redis', 'media-e2e']
 
 for (const name of consumers) test(`${name} fails closed when preparation fails or is skipped`, () => {
   const job = jobs[name]
@@ -20,10 +20,10 @@ for (const name of consumers) test(`${name} fails closed when preparation fails 
   assert.ok(job.indexOf('Require successful preparation') < job.indexOf('actions/checkout'))
   for (const result of ['success', 'failure', 'skipped', 'cancelled']) {
     const needs = {
-      changes: { result: 'success', outputs: { frontend: 'false', backend: 'false', remotion: 'false', characterize: 'false', ffmpeg_ledger: 'false' } },
+      changes: { result: 'success', outputs: { frontend: 'false', backend: 'false', remotion: 'false', characterize: 'false', ffmpeg_ledger: 'false', media_e2e: 'false' } },
       'prepare-packages': { result }, typecheck: { result }, 'build-backend': { result },
     }
-    const shouldRun = Function('needs', 'cancelled', `return (${condition.replace(/needs\.([a-z-]+)/g, "needs['$1']")})`)(needs, () => false)
+    const shouldRun = Function('needs', 'cancelled', `return (${condition.replace(/needs\.([a-z0-9-]+)/g, "needs['$1']")})`)(needs, () => false)
     if (diffGated.includes(name) && result === 'success') {
       assert.equal(shouldRun, false, 'unrelated diff still skips')
     } else assert.equal(shouldRun, true, 'failed preparation cannot skip a required check')
@@ -45,7 +45,10 @@ test('production migrations retain every original prerequisite', () => {
   for (const name of ['frontend-tests', 'backend-tests', 'typecheck', 'tenant-scope-lint',
     'check-ee-imports', 'check-pricing-leaks', 'check-billing-dumps',
     'check-public-surface', 'check-surface-funnel', 'backend-boot-smoke',
-    'migration-behavior', 'prepare-packages', 'build-backend']) assert.ok(needs.includes(name), name)
+    'migration-behavior', 'prepare-packages', 'build-backend',
+    // the real-media e2e files left Backend Tests for their own job, and their
+    // result still gates production migrations
+    'media-e2e']) assert.ok(needs.includes(name), name)
   for (const name of needs) assert.ok(jobs[name], `migrate needs a job that no longer exists: ${name}`)
   assert.match(jobs.migrate, /github\.ref == 'refs\/heads\/main' && github\.event_name == 'push'/)
 })
@@ -133,6 +136,7 @@ const RAILWAY_JOBS = {
   typecheck: 'ubuntu-latest',
   'build-backend': 'ubuntu-latest',
   'backend-boot-smoke': 'ubuntu-latest',
+  'media-e2e': 'ubuntu-latest',
 }
 // Only jobs that do nothing on a verified tree may drop to ubuntu-slim in that
 // mode: Type Check and the builds do their full work on a verified main push.

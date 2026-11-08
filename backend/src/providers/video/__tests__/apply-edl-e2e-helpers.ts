@@ -1,3 +1,4 @@
+// @test-reads-none reads only the raw frames and samples it decodes with ffmpeg into the temp dir
 /**
  * Real-ffmpeg fixture builders and decoders shared by the apply-edl e2e files
  * (`apply-edl.e2e.test.ts`, `apply-edl-multicam.e2e.test.ts`). Not a test file

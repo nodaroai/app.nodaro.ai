@@ -21,6 +21,10 @@ vi.mock("@/lib/config.js", () => ({
   config: cfg,
   hasCredits: () => true,
 }))
+// Every KIE poll loop waits `pollDelay` (2 s at first) through the shared
+// sleep before each status read. The loopback answers the first read, so the
+// loops run as they do in production, minus the wall-clock wait.
+vi.mock("../../../lib/sleep.js", () => ({ sleep: async () => {} }))
 
 async function loopback(
   handler: (req: http.IncomingMessage, body: string, res: http.ServerResponse) => void,

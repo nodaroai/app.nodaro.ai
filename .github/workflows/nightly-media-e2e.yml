@@ -1,0 +1,89 @@
+name: Nightly Media E2E
+
+# The real-media e2e suite (backend/src/test/media-e2e-files.json, ci.yml's
+# Media E2E job) on dev, once a night — decided 2026-11-08. In ci.yml the job
+# runs on a PR only when one of its inputs changed, so this run also covers
+# the nights no change reached it: a runner, image or upstream drift shows
+# here first. A scheduled run reports its checks on main's HEAD, and a red
+# check there makes Railway skip the production deploy (see
+# nightly-coverage.yml) — so nothing here may mark main red: the job
+# continues on error, every step has its own timeout under the job's, and the
+# last step states in the job summary whether the suite passed, failed or
+# never ran.
+on:
+  schedule:
+    - cron: "47 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Same install-time skips as ci.yml.
+env:
+  YOUTUBE_DL_SKIP_DOWNLOAD: "1"
+  ONNXRUNTIME_NODE_INSTALL: skip
+
+jobs:
+  media-e2e:
+    name: Media E2E (nightly)
+    # The public mirror receives this file with dev and main; it runs only here.
+    if: github.repository == 'nodaroai/app.nodaro.ai-internal'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    # Same job env as Backend Tests and Media E2E in ci.yml.
+    env:
+      SUPABASE_URL: https://test.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: test-key
+      EDITION: cloud
+      NODE_ENV: test
+      YOUTUBE_DL_SKIP_DOWNLOAD: true
+    steps:
+      - uses: actions/checkout@v5
+        timeout-minutes: 3
+        with:
+          ref: dev
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        timeout-minutes: 3
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      # The production-pinned build, installed exactly as ci.yml does (see
+      # Backend Tests there for why not apt).
+      - name: Install the production-pinned ffmpeg (via tools/install-pinned-ffmpeg.sh)
+        timeout-minutes: 5
+        run: sudo bash tools/install-pinned-ffmpeg.sh --from-dockerfile Dockerfile --arch amd64
+      - name: Pin npm 11
+        timeout-minutes: 2
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+      - name: Install workspace dependencies
+        timeout-minutes: 10
+        run: npm ci
+      - name: Build shared packages
+        timeout-minutes: 5
+        run: npm run build:packages
+      - name: Run the media e2e suite
+        id: suite
+        continue-on-error: true
+        timeout-minutes: 25
+        # One file at a time, as in ci.yml (an inherited VITEST_MAX_WORKERS
+        # would override the config's fileParallelism).
+        env:
+          VITEST_MAX_WORKERS: "1"
+        working-directory: backend
+        run: npm run test:media-e2e
+      - name: Outcome
+        if: always()
+        timeout-minutes: 2
+        env:
+          OUTCOME: ${{ steps.suite.outcome }}
+        run: |
+          case "$OUTCOME" in
+            success) line="the media e2e suite passed on dev" ;;
+            failure) line="⚠️ the media e2e suite FAILED on dev — see the step above; this run never blocks anything" ;;
+            skipped|"") line="⚠️ the media e2e suite never ran — a setup step failed; this run never blocks anything" ;;
+            *) line="⚠️ the media e2e suite did not finish (outcome: $OUTCOME); this run never blocks anything" ;;
+          esac
+          printf '### Nightly Media E2E\n\n%s\n' "$line" >> "$GITHUB_STEP_SUMMARY"

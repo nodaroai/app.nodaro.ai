@@ -158,11 +158,14 @@ describe("compositeFaceMesh", () => {
     const rgb = gradient()
     const out = await compositeFaceMesh(rgb, GW, GH, faceOnGradient())
     let drawn = 0
+    // Checked once for the whole frame, not with an expect per pixel (80,000 of them took a second).
+    const hued: number[] = []
     for (let i = 0; i < GW * GH; i++) {
       const r = out[3 * i]!, g = out[3 * i + 1]!, b = out[3 * i + 2]!
-      expect(Math.max(r, g, b) - Math.min(r, g, b)).toBe(0)
+      if (Math.max(r, g, b) - Math.min(r, g, b) !== 0) hued.push(i)
       if (r !== rgb[3 * i]) drawn++
     }
+    expect(hued, "the pixels that took a hue").toEqual([])
     expect(drawn).toBeGreaterThan(1000)
   })
 
@@ -212,13 +215,14 @@ describe("compositeFaceMesh", () => {
     const l = lumaOf(...skin)
     const core = Math.round(lineTone(Math.round(l), FACE_MESH_STYLE.outline))
     let neutral = 0
+    const cold: number[] = []
     for (let i = 0; i < GW * GH; i++) {
       const r = out[3 * i]!, g = out[3 * i + 1]!, b = out[3 * i + 2]!
       if (r === core && g === core && b === core) neutral++
       // Every pixel lies between the skin and a gray: still warm, or neutral — never blue or green.
-      expect(b).toBeLessThanOrEqual(r)
-      expect(g).toBeLessThanOrEqual(r)
+      if (b > r || g > r) cold.push(i)
     }
+    expect(cold, "the pixels bluer or greener than they are red").toEqual([])
     expect(neutral).toBeGreaterThan(50)
   })
 
@@ -245,27 +249,44 @@ describe("compositeFaceMesh on a coloured depth map", () => {
   /** The same depth in `table`'s colours, as the provider renders it. */
   const mapped = (table: Uint8Array) => frame(GW, GH, (x) => [table[3 * gOf(x)]!, table[3 * gOf(x) + 1]!, table[3 * gOf(x) + 2]!])
   const overlay = () => faceMeshOverlay([face(0.02, 0.05, 0.96, 0.9)], GW, GH)!
-  /** The squared distance from a colour to the nearest colour of the map (between two neighbouring entries). */
-  function offMap(table: Uint8Array, r: number, g: number, b: number): number {
-    let best = Infinity
+  /**
+   * The squared distance from a colour to the nearest colour of the map (between two neighbouring entries, in
+   * eighths). The candidates are worked out once per map and each colour's distance once: a frame repeats its
+   * colours, and searching all 255 × 9 candidates again for every drawn pixel took about 6 s a map.
+   */
+  function offMapOf(table: Uint8Array): (r: number, g: number, b: number) => number {
+    const candidates: number[] = []
     for (let i = 0; i < 255; i++) {
       for (let f = 0; f <= 1; f += 0.125) {
-        const c = [0, 1, 2].map((k) => table[3 * i + k]! + (table[3 * (i + 1) + k]! - table[3 * i + k]!) * f)
-        best = Math.min(best, (c[0]! - r) ** 2 + (c[1]! - g) ** 2 + (c[2]! - b) ** 2)
+        for (let k = 0; k < 3; k++) candidates.push(table[3 * i + k]! + (table[3 * (i + 1) + k]! - table[3 * i + k]!) * f)
       }
     }
-    return best
+    const known = new Map<number, number>()
+    return (r, g, b) => {
+      const key = (r << 16) | (g << 8) | b
+      let best = known.get(key)
+      if (best === undefined) {
+        best = Infinity
+        for (let c = 0; c < candidates.length; c += 3) {
+          best = Math.min(best, (candidates[c]! - r) ** 2 + (candidates[c + 1]! - g) ** 2 + (candidates[c + 2]! - b) ** 2)
+        }
+        known.set(key, best)
+      }
+      return best
+    }
   }
 
   for (const colormap of ["turbo", "inferno"] as const) {
     it(`${colormap}: a fully covered line pixel is the map at the line's tone of the depth under it, and nothing leaves the map`, async () => {
       const table = depthColormapTable(colormap)
+      const offMap = offMapOf(table)
       const rgb = mapped(table)
       const depth = { rgb: grayDepth(), width: GW, height: GH, table }
       const out = await compositeFaceMesh(rgb, GW, GH, overlay(), depth)
       let outlines = 0
       let meshes = 0
       let drawn = 0
+      const offTheMap: string[] = []
       for (let y = 0; y < GH; y++) {
         for (let x = 0; x < GW; x++) {
           const i = (y * GW + x) * 3
@@ -273,13 +294,14 @@ describe("compositeFaceMesh on a coloured depth map", () => {
           if (r === rgb[i] && g === rgb[i + 1] && b === rgb[i + 2]) continue
           drawn++
           // Every drawn pixel, its anti-aliased edges included, is a colour of the map (± rounding).
-          expect(offMap(table, r, g, b)).toBeLessThanOrEqual(3)
+          if (offMap(r, g, b) > 3) offTheMap.push(`${x},${y}: ${r},${g},${b}`)
           const d = gOf(x)
           const is = (tone: number) => [0, 1, 2].every((k) => Math.abs(out[i + k]! - table[3 * Math.round(tone) + k]!) <= 3)
           if (d >= FACE_MESH_STYLE.darkenAt && is(lineTone(d, FACE_MESH_STYLE.outline))) outlines++
           if (d >= FACE_MESH_STYLE.darkenAt && is(lineTone(d, FACE_MESH_STYLE.mesh))) meshes++
         }
       }
+      expect(offTheMap, "the drawn pixels off the map (x,y: r,g,b)").toEqual([])
       expect(drawn).toBeGreaterThan(1000)
       expect(outlines).toBeGreaterThan(20)
       expect(meshes).toBeGreaterThan(100)

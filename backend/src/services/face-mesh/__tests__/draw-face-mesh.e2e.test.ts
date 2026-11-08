@@ -1,9 +1,12 @@
+// @test-watches backend/src/services/face-detect/__tests__/fixtures/rt4k-540p2-gop.mp4
 /**
  * The face mesh on real clips — real ffmpeg, real onnxruntime-node, the pinned
  * models. The faces: Speaker Frames' parity fixture (26 frames of four seated
  * people, 960 × 540, `../../face-detect/__tests__/fixtures/README.md`); the
  * rest is drawn by ffmpeg's own sources (`testsrc2`, a sine tone, a black or
- * white mask), so nothing else is committed.
+ * white mask), so nothing else is committed. Every render runs both models on
+ * every frame it reads, so this file runs in the Media E2E job
+ * (`src/test/media-e2e-files.json`), not in Backend Tests.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { execFileSync } from "node:child_process"
@@ -105,6 +108,16 @@ function framesOf(path: string): { w: number; h: number; frames: Buffer[] } {
   const size = w! * h! * 3
   return { w: w!, h: h!, frames: Array.from({ length: all.length / size }, (_, i) => all.subarray(i * size, (i + 1) * size)) }
 }
+const decodedSources = new Map<string, ReturnType<typeof framesOf>>()
+/** `framesOf` for a clip this file never rewrites (a source a render is compared with): decoded once. */
+function sourceFramesOf(path: string): ReturnType<typeof framesOf> {
+  let decoded = decodedSources.get(path)
+  if (!decoded) {
+    decoded = framesOf(path)
+    decodedSources.set(path, decoded)
+  }
+  return decoded
+}
 /**
  * Per frame, the pixels of `drawn` whose luminance is more than 25 levels from
  * the same frame of `source` (inside `box`, pixels, when given): the lines —
@@ -113,7 +126,7 @@ function framesOf(path: string): { w: number; h: number; frames: Buffer[] } {
  */
 function changedPerFrame(drawn: string, source: string, box?: { x0: number; y0: number; x1: number; y1: number }): number[] {
   const a = framesOf(drawn)
-  const b = framesOf(source)
+  const b = sourceFramesOf(source)
   expect(a.frames).toHaveLength(b.frames.length)
   const luma = (rgb: Buffer, i: number) => 0.2126 * rgb[3 * i]! + 0.7152 * rgb[3 * i + 1]! + 0.0722 * rgb[3 * i + 2]!
   const { x0, y0, x1, y1 } = box ?? { x0: 0, y0: 0, x1: a.w, y1: a.h }
@@ -156,29 +169,34 @@ describe("drawFaceMeshVideo", () => {
     expect(bluePixels(out, 3)).toBeLessThanOrEqual(bluePixels(FACES, 3))
   }, 120_000)
 
+  // The parts, mask and depth cases below compare renders with each other or with their own source, never with
+  // the full clip's frame indices: they run on the short clip (`facesShort`, its first 8 frames, faces on every one).
   it("parts: the eye and lip outlines alone, or the lip outline alone — the same faces, fewer lines drawn on them", async () => {
-    const full = await drawFacesOnce({}, join(dir, "parts-full.mp4"))
-    const features = await drawFacesOnce({ parts: "features" }, join(dir, "parts-features.mp4"))
-    const mouth = await drawFacesOnce({ parts: "mouth" }, join(dir, "parts-mouth.mp4"))
+    const source = facesShort()
+    const full = await drawFacesOnce({ parts: "full" }, join(dir, "parts-full.mp4"), source)
+    const features = await drawFacesOnce({ parts: "features" }, join(dir, "parts-features.mp4"), source)
+    const mouth = await drawFacesOnce({ parts: "mouth" }, join(dir, "parts-mouth.mp4"), source)
+    expect(full.framesWithFaces).toBe(SHORT_FRAMES)
     // The same faces found and drawn on, frame for frame.
     for (const r of [features, mouth]) {
       expect([r.frames, r.framesWithFaces, r.facesDrawn]).toEqual([full.frames, full.framesWithFaces, full.facesDrawn])
-      expect(frames(join(dir, r === features ? "parts-features.mp4" : "parts-mouth.mp4"))).toBe(26)
+      expect(frames(join(dir, r === features ? "parts-features.mp4" : "parts-mouth.mp4"))).toBe(SHORT_FRAMES)
     }
-    const drawnFull = darkenedPixels(join(dir, "parts-full.mp4"), FACES, 3)
-    const drawnFeatures = darkenedPixels(join(dir, "parts-features.mp4"), FACES, 3)
-    const drawnMouth = darkenedPixels(join(dir, "parts-mouth.mp4"), FACES, 3)
+    const drawnFull = darkenedPixels(join(dir, "parts-full.mp4"), source, 3)
+    const drawnFeatures = darkenedPixels(join(dir, "parts-features.mp4"), source, 3)
+    const drawnMouth = darkenedPixels(join(dir, "parts-mouth.mp4"), source, 3)
     expect(drawnMouth).toBeGreaterThan(0)
     expect(drawnMouth).toBeLessThan(drawnFeatures)
     expect(drawnFeatures).toBeLessThan(drawnFull)
   }, 180_000)
 
   it("parts: the contours — the same faces, the features' lines and more (the oval, brows and nose where each face shows them)", async () => {
-    const features = await drawFacesOnce({ parts: "features" }, join(dir, "contours-features.mp4"))
-    const contours = await drawFacesOnce({ parts: "contours" }, join(dir, "contours.mp4"))
+    const source = facesShort()
+    const features = await drawFacesOnce({ parts: "features" }, join(dir, "contours-features.mp4"), source)
+    const contours = await drawFacesOnce({ parts: "contours" }, join(dir, "contours.mp4"), source)
     expect([contours.frames, contours.framesWithFaces, contours.facesDrawn]).toEqual([features.frames, features.framesWithFaces, features.facesDrawn])
-    expect(frames(join(dir, "contours.mp4"))).toBe(26)
-    expect(darkenedPixels(join(dir, "contours.mp4"), FACES, 3)).toBeGreaterThan(darkenedPixels(join(dir, "contours-features.mp4"), FACES, 3))
+    expect(frames(join(dir, "contours.mp4"))).toBe(SHORT_FRAMES)
+    expect(darkenedPixels(join(dir, "contours.mp4"), source, 3)).toBeGreaterThan(darkenedPixels(join(dir, "contours-features.mp4"), source, 3))
   }, 180_000)
 
   it("layers: a parts value's set draws that value's exact frames; every layer on draws more than the full mesh", async () => {
@@ -214,12 +232,13 @@ describe("drawFaceMeshVideo", () => {
   }, 180_000) // 6 renders of the 8-frame clip; on the 26-frame clip it took ~27 s alone on a dev machine and over 300 s on busy CI runners
 
   it("draws nothing outside the mask: an all-black mask draws no face, an all-white one every face", async () => {
-    const none = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, maskPath: maskClip("black.mp4", "black", 26), filters: OFF, outputPath: join(dir, "none.mp4") })
+    const source = facesShort()
+    const none = await drawFaceMeshVideo({ videoPath: source, drawOnPath: source, maskPath: maskClip("black.mp4", "black", SHORT_FRAMES), filters: OFF, outputPath: join(dir, "none.mp4") })
     expect(none.facesDrawn).toBe(0)
     expect(none.framesWithFaces).toBe(0)
-    expect(frames(join(dir, "none.mp4"))).toBe(26)
-    const all = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, maskPath: maskClip("white.mp4", "white", 26), filters: OFF, outputPath: join(dir, "all.mp4") })
-    expect(all.facesDrawn).toBeGreaterThanOrEqual(26)
+    expect(frames(join(dir, "none.mp4"))).toBe(SHORT_FRAMES)
+    const all = await drawFaceMeshVideo({ videoPath: source, drawOnPath: source, maskPath: maskClip("white.mp4", "white", SHORT_FRAMES), filters: OFF, outputPath: join(dir, "all.mp4") })
+    expect(all.facesDrawn).toBeGreaterThanOrEqual(SHORT_FRAMES)
   }, 120_000)
 
   it("the size limits leave faces out: none of these is a third of the frame tall", async () => {
@@ -283,10 +302,11 @@ describe("drawFaceMeshVideo", () => {
 
   it("a coloured depth map: the lines take the map's colours, read from the gray depth render at its own size", async () => {
     // The gray "depth" render (the faces' clip in gray) at half size, and the clip drawn on: the same in gray, full size.
+    const source = facesShort()
     const gray = join(dir, "gray.mp4")
-    ff("-i", FACES, "-vf", "format=gray,format=yuv420p", "-c:v", "libx264", "-pix_fmt", "yuv420p", gray)
+    ff("-i", source, "-vf", "format=gray,format=yuv420p", "-c:v", "libx264", "-pix_fmt", "yuv420p", gray)
     const depth = join(dir, "depth-half.mp4")
-    ff("-i", FACES, "-vf", "scale=480:270,format=gray,format=yuv420p", "-c:v", "libx264", "-pix_fmt", "yuv420p", depth)
+    ff("-i", source, "-vf", "scale=480:270,format=gray,format=yuv420p", "-c:v", "libx264", "-pix_fmt", "yuv420p", depth)
     /** Pixels of a frame with a clear hue (the gray clip has none). */
     const hued = (path: string) => {
       const { rgb, w, h } = frameAt(path, 3)
@@ -295,13 +315,13 @@ describe("drawFaceMeshVideo", () => {
       return n
     }
     const plain = join(dir, "gray-out.mp4")
-    await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: gray, filters: OFF, outputPath: plain })
+    await drawFaceMeshVideo({ videoPath: source, drawOnPath: gray, filters: OFF, outputPath: plain })
     expect(hued(plain)).toBeLessThan(10) // gray tones on a gray clip
     expect(darkenedPixels(plain, gray, 3)).toBeGreaterThan(200)
     const coloured = join(dir, "inferno-out.mp4")
-    const r = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: gray, depth: { path: depth, colormap: "inferno" }, filters: OFF, outputPath: coloured })
-    expect(r.frames).toBe(26)
-    expect(r.facesDrawn).toBeGreaterThanOrEqual(26)
+    const r = await drawFaceMeshVideo({ videoPath: source, drawOnPath: gray, depth: { path: depth, colormap: "inferno" }, filters: OFF, outputPath: coloured })
+    expect(r.frames).toBe(SHORT_FRAMES)
+    expect(r.facesDrawn).toBeGreaterThanOrEqual(SHORT_FRAMES)
     expect(hued(coloured)).toBeGreaterThan(100) // inferno's own colours where the lines are
   }, 120_000)
 

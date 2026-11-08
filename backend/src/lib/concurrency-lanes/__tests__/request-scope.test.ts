@@ -379,6 +379,12 @@ describe("a real client", () => {
     const addr = app.server.address()
     base = `http://127.0.0.1:${typeof addr === "object" && addr ? addr.port : 0}`
   })
+  // After each case's assertions, before the file's `app.close()`: drop the
+  // sockets the real client left open. On Node 22 the close otherwise waited
+  // about 4 s per case for the client's keep-alive socket to time out.
+  afterEach(() => {
+    app.server.closeAllConnections()
+  })
 
   const realFetch = (path: string, signal: AbortSignal) =>
     originalFetch(`${base}${path}`, { method: "POST", headers: { "x-user": "U", "content-type": "application/json" }, body: "{}", signal })

@@ -5,7 +5,10 @@
 // runs and of its setup files (tools/test-select/graph.mjs — workspace
 // packages resolve to packages/<dir>/dist/, so it needs `npm ci` and the
 // built packages), plus every @reads / @test-watches glob on the way. A file
-// outside the inputs is an error: a PR changing it would skip the job.
+// outside the inputs is an error: a PR changing it would skip the job. So is
+// a test that reads files without declaring what (no @test-watches, no
+// @test-reads-none), unless it is on the job's `untaggedScanners`, the ones
+// that predate the rule (decided 2026-11-08; the list only shrinks).
 // `--write` adds what is missing to job-inputs.json instead (sorted); review
 // the diff — a directory glob may read better than a list of its files.
 //
@@ -56,10 +59,17 @@ export async function checkJob(key, { write = false } = {}) {
   const workspaceDeps = workspaceDepsOf()
   const problems = []
   const missing = new Set()
+  const scanners = new Set()
   for (const t of tests) {
     const what = t.setup ? `setup file ${t.file}` : t.file
     if (t.always) problems.push(`${what} declares @test-always (${t.always}) — it may read anything, so no input list can hold it`)
     if (t.undeclaredReader) problems.push(`${what} reaches ${t.undeclaredReader}, which reads files and declares no @reads`)
+    // A test that reads files (itself or through a test-side helper) and
+    // declares neither what (@test-watches) nor that it reads nothing of the
+    // repo (@test-reads-none) runs on every change in the suites; in a gated
+    // job a change to what it reads would skip it. The ones that predate the
+    // rule are the job's `untaggedScanners` (only shrinks).
+    if (t.scanner && !t.setup) scanners.add(t.file)
     for (const p of [t.file, ...t.deps]) {
       if (p.startsWith("../")) { problems.push(`${what} reaches ${p}, outside the repository`); continue }
       for (const need of requiredInputs(p, workspaceDeps)) {
@@ -67,6 +77,13 @@ export async function checkJob(key, { write = false } = {}) {
       }
     }
     for (const g of [...t.watches, ...t.reads]) if (!isGlobCovered(g, job.inputs)) missing.add(g)
+  }
+  const known = new Set(job.untaggedScanners ?? [])
+  for (const f of [...scanners].sort()) {
+    if (!known.has(f)) problems.push(`${f} reads files and declares neither @test-watches nor @test-reads-none — no input list can hold what it reads; declare what it reads`)
+  }
+  for (const f of [...known].sort()) {
+    if (!scanners.has(f)) problems.push(`${f} is in ${key}'s untaggedScanners but is no longer an untagged scanner this job runs — remove it from ${INPUTS_FILE} (the list only shrinks)`)
   }
   if (write && missing.size > 0) {
     declaration.jobs[key] = { ...job, inputs: [...new Set([...job.inputs, ...missing])].sort() }

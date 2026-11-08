@@ -15,6 +15,18 @@ const frac = (p: Float64Array, w = W, h = H) => p.map((v, i) => v / (i % 2 === 0
 const sha = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 16)
 const segments = (svg: string) => (svg.match(/M/g) ?? []).length
 const gray = (v = 160) => Buffer.alloc(W * H * 3, v)
+/**
+ * Where two frames first differ, -1 when they are the same bytes (a length
+ * that differs counts too). Not `toEqual`: vitest walks a Buffer a byte at a
+ * time, about 3 s for a pair of these 2.7 MB frames; `equals` compares them
+ * natively.
+ */
+function firstDifference(a: Buffer, b: Buffer): number {
+  if (a.equals(b)) return -1
+  const n = Math.min(a.length, b.length)
+  for (let i = 0; i < n; i++) if (a[i] !== b[i]) return i
+  return n
+}
 
 /** A face's 468 points with the irises' 10 after them: each centre in the middle of its eye, its rim `r` px round it. */
 function withIrises(points: Float64Array, r = 6): Float64Array {
@@ -44,7 +56,8 @@ describe("every parts value drawn as its layers is that value's drawing, byte fo
         const byParts = faceMeshOverlay(faces(), W, H, parts)!
         const byLayers = faceMeshOverlay(faces(), W, H, { layers: videoFaceMeshLayersOfParts(parts) })!
         expect(byLayers).toEqual(byParts)
-        expect(await compositeFaceMesh(gray(), W, H, byLayers)).toEqual(await compositeFaceMesh(gray(), W, H, byParts))
+        const [fromLayers, fromParts] = [await compositeFaceMesh(gray(), W, H, byLayers), await compositeFaceMesh(gray(), W, H, byParts)]
+        expect(firstDifference(fromLayers, fromParts), "the first byte that differs").toBe(-1)
       })
     }
   }
