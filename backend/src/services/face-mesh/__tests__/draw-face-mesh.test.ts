@@ -32,19 +32,36 @@ const maskClip = (name: string, color: "black" | "white", n: number) => {
   ff("-f", "lavfi", "-i", `color=${color}:s=960x540:r=2`, "-frames:v", String(n), "-c:v", "libx264", "-pix_fmt", "yuv420p", out)
   return out
 }
+/** The first frames of the faces' clip, 4 s at 2 fps (`facesShort`): enough for a case that only compares renders. */
+const SHORT_FRAMES = 8
+let facesShortPath: string | undefined
+/**
+ * The faces' clip cut to its first `SHORT_FRAMES` frames, re-encoded once per
+ * file (the clip has B-frames, so it cannot be cut without re-encoding), tagged
+ * as the clip is. A render's cost follows its frames: a case that compares
+ * renders with each other draws a third of the work on it.
+ */
+function facesShort(): string {
+  if (facesShortPath) return facesShortPath
+  const out = join(dir, "faces-short.mp4")
+  ff("-i", FACES, "-frames:v", String(SHORT_FRAMES), "-an", "-c:v", "libx264", "-crf", "10", "-pix_fmt", "yuv420p", "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", out)
+  facesShortPath = out
+  return out
+}
 const drawn = new Map<string, Promise<DrawFaceMeshResult>>()
 /**
- * The faces' clip drawn on itself with these settings (no mask, no filter) at
- * `outputPath`. A render takes seconds, and some cases ask for the same one:
- * each exact set of settings is drawn ONCE per file, and a later case gets a
- * copy of the clip at its own path with the same result (the same inputs draw
- * the same bytes). A failed render is not kept: the next case draws it again.
+ * The faces' clip (or `source`) drawn on itself with these settings (no mask,
+ * no filter) at `outputPath`. A render takes seconds, and some cases ask for
+ * the same one: each exact set of settings is drawn ONCE per file and source,
+ * and a later case gets a copy of the clip at its own path with the same result
+ * (the same inputs draw the same bytes). A failed render is not kept: the next
+ * case draws it again.
  */
-async function drawFacesOnce(settings: Pick<DrawFaceMeshInput, "parts" | "layers">, outputPath: string): Promise<DrawFaceMeshResult> {
-  const key = JSON.stringify(settings)
+async function drawFacesOnce(settings: Pick<DrawFaceMeshInput, "parts" | "layers">, outputPath: string, source: string = FACES): Promise<DrawFaceMeshResult> {
+  const key = JSON.stringify([source, settings])
   let first = drawn.get(key)
   if (!first) {
-    first = drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, ...settings, filters: OFF, outputPath })
+    first = drawFaceMeshVideo({ videoPath: source, drawOnPath: source, ...settings, filters: OFF, outputPath })
     drawn.set(key, first)
     first.catch(() => drawn.delete(key))
   }
@@ -165,12 +182,17 @@ describe("drawFaceMeshVideo", () => {
   }, 180_000)
 
   it("layers: a parts value's set draws that value's exact frames; every layer on draws more than the full mesh", async () => {
+    // Every render here is compared with another render or with its own source, never with another case's: so the
+    // short clip (`facesShort`, its first 8 frames) carries the same checks at a third of the drawing.
+    const source = facesShort()
     const decoded = (path: string) => framesOf(path).frames
     for (const [parts, layers] of [["full", { wireframe: true, eyes: true, lips: true }], ["contours", { eyes: true, lips: true, contours: true }]] as const) {
       const a = join(dir, `layers-parts-${parts}.mp4`)
       const b = join(dir, `layers-${parts}.mp4`)
-      const byParts = await drawFacesOnce({ parts }, a)
-      const byLayers = await drawFacesOnce({ layers }, b)
+      const byParts = await drawFacesOnce({ parts }, a, source)
+      const byLayers = await drawFacesOnce({ layers }, b, source)
+      // Faces drawn on every frame of the short clip, so the comparison below compares lines, not two empty clips.
+      expect(byParts.framesWithFaces).toBe(SHORT_FRAMES)
       expect([byLayers.frames, byLayers.framesWithFaces, byLayers.facesDrawn]).toEqual([byParts.frames, byParts.framesWithFaces, byParts.facesDrawn])
       // Every frame, byte for byte. Not `toEqual` on the frames: vitest walks a Buffer a byte at a time and builds an
       // entry per byte (about 30 s per clip pair on a dev machine, minutes on a busy runner); `equals` compares the bytes natively.
@@ -179,17 +201,17 @@ describe("drawFaceMeshVideo", () => {
       expect(fromLayers.flatMap((f, i) => (f.equals(fromParts[i]!) ? [] : [i])), "the frames that differ").toEqual([])
     }
     const all = join(dir, "layers-all.mp4")
-    const r = await drawFacesOnce({ layers: { wireframe: true, eyes: true, lips: true, contours: true, irises: true, bold: true } }, all)
-    expect(r.frames).toBe(26)
-    expect(frames(all)).toBe(26)
-    expect(darkenedPixels(all, FACES, 3)).toBeGreaterThan(darkenedPixels(join(dir, "layers-full.mp4"), FACES, 3))
+    const r = await drawFacesOnce({ layers: { wireframe: true, eyes: true, lips: true, contours: true, irises: true, bold: true } }, all, source)
+    expect(r.frames).toBe(SHORT_FRAMES)
+    expect(frames(all)).toBe(SHORT_FRAMES)
+    expect(darkenedPixels(all, source, 3)).toBeGreaterThan(darkenedPixels(join(dir, "layers-full.mp4"), source, 3))
     // The irises alone: lines drawn (inside the open eyes), and far fewer than the full mesh's.
     const irises = join(dir, "layers-irises.mp4")
-    await drawFacesOnce({ layers: { irises: true } }, irises)
-    const irisPixels = changedPerFrame(irises, FACES).reduce((s, n) => s + n, 0)
+    await drawFacesOnce({ layers: { irises: true } }, irises, source)
+    const irisPixels = changedPerFrame(irises, source).reduce((s, n) => s + n, 0)
     expect(irisPixels).toBeGreaterThan(0)
-    expect(irisPixels).toBeLessThan(changedPerFrame(join(dir, "layers-full.mp4"), FACES).reduce((s, n) => s + n, 0) / 4)
-  }, 180_000) // ~10 s alone on a dev machine (6 renders); CI's busiest runners ran this file's cases up to 6x slower: 180 s is 3x that
+    expect(irisPixels).toBeLessThan(changedPerFrame(join(dir, "layers-full.mp4"), source).reduce((s, n) => s + n, 0) / 4)
+  }, 180_000) // 6 renders of the 8-frame clip; on the 26-frame clip it took ~27 s alone on a dev machine and over 300 s on busy CI runners
 
   it("draws nothing outside the mask: an all-black mask draws no face, an all-white one every face", async () => {
     const none = await drawFaceMeshVideo({ videoPath: FACES, drawOnPath: FACES, maskPath: maskClip("black.mp4", "black", 26), filters: OFF, outputPath: join(dir, "none.mp4") })

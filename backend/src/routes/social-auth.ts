@@ -7,7 +7,7 @@ import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { encryptToken, decryptToken } from "../services/social/encryption.js"
-import { generateAuthUrl, exchangeCodeForTokens, type TokenSet } from "../services/social/oauth.js"
+import { generateAuthUrl, exchangeCodeForTokens, getCallbackOrigin, type TokenSet } from "../services/social/oauth.js"
 import { getProvider, missingEnv, PROVIDERS, providerPublicInfo } from "../services/social/providers/registry.js"
 import type { AccountChoice, PlatformUserInfo, SocialProvider } from "../services/social/providers/types.js"
 import {
@@ -479,6 +479,44 @@ function escapeHtml(str: string): string {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
 }
 
+/**
+ * The `type` of the result a callback page hands the app that opened the
+ * pop-up. The app's integrations card accepts exactly these two shapes:
+ * `{ type: RESULT_CONNECTED, platform }` and `{ type: RESULT_FAILED, message }`.
+ */
+const RESULT_CONNECTED = "social-auth-success"
+const RESULT_FAILED = "social-auth-error"
+
+/**
+ * A value written into an inline <script> as a JavaScript literal. JSON alone
+ * is not safe there: a string holding `</script>` would end the script block
+ * early, and an error message can carry a provider's response text. So `<`,
+ * `>` and `&` are written as \u escapes, and so are U+2028/U+2029. The script
+ * still reads the same value.
+ */
+function scriptLiteral(value: string | Readonly<Record<string, unknown>>): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029")
+}
+
+/**
+ * The script statement that hands a result (a JavaScript expression) to the
+ * window that opened the pop-up. Its target is named here, on the server: the
+ * origin the callback is served on, from configuration. Never "*", and never
+ * whatever host the page happened to be reached on, so the result reaches no
+ * other origin, even when the opener has navigated away mid-flow. With no
+ * usable origin configured, the page posts nothing.
+ */
+function postResultToOpener(result: string): string {
+  const target = getCallbackOrigin()
+  if (!target) return ""
+  return `if (window.opener) window.opener.postMessage(${result}, ${scriptLiteral(target)});`
+}
+
 const PAGE_STYLE = `
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 480px; margin: 60px auto; padding: 0 20px; color: #1a1a1a; }
   h2 { margin-bottom: 4px; }
@@ -503,7 +541,7 @@ function pickerHtml(provider: SocialProvider, token: string, accounts: AccountCh
 ${items}
 <p class="err" id="err" hidden></p>
 <script>
-  const token = ${JSON.stringify(token)};
+  const token = ${scriptLiteral(token)};
   document.querySelectorAll(".account").forEach((btn) => {
     btn.addEventListener("click", async () => {
       document.querySelectorAll(".account").forEach((b) => b.setAttribute("disabled", ""));
@@ -515,10 +553,11 @@ ${items}
         });
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error((data.error && data.error.message) || "Failed to connect.");
-        document.body.innerHTML = "<h2>Connected!</h2><p>Account: " + (data.username || "") + "</p><p>You can close this window.</p>";
-        if (window.opener) {
-          window.opener.postMessage({ type: "social-auth-success", platform: data.platform }, window.location.origin);
-        }
+        // The account name is whatever the network returns (a page's admins
+        // name it), so it is set as text, never parsed as markup.
+        document.body.innerHTML = "<h2>Connected!</h2><p id='account'></p><p>You can close this window.</p>";
+        document.getElementById("account").textContent = "Account: " + (data.username || "");
+        ${postResultToOpener(`{ type: ${scriptLiteral(RESULT_CONNECTED)}, platform: data.platform }`)}
         setTimeout(() => window.close(), 2000);
       } catch (e) {
         const err = document.getElementById("err");
@@ -540,11 +579,7 @@ function successHtml(platform: string, username: string): string {
 <p>Account: ${safeUsername}</p>
 <p>You can close this window.</p>
 <script>
-  // Target window.location.origin (not "*") so a parent that navigates away
-  // mid-flow can't receive this message on a foreign origin.
-  if (window.opener) {
-    window.opener.postMessage({ type: "social-auth-success", platform: ${JSON.stringify(platform)} }, window.location.origin);
-  }
+  ${postResultToOpener(scriptLiteral({ type: RESULT_CONNECTED, platform }))}
   setTimeout(() => window.close(), 2000);
 </script>
 </body></html>`
@@ -567,11 +602,7 @@ function errorHtml(message: string, hint?: string): string {
 <p>${safeMessage}</p>
 ${safeHint ? `<div class="hint">${safeHint}</div>` : "<p>You can close this window and try again.</p>"}
 <script>
-  // Target window.location.origin (not "*") so error details aren't leaked
-  // to a foreign origin if the opener navigated away mid-flow.
-  if (window.opener) {
-    window.opener.postMessage({ type: "social-auth-error", message: ${JSON.stringify(message)} }, window.location.origin);
-  }
+  ${postResultToOpener(scriptLiteral({ type: RESULT_FAILED, message }))}
 </script>
 </body></html>`
 }

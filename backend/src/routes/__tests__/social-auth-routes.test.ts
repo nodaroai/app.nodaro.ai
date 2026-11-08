@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { runInNewContext } from "node:vm"
 import Fastify, { type FastifyInstance } from "fastify"
 
 // ---- mocks -----------------------------------------------------------------
@@ -56,7 +57,8 @@ vi.mock("../../lib/queue.js", () => ({
 }))
 
 import { socialAuthRoutes } from "../social-auth.js"
-import { savePendingSelection } from "../../services/social/state-store.js"
+import { saveOAuthState, savePendingSelection } from "../../services/social/state-store.js"
+import { getRedirectUri } from "../../services/social/oauth.js"
 import { encryptToken } from "../../services/social/encryption.js"
 import { getProvider } from "../../services/social/providers/registry.js"
 
@@ -259,5 +261,210 @@ describe("POST /v1/social/connect/finalize (between-steps picker)", () => {
     })
     expect(r.statusCode).toBe(400)
     expect((r.json() as { error: { code: string } }).error.code).toBe("expired")
+  })
+})
+
+/**
+ * The callback pages tell the app that opened the pop-up how the connect went,
+ * with `postMessage`. Each must name the one origin that may receive it: the
+ * origin of the redirect URI the provider sent the pop-up to, which is the
+ * app's own origin. Never `*`, and never whatever host the page happened to be
+ * reached on. Each page's script is run against a stand-in browser here, so
+ * the test reads what the page really sends rather than its source text.
+ */
+describe("the OAuth callback pages post their result to one configured origin", () => {
+  /** Where the page is served in the stand-in browser: deliberately NOT the configured origin. */
+  const SERVED_ON = "https://another-host.example"
+  const expectedTarget = () => new URL(getRedirectUri("tiktok")).origin
+
+  interface Posted {
+    message: unknown
+    targetOrigin: unknown
+  }
+
+  /**
+   * Run the page's one inline script with an opener that records what it is
+   * sent. For the account picker, `finalize` is what POST /connect/finalize
+   * answers, and every account button is clicked.
+   */
+  async function runPageScript(html: string, finalize?: unknown): Promise<Posted[]> {
+    const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/gi)].map((m) => m[1]!)
+    expect(scripts).toHaveLength(1)
+
+    const posted: Posted[] = []
+    const clicks: Array<() => Promise<void>> = []
+    const button = {
+      dataset: { id: "p2" },
+      setAttribute() {},
+      removeAttribute() {},
+      addEventListener(_type: string, handler: () => Promise<void>) {
+        clicks.push(handler)
+      },
+    }
+    runInNewContext(scripts[0]!, {
+      window: {
+        opener: {
+          postMessage(message: unknown, targetOrigin: unknown) {
+            posted.push({ message: JSON.parse(JSON.stringify(message)), targetOrigin })
+          },
+        },
+        location: { origin: SERVED_ON },
+        close() {},
+      },
+      document: {
+        querySelectorAll: () => [button],
+        getElementById: () => ({ textContent: "", hidden: true }),
+        body: { innerHTML: "" },
+      },
+      setTimeout: () => 0,
+      fetch: async () => ({ ok: true, json: async () => finalize }),
+    })
+    for (const click of clicks) await click()
+    return posted
+  }
+
+  /** The provider's token endpoint, answering with `body` and `status`. */
+  function stubTokenEndpoint(body: string, status = 200) {
+    return vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(body, { status }))
+  }
+
+  it("the denied page posts its error to the redirect URI's origin", async () => {
+    const r = await app.inject({ method: "GET", url: "/v1/social/callback/facebook?error=access_denied" })
+    expect(r.statusCode).toBe(200)
+
+    const posted = await runPageScript(r.body)
+    expect(posted).toEqual([
+      { message: { type: "social-auth-error", message: "Authorization was denied or failed." }, targetOrigin: expectedTarget() },
+    ])
+    expect(posted[0]!.targetOrigin).not.toBe("*")
+  })
+
+  it("the success page posts to the redirect URI's origin", async () => {
+    process.env.TIKTOK_CLIENT_KEY = "ck"
+    process.env.TIKTOK_CLIENT_SECRET = "cs"
+    await saveOAuthState("state-ok", { providerId: "tiktok", userId: "user-1", codeVerifier: "verifier" })
+    const token = stubTokenEndpoint(JSON.stringify({ access_token: "at" }))
+    const userInfo = vi.spyOn(getProvider("tiktok")!, "fetchUserInfo").mockResolvedValue({ id: "tt-1", username: "me" })
+
+    try {
+      const r = await app.inject({ method: "GET", url: "/v1/social/callback/tiktok?code=c&state=state-ok" })
+      expect(r.body).toContain("Connected to tiktok!")
+
+      const posted = await runPageScript(r.body)
+      expect(posted).toEqual([{ message: { type: "social-auth-success", platform: "tiktok" }, targetOrigin: expectedTarget() }])
+    } finally {
+      token.mockRestore()
+      userInfo.mockRestore()
+    }
+  })
+
+  it("the account picker posts to the redirect URI's origin once an account is chosen", async () => {
+    process.env.META_APP_ID = "app"
+    process.env.META_APP_SECRET = "secret"
+    await saveOAuthState("state-fb", { providerId: "facebook", userId: "user-1" })
+    const token = stubTokenEndpoint(JSON.stringify({ access_token: "fb-user-token" }))
+    const accounts = vi.spyOn(getProvider("facebook")!, "listAccounts").mockResolvedValue([
+      { id: "p1", name: "Page One" },
+      { id: "p2", name: "Page Two" },
+    ])
+
+    try {
+      const r = await app.inject({ method: "GET", url: "/v1/social/callback/facebook?code=c&state=state-fb" })
+      expect(r.body).toContain("Choose an account")
+
+      const posted = await runPageScript(r.body, { success: true, platform: "facebook", username: "Page Two" })
+      expect(posted).toEqual([{ message: { type: "social-auth-success", platform: "facebook" }, targetOrigin: expectedTarget() }])
+    } finally {
+      token.mockRestore()
+      accounts.mockRestore()
+    }
+  })
+
+  it("an error text from the provider cannot break out of the page's script", async () => {
+    process.env.TIKTOK_CLIENT_KEY = "ck"
+    process.env.TIKTOK_CLIENT_SECRET = "cs"
+    await saveOAuthState("state-err", { providerId: "tiktok", userId: "user-1", codeVerifier: "verifier" })
+    const providerText = '</script><script>window.opener.postMessage({type:"social-auth-success",platform:"tiktok"},"*")</script>'
+    const token = stubTokenEndpoint(providerText, 400)
+
+    try {
+      const r = await app.inject({ method: "GET", url: "/v1/social/callback/tiktok?code=c&state=state-err" })
+      // One script block, closed once: the provider's text stayed inside its string.
+      expect(r.body.match(/<\/script/gi)).toHaveLength(1)
+
+      const posted = await runPageScript(r.body)
+      expect(posted).toEqual([
+        {
+          message: { type: "social-auth-error", message: `Token exchange failed for tiktok: ${providerText}` },
+          targetOrigin: expectedTarget(),
+        },
+      ])
+    } finally {
+      token.mockRestore()
+    }
+  })
+})
+
+describe("the account picker shows the chosen account's name as text", () => {
+  it("never parses the name the network returns as HTML", async () => {
+    process.env.META_APP_ID = "app"
+    process.env.META_APP_SECRET = "secret"
+    await saveOAuthState("state-name", { providerId: "facebook", userId: "user-1" })
+    const token = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ access_token: "fb-user-token" }), { status: 200 }),
+    )
+    const accounts = vi.spyOn(getProvider("facebook")!, "listAccounts").mockResolvedValue([
+      { id: "p1", name: "Page One" },
+      { id: "p2", name: "Page Two" },
+    ])
+
+    try {
+      const r = await app.inject({ method: "GET", url: "/v1/social/callback/facebook?code=c&state=state-name" })
+      const script = /<script>([\s\S]*?)<\/script>/i.exec(r.body)![1]!
+
+      // A page name is whatever the page's admins typed.
+      const name = '<img src=x onerror="alert(1)">'
+      const html: string[] = []
+      const text: string[] = []
+      const element = () => ({
+        set textContent(v: string) {
+          text.push(v)
+        },
+        hidden: true,
+      })
+      let onClick: (() => Promise<void>) | undefined
+      runInNewContext(script, {
+        window: { opener: { postMessage() {} }, location: { origin: "https://another-host.example" }, close() {} },
+        document: {
+          querySelectorAll: () => [
+            {
+              dataset: { id: "p2" },
+              setAttribute() {},
+              removeAttribute() {},
+              addEventListener(_t: string, h: () => Promise<void>) {
+                onClick = h
+              },
+            },
+          ],
+          getElementById: element,
+          querySelector: element,
+          body: {
+            set innerHTML(v: string) {
+              html.push(v)
+            },
+            querySelector: element,
+          },
+        },
+        setTimeout: () => 0,
+        fetch: async () => ({ ok: true, json: async () => ({ success: true, platform: "facebook", username: name }) }),
+      })
+      await onClick!()
+
+      expect(html.join("")).not.toContain("<img")
+      expect(text.join("")).toContain(name)
+    } finally {
+      token.mockRestore()
+      accounts.mockRestore()
+    }
   })
 })

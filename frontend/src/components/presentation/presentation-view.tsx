@@ -62,6 +62,7 @@ import { shareWorkflow } from "@/lib/api"
 import { createClient } from "@/lib/supabase"
 import { getActiveWorkspaceId } from "@/lib/workspace-context"
 import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
+import { readLoginPopupSession } from "@/lib/popup-message"
 import { toast } from "sonner"
 import { useT, tx } from "@/lib/i18n"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
@@ -485,13 +486,13 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           `width=${w},height=${h},left=${left},top=${top},popup=1`,
         )
         if (popup) {
+          // Only the pop-up opened above, on this origin, may hand over a session.
           const handleAuthMessage = (event: MessageEvent) => {
-            if (event.origin !== window.location.origin) return
-            if (event.data?.type === "nodaro:authComplete" && event.data.access_token) {
-              window.removeEventListener("message", handleAuthMessage)
-              clearInterval(interval)
-              setAuthFromTokens(event.data.access_token, event.data.refresh_token)
-            }
+            const session = readLoginPopupSession(event, popup, window.location.origin)
+            if (!session) return
+            window.removeEventListener("message", handleAuthMessage)
+            clearInterval(interval)
+            setAuthFromTokens(session.accessToken, session.refreshToken)
           }
           window.addEventListener("message", handleAuthMessage)
           const interval = setInterval(() => {
