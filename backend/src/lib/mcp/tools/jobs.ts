@@ -15,6 +15,7 @@ import { fillJobRenderQuality, fillJobsRenderQuality } from "../../render-label-
 import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "../../render-listing.js"
 import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 import { bannedGalleryUsersFilter, galleryHides, loadGalleryModeration } from "../../gallery-moderation.js"
+import { surfaceAllowsPublicOutputs } from "../../surface-profile.js"
 import { JOB_SOURCES } from "../../job-source.js"
 import { applyJobListFilters, jobListFilterSelect, ratingsNotAvailable, withoutFilterEmbeds, MAX_JOB_LIST_FILTER_VALUES, type JobListFilters } from "../../job-list-filters.js"
 import { jobOwnerStateFor, ownerStateFields, type JobOwnerStateMap } from "../../job-owner-state.js"
@@ -188,6 +189,12 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
           content: [{ type: "text", text: "types, sources, favorited, rating, project_id, in_session and with_sessions are about your own jobs: use scope \"mine\"." }],
           isError: true,
         }
+      }
+      // The public scope is the gallery: a deployment that does not allow
+      // public work has none (`surfaceAllowsPublicOutputs`), so it lists
+      // nothing, without reading a job.
+      if (scope !== "mine" && !surfaceAllowsPublicOutputs()) {
+        return { content: [{ type: "text", text: JSON.stringify({ data: [], next_cursor: null }, null, 2) }] }
       }
       // display_cost (USD) intentionally excluded — MCP surfaces only the
       // credits abstraction; raw $ pricing is internal/admin and distracts

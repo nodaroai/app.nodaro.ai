@@ -18,6 +18,7 @@ import { isPreviewRender } from "../../preview-render.js"
 import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "../../render-listing.js"
 import { bannedGalleryUsersFilter, galleryHides, loadGalleryModeration } from "../../gallery-moderation.js"
 import { favoritableJobFilter } from "../../gallery-favorites.js"
+import { surfaceAllowsPublicOutputs } from "../../surface-profile.js"
 import { countEmptyInputSkips, executionOutcome } from "@nodaro/shared/workflow"
 import { isRenderNodeType } from "@nodaro/shared/nodes"
 import type { GenericNode } from "@nodaro/shared/types"
@@ -349,6 +350,15 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         const promptFilters = textSearchFilters(PROMPT_SEARCH_COLUMNS, args.query)
         const limit = args.limit ?? 50
         const scope = args.scope ?? "mine"
+        // A deployment that does not allow public work has no public gallery
+        // (`surfaceAllowsPublicOutputs`): the public scope lists nothing, and
+        // reads no job to find that out. The caller's own library is untouched.
+        if (scope !== "mine" && !surfaceAllowsPublicOutputs()) {
+          return {
+            content: [{ type: "text" as const, text: "(no items)" }],
+            structuredContent: { items: [], nextCursor: null, totalCount: 0 },
+          }
+        }
         const cursorCol = scope === "mine" ? "created_at" : "completed_at"
         // kinds (array, preferred) > kind (legacy single-value, kept for
         // cached-schema compat) > default [image, video].

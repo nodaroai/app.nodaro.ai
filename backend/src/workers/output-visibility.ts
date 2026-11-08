@@ -1,4 +1,4 @@
-import { runtimeSurfaceProfile } from "../lib/surface-profile.js"
+import { surfaceAllowsPublicOutputs } from "../lib/surface-profile.js"
 
 export interface OutputVisibilityInputs {
   /** The user's profile preference (public_outputs). */
@@ -26,11 +26,13 @@ export interface OutputVisibilityInputs {
  * Any private-forcing condition wins; the deployment surface switch is the
  * OUTERMOST gate — `outputs.allowPublic:false` makes every output private
  * regardless of the user's preference (a white-label / locked-down install).
+ * Its read side — the listings that must not show a row marked public before
+ * the switch was set — reads the same predicate (`surfaceAllowsPublicOutputs`).
  * Worker-local rules (e.g. resolving the parent execution's mcp flag) are
  * computed by the caller and passed in, or ANDed after this call.
  */
 export function resolveIsPublicOutput(i: OutputVisibilityInputs): boolean {
-  if (!runtimeSurfaceProfile().outputs.allowPublic) return false
+  if (!surfaceAllowsPublicOutputs()) return false
   if (!i.publicOutputs) return false
   if (i.forcePrivate) return false
   if (i.mcpClient) return false

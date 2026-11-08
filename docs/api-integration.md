@@ -4354,7 +4354,11 @@ filters on them with `favorited=true|false` and `rating=good|bad|rated|unrated`
 OAuth app tokens need `assets:write` for the two writes, and `assets:read` or
 `jobs:read` to list your favorites (no-op for user / API-key auth); the job
 reads stay `jobs:read`. A deployment that hides the gallery serves none of the
-`/v1/gallery` routes (they answer `404`). On a server whose database does not
+`/v1/gallery` routes (they answer `404`). A deployment that does not allow
+public work (`outputs.allowPublic: false`, see
+[Deployment](./deployment.md)) answers every `GET /v1/gallery` view but your
+own with an empty page, `{ data: [], nextCursor: null, totalCount: 0 }`: your
+own `userId` with your token still lists your work. On a server whose database does not
 have ratings yet, the rating write and a `rating=` filter answer
 `503 not_available`, and every job reads `rating: null`.
 
@@ -6457,6 +6461,11 @@ If your account is over its storage limit the route returns
 **`POST /v1/community/listings/:id/report`** accepts a `reason` of
 `real_person_no_consent` (depicts a real person without consent),
 `inappropriate`, `ip_violation`, or `other`.
+
+On a deployment that does not allow public work (`outputs.allowPublic: false`)
+no listing is served: `GET /v1/community/browse` and `GET /v1/community/favorites`
+answer empty lists, and a listing's card (`GET /v1/community/detail/:slug`), its
+full detail (`…/full`) and a clone answer `404 not_found`.
 
 ```bash
 # Browse the newest shared characters

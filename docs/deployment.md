@@ -842,7 +842,13 @@ optional; each array empty = "keep the default"):
   built-in default is kept)
 - `locale.default` / `locale.picker`
 - `outputs.allowPublic`: `false` forces every output private regardless of the
-  user's preference
+  user's preference, and every listing of other people's work answers as if
+  there were none: the public view of `GET /v1/gallery`, the community listings
+  (browse and favorites list nothing; a listing's card, its full detail and a
+  clone are not found) and the `scope: "public"` of the MCP `browse_gallery` and
+  `list_jobs` tools. Work marked public before the switch was set, or carried
+  over in a copied database, is therefore not listed either. A person's own
+  gallery and jobs are unchanged.
 - `voice.allowedGenders`: `["male"]` / `["female"]` / `["neutral"]` (any subset) —
   restrict voice pickers, policy-owned default voices, and TTS / speech requests to
   these voice genders. Empty (`[]`) = all genders, and nothing below is looked up.

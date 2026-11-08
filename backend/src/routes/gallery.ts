@@ -11,6 +11,7 @@ import { listFavoriteJobIds, toggleGalleryFavorite } from "../lib/gallery-favori
 import { requireAnyAppScope, requireAppScope } from "../lib/scope-prehandler.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
+import { surfaceAllowsPublicOutputs } from "../lib/surface-profile.js"
 
 // ---- Zod Schemas ----
 
@@ -83,6 +84,15 @@ export async function galleryRoutes(app: FastifyInstance) {
       reply
         .header("Vary", "Authorization")
         .header("Cache-Control", isOwnerView ? "private, no-store" : "public, max-age=30, stale-while-revalidate=86400")
+
+    // A deployment that does not allow public work (`outputs.allowPublic:
+    // false`) has no public gallery. The workers make every new output private
+    // there; a row marked public before the switch was set — or carried over
+    // in a copied database — must not be listed either, so every view but the
+    // owner's own answers empty without reading a job.
+    if (!isOwnerView && !surfaceAllowsPublicOutputs()) {
+      return withCacheHeaders().send({ data: [], nextCursor: null, totalCount: 0 })
+    }
 
     // Gallery moderation is discovery-only too: the owner view keeps the
     // built-in word list alone, as before; everyone else gets the admin's

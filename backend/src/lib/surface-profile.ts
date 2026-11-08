@@ -474,6 +474,24 @@ export function surfaceSsoOnly(): boolean {
 }
 
 /**
+ * Whether this deployment lets work be public at all (`outputs.allowPublic`).
+ * The one reader of the switch, on both of its sides:
+ *  - WRITE: the media workers make every output private while it is off
+ *    (workers/output-visibility.ts);
+ *  - READ: every listing of other people's public work answers as if there
+ *    were none — the public view of GET /v1/gallery, the community listings,
+ *    and the MCP public scopes of `browse_gallery` and `list_jobs`. A row
+ *    marked public before the switch was set, or carried over in a copied
+ *    database, is out of the write rule's reach; the read rule keeps it from
+ *    being listed.
+ * Inert by default: the switch defaults on, and a person's own work is never
+ * "public" to themselves, so their own views are untouched.
+ */
+export function surfaceAllowsPublicOutputs(): boolean {
+  return runtimeSurfaceProfile().outputs.allowPublic
+}
+
+/**
  * Fail-closed guard (SAI-4 / H8). True when a deployment CONFIGURED a surface
  * profile (NODARO_SURFACE_PROFILE set) on an edition that honors it
  * (surfaceGateOpen) but the profile did NOT load — detected because
