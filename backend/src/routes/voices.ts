@@ -1,12 +1,23 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyRequest } from "fastify"
+import { z } from "zod"
 import type { TtsProvider } from "@nodaro/shared/models"
 import { config } from "../lib/config.js"
 import { describeLimitedVoices } from "../providers/provider-keys.js"
 import { ELEVENLABS_BASE_URL } from "../providers/elevenlabs/client.js"
 import { getPremadeVoices } from "../lib/premade-voice-catalog.js"
-import { filterVoicesByAllowedGender, clampLibraryGender } from "../lib/voice-policy.js"
+import { filterVoicesByAllowedGender, clampLibraryGender, voiceNotAvailableBody } from "../lib/voice-policy.js"
 import { recordLibraryVoiceGenders } from "../lib/library-voice-genders.js"
+import { judgeVoicesUnderLock } from "../lib/voice-lock.js"
 import { isModelDenied } from "../lib/surface-deny.js"
+import { PREVIEW_VOICE_ID } from "../lib/voice-preview-address.js"
+import {
+  PreviewUnavailableError,
+  loadPreview,
+  requestedRange,
+  verifiedPreviewSource,
+  voicePreviewProxyOn,
+  withSameSitePreviews,
+} from "../lib/voice-preview-proxy.js"
 
 // ---------------------------------------------------------------------------
 // Shared voices search cache (5-min TTL, max 200 entries)
@@ -106,16 +117,32 @@ function getSharedCacheKey(params: Record<string, string | undefined>): string {
   return JSON.stringify(params)
 }
 
+/**
+ * The voices as this request should see their previews: on a deployment that
+ * serves them from its own host (`VOICE_PREVIEW_PROXY=true`), each one's
+ * same-site address (lib/voice-preview-proxy.ts); otherwise, and for the
+ * platform's own internal calls (an MCP tool, whose client is not a browser on
+ * this site), the provider's address, as before. Applied on the way out, so
+ * the caches keep the provider's addresses.
+ */
+function forThisSite<T extends { voice_id: string; preview_url: string }>(req: FastifyRequest, voices: readonly T[]): T[] {
+  return voicePreviewProxyOn() && !req.isInternalCall ? withSameSitePreviews(voices) : [...voices]
+}
+
+const previewParams = z.object({ voiceId: z.string().regex(PREVIEW_VOICE_ID) })
+const previewQuery = z.object({ src: z.string(), sig: z.string() })
+const PREVIEW_NOT_FOUND = { error: { code: "not_found", message: "Not found" } } as const
+
 // ---------------------------------------------------------------------------
 // Route
 // ---------------------------------------------------------------------------
 
 export async function voicesRoutes(app: FastifyInstance) {
-  app.get("/v1/voices", async (_req, reply) => {
+  app.get("/v1/voices", async (req, reply) => {
     // B4c: narrow the premade catalog to the deployment's allowed voice genders;
     // under a lock a voice with no known gender is not listed (inert when
     // voice.allowedGenders is [] — the default).
-    const voices = filterVoicesByAllowedGender(await getPremadeVoices())
+    const voices = forThisSite(req, filterVoicesByAllowedGender(await getPremadeVoices()))
     // Keyless: the static list still serves generation (TTS runs through the
     // connection or a later-added key), but say WHY it is limited instead of
     // pretending — the silent fallback read as "the picker is just poor"
@@ -163,7 +190,8 @@ export async function voicesRoutes(app: FastifyInstance) {
     const cacheKey = getSharedCacheKey(params)
     const cached = sharedVoiceCache.get(cacheKey)
     if (cached && Date.now() < cached.expiresAt) {
-      return reply.send(withAvailableProviders(cached.data))
+      const page = withAvailableProviders(cached.data)
+      return reply.send({ ...page, voices: forThisSite(req, page.voices) })
     }
 
     try {
@@ -247,10 +275,52 @@ export async function voicesRoutes(app: FastifyInstance) {
       }
       sharedVoiceCache.set(cacheKey, { data: result, expiresAt: Date.now() + SHARED_CACHE_TTL_MS })
 
-      return reply.send(withAvailableProviders(result))
+      const page = withAvailableProviders(result)
+      return reply.send({ ...page, voices: forThisSite(req, page.voices) })
     } catch (err) {
       console.error("[voices/library] Failed to fetch shared voices:", (err as Error).message)
       return reply.send({ voices: [], hasMore: false })
     }
+  })
+
+  // A voice's preview, served from this site (VOICE_PREVIEW_PROXY=true): the
+  // provider's file, at the address the lists above gave it. The signed
+  // address is the credential — an <audio src> sends no bearer — so the route
+  // is public (middleware/auth.ts) and fetches only a file the platform
+  // listed, for the voice it listed it under (lib/voice-preview-proxy.ts).
+  // Off: 404, as if there were no such route.
+  app.get("/v1/voices/:voiceId/preview", async (req, reply) => {
+    if (!voicePreviewProxyOn()) return reply.status(404).send(PREVIEW_NOT_FOUND)
+    const params = previewParams.safeParse(req.params)
+    const query = previewQuery.safeParse(req.query)
+    const voiceId = params.success ? params.data.voiceId : ""
+    const upstream = params.success && query.success ? verifiedPreviewSource(voiceId, query.data.src, query.data.sig) : null
+    if (!upstream) return reply.status(404).send(PREVIEW_NOT_FOUND)
+
+    // The voice lock, as the speech routes judge the same voice, before
+    // anything is fetched: an address minted before a lock was set, or for a
+    // voice a lock has since locked out, plays nothing. No lock: nothing read.
+    const verdict = await judgeVoicesUnderLock([voiceId], { userId: req.userId ?? null })
+    if (!verdict.allowed) return reply.status(400).send(voiceNotAvailableBody())
+
+    let file
+    try {
+      file = await loadPreview(upstream)
+    } catch (err) {
+      if (!(err instanceof PreviewUnavailableError)) throw err
+      req.log.warn({ voiceId, reason: err.reason }, "[voices/preview] the provider's preview could not be served")
+      return reply.status(502).send({ error: { code: "preview_unavailable", message: "This voice's preview could not be loaded." } })
+    }
+
+    const size = file.body.byteLength
+    // A day in this browser only: a shared cache would keep serving a preview
+    // after a voice lock refused the voice.
+    reply.header("Content-Type", file.contentType).header("Accept-Ranges", "bytes").header("Cache-Control", "private, max-age=86400")
+    const range = requestedRange(req.headers.range, size)
+    if (range === "unsatisfiable") return reply.status(416).header("Content-Range", `bytes */${size}`).send()
+    if (range) {
+      return reply.status(206).header("Content-Range", `bytes ${range.start}-${range.end}/${size}`).send(file.body.subarray(range.start, range.end + 1))
+    }
+    return reply.send(file.body)
   })
 }

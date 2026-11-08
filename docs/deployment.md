@@ -1991,6 +1991,44 @@ Unset, the managed proxy is disabled and the bundled auth and REST routes
 keep their existing behavior. To test the gateway locally with Caddy installed,
 run `node --test tools/__tests__/managed-supabase-proxy.test.mjs`.
 
+## Voice previews from the studio origin (`VOICE_PREVIEW_PROXY`)
+
+The voice lists (`GET /v1/voices` and `GET /v1/voices/library`) give each
+voice's `preview_url` as the speech provider's own storage address. On a
+network that filters every browser request by hostname — a white-label
+deployment that serves every product from one host — those addresses are
+blocked, so no voice picker can play a preview. Set `VOICE_PREVIEW_PROXY=true`
+and the lists give each preview as an address on your own host instead,
+`/v1/voices/<voiceId>/preview?src=…&sig=…`, which the backend answers by
+fetching the provider's file and streaming it.
+
+- **The address is signed.** An `<audio src>` sends no bearer, so the
+  signature is the credential: an HMAC, keyed from
+  `INTERNAL_ORCHESTRATOR_SECRET`, over the voice id and the provider's file
+  address. The route fetches only a file the lists gave, for the voice they
+  gave it under, and answers `404` for anything else, before any fetch.
+- **The voice lock applies.** Under a lock (`voice.allowedGenders` in the
+  surface profile) the route refuses a voice the lock refuses — `400
+  voice_not_available`, before any fetch — including an address handed out
+  before the lock was set.
+- **Capped and cached.** Only an `audio/*` file of at most 4 MB is served, the
+  cap held while reading whatever length the provider states; each file is
+  kept in memory for a day (32 MB in all), so the provider is asked once per
+  file. Byte ranges are answered (`206`), which some media players need.
+  Browsers keep a preview for a day (`Cache-Control: private`).
+- **Internal calls are unchanged.** An MCP tool's read of the lists (its client
+  is not a browser on your host) still gets the provider's addresses.
+- **One origin.** The address is a path, so it plays only where the API answers
+  on the same origin as the pages (the default single-container layout). Do not
+  set this on a deployment whose API is on another host.
+- **Saved voices.** A character or creature saved with a voice from these lists
+  keeps the same-site address as its `voice.previewUrl`. It goes on playing
+  while the switch stays on and `INTERNAL_ORCHESTRATOR_SECRET` is unchanged.
+
+Only the exact value `true` enables it. Unset, both lists answer exactly as
+before and `/v1/voices/<voiceId>/preview` answers `404`. Restart to apply. The
+route is described in [api-integration.md](./api-integration.md#voices--clones).
+
 ## See also
 
 - [Community Edition Quickstart](./community-edition-quickstart.md) —

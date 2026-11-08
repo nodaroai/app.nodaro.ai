@@ -5790,6 +5790,11 @@ list(): Promise<Voice[]>
 List the premade ElevenLabs voices (`GET /v1/voices`). Falls back to a curated
 set server-side when no ElevenLabs API key is configured.
 
+On a deployment that serves voice previews from its own host
+(`VOICE_PREVIEW_PROXY=true`), each voice's `preview_url` here and in
+`searchLibrary` is a same-site path (`/v1/voices/<id>/preview?…`) rather than
+the provider's address: resolve it against the API's origin to play it.
+
 ```ts
 const voices = await client.voices.list()
 ```

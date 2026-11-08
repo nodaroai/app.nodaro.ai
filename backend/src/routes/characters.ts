@@ -8,6 +8,7 @@ import {
 } from "@nodaro/shared/entities"
 import { DEFAULT_IDENTITY_LOCK } from "@nodaro/prompts/doctrine"
 import { safeUrlSchema } from "../lib/url-validator.js"
+import { savedVoicePreviewUrl } from "../lib/voice-preview-address.js"
 import { normalizeImageProvider } from "../lib/image-provider.js"
 import { capSelectedAssetByVariant } from "../lib/selected-asset-by-variant.js"
 import { supabase } from "../lib/supabase.js"
@@ -108,12 +109,13 @@ export const upsertCharacterBody = z.object({
   // library voices, the clone's sample for custom) the studio plays in an <audio>
   // element — persisted on the voice so Voice Library voices (which have NO by-id
   // lookup) stay previewable after reload. Client-played only (server never fetches
-  // it), so a plain bounded URL — NOT the SSRF-guarded `safeUrlSchema`. Optional +
-  // backward-compatible: legacy voices without it simply have no preview.
+  // it), so a plain bounded URL — NOT the SSRF-guarded `safeUrlSchema` — or the
+  // same-site address a deployment's voice lists give (`savedVoicePreviewUrl`).
+  // Optional + backward-compatible: legacy voices without it simply have no preview.
   // `ttsProvider` is the voice's recommended TTS provider (from the Voice Library's
   // verified models — see `deriveRecommendedTtsProvider`); clients send it as the
   // `provider` on text-to-speech so the voice renders on a model it's verified for.
-  voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string(), voiceType: z.enum(["premade", "library", "custom"]).optional(), previewUrl: z.string().url().max(2048).optional(), ttsProvider: z.enum(TTS_PROVIDERS).optional() }).nullable().optional(),
+  voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string(), voiceType: z.enum(["premade", "library", "custom"]).optional(), previewUrl: savedVoicePreviewUrl.optional(), ttsProvider: z.enum(TTS_PROVIDERS).optional() }).nullable().optional(),
   // Structured Person + Wardrobe selections (migration 221). Loose record blobs
   // by design: the `@nodaro/shared` person/wardrobe catalogs are the source of
   // truth and unknown ids simply produce no prompt hint — so we don't

@@ -974,6 +974,29 @@ describe("POST /v1/creatures — boards + voice (migration 220)", () => {
     expect(mockInsert2).toHaveBeenCalledWith(expect.objectContaining({ boards: [], voice: null }))
   })
 
+  // A client saves the `preview_url` a voice list gave it: on a deployment that
+  // serves previews from its own host, that is a same-site path.
+  it("INSERT persists a voice whose previewUrl is the same-site address a voice list gave", async () => {
+    const mockInsert = insertChain()
+    const voice = { ...VOICE, previewUrl: "/v1/voices/21m00Tcm4TlvDq8ikWAM/preview?src=aHR0cHM6Ly9leGFtcGxl&sig=c2lnbmF0dXJl" }
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/creatures",
+      payload: { name: "Ember", nodeId: "node-9", userId: TEST_USER_ID, voice },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({ voice }))
+  })
+
+  it("still refuses any other relative previewUrl", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/creatures",
+      payload: { name: "Ember", nodeId: "node-9", userId: TEST_USER_ID, voice: { ...VOICE, previewUrl: "/somewhere/else.mp3" } },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
   it("UPDATE writes boards + voice (USER-owned), omitted fields stay untouched", async () => {
     const mockUpdate = updateChain()
     const res = await app.inject({

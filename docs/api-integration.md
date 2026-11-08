@@ -6698,6 +6698,7 @@ until `status` is `completed`, read the result from `output_data`.
 |---|---|---|
 | `GET` | `/v1/voices` | Premade voice catalog (name, `voice_id`, gender/accent/age metadata). |
 | `GET` | `/v1/voices/library` | Search the shared Voice Library (`?search=`, `?gender=`, `?language=`, … `?page=`, `?page_size=`). |
+| `GET` | `/v1/voices/:voiceId/preview` | A voice's preview, served from the deployment's own host — only on a deployment that sets `VOICE_PREVIEW_PROXY=true` (otherwise `404`). There, both lists above give each `preview_url` as this route's signed address (`?src=…&sig=…`) instead of the speech provider's storage address; play it as given. No bearer (an `<audio src>` sends none): the signature is the credential. Answers the audio (`206` for a byte `Range`), `404` for an address the lists did not give, `400 voice_not_available` for a voice the deployment's voice lock refuses, `502 preview_unavailable` when the provider's file cannot be served. |
 | `GET` | `/v1/voice-clones` | List the voice clones you created before cloning was retired. |
 | `POST` | `/v1/voice-clones`, `/v1/voice-clones/from-url` | **Retired** — voice cloning is no longer offered. Both answer `410` with `error.code = "voice_cloning_retired"`. Use `/v1/voice-design` for a new custom voice. |
 | `PATCH` | `/v1/voice-clones/:id` | Rename / edit an existing clone. |

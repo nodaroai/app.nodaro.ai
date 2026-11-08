@@ -252,6 +252,15 @@ export const envSchema = z.object({
    * KIE_API_BASE_URL; default = ElevenLabs direct (unchanged behaviour).
    */
   ELEVENLABS_BASE_URL: baseUrl("https://api.elevenlabs.io"),
+  /**
+   * `true` = the voice lists (`GET /v1/voices`, `/v1/voices/library`) give each
+   * preview as a same-site address (`/v1/voices/:id/preview`, a signed proxy of
+   * the provider's file) instead of the provider's own storage address — for a
+   * deployment whose browsers may reach only its own host. Only the exact value
+   * `true` enables it; unset, both lists answer exactly as before and the
+   * preview route answers 404. Read only through lib/voice-preview-proxy.ts.
+   */
+  VOICE_PREVIEW_PROXY: z.string().optional().transform((v) => v === "true"),
   HEYGEN_API_KEY: z.string().default(""),
   /**
    * How often the shared (Redis) HeyGen public catalog — ≈7,000 preset

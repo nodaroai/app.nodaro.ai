@@ -4,6 +4,7 @@ import { expectedUpdatedAtSchema } from "../lib/optimistic-token-schema.js"
 import { TTS_PROVIDERS } from "@nodaro/shared/models"
 import { CREATURE_ATTACH_COLUMNS, type ReferenceSheet } from "@nodaro/shared/entities"
 import { safeUrlSchema } from "../lib/url-validator.js"
+import { savedVoicePreviewUrl } from "../lib/voice-preview-address.js"
 import { normalizeImageProvider } from "../lib/image-provider.js"
 import { capSelectedAssetByVariant } from "../lib/selected-asset-by-variant.js"
 import { supabase } from "../lib/supabase.js"
@@ -80,7 +81,7 @@ const upsertCreatureBody = z.object({
   // text-to-speech reads voiceId/ttsProvider/voiceType, lip-sync targets the
   // creature's main image). See characters.ts for the per-field doc; kept in
   // lock-step deliberately so Studio can share one voice picker for both.
-  voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string(), voiceType: z.enum(["premade", "library", "custom"]).optional(), previewUrl: z.string().url().max(2048).optional(), ttsProvider: z.enum(TTS_PROVIDERS).optional() }).nullable().optional(),
+  voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string(), voiceType: z.enum(["premade", "library", "custom"]).optional(), previewUrl: savedVoicePreviewUrl.optional(), ttsProvider: z.enum(TTS_PROVIDERS).optional() }).nullable().optional(),
   // The user's chosen DEFAULT asset take per variant (Studio version-history
   // "pick this take"). OPAQUE string->string map: key "<bucket>:<variant>",
   // value = the chosen URL. User-owned (flows through INSERT + UPDATE). Validate
