@@ -46,10 +46,11 @@ export async function speechToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    // B4c note: no voice.allowedGenders enforcement point here — speech-to-video
-    // lip-syncs a PROVIDED audioUrl to an image and selects no voice at all.
-    // Premade-gender enforcement lives in text-to-speech (Task 7); voice-creation
-    // nodes are gated by nodes.deny (Task 9).
+    // B4c note: no voice-lock enforcement point here, by design — speech-to-video
+    // animates an image to a PROVIDED audioUrl and selects no voice at all, so
+    // there is no voice id to judge. Speech this platform generates was judged
+    // where it was made (text-to-speech, dialogue, the voice changer, voiced
+    // video); voice-creation nodes are gated by nodes.deny.
     const { imageUrl, audioUrl, prompt, resolution, negativePrompt, seed, numFrames, fps, inferenceSteps, guidanceScale, shift } = parsed.data
     const userId = req.userId
 

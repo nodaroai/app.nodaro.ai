@@ -114,6 +114,15 @@ describe("node-executor hands the voice lock's lookups to buildPayload", () => {
     expect(buildCtx.voiceGenders).toEqual(new Map([["Daniel", "male"], ["LibVoice000000000001", "male"]]))
   })
 
+  it("looks up the voice a Voice Changer node converts into", async () => {
+    const node: SimpleNode = { id: "n4", type: "voice-changer", data: { label: "Revoice", audioUrl: "https://example.com/a.mp3", voiceId: "LibVoice000000000001" } }
+
+    const buildCtx = await buildCtxFor(node)
+
+    expect(mockResolveVoiceGenders).toHaveBeenCalledWith(["LibVoice000000000001"], { userId: "user-1" })
+    expect(buildCtx.voiceGenders).toEqual(new Map([["LibVoice000000000001", "male"]]))
+  })
+
   it("hands nothing on when the lookup has nothing to say (no lock)", async () => {
     mockResolveVoiceGenders.mockResolvedValueOnce(undefined as never)
     const node: SimpleNode = { id: "n3", type: "text-to-speech", data: { label: "Voice", directText: "hi", voice: "Daniel" } }

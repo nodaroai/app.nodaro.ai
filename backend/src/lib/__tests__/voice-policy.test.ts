@@ -12,8 +12,12 @@ import {
   voiceLockActive,
   premadeCatalogGender,
   judgeResolvedVoices,
+  judgeUnnamedVoices,
+  VoiceNotAvailableError,
+  voiceNotAvailableBody,
   type VoiceGender,
 } from "../voice-policy.js"
+import { DeterministicJobError } from "../deterministic-job-error.js"
 
 // Open the d2 gate exactly as surface-profile.test.ts does: `isBusiness()`
 // reads `config.EDITION` LIVE (config snapshots process.env once at import, so
@@ -166,5 +170,35 @@ describe("voice-policy — the synchronous backstop fails closed", () => {
     withProfile({ voice: { allowedGenders: ["male"] } }, () => {
       expect(judgeResolvedVoices([], undefined)).toEqual({ allowed: true })
     })
+  })
+})
+
+describe("voice-policy — speech whose voices nobody names fails closed", () => {
+  it("is allowed when unrestricted", () => {
+    expect(judgeUnnamedVoices()).toEqual({ allowed: true })
+  })
+
+  it("is refused under any lock, as a voice nobody can vouch for", () => {
+    for (const allowedGenders of [["male"], ["female"], ["neutral"], ["male", "female", "neutral"]]) {
+      withProfile({ voice: { allowedGenders } }, () => {
+        expect(judgeUnnamedVoices()).toEqual({ allowed: false, reason: "gender_unknown" })
+      })
+    }
+  })
+})
+
+describe("voice-policy — the lock's refusal", () => {
+  it("answers one code, and a lane may say it in its own words", () => {
+    expect(voiceNotAvailableBody()).toEqual({ error: { code: "voice_not_available", message: "The selected voice is not available on this deployment." } })
+    const own = new VoiceNotAvailableError("gender_unknown", "Dubbing is not available on this deployment.")
+    expect(own.message).toBe("Dubbing is not available on this deployment.")
+    expect(new VoiceNotAvailableError("gender_not_allowed").message).toBe("The selected voice is not available on this deployment.")
+  })
+
+  it("is a deterministic job error: the worker fails it now instead of retrying the same refusal", () => {
+    const err = new VoiceNotAvailableError("gender_not_allowed")
+    expect(err).toBeInstanceOf(DeterministicJobError)
+    expect(err.name).toBe("VoiceNotAvailableError")
+    expect(err).toMatchObject({ code: "voice_not_available", reason: "gender_not_allowed", deterministic: true })
   })
 })

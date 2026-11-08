@@ -2,7 +2,7 @@ import { buildSpeakerViewPayload } from "./speaker-view-payload.js"
 import type { SpeakerViewClipFacts, SpeakerViewTracksResolved } from "@nodaro/render-rules"
 import { moodboardWarnings, type ResolvedUserDirection } from "../../lib/user-direction-result.js"
 import { buildSpeakerFramesPayload } from "./speaker-frames-payload.js"
-import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
+import { DUBBING_VOICE_LOCK_MESSAGE, dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { retiredEditProviderReason } from "../../lib/retired-edit-providers.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import { AUDIO_ISOLATION_CREDIT_ID, FORCED_ALIGNMENT_CREDIT_ID, REMOVE_BACKGROUND_CREDIT_ID } from "../../lib/fixed-row-credit-ids.js"
@@ -204,7 +204,7 @@ import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 // Shared logic from packages/shared — single source of truth
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
 import { LEGACY_VIDEO_NODE_DEFAULT_PROVIDER } from "../../lib/generated-video-length.js"
-import { dialogueLinesOf, nodeAsBuilt, ttsVoiceOf, voicesToJudge } from "./dispatched-voices.js"
+import { dialogueLinesOf, nodeAsBuilt, ttsVoiceOf, voiceChangerVoiceOf, voicesToJudge } from "./dispatched-voices.js"
 import {
   collectAncestorRefs as sharedCollectAncestorRefs,
   LOCATION_REFERENCE_PHOTO_KINDS,
@@ -260,7 +260,7 @@ import { mergeScene3DReferences } from "../scene3d/scene3d-references.js"
 import { imageRequiredMessage } from "../../lib/video-image-required.js"
 import { viduQ4InputProblem } from "../../lib/vidu-q4-inputs.js"
 import { kling4InputProblem } from "../../lib/kling4-inputs.js"
-import { judgeResolvedVoices, VOICE_NOT_AVAILABLE_CODE, type VoiceGender } from "../../lib/voice-policy.js"
+import { judgeResolvedVoices, judgeUnnamedVoices, VOICE_NOT_AVAILABLE_CODE, type VoiceGender } from "../../lib/voice-policy.js"
 import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { speechRunsAs } from "../../lib/speech-credits.js"
 import { applyPromptPolicies } from "../../lib/prompt-policy.js"
@@ -2775,9 +2775,20 @@ function videoLinkTrackInto(nodeId: string, buildCtx: PayloadBuildContext | unde
 /** The voice lock's dispatch backstop: throws the coded refusal the route answers with. */
 function refuseVoicesTheLockRefuses(voices: readonly string[], buildCtx: PayloadBuildContext | undefined, message: string): void {
   if (judgeResolvedVoices(voices, buildCtx?.voiceGenders).allowed) return
+  throw voiceLockRefusal(message)
+}
+
+/** The same backstop for speech whose voices no node names (a dub): refused under any lock. */
+function refuseUnnamedVoicesTheLockRefuses(message: string): void {
+  if (judgeUnnamedVoices().allowed) return
+  throw voiceLockRefusal(message)
+}
+
+/** The lock's refusal in model-deny's coded shape. */
+function voiceLockRefusal(message: string): Error & { code?: string } {
   const err = new Error(message) as Error & { code?: string }
   err.code = VOICE_NOT_AVAILABLE_CODE
-  throw err
+  return err
 }
 
 export function buildPayload(
@@ -5873,14 +5884,23 @@ export function buildPayload(
       })
     }
 
-    case "voice-changer":
+    case "voice-changer": {
+      // The voice the clip is converted INTO, read once with the precedence the
+      // workflow engine's pre-resolution reads it (`voiceChangerVoiceOf`), so the
+      // voice judged is the voice sent.
+      const targetVoice = voiceChangerVoiceOf(data.voiceId, data.voice)
+      // B4c: the voice lock's dispatch backstop, as for text-to-speech above: the
+      // target voice judged by its id alone, from what the caller resolved; one
+      // nobody resolved must be a premade voice of an allowed gender. Inert with
+      // no lock.
+      refuseVoicesTheLockRefuses(voicesToJudge([targetVoice]), buildCtx, "The selected voice is not available on this deployment.")
       // Dual-mode: a wired video input switches the worker to video mode
       // (demux → STS → remux). Video wins over audio when both are present.
       return simpleResult("voice-changer", "elevenlabs-voice-changer", {
         jobId,
         audioUrl: resolvedInputs.audioUrl || data.audioUrl,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-        voiceId: data.voiceId || data.voice,
+        voiceId: targetVoice,
         model: data.model,
         stability: data.stability,
         similarityBoost: data.similarityBoost,
@@ -5888,6 +5908,7 @@ export function buildPayload(
         removeBackgroundNoise: data.removeBackgroundNoise,
         usageLogId,
       })
+    }
 
     case "voice-changer-pro": {
       // Multi-speaker recast: orderedVoices is an array of { voiceId, ... }
@@ -6108,6 +6129,10 @@ export function buildPayload(
     }
 
     case "dubbing": {
+      // B4c: a dub speaks in clones of its source's speakers, or in voices the
+      // service picks, so a voice lock refuses it (the route does the same), here
+      // before the reservation, the source's import check and dispatch.
+      refuseUnnamedVoicesTheLockRefuses(DUBBING_VOICE_LOCK_MESSAGE)
       // Source precedence mirrors the frontend engine: a panel sourceUrl
       // (ElevenLabs fetches the link) wins over wired inputs; among wired
       // inputs video wins over audio. Exactly one source reaches the worker.

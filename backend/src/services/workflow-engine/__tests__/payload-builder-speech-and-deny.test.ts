@@ -588,6 +588,64 @@ describe("payload-builder-voice-gender-deny.test.ts", () => {
     })
   })
 
+  const vcNode = (data: Record<string, unknown> = {}): SimpleNode => ({
+    id: "vc-1",
+    type: "voice-changer",
+    data: { audioUrl: "https://example.com/a.mp3", ...data },
+  })
+  const dubNode = (data: Record<string, unknown> = {}): SimpleNode => ({
+    id: "dub-1",
+    type: "dubbing",
+    data: { targetLanguage: "fr", videoUrl: "https://example.com/v.mp4", ...data },
+  })
+
+  describe("buildPayload — the Voice Changer's target voice (B4c)", () => {
+    it("refuses a target voice of a disallowed gender, from voiceId or the legacy voice field", () => {
+      maleOnly()
+      for (const data of [{ voiceId: "Rachel" }, { voice: "Rachel" }, { voiceId: "21m00Tcm4TlvDq8ikWAM" }]) {
+        const n = vcNode(data)
+        expect(() => buildPayload(n, "job-vc-1", {}, undefined, ctx(n))).toThrowError(
+          expect.objectContaining({ code: "voice_not_available", message: "The selected voice is not available on this deployment." }),
+        )
+      }
+    })
+
+    it("refuses a target voice nobody resolved, and builds one the caller resolved to an allowed gender", () => {
+      maleOnly()
+      const n = vcNode({ voiceId: "LibVoice000000000001" })
+      expect(() => buildPayload(n, "job-vc-2", {}, undefined, ctx(n))).toThrowError(
+        expect.objectContaining({ code: "voice_not_available" }),
+      )
+      const built = buildPayload(n, "job-vc-3", {}, undefined, { ...ctx(n), voiceGenders: new Map([["LibVoice000000000001", "male" as const]]) })
+      expect(built.jobName).toBe("voice-changer")
+      expect(built.payload.voiceId).toBe("LibVoice000000000001")
+    })
+
+    it("is inert with no lock", () => {
+      const n = vcNode({ voiceId: "Rachel" })
+      expect(buildPayload(n, "job-vc-4", {}, undefined, ctx(n)).payload.voiceId).toBe("Rachel")
+    })
+  })
+
+  describe("buildPayload — dubbing (B4c)", () => {
+    // A dub speaks in clones of its source's speakers, or in voices the service
+    // picks: nothing the platform can vouch for, so a lock refuses every dub.
+    it("refuses every dub under a lock, whatever the source", () => {
+      maleOnly()
+      for (const data of [{}, { videoUrl: undefined, audioUrl: "https://example.com/a.mp3" }, { sourceUrl: "https://www.youtube.com/watch?v=x" }]) {
+        const n = dubNode(data)
+        expect(() => buildPayload(n, "job-dub-1", {}, undefined, ctx(n))).toThrowError(
+          expect.objectContaining({ code: "voice_not_available", message: "Dubbing is not available on this deployment." }),
+        )
+      }
+    })
+
+    it("is inert with no lock", () => {
+      const n = dubNode()
+      expect(buildPayload(n, "job-dub-2", {}, undefined, ctx(n)).jobName).toBe("dubbing")
+    })
+  })
+
   /**
    * The workflow engine resolves voices ahead of the synchronous build
    * (`voicesTheBuildDispatches`, read by node-executor.ts). They must be the
@@ -621,6 +679,21 @@ describe("payload-builder-voice-gender-deny.test.ts", () => {
       const sent = (buildPayload(n, "job-p", {}, undefined, ctx(n)).payload.dialogue as Array<{ voice: string }>).map((l) => l.voice)
       expect(sent).toEqual(["Daniel", "LibVoice000000000001"])
       expect(voicesTheBuildDispatches(n, {})).toEqual(sent)
+    })
+
+    it("voice-changer: the target voice, voiceId before the legacy voice field", () => {
+      const cases: Array<Record<string, unknown>> = [
+        { voiceId: "NodeVoiceId000000001", voice: "Daniel" },
+        { voice: "Daniel" },
+      ]
+      for (const data of cases) {
+        const n = vcNode(data)
+        const sent = buildPayload(n, "job-p", {}, undefined, ctx(n)).payload.voiceId
+        expect(voicesTheBuildDispatches(n, {})).toEqual([sent])
+      }
+      const unset = vcNode()
+      expect(buildPayload(unset, "job-p", {}, undefined, ctx(unset)).payload.voiceId).toBeUndefined()
+      expect(voicesTheBuildDispatches(unset, {})).toEqual([])
     })
   })
 })

@@ -15,9 +15,21 @@ import { transcriptFromSpeechTimestamps } from "./alignment-transcript.js"
 // The premade name → voice_id map lives with the premade catalog
 // (lib/premade-voices.ts `PREMADE_VOICE_IDS`).
 
-/** Resolve a voice name → ElevenLabs UUID. UUIDs pass through unchanged. */
+/**
+ * Resolve a voice name → ElevenLabs UUID. UUIDs pass through unchanged.
+ *
+ * No voice (undefined or empty) is the policy's default voice, the first
+ * allowed-gender premade voice under a voice lock (B4c) and Rachel without one.
+ * The lock judges every NAMED voice and leaves an unnamed one to this default,
+ * so it must be the policy's: every funnel resolves here (text-to-speech,
+ * dialogue lines, the voice changer's target), and a Voice Changer node with no
+ * target voice used to speak in Rachel's on a deployment locked to male voices.
+ */
 export function resolveDirectVoiceId(voice: string | undefined): string {
-  if (!voice) return PREMADE_VOICE_IDS.Rachel!
+  if (!voice) {
+    const name = defaultAllowedVoiceId(FALLBACK_VOICES, "Rachel")
+    return PREMADE_VOICE_IDS[name] ?? name
+  }
   return PREMADE_VOICE_IDS[voice] ?? voice
 }
 

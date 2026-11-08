@@ -1,5 +1,6 @@
 import { runtimeSurfaceProfile } from "./surface-profile.js"
 import { FALLBACK_VOICES, PREMADE_VOICE_IDS } from "./premade-voices.js"
+import { DeterministicJobError } from "./deterministic-job-error.js"
 
 /**
  * Voice-gender policy (B4c). A DATA seam: the allowed genders live on the B1
@@ -21,6 +22,15 @@ export type VoiceGender = "male" | "female" | "neutral"
 
 /** The code every refusal of a voice under the lock answers with. */
 export const VOICE_NOT_AVAILABLE_CODE = "voice_not_available"
+
+/** What a refused voice answers, wherever it is refused (a route's 400, a plugin's `PluginHttpError`, a failed job). */
+export const VOICE_NOT_AVAILABLE_MESSAGE = "The selected voice is not available on this deployment."
+
+export function voiceNotAvailableBody(message: string = VOICE_NOT_AVAILABLE_MESSAGE): {
+  error: { code: typeof VOICE_NOT_AVAILABLE_CODE; message: string }
+} {
+  return { error: { code: VOICE_NOT_AVAILABLE_CODE, message } }
+}
 
 export function normalizeVoiceGender(raw: string | undefined | null): VoiceGender {
   const v = (raw ?? "").trim().toLowerCase()
@@ -127,6 +137,34 @@ export function judgeVoiceGender(g: VoiceGender | undefined): VoiceVerdict {
   if (allowed.length === 0) return ALLOWED
   if (g === undefined) return { allowed: false, reason: "gender_unknown" }
   return allowed.includes(g) ? ALLOWED : { allowed: false, reason: "gender_not_allowed" }
+}
+
+/**
+ * The lock's answer for speech whose voices no request names: a dub speaks in
+ * clones of its source's speakers, or in voices the dubbing service picks
+ * itself, so none of them is a voice the platform can vouch for. Refused under
+ * a lock (as a voice of unknown gender), allowed without one.
+ */
+export function judgeUnnamedVoices(): VoiceVerdict {
+  return judgeVoiceGender(undefined)
+}
+
+/**
+ * A voice the lock refused, for a lane with no reply to send (a speech worker,
+ * a film-studio pipeline step, a plugin's `PluginHttpError` cause). `reason` is
+ * for logs and tests; the client sees one code. A deterministic job error: the
+ * same job is refused the same way on every attempt, so the video worker fails
+ * and refunds it now instead of retrying it.
+ */
+export class VoiceNotAvailableError extends DeterministicJobError {
+  readonly code = VOICE_NOT_AVAILABLE_CODE
+  constructor(
+    readonly reason: Extract<VoiceVerdict, { allowed: false }>["reason"],
+    message: string = VOICE_NOT_AVAILABLE_MESSAGE,
+  ) {
+    super(message)
+    this.name = "VoiceNotAvailableError"
+  }
 }
 
 /**

@@ -87,7 +87,8 @@ import { probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
 import { directElevenLabsDialogue } from "../../providers/elevenlabs/direct-dialogue.js"
-import { planVoicedDialogue } from "../../lib/voiced-dialogue-lines.js"
+import { planVoicedDialogue, voicesTheVoicedVideoSends } from "../../lib/voiced-dialogue-lines.js"
+import { assertVoicesAllowed } from "../../lib/voice-lock.js"
 
 /**
  * VEO3 / VEO3.1 always produce a video with background audio per KIE's
@@ -1982,6 +1983,13 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
   const mode = getVideoAudioCapability(provider).mode
 
   const dialogueModel = dialogueProviderOf(d.dialogueProvider)
+  // B4c: the voice lock's backstop, before anything is generated: every voice
+  // this run will speak in (`voicesTheVoicedVideoSends`, the same reading the
+  // route judged), as the job's user. Here and not inside the voice chain,
+  // whose failures degrade to a silent or baked clip after the video is paid
+  // for: a refusal fails the job instead, finally (failed and refunded on this
+  // attempt). No lock: nothing is read.
+  await assertVoicesAllowed(voicesTheVoicedVideoSends({ ...d, dialogueProvider: dialogueModel }, provider), { userId: ctx.jobUserId })
   const plan = planVoicedDialogue({ ...d, dialogueProvider: dialogueModel })
   const voices = d.characterVoices ?? []
   const primaryVoiceId = voices[0]?.voiceId

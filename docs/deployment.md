@@ -867,18 +867,45 @@ optional; each array empty = "keep the default"):
     it while the lock was set (the library offers no lookup by id). A voice of a
     disallowed gender is refused with `voice_not_available`, and so is one whose
     gender none of these can establish, such as a library voice picked before the
-    lock was set. This holds on `/v1/text-to-speech`, `/v1/text-to-dialogue`, the
-    same two nodes in a workflow run, and Cloud plugin routes that check their
-    voices through the plugin toolkit (`tk.voices.assertAllowed`).
+    lock was set. A request is refused before any job is created or any credit
+    reserved. This holds on:
+    - `/v1/text-to-speech` and `/v1/text-to-dialogue`;
+    - `/v1/voice-changer`: the voice a clip is converted into;
+    - `/v1/generate-video` with a character voice (`characterVoices`): every voice
+      the clip speaks in. On a model driven by an audio track (Seedance 2) that is
+      the voice of each line it voices; on a model that speaks natively (Veo)
+      it is the cast's first voice, which the spoken clip is revoiced into;
+    - the Text to Speech, Text to Dialogue and Voice Changer nodes in a workflow
+      run;
+    - speech a film-studio pipeline generates: a shot's dialogue line, the
+      narration and the revoicing of a spoken shot. A refused shot line is
+      skipped like any line that failed (the shot keeps its clip as animated),
+      and a refused narration fails the run;
+    - Cloud plugin routes that check their voices through the plugin toolkit
+      (`tk.voices.assertAllowed`).
+
+    The speech worker checks every voice again before it is sent, so a queued
+    speech job whose voice the lock refuses fails and is refunded.
+  - **Dubbing** is refused under a lock (`voice_not_available`, "Dubbing is not
+    available on this deployment."), on `/v1/dubbing` and the Dubbing node. A dub
+    speaks in clones of its source's speakers, or in voices the dubbing service
+    picks, so none of its voices can be established.
   - **Defaults.** Every default/fallback voice resolves to the first
-    allowed-gender voice, and the Suno vocal-gender tags in the editor hide the
-    disallowed side.
+    allowed-gender voice, including the voice a request sends when it names
+    none. The Suno vocal-gender tags in the editor hide the disallowed side.
 
   Pair with `nodes.deny: ["voice-design","voice-remix"]` to remove the
-  voice-creation nodes (whose output gender is not knowable up front). The lock
-  does not yet judge the Voice Changer node's target voice, the voices inside a
-  voiced-video or speech-to-video run, dubbing, or speech a film-studio pipeline
-  generates.
+  voice-creation nodes (whose output gender is not knowable up front), and with
+  `"dubbing"` there to remove the Dubbing node a lock refuses. The lock judges
+  voices this platform picks; it does not judge:
+  - an audio track a request provides (Speech to Video and Lip Sync voice it as
+    given and select no voice);
+  - speech a video model generates in its own voice, including a natively
+    spoken clip whose revoice failed, and a film-studio shot whose revoice the
+    lock refused (the shot keeps the model's voice);
+  - the AI Avatar node's voices in its text mode, which come from that node's
+    own voice catalog;
+  - a Cloud plugin lane, until it checks its voices through the toolkit.
 - `features` — whole features this deployment switches off:
   `{"features":{"hide":["copilot","presentation"]}}`. `copilot` removes the
   Workflow Copilot everywhere — the canvas rail and its collapsed tab, the

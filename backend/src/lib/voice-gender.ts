@@ -29,32 +29,18 @@ import {
   knownVoiceGender,
   premadeCatalogGender,
   voiceLockActive,
-  VOICE_NOT_AVAILABLE_CODE,
   type VoiceGender,
   type VoiceVerdict,
 } from "./voice-policy.js"
 
+// The refusal itself is pure, so it lives with the policy (a lane that must not
+// load this resolver — lib/voice-lock.ts — throws it too); re-exported here for
+// the routes and the plugin toolkit that answer with it.
+export { VOICE_NOT_AVAILABLE_MESSAGE, voiceNotAvailableBody, VoiceNotAvailableError } from "./voice-policy.js"
+
 export interface VoiceLookup {
   /** Who is asking. A clone counts only as this user's own; absent → no clone is consulted. */
   readonly userId?: string | null
-}
-
-/** What a refused voice answers, wherever it is refused (a route's 400, a plugin's `PluginHttpError`). */
-export const VOICE_NOT_AVAILABLE_MESSAGE = "The selected voice is not available on this deployment."
-
-export function voiceNotAvailableBody(message: string = VOICE_NOT_AVAILABLE_MESSAGE): {
-  error: { code: typeof VOICE_NOT_AVAILABLE_CODE; message: string }
-} {
-  return { error: { code: VOICE_NOT_AVAILABLE_CODE, message } }
-}
-
-/** A voice the lock refused. `reason` is for logs and tests; the client sees one code. */
-export class VoiceNotAvailableError extends Error {
-  readonly code = VOICE_NOT_AVAILABLE_CODE
-  constructor(readonly reason: Extract<VoiceVerdict, { allowed: false }>["reason"]) {
-    super(VOICE_NOT_AVAILABLE_MESSAGE)
-    this.name = "VoiceNotAvailableError"
-  }
 }
 
 const ALLOWED: VoiceVerdict = Object.freeze({ allowed: true })

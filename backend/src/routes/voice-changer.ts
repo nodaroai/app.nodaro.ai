@@ -11,6 +11,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { judgeVoice, voiceNotAvailableBody } from "../lib/voice-gender.js"
 
 /** The catalog model every run of this route runs — and the credit id it bills under. */
 const VOICE_CHANGER_MODEL_ID = "elevenlabs-voice-changer"
@@ -58,6 +59,17 @@ export async function voiceChangerRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
       })
+    }
+
+    // B4c: under a voice lock, the voice a clip is converted INTO must be one
+    // whose gender the platform can vouch for as allowed, judged by its id alone
+    // (lib/voice-gender.ts: a premade voice by name or id, the caller's own
+    // clone, a library voice this deployment listed), before any job row or
+    // reservation. A voice of unknown gender is refused too. No lock: nothing is
+    // looked up and the request is unchanged.
+    const voiceVerdict = await judgeVoice(voiceId, { userId })
+    if (!voiceVerdict.allowed) {
+      return reply.status(400).send(voiceNotAvailableBody())
     }
 
     const mcpClient = extractMcpClient(req.body)

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { resolveOmittedTtsProvider } from "../../../lib/omitted-tts-provider.js"
 import { speechChargeOverride } from "../../../lib/speech-estimate.js"
+import { assertVoicesAllowed } from "../../../lib/voice-lock.js"
 import { probeAudioDuration } from "./_probe-audio.js"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 
@@ -63,6 +64,12 @@ export async function pipelineGenerateNarration(
   args: PipelineGenerateNarrationArgs,
 ): Promise<PipelineGenerateNarrationResult> {
   const { supabase, pipelineId, userId, text, voiceId, modelId } = args
+
+  // B4c: under a voice lock, the narrator's voice must be one whose gender the
+  // platform can vouch for as allowed (lib/voice-gender.ts, as the routes judge
+  // it), refused before any job row or reservation with the lock's coded
+  // refusal. No voice: the worker's policy-owned default. No lock: nothing read.
+  await assertVoicesAllowed([voiceId], { userId })
 
   // No model given → the REST route's omitted-provider rule, through the same function:
   // the default speech model (ElevenLabs v4, direct API — supports expressive delivery

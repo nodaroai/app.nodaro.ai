@@ -1,4 +1,4 @@
-import { PROJECT_DUBBING_NEEDS_UPLOAD, dubbingModelIdentifier, dubsAsProject } from "../lib/dubbing-model.js"
+import { DUBBING_VOICE_LOCK_MESSAGE, PROJECT_DUBBING_NEEDS_UPLOAD, dubbingModelIdentifier, dubsAsProject } from "../lib/dubbing-model.js"
 import { usesDubbingProject, validateProjectDubbing } from "../providers/elevenlabs/dubbing-project.js"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
@@ -18,6 +18,7 @@ import { isImportRefusal, requireImportAllowed } from "../lib/import-gate.js"
 import { importJobFields, importViaOf } from "../lib/import-via.js"
 import { dubbingSourceIsImport } from "../lib/dubbing-source.js"
 import { unusableLinkError } from "../lib/unusable-link.js"
+import { judgeUnnamedVoices, voiceNotAvailableBody } from "../lib/voice-policy.js"
 // Duration policy constants live beside the provider (the worker enforces the
 // same cap post-start against ElevenLabs' media_metadata — one source, two
 // seams). A span that can be measured is reserved exactly (and committed as
@@ -78,6 +79,19 @@ const dubbingBody = z.object({
   (b) => b.startTime == null || b.endTime == null || b.endTime > b.startTime,
   { message: "endTime must be greater than startTime" },
 )
+
+/**
+ * Fastify preHandler, the route's FIRST: the voice lock (B4c) refuses every dub
+ * while it is set. A dub speaks in clones of its source's speakers, or (with
+ * `disableVoiceCloning`) in voices the dubbing service picks itself, so no
+ * voice it produces is one the platform can vouch for (`judgeUnnamedVoices`).
+ * First, so a refused dub probes no media, reads no import gate and prices
+ * nothing. No lock: a pass, nothing read.
+ */
+export async function refuseDubbingUnderVoiceLock(_req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (judgeUnnamedVoices().allowed) return
+  return void reply.code(400).send(voiceNotAvailableBody(DUBBING_VOICE_LOCK_MESSAGE))
+}
 
 /**
  * Fastify preHandler: measures the source (an upload by ffprobe; a link —
@@ -177,6 +191,7 @@ export async function probeDubbingDurationPreHandler(req: FastifyRequest, reply:
 export async function dubbingRoutes(app: FastifyInstance) {
   app.post("/v1/dubbing", {
     preHandler: [
+      refuseDubbingUnderVoiceLock,
       probeDubbingDurationPreHandler,
       creditGuard((req) => dubbingModelIdentifier((req.body as Record<string, unknown>)?.targetLanguage), {
         // Per-minute pricing: the measured span, or the 30-minute ceiling
@@ -204,12 +219,9 @@ export async function dubbingRoutes(app: FastifyInstance) {
       })
     }
 
-    // B4c note: no voice.allowedGenders enforcement point here — dubbing has no
-    // PREMADE voice selector. It clones the ORIGINAL speaker's voice, or (with
-    // disableVoiceCloning) substitutes a Voice Library voice whose gender is not
-    // knowable at request time. Premade-gender enforcement lives in the routes
-    // that pick a premade voice (text-to-speech); voice-creation nodes are gated
-    // by nodes.deny (Task 9).
+    // B4c: a voice lock refused this request before anything else ran
+    // (`refuseDubbingUnderVoiceLock`, the first preHandler) — a dub names no
+    // voice the platform could judge.
     const {
       audioUrl, videoUrl, sourceUrl, targetLanguage, sourceLanguage, numSpeakers,
       disableVoiceCloning, dropBackgroundAudio, startTime, endTime,

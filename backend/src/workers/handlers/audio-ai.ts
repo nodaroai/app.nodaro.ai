@@ -15,7 +15,8 @@ import { generateSoundEffect } from "../../providers/elevenlabs/sound-effects.js
 import { ttsSupportsAudioTags, ttsSupportsTimestamps } from "@nodaro/shared/model-catalog"
 import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, type TextToAudioProvider } from "@nodaro/shared/models"
 import { normalizeTranscript, type Transcript } from "@nodaro/shared/edl"
-import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
+import { defaultAllowedVoiceId, voiceLockActive } from "../../lib/voice-policy.js"
+import { assertUnnamedVoicesAllowed, assertVoicesAllowed } from "../../lib/voice-lock.js"
 import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { elevenlabsSpeechCostUsd } from "../../lib/pricing/elevenlabs-speech-cost.js"
 import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
@@ -57,7 +58,7 @@ import {
 import { YOUTUBE_HOSTS, isAllowedSocialVideoUrl } from "../../lib/url-validator.js"
 import { requireImportAllowed, spendImportConfirmation } from "../../lib/import-gate.js"
 import { dubbingSourceIsImport } from "../../lib/dubbing-source.js"
-import { PROJECT_DUBBING_NEEDS_UPLOAD, dubsAsProject } from "../../lib/dubbing-model.js"
+import { DUBBING_VOICE_LOCK_MESSAGE, PROJECT_DUBBING_NEEDS_UPLOAD, dubsAsProject } from "../../lib/dubbing-model.js"
 import { UNUSABLE_LINK_MESSAGE } from "../../lib/unusable-link.js"
 import { hasUrlParserHazard } from "@nodaro/shared/video"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
@@ -142,6 +143,12 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     /** The request asked for per-word timings; honoured only when the model's sheet returns them. */
     withTimestamps?: boolean
   }
+  // B4c: the voice lock's backstop, FIRST. Every enqueuer judges the voice
+  // before the job exists (the route, the workflow engine, the film-studio
+  // pipeline); this judges it again, as the job's user, so a lane that forgets
+  // still fails closed. A refusal is final (the job is failed and refunded on
+  // this attempt). No lock: nothing is read.
+  await assertVoicesAllowed([voice], { userId: ctx.jobUserId })
   // Defensive default: every current enqueuer (routes/text-to-speech.ts,
   // payload-builder.ts's "text-to-speech" case, pipeline-generate-speech.ts,
   // pipeline-generate-narration.ts) already resolves a concrete provider
@@ -202,9 +209,12 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   } else if (await isNodaroConnected().catch(() => false)) {
     // The cloud relay is not widened for timings: a keyless install's speech
     // carries no transcript (the director there falls back to forced alignment).
+    // Under a voice lock an unnamed voice is sent as THIS deployment's default
+    // (the cloud's own default knows nothing of the lock); with no lock the
+    // relay picks its default, as before.
     cloudAudio = await generateSpeechViaCloud(
       processedText,
-      voice,
+      voice || (voiceLockActive() ? defaultAllowedVoiceId(FALLBACK_VOICES, "Rachel") : voice),
       provider,
       hasOptions ? ttsOptions : {},
     )
@@ -542,6 +552,9 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
     seed?: number
     applyTextNormalization?: "auto" | "on" | "off"
   }
+  // B4c: the voice lock's backstop, FIRST — every line's voice, as the job's
+  // user (see text-to-speech above). No lock: nothing is read.
+  await assertVoicesAllowed(dialogue.map((line) => line.voice), { userId: ctx.jobUserId })
   console.log(`[worker] text-to-dialogue ${ctx.jobId} (${dialogue.length} lines, direct API)`)
 
   // Same three ways out as handleTextToSpeech, same order, same reasons —
@@ -620,6 +633,10 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
     stability?: number; similarityBoost?: number; style?: number; removeBackgroundNoise?: boolean
     useSpeakerBoost?: boolean; seed?: number
   }
+  // B4c: the voice lock's backstop, FIRST — the voice the clip is converted
+  // INTO, as the job's user, before the media is probed or downloaded (see
+  // text-to-speech above). No lock: nothing is read.
+  await assertVoicesAllowed([voiceId], { userId: ctx.jobUserId })
   // modelId omitted → provider falls back to eleven_multilingual_sts_v2
   // (ElevenLabs-recommended default, also required for non-English audio).
   const opts = { modelId: model, stability, similarityBoost, style, removeBackgroundNoise, useSpeakerBoost, seed }
@@ -765,6 +782,12 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
     /** Held at the 30-minute ceiling (length unknown before start) — settled at delivery. */
     reservedCeiling?: boolean
   }
+  // B4c: the voice lock's backstop, FIRST. A dub names no voice the platform
+  // could judge (it speaks in clones of the source's speakers, or in voices the
+  // service picks), so under a lock it is refused here, before the media is
+  // probed, an import confirmation is spent or the service is asked (the route
+  // and the workflow engine refuse it before the job exists). No lock: a pass.
+  assertUnnamedVoicesAllowed(DUBBING_VOICE_LOCK_MESSAGE)
   // THE MEDIA DECIDES THE MODE, NEVER THE INPUT SLOT (#1069 rule, mirrors
   // voice-changer): a video wired into the video slot dubs as VIDEO; an
   // audio-only file in the video slot is demoted to audio; a video file in

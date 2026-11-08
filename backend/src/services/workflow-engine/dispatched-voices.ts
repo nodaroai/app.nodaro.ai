@@ -31,6 +31,15 @@ export function ttsVoiceOf(autoWired: unknown, voiceId: unknown, voice: unknown)
   return autoWired || voiceId || voice
 }
 
+/**
+ * The voice a Voice Changer node converts its clip INTO: the node's `voiceId`,
+ * else its legacy `voice`. Empty = the funnel's default voice, which the voice
+ * policy owns (`resolveDirectVoiceId`). Takes the values, like `ttsVoiceOf`.
+ */
+export function voiceChangerVoiceOf(voiceId: unknown, voice: unknown): unknown {
+  return voiceId || voice
+}
+
 /** A text-to-dialogue node's lines that have text (an empty line is dropped, as the editor drops it). */
 export function dialogueLinesOf(lines: unknown): Array<{ text: string; voice?: string }> | undefined {
   return (lines as Array<{ text: string; voice?: string }> | undefined)?.filter((l) => l.text?.trim())
@@ -51,6 +60,7 @@ export function voicesToJudge(values: readonly unknown[]): string[] {
 export function dispatchedVoicesOf(type: string, data: SimpleNode["data"], resolvedInputs: ResolvedInputs): string[] {
   if (type === "text-to-speech") return voicesToJudge([ttsVoiceOf(resolvedInputs.voice, data.voiceId, data.voice)])
   if (type === "text-to-dialogue") return voicesToJudge((dialogueLinesOf(data.dialogue ?? data.script) ?? []).map((l) => l.voice))
+  if (type === "voice-changer") return voicesToJudge([voiceChangerVoiceOf(data.voiceId, data.voice)])
   return []
 }
 
