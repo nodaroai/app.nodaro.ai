@@ -5,6 +5,7 @@ import { X, Loader2, Check } from "lucide-react"
 import { runtimeAudiomassOrigin, runtimeAudiomassUrl } from "@/lib/runtime-config"
 import { useT } from "@/lib/i18n"
 import { useInertBehind } from "@/lib/use-inert-behind"
+import { isFromWindow } from "@/lib/popup-message"
 
 /**
  * Read at RUNTIME, not inlined at build time — same reason as FreeCut (#767):
@@ -69,8 +70,10 @@ export function AudiomassEditorModal({ audioUrl, onExportComplete, onClose }: Au
   // Listen for messages from Audiomass (stable deps via refs)
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
+      // Only the editor frame this modal opened, on the editor's origin: another
+      // frame on that origin can post here too.
       const origin = audiomassOrigin()
-      if (!origin || event.origin !== origin) return
+      if (!origin || !isFromWindow(event, iframeRef.current?.contentWindow, origin)) return
       const { type, payload } = event.data || {}
 
       if (type === "AUDIOMASS_READY") {

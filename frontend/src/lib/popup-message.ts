@@ -1,16 +1,18 @@
 /**
- * Messages a pop-up sends back to the page that opened it.
+ * Messages from a window this page talks to: a pop-up it opened, a frame it
+ * embeds, or the page that frames it.
  *
  * A `message` event can come from ANY window able to post to this one: a frame
  * embedded in the page, or another tab or window holding a reference to it. So
- * a pop-up's message is taken only when BOTH of these hold:
+ * a message is taken only when BOTH of these hold:
  *
- * - `source` is the very window `window.open` returned, compared by identity;
- * - `origin` is the origin the pop-up's page is expected on.
+ * - `source` is that very window (what `window.open` returned, the frame's
+ *   `contentWindow`, `window.parent`), compared by identity;
+ * - `origin` is the origin that window's page is expected on.
  *
  * Either check alone has a hole. The origin alone trusts any frame served from
- * that origin, and the source alone trusts whatever page the pop-up happens to
- * show, the identity provider's own pages included. `classifyScene3DEmbedMessage`
+ * that origin, and the source alone trusts whatever page the window happens to
+ * show, an identity provider's own pages included. `classifyScene3DEmbedMessage`
  * applies the same rule to its parent frame.
  *
  * DOM-free and pure, so the adversarial cases are unit-testable without a browser.
@@ -20,16 +22,17 @@
 export interface PopupMessageTransport {
   readonly data: unknown
   readonly origin: string
-  /** `MessageEvent.source`. Compared by identity against the pop-up. */
+  /** `MessageEvent.source`. Compared by identity against the expected window. */
   readonly source: unknown
 }
 
-/** Whether a message came from `popup` (what `window.open` returned), on `expectedOrigin`. */
-export function isFromPopup(transport: PopupMessageTransport, popup: unknown, expectedOrigin: string): boolean {
-  // No pop-up (a blocked one) means there is nothing to hear from, and a
-  // message with no source (a synthetic event) must not match a null handle.
-  if (popup === null || popup === undefined) return false
-  if (transport.source !== popup) return false
+/** Whether a message came from `expected` (a pop-up, a frame's window, the parent), on `expectedOrigin`. */
+export function isFromWindow(transport: PopupMessageTransport, expected: unknown, expectedOrigin: string): boolean {
+  // No window (a blocked pop-up, a frame not mounted) means there is nothing to
+  // hear from, and a message with no source (a synthetic event) must not match
+  // a null handle.
+  if (expected === null || expected === undefined) return false
+  if (transport.source !== expected) return false
   return transport.origin === expectedOrigin
 }
 
@@ -55,7 +58,7 @@ export function readLoginPopupSession(
   popup: unknown,
   ownOrigin: string,
 ): LoginPopupSession | null {
-  if (!isFromPopup(transport, popup, ownOrigin)) return null
+  if (!isFromWindow(transport, popup, ownOrigin)) return null
   const data = transport.data
   if (!isRecord(data) || data.type !== LOGIN_POPUP_MESSAGE_TYPE) return null
   const { access_token: accessToken, refresh_token: refreshToken } = data

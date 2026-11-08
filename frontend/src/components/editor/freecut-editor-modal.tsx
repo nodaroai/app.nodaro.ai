@@ -7,6 +7,7 @@ import { NODARO_LOAD_VIDEO, NODARO_IMPORT_FILES, NODARO_RESET_PROJECT, FREECUT_R
 import { runtimeFreecutOrigin, runtimeFreecutUrl } from "@/lib/runtime-config"
 import { useT } from "@/lib/i18n"
 import { useInertBehind } from "@/lib/use-inert-behind"
+import { isFromWindow } from "@/lib/popup-message"
 
 /**
  * Read at RUNTIME, not inlined at build time (#767). The published community
@@ -134,7 +135,10 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
 
   const handleMessage = useCallback(
     (event: MessageEvent) => {
-      if (event.origin !== freecutOrigin()) return
+      // Only the editor frame this modal opened, on the editor's origin: another
+      // frame on that origin can post here too.
+      const origin = freecutOrigin()
+      if (!origin || !isFromWindow(event, iframeRef.current?.contentWindow, origin)) return
 
       if (event.data?.type === FREECUT_READY) {
         setReady(true)

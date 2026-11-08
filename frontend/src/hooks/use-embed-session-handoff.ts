@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { setAuthFromTokens } from "@/hooks/use-auth"
-import { isAllowedEmbedParent } from "@/lib/embed-origins"
+import { classifyEmbedSessionMessage } from "@/lib/embed-origins"
 
 /** How long to wait for the parent to hand us a session before giving up
  *  and letting the normal auth flow (login redirect) take over. */
@@ -26,7 +26,8 @@ export function isEmbedded(): boolean {
  *
  *   1. We announce readiness (`nodaro:embedReady`) to the parent.
  *   2. The parent replies with `{ access_token, refresh_token }` (or
- *      `nodaro:noSession`) — only honored from a first-party origin.
+ *      `nodaro:noSession`) — honored only from the parent window itself, on a
+ *      first-party origin (`classifyEmbedSessionMessage`).
  *   3. We adopt the session via `setAuthFromTokens` (works with PKCE — unlike
  *      the abandoned URL-hash handoff, `setSession` needs no code verifier).
  *
@@ -49,20 +50,17 @@ export function useEmbedSessionHandoff(): { awaitingHandoff: boolean } {
       setAwaitingHandoff(false)
     }
 
+    // Only the page that frames this one (`window.parent`, by identity), on a
+    // first-party origin, may hand over a session. Anything else is ignored.
     const handler = (event: MessageEvent) => {
-      if (!isAllowedEmbedParent(event.origin)) return
-      const data = event.data
-      if (!data || typeof data !== "object") return
-
-      if (data.type === "nodaro:setSession") {
-        const { access_token, refresh_token } = data as Record<string, unknown>
-        if (typeof access_token !== "string" || typeof refresh_token !== "string") return
+      const verdict = classifyEmbedSessionMessage(event, window.parent)
+      if (verdict.kind === "session") {
         // On success the user populates via onAuthStateChange and the guard
         // renders — we intentionally DON'T stopWaiting() here, to avoid a
         // window where awaitingHandoff is false but the user isn't set yet.
         // The timeout clears the flag harmlessly later (user is set by then).
-        void setAuthFromTokens(access_token, refresh_token)
-      } else if (data.type === "nodaro:noSession") {
+        void setAuthFromTokens(verdict.accessToken, verdict.refreshToken)
+      } else if (verdict.kind === "no-session") {
         // Parent is itself unauthenticated — don't keep the user waiting.
         stopWaiting()
       }

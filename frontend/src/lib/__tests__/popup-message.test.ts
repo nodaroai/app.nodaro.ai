@@ -1,28 +1,28 @@
 import { describe, it, expect } from "vitest"
-import { isFromPopup, readLoginPopupSession } from "../popup-message"
+import { isFromWindow, readLoginPopupSession } from "../popup-message"
 
 const ORIGIN = "https://app.example.test"
 /** What `window.open` returned. Only identity matters. */
 const popup = { name: "the pop-up" }
 const anotherWindow = { name: "another window" }
 
-describe("isFromPopup", () => {
+describe("isFromWindow", () => {
   it("holds for the pop-up's own message on the expected origin", () => {
-    expect(isFromPopup({ data: null, origin: ORIGIN, source: popup }, popup, ORIGIN)).toBe(true)
+    expect(isFromWindow({ data: null, origin: ORIGIN, source: popup }, popup, ORIGIN)).toBe(true)
   })
 
   it("fails for a message on the expected origin from another window", () => {
-    expect(isFromPopup({ data: null, origin: ORIGIN, source: anotherWindow }, popup, ORIGIN)).toBe(false)
+    expect(isFromWindow({ data: null, origin: ORIGIN, source: anotherWindow }, popup, ORIGIN)).toBe(false)
   })
 
   it("fails for the pop-up's window showing another origin", () => {
-    expect(isFromPopup({ data: null, origin: "https://id-provider.example", source: popup }, popup, ORIGIN)).toBe(false)
+    expect(isFromWindow({ data: null, origin: "https://id-provider.example", source: popup }, popup, ORIGIN)).toBe(false)
   })
 
   it("fails with no pop-up, even for a message that has no source either", () => {
     // A blocked pop-up leaves `window.open` returning null; a synthetic event has a null source.
-    expect(isFromPopup({ data: null, origin: ORIGIN, source: null }, null, ORIGIN)).toBe(false)
-    expect(isFromPopup({ data: null, origin: ORIGIN, source: undefined }, undefined, ORIGIN)).toBe(false)
+    expect(isFromWindow({ data: null, origin: ORIGIN, source: null }, null, ORIGIN)).toBe(false)
+    expect(isFromWindow({ data: null, origin: ORIGIN, source: undefined }, undefined, ORIGIN)).toBe(false)
   })
 })
 

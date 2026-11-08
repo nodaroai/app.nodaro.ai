@@ -1,4 +1,4 @@
-import { isFromPopup, isRecord, type PopupMessageTransport } from "@/lib/popup-message"
+import { isFromWindow, isRecord, type PopupMessageTransport } from "@/lib/popup-message"
 
 /**
  * The result the social-connect pop-up posts back to the card that opened it.
@@ -43,7 +43,7 @@ export function classifySocialConnectMessage(
   transport: PopupMessageTransport,
   context: SocialConnectContext,
 ): SocialConnectVerdict {
-  if (!isFromPopup(transport, context.popup, context.expectedOrigin)) return IGNORE
+  if (!isFromWindow(transport, context.popup, context.expectedOrigin)) return IGNORE
 
   const data = transport.data
   if (!isRecord(data)) return IGNORE
