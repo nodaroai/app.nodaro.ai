@@ -11,7 +11,7 @@ export function readSavedLocale(): LocaleId | null {
   return null
 }
 
-export function saveLocale(_id: string): void {}
+export function saveLocale(_id: string, _options?: { readonly cookieDomain?: string | null }): void {}
 
 export function watchSavedLocale(_onChange: (id: LocaleId) => void, _current: () => string | null): () => void {
   return () => {}

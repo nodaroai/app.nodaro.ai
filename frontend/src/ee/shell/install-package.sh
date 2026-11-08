@@ -1,7 +1,8 @@
 #!/bin/sh
 # Installs the shared site header (@nodaroai/shell, a private Nodaro package,
 # which also carries the media editor behind `virtual:media-editor`) into the
-# workspace — on a CLOUD build only. With VITE_SHARED_HEADER=true it is
+# workspace — on a CLOUD build only. With VITE_SHARED_HEADER=true (Nodaro's
+# sites) or =white-label (the image for deployments of their own) it is
 # required (no NPM_TOKEN is an error); with the flag off it is installed for
 # the trend admin's media editor when NPM_TOKEN is set, and skipped when it is
 # not (the admin then keeps its own editor; the header stays off either way).
@@ -13,7 +14,7 @@
 #
 #   usage: sh frontend/src/ee/shell/install-package.sh [<workspace root>]   (default /app)
 #   env:   VITE_EDITION                       the gate (cloud only)
-#          VITE_SHARED_HEADER                 true: the package is required
+#          VITE_SHARED_HEADER                 true / white-label: the package is required
 #          NPM_TOKEN                          a read:packages token for the org's private packages
 #          SHARED_HEADER_PKG_VERSION          optional; the pin below otherwise
 #
@@ -23,14 +24,19 @@
 # cannot print it.
 set -eu
 
-PIN="0.14.2"
+PIN="0.15.0"
 VERSION="${SHARED_HEADER_PKG_VERSION:-$PIN}"
 
 if [ "${VITE_EDITION:-}" != "cloud" ]; then
   echo "[site-header] skipped (edition=${VITE_EDITION:-unset})"
   exit 0
 fi
-if [ "${VITE_SHARED_HEADER:-}" != "true" ] && [ -z "$(printenv NPM_TOKEN || true)" ]; then
+# The flag values that build the header in (`SHARED_HEADER_FLAG_VALUES` in header-module-plugin.ts).
+case "${VITE_SHARED_HEADER:-}" in
+  true | white-label) REQUIRED=1 ;;
+  *) REQUIRED= ;;
+esac
+if [ -z "$REQUIRED" ] && [ -z "$(printenv NPM_TOKEN || true)" ]; then
   echo "[site-header] skipped (VITE_SHARED_HEADER=${VITE_SHARED_HEADER:-unset}, no NPM_TOKEN): the admin keeps its own media editor"
   exit 0
 fi
@@ -54,7 +60,7 @@ case "$CORE" in
 esac
 
 if [ -z "$(printenv NPM_TOKEN || true)" ]; then
-  echo "[site-header] VITE_SHARED_HEADER=true on a cloud build needs NPM_TOKEN (unset)" >&2
+  echo "[site-header] VITE_SHARED_HEADER=${VITE_SHARED_HEADER} on a cloud build needs NPM_TOKEN (unset)" >&2
   exit 1
 fi
 

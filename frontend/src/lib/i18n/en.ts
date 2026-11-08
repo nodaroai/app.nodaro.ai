@@ -598,6 +598,12 @@ export const en = {
   "nav.whatsNewIn": "What's new in {version}",
   "nav.backToProjects": "Back to projects",
   "nav.openMenu": "Open menu",
+  // The white-label header's credit words, in a deployment's own unit ({unit}: its name, as configured).
+  "header.units.balance": "{credits} {unit}",
+  "header.units.pill": "{credits} {unit} — get more {unit}",
+  "header.units.loading": "Loading {unit}",
+  "header.units.left": "{unit} left",
+  "header.units.meter": "{unit} left: {left} of {total}",
 
   // ── Auth / login ────────────────────────────────────────────────────────
   "auth.tagline": "Visual workflows for AI video generation",

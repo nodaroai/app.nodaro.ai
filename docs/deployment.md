@@ -139,7 +139,7 @@ here for each one anyway.
 | `LOOPS_CONTENT_RESTRICTED_ID` | `""` | Cloud: the Loops transactional template id of "Content access restricted", which an administrator sends from a copyright case to the account whose content a restriction covers. Data variables: `content` (the account's file: its name, kind and day, or several files by count), `source` (the link it was imported from, or `Not available`), `reason` (the reason the administrator writes for the account), `reference` (the case's number) and `counterNoticeUrl` (the account's counter-notification page, from `PUBLIC_URL`). Unset = the case's screen says the email cannot be sent |
 | `LOOPS_COMPLAINT_UPDATE_ID` | `""` | Cloud: the Loops transactional template id of "Complaint update", which an administrator sends from a case to its complainant. Data variables: `reference`, `status` (the case's status in words) and `action` (the case's decision). Unset = the case's screen says the email cannot be sent |
 | `VITE_ORGS_ENABLED` | `""` | Cloud, organizations: `true` shows the organization surfaces in the browser. Build-time (Vite inlines it), so it needs the `ARG`+`ENV` pair in the Dockerfile — and it must match the backend's `ORGS_ENABLED`, or the UI offers something the API refuses |
-| `VITE_SHARED_HEADER` | `""` | Nodaro Cloud only: `true` builds the image with the shared Nodaro site header, a private package the frontend stage installs with the `NPM_TOKEN` build arg (pin: optional `SHARED_HEADER_PKG_VERSION`). Build-time, with the `ARG`+`ENV` pair in the Dockerfile. Any other edition, or a build without the package, gets a stub and the flag off — a self-hosted image is unaffected whatever it is set to; a cloud build with it on but no package is refused. With it off, a cloud build that has `NPM_TOKEN` still installs the package for the trend admin's media editor (link import, range and crop); the header stays off |
+| `VITE_SHARED_HEADER` | `""` | Nodaro Cloud only: `true` builds the image with the shared Nodaro site header, a private package the frontend stage installs with the `NPM_TOKEN` build arg (pin: optional `SHARED_HEADER_PKG_VERSION`), and shows Nodaro's header above the editor. `white-label` builds the same header in for deployments of their own: it shows only where the deployment's surface profile sets [`header`](#keys-read-by-client-apps) to `"white-label"`, and Nodaro's header never does, so a deployment without that key renders exactly as without the header. Build-time, with the `ARG`+`ENV` pair in the Dockerfile. Any other edition, or a build without the package, gets a stub and the flag off — a self-hosted image is unaffected whatever it is set to; a cloud build with it on but no package is refused. With it off, a cloud build that has `NPM_TOKEN` still installs the package for the trend admin's media editor (link import, range and crop); the header stays off |
 | `PORT` / `HOST` | `8000` / `0.0.0.0` | Where the API listens (in the image the API sits on 9000 behind Caddy on 3000) |
 | `NODE_ENV` | `development` | `production` in every image |
 | `REDIS_URL` | `redis://localhost:6379` | BullMQ queues + caches (bundled: `redis://redis:6379`) |
@@ -1157,7 +1157,8 @@ editor — the shared header, its worlds and their pickers — which read
 Each is **absent unless you set it**, so `/config.js` stays exactly as it was
 until you do, and an absent key keeps today's behaviour. **The platform does
 not enforce them itself yet**: `imports.links: false`, for example, does not on
-its own refuse a link import. A malformed value of a key that limits what
+its own refuse a link import. The editor itself reads `header` and the keys of
+its white-label header (below). A malformed value of a key that limits what
 visitors can do falls to its restrictive side, with a warning; a malformed
 logo is dropped with a warning and the rest of `brand` is kept.
 
@@ -1192,7 +1193,29 @@ logo is dropped with a warning and the rest of `brand` is kept.
   is ignored (every language stays offered). A `locale.default` the list does
   not include is warned about at boot.
 - `header`: `"default"`, or `"white-label"` for the deployment's own header
-  without platform links. Any other value reads as `"white-label"`.
+  without platform links. Any other value reads as `"white-label"`. On an image
+  that carries the shared header (`VITE_SHARED_HEADER` set to `white-label` or
+  `true`), `"white-label"` puts it above the editor in white-label mode, with
+  nothing of Nodaro's in it:
+  - the worlds the profile's `worlds` offers, in its order, narrowed for each
+    viewer by `GET /v1/surface/availability`, each at its path on the same site
+    (`/image`, `/video`, `/music`, `/trends`, `/video/nodaro-motion`,
+    `/voice-changer`, and the editor at `/projects`). Explore and Studio are
+    not drawn;
+  - the deployment's name (`brand.productName`) and logo (`brand.logo`);
+  - its billing: with `billing.selfServe: false` no plans, upgrade, billing or
+    welcome credits. The credit figure is the one the sidebar card shows (the
+    viewer's allowance under a single payer), in the deployment's display unit
+    when one is configured;
+  - its languages (`locale.offered`; no language choice with
+    `locale.picker: false`). The header's language and accessibility cookies
+    stay on the host;
+  - home is the site's root, sign-in is the editor's own `/login`, and the
+    account pages are the editor's own routes.
+
+  The header replaces the sidebar's logo, credit card, account row and
+  language and theme switches, as Nodaro's header does. Absent or
+  `"default"`, every deployment's editor is unchanged.
 - `brand.logo`: the deployment's logo, as a path on this site
   (`/brand/logo.svg`) or an `https://` URL. A protocol-relative `//host/…`
   reference, any other scheme (`http:`, `data:`, `javascript:`), and anything

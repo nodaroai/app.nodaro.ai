@@ -84,6 +84,11 @@ describe("siteHeaderDecision", () => {
   it.each([
     [{ edition: "cloud", flag: "true" }, true, "package"],
     [{ edition: "cloud", flag: "true" }, false, "missing"],
+    // An image for deployments of their own: the same bundle (which header shows is decided at run time).
+    [{ edition: "cloud", flag: "white-label" }, true, "package"],
+    [{ edition: "cloud", flag: "white-label" }, false, "missing"],
+    [{ edition: "community", flag: "white-label" }, true, "stub"],
+    [{ edition: "cloud", flag: "yes" }, true, "stub"],
     [{ edition: "community", flag: "true" }, true, "stub"],
     [{ edition: "business", flag: "true" }, true, "stub"],
     [{ edition: "cloud", flag: "false" }, true, "stub"],
@@ -226,10 +231,17 @@ describe("siteHeaderModule", () => {
     await runConfig(on, "build")
     expect(resolve(on, SITE_A11Y_ID)).toBe(RESOLVED_A11Y)
     const source = load(on, RESOLVED_A11Y) ?? ""
-    expect(source).toMatch(/^import ".+\/a11y\.css"$/m)
+    // The page-wide stylesheet is NOT imported (it would style every page the
+    // image serves): the adapter hands its address, and the app links it only
+    // where the deployment shows the header (lib/accessibility-preferences.ts).
+    expect(source).not.toMatch(/^import ".+\/a11y\.css"$/m)
+    expect(source).toMatch(/^export \{ default as a11yStylesheet \} from ".+\/a11y\.css\?url"$/m)
     // The package's own reader, cookie writer and boot call: the app keeps no copy of the cookie format.
     expect(source).toMatch(/^import \{ applySavedAccessibility, readAccessibility, saveAccessibility \} from ".+\/a11y"$/m)
-    expect(source).toContain("save: (state) => saveAccessibility(state)")
+    // Each passes the app's cookie options through (host-only on a white-label deployment).
+    expect(source).toContain("read: (now, options) => readAccessibility(now, options)")
+    expect(source).toContain("save: (state, options) => saveAccessibility(state, options)")
+    expect(source).toContain("applySavedAccessibility(options)")
     expect(source).not.toMatch(/a11y-cookie/)
     expect(source).toMatch(/export const sharedAccessibility = /)
     expect(source).not.toMatch(/shell\.css|NodaroShell/)
@@ -307,10 +319,21 @@ describe("siteHeaderModule", () => {
 
   it("another edition with the flag on: the stub, and the flag is forced off", async () => {
     for (const edition of ["community", "business"]) {
-      const p = plugin(true, { ...ON, VITE_EDITION: edition })
-      expect(await runConfig(p, "build")).toEqual(FORCED_OFF)
-      expect(resolve(p, SITE_HEADER_ID)).toBe(STUB)
+      for (const flag of ["true", "white-label"]) {
+        const p = plugin(true, { VITE_EDITION: edition, VITE_SHARED_HEADER: flag })
+        expect(await runConfig(p, "build")).toEqual(FORCED_OFF)
+        expect(resolve(p, SITE_HEADER_ID)).toBe(STUB)
+      }
     }
+  })
+
+  it("an image for deployments of their own builds the header in exactly as a Nodaro build does", async () => {
+    const p = plugin(true, { VITE_EDITION: "cloud", VITE_SHARED_HEADER: "white-label" })
+    expect(await runConfig(p, "build")).toBeFalsy()
+    expect(resolve(p, SITE_HEADER_ID)).toBe(RESOLVED)
+    expect(resolve(p, SITE_LOCALE_ID)).toBe(RESOLVED_LOCALE)
+    expect(resolve(p, SITE_A11Y_ID)).toBe(RESOLVED_A11Y)
+    await expect(runConfig(plugin(false, { VITE_EDITION: "cloud", VITE_SHARED_HEADER: "white-label" }), "build")).rejects.toThrow(/VITE_SHARED_HEADER=white-label/)
   })
 
   it("flag unset: the stub, and nothing is defined (the bundle is as before)", async () => {

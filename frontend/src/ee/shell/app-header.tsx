@@ -5,17 +5,39 @@ import { buttonHiddenOn } from "@/components/accessibility/accessibility-menu"
 import { ACCESSIBILITY_STATEMENT_PATH } from "@/lib/accessibility-statement"
 import { markSharedHeaderMounted } from "@/lib/shared-header"
 import { useLocation, useNavigate } from "react-router-dom"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useTheme } from "next-themes"
 import { Menu } from "lucide-react"
 import { NodaroShell, shellTranslator } from "virtual:site-header"
-import { createClient as createNodaroClient } from "@nodaro/sdk/client"
+import { createClient as createNodaroClient, type NodaroClient } from "@nodaro/sdk/client"
+import type { UserBalance } from "@nodaro/sdk/credits"
 import { NODARO_CLIENT_OPTIONS } from "@/lib/nodaro-client"
 import { createClient } from "@/lib/supabase"
 import { useUiLanguage } from "@/hooks/use-ui-language"
 import { useT } from "@/lib/i18n"
-import { headerHomeUrl, readSiteEnv, worldHrefsFor } from "./site"
-import type { SiteAccountPage, SiteHeaderHandle, SiteHeaderLanguage, SiteHeaderTheme } from "./types"
+import { siteHeaderMode } from "@/lib/site-header-mode"
+import { availableWorlds, useSurfaceAvailability } from "@/lib/surface-availability"
+import { runtimeSurfaceProfile } from "@/lib/surface-profile"
+import {
+  surfaceBillingSelfServe,
+  surfaceBrandLogo,
+  surfaceConfiguredBrandName,
+  surfaceLocaleOffered,
+  surfaceLocalePicker,
+} from "@/lib/surface-selectors"
+import { HEADER_QUERY_KEYS } from "./query-keys"
+import { WHITE_LABEL_WORLD_PATHS, headerHomeUrl, readSiteEnv, worldHrefsFor } from "./site"
+import {
+  imageOriginsFor,
+  offeredLanguage,
+  openSitePage,
+  unitTranslator,
+  whiteLabelRoute,
+  whiteLabelWorlds,
+  withHeaderBalance,
+  type UnitWords,
+} from "./white-label"
+import type { SiteAccountPage, SiteHeaderHandle, SiteHeaderLanguage, SiteHeaderProps, SiteHeaderTheme } from "./types"
 
 /**
  * The app's ONE mount of the shared Nodaro site header (Cloud, behind
@@ -43,6 +65,11 @@ import type { SiteAccountPage, SiteHeaderHandle, SiteHeaderLanguage, SiteHeaderT
  *     menu does there (`buttonHiddenOn`); Alt+A still opens it. Its statement
  *     link is the app's statement route, so there is one statement. Both menus
  *     keep the same shared choices (`lib/accessibility-preferences.ts`).
+ *
+ * On a deployment whose surface profile says `header: "white-label"`
+ * (`siteHeaderMode()`), the same mount in the header's white-label mode
+ * (`WhiteLabelHeader` below): nothing of Nodaro's is drawn, and every link,
+ * mark, name, world and word is the deployment's — see `white-label.ts`.
  */
 
 /** The app's own phone/desktop switch (Tailwind `md`). */
@@ -66,6 +93,8 @@ const ACCOUNT_MENU_LINK =
  * every module that reaches `nodaro-client.ts`.
  */
 const headerSdk = createNodaroClient(NODARO_CLIENT_OPTIONS)
+/** The same client for the white-label header: its balance as that header draws it (`headerBalance`). */
+const whiteLabelSdk = withHeaderBalance(headerSdk)
 
 export interface AppHeaderProps {
   /** Editor pages: one phone row, so the canvas keeps its height. */
@@ -76,7 +105,84 @@ export interface AppHeaderProps {
   readonly onHeaderOverlay: () => void
 }
 
-export default function AppHeader({ compact, onOpenMenu, onHeaderOverlay }: AppHeaderProps) {
+export default function AppHeader(props: AppHeaderProps) {
+  return siteHeaderMode() === "white-label" ? <WhiteLabelHeader {...props} /> : <SiteHeader {...props} />
+}
+
+/**
+ * What a white-label deployment's header takes over from the default mount:
+ * its client, links, words and language, and the white-label props.
+ */
+interface WhiteLabelWiring {
+  readonly sdk: NodaroClient
+  readonly props: Pick<SiteHeaderProps, "whiteLabel" | "worlds" | "logo" | "brandName" | "imageOrigins" | "selfServe" | "cookieDomain">
+  /** The header's credit words in the deployment's unit; null while the figures are credits. */
+  readonly unitWords: UnitWords | null
+  /** The languages the deployment offers (undefined: every one); false: no language pill. */
+  readonly languages: readonly string[] | undefined | false
+}
+
+/**
+ * A white-label deployment's header (`header: "white-label"`):
+ *   - worlds: the deployment's (its profile's allowlist and order, narrowed by
+ *     the server's per-viewer answer once it lands), each at its address on
+ *     this same site (`WHITE_LABEL_WORLD_PATHS`), never a build's origins;
+ *   - its name and logo (`brand.productName`, `brand.logo`), and images only
+ *     from this site and the logo's own host;
+ *   - its billing (`billing.selfServe`), and the credit pill in its own unit,
+ *     from the figures the server converted (`white-label.ts`,
+ *     `headerBalance`), worded in the app's dictionaries;
+ *   - its languages (`locale.offered`, `locale.picker`), and the header's
+ *     cookies on this host alone;
+ *   - links: home is the site's root, sign-in this app's own page, the account
+ *     pages this app's routes; no Nodaro address, not even the accessibility
+ *     statement (Nodaro's own, `lib/accessibility-statement.ts`).
+ */
+function WhiteLabelHeader(props: AppHeaderProps) {
+  const t = useT()
+  // Re-render when the viewer's worlds land (DashboardLayout fetches them).
+  useSurfaceAvailability()
+  // The balance the header itself keeps (its own key; never fetched from here): its unit names the pill's words.
+  const { data: balance } = useQuery<UserBalance>({
+    queryKey: HEADER_QUERY_KEYS.credits,
+    queryFn: () => whiteLabelSdk.credits.balance(),
+    enabled: false,
+  })
+  const unit = balance?.display?.unit
+  const unitWords = useMemo<UnitWords | null>(
+    () =>
+      unit
+        ? {
+            label: unit,
+            balance: (credits) => t("header.units.balance", { credits, unit }),
+            pill: (credits) => t("header.units.pill", { credits, unit }),
+            loading: t("header.units.loading", { unit }),
+            left: t("header.units.left", { unit }),
+            meter: (left, total) => t("header.units.meter", { left, total, unit }),
+          }
+        : null,
+    [t, unit],
+  )
+  const logo = surfaceBrandLogo()
+  const name = surfaceConfiguredBrandName()
+  const wiring: WhiteLabelWiring = {
+    sdk: whiteLabelSdk,
+    props: {
+      whiteLabel: true,
+      worlds: whiteLabelWorlds(runtimeSurfaceProfile().worlds, availableWorlds()),
+      ...(logo ? { logo: { src: logo, alt: name ?? "" } } : {}),
+      ...(name ? { brandName: name } : {}),
+      imageOrigins: imageOriginsFor(logo),
+      selfServe: surfaceBillingSelfServe(),
+      cookieDomain: null,
+    },
+    unitWords,
+    languages: surfaceLocalePicker() ? surfaceLocaleOffered() : false,
+  }
+  return <SiteHeader {...props} whiteLabel={wiring} />
+}
+
+function SiteHeader({ compact, onOpenMenu, onHeaderOverlay, whiteLabel }: AppHeaderProps & { readonly whiteLabel?: WhiteLabelWiring }) {
   const t = useT()
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -86,17 +192,25 @@ export default function AppHeader({ compact, onOpenMenu, onHeaderOverlay }: AppH
   const { locale, rows, pick } = useUiLanguage()
 
   const here = window.location.origin
-  const worldHrefs = useMemo(() => worldHrefsFor(here, SITE), [here])
+  const white = whiteLabel !== undefined
+  const worldHrefs = useMemo(() => (white ? WHITE_LABEL_WORLD_PATHS : worldHrefsFor(here, SITE)), [here, white])
   const urls = useMemo(
-    () => ({ app: here, login: "/login", accessibility: `${here}${ACCESSIBILITY_STATEMENT_PATH}` }),
-    [here],
+    () =>
+      white
+        ? { app: here, login: "/login", home: "/" }
+        : { app: here, login: "/login", accessibility: `${here}${ACCESSIBILITY_STATEMENT_PATH}` },
+    [here, white],
   )
   // Before paint: the header's menu replaces the app's in the same frame.
   useLayoutEffect(() => markSharedHeaderMounted(), [])
-  const headerT = useMemo(() => shellTranslator(locale), [locale])
+  const shellT = useMemo(() => shellTranslator(locale), [locale])
+  const unitWords = whiteLabel?.unitWords ?? null
+  const headerT = useMemo(() => unitTranslator(shellT, unitWords), [shellT, unitWords])
 
-  const language = useMemo<SiteHeaderLanguage>(
-    () => ({
+  const languages = whiteLabel?.languages
+  const language = useMemo<SiteHeaderLanguage | undefined>(() => {
+    if (languages === false) return undefined
+    const all: SiteHeaderLanguage = {
       current: locale,
       options: rows.map(({ id, nativeName, shortCode, dir }) => ({ id, nativeName, shortCode, dir })),
       // Only a language the app offers: the id comes back from the header.
@@ -104,9 +218,9 @@ export default function AppHeader({ compact, onOpenMenu, onHeaderOverlay }: AppH
         const row = rows.find((candidate) => candidate.id === id)
         if (row) pick(row.id)
       },
-    }),
-    [locale, rows, pick],
-  )
+    }
+    return offeredLanguage(all, languages)
+  }, [locale, rows, pick, languages])
   // next-themes knows the theme only after mount; until then the pill waits.
   const theme = useMemo<SiteHeaderTheme | undefined>(() => {
     if (!resolvedTheme) return undefined
@@ -116,10 +230,17 @@ export default function AppHeader({ compact, onOpenMenu, onHeaderOverlay }: AppH
 
   const onNavigate = useCallback(
     (href: string) => {
+      if (white) {
+        // On a white-label site the other worlds (and the site's home) are other apps' pages on this same site.
+        const route = whiteLabelRoute(href, window.location.origin)
+        if (route) navigate(route)
+        else openSitePage(href)
+        return
+      }
       const url = new URL(href, window.location.origin)
       if (url.origin === window.location.origin) navigate(`${url.pathname}${url.search}${url.hash}`)
     },
-    [navigate],
+    [navigate, white],
   )
   const onAccountPage = useCallback((path: string, _page: SiteAccountPage) => navigate(path), [navigate])
   const onSignOut = useCallback(() => navigate("/login"), [navigate])
@@ -137,7 +258,7 @@ export default function AppHeader({ compact, onOpenMenu, onHeaderOverlay }: AppH
   return (
     <NodaroShell
       ref={shell}
-      sdk={headerSdk}
+      sdk={whiteLabel?.sdk ?? headerSdk}
       supabase={createClient()}
       queryClient={queryClient}
       sourceApp="app"
@@ -145,7 +266,7 @@ export default function AppHeader({ compact, onOpenMenu, onHeaderOverlay }: AppH
       worldHrefs={worldHrefs}
       onNavigate={onNavigate}
       urls={urls}
-      homeUrl={headerHomeUrl(SITE)}
+      homeUrl={white ? "/" : headerHomeUrl(SITE)}
       locale={locale}
       t={headerT}
       language={language}
@@ -174,6 +295,7 @@ export default function AppHeader({ compact, onOpenMenu, onHeaderOverlay }: AppH
       claimSignupGrant={false}
       onSignOut={onSignOut}
       onOverlayChange={onOverlayChange}
+      {...whiteLabel?.props}
     />
   )
 }

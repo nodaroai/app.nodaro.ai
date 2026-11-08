@@ -213,8 +213,12 @@ ARG VITE_APP_VERSION
 # Organizations (Cloud): "true" enables the organization surfaces. Empty =
 # off, which is every self-host build and every build before the launch.
 ARG VITE_ORGS_ENABLED
-# Shared site header (Cloud): "true" installs it (below) and puts it above the
-# app. Empty = off: every self-host build, and production until the cut-over.
+# Shared site header (Cloud). "true" installs it (below) and puts Nodaro's
+# header above the app (staging). "white-label" installs the same header for
+# the cloud image deployments of their own run (cloud-image.yml): at run time
+# it shows only where the deployment's surface profile says
+# header "white-label", and Nodaro's header never does. Empty = off: every
+# self-host build, and production until the cut-over.
 ARG VITE_SHARED_HEADER
 # Where the shared header's links go (frontend/src/ee/shell/site.ts). Empty =
 # the header's own canonical targets; a preview points them at its hosts.
@@ -268,7 +272,7 @@ RUN set -eu; \
     esac
 
 # The shared site header — a private package, installed ONLY on a cloud build
-# (required with VITE_SHARED_HEADER=true; with the flag off it is installed for
+# (required with VITE_SHARED_HEADER=true or white-label; with the flag off it is installed for
 # the trend admin's media editor when NPM_TOKEN is set, the header staying
 # off); every other build skips this step untouched (the script exits before
 # touching anything). NPM_TOKEN is the same

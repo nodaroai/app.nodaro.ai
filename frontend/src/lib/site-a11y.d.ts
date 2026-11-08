@@ -44,18 +44,33 @@ declare module "virtual:site-a11y" {
     readonly extraFields?: readonly string[]
   }
 
+  /**
+   * Where the header keeps its cookies: `cookieDomain: null` keeps them on this
+   * host (a white-label deployment); absent, the header's own rule.
+   */
+  export interface SharedCookieOptions {
+    readonly cookieDomain?: string | null
+  }
+
   export interface SharedAccessibility {
     /**
      * What the viewer chose on any product. With no shared choice yet, the
      * app's earlier per-browser choices are read once and written through.
      */
-    read(now?: number): SharedAccessibilityState
+    read(now?: number, options?: SharedCookieOptions): SharedAccessibilityState
     /** Keeps the choices for every product (the package's own cookie writer). */
-    save(state: SharedAccessibilityState): void
+    save(state: SharedAccessibilityState, options?: SharedCookieOptions): void
     /** Reads and applies the choices to `<html>` (before the first paint). Never throws. */
-    applySaved(): void
+    applySaved(options?: SharedCookieOptions): void
   }
 
   /** The shared store, or null on a build without the shared header. */
   export const sharedAccessibility: SharedAccessibility | null
+
+  /**
+   * The address of the header's page-wide accessibility stylesheet (what each
+   * choice does to the page), or null on a build without the shared header.
+   * Not loaded by the build: the app links it where the header is on.
+   */
+  export const a11yStylesheet: string | null
 }

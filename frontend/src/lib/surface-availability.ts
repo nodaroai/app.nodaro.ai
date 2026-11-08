@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react"
+import { isWorldId, type WorldId } from "@nodaro/shared/runtime-config"
 import { runtimeSurfaceProfile } from "./surface-profile"
 
 /**
@@ -39,6 +40,9 @@ let fetched: {
   /** Web Scrape SOURCES that follow a withheld node (the Instagram source follows
    *  the Instagram node). The backend sends the result, never the mapping. */
   webScrapeSources: { denied: ReadonlySet<string>; hiddenFromUsers: ReadonlySet<string> }
+  /** The worlds offered to this viewer, in the deployment's order; null when
+   *  the server sent none (one that predates them). */
+  worlds: readonly WorldId[] | null
 } | null = null
 let inflight: Promise<void> | null = null
 /** Whose answer `fetched` is. The answer is per viewer, so it is only ever shown
@@ -125,6 +129,7 @@ async function fetchAnswer(getAuthHeaders: () => Promise<Record<string, string>>
       nodes?: { denied?: unknown; hiddenFromUsers?: unknown }
       models?: { denied?: unknown }
       webScrapeSources?: { denied?: unknown; hiddenFromUsers?: unknown }
+      worlds?: unknown
     }
     if (seq !== viewerSeq) return
     const toSet = (v: unknown): ReadonlySet<string> =>
@@ -137,12 +142,26 @@ async function fetchAnswer(getAuthHeaders: () => Promise<Record<string, string>>
         denied: toSet(json.webScrapeSources?.denied),
         hiddenFromUsers: toSet(json.webScrapeSources?.hiddenFromUsers),
       },
+      worlds: offeredWorlds(json.worlds),
     }
     emit()
   } catch {
     // Offline / pre-auth — the static-profile fallback stands; the backend
     // is the authority either way.
   }
+}
+
+/**
+ * The enabled worlds of the answer's `worlds`, in its order: an id this app
+ * does not know (a newer server's world) or an entry it cannot read is left
+ * out. Null when the answer has no list at all.
+ */
+function offeredWorlds(value: unknown): readonly WorldId[] | null {
+  if (!Array.isArray(value)) return null
+  return value.flatMap((entry: unknown) => {
+    const world = entry as { id?: unknown; enabled?: unknown } | null
+    return world && isWorldId(world.id) && world.enabled === true ? [world.id] : []
+  })
 }
 
 /** Test hook. */
@@ -152,6 +171,7 @@ export function __resetSurfaceAvailabilityForTests(
     models: string[]
     hiddenFromUsers?: string[]
     webScrapeSources?: { denied?: string[]; hiddenFromUsers?: string[] }
+    worlds?: WorldId[]
   } | null,
 ): void {
   fetched = next
@@ -163,6 +183,7 @@ export function __resetSurfaceAvailabilityForTests(
           denied: new Set(next.webScrapeSources?.denied ?? []),
           hiddenFromUsers: new Set(next.webScrapeSources?.hiddenFromUsers ?? []),
         },
+        worlds: next.worlds ?? null,
       }
     : null
   if (!next) {
@@ -209,4 +230,14 @@ export function isWebScrapeSourceHiddenFromUsers(source: string): boolean {
 export function isModelUnavailable(id: string): boolean {
   if (fetched) return fetched.models.has(id)
   return runtimeSurfaceProfile().models.deny.includes(id)
+}
+
+/**
+ * The worlds this deployment offers the viewer, in its order: the profile's
+ * `worlds.allow` AND every node type each one runs available to them (the
+ * server's answer, `worlds`). Null before the answer lands, after sign-out,
+ * and when the server sent none — a reader then goes by the profile alone.
+ */
+export function availableWorlds(): readonly WorldId[] | null {
+  return fetched?.worlds ?? null
 }

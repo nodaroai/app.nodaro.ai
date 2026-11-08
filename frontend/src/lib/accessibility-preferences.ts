@@ -1,19 +1,24 @@
-import { sharedAccessibility } from "virtual:site-a11y"
+import { a11yStylesheet, sharedAccessibility, type SharedAccessibility } from "virtual:site-a11y"
+import { siteHeaderCookieOptions, siteHeaderMode } from "./site-header-mode"
 
 /**
  * The viewer's accessibility-menu choices, and how they reach the page: each
  * choice is a `data-a11y-*` attribute on <html>, and globals.css holds what
  * every attribute does. A blocked or empty storage simply means the defaults.
  *
- * Where they are kept — ONE store per build, never two:
- *   - a build with the shared site header (`virtual:site-a11y` is the
- *     header's): the cookie every Nodaro product shares, on every page — the
- *     header's own menu where the header is mounted, this app's menu on the
- *     pages without it. The header's reader carries this browser's earlier
- *     choices (the localStorage keys below) into the cookie once, when there
- *     is no cookie yet; from then on localStorage is never read or written.
- *   - every other build (`sharedAccessibility` is null): this browser's
- *     localStorage, as before.
+ * Where they are kept — ONE store per deployment, never two:
+ *   - where the deployment shows the shared site header (`siteHeaderMode()`,
+ *     on a build whose `virtual:site-a11y` is the header's): the cookie every
+ *     Nodaro product shares, on every page — the header's own menu where the
+ *     header is mounted, this app's menu on the pages without it — and on this
+ *     host alone for a white-label deployment. The header's reader carries
+ *     this browser's earlier choices (the localStorage keys below) into the
+ *     cookie once, when there is no cookie yet; from then on localStorage is
+ *     never read or written. The header's page-wide stylesheet is linked there
+ *     too (`linkSharedAccessibilityStylesheet`).
+ *   - everywhere else (`sharedAccessibility` is null, or the deployment shows
+ *     no header): this browser's localStorage, as before, and no stylesheet
+ *     of the header's.
  *
  * The operating system's "reduce motion" is honoured by CSS alone (a media
  * query beside the attribute rule), so it holds in every edition and changes
@@ -111,8 +116,15 @@ export function parsePreferences(raw: string | null): AccessibilityPreferences {
   }
 }
 
+/** The shared store, where the deployment shows the header; null where this browser's storage is the store. */
+function sharedStore(): SharedAccessibility | null {
+  if (!sharedAccessibility) return null
+  return siteHeaderMode() === null ? null : sharedAccessibility
+}
+
 export function loadPreferences(): AccessibilityPreferences {
-  if (sharedAccessibility) return sharedAccessibility.read().prefs
+  const shared = sharedStore()
+  if (shared) return shared.read(undefined, siteHeaderCookieOptions()).prefs
   try {
     return parsePreferences(window.localStorage.getItem(STORAGE_KEY))
   } catch {
@@ -121,10 +133,12 @@ export function loadPreferences(): AccessibilityPreferences {
 }
 
 export function savePreferences(prefs: AccessibilityPreferences): void {
-  if (sharedAccessibility) {
+  const shared = sharedStore()
+  if (shared) {
     // Spread what is kept: the header's button place and a newer product's
     // letters and fields are not this menu's to erase.
-    sharedAccessibility.save({ ...sharedAccessibility.read(), prefs })
+    const options = siteHeaderCookieOptions()
+    shared.save({ ...shared.read(undefined, options), prefs }, options)
     return
   }
   try {
@@ -149,13 +163,57 @@ export function applyPreferences(
 
 /**
  * For the entry module, before the first paint: the saved choices on <html>.
- * On a shared-header build the header's own `applySavedAccessibility()` (the
- * shared cookie, seeded once from this browser's earlier choices); elsewhere
- * this browser's storage. One source per build, so a page never gets two sets.
+ * Where the deployment shows the shared header, the header's own
+ * `applySavedAccessibility()` (the shared cookie, seeded once from this
+ * browser's earlier choices) and its stylesheet; elsewhere this browser's
+ * storage. One source per deployment, so a page never gets two sets.
  */
 export function applySavedPreferences(): void {
-  if (sharedAccessibility) sharedAccessibility.applySaved()
-  else applyPreferences(loadPreferences())
+  const shared = sharedStore()
+  if (!shared) {
+    applyPreferences(loadPreferences())
+    return
+  }
+  // A failure here is the header's to handle (its mount waits for the same link).
+  void linkSharedAccessibilityStylesheet().catch(() => {})
+  shared.applySaved(siteHeaderCookieOptions())
+}
+
+let stylesheet: Promise<void> | null = null
+
+/**
+ * The header's page-wide accessibility stylesheet (what each choice does to
+ * the page, the header's own parts included), linked once — and only where
+ * the deployment shows the header: the build carries its address, never the
+ * rules themselves, so a deployment without the header is styled as before.
+ *
+ * Resolves once the rules apply, at once where there is nothing to link. The
+ * header's mount waits for it (`components/layout/site-header-slot.tsx`): the
+ * header draws its accessibility menu only where the rules are on the page,
+ * and checks once, when it mounts, while this app's own menu steps aside for
+ * it. Rejects when the stylesheet cannot load, so the header fails and the
+ * page keeps its own chrome and menu instead of losing both.
+ */
+export function linkSharedAccessibilityStylesheet(): Promise<void> {
+  if (stylesheet) return stylesheet
+  if (!a11yStylesheet || sharedStore() === null || typeof document === "undefined") return Promise.resolve()
+  const href = a11yStylesheet
+  stylesheet = new Promise<void>((resolve, reject) => {
+    const link = document.createElement("link")
+    link.rel = "stylesheet"
+    link.href = href
+    link.setAttribute("data-site-a11y", "")
+    link.addEventListener("load", () => resolve(), { once: true })
+    link.addEventListener("error", () => reject(new Error("the shared accessibility stylesheet did not load")), { once: true })
+    document.head.appendChild(link)
+  })
+  return stylesheet
+}
+
+/** Test seam: forget the stylesheet linked by an earlier test. */
+export function resetSharedAccessibilityStylesheetForTests(): void {
+  stylesheet = null
+  if (typeof document !== "undefined") for (const link of document.querySelectorAll("link[data-site-a11y]")) link.remove()
 }
 
 /*
@@ -177,8 +235,9 @@ export function hiddenUntilAfter(months: HideMonths, now: Date = new Date()): nu
 
 /** When the button is hidden, the moment it returns; null when it shows. */
 export function loadHiddenUntil(now: number = Date.now()): number | null {
-  if (sharedAccessibility) {
-    const until = sharedAccessibility.read(now).hiddenUntil
+  const shared = sharedStore()
+  if (shared) {
+    const until = shared.read(now, siteHeaderCookieOptions()).hiddenUntil
     return until !== null && until > now ? until : null
   }
   try {
@@ -192,8 +251,10 @@ export function loadHiddenUntil(now: number = Date.now()): number | null {
 }
 
 export function saveHiddenUntil(until: number | null): void {
-  if (sharedAccessibility) {
-    sharedAccessibility.save({ ...sharedAccessibility.read(), hiddenUntil: until })
+  const shared = sharedStore()
+  if (shared) {
+    const options = siteHeaderCookieOptions()
+    shared.save({ ...shared.read(undefined, options), hiddenUntil: until }, options)
     return
   }
   try {

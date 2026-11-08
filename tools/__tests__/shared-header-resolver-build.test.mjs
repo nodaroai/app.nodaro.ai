@@ -50,6 +50,7 @@ function fixture({ withResolver }) {
       withResolver ? 'import { headerAvailable } from "virtual:site-header"' : "const headerAvailable = null",
       withResolver ? 'import { mediaEditorAvailable, TrimPanel } from "virtual:media-editor"' : "const mediaEditorAvailable = null, TrimPanel = null",
       'export const flagOn = import.meta.env.VITE_SHARED_HEADER === "true"',
+      'export const whiteLabelOn = import.meta.env.VITE_SHARED_HEADER === "white-label"',
       "export const header = headerAvailable",
       "export const mediaEditor = mediaEditorAvailable",
       "export const trimPanel = TrimPanel",
@@ -118,6 +119,25 @@ test("flag on, another edition: the bundle carries the stub and a literal false"
     // Only a cloud build says which header it carries, and where its worlds row leads.
     assert.equal(r.files["shell-version.json"], undefined)
     assert.equal(r.files["shell-worlds.json"], undefined)
+  })
+})
+
+test("the white-label value, another edition: the stub, and the flag compiled to false too", (t) => {
+  if (!viteReady(t)) return
+  withFixture({ withResolver: true }, (dir) => {
+    const r = viteBuild(dir, { VITE_EDITION: "community", VITE_SHARED_HEADER: "white-label" })
+    assert.equal(r.status, 0, r.output)
+    assert.match(r.code, /whiteLabelOn = false/)
+    assert.match(r.code, /headerAvailable = false/)
+  })
+})
+
+test("cloud + the white-label value + no package: the build is refused, as for true", (t) => {
+  if (!viteReady(t)) return
+  withFixture({ withResolver: true }, (dir) => {
+    const r = viteBuild(dir, { VITE_EDITION: "cloud", VITE_SHARED_HEADER: "white-label" })
+    assert.notEqual(r.status, 0)
+    assert.match(r.output, /VITE_SHARED_HEADER=white-label on a cloud build/)
   })
 })
 

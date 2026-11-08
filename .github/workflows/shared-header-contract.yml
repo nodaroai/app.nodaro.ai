@@ -29,6 +29,8 @@ on:
       - "frontend/src/lib/site-a11y.d.ts"
       - "frontend/src/lib/site-a11y-stub.ts"
       - "frontend/src/lib/accessibility-preferences.ts"
+      - "frontend/src/lib/site-header-mode.ts"
+      - "frontend/src/lib/runtime-config.ts"
       - "frontend/Caddyfile"
   push:
     branches: [dev, main]
@@ -46,6 +48,8 @@ on:
       - "frontend/src/lib/site-a11y.d.ts"
       - "frontend/src/lib/site-a11y-stub.ts"
       - "frontend/src/lib/accessibility-preferences.ts"
+      - "frontend/src/lib/site-header-mode.ts"
+      - "frontend/src/lib/runtime-config.ts"
       - "frontend/Caddyfile"
   workflow_dispatch:
 

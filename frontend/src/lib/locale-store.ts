@@ -1,10 +1,12 @@
 /**
  * The interface language: the app chrome and the picker catalogs.
  *
- * - One language for every Nodaro product: on a build with the shared site
- *   header, the choice is also the language cookie every product reads and
- *   writes (`virtual:site-locale`); elsewhere that module is a stub and the
- *   app's own storage is all there is.
+ * - One language for every Nodaro product: where the deployment shows the
+ *   shared site header (`siteHeaderMode()`, decided at run time), the choice
+ *   is also the language cookie every product reads and writes
+ *   (`virtual:site-locale`), on this host alone for a white-label deployment.
+ *   Elsewhere — a build without the header, where that module is a stub, and
+ *   a deployment that shows none — the app's own storage is all there is.
  * - Signed in, the account's language (`profiles.preferred_locale`) wins once
  *   per sign-in (`markHydrated`, called by `useLoadUserSettings`), and is
  *   written to the cookie, so it follows the account to every product.
@@ -20,6 +22,7 @@ import { create } from "zustand"
 import { LANGUAGES, type LocaleId, type LocaleDirection, getLocaleDirection } from "@nodaro/shared/i18n"
 import { readSavedLocale, saveLocale } from "virtual:site-locale"
 import { isOfferedLocale } from "./i18n/offered-locales"
+import { siteHeaderCookieOptions, siteHeaderMode } from "./site-header-mode"
 import { runtimeDefaultLocale } from "./runtime-config"
 import { surfaceLocaleDefault } from "./surface-selectors"
 
@@ -110,16 +113,21 @@ function writeStoredLocale(value: LocaleId) {
   }
 }
 
-/** The language the viewer chose on any Nodaro product (the shared cookie), or null. */
+/**
+ * The language the viewer chose on any Nodaro product (the shared cookie), or
+ * null. Only where the deployment shows the shared header: elsewhere the
+ * header's cookie is not this app's to read.
+ */
 function readSharedLocale(): LocaleId | null {
+  if (siteHeaderMode() === null) return null
   const shared = readSavedLocale()
   return isSupportedLocale(shared) ? shared : null
 }
 
-/** A choice to keep: for every product (the shared cookie) and on this device. */
+/** A choice to keep: on this device, and for every product (the shared cookie) where the deployment shows the header. */
 function keepLocale(value: LocaleId) {
   writeStoredLocale(value)
-  saveLocale(value)
+  if (siteHeaderMode() !== null) saveLocale(value, siteHeaderCookieOptions())
 }
 
 interface LocaleStore {

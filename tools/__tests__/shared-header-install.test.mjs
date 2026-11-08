@@ -102,12 +102,26 @@ test("cloud with the flag off but a token: installs the package for the media ed
 })
 
 test("cloud + flag without a token fails loudly and installs nothing", { skip: !available }, () => {
+  for (const flag of ["true", "white-label"]) {
+    const ws = workspace()
+    try {
+      const r = run(ws, { ...ON, VITE_SHARED_HEADER: flag })
+      assert.notEqual(r.status, 0)
+      assert.match(r.output, new RegExp(`VITE_SHARED_HEADER=${flag} on a cloud build needs NPM_TOKEN`))
+      assert.equal(existsSync(ws.log), false)
+    } finally {
+      rmSync(ws.root, { recursive: true, force: true })
+    }
+  }
+})
+
+test("the image for deployments of their own (flag white-label) installs the header exactly as a Nodaro build does", { skip: !available }, () => {
   const ws = workspace()
   try {
-    const r = run(ws, ON)
-    assert.notEqual(r.status, 0)
-    assert.match(r.output, /needs NPM_TOKEN/)
-    assert.equal(existsSync(ws.log), false)
+    const r = run(ws, { ...ON, VITE_SHARED_HEADER: "white-label", NPM_TOKEN: TOKEN })
+    assert.equal(r.status, 0, r.output)
+    assert.match(readFileSync(ws.log, "utf8"), /^install --no-save --ignore-scripts --no-audit --no-fund @nodaroai\/[a-z-]+@\d+\.\d+\.\d+\s*$/)
+    assert.equal(existsSync(join(ws.root, ".npmrc")), false, ".npmrc must be removed")
   } finally {
     rmSync(ws.root, { recursive: true, force: true })
   }

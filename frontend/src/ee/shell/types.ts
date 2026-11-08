@@ -88,4 +88,25 @@ export interface SiteHeaderProps {
   readonly phoneLayout?: "full" | "compact"
   readonly nonce?: string
   readonly ref?: Ref<SiteHeaderHandle>
+  // ── White-label mode (a deployment of its own; `white-label.ts`) ──────────
+  /** Nothing of Nodaro's is drawn: every link, mark and name is the host's, and an item it gives no link for is left out. */
+  readonly whiteLabel?: boolean
+  /** The worlds drawn, in their order (a world also needs its `worldHrefs` entry). */
+  readonly worlds?: readonly SiteWorldId[]
+  /** The deployment's own mark, drawn instead of Nodaro's. */
+  readonly logo?: SiteHeaderLogo
+  /** The deployment's name, said where the header would say Nodaro (white-label mode only). */
+  readonly brandName?: string
+  /** The https origins, beyond the page's own site, the header may draw images from (white-label mode only). */
+  readonly imageOrigins?: readonly string[]
+  /** false: the deployment sells nothing (no plans, upgrade, billing or welcome credits). */
+  readonly selfServe?: boolean
+  /** The Domain of the header's language and accessibility cookies; null keeps them on this host. */
+  readonly cookieDomain?: string | null
+}
+
+/** A deployment's own mark: a path on its site or an https URL, and its text alternative. */
+export interface SiteHeaderLogo {
+  readonly src: string
+  readonly alt: string
 }

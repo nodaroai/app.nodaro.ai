@@ -7,8 +7,15 @@
  * `import.meta.env.VITE_SHARED_HEADER`, so on a build without the flag (every
  * self-host build, production until the cut-over — and any build where the
  * resolver forced the flag off) the branch is dead and the header's chunk is
- * never emitted. Per page, the gate (`lib/shared-header.ts`) decides
- * (embedded, white-label, prepaid pages keep today's chrome).
+ * never emitted. Per page, the gate (`lib/shared-header.ts`) decides which
+ * header shows, if any (embedded pages, and deployments that are neither
+ * Nodaro's own nor asking for their own white-label header, keep today's
+ * chrome).
+ *
+ * The mount waits for the header's accessibility stylesheet as well as its
+ * chunk (`linkSharedAccessibilityStylesheet`): the header draws its
+ * accessibility menu only where those rules are on the page, and checks once,
+ * when it mounts, while the app's own menu steps aside for it.
  *
  * If the header's chunk fails to load or the header throws, the boundary below
  * closes the gate (`markSharedHeaderFailed`): the layout, the sidebar and the
@@ -19,6 +26,7 @@
  * the header (`__tests__/site-header-routes.test.ts`).
  */
 import { Component, Suspense, lazy, type ComponentType, type ReactNode } from "react"
+import { linkSharedAccessibilityStylesheet } from "@/lib/accessibility-preferences"
 import { markSharedHeaderFailed, useSharedHeaderActive } from "@/lib/shared-header"
 import { cn } from "@/lib/utils"
 
@@ -30,7 +38,9 @@ export interface SiteHeaderSlotProps {
 }
 
 const AppHeader: ComponentType<SiteHeaderSlotProps> | null =
-  import.meta.env.VITE_SHARED_HEADER === "true" ? lazy(() => import("@/ee/shell/app-header")) : null
+  import.meta.env.VITE_SHARED_HEADER === "true" || import.meta.env.VITE_SHARED_HEADER === "white-label"
+    ? lazy(() => Promise.all([import("@/ee/shell/app-header"), linkSharedAccessibilityStylesheet()]).then(([header]) => header))
+    : null
 
 /** Catches a failed chunk or a throwing header: renders nothing and hands the page back its own chrome. */
 class HeaderFailureBoundary extends Component<{ readonly children: ReactNode }, { readonly failed: boolean }> {

@@ -594,6 +594,11 @@ export const he: ChromeDict = {
   "nav.whatsNewIn": "מה חדש ב-{version}",
   "nav.backToProjects": "חזרה לפרויקטים",
   "nav.openMenu": "פתיחת תפריט",
+  "header.units.balance": "{credits} {unit}",
+  "header.units.pill": "{credits} {unit} — קבלת {unit} נוספים",
+  "header.units.loading": "טוענים {unit}",
+  "header.units.left": "{unit} שנותרו",
+  "header.units.meter": "{unit} שנותרו: {left} מתוך {total}",
 
   // Auth / login
   "auth.tagline": "תהליכים חזותיים ליצירת וידאו בבינה מלאכותית",

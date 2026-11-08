@@ -11,11 +11,19 @@ import { readSiteEnv, siteWorldsFile } from "./site"
  * `install-package.sh` beside this file and the Dockerfile's frontend stage).
  * App code imports it through ONE virtual id, `virtual:site-header`:
  *
- *   - cloud build, `VITE_SHARED_HEADER=true`, package installed → a small
- *     adapter that re-exports the package and imports its stylesheet;
+ *   - cloud build, `VITE_SHARED_HEADER` "true" or "white-label", package
+ *     installed → a small adapter that re-exports the package and imports its
+ *     stylesheet;
  *   - anything else → `stub.tsx` (`headerAvailable = false`, a header that
  *     renders nothing), so community / business builds and public CI never
  *     need the package.
+ *
+ * The two values build the same bundle; they differ in which header the page
+ * may show (`lib/edition.ts`, decided at run time by `lib/site-header-mode.ts`):
+ * "true" is Nodaro's own sites (Nodaro's header, or a white-label one where
+ * the deployment's surface profile asks for it); "white-label" is an image for
+ * deployments of their own, which shows the header only where the profile
+ * says `header: "white-label"`, and never Nodaro's.
  *
  * When the flag is on but cannot be honoured (another edition, or the package
  * is missing on the dev server) the flag itself is forced to "false" in the
@@ -34,8 +42,16 @@ import { readSiteEnv, siteWorldsFile } from "./site"
  * cookie too), read by the app's boot (before the first paint) and its own
  * menu, so it is light for the same reason. On the package decision it is an
  * adapter over the package's accessibility entry (its reader, its cookie
- * writer and its boot call) and its page-wide stylesheet; elsewhere
- * `lib/site-a11y-stub.ts` (`null`: the app keeps its own storage).
+ * writer and its boot call) and the address of its page-wide stylesheet;
+ * elsewhere `lib/site-a11y-stub.ts` (`null`: the app keeps its own storage).
+ *
+ * Both are only what the BUILD carries. Whether a page uses them is decided at
+ * run time, by the deployment (`siteHeaderMode()`): where it shows no header,
+ * the app keeps its own storage and loads no stylesheet of the header's, as on
+ * a build without it (`lib/locale-store.ts`, `components/i18n-html-dir.tsx`,
+ * `lib/accessibility-preferences.ts`). So the stylesheet is not imported here
+ * (that would style every page of every deployment the image serves): the
+ * adapter hands its address, and the app links it where the header is on.
  *
  * And `virtual:media-editor`: the shared media editor's parts (range strip,
  * crop box, ratio chips and their helpers), used by the trend admin's source
@@ -78,6 +94,13 @@ export const SITE_WORLDS_FILE = "shell-worlds.json"
 
 export type SiteHeaderDecision = "package" | "stub" | "missing"
 
+/** The flag's values that build the header in: Nodaro's own sites, and an image for deployments of their own. */
+export const SHARED_HEADER_FLAG_VALUES: readonly string[] = Object.freeze(["true", "white-label"])
+
+function buildsHeader(flag: string | undefined): boolean {
+  return flag !== undefined && SHARED_HEADER_FLAG_VALUES.includes(flag)
+}
+
 export interface SiteHeaderEnv {
   readonly edition?: string
   readonly flag?: string
@@ -85,7 +108,7 @@ export interface SiteHeaderEnv {
 
 /** What `virtual:site-header` becomes for this build. */
 export function siteHeaderDecision(env: SiteHeaderEnv, installed: boolean): SiteHeaderDecision {
-  if (env.edition !== "cloud" || env.flag !== "true") return "stub"
+  if (env.edition !== "cloud" || !buildsHeader(env.flag)) return "stub"
   return installed ? "package" : "missing"
 }
 
@@ -178,13 +201,13 @@ const LOCALE_ADAPTER = [
 ].join("\n")
 
 const A11Y_ADAPTER = [
-  `import "${PACKAGE}/a11y.css"`,
   `import { applySavedAccessibility, readAccessibility, saveAccessibility } from "${PACKAGE}/a11y"`,
+  `export { default as a11yStylesheet } from "${PACKAGE}/a11y.css?url"`,
   "export const sharedAccessibility = Object.freeze({",
-  "  read: (now) => readAccessibility(now),",
-  "  save: (state) => saveAccessibility(state),",
-  "  applySaved: () => {",
-  "    applySavedAccessibility()",
+  "  read: (now, options) => readAccessibility(now, options),",
+  "  save: (state, options) => saveAccessibility(state, options),",
+  "  applySaved: (options) => {",
+  "    applySavedAccessibility(options)",
   "  },",
   "})",
   "",
@@ -220,14 +243,14 @@ export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
       versionFile = publishes ? siteVersionFile(decision, present ? (options.readVersion ?? installedVersion)(options.root) : null) : null
       worldsFile = publishes ? siteWorldsFile(readSiteEnv(env), decision === "package") : null
       if (decision === "missing" && command === "build") {
-        throw new Error(`${FLAG}=true on a cloud build, but the header package is not installed. Install it (see frontend/src/ee/shell/install-package.sh) or unset the flag.`)
+        throw new Error(`${FLAG}=${env[FLAG]} on a cloud build, but the header package is not installed. Install it (see frontend/src/ee/shell/install-package.sh) or unset the flag.`)
       }
-      if (decision === "package" || env[FLAG] !== "true") return
+      if (decision === "package" || !buildsHeader(env[FLAG])) return
       // The flag is on but cannot be honoured: off in the bundle too.
       return { define: { [`import.meta.env.${FLAG}`]: JSON.stringify("false") } }
     },
     configResolved(config) {
-      if (decision === "missing") config.logger.warn(`[site-header] ${FLAG}=true but the header package is not installed — serving the stub, flag off.`)
+      if (decision === "missing") config.logger.warn(`[site-header] ${FLAG} is on but the header package is not installed — serving the stub, flag off.`)
     },
     resolveId(id, importer) {
       if (id === SITE_HEADER_ID) return decision === "package" ? RESOLVED_ID : options.stubPath
