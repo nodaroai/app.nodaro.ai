@@ -1,7 +1,7 @@
 ---
 node_type: text-to-speech
-generated_at: 2026-10-24T23:37:38.132Z
-generated_from: db68a9ee4
+generated_at: 2026-11-08T19:17:23.310Z
+generated_from: dc897a152
 ---
 
 # Text to Speech
@@ -83,6 +83,7 @@ generated_from: db68a9ee4
 - `style`
 - `speed`
 - `language_code`
+- `output_format`
 - `previous_text`
 - `next_text`
 - `user_request`

@@ -9,6 +9,7 @@ import { ttsWireModel, ttsModelKey } from "./tts-models.js"
 import { normalizeTtsVoiceSettings } from "./voice-settings.js"
 import { normalizeTtsNeighbourText } from "./neighbour-text.js"
 import { getTtsCapabilities, ttsSupportsTimestamps } from "@nodaro/shared/model-catalog"
+import { TTS_OUTPUT_FORMAT_FILES, type TtsOutputFormat } from "@nodaro/shared/models"
 import type { Transcript } from "@nodaro/shared/edl"
 import { transcriptFromSpeechTimestamps } from "./alignment-transcript.js"
 
@@ -74,6 +75,12 @@ export interface DirectTTSOptions {
    */
   previousText?: string
   nextText?: string
+  /**
+   * The file to ask the vendor for (`TTS_OUTPUT_FORMATS`), sent as the request's
+   * `output_format`. Absent ⇒ the field is not sent and the vendor's default MP3
+   * comes back, exactly as before the option existed.
+   */
+  outputFormat?: TtsOutputFormat
   /**
    * Retry with the default premade voice (Rachel) when ElevenLabs reports
    * voice_not_found. ONLY for LLM-originated requests (MCP), where the voice
@@ -180,6 +187,11 @@ async function renderElevenLabsTTS(
   // but only a model that returns them posts /with-timestamps — the others
   // stay byte-identical (plain URL, Accept: audio/mpeg, same body).
   const withTimestamps = wantTimestamps && ttsSupportsTimestamps(provider)
+  // The file asked for: only an explicit choice reaches the wire (`?output_format=`). Without one the
+  // request is byte-identical to before the option existed and the vendor's default MP3 comes back.
+  const outputFormat = options?.outputFormat
+  const outputFormatQuery = outputFormat ? `?output_format=${encodeURIComponent(outputFormat)}` : ""
+  const acceptMime = outputFormat ? TTS_OUTPUT_FORMAT_FILES[outputFormat].mime : "audio/mpeg"
 
   const body: Record<string, unknown> = {
     text,
@@ -256,13 +268,13 @@ async function renderElevenLabsTTS(
           body,
           dimensions: meta?.dimensions ?? {},
         },
-        `${ELEVENLABS_BASE_URL}/v1/text-to-speech/${vid}${withTimestamps ? "/with-timestamps" : ""}`,
+        `${ELEVENLABS_BASE_URL}/v1/text-to-speech/${vid}${withTimestamps ? "/with-timestamps" : ""}${outputFormatQuery}`,
         {
           method: "POST",
           headers: {
             "xi-api-key": apiKey,
             "Content-Type": "application/json",
-            Accept: withTimestamps ? "application/json" : "audio/mpeg",
+            Accept: withTimestamps ? "application/json" : acceptMime,
           },
           body: JSON.stringify(body),
           signal: controller.signal,

@@ -5,6 +5,7 @@ import { emit, success, dim, info, warn, table, type OutputOpts } from "../outpu
 import { reportQueuedJob } from "../util.js"
 import type { VcpAnalysis, VcpExportInput, VcpExportTrack, VoiceChangerProInput } from "@nodaro/sdk/voices"
 import { DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, type DialogueProvider } from "@nodaro/shared/models"
+import { VOICE_FAVORITE_TYPES, type VoiceFavoriteType } from "@nodaro/shared/pipeline"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -795,6 +796,75 @@ Examples:
           ["name", "voice_id", "gender", "accent", "age", "category"],
         )
         dim(`${voices.length} premade voice${voices.length === 1 ? "" : "s"} — pass a name or voice_id to --voice / --voices`)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("favorites")
+    .description("list your favorite voices, newest first (premade, library or clone), with the voice_id to pass to --voice")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (opts: GlobalOpts) => {
+      try {
+        const favorites = await buildClient(opts.profile).voices.listFavorites()
+        if (opts.json) {
+          emit(favorites, opts)
+          return
+        }
+        table(
+          favorites.map((f) => ({ name: f.name, voice_id: f.voiceId, type: f.voiceType, starred: f.createdAt })),
+          ["name", "voice_id", "type", "starred"],
+        )
+        dim(`${favorites.length} favorite${favorites.length === 1 ? "" : "s"} — pass voice_id to --voice / --voices`)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("favorite <voiceId>")
+    .description("star a voice (a premade voice, a Voice Library voice or one of your clones) — idempotent")
+    .requiredOption("--name <name>", "the voice's name, as your favorites list will show it")
+    .requiredOption("--type <type>", "what the voice is: premade | library | custom (a library voice starred as premade would render on the wrong path)")
+    .option("--preview <url>", "the voice's preview audio URL, if you have it")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (voiceId: string, opts: { name: string; type: string; preview?: string } & GlobalOpts) => {
+      try {
+        if (!(VOICE_FAVORITE_TYPES as readonly string[]).includes(opts.type)) {
+          throw new Error(`--type must be ${VOICE_FAVORITE_TYPES.join(", ")} (got "${opts.type}")`)
+        }
+        const favorite = await buildClient(opts.profile).voices.favorite({
+          voiceId,
+          voiceType: opts.type as VoiceFavoriteType,
+          name: opts.name,
+          ...(opts.preview ? { previewUrl: opts.preview } : {}),
+        })
+        if (opts.json) {
+          emit(favorite, opts)
+          return
+        }
+        dim(`Starred ${favorite.name} (${favorite.voiceId}).`)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("unfavorite <voiceId>")
+    .description("unstar a voice — idempotent")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (voiceId: string, opts: GlobalOpts) => {
+      try {
+        await buildClient(opts.profile).voices.unfavorite(voiceId)
+        if (opts.json) {
+          emit({ success: true, voiceId }, opts)
+          return
+        }
+        dim(`Unstarred ${voiceId}.`)
       } catch (err) {
         handleError(err)
       }

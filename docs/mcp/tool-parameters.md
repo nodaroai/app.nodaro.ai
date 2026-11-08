@@ -906,6 +906,18 @@ Needs `assets:write`.
 | `presetId` | string | yes | Preset id from list_node_presets. From 1 to 200 characters. |
 | `favorite` | boolean |  | false removes it (default true). |
 
+## `favorite_voice`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `voice_id` | string | yes | The voice's id: a premade or library voice_id, or a clone's ElevenLabs voice id. From 1 to 200 characters. |
+| `voice_type` | string |  | What the voice is — the same voice_type generate_speech takes for it. Required to star (a library voice is never starred as premade); not needed to unstar. One of `premade`, `library`, `custom`. |
+| `name` | string |  | The voice's name, as the favorites list shows it. Required to star. From 1 to 200 characters. |
+| `preview_url` | string |  | The voice's preview audio URL (https), when known; "" clears a stored preview. At most 2048 characters. |
+| `favorite` | boolean |  | false removes the star (default true). |
+
 ## `forced_alignment`
 
 Needs `workflows:execute`.
@@ -1285,6 +1297,7 @@ Needs `workflows:execute`.
 | `style` | number |  | From 0 to 1. |
 | `speed` | number |  | From 0.7 to 1.2. |
 | `language_code` | string |  |  |
+| `output_format` | string |  | The audio file to deliver: `mp3_44100_128` (default), `mp3_44100_192` (a higher MP3 bitrate) or `wav_24000` (an uncompressed WAV). Same credits. One of `mp3_44100_128`, `mp3_44100_192`, `wav_24000`. |
 | `previous_text` | string |  | The line spoken just BEFORE this one in the finished piece (the previous clip's text) — context for continuous intonation across clips; up to 1,000 characters, the end of a longer passage. Used by models that stitch; others ignore it. Not spoken. At most 1000 characters. |
 | `next_text` | string |  | The line spoken just AFTER this one (the next clip's text) — the start of a longer passage; up to 1,000 characters. Same continuity rule as previous_text. At most 1000 characters. |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
@@ -2025,6 +2038,12 @@ Needs `jobs:read` · Nodaro Cloud only.
 | `tag` | string |  | From 1 to 100 characters. |
 | `favorites` | boolean |  | true = only the user's favorites. |
 | `cursor` | string |  | next from the previous call. At most 500 characters. |
+
+## `list_voice_favorites`
+
+Needs `assets:read`.
+
+No parameters.
 
 ## `list_voices`
 

@@ -1192,6 +1192,39 @@ describe("createAssetFromJob", () => {
     await expect(createAssetFromJob("job-1", "user-1")).resolves.toBeUndefined()
   })
 
+  // A speech job asked for a WAV over the API stores one and says so
+  // (`output_data.audioMimeType`); its library row records that type.
+  it("records the audio type a job declares (a speech WAV)", async () => {
+    mocks.mockSingle.mockResolvedValueOnce({
+      data: { status: "completed", output_data: { audioUrl: "https://r2.example.com/audios/job-1.wav", audioMimeType: "audio/wav" } },
+      error: null,
+    })
+    mocks.mockMaybeSingle.mockResolvedValueOnce({ data: null, error: null })
+
+    await createAssetFromJob("job-1", "user-1")
+    expect(mocks.mockInsert).toHaveBeenCalledWith(expect.objectContaining({ type: "audio", filename: "job-1.wav", mime_type: "audio/wav" }))
+  })
+
+  // Every other audio producer declares nothing and keeps the type its rows always had,
+  // whatever the object's name says (an ext-less audio upload is stamped `.wav`).
+  it("an audio job that declares no type keeps audio/mpeg, and a non-audio declaration is ignored", async () => {
+    mocks.mockSingle.mockResolvedValueOnce({
+      data: { status: "completed", output_data: { audioUrl: "https://r2.example.com/audios/job-1.wav" } },
+      error: null,
+    })
+    mocks.mockMaybeSingle.mockResolvedValueOnce({ data: null, error: null })
+    await createAssetFromJob("job-1", "user-1")
+    expect(mocks.mockInsert).toHaveBeenLastCalledWith(expect.objectContaining({ type: "audio", mime_type: "audio/mpeg" }))
+
+    mocks.mockSingle.mockResolvedValueOnce({
+      data: { status: "completed", output_data: { audioUrl: "https://r2.example.com/audios/job-2.mp3", audioMimeType: "text/html" } },
+      error: null,
+    })
+    mocks.mockMaybeSingle.mockResolvedValueOnce({ data: null, error: null })
+    await createAssetFromJob("job-2", "user-1")
+    expect(mocks.mockInsert).toHaveBeenLastCalledWith(expect.objectContaining({ type: "audio", mime_type: "audio/mpeg" }))
+  })
+
   // A child job (`parent_job_id` set) is a step of its parent's run — the
   // parent's result is what reaches the Library, never each step.
   it("createAssetFromJob skips a child job", async () => {

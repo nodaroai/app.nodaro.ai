@@ -13,7 +13,7 @@ import { directElevenLabsTTS, directElevenLabsTTSWithTimestamps, stripAudioTags 
 import { directElevenLabsDialogue } from "../../providers/elevenlabs/direct-dialogue.js"
 import { generateSoundEffect } from "../../providers/elevenlabs/sound-effects.js"
 import { ttsSupportsAudioTags, ttsSupportsTimestamps } from "@nodaro/shared/model-catalog"
-import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, type TextToAudioProvider } from "@nodaro/shared/models"
+import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_OUTPUT_FORMAT, TTS_OUTPUT_FORMATS, TTS_OUTPUT_FORMAT_FILES, type TextToAudioProvider, type TtsOutputFormat } from "@nodaro/shared/models"
 import { normalizeTranscript, type Transcript } from "@nodaro/shared/edl"
 import { defaultAllowedVoiceId, voiceLockActive } from "../../lib/voice-policy.js"
 import { assertUnnamedVoicesAllowed, assertVoicesAllowed } from "../../lib/voice-lock.js"
@@ -124,8 +124,27 @@ async function generateSpeechViaCloud(
   }
 }
 
+/**
+ * The output format a speech payload asked for, when it names one the platform offers;
+ * `undefined` for an absent or unknown value, so a stale payload keeps the default path
+ * (the plain MP3 request) and never throws after the vendor has delivered.
+ */
+function knownOutputFormat(value: unknown): TtsOutputFormat | undefined {
+  return typeof value === "string" && (TTS_OUTPUT_FORMATS as readonly string[]).includes(value) ? (value as TtsOutputFormat) : undefined
+}
+
+/**
+ * The file a speech job stores: decided by the BYTES, never by the request. A WAV is a RIFF/WAVE
+ * container; anything else is an MP3 — both MP3 formats, and the vendor's default MP3 a relay that
+ * predates `outputFormat` answers with. A mislabelled file would be worse than a default.
+ */
+export function speechFileFor(audio: Buffer): { readonly ext: "mp3" | "wav"; readonly mime: "audio/mpeg" | "audio/wav" } {
+  const isWav = audio.length >= 12 && audio.toString("ascii", 0, 4) === "RIFF" && audio.toString("ascii", 8, 12) === "WAVE"
+  return isWav ? TTS_OUTPUT_FORMAT_FILES.wav_24000 : TTS_OUTPUT_FORMAT_FILES[DEFAULT_TTS_OUTPUT_FORMAT]
+}
+
 const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx) {
-  const { text, voice, provider: rawProvider, voiceType, stability, similarityBoost, style, speed, languageCode, previousText, nextText, allowDefaultVoiceFallback, withTimestamps } = job.data as {
+  const { text, voice, provider: rawProvider, voiceType, stability, similarityBoost, style, speed, languageCode, previousText, nextText, allowDefaultVoiceFallback, withTimestamps, outputFormat } = job.data as {
     jobId: string
     text: string
     voice?: string
@@ -142,6 +161,8 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     allowDefaultVoiceFallback?: boolean
     /** The request asked for per-word timings; honoured only when the model's sheet returns them. */
     withTimestamps?: boolean
+    /** The file asked for (`TTS_OUTPUT_FORMATS`); absent ⇒ the MP3 every speech job delivered before the field existed. */
+    outputFormat?: TtsOutputFormat
   }
   // B4c: the voice lock's backstop, FIRST. Every enqueuer judges the voice
   // before the job exists (the route, the workflow engine, the film-studio
@@ -156,6 +177,8 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   // resolves it through the same omitted-provider rule those enqueuers use (the
   // default speech model up to its own cap, turbo above it).
   const provider = rawProvider ?? resolveOmittedTtsProvider(text)
+  // Only a format the platform offers reaches the vendor; anything else keeps the plain MP3 request.
+  const requestedFormat = knownOutputFormat(outputFormat)
   console.log(`[worker] text-to-speech ${ctx.jobId} (provider: ${provider}, direct API)`)
 
   // Strip [audio tags] when the model does not perform them — v2 models speak them as literal
@@ -197,6 +220,8 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
       ...(hasOptions ? ttsOptions : {}),
       allowDefaultVoiceFallback: Boolean(allowDefaultVoiceFallback),
       ...(voiceType ? { voiceType } : {}),
+      // Only an explicit, known choice reaches the vendor; absent, the request is the plain MP3 one.
+      ...(requestedFormat ? { outputFormat: requestedFormat } : {}),
     }] as const
     if (withTimestamps && ttsSupportsTimestamps(provider)) {
       // The timed funnel: same request body; the response carries the alignment.
@@ -216,7 +241,7 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
       processedText,
       voice || (voiceLockActive() ? defaultAllowedVoiceId(FALLBACK_VOICES, "Rachel") : voice),
       provider,
-      hasOptions ? ttsOptions : {},
+      { ...(hasOptions ? ttsOptions : {}), ...(requestedFormat ? { outputFormat: requestedFormat } : {}) },
     )
     audioBuffer = cloudAudio.audio
   } else {
@@ -228,7 +253,9 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
 
   // POST-PROVIDER: the provider already delivered the audio (we were billed) —
   // an R2 upload failure here is post-delivery, so skip the refund.
-  const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId))
+  // Stored and served as the file that came back: the bytes decide (a relay that predates the field answers in MP3).
+  const file = speechFileFor(audioBuffer)
+  const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, mediaObjectKey(ctx.jobId, "audio", file.ext), file.mime, ctx.jobUserId))
   await setJobProgress(job, ctx.jobId, 100)
 
   // What this run cost the platform and the characters it sent (decided
@@ -251,7 +278,9 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     },
     // Per-word timings (words only) — absent unless asked for on a model that
     // returns them; then no `transcript` key at all (billedCharacters stays).
-    extraOutputData: { billedCharacters, ...(transcript ? { transcript } : {}) },
+    // `audioMimeType`: the file this job stored, so its library row records a WAV as one
+    // (createAssetFromJob reads it; every other audio producer keeps its own type).
+    extraOutputData: { billedCharacters, audioMimeType: file.mime, ...(transcript ? { transcript } : {}) },
     mediaUrl: r2Url,
   })
   if (!ok) return

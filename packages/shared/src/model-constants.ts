@@ -1406,6 +1406,25 @@ export const TTS_PROVIDERS = [
 export type TtsProvider = typeof TTS_PROVIDERS[number]
 
 /**
+ * The file a speech request can ask for (`outputFormat` on `/v1/text-to-speech`
+ * and the `text-to-speech` node run), named as the vendor names its formats:
+ * `codec_samplerate_bitrate`. Omitted ⇒ the first, which is exactly what every
+ * request delivered before the field existed. The list is deliberately short:
+ * the three the hosted deployment's vendor account serves (measured 2026-11-08);
+ * a self-hosted install's account must serve them too, or a run asking for one
+ * fails with the vendor's own message.
+ */
+export const TTS_OUTPUT_FORMATS = ["mp3_44100_128", "mp3_44100_192", "wav_24000"] as const
+export type TtsOutputFormat = typeof TTS_OUTPUT_FORMATS[number]
+export const DEFAULT_TTS_OUTPUT_FORMAT: TtsOutputFormat = "mp3_44100_128"
+/** How each format is stored and served: the file extension and the MIME type. */
+export const TTS_OUTPUT_FORMAT_FILES: Readonly<Record<TtsOutputFormat, { readonly ext: "mp3" | "wav"; readonly mime: "audio/mpeg" | "audio/wav" }>> = {
+  mp3_44100_128: { ext: "mp3", mime: "audio/mpeg" },
+  mp3_44100_192: { ext: "mp3", mime: "audio/mpeg" },
+  wav_24000: { ext: "wav", mime: "audio/wav" },
+}
+
+/**
  * Text-to-dialogue models (the `provider` of `/v1/text-to-dialogue` and of the
  * Text to Dialogue node). Each IS its catalog id and its credit identifier.
  * Never members of TTS_PROVIDERS: a dialogue model takes a script of lines, not

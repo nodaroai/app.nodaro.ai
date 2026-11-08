@@ -74,6 +74,9 @@ export class NodaroCloudAudioProvider implements TextToSpeechProvider {
       // keyed install's funnel would trim — so a keyless self-host behaves exactly like a keyed one.
       ...(neighbours.previousText !== undefined ? { previousText: neighbours.previousText } : {}),
       ...(neighbours.nextText !== undefined ? { nextText: neighbours.nextText } : {}),
+      // The file asked for rides to the cloud as the same field; a cloud that predates it strips an
+      // unknown key and answers in MP3 — which the worker then stores by its bytes, not by the request.
+      ...(options?.outputFormat !== undefined ? { outputFormat: options.outputFormat } : {}),
     }
     const jobId = await createCloudJob("/v1/text-to-speech", body)
     return extractAudioResult(await waitForCloudJob(jobId, undefined, { queueAware: true }), jobId)

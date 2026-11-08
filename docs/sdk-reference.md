@@ -3179,6 +3179,17 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > (ElevenLabs v4, v4 Turbo, Turbo v2.5 and Multilingual v2; not v3) keeps one intonation across clips produced separately. Up to 1,000
 > characters each; context is not spoken. See the Text to Speech node docs.
 
+> **Timings and the file on `text-to-speech`.** `TextToSpeechParams.withTimestamps: true`
+> asks for per-word timings: the finished job's `output_data.transcript` carries
+> `words[]` with `startMs` / `endMs`, at no extra credits (without it, no
+> `transcript` is written). `TextToSpeechParams.outputFormat` picks the audio file:
+> `mp3_44100_128` (the default, as before the field existed), `mp3_44100_192` (a
+> higher MP3 bitrate) or `wav_24000` (an uncompressed WAV) — same credits; the
+> job's `audioUrl` ends in `.mp3` or `.wav` by the file that actually came back,
+> and `output_data.audioMimeType` names it (`audio/mpeg` or `audio/wav`) — name a
+> download from that, not from the format asked for. The values are
+> `TTS_OUTPUT_FORMATS` in `@nodaro/shared/models`.
+
 > **Presets on `generate-image`.** `GenerateImageParams.presetId` applies a node
 > preset (a factory id from `presets.listFactory("generate-image")`, or one of
 > yours) exactly as the editor does — prompt and pre/post text, placeholder
@@ -5776,7 +5787,8 @@ export async function POST(request: Request) {
 ### `client.voices`
 
 ElevenLabs voices: the premade catalog, the community Voice Library, the
-signed-in user's existing voice clones (list / delete), and the **voice changer** —
+signed-in user's existing voice clones (list / delete), their **favorite voices**
+(list / star / unstar), and the **voice changer** —
 one-shot single-voice / multi-speaker recasts plus the interactive Voice
 Changer Pro flow (`analyze` → `recast({ output: "stems" })` → `exportMix`),
 voice design/remix, and dubbing.
@@ -5809,6 +5821,14 @@ Search the shared/community Voice Library (`GET /v1/voices/library`). All
 params are optional and forwarded as a querystring; `undefined` / `null` /
 empty-string values are omitted so server defaults apply. `hasMore` in the
 response drives "load more" pagination.
+
+`use_cases` groups the library the way a picker shows categories — one of
+`VOICE_LIBRARY_USE_CASES` (`@nodaro/shared/pipeline`): `advertisement`,
+`characters_animation`, `conversational`, `entertainment_tv`,
+`informative_educational`, `narrative_story`, `social_media`. One value per
+call; combine it with `language`, `gender`, `age` or `accent`. The value is
+passed through as sent, so a group the library adds later works before it is
+listed.
 
 Each returned voice may carry model-verification hints derived from the
 library's `verified_languages` metadata:
@@ -5882,6 +5902,36 @@ Delete one of the user's voice clones (`DELETE /v1/voice-clones/:id`).
 
 ```ts
 await client.voices.deleteClone(cloneId)
+```
+
+#### `listFavorites()` / `favorite(input)` / `unfavorite(voiceId)`
+
+```ts
+listFavorites(): Promise<VoiceFavorite[]>
+favorite(input: VoiceFavoriteInput): Promise<VoiceFavorite>
+unfavorite(voiceId: string): Promise<void>
+```
+
+The signed-in user's **favorite voices** — a premade voice, a Voice Library
+voice or one of their clones — starred from any client and read back by all of
+them, newest first (`GET /v1/voices/favorites`, `PUT` / `DELETE
+/v1/voices/favorites/:voiceId`). A favorite carries the `voiceId` + `voiceType`
+a text-to-speech run takes as `voice` + `voiceType`, and the `name` /
+`previewUrl` snapshot it was starred with, so a favorites list renders with no
+second lookup. Both writes are idempotent: starring an already-starred voice
+refreshes its snapshot; unstarring one that is not there succeeds. Past the
+per-user cap (500) `favorite` rejects with `409 limit_reached`. OAuth apps
+need `assets:read` for the list and `assets:write` for the writes.
+
+```ts
+const { voices } = await client.voices.searchLibrary({ search: "calm narrator", language: "en" })
+const pick = voices[0]
+await client.voices.favorite({ voiceId: pick.voice_id, voiceType: "library", name: pick.name, previewUrl: pick.preview_url })
+
+const favorites = await client.voices.listFavorites()
+await client.nodes.run("text-to-speech", { text: "Hello!", voice: favorites[0].voiceId, voiceType: favorites[0].voiceType })
+
+await client.voices.unfavorite(pick.voice_id)
 ```
 
 #### `change(input)`
@@ -9708,6 +9758,8 @@ not two.
 - `Voice` — premade ElevenLabs voice record, re-exported from `@nodaro/shared`
 - `VoiceClone` — user clone record (`elevenlabsVoiceId` is the TTS-time id), re-exported from `@nodaro/shared`
 - `VoiceLibraryParams` — query params for `searchLibrary()`, re-exported from `@nodaro/shared`
+- `VoiceLibraryUseCase` / `VOICE_LIBRARY_USE_CASES` — the `use_cases` values `searchLibrary()` groups the library by, from `@nodaro/shared/pipeline`
+- `VoiceFavorite`, `VoiceFavoriteInput`, `VoiceFavoriteType` / `VOICE_FAVORITE_TYPES` — favorites (`listFavorites()` / `favorite()`), from `@nodaro/shared/pipeline`
 - `VoiceLibraryResponse` — `{ voices: Voice[]; hasMore: boolean; ... }`, re-exported from `@nodaro/shared`
 - `VoiceChangerProInput` — full `recast()` input (see its section above)
 - `VoiceChangerProVoice` — one `orderedVoices` entry: voice id string or per-voice settings object

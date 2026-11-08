@@ -48,6 +48,16 @@ describe("audio mappers re-run the call they were made from", () => {
     })
   })
 
+  // The node always delivers the default MP3 and never asks for timings: a call that chose
+  // either is one the node could not re-run faithfully, so it becomes no node (the rule for
+  // every field outside a mapper's set), rather than a node that quietly delivers something else.
+  it("generate_speech with an output format or timings is not a node", () => {
+    const body = { text: "Welcome.", voice: "Rachel", provider: "elevenlabs-v3" }
+    expect(flowNodeFor("/v1/text-to-speech", { ...TRANSPORT, ...body, outputFormat: "wav_24000" }, "generate_speech")).toBeNull()
+    expect(flowNodeFor("/v1/text-to-speech", { ...TRANSPORT, ...body, withTimestamps: true }, "generate_speech")).toBeNull()
+    expect(flowNodeFor("/v1/text-to-speech", { ...TRANSPORT, ...body }, "generate_speech")).not.toBeNull()
+  })
+
   it("generate_dialogue → Text to Dialogue", () => {
     const body = {
       dialogue: [{ text: "Hi there.", voice: "Roger" }, { text: "[laughs] Hello!", voice: "Sarah" }],

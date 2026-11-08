@@ -296,6 +296,60 @@ describe("text-to-speech provider selection (keyless self-host)", () => {
     expect(mocks.mockCloudTextToSpeech).not.toHaveBeenCalled()
   })
 
+  describe("the audio file (outputFormat)", () => {
+    /** A WAV as the vendor returns it: a RIFF container with a WAVE tag. */
+    const WAV = Buffer.concat([Buffer.from("RIFF"), Buffer.from([0, 0, 0, 0]), Buffer.from("WAVEfmt "), Buffer.alloc(8)])
+
+    it("a known format rides to the vendor, and WAV bytes are stored as .wav / audio/wav", async () => {
+      config.ELEVENLABS_API_KEY = "el_test"
+      mocks.mockDirectElevenLabsTTS.mockResolvedValueOnce(WAV)
+
+      await handler(makeJob("text-to-speech", { text: "Hi", provider: "elevenlabs-v4", outputFormat: "wav_24000" }) as never, makeCtx())
+
+      expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalledWith("Hi", expect.any(String), "elevenlabs-v4", expect.objectContaining({ outputFormat: "wav_24000" }))
+      expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(WAV, "audios/job-1.wav", "audio/wav", "user-1")
+      // The job says which file it stored, so its library row records the WAV as one.
+      expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+        expect.objectContaining({ extraOutputData: expect.objectContaining({ audioMimeType: "audio/wav" }) }),
+      )
+    })
+
+    it("the bytes decide: a WAV asked for but answered as MP3 (a relay that predates the field) is stored as .mp3", async () => {
+      config.ELEVENLABS_API_KEY = ""
+      mocks.mockIsNodaroConnected.mockResolvedValue(true)
+
+      await handler(makeJob("text-to-speech", { text: "Hi", provider: "elevenlabs-v4", outputFormat: "wav_24000" }) as never, makeCtx())
+
+      // The format was forwarded to the relay…
+      expect(mocks.mockCloudTextToSpeech).toHaveBeenCalledWith("Hi", undefined, "elevenlabs-v4", expect.objectContaining({ outputFormat: "wav_24000" }))
+      // …but what came back is not a WAV, so it is not labelled one — on the file or on the library row.
+      expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(Buffer.from("cloud-audio"), "audios/job-1.mp3", "audio/mpeg", "user-1")
+      expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+        expect.objectContaining({ extraOutputData: expect.objectContaining({ audioMimeType: "audio/mpeg" }) }),
+      )
+    })
+
+    it("an unknown format in a stale payload keeps the plain request and the MP3 file", async () => {
+      config.ELEVENLABS_API_KEY = "el_test"
+
+      await handler(makeJob("text-to-speech", { text: "Hi", provider: "elevenlabs-v4", outputFormat: "pcm_44100" }) as never, makeCtx())
+
+      const options = mocks.mockDirectElevenLabsTTS.mock.calls[0]![3] as Record<string, unknown>
+      expect("outputFormat" in options).toBe(false)
+      expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(Buffer.from("fake-audio"), "audios/job-1.mp3", "audio/mpeg", "user-1")
+    })
+
+    it("without the field, nothing changes: no `outputFormat` in the vendor options, the MP3 file", async () => {
+      config.ELEVENLABS_API_KEY = "el_test"
+
+      await handler(makeJob("text-to-speech", { text: "Hi", provider: "elevenlabs-v4" }) as never, makeCtx())
+
+      const options = mocks.mockDirectElevenLabsTTS.mock.calls[0]![3] as Record<string, unknown>
+      expect("outputFormat" in options).toBe(false)
+      expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(Buffer.from("fake-audio"), "audios/job-1.mp3", "audio/mpeg", "user-1")
+    })
+  })
+
   it("no key + connected — generates on the cloud and stores the bytes locally", async () => {
     config.ELEVENLABS_API_KEY = ""
     mocks.mockIsNodaroConnected.mockResolvedValue(true)

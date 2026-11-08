@@ -195,6 +195,10 @@ const TOOLS_WITHOUT_INPUTS: ReadonlySet<string> = new Set<string>([
   // out at 300), so the list returns all of them with their counts and the
   // plan's caps — no pagination or filter to offer. See collections.ts.
   "list_collections",
+  // A person stars at most MAX_VOICE_FAVORITES_PER_USER (500) voices, so the
+  // list returns all of them, newest first — no pagination or filter to offer.
+  // See voice-favorites.ts.
+  "list_voice_favorites",
   // Pure content-delivery tool — returns the generated recast authoring guide
   // verbatim. No knobs, no per-call variation. See recast.ts.
   "get_recast_authoring_skill",

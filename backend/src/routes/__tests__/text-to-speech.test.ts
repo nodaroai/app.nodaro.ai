@@ -93,6 +93,7 @@ import { reserveCreditsForJob } from "@/middleware/credit-guard.js"
 import { getMaxTtsChars, DEFAULT_TTS_PROVIDER } from "@nodaro/shared/models"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
 import { TTS_NEIGHBOUR_TEXT_MAX_CHARS } from "../../providers/elevenlabs/neighbour-text.js"
+import { TTS_OUTPUT_FORMATS } from "@nodaro/shared/models"
 import { recordedLibraryVoiceGender } from "../../lib/library-voice-genders.js"
 
 // ---------------------------------------------------------------------------
@@ -238,6 +239,35 @@ describe("POST /v1/text-to-speech", () => {
       const payload = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
       expect(payload.previousText).toBeUndefined()
       expect(payload.nextText).toBeUndefined()
+    })
+  })
+
+  describe("the audio file (outputFormat)", () => {
+    const USER = "00000000-0000-4000-8000-000000000001"
+
+    it.each(TTS_OUTPUT_FORMATS)("%s is accepted, queued as `outputFormat` and stored on the job's input_data", async (outputFormat) => {
+      const { mockInsert } = mockJobInsert({ data: { id: "job-f1" }, error: null })
+      const res = await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi.", userId: USER, outputFormat } })
+      expect(res.statusCode).toBe(200)
+      expect(vi.mocked(videoQueue.add)).toHaveBeenCalledWith("text-to-speech", expect.objectContaining({ outputFormat }))
+      expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({ input_data: expect.objectContaining({ outputFormat }) }))
+    })
+
+    it("rejects a format the platform does not offer with a 400, before any job or reservation", async () => {
+      const { mockInsert } = mockJobInsert({ data: { id: "job-f2" }, error: null })
+      for (const outputFormat of ["pcm_44100", "wav_44100", "mp3", "", 128]) {
+        const res = await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi.", userId: USER, outputFormat } })
+        expect(res.statusCode, JSON.stringify(outputFormat)).toBe(400)
+      }
+      expect(mockInsert).not.toHaveBeenCalled()
+      expect(vi.mocked(videoQueue.add)).not.toHaveBeenCalled()
+    })
+
+    it("a request without it is unchanged: no `outputFormat` key on the queue payload", async () => {
+      mockJobInsert({ data: { id: "job-f3" }, error: null })
+      await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi.", userId: USER } })
+      const payload = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
+      expect("outputFormat" in payload).toBe(false)
     })
   })
 

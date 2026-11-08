@@ -1,4 +1,4 @@
-import type { TopazVideoResolution } from "@nodaro/shared/models"
+import type { TopazVideoResolution, TtsOutputFormat } from "@nodaro/shared/models"
 import type { FrameFit, FrameDelivery, VideoCharacterReference } from "@nodaro/shared/video"
 
 // Result types
@@ -352,6 +352,8 @@ export interface TextToSpeechOptions {
   /** The lines spoken just before / after this clip (continuity across clips). Models that stitch use them; trimmed at every exit (elevenlabs/neighbour-text.ts). */
   previousText?: string
   nextText?: string
+  /** The file to deliver (`TTS_OUTPUT_FORMATS`); absent ⇒ the vendor's default MP3, as every request delivered before the field existed. */
+  outputFormat?: TtsOutputFormat
 }
 
 export interface TextToSpeechProvider {

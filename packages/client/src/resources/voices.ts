@@ -1,7 +1,7 @@
-import type { Voice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared/pipeline"
+import type { Voice, VoiceClone, VoiceFavorite, VoiceFavoriteInput, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared/pipeline"
 import type { AudioFxPreset } from "@nodaro/shared/media"
 import type { DialogueProvider } from "@nodaro/shared/models"
-export type { Voice, SharedVoice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared/pipeline"
+export type { Voice, SharedVoice, VoiceClone, VoiceFavorite, VoiceFavoriteInput, VoiceFavoriteType, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared/pipeline"
 export type { AudioFxPreset } from "@nodaro/shared/media"
 import type { NodaroClientCore } from "../core.js"
 
@@ -67,6 +67,34 @@ export class VoicesResource {
   /** Delete one of the user's voice clones (`DELETE /v1/voice-clones/:id`). */
   async deleteClone(id: string): Promise<void> {
     await this.client.request<void>("DELETE", `/v1/voice-clones/${encodeURIComponent(id)}`)
+  }
+
+  /**
+   * The signed-in user's favorite voices (`GET /v1/voices/favorites`), newest
+   * first. Each carries the `voiceId` + `voiceType` a text-to-speech run takes
+   * and the `name` / `previewUrl` snapshot it was starred with, so a favorites
+   * list renders with no second lookup. OAuth apps need `assets:read`.
+   */
+  async listFavorites(): Promise<VoiceFavorite[]> {
+    const res = await this.client.request<{ favorites: VoiceFavorite[] }>("GET", "/v1/voices/favorites")
+    return res.favorites
+  }
+
+  /**
+   * Star a voice (`PUT /v1/voices/favorites/:voiceId`) — a premade voice, a
+   * Voice Library voice or one of the user's clones — with the snapshot to show
+   * it by. Idempotent: starring it again refreshes the snapshot. OAuth apps need
+   * `assets:write`. Answers `409 limit_reached` past the per-user cap.
+   */
+  async favorite(input: VoiceFavoriteInput): Promise<VoiceFavorite> {
+    const { voiceId, ...body } = input
+    const res = await this.client.request<{ favorite: VoiceFavorite }>("PUT", `/v1/voices/favorites/${encodeURIComponent(voiceId)}`, { body })
+    return res.favorite
+  }
+
+  /** Unstar a voice (`DELETE /v1/voices/favorites/:voiceId`). Idempotent. */
+  async unfavorite(voiceId: string): Promise<void> {
+    await this.client.request<{ success: true }>("DELETE", `/v1/voices/favorites/${encodeURIComponent(voiceId)}`)
   }
 
   /**

@@ -36,6 +36,7 @@ import { registerReduce } from "./tools/reduce.js"
 import { registerPromptHelper } from "./tools/prompt-helper.js"
 import { registerPickerCatalogs } from "./tools/picker-catalogs.js"
 import { registerPresets } from "./tools/node-presets.js"
+import { registerVoiceFavorites } from "./tools/voice-favorites.js"
 import { registerCollectionTools } from "./tools/collections.js"
 import { registerSessionTools } from "./tools/sessions.js"
 import { registerTrashTools } from "./tools/trash.js"
@@ -254,6 +255,10 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   registerReduce({ server, session, fastify: opts.fastify })
   registerPromptHelper({ server, session, fastify: opts.fastify })
   registerPresets({ server, session, fastify: opts.fastify })
+  // The user's favorite voices (list / star / unstar): every edition — the
+  // `/v1/voices/favorites` routes are core; gated by assets:read / assets:write
+  // like the gallery's favorites.
+  registerVoiceFavorites({ server, session, fastify: opts.fastify })
   // Collections (list / read / add a record): every edition — the
   // `/v1/collections*` routes are core and the caps come from the plan on
   // Nodaro Cloud; gated by assets:read / assets:write like the saved posts.

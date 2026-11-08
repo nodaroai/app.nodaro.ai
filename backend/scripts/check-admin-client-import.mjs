@@ -246,6 +246,14 @@ const ALLOWED_PATHS = [
   // route (and its tenant-scope lint entry) is the only way in.
   /^src\/routes\/saved-posts\.ts$/,
 
+  // Voice favorites (migration 608): per-user star / unstar / list over
+  // `voice_favorites`, same shape as saved-posts. Every handler derives
+  // `userId = req.userId` (401 if absent) and every query chains
+  // `.eq("user_id", userId)`; the upsert carries `user_id: userId`.
+  // voice_favorites grants nothing to client roles, so this route (and its
+  // tenant-scope lint entry) is the only way in.
+  /^src\/routes\/voice-favorites\.ts$/,
+
   // Collections (migration 462): per-user CRUD over `collections` and their
   // `collection_records`, same shape as saved-posts. Every handler derives
   // `userId = req.userId` (401 if absent), every query on both tables chains

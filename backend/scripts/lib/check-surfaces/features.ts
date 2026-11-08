@@ -50,7 +50,7 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "pipelines", cli: [], routePrefixes: ["/v1/pipelines"], mcpFiles: ["pipelines.ts"] },
   { id: "reduce", cli: [], routePrefixes: ["/v1/reduce"], mcpFiles: ["reduce.ts"] },
   { id: "promptHelper", cli: ["prompt"], routePrefixes: ["/v1/prompt-helper"], mcpFiles: ["prompt-helper.ts"] },
-  { id: "voices", cli: ["voice"], routePrefixes: ["/v1/voices", "/v1/voice-clones", "/v1/voice-changer-pro"], mcpFiles: ["voice-changer-pro-engines.ts"] },
+  { id: "voices", cli: ["voice"], routePrefixes: ["/v1/voices", "/v1/voice-clones", "/v1/voice-changer-pro"], mcpFiles: ["voice-changer-pro-engines.ts", "voice-favorites.ts"] },
   { id: "llm", cli: [], routePrefixes: ["/v1/llm"], mcpFiles: [] },
   { id: "media", cli: ["media"], routePrefixes: ["/v1/media"], mcpFiles: [] },
   // Content rights: the declaration a person confirms before a link is imported, and the confirmation a download carries.
@@ -236,6 +236,9 @@ export const MCP_DIRECT_TOOL_ROUTES: Readonly<Record<string, readonly string[]>>
   credit_transactions: ["GET /v1/credits/transactions", "GET /v1/billing/transactions"],
   // Presets: one discovery read over the user's presets, the factory catalog and the favorites.
   list_node_presets: ["GET /v1/node-presets", "GET /v1/node-presets/factory", "GET /v1/node-presets/favorites"],
+  // Voices: the user's starred voices, read and written.
+  list_voice_favorites: ["GET /v1/voices/favorites"],
+  favorite_voice: ["PUT /v1/voices/favorites/:p", "DELETE /v1/voices/favorites/:p"],
   // Marketplace: apps and components are both published apps, browsed by kind.
   list_apps: ["GET /v1/apps/browse"],
   list_components: ["GET /v1/apps/browse"],
