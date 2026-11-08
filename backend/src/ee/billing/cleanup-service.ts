@@ -34,6 +34,7 @@ import { judgeAssetRows, keysHeldByOtherLibraryRows, keysUserMayDelete } from ".
 import { deleteKeysRecordingFailures, publicUrlOfKey, type RecordOptions } from "../../lib/storage-delete.js"
 import { heldAmong } from "../../lib/legal-hold.js"
 import { TIER_STORAGE_LIMITS, TIER_CREDITS } from "./stripe-config.js"
+import { mediaKeptByDeploymentPayer } from "./payer-media-retention.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
 import { CreditsService } from "./credits.js"
 
@@ -407,6 +408,11 @@ async function collectLocationR2Keys(userId: string, cutoff?: string): Promise<s
 // ============================================================
 
 export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
+  // Under a deployment payer every user is stored free while the payer holds
+  // the plan: this sweep keeps everyone's media, whatever the payer's own plan
+  // (decided 2026-11-08, payer-media-retention.ts). Asked before any user is read.
+  if (await mediaKeptByDeploymentPayer("free-user media cleanup")) return { filesDeleted: 0, bytesFreed: 0, errors: 0 }
+
   let filesDeleted = 0
   let bytesFreed = 0
   let errors = 0
@@ -655,6 +661,11 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
 // ============================================================
 
 export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
+  // Same rule as the free-user sweep (payer-media-retention.ts): under a
+  // deployment payer no user's media is wiped, and nobody is reset to the free
+  // defaults here, whatever their own or the payer's subscription says.
+  if (await mediaKeptByDeploymentPayer("canceled-user media cleanup")) return { filesDeleted: 0, bytesFreed: 0, errors: 0 }
+
   let filesDeleted = 0
   let bytesFreed = 0
   let errors = 0

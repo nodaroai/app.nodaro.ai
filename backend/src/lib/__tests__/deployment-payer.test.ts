@@ -55,7 +55,10 @@ const {
   deploymentPayerActive,
   deploymentPayerId,
   deploymentBillingContext,
+  payerCoverage,
+  freshPayerCoverage,
   __resetDeploymentPayerForTests,
+  __setDeploymentPayerForTests,
 } = await import("../deployment-payer.js")
 
 const PAYER_UUID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
@@ -133,5 +136,58 @@ describe("configureDeploymentPayer — uuid and email resolution", () => {
 describe("deploymentBillingContext — misuse guard", () => {
   it("throws while inactive — callers must gate on deploymentPayerActive()", () => {
     expect(() => deploymentBillingContext("u-1")).toThrow(/inactive/)
+  })
+})
+
+describe("payerCoverage — who an active payer covers, at which plan (the one notion every plan rule reads)", () => {
+  it("no payer ⇒ null, and the fresh read is null too, with ZERO queries (the mainline invariant)", async () => {
+    expect(payerCoverage()).toBeNull()
+    expect(await freshPayerCoverage()).toBeNull()
+    expect(h.fromCalls).toBe(0)
+  })
+
+  it("a payer ⇒ the payer's id and cached grade, with no query while the grade is fresh", () => {
+    __setDeploymentPayerForTests(PAYER_UUID, { tierForGates: "pro" })
+    expect(payerCoverage()).toEqual({ payerId: PAYER_UUID, tier: "pro" })
+    expect(h.fromCalls).toBe(0)
+  })
+
+  it("a stale grade kicks ONE background refresh and answers with the current value", async () => {
+    __setDeploymentPayerForTests(PAYER_UUID, { tierForGates: "pro" })
+    const later = Date.now() + 61_000
+    const clock = vi.spyOn(Date, "now").mockReturnValue(later)
+    try {
+      h.profileRow = { data: { id: PAYER_UUID, tier: "basic", subscription_tier: "basic", lifetime_topup_credits: 0 }, error: null }
+      expect(payerCoverage()?.tier).toBe("pro")
+      expect(payerCoverage()?.tier).toBe("pro")
+      await vi.waitFor(() => expect(payerCoverage()?.tier).toBe("basic"))
+      expect(h.fromCalls).toBe(1)
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
+  it("the fresh read re-reads the row now, and the cache takes what it read", async () => {
+    __setDeploymentPayerForTests(PAYER_UUID, { tierForGates: "basic" })
+    h.profileRow = { data: { id: PAYER_UUID, tier: "free", subscription_tier: "free", lifetime_topup_credits: 0 }, error: null }
+    expect(await freshPayerCoverage()).toEqual({ coverage: { payerId: PAYER_UUID, tier: "free" }, read: true })
+    expect(h.fromCalls).toBe(1)
+    expect(payerCoverage()?.tier).toBe("free")
+  })
+
+  it("derives payg the way the entitlements do: a free payer with prepaid top-ups", async () => {
+    __setDeploymentPayerForTests(PAYER_UUID)
+    h.profileRow = { data: { id: PAYER_UUID, tier: "free", subscription_tier: "free", lifetime_topup_credits: 1000 }, error: null }
+    expect((await freshPayerCoverage())?.coverage.tier).toBe("payg")
+  })
+
+  it("an unreadable or missing row ⇒ read: false and the last grade read, never a rejection", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+    __setDeploymentPayerForTests(PAYER_UUID, { tierForGates: "pro" })
+    h.profileRow = { data: null, error: { message: "connection reset" } }
+    expect(await freshPayerCoverage()).toEqual({ coverage: { payerId: PAYER_UUID, tier: "pro" }, read: false })
+    h.profileRow = { data: null, error: null }
+    expect(await freshPayerCoverage()).toEqual({ coverage: { payerId: PAYER_UUID, tier: "pro" }, read: false })
+    error.mockRestore()
   })
 })

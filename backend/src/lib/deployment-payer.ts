@@ -45,7 +45,7 @@ const TIER_TTL_MS = 60_000
 let payerId: string | null = null
 let entitlements: DeploymentEntitlements | null = null
 let tierFetchedAt = 0
-let refreshInflight: Promise<void> | null = null
+let refreshInflight: Promise<boolean> | null = null
 
 async function db() {
   const { supabase } = await import("./supabase.js")
@@ -75,12 +75,13 @@ async function readPayerTier(id: string): Promise<string | null> {
   )
 }
 
-async function refreshEntitlements(id: string): Promise<void> {
+/** Re-read the payer's grade into the cache. True when the row was read. */
+async function refreshEntitlements(id: string): Promise<boolean> {
   const tier = await readPayerTier(id)
   if (tier === null) {
     console.error("[deployment-payer] payer tier refresh failed — keeping previous grade")
     tierFetchedAt = Date.now() // back off, don't hammer a failing read
-    return
+    return false
   }
   entitlements = {
     watermark: false,
@@ -89,6 +90,27 @@ async function refreshEntitlements(id: string): Promise<void> {
     tierForGates: tier,
   }
   tierFetchedAt = Date.now()
+  return true
+}
+
+/** The one refresh in flight, joined by every caller: a failure (or a throw) is `false`, never a rejection. */
+function refreshNow(id: string): Promise<boolean> {
+  if (!refreshInflight) {
+    refreshInflight = refreshEntitlements(id)
+      .catch((err) => {
+        console.error("[deployment-payer] background refresh failed:", (err as Error).message)
+        return false
+      })
+      .finally(() => {
+        refreshInflight = null
+      })
+  }
+  return refreshInflight
+}
+
+/** A stale grade kicks a background refresh; the caller keeps the current value (the zero-await request budget). */
+function kickRefreshIfStale(): void {
+  if (payerId && Date.now() - tierFetchedAt > TIER_TTL_MS) void refreshNow(payerId)
 }
 
 /**
@@ -388,6 +410,58 @@ export function deploymentPayerId(): string | null {
 }
 
 /**
+ * COVERAGE: who an active deployment payer covers, and at which plan (decided
+ * 2026-11-08). This is the ONE notion every plan rule reads:
+ *  - retention: while a payer is active, the media sweeps keep every covered
+ *    user's media, whatever this grade is (ee/billing/payer-media-retention.ts);
+ *  - entitlements: a covered user's plan gates run at this grade, not at the
+ *    user's own stored tier.
+ *
+ * Every user on the instance is covered. Every resolve point answers with the
+ * payer's context for every requester (billing-context.ts). Nobody there buys a
+ * plan of their own, so each user's own stored tier is `free`. The payer is
+ * covered too: its own runs debit its own pools at its own grade.
+ */
+export interface PayerCoverage {
+  /** The account that holds the plan and pays. */
+  readonly payerId: string
+  /** The payer account's grade (`resolveEffectiveTier` over its row): what every covered user runs at. */
+  readonly tier: string
+}
+
+/**
+ * The coverage this instance gives every user, or null when no payer is active.
+ * Null is mainline: no query, and the caller must change nothing.
+ *
+ * SYNC, from the cached grade. A stale grade kicks a background refresh and
+ * answers with the current value, the same discipline as
+ * `deploymentBillingContext`: ≤60s of drift after the payer's tier changes.
+ */
+export function payerCoverage(): PayerCoverage | null {
+  if (!payerId || !entitlements) return null
+  kickRefreshIfStale()
+  return { payerId, tier: entitlements.tierForGates }
+}
+
+/**
+ * `payerCoverage()` after re-reading the payer's row now, for a caller off the
+ * request path that must see the row as it is now, not as the last request
+ * cached it. The nightly media sweeps use it to log a payer on `free` as a
+ * misconfiguration. It joins a refresh already in flight, and the cache takes
+ * what it reads.
+ *
+ * `read: false` means the row could not be read. The coverage then carries the
+ * last grade read, and the caller decides what an unread row means. Null when
+ * no payer is active (no query). Never rejects.
+ */
+export async function freshPayerCoverage(): Promise<{ coverage: PayerCoverage; read: boolean } | null> {
+  if (!payerId) return null
+  const read = await refreshNow(payerId)
+  const coverage = payerId && entitlements ? { payerId, tier: entitlements.tierForGates } : null
+  return coverage ? { coverage, read } : null
+}
+
+/**
  * The resolved context for one request. SYNC — the entitlements are the
  * cached grade (boot-guaranteed non-null while active); a stale TTL kicks a
  * background refresh and answers with the current value, so the billing hook
@@ -403,14 +477,7 @@ export function deploymentBillingContext(
   if (!payerId || !entitlements) {
     throw new Error("[deployment-payer] context requested while inactive — callers must gate on deploymentPayerActive()")
   }
-  if (Date.now() - tierFetchedAt > TIER_TTL_MS && !refreshInflight) {
-    const id = payerId
-    refreshInflight = refreshEntitlements(id)
-      .catch((err) => console.error("[deployment-payer] background refresh failed:", (err as Error).message))
-      .finally(() => {
-        refreshInflight = null
-      })
-  }
+  kickRefreshIfStale()
   return {
     payer: "deployment",
     userId: requesterId,

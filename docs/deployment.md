@@ -982,6 +982,19 @@ optional; each array empty = "keep the default"):
     the payer's balance. The value is backend-only: it is stripped from
     `/config.js`, and the browser learns only a boolean `deploymentPayer` flag
     from `GET /v1/billing/surface`.
+    **Media retention** (decided 2026-11-08): the payer holds the plan, so every
+    user on the instance is stored on the free tier. The nightly cleanups that
+    go by a user's own plan therefore do not run while a payer is set. These are
+    the free-tier cleanup of media older than 60 days and the cleanup after a
+    canceled subscription. Every user's media is kept, the payer account's own
+    included, whatever plan the payer account is on: library items keep their
+    files and job results keep their links. A payer account on the free tier is
+    logged as a misconfiguration on every run (`[cleanup] … MISCONFIGURATION:
+    the deployment payer account … is on the free tier`) and still turns no
+    cleanup on, and neither does a payer account the cleanup cannot read.
+    Cleanups that do not go by a plan run as on any deployment: the Trash purge,
+    soft-deleted locations, temporary files. Whether a file is removed from
+    storage at all is the separate `STORAGE_DELETES` setting.
     The payer account gets a **billing page** (`/billing-admin`) that no
     other account can reach: it shows the pool, the per-user allowances and
     the grant history, and — when `STRIPE_SECRET_KEY` is set — lets the payer
