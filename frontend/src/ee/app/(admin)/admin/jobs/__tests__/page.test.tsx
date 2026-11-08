@@ -9,7 +9,13 @@ vi.mock("@/ee/hooks/queries/use-admin-queries", () => ({
   useAdminJobs: vi.fn(),
   useAdminJobsInfinite: vi.fn(),
   useAdminJobSources: vi.fn(),
-  useAllAdminUsersLite: vi.fn(),
+}))
+vi.mock("@/ee/hooks/queries/use-admin-user-lookup", () => ({
+  useAdminAccounts: vi.fn(),
+  useAdminUserByEmail: vi.fn(),
+  useAdminUserSearch: vi.fn(),
+  // The debounce is the hooks' own; here a value settles at once.
+  useDebouncedValue: <T,>(v: T) => v,
 }))
 
 import {
@@ -17,20 +23,37 @@ import {
   useAdminJobs,
   useAdminJobsInfinite,
   useAdminJobSources,
-  useAllAdminUsersLite,
 } from "@/ee/hooks/queries/use-admin-queries"
+import { useAdminAccounts, useAdminUserByEmail, useAdminUserSearch } from "@/ee/hooks/queries/use-admin-user-lookup"
 import AdminJobsPage from "../page"
 
-const USERS = [
-  { id: "u1", email: "Dana@x.test", fullName: null, role: "user" as const },
-  { id: "a1", email: "admin@x.test", fullName: null, role: "admin" as const },
-]
+const ADMINS = [{ id: "a1", email: "admin@x.test", fullName: null, role: "admin" as const }]
+/** An account no list loaded up front: the server finds it by part of its address, or by the whole of it. */
+const LEAD = { id: "t1", email: "ops.lead@example.com", fullName: "Ops Lead", role: "super_admin" as const }
 
 function usersLoaded(loaded: boolean) {
-  vi.mocked(useAllAdminUsersLite).mockReturnValue(
+  vi.mocked(useAdminAccounts).mockReturnValue(
     (loaded
-      ? { data: USERS, isSuccess: true, isError: false }
-      : { data: undefined, isSuccess: false, isError: false }) as unknown as ReturnType<typeof useAllAdminUsersLite>,
+      ? { data: ADMINS, isSuccess: true, isError: false }
+      : { data: undefined, isSuccess: false, isError: false }) as unknown as ReturnType<typeof useAdminAccounts>,
+  )
+}
+
+function serverAccounts() {
+  vi.mocked(useAdminUserSearch).mockImplementation(
+    (term: string) =>
+      ({
+        data: term && "ops.lead@example.com ops lead".includes(term.toLowerCase()) ? [LEAD] : [],
+        isFetching: false,
+      }) as unknown as ReturnType<typeof useAdminUserSearch>,
+  )
+  vi.mocked(useAdminUserByEmail).mockImplementation(
+    (email: string | undefined) =>
+      ({
+        data: !email ? undefined : email === LEAD.email ? LEAD : null,
+        isFetching: false,
+        isError: false,
+      }) as unknown as ReturnType<typeof useAdminUserByEmail>,
   )
 }
 
@@ -54,6 +77,7 @@ beforeEach(() => {
   vi.mocked(useAdminJobSources).mockReturnValue({ data: [] } as unknown as ReturnType<typeof useAdminJobSources>)
   vi.mocked(useAdminJobDetail).mockReturnValue({ data: undefined, isError: false } as unknown as ReturnType<typeof useAdminJobDetail>)
   usersLoaded(true)
+  serverAccounts()
 })
 
 afterEach(() => {
@@ -110,6 +134,47 @@ describe("AdminJobsPage", () => {
     expect(filters).toMatchObject({ excludeAdmins: true })
     expect(excluded).toEqual(["a1"])
     expect(options).toEqual({ enabled: true })
+  })
+
+  describe("finding an account", () => {
+    it("the picked account is named from the server, whatever the loaded lists hold", () => {
+      renderAt("/admin/jobs?user=ops.lead@example.com")
+      expect(vi.mocked(useAdminUserByEmail)).toHaveBeenCalledWith("ops.lead@example.com")
+      expect(screen.getByRole("combobox", { name: /user/i }).textContent).toContain("Ops Lead")
+    })
+
+    it("the User picker searches every account on the server", async () => {
+      const router = renderAt("/admin/jobs")
+      await userEvent.click(screen.getByRole("combobox", { name: /user/i }))
+      await userEvent.type(screen.getByPlaceholderText(/search/i), "ops.le")
+      expect(vi.mocked(useAdminUserSearch)).toHaveBeenCalledWith("ops.le")
+      await userEvent.click(screen.getByRole("option", { name: /ops\.lead@example\.com/ }))
+      expect(router.state.location.search).toBe("?user=ops.lead%40example.com")
+    })
+
+    it("part of an address in the search box offers the account; picking it sets the User filter", async () => {
+      const router = renderAt("/admin/jobs")
+      const box = screen.getByRole("searchbox", { name: "Search" })
+      await userEvent.type(box, "ops.lead")
+      const offered = screen.getByRole("list", { name: "Accounts matching" })
+      await userEvent.click(within(offered).getByRole("button", { name: /ops\.lead@example\.com/ }))
+      expect(router.state.location.search).toBe("?user=ops.lead%40example.com")
+      expect((box as HTMLInputElement).value).toBe("")
+    })
+
+    it("a whole address that is an account becomes the User filter, never a prompt search", () => {
+      const router = renderAt("/admin/jobs")
+      fireEvent.change(screen.getByRole("searchbox", { name: "Search" }), { target: { value: "Ops.Lead@example.com" } })
+      expect(router.state.location.search).toBe("?user=ops.lead%40example.com")
+      expect(lastJobsCall()[2]).toMatchObject({ userEmail: "ops.lead@example.com" })
+      expect(lastJobsCall()[2].q).toBeUndefined()
+    })
+
+    it("a whole address no account has is searched as text", () => {
+      const router = renderAt("/admin/jobs")
+      fireEvent.change(screen.getByRole("searchbox", { name: "Search" }), { target: { value: "nobody@x.test" } })
+      expect(router.state.location.search).toBe("?q=nobody%40x.test")
+    })
   })
 
   const NOTICE = "These filters arrive with the next release — showing jobs by status and user only."

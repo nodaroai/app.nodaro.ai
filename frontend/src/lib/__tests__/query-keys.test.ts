@@ -260,8 +260,8 @@ describe("queryKeys", () => {
       expect(queryKeys.admin.jobSources()).toEqual(["admin", "job-sources"])
     })
 
-    it("builds usersLite key", () => {
-      expect(queryKeys.admin.usersLite()).toEqual(["admin", "users-lite"])
+    it("builds userLookup key", () => {
+      expect(queryKeys.admin.userLookup("search", "20:dana")).toEqual(["admin", "user-lookup", "search", "20:dana"])
     })
 
     it("builds usageLogs key with defaults", () => {

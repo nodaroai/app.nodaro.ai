@@ -10,10 +10,10 @@ import {
   useAdminAppReports,
   usePatchAppReportMutation,
   fetchAdminAppReportsPage,
-  useAllAdminUsersLite,
   type AppReport,
   type AppReportsUserScope,
 } from "@/ee/hooks/queries/use-admin-queries"
+import { useAdminAccounts, useAdminUserSearch, useDebouncedValue, type AdminUserLite } from "@/ee/hooks/queries/use-admin-user-lookup"
 import { downloadMarkdown, exportDateStamp, exportPreamble, fetchAllRows } from "@/ee/lib/admin-export"
 
 /** The generic diagnostic inbox: reports written by platform nodes on behalf
@@ -98,8 +98,13 @@ export default function AdminAppReportsPage() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
 
-  const { data: users = [] } = useAllAdminUsersLite()
-  const adminIds = useMemo(() => users.filter((u) => u.role !== "user").map((u) => u.id), [users])
+  // The picker searches every account on the server; the picked one is kept for its label and the export.
+  const [pickedUser, setPickedUser] = useState<AdminUserLite | null>(null)
+  const [userTerm, setUserTerm] = useState("")
+  const userSearch = useAdminUserSearch(useDebouncedValue(userTerm))
+  const userOptions = userTerm.trim() ? (userSearch.data ?? []) : pickedUser ? [pickedUser] : []
+  const { data: admins, isSuccess: adminsLoaded, isError: adminsFailed } = useAdminAccounts()
+  const adminIds = useMemo(() => (admins ?? []).map((u) => u.id), [admins])
   const userScope: AppReportsUserScope = useMemo(
     () =>
       userFilter.kind === "user"
@@ -110,13 +115,16 @@ export default function AdminAppReportsPage() {
     [userFilter, adminIds],
   )
 
-  const listQuery = useAdminAppReports(offset, kind, appSlug, status, userScope)
+  // Hiding the admins needs their ids: no reports are asked for (or exported) until they are in.
+  const reportsReady = userFilter.kind !== "exclude_admins" || adminsLoaded
+  const listQuery = useAdminAppReports(offset, kind, appSlug, status, userScope, { enabled: reportsReady })
   const patch = usePatchAppReportMutation()
   if (!isAdmin) return null
 
   const reports = listQuery.data?.data ?? []
   const total = listQuery.data?.total ?? 0
-  const loading = listQuery.isLoading && reports.length === 0
+  const adminsMissing = userFilter.kind === "exclude_admins" && adminsFailed
+  const loading = (listQuery.isLoading || (!reportsReady && !adminsMissing)) && reports.length === 0
 
   const exportMd = async () => {
     setExporting(true)
@@ -130,7 +138,7 @@ export default function AdminAppReportsPage() {
           kind,
           app: appSlug,
           status,
-          user: userFilter.kind === "user" ? (users.find((u) => u.id === userFilter.id)?.email ?? userFilter.id) : userFilter.kind,
+          user: userFilter.kind === "user" ? (pickedUser?.id === userFilter.id ? pickedUser.email : userFilter.id) : userFilter.kind,
         }),
       )
     } finally {
@@ -167,17 +175,29 @@ export default function AdminAppReportsPage() {
             </SelectContent>
           </Select>
         </div>
-        {users.length > 0 && (
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">User</label>
-            <UserFilter users={users} value={userFilter} onChange={(next) => { setUserFilter(next); setOffset(0) }} />
-          </div>
-        )}
-        <Button variant="outline" size="sm" className="ml-auto" disabled={exporting || total === 0} onClick={exportMd}>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground mb-1 block">User</label>
+          <UserFilter
+            users={userOptions}
+            value={userFilter}
+            selected={pickedUser}
+            search={{ term: userTerm, onTermChange: setUserTerm, loading: userSearch.isFetching }}
+            onChange={(next, user) => {
+              setUserFilter(next)
+              setPickedUser(next.kind === "user" ? (user ?? null) : null)
+              setOffset(0)
+            }}
+          />
+        </div>
+        <Button variant="outline" size="sm" className="ml-auto" disabled={exporting || total === 0 || !reportsReady} onClick={exportMd}>
           {exporting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}
           Export .md
         </Button>
       </div>
+
+      {adminsMissing && (
+        <p className="mb-3 text-sm text-destructive">Couldn&apos;t load the admin accounts to hide. Reload to try again.</p>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>

@@ -79,6 +79,12 @@ export const MODEL_PICK_MAX = LIST_MAX - MODEL_EXTRA_VALUES
 const UUID_TEXT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 /** The server's address check (`z.email()`), so a link it would refuse is dropped here instead. */
 const EMAIL = z.email()
+
+/** Whether `text` is a whole address, by the server's check: the search box then looks it up as an account. */
+export function isEmailAddress(text: string): boolean {
+  return EMAIL.safeParse(text.trim().toLowerCase()).success
+}
+
 const DAY_TEXT = /^\d{4}-\d{2}-\d{2}$/
 const Q_MAX = 200
 const DAY_MS = 24 * 60 * 60 * 1000

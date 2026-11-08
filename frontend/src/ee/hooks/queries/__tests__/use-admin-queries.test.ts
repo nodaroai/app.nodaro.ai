@@ -42,7 +42,6 @@ vi.mock("@/lib/query-keys", () => ({
         ["admin", "jobs-infinite", pageSize, filters, [...(excludeUserIds ?? [])].sort().join(",")],
       jobSources: () => ["admin", "job-sources"],
       job: (id: string, status: string, completedAt: string | null) => ["admin", "job", id, status, completedAt ?? ""],
-      usersLite: () => ["admin", "users-lite"],
       usageLogs: (page: number, pageSize: number) => ["admin", "usage-logs", page, pageSize],
       models: () => ["admin", "models"],
       reports: (page: number, status?: string) => ["admin", "reports", page, status ?? ""],
@@ -70,7 +69,6 @@ import {
   useAdminJobSources,
   useAdminJobDetail,
   jobSourceLabel,
-  useAllAdminUsersLite,
   useAdminUsageLogs,
   useAdminModels,
   useAdminReports,
@@ -121,12 +119,6 @@ describe("admin query hooks — shared hasAdmin() gating", () => {
       call: () => useAdminUsers(0, 50),
       expectedKey: ["admin", "users", 0, 50],
       expectedStaleTime: 30_000,
-    },
-    {
-      name: "useAllAdminUsersLite",
-      call: () => useAllAdminUsersLite(),
-      expectedKey: ["admin", "users-lite"],
-      expectedStaleTime: 60_000,
     },
     {
       name: "useAdminJobs",
@@ -428,34 +420,6 @@ describe("useAdminJobDetail", () => {
       output_data: { imageUrl: "https://cdn.test/a.png" },
     })
     expect(String(mockFetch.mock.calls[0]![0])).toBe("/v1/admin/jobs/j1")
-  })
-})
-
-describe("useAllAdminUsersLite options.enabled", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockUseQuery.mockReturnValue({ data: null })
-  })
-
-  it("respects options.enabled = false even when hasAdmin() is true", () => {
-    mockHasAdmin.mockReturnValue(true)
-    useAllAdminUsersLite({ enabled: false })
-    const opts = mockUseQuery.mock.calls[0][0]
-    expect(opts.enabled).toBe(false)
-  })
-
-  it("defaults options.enabled to true (keeps hasAdmin gate behavior)", () => {
-    mockHasAdmin.mockReturnValue(true)
-    useAllAdminUsersLite()
-    const opts = mockUseQuery.mock.calls[0][0]
-    expect(opts.enabled).toBe(true)
-  })
-
-  it("stays disabled when hasAdmin() is false even with enabled=true", () => {
-    mockHasAdmin.mockReturnValue(false)
-    useAllAdminUsersLite({ enabled: true })
-    const opts = mockUseQuery.mock.calls[0][0]
-    expect(opts.enabled).toBe(false)
   })
 })
 

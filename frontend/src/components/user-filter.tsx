@@ -27,11 +27,26 @@ export interface UserFilterUser {
   readonly role: "user" | "admin" | "super_admin"
 }
 
+/**
+ * Server search: the caller owns the typed text and answers `users` for it
+ * (a search over every account), so the list is not filtered here.
+ */
+export interface UserFilterSearch {
+  readonly term: string
+  readonly onTermChange: (term: string) => void
+  readonly loading?: boolean
+}
+
 interface UserFilterProps {
+  /** The accounts offered: the whole list, or (with `search`) the answer for the typed text. */
   readonly users: ReadonlyArray<UserFilterUser>
   readonly value: UserFilterValue
-  readonly onChange: (value: UserFilterValue) => void
+  /** Called with the picked account too, so a caller that searches keeps its address and name. */
+  readonly onChange: (value: UserFilterValue, user?: UserFilterUser) => void
   readonly className?: string
+  readonly search?: UserFilterSearch
+  /** The picked account when it may not be among `users` (a search answers only what was typed). */
+  readonly selected?: UserFilterUser | null
 }
 
 /**
@@ -44,14 +59,18 @@ interface UserFilterProps {
  *  - `{ kind: "all" }` — no filter (default)
  *  - `{ kind: "exclude_admins" }` — hide rows owned by admin/super_admin users
  *  - `{ kind: "user", id }` — show only rows owned by this user
+ *
+ * With `search`, the typed text goes to the caller, which answers `users` from
+ * the server: every account can be found, not only those loaded up front.
  */
-export function UserFilter({ users, value, onChange, className }: UserFilterProps) {
+export function UserFilter({ users, value, onChange, className, search, selected }: UserFilterProps) {
   const [open, setOpen] = useState(false)
   const t = useT()
-  const label = getTriggerLabel(value, users, t)
+  const label = getTriggerLabel(value, users, t, selected)
+  const noMatch = search !== undefined && search.term.trim().length > 0 && !search.loading && users.length === 0
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) search?.onTermChange("") }}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -65,10 +84,15 @@ export function UserFilter({ users, value, onChange, className }: UserFilterProp
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[260px] p-0" align="start">
-        <Command>
-          <CommandInput placeholder={t("misc.searchUsers")} />
+        <Command shouldFilter={search === undefined}>
+          {search ? (
+            <CommandInput placeholder={t("misc.searchUsers")} value={search.term} onValueChange={search.onTermChange} />
+          ) : (
+            <CommandInput placeholder={t("misc.searchUsers")} />
+          )}
           <CommandList>
             <CommandEmpty>{t("misc.noUsersFound")}</CommandEmpty>
+            {noMatch && <p className="py-2 text-center text-sm text-muted-foreground">{t("misc.noUsersFound")}</p>}
             <CommandGroup>
               <CommandItem
                 value="__all"
@@ -100,8 +124,9 @@ export function UserFilter({ users, value, onChange, className }: UserFilterProp
                     key={u.id}
                     value={display}
                     onSelect={() => {
-                      onChange({ kind: "user", id: u.id })
+                      onChange({ kind: "user", id: u.id }, u)
                       setOpen(false)
+                      search?.onTermChange("")
                     }}
                   >
                     <CheckMark active={value.kind === "user" && value.id === u.id} />
@@ -138,10 +163,11 @@ function getTriggerLabel(
   value: UserFilterValue,
   users: ReadonlyArray<UserFilterUser>,
   t: TFunction,
+  selected?: UserFilterUser | null,
 ): string {
   if (value.kind === "all") return t("exec.allUsers")
   if (value.kind === "exclude_admins") return t("misc.excludingAdmins")
-  const u = users.find((x) => x.id === value.id)
+  const u = selected?.id === value.id ? selected : users.find((x) => x.id === value.id)
   if (!u) return t("misc.unknownUser")
   return formatUserShort(u)
 }

@@ -20,8 +20,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils"
 import { otherJobTypes, typesOfKind, type JobKind } from "./job-kinds"
 import { modelLines } from "./model-lines"
+import { ACCOUNT_SUGGESTIONS, AccountSuggestions } from "./account-suggestions"
+import {
+  useAdminUserByEmail,
+  useAdminUserSearch,
+  useDebouncedValue,
+  type AdminUserLite,
+} from "@/ee/hooks/queries/use-admin-user-lookup"
 import {
   DEFAULT_JOB_FILTERS,
+  isEmailAddress,
   LIST_ITEM,
   LIST_MAX,
   MODEL_PICK_MAX,
@@ -218,6 +226,8 @@ export function JobsFilterBar({ filters, onChange, sources }: JobsFilterBarProps
     }
   }, [filters.q])
   useEffect(() => {
+    // A whole address waits for its account lookup (below), which decides.
+    if (isEmailAddress(searchDraft)) return
     // The box shows the applied search (a link's, even a short one): nothing to send.
     if (searchDraft.trim() === (latest.current.filters.q ?? "")) return
     // A draft cut below 3 characters clears an applied search, after the same wait.
@@ -229,6 +239,39 @@ export function JobsFilterBar({ filters, onChange, sources }: JobsFilterBarProps
     }, SEARCH_DEBOUNCE_MS)
     return () => clearTimeout(timer)
   }, [searchDraft])
+
+  // Accounts matching what is typed, offered under the box (the prompt search
+  // keeps running); a whole address that is an account becomes the User filter.
+  const [searchFocused, setSearchFocused] = useState(false)
+  const settledDraft = useDebouncedValue(searchDraft.trim())
+  const accountTerm = settledDraft.length >= SEARCH_MIN_CHARS && !UUID_TEXT.test(settledDraft) ? settledDraft : ""
+  const { data: accounts = [] } = useAdminUserSearch(accountTerm, { limit: ACCOUNT_SUGGESTIONS })
+  const settledAddress = isEmailAddress(settledDraft) ? settledDraft.toLowerCase() : undefined
+  const addressLookup = useAdminUserByEmail(settledAddress)
+  const pickAccount = (account: AdminUserLite, how?: { replace: true }) => {
+    sentQ.current = undefined
+    setSearchDraft("")
+    setSearchFocused(false)
+    latest.current.onChange(
+      { ...latest.current.filters, userEmail: account.email.toLowerCase(), excludeAdmins: false, q: undefined },
+      how,
+    )
+  }
+  useEffect(() => {
+    // Only once typing has stopped on this address and its lookup has answered.
+    const draft = searchDraft.trim()
+    if (!settledAddress || draft.toLowerCase() !== settledAddress || addressLookup.isFetching) return
+    // The box holding the applied search (a `?q=<address>` link) refines that entry rather than adding one.
+    const how = draft === (latest.current.filters.q ?? "") ? { replace: true as const } : undefined
+    if (addressLookup.data) return pickAccount(addressLookup.data, how)
+    if (addressLookup.data === null || addressLookup.isError) {
+      // No such account (or the lookup failed): the address is searched as text, as before.
+      if (draft === (latest.current.filters.q ?? "")) return
+      sentQ.current = draft
+      latest.current.onChange({ ...latest.current.filters, q: draft }, { replace: true })
+    }
+    // pickAccount is left out of the deps: it reads the latest props through `latest`.
+  }, [searchDraft, settledAddress, addressLookup.data, addressLookup.isFetching, addressLookup.isError])
 
   // A text search with no `from` runs over the server's default window: show it.
   const effectiveFrom = useMemo(() => filters.from ?? serverParams(filters, new Date()).get("from") ?? "", [filters])
@@ -361,15 +404,23 @@ export function JobsFilterBar({ filters, onChange, sources }: JobsFilterBarProps
           />
         </div>
 
-        <Input
-          type="search"
-          aria-label="Search"
-          placeholder="Prompt, error or job id"
-          className="h-8 w-[220px]"
-          maxLength={SEARCH_MAX_CHARS}
-          value={searchDraft}
-          onChange={(e) => setSearchDraft(e.target.value)}
-        />
+        <div
+          className="relative"
+          onFocus={() => setSearchFocused(true)}
+          onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSearchFocused(false) }}
+        >
+          <Input
+            type="search"
+            aria-label="Search"
+            placeholder="Prompt, error, job id or account"
+            className="h-8 w-[220px]"
+            maxLength={SEARCH_MAX_CHARS}
+            value={searchDraft}
+            onChange={(e) => { setSearchDraft(e.target.value); setSearchFocused(true) }}
+            onKeyDown={(e) => { if (e.key === "Escape") setSearchFocused(false) }}
+          />
+          {searchFocused && accountTerm && <AccountSuggestions accounts={accounts} onPick={(a) => pickAccount(a)} />}
+        </div>
       </div>
 
       {chips.length > 0 && (

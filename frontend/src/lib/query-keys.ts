@@ -359,7 +359,8 @@ export const queryKeys = {
     jobPage: (id: string) => ["admin", "job-page", id] as const,
     /** Every job below one, in flow order, for the job page's child-jobs view. */
     jobChildren: (id: string) => ["admin", "job-page", id, "children"] as const,
-    usersLite: () => ["admin", "users-lite"] as const,
+    /** The admin pickers' accounts (`GET /v1/admin/user-lookup`): a search, an address, a set of ids, the admins. */
+    userLookup: (kind: "search" | "email" | "ids" | "admins", value: string) => ["admin", "user-lookup", kind, value] as const,
     usageLogs: (
       page: number,
       pageSize: number,

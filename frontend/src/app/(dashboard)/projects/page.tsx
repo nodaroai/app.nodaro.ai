@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Navigate, useSearchParams } from "react-router-dom"
 import { CopilotHomeSlot } from "@/components/dashboard/copilot-home-slot"
 import { MoveWorkflowDialog } from "@/components/dashboard/move-workflow-dialog"
@@ -15,7 +15,8 @@ import {
   type HomeTab,
 } from "@/components/dashboard/home/home-tabs"
 import type { UserFilterUser } from "@/components/user-filter"
-import { useAllAdminUsersLite } from "@/ee/hooks/queries/use-admin-queries"
+import { useAdminUsersByIds } from "@/ee/hooks/queries/use-admin-user-lookup"
+import { useAllProjects } from "@/hooks/queries/use-projects-queries"
 import { useAuth } from "@/hooks/use-auth"
 import { useCreateWorkflow } from "@/hooks/use-create-workflow"
 import type { MyWorkflow } from "@/hooks/queries/use-my-workflows-queries"
@@ -66,7 +67,15 @@ export default function ProjectsPage() {
   // core reaches it (tools/check-ee-imports.mjs).
   const [viewAll, setViewAll] = useState(() => isAdmin && readStoredViewAll())
   const showAll = isAdmin && viewAll
-  const { data: adminUsers = NO_USERS } = useAllAdminUsersLite({ enabled: showAll })
+  // The owners of the listed projects, read by id (the same query the grid lists):
+  // never the whole profiles table, which stopped at 1,000 accounts.
+  const { data: allProjects } = useAllProjects(showAll)
+  const ownerIds = useMemo(
+    () => (showAll ? (allProjects?.projects ?? []).map((p) => p.userId).filter((id): id is string => Boolean(id)) : []),
+    [showAll, allProjects],
+  )
+  const { data: owners } = useAdminUsersByIds(ownerIds, { enabled: showAll })
+  const adminUsers = showAll ? owners : NO_USERS
   const handleViewAllChange = useCallback((checked: boolean) => {
     setViewAll(checked)
     try {

@@ -11,10 +11,16 @@ import {
   useAdminJobDetail,
   useAdminJobs,
   useAdminJobSources,
-  useAllAdminUsersLite,
   type AdminJob,
   type AdminJobDetail,
 } from "@/ee/hooks/queries/use-admin-queries"
+import {
+  useAdminAccounts,
+  useAdminUserByEmail,
+  useAdminUserSearch,
+  useDebouncedValue,
+  type AdminUserLite,
+} from "@/ee/hooks/queries/use-admin-user-lookup"
 import { JobsGallery } from "./jobs-gallery"
 import { FiltersUnavailableNotice, JobsFilterBar } from "./jobs-filter-bar"
 import { ADMIN_JOB_STATUSES, jobFiltersKey, parseJobFilters, serializeJobFilters, type AdminJobFilters } from "./jobs-filters"
@@ -115,13 +121,9 @@ function JobDetailDialog({
 const PAGE_SIZE = 50
 
 /** The user filter's value for the filters' user (an address, or "admins hidden"). */
-function userFilterValue(filters: AdminJobFilters, users: ReadonlyArray<{ id: string; email: string }>): UserFilterValue {
-  if (filters.userEmail) {
-    const email = filters.userEmail
-    const user = users.find((u) => u.email.toLowerCase() === email)
-    // An address no loaded account has still filters (the server answers); the trigger reads "unknown user".
-    return { kind: "user", id: user?.id ?? "" }
-  }
+function userFilterValue(filters: AdminJobFilters, selected: AdminUserLite | null | undefined): UserFilterValue {
+  // An address no account has still filters (the server answers "no user"); the trigger reads "unknown user".
+  if (filters.userEmail) return { kind: "user", id: selected?.id ?? "" }
   return filters.excludeAdmins ? { kind: "exclude_admins" } : { kind: "all" }
 }
 
@@ -142,18 +144,22 @@ export default function AdminJobsPage() {
   const page = pageAt.key === filtersKey ? pageAt.page : 0
   const setPage = (next: number) => setPageAt({ key: filtersKey, page: next })
 
-  const { data: users = [], isSuccess: usersLoaded, isError: usersFailed } = useAllAdminUsersLite()
+  // The picker searches every account on the server; the picked one is read
+  // back by its address (the URL's), so its label survives a reload.
+  const [userTerm, setUserTerm] = useState("")
+  const userSearch = useAdminUserSearch(useDebouncedValue(userTerm))
+  const { data: selectedUser } = useAdminUserByEmail(filters.userEmail)
   const { data: sources = [] } = useAdminJobSources()
 
-  const adminIds = useMemo(
-    () => users.filter((u) => u.role !== "user").map((u) => u.id),
-    [users],
-  )
+  const hidesAdmins = filters.excludeAdmins && !filters.userEmail
+  const { data: admins, isSuccess: adminsLoaded, isError: adminsFailed } = useAdminAccounts()
+  const adminIds = useMemo(() => (admins ?? []).map((u) => u.id), [admins])
+  // While nothing is typed, the picker offers the picked account (if any) under All / Hide admins.
+  const userOptions = userTerm.trim() ? (userSearch.data ?? []) : selectedUser ? [selectedUser] : []
 
-  const onUserFilter = (next: UserFilterValue) => {
+  const onUserFilter = (next: UserFilterValue, user?: { email: string }) => {
     if (next.kind === "user") {
-      const email = users.find((u) => u.id === next.id)?.email
-      if (email) setFilters({ ...filters, userEmail: email.toLowerCase(), excludeAdmins: false })
+      if (user) setFilters({ ...filters, userEmail: user.email.toLowerCase(), excludeAdmins: false })
     } else {
       setFilters({ ...filters, userEmail: undefined, excludeAdmins: next.kind === "exclude_admins" })
     }
@@ -167,8 +173,7 @@ export default function AdminJobsPage() {
   const [detailTab, setDetailTab] = useState<string>("input")
   // Hiding the admins needs their ids: hold the request until the list is in,
   // so a refreshed or shared link never flashes the admins' jobs first.
-  const hidesAdmins = filters.excludeAdmins && !filters.userEmail
-  const jobsReady = !hidesAdmins || usersLoaded
+  const jobsReady = !hidesAdmins || adminsLoaded
   const { data, isLoading, isError } = useAdminJobs(page, PAGE_SIZE, filters, adminIds, { enabled: jobsReady })
   const loading = isLoading || !jobsReady
   const jobs = data?.jobs ?? []
@@ -196,13 +201,13 @@ export default function AdminJobsPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 justify-end">
-          {users.length > 0 && (
-            <UserFilter
-              users={users}
-              value={userFilterValue(filters, users)}
-              onChange={onUserFilter}
-            />
-          )}
+          <UserFilter
+            users={userOptions}
+            value={userFilterValue(filters, selectedUser)}
+            onChange={onUserFilter}
+            selected={selectedUser}
+            search={{ term: userTerm, onTermChange: setUserTerm, loading: userSearch.isFetching }}
+          />
           <div className="flex gap-1">
             {STATUS_OPTIONS.map((s) => (
               <Button
@@ -220,7 +225,7 @@ export default function AdminJobsPage() {
 
       <JobsFilterBar filters={filters} onChange={setFilters} sources={sources} />
 
-      {hidesAdmins && usersFailed && (
+      {hidesAdmins && adminsFailed && (
         <p className="mb-3 text-sm text-destructive">Couldn&apos;t load the admin accounts to hide. Reload to try again.</p>
       )}
 
