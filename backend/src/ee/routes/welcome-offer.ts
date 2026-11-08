@@ -5,6 +5,7 @@ import { sendInternalError } from "../../lib/http-errors.js"
 import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
 import { callerKeyHash } from "../../routes/oauth-register.js"
 import { readFreeGrant, runSignupGrantClaim, type FreeGrantState } from "../billing/signup-grant.js"
+import { SIGNUP_GRANTS_NOT_APPLICABLE, signupGrantsApply } from "../billing/free-grant-scope.js"
 import { TIER_CREDITS } from "../billing/stripe-config.js"
 import { consentLocaleField } from "../lib/consent-locale.js"
 import { recordConsentGrant } from "../lib/consent-record.js"
@@ -32,6 +33,10 @@ import { signupCookieKey } from "../lib/signup-cookie.js"
  *
  * Cloud-only (registered under hasCredits()), dormant until an admin turns
  * `welcome_offer_enabled` on.
+ *
+ * On a deployment with a single payer both answer 409 `not_applicable` before
+ * the offer's own switch is read (free-grant-scope.ts): the offer's credits
+ * would land in a balance nothing spends, so not even its consent is recorded.
  */
 
 const JWT_ONLY_MSG = "The welcome offer can only be answered from a first-party browser session"
@@ -81,6 +86,7 @@ export async function welcomeOfferRoutes(app: FastifyInstance): Promise<void> {
     async (req, reply) => {
       const userId = requireBrowserUser(req, reply)
       if (!userId) return
+      if (!signupGrantsApply()) return reply.status(409).send(SIGNUP_GRANTS_NOT_APPLICABLE)
 
       const cfg = await getWelcomeOfferConfig()
       if (!cfg.enabled) {
@@ -139,6 +145,7 @@ export async function welcomeOfferRoutes(app: FastifyInstance): Promise<void> {
     async (req, reply) => {
       const userId = requireBrowserUser(req, reply)
       if (!userId) return
+      if (!signupGrantsApply()) return reply.status(409).send(SIGNUP_GRANTS_NOT_APPLICABLE)
 
       // Same gate as the claim: the column exists only from migration 426, and
       // with the offer off there is no popup to have seen.

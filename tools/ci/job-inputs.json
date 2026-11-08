@@ -195,6 +195,7 @@
         "backend/src/ee/billing/edit-video-pro-credits.ts",
         "backend/src/ee/billing/external-wallet-client.ts",
         "backend/src/ee/billing/external-wallet.ts",
+        "backend/src/ee/billing/free-grant-scope.ts",
         "backend/src/ee/billing/free-grant-states.ts",
         "backend/src/ee/billing/free-video-limits.ts",
         "backend/src/ee/billing/generate-video-pro-credits.ts",

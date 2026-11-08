@@ -7464,7 +7464,11 @@ once, with the browser signals of the page making the claim. Idempotent: a
 decided account answers with its state and `granted: false`. Call it once per
 page load as soon as the session is known and never wait on it for rendering —
 a failed call costs nothing, the next load asks again. Nodaro Cloud only (a
-self-hosted instance answers 404).
+self-hosted instance answers 404). On a deployment where one billing account
+pays for every run, free signup credits do not apply: the call throws a
+`NodaroError` with `status` 409 and `code` `"not_applicable"`, and nothing is
+claimed or recorded (the fire-and-forget call below ignores it like any other
+failure).
 
 The signals come from the browser-only subpath `@nodaro/sdk/signup-signals`:
 `collectSignupKeys()` returns whatever could be measured within its deadline
@@ -7505,7 +7509,10 @@ self-hosted instance answers 404).
 the route answers a first-party web app signed in with a Supabase session
 (`supabaseAuth`) and refuses an API key or an OAuth app token with `403`. It
 answers `409 welcome_offer_disabled` while the deployment has the offer off:
-show the offer only when `balance().welcomeOffer` is present.
+show the offer only when `balance().welcomeOffer` is present. On a deployment
+where one billing account pays for every run it answers `409 not_applicable`
+and records nothing, not even the consent — free signup credits do not apply
+there, and `balance()` carries no `welcomeOffer`.
 
 **`WelcomeOfferClaimInput`:** `SignupKeys` (from `collectSignupKeys()`) plus
 `sourceApp?: string` — your app's slug (lowercase letters, digits and `-`, up to
@@ -7534,7 +7541,8 @@ shown, so `welcomeOffer.popupSeen` turns `true` in every app. Idempotent (the
 first stamp wins). A failed call only means the popup may show once more, so
 callers usually ignore errors. Same rules as `claimWelcomeOffer`: browser
 session only (`403` for API keys and OAuth app tokens), `409
-welcome_offer_disabled` while the offer is off, Cloud only.
+welcome_offer_disabled` while the offer is off, `409 not_applicable` on a
+deployment where one billing account pays for every run, Cloud only.
 
 ```ts
 import { collectSignupKeys } from "@nodaro/sdk/signup-signals"

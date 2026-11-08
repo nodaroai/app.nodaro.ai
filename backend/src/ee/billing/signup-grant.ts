@@ -11,6 +11,7 @@ import {
   type GrantDecision,
 } from "./signup-grant-policy.js"
 import { compareWithPluginGate } from "./signup-gate-seam.js"
+import { signupGrantsApply } from "./free-grant-scope.js"
 import { hasGrantedConsent } from "../lib/consent-record.js"
 import { isMissingColumnError, isMissingTableError } from "../../lib/postgrest-errors.js"
 import { neighbourhoodKey } from "../../lib/ip-address.js"
@@ -32,6 +33,11 @@ import { isHostingAddress } from "../../lib/hosting-ranges.js"
  *
  * Both write the ledger row only when the balance actually moved, and both
  * invalidate the balance cache so the next read shows the credits.
+ *
+ * On a deployment with a single payer no transition here moves a credit,
+ * whoever calls it (`signupGrantsApply`, free-grant-scope.ts): each one
+ * returns its "nothing moved" answer before it records, decides or writes
+ * anything.
  */
 
 // The state list lives in its own import-free module; re-exported here so
@@ -134,6 +140,8 @@ export async function runSignupGrantClaim(
   log: FastifyBaseLogger,
   options: ClaimOptions = {},
 ): Promise<ClaimOutcome> {
+  // No signal row, no decision, no RPC: the account stays as the caller found it.
+  if (!signupGrantsApply()) return { state: "unclaimed", granted: false, decision: null }
   const { userId, browserKey, deviceKey, ipHash } = params
   const ipScheme = params.ipScheme ?? null
   const address = params.address ?? null
@@ -280,6 +288,7 @@ export async function retryKeylessWithhold(
   log: FastifyBaseLogger,
 ): Promise<{ retried: boolean; state: FreeGrantState; activated: boolean; decision: GrantDecision | null }> {
   const { userId, browserKey, deviceKey, ipHash } = params
+  if (!signupGrantsApply()) return { retried: false, state: "withheld", activated: false, decision: null }
   if (!browserKey && !deviceKey) return { retried: false, state: "withheld", activated: false, decision: null }
   const signal = await readClaimSignal(userId)
   if (!signal || signal.browserKey || signal.deviceKey || !withheldForKeylessOnly(signal.reasons)) {
@@ -390,6 +399,8 @@ export async function activateSignupGrant(
   userId: string,
   description: string,
 ): Promise<{ activated: boolean; state: FreeGrantState }> {
+  // Nothing activated; the state reported is the one the account was left in.
+  if (!signupGrantsApply()) return { activated: false, state: (await readFreeGrantState(userId)) ?? "withheld" }
   const { data, error } = await supabase.rpc("activate_signup_grant", {
     p_user_id: userId,
     p_grant_amount: TIER_CREDITS.free,
@@ -422,6 +433,8 @@ export async function activateSignupGrant(
 export async function activateSignupGrantOnPurchase(
   userId: string,
 ): Promise<{ activated: boolean; state: FreeGrantState | null }> {
+  // A purchase on a deployment with a single payer releases no free grant.
+  if (!signupGrantsApply()) return { activated: false, state: null }
   let state: FreeGrantState | null = null
   try {
     state = await readFreeGrantState(userId)
@@ -433,8 +446,18 @@ export async function activateSignupGrantOnPurchase(
   }
 }
 
-/** Why a take-back or a restore moved nothing (the RPC's own words, migration 458). */
-export type GrantChangeRefusal = "not_found" | "not_revocable" | "not_revoked" | "paid_account" | "reservations_open"
+/**
+ * Why a take-back or a restore moved nothing: the RPC's own words (migration
+ * 458), plus `not_applicable` — a restore on a deployment with a single payer,
+ * refused here before any RPC (free-grant-scope.ts).
+ */
+export type GrantChangeRefusal =
+  | "not_found"
+  | "not_revocable"
+  | "not_revoked"
+  | "paid_account"
+  | "reservations_open"
+  | "not_applicable"
 
 export interface GrantChangeOutcome {
   changed: boolean
@@ -491,6 +514,9 @@ export async function revokeSignupGrant(userId: string, adminUserId: string | nu
 
 /** 'revoked' → the state it was taken from, with exactly the credits removed. */
 export async function reinstateSignupGrant(userId: string, adminUserId: string): Promise<GrantChangeOutcome> {
+  if (!signupGrantsApply()) {
+    return { changed: false, state: await readFreeGrantState(userId), credits: 0, refusal: "not_applicable" }
+  }
   const { data, error } = await supabase.rpc("reinstate_signup_grant", { p_user_id: userId })
   if (error) throw error
   const row = firstRow(data)

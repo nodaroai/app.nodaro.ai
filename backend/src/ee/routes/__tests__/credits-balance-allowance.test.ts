@@ -22,11 +22,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
-const { mockGetBalance, mockReadFreeGrant, mockRunSignupGrantClaim, mockAllowanceFor, state } = vi.hoisted(() => ({
+const { mockGetBalance, mockReadFreeGrant, mockRunSignupGrantClaim, mockAllowanceFor, mockWelcomeConfig, state } = vi.hoisted(() => ({
   mockGetBalance: vi.fn(),
   mockReadFreeGrant: vi.fn(),
   mockRunSignupGrantClaim: vi.fn(),
   mockAllowanceFor: vi.fn(),
+  mockWelcomeConfig: vi.fn(),
   state: { payerActive: false, enforce: false, payerId: null as string | null },
 }))
 
@@ -35,6 +36,7 @@ vi.mock("@/ee/billing/signup-grant.js", async () => {
   return { ...actual, readFreeGrant: mockReadFreeGrant, runSignupGrantClaim: mockRunSignupGrantClaim }
 })
 vi.mock("@/ee/billing/deployment-allowance-service.js", () => ({ allowanceFor: mockAllowanceFor }))
+vi.mock("@/ee/lib/welcome-offer-config.js", () => ({ getWelcomeOfferConfig: mockWelcomeConfig }))
 vi.mock("@/lib/deployment-payer.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/deployment-payer.js")>()
   return {
@@ -92,6 +94,7 @@ beforeEach(async () => {
   mockGetBalance.mockResolvedValue(BALANCE)
   mockReadFreeGrant.mockResolvedValue(undefined)
   mockAllowanceFor.mockResolvedValue(null)
+  mockWelcomeConfig.mockResolvedValue({ enabled: false })
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
     const header = req.headers["x-test-user-id"]
@@ -235,5 +238,15 @@ describe("GET /v1/user/credits — the allowance rider", () => {
     expect(mockReadFreeGrant).not.toHaveBeenCalled()
     expect(mockRunSignupGrantClaim).not.toHaveBeenCalled()
     expect(Object.hasOwn(res.json().data as object, "freeGrantState")).toBe(false)
+  })
+
+  it("under a payer: no welcomeOffer even while the offer is switched on — it would name credits no claim grants", async () => {
+    state.payerActive = true
+    mockWelcomeConfig.mockResolvedValue({ enabled: true })
+    const res = await getCredits(nextUserId())
+    expect(res.statusCode).toBe(200)
+    expect(Object.hasOwn(res.json().data as object, "welcomeOffer")).toBe(false)
+    expect(mockWelcomeConfig).not.toHaveBeenCalled()
+    expect(mockRunSignupGrantClaim).not.toHaveBeenCalled()
   })
 })

@@ -381,6 +381,39 @@ describe("POST /v1/admin/free-grants/:userId/activate", () => {
     expect(res.json().error.code).toBe("not_withheld")
     expect(grant.reinstateSignupGrant).not.toHaveBeenCalled()
   })
+
+  describe("on a deployment-payer instance", () => {
+    // A restore mints free credits; there, every run is billed to the
+    // deployment's billing account, so it refuses exactly like the take-back.
+    it.each(["withheld", "revoked"])(
+      "the operator is answered 409 not_applicable for a %s account — nothing is restored or audited",
+      async (state) => {
+        payerInstance()
+        grant.readFreeGrantState.mockResolvedValue(state)
+
+        const res = await post(url, OPERATOR)
+
+        expect(res.statusCode).toBe(409)
+        expect(res.json()).toEqual({
+          error: { code: "not_applicable", message: "Free signup credits do not apply on this deployment." },
+        })
+        expect(grant.activateSignupGrant).not.toHaveBeenCalled()
+        expect(grant.reinstateSignupGrant).not.toHaveBeenCalled()
+        expect(adminActions()).toEqual([])
+      },
+    )
+
+    it("a customer admin who is not an operator is stopped by the operator gate first", async () => {
+      payerInstance()
+
+      const res = await post(url, ADMIN)
+
+      expect(res.statusCode).toBe(403)
+      expect(res.json().error.code).toBe("operator_required")
+      expect(grant.activateSignupGrant).not.toHaveBeenCalled()
+      expect(grant.reinstateSignupGrant).not.toHaveBeenCalled()
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------

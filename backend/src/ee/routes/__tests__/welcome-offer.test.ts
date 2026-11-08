@@ -34,8 +34,10 @@ vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: 
 
 import { welcomeOfferRoutes } from "../welcome-offer.js"
 import { TIER_CREDITS } from "../../billing/stripe-config.js"
+import { __resetDeploymentPayerForTests, __setDeploymentPayerForTests } from "../../../lib/deployment-payer.js"
 
 const USER = "00000000-0000-4000-8000-000000000001"
+const PAYER = "00000000-0000-4000-8000-0000000000c3"
 const HEX64 = "c".repeat(64)
 
 let app: FastifyInstance
@@ -59,6 +61,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  __resetDeploymentPayerForTests()
   await app.close()
 })
 
@@ -202,5 +205,53 @@ describe("POST /v1/credits/welcome-offer/seen", () => {
     const res = await app.inject({ method: "POST", url: `/v1/credits/welcome-offer/seen?userId=${USER}` })
     expect(res.statusCode).toBe(500)
     expect(mockInvalidate).not.toHaveBeenCalled()
+  })
+})
+
+describe("the welcome offer on a deployment with a single payer", () => {
+  // Every run there is billed to the deployment's billing account: the offer's
+  // credits would land in a balance nothing spends. Both writes refuse before
+  // the offer's own switch is read — so not even a marketing consent is
+  // recorded for an offer that cannot exist there.
+  const NOT_APPLICABLE = {
+    error: { code: "not_applicable", message: "Free signup credits do not apply on this deployment." },
+  }
+
+  it("claim: 409 not_applicable — no consent recorded, no claim, nothing invalidated", async () => {
+    __setDeploymentPayerForTests(PAYER)
+
+    const res = await claim({ sourceApp: "studio", browserKey: HEX64 })
+
+    expect(res.statusCode).toBe(409)
+    expect(res.json()).toEqual(NOT_APPLICABLE)
+    expect(mockConfig).not.toHaveBeenCalled()
+    expect(mockRecordConsent).not.toHaveBeenCalled()
+    expect(mockReadFreeGrant).not.toHaveBeenCalled()
+    expect(mockRunClaim).not.toHaveBeenCalled()
+    expect(mockInvalidate).not.toHaveBeenCalled()
+    expect(mockSync).not.toHaveBeenCalled()
+  })
+
+  it("seen: 409 not_applicable — the popup is never stamped", async () => {
+    __setDeploymentPayerForTests(PAYER)
+
+    const res = await app.inject({ method: "POST", url: `/v1/credits/welcome-offer/seen?userId=${USER}` })
+
+    expect(res.statusCode).toBe(409)
+    expect(res.json()).toEqual(NOT_APPLICABLE)
+    expect(mockConfig).not.toHaveBeenCalled()
+    expect(mockFrom).not.toHaveBeenCalled()
+    expect(mockInvalidate).not.toHaveBeenCalled()
+  })
+
+  it("still answers 401 without a user, and 403 to a programmatic caller, first", async () => {
+    __setDeploymentPayerForTests(PAYER)
+    expect((await claim({}, null)).statusCode).toBe(401)
+
+    mockReject.mockImplementation((_req: unknown, reply: { status: (c: number) => { send: (b: unknown) => void } }) => {
+      reply.status(403).send({ error: { code: "forbidden" } })
+      return true
+    })
+    expect((await claim()).statusCode).toBe(403)
   })
 })

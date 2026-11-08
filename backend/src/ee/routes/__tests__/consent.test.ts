@@ -29,6 +29,7 @@ import { getConsentConfig } from "../../lib/consent-config.js"
 import { syncConsentRow } from "../../lib/consent-loops-sync.js"
 import { getWelcomeOfferConfig } from "../../lib/welcome-offer-config.js"
 import { readFreeGrantState, readWelcomeOfferState } from "../../billing/signup-grant.js"
+import { __resetDeploymentPayerForTests, __setDeploymentPayerForTests } from "../../../lib/deployment-payer.js"
 
 const ENABLED = {
   enabled: true,
@@ -62,6 +63,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  __resetDeploymentPayerForTests()
   await app.close()
 })
 
@@ -270,5 +272,26 @@ describe("the interface language a consent is answered in", () => {
     expect(res.statusCode).toBe(200)
     // No `locale` key at all: an opt-out must not erase the language of the grant it ends.
     expect(upsert.mock.calls[0][0]).not.toHaveProperty("locale")
+  })
+})
+
+describe("POST /v1/consent/grant on a deployment with a single payer", () => {
+  // The consent route moves no credits anywhere. In the welcome-offer flow the
+  // credits come from a CLAIM made after the consent (the boot claim, the
+  // balance read's fallback, or the welcome-offer claim), and each of those
+  // refuses, or is skipped, while a payer is active. So the consent is
+  // recorded as before and no grant transition runs.
+  it("records the consent and runs no grant transition", async () => {
+    __setDeploymentPayerForTests("00000000-0000-4000-8000-0000000000c3")
+    const upsert = mockUpsertOk()
+
+    const res = await app.inject({ method: "POST", url: "/v1/consent/grant", payload: { userId: "u1", sourceApp: "studio" } })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ status: "granted" })
+    expect(upsert).toHaveBeenCalledTimes(1)
+    expect(supabase.rpc).not.toHaveBeenCalled()
+    const tables = vi.mocked(supabase.from).mock.calls.map((call) => call[0])
+    expect(tables.every((table) => table === "user_consents" || table === "profiles")).toBe(true)
   })
 })
