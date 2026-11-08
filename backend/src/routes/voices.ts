@@ -1,101 +1,12 @@
 import type { FastifyInstance } from "fastify"
 import type { TtsProvider } from "@nodaro/shared/models"
 import { config } from "../lib/config.js"
-import { registerVoiceLookup } from "../providers/kie/audio.js"
 import { describeLimitedVoices } from "../providers/provider-keys.js"
 import { ELEVENLABS_BASE_URL } from "../providers/elevenlabs/client.js"
-import { FALLBACK_VOICES, type ElevenLabsVoice } from "../lib/premade-voices.js"
+import { getPremadeVoices } from "../lib/premade-voice-catalog.js"
 import { filterVoicesByAllowedGender, clampLibraryGender } from "../lib/voice-policy.js"
+import { recordLibraryVoiceGenders } from "../lib/library-voice-genders.js"
 import { isModelDenied } from "../lib/surface-deny.js"
-
-// ---------------------------------------------------------------------------
-// In-memory cache (6-hour TTL, stampede-safe)
-// ---------------------------------------------------------------------------
-
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000 // 6 hours
-let cachedVoices: readonly ElevenLabsVoice[] | null = null
-let cacheTimestamp = 0
-let inflight: Promise<readonly ElevenLabsVoice[]> | null = null
-
-// ---------------------------------------------------------------------------
-// Fetch from ElevenLabs API
-// ---------------------------------------------------------------------------
-
-async function fetchVoicesFromApi(): Promise<ElevenLabsVoice[]> {
-  const res = await fetch(
-    `${ELEVENLABS_BASE_URL}/v2/voices?category=premade&page_size=100`,
-    {
-      headers: {
-        "xi-api-key": config.ELEVENLABS_API_KEY,
-        Accept: "application/json",
-      },
-    },
-  )
-
-  if (!res.ok) {
-    throw new Error(`ElevenLabs API error: ${res.status}`)
-  }
-
-  const data = (await res.json()) as {
-    voices: Array<{
-      voice_id: string
-      name: string
-      preview_url: string
-      labels?: Record<string, string>
-      description?: string
-      use_case?: string
-      category?: string
-    }>
-  }
-
-  return data.voices.map((v) => ({
-    voice_id: v.voice_id,
-    name: v.name,
-    preview_url: v.preview_url ?? "",
-    gender: v.labels?.gender ?? "",
-    accent: v.labels?.accent ?? "",
-    age: v.labels?.age ?? "",
-    description: v.labels?.description ?? v.description ?? "",
-    use_case: v.labels?.use_case ?? v.use_case ?? "",
-    category: v.category ?? "premade",
-  }))
-}
-
-async function getVoices(): Promise<readonly ElevenLabsVoice[]> {
-  // No API key — return static fallback
-  if (!config.ELEVENLABS_API_KEY) {
-    registerVoiceLookup(FALLBACK_VOICES)
-    return FALLBACK_VOICES
-  }
-
-  const now = Date.now()
-
-  // Return cached if still valid
-  if (cachedVoices && now - cacheTimestamp < CACHE_TTL_MS) {
-    return cachedVoices
-  }
-
-  // Stampede protection
-  if (inflight) return inflight
-
-  inflight = fetchVoicesFromApi()
-    .then((voices) => {
-      cachedVoices = voices
-      cacheTimestamp = Date.now()
-      // Populate KIE voice UUID→name lookup so TTS can resolve IDs
-      registerVoiceLookup(voices)
-      return voices
-    })
-    .catch((err) => {
-      console.error("[voices] ElevenLabs API failed, using fallback:", err.message)
-      return FALLBACK_VOICES
-    })
-    .finally(() => {
-      inflight = null
-    })
-
-  return inflight
-}
 
 // ---------------------------------------------------------------------------
 // Shared voices search cache (5-min TTL, max 200 entries)
@@ -201,9 +112,10 @@ function getSharedCacheKey(params: Record<string, string | undefined>): string {
 
 export async function voicesRoutes(app: FastifyInstance) {
   app.get("/v1/voices", async (_req, reply) => {
-    // B4c: narrow the premade catalog to the deployment's allowed voice genders
-    // (inert when voice.allowedGenders is [] — the default).
-    const voices = filterVoicesByAllowedGender(await getVoices())
+    // B4c: narrow the premade catalog to the deployment's allowed voice genders;
+    // under a lock a voice with no known gender is not listed (inert when
+    // voice.allowedGenders is [] — the default).
+    const voices = filterVoicesByAllowedGender(await getPremadeVoices())
     // Keyless: the static list still serves generation (TTS runs through the
     // connection or a later-added key), but say WHY it is limited instead of
     // pretending — the silent fallback read as "the picker is just poor"
@@ -311,9 +223,21 @@ export async function voicesRoutes(app: FastifyInstance) {
         }
       })
 
+      // B4c: the Voice Library has no lookup by voice id, so a voice lock can
+      // only place a library voice this deployment has listed. Remember the
+      // gender the library states for EVERY voice on this page, before the
+      // filter below (so a later change of the lock is judged right); the
+      // lock's resolver reads it when the voice is used (lib/voice-gender.ts).
+      // Written only under a lock. A failed write leaves the voice unknown,
+      // which the lock refuses — so it never fails the listing.
+      await recordLibraryVoiceGenders(voices).catch((err: unknown) => {
+        console.warn("[voices/library] could not record library voice genders:", (err as Error).message)
+      })
+
       // B4c: post-filter the mapped response by allowed genders (defence in
       // depth — the outbound `gender` clamp above is a hint the provider need
-      // not honor). Inert when unrestricted.
+      // not honor). A voice whose gender the library does not state is not
+      // listed under a lock. Inert when unrestricted.
       const result = { voices: filterVoicesByAllowedGender(voices), hasMore: data.has_more ?? false }
 
       // Cache result (clear all on overflow). The cache holds every verified

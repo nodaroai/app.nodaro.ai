@@ -127,6 +127,8 @@ import { hasCredits, hasOrganizations, llmMeteredPricing } from "../config.js"
 import { LlmSpend, reserveLlmCall, settleLlmJob, type LlmReserveResult } from "../llm-billing.js"
 import { reserveLlmSideHold, sideCreditsFor, sideHoldFor, sideHoldPayerOf, sideHoldsAvailable } from "../llm-side-hold.js"
 import { appBaseUrl } from "../deployment-urls.js"
+import { voiceLockActive } from "../voice-policy.js"
+import { judgeVoice, VoiceNotAvailableError, voiceNotAvailableBody } from "../voice-gender.js"
 import { getAppSettings, settingsReadFailed } from "../app-settings.js"
 import { withEarlierMaskingKeys } from "../nodaro-motion-masking.js"
 import {
@@ -2436,6 +2438,16 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
     ...(opts.role === "daemon" ? { triggers: { listActive: listActivePluginTriggers, fire: firePluginTrigger } } : {}),
     sse: { create: (req, reply) => createSSEStream(req, reply) },
     social: { sendTelegramBotText: sendTelegramBotTextFor },
+    // The deployment's voice lock for the voices a plugin route sends: the
+    // verdict the speech routes give (lib/voice-gender.ts), read at call time.
+    // No lock: an allow, nothing read.
+    voices: {
+      isLocked: () => voiceLockActive(),
+      assertAllowed: async (voiceId, opts) => {
+        const verdict = await judgeVoice(voiceId, { userId: opts.userId })
+        if (!verdict.allowed) throw new PluginHttpError(400, voiceNotAvailableBody(), new VoiceNotAvailableError(verdict.reason))
+      },
+    },
     db: supabase,
     workflows: {
       writeCompatible,

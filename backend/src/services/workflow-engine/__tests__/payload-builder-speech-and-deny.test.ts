@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from "vitest"
 import { buildPayload, effectiveDispatchProvider } from "../payload-builder.js"
+import { voicesTheBuildDispatches } from "../dispatched-voices.js"
 import type { SimpleNode } from "../types.js"
 import { config } from "../../../lib/config.js"
 import { __resetSurfaceProfileCacheForTests } from "../../../lib/surface-profile.js"
@@ -119,7 +120,7 @@ describe("payload-builder-text-to-dialogue.test.ts", () => {
       expect(() => buildPayload(missing, "job3", {}, "usage3")).toThrow(/no dialogue lines/)
     })
 
-    it("B4c: rejects a line whose PREMADE voice gender the deployment disallows", () => {
+    it("B4c: rejects a line whose voice gender the lock disallows, or that nobody resolved", () => {
       // Open the surface gate (config snapshots process.env once at import, so
       // mutate the live field) + lock to female-only, then reset the memo —
       // the exact precedent from audio-ai.test.ts's B4c case. Mirrors the
@@ -138,11 +139,21 @@ describe("payload-builder-text-to-dialogue.test.ts", () => {
         expect(() => buildPayload(n, "job1", {}, "usage1")).toThrowError(
           expect.objectContaining({ code: "voice_not_available" }),
         )
-        // Library/custom UUIDs resolve to no gender and must pass.
+        // A library or custom id the build cannot place on its own is refused
+        // unless the caller resolved it (fail-closed). This used to pass: the
+        // backstop only knew premade voices.
         const uuidNode = node("d2", "text-to-dialogue", {
           dialogue: [{ id: "1", text: "Hi", voice: "W3C2vBPukr5b5jvoXhPK" }],
         })
-        expect(() => buildPayload(uuidNode, "job2", {}, "usage2")).not.toThrow()
+        expect(() => buildPayload(uuidNode, "job2", {}, "usage2")).toThrowError(
+          expect.objectContaining({ code: "voice_not_available" }),
+        )
+        const resolvedFemale = { voiceGenders: new Map([["W3C2vBPukr5b5jvoXhPK", "female" as const]]) }
+        expect(() => buildPayload(uuidNode, "job3", {}, "usage3", resolvedFemale)).not.toThrow()
+        const resolvedMale = { voiceGenders: new Map([["W3C2vBPukr5b5jvoXhPK", "male" as const]]) }
+        expect(() => buildPayload(uuidNode, "job4", {}, "usage4", resolvedMale)).toThrowError(
+          expect.objectContaining({ code: "voice_not_available" }),
+        )
       } finally {
         config.EDITION = prevEdition
         delete process.env.NODARO_SURFACE_PROFILE
@@ -525,12 +536,39 @@ describe("payload-builder-voice-gender-deny.test.ts", () => {
       expect(result.payload.voice).toBe("Adam")
     })
 
-    it("does NOT reject a custom/library voice (unknown premade gender) under the lock", () => {
+    // This used to build: the backstop only knew premade voices, and a custom or
+    // library id (or one sent as "premade") passed unjudged. Now the caller
+    // resolves the gender ahead of the build; a voice nobody resolved fails closed.
+    it("refuses a custom or library voice nobody resolved, whatever voiceType says", () => {
+      maleOnly()
+      for (const voiceType of ["custom", "library", "premade"] as const) {
+        const n = ttsNode()
+        const resolved = { voice: "someClonedId", voiceType }
+        expect(() => buildPayload(n, "job-vgd-4", resolved, undefined, ctx(n))).toThrowError(
+          expect.objectContaining({ code: "voice_not_available" }),
+        )
+      }
+    })
+
+    it("builds a voice the caller resolved to an allowed gender, and refuses one resolved otherwise", () => {
       maleOnly()
       const n = ttsNode()
       const resolved = { voice: "someClonedId", voiceType: "custom" as const }
-      const result = buildPayload(n, "job-vgd-4", resolved, undefined, ctx(n))
-      expect(result.payload.voice).toBe("someClonedId")
+      const allowed = buildPayload(n, "job-vgd-4b", resolved, undefined, { ...ctx(n), voiceGenders: new Map([["someClonedId", "male" as const]]) })
+      expect(allowed.payload.voice).toBe("someClonedId")
+      for (const g of ["female", undefined] as const) {
+        expect(() =>
+          buildPayload(n, "job-vgd-4c", resolved, undefined, { ...ctx(n), voiceGenders: new Map([["someClonedId", g]]) }),
+        ).toThrowError(expect.objectContaining({ code: "voice_not_available" }))
+      }
+    })
+
+    it("refuses a disallowed premade voice sent by its voice id, not its name", () => {
+      maleOnly()
+      const n = ttsNode({ voiceId: "21m00Tcm4TlvDq8ikWAM" }) // Rachel's id
+      expect(() => buildPayload(n, "job-vgd-4d", {}, undefined, ctx(n))).toThrowError(
+        expect.objectContaining({ code: "voice_not_available" }),
+      )
     })
 
     it("is inert by default — empty allowedGenders never rejects a female voice", () => {
@@ -547,6 +585,42 @@ describe("payload-builder-voice-gender-deny.test.ts", () => {
       const result = buildPayload(n, "job-vgd-6", {}, undefined, ctx(n))
       expect(result.jobName).toBe("generate-image")
       expect(result.payload.prompt).toBe("a red bird on a branch")
+    })
+  })
+
+  /**
+   * The workflow engine resolves voices ahead of the synchronous build
+   * (`voicesTheBuildDispatches`, read by node-executor.ts). They must be the
+   * voices the build then vets and sends, or a resolved voice would not be the
+   * one judged (a drift would only fail closed, but it would refuse a voice
+   * that is fine).
+   */
+  describe("the voices resolved ahead of the build are the voices it sends", () => {
+    it("text-to-speech: auto-wired, then voiceId, then voice", () => {
+      const cases: Array<[Record<string, unknown>, Record<string, unknown>]> = [
+        [{ voice: "AutoWired00000000001" }, { voiceId: "NodeVoiceId000000001", voice: "Daniel" }],
+        [{}, { voiceId: "NodeVoiceId000000001", voice: "Daniel" }],
+        [{}, { voice: "Daniel" }],
+      ]
+      for (const [resolvedInputs, data] of cases) {
+        const n = ttsNode(data)
+        const sent = buildPayload(n, "job-p", resolvedInputs, undefined, ctx(n)).payload.voice
+        expect(voicesTheBuildDispatches(n, resolvedInputs)).toEqual([sent])
+      }
+      const silent = ttsNode()
+      expect(buildPayload(silent, "job-p", {}, undefined, ctx(silent)).payload.voice).toBeUndefined()
+      expect(voicesTheBuildDispatches(silent, {})).toEqual([])
+    })
+
+    it("text-to-dialogue: the voices of the lines that have text", () => {
+      const n: SimpleNode = {
+        id: "d-p",
+        type: "text-to-dialogue",
+        data: { dialogue: [{ id: "1", text: "Hi", voice: "Daniel" }, { id: "2", text: "  ", voice: "Rachel" }, { id: "3", text: "Yo", voice: "LibVoice000000000001" }] },
+      }
+      const sent = (buildPayload(n, "job-p", {}, undefined, ctx(n)).payload.dialogue as Array<{ voice: string }>).map((l) => l.voice)
+      expect(sent).toEqual(["Daniel", "LibVoice000000000001"])
+      expect(voicesTheBuildDispatches(n, {})).toEqual(sent)
     })
   })
 })

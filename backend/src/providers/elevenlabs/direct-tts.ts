@@ -3,7 +3,7 @@ import { requireProviderKey } from "../provider-keys.js"
 import { providerFetch, type EgressMeta } from "../egress.js"
 import { ELEVENLABS_BASE_URL } from "./client.js"
 import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
-import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
+import { FALLBACK_VOICES, PREMADE_VOICE_IDS } from "../../lib/premade-voices.js"
 import { languageCodeForModel } from "./language-code.js"
 import { ttsWireModel, ttsModelKey } from "./tts-models.js"
 import { normalizeTtsVoiceSettings } from "./voice-settings.js"
@@ -12,42 +12,8 @@ import { getTtsCapabilities, ttsSupportsTimestamps } from "@nodaro/shared/model-
 import type { Transcript } from "@nodaro/shared/edl"
 import { transcriptFromSpeechTimestamps } from "./alignment-transcript.js"
 
-// 21 ElevenLabs premade voices — name → voice_id. KIE's TTS proxy accepts
-// these names directly, so the rest of the codebase passes names around.
-// The direct ElevenLabs API (/v1/text-to-speech/{voice_id}) requires UUIDs,
-// though, so we resolve names → IDs here before the request fires.
-// Without this, v3 jobs (which always use the direct API) 404 because
-// "Rachel" isn't a valid voice_id path segment.
-const PREMADE_VOICE_IDS: Record<string, string> = {
-  Rachel: "21m00Tcm4TlvDq8ikWAM",
-  // Adam + Harry ship in the premade catalog (lib/premade-voices.ts) with their
-  // UUID as the catalog voice_id, so a picker sending the UUID always worked —
-  // but a NAME-based reference (the B4c policy-owned default returns the picked
-  // voice's NAME) needs this name→id entry or the direct API 404s on "Adam".
-  Adam: "pNInz6obpgDQGcFmaJgB",
-  Harry: "SOYHLrjzK2X1ezoPC6cr",
-  Aria: "9BWtsMINqrJLrRacOk9x",
-  Roger: "CwhRBWXzGAHq8TQ4Fs17",
-  Sarah: "EXAVITQu4vr4xnSDxMaL",
-  Laura: "FGY2WhTYpPnrIDTdsKH5",
-  Charlie: "IKne3meq5aSn9XLyUdCD",
-  George: "JBFqnCBsd6RMkjVDRZzb",
-  Callum: "N2lVS1w4EtoT3dr4eOWO",
-  River: "SAz9YHcvj6GT2YYXdXww",
-  Liam: "TX3LPaxmHKxFdv7VOQHJ",
-  Charlotte: "XB0fDUnXU5powFXDhCwa",
-  Alice: "Xb7hH8MSUJpSbSDYk0k2",
-  Bella: "hpp4J3VqNfWAUOO0d1Us",
-  Matilda: "XrExE9yKIg1WjnnlVkGX",
-  Will: "bIHbv24MWmeRgasZH58o",
-  Jessica: "cgSgspJ2msm6clMCkdW9",
-  Eric: "cjVigY5qzO86Huf0OWal",
-  Chris: "iP95p4xoKVk53GoZ742B",
-  Brian: "nPczCjzI2devNBz1zQrb",
-  Daniel: "onwK4e9ZLuTAKqWW03F9",
-  Lily: "pFZP5JQG7iQjIQuC4Bku",
-  Bill: "pqHfZKP75CvOlQylNhV4",
-}
+// The premade name → voice_id map lives with the premade catalog
+// (lib/premade-voices.ts `PREMADE_VOICE_IDS`).
 
 /** Resolve a voice name → ElevenLabs UUID. UUIDs pass through unchanged. */
 export function resolveDirectVoiceId(voice: string | undefined): string {

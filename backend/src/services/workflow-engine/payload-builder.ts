@@ -62,7 +62,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, pickSunoSeparateSource, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, pickSunoSeparateSource, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -204,7 +204,7 @@ import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 // Shared logic from packages/shared — single source of truth
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
 import { LEGACY_VIDEO_NODE_DEFAULT_PROVIDER } from "../../lib/generated-video-length.js"
-import { withRunningVideoProvider } from "./normalize-node-types.js"
+import { dialogueLinesOf, nodeAsBuilt, ttsVoiceOf, voicesToJudge } from "./dispatched-voices.js"
 import {
   collectAncestorRefs as sharedCollectAncestorRefs,
   LOCATION_REFERENCE_PHOTO_KINDS,
@@ -260,7 +260,7 @@ import { mergeScene3DReferences } from "../scene3d/scene3d-references.js"
 import { imageRequiredMessage } from "../../lib/video-image-required.js"
 import { viduQ4InputProblem } from "../../lib/vidu-q4-inputs.js"
 import { kling4InputProblem } from "../../lib/kling4-inputs.js"
-import { isVoiceGenderAllowed, premadeVoiceGender } from "../../lib/voice-policy.js"
+import { judgeResolvedVoices, VOICE_NOT_AVAILABLE_CODE, type VoiceGender } from "../../lib/voice-policy.js"
 import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { speechRunsAs } from "../../lib/speech-credits.js"
 import { applyPromptPolicies } from "../../lib/prompt-policy.js"
@@ -359,6 +359,14 @@ export interface PayloadBuildContext {
    *  (`speakerViewClipOfRun`) because this builder is synchronous. ABSENT = no
    *  video wired. */
   speakerViewClip?: SpeakerViewClipFacts
+  /** The voice lock (B4c): the gender of each voice a speech node dispatches
+   *  (`dispatchedVoicesOf`), resolved by the caller (`node-executor.ts` →
+   *  `resolveVoiceGenders`, lib/voice-gender.ts) because this builder is
+   *  synchronous. Read only under a lock. A voice it does not cover is judged
+   *  by the premade catalog alone, so a caller that skips the lookup has every
+   *  non-premade voice refused: fail-closed by construction. ABSENT = nothing
+   *  resolved. */
+  voiceGenders?: ReadonlyMap<string, VoiceGender | undefined>
   /** The caller's own palette / moodboard a Generate Image node's stored
    *  `direction` names (`palette:<id>` / `moodboard:<id>`), resolved by the
    *  caller (`userDirectionForNode`, the route's own resolver) because this
@@ -2764,6 +2772,14 @@ function videoLinkTrackInto(nodeId: string, buildCtx: PayloadBuildContext | unde
   return undefined
 }
 
+/** The voice lock's dispatch backstop: throws the coded refusal the route answers with. */
+function refuseVoicesTheLockRefuses(voices: readonly string[], buildCtx: PayloadBuildContext | undefined, message: string): void {
+  if (judgeResolvedVoices(voices, buildCtx?.voiceGenders).allowed) return
+  const err = new Error(message) as Error & { code?: string }
+  err.code = VOICE_NOT_AVAILABLE_CODE
+  throw err
+}
+
 export function buildPayload(
   rawNode: SimpleNode,
   jobId: string,
@@ -2777,7 +2793,7 @@ export function buildPayload(
   // bypassed (@nodaro/render-rules teleport-bypass.ts).
   // A retired video model (stored, mapped or sent by an app input) is built,
   // priced and run as the model it became.
-  const node = withRunningVideoProvider(carriedNodeSettings(rawNode, buildCtx?.edges ?? []))
+  const node = nodeAsBuilt(rawNode, buildCtx?.edges ?? [])
   const data = node.data
   const type = node.type
 
@@ -5669,26 +5685,17 @@ export function buildPayload(
       // The EFFECTIVE voice + type this node will DISPATCH — computed once with
       // the same precedence the payload below uses, so the value we vet is byte-
       // identical to the value we send.
-      const effectiveVoice = resolvedInputs.voice || data.voiceId || data.voice
+      const effectiveVoice = ttsVoiceOf(resolvedInputs.voice, data.voiceId, data.voice)
       const effectiveVoiceType = resolvedInputs.voiceType || data.voiceType || "premade"
-      // B4c: voice-gender dispatch backstop. `voice.allowedGenders` was enforced
-      // ONLY at the direct /v1/text-to-speech route — the orchestrator/worker TTS
-      // path had NO backstop, so an auto-wired Character voice (input-resolver) or
-      // an imported/MCP-authored premade voice of a DISALLOWED gender reached the
-      // provider under a gender lock. This is the B1 model-deny bypass class:
-      // vet the EFFECTIVE voice (not just data.voiceId) and reject a disallowed
-      // premade gender at run time, mirroring model-deny's thrown shape. Custom /
-      // library / unknown-gender voices pass (clone/design/remix are gated by
-      // nodes.deny). Inert by default: isVoiceGenderAllowed returns true when
-      // allowedGenders is [].
-      if (effectiveVoiceType !== "custom" && effectiveVoiceType !== "library") {
-        const g = premadeVoiceGender(typeof effectiveVoice === "string" ? effectiveVoice : undefined)
-        if (g !== undefined && !isVoiceGenderAllowed(g)) {
-          const err = new Error("The selected voice is not available on this deployment.") as Error & { code?: string }
-          err.code = "voice_not_available"
-          throw err
-        }
-      }
+      // B4c: voice-gender dispatch backstop. The orchestrator path dispatches
+      // without the route, so an auto-wired Character voice (input-resolver) or
+      // an imported/MCP-authored voice must be vetted HERE: the EFFECTIVE voice,
+      // judged by its id alone (never by the stated voiceType). Its gender was
+      // resolved by the caller (buildCtx.voiceGenders); one nobody resolved is
+      // judged by the premade catalog alone, so it is refused unless it is a
+      // premade voice of an allowed gender. Thrown with model-deny's coded
+      // shape. Inert by default: no lock, no refusal.
+      refuseVoicesTheLockRefuses(voicesToJudge([effectiveVoice]), buildCtx, "The selected voice is not available on this deployment.")
       return {
         jobName: "text-to-speech",
         queueName: "video-generation",
@@ -5824,8 +5831,7 @@ export function buildPayload(
 
     case "text-to-dialogue": {
       // Filter empty dialogue lines (matches frontend behavior)
-      const rawDialogue = (data.dialogue ?? data.script) as Array<{ text: string; voice?: string }> | undefined
-      const filteredDialogue = rawDialogue?.filter((l) => l.text?.trim())
+      const filteredDialogue = dialogueLinesOf(data.dialogue ?? data.script)
       // Fail HONESTLY before dispatch when nothing is left to voice. The route
       // Zod can't cover this seam (orchestrator enqueues directly), and letting
       // it through means a raw provider 422 mid-run after credits reserve —
@@ -5835,16 +5841,10 @@ export function buildPayload(
       }
       // B4c: per-line voice-gender backstop, mirroring the TTS case above —
       // the orchestrator path must vet what it dispatches, not trust the
-      // route. Dialogue lines carry no voiceType, so vet by name resolution
-      // alone: custom/library UUIDs resolve to `undefined` gender and pass.
-      for (const line of filteredDialogue) {
-        const g = premadeVoiceGender(typeof line.voice === "string" ? line.voice : undefined)
-        if (g !== undefined && !isVoiceGenderAllowed(g)) {
-          const err = new Error("A selected voice is not available on this deployment.") as Error & { code?: string }
-          err.code = "voice_not_available"
-          throw err
-        }
-      }
+      // route. Each line's voice, judged by its id alone, from what the caller
+      // resolved; one nobody resolved must be a premade voice of an allowed
+      // gender.
+      refuseVoicesTheLockRefuses(voicesToJudge(filteredDialogue.map((l) => l.voice)), buildCtx, "A selected voice is not available on this deployment.")
       // The model the node runs on: `effectiveDispatchProvider` is what the
       // deployment model-deny check above read, so deny and dispatch agree; an
       // unknown id runs (and is billed) as v3 dialogue.

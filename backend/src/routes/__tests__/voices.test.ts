@@ -42,6 +42,33 @@ vi.mock("@/providers/kie/audio.js", () => ({
   registerVoiceLookup: vi.fn(),
 }))
 
+// The library listing records each served voice's gender for the voice lock
+// (lib/library-voice-genders.ts) in Redis — an in-memory stand-in here.
+const redisStore = vi.hoisted(() => ({ map: new Map<string, string>(), failNext: false }))
+vi.mock("@/lib/queue-connection.js", () => ({
+  redis: {
+    get: vi.fn(async (key: string) => redisStore.map.get(key) ?? null),
+    pipeline: vi.fn(() => {
+      const ops: Array<[string, string]> = []
+      const p = {
+        set(key: string, value: string) {
+          ops.push([key, value])
+          return p
+        },
+        async exec() {
+          if (redisStore.failNext) {
+            redisStore.failNext = false
+            throw new Error("redis down")
+          }
+          for (const [key, value] of ops) redisStore.map.set(key, value)
+          return []
+        },
+      }
+      return p
+    }),
+  },
+}))
+
 let app: FastifyInstance
 let fetchMock: ReturnType<typeof vi.fn>
 
@@ -63,6 +90,8 @@ beforeEach(async () => {
   vi.clearAllMocks()
   vi.resetModules()
   cfgState.key = "test-eleven-key"
+  redisStore.map.clear()
+  redisStore.failNext = false
   fetchMock = vi.fn()
   vi.stubGlobal("fetch", fetchMock)
 
@@ -194,6 +223,25 @@ describe("GET /v1/voices", () => {
     expect(body.hint).toBeUndefined()
   })
 
+  it("under a lock that allows neutral, still lists no premade voice whose gender is not labelled (B4c)", async () => {
+    cfgState.business = true
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ voice: { allowedGenders: ["male", "neutral"] } })
+    fetchMock.mockResolvedValueOnce(jsonResponse({
+      voices: [
+        { voice_id: "a", name: "Adam", preview_url: "", labels: { gender: "male" } },
+        { voice_id: "r", name: "River", preview_url: "", labels: { gender: "neutral" } },
+        { voice_id: "x", name: "No label", preview_url: "" },
+      ],
+    }))
+    try {
+      const res = await app.inject({ method: "GET", url: "/v1/voices" })
+      expect((res.json() as { voices: Array<{ name: string }> }).voices.map((v) => v.name)).toEqual(["Adam", "River"])
+    } finally {
+      delete process.env.NODARO_SURFACE_PROFILE
+      cfgState.business = false
+    }
+  })
+
   it("filters the catalog to the surface profile's allowed voice genders (B4c)", async () => {
     // Business edition + a male-only lock → the premade catalog drops every
     // non-male voice. Keyless path so the FALLBACK_VOICES catalog is served
@@ -319,6 +367,61 @@ describe("GET /v1/voices/library", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // GET /v1/voices/library — the recommendation never names a denied model
 // ═══════════════════════════════════════════════════════════════════════════
+
+describe("GET /v1/voices/library — the voice lock (B4c)", () => {
+  const PAGE = {
+    voices: [
+      { voice_id: "LibMale00000000000001", name: "Him", gender: "male" },
+      { voice_id: "LibFemale000000000001", name: "Her", gender: "female" },
+      { voice_id: "LibUnlabelled00000001", name: "Nobody knows" },
+    ],
+    has_more: false,
+  }
+
+  afterEach(() => {
+    delete process.env.NODARO_SURFACE_PROFILE
+    cfgState.business = false
+  })
+
+  function maleOnly() {
+    cfgState.business = true
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ voice: { allowedGenders: ["male"] } })
+  }
+
+  it("records the gender the library states for every served voice, before the filter, and lists only allowed ones", async () => {
+    maleOnly()
+    fetchMock.mockResolvedValueOnce(jsonResponse(PAGE))
+
+    const res = await app.inject({ method: "GET", url: "/v1/voices/library" })
+
+    expect(res.statusCode).toBe(200)
+    expect((res.json() as { voices: Array<{ voice_id: string }> }).voices.map((v) => v.voice_id)).toEqual(["LibMale00000000000001"])
+    expect(Object.fromEntries(redisStore.map)).toEqual({
+      "voice-gender:library:LibMale00000000000001": "male",
+      "voice-gender:library:LibFemale000000000001": "female",
+    })
+  })
+
+  it("never fails the listing over a record it could not write (the voice is then unknown, and refused)", async () => {
+    maleOnly()
+    redisStore.failNext = true
+    fetchMock.mockResolvedValueOnce(jsonResponse(PAGE))
+
+    const res = await app.inject({ method: "GET", url: "/v1/voices/library" })
+
+    expect(res.statusCode).toBe(200)
+    expect((res.json() as { voices: Array<{ voice_id: string }> }).voices.map((v) => v.voice_id)).toEqual(["LibMale00000000000001"])
+  })
+
+  it("records nothing and filters nothing when no lock is set", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(PAGE))
+
+    const res = await app.inject({ method: "GET", url: "/v1/voices/library" })
+
+    expect((res.json() as { voices: unknown[] }).voices).toHaveLength(3)
+    expect(redisStore.map.size).toBe(0)
+  })
+})
 
 describe("GET /v1/voices/library — model availability", () => {
   type LibVoice = { voice_id: string; recommendedProvider?: string; verifiedProviders?: string[] }

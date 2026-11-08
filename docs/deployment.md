@@ -845,14 +845,31 @@ optional; each array empty = "keep the default"):
   user's preference
 - `voice.allowedGenders`: `["male"]` / `["female"]` / `["neutral"]` (any subset) —
   restrict voice pickers, policy-owned default voices, and TTS / speech requests to
-  these voice genders. Empty (`[]`) = all genders. Enforced backend-side: the
-  `/v1/voices` list and the ElevenLabs shared-voices library are filtered (and the
-  library query gender is forced to the allowed set), a premade voice of a
-  disallowed gender is refused at request validation with `voice_not_available`,
-  every default/fallback voice resolves to the first allowed-gender voice, and the
-  Suno vocal-gender tags in the editor hide the disallowed side. Pair with
-  `nodes.deny: ["voice-design","voice-remix"]` to remove the
-  voice-creation nodes (whose output gender is not knowable up front).
+  these voice genders. Empty (`[]`) = all genders, and nothing below is looked up.
+  Enforced backend-side:
+  - **Lists.** The premade list (`/v1/voices`), the ElevenLabs shared-voices
+    library (`/v1/voices/library`, whose query gender is also forced to the
+    allowed set) and the voice clones list (`/v1/voice-clones`) show only voices
+    whose gender is known and allowed.
+  - **Use.** A voice is judged by its id alone, whatever `voiceType` a request
+    states. Its gender comes from the premade catalog (by name or by id), from
+    the caller's own clone (its recorded gender), or, for a Voice Library voice,
+    from the gender the library stated when this install's library list served
+    it while the lock was set (the library offers no lookup by id). A voice of a
+    disallowed gender is refused with `voice_not_available`, and so is one whose
+    gender none of these can establish, such as a library voice picked before the
+    lock was set. This holds on `/v1/text-to-speech`, `/v1/text-to-dialogue`, the
+    same two nodes in a workflow run, and Cloud plugin routes that check their
+    voices through the plugin toolkit (`tk.voices.assertAllowed`).
+  - **Defaults.** Every default/fallback voice resolves to the first
+    allowed-gender voice, and the Suno vocal-gender tags in the editor hide the
+    disallowed side.
+
+  Pair with `nodes.deny: ["voice-design","voice-remix"]` to remove the
+  voice-creation nodes (whose output gender is not knowable up front). The lock
+  does not yet judge the Voice Changer node's target voice, the voices inside a
+  voiced-video or speech-to-video run, dubbing, or speech a film-studio pipeline
+  generates.
 - `features` — whole features this deployment switches off:
   `{"features":{"hide":["copilot","presentation"]}}`. `copilot` removes the
   Workflow Copilot everywhere — the canvas rail and its collapsed tab, the

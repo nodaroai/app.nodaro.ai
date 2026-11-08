@@ -75,7 +75,9 @@ import { computeFingerprint } from "../../lib/dedup-fingerprint.js"
 import { loopbackFetch } from "./loopback-fetch.js"
 import { syncHttpCallError } from "./sync-http-failure.js"
 import { buildNodeRefMap, type WorkflowSettings } from "./payload-builder.js"
+import { voicesTheBuildDispatches } from "./dispatched-voices.js"
 import { buildPayloadWithSourceSize, type BuiltPayload } from "./source-size-build.js"
+import { resolveVoiceGenders } from "../../lib/voice-gender.js"
 import { userDirectionForNode } from "./node-user-direction.js"
 import { assertNodeAvailableForUser, viewerForNode } from "../../lib/availability-viewer.js"
 import { passThroughFor } from "./pass-through.js"
@@ -2190,6 +2192,11 @@ async function executeWorkerNode(
     // Speaker View fed a bare video (decided 2026-10-11, D16): the clip's real
     // length and size, measured once here, behind the checks that cost nothing.
     const speakerViewClip = node.type === "speaker-view" ? await speakerViewClipOfRun(node, resolvedInputs) : undefined
+    // The voice lock (B4c): the builder is synchronous, so the gender of each
+    // voice a speech node dispatches is looked up here, from the node as the
+    // build sees it, and handed in. Under a lock the builder refuses a voice it
+    // finds unresolved (fail-closed). No lock, or no voice: nothing is read.
+    const voiceGenders = await resolveVoiceGenders(voicesTheBuildDispatches(node, resolvedInputs, edges), { userId: ctx.userId })
     // "auto" on a model without a native auto keeps the photo's shape. The
     // builder is synchronous, so `buildPayloadWithSourceSize` reads the size of
     // the photo the build sends first, through the same probe the image routes
@@ -2211,6 +2218,7 @@ async function executeWorkerNode(
         editPlanPerMinute,
         ...(speakerViewTracks ? { speakerViewTracks } : {}),
         ...(speakerViewClip ? { speakerViewClip } : {}),
+        ...(voiceGenders ? { voiceGenders } : {}),
         ...(userDirection ? { userDirection } : {}),
       },
     )

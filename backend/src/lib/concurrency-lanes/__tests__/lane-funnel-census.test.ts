@@ -52,7 +52,8 @@ const LANE_EXEMPT_PROVIDER_IO: ReadonlyMap<string, string> = new Map([
   ["ee/copilot/kie-client.ts", "the Copilot's own client: the Copilot is not limited (ee/routes/copilot.ts runs its turn in runNotLimited)"],
   ["lib/reconcile/elevenlabs.ts", "the reconcile cron's status reads of jobs already submitted: no new provider work"],
   ["routes/voice-clones.ts", "its only provider call deletes a stored voice: no generation"],
-  ["routes/voices.ts", "its provider calls read the voice catalog (premade list, shared library): no generation"],
+  ["routes/voices.ts", "its provider call reads the voice catalog (the shared library): no generation"],
+  ["lib/premade-voice-catalog.ts", "its provider call reads the voice catalog (the premade list, for /v1/voices and the voice lock): no generation"],
 ])
 
 /**

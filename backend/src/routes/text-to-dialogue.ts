@@ -11,7 +11,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { isVoiceGenderAllowed, premadeVoiceGender } from "../lib/voice-policy.js"
+import { judgeVoices, voiceNotAvailableBody } from "../lib/voice-gender.js"
 
 // Probed hard limit (2026-08-30): an 11th unique voice → 400 max_voices_exceeded.
 const MAX_UNIQUE_DIALOGUE_VOICES = 10
@@ -99,20 +99,14 @@ export async function textToDialogueRoutes(app: FastifyInstance) {
       })
     }
 
-    // B4c: reject any line whose PREMADE voice gender the deployment disallows
-    // (mirrors the TTS route). Custom / library / unknown-gender identifiers
-    // pass (UUIDs resolve to `undefined` gender). Unrestricted deployments are
-    // byte-identical (isVoiceGenderAllowed returns true when allowedGenders
-    // is []). Dialogue enforced this at NEITHER seam before — going direct
-    // removes even the KIE proxy's incidental name-clamping, so the policy
-    // gate must be explicit now.
-    for (const line of dialogue) {
-      const g = premadeVoiceGender(line.voice)
-      if (g !== undefined && !isVoiceGenderAllowed(g)) {
-        return reply.status(400).send({
-          error: { code: "voice_not_available", message: "A selected voice is not available on this deployment." },
-        })
-      }
+    // B4c: under a voice lock, every line's voice must be one whose gender the
+    // platform can vouch for as allowed (mirrors the TTS route): judged by the
+    // voice's id alone — a premade voice (by name or id), the caller's own
+    // clone, a library voice this deployment listed (lib/voice-gender.ts). A
+    // voice of unknown gender is refused too. No lock: no lookup at all.
+    const voiceVerdict = await judgeVoices(dialogue.map((line) => line.voice), { userId })
+    if (!voiceVerdict.allowed) {
+      return reply.status(400).send(voiceNotAvailableBody("A selected voice is not available on this deployment."))
     }
 
     const { data: job, error } = await insertJob(req, {

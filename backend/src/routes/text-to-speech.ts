@@ -16,7 +16,7 @@ import { speechLengthPricingEnabled } from "../lib/config.js"
 import { speechBaseCredits } from "../lib/speech-credits.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { isVoiceGenderAllowed, premadeVoiceGender } from "../lib/voice-policy.js"
+import { judgeVoice, voiceNotAvailableBody } from "../lib/voice-gender.js"
 import { TTS_VOICE_SETTING_RANGES, type TtsVoiceSettingKey } from "../providers/elevenlabs/voice-settings.js"
 import { TTS_NEIGHBOUR_TEXT_MAX_CHARS } from "../providers/elevenlabs/neighbour-text.js"
 
@@ -145,17 +145,15 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       })
     }
 
-    // B4c: reject a PREMADE voice whose gender the deployment disallows. Custom /
-    // library / unknown-gender voices pass here (clone/design/remix are gated by
-    // nodes.deny). Unrestricted deployments are byte-identical (isVoiceGenderAllowed
-    // returns true when allowedGenders is []).
-    if (parsed.data.voiceType !== "custom" && parsed.data.voiceType !== "library") {
-      const g = premadeVoiceGender(parsed.data.voice)
-      if (g !== undefined && !isVoiceGenderAllowed(g)) {
-        return reply.status(400).send({
-          error: { code: "voice_not_available", message: "The selected voice is not available on this deployment." },
-        })
-      }
+    // B4c: under a voice lock, refuse a voice whose gender the platform cannot
+    // vouch for as allowed — judged by the voice's id alone, never by the
+    // request's own voiceType: a premade voice (by name or id), the caller's own
+    // clone, a library voice this deployment listed (lib/voice-gender.ts). A
+    // voice of unknown gender is refused too. No lock: no lookup at all, and
+    // the request is byte-identical to before.
+    const voiceVerdict = await judgeVoice(parsed.data.voice, { userId })
+    if (!voiceVerdict.allowed) {
+      return reply.status(400).send(voiceNotAvailableBody())
     }
 
     // Map legacy "elevenlabs" to "elevenlabs-turbo" for credit check; an omitted

@@ -3388,6 +3388,50 @@ export interface PluginToolkit {
    * that user. ADDITIVE-OPTIONAL — `?.`-guard it.
    */
   social?: PluginSocialToolkit
+  /**
+   * The deployment's voice lock, for the voices a plugin route sends to a
+   * provider (`PluginVoicesToolkit`). ADDITIVE-OPTIONAL (no CONTRACT_VERSION
+   * bump) — `?.`-guard it; an older host has no such member.
+   */
+  voices?: PluginVoicesToolkit
+}
+
+// ============================================================================
+// tk.voices — backend/src/lib/voice-gender.ts
+// ============================================================================
+
+/**
+ * The deployment's voice lock (`voice.allowedGenders` on its surface profile)
+ * for the voices a plugin route sends to a provider: a conversion's target
+ * voices, a re-spoken speaker's voice, a dub's voices. The same verdict the
+ * platform's own speech routes give. ADDITIVE-OPTIONAL (no CONTRACT_VERSION
+ * bump) — `?.`-guard the group.
+ */
+export interface PluginVoicesToolkit {
+  /**
+   * True when the deployment restricts voice genders. Read at call time and
+   * reads nothing else, so a route can ask it per request: for example, to
+   * refuse a speaker whose original voice would be kept, whose gender nothing
+   * here can vouch for.
+   */
+  isLocked(): boolean
+  /**
+   * Resolves when `voiceId` may be used on this deployment by `userId`, and
+   * rejects with a `PluginHttpError` (identify it by
+   * `.name === "PluginHttpError"`) when it may not: 400, body
+   * `{ error: { code: "voice_not_available", message } }`. Send it verbatim.
+   *
+   * The voice is judged by its id alone (premade voice by name or id, the
+   * user's own clone, a Voice Library voice this deployment's library listing
+   * served). Under a lock, a voice of a disallowed gender is refused, and so is
+   * one whose gender nothing can vouch for. With no lock it resolves at once
+   * and reads nothing; an empty `voiceId` has nothing to judge. A failed lookup
+   * rejects with that error itself (a server error, not a refusal).
+   *
+   * Call it for EVERY voice the route will send, before any reservation or
+   * job is created.
+   */
+  assertAllowed(voiceId: string, opts: { readonly userId: string }): Promise<void>
 }
 
 export interface PluginTelegramBotTextInput {
