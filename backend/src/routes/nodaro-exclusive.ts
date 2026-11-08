@@ -53,6 +53,8 @@ import { speakerFramesRelayRefusal, speakerFramesRelaySupport } from "../lib/pri
 import { requireNodaroConnection } from "../lib/nodaro-connection-gate.js"
 import { TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
 import { withoutLaneOnlyFields } from "../lib/concurrency-lanes/lane-parent.js"
+import { judgeVoices, voiceNotAvailableBody } from "../lib/voice-gender.js"
+import { judgeUnnamedVoices, type VoiceVerdict } from "../lib/voice-policy.js"
 
 /** Light body checks: only what the RELAY needs to exist. */
 const vcpBody = z.object({
@@ -282,6 +284,41 @@ function clientFields(body: Record<string, unknown>): Record<string, unknown> {
   return rest
 }
 
+/**
+ * The voices a relayed Voice Changer Pro conversion names, read off
+ * `orderedVoices`: each slot is a voice id, an object carrying its `voiceId`, or
+ * `null` (that speaker keeps their own voice, and the slot names none). Every
+ * named slot counts, a dropped speaker's too: which voices the cloud ends up
+ * using is the cloud's to interpret, and judging one that goes unused refuses
+ * nothing a caller needs. `null` when the list is not one this can read.
+ */
+function relayedConversionVoices(body: Record<string, unknown>): string[] | null {
+  const slots = body.orderedVoices
+  if (!Array.isArray(slots)) return null
+  const voices: string[] = []
+  for (const slot of slots as unknown[]) {
+    if (slot === null) continue
+    const voice = typeof slot === "string" ? slot : (slot as { voiceId?: unknown } | undefined)?.voiceId
+    if (typeof voice !== "string") return null
+    voices.push(voice)
+  }
+  return voices
+}
+
+/**
+ * B4c: this install's own voice lock over a conversion it relays. nodaro.ai's
+ * route answers to nodaro.ai's lock, not this install's, so the voices are
+ * judged here, the same way as every other speech lane: by the voice's id alone
+ * (lib/voice-gender.ts). The passthrough schema leaves the list unchecked and
+ * the cloud's schema is the authority, so a list this cannot read could carry
+ * anything: under a lock it is refused like a voice nobody can vouch for. No
+ * lock: an allow, and nothing is looked up.
+ */
+async function judgeRelayedConversion(body: Record<string, unknown>, userId: string): Promise<VoiceVerdict> {
+  const voices = relayedConversionVoices(body)
+  return voices ? judgeVoices(voices, { userId }) : judgeUnnamedVoices()
+}
+
 /** insertJob + enqueue, mirroring routes/ai-avatar.ts. */
 async function enqueueExclusive({ req, reply, jobType, body: rawBody, extraPayload }: EnqueueArgs) {
   const userId = req.userId
@@ -289,6 +326,12 @@ async function enqueueExclusive({ req, reply, jobType, body: rawBody, extraPaylo
     return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
   }
   const body = clientFields(rawBody)
+  // Here, in the one funnel, on the body the job will carry: before the row, so
+  // a refused conversion creates nothing and reaches nodaro.ai never.
+  if (jobType === "voice-changer-pro") {
+    const voiceVerdict = await judgeRelayedConversion(body, userId)
+    if (!voiceVerdict.allowed) return reply.status(400).send(voiceNotAvailableBody())
+  }
   const { data: job, error } = await insertJob(req, {
     workflow_id: extractWorkflowId(req.body),
     node_id: extractNodeId(req.body),

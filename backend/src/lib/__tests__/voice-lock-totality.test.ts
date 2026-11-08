@@ -16,8 +16,9 @@
  *       call that reaches the provider, and no speech call sits outside a
  *       handler — so a queued job fails closed even when its creator forgot;
  *   (d) the JOB census: every place that creates a speech job (text-to-speech,
- *       text-to-dialogue, voice-changer, voiced-video, dubbing) judges its voices
- *       before the job row, and is classified below with how;
+ *       text-to-dialogue, voice-changer, voiced-video, dubbing, a plugin-served
+ *       speech node), directly or through a factory handed the job type, judges
+ *       its voices before the job row, and is classified below with how;
  *   (e) the Voice Library is LISTED in exactly one place, and that place
  *       records what it served: the library has no lookup by voice id, so the
  *       lock can place a library voice only through that record;
@@ -123,6 +124,12 @@ const JOB_CREATORS: Readonly<Record<string, { readonly judges: RegExp; readonly 
   },
   // A preHandler, the route's first: it runs before the handler that writes the row.
   "routes/dubbing.ts": { judges: /preHandler: \[\s*refuseDubbingUnderVoiceLock,/ },
+  // The self-hosted relay: every job it creates goes through one funnel, which
+  // judges a conversion under the install's own lock right before the row.
+  "routes/nodaro-exclusive.ts": {
+    judges: /if \(jobType === "voice-changer-pro"\) \{\s*const voiceVerdict = await judgeRelayedConversion\(body, userId\)/,
+    row: /insertJob\(/,
+  },
   "ee/pipelines/services/pipeline-generate-speech.ts": { judges: /await assertVoicesAllowed\(\[voice\], \{ userId \}\)/, row: /runPipelineWorkerJob\(/ },
   "ee/pipelines/services/pipeline-generate-narration.ts": { judges: /await assertVoicesAllowed\(\[voiceId\], \{ userId \}\)/, row: /runPipelineWorkerJob\(/ },
   "ee/pipelines/services/pipeline-voice-change.ts": { judges: /await assertVoicesAllowed\(\[voiceId\], \{ userId \}\)/, row: /runPipelineWorkerJob\(/ },
@@ -137,10 +144,22 @@ const BUILDER_CASES: Readonly<Record<string, RegExp>> = {
   dubbing: /refuseUnnamedVoicesTheLockRefuses\(/,
 }
 
-/** A place in a file that creates a job of a speech type: an enqueue, or a builder's dispatch. */
+/** A file that enqueues under a job name held in a variable: the name reaches the queue through a helper's parameter. */
+const ENQUEUES_BY_VARIABLE = /[qQ]ueue\.add\(\s*[a-z]\w*\s*,/
+
+/**
+ * A place in a file that creates a job of a speech type: an enqueue, a
+ * builder's dispatch, or a factory that takes the job type and enqueues under
+ * it (`jobHandler("voice-changer-pro", schema)`, whose literal never reaches
+ * the `.add(` it ends in). The factory form is matched by its shape, whatever
+ * it is called: a call handed a speech job type, in a file that enqueues by
+ * variable.
+ */
 function createsSpeechJob(src: string): boolean {
+  const types = ALL_SPEECH_JOB_TYPES.join("|")
   for (const m of src.matchAll(/\.add\(\s*([^,()]*?),/g)) if (SPEECH_JOB_LITERAL.test(m[1]!)) return true
-  return new RegExp(`(?:jobName:\\s*|simpleResult\\(\\s*)"(?:${ALL_SPEECH_JOB_TYPES.join("|")})"`).test(src)
+  if (new RegExp(`(?:jobName:\\s*|simpleResult\\(\\s*)"(?:${types})"`).test(src)) return true
+  return ENQUEUES_BY_VARIABLE.test(src) && new RegExp(`(?:\\b\\w+\\(\\s*|jobType:\\s*)"(?:${types})"`).test(src)
 }
 
 /**

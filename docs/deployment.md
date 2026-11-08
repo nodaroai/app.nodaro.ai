@@ -939,6 +939,10 @@ optional; each array empty = "keep the default"):
     reserved. This holds on:
     - `/v1/text-to-speech` and `/v1/text-to-dialogue`;
     - `/v1/voice-changer`: the voice a clip is converted into;
+    - `/v1/voice-changer-pro` on an install connected to nodaro.ai: every voice a
+      conversion names, judged under this install's own lock before the job is
+      created and relayed. Under a lock, a voice list the install cannot read is
+      refused too;
     - `/v1/generate-video` with a character voice (`characterVoices`): every voice
       the clip speaks in. On a model driven by an audio track (Seedance 2) that is
       the voice of each line it voices; on a model that speaks natively (Veo)
