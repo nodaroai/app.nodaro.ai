@@ -384,6 +384,14 @@ const SUNO_DURATION_MAX = 360
  * A title WITHOUT a style stays in description mode: custom mode requires
  * both, and sending a request the provider will refuse would turn a
  * best-effort score into a failed one.
+ *
+ * THE PROMPT POLICY: the plugin runs `tk.prompts.applyPolicies` over its music
+ * prompt once, at its own boundary, and hands the vocal gender and negative
+ * style the policy returned in `vocalGender` / `negativeStyle`. They are
+ * forwarded as the platform's own Suno worker forwards a policed assembly
+ * (`workers/handlers/suno.ts`: an empty negative is none), in both modes. This
+ * member applies no policy of its own, so nothing is policed twice; an older
+ * plugin sends neither and its request is unchanged.
  */
 async function pluginGenerateMusic(
   prompt: string,
@@ -404,6 +412,8 @@ async function pluginGenerateMusic(
       ...(custom && typeof duration === "number" && Number.isFinite(duration)
         ? { duration: Math.min(SUNO_DURATION_MAX, Math.max(SUNO_DURATION_MIN, Math.round(duration))) }
         : {}),
+      ...(options?.negativeStyle ? { negativeStyle: options.negativeStyle } : {}),
+      ...(options?.vocalGender ? { vocalGender: options.vocalGender } : {}),
     },
     // Thread OUR Nodaro key so the egress seam attributes this billed create
     // (model is pinned to DEFAULT_SUNO_MODEL → its version key); spread keeps any onTaskCreated.

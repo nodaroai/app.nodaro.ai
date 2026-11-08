@@ -14,6 +14,8 @@ import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 import { beginWorkerDrain, SHUTDOWN_DRAIN_MS } from "./lib/worker-drain.js"
 import { setEditPlanPerMinuteSource } from "./lib/private-plugins/edit-plan-per-minute.js"
 import { askApiEditPlanPerMinute } from "./services/workflow-engine/edit-plan-per-minute-loopback.js"
+import { setPluginNodeVoicesSource } from "./lib/private-plugins/plugin-node-voices.js"
+import { askApiPluginNodeVoices } from "./services/workflow-engine/plugin-node-voices-loopback.js"
 import { startLaneParking } from "./lib/concurrency-lanes/park.js"
 import { startServerOccupancyPublisher } from "./lib/concurrency-lanes/server-occupancy.js"
 
@@ -50,6 +52,13 @@ await loadSwitchedOffModels()
 // plugin, so it asks this container's API whether the plugin charges per
 // started minute before it reserves an edit-plan job (fails closed to steps).
 setEditPlanPerMinuteSource(() => askApiEditPlanPerMinute())
+
+// The voice lock on a plugin-served speech node (Voice Changer Pro): this
+// process loads no plugin, so under a lock it asks this container's API to read
+// the node's voices with the reader its plugin declares, then judges them
+// before the node's job exists. With no lock it never asks; when the API can't
+// answer, the node fails (never an allow).
+setPluginNodeVoicesSource((type, data, inputs) => askApiPluginNodeVoices(type, data, inputs))
 
 // Concurrency lanes: promote this queue's parked runs when a slot is reserved
 // for them (a release in any process publishes the wake), and wake every

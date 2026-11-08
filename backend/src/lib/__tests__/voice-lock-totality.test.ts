@@ -1,7 +1,7 @@
 // @test-watches backend/src/**/*.ts
 /**
  * Voice-lock totality (B4c). A deployment's voice lock (`voice.allowedGenders`)
- * is only as wide as the places that ask it. This guard pins five things:
+ * is only as wide as the places that ask it. This guard pins six things:
  *
  *   (a) the SEAMS that judge a voice through the lock's resolver
  *       (lib/voice-gender.ts) — the workflow engine (pre-resolution + the
@@ -20,7 +20,13 @@
  *       before the job row, and is classified below with how;
  *   (e) the Voice Library is LISTED in exactly one place, and that place
  *       records what it served: the library has no lookup by voice id, so the
- *       lock can place a library voice only through that record.
+ *       lock can place a library voice only through that record;
+ *   (f) the PLUGIN-DISPATCHED path: every node the workflow builder sends
+ *       straight to a job a plugin's handler runs (past the plugin's own route
+ *       and its voice check) is classified — it speaks in named voices, and
+ *       the engine reads them with the reader its plugin declares
+ *       (`nodeVoices()`) and the builder judges them, refusing the node under a
+ *       lock when none is declared; or it does not, and why.
  *
  * Not in either census, by design: lanes that play a PROVIDED audio track and
  * select no voice (speech-to-video, lip-sync) — there is no voice id to judge,
@@ -29,6 +35,8 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync, readdirSync } from "node:fs"
 import { join, relative } from "node:path"
+import { CLOUD_ONLY_NODE_TYPES, NODARO_EXCLUSIVE_NODE_TYPES } from "../cloud-only-nodes.js"
+import { PLUGIN_SPEECH_NODE_TYPES } from "../../services/workflow-engine/dispatched-voices.js"
 
 const SRC = join(__dirname, "..", "..")
 const read = (rel: string) => readFileSync(join(SRC, rel), "utf8")
@@ -86,15 +94,18 @@ const SPEECH_LANES: Readonly<Record<string, SpeechLane>> = {
   },
   "lib/private-plugins/toolkit.ts": {
     kind: "plugin",
-    why: "plugin lanes (tk.providers): judged when the plugin calls tk.voices.assertAllowed for every voice it sends — " +
-      "adoption is the plugin package's own totality test to enforce. A plugin job that runs on a core job name is judged by that handler's backstop (c)",
+    why: "plugin lanes (tk.providers): a plugin route is judged when the plugin calls tk.voices.assertAllowed for every voice it sends — " +
+      "adoption is the plugin package's own totality test to enforce. A workflow run of a plugin node that speaks is judged by the engine, " +
+      "with the reader its plugin declares (f). A plugin job that runs on a core job name is judged by that handler's backstop (c)",
   },
   "lib/private-plugins/types.ts": { kind: "plugin", why: "the plugin contract's declaration of those tk.providers speech members (a signature, not a call)" },
 }
 
-/** The job types that send a voice to a speech provider when a worker runs them. */
+/** The job types that send a voice to a speech provider when a CORE worker runs them. */
 const SPEECH_JOB_TYPES = ["text-to-speech", "text-to-dialogue", "voice-changer", "voiced-video", "dubbing"] as const
-const SPEECH_JOB_LITERAL = new RegExp(`"(${SPEECH_JOB_TYPES.join("|")})"`)
+/** Every job type that speaks in a voice: the core ones above, and the plugin-served speech nodes' (f). */
+const ALL_SPEECH_JOB_TYPES: readonly string[] = [...SPEECH_JOB_TYPES, ...PLUGIN_SPEECH_NODE_TYPES]
+const SPEECH_JOB_LITERAL = new RegExp(`"(${ALL_SPEECH_JOB_TYPES.join("|")})"`)
 
 /**
  * Every file that creates a speech job, and the judgment it makes before the
@@ -129,7 +140,41 @@ const BUILDER_CASES: Readonly<Record<string, RegExp>> = {
 /** A place in a file that creates a job of a speech type: an enqueue, or a builder's dispatch. */
 function createsSpeechJob(src: string): boolean {
   for (const m of src.matchAll(/\.add\(\s*([^,()]*?),/g)) if (SPEECH_JOB_LITERAL.test(m[1]!)) return true
-  return new RegExp(`(?:jobName:\\s*|simpleResult\\(\\s*)"(?:${SPEECH_JOB_TYPES.join("|")})"`).test(src)
+  return new RegExp(`(?:jobName:\\s*|simpleResult\\(\\s*)"(?:${ALL_SPEECH_JOB_TYPES.join("|")})"`).test(src)
+}
+
+/**
+ * (f) Every node type the workflow builder dispatches straight to a job a
+ * PLUGIN's handler runs (a Nodaro-exclusive or Cloud-only node type with a
+ * builder dispatch), and whether it speaks in a named voice. Such a job runs
+ * past the plugin's own route and its voice check, so one that speaks is judged
+ * by the engine through the reader its plugin declares (PLUGIN_SPEECH_NODE_TYPES);
+ * one that does not says why. A node a plugin serves through its own HTTP route
+ * (the sync UGC nodes) is not here: that route judges its voices.
+ */
+type PluginDispatch = { readonly speaks: true } | { readonly speaks: false; readonly why: string }
+const PLUGIN_DISPATCHED: Readonly<Record<string, PluginDispatch>> = {
+  "voice-changer-pro": { speaks: true },
+  "generate-video-pro": { speaks: false, why: "a video model's own audio: the run selects no voice" },
+  "edit-video-pro": { speaks: false, why: "a video model's own audio over an edited span: the run selects no voice" },
+  "video-analysis": { speaks: false, why: "reads a video into text: nothing is spoken" },
+  "video-audit": { speaks: false, why: "reads a video into a report: nothing is spoken" },
+  "edit-plan": { speaks: false, why: "plans cuts of recordings: nothing is spoken" },
+  "camera-switch": { speaks: false, why: "cuts between recorded cameras: nothing is spoken" },
+  "speaker-view": { speaks: false, why: "frames recorded speakers: nothing is spoken" },
+  "speaker-frames": { speaks: false, why: "tracks faces in recordings: nothing is spoken" },
+  "content-recipe": { speaks: false, why: "writes a content recipe as text: nothing is spoken" },
+  "content-ideas": { speaks: false, why: "writes content ideas as text: nothing is spoken" },
+  "social-search": { speaks: false, why: "searches social posts: nothing is spoken" },
+  "pro-3d-render": { speaks: false, why: "renders a 3D scene: nothing is spoken" },
+}
+
+/** The job names the workflow builder dispatches by literal: payload-builder.ts and the node units' payloads. */
+function builderDispatchedJobNames(): Set<string> {
+  const builders = files.filter((f) => f.rel === "services/workflow-engine/payload-builder.ts" || /^nodes\/[^/]+\/payload\.ts$/.test(f.rel))
+  const names = new Set<string>()
+  for (const { src } of builders) for (const m of src.matchAll(/(?:simpleResult\(\s*|jobName:\s*)"([a-z0-9-]+)"/g)) names.add(m[1]!)
+  return names
 }
 
 /** A file's top-level functions (declarations and `const x = function`/arrow), each with its body. */
@@ -151,7 +196,12 @@ function registeredHandlers(src: string): Map<string, string> {
 
 describe("the voice lock — every speech lane is classified, every seam judges, the library is listed once", () => {
   it("(a) the workflow engine resolves ahead of the build, and every speech case judges what it sends", () => {
-    expect(read("services/workflow-engine/node-executor.ts")).toMatch(/resolveVoiceGenders\(voicesTheBuildDispatches\(node, resolvedInputs, edges\), \{ userId: ctx\.userId \}\)/)
+    const executor = srcOf("services/workflow-engine/node-executor.ts")
+    expect(executor).toMatch(/const pluginNodeVoices = await pluginVoicesTheBuildDispatches\(node, resolvedInputs, edges\)/)
+    expect(executor).toMatch(
+      /resolveVoiceGenders\(\s*\[\.\.\.voicesTheBuildDispatches\(node, resolvedInputs, edges\), \.\.\.\(pluginNodeVoices \?\? \[\]\)\],\s*\{ userId: ctx\.userId \},?\s*\)/,
+    )
+    expect(executor, "the executor no longer hands the plugin node's voices to the build").toMatch(/\.\.\.\(pluginNodeVoices \? \{ pluginNodeVoices \} : \{\}\)/)
     const dispatched = read("services/workflow-engine/dispatched-voices.ts")
     for (const type of ["text-to-speech", "text-to-dialogue", "voice-changer"]) {
       expect(dispatched, `the engine's pre-resolution does not read the voices a ${type} node sends`).toContain(`if (type === "${type}") return voicesToJudge(`)
@@ -259,5 +309,46 @@ describe("the voice lock — every speech lane is classified, every seam judges,
     const listing = files.filter((f) => f.src.includes("/v1/shared-voices")).map((f) => f.rel)
     expect(listing, "a second place lists the Voice Library without recording what it served").toEqual(["routes/voices.ts"])
     expect(read("routes/voices.ts")).toContain("recordLibraryVoiceGenders(voices)")
+  })
+
+  it("(f) every node the builder dispatches straight to a plugin's job is classified, and one that speaks is judged through its plugin's reader", () => {
+    const pluginServed = new Set([...NODARO_EXCLUSIVE_NODE_TYPES, ...CLOUD_ONLY_NODE_TYPES])
+    const dispatched = [...builderDispatchedJobNames()].filter((name) => pluginServed.has(name)).sort()
+    expect(dispatched.length, "found no builder dispatch to a plugin's job — the scan is wired to nothing").toBeGreaterThan(5)
+    const unclassified = dispatched.filter((name) => !(name in PLUGIN_DISPATCHED))
+    expect(
+      unclassified,
+      `The workflow builder dispatches these nodes straight to a plugin's job, past the plugin's own route, but ` +
+        `PLUGIN_DISPATCHED does not classify them: say whether a run speaks in a named voice. One that does joins ` +
+        `PLUGIN_SPEECH_NODE_TYPES (dispatched-voices.ts), and its plugin declares a reader with nodeVoices().`,
+    ).toEqual([])
+    const stale = Object.keys(PLUGIN_DISPATCHED).filter((name) => !dispatched.includes(name))
+    expect(stale, "PLUGIN_DISPATCHED lists nodes the builder no longer dispatches to a plugin's job — remove them").toEqual([])
+
+    const speaking = Object.entries(PLUGIN_DISPATCHED).filter(([, d]) => d.speaks).map(([name]) => name).sort()
+    expect([...PLUGIN_SPEECH_NODE_TYPES].sort(), "PLUGIN_SPEECH_NODE_TYPES is not the set of plugin-dispatched nodes that speak").toEqual(speaking)
+
+    // The engine reads those voices ahead of the build (under a lock only) with the plugin's declared reader…
+    const dispatchedVoices = srcOf("services/workflow-engine/dispatched-voices.ts")
+    expect(dispatchedVoices).toMatch(/if \(!voiceLockActive\(\)\) return undefined[\s\S]*?if \(!PLUGIN_SPEECH_NODE_TYPES\.has\(rawNode\.type\)\) return undefined[\s\S]*?readPluginNodeVoices\(/)
+    // …and the builder judges every such node before its own case, refusing it under a lock when nothing was read.
+    const pb = srcOf("services/workflow-engine/payload-builder.ts")
+    const backstop = pb.search(/if \(PLUGIN_SPEECH_NODE_TYPES\.has\(type\)\) refusePluginNodeVoicesTheLockRefuses\(buildCtx\)/)
+    expect(backstop, "payload-builder no longer runs the voice lock's backstop for a plugin-served speech node").toBeGreaterThan(0)
+    expect(backstop, "the plugin speech backstop runs after the node units' own builds, so a unit would escape it").toBeLessThan(
+      pb.search(/const unitPayload = UNIT_PAYLOADS\[type\]/),
+    )
+    for (const type of speaking) {
+      expect(pb.indexOf(`case "${type}": {`), `the plugin speech backstop runs only after the ${type} case`).toBeGreaterThan(backstop)
+    }
+    const refusal = pb.slice(pb.indexOf("function refusePluginNodeVoicesTheLockRefuses"))
+    expect(refusal).toMatch(/if \(!voices\) throw voiceLockRefusal\(/)
+    expect(refusal).toMatch(/refuseVoicesTheLockRefuses\(voicesToJudge\(voices\), buildCtx,/)
+  })
+
+  it("(f) the plugin contract declares the reader, the loader publishes it, and the standalone orchestrator can ask for it", () => {
+    expect(read("lib/private-plugins/types.ts")).toMatch(/nodeVoices\?\(\): Record<string, PluginNodeVoiceReader>/)
+    expect(srcOf("lib/private-plugins/load.ts")).toMatch(/setPluginNodeVoiceReaders\(nodeVoiceReaders\)/)
+    expect(srcOf("orchestrator.ts")).toMatch(/setPluginNodeVoicesSource\(\(type, data, inputs\) => askApiPluginNodeVoices\(type, data, inputs\)\)/)
   })
 })

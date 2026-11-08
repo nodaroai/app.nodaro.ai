@@ -646,6 +646,87 @@ describe("payload-builder-voice-gender-deny.test.ts", () => {
     })
   })
 
+  const vcpNode = (orderedVoices: unknown[] = [{ voiceId: "LibVoice000000000001" }, null]): SimpleNode => ({
+    id: "vcp-1",
+    type: "voice-changer-pro",
+    data: { audioUrl: "https://example.com/a.mp3", orderedVoices },
+  })
+
+  /**
+   * A plugin-served speech node is dispatched straight to the plugin's handler,
+   * past the plugin's own route and its voice check. Its voices are read ahead of
+   * the build with the reader its plugin declares (`pluginNodeVoices`, resolved
+   * by node-executor.ts) and judged here like a core speech node's. Under a lock,
+   * a node whose voices nobody read (no reader declared, or a caller that skipped
+   * the read) is refused: fail-closed.
+   */
+  describe("buildPayload — a plugin-served speech node (Voice Changer Pro) (B4c)", () => {
+    it("under a lock, refuses a node whose voices nobody read", () => {
+      maleOnly()
+      const n = vcpNode()
+      expect(() => buildPayload(n, "job-vcp-1", {}, undefined, ctx(n))).toThrowError(
+        expect.objectContaining({ code: "voice_not_available", message: "This node's voices can't be checked on this deployment, so it can't run here." }),
+      )
+    })
+
+    it("under a lock, builds when every voice read resolves to an allowed gender", () => {
+      maleOnly()
+      const n = vcpNode()
+      const built = buildPayload(n, "job-vcp-2", {}, undefined, {
+        ...ctx(n),
+        pluginNodeVoices: ["LibVoice000000000001"],
+        voiceGenders: new Map([["LibVoice000000000001", "male" as const]]),
+      })
+      expect(built.jobName).toBe("voice-changer-pro")
+      expect(built.payload.orderedVoices).toEqual([{ voiceId: "LibVoice000000000001" }, null])
+    })
+
+    it("under a lock, refuses a voice read of a disallowed gender, and one nobody resolved", () => {
+      maleOnly()
+      const n = vcpNode()
+      // Rachel is a female premade voice: the catalog alone refuses her.
+      expect(() => buildPayload(n, "job-vcp-3", {}, undefined, { ...ctx(n), pluginNodeVoices: ["Rachel"] })).toThrowError(
+        expect.objectContaining({ code: "voice_not_available", message: "The selected voice is not available on this deployment." }),
+      )
+      // A library id the caller did not resolve: nobody can vouch for it.
+      expect(() => buildPayload(n, "job-vcp-4", {}, undefined, { ...ctx(n), pluginNodeVoices: ["LibVoice000000000001"] })).toThrowError(
+        expect.objectContaining({ code: "voice_not_available" }),
+      )
+      for (const g of ["female", undefined] as const) {
+        expect(() =>
+          buildPayload(n, "job-vcp-5", {}, undefined, {
+            ...ctx(n),
+            pluginNodeVoices: ["LibVoice000000000001"],
+            voiceGenders: new Map([["LibVoice000000000001", g]]),
+          }),
+        ).toThrowError(expect.objectContaining({ code: "voice_not_available" }))
+      }
+    })
+
+    it("under a lock, judges every voice read, not only the first", () => {
+      maleOnly()
+      const n = vcpNode([{ voiceId: "Daniel" }, { voiceId: "Rachel" }])
+      expect(() => buildPayload(n, "job-vcp-6", {}, undefined, { ...ctx(n), pluginNodeVoices: ["Daniel", "Rachel"] })).toThrowError(
+        expect.objectContaining({ code: "voice_not_available" }),
+      )
+      expect(buildPayload(n, "job-vcp-7", {}, undefined, { ...ctx(n), pluginNodeVoices: ["Daniel", "Adam"] }).jobName).toBe("voice-changer-pro")
+    })
+
+    it("under a lock, builds when the reader found no named voice (an empty list is a reading, not a missing one)", () => {
+      maleOnly()
+      const n = vcpNode()
+      expect(buildPayload(n, "job-vcp-8", {}, undefined, { ...ctx(n), pluginNodeVoices: [] }).jobName).toBe("voice-changer-pro")
+      expect(buildPayload(n, "job-vcp-9", {}, undefined, { ...ctx(n), pluginNodeVoices: [""] }).jobName).toBe("voice-changer-pro")
+    })
+
+    it("is inert with no lock: nothing needs to have been read", () => {
+      const n = vcpNode([{ voiceId: "Rachel" }])
+      const built = buildPayload(n, "job-vcp-10", {}, undefined, ctx(n))
+      expect(built.jobName).toBe("voice-changer-pro")
+      expect(built.payload.orderedVoices).toEqual([{ voiceId: "Rachel" }])
+    })
+  })
+
   /**
    * The workflow engine resolves voices ahead of the synchronous build
    * (`voicesTheBuildDispatches`, read by node-executor.ts). They must be the

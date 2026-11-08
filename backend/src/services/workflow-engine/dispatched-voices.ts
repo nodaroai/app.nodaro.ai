@@ -3,10 +3,13 @@
  * one spelling shared by the builder's speech cases, which send and vet the
  * voices, and the workflow engine's pre-resolution for the voice lock
  * (`node-executor.ts`), which looks those voices up before the synchronous
- * build. Its own module, so the executor reads it without importing the
- * builder (which its tests replace).
+ * build. A node a plugin serves is read with its plugin's own reader
+ * (`pluginVoicesTheBuildDispatches`). Its own module, so the executor reads it
+ * without importing the builder (which its tests replace).
  */
 import { carriedNodeSettings } from "@nodaro/render-rules"
+import { voiceLockActive } from "../../lib/voice-policy.js"
+import { readPluginNodeVoices } from "../../lib/private-plugins/plugin-node-voices.js"
 import { withRunningVideoProvider } from "./normalize-node-types.js"
 import type { ResolvedInputs, SimpleEdge, SimpleNode } from "./types.js"
 
@@ -73,4 +76,39 @@ export function dispatchedVoicesOf(type: string, data: SimpleNode["data"], resol
 export function voicesTheBuildDispatches(rawNode: SimpleNode, resolvedInputs: ResolvedInputs, edges: readonly SimpleEdge[] = []): string[] {
   const node = nodeAsBuilt(rawNode, edges)
   return dispatchedVoicesOf(node.type, node.data, resolvedInputs)
+}
+
+/**
+ * The node types a PLUGIN serves that speak in named voices. A workflow run
+ * dispatches each straight to the plugin's handler, past the plugin's own
+ * route and its voice check, so under the deployment's voice lock the engine
+ * reads the node's voices with the reader its plugin declares (`nodeVoices()`,
+ * `pluginVoicesTheBuildDispatches`) and the builder judges them before any job
+ * or reservation; a node whose voices nobody could read is refused. The
+ * platform names the type (what it is, which is public); how to read its data
+ * is the plugin's. The voice-lock totality test classifies every node the
+ * builder dispatches to a plugin, so a new one cannot ship unclassified.
+ */
+export const PLUGIN_SPEECH_NODE_TYPES: ReadonlySet<string> = new Set(["voice-changer-pro"])
+
+/** What a plugin speech node whose voices nobody could read answers under a lock (coded `voice_not_available`). */
+export const PLUGIN_NODE_VOICES_UNREAD_MESSAGE = "This node's voices can't be checked on this deployment, so it can't run here."
+
+/**
+ * The voices a plugin-served speech node will speak in: under the voice lock,
+ * its plugin's declared reader run on the node as built (`nodeAsBuilt`) and its
+ * resolved inputs (`readPluginNodeVoices`). Undefined with no lock (nothing is
+ * read), for any other node type, and when no reader is declared — the
+ * builder then refuses the node under a lock. A reader, or an API asked on the
+ * standalone orchestrator's behalf, that fails THROWS: never an allow.
+ */
+export async function pluginVoicesTheBuildDispatches(
+  rawNode: SimpleNode,
+  resolvedInputs: ResolvedInputs,
+  edges: readonly SimpleEdge[] = [],
+): Promise<string[] | undefined> {
+  if (!voiceLockActive()) return undefined
+  if (!PLUGIN_SPEECH_NODE_TYPES.has(rawNode.type)) return undefined
+  const node = nodeAsBuilt(rawNode, edges)
+  return (await readPluginNodeVoices(node.type, node.data, resolvedInputs as Readonly<Record<string, unknown>>)) ?? undefined
 }

@@ -290,6 +290,25 @@ export interface PluginMusicGenOptions {
    * description mode rather than sending a request the provider will refuse.
    */
   title?: string
+  /**
+   * The vocal gender to sing in, sent as Suno's own `vocalGender` ("male" or
+   * "female"; absent or "" = the provider's choice). ADDITIVE-OPTIONAL (no
+   * CONTRACT_VERSION bump): an older host ignores it. This is where the
+   * deployment's prompt policy reaches the provider: send the `vocalGender`
+   * that `tk.prompts.applyPolicies` returned for this music prompt (a policy
+   * may force one). Forwarded as given in both modes, as the platform's own
+   * music lane sends it; the host applies no policy of its own here, so a
+   * plugin that polices its prompt polices it exactly once.
+   */
+  vocalGender?: string
+  /**
+   * Styles to steer away from, sent as Suno's own `negativeStyle` (absent or
+   * "" = none). ADDITIVE-OPTIONAL: an older host ignores it. For the prompt
+   * policy: send the `negativePrompt` that `tk.prompts.applyPolicies`
+   * returned for this music prompt (a policy may add terms to it). Forwarded
+   * as given in both modes, and never policed again here.
+   */
+  negativeStyle?: string
   onTaskCreated?: (taskId: string) => void | Promise<void>
 }
 
@@ -3434,6 +3453,32 @@ export interface PluginVoicesToolkit {
   assertAllowed(voiceId: string, opts: { readonly userId: string }): Promise<void>
 }
 
+/**
+ * How to read the voices a WORKFLOW RUN of one plugin-served node will speak in
+ * (plugin → host, declared with `NodaroPrivatePlugin.nodeVoices`). The
+ * workflow engine dispatches such a node straight to the plugin's handler,
+ * past the plugin's own route and the `tk.voices` check it makes, so under
+ * the deployment's voice lock the engine judges these voices itself, before
+ * the node's job or any reservation exists, exactly as it judges its own
+ * speech nodes. With no lock nothing reads them.
+ *
+ * `data` is the node's data as the engine builds it (field mappings and
+ * carried settings applied) and `inputs` its resolved upstream inputs, both as
+ * plain JSON copies. Return the id of every voice the node's job will send a
+ * speech provider: the voices the plugin's own route judges for the same
+ * request. An empty string has nothing to judge (a default voice is the
+ * deployment policy's own); an empty list says the node speaks in no named
+ * voice.
+ *
+ * Pure and synchronous: no I/O and no toolkit, because the engine may run in
+ * a process that loads no plugin and asks the API to run it. A reader that
+ * throws, or returns anything but a list of strings, fails the node.
+ */
+export type PluginNodeVoiceReader = (
+  data: Readonly<Record<string, unknown>>,
+  inputs: Readonly<Record<string, unknown>>,
+) => readonly string[]
+
 export interface PluginTelegramBotTextInput {
   /** Whose bot, and whose account it writes to: both are looked up by this owner. */
   userId: string
@@ -5607,6 +5652,17 @@ export interface NodaroPrivatePlugin {
    * `tk.capabilities.jobLanes` is true on the host.
    */
   jobLanes?(): Record<string, PluginJobLaneClass>
+  /**
+   * Additive: for each node type this plugin serves that speaks in voices,
+   * how to read the voices a workflow run of it will speak in, keyed by node
+   * type (see `PluginNodeVoiceReader`). Read only under the deployment's voice
+   * lock. A node type the platform knows speaks, run in a workflow under a lock
+   * with no reader declared, is refused (fail closed). Merged by the loader
+   * last write wins per type; a declaration that throws or is not an object,
+   * and an entry that is not a function, is refused (logged) without failing
+   * the load. Takes no toolkit.
+   */
+  nodeVoices?(): Record<string, PluginNodeVoiceReader>
 }
 
 export interface PrivatePluginsModule {

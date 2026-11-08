@@ -310,6 +310,7 @@ import { scene3DPrivateStore } from "./lib/private-plugins/scene3d-storage.js"
 import { shotsRoutes } from "./routes/shots.js"
 import { modelsRoutes } from "./routes/models.js"
 import { voicesRoutes } from "./routes/voices.js"
+import { pluginNodeVoicesRoutes } from "./routes/plugin-node-voices.js"
 import { heygenCatalogRoutes } from "./routes/heygen-catalog.js"
 import { voiceCloneRoutes } from "./routes/voice-clones.js"
 import { voiceChangerRoutes } from "./routes/voice-changer.js"
@@ -921,6 +922,10 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   await app.register(editPlanCapabilitiesRoutes)
   await app.register(speakerFramesCapabilitiesRoutes)
   await app.register(voicesRoutes)
+  // The voices a plugin-served node speaks in, for the standalone orchestrator
+  // under the voice lock (internal only; read per request — the plugins load
+  // further down).
+  await app.register(pluginNodeVoicesRoutes)
   await app.register(heygenCatalogRoutes)
   await app.register(voiceCloneRoutes)
   await app.register(voiceChangerRoutes)

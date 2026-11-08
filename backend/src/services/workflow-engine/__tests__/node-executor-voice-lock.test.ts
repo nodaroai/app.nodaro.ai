@@ -12,10 +12,11 @@
  * closed (the builder refuses an unresolved non-premade voice), so this is
  * what keeps a fine library voice usable in a workflow under a lock.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
-const { mockJobInsert, mockBuildPayload, mockQueueAdd, mockReserveCredits, mockResolveVoiceGenders } = vi.hoisted(() => ({
+const { mockJobInsert, mockJobDelete, mockBuildPayload, mockQueueAdd, mockReserveCredits, mockResolveVoiceGenders } = vi.hoisted(() => ({
   mockJobInsert: vi.fn().mockResolvedValue({ data: { id: "test-job-id" }, error: null }),
+  mockJobDelete: vi.fn().mockResolvedValue({ error: null }),
   mockBuildPayload: vi.fn(() => ({
     jobName: "text-to-speech",
     queueName: "video-generation",
@@ -44,7 +45,7 @@ vi.mock("@/lib/supabase.js", () => {
       from: vi.fn().mockReturnValue({
         insert: vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single: mockJobInsert }) }),
         update: vi.fn().mockReturnValue({ eq: eqFn }),
-        delete: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        delete: vi.fn().mockReturnValue({ eq: mockJobDelete }),
         select: vi.fn(),
       }),
     },
@@ -70,6 +71,8 @@ vi.mock("@/lib/availability-viewer.js", () => ({
 vi.mock("@/lib/voice-gender.js", () => ({ resolveVoiceGenders: mockResolveVoiceGenders }))
 
 import { executeNode } from "../node-executor.js"
+import { setPluginNodeVoiceReaders, _resetPluginNodeVoiceReadersForTests } from "@/lib/private-plugins/node-voices-registry.js"
+import { __resetSurfaceProfileCacheForTests } from "@/lib/surface-profile.js"
 import type { SimpleNode, OrchestratorContext } from "../types.js"
 
 const ctx = (userId: string) => ({
@@ -130,5 +133,80 @@ describe("node-executor hands the voice lock's lookups to buildPayload", () => {
     const buildCtx = await buildCtxFor(node)
 
     expect(buildCtx).not.toHaveProperty("voiceGenders")
+  })
+})
+
+/**
+ * The PLUGIN-DISPATCHED path: a Voice Changer Pro node runs on the plugin's
+ * handler, past the plugin's own route. Under a lock the executor reads its
+ * voices with the reader the plugin declares, looks their genders up with the
+ * core speech voices, and hands both on (`pluginNodeVoices`, `voiceGenders`);
+ * the builder judges them, or refuses the node when nothing was read.
+ */
+describe("node-executor reads a plugin-served speech node's voices with its plugin's reader", () => {
+  const vcp: SimpleNode = {
+    id: "n5",
+    type: "voice-changer-pro",
+    data: { label: "Recast", audioUrl: "https://example.com/a.mp3", orderedVoices: [{ voiceId: "LibVoice000000000001" }, null, "Daniel"] },
+  }
+  const slotReader = vi.fn((data: Readonly<Record<string, unknown>>, _inputs: Readonly<Record<string, unknown>>) =>
+    ((data.orderedVoices ?? []) as Array<string | { voiceId: string } | null>).flatMap((v) => (v === null ? [] : [typeof v === "string" ? v : v.voiceId])))
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    _resetPluginNodeVoiceReadersForTests()
+  })
+  afterEach(() => {
+    delete process.env.NODARO_SURFACE_PROFILE
+    __resetSurfaceProfileCacheForTests()
+  })
+  const lockToMale = () => {
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ voice: { allowedGenders: ["male"] } })
+    __resetSurfaceProfileCacheForTests()
+  }
+
+  it("under a lock: looks up the voices the reader returns, and hands them on", async () => {
+    lockToMale()
+    setPluginNodeVoiceReaders(new Map([["voice-changer-pro", slotReader]]))
+
+    const buildCtx = await buildCtxFor(vcp, { audioUrl: "https://example.com/wired.mp3" })
+
+    expect(slotReader).toHaveBeenCalledTimes(1)
+    expect(slotReader.mock.calls[0]![1]).toEqual({ audioUrl: "https://example.com/wired.mp3" })
+    expect(mockResolveVoiceGenders).toHaveBeenCalledWith(["LibVoice000000000001", "Daniel"], { userId: "user-1" })
+    expect((buildCtx as { pluginNodeVoices?: unknown }).pluginNodeVoices).toEqual(["LibVoice000000000001", "Daniel"])
+    expect(buildCtx.voiceGenders).toEqual(new Map([["LibVoice000000000001", "male"], ["Daniel", "male"]]))
+  })
+
+  it("under a lock with no reader declared: hands no voices on, so the builder refuses the node", async () => {
+    lockToMale()
+    setPluginNodeVoiceReaders(new Map())
+
+    const buildCtx = await buildCtxFor(vcp)
+
+    expect(buildCtx).not.toHaveProperty("pluginNodeVoices")
+    expect(mockResolveVoiceGenders).toHaveBeenCalledWith([], { userId: "user-1" })
+  })
+
+  it("with no lock: never asks the reader", async () => {
+    setPluginNodeVoiceReaders(new Map([["voice-changer-pro", slotReader]]))
+
+    const buildCtx = await buildCtxFor(vcp)
+
+    expect(slotReader).not.toHaveBeenCalled()
+    expect(buildCtx).not.toHaveProperty("pluginNodeVoices")
+  })
+
+  it("a reader that fails fails the node before the build: the placeholder row goes, nothing is reserved", async () => {
+    lockToMale()
+    setPluginNodeVoiceReaders(new Map([["voice-changer-pro", () => {
+      throw new Error("reader bug")
+    }]]))
+
+    await expect(executeNode(vcp, {}, [], [vcp], {}, ctx("user-1"))).rejects.toThrow("reader bug")
+    expect(mockBuildPayload).not.toHaveBeenCalled()
+    expect(mockReserveCredits).not.toHaveBeenCalled()
+    expect(mockQueueAdd).not.toHaveBeenCalled()
+    expect(mockJobDelete).toHaveBeenCalled()
   })
 })

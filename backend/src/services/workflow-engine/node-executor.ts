@@ -75,7 +75,7 @@ import { computeFingerprint } from "../../lib/dedup-fingerprint.js"
 import { loopbackFetch } from "./loopback-fetch.js"
 import { syncHttpCallError } from "./sync-http-failure.js"
 import { buildNodeRefMap, type WorkflowSettings } from "./payload-builder.js"
-import { voicesTheBuildDispatches } from "./dispatched-voices.js"
+import { pluginVoicesTheBuildDispatches, voicesTheBuildDispatches } from "./dispatched-voices.js"
 import { buildPayloadWithSourceSize, type BuiltPayload } from "./source-size-build.js"
 import { resolveVoiceGenders } from "../../lib/voice-gender.js"
 import { userDirectionForNode } from "./node-user-direction.js"
@@ -2194,9 +2194,17 @@ async function executeWorkerNode(
     const speakerViewClip = node.type === "speaker-view" ? await speakerViewClipOfRun(node, resolvedInputs) : undefined
     // The voice lock (B4c): the builder is synchronous, so the gender of each
     // voice a speech node dispatches is looked up here, from the node as the
-    // build sees it, and handed in. Under a lock the builder refuses a voice it
-    // finds unresolved (fail-closed). No lock, or no voice: nothing is read.
-    const voiceGenders = await resolveVoiceGenders(voicesTheBuildDispatches(node, resolvedInputs, edges), { userId: ctx.userId })
+    // build sees it, and handed in. A node a plugin serves runs on the plugin's
+    // handler, past the plugin's own route: its voices are read with the reader
+    // its plugin declares (under a lock only) and handed in too. Under a lock
+    // the builder refuses a voice it finds unresolved, and a plugin speech node
+    // whose voices nobody could read (fail-closed). No lock, or no voice:
+    // nothing is read.
+    const pluginNodeVoices = await pluginVoicesTheBuildDispatches(node, resolvedInputs, edges)
+    const voiceGenders = await resolveVoiceGenders(
+      [...voicesTheBuildDispatches(node, resolvedInputs, edges), ...(pluginNodeVoices ?? [])],
+      { userId: ctx.userId },
+    )
     // "auto" on a model without a native auto keeps the photo's shape. The
     // builder is synchronous, so `buildPayloadWithSourceSize` reads the size of
     // the photo the build sends first, through the same probe the image routes
@@ -2219,6 +2227,7 @@ async function executeWorkerNode(
         ...(speakerViewTracks ? { speakerViewTracks } : {}),
         ...(speakerViewClip ? { speakerViewClip } : {}),
         ...(voiceGenders ? { voiceGenders } : {}),
+        ...(pluginNodeVoices ? { pluginNodeVoices } : {}),
         ...(userDirection ? { userDirection } : {}),
       },
     )

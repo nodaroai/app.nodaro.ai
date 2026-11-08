@@ -903,6 +903,11 @@ optional; each array empty = "keep the default"):
       it is the cast's first voice, which the spoken clip is revoiced into;
     - the Text to Speech, Text to Dialogue and Voice Changer nodes in a workflow
       run;
+    - a Cloud plugin node that speaks in voices (Voice Changer Pro) in a workflow
+      run: its voices are read with the reader its plugin declares and judged
+      the same way. Under a lock, such a node whose plugin declares no reader is
+      refused (`voice_not_available`, "This node's voices can't be checked on
+      this deployment, so it can't run here.");
     - speech a film-studio pipeline generates: a shot's dialogue line, the
       narration and the revoicing of a spoken shot. A refused shot line is
       skipped like any line that failed (the shot keeps its clip as animated),
@@ -1093,7 +1098,10 @@ package stays content-free, enforced by its `content-free-contract` guard test
 (the package source may not read `process.env`). A prompt that a Cloud plugin
 assembles itself reaches the same registry through the plugin toolkit's
 `tk.prompts.applyPolicies`; such a lane is policed once its plugin calls that
-member at its final assembly point.
+member at its final assembly point. The toolkit's music generation takes the
+vocal gender and negative style that call returns for a music prompt and sends
+both to the provider, as the platform's own music lane does; it applies no
+policy itself, so a music prompt is policed once.
 
 **Job policy (generation gates).** A deployment that must judge generations —
 before they run, or before their output is published — registers a backend

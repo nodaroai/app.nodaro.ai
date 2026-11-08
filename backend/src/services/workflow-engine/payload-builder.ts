@@ -204,7 +204,15 @@ import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 // Shared logic from packages/shared — single source of truth
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
 import { LEGACY_VIDEO_NODE_DEFAULT_PROVIDER } from "../../lib/generated-video-length.js"
-import { dialogueLinesOf, nodeAsBuilt, ttsVoiceOf, voiceChangerVoiceOf, voicesToJudge } from "./dispatched-voices.js"
+import {
+  PLUGIN_NODE_VOICES_UNREAD_MESSAGE,
+  PLUGIN_SPEECH_NODE_TYPES,
+  dialogueLinesOf,
+  nodeAsBuilt,
+  ttsVoiceOf,
+  voiceChangerVoiceOf,
+  voicesToJudge,
+} from "./dispatched-voices.js"
 import {
   collectAncestorRefs as sharedCollectAncestorRefs,
   LOCATION_REFERENCE_PHOTO_KINDS,
@@ -260,7 +268,14 @@ import { mergeScene3DReferences } from "../scene3d/scene3d-references.js"
 import { imageRequiredMessage } from "../../lib/video-image-required.js"
 import { viduQ4InputProblem } from "../../lib/vidu-q4-inputs.js"
 import { kling4InputProblem } from "../../lib/kling4-inputs.js"
-import { judgeResolvedVoices, judgeUnnamedVoices, VOICE_NOT_AVAILABLE_CODE, type VoiceGender } from "../../lib/voice-policy.js"
+import {
+  judgeResolvedVoices,
+  judgeUnnamedVoices,
+  voiceLockActive,
+  VOICE_NOT_AVAILABLE_CODE,
+  VOICE_NOT_AVAILABLE_MESSAGE,
+  type VoiceGender,
+} from "../../lib/voice-policy.js"
 import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { speechRunsAs } from "../../lib/speech-credits.js"
 import { applyPromptPolicies } from "../../lib/prompt-policy.js"
@@ -367,6 +382,14 @@ export interface PayloadBuildContext {
    *  non-premade voice refused: fail-closed by construction. ABSENT = nothing
    *  resolved. */
   voiceGenders?: ReadonlyMap<string, VoiceGender | undefined>
+  /** The voice lock (B4c) for a node a PLUGIN serves that speaks
+   *  (`PLUGIN_SPEECH_NODE_TYPES`): the voices it will speak in, read under a
+   *  lock with the reader its plugin declares, by the caller
+   *  (`pluginVoicesTheBuildDispatches`) because this builder is synchronous;
+   *  their genders ride `voiceGenders`. ABSENT under a lock = nobody could read
+   *  them (no reader declared, or a caller that skipped the read), and the
+   *  node is refused: fail-closed by construction. */
+  pluginNodeVoices?: readonly string[]
   /** The caller's own palette / moodboard a Generate Image node's stored
    *  `direction` names (`palette:<id>` / `moodboard:<id>`), resolved by the
    *  caller (`userDirectionForNode`, the route's own resolver) because this
@@ -2784,6 +2807,19 @@ function refuseUnnamedVoicesTheLockRefuses(message: string): void {
   throw voiceLockRefusal(message)
 }
 
+/**
+ * The backstop for a plugin-served speech node (`PLUGIN_SPEECH_NODE_TYPES`):
+ * under a lock, the voices its plugin's reader read ahead of the build
+ * (`buildCtx.pluginNodeVoices`) are judged as resolved (`voiceGenders`), and a
+ * node whose voices nobody read is refused. With no lock: nothing to judge.
+ */
+function refusePluginNodeVoicesTheLockRefuses(buildCtx: PayloadBuildContext | undefined): void {
+  if (!voiceLockActive()) return
+  const voices = buildCtx?.pluginNodeVoices
+  if (!voices) throw voiceLockRefusal(PLUGIN_NODE_VOICES_UNREAD_MESSAGE)
+  refuseVoicesTheLockRefuses(voicesToJudge(voices), buildCtx, VOICE_NOT_AVAILABLE_MESSAGE)
+}
+
 /** The lock's refusal in model-deny's coded shape. */
 function voiceLockRefusal(message: string): Error & { code?: string } {
   const err = new Error(message) as Error & { code?: string }
@@ -2866,6 +2902,13 @@ export function buildPayload(
   // credit reservation, instead of letting `undefined` reach ffmpeg / the
   // provider. Mirrors the frontend single-node engine's per-node refusals.
   assertRequiredMediaInputs(type, resolvedInputs, data)
+
+  // B4c, a node a plugin serves that speaks in named voices (Voice Changer
+  // Pro): its job runs on the plugin's handler, past the plugin's own route and
+  // its voice check, so the voices the caller read with the plugin's declared
+  // reader are judged here, before any node's own build, like a core speech
+  // node's. Under a lock, none read = refused. Inert with no lock.
+  if (PLUGIN_SPEECH_NODE_TYPES.has(type)) refusePluginNodeVoicesTheLockRefuses(buildCtx)
 
   // A node unit builds its own payload (backend/src/nodes/<type>/payload.ts) — never a legacy type below.
   const unitPayload = UNIT_PAYLOADS[type]
