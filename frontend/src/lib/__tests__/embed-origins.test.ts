@@ -46,6 +46,68 @@ describe("isAllowedEmbedParent", () => {
   })
 })
 
+// A product served from the same site as this app (a white-label deployment
+// that serves every product from one host) frames an account page.
+describe("isAllowedEmbedParent — this page's own origin", () => {
+  const own = { selfOrigin: "https://studio.example.org", allowLocalhost: false }
+
+  it("trusts a parent on this page's own https origin", () => {
+    expect(isAllowedEmbedParent("https://studio.example.org", own)).toBe(true)
+    expect(isAllowedEmbedParent("https://STUDIO.example.org:443", own)).toBe(true)
+  })
+
+  it("trusts no other origin on the same site: another host, port or scheme", () => {
+    expect(isAllowedEmbedParent("https://other.example.org", own)).toBe(false)
+    expect(isAllowedEmbedParent("https://example.org", own)).toBe(false)
+    expect(isAllowedEmbedParent("https://studio.example.org:8443", own)).toBe(false)
+    expect(isAllowedEmbedParent("http://studio.example.org", own)).toBe(false)
+    expect(isAllowedEmbedParent("https://studio.example.org.evil.com", own)).toBe(false)
+  })
+
+  it("never over plain http, whatever this page's own origin", () => {
+    expect(isAllowedEmbedParent("http://studio.example.org", { selfOrigin: "http://studio.example.org", allowLocalhost: false })).toBe(false)
+  })
+
+  it("leaves Nodaro's rule exactly as it was", () => {
+    const fromNodaro = { selfOrigin: "https://app.nodaro.ai", allowLocalhost: false }
+    expect(isAllowedEmbedParent("https://studio.nodaro.ai", fromNodaro)).toBe(true)
+    expect(isAllowedEmbedParent("https://app.nodaro.ai", fromNodaro)).toBe(true)
+    expect(isAllowedEmbedParent("https://example.com", fromNodaro)).toBe(false)
+    expect(isAllowedEmbedParent("https://nodaro.ai.evil.com", fromNodaro)).toBe(false)
+    expect(isAllowedEmbedParent("http://studio.nodaro.ai", fromNodaro)).toBe(false)
+    // A stored-file host stays refused, even as its own page's parent.
+    expect(isAllowedEmbedParent("https://cdn.nodaro.ai", { selfOrigin: "https://cdn.nodaro.ai", allowLocalhost: false })).toBe(false)
+    expect(isAllowedEmbedParent("https://assets.nodaro.ai", { selfOrigin: "https://assets.nodaro.ai", allowLocalhost: false })).toBe(false)
+  })
+
+  it("an opaque or missing own origin trusts nothing more", () => {
+    expect(isAllowedEmbedParent("https://studio.example.org", { selfOrigin: "null", allowLocalhost: false })).toBe(false)
+    expect(isAllowedEmbedParent("https://studio.example.org", { selfOrigin: "", allowLocalhost: false })).toBe(false)
+    expect(isAllowedEmbedParent("null", { selfOrigin: "null", allowLocalhost: false })).toBe(false)
+  })
+
+  it("trusts no own origin it was not given (the rule before this clause)", () => {
+    expect(isAllowedEmbedParent("https://studio.example.org", { allowLocalhost: false })).toBe(false)
+  })
+
+  it("takes the hand-over from the framing page on that origin", () => {
+    const parent = { name: "the framing page" }
+    const handOver = { type: "nodaro:setSession", access_token: "access-1", refresh_token: "refresh-1" }
+    expect(classifyEmbedSessionMessage({ data: handOver, origin: "https://studio.example.org", source: parent }, parent, own)).toEqual({
+      kind: "session",
+      accessToken: "access-1",
+      refreshToken: "refresh-1",
+    })
+    expect(classifyEmbedSessionMessage({ data: { type: "nodaro:noSession" }, origin: "https://studio.example.org", source: parent }, parent, own)).toEqual({
+      kind: "no-session",
+    })
+    // Still only from the parent itself.
+    expect(classifyEmbedSessionMessage({ data: handOver, origin: "https://studio.example.org", source: { name: "a sibling" } }, parent, own)).toEqual({
+      kind: "ignore",
+    })
+  })
+})
+
 describe("classifyEmbedSessionMessage", () => {
   const parent = { name: "the framing page" }
   const handOver = { type: "nodaro:setSession", access_token: "access-1", refresh_token: "refresh-1" }

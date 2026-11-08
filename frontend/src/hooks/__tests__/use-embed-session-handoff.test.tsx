@@ -5,8 +5,14 @@ const setAuthFromTokens = vi.fn(async (_access: string, _refresh: string) => {})
 vi.mock("@/hooks/use-auth", () => ({
   setAuthFromTokens: (access: string, refresh: string) => setAuthFromTokens(access, refresh),
 }))
+// The real check, spied on: the hook must hand it this page's own origin.
+vi.mock("@/lib/embed-origins", async (orig) => {
+  const real = await orig<typeof import("@/lib/embed-origins")>()
+  return { ...real, classifyEmbedSessionMessage: vi.fn(real.classifyEmbedSessionMessage) }
+})
 
 import { useEmbedSessionHandoff } from "../use-embed-session-handoff"
+import { classifyEmbedSessionMessage } from "@/lib/embed-origins"
 
 /**
  * When the app runs framed inside another Nodaro surface, the page that frames
@@ -114,5 +120,17 @@ describe("useEmbedSessionHandoff", () => {
     deliver("nodaro:setSession")
     deliver(null)
     expect(setAuthFromTokens).not.toHaveBeenCalled()
+  })
+
+  // A product on this page's own origin (one host serving every product)
+  // frames an account page: the check is told this page's origin.
+  it("hands the check this page's own origin", () => {
+    renderHook(() => useEmbedSessionHandoff())
+    deliver(handOver)
+    expect(vi.mocked(classifyEmbedSessionMessage)).toHaveBeenLastCalledWith(
+      expect.objectContaining({ origin: PARENT_ORIGIN }),
+      parent,
+      { selfOrigin: window.location.origin },
+    )
   })
 })

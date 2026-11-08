@@ -11,12 +11,34 @@ import { isRecord, type PopupMessageTransport } from "@/lib/popup-message"
  * `*.nodaro.ai` (and the apex) is first-party and trusted — that covers
  * `studio.nodaro.ai`, future `next.studio.nodaro.ai`, etc. without edits here —
  * except the hosts that serve stored files (`STORED_FILE_HOSTS`).
+ *
+ * A parent on this page's OWN https origin is trusted too: a product served
+ * from the same site as this app — as on a white-label deployment that serves
+ * every product from one host — that frames an account page. It grants
+ * nothing such a parent does not already have: a page on this origin reads
+ * and writes this origin's cookies and storage, the session included. On
+ * Nodaro's own hosts the rule above already admits it, so nothing changes
+ * there; a stored-file host stays refused even as its own parent.
+ *
  * localhost is allowed only in dev. Everything else is rejected.
  */
 
 export interface EmbedParentOptions {
   /** Allow `localhost` / `127.0.0.1` parents. Defaults to dev builds only. */
   readonly allowLocalhost?: boolean
+  /** This page's own origin (`window.location.origin`), which a parent may share. Absent: no parent is trusted for sharing it. */
+  readonly selfOrigin?: string
+}
+
+/** `raw` as a serialized https origin, or undefined. */
+function httpsOriginOf(raw: string | undefined): string | undefined {
+  if (!raw) return undefined
+  try {
+    const url = new URL(raw)
+    return url.protocol === "https:" ? url.origin : undefined
+  } catch {
+    return undefined
+  }
 }
 
 /**
@@ -31,7 +53,7 @@ const STORED_FILE_HOSTS: ReadonlySet<string> = new Set(["cdn.nodaro.ai", "assets
 /** Whether `origin` (an exact origin string, e.g. `MessageEvent.origin`) may hand us a session. */
 export function isAllowedEmbedParent(
   origin: string,
-  { allowLocalhost = import.meta.env.DEV }: EmbedParentOptions = {},
+  { allowLocalhost = import.meta.env.DEV, selfOrigin }: EmbedParentOptions = {},
 ): boolean {
   let url: URL
   try {
@@ -48,6 +70,13 @@ export function isAllowedEmbedParent(
   // are rejected.
   if (url.protocol === "https:" && (host === "nodaro.ai" || host.endsWith(".nodaro.ai"))) {
     return !STORED_FILE_HOSTS.has(host)
+  }
+
+  // This page's own https origin (see the header). Compared as serialized
+  // origins, so scheme, host and port must all match.
+  const own = httpsOriginOf(selfOrigin)
+  if (own !== undefined && url.protocol === "https:" && url.origin === own) {
+    return true
   }
 
   if (allowLocalhost && (host === "localhost" || host === "127.0.0.1")) {
