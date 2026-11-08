@@ -28,6 +28,7 @@ export const RUNTIME_CONFIG_KEYS = Object.freeze([
   "surface",
   "moderation",
   "previewStopRule",
+  "mediaOrigin",
 ] as const)
 export type RuntimeConfigKey = (typeof RUNTIME_CONFIG_KEYS)[number]
 
@@ -111,6 +112,13 @@ export interface NodaroRuntimeConfig {
   readonly moderation?: { readonly uploadImage?: boolean }
   /** A platform editor rollout flag. */
   readonly previewStopRule?: boolean
+  /**
+   * The https origin this deployment serves user media from
+   * (`https://media.example.com`). Present only on a white-label deployment
+   * whose public media URL is https; absent, a reader trusts no media host
+   * beyond its own site.
+   */
+  readonly mediaOrigin?: string
 }
 
 // ── Rules shared by the platform and its readers ─────────────────────────────
@@ -143,6 +151,23 @@ export function isBrandLogoRef(value: unknown): value is string {
     if (value.startsWith("/")) return !value.startsWith("//") && new URL(value, PROBE_ORIGIN).origin === PROBE_ORIGIN
     const url = new URL(value)
     return url.protocol === "https:" && url.hostname.length > 0 && !url.username && !url.password
+  } catch {
+    return false
+  }
+}
+
+/**
+ * An https origin, spelled exactly as a browser spells one
+ * (`https://media.example.com`, a port only when it is not 443): what
+ * `new URL(src).origin` is compared with, so a path, a trailing slash,
+ * credentials, another letter case or any other scheme could never match, and
+ * is not one.
+ */
+export function isHttpsOrigin(value: unknown): value is string {
+  if (typeof value !== "string") return false
+  try {
+    const url = new URL(value)
+    return url.protocol === "https:" && url.origin === value
   } catch {
     return false
   }
@@ -313,6 +338,7 @@ export function parseRuntimeConfig(raw: unknown): NodaroRuntimeConfig {
   if (isRecord(raw.surface)) out.surface = parseRuntimeSurface(raw.surface)
   if (isRecord(raw.moderation) && raw.moderation.uploadImage === true) out.moderation = { uploadImage: true }
   if (raw.previewStopRule === true) out.previewStopRule = true
+  if (isHttpsOrigin(raw.mediaOrigin)) out.mediaOrigin = raw.mediaOrigin
   return out
 }
 

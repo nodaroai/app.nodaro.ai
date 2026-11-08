@@ -5,6 +5,7 @@ import {
   WORLD_IDS,
   WORLD_REQUIRED_NODE_TYPES,
   isBrandLogoRef,
+  isHttpsOrigin,
   isSsoOnly,
   isWorldId,
   orderWorlds,
@@ -95,6 +96,35 @@ describe("isBrandLogoRef — a path on the page's own site, or an https URL", ()
   })
 })
 
+describe("isHttpsOrigin — an https origin, spelled exactly as a browser spells one", () => {
+  it.each(["https://media.example.com", "https://media.example.com:8443", "https://xn--mnchen-3ya.example"])("accepts %s", (value) => {
+    expect(isHttpsOrigin(value)).toBe(true)
+  })
+
+  it.each([
+    "http://media.example.com",
+    "https://media.example.com/",
+    "https://media.example.com/bucket",
+    "https://media.example.com?x=1",
+    "https://media.example.com#x",
+    "https://user:pass@media.example.com",
+    "https://MEDIA.example.com",
+    "https://media.example.com:443",
+    " https://media.example.com",
+    "https://media.example.com ",
+    "//media.example.com",
+    "media.example.com",
+    "data:image/png;base64,AAAA",
+    "javascript:alert(1)",
+    "",
+    42,
+    null,
+    undefined,
+  ])("refuses %j", (value) => {
+    expect(isHttpsOrigin(value)).toBe(false)
+  })
+})
+
 describe("the same-origin sentinels never become an absolute URL", () => {
   it('apiUrl "/" resolves to relative (""); absent to undefined; anything else verbatim', () => {
     expect(resolveRuntimeApiBase({ apiUrl: "/" })).toBe("")
@@ -133,6 +163,18 @@ describe("parseRuntimeConfig — typed, lenient, never throws", () => {
   it.each([undefined, null, "x", 42, [1, 2]])("anything but an object is an empty config (%j)", (raw) => {
     expect(() => parseRuntimeConfig(raw)).not.toThrow()
     expect(parseRuntimeConfig(raw)).toEqual({})
+  })
+
+  it("keeps mediaOrigin only when it is an https origin", () => {
+    expect(parseRuntimeConfig({ apiUrl: "/", mediaOrigin: "https://media.example.com" })).toEqual({ apiUrl: "/", mediaOrigin: "https://media.example.com" })
+    for (const malformed of ["http://media.example.com", "https://media.example.com/", "https://media.example.com/bucket", "media.example.com", "", "  ", 7, null, ["https://media.example.com"]]) {
+      expect(parseRuntimeConfig({ apiUrl: "/", mediaOrigin: malformed })).toEqual({ apiUrl: "/" })
+    }
+  })
+
+  it("no mediaOrigin key ⇒ no mediaOrigin (a deployment that is not white-label)", () => {
+    expect("mediaOrigin" in parseRuntimeConfig({ apiUrl: "/" })).toBe(false)
+    expect("mediaOrigin" in parseRuntimeConfig({})).toBe(false)
   })
 
   it("no surface key ⇒ no surface (the deployment configured none)", () => {

@@ -50,9 +50,19 @@ describe("whiteLabelWorlds", () => {
 
 describe("imageOriginsFor", () => {
   it("the logo's https origin, when the logo is on another host; none for a path on the site", () => {
-    expect(imageOriginsFor("https://media.example.com/brand/logo.svg")).toEqual(["https://media.example.com"])
-    expect(imageOriginsFor("/brand/logo.svg")).toEqual([])
-    expect(imageOriginsFor(undefined)).toEqual([])
+    expect(imageOriginsFor("https://media.example.com/brand/logo.svg", undefined)).toEqual(["https://media.example.com"])
+    expect(imageOriginsFor("/brand/logo.svg", undefined)).toEqual([])
+    expect(imageOriginsFor(undefined, undefined)).toEqual([])
+  })
+
+  it("the deployment's media host beside the logo's", () => {
+    expect(imageOriginsFor("https://logo.example.com/logo.svg", "https://media.example.com")).toEqual(["https://logo.example.com", "https://media.example.com"])
+    expect(imageOriginsFor("/brand/logo.svg", "https://media.example.com")).toEqual(["https://media.example.com"])
+    expect(imageOriginsFor(undefined, "https://media.example.com")).toEqual(["https://media.example.com"])
+  })
+
+  it("one origin once, when the logo lives on the media host", () => {
+    expect(imageOriginsFor("https://media.example.com/brand/logo.svg", "https://media.example.com")).toEqual(["https://media.example.com"])
   })
 })
 

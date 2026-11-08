@@ -49,21 +49,25 @@ export function openSitePage(href: string): void {
   window.location.assign(href)
 }
 
-/**
- * The https origins, beyond the page's own site, the header may draw images
- * from: the logo's, when it lives on another host. The runtime config names
- * no media host of the deployment's (TODO(nodaro): add one to the shared
- * contract if the header ever draws the deployment's own media), so anything
- * else the header would draw from another origin shows its stand-in instead.
- */
-export function imageOriginsFor(logo: string | undefined): string[] {
-  if (!logo || logo.startsWith("/")) return []
+/** The logo's https origin, when it lives on another host. */
+function logoOrigin(logo: string | undefined): string | undefined {
+  if (!logo || logo.startsWith("/")) return undefined
   try {
     const url = new URL(logo)
-    return url.protocol === "https:" ? [url.origin] : []
+    return url.protocol === "https:" ? url.origin : undefined
   } catch {
-    return []
+    return undefined
   }
+}
+
+/**
+ * The https origins, beyond the page's own site, the header may draw images
+ * from: the logo's, when it lives on another host, and the deployment's media
+ * host (`mediaOrigin` in the runtime config), each once. Anything else the
+ * header would draw from another origin shows its stand-in instead.
+ */
+export function imageOriginsFor(logo: string | undefined, mediaOrigin: string | undefined): string[] {
+  return [...new Set([logoOrigin(logo), mediaOrigin])].filter((origin): origin is string => origin !== undefined)
 }
 
 /**

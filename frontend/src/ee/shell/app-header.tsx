@@ -15,6 +15,7 @@ import { NODARO_CLIENT_OPTIONS } from "@/lib/nodaro-client"
 import { createClient } from "@/lib/supabase"
 import { useUiLanguage } from "@/hooks/use-ui-language"
 import { useT } from "@/lib/i18n"
+import { runtimeMediaOrigin } from "@/lib/runtime-config"
 import { siteHeaderMode } from "@/lib/site-header-mode"
 import { availableWorlds, useSurfaceAvailability } from "@/lib/surface-availability"
 import { runtimeSurfaceProfile } from "@/lib/surface-profile"
@@ -128,7 +129,7 @@ interface WhiteLabelWiring {
  *     the server's per-viewer answer once it lands), each at its address on
  *     this same site (`WHITE_LABEL_WORLD_PATHS`), never a build's origins;
  *   - its name and logo (`brand.productName`, `brand.logo`), and images only
- *     from this site and the logo's own host;
+ *     from this site, the logo's own host and its media host (`mediaOrigin`);
  *   - its billing (`billing.selfServe`), and the credit pill in its own unit,
  *     from the figures the server converted (`white-label.ts`,
  *     `headerBalance`), worded in the app's dictionaries;
@@ -172,7 +173,7 @@ function WhiteLabelHeader(props: AppHeaderProps) {
       worlds: whiteLabelWorlds(runtimeSurfaceProfile().worlds, availableWorlds()),
       ...(logo ? { logo: { src: logo, alt: name ?? "" } } : {}),
       ...(name ? { brandName: name } : {}),
-      imageOrigins: imageOriginsFor(logo),
+      imageOrigins: imageOriginsFor(logo, runtimeMediaOrigin()),
       selfServe: surfaceBillingSelfServe(),
       cookieDomain: null,
     },

@@ -23,6 +23,7 @@ export {
   isSsoOnly,
   surfaceRequiresSignIn,
   isBrandLogoRef,
+  isHttpsOrigin,
   resolveRuntimeApiBase,
   resolveRuntimeSupabaseUrl,
   parseRuntimeSurface,

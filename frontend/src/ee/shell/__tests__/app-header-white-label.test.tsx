@@ -117,6 +117,18 @@ describe("the header mount on a white-label deployment", () => {
     expect(props.claimSignupGrant).toBe(false)
   })
 
+  it("may draw images from the deployment's media host, beside the logo's", () => {
+    window.__NODARO_RUNTIME__ = { surface: WHITE_LABEL_SURFACE, mediaOrigin: "https://cdn.acme.example" } as unknown as typeof window.__NODARO_RUNTIME__
+    expect(mount().props().imageOrigins).toEqual(["https://media.acme.example", "https://cdn.acme.example"])
+  })
+
+  it("with no media host in /config.js, or one that is not an https origin: the logo's host alone, as before", () => {
+    expect(mount().props().imageOrigins).toEqual(["https://media.acme.example"])
+    cleanup()
+    window.__NODARO_RUNTIME__ = { surface: WHITE_LABEL_SURFACE, mediaOrigin: "http://cdn.acme.example" } as unknown as typeof window.__NODARO_RUNTIME__
+    expect(mount().props().imageOrigins).toEqual(["https://media.acme.example"])
+  })
+
   it("every link is the deployment's: worlds by path on this site, home the site's root, sign-in this app's page", () => {
     const props = mount().props()
     expect(props.worldHrefs).toEqual(WHITE_LABEL_WORLD_PATHS)

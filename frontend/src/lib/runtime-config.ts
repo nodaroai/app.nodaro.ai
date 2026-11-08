@@ -1,4 +1,5 @@
 import {
+  isHttpsOrigin,
   resolveRuntimeApiBase,
   resolveRuntimeSupabaseUrl,
   type NodaroRuntimeConfig as RuntimeConfigContract,
@@ -218,4 +219,15 @@ export function runtimeUploadModerationEnabled(): boolean {
  */
 export function runtimePreviewStopRule(): boolean {
   return runtime().previewStopRule === true
+}
+
+/**
+ * The https origin this deployment serves user media from, as `/config.js`
+ * names it, or undefined: only a white-label deployment's `/config.js` carries
+ * one, and a value that is not an https origin is no value (the shared
+ * contract's rule).
+ */
+export function runtimeMediaOrigin(): string | undefined {
+  const value = runtime().mediaOrigin
+  return isHttpsOrigin(value) ? value : undefined
 }

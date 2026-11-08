@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { config } from "../config.js"
 import { runtimeSurfaceProfile, __resetSurfaceProfileCacheForTests } from "../surface-profile.js"
-import { renderSurfaceProfileForRuntimeConfig } from "../surface-profile-runtime-config.js"
+import { renderMediaOriginForRuntimeConfig, renderSurfaceProfileForRuntimeConfig } from "../surface-profile-runtime-config.js"
 
 /**
  * SAI-3 / H10 — one parser for the surface profile, by construction.
@@ -76,13 +76,77 @@ describe("renderSurfaceProfileForRuntimeConfig — the browser gets the RESOLVED
   })
 })
 
+describe("renderMediaOriginForRuntimeConfig — only a white-label surface names its media host", () => {
+  const WHITE_LABEL = JSON.stringify({ header: "white-label" })
+  const REAL_MEDIA_URL = config.R2_PUBLIC_URL
+  afterEach(() => {
+    config.R2_PUBLIC_URL = REAL_MEDIA_URL
+  })
+
+  it("a white-label surface: the https origin of the public media URL, any path dropped", () => {
+    config.EDITION = "business"
+    setEnv(WHITE_LABEL)
+    for (const url of ["https://media.acme.example", "https://media.acme.example/", "https://media.acme.example/bucket/path"]) {
+      config.R2_PUBLIC_URL = url
+      expect(renderMediaOriginForRuntimeConfig()).toBe("https://media.acme.example")
+    }
+    config.R2_PUBLIC_URL = "https://media.acme.example:8443/bucket"
+    expect(renderMediaOriginForRuntimeConfig()).toBe("https://media.acme.example:8443")
+  })
+
+  it("a set header other than the two modes reads as white-label here too (the schema's own rule)", () => {
+    config.EDITION = "cloud"
+    config.R2_PUBLIC_URL = "https://media.acme.example"
+    setEnv(JSON.stringify({ header: "minimal" }))
+    expect(renderMediaOriginForRuntimeConfig()).toBe("https://media.acme.example")
+  })
+
+  it.each(["", "http://localhost:3000/storage/nodaro-assets", "http://media.acme.example", "media.acme.example", "not a url"])(
+    "a media URL that is not https (%j) names no origin",
+    (url) => {
+      config.EDITION = "cloud"
+      config.R2_PUBLIC_URL = url
+      setEnv(WHITE_LABEL)
+      expect(renderMediaOriginForRuntimeConfig()).toBe("")
+    },
+  )
+
+  // Nodaro's own /config.js stays byte-identical: whatever its media URL is, its
+  // surface is not white-label, so the backend answers "" and the writer adds nothing.
+  it.each([
+    ["no profile", undefined],
+    ["a blank profile", "   "],
+    ["a profile that says nothing about the header", JSON.stringify({ nav: { hide: ["gallery"] } })],
+    ['header "default"', JSON.stringify({ header: "default" })],
+  ])("%s: nothing, whatever the media URL", (_label, profile) => {
+    config.EDITION = "cloud"
+    config.R2_PUBLIC_URL = "https://assets.nodaro.ai"
+    setEnv(profile)
+    expect(renderMediaOriginForRuntimeConfig()).toBe("")
+  })
+
+  it("community: nothing, even with a white-label profile (the gate is closed)", () => {
+    config.EDITION = "community"
+    config.R2_PUBLIC_URL = "https://media.acme.example"
+    setEnv(WHITE_LABEL)
+    expect(renderMediaOriginForRuntimeConfig()).toBe("")
+  })
+
+  it("a configured profile that fails to load: nothing", () => {
+    config.EDITION = "business"
+    config.R2_PUBLIC_URL = "https://media.acme.example"
+    setEnv("{ not json")
+    expect(renderMediaOriginForRuntimeConfig()).toBe("")
+  })
+})
+
 describe("print-surface-profile CLI — stdout is exactly the payload", () => {
   const HERE = dirname(fileURLToPath(import.meta.url))
   const CLI = resolve(HERE, "..", "print-surface-profile.ts")
   const BACKEND = resolve(HERE, "..", "..", "..")
 
-  function run(extra: Record<string, string>) {
-    return spawnSync(process.execPath, ["--import", "tsx", CLI], {
+  function run(extra: Record<string, string>, args: readonly string[] = []) {
+    return spawnSync(process.execPath, ["--import", "tsx", CLI, ...args], {
       cwd: BACKEND,
       encoding: "utf8",
       // Minimal env: what config.ts hard-requires, nothing inherited (no
@@ -121,6 +185,20 @@ describe("print-surface-profile CLI — stdout is exactly the payload", () => {
     const res = run({ EDITION: "community", NODARO_SURFACE_PROFILE: JSON.stringify(AUTHORED) })
     expect(res.status).toBe(0)
     expect(res.stdout).toBe("")
+  })
+
+  it("--media-origin prints exactly the origin on a white-label surface, and nothing else", () => {
+    const res = run({ EDITION: "business", NODARO_SURFACE_PROFILE: JSON.stringify({ header: "white-label" }), R2_PUBLIC_URL: "https://media.acme.example/bucket" }, ["--media-origin"])
+    expect(res.status).toBe(0)
+    expect(res.stdout).toBe("https://media.acme.example")
+  })
+
+  it("--media-origin prints nothing on a deployment that is not white-label, whatever its media URL", () => {
+    for (const profile of [undefined, JSON.stringify({ header: "default" })]) {
+      const res = run({ EDITION: "cloud", R2_PUBLIC_URL: "https://assets.nodaro.ai", ...(profile ? { NODARO_SURFACE_PROFILE: profile } : {}) }, ["--media-origin"])
+      expect(res.status).toBe(0)
+      expect(res.stdout).toBe("")
+    }
   })
 })
 

@@ -1303,6 +1303,16 @@ logo is dropped with a warning and the rest of `brand` is kept.
   `sso`. Accepts the same forms as `imports.links`; any other value reads as
   `true`.
 
+`/config.js` also carries one key the profile does not set. `mediaOrigin` is
+the `https://` origin of `R2_PUBLIC_URL` (any path dropped): the host a
+white-label deployment serves its users' media from. It is written only when
+the profile says `header: "white-label"`. The white-label header then draws
+images from that host as well as from the site and the logo's host, and client
+apps read the same key through the contract. With any other header, or an
+`R2_PUBLIC_URL` that is not `https://`, the key is absent and `/config.js` is
+unchanged. There is nothing to set: it follows `R2_PUBLIC_URL` at the next
+restart.
+
 Example (a single-sign-on deployment with its own header, three worlds and
 no link imports):
 

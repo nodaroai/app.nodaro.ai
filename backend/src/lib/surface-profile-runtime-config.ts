@@ -1,4 +1,22 @@
-import { SURFACE_PROFILE_DEFAULT, runtimeSurfaceProfile, surfaceGateOpen } from "./surface-profile.js"
+import { isHttpsOrigin } from "@nodaro/shared/runtime-config"
+import { config } from "./config.js"
+import { SURFACE_PROFILE_DEFAULT, runtimeSurfaceProfile, surfaceGateOpen, type SurfaceProfile } from "./surface-profile.js"
+
+/**
+ * The profile a page should be told about, or null whenever the browser should
+ * fall back to its own code default: nothing configured, the edition gate
+ * closed (community ignores the env, d2), or the configured profile failed to
+ * load. The last case is the SURFACE_PROFILE_DEFAULT identity signal
+ * `surfaceProfileFailedToLoad` reads; app.ts turns it into exit(1) on a gated
+ * edition (H8), so null here is only ever observed for the length of a failed
+ * boot.
+ */
+function configuredProfile(): SurfaceProfile | null {
+  if (!process.env.NODARO_SURFACE_PROFILE?.trim()) return null
+  if (!surfaceGateOpen()) return null
+  const profile = runtimeSurfaceProfile()
+  return profile === SURFACE_PROFILE_DEFAULT ? null : profile
+}
 
 /**
  * The deployment surface profile as the BROWSER must receive it (SAI-3 / H10).
@@ -18,17 +36,11 @@ import { SURFACE_PROFILE_DEFAULT, runtimeSurfaceProfile, surfaceGateOpen } from 
  * see a key the backend dropped, by construction rather than by drift test.
  *
  * Returns "" — not "{}" — whenever the browser should fall back to its own code
- * default: nothing configured, the edition gate closed (community ignores the
- * env, d2), or the configured profile failed to load. The last case is the
- * SURFACE_PROFILE_DEFAULT identity signal `surfaceProfileFailedToLoad` reads;
- * app.ts turns it into exit(1) on a gated edition (H8), so "" here is only ever
- * observed for the length of a failed boot.
+ * default (`configuredProfile`).
  */
 export function renderSurfaceProfileForRuntimeConfig(): string {
-  if (!process.env.NODARO_SURFACE_PROFILE?.trim()) return ""
-  if (!surfaceGateOpen()) return ""
-  const profile = runtimeSurfaceProfile()
-  if (profile === SURFACE_PROFILE_DEFAULT) return ""
+  const profile = configuredProfile()
+  if (!profile) return ""
   // REDACTION: three `billing` keys are backend-only by contract, and
   // /config.js is world-readable — so they are stripped here, at the ONE
   // render point, rather than trusted to a frontend that must never receive
@@ -59,4 +71,23 @@ export function renderSurfaceProfileForRuntimeConfig(): string {
     return JSON.stringify({ ...profile, billing })
   }
   return JSON.stringify(profile)
+}
+
+/**
+ * `/config.js`'s `mediaOrigin`: the https origin of the deployment's public
+ * media URL (R2_PUBLIC_URL, any path dropped), so a white-label deployment's
+ * header may draw its own media, served from a host other than the site.
+ *
+ * "" unless the surface is white-label, and "" for a media URL that is not
+ * https. Every other deployment's `/config.js` stays byte-identical, whatever
+ * its media URL.
+ */
+export function renderMediaOriginForRuntimeConfig(): string {
+  if (configuredProfile()?.header !== "white-label" || !config.R2_PUBLIC_URL) return ""
+  try {
+    const { origin } = new URL(config.R2_PUBLIC_URL)
+    return isHttpsOrigin(origin) ? origin : ""
+  } catch {
+    return ""
+  }
 }

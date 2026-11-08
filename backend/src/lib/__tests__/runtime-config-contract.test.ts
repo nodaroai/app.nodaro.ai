@@ -8,7 +8,7 @@ import { RUNTIME_CONFIG_KEYS, parseRuntimeConfig } from "@nodaro/shared/runtime-
 import { buildRuntimeConfig } from "../../../../tools/build-runtime-config.mjs"
 import { config } from "../config.js"
 import { __resetSurfaceProfileCacheForTests } from "../surface-profile.js"
-import { renderSurfaceProfileForRuntimeConfig } from "../surface-profile-runtime-config.js"
+import { renderMediaOriginForRuntimeConfig, renderSurfaceProfileForRuntimeConfig } from "../surface-profile-runtime-config.js"
 
 /**
  * /config.js is read by products outside this repo through the contract in
@@ -24,8 +24,10 @@ describe("the /config.js writer and the contract agree on every key", () => {
   it("every RUNTIME_* input the writer reads lands on a contract key, and every contract key can be written", () => {
     const inputs = [...new Set([...readFileSync(WRITER, "utf8").matchAll(/env\.(RUNTIME_[A-Z_]+)/g)].map((m) => m[1]))]
     expect(inputs.length).toBeGreaterThan(0)
-    // "true" satisfies every flag and is a non-blank string for every URL; the surface needs a JSON object.
-    const env = Object.fromEntries(inputs.map((name) => [name, name === "RUNTIME_SURFACE_PROFILE" ? "{}" : "true"]))
+    // "true" satisfies every flag and is a non-blank string for every URL; the surface needs a JSON object,
+    // and a reader keeps a media origin only when it is one.
+    const inputValue = (name: string) => (name === "RUNTIME_SURFACE_PROFILE" ? "{}" : name === "RUNTIME_MEDIA_ORIGIN" ? "https://media.example.com" : "true")
+    const env = Object.fromEntries(inputs.map((name) => [name, inputValue(name)]))
     const written = Object.keys(buildRuntimeConfig(env) as Record<string, unknown>).sort()
     expect(written).toEqual([...RUNTIME_CONFIG_KEYS].sort())
     // …and a reader keeps each one.
@@ -36,8 +38,10 @@ describe("the /config.js writer and the contract agree on every key", () => {
 describe("the backend's surface projection reaches a reader whole", () => {
   const REAL_EDITION = config.EDITION
   const REAL_ENV = process.env.NODARO_SURFACE_PROFILE
+  const REAL_MEDIA_URL = config.R2_PUBLIC_URL
   afterEach(() => {
     config.EDITION = REAL_EDITION
+    config.R2_PUBLIC_URL = REAL_MEDIA_URL
     if (REAL_ENV === undefined) delete process.env.NODARO_SURFACE_PROFILE
     else process.env.NODARO_SURFACE_PROFILE = REAL_ENV
     __resetSurfaceProfileCacheForTests()
@@ -87,6 +91,15 @@ describe("the backend's surface projection reaches a reader whole", () => {
     expect(read).toEqual(rendered)
     // The server-only billing keys were stripped before either side saw them.
     expect(JSON.stringify(read)).not.toMatch(/payerAccount|defaultAllowanceUnits|allowances|billing@acme/)
+  })
+
+  it("the media origin the backend prints is what a reader keeps", () => {
+    config.EDITION = "cloud"
+    config.R2_PUBLIC_URL = "https://media.acme.example/bucket"
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ header: "white-label" })
+    __resetSurfaceProfileCacheForTests()
+    const written = buildRuntimeConfig({ RUNTIME_MEDIA_ORIGIN: renderMediaOriginForRuntimeConfig() })
+    expect(parseRuntimeConfig(written).mediaOrigin).toBe("https://media.acme.example")
   })
 
   it("a profile that sets none of the new keys: the reader adds only their defaults", () => {

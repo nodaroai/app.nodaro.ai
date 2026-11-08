@@ -47,6 +47,10 @@ export function buildRuntimeConfig(env) {
     // strict way as config.ts. Off → no key, so the editor keeps the rule off.
     previewStopRule:
       env.RUNTIME_PREVIEW_STOP_RULE === "true" || env.RUNTIME_PREVIEW_STOP_RULE === "1" ? true : undefined,
+    // The backend's answer, carried as it is (print-surface-profile.js
+    // --media-origin): the https origin of the deployment's media host on a
+    // white-label surface, "" everywhere else, so no other /config.js changes.
+    mediaOrigin: pick(env.RUNTIME_MEDIA_ORIGIN),
   }
   for (const k of Object.keys(cfg)) if (cfg[k] === undefined) delete cfg[k]
   return cfg

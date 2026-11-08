@@ -20,14 +20,18 @@ import { pathToFileURL } from "node:url"
  * Any failure (config.ts throwing on a missing required env, an import error)
  * exits non-zero with nothing on stdout; start.sh treats that as "no override"
  * and the backend's own boot then reports the real cause.
+ *
+ * `--media-origin` prints /config.js's `mediaOrigin` instead of the profile,
+ * with the same guarantees (the backend decides it from its own resolved
+ * profile and config: see `renderMediaOriginForRuntimeConfig`).
  */
 const isCli = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href
 
 if (isCli) {
   process.env.DOTENV_CONFIG_QUIET ??= "true"
   try {
-    const { renderSurfaceProfileForRuntimeConfig } = await import("./surface-profile-runtime-config.js")
-    process.stdout.write(renderSurfaceProfileForRuntimeConfig())
+    const { renderMediaOriginForRuntimeConfig, renderSurfaceProfileForRuntimeConfig } = await import("./surface-profile-runtime-config.js")
+    process.stdout.write(process.argv[2] === "--media-origin" ? renderMediaOriginForRuntimeConfig() : renderSurfaceProfileForRuntimeConfig())
   } catch (err) {
     console.error("[print-surface-profile] could not resolve the surface profile:", (err as Error).message)
     process.exitCode = 1

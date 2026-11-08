@@ -142,3 +142,56 @@ test("start.sh hands PREVIEW_STOP_RULE_ENABLED to the writer", () => {
   const writerCall = dockerfile.slice(dockerfile.indexOf("RUNTIME_API_URL=\"$RUNTIME_API_URL_EFFECTIVE\""))
   assert.match(writerCall.slice(0, writerCall.indexOf("build-runtime-config.mjs")), /RUNTIME_PREVIEW_STOP_RULE="\$PREVIEW_STOP_RULE_ENABLED"/)
 })
+
+// The deployment's media origin. The backend decides it — "" except on a
+// white-label surface (print-surface-profile.js --media-origin, covered in
+// backend/src/lib/__tests__/print-surface-profile.test.ts) — and start.sh hands
+// the answer over, so the writer only carries it. A blank is no key.
+test("RUNTIME_MEDIA_ORIGIN lands on mediaOrigin", () => {
+  assert.equal(buildRuntimeConfig({ RUNTIME_MEDIA_ORIGIN: "https://media.example.com" }).mediaOrigin, "https://media.example.com")
+})
+
+test("a blank RUNTIME_MEDIA_ORIGIN leaves no key (every deployment that is not white-label)", () => {
+  for (const value of [undefined, "", "   "]) {
+    assert.ok(!("mediaOrigin" in buildRuntimeConfig({ RUNTIME_MEDIA_ORIGIN: value })), String(value))
+  }
+})
+
+test("start.sh asks the backend for the media origin and hands it to the writer", () => {
+  const dockerfile = readFileSync(resolve(dirname(ENTRY), "..", "Dockerfile"), "utf8")
+  assert.match(
+    dockerfile,
+    /RUNTIME_MEDIA_ORIGIN_RESOLVED="\$\(node \/app\/backend\/dist\/lib\/print-surface-profile\.js --media-origin\)" \|\| RUNTIME_MEDIA_ORIGIN_RESOLVED=""/,
+  )
+  const writerCall = dockerfile.slice(dockerfile.indexOf("RUNTIME_API_URL=\"$RUNTIME_API_URL_EFFECTIVE\""))
+  assert.match(writerCall.slice(0, writerCall.indexOf("build-runtime-config.mjs")), /RUNTIME_MEDIA_ORIGIN="\$RUNTIME_MEDIA_ORIGIN_RESOLVED"/)
+})
+
+// What start.sh passes on Nodaro's own deployments: the API URL, the anon key,
+// and every other input blank (no surface profile, so the backend's media-origin
+// answer is blank too).
+const NODARO_DEPLOYMENT_ENV = {
+  RUNTIME_API_URL: "https://app.nodaro.ai",
+  RUNTIME_SUPABASE_URL: "",
+  RUNTIME_SUPABASE_ANON_KEY: "public-anon-key",
+  RUNTIME_FREECUT_URL: "",
+  RUNTIME_AUDIOMASS_URL: "",
+  RUNTIME_DEFAULT_LOCALE: "",
+  RUNTIME_SURFACE_PROFILE: "",
+  RUNTIME_PREVIEW_STOP_RULE: "",
+}
+// The exact bytes the writer printed for that environment BEFORE this key existed.
+const NODARO_CONFIG_JS = 'window.__NODARO_RUNTIME__={"apiUrl":"https://app.nodaro.ai","supabaseAnonKey":"public-anon-key"};\n'
+const configJs = (env) => spawnSync(process.execPath, [ENTRY], { encoding: "utf8", env }).stdout
+
+test("CLI entry: Nodaro's own /config.js is byte-identical", () => {
+  assert.equal(configJs(NODARO_DEPLOYMENT_ENV), NODARO_CONFIG_JS)
+  assert.equal(configJs({ ...NODARO_DEPLOYMENT_ENV, RUNTIME_MEDIA_ORIGIN: "" }), NODARO_CONFIG_JS)
+})
+
+test("CLI entry: a white-label deployment gets exactly one more key, after every existing byte", () => {
+  assert.equal(
+    configJs({ ...NODARO_DEPLOYMENT_ENV, RUNTIME_MEDIA_ORIGIN: "https://media.example.com" }),
+    'window.__NODARO_RUNTIME__={"apiUrl":"https://app.nodaro.ai","supabaseAnonKey":"public-anon-key","mediaOrigin":"https://media.example.com"};\n',
+  )
+})
