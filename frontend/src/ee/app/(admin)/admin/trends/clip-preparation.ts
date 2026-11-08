@@ -135,7 +135,7 @@ export function environmentsThatCannotTakeSteps(envs: readonly TrendEngineEnviro
  * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
  * in that order) whose engine cannot enforce a forced Style — none recorded,
  * or one that does not declare `castSwap.styleChoice`. Unknown while the
- * environments are (undefined). "Always Precise" and "Always Flex" are
+ * environments are (undefined). "Precise in Nodaro Motion" and "Always Flex" are
  * offered only when this is empty (the setting is shared: the server refuses
  * the save otherwise, 409 `engine_unsupported`); "Users choose" always is.
  */
@@ -202,39 +202,51 @@ export function environmentsThatCannotRoutePreciseStyle(envs: readonly TrendEngi
 }
 
 /**
- * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) that do
- * not keep a run whose art style is photographic Precise when the route's
- * setting says so (`photographicStyles: "precise"`): its engine does not
- * declare `castSwap.preciseStyleRoutePhotographic`, or its platform (the app,
- * whose read of the row would drop the key) does not claim it. Such an
- * environment routes every style, as before. Unknown while the environments
- * are (undefined). Nothing waits for it.
+ * A part of the Precise art-style route (`nodaro_motion_precise_style_route`)
+ * that an environment takes only when its engine declares it AND its platform
+ * (the app, whose read of the row would drop the key, and whose admin's save
+ * would erase it) claims it, under the same name:
+ * - `preciseStyleRoutePhotographic`: a stored `photographicStyles: "precise"`
+ *   keeps a run whose art style is photographic Precise;
+ * - `preciseStyleRoutePerStyle`: the per-style map (`styleRoutes`) decides
+ *   each style's path.
  */
-export function environmentsThatRouteEveryStyle(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+export type PreciseStyleRouteFlag = "preciseStyleRoutePhotographic" | "preciseStyleRoutePerStyle"
+
+/**
+ * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) that do
+ * not take `flag` of the Precise art-style route (`PreciseStyleRouteFlag`):
+ * none recorded, or one whose engine does not declare `castSwap[flag]`, or
+ * whose platform does not claim `platform[flag]`. Unknown while the
+ * environments are (undefined). Nothing waits for either. One without
+ * `preciseStyleRoutePerStyle` ignores the map: its engine routes every style
+ * as Flex, except that one with `preciseStyleRoutePhotographic` keeps the
+ * photographic styles Precise on `photographicStyles: "precise"`, stored, or
+ * answered in the map's place when every Filmed style is "precise" in it by a
+ * platform that claims the Filmed fallback
+ * (`environmentsThatCannotSendFilmedFallback`).
+ */
+export function environmentsThatCannotRouteStyles(envs: readonly TrendEngineEnvironment[] | undefined, flag: PreciseStyleRouteFlag): string[] | undefined {
   if (!envs) return undefined
   return SHARED_SETTING_ENVIRONMENTS.filter((name) => {
     const supports = envs.find((e) => e.env === name)?.supports
-    return supports?.castSwap?.preciseStyleRoutePhotographic !== true || supports.platform?.preciseStyleRoutePhotographic !== true
+    return supports?.castSwap?.[flag] !== true || supports.platform?.[flag] !== true
   })
 }
 
 /**
- * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) that do
- * not route by the route's per-style map (`styleRoutes`): none recorded, or
- * one whose engine does not declare `castSwap.preciseStyleRoutePerStyle`, or
- * whose platform (the app, whose read of the row would drop the map, and whose
- * admin's save would erase it) does not claim it. Such an environment ignores
- * the map: its engine routes every style as Flex, except that one with only
- * `castSwap.preciseStyleRoutePhotographic` still keeps photographic styles
- * Precise on a stored `photographicStyles: "precise"`. Unknown while the
- * environments are (undefined). Nothing waits for it.
+ * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose
+ * platform does not answer an engine that cannot route per style the
+ * photographic path from the per-style map: none recorded, or one whose
+ * platform does not claim `platform.preciseStyleRouteFilmedFallback`. The
+ * translation is the app's, so the engine has no part in it. Such a platform
+ * sends that engine the map, which it ignores, and no photographic path: every
+ * style is made the Flex way there. Unknown while the environments are
+ * (undefined).
  */
-export function environmentsThatCannotRoutePerStyle(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
+export function environmentsThatCannotSendFilmedFallback(envs: readonly TrendEngineEnvironment[] | undefined): string[] | undefined {
   if (!envs) return undefined
-  return SHARED_SETTING_ENVIRONMENTS.filter((name) => {
-    const supports = envs.find((e) => e.env === name)?.supports
-    return supports?.castSwap?.preciseStyleRoutePerStyle !== true || supports.platform?.preciseStyleRoutePerStyle !== true
-  })
+  return SHARED_SETTING_ENVIRONMENTS.filter((name) => envs.find((e) => e.env === name)?.supports.platform?.preciseStyleRouteFilmedFallback !== true)
 }
 
 /**

@@ -10,9 +10,11 @@
  *                                      preciseArtStyleAlone: { "motion-prism": boolean, "motion-pulse": boolean } }
  *
  * `Choice = "user" | "precise" | "flex"`: `"user"` = people choose a direct
- * run's style (Precise or Flex) as before; `"precise"` / `"flex"` = every
- * direct run and quote of that engine runs in that style whatever the
- * request's `style` says, so a client shows no Style control for it. Read
+ * run's style (Precise or Flex) as before; `"flex"` = every direct run and
+ * quote of that engine runs Flex whatever the request's `style` says;
+ * `"precise"` = a client runs Precise, and the engine (from plugin 0.456.0)
+ * makes a request that asks for Flex a Flex run. Either way a client shows no
+ * Style control for it. Read
  * from the admin's setting (`nodaro_motion_style`, lib/nodaro-motion-style.ts)
  * through the settings cache (about 60 s), never the database per request.
  *

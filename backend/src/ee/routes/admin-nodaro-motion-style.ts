@@ -8,10 +8,12 @@
  *
  * The setting (`nodaro_motion_style`, lib/nodaro-motion-style.ts) says, per
  * engine, whether people choose a direct run's style (`"user"`, the default)
- * or every direct run and quote of that engine is Precise (`"precise"`) or
- * Flex (`"flex"`), whatever the request's `style` says — the API, the SDK and
- * MCP alike. Clients read it through `GET /v1/cast-swap/style-choice` to hide
- * their Style control. A trend run keeps its own trend's style.
+ * or it is forced. `"flex"` (Always Flex): every direct run and quote of that
+ * engine is Flex, whatever the request's `style` says — the API, the SDK and
+ * MCP alike. `"precise"` (Precise in Nodaro Motion): clients run Precise, and
+ * the engine (from plugin 0.456.0) makes a request that asks for Flex a Flex
+ * run. Clients read it through `GET /v1/cast-swap/style-choice` to hide their
+ * Style control. A trend run keeps its own trend's style.
  *
  * A save that forces any engine's style is 409 `engine_unsupported` while any
  * environment's engine does not declare `castSwap.styleChoice`

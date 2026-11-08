@@ -12148,7 +12148,7 @@ export interface TrendEngineEnvironment {
       preciseStyleRoute?: boolean
       /** The engine keeps a run whose art style is photographic Precise when the route's setting says so; absent = it routes every style. */
       preciseStyleRoutePhotographic?: boolean
-      /** The engine reads the route's per-style map (`styleRoutes`); absent = it ignores the map: it routes every style as Flex, except that one with `preciseStyleRoutePhotographic` still keeps photographic styles Precise on a stored `photographicStyles: "precise"`. */
+      /** The engine reads the route's per-style map (`styleRoutes`); absent = it is answered no map: it routes every style as Flex, except that one with `preciseStyleRoutePhotographic` keeps photographic styles Precise on `photographicStyles: "precise"`, stored or answered in the map's place when every Filmed style is "precise" in it. */
       preciseStyleRoutePerStyle?: boolean
     }
     /**
@@ -12167,6 +12167,8 @@ export interface TrendEngineEnvironment {
       preciseStyleRoutePhotographic?: boolean
       /** The Precise art-style route's per-style map (`styleRoutes`): it keeps the map and answers it to its engine. */
       preciseStyleRoutePerStyle?: boolean
+      /** The Precise art-style route's Filmed fallback: to an engine that cannot read the per-style map it answers `photographicStyles: "precise"` when every Filmed style is "precise" in the map. */
+      preciseStyleRouteFilmedFallback?: boolean
     }
   } & Record<string, unknown>
   updatedAt: string
@@ -13158,7 +13160,7 @@ export async function saveNodaroMotionMotion(motion: NodaroMotionMotion): Promis
 
 // ---- Admin: Nodaro Motion's Style choice for direct runs (/v1/admin/nodaro-motion/style, admin-nodaro-motion-style.ts) ----
 
-/** Who decides a direct run's style on an engine: people (the default), or always Precise / always Flex. */
+/** Who decides a direct run's style on an engine: people (the default), or Precise in Nodaro Motion (`"precise"`) / always Flex (`"flex"`). */
 export type NodaroMotionStyleChoice = "user" | "precise" | "flex"
 
 /** The Style choice per engine, keyed by public id; an engine left out (or "user") lets people choose. */

@@ -15,7 +15,7 @@
  *   GET/PUT /v1/admin/nodaro-motion/steps, GET …/steps/defaults, POST …/steps/check
  *                                         the direct runs' preparation steps per engine (admin-nodaro-motion-steps.ts)
  *   GET/PUT /v1/admin/nodaro-motion/style
- *                                         who chooses a direct run's style per engine: people, or always Precise / Flex (admin-nodaro-motion-style.ts)
+ *                                         who chooses a direct run's style per engine: people, or Precise in Nodaro Motion / always Flex (admin-nodaro-motion-style.ts)
  *   GET/PUT /v1/admin/nodaro-motion/style-only
  *                                         what a direct style-only run does per engine: its path and engine prompt (admin-nodaro-motion-style-only.ts)
  *   GET/PUT /v1/admin/nodaro-motion/precise-art-style

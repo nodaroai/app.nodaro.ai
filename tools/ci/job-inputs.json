@@ -542,6 +542,7 @@
         "backend/src/lib/nodaro-motion-motion.ts",
         "backend/src/lib/nodaro-motion-no-person.ts",
         "backend/src/lib/nodaro-motion-precise-art-style.ts",
+        "backend/src/lib/nodaro-motion-precise-style-route-engine.ts",
         "backend/src/lib/nodaro-motion-precise-style-route.ts",
         "backend/src/lib/nodaro-motion-prompt-parts.ts",
         "backend/src/lib/nodaro-motion-prompt-wording.ts",

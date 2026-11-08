@@ -70,11 +70,24 @@ export interface PlatformSupports {
   /**
    * The Precise art-style route's per-style map (`styleRoutes` of
    * `nodaro_motion_precise_style_route`, lib/nodaro-motion-precise-style-route.ts):
-   * its schemas take the key, and it is answered to its engine. A build from
-   * before drops the map when it reads the row, so its engine gets none, and
-   * its admin's save of the row erases the map for every environment.
+   * its schemas take the key, and it is answered to its engine when the engine
+   * reads it (`castSwap.preciseStyleRoutePerStyle`; `styleRoutesForEngine`).
+   * A build from before drops the map when it reads the row, so its engine
+   * gets none, and its admin's save of the row erases the map for every
+   * environment.
    */
   readonly preciseStyleRoutePerStyle?: boolean
+  /**
+   * The Precise art-style route's Filmed fallback (lib/nodaro-motion-precise-style-route.ts
+   * `styleRoutesForEngine`): to an engine that does not read the per-style map
+   * (no `castSwap.preciseStyleRoutePerStyle`) it answers no map, and
+   * `photographicStyles: "precise"` in its place when every Filmed style is
+   * "precise" in the map, so an engine that takes the photographic path keeps
+   * the Filmed styles Precise. The platform's own translation, not the
+   * engine's. A build from before sends such an engine the map, which it
+   * ignores, and no photographic path: every style is made the Flex way there.
+   */
+  readonly preciseStyleRouteFilmedFallback?: boolean
 }
 
 /** This build's `PlatformSupports`, claimed by the heartbeat (frozen: a fact about this build). */
@@ -84,6 +97,7 @@ export const PLATFORM_SUPPORTS: PlatformSupports = Object.freeze({
   faceMeshLayers: true,
   preciseStyleRoutePhotographic: true,
   preciseStyleRoutePerStyle: true,
+  preciseStyleRouteFilmedFallback: true,
 })
 
 /**

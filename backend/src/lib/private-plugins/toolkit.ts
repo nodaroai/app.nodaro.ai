@@ -150,6 +150,7 @@ import { engineTakesStyleOnly, styleOnlyForPlugin } from "../nodaro-motion-style
 import { engineTakesPreciseArtStyle, preciseArtStyleForPlugin } from "../nodaro-motion-precise-art-style.js"
 import { engineTakesNoPersonSourceClip, noPersonForPlugin } from "../nodaro-motion-no-person.js"
 import { engineRoutesPreciseStyle, preciseStyleRouteForPlugin } from "../nodaro-motion-precise-style-route.js"
+import { styleRoutesForEngine } from "../nodaro-motion-precise-style-route-engine.js"
 import { anyStepsSet, stepsForLoadedEngine, withEarlierStepsKeys } from "../nodaro-motion-steps.js"
 import { loadedEngineTakesSteps } from "../cast-swap-steps.js"
 import { KieVideoProvider } from "../../providers/kie/video.js"
@@ -2359,7 +2360,9 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_precise_style_route: the app settings could not be read")
         const cs = getPluginSupports().castSwap
         if (!engineRoutesPreciseStyle(cs)) return null
-        const route = preciseStyleRouteForPlugin(settings.nodaro_motion_precise_style_route)
+        // The per-style map only to an engine that reads it; any other gets the photographic path in its place
+        // when every Filmed style is kept Precise in it (`styleRoutesForEngine`).
+        const route = styleRoutesForEngine(preciseStyleRouteForPlugin(settings.nodaro_motion_precise_style_route), cs)
         // Its face mesh layers only to an engine that draws them (one that does not would ignore them): else no key,
         // and the routed run draws the Flex masking's lines, as before the key existed.
         if (!route || route.faceMeshLayers === undefined || engineDrawsFaceMeshLayers(cs)) return route

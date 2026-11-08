@@ -1,11 +1,14 @@
 // Admin → Nodaro Motion, one engine's Style choice (the `nodaro_motion_style`
 // setting's entry for the engine): people choose Precise or Flex on every run
-// they start themselves (the default), or every such run is always Precise or
-// always Flex, which also hides the Style choice in Nodaro Motion. A trend
-// keeps its own style.
+// they start themselves (the default), or a style is forced, which also hides
+// the Style choice in Nodaro Motion. "Always Flex" ("flex") is enforced for
+// every direct run, API and agent runs too. "Precise in Nodaro Motion"
+// ("precise") hides the Style choice in clients, and the engine (from plugin
+// 0.456.0) makes a request that asks for Flex a Flex run. A trend keeps its
+// own style.
 //
-// The setting is shared by every environment, so "Always Precise" and
-// "Always Flex" are greyed out, naming the environments, until every one's
+// The setting is shared by every environment, so "Precise in Nodaro Motion"
+// and "Always Flex" are greyed out, naming the environments, until every one's
 // engine enforces it (the server refuses the save otherwise, 409
 // `engine_unsupported`). "Users choose" is always offered, so a forced style
 // can always be taken back.
@@ -16,12 +19,12 @@ import type { NodaroMotionEngine, NodaroMotionStyle, NodaroMotionStyleChoice } f
 
 export const STYLE_CHOICE_OPTIONS: ReadonlyArray<{ value: NodaroMotionStyleChoice; label: string }> = [
   { value: "user", label: "Users choose (Precise or Flex)" },
-  { value: "precise", label: "Always Precise" },
+  { value: "precise", label: "Precise in Nodaro Motion" },
   { value: "flex", label: "Always Flex" },
 ]
 
 export const STYLE_CHOICE_HINT =
-  "Hides the Style choice in Nodaro Motion and runs every direct run in this style (API and agents too). Trends keep their own style."
+  "Hides the Style choice in Nodaro Motion. Always Flex also makes API and agent runs Flex; with Precise in Nodaro Motion, an API or agent request that asks for Flex gets Flex. Trends keep their own style."
 
 /** The setting as it is saved: each engine forced to a style; an engine where people choose is left out. */
 export function styleToSaved(draft: NodaroMotionStyle | null | undefined): NodaroMotionStyle {
@@ -75,7 +78,7 @@ export function StyleChoiceSelect({ value, onChange, missingIn }: Props) {
       <p id={hintId} className="text-xs text-muted-foreground">
         {STYLE_CHOICE_HINT}
         {!forcedOffered && missingIn !== undefined
-          ? ` Always Precise and Always Flex wait for the engine in ${missingIn.join(" and ")}: this setting is shared by every environment.`
+          ? ` Precise in Nodaro Motion and Always Flex wait for the engine in ${missingIn.join(" and ")}: this setting is shared by every environment.`
           : ""}
       </p>
     </div>

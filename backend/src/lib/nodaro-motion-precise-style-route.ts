@@ -27,13 +27,17 @@
  *   one without the flag, or a platform from before it (its tolerant read drops
  *   the key), routes every style alike.
  * - `styleRoutes`: which path such a run takes, art style by art style: a
- *   style's id (the style catalog's, `/^[a-z0-9-]{1,64}$/`) to "precise"
+ *   style's id (the style catalog's, `/^[a-z0-9][a-z0-9-]{0,63}$/`) to "precise"
  *   (left the Precise run, as routing "off" makes it, for that style alone) or
  *   "precise-gray" (left Precise, its sent clip in black and white). A style left out takes
  *   "flex", the default, routed as every style: "flex" is never stored, and
  *   the admin's save refuses it. Stored only when the map is not empty. The
  *   older `photographicStyles` stays readable beside it. The tolerant read
- *   keeps each valid entry and drops the others alone.
+ *   keeps each valid entry and drops the others alone. Only an engine that
+ *   declares `castSwap.preciseStyleRoutePerStyle` is answered the map; any
+ *   other is answered `photographicStyles: "precise"` in its place when every
+ *   Filmed style (`filmedStyleIds`) is "precise" in it, and nothing for it
+ *   otherwise (`styleRoutesForEngine`, in nodaro-motion-precise-style-route-engine.ts).
  * - `routedDepthBlur`: a routed run's OWN depth blur, in the Motion masking's
  *   `depthBlur` bounds (`CAST_SWAP_DEPTH_BLUR_BOUNDS`: 0–40 whole steps, the
  *   sigma at 1080 px tall). Absent or 0 is no blur. It applies only to a run the
@@ -107,8 +111,8 @@ export type PhotographicStylePath = (typeof PHOTOGRAPHIC_STYLE_PATHS)[number]
 export const STYLE_ROUTES = ["precise", "precise-gray"] as const
 export type StyleRoute = (typeof STYLE_ROUTES)[number]
 
-/** An art style's id, as the style catalog spells it. */
-export const STYLE_ROUTE_ID_PATTERN = /^[a-z0-9-]{1,64}$/
+/** An art style's id, as the style catalog spells it: 1–64 of a–z, 0–9 and -, starting with a letter or digit. */
+export const STYLE_ROUTE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/
 
 /** How many accounts the bypass list holds: it is a test list, not an audience. */
 export const PRECISE_STYLE_ROUTE_MAX_EMAILS = 200
@@ -263,4 +267,9 @@ export function parseNodaroMotionPreciseStyleRoute(value: unknown, warn: (msg: s
 /** Whether a (loaded or recorded) Cast Swap engine runs such a run as Flex (`castSwap.preciseStyleRoute`). An engine without it never reads the row. */
 export function engineRoutesPreciseStyle(cs: { readonly preciseStyleRoute?: boolean } | undefined): boolean {
   return cs?.preciseStyleRoute === true
+}
+
+/** Whether a (loaded or recorded) Cast Swap engine reads the per-style map (`castSwap.preciseStyleRoutePerStyle`). */
+export function engineRoutesPerStyle(cs: { readonly preciseStyleRoutePerStyle?: boolean } | undefined): boolean {
+  return cs?.preciseStyleRoutePerStyle === true
 }
