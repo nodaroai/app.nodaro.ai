@@ -725,8 +725,12 @@ account-linking rules — is in [External SSO](./sso.md); it is **off** unless
   account-linking rules, mints a one-time Supabase login token, and redirects
   (`302`) to `/sso?sso_token=<token>&next=<same-origin-relative-path>`. The
   browser's `/sso` landing exchanges that token for a session.
-- A `?next=` value is honoured only when it is a same-origin **relative** path;
-  anything else falls back to `/projects` (open-redirect guard).
+- A `?next=` value is honoured only when it is a same-origin **relative** path,
+  as a browser would follow it (`//host`, `/\host` and the like name another
+  site); anything else falls back to `/projects` (open-redirect guard). The
+  landing opens one of the editor's own pages in place and loads any other
+  path on the site in full (a page of another product served from the same
+  host).
 
 Status codes: `401` (bad or replayed assertion), `403` (`account_exists` /
 `email_unverified` / `account_linked_other_provider` /

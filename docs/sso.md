@@ -66,7 +66,7 @@ provider name configured in the install's Supabase Auth.)
 | `secret` | assertion (**required**) | The HS256 HMAC key used to verify the assertion signature. Use a **dedicated** secret — never the IdP's own session-signing secret, so a Nodaro compromise cannot forge IdP sessions. Minimum 16 characters. |
 | `audience` | assertion (**required**) | The value the assertion's `aud` claim must equal. |
 | `claimMap` | assertion (optional) | Which JWT claims carry the email / verified-flag / subject. Defaults to `{ "email": "email", "emailVerified": "email_verified", "subject": "sub" }`. |
-| `initiateUrl` | assertion (optional) | An absolute URL. Where `GET /v1/sso/:provider` redirects (`302`) when it is hit **without** an assertion — i.e. the login button sends the user here, the IdP authenticates them, and redirects back with `?assertion=…`. Nothing else is forwarded on that hop: if you want a post-login destination, your IdP must append `&next=<same-origin path>` on the way back. Without `initiateUrl`, a button hit answers `400 no_assertion`. |
+| `initiateUrl` | assertion (optional) | An absolute URL. Where `GET /v1/sso/:provider` redirects (`302`) when it is hit **without** an assertion — i.e. the login button sends the user here, the IdP authenticates them, and redirects back with `?assertion=…`. Nothing else is forwarded on that hop. A sign-in started on the login page goes on to the page the login page was asked to return to (`/login?redirect=<path>`, kept in the browser across the hop) unless your IdP names another page by appending `&next=<same-origin path>` on the way back (`next=/projects`, the default, names none). Without `initiateUrl`, a button hit answers `400 no_assertion`. |
 | `initiateUrlByHost` | assertion (optional) | A map from a **bare lower-case hostname** (no port) to an absolute URL: when the button hit arrives on that host, the redirect goes there instead of `initiateUrl`, which stays the default for every other host. For a deployment that answers on more than one hostname and whose IdP must be reached on a matching host. Keys are validated at boot — a mis-cased or ported key aborts startup rather than silently falling back. The map is never published by `GET /v1/sso/providers`. The provider `id`, `secret` and `audience` do not change per host, so account linking is unaffected by which host a user arrived on. |
 | `maxLifetimeSeconds` | assertion (optional) | Server-enforced cap on the assertion's lifetime (`exp − iat`). Default `300` (5 minutes), max `3600`. An assertion that claims a longer lifetime is rejected even if the IdP minted it. |
 | `domain` | oidc / saml (**one of `domain`/`supabaseProvider` required**) | Reserved. Validated at boot but **not yet consumed**: `GET /v1/sso/providers` publishes only `id`, `label` and `kind`, and the login page passes the provider **`id`** to `signInWithSSO` as the domain. Because `id` is a slug (no `.`), a Supabase-native SAML domain such as `acme.com` cannot currently be expressed — treat `kind: "saml"` as not wired end-to-end yet. |
@@ -191,11 +191,18 @@ IdP  ──authenticates, redirects back──▶  GET /v1/sso/:provider?asserti
                           ├─ apply account-linking rules
                           └─302─▶  /sso?sso_token=<one-time token>
 Browser  ──/sso landing exchanges the one-time token──▶  Supabase session
-                          └─▶  /projects (or a same-origin ?next path — present only
-                               if the IdP appended &next= when it redirected back;
-                               the login page's own ?redirect= is not forwarded
-                               through the SSO hop)
+                          └─▶  the page the IdP named with &next=, if it named one;
+                               else the login page's own ?redirect= (kept in the
+                               browser across the hop); else /projects
 ```
+
+Where the sign-in goes is a path on this site. One of the editor's own pages
+opens in place. Any other path — a page of another product served from the
+same host, such as a white-label deployment's `/voice-changer/…` or `/image`
+— is loaded in full, so that product answers it rather than the editor's
+not-found page. The same holds for every sign-in method: email and password,
+Google, and the Supabase-native SSO providers, which come back through
+`/auth/callback`.
 
 The login page shows an SSO button only when the deployment's surface profile
 advertises the `sso` auth method **and** at least one provider is configured
@@ -207,9 +214,11 @@ advertises the `sso` auth method **and** at least one provider is configured
   distinct from the IdP's own session secret.
 - **Single-use assertions.** The `jti` replay cache rejects a re-submitted
   assertion; the server-enforced max-lifetime keeps the replay window short.
-- **Open-redirect guard.** The `next` parameter is honoured only when it is a
-  same-origin *relative* path (starts with `/`, not `//`); anything else falls
-  back to `/projects`.
+- **Open-redirect guard.** The `next` parameter, and the login page's
+  `?redirect=`, are honoured only when they are a same-origin *relative* path,
+  judged the way a browser would follow them: `//host`, `/\host`, a path with
+  a tab or line break the browser drops, and a path whose dot segments resolve
+  to `//host` all name another site. Anything else falls back to `/projects`.
 - **No secret ever leaves the server.** `GET /v1/sso/providers` returns only
   `id`, `label`, and `kind` — never the `secret`. The assertion and the minted
   one-time token are redacted from request logs.

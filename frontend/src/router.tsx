@@ -4,6 +4,7 @@ import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { hasAdmin, hasCredits, isCloud, isMultiUser, hasOrganizations } from "@/lib/edition"
 import { surfaceNavHidden, surfaceBillingSelfServe } from "@/lib/surface-selectors"
 import { accessibilityStatementShown } from "@/lib/accessibility-statement"
+import { registerAppRoutes } from "@/lib/sign-in-redirect"
 
 // Error handling
 import RouteErrorBoundary from "@/components/route-error-boundary"
@@ -558,3 +559,9 @@ export const router = createBrowserRouter([
     element: <NotFound />,
   },
 ])
+
+// What a completed sign-in may open in place: a path this tree answers with a
+// page other than the not-found catch-all above. Any other path on this site
+// belongs to another product served beside the app, and gets a full page load
+// (lib/sign-in-redirect.ts).
+registerAppRoutes(router.routes)
