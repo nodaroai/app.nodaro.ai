@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { AccessibilityStatementLink } from "@/components/legal/accessibility-statement-link"
 import { ComplaintsLink } from "@/components/legal/complaints-link"
 import { buttonHiddenOn } from "@/components/accessibility/accessibility-menu"
@@ -15,6 +15,7 @@ import { NODARO_CLIENT_OPTIONS } from "@/lib/nodaro-client"
 import { createClient } from "@/lib/supabase"
 import { useUiLanguage } from "@/hooks/use-ui-language"
 import { useT } from "@/lib/i18n"
+import { useLocaleStore } from "@/lib/locale-store"
 import { runtimeMediaOrigin } from "@/lib/runtime-config"
 import { availableWorlds, useSurfaceAvailability } from "@/lib/surface-availability"
 import { runtimeSurfaceProfile } from "@/lib/surface-profile"
@@ -22,14 +23,12 @@ import {
   surfaceBillingSelfServe,
   surfaceBrandLogo,
   surfaceConfiguredBrandName,
-  surfaceLocaleOffered,
   surfaceLocalePicker,
 } from "@/lib/surface-selectors"
 import { HEADER_QUERY_KEYS } from "./query-keys"
 import { WHITE_LABEL_WORLD_PATHS } from "./site"
 import {
   imageOriginsFor,
-  offeredLanguage,
   openSitePage,
   unitTranslator,
   whiteLabelRoute,
@@ -57,8 +56,8 @@ import type { SiteHeaderHandle, SiteHeaderLanguage, SiteHeaderTheme } from "./ty
  *   - its billing (`billing.selfServe`), and the credit pill in its own unit,
  *     from the figures the server converted (`white-label.ts`,
  *     `headerBalance`), worded in the app's dictionaries;
- *   - its languages (`locale.offered`, `locale.picker`), and the header's
- *     cookies on this host alone;
+ *   - its languages (`locale.offered`, through the app's own list of
+ *     languages; `locale.picker`), and the header's cookies on this host alone;
  *   - links: home is the site's root, sign-in this app's own page, the account
  *     pages this app's routes (`accountPages="in-app"`); no Nodaro address, not
  *     even the accessibility statement (Nodaro's own,
@@ -91,9 +90,9 @@ const ACCOUNT_MENU_LINK =
  * client (`NODARO_CLIENT_OPTIONS`), so the two cannot drift, and only this
  * lazily loaded module loads every SDK resource — not every module that
  * reaches `nodaro-client.ts`. Its balance as that header draws it
- * (`headerBalance`).
+ * (`headerBalance`), in the language on screen when it is read.
  */
-const whiteLabelSdk = withHeaderBalance(createNodaroClient(NODARO_CLIENT_OPTIONS))
+const whiteLabelSdk = withHeaderBalance(createNodaroClient(NODARO_CLIENT_OPTIONS), () => useLocaleStore.getState().locale)
 
 export default function WhiteLabelHeader({ compact, onOpenMenu, onHeaderOverlay }: SiteHeaderSlotProps) {
   const t = useT()
@@ -113,6 +112,18 @@ export default function WhiteLabelHeader({ compact, onOpenMenu, onHeaderOverlay 
     enabled: false,
   })
   const unit = balance?.display?.unit
+  // The unit's word was picked for the language on screen when the balance was
+  // read. A language change reads it again, or the header says the last
+  // language's word until its next poll; with one label for every language
+  // there is nothing to re-word. The exact key: the model prices live under
+  // the same prefix.
+  const wordedLanguage = useRef(locale)
+  const hasUnitWords = balance?.display?.unitLabels !== undefined
+  useEffect(() => {
+    if (wordedLanguage.current === locale) return
+    wordedLanguage.current = locale
+    if (hasUnitWords) void queryClient.invalidateQueries({ queryKey: HEADER_QUERY_KEYS.credits, exact: true })
+  }, [locale, hasUnitWords, queryClient])
   const unitWords = useMemo<UnitWords | null>(
     () =>
       unit
@@ -137,10 +148,10 @@ export default function WhiteLabelHeader({ compact, onOpenMenu, onHeaderOverlay 
   const shellT = useMemo(() => shellTranslator(locale), [locale])
   const headerT = useMemo(() => unitTranslator(shellT, unitWords), [shellT, unitWords])
 
-  const languages = surfaceLocalePicker() ? surfaceLocaleOffered() : false
+  const showLanguages = surfaceLocalePicker()
   const language = useMemo<SiteHeaderLanguage | undefined>(() => {
-    if (languages === false) return undefined
-    const all: SiteHeaderLanguage = {
+    if (!showLanguages) return undefined
+    return {
       current: locale,
       options: rows.map(({ id, nativeName, shortCode, dir }) => ({ id, nativeName, shortCode, dir })),
       // Only a language the app offers: the id comes back from the header.
@@ -149,8 +160,7 @@ export default function WhiteLabelHeader({ compact, onOpenMenu, onHeaderOverlay 
         if (row) pick(row.id)
       },
     }
-    return offeredLanguage(all, languages)
-  }, [locale, rows, pick, languages])
+  }, [locale, rows, pick, showLanguages])
   // next-themes knows the theme only after mount; until then the pill waits.
   const theme = useMemo<SiteHeaderTheme | undefined>(() => {
     if (!resolvedTheme) return undefined

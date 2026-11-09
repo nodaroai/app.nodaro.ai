@@ -8,7 +8,7 @@
  * …?forever=true`; `POST /v1/jobs/:id/restore`, `DELETE /v1/jobs/:id?forever=true`).
  */
 import { supabase } from "./supabase.js"
-import { SESSION_FEED_JOB_COLS, TOOL_RE } from "./generation-sessions.js"
+import { TOOL_RE, sessionFeedJobCols } from "./generation-sessions.js"
 import { CHILD_JOB_COLUMN, TRASHED_JOB_COLUMN } from "./public-job-data.js"
 import { purgeAtOf } from "./job-trash.js"
 
@@ -120,7 +120,7 @@ async function hydrateTrashRows<J>(
     supabase
       .from("jobs")
       // trash-read: the Trash listing reads deleted jobs on purpose.
-      .select(`${SESSION_FEED_JOB_COLS}, ${TRASHED_JOB_COLUMN}`)
+      .select(`${sessionFeedJobCols()}, ${TRASHED_JOB_COLUMN}`)
       .in("id", jobIds)
       .eq("user_id", userId)
       .is(CHILD_JOB_COLUMN, null),

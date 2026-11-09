@@ -82,6 +82,14 @@ export interface DisplayUnitInfo {
   unit: string
   /** Decimal places the converted figures carry (0–4). */
   decimals: number
+  /**
+   * The unit's word per interface language, when the deployment gives one per
+   * language (locale id → word, e.g. `{ en: "points", he: "נקודות" }`). Show
+   * `unitLabels[locale] ?? unit`; a language without an entry uses `unit`.
+   * The server does not know the viewer's interface language, so it sends the
+   * words and the client picks.
+   */
+  unitLabels?: Record<string, string>
 }
 
 /**

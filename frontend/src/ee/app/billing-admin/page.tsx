@@ -26,6 +26,7 @@ import {
   parseThreshold,
   parseWhole,
   thresholdInputError,
+  unitWord,
   unitsInputError,
   type DisplayUnit,
 } from "./units"
@@ -347,7 +348,7 @@ function DefaultBlock({ overview }: { overview: DeploymentBillingOverview }) {
       <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("billingAdmin.defaultNote")}</p>
 
       <label className="mt-4 block text-xs text-muted-foreground" htmlFor="billing-admin-default">
-        {t("billingAdmin.defaultLabel", { unit: unit?.label ?? "" })}
+        {t("billingAdmin.defaultLabel", { unit: unitWord(unit) })}
       </label>
       <div className="mt-1 flex flex-wrap items-center gap-2">
         <Input

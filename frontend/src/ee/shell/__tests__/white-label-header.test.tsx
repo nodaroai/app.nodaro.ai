@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, render } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter, useLocation } from "react-router-dom"
+import { useLocaleStore } from "@/lib/locale-store"
 import { __resetSurfaceAvailabilityForTests } from "@/lib/surface-availability"
 import { WHITE_LABEL_WORLD_PATHS } from "../site"
 import type { SiteHeaderProps } from "../types"
@@ -24,17 +25,12 @@ vi.mock("virtual:site-header", () => ({
 }))
 vi.mock("@/lib/supabase", () => ({ createClient: () => ({ auth: {} }) }))
 vi.mock("next-themes", () => ({ useTheme: () => ({ resolvedTheme: "light", setTheme: vi.fn() }) }))
-vi.mock("@/hooks/use-ui-language", () => ({
-  useUiLanguage: () => ({
-    locale: "he",
-    rows: [
-      { id: "en", nativeName: "English", englishName: "English", shortCode: "EN", dir: "ltr" },
-      { id: "he", nativeName: "עברית", englishName: "Hebrew", shortCode: "HE", dir: "rtl" },
-      { id: "ja", nativeName: "日本語", englishName: "Japanese", shortCode: "JA", dir: "ltr" },
-    ],
-    pick: vi.fn(),
-  }),
-}))
+// The viewer's language, and the rows the one helper hands out for it (as the real hook does).
+const ui = vi.hoisted(() => ({ locale: "he" }))
+vi.mock("@/hooks/use-ui-language", async () => {
+  const { languageMenuRows } = await vi.importActual<typeof import("@/lib/i18n/offered-locales")>("@/lib/i18n/offered-locales")
+  return { useUiLanguage: () => ({ locale: ui.locale, rows: languageMenuRows(ui.locale as never), pick: vi.fn() }) }
+})
 
 vi.mock("@/lib/site-header-mode", () => ({
   siteHeaderMode: () => "white-label",
@@ -43,7 +39,7 @@ vi.mock("@/lib/site-header-mode", () => ({
 
 // The SDK's balance read, as the server answers it on a single-payer deployment with its own unit.
 const sdk = vi.hoisted(() => ({
-  balance: async () => ({
+  balance: async (): Promise<Record<string, unknown>> => ({
     subscription: 0, topup: 0, total: 0, tier: "free", effectiveTier: "free", dailySpent: 0, dailyLimit: null, monthlyAllocation: 0,
     allowance: { granted: 2000, remaining: 1500, enforced: true },
     display: { unit: "tokens", decimals: 0, total: 0, subscription: 0, topup: 0, dailySpent: 0, dailyLimit: null, monthlyAllocation: 0, appCreditsAllowance: 0, allowance: { granted: 8000000, remaining: 6000000 } },
@@ -51,7 +47,7 @@ const sdk = vi.hoisted(() => ({
 }))
 vi.mock("@nodaro/sdk/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@nodaro/sdk/client")>()),
-  createClient: () => ({ credits: { balance: sdk.balance }, me: {}, billing: {}, request: vi.fn() }),
+  createClient: () => ({ credits: { balance: () => sdk.balance() }, me: {}, billing: {}, request: vi.fn() }),
 }))
 
 const opened = vi.hoisted(() => [] as string[])
@@ -92,6 +88,7 @@ function mount(client = new QueryClient()) {
 beforeEach(() => {
   seen.props = null
   opened.length = 0
+  ui.locale = "he"
   window.__NODARO_RUNTIME__ = { surface: WHITE_LABEL_SURFACE } as unknown as typeof window.__NODARO_RUNTIME__
 })
 afterEach(() => {
@@ -183,6 +180,63 @@ describe("the header mount on a white-label deployment", () => {
     expect(props.t?.("credits.balance", { credits: "6,000,000" })).toBe("6,000,000 tokens")
     expect(props.t?.("account.creditsLeft")).toBe("tokens left")
     expect(props.t?.("account.settings")).toBe("he:account.settings")
+  })
+
+  it("the balance the header reads names the unit in the language on screen at that moment", async () => {
+    const balance = sdk.balance
+    sdk.balance = async () => ({
+      subscription: 0, topup: 0, total: 0, tier: "free", effectiveTier: "free", dailySpent: 0, dailyLimit: null, monthlyAllocation: 0,
+      display: { unit: "טוקנים", unitLabels: { en: "tokens", he: "טוקנים" }, decimals: 0, total: 5, subscription: 0, topup: 0, dailySpent: 0, dailyLimit: null, monthlyAllocation: 0, appCreditsAllowance: 0 },
+    })
+    try {
+      const props = mount().props()
+      useLocaleStore.setState({ locale: "en" })
+      expect((await props.sdk.credits.balance()).display?.unit).toBe("tokens")
+      useLocaleStore.setState({ locale: "he" })
+      expect((await props.sdk.credits.balance()).display?.unit).toBe("טוקנים")
+      useLocaleStore.setState({ locale: "ja" })
+      expect((await props.sdk.credits.balance()).display?.unit).toBe("טוקנים")
+    } finally {
+      sdk.balance = balance
+      useLocaleStore.setState({ locale: "en" })
+    }
+  })
+
+  it("a language change reads the balance again, so the unit's word follows it (only where the deployment gave words)", () => {
+    const client = new QueryClient()
+    const refetch = vi.spyOn(client, "invalidateQueries")
+    client.setQueryData(["credits"], { total: 1, display: { unit: "טוקנים", unitLabels: { en: "tokens", he: "טוקנים" } } })
+    const first = mount(client)
+    expect(refetch).not.toHaveBeenCalled()
+    ui.locale = "en"
+    first.view.rerender(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/projects"]}>
+          <WhiteLabelHeader compact={false} onOpenMenu={vi.fn()} onHeaderOverlay={vi.fn()} drawerOpen={false} />
+          <Where />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    expect(refetch).toHaveBeenCalledOnce()
+    expect(refetch).toHaveBeenCalledWith({ queryKey: ["credits"], exact: true })
+
+    // A deployment with one label: nothing to re-word, no extra request.
+    cleanup()
+    const single = new QueryClient()
+    const noRefetch = vi.spyOn(single, "invalidateQueries")
+    single.setQueryData(["credits"], { total: 1, display: { unit: "tokens" } })
+    ui.locale = "he"
+    const second = mount(single)
+    ui.locale = "en"
+    second.view.rerender(
+      <QueryClientProvider client={single}>
+        <MemoryRouter initialEntries={["/projects"]}>
+          <WhiteLabelHeader compact={false} onOpenMenu={vi.fn()} onHeaderOverlay={vi.fn()} drawerOpen={false} />
+          <Where />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    expect(noRefetch).not.toHaveBeenCalled()
   })
 
   it("no unit (the payer's own read, or none configured): the header's own credit words", () => {

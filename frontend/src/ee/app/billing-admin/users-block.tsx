@@ -12,7 +12,7 @@ import {
   type AllowanceGrantRow,
   type DeploymentUserRow,
 } from "@/ee/hooks/queries/use-deployment-billing"
-import { dateOrDash, orDash, parseWhole, unitsInputError, type DisplayUnit } from "./units"
+import { dateOrDash, orDash, parseWhole, unitsInputError, unitWord, type DisplayUnit } from "./units"
 import { ListError } from "./list-error"
 import { formatNumber } from "@/lib/i18n/format"
 
@@ -360,7 +360,7 @@ function TopupForm({
   return (
     <div data-testid={`topup-form-${row.id}`} className="mt-3 border-t border-border/60 pt-3">
       <label className="block text-xs text-muted-foreground" htmlFor={`topup-units-${row.id}`}>
-        {t("billingAdmin.topupUnits", { unit: unit?.label ?? "" })}
+        {t("billingAdmin.topupUnits", { unit: unitWord(unit) })}
       </label>
       <div className="mt-1 flex flex-wrap items-start gap-2">
         <Input
@@ -410,7 +410,7 @@ export function errorText(
     case "not_whole_credits":
       return t("billingAdmin.errNotWholeCredits", {
         rate: formatNumber(unit?.rate ?? 1),
-        unit: unit?.label ?? "",
+        unit: unitWord(unit),
       })
     case "zero":
       return t("billingAdmin.errZero")

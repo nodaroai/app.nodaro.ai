@@ -162,3 +162,27 @@ export function spendableCredits(
     displayFigure: allowance ? allowance.remaining : balance.total,
   }
 }
+
+/** The figures of `GET /v1/user/credits`'s `display` this rule reads: the server's own conversion of the raw ones. */
+export interface BalanceDisplayFigures {
+  readonly total: number | null
+  readonly externalWallet?: { readonly available: number | null }
+  readonly allowance?: { readonly remaining: number | null } | null
+}
+
+/**
+ * The same headline `displayFigure` picks, read from the server's converted
+ * `display` instead of the raw figures: a shared wallet's `available`, else the
+ * caller's allowance, else the total. The raw keys decide which (the server
+ * sends their `display` twins exactly where it sends them); `null` is a figure
+ * the server could not give, shown as an em dash, never 0.
+ *
+ * The one reader of this rule for a converted balance: the shared header's
+ * figures (`ee/shell/white-label.ts`) and `CreditBalance` both come through
+ * here, so the two can only ever agree on what a screen quotes.
+ */
+export function spendableDisplayFigure(balance: BalanceWithAllowance, display: BalanceDisplayFigures): number | null {
+  if (balance.externalWallet) return display.externalWallet?.available ?? null
+  if (balance.allowance) return display.allowance?.remaining ?? null
+  return display.total ?? null
+}

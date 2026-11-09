@@ -38,8 +38,9 @@ vi.mock("../../supabase.js", () => {
   return { supabase: { from: (table: string) => builder(table) } }
 })
 
-import { JOB_EVENT_COLUMNS, MAX_EVENT_BYTES, TEXT_FIELD_MAX_BYTES, cutText, eventBodyFor, type ClaimedDelivery } from "../event.js"
+import { MAX_EVENT_BYTES, TEXT_FIELD_MAX_BYTES, cutText, eventBodyFor, jobEventColumns, type ClaimedDelivery } from "../event.js"
 import { PUBLIC_JOB_KEYS } from "../../../routes/jobs.js"
+import { setTitleColumnPresentForTests } from "../../jobs-title-column.js"
 
 const OWNER = "00000000-0000-4000-8000-000000000001"
 const JOB = "00000000-0000-4000-8000-0000000000b1"
@@ -79,6 +80,7 @@ const JOB_ROW = {
   source: "sdk",
   source_detail: "sdk/2.27.0",
   session_id: null,
+  title: null,
   reconcile_attempts: 0,
   usage_log_id: "u1",
   // Never public, even if a select ever returned them:
@@ -93,6 +95,8 @@ beforeEach(() => {
   db.job = null
   db.usage = []
   db.calls.length = 0
+  // A database that has `jobs.title` (migration 609): the event carries it.
+  setTitleColumnPresentForTests(true)
 })
 
 describe("eventBodyFor — a job event", () => {
@@ -120,11 +124,14 @@ describe("eventBodyFor — a job event", () => {
   })
 
   it("reads only columns the jobs table has (every public key, and what the sanitizer needs)", () => {
-    const columns = JOB_EVENT_COLUMNS.split(", ")
+    const columns = jobEventColumns().split(", ")
     expect(columns).toEqual(expect.arrayContaining([...PUBLIC_JOB_KEYS, "reconcile_attempts", "usage_log_id"]))
     const table = jobsColumns()
     expect(table.has("id") && !table.has("not_a_column")).toBe(true) // the scan is not vacuous
     expect(columns.filter((c) => !table.has(c))).toEqual([])
+    // Before migration 609 reaches this database, the read leaves `title` out — and only it.
+    setTitleColumnPresentForTests(false)
+    expect(jobEventColumns().split(", ")).toEqual(columns.filter((c) => c !== "title"))
   })
 
   it("reads the job as the delivery owner's", async () => {

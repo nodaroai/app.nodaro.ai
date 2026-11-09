@@ -19,7 +19,7 @@ import { requireAppScope } from "../lib/scope-prehandler.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import {
   FEED_LIVE_JOB_FILTER,
-  SESSION_FEED_JOB_COLS,
+  sessionFeedJobCols,
   afterKeyset,
   decodeCursor,
   encodeCursor,
@@ -94,7 +94,7 @@ export function registerSessionItemRoutes(app: FastifyInstance): void {
     let query = supabase
       .from("session_items")
       // `!inner` + the filter: an item whose job is in the Trash is no row at all.
-      .select(`job_id, kind, added_at, removed_at, imported_from_session_id, job:jobs!job_id!inner(${SESSION_FEED_JOB_COLS})`)
+      .select(`job_id, kind, added_at, removed_at, imported_from_session_id, job:jobs!job_id!inner(${sessionFeedJobCols()})`)
       .eq("session_id", found.data.id)
       .eq("user_id", userId)
       .is(FEED_LIVE_JOB_FILTER, null)

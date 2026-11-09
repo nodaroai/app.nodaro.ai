@@ -74,6 +74,12 @@ export interface RuntimeSurfaceBilling {
   readonly unitLabel?: string
   readonly unitRate?: number
   readonly unitDecimals?: number
+  /**
+   * The unit's word per interface language, beside the single `unitLabel`: a
+   * language the deployment gives no word for uses `unitLabel`. Read with
+   * `surfaceUnitLabel`.
+   */
+  readonly unitLabels?: Readonly<Record<string, string>>
 }
 
 /**
@@ -246,6 +252,17 @@ export function surfaceStringOverride(strings: RuntimeSurfaceStrings | undefined
 }
 
 /**
+ * The deployment's word for its unit in `locale`: the `billing.unitLabels`
+ * entry for that language, else its single `unitLabel` (`single`). `labels` is
+ * the map as it arrives, on the surface or on a `display` object beside its
+ * `unit`.
+ */
+export function surfaceUnitLabel(labels: Readonly<Record<string, string>> | undefined, locale: string | undefined, single: string): string {
+  const word = labels && locale !== undefined && Object.hasOwn(labels, locale) ? labels[locale] : undefined
+  return typeof word === "string" && word.length > 0 ? word : single
+}
+
+/**
  * An https origin, spelled exactly as a browser spells one
  * (`https://media.example.com`, a port only when it is not 443): what
  * `new URL(src).origin` is compared with, so a path, a trailing slash,
@@ -356,17 +373,26 @@ function localeOf(value: unknown): RuntimeSurface["locale"] {
   }
 }
 
+/** Text words only, built from entries so a `"__proto__"` key stays an ordinary key; nothing usable leaves the key out. */
+function unitLabelsOf(value: unknown): Readonly<Record<string, string>> | undefined {
+  const words = Object.entries(record(value)).filter((e): e is [string, string] => typeof e[1] === "string" && e[1].length > 0)
+  return words.length ? Object.fromEntries(words) : undefined
+}
+
 function billingOf(value: unknown): RuntimeSurfaceBilling {
   const b = record(value)
   // Both or neither: a label without a rate (or the reverse) would put one
-  // unit's name on another unit's numbers.
+  // unit's name on another unit's numbers. The per-language words stand beside
+  // the label, so they live and fall with it.
   const coherent = typeof b.unitLabel === "string" && b.unitLabel.length > 0 && typeof b.unitRate === "number" && Number.isFinite(b.unitRate) && b.unitRate > 0
   const decimals = typeof b.unitDecimals === "number" && Number.isInteger(b.unitDecimals) && b.unitDecimals >= 0 && b.unitDecimals <= 4 ? b.unitDecimals : undefined
   return {
     costTab: b.costTab === "hidden" ? "hidden" : "inherit",
     sidebarCard: b.sidebarCard === "hidden" ? "hidden" : "inherit",
     selfServe: b.selfServe !== false,
-    ...(coherent ? { unitLabel: b.unitLabel as string, unitRate: b.unitRate as number, ...optional("unitDecimals", decimals) } : {}),
+    ...(coherent
+      ? { unitLabel: b.unitLabel as string, unitRate: b.unitRate as number, ...optional("unitDecimals", decimals), ...optional("unitLabels", unitLabelsOf(b.unitLabels)) }
+      : {}),
   }
 }
 

@@ -168,12 +168,21 @@ export interface GalleryCandidate {
   readonly userId: string | null | undefined
   readonly inputData: unknown
   readonly outputData?: unknown
+  /** The owner's own name for the job (migration 609): shown on the card beside the prompt, so judged like it. */
+  readonly title?: string | null
 }
 
-/** True when this output must stay out of the public gallery. */
+/**
+ * True when this output must stay out of the public gallery. Every piece of
+ * user-written text the card shows is judged by the same lists: the prompt
+ * (and the other texts of the input and output) and the owner's title — a
+ * word that would hide a prompt hides the whole card when it is in the title.
+ */
 export function galleryHides(moderation: GalleryModeration, item: GalleryCandidate): boolean {
   if (isPromptBlocked(galleryPromptOf(item.inputData))) return true
+  if (item.title && isPromptBlocked(item.title)) return true
   if (item.userId && moderation.bannedUserIds.has(item.userId.toLowerCase())) return true
   if (moderation.words.entries.length === 0) return false
-  return findBannedWord(galleryTextOf(item.inputData, item.outputData), moderation.words) !== null
+  const text = galleryTextOf(item.inputData, item.outputData)
+  return findBannedWord(item.title ? `${text}\n${item.title}` : text, moderation.words) !== null
 }

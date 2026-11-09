@@ -3,7 +3,8 @@ import { z } from "zod"
 import type { TtsProvider } from "@nodaro/shared/models"
 import { config } from "../lib/config.js"
 import { describeLimitedVoices } from "../providers/provider-keys.js"
-import { ELEVENLABS_BASE_URL } from "../providers/elevenlabs/client.js"
+import { providerFetch } from "../providers/egress.js"
+import { sharedVoicesHeaders, sharedVoicesUrl, verifiedLanguageCodes, verifiedModelIds, type RawSharedVoicesPage } from "../providers/elevenlabs/shared-voices.js"
 import { getPremadeVoices } from "../lib/premade-voice-catalog.js"
 import { filterVoicesByAllowedGender, clampLibraryGender, voiceNotAvailableBody } from "../lib/voice-policy.js"
 import { recordLibraryVoiceGenders } from "../lib/library-voice-genders.js"
@@ -33,6 +34,13 @@ interface SharedVoice {
   description: string
   use_case: string
   category: string
+  /** The library's one-word tone (`calm`, `deep`, …); `""` when it states none. */
+  descriptive: string
+  /** The primary language and locale as the library codes them; `""` when unstated. */
+  language: string
+  locale: string
+  /** Every language the voice is verified for, primary first — what `?language=` matches. */
+  verifiedLanguages: string[]
   recommendedProvider?: TtsProvider
   verifiedProviders?: TtsProvider[]
 }
@@ -201,14 +209,12 @@ export async function voicesRoutes(app: FastifyInstance) {
         if (v) qs.set(k, v)
       }
 
-      const res = await fetch(
-        `${ELEVENLABS_BASE_URL}/v1/shared-voices?${qs.toString()}`,
-        {
-          headers: {
-            "xi-api-key": config.ELEVENLABS_API_KEY,
-            Accept: "application/json",
-          },
-        },
+      // Through the egress funnel like every provider call; a catalog read, no
+      // billing model, so it takes no concurrency slot.
+      const res = await providerFetch(
+        { provider: "elevenlabs", operation: "sharedVoices.list", modelKey: null, body: undefined, dimensions: {} },
+        sharedVoicesUrl(qs),
+        { headers: sharedVoicesHeaders() },
       )
 
       if (!res.ok) {
@@ -216,27 +222,10 @@ export async function voicesRoutes(app: FastifyInstance) {
         return reply.send({ voices: [], hasMore: false })
       }
 
-      const data = (await res.json()) as {
-        voices: Array<{
-          voice_id: string
-          name: string
-          preview_url?: string
-          gender?: string
-          accent?: string
-          age?: string
-          description?: string
-          use_case?: string
-          category?: string
-          verified_languages?: Array<{ model_id?: string }>
-        }>
-        has_more?: boolean
-      }
+      const data = (await res.json()) as RawSharedVoicesPage
 
       const voices: SharedVoice[] = data.voices.map((v) => {
-        const modelIds = (v.verified_languages ?? [])
-          .map((l) => l.model_id)
-          .filter((m): m is string => typeof m === "string")
-        const verifiedProviders = deriveVerifiedTtsProviders(modelIds)
+        const verifiedProviders = deriveVerifiedTtsProviders(verifiedModelIds(v))
         return {
           voice_id: v.voice_id,
           name: v.name,
@@ -247,6 +236,10 @@ export async function voicesRoutes(app: FastifyInstance) {
           description: v.description ?? "",
           use_case: v.use_case ?? "",
           category: v.category ?? "",
+          descriptive: v.descriptive ?? "",
+          language: v.language ?? "",
+          locale: v.locale ?? "",
+          verifiedLanguages: verifiedLanguageCodes(v),
           ...(verifiedProviders.length > 0 ? { verifiedProviders } : {}),
         }
       })

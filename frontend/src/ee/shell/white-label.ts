@@ -1,9 +1,9 @@
-import { orderWorlds, worldAllowed, type SurfaceWorlds, type WorldId } from "@nodaro/shared/runtime-config"
+import { orderWorlds, surfaceUnitLabel, worldAllowed, type SurfaceWorlds, type WorldId } from "@nodaro/shared/runtime-config"
 import type { NodaroClient } from "@nodaro/sdk/client"
 import type { UserBalance } from "@nodaro/sdk/credits"
-import { spendableCredits } from "@/lib/spendable-credits"
+import { spendableCredits, spendableDisplayFigure } from "@/lib/spendable-credits"
 import { WHITE_LABEL_WORLD_PATHS } from "./site"
-import type { SiteHeaderLanguage, SiteHeaderTranslate, SiteWorldId } from "./types"
+import type { SiteHeaderTranslate, SiteWorldId } from "./types"
 
 /**
  * The white-label header's pure parts (`white-label-header.tsx` mounts it): a
@@ -70,19 +70,6 @@ export function imageOriginsFor(logo: string | undefined, mediaOrigin: string | 
   return [...new Set([logoOrigin(logo), mediaOrigin])].filter((origin): origin is string => origin !== undefined)
 }
 
-/**
- * The language pill narrowed to the languages the deployment offers
- * (`locale.offered`, compared without regard to letter case), keeping the
- * one on screen so the pill can say what it shows. Unchanged when the
- * deployment names none.
- */
-export function offeredLanguage(language: SiteHeaderLanguage, offered: readonly string[] | undefined): SiteHeaderLanguage {
-  if (!offered) return language
-  const ids = new Set(offered.map((id) => id.toLowerCase()))
-  const current = language.current.toLowerCase()
-  return { ...language, options: language.options.filter(({ id }) => ids.has(id.toLowerCase()) || id.toLowerCase() === current) }
-}
-
 /** A figure the header shows; one the server could not give stays unknown (the header's "…"), never 0. */
 function shown(figure: number | null | undefined): number {
   return (figure ?? undefined) as number
@@ -101,10 +88,13 @@ function shown(figure: number | null | undefined): number {
  *     the header reads in a unit);
  *   - in the deployment's own unit when the server converted the figures
  *     (`display`), else in credits. The app never converts: a figure the
- *     server did not convert is shown as it came.
+ *     server did not convert is shown as it came;
+ *   - the unit named in the viewer's language (`locale`): the word the server
+ *     sent for it (`display.unitLabels`), else its single label. The header
+ *     reads `display.unit` as it is and needs nothing of the map.
  * A balance with none of these is handed over as it is.
  */
-export function headerBalance(balance: UserBalance): UserBalance {
+export function headerBalance(balance: UserBalance, locale: string): UserBalance {
   // A display never refuses, so whether the deployment has a payer at all does not move it.
   const { allowance } = spendableCredits(balance, false)
   const external = balance.externalWallet
@@ -118,10 +108,12 @@ export function headerBalance(balance: UserBalance): UserBalance {
     balance.welcomeOffer && display.welcomeOffer
       ? { welcomeOffer: { ...balance.welcomeOffer, credits: shown(display.welcomeOffer.credits) } }
       : {}
-  if (external) return { ...balance, ...welcome, total: shown(display.externalWallet?.available), monthlyAllocation: 0 }
+  const unit = surfaceUnitLabel(display.unitLabels, locale, display.unit)
+  const figure = spendableDisplayFigure(balance, display)
+  if (external) return { ...balance, ...welcome, total: shown(figure), monthlyAllocation: 0, display: { ...display, unit } }
   const figures = allowance
-    ? { total: display.allowance?.remaining ?? null, subscription: display.allowance?.remaining ?? 0, monthlyAllocation: display.allowance?.granted ?? 0 }
-    : { total: display.total, subscription: display.subscription ?? 0, monthlyAllocation: display.monthlyAllocation ?? 0 }
+    ? { total: figure, subscription: display.allowance?.remaining ?? 0, monthlyAllocation: display.allowance?.granted ?? 0 }
+    : { total: figure, subscription: display.subscription ?? 0, monthlyAllocation: display.monthlyAllocation ?? 0 }
   return {
     ...balance,
     ...welcome,
@@ -129,17 +121,18 @@ export function headerBalance(balance: UserBalance): UserBalance {
     total: shown(figures.total),
     subscription: figures.subscription,
     monthlyAllocation: figures.monthlyAllocation,
-    display: { ...display, ...figures },
+    display: { ...display, ...figures, unit },
   }
 }
 
 /**
  * The SDK client as the white-label header gets it: the same client, whose
- * `credits.balance()` answers `headerBalance` of the balance. Every other call
- * is the client's own (a resource's methods run on the resource itself).
+ * `credits.balance()` answers `headerBalance` of the balance, in the language
+ * on screen when it is read (`locale`). Every other call is the client's own
+ * (a resource's methods run on the resource itself).
  */
-export function withHeaderBalance(sdk: NodaroClient): NodaroClient {
-  const balance = async () => headerBalance(await sdk.credits.balance())
+export function withHeaderBalance(sdk: NodaroClient, locale: () => string): NodaroClient {
+  const balance = async () => headerBalance(await sdk.credits.balance(), locale())
   const credits = new Proxy(sdk.credits, { get: (target, key) => (key === "balance" ? balance : Reflect.get(target, key)) })
   return new Proxy(sdk, { get: (target, key) => (key === "credits" ? credits : Reflect.get(target, key)) })
 }

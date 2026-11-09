@@ -116,6 +116,7 @@ The body:
       "source": "sdk",
       "source_detail": "sdk/2.28.0",
       "session_id": null,
+      "title": null,
       "user_id": "…",
       "created_at": "…",
       "started_at": "…",

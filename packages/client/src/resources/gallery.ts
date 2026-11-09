@@ -18,6 +18,11 @@ export interface GalleryItem {
   readonly createdAt: string
   readonly prompt: string | null
   readonly model: string | null
+  /**
+   * The owner's own name for the job (`client.jobs.rename`), or `null` until
+   * named. Public like the prompt beside it. Absent from an older server.
+   */
+  readonly title?: string | null
   /** A private 720p Preview render (Apply EDL at proxy quality). Present only when true. */
   readonly preview?: true
 }

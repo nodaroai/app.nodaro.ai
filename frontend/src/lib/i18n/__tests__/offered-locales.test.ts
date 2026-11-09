@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { afterEach, describe, it, expect } from "vitest"
 import { LANGUAGES } from "@nodaro/shared/i18n"
 import {
   CHROME_COMPLETE_RATIO,
@@ -76,5 +76,44 @@ describe("languageMenuRows — the current locale stays visible even when not of
     const rows = languageMenuRows("de")
     expect(rows.slice(0, -1)).toEqual(offeredLanguages())
     expect(rows[rows.length - 1]?.id).toBe("de")
+  })
+})
+
+describe("languageMenuRows — a deployment's `locale.offered` narrows every language list", () => {
+  afterEach(() => {
+    delete window.__NODARO_RUNTIME__
+  })
+
+  function offer(offered: string[]) {
+    window.__NODARO_RUNTIME__ = { surface: { locale: { picker: true, offered } } } as unknown as typeof window.__NODARO_RUNTIME__
+  }
+  const ids = (rows: ReturnType<typeof languageMenuRows>) => rows.map((l) => l.id)
+
+  it("with no `locale.offered`, nothing changes: the very same list", () => {
+    expect(languageMenuRows("he")).toBe(offeredLanguages())
+    expect(languageMenuRows("en")).toBe(offeredLanguages())
+    window.__NODARO_RUNTIME__ = { surface: { locale: { picker: true } } } as unknown as typeof window.__NODARO_RUNTIME__
+    expect(languageMenuRows("he")).toBe(offeredLanguages())
+  })
+
+  it("narrows to the deployment's languages, spelling aside, in the app's own order", () => {
+    offer(["pt-br", "en"])
+    expect(ids(languageMenuRows("en"))).toEqual(["en", "pt-BR"])
+  })
+
+  it("keeps the language on screen when it is not offered, so the menu can say what it shows", () => {
+    offer(["he", "en"])
+    expect(ids(languageMenuRows("ja"))).toEqual(["en", "he", "ja"])
+  })
+
+  it("narrows only: a language the deployment names that has no complete translation stays out", () => {
+    offer(["de", "en"])
+    expect(ids(languageMenuRows("en"))).toEqual(["en"])
+  })
+
+  it("reads the deployment's languages at call time", () => {
+    expect(languageMenuRows("he")).toBe(offeredLanguages())
+    offer(["he"])
+    expect(ids(languageMenuRows("he"))).toEqual(["he"])
   })
 })

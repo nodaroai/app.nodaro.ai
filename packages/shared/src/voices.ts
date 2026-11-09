@@ -52,6 +52,30 @@ export interface SharedVoice extends Voice {
    * joins this set the release it ships.
    */
   verifiedProviders?: TtsProvider[]
+  /**
+   * The library's one-word tone for the voice (`calm`, `deep`, `cute`, …) —
+   * one of {@link VOICE_LIBRARY_DESCRIPTIVES}, or a word the library added
+   * since; `""` when it states none, like every other field here. The value
+   * a `descriptives` filter matches. Absent only on a server older than this
+   * field.
+   */
+  descriptive?: string
+  /**
+   * The voice's primary language as the library codes it (`en`, `he`, …) and
+   * its locale (`en-US`); `""` when unstated. For what a `language` filter
+   * matches see {@link SharedVoice.verifiedLanguages}. Absent only on a
+   * server older than these fields.
+   */
+  language?: string
+  locale?: string
+  /**
+   * Every language the voice is verified for, as the library codes them, the
+   * primary language first — the set `GET /v1/voices/library?language=`
+   * matches against (a voice whose primary language is English and that is
+   * verified for Spanish is listed under `language=es`), and what the
+   * `languages` facet counts. Absent only on a server older than this field.
+   */
+  verifiedLanguages?: string[]
 }
 
 /**
@@ -71,17 +95,65 @@ export const VOICE_LIBRARY_USE_CASES = [
 ] as const
 export type VoiceLibraryUseCase = (typeof VOICE_LIBRARY_USE_CASES)[number]
 
+/**
+ * The tones (`descriptives`) the Voice Library labels its voices with
+ * (`GET /v1/voices/library?descriptives=<one>`), alphabetical — what a picker
+ * shows as a category's sub-groups. Every voice carries at most one. The
+ * library adds and drops words over time: this is the list it used when it
+ * was last read (2026-11); `GET /v1/voices/library/facets` says which exist
+ * now, with how many voices each, and the route passes any value through.
+ */
+export const VOICE_LIBRARY_DESCRIPTIVES = [
+  "anxious",
+  "calm",
+  "casual",
+  "childish",
+  "chill",
+  "classy",
+  "confident",
+  "crisp",
+  "cute",
+  "deep",
+  "excited",
+  "formal",
+  "gentle",
+  "grumpy",
+  "husky",
+  "hyped",
+  "intense",
+  "mature",
+  "meditative",
+  "modulated",
+  "neutral",
+  "pleasant",
+  "professional",
+  "raspy",
+  "relaxed",
+  "robotic",
+  "rough",
+  "sad",
+  "sassy",
+  "serious",
+  "soft",
+  "upbeat",
+  "whispery",
+  "wise",
+] as const
+export type VoiceLibraryDescriptive = (typeof VOICE_LIBRARY_DESCRIPTIVES)[number]
+
 /** Query params for `GET /v1/voices/library`. All optional; sent as a querystring. */
 export interface VoiceLibraryParams {
   search?: string
   gender?: string
   age?: string
   accent?: string
+  /** A language code as the library uses them (`en`, `he`); matches a voice's VERIFIED languages, not only its primary one. */
   language?: string
   category?: string
   /** One of `VOICE_LIBRARY_USE_CASES` (any other string is passed through as sent). */
   use_cases?: VoiceLibraryUseCase | (string & {})
-  descriptives?: string
+  /** One of `VOICE_LIBRARY_DESCRIPTIVES` (any other string is passed through as sent); one value per call. */
+  descriptives?: VoiceLibraryDescriptive | (string & {})
   featured?: boolean
   /** e.g. "trending" — passed through to the route. */
   sort?: string
@@ -95,6 +167,59 @@ export interface VoiceLibraryParams {
 export interface VoiceLibraryResponse {
   voices: SharedVoice[]
   hasMore: boolean
+}
+
+/**
+ * Query params for `GET /v1/voices/library/facets`: the listing's filters,
+ * without paging and sort. All optional.
+ */
+export type VoiceLibraryFacetsParams = Pick<
+  VoiceLibraryParams,
+  "search" | "gender" | "age" | "accent" | "language" | "category" | "use_cases" | "descriptives" | "featured"
+>
+
+/** One value of a facet and how many voices carry it. */
+export interface VoiceLibraryFacetCount {
+  value: string
+  count: number
+}
+
+/**
+ * `GET /v1/voices/library/facets` response: for the filters sent, how many
+ * library voices match (`total`) and that number broken down by every facet,
+ * so one call fills a whole picker screen. Each facet's counts apply every
+ * filter EXCEPT its own (a client shows every category's count while one is
+ * chosen); values with no voices are left out; lists are sorted by count,
+ * then by value. The values are the library's own spellings — the same
+ * strings the listing's filters take.
+ *
+ * Counted over the platform's copy of the library, refreshed on a schedule
+ * (`updatedAt` is when it was read), not over the live listing: a count may
+ * trail the listing by a few voices. `languages` counts a voice under every
+ * language it is verified for (what the listing's `language` filter matches),
+ * so those counts add up to more than `total`.
+ */
+export interface VoiceLibraryFacets {
+  /** Voices matching every filter sent. */
+  total: number
+  use_cases: VoiceLibraryFacetCount[]
+  languages: VoiceLibraryFacetCount[]
+  descriptives: VoiceLibraryFacetCount[]
+  genders: VoiceLibraryFacetCount[]
+  ages: VoiceLibraryFacetCount[]
+  accents: VoiceLibraryFacetCount[]
+  categories: VoiceLibraryFacetCount[]
+  /**
+   * True when `search` was sent: the library's own search is fuzzy (it stems
+   * and tolerates a typo), which the counts cannot reproduce — under `search`
+   * they match the name and description as written and are a lower estimate.
+   */
+  approximate: boolean
+  /** When the copy these counts come from was read (ISO 8601); null when there is none (no speech key). */
+  updatedAt: string | null
+  /** Present (true) when the deployment has no speech key: nothing to count. */
+  keyMissing?: boolean
+  hint?: string
 }
 
 /**

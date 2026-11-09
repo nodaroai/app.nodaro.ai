@@ -1,8 +1,11 @@
+import { surfaceUnitLabel } from "@nodaro/shared/runtime-config"
 import {
   surfaceCreditUnitLabel,
+  surfaceCreditUnitLabels,
   surfaceCreditsToUnits,
 } from "./surface-selectors"
 import { formatNumber } from "@/lib/i18n/format"
+import { useLocaleStore } from "@/lib/locale-store"
 
 /**
  * Credit figures in the DISPLAY unit (Phase B).
@@ -53,7 +56,17 @@ export function creditUnitsApprox(credits: number | null | undefined, estimate: 
  */
 export function creditUnitLabel(codeDefault = "CR"): string {
   const configured = surfaceCreditUnitLabel()
-  return configured === "CR" ? codeDefault : configured
+  return configured === "CR" ? codeDefault : viewerUnitWord(surfaceCreditUnitLabels(), configured)
+}
+
+/**
+ * The deployment's unit in the viewer's language: the word it gives for the
+ * language on screen (`billing.unitLabels`, read live at render like every
+ * other label here), else `single`, the label it uses everywhere else. With
+ * no per-language words the store is not read at all.
+ */
+function viewerUnitWord(labels: Readonly<Record<string, string>> | undefined, single: string): string {
+  return labels ? surfaceUnitLabel(labels, useLocaleStore.getState().locale, single) : single
 }
 
 /** `"12 CR"` — the two above, joined the way every hand-rolled site did. */
@@ -74,5 +87,16 @@ export function formatCreditUnits(
  */
 export function serverUnitLabel(unit: string | undefined, codeDefault = "CR"): string {
   if (!unit || unit === "credits") return codeDefault
-  return unit
+  // The seam sends the deployment's single label; a unit it does not call by that name is rendered as sent.
+  return unit === surfaceCreditUnitLabel() ? viewerUnitWord(surfaceCreditUnitLabels(), unit) : unit
+}
+
+/**
+ * The label for a `display` object: figures that came with their own unit and,
+ * where the deployment gives them, its words per language (`unitLabels`, the
+ * balance's and the model costs'). The word the server sent for the viewer's
+ * language, else {@link serverUnitLabel} of the unit.
+ */
+export function displayUnitLabel(display: { readonly unit: string; readonly unitLabels?: Readonly<Record<string, string>> }, codeDefault = "CR"): string {
+  return viewerUnitWord(display.unitLabels, serverUnitLabel(display.unit, codeDefault))
 }

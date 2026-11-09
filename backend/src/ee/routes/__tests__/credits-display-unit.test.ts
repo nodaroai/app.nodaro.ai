@@ -281,6 +281,34 @@ describe("GET /v1/user/credits with a display unit, on a deployment with a singl
   })
 })
 
+describe("the unit's words per interface language", () => {
+  const WORDS = { en: "Points", he: "נקודות" }
+
+  it("the balance's display carries the map beside the single label; the client picks the viewer's word", async () => {
+    setUnit({ unitLabel: "Points", unitRate: 2, unitLabels: WORDS })
+    const data = (await getCredits(nextUserId())).json().data as { display: Record<string, unknown> }
+    expect(data.display.unit).toBe("Points")
+    expect(data.display.unitLabels).toEqual(WORDS)
+    expect(data.display.decimals).toBe(0)
+  })
+
+  it("the price lookups carry it too", async () => {
+    setUnit({ unitLabel: "Points", unitRate: 2, unitLabels: WORDS })
+    expect((await batch([FIXED_ID])).json().display.unitLabels).toEqual(WORDS)
+    const single_ = (await single(FIXED_ID)).json().data.display
+    expect(single_.unit).toBe("Points")
+    expect(single_.unitLabels).toEqual(WORDS)
+  })
+
+  it("a single label: the key is absent, not empty — every body as before", async () => {
+    setUnit({ unitLabel: "Points", unitRate: 2 })
+    const display = (await getCredits(nextUserId())).json().data.display as Record<string, unknown>
+    expect(Object.hasOwn(display, "unitLabels")).toBe(false)
+    expect(Object.hasOwn((await batch([FIXED_ID])).json().display, "unitLabels")).toBe(false)
+    expect(Object.hasOwn((await single(FIXED_ID)).json().data.display, "unitLabels")).toBe(false)
+  })
+})
+
 describe("the price lookups with a display unit", () => {
   beforeEach(() => setUnit({ unitLabel: "Points", unitRate: 2 }))
 

@@ -12,7 +12,7 @@ import { join, relative } from "node:path"
  * Every user-facing render of a credit figure goes through ONE of:
  *   - <CreditCost …> (components/ui/credit-cost.tsx) — converts + labels
  *   - creditUnits() / creditUnitLabel() / formatCreditUnits() / serverUnitLabel()
- *     (lib/credit-units.ts) — for template strings and i18n params
+ *     / displayUnitLabel() (lib/credit-units.ts) — for template strings and i18n params
  *   - an i18n key that takes the label as a `u` parameter
  *
  * ALLOWLIST is deliberately EMPTY and must stay empty: the design forbids
@@ -60,6 +60,7 @@ function justified(line: string, prev: string | undefined): boolean {
     line.includes("creditUnitLabel(") ||
     line.includes("formatCreditUnits(") ||
     line.includes("serverUnitLabel(") ||
+    line.includes("displayUnitLabel(") ||
     line.includes("<CreditCost") ||
     line.includes("credit-units:") ||
     (prev?.includes("credit-units:") ?? false)
@@ -85,6 +86,20 @@ describe("credit-unit label scan (Phase B, H14)", () => {
       offenders,
       `Render credit figures through <CreditCost>, creditUnits()/creditUnitLabel()/formatCreditUnits(), or serverUnitLabel() (lib/credit-units.ts). Hand-rolled unit labels found:\n${offenders.join("\n")}`,
     ).toEqual([])
+  })
+
+  it("the locale's own words for the unit reach the screen only through the funnel (a converted figure beside \"credits\" is the bug above)", () => {
+    const offenders: string[] = []
+    const longWord = /\b(?:t|tx)\(\s*["']credits\.unit\.(?:one|other)["']/
+    for (const file of walk(FRONTEND_SRC)) {
+      const rel = relative(FRONTEND_SRC, file)
+      const lines = readFileSync(file, "utf8").split("\n")
+      lines.forEach((line, i) => {
+        if (NOISE.test(line)) return
+        if (longWord.test(line) && !justified(line, lines[i - 1])) offenders.push(`${rel}:${i + 1}  ${line.trim()}`)
+      })
+    }
+    expect(offenders, `Wrap the word in creditUnitLabel(...) or serverUnitLabel(...) so a deployment's unit replaces it:\n${offenders.join("\n")}`).toEqual([])
   })
 
   it("the allowlist is empty — a display unit may only be configured once every site is migrated", () => {

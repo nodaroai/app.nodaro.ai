@@ -71,7 +71,7 @@ function mount(balance: Record<string, unknown>, t?: SiteHeaderTranslate) {
   const Shell = pkg!.NodaroShell
   render(
     <Shell
-      sdk={withHeaderBalance(sdk as unknown as NodaroClient)}
+      sdk={withHeaderBalance(sdk as unknown as NodaroClient, () => "en")}
       supabase={fakeSupabase() as never}
       queryClient={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
       sourceApp="app"
@@ -126,6 +126,14 @@ describe.skipIf(!pkg)("a white-label balance, drawn by the pinned header", () =>
     expect(within(menu).getByText("tokens left")).toBeInTheDocument()
     expect(within(menu).getByText("tokens left: 6,000,000 of 8,000,000")).toBeInTheDocument()
     expect(menu.querySelector(".ns-menu-meter")).toHaveStyle({ width: "75%" })
+  })
+
+  it("the deployment's word for the viewer's language: the header draws the word the app handed it", async () => {
+    // The small caption over the figure reads `display.unit` itself, not through the app's translator.
+    const display = { unit: "טוקנים", unitLabels: { en: "tokens", he: "טוקנים" }, decimals: 0, ...WALLET, total: 1200 }
+    mount({ ...WALLET, total: 300, display })
+    expect(await within(bar()).findByText("tokens")).toBeInTheDocument()
+    expect(within(bar()).queryByText("טוקנים")).toBeNull()
   })
 
   it("an outside wallet: its figure and no meter, as before", async () => {

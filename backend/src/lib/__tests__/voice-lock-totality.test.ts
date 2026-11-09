@@ -324,10 +324,24 @@ describe("the voice lock — every speech lane is classified, every seam judges,
     }
   })
 
-  it("(e) the Voice Library is listed in one place, and it records what it served", () => {
-    const listing = files.filter((f) => f.src.includes("/v1/shared-voices")).map((f) => f.rel)
-    expect(listing, "a second place lists the Voice Library without recording what it served").toEqual(["routes/voices.ts"])
-    expect(read("routes/voices.ts")).toContain("recordLibraryVoiceGenders(voices)")
+  it("(e) the Voice Library is listed in one place, which records what it served; its counting copy serves no voice", () => {
+    // The listing's address is built in one module; two readers call it: the
+    // listing route, which serves voices to a client and so records each one's
+    // gender for the lock, and the library catalog, which walks the whole
+    // library to COUNT it (routes/voice-library-facets.ts) and never answers a
+    // client itself — the facets route narrows its copy by the lock before
+    // counting, so no count names a voice the listing would hide.
+    const ADDRESS = "providers/elevenlabs/shared-voices.ts"
+    const LISTING = "routes/voices.ts"
+    const COUNTER = "providers/elevenlabs/voice-library-catalog.ts"
+    const naming = files.filter((f) => f.src.includes("/v1/shared-voices")).map((f) => f.rel)
+    expect(naming, "the listing's address is built in one module").toEqual([ADDRESS])
+    const readers = files.filter((f) => f.rel !== ADDRESS && f.src.includes("sharedVoicesUrl(")).map((f) => f.rel).sort()
+    expect(readers, "a new place reads the Voice Library: either it serves voices (then it records what it served) or it is a counting copy (then it serves nothing)").toEqual([COUNTER, LISTING].sort())
+    expect(read(LISTING)).toContain("recordLibraryVoiceGenders(voices)")
+    for (const token of ["reply", "FastifyReply", "FastifyInstance"]) expect(srcOf(COUNTER), `${COUNTER} must never answer a client (${token})`).not.toContain(token)
+    expect(read("routes/voice-library-facets.ts")).toContain("filterVoicesByAllowedGender(voices)")
+    expect(read("routes/voice-library-facets.ts")).toContain("clampLibraryGender(query.gender)")
   })
 
   it("(f) every node the builder dispatches straight to a plugin's job is classified, and one that speaks is judged through its plugin's reader", () => {

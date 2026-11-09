@@ -39,6 +39,12 @@ export interface LibraryAsset {
    * leave it out.
    */
   readonly jobId?: string | null
+  /**
+   * The name the owner gave the job that made the file
+   * (`client.jobs.rename`), or `null` when it is unnamed or there is no job
+   * (an upload). Not the file's `filename`. Absent from an older server.
+   */
+  readonly title?: string | null
   readonly createdAt: string
 }
 

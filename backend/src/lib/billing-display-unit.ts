@@ -64,6 +64,13 @@ export interface DisplayUnit {
   readonly label: string
   readonly rate: number
   readonly decimals: number
+  /**
+   * The unit's word per interface language (`billing.unitLabels`), when the
+   * deployment gives one. It rides BESIDE `label`: nothing here knows the
+   * viewer's language, so a `display` object carries the map and the client
+   * picks the viewer's word. `label` stays what every other unit field says.
+   */
+  readonly labels?: Readonly<Record<string, string>>
 }
 type UnitConfig = DisplayUnit
 
@@ -79,7 +86,7 @@ type UnitConfig = DisplayUnit
 export function configuredDisplayUnit(): DisplayUnit | null {
   const b = runtimeSurfaceProfile().billing
   if (b.unitLabel === undefined || b.unitRate === undefined) return null
-  return { label: b.unitLabel, rate: b.unitRate, decimals: b.unitDecimals ?? 0 }
+  return { label: b.unitLabel, rate: b.unitRate, decimals: b.unitDecimals ?? 0, ...(b.unitLabels ? { labels: b.unitLabels } : {}) }
 }
 
 function convertQuote(q: Quote, u: UnitConfig): Quote {

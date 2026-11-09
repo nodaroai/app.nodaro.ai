@@ -6,9 +6,9 @@ import { hasCredits } from "@/lib/edition"
 import { useBillingSurface } from "@/hooks/use-billing-surface"
 import {
   isDeploymentPayer,
-  surfaceCreditUnitLabel,
   type DeploymentPayerProbe,
 } from "@/lib/surface-selectors"
+import { creditUnitLabel } from "@/lib/credit-units"
 import { tx, type MessageKey } from "@/lib/i18n"
 import type { DisplayUnit } from "@/ee/app/billing-admin/units"
 import { formatNumber } from "@/lib/i18n/format"
@@ -630,7 +630,7 @@ export function useGrantAllowanceMutation() {
       toast.success(
         tx("billingAdmin.topupDone", {
           granted: data.allowance.granted == null ? "—" : formatNumber(data.allowance.granted),
-          unit: surfaceCreditUnitLabel(),
+          unit: creditUnitLabel(),
         }),
       )
       void qc.invalidateQueries({ queryKey: deploymentBillingKeys.all })

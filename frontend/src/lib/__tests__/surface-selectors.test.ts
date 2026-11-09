@@ -76,6 +76,7 @@ describe("surface selectors — empty means inherit, non-empty means narrow", ()
 
 import {
   surfaceCreditUnitLabel,
+  surfaceCreditUnitLabels,
   surfaceCreditUnitRate,
   surfaceCreditUnitDecimals,
   surfaceCreditsToUnits,
@@ -120,6 +121,14 @@ describe("billing display-unit selectors (Phase B) — mainline literals by defa
     expect(surfaceCreditsToUnits(Number.POSITIVE_INFINITY)).toBeNull()
     delete window.__NODARO_RUNTIME__
     expect(surfaceCreditsToUnits(null)).toBeNull()
+  })
+
+  it("the per-language unit words: absent unless configured", () => {
+    expect(surfaceCreditUnitLabels()).toBeUndefined()
+    window.__NODARO_RUNTIME__ = { surface: { billing: { costTab: "inherit", sidebarCard: "inherit", selfServe: true, unitLabel: "u", unitRate: 2, unitLabels: { en: "units", he: "יחידות" } } } }
+    expect(surfaceCreditUnitLabels()).toEqual({ en: "units", he: "יחידות" })
+    // The single label is what the map falls back to, and is unchanged.
+    expect(surfaceCreditUnitLabel()).toBe("u")
   })
 
   it("sidebar credit card: hidden only when the profile says \"hidden\"", () => {

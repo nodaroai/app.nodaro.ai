@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { spendableCredits } from "../spendable-credits"
+import { spendableCredits, spendableDisplayFigure } from "../spendable-credits"
 
 /**
  * Track A (D12/R-A) — the one helper every client credit gate and every credit
@@ -245,5 +245,31 @@ describe("spendableCredits", () => {
     )
     expect(s.figure).toBe(199_950) // not × 2000
     expect(s.displayFigure).toBe(199_950)
+  })
+})
+
+describe("spendableDisplayFigure — the same rule, read from the server's converted `display`", () => {
+  const DISPLAY = { total: 3000 as number | null }
+
+  it("a shared wallet's available figure wins (the raw key decides, the display twin answers)", () => {
+    const balance = { total: 1, externalWallet: { available: 700 } }
+    expect(spendableDisplayFigure(balance, { ...DISPLAY, externalWallet: { available: 1400 } })).toBe(1400)
+  })
+
+  it("else the member's allowance", () => {
+    const balance = { total: 1, allowance: { granted: 900, remaining: 450, enforced: true } }
+    expect(spendableDisplayFigure(balance, { ...DISPLAY, allowance: { remaining: 900 } })).toBe(900)
+  })
+
+  it("else the total", () => {
+    expect(spendableDisplayFigure({ total: 1 }, DISPLAY)).toBe(3000)
+    expect(spendableDisplayFigure({ total: 1, allowance: null }, DISPLAY)).toBe(3000)
+  })
+
+  it("a figure the server could not give stays null, never 0", () => {
+    expect(spendableDisplayFigure({ total: 1, externalWallet: { available: null } }, { ...DISPLAY, externalWallet: { available: null } })).toBeNull()
+    expect(spendableDisplayFigure({ total: 1, externalWallet: { available: 5 } }, DISPLAY)).toBeNull()
+    expect(spendableDisplayFigure({ total: 1, allowance: { granted: 9, remaining: 4 } }, { ...DISPLAY, allowance: null })).toBeNull()
+    expect(spendableDisplayFigure({ total: 1 }, { total: null })).toBeNull()
   })
 })

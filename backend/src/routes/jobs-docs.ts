@@ -105,6 +105,13 @@ const JobSummary = z
       .nullable()
       .optional()
       .describe("The owner's rating of the job (`PUT /v1/jobs/{id}/rating`), or null when unrated."),
+    title: z
+      .string()
+      .min(1)
+      .max(120)
+      .nullable()
+      .optional()
+      .describe("The owner's own name for the job (`PATCH /v1/jobs/{id}`), one line of plain text up to 120 characters; null until named."),
     queue: JobQueue.optional().describe("Present only on the single-job read (`GET /v1/jobs/{id}`) while the job waits for a slot (status `queued`) — never on the rows of the `GET /v1/jobs` list; see JobQueue."),
   })
   .openapi("Job")

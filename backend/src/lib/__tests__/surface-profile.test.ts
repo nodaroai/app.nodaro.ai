@@ -323,6 +323,57 @@ describe("billing — the display-unit trio is coherent or absent (Phase B, §3.
   })
 })
 
+describe("billing.unitLabels — the unit's word per interface language", () => {
+  const warn = () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    return { spy, calls: () => spy.mock.calls.map((c) => String(c[0])) }
+  }
+  afterEach(() => vi.restoreAllMocks())
+  const WITH_UNIT = { unitLabel: "קרדיטים", unitRate: 2000 }
+  const billing = (extra: Record<string, unknown>) => parseSurfaceProfile(JSON.stringify({ billing: { ...WITH_UNIT, ...extra } })).billing
+
+  it("absent unless configured — a deployment with a single label parses exactly as before", () => {
+    expect(SURFACE_PROFILE_DEFAULT.billing).not.toHaveProperty("unitLabels")
+    expect(parseSurfaceProfile(JSON.stringify({ billing: WITH_UNIT })).billing).toEqual({ costTab: "inherit", sidebarCard: "inherit", selfServe: true, unitLabel: "קרדיטים", unitRate: 2000 })
+  })
+
+  it("keeps a coherent map: canonical locale ids, trimmed words, beside the single label", () => {
+    const b = billing({ unitLabels: { he: " קרדיטים ", en: "credits", "pt-br": "créditos" } })
+    expect(b.unitLabels).toEqual({ he: "קרדיטים", en: "credits", "pt-BR": "créditos" })
+    expect(b.unitLabel).toBe("קרדיטים")
+    expect(b.unitRate).toBe(2000)
+  })
+
+  it("a malformed map is dropped alone, loudly, and the unit keeps working on its single label", () => {
+    const { calls } = warn()
+    for (const unitLabels of ["credits", 7, ["en"], null]) {
+      const b = billing({ unitLabels })
+      expect(b, JSON.stringify(unitLabels)).not.toHaveProperty("unitLabels")
+      expect(b.unitLabel).toBe("קרדיטים")
+      expect(b.unitRate).toBe(2000)
+    }
+    expect(calls().filter((m) => m.includes("billing.unitLabels dropped")).length).toBe(4)
+  })
+
+  it("an entry with an unknown language or no word drops alone; nothing usable leaves the key out", () => {
+    const { calls } = warn()
+    expect(billing({ unitLabels: { he: "קרדיטים", xx: "x", en: "   ", ja: 7 } }).unitLabels).toEqual({ he: "קרדיטים" })
+    expect(calls().some((m) => m.includes("billing.unitLabels") && m.includes("xx"))).toBe(true)
+    expect(billing({ unitLabels: { zz: "x" } })).not.toHaveProperty("unitLabels")
+    expect(billing({ unitLabels: {} })).not.toHaveProperty("unitLabels")
+  })
+
+  it("rides WITH the coherent trio: a map without a coherent label + rate drops with it", () => {
+    const { calls } = warn()
+    const labels = { en: "credits", he: "קרדיטים" }
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { unitLabels: labels } })).billing).not.toHaveProperty("unitLabels")
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: "u", unitLabels: labels } })).billing).not.toHaveProperty("unitLabels")
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { unitRate: 2000, unitLabels: labels } })).billing).not.toHaveProperty("unitLabels")
+    expect(parseSurfaceProfile(JSON.stringify({ billing: { unitLabel: "u", unitRate: 0.01, unitLabels: labels } })).billing).not.toHaveProperty("unitLabels")
+    expect(calls().some((m) => m.includes("billing.unitLabels dropped") && m.includes("coherent"))).toBe(true)
+  })
+})
+
 describe("sidebar surface additions — integrations nav key, studio tab key, brand wordmark", () => {
   it("nav.hide accepts \"integrations\"", () => {
     const p = parseSurfaceProfile(JSON.stringify({ nav: { hide: ["integrations", "pricing"] } }))

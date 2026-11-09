@@ -276,6 +276,8 @@ describe("what expunge erases", () => {
       error_detail: null,
       input_fingerprint: null,
       reconcile_last_error: null,
+      // The owner's own name for the job (609): their words, erased with the rest.
+      title: null,
     })
   })
 
