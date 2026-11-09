@@ -1,5 +1,31 @@
 # @nodaro/prompts
 
+## 1.51.0
+
+### Minor Changes
+
+- 45f1902: GPT Image 2.6 joins the catalog: `gpt-image-2-6-flare`, `gpt-image-2-6-sunburst` and `gpt-image-2-6-economy`, each with an `-i2i` sibling. Flare and Sunburst take an `auto`, `low`, `medium`, `high`, `xhigh` or `max` quality at 1K, 2K or 4K, and an edit is priced by how many images it is given. Economy is a flat price at 1K.
+
+  Adds the `background` lever (`IMAGE_BACKGROUND_VALUES`, `ImageBackground`) on GPT Image 2, 2.5 and 2.6: `backgrounds` and `transparentResolution` on catalog entries, `background` through `normalizeModelInput` and `resolveNormalizedImageGen`, and `backgroundOptionsByKind`. `"low"` joins `IMAGE_QUALITY_VALUES`.
+
+### Patch Changes
+
+- fa16b02: Model descriptions no longer state a fixed filter setting ("safety_tolerance=5", "no safety filter"): a deployment can now change it per model.
+- 7dc454f: The `pop-art` style's video wording now leads with a pop-art print (bold primary colours, large visible Ben-Day dots) instead of a plain cel-shaded comic, and `RESTYLE_PREVIEWS` has an approved clip for it, its still at 7 s, where the players celebrate.
+- Updated dependencies [fa16b02]
+- Updated dependencies [f4678cb]
+- Updated dependencies [331ba80]
+- Updated dependencies [3ba7c05]
+- Updated dependencies [45f1902]
+- Updated dependencies [18dd86c]
+- Updated dependencies [52a1a24]
+- Updated dependencies [a27499d]
+- Updated dependencies [ac55661]
+- Updated dependencies [db740ae]
+- Updated dependencies [a82e34b]
+- Updated dependencies [3c2e500]
+  - @nodaro/shared@3.56.0
+
 ## 1.50.1
 
 ### Patch Changes
