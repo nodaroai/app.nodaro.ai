@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from "react"
 import { DirectionProvider } from "@radix-ui/react-direction"
 import { watchSavedLocale } from "virtual:site-locale"
 import { useLocaleStore } from "@/lib/locale-store"
+import { siteHeaderMode } from "@/lib/site-header-mode"
 
 /**
  * Puts the store's locale on `<html lang dir>`. The entry module calls it
@@ -23,9 +24,10 @@ export function applyDocumentLocale(): void {
  * shared content, not chrome) and picker tile grids (pinned through
  * `usePickerDir()`).
  *
- * It also follows the language every Nodaro product shares: coming back to
- * the tab after another product changed it, the page switches without a
- * reload (and writes nothing back).
+ * It also follows the language every Nodaro product shares, where the
+ * deployment shows the shared header: coming back to the tab after another
+ * product changed it, the page switches without a reload (and writes nothing
+ * back).
  */
 export function I18nHtmlDir(): null {
   const locale = useLocaleStore((s) => s.locale)
@@ -35,14 +37,13 @@ export function I18nHtmlDir(): null {
     el.setAttribute("lang", locale)
     el.setAttribute("dir", dir)
   }, [locale, dir])
-  useEffect(
-    () =>
-      watchSavedLocale(
-        (shared) => useLocaleStore.getState().followLocale(shared),
-        () => useLocaleStore.getState().locale,
-      ),
-    [],
-  )
+  useEffect(() => {
+    if (siteHeaderMode() === null) return
+    return watchSavedLocale(
+      (shared) => useLocaleStore.getState().followLocale(shared),
+      () => useLocaleStore.getState().locale,
+    )
+  }, [])
   return null
 }
 

@@ -683,4 +683,51 @@ describe("Auto Mode end-to-end (Phase 1D.2a §9 smoke 1)", () => {
     const finalPipeline = state.pipelines.get("p-fresh")!
     expect(finalPipeline.status).not.toBe("completed")
   })
+
+  it("under a deployment payer the stages run at the payer's grade stamped on the pipeline (decided 2026-11-08)", async () => {
+    const row = (id: string, config?: Record<string, unknown>) => ({
+      id,
+      user_id: "u1",
+      status: "queued",
+      mode: "auto" as const,
+      activation_mode: "interactive" as const,
+      input_prompt: "story prompt",
+      target_duration_seconds: 60,
+      format: "short_film",
+      output_resolution: "1080p",
+      language: "en",
+      reserved_credits: 100,
+      spent_credits: 0,
+      reservation_usage_log_id: "log-1",
+      failure_reason: null,
+      ...(config ? { config } : {}),
+    })
+    const stamped = {
+      billingContext: {
+        payer: "deployment",
+        userId: "u1",
+        payerId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        entitlements: { watermark: false, dailyCapCredits: null, parallelism: 4, tierForGates: "business" },
+      },
+    }
+    ;(runScriptStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "approved",
+      plan: fakePlan,
+      scriptCritic: passScriptVerdict,
+      castCoverageCritic: passCastVerdict,
+      locationsCoverageCritic: passLocationsVerdict,
+      objectsValidation: passObjectsVerdict,
+    })
+    const tierOf = async (id: string, config?: Record<string, unknown>) => {
+      ;(runScriptStage as ReturnType<typeof vi.fn>).mockClear()
+      const state: MockState = { pipelines: new Map([[id, row(id, config)]]), stages: [] }
+      await drivePipeline({ supabase: makeSupabase(state) as never, pipelineId: id })
+      return ((runScriptStage as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as { userTier?: string } | undefined)?.userTier
+    }
+
+    // The creator's own row reads "pro" here; the stamped payer's grade wins.
+    expect(await tierOf("p-payer-stamped", stamped)).toBe("business")
+    // No stamp (mainline): the creator's own tier, as before.
+    expect(await tierOf("p-unstamped")).toBe("pro")
+  })
 })

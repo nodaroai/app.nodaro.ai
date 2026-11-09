@@ -151,3 +151,55 @@ describe("deployment discovery gates", () => {
     expect(surfaceTemplatesVisible()).toBe(false)
   })
 })
+
+describe("the keys the client apps read — absent means today's behaviour", () => {
+  it("an unconfigured deployment reads every default", async () => {
+    const s = await import("../surface-selectors")
+    expect(s.surfaceRequireSignIn()).toBe(false)
+    expect(s.surfaceLinkImportsAllowed()).toBe(true)
+    expect(s.surfaceCatalogImages()).toBe("default")
+    expect(s.surfaceLocaleOffered()).toBeUndefined()
+    expect(s.surfaceHeaderMode()).toBe("default")
+    expect(s.surfaceBrandLogo()).toBeUndefined()
+    expect(s.surfaceWorldAllowed("explore")).toBe(true)
+  })
+
+  it("a configured deployment reads its values", async () => {
+    const s = await import("../surface-selectors")
+    window.__NODARO_RUNTIME__ = {
+      surface: {
+        imports: { links: false },
+        catalogs: { required: true, factoryPresets: false, images: "none" },
+        locale: { default: "he", picker: true, offered: ["he", "en"] },
+        header: "white-label",
+        brand: { productName: "Acme", logo: "/brand/logo.svg" },
+        worlds: { allow: ["image"] },
+      },
+    }
+    expect(s.surfaceLinkImportsAllowed()).toBe(false)
+    expect(s.surfaceCatalogImages()).toBe("none")
+    expect(s.surfaceLocaleOffered()).toEqual(["he", "en"])
+    expect(s.surfaceHeaderMode()).toBe("white-label")
+    expect(s.surfaceBrandLogo()).toBe("/brand/logo.svg")
+    expect(s.surfaceWorldAllowed("image")).toBe(true)
+    expect(s.surfaceWorldAllowed("explore")).toBe(false)
+  })
+
+  it("requireSignIn: explicit wins; absent, it follows SSO-only sign-in", async () => {
+    const s = await import("../surface-selectors")
+    window.__NODARO_RUNTIME__ = { surface: { auth: { methods: ["sso"], ssoLabel: "Continue" } } }
+    expect(s.surfaceRequireSignIn()).toBe(true)
+    window.__NODARO_RUNTIME__ = { surface: { auth: { methods: ["email", "sso"], ssoLabel: "Continue" } } }
+    expect(s.surfaceRequireSignIn()).toBe(false)
+    window.__NODARO_RUNTIME__ = { surface: { auth: { methods: ["sso"], ssoLabel: "Continue", requireSignIn: false } } }
+    expect(s.surfaceRequireSignIn()).toBe(false)
+    window.__NODARO_RUNTIME__ = { surface: { auth: { methods: ["email"], requireSignIn: true } } }
+    expect(s.surfaceRequireSignIn()).toBe(true)
+  })
+
+  it("worlds: an allowlist that is present but empty offers none", async () => {
+    const s = await import("../surface-selectors")
+    window.__NODARO_RUNTIME__ = { surface: { worlds: { allow: [] } } }
+    expect(s.surfaceWorldAllowed("app")).toBe(false)
+  })
+})

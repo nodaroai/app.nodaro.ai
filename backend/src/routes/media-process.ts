@@ -12,6 +12,7 @@ import { isRelayOwnedObject } from "../lib/asset-delete.js"
 import { judgeAssetRowDelete } from "../lib/key-ownership.js"
 import { jobOutputReferrerPaths } from "../lib/job-output-urls.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
+import { linkImportRefusal } from "../lib/link-imports.js"
 import {
   downloadFile,
   runFfmpeg,
@@ -259,6 +260,11 @@ export async function mediaProcessRoutes(app: FastifyInstance) {
     }
 
     const { sourceUrl, type, crop, trim, format, deleteSource } = parsed.data
+
+    // The output is stored as the account's own file, so an outside source is
+    // an import of it: refused here on a deployment that turned link imports off.
+    const refused = linkImportRefusal(sourceUrl)
+    if (refused) return reply.status(403).send({ error: refused })
 
     const inputExt = safeMediaExt(sourceUrl, type === "video" ? "mp4" : "mp3")
     const outputExt = format ?? inputExt

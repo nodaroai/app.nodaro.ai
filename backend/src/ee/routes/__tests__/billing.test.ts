@@ -99,8 +99,10 @@ vi.mock("@/ee/billing/provision-credits.js", () => ({
 vi.mock("@/lib/surface-profile.js", () => ({
   runtimeSurfaceProfile: () => ({ billing: { selfServe: true } }),
 }))
+const payerState = vi.hoisted(() => ({ coverage: null as null | { payerId: string; tier: string; storedTier: string } }))
 vi.mock("@/lib/deployment-payer.js", () => ({
   deploymentPayerId: () => null,
+  payerCoverage: () => payerState.coverage,
 }))
 
 vi.mock("@/middleware/credit-guard.js", () => ({
@@ -304,6 +306,23 @@ describe("GET /v1/billing/subscription", () => {
     // table mock feeds the profiles lookup the same pro row, and a stored
     // paid tier passes through the derivation untouched.
     expect(res.json()).toEqual({ data: subscription, effectiveTier: "pro" })
+  })
+
+  it("under a deployment payer, effectiveTier is the payer account's grade, with no read of the user's row (decided 2026-11-08)", async () => {
+    payerState.coverage = { payerId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", tier: "business", storedTier: "business" }
+    try {
+      const chain = createSupabaseChain({
+        single: vi.fn().mockResolvedValue({ data: null, error: { message: "Not found" } }),
+      })
+      vi.mocked(supabase.from).mockReturnValue(chain as never)
+
+      const res = await app.inject({ method: "GET", url: "/v1/billing/subscription?userId=user-123" })
+
+      expect(res.json()).toEqual({ data: null, effectiveTier: "business" })
+      expect(vi.mocked(supabase.from).mock.calls.map((c) => c[0])).toEqual(["subscriptions"])
+    } finally {
+      payerState.coverage = null
+    }
   })
 })
 

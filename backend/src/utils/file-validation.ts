@@ -409,6 +409,25 @@ export async function checkStorageQuota(
 }
 
 /**
+ * The bytes tracked against a user, read on their own. Under a deployment payer
+ * `checkStorageQuota` answers with no figures, because no per-user ceiling is
+ * enforced there, while the counter is still kept (`reserveStorageIfWithinLimit`
+ * tracks without enforcing). `GET /v1/storage/status` reports it from here.
+ *
+ * Null when the row cannot be read or does not exist: never a figure the
+ * caller could mistake for zero usage.
+ */
+export async function readTrackedStorageBytes(userId: string): Promise<number | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("storage_used_bytes")
+    .eq("id", userId)
+    .maybeSingle()
+  if (error || !data) return null
+  return Number((data as { storage_used_bytes?: number | null }).storage_used_bytes ?? 0)
+}
+
+/**
  * Update user's storage usage after upload
  */
 export async function updateStorageUsage(

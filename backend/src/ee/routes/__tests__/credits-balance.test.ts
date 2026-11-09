@@ -22,6 +22,7 @@ vi.mock("@/lib/supabase.js", () => ({
 vi.mock("@/lib/deployment-payer.js", () => ({
   deploymentPayerActive: vi.fn(),
   deploymentPayerId: vi.fn(),
+  payerCoverage: vi.fn(),
 }))
 
 // The summary's reads and sums are ee/billing/usage-summary.ts's own tests; the
@@ -44,7 +45,7 @@ vi.mock("@/lib/credit-history.js", async () => {
 
 import { registerCreditsBalanceRoutes } from "../credits-balance.js"
 import { supabase } from "../../../lib/supabase.js"
-import { deploymentPayerActive, deploymentPayerId } from "../../../lib/deployment-payer.js"
+import { deploymentPayerActive, deploymentPayerId, payerCoverage } from "../../../lib/deployment-payer.js"
 import { usageSummaryFor } from "../../billing/usage-summary.js"
 import { exportCreditHistory, listCreditHistory } from "../../../lib/credit-history.js"
 
@@ -63,6 +64,7 @@ beforeEach(async () => {
   // a `mockReturnValue(true)` from one test leaks into every later one.
   vi.mocked(deploymentPayerActive).mockReturnValue(false)
   vi.mocked(deploymentPayerId).mockReturnValue(null)
+  vi.mocked(payerCoverage).mockReturnValue(null)
 
   app = Fastify({ logger: false })
 
@@ -113,9 +115,10 @@ function mockProfileRow(row: Record<string, unknown>) {
   } as never)
 }
 
-function activePayer(id = PAYER_ID) {
+function activePayer(id = PAYER_ID, tier = "business") {
   vi.mocked(deploymentPayerActive).mockReturnValue(true)
   vi.mocked(deploymentPayerId).mockReturnValue(id)
+  vi.mocked(payerCoverage).mockReturnValue({ payerId: id, tier, storedTier: tier === "payg" ? "free" : tier })
 }
 
 // ---------------------------------------------------------------------------
@@ -262,6 +265,22 @@ describe("GET /v1/credits/balance under a deployment payer", () => {
     const res = await getAs("/v1/credits/balance", TEST_USER_ID, "api_token")
     expect(res.statusCode).toBe(200)
     expect(res.json().total).toBe(10)
+  })
+
+  it("an ordinary user's plan is the payer account's grade, not the free tier they are stored at (decided 2026-11-08)", async () => {
+    activePayer(PAYER_ID, "pro")
+    mockProfileRow({ subscription_credits: 0, topup_credits: 0, tier: "free", subscription_tier: "free", lifetime_topup_credits: 0 })
+
+    const res = await getAs("/v1/credits/balance", TEST_USER_ID, "jwt")
+    expect(res.json()).toMatchObject({ total: 0, tier: "pro", effectiveTier: "pro" })
+  })
+
+  it("a payg payer reads as free in `tier` (never stored as payg) and payg in `effectiveTier`", async () => {
+    activePayer(PAYER_ID, "payg")
+    mockProfileRow({ subscription_credits: 0, topup_credits: 0, tier: "free", subscription_tier: "free", lifetime_topup_credits: 0 })
+
+    const res = await getAs("/v1/credits/balance", TEST_USER_ID, "jwt")
+    expect(res.json()).toMatchObject({ tier: "free", effectiveTier: "payg" })
   })
 
   it("byte-identical with no deployment payer configured: api_token still gets 200", async () => {

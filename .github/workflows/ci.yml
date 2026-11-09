@@ -78,9 +78,10 @@ jobs:
   # PRs into dev are `shadow` (the full suite runs; the selector's choice is
   # reported and checked for misses) until the repository variable
   # TEST_SELECT_ENFORCE is exactly `true`, which makes them `affected`.
-  # The job outputs `remotion`, `characterize`, `migrations` and
-  # `ffmpeg_ledger` (decided 2026-10-20) gate four jobs that test one corner of
-  # the tree: each declares its inputs once, in tools/ci/job-inputs.json, and
+  # The job outputs `remotion`, `characterize`, `migrations`, `ffmpeg_ledger`
+  # (decided 2026-10-20) and `media_e2e` (decided 2026-11-08) gate five jobs
+  # that test one corner of the tree: each declares its inputs once, in
+  # tools/ci/job-inputs.json, and
   # runs on a PR only when one changed (or a global trigger, or tools/ci/) —
   # always on a push and on a PR into main. Each such job's `if:` reads
   # `!= 'false'`, so a gate that failed or wrote nothing runs it.
@@ -104,6 +105,7 @@ jobs:
       characterize: ${{ steps.jobs.outputs.characterize }}
       migrations: ${{ steps.jobs.outputs.migrations }}
       ffmpeg_ledger: ${{ steps.jobs.outputs.ffmpeg_ledger }}
+      media_e2e: ${{ steps.jobs.outputs.media_e2e }}
       mode: ${{ steps.mode.outputs.mode }}
       reason: ${{ steps.mode.outputs.reason }}
     steps:
@@ -937,8 +939,8 @@ jobs:
     # The suites, and the jobs gated by tools/ci/job-inputs.json — which always
     # run on a push, so their failure here is this merge's to answer for. A
     # skipped job is never a failure.
-    needs: [frontend-tests, backend-tests, remotion-tests, characterize, migration-behavior, ffmpeg-ledger-redis]
-    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/dev' && (needs.frontend-tests.result == 'failure' || needs.backend-tests.result == 'failure' || needs.remotion-tests.result == 'failure' || needs.characterize.result == 'failure' || needs.migration-behavior.result == 'failure' || needs.ffmpeg-ledger-redis.result == 'failure') }}
+    needs: [frontend-tests, backend-tests, remotion-tests, characterize, migration-behavior, ffmpeg-ledger-redis, media-e2e]
+    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/dev' && (needs.frontend-tests.result == 'failure' || needs.backend-tests.result == 'failure' || needs.remotion-tests.result == 'failure' || needs.characterize.result == 'failure' || needs.migration-behavior.result == 'failure' || needs.ffmpeg-ledger-redis.result == 'failure' || needs.media-e2e.result == 'failure') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1055,6 +1057,83 @@ jobs:
         if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
         working-directory: backend
         run: npx vitest run src/providers/video/__tests__/ffmpeg-memory-ledger.redis.test.ts src/lib/__tests__/download-slot-ledger.redis.test.ts src/ee/lib/__tests__/presence-redis.redis.test.ts src/lib/concurrency-lanes/__tests__/lane-gate.redis.test.ts src/lib/concurrency-lanes/__tests__/lanes.integration.redis.test.ts src/ee/concurrency-lanes/__tests__/history-scripts.redis.test.ts
+
+  # The real-media end-to-end suite (decided 2026-11-08): the real-ffmpeg and
+  # face-model tests that cannot shrink without losing what they prove, listed
+  # ONCE in backend/src/test/media-e2e-files.json. Backend Tests' config
+  # excludes exactly that list and backend/vitest.media-e2e.config.ts runs
+  # exactly it, one file at a time, so each test runs in one job or the other
+  # (tools/__tests__/media-e2e-ownership.test.mjs). Gated by
+  # tools/ci/job-inputs.json like the jobs above: on a PR only when one of its
+  # inputs changed, always on a push and on a PR into main, and nightly on dev
+  # through nightly-media-e2e.yml. It has no services, so it runs on the pool.
+  media-e2e:
+    name: Media E2E (real ffmpeg)
+    needs: [changes, prepare-packages]
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.prepare-packages.result != 'success' || needs.changes.outputs.media_e2e != 'false') }}
+    runs-on: ${{ github.repository == 'nodaroai/app.nodaro.ai-internal' && (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) && (vars.CI_RAILWAY_ENABLED == 'true' || vars.CI_RAILWAY_PILOT_BRANCH != '' && github.head_ref == vars.CI_RAILWAY_PILOT_BRANCH) && fromJSON('["self-hosted", "linux", "x64", "nodaro-ci"]') || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    # Same job env as Backend Tests.
+    env:
+      SUPABASE_URL: https://test.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: test-key
+      EDITION: cloud
+      NODE_ENV: test
+      YOUTUBE_DL_SKIP_DOWNLOAD: true
+    steps:
+      - name: Require successful preparation
+        env:
+          PREPARE_RESULT: ${{ needs.prepare-packages.result }}
+        run: test "$PREPARE_RESULT" = success
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: false
+          cache-dependency-path: package-lock.json
+      # Prepare Shared Packages keeps the npm download cache current; a Railway
+      # runner only restores it (no upload on this job's completion path).
+      - name: Restore npm downloads on Railway
+        if: runner.environment == 'self-hosted'
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        timeout-minutes: 2
+        with:
+          path: ~/.npm
+          key: node-cache-${{ runner.os }}-x64-npm-${{ hashFiles('package-lock.json') }}
+      # The production-pinned static build, as Backend Tests installs it.
+      - name: Install the production-pinned ffmpeg (via tools/install-pinned-ffmpeg.sh)
+        run: sudo bash tools/install-pinned-ffmpeg.sh --from-dockerfile Dockerfile --arch amd64
+      - name: Pin npm 11
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+      - name: Install workspace dependencies
+        run: npm ci
+      - name: Restore shared packages
+        id: build-packages
+        uses: ./.github/actions/restore-ci-build
+        with:
+          kind: packages
+      - name: Declared inputs cover what the tests reach
+        run: node tools/ci/job-inputs-check.mjs media_e2e
+      - name: Run the media e2e suite
+        # The declaration check fails the job, but never hides the result.
+        if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
+        # One file at a time (vitest.media-e2e.config.ts). The pool image sets
+        # VITEST_MAX_WORKERS=2, and Vitest lets that override fileParallelism.
+        env:
+          VITEST_MAX_WORKERS: "1"
+        working-directory: backend
+        run: npm run test:media-e2e
+      # The split itself, asked of Vitest (the tools job reads it statically,
+      # with no install): every backend test file in exactly one suite.
+      - name: Each test file is in exactly one suite
+        if: ${{ !cancelled() }}
+        env:
+          MEDIA_E2E_REQUIRE_VITEST: "1"
+        run: node --test tools/__tests__/media-e2e-ownership.test.mjs
 
   typecheck:
     name: Type Check
@@ -1822,7 +1901,7 @@ jobs:
     # Without it here, a migration whose proof failed still reached production
     # — the job ran, went red, and nothing downstream cared. Found while
     # planning the content-scoping migrations, 2026-08-23.
-    needs: [prepare-packages, build-backend, frontend-tests, backend-tests, ffmpeg-ledger-redis, typecheck, tenant-scope-lint, check-ee-imports, check-pricing-leaks, check-billing-dumps, check-public-surface, check-surface-funnel, backend-boot-smoke, migration-behavior]
+    needs: [prepare-packages, build-backend, frontend-tests, backend-tests, ffmpeg-ledger-redis, media-e2e, typecheck, tenant-scope-lint, check-ee-imports, check-pricing-leaks, check-billing-dumps, check-public-surface, check-surface-funnel, backend-boot-smoke, migration-behavior]
     env:
       # Disable CLI telemetry. The CLI flushes anonymous PostHog analytics on
       # exit; on a runner that flush can time out and surface as a spurious

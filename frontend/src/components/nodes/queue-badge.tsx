@@ -5,8 +5,7 @@ import { useShallow } from "zustand/react/shallow"
 import type { LocaleId } from "@nodaro/shared/i18n"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useLocaleStore } from "@/lib/locale-store"
-import { translate } from "@/lib/i18n"
-import { DICTS } from "@/lib/i18n/dicts"
+import { localeText, translate } from "@/lib/i18n"
 import type { MessageKey } from "@/lib/i18n/en"
 import type { JobQueueInfo } from "@/lib/api"
 import { isNodesJob, type NodeQueueInfo } from "@/components/editor/workflow-editor/node-queue-info"
@@ -28,7 +27,7 @@ const ORDINAL_KEYS: Record<Intl.LDMLPluralRule, MessageKey> = {
  * pick them (Spanish rules would make every English ordinal "th").
  */
 export function queueOrdinal(locale: LocaleId, n: number): string {
-  const rulesLocale = DICTS[locale]?.["node.queue.ordinalOther"] !== undefined ? locale : "en"
+  const rulesLocale = localeText(locale, "node.queue.ordinalOther") !== undefined ? locale : "en"
   const category = new Intl.PluralRules(rulesLocale, { type: "ordinal" }).select(n)
   return translate(locale, ORDINAL_KEYS[category], { n })
 }

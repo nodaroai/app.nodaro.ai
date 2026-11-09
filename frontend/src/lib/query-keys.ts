@@ -103,6 +103,14 @@ export const queryKeys = {
     list: (nodeType?: string) => ["nodePresets", "list", nodeType ?? ""] as const,
   },
 
+  // The deployment's factory preset catalog (the same for every caller), keyed
+  // by node type. Its own root, so a change to the user's presets (which
+  // invalidates `nodePresets.all`) does not refetch it.
+  nodePresetFactory: {
+    all: ["nodePresetFactory"] as const,
+    list: (nodeType?: string) => ["nodePresetFactory", "list", nodeType ?? ""] as const,
+  },
+
   // Node preset favorites (per-user starred presets, keyed by node type)
   nodePresetFavorites: {
     all: ["nodePresetFavorites"] as const,

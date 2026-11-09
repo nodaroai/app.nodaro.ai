@@ -42,6 +42,11 @@ export interface CatalogEntry {
   readonly platforms?: readonly string[]
   readonly data: Readonly<Record<string, unknown>>
   readonly minReferences?: number
+  /**
+   * A deployment preset's own example picture (lib/presets/app-presets.ts,
+   * `PackPreset`). Bundled presets never carry one: theirs is the committed file.
+   */
+  readonly previewUrl?: string
 }
 
 /** A factory preset as the API serves it (`GET /v1/node-presets/factory`). */
@@ -56,8 +61,10 @@ export function factoryPresetView(nodeType: string, preset: CatalogEntry) {
     ...(preset.platforms && preset.platforms.length > 0 ? { platforms: preset.platforms } : {}),
     data: preset.data,
     ...referenceFields(nodeType, preset.data, preset.minReferences),
-    previewUrl: factoryPresetPreviewUrl(preset.id, appBaseUrl()),
-    ...previewSrcSetField(preset.id),
+    // A deployment preset names its own picture, at one size; a bundled one is
+    // looked up among the committed files (null until one is committed).
+    previewUrl: preset.previewUrl ?? factoryPresetPreviewUrl(preset.id, appBaseUrl()),
+    ...(preset.previewUrl === undefined ? previewSrcSetField(preset.id) : {}),
   }
 }
 

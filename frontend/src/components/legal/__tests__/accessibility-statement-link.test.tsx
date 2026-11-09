@@ -1,4 +1,4 @@
-// @test-watches frontend/src/app/(auth)/login/page.tsx frontend/src/components/layout/sidebar-footer.tsx frontend/src/ee/shell/app-header.tsx
+// @test-watches frontend/src/app/(auth)/login/page.tsx frontend/src/components/layout/sidebar-footer.tsx frontend/src/ee/shell/white-label-header.tsx
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
@@ -55,7 +55,7 @@ describe("every surface that lists the legal pages carries the link", () => {
   const SURFACES = [
     "src/app/(auth)/login/page.tsx", // sign-in, beside Terms / Privacy / Refund
     "src/components/layout/sidebar-footer.tsx", // the sidebar, above the version
-    "src/ee/shell/app-header.tsx", // the shared header's account menu
+    "src/ee/shell/white-label-header.tsx", // the white-label header's account menu
   ]
   for (const file of SURFACES) {
     it(file, () => {

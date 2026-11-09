@@ -16,6 +16,7 @@ import type {
   PluginDaemon,
   PluginEngines,
   PluginHandlerFn,
+  PluginNodeVoiceReader,
   PluginServices,
   PluginSupports,
   PluginToolkit,
@@ -135,6 +136,7 @@ export { getPluginRecipes } from "./recipe-registry.js"
 import { setPluginRecipes } from "./recipe-registry.js"
 export { getPluginSupports } from "./supports-registry.js"
 import { setPluginSupports } from "./supports-registry.js"
+import { setPluginNodeVoiceReaders } from "./node-voices-registry.js"
 
 /**
  * Publish stand-in services without loading a plugin, for a process that only
@@ -158,6 +160,7 @@ function emptyResult(): LoadPrivatePluginsResult {
   setPluginEngines({})
   setPluginRecipes({})
   setPluginSupports({})
+  setPluginNodeVoiceReaders(new Map())
   // Fresh object per call — loadPrivatePlugins() is called from more than
   // one boot path (app.ts + video-worker.ts, Task 10), and callers merge
   // into `handlers` (e.g. Object.assign(allHandlers, handlers)). Sharing one
@@ -307,6 +310,9 @@ export async function loadPrivatePlugins(
   // to the registry only after every plugin loaded: a load that fails part
   // way reports no plugins, and must record none of their types.
   const jobLanes = new Map<string, unknown>()
+  // Each node type's voice reader, last write wins; published, like the
+  // lanes, only once every plugin loaded.
+  const nodeVoiceReaders = new Map<string, PluginNodeVoiceReader>()
 
   for (const plugin of plugins) {
     let ownTypes: string[] = []
@@ -364,6 +370,7 @@ export async function loadPrivatePlugins(
       return handleLoadFailure(`plugin "${plugin.name}" failed to initialise: ${detail}`, exit)
     }
     for (const [type, cls] of Object.entries(ownJobLanes(plugin, ownTypes))) jobLanes.set(type, cls)
+    for (const [type, reader] of Object.entries(readNodeVoices(plugin))) nodeVoiceReaders.set(type, reader)
     loaded.push(plugin.name)
   }
 
@@ -373,6 +380,7 @@ export async function loadPrivatePlugins(
   setPluginEngines(engines)
   setPluginRecipes(recipes)
   setPluginSupports(supports)
+  setPluginNodeVoiceReaders(nodeVoiceReaders)
   return {
     handlers,
     loaded,
@@ -420,6 +428,35 @@ function ownJobLanes(plugin: NodaroPrivatePlugin, ownTypes: readonly string[]): 
   for (const [type, cls] of Object.entries(readJobLanes(plugin))) {
     if (own.has(type)) kept[type] = cls
     else console.warn(`[private-plugins] plugin "${plugin.name}" declares a lane for job type "${type}", which its handlers() do not return — ignored`)
+  }
+  return kept
+}
+
+/**
+ * A plugin's `nodeVoices()` declaration: the voice reader of each node type it
+ * serves, or none. Never fails the load: a declaration that throws or is not
+ * a plain object is logged and dropped, and so is an entry that is not a
+ * function. Under the deployment's voice lock a speech node left without a
+ * reader is refused (fail closed); with no lock nothing reads them.
+ */
+function readNodeVoices(plugin: NodaroPrivatePlugin): Record<string, PluginNodeVoiceReader> {
+  if (!plugin.nodeVoices) return {}
+  let declared: unknown
+  try {
+    declared = plugin.nodeVoices()
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    console.warn(`[private-plugins] plugin "${plugin.name}" nodeVoices() threw: ${detail} — its nodes have no voice reader`)
+    return {}
+  }
+  if (declared === null || typeof declared !== "object" || Array.isArray(declared)) {
+    console.warn(`[private-plugins] plugin "${plugin.name}" nodeVoices() returned no object — its nodes have no voice reader`)
+    return {}
+  }
+  const kept: Record<string, PluginNodeVoiceReader> = {}
+  for (const [type, reader] of Object.entries(declared as Record<string, unknown>)) {
+    if (typeof reader === "function") kept[type] = reader as PluginNodeVoiceReader
+    else console.warn(`[private-plugins] plugin "${plugin.name}" nodeVoices() entry for "${type}" is not a function — ignored`)
   }
   return kept
 }

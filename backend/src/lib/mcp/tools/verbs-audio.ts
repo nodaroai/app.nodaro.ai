@@ -14,7 +14,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, DEFAULT_TTS_PROVIDER, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, SUNO_SEPARATE_TYPES } from "@nodaro/shared/models"
+import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, TTS_OUTPUT_FORMATS, DEFAULT_TTS_PROVIDER, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, SUNO_SEPARATE_TYPES } from "@nodaro/shared/models"
 import { MCP_TRANSCRIBE_PROVIDER } from "./_transcribe-provider.js"
 import { AUDIO_FX_PRESETS } from "@nodaro/shared/media"
 import { PITCH_TEMPO_LIMITS } from "@nodaro/shared/credits"
@@ -464,6 +464,13 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         style: z.number().min(0).max(1).optional(),
         speed: z.number().min(0.7).max(1.2).optional(),
         language_code: z.string().optional(),
+        output_format: z
+          .enum(TTS_OUTPUT_FORMATS)
+          .optional()
+          .describe(
+            "The audio file to deliver: `mp3_44100_128` (default), `mp3_44100_192` " +
+            "(a higher MP3 bitrate) or `wav_24000` (an uncompressed WAV). Same credits.",
+          ),
         previous_text: z
           .string()
           .max(TTS_NEIGHBOUR_TEXT_MAX_CHARS)
@@ -593,6 +600,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         style: effective.style as number | undefined,
         speed: effective.speed as number | undefined,
         languageCode: effective.language_code as string | undefined,
+        outputFormat: effective.output_format as string | undefined,
         previousText: effective.previous_text as string | undefined,
         nextText: effective.next_text as string | undefined,
         mcp_client: session.clientName,

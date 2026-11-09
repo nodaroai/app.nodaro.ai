@@ -290,6 +290,25 @@ export interface PluginMusicGenOptions {
    * description mode rather than sending a request the provider will refuse.
    */
   title?: string
+  /**
+   * The vocal gender to sing in, sent as Suno's own `vocalGender` ("male" or
+   * "female"; absent or "" = the provider's choice). ADDITIVE-OPTIONAL (no
+   * CONTRACT_VERSION bump): an older host ignores it. This is where the
+   * deployment's prompt policy reaches the provider: send the `vocalGender`
+   * that `tk.prompts.applyPolicies` returned for this music prompt (a policy
+   * may force one). Forwarded as given in both modes, as the platform's own
+   * music lane sends it; the host applies no policy of its own here, so a
+   * plugin that polices its prompt polices it exactly once.
+   */
+  vocalGender?: string
+  /**
+   * Styles to steer away from, sent as Suno's own `negativeStyle` (absent or
+   * "" = none). ADDITIVE-OPTIONAL: an older host ignores it. For the prompt
+   * policy: send the `negativePrompt` that `tk.prompts.applyPolicies`
+   * returned for this music prompt (a policy may add terms to it). Forwarded
+   * as given in both modes, and never policed again here.
+   */
+  negativeStyle?: string
   onTaskCreated?: (taskId: string) => void | Promise<void>
 }
 
@@ -2252,10 +2271,25 @@ export interface PluginHttpToolkit {
   /** Public HTTP bytes, SSRF checked, 30s timeout and streaming cap (1–25 MiB).
    * Caller must separately authorize the source. No storage credentials. */
   safeFetchBytes?(url: string, maxBytes: number): Promise<Buffer>
-  /** Mirrors `insertWithIdempotencyKey` (`lib/idempotent-insert.ts:33`).
-   *  P14: the optional context stamps the payer pair (workspace_id/org_id)
-   *  onto the row — which also trips the DB privacy clamp for workspace
-   *  work. Additive-optional: an older plugin's rows stay personal-shaped. */
+  /**
+   * Inserts the plugin's own row into `jobs`, race-proof on `idempotencyKey`
+   * (`insertStampedJobIdempotent`, `lib/insert-job.ts`).
+   * P14: the optional context stamps the payer pair (workspace_id/org_id)
+   * onto the row — which also trips the DB privacy clamp for workspace work.
+   * Additive-optional: an older plugin's rows stay personal-shaped. No
+   * session or origin is stamped; that is `insertJobWithProvenance`.
+   *
+   * The row passes the same request gate as every core job before it exists:
+   * a blocked account, an input naming a restricted file, and every request
+   * policy the deployment registered (one that throws blocks: fail-closed).
+   * A refusal rejects with a `PluginHttpError` (identify it by
+   * `.name === "PluginHttpError"`): 422 `job_blocked`, the same refusal
+   * `insertJobWithProvenance` throws. Send it verbatim
+   * (`reply.status(err.statusCode).send(err.body)`) or hand it to
+   * `sendInternalError`, which answers it the same way. Any other failure
+   * (the database) is re-thrown unchanged. With nothing registered and an
+   * unblocked account the row is written exactly as before.
+   */
   insertJobWithIdempotencyKey(
     data: Record<string, unknown> & { user_id: string },
     idempotencyKey: string | null | undefined,
@@ -2482,7 +2516,10 @@ export interface PluginHttpToolkit {
    * Mirrors `sendInternalError` (`lib/http-errors.ts`) — logs `err` server-side
    * and sends a sanitized `internal_error` 500 with the curated `clientMessage`
    * (marked so the global onSend net leaves it intact). The video-analysis route
-   * uses it for the job-insert failure path.
+   * uses it for the job-insert failure path. A refusal the toolkit itself
+   * shaped (a `PluginHttpError`: a job-policy block, a session or origin the
+   * request may not use) is answered as that refusal — its own 4xx status and
+   * body, logged at info — never as a 500.
    */
   sendInternalError(reply: FastifyReply, req: FastifyRequest, err: unknown, clientMessage?: string): FastifyReply
   /**
@@ -3196,6 +3233,53 @@ export interface PluginSseToolkit {
 }
 
 // ============================================================================
+// tk.prompts — backend/src/lib/prompt-policy.ts
+// ============================================================================
+
+/**
+ * Mirrors `PromptAssembly` (`lib/prompt-policy.ts`) field for field: a
+ * media-generation prompt as it stands just before it is sent to a provider.
+ */
+export interface PluginPromptAssembly {
+  prompt: string
+  /** "" when the provider takes none. A policy may add terms to it. */
+  negativePrompt: string
+  kind: "image" | "video" | "audio"
+  /** Suno vocal gender (audio only); a policy may force it. */
+  vocalGender?: string
+  /** True when the subject of an IMAGE assembly is a minor; absent elsewhere. */
+  subjectMinor?: boolean
+}
+
+/**
+ * The deployment's content policy for prompts a plugin assembles itself.
+ * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard the group; an
+ * older host has no such member.
+ */
+export interface PluginPromptsToolkit {
+  /**
+   * Runs every prompt policy the deployment registered, in registration
+   * order, over one assembly and returns the result: the prompt to send, the
+   * negative prompt to send, and (audio) the vocal gender to send. Exactly the
+   * transform a core route applies at its assembly point
+   * (`applyPromptPolicies`), read at call time.
+   *
+   * With no policy registered it is the identity: a plugin that calls it
+   * changes nothing on an install without a content policy. Synchronous and
+   * pure; the caller's object is never mutated.
+   *
+   * Call it ONCE per media-generation prompt, at the plugin's final assembly
+   * point, right before the provider dispatch (`tk.providers.*`), and send what
+   * it returns. Never call it on a prompt that is not a media-generation prompt
+   * (a segmentation target, an LLM system prompt, spoken text): a policy clause
+   * there is corruption, not enforcement. A prompt the plugin hands on to a core
+   * route through `tk.http.internalRequest` is policed by that route as well; a
+   * policy is idempotent by contract, so the second pass is a no-op.
+   */
+  applyPolicies(assembly: PluginPromptAssembly): PluginPromptAssembly
+}
+
+// ============================================================================
 // PluginToolkit — the full dependency-injection surface handed to every plugin
 // ============================================================================
 
@@ -3219,6 +3303,12 @@ export interface PluginToolkit {
    * member and the plugin keeps its tier billing.
    */
   llmBilling?: PluginLlmBillingToolkit
+  /**
+   * The deployment's prompt policy, for media-generation prompts a plugin
+   * assembles itself (`PluginPromptsToolkit`). ADDITIVE-OPTIONAL (no
+   * CONTRACT_VERSION bump) — `?.`-guard it; an older host has no such member.
+   */
+  prompts?: PluginPromptsToolkit
   pipelines: PluginPipelinesToolkit
   redis: PluginRedisToolkit
   auth: PluginAuthToolkit
@@ -3317,7 +3407,116 @@ export interface PluginToolkit {
    * that user. ADDITIVE-OPTIONAL — `?.`-guard it.
    */
   social?: PluginSocialToolkit
+  /**
+   * The deployment's voice lock, for the voices a plugin route sends to a
+   * provider (`PluginVoicesToolkit`). ADDITIVE-OPTIONAL (no CONTRACT_VERSION
+   * bump) — `?.`-guard it; an older host has no such member.
+   */
+  voices?: PluginVoicesToolkit
+  /**
+   * The deployment's switch for links to outside content
+   * (`PluginImportsToolkit`). ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) —
+   * `?.`-guard it; an older host has no such member.
+   */
+  imports?: PluginImportsToolkit
 }
+
+// ============================================================================
+// tk.imports — backend/src/lib/link-imports.ts
+// ============================================================================
+
+/**
+ * The deployment's switch for links to outside content (`imports.links` on its
+ * surface profile), for the links a plugin route fetches itself or hands to a
+ * provider: a video to analyse, a clip to recast, a picture from a page. The
+ * host's own downloads and probes (`tk.providers.downloadYouTubeVideo`,
+ * `downloadSocialPostVideo`, `ytMetadataProbe`, `probeSocialPostVideo`) refuse
+ * on their own; a link that goes through `tk.http.safeFetch` or
+ * `tk.ffmpeg.downloadFile`, or to a provider, needs this asked first.
+ * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard the group.
+ */
+export interface PluginImportsToolkit {
+  /**
+   * False when the deployment refuses links to outside content. Read at call
+   * time and reads nothing else, so a route can ask it per request.
+   */
+  linksAllowed(): boolean
+  /**
+   * Returns when `url` may be fetched on this deployment, and throws a
+   * `PluginHttpError` (identify it by `.name === "PluginHttpError"`) when it
+   * may not: 403, body `{ error: { code: "link_imports_disabled", message } }`.
+   * Send it verbatim. A file of this deployment's own storage always passes;
+   * with the switch on (the default) everything passes and nothing is read.
+   *
+   * Call it for EVERY caller-supplied link the route will fetch, probe or hand
+   * to a provider, before any job row, reservation or probe.
+   */
+  assertLinkAllowed(url: string): void
+}
+
+// ============================================================================
+// tk.voices — backend/src/lib/voice-gender.ts
+// ============================================================================
+
+/**
+ * The deployment's voice lock (`voice.allowedGenders` on its surface profile)
+ * for the voices a plugin route sends to a provider: a conversion's target
+ * voices, a re-spoken speaker's voice, a dub's voices. The same verdict the
+ * platform's own speech routes give. ADDITIVE-OPTIONAL (no CONTRACT_VERSION
+ * bump) — `?.`-guard the group.
+ */
+export interface PluginVoicesToolkit {
+  /**
+   * True when the deployment restricts voice genders. Read at call time and
+   * reads nothing else, so a route can ask it per request: for example, to
+   * refuse a speaker whose original voice would be kept, whose gender nothing
+   * here can vouch for.
+   */
+  isLocked(): boolean
+  /**
+   * Resolves when `voiceId` may be used on this deployment by `userId`, and
+   * rejects with a `PluginHttpError` (identify it by
+   * `.name === "PluginHttpError"`) when it may not: 400, body
+   * `{ error: { code: "voice_not_available", message } }`. Send it verbatim.
+   *
+   * The voice is judged by its id alone (premade voice by name or id, the
+   * user's own clone, a Voice Library voice this deployment's library listing
+   * served). Under a lock, a voice of a disallowed gender is refused, and so is
+   * one whose gender nothing can vouch for. With no lock it resolves at once
+   * and reads nothing; an empty `voiceId` has nothing to judge. A failed lookup
+   * rejects with that error itself (a server error, not a refusal).
+   *
+   * Call it for EVERY voice the route will send, before any reservation or
+   * job is created.
+   */
+  assertAllowed(voiceId: string, opts: { readonly userId: string }): Promise<void>
+}
+
+/**
+ * How to read the voices a WORKFLOW RUN of one plugin-served node will speak in
+ * (plugin → host, declared with `NodaroPrivatePlugin.nodeVoices`). The
+ * workflow engine dispatches such a node straight to the plugin's handler,
+ * past the plugin's own route and the `tk.voices` check it makes, so under
+ * the deployment's voice lock the engine judges these voices itself, before
+ * the node's job or any reservation exists, exactly as it judges its own
+ * speech nodes. With no lock nothing reads them.
+ *
+ * `data` is the node's data as the engine builds it (field mappings and
+ * carried settings applied) and `inputs` its resolved upstream inputs, both as
+ * plain JSON copies. Return the id of every voice the node's job will send a
+ * speech provider: the voices the plugin's own route judges for the same
+ * request. An empty string has nothing to judge (a default voice is the
+ * deployment policy's own); an empty list says the node speaks in no named
+ * voice.
+ *
+ * Pure and synchronous: no I/O and no toolkit, because the engine may run in
+ * a process that loads no plugin and asks the API to run it. A reader that
+ * throws, or returns anything but a list of strings, fails the node.
+ */
+export type PluginNodeVoiceReader = (
+  data: Readonly<Record<string, unknown>>,
+  inputs: Readonly<Record<string, unknown>>,
+) => readonly string[]
 
 export interface PluginTelegramBotTextInput {
   /** Whose bot, and whose account it writes to: both are looked up by this owner. */
@@ -4637,7 +4836,7 @@ export interface PluginAuthUser {
 export class PluginHttpError extends Error {
   override readonly name = "PluginHttpError"
   constructor(
-    readonly statusCode: 400 | 404 | 422,
+    readonly statusCode: 400 | 403 | 404 | 422,
     readonly body: { error: { code: string; message: string } & Record<string, unknown> },
     cause: unknown,
   ) {
@@ -5492,6 +5691,17 @@ export interface NodaroPrivatePlugin {
    * `tk.capabilities.jobLanes` is true on the host.
    */
   jobLanes?(): Record<string, PluginJobLaneClass>
+  /**
+   * Additive: for each node type this plugin serves that speaks in voices,
+   * how to read the voices a workflow run of it will speak in, keyed by node
+   * type (see `PluginNodeVoiceReader`). Read only under the deployment's voice
+   * lock. A node type the platform knows speaks, run in a workflow under a lock
+   * with no reader declared, is refused (fail closed). Merged by the loader
+   * last write wins per type; a declaration that throws or is not an object,
+   * and an entry that is not a function, is refused (logged) without failing
+   * the load. Takes no toolkit.
+   */
+  nodeVoices?(): Record<string, PluginNodeVoiceReader>
 }
 
 export interface PrivatePluginsModule {

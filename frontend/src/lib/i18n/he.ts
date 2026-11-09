@@ -594,6 +594,11 @@ export const he: ChromeDict = {
   "nav.whatsNewIn": "מה חדש ב-{version}",
   "nav.backToProjects": "חזרה לפרויקטים",
   "nav.openMenu": "פתיחת תפריט",
+  "header.units.balance": "{credits} {unit}",
+  "header.units.pill": "{credits} {unit} — קבלת {unit} נוספים",
+  "header.units.loading": "טוענים {unit}",
+  "header.units.left": "{unit} שנותרו",
+  "header.units.meter": "{unit} שנותרו: {left} מתוך {total}",
 
   // Auth / login
   "auth.tagline": "תהליכים חזותיים ליצירת וידאו בבינה מלאכותית",
@@ -5669,6 +5674,7 @@ export const he: ChromeDict = {
   "vidcfg.orientVideoKlingSuffix": ", עד 30 שניות",
   "vidcfg.normal": "רגיל",
   "vidcfg.nsfwFilter": "מסנן תוכן לא הולם",
+  "vidcfg.nsfwFilterForced": "נקבע על ידי מנהל המערכת",
   "vidcfg.originalAudio": "אודיו מקורי",
   "vidcfg.pro1080p": "Pro (1080p)",
   "vidcfg.referenceMode": "מצב ייחוס",

@@ -3,6 +3,7 @@ import { z } from "zod"
 import { sendInternalError } from "../../lib/http-errors.js"
 import { callerKeyHash } from "../../routes/oauth-register.js"
 import { fallbackClaimDue, retryKeylessWithhold, runSignupGrantClaim } from "../billing/signup-grant.js"
+import { SIGNUP_GRANTS_NOT_APPLICABLE, signupGrantsApply } from "../billing/free-grant-scope.js"
 import { welcomeClaimOptions } from "../billing/welcome-offer-claim-options.js"
 import { supabase } from "../../lib/supabase.js"
 import { clientAddress } from "../../lib/client-address.js"
@@ -24,6 +25,9 @@ import { signupCookieKey } from "../lib/signup-cookie.js"
  *
  * The response carries the STATE only, never the reasons: telling a withheld
  * account which rule caught it is a tuning guide for the next attempt.
+ *
+ * On a deployment with a single payer the route answers 409 `not_applicable`
+ * (free-grant-scope.ts); the boot client swallows it like any other failure.
  */
 
 /** A SHA-256 hex digest. Lowercase only: that is what crypto.subtle produces. */
@@ -112,6 +116,11 @@ export async function claimSignupGrantRoutes(app: FastifyInstance) {
           error: { code: "unauthorized", message: "Authentication required" },
         })
       }
+
+      // A deployment with a single payer bills every run to its billing
+      // account: no free grant applies (free-grant-scope.ts). Refused before
+      // the profile read and the signup cookie — nothing is recorded or set.
+      if (!signupGrantsApply()) return reply.status(409).send(SIGNUP_GRANTS_NOT_APPLICABLE)
 
       try {
         const { data: profile, error: profileError } = await supabase

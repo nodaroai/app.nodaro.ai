@@ -598,6 +598,12 @@ export const en = {
   "nav.whatsNewIn": "What's new in {version}",
   "nav.backToProjects": "Back to projects",
   "nav.openMenu": "Open menu",
+  // The white-label header's credit words, in a deployment's own unit ({unit}: its name, as configured).
+  "header.units.balance": "{credits} {unit}",
+  "header.units.pill": "{credits} {unit} — get more {unit}",
+  "header.units.loading": "Loading {unit}",
+  "header.units.left": "{unit} left",
+  "header.units.meter": "{unit} left: {left} of {total}",
 
   // ── Auth / login ────────────────────────────────────────────────────────
   "auth.tagline": "Visual workflows for AI video generation",
@@ -5698,6 +5704,7 @@ export const en = {
   "vidcfg.orientVideoKlingSuffix": ", max 30s",
   "vidcfg.normal": "Normal",
   "vidcfg.nsfwFilter": "NSFW Content Filter",
+  "vidcfg.nsfwFilterForced": "Set by your administrator",
   "vidcfg.originalAudio": "Original audio",
   "vidcfg.pro1080p": "Pro (1080p)",
   "vidcfg.referenceMode": "Reference Mode",

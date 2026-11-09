@@ -23,6 +23,9 @@ vi.mock("@/lib/node-registry.js", () => ({
     { type: "text-prompt", category: "input" },
     { type: "generate-image", category: "ai-image" },
     { type: "generate-video", category: "ai-video" },
+    { type: "text-to-video", category: "ai-video" },
+    { type: "suno-generate", category: "ai-audio" },
+    { type: "voice-changer-pro", category: "ai-audio" },
     { type: "instagram-scrape", category: "input" },
     { type: "meta-ads-scrape", category: "input" },
     { type: "web-scrape", category: "input" },
@@ -38,6 +41,7 @@ vi.mock("@/lib/config.js", () => ({
   hasAdmin: () => true,
 }))
 
+import { WORLD_IDS } from "@nodaro/shared/runtime-config"
 import { surfaceAvailabilityRoutes } from "../surface-availability.js"
 import {
   __resetAvailabilityOverridesForTests,
@@ -75,9 +79,12 @@ afterEach(async () => {
 const get = (userId?: string) =>
   app.inject({ method: "GET", url: "/v1/surface/availability", headers: userId ? { "x-user-id": userId } : {} })
 
+/** Every node type of the mocked registry. */
+const ALL_NODES = ["text-prompt", "generate-image", "generate-video", "text-to-video", "suno-generate", "voice-changer-pro", "instagram-scrape", "meta-ads-scrape", "web-scrape"]
+const SCRAPERS = ["instagram-scrape", "meta-ads-scrape"]
+
 /** The production shape: everything on except the two scrapers. */
-const hideScrapers = () =>
-  __resetAvailabilityOverridesForTests({ nodes: new Set(["text-prompt", "generate-image", "generate-video", "web-scrape"]) })
+const hideScrapers = () => __resetAvailabilityOverridesForTests({ nodes: new Set(ALL_NODES.filter((t) => !SCRAPERS.includes(t))) })
 
 describe("GET /v1/surface/availability", () => {
   it("stock deployment: nothing denied, nothing hidden, for anyone", async () => {
@@ -113,7 +120,7 @@ describe("GET /v1/surface/availability", () => {
   it("an admin does not get back what the deployment PROFILE removed", async () => {
     process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ nodes: { deny: ["generate-video"] } })
     __resetSurfaceProfileCacheForTests()
-    __resetAvailabilityOverridesForTests({ nodes: new Set(["text-prompt", "generate-image", "web-scrape"]) })
+    __resetAvailabilityOverridesForTests({ nodes: new Set(ALL_NODES.filter((t) => t !== "generate-video" && !SCRAPERS.includes(t))) })
     const body = (await get(ADMIN)).json()
     expect(body.nodes.denied).toEqual(["generate-video"])
     expect([...body.nodes.hiddenFromUsers].sort()).toEqual(["instagram-scrape", "meta-ads-scrape"])
@@ -142,5 +149,63 @@ describe("GET /v1/surface/availability", () => {
   it("is never shared-cacheable — the answer depends on who asked", async () => {
     const res = await get(ADMIN)
     expect(res.headers["cache-control"]).toBe("private, no-store")
+  })
+})
+
+describe("GET /v1/surface/availability — worlds", () => {
+  type World = { id: string; enabled: boolean }
+  const worldsOf = async (who?: string): Promise<World[]> => (await get(who)).json().worlds
+  const enabled = (worlds: World[]) => worlds.filter((w) => w.enabled).map((w) => w.id)
+  const setProfile = (profile: unknown) => {
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify(profile)
+    __resetSurfaceProfileCacheForTests()
+  }
+
+  it("stock deployment: every world, in the shared header's order, enabled for anyone", async () => {
+    for (const who of [undefined, USER, ADMIN]) {
+      expect(await worldsOf(who)).toEqual(WORLD_IDS.map((id) => ({ id, enabled: true })))
+    }
+  })
+
+  it("a world is off when a node type it runs is not offered — every one is required", async () => {
+    setProfile({ nodes: { allow: ["generate-image", "text-to-video", "voice-changer-pro"] } })
+    const worlds = await worldsOf(USER)
+    // video also runs generate-video, which the allowlist leaves out; music runs suno-generate.
+    expect(worlds.find((w) => w.id === "video")?.enabled).toBe(false)
+    expect(worlds.find((w) => w.id === "music")?.enabled).toBe(false)
+    expect(worlds.find((w) => w.id === "image")?.enabled).toBe(true)
+    expect(worlds.find((w) => w.id === "voice")?.enabled).toBe(true)
+    // Worlds that run no node of their own are untouched by the node lists.
+    for (const id of ["explore", "app", "studio"]) expect(worlds.find((w) => w.id === id)?.enabled, id).toBe(true)
+  })
+
+  it("Trends and Motion follow Cast Swap: denying it turns both off", async () => {
+    setProfile({ nodes: { deny: ["cast-swap"] } })
+    const worlds = await worldsOf(USER)
+    expect(worlds.find((w) => w.id === "trends")?.enabled).toBe(false)
+    expect(worlds.find((w) => w.id === "motion")?.enabled).toBe(false)
+    expect(worlds.find((w) => w.id === "video")?.enabled).toBe(true)
+  })
+
+  it("worlds.allow narrows by presence; order leads; worlds left out are still listed, off", async () => {
+    setProfile({ worlds: { allow: ["image", "app"], order: ["app", "image"] } })
+    const worlds = await worldsOf(USER)
+    expect(worlds.map((w) => w.id)).toEqual(["app", "image", "explore", "video", "music", "trends", "motion", "voice", "studio"])
+    expect(enabled(worlds)).toEqual(["app", "image"])
+
+    setProfile({ worlds: { allow: [] } })
+    expect(enabled(await worldsOf(USER))).toEqual([])
+  })
+
+  it("both conditions hold: an allowed world whose node is not offered stays off", async () => {
+    setProfile({ worlds: { allow: ["image", "video"] }, nodes: { deny: ["generate-video"] } })
+    expect(enabled(await worldsOf(USER))).toEqual(["image"])
+  })
+
+  it("per viewer: a node the admin switch withholds from users turns its world off for a user, not for an admin", async () => {
+    // Everything released except Voice Changer Pro.
+    __resetAvailabilityOverridesForTests({ nodes: new Set(ALL_NODES.filter((t) => t !== "voice-changer-pro")) })
+    expect((await worldsOf(USER)).find((w) => w.id === "voice")?.enabled).toBe(false)
+    expect((await worldsOf(ADMIN)).find((w) => w.id === "voice")?.enabled).toBe(true)
   })
 })

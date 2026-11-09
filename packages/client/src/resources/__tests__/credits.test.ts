@@ -351,3 +351,67 @@ describe("credits resource", () => {
     expect((err as StorageExceededError).limitBytes).toBe(10_000_000)
   })
 })
+
+describe("credits resource — the deployment's display unit", () => {
+  it("balance() passes the server-converted display figures and the allowance through untouched", async () => {
+    const answer: UserBalance = {
+      ...BALANCE,
+      allowance: { granted: 400, remaining: 150, enforced: false },
+      display: {
+        unit: "Points",
+        decimals: 0,
+        total: 3000,
+        subscription: 2000,
+        topup: 1000,
+        dailySpent: 40,
+        dailyLimit: null,
+        monthlyAllocation: 2000,
+        appCreditsAllowance: 0,
+        allowance: { granted: 800, remaining: 300 },
+      },
+    }
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: vi.fn().mockReturnValueOnce(mockOk({ data: answer })),
+    })
+    const balance = await c.credits.balance()
+
+    expect(balance.display).toEqual(answer.display)
+    expect(balance.display?.dailyLimit).toBeNull()
+    expect(balance.allowance?.enforced).toBe(false)
+    // The raw figures are what they always were.
+    expect(balance.total).toBe(1500)
+  })
+
+  it("a balance from a deployment with no display unit has no display key", async () => {
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: vi.fn().mockReturnValueOnce(mockOk({ data: BALANCE })),
+    })
+    const balance = await c.credits.balance()
+    expect(balance.display).toBeUndefined()
+  })
+
+  it("modelCosts() carries display.data beside data, and the single lookup's type carries display", async () => {
+    const answer: ModelCostsResult = {
+      data: { a: 12, "llm-chat:claude-opus-5.5": 6 },
+      missing: ["c"],
+      errors: [],
+      estimates: ["llm-chat:claude-opus-5.5"],
+      display: { unit: "Points", decimals: 0, data: { a: 24, "llm-chat:claude-opus-5.5": 12 } },
+    }
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: vi.fn().mockReturnValueOnce(mockOk(answer)),
+    })
+    const result = await c.credits.modelCosts(["a", "llm-chat:claude-opus-5.5", "c"])
+
+    expect(result.display).toEqual(answer.display)
+    expect(result.data.a).toBe(12)
+    const single: ModelCostResult = { model: "a", creditCost: 12, display: { unit: "Points", decimals: 0, creditCost: 24 } }
+    expect(single.display?.creditCost).toBe(24)
+  })
+})

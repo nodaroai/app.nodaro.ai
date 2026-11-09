@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import { type PipelineInput, validateDurationForFormat, validateModeActivation } from "@nodaro/shared/pipeline"
 import { resolveEffectiveTier } from "@nodaro/shared/credits"
+import { coverageOf, payerCoverage } from "../../lib/deployment-payer.js"
 
 /**
  * Phase 2 — shared "create + reserve + enqueue a pipeline" service.
@@ -194,9 +195,11 @@ export async function createPipeline(
     lipsyncEnabled: config.lipsync_enabled ?? true,
     videoCriticFrameCount: input.video_critic_frame_count,
   })
+  // Under a deployment payer the ladder runs at the payer account's grade
+  // (`coverageOf` the resolved payer, decided 2026-11-08).
   const maxCost = resolveMaxCostCredits({
     requested: input.max_cost_credits,
-    tier: userTier,
+    tier: (coverageOf(billingContext) ?? payerCoverage())?.tier ?? userTier,
   })
 
   // 1. Insert pipeline row.

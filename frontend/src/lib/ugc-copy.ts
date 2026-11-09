@@ -9,8 +9,7 @@
  */
 import { UGC_CREATOR_NO_IMAGE_MESSAGE, type UgcQuoteLineKey } from "@nodaro/render-rules"
 import { UGC_NODE_MESSAGES, UGC_SCRIPT_NEEDS_CHANGES, type UgcNodeMessageId } from "@nodaro/shared/ugc"
-import { tx, type MessageKey } from "@/lib/i18n"
-import { DICTS } from "@/lib/i18n/dicts"
+import { localeText, tx, type MessageKey } from "@/lib/i18n"
 import { useLocaleStore } from "@/lib/locale-store"
 import { ugcSeconds } from "@/lib/ugc-node-cards"
 
@@ -82,7 +81,7 @@ export const UGC_SCRIPT_NEEDS_CHANGES_KEY: MessageKey = "ugc.msg.scriptNeedsChan
 /** The dictionary's sentence where the interface language has its own; else the server's words. */
 function inOwnLanguage(serverLabel: string, key: MessageKey, vars?: Record<string, string | number>): string {
   const locale = useLocaleStore.getState().locale
-  return locale !== "en" && DICTS[locale]?.[key] !== undefined ? tx(key, vars) : serverLabel
+  return locale !== "en" && localeText(locale, key) !== undefined ? tx(key, vars) : serverLabel
 }
 
 /** Each fixed sentence a UGC node fails with → its entry, keyed by the shared sentence itself (never retyped here). */

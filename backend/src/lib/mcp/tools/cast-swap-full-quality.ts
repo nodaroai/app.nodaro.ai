@@ -37,6 +37,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import type { McpSession } from "../session.js"
+import { isNodeDenied, USER_VIEWER } from "../../surface-deny.js"
 import { neutralBreakdown } from "../../nodaro-motion-quote.js"
 import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
@@ -138,6 +139,8 @@ const fullQualityUrl = (id: string) => `/v1/cast-swap/${encodeURIComponent(id)}/
 
 export function registerCastSwapFullQualityTools({ server, session, fastify }: RegisterCastSwapFullQualityToolsOpts): void {
   if (!passesGate(session, executeGate)) return
+  // A Full Quality redo is a Nodaro Motion run: not listed where cast-swap is not offered.
+  if (isNodeDenied("cast-swap", USER_VIEWER)) return
 
   async function quote(id: string) {
     const res = await mcpInject(fastify, session, { method: "POST", url: `${fullQualityUrl(id)}/estimate`, payload: {} })

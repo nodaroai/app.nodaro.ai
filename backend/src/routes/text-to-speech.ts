@@ -9,14 +9,14 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { TTS_PROVIDERS, getMaxTtsChars } from "@nodaro/shared/models"
+import { TTS_OUTPUT_FORMATS, TTS_PROVIDERS, getMaxTtsChars } from "@nodaro/shared/models"
 import { ttsSupportsStitching } from "@nodaro/shared/model-catalog"
 import { resolveOmittedTtsProvider, ttsModelOf } from "../lib/omitted-tts-provider.js"
 import { speechLengthPricingEnabled } from "../lib/config.js"
 import { speechBaseCredits } from "../lib/speech-credits.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { isVoiceGenderAllowed, premadeVoiceGender } from "../lib/voice-policy.js"
+import { judgeVoice, voiceNotAvailableBody } from "../lib/voice-gender.js"
 import { TTS_VOICE_SETTING_RANGES, type TtsVoiceSettingKey } from "../providers/elevenlabs/voice-settings.js"
 import { TTS_NEIGHBOUR_TEXT_MAX_CHARS } from "../providers/elevenlabs/neighbour-text.js"
 
@@ -61,6 +61,9 @@ export const textToSpeechBody = z.object({
   // (measured 2026-10-06), through the model's sheet (`timestamps`); without the flag the
   // request is exactly the plain one. No price change.
   withTimestamps: z.boolean().optional(),
+  // The file to deliver (`TTS_OUTPUT_FORMATS`): omitted ⇒ the MP3 every request delivered before
+  // the field existed, so the payload and the vendor request stay byte-identical without it.
+  outputFormat: z.enum(TTS_OUTPUT_FORMATS).optional(),
   // What is spoken just before / after this clip in the finished piece — context a stitching
   // model (v4) uses for one continuous intonation across clips; the funnel sends it only to a
   // model whose sheet takes it. Checked in the refinement below, because whether a value can
@@ -145,17 +148,15 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       })
     }
 
-    // B4c: reject a PREMADE voice whose gender the deployment disallows. Custom /
-    // library / unknown-gender voices pass here (clone/design/remix are gated by
-    // nodes.deny). Unrestricted deployments are byte-identical (isVoiceGenderAllowed
-    // returns true when allowedGenders is []).
-    if (parsed.data.voiceType !== "custom" && parsed.data.voiceType !== "library") {
-      const g = premadeVoiceGender(parsed.data.voice)
-      if (g !== undefined && !isVoiceGenderAllowed(g)) {
-        return reply.status(400).send({
-          error: { code: "voice_not_available", message: "The selected voice is not available on this deployment." },
-        })
-      }
+    // B4c: under a voice lock, refuse a voice whose gender the platform cannot
+    // vouch for as allowed — judged by the voice's id alone, never by the
+    // request's own voiceType: a premade voice (by name or id), the caller's own
+    // clone, a library voice this deployment listed (lib/voice-gender.ts). A
+    // voice of unknown gender is refused too. No lock: no lookup at all, and
+    // the request is byte-identical to before.
+    const voiceVerdict = await judgeVoice(parsed.data.voice, { userId })
+    if (!voiceVerdict.allowed) {
+      return reply.status(400).send(voiceNotAvailableBody())
     }
 
     // Map legacy "elevenlabs" to "elevenlabs-turbo" for credit check; an omitted
@@ -171,7 +172,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
     // the destructured `text`) see the clamped value.
     parsed.data.text = parsed.data.text.slice(0, getMaxTtsChars(resolvedProvider))
 
-    const { text, voice, voiceType, stability, similarityBoost, style, speed, languageCode, previousText, nextText, withTimestamps } = parsed.data
+    const { text, voice, voiceType, stability, similarityBoost, style, speed, languageCode, previousText, nextText, withTimestamps, outputFormat } = parsed.data
 
     const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await insertJob(req, {
@@ -207,6 +208,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       languageCode,
       // Only when asked: an absent key keeps the payload byte-identical.
       ...(withTimestamps ? { withTimestamps } : {}),
+      ...(outputFormat ? { outputFormat } : {}),
       previousText,
       nextText,
       // LLM-originated (MCP) requests may carry a hallucinated voice id —

@@ -1,7 +1,10 @@
+import { WORLD_REQUIRED_NODE_TYPES, orderWorlds, worldAllowed, type WorldId } from "@nodaro/shared/runtime-config"
 import { runtimeSurfaceProfile } from "./surface-profile.js"
 import { parseSiteCaptureEnabled } from "./site-capture-switch.js"
 import {
   availabilityOverride,
+  gateGeneration,
+  nodesOverrideGeneration,
   GATEABLE_NODE_TYPES,
   GATEABLE_MODEL_IDS,
 } from "./availability-override.js"
@@ -26,7 +29,11 @@ import { isModelSwitchedOff, switchedOffModelIds } from "./model-switch.js"
  *      recommended shape for a curated deployment: a node the profile never
  *      heard of is unavailable by default instead of available by omission.
  *   3. admin override (availability-override.ts) — a stored enabled-set that
- *      REPLACES layer 2 while present; "reset to factory" deletes it.
+ *      REPLACES layer 2 while present; "reset to factory" deletes it. It
+ *      replaces it only for the gates it was saved knowing: a gate newer than
+ *      the stored override (an id that was live before it became gateable, a
+ *      route that follows its node only since route gating) is answered by
+ *      layer 2 until the next save ("Gating generations" there).
  *   4. the admin's model switch (model-switch.ts, models only) —
  *      `model_pricing.is_enabled` off on the admin models page. It wins over
  *      every layer below it: a model nobody can run is not offered, whatever
@@ -88,12 +95,21 @@ export function isNodeFactoryDenied(type: string): boolean {
   return deny.includes(type)
 }
 
-/** True when this deployment does not offer this node type to `viewer`. */
-export function isNodeDenied(type: string, viewer: AvailabilityViewer): boolean {
+/**
+ * True when this deployment does not offer this node type to `viewer`.
+ *
+ * `gateSince` is the gating generation of the DOOR asking, when that door is
+ * newer than the type itself — a route refused under a node only since route
+ * gating (lib/route-node-gate.ts). A stored override older than the door, or
+ * than the type's own gate (`gateGeneration`), never decided it, so the factory
+ * layer answers instead (lib/availability-override.ts, "Gating generations").
+ */
+export function isNodeDenied(type: string, viewer: AvailabilityViewer, gateSince = 0): boolean {
   // An install switch is no availability setting: no override hands the node back.
   if (switchedOffNodeTypes().includes(type)) return true
   const override = availabilityOverride("nodes")
   if (!override) return isNodeFactoryDenied(type)
+  if (Math.max(gateSince, gateGeneration(type)) > nodesOverrideGeneration()) return isNodeFactoryDenied(type)
   const hiddenByOverride = GATEABLE_NODE_TYPES.has(type) && !override.has(type)
   if (!hiddenByOverride) return false
   // Left OFF by the admin switch: hidden from users. An admin keeps it only if
@@ -159,6 +175,12 @@ const GOVERNED_CAPABILITIES: ReadonlyMap<
 function hostedCapability(hostType: string, data: unknown): { governedBy: string; label: string } | undefined {
   if (!data || typeof data !== "object") return undefined
   return GOVERNED_CAPABILITIES.get(hostType)?.(data as Readonly<Record<string, unknown>>)
+}
+
+/** True when `hostType` hosts a capability another node governs — a type the
+ *  availability funnel knows even when it is no registry node (competitor-scan). */
+export function isCapabilityHost(hostType: string): boolean {
+  return GOVERNED_CAPABILITIES.has(hostType)
 }
 
 /** The node type whose availability governs the capability `hostType` is
@@ -242,15 +264,25 @@ export function nodeNotAvailableError(types: readonly string[]): Error & { code:
   return Object.assign(new Error(deniedNodeRejectionMessage(types)), { code: "node_not_available" as const })
 }
 
+/**
+ * The FACTORY layer alone for a model (profile allow/deny), ignoring the admin
+ * override and the admin's model switch: what this deployment offers by its own
+ * configuration. What a boot-time check judges against — the admin layers change
+ * at run time, are loaded only later in boot, and asking them kicks a load.
+ */
+export function isModelFactoryDenied(id: string): boolean {
+  const { deny, allow } = runtimeSurfaceProfile().models
+  if (allow.length && GATEABLE_MODEL_IDS.has(id) && !allow.includes(id)) return true
+  return deny.includes(id)
+}
+
 /** True when this deployment does not offer this model id. */
 export function isModelDenied(id: string): boolean {
   // Layer 4 first: the admin's switch is not something an override can lift.
   if (isModelSwitchedOff(id)) return true
   const override = availabilityOverride("models")
   if (override) return GATEABLE_MODEL_IDS.has(id) && !override.has(id)
-  const { deny, allow } = runtimeSurfaceProfile().models
-  if (allow.length && GATEABLE_MODEL_IDS.has(id) && !allow.includes(id)) return true
-  return deny.includes(id)
+  return isModelFactoryDenied(id)
 }
 
 /** Shared refusal text for a denied model, parallel to the node message. */
@@ -297,4 +329,25 @@ export function effectiveDeniedModelIds(): string[] {
   // gateable universe is listed too — the browser hides exactly what runs refuse.
   for (const id of switchedOffModelIds()) if (isModelDenied(id)) denied.add(id)
   return [...denied]
+}
+
+// ── Worlds ───────────────────────────────────────────────────────────────────
+
+/**
+ * The worlds this deployment offers `viewer` (the shared header's tabs), every
+ * one listed, in the profile's display order. A world is enabled when the
+ * profile's `worlds.allow` lets it through (when set) AND every node type it
+ * runs passes `isNodeDenied` for this viewer, the predicate the write and run
+ * guards apply to those node types. Which node types a world runs is shared
+ * data (WORLD_REQUIRED_NODE_TYPES).
+ *
+ * Edition gates (Cloud-only and Nodaro-exclusive nodes) are their own layer
+ * and are not folded in here, as everywhere in this module.
+ */
+export function effectiveWorlds(viewer: AvailabilityViewer): Array<{ id: WorldId; enabled: boolean }> {
+  const worlds = runtimeSurfaceProfile().worlds
+  return orderWorlds(worlds?.order).map((id) => ({
+    id,
+    enabled: worldAllowed(worlds, id) && WORLD_REQUIRED_NODE_TYPES[id].every((type) => !isNodeDenied(type, viewer)),
+  }))
 }

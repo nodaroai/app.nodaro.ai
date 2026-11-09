@@ -220,6 +220,41 @@ await check("community serves the stock surface — no surface block in /config.
   return "no surface block — the surface profile is business+ only"
 })
 
+await check("a community page never asks for the hosted Nodaro header", async () => {
+  // The hosted header's loader is named only in a chunk a Cloud build emits
+  // (frontend/src/ee/shell/hosted-header.tsx, reached behind the build flag every
+  // other edition compiles to off). A browser can only request what a served
+  // script names, so this walks the app shell's scripts and every chunk they
+  // reach — bounded, generous for a real bundle — for the loader's address.
+  // Not the whole address: the header package writes it as a template (a bundle holds "/_header/v${major}/loader.js").
+  const LOADER = /\/_header\/v/
+  const REFERENCE = /(?:\.\/|\/?assets\/)([\w.-]+\.js)\b/g
+  const refs = (text) => [...text.matchAll(REFERENCE)].map((m) => m[1])
+  const shell = await fetch(`${BASE}/`)
+  assert(shell.status === 200, `GET / answered ${shell.status}`)
+  const html = await shell.text()
+  assert(!LOADER.test(html), "the app shell names the hosted header's loader")
+  const seen = new Set()
+  let frontier = [...new Set(refs(html))]
+  assert(frontier.length > 0, "the app shell names no script under /assets/ — nothing to check")
+  while (frontier.length > 0 && seen.size < 5000) {
+    const batch = frontier.splice(0, 16).filter((name) => !seen.has(name))
+    for (const name of batch) seen.add(name)
+    const bodies = await Promise.all(
+      batch.map(async (name) => {
+        const res = await fetch(`${BASE}/assets/${name}`)
+        return res.ok ? res.text() : ""
+      }),
+    )
+    for (const [i, body] of bodies.entries()) {
+      assert(!LOADER.test(body), `/assets/${batch[i]} names the hosted header's loader`)
+      for (const ref of refs(body)) if (!seen.has(ref)) frontier.push(ref)
+    }
+  }
+  assert(seen.size > 0, "no chunk was reached from the app shell — the walk proves nothing")
+  return `${seen.size} script(s) walked from the app shell; none names the hosted header's loader`
+})
+
 await check("a fresh install reports no operator account yet", async () => {
   const { json } = await api("/v1/setup/status")
   if (json?.hasUsers === true) {

@@ -30,7 +30,7 @@ beforeEach(() => {
 
 describe("FAL_LIP_SYNC_CONFIGS", () => {
   it("maps sync-lipsync-v3 to the fal endpoint + param names", () => {
-    expect(FAL_LIP_SYNC_CONFIGS["sync-lipsync-v3"]).toEqual({
+    expect(FAL_LIP_SYNC_CONFIGS["sync-lipsync-v3"]).toMatchObject({
       endpoint: "fal-ai/sync-lipsync/v3",
       videoParam: "video_url",
       audioParam: "audio_url",

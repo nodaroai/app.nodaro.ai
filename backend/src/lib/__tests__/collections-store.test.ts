@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest"
+import { describe, it, expect, vi, afterEach } from "vitest"
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("@/lib/config.js", () => ({
@@ -12,7 +12,10 @@ vi.mock("@/lib/config.js", () => ({
 
 import type { CollectionRecord } from "@nodaro/shared/nodes"
 import { supabase } from "../supabase.js"
-import { enrichRecordSources, itemFromWire, prepareRecord, setRecordUsed, type SetUsedOutcome } from "../collections-store.js"
+import { enrichRecordSources, itemFromWire, limitsFor, prepareRecord, setRecordUsed, type SetUsedOutcome } from "../collections-store.js"
+import { collectionCapsForTier } from "@nodaro/shared/nodes"
+import { __resetDeploymentPayerForTests, __setDeploymentPayerForTests } from "../deployment-payer.js"
+import type { FastifyRequest } from "fastify"
 
 const fromMock = supabase.from as ReturnType<typeof vi.fn>
 
@@ -235,5 +238,27 @@ describe("setRecordUsed", () => {
       outcomes.push((await setRecordUsed({ userId: USER, collectionId: COLL, recordId: row.id, used: true, by: { via: "api" } })).kind)
     }
     expect(outcomes).toEqual(["not_found", "missing_table", "missing_column", "error"])
+  })
+})
+
+describe("limitsFor — collection caps by plan", () => {
+  const req = { log: { warn: vi.fn() } } as unknown as FastifyRequest
+  const capsOf = (tier: string) => {
+    const caps = collectionCapsForTier(tier)
+    return { collections: caps?.collections ?? null, records: caps?.records ?? null }
+  }
+  afterEach(() => __resetDeploymentPayerForTests())
+
+  it("by the user's own effective tier", async () => {
+    fromMock.mockReset()
+    fromMock.mockReturnValue(makeQB({ data: { tier: "free", subscription_tier: "free", lifetime_topup_credits: 0 } }))
+    expect(await limitsFor(req, USER)).toEqual(capsOf("free"))
+  })
+
+  it("under a deployment payer, by the payer account's grade, with no read of the user's row (decided 2026-11-08)", async () => {
+    __setDeploymentPayerForTests("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", { tierForGates: "pro" })
+    fromMock.mockReset()
+    expect(await limitsFor(req, USER)).toEqual(capsOf("pro"))
+    expect(fromMock).not.toHaveBeenCalled()
   })
 })

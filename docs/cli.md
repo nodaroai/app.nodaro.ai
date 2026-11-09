@@ -428,6 +428,10 @@ nodaro objects recaption <id> [--json]
 
 # Voice — revoice an audio track or a talking video
 nodaro voice list [--clones] [--json]                    # the premade voice catalog (or your clones) — names/ids for --voice / --voices
+nodaro voice favorites [--json]                          # your favorite voices, newest first (premade, library or clone) — voice_id for --voice / --voices
+nodaro voice favorite <voiceId> --name <name> --type premade|library|custom [--preview <url>] [--json]
+                                                         # star a voice with the name (and https preview) your favorites list shows it by — idempotent
+nodaro voice unfavorite <voiceId> [--json]               # unstar a voice — idempotent
 nodaro voice changer --voice <id> --audio <url>|--video <url> [--model <id>] [--stability <0..1>] [--similarity <0..1>] [--style <0..1>] [--use-speaker-boost] [--seed <n>] [--remove-background-noise] [--watch] [--poll-interval <ms>] [--json]
 nodaro voice change ...                                  # alias of `voice changer`
 nodaro voice recast --audio <url>|--video <url> --voices <v1,v2,...>|--voices-json <json> [--model <id>] [--output video|stems] [--analysis-json <json>|--analysis-file <path>] [--no-preserve-background] [--separation-quality fast|best] [--music-volume-mode match|normalize|manual] [--music-volume <0-200>] [--remove-background-noise] [--voice-fx <preset>] [--voice-fx-mix <0-100>] [--voice-fx-delay <20-2000>] [--voice-fx-decay <0-1>] [--watch] [--poll-interval <ms>] [--json]

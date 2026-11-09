@@ -198,4 +198,34 @@ describe("voices resource", () => {
     expect(fd.get("file")).toBeInstanceOf(Blob)
     expect(out.elevenlabsVoiceId).toBe("el3")
   })
+
+  it("listFavorites() GETs /v1/voices/favorites and unwraps favorites[]", async () => {
+    const favorite = { voiceId: "v1", voiceType: "library", name: "Rachel", previewUrl: null, createdAt: "2026-11-08T12:00:00.000Z" }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ favorites: [favorite] }))
+    const c = make(fetchMock)
+    const out = await c.voices.listFavorites()
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/voices/favorites")
+    expect((fetchMock.mock.calls[0][1] as { method: string }).method).toBe("GET")
+    expect(out).toEqual([favorite])
+  })
+
+  it("favorite() PUTs /v1/voices/favorites/:voiceId (encoded) with the kind and snapshot, never the id, in the body", async () => {
+    const favorite = { voiceId: "a/b c", voiceType: "premade", name: "Rachel", previewUrl: "https://cdn/r.mp3", createdAt: "2026-11-08T12:00:00.000Z" }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ favorite }))
+    const c = make(fetchMock)
+    const out = await c.voices.favorite({ voiceId: "a/b c", voiceType: "premade", name: "Rachel", previewUrl: "https://cdn/r.mp3" })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/voices/favorites/a%2Fb%20c")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("PUT")
+    expect(JSON.parse(init.body)).toEqual({ voiceType: "premade", name: "Rachel", previewUrl: "https://cdn/r.mp3" })
+    expect(out).toEqual(favorite)
+  })
+
+  it("unfavorite() DELETEs /v1/voices/favorites/:voiceId (encoded)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ success: true }))
+    const c = make(fetchMock)
+    await expect(c.voices.unfavorite("a/b")).resolves.toBeUndefined()
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/voices/favorites/a%2Fb")
+    expect((fetchMock.mock.calls[0][1] as { method: string }).method).toBe("DELETE")
+  })
 })

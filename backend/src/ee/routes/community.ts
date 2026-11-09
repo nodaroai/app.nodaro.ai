@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase.js"
 import { cloneListing } from "../services/community/clone.js"
 import { PERSONAL_SPACE_DISABLED_ERROR } from "../../lib/default-project.js"
 import { requireAppScope } from "../../lib/scope-prehandler.js"
+import { surfaceAllowsPublicOutputs } from "../../lib/surface-profile.js"
 import type { EntityType } from "../lib/community-entity-adapters.js"
 import { decodeCommunityCursor, encodeCommunityCursor } from "./community-cursor.js"
 
@@ -17,9 +18,22 @@ function auth(req: FastifyRequest, reply: FastifyReply): string | null {
   return req.userId
 }
 
+/**
+ * A listing is published for everyone on the deployment, so a deployment that
+ * does not allow public work (`outputs.allowPublic: false`) lists none. Every
+ * route here that serves one answers as if none were listed — browse and
+ * favorites list nothing; a card, its full detail and a clone are not found —
+ * without reading a listing. An empty index beside a detail page that still
+ * answers by slug would be a deny in name only.
+ */
+const listingsShown = (): boolean => surfaceAllowsPublicOutputs()
+
+const LISTING_NOT_FOUND = { error: { code: "not_found", message: "Listing not found" } } as const
+
 export async function communityRoutes(app: FastifyInstance) {
   app.get("/v1/community/browse", async (req, reply) => {
     if (!auth(req, reply)) return
+    if (!listingsShown()) return reply.send({ data: [], nextCursor: null })
     const q = req.query as Record<string, string | undefined>
     const limit = Math.min(50, Math.max(1, parseInt(q.limit ?? "20", 10) || 20))
     let query = supabase.from("community_listings").select(PUBLIC_COLS).eq("is_listed", true).eq("is_active", true)
@@ -54,13 +68,15 @@ export async function communityRoutes(app: FastifyInstance) {
 
   app.get<{ Params: { slug: string } }>("/v1/community/detail/:slug", async (req, reply) => {
     if (!auth(req, reply)) return
+    if (!listingsShown()) return reply.status(404).send(LISTING_NOT_FOUND)
     const { data } = await supabase.from("community_listings").select(PUBLIC_COLS).eq("slug", req.params.slug).eq("is_listed", true).eq("is_active", true).single()
-    if (!data) return reply.status(404).send({ error: { code: "not_found", message: "Listing not found" } })
+    if (!data) return reply.status(404).send(LISTING_NOT_FOUND)
     return reply.send({ data: data as unknown as CommunityCard })
   })
 
   app.get<{ Params: { slug: string } }>("/v1/community/detail/:slug/full", async (req, reply) => {
     if (!auth(req, reply)) return
+    if (!listingsShown()) return reply.status(404).send(LISTING_NOT_FOUND)
     const { data: listing } = await supabase
       .from("community_listings")
       .select("id, slug, entity_type, title, creator_display_name")
@@ -68,7 +84,7 @@ export async function communityRoutes(app: FastifyInstance) {
       .eq("is_listed", true)
       .eq("is_active", true)
       .single()
-    if (!listing) return reply.status(404).send({ error: { code: "not_found", message: "Listing not found" } })
+    if (!listing) return reply.status(404).send(LISTING_NOT_FOUND)
     // snapshot lives in the RLS-deny-by-default community_listing_snapshots table;
     // this route runs on the service-role `supabase` client, which bypasses RLS.
     const { data: snap } = await supabase
@@ -91,6 +107,8 @@ export async function communityRoutes(app: FastifyInstance) {
       const userId = auth(req, reply); if (!userId) return
       const body = z.object({ entityType: z.enum(["character", "location", "object", "creature"]) }).safeParse(req.body)
       if (!body.success) return reply.status(400).send({ error: { code: "validation_error", message: "entityType required" } })
+      // The answer a listing that is no longer available gets (below).
+      if (!listingsShown()) return reply.status(404).send({ error: { code: "not_found", message: "Listing not available" } })
       try {
         const res = await cloneListing({ listingId: req.params.id, entityType: body.data.entityType as EntityType, userId })
         return reply.send(res)
@@ -158,6 +176,7 @@ export async function communityRoutes(app: FastifyInstance) {
 
   app.get("/v1/community/favorites", async (req, reply) => {
     const userId = auth(req, reply); if (!userId) return
+    if (!listingsShown()) return reply.send({ data: [] })
     const { data } = await supabase.from("community_listing_favorites").select(`listing:listing_id(${PUBLIC_COLS})`).eq("user_id", userId)
     return reply.send({ data: (data ?? []).map((r) => (r as { listing: unknown }).listing).filter(Boolean) as unknown as CommunityCard[] })
   })

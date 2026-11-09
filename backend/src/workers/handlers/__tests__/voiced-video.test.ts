@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 // ---------------------------------------------------------------------------
 // Mocks — vi.hoisted() for variables used inside vi.mock()
@@ -26,6 +26,13 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.mockFrom } }))
+
+// The voice lock's resolver (lib/voice-gender.ts, tested in its own module): the
+// worker's backstop asks it only while a lock is set.
+const lockResolver = vi.hoisted(() => ({
+  judgeVoices: vi.fn(async (_voices: readonly string[], _lookup: { userId?: string | null }) => ({ allowed: true }) as { allowed: boolean; reason?: string }),
+}))
+vi.mock("@/lib/voice-gender.js", () => ({ judgeVoices: lockResolver.judgeVoices }))
 
 vi.mock("@/lib/storage.js", () => ({
   mediaObjectKey: (id: string, type: string, ext: string) => `${type}s/${id}.${ext}`,
@@ -103,7 +110,11 @@ vi.mock("../../shared.js", async (importOriginal) => {
 
 import { getMaxTtsChars } from "@nodaro/shared/models"
 import { videoAIHandlers } from "../video-ai.js"
-import { planVoicedDialogue } from "../../../lib/voiced-dialogue-lines.js"
+import { planVoicedDialogue, voicesTheVoicedVideoSends } from "../../../lib/voiced-dialogue-lines.js"
+import { config } from "../../../lib/config.js"
+import { __resetSurfaceProfileCacheForTests } from "../../../lib/surface-profile.js"
+import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
+import { VoiceNotAvailableError } from "../../../lib/voice-policy.js"
 
 const handler = videoAIHandlers["voiced-video"]
 
@@ -600,5 +611,102 @@ describe("voiced-video handler — no voice resolvable", () => {
         extraOutputData: expect.objectContaining({ voiceApplied: false }),
       }),
     )
+  })
+})
+
+/**
+ * The voice lock's backstop in the worker: a voiced-video job judges the voices
+ * it will speak in BEFORE anything is sent — no video is generated, no speech
+ * synthesised — so a lane that forgot to judge them (the route does) still
+ * fails closed. A refusal is final: the job is failed and refunded on this
+ * attempt (a deterministic job error), never degraded to a silent or baked
+ * clip after the video was paid for.
+ */
+describe("voiced-video handler — the voice lock's backstop", () => {
+  const prevEdition = config.EDITION
+  const maleOnly = () => {
+    config.EDITION = "business" // surfaceGateOpen() → true (read live)
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ voice: { allowedGenders: ["male"] } })
+    __resetSurfaceProfileCacheForTests()
+  }
+  afterEach(() => {
+    config.EDITION = prevEdition
+    delete process.env.NODARO_SURFACE_PROFILE
+    __resetSurfaceProfileCacheForTests()
+    lockResolver.judgeVoices.mockReset()
+    lockResolver.judgeVoices.mockResolvedValue({ allowed: true })
+  })
+
+  const AUDIO_DRIVEN = {
+    imageUrl: "https://x.png",
+    prompt: "they talk",
+    provider: "seedance-2",
+    duration: 8,
+    characterVoices: [{ voiceId: "anna-voice", speaker: "Anna" }, { voiceId: "bob-voice", speaker: "Bob" }, { voiceId: "cara-voice", speaker: "Cara" }],
+    dialogue: [{ speaker: "Anna", line: "hello" }, { speaker: "Bob", line: "hi" }],
+    voicedAudioAddon: 25,
+    dialogueProvider: "elevenlabs-dialogue",
+  }
+  const NATIVE = {
+    imageUrl: "https://x.png",
+    prompt: "he speaks",
+    provider: "veo3",
+    duration: 8,
+    characterVoices: [{ voiceId: "anna-voice", speaker: "Anna" }, { voiceId: "bob-voice", speaker: "Bob" }],
+    dialogue: [{ speaker: "Bob", line: "hello" }],
+    voicedAudioAddon: 40,
+  }
+
+  it.each([
+    ["audio_driven", AUDIO_DRIVEN],
+    ["native_speech", NATIVE],
+  ])("%s: a refused voice fails the job before anything is generated, and the refusal is final", async (_mode, data) => {
+    maleOnly()
+    lockResolver.judgeVoices.mockResolvedValueOnce({ allowed: false, reason: "gender_not_allowed" })
+
+    const err = await handler(makeJob(data) as never, ctx).catch((e: unknown) => e)
+
+    expect(err).toBeInstanceOf(VoiceNotAvailableError)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(mocks.mockImageToVideo).not.toHaveBeenCalled()
+    expect(mocks.mockDirectDialogue).not.toHaveBeenCalled()
+    expect(mocks.mockDirectTTS).not.toHaveBeenCalled()
+    expect(mocks.mockDirectVoiceChanger).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ["audio_driven", AUDIO_DRIVEN, ["anna-voice", "bob-voice"]],
+    ["native_speech", NATIVE, ["anna-voice"]],
+  ])("%s: judges the voices the run speaks in, as the job's user", async (_mode, data, voices) => {
+    maleOnly()
+
+    await handler(makeJob(data) as never, ctx)
+
+    expect(lockResolver.judgeVoices).toHaveBeenCalledWith(voices, { userId: "user-1" })
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ extraOutputData: expect.objectContaining({ voiceApplied: true }) }))
+  })
+
+  it("with no lock, asks nothing", async () => {
+    await handler(makeJob(AUDIO_DRIVEN) as never, ctx)
+    await handler(makeJob(NATIVE) as never, ctx)
+    expect(lockResolver.judgeVoices).not.toHaveBeenCalled()
+  })
+
+  // The route and the backstop judge `voicesTheVoicedVideoSends`; these are the
+  // voices that actually reach the speech provider, so the two cannot drift.
+  it.each([
+    ["audio_driven, several voices (one dialogue call)", AUDIO_DRIVEN],
+    ["audio_driven, one voice (text-to-speech)", { ...AUDIO_DRIVEN, dialogue: [{ speaker: "Cara", line: "solo" }] }],
+    ["native_speech (the revoice)", NATIVE],
+  ])("%s: the voices sent are the voices judged", async (_label, data) => {
+    await handler(makeJob(data) as never, ctx)
+
+    const sent = new Set<string>()
+    for (const [lines] of mocks.mockDirectDialogue.mock.calls as unknown as Array<[Array<{ voice: string }>]>) for (const l of lines) sent.add(l.voice)
+    for (const call of mocks.mockDirectTTS.mock.calls as unknown as Array<[string, string]>) sent.add(call[1])
+    for (const call of mocks.mockDirectVoiceChanger.mock.calls as unknown as Array<[Buffer, string]>) sent.add(call[1])
+    expect([...sent].sort()).toEqual([...voicesTheVoicedVideoSends(data, data.provider)].sort())
+    expect(sent.size).toBeGreaterThan(0)
   })
 })

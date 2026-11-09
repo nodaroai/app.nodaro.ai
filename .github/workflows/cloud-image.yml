@@ -28,6 +28,15 @@ name: Cloud Image
 # hosted instance overrides them at boot via /config.js (runtime-config.ts), so
 # ONE cloud image serves every tenant's own Supabase + domain without a rebuild.
 #
+# The shared site header is built in with VITE_SHARED_HEADER=white-label: the
+# image carries it, and at run time each deployment's surface profile decides.
+# It shows only where the profile says header "white-label" (the deployment's
+# own header, nothing of Nodaro's in it); everywhere else the page is exactly
+# as without it — and Nodaro's own header ("true", staging) never shows on this
+# image. No VITE_HOME_URL / VITE_TOOLS_URL / VITE_STUDIO_URL: those name
+# Nodaro's hosts; a white-label header links the deployment's own site.
+# tools/__tests__/cloud-image-build-args.test.mjs pins these build args.
+#
 # ── ONE-TIME OPS (Tal), or the build fails loudly on the first cut ──
 #  • Repo SECRET  NPM_TOKEN            — a PAT with read:packages scoped to
 #                                        nodaroai/cloud-plugins. GITHUB_TOKEN
@@ -166,6 +175,7 @@ jobs:
           # of the image; GitHub masks it in the build log.
           build-args: |
             VITE_EDITION=cloud
+            VITE_SHARED_HEADER=white-label
             APP_VERSION=${{ steps.meta.outputs.version }}
             VITE_APP_VERSION=${{ steps.meta.outputs.version }}
             VITE_API_URL=http://localhost:3000
@@ -187,3 +197,13 @@ jobs:
           set -e
           docker pull "${IMAGE}:${SHA}"
           docker run --rm "${IMAGE}:${SHA}" node -e "import('@nodaroai/cloud-plugins').then(m=>{if(m.contractVersion!==1){console.error('cloud-plugins present but contractVersion=',m.contractVersion);process.exit(1)}console.log('OK: cloud-plugins baked, contractVersion=',m.contractVersion)}).catch(e=>{console.error('FAIL: cloud-plugins NOT in the image —',e&&e.message);process.exit(1)})"
+
+      - name: Verify the PUSHED image carries the shared header
+        # VITE_SHARED_HEADER=white-label builds it in; the build then writes
+        # /shell-version.json with header true (header-module-plugin.ts). A
+        # missing package fails the build itself, so this guards the artifact.
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -e
+          docker run --rm "${IMAGE}:${SHA}" node -e "const f=require('/app/frontend/dist/shell-version.json');if(f.header!==true||typeof f.version!=='string'){console.error('FAIL: the shared header is NOT built in —',JSON.stringify(f));process.exit(1)}console.log('OK: shared header built in, version',f.version)"

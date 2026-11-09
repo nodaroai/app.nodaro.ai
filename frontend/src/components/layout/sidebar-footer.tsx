@@ -20,10 +20,16 @@ interface SidebarFooterProps {
   readonly isRtl: boolean
   readonly onToggleCollapsed: () => void
   /**
-   * The signed-in user with sign-out, and the language and theme switches.
-   * Default true; false under the shared site header, which carries them.
+   * The signed-in user with sign-out, and the language switch. Default true;
+   * false under the shared site header, which carries them.
    */
   readonly accountControls?: boolean
+  /**
+   * The app's own theme switch. Default true; false only under a white-label
+   * header, which draws its own pill (the hosted header has no theme switch of
+   * its own, so the app keeps this one).
+   */
+  readonly themeSwitch?: boolean
 }
 
 /**
@@ -31,7 +37,7 @@ interface SidebarFooterProps {
  * toggle, the language and theme switches, and the version row with its
  * release dialog.
  */
-export function SidebarFooter({ isCollapsed, isRtl, onToggleCollapsed, accountControls = true }: SidebarFooterProps) {
+export function SidebarFooter({ isCollapsed, isRtl, onToggleCollapsed, accountControls = true, themeSwitch = true }: SidebarFooterProps) {
   const t = useT()
   const { user, signOut } = useAuth()
   const updateInfo = useUpdateCheck()
@@ -194,10 +200,10 @@ export function SidebarFooter({ isCollapsed, isRtl, onToggleCollapsed, accountCo
             </Button>
           )}
         </div>
-        {accountControls && !isCollapsed && (
+        {(accountControls || themeSwitch) && !isCollapsed && (
           <div className="flex items-center gap-0.5">
-            <LanguageSwitcher />
-            <ThemeToggle />
+            {accountControls && <LanguageSwitcher />}
+            {themeSwitch && <ThemeToggle />}
           </div>
         )}
       </div>

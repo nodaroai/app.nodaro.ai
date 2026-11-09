@@ -2,6 +2,7 @@ import { defineConfig, type Plugin } from "vite"
 import react from "@vitejs/plugin-react"
 import path from "path"
 import { siteHeaderModule } from "./src/ee/shell/header-module-plugin"
+import { uiStringsManifest } from "./src/lib/i18n/ui-strings-manifest-plugin"
 
 /**
  * Injects `import React from 'react'` into react-filerobot-image-editor files
@@ -36,7 +37,10 @@ export default defineConfig({
       localeStubPath: path.resolve(__dirname, "src/lib/site-locale-stub.ts"),
       a11yStubPath: path.resolve(__dirname, "src/lib/site-a11y-stub.ts"),
       mediaEditorStubPath: path.resolve(__dirname, "src/ee/shell/media-editor-stub.ts"),
+      hostedHeaderStubPath: path.resolve(__dirname, "src/ee/shell/hosted-header-stub.ts"),
     }),
+    // The key list the server checks a deployment's `strings` overrides against.
+    uiStringsManifest({ root: __dirname }),
   ],
   resolve: {
     alias: {

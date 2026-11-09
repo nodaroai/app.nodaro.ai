@@ -5,8 +5,11 @@
  * a no-op and boot is byte-identical (guarded by boot-smoke, Task 5). When a
  * deployment names an overlay package, this dynamic-imports it and awaits its
  * `register()`, which calls the existing registry setters (egress decorator,
- * billing provider, prompt policies, catalog/person packs). The loader is
- * GENERIC — it knows none of those setters; the overlay owns that wiring.
+ * billing provider, prompt policies, catalog/person packs, preset packs). The
+ * loader is GENERIC — it knows none of those setters; the overlay owns that
+ * wiring. What it does own is the platform's check, once register() has
+ * returned, that what was registered fits this deployment (preset packs:
+ * lib/presets/preset-pack-check.ts) — fatal like any other overlay failure.
  *
  * Mirrors two mainline precedents:
  *  - the call-form `import(name)` of registerNodaroCloudBillingProvider
@@ -104,6 +107,19 @@ async function loadOverlayOnce(name: string, opts: LoadOverlayOpts): Promise<Loa
     await mod.register()
   } catch (err) {
     return fail(`overlay "${name}" register() threw: ${detail(err)}`, exit)
+  }
+
+  // Judged only now, with every registration in: a preset is checked against the
+  // catalogs as the overlay's own catalog packs left them, in whatever order
+  // register() made its calls. Every problem in the one message. Imported here,
+  // not at the top: with no overlay set, nothing of it is even loaded.
+  const { presetPackProblems } = await import("../presets/preset-pack-check.js")
+  const presetProblems = presetPackProblems()
+  if (presetProblems.length > 0) {
+    return fail(
+      `overlay "${name}" registered preset packs this deployment cannot serve — ${presetProblems.join("; ")}`,
+      exit,
+    )
   }
 
   console.log(`[overlay] loaded ${name}`)

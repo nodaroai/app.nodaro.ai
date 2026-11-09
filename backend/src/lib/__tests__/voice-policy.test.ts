@@ -8,7 +8,16 @@ import {
   filterVoicesByAllowedGender,
   clampLibraryGender,
   defaultAllowedVoiceId,
+  knownVoiceGender,
+  voiceLockActive,
+  premadeCatalogGender,
+  judgeResolvedVoices,
+  judgeUnnamedVoices,
+  VoiceNotAvailableError,
+  voiceNotAvailableBody,
+  type VoiceGender,
 } from "../voice-policy.js"
+import { DeterministicJobError } from "../deterministic-job-error.js"
 
 // Open the d2 gate exactly as surface-profile.test.ts does: `isBusiness()`
 // reads `config.EDITION` LIVE (config snapshots process.env once at import, so
@@ -72,5 +81,124 @@ describe("voice-policy", () => {
       expect(clampLibraryGender("neutral")).toBeUndefined()
       expect(clampLibraryGender("male")).toBe("male")
     })
+  })
+})
+
+describe("voice-policy — an unknown gender is not a neutral one", () => {
+  it("knownVoiceGender keeps a missing or unrecognised label apart from neutral", () => {
+    expect(knownVoiceGender("Male ")).toBe("male")
+    expect(knownVoiceGender("female")).toBe("female")
+    expect(knownVoiceGender("neutral")).toBe("neutral")
+    expect(knownVoiceGender("non-binary")).toBe("neutral")
+    expect(knownVoiceGender("")).toBeUndefined()
+    expect(knownVoiceGender(undefined)).toBeUndefined()
+    expect(knownVoiceGender(null)).toBeUndefined()
+    expect(knownVoiceGender("robot")).toBeUndefined()
+  })
+
+  it("under a lock that allows neutral, a voice with no gender is still not listed", () => {
+    withProfile({ voice: { allowedGenders: ["male", "neutral"] } }, () => {
+      const voices = [
+        { voice_id: "a", name: "Adam", gender: "male" },
+        { voice_id: "r", name: "River", gender: "neutral" },
+        { voice_id: "x", name: "Unlabelled", gender: "" },
+        { voice_id: "y", name: "NoField" },
+      ]
+      expect(filterVoicesByAllowedGender(voices).map((v) => v.name)).toEqual(["Adam", "River"])
+      expect(isVoiceGenderAllowed("")).toBe(false)
+      expect(isVoiceGenderAllowed("neutral")).toBe(true)
+      expect(voiceLockActive()).toBe(true)
+    })
+  })
+
+  it("lists every voice, labelled or not, when unrestricted", () => {
+    const voices = [{ voice_id: "x", name: "Unlabelled", gender: "" }, { voice_id: "y", name: "NoField" }]
+    expect(filterVoicesByAllowedGender(voices)).toEqual(voices)
+    expect(voiceLockActive()).toBe(false)
+  })
+})
+
+describe("voice-policy — the premade catalog by name AND by voice id", () => {
+  it("knows a premade voice by its name and by its ElevenLabs id", () => {
+    expect(premadeCatalogGender("Rachel")).toBe("female")
+    expect(premadeCatalogGender("21m00Tcm4TlvDq8ikWAM")).toBe("female") // Rachel's id
+    expect(premadeCatalogGender("Brian")).toBe("male")
+    expect(premadeCatalogGender("nPczCjzI2devNBz1zQrb")).toBe("male") // Brian's id
+    expect(premadeCatalogGender("pNInz6obpgDQGcFmaJgB")).toBe("male") // Adam, whose catalog id IS its uuid
+    expect(premadeCatalogGender("River")).toBe("neutral")
+  })
+
+  it("knows nothing about a voice that is not premade", () => {
+    expect(premadeCatalogGender("W3C2vBPukr5b5jvoXhPK")).toBeUndefined()
+    expect(premadeCatalogGender("")).toBeUndefined()
+  })
+})
+
+describe("voice-policy — the synchronous backstop fails closed", () => {
+  it("allows everything, resolved or not, when unrestricted", () => {
+    expect(judgeResolvedVoices(["Rachel", "W3C2vBPukr5b5jvoXhPK"], undefined)).toEqual({ allowed: true })
+  })
+
+  it("under a lock, judges a premade voice from the catalog even with nothing resolved", () => {
+    withProfile({ voice: { allowedGenders: ["male"] } }, () => {
+      expect(judgeResolvedVoices(["Adam"], undefined)).toEqual({ allowed: true })
+      expect(judgeResolvedVoices(["21m00Tcm4TlvDq8ikWAM"], undefined)).toEqual({ allowed: false, reason: "gender_not_allowed" })
+    })
+  })
+
+  it("under a lock, refuses a voice nobody resolved (a caller that skipped the lookup fails closed)", () => {
+    withProfile({ voice: { allowedGenders: ["male"] } }, () => {
+      expect(judgeResolvedVoices(["W3C2vBPukr5b5jvoXhPK"], undefined)).toEqual({ allowed: false, reason: "gender_unknown" })
+      expect(judgeResolvedVoices(["W3C2vBPukr5b5jvoXhPK"], new Map())).toEqual({ allowed: false, reason: "gender_unknown" })
+    })
+  })
+
+  it("under a lock, takes what the caller resolved, and refuses a resolved unknown or disallowed gender", () => {
+    withProfile({ voice: { allowedGenders: ["male"] } }, () => {
+      const resolved = new Map<string, VoiceGender | undefined>([
+        ["libMale", "male"],
+        ["libFemale", "female"],
+        ["libUnknown", undefined],
+      ])
+      expect(judgeResolvedVoices(["libMale", "Adam"], resolved)).toEqual({ allowed: true })
+      expect(judgeResolvedVoices(["libMale", "libFemale"], resolved)).toEqual({ allowed: false, reason: "gender_not_allowed" })
+      expect(judgeResolvedVoices(["libUnknown"], resolved)).toEqual({ allowed: false, reason: "gender_unknown" })
+    })
+  })
+
+  it("has nothing to judge for an empty voice list (the dispatch default is the policy's own)", () => {
+    withProfile({ voice: { allowedGenders: ["male"] } }, () => {
+      expect(judgeResolvedVoices([], undefined)).toEqual({ allowed: true })
+    })
+  })
+})
+
+describe("voice-policy — speech whose voices nobody names fails closed", () => {
+  it("is allowed when unrestricted", () => {
+    expect(judgeUnnamedVoices()).toEqual({ allowed: true })
+  })
+
+  it("is refused under any lock, as a voice nobody can vouch for", () => {
+    for (const allowedGenders of [["male"], ["female"], ["neutral"], ["male", "female", "neutral"]]) {
+      withProfile({ voice: { allowedGenders } }, () => {
+        expect(judgeUnnamedVoices()).toEqual({ allowed: false, reason: "gender_unknown" })
+      })
+    }
+  })
+})
+
+describe("voice-policy — the lock's refusal", () => {
+  it("answers one code, and a lane may say it in its own words", () => {
+    expect(voiceNotAvailableBody()).toEqual({ error: { code: "voice_not_available", message: "The selected voice is not available on this deployment." } })
+    const own = new VoiceNotAvailableError("gender_unknown", "Dubbing is not available on this deployment.")
+    expect(own.message).toBe("Dubbing is not available on this deployment.")
+    expect(new VoiceNotAvailableError("gender_not_allowed").message).toBe("The selected voice is not available on this deployment.")
+  })
+
+  it("is a deterministic job error: the worker fails it now instead of retrying the same refusal", () => {
+    const err = new VoiceNotAvailableError("gender_not_allowed")
+    expect(err).toBeInstanceOf(DeterministicJobError)
+    expect(err.name).toBe("VoiceNotAvailableError")
+    expect(err).toMatchObject({ code: "voice_not_available", reason: "gender_not_allowed", deterministic: true })
   })
 })

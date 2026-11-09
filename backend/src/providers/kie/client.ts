@@ -13,9 +13,11 @@ import { config, hasCredits } from "../../lib/config.js"
 import { PLATFORM_CAPACITY_MESSAGE } from "../../lib/llm-platform-exhaustion.js"
 import { requireProviderKey, MissingProviderKeyError } from "../provider-keys.js"
 import { isWorkerDraining, DrainAbortError } from "../../lib/worker-drain.js"
+import { sleep as delay } from "../../lib/sleep.js"
 import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import { providerFetch, readUserSafeMessage, type EgressMeta } from "../egress.js"
+import { applyProviderSafety, kieSafetyEntry } from "../../lib/provider-safety.js"
 import { getRuntimeEnv } from "../../lib/runtime-env.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 
@@ -760,11 +762,13 @@ export type ProgressCallback = (progress: number) => Promise<void>
  * in-flight provider waits at their next wait point: checked on entry and
  * again after the timeout, worst-case abort latency is one poll delay
  * (≤10s), inside the worker's 25s drain window. Non-worker processes never
- * set the drain flag, so API/cron behavior is unchanged.
+ * set the drain flag, so API/cron behavior is unchanged. The delay itself is
+ * the shared `lib/sleep.js`, so a test that mocks it runs a poll loop without
+ * the wall-clock wait.
  */
 export async function sleep(ms: number): Promise<void> {
   if (isWorkerDraining()) throw new DrainAbortError()
-  await new Promise<void>((resolve) => setTimeout(resolve, ms))
+  await delay(ms)
   if (isWorkerDraining()) throw new DrainAbortError()
 }
 
@@ -819,7 +823,9 @@ export async function createKieTask(
     )
   }
 
-  const requestBody = { model, input }
+  // The admin's content-filter setting for this model, if any (lib/provider-safety.ts).
+  // With nothing set this is the same object, so the request is byte-identical.
+  const requestBody = { model, input: await applyProviderSafety(kieSafetyEntry(model, meta?.modelKey), input) }
 
   if (DEBUG) {
     console.log(`[KIE.ai] >>>>>> SENDING TO KIE.AI API <<<<<<`)

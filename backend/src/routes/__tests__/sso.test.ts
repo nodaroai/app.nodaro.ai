@@ -148,6 +148,26 @@ describe("GET /v1/sso/:provider", () => {
     expect(res.headers.location).toContain("next=%2Fprojects")
   })
 
+  // The landing follows a path outside the app's own pages with a full page
+  // load, so `next` is checked the way a browser would follow it.
+  it("rejects every next a browser would follow to another site", async () => {
+    const app = await build()
+    for (const next of ["/\\evil.com", "/\t/evil.com", "/\n/evil.com", "/.//evil.com", "/x/..//evil.com"]) {
+      const token = await mintAssertion()
+      const res = await app.inject({ method: "GET", url: `/v1/sso/librechat?assertion=${token}&next=${encodeURIComponent(next)}` })
+      expect(res.headers.location, JSON.stringify(next)).toBe("/sso?sso_token=HASHED_TOKEN_123&next=%2Fprojects")
+    }
+  })
+
+  it("honours a page of another product served from the same host", async () => {
+    const app = await build()
+    for (const next of ["/voice-changer/convert/abc?step=2", "/image", "/video/abc"]) {
+      const token = await mintAssertion()
+      const res = await app.inject({ method: "GET", url: `/v1/sso/librechat?assertion=${token}&next=${encodeURIComponent(next)}` })
+      expect(res.headers.location).toBe(`/sso?sso_token=HASHED_TOKEN_123&next=${encodeURIComponent(next)}`)
+    }
+  })
+
   it("401s an invalid assertion", async () => {
     const app = await build()
     const res = await app.inject({ method: "GET", url: "/v1/sso/librechat?assertion=not.a.jwt" })

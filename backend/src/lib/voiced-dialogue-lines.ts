@@ -19,6 +19,7 @@
 import {
   dialogueProviderOf,
   getDialogueCapabilities,
+  getVideoAudioCapability,
 } from "@nodaro/shared/models"
 import {
   parseAttributedDialogue,
@@ -137,6 +138,25 @@ export function planVoicedDialogue(input: VoicedDialogueInput): VoicedDialoguePl
     synthModel: multiSpeaker ? dialogueModel : speechRunsAs(voices[0]?.ttsProvider),
     multiSpeaker,
   }
+}
+
+/**
+ * The voices a voiced-video run sends to a speech provider, read off the job the
+ * way the worker reads it (`handleVoicedVideo`, workers/handlers/video-ai.ts):
+ * on an `audio_driven` model, the distinct voices of the lines it voices (the
+ * plan above); on a `native_speech` model, the cast's first voice, which the
+ * spoken clip is revoiced to; on any other model, none. `provider` is the model
+ * the job runs on. What the voice lock judges at the route, before the job
+ * exists, and again in the worker, before anything is sent. Never throws for a
+ * shape.
+ */
+export function voicesTheVoicedVideoSends(input: VoicedDialogueInput, provider: string): string[] {
+  const mode = getVideoAudioCapability(provider).mode
+  if (mode === "audio_driven") return [...new Set(planVoicedDialogue(input).lines.map((l) => l.voice))]
+  if (mode !== "native_speech") return []
+  const first = Array.isArray(input.characterVoices) ? (input.characterVoices[0] as unknown) : undefined
+  const voiceId = isRecord(first) ? first.voiceId : undefined
+  return typeof voiceId === "string" && voiceId.length > 0 ? [voiceId] : []
 }
 
 /** The price row the voiced add-on reserves on: the model actually synthesised (decided 2026-10-06, Q-VOICED). */

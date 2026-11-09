@@ -1408,6 +1408,15 @@ const CAST_SWAP_ART_STYLE_BYTES = 315
 // (under the per-tool budget; no headroom left).
 const CAST_SWAP_STYLE_ONLY_BYTES = 221
 
+// RAISED 2026-11-08 by the speech file and the voice favorites, and nothing else:
+// `generate_speech` gains ONE argument, `output_format` (the audio file to deliver, one clause),
+// and two tools are ADDED — `list_voice_favorites` (the user's starred voices, newest first — no
+// arguments) and `favorite_voice` (star or unstar a voice with the kind, name and preview it
+// shows by) — so the membership fixture moves too (both `all` sets). Measured by this suite:
+// 515_416 total − 513_263 = 2_153 B, the argument and the two definitions together (each far
+// under the per-tool budget; the descriptions are one paragraph and the arguments one clause).
+const VOICE_FAVORITES_TOOLS_BYTES = 2_153
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES,
   totalBytes:
@@ -1583,7 +1592,8 @@ export const TOOL_WIRE_BUDGET = {
     JOB_QUEUE_WORDING_BYTES +
     CAST_SWAP_STYLE_FORCED_BYTES +
     CAST_SWAP_ART_STYLE_BYTES +
-    CAST_SWAP_STYLE_ONLY_BYTES,
+    CAST_SWAP_STYLE_ONLY_BYTES +
+    VOICE_FAVORITES_TOOLS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

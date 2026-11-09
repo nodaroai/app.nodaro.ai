@@ -125,6 +125,8 @@ The node's own **Text** (the text it speaks when **Text Source** is Direct) can 
 
 Over the REST API and the SDK, `POST /v1/text-to-speech` also takes `withTimestamps: true`: every speech model (ElevenLabs v3, v4, v4 Turbo, Turbo v2.5 and Multilingual v2) returns its timings at the same character cost as the plain render (measured 2026-10-06; v4 Turbo measured 2026-10-07), so the finished job's `output_data.transcript` carries the speech's per-word timings (`words[]` with `startMs` / `endMs`, no segments) at no extra credits. Without the flag the request is exactly the plain one and no `transcript` is written. The node itself has no timings output.
 
+Over the REST API and the SDK, `POST /v1/text-to-speech` also takes `outputFormat` — the audio file to deliver: `mp3_44100_128` (the default, and exactly what every request delivered before the field existed), `mp3_44100_192` (a higher MP3 bitrate) or `wav_24000` (an uncompressed 24 kHz WAV). The choice changes the file only: the credits are the same, and the finished job's `audioUrl` ends in `.mp3` or `.wav` accordingly (the library records a WAV as `audio/wav`). Without the field the vendor request is byte-identical to the plain one. The node itself always delivers the default MP3.
+
 ## Best Practices
 
 - Use ElevenLabs v3, v4 or v4 Turbo for the widest language support and audio tag capabilities. v4 takes up to 10,000 characters per request, but has no Speed or Style setting, and a voice can sound noticeably different on v4 than on v3 — compare the two on your own voice before switching a finished project.

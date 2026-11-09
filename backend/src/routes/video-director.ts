@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { resolveEffectiveTier } from "@nodaro/shared/credits"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { payerCoverage } from "../lib/deployment-payer.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoDirectorQueue } from "../lib/video-director-queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -64,19 +65,26 @@ export async function videoDirectorRoutes(app: FastifyInstance) {
 
     // Resolve the user's tier so the director chain (model tier, parallelism,
     // watermark) matches their entitlement. Default to "free" when the profile
-    // row is missing — never block the run on a tier lookup.
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("tier, subscription_tier, lifetime_topup_credits")
-      .eq("id", userId)
-      .single()
-    const tier = profile
-      ? resolveEffectiveTier({
-          tier: (profile.tier as string | null) ?? null,
-          subscription_tier: (profile.subscription_tier as string | null) ?? null,
-          lifetime_topup_credits: (profile.lifetime_topup_credits as number) ?? 0,
-        })
-      : "free"
+    // row is missing — never block the run on a tier lookup. Under a
+    // deployment payer it is the payer account's grade (`payerCoverage`,
+    // decided 2026-11-08), and the user's own row is not read.
+    const covered = payerCoverage()
+    const { data: profile } = covered
+      ? { data: null }
+      : await supabase
+          .from("profiles")
+          .select("tier, subscription_tier, lifetime_topup_credits")
+          .eq("id", userId)
+          .single()
+    const tier = covered
+      ? covered.tier
+      : profile
+        ? resolveEffectiveTier({
+            tier: (profile.tier as string | null) ?? null,
+            subscription_tier: (profile.subscription_tier as string | null) ?? null,
+            lifetime_topup_credits: (profile.lifetime_topup_credits as number) ?? 0,
+          })
+        : "free"
 
     const mcpClient = extractMcpClient(req.body)
 

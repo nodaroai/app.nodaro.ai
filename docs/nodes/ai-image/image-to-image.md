@@ -58,9 +58,9 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | seedream-5-flash-i2i | Seedream 5 Flash | Fast, low-cost Seedream edits; flat **11 credits**<!-- credits: seedream-5-flash-i2i --> at 1K or 2K | Up to 10 input images, resolution options (1K/2K) |
 | flux-kontext | Flux Kontext | Context-aware editing via Kontext | Context-aware transforms |
 | flux-kontext-max | Flux Kontext Max | Highest quality Kontext editing | Premium context-aware transforms |
-| kontext-multi | Kontext Multi (Open) | Multi-image Flux Kontext Pro via Replicate — no safety filter | Up to 2 reference images. 33 credits<!-- credits: kontext-multi --> |
-| flux-2-pro | Flux 2 Pro (Safety Tolerance) | BFL Flux 2 Pro flagship via Replicate — `safety_tolerance` pinned to 5 | Up to 4 reference images. Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP); per-MP pricing — ~42 credits at 2 MP with the primary image. |
-| flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max via Replicate — `safety_tolerance=5`, up to 8 reference images | Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP). **Per-megapixel pricing**: ~110 credits at 2 MP with the primary image (1 ref), scaling with resolution and extra references. |
+| kontext-multi | Kontext Multi (Open) | Multi-image Flux Kontext Pro via Replicate | Up to 2 reference images. 33 credits<!-- credits: kontext-multi --> |
+| flux-2-pro | Flux 2 Pro (Safety Tolerance) | BFL Flux 2 Pro flagship via Replicate | Up to 4 reference images. Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP); per-MP pricing — ~42 credits at 2 MP with the primary image. |
+| flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max via Replicate, up to 8 reference images | Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP). **Per-megapixel pricing**: ~110 credits at 2 MP with the primary image (1 ref), scaling with resolution and extra references. |
 
 ## Best Practices
 

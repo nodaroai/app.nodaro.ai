@@ -23,6 +23,8 @@ vi.mock("@/lib/api", () => ({
   getTransactions: (...args: unknown[]) => mockGetTransactions(...args),
   getManageSubscriptionUrl: (...args: unknown[]) => mockGetManageSubscriptionUrl(...args),
   changePlan: (...args: unknown[]) => mockChangePlan(...args),
+  // useStorageProfile reads the billing surface (useBillingSurface) for the deployment-payer flag.
+  getBillingSurface: vi.fn(),
 }))
 
 vi.mock("@/lib/edition", () => ({
@@ -172,6 +174,22 @@ describe("useStorageProfile", () => {
     useStorageProfile("user-789")
     const opts = mockUseQuery.mock.calls[0][0]
     expect(opts.staleTime).toBe(30_000)
+  })
+
+  // A deployment with a payer enforces no per-user ceiling (decided 2026-11-08).
+  const answer = (deploymentPayer: boolean) => (opts: { queryKey: readonly unknown[] }) =>
+    opts.queryKey[0] === "billing" && opts.queryKey[1] === "surface"
+      ? { data: { contract: 2, providerId: "nodaro", displayUnit: "credits", canReport: true, canQuote: true, canAccount: true, mountCostTab: true, deploymentPayer } }
+      : { data: { storageUsed: 5_000, storageLimit: 1073741824 } }
+
+  it("on a deployment with a payer the limit is null: usage only, no ceiling", () => {
+    mockUseQuery.mockImplementation(answer(true))
+    expect(useStorageProfile("user-789").data).toEqual({ storageUsed: 5_000, storageLimit: null })
+  })
+
+  it("without a payer the limit is the tier's, as before", () => {
+    mockUseQuery.mockImplementation(answer(false))
+    expect(useStorageProfile("user-789").data).toEqual({ storageUsed: 5_000, storageLimit: 1073741824 })
   })
 })
 

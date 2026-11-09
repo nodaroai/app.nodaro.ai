@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from "vitest"
 import { buildPayload, effectiveDispatchProvider } from "../payload-builder.js"
+import { voicesTheBuildDispatches } from "../dispatched-voices.js"
 import type { SimpleNode } from "../types.js"
 import { config } from "../../../lib/config.js"
 import { __resetSurfaceProfileCacheForTests } from "../../../lib/surface-profile.js"
@@ -119,7 +120,7 @@ describe("payload-builder-text-to-dialogue.test.ts", () => {
       expect(() => buildPayload(missing, "job3", {}, "usage3")).toThrow(/no dialogue lines/)
     })
 
-    it("B4c: rejects a line whose PREMADE voice gender the deployment disallows", () => {
+    it("B4c: rejects a line whose voice gender the lock disallows, or that nobody resolved", () => {
       // Open the surface gate (config snapshots process.env once at import, so
       // mutate the live field) + lock to female-only, then reset the memo —
       // the exact precedent from audio-ai.test.ts's B4c case. Mirrors the
@@ -138,11 +139,21 @@ describe("payload-builder-text-to-dialogue.test.ts", () => {
         expect(() => buildPayload(n, "job1", {}, "usage1")).toThrowError(
           expect.objectContaining({ code: "voice_not_available" }),
         )
-        // Library/custom UUIDs resolve to no gender and must pass.
+        // A library or custom id the build cannot place on its own is refused
+        // unless the caller resolved it (fail-closed). This used to pass: the
+        // backstop only knew premade voices.
         const uuidNode = node("d2", "text-to-dialogue", {
           dialogue: [{ id: "1", text: "Hi", voice: "W3C2vBPukr5b5jvoXhPK" }],
         })
-        expect(() => buildPayload(uuidNode, "job2", {}, "usage2")).not.toThrow()
+        expect(() => buildPayload(uuidNode, "job2", {}, "usage2")).toThrowError(
+          expect.objectContaining({ code: "voice_not_available" }),
+        )
+        const resolvedFemale = { voiceGenders: new Map([["W3C2vBPukr5b5jvoXhPK", "female" as const]]) }
+        expect(() => buildPayload(uuidNode, "job3", {}, "usage3", resolvedFemale)).not.toThrow()
+        const resolvedMale = { voiceGenders: new Map([["W3C2vBPukr5b5jvoXhPK", "male" as const]]) }
+        expect(() => buildPayload(uuidNode, "job4", {}, "usage4", resolvedMale)).toThrowError(
+          expect.objectContaining({ code: "voice_not_available" }),
+        )
       } finally {
         config.EDITION = prevEdition
         delete process.env.NODARO_SURFACE_PROFILE
@@ -525,12 +536,39 @@ describe("payload-builder-voice-gender-deny.test.ts", () => {
       expect(result.payload.voice).toBe("Adam")
     })
 
-    it("does NOT reject a custom/library voice (unknown premade gender) under the lock", () => {
+    // This used to build: the backstop only knew premade voices, and a custom or
+    // library id (or one sent as "premade") passed unjudged. Now the caller
+    // resolves the gender ahead of the build; a voice nobody resolved fails closed.
+    it("refuses a custom or library voice nobody resolved, whatever voiceType says", () => {
+      maleOnly()
+      for (const voiceType of ["custom", "library", "premade"] as const) {
+        const n = ttsNode()
+        const resolved = { voice: "someClonedId", voiceType }
+        expect(() => buildPayload(n, "job-vgd-4", resolved, undefined, ctx(n))).toThrowError(
+          expect.objectContaining({ code: "voice_not_available" }),
+        )
+      }
+    })
+
+    it("builds a voice the caller resolved to an allowed gender, and refuses one resolved otherwise", () => {
       maleOnly()
       const n = ttsNode()
       const resolved = { voice: "someClonedId", voiceType: "custom" as const }
-      const result = buildPayload(n, "job-vgd-4", resolved, undefined, ctx(n))
-      expect(result.payload.voice).toBe("someClonedId")
+      const allowed = buildPayload(n, "job-vgd-4b", resolved, undefined, { ...ctx(n), voiceGenders: new Map([["someClonedId", "male" as const]]) })
+      expect(allowed.payload.voice).toBe("someClonedId")
+      for (const g of ["female", undefined] as const) {
+        expect(() =>
+          buildPayload(n, "job-vgd-4c", resolved, undefined, { ...ctx(n), voiceGenders: new Map([["someClonedId", g]]) }),
+        ).toThrowError(expect.objectContaining({ code: "voice_not_available" }))
+      }
+    })
+
+    it("refuses a disallowed premade voice sent by its voice id, not its name", () => {
+      maleOnly()
+      const n = ttsNode({ voiceId: "21m00Tcm4TlvDq8ikWAM" }) // Rachel's id
+      expect(() => buildPayload(n, "job-vgd-4d", {}, undefined, ctx(n))).toThrowError(
+        expect.objectContaining({ code: "voice_not_available" }),
+      )
     })
 
     it("is inert by default — empty allowedGenders never rejects a female voice", () => {
@@ -547,6 +585,196 @@ describe("payload-builder-voice-gender-deny.test.ts", () => {
       const result = buildPayload(n, "job-vgd-6", {}, undefined, ctx(n))
       expect(result.jobName).toBe("generate-image")
       expect(result.payload.prompt).toBe("a red bird on a branch")
+    })
+  })
+
+  const vcNode = (data: Record<string, unknown> = {}): SimpleNode => ({
+    id: "vc-1",
+    type: "voice-changer",
+    data: { audioUrl: "https://example.com/a.mp3", ...data },
+  })
+  const dubNode = (data: Record<string, unknown> = {}): SimpleNode => ({
+    id: "dub-1",
+    type: "dubbing",
+    data: { targetLanguage: "fr", videoUrl: "https://example.com/v.mp4", ...data },
+  })
+
+  describe("buildPayload — the Voice Changer's target voice (B4c)", () => {
+    it("refuses a target voice of a disallowed gender, from voiceId or the legacy voice field", () => {
+      maleOnly()
+      for (const data of [{ voiceId: "Rachel" }, { voice: "Rachel" }, { voiceId: "21m00Tcm4TlvDq8ikWAM" }]) {
+        const n = vcNode(data)
+        expect(() => buildPayload(n, "job-vc-1", {}, undefined, ctx(n))).toThrowError(
+          expect.objectContaining({ code: "voice_not_available", message: "The selected voice is not available on this deployment." }),
+        )
+      }
+    })
+
+    it("refuses a target voice nobody resolved, and builds one the caller resolved to an allowed gender", () => {
+      maleOnly()
+      const n = vcNode({ voiceId: "LibVoice000000000001" })
+      expect(() => buildPayload(n, "job-vc-2", {}, undefined, ctx(n))).toThrowError(
+        expect.objectContaining({ code: "voice_not_available" }),
+      )
+      const built = buildPayload(n, "job-vc-3", {}, undefined, { ...ctx(n), voiceGenders: new Map([["LibVoice000000000001", "male" as const]]) })
+      expect(built.jobName).toBe("voice-changer")
+      expect(built.payload.voiceId).toBe("LibVoice000000000001")
+    })
+
+    it("is inert with no lock", () => {
+      const n = vcNode({ voiceId: "Rachel" })
+      expect(buildPayload(n, "job-vc-4", {}, undefined, ctx(n)).payload.voiceId).toBe("Rachel")
+    })
+  })
+
+  describe("buildPayload — dubbing (B4c)", () => {
+    // A dub speaks in clones of its source's speakers, or in voices the service
+    // picks: nothing the platform can vouch for, so a lock refuses every dub.
+    it("refuses every dub under a lock, whatever the source", () => {
+      maleOnly()
+      for (const data of [{}, { videoUrl: undefined, audioUrl: "https://example.com/a.mp3" }, { sourceUrl: "https://www.youtube.com/watch?v=x" }]) {
+        const n = dubNode(data)
+        expect(() => buildPayload(n, "job-dub-1", {}, undefined, ctx(n))).toThrowError(
+          expect.objectContaining({ code: "voice_not_available", message: "Dubbing is not available on this deployment." }),
+        )
+      }
+    })
+
+    it("is inert with no lock", () => {
+      const n = dubNode()
+      expect(buildPayload(n, "job-dub-2", {}, undefined, ctx(n)).jobName).toBe("dubbing")
+    })
+  })
+
+  const vcpNode = (orderedVoices: unknown[] = [{ voiceId: "LibVoice000000000001" }, null]): SimpleNode => ({
+    id: "vcp-1",
+    type: "voice-changer-pro",
+    data: { audioUrl: "https://example.com/a.mp3", orderedVoices },
+  })
+
+  /**
+   * A plugin-served speech node is dispatched straight to the plugin's handler,
+   * past the plugin's own route and its voice check. Its voices are read ahead of
+   * the build with the reader its plugin declares (`pluginNodeVoices`, resolved
+   * by node-executor.ts) and judged here like a core speech node's. Under a lock,
+   * a node whose voices nobody read (no reader declared, or a caller that skipped
+   * the read) is refused: fail-closed.
+   */
+  describe("buildPayload — a plugin-served speech node (Voice Changer Pro) (B4c)", () => {
+    it("under a lock, refuses a node whose voices nobody read", () => {
+      maleOnly()
+      const n = vcpNode()
+      expect(() => buildPayload(n, "job-vcp-1", {}, undefined, ctx(n))).toThrowError(
+        expect.objectContaining({ code: "voice_not_available", message: "This node's voices can't be checked on this deployment, so it can't run here." }),
+      )
+    })
+
+    it("under a lock, builds when every voice read resolves to an allowed gender", () => {
+      maleOnly()
+      const n = vcpNode()
+      const built = buildPayload(n, "job-vcp-2", {}, undefined, {
+        ...ctx(n),
+        pluginNodeVoices: ["LibVoice000000000001"],
+        voiceGenders: new Map([["LibVoice000000000001", "male" as const]]),
+      })
+      expect(built.jobName).toBe("voice-changer-pro")
+      expect(built.payload.orderedVoices).toEqual([{ voiceId: "LibVoice000000000001" }, null])
+    })
+
+    it("under a lock, refuses a voice read of a disallowed gender, and one nobody resolved", () => {
+      maleOnly()
+      const n = vcpNode()
+      // Rachel is a female premade voice: the catalog alone refuses her.
+      expect(() => buildPayload(n, "job-vcp-3", {}, undefined, { ...ctx(n), pluginNodeVoices: ["Rachel"] })).toThrowError(
+        expect.objectContaining({ code: "voice_not_available", message: "The selected voice is not available on this deployment." }),
+      )
+      // A library id the caller did not resolve: nobody can vouch for it.
+      expect(() => buildPayload(n, "job-vcp-4", {}, undefined, { ...ctx(n), pluginNodeVoices: ["LibVoice000000000001"] })).toThrowError(
+        expect.objectContaining({ code: "voice_not_available" }),
+      )
+      for (const g of ["female", undefined] as const) {
+        expect(() =>
+          buildPayload(n, "job-vcp-5", {}, undefined, {
+            ...ctx(n),
+            pluginNodeVoices: ["LibVoice000000000001"],
+            voiceGenders: new Map([["LibVoice000000000001", g]]),
+          }),
+        ).toThrowError(expect.objectContaining({ code: "voice_not_available" }))
+      }
+    })
+
+    it("under a lock, judges every voice read, not only the first", () => {
+      maleOnly()
+      const n = vcpNode([{ voiceId: "Daniel" }, { voiceId: "Rachel" }])
+      expect(() => buildPayload(n, "job-vcp-6", {}, undefined, { ...ctx(n), pluginNodeVoices: ["Daniel", "Rachel"] })).toThrowError(
+        expect.objectContaining({ code: "voice_not_available" }),
+      )
+      expect(buildPayload(n, "job-vcp-7", {}, undefined, { ...ctx(n), pluginNodeVoices: ["Daniel", "Adam"] }).jobName).toBe("voice-changer-pro")
+    })
+
+    it("under a lock, builds when the reader found no named voice (an empty list is a reading, not a missing one)", () => {
+      maleOnly()
+      const n = vcpNode()
+      expect(buildPayload(n, "job-vcp-8", {}, undefined, { ...ctx(n), pluginNodeVoices: [] }).jobName).toBe("voice-changer-pro")
+      expect(buildPayload(n, "job-vcp-9", {}, undefined, { ...ctx(n), pluginNodeVoices: [""] }).jobName).toBe("voice-changer-pro")
+    })
+
+    it("is inert with no lock: nothing needs to have been read", () => {
+      const n = vcpNode([{ voiceId: "Rachel" }])
+      const built = buildPayload(n, "job-vcp-10", {}, undefined, ctx(n))
+      expect(built.jobName).toBe("voice-changer-pro")
+      expect(built.payload.orderedVoices).toEqual([{ voiceId: "Rachel" }])
+    })
+  })
+
+  /**
+   * The workflow engine resolves voices ahead of the synchronous build
+   * (`voicesTheBuildDispatches`, read by node-executor.ts). They must be the
+   * voices the build then vets and sends, or a resolved voice would not be the
+   * one judged (a drift would only fail closed, but it would refuse a voice
+   * that is fine).
+   */
+  describe("the voices resolved ahead of the build are the voices it sends", () => {
+    it("text-to-speech: auto-wired, then voiceId, then voice", () => {
+      const cases: Array<[Record<string, unknown>, Record<string, unknown>]> = [
+        [{ voice: "AutoWired00000000001" }, { voiceId: "NodeVoiceId000000001", voice: "Daniel" }],
+        [{}, { voiceId: "NodeVoiceId000000001", voice: "Daniel" }],
+        [{}, { voice: "Daniel" }],
+      ]
+      for (const [resolvedInputs, data] of cases) {
+        const n = ttsNode(data)
+        const sent = buildPayload(n, "job-p", resolvedInputs, undefined, ctx(n)).payload.voice
+        expect(voicesTheBuildDispatches(n, resolvedInputs)).toEqual([sent])
+      }
+      const silent = ttsNode()
+      expect(buildPayload(silent, "job-p", {}, undefined, ctx(silent)).payload.voice).toBeUndefined()
+      expect(voicesTheBuildDispatches(silent, {})).toEqual([])
+    })
+
+    it("text-to-dialogue: the voices of the lines that have text", () => {
+      const n: SimpleNode = {
+        id: "d-p",
+        type: "text-to-dialogue",
+        data: { dialogue: [{ id: "1", text: "Hi", voice: "Daniel" }, { id: "2", text: "  ", voice: "Rachel" }, { id: "3", text: "Yo", voice: "LibVoice000000000001" }] },
+      }
+      const sent = (buildPayload(n, "job-p", {}, undefined, ctx(n)).payload.dialogue as Array<{ voice: string }>).map((l) => l.voice)
+      expect(sent).toEqual(["Daniel", "LibVoice000000000001"])
+      expect(voicesTheBuildDispatches(n, {})).toEqual(sent)
+    })
+
+    it("voice-changer: the target voice, voiceId before the legacy voice field", () => {
+      const cases: Array<Record<string, unknown>> = [
+        { voiceId: "NodeVoiceId000000001", voice: "Daniel" },
+        { voice: "Daniel" },
+      ]
+      for (const data of cases) {
+        const n = vcNode(data)
+        const sent = buildPayload(n, "job-p", {}, undefined, ctx(n)).payload.voiceId
+        expect(voicesTheBuildDispatches(n, {})).toEqual([sent])
+      }
+      const unset = vcNode()
+      expect(buildPayload(unset, "job-p", {}, undefined, ctx(unset)).payload.voiceId).toBeUndefined()
+      expect(voicesTheBuildDispatches(unset, {})).toEqual([])
     })
   })
 })

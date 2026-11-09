@@ -10,8 +10,12 @@ declare module "virtual:site-locale" {
 
   /** The language the viewer chose on any product, or null. */
   export function readSavedLocale(): LocaleId | null
-  /** Keeps a choice for every product; a value that is not a platform language is ignored. */
-  export function saveLocale(id: string): void
+  /**
+   * Keeps a choice for every product; a value that is not a platform language
+   * is ignored. `cookieDomain: null` keeps the cookie on this host (a
+   * white-label deployment); absent, the header's own rule.
+   */
+  export function saveLocale(id: string, options?: { readonly cookieDomain?: string | null }): void
   /** Calls back when the viewer comes back and the shared language is not the one shown (`current`); returns the unsubscribe. */
   export function watchSavedLocale(onChange: (id: LocaleId) => void, current: () => string | null): () => void
 }

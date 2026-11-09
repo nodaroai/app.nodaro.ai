@@ -13,9 +13,10 @@ import { directElevenLabsTTS, directElevenLabsTTSWithTimestamps, stripAudioTags 
 import { directElevenLabsDialogue } from "../../providers/elevenlabs/direct-dialogue.js"
 import { generateSoundEffect } from "../../providers/elevenlabs/sound-effects.js"
 import { ttsSupportsAudioTags, ttsSupportsTimestamps } from "@nodaro/shared/model-catalog"
-import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, type TextToAudioProvider } from "@nodaro/shared/models"
+import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_OUTPUT_FORMAT, TTS_OUTPUT_FORMATS, TTS_OUTPUT_FORMAT_FILES, type TextToAudioProvider, type TtsOutputFormat } from "@nodaro/shared/models"
 import { normalizeTranscript, type Transcript } from "@nodaro/shared/edl"
-import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
+import { defaultAllowedVoiceId, voiceLockActive } from "../../lib/voice-policy.js"
+import { assertUnnamedVoicesAllowed, assertVoicesAllowed } from "../../lib/voice-lock.js"
 import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { elevenlabsSpeechCostUsd } from "../../lib/pricing/elevenlabs-speech-cost.js"
 import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
@@ -56,8 +57,9 @@ import {
 } from "../shared.js"
 import { YOUTUBE_HOSTS, isAllowedSocialVideoUrl } from "../../lib/url-validator.js"
 import { requireImportAllowed, spendImportConfirmation } from "../../lib/import-gate.js"
+import { assertLinkImportAllowed } from "../../lib/link-imports.js"
 import { dubbingSourceIsImport } from "../../lib/dubbing-source.js"
-import { PROJECT_DUBBING_NEEDS_UPLOAD, dubsAsProject } from "../../lib/dubbing-model.js"
+import { DUBBING_VOICE_LOCK_MESSAGE, PROJECT_DUBBING_NEEDS_UPLOAD, dubsAsProject } from "../../lib/dubbing-model.js"
 import { UNUSABLE_LINK_MESSAGE } from "../../lib/unusable-link.js"
 import { hasUrlParserHazard } from "@nodaro/shared/video"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
@@ -123,8 +125,27 @@ async function generateSpeechViaCloud(
   }
 }
 
+/**
+ * The output format a speech payload asked for, when it names one the platform offers;
+ * `undefined` for an absent or unknown value, so a stale payload keeps the default path
+ * (the plain MP3 request) and never throws after the vendor has delivered.
+ */
+function knownOutputFormat(value: unknown): TtsOutputFormat | undefined {
+  return typeof value === "string" && (TTS_OUTPUT_FORMATS as readonly string[]).includes(value) ? (value as TtsOutputFormat) : undefined
+}
+
+/**
+ * The file a speech job stores: decided by the BYTES, never by the request. A WAV is a RIFF/WAVE
+ * container; anything else is an MP3 — both MP3 formats, and the vendor's default MP3 a relay that
+ * predates `outputFormat` answers with. A mislabelled file would be worse than a default.
+ */
+export function speechFileFor(audio: Buffer): { readonly ext: "mp3" | "wav"; readonly mime: "audio/mpeg" | "audio/wav" } {
+  const isWav = audio.length >= 12 && audio.toString("ascii", 0, 4) === "RIFF" && audio.toString("ascii", 8, 12) === "WAVE"
+  return isWav ? TTS_OUTPUT_FORMAT_FILES.wav_24000 : TTS_OUTPUT_FORMAT_FILES[DEFAULT_TTS_OUTPUT_FORMAT]
+}
+
 const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx) {
-  const { text, voice, provider: rawProvider, voiceType, stability, similarityBoost, style, speed, languageCode, previousText, nextText, allowDefaultVoiceFallback, withTimestamps } = job.data as {
+  const { text, voice, provider: rawProvider, voiceType, stability, similarityBoost, style, speed, languageCode, previousText, nextText, allowDefaultVoiceFallback, withTimestamps, outputFormat } = job.data as {
     jobId: string
     text: string
     voice?: string
@@ -141,7 +162,15 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     allowDefaultVoiceFallback?: boolean
     /** The request asked for per-word timings; honoured only when the model's sheet returns them. */
     withTimestamps?: boolean
+    /** The file asked for (`TTS_OUTPUT_FORMATS`); absent ⇒ the MP3 every speech job delivered before the field existed. */
+    outputFormat?: TtsOutputFormat
   }
+  // B4c: the voice lock's backstop, FIRST. Every enqueuer judges the voice
+  // before the job exists (the route, the workflow engine, the film-studio
+  // pipeline); this judges it again, as the job's user, so a lane that forgets
+  // still fails closed. A refusal is final (the job is failed and refunded on
+  // this attempt). No lock: nothing is read.
+  await assertVoicesAllowed([voice], { userId: ctx.jobUserId })
   // Defensive default: every current enqueuer (routes/text-to-speech.ts,
   // payload-builder.ts's "text-to-speech" case, pipeline-generate-speech.ts,
   // pipeline-generate-narration.ts) already resolves a concrete provider
@@ -149,6 +178,8 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   // resolves it through the same omitted-provider rule those enqueuers use (the
   // default speech model up to its own cap, turbo above it).
   const provider = rawProvider ?? resolveOmittedTtsProvider(text)
+  // Only a format the platform offers reaches the vendor; anything else keeps the plain MP3 request.
+  const requestedFormat = knownOutputFormat(outputFormat)
   console.log(`[worker] text-to-speech ${ctx.jobId} (provider: ${provider}, direct API)`)
 
   // Strip [audio tags] when the model does not perform them — v2 models speak them as literal
@@ -190,6 +221,8 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
       ...(hasOptions ? ttsOptions : {}),
       allowDefaultVoiceFallback: Boolean(allowDefaultVoiceFallback),
       ...(voiceType ? { voiceType } : {}),
+      // Only an explicit, known choice reaches the vendor; absent, the request is the plain MP3 one.
+      ...(requestedFormat ? { outputFormat: requestedFormat } : {}),
     }] as const
     if (withTimestamps && ttsSupportsTimestamps(provider)) {
       // The timed funnel: same request body; the response carries the alignment.
@@ -202,11 +235,14 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   } else if (await isNodaroConnected().catch(() => false)) {
     // The cloud relay is not widened for timings: a keyless install's speech
     // carries no transcript (the director there falls back to forced alignment).
+    // Under a voice lock an unnamed voice is sent as THIS deployment's default
+    // (the cloud's own default knows nothing of the lock); with no lock the
+    // relay picks its default, as before.
     cloudAudio = await generateSpeechViaCloud(
       processedText,
-      voice,
+      voice || (voiceLockActive() ? defaultAllowedVoiceId(FALLBACK_VOICES, "Rachel") : voice),
       provider,
-      hasOptions ? ttsOptions : {},
+      { ...(hasOptions ? ttsOptions : {}), ...(requestedFormat ? { outputFormat: requestedFormat } : {}) },
     )
     audioBuffer = cloudAudio.audio
   } else {
@@ -218,7 +254,9 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
 
   // POST-PROVIDER: the provider already delivered the audio (we were billed) —
   // an R2 upload failure here is post-delivery, so skip the refund.
-  const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId))
+  // Stored and served as the file that came back: the bytes decide (a relay that predates the field answers in MP3).
+  const file = speechFileFor(audioBuffer)
+  const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, mediaObjectKey(ctx.jobId, "audio", file.ext), file.mime, ctx.jobUserId))
   await setJobProgress(job, ctx.jobId, 100)
 
   // What this run cost the platform and the characters it sent (decided
@@ -241,7 +279,9 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     },
     // Per-word timings (words only) — absent unless asked for on a model that
     // returns them; then no `transcript` key at all (billedCharacters stays).
-    extraOutputData: { billedCharacters, ...(transcript ? { transcript } : {}) },
+    // `audioMimeType`: the file this job stored, so its library row records a WAV as one
+    // (createAssetFromJob reads it; every other audio producer keeps its own type).
+    extraOutputData: { billedCharacters, audioMimeType: file.mime, ...(transcript ? { transcript } : {}) },
     mediaUrl: r2Url,
   })
   if (!ok) return
@@ -366,6 +406,11 @@ const handleTextToAudio: HandlerFn = async function handleTextToAudio(job, ctx) 
 const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
   const { audioUrl: rawAudioUrl, provider, language, diarize, tagAudioEvents, wordTimestamps } = job.data as { jobId: string; audioUrl: string; provider?: TranscribeProvider; language?: string; diarize?: boolean; tagAudioEvents?: boolean; wordTimestamps?: boolean }
   console.log(`[worker] transcribe ${ctx.jobId} (provider: ${provider ?? "whisper"}, language: ${language ?? "auto"})`)
+
+  // The deployment's switch for links to outside content, a post or a direct
+  // file alike (lib/link-imports.ts): the route answers it, and this is the
+  // backstop for a workflow run, which reaches the worker without the route.
+  assertLinkImportAllowed(rawAudioUrl)
 
   // A link to a video's page on a social platform: extract its audio first
   // (an STT provider cannot read a page). The test is the platform hosts' own
@@ -542,6 +587,9 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
     seed?: number
     applyTextNormalization?: "auto" | "on" | "off"
   }
+  // B4c: the voice lock's backstop, FIRST — every line's voice, as the job's
+  // user (see text-to-speech above). No lock: nothing is read.
+  await assertVoicesAllowed(dialogue.map((line) => line.voice), { userId: ctx.jobUserId })
   console.log(`[worker] text-to-dialogue ${ctx.jobId} (${dialogue.length} lines, direct API)`)
 
   // Same three ways out as handleTextToSpeech, same order, same reasons —
@@ -620,6 +668,10 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
     stability?: number; similarityBoost?: number; style?: number; removeBackgroundNoise?: boolean
     useSpeakerBoost?: boolean; seed?: number
   }
+  // B4c: the voice lock's backstop, FIRST — the voice the clip is converted
+  // INTO, as the job's user, before the media is probed or downloaded (see
+  // text-to-speech above). No lock: nothing is read.
+  await assertVoicesAllowed([voiceId], { userId: ctx.jobUserId })
   // modelId omitted → provider falls back to eleven_multilingual_sts_v2
   // (ElevenLabs-recommended default, also required for non-English audio).
   const opts = { modelId: model, stability, similarityBoost, style, removeBackgroundNoise, useSpeakerBoost, seed }
@@ -765,6 +817,12 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
     /** Held at the 30-minute ceiling (length unknown before start) — settled at delivery. */
     reservedCeiling?: boolean
   }
+  // B4c: the voice lock's backstop, FIRST. A dub names no voice the platform
+  // could judge (it speaks in clones of the source's speakers, or in voices the
+  // service picks), so under a lock it is refused here, before the media is
+  // probed, an import confirmation is spent or the service is asked (the route
+  // and the workflow engine refuse it before the job exists). No lock: a pass.
+  assertUnnamedVoicesAllowed(DUBBING_VOICE_LOCK_MESSAGE)
   // THE MEDIA DECIDES THE MODE, NEVER THE INPUT SLOT (#1069 rule, mirrors
   // voice-changer): a video wired into the video slot dubs as VIDEO; an
   // audio-only file in the video slot is demoted to audio; a video file in

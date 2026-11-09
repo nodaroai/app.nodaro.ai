@@ -58,15 +58,25 @@ function toUnitsStrict(v: number, rate: number, decimals: number): number | null
   return toUnits(v, rate, decimals)
 }
 
-interface UnitConfig {
+/** A deployment's display unit: what a client renders (label, decimals) and
+ *  the rate the SERVER converts with. */
+export interface DisplayUnit {
   readonly label: string
   readonly rate: number
   readonly decimals: number
 }
+type UnitConfig = DisplayUnit
 
-/** The configured unit, or null when the profile carries none (or a block
- *  the schema dropped — half-configured never reaches here). */
-function configuredUnit(): UnitConfig | null {
+/**
+ * The configured unit, or null when the profile carries none (or a block the
+ * schema dropped — half-configured never reaches here).
+ *
+ * The one reader of the unit trio for code that sends converted figures beside
+ * raw credits (`ee/billing/credit-display.ts`): convert with
+ * `toUnits(v, u.rate, u.decimals)`, and send `label` and `decimals` — never
+ * `rate`, so a client renders the server's figures instead of re-deriving them.
+ */
+export function configuredDisplayUnit(): DisplayUnit | null {
   const b = runtimeSurfaceProfile().billing
   if (b.unitLabel === undefined || b.unitRate === undefined) return null
   return { label: b.unitLabel, rate: b.unitRate, decimals: b.unitDecimals ?? 0 }
@@ -134,7 +144,7 @@ function convertAccount(a: AccountSummary, u: UnitConfig): AccountSummary {
  *  when there is nothing to do (see the header). */
 export function applyDisplayUnit(inner: BillingProvider): BillingProvider {
   if (inner.id === "none") return inner
-  const u = configuredUnit()
+  const u = configuredDisplayUnit()
   if (u === null) return inner
 
   const wrapped: BillingProvider = {

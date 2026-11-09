@@ -11,6 +11,7 @@ import {
   getRegisteredPeople,
   resetPersonPacks,
 } from "@nodaro/prompts/person"
+import { presetCatalog, resetPresetPacks } from "../../presets/app-presets.js"
 import * as fixture from "./fixtures/test-overlay.js"
 
 afterEach(() => {
@@ -19,10 +20,11 @@ afterEach(() => {
   clearPromptPolicies()
   resetCatalogPacks()
   resetPersonPacks()
+  resetPresetPacks()
 })
 
 describe("loadOverlay — end-to-end registration via an in-repo fixture", () => {
-  it("runs register() which wires all five seams; needs no real overlay package", async () => {
+  it("runs register() which wires all six seams; needs no real overlay package", async () => {
     const result = await loadOverlay({
       importer: async () => fixture,
       exit: (() => undefined) as never,
@@ -49,5 +51,7 @@ describe("loadOverlay — end-to-end registration via an in-repo fixture", () =>
     // catalog + person packs registered
     expect(getRegisteredCatalogPacks().some((p) => p.id === "test-overlay-catalog")).toBe(true)
     expect(getRegisteredPeople().some((p) => p.id === "test-person-1")).toBe(true)
+    // preset pack registered, passed the boot check, and served
+    expect(presetCatalog("generate-image").at(-1)?.id).toBe("generate-image/test-overlay-look")
   })
 })

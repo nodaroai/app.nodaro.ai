@@ -311,14 +311,19 @@ function ffprobe(path: string, entries: string, select = "v:0"): Record<string, 
 }
 
 describe.skipIf(!hasFfmpeg)("storeUpscaledVideo (real ffmpeg)", () => {
-  /** A clip of `size` with no sound, or with a 440 Hz tone. */
+  /**
+   * A clip of `size` with no sound, or with a 440 Hz tone, `seconds` long (1 s by
+   * default; a source clip must be 4–30 s). Encoded at x264's fastest preset:
+   * what a case checks is the size, codec, sound and length that come out, never
+   * the fixture's picture quality.
+   */
   function clip(name: string, size: string, opts: { sound?: boolean; seconds?: number; rotate?: number } = {}): string {
     const path = join(sandbox, name)
     execFileSync("ffmpeg", [
       "-v", "error", "-y",
       "-f", "lavfi", "-i", `testsrc=size=${size}:rate=24`,
       ...(opts.sound ? ["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100"] : []),
-      "-t", String(opts.seconds ?? 2), "-c:v", "libx264", "-pix_fmt", "yuv420p",
+      "-t", String(opts.seconds ?? 1), "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
       ...(opts.sound ? ["-c:a", "aac", "-shortest"] : ["-an"]),
       path,
     ])
@@ -329,13 +334,13 @@ describe.skipIf(!hasFfmpeg)("storeUpscaledVideo (real ffmpeg)", () => {
   }
 
   it("an example: 1080×1920 from a silent 2x upscale, the original's sound, no longer than the original, and a fresh poster", async () => {
-    const up = clip("up-portrait.mp4", "1440x2560", { seconds: 2.5 })
-    const orig = clip("orig-portrait.mp4", "720x1280", { sound: true, seconds: 2 })
-    const stored = await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 2, asSource: false, resolution: "1080p" })
+    const up = clip("up-portrait.mp4", "1440x2560", { seconds: 1.25 })
+    const orig = clip("orig-portrait.mp4", "720x1280", { sound: true })
+    const stored = await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 1, asSource: false, resolution: "1080p" })
     expect(stored).toMatchObject({ width: 1080, height: 1920 })
     expect(stored.url).toMatch(KEY_RE("mp4"))
     expect(stored.posterUrl).toMatch(KEY_RE("png"))
-    expect(stored.durationSec).toBeLessThanOrEqual(2.05)
+    expect(stored.durationSec).toBeLessThanOrEqual(1.05)
     expect(stored).not.toHaveProperty("display")
     const video = uploads.list.find((u) => u.contentType === "video/mp4")!
     expect(ffprobe(video.kept, "stream=codec_name,pix_fmt,width,height")).toMatchObject({ codec_name: "h264", pix_fmt: "yuv420p", width: 1080, height: 1920 })
@@ -345,9 +350,9 @@ describe.skipIf(!hasFfmpeg)("storeUpscaledVideo (real ffmpeg)", () => {
   }, 60_000)
 
   it("an upscale already 1080p H.264 with sound is stored as it is, with no re-encode", async () => {
-    const up = clip("up-asis.mp4", "1080x1920", { sound: true, seconds: 2 })
-    const orig = clip("orig-asis.mp4", "720x1280", { sound: true, seconds: 2 })
-    const stored = await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 2.1, asSource: false, resolution: "1080p", shownAs: { width: 720, height: 1280 } })
+    const up = clip("up-asis.mp4", "1080x1920", { sound: true })
+    const orig = clip("orig-asis.mp4", "720x1280", { sound: true })
+    const stored = await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 1.1, asSource: false, resolution: "1080p", shownAs: { width: 720, height: 1280 } })
     expect(runFfmpeg).not.toHaveBeenCalled()
     expect(stored).toMatchObject({ width: 1080, height: 1920 })
     const video = uploads.list.find((u) => u.contentType === "video/mp4")!
@@ -357,15 +362,15 @@ describe.skipIf(!hasFfmpeg)("storeUpscaledVideo (real ffmpeg)", () => {
   it("a landscape upscale comes out 1920×1080; an odd one keeps an even long side", async () => {
     const up = clip("up-land.mp4", "2560x1440")
     const orig = clip("orig-land.mp4", "1280x720", { sound: true })
-    expect(await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 2, asSource: false, resolution: "1080p" })).toMatchObject({ width: 1920, height: 1080 })
+    expect(await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 1, asSource: false, resolution: "1080p" })).toMatchObject({ width: 1920, height: 1080 })
     const odd = clip("up-odd.mp4", "1442x2562")
-    expect(await storeUpscaledVideo(TREND, { upscaledUrl: url(odd), originalUrl: url(orig), durationSec: 2, asSource: false, resolution: "1080p" })).toMatchObject({ width: 1080, height: 1918 })
+    expect(await storeUpscaledVideo(TREND, { upscaledUrl: url(odd), originalUrl: url(orig), durationSec: 1, asSource: false, resolution: "1080p" })).toMatchObject({ width: 1080, height: 1918 })
   }, 60_000)
 
   it("a rotated upscale (landscape frames tagged 90°) comes out portrait, by its decoded frame", async () => {
     const up = clip("up-rot.mp4", "2560x1440", { rotate: 90 })
     const orig = clip("orig-rot.mp4", "720x1280", { sound: true })
-    expect(await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 2, asSource: false, resolution: "1080p" })).toMatchObject({ width: 1080, height: 1920 })
+    expect(await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 1, asSource: false, resolution: "1080p" })).toMatchObject({ width: 1080, height: 1920 })
   }, 60_000)
 
   it("the source: stored as a new source clip is, with a new display copy at 1080p and no poster of its own", async () => {
@@ -387,7 +392,7 @@ describe.skipIf(!hasFfmpeg)("storeUpscaledVideo (real ffmpeg)", () => {
   it("at a 720p target: a landscape upscale comes out 1280×720, and a 720p source's display copy is 720p too", async () => {
     const up = clip("up-720-land.mp4", "1920x1080")
     const orig = clip("orig-720-land.mp4", "1280x720", { sound: true })
-    expect(await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 2, asSource: false, resolution: "720p" })).toMatchObject({ width: 1280, height: 720 })
+    expect(await storeUpscaledVideo(TREND, { upscaledUrl: url(up), originalUrl: url(orig), durationSec: 1, asSource: false, resolution: "720p" })).toMatchObject({ width: 1280, height: 720 })
     // A source clip is 4–30 s.
     const upSrc = clip("up-720-src.mp4", "1920x1080", { seconds: 4.2 })
     const origSrc = clip("orig-720-src.mp4", "1280x720", { sound: true, seconds: 4.2 })

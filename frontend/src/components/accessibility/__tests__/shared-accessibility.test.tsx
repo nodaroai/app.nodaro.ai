@@ -6,7 +6,9 @@ import type { SharedAccessibilityState } from "virtual:site-a11y"
  * A build with the shared site header: the accessibility choices live in the
  * store every Nodaro product shares (`virtual:site-a11y`, faked here), on
  * every page, and this browser's own storage is never a second source. And
- * where the header is mounted, its menu is the one on the page.
+ * where the header is mounted, its menu is the one on the page. All of that
+ * only where the deployment shows the header (`siteHeaderMode()`, faked here:
+ * on unless a test says otherwise); elsewhere the build's module is unused.
  */
 
 const shared = vi.hoisted(() => {
@@ -41,7 +43,13 @@ const shared = vi.hoisted(() => {
   }
 })
 
-vi.mock("virtual:site-a11y", () => ({ sharedAccessibility: shared.store }))
+const mode = vi.hoisted(() => ({ value: "default" as "default" | "white-label" | null }))
+vi.mock("@/lib/site-header-mode", () => ({
+  siteHeaderMode: () => mode.value,
+  siteHeaderCookieOptions: () => (mode.value === "white-label" ? { cookieDomain: null } : {}),
+}))
+const { STYLESHEET } = vi.hoisted(() => ({ STYLESHEET: "/assets/a11y-0123abcd.css" }))
+vi.mock("virtual:site-a11y", () => ({ sharedAccessibility: shared.store, a11yStylesheet: STYLESHEET }))
 vi.mock("@/lib/accessibility-statement", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/accessibility-statement")>()),
   accessibilityStatementShown: () => true,
@@ -50,8 +58,10 @@ vi.mock("@/lib/accessibility-statement", async (importOriginal) => ({
 import {
   applySavedPreferences,
   HIDE_KEY,
+  linkSharedAccessibilityStylesheet,
   loadHiddenUntil,
   loadPreferences,
+  resetSharedAccessibilityStylesheetForTests,
   saveHiddenUntil,
   savePreferences,
   STORAGE_KEY,
@@ -65,7 +75,11 @@ beforeEach(() => {
   window.localStorage.clear()
   shared.set({ prefs: shared.none, hiddenUntil: null })
   vi.clearAllMocks()
+  mode.value = "default"
+  resetSharedAccessibilityStylesheetForTests()
 })
+
+const linked = () => [...document.querySelectorAll<HTMLLinkElement>("link[data-site-a11y]")]
 
 describe("the choices on a shared-header build", () => {
   it("are read from and kept in the shared store, never this browser's storage", () => {
@@ -135,5 +149,67 @@ describe("one menu per page", () => {
     shared.set({ prefs: { ...shared.none, headings: true }, hiddenUntil: null })
     render(<AccessibilityMenuRoot router={router} />)
     expect(document.documentElement.hasAttribute("data-a11y-headings")).toBe(true)
+  })
+})
+
+describe("the header's stylesheet", () => {
+  it("is linked once, before the first paint, where the deployment shows the header", () => {
+    applySavedPreferences()
+    applySavedPreferences()
+    expect(linked().map((link) => [link.rel, link.getAttribute("href")])).toEqual([["stylesheet", STYLESHEET]])
+  })
+
+  it("the header waits for it to apply, and fails when it cannot load", async () => {
+    const ready = linkSharedAccessibilityStylesheet()
+    linked()[0]?.dispatchEvent(new Event("load"))
+    await expect(ready).resolves.toBeUndefined()
+    resetSharedAccessibilityStylesheetForTests()
+    const broken = linkSharedAccessibilityStylesheet()
+    linked()[0]?.dispatchEvent(new Event("error"))
+    await expect(broken).rejects.toThrow(/did not load/)
+  })
+})
+
+describe("where the deployment shows no shared header", () => {
+  // The image built for deployments of their own carries the header's module;
+  // a deployment that does not ask for the header gets none of it.
+  beforeEach(() => {
+    mode.value = null
+  })
+
+  it("this browser's own storage is the store, as on a build without the header", () => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ contrast: true }))
+    expect(loadPreferences()).toEqual({ ...shared.none, contrast: true })
+    savePreferences({ ...shared.none, links: true })
+    saveHiddenUntil(FUTURE)
+    expect(loadHiddenUntil()).toBe(FUTURE)
+    expect(shared.store.read).not.toHaveBeenCalled()
+    expect(shared.store.save).not.toHaveBeenCalled()
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBe(JSON.stringify({ ...shared.none, links: true }))
+  })
+
+  it("applies the choices itself, and links no stylesheet of the header's", async () => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ contrast: true }))
+    applySavedPreferences()
+    expect(shared.store.applySaved).not.toHaveBeenCalled()
+    expect(document.documentElement.hasAttribute("data-a11y-contrast")).toBe(true)
+    await expect(linkSharedAccessibilityStylesheet()).resolves.toBeUndefined()
+    expect(linked()).toEqual([])
+    document.documentElement.removeAttribute("data-a11y-contrast")
+  })
+})
+
+describe("on a white-label deployment", () => {
+  it("every read and write of the shared choices keeps them on this host", () => {
+    mode.value = "white-label"
+    loadPreferences()
+    savePreferences({ ...shared.none, links: true })
+    loadHiddenUntil()
+    saveHiddenUntil(FUTURE)
+    applySavedPreferences()
+    const host = { cookieDomain: null }
+    expect(shared.store.read.mock.calls.every((call) => (call as unknown[])[1] !== undefined && JSON.stringify((call as unknown[])[1]) === JSON.stringify(host))).toBe(true)
+    expect(shared.store.save.mock.calls.map((call) => (call as unknown[])[1])).toEqual([host, host])
+    expect(shared.store.applySaved).toHaveBeenCalledWith(host)
   })
 })

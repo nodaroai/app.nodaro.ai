@@ -50,7 +50,7 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Grok Imagine 2 Segment Map | xAI | Everyday | 0<!-- credits: grok-2-segment --> | edit | FREE semantic segment map of a prior grok-2 generation — named region masks whose indexes feed grok-2-edit's region targeting. |
 | Recraft Crisp Upscale | Recraft | Everyday | 3<!-- credits: recraft-upscale --> | upscale | Light-weight image upscale (Recraft Crisp). |
 | ⭐ Z-Image | Tongyi-MAI | Everyday | 3<!-- credits: z-image --> | t2i | Cheapest model in catalog. Fast, stylized output. Limited aspect ratios. |
-| Flux 2 Klein (Open) | Black Forest Labs | Everyday | 4<!-- credits: flux-2-klein --> | t2i | Open Flux 2 9B from BFL — fast, no safety filter. Runs direct on Replicate. |
+| Flux 2 Klein (Open) | Black Forest Labs | Everyday | 4<!-- credits: flux-2-klein --> | t2i | Open Flux 2 9B from BFL — fast. Runs direct on Replicate. |
 | Recraft Remove BG | Recraft | Everyday | 4<!-- credits: recraft-remove-bg --> | remove-bg | Remove image background. Cheap utility. |
 | Grok Imagine | xAI | Everyday | 11<!-- credits: grok --> | t2i, t2v | Expressive, high-contrast output. Supports both image and video. |
 | Grok Imagine (I2I) | xAI | Everyday | 11<!-- credits: grok-i2i --> | i2i | Image-to-image with Grok. |
@@ -83,17 +83,17 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Imagen 4 | Google | Premium | 22<!-- credits: imagen4 --> | t2i | Google's Imagen 4 — strong photographic quality and prompt fidelity. |
 | Nano Banana 2 | Google | Premium | 22<!-- credits: nano-banana-2 --> | t2i, i2i | Newer Nano Banana with native resolution control (1K/2K/4K) and Google Search context. |
 | Wan 2.7 | Alibaba | Premium | 22<!-- credits: wan-2.7 --> | t2i | Wan 2.7 text-to-image — 1K/2K/4K, up to 9 optional style/character reference images. |
-| Flux 2 Pro (Safety Tolerance) | Black Forest Labs | Premium | 26<!-- credits: flux-2-pro --> | t2i, i2i | BFL Flux 2 Pro flagship via Replicate — exposes the `safety_tolerance` lever pinned to 5 (max for Pro). Accepts up to 4 reference images. |
+| Flux 2 Pro (Safety Tolerance) | Black Forest Labs | Premium | 26<!-- credits: flux-2-pro --> | t2i, i2i | BFL Flux 2 Pro flagship via Replicate. Accepts up to 4 reference images. |
 | Flux Kontext Max | Black Forest Labs | Premium | 28<!-- credits: flux-kontext-max --> | t2i, edit | Premium Kontext — highest fidelity context-aware edits. |
 | Topaz Image Upscale | Topaz | Premium | 28<!-- credits: topaz-image-upscale --> | upscale | High-quality image upscale at 1x (enhance only), 2x or 4x. Best for production-ready output. |
 | Imagen 4 Ultra | Google | Premium | 33<!-- credits: imagen4-ultra --> | t2i | Premium Imagen 4 — highest fidelity, slower / more credits. |
-| Kontext Multi (Open) | Black Forest Labs | Premium | 33<!-- credits: kontext-multi --> | i2i, edit | Multi-image Flux Kontext Pro via Replicate — up to 4 input images, no safety filter. |
+| Kontext Multi (Open) | Black Forest Labs | Premium | 33<!-- credits: kontext-multi --> | i2i, edit | Multi-image Flux Kontext Pro via Replicate — up to 4 input images. |
 | Flux 2 Flex | Black Forest Labs | Premium | 39<!-- credits: flux-flex --> | t2i | Flux 2 Flex — premium fidelity, more flexible composition. Pricier than Pro. |
 | Ideogram Edit | Ideogram | Premium | 50<!-- credits: ideogram-edit --> | edit | Inpainting / mask-based editing with Ideogram. Pair with a mask URL. |
 | Ideogram Remix | Ideogram | Premium | 50<!-- credits: ideogram-remix --> | i2i | Ideogram remix — character-aware restyling driven by reference images. |
 | Nano Banana Pro | Google | Premium | 50<!-- credits: nano-banana-pro --> | t2i, i2i | Top-tier Nano Banana — best for text rendering, diagrams, and complex compositions. |
 | Flux 2 Flex (I2I) | Black Forest Labs | Premium | 66<!-- credits: flux-i2i --> | i2i | Image-to-image with Flux Flex. Honors source image structure while applying prompt. |
-| Flux 2 Max (Safety Tolerance) | Black Forest Labs | Premium | 77<!-- credits: flux-2-max --> | t2i, i2i | BFL Flux 2 Max — even larger sibling of Pro via Replicate, safety_tolerance=5, up to 8 reference images. Variable pricing by MP and ref count. |
+| Flux 2 Max (Safety Tolerance) | Black Forest Labs | Premium | 77<!-- credits: flux-2-max --> | t2i, i2i | BFL Flux 2 Max — even larger sibling of Pro via Replicate, up to 8 reference images. Variable pricing by MP and ref count. |
 | Wan 2.7 Pro | Alibaba | Premium | 132<!-- credits: wan-2.7-pro --> | t2i | Wan 2.7 Pro text-to-image — higher quality, 1K/2K/4K, no image input. |
 <!-- AUTO-GEN:END model-table-image -->
 

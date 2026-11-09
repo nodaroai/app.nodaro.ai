@@ -9,7 +9,7 @@ import { describe, it, expect, afterEach } from "vitest"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import { runtimeApiUrl, runtimeDefaultLocale, runtimeSupabaseAnonKey, runtimeSupabaseUrl, runtimeUploadModerationEnabled, runtimePreviewStopRule } from "../runtime-config"
+import { runtimeApiUrl, runtimeDefaultLocale, runtimeMediaOrigin, runtimeSupabaseAnonKey, runtimeSupabaseUrl, runtimeUploadModerationEnabled, runtimePreviewStopRule } from "../runtime-config"
 
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")
 
@@ -148,5 +148,30 @@ describe("runtimePreviewStopRule (the preview stop rule's rollout flag, decided 
     expect(runtimePreviewStopRule()).toBe(false)
     window.__NODARO_RUNTIME__ = { previewStopRule: "true" as unknown as boolean }
     expect(runtimePreviewStopRule()).toBe(false)
+  })
+})
+
+describe("runtimeMediaOrigin (a white-label deployment's media host)", () => {
+  afterEach(() => { delete window.__NODARO_RUNTIME__ })
+
+  it("returns the https origin /config.js names", () => {
+    window.__NODARO_RUNTIME__ = { mediaOrigin: "https://media.example.com" }
+    expect(runtimeMediaOrigin()).toBe("https://media.example.com")
+  })
+
+  it("is undefined when /config.js names none (every deployment that is not white-label)", () => {
+    expect(runtimeMediaOrigin()).toBeUndefined()
+    window.__NODARO_RUNTIME__ = {}
+    expect(runtimeMediaOrigin()).toBeUndefined()
+  })
+
+  it.each(["http://media.example.com", "https://media.example.com/bucket", "media.example.com", ""])("drops a value that is not an https origin (%j)", (value) => {
+    window.__NODARO_RUNTIME__ = { mediaOrigin: value }
+    expect(runtimeMediaOrigin()).toBeUndefined()
+  })
+
+  it("is no value when the key is not a string at all", () => {
+    window.__NODARO_RUNTIME__ = { mediaOrigin: 7 as unknown as string }
+    expect(runtimeMediaOrigin()).toBeUndefined()
   })
 })

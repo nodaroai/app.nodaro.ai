@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { resolveEffectiveTier, resolveStoredTier } from "@nodaro/shared/credits"
 import { z } from "zod"
 import { hasCredits } from "../../lib/config.js"
+import { payerCoverage } from "../../lib/deployment-payer.js"
 import { refusePayerBalanceToProgrammaticCaller } from "../lib/payer-balance-guard.js"
 import { supabase } from "../../lib/supabase.js"
 import { listUsageTransactions, USAGE_TRANSACTIONS_PAGE_MAX } from "../../lib/usage-transactions.js"
@@ -74,6 +75,9 @@ export async function registerCreditsBalanceRoutes(app: FastifyInstance): Promis
 
     const subscription = Number(data.subscription_credits ?? 0)
     const topup = Number(data.topup_credits ?? 0)
+    // Under a deployment payer the plan is the payer account's grade
+    // (`payerCoverage`), the same answer `getBalance` gives.
+    const covered = payerCoverage()
     return reply.send({
       total: subscription + topup,
       subscription,
@@ -81,15 +85,19 @@ export async function registerCreditsBalanceRoutes(app: FastifyInstance): Promis
       // Stored tier kept for back-compat; display should use effectiveTier
       // (must agree with getBalance's fields or the two balance surfaces
       // disagree in the UI).
-      tier: resolveStoredTier({
-        tier: data.tier ?? null,
-        subscription_tier: data.subscription_tier ?? null,
-      }),
-      effectiveTier: resolveEffectiveTier({
-        tier: data.tier ?? null,
-        subscription_tier: data.subscription_tier ?? null,
-        lifetime_topup_credits: (data.lifetime_topup_credits as number) ?? 0,
-      }),
+      tier:
+        covered?.storedTier ??
+        resolveStoredTier({
+          tier: data.tier ?? null,
+          subscription_tier: data.subscription_tier ?? null,
+        }),
+      effectiveTier:
+        covered?.tier ??
+        resolveEffectiveTier({
+          tier: data.tier ?? null,
+          subscription_tier: data.subscription_tier ?? null,
+          lifetime_topup_credits: (data.lifetime_topup_credits as number) ?? 0,
+        }),
     })
   })
 

@@ -1,4 +1,8 @@
+// @test-watches frontend/src/lib/i18n/en.{ts,js} frontend/src/lib/i18n/platform-languages.{ts,js}
 import { describe, it, expect, afterEach, vi } from "vitest"
+import { buildUiStringManifest } from "@nodaro/shared/runtime-config"
+import { en } from "../../../../frontend/src/lib/i18n/en.js"
+import { PLATFORM_LANGUAGES } from "../../../../frontend/src/lib/i18n/platform-languages.js"
 import { config } from "../config.js"
 import {
   SURFACE_PROFILE_DEFAULT,
@@ -512,5 +516,403 @@ describe("siblings without urlByHost — existing profiles", () => {
   it("parse exactly as before", () => {
     const apps = [{ label: "SAI Chat", url: "https://sai.example" }]
     expect(parseSurfaceProfile(JSON.stringify({ siblings: { apps } })).siblings.apps).toEqual(apps)
+  })
+})
+
+// ── The deployment keys the thin client apps read (runtime-config contract) ──
+//
+// Every new key is ABSENT from the stock default and from a profile that does
+// not set it, so an already-configured deployment's /config.js stays
+// byte-identical; readers apply the defaults (@nodaro/shared/runtime-config).
+// Each one degrades ALONE — a bad value never takes a sibling key down — and a
+// malformed SAFETY control falls to its restrictive side.
+
+describe("new keys — absent unless configured", () => {
+  it("the stock default and an empty profile carry none of them", () => {
+    for (const p of [SURFACE_PROFILE_DEFAULT, parseSurfaceProfile("{}")]) {
+      expect(p.worlds).toBeUndefined()
+      expect(p.imports).toBeUndefined()
+      expect(p.header).toBeUndefined()
+      expect(p.catalogs?.images).toBeUndefined()
+      expect(p.locale.offered).toBeUndefined()
+      expect(p.brand.logo).toBeUndefined()
+      expect(p.brand.favicon).toBeUndefined()
+      expect(p.auth.requireSignIn).toBeUndefined()
+      expect(p.strings).toBeUndefined()
+    }
+    expect(JSON.stringify(parseSurfaceProfile("{}"))).not.toMatch(/"worlds"|"imports"|"header"|"images"|"offered"|"logo"|"favicon"|"requireSignIn"|"strings"/)
+  })
+})
+
+describe("worlds — an allowlist where presence narrows", () => {
+  const warn = () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    return { calls: () => spy.mock.calls.map((c) => String(c[0])) }
+  }
+  afterEach(() => vi.restoreAllMocks())
+  const worlds = (value: unknown) => parseSurfaceProfile(JSON.stringify({ worlds: value, nav: { hide: ["gallery"] } }))
+
+  it("keeps a valid allowlist, home and order", () => {
+    expect(worlds({ allow: ["image", "video", "app"], home: "app", order: ["app", "image"] }).worlds).toEqual({
+      allow: ["image", "video", "app"],
+      home: "app",
+      order: ["app", "image"],
+    })
+  })
+
+  it("drops unknown ids loudly — and a list whose ids are ALL unknown offers no world, never every world", () => {
+    const { calls } = warn()
+    expect(worlds({ allow: ["image", "imge"] }).worlds).toEqual({ allow: ["image"] })
+    expect(worlds({ allow: ["imge"] }).worlds).toEqual({ allow: [] })
+    expect(calls().some((m) => m.includes("worlds.allow") && m.includes("imge"))).toBe(true)
+  })
+
+  it("[] offers no world; leaving allow out offers every one", () => {
+    expect(worlds({ allow: [] }).worlds).toEqual({ allow: [] })
+    expect(worlds({ order: ["voice"] }).worlds).toEqual({ order: ["voice"] })
+  })
+
+  it("a malformed allowlist or worlds block fails closed, and never takes a sibling key down", () => {
+    const { calls } = warn()
+    expect(worlds({ allow: "image" }).worlds).toEqual({ allow: [] })
+    expect(worlds("image").worlds).toEqual({ allow: [] })
+    expect(worlds(["image"]).worlds).toEqual({ allow: [] })
+    expect(worlds("image").nav.hide).toEqual(["gallery"])
+    expect(calls().filter((m) => m.includes("[surface-profile] worlds")).length).toBeGreaterThanOrEqual(3)
+  })
+
+  it("a home the allowlist does not let through, or an unknown one, is dropped", () => {
+    const { calls } = warn()
+    expect(worlds({ allow: ["image"], home: "explore" }).worlds).toEqual({ allow: ["image"] })
+    expect(worlds({ home: "nowhere" }).worlds).toEqual({})
+    expect(calls().filter((m) => m.includes("worlds.home")).length).toBe(2)
+  })
+
+  it("order keeps known ids once each", () => {
+    warn()
+    expect(worlds({ order: ["voice", "bogus", "voice", "image"] }).worlds).toEqual({ order: ["voice", "image"] })
+  })
+})
+
+describe("imports.links — a safety switch: a present false never flips open", () => {
+  const warn = () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    return { calls: () => spy.mock.calls.map((c) => String(c[0])) }
+  }
+  afterEach(() => vi.restoreAllMocks())
+  const links = (imports: unknown) => parseSurfaceProfile(JSON.stringify({ imports, brand: { productName: "Acme" } }))
+
+  it("accepts the boolean and string forms", () => {
+    for (const v of [false, "false", "0"]) expect(links({ links: v }).imports, String(v)).toEqual({ links: false })
+    for (const v of [true, "true", "1"]) expect(links({ links: v }).imports, String(v)).toEqual({ links: true })
+  })
+
+  it("an unparseable value, or a block that is not an object, refuses links — loudly", () => {
+    const { calls } = warn()
+    expect(links({ links: "no" }).imports).toEqual({ links: false })
+    expect(links({ links: 42 }).imports).toEqual({ links: false })
+    expect(links("off").imports).toEqual({ links: false })
+    expect(calls().filter((m) => m.includes("imports")).length).toBe(3)
+    expect(links("off").brand.productName).toBe("Acme")
+  })
+
+  it("an empty block configures nothing", () => {
+    expect(links({}).imports).toBeUndefined()
+  })
+})
+
+describe("catalogs.images", () => {
+  const warn = () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    return { calls: () => spy.mock.calls.map((c) => String(c[0])) }
+  }
+  afterEach(() => vi.restoreAllMocks())
+
+  it("keeps a known mode beside the other catalog switches", () => {
+    for (const images of ["default", "none", "own"]) {
+      expect(parseSurfaceProfile(JSON.stringify({ catalogs: { required: true, factoryPresets: false, images } })).catalogs).toEqual({
+        required: true,
+        factoryPresets: false,
+        images,
+      })
+    }
+  })
+
+  it("an unknown mode shows no pictures, loudly, and leaves the other switches alone", () => {
+    const { calls } = warn()
+    expect(parseSurfaceProfile(JSON.stringify({ catalogs: { required: false, factoryPresets: true, images: "None" } })).catalogs).toEqual({
+      required: false,
+      factoryPresets: true,
+      images: "none",
+    })
+    expect(calls().some((m) => m.includes("catalogs.images"))).toBe(true)
+  })
+
+  it("a malformed catalogs block fails closed with no pictures", () => {
+    expect(parseSurfaceProfile(JSON.stringify({ catalogs: "x" })).catalogs).toEqual({ required: true, factoryPresets: false, images: "none" })
+  })
+})
+
+describe("locale.offered", () => {
+  const warn = () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    return { calls: () => spy.mock.calls.map((c) => String(c[0])) }
+  }
+  afterEach(() => vi.restoreAllMocks())
+  const locale = (value: unknown) => parseSurfaceProfile(JSON.stringify({ locale: value })).locale
+
+  it("keeps known locale ids in their canonical spelling, each once", () => {
+    expect(locale({ default: "he", picker: true, offered: ["he", "en", "pt-br", "he"] })).toEqual({ default: "he", picker: true, offered: ["he", "en", "pt-BR"] })
+  })
+
+  it("drops unknown ids loudly; nothing usable leaves the key out (every language stays offered)", () => {
+    const { calls } = warn()
+    expect(locale({ picker: true, offered: ["he", "klingon"] })).toEqual({ picker: true, offered: ["he"] })
+    expect(locale({ picker: true, offered: ["klingon"] })).toEqual({ picker: true })
+    expect(locale({ picker: true, offered: "he" })).toEqual({ picker: true })
+    expect(calls().filter((m) => m.includes("locale.offered")).length).toBe(3)
+  })
+
+  it("a default the list does not offer is warned about (readers resolve it); a bad list never takes default or picker down", () => {
+    const { calls } = warn()
+    expect(locale({ default: "fr", picker: false, offered: ["he", "en"] })).toEqual({ default: "fr", picker: false, offered: ["he", "en"] })
+    expect(calls().some((m) => m.includes("locale.default"))).toBe(true)
+    expect(locale({ default: "he", picker: false, offered: 42 })).toEqual({ default: "he", picker: false })
+  })
+
+  it("picker may be left out beside the other locale keys (it defaults to shown)", () => {
+    expect(locale({ default: "he", offered: ["he", "en"] })).toEqual({ default: "he", picker: true, offered: ["he", "en"] })
+  })
+})
+
+describe("header", () => {
+  const warn = () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    return { calls: () => spy.mock.calls.map((c) => String(c[0])) }
+  }
+  afterEach(() => vi.restoreAllMocks())
+
+  it("keeps the two modes", () => {
+    expect(parseSurfaceProfile(JSON.stringify({ header: "white-label" })).header).toBe("white-label")
+    expect(parseSurfaceProfile(JSON.stringify({ header: "default" })).header).toBe("default")
+  })
+
+  it("any other value set means the deployment wanted its own header: white-label, loudly", () => {
+    const { calls } = warn()
+    expect(parseSurfaceProfile(JSON.stringify({ header: "whitelabel" })).header).toBe("white-label")
+    expect(parseSurfaceProfile(JSON.stringify({ header: true, nav: { hide: ["gallery"] } })).nav.hide).toEqual(["gallery"])
+    expect(calls().filter((m) => m.includes("[surface-profile] header")).length).toBe(2)
+  })
+})
+
+describe("brand.logo — a same-site path or an https URL", () => {
+  const warn = () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    return { calls: () => spy.mock.calls.map((c) => String(c[0])) }
+  }
+  afterEach(() => vi.restoreAllMocks())
+  const brand = (logo: unknown) => parseSurfaceProfile(JSON.stringify({ brand: { productName: "Acme", wordmark: "Studio", logo } })).brand
+
+  it("keeps a path or an https URL, trimmed", () => {
+    expect(brand(" /brand/logo.svg ").logo).toBe("/brand/logo.svg")
+    expect(brand("https://media.example.com/logo.svg").logo).toBe("https://media.example.com/logo.svg")
+  })
+
+  it.each(["//evil.example/x.svg", "/\\evil.example/x.svg", "http://media.example.com/x.svg", "data:image/png;base64,AAAA", "javascript:alert(1)", "logo.svg", 42])(
+    "drops %j alone — the rest of the brand stays",
+    (logo) => {
+      const { calls } = warn()
+      expect(brand(logo)).toEqual({ productName: "Acme", wordmark: "Studio" })
+      expect(calls().some((m) => m.includes("brand.logo"))).toBe(true)
+    },
+  )
+})
+
+describe("auth.requireSignIn — explicit, or absent (readers then derive it from SSO-only)", () => {
+  const warn = () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    return { calls: () => spy.mock.calls.map((c) => String(c[0])) }
+  }
+  afterEach(() => vi.restoreAllMocks())
+  const auth = (requireSignIn: unknown) =>
+    parseSurfaceProfile(JSON.stringify({ auth: { methods: ["email", "sso"], ssoLabel: "Continue", requireSignIn } })).auth
+
+  it("accepts the boolean and string forms; absent stays absent", () => {
+    for (const v of [true, "true", "1"]) expect(auth(v).requireSignIn, String(v)).toBe(true)
+    for (const v of [false, "false", "0"]) expect(auth(v).requireSignIn, String(v)).toBe(false)
+    expect(auth(undefined).requireSignIn).toBeUndefined()
+  })
+
+  it("an unparseable value requires sign-in, loudly, and keeps methods and the SSO label", () => {
+    const { calls } = warn()
+    expect(auth("yes")).toEqual({ methods: ["email", "sso"], ssoLabel: "Continue", requireSignIn: true })
+    expect(calls().some((m) => m.includes("auth.requireSignIn"))).toBe(true)
+  })
+})
+
+describe("the new keys reach /config.js; the server-only billing keys still never do", () => {
+  const REAL_EDITION = config.EDITION
+  const REAL_ENV = process.env.NODARO_SURFACE_PROFILE
+  afterEach(() => {
+    config.EDITION = REAL_EDITION
+    if (REAL_ENV === undefined) delete process.env.NODARO_SURFACE_PROFILE
+    else process.env.NODARO_SURFACE_PROFILE = REAL_ENV
+    __resetSurfaceProfileCacheForTests()
+  })
+
+  it("renders them resolved", async () => {
+    const { renderSurfaceProfileForRuntimeConfig } = await import("../surface-profile-runtime-config.js")
+    config.EDITION = "cloud"
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({
+      worlds: { allow: ["image", "app"], home: "app" },
+      imports: { links: "false" },
+      catalogs: { required: true, factoryPresets: false, images: "none" },
+      locale: { default: "he", picker: true, offered: ["he", "en"] },
+      header: "white-label",
+      brand: { productName: "Acme", logo: "/brand/logo.svg" },
+      auth: { methods: ["sso"], ssoLabel: "Continue", requireSignIn: true },
+      billing: { unitLabel: "units", unitRate: 2000, payerAccount: "billing@acme.example" },
+    })
+    __resetSurfaceProfileCacheForTests()
+    const out = JSON.parse(renderSurfaceProfileForRuntimeConfig())
+    expect(out.worlds).toEqual({ allow: ["image", "app"], home: "app" })
+    expect(out.imports).toEqual({ links: false })
+    expect(out.catalogs.images).toBe("none")
+    expect(out.locale.offered).toEqual(["he", "en"])
+    expect(out.header).toBe("white-label")
+    expect(out.brand.logo).toBe("/brand/logo.svg")
+    expect(out.auth.requireSignIn).toBe(true)
+    expect(out.billing.payerAccount).toBeUndefined()
+  })
+})
+
+describe("brand.favicon — the page's icons, paths on this site", () => {
+  const warn = () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    return { calls: () => spy.mock.calls.map((c) => String(c[0])) }
+  }
+  afterEach(() => vi.restoreAllMocks())
+  const brand = (favicon: unknown) =>
+    parseSurfaceProfile(JSON.stringify({ brand: { productName: "Example Studio", description: "Example Studio workflows", favicon } })).brand
+
+  it("takes one path or a list, trimmed, each once", () => {
+    expect(brand("/brand/favicon.svg").favicon).toEqual(["/brand/favicon.svg"])
+    expect(brand([" /brand/favicon.svg ", "/brand/favicon.png?v=2", "/brand/favicon.svg"]).favicon).toEqual(["/brand/favicon.svg", "/brand/favicon.png?v=2"])
+  })
+
+  it.each([
+    ["another site", "https://cdn.example.com/favicon.svg"],
+    ["a protocol-relative URL", "//evil.example/favicon.svg"],
+    ["a relative path", "favicon.svg"],
+    ["an attribute breaker", '/brand/x".svg'],
+    ["a tag breaker", "/brand/<x>.svg"],
+    ["a number", 7],
+  ])("drops %s alone, loudly; the rest of the brand stays", (_label, favicon) => {
+    const { calls } = warn()
+    expect(brand(["/brand/favicon.svg", favicon])).toEqual({ productName: "Example Studio", description: "Example Studio workflows", favicon: ["/brand/favicon.svg"] })
+    expect(calls().some((m) => m.includes("brand.favicon dropped"))).toBe(true)
+    expect(brand(favicon)).toEqual({ productName: "Example Studio", description: "Example Studio workflows" })
+  })
+
+  it("keeps the first four icons", () => {
+    const { calls } = warn()
+    expect(brand(["/a.svg", "/b.png", "/c.png", "/d.ico", "/e.png"]).favicon).toEqual(["/a.svg", "/b.png", "/c.png", "/d.ico"])
+    expect(calls().some((m) => m.includes("first 4 icons"))).toBe(true)
+  })
+})
+
+describe("strings — carried raw by the server, validated only on the way to /config.js", () => {
+  const REAL_EDITION = config.EDITION
+  const REAL_ENV = process.env.NODARO_SURFACE_PROFILE
+  afterEach(() => {
+    config.EDITION = REAL_EDITION
+    if (REAL_ENV === undefined) delete process.env.NODARO_SURFACE_PROFILE
+    else process.env.NODARO_SURFACE_PROFILE = REAL_ENV
+    __resetSurfaceProfileCacheForTests()
+    vi.restoreAllMocks()
+  })
+  const KEY = "credits.allowanceExceeded"
+  const EN_TEXT = "Your Example Studio allowance is used up. Ask your administrator for more."
+  const HE_TEXT = "נגמרה לכם המכסה. פנו למנהל המערכת שלכם."
+  const FLOW = buildUiStringManifest("flow", en, PLATFORM_LANGUAGES)
+  const fromBuild = vi.fn(() => ({ manifest: FLOW }))
+
+  async function render(profile: unknown, readManifest: typeof fromBuild | (() => { problem: string }) = fromBuild): Promise<{ text: string; out: Record<string, unknown> }> {
+    const { renderSurfaceProfileForRuntimeConfig } = await import("../surface-profile-runtime-config.js")
+    config.EDITION = "business"
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify(profile)
+    __resetSurfaceProfileCacheForTests()
+    const text = renderSurfaceProfileForRuntimeConfig(readManifest)
+    return { text, out: JSON.parse(text) as Record<string, unknown> }
+  }
+
+  it("the server's own profile keeps strings exactly as given, valid or not (it never reads them)", () => {
+    const raw = { flow: { he: { [KEY]: "<b>x</b>" } }, junk: 1 }
+    expect(parseSurfaceProfile(JSON.stringify({ strings: raw })).strings).toEqual(raw)
+  })
+
+  it("/config.js carries only what validates; every refused entry stays out", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const { text, out } = await render({
+      locale: { default: "he", offered: ["he", "en"] },
+      strings: { flow: { he: { [KEY]: HE_TEXT, "no.such.key": "x" }, en: { [KEY]: "<b>Call us</b>" }, ja: { [KEY]: "クレジットがありません。" } } },
+    })
+    expect(out.strings).toEqual({ flow: { he: { [KEY]: HE_TEXT } } })
+    expect(text).not.toMatch(/no\.such\.key|<b>|クレジット/)
+  })
+
+  it("a profile whose every override is refused carries no strings key at all", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const { out } = await render({ brand: { productName: "Example Studio" }, strings: { flow: { en: { "no.such.key": "x" } } } })
+    expect(out).not.toHaveProperty("strings")
+    expect(out.brand).toEqual({ productName: "Example Studio" })
+  })
+
+  it("INERT: without strings, /config.js is the same single JSON.stringify(profile) as before, and the manifest is never opened", async () => {
+    fromBuild.mockClear()
+    const { text } = await render({ nav: { hide: ["gallery"] }, brand: { productName: "Example Studio" } })
+    expect(text).toBe(JSON.stringify(runtimeSurfaceProfile()))
+    expect(text).not.toContain("strings")
+    expect(fromBuild).not.toHaveBeenCalled()
+  })
+
+  it("a build with no manifest: every override dropped with a warning, every other key intact", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const { out } = await render(
+      { nav: { hide: ["gallery"] }, brand: { productName: "Example Studio" }, strings: { flow: { en: { [KEY]: EN_TEXT } } } },
+      () => ({ problem: "there is no key manifest at /x (a local dev run, or a build that did not emit it)" }),
+    )
+    expect(out).not.toHaveProperty("strings")
+    expect(out.nav).toEqual({ hide: ["gallery"] })
+    expect(out.brand).toEqual({ productName: "Example Studio" })
+    expect(warn).toHaveBeenCalledWith("[surface-profile] strings.flow: every override dropped — there is no key manifest at /x (a local dev run, or a build that did not emit it), so none can be checked")
+  })
+
+  it("a surface that would outgrow one environment variable sheds its strings, never the rest", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const { RUNTIME_SURFACE_MAX_BYTES } = await import("../surface-profile-runtime-config.js")
+    const { UI_STRINGS_MAX_BYTES } = await import("../surface-strings.js")
+    // Fill Flow to its own budget in two locales: each block passes, together they are over the surface limit.
+    const plain = Object.entries(FLOW.keys).filter(([, names]) => names.length === 0).map(([key]) => key)
+    const perLocale = Math.floor(UI_STRINGS_MAX_BYTES / 2 / 1000)
+    const fill = (from: number) => Object.fromEntries(plain.slice(from, from + perLocale).map((key) => [key, "x".repeat(1000)]))
+    const blocks = { en: fill(0), he: fill(perLocale) }
+    expect(2 * perLocale * 1000).toBeLessThanOrEqual(UI_STRINGS_MAX_BYTES)
+    const bigBrand = "y".repeat(RUNTIME_SURFACE_MAX_BYTES - UI_STRINGS_MAX_BYTES / 2)
+    const { text, out } = await render({ nav: { hide: ["gallery"] }, brand: { productName: "Example Studio", description: bigBrand }, strings: { flow: blocks } })
+    expect(out).not.toHaveProperty("strings")
+    expect(out.nav).toEqual({ hide: ["gallery"] })
+    expect(Buffer.byteLength(text, "utf8")).toBeLessThan(RUNTIME_SURFACE_MAX_BYTES)
+    expect(warn.mock.calls.some((c) => /strings dropped — the surface with them is \d+ bytes/.test(String(c[0])))).toBe(true)
+  })
+
+  it("rides beside the billing redaction: both apply", async () => {
+    const { out } = await render({
+      billing: { unitLabel: "units", unitRate: 2000, payerAccount: "billing@example.com" },
+      strings: { flow: { en: { [KEY]: EN_TEXT } } },
+    })
+    expect(out.strings).toEqual({ flow: { en: { [KEY]: EN_TEXT } } })
+    expect(out.billing).toEqual({ costTab: "inherit", sidebarCard: "inherit", selfServe: true, unitLabel: "units", unitRate: 2000 })
+    expect(JSON.stringify(out)).not.toContain("billing@example.com")
   })
 })

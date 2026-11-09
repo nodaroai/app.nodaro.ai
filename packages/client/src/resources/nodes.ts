@@ -16,6 +16,7 @@ import {
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
 import type { VideoCharacterReference } from "@nodaro/shared/video"
 import type { ModelInputAdjustment } from "@nodaro/shared/model-catalog"
+import type { TtsOutputFormat } from "@nodaro/shared/models"
 import type { VideoDepthProvider, VideoDepthModelSize, VideoDepthColormap, VideoDepthResolution } from "@nodaro/shared/media"
 import type { DirectionFields, SubjectFields } from "@nodaro/prompts/prompt-builder"
 
@@ -246,6 +247,18 @@ export interface TextToSpeechParams extends GenerationSessionParams {
   previousText?: string
   /** The line spoken just AFTER this one. Same rule as `previousText`. */
   nextText?: string
+  /**
+   * Ask for per-word timings: the finished job's `output_data.transcript` carries
+   * `words[]` with `startMs` / `endMs`, at no extra credits. Without it the request
+   * is exactly the plain one and no `transcript` is written.
+   */
+  withTimestamps?: boolean
+  /**
+   * The audio file to deliver: `mp3_44100_128` (the default, as before the field
+   * existed), `mp3_44100_192` (a higher MP3 bitrate) or `wav_24000` (an uncompressed
+   * WAV). Same credits; the job's `audioUrl` ends in `.mp3` or `.wav` accordingly.
+   */
+  outputFormat?: TtsOutputFormat
   [k: string]: unknown
 }
 

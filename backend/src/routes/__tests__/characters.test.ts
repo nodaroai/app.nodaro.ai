@@ -2208,6 +2208,41 @@ describe("POST /v1/characters", () => {
     expect(captured.row?.voice).toEqual(voice)
   })
 
+  // A client saves the `preview_url` a voice list gave it: on a deployment that
+  // serves previews from its own host, that is a same-site path.
+  it("persists a voice whose previewUrl is the same-site address a voice list gave", async () => {
+    const { mockInsert, captured } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const voice = {
+      voiceId: "21m00Tcm4TlvDq8ikWAM",
+      voiceName: "Rachel",
+      traits: "calm",
+      voiceType: "premade",
+      previewUrl: "/v1/voices/21m00Tcm4TlvDq8ikWAM/preview?src=aHR0cHM6Ly9leGFtcGxl&sig=c2lnbmF0dXJl",
+    }
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: { name: "Hero", nodeId: "node-1", userId: TEST_USER_ID, voice },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(captured.row?.voice).toEqual(voice)
+  })
+
+  it("still refuses any other relative previewUrl", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero", nodeId: "node-1", userId: TEST_USER_ID,
+        voice: { voiceId: "v1", voiceName: "Aria", traits: "warm", previewUrl: "/somewhere/else.mp3" },
+      },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
   it("accepts a legacy voice WITHOUT previewUrl (validates; field absent, not null-forced)", async () => {
     const { mockInsert, captured } = mockInsertCapture()
     vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)

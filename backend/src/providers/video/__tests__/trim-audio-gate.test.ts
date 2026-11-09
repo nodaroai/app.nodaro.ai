@@ -32,6 +32,7 @@ vi.mock("../../../lib/import-gate.js", () => ({
 
 import { join } from "node:path"
 import { trimAudio } from "../trim-audio.js"
+import { OWN_MEDIA_URL, withLinkImportsOff } from "@/test/link-imports-off.js"
 
 const SOCIAL = "https://www.youtube.com/watch?v=abc"
 const DIRECT = "https://cdn.example.com/clip.mp4"
@@ -77,5 +78,25 @@ describe("trimAudio", () => {
     expect(mocks.requireImportAllowed).not.toHaveBeenCalled()
     expect(mocks.spendImportConfirmation).not.toHaveBeenCalled()
     expect(mocks.youtubedl).not.toHaveBeenCalled()
+  })
+})
+
+describe("trimAudio on a deployment that turned link imports off (a run reaches it without the route)", () => {
+  withLinkImportsOff()
+
+  it("refuses a direct file on another site before any work dir or fetch", async () => {
+    await expect(trimAudio({ videoUrl: DIRECT }, rights)).rejects.toMatchObject({ code: "link_imports_disabled" })
+    expect(mocks.createWorkDir).not.toHaveBeenCalled()
+    expect(mocks.downloadFile).not.toHaveBeenCalled()
+  })
+
+  it("refuses a social link the same way, before the rights gate", async () => {
+    await expect(trimAudio({ videoUrl: SOCIAL }, rights)).rejects.toMatchObject({ code: "link_imports_disabled" })
+    expect(mocks.requireImportAllowed).not.toHaveBeenCalled()
+  })
+
+  it("a file of this deployment's own storage still runs", async () => {
+    await trimAudio({ videoUrl: OWN_MEDIA_URL }, rights)
+    expect(mocks.downloadFile).toHaveBeenCalledWith(OWN_MEDIA_URL, join("/tmp/trim-work", "input.mp4"))
   })
 })

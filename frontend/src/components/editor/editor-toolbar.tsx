@@ -4,9 +4,10 @@ import { useState, useRef, useCallback, useEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { useAppDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
-import { ArrowLeft, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Play, Pause, MoreVertical, Download, Upload, Package, FileJson, FileText, ClipboardPaste } from "lucide-react"
+import { ArrowLeft, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Play, Pause, MoreVertical, Download, Upload, Package, FileJson, FileText, ClipboardPaste, Menu } from "lucide-react"
 import { CreditBalance } from "@/ee/components/credits/CreditBalance"
-import { useSharedHeaderActive } from "@/lib/shared-header"
+import { useSidebar } from "@/components/layout/sidebar-context"
+import { useSharedHeaderActive, useSharedHeaderMode } from "@/lib/shared-header"
 import { Button } from "@/components/ui/button"
 import { NodeDoubleClickToggle } from "./node-double-click-toggle"
 import { ScheduleToggle } from "./schedule-toggle"
@@ -82,6 +83,10 @@ interface EditorToolbarProps {
 export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab = "editor", onTabChange }: EditorToolbarProps) {
   const t = useT()
   const sharedHeader = useSharedHeaderActive()
+  // Under the hosted header the phone's drawer button has no slot in the
+  // header's row; the toolbar is the editor's own bar, so it holds it here.
+  const headerMode = useSharedHeaderMode()
+  const { openMobileMenu } = useSidebar()
   const projectDisplayName = useProjectDisplayName()
   const isRtl = useAppDir() === "rtl"
   const workflowName = useWorkflowStore((s) => s.workflowName)
@@ -406,6 +411,17 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
     <div className="flex items-center justify-between gap-2 px-2 sm:px-4 h-[41px] border-b border-gray-200 dark:border-border bg-white dark:bg-card">
       {/* Left section: Back, Breadcrumbs, Workflow name */}
       <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+        {headerMode === "default" && (
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={t("nav.openMenu")}
+            className="h-8 w-8 p-0 shrink-0 md:hidden"
+            onClick={openMobileMenu}
+          >
+            <Menu className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        )}
         {projectId && (
           <Button
             variant="ghost"

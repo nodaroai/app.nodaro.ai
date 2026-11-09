@@ -54,6 +54,23 @@ export interface SharedVoice extends Voice {
   verifiedProviders?: TtsProvider[]
 }
 
+/**
+ * The `use_cases` values the Voice Library groups its voices by
+ * (`GET /v1/voices/library?use_cases=<one>`): what a picker shows as its
+ * categories. The route passes the value through verbatim, so a value the
+ * library adds later works before it is listed here.
+ */
+export const VOICE_LIBRARY_USE_CASES = [
+  "advertisement",
+  "characters_animation",
+  "conversational",
+  "entertainment_tv",
+  "informative_educational",
+  "narrative_story",
+  "social_media",
+] as const
+export type VoiceLibraryUseCase = (typeof VOICE_LIBRARY_USE_CASES)[number]
+
 /** Query params for `GET /v1/voices/library`. All optional; sent as a querystring. */
 export interface VoiceLibraryParams {
   search?: string
@@ -62,7 +79,8 @@ export interface VoiceLibraryParams {
   accent?: string
   language?: string
   category?: string
-  use_cases?: string
+  /** One of `VOICE_LIBRARY_USE_CASES` (any other string is passed through as sent). */
+  use_cases?: VoiceLibraryUseCase | (string & {})
   descriptives?: string
   featured?: boolean
   /** e.g. "trending" — passed through to the route. */
@@ -100,4 +118,34 @@ export interface VoiceClone {
   updatedAt?: string
   /** Only on the create response (credit-tracking); never on the list. */
   jobId?: string
+}
+
+/**
+ * What a favorite voice is — the `voiceType` a text-to-speech run takes for it:
+ * a premade voice, a Voice Library voice, or one of the user's own clones
+ * (`custom`). The one list the route, the MCP tool and the CLI validate against.
+ */
+export const VOICE_FAVORITE_TYPES = ["premade", "library", "custom"] as const
+export type VoiceFavoriteType = (typeof VOICE_FAVORITE_TYPES)[number]
+
+/**
+ * One of the signed-in user's favorite voices (`GET /v1/voices/favorites`), newest
+ * first. `voiceId` is what a text-to-speech request takes as `voice` with
+ * `voiceType`; `name` and `previewUrl` are the snapshot the client sent when it
+ * starred the voice, so a favorites list renders with no second lookup.
+ */
+export interface VoiceFavorite {
+  voiceId: string
+  voiceType: VoiceFavoriteType
+  name: string
+  previewUrl: string | null
+  createdAt: string
+}
+
+/** Body of `PUT /v1/voices/favorites/:voiceId`: the voice's kind and the snapshot to show it by. */
+export interface VoiceFavoriteInput {
+  voiceId: string
+  voiceType: VoiceFavoriteType
+  name: string
+  previewUrl?: string | null
 }

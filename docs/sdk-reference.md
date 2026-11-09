@@ -58,6 +58,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.templates`](#clienttemplates)
   - [`client.tutorials`](#clienttutorials)
   - [`client.organizations`](#clientorganizations)
+  - [`client.surface`](#clientsurface)
   - [`client.workspaces`](#clientworkspaces)
   - [`client.edit`](#clientedit)
 - [Type re-exports](#type-re-exports)
@@ -70,7 +71,7 @@ The root `@nodaro/sdk` exports everything on this page. Each resource is also
 published as its own entry point, `@nodaro/sdk/<entry>`, which loads only that
 resource's module and the types it takes and returns:
 
-`/apps`, `/audio`, `/billing`, `/cast-swap`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/content-rights`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/trash`, `/trend-radar`, `/trends`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
+`/apps`, `/audio`, `/billing`, `/cast-swap`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/content-rights`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/surface`, `/templates`, `/trash`, `/trend-radar`, `/trends`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
 
 `/client` holds `createClient`, `NodaroClient` and the auth providers;
 `/core` holds `NodaroClientCore` (see below) and the same auth providers;
@@ -210,7 +211,7 @@ Returns `UserIdentity`:
 | `email` | `string` | The user's email. |
 | `displayName` | `string \| null` | Human-readable display name (from `profiles.full_name`); `null` if unset. |
 | `avatarUrl` | `string \| null` | Avatar URL; `null` if unset. |
-| `tier` | `string` | Stored subscription tier (e.g. `"free"`, `"pro"`). For the entitlement tier actually enforced (including `"payg"`), read `effectiveTier` from [`client.credits.balance()`](#clientcredits). |
+| `tier` | `string` | Stored subscription tier (e.g. `"free"`, `"pro"`). For the entitlement tier actually enforced (including `"payg"`), read `effectiveTier` from [`client.credits.balance()`](#clientcredits). On a deployment-payer instance, the deployment's plan: the billing account's tier. |
 | `isAdmin` | `boolean` | Whether the user holds an admin role. **Descriptive only** — use it to decide whether to render admin UI instead of capability-probing an admin endpoint; every admin API stays enforced server-side regardless. |
 
 On an instance with [organizations](./organizations.md) the same object also
@@ -467,6 +468,7 @@ measure on the account, the content rights check or the site's policy said no
 |--------|---------|
 | `imports_blocked` | importing links is blocked on the account, or the account is closed, under the deployment's repeat-infringer policy; the message says until when (a date in UTC, or until an administrator lifts the block) |
 | `import_source_disabled` | the link's site is disabled by an administrator; the message names no site |
+| `link_imports_disabled` | this deployment turned link imports off: a link to another site is refused (upload the file instead); a file of its own storage is not |
 | `rights_confirmation_required` | the deployment requires a confirmation and none was sent |
 | `rights_authorization_required` | the deployment requires a confirmation, the import came through an API key, a connected app or an AI agent, and the account holds no standing authorization (`contentRights.authorize`, by the person in their own session) |
 | `rights_confirmation_not_found` | no confirmation has that id |
@@ -689,7 +691,7 @@ and `status`:
 
 ### `class JobBlockedError extends NodaroError`
 
-HTTP 422 `job_blocked`. A job policy registered by this deployment refused the
+HTTP 422 `job_blocked`. A job policy or content guard registered by this deployment refused the
 generation **before it ran** — no job was created and nothing was charged.
 `message` is user-safe text written by the deployment's policy (or by the platform, when the policy supplies none); show it as-is.
 Do not retry the identical request: the platform does not retry a refused
@@ -3177,6 +3179,17 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > passes the lines spoken just before and after the clip; a model that stitches
 > (ElevenLabs v4, v4 Turbo, Turbo v2.5 and Multilingual v2; not v3) keeps one intonation across clips produced separately. Up to 1,000
 > characters each; context is not spoken. See the Text to Speech node docs.
+
+> **Timings and the file on `text-to-speech`.** `TextToSpeechParams.withTimestamps: true`
+> asks for per-word timings: the finished job's `output_data.transcript` carries
+> `words[]` with `startMs` / `endMs`, at no extra credits (without it, no
+> `transcript` is written). `TextToSpeechParams.outputFormat` picks the audio file:
+> `mp3_44100_128` (the default, as before the field existed), `mp3_44100_192` (a
+> higher MP3 bitrate) or `wav_24000` (an uncompressed WAV) — same credits; the
+> job's `audioUrl` ends in `.mp3` or `.wav` by the file that actually came back,
+> and `output_data.audioMimeType` names it (`audio/mpeg` or `audio/wav`) — name a
+> download from that, not from the format asked for. The values are
+> `TTS_OUTPUT_FORMATS` in `@nodaro/shared/models`.
 
 > **Presets on `generate-image`.** `GenerateImageParams.presetId` applies a node
 > preset (a factory id from `presets.listFactory("generate-image")`, or one of
@@ -5775,7 +5788,8 @@ export async function POST(request: Request) {
 ### `client.voices`
 
 ElevenLabs voices: the premade catalog, the community Voice Library, the
-signed-in user's existing voice clones (list / delete), and the **voice changer** —
+signed-in user's existing voice clones (list / delete), their **favorite voices**
+(list / star / unstar), and the **voice changer** —
 one-shot single-voice / multi-speaker recasts plus the interactive Voice
 Changer Pro flow (`analyze` → `recast({ output: "stems" })` → `exportMix`),
 voice design/remix, and dubbing.
@@ -5788,6 +5802,11 @@ list(): Promise<Voice[]>
 
 List the premade ElevenLabs voices (`GET /v1/voices`). Falls back to a curated
 set server-side when no ElevenLabs API key is configured.
+
+On a deployment that serves voice previews from its own host
+(`VOICE_PREVIEW_PROXY=true`), each voice's `preview_url` here and in
+`searchLibrary` is a same-site path (`/v1/voices/<id>/preview?…`) rather than
+the provider's address: resolve it against the API's origin to play it.
 
 ```ts
 const voices = await client.voices.list()
@@ -5803,6 +5822,14 @@ Search the shared/community Voice Library (`GET /v1/voices/library`). All
 params are optional and forwarded as a querystring; `undefined` / `null` /
 empty-string values are omitted so server defaults apply. `hasMore` in the
 response drives "load more" pagination.
+
+`use_cases` groups the library the way a picker shows categories — one of
+`VOICE_LIBRARY_USE_CASES` (`@nodaro/shared/pipeline`): `advertisement`,
+`characters_animation`, `conversational`, `entertainment_tv`,
+`informative_educational`, `narrative_story`, `social_media`. One value per
+call; combine it with `language`, `gender`, `age` or `accent`. The value is
+passed through as sent, so a group the library adds later works before it is
+listed.
 
 Each returned voice may carry model-verification hints derived from the
 library's `verified_languages` metadata:
@@ -5876,6 +5903,36 @@ Delete one of the user's voice clones (`DELETE /v1/voice-clones/:id`).
 
 ```ts
 await client.voices.deleteClone(cloneId)
+```
+
+#### `listFavorites()` / `favorite(input)` / `unfavorite(voiceId)`
+
+```ts
+listFavorites(): Promise<VoiceFavorite[]>
+favorite(input: VoiceFavoriteInput): Promise<VoiceFavorite>
+unfavorite(voiceId: string): Promise<void>
+```
+
+The signed-in user's **favorite voices** — a premade voice, a Voice Library
+voice or one of their clones — starred from any client and read back by all of
+them, newest first (`GET /v1/voices/favorites`, `PUT` / `DELETE
+/v1/voices/favorites/:voiceId`). A favorite carries the `voiceId` + `voiceType`
+a text-to-speech run takes as `voice` + `voiceType`, and the `name` /
+`previewUrl` snapshot it was starred with, so a favorites list renders with no
+second lookup. Both writes are idempotent: starring an already-starred voice
+refreshes its snapshot; unstarring one that is not there succeeds. Past the
+per-user cap (500) `favorite` rejects with `409 limit_reached`. OAuth apps
+need `assets:read` for the list and `assets:write` for the writes.
+
+```ts
+const { voices } = await client.voices.searchLibrary({ search: "calm narrator", language: "en" })
+const pick = voices[0]
+await client.voices.favorite({ voiceId: pick.voice_id, voiceType: "library", name: pick.name, previewUrl: pick.preview_url })
+
+const favorites = await client.voices.listFavorites()
+await client.nodes.run("text-to-speech", { text: "Hello!", voice: favorites[0].voiceId, voiceType: favorites[0].voiceType })
+
+await client.voices.unfavorite(pick.voice_id)
 ```
 
 #### `change(input)`
@@ -7233,6 +7290,15 @@ Throws `UnauthorizedError` (401) when signed out.
 | `freeGrantState` | `FreeGrantState?` | Where the free signup grant stands: `"unclaimed"`, `"granted"`, `"withheld"` (the account works but the grant did not land — show the activation path) or `"revoked"`. Absent where the deployment has no signup grant. |
 | `freeGrantNotice` | `"browser_unmeasured"?` | Only with `freeGrantState: "withheld"`, when the claim showed no browser signals at all: the app may say free credits need a regular browser and a reload. |
 | `welcomeOffer` | `WelcomeOfferState?` | Present only while the deployment has the welcome offer switched on — absent means no popup, no banner, no block. See [`claimWelcomeOffer`](#claimwelcomeofferinput). |
+| `allowance` | `BalanceAllowance \| null?` | Deployment-payer instances only: `{ granted, remaining, enforced }`, the caller's own allowance in credits — the figure to show there, since `total` is the personal balance, which does not fund runs on such a deployment. `enforced: false` means it is shown, not enforced. `null` for the billing account itself or when it could not be read (never 0). Absent elsewhere. |
+| `display` | `BalanceDisplay?` | On a deployment that shows its own unit instead of credits: the same figures converted by the server. Render these as they are; never convert credits yourself. Absent where no unit is configured, and for the billing account's own read on a deployment-payer instance (its balance is the deployment's pool, kept in credits). |
+
+**`BalanceDisplay`:** `unit` (the unit's label), `decimals` (the places its
+figures carry, 0–4), then `total`, `subscription`, `topup`, `dailySpent`,
+`dailyLimit`, `monthlyAllocation` and `appCreditsAllowance` in that unit, each
+`number | null` (`null` = unavailable — show an em dash, never 0). Plus
+`allowance: { granted, remaining } | null`, `externalWallet: { available }` and
+`welcomeOffer: { credits }`, each present exactly when the raw key is.
 
 **`WelcomeOfferState`:**
 
@@ -7294,6 +7360,7 @@ the convert is charged the sum, rounded once). `@nodaro/shared` builds it:
 | `errors` | `string[]` | Identifiers where the lookup itself failed. |
 | `estimates` | `string[]?` | The identifiers in `data` whose figure is an **estimate**, not a fixed price: metered LLM price keys (`<feature>:<model>[:direct]`, built by `llmPriceKey` from `@nodaro/shared/llm-models`), charged for the tokens the call actually uses. Show these as `≈N`. Omitted when there are none. A metered key in `missing` means the server is not pricing LLM calls per model — show no price for it. |
 | `errorCodes` | `Record<string, { code, message }>?` | Why each identifier in `errors` has no price — today `llm_model_unpriced`: a model with no rate on the lane it would be served on (it cannot be run). Omitted when `errors` is empty. |
+| `display` | `ModelCostsDisplay?` | On a deployment that shows its own unit instead of credits: `{ unit, decimals, data }`, where `data` maps the same identifiers to their price in that unit, converted by the server (`null` = unavailable). An identifier in `estimates` is an estimate here too. Absent where no unit is configured. |
 
 ```ts
 const { data, missing } = await client.credits.modelCosts(["nano-banana-pro", "seedance-2-fast"])
@@ -7313,7 +7380,9 @@ const shown = estimates?.includes(key) ? `≈${data[key]}` : String(data[key])
 ```
 
 `GET /v1/credits/model-cost?model=<id>` answers one identifier as
-`ModelCostResult` — `{ model, creditCost, estimate?: true }`.
+`ModelCostResult` — `{ model, creditCost, estimate?: true, display? }`, where
+`display` is `{ unit, decimals, creditCost }` on a deployment that shows its own
+unit instead of credits.
 
 #### `transactions(options?)`
 
@@ -7464,7 +7533,11 @@ once, with the browser signals of the page making the claim. Idempotent: a
 decided account answers with its state and `granted: false`. Call it once per
 page load as soon as the session is known and never wait on it for rendering —
 a failed call costs nothing, the next load asks again. Nodaro Cloud only (a
-self-hosted instance answers 404).
+self-hosted instance answers 404). On a deployment where one billing account
+pays for every run, free signup credits do not apply: the call throws a
+`NodaroError` with `status` 409 and `code` `"not_applicable"`, and nothing is
+claimed or recorded (the fire-and-forget call below ignores it like any other
+failure).
 
 The signals come from the browser-only subpath `@nodaro/sdk/signup-signals`:
 `collectSignupKeys()` returns whatever could be measured within its deadline
@@ -7505,7 +7578,10 @@ self-hosted instance answers 404).
 the route answers a first-party web app signed in with a Supabase session
 (`supabaseAuth`) and refuses an API key or an OAuth app token with `403`. It
 answers `409 welcome_offer_disabled` while the deployment has the offer off:
-show the offer only when `balance().welcomeOffer` is present.
+show the offer only when `balance().welcomeOffer` is present. On a deployment
+where one billing account pays for every run it answers `409 not_applicable`
+and records nothing, not even the consent — free signup credits do not apply
+there, and `balance()` carries no `welcomeOffer`.
 
 **`WelcomeOfferClaimInput`:** `SignupKeys` (from `collectSignupKeys()`) plus
 `sourceApp?: string` — your app's slug (lowercase letters, digits and `-`, up to
@@ -7534,7 +7610,8 @@ shown, so `welcomeOffer.popupSeen` turns `true` in every app. Idempotent (the
 first stamp wins). A failed call only means the popup may show once more, so
 callers usually ignore errors. Same rules as `claimWelcomeOffer`: browser
 session only (`403` for API keys and OAuth app tokens), `409
-welcome_offer_disabled` while the offer is off, Cloud only.
+welcome_offer_disabled` while the offer is off, `409 not_applicable` on a
+deployment where one billing account pays for every run, Cloud only.
 
 ```ts
 import { collectSignupKeys } from "@nodaro/sdk/signup-signals"
@@ -7692,7 +7769,7 @@ Errors:
 | Status | Error | When |
 |--------|-------|------|
 | 400 | `NodaroError`, `code: "validation_error"` | Not an http(s) address, an address that is a private or reserved IP, not a decodable image, or an image in a format that is not accepted (SVG, TIFF, …; accepted: JPEG, PNG, WebP, AVIF, GIF, HEIC). |
-| 403 | `ImportRefusedError` (a `ForbiddenError`), `code: "imports_blocked"`, `"import_source_disabled"` or a `rights_confirmation_*` code | Importing links is blocked on your account (or it is closed) under the deployment's repeat-infringer policy, the site is disabled by an administrator, or the content rights confirmation is missing (while required), for another link or account, stale, expired or used (a failed import uses it too). |
+| 403 | `ImportRefusedError` (a `ForbiddenError`), `code: "imports_blocked"`, `"import_source_disabled"`, `"link_imports_disabled"` or a `rights_confirmation_*` code | Importing links is blocked on your account (or it is closed) under the deployment's repeat-infringer policy, the site is disabled by an administrator, the deployment turned link imports off (a link to another site is refused; upload the file instead), or the content rights confirmation is missing (while required), for another link or account, stale, expired or used (a failed import uses it too). |
 | 422 | `NodaroError`, `code: "fetch_failed"` | The address could not be reached (including a host that resolves to a private address), or answered with an error. |
 | 413 | `StorageExceededError`, `reason: "file_too_large"` | The picture is over 20 MB. |
 | 413 | `StorageExceededError`, `reason: "storage_limit_exceeded"` | Your storage is full; `details` carries `usedBytes`, `quotaBytes`, `remainingBytes`, `tier`. |
@@ -8784,6 +8861,23 @@ const { monthlyStatementEmail } = await client.userSettings.get()
 await client.userSettings.update({ monthlyStatementEmail: !monthlyStatementEmail })
 ```
 
+### `client.surface`
+
+What this deployment offers the caller: the node types, models, Web Scrape
+sources and worlds an app should show the person on screen. The answer depends
+on who asks (an admin is still offered a node the admin switch withholds from
+users), so it is never shared-cached. Signed out, the answer is a user's.
+
+| Method | Endpoint | Notes |
+|--------|----------|-------|
+| `availability()` | `GET /v1/surface/availability` | `SurfaceAvailability`: `{ nodes: { denied, hiddenFromUsers }, models: { denied }, webScrapeSources: { denied, hiddenFromUsers }, worlds }`. `hiddenFromUsers` is empty for anyone but an admin. `worlds` lists every world (`SurfaceAvailabilityWorld`: `{ id, enabled }`) in the deployment's display order: `explore`, `image`, `video`, `music`, `trends`, `motion`, `voice`, `app`, `studio`; a newer server may add one. A world is `enabled` when the deployment lets it through and every node type it runs is available to the caller. |
+
+```ts
+// The shared header shows only the worlds this person can use.
+const { worlds } = await client.surface.availability()
+const tabs = worlds.filter((w) => w.enabled).map((w) => w.id)
+```
+
 ### `client.workspaces`
 
 Workspaces — the inner tenancy axis, where work lives. Belonging to a
@@ -9475,6 +9569,10 @@ Every type used in a public method signature is re-exported from
 
 - `UserSettings` / `UserSettingsPatch` / `UserSettingsSaved` / `UserSettingsLocale` / `UserTextTemplate` / `UserMcpPreferences` / `VariableDisplayMode` / `NodeDoubleClickAction` — `userSettings.get()` / `userSettings.update()`
 
+### Surface
+
+- `SurfaceAvailability` / `SurfaceAvailabilityWorld` — `surface.availability()`
+
 ### Client identity
 
 - `UserIdentity` — return type of `client.me()`: `{ id, email, displayName: string | null, avatarUrl: string | null, tier, isAdmin }`
@@ -9661,6 +9759,8 @@ not two.
 - `Voice` — premade ElevenLabs voice record, re-exported from `@nodaro/shared`
 - `VoiceClone` — user clone record (`elevenlabsVoiceId` is the TTS-time id), re-exported from `@nodaro/shared`
 - `VoiceLibraryParams` — query params for `searchLibrary()`, re-exported from `@nodaro/shared`
+- `VoiceLibraryUseCase` / `VOICE_LIBRARY_USE_CASES` — the `use_cases` values `searchLibrary()` groups the library by, from `@nodaro/shared/pipeline`
+- `VoiceFavorite`, `VoiceFavoriteInput`, `VoiceFavoriteType` / `VOICE_FAVORITE_TYPES` — favorites (`listFavorites()` / `favorite()`), from `@nodaro/shared/pipeline`
 - `VoiceLibraryResponse` — `{ voices: Voice[]; hasMore: boolean; ... }`, re-exported from `@nodaro/shared`
 - `VoiceChangerProInput` — full `recast()` input (see its section above)
 - `VoiceChangerProVoice` — one `orderedVoices` entry: voice id string or per-voice settings object

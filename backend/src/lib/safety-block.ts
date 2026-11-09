@@ -15,6 +15,7 @@
 import type { KieError } from "../providers/kie/client.js"
 import { providerErrorText, refusalLeavesOnlyTheClip } from "../providers/kie/seedance-edit-mode.js"
 import { safetyRetryPolicy, getModel } from "@nodaro/shared/model-catalog"
+import { jobBlockOf } from "./job-policy.js"
 
 export type SafetyBlock = {
   class: "copyright" | "likeness" | "safety"
@@ -235,6 +236,20 @@ export function policyBlockHint(
   hookPoint: "request" | "result",
 ): PolicyBlockHint {
   return { kind: "policy-block", policyId, reason, hookPoint }
+}
+
+/** The hint of a thrown policy block (`JobBlockedError`) anywhere on the error's
+ *  `cause` chain: a request a policy refused while a job was running (the
+ *  content guard at a worker's prompt funnel), carried like any other policy
+ *  block. `reason` is the block's user-safe sentence, never its machine text. */
+export function jobBlockHintOf(err: unknown): PolicyBlockHint | null {
+  let cur: unknown = err
+  for (let depth = 0; depth < 8 && cur !== null && typeof cur === "object"; depth++) {
+    const block = jobBlockOf(cur)
+    if (block) return policyBlockHint(block.policyId, block.message, "request")
+    cur = (cur as { cause?: unknown }).cause
+  }
+  return null
 }
 
 /** The hint when the thrown error (or anything on its `cause` chain) says the

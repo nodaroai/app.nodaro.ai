@@ -5,6 +5,7 @@ import { z } from "zod"
 import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { ELEVENLABS_BASE_URL } from "../providers/elevenlabs/client.js"
+import { filterVoicesByAllowedGender } from "../lib/voice-policy.js"
 
 /**
  * Voice clones — LIST / RENAME / DELETE only.
@@ -60,7 +61,10 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to fetch voice clones")
     }
 
-    const voiceClones = (data ?? []).map((v) => ({
+    // B4c: under a voice lock, list only the clones whose recorded gender is
+    // allowed — the lock refuses any other at use time (lib/voice-gender.ts),
+    // a clone with no recorded gender included. Inert when unrestricted.
+    const voiceClones = filterVoicesByAllowedGender(data ?? []).map((v) => ({
       id: v.id,
       name: v.name,
       description: v.description,

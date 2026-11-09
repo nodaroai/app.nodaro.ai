@@ -20,12 +20,14 @@ import { viduQ4InputProblem } from "../lib/vidu-q4-inputs.js"
 import { kling4InputProblem } from "../lib/kling4-inputs.js"
 import { applyAudioSoundtrack } from "../lib/audio-soundtrack.js"
 import { getModelCreditBaseCost } from "../ee/billing/credits.js"
-import { voicedAddonBaseCredits } from "../lib/voiced-dialogue-lines.js"
+import { voicedAddonBaseCredits, voicesTheVoicedVideoSends } from "../lib/voiced-dialogue-lines.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { voicedDialogueProvider } from "../lib/voiced-dialogue-model.js"
+import { judgeVoicesUnderLock } from "../lib/voice-lock.js"
+import { voiceNotAvailableBody } from "../lib/voice-policy.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderRefModeFrameSeats } from "@nodaro/shared/models"
@@ -1339,6 +1341,25 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       normResolution,
       (referenceVideoUrls?.length ?? 0) > 0,
     )
+
+    // B4c: a voiced run speaks in its cast's voices, so under a voice lock each
+    // voice it will send must be one whose gender the platform can vouch for as
+    // allowed (lib/voice-gender.ts), judged before the job row or any
+    // reservation. Read exactly as the worker reads the queued job
+    // (`voicesTheVoicedVideoSends`: the final prompt, the cast, the dialogue
+    // model forwarded below), so a cast voice with no line is not judged and a
+    // spoken one never slips through. Not voiced (the model cannot carry
+    // dialogue): no voice is sent, nothing to judge. No lock: nothing is loaded
+    // or read (`judgeVoicesUnderLock` imports the resolver only under a lock).
+    if (dispatchesVoicedVideo(parsed.data)) {
+      const voiceVerdict = await judgeVoicesUnderLock(
+        voicesTheVoicedVideoSends({ prompt, dialogue, characterVoices, dialogueProvider: voicedDialogueProvider(characterVoices) }, provider),
+        { userId },
+      )
+      if (!voiceVerdict.allowed) {
+        return reply.status(400).send(voiceNotAvailableBody("A selected voice is not available on this deployment."))
+      }
+    }
 
     const mcpClient = extractMcpClient(req.body)
     // job_type is required for the reconcile cron to finalise the job

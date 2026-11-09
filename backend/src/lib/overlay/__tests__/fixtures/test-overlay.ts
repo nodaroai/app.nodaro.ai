@@ -1,9 +1,10 @@
 // Generic in-repo overlay fixture. NOT customer content — proves the loader
-// runs a real register() that exercises all five registry setters. Paths are
+// runs a real register() that exercises all six registry setters. Paths are
 // relative from backend/src/lib/overlay/__tests__/fixtures/.
 import { setEgressDecorator } from "../../../../providers/egress.js"
 import { setBillingProvider } from "../../../billing-provider.js"
 import { registerPromptPolicy } from "../../../prompt-policy.js"
+import { registerPresetPack } from "../../../presets/app-presets.js"
 import { registerCatalogPack } from "@nodaro/prompts/catalog-packs"
 import { registerPersonPack } from "@nodaro/prompts/person"
 import { OVERLAY_CONTRACT_VERSION } from "../../load.js"
@@ -44,6 +45,16 @@ export function register(): void {
         label: "Test Person 1",
         description: "A generic fixture person — not customer content",
         promptHint: "test person one",
+      },
+    ],
+  })
+  registerPresetPack({
+    nodeType: "generate-image",
+    presets: [
+      {
+        id: "generate-image/test-overlay-look",
+        name: "Test overlay look",
+        data: { provider: "gpt-image-2", prompt: "a generic fixture scene", style: "anime" },
       },
     ],
   })

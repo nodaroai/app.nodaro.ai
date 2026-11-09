@@ -41,6 +41,77 @@ export interface UserBalance {
    * offer switched on — absent means "no popup, no banner, no block".
    */
   welcomeOffer?: WelcomeOfferState
+  /**
+   * A deployment with a single payer only: the caller's own allowance, in
+   * credits — the figure to show there, since `total` is the personal balance,
+   * which does not fund runs on such a deployment. `null` for the billing
+   * account itself, or when the figure could not be read (never treat it as 0).
+   * Absent on every other deployment.
+   */
+  allowance?: BalanceAllowance | null
+  /**
+   * The same credit figures in the deployment's own unit, converted by the
+   * server — present only on a deployment that shows its own unit instead of
+   * credits. Render these as they are; never convert credits yourself. Absent
+   * for the billing account's own read on a deployment with a single payer:
+   * its balance is the deployment's pool, which stays in credits.
+   */
+  display?: BalanceDisplay
+}
+
+/** `UserBalance.allowance` — a deployment with a single payer: the caller's own allowance, in credits. */
+export interface BalanceAllowance {
+  /** Credits the caller was granted. */
+  granted: number
+  /** Credits the caller has left of it. */
+  remaining: number
+  /**
+   * Whether the deployment refuses a run beyond the allowance. `false` = the
+   * allowance is shown, not enforced: gate a run on `remaining` only when true.
+   */
+  enforced: boolean
+}
+
+/**
+ * The unit a `display` object is in. A deployment can show its own unit
+ * instead of credits; its figures are then converted by the server, so a
+ * client renders them as they are and never multiplies by a rate.
+ */
+export interface DisplayUnitInfo {
+  /** The unit's label — what the deployment calls its credits. */
+  unit: string
+  /** Decimal places the converted figures carry (0–4). */
+  decimals: number
+}
+
+/**
+ * `UserBalance.display` — the balance's credit figures in the deployment's own
+ * unit, converted by the server. `null` = the figure is unavailable (show an em
+ * dash, never 0). The optional keys are present exactly when the raw
+ * `allowance`, `externalWallet` and `welcomeOffer` are.
+ */
+export interface BalanceDisplay extends DisplayUnitInfo {
+  total: number | null
+  subscription: number | null
+  topup: number | null
+  dailySpent: number | null
+  dailyLimit: number | null
+  monthlyAllocation: number | null
+  appCreditsAllowance: number | null
+  allowance?: { granted: number | null; remaining: number | null } | null
+  externalWallet?: { available: number | null }
+  welcomeOffer?: { credits: number | null }
+}
+
+/** `ModelCostsResult.display` — each priced identifier's credits, in the deployment's own unit. */
+export interface ModelCostsDisplay extends DisplayUnitInfo {
+  /** The same identifiers as `data`, converted. An id in `estimates` is an estimate here too. */
+  data: Record<string, number | null>
+}
+
+/** `ModelCostResult.display` — the one identifier's credits, in the deployment's own unit. */
+export interface ModelCostDisplay extends DisplayUnitInfo {
+  creditCost: number | null
 }
 
 /** Where an account's free signup grant stands. */
@@ -126,6 +197,11 @@ export interface ModelCostsResult {
    * price for it.
    */
   estimates?: string[]
+  /**
+   * The same prices in the deployment's own unit, converted by the server —
+   * present only on a deployment that shows its own unit instead of credits.
+   */
+  display?: ModelCostsDisplay
 }
 
 /** {@link ModelCostsResult.errorCodes} — why an identifier has no price. */
@@ -145,6 +221,8 @@ export interface ModelCostResult {
   model: string
   creditCost: number
   estimate?: true
+  /** `creditCost` in the deployment's own unit, converted by the server — present only where one is configured. */
+  display?: ModelCostDisplay
 }
 
 /**

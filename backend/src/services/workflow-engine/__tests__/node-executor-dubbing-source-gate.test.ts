@@ -103,6 +103,7 @@ vi.mock("@nodaro/shared/apps", async (importOriginal) => ({
 import { executeNode } from "../node-executor.js"
 import type { SimpleNode, OrchestratorContext } from "../types.js"
 import { supabase } from "@/lib/supabase.js"
+import { buildPayload } from "../payload-builder.js"
 
 const SOURCE = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 const CONFIRMATION = "7f1d6c9a-7b1e-4c7a-9b1c-2f6b1a8d2e01"
@@ -202,5 +203,22 @@ describe("node-executor: a run's dub of a link asks the content rights gate befo
     built.payload = { jobId: "test-job-id", targetLanguage: "fr", videoUrl: "https://x.example/c.mp4" }
     await expect(executeNode(makeNode(), {}, [], [], {}, makeCtx())).rejects.toThrow("reservation-sentinel")
     expect(gate.requireImportAllowed).not.toHaveBeenCalled()
+  })
+})
+
+// A deployment's voice lock refuses every dub at build time (payload-builder's
+// dubbing case, pinned in payload-builder-speech-and-deny.test.ts): the run's
+// placeholder row goes with the refusal, and nothing is read or reserved.
+describe("node-executor: a dub the voice lock refuses at build time", () => {
+  it("deletes the placeholder row, reads no import gate, reserves nothing, and carries the lock's code", async () => {
+    vi.mocked(buildPayload).mockImplementationOnce(() => {
+      throw Object.assign(new Error("Dubbing is not available on this deployment."), { code: "voice_not_available" })
+    })
+    await expect(executeNode(makeNode(), {}, [], [], {}, makeCtx())).rejects.toMatchObject({
+      code: "voice_not_available",
+      message: "Dubbing is not available on this deployment.",
+    })
+    expect(gate.requireImportAllowed).not.toHaveBeenCalled()
+    expectNothingStarted()
   })
 })

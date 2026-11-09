@@ -50,7 +50,7 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "pipelines", cli: [], routePrefixes: ["/v1/pipelines"], mcpFiles: ["pipelines.ts"] },
   { id: "reduce", cli: [], routePrefixes: ["/v1/reduce"], mcpFiles: ["reduce.ts"] },
   { id: "promptHelper", cli: ["prompt"], routePrefixes: ["/v1/prompt-helper"], mcpFiles: ["prompt-helper.ts"] },
-  { id: "voices", cli: ["voice"], routePrefixes: ["/v1/voices", "/v1/voice-clones", "/v1/voice-changer-pro"], mcpFiles: ["voice-changer-pro-engines.ts"] },
+  { id: "voices", cli: ["voice"], routePrefixes: ["/v1/voices", "/v1/voice-clones", "/v1/voice-changer-pro"], mcpFiles: ["voice-changer-pro-engines.ts", "voice-favorites.ts"] },
   { id: "llm", cli: [], routePrefixes: ["/v1/llm"], mcpFiles: [] },
   { id: "media", cli: ["media"], routePrefixes: ["/v1/media"], mcpFiles: [] },
   // Content rights: the declaration a person confirms before a link is imported, and the confirmation a download carries.
@@ -62,6 +62,8 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "billing", cli: ["billing"], routePrefixes: ["/v1/billing"], mcpFiles: [] },
   // The person's own settings; a first-party app reads and changes them through the SDK.
   { id: "userSettings", cli: [], routePrefixes: ["/v1/user/settings"], mcpFiles: [] },
+  // What this deployment offers the caller (node types, models, worlds); the pickers and the shared header read it.
+  { id: "surface", cli: [], routePrefixes: ["/v1/surface"], mcpFiles: [] },
   { id: "uploads", cli: [], routePrefixes: ["/v1/upload", "/v1/upload-json", "/v1/upload-page", "/v1/upload-proxy"], mcpFiles: ["upload.ts"] },
   { id: "library", cli: [], routePrefixes: ["/v1/library"], mcpFiles: ["gallery.ts"] },
   { id: "gallery", cli: ["gallery"], routePrefixes: ["/v1/gallery"], mcpFiles: ["gallery.ts"] },
@@ -137,6 +139,7 @@ export const ROUTE_ONLY_FAMILIES: Readonly<Record<string, string>> = {
   "api-tokens": "personal API tokens",
   component: "running a saved component",
   consent: "consent prompts and their answers",
+  "provider-safety": "which models an administrator forced the content filter on for (the node checkbox reads it)",
   "content-complaints": "the public complaints form (a complainant has no account; no SDK or MCP surface on purpose)",
   "deployment-billing": "a deployment's own billing for its users",
   download: "downloading a finished asset",
@@ -171,7 +174,6 @@ export const ROUTE_ONLY_FAMILIES: Readonly<Record<string, string>> = {
   stats: "usage statistics",
   storage: "storage usage",
   suno: "Suno music generation and editing",
-  surface: "the deployment's surface profile",
   telegram: "Telegram triggers",
   "telegram-channel": "the Telegram Channel Feed node's routes",
   ugc: "UGC video building (Cloud plugin)",
@@ -235,6 +237,9 @@ export const MCP_DIRECT_TOOL_ROUTES: Readonly<Record<string, readonly string[]>>
   credit_transactions: ["GET /v1/credits/transactions", "GET /v1/billing/transactions"],
   // Presets: one discovery read over the user's presets, the factory catalog and the favorites.
   list_node_presets: ["GET /v1/node-presets", "GET /v1/node-presets/factory", "GET /v1/node-presets/favorites"],
+  // Voices: the user's starred voices, read and written.
+  list_voice_favorites: ["GET /v1/voices/favorites"],
+  favorite_voice: ["PUT /v1/voices/favorites/:p", "DELETE /v1/voices/favorites/:p"],
   // Marketplace: apps and components are both published apps, browsed by kind.
   list_apps: ["GET /v1/apps/browse"],
   list_components: ["GET /v1/apps/browse"],

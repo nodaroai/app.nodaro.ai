@@ -11,6 +11,7 @@ import { hasCredits } from "@/lib/edition"
 import { queryKeys } from "@/lib/query-keys"
 import { invalidateBalance } from "@/ee/lib/invalidate-balance"
 import { TIER_STORAGE_BYTES } from "@/lib/pricing-data"
+import { useBillingSurface } from "@/hooks/use-billing-surface"
 
 export function useSubscription(userId: string | undefined) {
   return useQuery({
@@ -30,10 +31,23 @@ export function useTransactions(userId: string | undefined) {
   })
 }
 
-export function useStorageProfile(userId: string | undefined) {
-  return useQuery({
+/** The signed-in user's storage use and limit. A `null` limit is no per-user ceiling. */
+export interface StorageProfile {
+  readonly storageUsed: number
+  readonly storageLimit: number | null
+}
+
+/**
+ * The signed-in user's storage use and limit. On a deployment with a payer,
+ * media lives in the deployment's own bucket and no per-user ceiling is
+ * enforced, so the limit is `null` there (decided 2026-11-08). A meter then
+ * shows the usage, never a "space is running out" warning against the free
+ * tier each user is stored at.
+ */
+export function useStorageProfile(userId: string | undefined): { data: StorageProfile | undefined } {
+  const query = useQuery({
     queryKey: queryKeys.billing.storage(userId ?? ""),
-    queryFn: async () => {
+    queryFn: async (): Promise<StorageProfile> => {
       const supabase = createClient()
       const { data } = await supabase
         .from("profiles")
@@ -62,6 +76,9 @@ export function useStorageProfile(userId: string | undefined) {
     enabled: !!userId && hasCredits(),
     staleTime: 30_000,
   })
+  const { surface } = useBillingSurface()
+  const data = query.data && surface.deploymentPayer === true ? { ...query.data, storageLimit: null } : query.data
+  return { data }
 }
 
 export function useManageSubscriptionMutation() {

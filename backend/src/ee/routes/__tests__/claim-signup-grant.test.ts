@@ -40,8 +40,10 @@ vi.mock("@/ee/billing/balance-cache.js", async () => ({ invalidateBalanceCache: 
 
 import { claimSignupGrantRoutes } from "../claim-signup-grant.js"
 import { TIER_CREDITS } from "../../billing/stripe-config.js"
+import { __resetDeploymentPayerForTests, __setDeploymentPayerForTests } from "../../../lib/deployment-payer.js"
 
 const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
+const PAYER_ID = "00000000-0000-4000-8000-0000000000c3"
 const CALLER_IP = "203.0.113.5"
 /** What callerKeyHash MUST derive: the caller's hashed network — for an IPv4
  *  caller behind Caddy, sha256 of Caddy's single X-Forwarded-For entry (no
@@ -641,5 +643,52 @@ describe("POST /v1/credits/claim-signup-grant — a keyed retry of a keyless wit
     })
     expect((await claim({ browserKey: HEX64 })).json()).toEqual({ state: "withheld", granted: false })
     expect(mockRpc).not.toHaveBeenCalled()
+  })
+})
+
+describe("POST /v1/credits/claim-signup-grant — a deployment with a single payer", () => {
+  // Every run there is billed to the deployment's billing account, so a
+  // personal grant is a balance nothing spends. The claim refuses before it
+  // reads, records, decides or sets anything — the same answer the admin
+  // take-back already gives there.
+  afterEach(() => __resetDeploymentPayerForTests())
+
+  it("409 not_applicable: no profile read, no signal row, no RPC, no ledger line, no cookie", async () => {
+    __setDeploymentPayerForTests(PAYER_ID)
+    wireSupabase({})
+
+    const res = await claim({ browserKey: HEX64, deviceKey: OTHER_HEX64 })
+
+    expect(res.statusCode).toBe(409)
+    expect(res.json()).toEqual({
+      error: { code: "not_applicable", message: "Free signup credits do not apply on this deployment." },
+    })
+    expect(mockFrom).not.toHaveBeenCalled()
+    expect(mockRpc).not.toHaveBeenCalled()
+    expect(mockLogTransaction).not.toHaveBeenCalled()
+    expect(mockInvalidateBalanceCache).not.toHaveBeenCalled()
+    expect(res.headers["set-cookie"]).toBeUndefined()
+  })
+
+  it("refuses a withheld account too — the keyed retry never re-judges it", async () => {
+    __setDeploymentPayerForTests(PAYER_ID)
+    wireSupabase({ profile: { data: { free_grant_state: "withheld" }, error: null } })
+
+    const res = await claim({ browserKey: HEX64 })
+
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("not_applicable")
+    expect(mockFrom).not.toHaveBeenCalled()
+    expect(mockRpc).not.toHaveBeenCalled()
+  })
+
+  it("still answers 401 first without a session", async () => {
+    __setDeploymentPayerForTests(PAYER_ID)
+    wireSupabase({})
+
+    const res = await claim({}, null)
+
+    expect(res.statusCode).toBe(401)
+    expect(res.json().error.code).toBe("unauthorized")
   })
 })

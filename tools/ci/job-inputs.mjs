@@ -2,7 +2,8 @@
 // Which CI jobs a pull request can affect (decided 2026-10-20). A few jobs
 // test one corner of the tree on paid runners — Remotion Tests, FFmpeg Output
 // Characterization, Migration Behavior, FFmpeg Ledger — and ran on every PR
-// whatever it changed. Each one's inputs are declared ONCE, in job-inputs.json
+// whatever it changed; Media E2E (decided 2026-11-08) holds the real-media
+// e2e files too heavy for the Backend Tests shards. Each one's inputs are declared ONCE, in job-inputs.json
 // (job key → globs); the Diff Gate (job-gate.mjs) emits one output per key,
 // and the job runs when the PR touched one of its inputs, a global trigger of
 // the test-selection engine, or this gate itself.

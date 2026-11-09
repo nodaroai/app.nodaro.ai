@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 // ---------------------------------------------------------------------------
@@ -42,6 +42,7 @@ vi.mock("../../lib/presets/preview-copy.js", () => ({
 import { nodePresetRoutes } from "../node-presets.js"
 import { supabase } from "../../lib/supabase.js"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
+import { registerPresetPack, resetPresetPacks } from "../../lib/presets/app-presets.js"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const PRESET_ID = "00000000-0000-4000-8000-0000000000ab"
@@ -351,6 +352,60 @@ describe("node-presets routes", () => {
       else process.env.NODARO_SURFACE_PROFILE = previous
       __resetSurfaceProfileCacheForTests()
     }
+  })
+
+  // A deployment's own presets (lib/presets/app-presets.ts, registerPresetPack)
+  // ride the same public, cached catalog: after the bundled ones, or alone.
+  describe("a registered preset pack", () => {
+    const LOOK = {
+      id: "generate-image/deployment-look",
+      name: "Deployment look",
+      group: "Deployment",
+      data: { provider: "gpt-image-2", prompt: "restyle {image:1} as a watercolor" },
+      previewUrl: "https://media.example.test/presets/deployment-look.webp",
+    }
+    const SERVED = {
+      id: LOOK.id,
+      name: LOOK.name,
+      group: LOOK.group,
+      data: LOOK.data,
+      minReferences: 1,
+      needsImage: true,
+      previewUrl: LOOK.previewUrl,
+    }
+
+    async function factory(nodeType: string): Promise<Array<Record<string, unknown>>> {
+      const app = buildApp(false)
+      await app.register(nodePresetRoutes)
+      const res = await app.inject({ method: "GET", url: `/v1/node-presets/factory?nodeType=${nodeType}` })
+      expect(res.statusCode).toBe(200)
+      expect(res.headers["cache-control"]).toBe("public, max-age=300")
+      await app.close()
+      return res.json().data
+    }
+
+    afterEach(() => {
+      resetPresetPacks()
+      delete process.env.NODARO_SURFACE_PROFILE
+      __resetSurfaceProfileCacheForTests()
+    })
+
+    it("is served after the bundled presets", async () => {
+      const bundled = await factory("generate-image")
+      registerPresetPack({ nodeType: "generate-image", presets: [LOOK] })
+      const served = await factory("generate-image")
+      expect(served.slice(0, bundled.length)).toEqual(bundled)
+      expect(served).toHaveLength(bundled.length + 1)
+      expect(served.at(-1)).toEqual(SERVED)
+    })
+
+    it("is served alone when the deployment switches factory presets off", async () => {
+      process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ catalogs: { required: true, factoryPresets: false } })
+      __resetSurfaceProfileCacheForTests()
+      registerPresetPack({ nodeType: "generate-image", presets: [LOOK] })
+      expect(await factory("generate-image")).toEqual([SERVED])
+      expect(await factory("generate-video")).toEqual([])
+    })
   })
 
   // ── Favorites ────────────────────────────────────────────────────────────

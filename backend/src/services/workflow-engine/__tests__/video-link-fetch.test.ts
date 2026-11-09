@@ -517,3 +517,68 @@ describe("the 'nothing was charged' line is true only for a run that charged not
     expect(message).toContain("sectionEndSec")
   })
 })
+
+describe("a deployment that turned link imports off", () => {
+  const REFUSED = "Importing media from a link to another site is turned off on this deployment. Upload the file instead."
+  const refusing = (url: string) => (url.startsWith("https://cdn.nodaro.ai/") ? null : REFUSED)
+
+  it("refuses a post link the run would read before anything is probed or downloaded", async () => {
+    const d = deps({ linkRefusal: refusing })
+    const result = await run([link("src"), node("va", "video-analysis")], [edge("src", "va")], d)
+    expect(result).toEqual({ ok: false, reason: "refused", message: `Video URL "Episode": ${REFUSED}` })
+    expect(d.probe).not.toHaveBeenCalled()
+    expect(d.downloadVideo).not.toHaveBeenCalled()
+  })
+
+  it("refuses a direct file link too (a video's file on another site, no fetch here, its reader would fetch it)", async () => {
+    const d = deps({ linkRefusal: refusing })
+    const result = await run([link("src", { youtubeUrl: "https://example.com/clip.mp4" }), node("va", "video-analysis")], [edge("src", "va")], d)
+    expect(result).toMatchObject({ ok: false, reason: "refused" })
+    expect(d.downloadVideo).not.toHaveBeenCalled()
+  })
+
+  it("a stored file the request points outside is refused: it is what the next node would read", async () => {
+    const d = deps({ linkRefusal: refusing })
+    const pointedOutside = link("src", { youtubeUrl: "https://cdn.nodaro.ai/uploads/videos/a.mp4", downloadedVideoUrl: "https://example.com/clip.mp4", downloadedFromUrl: "https://cdn.nodaro.ai/uploads/videos/a.mp4" })
+    const result = await run([pointedOutside, node("va", "video-analysis")], [edge("src", "va")], d)
+    expect(result).toMatchObject({ ok: false, reason: "refused" })
+    expect(d.downloadVideo).not.toHaveBeenCalled()
+  })
+
+  it("a stored sound the request points outside is refused the same way (Transcribe reads the track)", async () => {
+    const d = deps({ linkRefusal: refusing })
+    const pointedOutside = link("src", { youtubeUrl: "https://cdn.nodaro.ai/uploads/videos/a.mp4", downloadedAudioUrl: "https://example.com/track.mp3" })
+    const result = await run([pointedOutside, node("tx", "transcribe")], [edge("src", "tx")], d)
+    expect(result).toMatchObject({ ok: false, reason: "refused" })
+    expect(d.downloadAudio).not.toHaveBeenCalled()
+  })
+
+  it("a node whose file is already stored on this deployment is not refused, and neither is a node nothing reads", async () => {
+    const d = deps({ linkRefusal: refusing })
+    const stored = link("src", { downloadedVideoUrl: FILE, downloadedFromUrl: YT })
+    const result = await run([stored, node("va", "video-analysis")], [edge("src", "va")], d)
+    expect(result.ok).toBe(true)
+    expect(d.downloadVideo).not.toHaveBeenCalled()
+
+    const unread = await run([link("other")], [], d)
+    expect(unread.ok).toBe(true)
+  })
+
+  it("a file an earlier fetch of this very link stored is reused, not refused", async () => {
+    const d = deps({ linkRefusal: refusing })
+    const result = await fetchVideoLinksForRun(
+      { nodes: [link("src"), node("va", "video-analysis")], edges: [edge("src", "va")], userId: "u1", recorded: { src: { link: YT, data: { downloadedVideoUrl: FILE, downloadedFromUrl: YT } } } },
+      d,
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error("unreachable")
+    expect(result.patches.get("src")).toMatchObject({ reused: true })
+  })
+
+  it("a link on this deployment's own storage passes", async () => {
+    const d = deps({ linkRefusal: refusing })
+    const result = await run([link("src", { youtubeUrl: "https://cdn.nodaro.ai/uploads/videos/a.mp4" }), node("va", "video-analysis")], [edge("src", "va")], d)
+    expect(result.ok).toBe(true)
+    expect(d.downloadVideo).not.toHaveBeenCalled()
+  })
+})

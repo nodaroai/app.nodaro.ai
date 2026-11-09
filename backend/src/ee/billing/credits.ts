@@ -107,7 +107,7 @@ import { authorizeExternalReservation, deliverExternalWalletSettlements, externa
 // settlement-lane cache invalidation so mainline issues no extra read. Both
 // answer FALSE on a deployment with no `billing.payerAccount`, which is what
 // keeps every branch below inert there.
-import { allowanceEnforcementActive, deploymentPayerActive } from "../../lib/deployment-payer.js"
+import { allowanceEnforcementActive, deploymentPayerActive, payerCoverage } from "../../lib/deployment-payer.js"
 import { attemptAutoRecharge, autoRechargeTargetFor } from "./auto-recharge.js"
 import { applyOrgEntitlements, effectiveTierOf, payerProfileId, spendGates } from "./org-entitlements.js"
 import { modelAvailabilityRefusal } from "./model-availability.js"
@@ -697,8 +697,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "flux-2-klein": flux2BaseCredits("flux-2-klein", 1, 0),  // default 1MP 0ref — BFL Flux 2 9B Klein via Replicate
   "kontext-multi": 30,            // multi-image-kontext-pro via Replicate
   "flux-fill": 30,                // FLUX Fill Pro (masked inpainting) via Replicate
-  "flux-2-pro": flux2BaseCredits("flux-2-pro", 2, 0),      // default 2MP 0ref — BFL Flux 2 Pro via Replicate, safety_tolerance=5
-  "flux-2-max": flux2BaseCredits("flux-2-max", 2, 0),      // default 2MP 0ref — BFL Flux 2 Max via Replicate, safety_tolerance=5
+  "flux-2-pro": flux2BaseCredits("flux-2-pro", 2, 0),      // default 2MP 0ref — BFL Flux 2 Pro via Replicate
+  "flux-2-max": flux2BaseCredits("flux-2-max", 2, 0),      // default 2MP 0ref — BFL Flux 2 Max via Replicate
   // Full per-MP×ref grid for Flux 2 family (108 entries, see flux2BaseCredits formula).
   // Identifier format: `<model>:<mp>MP:<n>ref` (mp ∈ {0.5,1,2,4}, n ∈ 0..8).
   ...FLUX2_STATIC,
@@ -4728,7 +4728,7 @@ export class CreditsService {
       }
     }
 
-    return {
+    const own: UserBalance = {
       total: subscriptionCredits + topupCredits,
       subscription: subscriptionCredits,
       topup: topupCredits,
@@ -4740,6 +4740,23 @@ export class CreditsService {
       features: (tierConfig.features as Record<string, unknown>) ?? {},
       periodEnd,
       appCreditsAllowance: profile.app_credits_allowance ?? 0,
+    }
+
+    // Under a deployment payer every user runs at the payer account's grade
+    // (decided 2026-11-08, lib/deployment-payer.ts `payerCoverage`). So the PLAN
+    // fields report that grade, with the deployment grade's terms: no daily cap,
+    // like every spend site under a payer (`applyOrgEntitlements`). The figures
+    // stay the user's own: balance, allocation and period. The Stripe self-heal
+    // above ran on the user's own stored tier, and nothing here writes.
+    const covered = payerCoverage()
+    if (!covered) return own
+    const plan = covered.tier === effectiveTier ? tierConfig : await getTierConfig(covered.tier)
+    return {
+      ...own,
+      tier: covered.storedTier,
+      effectiveTier: covered.tier,
+      features: (plan.features as Record<string, unknown>) ?? {},
+      dailyLimit: null,
     }
   }
 
@@ -4754,6 +4771,13 @@ export class CreditsService {
     appCreditsAllowance?: number
   }> {
     if (creditsDisabled()) return { allowed: true }
+    // Under a deployment payer the run is the deployment's prepaid work. The
+    // app-credit allowance economy is off there, whatever the payer account's
+    // grade, exactly as at the spend sites (`applyOrgEntitlements`' deployment
+    // branch: `appAllowance: false`). Every user there is stored on the free
+    // tier, so asking their own row would refuse every app run on the instance
+    // (decided 2026-11-08).
+    if (payerCoverage()) return { allowed: true }
 
     const { data: profile } = await supabase
       .from("profiles")

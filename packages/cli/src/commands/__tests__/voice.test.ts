@@ -25,6 +25,9 @@ const mocks = {
   createClone: vi.fn(),
   createCloneFromFile: vi.fn(),
   deleteClone: vi.fn(),
+  listFavorites: vi.fn(),
+  favorite: vi.fn(),
+  unfavorite: vi.fn(),
   jobsGet: vi.fn(),
 }
 
@@ -44,6 +47,9 @@ vi.mock("../../client.js", () => ({
       createClone: mocks.createClone,
       createCloneFromFile: mocks.createCloneFromFile,
       deleteClone: mocks.deleteClone,
+      listFavorites: mocks.listFavorites,
+      favorite: mocks.favorite,
+      unfavorite: mocks.unfavorite,
     },
     jobs: { get: mocks.jobsGet },
   }),
@@ -570,5 +576,42 @@ describe("voice list + clones commands", () => {
     mocks.deleteClone.mockResolvedValueOnce(undefined)
     await runCmd("voice", "clones", "delete", "row1")
     expect(mocks.deleteClone).toHaveBeenCalledWith("row1")
+  })
+})
+
+describe("voice favorites", () => {
+  const FAVORITE = { voiceId: "el1", voiceType: "library", name: "Rachel", previewUrl: null, createdAt: "2026-11-08T12:00:00.000Z" }
+
+  it("favorites lists them as a table with the voice_id to pass to --voice", async () => {
+    mocks.listFavorites.mockResolvedValueOnce([FAVORITE])
+    await runCmd("voice", "favorites")
+    expect(mocks.listFavorites).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(table)).toHaveBeenCalledWith(
+      [expect.objectContaining({ name: "Rachel", voice_id: "el1", type: "library" })],
+      ["name", "voice_id", "type", "starred"],
+    )
+  })
+
+  it("favorite stars with the kind, the name and the preview", async () => {
+    mocks.favorite.mockResolvedValueOnce(FAVORITE)
+    await runCmd("voice", "favorite", "el1", "--name", "Rachel", "--type", "library", "--preview", "https://cdn/r.mp3")
+    expect(mocks.favorite).toHaveBeenCalledWith({ voiceId: "el1", voiceType: "library", name: "Rachel", previewUrl: "https://cdn/r.mp3" })
+  })
+
+  it("favorite without --preview sends no previewUrl (a re-star keeps the stored preview)", async () => {
+    mocks.favorite.mockResolvedValueOnce(FAVORITE)
+    await runCmd("voice", "favorite", "el1", "--name", "Rachel", "--type", "premade")
+    expect(mocks.favorite).toHaveBeenCalledWith({ voiceId: "el1", voiceType: "premade", name: "Rachel" })
+  })
+
+  it("favorite refuses a --type outside premade | library | custom before any call", async () => {
+    await expect(runCmd("voice", "favorite", "el1", "--name", "Rachel", "--type", "clone")).rejects.toThrow("--type must be premade, library, custom")
+    expect(mocks.favorite).not.toHaveBeenCalled()
+  })
+
+  it("unfavorite unstars by id", async () => {
+    mocks.unfavorite.mockResolvedValueOnce(undefined)
+    await runCmd("voice", "unfavorite", "el1")
+    expect(mocks.unfavorite).toHaveBeenCalledWith("el1")
   })
 })

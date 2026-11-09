@@ -8,7 +8,7 @@
  * exact LYRICS, `style` the musical description, and `duration` is honoured
  * on the V6 family. Instrumental defaults ON either way; the first track wins.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 const { mockSunoGenerate } = vi.hoisted(() => ({ mockSunoGenerate: vi.fn() }))
 vi.mock("../../../providers/kie/suno-client.js", () => ({
@@ -19,6 +19,7 @@ vi.mock("../../../providers/kie/suno-client.js", () => ({
 }))
 
 import { buildToolkit } from "../toolkit.js"
+import { clearPromptPolicies, registerPromptPolicy } from "../../prompt-policy.js"
 
 describe("tk.providers.generateMusic", () => {
   beforeEach(() => {
@@ -135,6 +136,116 @@ describe("tk.providers.generateMusic", () => {
     mockSunoGenerate.mockResolvedValue({ taskId: "t", tracks: [] })
     const tk = buildToolkit()
     await expect(tk.providers.generateMusic!("brief")).rejects.toThrow(/no track/)
+  })
+
+  /**
+   * The deployment's prompt policy reaches plugin music through these two
+   * fields: the plugin runs `tk.prompts.applyPolicies` over its music prompt
+   * once, at its own boundary, and hands the vocal gender and negative style it
+   * returned to this member, which forwards them the way the platform's own
+   * Suno worker forwards a policed assembly (`negativeStyle || undefined`, the
+   * vocal gender as given). An older plugin sends neither: nothing changes.
+   */
+  it("forwards a vocal gender and a negative style, in description mode", async () => {
+    mockSunoGenerate.mockResolvedValue({ taskId: "t", tracks: [track()] })
+    const tk = buildToolkit()
+    await tk.providers.generateMusic!("an upbeat pop song about summer", {
+      instrumental: false,
+      vocalGender: "female",
+      negativeStyle: "heavy metal, screaming",
+    })
+    expect(mockSunoGenerate.mock.calls[0]![0]).toEqual({
+      prompt: "an upbeat pop song about summer",
+      model: "V6",
+      customMode: false,
+      instrumental: false,
+      vocalGender: "female",
+      negativeStyle: "heavy metal, screaming",
+    })
+  })
+
+  it("forwards them in custom mode too, beside the lyrics, style and title", async () => {
+    mockSunoGenerate.mockResolvedValue({ taskId: "t", tracks: [track()] })
+    const tk = buildToolkit()
+    await tk.providers.generateMusic!("[Verse]\nla la la", {
+      style: "acoustic folk",
+      title: "Song",
+      instrumental: false,
+      vocalGender: "male",
+      negativeStyle: "autotune",
+    })
+    expect(mockSunoGenerate.mock.calls[0]![0]).toEqual({
+      prompt: "[Verse]\nla la la",
+      model: "V6",
+      customMode: true,
+      instrumental: false,
+      style: "acoustic folk",
+      title: "Song",
+      vocalGender: "male",
+      negativeStyle: "autotune",
+    })
+  })
+
+  it("sends neither when they are empty (an empty negative is none, as the Suno worker reads it)", async () => {
+    mockSunoGenerate.mockResolvedValue({ taskId: "t", tracks: [track()] })
+    const tk = buildToolkit()
+    await tk.providers.generateMusic!("brief", { vocalGender: "", negativeStyle: "" })
+    const sent = mockSunoGenerate.mock.calls[0]![0]
+    expect(sent).not.toHaveProperty("vocalGender")
+    expect(sent).not.toHaveProperty("negativeStyle")
+  })
+
+  describe("the prompt policy is applied once, by the plugin, never again by the host", () => {
+    afterEach(() => clearPromptPolicies())
+
+    const forcing = () =>
+      registerPromptPolicy({
+        id: "test-forced-vocals",
+        apply: (a) =>
+          a.kind !== "audio"
+            ? a
+            : {
+                ...a,
+                prompt: a.prompt.includes("[policed]") ? a.prompt : `${a.prompt} [policed]`,
+                negativePrompt: a.negativePrompt.includes("explicit") ? a.negativePrompt : [a.negativePrompt, "explicit"].filter(Boolean).join(", "),
+                vocalGender: "female",
+              },
+      })
+
+    it("the host member runs no policy of its own: what it is handed is what the provider gets", async () => {
+      forcing()
+      mockSunoGenerate.mockResolvedValue({ taskId: "t", tracks: [track()] })
+      const tk = buildToolkit()
+
+      await tk.providers.generateMusic!("brief", { instrumental: false })
+      const bare = mockSunoGenerate.mock.calls[0]![0]
+      expect(bare.prompt).toBe("brief")
+      expect(bare).not.toHaveProperty("vocalGender")
+      expect(bare).not.toHaveProperty("negativeStyle")
+
+      await tk.providers.generateMusic!("brief", { instrumental: false, vocalGender: "male", negativeStyle: "drums" })
+      expect(mockSunoGenerate.mock.calls[1]![0]).toMatchObject({ prompt: "brief", vocalGender: "male", negativeStyle: "drums" })
+    })
+
+    it("a plugin that polices with tk.prompts and sends what it returned reaches the provider policed exactly once", async () => {
+      forcing()
+      mockSunoGenerate.mockResolvedValue({ taskId: "t", tracks: [track()] })
+      const tk = buildToolkit()
+      // The plugin's side of the boundary: police the music prompt once, then
+      // hand the provider member what the policy returned.
+      const policed = tk.prompts!.applyPolicies({ prompt: "brief", negativePrompt: "drums", kind: "audio" })
+      await tk.providers.generateMusic!(policed.prompt, {
+        instrumental: false,
+        ...(policed.vocalGender ? { vocalGender: policed.vocalGender } : {}),
+        negativeStyle: policed.negativePrompt,
+      })
+
+      expect(mockSunoGenerate.mock.calls[0]![0]).toMatchObject({
+        prompt: "brief [policed]",
+        vocalGender: "female",
+        negativeStyle: "drums, explicit",
+      })
+    })
   })
 
   it("adapts onTaskCreated into ReconcileOpts (void-returning callbacks awaited as promises)", async () => {

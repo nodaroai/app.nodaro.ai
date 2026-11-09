@@ -8,10 +8,27 @@
  *
  * The rules are checked against the functions each node's own run prices with
  * (generate-video-pro's clamp, the lip-sync audio cap, the cinematic clamp, ...).
+ *
+ * The pro pricing's `model_pricing` lookups MISS here, so each price is the
+ * STATIC_CREDIT_COSTS row (as in generate-video-pro-credits.test.ts). Without
+ * this, every distinct id waited about 7 s for the test setup's unreachable
+ * Supabase URL to fail before falling back to that same row.
  */
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
+
+vi.mock("../supabase.js", () => ({
+  supabase: {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          single: () => Promise.resolve({ data: null, error: { code: "PGRST116" } }),
+        }),
+      }),
+    }),
+  },
+}))
 import {
   AI_AVATAR_MAX_AUDIO_SEC,
   AI_AVATAR_MAX_DURATION_SEC,

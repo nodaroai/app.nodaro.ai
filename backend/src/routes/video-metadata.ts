@@ -3,6 +3,7 @@ import { z } from "zod"
 import { safeUrlSchema, isAllowedSocialVideoUrl, YOUTUBE_HOSTS } from "../lib/url-validator.js"
 import { ytMetadataProbe } from "../providers/video/youtube-video.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { linkImportRefusal } from "../lib/link-imports.js"
 
 /**
  * POST /v1/video-metadata — a lightweight, YouTube-only metadata probe the VCP
@@ -50,6 +51,12 @@ export async function videoMetadataRoutes(app: FastifyInstance) {
     }
 
     const { url } = parsed.data
+
+    // Nothing touches the link on a deployment that turned link imports off
+    // (lib/link-imports.ts): the refusal, not "unknown metadata", because the
+    // import that would follow is refused the same way.
+    const refused = linkImportRefusal(url)
+    if (refused) return reply.status(403).send({ error: refused })
 
     // The probe is YouTube-only; short-circuit every other allowlisted host to
     // nulls rather than calling a probe that would only throw for them.

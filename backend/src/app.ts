@@ -8,7 +8,10 @@ import { config, hasAdmin, hasCredits, isCloud, isMultiUser, siteCaptureEnabled 
 import { warmLlmMeteredSchemaGate } from "./lib/llm-metered-schema-gate.js"
 import { registerNodaroCloudBillingProvider } from "./lib/billing-provider.js"
 import { loadOverlay } from "./lib/overlay/load.js"
+import { loadContentGuard } from "./lib/content-guard-load.js"
+import { registerRequestUserScope } from "./lib/request-user-scope.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
+import { useProviderSafetySettings } from "./lib/provider-safety.js"
 import { CLIENT_HEADER } from "./lib/job-source.js"
 import { IDEMPOTENCY_HEADER } from "./lib/idempotency-header.js"
 import { WORKSPACE_HEADER } from "@nodaro/shared/organizations"
@@ -194,6 +197,8 @@ import { castSwapAdvancedRoutes } from "./ee/routes/cast-swap-advanced.js"
 import { adminTrendsRoutes } from "./ee/routes/admin-trends.js"
 import { trendRadarRoutes } from "./ee/routes/trend-radar.js"
 import { adminNodaroMotionRoutes } from "./ee/routes/admin-nodaro-motion.js"
+import { adminProviderSafetyRoutes } from "./ee/routes/admin-provider-safety.js"
+import { providerSafetyLocksRoutes } from "./routes/provider-safety-locks.js"
 import { motionTransferRoutes } from "./routes/motion-transfer.js"
 import { videoUpscaleRoutes } from "./routes/video-upscale.js"
 import { faceSwapRoutes } from "./routes/face-swap.js"
@@ -310,6 +315,8 @@ import { scene3DPrivateStore } from "./lib/private-plugins/scene3d-storage.js"
 import { shotsRoutes } from "./routes/shots.js"
 import { modelsRoutes } from "./routes/models.js"
 import { voicesRoutes } from "./routes/voices.js"
+import { voiceFavoriteRoutes } from "./routes/voice-favorites.js"
+import { pluginNodeVoicesRoutes } from "./routes/plugin-node-voices.js"
 import { heygenCatalogRoutes } from "./routes/heygen-catalog.js"
 import { voiceCloneRoutes } from "./routes/voice-clones.js"
 import { voiceChangerRoutes } from "./routes/voice-changer.js"
@@ -401,7 +408,7 @@ import { internalRequestUser } from "./lib/internal-caller.js"
 import rateLimit from "@fastify/rate-limit"
 import formbody from "@fastify/formbody"
 import { installTolerantJsonParser } from "./lib/tolerant-json-parser.js"
-import { registerInternalErrorSanitizer, registerErrorTelemetry } from "./lib/http-errors.js"
+import { registerInternalErrorSanitizer, registerErrorTelemetry, registerRefusalErrorHandler } from "./lib/http-errors.js"
 
 /**
  * Rate-limit key derivation.
@@ -446,10 +453,12 @@ export async function buildApp() {
   // NODARO_OVERLAY_PACKAGE is unset (spec §7.2 / G1). Fatal (exit 1) if a named
   // overlay fails to load.
   await loadOverlay()
+  await loadContentGuard()
 
   // Mainline prompt policies run AFTER the overlay's (registration order):
   // the minor-age floor is a platform safety invariant, not deployment content.
   registerMainlinePromptPolicies()
+  useProviderSafetySettings()
 
   // SAI-4 / H8 — fail closed. If a surface profile was configured but did not
   // load, refuse to boot rather than silently serving the un-narrowed mainline
@@ -538,6 +547,15 @@ export async function buildApp() {
   // may wait for a slot and when its client left (lib/concurrency-lanes/
   // request-scope.ts). An onRoute hook: before any plugin or route registers.
   installLaneRequestScope(app)
+
+  // A refusal that escapes a route (a plugin route that lets a toolkit
+  // refusal propagate, or the voice lock's own error) answers as itself:
+  // `{ error: { code, message } }` with its 4xx. Everything else falls through
+  // to Fastify's default handler unchanged. Before any plugin or route
+  // registers: a route keeps the error handler of the moment it registered.
+  registerRefusalErrorHandler(app)
+  // Before the auth hook, so everything after it runs inside the scope.
+  registerRequestUserScope(app)
 
   // application/x-www-form-urlencoded body parser — required by OAuth-spec
   // clients (Claude.ai etc.) that POST to /v1/oauth/token with form-encoded
@@ -808,6 +826,10 @@ export async function buildApp() {
   if (hasAdmin() && hasCredits()) await app.register(trendRadarRoutes)
 // Nodaro Motion (Cast Swap): the admin's face masking per engine, read by the engine through tk.settings.
 if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
+  // Provider content filters, per model (admin read; platform operator write).
+  if (hasAdmin()) await app.register(adminProviderSafetyRoutes)
+  // Which models an admin forced the filter on for: the node checkbox shows it.
+  await app.register(providerSafetyLocksRoutes)
   // The review surface only means something where the grant exists.
   if (hasCredits()) await app.register(adminFreeGrantRoutes)
   // The Users page's linked-account marking rides on the same clusters RPC.
@@ -921,6 +943,11 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   await app.register(editPlanCapabilitiesRoutes)
   await app.register(speakerFramesCapabilitiesRoutes)
   await app.register(voicesRoutes)
+  await app.register(voiceFavoriteRoutes)
+  // The voices a plugin-served node speaks in, for the standalone orchestrator
+  // under the voice lock (internal only; read per request — the plugins load
+  // further down).
+  await app.register(pluginNodeVoicesRoutes)
   await app.register(heygenCatalogRoutes)
   await app.register(voiceCloneRoutes)
   await app.register(voiceChangerRoutes)

@@ -21,9 +21,11 @@
  *
  * `deleteFromR2`/`batchDeleteFromR2` are reached through a DYNAMIC import so
  * this module (and everything that imports it, up to `workers/shared.ts`) does
- * not pull the S3 client into a graph that only ever reads.
+ * not pull the S3 client into a graph that only ever reads. So is
+ * `keepWithheldObjectsPrivate`, and only on a deployment that deletes nothing.
  */
 import { r2KeyFromOurUrl } from "./storage.js"
+import { storageDeletesSkipped } from "./storage-deletes-setting.js"
 import type { JobOutputRef } from "./job-policy.js"
 
 /** A withheld object, as stored in `jobs.held_objects` (D7). Keys, never URLs:
@@ -279,6 +281,10 @@ export function allOwnedObjects(
  * Deleting is still right — it removes a guessable object for the overwhelmingly
  * common case where nobody guessed it, and stops it accruing storage cost
  * forever. A delete failure logs and changes no verdict.
+ *
+ * On a deployment that deletes nothing (STORAGE_DELETES=skip) the files stay,
+ * and where objects are public by their own ACL they are made private instead
+ * (lib/withheld-objects-private.ts). That changes no verdict either.
  */
 export async function deleteOwnedObjects(jobId: string, objects: readonly HeldObject[]): Promise<number> {
   // Deduped: callers legitimately union two sources (the withheld list and the
@@ -289,6 +295,10 @@ export async function deleteOwnedObjects(jobId: string, objects: readonly HeldOb
     // A key storage fails to delete is recorded for the retry pass.
     const { deleteKeysRecordingFailures } = await import("./storage-delete.js")
     const { deleted } = await deleteKeysRecordingFailures(keys, "job-policy", { jobIdOf: () => jobId })
+    if (storageDeletesSkipped()) {
+      const { keepWithheldObjectsPrivate } = await import("./withheld-objects-private.js")
+      await keepWithheldObjectsPrivate(jobId, keys)
+    }
     return deleted
   } catch (err) {
     console.warn(`[job-policy] object cleanup failed for job ${jobId}: ${(err as Error).message}`)

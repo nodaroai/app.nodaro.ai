@@ -86,6 +86,7 @@ vi.mock("../../shared.js", async (importOriginal) => ({
 import { sunoHandlers } from "../suno.js"
 import { config } from "@/lib/config.js"
 import { registerPromptPolicy, clearPromptPolicies } from "../../../lib/prompt-policy.js"
+import { withLinkImportsOff } from "@/test/link-imports-off.js"
 
 function makeJob(name: string, data: Record<string, unknown> = {}) {
   return { name, data: { jobId: "job-1", ...data }, id: "bull-1", updateProgress: vi.fn() }
@@ -766,5 +767,18 @@ describe("jobs.provider attribution (#753)", () => {
         expect.objectContaining({ provider: "nodaro" }),
       )
     })
+  })
+})
+
+describe("suno cover and upload-extend on a deployment that turned link imports off (a run reaches them without the route)", () => {
+  withLinkImportsOff()
+
+  it.each(["suno-cover", "suno-upload-extend"] as const)("%s refuses a direct file on another site before the provider", async (jobType) => {
+    const data = jobType === "suno-cover"
+      ? { prompt: "jazz cover", uploadUrl: "https://example.com/song.mp3" }
+      : { uploadUrl: "https://example.com/song.mp3", continueAt: 30 }
+    await expect(sunoHandlers[jobType]!(makeJob(jobType, data) as never, makeCtx() as never)).rejects.toMatchObject({ code: "link_imports_disabled" })
+    expect(mocks.mockSunoCover).not.toHaveBeenCalled()
+    expect(mocks.mockDownloadAudioToR2).not.toHaveBeenCalled()
   })
 })

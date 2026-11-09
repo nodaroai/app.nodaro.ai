@@ -5,7 +5,7 @@
  * continuing its own run is that run's reviewer, so the verb forwards one.
  */
 import { m, src, USER, ID, makeApp, p1StoredRun } from "./helpers/use-case-continue-harness.js"
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, beforeAll } from "vitest"
 
 async function mcpServer() {
   // The verb reads the run's type from its job first: the owner's read of the
@@ -26,6 +26,16 @@ async function mcpServer() {
 }
 
 describe("MCP continue_use_case through the real route", () => {
+  // The MCP verbs are a cold import of over a second on an idle machine and
+  // several on a loaded CI runner. Loaded here, under a budget of their own,
+  // so the first test does not spend its 5 s timeout on them: a test that
+  // times out leaves its call running, and that call lands in the next test.
+  beforeAll(async () => {
+    await import("@/lib/mcp/tools/verbs-use-case.js")
+    await import("@/lib/mcp/tools/__tests__/_helpers.js")
+    await import("@/lib/mcp/session.js")
+  }, 60_000)
+
   it("a from-failed continue of a review-on run starts, its hidden run told a reviewer is present (no 409)", async () => {
     // What mcpInject's orchestrator secret makes of the request (auth.ts): the internal lane.
     m.authKind = "internal"

@@ -49,17 +49,31 @@ export function hasOrganizations(): boolean {
 }
 
 /**
- * Shared site header (Cloud): "true" puts the shared Nodaro header above the
- * app. Empty = off, which is every self-host build and production until the
- * cut-over; staging turns it on. Build-time like ORGS_ENABLED (Dockerfile ARG +
- * ENV), and the build's resolver forces it to "false" whenever the header
- * itself is not in the bundle (see `ee/shell/header-module-plugin.ts`), so
- * true here means the header is there.
+ * Shared site header (Cloud), build-time like ORGS_ENABLED (Dockerfile ARG +
+ * ENV):
+ *   - "true" puts the shared Nodaro header above the app (staging), or a
+ *     white-label one where the deployment's surface profile asks for it;
+ *   - "white-label" builds the header in for deployments of their own: it
+ *     shows only where the surface profile says `header: "white-label"`, and
+ *     Nodaro's header never does (the cloud image those deployments run);
+ *   - empty = off, which is every self-host build and Nodaro production until
+ *     the cut-over.
+ * The build's resolver forces it to "false" whenever the header itself is not
+ * in the bundle (see `ee/shell/header-module-plugin.ts`), so either value here
+ * means the header is there. Which header a page shows, if any, is decided at
+ * run time (`lib/site-header-mode.ts`).
  */
 export const SHARED_HEADER = import.meta.env.VITE_SHARED_HEADER === "true"
+export const WHITE_LABEL_HEADER = SHARED_HEADER || import.meta.env.VITE_SHARED_HEADER === "white-label"
 
+/** The build may show Nodaro's own shared header. */
 export function hasSharedHeader(): boolean {
   return isCloud() && hasCredits() && SHARED_HEADER
+}
+
+/** The build may show the shared header in white-label mode (a deployment's own header). */
+export function hasWhiteLabelHeader(): boolean {
+  return isCloud() && hasCredits() && WHITE_LABEL_HEADER
 }
 
 /** business + cloud are multi-user (community is single-user → sharing is inert) */

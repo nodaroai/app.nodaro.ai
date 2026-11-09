@@ -32,6 +32,7 @@ vi.mock("@/lib/url-validator.js", async () => {
 import { saveToStorageRoutes } from "../save-to-storage.js"
 import { supabase } from "../../lib/supabase.js"
 import { uploadToR2 } from "../../lib/storage.js"
+import { OWN_MEDIA_URL, withLinkImportsOff } from "@/test/link-imports-off.js"
 
 let app: FastifyInstance
 
@@ -167,5 +168,25 @@ describe("POST /v1/save-to-storage", () => {
         }),
       }),
     )
+  })
+})
+
+describe("POST /v1/save-to-storage on a deployment that turned link imports off", () => {
+  withLinkImportsOff()
+
+  it("refuses a link to another site before any job or fetch", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/save-to-storage", payload: { mediaUrl: "https://example.com/clip.mp4" } })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("link_imports_disabled")
+    expect(supabase.from).not.toHaveBeenCalled()
+    expect(uploadToR2).not.toHaveBeenCalled()
+  })
+
+  it("a file of this deployment's own storage is still copied", async () => {
+    setupJobMocks()
+    vi.mocked(uploadToR2).mockResolvedValue("https://cdn.nodaro.test/copy.mp4")
+    const res = await app.inject({ method: "POST", url: "/v1/save-to-storage", payload: { mediaUrl: OWN_MEDIA_URL } })
+    expect(res.statusCode).toBe(200)
+    expect(uploadToR2).toHaveBeenCalled()
   })
 })

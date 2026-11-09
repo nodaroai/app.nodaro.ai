@@ -66,6 +66,16 @@ vi.mock("@/lib/config.js", () => ({
   speechLengthPricingEnabled: () => false,
 }))
 
+// The voice lock's lookups (lib/voice-gender.ts): the library record and the
+// live premade catalog, each a module with its own tests. A clone row comes
+// from the supabase mock (`mockVoiceTables`).
+const libraryGenders = vi.hoisted(() => new Map<string, string>())
+vi.mock("@/lib/library-voice-genders.js", () => ({
+  recordedLibraryVoiceGender: vi.fn(async (voiceId: string) => libraryGenders.get(voiceId)),
+  recordLibraryVoiceGenders: vi.fn(async () => {}),
+}))
+vi.mock("@/lib/premade-voice-catalog.js", () => ({ getPremadeVoices: vi.fn(async () => []) }))
+
 vi.mock("@/lib/url-validator.js", async () => {
   const { z } = await import("zod")
   return { safeUrlSchema: z.string().url() }
@@ -83,6 +93,8 @@ import { reserveCreditsForJob } from "@/middleware/credit-guard.js"
 import { getMaxTtsChars, DEFAULT_TTS_PROVIDER } from "@nodaro/shared/models"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
 import { TTS_NEIGHBOUR_TEXT_MAX_CHARS } from "../../providers/elevenlabs/neighbour-text.js"
+import { TTS_OUTPUT_FORMATS } from "@nodaro/shared/models"
+import { recordedLibraryVoiceGender } from "../../lib/library-voice-genders.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -92,6 +104,7 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  libraryGenders.clear()
 
   app = Fastify({ logger: false })
 
@@ -126,6 +139,30 @@ function mockJobInsert(result: { data: unknown; error: unknown }) {
   const mockFrom = vi.mocked(supabase.from)
   mockFrom.mockReturnValue({ insert: mockInsert } as never)
   return { mockFrom, mockInsert, mockSelect, mockSingle }
+}
+
+/** Answers a `voice_clones` read from `clones` (by voice id AND owner) and a job insert like `mockJobInsert`. */
+function mockVoiceTables(clones: Array<{ elevenlabs_voice_id: string; user_id: string; gender: string | null }>) {
+  const mockSingle = vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null })
+  const mockInsert = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single: mockSingle }) })
+  vi.mocked(supabase.from).mockImplementation(((table: string) => {
+    if (table !== "voice_clones") return { insert: mockInsert }
+    const filters: Record<string, unknown> = {}
+    const chain = {
+      select: () => chain,
+      eq: (column: string, value: unknown) => {
+        filters[column] = value
+        return chain
+      },
+      limit: async () => ({
+        data: clones
+          .filter((c) => c.elevenlabs_voice_id === filters.elevenlabs_voice_id && c.user_id === filters.user_id)
+          .map((c) => ({ gender: c.gender })),
+        error: null,
+      }),
+    }
+    return chain
+  }) as never)
 }
 
 // ---------------------------------------------------------------------------
@@ -202,6 +239,35 @@ describe("POST /v1/text-to-speech", () => {
       const payload = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
       expect(payload.previousText).toBeUndefined()
       expect(payload.nextText).toBeUndefined()
+    })
+  })
+
+  describe("the audio file (outputFormat)", () => {
+    const USER = "00000000-0000-4000-8000-000000000001"
+
+    it.each(TTS_OUTPUT_FORMATS)("%s is accepted, queued as `outputFormat` and stored on the job's input_data", async (outputFormat) => {
+      const { mockInsert } = mockJobInsert({ data: { id: "job-f1" }, error: null })
+      const res = await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi.", userId: USER, outputFormat } })
+      expect(res.statusCode).toBe(200)
+      expect(vi.mocked(videoQueue.add)).toHaveBeenCalledWith("text-to-speech", expect.objectContaining({ outputFormat }))
+      expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({ input_data: expect.objectContaining({ outputFormat }) }))
+    })
+
+    it("rejects a format the platform does not offer with a 400, before any job or reservation", async () => {
+      const { mockInsert } = mockJobInsert({ data: { id: "job-f2" }, error: null })
+      for (const outputFormat of ["pcm_44100", "wav_44100", "mp3", "", 128]) {
+        const res = await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi.", userId: USER, outputFormat } })
+        expect(res.statusCode, JSON.stringify(outputFormat)).toBe(400)
+      }
+      expect(mockInsert).not.toHaveBeenCalled()
+      expect(vi.mocked(videoQueue.add)).not.toHaveBeenCalled()
+    })
+
+    it("a request without it is unchanged: no `outputFormat` key on the queue payload", async () => {
+      mockJobInsert({ data: { id: "job-f3" }, error: null })
+      await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi.", userId: USER } })
+      const payload = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
+      expect("outputFormat" in payload).toBe(false)
     })
   })
 
@@ -371,21 +437,66 @@ describe("POST /v1/text-to-speech", () => {
       expect(res.json().error.code).toBe("voice_not_available")
     })
 
-    it("allows a premade male voice, and any custom voice", async () => {
+    const USER = "00000000-0000-4000-8000-000000000001"
+    const OTHER = "00000000-0000-4000-8000-000000000002"
+    const speak = (voice: string, voiceType: string) =>
+      app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "hi", voice, voiceType, userId: USER } })
+
+    it("allows a premade male voice", async () => {
       mockJobInsert({ data: { id: "job-1" }, error: null })
-      const male = await app.inject({
-        method: "POST",
-        url: "/v1/text-to-speech",
-        payload: { text: "hi", voice: "Adam", voiceType: "premade", userId: "00000000-0000-4000-8000-000000000001" },
-      })
+      const male = await speak("Adam", "premade")
       expect(male.statusCode).toBe(200)
-      mockJobInsert({ data: { id: "job-2" }, error: null })
-      const custom = await app.inject({
+    })
+
+    // This used to pass: the check knew premade voices only, so any custom or
+    // library voice (or a library id sent as "premade") went through unjudged.
+    it("refuses a custom or library voice it cannot vouch for, whatever voiceType says", async () => {
+      mockVoiceTables([])
+      for (const voiceType of ["custom", "library", "premade"]) {
+        const res = await speak("someClonedId", voiceType)
+        expect(res.statusCode).toBe(400)
+        expect(res.json().error.code).toBe("voice_not_available")
+      }
+      expect(videoQueue.add).not.toHaveBeenCalled()
+    })
+
+    it("refuses a female premade voice sent by its voice id, not its name", async () => {
+      const res = await speak("21m00Tcm4TlvDq8ikWAM", "premade") // Rachel's id
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("voice_not_available")
+    })
+
+    it("allows the caller's own male clone, and refuses a clone that is someone else's", async () => {
+      mockVoiceTables([
+        { elevenlabs_voice_id: "CloneMale000000000001", user_id: USER, gender: "male" },
+        { elevenlabs_voice_id: "CloneOther00000000001", user_id: OTHER, gender: "male" },
+      ])
+      expect((await speak("CloneMale000000000001", "custom")).statusCode).toBe(200)
+      expect((await speak("CloneOther00000000001", "custom")).statusCode).toBe(400)
+    })
+
+    it("allows a library voice the library listing recorded as male, and refuses one recorded female", async () => {
+      libraryGenders.set("LibMale00000000000001", "male")
+      libraryGenders.set("LibFemale000000000001", "female")
+      mockVoiceTables([])
+      expect((await speak("LibMale00000000000001", "library")).statusCode).toBe(200)
+      expect((await speak("LibFemale000000000001", "library")).statusCode).toBe(400)
+    })
+  })
+
+  describe("voice lock off (the default)", () => {
+    it("looks nothing up for a custom voice and runs it as before", async () => {
+      mockJobInsert({ data: { id: "job-1" }, error: null })
+
+      const res = await app.inject({
         method: "POST",
         url: "/v1/text-to-speech",
         payload: { text: "hi", voice: "someClonedId", voiceType: "custom", userId: "00000000-0000-4000-8000-000000000001" },
       })
-      expect(custom.statusCode).toBe(200)
+
+      expect(res.statusCode).toBe(200)
+      expect(vi.mocked(supabase.from).mock.calls.map(([table]) => table)).toEqual(["jobs"])
+      expect(recordedLibraryVoiceGender).not.toHaveBeenCalled()
     })
   })
 

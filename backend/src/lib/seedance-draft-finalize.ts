@@ -46,6 +46,8 @@ export interface SeedanceDraftFinalizePlan {
   readonly refVideoDurationsSec: readonly unknown[]
   /** The id the finalize reserves under (`seedance-2-5-hd:{N}s[-ref]`). */
   readonly creditId: string
+  /** The draft's own filter choice: its node turned the filter on, so the finalize keeps it on. */
+  readonly nsfwChecker?: boolean
   /** The audio mux the draft got after rendering, re-applied to the 1080p
    *  render (`seedance-draft-audio.ts`); undefined = none. */
   readonly audioMux?: DraftAudioMux
@@ -180,6 +182,7 @@ export async function resolveSeedanceDraftFinalize(args: {
     hasRefVideo,
     refVideoDurationsSec,
     creditId: seedanceDraftFinalizeCreditId(outputSec, hasRefVideo),
+    ...(input.nsfwChecker === true ? { nsfwChecker: true } : {}),
     ...withAudioMux(input, completed.output_data ?? {}),
   }
 }
@@ -357,6 +360,7 @@ export async function seedanceDraftFinalizeStamp(
       draftOutputSec: resolved.outputSec,
       draftHasRefVideo: resolved.hasRefVideo,
       draftRefVideoDurationsSec: resolved.refVideoDurationsSec,
+      ...(resolved.nsfwChecker ? { draftNsfwChecker: true } : {}),
       ...(resolved.audioMux ? { draftAudioMux: resolved.audioMux } : {}),
       ...(resolved.draftVideoUrl ? { draftVideoUrl: resolved.draftVideoUrl } : {}),
     },

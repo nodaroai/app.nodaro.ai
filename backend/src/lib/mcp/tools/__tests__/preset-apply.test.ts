@@ -781,10 +781,28 @@ describe("generate_image { presetId } sends the editor's request", () => {
     expect(body?.quality).toBeUndefined()
   })
 
+  // One stub route and one registered server for every case of the table
+  // below, which only reads the body each call sends: registering every verb
+  // costs several times the call itself, and the table has a case per factory
+  // preset (hundreds). Each case clears the captured body first.
+  let shared: { server: ReturnType<typeof buildServer>; received: ReturnType<typeof stubRoute>["received"] } | undefined
+  async function sharedGenerateImageBody(args: Record<string, unknown>): Promise<Record<string, unknown> | undefined> {
+    if (!shared) {
+      const { fastify, received } = stubRoute("POST", "/v1/generate-image", { jobId: "j-preset" })
+      const server = buildServer()
+      registerVerbs({ server, session: executeSession(), fastify })
+      shared = { server, received }
+    }
+    delete shared.received.url
+    delete shared.received.body
+    await callTool(shared.server, "generate_image", args)
+    return shared.received.body
+  }
+
   it.each(ALL.filter((p) => !/\{[A-Z_]+\}/.test(JSON.stringify(p.data))).map((p) => [p.id, p] as const))(
     "%s: the body is the editor-equivalent build, with nothing added",
     async (_id, preset) => {
-      const { body } = await runGenerateImage({ presetId: preset.id })
+      const body = await sharedGenerateImageBody({ presetId: preset.id })
       const { mcp_client: _c, userId: _u, ...sent } = body as Record<string, unknown>
       expect(sent).toEqual(buildGenerateImagePresetBody(preset.data))
     },

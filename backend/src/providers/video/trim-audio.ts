@@ -5,6 +5,7 @@ import { withYtDlpOptionsAdmission } from "./ytdlp-admission.js"
 import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 import { isAllowedSocialVideoUrl } from "../../lib/url-validator.js"
 import { requireImportAllowed, spendImportConfirmation, type ImportRights } from "../../lib/import-gate.js"
+import { assertLinkImportAllowed } from "../../lib/link-imports.js"
 import { VIDEO_FORMAT_SELECTOR } from "./video-format.js"
 
 function isSocialMediaUrl(url: string): boolean {
@@ -27,11 +28,15 @@ interface TrimAudioResult {
  * and this is an ENGINE of the import gate (`lib/import-gate.ts`): the site's
  * policy and the content rights confirmation are checked before anything is
  * fetched and the confirmation spent right before yt-dlp runs; a refusal is
- * the gate's own error, never rewrapped. A direct file is not an import of a
- * link and passes the gate untouched.
+ * the gate's own error, never rewrapped. A direct file needs no rights
+ * confirmation and passes the gate untouched, but a link to outside content,
+ * in either shape, is refused first on a deployment that turned link imports
+ * off (`lib/link-imports.ts`): the route answers it, and this is the backstop
+ * for a workflow run, which reaches the worker without the route.
  */
 export async function trimAudio(options: TrimAudioOptions, rights: ImportRights): Promise<TrimAudioResult> {
   const { videoUrl, audioFormat = "mp3", startTime, endTime } = options
+  assertLinkImportAllowed(videoUrl)
   const social = isSocialMediaUrl(videoUrl)
   // Outside the work dir and the try below: a refusal is the gate's own error.
   if (social) await requireImportAllowed(videoUrl, rights)

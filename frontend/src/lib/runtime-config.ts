@@ -1,3 +1,10 @@
+import {
+  isHttpsOrigin,
+  resolveRuntimeApiBase,
+  resolveRuntimeSupabaseUrl,
+  type NodaroRuntimeConfig as RuntimeConfigContract,
+} from "@nodaro/shared/runtime-config"
+
 /**
  * Runtime overrides for the three values Vite inlines at build time.
  *
@@ -14,14 +21,13 @@
  * `VITE_FREECUT_URL` and `VITE_AUDIOMASS_URL` goes through here; a raw
  * `import.meta.env` read of those elsewhere is a regression (guard test in
  * `__tests__/runtime-config.test.ts`).
+ *
+ * The keys, and the same-origin sentinels `apiUrl: "/"` and
+ * `supabaseUrl: "/supabase"`, are the published contract in
+ * @nodaro/shared/runtime-config: the other products served from the same site
+ * read this file too. Each key's meaning is documented at its getter below.
  */
-export interface NodaroRuntimeConfig {
-  readonly apiUrl?: string
-  readonly supabaseUrl?: string
-  readonly supabaseAnonKey?: string
-  readonly freecutUrl?: string
-  readonly audiomassUrl?: string
-  readonly defaultLocale?: string
+export interface NodaroRuntimeConfig extends Omit<RuntimeConfigContract, "surface"> {
   /**
    * Deployment surface profile (B1) — a partial narrowing set by the /config.js
    * writer (tools/build-runtime-config.mjs), read through surface-profile.ts's
@@ -29,21 +35,6 @@ export interface NodaroRuntimeConfig {
    * validated JSON, and consumers merge it over the code default.
    */
   readonly surface?: Partial<import("./surface-profile").SurfaceProfile>
-  /**
-   * Upload-moderation capability (G3). Set by the /config.js writer from env
-   * RUNTIME_UPLOAD_MODERATION when a deployment wires a moderation plugin
-   * route (POST /v1/moderate-image, provided via @nodaroai/cloud-plugins
-   * registerRoutes — never in core). Absent on mainline: the upload-image
-   * node then never calls moderation and never renders the overlay.
-   */
-  readonly moderation?: { readonly uploadImage?: boolean }
-  /**
-   * The preview stop rule's rollout flag (decided 2026-10-05). Set by the
-   * /config.js writer from the backend's own PREVIEW_STOP_RULE_ENABLED, so the
-   * editor and the server agree and flipping it needs no rebuild. Absent =
-   * off: the editor behaves as before the rule existed.
-   */
-  readonly previewStopRule?: boolean
 }
 
 declare global {
@@ -71,10 +62,11 @@ const pick = (override: string | undefined, baked: string | undefined): string =
  * here to "", which the four SSE consumers already treat as "build the URL
  * relative to this page". It cannot be written as "" in /config.js: an empty
  * override means "no override" and would fall back to the baked VITE_API_URL.
+ * The sentinel's rule is the shared contract's, so every product reading this
+ * file resolves it the same way and none falls back to an absolute URL.
  */
 export function runtimeApiUrl(): string {
-  const picked = pick(runtime().apiUrl, import.meta.env.VITE_API_URL as string | undefined)
-  return picked.trim() === "/" ? "" : picked
+  return resolveRuntimeApiBase({ apiUrl: pick(runtime().apiUrl, import.meta.env.VITE_API_URL as string | undefined) }) ?? ""
 }
 
 /** The Supabase URL the BROWSER uses (auth + PostgREST). */
@@ -82,7 +74,8 @@ export function runtimeSupabaseUrl(): string {
   const picked = pick(runtime().supabaseUrl, import.meta.env.VITE_SUPABASE_URL as string | undefined)
   // supabase-js requires an absolute URL; resolve the deployment's explicit
   // proxy sentinel on the page so additional studio hostnames stay on-origin.
-  return picked.trim() === "/supabase" ? `${window.location.origin}/supabase` : picked
+  const origin = typeof window !== "undefined" ? window.location.origin : ""
+  return resolveRuntimeSupabaseUrl({ supabaseUrl: picked }, origin) ?? ""
 }
 
 export function runtimeSupabaseAnonKey(): string {
@@ -226,4 +219,15 @@ export function runtimeUploadModerationEnabled(): boolean {
  */
 export function runtimePreviewStopRule(): boolean {
   return runtime().previewStopRule === true
+}
+
+/**
+ * The https origin this deployment serves user media from, as `/config.js`
+ * names it, or undefined: only a white-label deployment's `/config.js` carries
+ * one, and a value that is not an https origin is no value (the shared
+ * contract's rule).
+ */
+export function runtimeMediaOrigin(): string | undefined {
+  const value = runtime().mediaOrigin
+  return isHttpsOrigin(value) ? value : undefined
 }

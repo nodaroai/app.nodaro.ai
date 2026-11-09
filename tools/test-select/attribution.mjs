@@ -14,8 +14,8 @@
 // `failedJobs`: the ids of the jobs this run waited on that FAILED
 // (failedJobsFrom) — the two suites, whose files are listed below, and the
 // jobs that test one corner of the tree (tools/ci/job-inputs.json: Remotion,
-// Characterization, Migration Behavior, FFmpeg Ledger), which upload no file
-// lists. A skipped job is not a failure.
+// Characterization, Migration Behavior, FFmpeg Ledger, Media E2E), which upload
+// no file lists. A skipped job is not a failure.
 const SUITE_JOBS = ["frontend-tests", "backend-tests"]
 export function failedJobsFrom(needs) {
   return Object.entries(needs ?? {}).filter(([, n]) => n?.result === "failure").map(([id]) => id).sort()

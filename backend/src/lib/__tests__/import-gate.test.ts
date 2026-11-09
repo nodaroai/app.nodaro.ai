@@ -8,7 +8,7 @@
  * rights part: measures and the site's policy only, nothing read, spent or
  * counted.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 vi.mock("../account-measures.js", () => ({ assertImportsAllowed: vi.fn().mockResolvedValue(undefined) }))
 
@@ -44,6 +44,8 @@ import {
   spendImportConfirmation,
 } from "../import-gate.js"
 import { recordUnconfirmedImport } from "../unconfirmed-imports.js"
+import { __resetSurfaceProfileCacheForTests } from "../surface-profile.js"
+import { LinkImportsDisabledError } from "../link-imports.js"
 import { assertImportsAllowed } from "../account-measures.js"
 import { AccountMeasureError } from "../account-measure-error.js"
 import { ImportSourceError, assertImportSourceAllowed } from "../import-source-policy.js"
@@ -298,5 +300,61 @@ describe("the plugin lane is exempt from the declaration (a private plugin's own
     await expect(spendImportConfirmation(URL_, { userId: "", lane: "plugin" })).rejects.toBeInstanceOf(ImportOwnerUnknownError)
     expect(checkRightsConfirmation).not.toHaveBeenCalled()
     expect(recordUnconfirmedImport).not.toHaveBeenCalled()
+  })
+})
+
+describe("the deployment's switch for links to outside content (imports.links)", () => {
+  const OWN = "https://cdn.nodaro.test/videos/yt-abc.mp4"
+  const prevPublic = process.env.R2_PUBLIC_URL
+  const prevProfile = process.env.NODARO_SURFACE_PROFILE
+
+  beforeEach(() => {
+    process.env.R2_PUBLIC_URL = "https://cdn.nodaro.test"
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ imports: { links: false } })
+    __resetSurfaceProfileCacheForTests()
+  })
+  afterEach(() => {
+    if (prevPublic === undefined) delete process.env.R2_PUBLIC_URL
+    else process.env.R2_PUBLIC_URL = prevPublic
+    if (prevProfile === undefined) delete process.env.NODARO_SURFACE_PROFILE
+    else process.env.NODARO_SURFACE_PROFILE = prevProfile
+    __resetSurfaceProfileCacheForTests()
+  })
+
+  it("the read half refuses a link to outside content before the account or any record is read", async () => {
+    const refusal = await requireImportAllowed(URL_, { userId: "u1", confirmationId: ID, lane: "route" }).catch((e: unknown) => e)
+    expect(refusal).toBeInstanceOf(LinkImportsDisabledError)
+    expect(refusal).toMatchObject({ code: "link_imports_disabled", deterministic: true })
+    expect(isImportRefusal(refusal)).toBe(true)
+    expect(assertImportsAllowed).not.toHaveBeenCalled()
+    expect(assertImportSourceAllowed).not.toHaveBeenCalled()
+    expect(checkRightsConfirmation).not.toHaveBeenCalled()
+  })
+
+  it("the read half refuses even with no account behind the import (the deployment's switch is not about the account)", async () => {
+    await expect(requireImportAllowed(URL_, { userId: "", lane: "run" })).rejects.toBeInstanceOf(LinkImportsDisabledError)
+  })
+
+  it("the write half and the accountless lane refuse the same way, before anything is spent or counted", async () => {
+    await expect(spendImportConfirmation(URL_, { userId: "u1", lane: "route", via: "api" })).rejects.toBeInstanceOf(LinkImportsDisabledError)
+    expect(consumeRightsConfirmation).not.toHaveBeenCalled()
+    expect(deriveAndConsumeConfirmation).not.toHaveBeenCalled()
+
+    await expect(requireAccountlessImportAllowed(URL_, "plugin")).rejects.toBeInstanceOf(LinkImportsDisabledError)
+    expect(assertImportSourceAllowed).not.toHaveBeenCalled()
+  })
+
+  it("a file of this deployment's own storage is not a link to outside content: it is judged as before", async () => {
+    await requireImportAllowed(OWN, { userId: "u1", lane: "route" })
+    expect(assertImportsAllowed).toHaveBeenCalledWith("u1")
+    expect(assertImportSourceAllowed).toHaveBeenCalledWith(OWN)
+    expect(checkRightsConfirmation).toHaveBeenCalled()
+  })
+
+  it("with the switch on, the same link is judged as before", async () => {
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ imports: { links: true } })
+    __resetSurfaceProfileCacheForTests()
+    await requireImportAllowed(URL_, { userId: "u1", lane: "route" })
+    expect(assertImportsAllowed).toHaveBeenCalledWith("u1")
   })
 })

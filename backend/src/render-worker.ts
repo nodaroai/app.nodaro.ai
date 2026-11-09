@@ -1,7 +1,9 @@
 import { createRenderWorker } from "./workers/render-worker.js"
 import { loadOverlay } from "./lib/overlay/load.js"
+import { loadContentGuard } from "./lib/content-guard-load.js"
 import { initializeExternalWallet } from "./lib/external-wallet.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
+import { useProviderSafetySettings } from "./lib/provider-safety.js"
 import { beginWorkerDrain, SHUTDOWN_DRAIN_MS } from "./lib/worker-drain.js"
 import { startLaneParking } from "./lib/concurrency-lanes/park.js"
 import { startServerOccupancyPublisher } from "./lib/concurrency-lanes/server-occupancy.js"
@@ -17,11 +19,13 @@ process.on("uncaughtException", (err) => {
 // Load any deployment-supplied overlay (e.g. egress decorator) before the
 // render worker starts consuming jobs. No-op when NODARO_OVERLAY_PACKAGE unset.
 await loadOverlay()
+await loadContentGuard()
 await initializeExternalWallet(true)
 
 // Mainline prompt policies run AFTER the overlay's (registration order):
 // the minor-age floor is a platform safety invariant, not deployment content.
 registerMainlinePromptPolicies()
+useProviderSafetySettings()
 
 // Concurrency lanes: promote this queue's parked jobs when a slot is reserved
 // for them, and wake every parked job when enforcement goes off. Started before the worker,

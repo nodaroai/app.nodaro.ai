@@ -22,28 +22,34 @@ const env = vi.hoisted(() => ({
   require: process.env.SHARED_HEADER_TESTS_REQUIRE_PACKAGE === "1",
 }))
 
+type CookieOptions = { readonly cookieDomain?: string | null }
+
 interface PackageA11y {
-  readonly readAccessibility: (now?: number) => SharedAccessibilityState
-  readonly saveAccessibility: (state: SharedAccessibilityState) => void
-  readonly applySavedAccessibility: () => unknown
+  readonly readAccessibility: (now?: number, options?: CookieOptions) => SharedAccessibilityState
+  readonly saveAccessibility: (state: SharedAccessibilityState, options?: CookieOptions) => void
+  readonly applySavedAccessibility: (options?: CookieOptions) => unknown
   readonly ACCESSIBILITY_COOKIE: string
 }
+
+// The app uses the shared store where the deployment shows the header: on here.
+vi.mock("@/lib/site-header-mode", () => ({ siteHeaderMode: () => "default", siteHeaderCookieOptions: () => ({}) }))
 
 vi.mock("virtual:site-a11y", async () => {
   try {
     const pkg = (await import(/* @vite-ignore */ env.specifier)) as PackageA11y
     return {
       sharedAccessibility: Object.freeze({
-        read: (now?: number) => pkg.readAccessibility(now),
-        save: (state: SharedAccessibilityState) => pkg.saveAccessibility(state),
-        applySaved: () => {
-          pkg.applySavedAccessibility()
+        read: (now?: number, options?: CookieOptions) => pkg.readAccessibility(now, options),
+        save: (state: SharedAccessibilityState, options?: CookieOptions) => pkg.saveAccessibility(state, options),
+        applySaved: (options?: CookieOptions) => {
+          pkg.applySavedAccessibility(options)
         },
       }),
+      a11yStylesheet: null,
     }
   } catch (error) {
     if (env.require) throw error
-    return { sharedAccessibility: null }
+    return { sharedAccessibility: null, a11yStylesheet: null }
   }
 })
 

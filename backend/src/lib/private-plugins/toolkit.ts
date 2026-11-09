@@ -16,6 +16,7 @@ import { createSceneRenderingToolkit } from "./scene3d-render-toolkit.js"
 import { completeStructuredMetered } from "./llm-metered.js"
 import { FFMPEG_MEMBER_LANES, LLM_MEMBER_LANES, MEDIA_MEMBER_LANES, PROVIDER_MEMBER_LANES, withMemberSlots, withSideHoldSlot } from "./toolkit-lanes.js"
 import { createSSEStream } from "../sse.js"
+import { applyPromptPolicies } from "../prompt-policy.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { directElevenLabsTTS } from "../../providers/elevenlabs/direct-tts.js"
 import { hostTtsCapabilities } from "./tts-capabilities-toolkit.js"
@@ -45,9 +46,9 @@ import {
   needsContainerRemux,
   remuxToMp4,
 } from "../../providers/video/ffmpeg-utils.js"
-import { ytMetadataProbe, YtUrlNotAllowedError } from "../../providers/video/youtube-video.js"
-import { probeSocialPostVideo, socialPostOf } from "../../providers/video/social-post-video.js"
-import { pluginDownloadSocialPostVideo, pluginDownloadYouTubeVideo } from "./toolkit-downloads.js"
+import { YtUrlNotAllowedError } from "../../providers/video/youtube-video.js"
+import { socialPostOf } from "../../providers/video/social-post-video.js"
+import { assertPluginLinkAllowed, pluginDownloadSocialPostVideo, pluginDownloadYouTubeVideo, pluginProbeSocialPostVideo, pluginYtMetadataProbe } from "./toolkit-downloads.js"
 import { trimVideo as trimVideoCore } from "../../providers/video/trim-video.js"
 import { removeAudio } from "../../providers/video/remove-audio.js"
 import { PITCH_SHIFT_MAX_SEMITONES, pitchTempo } from "../../providers/video/pitch-tempo.js"
@@ -111,9 +112,8 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../reques
 import { extractMcpClient } from "../extract-mcp-client.js"
 import { buildJobInputData } from "../job-input-data.js"
 import { formatZodError } from "../zod-error.js"
-import { insertWithIdempotencyKey } from "../idempotent-insert.js"
 import { warmCompletedJobVideo } from "../warm-video-copies.js"
-import { billingPairColumns, insertJobIdempotent } from "../insert-job.js"
+import { billingPairColumns, insertJobIdempotent, insertStampedJobIdempotent } from "../insert-job.js"
 import { isGenerationSessionNotFound } from "../generation-session-error.js"
 import { CLIENT_ORIGIN_RULE, isInvalidClientOrigin } from "../client-origin-error.js"
 import { jobBlockOf, jobBlockedBody } from "../job-policy.js"
@@ -127,6 +127,9 @@ import { hasCredits, hasOrganizations, llmMeteredPricing } from "../config.js"
 import { LlmSpend, reserveLlmCall, settleLlmJob, type LlmReserveResult } from "../llm-billing.js"
 import { reserveLlmSideHold, sideCreditsFor, sideHoldFor, sideHoldPayerOf, sideHoldsAvailable } from "../llm-side-hold.js"
 import { appBaseUrl } from "../deployment-urls.js"
+import { voiceLockActive } from "../voice-policy.js"
+import { surfaceAllowsLinkImports } from "../surface-profile.js"
+import { judgeVoice, VoiceNotAvailableError, voiceNotAvailableBody } from "../voice-gender.js"
 import { getAppSettings, settingsReadFailed } from "../app-settings.js"
 import { withEarlierMaskingKeys } from "../nodaro-motion-masking.js"
 import {
@@ -187,7 +190,7 @@ import { promises as fs } from "node:fs"
 import type { ZodType } from "zod"
 import type { PluginEdlTimelineOptions, PluginEdlTimelineResult } from "./types.js"
 import { PluginHttpError } from "./types.js"
-import type { PluginCapabilities, PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginJobErrorHint, PluginOwnedJobRow, PluginOwnedRawJob } from "./types.js"
+import type { PluginBillingContext, PluginCapabilities, PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginJobErrorHint, PluginOwnedJobRow, PluginOwnedRawJob } from "./types.js"
 import type { PluginFfmpegToolkit, PluginLlmToolkit, PluginMediaToolkit, PluginProvidersToolkit } from "./types.js"
 import type { PluginToolkit, PluginLlmRequest, PluginLlmSpend, PluginLlmSideHoldPayer, PluginLlmSideHoldToolkit, PluginLlmMultimodalRequest, PluginVideoGenOptions, PluginVideoGenResult, PluginImageGenOptions, PluginImageGenResult, PluginMusicGenOptions, PluginMusicGenResult, PipelineSnapshot } from "./types.js"
 import { applyFrameFitAndDelivery } from "../video-frame-dispatch.js"
@@ -382,6 +385,14 @@ const SUNO_DURATION_MAX = 360
  * A title WITHOUT a style stays in description mode: custom mode requires
  * both, and sending a request the provider will refuse would turn a
  * best-effort score into a failed one.
+ *
+ * THE PROMPT POLICY: the plugin runs `tk.prompts.applyPolicies` over its music
+ * prompt once, at its own boundary, and hands the vocal gender and negative
+ * style the policy returned in `vocalGender` / `negativeStyle`. They are
+ * forwarded as the platform's own Suno worker forwards a policed assembly
+ * (`workers/handlers/suno.ts`: an empty negative is none), in both modes. This
+ * member applies no policy of its own, so nothing is policed twice; an older
+ * plugin sends neither and its request is unchanged.
  */
 async function pluginGenerateMusic(
   prompt: string,
@@ -402,6 +413,8 @@ async function pluginGenerateMusic(
       ...(custom && typeof duration === "number" && Number.isFinite(duration)
         ? { duration: Math.min(SUNO_DURATION_MAX, Math.max(SUNO_DURATION_MIN, Math.round(duration))) }
         : {}),
+      ...(options?.negativeStyle ? { negativeStyle: options.negativeStyle } : {}),
+      ...(options?.vocalGender ? { vocalGender: options.vocalGender } : {}),
     },
     // Thread OUR Nodaro key so the egress seam attributes this billed create
     // (model is pinned to DEFAULT_SUNO_MODEL → its version key); spread keeps any onTaskCreated.
@@ -1028,6 +1041,20 @@ async function readJob(jobId: string): Promise<PluginJobRow | null> {
 }
 
 /**
+ * The prompt funnel for a prompt a plugin assembled. A content-guard refusal
+ * (the funnel's one throw) reaches the plugin as the sendable `PluginHttpError`
+ * every other host refusal is, carrying the block as its cause, so a job
+ * handler is still failed for good and refunded.
+ */
+function policeForPlugin(assembly: Parameters<typeof applyPromptPolicies>[0]): ReturnType<typeof applyPromptPolicies> {
+  try {
+    return applyPromptPolicies({ ...assembly })
+  } catch (err) {
+    throw pluginHttpRefusalOf(err) ?? err
+  }
+}
+
+/**
  * The `PluginHttpError` for a refusal of the request itself, or null for any
  * other failure. Each status + body is exactly the one `sendInternalError`
  * (`lib/http-errors.ts`) answers for the same error, so a plugin route refuses
@@ -1060,6 +1087,35 @@ async function insertJobWithProvenance(
 ): Promise<{ id: string; created: boolean }> {
   try {
     const result = await insertJobIdempotent<{ id: string }>(req, row, idempotencyKey)
+    return { id: result.row.id, created: result.created }
+  }
+  catch (err) {
+    throw pluginHttpRefusalOf(err) ?? err
+  }
+}
+
+/**
+ * `tk.http.insertJobWithIdempotencyKey` — the plugin contract's own insert
+ * lane. The row is the plugin's: the calling surface (`lib/job-source.ts`,
+ * when `req` is given) goes UNDER it, so the plugin's own columns win, as in
+ * `insertJob`; the P14 payer pair from `billingContext` goes OVER it, the ONE
+ * exception to caller-wins, as in `withJobProvenance`. No session or origin is
+ * stamped: that is `insertJobWithProvenance`.
+ *
+ * The row passes the same request gate as every other job
+ * (`insertStampedJobIdempotent`) before it exists. A refusal rejects with the
+ * `PluginHttpError` the provenance funnel throws for it (422 job_blocked);
+ * anything else (the database) is re-thrown unchanged.
+ */
+async function insertJobWithIdempotencyKey(
+  data: Record<string, unknown> & { user_id: string },
+  idempotencyKey: string | null | undefined,
+  billingContext?: PluginBillingContext,
+  req?: FastifyRequest,
+): Promise<{ id: string; created: boolean }> {
+  const row = { ...(req ? jobSourceColumns(req) : {}), ...data, ...billingPairColumns(billingContext) }
+  try {
+    const result = await insertStampedJobIdempotent<{ id: string }>(row, idempotencyKey)
     return { id: result.row.id, created: result.created }
   }
   catch (err) {
@@ -1811,12 +1867,13 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       // maxFilesizeBytes?, confirmationId?}. Its `hardening` (raw yt-dlp
       // arguments among them) stays internal: a plugin reaches the hardened
       // lane only through `downloadSocialPostVideo`, whatever it passes here.
-      // Both downloads pass the import gate first (toolkit-downloads.ts).
+      // Both downloads pass the import gate first, and both probes the
+      // deployment's switch for links (toolkit-downloads.ts).
       downloadYouTubeVideo: pluginDownloadYouTubeVideo,
-      ytMetadataProbe,
+      ytMetadataProbe: pluginYtMetadataProbe,
       YtUrlNotAllowedError,
       socialPostVideoUrl: (url: string) => socialPostOf(url)?.url ?? null,
-      probeSocialPostVideo,
+      probeSocialPostVideo: pluginProbeSocialPostVideo,
       downloadSocialPostVideo: pluginDownloadSocialPostVideo,
     }, PROVIDER_MEMBER_LANES),
     ffmpeg: withMemberSlots<PluginFfmpegToolkit>("ffmpeg", {
@@ -1996,19 +2053,8 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       formatZodError,
       safeFetch,
       safeFetchBytes,
-      // Mirrors `insertWithIdempotencyKey` (`lib/idempotent-insert.ts:33`),
-      // narrowed to the "jobs" table + the one column the contract needs.
-      insertJobWithIdempotencyKey: async (data, idempotencyKey, billingContext, req) => {
-        // The calling surface goes UNDER the plugin's row (caller wins, as in
-        // `insertJob`); the P14 payer pair is spread AFTER it — the ONE
-        // exception to caller-wins, same as withJobProvenance.
-        const { row, created } = await insertWithIdempotencyKey<{ id: string }>(
-          "jobs",
-          { ...(req ? jobSourceColumns(req) : {}), ...data, ...billingPairColumns(billingContext) },
-          idempotencyKey,
-        )
-        return { id: row.id, created }
-      },
+      // Both insert lanes ask the request gate (lib/insert-job.ts); see each function.
+      insertJobWithIdempotencyKey,
       insertJobWithProvenance,
       computeVoiceChangerProPricing: async (args) => {
         if (!hasCredits()) {
@@ -2217,6 +2263,13 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         () => sideHoldsAvailable()),
       },
     },
+    // The deployment's prompt policy for prompts a plugin assembles itself.
+    // Delegates at CALL time (a policy registered after this toolkit was built
+    // still applies) and hands the registry a copy, so a policy that edits its
+    // argument never reaches the plugin's own object.
+    prompts: {
+      applyPolicies: (assembly) => policeForPlugin(assembly),
+    },
     pipelines: {
       // Core (`lib/private-plugins/`) may not STATICALLY import `ee/`
       // (tools/check-ee-imports.mjs) — each method reaches the seed lane via a
@@ -2411,6 +2464,23 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
     ...(opts.role === "daemon" ? { triggers: { listActive: listActivePluginTriggers, fire: firePluginTrigger } } : {}),
     sse: { create: (req, reply) => createSSEStream(req, reply) },
     social: { sendTelegramBotText: sendTelegramBotTextFor },
+    // The deployment's voice lock for the voices a plugin route sends: the
+    // verdict the speech routes give (lib/voice-gender.ts), read at call time.
+    // No lock: an allow, nothing read.
+    voices: {
+      isLocked: () => voiceLockActive(),
+      assertAllowed: async (voiceId, opts) => {
+        const verdict = await judgeVoice(voiceId, { userId: opts.userId })
+        if (!verdict.allowed) throw new PluginHttpError(400, voiceNotAvailableBody(), new VoiceNotAvailableError(verdict.reason))
+      },
+    },
+    // The deployment's switch for links to outside content, for the links a
+    // plugin route fetches or hands to a provider itself (lib/link-imports.ts),
+    // the same answer the platform's own import routes give.
+    imports: {
+      linksAllowed: () => surfaceAllowsLinkImports(),
+      assertLinkAllowed: assertPluginLinkAllowed,
+    },
     db: supabase,
     workflows: {
       writeCompatible,

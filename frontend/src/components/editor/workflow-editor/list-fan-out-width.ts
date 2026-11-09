@@ -1,7 +1,10 @@
-import { getCachedTier } from "@/hooks/use-auth"
-import { getMyLanes, type MyLanes } from "@/lib/api"
+import { getCachedTier, getCachedUserId } from "@/hooks/use-auth"
+import { getMyLanes, type MyLanes, type UserBalance } from "@/lib/api"
+import { BILLING_SURFACE_QUERY_KEY, type BillingSurface } from "@/lib/billing-surface"
 import { hasCredits } from "@/lib/edition"
 import { TIER_PARALLELISM } from "@/lib/pricing-data"
+import { queryClient } from "@/lib/query-client"
+import { queryKeys } from "@/lib/query-keys"
 
 /** How long a read of the server's line sizes stands before the next fan-out refreshes it (the server's own enforcement mirror refreshes this often). */
 export const LANE_SIZES_REFRESH_MS = 30_000
@@ -43,7 +46,26 @@ function isMyLanes(value: unknown): value is MyLanes {
 
 /** The width without concurrency lanes: the plan's per-tier table on Cloud, 12 elsewhere. */
 function tierWidth(): number {
-  return hasCredits() ? (TIER_PARALLELISM[getCachedTier()] ?? TIER_PARALLELISM.free) : 12
+  return hasCredits() ? (TIER_PARALLELISM[planTier()] ?? TIER_PARALLELISM.free) : 12
+}
+
+/**
+ * The plan this session's work runs at. It is this session's own profile tier
+ * (`getCachedTier`), except on a deployment with a payer. There every user is
+ * stored on the free tier while the payer holds the plan, and the server runs
+ * everyone at the payer account's grade (decided 2026-11-08), which the balance
+ * reports as `effectiveTier`. Read from the caches the editor already filled:
+ * it never waits, and anything unreadable is the session's own tier.
+ */
+function planTier(): string {
+  try {
+    if (queryClient.getQueryData<BillingSurface>(BILLING_SURFACE_QUERY_KEY)?.deploymentPayer !== true) return getCachedTier()
+    const userId = getCachedUserId()
+    const reported = userId ? queryClient.getQueryData<UserBalance>(queryKeys.credits.balance(userId))?.effectiveTier : undefined
+    return typeof reported === "string" && reported.length > 0 ? reported : getCachedTier()
+  } catch {
+    return getCachedTier()
+  }
 }
 
 /**

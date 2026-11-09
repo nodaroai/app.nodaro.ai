@@ -213,18 +213,16 @@ ARG VITE_APP_VERSION
 # Organizations (Cloud): "true" enables the organization surfaces. Empty =
 # off, which is every self-host build and every build before the launch.
 ARG VITE_ORGS_ENABLED
-# Shared site header (Cloud): "true" installs it (below) and puts it above the
-# app. Empty = off: every self-host build, and production until the cut-over.
+# Shared site header (Cloud). "true" installs it (below) and puts Nodaro's
+# header above the app (staging). "white-label" installs the same header for
+# the cloud image deployments of their own run (cloud-image.yml): at run time
+# it shows only where the deployment's surface profile says
+# header "white-label", and Nodaro's header never does. Empty = off: every
+# self-host build, and production until the cut-over.
 ARG VITE_SHARED_HEADER
-# Where the shared header's links go (frontend/src/ee/shell/site.ts). Empty =
-# the header's own canonical targets; a preview points them at its hosts.
-ARG VITE_HOME_URL
-ARG VITE_TOOLS_URL
 
 ENV VITE_ORGS_ENABLED=$VITE_ORGS_ENABLED
 ENV VITE_SHARED_HEADER=$VITE_SHARED_HEADER
-ENV VITE_HOME_URL=$VITE_HOME_URL
-ENV VITE_TOOLS_URL=$VITE_TOOLS_URL
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 ENV VITE_API_URL=$VITE_API_URL
@@ -268,7 +266,7 @@ RUN set -eu; \
     esac
 
 # The shared site header — a private package, installed ONLY on a cloud build
-# (required with VITE_SHARED_HEADER=true; with the flag off it is installed for
+# (required with VITE_SHARED_HEADER=true or white-label; with the flag off it is installed for
 # the trend admin's media editor when NPM_TOKEN is set, the header staying
 # off); every other build skips this step untouched (the script exits before
 # touching anything). NPM_TOKEN is the same
@@ -417,6 +415,7 @@ RUN if [ -n "$(printenv NPM_TOKEN)" ]; then \
       { test -z "$(find node_modules/@nodaroai -path '*/node_modules/@nodaro/*' -type d 2>/dev/null)" \
         || { echo "a nested @nodaro catalog was installed under node_modules/@nodaroai — the peer ranges disagree with the workspace"; exit 1; }; } && \
       node -e "import('@nodaroai/cloud-plugins').then(m=>{if(m.contractVersion!==1){console.error('plugin smoke: contractVersion mismatch:',m.contractVersion);process.exit(1)}}).catch(e=>{console.error('plugin smoke failed:',e&&e.message);process.exit(1)})" && \
+      node -e "import('@nodaroai/cloud-plugins/content-guard').then(m=>{if(!m.contentGuard||m.contentGuard.proveReady()!==true){console.error('plugin smoke: the content guard is not ready');process.exit(1)}}).catch(e=>{console.error('plugin smoke failed:',e&&e.message);process.exit(1)})" && \
       rm -f .npmrc; \
     fi
 
@@ -801,6 +800,9 @@ done
 #   previewStopRule <- PREVIEW_STOP_RULE_ENABLED (the preview stop rule's
 #                      rollout flag; the backend reads the same variable, so
 #                      the editor and the server always agree)
+#   mediaOrigin     <- the https origin of R2_PUBLIC_URL on a white-label
+#                      surface, as the backend prints it below; absent on any
+#                      other surface, whose config.js is unchanged
 # ALWAYS written — a missing file would fall through try_files to index.html
 # served as JavaScript.
 FRONTEND_SUPABASE_URL_EFFECTIVE="$FRONTEND_SUPABASE_URL"
@@ -820,6 +822,9 @@ fi
 # which the writer reads as "no override". A printer failure (non-zero exit)
 # is the same "" and the backend's own boot reports the real cause.
 RUNTIME_SURFACE_PROFILE_RESOLVED="$(node /app/backend/dist/lib/print-surface-profile.js)" || RUNTIME_SURFACE_PROFILE_RESOLVED=""
+# Same printer, same rules: "" unless the surface is white-label and its public
+# media URL is https (the backend reads both). A failure is the same "".
+RUNTIME_MEDIA_ORIGIN_RESOLVED="$(node /app/backend/dist/lib/print-surface-profile.js --media-origin)" || RUNTIME_MEDIA_ORIGIN_RESOLVED=""
 # PUBLIC_URL is single-valued, so on a studio answering on more than one
 # hostname it would send every browser's SSE to whichever host it names —
 # cross-origin from all the others. The "/" sentinel says "same origin as the
@@ -828,7 +833,7 @@ if [ "$PUBLIC_URL_SAME_ORIGIN" = "true" ]; then RUNTIME_API_URL_EFFECTIVE="/"; e
 # The writer prints the /config.js line to stdout (log line to stderr), so the
 # redirect captures only the payload; on failure the file is left empty, which
 # the frontend reads as "no override" → build-time values.
-if ! RUNTIME_API_URL="$RUNTIME_API_URL_EFFECTIVE" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" RUNTIME_AUDIOMASS_URL="$AUDIOMASS_URL" RUNTIME_DEFAULT_LOCALE="$DEFAULT_LOCALE" RUNTIME_SURFACE_PROFILE="$RUNTIME_SURFACE_PROFILE_RESOLVED" RUNTIME_PREVIEW_STOP_RULE="$PREVIEW_STOP_RULE_ENABLED" \
+if ! RUNTIME_API_URL="$RUNTIME_API_URL_EFFECTIVE" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" RUNTIME_AUDIOMASS_URL="$AUDIOMASS_URL" RUNTIME_DEFAULT_LOCALE="$DEFAULT_LOCALE" RUNTIME_SURFACE_PROFILE="$RUNTIME_SURFACE_PROFILE_RESOLVED" RUNTIME_PREVIEW_STOP_RULE="$PREVIEW_STOP_RULE_ENABLED" RUNTIME_MEDIA_ORIGIN="$RUNTIME_MEDIA_ORIGIN_RESOLVED" \
   node /app/tools/build-runtime-config.mjs > /app/frontend/dist/config.js; then
   echo "[start.sh] WARNING: could not write /app/frontend/dist/config.js — the frontend keeps its build-time URLs"
 fi

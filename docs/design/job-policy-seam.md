@@ -28,7 +28,7 @@ matter for different reasons.
 
 | | **Request** | **Result** |
 |---|---|---|
-| Chokepoint | `lib/insert-job.ts` — the funnel every job-creating route, orchestrator node and pipeline stage passes through. **Plugin-created jobs are the one exception**: the plugin toolkit's `insertJobWithIdempotencyKey` inserts through `lib/idempotent-insert.ts` directly and is never asked at the request gate, so for a plugin job (generate-video-pro, video-analysis import) the result gate is the only enforcement point | the completion funnels: `workers/shared.ts :: markJobCompleted` and `lib/job-finalize.ts :: finalizeJobWithMedia` |
+| Chokepoint | `lib/insert-job.ts` — the funnel every job-creating route, orchestrator node, pipeline stage and plugin route passes through. A plugin creates its jobs through the toolkit's two insert members, `insertJobWithProvenance` (`insertJobIdempotent`) and `insertJobWithIdempotencyKey` (`insertStampedJobIdempotent`, for a row that carries its own provenance); both ask the request gate | the completion funnels: `workers/shared.ts :: markJobCompleted` and `lib/job-finalize.ts :: finalizeJobWithMedia` |
 | Asked | before the row exists and before credits are reserved | after the output is written to storage, before the completion write, the asset row and the credit commit |
 | Verdicts | `allow`, `block` | `allow`, `flag`, `block`, `hold` |
 | Why here | a block leaves **nothing** to unwind: no row, no reservation, no queue entry, no refund | the last moment at which nothing is published — the asset row, the gallery, `output_data` and every downstream node read what happens after this point |
@@ -42,11 +42,10 @@ answer is a 422 and an absence.
 **What the request gate can see is stated, not hidden.** Jobs created by a
 route, the MCP server, the SDK, the CLI or the browser extension — and the
 children a pipeline stage creates — arrive at the funnel with their full input,
-so the request gate can judge content. Jobs a plugin creates through the
-toolkit's `insertJobWithIdempotencyKey` (generate-video-pro, the video-analysis
-import) do not arrive at all: that lane inserts outside `lib/insert-job.ts`,
-the request gate is never asked, and the result gate is their only enforcement
-point. Jobs a workflow run or an app run creates for its nodes arrive without
+so the request gate can judge content. So do the jobs a plugin route creates
+through the toolkit: the gate sees the plugin's row as it will land. A refusal
+reaches the plugin as a `PluginHttpError` (422 `job_blocked`) before any row
+or reservation exists. Jobs a workflow run or an app run creates for its nodes arrive without
 their content: the orchestrator inserts a provenance-only row (`{ type,
 node_id }` plus the provenance columns) and attaches the real payload in a
 separate update after the insert. For those the request gate can gate by user,
@@ -60,10 +59,11 @@ Both funnels are covered by totality tests
 `lib/__tests__/job-policy-request-totality.test.ts` on the request side,
 `workers/__tests__/job-policy-result-totality.test.ts` on the result side) that
 fail the build if a new job insert, completion or failure write is added
-outside them — with one named exception on the request side: the plugin
-toolkit's `insertJobWithIdempotencyKey` lane is allowlisted by the insert guard
-and is not gated. It is the same discipline the prompt-policy and upload-policy
-totality tests apply to their own coverage.
+outside them. The insert guard allows a raw `jobs` write in `lib/insert-job.ts`
+alone, checks that every write there follows the request gate in its own
+function, and scans the plugin toolkit on its own so its lane cannot be
+allowlisted back past the gate. It is the same discipline the prompt-policy and
+upload-policy totality tests apply to their own coverage.
 
 ## The policy object
 
@@ -345,6 +345,11 @@ No identity request occurs unless a policy calls the method.
 the decision audit. Labels never become the user-visible explanation.
 
 ## What is deliberately not gated
+
+The request gate judges a job row, and some rows do not hold their final
+content (see above). Refusing a request on its content everywhere, including
+those rows, is what the [content guard](./content-guard.md) does: it is asked at
+the prompt funnel and the workflow engine's payload step as well as here.
 
 The seam sits on jobs. Anything that produces no job row — synchronous text
 routes, streaming LLM responses, in-handler planning calls, prompt drafts written

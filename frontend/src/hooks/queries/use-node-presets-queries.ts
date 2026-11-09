@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { queryKeys } from "@/lib/query-keys"
 import {
   listNodePresets,
+  listFactoryNodePresets,
   createNodePreset,
   updateNodePreset,
   deleteNodePreset,
@@ -25,6 +26,24 @@ export function useNodePresets(nodeType: string | undefined, userId: string | un
     queryFn: () => listNodePresets(nodeType),
     enabled: !!userId && !!nodeType,
     staleTime: 60_000,
+  })
+}
+
+/**
+ * The deployment's factory catalog for a node type, as the server serves it:
+ * the bundled presets (unless the deployment switched them off) followed by
+ * the deployment's own. The same for every caller, so it needs no account;
+ * `undefined` until it lands and whenever it cannot be read — the menu then
+ * shows the bundled catalog the deployment allows.
+ */
+export function useFactoryPresets(nodeType: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.nodePresetFactory.list(nodeType),
+    queryFn: () => listFactoryNodePresets(nodeType as string),
+    enabled: !!nodeType,
+    // The route lets caches keep its answer for five minutes.
+    staleTime: 5 * 60_000,
+    retry: 1,
   })
 }
 

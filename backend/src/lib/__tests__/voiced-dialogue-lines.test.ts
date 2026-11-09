@@ -21,7 +21,7 @@ vi.mock("@/ee/billing/credits.js", () => ({
 
 import { getMaxTtsChars, getDialogueCapabilities } from "@nodaro/shared/models"
 import { stripAudioTags } from "../../providers/elevenlabs/audio-tags.js"
-import { planVoicedDialogue, voicedAddonBaseCredits, voicedAddonCreditId } from "../voiced-dialogue-lines.js"
+import { planVoicedDialogue, voicedAddonBaseCredits, voicedAddonCreditId, voicesTheVoicedVideoSends } from "../voiced-dialogue-lines.js"
 
 const ANNA = { voiceId: "anna-id", ttsProvider: "elevenlabs-v4" as const, speaker: "Anna" }
 const BOB = { voiceId: "bob-id", speaker: "Bob" }
@@ -181,5 +181,46 @@ describe("voicedAddonBaseCredits", () => {
     expect(voicedAddonCreditId({ dialogue: [{ speaker: "Anna", line: "Hi" }], characterVoices: [ANNA] })).toBe("elevenlabs-v4")
     expect(voicedAddonCreditId({ dialogue: [{ speaker: "Anna", line: "Hi" }, { speaker: "Bob", line: "Yo" }], characterVoices: [ANNA, BOB] })).toBe("elevenlabs-dialogue")
     expect(voicedAddonCreditId({ dialogue: duo("Anna", "Cara"), characterVoices: [ANNA, CARA] })).toBe("elevenlabs-dialogue-v4")
+  })
+})
+
+/**
+ * The voices a voiced-video run speaks in — what the voice lock judges at the
+ * route and again in the worker before anything is sent. The worker's own
+ * sends are pinned to this in workers/handlers/__tests__/voiced-video.test.ts.
+ */
+describe("voicesTheVoicedVideoSends", () => {
+  it("audio_driven: the distinct voices of the lines it voices, never a cast voice with no line", () => {
+    const input = { dialogue: [{ speaker: "Anna", line: "Hi." }, { speaker: "Anna", line: "Again." }, { speaker: "Bob", line: "Yo." }], characterVoices: [ANNA, BOB, CARA] }
+    expect(voicesTheVoicedVideoSends(input, "seedance-2")).toEqual(["anna-id", "bob-id"])
+  })
+
+  it("audio_driven: a line by a speaker the cast does not name is voiced by the cast's first voice", () => {
+    expect(voicesTheVoicedVideoSends({ dialogue: [{ speaker: "Zed", line: "Hi." }], characterVoices: [BOB, ANNA] }, "seedance-2")).toEqual(["bob-id"])
+  })
+
+  it("audio_driven: lines past the dialogue cap are not voiced, so their voices are not sent", () => {
+    const cap = getDialogueCapabilities("elevenlabs-dialogue").maxChars
+    const dialogue = [{ speaker: "Anna", line: "a".repeat(cap) }, { speaker: "Bob", line: "b" }]
+    expect(voicesTheVoicedVideoSends({ dialogue, characterVoices: [ANNA, BOB], dialogueProvider: "elevenlabs-dialogue" }, "seedance-2")).toEqual(["anna-id"])
+  })
+
+  it("audio_driven: no line, no voice", () => {
+    expect(voicesTheVoicedVideoSends({ dialogue: [], prompt: "no attributed speech", characterVoices: [ANNA] }, "seedance-2")).toEqual([])
+  })
+
+  it("native_speech: the cast's first voice, the one the spoken clip is revoiced to, lines or not", () => {
+    expect(voicesTheVoicedVideoSends({ dialogue: [{ speaker: "Bob", line: "Hi." }], characterVoices: [ANNA, BOB] }, "veo3")).toEqual(["anna-id"])
+    expect(voicesTheVoicedVideoSends({ dialogue: [], characterVoices: [BOB] }, "veo3")).toEqual(["bob-id"])
+    expect(voicesTheVoicedVideoSends({ dialogue: [], characterVoices: [] }, "veo3")).toEqual([])
+  })
+
+  it("a model that speaks no dialogue sends no voice", () => {
+    expect(voicesTheVoicedVideoSends({ dialogue: [{ speaker: "Anna", line: "Hi." }], characterVoices: [ANNA] }, "minimax")).toEqual([])
+  })
+
+  it("never throws for a malformed cast (the shapes it skips are the plan's)", () => {
+    expect(voicesTheVoicedVideoSends({ characterVoices: [null, { voiceId: 3 }] }, "veo3")).toEqual([])
+    expect(voicesTheVoicedVideoSends({ characterVoices: "nope" }, "seedance-2")).toEqual([])
   })
 })

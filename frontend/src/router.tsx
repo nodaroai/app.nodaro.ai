@@ -4,6 +4,7 @@ import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { hasAdmin, hasCredits, isCloud, isMultiUser, hasOrganizations } from "@/lib/edition"
 import { surfaceNavHidden, surfaceBillingSelfServe } from "@/lib/surface-selectors"
 import { accessibilityStatementShown } from "@/lib/accessibility-statement"
+import { registerAppRoutes } from "@/lib/sign-in-redirect"
 
 // Error handling
 import RouteErrorBoundary from "@/components/route-error-boundary"
@@ -134,6 +135,7 @@ const AdminReview = lazy(() => import("@/ee/app/(admin)/admin/review/page"))
 const AdminTrends = lazy(() => import("@/ee/app/(admin)/admin/trends/page"))
 const AdminTrendEditor = lazy(() => import("@/ee/app/(admin)/admin/trends/detail/page"))
 const AdminNodaroMotion = lazy(() => import("@/ee/app/(admin)/admin/nodaro-motion/page"))
+const AdminProviderSafety = lazy(() => import("@/ee/app/(admin)/admin/provider-safety/page"))
 const AdminMotionPriceCheck = lazy(() => import("@/ee/app/(admin)/admin/motion-price-check/page"))
 const AdminTrendRadar = lazy(() => import("@/ee/app/(admin)/admin/trend-radar/page"))
 const AdminTrendRadarSettings = lazy(() => import("@/ee/app/(admin)/admin/trend-radar/settings-page"))
@@ -202,6 +204,7 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
       { path: "app-reports", element: <SuspenseWrapper><AdminAppReports /></SuspenseWrapper> },
       { path: "complaints", element: <SuspenseWrapper><AdminComplaints /></SuspenseWrapper> },
       { path: "complaints/:id", element: <SuspenseWrapper><AdminComplaintCase /></SuspenseWrapper> },
+      { path: "provider-safety", element: <SuspenseWrapper><AdminProviderSafety /></SuspenseWrapper> },
       { path: "review", element: <SuspenseWrapper><AdminReview /></SuspenseWrapper> },
       // Trends exist only where credits do (the API is under hasCredits()), as does the nav entry.
       ...(hasCredits()
@@ -558,3 +561,9 @@ export const router = createBrowserRouter([
     element: <NotFound />,
   },
 ])
+
+// What a completed sign-in may open in place: a path this tree answers with a
+// page other than the not-found catch-all above. Any other path on this site
+// belongs to another product served beside the app, and gets a full page load
+// (lib/sign-in-redirect.ts).
+registerAppRoutes(router.routes)

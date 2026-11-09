@@ -1,8 +1,10 @@
 // @vitest-environment node
+// @test-watches frontend/src/lib/surface-profile.ts backend/src/lib/surface-profile.ts
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
+import ts from "typescript"
 
 /**
  * The frontend and backend SurfaceProfile shapes are two hand-kept copies
@@ -41,6 +43,56 @@ describe("surface-profile drift", () => {
     const fe = defaultKeys(readFileSync(FE, "utf8"))
     const be = defaultKeys(readFileSync(BE, "utf8"))
     expect(fe).toEqual(be)
+  })
+})
+
+/**
+ * Every member path of the file's `SurfaceProfile` interface — `auth.requireSignIn?`,
+ * `worlds?.allow?`, `siblings.apps[].urlByHost?` — following inline object types,
+ * arrays and the file's own interfaces. Wider than the default literal above,
+ * which cannot see a key that is absent unless configured.
+ */
+function profileShape(file: string): string[] {
+  const sf = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true)
+  const interfaces = new Map<string, ts.InterfaceDeclaration>()
+  sf.forEachChild((n) => {
+    if (ts.isInterfaceDeclaration(n)) interfaces.set(n.name.text, n)
+  })
+  const out: string[] = []
+  const follow = (type: ts.TypeNode | undefined, path: string, seen: ReadonlySet<string>): void => {
+    if (!type) return
+    if (ts.isTypeLiteralNode(type)) walk(type.members, path, seen)
+    else if (ts.isArrayTypeNode(type)) follow(type.elementType, `${path}[]`, seen)
+    else if (ts.isTypeReferenceNode(type) && ts.isIdentifier(type.typeName)) {
+      const ref = interfaces.get(type.typeName.text)
+      if (ref && !seen.has(ref.name.text)) walk(ref.members, path, new Set([...seen, ref.name.text]))
+    }
+  }
+  const walk = (members: ts.NodeArray<ts.TypeElement>, prefix: string, seen: ReadonlySet<string>): void => {
+    for (const m of members) {
+      if (!ts.isPropertySignature(m)) continue
+      const path = `${prefix ? `${prefix}.` : ""}${m.name.getText(sf)}${m.questionToken ? "?" : ""}`
+      out.push(path)
+      follow(m.type, path, seen)
+    }
+  }
+  const root = interfaces.get("SurfaceProfile")
+  expect(root, `${file} declares interface SurfaceProfile`).toBeDefined()
+  walk(root!.members, "", new Set(["SurfaceProfile"]))
+  return out.sort()
+}
+
+/** Billing keys only the backend holds: surface-profile-runtime-config.ts strips them from /config.js. */
+const BACKEND_ONLY = ["billing.allowances?", "billing.defaultAllowanceUnits?", "billing.payerAccount?"]
+
+describe("surface-profile shape drift (nested members)", () => {
+  it("frontend and backend SurfaceProfile declare the same members, nested and optional ones included", () => {
+    const fe = profileShape(FE)
+    const be = profileShape(BE)
+    expect(fe).toContain("worlds?.allow?")
+    expect(fe).toContain("auth.requireSignIn?")
+    expect(fe).toEqual(be.filter((p) => !BACKEND_ONLY.includes(p)))
+    expect(be.filter((p) => !fe.includes(p))).toEqual(BACKEND_ONLY)
   })
 })
 

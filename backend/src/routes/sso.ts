@@ -18,11 +18,29 @@ const QuerySchema = z.object({
   via: z.string().max(512).optional(),
 })
 
-/** Same-origin relative path only (§5.6 rule 5 — open-redirect guard). Mirrors
- *  the frontend consumeRedirect / auth-callback guard. */
+/** A site no address belongs to: `next` is resolved against it, and must stay on it. */
+const NOWHERE = "https://sso-next.invalid"
+
+/**
+ * Same-origin relative path only (§5.6 rule 5 — open-redirect guard), checked
+ * the way a browser would follow it: `/\host`, a tab or line break the
+ * browser drops (`/<TAB>/host`) and a path whose dot segments resolve to
+ * `//host` all name another site, and fall back to /projects like `//host`
+ * and an absolute URL do. The landing follows `next` with a full page load
+ * when it is not one of the app's own pages, so this matters. Mirrors the
+ * frontend guard (frontend/src/lib/sign-in-redirect.ts `sameSitePath`), which
+ * checks it again.
+ */
 function safeNext(raw: string | undefined): string {
-  if (raw && raw.startsWith("/") && !raw.startsWith("//")) return raw
-  return "/projects"
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/projects"
+  let url: URL
+  try {
+    url = new URL(raw, NOWHERE)
+  } catch {
+    return "/projects"
+  }
+  if (url.origin !== NOWHERE || url.pathname.startsWith("//")) return "/projects"
+  return `${url.pathname}${url.search}${url.hash}`
 }
 
 /**

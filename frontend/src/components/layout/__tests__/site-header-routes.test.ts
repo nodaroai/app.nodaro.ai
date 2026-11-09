@@ -38,10 +38,12 @@ describe("where the shared site header can render", () => {
     expect(where(/<DashboardLayout\b/)).toEqual(["router.tsx"])
   })
 
-  it("only the slot reaches the ee mount, and only the mount reaches the header module", () => {
-    expect(where(/["']@\/ee\/shell\/app-header["']/)).toEqual(["components/layout/site-header-slot.tsx"])
-    // The resolver names the id it resolves; the mount is the only importer.
-    expect(where(/["']virtual:site-header["']/)).toEqual(["ee/shell/app-header.tsx", "ee/shell/header-module-plugin.ts"])
+  it("only the slot reaches the ee mounts, and only each mount reaches its header module", () => {
+    expect(where(/["']@\/ee\/shell\/hosted-header["']/)).toEqual(["components/layout/site-header-slot.tsx"])
+    expect(where(/["']@\/ee\/shell\/white-label-header["']/)).toEqual(["components/layout/site-header-slot.tsx"])
+    // The resolver names the ids it resolves; each mount is the only importer of its own.
+    expect(where(/["']virtual:site-header["']/)).toEqual(["ee/shell/header-module-plugin.ts", "ee/shell/white-label-header.tsx"])
+    expect(where(/["']virtual:hosted-header["']/)).toEqual(["ee/shell/contract/props.contract.ts", "ee/shell/header-module-plugin.ts", "ee/shell/hosted-header.tsx"])
   })
 
   it("the shared language has its own small module, read only by the locale store and <html> mirror", () => {
@@ -66,7 +68,7 @@ describe("where the shared site header can render", () => {
   })
 
   it("only the header's mount says it is on the page (the app's accessibility menu steps aside for it)", () => {
-    expect(where(/\bmarkSharedHeaderMounted\(/)).toEqual(["ee/shell/app-header.tsx", "lib/shared-header.ts"])
+    expect(where(/\bmarkSharedHeaderMounted\(/)).toEqual(["ee/shell/hosted-header.tsx", "ee/shell/white-label-header.tsx", "lib/shared-header.ts"])
   })
 
   it("the admin layout reads neither the slot nor the gate", () => {

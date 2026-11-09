@@ -19,6 +19,7 @@ vi.mock("@/providers/video/youtube-video.js", () => ({
 
 import { videoMetadataRoutes } from "../video-metadata.js"
 import { ytMetadataProbe } from "../../providers/video/youtube-video.js"
+import { withLinkImportsOff } from "@/test/link-imports-off.js"
 
 const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
 const YT_URL = "https://www.youtube.com/watch?v=abc123"
@@ -129,5 +130,22 @@ describe("POST /v1/video-metadata — non-YouTube allowlisted hosts", () => {
     // The probe validates against the NARROW YOUTUBE_HOSTS and would only ever
     // throw for these — so the route must short-circuit, never invoke it.
     expect(ytMetadataProbe).not.toHaveBeenCalled()
+  })
+})
+
+describe("POST /v1/video-metadata on a deployment that turned link imports off", () => {
+  withLinkImportsOff()
+
+  it("refuses before the probe", async () => {
+    const res = await post({ userId: TEST_USER_ID, url: YT_URL })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("link_imports_disabled")
+    expect(ytMetadataProbe).not.toHaveBeenCalled()
+  })
+
+  it("a host the probe would not read is refused the same way", async () => {
+    const res = await post({ userId: TEST_USER_ID, url: "https://www.tiktok.com/@a/video/1" })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("link_imports_disabled")
   })
 })

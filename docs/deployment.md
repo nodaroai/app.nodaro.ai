@@ -139,7 +139,7 @@ here for each one anyway.
 | `LOOPS_CONTENT_RESTRICTED_ID` | `""` | Cloud: the Loops transactional template id of "Content access restricted", which an administrator sends from a copyright case to the account whose content a restriction covers. Data variables: `content` (the account's file: its name, kind and day, or several files by count), `source` (the link it was imported from, or `Not available`), `reason` (the reason the administrator writes for the account), `reference` (the case's number) and `counterNoticeUrl` (the account's counter-notification page, from `PUBLIC_URL`). Unset = the case's screen says the email cannot be sent |
 | `LOOPS_COMPLAINT_UPDATE_ID` | `""` | Cloud: the Loops transactional template id of "Complaint update", which an administrator sends from a case to its complainant. Data variables: `reference`, `status` (the case's status in words) and `action` (the case's decision). Unset = the case's screen says the email cannot be sent |
 | `VITE_ORGS_ENABLED` | `""` | Cloud, organizations: `true` shows the organization surfaces in the browser. Build-time (Vite inlines it), so it needs the `ARG`+`ENV` pair in the Dockerfile — and it must match the backend's `ORGS_ENABLED`, or the UI offers something the API refuses |
-| `VITE_SHARED_HEADER` | `""` | Nodaro Cloud only: `true` builds the image with the shared Nodaro site header, a private package the frontend stage installs with the `NPM_TOKEN` build arg (pin: optional `SHARED_HEADER_PKG_VERSION`). Build-time, with the `ARG`+`ENV` pair in the Dockerfile. Any other edition, or a build without the package, gets a stub and the flag off — a self-hosted image is unaffected whatever it is set to; a cloud build with it on but no package is refused. With it off, a cloud build that has `NPM_TOKEN` still installs the package for the trend admin's media editor (link import, range and crop); the header stays off |
+| `VITE_SHARED_HEADER` | `""` | Nodaro Cloud only: `true` builds the image with the shared Nodaro site header, a private package the frontend stage installs with the `NPM_TOKEN` build arg (pin: optional `SHARED_HEADER_PKG_VERSION`), and shows Nodaro's header above the editor: the hosted header, drawn from `nodaro.ai/_header/` in the visitor's browser (if it cannot load there, the app shows its own sidebar chrome). `white-label` builds the package in for deployments of their own: the header (the npm package's white-label mode, not the hosted one) shows only where the deployment's surface profile sets [`header`](#keys-read-by-client-apps) to `"white-label"`, and Nodaro's header never does, so a deployment without that key renders exactly as without the header. Build-time, with the `ARG`+`ENV` pair in the Dockerfile. Any other edition, or a build without the package, gets a stub and the flag off — a self-hosted image is unaffected whatever it is set to; a cloud build with it on but no package is refused. With it off, a cloud build that has `NPM_TOKEN` still installs the package for the trend admin's media editor (link import, range and crop); the header stays off |
 | `PORT` / `HOST` | `8000` / `0.0.0.0` | Where the API listens (in the image the API sits on 9000 behind Caddy on 3000) |
 | `NODE_ENV` | `development` | `production` in every image |
 | `REDIS_URL` | `redis://localhost:6379` | BullMQ queues + caches (bundled: `redis://redis:6379`) |
@@ -182,7 +182,7 @@ here for each one anyway.
 | `R2_PUBLIC_FALLBACK_DOMAIN` | `""` | A second public host for assets (e.g. the raw `pub-<id>.r2.dev` beside a CDN domain) |
 | `SITE_ASSET_ARCHIVE` | `auto` | Keeps every build's styling files (CSS, fonts, images under `/assets/`) in storage under `site-assets/`, so a page an earlier deploy served — a session replay, a tab left open — still gets its stylesheet at its original URL. Each boot copies the build's files once; nothing deletes them. `auto` = on for a production Cloud server only (`NODE_ENV=production`, as the image sets — never a developer's checkout); `on` / `off` decide for any edition. Needs storage configured. |
 | `R2_SHARED_WITH_RELAY_TARGET` | `false` | Set `true` ONLY when `R2_PUBLIC_URL` names the same bucket the instance's relay target (`NODARO_CLOUD_URL`) writes to. It keys on the SOURCE URL, not on the lane: **any** source URL that is already an object in this bucket is then referenced in place instead of being copied under a second key. That covers relayed outputs — which this instance also stops deleting and stops counting against its quota, because another instance created them — and it covers non-relayed sources too: the `save-to-storage` node stores a reference rather than an independent copy when its input is already in the bucket, so deleting that input's library item removes the object the save node points at. Strict parse: only `true` / `1` enable it |
-| `STORAGE_DELETES` | `on` | `skip` makes this install delete nothing from storage. Every delete (a user's or an administrator's permanent delete, the retention cleanup, a run's own cleanup, the retained snapshots' collection, the cleanup of `SCENE3D_PRIVATE_BUCKET`) is skipped with a warning in the log (`storage deletes are off on this deployment`) and the file stays. Everything around the delete still happens: rows are removed, and links and storage quotas are updated as before. Nothing is recorded for the daily retry of failed deletes, which does not run, and a content restriction moves no file to or from the `evidence/` prefix (each key is recorded as skipped). For a deployment that shares its media storage with another deployment but runs on its own copy of the database, for example a staging environment restored from production: its rows name files the other deployment still references. `on`, unset or blank deletes as before; any other value stops the API from starting. Restart to apply |
+| `STORAGE_DELETES` | `on` | `skip` makes this install delete nothing from storage. Every delete (a user's or an administrator's permanent delete, the retention cleanup, a run's own cleanup, the retained snapshots' collection, the cleanup of `SCENE3D_PRIVATE_BUCKET`) is skipped with a warning in the log (`storage deletes are off on this deployment`) and the file stays. Everything around the delete still happens: rows are removed, and links and storage quotas are updated as before. Nothing is recorded for the daily retry of failed deletes, which does not run, and a content restriction moves no file to or from the `evidence/` prefix (each key is recorded as skipped). A job's own files that a content policy withholds (a blocked result, a held result that is rejected or expires, or a held job its owner cancels) are made private instead, with the canned ACL `private`, where objects are public by their own ACL (`STORAGE_OBJECT_ACL` set): the file stays, and its URL no longer reads it. Where objects are public by a bucket policy, or the store has no object ACLs (R2), those files stay as they are; a file whose ACL change fails is logged with its job and left as it is. For a deployment that shares its media storage with another deployment but runs on its own copy of the database, for example a staging environment restored from production: its rows name files the other deployment still references. `on`, unset or blank deletes as before; any other value stops the API from starting. Restart to apply |
 | `MAX_CONCURRENT_NODES_PER_EXECUTION` | `6` (max 20) | Nodes one workflow run may execute at once — the self-host parallelism ceiling. Limits one run while lanes are not enforced; ignored once they are (see [Concurrency lanes](#concurrency-lanes)) |
 | `LANE_PROVIDER_PER_USER` · `LANE_LLM_PER_USER` · `LANE_LOCAL_PER_USER` · `LANE_RUN_PER_USER` | `12` · `24` · `24` · `12` (1 to 500) | Community and Business — how many jobs of each lane one person runs at once. See [Concurrency lanes](#concurrency-lanes) |
 | `LANE_QUEUE_TIMEOUT_MINUTES` · `LANE_LIVE_WAIT_MINUTES` | `120` (5 to 1440) · `10` (1 to 60) | How long a queued job, and a request answered while you wait, may wait for a free slot. See [Concurrency lanes](#concurrency-lanes) |
@@ -221,7 +221,7 @@ here for each one anyway.
 | `PAYG_WEB_BLOCK_ENABLED` · `PAYG_WEB_BLOCK_EXEMPT_USER_IDS` | off · `""` | Cloud only — pay-as-you-go web block and its grandfathered accounts, comma-separated. Not combinable with a `billing.payerAccount` whose effective grade is `free` or `payg`: the pool is resolved at the payer's tier, so the API refuses to boot (`PAYG_WEB_BLOCK_ENABLED is on and the deployment payer's effective tier is …`) rather than refuse every run — put the payer on a paid subscription or leave the flag off |
 | `AUTO_RECHARGE_ENABLED` | off | Cloud only — auto-recharge kill switch: it guards the trigger + charge path only, while webhook provisioning stays on so in-flight payments still settle |
 | `HOSTED_DEPLOYMENTS` | unset | Cloud only — the dedicated deployments whose billing status `/admin/hosted-deployments` shows: a JSON array of `{ "name", "url", "key" }`, where `url` is the deployment's https origin and `key` a **read-only** billing integration key (`ndr_bill_ro_…`) minted on that deployment's `/billing-admin`. An entry with any other key, or a non-https URL, is refused and shown as misconfigured — never called. The page reads each deployment's `GET /v1/deployment-billing/balance` (pool, monthly spend, low balance, auto top-up), cached for a minute. |
-| `HEADER_VERSIONS_PRODUCTS` · `HEADER_VERSIONS_GITHUB_TOKEN` | `""` (the page lists nothing, and explains the setup) | Cloud only — the admin panel's **Header versions** page: which version of the shared header each product's live and test site serves, beside the newest release, and what each newer release brought. In order: the products, a JSON array of `{ "id", "label", "repo", "production", "staging", "source", "icon"? }` (`repo` as `owner/name`, the two hosts bare, `source` `lockfile` — the version is the deployed commit's lockfile — or `site-file` — the site publishes it at `/shell-version.json`, as this app's cloud build does; `icon`, optional, names the product's picture on the page — one of the names in `frontend/src/ee/app/(admin)/admin/header-versions/product-icon.tsx`, else its first letter is drawn); and a read-only fine-grained GitHub token with **Contents** and **Deployments** read access to those repositories and the header's own. The server reads each environment's last successful deployment and the version that commit installs, and each newer release's merged changes between its tag and the one before (said in plain words by a model once per release, a platform cost). It also shows the header repository's own explanations of how the header works, read from its default branch, and asks each of the header's world links what it answers. Where each site's worlds row leads comes from the file the site publishes at `/shell-worlds.json` (`{ "worldsRow": true, "worldHrefs": { "<world>": "https://…" or "/path" } }`; this app's cloud build writes one from the same origins its header uses: `VITE_TOOLS_URL`, `VITE_STUDIO_URL`), and every address a site leads to is asked too, once per check; a site without the file is shown as not reported yet. Without the token only the sites' own files answer |
+| `HEADER_VERSIONS_PRODUCTS` · `HEADER_VERSIONS_GITHUB_TOKEN` | `""` (the page lists nothing, and explains the setup) | Cloud only — the admin panel's **Header versions** page: which version of the shared header each product's live and test site serves, beside the newest release, and what each newer release brought. In order: the products, a JSON array of `{ "id", "label", "repo", "production", "staging", "source", "icon"? }` (`repo` as `owner/name`, the two hosts bare, `source` `lockfile` — the version is the deployed commit's lockfile — or `site-file` — the site publishes it at `/shell-version.json`, as this app's cloud build does; `icon`, optional, names the product's picture on the page — one of the names in `frontend/src/ee/app/(admin)/admin/header-versions/product-icon.tsx`, else its first letter is drawn); and a read-only fine-grained GitHub token with **Contents** and **Deployments** read access to those repositories and the header's own. The server reads each environment's last successful deployment and the version that commit installs, and each newer release's merged changes between its tag and the one before (said in plain words by a model once per release, a platform cost). It also shows the header repository's own explanations of how the header works, read from its default branch, and asks each of the header's world links what it answers. Where each site's worlds row leads comes from the file the site publishes at `/shell-worlds.json` (`{ "worldsRow": true, "worldHrefs": { "<world>": "https://…" or "/path" } }`), and every address a site leads to is asked too, once per check; a site without the file (this app's own, whose hosted header holds its links itself) is shown as not reported. Without the token only the sites' own files answer |
 | `ORGS_ENABLED` | off | Cloud only — multi-tenant organizations (schools / teams) rollout gate. Ships dark; the schema migrations run in every edition regardless |
 | `MCP_ENABLED` | off | Serve the MCP endpoint (§10) |
 | `SPEECH_LENGTH_PRICING_ENABLED` | off | Cloud only — price Text to Speech and Text to Dialogue by length (every started 100 characters, with a minimum per request) instead of a flat amount per request. On at `app.nodaro.ai` and `next.nodaro.ai` since 2026-10-08. See the Credits section of each node's page |
@@ -526,6 +526,48 @@ CORS_ORIGIN=https://nodaro.example.com
 …and restart the stack so the frontend's Vite build picks up the new
 `PUBLIC_URL`.
 
+### Serving other apps on the same host
+
+The container's Caddy also reads every `*.caddy` file in
+`/etc/caddy/sites.d/` as part of its one site
+(`import /etc/caddy/sites.d/*.caddy` in `frontend/Caddyfile`). A deployment
+that serves other web apps beside the editor on the same host adds their
+routes there, in an image built on this one, instead of editing the
+Caddyfile:
+
+```dockerfile
+FROM <this image>
+COPY --from=<other app's build> /dist /srv/other-app
+COPY other-app.caddy /etc/caddy/sites.d/other-app.caddy
+```
+
+```caddy
+# /etc/caddy/sites.d/other-app.caddy
+@other_app path /other /other/*
+handle @other_app {
+	root * /srv/other-app
+	encode zstd gzip
+	try_files {path} /index.html
+	file_server
+}
+```
+
+- A file holds directives of the site itself (`handle`, `redir`, …), not a
+  site of its own. Caddy orders `handle` blocks by their paths, so a route
+  here is answered before the editor's own catch-all.
+- Choose paths that do not overlap the editor's: the API (`/v1/*`), the auth
+  and storage proxies (`/supabase/*`, `/storage/*`), `/.well-known/*`,
+  `/config.js`, `/assets/*` and the editor's own pages. Keep an app's files
+  under its own path too.
+- Match a path exactly and with `/*` (`/other /other/*`), never by a bare
+  prefix: `/other*` would also take `/other-thing`.
+- With no file there (the default; the directory need not exist) the site is
+  exactly as before, and Caddy logs one warning at start, `No files matching
+  import glob pattern`, which is expected.
+- A file Caddy cannot parse keeps Caddy from starting, and then nothing
+  answers on port 3000. Check the layered image with
+  `caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`.
+
 ## 4. First user + admin promotion
 
 Community edition has no admin panel, but Business and Cloud do. To
@@ -589,9 +631,7 @@ build time):
 
 | Var | Description |
 |---|---|
-| `VITE_STUDIO_URL` | Base URL of the external Studio app (studio.nodaro.ai) for "Open in Studio" deep links. Default `https://studio.nodaro.ai`. On Nodaro Cloud with `VITE_SHARED_HEADER=true` it is also the shared header's Studio link; unset, the header keeps its own. |
-| `VITE_HOME_URL` | Nodaro Cloud with `VITE_SHARED_HEADER=true` only: where the shared header's logo links (the home page). Unset = the header's own default; a preview points it at its preview home. Ignored by every other build. |
-| `VITE_TOOLS_URL` | Nodaro Cloud with `VITE_SHARED_HEADER=true` only: the origin serving the header's Explore, Image, Video, Music, Trends, Nodaro Motion and Voice Changer links (`<origin>/explore`, `<origin>/image`, …, `<origin>/video/cast-swap`, `<origin>/voice-changer`). Unset = the header's own defaults; a preview points it at its preview host. Ignored by every other build. |
+| `VITE_STUDIO_URL` | Base URL of the external Studio app (studio.nodaro.ai) for "Open in Studio" deep links. Default `https://studio.nodaro.ai`. |
 | `VITE_PERSON_URL` | Base URL of the external Person app (person.nodaro.ai) for the home screen "Open Person" card. Default `https://person.nodaro.ai`. |
 
 ### Template seeder claim (Cloud)
@@ -782,7 +822,23 @@ optional; each array empty = "keep the default"):
   unavailable until the deployment lists it, instead of available by omission.
   The inversion is scoped to gateable ids — utility nodes (`sticky-note`,
   `preview`) and workflow-internal pseudo-types are never denied by omission,
-  only by an explicit `deny` entry. An admin can further adjust availability at
+  only by an explicit `deny` entry.
+
+  The lists hold on the direct API too: every route that spends credits is
+  checked as the node it runs, whatever its path — `POST /v1/suno/generate` as
+  `suno-generate`, `POST /v1/edit-image` as Upscale Image, Remove Background or
+  Modify Image by its `provider`, `POST /v1/social/publish` as the platform's
+  post node or Publish to Social, an entity's sheet, motion and caption routes
+  as that entity's node, a node's `/continue` and streaming routes as the node.
+  One gateable id has no canvas node: `cast-swap` is Nodaro Motion —
+  `POST /v1/cast-swap` and its routes, and every trend run
+  (`POST /v1/trends/:slug/estimate` and `/runs` answer `node_not_available`
+  where it is not offered, and the MCP tools `cast_swap`, the Full Quality pair
+  and the trend tools are not listed). With `nodes.allow` set, a credit-spending route that
+  is linked to no node is refused with `node_not_available` (the whitelist never
+  allowed it) and logged once; the few routes that run no node (Copilot, which
+  `features.hide` governs; Video Director; a pipeline's stage actions) are not
+  node-gated. An admin can further adjust availability at
   runtime from **Admin → Availability** (full list with per-item toggles); a
   stored runtime override replaces this factory set until "Reset to factory".
   The two layers differ in who they apply to. A **node type left off in Admin →
@@ -795,6 +851,16 @@ optional; each array empty = "keep the default"):
   **on** in Admin → Availability releases it to everyone; a hoster who must
   prevent that should not grant the admin role. Models have no admin exception
   at all: a model turned off is off for admins too.
+
+  A stored override decides only what it was saved knowing. An id that became
+  gateable after the override was stored (`cast-swap`), and a route that is
+  checked as its node only since then (the nested routes above), keep their
+  factory state until the override is saved again — so upgrading never turns
+  off something users had. Admin → Availability says when the stored override
+  predates them; saving it from that page applies its list to them too,
+  including the routes of any node left off. A brand-new node is not such an
+  id: an override that does not list it withholds it from users until it is
+  ticked, as before.
 
   What follows from "hidden from users, kept for admins":
   - A run is judged as the user it executes as. An app or presentation run
@@ -840,19 +906,81 @@ optional; each array empty = "keep the default"):
   `productName` still drives the document title and accessibility name.
 - `brand.description`: replaces the `<meta name="description">` (absent = the
   built-in default is kept)
-- `locale.default` / `locale.picker`
+- `brand.logo`: see [keys read by client apps](#keys-read-by-client-apps) below
+- `locale.default` / `locale.picker` (plus `locale.offered`, below). `picker`
+  may be left out beside the other locale keys and then means shown; before,
+  leaving it out discarded the whole `locale` block, `default` included
 - `outputs.allowPublic`: `false` forces every output private regardless of the
-  user's preference
+  user's preference, and every listing of other people's work answers as if
+  there were none: the public view of `GET /v1/gallery`, the community listings
+  (browse and favorites list nothing; a listing's card, its full detail and a
+  clone are not found) and the `scope: "public"` of the MCP `browse_gallery` and
+  `list_jobs` tools. Work marked public before the switch was set, or carried
+  over in a copied database, is therefore not listed either. A person's own
+  gallery and jobs are unchanged.
 - `voice.allowedGenders`: `["male"]` / `["female"]` / `["neutral"]` (any subset) —
   restrict voice pickers, policy-owned default voices, and TTS / speech requests to
-  these voice genders. Empty (`[]`) = all genders. Enforced backend-side: the
-  `/v1/voices` list and the ElevenLabs shared-voices library are filtered (and the
-  library query gender is forced to the allowed set), a premade voice of a
-  disallowed gender is refused at request validation with `voice_not_available`,
-  every default/fallback voice resolves to the first allowed-gender voice, and the
-  Suno vocal-gender tags in the editor hide the disallowed side. Pair with
-  `nodes.deny: ["voice-design","voice-remix"]` to remove the
-  voice-creation nodes (whose output gender is not knowable up front).
+  these voice genders. Empty (`[]`) = all genders, and nothing below is looked up.
+  Enforced backend-side:
+  - **Lists.** The premade list (`/v1/voices`), the ElevenLabs shared-voices
+    library (`/v1/voices/library`, whose query gender is also forced to the
+    allowed set) and the voice clones list (`/v1/voice-clones`) show only voices
+    whose gender is known and allowed.
+  - **Use.** A voice is judged by its id alone, whatever `voiceType` a request
+    states. Its gender comes from the premade catalog (by name or by id), from
+    the caller's own clone (its recorded gender), or, for a Voice Library voice,
+    from the gender the library stated when this install's library list served
+    it while the lock was set (the library offers no lookup by id). A voice of a
+    disallowed gender is refused with `voice_not_available`, and so is one whose
+    gender none of these can establish, such as a library voice picked before the
+    lock was set. A request is refused before any job is created or any credit
+    reserved. This holds on:
+    - `/v1/text-to-speech` and `/v1/text-to-dialogue`;
+    - `/v1/voice-changer`: the voice a clip is converted into;
+    - `/v1/voice-changer-pro` on an install connected to nodaro.ai: every voice a
+      conversion names, judged under this install's own lock before the job is
+      created and relayed. Under a lock, a voice list the install cannot read is
+      refused too;
+    - `/v1/generate-video` with a character voice (`characterVoices`): every voice
+      the clip speaks in. On a model driven by an audio track (Seedance 2) that is
+      the voice of each line it voices; on a model that speaks natively (Veo)
+      it is the cast's first voice, which the spoken clip is revoiced into;
+    - the Text to Speech, Text to Dialogue and Voice Changer nodes in a workflow
+      run;
+    - a Cloud plugin node that speaks in voices (Voice Changer Pro) in a workflow
+      run: its voices are read with the reader its plugin declares and judged
+      the same way. Under a lock, such a node whose plugin declares no reader is
+      refused (`voice_not_available`, "This node's voices can't be checked on
+      this deployment, so it can't run here.");
+    - speech a film-studio pipeline generates: a shot's dialogue line, the
+      narration and the revoicing of a spoken shot. A refused shot line is
+      skipped like any line that failed (the shot keeps its clip as animated),
+      and a refused narration fails the run;
+    - Cloud plugin routes that check their voices through the plugin toolkit
+      (`tk.voices.assertAllowed`).
+
+    The speech worker checks every voice again before it is sent, so a queued
+    speech job whose voice the lock refuses fails and is refunded.
+  - **Dubbing** is refused under a lock (`voice_not_available`, "Dubbing is not
+    available on this deployment."), on `/v1/dubbing` and the Dubbing node. A dub
+    speaks in clones of its source's speakers, or in voices the dubbing service
+    picks, so none of its voices can be established.
+  - **Defaults.** Every default/fallback voice resolves to the first
+    allowed-gender voice, including the voice a request sends when it names
+    none. The Suno vocal-gender tags in the editor hide the disallowed side.
+
+  Pair with `nodes.deny: ["voice-design","voice-remix"]` to remove the
+  voice-creation nodes (whose output gender is not knowable up front), and with
+  `"dubbing"` there to remove the Dubbing node a lock refuses. The lock judges
+  voices this platform picks; it does not judge:
+  - an audio track a request provides (Speech to Video and Lip Sync voice it as
+    given and select no voice);
+  - speech a video model generates in its own voice, including a natively
+    spoken clip whose revoice failed, and a film-studio shot whose revoice the
+    lock refused (the shot keeps the model's voice);
+  - the AI Avatar node's voices in its text mode, which come from that node's
+    own voice catalog;
+  - a Cloud plugin lane, until it checks its voices through the toolkit.
 - `features` — whole features this deployment switches off:
   `{"features":{"hide":["copilot","presentation"]}}`. `copilot` removes the
   Workflow Copilot everywhere — the canvas rail and its collapsed tab, the
@@ -894,7 +1022,18 @@ optional; each array empty = "keep the default"):
     Consequences when set: every reservation debits the payer account
     (ownership and galleries stay the requester's); requester tier gates run
     at the payer account's grade, with watermarking and daily caps off;
-    per-user storage quotas stop enforcing (usage is still tracked); a
+    **every user's plan is the payer account's** (decided 2026-11-08). Every
+    user on the instance is stored on the free tier, so the plan the API
+    reports for a user (`tier` and `effectiveTier` on `GET /v1/user/credits`,
+    `GET /v1/credits/balance`, `GET /v1/me`, `GET /v1/user/settings` and
+    `GET /v1/billing/subscription`) is the payer account's grade instead. A
+    pay-as-you-go billing account reads `tier: "free"`, `effectiveTier:
+    "payg"`. The plan's features follow it too: private outputs, collection
+    caps, and pipeline budgets and limits. The free-tier rules never apply:
+    no daily cap (`dailyLimit: null`), and no app-credit requirement on
+    running a published app. Balances, allocations and billing are unchanged;
+    per-user storage quotas stop enforcing (usage is still tracked, and
+    `GET /v1/storage/status` reports `limitBytes: null`, unlimited); a
     requester's own card is never auto-recharged (see the billing page below
     for the payer's); and `/usage` shows each user their own
     consumption for the period, plus their own allowance as soon as a payer is
@@ -903,6 +1042,19 @@ optional; each array empty = "keep the default"):
     the payer's balance. The value is backend-only: it is stripped from
     `/config.js`, and the browser learns only a boolean `deploymentPayer` flag
     from `GET /v1/billing/surface`.
+    **Media retention** (decided 2026-11-08): the payer holds the plan, so every
+    user on the instance is stored on the free tier. The nightly cleanups that
+    go by a user's own plan therefore do not run while a payer is set. These are
+    the free-tier cleanup of media older than 60 days and the cleanup after a
+    canceled subscription. Every user's media is kept, the payer account's own
+    included, whatever plan the payer account is on: library items keep their
+    files and job results keep their links. A payer account on the free tier is
+    logged as a misconfiguration on every run (`[cleanup] … MISCONFIGURATION:
+    the deployment payer account … is on the free tier`) and still turns no
+    cleanup on, and neither does a payer account the cleanup cannot read.
+    Cleanups that do not go by a plan run as on any deployment: the Trash purge,
+    soft-deleted locations, temporary files. Whether a file is removed from
+    storage at all is the separate `STORAGE_DELETES` setting.
     The payer account gets a **billing page** (`/billing-admin`) that no
     other account can reach: it shows the pool, the per-user allowances and
     the grant history, and — when `STRIPE_SECRET_KEY` is set — lets the payer
@@ -998,7 +1150,15 @@ packages rather than read from the environment.) The clause lives in the
 deployment's own registered `PromptPolicy` module, applied by the backend
 registry in `backend/src/lib/prompt-policy.ts`; the published `@nodaro/prompts`
 package stays content-free, enforced by its `content-free-contract` guard test
-(the package source may not read `process.env`).
+(the package source may not read `process.env`). A prompt that a Cloud plugin
+assembles itself reaches the same registry through the plugin toolkit's
+`tk.prompts.applyPolicies`; such a lane is policed once its plugin calls that
+member at its final assembly point. The toolkit's music generation takes the
+vocal gender and negative style that call returns for a music prompt and sends
+both to the provider, as the platform's own music lane does; it applies no
+policy itself, so a music prompt is policed once.
+
+**Provider content filters (Admin → Provider Safety).** Some providers expose a setting for their own content filter on a model. Where one exists, a platform operator can set it per model: forcing a filter on applies to every run of that model, and a model left alone keeps the request it sends today. Loosening a filter is refused unless the deployment has registered both a content guard and a result check (a check of what a model actually made). Nothing registers a result check yet, so every loosening control is locked today, and Admin says so. Once it is allowed, loosening never applies to a request that carries an input image or video, and never applies to a model that works from a real person's face or body. Anything made on a loosened model stays out of the public gallery. A provider's moderation that it does not expose as a setting cannot be changed from here. A changed setting applies to new runs within a few seconds.
 
 **Job policy (generation gates).** A deployment that must judge generations —
 before they run, or before their output is published — registers a backend
@@ -1010,7 +1170,7 @@ optional checks. The **request** gate (`checkRequest`) sits at the single
 job-insert funnel and is asked before a row or a credit reservation exists; its
 verdict is `{ verdict: "allow" }` or `{ verdict: "block", reason, userMessage? }`,
 and a block answers HTTP 422 `{ error: { code: "job_blocked", message } }` with
-nothing to refund. The **result** gate (`checkResult`) sits at the completion
+nothing to refund. A separate **content guard** ([design note](./design/content-guard.md)) refuses a request on its content at every place that content becomes final, in the same shape. On Cloud it is required: the private plugin build supplies it, and the platform refuses to start without one that can prove it has its word lists (`PRIVATE_MODULES=optional` is the declared degraded boot without it). So **release the plugin build that ships the guard and pin it in `CLOUD_PLUGINS_VERSION` first, then deploy the platform.** Done the other way round, the image build's smoke test or the new version's health check fails and the running version keeps serving. Other editions have no guard, and nothing changes for them. The **result** gate (`checkResult`) sits at the completion
 funnels, asked after the output is written to storage and before the completion
 write, the asset row and the credit commit; its verdicts are `allow`, `flag`,
 `block` and `hold`. A `block` fails the job with a full refund, deletes the
@@ -1052,8 +1212,247 @@ from imported or previously saved workflows. Voice gender restrictions apply
 to picker filters and cached results as well as server results; restricted
 deployments do not show unverified bundled voice placeholders.
 
-Brand **assets** (favicon, logos) are overridden by a Docker static-asset layer,
-not this JSON.
+A deployment can also ship presets of its own, registered at its composition
+root as preset packs. The API's factory catalog (`GET /v1/node-presets/factory`
+and the MCP preset tools) serves them after the bundled presets, or alone when
+`factoryPresets` is `false`. The canvas editor's preset menu reads that
+catalog too, so it lists them; until the catalog arrives, or when it cannot be
+read, the menu shows the bundled presets the profile allows. Each pack preset
+is checked at boot: it may name only
+models this profile's `models` lists offer, only picker IDs the curated
+catalogs offer, and an https example picture or none. A deployment whose packs
+fail the check refuses to start. Design note:
+[`docs/design/preset-pack-seam.md`](design/preset-pack-seam.md).
+
+The editor's own brand **assets** (favicon, logo files) are overridden by a
+Docker static-asset layer, not this JSON; `brand.logo` names a logo for the
+client apps that read it.
+
+### Wording and the page head (`strings`, `brand.favicon`)
+
+Two keys change what the editor shows without a rebuild. Both are **absent
+unless you set them**. With neither set, `/config.js` and `index.html` are byte
+for byte what they are without this feature.
+
+**`strings`: your own wording for the UI strings of the editor, the tools app
+and the voice app, per language.**
+
+```json
+"strings": {
+  "flow": {
+    "en": { "credits.allowanceExceeded": "Your Example Studio allowance is used up. Ask your administrator for more." },
+    "he": { "credits.allowanceExceeded": "נגמרה לכם המכסה. פנו למנהל המערכת שלכם." }
+  }
+}
+```
+
+- The first level names the product whose strings you override: `flow` is the
+  workflow editor, `tools` the tools app and `voice` the voice app. One profile
+  sets your wording in all three, and each app reads only its own block.
+- The keys are that product's own message keys. For `flow` they are in
+  `frontend/src/lib/i18n/en.ts`. Every key whose English text is not blank can
+  be overridden. The blank ones are grammar data (a word's grammatical gender,
+  the gap between joined fragments) and cannot be.
+- An override replaces that one string in that one language. An `en` override
+  is also the English that a language without its own translation of the key
+  falls back to.
+- Every entry is checked at container boot, when the container writes
+  `/config.js`. An entry that fails a check is **dropped, with a
+  `[surface-profile] strings…` warning** in the log. The rest are kept, and a
+  bad entry never stops the deployment from starting. An entry is dropped when:
+  - its key is not one of that product's;
+  - its language is not one you offer: `locale.offered`, or, without it, that
+    product's languages (the editor's are `en`, `he`, `ja`, `ko`, `pt-BR`);
+  - its text is blank, longer than 1,000 characters, or not plain text. Plain
+    text has no HTML (no tag such as `<b>` or `</a>`, no comment, no character
+    reference such as `&amp;`: the editor shows text exactly as written), no
+    control character other than a line break, and no bidi embedding or
+    override character (U+202A to U+202E). The marks and isolates that
+    right-to-left text uses are fine;
+  - its `{placeholders}` are not exactly those of the English string. Every
+    placeholder stays and none is added; their order may change.
+- The list of keys comes from each product's own build, which leaves
+  `ui-strings-manifest.<product>.json` beside its `index.html` (keys and
+  placeholder names only, no text). The container reads every product's file
+  from the editor's build directory (`frontend/dist`, where the editor's
+  `ui-strings-manifest.flow.json` already is). So if you compose the tools app
+  or the voice app into one image with the editor, copy that app's manifest
+  file there, next to the editor's own.
+- If a product's file is missing, as on a local development run or in an image
+  that did not copy it, the deployment still starts. That product's overrides
+  are dropped, with one warning, and the other products keep theirs.
+- One product's overrides may hold at most 64 KiB of text; a larger block is
+  dropped as a whole. `/config.js` loads before every page renders, and the
+  container hands the whole profile to its writer as a single environment
+  variable, which Linux caps at 128 KiB. So if the profile with its overrides,
+  every product's together, would pass 120 KiB, all the overrides are dropped,
+  and nothing else.
+- `/config.js` loads before the app, so the editor shows your wording from its
+  first render. Messages the server sends, and the label tables keyed by
+  English text (node headers, handle names, model descriptions), are not
+  message keys and are not covered.
+- A platform upgrade can remove or rename a key. Your override for it is then
+  dropped, with a warning at boot, so check the boot log after an upgrade.
+
+**`brand.favicon`, and the brand in the page head.** At container start, right
+after it writes `/config.js`, the container writes your brand into the built
+`index.html`, so crawlers, link previews and the browser tab show it before any
+script runs:
+
+- `<title>` takes `brand.productName` (left alone while it is `Nodaro`);
+- `<meta name="description">` takes `brand.description`;
+- the icon links take `brand.favicon`: one path on this site, or a list of up to
+  four (`["/brand/favicon.svg", "/brand/favicon.png"]`). Each path becomes a
+  `<link rel="icon">`, typed from its extension, and every platform icon link
+  is removed, the home-screen `apple-touch-icon` included. A path to another
+  site (`https://…`, `//…`), or one with spaces, quotes or angle brackets, is
+  dropped with a warning. You still ship the icon files yourself (the
+  static-asset layer above). Give them versioned names, because static images
+  are cached for a year.
+
+Only those three are touched; every other byte of the built file, Vite's hashed
+asset references included, stays as built. A file that has lost one of them (no
+`<title>`, two descriptions, no icon link) is left exactly as built, and the log
+says `[start.sh] brand head NOT applied: …`. With no brand set, the file is not
+written at all. Notes:
+
+- `brand` needs its `productName`: a `brand` block without one is ignored as a
+  whole.
+- A request for `/favicon.ico` itself (some crawlers send one) is still answered
+  with the platform's icon.
+- The head is written on each container start. A new container (every deploy
+  makes one) starts again from the built file.
+
+Example (a Hebrew-first deployment with its own name, description, icons and
+out-of-credits wording):
+
+```bash
+NODARO_SURFACE_PROFILE={"brand":{"productName":"Example Studio","description":"Workflows by Example Studio","favicon":["/brand/favicon.svg","/brand/favicon.png"]},"locale":{"default":"he","offered":["he","en"]},"strings":{"flow":{"en":{"credits.allowanceExceeded":"Your Example Studio allowance is used up. Ask your administrator for more."},"he":{"credits.allowanceExceeded":"נגמרה לכם המכסה. פנו למנהל המערכת שלכם."}}}}
+```
+
+### Keys read by client apps
+
+These keys are for the other products served from the same site as the
+editor — the shared header, its worlds and their pickers — which read
+`/config.js` through the published `@nodaro/shared/runtime-config` contract.
+Each is **absent unless you set it**, so `/config.js` stays exactly as it was
+until you do, and an absent key keeps today's behaviour. **The platform does
+not enforce them itself yet**, with one exception: `imports.links: false` is
+enforced by the server (below). The editor itself reads `header` and the keys of
+its white-label header (below). A malformed value of a key that limits what
+visitors can do falls to its restrictive side, with a warning; a malformed
+logo is dropped with a warning and the rest of `brand` is kept.
+
+- `worlds`: `{ "allow": [...], "home": "...", "order": [...] }` — the worlds the
+  shared header offers. World ids: `explore`, `image`, `video`, `music`,
+  `trends`, `motion`, `voice`, `app` (the workflow editor) and `studio`.
+  - `allow`: when present, exactly the worlds offered. Unlike the lists above,
+    **presence is what narrows**: `[]` offers no world, and so does a list whose
+    ids are all unknown (unknown ids are dropped with a warning). Leave `allow`
+    out to offer every world. A `worlds` value that is not an object, or an
+    `allow` that is not a list, offers no world.
+  - `home`: the world a visit to the site's root lands on. Dropped, with a
+    warning, when `allow` does not include it.
+  - `order`: the display order; worlds it leaves out follow in the order
+    above.
+
+  A world is also offered only while every node type it runs is available to
+  the viewer (`video`, for example, runs `generate-video` and `text-to-video`).
+  `GET /v1/surface/availability` answers both conditions per viewer, as
+  `worlds: [{ id, enabled }]` in this order (see
+  [api-integration.md](./api-integration.md#what-this-deployment-offers-the-caller)).
+- `imports.links`: `false` = media may not be imported from a link to another
+  site. Default `true`. Accepts `true` / `false` / `"true"` / `"false"` /
+  `"1"` / `"0"`; any other value, or an `imports` value that is not an object,
+  reads as `false`.
+
+  The client apps hide their link fields when it is `false`, and **the server
+  enforces it** whatever the client sends: an import of a link to another site
+  answers `403 link_imports_disabled` before any job, reservation or fetch. A
+  file of the deployment's own storage is not a link to another site and is
+  never refused (the host alone does not make a link yours: a link that goes
+  through the content network's image transform, or that another URL reader
+  could read differently, counts as another site).
+
+  It covers every lane that imports from a link: `POST /v1/download-video`,
+  `POST /v1/youtube-audio` and `POST /v1/extract-youtube-audio`, the picture and
+  recording imports `POST /v1/media/import-url` and `POST /v1/media/import-recording`,
+  `POST /v1/save-to-storage`, `POST /v1/media/process`, `POST /v1/trim-audio`,
+  `POST /v1/transcribe` and Suno's cover and upload-extend with a link as their
+  source (a video's page or a direct file alike), a dub's `sourceUrl`, the
+  metadata probe `POST /v1/video-metadata`, a workflow's Video URL node (the run
+  is refused before anything runs), the media copied in by a workflow import
+  (reported as skipped, the import itself succeeds), the same routes reached
+  through MCP (`download_youtube_audio` and the other import tools), the SDK and
+  the CLI, and a private plugin's own downloads and link probes.
+
+  It does not, yet, refuse an outside URL given to a media-generation or
+  media-processing route as a source image, video or audio (`POST /v1/generate-video`'s
+  `imageUrl`, `POST /v1/trim-video`'s `videoUrl` and the like). Nor does it
+  cover the display proxy `GET /v1/image-proxy`, the scrapers and site capture
+  (`POST /v1/web-scrape`, `/v1/site-capture`, `/v1/meta-ads-scrape`,
+  `/v1/instagram-scrape`), the length probes `POST /v1/clip-length` and the
+  Seedance reference estimate, publishing or scheduling a post from an outside
+  file, or a self-hosted install's relay to the cloud. On such a deployment
+  those URLs still reach the provider or the deployment's own network, so its
+  network filter still answers for them.
+- `catalogs.images`: the pictures on picker options — `"default"` (the
+  platform's), `"none"` or `"own"` (the deployment's own). Default
+  `"default"`; any other value reads as `"none"`.
+- `locale.offered`: the languages a visitor may pick from, as locale ids
+  (`["he","en"]`), read in the platform's own spelling (`pt-br` becomes
+  `pt-BR`). Unknown ids are dropped with a warning, and a list with none left
+  is ignored (every language stays offered). A `locale.default` the list does
+  not include is warned about at boot.
+- `header`: `"default"`, or `"white-label"` for the deployment's own header
+  without platform links. Any other value reads as `"white-label"`. On an image
+  that carries the shared header (`VITE_SHARED_HEADER` set to `white-label` or
+  `true`), `"white-label"` puts it above the editor in white-label mode, with
+  nothing of Nodaro's in it:
+  - the worlds the profile's `worlds` offers, in its order, narrowed for each
+    viewer by `GET /v1/surface/availability`, each at its path on the same site
+    (`/image`, `/video`, `/music`, `/trends`, `/video/nodaro-motion`,
+    `/voice-changer`, and the editor at `/projects`). Explore and Studio are
+    not drawn;
+  - the deployment's name (`brand.productName`) and logo (`brand.logo`);
+  - its billing: with `billing.selfServe: false` no plans, upgrade, billing or
+    welcome credits. The credit figure is the one the sidebar card shows (the
+    viewer's allowance under a single payer), in the deployment's display unit
+    when one is configured;
+  - its languages (`locale.offered`; no language choice with
+    `locale.picker: false`). The header's language and accessibility cookies
+    stay on the host;
+  - home is the site's root, sign-in is the editor's own `/login`, and the
+    account pages are the editor's own routes.
+
+  The header replaces the sidebar's logo, credit card, account row and
+  language and theme switches, as Nodaro's header does. Absent or
+  `"default"`, every deployment's editor is unchanged.
+- `brand.logo`: the deployment's logo, as a path on this site
+  (`/brand/logo.svg`) or an `https://` URL. A protocol-relative `//host/…`
+  reference, any other scheme (`http:`, `data:`, `javascript:`), and anything
+  with spaces or backslashes is dropped.
+- `auth.requireSignIn`: `true` = no guest visits; a visitor signs in before a
+  product loads. Left out, it is `true` exactly when `auth.methods` names only
+  `sso`. Accepts the same forms as `imports.links`; any other value reads as
+  `true`.
+
+`/config.js` also carries one key the profile does not set. `mediaOrigin` is
+the `https://` origin of `R2_PUBLIC_URL` (any path dropped): the host a
+white-label deployment serves its users' media from. It is written only when
+the profile says `header: "white-label"`. The white-label header then draws
+images from that host as well as from the site and the logo's host, and client
+apps read the same key through the contract. With any other header, or an
+`R2_PUBLIC_URL` that is not `https://`, the key is absent and `/config.js` is
+unchanged. There is nothing to set: it follows `R2_PUBLIC_URL` at the next
+restart.
+
+Example (a single-sign-on deployment with its own header, three worlds and
+no link imports):
+
+```bash
+NODARO_SURFACE_PROFILE={"auth":{"methods":["sso"],"ssoLabel":"Continue"},"header":"white-label","brand":{"productName":"Studio","logo":"/brand/logo.svg","platformLinks":false},"worlds":{"allow":["image","video","app"],"home":"app"},"imports":{"links":false},"catalogs":{"required":true,"factoryPresets":false,"images":"none"},"locale":{"default":"he","offered":["he","en"]}}
+```
 
 ## 6. Updating
 
@@ -1750,6 +2149,44 @@ this configuration without another custom domain on Supabase.
 Unset, the managed proxy is disabled and the bundled auth and REST routes
 keep their existing behavior. To test the gateway locally with Caddy installed,
 run `node --test tools/__tests__/managed-supabase-proxy.test.mjs`.
+
+## Voice previews from the studio origin (`VOICE_PREVIEW_PROXY`)
+
+The voice lists (`GET /v1/voices` and `GET /v1/voices/library`) give each
+voice's `preview_url` as the speech provider's own storage address. On a
+network that filters every browser request by hostname — a white-label
+deployment that serves every product from one host — those addresses are
+blocked, so no voice picker can play a preview. Set `VOICE_PREVIEW_PROXY=true`
+and the lists give each preview as an address on your own host instead,
+`/v1/voices/<voiceId>/preview?src=…&sig=…`, which the backend answers by
+fetching the provider's file and streaming it.
+
+- **The address is signed.** An `<audio src>` sends no bearer, so the
+  signature is the credential: an HMAC, keyed from
+  `INTERNAL_ORCHESTRATOR_SECRET`, over the voice id and the provider's file
+  address. The route fetches only a file the lists gave, for the voice they
+  gave it under, and answers `404` for anything else, before any fetch.
+- **The voice lock applies.** Under a lock (`voice.allowedGenders` in the
+  surface profile) the route refuses a voice the lock refuses — `400
+  voice_not_available`, before any fetch — including an address handed out
+  before the lock was set.
+- **Capped and cached.** Only an `audio/*` file of at most 4 MB is served, the
+  cap held while reading whatever length the provider states; each file is
+  kept in memory for a day (32 MB in all), so the provider is asked once per
+  file. Byte ranges are answered (`206`), which some media players need.
+  Browsers keep a preview for a day (`Cache-Control: private`).
+- **Internal calls are unchanged.** An MCP tool's read of the lists (its client
+  is not a browser on your host) still gets the provider's addresses.
+- **One origin.** The address is a path, so it plays only where the API answers
+  on the same origin as the pages (the default single-container layout). Do not
+  set this on a deployment whose API is on another host.
+- **Saved voices.** A character or creature saved with a voice from these lists
+  keeps the same-site address as its `voice.previewUrl`. It goes on playing
+  while the switch stays on and `INTERNAL_ORCHESTRATOR_SECRET` is unchanged.
+
+Only the exact value `true` enables it. Unset, both lists answer exactly as
+before and `/v1/voices/<voiceId>/preview` answers `404`. Restart to apply. The
+route is described in [api-integration.md](./api-integration.md#voices--clones).
 
 ## See also
 

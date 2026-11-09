@@ -62,7 +62,8 @@ vi.mock(import("@/lib/concurrency-lanes/registry.js"), async (importOriginal) =>
 // ---------------------------------------------------------------------------
 
 import { getPluginEngines, getPluginRecipes, getPluginServices, getPluginSupports, loadPrivatePlugins } from "../load.js"
-import type { NodaroPrivatePlugin, PluginJobLaneClass, PluginToolkit } from "../types.js"
+import { pluginNodeVoiceReaderOf, pluginNodeVoiceReadersLoaded, _resetPluginNodeVoiceReadersForTests } from "../node-voices-registry.js"
+import type { NodaroPrivatePlugin, PluginJobLaneClass, PluginNodeVoiceReader, PluginToolkit } from "../types.js"
 import type { LaneClass } from "@/lib/concurrency-lanes/types.js"
 import {
   laneClassOf,
@@ -612,6 +613,133 @@ describe("supports — what a plugin's own handlers can do (plugin → host)", (
     expect(getPluginSupports()).toEqual({})
 
     errorSpy.mockRestore()
+  })
+})
+
+describe("nodeVoices — how to read the voices a plugin's node speaks in (plugin → host)", () => {
+  beforeEach(() => {
+    mockHasCreditsRef.value = true
+    _resetPluginNodeVoiceReadersForTests()
+  })
+
+  const reader = (voice: string): PluginNodeVoiceReader => () => [voice]
+
+  it("publishes every plugin's readers, last write wins per node type", async () => {
+    await loadPrivatePlugins({
+      importer: async () => ({
+        contractVersion: 1,
+        plugins: [
+          makePlugin({ name: "a", nodeVoices: () => ({ "speaker-node": reader("FromA"), "other-node": reader("Other") }) }),
+          makePlugin({ name: "b", nodeVoices: () => ({ "speaker-node": reader("FromB") }) }),
+        ],
+      }),
+      toolkit: fakeToolkit,
+    })
+
+    expect(pluginNodeVoiceReadersLoaded()).toBe(true)
+    expect(pluginNodeVoiceReaderOf("speaker-node")?.({}, {})).toEqual(["FromB"])
+    expect(pluginNodeVoiceReaderOf("other-node")?.({}, {})).toEqual(["Other"])
+    expect(pluginNodeVoiceReaderOf("unknown-node")).toBeUndefined()
+  })
+
+  it("an older plugin that declares none loads unchanged, with no reader", async () => {
+    const result = await loadPrivatePlugins({
+      importer: async () => ({ contractVersion: 1, plugins: [makePlugin({ name: "a" })] }),
+      toolkit: fakeToolkit,
+    })
+
+    expect(result.loaded).toEqual(["a"])
+    expect(pluginNodeVoiceReadersLoaded()).toBe(true)
+    expect(pluginNodeVoiceReaderOf("voice-changer-pro")).toBeUndefined()
+  })
+
+  it("a declaration that throws or is not an object is logged and dropped; the plugin still loads", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    for (const nodeVoices of [
+      () => {
+        throw new Error("boom")
+      },
+      () => null,
+      () => [reader("X")],
+    ] as unknown as Array<NonNullable<NodaroPrivatePlugin["nodeVoices"]>>) {
+      const result = await loadPrivatePlugins({
+        importer: async () => ({ contractVersion: 1, plugins: [makePlugin({ name: "a", nodeVoices })] }),
+        toolkit: fakeToolkit,
+      })
+      expect(result.loaded).toEqual(["a"])
+      expect(pluginNodeVoiceReaderOf("0")).toBeUndefined()
+      expect(pluginNodeVoiceReaderOf("speaker-node")).toBeUndefined()
+    }
+    expect(warnSpy.mock.calls.filter(([message]) => String(message).includes("nodeVoices()"))).toHaveLength(3)
+    warnSpy.mockRestore()
+  })
+
+  it("an entry that is not a function is refused (logged), and the plugin's other entries stand", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    await loadPrivatePlugins({
+      importer: async () => ({
+        contractVersion: 1,
+        plugins: [makePlugin({ name: "a", nodeVoices: () => ({ "speaker-node": reader("Kept"), "bad-node": ["Voice"] as unknown as PluginNodeVoiceReader }) })],
+      }),
+      toolkit: fakeToolkit,
+    })
+
+    expect(pluginNodeVoiceReaderOf("speaker-node")?.({}, {})).toEqual(["Kept"])
+    expect(pluginNodeVoiceReaderOf("bad-node")).toBeUndefined()
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("bad-node"))
+    warnSpy.mockRestore()
+  })
+
+  it("is cleared when a later load fails or loads nothing, and still counts as loaded", async () => {
+    const declaring = async () => ({
+      contractVersion: 1,
+      plugins: [makePlugin({ name: "a", nodeVoices: () => ({ "speaker-node": reader("X") }) })],
+    })
+    const exit = vi.fn() as unknown as (code: number) => never
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    await loadPrivatePlugins({ importer: declaring, toolkit: fakeToolkit })
+    await loadPrivatePlugins({ importer: async () => { throw new Error("boom") }, exit })
+    expect(pluginNodeVoiceReaderOf("speaker-node")).toBeUndefined()
+    expect(pluginNodeVoiceReadersLoaded()).toBe(true)
+
+    await loadPrivatePlugins({ importer: declaring, toolkit: fakeToolkit })
+    mockHasCreditsRef.value = false
+    await loadPrivatePlugins({})
+    expect(pluginNodeVoiceReaderOf("speaker-node")).toBeUndefined()
+    expect(pluginNodeVoiceReadersLoaded()).toBe(true)
+
+    errorSpy.mockRestore()
+  })
+
+  it("a reader declared by a plugin whose load then fails is not published", async () => {
+    const exit = vi.fn() as unknown as (code: number) => never
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const result = await loadPrivatePlugins({
+      importer: async () => ({
+        contractVersion: 1,
+        plugins: [
+          makePlugin({ name: "a", nodeVoices: () => ({ "speaker-node": reader("X") }) }),
+          makePlugin({
+            name: "b",
+            handlers: () => {
+              throw new Error("init failed")
+            },
+          }),
+        ],
+      }),
+      toolkit: fakeToolkit,
+      exit,
+    })
+
+    // A failed load (fatal on cloud, degraded under PRIVATE_MODULES=optional)
+    // loads no plugin, so none of its readers may stand either.
+    expect(result.loaded).toEqual([])
+    expect(pluginNodeVoiceReaderOf("speaker-node")).toBeUndefined()
+    expect(pluginNodeVoiceReadersLoaded()).toBe(true)
+    errorSpy.mockRestore()
+    warnSpy.mockRestore()
   })
 })
 

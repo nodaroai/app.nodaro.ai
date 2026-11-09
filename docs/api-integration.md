@@ -725,8 +725,12 @@ account-linking rules — is in [External SSO](./sso.md); it is **off** unless
   account-linking rules, mints a one-time Supabase login token, and redirects
   (`302`) to `/sso?sso_token=<token>&next=<same-origin-relative-path>`. The
   browser's `/sso` landing exchanges that token for a session.
-- A `?next=` value is honoured only when it is a same-origin **relative** path;
-  anything else falls back to `/projects` (open-redirect guard).
+- A `?next=` value is honoured only when it is a same-origin **relative** path,
+  as a browser would follow it (`//host`, `/\host` and the like name another
+  site); anything else falls back to `/projects` (open-redirect guard). The
+  landing opens one of the editor's own pages in place and loads any other
+  path on the site in full (a page of another product served from the same
+  host).
 
 Status codes: `401` (bad or replayed assertion), `403` (`account_exists` /
 `email_unverified` / `account_linked_other_provider` /
@@ -1587,7 +1591,7 @@ All errors share the same shape:
 | 403 | `api_tokens_payer_only` | — | On a deployment-payer instance only the billing account may create a personal API token; every other user is refused. Existing tokens stay listable and revocable by their owner. |
 | 403 | `payer_balance_jwt_only` | — | (Deployment-payer instances only) A credit-balance read (`GET /v1/credits/balance`, `GET /v1/user/credits`, `GET /v1/credits/check`) authenticated **as the billing account** with an API token or an OAuth app token. The deployment's pool is the operator's number and is answered only to that account's own browser session — see [§3](#3-public-api-endpoints). No other identity is affected. |
 | 403 | `subscription_required` | — | (Cloud edition only) A pay-as-you-go account tried to spend from a first-party consumer surface (browser session in the studio or another Nodaro app). Payg credits are redeemable via the API/SDK/CLI/MCP — this never fires for token-authenticated calls. Rollout-gated: availability may lag this document. |
-| 403 | `node_not_available` | — | A run of a node this deployment does not offer you (it is hidden or not yet released). On Tighten Episode, Trailer, Clip Pack and Speaker Layout (`POST /v1/tighten-episode`, `POST /v1/episode-trailer`, `POST /v1/clip-pack`, `POST /v1/speaker-layout` and their `/estimate`) also a request with several recordings (`mediaUrls`) or a Master audio (`masterAudioUrl`) while Speaker Map, which they need, is not available to you — not yet enabled on nodaro.ai. Refused before anything is probed or charged; send one recording. See [Tighten Episode → Several cameras](./nodes/processing-video/tighten-episode.md#several-cameras), [Trailer → Several cameras](./nodes/processing-video/episode-trailer.md#several-cameras) and [Clip Pack → Several cameras](./nodes/processing-video/clip-pack.md#several-cameras) and [Speaker Layout → Several cameras](./nodes/processing-video/speaker-layout.md#several-cameras). |
+| 403 | `node_not_available` | — | A run of a node this deployment does not offer you (it is hidden or not yet released). Every route that spends credits is checked as the node it runs, whatever its path (`POST /v1/suno/generate` as `suno-generate`; a trend run, `POST /v1/trends/:slug/runs` and `/estimate`, as `cast-swap`, Nodaro Motion). On Tighten Episode, Trailer, Clip Pack and Speaker Layout (`POST /v1/tighten-episode`, `POST /v1/episode-trailer`, `POST /v1/clip-pack`, `POST /v1/speaker-layout` and their `/estimate`) also a request with several recordings (`mediaUrls`) or a Master audio (`masterAudioUrl`) while Speaker Map, which they need, is not available to you — not yet enabled on nodaro.ai. Refused before anything is probed or charged; send one recording. See [Tighten Episode → Several cameras](./nodes/processing-video/tighten-episode.md#several-cameras), [Trailer → Several cameras](./nodes/processing-video/episode-trailer.md#several-cameras) and [Clip Pack → Several cameras](./nodes/processing-video/clip-pack.md#several-cameras) and [Speaker Layout → Several cameras](./nodes/processing-video/speaker-layout.md#several-cameras). |
 | 404 | `not_found` | — | Workflow, execution, or token not found. |
 | 404 | `workspace_not_found` | — | (Cloud edition, organizations) The workspace named by workspace-paid work does not exist (or was deleted mid-flight). Rollout-gated. |
 | 409 | `workspace_archived` | — | (Cloud edition, organizations) Workspace-paid work into an archived workspace. Unarchive it or move the work. Rollout-gated. |
@@ -1595,7 +1599,8 @@ All errors share the same shape:
 | 409 | `workflow_conflict` | `currentVersion`, `currentUpdatedAt`, `currentRecord` | `PATCH /v1/workflows/:id`: the workflow changed since your `expectedVersion` / `expectedUpdatedAt` — merge onto `currentRecord` and save again (see [`workflows.update`](./sdk-reference.md#updateid-input)). An edges-only save (`edges` without `nodes`) that wires a [Video Overlay](./nodes/processing-video/video-overlay.md) layer rewrites that node and returns `409 workflow_conflict` (with `currentVersion` / `currentRecord`) if the workflow changed since it was read — even when you sent no `expectedVersion`; nothing is overwritten and the save is not retried. |
 | 409 | `job_cancelled` | — | A synchronous metered LLM request whose job was cancelled after its credits were held but before its call was sent. The call is never sent and nothing is charged (the hold is refunded). Do not retry it as-is: the job was cancelled on purpose. |
 | 409 | `idempotency_key_reused` | — | A use-case run or its continue (`POST /v1/tighten-episode`, `POST /v1/episode-chapters`, `POST /v1/episode-trailer`, `POST /v1/clip-pack`, `POST /v1/speaker-layout`, and their `/continue`): the `Idempotency-Key` already belongs to one of your jobs that is not a run of that node — a run of another use-case node, or any other kind of job (an image generation, say). Refused; nothing is created or charged. Send a new key. A key that already belongs to a run of the same node answers that run (`202`, `deduped: true`). |
-| 422 | `job_blocked` | — | A job policy registered by this deployment refused the generation before it ran. `message` is user-facing text written by the deployment's policy (or by the platform, when the policy supplies none) — show it as-is. No job was created and nothing was charged. The platform does not retry a refused request; whether the same request would be judged differently is the deployment's policy's business. Only occurs on deployments that register a job policy — see [deployment.md](./deployment.md#surface-profile-nodaro_surface_profile). Two bookkeeping inserts are the honest exception: the Suno voice-persona ownership rows and the connected-cloud LLM mirror row treat a block as best-effort — the operation proceeds and its row is simply not recorded — so a policy blocking one of those neither stops the call nor reaches you as a 422. |
+| 409 | `not_applicable` | — | (Cloud edition, deployment-payer instances) A free-signup-credit route on a deployment where one billing account pays for every run: `POST /v1/credits/claim-signup-grant`, `POST /v1/credits/welcome-offer/claim` and `POST /v1/credits/welcome-offer/seen`, and an administrator's restore or take-back of a free grant. Free signup credits do not apply there, so nothing is read, recorded or granted. Nothing to retry: a client that claims on every page load can ignore it. |
+| 422 | `job_blocked` | — | A job policy or content guard registered by this deployment refused the generation before it ran. `message` is user-facing text written by the deployment's policy (or by the platform, when the policy supplies none) — show it as-is. No job was created and nothing was charged. The platform does not retry a refused request; whether the same request would be judged differently is the deployment's policy's business. Only occurs on deployments that register a job policy — see [deployment.md](./deployment.md#surface-profile-nodaro_surface_profile). Two bookkeeping inserts are the honest exception: the Suno voice-persona ownership rows and the connected-cloud LLM mirror row treat a block as best-effort — the operation proceeds and its row is simply not recorded — so a policy blocking one of those neither stops the call nor reaches you as a 422. |
 | 422 | `upload_blocked` | — | An upload policy registered by this deployment refused the upload before it was stored (every byte-carrying ingestion lane: `POST /v1/upload*`, the proxy PUT and the handoff POST). `message` is the deployment's own reason — show it as-is. Nothing was written. Only occurs on deployments that register an upload policy. |
 | 429 | `rate_limited` | — | You've exceeded the per-minute bucket. Back off. |
 | 500 | `internal_error` | — | Server bug or downstream dependency failure. Retry with backoff. |
@@ -2369,6 +2374,10 @@ instance can use: a node the deployment withholds from users is absent, and
 Web Scrape's description leaves out any source it withdraws (its Instagram
 source follows the Instagram node's availability).
 
+### Which models have a content filter forced on
+
+`GET /v1/provider-safety/locks` answers `{ "forcedOn": ["seedance-2"] }`: the models a deployment administrator has forced the content filter on for. A client that offers a filter choice for one of these models should show it on and locked; empty when none is forced.
+
 ### Model catalog
 
 `GET /v1/models` — the REST twin of the MCP `list_models` tool, for plain
@@ -2492,6 +2501,15 @@ analysis call per item. Ask for the whole analysis as one id,
 The answer is that run's figure: the estimate times the items, rounded up and
 marked up once. The served one-call estimate times the items can come to more.
 
+**In the deployment's own unit.** A deployment can show its own unit instead of
+credits. There `POST /v1/credits/model-costs` also answers
+`display: { unit, decimals, data }` — `data` maps the same identifiers to their
+price in that unit, converted by the server (`null` = unavailable) — and
+`GET /v1/credits/model-cost` adds `display: { unit, decimals, creditCost }` to
+its `data`. An identifier listed in `estimates` is an estimate in both. Render
+these as they are rather than converting credits yourself. `display` is absent
+where no unit is configured, and every other field is unchanged.
+
 Cancelling a metered LLM job never charges its whole hold. A job whose call
 has started is charged what it used and the rest is refunded. A job cancelled
 before its call starts is refunded, except for what an earlier attempt of the
@@ -2512,6 +2530,40 @@ charges anything: the hold is refunded.
 | `mode` | e.g. `t2i`, `i2v`, `t2v`, `tts`, `video-analysis` | Filter by operation. |
 | `family` | string | Vendor / lab name, e.g. `Google`, `Bytedance`. |
 | `featuredOnly` | boolean | Featured models only. |
+
+### What this deployment offers the caller
+
+`GET /v1/surface/availability` — what an app should show the person signed
+in: the node types, models, Web Scrape sources and worlds this deployment
+offers them. Unlike the two discovery endpoints above, the answer depends on
+who asks: an admin is still offered a node the admin switch (Admin →
+Availability) withholds from users. So it is answered `Cache-Control:
+private, no-store`. A token is optional; signed out, the answer is a user's.
+No scopes required.
+
+```json
+{
+  "nodes": { "denied": ["social-publish"], "hiddenFromUsers": [] },
+  "models": { "denied": ["flux-flex"] },
+  "webScrapeSources": { "denied": [], "hiddenFromUsers": [] },
+  "worlds": [
+    { "id": "image", "enabled": true },
+    { "id": "video", "enabled": false }
+  ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `nodes.denied` | Node types the caller is not offered. Saving or running one is refused with `node_not_available`. |
+| `nodes.hiddenFromUsers` | For an admin only (empty for anyone else): node types the admin can use and the deployment's users cannot. |
+| `models.denied` | Model ids nobody on this deployment is offered (`model_not_available`). |
+| `webScrapeSources.denied` / `.hiddenFromUsers` | Web Scrape sources withdrawn with the node that governs them (the Instagram source follows the Instagram node), in the same two views. |
+| `worlds` | Every world of the shared site header — `explore`, `image`, `video`, `music`, `trends`, `motion`, `voice`, `app` (the workflow editor) and `studio` — in the deployment's display order (`worlds.order` in its [surface profile](./deployment.md#keys-read-by-client-apps)). A newer server may add a world; handle an id you do not know. |
+| `worlds[].enabled` | `true` when the deployment's `worlds.allow` lets the world through (or sets none) and every node type the world runs is available to the caller: `image` runs `generate-image`, `video` runs `generate-video` and `text-to-video`, `music` runs `suno-generate`, `trends` and `motion` run `cast-swap`, `voice` runs `voice-changer-pro`; `explore`, `app` and `studio` run no node of their own. The table is published as `WORLD_REQUIRED_NODE_TYPES` in `@nodaro/shared/runtime-config`. |
+
+`worlds` reports a deployment's availability settings only. Whether the
+edition serves a node at all is decided where its route is registered.
 
 ### Edit Plan modes
 
@@ -3708,8 +3760,8 @@ are not registered and return 404.
 
 | Method | Path | Query | Purpose |
 |---|---|---|---|
-| `GET` | `/v1/credits/balance` | — | Return `{ total, subscription, topup, tier, effectiveTier }`. `total = subscription + topup`. `effectiveTier` is the entitlement tier actually enforced — `"payg"` = no subscription but purchased credits (all models unlocked, no watermark, no daily cap). On a deployment-payer instance this is the caller's own pool, which does not fund their runs — read the allowance below instead. |
-| `GET` | `/v1/user/credits` | — | The fuller balance payload. On a deployment-payer instance it adds `allowance: { granted, remaining, enforced } \| null` — the caller's per-user allowance in credits, `enforced` telling you whether the deployment refuses runs beyond it (`false` = shown, not enforced). `null` for the billing account itself (it holds the real pool) or when the figure could not be read; never treat `null` as zero. |
+| `GET` | `/v1/credits/balance` | — | Return `{ total, subscription, topup, tier, effectiveTier }`. `total = subscription + topup`. `effectiveTier` is the entitlement tier actually enforced — `"payg"` = no subscription but purchased credits (all models unlocked, no watermark, no daily cap). On a deployment-payer instance this is the caller's own pool, which does not fund their runs — read the allowance below instead; `tier` and `effectiveTier` there are the deployment's plan, the billing account's grade (a pay-as-you-go billing account reads `free` / `payg`). |
+| `GET` | `/v1/user/credits` | — | The fuller balance payload. On a deployment-payer instance `tier`, `effectiveTier` and `features` report the deployment's plan (the billing account's grade, `tier` in its stored form), `dailyLimit` is `null` (no daily cap applies there), and it adds `allowance: { granted, remaining, enforced } \| null` — the caller's per-user allowance in credits, `enforced` telling you whether the deployment refuses runs beyond it (`false` = shown, not enforced). `null` for the billing account itself (it holds the real pool) or when the figure could not be read; never treat `null` as zero. On a deployment that shows its own unit instead of credits it also carries `display`: the same figures converted by the server, `{ unit, decimals, total, subscription, topup, dailySpent, dailyLimit, monthlyAllocation, appCreditsAllowance }` plus `allowance: { granted, remaining }`, `externalWallet: { available }` and `welcomeOffer: { credits }` exactly when the raw keys are present. `unit` is the unit's label and `decimals` the places its figures carry; render them as they are and never convert credits yourself (`null` = unavailable). Absent where no unit is configured, and for the billing account's own read on a deployment-payer instance (its balance is the deployment's pool, kept in credits). Every raw field is unchanged. |
 | `GET` | `/v1/credits/transactions` | `limit` (1–50, default 20), `cursor` (ISO timestamp for page-forward) | Return `{ data: Transaction[], nextCursor }`. Cursor is the `created_at` of the last row; pass it as `?cursor=` on the next request. `nextCursor` is `null` when there are no more rows. |
 | `GET` | `/v1/credits/usage-summary` | `from` / `to` (an ISO timestamp, or a date alone — `2026-10-01` is that whole UTC day; inclusive; default the last 30 days up to now; at most a year apart, else `400`), `bucket` (`day`, `week` or `month`; default `day`) | The period's usage summed for a billing screen: `{ data: UsageSummary }`. On a deployment-payer instance the billing account's own session only (`403 payer_balance_jwt_only` to its tokens). |
 
@@ -3775,7 +3827,10 @@ Two writes answer it:
 Both are **browser session only**: the consent is a person's choice in a
 browser, so they answer a Supabase session from a first-party web app and
 refuse an API token or an OAuth app token with `403 forbidden`. Both answer
-`409 welcome_offer_disabled` while the offer is off. SDK:
+`409 welcome_offer_disabled` while the offer is off. On a deployment where one
+billing account pays for every run, both answer `409 not_applicable` instead and
+record nothing, not even the consent: free signup credits do not apply there
+(`GET /v1/user/credits` carries no `welcomeOffer` there either). SDK:
 `client.credits.claimWelcomeOffer(input)` and
 `client.credits.markWelcomeOfferSeen()`.
 
@@ -3796,7 +3851,9 @@ settings, `{ data: { tier, publicOutputs, promptTemplates, textTemplates,
 preferredLocale, mcpPreferences, showRecentNodes, showMostUsedNodes,
 variableDisplayMode, nodeDoubleClickAction, monthlyStatementEmail } }`, and
 `PATCH /v1/user/settings` changes the fields sent (any subset of the same,
-without `tier`) and answers them as saved. `promptTemplates` and
+without `tier`) and answers them as saved. On a deployment-payer instance
+`tier` is the deployment's plan (the billing account's grade), and turning
+`publicOutputs` off follows that plan. `promptTemplates` and
 `textTemplates` replace the stored value whole; `mcpPreferences` merges one
 axis at a time. `publicOutputs: false` needs the Standard plan or above on
 Nodaro Cloud (`403`); an invalid value is `400 validation_error`, a patch with
@@ -4066,8 +4123,10 @@ subscribed. `effectiveTier` is the tier the account's entitlements follow:
 usually a plan `id` from the list above; `"payg"` (no subscription, credits
 bought — every model, no watermark); or a tier that is not on sale, such as
 `"enterprise"`. Match it against `data[].id` to mark the current plan — no
-match means pay-as-you-go or such a tier. SDK: `client.billing.subscription()`;
-CLI: `nodaro billing subscription`.
+match means pay-as-you-go or such a tier. On a deployment-payer instance
+`effectiveTier` is the deployment's plan (the billing account's grade), and
+`data` is the caller's own subscription, normally `null`. SDK:
+`client.billing.subscription()`; CLI: `nodaro billing subscription`.
 
 ## 13. Job batch polling
 
@@ -4350,7 +4409,11 @@ filters on them with `favorited=true|false` and `rating=good|bad|rated|unrated`
 OAuth app tokens need `assets:write` for the two writes, and `assets:read` or
 `jobs:read` to list your favorites (no-op for user / API-key auth); the job
 reads stay `jobs:read`. A deployment that hides the gallery serves none of the
-`/v1/gallery` routes (they answer `404`). On a server whose database does not
+`/v1/gallery` routes (they answer `404`). A deployment that does not allow
+public work (`outputs.allowPublic: false`, see
+[Deployment](./deployment.md)) answers every `GET /v1/gallery` view but your
+own with an empty page, `{ data: [], nextCursor: null, totalCount: 0 }`: your
+own `userId` with your token still lists your work. On a server whose database does not
 have ratings yet, the rating write and a `rating=` filter answer
 `503 not_available`, and every job reads `rating: null`.
 
@@ -5451,6 +5514,23 @@ submitted, before any redirect; a listed site covers its subdomains. A change
 takes effect within a minute. The list is the deployment's own and is not part
 of the public API.
 
+**A deployment that turned link imports off.** A deployment can refuse imports
+from links to other sites altogether (`imports.links: false` in its surface
+profile, [deployment.md](./deployment.md)). Every import lane then answers
+`403 link_imports_disabled`, before any job, reservation or fetch, for a link
+that is not a file of the deployment's own storage: `POST /v1/download-video`,
+`POST /v1/youtube-audio`, `POST /v1/extract-youtube-audio`,
+`POST /v1/media/import-url`, `POST /v1/media/import-recording`,
+`POST /v1/save-to-storage`, `POST /v1/media/process`, `POST /v1/trim-audio`,
+`POST /v1/transcribe`, Suno's cover and upload-extend, a dub's `sourceUrl`, and
+`POST /v1/video-metadata`. A workflow's Video URL node is refused before the run
+starts, and the media of an imported workflow is left as it was and reported as
+skipped. The refusal has one body everywhere:
+
+```json
+{ "error": { "code": "link_imports_disabled", "message": "Importing media from a link to another site is turned off on this deployment. Upload the file instead." } }
+```
+
 **How many imports carry a declaration.** Admin → Settings → Content rights
 shows, for the last 7, 30 or 90 days, how many imports of a link started and
 how many of them carried a confirmation (a ticked box, or one derived from a
@@ -5498,10 +5578,11 @@ image or likeness, unauthorized voice use, impersonation or identity misuse,
 a privacy violation, or another legal complaint). The routes are public: a
 complainant has no account here. They are the form's own contract and have
 no SDK method, CLI command or MCP tool — a complaint is a person's legal act,
-made on the page. The form is linked from the sign-in page, the sidebar and
-the account menu wherever the deployment has an administrator's screen to
-handle the cases and shows the platform's legal pages; elsewhere it stays at
-its address, unlinked.
+made on the page. The form is linked from the sign-in page and the sidebar
+(and, on a deployment with its own white-label header, that header's account
+menu) wherever the deployment has an administrator's screen to handle the
+cases and shows the platform's legal pages; elsewhere it stays at its address,
+unlinked.
 
 | Method | Route | What it does |
 |--------|-------|--------------|
@@ -6454,6 +6535,11 @@ If your account is over its storage limit the route returns
 `real_person_no_consent` (depicts a real person without consent),
 `inappropriate`, `ip_violation`, or `other`.
 
+On a deployment that does not allow public work (`outputs.allowPublic: false`)
+no listing is served: `GET /v1/community/browse` and `GET /v1/community/favorites`
+answer empty lists, and a listing's card (`GET /v1/community/detail/:slug`), its
+full detail (`…/full`) and a clone answer `404 not_found`.
+
 ```bash
 # Browse the newest shared characters
 curl -s "https://app.nodaro.ai/v1/community/browse?entityType=character&sort=newest" \
@@ -6637,7 +6723,11 @@ until `status` is `completed`, read the result from `output_data`.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/v1/voices` | Premade voice catalog (name, `voice_id`, gender/accent/age metadata). |
-| `GET` | `/v1/voices/library` | Search the shared Voice Library (`?search=`, `?gender=`, `?language=`, … `?page=`, `?page_size=`). |
+| `GET` | `/v1/voices/library` | Search the shared Voice Library (`?search=`, `?gender=`, `?age=`, `?accent=`, `?language=`, `?category=`, `?use_cases=` — one of `advertisement`, `characters_animation`, `conversational`, `entertainment_tv`, `informative_educational`, `narrative_story`, `social_media`; `?descriptives=`, `?featured=`, `?sort=`, `?page=`, `?page_size=`). |
+| `GET` | `/v1/voices/:voiceId/preview` | A voice's preview, served from the deployment's own host — only on a deployment that sets `VOICE_PREVIEW_PROXY=true` (otherwise `404`). There, both lists above give each `preview_url` as this route's signed address (`?src=…&sig=…`) instead of the speech provider's storage address; play it as given. No bearer (an `<audio src>` sends none): the signature is the credential. Answers the audio (`206` for a byte `Range`), `404` for an address the lists did not give, `400 voice_not_available` for a voice the deployment's voice lock refuses, `502 preview_unavailable` when the provider's file cannot be served. |
+| `GET` | `/v1/voices/favorites` | Your favorite voices, newest first: `{ favorites: [{ voiceId, voiceType, name, previewUrl, createdAt }] }`. `voiceId` + `voiceType` are what `POST /v1/text-to-speech` takes as `voice` + `voiceType`; `name` / `previewUrl` are the snapshot you starred the voice with. OAuth apps need `assets:read`. |
+| `PUT` | `/v1/voices/favorites/:voiceId` | Star a voice — body `{ voiceType: "premade" \| "library" \| "custom", name, previewUrl? }` → `{ favorite }`. Idempotent (starring again refreshes the snapshot); `409 limit_reached` past 500 favorites. OAuth apps need `assets:write`. |
+| `DELETE` | `/v1/voices/favorites/:voiceId` | Unstar a voice → `{ success: true }`. Idempotent. OAuth apps need `assets:write`. |
 | `GET` | `/v1/voice-clones` | List the voice clones you created before cloning was retired. |
 | `POST` | `/v1/voice-clones`, `/v1/voice-clones/from-url` | **Retired** — voice cloning is no longer offered. Both answer `410` with `error.code = "voice_cloning_retired"`. Use `/v1/voice-design` for a new custom voice. |
 | `PATCH` | `/v1/voice-clones/:id` | Rename / edit an existing clone. |

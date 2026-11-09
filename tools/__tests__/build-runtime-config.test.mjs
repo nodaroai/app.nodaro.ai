@@ -142,3 +142,286 @@ test("start.sh hands PREVIEW_STOP_RULE_ENABLED to the writer", () => {
   const writerCall = dockerfile.slice(dockerfile.indexOf("RUNTIME_API_URL=\"$RUNTIME_API_URL_EFFECTIVE\""))
   assert.match(writerCall.slice(0, writerCall.indexOf("build-runtime-config.mjs")), /RUNTIME_PREVIEW_STOP_RULE="\$PREVIEW_STOP_RULE_ENABLED"/)
 })
+
+// ── The brand in index.html's head (written at boot after /config.js) ────────
+
+import { chmodSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync as writeFile } from "node:fs"
+import { tmpdir } from "node:os"
+import { applyBrandHead, brandHeadRequest, indexHtmlPath, isSameSitePath, writeBrandHead } from "../build-runtime-config.mjs"
+
+const SOURCE_INDEX = resolve(dirname(ENTRY), "..", "frontend", "index.html")
+const SOURCE_HTML = readFileSync(SOURCE_INDEX, "utf8")
+
+// What `vite build` makes of index.html: the module entry leaves <body>, and
+// the hashed bundle, its preloads and the stylesheets land before </head>.
+const VITE_TAGS = [
+  '    <script type="module" crossorigin src="/assets/index-Ab12Cd34.js"></script>',
+  '    <link rel="modulepreload" crossorigin href="/assets/react-vendor-Ef56Gh78.js">',
+  '    <link rel="stylesheet" crossorigin href="/assets/index-Ij90Kl12.css">',
+]
+const BUILT_HTML = SOURCE_HTML.replace('    <script type="module" src="/src/main.tsx"></script>\n', "").replace("  </head>", `${VITE_TAGS.join("\n")}\n  </head>`)
+
+const BRAND = { productName: "Example Studio", description: "Workflows by Example Studio", favicon: ["/brand/favicon.svg", "/brand/favicon.png"] }
+
+/** The head with the three rewritten anchors taken out, to compare everything else. */
+const outsideAnchors = (html) =>
+  html
+    .split("\n")
+    .filter((line) => !/<title>|<meta\b[^>]*name="description"|<link\b[^>]*rel="(?:icon|apple-touch-icon)"/.test(line))
+    .join("\n")
+
+function tempIndex(html) {
+  const dir = mkdtempSync(resolve(tmpdir(), "brand-head-"))
+  const file = resolve(dir, "index.html")
+  writeFile(file, html)
+  return { dir, file }
+}
+
+function runCli(env, indexFile) {
+  return spawnSync(process.execPath, [ENTRY, "--index-html", indexFile], { encoding: "utf8", env })
+}
+
+test("the built fixture really looks built (sanity for the tests below)", () => {
+  assert.ok(BUILT_HTML.includes("/assets/index-Ab12Cd34.js"))
+  assert.ok(!BUILT_HTML.includes("/src/main.tsx"))
+})
+
+test("INERT: no brand, or the platform's own name, asks nothing of the head and returns the same bytes", () => {
+  for (const brand of [undefined, null, {}, { productName: "Nodaro" }, { productName: "Nodaro", description: "" }, { productName: " " }, { favicon: [] }, { favicon: ["//evil.example/x.svg", "https://x.example/y.png"] }, "x", [1]]) {
+    assert.equal(brandHeadRequest(brand), undefined, JSON.stringify(brand))
+    const out = applyBrandHead(BUILT_HTML, brand)
+    assert.equal(out.html, BUILT_HTML, JSON.stringify(brand))
+    assert.deepEqual(out.problems, [])
+  }
+})
+
+test("INERT end to end: with no brand set the CLI never writes index.html — same bytes, same mtime, no log line", () => {
+  const { dir, file } = tempIndex(BUILT_HTML)
+  try {
+    const mtime = statSync(file).mtimeMs
+    // No surface at all, and a resolved profile whose brand is the platform default.
+    for (const surface of [undefined, JSON.stringify({ nav: { hide: ["gallery"] }, brand: { productName: "Nodaro" } })]) {
+      const env = surface === undefined ? {} : { RUNTIME_SURFACE_PROFILE: surface }
+      const res = runCli(env, file)
+      assert.equal(res.status, 0)
+      assert.match(res.stdout, /^window\.__NODARO_RUNTIME__=\{.*\};\n$/)
+      assert.doesNotMatch(res.stderr, /brand head/)
+    }
+    assert.equal(readFileSync(file, "utf8"), BUILT_HTML)
+    assert.equal(statSync(file).mtimeMs, mtime)
+    assert.deepEqual(readdirSync(dir), ["index.html"])
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a brand rewrites the title, the description and the icons; every other byte stays as built", () => {
+  const { html, applied, problems } = applyBrandHead(BUILT_HTML, BRAND)
+  assert.deepEqual(problems, [])
+  assert.deepEqual(applied, ["title", "description", "favicon"])
+  assert.match(html, /<title>Example Studio<\/title>/)
+  assert.match(html, /<meta name="description" content="Workflows by Example Studio" \/>/)
+  assert.ok(html.includes('    <link rel="icon" type="image/svg+xml" href="/brand/favicon.svg" />\n    <link rel="icon" type="image/png" href="/brand/favicon.png" />\n'))
+  // Every platform icon link is gone, the home-screen one included.
+  assert.doesNotMatch(html, /favicon\.svg\?v=11|favicon\.png\?v=11|favicon\.ico\?v=11|apple-touch-icon|logo-192\.png/)
+  assert.equal(html.match(/<link\b[^>]*rel="icon"/g).length, 2)
+  // Vite's hashed references, byte for byte.
+  for (const tag of VITE_TAGS) assert.ok(html.includes(tag), tag)
+  assert.equal(outsideAnchors(html), outsideAnchors(BUILT_HTML))
+})
+
+test("only the parts the brand sets are touched", () => {
+  const { html, applied } = applyBrandHead(BUILT_HTML, { productName: "Nodaro", description: "Workflows by Example Studio" })
+  assert.deepEqual(applied, ["description"])
+  assert.match(html, /<title>Nodaro\.ai<\/title>/)
+  assert.ok(html.includes('<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=11" />'))
+  const titleOnly = applyBrandHead(BUILT_HTML, { productName: "Example Studio" })
+  assert.deepEqual(titleOnly.applied, ["title"])
+  assert.match(titleOnly.html, /content="Visual workflow platform for AI video generation"/)
+})
+
+test("text is escaped for HTML, and $ patterns in it stay literal", () => {
+  const { html } = applyBrandHead(BUILT_HTML, { productName: "Example & <Studio> $& $1", description: 'Say "hi" & $\' bye' })
+  // `$&` is escaped like any other ampersand; what matters is that it never expanded to the match.
+  assert.match(html, /<title>Example &amp; &lt;Studio&gt; \$&amp; \$1<\/title>/)
+  assert.ok(html.includes('content="Say &quot;hi&quot; &amp; $\' bye"'))
+})
+
+test("icon types come from the extension; an unknown one gets no type", () => {
+  const { html } = applyBrandHead(BUILT_HTML, { productName: "Nodaro", favicon: ["/b/i.ico?v=3", "/b/i.webp", "/b/icon"] })
+  assert.ok(html.includes('<link rel="icon" type="image/x-icon" href="/b/i.ico?v=3" />'))
+  assert.ok(html.includes('<link rel="icon" type="image/webp" href="/b/i.webp" />'))
+  assert.ok(html.includes('<link rel="icon" href="/b/icon" />'))
+})
+
+test("idempotent: the rewrite of a rewritten head is the same head, whichever brand came first", () => {
+  const once = applyBrandHead(BUILT_HTML, BRAND).html
+  assert.equal(applyBrandHead(once, BRAND).html, once)
+  const other = applyBrandHead(BUILT_HTML, { productName: "Other", description: "Other text", favicon: ["/o.png", "/o.svg", "/o.ico"] }).html
+  assert.equal(applyBrandHead(other, BRAND).html, once)
+})
+
+test("a missing or doubled anchor leaves the file exactly as built, and says why", () => {
+  const cases = [
+    [BUILT_HTML.replace(/<title>[^<]*<\/title>/, ""), /<title> found 0 times/],
+    [BUILT_HTML.replace("</title>", "</title>\n    <title>Second</title>"), /<title> found 2 times/],
+    [BUILT_HTML.replace(/<meta name="description"[^>]*>/, ""), /description"> found 0 times/],
+    [BUILT_HTML.replace(/<link rel="(?:icon|apple-touch-icon)"[^>]*>\n/g, ""), /no icon <link>/],
+    [BUILT_HTML.replace("</head>", ""), /no <head>…<\/head>/],
+  ]
+  for (const [html, why] of cases) {
+    const out = applyBrandHead(html, BRAND)
+    assert.equal(out.html, html)
+    assert.deepEqual(out.applied, [])
+    assert.match(out.problems.join("; "), why)
+  }
+})
+
+test("CLI: a brand is written in place, atomically, and logged — stdout is still only /config.js", () => {
+  const { dir, file } = tempIndex(BUILT_HTML)
+  try {
+    const res = runCli({ RUNTIME_SURFACE_PROFILE: JSON.stringify({ brand: BRAND }) }, file)
+    assert.equal(res.status, 0)
+    assert.match(res.stdout, /^window\.__NODARO_RUNTIME__=\{"surface":\{.*\}\};\n$/)
+    assert.match(res.stderr, /brand head applied to .*index\.html: title, description, favicon/)
+    assert.equal(readFileSync(file, "utf8"), applyBrandHead(BUILT_HTML, BRAND).html)
+    assert.deepEqual(readdirSync(dir), ["index.html"])
+    // A second boot of the same container: nothing to change.
+    const again = runCli({ RUNTIME_SURFACE_PROFILE: JSON.stringify({ brand: BRAND }) }, file)
+    assert.match(again.stderr, /brand head already in/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("CLI: anchors missing → the file stays as built, the reason is logged, /config.js and the exit code are untouched", () => {
+  const broken = BUILT_HTML.replace(/<title>[^<]*<\/title>/, "")
+  const { dir, file } = tempIndex(broken)
+  try {
+    const res = runCli({ RUNTIME_SURFACE_PROFILE: JSON.stringify({ brand: BRAND }) }, file)
+    assert.equal(res.status, 0)
+    assert.match(res.stdout, /^window\.__NODARO_RUNTIME__=/)
+    assert.match(res.stderr, /brand head NOT applied: <title> found 0 times/)
+    assert.equal(readFileSync(file, "utf8"), broken)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("CLI: an unreadable index.html is logged, never fatal", () => {
+  const res = runCli({ RUNTIME_SURFACE_PROFILE: JSON.stringify({ brand: BRAND }) }, "/nonexistent/brand-head/index.html")
+  assert.equal(res.status, 0)
+  assert.match(res.stdout, /^window\.__NODARO_RUNTIME__=/)
+  assert.match(res.stderr, /brand head NOT applied: cannot read/)
+})
+
+// The image may leave frontend/dist/ to root while index.html is this user's:
+// no temporary file can be created beside it, but the file itself is writable.
+test("a directory it cannot write into: the head is written in place, no temp file left", { skip: process.getuid?.() === 0 ? "root ignores the mode bits" : false }, () => {
+  const { dir, file } = tempIndex(BUILT_HTML)
+  try {
+    chmodSync(dir, 0o555)
+    const logs = []
+    assert.equal(writeBrandHead(file, BRAND, (l) => logs.push(l)), "applied")
+    assert.equal(readFileSync(file, "utf8"), applyBrandHead(BUILT_HTML, BRAND).html)
+    assert.deepEqual(readdirSync(dir), ["index.html"])
+    assert.match(logs.join("\n"), /brand head applied/)
+  } finally {
+    chmodSync(dir, 0o755)
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("a file it cannot write either: logged as not applied, the file as built", { skip: process.getuid?.() === 0 ? "root ignores the mode bits" : false }, () => {
+  const { dir, file } = tempIndex(BUILT_HTML)
+  try {
+    chmodSync(file, 0o444)
+    chmodSync(dir, 0o555)
+    const logs = []
+    assert.equal(writeBrandHead(file, BRAND, (l) => logs.push(l)), "failed")
+    assert.equal(readFileSync(file, "utf8"), BUILT_HTML)
+    assert.match(logs.join("\n"), /brand head NOT applied/)
+  } finally {
+    chmodSync(dir, 0o755)
+    chmodSync(file, 0o644)
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test("writeBrandHead never throws, even on a path it cannot write", () => {
+  const logs = []
+  assert.equal(writeBrandHead("/nonexistent/x.html", BRAND, (l) => logs.push(l)), "unreadable")
+  assert.equal(writeBrandHead("/nonexistent/x.html", undefined, (l) => logs.push(l)), "inert")
+  assert.equal(logs.length, 1)
+})
+
+test("the default index.html is the image's layout: tools/ beside frontend/dist/", () => {
+  assert.equal(indexHtmlPath([]), resolve(dirname(ENTRY), "..", "frontend", "dist", "index.html"))
+  assert.equal(indexHtmlPath(["--index-html", "/x/index.html"]), "/x/index.html")
+  assert.equal(indexHtmlPath(["--index-html=/y/index.html"]), "/y/index.html")
+})
+
+test("GUARD: frontend/index.html still has every anchor the boot rewrite needs (an edit that loses one fails here)", () => {
+  assert.deepEqual(applyBrandHead(SOURCE_HTML, BRAND).problems, [])
+  assert.deepEqual(applyBrandHead(BUILT_HTML, BRAND).problems, [])
+})
+
+test("isSameSitePath: a path on this site, nothing that could leave it or end an attribute", () => {
+  for (const ok of ["/brand/favicon.svg", "/icon.png?v=2"]) assert.equal(isSameSitePath(ok), true, ok)
+  for (const bad of ["//x.example/a.svg", "/\\x.example/a.svg", "https://x.example/a.svg", "a.svg", '/a".svg', "/a<b>.svg", "/a b.svg", "", 7, undefined]) {
+    assert.equal(isSameSitePath(bad), false, String(bad))
+  }
+})
+
+// The deployment's media origin. The backend decides it — "" except on a
+// white-label surface (print-surface-profile.js --media-origin, covered in
+// backend/src/lib/__tests__/print-surface-profile.test.ts) — and start.sh hands
+// the answer over, so the writer only carries it. A blank is no key.
+test("RUNTIME_MEDIA_ORIGIN lands on mediaOrigin", () => {
+  assert.equal(buildRuntimeConfig({ RUNTIME_MEDIA_ORIGIN: "https://media.example.com" }).mediaOrigin, "https://media.example.com")
+})
+
+test("a blank RUNTIME_MEDIA_ORIGIN leaves no key (every deployment that is not white-label)", () => {
+  for (const value of [undefined, "", "   "]) {
+    assert.ok(!("mediaOrigin" in buildRuntimeConfig({ RUNTIME_MEDIA_ORIGIN: value })), String(value))
+  }
+})
+
+test("start.sh asks the backend for the media origin and hands it to the writer", () => {
+  const dockerfile = readFileSync(resolve(dirname(ENTRY), "..", "Dockerfile"), "utf8")
+  assert.match(
+    dockerfile,
+    /RUNTIME_MEDIA_ORIGIN_RESOLVED="\$\(node \/app\/backend\/dist\/lib\/print-surface-profile\.js --media-origin\)" \|\| RUNTIME_MEDIA_ORIGIN_RESOLVED=""/,
+  )
+  const writerCall = dockerfile.slice(dockerfile.indexOf("RUNTIME_API_URL=\"$RUNTIME_API_URL_EFFECTIVE\""))
+  assert.match(writerCall.slice(0, writerCall.indexOf("build-runtime-config.mjs")), /RUNTIME_MEDIA_ORIGIN="\$RUNTIME_MEDIA_ORIGIN_RESOLVED"/)
+})
+
+// What start.sh passes on Nodaro's own deployments: the API URL, the anon key,
+// and every other input blank (no surface profile, so the backend's media-origin
+// answer is blank too).
+const NODARO_DEPLOYMENT_ENV = {
+  RUNTIME_API_URL: "https://app.nodaro.ai",
+  RUNTIME_SUPABASE_URL: "",
+  RUNTIME_SUPABASE_ANON_KEY: "public-anon-key",
+  RUNTIME_FREECUT_URL: "",
+  RUNTIME_AUDIOMASS_URL: "",
+  RUNTIME_DEFAULT_LOCALE: "",
+  RUNTIME_SURFACE_PROFILE: "",
+  RUNTIME_PREVIEW_STOP_RULE: "",
+}
+// The exact bytes the writer printed for that environment BEFORE this key existed.
+const NODARO_CONFIG_JS = 'window.__NODARO_RUNTIME__={"apiUrl":"https://app.nodaro.ai","supabaseAnonKey":"public-anon-key"};\n'
+const configJs = (env) => spawnSync(process.execPath, [ENTRY], { encoding: "utf8", env }).stdout
+
+test("CLI entry: Nodaro's own /config.js is byte-identical", () => {
+  assert.equal(configJs(NODARO_DEPLOYMENT_ENV), NODARO_CONFIG_JS)
+  assert.equal(configJs({ ...NODARO_DEPLOYMENT_ENV, RUNTIME_MEDIA_ORIGIN: "" }), NODARO_CONFIG_JS)
+})
+
+test("CLI entry: a white-label deployment gets exactly one more key, after every existing byte", () => {
+  assert.equal(
+    configJs({ ...NODARO_DEPLOYMENT_ENV, RUNTIME_MEDIA_ORIGIN: "https://media.example.com" }),
+    'window.__NODARO_RUNTIME__={"apiUrl":"https://app.nodaro.ai","supabaseAnonKey":"public-anon-key","mediaOrigin":"https://media.example.com"};\n',
+  )
+})

@@ -26,6 +26,7 @@ vi.mock("@/lib/supabase.js", () => {
 
 import { meRoutes } from "../me.js"
 import { supabase } from "../../lib/supabase.js"
+import { __resetDeploymentPayerForTests, __setDeploymentPayerForTests } from "../../lib/deployment-payer.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -175,5 +176,24 @@ describe("GET /v1/me", () => {
       tier: "free",
       isAdmin: false,
     })
+  })
+})
+
+describe("GET /v1/me under a deployment payer (decided 2026-11-08)", () => {
+  const PAYER = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+  const storedFree = { id: TEST_USER_ID, email: "ada@example.com", full_name: null, avatar_url: null, tier: "free", subscription_tier: "free" }
+  const getMe = () => app.inject({ method: "GET", url: "/v1/me", headers: { "x-user-id": TEST_USER_ID } })
+  afterEach(() => __resetDeploymentPayerForTests())
+
+  it("reports the payer account's plan, not the free tier every user there is stored at", async () => {
+    __setDeploymentPayerForTests(PAYER, { tierForGates: "pro" })
+    mockProfileSingle({ data: storedFree, error: null })
+    expect((await getMe()).json().data.tier).toBe("pro")
+  })
+
+  it("a payg payer reads as free: payg is never a stored tier", async () => {
+    __setDeploymentPayerForTests(PAYER, { tierForGates: "payg" })
+    mockProfileSingle({ data: storedFree, error: null })
+    expect((await getMe()).json().data.tier).toBe("free")
   })
 })

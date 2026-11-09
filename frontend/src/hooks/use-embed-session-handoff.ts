@@ -27,7 +27,7 @@ export function isEmbedded(): boolean {
  *   1. We announce readiness (`nodaro:embedReady`) to the parent.
  *   2. The parent replies with `{ access_token, refresh_token }` (or
  *      `nodaro:noSession`) — honored only from the parent window itself, on a
- *      first-party origin (`classifyEmbedSessionMessage`).
+ *      first-party origin or this page's own (`classifyEmbedSessionMessage`).
  *   3. We adopt the session via `setAuthFromTokens` (works with PKCE — unlike
  *      the abandoned URL-hash handoff, `setSession` needs no code verifier).
  *
@@ -51,9 +51,10 @@ export function useEmbedSessionHandoff(): { awaitingHandoff: boolean } {
     }
 
     // Only the page that frames this one (`window.parent`, by identity), on a
-    // first-party origin, may hand over a session. Anything else is ignored.
+    // first-party origin or this page's own, may hand over a session.
+    // Anything else is ignored.
     const handler = (event: MessageEvent) => {
-      const verdict = classifyEmbedSessionMessage(event, window.parent)
+      const verdict = classifyEmbedSessionMessage(event, window.parent, { selfOrigin: window.location.origin })
       if (verdict.kind === "session") {
         // On success the user populates via onAuthStateChange and the guard
         // renders — we intentionally DON'T stopWaiting() here, to avoid a

@@ -498,3 +498,31 @@ describe("trend verbs are gated on the edition", () => {
     for (const t of TREND_TOOLS) expect(on).toContain(t)
   })
 })
+
+describe("trend verbs follow Nodaro Motion's availability (cast-swap)", () => {
+  const TREND_TOOLS = ["estimate_trend", "get_trend", "list_trends", "run_trend"]
+  afterEach(async () => {
+    delete process.env.NODARO_SURFACE_PROFILE
+    const { __resetSurfaceProfileCacheForTests } = await import("../../../surface-profile.js")
+    __resetSurfaceProfileCacheForTests()
+  })
+  async function namesUnder(profile: object) {
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify(profile)
+    const { __resetSurfaceProfileCacheForTests } = await import("../../../surface-profile.js")
+    __resetSurfaceProfileCacheForTests()
+    h.credits = true
+    const server = await buildMcpServer({ userId: "u1", scopes: ["jobs:read", "workflows:execute"], clientName: "Claude", fastify: Fastify() })
+    return (await listTools(server)).map((t) => t.name)
+  }
+
+  it("are not listed — nor cast_swap and its Full Quality — where the deployment does not offer cast-swap", async () => {
+    const names = await namesUnder({ nodes: { allow: ["generate-image"] } })
+    for (const t of [...TREND_TOOLS, "cast_swap", "estimate_full_quality", "full_quality"]) expect(names).not.toContain(t)
+    expect(names).toContain("ping")
+  })
+
+  it("are listed where it does", async () => {
+    const names = await namesUnder({ nodes: { allow: ["generate-image", "cast-swap"] } })
+    for (const t of [...TREND_TOOLS, "cast_swap"]) expect(names).toContain(t)
+  })
+})

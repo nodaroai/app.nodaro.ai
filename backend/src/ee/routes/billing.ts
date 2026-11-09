@@ -31,7 +31,7 @@ import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
 import { rateLimitAddressKey } from "../../lib/client-address.js"
 import { tierColumns } from "../billing/tier-columns.js"
 import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
-import { deploymentPayerId } from "../../lib/deployment-payer.js"
+import { deploymentPayerId, payerCoverage } from "../../lib/deployment-payer.js"
 import { byNewest, invoiceDocument, paymentMethodView, receiptDocument, type PurchaseRow } from "../billing/billing-documents.js"
 import { stripeCustomerIdOf } from "../billing/stripe-customer.js"
 import { grantPaidPlanChange, invoicePriceLines, notePlanCreditPeak } from "../billing/plan-change-credits.js"
@@ -192,19 +192,27 @@ export async function billingRoutes(app: FastifyInstance) {
 
     // effectiveTier needs a profiles lookup — this route historically read
     // only `subscriptions` and returned {data: null} for non-subscribers,
-    // which left payg users indistinguishable from free here.
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("tier, subscription_tier, lifetime_topup_credits")
-      .eq("id", userId)
-      .single()
-    const effectiveTier = profile
-      ? resolveEffectiveTier({
-          tier: (profile.tier as string | null) ?? null,
-          subscription_tier: (profile.subscription_tier as string | null) ?? null,
-          lifetime_topup_credits: (profile.lifetime_topup_credits as number) ?? 0,
-        })
-      : "free"
+    // which left payg users indistinguishable from free here. Under a
+    // deployment payer it is the payer account's grade instead
+    // (`payerCoverage`, decided 2026-11-08), and the user's own row is not read
+    // for it.
+    const covered = payerCoverage()
+    const { data: profile } = covered
+      ? { data: null }
+      : await supabase
+          .from("profiles")
+          .select("tier, subscription_tier, lifetime_topup_credits")
+          .eq("id", userId)
+          .single()
+    const effectiveTier = covered
+      ? covered.tier
+      : profile
+        ? resolveEffectiveTier({
+            tier: (profile.tier as string | null) ?? null,
+            subscription_tier: (profile.subscription_tier as string | null) ?? null,
+            lifetime_topup_credits: (profile.lifetime_topup_credits as number) ?? 0,
+          })
+        : "free"
 
     const { data, error } = await supabase
       .from("subscriptions")

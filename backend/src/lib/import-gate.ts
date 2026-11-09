@@ -28,6 +28,12 @@
  * call without one, and `import-gate-totality.test.ts` names a new yt-dlp
  * lane that does not run through an engine.
  *
+ * In front of all of it, the deployment's own switch for links to outside
+ * content (`lib/link-imports.ts`): every funnel below asks it first, before
+ * the account or a record is read, so a deployment that turned link imports
+ * off refuses them all in one place. A file of the deployment's own storage
+ * is not a link to outside content and is judged as before.
+ *
  * THE PLUGIN LANE IS EXEMPT from the rights part (decided 2026-11-05): a
  * private plugin's own download of a link asks the account's measures and
  * the site's policy like every other, but never the declaration — not with
@@ -53,6 +59,7 @@ import {
 import { ImportSourceError, assertImportSourceAllowed } from "./import-source-policy.js"
 import { AccountMeasureError } from "./account-measure-error.js"
 import { assertImportsAllowed } from "./account-measures.js"
+import { LinkImportsDisabledError, assertLinkImportAllowed } from "./link-imports.js"
 import { recordUnconfirmedImport, type UnconfirmedImport } from "./unconfirmed-imports.js"
 
 /** Who imports, under which confirmation, from which lane. */
@@ -69,11 +76,11 @@ export interface ImportRights {
   readonly authorizationId?: string | null
 }
 
-export type ImportRefusal = AccountMeasureError | ImportSourceError | ContentRightsError
+export type ImportRefusal = AccountMeasureError | ImportSourceError | ContentRightsError | LinkImportsDisabledError
 
 /** True for a refusal the gate itself made (a 403 to a client, a `failed` download to a run). */
 export function isImportRefusal(e: unknown): e is ImportRefusal {
-  return e instanceof AccountMeasureError || e instanceof ImportSourceError || e instanceof ContentRightsError
+  return e instanceof AccountMeasureError || e instanceof ImportSourceError || e instanceof ContentRightsError || e instanceof LinkImportsDisabledError
 }
 
 /**
@@ -103,6 +110,7 @@ export function laneExemptFromRights(lane: RightsLane): boolean {
 
 /** The read half: throws an `ImportRefusal` when the link may not be imported by this account now. */
 export async function requireImportAllowed(url: string, rights: ImportRights): Promise<void> {
+  assertLinkImportAllowed(url)
   requireAccount(rights)
   await assertImportsAllowed(rights.userId)
   await assertImportSourceAllowed(url)
@@ -126,6 +134,7 @@ function unconfirmedOf(url: string, rights: ImportRights): UnconfirmedImport {
  * the download waited for its slot).
  */
 export async function spendImportConfirmation(url: string, rights: ImportRights): Promise<string | null> {
+  assertLinkImportAllowed(url)
   requireAccount(rights)
   await assertImportsAllowed(rights.userId)
   // An exempt lane runs under no confirmation: nothing was read at the read half, nothing is spent or counted here.
@@ -172,6 +181,7 @@ export async function spendImportConfirmation(url: string, rights: ImportRights)
  * spent — and is counted, with no account, when it goes ahead.
  */
 export async function requireAccountlessImportAllowed(url: string, lane: RightsLane): Promise<void> {
+  assertLinkImportAllowed(url)
   await assertImportSourceAllowed(url)
   if (laneExemptFromRights(lane)) return
   await checkRightsConfirmation({ url, userId: "", confirmationId: null, lane, via: null })

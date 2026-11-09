@@ -3,8 +3,10 @@ import { logFfmpegVersion } from "./providers/video/ffmpeg-utils.js"
 import { beginWorkerDrain, inFlightDrainDeadlineMs } from "./lib/worker-drain.js"
 import { createWorkerShutdown } from "./lib/worker-shutdown.js"
 import { loadOverlay } from "./lib/overlay/load.js"
+import { loadContentGuard } from "./lib/content-guard-load.js"
 import { initializeExternalWallet } from "./lib/external-wallet.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
+import { useProviderSafetySettings } from "./lib/provider-safety.js"
 import { startLaneParking } from "./lib/concurrency-lanes/park.js"
 import { startServerOccupancyPublisher } from "./lib/concurrency-lanes/server-occupancy.js"
 
@@ -20,11 +22,13 @@ process.on("uncaughtException", (err) => {
 // packs) before the worker starts consuming jobs — the seams are per-process
 // singletons. No-op + byte-identical when NODARO_OVERLAY_PACKAGE is unset.
 await loadOverlay()
+await loadContentGuard()
 await initializeExternalWallet(true)
 
 // Mainline prompt policies run AFTER the overlay's (registration order):
 // the minor-age floor is a platform safety invariant, not deployment content.
 registerMainlinePromptPolicies()
+useProviderSafetySettings()
 
 // Concurrency lanes: promote this queue's parked jobs when a slot is reserved
 // for them (a release in any process publishes the wake), and wake every

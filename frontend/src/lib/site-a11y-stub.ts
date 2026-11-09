@@ -6,3 +6,6 @@
  * (`lib/accessibility-preferences.ts`).
  */
 export const sharedAccessibility: null = null
+
+/** No header, so no stylesheet of the header's. */
+export const a11yStylesheet: null = null

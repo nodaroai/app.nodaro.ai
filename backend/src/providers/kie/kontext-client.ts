@@ -19,6 +19,7 @@ import {
   type VeoRecordInfoResponse,
 } from "./client.js"
 import { providerFetch } from "../egress.js"
+import { applyProviderSafety, kieSafetyEntry } from "../../lib/provider-safety.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 
@@ -38,7 +39,8 @@ export async function runFluxKontextTask(
     )
   }
 
-  const requestBody = { model, ...input }
+  // The admin's content-filter setting for this model, if any (lib/provider-safety.ts).
+  const requestBody = { model, ...(await applyProviderSafety(kieSafetyEntry(model, reconcileOpts?.modelKey), input)) }
 
   if (DEBUG) {
     console.log(`[KIE.ai Kontext] Creating Kontext task with model: ${model}`)

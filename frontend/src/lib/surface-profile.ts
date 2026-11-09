@@ -1,8 +1,12 @@
+import type { RuntimeSurfaceStrings, SurfaceCatalogImages, SurfaceHeaderMode, WorldId } from "@nodaro/shared/runtime-config"
+
 /**
  * Frontend mirror of backend/src/lib/surface-profile.ts. Two copies + a drift
  * test (surface-profile-drift.test.ts), same rationale as cloud-only-nodes.ts.
  * The browser reads the already-validated profile from /config.js — no Zod
- * here; the backend is the authority.
+ * here; the backend is the authority. Products outside this repo read the same
+ * projection through @nodaro/shared/runtime-config, which also owns the world
+ * ids and the rules every reader shares.
  */
 export type NavKey = "gallery" | "explore" | "pricing" | "templates" | "apps" | "community" | "integrations"
 /** Mirror of the backend's FeatureKey — whole features a deployment switches
@@ -42,21 +46,36 @@ export interface SurfaceBilling {
   selfServe: boolean
 }
 
+/** See the backend twin: `allow`, when PRESENT, is exactly the worlds offered (`[]` offers none). */
+export interface SurfaceWorlds {
+  allow?: WorldId[]
+  home?: WorldId
+  order?: WorldId[]
+}
+
 export interface SurfaceProfile {
   nav: { hide: NavKey[] }
   features: { hide: FeatureKey[] }
   dashboard: { tabs: DashboardTabKey[] }
   nodes: { deny: string[]; allow: string[] }
   models: { deny: string[]; allow: string[] }
-  auth: { methods: AuthMethod[]; ssoLabel?: string }
+  /** `requireSignIn` absent: derived (true exactly when sign-in is SSO-only). */
+  auth: { methods: AuthMethod[]; ssoLabel?: string; requireSignIn?: boolean }
   siblings: { apps: SurfaceSibling[] }
-  brand: { productName: string; description?: string; wordmark?: string; platformLinks?: boolean }
-  locale: { default?: string; picker: boolean }
+  /** `favicon`: the page's icons; the container writes them into index.html at boot, nothing here reads them. */
+  brand: { productName: string; description?: string; wordmark?: string; platformLinks?: boolean; logo?: string; favicon?: string[] }
+  locale: { default?: string; picker: boolean; offered?: string[] }
   outputs: { allowPublic: boolean }
   voice: { allowedGenders: string[] } // B4c — [] = all genders allowed (narrowing only)
   billing: SurfaceBilling
-  catalogs?: { required: boolean; factoryPresets: boolean }
+  catalogs?: { required: boolean; factoryPresets: boolean; images?: SurfaceCatalogImages }
   catalogPolicy?: unknown
+  // Absent unless the deployment set them; the selectors apply the defaults.
+  worlds?: SurfaceWorlds
+  imports?: { links: boolean }
+  header?: SurfaceHeaderMode
+  /** UI-string overrides, validated by the backend; `lib/i18n` lays them over the dictionaries (see `localeText`). */
+  strings?: RuntimeSurfaceStrings
 }
 
 export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
@@ -98,6 +117,10 @@ export function runtimeSurfaceProfile(): SurfaceProfile {
     billing: { ...d.billing, ...o.billing },
     catalogs: { required: false, factoryPresets: true, ...d.catalogs, ...o.catalogs },
     catalogPolicy: o.catalogPolicy ?? d.catalogPolicy,
+    ...(o.worlds ? { worlds: o.worlds } : {}),
+    ...(o.imports ? { imports: o.imports } : {}),
+    ...(o.header ? { header: o.header } : {}),
+    ...(o.strings ? { strings: o.strings } : {}),
   }
 }
 

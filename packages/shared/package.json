@@ -90,6 +90,11 @@
       "import": "./dist/entries/pipeline.js",
       "require": "./dist/entries/pipeline.cjs"
     },
+    "./runtime-config": {
+      "types": "./dist/entries/runtime-config.d.ts",
+      "import": "./dist/entries/runtime-config.js",
+      "require": "./dist/entries/runtime-config.cjs"
+    },
     "./scene3d": {
       "types": "./dist/entries/scene3d.d.ts",
       "import": "./dist/entries/scene3d.js",

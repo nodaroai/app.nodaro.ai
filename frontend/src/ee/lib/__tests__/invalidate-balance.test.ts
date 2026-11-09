@@ -2,8 +2,9 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { join, relative } from "node:path"
 import { QueryClient } from "@tanstack/react-query"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
+import { ACCOUNT_CHANGED_EVENT } from "@/lib/account-changed-event"
 import { queryKeys } from "@/lib/query-keys"
 import { keyUseAt, occurrences, stripComments } from "@/ee/shell/__tests__/query-key-uses"
 import { HEADER_BALANCE_KEY, invalidateBalance } from "../invalidate-balance"
@@ -29,6 +30,17 @@ describe("invalidateBalance", () => {
     expect(qc.getQueryState(queryKeys.credits.balance("u1"))?.isInvalidated).toBe(true)
     expect(qc.getQueryState(HEADER_BALANCE_KEY)?.isInvalidated).toBe(true)
     expect(qc.getQueryState(queryKeys.credits.modelCost("some-model"))?.isInvalidated).toBe(false)
+  })
+
+  it("tells the hosted header too: its balance is its own, kept fresh by this one event", async () => {
+    const heard = vi.fn()
+    window.addEventListener(ACCOUNT_CHANGED_EVENT, heard)
+    try {
+      await invalidateBalance(clientWith("u1"), "u1")
+      expect(heard).toHaveBeenCalledTimes(1)
+    } finally {
+      window.removeEventListener(ACCOUNT_CHANGED_EVENT, heard)
+    }
   })
 
   it("is the literal [\"credits\"] (held to the header's own exported key, both ways, by ee/shell/contract)", () => {

@@ -33,7 +33,7 @@ import { useDeploymentPayerViewer } from "@/ee/hooks/queries/use-deployment-bill
 import { surfaceNavHidden, surfaceTabs, surfaceBillingSelfServe } from "@/lib/surface-selectors"
 import type { DashboardTabKey, NavKey } from "@/lib/surface-profile"
 import { useSidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH } from "./sidebar-context"
-import { useSharedHeaderActive } from "@/lib/shared-header"
+import { useSharedHeaderMode } from "@/lib/shared-header"
 import { SidebarBrandStrip, SidebarHeaderModeStrip } from "./sidebar-brand-strip"
 import { SidebarCreditCard } from "./sidebar-credit-card"
 import { SidebarFooter } from "./sidebar-footer"
@@ -186,7 +186,8 @@ export function AppSidebar({
   // Self-serve purchase off (a prepaid instance): the Pricing/Billing entries
   // are withheld (and the credit card is a plain readout — sidebar-credit-card).
   const selfServe = surfaceBillingSelfServe()
-  const sharedHeader = useSharedHeaderActive()
+  const headerMode = useSharedHeaderMode()
+  const sharedHeader = headerMode !== null
   const [mounted, setMounted] = useState(false)
   const [initializedFromStorage, setInitializedFromStorage] = useState(false)
   const { data: pendingReportsCount = 0 } = useGalleryReportCount()
@@ -361,7 +362,7 @@ export function AppSidebar({
         </nav>
 
         {/* Bottom section */}
-        <SidebarFooter isCollapsed={isCollapsed} isRtl={isRtl} onToggleCollapsed={toggleCollapsed} accountControls={!sharedHeader} />
+        <SidebarFooter isCollapsed={isCollapsed} isRtl={isRtl} onToggleCollapsed={toggleCollapsed} accountControls={!sharedHeader} themeSwitch={headerMode !== "white-label"} />
       </aside>
     </TooltipProvider>
   )

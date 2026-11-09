@@ -1,7 +1,7 @@
 import { useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { createClient } from "@/lib/supabase"
-import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
+import { DEFAULT_SIGN_IN_PATH, followSignInRedirect, takeSignInRedirect } from "@/lib/sign-in-redirect"
 import { isBlockedCallback } from "@/lib/sign-in-error"
 import { LOGIN_POPUP_MESSAGE_TYPE } from "@/lib/popup-message"
 
@@ -22,13 +22,16 @@ export default function AuthCallback() {
     // to the opener via postMessage and close the window.
     const isPopup = !!window.opener
 
-    // Consume the saved redirect URL once (e.g., from /present/:shareToken)
-    let redirectUrl = localStorage.getItem(AUTH_REDIRECT_KEY) ?? "/projects"
-    localStorage.removeItem(AUTH_REDIRECT_KEY)
-    // Validate redirect is a relative path (prevent open redirect)
-    if (!redirectUrl.startsWith("/") || redirectUrl.startsWith("//")) {
-      redirectUrl = "/projects"
-    }
+    // Consume the saved redirect once (e.g., from /present/:shareToken, or a
+    // page of another product on this site) — a path on this site only, the
+    // way the browser would follow it (prevents an open redirect).
+    const redirectUrl = takeSignInRedirect() ?? DEFAULT_SIGN_IN_PATH
+
+    // Set below. Cleared once the sign-in goes on: a full page load keeps this
+    // page mounted until the next document arrives, and the timeout must not
+    // send it to /login meanwhile.
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    let wentOn = false
 
     function onAuthSuccess() {
       if (isPopup) {
@@ -49,7 +52,13 @@ export default function AuthCallback() {
         })
         return
       }
-      navigate(redirectUrl, { replace: true })
+      // This app's own page in place; another product's page on this site by
+      // a full page load (lib/sign-in-redirect.ts). Once: the listener and the
+      // getSession fallback below can both report the same session.
+      if (wentOn) return
+      wentOn = true
+      clearTimeout(timeout)
+      followSignInRedirect(navigate, redirectUrl)
     }
 
     // Supabase automatically exchanges the code/hash tokens via onAuthStateChange.
@@ -69,7 +78,7 @@ export default function AuthCallback() {
     })
 
     // Safety timeout — if nothing happens in 5s, go to login
-    const timeout = setTimeout(() => {
+    timeout = setTimeout(() => {
       if (isPopup) {
         window.close()
         return

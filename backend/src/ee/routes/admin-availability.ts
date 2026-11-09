@@ -8,9 +8,13 @@ import { LLM_MODELS } from "@nodaro/shared/llm-models"
 import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
 import {
   availabilityOverride,
+  gateGeneration,
+  nodesOverrideGeneration,
   saveAvailabilityOverride,
+  GATEABLE_FEATURES,
   GATEABLE_NODE_TYPES,
   GATEABLE_MODEL_IDS,
+  GATING_GENERATION,
   type AvailabilityKind,
 } from "../../lib/availability-override.js"
 
@@ -21,6 +25,11 @@ import {
  * override is active; PUT stores a full enabled-set (or null = reset to
  * factory). The enforcement itself lives in lib/surface-deny.ts — these
  * routes only read/write the override.
+ *
+ * The node list is the canvas nodes plus the gateable features with no node
+ * (Nodaro Motion). An id whose gate is newer than the stored override shows
+ * its FACTORY state — what users get until the next save decides it
+ * (`gating`: the generation the override was saved at, and this code's).
  */
 
 const putBody = z.object({
@@ -41,14 +50,19 @@ export async function adminAvailabilityRoutes(app: FastifyInstance) {
   app.get("/v1/admin/availability", { preHandler: requireAdmin }, async (_req, reply) => {
     const nodeOverride = availabilityOverride("nodes")
     const modelOverride = availabilityOverride("models")
+    const storedGeneration = nodesOverrideGeneration()
 
-    const nodes = NODE_REGISTRY.filter((n) => GATEABLE_NODE_TYPES.has(n.type)).map((n) => ({
-      id: n.type,
-      label: n.label,
-      category: n.category,
-      factoryEnabled: factoryEnabled("nodes", n.type),
-      enabled: nodeOverride ? nodeOverride.has(n.type) : factoryEnabled("nodes", n.type),
-    }))
+    const nodes = [
+      ...NODE_REGISTRY.map((n) => ({ id: n.type, label: n.label, category: n.category })),
+      ...GATEABLE_FEATURES.map((f) => ({ id: f.type, label: f.label, category: f.category })),
+    ]
+      .filter((n) => GATEABLE_NODE_TYPES.has(n.id))
+      .map((n) => ({
+        ...n,
+        factoryEnabled: factoryEnabled("nodes", n.id),
+        // A gate the stored override predates is answered by the factory set.
+        enabled: nodeOverride && gateGeneration(n.id) <= storedGeneration ? nodeOverride.has(n.id) : factoryEnabled("nodes", n.id),
+      }))
 
     const models = [
       ...Object.entries(MODEL_CATALOG).map(([id, entry]) => ({
@@ -66,7 +80,11 @@ export async function adminAvailabilityRoutes(app: FastifyInstance) {
       }))
 
     return reply.send({
-      nodes: { items: nodes, overridden: nodeOverride !== null },
+      nodes: {
+        items: nodes,
+        overridden: nodeOverride !== null,
+        ...(nodeOverride ? { gating: { stored: storedGeneration, current: GATING_GENERATION } } : {}),
+      },
       models: { items: models, overridden: modelOverride !== null },
     })
   })

@@ -17,6 +17,8 @@
  * already-transformed text must be a no-op, achieved with a marker segment.
  */
 
+import { guardAssembledPrompt } from "./content-guard.js"
+
 /** The assembled prompt as the server holds it, just before dispatch. */
 export interface PromptAssembly {
   prompt: string
@@ -55,6 +57,9 @@ export function getRegisteredPromptPolicyIds(): readonly string[] {
 
 /** Run every registered policy in order. No policy registered = identity. */
 export function applyPromptPolicies(a: PromptAssembly): PromptAssembly {
+  // The content guard judges what was asked, so it runs before any policy
+  // rewrites the text. With no guard registered this is one boolean.
+  guardAssembledPrompt(a)
   let out = a
   for (const p of policies) out = p.apply(out)
   return out

@@ -9,8 +9,13 @@ export { CreditsResource } from "../resources/credits.js"
 
 export type {
   UserBalance,
+  BalanceAllowance,
+  BalanceDisplay,
+  DisplayUnitInfo,
   ModelCostsResult,
+  ModelCostsDisplay,
   ModelCostResult,
+  ModelCostDisplay,
   ModelCostError,
   SignupKeys,
   SignupGrantClaimResult,

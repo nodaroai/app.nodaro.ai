@@ -1,3 +1,4 @@
+// @test-reads-none reads only the clips it renders with ffmpeg into its temp dir and the uploads it keeps in memory
 /**
  * Real-ffmpeg integration test for the apply-edl executor (`../apply-edl.ts`).
  *

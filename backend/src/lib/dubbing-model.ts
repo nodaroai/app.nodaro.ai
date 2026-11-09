@@ -19,3 +19,11 @@ export function dubsAsProject(targetLanguage: unknown): boolean {
 
 /** The project API takes an uploaded audio or video file only, never a link the service fetches. */
 export const PROJECT_DUBBING_NEEDS_UPLOAD = "Hebrew dubbing requires an uploaded audio or video file. Import the video first."
+
+/**
+ * What a dub answers under a voice lock (B4c): a dub speaks in clones of its
+ * source's speakers, or in voices the service picks, so none is a voice the
+ * deployment can vouch for, and the lock refuses it (`judgeUnnamedVoices`, with
+ * the lock's code). One sentence for the route, the workflow and the worker.
+ */
+export const DUBBING_VOICE_LOCK_MESSAGE = "Dubbing is not available on this deployment."

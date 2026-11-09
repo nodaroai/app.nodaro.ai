@@ -62,6 +62,9 @@ const MONEY_MARKERS: ReadonlyArray<{ re: RegExp; what: string }> = [
   { re: /setLanesEnforced\(/, what: "switches lane enforcement (every lane limit and provider ceiling)" },
   // Cancelling another account's job refunds its reserved credits to that account.
   { re: /cancelOwnedJob\(/, what: "cancels and refunds a job on its owner's behalf" },
+  // Not money, but the same boundary: what the platform's own provider accounts
+  // are asked to allow is the platform's call, never a customer's admins'.
+  { re: /saveProviderSafetyRow\(/, what: "writes the provider content-filter settings (what the platform's provider accounts are asked to allow)" },
 ]
 
 /**
@@ -176,6 +179,8 @@ describe("money-route totality", () => {
       "PUT /v1/admin/lanes/users/:id",
       "PUT /v1/admin/lanes/settings",
       "POST /v1/admin/lanes/jobs/:jobId/cancel",
+      // Provider content filters (ee/routes/admin-provider-safety.ts).
+      "PUT /v1/admin/provider-safety",
     ]) {
       expect(gatedPaths, `${expected} must carry requirePlatformOperator`).toContain(expected)
     }

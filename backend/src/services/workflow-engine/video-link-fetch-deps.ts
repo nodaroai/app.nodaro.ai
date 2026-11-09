@@ -21,9 +21,11 @@ import { ytMetadataProbe } from "../../providers/video/youtube-video.js"
 import { downloadVideoForRun, withDownloadSlot } from "../../lib/video-download.js"
 import { downloadAudioToR2 } from "../../workers/download-audio.js"
 import { requireImportAllowed, type ImportRights } from "../../lib/import-gate.js"
+import { linkImportRefusal } from "../../lib/link-imports.js"
 import type { VideoLinkFetchDeps } from "./video-link-fetch.js"
 
 export const realVideoLinkFetchDeps: VideoLinkFetchDeps = {
+  linkRefusal: (url) => linkImportRefusal(url)?.message ?? null,
   async probe(url) {
     try {
       return await ytMetadataProbe(url)

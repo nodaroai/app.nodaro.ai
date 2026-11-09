@@ -6,12 +6,16 @@ import { MemoryRouter, Route, Routes } from "react-router-dom"
  * DashboardLayout with and without the shared site header. Off: exactly
  * today's frame (sidebar beside the column, the app's own phone header on
  * non-editor pages). On: the header above the sidebar row — compact on editor
- * pages — and no second phone header; its menu button opens the drawer.
+ * pages. Under the hosted header (Nodaro's own deployments) the app's own
+ * phone bar comes back for its drawer button, without its logo (the header
+ * has no slot to hold it); a white-label header keeps it in its own row and
+ * the app's phone bar stays out.
  */
 
-const gate = { on: false }
+const gate = { mode: null as "default" | "white-label" | null, drawn: false }
 const slotProps: { current: Record<string, unknown> | null } = { current: null }
-vi.mock("@/lib/shared-header", () => ({ sharedHeaderActive: () => gate.on, useSharedHeaderActive: () => gate.on }))
+const phoneBar: { current: Record<string, unknown> | null } = { current: null }
+vi.mock("@/lib/shared-header", () => ({ useSharedHeaderMode: () => gate.mode, useSharedHeaderMounted: () => gate.drawn }))
 vi.mock("@/components/layout/site-header-slot", () => ({
   SiteHeaderSlot: (props: Record<string, unknown>) => {
     slotProps.current = props
@@ -20,7 +24,10 @@ vi.mock("@/components/layout/site-header-slot", () => ({
 }))
 vi.mock("@/components/layout/app-sidebar", () => ({
   AppSidebar: ({ isMobileOpen }: { isMobileOpen: boolean }) => <aside data-testid="sidebar" data-open={String(isMobileOpen)} />,
-  MobileHeader: () => <header data-testid="app-phone-header" />,
+  MobileHeader: (props: Record<string, unknown>) => {
+    phoneBar.current = props
+    return <header data-testid="app-phone-header" />
+  },
   NAV_ITEMS: [],
 }))
 vi.mock("@/components/layout/free-grant-banner-slot", () => ({ FreeGrantBannerSlot: () => null }))
@@ -51,8 +58,10 @@ function at(path: string) {
 
 afterEach(() => {
   cleanup()
-  gate.on = false
+  gate.mode = null
+  gate.drawn = false
   slotProps.current = null
+  phoneBar.current = null
 })
 
 describe("DashboardLayout without the shared header", () => {
@@ -60,6 +69,7 @@ describe("DashboardLayout without the shared header", () => {
     const { container } = at("/projects")
     expect(screen.queryByTestId("site-header")).toBeNull()
     expect(screen.getByTestId("app-phone-header")).toBeInTheDocument()
+    expect(phoneBar.current?.showLogo).toBe(true)
     expect((container.querySelector("[data-testid=sidebar]")?.parentElement as HTMLElement).className).toBe("flex h-screen bg-background")
   })
 
@@ -69,27 +79,85 @@ describe("DashboardLayout without the shared header", () => {
   })
 })
 
-describe("DashboardLayout with the shared header", () => {
-  it("the header sits above the sidebar row, and the app's own phone header is gone", () => {
-    gate.on = true
+describe("DashboardLayout with the hosted header (Nodaro's own deployments)", () => {
+  it("the header sits above the sidebar row", () => {
+    gate.mode = "default"
     const { container } = at("/projects")
     const header = screen.getByTestId("site-header")
     const frame = header.parentElement as HTMLElement
     expect(frame.className).toBe("flex h-screen flex-col bg-background")
     expect(frame.firstElementChild).toBe(header)
     expect(container.querySelector("[data-testid=sidebar]")?.parentElement?.className).toBe("flex min-h-0 flex-1")
-    expect(screen.queryByTestId("app-phone-header")).toBeNull()
     expect(header).toHaveAttribute("data-compact", "false")
   })
 
+  it("the app's phone bar holds the drawer button off the editor, without a second logo", () => {
+    gate.mode = "default"
+    at("/projects")
+    expect(screen.getByTestId("app-phone-header")).toBeInTheDocument()
+    expect(phoneBar.current?.showLogo).toBe(false)
+    act(() => (phoneBar.current?.onMenuClick as () => void)())
+    expect(screen.getByTestId("sidebar")).toHaveAttribute("data-open", "true")
+  })
+
+  it("compact on the editor, where the canvas keeps its height: no phone bar there", () => {
+    gate.mode = "default"
+    at("/projects/p1/workflows/w1")
+    expect(screen.getByTestId("site-header")).toHaveAttribute("data-compact", "true")
+    expect(screen.queryByTestId("app-phone-header")).toBeNull()
+  })
+
+  it("tells the header when the drawer is open, and a header overlay closes the drawer", () => {
+    gate.mode = "default"
+    at("/projects")
+    expect(slotProps.current?.drawerOpen).toBe(false)
+    act(() => (phoneBar.current?.onMenuClick as () => void)())
+    expect(slotProps.current?.drawerOpen).toBe(true)
+    act(() => (slotProps.current?.onHeaderOverlay as () => void)())
+    expect(screen.getByTestId("sidebar")).toHaveAttribute("data-open", "false")
+  })
+})
+
+describe("the skip link", () => {
+  it("stays the app's while the hosted header is still loading", () => {
+    gate.mode = "default"
+    at("/projects")
+    expect(screen.getByRole("link", { name: "Skip to content" })).toBeInTheDocument()
+  })
+
+  it("is the hosted header's own once it has drawn (no second, identical stop)", () => {
+    gate.mode = "default"
+    gate.drawn = true
+    at("/projects")
+    expect(screen.queryByRole("link", { name: "Skip to content" })).toBeNull()
+  })
+
+  it("stays the app's under a white-label header, which draws none", () => {
+    gate.mode = "white-label"
+    gate.drawn = true
+    at("/projects")
+    expect(screen.getByRole("link", { name: "Skip to content" })).toBeInTheDocument()
+  })
+})
+
+describe("DashboardLayout with a white-label header (a deployment of its own)", () => {
+  it("the header sits above the sidebar row, and the app's own phone header stays out", () => {
+    gate.mode = "white-label"
+    const { container } = at("/projects")
+    const header = screen.getByTestId("site-header")
+    expect((header.parentElement as HTMLElement).className).toBe("flex h-screen flex-col bg-background")
+    expect(container.querySelector("[data-testid=sidebar]")?.parentElement?.className).toBe("flex min-h-0 flex-1")
+    expect(screen.queryByTestId("app-phone-header")).toBeNull()
+  })
+
   it("compact on the editor", () => {
-    gate.on = true
+    gate.mode = "white-label"
     at("/projects/p1/workflows/w1")
     expect(screen.getByTestId("site-header")).toHaveAttribute("data-compact", "true")
   })
 
   it("the header's menu button opens the sidebar drawer, and a header overlay closes it", () => {
-    gate.on = true
+    gate.mode = "white-label"
     at("/projects")
     act(() => (slotProps.current?.onOpenMenu as () => void)())
     expect(screen.getByTestId("sidebar")).toHaveAttribute("data-open", "true")

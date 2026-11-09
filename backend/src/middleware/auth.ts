@@ -272,6 +272,13 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; pattern?
   { path: "/v1/download-video/progress", prefix: true },
   { method: "GET", path: "/v1/voices" },
   { method: "GET", path: "/v1/voices/library" },
+  // A voice's preview served from this site (routes/voices.ts, on with
+  // VOICE_PREVIEW_PROXY): an <audio src> sends no bearer, so the signed address
+  // the lists hand out is the credential, checked by the route before anything
+  // is fetched (lib/voice-preview-proxy.ts). One voice-id segment; HEAD too,
+  // since a probe reads headers only.
+  { method: "GET", path: "/v1/voices/:voiceId/preview", pattern: /^\/v1\/voices\/[A-Za-z0-9_-]{1,64}\/preview$/ },
+  { method: "HEAD", path: "/v1/voices/:voiceId/preview", pattern: /^\/v1\/voices\/[A-Za-z0-9_-]{1,64}\/preview$/ },
   // HeyGen catalog: read-only avatar/voice data; published apps render pickers
   // for anonymous viewers, so these MUST be public (auth would 401 them).
   { method: "GET", path: "/v1/heygen/avatars" },

@@ -1,101 +1,23 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyRequest } from "fastify"
+import { z } from "zod"
 import type { TtsProvider } from "@nodaro/shared/models"
 import { config } from "../lib/config.js"
-import { registerVoiceLookup } from "../providers/kie/audio.js"
 import { describeLimitedVoices } from "../providers/provider-keys.js"
 import { ELEVENLABS_BASE_URL } from "../providers/elevenlabs/client.js"
-import { FALLBACK_VOICES, type ElevenLabsVoice } from "../lib/premade-voices.js"
-import { filterVoicesByAllowedGender, clampLibraryGender } from "../lib/voice-policy.js"
+import { getPremadeVoices } from "../lib/premade-voice-catalog.js"
+import { filterVoicesByAllowedGender, clampLibraryGender, voiceNotAvailableBody } from "../lib/voice-policy.js"
+import { recordLibraryVoiceGenders } from "../lib/library-voice-genders.js"
+import { judgeVoicesUnderLock } from "../lib/voice-lock.js"
 import { isModelDenied } from "../lib/surface-deny.js"
-
-// ---------------------------------------------------------------------------
-// In-memory cache (6-hour TTL, stampede-safe)
-// ---------------------------------------------------------------------------
-
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000 // 6 hours
-let cachedVoices: readonly ElevenLabsVoice[] | null = null
-let cacheTimestamp = 0
-let inflight: Promise<readonly ElevenLabsVoice[]> | null = null
-
-// ---------------------------------------------------------------------------
-// Fetch from ElevenLabs API
-// ---------------------------------------------------------------------------
-
-async function fetchVoicesFromApi(): Promise<ElevenLabsVoice[]> {
-  const res = await fetch(
-    `${ELEVENLABS_BASE_URL}/v2/voices?category=premade&page_size=100`,
-    {
-      headers: {
-        "xi-api-key": config.ELEVENLABS_API_KEY,
-        Accept: "application/json",
-      },
-    },
-  )
-
-  if (!res.ok) {
-    throw new Error(`ElevenLabs API error: ${res.status}`)
-  }
-
-  const data = (await res.json()) as {
-    voices: Array<{
-      voice_id: string
-      name: string
-      preview_url: string
-      labels?: Record<string, string>
-      description?: string
-      use_case?: string
-      category?: string
-    }>
-  }
-
-  return data.voices.map((v) => ({
-    voice_id: v.voice_id,
-    name: v.name,
-    preview_url: v.preview_url ?? "",
-    gender: v.labels?.gender ?? "",
-    accent: v.labels?.accent ?? "",
-    age: v.labels?.age ?? "",
-    description: v.labels?.description ?? v.description ?? "",
-    use_case: v.labels?.use_case ?? v.use_case ?? "",
-    category: v.category ?? "premade",
-  }))
-}
-
-async function getVoices(): Promise<readonly ElevenLabsVoice[]> {
-  // No API key — return static fallback
-  if (!config.ELEVENLABS_API_KEY) {
-    registerVoiceLookup(FALLBACK_VOICES)
-    return FALLBACK_VOICES
-  }
-
-  const now = Date.now()
-
-  // Return cached if still valid
-  if (cachedVoices && now - cacheTimestamp < CACHE_TTL_MS) {
-    return cachedVoices
-  }
-
-  // Stampede protection
-  if (inflight) return inflight
-
-  inflight = fetchVoicesFromApi()
-    .then((voices) => {
-      cachedVoices = voices
-      cacheTimestamp = Date.now()
-      // Populate KIE voice UUID→name lookup so TTS can resolve IDs
-      registerVoiceLookup(voices)
-      return voices
-    })
-    .catch((err) => {
-      console.error("[voices] ElevenLabs API failed, using fallback:", err.message)
-      return FALLBACK_VOICES
-    })
-    .finally(() => {
-      inflight = null
-    })
-
-  return inflight
-}
+import { PREVIEW_VOICE_ID } from "../lib/voice-preview-address.js"
+import {
+  PreviewUnavailableError,
+  loadPreview,
+  requestedRange,
+  verifiedPreviewSource,
+  voicePreviewProxyOn,
+  withSameSitePreviews,
+} from "../lib/voice-preview-proxy.js"
 
 // ---------------------------------------------------------------------------
 // Shared voices search cache (5-min TTL, max 200 entries)
@@ -195,15 +117,32 @@ function getSharedCacheKey(params: Record<string, string | undefined>): string {
   return JSON.stringify(params)
 }
 
+/**
+ * The voices as this request should see their previews: on a deployment that
+ * serves them from its own host (`VOICE_PREVIEW_PROXY=true`), each one's
+ * same-site address (lib/voice-preview-proxy.ts); otherwise, and for the
+ * platform's own internal calls (an MCP tool, whose client is not a browser on
+ * this site), the provider's address, as before. Applied on the way out, so
+ * the caches keep the provider's addresses.
+ */
+function forThisSite<T extends { voice_id: string; preview_url: string }>(req: FastifyRequest, voices: readonly T[]): T[] {
+  return voicePreviewProxyOn() && !req.isInternalCall ? withSameSitePreviews(voices) : [...voices]
+}
+
+const previewParams = z.object({ voiceId: z.string().regex(PREVIEW_VOICE_ID) })
+const previewQuery = z.object({ src: z.string(), sig: z.string() })
+const PREVIEW_NOT_FOUND = { error: { code: "not_found", message: "Not found" } } as const
+
 // ---------------------------------------------------------------------------
 // Route
 // ---------------------------------------------------------------------------
 
 export async function voicesRoutes(app: FastifyInstance) {
-  app.get("/v1/voices", async (_req, reply) => {
-    // B4c: narrow the premade catalog to the deployment's allowed voice genders
-    // (inert when voice.allowedGenders is [] — the default).
-    const voices = filterVoicesByAllowedGender(await getVoices())
+  app.get("/v1/voices", async (req, reply) => {
+    // B4c: narrow the premade catalog to the deployment's allowed voice genders;
+    // under a lock a voice with no known gender is not listed (inert when
+    // voice.allowedGenders is [] — the default).
+    const voices = forThisSite(req, filterVoicesByAllowedGender(await getPremadeVoices()))
     // Keyless: the static list still serves generation (TTS runs through the
     // connection or a later-added key), but say WHY it is limited instead of
     // pretending — the silent fallback read as "the picker is just poor"
@@ -251,7 +190,8 @@ export async function voicesRoutes(app: FastifyInstance) {
     const cacheKey = getSharedCacheKey(params)
     const cached = sharedVoiceCache.get(cacheKey)
     if (cached && Date.now() < cached.expiresAt) {
-      return reply.send(withAvailableProviders(cached.data))
+      const page = withAvailableProviders(cached.data)
+      return reply.send({ ...page, voices: forThisSite(req, page.voices) })
     }
 
     try {
@@ -311,9 +251,21 @@ export async function voicesRoutes(app: FastifyInstance) {
         }
       })
 
+      // B4c: the Voice Library has no lookup by voice id, so a voice lock can
+      // only place a library voice this deployment has listed. Remember the
+      // gender the library states for EVERY voice on this page, before the
+      // filter below (so a later change of the lock is judged right); the
+      // lock's resolver reads it when the voice is used (lib/voice-gender.ts).
+      // Written only under a lock. A failed write leaves the voice unknown,
+      // which the lock refuses — so it never fails the listing.
+      await recordLibraryVoiceGenders(voices).catch((err: unknown) => {
+        console.warn("[voices/library] could not record library voice genders:", (err as Error).message)
+      })
+
       // B4c: post-filter the mapped response by allowed genders (defence in
       // depth — the outbound `gender` clamp above is a hint the provider need
-      // not honor). Inert when unrestricted.
+      // not honor). A voice whose gender the library does not state is not
+      // listed under a lock. Inert when unrestricted.
       const result = { voices: filterVoicesByAllowedGender(voices), hasMore: data.has_more ?? false }
 
       // Cache result (clear all on overflow). The cache holds every verified
@@ -323,10 +275,52 @@ export async function voicesRoutes(app: FastifyInstance) {
       }
       sharedVoiceCache.set(cacheKey, { data: result, expiresAt: Date.now() + SHARED_CACHE_TTL_MS })
 
-      return reply.send(withAvailableProviders(result))
+      const page = withAvailableProviders(result)
+      return reply.send({ ...page, voices: forThisSite(req, page.voices) })
     } catch (err) {
       console.error("[voices/library] Failed to fetch shared voices:", (err as Error).message)
       return reply.send({ voices: [], hasMore: false })
     }
+  })
+
+  // A voice's preview, served from this site (VOICE_PREVIEW_PROXY=true): the
+  // provider's file, at the address the lists above gave it. The signed
+  // address is the credential — an <audio src> sends no bearer — so the route
+  // is public (middleware/auth.ts) and fetches only a file the platform
+  // listed, for the voice it listed it under (lib/voice-preview-proxy.ts).
+  // Off: 404, as if there were no such route.
+  app.get("/v1/voices/:voiceId/preview", async (req, reply) => {
+    if (!voicePreviewProxyOn()) return reply.status(404).send(PREVIEW_NOT_FOUND)
+    const params = previewParams.safeParse(req.params)
+    const query = previewQuery.safeParse(req.query)
+    const voiceId = params.success ? params.data.voiceId : ""
+    const upstream = params.success && query.success ? verifiedPreviewSource(voiceId, query.data.src, query.data.sig) : null
+    if (!upstream) return reply.status(404).send(PREVIEW_NOT_FOUND)
+
+    // The voice lock, as the speech routes judge the same voice, before
+    // anything is fetched: an address minted before a lock was set, or for a
+    // voice a lock has since locked out, plays nothing. No lock: nothing read.
+    const verdict = await judgeVoicesUnderLock([voiceId], { userId: req.userId ?? null })
+    if (!verdict.allowed) return reply.status(400).send(voiceNotAvailableBody())
+
+    let file
+    try {
+      file = await loadPreview(upstream)
+    } catch (err) {
+      if (!(err instanceof PreviewUnavailableError)) throw err
+      req.log.warn({ voiceId, reason: err.reason }, "[voices/preview] the provider's preview could not be served")
+      return reply.status(502).send({ error: { code: "preview_unavailable", message: "This voice's preview could not be loaded." } })
+    }
+
+    const size = file.body.byteLength
+    // A day in this browser only: a shared cache would keep serving a preview
+    // after a voice lock refused the voice.
+    reply.header("Content-Type", file.contentType).header("Accept-Ranges", "bytes").header("Cache-Control", "private, max-age=86400")
+    const range = requestedRange(req.headers.range, size)
+    if (range === "unsatisfiable") return reply.status(416).header("Content-Range", `bytes */${size}`).send()
+    if (range) {
+      return reply.status(206).header("Content-Range", `bytes ${range.start}-${range.end}/${size}`).send(file.body.subarray(range.start, range.end + 1))
+    }
+    return reply.send(file.body)
   })
 }

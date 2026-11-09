@@ -12,10 +12,15 @@ import * as sharedA11y from "@nodaroai/shell/a11y"
 import type * as appA11y from "virtual:site-a11y"
 import * as sharedEditor from "@nodaroai/shell/media-editor"
 import type * as appEditor from "virtual:media-editor"
+import * as hostedHeader from "@nodaroai/shell/header"
+import type { PageId } from "@nodaroai/shell/header"
+import { ACCOUNT_CHANGED_EVENT as PACKAGE_ACCOUNT_CHANGED_EVENT } from "@nodaroai/shell/fetch"
+import type * as appHosted from "virtual:hosted-header"
 
 import { HEADER_BALANCE_KEY } from "../../lib/invalidate-balance"
 import { HEADER_QUERY_KEYS } from "../query-keys"
 import type { AccessibilityPreferences, ToggleKey } from "../../../lib/accessibility-preferences"
+import { ACCOUNT_CHANGED_EVENT } from "../../../lib/account-changed-event"
 import type { SiteHeaderProps, SiteHeaderTranslate } from "../types"
 import type * as appEditorTypes from "../media-editor-types"
 
@@ -96,6 +101,25 @@ export const appPrefsFit: Fits<AccessibilityPreferences, sharedA11y.Accessibilit
 export const readAccessibilityFits: appA11y.SharedAccessibility["read"] = sharedA11y.readAccessibility
 export const applySavedFits: appA11y.SharedAccessibility["applySaved"] = sharedA11y.applySavedAccessibility
 export const saveAccessibilityFits: appA11y.SharedAccessibility["save"] = sharedA11y.saveAccessibility
+
+/**
+ * The hosted header (`virtual:hosted-header`, typed by `../hosted-header-virtual.d.ts`):
+ * each name and helper the app uses is the package's, at the type the app uses
+ * it; the two page ids the app says are the contract's; the event that tells
+ * the header the account changed is the package's name, both ways.
+ */
+export const hostedTagIs: typeof appHosted.HEADER_TAG = hostedHeader.HEADER_TAG
+export const hostedEventsAre: typeof appHosted.HEADER_EVENTS = hostedHeader.HEADER_EVENTS
+export const hostedEventsAreBack: typeof hostedHeader.HEADER_EVENTS = {} as typeof appHosted.HEADER_EVENTS
+export const hostedLoaderIs: typeof appHosted.LOADER_URL = hostedHeader.LOADER_URL
+export const hostedFallbackIs: typeof appHosted.HeaderFallback = hostedHeader.HeaderFallback
+export const hostedNavigationIs: typeof appHosted.useHeaderNavigation = hostedHeader.useHeaderNavigation
+export const hostedFailureIs: typeof appHosted.onHeaderFailure = hostedHeader.onHeaderFailure
+export const hostedOverlaysAre: typeof appHosted.closeHeaderOverlays = hostedHeader.closeHeaderOverlays
+export const flowPage: PageId = "flow"
+export const flowCanvasPage: PageId = "flow-canvas"
+export const accountChangedIs: typeof PACKAGE_ACCOUNT_CHANGED_EVENT = ACCOUNT_CHANGED_EVENT
+export const accountChangedIsBack: typeof ACCOUNT_CHANGED_EVENT = PACKAGE_ACCOUNT_CHANGED_EVENT
 
 /**
  * The shared media editor (`virtual:media-editor`, typed by

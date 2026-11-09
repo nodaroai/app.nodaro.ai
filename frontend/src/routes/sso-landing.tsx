@@ -2,20 +2,38 @@ import { useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { createClient } from "@/lib/supabase"
 import { useT } from "@/lib/i18n"
+import { DEFAULT_SIGN_IN_PATH, followSignInRedirect, sameSitePath, takeSignInRedirect } from "@/lib/sign-in-redirect"
+
+/**
+ * Where an SSO sign-in goes once its session exists. The identity provider
+ * names a destination by appending `&next=` on its way back; the SSO hop
+ * forwards nothing else, so the login page's own `?redirect=` (kept in
+ * localStorage, as for the Google round trip) is what a sign-in begun there
+ * goes on to, whenever the provider named no other page. `next` arrives as
+ * `/projects` when it was absent or unsafe (the exchange route and the
+ * index.html stash both default it), so that is the case the kept
+ * destination fills. The kept destination is consumed either way: a finished
+ * sign-in leaves nothing behind for the next one.
+ */
+function ssoDestination(next: string | undefined): string {
+  const named = sameSitePath(next)
+  const kept = takeSignInRedirect()
+  if (named !== null && named !== DEFAULT_SIGN_IN_PATH) return named
+  return kept ?? DEFAULT_SIGN_IN_PATH
+}
 
 /** SSO exchange landing (B6). The backend has already verified the assertion,
  *  enforced linking rules, and minted a one-time Supabase token; the
  *  index.html pre-module script stashed it into window.__NODARO_SSO__ and
- *  cleaned the URL. Here we redeem it for a session and navigate on. */
+ *  cleaned the URL. Here we redeem it for a session and go on: this app's own
+ *  page in place, another product's page on this site by a full page load
+ *  (lib/sign-in-redirect.ts). */
 export default function SsoLandingPage() {
   const navigate = useNavigate()
   const t = useT()
 
   useEffect(() => {
     const stashed = (window as unknown as { __NODARO_SSO__?: { token: string; next: string } }).__NODARO_SSO__
-    // Same-origin relative guard, again (defence in depth vs. the inline script).
-    let next = stashed?.next ?? "/projects"
-    if (!next.startsWith("/") || next.startsWith("//")) next = "/projects"
 
     if (!stashed?.token) {
       navigate("/login", { replace: true })
@@ -29,7 +47,13 @@ export default function SsoLandingPage() {
     supabase.auth
       .verifyOtp({ token_hash: stashed.token, type: "email" })
       .then(({ error }) => {
-        navigate(error ? "/login" : next, { replace: true })
+        if (error) {
+          navigate("/login", { replace: true })
+          return
+        }
+        // Same-origin path guard, again (defence in depth vs. the inline
+        // script), the way the browser would follow it.
+        followSignInRedirect(navigate, ssoDestination(stashed.next))
       })
       .catch(() => navigate("/login", { replace: true }))
   }, [navigate])

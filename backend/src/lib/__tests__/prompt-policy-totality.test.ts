@@ -24,6 +24,16 @@ import { unitRouteFiles } from "../unit-source-files.js"
  * media-generation prompt (segmentation targets, LLM/plan lanes, spoken TTS
  * content) must NOT be policed — a modesty clause inside a mask target or a
  * structured-output system prompt is corruption, not enforcement.
+ *
+ * The PLUGIN lane (Cloud plugins: the gvp/evp pipelines, Nodaro Motion,
+ * trends) assembles its prompts in the private plugin package, which this
+ * repo cannot scan. Its door into the same registry is the toolkit member
+ * `tk.prompts.applyPolicies` (`lib/private-plugins/toolkit.ts`), which runs
+ * `applyPromptPolicies` at call time; half (d) pins that wiring here. Whether
+ * every plugin provider dispatch actually calls it is enforced by the plugin
+ * repo's own totality test, never by this file. A plugin prompt that goes on
+ * through `tk.http.internalRequest` to a core route is policed again there,
+ * which the policy author's idempotence contract makes a no-op.
  */
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -79,7 +89,7 @@ const EXCLUDED_ROUTES: Readonly<Record<string, string>> = {
   "generate-face.ts": "polices at the entity image chokepoint (workers/handlers/entity.ts makeEntityImageHandler)",
   "generate-music.ts": "polices at the music assembly point (workers/handlers/suno.ts)",
   "suno.ts": "voice-persona routes; every music prompt assembles + polices in workers/handlers/suno.ts",
-  "pipelines.ts": "film-studio pipeline — assembly lives in the Cloud plugin lane (documented gvp/evp caveat)",
+  "pipelines.ts": "film-studio pipeline — assembly lives in the Cloud plugin lane, which polices through tk.prompts.applyPolicies (half (d))",
   "after-effects-ai.ts": "LLM plan lane — structured output, not a media-generation prompt",
   "generate-script.ts": "LLM lane — script text, not a media-generation prompt",
   "image-critic.ts": "LLM analysis lane",
@@ -136,5 +146,32 @@ describe("prompt-policy totality — every media-prompt lane polices at its asse
     const pb = readFileSync(resolve(ENGINE, "payload-builder.ts"), "utf8")
     expect(pb.includes("withImagePromptPolicy")).toBe(true)
     expect(pb.includes("applyPromptPolicies(")).toBe(true)
+  })
+
+  it("(d) the plugin lane's toolkit door runs the same registry", () => {
+    // The member a plugin calls at its own assembly point. It must DELEGATE to
+    // the registry (read at call time), never carry a copy of a policy.
+    // Behaviour is proven in private-plugins/__tests__/toolkit-prompt-policy.test.ts.
+    const toolkit = readFileSync(resolve(SRC, "lib", "private-plugins", "toolkit.ts"), "utf8")
+    expect(toolkit, "toolkit.ts no longer wires tk.prompts.applyPolicies to the prompt funnel").toMatch(
+      /prompts:\s*\{\s*applyPolicies:\s*\([^)]*\)\s*=>\s*policeForPlugin\(/,
+    )
+    const police = toolkit.slice(toolkit.indexOf("function policeForPlugin("), toolkit.indexOf("\n}\n", toolkit.indexOf("function policeForPlugin(")))
+    expect(police, "policeForPlugin no longer delegates to applyPromptPolicies").toMatch(/applyPromptPolicies\(\{ \.\.\.assembly \}\)/)
+    const contract = readFileSync(resolve(SRC, "lib", "private-plugins", "types.ts"), "utf8")
+    expect(contract, "types.ts no longer declares the tk.prompts group").toMatch(/\bprompts\?:\s*PluginPromptsToolkit\b/)
+    // Plugin music: the plugin polices its music prompt ONCE, at its own
+    // boundary, and hands the policy's vocal gender and negative style to the
+    // toolkit's music member, which FORWARDS them to the provider and runs no
+    // policy of its own — so nothing is policed twice. Behaviour is proven in
+    // private-plugins/__tests__/toolkit-music-gen.test.ts.
+    const musicAt = toolkit.indexOf("async function pluginGenerateMusic(")
+    expect(musicAt, "toolkit.ts no longer has the plugin music member").toBeGreaterThan(0)
+    const music = toolkit.slice(musicAt, toolkit.indexOf("\n}\n", musicAt))
+    expect(music, "the plugin music member no longer forwards a policed vocal gender").toMatch(/options\?\.vocalGender \? \{ vocalGender: options\.vocalGender \} : \{\}/)
+    expect(music, "the plugin music member no longer forwards a policed negative style").toMatch(/options\?\.negativeStyle \? \{ negativeStyle: options\.negativeStyle \} : \{\}/)
+    expect(music, "the plugin music member runs a policy itself: a plugin's music prompt would be policed twice").not.toMatch(/applyPromptPolicies\(/)
+    const musicOptions = contract.slice(contract.indexOf("export interface PluginMusicGenOptions"), contract.indexOf("export interface PluginMusicGenResult"))
+    expect(musicOptions, "PluginMusicGenOptions no longer takes the policy's vocal gender and negative style").toMatch(/vocalGender\?: string[\s\S]*negativeStyle\?: string/)
   })
 })

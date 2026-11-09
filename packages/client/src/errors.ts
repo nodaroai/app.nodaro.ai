@@ -73,6 +73,7 @@ export class ModelUnavailableError extends ForbiddenError {
 export type ImportRefusalCode =
   | "imports_blocked"
   | "import_source_disabled"
+  | "link_imports_disabled"
   | "rights_confirmation_required"
   | "rights_authorization_required"
   | "rights_confirmation_not_found"
@@ -86,7 +87,8 @@ export type ImportRefusalCode =
  * blocked on the account, or the account is closed, under the deployment's
  * repeat-infringer policy (`imports_blocked`; the message says until when),
  * the link's site is disabled by an administrator (`import_source_disabled`),
- * or the content rights confirmation is missing while the deployment requires
+ * the deployment turned link imports off (`link_imports_disabled`), or the
+ * content rights confirmation is missing while the deployment requires
  * one (`rights_confirmation_required`; for an import through an API key or an
  * AI agent with no standing authorization, `rights_authorization_required`),
  * does not exist, is for another link or account, was made under an older
@@ -95,6 +97,7 @@ export type ImportRefusalCode =
 export const IMPORT_REFUSAL_CODES: ReadonlySet<ImportRefusalCode> = new Set<ImportRefusalCode>([
   "imports_blocked",
   "import_source_disabled",
+  "link_imports_disabled",
   "rights_confirmation_required",
   "rights_authorization_required",
   "rights_confirmation_not_found",
@@ -116,7 +119,9 @@ export const IMPORT_REFUSAL_CODES: ReadonlySet<ImportRefusalCode> = new Set<Impo
  * their own session); `imports_blocked` lasts until the date its message names
  * or until an administrator lifts it, and the account's owner reads why in
  * their settings; an `import_source_disabled` site has no remedy on the
- * caller's side, and the message names no site.
+ * caller's side, and the message names no site; `link_imports_disabled` means
+ * a link to another site is refused on this deployment altogether (upload the
+ * file instead).
  */
 export class ImportRefusedError extends ForbiddenError {
   declare readonly code: ImportRefusalCode

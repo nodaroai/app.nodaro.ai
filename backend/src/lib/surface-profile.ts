@@ -1,7 +1,20 @@
 // @reads-none reads only the operator's @file from NODARO_SURFACE_PROFILE (no default, no tracked example)
 import { z } from "zod"
 import { readFileSync } from "node:fs"
+import { isSsoOnly, type SurfaceCatalogImages, type SurfaceHeaderMode, type WorldId } from "@nodaro/shared/runtime-config"
 import { isBusiness, isCloud } from "./config.js"
+import {
+  brandFaviconSchema,
+  brandLogoSchema,
+  catalogImagesSchema,
+  localeOfferedSchema,
+  noteLocaleCoherence,
+  parseFlag,
+  requireSignInSchema,
+  surfaceHeaderSchema,
+  surfaceImportsSchema,
+  surfaceWorldsSchema,
+} from "./surface-profile-client-keys.js"
 
 /**
  * Deployment surface profile (B1). Rides the runtime-config channel: env
@@ -12,12 +25,17 @@ import { isBusiness, isCloud } from "./config.js"
  * / hide / whitelist are NARROWING operations layered over what the code
  * already renders, so the stock default is inert (mainline byte-identical when
  * the env is unset) and there is no "empty = everything hidden" footgun. A
- * non-empty array is an explicit narrowing.
+ * non-empty array is an explicit narrowing. The one exception is
+ * `worlds.allow`, where PRESENCE narrows (see SurfaceWorlds).
  *
- * Kept in core (NOT packages/shared) and duplicated in
- * frontend/src/lib/surface-profile.ts with a drift test — same rationale as
- * cloud-only-nodes.ts: this is edition/deployment config, not a public wire
- * contract, and packages/shared is an irrevocable Apache grant.
+ * The schema — the authority on what a deployment may set — stays in core and
+ * is mirrored in frontend/src/lib/surface-profile.ts with a drift test (same
+ * rationale as cloud-only-nodes.ts: packages/shared is an irrevocable Apache
+ * grant). What a PAGE receives (the /config.js projection,
+ * surface-profile-runtime-config.ts) is read by products outside this repo
+ * too, so its key names, shapes and lenient reader are the published contract
+ * in @nodaro/shared/runtime-config, with the world ids and the rules every
+ * reader shares (SSO-only, logo references, the catalog-image modes).
  */
 
 export type NavKey = "gallery" | "explore" | "pricing" | "templates" | "apps" | "community" | "integrations"
@@ -112,21 +130,46 @@ export interface SurfaceBilling {
   allowances?: "off" | "enforce"
 }
 
+/**
+ * The worlds a deployment offers (the shared header's tabs). `allow`, when
+ * PRESENT, is exactly the worlds offered — `[]` offers none — so an allowlist
+ * whose ids are all unknown offers nothing instead of everything. Absent: every
+ * world is offered, subject to the node types it runs (GET
+ * /v1/surface/availability). `home` is always one `allow` lets through.
+ */
+export interface SurfaceWorlds {
+  allow?: WorldId[]
+  home?: WorldId
+  order?: WorldId[]
+}
+
 export interface SurfaceProfile {
   nav: { hide: NavKey[] }
   features: { hide: FeatureKey[] }
   dashboard: { tabs: DashboardTabKey[] }
   nodes: { deny: string[]; allow: string[] }
   models: { deny: string[]; allow: string[] }
-  auth: { methods: AuthMethod[]; ssoLabel?: string }
+  /** `requireSignIn` absent: readers derive it (true exactly when sign-in is SSO-only). */
+  auth: { methods: AuthMethod[]; ssoLabel?: string; requireSignIn?: boolean }
   siblings: { apps: SurfaceSibling[] }
-  brand: { productName: string; description?: string; wordmark?: string; platformLinks?: boolean }
-  locale: { default?: string; picker: boolean }
+  /** `favicon`: the page's icons, paths on this site; boot writes them into index.html's head (tools/build-runtime-config.mjs). */
+  brand: { productName: string; description?: string; wordmark?: string; platformLinks?: boolean; logo?: string; favicon?: string[] }
+  locale: { default?: string; picker: boolean; offered?: string[] }
   outputs: { allowPublic: boolean }
   voice: { allowedGenders: string[] } // B4c — [] = all genders allowed (narrowing only)
   billing: SurfaceBilling
-  catalogs?: { required: boolean; factoryPresets: boolean }
+  catalogs?: { required: boolean; factoryPresets: boolean; images?: SurfaceCatalogImages }
   catalogPolicy?: unknown // B4 (Phase 4) — carried opaque; validated loosely, never read here
+  // Read by the client apps through /config.js; absent = their default.
+  worlds?: SurfaceWorlds
+  imports?: { links: boolean }
+  header?: SurfaceHeaderMode
+  /**
+   * UI-string overrides, `product → locale → key → text`. Carried RAW and never
+   * read by the server. The /config.js projection is what validates them,
+   * against the key manifest each product's build emits (surface-strings.ts).
+   */
+  strings?: unknown
 }
 
 export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
@@ -222,9 +265,8 @@ const lenientFlag = (name: string, fallback: boolean, fallbackWord: string, opts
     .unknown()
     .optional()
     .transform((v) => {
-      if (typeof v === "boolean") return v
-      if (v === "true" || v === "1") return true
-      if (v === "false" || v === "0") return false
+      const parsed = parseFlag(v)
+      if (parsed !== undefined) return parsed
       if (v !== undefined || opts.warnOnAbsent) {
         console.warn(`[surface-profile] ${name} ${v === undefined ? "absent" : "unparseable"} — defaulting to ${fallbackWord} (${fallback})`)
       }
@@ -358,7 +400,7 @@ export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
   nodes: z.object({ deny: stringArray(), allow: stringArray() }).catch({ deny: [], allow: [] }),
   models: z.object({ deny: stringArray(), allow: stringArray() }).catch({ deny: [], allow: [] }),
   auth: z
-    .object({ methods: knownEnumArray(AUTH_METHODS.options), ssoLabel: z.string().optional() })
+    .object({ methods: knownEnumArray(AUTH_METHODS.options), ssoLabel: z.string().optional(), requireSignIn: requireSignInSchema.optional() })
     .catch({ methods: [] }),
   siblings: z
     .object({
@@ -372,10 +414,25 @@ export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
     })
     .catch({ apps: [] }),
   brand: z
-    .object({ productName: z.string().min(1), description: z.string().optional(), wordmark: z.string().optional(), platformLinks: z.boolean().optional().catch(false) })
+    .object({
+      productName: z.string().min(1),
+      description: z.string().optional(),
+      wordmark: z.string().optional(),
+      platformLinks: z.boolean().optional().catch(false),
+      logo: brandLogoSchema.optional(),
+      favicon: brandFaviconSchema.optional(),
+    })
     .catch({ productName: "Nodaro" }),
-  catalogs: z.object({ required: z.boolean().catch(true), factoryPresets: z.boolean().catch(false) }).catch({ required: true, factoryPresets: false }).optional(),
-  locale: z.object({ default: z.string().optional(), picker: z.boolean() }).catch({ picker: true }),
+  catalogs: z
+    .object({ required: z.boolean().catch(true), factoryPresets: z.boolean().catch(false), images: catalogImagesSchema.optional() })
+    .catch({ required: true, factoryPresets: false, images: "none" })
+    .optional(),
+  // `picker` may be left out beside the other locale keys (it defaults to
+  // shown), so a profile that sets only `offered` or `default` keeps them.
+  locale: z
+    .object({ default: z.string().optional(), picker: z.boolean().catch(true), offered: localeOfferedSchema.optional() })
+    .transform(noteLocaleCoherence)
+    .catch({ picker: true }),
   outputs: z.object({ allowPublic: lenientPublicFlag }).catch({ allowPublic: true }),
   voice: z.object({ allowedGenders: stringArray() }).catch({ allowedGenders: [] }),
   billing: z
@@ -393,6 +450,10 @@ export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
     .transform(coherentBilling)
     .catch(BILLING_DEFAULT),
   catalogPolicy: z.unknown().optional(),
+  worlds: surfaceWorldsSchema.optional(),
+  imports: surfaceImportsSchema.optional(),
+  header: surfaceHeaderSchema.optional(),
+  strings: z.unknown().optional(),
 }) as z.ZodType<SurfaceProfile>
 
 /** One-level-deep merge: each override sub-object replaces the default's, keys
@@ -414,6 +475,11 @@ function mergeOverDefault(override: Partial<SurfaceProfile>): SurfaceProfile {
     billing: { ...d.billing, ...override.billing },
     catalogs: { required: false, factoryPresets: true, ...d.catalogs, ...override.catalogs },
     catalogPolicy: override.catalogPolicy ?? d.catalogPolicy,
+    // Absent from the default: present only when the profile set them.
+    ...(override.worlds ? { worlds: override.worlds } : {}),
+    ...(override.imports ? { imports: override.imports } : {}),
+    ...(override.header ? { header: override.header } : {}),
+    ...(override.strings !== undefined ? { strings: override.strings } : {}),
   }
 }
 
@@ -469,8 +535,41 @@ export function surfaceGateOpen(): boolean {
  * password/OAuth account is legitimate there.
  */
 export function surfaceSsoOnly(): boolean {
-  const methods = runtimeSurfaceProfile().auth.methods
-  return methods.length > 0 && methods.every((m) => m === "sso")
+  return isSsoOnly(runtimeSurfaceProfile().auth.methods)
+}
+
+/**
+ * Whether this deployment lets work be public at all (`outputs.allowPublic`).
+ * The one reader of the switch, on both of its sides:
+ *  - WRITE: the media workers make every output private while it is off
+ *    (workers/output-visibility.ts);
+ *  - READ: every listing of other people's public work answers as if there
+ *    were none — the public view of GET /v1/gallery, the community listings,
+ *    and the MCP public scopes of `browse_gallery` and `list_jobs`. A row
+ *    marked public before the switch was set, or carried over in a copied
+ *    database, is out of the write rule's reach; the read rule keeps it from
+ *    being listed.
+ * Inert by default: the switch defaults on, and a person's own work is never
+ * "public" to themselves, so their own views are untouched.
+ */
+export function surfaceAllowsPublicOutputs(): boolean {
+  return runtimeSurfaceProfile().outputs.allowPublic
+}
+
+/**
+ * Whether this deployment lets media be imported from a link to another site
+ * (`imports.links`). The one reader of the key on the server; the client apps
+ * read it through /config.js (their `surfaceLinkImportsAllowed()`). Absent, or
+ * no profile at all, means allowed: exactly today's behaviour. `false` means
+ * refused, and `lib/link-imports.ts` decides what that refuses.
+ *
+ * The unset case returns before the profile is read: it is what every install
+ * without a profile answers, and an env read has no mock surface, so a route
+ * suite that mocks the config module partially cannot break on this gate.
+ */
+export function surfaceAllowsLinkImports(): boolean {
+  if (!process.env.NODARO_SURFACE_PROFILE?.trim()) return true
+  return runtimeSurfaceProfile().imports?.links !== false
 }
 
 /**

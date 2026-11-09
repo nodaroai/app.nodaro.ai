@@ -57,7 +57,7 @@ const BASELINE_MAX_ENTRIES = 26
 // a composite primary key names the column identifying the row's owning object
 // instead. Without this the rule silently never fires for such a table — it
 // reads like coverage and provides none.
-const ROW_KEY_BY_TABLE = new Map([["workflow_collaborators", "workflow_id"], ["session_items", "session_id"], ["job_ratings", "job_id"]])
+const ROW_KEY_BY_TABLE = new Map([["workflow_collaborators", "workflow_id"], ["session_items", "session_id"], ["job_ratings", "job_id"], ["voice_favorites", "voice_id"]])
 
 function rowKeyMatcher(table) {
   return new RegExp(`\\.eq\\s*\\(\\s*["']${ROW_KEY_BY_TABLE.get(table) ?? "id"}["']`)
@@ -84,6 +84,7 @@ const TENANT_TABLES = new Set([
   "locations",
   "faces",
   "voice_clones",
+  "voice_favorites",
   "workflows",
   "projects",
   "jobs",

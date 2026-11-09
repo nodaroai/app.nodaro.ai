@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { assertVoicesAllowed } from "../../../lib/voice-lock.js"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 
 export interface PipelineVoiceChangeArgs {
@@ -56,6 +57,11 @@ export async function pipelineVoiceChange(
 
   if (!videoUrl) throw new Error("pipelineVoiceChange requires a videoUrl")
   if (!voiceId) throw new Error("pipelineVoiceChange requires a voiceId")
+  // B4c: under a voice lock, the voice the clip is revoiced INTO must be one
+  // whose gender the platform can vouch for as allowed (lib/voice-gender.ts, as
+  // the routes judge it), refused before any job row or reservation with the
+  // lock's coded refusal. No lock: nothing is read.
+  await assertVoicesAllowed([voiceId], { userId })
 
   return runPipelineWorkerJob({
     supabase,

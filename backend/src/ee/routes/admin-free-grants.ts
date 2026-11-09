@@ -14,7 +14,7 @@ import {
   type GrantChangeRefusal,
 } from "../billing/signup-grant.js"
 import { recordAdminAction } from "../lib/admin-actions.js"
-import { deploymentPayerActive } from "../../lib/deployment-payer.js"
+import { SIGNUP_GRANTS_NOT_APPLICABLE, signupGrantsApply } from "../billing/free-grant-scope.js"
 import {
   buildClusters,
   chunk,
@@ -56,6 +56,7 @@ const GRANT_REFUSAL_MESSAGE: Record<GrantChangeRefusal, string> = {
   not_revoked: "This account's free credits were not taken back.",
   paid_account: "This is (or was) a paying account — use Adjust credits instead.",
   reservations_open: "This account has work running. Block it first, or try again when the work has finished.",
+  not_applicable: SIGNUP_GRANTS_NOT_APPLICABLE.error.message,
 }
 
 /**
@@ -156,13 +157,15 @@ export async function adminFreeGrantRoutes(app: FastifyInstance) {
   /**
    * POST /v1/admin/free-grants/:userId/activate — restore. A withheld grant is
    * granted; a grant an admin took back returns exactly what was taken, in the
-   * state it was taken from.
+   * state it was taken from. On a deployment with a single payer it refuses,
+   * like the take-back: no free grant applies there (free-grant-scope.ts).
    */
   app.post("/v1/admin/free-grants/:userId/activate", { preHandler: requirePlatformOperator }, async (req, reply) => {
     const parsed = userParams.safeParse(req.params)
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: "Invalid user id" } })
     }
+    if (!signupGrantsApply()) return reply.status(409).send(SIGNUP_GRANTS_NOT_APPLICABLE)
     try {
       if ((await readFreeGrantState(parsed.data.userId)) === "revoked") {
         const back = await reinstateSignupGrant(parsed.data.userId, req.userId!)
@@ -197,9 +200,7 @@ export async function adminFreeGrantRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: "Invalid user id" } })
     }
-    if (deploymentPayerActive()) {
-      return reply.status(409).send({ error: { code: "not_applicable", message: "Free signup credits do not apply on this deployment." } })
-    }
+    if (!signupGrantsApply()) return reply.status(409).send(SIGNUP_GRANTS_NOT_APPLICABLE)
     try {
       const out = await revokeSignupGrant(parsed.data.userId, req.userId!)
       if (!out.changed) {

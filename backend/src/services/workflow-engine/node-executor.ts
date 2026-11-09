@@ -49,6 +49,8 @@ import { CONTENT_RESTRICTED_MESSAGE, restrictedInputKey } from "../../lib/conten
 import "../../lib/content-restriction-address.js"
 import "../../lib/content-restriction-set.js"
 import { insertInternalJob, JobBlockedError } from "../../lib/insert-job.js"
+import { hasContentGuard, refuseProhibitedContent } from "../../lib/content-guard.js"
+import { subjectOfInputData } from "../../lib/content-guard-subject.js"
 import { resolvedModelOfJob } from "../../lib/job-resolved-model.js"
 import { videoQueue } from "../../lib/queue.js"
 import { renderQueue } from "../../lib/render-queue.js"
@@ -75,7 +77,9 @@ import { computeFingerprint } from "../../lib/dedup-fingerprint.js"
 import { loopbackFetch } from "./loopback-fetch.js"
 import { syncHttpCallError } from "./sync-http-failure.js"
 import { buildNodeRefMap, type WorkflowSettings } from "./payload-builder.js"
+import { pluginVoicesTheBuildDispatches, voicesTheBuildDispatches } from "./dispatched-voices.js"
 import { buildPayloadWithSourceSize, type BuiltPayload } from "./source-size-build.js"
+import { resolveVoiceGenders } from "../../lib/voice-gender.js"
 import { userDirectionForNode } from "./node-user-direction.js"
 import { assertNodeAvailableForUser, viewerForNode } from "../../lib/availability-viewer.js"
 import { passThroughFor } from "./pass-through.js"
@@ -2067,6 +2071,24 @@ async function refuseRestrictedInput(jobId: string, input: Record<string, unknow
   throw refused
 }
 
+/**
+ * The workflow engine's content-guard check (lib/content-guard.ts): a refusal
+ * deletes the placeholder row and fails the node with the guard's sentence.
+ * Before the reservation, so nothing is charged and nothing is refunded.
+ */
+async function refuseProhibitedPayload(
+  jobId: string,
+  input: Record<string, unknown>,
+  userId: string | undefined,
+  jobType: string,
+): Promise<void> {
+  if (!hasContentGuard()) return
+  const block = refuseProhibitedContent(subjectOfInputData(input), { lane: "workflow-payload", userId, jobType })
+  if (!block) return
+  await supabase.from("jobs").delete().eq("id", jobId)
+  throw new JobBlockedError(block)
+}
+
 async function executeWorkerNode(
   node: SimpleNode,
   resolvedInputs: ResolvedInputs,
@@ -2190,6 +2212,19 @@ async function executeWorkerNode(
     // Speaker View fed a bare video (decided 2026-10-11, D16): the clip's real
     // length and size, measured once here, behind the checks that cost nothing.
     const speakerViewClip = node.type === "speaker-view" ? await speakerViewClipOfRun(node, resolvedInputs) : undefined
+    // The voice lock (B4c): the builder is synchronous, so the gender of each
+    // voice a speech node dispatches is looked up here, from the node as the
+    // build sees it, and handed in. A node a plugin serves runs on the plugin's
+    // handler, past the plugin's own route: its voices are read with the reader
+    // its plugin declares (under a lock only) and handed in too. Under a lock
+    // the builder refuses a voice it finds unresolved, and a plugin speech node
+    // whose voices nobody could read (fail-closed). No lock, or no voice:
+    // nothing is read.
+    const pluginNodeVoices = await pluginVoicesTheBuildDispatches(node, resolvedInputs, edges)
+    const voiceGenders = await resolveVoiceGenders(
+      [...voicesTheBuildDispatches(node, resolvedInputs, edges), ...(pluginNodeVoices ?? [])],
+      { userId: ctx.userId },
+    )
     // "auto" on a model without a native auto keeps the photo's shape. The
     // builder is synchronous, so `buildPayloadWithSourceSize` reads the size of
     // the photo the build sends first, through the same probe the image routes
@@ -2211,6 +2246,8 @@ async function executeWorkerNode(
         editPlanPerMinute,
         ...(speakerViewTracks ? { speakerViewTracks } : {}),
         ...(speakerViewClip ? { speakerViewClip } : {}),
+        ...(voiceGenders ? { voiceGenders } : {}),
+        ...(pluginNodeVoices ? { pluginNodeVoices } : {}),
         ...(userDirection ? { userDirection } : {}),
       },
     )
@@ -2231,6 +2268,12 @@ async function executeWorkerNode(
   // goes with the refusal, like every refusal of this stage; the payload
   // write further down asks once more, as a backstop.
   await refuseRestrictedInput(jobId, { ...resolvedInputs, ...payload }, ctx.userId)
+
+  // 2.1. The content guard, on the built payload: the placeholder row carried
+  // none of this content past the insert funnel, and the prompt funnel saw only
+  // what its assembly point handled. The row goes with a refusal; nothing has
+  // been reserved yet (lib/content-guard.ts).
+  await refuseProhibitedPayload(jobId, { ...resolvedInputs, ...payload }, ctx.userId, node.type)
 
   // 2a. Audio soundtrack — the DAG twin of the routes'
   // `applyAudioSoundtrackPreHandler`: on a model that takes reference audio

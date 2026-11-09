@@ -65,6 +65,7 @@ import { supabase } from "../../lib/supabase.js"
 import { uploadBufferToR2, deleteFromR2 } from "../../lib/storage.js"
 import { updateStorageUsage } from "../../utils/file-validation.js"
 import { createWorkDir, runFfmpeg } from "../../providers/video/ffmpeg-utils.js"
+import { withLinkImportsOff } from "@/test/link-imports-off.js"
 
 // ---------------------------------------------------------------------------
 // safeMediaExt (pure unit tests, pre-existing)
@@ -411,5 +412,22 @@ describe("POST /v1/media/process — video encode quality", () => {
     const args = vi.mocked(runFfmpeg).mock.calls[0]![0] as string[]
     expect(args).toContain("libx264")
     expect(args[args.indexOf("-crf") + 1]).toBe("18")
+  })
+})
+
+describe("POST /v1/media/process on a deployment that turned link imports off", () => {
+  withLinkImportsOff()
+
+  it("refuses an outside source before any work dir or fetch", async () => {
+    const res = await post({ sourceUrl: "https://example.com/talk.mp3" })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("link_imports_disabled")
+    expect(createWorkDir).not.toHaveBeenCalled()
+  })
+
+  it("a source on this deployment's own storage is still processed", async () => {
+    queueSupabaseResults({ data: { id: "new-output-asset" }, error: null })
+    const res = await post({ sourceUrl: "https://cdn.nodaro.test/uploads/audio/own.mp3" })
+    expect(res.statusCode).toBe(200)
   })
 })

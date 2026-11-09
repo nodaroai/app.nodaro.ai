@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { speechChargeOverride } from "../../../lib/speech-estimate.js"
+import { assertVoicesAllowed } from "../../../lib/voice-lock.js"
 import { probeAudioDuration } from "./_probe-audio.js"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 
@@ -69,6 +70,13 @@ export async function pipelineGenerateSpeech(
     speed,
     languageCode,
   } = args
+
+  // B4c: under a voice lock, the voice this line is spoken in must be one whose
+  // gender the platform can vouch for as allowed (lib/voice-gender.ts, as the
+  // routes judge it), refused before any job row or reservation with the lock's
+  // coded refusal — the scene step then treats it like any failed line. No
+  // voice: the worker's policy-owned default. No lock: nothing is read.
+  await assertVoicesAllowed([voice], { userId })
 
   // Map legacy "elevenlabs" to "elevenlabs-turbo" for credit identifier (mirrors
   // the route's resolution logic in routes/text-to-speech.ts).

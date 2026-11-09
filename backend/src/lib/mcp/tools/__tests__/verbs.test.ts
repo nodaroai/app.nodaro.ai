@@ -862,6 +862,20 @@ describe("generate_speech verb", () => {
     expect(received.body?.nextText).toBe("After.")
   })
 
+  it("maps output_format to the route's outputFormat, and sends no key without it", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/text-to-speech", { jobId: "j-tts-3" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const withFormat = await callTool(server, "generate_speech", { text: "Hi.", output_format: "wav_24000" })
+    expect(withFormat.isError).toBeUndefined()
+    expect(received.body?.outputFormat).toBe("wav_24000")
+    const plain = await callTool(server, "generate_speech", { text: "Hi." })
+    expect(plain.isError).toBeUndefined()
+    expect(received.body && "outputFormat" in received.body).toBe(false)
+    const unknown = await callTool(server, "generate_speech", { text: "Hi.", output_format: "pcm_44100" })
+    expect(unknown.isError).toBe(true)
+  })
+
   it("refuses a neighbour text over 1,000 characters at the schema", async () => {
     const server = buildServer()
     registerVerbs({ server, session: executeSession(), fastify: Fastify() })

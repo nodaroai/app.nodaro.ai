@@ -7,20 +7,30 @@ import type { LocaleId } from "@nodaro/shared/i18n"
  * first at startup, written on every choice the user makes and on the
  * account's language at sign-in, and only SHOWN when another product changed
  * it. The module is the header's on a cloud build and a stub elsewhere; here
- * it is a fake cookie the tests can read and set.
+ * it is a fake cookie the tests can read and set. The app uses it only where
+ * the deployment shows the shared header (`siteHeaderMode()`, faked here: on,
+ * unless a test says otherwise).
  */
 
 const shared = vi.hoisted(() => ({
   value: null as string | null,
   saved: [] as string[],
+  options: [] as unknown[],
   watcher: null as null | { onChange: (id: string) => void; current: () => string | null },
   unsubscribed: 0,
+}))
+const mode = vi.hoisted(() => ({ value: "default" as "default" | "white-label" | null }))
+
+vi.mock("@/lib/site-header-mode", () => ({
+  siteHeaderMode: () => mode.value,
+  siteHeaderCookieOptions: () => (mode.value === "white-label" ? { cookieDomain: null } : {}),
 }))
 
 vi.mock("virtual:site-locale", () => ({
   readSavedLocale: () => shared.value,
-  saveLocale: (id: string) => {
+  saveLocale: (id: string, options?: unknown) => {
     shared.saved.push(id)
+    shared.options.push(options)
     shared.value = id
   },
   watchSavedLocale: (onChange: (id: string) => void, current: () => string | null) => {
@@ -43,8 +53,10 @@ beforeEach(() => {
   window.localStorage.clear()
   shared.value = null
   shared.saved = []
+  shared.options = []
   shared.watcher = null
   shared.unsubscribed = 0
+  mode.value = "default"
 })
 afterEach(() => {
   cleanup()
@@ -146,5 +158,41 @@ describe("following the shared language on an open page", () => {
 
     view.unmount()
     expect(shared.unsubscribed).toBe(1)
+  })
+})
+
+describe("where the deployment shows no shared header", () => {
+  // The image built for deployments of their own carries the header's module;
+  // a deployment that does not ask for the header must touch none of its cookies.
+  beforeEach(() => {
+    mode.value = null
+  })
+
+  it("the shared cookie is never read: the device's own saved choice, as on a build without the header", async () => {
+    window.localStorage.setItem(KEY, "ja")
+    shared.value = "he"
+    const { resolveInitialLocale } = await loadStore()
+    expect(resolveInitialLocale()).toBe("ja")
+  })
+
+  it("a choice is kept on this device only, and nothing is watched", async () => {
+    const { useLocaleStore } = await loadStore()
+    useLocaleStore.getState().setLocale("ko")
+    useLocaleStore.getState().markHydrated("he" as LocaleId, "user-1")
+    expect(shared.saved).toEqual([])
+    expect(window.localStorage.getItem(KEY)).toBe("ko")
+    const { I18nHtmlDir } = await import("@/components/i18n-html-dir")
+    render(<I18nHtmlDir />)
+    expect(shared.watcher).toBeNull()
+  })
+})
+
+describe("on a white-label deployment", () => {
+  it("the shared language is kept on this host alone (the header's own cookie domain, null)", async () => {
+    mode.value = "white-label"
+    const { useLocaleStore } = await loadStore()
+    useLocaleStore.getState().setLocale("he")
+    expect(shared.saved).toEqual(["he"])
+    expect(shared.options).toEqual([{ cookieDomain: null }])
   })
 })

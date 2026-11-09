@@ -12,7 +12,7 @@ import { complaintsLinkShown } from "@/lib/complaints-page"
 import { ComplaintsLink } from "@/components/legal/complaints-link"
 import { runtimeSurfaceProfile, type AuthMethod } from "@/lib/surface-profile"
 import { createClient } from "@/lib/supabase"
-import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
+import { followSignInRedirect, rememberSignInRedirect, takeSignInRedirect } from "@/lib/sign-in-redirect"
 import { FREE_TIER_CREDITS } from "@/lib/pricing-data"
 import { runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "@/lib/runtime-config"
 import { useT } from "@/lib/i18n"
@@ -22,17 +22,6 @@ import { isBlockedSignIn } from "@/lib/sign-in-error"
 import { ssoEntryPath } from "@/lib/sibling-origin"
 
 const PENDING_PLAN_KEY = "nodaro_pending_plan"
-
-/** Read + consume the stored post-auth redirect (same key the OAuth
- *  round-trip uses), falling back to the dashboard. */
-function consumeRedirect(): string {
-  const stored = localStorage.getItem(AUTH_REDIRECT_KEY)
-  if (stored && stored.startsWith("/") && !stored.startsWith("//")) {
-    localStorage.removeItem(AUTH_REDIRECT_KEY)
-    return stored
-  }
-  return "/projects"
-}
 
 export default function LoginPage() {
   const t = useT()
@@ -167,16 +156,15 @@ export default function LoginPage() {
   const showSso = authMethods.includes("sso")
   const ssoLabel = surfaceAuthSsoLabel()
 
-  // Persist redirect param to localStorage (survives Google OAuth round-trip).
-  // Both spellings are live senders: dashboard guards use ?redirect=, while
-  // the OAuth consent + CLI auth pages send ?return_to= — ignoring the latter
-  // stranded users in /projects after sign-in, losing the consent screen
-  // (founder hit it mid community-connect, 2026-08-14).
+  // Persist redirect param to localStorage (survives the Google OAuth and the
+  // single sign-on round trips). Both spellings are live senders: dashboard
+  // guards and the site's other products use ?redirect=, while the OAuth
+  // consent + CLI auth pages send ?return_to= — ignoring the latter stranded
+  // users in /projects after sign-in, losing the consent screen (founder hit
+  // it mid community-connect, 2026-08-14). A destination outside this app's
+  // own pages opens with a full page load (lib/sign-in-redirect.ts).
   useEffect(() => {
-    const redirect = searchParams.get("redirect") ?? searchParams.get("return_to")
-    if (redirect && redirect.startsWith("/") && !redirect.startsWith("//")) {
-      localStorage.setItem(AUTH_REDIRECT_KEY, redirect)
-    }
+    rememberSignInRedirect(searchParams.get("redirect") ?? searchParams.get("return_to"))
   }, [searchParams])
 
   async function handleGoogleSignIn() {
@@ -203,7 +191,7 @@ export default function LoginPage() {
     setError(null)
     try {
       await signInWithEmail(email, password)
-      navigate(consumeRedirect(), { replace: true })
+      followSignInRedirect(navigate, takeSignInRedirect())
     } catch (err) {
       setError(signInErrorText(err))
       setPending(false)

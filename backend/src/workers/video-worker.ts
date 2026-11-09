@@ -29,6 +29,7 @@ import {
   requestRefusedHintOf,
   sentVideoInput,
   creditsHintOf,
+  jobBlockHintOf,
   queueTimeoutHintOf,
   safetyBlockMessage,
   fallbackLabelOf,
@@ -37,6 +38,8 @@ import {
 import { resolveIsPublicOutput, mcpClientForcesPrivate } from "./output-visibility.js"
 import { isPreviewRender } from "../lib/preview-render.js"
 import { isPromptBlocked } from "../config/content-filter.js"
+import { isLoosenedRun } from "../lib/provider-safety.js"
+import { providerSafetyEntriesForJob } from "../providers/safety-entries.js"
 import { refundJobCredits, settleCancelledMeteredJob, settleDiscardedCancelledMeteredHold, LLM_PRODUCT_JOB_TYPES, createAssetFromJob, isFinalJobAttempt, type HandlerFn, type JobContext } from "./shared.js"
 import { imageAIHandlers } from "./handlers/image-ai.js"
 import { videoAIHandlers } from "./handlers/video-ai.js"
@@ -277,10 +280,15 @@ export function createVideoWorker() {
     }
     const jobData = job.data as Record<string, unknown>
     const promptText = (jobData.prompt as string) ?? (jobData.text as string) ?? null
+    // Anything made on a model whose filter an admin loosened stays out of the
+    // public gallery (lib/provider-safety.ts).
+    const loosenedRun = await isLoosenedRun(
+      providerSafetyEntriesForJob(jobModelIdOf(jobData), { pluginServed: Object.hasOwn(privatePluginHandlers, job.name) }),
+    )
     let isPublicOutput = resolveIsPublicOutput({
       publicOutputs: publicPref,
-      // uploaded/private input content, or a blocked prompt
-      forcePrivate: jobRecord?.force_private === true || isPromptBlocked(promptText),
+      // uploaded/private input content, a blocked prompt, or a loosened filter
+      forcePrivate: jobRecord?.force_private === true || isPromptBlocked(promptText) || loosenedRun,
       // direct MCP generation (Claude.ai / Cursor) — a private surface.
       // jobs.mcp_client is a TEXT client name, never a boolean — `=== true`
       // was always false and leaked direct-MCP output to the public gallery.
@@ -720,7 +728,7 @@ export function createVideoWorker() {
         // blamed the generated audio (`subject: "audio"`), not the picture.
         // Shared with the reconcile path (lib/reconcile/kie.ts).
         const errorHint =
-          refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err), requestRefusedHintOf(err, job.data), promptRefusedOf(err), audioRefusedOf(err)) ?? creditsHintOf(err) ?? queueTimeoutHintOf(err)
+          refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err), requestRefusedHintOf(err, job.data), promptRefusedOf(err), audioRefusedOf(err)) ?? creditsHintOf(err) ?? queueTimeoutHintOf(err) ?? jobBlockHintOf(err)
         const flipped = await markJobFailed(jobId, {
           error_message: errorMessage,
           // W0: the provider's own error, redacted — the sanitized message

@@ -72,6 +72,7 @@ export default defineConfig({
       "virtual:site-header": path.resolve(__dirname, "./src/ee/shell/stub.tsx"),
       "virtual:site-locale": path.resolve(__dirname, "./src/lib/site-locale-stub.ts"),
       "virtual:site-a11y": path.resolve(__dirname, "./src/lib/site-a11y-stub.ts"),
+      "virtual:hosted-header": path.resolve(__dirname, "./src/ee/shell/hosted-header-stub.ts"),
       // The shared media editor rides the same decision: tests get its stub; a
       // test of the editor's screens mocks "virtual:media-editor".
       "virtual:media-editor": path.resolve(__dirname, "./src/ee/shell/media-editor-stub.ts"),

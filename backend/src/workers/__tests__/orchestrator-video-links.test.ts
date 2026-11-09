@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest"
 import { overriddenVideoLinkIds, prepareVideoLinksForRun } from "../orchestrator-video-links.js"
 import type { VideoLinkFetchDeps } from "../../services/workflow-engine/video-link-fetch.js"
 import type { SimpleNode } from "../../services/workflow-engine/types.js"
+import { withLinkImportsOff } from "@/test/link-imports-off.js"
 
 const YT = "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
 const FILE = "https://cdn.nodaro.ai/videos/yt-1.mp4"
@@ -205,5 +206,50 @@ describe("prepareVideoLinksForRun", () => {
     })
     expect(d.downloadVideo).toHaveBeenCalledTimes(1)
     expect(outcome).toMatchObject({ kind: "ok", fetched: ["src"] })
+  })
+})
+
+describe("prepareVideoLinksForRun on a deployment that turned link imports off", () => {
+  withLinkImportsOff()
+
+  it("refuses a direct file link the run reads (it is not a post link, so it would otherwise pass through to its reader)", async () => {
+    const direct = [
+      { id: "src", type: "youtube-video", data: { label: "Episode", youtubeUrl: "https://example.com/clip.mp4" } } as SimpleNode,
+      { id: "va", type: "video-analysis", data: {} } as SimpleNode,
+    ]
+    const outcome = await prepareVideoLinksForRun({
+      userId: "u1", nodes: direct, edges, executingIds: new Set(["va"]), inputOverrides: undefined,
+      controlStatus: async () => "running",
+      deps: { ...deps(), linkRefusal: (url) => (url.includes("example.com") ? "refused here" : null) },
+    })
+    expect(outcome).toEqual({ kind: "refused", message: 'Video URL "Episode": refused here' })
+  })
+
+  it("refuses a stored file the request points outside even when the link itself is this deployment's own", async () => {
+    const pointedOutside = [
+      {
+        id: "src",
+        type: "youtube-video",
+        data: { label: "Episode", youtubeUrl: "https://cdn.nodaro.test/uploads/videos/a.mp4", downloadedVideoUrl: "https://example.com/clip.mp4", downloadedFromUrl: "https://cdn.nodaro.test/uploads/videos/a.mp4" },
+      } as SimpleNode,
+      { id: "va", type: "video-analysis", data: {} } as SimpleNode,
+    ]
+    const outcome = await prepareVideoLinksForRun({
+      userId: "u1", nodes: pointedOutside, edges, executingIds: new Set(["va"]), inputOverrides: undefined,
+      controlStatus: async () => "running",
+      deps: { ...deps(), linkRefusal: (url) => (url.includes("example.com") ? "refused here" : null) },
+    })
+    expect(outcome).toEqual({ kind: "refused", message: 'Video URL "Episode": refused here' })
+  })
+
+  it("stays inert for a graph with no link to outside content", async () => {
+    const own = [
+      { id: "src", type: "youtube-video", data: { label: "Episode", youtubeUrl: "https://cdn.nodaro.test/uploads/videos/a.mp4" } } as SimpleNode,
+      { id: "va", type: "video-analysis", data: {} } as SimpleNode,
+    ]
+    const controlStatus = vi.fn()
+    const outcome = await prepareVideoLinksForRun({ userId: "u1", nodes: own, edges, executingIds: new Set(["va"]), inputOverrides: undefined, controlStatus })
+    expect(outcome).toEqual({ kind: "ok", inputOverrides: undefined, fetched: [], files: {} })
+    expect(controlStatus).not.toHaveBeenCalled()
   })
 })

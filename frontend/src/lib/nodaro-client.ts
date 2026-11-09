@@ -74,7 +74,7 @@ export const NODARO_CLIENT_OPTIONS: ClientOptions = {
 
 /**
  * Every SDK client the app builds takes {@link NODARO_CLIENT_OPTIONS} — this
- * one and the shared header's full client (`ee/shell/app-header.tsx`) — so a
+ * one and the white-label header's full client (`ee/shell/white-label-header.tsx`) — so a
  * base URL, auth, timeout or workspace set for one cannot miss the other.
  */
 export const nodaroClient: AppNodaroClient = new AppNodaroClient(NODARO_CLIENT_OPTIONS)

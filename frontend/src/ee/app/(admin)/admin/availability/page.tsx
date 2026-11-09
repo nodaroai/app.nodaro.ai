@@ -23,9 +23,17 @@ interface AvailabilityItem {
   enabled: boolean
 }
 
+interface AvailabilityKindData {
+  items: AvailabilityItem[]
+  overridden: boolean
+  /** Nodes only, while an override is stored: the gating generation it was
+   *  saved at, and the server's. Older = some gates follow the factory set. */
+  gating?: { stored: number; current: number }
+}
+
 interface AvailabilityResponse {
-  nodes: { items: AvailabilityItem[]; overridden: boolean }
-  models: { items: AvailabilityItem[]; overridden: boolean }
+  nodes: AvailabilityKindData
+  models: AvailabilityKindData
 }
 
 type Kind = "nodes" | "models"
@@ -122,6 +130,14 @@ function KindSection({ kind, data }: { readonly kind: Kind; readonly data: Avail
           </Button>
         </div>
       </div>
+
+      {data.gating && data.gating.stored < data.gating.current && (
+        <p className="-mt-2 mb-4 text-xs text-muted-foreground">
+          This override was saved before some items and routes could be switched here: until you save, they follow
+          the factory set (the state shown). Saving applies the list to them too, including the routes of any node
+          left off.
+        </p>
+      )}
 
       <div className="space-y-4">
         {categories.map(([category, items]) => (

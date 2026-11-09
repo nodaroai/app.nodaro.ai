@@ -47,6 +47,10 @@
  * A signed-in caller's reads need `jobs:read` for an OAuth app; estimate and
  * run `workflows:execute` (as the Cast Swap MCP verb); favorites
  * `assets:write` (as the gallery's).
+ *
+ * Estimate and run follow the availability of `cast-swap` (Nodaro Motion, the
+ * engine every trend run is): where this deployment does not offer it to the
+ * caller, both answer 403 `node_not_available`, as the engine's own route does.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
@@ -55,6 +59,7 @@ import { CAST_SWAP_RESOLUTIONS_BY_ENGINE, castSwapEngineFrom, nodaroMotionEngine
 import { supabase } from "../../lib/supabase.js"
 import { requireScope } from "../../lib/scopes.js"
 import { requireAppScope } from "../../lib/scope-prehandler.js"
+import { requireNodeAvailable } from "../../lib/availability-viewer.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { afterKeyset, decodeCursor, encodeCursor, findOwnSession, type Keyset } from "../../lib/generation-sessions.js"
 import { resolveRequestOrigin } from "../../lib/client-origin-scope.js"
@@ -676,9 +681,14 @@ export async function trendRoutes(app: FastifyInstance) {
     }
   })
 
+  // A trend run IS a Nodaro Motion run (dispatched to POST /v1/cast-swap below):
+  // a deployment that does not offer cast-swap refuses its quote and its run
+  // here, with the node's own refusal, before anything is composed.
+  const runsNodaroMotion = requireNodeAvailable("cast-swap")
+
   app.post(
     "/v1/trends/:slug/estimate",
-    { preHandler: requireAppScope("workflows:execute"), config: WRITE_LIMIT },
+    { preHandler: [requireAppScope("workflows:execute"), runsNodaroMotion], config: WRITE_LIMIT },
     async (req, reply) => {
       if (!req.userId) return err(reply, 401, "unauthorized", "Authentication required")
       try {
@@ -715,7 +725,7 @@ export async function trendRoutes(app: FastifyInstance) {
 
   app.post(
     "/v1/trends/:slug/runs",
-    { preHandler: requireAppScope("workflows:execute"), config: WRITE_LIMIT },
+    { preHandler: [requireAppScope("workflows:execute"), runsNodaroMotion], config: WRITE_LIMIT },
     async (req, reply) => {
       if (!req.userId) return err(reply, 401, "unauthorized", "Authentication required")
       try {

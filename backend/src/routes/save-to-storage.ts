@@ -12,6 +12,7 @@ import { getSizeLimit, type FileCategory } from "../utils/file-validation.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import { linkImportRefusal } from "../lib/link-imports.js"
 
 const saveToStorageBody = z.object({
   mediaUrl: safeUrlSchema,
@@ -72,6 +73,11 @@ export async function saveToStorageRoutes(app: FastifyInstance) {
         error: { code: "unauthorized", message: "Authentication required" },
       })
     }
+
+    // A copy of a link into the account's storage is an import of it: refused
+    // here, before any job row, on a deployment that turned link imports off.
+    const refused = linkImportRefusal(mediaUrl)
+    if (refused) return reply.status(403).send({ error: refused })
 
     const detectedType: MediaType = parsed.data.mediaType ?? detectMediaType(mediaUrl)
 

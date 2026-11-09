@@ -13,6 +13,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { isAllowedSocialVideoUrl } from "../lib/url-validator.js"
 import { isImportRefusal, requireImportAllowed } from "../lib/import-gate.js"
 import { importJobFields, importViaOf } from "../lib/import-via.js"
+import { linkImportRefusal } from "../lib/link-imports.js"
 
 const trimAudioBody = z.object({
   videoUrl: safeUrlSchema,
@@ -44,6 +45,12 @@ export async function trimAudioRoutes(app: FastifyInstance) {
         error: { code: "unauthorized", message: "Authentication required" },
       })
     }
+
+    // A link to outside content on a deployment that turned link imports off
+    // (lib/link-imports.ts): refused here, a video's page or a direct file
+    // alike, before any job row exists.
+    const switchRefusal = linkImportRefusal(restData.videoUrl)
+    if (switchRefusal) return reply.status(403).send({ error: switchRefusal })
 
     // A social link is an import of a link: the site's policy and the rights
     // check (reads) answer here, before any job row exists; the worker spends
