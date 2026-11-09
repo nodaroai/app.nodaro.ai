@@ -22,6 +22,7 @@ import {
   resolveRuntimeSupabaseUrl,
   surfaceRequiresSignIn,
   surfaceStringOverride,
+  surfaceUnitLabel,
   worldAllowed,
 } from "../entries/runtime-config.js"
 
@@ -250,6 +251,32 @@ describe("parseRuntimeSurface — every default applied", () => {
   it("the unit label and rate come both or neither", () => {
     expect(parseRuntimeSurface({ billing: { unitLabel: "units" } }).billing.unitLabel).toBeUndefined()
     expect(parseRuntimeSurface({ billing: { unitRate: 2000 } }).billing.unitRate).toBeUndefined()
+  })
+
+  it("the unit's per-language words ride beside a coherent unit, are dropped without one, and keep text only", () => {
+    const unit = { unitLabel: "units", unitRate: 2000 }
+    const words = { en: "units", he: "יחידות", "pt-BR": "unidades" }
+    expect(parseRuntimeSurface({ billing: { ...unit, unitLabels: words } }).billing.unitLabels).toEqual(words)
+    // Nothing to stand beside: a word without a coherent label and rate is no unit.
+    expect(parseRuntimeSurface({ billing: { unitLabels: words } }).billing).toEqual(RUNTIME_SURFACE_DEFAULT.billing)
+    expect(parseRuntimeSurface({ billing: { unitLabel: "units", unitLabels: words } }).billing).not.toHaveProperty("unitLabels")
+    // Only text survives; nothing left, no key. Built from entries: a "__proto__" key stays an ordinary key.
+    expect(parseRuntimeSurface({ billing: { ...unit, unitLabels: { en: "units", he: 7, ja: "" } } }).billing.unitLabels).toEqual({ en: "units" })
+    expect(parseRuntimeSurface({ billing: { ...unit, unitLabels: "units" } }).billing).not.toHaveProperty("unitLabels")
+    const parsed = parseRuntimeSurface({ billing: { ...unit, unitLabels: JSON.parse('{"__proto__": "x", "he": "יחידות"}') } }).billing.unitLabels
+    expect(Object.keys(parsed ?? {}).sort()).toEqual(["__proto__", "he"])
+  })
+
+  it("surfaceUnitLabel: the viewer's word, else the single label", () => {
+    const words = { en: "units", he: "יחידות" }
+    expect(surfaceUnitLabel(words, "he", "single")).toBe("יחידות")
+    expect(surfaceUnitLabel(words, "ja", "single")).toBe("single")
+    expect(surfaceUnitLabel(undefined, "he", "single")).toBe("single")
+    expect(surfaceUnitLabel(words, undefined, "single")).toBe("single")
+    // Not fooled by an inherited key or a blank word.
+    expect(surfaceUnitLabel(words, "__proto__", "single")).toBe("single")
+    expect(surfaceUnitLabel(words, "constructor", "single")).toBe("single")
+    expect(surfaceUnitLabel({ he: "" }, "he", "single")).toBe("single")
   })
 
   it("a value it does not know falls to the restrictive side, never to more", () => {

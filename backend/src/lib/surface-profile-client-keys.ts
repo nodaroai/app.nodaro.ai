@@ -169,6 +169,32 @@ export function noteLocaleCoherence<T extends { default?: string; offered?: stri
   return l
 }
 
+/**
+ * `billing.unitLabels`: the unit's word per interface language, keyed by locale
+ * id in the platform's own spelling. A relabelling only, so it degrades softly
+ * and alone, and the unit keeps working on its single `unitLabel`: anything but
+ * an object drops whole, an entry with an unknown language or no word drops
+ * alone, and nothing usable leaves the key out. Whether the key may stand at
+ * all is `coherentBilling`'s call (surface-profile.ts): it rides with the unit.
+ */
+export function coherentUnitLabels(raw: unknown): Record<string, string> | undefined {
+  if (raw === undefined) return undefined
+  if (!isPlainObject(raw)) {
+    console.warn('[surface-profile] billing.unitLabels dropped — must be an object { "<locale id>": "<word>" }')
+    return undefined
+  }
+  const kept: [string, string][] = []
+  const dropped: string[] = []
+  for (const [locale, word] of Object.entries(raw)) {
+    const id = canonicalLocaleId(locale)
+    const text = typeof word === "string" ? word.trim() : ""
+    if (id && text) kept.push([id, text])
+    else dropped.push(locale)
+  }
+  if (dropped.length) console.warn(`[surface-profile] billing.unitLabels dropped ${JSON.stringify(dropped)} — each entry needs a known locale id and a non-empty word`)
+  return kept.length ? Object.fromEntries(kept) : undefined
+}
+
 export const brandLogoSchema = z
   .unknown()
   .optional()

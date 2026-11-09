@@ -150,6 +150,19 @@ describe("GenerateButton", () => {
     expect(button.textContent).not.toContain("(1 credits)")
   })
 
+  it("names the deployment's unit when it shows its own, in the viewer's language where it gives one", () => {
+    window.__NODARO_RUNTIME__ = { surface: { billing: { costTab: "inherit", sidebarCard: "inherit", selfServe: true, unitLabel: "נקודות", unitRate: 10, unitLabels: { en: "points" } } } } as unknown as typeof window.__NODARO_RUNTIME__
+    try {
+      mockCreditCost.mockReturnValue({ data: 2 })
+      render(<GenerateButton {...defaultProps} />)
+      const button = screen.getByTestId("generate-button")
+      expect(button.textContent).toContain("(20 points)")
+      expect(button.textContent).not.toContain("credits")
+    } finally {
+      delete window.__NODARO_RUNTIME__
+    }
+  })
+
   it("renders custom label", () => {
     render(<GenerateButton {...defaultProps} label="Run Task" />)
     const button = screen.getByTestId("generate-button")

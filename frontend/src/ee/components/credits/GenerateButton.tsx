@@ -5,7 +5,7 @@ import { hasCredits } from "@/lib/edition"
 import { useT } from "@/lib/i18n"
 import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
 import { useModelCreditCost, useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
-import { creditUnits, creditUnitsApprox } from "@/lib/credit-units"
+import { creditUnitLabel, creditUnits, creditUnitsApprox } from "@/lib/credit-units"
 import { isModelEstimate } from "@/hooks/use-model-credit-cost"
 import { spendableCredits } from "@/lib/spendable-credits"
 import { useBillingSurface } from "@/hooks/use-billing-surface"
@@ -97,7 +97,7 @@ export function GenerateButton({
         <span className="ms-1 opacity-80">
           {t("credits.amount", {
             n: creditUnitsApprox(totalCost, estimate),
-            unit: shownCost === 1 ? t("credits.unit.one") : t("credits.unit.other"),
+            unit: creditUnitLabel(shownCost === 1 ? t("credits.unit.one") : t("credits.unit.other")),
           })}
         </span>
       )}

@@ -7392,7 +7392,9 @@ figures carry, 0–4), then `total`, `subscription`, `topup`, `dailySpent`,
 `dailyLimit`, `monthlyAllocation` and `appCreditsAllowance` in that unit, each
 `number | null` (`null` = unavailable — show an em dash, never 0). Plus
 `allowance: { granted, remaining } | null`, `externalWallet: { available }` and
-`welcomeOffer: { credits }`, each present exactly when the raw key is.
+`welcomeOffer: { credits }`, each present exactly when the raw key is. Where
+the deployment names its unit per interface language it also carries
+`unitLabels` (locale id → word): show `unitLabels[locale] ?? unit`.
 
 **`WelcomeOfferState`:**
 

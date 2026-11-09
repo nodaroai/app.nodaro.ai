@@ -86,6 +86,7 @@ describe("the backend's surface projection reaches a reader whole", () => {
         unitLabel: "units",
         unitRate: 2000,
         unitDecimals: 0,
+        unitLabels: { en: "units", he: "יחידות" },
         payerAccount: "billing@acme.example",
         defaultAllowanceUnits: 400000,
         allowances: "enforce",

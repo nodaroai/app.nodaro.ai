@@ -28,6 +28,14 @@ export interface DisplayUnitFields {
   unit: string
   /** Decimal places the converted figures carry (0–4). */
   decimals: number
+  /**
+   * The unit's word per interface language, when the deployment gives one per
+   * language: locale id → word, beside `unit` (the fallback). The request does
+   * not say which language the viewer's interface is in (the browser's
+   * `Accept-Language` is not it, and `GET /v1/credits/model-cost` answers from
+   * a public cache), so the server sends the words and the client picks.
+   */
+  unitLabels?: Readonly<Record<string, string>>
 }
 
 /** `GET /v1/user/credits` → `data.display`: the balance's credit figures, converted. */
@@ -66,7 +74,7 @@ function convert(v: number | null | undefined, u: DisplayUnit): number | null {
 }
 
 function unitFields(u: DisplayUnit): DisplayUnitFields {
-  return { unit: u.label, decimals: u.decimals }
+  return { unit: u.label, decimals: u.decimals, ...(u.labels ? { unitLabels: u.labels } : {}) }
 }
 
 /**

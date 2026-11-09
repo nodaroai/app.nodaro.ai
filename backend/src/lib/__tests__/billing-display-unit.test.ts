@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest"
-import { applyDisplayUnit, toUnits } from "../billing-display-unit.js"
+import { applyDisplayUnit, configuredDisplayUnit, toUnits } from "../billing-display-unit.js"
 import {
   noneBillingProvider,
   setBillingProvider,
@@ -230,6 +230,28 @@ describe("applyDisplayUnit — configured (label קרדיטים, rate 2000)", ()
   it("account(): an ABSENT `allocated` stays absent (mainline wire shape)", async () => {
     const a = (await wrapped().account("u"))!
     expect(Object.hasOwn(a, "allocated")).toBe(false)
+  })
+})
+
+describe("configuredDisplayUnit — the per-language words", () => {
+  it("carries the map beside the single label, which stays what the seam's own `unit` fields say", async () => {
+    configure({ unitLabel: "קרדיטים", unitRate: 2000, unitLabels: { en: "credits", he: "קרדיטים" } })
+    expect(configuredDisplayUnit()).toEqual({ label: "קרדיטים", rate: 2000, decimals: 0, labels: { en: "credits", he: "קרדיטים" } })
+    setBillingProvider(stub())
+    expect(getBillingProvider().displayUnit).toBe("קרדיטים")
+    expect((await getBillingProvider().account("u"))!.unit).toBe("קרדיטים")
+    expect((await getBillingProvider().report(["j1"]))!.get("j1")!.unit).toBe("קרדיטים")
+  })
+
+  it("no map: no labels key — a deployment with a single label reads exactly as before", () => {
+    configure({ unitLabel: "קרדיטים", unitRate: 2000 })
+    expect(configuredDisplayUnit()).toEqual({ label: "קרדיטים", rate: 2000, decimals: 0 })
+    expect(configuredDisplayUnit()).not.toHaveProperty("labels")
+  })
+
+  it("no unit: null, whatever the map says (it was dropped with the trio)", () => {
+    configure({ unitLabels: { en: "credits" } })
+    expect(configuredDisplayUnit()).toBeNull()
   })
 })
 

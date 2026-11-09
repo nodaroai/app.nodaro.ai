@@ -45,6 +45,7 @@ export type { CommunityCard } from "@nodaro/shared/apps"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import type { BillingSurface, BillingAccount } from "./billing-surface"
 import type { CreditAllowance } from "./spendable-credits"
+import type { BalanceDisplay } from "@nodaro/sdk/credits"
 import { withIdempotencyHeader } from "@/lib/idempotency-key"
 import { noteServerDate } from "@/lib/server-clock"
 import { runtimeApiUrl } from "@/lib/runtime-config"
@@ -7570,6 +7571,14 @@ export interface UserBalance {
    */
   allowance?: CreditAllowance | null
   externalWallet?: { available: number | null }
+  /**
+   * The same figures in the deployment's own unit, converted by the server;
+   * absent where no unit is configured (and on the billing account's own read
+   * under a single payer). Render these as they are, never `creditUnits` them
+   * again: `lib/spendable-credits.ts :: spendableDisplayFigure` picks the
+   * headline, `lib/credit-units.ts :: displayUnitLabel` words its unit.
+   */
+  display?: BalanceDisplay
 }
 
 export interface CreditCheckResult {

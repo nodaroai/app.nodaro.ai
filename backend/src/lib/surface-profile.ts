@@ -7,6 +7,7 @@ import {
   brandFaviconSchema,
   brandLogoSchema,
   catalogImagesSchema,
+  coherentUnitLabels,
   localeOfferedSchema,
   noteLocaleCoherence,
   parseFlag,
@@ -90,6 +91,13 @@ export interface SurfaceBilling {
   sidebarCard: "inherit" | "hidden"
   /** Display label for a credit figure. BOTH-OR-NEITHER with unitRate. */
   unitLabel?: string
+  /**
+   * The unit's word per interface language, locale id → word, beside `unitLabel`
+   * (what a language it does not name falls back to). A member of the unit
+   * family: it stands only beside a coherent trio. The browser and the server's
+   * `display` objects get the map; the client picks the viewer's word.
+   */
+  unitLabels?: Record<string, string>
   /** Display units per 1 Nodaro credit. BOTH-OR-NEITHER with unitLabel. */
   unitRate?: number
   /** Decimal places for a converted figure. 0..4, default 0. */
@@ -300,7 +308,7 @@ const BILLING_DEFAULT: SurfaceBilling = { costTab: "inherit", sidebarCard: "inhe
  * requires the unit (the hosted overlay's register() asserts it and the loader
  * turns that into exit(1)); parseSurfaceProfile never throws, by contract.
  */
-function coherentBilling(raw: { costTab: "inherit" | "hidden"; sidebarCard: "inherit" | "hidden"; selfServe: boolean; unitLabel?: unknown; unitRate?: unknown; unitDecimals?: unknown; payerAccount?: unknown; defaultAllowanceUnits?: unknown; allowances?: unknown }): SurfaceBilling {
+function coherentBilling(raw: { costTab: "inherit" | "hidden"; sidebarCard: "inherit" | "hidden"; selfServe: boolean; unitLabel?: unknown; unitLabels?: unknown; unitRate?: unknown; unitDecimals?: unknown; payerAccount?: unknown; defaultAllowanceUnits?: unknown; allowances?: unknown }): SurfaceBilling {
   const out: SurfaceBilling = { costTab: raw.costTab, sidebarCard: raw.sidebarCard, selfServe: raw.selfServe }
   // Independent of the unit trio: a malformed payerAccount drops ALONE (the
   // unit keeps working), and vice versa. The fail-LOUD half — "configured but
@@ -323,16 +331,23 @@ function coherentBilling(raw: { costTab: "inherit" | "hidden"; sidebarCard: "inh
       "[surface-profile] billing.defaultAllowanceUnits/allowances dropped — they are members of the unit family and need a coherent unitLabel + unitRate",
     )
   }
+  // Same for the per-language words: they name the unit, so no coherent unit, no words.
+  const dropUnitLabels = (): void => {
+    if (raw.unitLabels === undefined) return
+    console.warn("[surface-profile] billing.unitLabels dropped — it needs a coherent unitLabel + unitRate to stand beside")
+  }
   const hasLabel = raw.unitLabel !== undefined
   const hasRate = raw.unitRate !== undefined
   if (!hasLabel && !hasRate && raw.unitDecimals === undefined) {
     dropAllowanceFamily()
+    dropUnitLabels()
     return out
   }
 
   const drop = (why: string): SurfaceBilling => {
     console.warn(`[surface-profile] billing.unitLabel/unitRate/unitDecimals dropped — ${why}`)
     dropAllowanceFamily()
+    dropUnitLabels()
     return out
   }
   if (hasLabel !== hasRate) return drop("unitLabel and unitRate must be set together (both or neither)")
@@ -354,6 +369,9 @@ function coherentBilling(raw: { costTab: "inherit" | "hidden"; sidebarCard: "inh
   out.unitLabel = raw.unitLabel.trim()
   out.unitRate = rate
   if (raw.unitDecimals !== undefined) out.unitDecimals = decimals
+  // Absent unless the deployment set one, so a single-label profile parses as it always has.
+  const unitLabels = coherentUnitLabels(raw.unitLabels)
+  if (unitLabels) out.unitLabels = unitLabels
 
   // The allowance pair — validated only now (the trio is coherent), and each
   // key drops ALONE: a bogus rollout gate must not take the seed down with it,
@@ -441,6 +459,7 @@ export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
       sidebarCard: z.enum(["inherit", "hidden"]).catch("inherit"),
       selfServe: lenientSelfServeFlag,
       unitLabel: z.unknown().optional(),
+      unitLabels: z.unknown().optional(),
       unitRate: z.unknown().optional(),
       unitDecimals: z.unknown().optional(),
       payerAccount: z.unknown().optional(),

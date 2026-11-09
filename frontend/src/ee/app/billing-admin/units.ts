@@ -13,6 +13,7 @@
  * throws the quotient away.
  */
 
+import { serverUnitLabel } from "@/lib/credit-units"
 import { formatDate, formatNumber } from "@/lib/i18n/format"
 
 /** The deployment's display unit, exactly as `/overview` reports it. `null`
@@ -22,6 +23,11 @@ export interface DisplayUnit {
   readonly label: string
   readonly rate: number
   readonly decimals: number
+}
+
+/** The unit named for the viewer (`billing.unitLabels`, else its label); "" where the deployment has none. */
+export function unitWord(unit: DisplayUnit | null): string {
+  return unit ? serverUnitLabel(unit.label, unit.label) : ""
 }
 
 export type UnitsInputError =

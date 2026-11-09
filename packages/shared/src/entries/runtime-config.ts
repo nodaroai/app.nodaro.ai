@@ -33,6 +33,7 @@ export {
   parseRuntimeConfig,
   readRuntimeConfig,
   surfaceStringOverride,
+  surfaceUnitLabel,
   uiStringManifestFile,
   uiStringPlaceholders,
   buildUiStringManifest,

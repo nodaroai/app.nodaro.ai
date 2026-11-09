@@ -1005,6 +1005,17 @@ optional; each array empty = "keep the default"):
     number > 0; decimals an integer in 0–4; 1 credit<!-- credits: n/a --> must not round to 0; and
     `unitRate × 10^unitDecimals` must be an integer so per-charge conversion
     sums exactly. Unset = the platform's own labels, no conversion.
+  - `billing.unitLabels` (optional, beside `unitLabel`): the unit's word per
+    interface language, by locale id in the platform's spelling
+    (`{ "en": "points", "he": "נקודות" }`; `pt-br` is read as `pt-BR`). A viewer
+    reads the word for the language on screen, and a language with no word
+    falls back to `unitLabel`, which stays required. The words are a member of
+    the unit: they need a coherent `unitLabel` + `unitRate`, and are dropped
+    with them when the unit is. A value that is not an object is dropped with
+    a warning, an entry with an unknown language or no word is dropped alone,
+    and neither touches the unit. They reach `/config.js` and the `display`
+    objects of the balance and price reads (`display.unitLabels`, for the
+    client to pick from). Unset = the one label in every language.
   - `billing.costTab`: `"hidden"` keeps the canvas Cost tab off even with a
     billing provider registered (default `"inherit"`).
   - `billing.sidebarCard`: `"hidden"` removes the sidebar credit-balance card
@@ -1404,7 +1415,10 @@ logo is dropped with a warning and the rest of `brand` is kept.
   `"default"`; any other value reads as `"none"`.
 - `locale.offered`: the languages a visitor may pick from, as locale ids
   (`["he","en"]`), read in the platform's own spelling (`pt-br` becomes
-  `pt-BR`). Unknown ids are dropped with a warning, and a list with none left
+  `pt-BR`). Every language list in the editor offers only these: the header's
+  menu, the sidebar's switcher, and the language picker on a parameter node's
+  panel (a language already on screen stays listed so it can be switched away
+  from). Unknown ids are dropped with a warning, and a list with none left
   is ignored (every language stays offered). A `locale.default` the list does
   not include is warned about at boot.
 - `header`: `"default"`, or `"white-label"` for the deployment's own header
@@ -1421,7 +1435,11 @@ logo is dropped with a warning and the rest of `brand` is kept.
   - its billing: with `billing.selfServe: false` no plans, upgrade, billing or
     welcome credits. The credit figure is the one the sidebar card shows (the
     viewer's allowance under a single payer), in the deployment's display unit
-    when one is configured;
+    when one is configured, named in the viewer's language when the deployment
+    gives `billing.unitLabels`. The balance readout outside the header (the
+    app runner, `/present` links, and the editor's toolbar when the header did
+    not load) follows the same figure and unit, and carries no plan badge with
+    `billing.selfServe: false`;
   - its languages (`locale.offered`; no language choice with
     `locale.picker: false`). The header's language and accessibility cookies
     stay on the host;

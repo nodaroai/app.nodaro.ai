@@ -12,6 +12,7 @@
 // Deliberately free of any import from the locale store (which imports this
 // module for browser detection) — keep it that way.
 import { LANGUAGES, type LocaleId } from "@nodaro/shared/i18n"
+import { surfaceLocaleOffered } from "../surface-selectors"
 import { en, type MessageKey } from "./en"
 import { DICTS } from "./dicts"
 
@@ -55,12 +56,32 @@ export function isOfferedLocale(id: string | null | undefined): id is LocaleId {
 }
 
 /**
- * Rows for a language menu: the offered languages, plus the current locale
- * when it is not offered — a saved choice made before the gate existed stays
- * visible and switchable instead of silently disappearing from the menu.
+ * What a deployment's `locale.offered` leaves of the offered languages, in
+ * their order, spelling aside. `OFFERED` itself when the deployment names
+ * none. Read at call time: `locale.offered` lives in `/config.js`, the
+ * dictionaries behind `OFFERED` do not.
+ */
+function offeredHere(): ReadonlyArray<LanguageDefinition> {
+  const narrowed = surfaceLocaleOffered()
+  if (!narrowed) return OFFERED
+  const ids = new Set(narrowed.map((id) => id.toLowerCase()))
+  return OFFERED.filter((l) => ids.has(l.id.toLowerCase()))
+}
+
+/**
+ * Rows for a language menu: the languages this deployment offers, plus the
+ * current locale when it is not one of them — a saved choice made before the
+ * gate existed (or a language this deployment does not offer) stays visible and
+ * switchable instead of silently disappearing from the menu.
+ *
+ * Every language list in the app reads this one helper, directly or through
+ * `useUiLanguage`'s `rows`; `__tests__/language-lists-funnel.test.ts` fails a
+ * list that walks the registry or narrows on its own. A pick in any of them
+ * switches the whole interface, so none may offer more than the deployment does.
  */
 export function languageMenuRows(current: LocaleId): ReadonlyArray<LanguageDefinition> {
-  if (OFFERED_IDS.has(current)) return OFFERED
+  const offered = offeredHere()
+  if (offered.some((l) => l.id === current)) return offered
   const currentDef = LANGUAGES.find((l) => l.id === current)
-  return currentDef ? [...OFFERED, currentDef] : OFFERED
+  return currentDef ? [...offered, currentDef] : offered
 }

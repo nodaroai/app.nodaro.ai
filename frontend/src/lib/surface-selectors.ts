@@ -125,9 +125,20 @@ export function surfaceLocalePicker(): boolean {
 
 /** The label a CLIENT-computed credit figure is rendered with. "CR" when no
  *  unit is configured. Figures that arrive from the billing seam carry their
- *  own unit (cost-summary `unit`, account `unit`) — render those with THAT. */
+ *  own unit (cost-summary `unit`, account `unit`) — render those with THAT.
+ *  This is the deployment's single label; a screen reads the viewer's word
+ *  through `creditUnitLabel` (lib/credit-units.ts). */
 export function surfaceCreditUnitLabel(): string {
   return runtimeSurfaceProfile().billing.unitLabel ?? "CR"
+}
+
+/**
+ * The unit's word per interface language (`billing.unitLabels`), or undefined.
+ * The viewer's word is picked in `lib/credit-units.ts`: this module must not
+ * read the locale store, which imports it and reads a default from it at load.
+ */
+export function surfaceCreditUnitLabels(): Readonly<Record<string, string>> | undefined {
+  return runtimeSurfaceProfile().billing.unitLabels
 }
 
 /** Display units per 1 Nodaro credit; 1 when no unit is configured. */

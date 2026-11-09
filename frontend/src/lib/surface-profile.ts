@@ -41,6 +41,8 @@ export interface SurfaceBilling {
   costTab: "inherit" | "hidden"
   sidebarCard: "inherit" | "hidden"
   unitLabel?: string
+  /** The unit's word per interface language, beside `unitLabel` (`lib/credit-units.ts` picks the viewer's). */
+  unitLabels?: Record<string, string>
   unitRate?: number
   unitDecimals?: number
   selfServe: boolean
