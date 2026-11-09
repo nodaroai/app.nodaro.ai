@@ -5674,6 +5674,7 @@ export const he: ChromeDict = {
   "vidcfg.orientVideoKlingSuffix": ", עד 30 שניות",
   "vidcfg.normal": "רגיל",
   "vidcfg.nsfwFilter": "מסנן תוכן לא הולם",
+  "vidcfg.nsfwFilterForced": "נקבע על ידי מנהל המערכת",
   "vidcfg.originalAudio": "אודיו מקורי",
   "vidcfg.pro1080p": "Pro (1080p)",
   "vidcfg.referenceMode": "מצב ייחוס",

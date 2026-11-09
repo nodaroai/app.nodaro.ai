@@ -139,6 +139,7 @@ export const ROUTE_ONLY_FAMILIES: Readonly<Record<string, string>> = {
   "api-tokens": "personal API tokens",
   component: "running a saved component",
   consent: "consent prompts and their answers",
+  "provider-safety": "which models an administrator forced the content filter on for (the node checkbox reads it)",
   "content-complaints": "the public complaints form (a complainant has no account; no SDK or MCP surface on purpose)",
   "deployment-billing": "a deployment's own billing for its users",
   download: "downloading a finished asset",

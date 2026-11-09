@@ -23,11 +23,14 @@ export const SEEDANCE_DRAFT_FINALIZE_KIE_MODEL = "bytedance/seedance-2-5-draft"
 export const SEEDANCE_DRAFT_UNAVAILABLE_MESSAGE =
   "This Seedance draft can no longer be finalized — drafts are kept for about 7 days. Make a new draft and finalize it."
 
-export function buildSeedanceDraftFinalizeInput(draftTaskId: string): Record<string, unknown> {
+export function buildSeedanceDraftFinalizeInput(draftTaskId: string, opts: { nsfwChecker?: boolean } = {}): Record<string, unknown> {
   return {
     draft_task_id: draftTaskId,
     resolution: SEEDANCE_DRAFT_FINALIZE_RESOLUTION,
     output_format: seedance25OutputFormat(),
+    // The draft's own filter choice: only sent when the draft asked for it, so
+    // a finalize of any other draft is byte-identical.
+    ...(opts.nsfwChecker === true ? { nsfw_checker: true } : {}),
   }
 }
 
@@ -64,12 +67,14 @@ export async function runSeedanceDraftFinalize(
     onProgress?: ProgressCallback
     reconcile?: ReconcileOpts
     billing?: { billedSec: number; hasRefVideo: boolean }
+    /** The node's filter choice, carried from the draft: the finalize must not drop it. */
+    nsfwChecker?: boolean
   } = {},
 ): Promise<{ url: string; kieTaskId?: string; providerMs?: number; cost?: number }> {
   try {
     const r = await runKieTask(
       SEEDANCE_DRAFT_FINALIZE_KIE_MODEL,
-      buildSeedanceDraftFinalizeInput(draftTaskId),
+      buildSeedanceDraftFinalizeInput(draftTaskId, { nsfwChecker: opts.nsfwChecker }),
       undefined,
       opts.onProgress,
       {

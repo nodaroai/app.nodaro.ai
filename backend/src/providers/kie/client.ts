@@ -17,6 +17,7 @@ import { sleep as delay } from "../../lib/sleep.js"
 import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import { providerFetch, readUserSafeMessage, type EgressMeta } from "../egress.js"
+import { applyProviderSafety, kieSafetyEntry } from "../../lib/provider-safety.js"
 import { getRuntimeEnv } from "../../lib/runtime-env.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 
@@ -822,7 +823,9 @@ export async function createKieTask(
     )
   }
 
-  const requestBody = { model, input }
+  // The admin's content-filter setting for this model, if any (lib/provider-safety.ts).
+  // With nothing set this is the same object, so the request is byte-identical.
+  const requestBody = { model, input: await applyProviderSafety(kieSafetyEntry(model, meta?.modelKey), input) }
 
   if (DEBUG) {
     console.log(`[KIE.ai] >>>>>> SENDING TO KIE.AI API <<<<<<`)

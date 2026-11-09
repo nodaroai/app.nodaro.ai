@@ -18,6 +18,9 @@ import { runTopazImageUpscale } from "./topaz.js"
 import { translateToEnglish } from "../../lib/translate.js"
 import { isFlux2Model } from "@nodaro/shared/model-catalog"
 import { flux2CostUsd } from "../../lib/pricing/flux2-cost.js"
+import { applyProviderSafety } from "../../lib/provider-safety.js"
+import { confirmedByRun, DISABLE_SAFETY_CHECKER_LEVER, type SafetyLever } from "../safety-levers.js"
+import type { ProviderSafetyEntry } from "../kie/models.js"
 
 const DEFAULT_ASPECT_RATIO = "1:1"
 
@@ -55,12 +58,15 @@ interface ReplicateModelSpec {
     referenceImageUrls: string[] | undefined,
     extraParams: Record<string, unknown> | undefined,
   ) => Record<string, unknown>
+  /** The model's content-filter settings, as its schema exposes them (https://replicate.com/<model>/api/schema). */
+  safetyLevers?: readonly SafetyLever[]
 }
 
 const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
   // BFL Flux 2 9B Klein — small, fast, no KIE safety filter.
   "flux-2-klein": {
     model: "black-forest-labs/flux-2-klein-9b",
+    safetyLevers: [confirmedByRun(DISABLE_SAFETY_CHECKER_LEVER)],
     buildInput: (prompt, referenceImageUrls, extraParams) => {
       const { aspectRatio, seed } = readCommon(extraParams)
       const input: Record<string, unknown> = {
@@ -83,6 +89,8 @@ const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
   // "nodaroai/char-<uuid>:abc123...").
   "flux-lora-character": {
     model: null,
+    // A trained character is a real person's look: this is never loosened.
+    safetyLevers: [{ ...DISABLE_SAFETY_CHECKER_LEVER, neverLoosen: true }],
     buildInput: (prompt, _refs, extraParams) => {
       const { aspectRatio, seed } = readCommon(extraParams)
       const triggerWord = (extraParams?.lora_trigger as string | undefined) ?? ""
@@ -101,6 +109,8 @@ const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
   // (it is a two-image combiner), so the ref cap is 2 (see REF_IMAGE_MAX_LIMITS).
   "kontext-multi": {
     model: "flux-kontext-apps/multi-image-kontext-pro",
+    // Always takes input images, so never loosened.
+    safetyLevers: [{ kind: "scale", param: "safety_tolerance", min: 0, max: 2, strictest: 0, shipped: null, providerDefault: 2, neverLoosen: true }],
     buildInput: (prompt, referenceImageUrls, extraParams) => {
       const { aspectRatio, seed } = readCommon(extraParams)
       const refs = referenceImageUrls ?? []
@@ -123,6 +133,8 @@ const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
   // input image — no aspect_ratio param in this schema.
   "flux-fill": {
     model: "black-forest-labs/flux-fill-pro",
+    // Always takes an input image and mask, so never loosened (the schema's looser 6 stays out of reach).
+    safetyLevers: [{ kind: "scale", param: "safety_tolerance", min: 1, max: 6, strictest: 1, shipped: 5, providerDefault: 2, neverLoosen: true }],
     buildInput: (prompt, referenceImageUrls, extraParams) => {
       const input: Record<string, unknown> = {
         prompt,
@@ -144,6 +156,7 @@ const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
   // `buildCreditModelIdentifier`). Supports up to 8 reference images.
   "flux-2-max": {
     model: "black-forest-labs/flux-2-max",
+    safetyLevers: [{ kind: "scale", param: "safety_tolerance", min: 1, max: 5, strictest: 1, shipped: 5, providerDefault: 2 }],
     buildInput: (prompt, referenceImageUrls, extraParams) => {
       const { aspectRatio, seed } = readCommon(extraParams)
       const refs = referenceImageUrls ?? []
@@ -168,6 +181,7 @@ const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
   // `input_images` array (the model accepts up to 8; frontend caps at 4).
   "flux-2-pro": {
     model: "black-forest-labs/flux-2-pro",
+    safetyLevers: [{ kind: "scale", param: "safety_tolerance", min: 1, max: 5, strictest: 1, shipped: 5, providerDefault: 2 }],
     buildInput: (prompt, referenceImageUrls, extraParams) => {
       const { aspectRatio, seed } = readCommon(extraParams)
       const refs = referenceImageUrls ?? []
@@ -209,7 +223,8 @@ async function runImagePrediction(
     `[Replicate:image] model=${model} (${spec.model}) prompt="${englishPrompt}" refs=${referenceImageUrls?.length ?? 0}`,
   )
 
-  const input = spec.buildInput(englishPrompt, referenceImageUrls, extraParams)
+  const built = spec.buildInput(englishPrompt, referenceImageUrls, extraParams)
+  const input = await applyProviderSafety(replicateSafetyEntry(model), built)
 
   // Resolve dynamic model (flux-lora-character) per-request from extraParams.
   // Versioned references contain ":" (owner/name:hash) and use the `version`
@@ -290,4 +305,15 @@ export class ReplicateImageProvider implements ImageGenerationProvider, ImageEdi
     const resolved = model ?? REPLICATE_IMAGE_MODEL_IDS[0]
     return runImagePrediction(prompt, resolved, referenceImageUrls, extraParams, reconcileOpts)
   }
+}
+
+/** Replicate's image models with a content-filter lever, as the admin page and the chokepoint read them. */
+export function replicateSafetyEntries(): readonly ProviderSafetyEntry[] {
+  return Object.entries(IMAGE_MODELS).flatMap(([modelId, spec]) =>
+    spec.safetyLevers?.length ? [{ modelId, wireModel: spec.model ?? modelId, levers: spec.safetyLevers }] : [],
+  )
+}
+
+function replicateSafetyEntry(modelId: string): ProviderSafetyEntry | null {
+  return replicateSafetyEntries().find((e) => e.modelId === modelId) ?? null
 }

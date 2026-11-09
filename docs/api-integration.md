@@ -2374,6 +2374,10 @@ instance can use: a node the deployment withholds from users is absent, and
 Web Scrape's description leaves out any source it withdraws (its Instagram
 source follows the Instagram node's availability).
 
+### Which models have a content filter forced on
+
+`GET /v1/provider-safety/locks` answers `{ "forcedOn": ["seedance-2"] }`: the models a deployment administrator has forced the content filter on for. A client that offers a filter choice for one of these models should show it on and locked; empty when none is forced.
+
 ### Model catalog
 
 `GET /v1/models` — the REST twin of the MCP `list_models` tool, for plain

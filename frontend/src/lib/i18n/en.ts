@@ -5704,6 +5704,7 @@ export const en = {
   "vidcfg.orientVideoKlingSuffix": ", max 30s",
   "vidcfg.normal": "Normal",
   "vidcfg.nsfwFilter": "NSFW Content Filter",
+  "vidcfg.nsfwFilterForced": "Set by your administrator",
   "vidcfg.originalAudio": "Original audio",
   "vidcfg.pro1080p": "Pro (1080p)",
   "vidcfg.referenceMode": "Reference Mode",

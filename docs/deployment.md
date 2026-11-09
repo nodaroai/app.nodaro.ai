@@ -1160,6 +1160,8 @@ vocal gender and negative style that call returns for a music prompt and sends
 both to the provider, as the platform's own music lane does; it applies no
 policy itself, so a music prompt is policed once.
 
+**Provider content filters (Admin → Provider Safety).** Some providers expose a setting for their own content filter on a model. Where one exists, a platform operator can set it per model: forcing a filter on applies to every run of that model, and a model left alone keeps the request it sends today. Loosening a filter is refused unless the deployment has registered both a content guard and a result check (a check of what a model actually made). Nothing registers a result check yet, so every loosening control is locked today, and Admin says so. Once it is allowed, loosening never applies to a request that carries an input image or video, and never applies to a model that works from a real person's face or body. Anything made on a loosened model stays out of the public gallery. A provider's moderation that it does not expose as a setting cannot be changed from here. A changed setting applies to new runs within a few seconds.
+
 **Job policy (generation gates).** A deployment that must judge generations —
 before they run, or before their output is published — registers a backend
 `JobPolicy` at the composition root (`backend/src/lib/job-policy.ts`). Like the

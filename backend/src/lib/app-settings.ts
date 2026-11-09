@@ -3,6 +3,7 @@ import { supabase } from "./supabase.js"
 import { appSettingsChangedSince, appSettingsVersion, forgetAppSettingsVersion } from "./app-settings-version.js"
 import type { GalleryWordEntry } from "./gallery-word-filter.js"
 import { MODEL_MAKER_LOGOS_KEY, parseModelMakerLogos } from "./maker-logo-settings.js"
+import { PROVIDER_SAFETY_OVERRIDES_KEY, parseProviderSafetyOverrides } from "./provider-safety-settings.js"
 import { NODARO_MOTION_MASKING_KEY, parseNodaroMotionMasking, type NodaroMotionMasking } from "./nodaro-motion-masking.js"
 import { NODARO_MOTION_PROMPT_PARTS_KEY, parseNodaroMotionPromptParts, type NodaroMotionPromptParts } from "./nodaro-motion-prompt-parts.js"
 import { NODARO_MOTION_MOTION_KEY, parseNodaroMotionMotion, type NodaroMotionMotion } from "./nodaro-motion-motion.js"
@@ -194,6 +195,8 @@ export interface AppSettings {
    * window they are counted over. Absent or unreadable: the default.
    */
   rights_repeat_infringer_policy: RepeatInfringerPolicy
+  /** What an admin changed about provider content filters (lib/provider-safety.ts); empty = none. */
+  provider_safety_overrides: Record<string, Record<string, boolean | number>>
 }
 
 // The settings are kept in memory so a job does not read every row each time.
@@ -252,7 +255,7 @@ async function refreshSettings(): Promise<AppSettings> {
   if (error) {
     console.error("[getAppSettings] Error fetching settings:", error.message)
     // Return defaults on error
-    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null, nodaro_motion_pulse_audio: null, nodaro_motion_prism_reference_audio: null, nodaro_motion_steps: null, nodaro_motion_style: null, nodaro_motion_prompt_wording: null, nodaro_motion_style_only: null, nodaro_motion_precise_art_style: null, nodaro_motion_no_person: null, nodaro_motion_precise_style_route: null, nodaro_motion_advanced: null, content_rights_required: false, rights_repeat_infringer_policy: DEFAULT_REPEAT_INFRINGER_POLICY }
+    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null, nodaro_motion_pulse_audio: null, nodaro_motion_prism_reference_audio: null, nodaro_motion_steps: null, nodaro_motion_style: null, nodaro_motion_prompt_wording: null, nodaro_motion_style_only: null, nodaro_motion_precise_art_style: null, nodaro_motion_no_person: null, nodaro_motion_precise_style_route: null, nodaro_motion_advanced: null, content_rights_required: false, rights_repeat_infringer_policy: DEFAULT_REPEAT_INFRINGER_POLICY, provider_safety_overrides: {} }
     readFailures.add(fallback)
     return fallback
   }
@@ -289,6 +292,7 @@ async function refreshSettings(): Promise<AppSettings> {
     nodaro_motion_advanced: null,
     content_rights_required: false,
     rights_repeat_infringer_policy: DEFAULT_REPEAT_INFRINGER_POLICY,
+    provider_safety_overrides: {},
   }
 
   for (const row of data ?? []) {
@@ -298,6 +302,10 @@ async function refreshSettings(): Promise<AppSettings> {
     }
     if (row.key === REPEAT_INFRINGER_POLICY_KEY) {
       settings.rights_repeat_infringer_policy = parseRepeatInfringerPolicy(row.value)
+      continue
+    }
+    if (row.key === PROVIDER_SAFETY_OVERRIDES_KEY) {
+      settings.provider_safety_overrides = parseProviderSafetyOverrides(row.value)
       continue
     }
     if (row.key === NODARO_MOTION_MASKING_KEY) {

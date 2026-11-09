@@ -5550,6 +5550,7 @@ export const ko: ChromeDict = {
   "vidcfg.orientVideoKlingSuffix": ", 최대 30초",
   "vidcfg.normal": "표준",
   "vidcfg.nsfwFilter": "NSFW 콘텐츠 필터",
+  "vidcfg.nsfwFilterForced": "관리자가 설정함",
   "vidcfg.originalAudio": "원본 오디오",
   "vidcfg.pro1080p": "프로(1080p)",
   "vidcfg.referenceMode": "레퍼런스 모드",

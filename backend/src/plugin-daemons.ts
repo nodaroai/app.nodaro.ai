@@ -21,6 +21,7 @@ import { loadOverlay } from "./lib/overlay/load.js"
 import { loadContentGuard } from "./lib/content-guard-load.js"
 import { initializeExternalWallet } from "./lib/external-wallet.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
+import { useProviderSafetySettings } from "./lib/provider-safety.js"
 import type { PluginDaemonHost } from "./lib/plugin-daemons/host.js"
 
 /** Upper bound on any shutdown: the host's drain window plus a margin, then exit regardless. */
@@ -115,6 +116,7 @@ async function main() {
   await loadContentGuard()
   await initializeExternalWallet(true)
   registerMainlinePromptPolicies()
+  useProviderSafetySettings()
 
   if (!hasCredits()) {
     console.info("[plugin-daemons] EDITION is not cloud — no plugin daemons to host")

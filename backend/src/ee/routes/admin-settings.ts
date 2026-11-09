@@ -16,6 +16,7 @@ import { isSlackWebhookValid } from "../notifications/slack-client.js"
 import { MODEL_MAKER_LOGOS_KEY, modelMakerLogosError } from "../../lib/maker-logo-settings.js"
 import { LANE_LIVE_WAIT_KEY, LANE_QUEUE_TIMEOUT_KEY, LANES_ENFORCED_KEY } from "../../lib/concurrency-lanes/settings-keys.js"
 import { REPEAT_INFRINGER_POLICY_KEY } from "../../lib/repeat-infringer-policy.js"
+import { PROVIDER_SAFETY_OVERRIDES_KEY } from "../../lib/provider-safety-settings.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
 
@@ -29,6 +30,7 @@ const DEDICATED_SETTING_ROUTES: Readonly<Record<string, string>> = Object.freeze
   [LANE_QUEUE_TIMEOUT_KEY]: "PUT /v1/admin/lanes/settings",
   [LANE_LIVE_WAIT_KEY]: "PUT /v1/admin/lanes/settings",
   [REPEAT_INFRINGER_POLICY_KEY]: "PUT /v1/admin/repeat-infringer-policy",
+  [PROVIDER_SAFETY_OVERRIDES_KEY]: "PUT /v1/admin/provider-safety",
 })
 
 const settingKeyParams = z.object({

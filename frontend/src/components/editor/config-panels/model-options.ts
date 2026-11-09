@@ -76,9 +76,9 @@ export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string
   { value: "z-image", label: "Z-Image", desc: "Fast, lightweight generation" },
   { value: "wan-2.7",     label: "Wan 2.7",     desc: "T2I, 1K/2K/4K, up to 9 ref images" },
   { value: "wan-2.7-pro", label: "Wan 2.7 Pro", desc: "Higher quality T2I, 1K/2K/4K" },
-  { value: "flux-2-klein", label: "Flux 2 Klein (Open)", desc: "BFL Flux 2 9B via Replicate — fast, no safety filter" },
-  { value: "flux-2-pro", label: "Flux 2 Pro (Safety Tolerance)", desc: "BFL Flux 2 Pro via Replicate — flagship quality, safety_tolerance=5 (max for Pro)" },
-  { value: "flux-2-max", label: "Flux 2 Max (Safety Tolerance)", desc: "BFL Flux 2 Max via Replicate — even larger sibling, up to 8 refs, safety_tolerance=5 (variable pricing: 2-62 cr)" },
+  { value: "flux-2-klein", label: "Flux 2 Klein (Open)", desc: "BFL Flux 2 9B via Replicate — fast" },
+  { value: "flux-2-pro", label: "Flux 2 Pro (Safety Tolerance)", desc: "BFL Flux 2 Pro via Replicate — flagship quality" },
+  { value: "flux-2-max", label: "Flux 2 Max (Safety Tolerance)", desc: "BFL Flux 2 Max via Replicate — even larger sibling, up to 8 refs (variable pricing: 2-62 cr)" },
 ]
 
 export const IMAGE_GEN_MODEL_IDS = IMAGE_GEN_MODELS.map(m => m.value)
@@ -106,9 +106,9 @@ export const IMAGE_I2I_MODELS: readonly { value: ImageI2IProvider; label: string
   { value: "seedream-5-pro-i2i", label: "Seedream 5 Pro", desc: "Pro Seedream image-to-image, multi-reference edits" },
   { value: "seedream-5-flash-i2i", label: "Seedream 5 Flash", desc: "Fast, low-cost Seedream edits, up to 10 input images" },
   { value: "seedream-edit", label: "Seedream Edit", desc: "Photorealistic image editing" },
-  { value: "kontext-multi", label: "Kontext Multi (Open)", desc: "Multi-image Flux Kontext via Replicate — up to 4 refs, no safety filter" },
-  { value: "flux-2-pro", label: "Flux 2 Pro (Safety Tolerance)", desc: "BFL Flux 2 Pro via Replicate — flagship quality, safety_tolerance=5" },
-  { value: "flux-2-max", label: "Flux 2 Max (Safety Tolerance)", desc: "BFL Flux 2 Max via Replicate — up to 8 refs, safety_tolerance=5 (variable pricing: 2-62 cr)" },
+  { value: "kontext-multi", label: "Kontext Multi (Open)", desc: "Multi-image Flux Kontext via Replicate — up to 4 refs" },
+  { value: "flux-2-pro", label: "Flux 2 Pro (Safety Tolerance)", desc: "BFL Flux 2 Pro via Replicate — flagship quality" },
+  { value: "flux-2-max", label: "Flux 2 Max (Safety Tolerance)", desc: "BFL Flux 2 Max via Replicate — up to 8 refs (variable pricing: 2-62 cr)" },
   { value: "flux-fill", label: "Flux Fill (Inpaint)", desc: "BFL FLUX Fill Pro via Replicate — dedicated masked inpainting (white = edit area)" },
 ]
 

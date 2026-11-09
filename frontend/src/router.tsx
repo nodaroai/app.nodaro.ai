@@ -135,6 +135,7 @@ const AdminReview = lazy(() => import("@/ee/app/(admin)/admin/review/page"))
 const AdminTrends = lazy(() => import("@/ee/app/(admin)/admin/trends/page"))
 const AdminTrendEditor = lazy(() => import("@/ee/app/(admin)/admin/trends/detail/page"))
 const AdminNodaroMotion = lazy(() => import("@/ee/app/(admin)/admin/nodaro-motion/page"))
+const AdminProviderSafety = lazy(() => import("@/ee/app/(admin)/admin/provider-safety/page"))
 const AdminMotionPriceCheck = lazy(() => import("@/ee/app/(admin)/admin/motion-price-check/page"))
 const AdminTrendRadar = lazy(() => import("@/ee/app/(admin)/admin/trend-radar/page"))
 const AdminTrendRadarSettings = lazy(() => import("@/ee/app/(admin)/admin/trend-radar/settings-page"))
@@ -203,6 +204,7 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
       { path: "app-reports", element: <SuspenseWrapper><AdminAppReports /></SuspenseWrapper> },
       { path: "complaints", element: <SuspenseWrapper><AdminComplaints /></SuspenseWrapper> },
       { path: "complaints/:id", element: <SuspenseWrapper><AdminComplaintCase /></SuspenseWrapper> },
+      { path: "provider-safety", element: <SuspenseWrapper><AdminProviderSafety /></SuspenseWrapper> },
       { path: "review", element: <SuspenseWrapper><AdminReview /></SuspenseWrapper> },
       // Trends exist only where credits do (the API is under hasCredits()), as does the nav entry.
       ...(hasCredits()

@@ -133,6 +133,7 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 | 11 | `frontend/src/lib/pricing-data.ts` | `PRICING_TIERS` if tier features/prices change |
 | 12 | `packages/shared/src/node-default-mappings.ts` | `QUALITY_MAP` + `deriveLinkedFields` — each entry MUST declare `field: "resolution" \| "quality"` (see pitfall 4) |
 | 12b | Config panel for the node type | Provider-aware dropdowns MUST have `useEffect([currentProvider])` that snaps stale values to a valid option, or clears them when the new provider has no such lever (see pitfall 5). Reference: `image-configs.tsx::GenerateImageConfig`, `video-configs.tsx::ImageToVideoConfig`, `audio-configs.tsx::LipSyncConfig` |
+| 12c | The model's provider config (`KieModelConfig`, `ReplicateModelSpec`, the fal config) | If the provider's API takes a content-filter parameter for this model, declare it as `safetyLevers` (`providers/safety-levers.ts`, what we send today included). Admin → Provider Safety is generated from it; `providers/__tests__/safety-levers.test.ts` fails a provider file that names one undeclared. |
 | 13 | `backend/skills/nodes/<type>.md` (generated) | If step 1 added/renamed node data fields, regenerate: `cd backend && npm run gen:skills`. The `gen:skills:check` CI job hard-fails on drift (see pitfall 6). |
 
 **Common pitfalls (each has caused a recurring outage):**

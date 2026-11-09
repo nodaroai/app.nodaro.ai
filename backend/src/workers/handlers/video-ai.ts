@@ -1175,7 +1175,7 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
 }
 
 const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx) {
-  const { videoUrl, upscaleFactor, targetResolution, targetFps, provider, kieTaskId, draftAudioMux, draftVideoUrl, draftHasRefVideo } = job.data as {
+  const { videoUrl, upscaleFactor, targetResolution, targetFps, provider, kieTaskId, draftAudioMux, draftNsfwChecker, draftVideoUrl, draftHasRefVideo } = job.data as {
     jobId: string
     videoUrl?: string
     /** Legacy relative lever — mapped onto a target over the clip's size. */
@@ -1187,6 +1187,8 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
     kieTaskId?: string
     /** Seedance draft finalize: the mux the draft got after rendering (from the source job). */
     draftAudioMux?: unknown
+    /** The draft's own filter choice (`nsfwChecker`), kept by its finalize. */
+    draftNsfwChecker?: unknown
     /** Seedance draft finalize: the stored draft clip (audio-copy fallback). */
     draftVideoUrl?: string
     /** Seedance draft finalize: whether the draft had a reference video. */
@@ -1239,6 +1241,7 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
         const result = await runSeedanceDraftFinalize(kieTaskId, {
           onProgress,
           reconcile: { onTaskCreated: makeOnTaskCreated(ctx.jobId, "kie-seedance-draft") },
+          nsfwChecker: draftNsfwChecker === true,
           ...(billedSec !== undefined ? { billing: { billedSec, hasRefVideo: draftHasRefVideo === true } } : {}),
         })
         finalizeMeta = result

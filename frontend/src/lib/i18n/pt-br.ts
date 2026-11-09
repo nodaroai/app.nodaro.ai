@@ -5550,6 +5550,7 @@ export const ptBR: ChromeDict = {
   "vidcfg.orientVideoKlingSuffix": ", máx. 30 s",
   "vidcfg.normal": "Normal",
   "vidcfg.nsfwFilter": "Filtro de conteúdo NSFW",
+  "vidcfg.nsfwFilterForced": "Definido pelo administrador",
   "vidcfg.originalAudio": "Áudio original",
   "vidcfg.pro1080p": "Pro (1080p)",
   "vidcfg.referenceMode": "Modo de referência",

@@ -16,6 +16,9 @@
 import { runFalRequest, extractFalUrl } from "./client.js"
 import { falCostUsd } from "./pricing.js"
 import type { ReconcileOpts } from "../provider.interface.js"
+import { applyProviderSafety } from "../../lib/provider-safety.js"
+import type { SafetyLever } from "../safety-levers.js"
+import type { ProviderSafetyEntry } from "../kie/models.js"
 
 interface FalLipSyncConfig {
   /** fal endpoint slug (the slashed id never leaves this registry). */
@@ -24,6 +27,8 @@ interface FalLipSyncConfig {
   videoParam: string
   /** Input field name for the driving audio URL. */
   audioParam: string
+  /** The model's content-filter settings, as its schema exposes them. */
+  safetyLevers?: readonly SafetyLever[]
 }
 
 export const FAL_LIP_SYNC_CONFIGS: Record<string, FalLipSyncConfig> = {
@@ -31,6 +36,8 @@ export const FAL_LIP_SYNC_CONFIGS: Record<string, FalLipSyncConfig> = {
     endpoint: "fal-ai/sync-lipsync/v3",
     videoParam: "video_url",
     audioParam: "audio_url",
+    // Works from a real person's face and footage: never loosened.
+    safetyLevers: [{ kind: "boolean", param: "enable_safety_checker", filterOnValue: true, shipped: null, providerDefault: true, neverLoosen: true }],
   },
 }
 
@@ -83,7 +90,7 @@ export async function falLipSync(
 
   const { output } = await runFalRequest({
     endpoint: cfg.endpoint,
-    input,
+    input: await applyProviderSafety(falLipSyncSafetyEntry(provider), input),
     label: "[fal:lipSync]",
     reconcileOpts,
   })
@@ -98,4 +105,15 @@ export async function falLipSync(
   const cost = falCostUsd(provider, { seconds })
 
   return { videoUrl: videoUrlOut, cost }
+}
+
+/** fal's lip-sync models with a content-filter lever, as the admin page and the chokepoint read them. */
+export function falSafetyEntries(): readonly ProviderSafetyEntry[] {
+  return Object.entries(FAL_LIP_SYNC_CONFIGS).flatMap(([modelId, cfg]) =>
+    cfg.safetyLevers?.length ? [{ modelId, wireModel: cfg.endpoint, levers: cfg.safetyLevers }] : [],
+  )
+}
+
+function falLipSyncSafetyEntry(modelId: string): ProviderSafetyEntry | null {
+  return falSafetyEntries().find((e) => e.modelId === modelId) ?? null
 }

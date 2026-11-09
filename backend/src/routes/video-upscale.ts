@@ -240,6 +240,7 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
                   sourceJobId: draft.sourceJobId,
                   draftOutputSec: draft.outputSec,
                   draftHasRefVideo: draft.hasRefVideo,
+                  ...(draft.nsfwChecker ? { draftNsfwChecker: true } : {}),
                   ...(draft.audioMux ? { draftAudioMux: draft.audioMux } : {}),
                   ...(draft.draftVideoUrl ? { draftVideoUrl: draft.draftVideoUrl } : {}),
                 }
@@ -269,6 +270,7 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
       ...(draftBilledSec !== undefined ? { draftBilledSec } : {}),
       // The audio mux the draft got after rendering, re-applied to the 1080p
       // render (read from the SOURCE job by the preHandler, never the body).
+      ...(draft?.nsfwChecker ? { draftNsfwChecker: true } : {}),
       ...(draft?.audioMux ? { draftAudioMux: draft.audioMux } : {}),
       ...(draft?.draftVideoUrl ? { draftVideoUrl: draft.draftVideoUrl } : {}),
       usageLogId,

@@ -14,6 +14,8 @@
  * the migration is complete.
  */
 
+import { confirmedByRun, ENABLE_SAFETY_CHECKER_LEVER, NSFW_CHECKER_LEVER, NSFW_CHECKER_SENT_FALSE_LEVER, type SafetyLever } from "../safety-levers.js"
+
 /** 1 KIE credit = $0.005 USD */
 export const KIE_CREDIT_USD = 0.005
 
@@ -56,6 +58,8 @@ export interface KieModelConfig {
    * its doc URL and fetch date.
    */
   acceptedImageFormats?: readonly string[]
+  /** The content-filter settings this SKU exposes (lib/provider-safety.ts applies them; docs/nodes/ states the page). */
+  safetyLevers?: readonly SafetyLever[]
   aspectRatioParam?: string    // Non-standard aspect ratio param name (default: "aspect_ratio"; e.g., "ratio")
   maxRefImages?: number        // If set, merges primary + referenceImageUrls into imageParam array up to this cap
   extraParams?: Record<string, unknown>  // Default extra parameters
@@ -196,6 +200,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // Resolution 1K/2K/4K; ref images are optional (acts as pure T2I when omitted)
   "wan-2.7": {
     model: "wan/2-7-image",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 8,
     cost: 0.040,  // (1K default)
     imageParam: "input_urls",  // optional array of ref image URLs
@@ -206,6 +211,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // See: docs.kie.ai/market/wan/2-7-image-pro.md
   "wan-2.7-pro": {
     model: "wan/2-7-image-pro",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 12,
     cost: 0.060,  // (1K default)
     extraParams: { aspect_ratio: "16:9", resolution: "1K" },
@@ -214,6 +220,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // Flux family
   "flux": {
     model: "flux-2/pro-text-to-image",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 5,
     cost: 0.025,  // (1K default)
     // NOTE: 2K resolution costs — handled via composite identifier "flux:2K"
@@ -221,6 +228,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   },
   "flux-i2i": {
     model: "flux-2/flex-image-to-image",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 14,
     cost: 0.07,  // (1K default, same as flex T2I)
     // NOTE: 2K resolution costs — handled via composite identifier "flux-i2i:2K"
@@ -230,6 +238,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   },
   "flux-pro-i2i": {
     model: "flux-2/pro-image-to-image",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 5,
     cost: 0.025,  // (1K default, same as pro T2I)
     // NOTE: 2K resolution costs — handled via composite identifier "flux-pro-i2i:2K"
@@ -241,12 +250,14 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // Grok family
   "grok": {
     model: "grok-imagine/text-to-image",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 4,
     cost: 0.02,
     extraParams: { aspect_ratio: "16:9" },
   },
   "grok-i2i": {
     model: "grok-imagine/image-to-image",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 4,
     cost: 0.02,
     inputType: "image-to-image",
@@ -453,12 +464,14 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // NOTE: Qwen uses `image_size` with named values (square, square_hd, portrait_4_3, etc.)
   "qwen": {
     model: "qwen/text-to-image",
+    safetyLevers: [NSFW_CHECKER_LEVER, confirmedByRun(ENABLE_SAFETY_CHECKER_LEVER)],
     credits: 4,
     cost: 0.02,
     extraParams: { image_size: "landscape_16_9", output_format: "png" },
   },
   "qwen-i2i": {
     model: "qwen/image-to-image",
+    safetyLevers: [NSFW_CHECKER_LEVER, ENABLE_SAFETY_CHECKER_LEVER],
     credits: 4,
     cost: 0.02,
     inputType: "image-to-image",
@@ -467,6 +480,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   },
   "qwen-edit": {
     model: "qwen/image-edit",
+    safetyLevers: [NSFW_CHECKER_LEVER, ENABLE_SAFETY_CHECKER_LEVER],
     credits: 5,
     cost: 0.025,
     inputType: "image-to-image",
@@ -478,12 +492,14 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // See: docs.kie.ai/market/seedream/4.5-text-to-image.md
   "seedream": {
     model: "seedream/4.5-text-to-image",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 6.5,
     cost: 0.032,
     extraParams: { aspect_ratio: "16:9", quality: "basic" },
   },
   "seedream-edit": {
     model: "seedream/4.5-edit",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 6.5,
     cost: 0.032,
     inputType: "image-to-image",
@@ -494,6 +510,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // See: docs.kie.ai/market/seedream/5-lite-text-to-image.md
   "seedream-5-lite": {
     model: "seedream/5-lite-text-to-image",
+    safetyLevers: [confirmedByRun(NSFW_CHECKER_LEVER)],
     credits: 5.5,
     cost: 0.0275,
     // NOTE: High quality (4K) may cost more — handled via composite identifier "seedream-5-lite:high"
@@ -501,6 +518,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   },
   "seedream-5-lite-i2i": {
     model: "seedream/5-lite-image-to-image",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 5.5,
     cost: 0.0275,
     inputType: "image-to-image",
@@ -514,12 +532,14 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // See: docs.kie.ai/market/seedream/5-pro-text-to-image.md
   "seedream-5-pro": {
     model: "seedream/5-pro-text-to-image",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 7,
     cost: 0.035,
     extraParams: { aspect_ratio: "16:9", quality: "basic" },
   },
   "seedream-5-pro-i2i": {
     model: "seedream/5-pro-image-to-image",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 7,
     cost: 0.035,
     inputType: "image-to-image",
@@ -537,6 +557,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   //      docs.kie.ai/market/seedream/5-flash-image-to-image.md
   "seedream-5-flash": {
     model: "seedream/5-flash-text-to-image",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 3.24,
     cost: 0.0162,
     resolutionParam: "size",
@@ -544,6 +565,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   },
   "seedream-5-flash-i2i": {
     model: "seedream/5-flash-image-to-image",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 3.24,
     cost: 0.0162,
     inputType: "image-to-image",
@@ -556,6 +578,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // See: docs.kie.ai/market/flux2/flex-text-to-image.md
   "flux-flex": {
     model: "flux-2/flex-text-to-image",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 14,
     cost: 0.07,  // (1K default)
     // NOTE: 2K resolution costs — handled via composite identifier "flux-flex:2K"
@@ -566,6 +589,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // See: docs.kie.ai/market/z-image/z-image.md
   "z-image": {
     model: "z-image",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 0.8,
     cost: 0.004,
     extraParams: { aspect_ratio: "16:9" },
@@ -624,12 +648,14 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // Uses inputImage param for I2I editing mode, pure T2I without it
   "flux-kontext": {
     model: "flux-kontext-pro",
+    safetyLevers: [{ kind: "scale", param: "safetyTolerance", min: 0, max: 6, strictest: 0, shipped: null, providerDefault: 2 }],
     credits: 5,
     cost: 0.025,
     extraParams: { aspectRatio: "16:9", outputFormat: "jpeg" },
   },
   "flux-kontext-max": {
     model: "flux-kontext-max",
+    safetyLevers: [{ kind: "scale", param: "safetyTolerance", min: 0, max: 6, strictest: 0, shipped: null, providerDefault: 2, wireUnconfirmed: true }],
     credits: 10,
     cost: 0.05,
     extraParams: { aspectRatio: "16:9", outputFormat: "jpeg" },
@@ -645,6 +671,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Uses single image_url, NOT array!
   "minimax": {
     model: "hailuo/02-image-to-video-pro",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 57,
     cost: 0.285,  // (6s, 1080p)
     imageParam: "image_url",  // single URL (NOT array!)
@@ -733,6 +760,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // carries no `resolution` key, exactly as before the lever guard existed.
   "grok-i2v": {
     model: "grok-imagine/image-to-video",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 20,
     cost: 0.10,  // (6s, 720p default)
     imageParam: "image_urls",  // array format
@@ -750,6 +778,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // `credits`/`cost` below are the KIE-side default tier (8s @480p) for audit logging.
   "grok-imagine-video-1.5": {
     model: "grok-imagine-video-1-5-preview",
+    safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 118,           // KIE: 14.5×8 + 2 (8s @480p default tier)
     cost: 0.59,
     imageParam: "image_urls",   // array format, single image (max 1)
@@ -766,6 +795,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Per-second pricing: 480p no-ref 19 cr/s, 480p ref 11.5 cr/s, 720p no-ref 41 cr/s, 720p ref 25 cr/s
   "seedance-2": {
     model: "bytedance/seedance-2",
+    safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 82,
     cost: 0.41,  // (8s, 720p, no ref default)
     imageParam: "first_frame_url",
@@ -786,6 +816,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Per-second pricing: 480p no-ref 15.5 cr/s, 480p ref 8 cr/s, 720p no-ref 33 cr/s, 720p ref 20 cr/s
   "seedance-2-fast": {
     model: "bytedance/seedance-2-fast",
+    safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 66,
     cost: 0.33,  // (8s, 720p, no ref default)
     imageParam: "first_frame_url",
@@ -807,6 +838,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // 720p no-ref 20.5 cr/s, 720p ref 12.5 cr/s. Per-second composites in credits.ts are authoritative.
   "seedance-2-mini": {
     model: "bytedance/seedance-2-mini",
+    safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 41,
     cost: 0.205,  // nominal 8s/720p/no-ref fallback (41 cr × ); composites override
     imageParam: "first_frame_url",
@@ -845,6 +877,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   //    omitSeed — a seeded run otherwise fails before it generates.
   "seedance-2-5": {
     model: "bytedance/seedance-2-5",
+    safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 126,
     cost: 0.63,  // nominal 8s/720p/no-ref fallback (63 cr/s × 8); composites override
     imageParam: "first_frame_url",
@@ -884,6 +917,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Wan 2.6 I2V - docs.kie.ai/market/wan/2-6-image-to-video
   "wan-i2v": {
     model: "wan/2-6-image-to-video",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 70,
     cost: 0.35,  // (5s, 720p default)
     // NOTE: 1080p=104.5, 10s-720p=140, 10s-1080p=209.5, 15s-720p=210, 15s-1080p=315
@@ -896,6 +930,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Wan 2.2 Turbo I2V - docs.kie.ai/market/wan/2-2-a14b-image-to-video-turbo
   "wan-turbo": {
     model: "wan/2-2-a14b-image-to-video-turbo",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 40,
     cost: 0.20,
     imageParam: "image_url",  // Single URL string
@@ -912,6 +947,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // intent-less request sends no `resolution` key, exactly as before.
   "wan-2.7-i2v": {
     model: "wan/2-7-image-to-video",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 75,
     cost: 0.375,  // (5s 720p)
     imageParam: "first_frame_url",  // single string; end frame goes to last_frame_url
@@ -957,6 +993,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Hailuo 2.3 Pro I2V - docs.kie.ai/market/hailuo/2-3-image-to-video-pro
   "hailuo-2.3-pro": {
     model: "hailuo/2-3-image-to-video-pro",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 80,
     cost: 0.40,  // (10s actual from audit)
     imageParam: "image_url",  // Single URL string
@@ -968,6 +1005,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Hailuo 2.3 Standard I2V - docs.kie.ai/market/hailuo/2-3-image-to-video-standard
   "hailuo-2.3": {
     model: "hailuo/2-3-image-to-video-standard",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 30,
     cost: 0.15,  // (6s, 768p default)
     // NOTE: 6s-1080p=50, 10s-768p=50
@@ -980,6 +1018,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Hailuo Standard (02) I2V - docs.kie.ai/market/hailuo/02-image-to-video-standard
   "hailuo-standard": {
     model: "hailuo/02-image-to-video-standard",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 30,
     cost: 0.15,  // (6s, 768p default)
     imageParam: "image_url",  // Single URL string
@@ -992,6 +1031,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Bytedance V1 Lite I2V - docs.kie.ai/market/bytedance/v1-lite-image-to-video
   "bytedance-lite": {
     model: "bytedance/v1-lite-image-to-video",
+    safetyLevers: [NSFW_CHECKER_LEVER, ENABLE_SAFETY_CHECKER_LEVER],
     credits: 22.5,
     cost: 0.1125,  // (actual from audit)
     imageParam: "image_url",  // Single URL string
@@ -1004,6 +1044,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Bytedance V1 Pro I2V - docs.kie.ai/market/bytedance/v1-pro-image-to-video
   "bytedance-pro": {
     model: "bytedance/v1-pro-image-to-video",
+    safetyLevers: [NSFW_CHECKER_LEVER, ENABLE_SAFETY_CHECKER_LEVER],
     credits: 70,
     cost: 0.35,  // (actual from audit)
     imageParam: "image_url",  // Single URL string
@@ -1015,6 +1056,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Bytedance V1 Pro Fast I2V - docs.kie.ai/market/bytedance/v1-pro-fast-image-to-video
   "bytedance-pro-fast": {
     model: "bytedance/v1-pro-fast-image-to-video",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 36,
     cost: 0.18,  // (actual from audit)
     imageParam: "image_url",  // Single URL string
@@ -1076,6 +1118,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // (5s @720P) for audit logging only.
   "wan-3": {
     model: "wan/3-0-video",
+    safetyLevers: [confirmedByRun(NSFW_CHECKER_LEVER)],
     credits: 80,             // KIE: 16 cr/s × 5 (5s @720P default tier)
     cost: 0.40,
     imageParam: "first_frame_url",
@@ -1146,6 +1189,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // See: docs.kie.ai/market/wan/3-0-video-prime.md
   "wan-3-prime": {
     model: "wan/3-0-video-prime",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 126,            // KIE: 25.2 cr/s × 5 (5s @720P default tier)
     cost: 0.63,
     imageParam: "first_frame_url",
@@ -1180,6 +1224,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Hailuo/MiniMax - VERIFIED: docs.kie.ai/market/hailuo/02-text-to-video-pro
   "minimax": {
     model: "hailuo/02-text-to-video-pro",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 57,
     cost: 0.285,  // (6s, 1080p)
     extraParams: { prompt_optimizer: false },
@@ -1232,6 +1277,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Grok
   "grok": {
     model: "grok-imagine/text-to-video",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 20,
     cost: 0.10,  // (6s, 720p default)
     extraParams: { aspect_ratio: "16:9", mode: "normal", duration: "6", resolution: "720p" },
@@ -1252,6 +1298,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Seedance 2.0 T2V — docs.kie.ai/market/bytedance/seedance-2
   "seedance-2": {
     model: "bytedance/seedance-2",
+    safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 82,
     cost: 0.41,
     extraParams: {
@@ -1268,6 +1315,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Seedance 2.0 Fast T2V - docs.kie.ai/market/bytedance/seedance-2-fast
   "seedance-2-fast": {
     model: "bytedance/seedance-2-fast",
+    safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 66,
     cost: 0.33,
     extraParams: {
@@ -1284,6 +1332,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Seedance 2.0 Mini T2V — docs.kie.ai/market/bytedance/seedance-2-mini
   "seedance-2-mini": {
     model: "bytedance/seedance-2-mini",
+    safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 41,
     cost: 0.205,  // nominal 8s/720p/no-ref fallback; per-second composites authoritative
     extraParams: {
@@ -1304,6 +1353,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // `seed` either (see the i2v entry), hence omitSeed.
   "seedance-2-5": {
     model: "bytedance/seedance-2-5",
+    safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 126,
     cost: 0.63,  // nominal 8s/720p/no-ref fallback; per-second composites authoritative
     omitSeed: true,
@@ -1333,6 +1383,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Wan 2.6 T2V - docs.kie.ai/market/wan/2-6-text-to-video
   "wan": {
     model: "wan/2-6-text-to-video",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 104.5,
     cost: 0.5225,  // (5s, 1080p default)
     // NOTE: 720p=70, 10s-720p=140, 10s-1080p=209.5, 15s-720p=210, 15s-1080p=315
@@ -1343,6 +1394,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Hailuo Standard (02) T2V - docs.kie.ai/market/hailuo/02-text-to-video-standard
   "hailuo-standard": {
     model: "hailuo/02-text-to-video-standard",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 30,
     cost: 0.15,  // (6s, 768p default)
     extraParams: { prompt_optimizer: false },
@@ -1352,6 +1404,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Bytedance V1 Lite T2V - docs.kie.ai/market/bytedance/v1-lite-text-to-video
   "bytedance-lite": {
     model: "bytedance/v1-lite-text-to-video",
+    safetyLevers: [NSFW_CHECKER_LEVER, ENABLE_SAFETY_CHECKER_LEVER],
     credits: 22.5,
     cost: 0.1125,  // (actual from audit)
     extraParams: { aspect_ratio: "16:9", resolution: "720p" },
@@ -1361,6 +1414,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Bytedance V1 Pro T2V - docs.kie.ai/market/bytedance/v1-pro-text-to-video
   "bytedance-pro": {
     model: "bytedance/v1-pro-text-to-video",
+    safetyLevers: [NSFW_CHECKER_LEVER, ENABLE_SAFETY_CHECKER_LEVER],
     credits: 70,
     cost: 0.35,  // (actual from audit)
     extraParams: { aspect_ratio: "16:9", resolution: "720p" },
@@ -1370,6 +1424,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Wan 2.2 Turbo T2V - docs.kie.ai/market/wan/2-2-a14b-text-to-video-turbo
   "wan-turbo": {
     model: "wan/2-2-a14b-text-to-video-turbo",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 80,
     cost: 0.40,  // (5s, 720p default)
     // NOTE: 480p=40, 580p=60
@@ -1410,6 +1465,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // i2v entry above for why extraParams here is declarative only.
   "wan-3": {
     model: "wan/3-0-video",
+    safetyLevers: [confirmedByRun(NSFW_CHECKER_LEVER)],
     credits: 80,             // KIE: 16 cr/s × 5 (5s @720P default tier)
     cost: 0.40,
     extraParams: { resolution: "720p", aspect_ratio: "adaptive", duration: 5, audio: true },
@@ -1445,6 +1501,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Wan 3.0 Prime T2V — the high-speed tier (faster, higher per-second rate).
   "wan-3-prime": {
     model: "wan/3-0-video-prime",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 126,            // KIE: 25.2 cr/s × 5 (5s @720P default tier)
     cost: 0.63,
     extraParams: { resolution: "720p", aspect_ratio: "adaptive", duration: 5, audio: true },
@@ -1458,6 +1515,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // likewise no pinned value.
   "wan-2.7-t2v": {
     model: "wan/2-7-text-to-video",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 75,
     cost: 0.375,  // (5s 720p)
     aspectRatioParam: "ratio",  // KIE uses "ratio" not "aspect_ratio" for this model
@@ -1488,6 +1546,7 @@ export const KIE_VIDEO_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Wan 2.6 - Standard createTask endpoint, input: video_urls array
   "wan": {
     model: "wan/2-6-video-to-video",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 70,
     cost: 0.35,  // (5s, 720p default)
     imageParam: "video_urls",  // Array format: ["video_url"]
@@ -1500,6 +1559,7 @@ export const KIE_VIDEO_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Prompt max 1500 chars (vs 5000 for standard)
   "wan-flash": {
     model: "wan/2-6-flash-video-to-video",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 40,
     cost: 0.20,  // Estimated — flash variant ~57% of standard
     imageParam: "video_urls",
@@ -1514,6 +1574,7 @@ export const KIE_VIDEO_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Cost: per generation
   "wan-videoedit": {
     model: "wan/2-7-videoedit",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 100,
     cost: 0.50,
     imageParam: "reference_image",
@@ -1593,6 +1654,7 @@ export const KIE_MOTION_TRANSFER_MODELS: Record<string, KieModelConfig> = {
   // Moves character from image within the video scene (~1s output)
   "wan-animate-move": {
     model: "wan/2-2-animate-move",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 102,
     cost: 0.51,  // (480p actual from audit)
     // NOTE: 580p, 720p = (actual from audit)
@@ -1605,6 +1667,7 @@ export const KIE_MOTION_TRANSFER_MODELS: Record<string, KieModelConfig> = {
   // Replaces character in video with character from image (~1s output)
   "wan-animate-replace": {
     model: "wan/2-2-animate-replace",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 102,
     cost: 0.51,  // (480p, same as move)
     // NOTE: 580p, 720p = (same as move)
@@ -1780,6 +1843,7 @@ export const KIE_STT_MODELS: Record<string, KieModelConfig> = {
 export const KIE_SPEECH_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   "wan-s2v": {
     model: "wan/2-2-a14b-speech-to-video-turbo",
+    safetyLevers: [NSFW_CHECKER_LEVER],
     credits: 12,
     cost: 0.06,  // (480p default)
     // NOTE: 580p, 720p
@@ -1969,4 +2033,58 @@ export function getEndFrameParam(
 ): string | undefined {
   const cfg = getKieModelConfig(category, provider)
   return cfg?.endFrameParam
+}
+
+// =============================================================================
+// Content-filter levers, read from every table above
+// =============================================================================
+
+/** A model whose provider exposes a content-filter setting, and what the request is keyed by. */
+export interface ProviderSafetyEntry {
+  /** Our own model id: what the admin's setting is stored under. */
+  readonly modelId: string
+  /** What the provider's API calls it, where that differs per endpoint. */
+  readonly wireModel: string
+  readonly levers: readonly SafetyLever[]
+}
+
+const SAFETY_TABLES: ReadonlyArray<Record<string, KieModelConfig>> = [
+  KIE_IMAGE_MODELS, KIE_VIDEO_MODELS, KIE_TEXT_TO_VIDEO_MODELS, KIE_VIDEO_TO_VIDEO_MODELS, KIE_MOTION_TRANSFER_MODELS,
+  KIE_VIDEO_UPSCALE_MODELS, KIE_LIP_SYNC_MODELS, KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS,
+  KIE_SPEECH_TO_VIDEO_MODELS, KIE_SPECIAL_MODELS,
+]
+
+/** The Seedance 2.5 finalize endpoint carries no config of its own (seedance-draft.ts sends it directly). */
+const SEEDANCE_DRAFT_FINALIZE_WIRE_MODEL = "bytedance/seedance-2-5-draft"
+
+let entries: readonly ProviderSafetyEntry[] | null = null
+
+/** Every KIE model with a content-filter lever, one entry per endpoint. */
+export function kieSafetyEntries(): readonly ProviderSafetyEntry[] {
+  if (entries) return entries
+  const list: ProviderSafetyEntry[] = []
+  for (const table of SAFETY_TABLES) {
+    for (const [modelId, config] of Object.entries(table)) {
+      if (config.safetyLevers?.length) list.push({ modelId, wireModel: config.model, levers: config.safetyLevers })
+    }
+  }
+  list.push({ modelId: "seedance-2-5-hd", wireModel: SEEDANCE_DRAFT_FINALIZE_WIRE_MODEL, levers: [NSFW_CHECKER_LEVER] })
+  entries = list
+  return list
+}
+
+/** Every KIE model id with no content-filter lever (the page says so). */
+export function kieModelIdsWithoutSafetyLever(): readonly string[] {
+  const withLever = new Set(kieSafetyEntries().map((e) => e.modelId))
+  const without = new Set<string>()
+  for (const table of SAFETY_TABLES) for (const modelId of Object.keys(table)) if (!withLever.has(modelId)) without.add(modelId)
+  return [...without]
+}
+
+export function kieSafetyEntryByWireModel(wireModel: string): ProviderSafetyEntry | null {
+  return kieSafetyEntries().find((e) => e.wireModel === wireModel) ?? null
+}
+
+export function kieSafetyEntryByModelId(modelId: string): ProviderSafetyEntry | null {
+  return kieSafetyEntries().find((e) => e.modelId === modelId) ?? null
 }

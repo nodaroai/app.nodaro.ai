@@ -121,6 +121,7 @@ import { useFreeVideoLimits } from "@/hooks/use-free-video-limits"
 import { lockedVideoDuration, lockedVideoModel, lockedVideoResolution, openVideoDuration, openVideoResolution } from "@/lib/free-video-locks"
 import { LockableSelectItem } from "./lockable-select-item"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
+import { NsfwFilterCheckbox } from "./nsfw-filter-checkbox"
 
 // ---------------------------------------------------------------------------
 // Character @-mention autocomplete — builds the RefImageItem[] passed as
@@ -1127,16 +1128,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             />
             <label htmlFor="seedance2WebSearch" className="text-xs">{t("vidcfg.enableWebSearch")}</label>
           </div>
-          <div className="flex items-center gap-2 px-1">
-            <input
-              type="checkbox"
-              id="seedance2Nsfw"
-              checked={data.nsfwChecker || false}
-              onChange={(e) => onUpdate({ nsfwChecker: e.target.checked })}
-              className="rounded border-muted-foreground/40"
-            />
-            <label htmlFor="seedance2Nsfw" className="text-xs">{t("vidcfg.nsfwFilter")}</label>
-          </div>
+          <NsfwFilterCheckbox id="seedance2Nsfw" provider={data.provider as string | undefined} checked={Boolean(data.nsfwChecker)} onChange={(checked) => onUpdate({ nsfwChecker: checked })} />
         </>
       )}
 
@@ -2838,16 +2830,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             />
             <label htmlFor="seedance2T2VWebSearch" className="text-xs">{t("vidcfg.enableWebSearch")}</label>
           </div>
-          <div className="flex items-center gap-2 px-1">
-            <input
-              type="checkbox"
-              id="seedance2T2VNsfw"
-              checked={(data.nsfwChecker as boolean | undefined) || false}
-              onChange={(e) => onUpdate({ nsfwChecker: e.target.checked })}
-              className="rounded border-muted-foreground/40"
-            />
-            <label htmlFor="seedance2T2VNsfw" className="text-xs">{t("vidcfg.nsfwFilter")}</label>
-          </div>
+          <NsfwFilterCheckbox id="seedance2T2VNsfw" provider={data.provider as string | undefined} checked={Boolean(data.nsfwChecker)} onChange={(checked) => onUpdate({ nsfwChecker: checked })} />
         </>
       )}
 
@@ -3769,16 +3752,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             />
             <label htmlFor="gv-seedance2WebSearch" className="text-xs">{t("vidcfg.enableWebSearch")}</label>
           </div>
-          <div className="flex items-center gap-2 px-1">
-            <input
-              type="checkbox"
-              id="gv-seedance2Nsfw"
-              checked={data.nsfwChecker || false}
-              onChange={(e) => onUpdate({ nsfwChecker: e.target.checked })}
-              className="rounded border-muted-foreground/40"
-            />
-            <label htmlFor="gv-seedance2Nsfw" className="text-xs">{t("vidcfg.nsfwFilter")}</label>
-          </div>
+          <NsfwFilterCheckbox id="gv-seedance2Nsfw" provider={data.provider as string | undefined} checked={Boolean(data.nsfwChecker)} onChange={(checked) => onUpdate({ nsfwChecker: checked })} />
         </>
       )}
 

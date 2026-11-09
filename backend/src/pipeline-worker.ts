@@ -18,6 +18,7 @@ import { loadOverlay } from "./lib/overlay/load.js"
 import { loadContentGuard } from "./lib/content-guard-load.js"
 import { initializeExternalWallet } from "./lib/external-wallet.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
+import { useProviderSafetySettings } from "./lib/provider-safety.js"
 import { startLaneParking } from "./lib/concurrency-lanes/park.js"
 import { startServerOccupancyPublisher } from "./lib/concurrency-lanes/server-occupancy.js"
 
@@ -40,6 +41,7 @@ async function main() {
   // Mainline prompt policies run AFTER the overlay's (registration order):
   // the minor-age floor is a platform safety invariant, not deployment content.
   registerMainlinePromptPolicies()
+  useProviderSafetySettings()
 
   if (!hasCredits()) {
     console.log("[pipeline-worker] EDITION is not cloud — pipeline worker not started")

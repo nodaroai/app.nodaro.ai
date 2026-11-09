@@ -30,7 +30,7 @@ Replicate sits AFTER KIE in `routes/<capability>` provider chains. For image-gen
 Current Replicate-only model ids:
 - **`flux-2-klein`** — BFL Flux 2 9B Klein (`black-forest-labs/flux-2-klein-9b`), 2 cr. Refs go in the `images` array (max 5), NOT a single `image` string.
 - **`flux-2-pro`** — BFL Flux 2 Pro, flat 4 cr, refs in the `input_images` array (schema max 8; frontend caps at 4)
-- **`flux-2-max`** — BFL Flux 2 Max, variable pricing 3–18 cr via composite identifier (`flux-2-max:Nref`), refs in the `input_images` array (max 8), `safety_tolerance: 5` pinned (max)
+- **`flux-2-max`** — BFL Flux 2 Max, variable pricing 3–18 cr via composite identifier (`flux-2-max:Nref`), refs in the `input_images` array (max 8), `safety_tolerance: 5` by default
 - **`kontext-multi`** — multi-image Flux Kontext Pro (`flux-kontext-apps/multi-image-kontext-pro`), i2i / modify-image. The model exposes ONLY `input_image_1` + `input_image_2`, so the ref cap is **2** (not 4), 4 cr
 - **`flux-lora-character`** — synthetic id; version resolved per-request from `extraParams.lora_version` (the character's stored `lora_replicate_version`), 3 cr/image
 
@@ -79,7 +79,7 @@ Migration 126 adds 7 `lora_*` columns to `characters` + partial index on in-flig
 
 ## Flux 2 Safety Tolerance
 
-`flux-2-max` (and `flux-2-pro`) pin `safety_tolerance: 5` (family max) so the BFL safety filter is at its loosest. KIE's filter never sees these requests because the routing chain falls through to Replicate before reaching any KIE endpoint.
+`flux-2-max` (and `flux-2-pro`) send `safety_tolerance: 5` (the family maximum) by default. An admin can set the value per model on Admin → Provider Safety (`lib/provider-safety.ts`, declared in `safetyLevers` on the model spec). KIE's own filter never sees these requests because the routing chain falls through to Replicate before reaching any KIE endpoint.
 
 ## Trigger Word Convention
 

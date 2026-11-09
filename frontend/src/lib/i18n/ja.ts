@@ -5616,6 +5616,7 @@ export const ja: ChromeDict = {
   "vidcfg.orientVideoKlingSuffix": "、最大 30 秒",
   "vidcfg.normal": "ノーマル",
   "vidcfg.nsfwFilter": "NSFW コンテンツフィルター",
+  "vidcfg.nsfwFilterForced": "管理者が設定",
   "vidcfg.originalAudio": "元のオーディオ",
   "vidcfg.pro1080p": "プロ（1080p）",
   "vidcfg.referenceMode": "リファレンスモード",

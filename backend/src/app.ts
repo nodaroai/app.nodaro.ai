@@ -11,6 +11,7 @@ import { loadOverlay } from "./lib/overlay/load.js"
 import { loadContentGuard } from "./lib/content-guard-load.js"
 import { registerRequestUserScope } from "./lib/request-user-scope.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
+import { useProviderSafetySettings } from "./lib/provider-safety.js"
 import { CLIENT_HEADER } from "./lib/job-source.js"
 import { IDEMPOTENCY_HEADER } from "./lib/idempotency-header.js"
 import { WORKSPACE_HEADER } from "@nodaro/shared/organizations"
@@ -196,6 +197,8 @@ import { castSwapAdvancedRoutes } from "./ee/routes/cast-swap-advanced.js"
 import { adminTrendsRoutes } from "./ee/routes/admin-trends.js"
 import { trendRadarRoutes } from "./ee/routes/trend-radar.js"
 import { adminNodaroMotionRoutes } from "./ee/routes/admin-nodaro-motion.js"
+import { adminProviderSafetyRoutes } from "./ee/routes/admin-provider-safety.js"
+import { providerSafetyLocksRoutes } from "./routes/provider-safety-locks.js"
 import { motionTransferRoutes } from "./routes/motion-transfer.js"
 import { videoUpscaleRoutes } from "./routes/video-upscale.js"
 import { faceSwapRoutes } from "./routes/face-swap.js"
@@ -455,6 +458,7 @@ export async function buildApp() {
   // Mainline prompt policies run AFTER the overlay's (registration order):
   // the minor-age floor is a platform safety invariant, not deployment content.
   registerMainlinePromptPolicies()
+  useProviderSafetySettings()
 
   // SAI-4 / H8 — fail closed. If a surface profile was configured but did not
   // load, refuse to boot rather than silently serving the un-narrowed mainline
@@ -822,6 +826,10 @@ export async function buildApp() {
   if (hasAdmin() && hasCredits()) await app.register(trendRadarRoutes)
 // Nodaro Motion (Cast Swap): the admin's face masking per engine, read by the engine through tk.settings.
 if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
+  // Provider content filters, per model (admin read; platform operator write).
+  if (hasAdmin()) await app.register(adminProviderSafetyRoutes)
+  // Which models an admin forced the filter on for: the node checkbox shows it.
+  await app.register(providerSafetyLocksRoutes)
   // The review surface only means something where the grant exists.
   if (hasCredits()) await app.register(adminFreeGrantRoutes)
   // The Users page's linked-account marking rides on the same clusters RPC.

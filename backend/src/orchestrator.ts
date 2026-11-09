@@ -12,6 +12,7 @@ import { initializeExternalWallet } from "./lib/external-wallet.js"
 import { loadAvailabilityOverrides } from "./lib/availability-override.js"
 import { loadSwitchedOffModels } from "./lib/model-switch.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
+import { useProviderSafetySettings } from "./lib/provider-safety.js"
 import { beginWorkerDrain, SHUTDOWN_DRAIN_MS } from "./lib/worker-drain.js"
 import { setEditPlanPerMinuteSource } from "./lib/private-plugins/edit-plan-per-minute.js"
 import { askApiEditPlanPerMinute } from "./services/workflow-engine/edit-plan-per-minute-loopback.js"
@@ -40,6 +41,7 @@ await initializeExternalWallet(true)
 // Mainline prompt policies run AFTER the overlay's (registration order):
 // the minor-age floor is a platform safety invariant, not deployment content.
 registerMainlinePromptPolicies()
+useProviderSafetySettings()
 
 // The DAG's run-time availability check (executeNode → isNodeDenied) reads the
 // admin's stored override. app.ts loads it for the API process; this process

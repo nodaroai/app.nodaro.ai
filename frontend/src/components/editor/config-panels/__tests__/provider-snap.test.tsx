@@ -28,6 +28,8 @@ import { getAspectRatiosForVideoModel, getVideoResolutionOptions } from "../mode
 // useEffect firing; rendered UI is incidental.
 // =============================================================================
 
+// The filter checkbox's lock (`nsfw-filter-checkbox.tsx`) reads the server: no admin lock here.
+vi.mock("@/hooks/queries/use-provider-safety-locks", () => ({ useFilterForcedOn: () => false, useProviderSafetyLocks: () => ({ data: [] }) }))
 vi.mock("@/components/ui/label", () => ({
   Label: ({ children, ...props }: any) => <label {...props}>{children}</label>,
 }))

@@ -808,11 +808,11 @@ export const IMAGE_I2I_PROVIDERS = [
   "flux-kontext-max",
   // Replicate Open (uncensored) — multi-image Kontext via Replicate
   "kontext-multi",
-  // BFL Flux 2 Pro — runs through Replicate with safety_tolerance=5 (max for Pro)
+  // BFL Flux 2 Pro — runs through Replicate
   "flux-2-pro",
   // BFL FLUX Fill Pro — dedicated masked inpainting via Replicate (white = edit area)
   "flux-fill",
-  // BFL Flux 2 Max — runs through Replicate with safety_tolerance=5, up to 8 refs
+  // BFL Flux 2 Max — runs through Replicate, up to 8 refs
   "flux-2-max",
   // BFL FLUX Fill Pro — dedicated inpainting via Replicate (image + mask + prompt,
   // white = edit area). Second mask-capable i2i provider alongside ideogram-edit.
