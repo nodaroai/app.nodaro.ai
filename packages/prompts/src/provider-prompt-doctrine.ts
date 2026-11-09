@@ -268,6 +268,34 @@ Source: KIE gemini-omni-video market contract (parameters + live behavior probed
 aspect-ratio hard-reject, see providers/kie/video.ts). Captured 2026-08-09.`,
 }
 
+const GEMINI_OMNI_12_DOCTRINE: ProviderPromptDoctrine = {
+  providers: ["gemini-omni-flash-1-2"],
+  heading: "Gemini Omni Flash 1.2 (gemini-omni-flash-1-2)",
+  tips: [
+    "Google video with native sound: text-to-video, frames, reference images and video-edit through one prompt surface. Every second from 3 to 15; 360p, 720p, 1080p or 4K.",
+    "Structure like the platform default: subject → action → scene → lighting → camera → style. Quote dialogue lines to have them spoken; describe SFX and ambience plainly.",
+    "Only a start frame (and an end frame) wired: they are sent as exact first and last frames. With reference images wired too, frames join the image list after your references and are named in the prompt.",
+    "Up to 6 reference images: bind them by ordinal ('the woman from @image_1'). No character or voice references on this model. Video-edit: describe the change; the output follows the source clip, up to 15s.",
+  ],
+  doctrine: `Prompt structure (no public Google prompt guide exists for this endpoint — the API
+contract is the doctrine source):
+subject → action → scene/environment → lighting → camera movement → style → constraints.
+
+**Modes (picked from the wired inputs)**
+- Nothing visual → text-to-video.
+- Start frame alone, or start + end frame → exact frames. First + last holds up to 10s; past that the two frames go by the reference route below.
+- Reference images wired → your images come FIRST, in your order (\`@image_1\`, \`@image_2\`, …), up to 6. A wired start or end frame is appended after them and the platform names it in the prompt as the opening or closing frame.
+- Source video wired → video-edit: describe the CHANGE, not a full re-description. The output follows the source clip, which is cut to 15s at most. Up to 5 images may ride beside it.
+
+**Audio (native)**
+- Audio is generated with the clip. Quote dialogue to have it spoken; describe SFX and ambience plainly. State exclusions ("no music") or a bed may be invented.
+
+**Duration & tiers**
+- Any whole second from 3 to 15. 360p is for drafts; 720p and 1080p are close in price; 4K only when the deliverable needs it.
+
+Source: KIE google/gemini-omni-flash-1-2 market contract. Captured 2026-11-09.`,
+}
+
 const GROK_IMAGINE_DOCTRINE: ProviderPromptDoctrine = {
   providers: ["grok-i2v", "grok-imagine-video-1.5"],
   heading: "Grok Imagine (grok-i2v, grok-imagine-video-1.5)",
@@ -521,6 +549,7 @@ export const PROVIDER_PROMPT_DOCTRINES: readonly ProviderPromptDoctrine[] = [
   MINIMAX_H3_DOCTRINE,
   VEO_31_DOCTRINE,
   GEMINI_OMNI_DOCTRINE,
+  GEMINI_OMNI_12_DOCTRINE,
   GROK_IMAGINE_DOCTRINE,
   WAN_DOCTRINE,
   WAN_3_DOCTRINE,

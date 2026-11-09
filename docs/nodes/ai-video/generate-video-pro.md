@@ -92,6 +92,7 @@ Generate Video Pro offers every video model that can drive the engine's **keyfra
 | `veo3_lite` | VEO 3.1 Lite | 4 / 6 / 8s | 720p / 1080p / 4K | Keyframes |
 | `gemini-omni-video` | Gemini Omni | 4 / 6 / 8 / 10s | 720p / 1080p / 4K | Keyframes |
 | `gemini-omni-flash` | Gemini Omni Flash | 4 / 6 / 8 / 10s | 720p / 1080p / 4K | Keyframes |
+| `gemini-omni-flash-1-2` | Gemini Omni Flash 1.2 | 3–15s | 720p / 1080p / 4K | Keyframes |
 | `grok-i2v` | Grok I2V | 6 / 10s | 480p / 720p | Keyframes |
 | `wan-3` | Wan 3.0 | 2–30s | 480p / 720p / 1080p | Keyframes |
 | `wan-3-prime` | Wan 3.0 Prime | 2–30s | 480p / 720p / 1080p | Keyframes |

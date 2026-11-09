@@ -36,6 +36,7 @@ import {
   isViduQ4Provider,
   isKling4Provider,
   isGeminiOmniProvider,
+  isGeminiOmniPerSecondProvider,
 } from "./model-constants.js"
 import { MODEL_CATALOG } from "./model-catalog.js"
 
@@ -51,7 +52,7 @@ export function uiAspectRatioFill(provider: string): string | undefined {
 /** See the file docstring — per-family on purpose; never a generic
  *  PRICING_DEFAULT_RESOLUTION read (that would reprice seedance-2-5). */
 export function uiResolutionFill(provider: string): string | undefined {
-  if (isWan3Provider(provider) || isViduQ4Provider(provider) || isKling4Provider(provider)) return PRICING_DEFAULT_RESOLUTION[provider]
+  if (isWan3Provider(provider) || isViduQ4Provider(provider) || isKling4Provider(provider) || isGeminiOmniPerSecondProvider(provider)) return PRICING_DEFAULT_RESOLUTION[provider]
   if (isSeedance2Provider(provider)) return MODEL_CATALOG[provider]?.resolutions?.[0]
   return undefined
 }

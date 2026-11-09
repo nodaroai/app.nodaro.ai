@@ -146,7 +146,7 @@ export interface ProviderOptions {
   frameFit?: FrameFit
   frameDelivery?: FrameDelivery
   videoTrimStart?: number  // Gemini Omni V2V: source-clip trim start (seconds)
-  videoTrimEnd?: number    // Gemini Omni V2V: source-clip trim end (seconds, ends-start ≤ 10)
+  videoTrimEnd?: number    // Gemini Omni V2V: source-clip trim end (seconds, ends-start ≤ 10; ≤ 15 on Flash 1.2)
   // Seedance 2.5 ONLY: request the `mov` container (H.264 yuv444p + PCM)
   // instead of KIE's default mp4. Opt-in per CALL, never a global default —
   // mov bytes are not browser-safe and `storage.ts` stamps a provider video

@@ -33,6 +33,9 @@ const estimateBody = z.object({
   soundtrackAudioUrl: z.string().url().max(2048).optional(),
   /** A soundtrack clip whose audio is not produced yet: priced as long as the output, the longest it can be. */
   unknownSoundtrack: z.boolean().optional(),
+  /** Gemini Omni Flash 1.2: the node's trim of its source clip, in seconds. It decides what is billed. */
+  videoTrimStart: z.number().int().min(0).optional(),
+  videoTrimEnd: z.number().int().min(0).optional(),
 })
 
 /**
@@ -80,7 +83,7 @@ export function registerSeedanceRefEstimate(app: FastifyInstance): void {
     const { provider, resolution, duration, draft, referenceVideoUrls } = parsed.data
     const unknownClips = parsed.data.unknownReferenceVideos ?? 0
     if (!billsReferenceVideoSeconds(provider)) {
-      return reply.status(400).send({ error: { code: "validation_error", message: `"${provider}" is not a model whose price follows its reference clips (Seedance 2, Kling 4.0).` } })
+      return reply.status(400).send({ error: { code: "validation_error", message: `"${provider}" is not a model whose price follows its reference clips (Seedance 2, Kling 4.0, Gemini Omni Flash 1.2).` } })
     }
     const soundtrack = parsed.data.soundtrackAudioUrl !== undefined || parsed.data.unknownSoundtrack === true
     if (referenceVideoUrls.length + unknownClips === 0 && !soundtrack) {
@@ -102,7 +105,8 @@ export function registerSeedanceRefEstimate(app: FastifyInstance): void {
         ? audioSoundtrackClipSec(await probeMediaDuration(parsed.data.soundtrackAudioUrl).catch(() => Number.NaN), outputSec)
         : parsed.data.unknownSoundtrack === true ? outputSec : undefined
       const durationsSec = soundtrackSec === undefined ? probed : [...probed, soundtrackSec]
-      return { data: await seedance2RefVideoChargedQuote({ provider, resolution, duration, draft, durationsSec, unknownClips }) }
+      const videoTrim = { start: parsed.data.videoTrimStart, end: parsed.data.videoTrimEnd }
+      return { data: await seedance2RefVideoChargedQuote({ provider, resolution, duration, draft, durationsSec, unknownClips, videoTrim }) }
     } catch (err) {
       if (handlePriceNotConfigured(err, reply, ROUTE)) return reply
       return sendInternalError(reply, req, err, "Failed to estimate the reference-video credits")

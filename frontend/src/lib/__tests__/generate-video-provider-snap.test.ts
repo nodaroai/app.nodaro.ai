@@ -35,6 +35,16 @@ describe("generateVideoProviderSnap — every model ends on values it accepts", 
     })
   }
 
+  it("Gemini Omni Flash 1.2 opens on 8s at 720p, never its 360p first tier", () => {
+    expect(generateVideoProviderSnap({}, "gemini-omni-flash-1-2")).toMatchObject({ duration: 8, resolution: "720p" })
+  })
+
+  it("narrows a 15 s source trim for the Omni models that allow 10 s, and only then", () => {
+    expect(generateVideoProviderSnap({ videoTrimStart: 2, videoTrimEnd: 17 }, "gemini-omni-flash")).toMatchObject({ videoTrimEnd: 12 })
+    expect(generateVideoProviderSnap({ videoTrimStart: 2, videoTrimEnd: 17 }, "gemini-omni-flash-1-2")).not.toHaveProperty("videoTrimEnd")
+    expect(generateVideoProviderSnap({ videoTrimStart: 2, videoTrimEnd: 8 }, "gemini-omni-flash")).not.toHaveProperty("videoTrimEnd")
+  })
+
   it("is a no-op on a node that already fits", () => {
     expect(generateVideoProviderSnap({ resolution: "720p", aspectRatio: "16:9", duration: 8 }, "seedance-2-5")).toEqual({})
   })

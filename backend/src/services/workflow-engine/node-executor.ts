@@ -1834,6 +1834,8 @@ async function computeSeedance2RefVideoCreditOverride(
     outputDurationSec: pricedOutputDurationSec(provider as string, payload.duration as number | string | undefined),
     // Auto (-1) is the edit shape: its hold follows the source clip.
     requestedDuration: payload.duration,
+    // Per-second Gemini Omni: the node's trim decides what is billed.
+    videoTrim: { start: payload.videoTrimStart, end: payload.videoTrimEnd },
   }
   // Probe once, use twice (R15) — the duration gate above already ffprobed
   // this payload for any provider with a declared bound, so the DEBIT prices

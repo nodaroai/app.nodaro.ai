@@ -1303,6 +1303,15 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     allowedDurations: [4, 6, 8, 10],
     requiresDuration: true,
   },
+
+  // Gemini Omni Flash 1.2 — one KIE id, four modes picked by the inputs. Bespoke
+  // request builder (gemini-omni-12.ts). See: docs.kie.ai/market/google/gemini-omni-flash-1-2.md
+  "gemini-omni-flash-1-2": {
+    model: "google/gemini-omni-flash-1-2",
+    credits: 72,               // KIE credits for the default 8s 720p render (audit display)
+    cost: 0.36,                // USD display fallback only — real cost from the per-second rate
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  },
 }
 
 // =============================================================================
@@ -1546,6 +1555,15 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     cost: 0.315,               // USD display fallback only — real cost via the per-tier table in video.ts
     allowedDurations: [4, 6, 8, 10],
     requiresDuration: true,
+  },
+
+  // Gemini Omni Flash 1.2 — one KIE id, four modes picked by the inputs. Bespoke
+  // request builder (gemini-omni-12.ts). See: docs.kie.ai/market/google/gemini-omni-flash-1-2.md
+  "gemini-omni-flash-1-2": {
+    model: "google/gemini-omni-flash-1-2",
+    credits: 72,               // KIE credits for the default 8s 720p render (audit display)
+    cost: 0.36,                // USD display fallback only — real cost from the per-second rate
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
 
   // Wan 3.0 T2V — ONE KIE id serves every mode (unlike wan-2.7, whose split

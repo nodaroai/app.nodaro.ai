@@ -4,6 +4,7 @@ import { isAutoVideoDuration } from "@nodaro/shared/model-catalog"
 import { videoGenerationCreditId } from "@nodaro/shared/credits"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { refVideoCapFor } from "../../lib/ref-video-probe.js"
+import type { VideoSourceTrim } from "../../lib/gemini-omni-12-source.js"
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
 import { seedance2RefVideoBaseCreditsFromDurations, seedance2RefVideoExpectedBaseCredits } from "./seedance2-ref-video-credits.js"
 import { applyServiceMarkup } from "./service-margin.js"
@@ -58,6 +59,8 @@ export interface Seedance2RefVideoQuoteRequest {
   durationsSec: readonly number[]
   /** Wired clips whose length is not known (the worst case; `min` = the shortest clip). */
   unknownClips: number
+  /** The node's trim of its source clip (per-second Gemini Omni: it decides what is billed). */
+  videoTrim?: VideoSourceTrim
 }
 
 /**
@@ -75,8 +78,9 @@ export function seedance2RefVideoQuote(
   const unknown = Math.max(0, Math.min(args.unknownClips, cap - known.length))
   const shortest = VIDEO_REF_VIDEO_DURATION_LIMITS[provider]?.minSec ?? 1
 
-  const ceilingBase = seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, durationsSec: [...known, ...Array<number>(unknown).fill(Number.NaN)] })
-  const floorBase = seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, durationsSec: [...known, ...Array<number>(unknown).fill(shortest)] })
+  const { videoTrim } = args
+  const ceilingBase = seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, videoTrim, durationsSec: [...known, ...Array<number>(unknown).fill(Number.NaN)] })
+  const floorBase = seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, videoTrim, durationsSec: [...known, ...Array<number>(unknown).fill(shortest)] })
 
   // Marked up once, at the identifier the run's reservation is marked up at.
   const credits = args.charge(identifier, ceilingBase)

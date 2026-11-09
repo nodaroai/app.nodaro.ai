@@ -693,6 +693,7 @@ const MODEL_DESCRIPTIONS_KO: Record<string, string> = {
   "Full instrument + vocal generation": "악기 + 보컬 전체 생성",
   "Google's latest, strong prompt adherence": "Google 최신 모델, 뛰어난 프롬프트 충실도",
   "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit": "Google, 4–10초, 720p/1080p/4K, 네이티브 오디오, 레퍼런스 + 동영상 편집",
+  "Google, 3–15s, 360p to 4K, native audio, refs + video-edit": "Google, 3–15초, 360p~4K, 네이티브 오디오, 레퍼런스 + 동영상 편집",
   "Guided video editing with reference image support": "레퍼런스 이미지를 지원하는 가이드 기반 동영상 편집",
   "Hailuo 02, end frame support": "Hailuo 02, 종료 프레임 지원",
   "High quality video-to-video": "고품질 동영상→동영상 변환",

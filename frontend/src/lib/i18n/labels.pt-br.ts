@@ -693,6 +693,7 @@ const MODEL_DESCRIPTIONS_PT_BR: Record<string, string> = {
   "Full instrument + vocal generation": "Geração completa de instrumentos + vocais",
   "Google's latest, strong prompt adherence": "O mais recente do Google, forte aderência ao prompt",
   "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit": "Google, 4–10 s, 720p/1080p/4K, áudio nativo, refs. + edição de vídeo",
+  "Google, 3–15s, 360p to 4K, native audio, refs + video-edit": "Google, 3–15 s, de 360p a 4K, áudio nativo, refs. + edição de vídeo",
   "Guided video editing with reference image support": "Edição de vídeo guiada, com suporte a imagens de referência",
   "Hailuo 02, end frame support": "Hailuo 02, suporte a quadro final",
   "High quality video-to-video": "Vídeo para vídeo de alta qualidade",

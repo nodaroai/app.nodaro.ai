@@ -691,6 +691,13 @@ describe("payload-builder.kling-4.test.ts", () => {
     expect(r.modelIdentifier).toBe("kling-4-keyframes:5s:720p")
   })
 
+  it("Gemini Omni Flash 1.2 keeps a lone end frame as the END frame", () => {
+    const r = build(n("gemini-omni-flash-1-2"), { endFrameUrl: END })
+    expect(r.jobName).toBe("image-to-video")
+    expect(r.payload.endFrameUrl).toBe(END)
+    expect(r.payload.imageUrl).toBeUndefined()
+  })
+
   it("Keyframes with in-between frames and an end frame (no start) keeps both", () => {
     const r = build(n("kling-4-keyframes"), { endFrameUrl: END, referenceImageUrls: [MID(1), MID(2)] })
     expect(r.jobName).toBe("image-to-video")

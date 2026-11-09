@@ -26,6 +26,7 @@ import {
   applyDefaultVideoSelection,
   audioSoundtrackActive,
   billsReferenceVideoSeconds,
+  isGeminiOmniPerSecondProvider,
   isSeedanceVideoEditProvider,
 } from "@nodaro/shared/models"
 import {
@@ -120,6 +121,9 @@ export function seedanceRefQuoteRequest(
     referenceVideoUrls: urls,
     ...(unknown > 0 ? { unknownReferenceVideos: unknown } : {}),
     ...(soundtrack ? (soundtrackAudioUrl ? { soundtrackAudioUrl } : { unknownSoundtrack: true }) : {}),
+    // Flash 1.2 bills the stretch of the clip the node's trim keeps.
+    ...(isGeminiOmniPerSecondProvider(provider) && typeof data.videoTrimStart === "number" ? { videoTrimStart: data.videoTrimStart } : {}),
+    ...(isGeminiOmniPerSecondProvider(provider) && typeof data.videoTrimEnd === "number" ? { videoTrimEnd: data.videoTrimEnd } : {}),
   }
 }
 

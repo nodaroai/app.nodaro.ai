@@ -2,6 +2,7 @@ import { MODEL_CATALOG, SEEDANCE_DRAFT_FINALIZE_PROVIDER, SEEDANCE_DRAFT_MODELS,
 import {
   VIDEO_REF_VIDEO_DURATION_LIMITS,
   VIDEO_REF_RATE_PROVIDERS,
+  isGeminiOmniPerSecondProvider,
   isKling4Provider,
   normalizeKling4Resolution,
   pricedOutputDurationSec,
@@ -15,6 +16,7 @@ import { STATIC_CREDIT_COSTS, PriceNotConfiguredError, getModelCreditBaseCost } 
 // ee -> core is the allowed direction; re-exported so existing importers of
 // this module are unaffected.
 import { probeRefVideoDurations } from "../../lib/ref-video-probe.js"
+import { geminiOmni12LadderSec, videoRefBilledDurations, type VideoSourceTrim } from "../../lib/gemini-omni-12-source.js"
 import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
 
 export { probeRefVideoDurations, refVideoCapFor } from "../../lib/ref-video-probe.js"
@@ -69,6 +71,17 @@ export function seedance2RefVideoBaseCredits(args: {
 }): number {
   const { provider, resolution, outputDurationSec, inputVideoDurationSec } = args
 
+  // A per-second Gemini Omni edit bills the clip on the model's ordinary ladder:
+  // no `-ref` rate and no input seconds of its own.
+  if (isGeminiOmniPerSecondProvider(provider)) {
+    const ladderId = buildVideoCreditModelIdentifier(
+      provider, geminiOmni12LadderSec(outputDurationSec), undefined, undefined, undefined, resolution, /* hasVideoRef */ true,
+    )
+    const row = STATIC_CREDIT_COSTS[ladderId]
+    if (row === undefined) throw new PriceNotConfiguredError(ladderId)
+    return row
+  }
+
   // Clamp the requested resolution to the provider's catalog resolutions, snapping
   // an unsupported tier to the top (last) priced tier — mirrors credit-identifiers.ts.
   // A VIDEO_REF_RATE_PROVIDERS model (Kling 4.0) renders through its own
@@ -100,8 +113,11 @@ export function seedance2RefVideoBaseCredits(args: {
  *    input is shorter than the output, the input is counted as the output
  *    duration" (kie.ai/kling-4-0 billing: a 10s output with a 5s input bills
  *    20s, with a 15s input 25s).
+ *  - per-second Gemini Omni: the output alone, which follows the source clip
+ *    (kie.ai/gemini-omni-1-2-flash: "billed for the length of the input video").
  */
 export function billedRefVideoSeconds(provider: string, outputDurationSec: number, inputVideoDurationSec: number): number {
+  if (isGeminiOmniPerSecondProvider(provider)) return outputDurationSec
   return VIDEO_REF_RATE_PROVIDERS.has(provider)
     ? outputDurationSec + Math.max(outputDurationSec, inputVideoDurationSec)
     : inputVideoDurationSec + outputDurationSec
@@ -170,6 +186,12 @@ export function seedance2RefVideoHeldOutputSec(args: {
   durationsSec: readonly unknown[]
 }): number {
   const { provider, outputDurationSec, requestedDuration, durationsSec } = args
+  // A per-second Gemini Omni edit renders its source clip, rounded up to a whole
+  // second so a clip a hair over a rung still holds the rung above it.
+  if (isGeminiOmniPerSecondProvider(provider)) {
+    const clipSec = billedInputSeconds(provider, durationsSec).perClip[0] ?? refVideoWorstCaseSecFor(provider)
+    return Math.ceil(clipSec - 0.05)
+  }
   if (!outputFollowsReferenceClip(provider)) return outputDurationSec
   const autoEdit = autoEditHeldOutputSec(provider, requestedDuration, durationsSec)
   if (autoEdit !== undefined) return autoEdit
@@ -208,13 +230,16 @@ export function seedance2RefVideoBaseCreditsFromDurations(args: {
   /** The request's own duration (Auto = -1, the edit shape). Required so no reservation path can skip the rule. */
   requestedDuration: unknown
   durationsSec: readonly number[]
+  /** The node's trim of its source clip (per-second Gemini Omni: it decides what is billed). */
+  videoTrim?: VideoSourceTrim
 }): number {
-  const { provider, resolution, durationsSec } = args
+  const { provider, resolution } = args
+  const durationsSec = videoRefBilledDurations(provider, args.durationsSec, args.videoTrim)
   const { totalSec } = billedInputSeconds(provider, durationsSec)
   return seedance2RefVideoBaseCredits({
     provider,
     resolution,
-    outputDurationSec: seedance2RefVideoHeldOutputSec(args),
+    outputDurationSec: seedance2RefVideoHeldOutputSec({ ...args, durationsSec }),
     inputVideoDurationSec: totalSec,
   })
 }
@@ -243,7 +268,8 @@ export function seedance2RefVideoExpectedBaseCredits(args: {
   const { provider, resolution, outputDurationSec, autoDuration, durationsSec } = args
   if (durationsSec.length === 0 || !durationsSec.every(isUsableDuration)) return undefined
   const { perClip, totalSec } = billedInputSeconds(provider, durationsSec)
-  const renderedSec = autoDuration && outputFollowsReferenceClip(provider) ? perClip[0]! : outputDurationSec
+  const followsClip = isGeminiOmniPerSecondProvider(provider) || (autoDuration && outputFollowsReferenceClip(provider))
+  const renderedSec = followsClip ? perClip[0]! : outputDurationSec
   return seedance2RefVideoBaseCredits({ provider, resolution, outputDurationSec: renderedSec, inputVideoDurationSec: totalSec })
 }
 
@@ -266,10 +292,11 @@ export async function seedance2RefVideoBaseCreditsFromUrls(args: {
   /** The request's own duration (Auto = -1, the edit shape). */
   requestedDuration: unknown
   referenceVideoUrls: readonly unknown[]
+  videoTrim?: VideoSourceTrim
 }): Promise<number> {
-  const { provider, resolution, outputDurationSec, requestedDuration, referenceVideoUrls } = args
+  const { provider, resolution, outputDurationSec, requestedDuration, referenceVideoUrls, videoTrim } = args
   const durationsSec = await probeRefVideoDurations({ provider, referenceVideoUrls })
-  return seedance2RefVideoBaseCreditsFromDurations({ provider, resolution, outputDurationSec, requestedDuration, durationsSec })
+  return seedance2RefVideoBaseCreditsFromDurations({ provider, resolution, outputDurationSec, requestedDuration, durationsSec, videoTrim })
 }
 
 /**

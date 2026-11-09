@@ -3182,6 +3182,12 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `gemini-omni-video` on an identical request shape — same 4 / 6 / 8 / 10
 > `duration` menu (8 s when omitted), same 720p / 1080p / 4K tiers, same
 > 16:9 / 9:16-only aspect, same 7-unit input quota.
+> **Gemini Omni Flash 1.2** (`gemini-omni-flash-1-2`) is priced per second: any
+> whole-second `duration` from 3 to 15, 360p / 720p / 1080p / 4K, and `auto` beside
+> 16:9 and 9:16. No `characterReferences`. A source video is edited and charged by
+> its own length, up to 15 s (`videoTrimStart` / `videoTrimEnd` pick a window of
+> up to 15 s). See
+> [Gemini Omni Flash 1.2](nodes/ai-video/generate-video.md#gemini-omni-flash-12).
 > `resolution` / `aspectRatio` are pass-through strings — an unsupported value
 > is ignored, never a 400. Start/end frames and references can coexist (the
 > frames become prompt-directed `Image N` references; the resolver picks the

@@ -17,6 +17,11 @@ const VIDU_Q4_4K_COMPOSITES: readonly string[] = (VIDEO_DURATION_TIERS["vidu-q4"
   (t) => `vidu-q4:${t.suffix}:4k`,
 )
 
+/** Gemini Omni Flash 1.2's 4K rows, closed to the free tier like every Omni 4K row. */
+const GEMINI_OMNI_12_4K_COMPOSITES: readonly string[] = (VIDEO_DURATION_TIERS["gemini-omni-flash-1-2"] ?? []).map(
+  (t) => `gemini-omni-flash-1-2:${t.suffix}:4k`,
+)
+
 export const STRIPE_PRODUCTS = {
   basic: {
     productId: "prod_U6gPUNpvVGjE2f",
@@ -157,6 +162,7 @@ export const FREE_TIER_RESTRICTIONS = {
     "gemini-omni-video:4k:4", "gemini-omni-video:4k:6", "gemini-omni-video:4k:8", "gemini-omni-video:4k:10", "gemini-omni-video:4k:vref",
     "gemini-omni-flash:4k:4", "gemini-omni-flash:4k:6", "gemini-omni-flash:4k:8", "gemini-omni-flash:4k:10", "gemini-omni-flash:4k:vref",
     ...VIDU_Q4_4K_COMPOSITES,
+    ...GEMINI_OMNI_12_4K_COMPOSITES,
   ],
   watermark: true,
 } as const

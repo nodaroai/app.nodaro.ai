@@ -96,6 +96,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `kling-4` | `kling-4.0/reference-to-video` (bespoke `runKling4`, body from `kling4.ts`) | [kling 4.0 reference](https://docs.kie.ai/market/kling/v4-reference-to-video.md) |
 | `kling-4-keyframes` | `kling-4.0/keyframe-to-video` (bespoke `runKling4`) | [kling 4.0 keyframe](https://docs.kie.ai/market/kling/v4-keyframe-to-video.md) |
 | `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (via `runGeminiOmni`; the pro sibling's id is the bare `gemini-omni-video`) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
+| `gemini-omni-flash-1-2` | `google/gemini-omni-flash-1-2` (bespoke `runGeminiOmni12`, body from `gemini-omni-12.ts`) | [gemini omni flash 1.2](https://docs.kie.ai/market/google/gemini-omni-flash-1-2.md) |
 | `gemini-omni-video` | `gemini-omni-video` (via `runGeminiOmni`; the pro sibling of flash) | [gemini omni video](https://docs.kie.ai/market/gemini-omni-video.md) |
 | `wan-i2v` | `wan/2-6-image-to-video` | [wan 2.6 i2v](https://docs.kie.ai/market/wan/2-6-image-to-video.md) |
 | `wan-turbo` | `wan/2-2-a14b-image-to-video-turbo` | [wan turbo i2v](https://docs.kie.ai/market/wan/2-2-a14b-image-to-video-turbo.md) |
@@ -125,6 +126,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `kling-4` | `kling-4.0/reference-to-video` (ONE KIE id serves both modes) | [kling 4.0 reference](https://docs.kie.ai/market/kling/v4-reference-to-video.md) |
 | `kling-4-keyframes` | `kling-4.0/keyframe-to-video` (ONE KIE id serves both modes) | [kling 4.0 keyframe](https://docs.kie.ai/market/kling/v4-keyframe-to-video.md) |
 | `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (ONE KIE id serves both modes) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
+| `gemini-omni-flash-1-2` | `google/gemini-omni-flash-1-2` (ONE KIE id serves every mode) | [gemini omni flash 1.2](https://docs.kie.ai/market/google/gemini-omni-flash-1-2.md) |
 | `gemini-omni-video` | `gemini-omni-video` (ONE KIE id serves both modes) | [gemini omni video](https://docs.kie.ai/market/gemini-omni-video.md) |
 | `wan` | `wan/2-6-text-to-video` | [wan 2.6 t2v](https://docs.kie.ai/market/wan/2-6-text-to-video.md) |
 | `sora2` | `sora-2-text-to-video` | [sora2 t2v](https://docs.kie.ai/market/sora2/sora-2-text-to-video.md) |
@@ -271,6 +273,38 @@ afterwards (300-65536 px per side, aspect 0.4-2.5, our 2048 px cap).
   reservation and settlement reuse the Seedance machinery
   (`billsReferenceVideoSeconds`, `billedRefVideoSeconds` in
   `ee/billing/seedance2-ref-video-credits.ts`); subjects and voices are free.
+
+### Gemini Omni Flash 1.2 wire notes (`gemini-omni-flash-1-2`, bespoke `runGeminiOmni12`)
+
+One KIE id, four modes picked by the inputs. It is in `GEMINI_OMNI_PROVIDERS` for
+the family's routing, and `GEMINI_OMNI_PER_SECOND_PROVIDERS` is what separates its
+price and billing from 1.1's. `buildGeminiOmni12Request` (`gemini-omni-12.ts`)
+builds an allow-listed body:
+
+- **Text or references:** `image_urls` (up to 6; `images + 2 for a video ≤ 7`),
+  integer `duration` 3-15.
+- **Frames:** only a start frame (and an end frame) wired → `first_frame_url` /
+  `last_frame_url`. KIE takes no other image beside them, no lone last frame, and
+  first + last holds only up to 10 s. Anything else wired, or a lone end frame, or
+  first + last past 10 s: the frames join `image_urls` after the caller's own
+  images (`placeFramesAfterReferences`), named in the prompt.
+- **Video edit:** `video_list` is one plain URL, up to 15 s, and `duration` must
+  not be sent; the output follows the clip. KIE has no trim fields, so
+  `prepareGeminiOmni12Source` cuts the clip (the node's trim, else its first 15 s)
+  into the job's scratch folder.
+- **`auto`:** KIE reads it as 16:9 when no reference image is sent, so beside real
+  frames the runner sends the ratio nearest the start frame
+  (`geminiOmni12FrameAspect`, the rule the frame fit already uses).
+- `seeds`, not `seed`, 10000-99999: an out-of-range value is omitted. No
+  `character_ids` or `audio_ids`, so characters and pinned voices are refused.
+- **Billing:** a `:<N>s:<res>` ladder, one row per second and resolution. An edit
+  bills the same rows over the clip's length: it joins `billsReferenceVideoSeconds`
+  (`billedRefVideoSeconds`: output alone, which follows the clip), so the routes,
+  the DAG and the quotes all read the probed clip, cut by the node's trim
+  (`videoRefBilledDurations`, `lib/gemini-omni-12-source.ts`). The hold is the
+  clip's price, so nothing settles down after the run, except a clip the hold
+  could not read, which settles on the clip delivered. A clip under 3 s bills
+  the 3 s row.
 
 ### Seedance 2.5 edit mode (`runVideoTaskWithSeedanceEditRetry`, video.ts)
 

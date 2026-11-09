@@ -58,6 +58,8 @@ interface RefVideoEstimateRequest {
    * output] — `source` is its upstream node, when the estimate has it.
    */
   soundtrack?: { readonly source: EstimateNode | undefined }
+  /** The node's trim of its source clip (per-second Gemini Omni: it decides what is billed). */
+  videoTrim: { start: unknown; end: unknown }
 }
 
 /** The request `node` (already read through its Settings input) makes, or undefined when its price does not follow reference clips. */
@@ -107,6 +109,7 @@ function refVideoEstimateRequest(
   const byId = new Map(nodes.map((n) => [n.id, n]))
   return {
     provider, resolution, duration, draft: data.draft === true,
+    videoTrim: { start: data.videoTrimStart, end: data.videoTrimEnd },
     clipSources: clipSourceIds.map((id) => (id === undefined ? undefined : byId.get(id))),
     ...(soundtrack ? { soundtrack: { source: byId.get(audioEdges[0]!.source) } } : {}),
   }
@@ -147,6 +150,7 @@ export function seedanceRefVideoEstimateCredits(
     draft: request.draft,
     durationsSec,
     unknownClips,
+    videoTrim: request.videoTrim,
     charge: (identifier, base) => prices.charge(identifier, base),
   }).credits
 }

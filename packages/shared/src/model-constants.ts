@@ -255,6 +255,8 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   // Gemini Omni Flash 1.1 — same 20000-char prompt surface as the pro sibling
   // (docs.kie.ai/market/google/gemini-omni-flash-1-1).
   "gemini-omni-flash": 20000,
+  // (docs.kie.ai/market/google/gemini-omni-flash-1-2).
+  "gemini-omni-flash-1-2": 20000,
   // Wan 3.0 / 3.0 Prime — 20000 chars, excess truncated by the provider
   // (docs.kie.ai/market/wan/3-0-video and /3-0-video-prime).
   "wan-3": 20000,
@@ -972,6 +974,7 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   "kling-3-omni",
   "gemini-omni-video",
   "gemini-omni-flash",
+  "gemini-omni-flash-1-2",
   // Wan 3.0 family — one id per SKU serves BOTH modes (no t2v twin, no alias),
   // so each id is listed in this array AND in TEXT_TO_VIDEO_PROVIDERS.
   "wan-3",
@@ -1023,6 +1026,7 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "runway-kie",
   "gemini-omni-video",
   "gemini-omni-flash",
+  "gemini-omni-flash-1-2",
   // Wan 3.0 family — REAL t2v (prompt-only runs are the documented default
   // mode), so they belong in this main section and must NOT be gated by
   // VIDEO_PROVIDERS_REQUIRING_IMAGE.
@@ -1880,6 +1884,10 @@ export const DURATION_PRICED_PROVIDERS = new Set([
   // video rate on `kling-4`, see VIDEO_REF_RATE_PROVIDERS).
   "kling-4",
   "kling-4-keyframes",
+  // Gemini Omni Flash 1.2 — per-second billing at four resolution rates. The
+  // only Omni SKU here: the per-clip SKUs price in their own branch of
+  // buildVideoCreditModelIdentifier.
+  "gemini-omni-flash-1-2",
 ])
 
 /**
@@ -2085,10 +2093,36 @@ export function kling4KeyframeFrameCap(durationSec: number | string | undefined)
 export const GEMINI_OMNI_PROVIDERS = new Set<string>([
   "gemini-omni-video",
   "gemini-omni-flash",
+  // Own request builder and per-second price: GEMINI_OMNI_PER_SECOND_PROVIDERS.
+  "gemini-omni-flash-1-2",
 ])
 
 export function isGeminiOmniProvider(provider: string | undefined): boolean {
   return !!provider && GEMINI_OMNI_PROVIDERS.has(provider)
+}
+
+/**
+ * The Gemini Omni SKUs billed per second of video (Gemini Omni Flash 1.2). What
+ * the family shares (V2V through the i2v handle, the panels) comes from
+ * {@link GEMINI_OMNI_PROVIDERS}. These differ in two ways: the price is a
+ * `:<N>s:<res>` ladder, and a run with a source video bills that clip's own
+ * seconds and nothing else (the output follows the clip), so they also answer
+ * {@link billsReferenceVideoSeconds}.
+ */
+export const GEMINI_OMNI_PER_SECOND_PROVIDERS = new Set<string>([
+  "gemini-omni-flash-1-2",
+])
+
+export function isGeminiOmniPerSecondProvider(provider: string | undefined): boolean {
+  return !!provider && GEMINI_OMNI_PER_SECOND_PROVIDERS.has(provider)
+}
+
+/** The longest source clip Gemini Omni Flash 1.2 takes (docs.kie.ai/market/google/gemini-omni-flash-1-2). */
+export const GEMINI_OMNI_12_MAX_SOURCE_SEC = 15
+
+/** The widest trim window a request may set on a Gemini Omni source clip, in seconds. */
+export function videoSourceTrimMaxSec(provider: string | undefined): number {
+  return isGeminiOmniPerSecondProvider(provider) ? GEMINI_OMNI_12_MAX_SOURCE_SEC : 10
 }
 
 /**
@@ -2612,6 +2646,10 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   // Gemini Omni Flash 1.1 — identical quota to the pro sibling
   // (images + 2×videos + character_ids ≤ 7).
   "gemini-omni-flash": { images: 7, videos: 1, characters: 3, voices: 3 },
+  // Gemini Omni Flash 1.2 — up to 6 images, one source video, and images +
+  // 2 for a video ≤ 7, so 5 images beside a video (the request builder holds
+  // that). No `character_ids` / `audio_ids` in its schema: no characters, no voices.
+  "gemini-omni-flash-1-2": { images: 6, videos: 1 },
   "kling-3-omni": { images: 7 },     // catalog/docs: "end frame + up to 7 reference images"
   // Kling 4.0 Reference — 10 images, 5 videos, 7 subjects (`characters`,
   // KIE `elements`) and 3 voices (reference audio, KIE `voices`), 15 in all
@@ -2784,6 +2822,9 @@ export const RESOLUTION_DURATION_PRICING: Record<string, readonly string[]> = {
   // (VIDEO_REF_RATE_PROVIDERS).
   "kling-4": ["720p", "1080p"],
   "kling-4-keyframes": ["720p", "1080p"],
+  // Gemini Omni Flash 1.2 — per-second billing at four resolution rates.
+  // Ascending; the billed default (720p) is declared in PRICING_DEFAULT_RESOLUTION.
+  "gemini-omni-flash-1-2": ["360p", "720p", "1080p", "4k"],
 }
 
 /**
@@ -2799,15 +2840,18 @@ export const VIDEO_REF_RATE_PROVIDERS = new Set<string>([
 
 /**
  * Video models whose reference-VIDEO runs also bill the clips' own seconds:
- * the Seedance 2 family (`unit × (input + output)`) and the
- * VIDEO_REF_RATE_PROVIDERS (Kling 4.0: `unit × (output + max(output, input))`).
+ * the Seedance 2 family (`unit × (input + output)`), the
+ * VIDEO_REF_RATE_PROVIDERS (Kling 4.0: `unit × (output + max(output, input))`)
+ * and the per-second Gemini Omni SKUs (`unit × source clip`, the output follows it).
  * The reservation holds the worst case from the probed clips and the
  * settlement meters down to what was delivered (backend
  * ee/billing/seedance2-ref-video-credits.ts) — this is the one gate every lane
  * (routes, orchestrator, worker settlement, reconcile) asks.
  */
 export function billsReferenceVideoSeconds(provider: string | undefined): boolean {
-  return isSeedance2Provider(provider) || (!!provider && VIDEO_REF_RATE_PROVIDERS.has(provider))
+  return isSeedance2Provider(provider)
+    || isGeminiOmniPerSecondProvider(provider)
+    || (!!provider && VIDEO_REF_RATE_PROVIDERS.has(provider))
 }
 
 /**
@@ -2900,8 +2944,8 @@ export function videoProviderRequiresImage(provider: string | undefined): boolea
  * reference mode takes a lone last frame as the sole reference image plus a
  * closing-frame prompt hint. NOTHING else does: VEO ships `[imageUrl,
  * endFrameUrl]` verbatim (a lone end frame would reach KIE as `[null, url]`),
- * the Gemini Omni branch drops the frame when there is no start frame, and the
- * generic KIE path sends `end_frame` with no image param at all. So the
+ * the per-clip Gemini Omni branch drops the frame when there is no start frame (Omni
+ * Flash 1.2 folds it, with its own builder), and the generic KIE path sends `end_frame` with no image param at all. So the
  * exemption is keyed to the FOLD, not to "carries image references" — the
  * catalog has no capability for it, and these three family predicates are the
  * same membership the provider layer itself branches on (the backend's
@@ -2910,7 +2954,7 @@ export function videoProviderRequiresImage(provider: string | undefined): boolea
  * family here; one that does not keeps the honest `image_required` 400.
  */
 export function videoProviderFoldsLoneEndFrame(provider: string): boolean {
-  return isSeedance2Provider(provider) || isMinimaxH3Provider(provider) || isWan3Provider(provider)
+  return isSeedance2Provider(provider) || isMinimaxH3Provider(provider) || isWan3Provider(provider) || isGeminiOmniPerSecondProvider(provider)
 }
 
 /**
@@ -3041,6 +3085,8 @@ export const VIDEO_AUDIO_CAPABILITY: Record<string, VideoAudioCapability> = {
   // dialogue; priced into the per-second rate.
   "kling-4": { mode: "ambient", alwaysOn: true, defaultOn: true },
   "kling-4-keyframes": { mode: "ambient", alwaysOn: true, defaultOn: true },
+  // Gemini Omni Flash 1.2 — native audio with no on/off input in its schema.
+  "gemini-omni-flash-1-2": { mode: "ambient", alwaysOn: true },
   // Gemini Omni (both SKUs — the pro `gemini-omni-video` and the faster
   // `gemini-omni-flash`; one model at two speeds, so their rows are identical
   // and a test pins that). Settled 2026-09-03 from Google's own documentation
@@ -3212,6 +3258,9 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
   // reference-video rate.
   "kling-4": "duration+resolution+ref",
   "kling-4-keyframes": "duration+resolution",
+  // Gemini Omni Flash 1.2 — per-second at four resolution rates; a video edit
+  // bills the same rates over the source clip.
+  "gemini-omni-flash-1-2": "duration+resolution",
 }
 
 /**
@@ -3331,7 +3380,16 @@ export const PRICING_DEFAULT_RESOLUTION: Record<string, string> = {
   // normalizeKling4Resolution pins the same tier for anything unknown.
   "kling-4": "720p",
   "kling-4-keyframes": "720p",
+  // Gemini Omni Flash 1.2 — KIE renders 720p when `resolution` is omitted, and
+  // the runner sends 720p for anything off its list.
+  "gemini-omni-flash-1-2": "720p",
 }
+
+/** Gemini Omni Flash 1.2 per-second tiers — one per allowed duration (3–15s). */
+const GEMINI_OMNI_12_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = Array.from(
+  { length: 13 },
+  (_, i) => ({ maxSeconds: i + 3, suffix: `${i + 3}s` }),
+)
 
 /** HappyHorse 1.1 per-second tiers — one per allowed duration (3–15s), shared
  *  by all three modes (t2v/i2v/ref2v) which bill at identical published rates. */
@@ -3466,6 +3524,7 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
   "vidu-q4": VIDU_Q4_DURATION_TIERS,
   "kling-4": KLING_4_DURATION_TIERS,
   "kling-4-keyframes": KLING_4_DURATION_TIERS,
+  "gemini-omni-flash-1-2": GEMINI_OMNI_12_DURATION_TIERS,
   // MiniMax Hailuo 3 — true per-second billing (KIE 36.5 cr/s @2K, 22.5 cr/s
   // @768P). One tier per allowed second (4-15s) so the composite identifier
   // maps 1:1 to the seeded price — no rounding/overcharge for any on-menu

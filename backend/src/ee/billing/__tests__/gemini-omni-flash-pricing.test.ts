@@ -51,7 +51,7 @@ describe("gemini-omni-flash static credits — literal table", () => {
   }
 
   it("seeds exactly 10 composites plus the bare id", () => {
-    const keys = Object.keys(STATIC_CREDIT_COSTS).filter((k) => k.startsWith("gemini-omni-flash"))
+    const keys = Object.keys(STATIC_CREDIT_COSTS).filter((k) => k === "gemini-omni-flash" || k.startsWith("gemini-omni-flash:"))
     expect(keys.length).toBe(11)
   })
 })

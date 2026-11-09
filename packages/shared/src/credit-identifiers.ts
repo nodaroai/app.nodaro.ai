@@ -23,6 +23,7 @@ import {
   isVeoProvider,
   isMinimaxH3Provider,
   isGeminiOmniProvider,
+  isGeminiOmniPerSecondProvider,
   isWan3Provider,
   isViduQ4Provider,
   isKling4Provider,
@@ -439,7 +440,8 @@ export function buildVideoCreditModelIdentifier(
   // provider id, so a further Omni SKU needs no edit here — it only has to join
   // GEMINI_OMNI_PROVIDERS and seed its rows. These models are deliberately NOT
   // in DURATION_PRICED_PROVIDERS; this branch early-returns before that gate.
-  if (isGeminiOmniProvider(effectiveProvider)) {
+  // A per-second SKU (Omni Flash 1.2) prices on the `:<N>s:<res>` ladder below.
+  if (isGeminiOmniProvider(effectiveProvider) && !isGeminiOmniPerSecondProvider(effectiveProvider)) {
     if (hasVideoRef) {
       return resolution === "4k" ? `${effectiveProvider}:4k:vref` : `${effectiveProvider}:vref`
     }

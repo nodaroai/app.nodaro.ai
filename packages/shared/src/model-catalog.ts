@@ -316,6 +316,9 @@ export interface ModelCatalogEntry {
   referenceSyntax?: "@image(n)" | "[Image N]"
   aspectRatios?: readonly string[]
   resolutions?: readonly string[]
+  /** The resolution a caller who names none lands on when it is not the
+   *  cheapest entry (see `defaultResolutionFor`). */
+  defaultResolution?: string
   /**
    * What this model actually RENDERS for a resolution outside `resolutions`.
    *
@@ -1926,6 +1929,32 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "gemini-omni-flash:4k:vref", credits: 630, note: "video-edit 4K" },
     ],
   },
+  "gemini-omni-flash-1-2": {
+    id: "gemini-omni-flash-1-2",
+    kind: "video",
+    modes: ["i2v", "t2v"] as const,   // V2V is served via the i2v handle, not a catalog mode
+    family: "Google",
+    maker: "google",
+    label: "Gemini Omni Flash 1.2",
+    series: "Gemini",
+    description: "Google Gemini Omni Flash 1.2 — 3–15s video with native sound, from 360p to 4K: from text, up to 6 reference images, exact first and last frames, or a video edit. Priced per second.",
+    useCases: ["cinematic", "fast"],
+    features: ["audio", "reference-image", "reference-to-video", "end-frame"],
+    aspectRatios: ["16:9", "9:16", "auto"],
+    resolutions: ["360p", "720p", "1080p", "4k"],
+    defaultResolution: "720p",
+    unlistedResolutionRendersAs: "720p",
+    durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 8,
+    pricing: [
+      { identifier: "gemini-omni-flash-1-2", credits: 180, note: "default 8s 720p — see :Ns:res variants" },
+      { identifier: "gemini-omni-flash-1-2:3s:360p", credits: 30, note: "3s 360p (min)" },
+      { identifier: "gemini-omni-flash-1-2:8s:720p", credits: 180, note: "8s 720p (the default tier)" },
+      { identifier: "gemini-omni-flash-1-2:8s:1080p", credits: 200, note: "8s 1080p" },
+      { identifier: "gemini-omni-flash-1-2:8s:4k", credits: 440, note: "8s 4K" },
+      { identifier: "gemini-omni-flash-1-2:15s:4k", credits: 830, note: "15s 4K (max)" },
+    ],
+  },
 
   // ── Kling ──
   "kling": {
@@ -2246,7 +2275,10 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "seedance-2-5": {
     id: "seedance-2-5",
     kind: "video",
-    modes: ["i2v", "t2v"] as const,
+    // `v2v`: it edits a clip by instruction on the same route as the other edit
+    // models (/v1/video-to-video, through its reference lane, in the clip's own
+    // ratio and length). It still makes a clip from words or a picture.
+    modes: ["i2v", "t2v", "v2v"] as const,
     family: "Bytedance",
     maker: "bytedance",
     label: "Seedance 2.5",
@@ -3912,10 +3944,14 @@ export function validateModelInput(
  * The resolution a Flux 2 model should land on when its stored value is absent
  * or invalid. Flux 2 exposes ascending megapixel options ("0.5 MP"…"4 MP"), so
  * snapping to `options[0]` would silently downgrade every node to the cheapest
- * tier; each variant has a sensible mid default instead. Returns undefined for
- * every non-Flux-2 model (they snap to `options[0]` normally).
+ * tier; each variant has a sensible mid default instead. A model can also
+ * declare one (`defaultResolution`, Gemini Omni Flash 1.2: its cheapest tier is
+ * a 360p preview). Returns undefined for every other model (they snap to
+ * `options[0]` normally).
  */
 export function defaultResolutionFor(modelId: string): string | undefined {
+  const declared = MODEL_CATALOG[modelId]?.defaultResolution
+  if (declared) return declared
   if (!isFlux2Model(modelId)) return undefined
   return modelId === "flux-2-klein" ? "1 MP" : "2 MP"
 }

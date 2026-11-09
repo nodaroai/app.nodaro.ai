@@ -5,8 +5,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
  *
  * The helper's docstring makes a promise about the WHOLE provider space: the
  * Seedance 2.x / MiniMax Hailuo 3 / Wan 3 families fold a lone closing frame
- * into `reference_image_urls` through the shared `resolveSeedance2Inputs`, and
- * "NOTHING else does". `/v1/generate-video`'s image-required gate is keyed to
+ * into `reference_image_urls` through the shared `resolveSeedance2Inputs`,
+ * Gemini Omni Flash 1.2 into its `image_urls`, and "NOTHING else does". `/v1/generate-video`'s image-required gate is keyed to
  * that promise — an end-frame-only body is admitted exactly when the helper
  * says yes — so the promise has to be an invariant, not a comment.
  *
@@ -117,7 +117,7 @@ describe("videoProviderFoldsLoneEndFrame — every provider it names really fold
       await provider.imageToVideo(undefined, "the camera settles on the final beat", p, 5, END)
       const input = captured()
       // Reference mode: the frame IS the reference the model receives...
-      expect(input.reference_image_urls).toEqual([END])
+      expect(input.reference_image_urls ?? input.image_urls).toEqual([END])
       // ...and no orphan last frame rides along beside it.
       expect(input.last_frame_url).toBeUndefined()
       expect(input.first_frame_url).toBeUndefined()

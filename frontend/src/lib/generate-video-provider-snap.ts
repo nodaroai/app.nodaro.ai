@@ -12,10 +12,12 @@ import {
 } from "@nodaro/shared/model-catalog"
 import {
   isGeminiOmniProvider,
+  isGeminiOmniPerSecondProvider,
   isWan3Provider,
   isViduQ4Provider,
   isKling4Provider,
   supportsAutoVideoDuration,
+  videoSourceTrimMaxSec,
 } from "@nodaro/shared/models"
 import {
   uiDurationFill,
@@ -117,9 +119,9 @@ export function generateVideoProviderSnap(
     // path fills for an untouched node.
     if (data.aspectRatio == null) updates.aspectRatio = "adaptive"
   }
-  if (isViduQ4Provider(provider) || isKling4Provider(provider)) {
-    // Same rule as Wan 3.0 (Vidu Q4 and Kling 4.0): the bare credit identifier is the 5s @ 720p tier
-    // while the catalog ladders start at 3s / 540p, so persist the declared
+  if (isViduQ4Provider(provider) || isKling4Provider(provider) || isGeminiOmniPerSecondProvider(provider)) {
+    // Same rule as Wan 3.0 (Vidu Q4, Kling 4.0, Omni Flash 1.2): the bare credit identifier is a declared
+    // duration @ 720p tier while the catalog ladders start lower (3s / 360p, 540p), so persist the declared
     // defaults rather than `opts[0]`. No aspect fill — a frame run takes the
     // frame's shape and a reference run defaults to 16:9.
     if (!opts?.some((o) => o.value === resolution)) {
@@ -128,6 +130,12 @@ export function generateVideoProviderSnap(
     if (data.duration == null || ("duration" in updates && updates.duration === undefined)) {
       updates.duration = openVideoDuration(limits, provider, [uiDurationFill(provider) ?? 5, ...(VIDEO_DURATION_OPTIONS[provider]?.map((o) => o.value) ?? [])])
     }
+  }
+  // A source-clip trim set on a model that allows a wider window.
+  if (isGeminiOmniProvider(provider) && typeof data.videoTrimEnd === "number") {
+    const start = typeof data.videoTrimStart === "number" ? data.videoTrimStart : 0
+    const widest = videoSourceTrimMaxSec(provider)
+    if (data.videoTrimEnd - start > widest) updates.videoTrimEnd = start + widest
   }
   if (hasStaleSeedanceDraft(provider, data.draft)) updates.draft = undefined
   return updates

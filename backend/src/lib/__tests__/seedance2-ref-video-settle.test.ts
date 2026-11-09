@@ -169,6 +169,20 @@ describe("measureSeedance2RefVideoBaseCredits", () => {
  * hold) and the reference clips billed on the input side (`inputSec`, 0
  * without a reference video). The credits are exactly the old function's.
  */
+describe("per-second Gemini Omni", () => {
+  const run = { provider: "gemini-omni-flash-1-2", resolution: "720p", outputUrl: "out", referenceVideoUrls: ["clip"], duration: 8 }
+
+  it("commits the hold when the source clip was measured", async () => {
+    expect(await measureSeedance2RefVideoBaseCredits({ ...run, refVideoDurationsSec: [10] })).toBeUndefined()
+    expect(settle.refSeconds).not.toHaveBeenCalled()
+  })
+
+  it("settles on the delivered clip when the source could not be read", async () => {
+    expect(await measureSeedance2RefVideoBaseCredits({ ...run, refVideoDurationsSec: [null] })).toBe(7193)
+    expect(settle.refSeconds).toHaveBeenCalled()
+  })
+})
+
 describe("measureSeedance2Settle", () => {
   it.each([
     ["a reference run", args],

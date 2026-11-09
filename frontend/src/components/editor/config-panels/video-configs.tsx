@@ -60,6 +60,7 @@ import { TOPAZ_VIDEO_FPS_CHOICES, TOPAZ_VIDEO_RESOLUTIONS, clampTopazVideoFps, i
 import { TOPAZ_VIDEO_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
 import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
 import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, kling4KeyframeFrameCap, KLING_4_MAX_MIDDLE_FRAMES, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
+import { videoSourceTrimMaxSec } from "@nodaro/shared/models"
 import { buildVideoCreditModelIdentifier, VIDEO_AUDIT_BUCKET_CREDITS } from "@nodaro/shared/credits"
 import { characterMentionSlug, characterMentionableAssetArrays, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared/entities"
 import { DEFAULT_LABEL_BY_SOURCE, type ReferenceSource, type ConnectedReference } from "@nodaro/shared/types"
@@ -3083,8 +3084,13 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
   // over-quota warning below, so the user isn't surprised by the runtime rejection.
   const geminiVideoCount = connectedRefVideos.length
   const geminiHasStartFrame = connectedImages.some((i) => i.targetHandle === "startFrame")
-  const geminiQuotaUsed = (geminiHasStartFrame ? 1 : 0) + connectedRefImages.length + geminiVideoCount * 2
-  const geminiQuotaExceeded = isGeminiOmni && geminiQuotaUsed > 7
+  const geminiHasEndFrame = connectedImages.some((i) => i.targetHandle === "endFrame")
+  const geminiImagesUsed = (geminiHasStartFrame ? 1 : 0) + (geminiHasEndFrame ? 1 : 0) + connectedRefImages.length
+  const geminiQuotaUsed = geminiImagesUsed + geminiVideoCount * 2
+  // Flash 1.2 caps the images on their own too, at 6 (`refCaps.images`).
+  const geminiQuotaExceeded = isGeminiOmni && (geminiQuotaUsed > 7 || geminiImagesUsed > (refCaps?.images ?? 7))
+  // The widest trim window: 15 s on Flash 1.2, 10 s on the other Omni models.
+  const geminiTrimMax = videoSourceTrimMaxSec(currentProvider)
   // Capability-first: the Gemini Omni family's budget is DYNAMIC (images +
   // startFrame + 2×videos ≤ 7) so it stays a computed branch; everything else
   // reads its flat cap from the shared VIDEO_REF_LIMITS_BY_PROVIDER map that
@@ -3098,7 +3104,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
   const keyframeUsed = keyframeEnds + connectedRefImages.length
 
   const maxRefImages = isGeminiOmni
-    ? Math.max(0, 7 - geminiVideoCount * 2 - (geminiHasStartFrame ? 1 : 0))
+    ? Math.max(0, Math.min(refCaps?.images ?? 7, 7 - geminiVideoCount * 2) - (geminiHasStartFrame ? 1 : 0) - (geminiHasEndFrame ? 1 : 0))
     : currentProvider === "grok-i2v" ? 6
     : currentProvider === "kling-3-omni" ? 7
     : isKeyframesModel ? Math.max(0, Math.min(KLING_4_MAX_MIDDLE_FRAMES, keyframeCap - keyframeEnds))
@@ -4093,20 +4099,20 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
                   onChange={(e) => {
                     const start = Math.max(0, Math.floor(Number(e.target.value) || 0))
                     // Re-clamp end so raising start past it can't create an inverted /
-                    // >10s window that the backend would reject only at submit.
-                    const end = (data.videoTrimEnd as number) ?? start + 10
-                    onUpdate({ videoTrimStart: start, videoTrimEnd: Math.min(Math.max(end, start + 1), start + 10) })
+                    // over-wide window that the backend would reject only at submit.
+                    const end = (data.videoTrimEnd as number) ?? start + geminiTrimMax
+                    onUpdate({ videoTrimStart: start, videoTrimEnd: Math.min(Math.max(end, start + 1), start + geminiTrimMax) })
                   }}
                   placeholder={t("vidcfg.phStart")}
                 />
                 <Input
                   type="number"
                   min={0}
-                  value={(data.videoTrimEnd as number) ?? 10}
+                  value={(data.videoTrimEnd as number) ?? geminiTrimMax}
                   onChange={(e) => {
                     const start = (data.videoTrimStart as number) ?? 0
                     const end = Math.floor(Number(e.target.value) || 0)
-                    onUpdate({ videoTrimEnd: Math.min(Math.max(end, start + 1), start + 10) })
+                    onUpdate({ videoTrimEnd: Math.min(Math.max(end, start + 1), start + geminiTrimMax) })
                   }}
                   placeholder={t("vidcfg.phEnd")}
                 />
@@ -4210,6 +4216,11 @@ function GVP_ANCHOR_MODE_HINTS(): Record<GvpAnchorChoice, string> {
 }
 }
 
+/** Generate Video Pro has no 360p tier (Gemini Omni Flash 1.2 offers one elsewhere). */
+function gvpResolutionOptions(provider: string) {
+  return getVideoResolutionOptions(provider)?.filter((o) => o.value !== "360p")
+}
+
 function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap }: ConfigProps<GenerateVideoProNodeData> & { nodeId?: string }) {
   const localizeOption = useLocalizeOptionLabel()
   const t = useT()
@@ -4235,13 +4246,13 @@ function GenerateVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, on
   // valid option, mirroring GenerateVideoConfig's / ImageToVideoConfig's snap
   // effect above (same VIDEO_RESOLUTION_OPTIONS source, so it can't drift).
   useEffect(() => {
-    const opts = getVideoResolutionOptions(currentProvider)
+    const opts = gvpResolutionOptions(currentProvider)
     if (opts && data.resolution && !opts.some((o) => o.value === data.resolution)) {
       onUpdate({ resolution: opts[0]?.value })
     }
   }, [currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const resolutionOptions = getVideoResolutionOptions(currentProvider)
+  const resolutionOptions = gvpResolutionOptions(currentProvider)
   const aspectOptions = getAspectRatiosForVideoModel(currentProvider)
   const canExtend = supportsExtendRender(currentProvider)
   // Anchor frames are a KEYFRAMES concept — under the extend chain each segment

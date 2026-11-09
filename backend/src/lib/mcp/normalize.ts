@@ -13,7 +13,7 @@
  * accept (or undefined when the lever genuinely doesn't apply to the
  * resolved model). Validation errors are SWALLOWED, not surfaced.
  */
-import { MODEL_CATALOG, VIDEO_DURATION_AUTO, isAutoVideoDuration, type ModelCatalogEntry } from "@nodaro/shared/model-catalog"
+import { MODEL_CATALOG, VIDEO_DURATION_AUTO, defaultResolutionFor, isAutoVideoDuration, type ModelCatalogEntry } from "@nodaro/shared/model-catalog"
 import { canonicalVideoProvider } from "@nodaro/shared/models"
 
 /**
@@ -371,7 +371,8 @@ export function normalizeVideoInput(
     ?? normalizeResolution(saved.resolution, modelEntry?.resolutions)
     // Default to the lowest catalog resolution (catalog arrays are ordered
     // low→high) so MCP video tools default to the cheapest tier when the
-    // caller doesn't specify one.
+    // caller doesn't specify one, unless the model declares otherwise.
+    ?? defaultResolutionFor(model)
     ?? modelEntry?.resolutions?.[0]
 
   const duration =

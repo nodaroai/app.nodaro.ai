@@ -149,6 +149,7 @@ import {
   isMinimaxH3Provider,
   isWan3Provider,
   isGeminiOmniProvider,
+  isGeminiOmniPerSecondProvider,
   PRICING_DEFAULT_RESOLUTION,
   supportsExtendRender,
   COMPOSER_PLAN_MAP,
@@ -4276,8 +4277,10 @@ export function buildPayload(
       // A keyframes model (Kling 4.0 Keyframes) takes an end frame alone, so
       // its end frame stays the END.
       const keyframesModel = hasFeature(provider, "keyframes")
-      const startFrameUrl = resolvedInputs.startFrameUrl ?? resolvedInputs.imageUrl ?? (keyframesModel ? undefined : resolvedInputs.endFrameUrl)
-      const endFrameUrl = (resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || keyframesModel)
+      // Omni Flash 1.2 takes it alone too, as the closing frame.
+      const keepsLoneEndFrame = keyframesModel || isGeminiOmniPerSecondProvider(provider)
+      const startFrameUrl = resolvedInputs.startFrameUrl ?? resolvedInputs.imageUrl ?? (keepsLoneEndFrame ? undefined : resolvedInputs.endFrameUrl)
+      const endFrameUrl = (resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || keepsLoneEndFrame)
         ? resolvedInputs.endFrameUrl
         : undefined
       const hasStart = !!startFrameUrl
@@ -4291,7 +4294,7 @@ export function buildPayload(
       // twin cannot carry them (Grok Imagine 1, #861).
       // A keyframes model takes an end frame on its own (no start frame); only
       // the image-to-video lane carries it, so any wired frame picks that lane.
-      const mode = resolveVideoModeForInputs(provider, { hasStartFrame: hasStart || (keyframesModel && !!endFrameUrl), hasImageRefs: hasImageRef })
+      const mode = resolveVideoModeForInputs(provider, { hasStartFrame: hasStart || (keepsLoneEndFrame && !!endFrameUrl), hasImageRefs: hasImageRef })
 
       // Gemini Omni family (video + flash): a connected source video is a
       // video-edit (V2V) job, routed through the image-to-video worker path (one

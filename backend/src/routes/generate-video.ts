@@ -10,6 +10,7 @@ import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { effectiveVideoPromptCeiling } from "../lib/video-prompt-ceiling.js"
 import { creditGuard, reserveCreditsForJob, type RoutePricing } from "../middleware/credit-guard.js"
+import { videoRefBilledDurations } from "../lib/gemini-omni-12-source.js"
 import { noteAddon, noteAutoDurationSettles, noteExtraReferenceImages, noteRefVideoPricing } from "../lib/video-price-notes.js"
 import { noteExpectedBase } from "../lib/price-notes.js"
 import { resolveVideoRequestNorm } from "../lib/video-request-norm.js"
@@ -30,7 +31,7 @@ import { judgeVoicesUnderLock } from "../lib/voice-lock.js"
 import { voiceNotAvailableBody } from "../lib/voice-policy.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderRefModeFrameSeats } from "@nodaro/shared/models"
+import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoSourceTrimMaxSec, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderRefModeFrameSeats } from "@nodaro/shared/models"
 import { VIDEO_DURATION_AUTO, isAutoVideoDuration, isSeedanceDraftCapable, hasFeature } from "@nodaro/shared/model-catalog"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, FRAME_FITS, FRAME_DELIVERIES } from "@nodaro/shared/video"
@@ -209,17 +210,18 @@ const generateVideoPublicFields = z.object({
   dialogue: z.array(dialogueLineSchema).max(50).optional(),
 })
 
-function refineTrimWindow(b: { videoTrimStart?: number; videoTrimEnd?: number }, ctx: z.RefinementCtx): void {
+function refineTrimWindow(b: { provider?: string; videoTrimStart?: number; videoTrimEnd?: number }, ctx: z.RefinementCtx): void {
   // Validate the EFFECTIVE trim window when EITHER bound is supplied — a one-sided
-  // value still resolves a window at the provider (start ?? 0, ends ?? start+10),
+  // value still resolves a window at the provider (start ?? 0, ends ?? start + the widest window),
   // so e.g. videoTrimEnd:30 alone (→ 0..30) must be rejected here, not at KIE.
   if (b.videoTrimStart != null || b.videoTrimEnd != null) {
     const start = b.videoTrimStart ?? 0
-    const ends = b.videoTrimEnd ?? start + 10
+    const maxWindow = videoSourceTrimMaxSec(b.provider)
+    const ends = b.videoTrimEnd ?? start + maxWindow
     if (ends <= start) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "videoTrimEnd must be greater than videoTrimStart", path: ["videoTrimEnd"] })
-    } else if (ends - start > 10) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "trim window must be ≤ 10 seconds", path: ["videoTrimEnd"] })
+    } else if (ends - start > maxWindow) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `trim window must be ≤ ${maxWindow} seconds`, path: ["videoTrimEnd"] })
     }
   }
 }
@@ -853,8 +855,14 @@ export const generateVideoPricing: RoutePricing = {
           req.refVideoDurationsSec ??
           (await probeRefVideoDurations({ provider: priceArgs.provider, referenceVideoUrls: b.referenceVideoUrls as unknown[] }))
         req.refVideoDurationsSec = durationsSec
-        await noteRefVideoPricing(req, { ...priceArgs, rawDuration: b.duration, durationsSec, settlesToActual: true })
-        dynamicBase = seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, requestedDuration: b.duration, durationsSec })
+        const videoTrim = { start: b.videoTrimStart, end: b.videoTrimEnd }
+        await noteRefVideoPricing(req, {
+          ...priceArgs,
+          rawDuration: b.duration,
+          durationsSec: videoRefBilledDurations(priceArgs.provider, durationsSec, videoTrim),
+          settlesToActual: true,
+        })
+        dynamicBase = seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, requestedDuration: b.duration, durationsSec, videoTrim })
       }
       // MiniMax Hailuo 3 bills unit×(input+output) for reference-video runs
       // AND surcharges input images beyond the first 5 (11 KIE cr each).
