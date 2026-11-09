@@ -4,6 +4,7 @@ import {
   IMAGE_MODEL_ROLE_DEFAULTS,
   IMAGE_MODEL_RATIO_FALLBACKS,
   defaultImageModel,
+  defaultImageModelForNode,
   imageModelDrawsRatio,
 } from "../image-model-roles.js"
 
@@ -13,7 +14,7 @@ describe("image model role defaults (decided 2026-10-08)", () => {
       character: "gpt-image-2",
       general: "gpt-image-2",
       anchor: "gpt-image-2",
-      edit: "gpt-image-2-5-flare-i2i",
+      edit: "gpt-image-2-6-flare-i2i",
     })
   })
 
@@ -32,22 +33,40 @@ describe("image model role defaults (decided 2026-10-08)", () => {
     for (const r of [undefined, null, "", "auto", "1:1", "16:9", "9:16", "4:3", "3:4"]) {
       expect(defaultImageModel("general", r)).toBe("gpt-image-2")
     }
-    expect(defaultImageModel("edit", "16:9")).toBe("gpt-image-2-5-flare-i2i")
+    expect(defaultImageModel("edit", "16:9")).toBe("gpt-image-2-6-flare-i2i")
   })
 
-  it("moves wide and in-between ratios to Sunburst, and 4:5 / 5:4 to Nano Banana Pro", () => {
-    for (const r of ["21:9", "3:2", "2:3", "27:16", "9:8"]) {
-      expect(defaultImageModel("character", r)).toBe("gpt-image-2-5-sunburst")
-      expect(defaultImageModel("anchor", r)).toBe("gpt-image-2-5-sunburst")
+  it("moves wide and in-between ratios to 2.6 Sunburst", () => {
+    for (const r of ["21:9", "3:2", "2:3", "4:5", "5:4"]) {
+      expect(defaultImageModel("character", r)).toBe("gpt-image-2-6-sunburst")
+      expect(defaultImageModel("anchor", r)).toBe("gpt-image-2-6-sunburst")
     }
-    for (const r of ["4:5", "5:4"]) {
-      expect(defaultImageModel("general", r)).toBe("nano-banana-pro")
-      expect(defaultImageModel("edit", r)).toBe("nano-banana-pro")
+    expect(defaultImageModel("general", "4:5")).toBe("gpt-image-2-6-sunburst")
+    expect(defaultImageModel("edit", "4:5")).toBe("gpt-image-2-6-flare-i2i")
+  })
+
+  it("keeps 2.5 Sunburst behind 2.6 for a ratio only 2.5 draws, and Nano Banana Pro last", () => {
+    for (const role of ["character", "general", "anchor"] as const) {
+      expect(IMAGE_MODEL_RATIO_FALLBACKS[role]).toEqual(["gpt-image-2-6-sunburst", "gpt-image-2-5-sunburst", "nano-banana-pro"])
     }
+    expect(IMAGE_MODEL_RATIO_FALLBACKS.edit).toEqual(["gpt-image-2-6-sunburst-i2i", "gpt-image-2-5-sunburst-i2i", "nano-banana-pro"])
+    const only25 = (MODEL_CATALOG["gpt-image-2-5-sunburst"]!.aspectRatios ?? []).filter(
+      (r) => !imageModelDrawsRatio("gpt-image-2-6-sunburst", r) && !imageModelDrawsRatio("gpt-image-2", r),
+    )
+    for (const r of only25) expect(defaultImageModel("general", r)).toBe("gpt-image-2-5-sunburst")
   })
 
   it("falls back to the role model when nothing draws the ratio", () => {
     expect(defaultImageModel("general", "7:1")).toBe("gpt-image-2")
+  })
+
+  it("names each image node's default the way its route does", () => {
+    expect(defaultImageModelForNode("generate-image", "1:1")).toBe("gpt-image-2")
+    expect(defaultImageModelForNode("generate-image", "21:9")).toBe("gpt-image-2-6-sunburst")
+    expect(defaultImageModelForNode("image-to-image")).toBe("gpt-image-2-6-flare-i2i")
+    expect(defaultImageModelForNode("modify-image")).toBe("gpt-image-2-6-flare-i2i")
+    expect(defaultImageModelForNode("reference-board", "2:3")).toBe("gpt-image-2-6-sunburst")
+    expect(defaultImageModelForNode("text-to-speech")).toBeUndefined()
   })
 
   it("reads ratios from the catalog", () => {

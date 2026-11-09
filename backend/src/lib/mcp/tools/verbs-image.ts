@@ -423,7 +423,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "PRIMARY tool for image-to-image / edit / transform / restyle / outpaint / inpaint work. Use it " +
           "directly; do NOT search the apps marketplace for image editing.\n\n" +
           "**Picking a model**: `list_models { kind: \"image\", mode: \"i2i\" }` or `mode: \"edit\"` for the " +
-          "capability sheets. Default gpt-image-2-5-flare-i2i; gpt-image-2-i2i for face/character identity across " +
+          "capability sheets. Default gpt-image-2-6-flare-i2i; gpt-image-2-i2i for face/character identity across " +
           "multi-turn edits and for typography; gpt-image-2 for text-heavy, prompt-adherence-critical edits; " +
           "recraft-remove-bg for background removal (no prompt). The full model guidance is " +
           "`get_node_skill(\"modify-image\")`.\n\n" +
@@ -438,7 +438,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             .string()
             .optional()
             .describe(
-              `I2I / edit model. Default gpt-image-2-5-flare-i2i. Recommended: ${I2I_MODEL_IDS.join(", ")}. ` +
+              `I2I / edit model. Default gpt-image-2-6-flare-i2i. Recommended: ${I2I_MODEL_IDS.join(", ")}. ` +
               `For identity-preserving edits use gpt-image-2-i2i. Unknown values fall back. ` +
               `Call list_models for capability details.`,
             ),
@@ -654,7 +654,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         "Transform an image guided by a text prompt (img2img). Supports style " +
         "transfer, re-styling, inpainting with a mask, and multi-reference " +
         "composition. Returns a job_id.\n\n" +
-        "**Recommended models**: gpt-image-2-5-flare-i2i (default), gpt-image-2-i2i (identity), nano-banana-2-1, " +
+        "**Recommended models**: gpt-image-2-6-flare-i2i (default), gpt-image-2-i2i (identity), nano-banana-2-1, " +
         "flux-kontext (photorealistic edits), gpt-image-i2i (creative repaints), " +
         "flux-i2i, ideogram-remix. Call `list_models { kind: \"image\", mode: \"i2i\" }` " +
         "for the full list.",
@@ -663,7 +663,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         image_asset_id: z.string().optional().describe("Nodaro image job id."),
         prompt: z.string().min(1).max(2000).describe("Transformation description."),
         model: z.string().optional().describe(
-          `img2img model. Default gpt-image-2-5-flare-i2i. Options: ${I2I_MODEL_IDS.join(", ")}. Unknown values fall back to the default.`,
+          `img2img model. Default gpt-image-2-6-flare-i2i. Options: ${I2I_MODEL_IDS.join(", ")}. Unknown values fall back to the default.`,
         ),
         reference_image_urls: z
           .union([z.array(z.string()), z.string()])

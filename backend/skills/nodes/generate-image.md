@@ -117,7 +117,7 @@ Text-to-image generation. For trailer / cinematic flows, embed character + locat
 ### Quick model picks (MCP `generate_image`)
 
 - `gpt-image-2` (default) — best overall in the 2026-10 comparison: characters and identity from reference images, character boards and grids, exact text and non-Latin lettering. It draws 1:1, 16:9, 9:16, 4:3 and 3:4.
-- `gpt-image-2-5-sunburst` — the same family for ratios GPT Image 2 can't draw (21:9, 3:2, 2:3); `gpt-image-2-5-flare` is its faster sibling.
+- `gpt-image-2-6-sunburst` — the same family for ratios GPT Image 2 can't draw (21:9, 3:2, 2:3, 4:5, 5:4); `gpt-image-2-6-flare` is its faster sibling.
 - `nano-banana-2-1` — strong scenes and illustration for a lower price; good for drafts and iteration.
 - `z-image` — cheapest stylized output.
 - **Avoid `flux`** for general use — it degrades in multi-turn workflows; use one of the above.

@@ -796,7 +796,7 @@ const contentModelControl = (feature: "content-recipe" | "content-ideas"): Quick
  *  model takes — the SAME per-model sources its config panel reads, so a model
  *  switch snaps a value the new model would reject. */
 const referenceBoardProviderOf = (data: Record<string, unknown>): string =>
-  typeof data.provider === "string" && data.provider ? data.provider : "gpt-image-2-5-sunburst"
+  typeof data.provider === "string" && data.provider ? data.provider : "gpt-image-2-6-sunburst"
 const referenceBoardQuickConfigs = (): ReadonlyArray<QuickConfigControl> => [
   {
     field: "provider", ariaLabel: tx("field.model"), icon: Sparkles,

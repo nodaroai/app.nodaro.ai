@@ -434,14 +434,14 @@ export interface ModelRecommendation {
 
 export const MODEL_RECOMMENDATIONS: readonly ModelRecommendation[] = [
   // image
-  { intent: "best for typography / logos / text-heavy", modelIds: ["gpt-image-2", "gpt-image-2-5-flare"], note: "GPT Image 2 for exact copy, labels and non-Latin text; GPT Image 2.5 Flare is close and faster." },
+  { intent: "best for typography / logos / text-heavy", modelIds: ["gpt-image-2", "gpt-image-2-6-flare"], note: "GPT Image 2 for exact copy, labels and non-Latin text; GPT Image 2.6 Flare for posters and layouts, and faster." },
   // Notes name the RANKING, not the price — the price sits in the generated
   // table directly below them and in `pricing`, so restating it here just
   // creates a copy that rots (this one said "1 credit" long after it was 2).
   { intent: "cheapest realistic image", modelIds: ["z-image", "qwen", "imagen4-fast"], note: "Z-Image is the cheapest. Qwen / Imagen4 Fast for slightly higher quality." },
-  { intent: "highest fidelity image", modelIds: ["gpt-image-2", "gpt-image-2-5-sunburst", "imagen4-ultra"], note: "GPT Image 2 for characters and identity; GPT Image 2.5 Sunburst for wide or in-between ratios GPT Image 2 can't draw." },
-  { intent: "image edit / restyle", modelIds: ["gpt-image-2-5-flare-i2i", "gpt-image-2-i2i", "seedream-5-pro-i2i"], note: "GPT Image 2.5 Flare keeps pose, framing and product detail; GPT Image 2 i2i for identity-critical edits; Seedream 5 Pro for instruction-based edits." },
-  { intent: "highest-resolution image", modelIds: ["topaz-image-upscale", "gpt-image-2", "gpt-image-2-5-sunburst"], note: "Generate at the model's top tier, then Topaz upscale 4x (Topaz's only lever is the 1x/2x/4x factor)." },
+  { intent: "highest fidelity image", modelIds: ["gpt-image-2", "gpt-image-2-6-sunburst", "imagen4-ultra"], note: "GPT Image 2 for characters and identity; GPT Image 2.6 Sunburst for wide or in-between ratios GPT Image 2 can't draw." },
+  { intent: "image edit / restyle", modelIds: ["gpt-image-2-6-flare-i2i", "gpt-image-2-i2i", "seedream-5-pro-i2i"], note: "GPT Image 2.6 Flare changes what you ask and keeps the rest; GPT Image 2 i2i for identity-critical edits; Seedream 5 Pro for instruction-based edits." },
+  { intent: "highest-resolution image", modelIds: ["topaz-image-upscale", "gpt-image-2", "gpt-image-2-6-sunburst"], note: "Generate at the model's top tier, then Topaz upscale 4x (Topaz's only lever is the 1x/2x/4x factor)." },
   { intent: "background removal / cutout", modelIds: ["recraft-remove-bg"], note: "Cheap, no prompt needed." },
   // video
   { intent: "best cinematic video", modelIds: ["veo3", "kling-3.0", "seedance-2"], note: "VEO 3.1 Quality for premium narrative; Kling 3.0 for music-synced motion; Seedance 2 for reference-driven consistency." },

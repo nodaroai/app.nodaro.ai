@@ -26,7 +26,7 @@ re-describing them — less re-description means less identity drift.
 |---|---|---|
 | Any Reference Sheet board | `gpt-image-2` (default) | Dense boards with a faithful face, every requested panel, and clean labels and HEX swatches |
 | Identity grids to feed back as references | `gpt-image-2` (default) | Built the cleanest four-angle grid and kept both identities on the two-person cast sheet; 4K keeps panel faces sharp when reused |
-| A board at a ratio GPT Image 2 can't draw (2:3, 21:9, 3:2) | `gpt-image-2-5-sunburst` | The same family's precision model, with a wider ratio set |
+| A board at a ratio GPT Image 2 can't draw (2:3, 21:9, 3:2) | `gpt-image-2-6-sunburst` | The same family's precision model, with a wider ratio set |
 | Fast, cheap iteration before a final board | `nano-banana-2-1` | Strong for its price; switch to `gpt-image-2` for the board you keep |
 
 ## The October 2026 comparison (current defaults)

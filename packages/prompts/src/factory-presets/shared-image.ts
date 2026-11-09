@@ -73,8 +73,8 @@ const STYLIZED_SUBJECT: ReadonlyArray<{
 
 /** Build the Stylized Subject presets for a node type (id = `<nodeType>/<slug>`). */
 /**
- * Both preset families are edits of a connected photo, so they run on the platform's edit model,
- * GPT Image 2.5 Flare (decided 2026-10-08 from the image model bake-off: it kept pose, framing and
+ * Both preset families are edits of a connected photo, and they run on GPT Image 2.5 Flare, the
+ * model they were built and checked on (decided 2026-10-08 from the image model bake-off: it kept pose, framing and
  * product design on every edit). Modify Image takes the i2i id; Generate Image takes the t2i id,
  * which the platform swaps to the same i2i model whenever a reference image is connected.
  */

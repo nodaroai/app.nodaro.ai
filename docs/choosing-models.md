@@ -24,11 +24,11 @@ Don't know where to start? Find your goal here, then jump to the model in the ta
 <!-- AUTO-GEN:START model-recommendations -->
 | I want… | Models | Notes |
 | --- | --- | --- |
-| best for typography / logos / text-heavy | GPT Image 2, GPT Image 2.5 Flare | GPT Image 2 for exact copy, labels and non-Latin text; GPT Image 2.5 Flare is close and faster. |
+| best for typography / logos / text-heavy | GPT Image 2, GPT Image 2.6 Flare | GPT Image 2 for exact copy, labels and non-Latin text; GPT Image 2.6 Flare for posters and layouts, and faster. |
 | cheapest realistic image | Z-Image, Qwen, Imagen 4 Fast | Z-Image is the cheapest. Qwen / Imagen4 Fast for slightly higher quality. |
-| highest fidelity image | GPT Image 2, GPT Image 2.5 Sunburst, Imagen 4 Ultra | GPT Image 2 for characters and identity; GPT Image 2.5 Sunburst for wide or in-between ratios GPT Image 2 can't draw. |
-| image edit / restyle | GPT Image 2.5 Flare (I2I), GPT Image 2 (I2I), Seedream 5 Pro (I2I) | GPT Image 2.5 Flare keeps pose, framing and product detail; GPT Image 2 i2i for identity-critical edits; Seedream 5 Pro for instruction-based edits. |
-| highest-resolution image | Topaz Image Upscale, GPT Image 2, GPT Image 2.5 Sunburst | Generate at the model's top tier, then Topaz upscale 4x (Topaz's only lever is the 1x/2x/4x factor). |
+| highest fidelity image | GPT Image 2, GPT Image 2.6 Sunburst, Imagen 4 Ultra | GPT Image 2 for characters and identity; GPT Image 2.6 Sunburst for wide or in-between ratios GPT Image 2 can't draw. |
+| image edit / restyle | GPT Image 2.6 Flare (I2I), GPT Image 2 (I2I), Seedream 5 Pro (I2I) | GPT Image 2.6 Flare changes what you ask and keeps the rest; GPT Image 2 i2i for identity-critical edits; Seedream 5 Pro for instruction-based edits. |
+| highest-resolution image | Topaz Image Upscale, GPT Image 2, GPT Image 2.6 Sunburst | Generate at the model's top tier, then Topaz upscale 4x (Topaz's only lever is the 1x/2x/4x factor). |
 | background removal / cutout | Recraft Remove BG | Cheap, no prompt needed. |
 | best cinematic video | VEO 3.1 Quality, Kling 3.0, Seedance 2 | VEO 3.1 Quality for premium narrative; Kling 3.0 for music-synced motion; Seedance 2 for reference-driven consistency. |
 | cheap batch video clips | VEO 3.1 Fast, Wan 2.2 Turbo, Bytedance Lite I2V | VEO 3.1 Fast is the best price/quality balance with native audio. |

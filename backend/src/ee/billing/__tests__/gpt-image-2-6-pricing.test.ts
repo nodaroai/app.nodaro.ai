@@ -135,3 +135,45 @@ describe("GPT Image 2.6: a base image and wired identities", () => {
     expect(getNodeModelIdentifier(node({ baseImageUrl: BASE }) as never, {})).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
   })
 })
+
+describe("GPT Image 2.6 as the default", () => {
+  const edit = (body: Record<string, unknown>) => resolveImageToImageCreditIdentifier({ body } as never)
+  const generate = (body: Record<string, unknown>) => imageCreditIdentifierFor({ prompt: "x", ...body }, undefined, undefined)
+  const estimate = (type: string, data: Record<string, unknown>, imageRefsWired = 0) =>
+    getNodeModelIdentifier({ id: "n", type, data } as never, { imageRefsWired })
+
+  it("an edit naming no model is priced on 2.6 Flare at Medium, by its images", () => {
+    expect(edit({ imageUrl: "https://a/x.png", prompt: "x" })).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
+    expect(edit({ imageUrl: "https://a/x.png", prompt: "x", referenceImageUrls: ["https://a/y.png", "https://a/z.png"] }))
+      .toBe("gpt-image-2-6-flare-i2i:medium:1K:3ref")
+    expect(edit({ imageUrl: "https://a/x.png", prompt: "x", resolution: "2K" })).toBe("gpt-image-2-6-flare-i2i:medium:2K:1ref")
+  })
+
+  it("a ratio GPT Image 2 can't draw is priced on 2.6 Sunburst at Medium", () => {
+    expect(generate({ aspectRatio: "21:9" })).toBe("gpt-image-2-6-sunburst:medium:1K")
+    expect(generate({ aspectRatio: "4:5", referenceImageUrls: ["https://a/y.png"] })).toBe("gpt-image-2-6-sunburst-i2i:medium:1K:1ref")
+  })
+
+  it("a ratio GPT Image 2 draws keeps its price", () => {
+    expect(generate({ aspectRatio: "16:9" })).toBe("gpt-image-2")
+  })
+
+  it("an estimate of a node naming no model quotes the default it runs on", () => {
+    expect(estimate("modify-image", {})).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
+    // Its source image plus the three wired references.
+    expect(estimate("image-to-image", { resolution: "2K" }, 3)).toBe("gpt-image-2-6-flare-i2i:medium:2K:4ref")
+    expect(estimate("generate-image", { aspectRatio: "21:9" })).toBe("gpt-image-2-6-sunburst:medium:1K")
+    expect(estimate("reference-board", { aspectRatio: "2:3", resolution: "4K" })).toBe("gpt-image-2-6-sunburst:medium:4K")
+  })
+
+  it("a node naming no model whose default is not priced per image keeps the node-type row", () => {
+    expect(estimate("generate-image", { aspectRatio: "16:9" })).toBe("generate-image")
+    expect(estimate("reference-board", { aspectRatio: "16:9" })).toBe("reference-board")
+  })
+
+  it("every id a default reaches has a row", () => {
+    for (const id of ["gpt-image-2-6-flare-i2i:medium:1K:1ref", "gpt-image-2-6-flare-i2i:medium:4K:16ref", "gpt-image-2-6-sunburst:medium:4K", "gpt-image-2-6-sunburst-i2i:medium:1K:1ref"]) {
+      expect(STATIC_CREDIT_COSTS[id], id).toBeGreaterThan(0)
+    }
+  })
+})

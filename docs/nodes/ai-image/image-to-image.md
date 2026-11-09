@@ -11,7 +11,7 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Provider | select | `gpt-image-2-5-flare-i2i` | AI model to use for transformation (24 options) |
+| Provider | select | `gpt-image-2-6-flare-i2i` | AI model to use for transformation (24 options) |
 | Prompt | text | `""` | Description of the desired transformation |
 | Style | select | `""` | 16 presets + "Custom..." free text (same as Generate Image) |
 | Negative Prompt | text | `""` | Elements to exclude from the result |
@@ -47,10 +47,11 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | flux-pro-i2i | Flux-2 Pro | Premium quality image transforms | Resolution options (1K/2K) |
 | gpt-image-i2i | GPT Image | Text rendering, complex compositions | Quality options (medium/high) |
 | gpt-image-2-i2i | GPT Image 2 | Higher resolution GPT Image; 1K/2K/4K | Resolution options |
-| gpt-image-2-5-flare-i2i | GPT Image 2.5 Flare | Fast GPT Image 2.5 edits, up to 16 source images — the default edit model; 1K/2K/4K at **17<!-- credits: gpt-image-2-5-flare-i2i --> / 28<!-- credits: gpt-image-2-5-flare-i2i:2K --> / 44 credits**<!-- credits: gpt-image-2-5-flare-i2i:4K --> | Resolution options |
+| gpt-image-2-5-flare-i2i | GPT Image 2.5 Flare | Fast GPT Image 2.5 edits, up to 16 source images; 1K/2K/4K at **17<!-- credits: gpt-image-2-5-flare-i2i --> / 28<!-- credits: gpt-image-2-5-flare-i2i:2K --> / 44 credits**<!-- credits: gpt-image-2-5-flare-i2i:4K --> | Resolution options |
 | gpt-image-2-5-sunburst-i2i | GPT Image 2.5 Sunburst | Precision GPT Image 2.5 edits, up to 16 source images — tightest control for demanding retouches, slower; same **17<!-- credits: gpt-image-2-5-sunburst-i2i --> / 28<!-- credits: gpt-image-2-5-sunburst-i2i:2K --> / 44 credits**<!-- credits: gpt-image-2-5-sunburst-i2i:4K --> | Resolution options |
-| gpt-image-2-6-flare-i2i | GPT Image 2.6 Flare | Fast GPT Image 2.6 edits, up to 16 input images, priced per image: at medium 1K, **29 credits**<!-- credits: gpt-image-2-6-flare-i2i:medium:1K:1ref --> with one image, **47 credits**<!-- credits: gpt-image-2-6-flare-i2i:medium:1K:4ref --> with four | Quality and resolution options |
-| gpt-image-2-6-sunburst-i2i | GPT Image 2.6 Sunburst | Precision GPT Image 2.6 edits, up to 16 input images, for finished, detail-critical work. Same price as Flare | Quality and resolution options || ideogram-edit | Ideogram Edit | AI-guided image editing | Mask-based inpainting |
+| gpt-image-2-6-flare-i2i | GPT Image 2.6 Flare | The default edit model. Fast GPT Image 2.6 edits, up to 16 input images, priced per image: at medium 1K, **29 credits**<!-- credits: gpt-image-2-6-flare-i2i:medium:1K:1ref --> with one image, **47 credits**<!-- credits: gpt-image-2-6-flare-i2i:medium:1K:4ref --> with four | Quality and resolution options |
+| gpt-image-2-6-sunburst-i2i | GPT Image 2.6 Sunburst | Precision GPT Image 2.6 edits, up to 16 input images, for finished, detail-critical work. Same price as Flare | Quality and resolution options |
+| ideogram-edit | Ideogram Edit | AI-guided image editing | Mask-based inpainting |
 | ideogram-remix | Ideogram Remix | Restyle with character consistency | Character-consistent restyling |
 | qwen-i2i | Qwen | Versatile image transformation | General I2I |
 | qwen-edit | Qwen Edit | Targeted image editing | Targeted edits |

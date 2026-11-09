@@ -138,7 +138,7 @@ import { countImageInputEdges, countRefModalityEdges } from "@nodaro/shared/work
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
 import { gptImage26StaticCosts } from "./gpt-image-2-6-pricing.js"
-import { gptImage26EstimatedImages, isGptImage26Tiered } from "@nodaro/shared/model-catalog"
+import { defaultImageModelForNode, gptImage26EstimatedImages, isGptImage26Tiered } from "@nodaro/shared/model-catalog"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
@@ -6847,7 +6847,10 @@ export function getNodeModelIdentifier(
   // units: graphPricingUnits. Above the `!provider` bail: no provider IS Topaz.
   if (nodeType === "video-upscale" && isTopazVideoUpscaleNode(node)) return TOPAZ_VIDEO_UNIT_CREDIT_ID
 
-  const provider = data.provider as string | undefined
+  // A node naming no model whose default is priced per input image: the node-type
+  // row would quote below what the run reserves.
+  const nodeDefault = data.provider ? undefined : defaultImageModelForNode(nodeType, data.aspectRatio as string | undefined)
+  const provider = (data.provider as string | undefined) ?? (nodeDefault && isGptImage26Tiered(nodeDefault) ? nodeDefault : undefined)
   if (!provider) return nodeType
 
   // Extend-video: VEO quality costs more than fast

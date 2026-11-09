@@ -2,7 +2,7 @@ import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from 
 import type { SourceNodeInfo } from "./types"
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
-import { gptImage26EstimatedImages, isGptImage26Tiered } from "@nodaro/shared/model-catalog"
+import { defaultImageModelForNode, gptImage26EstimatedImages, isGptImage26Tiered } from "@nodaro/shared/model-catalog"
 import { countImageInputEdges } from "@nodaro/shared/workflow"
 import {
   buildCreditModelIdentifier as sharedBuildCreditModelIdentifier,
@@ -742,7 +742,9 @@ export function getModelIdentifier(
   // the `!provider` bail, which quoted the node-type row.
   if (nodeType === "video-upscale" && isTopazVideoUpscaleProvider(data.provider)) return TOPAZ_VIDEO_UNIT_CREDIT_ID
 
-  const provider = data.provider as string | undefined
+  // A node naming no model whose default is priced per input image: as the server estimate.
+  const nodeDefault = data.provider ? undefined : defaultImageModelForNode(nodeType, data.aspectRatio as string | undefined)
+  const provider = (data.provider as string | undefined) ?? (nodeDefault && isGptImage26Tiered(nodeDefault) ? nodeDefault : undefined)
   if (!provider) return nodeType
 
   // Video to Video, Seedance EDIT lane: Seedance has no v2v endpoint — the node

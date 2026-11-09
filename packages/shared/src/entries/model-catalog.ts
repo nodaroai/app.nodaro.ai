@@ -104,6 +104,7 @@ export {
   IMAGE_MODEL_ROLE_DEFAULTS,
   IMAGE_MODEL_RATIO_FALLBACKS,
   defaultImageModel,
+  defaultImageModelForNode,
   imageModelDrawsRatio,
 } from "../image-model-roles.js"
 export type { ImageModelRole } from "../image-model-roles.js"

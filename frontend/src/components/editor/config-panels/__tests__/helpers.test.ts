@@ -810,3 +810,16 @@ describe("buildCreditModelIdentifier", () => {
     expect(buildCreditModelIdentifier("ideogram-v3", { renderingSpeed: "BALANCED" })).toBe("ideogram-v3")
   })
 })
+
+describe("getModelIdentifier: an image node naming no model", () => {
+  const node = (type: string, data: Record<string, unknown>) => ({ id: "n", type, position: { x: 0, y: 0 }, data }) as unknown as WorkflowNode
+
+  it("quotes GPT Image 2.6 when that is the default it runs on", () => {
+    expect(getModelIdentifier(node("modify-image", {}))).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
+    expect(getModelIdentifier(node("generate-image", { aspectRatio: "21:9" }))).toBe("gpt-image-2-6-sunburst:medium:1K")
+  })
+
+  it("keeps the node-type row when the default isn't priced per image", () => {
+    expect(getModelIdentifier(node("generate-image", { aspectRatio: "16:9" }))).toBe("generate-image")
+  })
+})

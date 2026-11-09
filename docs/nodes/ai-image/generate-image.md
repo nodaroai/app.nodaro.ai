@@ -9,7 +9,7 @@ Generate Image is the primary text-to-image node. It accepts a text prompt (with
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Provider | select | `gpt-image-2` | AI model to use for generation (27 options). With no model set, a ratio GPT Image 2 can't draw (21:9, 3:2, 2:3, …) uses `gpt-image-2-5-sunburst`, and 4:5 / 5:4 use `nano-banana-pro`. |
+| Provider | select | `gpt-image-2` | AI model to use for generation (27 options). With no model set, a ratio GPT Image 2 can't draw (21:9, 3:2, 2:3, 4:5, 5:4, …) uses `gpt-image-2-6-sunburst`, at Medium quality. |
 | Prompt | text | `""` | Text description of the image to generate. Each model has its own prompt-length limit -- 20 000 characters on the Nano Banana / GPT Image families, 5 000 by default, and as little as **1 000 on Z-Image and Seedream 5 Lite**. The editor counts down to your model's limit as you type, and a prompt still over it at run time is **shortened to fit** rather than refused |
 | Style | select | `""` | One of 16 presets (Photorealistic, Cinematic, Anime, Digital Art, Oil Painting, Watercolor, Children's Book, Comic Book, Pixel Art, 3D Render, Pencil Sketch, Pop Art, Minimalist, Retro/Vintage, Fantasy, Noir) or "Custom..." free text. Style text is appended to the prompt at execution time. |
 | Negative Prompt | text | `""` | Elements to exclude. Sent natively for imagen4, ideogram, qwen; appended as "Avoid:..." for other providers. |
