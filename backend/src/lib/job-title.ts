@@ -15,6 +15,7 @@
  */
 import { supabase } from "./supabase.js"
 import { CHILD_JOB_COLUMN } from "./public-job-data.js"
+import { noteTitleColumnError, titleColumnPresent } from "./jobs-title-column.js"
 
 export const JOB_TITLE_MAX_CHARS = 120
 
@@ -42,6 +43,8 @@ export type SetJobTitleOutcome =
   | { kind: "ok"; title: string | null }
   /** Not the caller's job, a child job, or no such job — the same answer, never a hint which. */
   | { kind: "not_found" }
+  /** The column is not in this database yet (staging before migration 609 reaches main). */
+  | { kind: "not_available" }
 
 /**
  * Name the owner's own job, or clear its name with `null`. `title` is already
@@ -50,6 +53,7 @@ export type SetJobTitleOutcome =
  * as missing. Throws on a database failure.
  */
 export async function setJobTitle(ownerId: string, jobId: string, title: string | null): Promise<SetJobTitleOutcome> {
+  if (!titleColumnPresent()) return { kind: "not_available" }
   const { data, error } = await supabase
     .from("jobs")
     .update({ title })
@@ -59,6 +63,7 @@ export async function setJobTitle(ownerId: string, jobId: string, title: string 
     .is(CHILD_JOB_COLUMN, null)
     .select("id, title")
     .maybeSingle()
+  if (noteTitleColumnError(error)) return { kind: "not_available" }
   if (error) throw error
   if (!data) return { kind: "not_found" }
   return { kind: "ok", title: (data as { title?: string | null }).title ?? null }

@@ -48,6 +48,7 @@ openApiRegistry.registerPath({
     401: { description: "Unauthorized" },
     403: { description: "An OAuth token without assets:write" },
     404: { description: "Job not found (or not yours)" },
+    503: { description: "Naming a job is not available on this server yet" },
   },
 })
 
@@ -85,6 +86,11 @@ export function registerJobTitleRoute(app: FastifyInstance): void {
       }
       if (outcome.kind === "not_found") {
         return reply.status(404).send({ error: { code: "not_found", message: "Job not found" } })
+      }
+      if (outcome.kind === "not_available") {
+        return reply.status(503).send({
+          error: { code: "not_available", message: "Naming a job is not available on this server yet." },
+        })
       }
       return { data: { jobId: params.data.id, title: outcome.title } }
     },

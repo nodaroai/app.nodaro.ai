@@ -25,7 +25,7 @@ vi.mock("@/lib/queue.js", () => ({ videoQueue: {}, tryRemoveFromQueue: vi.fn(), 
 
 const { sanitizeJobForPublic } = await import("../routes/jobs.js")
 const { jobView } = await import("../lib/mcp/tools/_job-view.js")
-const { JOB_EVENT_COLUMNS } = await import("../lib/webhooks/event.js")
+const { jobEventColumns } = await import("../lib/webhooks/event.js")
 const { LLM_BILLING_LEDGER_COLUMN } = await import("../lib/llm-billing.js")
 
 const SRC = join(__dirname, "..")
@@ -321,7 +321,7 @@ describe("the metered LLM billing ledger stays server-only", () => {
   it("the MCP job view and the webhook payload columns carry no ledger and no cost", () => {
     const view = jobView(row as never)
     expect(JSON.stringify(view)).not.toMatch(/costUsd|llm_billing|provider_cost/)
-    expect(JOB_EVENT_COLUMNS.split(/,\s*/)).not.toContain("llm_billing")
-    expect(JOB_EVENT_COLUMNS.split(/,\s*/)).not.toContain("provider_cost")
+    expect(jobEventColumns().split(/,\s*/)).not.toContain("llm_billing")
+    expect(jobEventColumns().split(/,\s*/)).not.toContain("provider_cost")
   })
 })

@@ -11,6 +11,7 @@ import { assetSourceColumns, JOB_SOURCES } from "../lib/job-source.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { fillAssetRenderQuality } from "../lib/render-label-fill.js"
+import { titleEmbedSelect } from "../lib/jobs-title-column.js"
 import { ASSET_SEARCH_COLUMNS, searchTextParam, textSearchFilters } from "../lib/text-search.js"
 
 // ============================================================
@@ -48,6 +49,26 @@ const saveGeneratedBody = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
   isLibraryItem: z.boolean().optional().default(false),
 })
+
+/** A row of the listing's query: the columns it selects (`job` only once the database has `jobs.title`). */
+interface LibraryAssetRow {
+  readonly id: string
+  readonly user_id: string
+  readonly type: string
+  readonly filename: string | null
+  readonly mime_type: string | null
+  readonly size_bytes: number | null
+  readonly r2_key: string
+  readonly r2_url: string
+  readonly metadata: Record<string, unknown> | null
+  readonly is_library_item: boolean | null
+  readonly upload_source: string | null
+  readonly source: string | null
+  readonly source_detail: string | null
+  readonly created_at: string
+  readonly job_id: string | null
+  readonly job?: unknown
+}
 
 /** The `title` of an embedded `job:jobs!job_id(title)`, whichever shape the embed arrived in; null when there is none. */
 export function embeddedJobTitle(embed: unknown): string | null {
@@ -120,11 +141,12 @@ export async function libraryRoutes(app: FastifyInstance) {
     let query = supabase
       .from("assets")
       // `job`: the file's job, for the name its owner gave it (`title`, migration
-      // 609) — a to-one embed on `assets.job_id`; null for an upload, or once
-      // that job's history is deleted.
+      // 609) — a to-one embed on `assets.job_id`, once this database has the
+      // column (lib/jobs-title-column.ts); null for an upload, or once that
+      // job's history is deleted.
       // trash-read: a file kept in the library outlives its deleted job by design
       // (like its render label), and so does the name its owner gave that job.
-      .select("id, user_id, type, filename, mime_type, size_bytes, r2_key, r2_url, metadata, is_library_item, upload_source, source, source_detail, job:jobs!job_id(title), created_at, job_id")
+      .select("id, user_id, type, filename, mime_type, size_bytes, r2_key, r2_url, metadata, is_library_item, upload_source, source, source_detail" + titleEmbedSelect() + ", created_at, job_id")
       .is(RESTRICTED_ASSET_COLUMN, null)
 
     if (owned) {
@@ -199,7 +221,9 @@ export async function libraryRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to load library")
     }
 
-    const rows = data ?? []
+    // The select is built from parts (the job embed joins it only once the
+    // database has `jobs.title`), so supabase-js cannot infer the row: name it here.
+    const rows = (data ?? []) as unknown as LibraryAssetRow[]
     const hasMore = rows.length > limit
     const pageRows = hasMore ? rows.slice(0, limit) : rows
     const nextCursor = hasMore ? pageRows[pageRows.length - 1]?.id ?? null : null

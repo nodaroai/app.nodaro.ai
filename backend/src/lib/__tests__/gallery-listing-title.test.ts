@@ -32,6 +32,7 @@ vi.mock("@/lib/supabase.js", () => {
 
 import { readGalleryPage } from "../gallery-listing.js"
 import { OWNER_VIEW_MODERATION } from "../gallery-moderation.js"
+import { setTitleColumnPresentForTests } from "../jobs-title-column.js"
 
 function job(id: string, title: string | null | undefined) {
   return {
@@ -49,6 +50,7 @@ function job(id: string, title: string | null | undefined) {
 beforeEach(() => {
   db.selects = []
   db.rows = []
+  setTitleColumnPresentForTests(true)
 })
 
 describe("readGalleryPage — the job's name on a card", () => {
@@ -64,5 +66,13 @@ describe("readGalleryPage — the job's name on a card", () => {
     // Beside the prompt, which is public too.
     expect(items[0].prompt).toBe("a lighthouse at dusk")
     expect(db.selects.some((s) => s.startsWith("id,") && s.split(", ").includes("title"))).toBe(true)
+  })
+
+  it("before the column reaches this database, the cards are read without it and every title is null", async () => {
+    setTitleColumnPresentForTests(false)
+    db.rows = [job("j1", undefined)]
+    const page = await readGalleryPage({ limit: 10, includePrivate: false, moderation: OWNER_VIEW_MODERATION })
+    expect(page.rows.map((row) => row.item.title)).toEqual([null])
+    expect(db.selects.some((s) => s.startsWith("id,") && s.split(", ").includes("title"))).toBe(false)
   })
 })

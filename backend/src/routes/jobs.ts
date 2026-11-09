@@ -7,6 +7,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { CHILD_JOB_COLUMN, TRASHED_JOB_COLUMN, TREND_RUN_MARKER_SELECT, maskTrendRunError, maskTrendRunErrors, nonAdminJobInputData, redactPrivateJobData } from "../lib/public-job-data.js"
 import { registerJobTrashRoutes } from "./job-trash.js"
 import { registerJobTitleRoute } from "./job-title.js"
+import { titleSelect } from "../lib/jobs-title-column.js"
 // OpenAPI entries (module side effect, like every route file's registerPath).
 import "./jobs-docs.js"
 import { liveSessionsOfJobs } from "../lib/job-sessions.js"
@@ -265,7 +266,7 @@ export async function jobRoutes(app: FastifyInstance) {
     const { data: read, error } = await readWithLaneStamp("job", (stamp) => {
       let query = supabase
         .from("jobs")
-        .select(`id, status, progress, input_data, output_data, error_message, title, error_detail, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, reconcile_attempts, source, source_detail, session_id, usage_log_id${stamp}`)
+        .select(`id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, reconcile_attempts, source, source_detail, session_id, usage_log_id${titleSelect()}${stamp}`)
         .eq("id", id)
         // A job in the Trash answers, for every caller, as one that does not exist.
         .is(TRASHED_JOB_COLUMN, null)
@@ -467,7 +468,7 @@ export async function jobRoutes(app: FastifyInstance) {
     let query = supabase
       // trash-read: applyJobListFilters below leaves the Trash out.
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, title, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, source, source_detail, session_id, usage_log_id, workflow_execution_id, workflow_executions!workflow_execution_id(is_component_execution, trigger_type)" + jobListFilterSelect(filters))
+      .select("id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, source, source_detail, session_id" + titleSelect() + ", usage_log_id, workflow_execution_id, workflow_executions!workflow_execution_id(is_component_execution, trigger_type)" + jobListFilterSelect(filters))
       .order("created_at", { ascending: false })
       .limit(limitNum)
 

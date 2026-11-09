@@ -15,8 +15,9 @@ vi.mock("@/lib/job-title.js", async (importOriginal) => {
 
 import { registerJobTitleRoute } from "../job-title.js"
 import { PUBLIC_JOB_KEYS, sanitizeJobForPublic, type JobRecord } from "../jobs.js"
-import { SESSION_FEED_JOB_COLS } from "../../lib/generation-sessions.js"
+import { SESSION_FEED_JOB_COLS, sessionFeedJobCols } from "../../lib/generation-sessions.js"
 import { setJobTitle } from "../../lib/job-title.js"
+import { setTitleColumnPresentForTests } from "../../lib/jobs-title-column.js"
 
 const OWNER = "00000000-0000-4000-8000-000000000001"
 const OTHER = "00000000-0000-4000-8000-000000000002"
@@ -104,6 +105,13 @@ describe("PATCH /v1/jobs/:id", () => {
     vi.mocked(setJobTitle).mockRejectedValue(new Error("db down"))
     expect((await rename(`__userId=${OWNER}`, { title: "x" })).statusCode).toBe(500)
   })
+
+  it("before the column reaches this database, naming is 503 not_available — never a silent success", async () => {
+    vi.mocked(setJobTitle).mockResolvedValue({ kind: "not_available" })
+    const res = await rename(`__userId=${OWNER}`, { title: "x" })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error.code).toBe("not_available")
+  })
 })
 
 describe("the name reaches every job read", () => {
@@ -114,7 +122,13 @@ describe("the name reaches every job read", () => {
     expect((sanitizeJobForPublic({ ...job, title: null }, false) as { title?: string | null }).title).toBeNull()
   })
 
-  it("is selected for a session's items (and the Trash, which reads the same columns)", () => {
-    expect(SESSION_FEED_JOB_COLS.split(", ")).toContain("title")
+  it("is selected for a session's items (and the Trash, which reads the same columns) once the database has the column", () => {
+    setTitleColumnPresentForTests(true)
+    expect(sessionFeedJobCols().split(", ")).toContain("title")
+    // Before migration 609 reaches the database (staging reads the shared one),
+    // the feed names every other column and not this one, so it still answers.
+    setTitleColumnPresentForTests(false)
+    expect(sessionFeedJobCols()).toBe(SESSION_FEED_JOB_COLS)
+    expect(SESSION_FEED_JOB_COLS.split(", ")).not.toContain("title")
   })
 })

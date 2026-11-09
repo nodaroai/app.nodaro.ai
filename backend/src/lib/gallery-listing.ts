@@ -1,6 +1,7 @@
 import { CHILD_JOB_COLUMN, TRASHED_JOB_COLUMN } from "./public-job-data.js"
 import { supabase } from "./supabase.js"
 import { bannedGalleryUsersFilter, galleryHides, type GalleryModeration } from "./gallery-moderation.js"
+import { titleSelect } from "./jobs-title-column.js"
 import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "./render-listing.js"
 
 // Gallery only shows AI-generated creative content — NOT processing/application
@@ -169,6 +170,18 @@ function jobTypeFilter(
  * gallery's moderation (lib/gallery-moderation.ts). Throws when the database
  * cannot be read.
  */
+/** A row of the page query below: the columns it selects (`title` only once the database has it). */
+interface GalleryJobRow {
+  readonly id: string
+  readonly job_type: string
+  readonly input_data: unknown
+  readonly output_data: unknown
+  readonly completed_at: string
+  readonly user_id: string | null
+  readonly provider: string | null
+  readonly title?: string | null
+}
+
 export async function readGalleryPage(q: GalleryPageQuery): Promise<GalleryPage> {
   const { limit, cursor, moderation } = q
   const excludedUsers = bannedGalleryUsersFilter(moderation)
@@ -211,7 +224,8 @@ export async function readGalleryPage(q: GalleryPageQuery): Promise<GalleryPage>
 
     let dbQuery = supabase
       .from("jobs")
-      .select("id, job_type, input_data, output_data, completed_at, user_id, provider, title")
+      // `title` (the owner's name for the job, migration 609) once this database has the column.
+      .select("id, job_type, input_data, output_data, completed_at, user_id, provider" + titleSelect())
       .is(TRASHED_JOB_COLUMN, null)
       .eq("status", "completed")
       .not("output_data", "is", null)
@@ -226,8 +240,11 @@ export async function readGalleryPage(q: GalleryPageQuery): Promise<GalleryPage>
     if (pageCursor) dbQuery = dbQuery.lt("completed_at", pageCursor)
     dbQuery = typeFilter.or !== undefined ? dbQuery.or(typeFilter.or) : dbQuery.in("job_type", typeFilter.in)
 
-    const { data: jobs, error } = await dbQuery
+    const { data, error } = await dbQuery
     if (error) throw new Error(`Gallery query failed: ${error.message}`)
+    // The select is built from parts (the title column joins it only once the
+    // database has it), so supabase-js cannot infer the row: name it here.
+    const jobs = data as unknown as GalleryJobRow[] | null
     if (!jobs || jobs.length === 0) {
       hasMore = false
       break

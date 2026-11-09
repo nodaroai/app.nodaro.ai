@@ -45,6 +45,7 @@ vi.mock("@/lib/config.js", () => ({
 vi.mock("@/lib/admin-check.js", () => ({ warmAdminCache: vi.fn(), checkIsAdmin: vi.fn().mockResolvedValue(false) }))
 
 const { libraryRoutes, embeddedJobTitle } = await import("../library.js")
+const { setTitleColumnPresentForTests } = await import("../../lib/jobs-title-column.js")
 
 const USER = "11111111-1111-4111-8111-111111111111"
 
@@ -74,6 +75,7 @@ let app: FastifyInstance
 beforeEach(async () => {
   db.selects = []
   db.rows = []
+  setTitleColumnPresentForTests(true)
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
     req.userId = USER
@@ -104,6 +106,16 @@ describe("GET /v1/library — the job's name on each file", () => {
     // The download name is untouched by the job's name.
     expect(data[0].filename).toBe("a1.png")
     expect(db.selects.some((s) => s.includes("job:jobs!job_id(title)"))).toBe(true)
+  })
+
+  it("before the column reaches this database, the listing names no job and every row's title is null — the list still answers", async () => {
+    setTitleColumnPresentForTests(false)
+    db.rows = [asset("a1", { job_id: "j1" })]
+    // The listing's own query is the one without the embed now; answer it anyway.
+    const res = await app.inject({ method: "GET", url: "/v1/library?owned=true" })
+    expect(res.statusCode).toBe(200)
+    expect(db.selects.some((s) => s.includes("jobs!job_id"))).toBe(false)
+    expect(db.selects.some((s) => s.endsWith("created_at, job_id"))).toBe(true)
   })
 })
 

@@ -26,6 +26,7 @@ vi.mock("@/lib/supabase.js", () => {
 })
 
 import { JOB_TITLE_MAX_CHARS, normalizeJobTitle, setJobTitle } from "../job-title.js"
+import { setTitleColumnPresentForTests, titleColumnPresent } from "../jobs-title-column.js"
 
 const OWNER = "00000000-0000-4000-8000-000000000001"
 const JOB = "00000000-0000-4000-8000-0000000000c1"
@@ -33,6 +34,8 @@ const JOB = "00000000-0000-4000-8000-0000000000c1"
 beforeEach(() => {
   db.calls = []
   db.answer = { data: null, error: null }
+  // A database that has the column (migration 609 applied).
+  setTitleColumnPresentForTests(true)
 })
 
 describe("normalizeJobTitle", () => {
@@ -86,5 +89,17 @@ describe("setJobTitle", () => {
   it("a database failure throws (the route answers 500), never a silent 'ok'", async () => {
     db.answer = { data: null, error: new Error("db down") }
     await expect(setJobTitle(OWNER, JOB, "x")).rejects.toThrow("db down")
+  })
+
+  it("before the column reaches this database, naming is not available — nothing is written", async () => {
+    setTitleColumnPresentForTests(false)
+    expect(await setJobTitle(OWNER, JOB, "x")).toEqual({ kind: "not_available" })
+    expect(db.calls).toEqual([])
+  })
+
+  it("a write the database refuses as an unknown column says the same, and the column is forgotten until the next probe", async () => {
+    db.answer = { data: null, error: { code: "PGRST204", message: "Could not find the 'title' column" } }
+    expect(await setJobTitle(OWNER, JOB, "x")).toEqual({ kind: "not_available" })
+    expect(titleColumnPresent()).toBe(false)
   })
 })

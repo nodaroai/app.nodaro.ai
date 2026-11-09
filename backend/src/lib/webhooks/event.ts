@@ -25,6 +25,7 @@
 import { supabase } from "../supabase.js"
 import { PUBLIC_JOB_KEYS, sanitizeJobForPublic, type JobRecord } from "../../routes/jobs.js"
 import { fillJobRenderQuality } from "../render-label-fill.js"
+import { titleColumnPresent } from "../jobs-title-column.js"
 import { CHILD_JOB_COLUMN } from "../public-job-data.js"
 import { publicCreditFieldsOf, runCreditsFor } from "../job-credit-status.js"
 import type { WebhookEventType } from "./event-types.js"
@@ -36,9 +37,15 @@ export const TEXT_FIELD_MAX_BYTES = 2048
 /**
  * The job columns an event reads: exactly the public ones (so a key added to
  * PUBLIC_JOB_KEYS reaches webhooks with no second list to update), plus what
- * the sanitizer and the credit figures read before they drop it.
+ * the sanitizer and the credit figures read before they drop it. `title`
+ * (migration 609) is named only once this database has the column
+ * (lib/jobs-title-column.ts) — staging reads the shared database before the
+ * promotion applies the migration, and a missing column fails the whole read.
  */
-export const JOB_EVENT_COLUMNS = [...PUBLIC_JOB_KEYS, "reconcile_attempts", "usage_log_id"].join(", ")
+export function jobEventColumns(): string {
+  const keys = PUBLIC_JOB_KEYS.filter((key) => key !== "title" || titleColumnPresent())
+  return [...keys, "reconcile_attempts", "usage_log_id"].join(", ")
+}
 
 /** A delivery as `claim_webhook_deliveries` hands it out. */
 export interface ClaimedDelivery {
@@ -84,7 +91,7 @@ async function jobFor(d: ClaimedDelivery): Promise<Record<string, unknown> | nul
   if (!d.jobId) return null
   const { data, error } = await supabase
     .from("jobs")
-    .select(JOB_EVENT_COLUMNS)
+    .select(jobEventColumns())
     .eq("id", d.jobId)
     .eq("user_id", d.userId)
     // A child job is reported only through its parent: the capture records no
