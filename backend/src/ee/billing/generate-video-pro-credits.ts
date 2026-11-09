@@ -142,12 +142,20 @@ export interface GenerateVideoProPricing {
 /** Image models the keyframes engine generates scene anchors with, in the
  *  order it tries them for an aspect ratio — GPT Image 2 at 2K first (decided
  *  2026-10-08: quality first; the engine had used Sunburst since 2026-09-16 and
- *  GPT Image 2 before that), GPT Image 2.5 Sunburst for the ratios GPT Image 2
- *  cannot draw (21:9, 3:2, 2:3, …), then nano-banana-pro for 4:5 / 5:4. The
- *  `:2K` COMPOSITES are the billed identifiers, not the bare ids (a bare GPT id
- *  is the 1K price and would under-reserve every anchor); nano-banana-pro's
- *  base already covers 2K. */
-const KEYFRAME_ANCHOR_CHAIN = ["gpt-image-2:2K", "gpt-image-2-5-sunburst:2K", "nano-banana-pro"] as const
+ *  GPT Image 2 before that), GPT Image 2.6 Sunburst for the ratios GPT Image 2
+ *  cannot draw (21:9, 3:2, 2:3, 4:5, 5:4, …), GPT Image 2.5 Sunburst for the few
+ *  2.6 does not draw (27:16, 16:27, 9:8, 8:9), then nano-banana-pro. The `:2K`
+ *  COMPOSITES are the billed identifiers, not the bare ids (a bare GPT id is the
+ *  1K price and would under-reserve every anchor); nano-banana-pro's base already
+ *  covers 2K. A 2.6 anchor is priced by how many pictures it sends, so the hold
+ *  is its most (16) and the plugin's meter charges what each anchor really sent:
+ *  the rest of the hold is released. */
+const KEYFRAME_ANCHOR_CHAIN = [
+  "gpt-image-2:2K",
+  "gpt-image-2-6-sunburst-i2i:medium:2K:16ref",
+  "gpt-image-2-5-sunburst:2K",
+  "nano-banana-pro",
+] as const
 /** The last link — also what an aspect-less (pre-field) plugin generates on. */
 const KEYFRAME_ANCHOR_FALLBACK_MODEL = "nano-banana-pro"
 /** Worst-case anchors per segment (start + end frame). */
@@ -159,8 +167,9 @@ const ANCHORS_PER_SEGMENT = 2
  * a model moves price and generation together.
  *
  * TWIN: `resolveAnchorModel` in the plugin repo (generate-video-pro
- * `engine/keyframes.ts`) — the first of gpt-image-2, gpt-image-2-5-sunburst,
- * nano-banana-pro whose catalog lists the ratio. The plugin resolves
+ * `engine/keyframes.ts`) — the first of gpt-image-2, gpt-image-2-6-sunburst,
+ * gpt-image-2-5-sunburst, nano-banana-pro whose catalog lists the ratio. The
+ * plugin resolves
  * `"adaptive"`/absent to `"16:9"` before sending. A mismatch is a mispriced
  * run, so keep them in lock-step.
  *

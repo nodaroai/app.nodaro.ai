@@ -388,25 +388,27 @@ describe("computeGenerateVideoProPricing — keyframes render method (seedance-2
     }
   })
 
-  it("prices ratios GPT Image 2 cannot render at Sunburst, and 4:5 / 5:4 at nano-banana-pro", async () => {
-    // TWIN of the plugin's `resolveAnchorModel` (2026-10-08): the first of
-    // gpt-image-2, gpt-image-2-5-sunburst, nano-banana-pro whose catalog lists
-    // the ratio. Reserving a cheaper unit than the model that draws it would
-    // under-reserve every such run.
-    const ANCHOR_SUNBURST = STATIC_CREDIT_COSTS["gpt-image-2-5-sunburst:2K"]!
-    for (const aspectRatio of ["21:9", "3:2", "2:3"]) {
+  it("holds a 2.6 Sunburst anchor at its most pictures for ratios GPT Image 2 cannot render, and 2.5 for the four 2.6 lacks", async () => {
+    // TWIN of the plugin's `resolveAnchorModel`: the first of gpt-image-2,
+    // gpt-image-2-6-sunburst, gpt-image-2-5-sunburst, nano-banana-pro whose
+    // catalog lists the ratio. Reserving a cheaper unit than the model that
+    // draws it would under-reserve every such run.
+    const ANCHOR_SUNBURST_2_6 = STATIC_CREDIT_COSTS["gpt-image-2-6-sunburst-i2i:medium:2K:16ref"]!
+    expect(ANCHOR_SUNBURST_2_6).toBeGreaterThan(0)
+    for (const aspectRatio of ["21:9", "3:2", "2:3", "4:5", "5:4"]) {
       const r = await computeGenerateVideoProPricing({
         provider: "seedance-2", resolution: "720p", durationSec: 16,
         renderMethod: "keyframes", aspectRatio,
       })
-      expect(r.anchorReserve, aspectRatio).toBe(2 * 2 * ANCHOR_SUNBURST)
+      expect(r.anchorReserve, aspectRatio).toBe(2 * 2 * ANCHOR_SUNBURST_2_6)
     }
-    for (const aspectRatio of ["4:5", "5:4"]) {
+    const ANCHOR_SUNBURST_2_5 = STATIC_CREDIT_COSTS["gpt-image-2-5-sunburst:2K"]!
+    for (const aspectRatio of ["27:16", "16:27", "9:8", "8:9"]) {
       const r = await computeGenerateVideoProPricing({
         provider: "seedance-2", resolution: "720p", durationSec: 16,
         renderMethod: "keyframes", aspectRatio,
       })
-      expect(r.anchorReserve, aspectRatio).toBe(2 * 2 * ANCHOR)
+      expect(r.anchorReserve, aspectRatio).toBe(2 * 2 * ANCHOR_SUNBURST_2_5)
     }
   })
 
