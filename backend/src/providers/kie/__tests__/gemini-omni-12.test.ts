@@ -1,7 +1,58 @@
-import { describe, it, expect } from "vitest"
-import { buildGeminiOmni12Request } from "../gemini-omni-12.js"
+import { describe, it, expect, vi, beforeEach } from "vitest"
+
+const media = vi.hoisted(() => ({ fetchOwnMedia: vi.fn(), meta: { width: 720, height: 1280, orientation: undefined as number | undefined } }))
+vi.mock("../../../lib/fetch-own-media.js", () => ({ fetchOwnMedia: media.fetchOwnMedia }))
+vi.mock("sharp", () => ({ default: () => ({ metadata: async () => media.meta }) }))
+
+import { buildGeminiOmni12Request, geminiOmni12FrameAspect, geminiOmni12SendsRealFrames } from "../gemini-omni-12.js"
 
 const base = { prompt: "a cat plays piano", durationSec: 8, resolution: "720p", aspectRatio: "16:9" }
+
+describe("geminiOmni12SendsRealFrames", () => {
+  const args = { startFrameUrl: "s", durationSec: 8, hasReferenceImages: false, hasSourceVideo: false }
+
+  it("is true for frames alone", () => {
+    expect(geminiOmni12SendsRealFrames(args)).toBe(true)
+    expect(geminiOmni12SendsRealFrames({ ...args, endFrameUrl: "e", durationSec: 10 })).toBe(true)
+  })
+
+  it("is false once anything else is wired, past 10 s with two frames, or with no start frame", () => {
+    expect(geminiOmni12SendsRealFrames({ ...args, hasReferenceImages: true })).toBe(false)
+    expect(geminiOmni12SendsRealFrames({ ...args, hasSourceVideo: true })).toBe(false)
+    expect(geminiOmni12SendsRealFrames({ ...args, endFrameUrl: "e", durationSec: 11 })).toBe(false)
+    expect(geminiOmni12SendsRealFrames({ ...args, startFrameUrl: undefined, endFrameUrl: "e" })).toBe(false)
+  })
+})
+
+describe("geminiOmni12FrameAspect", () => {
+  beforeEach(() => {
+    media.fetchOwnMedia.mockReset().mockResolvedValue({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) })
+    media.meta = { width: 720, height: 1280, orientation: undefined }
+  })
+
+  it("follows a portrait frame", async () => {
+    expect(await geminiOmni12FrameAspect("gemini-omni-flash-1-2", "f", "t")).toBe("9:16")
+  })
+
+  it("follows a landscape frame, and a square one lands on 16:9", async () => {
+    media.meta = { width: 1280, height: 720, orientation: undefined }
+    expect(await geminiOmni12FrameAspect("gemini-omni-flash-1-2", "f", "t")).toBe("16:9")
+    media.meta = { width: 1024, height: 1024, orientation: undefined }
+    expect(await geminiOmni12FrameAspect("gemini-omni-flash-1-2", "f", "t")).toBe("16:9")
+  })
+
+  it("reads the shape as displayed, for a sideways-tagged photo", async () => {
+    media.meta = { width: 1280, height: 720, orientation: 6 }
+    expect(await geminiOmni12FrameAspect("gemini-omni-flash-1-2", "f", "t")).toBe("9:16")
+  })
+
+  it("stays auto when the frame cannot be read", async () => {
+    media.fetchOwnMedia.mockResolvedValue({ ok: false })
+    expect(await geminiOmni12FrameAspect("gemini-omni-flash-1-2", "f", "t")).toBe("auto")
+    media.fetchOwnMedia.mockRejectedValue(new Error("gone"))
+    expect(await geminiOmni12FrameAspect("gemini-omni-flash-1-2", "f", "t")).toBe("auto")
+  })
+})
 
 describe("buildGeminiOmni12Request", () => {
   it("text only: an integer duration and no images", () => {

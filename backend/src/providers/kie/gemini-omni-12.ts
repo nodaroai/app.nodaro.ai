@@ -17,7 +17,10 @@
  * last pair past the 10 s that the real-frames mode allows.
  */
 import { dirname } from "node:path"
+import sharp from "sharp"
 import { placeFramesAfterReferences } from "@nodaro/prompts/assembly"
+import { resolveFrameFitAspect } from "@nodaro/shared/video"
+import { fetchOwnMedia } from "../../lib/fetch-own-media.js"
 import { uploadJobScratchFile } from "../../lib/job-scratch.js"
 import { geminiOmni12CutEndSec, geminiOmni12SourceWindow, type VideoSourceTrim } from "../../lib/gemini-omni-12-source.js"
 import { cleanupWorkDir, probeMediaDuration } from "../video/ffmpeg-utils.js"
@@ -67,6 +70,42 @@ export interface GeminiOmni12Request {
   droppedRefImages: number
 }
 
+/**
+ * Whether a request goes out with real frames: only frames wired, with a start
+ * frame (KIE has no last-frame-only mode), and first + last within its 10 s.
+ */
+export function geminiOmni12SendsRealFrames(args: {
+  startFrameUrl?: string
+  endFrameUrl?: string
+  durationSec: number
+  hasReferenceImages: boolean
+  hasSourceVideo: boolean
+}): boolean {
+  return !args.hasSourceVideo && !args.hasReferenceImages && !!args.startFrameUrl
+    && (!args.endFrameUrl || args.durationSec <= FIRST_LAST_MAX_SEC)
+}
+
+/**
+ * The ratio to send for `auto` beside real frames: KIE reads `auto` as 16:9 when
+ * no reference image is sent, which crops a portrait frame. The frame's own
+ * shape picks, by the rule the frame fit already used. A frame that cannot be
+ * read stays `auto`.
+ */
+export async function geminiOmni12FrameAspect(modelKey: string, frameUrl: string, logLabel: string): Promise<string> {
+  try {
+    const res = await fetchOwnMedia(frameUrl)
+    if (!res.ok) return "auto"
+    const meta = await sharp(Buffer.from(await res.arrayBuffer())).metadata()
+    const swapped = typeof meta.orientation === "number" && meta.orientation >= 5
+    const sourceWidth = (swapped ? meta.height : meta.width) ?? 0
+    const sourceHeight = (swapped ? meta.width : meta.height) ?? 0
+    return resolveFrameFitAspect({ provider: modelKey, requestedAspect: "auto", sourceWidth, sourceHeight }) ?? "auto"
+  } catch (err) {
+    console.warn(`[KIE.ai] ${logLabel}: could not read the start frame's shape, sending auto: ${err instanceof Error ? err.message : String(err)}`)
+    return "auto"
+  }
+}
+
 export function buildGeminiOmni12Request(args: GeminiOmni12RequestArgs): GeminiOmni12Request {
   const refs = (args.referenceImageUrls ?? []).filter((u): u is string => typeof u === "string" && u.trim().length > 0)
   const { startFrameUrl, endFrameUrl, sourceVideoUrl, durationSec, seed } = args
@@ -76,9 +115,7 @@ export function buildGeminiOmni12Request(args: GeminiOmni12RequestArgs): GeminiO
     ...(seed !== undefined && Number.isInteger(seed) && seed >= SEED_MIN && seed <= SEED_MAX ? { seeds: seed } : {}),
   }
 
-  // KIE has no last-frame-only mode, so a lone end frame goes through the list.
-  const onlyFrames = !sourceVideoUrl && refs.length === 0 && !!startFrameUrl
-  if (onlyFrames && (!endFrameUrl || durationSec <= FIRST_LAST_MAX_SEC)) {
+  if (geminiOmni12SendsRealFrames({ startFrameUrl, endFrameUrl, durationSec, hasReferenceImages: refs.length > 0, hasSourceVideo: !!sourceVideoUrl })) {
     return {
       mode: endFrameUrl ? "first-last-frame" : "first-frame",
       input: {

@@ -292,6 +292,9 @@ builds an allow-listed body:
   not be sent; the output follows the clip. KIE has no trim fields, so
   `prepareGeminiOmni12Source` cuts the clip (the node's trim, else its first 15 s)
   into the job's scratch folder.
+- **`auto`:** KIE reads it as 16:9 when no reference image is sent, so beside real
+  frames the runner sends the ratio nearest the start frame
+  (`geminiOmni12FrameAspect`, the rule the frame fit already uses).
 - `seeds`, not `seed`, 10000-99999: an out-of-range value is omitted. No
   `character_ids` or `audio_ids`, so characters and pinned voices are refused.
 - **Billing:** a `:<N>s:<res>` ladder, one row per second and resolution. An edit

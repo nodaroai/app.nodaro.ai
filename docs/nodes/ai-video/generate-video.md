@@ -337,7 +337,7 @@ The mode comes from what you wire:
 
 **Video-edit.** The result follows the source clip, so `duration` is ignored. The clip can be up to 15 seconds: a longer one uses its first 15 seconds, and `videoTrimStart` / `videoTrimEnd` pick another stretch of up to 15 seconds.
 
-**Aspect ratio.** `16:9`, `9:16`, or `auto`, which follows the reference image and is `16:9` with none.
+**Aspect ratio.** `16:9`, `9:16`, or `auto`. With exact frames, `auto` picks whichever of `16:9` or `9:16` is closer to the start frame. With reference images it follows them, and with neither it is `16:9`.
 
 **Seed.** Sent when it is a whole number from 10000 to 99999, otherwise left out.
 

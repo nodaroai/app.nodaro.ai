@@ -27,7 +27,7 @@ import { getLipSyncMaxAudioSeconds } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared/video"
 import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs, placeFramesAfterReferences } from "@nodaro/prompts/assembly"
 import { isGeminiOmniPerSecondProvider } from "@nodaro/shared/models"
-import { GEMINI_OMNI_12_RATE_USD_PER_SEC, buildGeminiOmni12Request, prepareGeminiOmni12Source } from "./gemini-omni-12.js"
+import { GEMINI_OMNI_12_RATE_USD_PER_SEC, buildGeminiOmni12Request, geminiOmni12FrameAspect, geminiOmni12SendsRealFrames, prepareGeminiOmni12Source } from "./gemini-omni-12.js"
 import {
   createSanitizedError,
   runKieTask,
@@ -1416,12 +1416,18 @@ async function runGeminiOmni12(
   const durationSec = snapToAllowedDuration(duration !== undefined && duration > 0 ? duration : 8, modelConfig.allowedDurations ?? [])
   const requestedResolution = options?.resolution
   const resolution = requestedResolution && geminiOmniResolutions(modelKey).includes(requestedResolution) ? requestedResolution : "720p"
+  const isAuto = aspectRatioValue?.trim().toLowerCase() === "auto"
+  const hasReferenceImages = (normalized?.referenceImageUrls ?? []).some((u) => !!u)
+  const realFrames = geminiOmni12SendsRealFrames({ startFrameUrl, endFrameUrl, durationSec, hasReferenceImages, hasSourceVideo: !!source })
+  const aspectRatio = !isAuto
+    ? resolveGeminiOmniAspect(modelKey, aspectRatioValue)
+    : realFrames && startFrameUrl ? await geminiOmni12FrameAspect(modelKey, startFrameUrl, logLabel) : "auto"
   const { mode, input, droppedRefImages } = buildGeminiOmni12Request({
     // The schema refuses an empty prompt; a node with nothing typed reaches here as "".
     prompt: prompt?.trim() ? prompt : "smooth cinematic motion",
     durationSec,
     resolution,
-    aspectRatio: aspectRatioValue?.trim().toLowerCase() === "auto" ? "auto" : resolveGeminiOmniAspect(modelKey, aspectRatioValue),
+    aspectRatio,
     seed: options?.seed,
     startFrameUrl,
     endFrameUrl,
