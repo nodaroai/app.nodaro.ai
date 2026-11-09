@@ -501,6 +501,10 @@ export interface InsertJobBlock {
 export class JobBlockedError extends Error {
   readonly code = "job_blocked" as const
   readonly statusCode = 422 as const
+  /** A refusal is a verdict on the request's own content: a retry gets the same
+   *  answer, so a worker treats it as final (`isDeterministicJobError` reads
+   *  this marker, across a lost prototype too). */
+  readonly deterministic = true as const
   constructor(readonly block: InsertJobBlock) {
     super(block.message)
     this.name = "JobBlockedError"

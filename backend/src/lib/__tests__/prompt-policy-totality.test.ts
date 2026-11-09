@@ -153,9 +153,11 @@ describe("prompt-policy totality — every media-prompt lane polices at its asse
     // the registry (read at call time), never carry a copy of a policy.
     // Behaviour is proven in private-plugins/__tests__/toolkit-prompt-policy.test.ts.
     const toolkit = readFileSync(resolve(SRC, "lib", "private-plugins", "toolkit.ts"), "utf8")
-    expect(toolkit, "toolkit.ts no longer wires tk.prompts.applyPolicies to applyPromptPolicies").toMatch(
-      /prompts:\s*\{\s*applyPolicies:\s*\([^)]*\)\s*=>\s*applyPromptPolicies\(/,
+    expect(toolkit, "toolkit.ts no longer wires tk.prompts.applyPolicies to the prompt funnel").toMatch(
+      /prompts:\s*\{\s*applyPolicies:\s*\([^)]*\)\s*=>\s*policeForPlugin\(/,
     )
+    const police = toolkit.slice(toolkit.indexOf("function policeForPlugin("), toolkit.indexOf("\n}\n", toolkit.indexOf("function policeForPlugin(")))
+    expect(police, "policeForPlugin no longer delegates to applyPromptPolicies").toMatch(/applyPromptPolicies\(\{ \.\.\.assembly \}\)/)
     const contract = readFileSync(resolve(SRC, "lib", "private-plugins", "types.ts"), "utf8")
     expect(contract, "types.ts no longer declares the tk.prompts group").toMatch(/\bprompts\?:\s*PluginPromptsToolkit\b/)
     // Plugin music: the plugin polices its music prompt ONCE, at its own

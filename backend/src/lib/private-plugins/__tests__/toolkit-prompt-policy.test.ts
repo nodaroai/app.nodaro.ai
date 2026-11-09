@@ -14,8 +14,14 @@ vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 
 import { buildToolkit } from "../toolkit.js"
 import { clearPromptPolicies, registerPromptPolicy, type PromptAssembly } from "../../prompt-policy.js"
+import { clearContentGuard, CONTENT_GUARD_MESSAGE, registerContentGuard } from "../../content-guard.js"
+import { isDeterministicJobError } from "../../deterministic-job-error.js"
+import { jobBlockHintOf } from "../../safety-block.js"
 
-afterEach(() => clearPromptPolicies())
+afterEach(() => {
+  clearPromptPolicies()
+  clearContentGuard()
+})
 
 function applyPolicies() {
   const member = buildToolkit().prompts?.applyPolicies
@@ -69,5 +75,27 @@ describe("tk.prompts.applyPolicies", () => {
     expect(seen).toEqual([{ prompt: "p", negativePrompt: "", kind: "image", subjectMinor: true }])
     expect(input.prompt).toBe("p")
     expect(out.prompt).toBe("rewritten in place")
+  })
+
+  it("a prompt the content guard refuses reaches the plugin as a sendable refusal, final for a job", () => {
+    registerContentGuard({
+      proveReady: () => true,
+      id: "placeholder-guard",
+      check: (subject) => (subject.texts.join(" ").includes("MINORTERM") ? { refused: true, reason: "placeholder" } : { refused: false }),
+    })
+    let thrown: unknown
+    try {
+      applyPolicies()({ prompt: "MINORTERM", negativePrompt: "", kind: "image" })
+    } catch (err) {
+      thrown = err
+    }
+    const refusal = thrown as { name: string; statusCode: number; body: { error: { code: string; message: string } } }
+    expect(refusal.name).toBe("PluginHttpError")
+    expect(refusal.statusCode).toBe(422)
+    expect(refusal.body).toEqual({ error: { code: "job_blocked", message: CONTENT_GUARD_MESSAGE } })
+    // A plugin job handler that lets this escape is failed for good, with the
+    // block's hint, because the worker reads the cause chain.
+    expect(isDeterministicJobError(thrown)).toBe(true)
+    expect(jobBlockHintOf(thrown)).toEqual({ kind: "policy-block", policyId: "platform:content-guard", reason: CONTENT_GUARD_MESSAGE, hookPoint: "request" })
   })
 })

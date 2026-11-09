@@ -21,6 +21,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { hasCredits, config } from "../lib/config.js"
 import { insertJob } from "../lib/insert-job.js"
+import { hasContentGuard, refuseProhibitedContent } from "../lib/content-guard.js"
+import { subjectOfInputData } from "../lib/content-guard-subject.js"
 import { JobBlockedError, jobBlockOf, jobBlockedBody } from "../lib/job-policy.js"
 import { supabase } from "../lib/supabase.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -132,7 +134,7 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
       const { data: character } = await supabase
         .from("characters")
         .select(
-          "id, name, source_image_url, reference_photos, expressions, poses, angles, body_angles, lighting_variations",
+          "id, name, description, person, source_image_url, reference_photos, expressions, poses, angles, body_angles, lighting_variations",
         )
         .eq("id", characterId)
         .eq("user_id", req.userId)
@@ -152,6 +154,18 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
       let jobId: string | null = null
 
       try {
+        // The content guard (lib/content-guard.ts): this lane sends no prompt,
+        // so what the character row says is the text it has. Thrown, so the
+        // catch below runs the same cleanup as any request-gate block.
+        const refused = hasContentGuard()
+          ? refuseProhibitedContent(subjectOfInputData({ name: character.name, description: character.description, person: character.person }), {
+              lane: "character-training",
+              userId: req.userId,
+              jobType: CHARACTER_LORA_TRAINING_JOB_TYPE,
+            })
+          : null
+        if (refused) throw new JobBlockedError(refused)
+
         // Step 2 — aggregate training images (optionally curated to a subset).
         const images = collectTrainingImages(character, selectedImageUrls)
         const imageCount = images.length

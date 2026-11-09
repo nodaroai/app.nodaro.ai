@@ -193,6 +193,8 @@ vi.mock("@/providers/kie/client.js", () => {
 import { createVideoWorker } from "../video-worker.js"
 import { KieError } from "../../providers/kie/client.js"
 import { UnrecoverableError } from "bullmq"
+import { JobBlockedError } from "../../lib/job-policy.js"
+import { jobBlockHintOf } from "../../lib/safety-block.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -337,5 +339,37 @@ describe("video worker — credits failure hint", () => {
     await processor(makeBullJob("generate-image", { provider: "gpt-image-2" })).catch(() => {})
 
     expect(failedUpdate()?.error_hint).toEqual({ kind: "safety-block", class: "copyright", retried: false })
+  })
+})
+
+// A request the content guard refused at a worker's own prompt funnel.
+describe("video worker — a policy block raised while the job runs", () => {
+  let processor: (job: unknown, token?: string) => Promise<void>
+
+  beforeEach(() => {
+    createVideoWorker()
+    processor = mocks.getCapturedProcessor()!
+  })
+
+  const blockedError = () =>
+    new JobBlockedError({ code: "job_blocked", policyId: "platform:content-guard", message: "This request isn't allowed under our content rules." })
+
+  it("writes the policy-block hint with the block's own sentence, and refunds once", async () => {
+    const err = blockedError()
+    mocks.mockHandler.mockRejectedValueOnce(err)
+
+    await processor(makeBullJob("text-to-video", { provider: "seedance-2" })).catch(() => {})
+
+    expect(failedUpdate()).toEqual(expect.objectContaining({ status: "failed", error_hint: jobBlockHintOf(err) }))
+    expect(failedUpdate()?.error_hint).toMatchObject({ kind: "policy-block", reason: "This request isn't allowed under our content rules." })
+    expect(mocks.mockRefundJobCredits).toHaveBeenCalledTimes(1)
+  })
+
+  it("reads the block off a wrapper's cause chain", async () => {
+    mocks.mockHandler.mockRejectedValueOnce(new Error("the run stopped", { cause: blockedError() }))
+
+    await processor(makeBullJob("text-to-video", { provider: "seedance-2" })).catch(() => {})
+
+    expect(failedUpdate()?.error_hint).toMatchObject({ kind: "policy-block" })
   })
 })

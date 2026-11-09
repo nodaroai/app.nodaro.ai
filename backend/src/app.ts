@@ -8,6 +8,8 @@ import { config, hasAdmin, hasCredits, isCloud, isMultiUser, siteCaptureEnabled 
 import { warmLlmMeteredSchemaGate } from "./lib/llm-metered-schema-gate.js"
 import { registerNodaroCloudBillingProvider } from "./lib/billing-provider.js"
 import { loadOverlay } from "./lib/overlay/load.js"
+import { loadContentGuard } from "./lib/content-guard-load.js"
+import { registerRequestUserScope } from "./lib/request-user-scope.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 import { CLIENT_HEADER } from "./lib/job-source.js"
 import { IDEMPOTENCY_HEADER } from "./lib/idempotency-header.js"
@@ -448,6 +450,7 @@ export async function buildApp() {
   // NODARO_OVERLAY_PACKAGE is unset (spec §7.2 / G1). Fatal (exit 1) if a named
   // overlay fails to load.
   await loadOverlay()
+  await loadContentGuard()
 
   // Mainline prompt policies run AFTER the overlay's (registration order):
   // the minor-age floor is a platform safety invariant, not deployment content.
@@ -547,6 +550,8 @@ export async function buildApp() {
   // to Fastify's default handler unchanged. Before any plugin or route
   // registers: a route keeps the error handler of the moment it registered.
   registerRefusalErrorHandler(app)
+  // Before the auth hook, so everything after it runs inside the scope.
+  registerRequestUserScope(app)
 
   // application/x-www-form-urlencoded body parser — required by OAuth-spec
   // clients (Claude.ai etc.) that POST to /v1/oauth/token with form-encoded

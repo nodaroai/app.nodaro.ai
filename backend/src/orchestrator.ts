@@ -7,6 +7,7 @@
 
 import { createOrchestratorWorker } from "./workers/orchestrator-worker.js"
 import { loadOverlay } from "./lib/overlay/load.js"
+import { loadContentGuard } from "./lib/content-guard-load.js"
 import { initializeExternalWallet } from "./lib/external-wallet.js"
 import { loadAvailabilityOverrides } from "./lib/availability-override.js"
 import { loadSwitchedOffModels } from "./lib/model-switch.js"
@@ -33,6 +34,7 @@ process.on("uncaughtException", (err) => {
 // orchestrator worker in server.ts is already covered by buildApp's loadOverlay.
 // No-op + byte-identical when NODARO_OVERLAY_PACKAGE is unset.
 await loadOverlay()
+await loadContentGuard()
 await initializeExternalWallet(true)
 
 // Mainline prompt policies run AFTER the overlay's (registration order):

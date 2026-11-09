@@ -1040,6 +1040,20 @@ async function readJob(jobId: string): Promise<PluginJobRow | null> {
 }
 
 /**
+ * The prompt funnel for a prompt a plugin assembled. A content-guard refusal
+ * (the funnel's one throw) reaches the plugin as the sendable `PluginHttpError`
+ * every other host refusal is, carrying the block as its cause, so a job
+ * handler is still failed for good and refunded.
+ */
+function policeForPlugin(assembly: Parameters<typeof applyPromptPolicies>[0]): ReturnType<typeof applyPromptPolicies> {
+  try {
+    return applyPromptPolicies({ ...assembly })
+  } catch (err) {
+    throw pluginHttpRefusalOf(err) ?? err
+  }
+}
+
+/**
  * The `PluginHttpError` for a refusal of the request itself, or null for any
  * other failure. Each status + body is exactly the one `sendInternalError`
  * (`lib/http-errors.ts`) answers for the same error, so a plugin route refuses
@@ -2252,7 +2266,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
     // still applies) and hands the registry a copy, so a policy that edits its
     // argument never reaches the plugin's own object.
     prompts: {
-      applyPolicies: (assembly) => applyPromptPolicies({ ...assembly }),
+      applyPolicies: (assembly) => policeForPlugin(assembly),
     },
     pipelines: {
       // Core (`lib/private-plugins/`) may not STATICALLY import `ee/`

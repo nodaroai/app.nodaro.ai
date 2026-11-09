@@ -690,7 +690,7 @@ and `status`:
 
 ### `class JobBlockedError extends NodaroError`
 
-HTTP 422 `job_blocked`. A job policy registered by this deployment refused the
+HTTP 422 `job_blocked`. A job policy or content guard registered by this deployment refused the
 generation **before it ran** — no job was created and nothing was charged.
 `message` is user-safe text written by the deployment's policy (or by the platform, when the policy supplies none); show it as-is.
 Do not retry the identical request: the platform does not retry a refused

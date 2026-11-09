@@ -384,6 +384,7 @@ export function registerErrorTelemetry(app: FastifyInstance): void {
     // A refusal is answered as its own 4xx (registerRefusalErrorHandler): a
     // client outcome, even when the error carries no status of its own.
     if (clientRefusalOf(error)) return
+    if (jobBlockOf(error)) return
     const status = (error as { statusCode?: number }).statusCode ?? 500
     if (status < 500) return // 4xx = client errors (validation, auth) — not telemetry
     reportServerError(req, errorMessageOf(error) ?? "Unknown error", "uncaught", error)
@@ -411,9 +412,21 @@ export function registerErrorTelemetry(app: FastifyInstance): void {
 export function registerRefusalErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler(async (error, req, reply) => {
     const refusal = clientRefusalOf(error)
-    if (!refusal) throw error
-    req.log.info({ code: refusal.body.error.code }, "request refused")
-    void reply.status(refusal.statusCode).send(refusal.body)
+    if (refusal) {
+      req.log.info({ code: refusal.body.error.code }, "request refused")
+      void reply.status(refusal.statusCode).send(refusal.body)
+      return
+    }
+    // A policy block that escapes a route (a prompt the content guard refused,
+    // thrown from the prompt funnel, which most routes do not catch around):
+    // the same 422 `job_blocked` body as a block a route answers itself.
+    const blocked = jobBlockOf(error)
+    if (blocked) {
+      req.log.info({ policyId: blocked.policyId }, "job blocked by policy")
+      void reply.status(422).send(jobBlockedBody({ userMessage: blocked.message }))
+      return
+    }
+    throw error
   })
 }
 

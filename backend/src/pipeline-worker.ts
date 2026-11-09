@@ -15,6 +15,7 @@
 
 import { hasCredits } from "./lib/config.js"
 import { loadOverlay } from "./lib/overlay/load.js"
+import { loadContentGuard } from "./lib/content-guard-load.js"
 import { initializeExternalWallet } from "./lib/external-wallet.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 import { startLaneParking } from "./lib/concurrency-lanes/park.js"
@@ -33,6 +34,7 @@ async function main() {
   // ahead of the hasCredits() gate so a cloud pipeline process still loads it.
   // No-op + byte-identical when NODARO_OVERLAY_PACKAGE is unset.
   await loadOverlay()
+  await loadContentGuard()
   await initializeExternalWallet(true)
 
   // Mainline prompt policies run AFTER the overlay's (registration order):

@@ -49,6 +49,8 @@ import { CONTENT_RESTRICTED_MESSAGE, restrictedInputKey } from "../../lib/conten
 import "../../lib/content-restriction-address.js"
 import "../../lib/content-restriction-set.js"
 import { insertInternalJob, JobBlockedError } from "../../lib/insert-job.js"
+import { hasContentGuard, refuseProhibitedContent } from "../../lib/content-guard.js"
+import { subjectOfInputData } from "../../lib/content-guard-subject.js"
 import { resolvedModelOfJob } from "../../lib/job-resolved-model.js"
 import { videoQueue } from "../../lib/queue.js"
 import { renderQueue } from "../../lib/render-queue.js"
@@ -2069,6 +2071,24 @@ async function refuseRestrictedInput(jobId: string, input: Record<string, unknow
   throw refused
 }
 
+/**
+ * The workflow engine's content-guard check (lib/content-guard.ts): a refusal
+ * deletes the placeholder row and fails the node with the guard's sentence.
+ * Before the reservation, so nothing is charged and nothing is refunded.
+ */
+async function refuseProhibitedPayload(
+  jobId: string,
+  input: Record<string, unknown>,
+  userId: string | undefined,
+  jobType: string,
+): Promise<void> {
+  if (!hasContentGuard()) return
+  const block = refuseProhibitedContent(subjectOfInputData(input), { lane: "workflow-payload", userId, jobType })
+  if (!block) return
+  await supabase.from("jobs").delete().eq("id", jobId)
+  throw new JobBlockedError(block)
+}
+
 async function executeWorkerNode(
   node: SimpleNode,
   resolvedInputs: ResolvedInputs,
@@ -2248,6 +2268,12 @@ async function executeWorkerNode(
   // goes with the refusal, like every refusal of this stage; the payload
   // write further down asks once more, as a backstop.
   await refuseRestrictedInput(jobId, { ...resolvedInputs, ...payload }, ctx.userId)
+
+  // 2.1. The content guard, on the built payload: the placeholder row carried
+  // none of this content past the insert funnel, and the prompt funnel saw only
+  // what its assembly point handled. The row goes with a refusal; nothing has
+  // been reserved yet (lib/content-guard.ts).
+  await refuseProhibitedPayload(jobId, { ...resolvedInputs, ...payload }, ctx.userId, node.type)
 
   // 2a. Audio soundtrack — the DAG twin of the routes'
   // `applyAudioSoundtrackPreHandler`: on a model that takes reference audio

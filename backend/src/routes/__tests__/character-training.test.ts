@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { supabase } from "../../lib/supabase.js"
 import { characterTrainingRoutes } from "../character-training.js"
 import { clearJobPolicies, registerJobPolicy } from "../../lib/job-policy.js"
+import { clearContentGuard, CONTENT_GUARD_MESSAGE, registerContentGuard } from "../../lib/content-guard.js"
 
 vi.mock("../../lib/supabase.js", () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }))
+vi.mock("../../lib/job-policy-audit.js", () => ({ recordJobPolicyDecision: vi.fn(async () => "decision-1"), hashGateSubject: vi.fn(() => "hash-1") }))
 
 // Lazy-getter for PUBLIC_URL so the missing-env test can flip it for one
 // assertion without re-mocking the module + rebuilding the Fastify app.
@@ -475,5 +477,88 @@ describe("POST /v1/characters/:id/train — request-gate block (F10)", () => {
     // …and the zip that was uploaded before the gate refused is deleted.
     const storage = await import("../../lib/storage.js")
     expect(storage.deleteFromR2).toHaveBeenCalledWith("character-training/test/123.zip")
+  })
+})
+
+// This lane sends no prompt, so what the character row says is what the guard judges.
+describe("POST /v1/characters/:id/train — the content guard", () => {
+  afterEach(() => clearContentGuard())
+
+  function characterRow(extra: Record<string, unknown>) {
+    return {
+      id: TEST_CHARACTER_ID,
+      name: "Kira",
+      source_image_url: "https://r2/source.jpg",
+      reference_photos: [], expressions: [], poses: [], angles: [],
+      body_angles: [], lighting_variations: [],
+      ...extra,
+    }
+  }
+
+  function mockCharacter(row: Record<string, unknown>): Array<Record<string, unknown>> {
+    const characterUpdates: Array<Record<string, unknown>> = []
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: TEST_CHARACTER_ID, error: null } as never)
+    vi.mocked(supabase.from).mockImplementation(((table: string) => {
+      if (table === "characters") {
+        return {
+          select: () => ({ eq: () => ({ eq: () => ({ single: async () => ({ data: row, error: null }) }) }) }),
+          update: (patch: Record<string, unknown>) => {
+            characterUpdates.push(patch)
+            return { eq: () => ({ eq: async () => ({ data: null, error: null }) }) }
+          },
+        }
+      }
+      return { insert: () => ({ select: () => ({ single: async () => ({ data: null, error: null }) }) }) }
+    }) as never)
+    return characterUpdates
+  }
+
+  function registerPlaceholderGuard(): void {
+    registerContentGuard({
+      proveReady: () => true,
+      id: "placeholder-guard",
+      check(subject) {
+        const text = subject.texts.join(" ")
+        return (subject.minorSignal || text.includes("MINORTERM")) && text.includes("ADULTTERM") ? { refused: true, reason: "placeholder" } : { refused: false }
+      },
+    })
+  }
+
+  const train = () =>
+    app.inject({
+      method: "POST",
+      url: `/v1/characters/${TEST_CHARACTER_ID}/train`,
+      headers: { "x-user-id": TEST_USER_ID, "content-type": "application/json" },
+      payload: {},
+    })
+
+  async function expectRefused(characterUpdates: Array<Record<string, unknown>>) {
+    const res = await train()
+    expect(res.statusCode).toBe(422)
+    expect(res.json()).toEqual({ error: { code: "job_blocked", message: CONTENT_GUARD_MESSAGE } })
+    const lora = await import("../../lib/character-lora.js")
+    expect(lora.zipImagesToR2Buffer).not.toHaveBeenCalled()
+    const replicateTraining = await import("../../providers/replicate/training.js")
+    expect(replicateTraining.createCharacterTraining).not.toHaveBeenCalled()
+    expect(characterUpdates).toContainEqual({ lora_training_status: null })
+  }
+
+  it("refuses on what the description says, before anything is zipped or trained", async () => {
+    const updates = mockCharacter(characterRow({ description: "MINORTERM ADULTTERM" }))
+    registerPlaceholderGuard()
+    await expectRefused(updates)
+  })
+
+  it("refuses on a minor Person value with an adult term in the description", async () => {
+    const updates = mockCharacter(characterRow({ description: "ADULTTERM", person: { age: "age-child" } }))
+    registerPlaceholderGuard()
+    await expectRefused(updates)
+  })
+
+  it("with no guard registered, the row's words are not read at all", async () => {
+    const updates = mockCharacter(characterRow({ description: "MINORTERM ADULTTERM" }))
+    const res = await train()
+    expect(res.statusCode).not.toBe(422)
+    expect(updates).not.toHaveLength(0)
   })
 })

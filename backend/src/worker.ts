@@ -3,6 +3,7 @@ import { logFfmpegVersion } from "./providers/video/ffmpeg-utils.js"
 import { beginWorkerDrain, inFlightDrainDeadlineMs } from "./lib/worker-drain.js"
 import { createWorkerShutdown } from "./lib/worker-shutdown.js"
 import { loadOverlay } from "./lib/overlay/load.js"
+import { loadContentGuard } from "./lib/content-guard-load.js"
 import { initializeExternalWallet } from "./lib/external-wallet.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 import { startLaneParking } from "./lib/concurrency-lanes/park.js"
@@ -20,6 +21,7 @@ process.on("uncaughtException", (err) => {
 // packs) before the worker starts consuming jobs — the seams are per-process
 // singletons. No-op + byte-identical when NODARO_OVERLAY_PACKAGE is unset.
 await loadOverlay()
+await loadContentGuard()
 await initializeExternalWallet(true)
 
 // Mainline prompt policies run AFTER the overlay's (registration order):

@@ -29,6 +29,7 @@ import {
   requestRefusedHintOf,
   sentVideoInput,
   creditsHintOf,
+  jobBlockHintOf,
   queueTimeoutHintOf,
   safetyBlockMessage,
   fallbackLabelOf,
@@ -720,7 +721,7 @@ export function createVideoWorker() {
         // blamed the generated audio (`subject: "audio"`), not the picture.
         // Shared with the reconcile path (lib/reconcile/kie.ts).
         const errorHint =
-          refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err), requestRefusedHintOf(err, job.data), promptRefusedOf(err), audioRefusedOf(err)) ?? creditsHintOf(err) ?? queueTimeoutHintOf(err)
+          refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err), requestRefusedHintOf(err, job.data), promptRefusedOf(err), audioRefusedOf(err)) ?? creditsHintOf(err) ?? queueTimeoutHintOf(err) ?? jobBlockHintOf(err)
         const flipped = await markJobFailed(jobId, {
           error_message: errorMessage,
           // W0: the provider's own error, redacted — the sanitized message

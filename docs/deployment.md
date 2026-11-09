@@ -1170,7 +1170,7 @@ optional checks. The **request** gate (`checkRequest`) sits at the single
 job-insert funnel and is asked before a row or a credit reservation exists; its
 verdict is `{ verdict: "allow" }` or `{ verdict: "block", reason, userMessage? }`,
 and a block answers HTTP 422 `{ error: { code: "job_blocked", message } }` with
-nothing to refund. The **result** gate (`checkResult`) sits at the completion
+nothing to refund. A separate **content guard** ([design note](./design/content-guard.md)) refuses a request on its content at every place that content becomes final, in the same shape. On Cloud it is required: the private plugin build supplies it, and the platform refuses to start without one that can prove it has its word lists (`PRIVATE_MODULES=optional` is the declared degraded boot without it). So **release the plugin build that ships the guard and pin it in `CLOUD_PLUGINS_VERSION` first, then deploy the platform.** Done the other way round, the image build's smoke test or the new version's health check fails and the running version keeps serving. Other editions have no guard, and nothing changes for them. The **result** gate (`checkResult`) sits at the completion
 funnels, asked after the output is written to storage and before the completion
 write, the asset row and the credit commit; its verdicts are `allow`, `flag`,
 `block` and `hold`. A `block` fails the job with a full refund, deletes the

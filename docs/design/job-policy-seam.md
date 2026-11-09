@@ -346,6 +346,11 @@ the decision audit. Labels never become the user-visible explanation.
 
 ## What is deliberately not gated
 
+The request gate judges a job row, and some rows do not hold their final
+content (see above). Refusing a request on its content everywhere, including
+those rows, is what the [content guard](./content-guard.md) does: it is asked at
+the prompt funnel and the workflow engine's payload step as well as here.
+
 The seam sits on jobs. Anything that produces no job row — synchronous text
 routes, streaming LLM responses, in-handler planning calls, prompt drafts written
 before a row exists — is out of scope by construction, and no amount of

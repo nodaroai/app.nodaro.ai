@@ -421,6 +421,7 @@ RUN if [ -n "$(printenv NPM_TOKEN)" ]; then \
       { test -z "$(find node_modules/@nodaroai -path '*/node_modules/@nodaro/*' -type d 2>/dev/null)" \
         || { echo "a nested @nodaro catalog was installed under node_modules/@nodaroai — the peer ranges disagree with the workspace"; exit 1; }; } && \
       node -e "import('@nodaroai/cloud-plugins').then(m=>{if(m.contractVersion!==1){console.error('plugin smoke: contractVersion mismatch:',m.contractVersion);process.exit(1)}}).catch(e=>{console.error('plugin smoke failed:',e&&e.message);process.exit(1)})" && \
+      node -e "import('@nodaroai/cloud-plugins/content-guard').then(m=>{if(!m.contentGuard||m.contentGuard.proveReady()!==true){console.error('plugin smoke: the content guard is not ready');process.exit(1)}}).catch(e=>{console.error('plugin smoke failed:',e&&e.message);process.exit(1)})" && \
       rm -f .npmrc; \
     fi
 

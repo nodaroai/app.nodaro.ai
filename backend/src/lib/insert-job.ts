@@ -59,6 +59,8 @@ import {
 import { InvalidClientOriginError, resolveRequestOrigin, withRequestOrigin } from "./client-origin-scope.js"
 import { ACCESS_BLOCKED_BODY, isUserBlocked } from "./access-blocks.js"
 import { CONTENT_RESTRICTED_MESSAGE, CONTENT_RESTRICTION_POLICY_ID, restrictedInputKey } from "./content-restriction-gate.js"
+import { hasContentGuard, refuseProhibitedContent } from "./content-guard.js"
+import { subjectOfInputData } from "./content-guard-subject.js"
 // The gate's two light halves, loaded with the funnel rather than on the
 // first insert that names an address (see node-executor.ts).
 import "./content-restriction-address.js"
@@ -232,6 +234,21 @@ async function gateJobInsert(rows: ReadonlyArray<Record<string, unknown>>): Prom
   for (const row of rows) {
     if (await restrictedInputKey((row.input_data as Record<string, unknown> | undefined) ?? null, { userId: owner })) {
       return { block: { code: "job_blocked", policyId: CONTENT_RESTRICTION_POLICY_ID, message: CONTENT_RESTRICTED_MESSAGE } }
+    }
+  }
+  // The third: a request whose content the deployment's content guard refuses
+  // starts no job (lib/content-guard.ts). Asked for every row, after the
+  // cheaper rules, and only when a guard is registered: with none this is one
+  // boolean and no row is read.
+  if (hasContentGuard()) {
+    for (const row of rows) {
+      const input = (row.input_data as Record<string, unknown> | undefined) ?? null
+      const refused = refuseProhibitedContent(subjectOfInputData(input), {
+        lane: "job-insert",
+        userId: owner,
+        jobType: (row.job_type as string | null | undefined) ?? (typeof input?.type === "string" ? input.type : null),
+      })
+      if (refused) return { block: refused }
     }
   }
   if (!hasJobPolicyFor("request")) return null

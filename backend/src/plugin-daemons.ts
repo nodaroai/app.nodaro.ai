@@ -18,6 +18,7 @@
 
 import { config, hasCredits } from "./lib/config.js"
 import { loadOverlay } from "./lib/overlay/load.js"
+import { loadContentGuard } from "./lib/content-guard-load.js"
 import { initializeExternalWallet } from "./lib/external-wallet.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 import type { PluginDaemonHost } from "./lib/plugin-daemons/host.js"
@@ -111,6 +112,7 @@ async function main() {
   // then the mainline prompt policies (a platform safety invariant a daemon
   // inherits the moment it asks the toolkit for a generation).
   await loadOverlay()
+  await loadContentGuard()
   await initializeExternalWallet(true)
   registerMainlinePromptPolicies()
 
