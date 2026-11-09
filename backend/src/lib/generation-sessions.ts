@@ -16,7 +16,7 @@ export const SESSION_COLS =
  *  embeds them `!inner` and filters `TRASHED_JOB_COLUMN` (FEED_LIVE_JOB_FILTER),
  *  so an item whose job is in the Trash is not a row at all. */
 export const SESSION_FEED_JOB_COLS =
-  "id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, user_id, credits, job_type, source, source_detail, session_id, parent_job_id"
+  "id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, user_id, credits, job_type, source, source_detail, session_id, title, parent_job_id"
 
 /** The feed's embedded job (`job:jobs!job_id!inner(...)`) must be live. */
 export const FEED_LIVE_JOB_FILTER = `job.${TRASHED_JOB_COLUMN}`

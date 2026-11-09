@@ -49,6 +49,12 @@ const saveGeneratedBody = z.object({
   isLibraryItem: z.boolean().optional().default(false),
 })
 
+/** The `title` of an embedded `job:jobs!job_id(title)`, whichever shape the embed arrived in; null when there is none. */
+export function embeddedJobTitle(embed: unknown): string | null {
+  const job = (Array.isArray(embed) ? embed[0] : embed) as { title?: unknown } | null | undefined
+  return typeof job?.title === "string" && job.title !== "" ? job.title : null
+}
+
 // ============================================================
 // Routes
 // ============================================================
@@ -113,7 +119,12 @@ export async function libraryRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("assets")
-      .select("id, user_id, type, filename, mime_type, size_bytes, r2_key, r2_url, metadata, is_library_item, upload_source, source, source_detail, created_at, job_id")
+      // `job`: the file's job, for the name its owner gave it (`title`, migration
+      // 609) — a to-one embed on `assets.job_id`; null for an upload, or once
+      // that job's history is deleted.
+      // trash-read: a file kept in the library outlives its deleted job by design
+      // (like its render label), and so does the name its owner gave that job.
+      .select("id, user_id, type, filename, mime_type, size_bytes, r2_key, r2_url, metadata, is_library_item, upload_source, source, source_detail, job:jobs!job_id(title), created_at, job_id")
       .is(RESTRICTED_ASSET_COLUMN, null)
 
     if (owned) {
@@ -217,6 +228,10 @@ export async function libraryRoutes(app: FastifyInstance) {
       // The job that made the file; `null` for an upload, or once that job's
       // history is deleted (`assets.job_id` is ON DELETE SET NULL).
       jobId: a.job_id ?? null,
+      // The name that job's owner gave it (`PATCH /v1/jobs/:id`); null when the
+      // job is unnamed, or when there is no job. A to-one embed arrives as an
+      // object, but a one-element array is accepted too (the list route's lesson).
+      title: embeddedJobTitle((a as { job?: unknown }).job),
       createdAt: a.created_at,
     }))
 

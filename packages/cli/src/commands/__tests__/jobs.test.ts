@@ -11,9 +11,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { Command } from "commander"
 import { jobsCommand } from "../jobs.js"
 
-const mocks = { get: vi.fn(), list: vi.fn(), rate: vi.fn() }
+const mocks = { get: vi.fn(), list: vi.fn(), rate: vi.fn(), rename: vi.fn() }
 vi.mock("../../client.js", () => ({
-  buildClient: () => ({ jobs: { get: mocks.get, list: mocks.list, rate: mocks.rate } }),
+  buildClient: () => ({ jobs: { get: mocks.get, list: mocks.list, rate: mocks.rate, rename: mocks.rename } }),
   handleError: (err: unknown) => { throw err },
 }))
 

@@ -733,6 +733,7 @@ const JOB_PATCH = {
   error_detail: null,
   input_fingerprint: null,
   reconcile_last_error: null,
+  title: null,
 }
 
 describe("redactAppExpungeTargets", () => {

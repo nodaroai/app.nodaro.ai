@@ -1406,7 +1406,9 @@ The returned `Job` uses snake_case fields to match the wire format. Non-admin
 callers receive an explicit allowlist of job fields — `id`, `status`,
 `progress`, `input_data`, `output_data`, `error_message`, `error_hint`,
 `created_at`, `started_at`, `completed_at`, `user_id`, `credits`, `job_type`,
-`source`, `source_detail`, plus `favorited` (whether the job's owner favorited
+`source`, `source_detail`, `title` (the owner's own name for the job —
+[`rename()`](#renameid-title) — or `null` until named), plus `favorited`
+(whether the job's owner favorited
 it — [`client.gallery`](#clientgallery)) and `rating` (`"good"`, `"bad"` or
 `null` — [`rate()`](#rateid-rating)) — both left out when the server cannot read
 them for a moment, so treat a missing field as unknown, never as `false` —
@@ -1538,6 +1540,32 @@ that does not have ratings yet it throws a `NodaroError` with code
 ```ts
 await client.jobs.rate(jobId, "good")
 await client.jobs.rate(jobId, null) // clear it
+```
+
+#### `rename(id, title)`
+
+```ts
+rename(id: string, title: string | null): Promise<{ data: { jobId: string; title: string | null } }>
+```
+
+Names one of your jobs — "Wedding toast, final" on a picture, a clip, a track
+or a speech take — or clears its name with `null` (`PATCH /v1/jobs/:id`). The
+name is trimmed and must be one line of plain text, 1–120 characters, in any
+language; a longer or multi-line one throws a `NodaroError` with code
+`validation_error`. Only the job's owner names it: anyone else's job is a
+`NotFoundError`. Free; any job type and status, the Trash included; nothing
+else about the job changes (no reordering of results). The name reads back as
+`Job.title` wherever the job is returned — `get()`, `list()`, a session's
+items, `client.trash.list()` — and as `title` on a gallery card
+([`client.gallery`](#clientgallery), public beside the prompt) and on a library
+row ([`client.library`](#clientlibrary): the name of the job that made the
+file, not its `filename`). Clearing it brings a client's own made-up name back.
+OAuth apps need the `assets:write` scope. Named `rename`, like `rate`, rather
+than a general `update`: the route takes this one field.
+
+```ts
+await client.jobs.rename(jobId, "Hero shot v2")
+await client.jobs.rename(jobId, null) // back to the made-up name
 ```
 
 #### `fromUpload(params)`
@@ -7873,7 +7901,7 @@ list(params?: ListLibraryParams): Promise<ListLibraryResult>
 ```
 
 `GET /v1/library` → the user's stored media with a storage summary. Filter by
-`type` (`image` / `video` / `audio`), paginate with `cursor`/`limit`. Each row carries `jobId`, the job that made the file (`null` for an upload; absent from servers before this field).
+`type` (`image` / `video` / `audio`), paginate with `cursor`/`limit`. Each row carries `jobId`, the job that made the file (`null` for an upload; absent from servers before this field), and `title`, the name its owner gave that job ([`client.jobs.rename`](#renameid-title); `null` when unnamed or there is no job; not the file's `filename`, which stays the download name; absent from servers before this field).
 
 `q` searches the filename by words: only the files whose filename contains
 every word of it (the first 5), ignoring case, every character of a word
@@ -7912,7 +7940,11 @@ interface BrowseGalleryParams {
 `GET /v1/gallery` → a page of the public gallery, newest completed first:
 `{ data: GalleryItem[], nextCursor, totalCount? }` (`totalCount` on the first
 page only). No token needed. Each item is `{ id, type, jobName, outputUrl,
-thumbnailUrl, createdAt, prompt, model, preview? }`, where `id` is the job id.
+thumbnailUrl, createdAt, prompt, model, title?, preview? }`, where `id` is the
+job id and `title` is the owner's own name for it
+([`client.jobs.rename`](#renameid-title)) — public beside the prompt and
+judged by the same word lists (a card whose title the lists would hide as a
+prompt stays out), `null` until named.
 `favoritesOnly` lists your own favorites only: pass your own `userId` (from
 `client.me()`); anyone else's favorites are refused (`UnauthorizedError`
 without a token, `ForbiddenError` with another person's `userId` or none).
@@ -9695,7 +9727,7 @@ not two.
 
 ### Gallery
 
-- `GalleryItem` — one gallery card: `{ id, type, jobName, outputUrl, thumbnailUrl, createdAt, prompt, model, preview? }`
+- `GalleryItem` — one gallery card: `{ id, type, jobName, outputUrl, thumbnailUrl, createdAt, prompt, model, title?, preview? }` (`title`: the owner's own name for the job, `null` until named — [`client.jobs.rename`](#renameid-title))
 - `GalleryMediaType` — `"image" | "video" | "audio"`
 - `BrowseGalleryParams` / `GalleryPage` — `gallery.browse` filters and page (`{ data, nextCursor, totalCount? }`)
 - `ToggleFavoriteResult` — `{ favorited }`

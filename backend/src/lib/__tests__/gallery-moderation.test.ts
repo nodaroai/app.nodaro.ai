@@ -120,6 +120,15 @@ describe("galleryHides", () => {
   it("the built-in list applies everywhere, the owner view included", () => {
     expect(galleryHides(OWNER_VIEW_MODERATION, { userId: B, inputData: { prompt: "nsfw scene" } })).toBe(true)
   })
+
+  it("the owner's title is judged like the prompt beside it, by both lists — the whole card stays out", () => {
+    expect(galleryHides(moderation, { userId: B, inputData: { prompt: "a sunset" }, title: "my red bucket" })).toBe(true)
+    expect(galleryHides(moderation, { userId: B, inputData: { prompt: "a sunset" }, title: "un seau" })).toBe(true)
+    expect(galleryHides(moderation, { userId: B, inputData: { prompt: "a sunset" }, title: "a bucket of water" })).toBe(false)
+    expect(galleryHides(OWNER_VIEW_MODERATION, { userId: B, inputData: { prompt: "a sunset" }, title: "nsfw scene" })).toBe(true)
+    expect(galleryHides(moderation, { userId: B, inputData: { prompt: "a sunset" }, title: null })).toBe(false)
+    expect(galleryHides(moderation, { userId: B, inputData: { prompt: "a sunset" }, title: "Wedding toast, final" })).toBe(false)
+  })
 })
 
 describe("bannedGalleryUsersFilter", () => {

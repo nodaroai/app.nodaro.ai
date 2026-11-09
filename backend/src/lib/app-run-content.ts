@@ -95,6 +95,7 @@ export function executionContentRedaction(): { node_states: Record<string, never
  * - `reconcile_last_error` (138): the raw message of the last failed
  *   reconcile attempt, unredacted — the same provider/system text as
  *   `error_detail` (decided 2026-10-06).
+ * - `title` (609): the name the owner gave the job — their own words.
  *
  * The runner's own library uploads are kept: their `assets` rows belong to the
  * runner, not the app, and are never touched here.
@@ -108,6 +109,7 @@ export function jobContentRedaction(): {
   error_detail: null
   input_fingerprint: null
   reconcile_last_error: null
+  title: null
 } {
   return {
     input_data: {},
@@ -118,6 +120,7 @@ export function jobContentRedaction(): {
     error_detail: null,
     input_fingerprint: null,
     reconcile_last_error: null,
+    title: null,
   }
 }
 

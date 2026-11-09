@@ -79,6 +79,7 @@ const JOB_ROW = {
   source: "sdk",
   source_detail: "sdk/2.27.0",
   session_id: null,
+  title: null,
   reconcile_attempts: 0,
   usage_log_id: "u1",
   // Never public, even if a select ever returned them:

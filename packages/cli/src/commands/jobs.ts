@@ -139,6 +139,26 @@ export function jobsCommand(): Command {
     })
 
   cmd
+    .command("rename <id> [title]")
+    .description("name one of your jobs (one line of plain text, up to 120 characters), or clear its name with --clear")
+    .option("--clear", "remove the name")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (id: string, title: string | undefined, opts: { clear?: boolean } & GlobalOpts) => {
+      try {
+        if (!opts.clear && (title === undefined || title.trim() === "")) {
+          throw new Error("give the name, or --clear to remove it")
+        }
+        const client = buildClient(opts.profile)
+        const result = await client.jobs.rename(id, opts.clear ? null : (title as string))
+        if (opts.json) emit(result, opts)
+        else success(result.data.title ? `named job ${id} "${result.data.title}"` : `cleared the name of job ${id}`)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
     .command("cancel <id>")
     .description("cancel a pending or running job")
     .option("--profile <name>")

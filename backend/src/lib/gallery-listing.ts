@@ -100,6 +100,8 @@ export interface GalleryItem {
   readonly createdAt: string
   readonly prompt: string | null
   readonly model: string | null
+  /** The owner's own name for the job (`PATCH /v1/jobs/:id`), or null until named. Shown beside the prompt, which is public too. */
+  readonly title: string | null
   /** A private 720p Preview render (Apply EDL at proxy quality). Present only when true. */
   readonly preview?: true
 }
@@ -209,7 +211,7 @@ export async function readGalleryPage(q: GalleryPageQuery): Promise<GalleryPage>
 
     let dbQuery = supabase
       .from("jobs")
-      .select("id, job_type, input_data, output_data, completed_at, user_id, provider")
+      .select("id, job_type, input_data, output_data, completed_at, user_id, provider, title")
       .is(TRASHED_JOB_COLUMN, null)
       .eq("status", "completed")
       .not("output_data", "is", null)
@@ -248,7 +250,9 @@ export async function readGalleryPage(q: GalleryPageQuery): Promise<GalleryPage>
       if (!type || !outputUrl) continue
       // The type asked for is the type listed (a render's medium is per row).
       if (OWNER_ONLY_JOBS.has(job.job_type) && (q.type === "video" || q.type === "audio" || q.type === "image") && q.type !== type) continue
-      if (galleryHides(moderation, { userId: job.user_id, inputData, outputData })) continue
+      const title = ((job as { title?: string | null }).title ?? null) || null
+      // The owner's title is shown beside the prompt, so it is judged with it.
+      if (galleryHides(moderation, { userId: job.user_id, inputData, outputData, title })) continue
       rows.push({
         userId: (job.user_id as string | null) ?? null,
         item: {
@@ -260,6 +264,7 @@ export async function readGalleryPage(q: GalleryPageQuery): Promise<GalleryPage>
           createdAt: job.completed_at,
           prompt: (inputData.prompt as string) ?? (inputData.text as string) ?? null,
           model: (inputData.provider as string) ?? (job.provider as string) ?? null,
+          title,
           ...(isPreviewListing(job) ? { preview: true as const } : {}),
         },
       })

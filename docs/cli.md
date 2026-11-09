@@ -357,6 +357,8 @@ nodaro jobs list [--status <s,s>] [--type <t,t>] [--origin <app>] [--source <s,s
 #   newest first; --status / --type / --source take a comma-separated list; --source mcp lists what your MCP clients (Claude, ChatGPT, …) made; --no-favorited keeps the jobs you did not favorite; every filter combines with AND
 nodaro jobs get <id> [--json]
 nodaro jobs rate <id> good|bad|clear [--json]             # your rating of one of your jobs; clear removes it
+nodaro jobs rename <id> <title> [--json]                  # name one of your jobs (one line, up to 120 characters); it reads back as `title`
+nodaro jobs rename <id> --clear [--json]                  # remove the name
 nodaro jobs cancel <id> [--json]
 
 # Gallery — the public gallery and your favorites

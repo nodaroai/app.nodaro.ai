@@ -286,6 +286,13 @@ export interface Job {
    */
   rating?: JobRating | null
   /**
+   * The owner's own name for the job ({@link JobsResource.rename}) — "Wedding
+   * toast, final" — or `null` until named. One line of plain text, up to 120
+   * characters. Returned wherever the job is: `get()`, `list()`, a session's
+   * items, the Trash. Absent from an older server.
+   */
+  title?: string | null
+  /**
    * Where the job stands in line while it waits for a free slot: present on
    * `get()` only while `status` is `queued` (never on `list()`). See
    * {@link JobQueueInfo}.
@@ -361,6 +368,11 @@ export interface ListJobsParams {
 /** What {@link JobsResource.rate} answers: the job's rating now. */
 export interface RateJobResult {
   data: { jobId: string; rating: JobRating | null }
+}
+
+/** What {@link JobsResource.rename} answers: the job's name now (`null` once cleared). */
+export interface RenameJobResult {
+  data: { jobId: string; title: string | null }
 }
 
 /**
@@ -476,6 +488,22 @@ export class JobsResource {
   rate(id: string, rating: JobRating | null): Promise<RateJobResult> {
     return this.client.request<RateJobResult>("PUT", `/v1/jobs/${encodeURIComponent(id)}/rating`, {
       body: { rating },
+    })
+  }
+
+  /**
+   * Name one of your jobs — "Wedding toast, final" on a picture, a clip, a
+   * track or a speech take — or clear its name with `null` (`PATCH
+   * /v1/jobs/:id`). Trimmed; one line of plain text, 1–120 characters, any
+   * language: a longer or multi-line name is a `NodaroError`
+   * (`validation_error`). Only the job's owner names it — anyone else's job is
+   * a `NotFoundError`. Free; any job type and status, the Trash included;
+   * nothing else about the job changes. The name reads back as `Job.title`
+   * wherever the job is returned. OAuth apps need the `assets:write` scope.
+   */
+  rename(id: string, title: string | null): Promise<RenameJobResult> {
+    return this.client.request<RenameJobResult>("PATCH", `/v1/jobs/${encodeURIComponent(id)}`, {
+      body: { title },
     })
   }
 

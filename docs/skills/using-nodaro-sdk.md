@@ -65,7 +65,7 @@ const client = createClient({
 ```typescript
 client.workflows       // list, get, getPublic, create, update, delete, run, export, import
 client.projects        // list, get, create, update, delete
-client.jobs            // get, getStatus, cancel
+client.jobs            // get, getStatus, list, cancel, delete, restore, rate, rename, fromUpload
 client.executions      // get, listForWorkflow, cancel
 client.nodes           // list, get, run, runAndWait, runMany
 client.characters      // list, get, create, update, upsert, delete, restore, duplicate, usage, generate, generateAsset, generateMotion, approvePortrait, recaption
