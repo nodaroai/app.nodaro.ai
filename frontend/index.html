@@ -6,6 +6,33 @@
     <meta name="description" content="Visual workflow platform for AI video generation" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#212121" media="(prefers-color-scheme: dark)" />
+    <!--
+      The theme, before the first frame: the choice the app's next-themes
+      provider makes (src/components/theme-provider.tsx: the visitor's `theme`,
+      else the system's), written on the html element here, ahead of every
+      stylesheet, and the page's own background for the moment the stylesheet
+      is still on its way. This page is drawn by the bundle: without this,
+      every frame until it has run is :root's light colours, a white flash when
+      arriving from any other Nodaro page. Held by
+      `src/lib/__tests__/first-frame.test.ts`.
+    -->
+    <style>
+      html{background:#121212}
+      html.light{background:#fff}
+    </style>
+    <script>
+      /* theme-boot */
+      ;(function () {
+        var saved = null
+        try {
+          saved = localStorage.getItem("theme")
+        } catch (error) {}
+        var theme = saved === "light" || saved === "dark" ? saved : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+        var root = document.documentElement
+        root.classList.add(theme)
+        root.style.colorScheme = theme
+      })()
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=11" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png?v=11" />
     <link rel="icon" href="/favicon.ico?v=11" />
