@@ -1,6 +1,8 @@
 // backend/src/prompts/prompt-wizard-system.ts
 
 import { getCategoriesForNodeType, getPromptDoctrine, PROVIDER_CAPABILITIES, REFERENCE_IMAGE_ROLES } from "@nodaro/prompts/doctrine"
+import { getModel } from "@nodaro/shared/model-catalog"
+import { isModelSwitchedOff } from "../lib/model-switch.js"
 
 interface WizardAnalyzeContext {
   nodeType: string
@@ -152,10 +154,14 @@ When the user's input suggests ARTISTIC styles (anime, watercolor, pixel art, et
 }
 
 function buildProviderBlock(nodeType: string, provider?: string): string {
-  const providerCaps = PROVIDER_CAPABILITIES[nodeType]
+  // Only what a run can use: a model switched off or kept out of the docs is
+  // never put forward as `recommendedModel`.
+  const offered = Object.entries(PROVIDER_CAPABILITIES[nodeType] ?? {}).filter(
+    ([p]) => !isModelSwitchedOff(p) && !getModel(p)?.docsHidden,
+  )
   let block = ""
-  if (providerCaps && Object.keys(providerCaps).length > 1) {
-    const entries = Object.entries(providerCaps)
+  if (offered.length > 1) {
+    const entries = offered
       .map(([p, desc]) => `- ${p}: ${desc}`)
       .join("\n")
     block += `

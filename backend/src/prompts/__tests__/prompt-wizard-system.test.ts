@@ -11,6 +11,21 @@ describe("buildWizardAnalyzeSystem", () => {
     expect(sys).toContain("reference-role-1")
   })
 
+  it("never puts forward a model that is switched off or kept out of the docs", async () => {
+    const { __resetModelSwitchForTests } = await import("../../lib/model-switch.js")
+    const { MODEL_CATALOG } = await import("@nodaro/shared/model-catalog")
+    const hidden = Object.values(MODEL_CATALOG).find((m) => m.docsHidden)!.id
+    __resetModelSwitchForTests(["flux"])
+    try {
+      const sys = buildWizardEnhanceSystem({ nodeType: "generate-image" })
+      expect(sys).not.toContain(`- ${hidden}:`)
+      expect(sys).not.toContain("- flux:")
+      expect(sys).toContain("- nano-banana:")
+    } finally {
+      __resetModelSwitchForTests()
+    }
+  })
+
   it("pins the language doctrine: labels mirror the user's language, values are ALWAYS English", () => {
     // A Hebrew prompt produced Hebrew labels (fine — UI text) but nothing
     // pinned the option VALUES to English; values are prompt fragments fed

@@ -88,7 +88,8 @@ export const imageToImageBody = z.object({
 /** What the handler validates: the body, and each model's own image limit.
  *  `imageToImageBody` stays a plain object for `applySnappedLevers`. */
 const imageToImageRequest = imageToImageBody.superRefine((data, ctx) => {
-  const limit = requestImageLimit(data.provider)
+  // No model named: the limit of the default the handler will run it on.
+  const limit = requestImageLimit(data.provider ?? defaultImageModel("edit", data.aspectRatio))
   if (1 + (data.referenceImageUrls?.length ?? 0) > limit) {
     ctx.addIssue({ code: "custom", path: ["referenceImageUrls"], message: `This model takes at most ${limit} input images, imageUrl included` })
   }

@@ -207,11 +207,21 @@ function applyResolutionParam(modelConfig: KieModelConfig, input: Record<string,
 }
 
 /** The resolution value on the wire, wherever `applyResolutionParam` put it. */
-/** Removes every key a model with an explicit field list does not take. Mutates `input`. */
+/**
+ * Keeps a request inside a strict schema: removes every key a model with an
+ * explicit field list does not take, and every input image past the most it
+ * accepts. The source is first, so what goes is the last references; the price
+ * id stops at the same number, so nothing is billed that is not sent. Mutates `input`.
+ */
 function keepDeclaredInputFields(modelConfig: KieModelConfig, input: Record<string, unknown>): void {
   if (!modelConfig.inputFields) return
   for (const key of Object.keys(input)) {
     if (!modelConfig.inputFields.includes(key)) delete input[key]
+  }
+  const urls = input.input_urls
+  if (modelConfig.maxInputImages !== undefined && Array.isArray(urls) && urls.length > modelConfig.maxInputImages) {
+    console.warn(`[KIE.ai] ${modelConfig.model}: ${urls.length} input images, sending the first ${modelConfig.maxInputImages}`)
+    input.input_urls = urls.slice(0, modelConfig.maxInputImages)
   }
 }
 

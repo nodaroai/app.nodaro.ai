@@ -93,6 +93,8 @@ export function gptImage26EstimatedImages(
   return (
     listed(data.referenceImageUrls) +
     listed(data.characterDefinitionIds) +
+    listed(data.extraRefs) +
+    single(data.referenceImageUrl) +
     single(data.baseImageUrl) +
     single(data.sourceImageUrl) +
     wiredImages +

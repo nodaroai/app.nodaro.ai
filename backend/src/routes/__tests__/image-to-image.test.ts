@@ -343,6 +343,23 @@ describe("POST /v1/image-to-image", () => {
       expect((await post("gpt-image-2-6-flare-i2i", 16)).statusCode).toBe(400)
     })
 
+    it("no model named takes the default's limit: 16 on GPT Image 2.6", async () => {
+      const postDefault = (extras: number) =>
+        app.inject({
+          method: "POST",
+          url: "/v1/image-to-image",
+          payload: {
+            imageUrl: "https://example.com/image.png",
+            prompt: "edit it",
+            userId: VALID_UUID,
+            referenceImageUrls: Array.from({ length: extras }, (_, i) => `https://example.com/ref${i}.png`),
+          },
+        })
+      mockJobInsert("job-default")
+      expect((await postDefault(15)).statusCode).toBe(200)
+      expect((await postDefault(16)).statusCode).toBe(400)
+    })
+
     it("every other model stays at 14", async () => {
       mockJobInsert("job-14")
       expect((await post("gpt-image-2-5-flare-i2i", 13)).statusCode).toBe(200)

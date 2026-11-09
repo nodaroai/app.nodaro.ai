@@ -14,6 +14,7 @@
  * the migration is complete.
  */
 
+import { requestImageLimit } from "@nodaro/shared/models"
 import { confirmedByRun, ENABLE_SAFETY_CHECKER_LEVER, NSFW_CHECKER_LEVER, NSFW_CHECKER_SENT_FALSE_LEVER, type SafetyLever, MODERATION_LEVER } from "../safety-levers.js"
 
 /** 1 KIE credit = $0.005 USD */
@@ -115,7 +116,9 @@ export interface KieModelConfig {
    * whatever a node carries, such as a seed left from another model.
    */
   inputFields?: readonly string[]
-  requiresDuration?: boolean              // Model schema lists `duration` as REQUIRED — bespoke runners must emit it even in modes where it is ignored (gemini-omni-flash)
+  /** The most `input_urls` this model accepts: what a request holds past it is not sent. */
+  maxInputImages?: number
+  requiresDuration?: boolean             // Model schema lists `duration` as REQUIRED — bespoke runners must emit it even in modes where it is ignored (gemini-omni-flash)
 }
 
 /**
@@ -426,6 +429,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   "gpt-image-2-6-flare-i2i": {
     model: "gpt-image-2-6/flare-image-to-image",
     inputFields: GPT_IMAGE_2_6_FIELDS_I2I,
+    maxInputImages: requestImageLimit("gpt-image-2-6-flare-i2i"),
     safetyLevers: [MODERATION_LEVER],
     credits: 7.82,
     cost: 0.0391,  // medium 1K, 1:1. KIE bills by tokens; the job records the real figure
@@ -446,6 +450,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   "gpt-image-2-6-sunburst-i2i": {
     model: "gpt-image-2-6/sunburst-image-to-image",
     inputFields: GPT_IMAGE_2_6_FIELDS_I2I,
+    maxInputImages: requestImageLimit("gpt-image-2-6-sunburst-i2i"),
     safetyLevers: [MODERATION_LEVER],
     credits: 7.82,
     cost: 0.0391,  // medium 1K, 1:1. KIE bills by tokens; the job records the real figure

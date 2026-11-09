@@ -626,6 +626,16 @@ describe("GPT Image 2.6 on the wire", () => {
     expect(input.input_urls).toHaveLength(1)
   })
 
+  it("never sends more than 16 input images, the first one kept", async () => {
+    mocks.mockRunKieTask.mockResolvedValue(done(40))
+    const urls = Array.from({ length: 17 }, (_, i) => `https://img${i}.png`)
+    await provider.generateImage("keep the bottle", urls, "gpt-image-2-6-flare")
+    const [, input] = mocks.mockRunKieTask.mock.calls[0]!
+    expect(input.input_urls).toHaveLength(16)
+    expect(input.input_urls[0]).toBe("https://img0.png")
+    expect(input.input_urls[15]).toBe("https://img15.png")
+  })
+
   it("Economy sends neither quality nor size", async () => {
     mocks.mockRunKieTask.mockResolvedValue(done(5))
     await provider.generateImage("a cat", undefined, "gpt-image-2-6-economy")

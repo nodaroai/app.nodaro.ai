@@ -345,7 +345,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         )
         // Tolerant: array | JSON-string | lone URL; asset ids resolved to URLs.
         // The route's referenceImageUrls schema is URL-only (and capped per model).
-        const refUrls = await resolveRefArray(effective.reference_image_urls, session.userId, "image", requestImageLimit(effective.model as string | undefined))
+        const refUrls = await resolveRefArray(effective.reference_image_urls, session.userId, "image", requestImageLimit(fanOut ? undefined : ((effective.model as string | undefined) ?? model)))
         // "auto" keeps the shape of the photo the call sends (the base image,
         // else the first reference): /v1/generate-image resolves it against
         // that photo — natively, or to the model's nearest listed ratio — so a
@@ -703,7 +703,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
 
       // Resolve asset ids → URLs (route's referenceImageUrls is URL-only);
       // tolerant of array | lone string | JSON-stringified array inputs.
-      const i2iRefs = await resolveRefArray(args.reference_image_urls, session.userId, "image", requestImageLimit(args.model) - 1)
+      const i2iRefs = await resolveRefArray(args.reference_image_urls, session.userId, "image", requestImageLimit(args.model ?? defaultImageModel("edit", args.aspect_ratio)) - 1)
       const payload: Record<string, unknown> = {
         imageUrl,
         prompt: args.prompt,

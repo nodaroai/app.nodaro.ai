@@ -21,6 +21,7 @@ import { NodeQuickStrip } from "./node-quick-strip"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useWiredImageRefCount } from "@/hooks/use-wired-image-ref-count"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
@@ -68,9 +69,11 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
     useResultAspectRatio(id, results, activeIndex)
   const upstreamImageAspect = useUpstreamImageAspect(id)
 
+  const wiredImageRefs = useWiredImageRefCount(id)
   const creditModelId = buildCreditModelIdentifier(
     nodeData.provider ?? defaultImageModel("character", nodeData.aspectRatio),
     nodeData as unknown as Record<string, unknown>,
+    wiredImageRefs,
   )
   const credits = useModelCredits(creditModelId, 1)
 

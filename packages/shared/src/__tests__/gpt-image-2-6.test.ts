@@ -199,14 +199,25 @@ describe("GPT Image 2.6: the images a run sends", () => {
     expect(gptImage26EstimatedImages("gpt-image-2-6-flare", { sourceImageUrl: A }, 0)).toBe(1)
   })
 
-  it("wires count reference images and identity nodes, for this node only", () => {
+  it("an edit's estimate counts every image it sends", () => {
+    const edit = "gpt-image-2-6-flare-i2i"
+    const fourWired = Array.from({ length: 4 }, () => ({ target: "n", targetHandle: "image" }))
+    expect(gptImage26EstimatedImages(edit, {}, countImageInputEdges(fourWired, "n"))).toBe(4)
+    expect(gptImage26EstimatedImages(edit, {}, countImageInputEdges(fourWired.slice(0, 1), "n"))).toBe(1)
+    expect(gptImage26EstimatedImages(edit, { extraRefs: [{ url: A }, { url: B }] }, 0)).toBe(3)
+    expect(gptImage26EstimatedImages(edit, { referenceImageUrl: A }, 0)).toBe(2)
+  })
+
+  it("wires count reference images, identity nodes and every image wire after the source, for this node only", () => {
     const edges = [
       { target: "n", targetHandle: "references" },
       { target: "n", targetHandle: "assets" },
+      { target: "n", targetHandle: "image" },
+      { target: "n", targetHandle: "image" },
       { target: "n", targetHandle: "prompt" },
       { target: "other", targetHandle: "assets" },
     ]
-    expect(countImageInputEdges(edges, "n")).toBe(2)
+    expect(countImageInputEdges(edges, "n")).toBe(3)
   })
 })
 
