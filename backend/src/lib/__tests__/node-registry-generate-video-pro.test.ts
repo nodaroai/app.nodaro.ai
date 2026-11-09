@@ -41,6 +41,7 @@ describe("generate-video-pro node registry", () => {
       "veo3_lite",
       "gemini-omni-video",
       "gemini-omni-flash",
+      "gemini-omni-flash-1-2",
       "kling-4",
       "grok-i2v",
       "wan-3",

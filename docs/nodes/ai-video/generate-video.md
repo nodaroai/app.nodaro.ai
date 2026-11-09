@@ -74,6 +74,7 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 |---|---|---|---|
 | VEO 3.x | `veo3` (Quality), `veo3.1` (Fast), `veo3_lite` (Lite) | T2V, I2V, first+last — **reference on Fast and Lite only** | 4 / 6 / 8s; 720p / 1080p; generate-audio default on; auto-translate. **Reference mode runs at 8s** — VEO accepts no other length once image references are wired, so a 4s or 6s request is run at 8s (VEO pricing is flat across the three lengths, so the credit cost is unchanged). Quality has no reference mode, so its runs always honour the requested length |
 | Gemini Omni | `gemini-omni-video` (Pro), `gemini-omni-flash` (Flash) | T2V, I2V, video-edit (V2V) | 4 / 6 / 8 / 10s; 720p / 1080p / 4K (4K not on free tier); generates an audio track by default and takes audio direction from the prompt, but no in-model dialogue (see section); up to 7 reference images; V2V uses trim window ≤ 10 s. `gemini-omni-flash` is the cheaper, faster sibling on an **identical** request shape — same duration menu, same resolution tiers, same 16:9 / 9:16-only aspect, same 7-unit input quota (a wired source video takes 2 units) |
+| Gemini Omni Flash 1.2 | `gemini-omni-flash-1-2` | T2V, I2V, first+last, reference, video-edit (V2V) | Every second from 3 to 15; 360p / 720p / 1080p / 4K (4K not on free tier); native audio; up to 6 reference images; no character references or pinned voices. See [Gemini Omni Flash 1.2](#gemini-omni-flash-12). |
 | Kling | `kling`, `kling-turbo`, `kling-3.0`, `kling-master` | T2V, I2V (`kling-master` is I2V-only) | 5 / 10s (Kling 3.0: continuous 3–15s) |
 | Seedance 2 | `seedance-2`, `seedance-2-fast`, `seedance-2-mini`, `seedance-2-5` | T2V, I2V, reference (S2) | S2: 4–15s; **`seedance-2-5`: 4–30s in one shot**. Aspect 16:9 / 9:16 / 1:1 / 4:3 / 3:4 / **21:9** / **adaptive** — **`adaptive` is the default** (output matches the wired input; was `16:9`); on `seedance-2-5` a wired start frame forces `adaptive` (any explicit ratio is rejected, so the frame sets the ratio). Resolution by variant (separate KIE models): `seedance-2` (full) **480p / 720p / 1080p / 4K**; `seedance-2-fast` **480p / 720p only** (no 1080p, no 4K); `seedance-2-mini` **480p / 720p only**; `seedance-2-5` **480p / 720p / 1080p** (no 4K; 1080p added 2026-08-17). Refs: up to 9 image + 3 video + 3 audio (**`seedance-2-5`: 30 / 10 / 10**) |
 | MiniMax H3 | `minimax-h3` | T2V, I2V (first/last frame), reference | 4–15s (any second, default 6); resolution **2K (default) / 768P** (768P is the cheaper per-second rate); aspect 21:9 / 16:9 / 4:3 / 1:1 / 3:4 / 9:16 + **adaptive** (default; pure T2V requires a concrete ratio and renders 16:9 when left on adaptive). Up to 9 image + 3 video + 3 audio refs; audio always on |
@@ -318,6 +319,44 @@ Composite credit identifier: `<model>:<resolution_prefix>:<duration>` — e.g. `
 
 > **Note:** 4K is blocked on the free tier. Free-tier requests at 4K resolution are rejected with a `tier_restriction` error — upgrade to Basic or higher to use 4K output.
 
+### Gemini Omni Flash 1.2
+
+`gemini-omni-flash-1-2` is the newest Omni Flash: clips up to 15 seconds with sound generated alongside the picture, priced per second. It follows Omni Flash, but it is not a drop-in for it: it takes no character references or pinned voices, so keep `gemini-omni-flash` for those.
+
+The mode comes from what you wire:
+
+| Wired | What runs |
+|---|---|
+| Nothing visual | Text to video. |
+| Reference images only | Up to 6 images steer the subject, scene or style. Refer to them as `@image_1`, `@image_2`, … |
+| Start frame only | The clip opens exactly on that image. 3–15 s. |
+| Start and end frames only | The clip runs exactly between them. 3–10 s. |
+| Frames and reference images | Your references come first; the frames follow them in the same list and are named in the prompt as the opening and closing frame. 3–15 s. |
+| A start and end frame at more than 10 s, or an end frame alone | The frames go in that same list, named in the prompt. |
+| Source video | Video-edit: describe the change. Up to 5 reference images can ride along, and any frames you wire count toward those 5. |
+
+**Video-edit.** The result follows the source clip, so `duration` is ignored. The clip can be up to 15 seconds: a longer one uses its first 15 seconds, and `videoTrimStart` / `videoTrimEnd` pick another stretch of up to 15 seconds.
+
+**Aspect ratio.** `16:9`, `9:16`, or `auto`, which follows the reference image and is `16:9` with none.
+
+**Seed.** Sent when it is a whole number from 10000 to 99999, otherwise left out.
+
+#### What Gemini Omni Flash 1.2 costs
+
+Composite credit identifier: `gemini-omni-flash-1-2:<N>s:<resolution>`, one row for every second from 3 to 15, at `360p`, `720p`, `1080p` or `4k`. An omitted resolution prices as 720p and an omitted duration as 8 seconds.
+
+| Length | 360p | 720p | 1080p | 4K |
+|---|---:|---:|---:|---:|
+| 3 s | 33<!-- credits: gemini-omni-flash-1-2:3s:360p --> | 77<!-- credits: gemini-omni-flash-1-2:3s:720p --> | 88<!-- credits: gemini-omni-flash-1-2:3s:1080p --> | 187<!-- credits: gemini-omni-flash-1-2:3s:4k --> |
+| 5 s | 55<!-- credits: gemini-omni-flash-1-2:5s:360p --> | 132<!-- credits: gemini-omni-flash-1-2:5s:720p --> | 143<!-- credits: gemini-omni-flash-1-2:5s:1080p --> | 308<!-- credits: gemini-omni-flash-1-2:5s:4k --> |
+| 8 s (default) | 88<!-- credits: gemini-omni-flash-1-2:8s:360p --> | 198<!-- credits: gemini-omni-flash-1-2:8s:720p --> | 220<!-- credits: gemini-omni-flash-1-2:8s:1080p --> | 484<!-- credits: gemini-omni-flash-1-2:8s:4k --> |
+| 10 s | 110<!-- credits: gemini-omni-flash-1-2:10s:360p --> | 253<!-- credits: gemini-omni-flash-1-2:10s:720p --> | 275<!-- credits: gemini-omni-flash-1-2:10s:1080p --> | 605<!-- credits: gemini-omni-flash-1-2:10s:4k --> |
+| 15 s | 165<!-- credits: gemini-omni-flash-1-2:15s:360p --> | 374<!-- credits: gemini-omni-flash-1-2:15s:720p --> | 418<!-- credits: gemini-omni-flash-1-2:15s:1080p --> | 913<!-- credits: gemini-omni-flash-1-2:15s:4k --> |
+
+**Video-edit** is charged the same rows, for the length of the clip the run sends: `<clip seconds after any trim, at most 15>`, rounded up to a whole second, with a 3-second minimum. For example, a 5-second clip at 720p costs 132<!-- credits: gemini-omni-flash-1-2:5s:720p -->. The run holds that price when it starts. If the clip cannot be measured it holds the 15-second price, and after the run it is charged for the length delivered.
+
+> **Note:** 4K is blocked on the free tier.
+
 ## Cinematic direction by id (`direction`, API / SDK)
 
 On the canvas you set a look and a motion by **wiring parameter-picker nodes**
@@ -520,6 +559,9 @@ nearest length it does:
 | `gemini-omni-flash` | 8s | 720p | any | no ref | 297<!-- credits: gemini-omni-flash:8 --> |
 | `gemini-omni-flash` | 10s | 4K | any | no ref | 583<!-- credits: gemini-omni-flash:4k:10 --> |
 | `gemini-omni-flash` | — | 720p | video-edit | 1 source video | 462<!-- credits: gemini-omni-flash:vref --> |
+| `gemini-omni-flash-1-2` | 8s | 720p | any | no source video | 198<!-- credits: gemini-omni-flash-1-2:8s:720p --> |
+| `gemini-omni-flash-1-2` | 15s | 4K | any | no source video | 913<!-- credits: gemini-omni-flash-1-2:15s:4k --> |
+| `gemini-omni-flash-1-2` | follows the clip | 720p | video-edit | 5s source video | 132<!-- credits: gemini-omni-flash-1-2:5s:720p --> |
 
 **Grok Imagine 1.5** uses true per-second pricing via the composite identifier `grok-imagine-video-1.5:<N>s:<resolution>` (N = 1–15, resolution = `480p` / `720p`). Each length has its own price, the required input image included — about 40 credits a second @ 480p and about 69 @ 720p. Examples: 4s/480p = 165<!-- credits: grok-imagine-video-1.5:4s:480p -->, 8s/480p = 330<!-- credits: grok-imagine-video-1.5:8s:480p -->, 8s/720p = 561<!-- credits: grok-imagine-video-1.5:8s:720p -->, 15s/720p = 1045<!-- credits: grok-imagine-video-1.5:15s:720p -->. **A request that omits `duration` renders and bills 8 s** (`grok-imagine-video-1.5:8s:…`).
 

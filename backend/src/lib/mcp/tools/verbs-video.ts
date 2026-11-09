@@ -186,7 +186,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .describe(
             "Identity/reference images (URLs or Nodaro asset IDs), capped at the model's own " +
             "limit (seedance-2-5 30, seedance-2 family + minimax-h3 9, wan-3 / wan-3-prime 10, " +
-            "gemini-omni-video / gemini-omni-flash 7, veo3/veo3.1 3, ...). " +
+            "gemini-omni-video / gemini-omni-flash 7, gemini-omni-flash-1-2 6, veo3/veo3.1 3, ...). " +
             "Dropped on models with no reference path. Accepts an array; a lone URL or " +
             "JSON-stringified array is coerced.",
           ),
@@ -196,7 +196,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .describe(
             "Reference videos for style/motion transfer, capped at the model's own limit " +
             "(seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime / kling-4 5, " +
-            "gemini-omni-video / gemini-omni-flash 1). Wan 3.0 takes each clip at 1-15s and " +
+            "gemini-omni-video / gemini-omni-flash / gemini-omni-flash-1-2 1). Wan 3.0 takes each clip at 1-15s and " +
             "≤15s combined, and input video seconds + output duration must stay ≤30s. " +
             "Dropped on models without video-reference support.",
           ),
@@ -501,7 +501,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .describe(
             "Identity/reference images (URLs or Nodaro asset IDs), capped at the model's own " +
             "limit: seedance-2-5 30, seedance-2 family + minimax-h3 9, wan-3 / wan-3-prime 10, " +
-            "gemini-omni-video / gemini-omni-flash / kling-3-omni / grok-i2v 7, " +
+            "gemini-omni-video / gemini-omni-flash / kling-3-omni / grok-i2v 7, gemini-omni-flash-1-2 6, " +
             "happyhorse-ref2v 9, veo3/veo3.1 3. Resolved server-side; " +
             "silently dropped on models with no reference path. " +
             "Accepts an array; a lone URL or JSON-stringified array is coerced.",
@@ -513,7 +513,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             "Reference videos for style/motion transfer (URLs or Nodaro asset IDs). " +
             "seedance-2-5 up to 10, seedance-2 family + minimax-h3 up to 3, wan-3 / wan-3-prime " +
             "up to 5 (each clip 1-15s, ≤15s combined; input seconds + output duration ≤30s), " +
-            "gemini-omni-video / gemini-omni-flash 1; " +
+            "gemini-omni-video / gemini-omni-flash / gemini-omni-flash-1-2 1; " +
             "dropped on models without video-reference support. Ignored in 'frames' mode. " +
             "Accepts an array; a lone URL or JSON-stringified array is coerced.",
           ),

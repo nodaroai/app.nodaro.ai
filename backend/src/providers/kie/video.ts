@@ -26,6 +26,8 @@ import { VIDEO_DURATION_AUTO, isAutoVideoDuration, getModel, isSeedanceDraftCapa
 import { getLipSyncMaxAudioSeconds } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared/video"
 import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs, placeFramesAfterReferences } from "@nodaro/prompts/assembly"
+import { isGeminiOmniPerSecondProvider } from "@nodaro/shared/models"
+import { GEMINI_OMNI_12_RATE_USD_PER_SEC, buildGeminiOmni12Request, prepareGeminiOmni12Source } from "./gemini-omni-12.js"
 import {
   createSanitizedError,
   runKieTask,
@@ -1374,6 +1376,75 @@ async function runGeminiOmni(
 }
 
 /**
+ * Gemini Omni Flash 1.2 — the request comes from `buildGeminiOmni12Request`
+ * (gemini-omni-12.ts). The frames arrive already normalized by imageToVideo;
+ * the references are normalized here. A source clip is cut to what KIE takes
+ * before the body is built, and the run's provider cost is the per-second rate
+ * over the seconds KIE bills: the clip's on an edit, the requested ones otherwise.
+ */
+async function runGeminiOmni12(
+  modelConfig: KieModelConfig,
+  /** OUR Nodaro key (NOT modelConfig.model, the KIE id) for the egress seam. */
+  modelKey: string,
+  prompt: string,
+  duration: number | undefined,
+  aspectRatioValue: string | undefined,
+  startFrameUrl: string | undefined,
+  endFrameUrl: string | undefined,
+  options: ProviderOptions | undefined,
+  reconcileOpts: ReconcileOpts | undefined,
+  logLabel: string,
+): Promise<ProviderResult> {
+  // The routes refuse these first; this is the backstop for worker/DAG payloads.
+  const characterProblem = videoCharacterRefProblem({
+    provider: modelKey,
+    characterReferences: options?.characterReferences,
+    imageCount: options?.referenceImageUrls?.length ?? 0,
+    videoCount: options?.referenceVideoUrls?.length ?? 0,
+    hasStartFrame: !!startFrameUrl,
+    hasEndFrame: !!endFrameUrl,
+  })
+  if (characterProblem) throw createSanitizedError(`${logLabel}: ${characterProblem.message}`, "Video generation")
+  const videoUrls = options?.referenceVideoUrls ?? []
+  if (videoUrls.length > 1) {
+    throw createSanitizedError(`${logLabel}: only one source video is supported`, "Video generation")
+  }
+  const source = videoUrls[0]
+    ? await prepareGeminiOmni12Source(videoUrls[0], { start: options?.videoTrimStart, end: options?.videoTrimEnd }, logLabel)
+    : undefined
+  const normalized = await normalizeReferenceImages(modelKey, options)
+  const durationSec = snapToAllowedDuration(duration !== undefined && duration > 0 ? duration : 8, modelConfig.allowedDurations ?? [])
+  const requestedResolution = options?.resolution
+  const resolution = requestedResolution && geminiOmniResolutions(modelKey).includes(requestedResolution) ? requestedResolution : "720p"
+  const { mode, input, droppedRefImages } = buildGeminiOmni12Request({
+    // The schema refuses an empty prompt; a node with nothing typed reaches here as "".
+    prompt: prompt?.trim() ? prompt : "smooth cinematic motion",
+    durationSec,
+    resolution,
+    aspectRatio: aspectRatioValue?.trim().toLowerCase() === "auto" ? "auto" : resolveGeminiOmniAspect(modelKey, aspectRatioValue),
+    seed: options?.seed,
+    startFrameUrl,
+    endFrameUrl,
+    referenceImageUrls: normalized?.referenceImageUrls,
+    sourceVideoUrl: source?.url,
+  })
+  if (droppedRefImages > 0) console.log(`[KIE.ai] ${logLabel}: dropped ${droppedRefImages} trailing reference image(s) to fit the input limit`)
+  const tierCostUsd = (GEMINI_OMNI_12_RATE_USD_PER_SEC[resolution] ?? 0) * (source?.billedSec ?? durationSec)
+
+  console.log(`[KIE.ai] ${logLabel} (${mode}) input:`, JSON.stringify(input, null, 2))
+  const { resultJson, taskId, providerMs } = await runKieTask(
+    modelConfig.model, input, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress,
+    { ...reconcileOpts, modelKey, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
+  )
+  const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+  if (!videoUrl) {
+    throw createSanitizedError(`${logLabel} task succeeded but no URL found`, "Video generation")
+  }
+  console.log(`[KIE.ai] ${logLabel} completed: ${videoUrl} (cost: $${tierCostUsd.toFixed(4)})`)
+  return { url: videoUrl, cost: tierCostUsd, ...(taskId && { kieTaskId: taskId }), ...(providerMs !== undefined && { providerMs }) }
+}
+
+/**
  * Per-second KIE wholesale rate (USD) for the Wan 3.0 family, by WIRE
  * resolution tier. KIE publishes credits/second — 8 / 16 / 32 for wan-3 and
  * 12.2 / 25.2 / 50.4 for wan-3-prime — and bills $0.005 per credit. Reported as
@@ -2046,6 +2117,23 @@ export class KieVideoProvider
       return { url: videoUrl, cost: modelConfig.cost, kieTaskId: runwayTaskId }
     }
 
+    // Gemini Omni Flash 1.2 — its own request builder (gemini-omni-12.ts). MUST
+    // stay above the family branch below, which sends 1.1's wire.
+    if (isGeminiOmniPerSecondProvider(provider)) {
+      return runGeminiOmni12(
+        modelConfig,
+        provider,
+        effectivePrompt ?? "smooth cinematic motion",
+        duration,
+        options?.aspectRatio,
+        effectiveImageUrl,
+        effectiveEndFrameUrl,
+        options,
+        reconcileOpts,
+        `Gemini Omni 1.2 (${provider})`,
+      )
+    }
+
     // Gemini Omni family (pro + flash) — multimodal input + native audio.
     // imageToVideo has no top-level aspectRatio param (unlike textToVideo);
     // read from options only. Family-keyed, never a literal id: every branch
@@ -2524,6 +2612,23 @@ export class KieVideoProvider
         `[KIE.ai] Runway Text-to-video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
       )
       return { url: videoUrl, cost: modelConfig.cost, kieTaskId: runwayTaskId }
+    }
+
+    // Gemini Omni Flash 1.2 — same request builder as its image lane. MUST stay
+    // above the family branch below, which sends 1.1's wire.
+    if (isGeminiOmniPerSecondProvider(provider)) {
+      return runGeminiOmni12(
+        modelConfig,
+        provider,
+        effectivePrompt,
+        duration,
+        aspectRatio ?? options?.aspectRatio,
+        undefined,
+        undefined,
+        options,
+        reconcileOpts,
+        `Gemini Omni 1.2 t2v (${provider})`,
+      )
     }
 
     // Gemini Omni family (pro + flash) — text-to-video (defensive V2V/I2V if

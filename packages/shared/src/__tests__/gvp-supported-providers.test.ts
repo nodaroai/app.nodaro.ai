@@ -60,6 +60,7 @@ describe("GVP_SUPPORTED_PROVIDERS", () => {
       "veo3_lite",
       "gemini-omni-video",
       "gemini-omni-flash",
+      "gemini-omni-flash-1-2",
       "kling-4",
       "grok-i2v",
       "wan-3",
@@ -214,6 +215,7 @@ describe("GVP_END_FRAME_PROVIDERS", () => {
       // pro-node SKU any more.
       "veo3.1",
       "veo3_lite",
+      "gemini-omni-flash-1-2",
       "wan-3",
       "wan-3-prime",
     ])

@@ -127,6 +127,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Bytedance Pro I2V | Bytedance | Everyday | 193<!-- credits: bytedance-pro --> | i2v, t2v | Pro Bytedance video tier — better quality. |
 | Wan 2.6 | Alibaba | Everyday | 193<!-- credits: wan --> | v2v, t2v | Wan 2.6 — text-to-video and video-to-video under a single id. |
 | Wan 2.6 I2V | Alibaba | Everyday | 193<!-- credits: wan-i2v --> | i2v | Wan 2.6 image-to-video — 5/10/15s at 720p/1080p. |
+| Gemini Omni Flash 1.2 | Google | Everyday | 198<!-- credits: gemini-omni-flash-1-2 --> | i2v, t2v | Google Gemini Omni Flash 1.2 — 3–15s video with native sound, from 360p to 4K: from text, up to 6 reference images, exact first and last frames, or a video edit. Priced per second. |
 | LTX 2.3 Fast | Lightricks | Everyday | 198<!-- credits: ltx-2.3-fast --> | i2v, t2v | Lightricks LTX 2.3 Fast — text/image→video up to 20s at 1080p (6/8/10s at 2K and 4K). No audio input, no extend. |
 | Wan 2.7 I2V | Alibaba | Everyday | 207<!-- credits: wan-2.7-i2v --> | i2v | Wan 2.7 image-to-video — 2–15s at 720p/1080p, supports start+end frame. |
 | Wan 2.7 T2V | Alibaba | Everyday | 207<!-- credits: wan-2.7-t2v --> | t2v | Wan 2.7 text-to-video — 2–15s at 720p/1080p. |

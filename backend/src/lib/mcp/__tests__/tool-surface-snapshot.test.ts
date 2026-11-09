@@ -1425,6 +1425,9 @@ const GPT_IMAGE_2_6_PER_TOOL_BYTES = 208
 // Measured by this suite: 515_960 total − 515_416 = 544 B, the same two changes across the tools,
 // plus the Auto, Extra High and Max values and the short quality hint.
 const GPT_IMAGE_2_6_TOTAL_BYTES = 544
+// Gemini Omni Flash 1.2: its id in the video verbs' provider lists, and its
+// reference caps in the descriptions of `generate_video` / `animate_image`.
+const GEMINI_OMNI_FLASH_1_2_BYTES = 109
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES,
@@ -1603,7 +1606,8 @@ export const TOOL_WIRE_BUDGET = {
     CAST_SWAP_ART_STYLE_BYTES +
     CAST_SWAP_STYLE_ONLY_BYTES +
     VOICE_FAVORITES_TOOLS_BYTES +
-    GPT_IMAGE_2_6_TOTAL_BYTES,
+    GPT_IMAGE_2_6_TOTAL_BYTES +
+    GEMINI_OMNI_FLASH_1_2_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -1,4 +1,4 @@
-import { billsReferenceVideoSeconds, isSeedance2Provider } from "@nodaro/shared/models"
+import { billsReferenceVideoSeconds, isGeminiOmniPerSecondProvider, isSeedance2Provider } from "@nodaro/shared/models"
 import { isAutoVideoDuration } from "@nodaro/shared/model-catalog"
 import { hasCredits } from "./config.js"
 
@@ -59,6 +59,10 @@ export interface Seedance2Settle {
 
 const NOT_MEASURED: Seedance2Settle = { baseCredits: undefined, seconds: undefined }
 
+const everyClipMeasured = (durationsSec: unknown): boolean =>
+  Array.isArray(durationsSec) && durationsSec.length > 0
+  && durationsSec.every((d) => typeof d === "number" && Number.isFinite(d) && d > 0)
+
 /**
  * Price a measurement already taken. A pricing failure (a missing price row)
  * commits the reservation, as before, and keeps the seconds: the length is
@@ -91,6 +95,10 @@ export async function measureSeedance2Settle(args: Seedance2SettleArgs): Promise
   // Every model whose reference-video runs bill the clips' seconds (Seedance 2,
   // Kling 4.0) settles here; only Seedance has the Auto-duration case below.
   if (!billsReferenceVideoSeconds(provider)) return NOT_MEASURED
+  // A per-second Gemini Omni edit is billed for its source clip, and the hold is
+  // already that clip's price. Only a clip the hold could not read settles on
+  // the clip delivered.
+  if (isGeminiOmniPerSecondProvider(provider) && everyClipMeasured(args.refVideoDurationsSec)) return NOT_MEASURED
   const hasVideoRef = Array.isArray(referenceVideoUrls) && referenceVideoUrls.length > 0
   if (!hasVideoRef) {
     if (!isSeedance2Provider(provider)) return NOT_MEASURED

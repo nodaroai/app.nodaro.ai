@@ -1274,6 +1274,19 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "gemini-omni-flash:4k:10":   530,
   "gemini-omni-flash:vref":    420,
   "gemini-omni-flash:4k:vref": 630,
+  // ── Gemini Omni Flash 1.2 (KIE google/gemini-omni-flash-1-2) — per second of
+  // video at 4 / 9 / 10 / 22 KIE cr/s (360p / 720p / 1080p / 4K). Base = KIE
+  // credits × 2.5, rounded up to the next 10. A video edit bills the same rows
+  // over the source clip's length. Migration 612 seeds the same rows.
+  "gemini-omni-flash-1-2": 180,   // (8s 720p default render)
+  "gemini-omni-flash-1-2:3s:360p": 30, "gemini-omni-flash-1-2:4s:360p": 40, "gemini-omni-flash-1-2:5s:360p": 50, "gemini-omni-flash-1-2:6s:360p": 60, "gemini-omni-flash-1-2:7s:360p": 70, "gemini-omni-flash-1-2:8s:360p": 80, "gemini-omni-flash-1-2:9s:360p": 90,
+  "gemini-omni-flash-1-2:10s:360p": 100, "gemini-omni-flash-1-2:11s:360p": 110, "gemini-omni-flash-1-2:12s:360p": 120, "gemini-omni-flash-1-2:13s:360p": 130, "gemini-omni-flash-1-2:14s:360p": 140, "gemini-omni-flash-1-2:15s:360p": 150,
+  "gemini-omni-flash-1-2:3s:720p": 70, "gemini-omni-flash-1-2:4s:720p": 90, "gemini-omni-flash-1-2:5s:720p": 120, "gemini-omni-flash-1-2:6s:720p": 140, "gemini-omni-flash-1-2:7s:720p": 160, "gemini-omni-flash-1-2:8s:720p": 180, "gemini-omni-flash-1-2:9s:720p": 210,
+  "gemini-omni-flash-1-2:10s:720p": 230, "gemini-omni-flash-1-2:11s:720p": 250, "gemini-omni-flash-1-2:12s:720p": 270, "gemini-omni-flash-1-2:13s:720p": 300, "gemini-omni-flash-1-2:14s:720p": 320, "gemini-omni-flash-1-2:15s:720p": 340,
+  "gemini-omni-flash-1-2:3s:1080p": 80, "gemini-omni-flash-1-2:4s:1080p": 100, "gemini-omni-flash-1-2:5s:1080p": 130, "gemini-omni-flash-1-2:6s:1080p": 150, "gemini-omni-flash-1-2:7s:1080p": 180, "gemini-omni-flash-1-2:8s:1080p": 200, "gemini-omni-flash-1-2:9s:1080p": 230,
+  "gemini-omni-flash-1-2:10s:1080p": 250, "gemini-omni-flash-1-2:11s:1080p": 280, "gemini-omni-flash-1-2:12s:1080p": 300, "gemini-omni-flash-1-2:13s:1080p": 330, "gemini-omni-flash-1-2:14s:1080p": 350, "gemini-omni-flash-1-2:15s:1080p": 380,
+  "gemini-omni-flash-1-2:3s:4k": 170, "gemini-omni-flash-1-2:4s:4k": 220, "gemini-omni-flash-1-2:5s:4k": 280, "gemini-omni-flash-1-2:6s:4k": 330, "gemini-omni-flash-1-2:7s:4k": 390, "gemini-omni-flash-1-2:8s:4k": 440, "gemini-omni-flash-1-2:9s:4k": 500,
+  "gemini-omni-flash-1-2:10s:4k": 550, "gemini-omni-flash-1-2:11s:4k": 610, "gemini-omni-flash-1-2:12s:4k": 660, "gemini-omni-flash-1-2:13s:4k": 720, "gemini-omni-flash-1-2:14s:4k": 770, "gemini-omni-flash-1-2:15s:4k": 830,
   // ── Wan 3.0 (KIE wan/3-0-video) and Wan 3.0 Prime (wan/3-0-video-prime) ──
   //    True per-second billing at three published resolution rates. Nodaro
   //    credits = ceil(KIE cr/s × duration ÷ 4) × 10 — the same conversion as

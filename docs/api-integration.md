@@ -2734,6 +2734,16 @@ so a value the model doesn't support is ignored, never a 400:
   10 `duration` menu (an omitted duration renders and bills as 8 s), the same
   16:9 / 9:16-only `aspectRatio`, and the same 7-unit input quota (each image
   1 unit, a source video 2). It is the cheaper, faster SKU of the pair.
+- **`gemini-omni-flash-1-2`** is the newest Omni Flash, priced per second: any
+  whole-second `duration` from 3 to 15, `360p` / `720p` / `1080p` / `4k`,
+  `aspectRatio` `16:9` / `9:16` / `auto`, and up to 6 reference images (5 beside
+  a source video). A start frame alone, or a start and end frame up to 10 s, are
+  exact frames; with references wired, or past 10 s, the frames join the
+  reference list and are named in the prompt. A source video is edited and
+  charged by its own length, up to 15 s (`videoTrimStart` / `videoTrimEnd` pick
+  the stretch, a window of up to 15 s; otherwise a longer clip uses its first
+  15 s). It takes no `characterReferences`. See
+  [Gemini Omni Flash 1.2](nodes/ai-video/generate-video.md#gemini-omni-flash-12).
 - **Frames + references coexist** (Seedance 2 and MiniMax H3 — **not** Wan 3.0,
   whose arrays are exclusive, see above). When any reference (image / video /
   audio) is wired alongside a start/end frame, the frames become

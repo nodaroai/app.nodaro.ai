@@ -2117,6 +2117,24 @@ describe("generate-video — reference images + mode-alias dispatch", () => {
     expect(mockRunVideoGeneration).toHaveBeenCalled()
   })
 
+  it("gemini-omni-flash-1-2 runs a source VIDEO alone as a video edit", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      prompt: "restyle this shot",
+      referenceVideoUrls: ["http://cdn.example/source.mp4"],
+    })
+    mockRunVideoGeneration.mockResolvedValue(undefined)
+    await executeNode(makeNode("generate-video", { provider: "gemini-omni-flash-1-2" }), makeCtx())
+    expect(mockRunTextToVideoGeneration).not.toHaveBeenCalled()
+    expect(mockRunVideoGeneration).toHaveBeenCalled()
+  })
+
+  it("gemini-omni-flash-1-2 takes an end frame alone", async () => {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "arrive here", endFrameUrl: "http://cdn.example/last.png" })
+    mockRunVideoGeneration.mockResolvedValue(undefined)
+    await executeNode(makeNode("generate-video", { provider: "gemini-omni-flash-1-2" }), makeCtx())
+    expect(mockRunVideoGeneration).toHaveBeenCalled()
+  })
+
   it("wan-3 with a wired reference VIDEO stays text-to-video (NOT a V2V source)", async () => {
     // Wan 3.0's reference videos are a t2v-compatible reference ARRAY, not a
     // V2V source clip, so it must keep the standard start-frame-only split.

@@ -1,5 +1,6 @@
 import type { FastifyRequest } from "fastify"
 import { isAutoVideoDuration } from "@nodaro/shared/model-catalog"
+import { isGeminiOmniPerSecondProvider } from "@nodaro/shared/models"
 import { isQuoting, noteAdjustment, noteExpectedBase, noteWarning } from "./price-notes.js"
 
 /**
@@ -35,9 +36,13 @@ export async function noteRefVideoPricing(req: FastifyRequest, args: {
   if (!isQuoting(req)) return
   const measured = args.durationsSec.filter(usable)
   const totalSec = Math.round(measured.reduce((a, d) => a + d, 0) * 10) / 10
+  // A per-second Gemini Omni edit bills the source clip alone: the hold is its price.
+  const sourceClipOnly = isGeminiOmniPerSecondProvider(args.provider)
   noteAdjustment(req, {
     code: "ref_video_length",
-    message: `Priced by length: the ${args.durationsSec.length} reference clip(s) (${totalSec}s measured) are billed with the output.`,
+    message: sourceClipOnly
+      ? `Priced by length: the source clip (${totalSec}s) is what is billed.`
+      : `Priced by length: the ${args.durationsSec.length} reference clip(s) (${totalSec}s measured) are billed with the output.`,
   })
   if (measured.length < args.durationsSec.length) {
     noteWarning(req, {
@@ -45,7 +50,7 @@ export async function noteRefVideoPricing(req: FastifyRequest, args: {
       message: "A reference clip could not be measured, so it is priced as the longest clip the model accepts.",
     })
   }
-  if (!args.settlesToActual) return
+  if (!args.settlesToActual || (sourceClipOnly && measured.length === args.durationsSec.length)) return
   const { seedance2RefVideoExpectedBaseCredits } = await import("../ee/billing/seedance2-ref-video-credits.js")
   const expected = seedance2RefVideoExpectedBaseCredits({
     provider: args.provider,

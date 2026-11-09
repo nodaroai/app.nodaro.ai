@@ -709,6 +709,7 @@ const MODEL_DESCRIPTIONS_HE: Record<string, string> = {
   "Full instrument + vocal generation": "יצירה מלאה של כלי נגינה ושירה",
   "Google's latest, strong prompt adherence": "העדכני של Google, היצמדות חזקה לפרומפט",
   "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit": "Google, 4–10 שניות, 720p/1080p/4K, אודיו מובנה, ייחוסים + עריכת וידאו",
+  "Google, 3–15s, 360p to 4K, native audio, refs + video-edit": "Google, 3–15 שניות, 360p עד 4K, אודיו מובנה, ייחוסים + עריכת וידאו",
   "Guided video editing with reference image support": "עריכת וידאו מונחית עם תמיכה בתמונות ייחוס",
   "Hailuo 02, end frame support": "Hailuo 02, תמיכה בפריים סיום",
   "High quality video-to-video": "וידאו לווידאו באיכות גבוהה",

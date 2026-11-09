@@ -693,6 +693,7 @@ const MODEL_DESCRIPTIONS_JA: Record<string, string> = {
   "Full instrument + vocal generation": "楽器＋ボーカルのフル生成",
   "Google's latest, strong prompt adherence": "Google の最新モデル、プロンプトへの高い忠実度",
   "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit": "Google、4〜10 秒、720p/1080p/4K、ネイティブオーディオ、リファレンス＋動画編集",
+  "Google, 3–15s, 360p to 4K, native audio, refs + video-edit": "Google、3〜15 秒、360p〜4K、ネイティブオーディオ、リファレンス＋動画編集",
   "Guided video editing with reference image support": "リファレンス画像に対応したガイド付き動画編集",
   "Hailuo 02, end frame support": "Hailuo 02、終了フレームに対応",
   "High quality video-to-video": "高品質な動画から動画",

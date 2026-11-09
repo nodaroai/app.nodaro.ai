@@ -11193,6 +11193,9 @@ export interface SeedanceRefEstimateRequest {
   readonly soundtrackAudioUrl?: string
   /** A soundtrack clip whose audio is not produced yet. */
   readonly unknownSoundtrack?: boolean
+  /** Gemini Omni Flash 1.2: the node's trim of its source clip, in seconds. */
+  readonly videoTrimStart?: number
+  readonly videoTrimEnd?: number
 }
 
 /**
