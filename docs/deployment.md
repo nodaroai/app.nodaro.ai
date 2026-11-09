@@ -175,6 +175,7 @@ here for each one anyway.
 | `NODARO_CLOUD_URL` | `https://app.nodaro.ai` | Where the connection talks to; CI points it at an unreachable host |
 | `NODARO_ENCRYPTION_KEY` | `""` (compose: generated) | 64-char hex; encrypts pasted provider keys, social connections, stored HTTP credentials (Webhook Output) and [webhook endpoint](./webhooks.md) signing secrets at rest. Without it, registering a webhook endpoint answers `503 encryption_key_missing` |
 | `HEYGEN_CATALOG_REFRESH_HOURS` | `24` | How often the shared HeyGen preset catalog is refreshed |
+| `VOICE_LIBRARY_REFRESH_HOURS` | `6` | How often the platform's copy of the shared Voice Library (what `GET /v1/voices/library/facets` counts) is walked again; needs `ELEVENLABS_API_KEY` |
 | `REPLICATE_WEBHOOK_SECRET` | `""` | Cloud edition — LoRA training callbacks; unset = webhook fast-fails 503 |
 | `R2_ENDPOINT` · `R2_FORCE_PATH_STYLE` · `R2_ACCOUNT_ID` · `R2_ACCESS_KEY_ID` · `R2_SECRET_ACCESS_KEY` · `R2_BUCKET_NAME` · `R2_PUBLIC_URL` | bundled MinIO (compose); outside compose `R2_BUCKET_NAME` defaults to `scenenode-assets` — always set it to your bucket | Object storage — see 2d |
 | `R2_REGION` | `auto` | S3 region. `auto` suits Cloudflare R2 and MinIO ignores it; set a real one for Supabase-local (`local`), DO Spaces (`nyc3`, …) or AWS — they reject `auto` |
@@ -925,7 +926,9 @@ optional; each array empty = "keep the default"):
   - **Lists.** The premade list (`/v1/voices`), the ElevenLabs shared-voices
     library (`/v1/voices/library`, whose query gender is also forced to the
     allowed set) and the voice clones list (`/v1/voice-clones`) show only voices
-    whose gender is known and allowed.
+    whose gender is known and allowed. The library's facet counts
+    (`/v1/voices/library/facets`) are counted over that same narrowed set, so
+    no count advertises a voice the listing hides.
   - **Use.** A voice is judged by its id alone, whatever `voiceType` a request
     states. Its gender comes from the premade catalog (by name or by id), from
     the caller's own clone (its recorded gender), or, for a Voice Library voice,
@@ -1557,7 +1560,11 @@ voice catalogs (`heygen:catalog:v1:*`, ≈4 MB, published once a fill
 completes and adopted by every instance at boot; one instance per
 environment refreshes it under a lock every
 `HEYGEN_CATALOG_REFRESH_HOURS`, default 24; the others notice a newer
-snapshot within about half a minute and adopt it). Everything there is a
+snapshot within about half a minute and adopt it) and the platform's copy
+of the shared Voice Library (`voice-library:catalog:v1:*`, ≈10 MB — ≈21,700
+voices walked over ≈220 listing pages in about three minutes, what
+`GET /v1/voices/library/facets` counts; same mechanics, every
+`VOICE_LIBRARY_REFRESH_HOURS`, default 6). Everything there is a
 cache: with Redis unreachable each instance falls back to its own
 memory, and a flushed key is simply refilled from the provider on the
 next boot.

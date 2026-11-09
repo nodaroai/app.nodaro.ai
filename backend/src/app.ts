@@ -316,6 +316,7 @@ import { shotsRoutes } from "./routes/shots.js"
 import { modelsRoutes } from "./routes/models.js"
 import { voicesRoutes } from "./routes/voices.js"
 import { voiceFavoriteRoutes } from "./routes/voice-favorites.js"
+import { voiceLibraryFacetRoutes } from "./routes/voice-library-facets.js"
 import { pluginNodeVoicesRoutes } from "./routes/plugin-node-voices.js"
 import { heygenCatalogRoutes } from "./routes/heygen-catalog.js"
 import { voiceCloneRoutes } from "./routes/voice-clones.js"
@@ -944,6 +945,7 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   await app.register(speakerFramesCapabilitiesRoutes)
   await app.register(voicesRoutes)
   await app.register(voiceFavoriteRoutes)
+  await app.register(voiceLibraryFacetRoutes)
   // The voices a plugin-served node speaks in, for the standalone orchestrator
   // under the voice lock (internal only; read per request — the plugins load
   // further down).

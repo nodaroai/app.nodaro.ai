@@ -5871,6 +5871,72 @@ await client.nodes.run("text-to-speech", {
 })
 ```
 
+Each voice also carries what the library says about its sound and its
+languages, so a card can read "Cute · Spanish" without a second call:
+
+- `descriptive` — the library's one-word tone (`calm`, `deep`, `cute`, …), one
+  of `VOICE_LIBRARY_DESCRIPTIVES` (`@nodaro/shared/pipeline`) or a word the
+  library added since; `""` when it states none. The value a `descriptives`
+  filter takes — one value per call.
+- `language` / `locale` — the primary language as the library codes it (`en`,
+  `he`) and its locale (`en-US`); `""` when unstated.
+- `verifiedLanguages` — every language code the voice is verified for, the
+  primary first. **This is what `?language=` matches**: a voice whose primary
+  language is English and that is verified for Spanish is listed under
+  `language: "es"`. The `languages` facet below counts the same way.
+
+Servers older than these fields omit them.
+
+#### `libraryFacets(params?)`
+
+```ts
+libraryFacets(params?: VoiceLibraryFacetsParams): Promise<VoiceLibraryFacets>
+```
+
+How many Voice Library voices each category (`use_cases`), tone
+(`descriptives`), language, gender, age, accent and category has, for the
+filters you hold (`GET /v1/voices/library/facets`) — one public call, no
+credits, that fills a whole picker screen: a count on every category, tones
+with no voices hidden, "no Hebrew voices here" said before the click.
+`params` are `searchLibrary()`'s filters without paging and sort: `search`,
+`gender`, `age`, `accent`, `language`, `category`, `use_cases`,
+`descriptives`, `featured`.
+
+```ts
+{
+  total: 681,                       // voices matching every filter sent
+  use_cases:    [{ value: "characters_animation", count: 681 }, { value: "social_media", count: 930 }, …],
+  languages:    [{ value: "en", count: 681 }, { value: "es", count: 496 }, …],
+  descriptives: [{ value: "confident", count: 73 }, { value: "casual", count: 64 }, …],
+  genders: […], ages: […], accents: […], categories: […],
+  approximate: false,
+  updatedAt: "2026-11-09T06:00:00.000Z",
+}
+```
+
+- `total` applies every filter. Each facet's counts apply every filter
+  **except that facet's own**, so a client shows every category's count while
+  one is chosen. Values with no voices are left out; lists are sorted by
+  count, then by value. The values are the library's own spellings — pass
+  them straight back as the listing's filters.
+- `languages` counts a voice under every language it is verified for (what
+  `language` matches), so those counts add up to more than `total`.
+- The counts come from the platform's own copy of the library, read on a
+  schedule — `updatedAt` says when — not from the live listing, so a count
+  may trail the listing by a few voices. With `search`, the counts are a
+  lower estimate and `approximate` is `true`: the library's own search is
+  fuzzy (it stems and tolerates a typo), which no copy reproduces.
+- For the few minutes after a deployment first reads the library the call
+  rejects with `503 voice_library_warming`; retry after its `Retry-After`
+  seconds. On a deployment with no speech key it answers zero counts with
+  `keyMissing: true`.
+
+```ts
+const facets = await client.voices.libraryFacets({ use_cases: "characters_animation", language: "en" })
+const tones = facets.descriptives            // only tones that have voices, most first
+const hebrew = facets.languages.find((l) => l.value === "he")?.count ?? 0
+```
+
 #### `listClones()`
 
 ```ts
@@ -9760,6 +9826,8 @@ not two.
 - `VoiceClone` — user clone record (`elevenlabsVoiceId` is the TTS-time id), re-exported from `@nodaro/shared`
 - `VoiceLibraryParams` — query params for `searchLibrary()`, re-exported from `@nodaro/shared`
 - `VoiceLibraryUseCase` / `VOICE_LIBRARY_USE_CASES` — the `use_cases` values `searchLibrary()` groups the library by, from `@nodaro/shared/pipeline`
+- `VoiceLibraryDescriptive` / `VOICE_LIBRARY_DESCRIPTIVES` — the `descriptives` (tone) values the library labels voices with, as last read; `libraryFacets()` says which exist now, from `@nodaro/shared/pipeline`
+- `VoiceLibraryFacetsParams`, `VoiceLibraryFacets`, `VoiceLibraryFacetCount` — `libraryFacets()` input and output (`{ total, use_cases, languages, descriptives, genders, ages, accents, categories, approximate, updatedAt }`, each facet `[{ value, count }]`), from `@nodaro/shared/pipeline`
 - `VoiceFavorite`, `VoiceFavoriteInput`, `VoiceFavoriteType` / `VOICE_FAVORITE_TYPES` — favorites (`listFavorites()` / `favorite()`), from `@nodaro/shared/pipeline`
 - `VoiceLibraryResponse` — `{ voices: Voice[]; hasMore: boolean; ... }`, re-exported from `@nodaro/shared`
 - `VoiceChangerProInput` — full `recast()` input (see its section above)

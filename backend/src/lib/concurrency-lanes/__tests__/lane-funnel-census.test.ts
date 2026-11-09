@@ -52,7 +52,6 @@ const LANE_EXEMPT_PROVIDER_IO: ReadonlyMap<string, string> = new Map([
   ["ee/copilot/kie-client.ts", "the Copilot's own client: the Copilot is not limited (ee/routes/copilot.ts runs its turn in runNotLimited)"],
   ["lib/reconcile/elevenlabs.ts", "the reconcile cron's status reads of jobs already submitted: no new provider work"],
   ["routes/voice-clones.ts", "its only provider call deletes a stored voice: no generation"],
-  ["routes/voices.ts", "its provider call reads the voice catalog (the shared library): no generation"],
   ["lib/premade-voice-catalog.ts", "its provider call reads the voice catalog (the premade list, for /v1/voices and the voice lock): no generation"],
 ])
 
@@ -126,7 +125,9 @@ describe("provider I/O takes its concurrency slot", () => {
   it("scans the real population", () => {
     expect(io.length).toBeGreaterThanOrEqual(5)
     expect(io.some((h) => h.file === "providers/replicate/client.ts")).toBe(true)
-    expect(io.some((h) => h.file === "routes/voices.ts")).toBe(true)
+    // A raw provider read past the funnels (the premade voice list); the shared
+    // library's listing and walk go through providerFetch and are not counted here.
+    expect(io.some((h) => h.file === "lib/premade-voice-catalog.ts")).toBe(true)
   })
 
   it("the census test lists offenders", () => {

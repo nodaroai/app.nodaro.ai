@@ -423,6 +423,37 @@ describe("GET /v1/voices/library — the voice lock (B4c)", () => {
   })
 })
 
+describe("GET /v1/voices/library — each voice's tone and languages", () => {
+  it("carries the library's descriptive, primary language + locale, and every verified language code (primary first)", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        voices: [
+          {
+            voice_id: "lib-1",
+            name: "Nova",
+            descriptive: "cute",
+            language: "en",
+            locale: "en-US",
+            verified_languages: [
+              { language: "es", model_id: "eleven_v4" },
+              { language: "en", model_id: "eleven_v4" },
+              { language: "es", model_id: "eleven_v3" },
+            ],
+          },
+          { voice_id: "lib-2", name: "Bare" },
+        ],
+        has_more: false,
+      }),
+    )
+
+    const res = await app.inject({ method: "GET", url: "/v1/voices/library" })
+    const voices = (res.json() as { voices: Array<Record<string, unknown>> }).voices
+    expect(voices[0]).toMatchObject({ voice_id: "lib-1", descriptive: "cute", language: "en", locale: "en-US", verifiedLanguages: ["en", "es"] })
+    // A voice the library leaves unlabelled: empty strings, never null or missing — like every other field.
+    expect(voices[1]).toMatchObject({ voice_id: "lib-2", descriptive: "", language: "", locale: "", verifiedLanguages: [] })
+  })
+})
+
 describe("GET /v1/voices/library — model availability", () => {
   type LibVoice = { voice_id: string; recommendedProvider?: string; verifiedProviders?: string[] }
 

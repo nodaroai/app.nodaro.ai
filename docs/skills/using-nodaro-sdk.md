@@ -77,7 +77,7 @@ client.promptHelper    // analyze, generate, enhance
 client.apps            // list, get, run, listRuns, getRun, deleteRun
 client.developerApps   // list, get, create, update, delete, rotateSecret
 client.oauth           // exchangeCode, revoke, getAppInfo
-client.voices          // list, searchLibrary, listClones, createClone, deleteClone, change
+client.voices          // list, searchLibrary, libraryFacets, listFavorites, favorite, unfavorite, listClones, deleteClone, change
 client.credits         // balance, modelCosts
 client.uploads         // upload
 ```

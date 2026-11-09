@@ -261,6 +261,14 @@ export const envSchema = z.object({
    * preview route answers 404. Read only through lib/voice-preview-proxy.ts.
    */
   VOICE_PREVIEW_PROXY: z.string().optional().transform((v) => v === "true"),
+  /**
+   * How often the platform's own copy of the shared Voice Library — ≈21,700
+   * voices over ≈220 listing pages, what `GET /v1/voices/library/facets`
+   * counts — is walked again (providers/elevenlabs/voice-library-catalog.ts).
+   * One instance per environment walks it; the rest adopt the shared Redis
+   * snapshot. The listing itself is live and unaffected. Fractional hours are fine.
+   */
+  VOICE_LIBRARY_REFRESH_HOURS: z.coerce.number().positive().max(24 * 30).default(6),
   HEYGEN_API_KEY: z.string().default(""),
   /**
    * How often the shared (Redis) HeyGen public catalog — ≈7,000 preset

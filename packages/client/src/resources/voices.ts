@@ -1,7 +1,21 @@
-import type { Voice, VoiceClone, VoiceFavorite, VoiceFavoriteInput, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared/pipeline"
+import type { Voice, VoiceClone, VoiceFavorite, VoiceFavoriteInput, VoiceLibraryFacets, VoiceLibraryFacetsParams, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared/pipeline"
 import type { AudioFxPreset } from "@nodaro/shared/media"
 import type { DialogueProvider } from "@nodaro/shared/models"
-export type { Voice, SharedVoice, VoiceClone, VoiceFavorite, VoiceFavoriteInput, VoiceFavoriteType, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared/pipeline"
+export type {
+  Voice,
+  SharedVoice,
+  VoiceClone,
+  VoiceFavorite,
+  VoiceFavoriteInput,
+  VoiceFavoriteType,
+  VoiceLibraryDescriptive,
+  VoiceLibraryFacetCount,
+  VoiceLibraryFacets,
+  VoiceLibraryFacetsParams,
+  VoiceLibraryParams,
+  VoiceLibraryResponse,
+  VoiceLibraryUseCase,
+} from "@nodaro/shared/pipeline"
 export type { AudioFxPreset } from "@nodaro/shared/media"
 import type { NodaroClientCore } from "../core.js"
 
@@ -12,6 +26,15 @@ import type { NodaroClientCore } from "../core.js"
  * `@nodaro/shared`.
  */
 /** Audio-FX preset union (reverb spaces / telephone / megaphone / echo / custom) — used by {@link VoiceChangerProInput.voiceFx}. */
+
+/** The listing's and the facets' querystring: every param set, `undefined` / `null` / `""` left out so the server defaults apply. */
+function libraryQuery(params: VoiceLibraryParams | VoiceLibraryFacetsParams): Record<string, string | number | boolean | undefined> {
+  const query: Record<string, string | number | boolean | undefined> = {}
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "") query[k] = v as string | number | boolean
+  }
+  return query
+}
 
 /**
  * Read access to ElevenLabs voices: the premade catalog plus the shared
@@ -37,11 +60,24 @@ export class VoicesResource {
    * drives "load more" pagination.
    */
   searchLibrary(params: VoiceLibraryParams = {}): Promise<VoiceLibraryResponse> {
-    const query: Record<string, string | number | boolean | undefined> = {}
-    for (const [k, v] of Object.entries(params)) {
-      if (v !== undefined && v !== null && v !== "") query[k] = v as string | number | boolean
-    }
-    return this.client.request("GET", "/v1/voices/library", { query })
+    return this.client.request("GET", "/v1/voices/library", { query: libraryQuery(params) })
+  }
+
+  /**
+   * How many Voice Library voices each category (`use_cases`), tone
+   * (`descriptives`), language, gender, age, accent and category has, for the
+   * filters you hold (`GET /v1/voices/library/facets`) — one public call,
+   * no credits, that fills a whole picker screen: counts on the categories,
+   * tones with no voices hidden, "no Hebrew voices here" said before the
+   * click. `total` applies every filter; each facet's counts apply every
+   * filter except its own, so every category keeps its count while one is
+   * chosen. Counted over the platform's copy of the library (`updatedAt`),
+   * refreshed on a schedule; with `search`, a lower estimate (`approximate`).
+   * Answers `503 voice_library_warming` for the few minutes after a
+   * deployment first reads the library; retry after `Retry-After` seconds.
+   */
+  libraryFacets(params: VoiceLibraryFacetsParams = {}): Promise<VoiceLibraryFacets> {
+    return this.client.request("GET", "/v1/voices/library/facets", { query: libraryQuery(params) })
   }
 
   /**

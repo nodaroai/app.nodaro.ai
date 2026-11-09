@@ -36,6 +36,7 @@ import { logFfmpegVersion } from "./providers/video/ffmpeg-utils.js"
 import { assertClientAddressConfig, describeClientAddressConfig } from "./lib/client-address.js"
 import { watchProviderCredentials } from "./providers/index.js"
 import { warmHeygenCatalog } from "./providers/heygen/catalog.js"
+import { warmVoiceLibraryCatalog } from "./providers/elevenlabs/voice-library-catalog.js"
 import { ensureStorageBucket } from "./lib/storage.js"
 import { archiveThisBuild } from "./lib/site-asset-archive.js"
 import { initTelegramRoutingTable } from "./lib/telegram-router.js"
@@ -174,6 +175,11 @@ async function main() {
   // picker opened after a deploy usually finds them done. Fire-and-forget;
   // no-op without a key.
   warmHeygenCatalog()
+
+  // The shared Voice Library (≈21,700 voices over ≈220 pages, what the facet
+  // counts read): adopt the Redis snapshot, or start the one walk per
+  // environment now. Fire-and-forget; no-op without a speech key.
+  warmVoiceLibraryCatalog()
 
   // Concurrency lanes: copy this environment's `lanes_enforced` setting (or
   // LANES_ENFORCED) and the provider ceilings into the gate's Redis every 30 s

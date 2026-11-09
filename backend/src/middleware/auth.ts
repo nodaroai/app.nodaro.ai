@@ -272,6 +272,10 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; pattern?
   { path: "/v1/download-video/progress", prefix: true },
   { method: "GET", path: "/v1/voices" },
   { method: "GET", path: "/v1/voices/library" },
+  // How many library voices each category / tone / language has (routes/
+  // voice-library-facets.ts): the same public, cached read as the listing —
+  // a picker shows the counts before anyone signs in. Exact path, GET only.
+  { method: "GET", path: "/v1/voices/library/facets" },
   // A voice's preview served from this site (routes/voices.ts, on with
   // VOICE_PREVIEW_PROXY): an <audio src> sends no bearer, so the signed address
   // the lists hand out is the credential, checked by the route before anything
