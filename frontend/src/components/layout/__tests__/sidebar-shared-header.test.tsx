@@ -6,14 +6,21 @@ import { AppSidebar } from "../app-sidebar"
 import { SidebarProvider } from "../sidebar-context"
 
 /**
- * With the shared site header on, the sidebar keeps its navigation, its
+ * With a shared site header on, the sidebar keeps its navigation, its
  * collapse toggle and the version row, and leaves out what the header now
  * carries: the logo and its app menu, the credit card, the signed-in user with
- * sign-out, and the language and theme switches. (Off, it renders exactly as
+ * sign-out, and the language switch. The theme switch is the app's own under
+ * the hosted header, which has none; a white-label header draws its own pill,
+ * so the sidebar's stays out there. (Off, the sidebar renders exactly as
  * before: sidebar-characterization.test.tsx.)
  */
 
-vi.mock("@/lib/shared-header", () => ({ sharedHeaderActive: () => true, useSharedHeaderActive: () => true }))
+const gate = vi.hoisted(() => ({ mode: "default" as "default" | "white-label" }))
+vi.mock("@/lib/shared-header", () => ({
+  sharedHeaderActive: () => true,
+  useSharedHeaderActive: () => true,
+  useSharedHeaderMode: () => gate.mode,
+}))
 vi.mock("@/lib/version", () => ({ APP_VERSION: "0.0.0-test" }))
 vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ user: { id: "u1", email: "ada@example.com" }, isAdmin: false, signOut: vi.fn() }) }))
 vi.mock("@/hooks/queries/use-gallery-queries", () => ({ useGalleryReportCount: () => ({ data: 0 }) }))
@@ -27,7 +34,8 @@ vi.mock("@/hooks/use-billing-surface", () => ({ useBillingSurface: () => ({ surf
 vi.mock("@/hooks/use-update-check", () => ({ useUpdateCheck: () => null }))
 vi.mock("@/lib/edition", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/edition")>()), hasCredits: () => true }))
 
-function sidebar(collapsed: boolean) {
+function sidebar(collapsed: boolean, mode: "default" | "white-label" = "default") {
+  gate.mode = mode
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <MemoryRouter initialEntries={["/projects"]}>
@@ -39,16 +47,28 @@ function sidebar(collapsed: boolean) {
   )
 }
 
-describe("the sidebar under the shared header", () => {
-  it.each([false, true])("collapsed=%s: no logo menu, credit card, user row, language or theme switch", (collapsed) => {
-    sidebar(collapsed)
-    expect(screen.queryByRole("button", { name: "Open a Nodaro app" })).toBeNull()
-    expect(screen.queryByText("1,500")).toBeNull()
-    expect(screen.queryByText(/^1\.5K$/)).toBeNull()
-    expect(screen.queryByText("ada@example.com")).toBeNull()
-    expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull()
+describe("the sidebar under a shared header", () => {
+  it.each(["default", "white-label"] as const)("mode %s: no logo menu, credit card, user row or language switch, collapsed or not", (mode) => {
+    for (const collapsed of [false, true]) {
+      const { unmount } = sidebar(collapsed, mode)
+      expect(screen.queryByRole("button", { name: "Open a Nodaro app" })).toBeNull()
+      expect(screen.queryByText("1,500")).toBeNull()
+      expect(screen.queryByText(/^1\.5K$/)).toBeNull()
+      expect(screen.queryByText("ada@example.com")).toBeNull()
+      expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull()
+      expect(screen.queryByRole("button", { name: "Pick language" })).toBeNull()
+      unmount()
+    }
+  })
+
+  it("the hosted header has no theme pill: the sidebar keeps the app's own switch", () => {
+    sidebar(false, "default")
+    expect(screen.getByRole("button", { name: "Toggle theme" })).toBeInTheDocument()
+  })
+
+  it("a white-label header draws its own: the sidebar's switch stays out", () => {
+    sidebar(false, "white-label")
     expect(screen.queryByRole("button", { name: "Toggle theme" })).toBeNull()
-    expect(screen.queryByRole("button", { name: "Pick language" })).toBeNull()
   })
 
   it.each([false, true])("collapsed=%s: keeps the navigation, the collapse toggle and the version", (collapsed) => {

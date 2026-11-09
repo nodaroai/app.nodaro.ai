@@ -29,7 +29,9 @@ vi.mock("virtual:site-a11y", () => ({
   a11yStylesheet: "/assets/a11y-test.css",
 }))
 vi.mock("virtual:site-locale", () => ({ readSavedLocale: shared.readLocale, saveLocale: shared.saveLocale, watchSavedLocale: shared.watchLocale }))
-vi.mock("@/ee/shell/app-header", () => ({ default: () => <div data-testid="app-header" /> }))
+// Which mount a page gets (the slot decides) is its own test; here it is only "a header".
+vi.mock("@/ee/shell/hosted-header", () => ({ default: () => <div data-testid="app-header" /> }))
+vi.mock("@/ee/shell/white-label-header", () => ({ default: () => <div data-testid="app-header" /> }))
 
 // The signed-in app around the layout (as in the sidebar's characterization).
 vi.mock("@/lib/version", () => ({ APP_VERSION: "0.0.0-test" }))

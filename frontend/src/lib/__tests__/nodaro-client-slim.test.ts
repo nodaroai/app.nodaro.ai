@@ -22,8 +22,8 @@ const FULL_CLIENT = new Set(["@nodaro/sdk/client", "@nodaro/sdk"])
 
 /** Modules that need the full client by design, each with the reason. Only shrinks. */
 const FULL_CLIENT_ALLOWED: Readonly<Record<string, string>> = {
-  "ee/shell/app-header.tsx":
-    "the shared site header's `sdk` prop is a full NodaroClient; the module is loaded lazily, only on a Cloud build with VITE_SHARED_HEADER on",
+  "ee/shell/white-label-header.tsx":
+    "the white-label header's `sdk` prop is a full NodaroClient; the module is loaded lazily, only on a Cloud build that carries the header",
 }
 
 function productFiles(dir: string, out: string[] = []): string[] {

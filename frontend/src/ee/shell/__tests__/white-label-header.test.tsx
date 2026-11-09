@@ -8,10 +8,9 @@ import type { SiteHeaderProps } from "../types"
 
 /**
  * The header mount on a deployment whose surface profile says
- * `header: "white-label"`: the header's white-label mode, wired from the
- * deployment's profile and runtime config, with nothing of Nodaro's in it.
- * And, beside it, the proof that every other deployment's header is wired
- * exactly as before: the same props, no more and no fewer.
+ * `header: "white-label"`: the npm header's white-label mode (the hosted
+ * element has none), wired from the deployment's profile and runtime config,
+ * with nothing of Nodaro's in it.
  */
 
 const seen: { props: SiteHeaderProps | null } = { props: null }
@@ -37,10 +36,9 @@ vi.mock("@/hooks/use-ui-language", () => ({
   }),
 }))
 
-const mode = vi.hoisted(() => ({ value: "white-label" as "default" | "white-label" | null }))
 vi.mock("@/lib/site-header-mode", () => ({
-  siteHeaderMode: () => mode.value,
-  siteHeaderCookieOptions: () => (mode.value === "white-label" ? { cookieDomain: null } : {}),
+  siteHeaderMode: () => "white-label",
+  siteHeaderCookieOptions: () => ({ cookieDomain: null }),
 }))
 
 // The SDK's balance read, as the server answers it on a single-payer deployment with its own unit.
@@ -62,7 +60,7 @@ vi.mock("../white-label", async (importOriginal) => ({
   openSitePage: (href: string) => opened.push(href),
 }))
 
-const { default: AppHeader } = await import("../app-header")
+const { default: WhiteLabelHeader } = await import("../white-label-header")
 
 const WHITE_LABEL_SURFACE = {
   header: "white-label",
@@ -83,7 +81,7 @@ function mount(client = new QueryClient()) {
   const view = render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={["/projects"]}>
-        <AppHeader compact={false} onOpenMenu={vi.fn()} onHeaderOverlay={vi.fn()} />
+        <WhiteLabelHeader compact={false} onOpenMenu={vi.fn()} onHeaderOverlay={vi.fn()} drawerOpen={false} />
         <Where />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -94,7 +92,6 @@ function mount(client = new QueryClient()) {
 beforeEach(() => {
   seen.props = null
   opened.length = 0
-  mode.value = "white-label"
   window.__NODARO_RUNTIME__ = { surface: WHITE_LABEL_SURFACE } as unknown as typeof window.__NODARO_RUNTIME__
 })
 afterEach(() => {
@@ -146,7 +143,7 @@ describe("the header mount on a white-label deployment", () => {
     view.rerender(
       <QueryClientProvider client={client}>
         <MemoryRouter initialEntries={["/projects"]}>
-          <AppHeader compact={false} onOpenMenu={vi.fn()} onHeaderOverlay={vi.fn()} />
+          <WhiteLabelHeader compact={false} onOpenMenu={vi.fn()} onHeaderOverlay={vi.fn()} drawerOpen={false} />
         </MemoryRouter>
       </QueryClientProvider>,
     )
@@ -192,33 +189,5 @@ describe("the header mount on a white-label deployment", () => {
     const client = new QueryClient()
     client.setQueryData(["credits"], { total: 1500 })
     expect(mount(client).props().t?.("credits.label")).toBe("he:credits.label")
-  })
-})
-
-describe("every other deployment's header is wired exactly as before", () => {
-  // The props today's mount passes: no white-label key, and none of today's missing.
-  const TODAY = [
-    "accessibilityButton", "accountMenuExtras", "accountPages", "activeWorld", "claimSignupGrant", "homeUrl", "language",
-    "leadingSlot", "locale", "onAccountPage", "onNavigate", "onOverlayChange", "onSignOut", "phoneBreakpoint",
-    "phoneLayout", "queryClient", "ref", "sdk", "sourceApp", "supabase", "t", "theme", "urls", "worldHrefs",
-  ]
-
-  it.each([["Nodaro's own header", "default"], ["no header mode at all", null]] as const)("%s: today's props", (_label, value) => {
-    mode.value = value
-    delete window.__NODARO_RUNTIME__
-    const props = mount().props()
-    expect(Object.keys(props).sort()).toEqual(TODAY)
-    expect(props.urls).toEqual({ app: window.location.origin, login: "/login", accessibility: `${window.location.origin}/accessibility` })
-    expect(props.worldHrefs?.app).toBe(`${window.location.origin}/projects`)
-    expect(props.language?.options.map((o) => o.id)).toEqual(["en", "he", "ja"])
-    // The header's own translator, unwrapped.
-    expect(props.t?.("credits.label")).toBe("he:credits.label")
-  })
-
-  it("Nodaro's header gets the SDK client as it is: the balance is the server's, untouched", async () => {
-    mode.value = "default"
-    delete window.__NODARO_RUNTIME__
-    const balance = await mount().props().sdk.credits.balance()
-    expect(balance).toMatchObject({ total: 0, subscription: 0, monthlyAllocation: 0 })
   })
 })

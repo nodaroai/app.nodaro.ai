@@ -10,6 +10,8 @@ interface SidebarContextValue {
   sidebarWidth: number
   setCollapsed: (collapsed: boolean) => void
   toggleCollapsed: () => void
+  /** Opens the phone drawer: for a phone drawer button outside the layout (the editor toolbar). */
+  openMobileMenu: () => void
 }
 
 const SidebarContext = createContext<SidebarContextValue | null>(null)
@@ -17,9 +19,12 @@ const SidebarContext = createContext<SidebarContextValue | null>(null)
 interface SidebarProviderProps {
   readonly children: ReactNode
   readonly defaultCollapsed?: boolean
+  readonly onOpenMobileMenu?: () => void
 }
 
-export function SidebarProvider({ children, defaultCollapsed = false }: SidebarProviderProps) {
+const NO_MOBILE_MENU = () => {}
+
+export function SidebarProvider({ children, defaultCollapsed = false, onOpenMobileMenu = NO_MOBILE_MENU }: SidebarProviderProps) {
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed)
 
   const setCollapsed = useCallback((collapsed: boolean) => {
@@ -33,7 +38,7 @@ export function SidebarProvider({ children, defaultCollapsed = false }: SidebarP
   const sidebarWidth = isCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH
 
   return (
-    <SidebarContext.Provider value={{ isCollapsed, sidebarWidth, setCollapsed, toggleCollapsed }}>
+    <SidebarContext.Provider value={{ isCollapsed, sidebarWidth, setCollapsed, toggleCollapsed, openMobileMenu: onOpenMobileMenu }}>
       {children}
     </SidebarContext.Provider>
   )
@@ -48,6 +53,7 @@ export function useSidebar() {
       sidebarWidth: SIDEBAR_COLLAPSED_WIDTH,
       setCollapsed: () => {},
       toggleCollapsed: () => {},
+      openMobileMenu: () => {},
     }
   }
   return context

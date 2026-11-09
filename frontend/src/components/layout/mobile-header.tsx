@@ -8,10 +8,12 @@ import { useAppDir } from "@/lib/locale-store"
 
 interface MobileHeaderProps {
   readonly onMenuClick: () => void
+  /** Under the hosted header the bar holds the drawer button, but its logo would stand right below the header's. */
+  readonly showLogo?: boolean
 }
 
 /** The app's own phone header (below `md`): back to projects, the menu, the logo, the theme switch. */
-export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
+export function MobileHeader({ onMenuClick, showLogo = true }: MobileHeaderProps) {
   const t = useT()
   const location = useLocation()
   const isDashboard = location.pathname === "/projects"
@@ -37,7 +39,7 @@ export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
       >
         <Menu className="h-5 w-5" />
       </Button>
-      <NodaroLogo size="sm" />
+      {showLogo && <NodaroLogo size="sm" />}
       <div className="ms-auto">
         <ThemeToggle />
       </div>

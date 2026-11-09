@@ -100,7 +100,10 @@ describe("headerBalance", () => {
 
   it("a single payer: the caller's allowance is the headline, and the meter is what is left of it", () => {
     const balance = { ...BASE, total: 0, allowance: { granted: 2000, remaining: 1500, enforced: true } } as UserBalance
-    expect(headerBalance(balance)).toMatchObject({ total: 1500, subscription: 1500, monthlyAllocation: 2000 })
+    const view = headerBalance(balance)
+    expect(view).toMatchObject({ total: 1500, subscription: 1500, monthlyAllocation: 2000 })
+    // The header draws a month meter only beside the account's own wallet: handed an allowance, it would draw none.
+    expect(view.allowance).toBeFalsy()
   })
 
   it("an outside wallet: its available figure, no meter; unknown stays unknown, never 0", () => {
@@ -117,7 +120,24 @@ describe("headerBalance", () => {
       allowance: { granted: 2000, remaining: 1500, enforced: false },
       display: { unit: "tokens", decimals: 0, total: 0, subscription: 0, topup: 0, dailySpent: 0, dailyLimit: null, monthlyAllocation: 0, appCreditsAllowance: 0, allowance: { granted: 8000000, remaining: 6000000 } },
     } as unknown as UserBalance
-    expect(headerBalance(balance)).toMatchObject({ total: 6000000, subscription: 6000000, monthlyAllocation: 8000000 })
+    const view = headerBalance(balance)
+    expect(view).toMatchObject({ total: 6000000, subscription: 6000000, monthlyAllocation: 8000000 })
+    // In a unit the header reads `display` itself: the allowance is its own wallet there too, so the meter is drawn.
+    expect(view.allowance).toBeFalsy()
+    expect(view.display).toMatchObject({ unit: "tokens", total: 6000000, subscription: 6000000, monthlyAllocation: 8000000 })
+  })
+
+  it("with a unit and an allowance the server could not convert: unknown stays unknown, no meter", () => {
+    const balance = {
+      ...BASE,
+      total: 0,
+      allowance: { granted: 2000, remaining: 1500, enforced: false },
+      display: { unit: "tokens", decimals: 0, total: 0, subscription: 0, topup: 0, dailySpent: 0, dailyLimit: null, monthlyAllocation: 0, appCreditsAllowance: 0, allowance: null },
+    } as unknown as UserBalance
+    const view = headerBalance(balance)
+    expect(view.total).toBeUndefined()
+    expect(view.allowance).toBeFalsy()
+    expect(view.display).toMatchObject({ total: null, subscription: 0, monthlyAllocation: 0 })
   })
 
   it("with a unit and no allowance: the converted balance, meter and welcome credits", () => {
@@ -126,7 +146,9 @@ describe("headerBalance", () => {
       welcomeOffer: { popupSeen: false, consentPending: false, credits: 100 },
       display: { unit: "tokens", decimals: 0, total: 1400000, subscription: 1200000, topup: 200000, dailySpent: 0, dailyLimit: null, monthlyAllocation: 4000000, appCreditsAllowance: 0, welcomeOffer: { credits: 400000 } },
     } as unknown as UserBalance
-    expect(headerBalance(balance)).toMatchObject({ total: 1400000, subscription: 1200000, monthlyAllocation: 4000000, welcomeOffer: { popupSeen: false, credits: 400000 } })
+    const view = headerBalance(balance)
+    expect(view).toMatchObject({ total: 1400000, subscription: 1200000, monthlyAllocation: 4000000, welcomeOffer: { popupSeen: false, credits: 400000 } })
+    expect(view.display).toMatchObject({ total: 1400000, subscription: 1200000, monthlyAllocation: 4000000 })
   })
 
   it("a converted figure the server could not give stays unknown", () => {
@@ -134,6 +156,13 @@ describe("headerBalance", () => {
     const view = headerBalance(balance)
     expect(view.total).toBeUndefined()
     expect(view.monthlyAllocation).toBe(0)
+    // The header reads `display` for its meter: an unknown month is an empty one, as the balance beside it says.
+    expect(view.display).toMatchObject({ subscription: 0, monthlyAllocation: 0 })
+  })
+
+  it("an outside wallet keeps its key: the header draws no meter beside it", () => {
+    const balance = { ...BASE, externalWallet: { available: 420 }, allowance: { granted: 2000, remaining: 1500, enforced: true } } as UserBalance
+    expect(headerBalance(balance).externalWallet).toEqual({ available: 420 })
   })
 })
 
@@ -170,6 +199,14 @@ describe("unitTranslator", () => {
     expect(unit("account.creditsLeft")).toBe("tokens left")
     expect(unit("account.monthMeter", { left: "5", total: "10" })).toBe("5 of 10 tokens")
     expect(unit("account.settings")).toBe("shell:account.settings")
+  })
+
+  it("words the header's own unit sentences too, so a deployment reads the app's words as before", () => {
+    const unit = unitTranslator(t, words)
+    expect(unit("credits.pillUnit", { amount: "1,500", unit: "tokens" })).toBe("1,500 tokens, more")
+    expect(unit("credits.balanceUnit", { amount: "1,500", unit: "tokens" })).toBe("1,500 tokens")
+    expect(unit("account.unitsLeft", { unit: "tokens" })).toBe("tokens left")
+    expect(unit("account.monthMeterUnit", { unit: "tokens", left: "5", total: "10" })).toBe("5 of 10 tokens")
   })
 
   it("no unit: the header's own words", () => {

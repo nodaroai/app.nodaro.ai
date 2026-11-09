@@ -9,7 +9,7 @@ import { FreeGrantBannerSlot } from "@/components/layout/free-grant-banner-slot"
 import { ConsentGateSlot } from "@/components/layout/consent-gate-slot"
 import { WelcomeOfferPopupSlot } from "@/components/layout/welcome-offer-popup-slot"
 import { SiteHeaderSlot } from "@/components/layout/site-header-slot"
-import { useSharedHeaderActive } from "@/lib/shared-header"
+import { useSharedHeaderMode, useSharedHeaderMounted } from "@/lib/shared-header"
 import { SidebarProvider } from "@/components/layout/sidebar-context"
 import { useLoadUserSettings } from "@/hooks/use-load-user-settings"
 import { useAuth } from "@/hooks/use-auth"
@@ -113,7 +113,12 @@ export default function DashboardLayout() {
 
   // The shared site header replaces the sidebar's own chrome (one gate for the
   // layout, the sidebar and the editor toolbar).
-  const sharedHeader = useSharedHeaderActive()
+  const headerMode = useSharedHeaderMode()
+  const sharedHeader = headerMode !== null
+  // The hosted header draws its own skip link as its first element; a second,
+  // identical stop right before it helps nobody, so the app's steps aside once
+  // the header has drawn (a loading or failed header keeps the app's).
+  const hostedHeaderDrawn = useSharedHeaderMounted() && headerMode === "default"
   usePageTitle(location.pathname, NAV_ITEMS)
 
   // Show loading state while checking auth
@@ -134,9 +139,13 @@ export default function DashboardLayout() {
   )
   const column = (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Only show mobile header on non-editor pages (and never when embedded,
-          or under the shared site header, which has its own phone rows) */}
-      {!isEditor && !embedded && !sharedHeader && <MobileHeader onMenuClick={() => setMobileMenuOpen(true)} />}
+      {/* The app's phone bar, on non-editor pages (and never when embedded):
+          its own when no shared header draws; under the hosted header (which
+          has no slot for it) the drawer button's home, without a second logo.
+          A white-label header's phone rows hold the button themselves. */}
+      {!isEditor && !embedded && headerMode !== "white-label" && (
+        <MobileHeader onMenuClick={() => setMobileMenuOpen(true)} showLogo={headerMode === null} />
+      )}
       {/* Withheld free grant → activation path. Self-hiding; cloud only. */}
       {!embedded && <FreeGrantBannerSlot />}
       {/* The editor paints its own canvas ground; every other page gets the
@@ -156,13 +165,13 @@ export default function DashboardLayout() {
   )
 
   return (
-    <SidebarProvider defaultCollapsed={isEditor}>
+    <SidebarProvider defaultCollapsed={isEditor} onOpenMobileMenu={() => setMobileMenuOpen(true)}>
       {/* First Tab stop on every signed-in page, the editor included: past the
           sidebar and header (WCAG 2.4.1). The editor's canvas takes Tab for
           Add Node only once the canvas was clicked (canvas-tab-intent.ts), so
           a keyboard user reaches this first. Focus moves by script, so the
           address gains no #main and Back is unchanged. */}
-      <SkipToContent />
+      {!hostedHeaderDrawn && <SkipToContent />}
       {sharedHeader ? (
         // The shared site header (Cloud, lib/shared-header.ts) above the
         // sidebar row; the row takes the rest of the screen.
@@ -171,6 +180,7 @@ export default function DashboardLayout() {
             compact={isEditor}
             onOpenMenu={() => setMobileMenuOpen(true)}
             onHeaderOverlay={() => setMobileMenuOpen(false)}
+            drawerOpen={mobileMenuOpen}
           />
           <div className="flex min-h-0 flex-1">
             {sidebar}

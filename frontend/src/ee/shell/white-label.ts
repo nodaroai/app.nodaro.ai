@@ -6,7 +6,7 @@ import { WHITE_LABEL_WORLD_PATHS } from "./site"
 import type { SiteHeaderLanguage, SiteHeaderTranslate, SiteWorldId } from "./types"
 
 /**
- * The white-label header's pure parts (`app-header.tsx` mounts it): a
+ * The white-label header's pure parts (`white-label-header.tsx` mounts it): a
  * deployment of its own, whose surface profile says `header: "white-label"`.
  * The header then draws only what the app gives it, so each value here is the
  * deployment's, never Nodaro's.
@@ -89,14 +89,16 @@ function shown(figure: number | null | undefined): number {
 }
 
 /**
- * The balance as the white-label header draws it. The header (0.15.0) shows
- * `total` on its credit pill and the account menu, and a meter of
- * `subscription` against `monthlyAllocation`, so the app hands it the figures
- * the sidebar card would show:
+ * The balance as the white-label header draws it: the app hands it the figures
+ * the sidebar card would show.
  *   - the headline the card picks (`spendableCredits`): the caller's
  *     allowance on a deployment with a single payer, an outside wallet's
- *     available figure where one funds the runs, the balance otherwise; the
- *     meter is what is left of the allowance, and an outside wallet has none;
+ *     available figure where one funds the runs, the balance otherwise;
+ *   - the meter is what is left of the allowance, and an outside wallet has
+ *     none. The header draws a month meter only beside the account's own
+ *     wallet, so the allowance goes to it AS that wallet: with no `allowance`
+ *     key for it to read, its figures as the wallet's (and `display`'s, which
+ *     the header reads in a unit);
  *   - in the deployment's own unit when the server converted the figures
  *     (`display`), else in credits. The app never converts: a figure the
  *     server did not convert is shown as it came.
@@ -109,7 +111,7 @@ export function headerBalance(balance: UserBalance): UserBalance {
   const display = balance.display
   if (!display) {
     if (external) return { ...balance, total: shown(external.available), monthlyAllocation: 0 }
-    if (allowance) return { ...balance, total: allowance.remaining, subscription: allowance.remaining, monthlyAllocation: allowance.granted }
+    if (allowance) return { ...balance, allowance: null, total: allowance.remaining, subscription: allowance.remaining, monthlyAllocation: allowance.granted }
     return balance
   }
   const welcome =
@@ -117,21 +119,17 @@ export function headerBalance(balance: UserBalance): UserBalance {
       ? { welcomeOffer: { ...balance.welcomeOffer, credits: shown(display.welcomeOffer.credits) } }
       : {}
   if (external) return { ...balance, ...welcome, total: shown(display.externalWallet?.available), monthlyAllocation: 0 }
-  if (allowance) {
-    return {
-      ...balance,
-      ...welcome,
-      total: shown(display.allowance?.remaining),
-      subscription: display.allowance?.remaining ?? 0,
-      monthlyAllocation: display.allowance?.granted ?? 0,
-    }
-  }
+  const figures = allowance
+    ? { total: display.allowance?.remaining ?? null, subscription: display.allowance?.remaining ?? 0, monthlyAllocation: display.allowance?.granted ?? 0 }
+    : { total: display.total, subscription: display.subscription ?? 0, monthlyAllocation: display.monthlyAllocation ?? 0 }
   return {
     ...balance,
     ...welcome,
-    total: shown(display.total),
-    subscription: display.subscription ?? 0,
-    monthlyAllocation: display.monthlyAllocation ?? 0,
+    ...(allowance ? { allowance: null } : {}),
+    total: shown(figures.total),
+    subscription: figures.subscription,
+    monthlyAllocation: figures.monthlyAllocation,
+    display: { ...display, ...figures },
   }
 }
 
@@ -158,10 +156,10 @@ export interface UnitWords {
 
 /**
  * The header's translator with its credit words in the deployment's unit:
- * the keys whose sentences say "credits" (the pill, its screen-reader line,
- * the account menu's caption and meter) are worded with `words`; every other
- * key is the header's own. `null` (no unit: the figures are credits) is the
- * header's translator unchanged.
+ * the keys whose sentences say "credits", and the header's own sentences for a
+ * unit (the pill, its screen-reader line, the account menu's caption and
+ * meter), are worded with `words`; every other key is the header's own. `null`
+ * (no unit: the figures are credits) is the header's translator unchanged.
  */
 export function unitTranslator(t: SiteHeaderTranslate, words: UnitWords | null): SiteHeaderTranslate {
   if (!words) return t
@@ -172,13 +170,19 @@ export function unitTranslator(t: SiteHeaderTranslate, words: UnitWords | null):
         return words.label
       case "credits.balance":
         return words.balance(text(vars?.credits))
+      case "credits.balanceUnit":
+        return words.balance(text(vars?.amount))
       case "credits.pill":
         return words.pill(text(vars?.credits))
+      case "credits.pillUnit":
+        return words.pill(text(vars?.amount))
       case "credits.loading":
         return words.loading
       case "account.creditsLeft":
+      case "account.unitsLeft":
         return words.left
       case "account.monthMeter":
+      case "account.monthMeterUnit":
         return words.meter(text(vars?.left), text(vars?.total))
       default:
         return t(key, vars)

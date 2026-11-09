@@ -2,14 +2,14 @@
 import { existsSync, readFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import type { Plugin } from "vite"
-import { readSiteEnv, siteWorldsFile } from "./site"
 
 /**
  * The shared site header's module resolver (Cloud only).
  *
  * The header is a private package that only cloud images install (see
  * `install-package.sh` beside this file and the Dockerfile's frontend stage).
- * App code imports it through ONE virtual id, `virtual:site-header`:
+ * App code imports it through ONE virtual id per part. `virtual:site-header`
+ * is the npm header, which a white-label deployment shows:
  *
  *   - cloud build, `VITE_SHARED_HEADER` "true" or "white-label", package
  *     installed → a small adapter that re-exports the package and imports its
@@ -53,6 +53,15 @@ import { readSiteEnv, siteWorldsFile } from "./site"
  * (that would style every page of every deployment the image serves): the
  * adapter hands its address, and the app links it where the header is on.
  *
+ * And `virtual:hosted-header`: the product side of the hosted Nodaro header
+ * (loaded live from nodaro.ai on Nodaro's own deployments, so only this small
+ * part comes from the package): its loader address, event names, frozen
+ * fallback and the reserve stylesheet. It is an id of its own so the hosted
+ * mount's chunk never carries the npm header. On the package decision it is an
+ * adapter over the package's header entry; elsewhere `hosted-header-stub.ts`,
+ * which has no loader address, so a community or business bundle can never name
+ * it (and nothing reaches its mount there).
+ *
  * And `virtual:media-editor`: the shared media editor's parts (range strip,
  * crop box, ratio chips and their helpers), used by the trend admin's source
  * clip intake. On the package decision it re-exports the package's editor
@@ -64,17 +73,17 @@ import { readSiteEnv, siteWorldsFile } from "./site"
  * the editor is admin tooling, not the header, and a cloud build without the
  * package simply keeps the admin's own editor.
  *
- * Types come from `site-header.d.ts`, `media-editor.d.ts`,
- * `lib/site-locale.d.ts` and `lib/site-a11y.d.ts`; `contract/` holds the
- * internal-only check that those types still fit the package.
+ * Types come from `site-header.d.ts`, `hosted-header-virtual.d.ts`,
+ * `media-editor.d.ts`, `lib/site-locale.d.ts` and `lib/site-a11y.d.ts`;
+ * `contract/` holds the internal-only check that those types still fit the
+ * package.
  *
- * A cloud build also publishes `/shell-version.json`: the header version it
- * installed (`null` without the package) and whether the site shows it. The
- * version depends on the environment's build settings as well as the commit,
- * so the built site is the one place that knows it; the admin's Header
- * versions page reads it (`backend/src/ee/lib/header-versions/`). Beside it,
- * `/shell-worlds.json`: where the site's worlds row leads, from the same
- * function the header's links come from (`site.ts`), for the same reason.
+ * A cloud build also publishes `/shell-version.json`: the header package
+ * version it installed (`null` without the package) and whether the site shows
+ * it. The version depends on the environment's build settings as well as the
+ * commit, so the built site is the one place that knows it; the admin's Header
+ * versions page reads it (`backend/src/ee/lib/header-versions/`), and the
+ * cloud image's build checks that the header was built in with it.
  */
 
 export const SITE_HEADER_ID = "virtual:site-header"
@@ -85,12 +94,12 @@ export const SITE_A11Y_ID = "virtual:site-a11y"
 const RESOLVED_A11Y_ID = `\0${SITE_A11Y_ID}`
 export const MEDIA_EDITOR_ID = "virtual:media-editor"
 const RESOLVED_MEDIA_EDITOR_ID = `\0${MEDIA_EDITOR_ID}`
+export const HOSTED_HEADER_ID = "virtual:hosted-header"
+const RESOLVED_HOSTED_HEADER_ID = `\0${HOSTED_HEADER_ID}`
 const PACKAGE = "@nodaroai/shell"
 const FLAG = "VITE_SHARED_HEADER"
 /** Served at the site's root; the backend's `SITE_FILE` reads it by this name. */
 export const SITE_VERSION_FILE = "shell-version.json"
-/** Served at the site's root; the backend's `WORLDS_FILE` reads it by this name. */
-export const SITE_WORLDS_FILE = "shell-worlds.json"
 
 export type SiteHeaderDecision = "package" | "stub" | "missing"
 
@@ -174,6 +183,8 @@ export interface SiteHeaderModuleOptions {
   readonly a11yStubPath: string
   /** The media editor stub's absolute path. */
   readonly mediaEditorStubPath: string
+  /** The hosted header's product-side stub's absolute path. */
+  readonly hostedHeaderStubPath: string
   /** Test seam; defaults to Node resolution from `root`. */
   readonly isInstalled?: (root: string) => boolean
   /** Test seam; defaults to the installed package's own `package.json`. */
@@ -213,6 +224,13 @@ const A11Y_ADAPTER = [
   "",
 ].join("\n")
 
+const HOSTED_HEADER_ADAPTER = [
+  `import "${PACKAGE}/reserve.css"`,
+  `export { HEADER_EVENTS, HEADER_TAG, HeaderFallback, LOADER_URL, closeHeaderOverlays, onHeaderFailure, useHeaderNavigation } from "${PACKAGE}/header"`,
+  "export const hostedHeaderAvailable = true",
+  "",
+].join("\n")
+
 const MEDIA_EDITOR_ADAPTER = [
   `import "${PACKAGE}/shell.css"`,
   `export * from "${PACKAGE}/media-editor"`,
@@ -220,7 +238,7 @@ const MEDIA_EDITOR_ADAPTER = [
   "",
 ].join("\n")
 
-const ADAPTER_IDS: ReadonlySet<string | undefined> = new Set([RESOLVED_ID, RESOLVED_LOCALE_ID, RESOLVED_A11Y_ID, RESOLVED_MEDIA_EDITOR_ID])
+const ADAPTER_IDS: ReadonlySet<string | undefined> = new Set([RESOLVED_ID, RESOLVED_LOCALE_ID, RESOLVED_A11Y_ID, RESOLVED_MEDIA_EDITOR_ID, RESOLVED_HOSTED_HEADER_ID])
 
 export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
   const installed = options.isInstalled ?? isPackageInstalled
@@ -228,7 +246,6 @@ export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
   let decision: SiteHeaderDecision = "stub"
   let editor: "package" | "stub" = "stub"
   let versionFile: string | null = null
-  let worldsFile: string | null = null
   return {
     name: "nodaro-site-header",
     enforce: "pre",
@@ -238,10 +255,9 @@ export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
       const present = installed(options.root)
       decision = siteHeaderDecision({ edition: env.VITE_EDITION, flag: env[FLAG] }, present)
       editor = mediaEditorDecision(env.VITE_EDITION, present)
-      // `/shell-version.json` and `/shell-worlds.json`: a cloud build's only; never on another build or the dev server.
+      // `/shell-version.json`: a cloud build's only; never on another build or the dev server.
       const publishes = command === "build" && env.VITE_EDITION === "cloud"
       versionFile = publishes ? siteVersionFile(decision, present ? (options.readVersion ?? installedVersion)(options.root) : null) : null
-      worldsFile = publishes ? siteWorldsFile(readSiteEnv(env), decision === "package") : null
       if (decision === "missing" && command === "build") {
         throw new Error(`${FLAG}=${env[FLAG]} on a cloud build, but the header package is not installed. Install it (see frontend/src/ee/shell/install-package.sh) or unset the flag.`)
       }
@@ -257,6 +273,7 @@ export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
       if (id === SITE_LOCALE_ID) return decision === "package" ? RESOLVED_LOCALE_ID : options.localeStubPath
       if (id === SITE_A11Y_ID) return decision === "package" ? RESOLVED_A11Y_ID : options.a11yStubPath
       if (id === MEDIA_EDITOR_ID) return editor === "package" ? RESOLVED_MEDIA_EDITOR_ID : options.mediaEditorStubPath
+      if (id === HOSTED_HEADER_ID) return decision === "package" ? RESOLVED_HOSTED_HEADER_ID : options.hostedHeaderStubPath
       // The adapters have no file of their own: resolve their imports from the
       // frontend directory, as if a file there imported them.
       if (ADAPTER_IDS.has(importer) && id.startsWith(PACKAGE)) {
@@ -268,11 +285,11 @@ export function siteHeaderModule(options: SiteHeaderModuleOptions): Plugin {
       if (id === RESOLVED_ID) return ADAPTER
       if (id === RESOLVED_A11Y_ID) return A11Y_ADAPTER
       if (id === RESOLVED_MEDIA_EDITOR_ID) return MEDIA_EDITOR_ADAPTER
+      if (id === RESOLVED_HOSTED_HEADER_ID) return HOSTED_HEADER_ADAPTER
       return id === RESOLVED_LOCALE_ID ? LOCALE_ADAPTER : null
     },
     generateBundle() {
       if (versionFile !== null) this.emitFile({ type: "asset", fileName: SITE_VERSION_FILE, source: versionFile })
-      if (worldsFile !== null) this.emitFile({ type: "asset", fileName: SITE_WORLDS_FILE, source: worldsFile })
     },
   }
 }

@@ -37,6 +37,7 @@ export default defineConfig({
       localeStubPath: path.resolve(__dirname, "src/lib/site-locale-stub.ts"),
       a11yStubPath: path.resolve(__dirname, "src/lib/site-a11y-stub.ts"),
       mediaEditorStubPath: path.resolve(__dirname, "src/ee/shell/media-editor-stub.ts"),
+      hostedHeaderStubPath: path.resolve(__dirname, "src/ee/shell/hosted-header-stub.ts"),
     }),
     // The key list the server checks a deployment's `strings` overrides against.
     uiStringsManifest({ root: __dirname }),

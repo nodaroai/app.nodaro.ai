@@ -29,6 +29,7 @@ on:
       - "frontend/src/lib/site-a11y.d.ts"
       - "frontend/src/lib/site-a11y-stub.ts"
       - "frontend/src/lib/accessibility-preferences.ts"
+      - "frontend/src/lib/account-changed-event.ts"
       - "frontend/src/lib/site-header-mode.ts"
       - "frontend/src/lib/runtime-config.ts"
       - "frontend/Caddyfile"
@@ -48,6 +49,7 @@ on:
       - "frontend/src/lib/site-a11y.d.ts"
       - "frontend/src/lib/site-a11y-stub.ts"
       - "frontend/src/lib/accessibility-preferences.ts"
+      - "frontend/src/lib/account-changed-event.ts"
       - "frontend/src/lib/site-header-mode.ts"
       - "frontend/src/lib/runtime-config.ts"
       - "frontend/Caddyfile"
@@ -100,11 +102,14 @@ jobs:
         run: npx tsc -p frontend/src/ee/shell/contract/tsconfig.json
       # The app's own accessibility menu saves through the package's cookie
       # writer (no copy of its own): each save must keep what the app does not
-      # own (the header's button place, a newer product's letters). Skips
-      # without the package elsewhere; here the variable makes a missing
-      # package a failure.
-      - name: The app's accessibility saves go through the package
+      # own (the header's button place, a newer product's letters). The hosted
+      # header's product side (its failure signal, its router helper, its
+      # frozen fallback) behaves as the app assumes, and the real header draws
+      # a white-label balance the way the app means it (the allowance's month
+      # meter). All skip without the package elsewhere; here the variable makes
+      # a missing package a failure.
+      - name: What the app relies on goes through the package
         working-directory: frontend
         env:
           SHARED_HEADER_TESTS_REQUIRE_PACKAGE: "1"
-        run: npx vitest run src/ee/shell/__tests__/a11y-package.test.ts
+        run: npx vitest run src/ee/shell/__tests__/a11y-package.test.ts src/ee/shell/__tests__/hosted-header-package.test.tsx src/ee/shell/__tests__/white-label-balance-package.test.tsx

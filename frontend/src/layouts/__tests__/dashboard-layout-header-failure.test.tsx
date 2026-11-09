@@ -11,7 +11,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom"
 
 vi.stubEnv("VITE_SHARED_HEADER", "true")
 vi.mock("@/lib/edition", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/edition")>()), hasSharedHeader: () => true }))
-vi.mock("@/ee/shell/app-header", () => ({
+vi.mock("@/ee/shell/hosted-header", () => ({
   default: () => {
     throw new Error("the header failed")
   },
@@ -57,8 +57,11 @@ describe("when the shared header fails", () => {
         </Routes>
       </MemoryRouter>,
     )
-    expect(await screen.findByTestId("app-phone-header")).toBeInTheDocument()
-    expect(screen.getByTestId("sidebar")).toHaveAttribute("data-shared-header", "false")
+    // The app's own chrome comes back once the failure lands (the phone bar is
+    // there either way now: under the hosted header it holds the drawer button).
+    await vi.waitFor(() => expect(screen.getByTestId("sidebar")).toHaveAttribute("data-shared-header", "false"))
+    expect(screen.getByTestId("app-phone-header")).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Skip to content" })).toBeInTheDocument()
     expect(screen.getByText("projects")).toBeInTheDocument()
     expect(screen.queryByText("route error view")).toBeNull()
     expect(sharedHeaderActive()).toBe(false)

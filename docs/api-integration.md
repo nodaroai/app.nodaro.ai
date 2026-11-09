@@ -5561,10 +5561,11 @@ image or likeness, unauthorized voice use, impersonation or identity misuse,
 a privacy violation, or another legal complaint). The routes are public: a
 complainant has no account here. They are the form's own contract and have
 no SDK method, CLI command or MCP tool — a complaint is a person's legal act,
-made on the page. The form is linked from the sign-in page, the sidebar and
-the account menu wherever the deployment has an administrator's screen to
-handle the cases and shows the platform's legal pages; elsewhere it stays at
-its address, unlinked.
+made on the page. The form is linked from the sign-in page and the sidebar
+(and, on a deployment with its own white-label header, that header's account
+menu) wherever the deployment has an administrator's screen to handle the
+cases and shows the platform's legal pages; elsewhere it stays at its address,
+unlinked.
 
 | Method | Route | What it does |
 |--------|-------|--------------|

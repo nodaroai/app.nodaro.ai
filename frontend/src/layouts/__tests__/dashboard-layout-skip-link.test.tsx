@@ -11,7 +11,7 @@ import { Link, MemoryRouter, Route, Routes } from "react-router-dom"
  * itself in the title. And the "reduce motion" setting is honoured site-wide.
  */
 
-vi.mock("@/lib/shared-header", () => ({ sharedHeaderActive: () => false, useSharedHeaderActive: () => false }))
+vi.mock("@/lib/shared-header", () => ({ sharedHeaderActive: () => false, useSharedHeaderMode: () => null, useSharedHeaderMounted: () => false }))
 vi.mock("@/components/layout/site-header-slot", () => ({ SiteHeaderSlot: () => null }))
 vi.mock("@/components/layout/app-sidebar", () => ({
   AppSidebar: () => (

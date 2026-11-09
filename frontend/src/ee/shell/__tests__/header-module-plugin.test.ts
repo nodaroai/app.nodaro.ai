@@ -6,6 +6,7 @@ import type { Plugin, UserConfig } from "vite"
 import { describe, expect, it } from "vitest"
 
 import {
+  HOSTED_HEADER_ID,
   installedVersion,
   isPackageInstalled,
   MEDIA_EDITOR_ID,
@@ -14,7 +15,6 @@ import {
   SITE_HEADER_ID,
   SITE_LOCALE_ID,
   SITE_VERSION_FILE,
-  SITE_WORLDS_FILE,
   siteHeaderDecision,
   siteHeaderModule,
 } from "../header-module-plugin"
@@ -38,6 +38,8 @@ const A11Y_STUB = "/stub/site-a11y.ts"
 const RESOLVED_A11Y = `\0${SITE_A11Y_ID}`
 const MEDIA_EDITOR_STUB = "/stub/media-editor.ts"
 const RESOLVED_MEDIA_EDITOR = `\0${MEDIA_EDITOR_ID}`
+const HOSTED_STUB = "/stub/hosted-header.ts"
+const RESOLVED_HOSTED = `\0${HOSTED_HEADER_ID}`
 const FORCED_OFF = { define: { "import.meta.env.VITE_SHARED_HEADER": JSON.stringify("false") } }
 
 function plugin(installed: boolean, env: Record<string, string>): Plugin {
@@ -47,6 +49,7 @@ function plugin(installed: boolean, env: Record<string, string>): Plugin {
     localeStubPath: LOCALE_STUB,
     a11yStubPath: A11Y_STUB,
     mediaEditorStubPath: MEDIA_EDITOR_STUB,
+    hostedHeaderStubPath: HOSTED_STUB,
     isInstalled: () => installed,
     readVersion: () => (installed ? "0.12.0" : null),
     readEnv: () => env,
@@ -151,38 +154,11 @@ describe("the site's shell-version.json", () => {
       const p = plugin(installed, env)
       await runConfig(p, "build")
       const files = emitted(p)
-      expect(files.map((f) => [f.type, f.fileName])).toEqual([
-        ["asset", SITE_VERSION_FILE],
-        ["asset", SITE_WORLDS_FILE],
-      ])
+      // The hosted header's links are the header's own, so the file of where a
+      // build's worlds row leads is gone; only the version stays.
+      expect(files.map((f) => [f.type, f.fileName])).toEqual([["asset", SITE_VERSION_FILE]])
       expect(JSON.parse(files[0]?.source ?? "")).toEqual(expected)
     }
-  })
-
-  it("beside it, where the worlds row leads: the build's own origins, the App's tab on the site itself", async () => {
-    const worlds = async (installed: boolean, env: Record<string, string>) => {
-      const p = plugin(installed, env)
-      await runConfig(p, "build")
-      return JSON.parse(emitted(p).find((f) => f.fileName === SITE_WORLDS_FILE)?.source ?? "null")
-    }
-    expect(await worlds(true, { ...ON, VITE_TOOLS_URL: "https://next.tools.example", VITE_STUDIO_URL: "https://studio.example" })).toEqual({
-      worldsRow: true,
-      worldHrefs: {
-        explore: "https://next.tools.example/explore",
-        image: "https://next.tools.example/image",
-        video: "https://next.tools.example/video",
-        music: "https://next.tools.example/music",
-        trends: "https://next.tools.example/trends",
-        motion: "https://next.tools.example/video/cast-swap",
-        voice: "https://next.tools.example/voice-changer",
-        studio: "https://studio.example/",
-        app: "/projects",
-      },
-    })
-    // No origins set: the header keeps its own for the rest.
-    expect(await worlds(true, ON)).toEqual({ worldsRow: true, worldHrefs: { app: "/projects" } })
-    // A site that does not show the header shows no row.
-    expect(await worlds(true, { VITE_EDITION: "cloud", VITE_TOOLS_URL: "https://next.tools.example" })).toEqual({ worldsRow: false, worldHrefs: {} })
   })
 
   it("no other build, and no dev server, writes one", async () => {
@@ -206,6 +182,28 @@ describe("siteHeaderModule", () => {
     expect(source).toMatch(/export const headerAvailable = true/)
     expect(source).toMatch(/^import ".+\/shell\.css"$/m)
     expect(source).toMatch(/^export \{ NodaroShell, shellTranslator \} from ".+"$/m)
+  })
+
+  it("the hosted header's product side follows the same decision, as an adapter of its own (no npm header in its chunk)", async () => {
+    const on = plugin(true, ON)
+    await runConfig(on, "build")
+    expect(resolve(on, HOSTED_HEADER_ID)).toBe(RESOLVED_HOSTED)
+    const source = load(on, RESOLVED_HOSTED) ?? ""
+    // The reserved box and the frozen fallback's styles travel with the element.
+    expect(source).toMatch(/^import ".+\/reserve\.css"$/m)
+    expect(source).toMatch(/^export \{ .*\bHeaderFallback\b.*\buseHeaderNavigation\b.* \} from ".+\/header"$/m)
+    expect(source).toMatch(/^export const hostedHeaderAvailable = true$/m)
+    expect(source).not.toMatch(/shell\.css|NodaroShell/)
+
+    for (const [installed, env] of [
+      [true, { ...ON, VITE_EDITION: "community" }],
+      [true, { ...ON, VITE_EDITION: "business" }],
+      [false, { VITE_EDITION: "cloud" }],
+    ] as const) {
+      const off = plugin(installed, env)
+      await runConfig(off, "build")
+      expect(resolve(off, HOSTED_HEADER_ID)).toBe(HOSTED_STUB)
+    }
   })
 
   it("the shared language follows the same decision, as an adapter of its own (no header in the main bundle)", async () => {
@@ -360,6 +358,7 @@ describe("siteHeaderModule", () => {
       localeStubPath: LOCALE_STUB,
       a11yStubPath: A11Y_STUB,
       mediaEditorStubPath: MEDIA_EDITOR_STUB,
+      hostedHeaderStubPath: HOSTED_STUB,
       isInstalled: () => false,
       readEnv: (_mode, dir) => {
         dirs.push(dir)

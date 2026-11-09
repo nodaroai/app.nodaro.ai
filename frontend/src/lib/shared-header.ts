@@ -3,11 +3,13 @@ import { isEmbedded } from "@/hooks/use-embed-session-handoff"
 import { siteHeaderMode, type SiteHeaderMode } from "@/lib/site-header-mode"
 
 /**
- * Whether the shared site header replaces the sidebar's own chrome (the logo
- * menu, the credit card, the user row, the language and theme switches, the
- * phone header) on this page, and which header it is. The ONE gate the layout,
- * the sidebar and the editor toolbar read, so they can never disagree about a
- * page.
+ * Whether a shared site header replaces the sidebar's own chrome (the logo
+ * menu, the credit card, the user row, the language switch — and, under a
+ * white-label header, the theme switch and the phone header) on this page, and
+ * which header it is: the hosted header on Nodaro's own deployments, the npm
+ * header in white-label mode on a deployment of its own. The ONE gate the
+ * layout, the sidebar and the editor toolbar read, so they can never disagree
+ * about a page.
  *
  * On only when all hold:
  *   - the deployment shows a header (`siteHeaderMode()`): Nodaro's, on a
@@ -19,9 +21,10 @@ import { siteHeaderMode, type SiteHeaderMode } from "@/lib/site-header-mode"
  *   - the page is not embedded: the products — and the header itself — frame
  *     this app's billing and settings pages, and a framed page never draws a
  *     header;
- *   - the header has not failed on this page (its chunk did not load, or it
- *     threw): then the app goes back to its own chrome rather than losing
- *     sign-out, credits, language and theme with no header to hold them.
+ *   - the header has not failed on this page (its chunk or its hosted files
+ *     did not load, or it threw): then the app goes back to its own chrome
+ *     rather than losing sign-out, credits, language and theme with no header
+ *     to hold them.
  *
  * Only `DashboardLayout` mounts the header at all, so admin and every public
  * route (sign-in, shares, embeds, published apps) never get one either way.

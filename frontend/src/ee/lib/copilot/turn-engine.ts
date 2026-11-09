@@ -7,6 +7,7 @@
  * explicit stop, a workflow change, or leaving the editor.
  */
 import { getAuthHeaders } from "@/lib/api"
+import { dispatchAccountChanged } from "@/lib/account-changed-event"
 import { tx, type MessageKey } from "@/lib/i18n"
 import { useLocaleStore } from "@/lib/locale-store"
 import { queryClient } from "@/lib/query-client"
@@ -254,6 +255,8 @@ async function send(
     useCopilotUiStore.getState().setTurnActive(false)
     queryClient.invalidateQueries({ queryKey: queryKeys.copilot.thread(threadId) })
     queryClient.invalidateQueries({ queryKey: queryKeys.credits.all })
+    // The turn spent credits; the hosted header's balance is its own (`invalidateBalance`).
+    dispatchAccountChanged()
   }
 }
 
