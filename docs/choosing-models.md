@@ -68,8 +68,6 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Flux 2 Pro | Black Forest Labs | Standard | 15<!-- credits: flux --> | t2i | Flux 2 Pro text-to-image. Strong realism, fast. Resolution lever to 2K. |
 | Flux 2 Pro (I2I) | Black Forest Labs | Standard | 15<!-- credits: flux-pro-i2i --> | i2i | Image-to-image with Flux Pro. Cheaper than Flex variant, good general edits. |
 | Flux Kontext Pro | Black Forest Labs | Standard | 15<!-- credits: flux-kontext --> | t2i, edit | Context-aware editing and style transfer. Strong at preserving subject identity through edits. |
-| GPT Image 2.6 Economy | OpenAI | Standard | 15<!-- credits: gpt-image-2-6-economy --> | t2i | The same GPT Image 2.6 at a flat low price, 1K only - pick it for volume. |
-| GPT Image 2.6 Economy (I2I) | OpenAI | Standard | 15<!-- credits: gpt-image-2-6-economy-i2i --> | i2i | Flat-price GPT Image 2.6 edits, 1K only, up to 16 input images - pick it for volume. |
 | Qwen Edit | Alibaba | Standard | 15<!-- credits: qwen-edit --> | edit | Qwen image edit endpoint with native negative prompt. |
 | Seedream 5 Lite | Bytedance | Standard | 16<!-- credits: seedream-5-lite --> | t2i | Newer Seedream 5 Lite — instruction-based generation, visual reasoning. |
 | Seedream 5 Lite (I2I) | Bytedance | Standard | 16<!-- credits: seedream-5-lite-i2i --> | i2i | Image-to-image with Seedream 5 Lite. |

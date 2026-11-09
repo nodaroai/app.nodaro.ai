@@ -410,7 +410,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // Economy, flat per image at 1K with no quality, size or moderation input.
   // `moderation` (auto, low) is a content-filter setting; nothing is sent, so
   // KIE's default of low applies. Quality low, medium, high (default medium).
-  // Prices are provisional until a staging run has measured them.
+  // Prices were measured on 2026-11-09 against real runs.
   // See: docs.kie.ai/market/gpt/gpt-image-2-6-{flare,sunburst,economy}-{text,image}-to-image.md
   // `inputFields` is what this release sends of each schema: the masks, GIF and
   // SVG fields come with those features.

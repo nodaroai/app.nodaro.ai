@@ -123,6 +123,13 @@ describe("costTier", () => {
 })
 
 describe("renderModelTable", () => {
+  it("leaves out a model withheld from the docs", () => {
+    const entry = Object.values(CATALOG).find((e) => e.kind === "image")!
+    const withheld = { ...CATALOG, [entry.id]: { ...entry, docsHidden: true } }
+    expect(renderModelTable(CATALOG, "image")).toContain(entry.label)
+    expect(renderModelTable(withheld, "image")).not.toContain(entry.label)
+  })
+
   it("renders a markdown table for the given kind with header columns", () => {
     const out = renderModelTable(CATALOG, "image")
     expect(out).toContain("| Model |")

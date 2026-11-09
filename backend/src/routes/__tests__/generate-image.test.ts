@@ -880,6 +880,46 @@ describe("POST /v1/generate-image", () => {
       expect(vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]).toBe("nano-banana")
     })
 
+    describe("how many input images a request may carry", () => {
+      const post = (provider: string, references: number, extra: Record<string, unknown> = {}) =>
+        app.inject({
+          method: "POST",
+          url: "/v1/generate-image",
+          payload: {
+            prompt: "a teapot",
+            userId: VALID_UUID,
+            provider,
+            referenceImageUrls: Array.from({ length: references }, (_, i) => `https://r2.nodaro.ai/ref-${i}.png`),
+            ...extra,
+          },
+        })
+
+      it("GPT Image 2.6 Flare and Sunburst take 16", async () => {
+        for (const provider of ["gpt-image-2-6-flare", "gpt-image-2-6-sunburst"]) {
+          setupSupabaseMock({})
+          expect((await post(provider, 16)).statusCode, provider).toBe(200)
+        }
+      })
+
+      it("a base image counts: 16 references and a base is one too many", async () => {
+        const res = await post("gpt-image-2-6-flare", 16, { baseImageUrl: "https://r2.nodaro.ai/base.png" })
+        expect(res.statusCode).toBe(400)
+        expect(res.json().error.code).toBe("validation_error")
+      })
+
+      it("every other model stays at 14", async () => {
+        setupSupabaseMock({})
+        expect((await post("gpt-image-2-5-flare", 14)).statusCode).toBe(200)
+        const res = await post("gpt-image-2-5-flare", 15)
+        expect(res.statusCode).toBe(400)
+        expect(res.json().error.code).toBe("validation_error")
+      })
+
+      it("the array's outer bound still stops past 16 for any model", async () => {
+        expect((await post("gpt-image-2-6-flare", 17)).statusCode).toBe(400)
+      })
+    })
+
     it("preserves `referenceImageUrls: undefined` on the queue when the old shape omits refs", async () => {
       setupSupabaseMock({})
       const res = await app.inject({

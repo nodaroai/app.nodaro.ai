@@ -15,7 +15,7 @@ import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.
 import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { llmComplete } from "../lib/llm-client.js"
-import { MODIFY_IMAGE_PROVIDERS, IMAGE_ASPECT_RATIO_VALUES, IMAGE_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, IMAGE_BACKGROUND_VALUES, IMAGE_RENDERING_SPEED_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
+import { MODIFY_IMAGE_PROVIDERS, IMAGE_ASPECT_RATIO_VALUES, IMAGE_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, IMAGE_BACKGROUND_VALUES, IMAGE_RENDERING_SPEED_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, MAX_REQUEST_IMAGE_LIMIT, requestImageLimit } from "@nodaro/shared/models"
 import { IMAGE_TO_IMAGE_ATTACH_COLUMNS } from "@nodaro/shared/entities"
 import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
@@ -39,7 +39,9 @@ export const imageToImageBody = z.object({
   // lets the MCP modify_image tool pass nano-banana-edit without a 400; it's
   // a superset so existing i2i callers are unaffected.
   provider: z.enum(MODIFY_IMAGE_PROVIDERS).optional(),
-  referenceImageUrls: z.array(safeUrlSchema).max(13).optional(),
+  // `imageUrl` plus these. The array's bound is the largest limit any model has;
+  // `imageToImageRequest` holds each model to its own.
+  referenceImageUrls: z.array(safeUrlSchema).max(MAX_REQUEST_IMAGE_LIMIT - 1).optional(),
   resolution: z.enum(IMAGE_RESOLUTION_VALUES).optional(),
   quality: z.enum(IMAGE_QUALITY_VALUES).optional(),
   /** Image background, on the models that take one (`auto`, `opaque`, `transparent`). */
@@ -83,6 +85,15 @@ export const imageToImageBody = z.object({
   injectCharacterContext: z.boolean().optional().default(false),
 })
 
+/** What the handler validates: the body, and each model's own image limit.
+ *  `imageToImageBody` stays a plain object for `applySnappedLevers`. */
+const imageToImageRequest = imageToImageBody.superRefine((data, ctx) => {
+  const limit = requestImageLimit(data.provider)
+  if (1 + (data.referenceImageUrls?.length ?? 0) > limit) {
+    ctx.addIssue({ code: "custom", path: ["referenceImageUrls"], message: `This model takes at most ${limit} input images, imageUrl included` })
+  }
+})
+
 const IDENTITY_PRESERVE_SUFFIX =
   "The subject must remain exactly the same person — preserve facial identity, eye color, hair color, skin tone, and unique features."
 
@@ -101,7 +112,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       }),
     ],
   }, async (req, reply) => {
-    const parsed = imageToImageBody.safeParse(req.body)
+    const parsed = imageToImageRequest.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
         error: { code: "validation_error", ...formatZodError(parsed.error) },

@@ -402,6 +402,13 @@ export interface ModelCatalogEntry {
    */
   mcpHidden?: boolean
   /**
+   * Left out of the public docs' model tables and the model lists in the MCP
+   * tool descriptions, while a provider can't serve this model. Not an
+   * availability switch: what hides a model from every menu and refuses a run
+   * is the admin's `model_pricing.is_enabled` (backend lib/model-switch.ts).
+   */
+  docsHidden?: boolean
+  /**
    * The provider's safety filter is known to be non-deterministic on this
    * model — the platform retries a blocked request once; `fallback` names
    * the catalog model to offer when it blocks again.
@@ -481,12 +488,9 @@ const GPT_IMAGE_2_5_RATIOS = [
 ] as const
 // GPT Image 2.6 Flare and Sunburst: auto plus fifteen ratios, Economy a shorter
 // list of its own (docs.kie.ai/market/gpt/gpt-image-2-6-*).
-// 27:16, 16:27, 9:8 and 8:9 are NOT in KIE's documented list for 2.6 (they are
-// 2.5's). They stay only if the staging test shows KIE accepts them.
 const GPT_IMAGE_2_6_RATIOS = [
   "auto", "1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16",
   "2:1", "1:2", "21:9", "9:21", "3:1", "1:3",
-  "27:16", "16:27", "9:8", "8:9",
 ] as const
 const GPT_IMAGE_2_6_ECONOMY_RATIOS = ["auto", "1:1", "16:9", "9:16", "3:2", "2:3", "21:9", "4:3"] as const
 const GPT_IMAGE_2_6_VALUE_LABELS = {
@@ -494,8 +498,6 @@ const GPT_IMAGE_2_6_VALUE_LABELS = {
   "5:4": "5:4 (Near-square)", "4:5": "4:5 (Near-square)",
   "2:1": "2:1 (Wide)", "1:2": "1:2 (Vertical)",
   "9:21": "9:21 (Ultra-tall)", "3:1": "3:1 (Banner)", "1:3": "1:3 (Vertical banner)",
-  "27:16": "27:16 (Ultra-wide)", "16:27": "16:27 (Ultra-tall)",
-  "9:8": "9:8 (Near-square)", "8:9": "8:9 (Near-square)",
   // Auto takes the shared label; it is an aspect ratio on these models too.
   "low": "Low", "medium": "Medium", "high": "High", "xhigh": "Extra High", "max": "Max",
 } as const
@@ -879,9 +881,6 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_RATIOS,
     resolutions: ["1K", "2K", "4K"],
-    backgrounds: GPT_IMAGE_BACKGROUNDS,
-    transparentResolution: "1K",
-    backgroundOnlyAtTransparentResolution: true,
     pricing: [
       { identifier: "gpt-image-2", credits: 15, note: "1K default" },
       { identifier: "gpt-image-2:2K", credits: 25, note: "2K" },
@@ -904,9 +903,6 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_RATIOS,
     resolutions: ["1K", "2K", "4K"],
-    backgrounds: GPT_IMAGE_BACKGROUNDS,
-    transparentResolution: "1K",
-    backgroundOnlyAtTransparentResolution: true,
     pricing: [
       { identifier: "gpt-image-2-i2i", credits: 15, note: "1K default" },
       { identifier: "gpt-image-2-i2i:2K", credits: 25, note: "2K" },
@@ -1164,6 +1160,11 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     valueLabels: GPT_IMAGE_2_6_VALUE_LABELS,
     safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
   },
+  // Economy is withheld since 2026-11-09: KIE answers every Economy request with
+  // an internal error, on its own playground too. Migration 611 switched the two
+  // ids off (`model_pricing.is_enabled`), which hides them from every menu and
+  // refuses a run. Turning the two rows on at /admin/models brings them back;
+  // `docsHidden` keeps them out of the docs until it is removed here.
   "gpt-image-2-6-economy": {
     id: "gpt-image-2-6-economy",
     kind: "image",
@@ -1171,6 +1172,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     family: "OpenAI",
     maker: "openai",
     label: "GPT Image 2.6 Economy",
+    docsHidden: true,
     series: "GPT Image",
     description: "The same GPT Image 2.6 at a flat low price, 1K only - pick it for volume.",
     useCases: ["general", "draft"],
@@ -1188,6 +1190,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     family: "OpenAI",
     maker: "openai",
     label: "GPT Image 2.6 Economy (I2I)",
+    docsHidden: true,
     series: "GPT Image",
     description: "Flat-price GPT Image 2.6 edits, 1K only, up to 16 input images - pick it for volume.",
     useCases: ["edit", "draft"],
@@ -4682,6 +4685,7 @@ export function modelIdsByKindMode(
     .filter((m) => (kind === null ? true : m.kind === kind))
     .filter((m) => m.modes.some((md) => modes.includes(md)))
     .filter((m) => includeHidden || !m.mcpHidden)
+    .filter((m) => !m.docsHidden)
     .map((m) => m.id)
     .sort()
   if (ids.length === 0) {

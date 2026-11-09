@@ -669,7 +669,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "gpt-image-2-5-sunburst:2K": 25,
   "gpt-image-2-5-sunburst:4K": 40,
   // GPT Image 2.6: Flare and Sunburst per quality, size and input image
-  // (provisional, see gpt-image-2-6-pricing.ts), Economy flat at 1K.
+  // (measured 2026-11-09, see gpt-image-2-6-pricing.ts), Economy flat at 1K.
   ...gptImage26StaticCosts(),
   "gpt-image-2-6-economy": 13,
   "gpt-image-2-6-economy-i2i": 13,

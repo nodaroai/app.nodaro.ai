@@ -497,30 +497,45 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 Six SKUs on the standard `createTask` lane. Flare and Sunburst are billed by
 **tokens**, Economy flat per image (5 KIE credits, 1K only).
 
-- Prices are the 1:1 estimate on the product page, the dearest shape read, in
+- Prices are the 1:1 estimate on the product page in
   `ee/billing/gpt-image-2-6-pricing.ts`: one row per quality and size, and on an
-  edit per input image too (`:<N>ref`), about 2.2 KIE credits each. **Provisional
-  until measured:** `costFromTaskRecord` makes the job record the task's own
-  `creditsConsumed` as `provider_cost`, so a real run shows what KIE billed.
+  edit per input image too (`:<N>ref`). **Measured 2026-11-09 on real runs:** 1:1
+  is the dearest shape (2:1 and 16:9 at medium 1K cost well under it, whatever
+  their pixels); bills came within 1% of the table by size, shape and quality;
+  each input image cost 1.8 to 2.2 KIE credits (the rows use 2.2).
+  `costFromTaskRecord` makes the job record the task's own `creditsConsumed` as
+  `provider_cost`, and the figure is present on 2.6 task records.
+- **Economy is withheld (2026-11-09).** Every task fails within a millisecond with
+  `[500] Internal Error`, in text-to-image and edit, at several shapes, and on
+  KIE's own playground too. Migration 611 turned off the two ids'
+  `model_pricing.is_enabled`, which hides them from `/v1/models`, MCP `list_models`
+  and every menu, and refuses a run with `model_disabled`. When KIE fixes it, turn
+  the two rows on at /admin/models; then drop `docsHidden` from the two catalog
+  entries and restore their rows in the docs.
 - **Quality `auto`** (KIE picks the level): the only metered quality. Reserved at
   the Max row (`:auto:` ids hold the Max value), then settled on the task's own
   `creditsConsumed`: `autoQualityKieCredits` on the result, `gptImage26AutoSettledBase`
   (`lib/gpt-image-2-6-settle.ts`), handed to `meteredBaseCredits` in
   `finalizeJobWithMedia` (held runs replay it) and to the entity tail; the KIE
   reconcile lane does the same. A task record with no figure commits the
-  reservation, the Max price, with an `[ALERT]` line. **Unverified live:** the 2.6
-  docs show no response example.
-- 27:16, 16:27, 9:8 and 8:9 are offered on Flare and Sunburst but are not in KIE's
-  documented list. They stay only if the staging test shows KIE accepts them.
+  reservation, the Max price, with an `[ALERT]` line. In the one live run tried
+  (2026-11-09) KIE picked low and the run was charged that, not the Max it held.
+- 27:16, 16:27, 9:8 and 8:9, 2.5's extra ratios, are refused on 2.6 ("Invalid aspect
+  ratio", no charge, tried 2026-11-09). KIE's docs don't list them either.
+- Up to 16 input images on Flare and Sunburst; the routes hold every other model to
+  14 (`requestImageLimit`, separate from `REF_IMAGE_MAX_LIMITS`).
 - All six 2.6 models send an explicit field list (`inputFields` in `models.ts`):
   their schemas are `additionalProperties: false`, and a worker passes along
   whatever a node carries. A new setting joins the list with the feature.
 - The KIE record is `{ code, message, data }`: `creditsConsumed` sits in `data`
   (`kieTaskCreditsConsumed`).
-- `background` (`auto`, `opaque`, `transparent`) also exists on GPT Image 2 and
-  2.5, where KIE takes it only at 1K, whatever its value
+- `background` (`auto`, `opaque`, `transparent`) also exists on GPT Image 2.5, where
+  KIE takes it only at 1K, whatever its value
   (`backgroundOnlyAtTransparentResolution`): nothing is sent above it. KIE limits transparent to 1K (`transparentResolution` on the catalog entry,
-  coerced in `normalizeModelInput`). Economy is 1K anyway.
+  coerced in `normalizeModelInput`). Economy is 1K anyway. **GPT Image 2 has no
+  background setting here**, though KIE's docs list one: transparent failed twice
+  with `[500] Internal Error` on 2026-11-09, while opaque and no value rendered, and
+  opaque or auto alone is no reason to offer it. A value sent to it is dropped.
 - `moderation` (`auto`, `low`; Flare and Sunburst only) is not sent, so KIE's
   default `low` applies. It is declared as a `choice` lever so the Admin → Provider
   Safety page can tighten it to `auto`.

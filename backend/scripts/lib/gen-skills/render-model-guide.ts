@@ -56,7 +56,7 @@ const asListed: ChargedCreditsOf = (_identifier, credits) => credits
 
 /**
  * One markdown table of every catalog entry of `kind`, excluding `mcpHidden`
- * (superseded) models. Sorted cheapest-first so the everyday picks read at the
+ * (superseded) and `docsHidden` (withheld) models. Sorted cheapest-first so the everyday picks read at the
  * top; featured ("best in tier") models are flagged with ⭐.
  */
 export function renderModelTable(
@@ -70,7 +70,7 @@ export function renderModelTable(
     return row ? { credits: chargedOf(row.identifier, row.credits), identifier: row.identifier } : { credits: 0, identifier: null }
   }
   const rows = Object.values(catalog)
-    .filter((e) => e.kind === kind && !e.mcpHidden)
+    .filter((e) => e.kind === kind && !e.mcpHidden && !e.docsHidden)
     .map((e) => ({ e, ...priced(e) }))
     .sort((a, b) => {
       if (a.credits !== b.credits) return a.credits - b.credits

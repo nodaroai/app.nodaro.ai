@@ -14,9 +14,9 @@ Generate Image is the primary text-to-image node. It accepts a text prompt (with
 | Style | select | `""` | One of 16 presets (Photorealistic, Cinematic, Anime, Digital Art, Oil Painting, Watercolor, Children's Book, Comic Book, Pixel Art, 3D Render, Pencil Sketch, Pop Art, Minimalist, Retro/Vintage, Fantasy, Noir) or "Custom..." free text. Style text is appended to the prompt at execution time. |
 | Negative Prompt | text | `""` | Elements to exclude. Sent natively for imagen4, ideogram, qwen; appended as "Avoid:..." for other providers. |
 | Aspect Ratio | select | `"16:9"` | Provider-specific ratio sets (see table below), plus **Auto (match the photo)** on every model. With a photo wired in (the inpaint / refine base when set, else the first reference image), Auto keeps that photo's shape — on models without a native auto, the supported shape closest to it. With no photo wired, Auto gives the model's default shape: its own auto where it has one, else its first listed ratio. A node with no ratio set (one written by an agent, an import or a template) is Auto, on the panel and in the run. |
-| Resolution | select | varies | Available for nano-banana-pro, nano-banana-2, nano-banana-2-1, flux, flux-flex, gpt-image-2 and the GPT Image 2.5 and 2.6 models (not 2.6 Economy): 1K, 2K, 4K; seedream-5-flash: 1K, 2K (same price at either) |
+| Resolution | select | varies | Available for nano-banana-pro, nano-banana-2, nano-banana-2-1, flux, flux-flex, gpt-image-2 and the GPT Image 2.5 and 2.6 models: 1K, 2K, 4K; seedream-5-flash: 1K, 2K (same price at either) |
 | Quality | select | varies | Available for gpt-image (medium/high), GPT Image 2.6 Flare and Sunburst (auto, low, medium, high, extra high, max; medium by default; at auto the model picks the level and the run costs what it really used, at most the max price), seedream/seedream-5-lite (basic 2K / high 4K), and seedream-5-pro (basic 1K / high 2K) |
-| Background | select | Auto | Available for GPT Image 2, 2.5 and 2.6: auto, opaque or transparent. A transparent background renders at 1K: at a larger size the node moves to 1K and says so. On GPT Image 2 and 2.5 the setting only applies at 1K; at a larger size the image uses the model's own background. |
+| Background | select | Auto | Available for GPT Image 2.5 and 2.6: auto, opaque or transparent. A transparent background renders at 1K: at a larger size the node moves to 1K and says so. On GPT Image 2.5 the setting only applies at 1K; at a larger size the image uses the model's own background. |
 | Rendering Speed | select | -- | Available for ideogram-v3: turbo, balanced, quality |
 | Seed | number | -- | Reproducibility seed (supported by select providers) |
 | Style Type | select | -- | Ideogram-specific style parameter |
@@ -92,9 +92,7 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 | gpt-image-2-5-flare | GPT Image 2.5 Flare | **The fast one — start here.** Higher quality than GPT Image 2 at roughly half the latency. Best for iteration, social/creator content, campaign variants, thumbnails and high-volume work. Resolution-tiered pricing: **17 credits**<!-- credits: gpt-image-2-5-flare --> at 1K / **28 credits**<!-- credits: gpt-image-2-5-flare:2K --> at 2K / **44 credits**<!-- credits: gpt-image-2-5-flare:4K --> at 4K. | auto, 1:1, 3:2, 2:3, 4:3, 3:4, 16:9, 9:16, 21:9, 27:16, 16:27, 9:8, 8:9 |
 | gpt-image-2-5-sunburst | GPT Image 2.5 Sunburst | **The precise one.** Trades generation time for tighter control and detail fidelity — brand-sensitive and production work: packaging, diagrams, ecommerce retouching, polished campaign creative. Same price as Flare; expect a longer run. | Same as GPT Image 2.5 Flare |
 | gpt-image-2-6-flare | GPT Image 2.6 Flare | **Pick it for speed.** Posters, product shots and quick iteration, with strong layouts. At medium quality: **22 credits**<!-- credits: gpt-image-2-6-flare:medium:1K --> at 1K / **44 credits**<!-- credits: gpt-image-2-6-flare:medium:2K --> at 2K / **74 credits**<!-- credits: gpt-image-2-6-flare:medium:4K --> at 4K. Low from **14 credits**<!-- credits: gpt-image-2-6-flare:low:1K -->, high up to **90 credits**<!-- credits: gpt-image-2-6-flare:high:4K -->. With reference images, each one adds to the price. | auto, 1:1, 3:2, 2:3, 4:3, 3:4, 5:4, 4:5, 16:9, 9:16, 2:1, 1:2, 21:9, 9:21, 3:1, 1:3 |
-| gpt-image-2-6-sunburst | GPT Image 2.6 Sunburst | **Pick it when every detail counts.** The finest detail and the strongest consistency across edits. Same price as Flare. | Same as GPT Image 2.6 Flare |
-| gpt-image-2-6-economy | GPT Image 2.6 Economy | **Pick it for volume.** The same GPT Image 2.6 at a flat **15 credits**<!-- credits: gpt-image-2-6-economy --> per image, 1K only, no quality setting. | auto, 1:1, 16:9, 9:16, 3:2, 2:3, 21:9, 4:3 |
-| imagen4 | Imagen 4 | Google's latest, strong prompt adherence | 1:1, 16:9, 9:16, 4:3, 3:4 |
+| gpt-image-2-6-sunburst | GPT Image 2.6 Sunburst | **Pick it when every detail counts.** The finest detail and the strongest consistency across edits. Same price as Flare. | Same as GPT Image 2.6 Flare || imagen4 | Imagen 4 | Google's latest, strong prompt adherence | 1:1, 16:9, 9:16, 4:3, 3:4 |
 | imagen4-fast | Imagen 4 Fast | Fast Imagen, lower latency | Same as Imagen 4 |
 | imagen4-ultra | Imagen 4 Ultra | Highest quality Google image gen | Same as Imagen 4 |
 | ideogram-v3 | Ideogram V3 | Fast text-to-image | 1:1, 16:9, 9:16, 4:3, 3:4 |
@@ -122,20 +120,17 @@ thirteen aspect ratios, same 1K/2K/4K tiers, same 16-image edit cap.
 
 If you are unsure, draft on Flare and finish on Sunburst.
 
-### Choosing between GPT Image 2.6 Flare, Sunburst and Economy
+### Choosing between GPT Image 2.6 Flare and Sunburst
 
 - **Flare** is for speed: iteration, posters and product shots.
 - **Sunburst** is for when every detail counts: finished work and edits that
   must stay consistent. It costs the same as Flare.
-- **Economy** is for volume: the same model at a flat price, 1K only, with
-  fewer aspect ratios and no quality setting.
 
-Flare and Sunburst offer six qualities at each of 1K, 2K and 4K: auto, low,
-medium (the default), high, extra high and max. Draft at low and finish at medium
-or above. At auto the model picks the level, so the price it quotes is the most
-the run can cost (the max price), and you are charged what it really used. Up to
-16 input images; on Flare and Sunburst each one adds to the price, so an edit with
-fewer images costs less.
+Both offer six qualities at each of 1K, 2K and 4K: auto, low, medium (the
+default), high, extra high and max. Draft at low and finish at medium or above.
+At auto the model picks the level, so the price it quotes is the most the run can
+cost (the max price), and you are charged what it really used. Up to 16 input
+images; each one adds to the price, so an edit with fewer images costs less.
 
 ## Inpainting & Refine
 

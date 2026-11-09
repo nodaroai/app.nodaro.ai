@@ -709,6 +709,32 @@ export function imageReferenceLimit(provider: string | undefined): number {
   return REF_IMAGE_MAX_LIMITS[effective] ?? DEFAULT_REF_IMAGE_MAX
 }
 
+/** The most input images one request may carry, on a model with no row below. */
+export const DEFAULT_REQUEST_IMAGE_LIMIT = 14
+
+/**
+ * Models a request may give more input images than
+ * {@link DEFAULT_REQUEST_IMAGE_LIMIT}. Separate from
+ * {@link REF_IMAGE_MAX_LIMITS}, the cap the canvas and the assembler honour: the
+ * routes have their own, lower ceiling, and it rises per model only here.
+ */
+const REQUEST_IMAGE_LIMITS: Record<string, number> = {
+  "gpt-image-2-6-flare-i2i": 16,
+  "gpt-image-2-6-sunburst-i2i": 16,
+}
+
+/** The largest per-model limit: the outer bound of the routes' array schemas. */
+export const MAX_REQUEST_IMAGE_LIMIT = Math.max(DEFAULT_REQUEST_IMAGE_LIMIT, ...Object.values(REQUEST_IMAGE_LIMITS))
+
+/**
+ * The most input images one request may carry for `provider` (a text-to-image
+ * id reads its edit sibling's row, the model that consumes them).
+ */
+export function requestImageLimit(provider: string | undefined): number {
+  const effective = provider ? (T2I_TO_I2I_VARIANT[provider] ?? provider) : undefined
+  return (effective !== undefined ? REQUEST_IMAGE_LIMITS[effective] : undefined) ?? DEFAULT_REQUEST_IMAGE_LIMIT
+}
+
 // Variable pricing: which setting type affects cost per provider
 export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution" | "rendering-speed"> = {
   "gpt-image": "quality",

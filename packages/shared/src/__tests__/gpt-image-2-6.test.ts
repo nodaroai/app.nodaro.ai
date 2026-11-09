@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest"
 import { buildCreditModelIdentifier, resolveNormalizedImageGen } from "../credit-identifiers.js"
-import { MODEL_CATALOG, normalizeModelInput } from "../model-catalog.js"
+import { MODEL_CATALOG, modelIdsByKindMode, normalizeModelInput } from "../model-catalog.js"
 import { GPT_IMAGE_2_6_TIERED_I2I, GPT_IMAGE_2_6_TIERED_T2I, gptImage26EstimatedImages, gptImage26SentImages, isGptImage26AutoRun } from "../gpt-image-2-6.js"
 import { countImageInputEdges } from "../node-refs.js"
-import { IMAGE_I2I_PROVIDERS, IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT } from "../model-constants.js"
+import { DEFAULT_REQUEST_IMAGE_LIMIT, IMAGE_I2I_PROVIDERS, IMAGE_GEN_PROVIDERS, MAX_REQUEST_IMAGE_LIMIT, requestImageLimit, T2I_TO_I2I_VARIANT } from "../model-constants.js"
 
 const ALL = [
   "gpt-image-2-6-flare", "gpt-image-2-6-flare-i2i",
@@ -85,13 +85,21 @@ describe("GPT Image 2.6 catalog", () => {
     expect(normalizeModelInput("gpt-image-2-6-economy", { quality }).quality).toBeUndefined()
   })
 
-  it("the four ratios under trial are on Flare and Sunburst, not on Economy", () => {
-    for (const id of [...GPT_IMAGE_2_6_TIERED_T2I, ...GPT_IMAGE_2_6_TIERED_I2I]) {
-      expect(MODEL_CATALOG[id]?.aspectRatios).toEqual(expect.arrayContaining(["27:16", "16:27", "9:8", "8:9"]))
+  it("KIE refused 2.5's extra ratios on 2.6, so none of the six offers them", () => {
+    for (const id of ALL) {
+      for (const ratio of ["27:16", "16:27", "9:8", "8:9"]) {
+        expect(MODEL_CATALOG[id]?.aspectRatios, `${id} ${ratio}`).not.toContain(ratio)
+      }
     }
-    for (const id of ["gpt-image-2-6-economy", "gpt-image-2-6-economy-i2i"]) {
-      expect(MODEL_CATALOG[id]?.aspectRatios).not.toContain("27:16")
-    }
+  })
+
+  it("Economy is left out of the docs and the MCP model lists while it is withheld", () => {
+    expect(MODEL_CATALOG["gpt-image-2-6-economy"]?.docsHidden).toBe(true)
+    expect(MODEL_CATALOG["gpt-image-2-6-economy-i2i"]?.docsHidden).toBe(true)
+    const listed = modelIdsByKindMode("image", ["t2i", "i2i", "edit"], { includeHidden: true })
+    expect(listed).not.toContain("gpt-image-2-6-economy")
+    expect(listed).not.toContain("gpt-image-2-6-economy-i2i")
+    expect(listed).toContain("gpt-image-2-6-flare")
   })
 
   it("Economy has no quality or size setting", () => {
@@ -107,10 +115,17 @@ describe("GPT Image 2.6 catalog", () => {
 })
 
 describe("the background setting", () => {
-  const WITH_BACKGROUND = [...ALL, "gpt-image-2", "gpt-image-2-i2i", "gpt-image-2-5-flare", "gpt-image-2-5-flare-i2i", "gpt-image-2-5-sunburst", "gpt-image-2-5-sunburst-i2i"]
+  const WITH_BACKGROUND = [...ALL, "gpt-image-2-5-flare", "gpt-image-2-5-flare-i2i", "gpt-image-2-5-sunburst", "gpt-image-2-5-sunburst-i2i"]
 
   it.each(WITH_BACKGROUND)("%s offers auto, opaque and transparent", (id) => {
     expect(MODEL_CATALOG[id]?.backgrounds).toEqual(["auto", "opaque", "transparent"])
+  })
+
+  it.each(["gpt-image-2", "gpt-image-2-i2i"])("%s has no background setting: KIE failed it live, so a value sent is dropped", (id) => {
+    expect(MODEL_CATALOG[id]?.backgrounds).toBeUndefined()
+    const out = normalizeModelInput(id, { background: "transparent", resolution: "2K" })
+    expect(out.background).toBeUndefined()
+    expect(out.resolution).toBe("2K")
   })
 
   it("a model without the setting drops the value and says so", () => {
@@ -119,7 +134,7 @@ describe("the background setting", () => {
     expect(out.adjustments).toEqual([expect.objectContaining({ field: "background", from: "transparent", to: undefined })])
   })
 
-  it.each(["gpt-image-2-6-flare", "gpt-image-2-5-sunburst", "gpt-image-2"])("%s: transparent moves the size to 1K and says so", (id) => {
+  it.each(["gpt-image-2-6-flare", "gpt-image-2-5-sunburst"])("%s: transparent moves the size to 1K and says so", (id) => {
     const out = normalizeModelInput(id, { background: "transparent", resolution: "4K" })
     expect(out).toMatchObject({ background: "transparent", resolution: "1K" })
     expect(out.adjustments).toEqual([expect.objectContaining({ field: "resolution", from: "4K", to: "1K" })])
@@ -140,6 +155,21 @@ describe("the background setting", () => {
     expect(n.background).toBe("transparent")
     const old = resolveNormalizedImageGen({ provider: "gpt-image-2-5-flare", resolution: "4K", background: "transparent", refCount: 0 })
     expect(old.identifier).toBe("gpt-image-2-5-flare")
+  })
+})
+
+describe("the most input images one request may carry", () => {
+  it.each(["gpt-image-2-6-flare", "gpt-image-2-6-flare-i2i", "gpt-image-2-6-sunburst", "gpt-image-2-6-sunburst-i2i"])("%s takes 16", (id) => {
+    expect(requestImageLimit(id)).toBe(16)
+  })
+
+  it.each(["gpt-image-2-6-economy-i2i", "gpt-image-2-5-flare-i2i", "gpt-image-2-i2i", "nano-banana-pro", "seedream-edit", undefined])("%s keeps the default", (id) => {
+    expect(requestImageLimit(id)).toBe(DEFAULT_REQUEST_IMAGE_LIMIT)
+    expect(DEFAULT_REQUEST_IMAGE_LIMIT).toBe(14)
+  })
+
+  it("the routes' outer bound is the largest limit", () => {
+    expect(MAX_REQUEST_IMAGE_LIMIT).toBe(16)
   })
 })
 
@@ -181,29 +211,29 @@ describe("GPT Image 2.6: the images a run sends", () => {
 })
 
 describe("the background setting's size rule", () => {
-  it("GPT Image 2 and 2.5: transparent above 1K moves to 1K", () => {
-    for (const id of ["gpt-image-2", "gpt-image-2-i2i", "gpt-image-2-5-flare", "gpt-image-2-5-sunburst-i2i"]) {
+  it("GPT Image 2.5: transparent above 1K moves to 1K", () => {
+    for (const id of ["gpt-image-2-5-flare", "gpt-image-2-5-sunburst-i2i"]) {
       const r = normalizeModelInput(id, { resolution: "2K", background: "transparent" })
       expect(r.resolution, id).toBe("1K")
       expect(r.background, id).toBe("transparent")
     }
   })
 
-  it("GPT Image 2 and 2.5: opaque above 1K is not sent, and says so", () => {
+  it("GPT Image 2.5: opaque above 1K is not sent, and says so", () => {
     const r = normalizeModelInput("gpt-image-2-5-flare", { resolution: "4K", background: "opaque" })
     expect(r.resolution).toBe("4K")
     expect(r.background).toBeUndefined()
     expect(r.adjustments.map((a) => a.field)).toContain("background")
   })
 
-  it("GPT Image 2 and 2.5: auto above 1K is not sent, with nothing to say", () => {
-    const r = normalizeModelInput("gpt-image-2", { resolution: "2K", background: "auto" })
+  it("GPT Image 2.5: auto above 1K is not sent, with nothing to say", () => {
+    const r = normalizeModelInput("gpt-image-2-5-flare", { resolution: "2K", background: "auto" })
     expect(r.background).toBeUndefined()
     expect(r.adjustments).toEqual([])
   })
 
-  it("GPT Image 2 and 2.5: any value at 1K is sent", () => {
-    expect(normalizeModelInput("gpt-image-2", { resolution: "1K", background: "opaque" }).background).toBe("opaque")
+  it("GPT Image 2.5: any value at 1K is sent", () => {
+    expect(normalizeModelInput("gpt-image-2-5-flare", { resolution: "1K", background: "opaque" }).background).toBe("opaque")
   })
 
   it("GPT Image 2.6: opaque and auto stay at any size, transparent moves to 1K", () => {
