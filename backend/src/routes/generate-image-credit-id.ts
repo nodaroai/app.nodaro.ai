@@ -12,8 +12,8 @@ import { presetFanOutBodies } from "../lib/presets/generate-image-preset-hook.js
 import { userDirectionOf, type ResolvedUserDirection } from "../lib/user-direction.js"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared/models"
 import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
-import { defaultImageModel } from "@nodaro/shared/model-catalog"
-import { assembledRefCountForPricing, isStructuredImageMode } from "./generate-image-plan.js"
+import { defaultImageModel, gptImage26SentImages } from "@nodaro/shared/model-catalog"
+import { assembledRefsForPricing, isStructuredImageMode } from "./generate-image-plan.js"
 
 /**
  * The credit-CHECK model-identifier resolver (preHandler side). Extracted as a
@@ -83,6 +83,7 @@ export function imageCreditIdentifierFor(
   const quality = body?.quality
   const resolution = body?.resolution
   const renderingSpeed = body?.renderingSpeed
+  const background = body?.background
 
   // WI-1b: in structured mode, `connectedReferences` expand to URLs and are
   // gated per-provider INSIDE `buildImagePrompt` — so the billed reference
@@ -101,9 +102,11 @@ export function imageCreditIdentifierFor(
     subject?: unknown
     structured?: unknown
   })
-  const refCount = structured
-    ? assembledRefCountForPricing(pricedBody as Parameters<typeof assembledRefCountForPricing>[0], userDirection)
-    : (flatRefs?.length ?? 0)
+  const references = structured
+    ? assembledRefsForPricing(pricedBody as Parameters<typeof assembledRefsForPricing>[0], userDirection)
+    : (flatRefs ?? [])
+  // On GPT Image 2.6 the base of an edit is one more image sent, as in the DEBIT.
+  const refCount = gptImage26SentImages(rawProvider, references, body?.baseImageUrl)
 
   // Shared reference-aware builder: mirrors the handler's T2I→I2I auto-swap
   // (triggered by refs being attached — in structured mode the ASSEMBLED count,
@@ -122,6 +125,7 @@ export function imageCreditIdentifierFor(
     quality,
     resolution,
     renderingSpeed,
+    background,
     refCount,
     swapToI2i: true,
   }).identifier

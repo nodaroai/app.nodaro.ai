@@ -198,16 +198,23 @@ export function normalizeQuality(
   }
   // Synonym buckets — map to the closest semantic neighbour.
   const last = supported[supported.length - 1]!
+  // The first listed value, but never Auto: it is only chosen by name (the exact
+  // match above), because it reserves the top price.
+  const firstFixed = supported.find((v) => v.toLowerCase() !== "auto") ?? supported[0]
   if (["ultra", "best", "max", "premium", "highest"].includes(lower)) return last
   if (["auto", "balanced", "default", "normal", "standard"].includes(lower)) {
     // Prefer "BALANCED" / "medium" if present; otherwise first.
     const balanced = supported.find((v) =>
       ["BALANCED", "medium", "basic"].includes(v),
     )
-    return balanced ?? supported[0]
+    return balanced ?? firstFixed
   }
   if (["fast", "quick", "speed", "turbo"].includes(lower)) {
-    return supported.find((v) => v.toLowerCase().includes("turbo")) ?? supported[0]
+    return (
+      supported.find((v) => v.toLowerCase().includes("turbo")) ??
+      supported.find((v) => v.toLowerCase() === "low") ??
+      firstFixed
+    )
   }
   return undefined
 }

@@ -18,6 +18,7 @@ import { useSubscription, useChangePlanMutation } from "@/ee/hooks/queries/use-b
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { TopupSection } from "./topup-section"
 import { useT, type MessageKey } from "@/lib/i18n"
+import { PersonalFreeCreditsOnly } from "@/components/billing/personal-free-credits-only"
 import { creditUnits } from "@/lib/credit-units"
 import { formatNumber } from "@/lib/i18n/format"
 import { whenActivated } from "@/lib/prerender"
@@ -459,100 +460,102 @@ export default function PricingPage() {
           {/* FREE TIER strip — acquisition pitch for guests; "you're on this
               plan" for signed-in free/payg; hidden for paid subscribers. */}
           {freeTier && !currentTierId && (
-            <div
-              style={{
-                border: "1px dashed var(--prc-border-strong)",
-                borderRadius: 16,
-                padding: "24px 28px",
-                marginTop: 18,
-                display: "flex",
-                alignItems: "center",
-                gap: 28,
-                flexWrap: "wrap",
-              }}
-            >
-              <div style={{ flex: 1, minWidth: 340 }}>
-                <div
-                  style={{
-                    fontFamily: MONO,
-                    fontSize: 11,
-                    letterSpacing: "0.16em",
-                    color: "var(--prc-pink-strong)",
-                    marginBottom: 9,
-                  }}
-                >
-                  {t("pricing.freeTierBadge")}
+            <PersonalFreeCreditsOnly>
+              <div
+                style={{
+                  border: "1px dashed var(--prc-border-strong)",
+                  borderRadius: 16,
+                  padding: "24px 28px",
+                  marginTop: 18,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 28,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 340 }}>
+                  <div
+                    style={{
+                      fontFamily: MONO,
+                      fontSize: 11,
+                      letterSpacing: "0.16em",
+                      color: "var(--prc-pink-strong)",
+                      marginBottom: 9,
+                    }}
+                  >
+                    {t("pricing.freeTierBadge")}
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 600 }}>
+                    {user ? (
+                      <>
+                        {t("pricing.onThisPlanPrefix")}{t("common.fragmentGap")}
+                        <span style={{ fontWeight: 800 }}>
+                          {t("pricing.freeCreditsCount", { credits: formatNumber(creditUnits(freeTier.credits)) })}
+                        </span>{t("common.fragmentGap")}
+                        {t("pricing.includedAtSignup")}
+                      </>
+                    ) : (
+                      <>
+                        {t("pricing.tryEverythingPrefix")}{t("common.fragmentGap")}
+                        <span style={{ fontWeight: 800 }}>
+                          {t("pricing.freeCreditsCount", { credits: formatNumber(creditUnits(freeTier.credits)) })}
+                        </span>{t("common.fragmentGap")}
+                        {t("pricing.noCreditCardSuffix")}
+                      </>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: MONO,
+                      fontSize: 11,
+                      letterSpacing: "0.08em",
+                      color: "var(--blg-t3-dim)",
+                      marginTop: 10,
+                    }}
+                  >
+                    {freeTier.features.map(featureText).join(" · ").toUpperCase()}
+                  </div>
                 </div>
-                <div style={{ fontSize: 18, fontWeight: 600 }}>
-                  {user ? (
-                    <>
-                      {t("pricing.onThisPlanPrefix")}{t("common.fragmentGap")}
-                      <span style={{ fontWeight: 800 }}>
-                        {t("pricing.freeCreditsCount", { credits: formatNumber(creditUnits(freeTier.credits)) })}
-                      </span>{t("common.fragmentGap")}
-                      {t("pricing.includedAtSignup")}
-                    </>
-                  ) : (
-                    <>
-                      {t("pricing.tryEverythingPrefix")}{t("common.fragmentGap")}
-                      <span style={{ fontWeight: 800 }}>
-                        {t("pricing.freeCreditsCount", { credits: formatNumber(creditUnits(freeTier.credits)) })}
-                      </span>{t("common.fragmentGap")}
-                      {t("pricing.noCreditCardSuffix")}
-                    </>
-                  )}
-                </div>
-                <div
-                  style={{
-                    fontFamily: MONO,
-                    fontSize: 11,
-                    letterSpacing: "0.08em",
-                    color: "var(--blg-t3-dim)",
-                    marginTop: 10,
-                  }}
-                >
-                  {freeTier.features.map(featureText).join(" · ").toUpperCase()}
-                </div>
+                {user ? (
+                  <span
+                    style={{
+                      fontFamily: MONO,
+                      fontSize: 11,
+                      letterSpacing: "0.14em",
+                      color: "var(--prc-pink-strong)",
+                      border: "1px solid var(--prc-pink-border)",
+                      background: "var(--prc-pink-chip)",
+                      borderRadius: 99,
+                      padding: "9px 18px",
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {t("pricing.currentPlanBadge")}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={loadingTier === "free" || subLoading}
+                    onClick={() => handleSubscribe("free", null)}
+                    className="bg-transparent border border-[var(--blg-pink)] text-[var(--blg-pink)] hover:bg-[var(--blg-pink)] hover:text-white"
+                    style={{
+                      fontFamily: "inherit",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      padding: "13px 34px",
+                      borderRadius: 11,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                      ...(loadingTier === "free" || subLoading ? { opacity: 0.55, cursor: "default" } : {}),
+                    }}
+                  >
+                    {getButtonLabel("free")}
+                  </button>
+                )}
               </div>
-              {user ? (
-                <span
-                  style={{
-                    fontFamily: MONO,
-                    fontSize: 11,
-                    letterSpacing: "0.14em",
-                    color: "var(--prc-pink-strong)",
-                    border: "1px solid var(--prc-pink-border)",
-                    background: "var(--prc-pink-chip)",
-                    borderRadius: 99,
-                    padding: "9px 18px",
-                    whiteSpace: "nowrap",
-                    flexShrink: 0,
-                  }}
-                >
-                  {t("pricing.currentPlanBadge")}
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  disabled={loadingTier === "free" || subLoading}
-                  onClick={() => handleSubscribe("free", null)}
-                  className="bg-transparent border border-[var(--blg-pink)] text-[var(--blg-pink)] hover:bg-[var(--blg-pink)] hover:text-white"
-                  style={{
-                    fontFamily: "inherit",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    padding: "13px 34px",
-                    borderRadius: 11,
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                    flexShrink: 0,
-                    ...(loadingTier === "free" || subLoading ? { opacity: 0.55, cursor: "default" } : {}),
-                  }}
-                >
-                  {getButtonLabel("free")}
-                </button>
-              )}
-            </div>
+            </PersonalFreeCreditsOnly>
           )}
 
           {/* TOP-UP CREDITS — header row from the mock; the card below keeps the

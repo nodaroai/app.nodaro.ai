@@ -18,7 +18,7 @@ export function parseProviderSafetyOverrides(value: unknown): ProviderSafetyOver
     if (!params || typeof params !== "object" || Array.isArray(params)) continue
     const kept: Record<string, SafetyValue> = {}
     for (const [param, v] of Object.entries(params as Record<string, unknown>)) {
-      if (typeof v === "boolean" || (typeof v === "number" && Number.isFinite(v))) kept[param] = v
+      if (typeof v === "boolean" || typeof v === "string" || (typeof v === "number" && Number.isFinite(v))) kept[param] = v
     }
     if (Object.keys(kept).length > 0) out[modelId] = kept
   }

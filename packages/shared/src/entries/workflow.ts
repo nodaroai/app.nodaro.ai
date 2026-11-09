@@ -142,7 +142,7 @@ export {
 export { VARIABLES_HANDLE_ID, buildConditionVariables } from "../condition-variables.js"
 export { extractAllGeneratedResults, extractGeneratedJsonAsList, spreadJsonArrayIfSingleton } from "../generated-results.js"
 export { resolveFieldMappings, resolveLocationFields, type FieldEdgeSource } from "../resolve-field-mappings.js"
-export { resolveNodeRefs, parseNodeRef, canonicalVarName, NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, REF_HANDLE_CATEGORY, REFERENCE_HANDLE_MAP, referenceModalityForHandle, FRAME_TARGET_HANDLES, countRefModalityEdges, REF_TOKEN_NAMESPACE_PREFIXES, classifyRefToken, unresolvedRefTokens } from "../node-refs.js"
+export { resolveNodeRefs, parseNodeRef, canonicalVarName, NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, REF_HANDLE_CATEGORY, REFERENCE_HANDLE_MAP, referenceModalityForHandle, FRAME_TARGET_HANDLES, countImageInputEdges, countRefModalityEdges, REF_TOKEN_NAMESPACE_PREFIXES, classifyRefToken, unresolvedRefTokens } from "../node-refs.js"
 export type { RefCandidate, ReferenceModality, RefModalityEdge, RefTokenKind } from "../node-refs.js"
 export { resolveSourceThroughConnectedList } from "../list-source-resolver.js"
 export { zipMergeLists } from "../list-merge.js"

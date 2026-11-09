@@ -7,6 +7,21 @@
  */
 export * from "../seedance-draft.js"
 export { isFlux2Model, FLUX2_RES_MP } from "../flux2-pricing.js"
+export {
+  GPT_IMAGE_2_6_DEFAULT_QUALITY,
+  GPT_IMAGE_2_6_DEFAULT_RESOLUTION,
+  GPT_IMAGE_2_6_MAX_INPUT_IMAGES,
+  GPT_IMAGE_2_6_METERED_QUALITY,
+  GPT_IMAGE_2_6_QUALITIES,
+  GPT_IMAGE_2_6_RESOLUTIONS,
+  GPT_IMAGE_2_6_TIERED_I2I,
+  GPT_IMAGE_2_6_TIERED_T2I,
+  gptImage26EstimatedImages,
+  gptImage26SentImages,
+  isGptImage26AutoRun,
+  isGptImage26I2i,
+  isGptImage26Tiered,
+} from "../gpt-image-2-6.js"
 export type { Flux2Model } from "../flux2-pricing.js"
 // Model catalog (single source of truth for MCP `list_models` and the
 // frontend config-panel registries).
@@ -37,6 +52,7 @@ export {
   resolutionOptionsByKind,
   aspectRatioOptionsByKind,
   qualityOptionsByKind,
+  backgroundOptionsByKind,
   creditRangesAll,
   modelIdsByKindMode,
   buildModelMenu,
@@ -88,6 +104,7 @@ export {
   IMAGE_MODEL_ROLE_DEFAULTS,
   IMAGE_MODEL_RATIO_FALLBACKS,
   defaultImageModel,
+  defaultImageModelForNode,
   imageModelDrawsRatio,
 } from "../image-model-roles.js"
 export type { ImageModelRole } from "../image-model-roles.js"

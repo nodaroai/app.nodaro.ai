@@ -1,5 +1,49 @@
 # @nodaro/cli
 
+## 1.46.0
+
+### Minor Changes
+
+- 3a6fa3f: A name of the person's own on any result: `client.jobs.rename(id, title)`.
+
+  - `jobs.rename(id, title | null)` (`PATCH /v1/jobs/:id`): name one of your jobs — "Wedding toast, final" on a picture, a clip, a track or a speech take — or clear the name with `null` (or `""`). Trimmed; one line of plain text, 1–120 characters, any language (`validation_error` otherwise). The owner only (anyone else's job is `NotFoundError`); free; any job type and status, the Trash included; nothing else about the job changes. Answers `{ data: { jobId, title } }` (`RenameJobResult`). OAuth apps need `assets:write`. Named `rename`, like `rate`, rather than a general `update`: the route takes this one field.
+  - `Job.title` (`string | null`, `null` until named) wherever a job is returned — `jobs.get`, `jobs.list`, a session's items (`SessionItem.job`), `client.trash.list()` — and the same name as `title` on `GalleryItem` (public, beside the prompt) and on `LibraryAsset` (the name of the job that made the file; not its `filename`). Absent from a server older than this release. Webhook job payloads carry it too.
+  - CLI: `nodaro jobs rename <id> <title>` and `nodaro jobs rename <id> --clear`.
+
+- a82e34b: Speech: the audio file a run delivers, and favorite voices.
+
+  - `TextToSpeechParams` (`nodes.run("text-to-speech", …)`) takes `outputFormat`: `mp3_44100_128` (the default, as before), `mp3_44100_192` or `wav_24000` — same credits, the job's `audioUrl` ends in `.mp3` or `.wav` accordingly. The values are `TTS_OUTPUT_FORMATS` in `@nodaro/shared/models` (with `DEFAULT_TTS_OUTPUT_FORMAT` and `TTS_OUTPUT_FORMAT_FILES`). `withTimestamps` is now typed too.
+  - `client.voices.listFavorites()`, `favorite(input)` and `unfavorite(voiceId)`: the signed-in user's favorite voices — a premade voice, a Voice Library voice or one of their clones — starred from any client and read back by all of them, newest first, each with the `voiceId` / `voiceType` a speech run takes and the `name` / `previewUrl` it was starred with. Types `VoiceFavorite`, `VoiceFavoriteInput` and `VoiceFavoriteType` (its values as `VOICE_FAVORITE_TYPES`) in `@nodaro/shared/pipeline` and `@nodaro/sdk/voices`.
+  - `VOICE_LIBRARY_USE_CASES` / `VoiceLibraryUseCase` (`@nodaro/shared/pipeline`): the seven `use_cases` values `voices.searchLibrary()` groups the Voice Library by (`advertisement`, `characters_animation`, `conversational`, `entertainment_tv`, `informative_educational`, `narrative_story`, `social_media`); `VoiceLibraryParams.use_cases` is typed to them and still takes any string.
+  - CLI: `nodaro voice favorites`, `nodaro voice favorite <voiceId> --name … --type premade|library|custom [--preview <https url>]` (both options required), `nodaro voice unfavorite <voiceId>`.
+
+### Patch Changes
+
+- Updated dependencies [5ab3e17]
+- Updated dependencies [22ff9db]
+- Updated dependencies [fa16b02]
+- Updated dependencies [f4678cb]
+- Updated dependencies [331ba80]
+- Updated dependencies [3ba7c05]
+- Updated dependencies [45f1902]
+- Updated dependencies [45f1902]
+- Updated dependencies [3a6fa3f]
+- Updated dependencies [7dc454f]
+- Updated dependencies [18dd86c]
+- Updated dependencies [52a1a24]
+- Updated dependencies [a27499d]
+- Updated dependencies [ac55661]
+- Updated dependencies [db740ae]
+- Updated dependencies [db740ae]
+- Updated dependencies [7bbde1c]
+- Updated dependencies [d2ff226]
+- Updated dependencies [af790ff]
+- Updated dependencies [a82e34b]
+- Updated dependencies [3c2e500]
+  - @nodaro/sdk@2.66.0
+  - @nodaro/shared@3.56.0
+  - @nodaro/prompts@1.51.0
+
 ## 1.45.3
 
 ### Patch Changes

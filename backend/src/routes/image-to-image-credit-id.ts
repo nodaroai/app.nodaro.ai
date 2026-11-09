@@ -30,6 +30,7 @@ export function resolveImageToImageCreditIdentifier(req: FastifyRequest): string
     quality: body?.quality,
     resolution: body?.resolution,
     renderingSpeed: body?.renderingSpeed,
+    background: body?.background,
     refCount: 1 + extraRefs,
     swapToI2i: false,
   }).identifier

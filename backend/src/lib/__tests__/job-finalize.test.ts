@@ -146,6 +146,9 @@ const autoAttachMocks = vi.hoisted(() => ({
 }))
 
 vi.mock("@/lib/character-auto-attach.js", () => autoAttachMocks)
+vi.mock("@/lib/gpt-image-2-6-settle.js", () => ({
+  gptImage26AutoSettledBase: async (k: number | undefined) => (k === undefined ? undefined : Math.ceil(k * 2.5)),
+}))
 
 import { finalizeJobWithMedia, runCompletionTail } from "@/lib/job-finalize.js"
 
@@ -1217,6 +1220,17 @@ describe("finalizeJobWithMedia — measured settlement (meteredBaseCredits)", ()
     })
     const commitReplay = sharedMocks.markJobCompletedDetailed.mock.calls[0]![3]
     expect(commitReplay).toEqual({ meteredCost: 0.5, meteredBaseCredits: 7193 })
+  })
+
+  it("a GPT Image 2.6 Auto run settles on what KIE billed, and a held run replays it", async () => {
+    await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "generate-image",
+      result: { url: "https://kie.example/x.png", cost: 0.1, providerUsed: "kie", autoQualityKieCredits: 8 },
+    })
+    expect(sharedMocks.commitJobCredits).toHaveBeenCalledWith("u-log-1", "j1", null, 20, true)
+    const commitReplay = sharedMocks.markJobCompletedDetailed.mock.calls[0]![3]
+    expect(commitReplay).toMatchObject({ meteredBaseCredits: 20 })
   })
 
   it("absent: the provider-cost / reserved-tier path is byte-identical to before", async () => {

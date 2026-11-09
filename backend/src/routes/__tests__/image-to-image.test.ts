@@ -318,6 +318,57 @@ describe("POST /v1/image-to-image", () => {
     )
   })
 
+  describe("how many input images a request may carry", () => {
+    const post = (provider: string, extras: number) =>
+      app.inject({
+        method: "POST",
+        url: "/v1/image-to-image",
+        payload: {
+          imageUrl: "https://example.com/image.png",
+          prompt: "edit it",
+          userId: VALID_UUID,
+          provider,
+          referenceImageUrls: Array.from({ length: extras }, (_, i) => `https://example.com/ref${i}.png`),
+        },
+      })
+
+    it("GPT Image 2.6 Flare and Sunburst take 16: the image and 15 more", async () => {
+      for (const provider of ["gpt-image-2-6-flare-i2i", "gpt-image-2-6-sunburst-i2i"]) {
+        mockJobInsert("job-16")
+        expect((await post(provider, 15)).statusCode, provider).toBe(200)
+      }
+    })
+
+    it("past 16 is refused", async () => {
+      expect((await post("gpt-image-2-6-flare-i2i", 16)).statusCode).toBe(400)
+    })
+
+    it("no model named takes the default's limit: 16 on GPT Image 2.6", async () => {
+      const postDefault = (extras: number) =>
+        app.inject({
+          method: "POST",
+          url: "/v1/image-to-image",
+          payload: {
+            imageUrl: "https://example.com/image.png",
+            prompt: "edit it",
+            userId: VALID_UUID,
+            referenceImageUrls: Array.from({ length: extras }, (_, i) => `https://example.com/ref${i}.png`),
+          },
+        })
+      mockJobInsert("job-default")
+      expect((await postDefault(15)).statusCode).toBe(200)
+      expect((await postDefault(16)).statusCode).toBe(400)
+    })
+
+    it("every other model stays at 14", async () => {
+      mockJobInsert("job-14")
+      expect((await post("gpt-image-2-5-flare-i2i", 13)).statusCode).toBe(200)
+      const res = await post("gpt-image-2-5-flare-i2i", 14)
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+    })
+  })
+
   it("returns 500 when job insert fails", async () => {
     mockJobInsert("job-1", { message: "DB connection failed" })
 
@@ -1150,7 +1201,7 @@ describe("POST /v1/image-to-image", () => {
       expect(() =>
         resolveImageToImageCreditIdentifier({ body: null } as unknown as FastifyRequest),
       ).not.toThrow()
-      expect(resolveImageToImageCreditIdentifier({ body: null } as unknown as FastifyRequest)).toBe("gpt-image-2-5-flare-i2i")
+      expect(resolveImageToImageCreditIdentifier({ body: null } as unknown as FastifyRequest)).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
     })
   })
 

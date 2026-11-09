@@ -172,6 +172,10 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   "gpt-image-2-5-flare-i2i": { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
   "gpt-image-2-5-sunburst": { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
   "gpt-image-2-5-sunburst-i2i": { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
+  "gpt-image-2-6-flare": { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
+  "gpt-image-2-6-flare-i2i": { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
+  "gpt-image-2-6-sunburst": { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
+  "gpt-image-2-6-sunburst-i2i": { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
   // Image gen — quality-style (medium/high or basic/high)
   "gpt-image":           { field: "quality",    values: { low: "medium", mid: "medium", high: "high" } },
   "gpt-image-i2i":       { field: "quality",    values: { low: "medium", mid: "medium", high: "high" } },

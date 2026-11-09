@@ -48,8 +48,18 @@ export interface ScaleSafetyLever extends LeverBase {
   readonly providerDefault: number | null
 }
 
-export type SafetyLever = BooleanSafetyLever | ScaleSafetyLever
-export type SafetyValue = boolean | number
+export interface ChoiceSafetyLever extends LeverBase {
+  readonly kind: "choice"
+  /** The values the parameter takes, strictest first. */
+  readonly values: readonly string[]
+  /** What the request carries today, or null when the parameter is not sent. */
+  readonly shipped: string | null
+  /** The provider's documented default when the parameter is absent, or null when the docs do not state one. */
+  readonly providerDefault: string | null
+}
+
+export type SafetyLever = BooleanSafetyLever | ScaleSafetyLever | ChoiceSafetyLever
+export type SafetyValue = boolean | number | string
 
 /** KIE's add-on filter, on by request only. Documented default false: not sending it leaves KIE's filter off. */
 export const NSFW_CHECKER_LEVER: BooleanSafetyLever = { kind: "boolean", param: "nsfw_checker", filterOnValue: true, shipped: null, providerDefault: false, probePending: true }
@@ -61,6 +71,9 @@ export const ENABLE_SAFETY_CHECKER_LEVER: BooleanSafetyLever = { kind: "boolean"
 
 /** What the request says about the model's own checker, reversed: `false` is on, the documented default. */
 export const DISABLE_SAFETY_CHECKER_LEVER: BooleanSafetyLever = { kind: "boolean", param: "disable_safety_checker", filterOnValue: false, shipped: null, providerDefault: false, probePending: true }
+
+/** GPT Image 2.6's `moderation`. Not sent, so KIE's documented default of `low` applies; `auto` is the stricter one. */
+export const MODERATION_LEVER: ChoiceSafetyLever = { kind: "choice", param: "moderation", values: ["auto", "low"], shipped: null, providerDefault: "low", probePending: true }
 
 /**
  * The same lever, on a model where a paid test run has confirmed it: the request
@@ -74,6 +87,7 @@ export function confirmedByRun<L extends SafetyLever>(lever: L): L {
 /** The filter the request runs with today, in the terms of its own switch. */
 export function leverToday(lever: SafetyLever): SafetyValue {
   if (lever.kind === "boolean") return lever.shipped ?? lever.providerDefault ?? lever.filterOnValue
+  if (lever.kind === "choice") return lever.shipped ?? lever.providerDefault ?? lever.values[0]!
   return lever.shipped ?? lever.providerDefault ?? lever.strictest
 }
 
@@ -82,6 +96,7 @@ export function isLooserThanToday(lever: SafetyLever, value: SafetyValue): boole
   if (lever.kind === "boolean") {
     return value !== lever.filterOnValue && leverToday(lever) === lever.filterOnValue
   }
+  if (lever.kind === "choice") return lever.values.indexOf(value as string) > lever.values.indexOf(leverToday(lever) as string)
   const today = leverToday(lever) as number
   return Math.abs((value as number) - lever.strictest) > Math.abs(today - lever.strictest)
 }
@@ -89,5 +104,6 @@ export function isLooserThanToday(lever: SafetyLever, value: SafetyValue): boole
 /** Whether `value` is one the lever accepts. */
 export function isLeverValue(lever: SafetyLever, value: unknown): value is SafetyValue {
   if (lever.kind === "boolean") return typeof value === "boolean"
+  if (lever.kind === "choice") return typeof value === "string" && lever.values.includes(value)
   return typeof value === "number" && Number.isInteger(value) && value >= lever.min && value <= lever.max
 }

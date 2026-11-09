@@ -51,6 +51,11 @@ export interface ProviderResult {
    *  upscalers bill in Topaz units). Set only where a run is charged by them:
    *  the handler settles `units × the unit's price row` (`meteredBaseCredits`). */
   billedUnits?: number
+  /** GPT Image 2.6 at quality Auto only: the KIE credits the task really used.
+   *  KIE picks the level, so the run is reserved at Max and finalize settles on
+   *  this figure. Absent on every other run, and on an Auto run whose task
+   *  record has no figure (that run commits its reservation). */
+  autoQualityKieCredits?: number
 }
 
 // Capabilities a provider can support

@@ -9764,7 +9764,7 @@ not two.
 - `NodeInputField`, `NodeInputSchema` — input-schema shapes
 - `PromptAffixFields` — the `{ promptPrefix?, promptSuffix? }` node-data contract for [pre & post text](./prompt-pre-post-text.md); `PROMPT_PREFIX_KEY` / `PROMPT_SUFFIX_KEY` are the matching key constants (value exports, not types)
 - `RunNodeResult` — `{ jobId: string; ... } | Record<string, unknown>` (discriminated on presence of `jobId`)
-- `RunNodeAdjustment` — one parameter correction on the image node types: `{ field: "aspectRatio" | "resolution" | "quality" | "duration", from, to?, reason }` (re-exported from `@nodaro/shared`'s `ModelInputAdjustment`); see [Parameter corrections](./api-integration.md#4d-parameter-corrections-adjustments)
+- `RunNodeAdjustment` — one parameter correction on the image node types: `{ field: "aspectRatio" | "resolution" | "quality" | "duration" | "background", from, to?, reason }` (re-exported from `@nodaro/shared`'s `ModelInputAdjustment`); see [Parameter corrections](./api-integration.md#4d-parameter-corrections-adjustments)
 - `NodeJobOutput` — typed `output_data` shape: `{ audioUrl?, videoUrl?, imageUrl?, thumbnailUrl?, [k]: unknown }`
 - `RunAndWaitOptions` — `{ signal?, onProgress?, pollMs?, maxMs? }`
 - `RunManyResult` — `{ jobId: string; output: NodeJobOutput }`

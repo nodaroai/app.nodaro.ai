@@ -7,6 +7,10 @@
     "claude-opus-5",
     "claude-sonnet-4-6",
     "claude-sonnet-5-5",
+    "gpt-image-2-6-flare",
+    "gpt-image-2-6-flare-i2i",
+    "gpt-image-2-6-sunburst",
+    "gpt-image-2-6-sunburst-i2i",
     "instagram-analysis",
     "meta-ads-analysis"
   ]

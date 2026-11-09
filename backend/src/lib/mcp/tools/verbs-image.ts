@@ -31,7 +31,7 @@ import {
 } from "./_image-batch.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { defaultImageModel, isAutoAspectToken, modelIdsByKindMode } from "@nodaro/shared/model-catalog"
-import { MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS } from "@nodaro/shared/models"
+import { IMAGE_BACKGROUND_VALUES, IMAGE_QUALITY_VALUES, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, requestImageLimit } from "@nodaro/shared/models"
 import { SCRIPT_SCENE_COUNT_RANGE, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TARGET_DURATION_DEFAULT, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared/nodes"
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { normalizeImageInput } from "../normalize.js"
@@ -124,7 +124,11 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           quality: z
             .string()
             .optional()
-            .describe("Quality: medium / high (model-dependent). Synonyms accepted."),
+            .describe("Quality by model (list_models). Auto bills real cost, up to Max."),
+          background: z
+            .enum(IMAGE_BACKGROUND_VALUES)
+            .optional()
+            .describe("Models that list it. Transparent renders at 1K."),
           aspect_ratio: z
             .string()
             .optional()
@@ -138,7 +142,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             .union([z.array(z.string()), z.string()])
             .optional()
             .describe(
-              "Reference images (URLs or Nodaro asset ids, up to 14) for identity / " +
+              "Reference images (URLs or Nodaro asset ids, up to 14; 16 on GPT Image 2.6) for identity / " +
               "style / composition guidance — use whenever the output must match a " +
               "given person, character, or product. Accepts an array; a lone URL or " +
               "a JSON-stringified array is tolerated and coerced.",
@@ -340,8 +344,8 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           effective.structured as Parameters<typeof buildCompositePrompt>[1],
         )
         // Tolerant: array | JSON-string | lone URL; asset ids resolved to URLs.
-        // The route's referenceImageUrls schema is URL-only (max 14).
-        const refUrls = await resolveRefArray(effective.reference_image_urls, session.userId, "image", 14)
+        // The route's referenceImageUrls schema is URL-only (and capped per model).
+        const refUrls = await resolveRefArray(effective.reference_image_urls, session.userId, "image", requestImageLimit(fanOut ? undefined : ((effective.model as string | undefined) ?? model)))
         // "auto" keeps the shape of the photo the call sends (the base image,
         // else the first reference): /v1/generate-image resolves it against
         // that photo — natively, or to the model's nearest listed ratio — so a
@@ -368,6 +372,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           aspectRatio,
           resolution,
           quality,
+          ...(effective.background ? { background: effective.background } : {}),
           negativePrompt: effective.negative_prompt as string | undefined,
           ...(refUrls.length ? { referenceImageUrls: refUrls } : {}),
           ...(args.connected_references ? { connectedReferences: args.connected_references } : {}),
@@ -418,7 +423,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "PRIMARY tool for image-to-image / edit / transform / restyle / outpaint / inpaint work. Use it " +
           "directly; do NOT search the apps marketplace for image editing.\n\n" +
           "**Picking a model**: `list_models { kind: \"image\", mode: \"i2i\" }` or `mode: \"edit\"` for the " +
-          "capability sheets. Default gpt-image-2-5-flare-i2i; gpt-image-2-i2i for face/character identity across " +
+          "capability sheets. Default gpt-image-2-6-flare-i2i; gpt-image-2-i2i for face/character identity across " +
           "multi-turn edits and for typography; gpt-image-2 for text-heavy, prompt-adherence-critical edits; " +
           "recraft-remove-bg for background removal (no prompt). The full model guidance is " +
           "`get_node_skill(\"modify-image\")`.\n\n" +
@@ -433,12 +438,13 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             .string()
             .optional()
             .describe(
-              `I2I / edit model. Default gpt-image-2-5-flare-i2i. Recommended: ${I2I_MODEL_IDS.join(", ")}. ` +
+              `I2I / edit model. Default gpt-image-2-6-flare-i2i. Recommended: ${I2I_MODEL_IDS.join(", ")}. ` +
               `For identity-preserving edits use gpt-image-2-i2i. Unknown values fall back. ` +
               `Call list_models for capability details.`,
             ),
           resolution: z.string().optional().describe("Resolution: falls back to nearest supported."),
-          quality: z.string().optional().describe("Quality: medium/high/basic. Synonyms accepted."),
+          quality: z.string().optional().describe("Quality by model (list_models). Auto bills real cost, up to Max."),
+          background: z.enum(IMAGE_BACKGROUND_VALUES).optional().describe("Models that list it. Transparent renders at 1K."),
           aspect_ratio: z.string().optional().describe("Aspect ratio. 'auto' keeps the photo's shape on every model. Variations and unsupported values fall back."),
           negative_prompt: z.string().max(2000).optional(),
           structured: StructuredFields.optional(),
@@ -545,6 +551,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           aspectRatio,
           resolution,
           quality,
+          ...(args.background ? { background: args.background } : {}),
           negativePrompt: args.negative_prompt,
           mcp_client: session.clientName,
           userId: session.userId,
@@ -647,7 +654,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         "Transform an image guided by a text prompt (img2img). Supports style " +
         "transfer, re-styling, inpainting with a mask, and multi-reference " +
         "composition. Returns a job_id.\n\n" +
-        "**Recommended models**: gpt-image-2-5-flare-i2i (default), gpt-image-2-i2i (identity), nano-banana-2-1, " +
+        "**Recommended models**: gpt-image-2-6-flare-i2i (default), gpt-image-2-i2i (identity), nano-banana-2-1, " +
         "flux-kontext (photorealistic edits), gpt-image-i2i (creative repaints), " +
         "flux-i2i, ideogram-remix. Call `list_models { kind: \"image\", mode: \"i2i\" }` " +
         "for the full list.",
@@ -656,18 +663,18 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         image_asset_id: z.string().optional().describe("Nodaro image job id."),
         prompt: z.string().min(1).max(2000).describe("Transformation description."),
         model: z.string().optional().describe(
-          `img2img model. Default gpt-image-2-5-flare-i2i. Options: ${I2I_MODEL_IDS.join(", ")}. Unknown values fall back to the default.`,
+          `img2img model. Default gpt-image-2-6-flare-i2i. Options: ${I2I_MODEL_IDS.join(", ")}. Unknown values fall back to the default.`,
         ),
         reference_image_urls: z
           .union([z.array(z.string()), z.string()])
           .optional()
           .describe(
-            "Extra reference images (URLs or Nodaro asset ids, up to 13) for multi-ref " +
+            "Extra reference images (URLs or Nodaro asset ids, up to 13; 15 on GPT Image 2.6) for multi-ref " +
             "models — asset ids are resolved server-side. Accepts an array; a lone URL " +
             "or a JSON-stringified array is coerced.",
           ),
         resolution: z.enum(["1K", "2K", "4K"]).optional(),
-        quality: z.enum(["medium", "high", "basic"]).optional(),
+        quality: z.enum(IMAGE_QUALITY_VALUES).optional(),
         strength: z.number().min(0).max(1).optional().describe("How much the prompt overrides the source image (0=subtle, 1=full repaint)."),
         aspect_ratio: z.string().optional(),
         negative_prompt: z.string().max(5000).optional(),
@@ -696,7 +703,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
 
       // Resolve asset ids → URLs (route's referenceImageUrls is URL-only);
       // tolerant of array | lone string | JSON-stringified array inputs.
-      const i2iRefs = await resolveRefArray(args.reference_image_urls, session.userId, "image", 13)
+      const i2iRefs = await resolveRefArray(args.reference_image_urls, session.userId, "image", requestImageLimit(args.model ?? defaultImageModel("edit", args.aspect_ratio)) - 1)
       const payload: Record<string, unknown> = {
         imageUrl,
         prompt: args.prompt,

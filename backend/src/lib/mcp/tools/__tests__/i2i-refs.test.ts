@@ -54,6 +54,21 @@ describe("image_to_image reference resolution", () => {
     ])
   })
 
+  it("with no model named, keeps as many references as the default model takes", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/image-to-image", { jobId: "j-i2i-limit" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "image_to_image", {
+      image_url: "https://cdn.nodaro.ai/uploads/source.png",
+      prompt: "restyle",
+      reference_image_urls: Array.from({ length: 15 }, (_, i) => `https://cdn.nodaro.ai/uploads/ref${i}.png`),
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.referenceImageUrls).toHaveLength(15)
+  })
+
   it("drops unresolvable asset ids instead of forwarding garbage to the URL-only route", async () => {
     const { fastify, received } = stubRoute("POST", "/v1/image-to-image", { jobId: "j-i2i-2" })
     const server = buildServer()

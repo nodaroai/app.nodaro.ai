@@ -173,3 +173,15 @@ describe("generate_mask", () => {
     expect(flowNodeFor("/v1/generate-mask", { ...TRANSPORT, imageUrl: IMG, prompt: "the person" }, "generate_mask")).toBeNull()
   })
 })
+
+describe("the background setting on a flow node", () => {
+  it("Generate Image carries it", () => {
+    const spec = nodeOf("/v1/generate-image", "generate_image", { prompt: "a cat", provider: "gpt-image-2-6-flare", background: "transparent" })
+    expect(spec.data.background).toBe("transparent")
+  })
+
+  it("Image to Image carries it", () => {
+    const spec = nodeOf("/v1/image-to-image", "image_to_image", { imageUrl: IMG, prompt: "a cat", provider: "gpt-image-2-6-flare-i2i", background: "opaque" })
+    expect(spec.data.background).toBe("opaque")
+  })
+})

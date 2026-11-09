@@ -1,5 +1,53 @@
 # @nodaro/sdk
 
+## 2.66.0
+
+### Minor Changes
+
+- 22ff9db: The credit reads carry an optional `display` object on a deployment that shows its own unit instead of credits: the same figures, converted by the server, with the unit's label and decimals. `client.credits.balance()` (`UserBalance.display`), `client.credits.modelCosts()` (`ModelCostsResult.display`) and the single-id lookup's `ModelCostResult.display`. Render these instead of converting credits yourself; `null` in them means unavailable, never zero. `UserBalance` also types `allowance`, the per-user allowance the server sends on a deployment with a single payer. Absent elsewhere, and every existing field is unchanged.
+- 45f1902: `GenerateImageParams` and `ImageToImageParams` type `background` (`auto`, `opaque`, `transparent`), on the GPT Image models that take it. `ModelSummary` carries `backgrounds`.
+- 3a6fa3f: A name of the person's own on any result: `client.jobs.rename(id, title)`.
+
+  - `jobs.rename(id, title | null)` (`PATCH /v1/jobs/:id`): name one of your jobs — "Wedding toast, final" on a picture, a clip, a track or a speech take — or clear the name with `null` (or `""`). Trimmed; one line of plain text, 1–120 characters, any language (`validation_error` otherwise). The owner only (anyone else's job is `NotFoundError`); free; any job type and status, the Trash included; nothing else about the job changes. Answers `{ data: { jobId, title } }` (`RenameJobResult`). OAuth apps need `assets:write`. Named `rename`, like `rate`, rather than a general `update`: the route takes this one field.
+  - `Job.title` (`string | null`, `null` until named) wherever a job is returned — `jobs.get`, `jobs.list`, a session's items (`SessionItem.job`), `client.trash.list()` — and the same name as `title` on `GalleryItem` (public, beside the prompt) and on `LibraryAsset` (the name of the job that made the file; not its `filename`). Absent from a server older than this release. Webhook job payloads carry it too.
+  - CLI: `nodaro jobs rename <id> <title>` and `nodaro jobs rename <id> --clear`.
+
+- db740ae: The credit reads' `display` object (`UserBalance.display`, `ModelCostsResult.display`, `ModelCostResult.display`) can carry `unitLabels`: on a deployment that names its unit per interface language, the word for each language beside the single `unit`. Show `unitLabels[locale] ?? unit`. Absent everywhere else, and every existing field is unchanged.
+- d2ff226: `createSharedSupabaseClient` (`@nodaro/sdk/supabase`) takes a new `retiredSupabaseUrls` option: the Supabase projects an app has moved away from. When the client is created in a browser, it deletes every cookie those projects left (`sb-<project-ref>-…`: the session and its chunks, the code verifiers, the stored user), on `cookieDomain` and host-only, so a session nothing reads any more stops being sent with every request. The current project's cookies are never deleted, even if its URL is listed.
+- af790ff: New `client.surface.availability()` (`GET /v1/surface/availability`, also published as `@nodaro/sdk/surface`): what the deployment offers the caller. That means the node types and models it does not offer and the Web Scrape sources it withdraws, and now every world of the shared site header with whether the caller is offered it (`worlds: [{ id, enabled }]`, in the deployment's display order). A world is enabled when the deployment lets it through and every node type it runs is available to the caller. Types: `SurfaceAvailability`, `SurfaceAvailabilityWorld`.
+- a82e34b: Speech: the audio file a run delivers, and favorite voices.
+
+  - `TextToSpeechParams` (`nodes.run("text-to-speech", …)`) takes `outputFormat`: `mp3_44100_128` (the default, as before), `mp3_44100_192` or `wav_24000` — same credits, the job's `audioUrl` ends in `.mp3` or `.wav` accordingly. The values are `TTS_OUTPUT_FORMATS` in `@nodaro/shared/models` (with `DEFAULT_TTS_OUTPUT_FORMAT` and `TTS_OUTPUT_FORMAT_FILES`). `withTimestamps` is now typed too.
+  - `client.voices.listFavorites()`, `favorite(input)` and `unfavorite(voiceId)`: the signed-in user's favorite voices — a premade voice, a Voice Library voice or one of their clones — starred from any client and read back by all of them, newest first, each with the `voiceId` / `voiceType` a speech run takes and the `name` / `previewUrl` it was starred with. Types `VoiceFavorite`, `VoiceFavoriteInput` and `VoiceFavoriteType` (its values as `VOICE_FAVORITE_TYPES`) in `@nodaro/shared/pipeline` and `@nodaro/sdk/voices`.
+  - `VOICE_LIBRARY_USE_CASES` / `VoiceLibraryUseCase` (`@nodaro/shared/pipeline`): the seven `use_cases` values `voices.searchLibrary()` groups the Voice Library by (`advertisement`, `characters_animation`, `conversational`, `entertainment_tv`, `informative_educational`, `narrative_story`, `social_media`); `VoiceLibraryParams.use_cases` is typed to them and still takes any string.
+  - CLI: `nodaro voice favorites`, `nodaro voice favorite <voiceId> --name … --type premade|library|custom [--preview <https url>]` (both options required), `nodaro voice unfavorite <voiceId>`.
+
+- 3c2e500: Voice Library: how many voices each category, tone and language has, and each voice's tone and languages.
+
+  - `client.voices.libraryFacets(params?)` (`GET /v1/voices/library/facets`, public, no credits): for the listing's filters (`use_cases`, `language`, `descriptives`, `gender`, `age`, `accent`, `category`, `featured`, `search`), how many library voices match (`total`) and that number broken down by every facet — `use_cases`, `languages`, `descriptives`, `genders`, `ages`, `accents`, `categories` — each as `[{ value, count }]` sorted by count, zero counts left out, each facet ignoring its own filter so every category keeps its count while one is chosen. Counted over the platform's own copy of the library, refreshed on a schedule (`updatedAt`); `languages` counts a voice under every language it is verified for, which is what the listing's `language` filter matches. With `search` the counts are a lower estimate and `approximate` is true. For the few minutes after a deployment first reads the library the route answers `503 voice_library_warming` with `Retry-After`. Types `VoiceLibraryFacets`, `VoiceLibraryFacetCount`, `VoiceLibraryFacetsParams` (`@nodaro/shared/pipeline`, `@nodaro/sdk/voices`).
+  - `searchLibrary()` voices now carry `descriptive` (the library's one-word tone, `""` when it states none), `language` and `locale` (the primary language, `""` when unstated) and `verifiedLanguages` (every language code the voice is verified for, primary first), so a card can say "Cute · Spanish" without a second call.
+  - `VOICE_LIBRARY_DESCRIPTIVES` / `VoiceLibraryDescriptive` (`@nodaro/shared/pipeline`): the 34 tone words the library labels its voices with today, alphabetical (`anxious` … `wise`); `VoiceLibraryParams.descriptives` is typed to them and still takes any string — the facets route says which exist now.
+
+### Patch Changes
+
+- 5ab3e17: The `castSwap.styleChoice()` doc comments now say what each answer does: `"flex"` makes every direct run and estimate on that engine Flex whatever the request's `style` says, while `"precise"` changes no request (Nodaro's own apps run Precise there and hide their Style control; a request's `style` is taken as sent).
+- 7bbde1c: `ImportRefusedError` knows the new refusal `link_imports_disabled`: a deployment that turned link imports off refuses a link to another site, before any job or fetch.
+- Updated dependencies [fa16b02]
+- Updated dependencies [f4678cb]
+- Updated dependencies [331ba80]
+- Updated dependencies [3ba7c05]
+- Updated dependencies [45f1902]
+- Updated dependencies [7dc454f]
+- Updated dependencies [18dd86c]
+- Updated dependencies [52a1a24]
+- Updated dependencies [a27499d]
+- Updated dependencies [ac55661]
+- Updated dependencies [db740ae]
+- Updated dependencies [a82e34b]
+- Updated dependencies [3c2e500]
+  - @nodaro/shared@3.56.0
+  - @nodaro/prompts@1.51.0
+
 ## 2.65.1
 
 ### Patch Changes

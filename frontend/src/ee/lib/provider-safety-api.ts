@@ -2,7 +2,7 @@ import { getAuthHeaders } from "@/lib/api"
 
 /** The server's view of provider content filters (`GET /v1/admin/provider-safety`). */
 
-export type SafetyValue = boolean | number
+export type SafetyValue = boolean | number | string
 export type LeverValueLock = "loosening-locked" | "never-loosen" | "wire-unconfirmed"
 
 export interface ProviderSafetyValueOption {
@@ -13,7 +13,7 @@ export interface ProviderSafetyValueOption {
 
 export interface ProviderSafetyLever {
   readonly param: string
-  readonly kind: "boolean" | "scale"
+  readonly kind: "boolean" | "scale" | "choice"
   readonly filterOnValue?: boolean
   readonly today: SafetyValue
   readonly override: SafetyValue | null

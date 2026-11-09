@@ -110,6 +110,20 @@ describe("normalizeQuality", () => {
     expect(normalizeQuality("balanced", supportedTurbo)).toBe("BALANCED")
   })
 
+  it("a model listing Auto first: a word for fast takes the cheap level, never Auto", () => {
+    const listed = ["auto", "low", "medium", "high", "xhigh", "max"] as const
+    for (const word of ["fast", "quick", "speed", "turbo"]) expect(normalizeQuality(word, listed)).toBe("low")
+    expect(normalizeQuality("balanced", listed)).toBe("medium")
+    expect(normalizeQuality("default", listed)).toBe("medium")
+    expect(normalizeQuality("best", listed)).toBe("max")
+  })
+
+  it("Auto is only reached by naming it", () => {
+    expect(normalizeQuality("auto", ["auto", "low", "medium"])).toBe("auto")
+    expect(normalizeQuality("fast", ["auto", "medium", "high"])).toBe("medium")
+    expect(normalizeQuality("normal", ["auto", "standard"])).toBe("standard")
+  })
+
   it("returns undefined for unknown when no synonym matches", () => {
     expect(normalizeQuality("weird-quality", supportedMedHigh)).toBeUndefined()
   })

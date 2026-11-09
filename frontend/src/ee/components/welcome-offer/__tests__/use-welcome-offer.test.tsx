@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { renderHook, act, waitFor } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import type { ReactNode } from "react"
@@ -7,11 +7,13 @@ const h = vi.hoisted(() => ({
   claim: vi.fn(),
   seen: vi.fn().mockResolvedValue(undefined),
   collectKeys: vi.fn().mockResolvedValue({ browserKey: "a".repeat(64) }),
+  surface: {} as { deploymentPayer?: boolean },
 }))
 
 vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ user: { id: "u1" } }) }))
 vi.mock("@/lib/edition", () => ({ hasCredits: () => true, isCloud: () => true }))
 vi.mock("@/ee/lib/ensure-signup-grant", () => ({ collectKeys: h.collectKeys }))
+vi.mock("@/hooks/use-billing-surface", () => ({ useBillingSurface: () => ({ surface: h.surface, isLoading: false }) }))
 vi.mock("../welcome-offer-api", () => ({
   SOURCE_APP: "app",
   claimWelcomeOffer: h.claim,
@@ -48,7 +50,12 @@ function setup(balance: Partial<UserBalance>) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  h.surface = {}
   useWelcomeOfferStore.setState({ claimedCredits: null, consentAskVersion: 0 })
+})
+
+afterEach(() => {
+  delete window.__NODARO_RUNTIME__
 })
 
 /**
@@ -142,6 +149,42 @@ describe("useWelcomeOffer — mode from the balance", () => {
     })
     expect(h.claim).toHaveBeenCalledWith({ browserKey: "a".repeat(64) })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.credits.balance("u1") })
+  })
+})
+
+/**
+ * A deployment that sells nothing (`billing.selfServe: false`) or has a single
+ * payer gives no free credits of one's own, so there is no offer to make: the
+ * popup and the banner read the mode, and this is where it is decided. The
+ * consent ask is not an offer, and it is the only way out of a refused create
+ * (`403 consent_required`), so it stays.
+ */
+describe("useWelcomeOffer — a deployment with no personal free credits", () => {
+  const OFFER = { freeGrantState: "unclaimed", welcomeOffer: { popupSeen: false, consentPending: false, credits: 1500 } } as const
+  const sellsNothing = { surface: { billing: { costTab: "inherit", sidebarCard: "inherit", selfServe: false } } } as const
+
+  it("billing.selfServe false: no offer and no popup, for an account the offer would otherwise reach", () => {
+    window.__NODARO_RUNTIME__ = sellsNothing
+    const { wrapper } = setup(OFFER)
+    const { result } = renderHook(() => useWelcomeOffer(), { wrapper })
+    expect(result.current.mode).toBeNull()
+    expect(result.current.popupDue).toBe(false)
+  })
+
+  it("a deployment payer: no offer either", () => {
+    h.surface = { deploymentPayer: true }
+    const { wrapper } = setup(OFFER)
+    const { result } = renderHook(() => useWelcomeOffer(), { wrapper })
+    expect(result.current.mode).toBeNull()
+    expect(result.current.popupDue).toBe(false)
+  })
+
+  it("the consent ask stays, whatever the deployment sells", () => {
+    window.__NODARO_RUNTIME__ = sellsNothing
+    h.surface = { deploymentPayer: true }
+    const { wrapper } = setup({ freeGrantState: "granted", welcomeOffer: { popupSeen: false, consentPending: true, credits: 1500 } })
+    const { result } = renderHook(() => useWelcomeOffer(), { wrapper })
+    expect(result.current.mode).toBe("consent-pending")
   })
 })
 

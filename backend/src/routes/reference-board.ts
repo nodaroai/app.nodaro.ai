@@ -10,6 +10,7 @@ import { insertJobIdempotent } from "../lib/insert-job.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { buildCreditModelIdentifier } from "@nodaro/shared/credits"
+import { boardQuality } from "../lib/entity-credit-identifier.js"
 import { REFERENCE_BOARD_PROVIDERS, buildBoardPrompt } from "@nodaro/shared/entities"
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
 import { formatZodError } from "../lib/zod-error.js"
@@ -21,7 +22,7 @@ const referenceBoardBody = z.object({
   negativePrompt: z.string().max(5000).optional(),
   aspectRatio: z.string().max(12).optional(),
   resolution: z.enum(["1K", "2K", "4K"]).optional(),
-  quality: z.enum(["medium", "high"]).optional(),
+  quality: z.enum(["auto", "low", "medium", "high", "xhigh", "max"]).optional(),
   seed: z.number().int().min(0).optional(),
   referenceImageUrls: z.array(safeUrlSchema).max(13).optional(),
   // Connected-entity context for the metadata block (resolver-supplied):
@@ -43,8 +44,11 @@ export function resolveBoardCreditIdentifier(req: FastifyRequest): string {
   const provider = (REFERENCE_BOARD_PROVIDERS as readonly string[]).includes(raw) ? raw : fallback
   return buildCreditModelIdentifier(
     provider,
-    b.quality as string | undefined,
+    boardQuality(provider, b.quality),
     b.resolution as string | undefined,
+    undefined,
+    undefined,
+    Array.isArray(b.referenceImageUrls) ? b.referenceImageUrls.length : 0,
   )
 }
 
@@ -124,7 +128,7 @@ export async function referenceBoardRoutes(app: FastifyInstance): Promise<void> 
       provider: body.provider,
       aspectRatio: body.aspectRatio,
       resolution: body.resolution,
-      quality: body.quality,
+      quality: boardQuality(body.provider, body.quality),
       negativePrompt: body.negativePrompt,
       seed: body.seed,
       usageLogId,

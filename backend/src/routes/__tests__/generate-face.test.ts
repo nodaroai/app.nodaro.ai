@@ -207,3 +207,15 @@ describe("POST /v1/generate-face — subjectMinor (W1-a)", () => {
     expect(enqueued.subjectMinor).toBe(true)
   })
 })
+
+describe("POST /v1/generate-face — GPT Image 2.6's price", () => {
+  it("a source image is priced as the edit it runs as", async () => {
+    await post({ name: "Ada", provider: "gpt-image-2-6-flare", sourceImageUrl: "https://cdn.example.com/a.png" })
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
+  })
+
+  it("another model keeps its plain id", async () => {
+    await post({ name: "Ada", provider: "gpt-image-2-5-flare", sourceImageUrl: "https://cdn.example.com/a.png" })
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("gpt-image-2-5-flare")
+  })
+})

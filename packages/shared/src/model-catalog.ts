@@ -335,6 +335,26 @@ export interface ModelCatalogEntry {
    */
   unlistedResolutionRendersAs?: string
   qualities?: readonly string[]
+  /**
+   * The quality a run renders at when none is named, where that is not the
+   * first listed. A value the model does not take snaps to it, as does a panel.
+   */
+  defaultQuality?: string
+  /**
+   * The image background settings this model takes (`auto`, `opaque`,
+   * `transparent`). Absent: no such setting, and a value sent is dropped.
+   */
+  backgrounds?: readonly string[]
+  /**
+   * The one resolution a transparent background renders at, where the provider
+   * limits it. `normalizeModelInput` moves the size there and says so.
+   */
+  transparentResolution?: string
+  /**
+   * The provider takes the background setting, whatever its value, only at
+   * `transparentResolution`. Above it nothing is sent.
+   */
+  backgroundOnlyAtTransparentResolution?: true
   durations?: readonly number[]
   /**
    * The length (seconds) this model renders when the request names no duration
@@ -382,6 +402,13 @@ export interface ModelCatalogEntry {
    */
   mcpHidden?: boolean
   /**
+   * Left out of the public docs' model tables and the model lists in the MCP
+   * tool descriptions, while a provider can't serve this model. Not an
+   * availability switch: what hides a model from every menu and refuses a run
+   * is the admin's `model_pricing.is_enabled` (backend lib/model-switch.ts).
+   */
+  docsHidden?: boolean
+  /**
    * The provider's safety filter is known to be non-deterministic on this
    * model — the platform retries a blocked request once; `fallback` names
    * the catalog model to offer when it blocks again.
@@ -407,14 +434,14 @@ export interface ModelRecommendation {
 
 export const MODEL_RECOMMENDATIONS: readonly ModelRecommendation[] = [
   // image
-  { intent: "best for typography / logos / text-heavy", modelIds: ["gpt-image-2", "gpt-image-2-5-flare"], note: "GPT Image 2 for exact copy, labels and non-Latin text; GPT Image 2.5 Flare is close and faster." },
+  { intent: "best for typography / logos / text-heavy", modelIds: ["gpt-image-2", "gpt-image-2-6-flare"], note: "GPT Image 2 for exact copy, labels and non-Latin text; GPT Image 2.6 Flare for posters and layouts, and faster." },
   // Notes name the RANKING, not the price — the price sits in the generated
   // table directly below them and in `pricing`, so restating it here just
   // creates a copy that rots (this one said "1 credit" long after it was 2).
   { intent: "cheapest realistic image", modelIds: ["z-image", "qwen", "imagen4-fast"], note: "Z-Image is the cheapest. Qwen / Imagen4 Fast for slightly higher quality." },
-  { intent: "highest fidelity image", modelIds: ["gpt-image-2", "gpt-image-2-5-sunburst", "imagen4-ultra"], note: "GPT Image 2 for characters and identity; GPT Image 2.5 Sunburst for wide or in-between ratios GPT Image 2 can't draw." },
-  { intent: "image edit / restyle", modelIds: ["gpt-image-2-5-flare-i2i", "gpt-image-2-i2i", "seedream-5-pro-i2i"], note: "GPT Image 2.5 Flare keeps pose, framing and product detail; GPT Image 2 i2i for identity-critical edits; Seedream 5 Pro for instruction-based edits." },
-  { intent: "highest-resolution image", modelIds: ["topaz-image-upscale", "gpt-image-2", "gpt-image-2-5-sunburst"], note: "Generate at the model's top tier, then Topaz upscale 4x (Topaz's only lever is the 1x/2x/4x factor)." },
+  { intent: "highest fidelity image", modelIds: ["gpt-image-2", "gpt-image-2-6-sunburst", "imagen4-ultra"], note: "GPT Image 2 for characters and identity; GPT Image 2.6 Sunburst for wide or in-between ratios GPT Image 2 can't draw." },
+  { intent: "image edit / restyle", modelIds: ["gpt-image-2-6-flare-i2i", "gpt-image-2-i2i", "seedream-5-pro-i2i"], note: "GPT Image 2.6 Flare changes what you ask and keeps the rest; GPT Image 2 i2i for identity-critical edits; Seedream 5 Pro for instruction-based edits." },
+  { intent: "highest-resolution image", modelIds: ["topaz-image-upscale", "gpt-image-2", "gpt-image-2-6-sunburst"], note: "Generate at the model's top tier, then Topaz upscale 4x (Topaz's only lever is the 1x/2x/4x factor)." },
   { intent: "background removal / cutout", modelIds: ["recraft-remove-bg"], note: "Cheap, no prompt needed." },
   // video
   { intent: "best cinematic video", modelIds: ["veo3", "kling-3.0", "seedance-2"], note: "VEO 3.1 Quality for premium narrative; Kling 3.0 for music-synced motion; Seedance 2 for reference-driven consistency." },
@@ -459,6 +486,24 @@ const GPT_IMAGE_2_5_RATIOS = [
   "auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16",
   "21:9", "27:16", "16:27", "9:8", "8:9",
 ] as const
+// GPT Image 2.6 Flare and Sunburst: auto plus fifteen ratios, Economy a shorter
+// list of its own (docs.kie.ai/market/gpt/gpt-image-2-6-*).
+const GPT_IMAGE_2_6_RATIOS = [
+  "auto", "1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16",
+  "2:1", "1:2", "21:9", "9:21", "3:1", "1:3",
+] as const
+const GPT_IMAGE_2_6_ECONOMY_RATIOS = ["auto", "1:1", "16:9", "9:16", "3:2", "2:3", "21:9", "4:3"] as const
+const GPT_IMAGE_2_6_VALUE_LABELS = {
+  "3:2": "3:2 (Landscape)", "2:3": "2:3 (Portrait)",
+  "5:4": "5:4 (Near-square)", "4:5": "4:5 (Near-square)",
+  "2:1": "2:1 (Wide)", "1:2": "1:2 (Vertical)",
+  "9:21": "9:21 (Ultra-tall)", "3:1": "3:1 (Banner)", "1:3": "1:3 (Vertical banner)",
+  // Auto takes the shared label; it is an aspect ratio on these models too.
+  "low": "Low", "medium": "Medium", "high": "High", "xhigh": "Extra High", "max": "Max",
+} as const
+// The GPT Image background setting. KIE renders a transparent one at 1K only
+// (`transparentResolution`), which normalizeModelInput enforces.
+const GPT_IMAGE_BACKGROUNDS = ["auto", "opaque", "transparent"] as const
 const IMAGEN4_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
 const IDEOGRAM_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
 const SEEDREAM_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"] as const
@@ -878,6 +923,9 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_5_RATIOS,
     resolutions: ["1K", "2K", "4K"],
+    backgrounds: GPT_IMAGE_BACKGROUNDS,
+    transparentResolution: "1K",
+    backgroundOnlyAtTransparentResolution: true,
     pricing: [
       { identifier: "gpt-image-2-5-flare", credits: 15, note: "1K default" },
       { identifier: "gpt-image-2-5-flare:2K", credits: 25, note: "2K" },
@@ -903,6 +951,9 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_5_RATIOS,
     resolutions: ["1K", "2K", "4K"],
+    backgrounds: GPT_IMAGE_BACKGROUNDS,
+    transparentResolution: "1K",
+    backgroundOnlyAtTransparentResolution: true,
     pricing: [
       { identifier: "gpt-image-2-5-flare-i2i", credits: 15, note: "1K default" },
       { identifier: "gpt-image-2-5-flare-i2i:2K", credits: 25, note: "2K" },
@@ -928,6 +979,9 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_5_RATIOS,
     resolutions: ["1K", "2K", "4K"],
+    backgrounds: GPT_IMAGE_BACKGROUNDS,
+    transparentResolution: "1K",
+    backgroundOnlyAtTransparentResolution: true,
     pricing: [
       { identifier: "gpt-image-2-5-sunburst", credits: 15, note: "1K default" },
       { identifier: "gpt-image-2-5-sunburst:2K", credits: 25, note: "2K" },
@@ -953,6 +1007,9 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_5_RATIOS,
     resolutions: ["1K", "2K", "4K"],
+    backgrounds: GPT_IMAGE_BACKGROUNDS,
+    transparentResolution: "1K",
+    backgroundOnlyAtTransparentResolution: true,
     pricing: [
       { identifier: "gpt-image-2-5-sunburst-i2i", credits: 15, note: "1K default" },
       { identifier: "gpt-image-2-5-sunburst-i2i:2K", credits: 25, note: "2K" },
@@ -963,6 +1020,185 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       "27:16": "27:16 (Ultra-wide)", "16:27": "16:27 (Ultra-tall)",
       "9:8": "9:8 (Near-square)", "8:9": "8:9 (Near-square)",
     },
+    safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
+  },
+  "gpt-image-2-6-flare": {
+    id: "gpt-image-2-6-flare",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "OpenAI",
+    maker: "openai",
+    label: "GPT Image 2.6 Flare",
+    series: "GPT Image",
+    description: "Fast GPT Image 2.6 - pick it for speed: posters, product shots and quick iteration, with stronger layouts. Up to 4K, quality from low to max or auto (priced up to the max), a transparent background at 1K.",
+    useCases: ["typography", "high-res", "general", "draft"],
+    features: ["reference-image"],
+    aspectRatios: GPT_IMAGE_2_6_RATIOS,
+    resolutions: ["1K", "2K", "4K"],
+    qualities: ["auto", "low", "medium", "high", "xhigh", "max"],
+    defaultQuality: "medium",
+    backgrounds: GPT_IMAGE_BACKGROUNDS,
+    transparentResolution: "1K",
+    pricing: [
+      { identifier: "gpt-image-2-6-flare", credits: 20, note: "medium, 1K default" },
+      { identifier: "gpt-image-2-6-flare:low:1K", credits: 12, note: "low, 1K" },
+      { identifier: "gpt-image-2-6-flare:low:2K", credits: 23, note: "low, 2K" },
+      { identifier: "gpt-image-2-6-flare:low:4K", credits: 38, note: "low, 4K" },
+      { identifier: "gpt-image-2-6-flare:medium:1K", credits: 20, note: "medium, 1K" },
+      { identifier: "gpt-image-2-6-flare:medium:2K", credits: 40, note: "medium, 2K" },
+      { identifier: "gpt-image-2-6-flare:medium:4K", credits: 67, note: "medium, 4K" },
+      { identifier: "gpt-image-2-6-flare:high:1K", credits: 24, note: "high, 1K" },
+      { identifier: "gpt-image-2-6-flare:high:2K", credits: 49, note: "high, 2K" },
+      { identifier: "gpt-image-2-6-flare:high:4K", credits: 81, note: "high, 4K" },
+      { identifier: "gpt-image-2-6-flare:xhigh:1K", credits: 43, note: "extra high, 1K" },
+      { identifier: "gpt-image-2-6-flare:xhigh:2K", credits: 86, note: "extra high, 2K" },
+      { identifier: "gpt-image-2-6-flare:xhigh:4K", credits: 143, note: "extra high, 4K" },
+      { identifier: "gpt-image-2-6-flare:max:1K", credits: 96, note: "max, 1K" },
+      { identifier: "gpt-image-2-6-flare:max:2K", credits: 193, note: "max, 2K" },
+      { identifier: "gpt-image-2-6-flare:max:4K", credits: 321, note: "max, 4K" },
+      { identifier: "gpt-image-2-6-flare:auto:1K", credits: 96, note: "auto, 1K: the most it can cost, settled on what it really cost" },
+      { identifier: "gpt-image-2-6-flare:auto:2K", credits: 193, note: "auto, 2K: the most it can cost, settled on what it really cost" },
+      { identifier: "gpt-image-2-6-flare:auto:4K", credits: 321, note: "auto, 4K: the most it can cost, settled on what it really cost" },
+    ],
+    valueLabels: GPT_IMAGE_2_6_VALUE_LABELS,
+    safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
+  },
+  "gpt-image-2-6-flare-i2i": {
+    id: "gpt-image-2-6-flare-i2i",
+    kind: "image",
+    modes: ["i2i"] as const,
+    family: "OpenAI",
+    maker: "openai",
+    label: "GPT Image 2.6 Flare (I2I)",
+    series: "GPT Image",
+    description: "Fast GPT Image 2.6 edits - up to 16 input images, priced per image. Pick it while iterating.",
+    useCases: ["edit", "high-res"],
+    features: ["reference-image"],
+    aspectRatios: GPT_IMAGE_2_6_RATIOS,
+    resolutions: ["1K", "2K", "4K"],
+    qualities: ["auto", "low", "medium", "high", "xhigh", "max"],
+    defaultQuality: "medium",
+    backgrounds: GPT_IMAGE_BACKGROUNDS,
+    transparentResolution: "1K",
+    pricing: [
+      { identifier: "gpt-image-2-6-flare-i2i", credits: 20, note: "medium, 1K default" },
+      { identifier: "gpt-image-2-6-flare-i2i:low:1K:1ref", credits: 17, note: "low, 1K, one input image (the least)" },
+      { identifier: "gpt-image-2-6-flare-i2i:medium:1K:1ref", credits: 26, note: "medium, 1K, one input image" },
+      { identifier: "gpt-image-2-6-flare-i2i:high:4K:16ref", credits: 169, note: "high, 4K, sixteen input images" },
+      { identifier: "gpt-image-2-6-flare-i2i:max:4K:16ref", credits: 409, note: "max, 4K, sixteen input images (the most)" },
+      { identifier: "gpt-image-2-6-flare-i2i:auto:1K:1ref", credits: 101, note: "auto, 1K, one input image: the most it can cost, settled on what it really cost" },
+    ],
+    valueLabels: GPT_IMAGE_2_6_VALUE_LABELS,
+    safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
+  },
+  "gpt-image-2-6-sunburst": {
+    id: "gpt-image-2-6-sunburst",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "OpenAI",
+    maker: "openai",
+    label: "GPT Image 2.6 Sunburst",
+    series: "GPT Image",
+    description: "Precision GPT Image 2.6 - pick it when every detail counts: the strongest consistency across edits and the finest detail. Up to 4K, quality from low to max or auto (priced up to the max), a transparent background at 1K.",
+    useCases: ["typography", "high-res", "general"],
+    features: ["reference-image"],
+    aspectRatios: GPT_IMAGE_2_6_RATIOS,
+    resolutions: ["1K", "2K", "4K"],
+    qualities: ["auto", "low", "medium", "high", "xhigh", "max"],
+    defaultQuality: "medium",
+    backgrounds: GPT_IMAGE_BACKGROUNDS,
+    transparentResolution: "1K",
+    pricing: [
+      { identifier: "gpt-image-2-6-sunburst", credits: 20, note: "medium, 1K default" },
+      { identifier: "gpt-image-2-6-sunburst:low:1K", credits: 12, note: "low, 1K" },
+      { identifier: "gpt-image-2-6-sunburst:low:2K", credits: 23, note: "low, 2K" },
+      { identifier: "gpt-image-2-6-sunburst:low:4K", credits: 38, note: "low, 4K" },
+      { identifier: "gpt-image-2-6-sunburst:medium:1K", credits: 20, note: "medium, 1K" },
+      { identifier: "gpt-image-2-6-sunburst:medium:2K", credits: 40, note: "medium, 2K" },
+      { identifier: "gpt-image-2-6-sunburst:medium:4K", credits: 67, note: "medium, 4K" },
+      { identifier: "gpt-image-2-6-sunburst:high:1K", credits: 24, note: "high, 1K" },
+      { identifier: "gpt-image-2-6-sunburst:high:2K", credits: 49, note: "high, 2K" },
+      { identifier: "gpt-image-2-6-sunburst:high:4K", credits: 81, note: "high, 4K" },
+      { identifier: "gpt-image-2-6-sunburst:xhigh:1K", credits: 43, note: "extra high, 1K" },
+      { identifier: "gpt-image-2-6-sunburst:xhigh:2K", credits: 86, note: "extra high, 2K" },
+      { identifier: "gpt-image-2-6-sunburst:xhigh:4K", credits: 143, note: "extra high, 4K" },
+      { identifier: "gpt-image-2-6-sunburst:max:1K", credits: 96, note: "max, 1K" },
+      { identifier: "gpt-image-2-6-sunburst:max:2K", credits: 193, note: "max, 2K" },
+      { identifier: "gpt-image-2-6-sunburst:max:4K", credits: 321, note: "max, 4K" },
+      { identifier: "gpt-image-2-6-sunburst:auto:1K", credits: 96, note: "auto, 1K: the most it can cost, settled on what it really cost" },
+      { identifier: "gpt-image-2-6-sunburst:auto:2K", credits: 193, note: "auto, 2K: the most it can cost, settled on what it really cost" },
+      { identifier: "gpt-image-2-6-sunburst:auto:4K", credits: 321, note: "auto, 4K: the most it can cost, settled on what it really cost" },
+    ],
+    valueLabels: GPT_IMAGE_2_6_VALUE_LABELS,
+    safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
+  },
+  "gpt-image-2-6-sunburst-i2i": {
+    id: "gpt-image-2-6-sunburst-i2i",
+    kind: "image",
+    modes: ["i2i"] as const,
+    family: "OpenAI",
+    maker: "openai",
+    label: "GPT Image 2.6 Sunburst (I2I)",
+    series: "GPT Image",
+    description: "Precision GPT Image 2.6 edits - up to 16 input images, priced per image. Pick it for finished, detail-critical edits.",
+    useCases: ["edit", "high-res"],
+    features: ["reference-image"],
+    aspectRatios: GPT_IMAGE_2_6_RATIOS,
+    resolutions: ["1K", "2K", "4K"],
+    qualities: ["auto", "low", "medium", "high", "xhigh", "max"],
+    defaultQuality: "medium",
+    backgrounds: GPT_IMAGE_BACKGROUNDS,
+    transparentResolution: "1K",
+    pricing: [
+      { identifier: "gpt-image-2-6-sunburst-i2i", credits: 20, note: "medium, 1K default" },
+      { identifier: "gpt-image-2-6-sunburst-i2i:low:1K:1ref", credits: 17, note: "low, 1K, one input image (the least)" },
+      { identifier: "gpt-image-2-6-sunburst-i2i:medium:1K:1ref", credits: 26, note: "medium, 1K, one input image" },
+      { identifier: "gpt-image-2-6-sunburst-i2i:high:4K:16ref", credits: 169, note: "high, 4K, sixteen input images" },
+      { identifier: "gpt-image-2-6-sunburst-i2i:max:4K:16ref", credits: 409, note: "max, 4K, sixteen input images (the most)" },
+      { identifier: "gpt-image-2-6-sunburst-i2i:auto:1K:1ref", credits: 101, note: "auto, 1K, one input image: the most it can cost, settled on what it really cost" },
+    ],
+    valueLabels: GPT_IMAGE_2_6_VALUE_LABELS,
+    safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
+  },
+  // Economy is withheld since 2026-11-09: KIE answers every Economy request with
+  // an internal error, on its own playground too. Migration 611 switched the two
+  // ids off (`model_pricing.is_enabled`), which hides them from every menu and
+  // refuses a run. Turning the two rows on at /admin/models brings them back;
+  // `docsHidden` keeps them out of the docs until it is removed here.
+  "gpt-image-2-6-economy": {
+    id: "gpt-image-2-6-economy",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "OpenAI",
+    maker: "openai",
+    label: "GPT Image 2.6 Economy",
+    docsHidden: true,
+    series: "GPT Image",
+    description: "The same GPT Image 2.6 at a flat low price, 1K only - pick it for volume.",
+    useCases: ["general", "draft"],
+    features: ["reference-image"],
+    aspectRatios: GPT_IMAGE_2_6_ECONOMY_RATIOS,
+    backgrounds: GPT_IMAGE_BACKGROUNDS,
+    pricing: [{ identifier: "gpt-image-2-6-economy", credits: 13, note: "1K flat" }],
+    valueLabels: GPT_IMAGE_2_6_VALUE_LABELS,
+    safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
+  },
+  "gpt-image-2-6-economy-i2i": {
+    id: "gpt-image-2-6-economy-i2i",
+    kind: "image",
+    modes: ["i2i"] as const,
+    family: "OpenAI",
+    maker: "openai",
+    label: "GPT Image 2.6 Economy (I2I)",
+    docsHidden: true,
+    series: "GPT Image",
+    description: "Flat-price GPT Image 2.6 edits, 1K only, up to 16 input images - pick it for volume.",
+    useCases: ["edit", "draft"],
+    features: ["reference-image"],
+    aspectRatios: GPT_IMAGE_2_6_ECONOMY_RATIOS,
+    backgrounds: GPT_IMAGE_BACKGROUNDS,
+    pricing: [{ identifier: "gpt-image-2-6-economy-i2i", credits: 13, note: "1K flat" }],
+    valueLabels: GPT_IMAGE_2_6_VALUE_LABELS,
     safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
   },
 
@@ -3704,7 +3940,7 @@ function sameOptionValue(a: string | number, b: string | number): boolean {
 
 /** One correction `normalizeModelInput` made, for disclosure to the user. */
 export interface ModelInputAdjustment {
-  field: "aspectRatio" | "resolution" | "quality" | "duration"
+  field: "aspectRatio" | "resolution" | "quality" | "duration" | "background"
   /** The value that was asked for. */
   from: string | number
   /** What it became — `undefined` means the lever was dropped entirely. */
@@ -3717,6 +3953,7 @@ export interface NormalizedModelInput {
   resolution?: string
   quality?: string
   duration?: number
+  background?: string
   /** Empty when the input was already valid. */
   adjustments: ModelInputAdjustment[]
 }
@@ -3838,6 +4075,7 @@ export function normalizeModelInput(
     resolution?: string
     quality?: string
     duration?: number
+    background?: string
   },
   context: ModelInputContext = {},
 ): NormalizedModelInput {
@@ -3904,7 +4142,8 @@ export function normalizeModelInput(
     m.resolutions,
     defaultResolutionFor(modelId),
   )
-  out.quality = snap("quality", input.quality, m.qualities)
+  out.quality = snap("quality", input.quality, m.qualities, m.defaultQuality)
+  out.background = snap("background", input.background, m.backgrounds)
   out.duration =
     m.autoDuration === true && isAutoVideoDuration(input.duration)
       ? input.duration
@@ -3931,6 +4170,42 @@ export function normalizeModelInput(
       })
       out.resolution = "2K"
     }
+  }
+
+  // A transparent background only renders at the size the provider allows it.
+  // Priced after this, so the run pays for the size it renders.
+  if (
+    out.background === "transparent" &&
+    m.transparentResolution !== undefined &&
+    out.resolution !== undefined &&
+    out.resolution !== m.transparentResolution
+  ) {
+    adjustments.push({
+      field: "resolution",
+      from: out.resolution,
+      to: m.transparentResolution,
+      reason: `${m.label} only renders a transparent background at ${m.transparentResolution}.`,
+    })
+    out.resolution = m.transparentResolution
+  }
+
+  // Above that size such a model takes no background setting at all. `auto` is
+  // what it does anyway, so only `opaque` is a change worth saying.
+  if (
+    m.backgroundOnlyAtTransparentResolution &&
+    out.background !== undefined &&
+    out.resolution !== undefined &&
+    out.resolution !== m.transparentResolution
+  ) {
+    if (out.background !== "auto") {
+      adjustments.push({
+        field: "background",
+        from: out.background,
+        to: undefined,
+        reason: `${m.label} only takes a background setting at ${m.transparentResolution}.`,
+      })
+    }
+    out.background = undefined
   }
 
   return out
@@ -4175,6 +4450,7 @@ const MODEL_VALUE_LABELS: Record<string, string> = {
   "2k": "2K",
   "8K": "8K (Ultra)",
   // qualities
+  "low": "Low (Fast)",
   "medium": "Medium (Balanced)",
   "high": "High (Detailed)",
   "basic": "Basic (2K)",
@@ -4318,6 +4594,17 @@ export function qualityOptionsByKind(kind: ModelKind): Record<string, LabeledOpt
   return out
 }
 
+/** Same shape as `qualityOptionsByKind` but for `backgrounds`. */
+export function backgroundOptionsByKind(kind: ModelKind): Record<string, LabeledOption[]> {
+  const out: Record<string, LabeledOption[]> = {}
+  for (const m of Object.values(MODEL_CATALOG)) {
+    if (m.kind !== kind) continue
+    if (!m.backgrounds) continue
+    out[m.id] = m.backgrounds.map((v) => ({ value: v, label: decorateLabel(m, v) }))
+  }
+  return out
+}
+
 /** One shaped model row for a picker — capabilities derived from the catalog. */
 export interface ModelMenuOption {
   /** Catalog id (the API enum value). */
@@ -4398,6 +4685,7 @@ export function modelIdsByKindMode(
     .filter((m) => (kind === null ? true : m.kind === kind))
     .filter((m) => m.modes.some((md) => modes.includes(md)))
     .filter((m) => includeHidden || !m.mcpHidden)
+    .filter((m) => !m.docsHidden)
     .map((m) => m.id)
     .sort()
   if (ids.length === 0) {

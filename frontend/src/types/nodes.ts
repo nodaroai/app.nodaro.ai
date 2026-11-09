@@ -1834,6 +1834,7 @@ export type GenerateImageData = PromptAffixFields & {
   negativePrompt: string
   resolution?: string
   quality?: string
+  background?: string
   seed?: number
   renderingSpeed?: string
   styleType?: string
@@ -1981,6 +1982,7 @@ export type ImageToImageData = {
   aspectRatio?: string
   resolution?: string
   quality?: string
+  background?: string
   negativePrompt?: string
   seed?: number
   renderingSpeed?: string
@@ -2018,6 +2020,7 @@ export type ModifyImageData = PromptAffixFields & {
   aspectRatio?: string
   resolution?: string
   quality?: string
+  background?: string
   negativePrompt?: string
   seed?: number
   renderingSpeed?: string
@@ -8529,7 +8532,7 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: {
       label: "Modify Image",
       prompt: "",
-      provider: "gpt-image-2-5-flare-i2i" as ModifyImageProvider,
+      provider: "gpt-image-2-6-flare-i2i" as ModifyImageProvider,
       negativePrompt: "",
       fieldMappings: {},
     },
@@ -10742,7 +10745,7 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       label: "Reference Board",
       sourceMode: "image",
       boardTemplate: "character/full-board",
-      provider: "gpt-image-2-5-sunburst",
+      provider: "gpt-image-2-6-sunburst",
       prompt: "",
       negativePrompt: "",
       aspectRatio: "2:3",

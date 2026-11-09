@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "@/hooks/use-auth"
+import { useBillingSurface } from "@/hooks/use-billing-surface"
 import { queryKeys } from "@/lib/query-keys"
 import { invalidateBalance } from "@/ee/lib/invalidate-balance"
 import { creditUnits } from "@/lib/credit-units"
@@ -11,13 +12,15 @@ import { collectKeys } from "@/ee/lib/ensure-signup-grant"
 import { claimWelcomeOffer, markWelcomeOfferSeen, type WelcomeOfferClaimResult } from "./welcome-offer-api"
 import { useWelcomeOfferStore } from "./welcome-offer-store"
 import { formatNumber } from "@/lib/i18n/format"
+import { personalFreeCreditsShown } from "@/lib/surface-selectors"
 
 /**
  * Which welcome surface applies to this account, if any:
  *  - "offer"           — credits not claimed yet: the popup (once) + the banner
  *  - "consent-pending" — granted through the extension, consent still owed:
  *                        the blocking banner (and the popup on a refused create)
- *  - null              — nothing to show (offer off, or the account is settled)
+ *  - null              — nothing to show (offer off, the account is settled, or
+ *                        the deployment gives no free credits of one's own)
  */
 export type WelcomeOfferMode = "offer" | "consent-pending" | null
 
@@ -43,6 +46,7 @@ export function useWelcomeOffer(): WelcomeOffer {
   const userId = user?.id
   const queryClient = useQueryClient()
   const { data: balance } = useUserCredits(userId)
+  const { surface } = useBillingSurface()
 
   const raw = balance?.welcomeOffer
   // An offer is only shown with the server's figure: one without a number
@@ -51,12 +55,18 @@ export function useWelcomeOffer(): WelcomeOffer {
   // A withheld grant belongs to the first-purchase banner, whatever the
   // consent mark says: "your credits are active" would be a lie there, and
   // the server-side block stays regardless.
+  //
+  // A deployment that gives no free credits of one's own has no offer to make
+  // (`personalFreeCreditsShown`; the server leaves the offer out under a
+  // payer, and the shared header withholds it under `billing.selfServe:
+  // false`). The consent ask is not an offer and stays: it is the only way out
+  // of a refused create (`403 consent_required`).
   const mode: WelcomeOfferMode =
     !offer || balance?.freeGrantState === "withheld"
       ? null
       : offer.consentPending
         ? "consent-pending"
-        : balance?.freeGrantState === "unclaimed"
+        : balance?.freeGrantState === "unclaimed" && personalFreeCreditsShown(surface.deploymentPayer)
           ? "offer"
           : null
   const popupDue = mode === "offer" && offer?.popupSeen === false

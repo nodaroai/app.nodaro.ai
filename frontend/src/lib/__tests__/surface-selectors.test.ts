@@ -9,10 +9,32 @@ import {
   surfaceAuthMethods,
   surfaceOutputsAllowPublic,
   surfaceLocalePicker,
+  personalFreeCreditsShown,
 } from "../surface-selectors"
 
 afterEach(() => {
   delete window.__NODARO_RUNTIME__
+})
+
+describe("personalFreeCreditsShown — free credits of one's own are promised only where the deployment has them to give", () => {
+  it("Nodaro's defaults: shown", () => {
+    expect(personalFreeCreditsShown(false)).toBe(true)
+  })
+
+  it("fails open until the billing surface answers (undefined is not yet a payer), so Nodaro's first paint never changes", () => {
+    expect(personalFreeCreditsShown(undefined)).toBe(true)
+  })
+
+  it("a deployment payer: not shown", () => {
+    expect(personalFreeCreditsShown(true)).toBe(false)
+  })
+
+  it("a deployment that sells nothing (billing.selfServe: false): not shown, payer or not", () => {
+    window.__NODARO_RUNTIME__ = { surface: { billing: { costTab: "inherit", sidebarCard: "inherit", selfServe: false } } }
+    expect(personalFreeCreditsShown(false)).toBe(false)
+    expect(personalFreeCreditsShown(undefined)).toBe(false)
+    expect(personalFreeCreditsShown(true)).toBe(false)
+  })
 })
 
 describe("surface selectors — empty means inherit, non-empty means narrow", () => {

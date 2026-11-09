@@ -5,7 +5,8 @@ import { insertJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
+import { plainEntityCheckIdentifier, plainEntityCreditIdentifier } from "../lib/entity-credit-identifier.js"
+import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
@@ -128,7 +129,7 @@ function buildVariantPrompt(
 export async function generateCreatureAssetRoutes(app: FastifyInstance) {
   app.post("/v1/generate-creature-asset", {
     preHandler: [
-      creditGuard((req) => extractProvider(req.body, IMAGE_MODEL_ROLE_DEFAULTS.character)),
+      creditGuard((req) => plainEntityCheckIdentifier(req.body, IMAGE_MODEL_ROLE_DEFAULTS.character)),
       // The lane last, and only for a request that will make the LLM call.
       laneGuard("llm", {
         // The studio path drafts a missing description with an LLM before it reserves.
@@ -247,12 +248,12 @@ export async function generateCreatureAssetRoutes(app: FastifyInstance) {
       }
     }
 
-    const modelIdentifier = parsed.data.provider
-
     // Use the creature's anchor source image as the i2i source when the
     // studio path runs, UNLESS the caller passed an explicit sourceImageUrl
     // (their choice wins). Outside the studio path, behavior is unchanged.
     const resolvedSourceImageUrl = parsed.data.sourceImageUrl ?? sourceImageUrlAnchor ?? undefined
+    // Priced on the image the worker sends, which the CHECK may not have seen.
+    const modelIdentifier = plainEntityCreditIdentifier(parsed.data.provider, resolvedSourceImageUrl ? 1 : 0)
 
     const prompt = buildVariantPrompt(assetType, variant, name, parsed.data.description, category, style)
 

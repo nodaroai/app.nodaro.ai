@@ -14,6 +14,7 @@ import { runtimeSurfaceProfile, type AuthMethod } from "@/lib/surface-profile"
 import { createClient } from "@/lib/supabase"
 import { followSignInRedirect, rememberSignInRedirect, takeSignInRedirect } from "@/lib/sign-in-redirect"
 import { FREE_TIER_CREDITS } from "@/lib/pricing-data"
+import { PersonalFreeCreditsOnly } from "@/components/billing/personal-free-credits-only"
 import { runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "@/lib/runtime-config"
 import { useT } from "@/lib/i18n"
 import { useDocumentTitle } from "@/components/layout/page-title"
@@ -352,9 +353,11 @@ export default function LoginPage() {
               </Link>
             </p>
           ) : (
-            <p className="text-xs text-muted-foreground pt-1">
-              {t("auth.freeCredits", { credits: formatNumber(FREE_TIER_CREDITS) })}
-            </p>
+            <PersonalFreeCreditsOnly>
+              <p className="text-xs text-muted-foreground pt-1">
+                {t("auth.freeCredits", { credits: formatNumber(FREE_TIER_CREDITS) })}
+              </p>
+            </PersonalFreeCreditsOnly>
           )}
         </div>
       </main>

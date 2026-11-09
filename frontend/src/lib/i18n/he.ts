@@ -5510,6 +5510,7 @@ export const he: ChromeDict = {
   "field.styleType": "סוג סגנון",
   "field.resolution": "רזולוציה",
   "field.quality": "איכות",
+  "field.background": "רקע",
   "field.renderingSpeed": "מהירות עיבוד",
   "field.strength": "עוצמה",
   "field.guidanceScale": "מידת היצמדות",

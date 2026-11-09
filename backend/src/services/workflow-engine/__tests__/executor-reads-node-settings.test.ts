@@ -24,7 +24,7 @@ const GOES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   "image-collage": { imageLabels: "label text that may come from a run: content" },
   "text-to-dialogue": { script: "the words spoken, read only as an older spelling of the dialogue: content" },
   "edit-image": Object.fromEntries(["aspectRatio", "negativePrompt", "prompt", "seed", "style", "targetResolution", "upscaleFactor"].map((k) => [k, "a legacy type the editor rewrites on load (normalize-node-types)"])),
-  "image-to-image": Object.fromEntries(["aspectRatio", "guidanceScale", "negativePrompt", "prompt", "quality", "referenceOrder", "renderingSpeed", "resolution", "seed", "strength", "style", "suppressedCanonicalCharacterIds", "suppressedCanonicalLocationIds"].map((k) => [k, "a legacy type the editor rewrites on load (normalize-node-types)"])),
+  "image-to-image": Object.fromEntries(["aspectRatio", "background", "guidanceScale", "negativePrompt", "prompt", "quality", "referenceOrder", "renderingSpeed", "resolution", "seed", "strength", "style", "suppressedCanonicalCharacterIds", "suppressedCanonicalLocationIds"].map((k) => [k, "a legacy type the editor rewrites on load (normalize-node-types)"])),
   scene: Object.fromEntries(["aspectRatio", "characters", "locations", "objects", "prompt", "provider"].map((k) => [k, "the older Scene shape; the editor writes the pipeline shape"])),
   ...Object.fromEntries(["character", "face", "object", "creature", "location"].map((t) => [t, { name: "an older name field; the entity's name is its own declared field", prompt: "an older prompt field; a library entity in the strip set is stripped strictly" }])),
   "edit-3d-scene": { operations: "the edit plan the run builds" },

@@ -14,8 +14,9 @@ import type {
 import sharp from "sharp"
 import { KieError, createSanitizedError, runKieTask, type KieResultJson } from "./client.js"
 import { runFluxKontextTask } from "./kontext-client.js"
-import { KIE_IMAGE_MODELS, kieSeedForWire, type KieModelConfig } from "./models.js"
-import { kieImageCostUsd } from "./image-cost.js"
+import { KIE_IMAGE_MODELS, kieSeedForWire, type KieModelConfig, KIE_CREDIT_USD } from "./models.js"
+import { kieImageCostUsd, kieTaskCreditsConsumed } from "./image-cost.js"
+import { isGptImage26AutoRun } from "@nodaro/shared/model-catalog"
 import { ensureImageForProvider } from "./video.js"
 import { TASK_CHAINED_EDIT_PROVIDERS, getMaxImagePromptChars } from "@nodaro/shared/models"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
@@ -92,6 +93,9 @@ const GPT_IMAGE_T2I_TO_I2I: Record<string, string> = {
   "gpt-image-2": "gpt-image-2-i2i",
   "gpt-image-2-5-flare": "gpt-image-2-5-flare-i2i",
   "gpt-image-2-5-sunburst": "gpt-image-2-5-sunburst-i2i",
+  "gpt-image-2-6-flare": "gpt-image-2-6-flare-i2i",
+  "gpt-image-2-6-sunburst": "gpt-image-2-6-sunburst-i2i",
+  "gpt-image-2-6-economy": "gpt-image-2-6-economy-i2i",
   "gpt-image": "gpt-image-i2i",
 }
 
@@ -203,6 +207,24 @@ function applyResolutionParam(modelConfig: KieModelConfig, input: Record<string,
 }
 
 /** The resolution value on the wire, wherever `applyResolutionParam` put it. */
+/**
+ * Keeps a request inside a strict schema: removes every key a model with an
+ * explicit field list does not take, and every input image past the most it
+ * accepts. The source is first, so what goes is the last references; the price
+ * id stops at the same number, so nothing is billed that is not sent. Mutates `input`.
+ */
+function keepDeclaredInputFields(modelConfig: KieModelConfig, input: Record<string, unknown>): void {
+  if (!modelConfig.inputFields) return
+  for (const key of Object.keys(input)) {
+    if (!modelConfig.inputFields.includes(key)) delete input[key]
+  }
+  const urls = input.input_urls
+  if (modelConfig.maxInputImages !== undefined && Array.isArray(urls) && urls.length > modelConfig.maxInputImages) {
+    console.warn(`[KIE.ai] ${modelConfig.model}: ${urls.length} input images, sending the first ${modelConfig.maxInputImages}`)
+    input.input_urls = urls.slice(0, modelConfig.maxInputImages)
+  }
+}
+
 function wireResolution(modelConfig: KieModelConfig, input: Record<string, unknown>): string | number | undefined {
   return input[modelConfig.resolutionParam ?? "resolution"] as string | number | undefined
 }
@@ -445,13 +467,15 @@ export class KieImageProvider
       input.seed = kieSeedForWire(modelConfig, input.seed)
     }
 
+    keepDeclaredInputFields(modelConfig, input)
+
     console.log(
       `[KIE.ai] Request input:`,
       JSON.stringify(input, null, 2)
     )
 
     const resolution = wireResolution(modelConfig, input)
-    const cost = kieImageCostUsd(provider, modelConfig, resolution)
+    const listedCost = kieImageCostUsd(provider, modelConfig, resolution)
 
     // Egress money-metadata: OUR Nodaro key is `provider` (NOT modelConfig.model,
     // the KIE id two of our keys can collapse onto); the resolution/quality lever
@@ -485,18 +509,32 @@ export class KieImageProvider
     }
     const extraUrls = allUrls.slice(1)
 
+    const rawInfo = "rawRecordInfo" in result ? result.rawRecordInfo : undefined
+    // A model KIE bills by what the run used: the task record's own figure, so
+    // jobs.provider_cost is the real cost, not an estimate.
+    const taskCredits = modelConfig.costFromTaskRecord ? kieTaskCreditsConsumed(rawInfo as Record<string, unknown> | undefined) : undefined
+    const cost = taskCredits !== undefined ? taskCredits * KIE_CREDIT_USD : listedCost
+
+    // Quality Auto: KIE picked the level, so the charge settles on this figure.
+    const autoRun = isGptImage26AutoRun(provider, input.quality)
+    const autoQualityKieCredits = autoRun ? taskCredits : undefined
+    if (autoRun && taskCredits === undefined) {
+      console.error(
+        `[ALERT] ${provider} at quality auto: KIE's task record has no credits figure, so this run commits its reservation (the Max price).`
+      )
+    }
+
     console.log(
       `[KIE.ai] Image completed: ${imageUrl}${extraUrls.length ? ` (+${extraUrls.length} variants)` : ""} (cost: $${cost.toFixed(4)})`
     )
 
     // Log credit audit entry (fire-and-forget)
-    const rawInfo = "rawRecordInfo" in result ? result.rawRecordInfo : undefined
     logCreditAudit({
       modelKey: provider,
       expectedKieCredits: modelConfig.credits,
       modelConfig: { ...(extraParams ?? {}), provider },
       rawResponseSample: rawInfo,
-      actualKieCredits: extractCreditFields(rawInfo)?.credits as number | undefined,
+      actualKieCredits: taskCredits ?? (extractCreditFields(rawInfo)?.credits as number | undefined),
       notes: "image-generation",
     })
 
@@ -515,6 +553,7 @@ export class KieImageProvider
       cost,
       ...(kieTaskId && { kieTaskId }),
       ...(providerMs !== undefined && { providerMs }),
+      ...(autoQualityKieCredits !== undefined && { autoQualityKieCredits }),
     }
   }
 
@@ -704,6 +743,8 @@ export class KieImageProvider
     if (input.seed !== undefined) {
       input.seed = kieSeedForWire(modelConfig, input.seed)
     }
+
+    keepDeclaredInputFields(modelConfig, input)
 
     console.log(
       `[KIE.ai] Edit request input:`,

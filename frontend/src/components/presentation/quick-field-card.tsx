@@ -66,7 +66,7 @@ export function QuickFieldCard({ control, nodeData, allowedValues, readOnly, cus
   }, [control, nodeData, allowedValues, availability])
 
   const stored = readQuickConfigValue(control, nodeData)
-  const effective = stored !== "" ? stored : (control.defaultValue ?? "")
+  const effective = stored !== "" ? stored : (control.defaultFor?.(nodeData) ?? control.defaultValue ?? "")
 
   const autoCorrect = useContext(AutoCorrectContext)
 
@@ -83,7 +83,9 @@ export function QuickFieldCard({ control, nodeData, allowedValues, readOnly, cus
       return
     }
     if (stored === "" && allowedValues && options.length > 0 && !options.some((o) => o.value === effective)) {
-      onPatchRef.current(quickConfigSnapWrite(control, options[0]!.value))
+      // A field with a model's own default never lands on Auto by itself.
+      const first = (control.defaultFor ? options.find((o) => o.value !== "auto") : undefined) ?? options[0]!
+      onPatchRef.current(quickConfigSnapWrite(control, first.value))
     }
   }, [control, stored, effective, options, nodeData, allowedValues, readOnly, autoCorrect, keepRetained])
 

@@ -1417,8 +1417,17 @@ const CAST_SWAP_STYLE_ONLY_BYTES = 221
 // under the per-tool budget; the descriptions are one paragraph and the arguments one clause).
 const VOICE_FAVORITES_TOOLS_BYTES = 2_153
 
+// RAISED 2026-11-09 by GPT Image 2.6 and the background setting, and nothing else: three model
+// ids in generate_image's and the edit tools' model lists, and one short `background` argument
+// on generate_image and modify_image. `generate_image` is the one tool past the per-tool budget.
+// No tool was added, so the fixture does NOT move.
+const GPT_IMAGE_2_6_PER_TOOL_BYTES = 208
+// Measured by this suite: 515_960 total − 515_416 = 544 B, the same two changes across the tools,
+// plus the Auto, Extra High and Max values and the short quality hint.
+const GPT_IMAGE_2_6_TOTAL_BYTES = 544
+
 export const TOOL_WIRE_BUDGET = {
-  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES,
+  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES,
   totalBytes:
     337_638 +
     IMAGE_OVERLAY_TOOL_BYTES +
@@ -1593,7 +1602,8 @@ export const TOOL_WIRE_BUDGET = {
     CAST_SWAP_STYLE_FORCED_BYTES +
     CAST_SWAP_ART_STYLE_BYTES +
     CAST_SWAP_STYLE_ONLY_BYTES +
-    VOICE_FAVORITES_TOOLS_BYTES,
+    VOICE_FAVORITES_TOOLS_BYTES +
+    GPT_IMAGE_2_6_TOTAL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

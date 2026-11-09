@@ -87,6 +87,8 @@ export async function recoverEntityJob(args: {
   jobType: string
   url: string
   claimant?: FinalizeClaimant
+  /** A recovered GPT Image 2.6 Auto run: what KIE really billed, to settle on. */
+  autoQualityKieCredits?: number
 }): Promise<void> {
   const { jobId, jobType, url } = args
   if (!isEntityMediaJobType(jobType)) {
@@ -126,8 +128,8 @@ export async function recoverEntityJob(args: {
       // Post-reconcile the provider's actual cost is unknown: leave the cost
       // fields unset so the completion write OMITS them (writing NULL there
       // clobbered the metadata a prior attempt had recorded) and credits
-      // commit at the reservation.
-      result: { url },
+      // commit at the reservation (a GPT Image 2.6 Auto run settles on KIE's bill).
+      result: { url, ...(args.autoQualityKieCredits !== undefined && { autoQualityKieCredits: args.autoQualityKieCredits }) },
     })
     if (r2Url) {
       console.log(`[entity-recovery] recovered ${jobType} job ${jobId}: ${r2Url}`)

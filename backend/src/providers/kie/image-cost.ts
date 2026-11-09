@@ -31,3 +31,17 @@ export function kieImageCostUsd(
   const sent = resolution ?? "1K"
   return isGptImage2Resolution(sent) ? GPT_IMAGE_2_KIE_CREDITS[sent] * KIE_CREDIT_USD : modelConfig.cost
 }
+
+/**
+ * The KIE credits a finished task really consumed, from its own record: the
+ * whole recordInfo answer, `{ code, message, data: { ... } }`, with the figure
+ * inside `data`. Absent, not a number, or not above zero: undefined, so a job
+ * records the listed figure rather than nothing or a false zero.
+ */
+export function kieTaskCreditsConsumed(record: Record<string, unknown> | undefined): number | undefined {
+  const data = record?.data
+  const task = data && typeof data === "object" ? (data as Record<string, unknown>) : undefined
+  const raw = task?.creditsConsumed ?? task?.consumeCredits ?? task?.credits_consumed
+  const credits = typeof raw === "string" ? Number(raw) : raw
+  return typeof credits === "number" && Number.isFinite(credits) && credits > 0 ? credits : undefined
+}

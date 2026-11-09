@@ -133,10 +133,12 @@ import { getLlmTier, defaultReasoningEffort, llmDefaultsFeature, LLM_FEATURE_DEF
 import { FLUX2_RES_MP, type Flux2Model } from "@nodaro/shared/model-catalog"
 import { renderVideoCreditId, scene3DRenderTierCredits } from "@nodaro/shared/scene3d"
 import { META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SCRAPE_ANALYSIS_FEATURE, scrapeAnalysisPriceParts, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS } from "@nodaro/shared/social"
-import { countRefModalityEdges } from "@nodaro/shared/workflow"
+import { countImageInputEdges, countRefModalityEdges } from "@nodaro/shared/workflow"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
+import { gptImage26StaticCosts } from "./gpt-image-2-6-pricing.js"
+import { defaultImageModelForNode, gptImage26EstimatedImages, isGptImage26Tiered } from "@nodaro/shared/model-catalog"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
@@ -666,6 +668,11 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "gpt-image-2-5-sunburst": 15,            // 1K default
   "gpt-image-2-5-sunburst:2K": 25,
   "gpt-image-2-5-sunburst:4K": 40,
+  // GPT Image 2.6: Flare and Sunburst per quality, size and input image
+  // (measured 2026-11-09, see gpt-image-2-6-pricing.ts), Economy flat at 1K.
+  ...gptImage26StaticCosts(),
+  "gpt-image-2-6-economy": 13,
+  "gpt-image-2-6-economy-i2i": 13,
   "reference-sheet:assembly": 40, // Flat sheet-assembly fee; per-panel gen priced separately (bare provider key)
   "reference-sheet:assembly-motion": 60, // Flat FFmpeg-assembly fee for motion sheets; motion clips priced separately by the motion routes
   "imagen4": 20,
@@ -5481,6 +5488,7 @@ function estimateNodeCredits(
     // Video Face Mesh (the Cast Swap engine's quote graph): its `video` wire, priced as Video Mask's (the 30 fps basis).
     videoFaceMeshSec: node.type === "video-face-mesh" ? videoMaskClipSecOf(node, edges, wireSec, wireFps) : undefined,
     videoRefWired: videoRefWired(node, edges),
+    imageRefsWired: edges && node.id ? countImageInputEdges(edges, node.id) : undefined,
   })
   // An LLM Chat node that says how large its call is (`data.expectedUsage`, a plugin's quote graph): that call on
   // the model's primary lane, never below the feature's typical one (each token count floored at it, so the field
@@ -6573,6 +6581,8 @@ export function getNodeModelIdentifier(
     videoFaceMeshSec?: number
     /** A video generation node with a reference video wired (a GRAPH fact; undefined = unknown → the plain ladder). */
     videoRefWired?: boolean
+    /** Reference images wired into an image node (a GRAPH fact; undefined = unknown → the node's own list). */
+    imageRefsWired?: number
   } = {},
 ): string {
   // A retired video model is quoted as the model it runs as — what the run reserves.
@@ -6837,7 +6847,10 @@ export function getNodeModelIdentifier(
   // units: graphPricingUnits. Above the `!provider` bail: no provider IS Topaz.
   if (nodeType === "video-upscale" && isTopazVideoUpscaleNode(node)) return TOPAZ_VIDEO_UNIT_CREDIT_ID
 
-  const provider = data.provider as string | undefined
+  // A node naming no model whose default is priced per input image: the node-type
+  // row would quote below what the run reserves.
+  const nodeDefault = data.provider ? undefined : defaultImageModelForNode(nodeType, data.aspectRatio as string | undefined)
+  const provider = (data.provider as string | undefined) ?? (nodeDefault && isGptImage26Tiered(nodeDefault) ? nodeDefault : undefined)
   if (!provider) return nodeType
 
   // Extend-video: VEO quality costs more than fast
@@ -6939,13 +6952,15 @@ export function getNodeModelIdentifier(
     return buildCreditModelIdentifier(provider, undefined, undefined, undefined, creditTier)
   }
 
-  // Image/edit nodes with quality/resolution variable pricing
+  // Image/edit nodes with quality/resolution variable pricing. The input images
+  // reach the id for a model priced per image.
   return buildCreditModelIdentifier(
     provider,
     data.quality as string | undefined,
     data.resolution as string | undefined,
     data.renderingSpeed as string | undefined,
     data.targetResolution as string | undefined,
+    isGptImage26Tiered(provider) ? gptImage26EstimatedImages(provider, data, graph.imageRefsWired ?? 0) : undefined,
   )
 }
 

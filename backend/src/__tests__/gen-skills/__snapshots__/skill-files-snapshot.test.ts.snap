@@ -62,6 +62,7 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
 - \`models\`
 - \`resolution\`
 - \`quality\`
+- \`background\`
 - \`aspect_ratio\`
 - \`negative_prompt\`
 - \`reference_image_urls\`
@@ -100,6 +101,7 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
 - \`providers?: readonly ImageProvider[]\`
 - \`resolution?: string\`
 - \`quality?: string\`
+- \`background?: string\`
 - \`seed?: number\`
 - \`renderingSpeed?: string\`
 - \`styleType?: string\`

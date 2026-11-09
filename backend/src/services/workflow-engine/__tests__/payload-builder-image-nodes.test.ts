@@ -640,3 +640,84 @@ describe("payload-builder-unset-aspect-is-auto.test.ts", () => {
     })
   })
 })
+
+describe("GPT Image 2.6 in a workflow run", () => {
+  const SRC = "https://media.nodaro.ai/src.png"
+  const node = (type: string, data: Record<string, unknown>): SimpleNode => ({ id: "n1", type, data })
+
+  it("Generate Image counts its base", () => {
+    const r = buildPayload(node("generate-image", { prompt: "a", provider: "gpt-image-2-6-flare", baseImageUrl: SRC }), "j", {}, "u")
+    expect(r.modelIdentifier).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
+  })
+
+  it("Image to Image takes the background and prices the size it renders", () => {
+    const r = buildPayload(
+      node("image-to-image", { prompt: "a", provider: "gpt-image-2-6-flare-i2i", resolution: "2K", background: "transparent" }),
+      "j",
+      { imageUrl: SRC },
+      "u",
+    )
+    expect(r.payload.background).toBe("transparent")
+    expect(r.payload.resolution).toBe("1K")
+    expect(r.modelIdentifier).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
+  })
+
+  it.each([
+    ["face", "generate-face"],
+    ["object", "generate-object"],
+    ["creature", "generate-creature"],
+  ])("a %s node with a source image is priced as an edit", (type, job) => {
+    const withSource = buildPayload(node(type, { name: "n", description: "d", provider: "gpt-image-2-6-flare", sourceImageUrl: SRC }), "j", {}, "u")
+    expect(withSource.jobName).toBe(job)
+    expect(withSource.modelIdentifier).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
+    const without = buildPayload(node(type, { name: "n", description: "d", provider: "gpt-image-2-6-flare" }), "j", {}, "u")
+    expect(without.modelIdentifier).toBe("gpt-image-2-6-flare:medium:1K")
+  })
+
+  it("another model on a face node keeps its plain id", () => {
+    const r = buildPayload(node("face", { name: "n", description: "d", provider: "gpt-image-2-5-flare", sourceImageUrl: SRC }), "j", {}, "u")
+    expect(r.modelIdentifier).toBe("gpt-image-2-5-flare")
+  })
+
+  it.each([
+    ["character", "generate-character"],
+    ["location", "generate-location"],
+  ])("a %s node is priced on what its job sends, not on a quality and size it never carries", (type, job) => {
+    const r = buildPayload(
+      node(type, { name: "n", description: "d", provider: "gpt-image-2-6-flare", quality: "auto", resolution: "4K" }),
+      "j",
+      {},
+      "u",
+    )
+    expect(r.jobName).toBe(job)
+    expect(r.payload.quality).toBeUndefined()
+    expect(r.payload.resolution).toBeUndefined()
+    expect(r.modelIdentifier).toBe("gpt-image-2-6-flare:medium:1K")
+    const edited = buildPayload(
+      node(type, { name: "n", description: "d", provider: "gpt-image-2-6-flare", quality: "max", sourceImageUrl: SRC }),
+      "j",
+      {},
+      "u",
+    )
+    expect(edited.modelIdentifier).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
+  })
+
+  it("a reference board drops a quality its model does not offer, from the price and the job", () => {
+    const stale = buildPayload(
+      node("reference-board", { prompt: "a", boardTemplate: "t", provider: "gpt-image-2-6-flare", quality: "basic" }),
+      "j",
+      {},
+      "u",
+    )
+    expect(stale.payload.quality).toBeUndefined()
+    expect(stale.modelIdentifier).toBe("gpt-image-2-6-flare:medium:1K")
+    const kept = buildPayload(
+      node("reference-board", { prompt: "a", boardTemplate: "t", provider: "gpt-image-2-6-flare", quality: "high" }),
+      "j",
+      {},
+      "u",
+    )
+    expect(kept.payload.quality).toBe("high")
+    expect(kept.modelIdentifier).toBe("gpt-image-2-6-flare:high:1K")
+  })
+})

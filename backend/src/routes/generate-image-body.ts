@@ -9,7 +9,8 @@ import { clientOriginSchema } from "../lib/client-origin-schema.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { imageBatchFields, imageBatchIssues } from "../lib/image-batch.js"
 import { presetIdSchema, presetVariablesSchema } from "../lib/presets/generate-image-preset-hook.js"
-import { IMAGE_GEN_PROVIDERS, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, IMAGE_RENDERING_SPEED_VALUES, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
+import { IMAGE_GEN_PROVIDERS, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, IMAGE_BACKGROUND_VALUES, IMAGE_RENDERING_SPEED_VALUES, PROMPT_HARD_CEILING, MAX_REQUEST_IMAGE_LIMIT, requestImageLimit } from "@nodaro/shared/models"
+import { defaultImageModel, gptImage26SentImages } from "@nodaro/shared/model-catalog"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
 import { subjectSchema } from "../lib/subject-schema.js"
@@ -94,7 +95,9 @@ export const generateImageBody = z.object({
   // Several images in one call: `count` (each its own job) and `models` (the
   // same request on 2–4 models, instead of `provider`) — lib/image-batch.ts.
   ...imageBatchFields,
-  referenceImageUrls: z.array(safeUrlSchema).max(14).optional(),
+  // The bound is the largest limit any model has; `generateImageRequest` holds
+  // each model to its own.
+  referenceImageUrls: z.array(safeUrlSchema).max(MAX_REQUEST_IMAGE_LIMIT).optional(),
   // ─── WI-1b structured inputs (all optional; ADDITIVE) ────────────────────
   // When ANY of these is present, the route is in "structured mode": it
   // assembles the flat prompt + reference URLs server-side via the shared
@@ -163,6 +166,8 @@ export const generateImageBody = z.object({
   aspectRatio: z.enum(IMAGE_ASPECT_RATIO_VALUES).optional(),
   resolution: z.enum(IMAGE_RESOLUTION_VALUES).optional(),
   quality: z.enum(IMAGE_QUALITY_VALUES).optional(),
+  /** Image background, on the models that take one (`auto`, `opaque`, `transparent`). */
+  background: z.enum(IMAGE_BACKGROUND_VALUES).optional(),
   negativePrompt: z.string().max(5000).optional(),
   seed: z.number().int().min(0).optional(),
   renderingSpeed: z.enum(IMAGE_RENDERING_SPEED_VALUES).optional(),
@@ -188,10 +193,19 @@ export const generateImageBody = z.object({
 })
 
 /** What the handler validates: the body plus the batch fields' cross-field
- *  rules. `generateImageBody` stays a plain object — `applySnappedLevers` and
- *  the OpenAPI entry read its `shape`. */
+ *  rules and each model's own image limit. `generateImageBody` stays a plain
+ *  object — `applySnappedLevers` and the OpenAPI entry read its `shape`. */
 export const generateImageRequest = generateImageBody.superRefine((data, ctx) => {
   for (const issue of imageBatchIssues(data)) ctx.addIssue({ code: "custom", path: [issue.path], message: issue.message })
+  const references = data.referenceImageUrls ?? []
+  // No model named: the limit of the default the route will run it on.
+  for (const model of data.models?.length ? data.models : [data.provider ?? defaultImageModel("general", data.aspectRatio)]) {
+    const limit = requestImageLimit(model)
+    if (gptImage26SentImages(model, references, data.baseImageUrl) > limit) {
+      ctx.addIssue({ code: "custom", path: ["referenceImageUrls"], message: `${model} takes at most ${limit} input images` })
+      break
+    }
+  }
 })
 
 export type GenerateImageData = z.infer<typeof generateImageBody>

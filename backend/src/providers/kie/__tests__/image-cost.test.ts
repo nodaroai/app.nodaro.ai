@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { GPT_IMAGE_2_KIE_CREDITS, KIE_CREDIT_USD, KIE_IMAGE_MODELS } from "../models.js"
-import { kieImageCostUsd } from "../image-cost.js"
+import { kieImageCostUsd, kieTaskCreditsConsumed } from "../image-cost.js"
 
 const GPT_IMAGE_2_IDS = ["gpt-image-2", "gpt-image-2-i2i"]
 
@@ -49,4 +49,22 @@ describe("kieImageCostUsd", () => {
       }
     },
   )
+})
+
+describe("kieTaskCreditsConsumed", () => {
+  const record = (fields: Record<string, unknown>) => ({ code: 200, message: "success", data: { taskId: "t1", ...fields } })
+
+  it("reads the figure from the task inside the record, as a number or a string", () => {
+    expect(kieTaskCreditsConsumed(record({ creditsConsumed: 9.5 }))).toBe(9.5)
+    expect(kieTaskCreditsConsumed(record({ creditsConsumed: "12" }))).toBe(12)
+    expect(kieTaskCreditsConsumed(record({ consumeCredits: 3 }))).toBe(3)
+  })
+
+  it("is undefined for a record without a usable figure", () => {
+    expect(kieTaskCreditsConsumed(undefined)).toBeUndefined()
+    expect(kieTaskCreditsConsumed({})).toBeUndefined()
+    expect(kieTaskCreditsConsumed(record({}))).toBeUndefined()
+    expect(kieTaskCreditsConsumed(record({ creditsConsumed: 0 }))).toBeUndefined()
+    expect(kieTaskCreditsConsumed(record({ creditsConsumed: "many" }))).toBeUndefined()
+  })
 })

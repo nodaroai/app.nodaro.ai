@@ -5390,6 +5390,7 @@ export const ptBR: ChromeDict = {
   "field.styleType": "Tipo de estilo",
   "field.resolution": "Resolução",
   "field.quality": "Qualidade",
+  "field.background": "Fundo",
   "field.renderingSpeed": "Velocidade de renderização",
   "field.strength": "Intensidade",
   "field.guidanceScale": "Escala de orientação",

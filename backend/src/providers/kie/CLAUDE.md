@@ -49,6 +49,12 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `gpt-image-i2i` | `gpt-image/1.5-image-to-image` | [gpt-image 1.5 i2i](https://docs.kie.ai/market/gpt-image/1-5-image-to-image.md) |
 | `gpt-image-2` | `gpt-image-2-text-to-image` | [gpt-image 2 t2i](https://docs.kie.ai/market/gpt/gpt-image-2-text-to-image.md) |
 | `gpt-image-2-i2i` | `gpt-image-2-image-to-image` | [gpt-image 2 i2i](https://docs.kie.ai/market/gpt/gpt-image-2-image-to-image.md) |
+| `gpt-image-2-6-flare` | `gpt-image-2-6/flare-text-to-image` | [gpt-image 2.6 flare t2i](https://docs.kie.ai/market/gpt/gpt-image-2-6-flare-text-to-image.md) |
+| `gpt-image-2-6-flare-i2i` | `gpt-image-2-6/flare-image-to-image` | [gpt-image 2.6 flare i2i](https://docs.kie.ai/market/gpt/gpt-image-2-6-flare-image-to-image.md) |
+| `gpt-image-2-6-sunburst` | `gpt-image-2-6/sunburst-text-to-image` | [gpt-image 2.6 sunburst t2i](https://docs.kie.ai/market/gpt/gpt-image-2-6-sunburst-text-to-image.md) |
+| `gpt-image-2-6-sunburst-i2i` | `gpt-image-2-6/sunburst-image-to-image` | [gpt-image 2.6 sunburst i2i](https://docs.kie.ai/market/gpt/gpt-image-2-6-sunburst-image-to-image.md) |
+| `gpt-image-2-6-economy` | `gpt-image-2-6/economy-text-to-image` | [gpt-image 2.6 economy t2i](https://docs.kie.ai/market/gpt/gpt-image-2-6-economy-text-to-image.md) |
+| `gpt-image-2-6-economy-i2i` | `gpt-image-2-6/economy-image-to-image` | [gpt-image 2.6 economy i2i](https://docs.kie.ai/market/gpt/gpt-image-2-6-economy-image-to-image.md) |
 | `imagen4` | `google/imagen4` | [imagen4](https://docs.kie.ai/market/google/imagen4.md) |
 | `imagen4-fast` | `google/imagen4-fast` | [imagen4-fast](https://docs.kie.ai/market/google/imagen4-fast.md) |
 | `imagen4-ultra` | `google/imagen4-ultra` | [imagen4-ultra](https://docs.kie.ai/market/google/imagen4-ultra.md) |
@@ -468,6 +474,7 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 |--------|-------|--------|
 | GPT Image 1.5 (T2I + I2I) | `quality` | `"medium"`, `"high"` |
 | GPT Image 2 (T2I + I2I) | Not supported (uses `resolution` instead) | — |
+| GPT Image 2.6 Flare, Sunburst (T2I + I2I) | `quality` | `"low"`, `"medium"` (default), `"high"` offered (schema also has `xhigh`, `max`, `auto`, not offered). Billed by tokens, with `resolution` beside it |
 | Seedream 4.5 (T2I + Edit) | `quality` | `"basic"` (2K), `"high"` (4K) |
 | Seedream 5 Lite (T2I + I2I) | `quality` | `"basic"` (2K), `"high"` (4K) |
 | Seedream 5 Pro (T2I + I2I) | `quality` | `"basic"` (1K), `"high"` (2K) — note: one tier LOWER than Lite/4.5 |
@@ -484,6 +491,59 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 | Ideogram (character, remix) | `negative_prompt` | 500 chars | Native (sent as API param) |
 | Qwen (T2I, edit) | `negative_prompt` | 500 chars | Native (sent as API param) |
 | Other models | Not natively supported | — | Frontend appends "Avoid: ..." to prompt text |
+
+### GPT Image 2.6 wire notes
+
+Six SKUs on the standard `createTask` lane. Flare and Sunburst are billed by
+**tokens**, Economy flat per image (5 KIE credits, 1K only).
+
+- Prices are the 1:1 estimate on the product page in
+  `ee/billing/gpt-image-2-6-pricing.ts`: one row per quality and size, and on an
+  edit per input image too (`:<N>ref`). **Measured 2026-11-09 on real runs:** 1:1
+  is the dearest shape (2:1 and 16:9 at medium 1K cost well under it, whatever
+  their pixels); bills came within 1% of the table by size, shape and quality;
+  each input image cost 1.8 to 2.2 KIE credits (the rows use 2.2).
+  `costFromTaskRecord` makes the job record the task's own `creditsConsumed` as
+  `provider_cost`, and the figure is present on 2.6 task records.
+- **Economy is withheld (2026-11-09).** Every task fails within a millisecond with
+  `[500] Internal Error`, in text-to-image and edit, at several shapes, and on
+  KIE's own playground too. Migration 611 turned off the two ids'
+  `model_pricing.is_enabled`, which hides them from `/v1/models`, MCP `list_models`
+  and every menu, and refuses a run with `model_disabled`. When KIE fixes it, turn
+  the two rows on at /admin/models; then drop `docsHidden` from the two catalog
+  entries and restore their rows in the docs.
+- **Quality `auto`** (KIE picks the level): the only metered quality. Reserved at
+  the Max row (`:auto:` ids hold the Max value), then settled on the task's own
+  `creditsConsumed`: `autoQualityKieCredits` on the result, `gptImage26AutoSettledBase`
+  (`lib/gpt-image-2-6-settle.ts`), handed to `meteredBaseCredits` in
+  `finalizeJobWithMedia` (held runs replay it) and to the entity tail; the KIE
+  reconcile lane does the same. A task record with no figure commits the
+  reservation, the Max price, with an `[ALERT]` line. In the one live run tried
+  (2026-11-09) KIE picked low and the run was charged that, not the Max it held.
+- 27:16, 16:27, 9:8 and 8:9, 2.5's extra ratios, are refused on 2.6 ("Invalid aspect
+  ratio", no charge, tried 2026-11-09). KIE's docs don't list them either.
+- Up to 16 input images on Flare and Sunburst; the routes hold every other model to
+  14 (`requestImageLimit`, separate from `REF_IMAGE_MAX_LIMITS`).
+- All six 2.6 models send an explicit field list (`inputFields` in `models.ts`):
+  their schemas are `additionalProperties: false`, and a worker passes along
+  whatever a node carries. A new setting joins the list with the feature.
+- The KIE record is `{ code, message, data }`: `creditsConsumed` sits in `data`
+  (`kieTaskCreditsConsumed`).
+- `background` (`auto`, `opaque`, `transparent`) also exists on GPT Image 2.5, where
+  KIE takes it only at 1K, whatever its value
+  (`backgroundOnlyAtTransparentResolution`): nothing is sent above it. KIE limits transparent to 1K (`transparentResolution` on the catalog entry,
+  coerced in `normalizeModelInput`). Economy is 1K anyway. **GPT Image 2 has no
+  background setting here**, though KIE's docs list one: transparent failed twice
+  with `[500] Internal Error` on 2026-11-09, while opaque and no value rendered, and
+  opaque or auto alone is no reason to offer it. A value sent to it is dropped.
+- `moderation` (`auto`, `low`; Flare and Sunburst only) is not sent, so KIE's
+  default `low` applies. It is declared as a `choice` lever so the Admin → Provider
+  Safety page can tighten it to `auto`.
+- Not wired yet: `mask_url`, `markup`, `output_format` (GIF and SVG, whose fields
+  are `frame_count`, `frame_duration_ms`, `size` and `svg.model`), `complexity`,
+  `output_compression`.
+- `prompt` is documented up to 32,000 characters on Flare and Sunburst; the routes
+  stop at `PROMPT_HARD_CEILING` (30,000). Economy documents 20,000.
 
 ### seed type
 

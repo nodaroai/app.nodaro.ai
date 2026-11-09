@@ -16,7 +16,7 @@ vi.mock("@/lib/translate.js", () => ({ translateToEnglish: vi.fn(async (p: strin
 import { KIE_IMAGE_MODELS, KIE_VIDEO_MODELS, KIE_TEXT_TO_VIDEO_MODELS, kieSafetyEntries } from "../kie/models.js"
 import { replicateSafetyEntries } from "../replicate/image.js"
 import { falSafetyEntries } from "../fal/lip-sync.js"
-import { leverToday, type SafetyLever } from "../safety-levers.js"
+import { MODERATION_LEVER, isLeverValue, isLooserThanToday, leverToday, type SafetyLever } from "../safety-levers.js"
 import { providerSafetyGroups } from "../safety-entries.js"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -75,7 +75,10 @@ describe("content-filter parameters in provider code", () => {
     expect(all.length).toBeGreaterThan(50)
     for (const lever of all) {
       if (lever.kind === "boolean") expect(typeof lever.filterOnValue).toBe("boolean")
-      else {
+      else if (lever.kind === "choice") {
+        expect(new Set(lever.values).size).toBe(lever.values.length)
+        expect(lever.values.length).toBeGreaterThan(1)
+      } else {
         expect(lever.min).toBeLessThan(lever.max)
         expect([lever.min, lever.max]).toContain(lever.strictest)
       }
@@ -125,5 +128,28 @@ describe("content-filter parameters in provider code", () => {
     expect(worker, "a job must be checked against the models it can run").toContain("providerSafetyEntriesForJob(jobModelIdOf(jobData), { pluginServed: Object.hasOwn(privatePluginHandlers, job.name) })")
     expect(worker, "a loosened run must be forced private at pickup").toMatch(/const loosenedRun = await isLoosenedRun\(/)
     expect(worker, "a loosened run must be forced private at pickup").toMatch(/forcePrivate:[^,\n]*\|\| loosenedRun,/)
+  })
+})
+
+describe("GPT Image 2.6 moderation", () => {
+  it("is declared on Flare and Sunburst, sent as nothing, so KIE's default of low applies", () => {
+    for (const id of ["gpt-image-2-6-flare", "gpt-image-2-6-flare-i2i", "gpt-image-2-6-sunburst", "gpt-image-2-6-sunburst-i2i"]) {
+      expect(KIE_IMAGE_MODELS[id]?.safetyLevers).toEqual([MODERATION_LEVER])
+      expect(KIE_IMAGE_MODELS[id]?.extraParams?.moderation).toBeUndefined()
+    }
+    expect(MODERATION_LEVER.shipped).toBeNull()
+    expect(leverToday(MODERATION_LEVER)).toBe("low")
+  })
+
+  it("Economy documents no such parameter", () => {
+    expect(KIE_IMAGE_MODELS["gpt-image-2-6-economy"]?.safetyLevers).toBeUndefined()
+    expect(KIE_IMAGE_MODELS["gpt-image-2-6-economy-i2i"]?.safetyLevers).toBeUndefined()
+  })
+
+  it("auto is the stricter value, and only the listed values are accepted", () => {
+    expect(isLooserThanToday(MODERATION_LEVER, "auto")).toBe(false)
+    expect(isLeverValue(MODERATION_LEVER, "auto")).toBe(true)
+    expect(isLeverValue(MODERATION_LEVER, "off")).toBe(false)
+    expect(isLeverValue(MODERATION_LEVER, true)).toBe(false)
   })
 })

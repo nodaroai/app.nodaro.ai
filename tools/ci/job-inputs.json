@@ -219,6 +219,7 @@
         "backend/src/ee/billing/free-grant-states.ts",
         "backend/src/ee/billing/free-video-limits.ts",
         "backend/src/ee/billing/generate-video-pro-credits.ts",
+        "backend/src/ee/billing/gpt-image-2-6-pricing.ts",
         "backend/src/ee/billing/job-reservation-settlement.ts",
         "backend/src/ee/billing/listing-range.ts",
         "backend/src/ee/billing/llm-billing-impl.ts",

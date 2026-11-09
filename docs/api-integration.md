@@ -940,7 +940,8 @@ organization, adding people, archiving a class — are documented in
 
 `POST /v1/generate-image`, `/v1/image-to-image`, `/v1/edit-image`,
 `/v1/text-to-video` and `/v1/generate-video` accept a single, model-agnostic
-vocabulary for `aspectRatio`, `resolution` and `quality` — but no model supports
+vocabulary for `aspectRatio`, `resolution` and `quality` (and `background` on the
+image routes) — but no model supports
 all of it. Rather than reject a request (a rejection mid-workflow takes every
 already-generated, already-billed sibling node down with it), the server
 **corrects** the value to one the chosen model accepts and tells you what it

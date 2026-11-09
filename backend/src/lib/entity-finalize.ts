@@ -51,6 +51,7 @@ import {
   uploadImageMaybeWatermark,
   uploadVideoMaybeWatermark,
 } from "../workers/shared.js"
+import { gptImage26AutoSettledBase } from "./gpt-image-2-6-settle.js"
 import {
   attachAssetToCharacter,
   resolveAssetColumn,
@@ -192,6 +193,8 @@ export interface EntityFinalizeInput {
     providerUsed?: string | null
     cost?: number | null
     displayCost?: number | null
+    /** See ProviderResult.autoQualityKieCredits (GPT Image 2.6 at quality Auto). */
+    autoQualityKieCredits?: number
   }
   /** Ran right after the R2 upload, before the completion CAS. The worker uses
    *  it for its `setJobProgress(…, 100)` tick; the reconciler has no BullMQ job
@@ -238,7 +241,10 @@ export async function finalizeEntityJob(input: EntityFinalizeInput): Promise<str
   })
   if (!ok) return null
 
-  await commitJobCredits(usageLogId, jobId, result.cost ?? null)
+  // A GPT Image 2.6 Auto run was reserved at Max: it settles on KIE's bill.
+  const autoBase = await gptImage26AutoSettledBase(result.autoQualityKieCredits)
+  if (autoBase !== undefined) await commitJobCredits(usageLogId, jobId, null, autoBase, true)
+  else await commitJobCredits(usageLogId, jobId, result.cost ?? null)
 
   await attachEntityResult({ jobType, spec, userId, url: r2Url })
 

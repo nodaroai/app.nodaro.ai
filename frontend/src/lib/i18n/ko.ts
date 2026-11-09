@@ -5390,6 +5390,7 @@ export const ko: ChromeDict = {
   "field.styleType": "스타일 유형",
   "field.resolution": "해상도",
   "field.quality": "품질",
+  "field.background": "배경",
   "field.renderingSpeed": "렌더링 속도",
   "field.strength": "강도",
   "field.guidanceScale": "가이던스 스케일",

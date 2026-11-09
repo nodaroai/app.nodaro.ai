@@ -1,7 +1,7 @@
 ---
 node_type: modify-image
-generated_at: 2026-10-24T23:37:37.868Z
-generated_from: db68a9ee4
+generated_at: 2026-11-09T15:19:15.653Z
+generated_from: 45f1902b4
 ---
 
 # Modify Image
@@ -27,6 +27,7 @@ generated_from: db68a9ee4
 - `aspectRatio?: string`
 - `resolution?: string`
 - `quality?: string`
+- `background?: string`
 - `negativePrompt?: string`
 - `seed?: number`
 - `renderingSpeed?: string`
@@ -52,7 +53,7 @@ generated_from: db68a9ee4
 {
   "label": "Modify Image",
   "prompt": "",
-  "provider": "gpt-image-2-5-flare-i2i",
+  "provider": "gpt-image-2-6-flare-i2i",
   "negativePrompt": "",
   "fieldMappings": {}
 }
@@ -65,13 +66,13 @@ Image-to-image: edit / transform / restyle / outpaint / inpaint (`modify_image` 
 
 ### Model guidance
 
-- **`gpt-image-2-5-flare-i2i`** (default) — the most reliable editor in the 2026-10 comparison: changes what you ask and keeps pose, framing, face and product detail. Up to 16 source images.
+- **`gpt-image-2-6-flare-i2i`** (default) — the newest GPT Image Flare: changes what you ask and keeps the rest. Medium quality unless you set one. Up to 16 source images, priced per image.
 - **`gpt-image-2-i2i`** — identity-critical edits of a person, and text-heavy edits.
 - **`nano-banana-2-1`** — good edits for a lower price, up to 10 references.
 - **`ideogram-remix`** — character-aware, good for stylized remix.
 - **`seedream-edit`** — high-res output for instruction-style edits.
 - **`recraft-remove-bg`** — background removal, no prompt (`list_models` shows its credits).
-- **Avoid `flux-kontext`** for general use — it degrades quickly across multi-turn edits; only for one-shot texture-heavy edits, and even then prefer GPT Image 2.5 Flare.
+- **Avoid `flux-kontext`** for general use — it degrades quickly across multi-turn edits; only for one-shot texture-heavy edits, and even then prefer GPT Image 2.6 Flare.
 
 Provide ONE of `image_url` (any publicly fetchable HTTPS URL) or `image_asset_id` (a Nodaro job id whose output is an image).
 
@@ -85,6 +86,7 @@ Provide ONE of `image_url` (any publicly fetchable HTTPS URL) or `image_asset_id
 - `model`
 - `resolution`
 - `quality`
+- `background`
 - `aspect_ratio`
 - `negative_prompt`
 - `structured`
@@ -114,7 +116,7 @@ Provide ONE of `image_url` (any publicly fetchable HTTPS URL) or `image_asset_id
   "data": {
     "label": "Modify Image",
     "prompt": "",
-    "provider": "gpt-image-2-5-flare-i2i",
+    "provider": "gpt-image-2-6-flare-i2i",
     "negativePrompt": "",
     "fieldMappings": {}
   }

@@ -511,3 +511,15 @@ describe("POST /v1/generate-object — multi-candidate + auto-attach (Phase C2a)
     })
   })
 })
+
+describe("POST /v1/generate-object — GPT Image 2.6's price", () => {
+  it("a source image is priced as the edit it runs as", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-object",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Ornate Goblet", provider: "gpt-image-2-6-flare", sourceImageUrl: "https://cdn.example.com/a.png" },
+    })
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
+  })
+})

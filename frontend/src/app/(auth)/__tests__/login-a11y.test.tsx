@@ -19,6 +19,7 @@ vi.mock("@/lib/edition", async (orig) => ({
 vi.mock("@/hooks/use-auth", () => ({
   useAuth: () => ({ signInWithGoogle: vi.fn(), signInWithEmail: vi.fn() }),
 }))
+vi.mock("@/hooks/use-billing-surface", () => ({ useBillingSurface: () => ({ surface: {} }) }))
 
 beforeEach(() => {
   vi.stubGlobal(

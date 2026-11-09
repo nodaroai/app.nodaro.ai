@@ -14,7 +14,8 @@
  * the migration is complete.
  */
 
-import { confirmedByRun, ENABLE_SAFETY_CHECKER_LEVER, NSFW_CHECKER_LEVER, NSFW_CHECKER_SENT_FALSE_LEVER, type SafetyLever } from "../safety-levers.js"
+import { requestImageLimit } from "@nodaro/shared/models"
+import { confirmedByRun, ENABLE_SAFETY_CHECKER_LEVER, NSFW_CHECKER_LEVER, NSFW_CHECKER_SENT_FALSE_LEVER, type SafetyLever, MODERATION_LEVER } from "../safety-levers.js"
 
 /** 1 KIE credit = $0.005 USD */
 export const KIE_CREDIT_USD = 0.005
@@ -103,7 +104,21 @@ export interface KieModelConfig {
    * inverts a caller's mask before sending it.
    */
   maskEditColor?: "black"
-  requiresDuration?: boolean              // Model schema lists `duration` as REQUIRED — bespoke runners must emit it even in modes where it is ignored (gemini-omni-flash)
+  /**
+   * KIE bills this model by what each run used, so a job records the task's own
+   * `creditsConsumed` as its cost. `credits` / `cost` stay the listed figure,
+   * used only when a record does not carry one.
+   */
+  costFromTaskRecord?: true
+  /**
+   * The only `input` keys this model is ever sent. Its KIE schema refuses
+   * anything else (`additionalProperties: false`), and a worker passes along
+   * whatever a node carries, such as a seed left from another model.
+   */
+  inputFields?: readonly string[]
+  /** The most `input_urls` this model accepts: what a request holds past it is not sent. */
+  maxInputImages?: number
+  requiresDuration?: boolean             // Model schema lists `duration` as REQUIRED — bespoke runners must emit it even in modes where it is ignored (gemini-omni-flash)
 }
 
 /**
@@ -123,6 +138,11 @@ const GROK_2_SEGMENT_EDIT_MODEL = "grok-imagine-image-2-0/segment-edit"
 // =============================================================================
 // IMAGE GENERATION MODELS
 // =============================================================================
+const GPT_IMAGE_2_6_FIELDS = ["prompt", "aspect_ratio", "resolution", "quality", "background", "moderation"] as const
+const GPT_IMAGE_2_6_FIELDS_I2I = [...GPT_IMAGE_2_6_FIELDS, "input_urls"] as const
+const GPT_IMAGE_2_6_ECONOMY_FIELDS = ["prompt", "aspect_ratio", "background"] as const
+const GPT_IMAGE_2_6_ECONOMY_FIELDS_I2I = [...GPT_IMAGE_2_6_ECONOMY_FIELDS, "input_urls"] as const
+
 export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // Google Nano Banana family
   // Routed to KIE's `nano-banana-pro` model id (NOT base nano-banana) so we get
@@ -387,6 +407,75 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     inputType: "image-to-image",
     imageParam: "input_urls",  // Array, max 16
     extraParams: { aspect_ratio: "16:9", resolution: "1K" },
+  },
+
+  // GPT Image 2.6 — Flare (fast) and Sunburst (precision), billed by tokens, and
+  // Economy, flat per image at 1K with no quality, size or moderation input.
+  // `moderation` (auto, low) is a content-filter setting; nothing is sent, so
+  // KIE's default of low applies. Quality low, medium, high (default medium).
+  // Prices were measured on 2026-11-09 against real runs.
+  // See: docs.kie.ai/market/gpt/gpt-image-2-6-{flare,sunburst,economy}-{text,image}-to-image.md
+  // `inputFields` is what this release sends of each schema: the masks, GIF and
+  // SVG fields come with those features.
+  "gpt-image-2-6-flare": {
+    model: "gpt-image-2-6/flare-text-to-image",
+    inputFields: GPT_IMAGE_2_6_FIELDS,
+    safetyLevers: [MODERATION_LEVER],
+    credits: 7.82,
+    cost: 0.0391,  // medium 1K, 1:1. KIE bills by tokens; the job records the real figure
+    costFromTaskRecord: true,
+    extraParams: { aspect_ratio: "16:9", resolution: "1K", quality: "medium" },
+  },
+  "gpt-image-2-6-flare-i2i": {
+    model: "gpt-image-2-6/flare-image-to-image",
+    inputFields: GPT_IMAGE_2_6_FIELDS_I2I,
+    maxInputImages: requestImageLimit("gpt-image-2-6-flare-i2i"),
+    safetyLevers: [MODERATION_LEVER],
+    credits: 7.82,
+    cost: 0.0391,  // medium 1K, 1:1. KIE bills by tokens; the job records the real figure
+    costFromTaskRecord: true,
+    inputType: "image-to-image",
+    imageParam: "input_urls",  // Array, max 16
+    extraParams: { aspect_ratio: "16:9", resolution: "1K", quality: "medium" },
+  },
+  "gpt-image-2-6-sunburst": {
+    model: "gpt-image-2-6/sunburst-text-to-image",
+    inputFields: GPT_IMAGE_2_6_FIELDS,
+    safetyLevers: [MODERATION_LEVER],
+    credits: 7.82,
+    cost: 0.0391,  // medium 1K, 1:1. KIE bills by tokens; the job records the real figure
+    costFromTaskRecord: true,
+    extraParams: { aspect_ratio: "16:9", resolution: "1K", quality: "medium" },
+  },
+  "gpt-image-2-6-sunburst-i2i": {
+    model: "gpt-image-2-6/sunburst-image-to-image",
+    inputFields: GPT_IMAGE_2_6_FIELDS_I2I,
+    maxInputImages: requestImageLimit("gpt-image-2-6-sunburst-i2i"),
+    safetyLevers: [MODERATION_LEVER],
+    credits: 7.82,
+    cost: 0.0391,  // medium 1K, 1:1. KIE bills by tokens; the job records the real figure
+    costFromTaskRecord: true,
+    inputType: "image-to-image",
+    imageParam: "input_urls",  // Array, max 16
+    extraParams: { aspect_ratio: "16:9", resolution: "1K", quality: "medium" },
+  },
+  "gpt-image-2-6-economy": {
+    model: "gpt-image-2-6/economy-text-to-image",
+    inputFields: GPT_IMAGE_2_6_ECONOMY_FIELDS,
+    credits: 5,
+    cost: 0.025,  // flat, 1K
+    costFromTaskRecord: true,
+    extraParams: { aspect_ratio: "16:9" },
+  },
+  "gpt-image-2-6-economy-i2i": {
+    model: "gpt-image-2-6/economy-image-to-image",
+    inputFields: GPT_IMAGE_2_6_ECONOMY_FIELDS_I2I,
+    credits: 5,
+    cost: 0.025,  // flat, 1K
+    costFromTaskRecord: true,
+    inputType: "image-to-image",
+    imageParam: "input_urls",  // Array, max 16
+    extraParams: { aspect_ratio: "16:9" },
   },
 
   // Google Imagen4 family

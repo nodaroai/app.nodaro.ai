@@ -108,7 +108,7 @@ export const IMAGE_ROUTE_MAPPERS: RouteMappers = {
   "/v1/generate-image": {
     tools: ["generate_image"],
     fields: new Set([
-      "prompt", "provider", "aspectRatio", "resolution", "quality", "negativePrompt",
+      "prompt", "provider", "aspectRatio", "resolution", "quality", "background", "negativePrompt",
       "referenceImageUrls", "strength", "guidanceScale", "baseImageUrl", "maskUrl",
     ]),
     map(body) {
@@ -130,6 +130,7 @@ export const IMAGE_ROUTE_MAPPERS: RouteMappers = {
           negativePrompt: str(body.negativePrompt) ?? "",
           resolution: str(body.resolution),
           quality: str(body.quality),
+          background: str(body.background),
           strength: num(body.strength),
           guidanceScale: num(body.guidanceScale),
           baseImageUrl: str(body.baseImageUrl),
@@ -143,7 +144,7 @@ export const IMAGE_ROUTE_MAPPERS: RouteMappers = {
   "/v1/image-to-image": {
     tools: ["modify_image", "image_to_image"],
     fields: new Set([
-      "imageUrl", "prompt", "provider", "aspectRatio", "resolution", "quality", "negativePrompt",
+      "imageUrl", "prompt", "provider", "aspectRatio", "resolution", "quality", "background", "negativePrompt",
       "referenceImageUrls", "strength", "seed", "maskUrl",
     ]),
     map(body) {
@@ -164,6 +165,7 @@ export const IMAGE_ROUTE_MAPPERS: RouteMappers = {
           aspectRatio: str(body.aspectRatio),
           resolution: str(body.resolution),
           quality: str(body.quality),
+          background: str(body.background),
           negativePrompt: str(body.negativePrompt),
           strength: num(body.strength),
           seed: num(body.seed),

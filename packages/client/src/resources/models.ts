@@ -42,6 +42,8 @@ export interface ModelSummary {
   aspectRatios?: string[]
   resolutions?: string[]
   qualities?: string[]
+  /** The image background settings the model takes (`auto`, `opaque`, `transparent`). */
+  backgrounds?: string[]
   durations?: number[]
   /** Compact per-model prompting tips (present when a doctrine exists). */
   promptTips?: string[]

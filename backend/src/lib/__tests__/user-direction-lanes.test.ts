@@ -58,7 +58,7 @@ describe("the route lane", () => {
     // The credit CHECK lives in its own module (the route imports it).
     const pricing = read("routes/generate-image-credit-id.ts")
     expect(pricing).toContain("userDirectionOf(req)")
-    expect(pricing).toMatch(/assembledRefCountForPricing\([^\n]*, userDirection\)/)
+    expect(pricing).toMatch(/assembledRefsForPricing\([^\n]*, userDirection\)/)
     const handler = route.slice(route.indexOf("export async function generateImageRoutes"))
     expect(handler).toContain("userDirectionOf(req)")
     expect(handler).toMatch(/assembleImageRequest\(request, structuredMode, userDirection\)/)

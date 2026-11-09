@@ -46,6 +46,7 @@ import {
   getSourcePhotoAspectRatios,
   IMAGE_RESOLUTION_OPTIONS,
   IMAGE_QUALITY_OPTIONS,
+  defaultQualityFor,
   REFERENCE_BOARD_PROVIDER_OPTIONS,
   VIDEO_GEN_MODELS,
   GVP_PROVIDERS,
@@ -189,6 +190,8 @@ export interface QuickConfigControl {
    *  LAST in the shared aspect list; without this the trigger showed "16:9"
    *  while runs were actually adaptive). Must be one of the options' values. */
   readonly defaultValue?: string
+  /** `defaultValue` when it depends on the node (a model's own default quality). */
+  readonly defaultFor?: (data: Record<string, unknown>) => string | undefined
   /** Numeric free-entry range: appends a "Custom…" item that opens a popover
    *  with a slider + number input (the same pair the config panels use), so
    *  ANY in-range value is one tap away — not just the preset list. In-range
@@ -793,7 +796,7 @@ const contentModelControl = (feature: "content-recipe" | "content-ideas"): Quick
  *  model takes — the SAME per-model sources its config panel reads, so a model
  *  switch snaps a value the new model would reject. */
 const referenceBoardProviderOf = (data: Record<string, unknown>): string =>
-  typeof data.provider === "string" && data.provider ? data.provider : "gpt-image-2-5-sunburst"
+  typeof data.provider === "string" && data.provider ? data.provider : "gpt-image-2-6-sunburst"
 const referenceBoardQuickConfigs = (): ReadonlyArray<QuickConfigControl> => [
   {
     field: "provider", ariaLabel: tx("field.model"), icon: Sparkles,
@@ -810,6 +813,8 @@ const referenceBoardQuickConfigs = (): ReadonlyArray<QuickConfigControl> => [
   {
     field: "quality", ariaLabel: tx("field.quality"), icon: Gauge,
     options: (data) => toOptions(IMAGE_QUALITY_OPTIONS[referenceBoardProviderOf(data)] ?? []),
+    defaultFor: (data) => defaultQualityFor(referenceBoardProviderOf(data)),
+    snap: (_value, data) => defaultQualityFor(referenceBoardProviderOf(data)) ?? "",
   },
 ]
 
@@ -1464,7 +1469,7 @@ export function QuickConfigSelect({
   const inRange = (v: string): boolean => isInQuickConfigRange(control, v)
   // Unset field → the control's declared default (e.g. gvp aspect "adaptive"),
   // both for the trigger label and for what reads as selected in the menu.
-  const effectiveValue = value !== "" && value != null ? value : (control.defaultValue ?? "")
+  const effectiveValue = value !== "" && value != null ? value : (control.defaultFor?.(data) ?? control.defaultValue ?? "")
 
   // Fail-safe (mirrors the config panels' provider-change snap; valid set is
   // single-sourced from model-options): if the current provider invalidated

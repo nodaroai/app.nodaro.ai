@@ -16,7 +16,7 @@ import {
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
 import type { VideoCharacterReference } from "@nodaro/shared/video"
 import type { ModelInputAdjustment } from "@nodaro/shared/model-catalog"
-import type { TtsOutputFormat } from "@nodaro/shared/models"
+import type { ImageBackground, TtsOutputFormat } from "@nodaro/shared/models"
 import type { VideoDepthProvider, VideoDepthModelSize, VideoDepthColormap, VideoDepthResolution } from "@nodaro/shared/media"
 import type { DirectionFields, SubjectFields } from "@nodaro/prompts/prompt-builder"
 
@@ -315,6 +315,8 @@ export interface GenerateImageParams extends StructuredReferenceParams, Generati
    *  applied once per model. */
   models?: string[]
   /** With `count`, image i gets `seed + i` — one seed would draw the same image every time. */
+  /** Image background, on the models that take one. `transparent` renders at 1K. */
+  background?: ImageBackground
   seed?: number
   /** Flat reference image URLs — appended after `connectedReferences`. */
   referenceImageUrls?: string[]
