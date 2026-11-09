@@ -2246,7 +2246,10 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "seedance-2-5": {
     id: "seedance-2-5",
     kind: "video",
-    modes: ["i2v", "t2v"] as const,
+    // `v2v`: it edits a clip by instruction on the same route as the other edit
+    // models (/v1/video-to-video, through its reference lane, in the clip's own
+    // ratio and length). It still makes a clip from words or a picture.
+    modes: ["i2v", "t2v", "v2v"] as const,
     family: "Bytedance",
     maker: "bytedance",
     label: "Seedance 2.5",
