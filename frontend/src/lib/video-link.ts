@@ -88,7 +88,7 @@ export type DownloadErrorCode =
   | "busy"
   /** The content rights confirmation could not be recorded, or did not hold (the server's `rights_confirmation_*`). */
   | "rights"
-  /** The site the link is from is disabled here (the server's `import_source_disabled`). */
+  /** The site the link is from is disabled here, or the deployment turned link imports off (`import_source_disabled`, `link_imports_disabled`). */
   | "refused"
   | "generic"
 
@@ -119,8 +119,9 @@ export function classifyDownloadError(raw: string | undefined): DownloadErrorCod
 /**
  * A failure to START a download, as the request threw it: the import gate's
  * refusals carry the server's own code (`rights_confirmation_*` for the
- * confirmation, `import_source_disabled` for the site — `apiJson` keeps it on
- * the error), and are never guessed from the words; anything else is sorted
+ * confirmation, `import_source_disabled` for the site, `link_imports_disabled`
+ * for a deployment that turned link imports off — `apiJson` keeps it on the
+ * error), and are never guessed from the words; anything else is sorted
  * by its message as above. `raw` is the message the node keeps as a tooltip.
  */
 export function classifyDownloadFailure(err: unknown): { readonly code: DownloadErrorCode; readonly raw: string } {
@@ -128,7 +129,7 @@ export function classifyDownloadFailure(err: unknown): { readonly code: Download
   const code = typeof err === "object" && err !== null ? (err as { code?: unknown }).code : undefined
   if (typeof code === "string") {
     if (code.startsWith("rights_confirmation")) return { code: "rights", raw }
-    if (code === "import_source_disabled") return { code: "refused", raw }
+    if (code === "import_source_disabled" || code === "link_imports_disabled") return { code: "refused", raw }
   }
   return { code: classifyDownloadError(raw), raw }
 }

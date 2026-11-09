@@ -1337,8 +1337,8 @@ editor — the shared header, its worlds and their pickers — which read
 `/config.js` through the published `@nodaro/shared/runtime-config` contract.
 Each is **absent unless you set it**, so `/config.js` stays exactly as it was
 until you do, and an absent key keeps today's behaviour. **The platform does
-not enforce them itself yet**: `imports.links: false`, for example, does not on
-its own refuse a link import. The editor itself reads `header` and the keys of
+not enforce them itself yet**, with one exception: `imports.links: false` is
+enforced by the server (below). The editor itself reads `header` and the keys of
 its white-label header (below). A malformed value of a key that limits what
 visitors can do falls to its restrictive side, with a warning; a malformed
 logo is dropped with a warning and the rest of `brand` is kept.
@@ -1365,6 +1365,37 @@ logo is dropped with a warning and the rest of `brand` is kept.
   site. Default `true`. Accepts `true` / `false` / `"true"` / `"false"` /
   `"1"` / `"0"`; any other value, or an `imports` value that is not an object,
   reads as `false`.
+
+  The client apps hide their link fields when it is `false`, and **the server
+  enforces it** whatever the client sends: an import of a link to another site
+  answers `403 link_imports_disabled` before any job, reservation or fetch. A
+  file of the deployment's own storage is not a link to another site and is
+  never refused (the host alone does not make a link yours: a link that goes
+  through the content network's image transform, or that another URL reader
+  could read differently, counts as another site).
+
+  It covers every lane that imports from a link: `POST /v1/download-video`,
+  `POST /v1/youtube-audio` and `POST /v1/extract-youtube-audio`, the picture and
+  recording imports `POST /v1/media/import-url` and `POST /v1/media/import-recording`,
+  `POST /v1/save-to-storage`, `POST /v1/media/process`, `POST /v1/trim-audio`,
+  `POST /v1/transcribe` and Suno's cover and upload-extend with a link as their
+  source (a video's page or a direct file alike), a dub's `sourceUrl`, the
+  metadata probe `POST /v1/video-metadata`, a workflow's Video URL node (the run
+  is refused before anything runs), the media copied in by a workflow import
+  (reported as skipped, the import itself succeeds), the same routes reached
+  through MCP (`download_youtube_audio` and the other import tools), the SDK and
+  the CLI, and a private plugin's own downloads and link probes.
+
+  It does not, yet, refuse an outside URL given to a media-generation or
+  media-processing route as a source image, video or audio (`POST /v1/generate-video`'s
+  `imageUrl`, `POST /v1/trim-video`'s `videoUrl` and the like). Nor does it
+  cover the display proxy `GET /v1/image-proxy`, the scrapers and site capture
+  (`POST /v1/web-scrape`, `/v1/site-capture`, `/v1/meta-ads-scrape`,
+  `/v1/instagram-scrape`), the length probes `POST /v1/clip-length` and the
+  Seedance reference estimate, publishing or scheduling a post from an outside
+  file, or a self-hosted install's relay to the cloud. On such a deployment
+  those URLs still reach the provider or the deployment's own network, so its
+  network filter still answers for them.
 - `catalogs.images`: the pictures on picker options — `"default"` (the
   platform's), `"none"` or `"own"` (the deployment's own). Default
   `"default"`; any other value reads as `"none"`.

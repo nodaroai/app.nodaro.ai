@@ -217,6 +217,7 @@ import { isPostProcessingError } from "../../../lib/post-processing-error.js"
 // (no BullMQ retries) instead of on the final attempt.
 import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
 import { NoAudioTrackError } from "../../../providers/video/extract-audio-track.js"
+import { OWN_MEDIA_URL, withLinkImportsOff } from "@/test/link-imports-off.js"
 
 function makeJob(name: string, data: Record<string, unknown> = {}) {
   return { name, data: { jobId: "job-1", ...data }, id: "bull-1", updateProgress: vi.fn() }
@@ -1696,5 +1697,23 @@ describe("relay provenance on the cloud audio lanes", () => {
     const { result } = mocks.mockFinalizeJobWithMedia.mock.calls[0][0]
     expect(result).not.toHaveProperty("relayJobId")
     expect(result).not.toHaveProperty("relayCredits")
+  })
+})
+
+describe("transcribe handler on a deployment that turned link imports off (a run reaches it without the route)", () => {
+  withLinkImportsOff()
+  const handler = audioAIHandlers["transcribe"]
+
+  it("refuses a direct file on another site before the provider or a fetch", async () => {
+    const job = makeJob("transcribe", { audioUrl: "https://example.com/audio.mp3" })
+    await expect(handler(job as never, makeCtx() as never)).rejects.toMatchObject({ code: "link_imports_disabled" })
+    expect(mocks.mockTranscribe).not.toHaveBeenCalled()
+  })
+
+  it("a file of this deployment's own storage still runs", async () => {
+    mocks.mockTranscribe.mockResolvedValue({ text: "hello", segments: [] })
+    const job = makeJob("transcribe", { audioUrl: OWN_MEDIA_URL })
+    await handler(job as never, makeCtx() as never)
+    expect(mocks.mockTranscribe).toHaveBeenCalled()
   })
 })

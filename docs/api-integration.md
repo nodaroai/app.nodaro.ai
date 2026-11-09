@@ -5514,6 +5514,23 @@ submitted, before any redirect; a listed site covers its subdomains. A change
 takes effect within a minute. The list is the deployment's own and is not part
 of the public API.
 
+**A deployment that turned link imports off.** A deployment can refuse imports
+from links to other sites altogether (`imports.links: false` in its surface
+profile, [deployment.md](./deployment.md)). Every import lane then answers
+`403 link_imports_disabled`, before any job, reservation or fetch, for a link
+that is not a file of the deployment's own storage: `POST /v1/download-video`,
+`POST /v1/youtube-audio`, `POST /v1/extract-youtube-audio`,
+`POST /v1/media/import-url`, `POST /v1/media/import-recording`,
+`POST /v1/save-to-storage`, `POST /v1/media/process`, `POST /v1/trim-audio`,
+`POST /v1/transcribe`, Suno's cover and upload-extend, a dub's `sourceUrl`, and
+`POST /v1/video-metadata`. A workflow's Video URL node is refused before the run
+starts, and the media of an imported workflow is left as it was and reported as
+skipped. The refusal has one body everywhere:
+
+```json
+{ "error": { "code": "link_imports_disabled", "message": "Importing media from a link to another site is turned off on this deployment. Upload the file instead." } }
+```
+
 **How many imports carry a declaration.** Admin → Settings → Content rights
 shows, for the last 7, 30 or 90 days, how many imports of a link started and
 how many of them carried a confirmation (a ticked box, or one derived from a

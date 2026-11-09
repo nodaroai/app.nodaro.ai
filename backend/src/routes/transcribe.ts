@@ -10,6 +10,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { importJobFields, importViaOf } from "../lib/import-via.js"
+import { linkImportRefusal } from "../lib/link-imports.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import {
@@ -94,6 +95,12 @@ export async function transcribeRoutes(app: FastifyInstance) {
         error: { code: "unauthorized", message: "Authentication required" },
       })
     }
+
+    // A link to outside content on a deployment that turned link imports off
+    // (lib/link-imports.ts): refused here, a social link or a direct file
+    // alike, before any job row exists or credits are held.
+    const switchRefusal = linkImportRefusal(audioUrl)
+    if (switchRefusal) return reply.status(403).send({ error: switchRefusal })
 
     // A social link's sound is an import of the link (the worker extracts it
     // first, on the same test): the site's policy and the rights check (reads)

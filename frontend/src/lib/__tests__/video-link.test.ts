@@ -76,6 +76,10 @@ describe("classifyDownloadFailure — a request that threw", () => {
     expect(classifyDownloadFailure(refused("rights_confirmation_required", "Confirm that you hold the rights to this content before it is imported."))).toEqual({ code: "rights", raw: "Confirm that you hold the rights to this content before it is imported." })
     expect(classifyDownloadFailure(refused("rights_confirmation_used", "Used already")).code).toBe("rights")
     expect(classifyDownloadFailure(refused("import_source_disabled", "This link can't be imported here."))).toEqual({ code: "refused", raw: "This link can't be imported here." })
+    expect(classifyDownloadFailure(refused("link_imports_disabled", "Importing media from a link to another site is turned off on this deployment."))).toEqual({
+      code: "refused",
+      raw: "Importing media from a link to another site is turned off on this deployment.",
+    })
     // A provider message that happens to mention a confirmation is still sorted by its words.
     expect(classifyDownloadFailure(new Error("Private video — confirmation of age needed")).code).toBe("private")
   })

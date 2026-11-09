@@ -46,9 +46,9 @@ import {
   needsContainerRemux,
   remuxToMp4,
 } from "../../providers/video/ffmpeg-utils.js"
-import { ytMetadataProbe, YtUrlNotAllowedError } from "../../providers/video/youtube-video.js"
-import { probeSocialPostVideo, socialPostOf } from "../../providers/video/social-post-video.js"
-import { pluginDownloadSocialPostVideo, pluginDownloadYouTubeVideo } from "./toolkit-downloads.js"
+import { YtUrlNotAllowedError } from "../../providers/video/youtube-video.js"
+import { socialPostOf } from "../../providers/video/social-post-video.js"
+import { assertPluginLinkAllowed, pluginDownloadSocialPostVideo, pluginDownloadYouTubeVideo, pluginProbeSocialPostVideo, pluginYtMetadataProbe } from "./toolkit-downloads.js"
 import { trimVideo as trimVideoCore } from "../../providers/video/trim-video.js"
 import { removeAudio } from "../../providers/video/remove-audio.js"
 import { PITCH_SHIFT_MAX_SEMITONES, pitchTempo } from "../../providers/video/pitch-tempo.js"
@@ -128,6 +128,7 @@ import { LlmSpend, reserveLlmCall, settleLlmJob, type LlmReserveResult } from ".
 import { reserveLlmSideHold, sideCreditsFor, sideHoldFor, sideHoldPayerOf, sideHoldsAvailable } from "../llm-side-hold.js"
 import { appBaseUrl } from "../deployment-urls.js"
 import { voiceLockActive } from "../voice-policy.js"
+import { surfaceAllowsLinkImports } from "../surface-profile.js"
 import { judgeVoice, VoiceNotAvailableError, voiceNotAvailableBody } from "../voice-gender.js"
 import { getAppSettings, settingsReadFailed } from "../app-settings.js"
 import { withEarlierMaskingKeys } from "../nodaro-motion-masking.js"
@@ -1866,12 +1867,13 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       // maxFilesizeBytes?, confirmationId?}. Its `hardening` (raw yt-dlp
       // arguments among them) stays internal: a plugin reaches the hardened
       // lane only through `downloadSocialPostVideo`, whatever it passes here.
-      // Both downloads pass the import gate first (toolkit-downloads.ts).
+      // Both downloads pass the import gate first, and both probes the
+      // deployment's switch for links (toolkit-downloads.ts).
       downloadYouTubeVideo: pluginDownloadYouTubeVideo,
-      ytMetadataProbe,
+      ytMetadataProbe: pluginYtMetadataProbe,
       YtUrlNotAllowedError,
       socialPostVideoUrl: (url: string) => socialPostOf(url)?.url ?? null,
-      probeSocialPostVideo,
+      probeSocialPostVideo: pluginProbeSocialPostVideo,
       downloadSocialPostVideo: pluginDownloadSocialPostVideo,
     }, PROVIDER_MEMBER_LANES),
     ffmpeg: withMemberSlots<PluginFfmpegToolkit>("ffmpeg", {
@@ -2471,6 +2473,13 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         const verdict = await judgeVoice(voiceId, { userId: opts.userId })
         if (!verdict.allowed) throw new PluginHttpError(400, voiceNotAvailableBody(), new VoiceNotAvailableError(verdict.reason))
       },
+    },
+    // The deployment's switch for links to outside content, for the links a
+    // plugin route fetches or hands to a provider itself (lib/link-imports.ts),
+    // the same answer the platform's own import routes give.
+    imports: {
+      linksAllowed: () => surfaceAllowsLinkImports(),
+      assertLinkAllowed: assertPluginLinkAllowed,
     },
     db: supabase,
     workflows: {

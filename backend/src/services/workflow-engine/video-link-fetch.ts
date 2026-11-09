@@ -85,6 +85,12 @@ export interface VideoLinkFetchDeps {
   ): Promise<{ readonly videoUrl: string; readonly thumbnailUrl?: string }>
   /** The audio track of the link: its stored URL. */
   downloadAudio(url: string, request: VideoLinkFetchRights & { readonly userId: string; readonly signal?: AbortSignal }): Promise<string>
+  /**
+   * The deployment's refusal of a link to outside content (`lib/link-imports.ts`),
+   * or null: read before anything is probed or fetched. Optional so a test of the
+   * rules can leave the switch out.
+   */
+  linkRefusal?(url: string): string | null
 }
 
 /** What an earlier fetch of a Video URL node produced: the link it was for, and the node fields it wrote. */
@@ -319,10 +325,22 @@ export async function fetchVideoLinksForRun(input: VideoLinkFetchInput, deps: Vi
     const need = needs.get(node.id)
     if (!need || need === "none") continue
     const link = text(node.data.youtubeUrl)
-    if (!link || !isSocialVideoUrl(link)) continue
-    if (need === "file" && videoLinkDownloadedFile(node.data) !== undefined) continue
-    if (need === "audio" && text(node.data.downloadedAudioUrl) !== "") continue
-    jobs.push({ node, link, label: text(node.data.label) || node.id, need })
+    // A stored file is what the nodes after the link read when there is one; a
+    // run's request can name it directly (the lock admits any safe URL there).
+    const stored = need === "file" ? videoLinkDownloadedFile(node.data) : text(node.data.downloadedAudioUrl) || undefined
+    const read = stored ?? link
+    if (!read) continue
+    const label = text(node.data.label) || node.id
+    // What the run would read, a post, a direct file or a stored file alike:
+    // refused here, before anything is probed or fetched, on a deployment that
+    // turned link imports off. A file an earlier fetch of this link stored
+    // stays usable.
+    const refused = deps.linkRefusal?.(read) ?? null
+    if (refused !== null && !recordedPatch(node, link, need, input)) {
+      return { ok: false, reason: "refused", message: `Video URL "${label}": ${refused}` }
+    }
+    if (stored !== undefined || !link || !isSocialVideoUrl(link)) continue
+    jobs.push({ node, link, label, need })
   }
 
   const patches = new Map<string, VideoLinkPatch>()

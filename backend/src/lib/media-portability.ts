@@ -9,6 +9,7 @@ import {
 } from "@nodaro/shared/workflow"
 import { safeFetch } from "./safe-fetch.js"
 import { RESTRICTED_ASSET_COLUMN } from "./content-restrictions-column.js"
+import { LINK_IMPORTS_DISABLED_MESSAGE, linkImportRefusal } from "./link-imports.js"
 
 /**
  * Workflow media portability (#866).
@@ -671,6 +672,17 @@ export async function rehostForeignMedia<T>(
     const size = await getR2ObjectSize(key).catch(() => 0)
     if (size <= 0) report.unreachable.push(ref)
   })
+
+  // A deployment that turned link imports off copies nothing from outside: an
+  // outside URL stays as the bundle gave it and is reported, and a file of this
+  // deployment's own storage is copied as before (`lib/link-imports.ts`).
+  for (const candidates of [assetCandidates, graphCandidates]) {
+    for (const [url, ref] of candidates) {
+      if (linkImportRefusal(url) === null) continue
+      candidates.delete(url)
+      report.skipped.push({ ...ref, reason: LINK_IMPORTS_DISABLED_MESSAGE })
+    }
+  }
 
   // The cap is PER HALF, not per import: neither the bundle's entities nor the
   // graph's media can spend the other's slots. Each half keeps the wall-time

@@ -557,6 +557,22 @@ export function surfaceAllowsPublicOutputs(): boolean {
 }
 
 /**
+ * Whether this deployment lets media be imported from a link to another site
+ * (`imports.links`). The one reader of the key on the server; the client apps
+ * read it through /config.js (their `surfaceLinkImportsAllowed()`). Absent, or
+ * no profile at all, means allowed: exactly today's behaviour. `false` means
+ * refused, and `lib/link-imports.ts` decides what that refuses.
+ *
+ * The unset case returns before the profile is read: it is what every install
+ * without a profile answers, and an env read has no mock surface, so a route
+ * suite that mocks the config module partially cannot break on this gate.
+ */
+export function surfaceAllowsLinkImports(): boolean {
+  if (!process.env.NODARO_SURFACE_PROFILE?.trim()) return true
+  return runtimeSurfaceProfile().imports?.links !== false
+}
+
+/**
  * Fail-closed guard (SAI-4 / H8). True when a deployment CONFIGURED a surface
  * profile (NODARO_SURFACE_PROFILE set) on an edition that honors it
  * (surfaceGateOpen) but the profile did NOT load — detected because

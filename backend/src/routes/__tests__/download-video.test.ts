@@ -107,6 +107,7 @@ import { RedisDownloadLedger } from "../../lib/download-slot-ledger.js"
 import { makeFakeDownloadClient, makeFakeDownloadStore } from "../../lib/__tests__/fake-download-redis.js"
 import { ContentRightsError, checkRightsConfirmation, consumeRightsConfirmation, deriveAndConsumeConfirmation, recordEvent } from "../../lib/content-rights.js"
 import { recordUnconfirmedImport } from "../../lib/unconfirmed-imports.js"
+import { withLinkImportsOff } from "@/test/link-imports-off.js"
 
 const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
 const YT_URL = "https://www.youtube.com/watch?v=abc123"
@@ -750,5 +751,30 @@ describe("POST /v1/download-video — asset bookkeeping", () => {
       warnSpy.mockRestore()
       errorSpy.mockRestore()
     }
+  })
+})
+
+describe("POST /v1/download-video on a deployment that turned link imports off", () => {
+  withLinkImportsOff()
+
+  it("refuses before the site's policy, a slot or the download, with the one refusal", async () => {
+    const { assertImportSourceAllowed } = await import("../../lib/import-source-policy.js")
+    const res = await post({ url: YT_URL })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("link_imports_disabled")
+    expect(assertImportSourceAllowed).not.toHaveBeenCalled()
+    expect(downloadYouTubeVideo).not.toHaveBeenCalled()
+  })
+
+  it("a direct file on another site is refused the same way", async () => {
+    const res = await post({ url: "https://example.com/clip.mp4" })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("link_imports_disabled")
+    expect(downloadYouTubeVideo).not.toHaveBeenCalled()
+  })
+
+  it("a file of this deployment's own storage is still downloaded", async () => {
+    const res = await post({ url: "https://cdn.nodaro.test/uploads/videos/own.mp4" })
+    expect(res.statusCode).toBe(200)
   })
 })

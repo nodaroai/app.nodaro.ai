@@ -57,6 +57,7 @@ import {
 } from "../shared.js"
 import { YOUTUBE_HOSTS, isAllowedSocialVideoUrl } from "../../lib/url-validator.js"
 import { requireImportAllowed, spendImportConfirmation } from "../../lib/import-gate.js"
+import { assertLinkImportAllowed } from "../../lib/link-imports.js"
 import { dubbingSourceIsImport } from "../../lib/dubbing-source.js"
 import { DUBBING_VOICE_LOCK_MESSAGE, PROJECT_DUBBING_NEEDS_UPLOAD, dubsAsProject } from "../../lib/dubbing-model.js"
 import { UNUSABLE_LINK_MESSAGE } from "../../lib/unusable-link.js"
@@ -405,6 +406,11 @@ const handleTextToAudio: HandlerFn = async function handleTextToAudio(job, ctx) 
 const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
   const { audioUrl: rawAudioUrl, provider, language, diarize, tagAudioEvents, wordTimestamps } = job.data as { jobId: string; audioUrl: string; provider?: TranscribeProvider; language?: string; diarize?: boolean; tagAudioEvents?: boolean; wordTimestamps?: boolean }
   console.log(`[worker] transcribe ${ctx.jobId} (provider: ${provider ?? "whisper"}, language: ${language ?? "auto"})`)
+
+  // The deployment's switch for links to outside content, a post or a direct
+  // file alike (lib/link-imports.ts): the route answers it, and this is the
+  // backstop for a workflow run, which reaches the worker without the route.
+  assertLinkImportAllowed(rawAudioUrl)
 
   // A link to a video's page on a social platform: extract its audio first
   // (an STT provider cannot read a page). The test is the platform hosts' own

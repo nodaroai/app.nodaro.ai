@@ -68,7 +68,10 @@ export class UploadsResource {
    * An import of a link runs the platform's content rights check: pass the
    * `confirmationId` from `contentRights.confirm({ url })` when the deployment
    * requires one (`403 rights_confirmation_required` otherwise). A site an
-   * administrator disabled answers `403 import_source_disabled`.
+   * administrator disabled answers `403 import_source_disabled`, and a
+   * deployment that turned link imports off answers `403 link_imports_disabled`
+   * for a link to another site (a file of the deployment's own storage is still
+   * imported as before).
    */
   async importUrl(url: string, options: { confirmationId?: string } = {}): Promise<ImportUrlResult> {
     const res = await this.client.request<{ data: ImportUrlResult }>("POST", "/v1/media/import-url", {

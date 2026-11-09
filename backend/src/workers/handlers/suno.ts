@@ -25,6 +25,7 @@ import {
 } from "../shared.js"
 import { applyPromptPolicies } from "../../lib/prompt-policy.js"
 import { requireImportAllowed, spendImportConfirmation } from "../../lib/import-gate.js"
+import { assertLinkImportAllowed } from "../../lib/link-imports.js"
 import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 import { providerKindForSuno } from "../../lib/reconcile/provider-kind.js"
 import { cloudTaskId, maybeSunoCloudOutput, shouldRunSunoOnCloud, type SunoProviderUsed } from "./suno-cloud.js"
@@ -218,6 +219,8 @@ const handleSunoCover: HandlerFn = async function handleSunoCover(job, ctx) {
     personaId?: string; personaModel?: "voice_persona" | "style_persona"
   }
   console.log(`[worker] suno-cover ${ctx.jobId} (model: ${model ?? DEFAULT_SUNO_MODEL}, customMode: ${customMode}, instrumental: ${instrumental}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""})`)
+  // The deployment's switch, for a run (which reaches the worker without the route): a post or a direct file alike.
+  assertLinkImportAllowed(uploadUrl)
   // BEFORE the social-URL download below: the cloud's own handler performs the
   // same download, and the local copy's URL is on a private host it could not
   // fetch anyway — downloading here first would cost bandwidth for a file we
@@ -456,6 +459,8 @@ const handleSunoUploadExtend: HandlerFn = async function handleSunoUploadExtend(
     negativeStyle?: string; vocalGender?: string
   }
   console.log(`[worker] suno-upload-extend ${ctx.jobId} (model: ${model ?? DEFAULT_SUNO_MODEL}, continueAt: ${continueAt}s)`)
+  // The deployment's switch, for a run (which reaches the worker without the route): a post or a direct file alike.
+  assertLinkImportAllowed(uploadUrl)
   // BEFORE the social-URL download below: the cloud's own handler performs the
   // same download, and the local copy's URL is on a private host it could not
   // fetch anyway — downloading here first would cost bandwidth for a file we

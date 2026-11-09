@@ -468,6 +468,7 @@ measure on the account, the content rights check or the site's policy said no
 |--------|---------|
 | `imports_blocked` | importing links is blocked on the account, or the account is closed, under the deployment's repeat-infringer policy; the message says until when (a date in UTC, or until an administrator lifts the block) |
 | `import_source_disabled` | the link's site is disabled by an administrator; the message names no site |
+| `link_imports_disabled` | this deployment turned link imports off: a link to another site is refused (upload the file instead); a file of its own storage is not |
 | `rights_confirmation_required` | the deployment requires a confirmation and none was sent |
 | `rights_authorization_required` | the deployment requires a confirmation, the import came through an API key, a connected app or an AI agent, and the account holds no standing authorization (`contentRights.authorize`, by the person in their own session) |
 | `rights_confirmation_not_found` | no confirmation has that id |
@@ -7768,7 +7769,7 @@ Errors:
 | Status | Error | When |
 |--------|-------|------|
 | 400 | `NodaroError`, `code: "validation_error"` | Not an http(s) address, an address that is a private or reserved IP, not a decodable image, or an image in a format that is not accepted (SVG, TIFF, …; accepted: JPEG, PNG, WebP, AVIF, GIF, HEIC). |
-| 403 | `ImportRefusedError` (a `ForbiddenError`), `code: "imports_blocked"`, `"import_source_disabled"` or a `rights_confirmation_*` code | Importing links is blocked on your account (or it is closed) under the deployment's repeat-infringer policy, the site is disabled by an administrator, or the content rights confirmation is missing (while required), for another link or account, stale, expired or used (a failed import uses it too). |
+| 403 | `ImportRefusedError` (a `ForbiddenError`), `code: "imports_blocked"`, `"import_source_disabled"`, `"link_imports_disabled"` or a `rights_confirmation_*` code | Importing links is blocked on your account (or it is closed) under the deployment's repeat-infringer policy, the site is disabled by an administrator, the deployment turned link imports off (a link to another site is refused; upload the file instead), or the content rights confirmation is missing (while required), for another link or account, stale, expired or used (a failed import uses it too). |
 | 422 | `NodaroError`, `code: "fetch_failed"` | The address could not be reached (including a host that resolves to a private address), or answered with an error. |
 | 413 | `StorageExceededError`, `reason: "file_too_large"` | The picture is over 20 MB. |
 | 413 | `StorageExceededError`, `reason: "storage_limit_exceeded"` | Your storage is full; `details` carries `usedBytes`, `quotaBytes`, `remainingBytes`, `tier`. |

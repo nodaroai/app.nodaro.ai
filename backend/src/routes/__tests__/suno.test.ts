@@ -106,6 +106,7 @@ vi.mock("@/ee/billing/credits.js", () => ({
 import { sunoRoutes } from "../suno.js"
 import { SUNO_STEM_NAMES } from "@nodaro/shared/models"
 import { supabase } from "../../lib/supabase.js"
+import { OWN_MEDIA_URL, withLinkImportsOff } from "@/test/link-imports-off.js"
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -1109,5 +1110,33 @@ describe("Suno text ceilings and clamps (P7)", () => {
 
     const enqueued = mockVideoQueueAdd.mock.calls.at(-1)?.[1] as { prompt?: string }
     expect(enqueued.prompt).toHaveLength(5000)
+  })
+})
+
+describe("Suno on a deployment that turned link imports off", () => {
+  withLinkImportsOff()
+  const ROUTES = [
+    { url: "/v1/suno/cover", body: { prompt: "A cover song" } },
+    { url: "/v1/suno/upload-extend", body: { continueAt: 30 } },
+  ] as const
+
+  it.each(ROUTES)("$url: a direct file on another site is refused before the gate, any job or credit hold", async ({ url, body }) => {
+    const res = await authedPost(url, { ...body, uploadUrl: "https://example.com/song.mp3" })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("link_imports_disabled")
+    expect(gate.requireImportAllowed).not.toHaveBeenCalled()
+    expect(mockJobInsert).not.toHaveBeenCalled()
+    expect(mockReserveCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it.each(ROUTES)("$url: a social link is refused the same way", async ({ url, body }) => {
+    const res = await authedPost(url, { ...body, uploadUrl: "https://www.youtube.com/watch?v=abc" })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("link_imports_disabled")
+  })
+
+  it.each(ROUTES)("$url: a file of this deployment's own storage still runs", async ({ url, body }) => {
+    const res = await authedPost(url, { ...body, uploadUrl: OWN_MEDIA_URL })
+    expect(res.statusCode).toBe(200)
   })
 })

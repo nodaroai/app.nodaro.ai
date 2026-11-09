@@ -25,6 +25,7 @@ import { isSocialVideoUrl } from "@nodaro/shared/video"
 import type { SimpleEdge, SimpleNode } from "../services/workflow-engine/types.js"
 import { fetchVideoLinksForRun, type VideoLinkFetchDeps } from "../services/workflow-engine/video-link-fetch.js"
 import { workerDrainSignal } from "../lib/worker-drain.js"
+import { linkImportRefusal } from "../lib/link-imports.js"
 import { mergeVideoLinkFiles, type VideoLinkFiles } from "../lib/execution-video-link-files.js"
 
 type InputOverrides = Record<string, Record<string, unknown>>
@@ -107,8 +108,24 @@ function holdsPostLink(nodes: readonly SimpleNode[]): boolean {
   })
 }
 
+/**
+ * Whether any Video URL node of the graph holds a link this deployment refuses
+ * (`lib/link-imports.ts`): its link, a post or a direct file alike, or a stored
+ * file it names (what the nodes after it read), which the fetch below refuses
+ * before anything runs. Inert while link imports are allowed.
+ */
+function holdsRefusedLink(nodes: readonly SimpleNode[]): boolean {
+  return nodes.some((n) => {
+    if (n.type !== "youtube-video") return false
+    const data = n.data as Record<string, unknown>
+    return [data.youtubeUrl, data.downloadedVideoUrl, data.downloadedAudioUrl].some(
+      (url) => typeof url === "string" && url.trim() !== "" && linkImportRefusal(url.trim()) !== null,
+    )
+  })
+}
+
 export async function prepareVideoLinksForRun(args: PrepareVideoLinksArgs): Promise<PrepareVideoLinksOutcome> {
-  if (!holdsPostLink(args.nodes)) return { kind: "ok", inputOverrides: args.inputOverrides, fetched: [], files: {} }
+  if (!holdsPostLink(args.nodes) && !holdsRefusedLink(args.nodes)) return { kind: "ok", inputOverrides: args.inputOverrides, fetched: [], files: {} }
   const requestSetIds = overriddenVideoLinkIds(args.nodes, args.inputOverrides)
   const recorded = args.loadRecorded ? await args.loadRecorded() : {}
 

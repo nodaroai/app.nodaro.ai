@@ -10,6 +10,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { importJobFields, importViaOf } from "../lib/import-via.js"
+import { linkImportRefusal } from "../lib/link-imports.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import {
@@ -322,6 +323,13 @@ async function refusedSourceImport(
   const unusable = unusableLinkError(uploadUrl)
   if (unusable) {
     reply.status(400).send({ error: unusable })
+    return true
+  }
+  // A link to outside content on a deployment that turned link imports off
+  // (lib/link-imports.ts): a social link or a direct file alike.
+  const switchRefusal = linkImportRefusal(uploadUrl)
+  if (switchRefusal) {
+    reply.status(403).send({ error: switchRefusal })
     return true
   }
   if (!isAllowedSocialVideoUrl(uploadUrl)) return false

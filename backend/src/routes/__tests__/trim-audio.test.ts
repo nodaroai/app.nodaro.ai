@@ -26,6 +26,7 @@ vi.mock("@/lib/import-gate.js", () => ({
 }))
 
 import { trimAudioRoutes } from "../trim-audio.js"
+import { OWN_MEDIA_URL, withLinkImportsOff } from "@/test/link-imports-off.js"
 
 class Refusal extends Error {
   constructor(readonly code: string, message: string) {
@@ -78,5 +79,30 @@ describe("POST /v1/trim-audio", () => {
     expect(res.statusCode).toBe(200)
     expect(mocks.requireImportAllowed).not.toHaveBeenCalled()
     expect(mocks.queueAdd).toHaveBeenCalledWith("trim-audio", expect.objectContaining({ videoUrl: DIRECT }))
+  })
+})
+
+describe("POST /v1/trim-audio on a deployment that turned link imports off", () => {
+  withLinkImportsOff()
+
+  it("refuses a direct file on another site before any job, and never asks the gate", async () => {
+    const res = await post({ videoUrl: DIRECT })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("link_imports_disabled")
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+    expect(mocks.requireImportAllowed).not.toHaveBeenCalled()
+  })
+
+  it("refuses a social link the same way", async () => {
+    const res = await post({ videoUrl: SOCIAL })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("link_imports_disabled")
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+  })
+
+  it("a file of this deployment's own storage still runs", async () => {
+    const res = await post({ videoUrl: OWN_MEDIA_URL })
+    expect(res.statusCode).toBe(200)
+    expect(mocks.queueAdd).toHaveBeenCalledWith("trim-audio", expect.objectContaining({ videoUrl: OWN_MEDIA_URL }))
   })
 })

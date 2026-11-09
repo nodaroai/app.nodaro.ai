@@ -37,6 +37,7 @@ import {
   isUnroutableMediaUrl,
   rehostForeignMedia,
 } from "../media-portability.js"
+import { withLinkImportsOff } from "@/test/link-imports-off.js"
 
 /** A Response-like object with a streaming body, as the capped reader consumes it. */
 function mediaResponse(bytes: Buffer, contentType: string, status = 200): Response {
@@ -271,5 +272,31 @@ describe("rehostForeignMedia", () => {
     expect(safeFetchMock).not.toHaveBeenCalled()
     expect(report).toEqual({ rehosted: 0, unreachable: [], skipped: [] })
     expect(out).toEqual(nodes)
+  })
+})
+
+describe("rehostForeignMedia on a deployment that turned link imports off", () => {
+  withLinkImportsOff()
+
+  it("copies nothing from outside: each outside URL stays as the bundle gave it and is reported", async () => {
+    const nodes = [
+      { id: "a", data: { videoUrl: PUBLIC_VIDEO, label: "Clip" } },
+      { id: "b", data: { imageUrl: PUBLIC_IMAGE } },
+    ]
+    const { nodes: out, report } = await rehostForeignMedia(nodes, "user-1")
+    expect(safeFetchMock).not.toHaveBeenCalled()
+    expect(report.rehosted).toBe(0)
+    expect(report.skipped.map((s) => s.url).sort()).toEqual([PUBLIC_IMAGE, PUBLIC_VIDEO].sort())
+    for (const skipped of report.skipped) expect(skipped.reason).toContain("turned off")
+    expect((out[0] as { data: { videoUrl: string } }).data.videoUrl).toBe(PUBLIC_VIDEO)
+  })
+
+  it("media already on this deployment's storage is judged as before (no fetch, nothing reported)", async () => {
+    r2KeyMock.mockImplementation((u) => (u === OURS ? "videos/mine.mp4" : null))
+    r2SizeMock.mockResolvedValue(1234)
+    const { report } = await rehostForeignMedia([{ id: "a", data: { videoUrl: OURS } }], "user-1")
+    expect(safeFetchMock).not.toHaveBeenCalled()
+    expect(report.skipped).toEqual([])
+    expect(report.unreachable).toEqual([])
   })
 })

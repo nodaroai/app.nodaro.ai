@@ -75,6 +75,7 @@ import { transcribeRoutes } from "../transcribe.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
+import { OWN_MEDIA_URL, withLinkImportsOff } from "@/test/link-imports-off.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -521,5 +522,25 @@ describe("POST /v1/transcribe — a link to a video's page is an import of the l
     expect(res.statusCode).toBe(400)
     expect(res.json().error.issues.map((i: { path: string }) => i.path)).toContain("confirmationId")
     expect(gate.requireImportAllowed).not.toHaveBeenCalled()
+  })
+})
+
+describe("POST /v1/transcribe on a deployment that turned link imports off", () => {
+  withLinkImportsOff()
+
+  it("refuses a direct file on another site before any job or reservation", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/transcribe", payload: { userId: VALID_UUID, audioUrl: "https://example.com/talk.mp3" } })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("link_imports_disabled")
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+    expect(gate.requireImportAllowed).not.toHaveBeenCalled()
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("a file of this deployment's own storage still runs", async () => {
+    mockJobInsert()
+    const res = await app.inject({ method: "POST", url: "/v1/transcribe", payload: { userId: VALID_UUID, audioUrl: OWN_MEDIA_URL } })
+    expect(res.statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenCalledWith("transcribe", expect.objectContaining({ audioUrl: OWN_MEDIA_URL }))
   })
 })

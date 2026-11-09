@@ -3413,6 +3413,45 @@ export interface PluginToolkit {
    * bump) — `?.`-guard it; an older host has no such member.
    */
   voices?: PluginVoicesToolkit
+  /**
+   * The deployment's switch for links to outside content
+   * (`PluginImportsToolkit`). ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) —
+   * `?.`-guard it; an older host has no such member.
+   */
+  imports?: PluginImportsToolkit
+}
+
+// ============================================================================
+// tk.imports — backend/src/lib/link-imports.ts
+// ============================================================================
+
+/**
+ * The deployment's switch for links to outside content (`imports.links` on its
+ * surface profile), for the links a plugin route fetches itself or hands to a
+ * provider: a video to analyse, a clip to recast, a picture from a page. The
+ * host's own downloads and probes (`tk.providers.downloadYouTubeVideo`,
+ * `downloadSocialPostVideo`, `ytMetadataProbe`, `probeSocialPostVideo`) refuse
+ * on their own; a link that goes through `tk.http.safeFetch` or
+ * `tk.ffmpeg.downloadFile`, or to a provider, needs this asked first.
+ * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard the group.
+ */
+export interface PluginImportsToolkit {
+  /**
+   * False when the deployment refuses links to outside content. Read at call
+   * time and reads nothing else, so a route can ask it per request.
+   */
+  linksAllowed(): boolean
+  /**
+   * Returns when `url` may be fetched on this deployment, and throws a
+   * `PluginHttpError` (identify it by `.name === "PluginHttpError"`) when it
+   * may not: 403, body `{ error: { code: "link_imports_disabled", message } }`.
+   * Send it verbatim. A file of this deployment's own storage always passes;
+   * with the switch on (the default) everything passes and nothing is read.
+   *
+   * Call it for EVERY caller-supplied link the route will fetch, probe or hand
+   * to a provider, before any job row, reservation or probe.
+   */
+  assertLinkAllowed(url: string): void
 }
 
 // ============================================================================
@@ -4797,7 +4836,7 @@ export interface PluginAuthUser {
 export class PluginHttpError extends Error {
   override readonly name = "PluginHttpError"
   constructor(
-    readonly statusCode: 400 | 404 | 422,
+    readonly statusCode: 400 | 403 | 404 | 422,
     readonly body: { error: { code: string; message: string } & Record<string, unknown> },
     cause: unknown,
   ) {
