@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/tooltip"
 import { CreditBalance } from "@/ee/components/credits/CreditBalance"
 import { GetCreditsModal } from "@/ee/components/credits/GetCreditsModal"
+import { getCreditsCtaKey } from "./get-credits-cta"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { isResetAction, newRunActionLabel, type NewRunAction } from "@/components/app-runner/types"
@@ -1732,7 +1733,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                     className="shrink-0 whitespace-nowrap h-8 px-4 rounded-full text-sm font-medium text-white bg-cta hover:bg-cta-hover flex items-center gap-2 transition-all duration-200"
                   >
                     <Sparkles className="h-4 w-4" />
-                    {userCredits?.tier === "free" ? t("present.getFreeCredits") : t("runner.getCredits")}
+                    {t(getCreditsCtaKey(userCredits?.tier, deploymentPayer))}
                   </button>
                 ) : (
                   <>
@@ -2120,7 +2121,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                   className="shrink-0 whitespace-nowrap h-10 px-4 rounded-full text-sm font-medium text-white bg-cta hover:bg-cta-hover flex items-center gap-2 transition-all duration-200 touch-manipulation"
                 >
                   <Sparkles className="h-4 w-4" />
-                  {userCredits?.tier === "free" ? t("present.getFreeCredits") : t("runner.getCredits")}
+                  {t(getCreditsCtaKey(userCredits?.tier, deploymentPayer))}
                 </button>
               ) : (
                 <button

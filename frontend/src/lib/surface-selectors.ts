@@ -225,6 +225,27 @@ export function isDeploymentPayer(
   return deploymentPayer === true && probe === "payer"
 }
 
+/**
+ * May this deployment promise a person free credits of their own?
+ *
+ * Not where it sells nothing (`billing.selfServe: false`), and not where one
+ * account pays for everything (a deployment payer): such a deployment has no
+ * free credits to give (decided 2026-11-08), and the server refuses signup
+ * grants under a payer (`signupGrantsApply`). Every surface that makes the
+ * promise goes through here or through `PersonalFreeCreditsOnly`; the guard
+ * (`__tests__/personal-free-credits-guard.test.ts`) fails one that does not.
+ *
+ * The two facts arrive separately. `selfServe` is in /config.js, so it is known
+ * on the first paint. `deploymentPayer` is learned from `GET /v1/billing/surface`
+ * (the payer's identity never reaches /config.js) and reads undefined until that
+ * answers: this fails open, like `InsufficientCreditsModal`, so Nodaro's first
+ * paint is unchanged. The cost: a payer deployment that leaves self-serve on
+ * shows the promise for the length of that one request.
+ */
+export function personalFreeCreditsShown(deploymentPayer: boolean | undefined): boolean {
+  return surfaceBillingSelfServe() && deploymentPayer !== true
+}
+
 
 /** Curated installs never expose bundled catalogs while fetching their reviewed set. */
 export function surfaceCatalogsRequired(): boolean {

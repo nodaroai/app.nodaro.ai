@@ -2,6 +2,8 @@ import { Link } from "react-router-dom"
 import { Sparkles } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { FREE_TIER_CREDITS } from "@/lib/pricing-data"
+import { personalFreeCreditsShown } from "@/lib/surface-selectors"
+import { useBillingSurface } from "@/hooks/use-billing-surface"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { useT } from "@/lib/i18n"
@@ -21,13 +23,19 @@ import { useT } from "@/lib/i18n"
  * Shown only to a FREE account. A withheld account that already pays (payg or
  * a plan) is not in the free-grant business — the paid-account ruling of
  * `revokeSignupGrant` — and "with your first purchase" would be false there.
+ *
+ * Not at all on a deployment that gives no free credits of one's own
+ * (`personalFreeCreditsShown`): there is no grant to wait for, and nothing to
+ * buy with a first purchase.
  */
 export function FreeGrantWithheldBanner() {
   const t = useT()
   const { user } = useAuth()
   const { data: balance } = useUserCredits(user?.id)
+  const { surface } = useBillingSurface()
 
   if (balance?.freeGrantState !== "withheld" || balance.effectiveTier !== "free") return null
+  if (!personalFreeCreditsShown(surface.deploymentPayer)) return null
 
   // Withheld only because the browser could not be measured (a privacy
   // browser, an ad blocker, a slow phone): say what to do — a reload in a

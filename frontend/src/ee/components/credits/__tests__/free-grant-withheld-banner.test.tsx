@@ -1,11 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import React from "react"
 
-const { mockBalance } = vi.hoisted(() => ({
+const { mockBalance, billing } = vi.hoisted(() => ({
   mockBalance: vi.fn<() => { data: Record<string, unknown> | undefined }>(() => ({ data: undefined })),
+  billing: { surface: {} as { deploymentPayer?: boolean } },
 }))
+vi.mock("@/hooks/use-billing-surface", () => ({ useBillingSurface: () => ({ surface: billing.surface, isLoading: false }) }))
 vi.mock("@/ee/hooks/queries/use-credits-queries", () => ({
   useUserCredits: () => mockBalance(),
 }))
@@ -29,6 +31,11 @@ const withheldFree = { total: 0, freeGrantState: "withheld", effectiveTier: "fre
 beforeEach(() => {
   vi.clearAllMocks()
   mockBalance.mockReturnValue({ data: undefined })
+  billing.surface = {}
+})
+
+afterEach(() => {
+  delete window.__NODARO_RUNTIME__
 })
 
 describe("FreeGrantWithheldBanner", () => {
@@ -82,6 +89,25 @@ describe("FreeGrantWithheldBanner", () => {
     renderAt("/projects")
     expect(screen.queryByTestId("free-grant-browser-banner")).toBeNull()
     expect(screen.getByTestId("free-grant-withheld-banner")).toBeTruthy()
+  })
+
+  it("renders nothing, in either variant, on a deployment that gives no free credits of one's own", () => {
+    const variants = [withheldFree, { ...withheldFree, freeGrantNotice: "browser_unmeasured" }]
+    for (const data of variants) {
+      mockBalance.mockReturnValue({ data })
+
+      window.__NODARO_RUNTIME__ = { surface: { billing: { costTab: "inherit", sidebarCard: "inherit", selfServe: false } } }
+      const sellsNothing = renderAt("/projects")
+      expect(sellsNothing.container.innerHTML).toBe("")
+      sellsNothing.unmount()
+      delete window.__NODARO_RUNTIME__
+
+      billing.surface = { deploymentPayer: true }
+      const payer = renderAt("/projects")
+      expect(payer.container.innerHTML).toBe("")
+      payer.unmount()
+      billing.surface = {}
+    }
   })
 
   it("sends the user to the pricing page, where packs are bought — no Stripe step of its own", () => {

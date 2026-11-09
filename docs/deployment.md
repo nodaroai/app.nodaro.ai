@@ -1024,7 +1024,11 @@ optional; each array empty = "keep the default"):
   - `billing.selfServe`: `false` withholds self-serve purchase — the pricing
     page, buy-packs, `/billing` and every "buy credits" call to action — for a
     prepaid instance whose users must not buy the platform's credits with a
-    card (default `true`; a present `false` is never flipped open). A prepaid
+    card (default `true`; a present `false` is never flipped open). Such an
+    instance also makes no promise of free credits of one's own: the sign-in
+    page's free-credits line, the welcome offer and its banner, the banner
+    about withheld free credits, the pricing page's free tier and "Get Free
+    Credits" on an app's run screen (it reads "Get credits" instead). A prepaid
     billing instance renders a **Usage & Cost** sidebar entry (`/usage`) in
     their place.
   - `billing.payerAccount`: the **deployment payer** — one designated account
@@ -1036,8 +1040,11 @@ optional; each array empty = "keep the default"):
     Consequences when set: every reservation debits the payer account
     (ownership and galleries stay the requester's); requester tier gates run
     at the payer account's grade, with watermarking and daily caps off;
-    **every user's plan is the payer account's** (decided 2026-11-08). Every
-    user on the instance is stored on the free tier, so the plan the API
+    **every user's plan is the payer account's** (decided 2026-11-08), and
+    the instance promises nobody free credits of their own, on any screen
+    (the list under `billing.selfServe` above; the server already refuses a
+    signup grant here). Every user on the instance is stored on the free
+    tier, so the plan the API
     reports for a user (`tier` and `effectiveTier` on `GET /v1/user/credits`,
     `GET /v1/credits/balance`, `GET /v1/me`, `GET /v1/user/settings` and
     `GET /v1/billing/subscription`) is the payer account's grade instead. A
