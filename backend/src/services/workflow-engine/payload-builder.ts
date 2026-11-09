@@ -79,6 +79,7 @@ import {
 } from "@nodaro/shared/video"
 import {
   defaultImageModel,
+  gptImage26SentImages,
   IMAGE_MODEL_ROLE_DEFAULTS,
   isSeedanceDraftCapable,
   SEEDANCE_DRAFT_FINALIZE_PROVIDER,
@@ -255,7 +256,7 @@ import { getParameterPromptHint, isMinorAge, containsMinorAgeHint } from "@nodar
 import { hookPlateCaptionSegments, CAPTION_SEGMENT_LEVER_KEYS } from "@nodaro/prompts/presets"
 import { labelRefHintContext } from "./label-ref-hint-context.js"
 import type { CharacterDef, ConnectedReference, SceneData } from "@nodaro/shared/types"
-import { resolveEntityImageCreditIdentifier } from "../../lib/entity-credit-identifier.js"
+import { boardQuality, plainEntityCreditIdentifier, workflowEntityCreditIdentifier } from "../../lib/entity-credit-identifier.js"
 import { backendHybridRoles } from "../../lib/reference-format.js"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { config, llmMeteredPricing } from "../../lib/config.js"
@@ -3243,7 +3244,13 @@ export function buildPayload(
         resolution: data.resolution,
         quality: data.quality,
         renderingSpeed: data.renderingSpeed,
-        refCount: result.referenceImageUrls?.length ?? 0,
+        background: data.background,
+        // On GPT Image 2.6 the base of an edit is one more image sent.
+        refCount: gptImage26SentImages(
+          provider,
+          result.referenceImageUrls ?? [],
+          resolvedInputs.baseImageUrl || data.baseImageUrl,
+        ),
         swapToI2i: !lora,
         sourceImage: buildCtx?.sourceImage,
       })
@@ -3280,6 +3287,7 @@ export function buildPayload(
           aspectRatio: lora ? aspectRatioForLoraModel(imageParams.aspectRatio) : imageParams.aspectRatio,
           resolution: imageParams.resolution,
           quality: imageParams.quality,
+          background: imageParams.background,
           negativePrompt: result.nativeNegativePrompt,
           seed: data.seed,
           renderingSpeed: data.renderingSpeed,
@@ -3317,13 +3325,19 @@ export function buildPayload(
         for (const url of chainRefs) refUrls.push(url)
       }
 
+      // A quality left over from another model is dropped, as on the route.
+      const boardRunQuality = boardQuality(provider, data.quality)
+
       return {
         jobName: "reference-board",
         queueName: "video-generation",
         modelIdentifier: buildCreditModelIdentifier(
           provider,
-          data.quality as string | undefined,
+          boardRunQuality,
           data.resolution as string | undefined,
+          undefined,
+          undefined,
+          refUrls?.length ?? 0,
         ),
         payload: {
           jobId,
@@ -3332,7 +3346,7 @@ export function buildPayload(
           provider,
           aspectRatio: data.aspectRatio,
           resolution: data.resolution,
-          quality: data.quality,
+          quality: boardRunQuality,
           negativePrompt: data.negativePrompt,
           seed: data.seed,
           boardTemplate: data.boardTemplate,
@@ -3455,6 +3469,7 @@ export function buildPayload(
           aspectRatio: data.aspectRatio as string | undefined,
           resolution: data.resolution as string | undefined,
           quality: data.quality as string | undefined,
+          background: data.background as string | undefined,
         },
         { sourceImage: buildCtx?.sourceImage },
       )
@@ -3578,6 +3593,7 @@ export function buildPayload(
           aspectRatio: i2iParams.aspectRatio,
           resolution: i2iParams.resolution,
           quality: i2iParams.quality,
+          background: i2iParams.background,
           negativePrompt: i2iResult.nativeNegativePrompt,
           seed: data.seed,
           renderingSpeed: data.renderingSpeed,
@@ -3605,6 +3621,7 @@ export function buildPayload(
           aspectRatio: nodeAspectRatio(type, data.aspectRatio),
           resolution: data.resolution as string | undefined,
           quality: data.quality as string | undefined,
+          background: data.background as string | undefined,
         },
         { sourceImage: buildCtx?.sourceImage },
       )
@@ -3757,6 +3774,7 @@ export function buildPayload(
           aspectRatio: modParams.aspectRatio,
           resolution: modParams.resolution,
           quality: modParams.quality,
+          background: modParams.background,
           negativePrompt: i2iResult.nativeNegativePrompt,
           seed: data.seed,
           renderingSpeed: data.renderingSpeed,
@@ -7485,7 +7503,7 @@ export function buildPayload(
         // so Flux 2 character generations price the correct :Nref tier. Mirrors
         // generate-character.ts; the entity worker commits NON-metered, so the
         // reserved id IS the final charge (bare `provider` mischarged Flux 2).
-        modelIdentifier: resolveEntityImageCreditIdentifier(data),
+        modelIdentifier: workflowEntityCreditIdentifier(data),
         payload: {
           jobId,
           prompt: entityPrompt,
@@ -7533,7 +7551,7 @@ export function buildPayload(
       return {
         jobName: "generate-face",
         queueName: "video-generation",
-        modelIdentifier: provider,
+        modelIdentifier: plainEntityCreditIdentifier(provider, data.sourceImageUrl ? 1 : 0),
         payload: {
           jobId,
           prompt: entityPrompt,
@@ -7573,7 +7591,7 @@ export function buildPayload(
       return {
         jobName: "generate-object",
         queueName: "video-generation",
-        modelIdentifier: provider,
+        modelIdentifier: plainEntityCreditIdentifier(provider, data.sourceImageUrl ? 1 : 0),
         payload: {
           jobId,
           prompt: entityPrompt,
@@ -7602,7 +7620,7 @@ export function buildPayload(
       return {
         jobName: "generate-creature",
         queueName: "video-generation",
-        modelIdentifier: provider,
+        modelIdentifier: plainEntityCreditIdentifier(provider, data.sourceImageUrl ? 1 : 0),
         payload: {
           jobId,
           prompt: entityPrompt,
@@ -7632,7 +7650,7 @@ export function buildPayload(
         queueName: "video-generation",
         // Ref-aware identifier (see generate-character above) — `sourceImageUrl`
         // counts as one reference so Flux 2 locations hit the correct :Nref tier.
-        modelIdentifier: resolveEntityImageCreditIdentifier(data),
+        modelIdentifier: workflowEntityCreditIdentifier(data),
         payload: {
           jobId,
           prompt: entityPrompt,
@@ -7695,7 +7713,7 @@ export function buildPayload(
       return {
         jobName: "generate-image",
         queueName: "video-generation",
-        modelIdentifier: provider,
+        modelIdentifier: plainEntityCreditIdentifier(provider, sceneRefUrls.length),
         payload: {
           jobId,
           prompt: scenePrompt,

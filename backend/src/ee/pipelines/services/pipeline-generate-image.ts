@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
-import { defaultImageModel } from "@nodaro/shared/model-catalog"
+import { defaultImageModel, isGptImage26Tiered } from "@nodaro/shared/model-catalog"
+import { buildCreditModelIdentifier } from "@nodaro/shared/credits"
 
 export interface PipelineGenerateImageArgs {
   supabase: SupabaseClient
@@ -74,6 +75,12 @@ export async function pipelineGenerateImage(
   const modelIdentifier =
     args.modelIdentifier ?? args.userOverride ?? defaultImageModel("general", aspectRatio)
 
+  // The id the run is priced on: a model priced per input image (GPT Image 2.6)
+  // pays for the references it is sent; every other model is its own id.
+  const creditIdentifier = isGptImage26Tiered(modelIdentifier)
+    ? buildCreditModelIdentifier(modelIdentifier, undefined, undefined, undefined, undefined, referenceImageUrls?.length ?? 0)
+    : modelIdentifier
+
   return runPipelineWorkerJob({
     supabase,
     pipelineId,
@@ -95,7 +102,7 @@ export async function pipelineGenerateImage(
       aspectRatio,
       usageLogId,
     }),
-    modelIdentifier,
+    modelIdentifier: creditIdentifier,
     assetType: "image",
     pickOutputUrl: (output) => output.imageUrl as string | undefined,
     missingOutputError: "Image job completed without imageUrl in output_data",

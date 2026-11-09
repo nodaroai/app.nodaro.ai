@@ -1834,6 +1834,7 @@ export type GenerateImageData = PromptAffixFields & {
   negativePrompt: string
   resolution?: string
   quality?: string
+  background?: string
   seed?: number
   renderingSpeed?: string
   styleType?: string
@@ -1981,6 +1982,7 @@ export type ImageToImageData = {
   aspectRatio?: string
   resolution?: string
   quality?: string
+  background?: string
   negativePrompt?: string
   seed?: number
   renderingSpeed?: string
@@ -2018,6 +2020,7 @@ export type ModifyImageData = PromptAffixFields & {
   aspectRatio?: string
   resolution?: string
   quality?: string
+  background?: string
   negativePrompt?: string
   seed?: number
   renderingSpeed?: string

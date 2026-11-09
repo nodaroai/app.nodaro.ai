@@ -6,7 +6,8 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { resolveTemplate, applyTemplate } from "../config/prompt-templates.js"
-import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
+import { plainEntityCheckIdentifier, plainEntityCreditIdentifier } from "../lib/entity-credit-identifier.js"
+import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { buildFaceTemplateInputs } from "@nodaro/prompts/doctrine"
@@ -28,7 +29,7 @@ const generateFaceBody = z.object({
 })
 
 export async function generateFaceRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-face", { preHandler: creditGuard((req) => extractProvider(req.body, IMAGE_MODEL_ROLE_DEFAULTS.character)) }, async (req, reply) => {
+  app.post("/v1/generate-face", { preHandler: creditGuard((req) => plainEntityCheckIdentifier(req.body, IMAGE_MODEL_ROLE_DEFAULTS.character)) }, async (req, reply) => {
     const parsed = generateFaceBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -45,7 +46,7 @@ export async function generateFaceRoutes(app: FastifyInstance) {
       })
     }
 
-    const modelIdentifier = parsed.data.provider
+    const modelIdentifier = plainEntityCreditIdentifier(parsed.data.provider, sourceImageUrl ? 1 : 0)
 
     // Use client-provided prompt (which includes flow+user template resolution)
     // or fall back to server-side template resolution (for direct API calls)

@@ -63,6 +63,7 @@ export interface ProviderSafetyView {
 
 function valuesOf(lever: SafetyLever): readonly SafetyValue[] {
   if (lever.kind === "boolean") return [lever.filterOnValue, !lever.filterOnValue]
+  if (lever.kind === "choice") return lever.values
   const out: number[] = []
   for (let v = lever.min; v <= lever.max; v += 1) out.push(v)
   return out

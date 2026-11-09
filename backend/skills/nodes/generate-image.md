@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-10-24T23:37:37.851Z
-generated_from: db68a9ee4
+generated_at: 2026-11-09T10:40:11.443Z
+generated_from: ab64e4563
 ---
 
 # generate-image
@@ -29,6 +29,7 @@ generated_from: db68a9ee4
 - `providers?: readonly ImageProvider[]`
 - `resolution?: string`
 - `quality?: string`
+- `background?: string`
 - `seed?: number`
 - `renderingSpeed?: string`
 - `styleType?: string`
@@ -90,6 +91,7 @@ generated_from: db68a9ee4
 - `models`
 - `resolution`
 - `quality`
+- `background`
 - `aspect_ratio`
 - `negative_prompt`
 - `reference_image_urls`

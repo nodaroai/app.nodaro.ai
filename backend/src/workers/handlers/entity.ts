@@ -217,6 +217,7 @@ function makeEntityImageHandler(
         providerUsed: result.providerUsed,
         cost: result.cost,
         displayCost: result.displayCost,
+        ...(result.autoQualityKieCredits !== undefined && { autoQualityKieCredits: result.autoQualityKieCredits }),
       },
       afterUpload: () => setJobProgress(job, ctx.jobId, 100),
     })

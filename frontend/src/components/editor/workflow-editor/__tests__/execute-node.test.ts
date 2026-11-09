@@ -1029,6 +1029,16 @@ describe("image-to-image", () => {
     expect(mockToastError).toHaveBeenCalled()
   })
 
+  it("passes the background setting to runImageToImage", async () => {
+    mockResolveNodeInputs.mockReturnValue({ imageUrl: "http://img.png" })
+    mockRunImageToImage.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("image-to-image", { prompt: "make it blue", provider: "gpt-image-2-6-flare-i2i", background: "transparent" }),
+      makeCtx(),
+    )
+    expect(mockRunImageToImage.mock.calls[0]![6]).toMatchObject({ background: "transparent" })
+  })
+
   it("calls runImageToImage with correct args", async () => {
     mockResolveNodeInputs.mockReturnValue({
       imageUrl: "http://img.png",

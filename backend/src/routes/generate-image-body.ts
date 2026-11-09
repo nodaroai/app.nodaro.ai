@@ -9,7 +9,7 @@ import { clientOriginSchema } from "../lib/client-origin-schema.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { imageBatchFields, imageBatchIssues } from "../lib/image-batch.js"
 import { presetIdSchema, presetVariablesSchema } from "../lib/presets/generate-image-preset-hook.js"
-import { IMAGE_GEN_PROVIDERS, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, IMAGE_RENDERING_SPEED_VALUES, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
+import { IMAGE_GEN_PROVIDERS, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, IMAGE_BACKGROUND_VALUES, IMAGE_RENDERING_SPEED_VALUES, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
 import { subjectSchema } from "../lib/subject-schema.js"
@@ -163,6 +163,8 @@ export const generateImageBody = z.object({
   aspectRatio: z.enum(IMAGE_ASPECT_RATIO_VALUES).optional(),
   resolution: z.enum(IMAGE_RESOLUTION_VALUES).optional(),
   quality: z.enum(IMAGE_QUALITY_VALUES).optional(),
+  /** Image background, on the models that take one (`auto`, `opaque`, `transparent`). */
+  background: z.enum(IMAGE_BACKGROUND_VALUES).optional(),
   negativePrompt: z.string().max(5000).optional(),
   seed: z.number().int().min(0).optional(),
   renderingSpeed: z.enum(IMAGE_RENDERING_SPEED_VALUES).optional(),

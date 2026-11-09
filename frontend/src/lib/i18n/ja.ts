@@ -5456,6 +5456,7 @@ export const ja: ChromeDict = {
   "field.styleType": "スタイルの種類",
   "field.resolution": "解像度",
   "field.quality": "品質",
+  "field.background": "背景",
   "field.renderingSpeed": "レンダリング速度",
   "field.strength": "強度",
   "field.guidanceScale": "ガイダンススケール",

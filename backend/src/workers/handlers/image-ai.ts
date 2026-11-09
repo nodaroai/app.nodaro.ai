@@ -27,7 +27,7 @@ export const TEXT_TO_IMAGE_MODEL_OF_SIBLING: Readonly<Record<string, string>> = 
 )
 
 const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, ctx) {
-  const { prompt, referenceImageUrls, provider, model, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, styleType, expandPrompt, extraParams: upstreamExtras, baseImageUrl, maskUrl, strength, guidanceScale } = job.data as {
+  const { prompt, referenceImageUrls, provider, model, aspectRatio, resolution, quality, background, negativePrompt, seed, renderingSpeed, styleType, expandPrompt, extraParams: upstreamExtras, baseImageUrl, maskUrl, strength, guidanceScale } = job.data as {
     jobId: string
     prompt: string
     referenceImageUrls?: string[]
@@ -41,6 +41,7 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
     aspectRatio?: string
     resolution?: string
     quality?: string
+    background?: string
     negativePrompt?: string
     seed?: number
     renderingSpeed?: string
@@ -80,6 +81,7 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
     ...(aspectRatio && { aspect_ratio: aspectRatio }),
     ...(resolution && { resolution }),
     ...(quality && { quality }),
+    ...(background && { background }),
     ...(negativePrompt && { negative_prompt: negativePrompt }),
     ...(seed != null && { seed }),
     ...(renderingSpeed && { rendering_speed: renderingSpeed }),
@@ -299,7 +301,7 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
 }
 
 const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx) {
-  const { imageUrl, referenceImageUrls, prompt, provider, resolution, quality, strength, aspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale, maskUrl, attachToCharacterId, attachToColumn, attachName, description, realLifeRefs } = job.data as {
+  const { imageUrl, referenceImageUrls, prompt, provider, resolution, quality, background, strength, aspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale, maskUrl, attachToCharacterId, attachToColumn, attachName, description, realLifeRefs } = job.data as {
     jobId: string
     imageUrl: string
     referenceImageUrls?: string[]
@@ -307,6 +309,7 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
     provider?: string
     resolution?: string
     quality?: string
+    background?: string
     strength?: number
     aspectRatio?: string
     negativePrompt?: string
@@ -336,6 +339,7 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
     ...(aspectRatio && { aspect_ratio: aspectRatio }),
     ...(resolution && { resolution }),
     ...(quality && { quality }),
+    ...(background && { background }),
     ...(strength != null && { strength }),
     ...(negativePrompt && { negative_prompt: negativePrompt }),
     ...(seed != null && { seed }),

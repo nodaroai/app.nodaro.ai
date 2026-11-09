@@ -1926,12 +1926,13 @@ function executeNodeCore(
           imgData.generatedImageUrl
         : undefined);
     const inpaint =
-      effectiveBase || imgData.maskUrl || imgData.strength != null || imgData.guidanceScale != null
+      effectiveBase || imgData.maskUrl || imgData.strength != null || imgData.guidanceScale != null || imgData.background
         ? {
             baseImageUrl: effectiveBase,
             maskUrl: imgData.maskUrl,
             strength: imgData.strength,
             guidanceScale: imgData.guidanceScale,
+            background: imgData.background,
           }
         : undefined;
     return runImageGeneration(
@@ -2233,6 +2234,7 @@ function executeNodeCore(
         aspectRatio: i2iData.aspectRatio,
         resolution: i2iData.resolution,
         quality: i2iData.quality,
+        background: i2iData.background,
         negativePrompt: result.nativeNegativePrompt,
         seed: i2iData.seed,
         renderingSpeed: i2iData.renderingSpeed,
@@ -2384,6 +2386,7 @@ function executeNodeCore(
         aspectRatio: nodeAspectRatio("modify-image", modData.aspectRatio),
         resolution: modData.resolution,
         quality: modData.quality,
+        background: modData.background,
         negativePrompt: result.nativeNegativePrompt,
         seed: modData.seed,
         renderingSpeed: modData.renderingSpeed,

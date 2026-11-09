@@ -32,7 +32,7 @@ import {
 export { PROVIDER_SAFETY_AUDIT_TARGET }
 
 const putBody = z.strictObject({
-  overrides: z.record(z.string().min(1), z.record(z.string().min(1), z.union([z.boolean(), z.number()]))),
+  overrides: z.record(z.string().min(1), z.record(z.string().min(1), z.union([z.boolean(), z.number(), z.string().min(1)]))),
 })
 
 export async function adminProviderSafetyRoutes(app: FastifyInstance) {

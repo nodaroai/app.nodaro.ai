@@ -7,7 +7,8 @@ import { insertJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
+import { plainEntityCheckIdentifier, plainEntityCreditIdentifier } from "../lib/entity-credit-identifier.js"
+import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
@@ -83,15 +84,15 @@ export async function generateObjectRoutes(app: FastifyInstance) {
       // when count=10. computeCredits returns BASE (pre-markup) credits;
       // markup is applied inside creditGuardImpl so the same final number
       // is both checked AND reserved.
-      preHandler: creditGuard((req: FastifyRequest) => extractProvider(req.body, IMAGE_MODEL_ROLE_DEFAULTS.general), {
+      preHandler: creditGuard((req: FastifyRequest) => plainEntityCheckIdentifier(req.body, IMAGE_MODEL_ROLE_DEFAULTS.general), {
         computeCredits: async (body) => {
           const count = extractCount(body)
-          const provider = extractProvider(body, IMAGE_MODEL_ROLE_DEFAULTS.general)
+          const identifier = plainEntityCheckIdentifier(body, IMAGE_MODEL_ROLE_DEFAULTS.general)
           // Dynamic import: getModelCreditBaseCost lives in ee/ and we keep
           // core free of static ee/ imports. Only reached in cloud edition
           // (creditGuard short-circuits to a no-op otherwise).
           const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
-          const pricing = await getModelCreditBaseCost(provider)
+          const pricing = await getModelCreditBaseCost(identifier)
           return pricing.creditCost * count
         },
       }),
@@ -140,7 +141,7 @@ export async function generateObjectRoutes(app: FastifyInstance) {
         }
       }
 
-      const modelIdentifier = parsed.data.provider
+      const modelIdentifier = plainEntityCreditIdentifier(parsed.data.provider, sourceImageUrl ? 1 : 0)
 
       const prompt = buildObjectPrompt({ name, description, category, style })
 

@@ -2,6 +2,8 @@ import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from 
 import type { SourceNodeInfo } from "./types"
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
+import { gptImage26EstimatedImages, isGptImage26Tiered } from "@nodaro/shared/model-catalog"
+import { countImageInputEdges } from "@nodaro/shared/workflow"
 import {
   buildCreditModelIdentifier as sharedBuildCreditModelIdentifier,
   buildVideoCreditModelIdentifier,
@@ -773,19 +775,25 @@ export function getModelIdentifier(
     )
   }
 
-  return buildCreditModelIdentifier(provider, data)
+  return buildCreditModelIdentifier(
+    provider,
+    data,
+    edges && isGptImage26Tiered(provider) ? countImageInputEdges(edges, node.id) : 0,
+  )
 }
 
 /**
  * Build composite credit model identifier from provider + node data.
  * Extracts quality/resolution/renderingSpeed from data and delegates to the shared function.
+ * `wiredImageRefs`: reference images wired into the node, for a model priced per input image.
  */
-export function buildCreditModelIdentifier(provider: string, data: Record<string, unknown>): string {
+export function buildCreditModelIdentifier(provider: string, data: Record<string, unknown>, wiredImageRefs = 0): string {
   // flux-2-max bills per reference image — the UI cost preview pulls the
   // ref count from `data.referenceImageUrls` (panel-local mirror of the wired
   // refs) so the displayed credit number matches what the route will charge.
   const refs = data.referenceImageUrls as string[] | undefined
-  const refCount = refs?.length ?? 0
+  // GPT Image 2.6 counts every image the run will send.
+  const refCount = isGptImage26Tiered(provider) ? gptImage26EstimatedImages(provider, data, wiredImageRefs) : (refs?.length ?? 0)
   // Topaz bills on the upscale FACTOR. The legacy `targetResolution` still on
   // stored node data is mapped forward by resolveTopazUpscale — the same
   // authority the route, the estimator and the worker use — so the credit badge

@@ -39,6 +39,7 @@ import { useInlinePromptActive } from "./inline-node-prompt/use-inline-prompt-ac
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
+import { useWiredImageRefCount } from "@/hooks/use-wired-image-ref-count"
 
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useProvidersCreditsSum } from "@/ee/hooks/use-providers-credits-sum"
@@ -126,9 +127,11 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   // an image is present + handle bounds re-measure) is owned by BaseNode —
   // see the unified sizing effect in `base-node.tsx`. No per-node sizing
   // logic needed here.
+  const wiredImageRefs = useWiredImageRefCount(id)
   const creditModelId = buildCreditModelIdentifier(
     runData.provider ?? IMAGE_MODEL_ROLE_DEFAULTS.general,
     runData as unknown as Record<string, unknown>,
+    wiredImageRefs,
   )
   // Single-provider primary cost (also primes the cache). Multi-provider total
   // is the SUM across all selected providers — `RunNodeButton` will further

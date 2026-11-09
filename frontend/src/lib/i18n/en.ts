@@ -5540,6 +5540,7 @@ export const en = {
   "field.styleType": "Style Type",
   "field.resolution": "Resolution",
   "field.quality": "Quality",
+  "field.background": "Background",
   "field.renderingSpeed": "Rendering Speed",
   "field.strength": "Strength",
   "field.guidanceScale": "Guidance Scale",

@@ -15,7 +15,7 @@ import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.
 import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { llmComplete } from "../lib/llm-client.js"
-import { MODIFY_IMAGE_PROVIDERS, IMAGE_ASPECT_RATIO_VALUES, IMAGE_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, IMAGE_RENDERING_SPEED_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
+import { MODIFY_IMAGE_PROVIDERS, IMAGE_ASPECT_RATIO_VALUES, IMAGE_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, IMAGE_BACKGROUND_VALUES, IMAGE_RENDERING_SPEED_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
 import { IMAGE_TO_IMAGE_ATTACH_COLUMNS } from "@nodaro/shared/entities"
 import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
@@ -42,6 +42,8 @@ export const imageToImageBody = z.object({
   referenceImageUrls: z.array(safeUrlSchema).max(13).optional(),
   resolution: z.enum(IMAGE_RESOLUTION_VALUES).optional(),
   quality: z.enum(IMAGE_QUALITY_VALUES).optional(),
+  /** Image background, on the models that take one (`auto`, `opaque`, `transparent`). */
+  background: z.enum(IMAGE_BACKGROUND_VALUES).optional(),
   strength: z.number().min(0).max(1).optional(),
   // The SAME shared vocabulary /v1/generate-image and /v1/edit-image declare
   // (`IMAGE_ASPECT_RATIO_VALUES`) — one tuple, not three drifting literal
@@ -115,7 +117,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
     // `applySnappedLevers` below rewrites them on `parsed.data`, so these locals
     // are the caller's PRE-snap values and are only ever valid as INPUT to the
     // normalizer. Everything downstream reads `parsed.data.*`.
-    const { imageUrl, prompt: rawPrompt, provider, referenceImageUrls, resolution: rawResolution, quality: rawQuality, strength, aspectRatio: rawAspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale, maskUrl } = parsed.data
+    const { imageUrl, prompt: rawPrompt, provider, referenceImageUrls, resolution: rawResolution, quality: rawQuality, background: rawBackground, strength, aspectRatio: rawAspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale, maskUrl } = parsed.data
     let prompt = rawPrompt
     const userId = req.userId
 
@@ -143,6 +145,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       quality: rawQuality,
       resolution: rawResolution,
       renderingSpeed,
+      background: rawBackground,
       refCount: i2iRefCount,
       swapToI2i: false,
       sourceImage,
@@ -304,6 +307,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       provider,
       resolution: parsed.data.resolution,
       quality: parsed.data.quality,
+      background: parsed.data.background,
       strength,
       aspectRatio: parsed.data.aspectRatio,
       negativePrompt: finalNegativePrompt,

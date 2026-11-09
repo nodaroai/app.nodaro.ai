@@ -590,3 +590,15 @@ describe("POST /v1/generate-creature — multi-candidate + auto-attach (Phase D5
     })
   })
 })
+
+describe("POST /v1/generate-creature — GPT Image 2.6's price", () => {
+  it("a source image is priced as the edit it runs as", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-creature",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Crimson Dragon", species: "dragon", provider: "gpt-image-2-6-flare", sourceImageUrl: "https://cdn.example.com/a.png" },
+    })
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
+  })
+})

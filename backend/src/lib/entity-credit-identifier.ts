@@ -1,6 +1,12 @@
-import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
+import { buildCreditModelIdentifier, resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { extractProvider } from "./request-helpers.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
+import { IMAGE_MODEL_ROLE_DEFAULTS, getModel, isGptImage26Tiered } from "@nodaro/shared/model-catalog"
+
+/** The quality a Reference Board runs at: dropped when its model does not offer it. */
+export function boardQuality(provider: unknown, quality: unknown): string | undefined {
+  if (typeof provider !== "string" || typeof quality !== "string") return undefined
+  return getModel(provider)?.qualities?.includes(quality) ? quality : undefined
+}
 
 /**
  * Quality-aware credit model identifier for the entity image routes
@@ -66,4 +72,38 @@ export function resolveEntityImageParams(
 
 export function resolveEntityImageCreditIdentifier(body: unknown, refCountOverride?: number): string {
   return resolveEntityImageParams(body, refCountOverride).identifier
+}
+
+/**
+ * The credit id of an image route or node priced on the plain model (face,
+ * object, creature, their asset routes, surround fill, a Scene). GPT Image 2.6
+ * is priced by quality, size and input images, so what such a run sends sets its
+ * id: these send no quality or size (medium, 1K) and `inputImages` pictures.
+ * Every other model keeps its plain id.
+ */
+export function plainEntityCreditIdentifier(provider: string, inputImages: number): string {
+  if (!isGptImage26Tiered(provider)) return provider
+  return buildCreditModelIdentifier(provider, undefined, undefined, undefined, undefined, inputImages)
+}
+
+/** The same id at a route's CHECK, where the raw body is all that is known. */
+export function plainEntityCheckIdentifier(body: unknown, defaultProvider: string): string {
+  const source = body && typeof body === "object" ? (body as Record<string, unknown>).sourceImageUrl : undefined
+  return plainEntityCreditIdentifier(
+    extractProvider(body, defaultProvider),
+    typeof source === "string" && source.length > 0 ? 1 : 0,
+  )
+}
+
+/**
+ * The credit id of a workflow Character or Location node. The job it queues
+ * carries no quality or size, so GPT Image 2.6 is priced on what it really
+ * sends: medium, 1K and its source image. Every other model keeps the id built
+ * from the node's own settings.
+ */
+export function workflowEntityCreditIdentifier(data: unknown): string {
+  const provider = extractProvider(data, IMAGE_MODEL_ROLE_DEFAULTS.character)
+  return isGptImage26Tiered(provider)
+    ? plainEntityCheckIdentifier(data, IMAGE_MODEL_ROLE_DEFAULTS.character)
+    : resolveEntityImageCreditIdentifier(data)
 }

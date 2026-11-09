@@ -25,6 +25,7 @@ import { prefetchModelCredits } from "@/ee/hooks/use-model-credits"
 import {
   IMAGE_RESOLUTION_OPTIONS,
   IMAGE_QUALITY_OPTIONS,
+  defaultQualityFor,
   getAspectRatiosForModel,
   defaultResolutionFor,
   REFERENCE_BOARD_PROVIDER_OPTIONS,
@@ -152,6 +153,7 @@ function ReferenceBoardConfigImpl({
   const aspectRatioOptions = getAspectRatiosForModel(currentProvider)
   const resolutionOptions = IMAGE_RESOLUTION_OPTIONS[currentProvider]
   const qualityOptions = IMAGE_QUALITY_OPTIONS[currentProvider]
+  const qualityDefault = defaultQualityFor(currentProvider)
 
   // ── Provider-aware fail-safe useEffect (CLAUDE.md Provider Enum Sync step 12b) ──
   // When provider changes, snap stale aspectRatio / resolution / quality values
@@ -181,7 +183,7 @@ function ReferenceBoardConfigImpl({
     // Quality: snap to first valid or clear.
     if (qualityOptions) {
       if (data.quality && !qualityOptions.some((o) => o.value === data.quality)) {
-        updates.quality = qualityOptions[0]?.value
+        updates.quality = qualityDefault ?? qualityOptions[0]?.value
       }
     } else if (data.quality !== undefined) {
       updates.quality = undefined
@@ -434,7 +436,7 @@ function ReferenceBoardConfigImpl({
               onMapField={onMapField}
             >
               <Select
-                value={data.quality || qualityOptions[0]?.value}
+                value={data.quality || qualityDefault || qualityOptions[0]?.value}
                 onValueChange={(v) => onUpdate({ quality: v })}
               >
                 <SelectTrigger aria-label={t("field.quality")}>

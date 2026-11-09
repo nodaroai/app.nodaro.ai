@@ -68,6 +68,8 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Flux 2 Pro | Black Forest Labs | Standard | 15<!-- credits: flux --> | t2i | Flux 2 Pro text-to-image. Strong realism, fast. Resolution lever to 2K. |
 | Flux 2 Pro (I2I) | Black Forest Labs | Standard | 15<!-- credits: flux-pro-i2i --> | i2i | Image-to-image with Flux Pro. Cheaper than Flex variant, good general edits. |
 | Flux Kontext Pro | Black Forest Labs | Standard | 15<!-- credits: flux-kontext --> | t2i, edit | Context-aware editing and style transfer. Strong at preserving subject identity through edits. |
+| GPT Image 2.6 Economy | OpenAI | Standard | 15<!-- credits: gpt-image-2-6-economy --> | t2i | The same GPT Image 2.6 at a flat low price, 1K only - pick it for volume. |
+| GPT Image 2.6 Economy (I2I) | OpenAI | Standard | 15<!-- credits: gpt-image-2-6-economy-i2i --> | i2i | Flat-price GPT Image 2.6 edits, 1K only, up to 16 input images - pick it for volume. |
 | Qwen Edit | Alibaba | Standard | 15<!-- credits: qwen-edit --> | edit | Qwen image edit endpoint with native negative prompt. |
 | Seedream 5 Lite | Bytedance | Standard | 16<!-- credits: seedream-5-lite --> | t2i | Newer Seedream 5 Lite — instruction-based generation, visual reasoning. |
 | Seedream 5 Lite (I2I) | Bytedance | Standard | 16<!-- credits: seedream-5-lite-i2i --> | i2i | Image-to-image with Seedream 5 Lite. |
@@ -77,9 +79,13 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | GPT Image 2.5 Sunburst (I2I) | OpenAI | Standard | 17<!-- credits: gpt-image-2-5-sunburst-i2i --> | i2i | Precision GPT Image 2.5 edits (up to 16 source images) - the most controlled edit in the GPT family, at the cost of a longer run. |
 | Ideogram V3 | Ideogram | Standard | 20<!-- credits: ideogram-v3 --> | t2i | Strong typography and stylized illustration. Speed/quality tiered (TURBO/BALANCED/QUALITY). |
 | Seedream 5 Pro | Bytedance | Standard | 20<!-- credits: seedream-5-pro --> | t2i | Flagship Seedream 5 Pro — strongest instruction following and visual reasoning. Basic = 1K, high = 2K. |
-| ⭐ GPT Image 2 | OpenAI | Premium | 21<!-- credits: gpt-image-2 --> | t2i | Next-gen GPT Image — broader aspect ratios, resolution-based pricing (1K/2K/4K). |
-| GPT Image 2 (I2I) | OpenAI | Premium | 21<!-- credits: gpt-image-2-i2i --> | i2i | Image-to-image with GPT Image 2. |
-| Seedream 5 Pro (I2I) | Bytedance | Premium | 21<!-- credits: seedream-5-pro-i2i --> | i2i | Image-to-image with Seedream 5 Pro — multi-reference instruction edits. Basic = 1K, high = 2K. |
+| ⭐ GPT Image 2 | OpenAI | Standard | 21<!-- credits: gpt-image-2 --> | t2i | Next-gen GPT Image — broader aspect ratios, resolution-based pricing (1K/2K/4K). |
+| GPT Image 2 (I2I) | OpenAI | Standard | 21<!-- credits: gpt-image-2-i2i --> | i2i | Image-to-image with GPT Image 2. |
+| Seedream 5 Pro (I2I) | Bytedance | Standard | 21<!-- credits: seedream-5-pro-i2i --> | i2i | Image-to-image with Seedream 5 Pro — multi-reference instruction edits. Basic = 1K, high = 2K. |
+| GPT Image 2.6 Flare | OpenAI | Premium | 22<!-- credits: gpt-image-2-6-flare --> | t2i | Fast GPT Image 2.6 - pick it for speed: posters, product shots and quick iteration, with stronger layouts. Up to 4K, quality from low to max or auto (priced up to the max), a transparent background at 1K. |
+| GPT Image 2.6 Flare (I2I) | OpenAI | Premium | 22<!-- credits: gpt-image-2-6-flare-i2i --> | i2i | Fast GPT Image 2.6 edits - up to 16 input images, priced per image. Pick it while iterating. |
+| GPT Image 2.6 Sunburst | OpenAI | Premium | 22<!-- credits: gpt-image-2-6-sunburst --> | t2i | Precision GPT Image 2.6 - pick it when every detail counts: the strongest consistency across edits and the finest detail. Up to 4K, quality from low to max or auto (priced up to the max), a transparent background at 1K. |
+| GPT Image 2.6 Sunburst (I2I) | OpenAI | Premium | 22<!-- credits: gpt-image-2-6-sunburst-i2i --> | i2i | Precision GPT Image 2.6 edits - up to 16 input images, priced per image. Pick it for finished, detail-critical edits. |
 | Imagen 4 | Google | Premium | 22<!-- credits: imagen4 --> | t2i | Google's Imagen 4 — strong photographic quality and prompt fidelity. |
 | Nano Banana 2 | Google | Premium | 22<!-- credits: nano-banana-2 --> | t2i, i2i | Newer Nano Banana with native resolution control (1K/2K/4K) and Google Search context. |
 | Wan 2.7 | Alibaba | Premium | 22<!-- credits: wan-2.7 --> | t2i | Wan 2.7 text-to-image — 1K/2K/4K, up to 9 optional style/character reference images. |

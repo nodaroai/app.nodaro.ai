@@ -13,6 +13,7 @@ import {
   getVideoResolutionOptions,
   IMAGE_QUALITY_OPTIONS,
   IMAGE_RESOLUTION_OPTIONS,
+  defaultQualityFor,
 } from "@/components/editor/config-panels/model-options"
 // Single source of truth for the duration-slider cap — defined once in the
 // config panel (frontend/src/components/editor/config-panels/video-configs.tsx)
@@ -307,6 +308,7 @@ function OptionSelect({
   allowedValues,
   readOnly,
   autoReset,
+  resetTo,
   showDesc,
 }: {
   label: string
@@ -316,6 +318,7 @@ function OptionSelect({
   allowedValues?: Array<string | number | boolean>
   readOnly?: boolean
   autoReset?: boolean
+  resetTo?: string
   showDesc?: boolean
 }) {
   const filtered = allowedValues
@@ -324,7 +327,7 @@ function OptionSelect({
       )
     : options
 
-  useAutoReset(value, filtered, onChange, autoReset ?? false)
+  useAutoReset(value, filtered, onChange, autoReset ?? false, resetTo)
   const t = useT()
 
   const strValue = String(value ?? "")
@@ -503,6 +506,7 @@ function renderGenerateImage(
           allowedValues={allowedValues}
           readOnly={readOnly}
           autoReset
+          resetTo={defaultQualityFor(provider)}
         />
       )
     }

@@ -92,6 +92,7 @@ export function projectModel(m: ModelCatalogEntry, prices: ChargedPrices, opts: 
   if (m.aspectRatios?.length) out.aspectRatios = m.aspectRatios
   if (m.resolutions?.length) out.resolutions = m.resolutions
   if (m.qualities?.length) out.qualities = m.qualities
+  if (m.backgrounds?.length) out.backgrounds = m.backgrounds
   if (m.durations?.length) out.durations = m.durations
   // What an unset `duration` renders AND is charged at (the catalog funnel).
   if (m.defaultDuration !== undefined) out.defaultDuration = m.defaultDuration

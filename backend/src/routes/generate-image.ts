@@ -104,7 +104,7 @@ openApiRegistry.registerPath({
               jobId: z.string().uuid(),
               /** Present only when a catalog-invalid parameter was corrected. */
               adjustments: z.array(z.object({
-                field: z.enum(["aspectRatio", "resolution", "quality", "duration"]),
+                field: z.enum(["aspectRatio", "resolution", "quality", "duration", "background"]),
                 from: z.union([z.string(), z.number()]),
                 to: z.union([z.string(), z.number()]).optional(),
                 reason: z.string(),

@@ -114,8 +114,9 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "reasoningEffort": { valueType: "string", fixed: false, values: ["high","low","max","medium","none","xhigh"] },
   },
   "reference-board": {
-    "aspectRatio": { valueType: "string", fixed: false, values: ["16:27","16:9","1:1","21:9","27:16","2:3","3:2","3:4","4:3","4:5","5:4","8:9","9:16","9:8","auto"] },
-    "provider": { valueType: "string", fixed: true, values: ["gpt-image-2","gpt-image-2-5-flare","gpt-image-2-5-sunburst","nano-banana-pro"] },
+    "aspectRatio": { valueType: "string", fixed: false, values: ["16:27","16:9","1:1","1:2","1:3","21:9","27:16","2:1","2:3","3:1","3:2","3:4","4:3","4:5","5:4","8:9","9:16","9:21","9:8","auto"] },
+    "provider": { valueType: "string", fixed: true, values: ["gpt-image-2","gpt-image-2-5-flare","gpt-image-2-5-sunburst","gpt-image-2-6-flare","gpt-image-2-6-sunburst","nano-banana-pro"] },
+    "quality": { valueType: "string", fixed: false, values: ["auto","high","low","max","medium","xhigh"] },
     "resolution": { valueType: "string", fixed: false, values: ["1K","2K","4K"] },
   },
   "reference-sheet": {

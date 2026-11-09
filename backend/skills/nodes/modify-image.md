@@ -1,7 +1,7 @@
 ---
 node_type: modify-image
-generated_at: 2026-10-24T23:37:37.868Z
-generated_from: db68a9ee4
+generated_at: 2026-11-09T10:40:11.453Z
+generated_from: ab64e4563
 ---
 
 # Modify Image
@@ -27,6 +27,7 @@ generated_from: db68a9ee4
 - `aspectRatio?: string`
 - `resolution?: string`
 - `quality?: string`
+- `background?: string`
 - `negativePrompt?: string`
 - `seed?: number`
 - `renderingSpeed?: string`
@@ -85,6 +86,7 @@ Provide ONE of `image_url` (any publicly fetchable HTTPS URL) or `image_asset_id
 - `model`
 - `resolution`
 - `quality`
+- `background`
 - `aspect_ratio`
 - `negative_prompt`
 - `structured`

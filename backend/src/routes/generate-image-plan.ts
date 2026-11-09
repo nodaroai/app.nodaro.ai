@@ -16,7 +16,7 @@ import { aspectRatioForLoraModel, imageJobPhotoUrl } from "../lib/image-auto-asp
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_PROMPT_MAX } from "@nodaro/shared/models"
 import { normalizedImageGenModelId, resolveNormalizedImageGen } from "@nodaro/shared/credits"
-import { defaultImageModel, type ModelInputAdjustment } from "@nodaro/shared/model-catalog"
+import { defaultImageModel, gptImage26SentImages, type ModelInputAdjustment } from "@nodaro/shared/model-catalog"
 import { assembleImageInput, type AssembleImageInput } from "@nodaro/prompts/assembly"
 import { REFERENCE_RULES, REFERENCE_RULES_MULTI_PERSON } from "@nodaro/prompts/doctrine"
 import { backendHybridRoles } from "../lib/reference-format.js"
@@ -153,6 +153,14 @@ export function buildAssembleInput(
  * preHandler on a pricing estimate.
  */
 export function assembledRefCountForPricing(
+  body: Parameters<typeof assembledRefsForPricing>[0],
+  userDirection: ResolvedUserDirection | undefined,
+): number {
+  return assembledRefsForPricing(body, userDirection).length
+}
+
+/** The references themselves, for a price that also counts a base image they may already hold. */
+export function assembledRefsForPricing(
   body: {
     prompt?: string
     provider?: string
@@ -166,12 +174,12 @@ export function assembledRefCountForPricing(
     negativePrompt?: string
   },
   userDirection: ResolvedUserDirection | undefined,
-): number {
+): readonly string[] {
   try {
     const result = assembleImageInput(buildAssembleInput(body, false, userDirection))
-    return result.referenceImageUrls?.length ?? 0
+    return result.referenceImageUrls ?? []
   } catch {
-    return body.referenceImageUrls?.length ?? 0
+    return body.referenceImageUrls ?? []
   }
 }
 
@@ -254,7 +262,7 @@ export async function planImageJob(args: {
   // `applySnappedLevers` below rewrites them on `data`, so these locals are the
   // caller's PRE-snap values and are only ever valid as INPUT to the
   // normalizer. Everything downstream reads `data.*`.
-  const { provider, aspectRatio: rawAspectRatio, resolution: rawResolution, quality: rawQuality, characterDescriptions, seed, renderingSpeed, styleType, expandPrompt, baseImageUrl, maskUrl, strength, guidanceScale } = data
+  const { provider, aspectRatio: rawAspectRatio, resolution: rawResolution, quality: rawQuality, background: rawBackground, characterDescriptions, seed, renderingSpeed, styleType, expandPrompt, baseImageUrl, maskUrl, strength, guidanceScale } = data
   // Reference URLs to use downstream. Two views, intentionally distinct:
   //   • `queueReferenceImageUrls` — the value sent to the worker + recorded in
   //     the job (see `AssembledImageRequest`).
@@ -264,6 +272,9 @@ export async function planImageJob(args: {
   //     billed count always equals the count actually sent to the provider.
   const { queueReferenceImageUrls } = args.assembled
   const assembledRefs = queueReferenceImageUrls ?? []
+  // What the run sends, for a price by input image: on GPT Image 2.6 the base of
+  // an edit counts too (the worker sends it first).
+  const sentImages = gptImage26SentImages(provider, assembledRefs, baseImageUrl)
   let effectiveNegativePrompt = args.assembled.negativePrompt
 
   // Append character descriptions to prompt. In structured mode the base is
@@ -326,7 +337,7 @@ export async function planImageJob(args: {
   const sourceImage = resolvedLora
     ? undefined
     : await sourceImageForAutoAspect(
-        normalizedImageGenModelId({ provider, refCount: assembledRefs.length, swapToI2i: true }),
+        normalizedImageGenModelId({ provider, refCount: sentImages, swapToI2i: true }),
         rawAspectRatio,
         imageJobPhotoUrl({ baseImageUrl, referenceImageUrls: queueReferenceImageUrls }),
       )
@@ -340,7 +351,8 @@ export async function planImageJob(args: {
     quality: rawQuality,
     resolution: rawResolution,
     renderingSpeed,
-    refCount: assembledRefs.length,
+    background: rawBackground,
+    refCount: sentImages,
     swapToI2i: true,
     sourceImage,
   })
@@ -387,6 +399,7 @@ export async function planImageJob(args: {
     aspectRatio: data.aspectRatio,
     resolution: data.resolution,
     quality: data.quality,
+    background: data.background,
     // Structured mode: only the NATIVE negative prompt rides this channel
     // (the non-native one is folded into `prompt`). Flat mode: the raw
     // negative prompt, unchanged.

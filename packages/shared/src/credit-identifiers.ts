@@ -35,6 +35,16 @@ import {
   canonicalVideoProvider,
 } from "./model-constants.js"
 import { isFlux2Model, FLUX2_RES_MP, type Flux2Model } from "./flux2-pricing.js"
+import {
+  GPT_IMAGE_2_6_DEFAULT_QUALITY,
+  GPT_IMAGE_2_6_DEFAULT_RESOLUTION,
+  GPT_IMAGE_2_6_MAX_INPUT_IMAGES,
+  GPT_IMAGE_2_6_QUALITIES,
+  GPT_IMAGE_2_6_RESOLUTIONS,
+  isGptImage26I2i,
+  isGptImage26Tiered,
+  type GptImage26TieredModel,
+} from "./gpt-image-2-6.js"
 import { VIDEO_DURATION_AUTO } from "./video-duration-auto.js"
 import { uiResolutionFill } from "./video-ui-defaults.js"
 import { MODEL_CATALOG, autoAspectNeedsSourceImage, normalizeModelInput, normalizeVideoRequestParams, defaultResolutionFor, type ModelInputAdjustment, type SourceImageSize } from "./model-catalog.js"
@@ -76,6 +86,30 @@ function flux2MegapixelTier(model: Flux2Model, resolution?: string): string {
 }
 
 /**
+ * The price id of a GPT Image 2.6 Flare or Sunburst run: `<id>:<quality>:<size>`,
+ * and on an edit `<id>:<quality>:<size>:<N>ref`, N being the input images.
+ *
+ * A value off the grid (a stored node, the multi-provider preview pricing one
+ * node's data against every model) lands on the default rather than building
+ * an id no row answers. A text-to-image id sent input images runs on the edit
+ * endpoint, so a caller that does not swap the model first (the entity routes,
+ * a pipeline pin) is priced there too. An edit always has at least its source.
+ */
+function gptImage26CreditId(
+  provider: GptImage26TieredModel,
+  quality: string | undefined,
+  resolution: string | undefined,
+  referenceImageCount: number | undefined,
+): string {
+  const q = (GPT_IMAGE_2_6_QUALITIES as readonly string[]).includes(quality ?? "") ? quality : GPT_IMAGE_2_6_DEFAULT_QUALITY
+  const r = (GPT_IMAGE_2_6_RESOLUTIONS as readonly string[]).includes(resolution ?? "") ? resolution : GPT_IMAGE_2_6_DEFAULT_RESOLUTION
+  const images = Math.trunc(referenceImageCount ?? 0)
+  const model = !isGptImage26I2i(provider) && images > 0 ? T2I_TO_I2I_VARIANT[provider]! : provider
+  if (!isGptImage26I2i(model)) return `${model}:${q}:${r}`
+  return `${model}:${q}:${r}:${Math.min(Math.max(1, images), GPT_IMAGE_2_6_MAX_INPUT_IMAGES)}ref`
+}
+
+/**
  * Compute composite model identifier for variable credit pricing.
  * Examples: "gpt-image:high", "flux:2K", "nano-banana-pro:4K", "ideogram:TURBO",
  *           "flux-2-pro:2MP", "flux-2-max:2MP:1ref" (Flux 2 — billed per megapixel).
@@ -100,6 +134,9 @@ export function buildCreditModelIdentifier(
   // reflect refs (there is no metered true-up to correct an under-reserved tier).
   if (isFlux2Model(provider)) {
     return `${provider}:${flux2MegapixelTier(provider, resolution)}MP:${Math.min(referenceImageCount ?? 0, 8)}ref`
+  }
+  if (isGptImage26Tiered(provider)) {
+    return gptImage26CreditId(provider, quality, resolution, referenceImageCount)
   }
   if (HIGH_QUALITY_PROVIDERS.has(provider) && quality === "high") {
     return `${provider}:high`
@@ -140,6 +177,7 @@ export interface NormalizedImageGen {
   aspectRatio?: string
   resolution?: string
   quality?: string
+  background?: string
   /** Empty when the caller's values were already valid for `modelId`. */
   adjustments: ModelInputAdjustment[]
 }
@@ -215,6 +253,8 @@ export function resolveNormalizedImageGen(opts: {
   quality?: unknown
   resolution?: unknown
   renderingSpeed?: unknown
+  /** Does not price on its own, but a transparent background can move the size. */
+  background?: unknown
   refCount: number
   swapToI2i?: boolean
   sourceImage?: SourceImageSize
@@ -230,6 +270,7 @@ export function resolveNormalizedImageGen(opts: {
       aspectRatio: str(opts.aspectRatio),
       resolution: str(opts.resolution),
       quality: str(opts.quality),
+      background: str(opts.background),
     },
     { sourceImage: opts.sourceImage },
   )
@@ -247,6 +288,7 @@ export function resolveNormalizedImageGen(opts: {
     aspectRatio: n.aspectRatio,
     resolution: n.resolution,
     quality: n.quality,
+    background: n.background,
     adjustments: n.adjustments,
   }
 }

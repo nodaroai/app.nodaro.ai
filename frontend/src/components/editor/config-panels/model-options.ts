@@ -2,7 +2,7 @@ import { hasCredits } from "@/lib/edition"
 import { creditUnits, creditUnitLabel, formatCreditUnits } from "@/lib/credit-units"
 import { isModelUnavailable } from "@/lib/surface-availability"
 import { isVariablePricedModel, type CreditRange } from "@/lib/model-credit-range"
-import { VIDEO_DURATION_AUTO, aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, durationsByMode, modelsWithFeature, isFlux2Model, type LabeledOption } from "@nodaro/shared/model-catalog"
+import { VIDEO_DURATION_AUTO, aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, backgroundOptionsByKind, getModel, durationsByMode, modelsWithFeature, isFlux2Model, type LabeledOption } from "@nodaro/shared/model-catalog"
 import {
   supportsAutoVideoDuration,
   isGvpSupportedProvider,
@@ -57,6 +57,9 @@ export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string
   { value: "gpt-image-2", label: "GPT Image 2", desc: "Latest GPT Image, sharper text + photorealism, up to 4K" },
   { value: "gpt-image-2-5-flare", label: "GPT Image 2.5 Flare", desc: "Fast everyday GPT Image 2.5 — ~2x quicker, great for iteration" },
   { value: "gpt-image-2-5-sunburst", label: "GPT Image 2.5 Sunburst", desc: "Precision GPT Image 2.5 — slower, best for final/brand work" },
+  { value: "gpt-image-2-6-flare", label: "GPT Image 2.6 Flare", desc: "Fast GPT Image 2.6 — pick for speed, up to 4K" },
+  { value: "gpt-image-2-6-sunburst", label: "GPT Image 2.6 Sunburst", desc: "Precision GPT Image 2.6 — when every detail counts" },
+  { value: "gpt-image-2-6-economy", label: "GPT Image 2.6 Economy", desc: "GPT Image 2.6 at a flat low price, 1K — pick for volume" },
   { value: "grok", label: "Grok", desc: "Creative and stylized imagery" },
   { value: "grok-2", label: "Grok Imagine 2", desc: "Latest Grok — expressive, high-contrast imagery" },
   { value: "ideogram-v3", label: "Ideogram V3", desc: "Fast text-to-image, affordable" },
@@ -92,6 +95,9 @@ export const IMAGE_I2I_MODELS: readonly { value: ImageI2IProvider; label: string
   { value: "gpt-image-2-i2i", label: "GPT Image 2", desc: "Latest GPT Image, sharper text + photorealism, up to 4K" },
   { value: "gpt-image-2-5-flare-i2i", label: "GPT Image 2.5 Flare", desc: "Fast GPT Image 2.5 edits — up to 16 sources, best for iteration" },
   { value: "gpt-image-2-5-sunburst-i2i", label: "GPT Image 2.5 Sunburst", desc: "Precision GPT Image 2.5 edits — tightest control, slower" },
+  { value: "gpt-image-2-6-flare-i2i", label: "GPT Image 2.6 Flare", desc: "Fast GPT Image 2.6 edits — up to 16 sources, priced per image" },
+  { value: "gpt-image-2-6-sunburst-i2i", label: "GPT Image 2.6 Sunburst", desc: "Precision GPT Image 2.6 edits — up to 16 sources, priced per image" },
+  { value: "gpt-image-2-6-economy-i2i", label: "GPT Image 2.6 Economy", desc: "Flat-price GPT Image 2.6 edits, 1K — pick for volume" },
   { value: "grok-i2i", label: "Grok", desc: "Creative and stylized imagery" },
   { value: "ideogram-edit", label: "Ideogram Edit", desc: "AI-guided image editing" },
   { value: "ideogram-remix", label: "Ideogram Remix", desc: "Restyle with character consistency" },
@@ -582,6 +588,25 @@ export function getVideoModelCapabilitiesTooltip(provider: string): string | und
 export const IMAGE_QUALITY_OPTIONS: Record<string, readonly LabeledOption[]> =
   qualityOptionsByKind("image")
 
+// Image backgrounds — derived from MODEL_CATALOG. No entry: no such setting.
+export const IMAGE_BACKGROUND_OPTIONS: Record<string, readonly LabeledOption[]> =
+  backgroundOptionsByKind("image")
+
+/** The quality a run renders at when none is set, where it is not the first listed. */
+export function defaultQualityFor(provider: string): string | undefined {
+  return getModel(provider)?.defaultQuality
+}
+
+/** Where several models share one list: the first option, but never Auto, which is only chosen on purpose. */
+export function firstFixedQuality(options: readonly LabeledOption[] | undefined): string | undefined {
+  return (options?.find((o) => o.value !== "auto") ?? options?.[0])?.value
+}
+
+/** The one size this model renders a transparent background at, where it is limited. */
+export function transparentResolutionFor(provider: string): string | undefined {
+  return getModel(provider)?.transparentResolution
+}
+
 /**
  * Default resolution for the Flux 2 family when no (or a stale) resolution is
  * set on the node. Flux 2 uses ascending MP options ("0.5 MP" … "4 MP"), so
@@ -820,6 +845,8 @@ export const REFERENCE_BOARD_PROVIDER_OPTIONS: ReadonlyArray<{ value: string; la
   { value: "gpt-image-2",     label: "GPT Image 2",     desc: "Sharper text + photorealism, up to 4K" },
   { value: "gpt-image-2-5-flare",    label: "GPT Image 2.5 Flare",    desc: "Fast board drafts, up to 4K" },
   { value: "gpt-image-2-5-sunburst", label: "GPT Image 2.5 Sunburst", desc: "Precision board layout + labels, up to 4K" },
+  { value: "gpt-image-2-6-flare",    label: "GPT Image 2.6 Flare",    desc: "Fast board drafts, up to 4K" },
+  { value: "gpt-image-2-6-sunburst", label: "GPT Image 2.6 Sunburst", desc: "Precision board layout + labels, up to 4K" },
 ]
 
 /** Flat lookup of model ID to description, built from all model arrays */

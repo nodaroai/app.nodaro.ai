@@ -767,6 +767,15 @@ describe("getModelIdentifier", () => {
   })
 })
 
+describe("GPT Image 2.6's estimate", () => {
+  it("counts every image the run will send", () => {
+    expect(buildCreditModelIdentifier("gpt-image-2-6-flare", { baseImageUrl: "https://a.png" })).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
+    expect(buildCreditModelIdentifier("gpt-image-2-6-flare", { characterDefinitionIds: ["c1", "c2"] })).toBe("gpt-image-2-6-flare-i2i:medium:1K:2ref")
+    expect(buildCreditModelIdentifier("gpt-image-2-6-flare", {}, 1)).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
+    expect(buildCreditModelIdentifier("gpt-image-2-6-flare", {})).toBe("gpt-image-2-6-flare:medium:1K")
+  })
+})
+
 describe("buildCreditModelIdentifier", () => {
   it("returns 'topaz-image-upscale' for 2K (default, no suffix)", () => {
     expect(buildCreditModelIdentifier("topaz-image-upscale", { targetResolution: "2K" })).toBe("topaz-image-upscale")

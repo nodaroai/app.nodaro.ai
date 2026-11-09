@@ -42,7 +42,7 @@ import type {
   ManualReferenceImage,
   ImageProvider,
 } from "@/types/nodes"
-import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, imageStylePresets, getAspectRatiosForModel, getSourcePhotoAspectRatios, withPhotoAuto, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor, withoutDeniedModels } from "./model-options"
+import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, imageStylePresets, getAspectRatiosForModel, getSourcePhotoAspectRatios, withPhotoAuto, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, IMAGE_BACKGROUND_OPTIONS, transparentResolutionFor, defaultQualityFor, firstFixedQuality, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor, withoutDeniedModels } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
@@ -203,6 +203,9 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
   const qualityOptions = isMulti
     ? (intersected.qualities.length > 0 ? intersected.qualities : undefined)
     : IMAGE_QUALITY_OPTIONS[currentProvider]
+  const qualityDefault = isMulti ? firstFixedQuality(qualityOptions) : defaultQualityFor(currentProvider)
+  // One model at a time: a background setting is not offered across several.
+  const backgroundOptions = isMulti ? undefined : IMAGE_BACKGROUND_OPTIONS[currentProvider]
   const supportsRefImage = isMulti
     ? intersected.supportsReferenceImage
     : MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(currentProvider)
@@ -245,7 +248,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
     }
     if (qualityOptions) {
       if (data.quality && !qualityOptions.some((o) => o.value === data.quality)) {
-        updates.quality = qualityOptions[0]?.value
+        updates.quality = qualityDefault ?? qualityOptions[0]?.value
       }
     } else if (data.quality !== undefined) {
       updates.quality = undefined
@@ -264,6 +267,19 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
         updates.resolution = "2K"
       }
     }
+    if (backgroundOptions) {
+      if (data.background && !backgroundOptions.some((o) => o.value === data.background)) {
+        updates.background = undefined
+      }
+    } else if (data.background !== undefined) {
+      updates.background = undefined
+    }
+    // KIE renders a transparent background at one size only.
+    const transparentAt = transparentResolutionFor(currentProvider)
+    if ((updates.background ?? data.background) === "transparent" && transparentAt) {
+      const size = updates.resolution ?? data.resolution
+      if (size && size !== transparentAt) updates.resolution = transparentAt
+    }
     if (!supportsRefImage && data.referenceImageUrl) {
       updates.referenceImageUrl = undefined
     }
@@ -280,7 +296,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
     if (Object.keys(updates).length > 0) {
       onUpdate(updates)
     }
-  }, [providersList, currentProvider, data.aspectRatio]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [providersList, currentProvider, data.aspectRatio, data.background]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Migrate legacy single referenceImageUrl to new multi-image format
   useEffect(() => {
@@ -669,12 +685,27 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
           {qualityOptions && (
             <MappableField field="quality" label={t("field.quality")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
               <Select
-                value={data.quality || qualityOptions[0]?.value}
+                value={data.quality || qualityDefault || qualityOptions[0]?.value}
                 onValueChange={(v) => onUpdate({ quality: v })}
               >
                 <SelectTrigger aria-label={t("field.quality")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {qualityOptions.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </MappableField>
+          )}
+          {backgroundOptions && (
+            <MappableField field="background" label={t("field.background")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+              <Select
+                value={data.background || backgroundOptions[0]?.value}
+                onValueChange={(v) => onUpdate({ background: v })}
+              >
+                <SelectTrigger aria-label={t("field.background")}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {backgroundOptions.map((o) => (
                     <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                   ))}
                 </SelectContent>
@@ -939,6 +970,8 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
   const listedAspectRatios = useMemo(() => getAspectRatiosForModel(currentProvider), [currentProvider])
   const resolutionOptions = useMemo(() => !isNanoBananaEdit ? IMAGE_RESOLUTION_OPTIONS[currentProvider] : undefined, [currentProvider, isNanoBananaEdit])
   const qualityOptions = useMemo(() => !isNanoBananaEdit ? IMAGE_QUALITY_OPTIONS[currentProvider] : undefined, [currentProvider, isNanoBananaEdit])
+  const backgroundOptions = useMemo(() => !isNanoBananaEdit ? IMAGE_BACKGROUND_OPTIONS[currentProvider] : undefined, [currentProvider, isNanoBananaEdit])
+  const qualityDefault = defaultQualityFor(currentProvider)
   const strengthConfig = useMemo(() => !isNanoBananaEdit ? I2I_STRENGTH_SUPPORT[currentProvider] : undefined, [currentProvider, isNanoBananaEdit])
   const supportsSeed = SEED_SUPPORT.has(currentProvider)
   const supportsRenderingSpeed = !isNanoBananaEdit && RENDERING_SPEED_SUPPORT.has(currentProvider)
@@ -972,7 +1005,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     }
     if (qualityOptions) {
       if (data.quality && !qualityOptions.some((o) => o.value === data.quality)) {
-        updates.quality = qualityOptions[0]?.value
+        updates.quality = qualityDefault ?? qualityOptions[0]?.value
       }
     } else if (data.quality !== undefined) {
       updates.quality = undefined
@@ -989,6 +1022,19 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         updates.resolution = "2K"
       }
     }
+    if (backgroundOptions) {
+      if (data.background && !backgroundOptions.some((o) => o.value === data.background)) {
+        updates.background = undefined
+      }
+    } else if (data.background !== undefined) {
+      updates.background = undefined
+    }
+    // KIE renders a transparent background at one size only.
+    const transparentAt = transparentResolutionFor(currentProvider)
+    if ((updates.background ?? data.background) === "transparent" && transparentAt) {
+      const size = updates.resolution ?? data.resolution
+      if (size && size !== transparentAt) updates.resolution = transparentAt
+    }
     if (!supportsRefImage && data.referenceImageUrl) {
       updates.referenceImageUrl = undefined
     }
@@ -998,7 +1044,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     if (Object.keys(updates).length > 0) {
       onUpdate(updates)
     }
-  }, [currentProvider, data.aspectRatio]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentProvider, data.aspectRatio, data.background]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [isCustomStyle, setIsCustomStyle] = useState(
     () => !!data.style && !imageStylePresets().some((p) => p.value === data.style)
@@ -1696,12 +1742,27 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           {qualityOptions && (
             <MappableField field="quality" label={t("field.quality")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
               <Select
-                value={data.quality || qualityOptions[0]?.value}
+                value={data.quality || qualityDefault || qualityOptions[0]?.value}
                 onValueChange={(v) => onUpdate({ quality: v })}
               >
                 <SelectTrigger aria-label={t("field.quality")}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {qualityOptions.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </MappableField>
+          )}
+          {backgroundOptions && (
+            <MappableField field="background" label={t("field.background")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+              <Select
+                value={data.background || backgroundOptions[0]?.value}
+                onValueChange={(v) => onUpdate({ background: v })}
+              >
+                <SelectTrigger aria-label={t("field.background")}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {backgroundOptions.map((o) => (
                     <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
                   ))}
                 </SelectContent>

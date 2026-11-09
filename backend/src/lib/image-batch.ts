@@ -138,7 +138,7 @@ export interface ImageBatchPlanGroup {
 }
 
 const adjustmentSchema = z.object({
-  field: z.enum(["aspectRatio", "resolution", "quality", "duration"]),
+  field: z.enum(["aspectRatio", "resolution", "quality", "duration", "background"]),
   from: z.union([z.string(), z.number()]),
   to: z.union([z.string(), z.number()]).optional(),
   reason: z.string(),

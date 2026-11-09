@@ -65,6 +65,8 @@ export interface RouteResult {
   cost: number | null
   displayCost: number | null
   providerUsed: ProviderUsed
+  /** See ProviderResult.autoQualityKieCredits (GPT Image 2.6 at quality Auto). */
+  autoQualityKieCredits?: number
   kieTaskId?: string  // Provider task ID for chained operations (VEO/Runway extend-upscale; Grok task-chained edit/segment)
   /** Grok 2 segment-map only: named region metadata, order-aligned with
    *  [url, ...extraUrls]. See ProviderResult.segments. */
@@ -290,6 +292,7 @@ async function walkChainAndExecute(
       // Provider-reported billing units (Replicate's Topaz upscalers) —
       // conditional for the same reason: absent on every other result.
       ...(result.billedUnits !== undefined ? { billedUnits: result.billedUnits } : {}),
+      ...(result.autoQualityKieCredits !== undefined ? { autoQualityKieCredits: result.autoQualityKieCredits } : {}),
     }
   }
 

@@ -31,7 +31,7 @@ import {
 } from "./_image-batch.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { defaultImageModel, isAutoAspectToken, modelIdsByKindMode } from "@nodaro/shared/model-catalog"
-import { MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS } from "@nodaro/shared/models"
+import { IMAGE_BACKGROUND_VALUES, IMAGE_QUALITY_VALUES, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS } from "@nodaro/shared/models"
 import { SCRIPT_SCENE_COUNT_RANGE, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TARGET_DURATION_DEFAULT, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared/nodes"
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { normalizeImageInput } from "../normalize.js"
@@ -124,7 +124,11 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           quality: z
             .string()
             .optional()
-            .describe("Quality: medium / high (model-dependent). Synonyms accepted."),
+            .describe("Quality by model (list_models). Auto bills real cost, up to Max."),
+          background: z
+            .enum(IMAGE_BACKGROUND_VALUES)
+            .optional()
+            .describe("Models that list it. Transparent renders at 1K."),
           aspect_ratio: z
             .string()
             .optional()
@@ -368,6 +372,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           aspectRatio,
           resolution,
           quality,
+          ...(effective.background ? { background: effective.background } : {}),
           negativePrompt: effective.negative_prompt as string | undefined,
           ...(refUrls.length ? { referenceImageUrls: refUrls } : {}),
           ...(args.connected_references ? { connectedReferences: args.connected_references } : {}),
@@ -438,7 +443,8 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
               `Call list_models for capability details.`,
             ),
           resolution: z.string().optional().describe("Resolution: falls back to nearest supported."),
-          quality: z.string().optional().describe("Quality: medium/high/basic. Synonyms accepted."),
+          quality: z.string().optional().describe("Quality by model (list_models). Auto bills real cost, up to Max."),
+          background: z.enum(IMAGE_BACKGROUND_VALUES).optional().describe("Models that list it. Transparent renders at 1K."),
           aspect_ratio: z.string().optional().describe("Aspect ratio. 'auto' keeps the photo's shape on every model. Variations and unsupported values fall back."),
           negative_prompt: z.string().max(2000).optional(),
           structured: StructuredFields.optional(),
@@ -545,6 +551,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           aspectRatio,
           resolution,
           quality,
+          ...(args.background ? { background: args.background } : {}),
           negativePrompt: args.negative_prompt,
           mcp_client: session.clientName,
           userId: session.userId,
@@ -667,7 +674,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             "or a JSON-stringified array is coerced.",
           ),
         resolution: z.enum(["1K", "2K", "4K"]).optional(),
-        quality: z.enum(["medium", "high", "basic"]).optional(),
+        quality: z.enum(IMAGE_QUALITY_VALUES).optional(),
         strength: z.number().min(0).max(1).optional().describe("How much the prompt overrides the source image (0=subtle, 1=full repaint)."),
         aspect_ratio: z.string().optional(),
         negative_prompt: z.string().max(5000).optional(),

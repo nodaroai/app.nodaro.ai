@@ -132,6 +132,14 @@ describe("editImage", () => {
 // ---------------------------------------------------------------------------
 
 describe("imageToImage", () => {
+  it("sends the background setting", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "j1" })
+    vi.stubGlobal("fetch", mock)
+    await imageToImage("http://img.png", "x", "gpt-image-2-6-flare-i2i", undefined, undefined, { background: "transparent" })
+    expect(JSON.parse(mock.mock.calls[0]![1].body as string).background).toBe("transparent")
+  })
+
   it("sends imageUrl and prompt in body", async () => {
     noSession()
     const mock = mockFetchJson({ jobId: "j1" })

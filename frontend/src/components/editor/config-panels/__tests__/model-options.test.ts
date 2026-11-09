@@ -10,6 +10,9 @@ vi.mock("@/lib/edition", () => editionMock)
 import { SUNO_MODELS as SUNO_MODELS_SHARED, DIALOGUE_PROVIDERS } from "@nodaro/shared/models"
 import { VIDEO_DEPTH_PROVIDERS } from "@nodaro/shared/media"
 import {
+  IMAGE_QUALITY_OPTIONS,
+  defaultQualityFor,
+  firstFixedQuality,
   SUNO_MODELS,
   DIALOGUE_MODELS,
   IMAGE_GEN_MODELS,
@@ -316,5 +319,19 @@ describe("VIDEO_DEPTH_MODELS", () => {
 
   it("feeds the description lookup", () => {
     for (const m of VIDEO_DEPTH_MODELS) expect(MODEL_DESCRIPTIONS[m.value]).toBe(m.desc)
+  })
+})
+
+describe("firstFixedQuality", () => {
+  it("skips Auto, which is only chosen on purpose", () => {
+    expect(firstFixedQuality(IMAGE_QUALITY_OPTIONS["gpt-image-2-6-flare"])).toBe("low")
+    expect(firstFixedQuality([{ value: "auto", label: "Auto" }])).toBe("auto")
+    expect(firstFixedQuality(undefined)).toBeUndefined()
+  })
+
+  it("GPT Image 2.6 defaults to medium though Auto is listed first", () => {
+    expect(IMAGE_QUALITY_OPTIONS["gpt-image-2-6-flare"]?.[0]?.value).toBe("auto")
+    expect(defaultQualityFor("gpt-image-2-6-flare")).toBe("medium")
+    expect(defaultQualityFor("gpt-image")).toBeUndefined()
   })
 })

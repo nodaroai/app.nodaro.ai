@@ -48,6 +48,9 @@ export const IMAGE_ASPECT_RATIO_VALUES = [
   // GPT Image 2.5 (Flare + Sunburst) additions: near-square and ultra-wide/tall
   // cinema ratios (docs.kie.ai/market/gpt/gpt-image-2-5-*).
   "27:16", "16:27", "9:8", "8:9",
+  // GPT Image 2.6 additions: wide and tall ratios of its own
+  // (docs.kie.ai/market/gpt/gpt-image-2-6-*).
+  "2:1", "1:2", "9:21", "3:1", "1:3",
 ] as const
 
 /** A ratio string the image routes accept (pre-snap vocabulary, not a per-model guarantee). */
@@ -64,8 +67,12 @@ export const IMAGE_RESOLUTION_VALUES = ["1K", "2K", "4K", "0.5 MP", "1 MP", "2 M
 export type ImageResolution = typeof IMAGE_RESOLUTION_VALUES[number]
 
 /** The `quality` vocabulary of the same two routes (vocabulary bound; the catalog snap gates per model). */
-export const IMAGE_QUALITY_VALUES = ["medium", "high", "basic"] as const
+export const IMAGE_QUALITY_VALUES = ["auto", "low", "medium", "high", "xhigh", "max", "basic"] as const
 export type ImageQuality = typeof IMAGE_QUALITY_VALUES[number]
+
+/** The `background` vocabulary of the same two routes (vocabulary bound; the catalog snap gates per model). */
+export const IMAGE_BACKGROUND_VALUES = ["auto", "opaque", "transparent"] as const
+export type ImageBackground = typeof IMAGE_BACKGROUND_VALUES[number]
 
 /** The `renderingSpeed` vocabulary (Ideogram's speed tiers — see {@link RENDERING_SPEED_SUPPORT}). */
 export const IMAGE_RENDERING_SPEED_VALUES = ["TURBO", "BALANCED", "QUALITY"] as const
@@ -108,6 +115,14 @@ export const MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   "gpt-image-2-5-flare-i2i": 20000,      // docs.kie.ai/market/gpt/gpt-image-2-5-flare-image-to-image
   "gpt-image-2-5-sunburst": 20000,       // docs.kie.ai/market/gpt/gpt-image-2-5-sunburst-text-to-image
   "gpt-image-2-5-sunburst-i2i": 20000,   // docs.kie.ai/market/gpt/gpt-image-2-5-sunburst-image-to-image
+  // GPT Image 2.6 — Flare and Sunburst document 32000 chars, Economy 20000.
+  // PROMPT_HARD_CEILING (30000) is what the routes accept, so that is the cap.
+  "gpt-image-2-6-flare": 30000,          // docs.kie.ai/market/gpt/gpt-image-2-6-flare-text-to-image
+  "gpt-image-2-6-flare-i2i": 30000,      // docs.kie.ai/market/gpt/gpt-image-2-6-flare-image-to-image
+  "gpt-image-2-6-sunburst": 30000,       // docs.kie.ai/market/gpt/gpt-image-2-6-sunburst-text-to-image
+  "gpt-image-2-6-sunburst-i2i": 30000,   // docs.kie.ai/market/gpt/gpt-image-2-6-sunburst-image-to-image
+  "gpt-image-2-6-economy": 20000,        // docs.kie.ai/market/gpt/gpt-image-2-6-economy-text-to-image
+  "gpt-image-2-6-economy-i2i": 20000,    // docs.kie.ai/market/gpt/gpt-image-2-6-economy-image-to-image
   // ── lower than the 5000 default (over-send risk if left at default) ──
   "seedream": 3000,            // docs.kie.ai/market/seedream/4-5-text-to-image
   "seedream-edit": 3000,       // docs.kie.ai/market/seedream/4-5-edit
@@ -527,6 +542,9 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "gpt-image-2",
   "gpt-image-2-5-flare",
   "gpt-image-2-5-sunburst",
+  "gpt-image-2-6-flare",
+  "gpt-image-2-6-sunburst",
+  "gpt-image-2-6-economy",
   "grok",
   "grok-2",
   "qwen",
@@ -542,6 +560,9 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "gpt-image-2-i2i",
   "gpt-image-2-5-flare-i2i",
   "gpt-image-2-5-sunburst-i2i",
+  "gpt-image-2-6-flare-i2i",
+  "gpt-image-2-6-sunburst-i2i",
+  "gpt-image-2-6-economy-i2i",
   "grok-2-i2i",
   "flux-i2i",
   "flux-pro-i2i",
@@ -582,6 +603,9 @@ export const T2I_TO_I2I_VARIANT: Record<string, string> = {
   "gpt-image-2": "gpt-image-2-i2i",
   "gpt-image-2-5-flare": "gpt-image-2-5-flare-i2i",
   "gpt-image-2-5-sunburst": "gpt-image-2-5-sunburst-i2i",
+  "gpt-image-2-6-flare": "gpt-image-2-6-flare-i2i",
+  "gpt-image-2-6-sunburst": "gpt-image-2-6-sunburst-i2i",
+  "gpt-image-2-6-economy": "gpt-image-2-6-economy-i2i",
   "grok": "grok-i2i",
   // grok-2's t2i takes NO image input; its "i2i" is the segment-map(image_url)
   // → image-edit(task_id) chain in the KIE provider (single reference).
@@ -621,6 +645,9 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "gpt-image-2-i2i": 16,
   "gpt-image-2-5-flare-i2i": 16,
   "gpt-image-2-5-sunburst-i2i": 16,
+  "gpt-image-2-6-flare-i2i": 16,
+  "gpt-image-2-6-sunburst-i2i": 16,
+  "gpt-image-2-6-economy-i2i": 16,
   "flux-i2i": 4,
   "flux-pro-i2i": 4,
   "seedream-edit": 16,
@@ -760,6 +787,9 @@ export const IMAGE_GEN_PROVIDERS = [
   "gpt-image-2",
   "gpt-image-2-5-flare",
   "gpt-image-2-5-sunburst",
+  "gpt-image-2-6-flare",
+  "gpt-image-2-6-sunburst",
+  "gpt-image-2-6-economy",
   "imagen4",
   "imagen4-fast",
   "imagen4-ultra",
@@ -795,6 +825,9 @@ export const IMAGE_I2I_PROVIDERS = [
   "gpt-image-2-i2i",
   "gpt-image-2-5-flare-i2i",
   "gpt-image-2-5-sunburst-i2i",
+  "gpt-image-2-6-flare-i2i",
+  "gpt-image-2-6-sunburst-i2i",
+  "gpt-image-2-6-economy-i2i",
   "grok-2-i2i",
   "ideogram-edit",
   "ideogram-remix",
@@ -1726,6 +1759,9 @@ export const IMAGE_MASK_MODE: Record<ImageGenProvider, ImageMaskMode> = {
   "gpt-image-2": "prompt",
   "gpt-image-2-5-flare": "prompt",
   "gpt-image-2-5-sunburst": "prompt",
+  "gpt-image-2-6-flare": "prompt",
+  "gpt-image-2-6-sunburst": "prompt",
+  "gpt-image-2-6-economy": "prompt",
   "seedream": "prompt",
   "seedream-5-lite": "prompt",
   "seedream-5-pro": "prompt",

@@ -15,6 +15,7 @@ import {
 } from "../workers/shared.js"
 import { relayFieldsFrom } from "../providers/nodaro/relay-cost.js"
 import { heldCommitArgs, type HeldCommitReplay } from "./job-policy.js"
+import { gptImage26AutoSettledBase } from "./gpt-image-2-6-settle.js"
 // @registry-enumerates NOT_GENERIC_RECOVERABLE carries every node unit with the "finalize:own-writer" capability
 import { UNIT_NODE_DESCRIPTORS } from "./unit-descriptors.js"
 import { composeSet, unitsWith } from "./unit-compose.js"
@@ -31,6 +32,8 @@ import { composeSet, unitsWith } from "./unit-compose.js"
 export interface ProviderFinalizeResult {
   url: string
   extraUrls?: readonly string[]
+  /** See ProviderResult.autoQualityKieCredits — GPT Image 2.6 at quality Auto. */
+  autoQualityKieCredits?: number
   cost: number | null
   /** See ProviderResult.meteredCost — true only for genuine GPU-time providers
    *  (commit trues-up from cost); fixed/composite providers commit reserved. */
@@ -660,7 +663,8 @@ export async function finalizeJobWithMedia(
     extraNonProviderCredits: input.extraNonProviderCredits,
     meteredCost: result.cost,
     loopTrimAddonRefundCredits: input.loopTrimAddonRefundCredits,
-    meteredBaseCredits: input.meteredBaseCredits,
+    // A handler's own measure wins; a GPT Image 2.6 Auto run settles on KIE's bill.
+    meteredBaseCredits: input.meteredBaseCredits ?? await gptImage26AutoSettledBase(result.autoQualityKieCredits),
   }
   const outcome = await markJobCompletedDetailed(
     jobId,

@@ -671,3 +671,26 @@ describe("POST /v1/generate-object-asset — auto-attach payload + source-image 
     expect(res.json().error.code).toBe("validation_error")
   })
 })
+
+describe("POST /v1/generate-object-asset — GPT Image 2.6's price", () => {
+  it("is priced on the anchor image the worker sends, which the body does not name", async () => {
+    setupSupabaseMock({
+      objectRow: { source_image_url: "https://example.com/goblet.png", canonical_description: "a goblet" },
+    })
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-object-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "materials",
+        variant: "wood",
+        name: "Ornate Goblet",
+        provider: "gpt-image-2-6-flare",
+        attachToObjectId: TEST_OBJECT_ID,
+        attachToColumn: "materials",
+        attachName: "wood",
+      },
+    })
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
+  })
+})

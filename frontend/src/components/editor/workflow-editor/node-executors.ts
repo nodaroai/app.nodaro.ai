@@ -93,6 +93,7 @@ export function runImageGeneration(
     maskUrl?: string
     strength?: number
     guidanceScale?: number
+    background?: string
   },
 ): Promise<string> {
   return pollJobWithNodeUpdate(
@@ -168,6 +169,7 @@ export function runImageToImage(
     aspectRatio?: string
     resolution?: string
     quality?: string
+    background?: string
     negativePrompt?: string
     seed?: number
     renderingSpeed?: string
@@ -203,6 +205,7 @@ export function runModifyImage(
     aspectRatio?: string
     resolution?: string
     quality?: string
+    background?: string
     negativePrompt?: string
     seed?: number
     renderingSpeed?: string

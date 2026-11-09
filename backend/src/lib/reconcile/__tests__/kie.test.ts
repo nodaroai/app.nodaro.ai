@@ -167,6 +167,10 @@ vi.mock("../../credits-job-lifecycle.js", () => ({
 const settle = vi.hoisted(() => ({
   measure: vi.fn(async (_args: Record<string, unknown>): Promise<number | undefined> => undefined),
 }))
+vi.mock("../../gpt-image-2-6-settle.js", () => ({
+  gptImage26AutoSettledBase: async (k: number | undefined) => (k === undefined ? undefined : Math.ceil(k * 2.5)),
+}))
+
 vi.mock("../../seedance2-ref-video-settle.js", () => ({
   measureSeedance2RefVideoBaseCredits: settle.measure,
 }))
@@ -264,6 +268,63 @@ describe("reconcileKieJob", () => {
       jobId: "j-seedance",
     })
     expect(mocks.finalizeMock).toHaveBeenCalledWith(expect.objectContaining({ jobId: "j-seedance", meteredBaseCredits: 7193 }))
+  })
+
+  it("a recovered GPT Image 2.6 Auto run settles on what KIE billed, as the worker would have", async () => {
+    mocks.pollKieTaskMock.mockResolvedValueOnce({
+      resultJson: { resultUrls: ["https://kie.example/out.png"] },
+      rawRecordInfo: { code: 200, data: { creditsConsumed: 8 } },
+      providerMs: 4000,
+      taskId: "t-auto",
+    })
+    await reconcileKieJob({
+      id: "j-auto",
+      provider_kind: "kie-standard",
+      provider_task_id: "t-auto",
+      reconcile_attempts: 0,
+      job_type: "generate-image",
+      input_data: { provider: "gpt-image-2-6-flare", quality: "auto" },
+    })
+    expect(mocks.finalizeMock).toHaveBeenCalledWith(expect.objectContaining({ jobId: "j-auto", meteredBaseCredits: 20 }))
+  })
+
+  it("a recovered Auto run with no figure commits its reservation and says so", async () => {
+    const alert = vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.pollKieTaskMock.mockResolvedValueOnce({
+      resultJson: { resultUrls: ["https://kie.example/out.png"] },
+      rawRecordInfo: { code: 200, data: {} },
+      providerMs: 4000,
+      taskId: "t-none",
+    })
+    await reconcileKieJob({
+      id: "j-none",
+      provider_kind: "kie-standard",
+      provider_task_id: "t-none",
+      reconcile_attempts: 0,
+      job_type: "generate-image",
+      input_data: { provider: "gpt-image-2-6-flare", quality: "auto" },
+    })
+    expect(mocks.finalizeMock.mock.calls[0]![0]).not.toHaveProperty("meteredBaseCredits")
+    expect(alert.mock.calls.some(([m]) => String(m).startsWith("[ALERT]"))).toBe(true)
+    alert.mockRestore()
+  })
+
+  it("a run at any other quality is not settled on KIE's figure", async () => {
+    mocks.pollKieTaskMock.mockResolvedValueOnce({
+      resultJson: { resultUrls: ["https://kie.example/out.png"] },
+      rawRecordInfo: { code: 200, data: { creditsConsumed: 8 } },
+      providerMs: 4000,
+      taskId: "t-max",
+    })
+    await reconcileKieJob({
+      id: "j-max",
+      provider_kind: "kie-standard",
+      provider_task_id: "t-max",
+      reconcile_attempts: 0,
+      job_type: "generate-image",
+      input_data: { provider: "gpt-image-2-6-flare", quality: "max" },
+    })
+    expect(mocks.finalizeMock.mock.calls[0]![0]).not.toHaveProperty("meteredBaseCredits")
   })
 
   it("a run with nothing to measure finalizes without a measured charge (the reservation is committed, as before)", async () => {

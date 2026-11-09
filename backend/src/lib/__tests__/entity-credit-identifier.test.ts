@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { resolveEntityImageCreditIdentifier, resolveEntityImageParams } from "../entity-credit-identifier.js"
+import { boardQuality, plainEntityCheckIdentifier, plainEntityCreditIdentifier, resolveEntityImageCreditIdentifier, resolveEntityImageParams, workflowEntityCreditIdentifier } from "../entity-credit-identifier.js"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 
 /**
@@ -185,7 +185,7 @@ describe("catalog snap inside the entity credit identifier", () => {
 describe("the entity route enums can carry every value the snap returns", () => {
   // Mirrors `resolution` / `quality` in all four entity route bodies.
   const ROUTE_RESOLUTIONS = ["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"] as const
-  const ROUTE_QUALITIES = ["medium", "high", "basic"] as const
+  const ROUTE_QUALITIES = ["auto", "low", "medium", "high", "xhigh", "max", "basic"] as const
 
   it("snaps every route-enum resolution to a route-enum resolution, for every image model", () => {
     const allowed = new Set<string>(ROUTE_RESOLUTIONS)
@@ -221,5 +221,48 @@ describe("the entity route enums can carry every value the snap returns", () => 
     }
     expect(offenders).toEqual([])
     expect(checked).toBeGreaterThan(100)
+  })
+})
+
+describe("plainEntityCreditIdentifier", () => {
+  it("GPT Image 2.6 is priced as what the run sends", () => {
+    expect(plainEntityCreditIdentifier("gpt-image-2-6-flare", 0)).toBe("gpt-image-2-6-flare:medium:1K")
+    expect(plainEntityCreditIdentifier("gpt-image-2-6-flare", 1)).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
+    expect(plainEntityCreditIdentifier("gpt-image-2-6-sunburst", 3)).toBe("gpt-image-2-6-sunburst-i2i:medium:1K:3ref")
+  })
+
+  it("every other model keeps its plain id", () => {
+    expect(plainEntityCreditIdentifier("gpt-image-2-5-flare", 1)).toBe("gpt-image-2-5-flare")
+    expect(plainEntityCreditIdentifier("gpt-image-2-6-economy", 1)).toBe("gpt-image-2-6-economy")
+    expect(plainEntityCreditIdentifier("flux-2-pro", 2)).toBe("flux-2-pro")
+  })
+
+  it("the CHECK reads the raw body", () => {
+    expect(plainEntityCheckIdentifier({ provider: "gpt-image-2-6-flare", sourceImageUrl: "https://a.png" }, "x")).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
+    expect(plainEntityCheckIdentifier({ provider: "gpt-image-2-6-flare" }, "x")).toBe("gpt-image-2-6-flare:medium:1K")
+    expect(plainEntityCheckIdentifier({ provider: "gpt-image-2-6-flare", sourceImageUrl: 7 }, "x")).toBe("gpt-image-2-6-flare:medium:1K")
+    expect(plainEntityCheckIdentifier({}, "nano-banana-pro")).toBe("nano-banana-pro")
+  })
+})
+
+describe("workflowEntityCreditIdentifier", () => {
+  it("GPT Image 2.6 is priced on what the job sends, whatever the node's settings say", () => {
+    expect(workflowEntityCreditIdentifier({ provider: "gpt-image-2-6-flare", quality: "auto", resolution: "4K" })).toBe("gpt-image-2-6-flare:medium:1K")
+    expect(workflowEntityCreditIdentifier({ provider: "gpt-image-2-6-sunburst", quality: "max", resolution: "2K", sourceImageUrl: "https://a.png" })).toBe("gpt-image-2-6-sunburst-i2i:medium:1K:1ref")
+  })
+
+  it("every other model keeps the id built from the node's settings", () => {
+    expect(workflowEntityCreditIdentifier({ provider: "nano-banana-pro", resolution: "4K" })).toBe(resolveEntityImageCreditIdentifier({ provider: "nano-banana-pro", resolution: "4K" }))
+    expect(workflowEntityCreditIdentifier({})).toBe("gpt-image-2")
+  })
+})
+
+describe("boardQuality", () => {
+  it("keeps a quality the model offers and drops the rest", () => {
+    expect(boardQuality("gpt-image-2-6-flare", "high")).toBe("high")
+    expect(boardQuality("gpt-image-2-6-flare", "basic")).toBeUndefined()
+    expect(boardQuality("gpt-image-2-5-flare", "max")).toBeUndefined()
+    expect(boardQuality("gpt-image-2-6-flare", undefined)).toBeUndefined()
+    expect(boardQuality(undefined, "high")).toBeUndefined()
   })
 })

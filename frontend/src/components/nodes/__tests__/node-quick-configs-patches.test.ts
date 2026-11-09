@@ -122,3 +122,19 @@ describe("a retired LLM model a saved node still carries", () => {
     })
   }
 })
+
+describe("a reference board's quality on a model that lists Auto first", () => {
+  const c = control("reference-board", "quality")
+  const data = { provider: "gpt-image-2-6-flare" }
+
+  it("shows the model's default when unset", () => {
+    expect(c.defaultFor?.(data)).toBe("medium")
+  })
+
+  it("a stale value snaps to the default, never to Auto", () => {
+    const options = resolveQuickConfigOptions(c, data)
+    expect(options[0]?.value).toBe("auto")
+    expect(quickConfigSnapPatch(c, "basic", options, data)).toEqual({ quality: "medium" })
+  })
+})
+

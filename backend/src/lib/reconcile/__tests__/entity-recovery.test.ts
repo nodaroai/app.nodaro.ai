@@ -184,6 +184,20 @@ describe("reconcile recovers a FINISHED entity generation instead of refunding i
     expect(mocks.markJobFailedMock).not.toHaveBeenCalled()
   })
 
+  it("a recovered GPT Image 2.6 Auto entity run settles on what KIE billed", async () => {
+    const input = { type: "generate-character", attachToCharacterId: CHARACTER_ID, provider: "gpt-image-2-6-flare", quality: "auto" }
+    mocks.jobRow.data = jobRowWith(input)
+    mocks.pollKieTaskMock.mockResolvedValue({
+      resultJson: { resultUrls: ["https://kie/result.png"] },
+      rawRecordInfo: { code: 200, data: { creditsConsumed: 8 } },
+      providerMs: 4200,
+    })
+
+    await reconcileKieJob({ ...row(), input_data: input })
+
+    expect(mocks.commitCreditsMock).toHaveBeenCalledWith("ul-1", "j-1", null, 20, true)
+  })
+
   it("completes a generate-object-asset job, carrying assetType into output_data", async () => {
     mocks.jobRow.data = jobRowWith({
       type: "generate-object-asset",

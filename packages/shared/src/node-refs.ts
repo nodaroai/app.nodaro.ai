@@ -190,6 +190,16 @@ export function countRefModalityEdges(
   return n
 }
 
+/**
+ * The wires that bring a node the images a run sends: its reference images, and
+ * each identity node on the `assets` handle (one image at least). For a model
+ * priced per input image.
+ */
+export function countImageInputEdges(edges: ReadonlyArray<RefModalityEdge>, nodeId: string): number {
+  const assets = edges.filter((e) => e.target === nodeId && e.targetHandle === "assets").length
+  return countRefModalityEdges(edges, nodeId, "image") + assets
+}
+
 /** A candidate contribution to the `{label}` map: the node's label, its resolved
  *  output, and its direct-parent handle category (-1 = not combinable / deeper). */
 export interface RefCandidate {

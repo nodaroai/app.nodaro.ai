@@ -35,6 +35,9 @@ import {
 } from "../job-finalize.js"
 import { loopTrimAddonForReconcile } from "./loop-trim-refund.js"
 import { measureSeedance2RefVideoBaseCredits } from "../seedance2-ref-video-settle.js"
+import { gptImage26AutoSettledBase } from "../gpt-image-2-6-settle.js"
+import { kieTaskCreditsConsumed } from "../../providers/kie/image-cost.js"
+import { isGptImage26AutoRun } from "@nodaro/shared/model-catalog"
 import { measureSeedanceDraftRenderSec, draftRenderOutputData } from "../seedance-draft-finalize.js"
 import { readDraftAudioMux, draftAudioMuxOutputData } from "../seedance-draft-audio.js"
 import { applyDraftAudioMux, draftAudioWarningOutputData, type DraftAudioMuxResult } from "../seedance-draft-audio-apply.js"
@@ -113,6 +116,20 @@ async function draftFinalizeMedia(
   })
 }
 
+/**
+ * The KIE credits to settle a recovered GPT Image 2.6 Auto run on, as the worker
+ * would have. Any other run: undefined. An Auto run whose record has no figure
+ * commits its reservation, the Max price, so that is said out loud.
+ */
+function autoQualityCreditsOf(row: KieJobRow, kieCredits: number | undefined): number | undefined {
+  const input = row.input_data ?? {}
+  if (!isGptImage26AutoRun(input.provider, input.quality)) return undefined
+  if (kieCredits === undefined) {
+    console.error(`[ALERT] job ${row.id} (${String(input.provider)} at quality auto): KIE's task record has no credits figure, so it commits its reservation (the Max price).`)
+  }
+  return kieCredits
+}
+
 /** Single-attempt poll dispatcher. Returns the recovered URL(s) on success;
  *  throws when the upstream task is still running OR has terminally failed.
  *  Caller distinguishes terminal failure via `isUpstreamKieFailure(err)` (the
@@ -121,6 +138,8 @@ async function singlePoll(row: KieJobRow, pollAttempts = 1): Promise<{
   url: string
   extraUrls: readonly string[]
   providerMs?: number
+  /** What the task really used, where the poll reads the task record. */
+  kieCredits?: number
 }> {
   if (!row.provider_task_id) throw new Error("no provider_task_id")
   const id = row.provider_task_id
@@ -137,7 +156,7 @@ async function singlePoll(row: KieJobRow, pollAttempts = 1): Promise<{
         : []
       )
       if (!urls[0]) throw new Error("KIE success but no result URL")
-      return { url: urls[0]!, extraUrls: urls.slice(1), providerMs: r.providerMs }
+      return { url: urls[0]!, extraUrls: urls.slice(1), providerMs: r.providerMs, kieCredits: kieTaskCreditsConsumed(r.rawRecordInfo) }
     }
     case "kie-veo": {
       const r = await pollVeoTask(id, "VEO")
@@ -350,7 +369,7 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
     return reconcileKieSunoJob(row, opts)
   }
 
-  let result: { url: string; extraUrls: readonly string[]; providerMs?: number }
+  let result: Awaited<ReturnType<typeof singlePoll>>
   try {
     result = await singlePoll(row, opts?.pollAttempts ?? 1)
   } catch (err) {
@@ -390,6 +409,7 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
         jobType: row.job_type,
         url: result.url,
         claimant: opts?.claimant ?? "cron",
+        autoQualityKieCredits: autoQualityCreditsOf(row, result.kieCredits),
       })
     } catch (err) {
       await bumpAttemptsOrExhaust(row.id, err)
@@ -436,7 +456,7 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
     // reservation's probe of them); `undefined` = not such a run, or
     // unmeasurable → the reservation is committed as before.
     const input = (row.input_data ?? {}) as Record<string, unknown>
-    const meteredBaseCredits = await measureSeedance2RefVideoBaseCredits({
+    const meteredBaseCredits = await gptImage26AutoSettledBase(autoQualityCreditsOf(row, result.kieCredits)) ?? await measureSeedance2RefVideoBaseCredits({
       provider: typeof input.provider === "string" ? input.provider : undefined,
       resolution: typeof input.resolution === "string" ? input.resolution : undefined,
       outputUrl: result.url,

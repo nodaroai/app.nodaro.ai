@@ -17,7 +17,7 @@ import type { ModelInputAdjustment } from "@nodaro/shared/model-catalog"
 import type { NormalizedImageGen } from "@nodaro/shared/credits"
 
 /** The catalog-governed levers a route hands to the normalizer. */
-const SNAPPED_LEVER_FIELDS = ["aspectRatio", "resolution", "quality"] as const
+const SNAPPED_LEVER_FIELDS = ["aspectRatio", "resolution", "quality", "background"] as const
 
 /** Just the snapped values — callers pass the whole `NormalizedImageGen`. */
 type SnappedLevers = Pick<NormalizedImageGen, (typeof SNAPPED_LEVER_FIELDS)[number]>

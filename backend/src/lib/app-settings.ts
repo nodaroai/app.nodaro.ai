@@ -196,7 +196,7 @@ export interface AppSettings {
    */
   rights_repeat_infringer_policy: RepeatInfringerPolicy
   /** What an admin changed about provider content filters (lib/provider-safety.ts); empty = none. */
-  provider_safety_overrides: Record<string, Record<string, boolean | number>>
+  provider_safety_overrides: Record<string, Record<string, boolean | number | string>>
 }
 
 // The settings are kept in memory so a job does not read every row each time.

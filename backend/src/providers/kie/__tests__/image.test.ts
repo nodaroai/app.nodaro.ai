@@ -53,6 +53,12 @@ vi.mock("../models.js", async (importOriginal) => {
       "gpt-image-2": { model: "gpt-image-2-text-to-image", cost: 0.02, extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
       "gpt-image-2-i2i": { model: "gpt-image-2-image-to-image", cost: 0.02, inputType: "image-to-image", imageParam: "input_urls", extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
       // GPT Image 2.5 Flare — same family quirk; widest ratio set, no cross-field limit.
+      // GPT Image 2.6 — the REAL configs: what is tested is what they declare.
+      "gpt-image-2-6-flare": actual.KIE_IMAGE_MODELS["gpt-image-2-6-flare"],
+      "gpt-image-2-6-flare-i2i": actual.KIE_IMAGE_MODELS["gpt-image-2-6-flare-i2i"],
+      "gpt-image-2-6-economy": actual.KIE_IMAGE_MODELS["gpt-image-2-6-economy"],
+      "gpt-image-2-6-economy-i2i": actual.KIE_IMAGE_MODELS["gpt-image-2-6-economy-i2i"],
+      "gpt-image-2-6-sunburst-i2i": actual.KIE_IMAGE_MODELS["gpt-image-2-6-sunburst-i2i"],
       "gpt-image-2-5-flare": { model: "gpt-image-2-5-flare-text-to-image", cost: 0.03, extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
       "gpt-image-2-5-flare-i2i": { model: "gpt-image-2-5-flare-image-to-image", cost: 0.03, inputType: "image-to-image", imageParam: "input_urls", extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
       "grok-i2i": { model: "grok-imagine/image-to-image", cost: 0.04, inputType: "image-to-image", imageParam: "image_urls", extraParams: {} },
@@ -593,5 +599,108 @@ describe("ideogram-edit mask polarity (models.ts `maskEditColor`)", () => {
 
     expect(mocks.mockUploadBufferToR2).not.toHaveBeenCalled()
     expect(sentInput().mask_url).toBe("https://src.png")
+  })
+})
+
+describe("GPT Image 2.6 on the wire", () => {
+  beforeEach(() => vi.clearAllMocks())
+  const done = (creditsConsumed?: unknown) => ({
+    resultJson: { resultUrls: ["https://result.png"] },
+    rawRecordInfo: { code: 200, message: "success", data: creditsConsumed === undefined ? { taskId: "t1" } : { taskId: "t1", creditsConsumed } },
+  })
+
+  it("sends KIE's model id, the quality, the size and the background", async () => {
+    mocks.mockRunKieTask.mockResolvedValue(done(9.5))
+    await provider.generateImage("a tag that reads BATCH 07", undefined, "gpt-image-2-6-flare", { quality: "low", resolution: "1K", background: "transparent" })
+    const [modelId, input] = mocks.mockRunKieTask.mock.calls[0]!
+    expect(modelId).toBe("gpt-image-2-6/flare-text-to-image")
+    expect(input).toMatchObject({ quality: "low", resolution: "1K", background: "transparent" })
+    expect(input.moderation).toBeUndefined()
+  })
+
+  it("an image sent moves it to the edit endpoint as input_urls", async () => {
+    mocks.mockRunKieTask.mockResolvedValue(done(12))
+    await provider.generateImage("keep the bottle", ["https://a.png"], "gpt-image-2-6-flare")
+    const [modelId, input] = mocks.mockRunKieTask.mock.calls[0]!
+    expect(modelId).toBe("gpt-image-2-6/flare-image-to-image")
+    expect(input.input_urls).toHaveLength(1)
+  })
+
+  it("Economy sends neither quality nor size", async () => {
+    mocks.mockRunKieTask.mockResolvedValue(done(5))
+    await provider.generateImage("a cat", undefined, "gpt-image-2-6-economy")
+    const [modelId, input] = mocks.mockRunKieTask.mock.calls[0]!
+    expect(modelId).toBe("gpt-image-2-6/economy-text-to-image")
+    expect(input.quality).toBeUndefined()
+    expect(input.resolution).toBeUndefined()
+  })
+
+  it("sends a Flare request only the fields of its schema", async () => {
+    mocks.mockRunKieTask.mockResolvedValue(done(9.5))
+    await provider.generateImage("a cat", undefined, "gpt-image-2-6-flare", {
+      aspect_ratio: "16:9", resolution: "2K", quality: "high", background: "auto",
+      seed: 7, strength: 0.5, guidance_scale: 3, rendering_speed: "TURBO", style_type: "REALISTIC", negative_prompt: "x", mask_url: "https://m.png",
+    })
+    const [, input] = mocks.mockRunKieTask.mock.calls[0]!
+    expect(Object.keys(input).sort()).toEqual(["aspect_ratio", "background", "prompt", "quality", "resolution"])
+  })
+
+  it("an edit keeps its images and no mask", async () => {
+    mocks.mockRunKieTask.mockResolvedValue(done(12))
+    await provider.generateImage("keep it", ["https://a.png"], "gpt-image-2-6-sunburst-i2i", { mask_url: "https://m.png", seed: 3 })
+    const [, input] = mocks.mockRunKieTask.mock.calls[0]!
+    expect(input.input_urls).toHaveLength(1)
+    expect(input.mask_url).toBeUndefined()
+    expect(input.seed).toBeUndefined()
+  })
+
+  it("quality auto is sent as it is and reports what KIE billed", async () => {
+    mocks.mockRunKieTask.mockResolvedValue(done(21.5))
+    const result = await provider.generateImage("a cat", undefined, "gpt-image-2-6-flare", { quality: "auto" })
+    expect(mocks.mockRunKieTask.mock.calls[0]![1]).toMatchObject({ quality: "auto" })
+    expect(result.autoQualityKieCredits).toBe(21.5)
+  })
+
+  it("every other quality keeps its fixed price: no settlement figure", async () => {
+    mocks.mockRunKieTask.mockResolvedValue(done(21.5))
+    const result = await provider.generateImage("a cat", undefined, "gpt-image-2-6-flare", { quality: "max" })
+    expect(result.autoQualityKieCredits).toBeUndefined()
+  })
+
+  it("an auto run whose record has no figure says so loudly and settles on nothing", async () => {
+    const alert = vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.mockRunKieTask.mockResolvedValue(done())
+    const result = await provider.generateImage("a cat", undefined, "gpt-image-2-6-flare", { quality: "auto" })
+    expect(result.autoQualityKieCredits).toBeUndefined()
+    expect(alert.mock.calls.some(([m]) => String(m).startsWith("[ALERT]") && String(m).includes("Max price"))).toBe(true)
+    alert.mockRestore()
+  })
+
+  it("Economy sends only what its own schema has", async () => {
+    mocks.mockRunKieTask.mockResolvedValue(done(5))
+    await provider.generateImage("a cat", ["https://a.png"], "gpt-image-2-6-economy-i2i", {
+      aspect_ratio: "1:1", resolution: "2K", quality: "high", background: "transparent", moderation: "low", seed: 1,
+    })
+    const [modelId, input] = mocks.mockRunKieTask.mock.calls[0]!
+    expect(modelId).toBe("gpt-image-2-6/economy-image-to-image")
+    expect(Object.keys(input).sort()).toEqual(["aspect_ratio", "background", "input_urls", "prompt"])
+  })
+
+  it("another model is sent as before", async () => {
+    mocks.mockRunKieTask.mockResolvedValue(done())
+    await provider.generateImage("a cat", undefined, "gpt-image-2-5-flare", { seed: 9 })
+    expect(mocks.mockRunKieTask.mock.calls[0]![1].seed).toBe(9)
+  })
+
+  it("records what the task really consumed", async () => {
+    mocks.mockRunKieTask.mockResolvedValue(done(9.5))
+    const result = await provider.generateImage("a cat", undefined, "gpt-image-2-6-flare")
+    expect(result.cost).toBeCloseTo(9.5 * 0.005, 6)
+  })
+
+  it("keeps the listed figure when the record carries none", async () => {
+    mocks.mockRunKieTask.mockResolvedValue(done())
+    const result = await provider.generateImage("a cat", undefined, "gpt-image-2-6-flare")
+    expect(result.cost).toBe(0.0391)
   })
 })

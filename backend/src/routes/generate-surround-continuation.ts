@@ -8,6 +8,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { hasCredits } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { plainEntityCreditIdentifier } from "../lib/entity-credit-identifier.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
@@ -90,14 +91,14 @@ export async function generateSurroundContinuationRoutes(app: FastifyInstance) {
   app.post(
     "/v1/generate-surround-continuation",
     {
-      preHandler: creditGuard((req) => extractProvider(req.body, IMAGE_MODEL_ROLE_DEFAULTS.general), {
+      preHandler: creditGuard((req) => plainEntityCreditIdentifier(extractProvider(req.body, IMAGE_MODEL_ROLE_DEFAULTS.general), 1), {
         // Add the opt-in refine upscale as a credit addon on top of the image
         // provider's base. Returns BASE credits (markup applied in creditGuard so
         // the same number is checked + reserved). Mirrors generate-character.
         computeCredits: async (body) => {
           const b = body as Record<string, unknown>
           const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
-          let credits = (await getModelCreditBaseCost(extractProvider(body, IMAGE_MODEL_ROLE_DEFAULTS.general))).creditCost
+          let credits = (await getModelCreditBaseCost(plainEntityCreditIdentifier(extractProvider(body, IMAGE_MODEL_ROLE_DEFAULTS.general), 1))).creditCost
           if (b.refine === true) {
             const rp = typeof b.refineProvider === "string" ? b.refineProvider : "recraft-upscale"
             credits += (await getModelCreditBaseCost(rp)).creditCost
@@ -156,7 +157,8 @@ export async function generateSurroundContinuationRoutes(app: FastifyInstance) {
         }
       }
 
-      const modelIdentifier = parsed.data.provider
+      // The worker always sends the one composite image.
+      const modelIdentifier = plainEntityCreditIdentifier(parsed.data.provider, 1)
       // B4b: deployment prompt policy at this route's assembly point — the
       // surround-fill lane's only policing site. No policy registered = identity.
       const prompt = applyPromptPolicies({

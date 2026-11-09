@@ -323,3 +323,15 @@ describe("POST /v1/generate-surround-continuation", () => {
     expect(supabase.from).not.toHaveBeenCalled()
   })
 })
+
+describe("POST /v1/generate-surround-continuation — GPT Image 2.6's price", () => {
+  it("is priced on the one composite the worker sends", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-surround-continuation",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { referenceImageUrl: REF_URL, direction: "right", provider: "gpt-image-2-6-sunburst", aspectRatio: "16:9" },
+    })
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("gpt-image-2-6-sunburst-i2i:medium:1K:1ref")
+  })
+})

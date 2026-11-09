@@ -899,6 +899,7 @@ export async function generateImage(
     maskUrl?: string
     strength?: number
     guidanceScale?: number
+    background?: string
   },
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
@@ -959,6 +960,9 @@ export async function generateImage(
   }
   if (inpaint?.guidanceScale != null) {
     body.guidanceScale = inpaint.guidanceScale
+  }
+  if (inpaint?.background) {
+    body.background = inpaint.background
   }
   return apiJson("/v1/generate-image", {
     body,
@@ -1101,6 +1105,7 @@ export async function imageToImage(
     aspectRatio?: string
     resolution?: string
     quality?: string
+    background?: string
     negativePrompt?: string
     seed?: number
     renderingSpeed?: string
@@ -1130,6 +1135,7 @@ export async function imageToImage(
   if (options?.aspectRatio) body.aspectRatio = options.aspectRatio
   if (options?.resolution) body.resolution = options.resolution
   if (options?.quality) body.quality = options.quality
+  if (options?.background) body.background = options.background
   if (options?.negativePrompt) body.negativePrompt = options.negativePrompt
   if (options?.seed != null) body.seed = options.seed
   if (options?.renderingSpeed) body.renderingSpeed = options.renderingSpeed
@@ -1159,6 +1165,7 @@ export async function modifyImage(
     aspectRatio?: string
     resolution?: string
     quality?: string
+    background?: string
     negativePrompt?: string
     seed?: number
     renderingSpeed?: string

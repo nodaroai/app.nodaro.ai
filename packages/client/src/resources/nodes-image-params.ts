@@ -9,6 +9,7 @@
  */
 import type {
   ImageAspectRatio,
+  ImageBackground,
   ImageEditProvider,
   ImageEditTargetResolution,
   ImageQuality,
@@ -55,6 +56,8 @@ export interface ImageToImageParams extends GenerationSessionParams {
   referenceImageUrls?: string[]
   resolution?: ImageResolution
   quality?: ImageQuality
+  /** Image background, on the models that take one. `transparent` renders at 1K. */
+  background?: ImageBackground
   /** 0–1: how far the result may move from the source (taken by the models in `I2I_STRENGTH_SUPPORT`). */
   strength?: number
   /** `"auto"` on a model without a native auto keeps the source image's shape (the model's nearest ratio). */
