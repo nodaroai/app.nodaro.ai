@@ -892,8 +892,7 @@ describe("strings — carried raw by the server, validated only on the way to /c
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
     const { RUNTIME_SURFACE_MAX_BYTES } = await import("../surface-profile-runtime-config.js")
     const { UI_STRINGS_MAX_BYTES } = await import("../surface-strings.js")
-    // Two products' worth is impossible today (one product), so fill Flow to its own
-    // budget in two locales: each block passes, together they are over the surface limit.
+    // Fill Flow to its own budget in two locales: each block passes, together they are over the surface limit.
     const plain = Object.entries(FLOW.keys).filter(([, names]) => names.length === 0).map(([key]) => key)
     const perLocale = Math.floor(UI_STRINGS_MAX_BYTES / 2 / 1000)
     const fill = (from: number) => Object.fromEntries(plain.slice(from, from + perLocale).map((key) => [key, "x".repeat(1000)]))

@@ -20,9 +20,15 @@ import { canonicalLocaleId } from "./surface-profile-client-keys.js"
  *
  * Every entry is checked against the product's key manifest, which its build
  * derives from its base (English) dictionary and leaves beside its output
- * (frontend/src/lib/i18n/ui-strings-manifest-plugin.ts): the key exists there,
- * the locale is one the deployment offers, the text is plain, its
+ * (frontend/src/lib/i18n/ui-strings-manifest-plugin.ts for Flow): the key
+ * exists there, the locale is one the deployment offers, the text is plain, its
  * {placeholders} are exactly the base string's, and its length is sane.
+ *
+ * Every product's manifest is read from one directory, Flow's build output. A
+ * deployment that composes another product's app into the same image copies
+ * that product's manifest there, next to Flow's own. A manifest that is not
+ * there costs that one product its overrides, with one warning; the other
+ * products keep theirs.
  *
  * INVALID INPUT IS DROPPED WITH A WARNING, never fatal. That is the profile's
  * convention for a field (a partial config is a first-class state): each bad
@@ -74,7 +80,7 @@ export function readUiStringManifest(product: UiStringProduct, dir: string = FRO
     text = readFileSync(file, "utf8")
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code
-    return { problem: code === "ENOENT" ? `there is no key manifest at ${file} (a local dev run, or a build that did not emit it)` : `the key manifest at ${file} cannot be read (${code ?? (err as Error).message})` }
+    return { problem: code === "ENOENT" ? `there is no key manifest at ${file} (a local dev run, a build that did not emit it, or an image that did not copy it there)` : `the key manifest at ${file} cannot be read (${code ?? (err as Error).message})` }
   }
   let parsed: unknown
   try {

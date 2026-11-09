@@ -186,10 +186,13 @@ export function isSameSitePath(value: unknown): value is string {
 /**
  * The products whose UI strings a deployment may override, each keyed in
  * `surface.strings` by its id and checked against that product's own
- * dictionary. `flow`: the platform's workflow editor. A product adopts the
- * overrides by adding its id here and giving the platform its key manifest.
+ * dictionary. `flow`: the platform's workflow editor; `tools`: the tools app;
+ * `voice`: the voice app. One profile words them all. A product adopts the
+ * overrides by adding its id here and giving the platform its key manifest
+ * (`uiStringManifestFile`), which a deployment composing the app into one
+ * image copies next to Flow's own.
  */
-export const UI_STRING_PRODUCTS = Object.freeze(["flow"] as const)
+export const UI_STRING_PRODUCTS = Object.freeze(["flow", "tools", "voice"] as const)
 export type UiStringProduct = (typeof UI_STRING_PRODUCTS)[number]
 
 /**

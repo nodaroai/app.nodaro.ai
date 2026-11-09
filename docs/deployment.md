@@ -1234,8 +1234,8 @@ Two keys change what the editor shows without a rebuild. Both are **absent
 unless you set them**. With neither set, `/config.js` and `index.html` are byte
 for byte what they are without this feature.
 
-**`strings`: your own wording for any of the editor's UI strings, per
-language.**
+**`strings`: your own wording for the UI strings of the editor, the tools app
+and the voice app, per language.**
 
 ```json
 "strings": {
@@ -1246,12 +1246,13 @@ language.**
 }
 ```
 
-- The first level names the product whose strings you override. `flow` is the
-  workflow editor; it is the only product that reads them so far.
-- The keys are the editor's message keys (`frontend/src/lib/i18n/en.ts`): every
-  key whose English text is not blank. The blank ones are grammar data (a
-  word's grammatical gender, the gap between joined fragments) and cannot be
-  overridden.
+- The first level names the product whose strings you override: `flow` is the
+  workflow editor, `tools` the tools app and `voice` the voice app. One profile
+  sets your wording in all three, and each app reads only its own block.
+- The keys are that product's own message keys. For `flow` they are in
+  `frontend/src/lib/i18n/en.ts`. Every key whose English text is not blank can
+  be overridden. The blank ones are grammar data (a word's grammatical gender,
+  the gap between joined fragments) and cannot be.
 - An override replaces that one string in that one language. An `en` override
   is also the English that a language without its own translation of the key
   falls back to.
@@ -1259,9 +1260,9 @@ language.**
   `/config.js`. An entry that fails a check is **dropped, with a
   `[surface-profile] strings…` warning** in the log. The rest are kept, and a
   bad entry never stops the deployment from starting. An entry is dropped when:
-  - its key is not one of the editor's;
-  - its language is not one you offer: `locale.offered`, or, without it, the
-    editor's languages (`en`, `he`, `ja`, `ko`, `pt-BR`);
+  - its key is not one of that product's;
+  - its language is not one you offer: `locale.offered`, or, without it, that
+    product's languages (the editor's are `en`, `he`, `ja`, `ko`, `pt-BR`);
   - its text is blank, longer than 1,000 characters, or not plain text. Plain
     text has no HTML (no tag such as `<b>` or `</a>`, no comment, no character
     reference such as `&amp;`: the editor shows text exactly as written), no
@@ -1270,15 +1271,22 @@ language.**
     right-to-left text uses are fine;
   - its `{placeholders}` are not exactly those of the English string. Every
     placeholder stays and none is added; their order may change.
-- The list of keys comes from the editor's own build, which leaves
-  `ui-strings-manifest.flow.json` beside `index.html` (keys and placeholder names
-  only, no text). If that file is missing, as on a local development run, the
-  deployment still starts, and every override is dropped with a warning.
+- The list of keys comes from each product's own build, which leaves
+  `ui-strings-manifest.<product>.json` beside its `index.html` (keys and
+  placeholder names only, no text). The container reads every product's file
+  from the editor's build directory (`frontend/dist`, where the editor's
+  `ui-strings-manifest.flow.json` already is). So if you compose the tools app
+  or the voice app into one image with the editor, copy that app's manifest
+  file there, next to the editor's own.
+- If a product's file is missing, as on a local development run or in an image
+  that did not copy it, the deployment still starts. That product's overrides
+  are dropped, with one warning, and the other products keep theirs.
 - One product's overrides may hold at most 64 KiB of text; a larger block is
   dropped as a whole. `/config.js` loads before every page renders, and the
   container hands the whole profile to its writer as a single environment
-  variable, which Linux caps at 128 KiB. So if the profile with its overrides
-  would pass 120 KiB, the overrides are dropped, and only them.
+  variable, which Linux caps at 128 KiB. So if the profile with its overrides,
+  every product's together, would pass 120 KiB, all the overrides are dropped,
+  and nothing else.
 - `/config.js` loads before the app, so the editor shows your wording from its
   first render. Messages the server sends, and the label tables keyed by
   English text (node headers, handle names, model descriptions), are not

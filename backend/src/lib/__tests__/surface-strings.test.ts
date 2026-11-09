@@ -69,7 +69,7 @@ describe("readUiStringManifest — the file the editor's build leaves beside its
 
   it("an absent file: no manifest, and it says so", () => {
     const read = readUiStringManifest("flow", tempDir())
-    expect("problem" in read && read.problem).toMatch(/there is no key manifest at .*ui-strings-manifest\.flow\.json \(a local dev run, or a build that did not emit it\)/)
+    expect("problem" in read && read.problem).toMatch(/there is no key manifest at .*ui-strings-manifest\.flow\.json \(a local dev run, a build that did not emit it, or an image that did not copy it there\)/)
   })
 
   it("an absent file: every override is dropped with one clear warning, and nothing throws", () => {
@@ -103,9 +103,87 @@ describe("readUiStringManifest — the file the editor's build leaves beside its
     quiet()
     const read = vi.fn(fromBuild)
     expect(resolveSurfaceStrings(undefined, undefined, read)).toBeUndefined()
-    expect(resolveSurfaceStrings({ voice: { en: { "x.y": "z" } } }, undefined, read)).toBeUndefined()
+    expect(resolveSurfaceStrings({ other: { en: { "x.y": "z" } } }, undefined, read)).toBeUndefined()
     expect(resolveSurfaceStrings("x", undefined, read)).toBeUndefined()
     expect(read).not.toHaveBeenCalled()
+  })
+})
+
+describe("the other products — each checked against its own manifest, in one directory", () => {
+  // Stands in for the tools app's and the voice app's own dictionaries: a key of theirs
+  // that is not Flow's, and one with placeholders, so the check can only pass against the right file.
+  const TOOLS: UiStringManifest = buildUiStringManifest("tools", { "quota.short": "Not enough credits. Ask your admin for more.", "quota.needed": "This run needs {required} and you have {available}." }, ["en", "he"])
+  const VOICE: UiStringManifest = buildUiStringManifest("voice", { "voice.quota": "Out of minutes." }, ["en", "ja"])
+  const FLOW_OVERRIDE = { flow: { en: { [KEY]: EN_TEXT } } }
+
+  const dirs: string[] = []
+  /** A composed image's build directory: Flow's manifest and the others copied next to it. */
+  const buildDirHolding = (...manifests: UiStringManifest[]) => {
+    const dir = mkdtempSync(join(tmpdir(), "ui-strings-composed-"))
+    dirs.push(dir)
+    for (const manifest of manifests) writeFileSync(join(dir, uiStringManifestFile(manifest.product)), JSON.stringify(manifest))
+    return dir
+  }
+  const resolveIn = (dir: string, raw: unknown, offered?: readonly string[]) => resolveSurfaceStrings(raw, offered, (product) => readUiStringManifest(product, dir))
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+  })
+
+  it("a strings.tools entry is checked against the tools manifest, not Flow's", () => {
+    const warn = quiet()
+    const dir = buildDirHolding(FLOW, TOOLS)
+    const text = "Your Example Studio allowance is used up."
+    expect(resolveIn(dir, { tools: { en: { "quota.short": text, [KEY]: "A key only Flow has" } } })).toEqual({ tools: { en: { "quota.short": text } } })
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0][0]).toBe(`[surface-profile] strings.tools.en.${JSON.stringify(KEY)} dropped — is not a key of the tools dictionary`)
+  })
+
+  it("the placeholders it must keep are that product's base string's", () => {
+    const warn = quiet()
+    const dir = buildDirHolding(FLOW, TOOLS)
+    const kept = "You have {available}; this needs {required}."
+    expect(resolveIn(dir, { tools: { en: { "quota.needed": kept } } })).toEqual({ tools: { en: { "quota.needed": kept } } })
+    expect(warn).not.toHaveBeenCalled()
+    expect(resolveIn(dir, { tools: { en: { "quota.needed": "This run needs {required}." } } })).toBeUndefined()
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0][0]).toMatch(/strings\.tools\.en\."quota\.needed" dropped — uses placeholders \{required\}, but the base string uses \{available\}, \{required\}/)
+  })
+
+  it("without locale.offered, a product's overrides may target that product's own languages; with it, the deployment's", () => {
+    const warn = quiet()
+    const dir = buildDirHolding(TOOLS)
+    const heText = "נגמרה המכסה."
+    expect(resolveIn(dir, { tools: { he: { "quota.short": heText }, ja: { "quota.short": "x" } } })).toEqual({ tools: { he: { "quota.short": heText } } })
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0][0]).toBe("[surface-profile] strings.tools.ja dropped — ja is not offered (tools offers: en, he)")
+    warn.mockClear()
+    expect(resolveIn(dir, { tools: { he: { "quota.short": heText }, en: { "quota.short": "x" } } }, ["he"])).toEqual({ tools: { he: { "quota.short": heText } } })
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0][0]).toBe("[surface-profile] strings.tools.en dropped — en is not offered (locale.offered: he)")
+  })
+
+  it("each product reads its own manifest: the file of one is never taken for another", () => {
+    const warn = quiet()
+    const dir = buildDirHolding(TOOLS, VOICE)
+    expect(resolveIn(dir, { tools: { en: { "quota.short": "A" } }, voice: { ja: { "voice.quota": "B" } } })).toEqual({ tools: { en: { "quota.short": "A" } }, voice: { ja: { "voice.quota": "B" } } })
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it("a missing manifest drops only that product's overrides, with one warning, and the others stay", () => {
+    const warn = quiet()
+    const dir = buildDirHolding(FLOW, VOICE)
+    const raw = { ...FLOW_OVERRIDE, tools: { en: { "quota.short": "A", "quota.needed": "{required} {available}" }, he: { "quota.short": "B" } }, voice: { en: { "voice.quota": "C" } } }
+    expect(resolveIn(dir, raw)).toEqual({ ...FLOW_OVERRIDE, voice: { en: { "voice.quota": "C" } } })
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0][0]).toMatch(/^\[surface-profile\] strings\.tools: every override dropped — there is no key manifest at .*ui-strings-manifest\.tools\.json \(.*\), so none can be checked$/)
+  })
+
+  it("Flow's own missing manifest drops only Flow's, with one warning", () => {
+    const warn = quiet()
+    const dir = buildDirHolding(TOOLS)
+    expect(resolveIn(dir, { ...FLOW_OVERRIDE, tools: { en: { "quota.short": "A" } } })).toEqual({ tools: { en: { "quota.short": "A" } } })
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0][0]).toMatch(/strings\.flow: every override dropped/)
   })
 })
 
@@ -204,8 +282,8 @@ describe("resolveSurfaceStrings — drop each bad entry with a warning, keep the
 
   it("a product that reads no overrides is dropped; Flow's beside it stay", () => {
     const warn = quiet()
-    expect(resolveFlow({ voice: { en: { "x.y": "z" } }, flow: { en: { [KEY]: EN_TEXT } } })).toEqual({ flow: { en: { [KEY]: EN_TEXT } } })
-    expect(warn).toHaveBeenCalledWith('[surface-profile] strings.voice dropped — "voice" is not a product that reads overrides (known: flow)')
+    expect(resolveFlow({ other: { en: { "x.y": "z" } }, flow: { en: { [KEY]: EN_TEXT } } })).toEqual({ flow: { en: { [KEY]: EN_TEXT } } })
+    expect(warn).toHaveBeenCalledWith('[surface-profile] strings.other dropped — "other" is not a product that reads overrides (known: flow, tools, voice)')
   })
 
   it.each([["a string", "x"], ["an array", [1]], ["null", null], ["a number", 7]])("strings as %s is ignored, loudly", (_label, raw) => {

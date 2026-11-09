@@ -311,7 +311,7 @@ describe("isSameSitePath — a brand.favicon entry", () => {
 
 describe("UI-string overrides — surface.strings", () => {
   it("names the products that read their own namespace", () => {
-    expect([...UI_STRING_PRODUCTS]).toEqual(["flow"])
+    expect([...UI_STRING_PRODUCTS]).toEqual(["flow", "tools", "voice"])
     expect(Object.isFrozen(UI_STRING_PRODUCTS)).toBe(true)
   })
 
@@ -352,6 +352,8 @@ describe("UI-string overrides — surface.strings", () => {
 describe("the UI-string key manifest", () => {
   it("names one file per product", () => {
     expect(uiStringManifestFile("flow")).toBe("ui-strings-manifest.flow.json")
+    expect(uiStringManifestFile("tools")).toBe("ui-strings-manifest.tools.json")
+    expect(uiStringManifestFile("voice")).toBe("ui-strings-manifest.voice.json")
   })
 
   it("reads {name} placeholders only, each once, sorted", () => {
