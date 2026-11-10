@@ -12973,6 +12973,7 @@ export const en = {
   "speakerView.reason.slotsFixed": "{layout} keeps its slots in place, so there is nothing to move.",
   "speakerView.reason.noSameCamera": "No speaker change can pan here.",
   "speakerView.reason.noClockJump": "No stretch was cut out at any of the {changes} speaker changes, so there is nothing to crossfade.",
+  "speakerView.reason.nothingCut": "Nothing is cut out of the recording, so there is nothing to crossfade.",
   "speakerView.reason.clip": "Clip {clip}: {reason}",
   "speakerView.snappedAspect": "{from} isn't drawn for {aspect} — renders as {to}.",
   "speakerView.snappedSpeakers": "{from} doesn't fit this edit's speakers — renders as {to}.",

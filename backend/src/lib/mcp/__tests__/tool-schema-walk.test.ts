@@ -80,7 +80,15 @@ function parseToolFile(filename: string): ParsedTool[] {
       tools.push({ file: filename, name, schemaKeys: [], source })
       continue
     }
-    const openIdx = source.indexOf("{", inputSchemaIdx)
+    // A use-case run verb's schema is its shared input's `shape` (verbs-use-case-input.ts:
+    // `inputSchema: X_INPUT.shape`, the same shape estimate_use_case validates against):
+    // walk that object literal, in the same file, as if it were written inline.
+    const shared = /^inputSchema\s*:\s*([A-Z][A-Z0-9_]*)\.shape\b/.exec(source.slice(inputSchemaIdx))
+    const sharedAt = shared ? source.search(new RegExp(`const ${shared[1]} = useCaseVerbInput\\(\\{`)) : -1
+    if (shared && sharedAt === -1) {
+      throw new Error(`Tool "${name}" in ${filename} takes ${shared[1]}.shape, but no \`const ${shared[1]} = useCaseVerbInput({\` is in that file`)
+    }
+    const openIdx = source.indexOf("{", shared ? source.indexOf("shape:", sharedAt) : inputSchemaIdx)
     if (openIdx === -1) {
       tools.push({ file: filename, name, schemaKeys: [], source })
       continue

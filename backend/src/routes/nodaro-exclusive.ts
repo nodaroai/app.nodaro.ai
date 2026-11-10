@@ -145,6 +145,7 @@ const cameraSwitchSetting = (key: CameraSwitchNumericSetting) =>
 const cameraSwitchSettings = z.object({
   minShotMs: cameraSwitchSetting("minShotMs"),
   leadMs: cameraSwitchSetting("leadMs"),
+  lagMs: cameraSwitchSetting("lagMs"),
   maxShotMs: cameraSwitchSetting("maxShotMs"),
   wideEvery: cameraSwitchSetting("wideEvery"),
   speakerNames: z.record(z.string().min(1).max(200), z.string().min(1).max(CAMERA_SWITCH_NAME_MAX)).optional(),

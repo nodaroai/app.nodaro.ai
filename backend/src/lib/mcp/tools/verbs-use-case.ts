@@ -3,7 +3,9 @@
  * (`tighten_episode` → POST /v1/tighten-episode, `make_chapters` → POST
  * /v1/episode-chapters, `make_trailer` → POST /v1/episode-trailer,
  * `make_clip_pack` → POST /v1/clip-pack, `continue_use_case` → POST
- * /v1/<the run's type>/continue, the type read from the run's own job row). CORE and ungated like `apply_edl`: the route
+ * /v1/<the run's type>/continue, the type read from the run's own job row;
+ * `estimate_use_case` → POST /v1/<type>/estimate, verbs-use-case-estimate.ts,
+ * with each run verb's own input). CORE and ungated like `apply_edl`: the route
  * answers an install that cannot run it (unconnected, keyless) with its own
  * honest 503 before any charge. Its own module (the video verbs file is past
  * 3,000 lines); `registerVideoVerbs` calls it after its `workflows:execute`
@@ -33,6 +35,8 @@ import {
   TRAILER_FORMATS,
   USE_CASE_NODE_TYPES,
   isClipPackEmphasis,
+  trailerRepeatedFormat,
+  trailerRepeatedFormatMessage,
   usecaseContinuePath,
   usecaseDescriptor,
   usecaseFeeCreditId,
@@ -54,7 +58,9 @@ import type { RegisterOpts } from "./verbs-image.js"
 import { clientRequestIdSchema, dispatchJob, errorResult, JOB_OUTPUT_SCHEMA, uiMeta } from "./_verb-helpers.js"
 import { framingSourceInputShape, framingSourcePayload } from "./verbs-use-case-framing.js"
 import { RECORDINGS_SENTENCE, recordingsInputShape, recordingsPayload } from "./verbs-use-case-recordings.js"
-import { registerSpeakerLayout } from "./verbs-use-case-speaker-layout.js"
+import { registerSpeakerLayout, SPEAKER_LAYOUT_INPUT } from "./verbs-use-case-speaker-layout.js"
+import { useCaseVerbInput, type UseCaseVerbInput } from "./verbs-use-case-input.js"
+import { registerEstimateUseCase } from "./verbs-use-case-estimate.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 const tuple = (list: readonly string[]) => list as unknown as [string, ...string[]]
@@ -227,7 +233,62 @@ export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts)
       })
     },
   )
+
+  // One quote for every offered node: its run verb's arguments, posted to its /estimate route.
+  registerEstimateUseCase({ server, session, fastify }, offered, INPUT_BY_BUILDER, refusalText)
 }
+
+/** tighten_episode's arguments and the body they make (shared with estimate_use_case). */
+const TIGHTEN_INPUT = useCaseVerbInput({
+  tool: "tighten_episode",
+  shape: {
+    ...recordingsInputShape,
+    music_url: z.string().url().optional().describe("Optional music bed, ducked under the voice and ending with the episode."),
+    output: z.enum(["video", "audio"]).optional().describe("video (default) or an audio-only episode."),
+    framing_aspect: z
+      .enum(tuple(EDL_TARGET_ASPECTS))
+      .optional()
+      .describe("Frame a video episode for this shape with Speaker View (automatic boxes over the speakers on screen). Omit for no framing."),
+    framing_layout: z
+      .enum(tuple(SPEAKER_VIEW_LAYOUT_SETTINGS))
+      .optional()
+      .describe("Layout when framing_aspect is set (default auto; one the shape does not draw is snapped). Ignored without framing_aspect."),
+    ...framingSourceInputShape,
+    captions: z.boolean().optional().describe(`Burn captions into a video episode (default ${D.captions}).`),
+    caption_style: z.enum(tuple(ALL_CAPTION_STYLES)).optional().describe(`Caption style (default ${D.captionStyle}).`),
+    review_before_render: z.boolean().optional().describe(`Stop at a proxy preview for review (default ${D.reviewBeforeRender}).`),
+    plan_tier: z.enum(tuple(EDIT_PLAN_TIERS)).optional().describe(`Editing quality (default ${D.planTier}).`),
+    instructions: z.string().max(4000).optional().describe("Editing instructions for the plan."),
+    style_guide: z.string().max(4000).optional().describe("Style guide for the plan."),
+    music_duck_amount: z
+      .number()
+      .min(0)
+      .max(100)
+      .optional()
+      .describe(`How far the music dips under speech, 0–100 (default ${D.musicDuckAmount}).`),
+    client_request_id: clientRequestIdSchema.optional(),
+  },
+  body: (args) => {
+    const recordings = recordingsPayload(args)
+    if ("error" in recordings) return recordings
+    return {
+      payload: {
+        ...recordings.payload,
+        ...(args.music_url ? { musicUrl: args.music_url } : {}),
+        ...(args.output ? { output: args.output } : {}),
+        ...(args.framing_aspect ? { framing: { aspect: args.framing_aspect, layout: args.framing_layout ?? "auto" } } : {}),
+        ...framingSourcePayload(args),
+        ...(args.captions !== undefined ? { captions: args.captions } : {}),
+        ...(args.caption_style ? { captionStyle: args.caption_style } : {}),
+        ...(args.review_before_render !== undefined ? { reviewBeforeRender: args.review_before_render } : {}),
+        ...(args.plan_tier ? { planTier: args.plan_tier } : {}),
+        ...(args.instructions ? { instructions: args.instructions } : {}),
+        ...(args.style_guide ? { styleGuide: args.style_guide } : {}),
+        ...(args.music_duck_amount !== undefined ? { musicDuckAmount: args.music_duck_amount } : {}),
+      },
+    }
+  },
+})
 
 function registerTightenEpisode({ server, session, fastify }: RegisterCtx): void {
   const TIGHTEN = usecaseDescriptor(usecaseTypeOfBuilder("tighten"))
@@ -248,58 +309,21 @@ function registerTightenEpisode({ server, session, fastify }: RegisterCtx): void
         "finished steps are kept and not charged again. Returns a job id: the episode is the job result " +
         "(`output_data.videoUrl` or `audioUrl`), the edit is `output_data.json`." +
         priceSentence(usecaseTypeOfBuilder("tighten")),
-      inputSchema: {
-        ...recordingsInputShape,
-        music_url: z.string().url().optional().describe("Optional music bed, ducked under the voice and ending with the episode."),
-        output: z.enum(["video", "audio"]).optional().describe("video (default) or an audio-only episode."),
-        framing_aspect: z
-          .enum(tuple(EDL_TARGET_ASPECTS))
-          .optional()
-          .describe("Frame a video episode for this shape with Speaker View (automatic boxes over the speakers on screen). Omit for no framing."),
-        framing_layout: z
-          .enum(tuple(SPEAKER_VIEW_LAYOUT_SETTINGS))
-          .optional()
-          .describe("Layout when framing_aspect is set (default auto; one the shape does not draw is snapped). Ignored without framing_aspect."),
-        ...framingSourceInputShape,
-        captions: z.boolean().optional().describe(`Burn captions into a video episode (default ${D.captions}).`),
-        caption_style: z.enum(tuple(ALL_CAPTION_STYLES)).optional().describe(`Caption style (default ${D.captionStyle}).`),
-        review_before_render: z.boolean().optional().describe(`Stop at a proxy preview for review (default ${D.reviewBeforeRender}).`),
-        plan_tier: z.enum(tuple(EDIT_PLAN_TIERS)).optional().describe(`Editing quality (default ${D.planTier}).`),
-        instructions: z.string().max(4000).optional().describe("Editing instructions for the plan."),
-        style_guide: z.string().max(4000).optional().describe("Style guide for the plan."),
-        music_duck_amount: z
-          .number()
-          .min(0)
-          .max(100)
-          .optional()
-          .describe(`How far the music dips under speech, 0–100 (default ${D.musicDuckAmount}).`),
-        client_request_id: clientRequestIdSchema.optional(),
-      },
+      inputSchema: TIGHTEN_INPUT.shape,
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: uiMeta(WIDGET_URI.jobAuto),
     },
     async (args) => {
-      const recordings = recordingsPayload(args)
-      if ("error" in recordings) return recordings.error
+      const body = TIGHTEN_INPUT.body(args)
+      if ("error" in body) return body.error
       return dispatchJob(fastify, session, {
         // The descriptor's route, spelled out: the surface checker reads a tool's routes from its literals.
         url: "/v1/tighten-episode",
         label: TIGHTEN.label,
         formatRefusal: refusalText,
         payload: {
-          ...recordings.payload,
-          ...(args.music_url ? { musicUrl: args.music_url } : {}),
-          ...(args.output ? { output: args.output } : {}),
-          ...(args.framing_aspect ? { framing: { aspect: args.framing_aspect, layout: args.framing_layout ?? "auto" } } : {}),
-          ...framingSourcePayload(args),
-          ...(args.captions !== undefined ? { captions: args.captions } : {}),
-          ...(args.caption_style ? { captionStyle: args.caption_style } : {}),
-          ...(args.review_before_render !== undefined ? { reviewBeforeRender: args.review_before_render } : {}),
-          ...(args.plan_tier ? { planTier: args.plan_tier } : {}),
-          ...(args.instructions ? { instructions: args.instructions } : {}),
-          ...(args.style_guide ? { styleGuide: args.style_guide } : {}),
-          ...(args.music_duck_amount !== undefined ? { musicDuckAmount: args.music_duck_amount } : {}),
+          ...body.payload,
           // The agent that asked for a review IS its reviewer (it reads the
           // preview and calls continue_use_case render-final). MCP calls come
           // in on the internal lane, where only a forwarded true counts.
@@ -315,6 +339,29 @@ function registerTightenEpisode({ server, session, fastify }: RegisterCtx): void
   )
 }
 
+/** make_chapters' arguments and the body they make (shared with estimate_use_case). */
+const CHAPTERS_INPUT = useCaseVerbInput({
+  tool: "make_chapters",
+  shape: {
+    media_url: z.string().url().describe("The recording (video or audio URL)."),
+    plan_tier: z
+      .enum(tuple(EDIT_PLAN_TIERS))
+      .optional()
+      .describe(`Planning quality (default ${EPISODE_CHAPTERS_DEFAULTS.planTier}).`),
+    instructions: z.string().max(4000).optional().describe("Instructions for the chapters (\"5 to 8 chapters\", \"short titles\")."),
+    style_guide: z.string().max(4000).optional().describe("Style guide for the chapter titles."),
+    client_request_id: clientRequestIdSchema.optional(),
+  },
+  body: (args) => ({
+    payload: {
+      mediaUrls: [args.media_url],
+      ...(args.plan_tier ? { planTier: args.plan_tier } : {}),
+      ...(args.instructions ? { instructions: args.instructions } : {}),
+      ...(args.style_guide ? { styleGuide: args.style_guide } : {}),
+    },
+  }),
+})
+
 function registerMakeChapters({ server, session, fastify }: RegisterCtx): void {
   const CHAPTERS = usecaseDescriptor(usecaseTypeOfBuilder("chapters"))
   server.registerTool(
@@ -328,40 +375,73 @@ function registerMakeChapters({ server, session, fastify }: RegisterCtx): void {
         "the list itself is `output_data.json` (`[{ startMs, title }]`, the same rows; the first starts at 0). A run that finds no chapters fails, and its fee is refunded. " +
         "If a run fails, `continue_use_case` with `mode: \"from-failed\"` re-runs only the steps that did not finish." +
         priceSentence(usecaseTypeOfBuilder("chapters")),
-      inputSchema: {
-        media_url: z.string().url().describe("The recording (video or audio URL)."),
-        plan_tier: z
-          .enum(tuple(EDIT_PLAN_TIERS))
-          .optional()
-          .describe(`Planning quality (default ${EPISODE_CHAPTERS_DEFAULTS.planTier}).`),
-        instructions: z.string().max(4000).optional().describe("Instructions for the chapters (\"5 to 8 chapters\", \"short titles\")."),
-        style_guide: z.string().max(4000).optional().describe("Style guide for the chapter titles."),
-        client_request_id: clientRequestIdSchema.optional(),
-      },
+      inputSchema: CHAPTERS_INPUT.shape,
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: uiMeta(WIDGET_URI.jobAuto),
     },
-    async (args) =>
-      dispatchJob(fastify, session, {
+    async (args) => {
+      const body = CHAPTERS_INPUT.body(args)
+      if ("error" in body) return body.error
+      return dispatchJob(fastify, session, {
         // The descriptor's route, spelled out: the surface checker reads a tool's routes from its literals.
         url: "/v1/episode-chapters",
         label: CHAPTERS.label,
         formatRefusal: refusalText,
         payload: {
-          mediaUrls: [args.media_url],
-          ...(args.plan_tier ? { planTier: args.plan_tier } : {}),
-          ...(args.instructions ? { instructions: args.instructions } : {}),
-          ...(args.style_guide ? { styleGuide: args.style_guide } : {}),
+          ...body.payload,
           mcp_client: session.clientName,
           userId: session.userId,
         },
         widgetKind: "generic",
         widgetData: { prompt: "(chapters)" },
         ...(args.client_request_id ? { clientRequestId: args.client_request_id } : {}),
-      }),
+      })
+    },
   )
 }
+
+/** make_trailer's arguments and the body they make (shared with estimate_use_case). */
+const TRAILER_INPUT = useCaseVerbInput({
+  tool: "make_trailer",
+  shape: {
+    ...recordingsInputShape,
+    // Every format is a video: Trailer's recording is a video (an audio-only one is refused).
+    media_url: recordingsInputShape.media_url.describe("The recording (a video URL; audio-only is refused). Or `media_urls`."),
+    intro_card_url: z.string().url().optional().describe("Optional intro card: a short video (15 s at most), the recording's size and shape."),
+    formats: z
+      .array(z.enum(tuple(TRAILER_FORMATS)))
+      .min(1)
+      .max(TRAILER_FORMATS.length)
+      .superRefine((list, ctx) => {
+        // The route's own refusal, in the same words (it names the format).
+        const twice = trailerRepeatedFormat(list)
+        if (twice !== null) ctx.addIssue({ code: "custom", message: trailerRepeatedFormatMessage(twice) })
+      })
+      .optional()
+      .describe(`The formats to deliver (default ${EPISODE_TRAILER_DEFAULTS.formats.join(", ")}).`),
+    review_before_render: z.boolean().optional().describe(`Stop at a proxy preview for review (default ${EPISODE_TRAILER_DEFAULTS.reviewBeforeRender}).`),
+    plan_tier: z.enum(tuple(EDIT_PLAN_TIERS)).optional().describe(`Editing quality (default ${EPISODE_TRAILER_DEFAULTS.planTier}).`),
+    instructions: z.string().max(4000).optional().describe("Instructions for the trailer (\"open on the funniest moment\")."),
+    style_guide: z.string().max(4000).optional().describe("Style guide for the plan."),
+    client_request_id: clientRequestIdSchema.optional(),
+  },
+  body: (args) => {
+    const recordings = recordingsPayload(args)
+    if ("error" in recordings) return recordings
+    return {
+      payload: {
+        ...recordings.payload,
+        ...(args.intro_card_url ? { introCardUrl: args.intro_card_url } : {}),
+        ...(args.formats ? { formats: args.formats } : {}),
+        ...(args.review_before_render !== undefined ? { reviewBeforeRender: args.review_before_render } : {}),
+        ...(args.plan_tier ? { planTier: args.plan_tier } : {}),
+        ...(args.instructions ? { instructions: args.instructions } : {}),
+        ...(args.style_guide ? { styleGuide: args.style_guide } : {}),
+      },
+    }
+  },
+})
 
 function registerMakeTrailer({ server, session, fastify }: RegisterCtx): void {
   const TRAILER = usecaseDescriptor(usecaseTypeOfBuilder("trailer"))
@@ -385,44 +465,21 @@ function registerMakeTrailer({ server, session, fastify }: RegisterCtx): void {
         "new run. If a run fails, `continue_use_case` with " +
         "`mode: \"from-failed\"` re-runs only the steps that did not finish." +
         priceSentence(usecaseTypeOfBuilder("trailer")),
-      inputSchema: {
-        ...recordingsInputShape,
-        // Every format is a video: Trailer's recording is a video (an audio-only one is refused).
-        media_url: recordingsInputShape.media_url.describe("The recording (a video URL; audio-only is refused). Or `media_urls`."),
-        intro_card_url: z.string().url().optional().describe("Optional intro card: a short video (15 s at most), the recording's size and shape."),
-        formats: z
-          .array(z.enum(tuple(TRAILER_FORMATS)))
-          .min(1)
-          .max(TRAILER_FORMATS.length)
-          .refine((list) => new Set(list).size === list.length, "Name each format once.")
-          .optional()
-          .describe(`The formats to deliver (default ${EPISODE_TRAILER_DEFAULTS.formats.join(", ")}).`),
-        review_before_render: z.boolean().optional().describe(`Stop at a proxy preview for review (default ${EPISODE_TRAILER_DEFAULTS.reviewBeforeRender}).`),
-        plan_tier: z.enum(tuple(EDIT_PLAN_TIERS)).optional().describe(`Editing quality (default ${EPISODE_TRAILER_DEFAULTS.planTier}).`),
-        instructions: z.string().max(4000).optional().describe("Instructions for the trailer (\"open on the funniest moment\")."),
-        style_guide: z.string().max(4000).optional().describe("Style guide for the plan."),
-        client_request_id: clientRequestIdSchema.optional(),
-      },
+      inputSchema: TRAILER_INPUT.shape,
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: uiMeta(WIDGET_URI.jobAuto),
     },
     async (args) => {
-      const recordings = recordingsPayload(args)
-      if ("error" in recordings) return recordings.error
+      const body = TRAILER_INPUT.body(args)
+      if ("error" in body) return body.error
       return dispatchJob(fastify, session, {
         // The descriptor's route, spelled out: the surface checker reads a tool's routes from its literals.
         url: "/v1/episode-trailer",
         label: TRAILER.label,
         formatRefusal: refusalText,
         payload: {
-          ...recordings.payload,
-          ...(args.intro_card_url ? { introCardUrl: args.intro_card_url } : {}),
-          ...(args.formats ? { formats: args.formats } : {}),
-          ...(args.review_before_render !== undefined ? { reviewBeforeRender: args.review_before_render } : {}),
-          ...(args.plan_tier ? { planTier: args.plan_tier } : {}),
-          ...(args.instructions ? { instructions: args.instructions } : {}),
-          ...(args.style_guide ? { styleGuide: args.style_guide } : {}),
+          ...body.payload,
           // The agent that asked for a review is its reviewer (as on tighten_episode).
           ...(args.review_before_render === true ? { reviewerPresent: true } : {}),
           mcp_client: session.clientName,
@@ -440,6 +497,85 @@ const F = CLIP_PACK_DEFAULT_FRAMING
 /** The emphasis values, named from the atoms Speaker View draws (its refusal and its description). */
 const EMPHASIS_VALUES = `"none", or ${SPEAKER_VIEW_EMPHASIS_ATOMS.join(", ")} joined with "+" (each once)`
 const EMPHASIS_HINT = `emphasis is ${EMPHASIS_VALUES}`
+
+/** make_clip_pack's arguments and the body they make (shared with estimate_use_case). */
+const CLIP_PACK_INPUT = useCaseVerbInput({
+  tool: "make_clip_pack",
+  shape: {
+    ...recordingsInputShape,
+    count: z
+      .number()
+      .int()
+      .min(1)
+      .max(EDIT_PLAN_MAX_CLIP_COUNT)
+      .optional()
+      .describe(`How many clips to find, 1–${EDIT_PLAN_MAX_CLIP_COUNT} (default ${CLIP_PACK_DEFAULTS.count}); the plan may find fewer.`),
+    target_length_sec: z
+      .number()
+      .int()
+      .min(CLIP_PACK_MIN_TARGET_SEC)
+      .max(CLIP_PACK_MAX_TARGET_SEC)
+      .optional()
+      .describe(`Each clip's target length in seconds, ${CLIP_PACK_MIN_TARGET_SEC}–${CLIP_PACK_MAX_TARGET_SEC} (default ${CLIP_PACK_DEFAULTS.targetDurationSec}).`),
+    framing: z
+      .object({
+        aspect: z.enum(tuple(EDL_TARGET_ASPECTS)).describe("The clips' shape."),
+        layout: z
+          .enum(tuple(SPEAKER_VIEW_LAYOUT_SETTINGS))
+          .optional()
+          .describe(`How the speakers are laid out (default ${F.layout}; one the shape does not draw is snapped).`),
+        switch_type: z.enum(tuple(SPEAKER_SWITCH_IDS)).optional().describe(`The switch at each speaker change (default ${F.switchType}).`),
+        emphasis: z
+          .string()
+          .max(40)
+          .refine(isClipPackEmphasis, EMPHASIS_HINT)
+          .optional()
+          .describe(`How the speaker talking is emphasised (default ${F.emphasisStyle}): ${EMPHASIS_VALUES}.`),
+      })
+      .nullable()
+      .optional()
+      .describe(`Frame each video clip with Speaker View on automatic boxes over the episode's speakers (default ${F.aspect}, ${F.layout}). null: the recording's shape.`),
+    ...framingSourceInputShape,
+    captions: z.boolean().optional().describe(`Caption each video clip (default ${CLIP_PACK_DEFAULTS.captions}).`),
+    caption_style: z.enum(tuple(ALL_CAPTION_STYLES)).optional().describe(`Caption style (default ${CLIP_PACK_DEFAULTS.captionStyle}).`),
+    review_before_render: z.boolean().optional().describe(`Stop at proxy previews for review (default ${CLIP_PACK_DEFAULTS.reviewBeforeRender}).`),
+    plan_tier: z.enum(tuple(EDIT_PLAN_TIERS)).optional().describe(`Editing quality (default ${CLIP_PACK_DEFAULTS.planTier}).`),
+    instructions: z.string().max(4000).optional().describe("Instructions for picking the clips (\"the funniest moments\")."),
+    style_guide: z.string().max(4000).optional().describe("Style guide for the plan."),
+    client_request_id: clientRequestIdSchema.optional(),
+  },
+  body: (args) => {
+    const recordings = recordingsPayload(args)
+    if ("error" in recordings) return recordings
+    return {
+      payload: {
+        ...recordings.payload,
+        ...(args.count !== undefined ? { count: args.count } : {}),
+        ...(args.target_length_sec !== undefined ? { targetDurationSec: args.target_length_sec } : {}),
+        // null = no framing; a field left out takes the route's default (layout: stacked).
+        ...(args.framing === null
+          ? { framing: null }
+          : args.framing
+            ? {
+                framing: {
+                  aspect: args.framing.aspect,
+                  ...(args.framing.layout ? { layout: args.framing.layout } : {}),
+                  ...(args.framing.switch_type ? { switchType: args.framing.switch_type } : {}),
+                  ...(args.framing.emphasis ? { emphasisStyle: args.framing.emphasis } : {}),
+                },
+              }
+            : {}),
+        ...framingSourcePayload(args),
+        ...(args.captions !== undefined ? { captions: args.captions } : {}),
+        ...(args.caption_style ? { captionStyle: args.caption_style } : {}),
+        ...(args.review_before_render !== undefined ? { reviewBeforeRender: args.review_before_render } : {}),
+        ...(args.plan_tier ? { planTier: args.plan_tier } : {}),
+        ...(args.instructions ? { instructions: args.instructions } : {}),
+        ...(args.style_guide ? { styleGuide: args.style_guide } : {}),
+      },
+    }
+  },
+})
 
 function registerMakeClipPack({ server, session, fastify }: RegisterCtx): void {
   const CLIP_PACK_LABEL = usecaseDescriptor(usecaseTypeOfBuilder("clipPack")).label
@@ -467,85 +603,21 @@ function registerMakeClipPack({ server, session, fastify }: RegisterCtx): void {
         "When no clip renders, the run fails and its fee is refunded. If a run fails, `continue_use_case` with " +
         "`mode: \"from-failed\"` re-runs only the steps that did not finish." +
         priceSentence(usecaseTypeOfBuilder("clipPack")),
-      inputSchema: {
-        ...recordingsInputShape,
-        count: z
-          .number()
-          .int()
-          .min(1)
-          .max(EDIT_PLAN_MAX_CLIP_COUNT)
-          .optional()
-          .describe(`How many clips to find, 1–${EDIT_PLAN_MAX_CLIP_COUNT} (default ${CLIP_PACK_DEFAULTS.count}); the plan may find fewer.`),
-        target_length_sec: z
-          .number()
-          .int()
-          .min(CLIP_PACK_MIN_TARGET_SEC)
-          .max(CLIP_PACK_MAX_TARGET_SEC)
-          .optional()
-          .describe(`Each clip's target length in seconds, ${CLIP_PACK_MIN_TARGET_SEC}–${CLIP_PACK_MAX_TARGET_SEC} (default ${CLIP_PACK_DEFAULTS.targetDurationSec}).`),
-        framing: z
-          .object({
-            aspect: z.enum(tuple(EDL_TARGET_ASPECTS)).describe("The clips' shape."),
-            layout: z
-              .enum(tuple(SPEAKER_VIEW_LAYOUT_SETTINGS))
-              .optional()
-              .describe(`How the speakers are laid out (default ${F.layout}; one the shape does not draw is snapped).`),
-            switch_type: z.enum(tuple(SPEAKER_SWITCH_IDS)).optional().describe(`The switch at each speaker change (default ${F.switchType}).`),
-            emphasis: z
-              .string()
-              .max(40)
-              .refine(isClipPackEmphasis, EMPHASIS_HINT)
-              .optional()
-              .describe(`How the speaker talking is emphasised (default ${F.emphasisStyle}): ${EMPHASIS_VALUES}.`),
-          })
-          .nullable()
-          .optional()
-          .describe(`Frame each video clip with Speaker View on automatic boxes over the episode's speakers (default ${F.aspect}, ${F.layout}). null: the recording's shape.`),
-        ...framingSourceInputShape,
-        captions: z.boolean().optional().describe(`Caption each video clip (default ${CLIP_PACK_DEFAULTS.captions}).`),
-        caption_style: z.enum(tuple(ALL_CAPTION_STYLES)).optional().describe(`Caption style (default ${CLIP_PACK_DEFAULTS.captionStyle}).`),
-        review_before_render: z.boolean().optional().describe(`Stop at proxy previews for review (default ${CLIP_PACK_DEFAULTS.reviewBeforeRender}).`),
-        plan_tier: z.enum(tuple(EDIT_PLAN_TIERS)).optional().describe(`Editing quality (default ${CLIP_PACK_DEFAULTS.planTier}).`),
-        instructions: z.string().max(4000).optional().describe("Instructions for picking the clips (\"the funniest moments\")."),
-        style_guide: z.string().max(4000).optional().describe("Style guide for the plan."),
-        client_request_id: clientRequestIdSchema.optional(),
-      },
+      inputSchema: CLIP_PACK_INPUT.shape,
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: uiMeta(WIDGET_URI.jobAuto),
     },
     async (args) => {
-      const recordings = recordingsPayload(args)
-      if ("error" in recordings) return recordings.error
+      const body = CLIP_PACK_INPUT.body(args)
+      if ("error" in body) return body.error
       return dispatchJob(fastify, session, {
         // The descriptor's route, spelled out: the surface checker reads a tool's routes from its literals.
         url: "/v1/clip-pack",
         label: CLIP_PACK_LABEL,
         formatRefusal: refusalText,
         payload: {
-          ...recordings.payload,
-          ...(args.count !== undefined ? { count: args.count } : {}),
-          ...(args.target_length_sec !== undefined ? { targetDurationSec: args.target_length_sec } : {}),
-          // null = no framing; a field left out takes the route's default (layout: stacked).
-          ...(args.framing === null
-            ? { framing: null }
-            : args.framing
-              ? {
-                  framing: {
-                    aspect: args.framing.aspect,
-                    ...(args.framing.layout ? { layout: args.framing.layout } : {}),
-                    ...(args.framing.switch_type ? { switchType: args.framing.switch_type } : {}),
-                    ...(args.framing.emphasis ? { emphasisStyle: args.framing.emphasis } : {}),
-                  },
-                }
-              : {}),
-          ...framingSourcePayload(args),
-          ...(args.captions !== undefined ? { captions: args.captions } : {}),
-          ...(args.caption_style ? { captionStyle: args.caption_style } : {}),
-          ...(args.review_before_render !== undefined ? { reviewBeforeRender: args.review_before_render } : {}),
-          ...(args.plan_tier ? { planTier: args.plan_tier } : {}),
-          ...(args.instructions ? { instructions: args.instructions } : {}),
-          ...(args.style_guide ? { styleGuide: args.style_guide } : {}),
+          ...body.payload,
           // The agent that asked for a review is its reviewer (as on tighten_episode).
           ...(args.review_before_render === true ? { reviewerPresent: true } : {}),
           mcp_client: session.clientName,
@@ -557,4 +629,13 @@ function registerMakeClipPack({ server, session, fastify }: RegisterCtx): void {
       })
     },
   )
+}
+
+/** Each use-case node's run-verb input, by its graph builder: what estimate_use_case validates and posts. */
+const INPUT_BY_BUILDER: Readonly<Record<UseCaseBuilderKey, UseCaseVerbInput>> = {
+  tighten: TIGHTEN_INPUT,
+  chapters: CHAPTERS_INPUT,
+  trailer: TRAILER_INPUT,
+  clipPack: CLIP_PACK_INPUT,
+  speakerLayout: SPEAKER_LAYOUT_INPUT,
 }

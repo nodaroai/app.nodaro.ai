@@ -9048,7 +9048,8 @@ first, [`withWorkspace`](#clientwithworkspaceworkspaceid) is the second.
 Editorial primitives for podcast / long-form video editing. Twelve
 request methods return `{ jobId }` (`EditJobResult`) — poll with
 [`client.jobs.getStatus(jobId)`](#getstatusid) — plus five quotes
-(`estimateTightenEpisode`, `estimateEpisodeChapters`, `estimateEpisodeTrailer`, `estimateClipPack`, `estimateSpeakerLayout`) and one pure local helper.
+(`estimateTightenEpisode`, `estimateEpisodeChapters`, `estimateEpisodeTrailer`, `estimateClipPack`, `estimateSpeakerLayout`), one read
+(`editPlanCapabilities`) and one pure local helper.
 
 | Method | Endpoint | Notes |
 |--------|----------|-------|
@@ -9057,6 +9058,7 @@ request methods return `{ jobId }` (`EditJobResult`) — poll with
 | `speakerMap(input)` | `POST /v1/speaker-map` | Keyless: which camera each speaker is on, from the cameras' own microphones. |
 | `applyEdl(input)` | `POST /v1/apply-edl` | Render an edit decision list (EDL) into a video or audio cut. |
 | `cameraSwitch(input)` | `POST /v1/camera-switch` | Multicam: put each cut of an EDL on the camera of whoever is speaking (flat price). Runs on nodaro.ai; a self-hosted install relays it once connected (`503 nodaro_connection_required` otherwise). |
+| `editPlanCapabilities()` | `GET /v1/edit-plan/capabilities` | The Edit Plan modes this server can plan, who answered, and whether Edit Plan is charged per started minute. Nothing is created or charged. |
 | `editPlan(input)` | `POST /v1/edit-plan` | Transcript-driven planner (tighten / clips / chapters / trailer). On a self-hosted install it relays to nodaro.ai (`503 nodaro_connection_required` when not connected). |
 | `tightenEpisode(input, options?)` | `POST /v1/tighten-episode` | Tighten Episode: one recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map), the tightened episode out — transcribe, plan, render, with optional captions, music and framing, in one call. Core; a self-hosted install needs a nodaro.ai connection for the steps that run there (`503 nodaro_connection_required` otherwise). |
 | `estimateTightenEpisode(input)` | `POST /v1/tighten-episode/estimate` | What a Tighten Episode run is estimated at. Nothing is created or charged. |
@@ -9359,7 +9361,7 @@ left out takes the node's default. See the [node page](./nodes/processing-video/
 | `masterAudioUrl` | `string` | no | The mixer or recorder track: the trailer's sound and the clock the recordings are lined up to. **Needs Speaker Map**. |
 | `cameras` | `{ wide?, synced?, speakerCameras? }` | no | With several recordings or a Master audio: as on `tightenEpisode`. Ignored on one recording with no Master audio (the CLI, by contrast, refuses its Cameras flags there and exits 1). |
 | `introCardUrl` | `string` | no | A short video, 15 s at most, played before the trailer. Make it the recording's size and shape, or one of the two is letterboxed. |
-| `formats` | `TrailerFormat[]` | no | `"9:16"` \| `"1:1"` \| `"4:5"` \| `"16:9"` (the list is exported as `TRAILER_FORMATS`; 16:9 is a 1920×1080 landscape). Default `["9:16", "1:1", "4:5"]`. At least one: an empty list is sent as is and refused `400 validation_error`. |
+| `formats` | `TrailerFormat[]` | no | `"9:16"` \| `"1:1"` \| `"4:5"` \| `"16:9"` (the list is exported as `TRAILER_FORMATS`; 16:9 is a 1920×1080 landscape). Default `["9:16", "1:1", "4:5"]`. At least one, each once: an empty list, or one that names a format twice, is sent as is and refused `400 validation_error` (a repeat is named: "The format 9:16 is listed twice: name each format once."). |
 | `reviewBeforeRender` | `boolean` | no | Stop at a quick preview of the trailer for a person to review; render every format afterwards with `continueUseCase({ mode: "render-final" })`. |
 | `planTier` | `EditPlanTier` | no | `"economy"` \| `"standard"` (default) \| `"premium"`. |
 | `instructions` | `string` | no | Instructions for the trailer (up to 4 000 characters). |
@@ -9643,6 +9645,36 @@ const done = await client.jobs.getStatus(jobId)
 const plan = unwrapEditPlanOutput(done.data.output_data)  // Edl[] for clips
 ```
 
+#### `editPlanCapabilities()`
+
+```ts
+editPlanCapabilities(): Promise<EditPlanCapabilities>
+```
+
+The Edit Plan modes this server can plan (`GET /v1/edit-plan/capabilities`).
+Nothing is created or charged. Ask it before offering a mode: `editPlan` with a
+mode the answer does not list is refused before anything is charged
+(`400 mode_not_available`).
+
+**`EditPlanCapabilities`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `modes` | `EditPlanMode[]` | The modes this server plans. `tighten`, `clips` and `chapters` are always listed; `trailer` once the server can plan a trailer. |
+| `source` | `"server" \| "nodaro.ai" \| "nodaro.ai-unreachable"` | Who answered: this server (nodaro.ai, or a self-hosted install that is not connected), nodaro.ai for a connected self-hosted install, or a connected self-hosted install that could not reach nodaro.ai (only the three original modes are listed then). A newer server may add a value. |
+| `perMinute` | `boolean` | `true` when Edit Plan is charged per started minute of the recording, `false` when at the 15/30/60/90/120/180-minute step its length rounds up to — see [Edit Plan](./nodes/processing-video/edit-plan.md#credit-cost). |
+
+The answer is never cached (`Cache-Control: private, no-store`): a server update
+can change it. The route and its reasons are described under
+[Edit Plan modes](./api-integration.md#edit-plan-modes).
+
+```ts
+const { modes } = await client.edit.editPlanCapabilities()
+if (modes.includes("trailer")) {
+  await client.edit.editPlan({ mode: "trailer", planTier: "standard", transcript, sources })
+}
+```
+
 #### `cameraSwitch(input)`
 
 ```ts
@@ -9657,6 +9689,7 @@ cameraSwitch(input: CameraSwitchInput): Promise<EditJobResult>
 | `speakerMapResult` | `SpeakerMapResult \| string` | no | A `speakerMap` job's `output_data.json`, folded into `speakerMap` before the request: a label in `speakerMap` wins, then the result, then the n-th speaker heard gets the n-th camera. Something that is not a Speaker Map result rejects with a `NodaroError` (`code: "not_a_speaker_map"`) before any request. |
 | `speakerNames` | `Record<string, string>` | no | Speaker label → display name, 1–80 characters. |
 | `minShotMs` / `leadMs` / `maxShotMs` / `wideEvery` | `number` | no | Whole numbers: shortest shot 500–60 000 (default 2 500), cut lead 0–5 000 (200), wide break after 0–600 000 (20 000, with a wide source; 0 = never), every N-th cut to the wide 0–20 (0 = off). The bounds are `CAMERA_SWITCH_BOUNDS` in `@nodaro/shared/edl`. With a wide source, a shot longer than the wide break plus two shortest shots (25 s at the defaults) cuts to the wide one wide break in (20 s), for one shortest shot. |
+| `lagMs` | `number` | no | Delay each cut by this long, in whole ms, 0–5 000 (default 0): the counterpart of `leadMs`. In `CAMERA_SWITCH_BOUNDS` too. A route setting only: a Camera Switch node on the canvas has no control for it. |
 | `layoutHints` | `boolean` | no | Overlapping speech → a layout hint (default false; Apply EDL renders cut-only edits). |
 | `workflowId` | `string` | no | Execution-history display. |
 

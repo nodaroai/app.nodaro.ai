@@ -830,6 +830,15 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `draft` | boolean |  | Default true; only at 480p (a motion-pulse trend has none). |
 | `preview_job_id` | string |  | For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over. |
 
+## `estimate_use_case`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `node_type` | string | yes | The use-case node to quote. One of `tighten-episode`, `episode-chapters`, `episode-trailer`, `clip-pack`, `speaker-layout`. |
+| `input` | object (map of any) | yes | That node's run-tool arguments. |
+
 ## `export_workflow`
 
 Needs `workflows:read`.
@@ -2927,6 +2936,34 @@ Needs `workflows:execute`.
 | `master_source_id` | string |  | The id of the master audio: hears everyone, so it is no one's camera. From 1 to 200 characters. |
 | `wide_source_id` | string |  | The id of the wide shot: no one's camera; a speaker with no clear camera is shown on it. From 1 to 200 characters. |
 | `margin_db` | number |  | How much louder (dB) the loudest camera must be than the next for a speaker to get it. Default 3. From 0 to 30. |
+
+## `speaker_view`
+
+Needs `workflows:execute` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `edl` | object (map of any) or string |  | One edit (object or JSON string). Or `video_url`. |
+| `video_url` | string (URL) |  | Instead of `edl`: a public video URL, up to 500 MB. |
+| `transcript` | object (map of any) or string |  | The word transcript with speaker labels (object or JSON string). Required with `video_url`. |
+| `target_aspect` | string |  | Output shape (default: the edit's, else 16:9; 9:16 with `video_url`). One of `16:9`, `9:16`, `1:1`, `4:5`. |
+| `layout` | string |  | Default auto; one the shape or speaker count rules out is snapped. One of `auto`, `single`, `side-by-side`, `stacked`, `grid`, `pip`. |
+| `switch` | object |  | The switch at each speaker change. |
+| `switch.type` | string | yes | cut, pan, zoom or "xfade:&lt;transition>". At most 40 characters. |
+| `switch.duration_ms` | integer |  | Pan / zoom tween length, ms. From 0 to 5000. |
+| `emphasis` | object |  | How the speaker talking is marked. |
+| `emphasis.style` | string | yes | none, or scale, border, dim joined with "+". At most 40 characters. |
+| `emphasis.duration_ms` | integer |  | Ease length, ms. From 0 to 5000. |
+| `quality` | string |  | final (default) or proxy (a private 720p preview). One of `final`, `proxy`. |
+| `speaker_regions` | object[] |  | A crop of a camera per speaker. At most 500 items. |
+| `speaker_regions[].source` | string | yes | The edit's source id (the camera). From 1 to 200 characters. |
+| `speaker_regions[].speaker` | string | yes | From 1 to 200 characters. |
+| `speaker_regions[].region` | object | yes | The crop, as fractions of the frame. |
+| `speaker_regions[].region.x` | number | yes | From 0 to 1. |
+| `speaker_regions[].region.y` | number | yes | From 0 to 1. |
+| `speaker_regions[].region.w` | number | yes | From 0.01 to 1. |
+| `speaker_regions[].region.h` | number | yes | From 0.01 to 1. |
+| `accent_color` | string |  | The Border emphasis colour, #RRGGBB (default white). |
 
 ## `speech_to_video`
 

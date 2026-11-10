@@ -489,6 +489,8 @@ describe("make_trailer", () => {
     const { server, seen } = await setup()
     const dup = await callTool(server, "make_trailer", { media_url: "https://r2/ep.mp4", formats: ["9:16", "9:16"] })
     expect(dup.isError).toBe(true)
+    // The route's own words, naming the format.
+    expect(JSON.stringify(dup.content)).toContain("The format 9:16 is listed twice: name each format once.")
     const five = await callTool(server, "make_trailer", { media_url: "https://r2/ep.mp4", formats: ["9:16", "1:1", "4:5", "16:9", "9:16"] })
     expect(five.isError).toBe(true)
     expect(seen.url).toBeUndefined()

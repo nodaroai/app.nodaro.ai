@@ -40,6 +40,8 @@ With more than one recording wired into `media`, the recordings are taken in the
 | Review before render | On / Off | Off | On: the run stops at a quick preview; **Render final** then makes the full-quality video. See [Review before render](#review-before-render). |
 | Cameras | Wide camera, Recordings already in sync, Who is on which camera | — | Shown with two or more recordings or a Master audio, where Speaker Map is available to you. See [Several cameras](#several-cameras). |
 
+**Greyed switches.** The Crossfade is always greyed — *Nothing is cut out of the recording, so there is nothing to crossfade.* — because Speaker Layout keeps the whole recording, and a crossfade is drawn only where a stretch was cut out between two speakers. Pan and Zoom are greyed under Side by side, Stacked and Grid, which keep their slots in place, with the reason [Speaker View](./speaker-view.md#which-choices-apply-where) gives. A crossfade, Pan or Zoom stored on the node or sent over the API anyway is kept, and drawn as a cut there.
+
 Each speaker on screen gets an automatic box — the default boxes Speaker View's **Split the camera by speaker** deals. A voice heard only briefly — under 10 seconds and under 5 % of the talk — gets no box of its own, so a stray label in the transcript never takes a share of the frame.
 
 ## Following faces
@@ -113,6 +115,8 @@ The estimate prices Speaker View at the recording's full length — the length o
 `POST /v1/speaker-layout/continue` with `{ jobId, mode }` continues one of your runs: `"mode": "from-failed"` runs what a failed run did not complete, and `"mode": "render-final"` renders a review run's final (no `editedEdl`: `400 use_case_no_plan`). Its other refusals are the [continuation codes](../../api-integration.md#continuing-a-run).
 
 The [SDK](../../sdk-reference.md) (`client.edit.speakerLayout`, `client.edit.estimateSpeakerLayout`, `client.edit.continueUseCase`), the [CLI](../../cli.md) (`nodaro edit speaker-layout`, `nodaro edit continue-use-case`) and MCP (`speaker_layout`, `continue_use_case`) call the same routes.
+
+To quote a run before starting it, nothing created or charged: `client.edit.estimateSpeakerLayout` in the SDK, `--estimate` on `nodaro edit speaker-layout` in the CLI (the same flags, sent to `POST /v1/speaker-layout/estimate` instead of the run), and MCP's `estimate_use_case` with `node_type: "speaker-layout"` and `speaker_layout`'s arguments as `input`.
 
 ## Common Use Cases
 

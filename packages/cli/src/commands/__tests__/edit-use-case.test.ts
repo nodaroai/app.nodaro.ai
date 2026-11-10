@@ -106,7 +106,7 @@ describe("edit tighten-episode", () => {
   it("maps flags to client.edit.tightenEpisode", async () => {
     mocks.tightenEpisode.mockResolvedValueOnce({ jobId: "job-1" })
     await runCmd("edit", "tighten-episode", "--media", "https://r2/ep.mp4", "--output", "audio", "--review", "--plan-tier", "premium", "--json")
-    expect(mocks.tightenEpisode).toHaveBeenCalledWith({ mediaUrl: "https://r2/ep.mp4", output: "audio", reviewBeforeRender: true, planTier: "premium" })
+    expect(mocks.tightenEpisode).toHaveBeenCalledWith({ mediaUrl: "https://r2/ep.mp4", output: "audio", reviewBeforeRender: true, planTier: "premium" }, undefined)
   })
 
   it("sends framing with its layout, music, no captions and instructions", async () => {
@@ -126,20 +126,20 @@ describe("edit tighten-episode", () => {
       framing: { aspect: "9:16", layout: "stacked" },
       captions: false,
       instructions: "keep the intro",
-    })
+    }, undefined)
   })
 
   it("frames with the automatic layout when --layout is not given", async () => {
     mocks.tightenEpisode.mockResolvedValueOnce({ jobId: "job-3" })
     await runCmd("edit", "tighten-episode", "--media", "https://r2/ep.mp4", "--framing", "16:9", "--json")
-    expect(mocks.tightenEpisode).toHaveBeenCalledWith({ mediaUrl: "https://r2/ep.mp4", framing: { aspect: "16:9", layout: "auto" } })
+    expect(mocks.tightenEpisode).toHaveBeenCalledWith({ mediaUrl: "https://r2/ep.mp4", framing: { aspect: "16:9", layout: "auto" } }, undefined)
   })
 
   it("sends --framing-source with --framing (decided 2026-10-17/20)", async () => {
     for (const source of ["auto", "static", "tracking"]) {
       mocks.tightenEpisode.mockResolvedValueOnce({ jobId: "job-f" })
       await runCmd("edit", "tighten-episode", "--media", "https://r2/ep.mp4", "--framing", "9:16", "--framing-source", source, "--json")
-      expect(mocks.tightenEpisode).toHaveBeenLastCalledWith({ mediaUrl: "https://r2/ep.mp4", framing: { aspect: "9:16", layout: "auto" }, framingSource: source })
+      expect(mocks.tightenEpisode).toHaveBeenLastCalledWith({ mediaUrl: "https://r2/ep.mp4", framing: { aspect: "9:16", layout: "auto" }, framingSource: source }, undefined)
     }
   })
 
@@ -195,13 +195,13 @@ describe("edit tighten-episode on several recordings (decided 2026-10-19)", () =
       mediaUrls: ["https://r2/a.mp4", "https://r2/b.mp4"],
       masterAudioUrl: "https://r2/m.wav",
       cameras: { wide: 2, speakerCameras: { "1": 2, "2": 0 } },
-    })
+    }, undefined)
   })
 
   it("--synced, and one --media with a Master audio", async () => {
     mocks.tightenEpisode.mockResolvedValueOnce({ jobId: "job-s" })
     await runCmd("edit", "tighten-episode", "--media", "https://r2/a.mp4", "--master-audio", "https://r2/m.wav", "--synced", "--json")
-    expect(mocks.tightenEpisode).toHaveBeenCalledWith({ mediaUrl: "https://r2/a.mp4", masterAudioUrl: "https://r2/m.wav", cameras: { synced: true } })
+    expect(mocks.tightenEpisode).toHaveBeenCalledWith({ mediaUrl: "https://r2/a.mp4", masterAudioUrl: "https://r2/m.wav", cameras: { synced: true } }, undefined)
   })
 
   it("refuses a camera flag with one recording and no Master audio, and malformed camera flags, before any request", async () => {

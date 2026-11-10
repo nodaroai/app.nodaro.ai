@@ -12666,6 +12666,7 @@ export const ko: ChromeDict = {
   "speakerView.reason.slotsFixed": "{layout}은(는) 칸을 고정하므로 움직일 것이 없습니다.",
   "speakerView.reason.noSameCamera": "여기서 팬할 수 있는 화자 전환이 없습니다.",
   "speakerView.reason.noClockJump": "화자 전환 {changes}회 어디에서도 잘려 나간 구간이 없어 크로스페이드를 적용할 곳이 없습니다.",
+  "speakerView.reason.nothingCut": "녹화에서 잘려 나가는 구간이 없어 크로스페이드를 적용할 곳이 없습니다.",
   "speakerView.reason.clip": "클립 {clip}: {reason}",
   "speakerView.snappedAspect": "{from}은(는) {aspect}에서 그려지지 않아 {to}(으)로 렌더링됩니다.",
   "speakerView.snappedSpeakers": "{from}은(는) 이 편집의 화자 수에 맞지 않아 {to}(으)로 렌더링됩니다.",

@@ -12876,6 +12876,7 @@ export const he: ChromeDict = {
   "speakerView.reason.slotsFixed": "הפריסה ״{layout}״ משאירה את המשבצות במקומן, ולכן אין מה להזיז.",
   "speakerView.reason.noSameCamera": "אף החלפת דוברים לא יכולה לעשות פאן כאן.",
   "speakerView.reason.noClockJump": "באף אחת מ-{changes} החלפות הדוברים לא נחתך קטע, ולכן אין מקום למעבר הדרגתי.",
+  "speakerView.reason.nothingCut": "שום קטע לא נחתך מההקלטה, ולכן אין מקום למעבר הדרגתי.",
   "speakerView.reason.clip": "קליפ {clip}: {reason}",
   "speakerView.snappedAspect": "הפריסה ״{from}״ לא מצוירת עבור {aspect} — תוצג כ״{to}״.",
   "speakerView.snappedSpeakers": "הפריסה ״{from}״ לא מתאימה לדוברי העריכה הזו — תוצג כ״{to}״.",

@@ -31,7 +31,7 @@ import { buildTrailerMulticamGraph } from "./episode-trailer-multicam"
 import { resolveUseCaseCameras, usecaseShapeIsMulticam, type UseCaseCameras, type UseCaseSourcesShape } from "./use-case-cameras"
 import { usecaseIsMulticam } from "./use-case-multicam"
 
-export { TRAILER_FORMATS, TRAILER_FORMAT_SPECS, TRAILER_NODE_IDS, type TrailerFormat } from "./episode-trailer-parts"
+export { TRAILER_FORMATS, TRAILER_FORMAT_SPECS, TRAILER_NODE_IDS, trailerRepeatedFormat, trailerRepeatedFormatMessage, type TrailerFormat } from "./episode-trailer-parts"
 
 /** The longest intro card a Trailer takes, in seconds (decided 2026-10-18): a title card, never a second episode. */
 export const TRAILER_INTRO_CARD_MAX_SEC = 15

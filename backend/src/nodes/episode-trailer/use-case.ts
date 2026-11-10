@@ -9,7 +9,7 @@
 // - outputType "video" (unit.json registry.outputType): the trailers on `media` (a list, one per
 //   format; an Each wire runs once per format); the plan (an EDL) on `json`.
 import { z } from "zod"
-import { TRAILER_FORMATS } from "@nodaro/render-rules"
+import { TRAILER_FORMATS, trailerRepeatedFormat, trailerRepeatedFormatMessage } from "@nodaro/render-rules"
 import { EDIT_PLAN_TIERS } from "@nodaro/shared/edl"
 import { safeUrlSchema } from "../../lib/url-validator.js"
 import { usecaseLaneShape, usecaseMulticamRecordingShape, usecasePlanShape } from "../../lib/use-case/body-shapes.js"
@@ -19,13 +19,21 @@ import type { UnitUseCase } from "../kit.js"
  * Trailer: the recordings (one, or up to six cameras of one conversation, with
  * an optional Master audio and the Cameras settings — decided 2026-10-17), an
  * optional intro card (a video that plays first), the formats to deliver (at
- * least one: an empty list is refused here, before anything is written) and
- * the plan's settings.
+ * least one, each once: an empty list or a format listed twice is refused here,
+ * before anything is written) and the plan's settings.
  */
 export const body = z.object({
   ...usecaseMulticamRecordingShape,
   introCardUrl: z.optional(safeUrlSchema),
-  formats: z.array(z.enum(TRAILER_FORMATS as unknown as [string, ...string[]])).min(1, "Choose at least one format").max(TRAILER_FORMATS.length).optional(),
+  formats: z.array(z.enum(TRAILER_FORMATS as unknown as [string, ...string[]]))
+    .min(1, "Choose at least one format")
+    // A format listed twice is refused, naming it, before anything is written or charged.
+    .superRefine((list, ctx) => {
+      const twice = trailerRepeatedFormat(list)
+      if (twice !== null) ctx.addIssue({ code: "custom", message: trailerRepeatedFormatMessage(twice) })
+    })
+    .max(TRAILER_FORMATS.length)
+    .optional(),
   reviewBeforeRender: z.boolean().optional(),
   ...usecasePlanShape,
   ...usecaseLaneShape,

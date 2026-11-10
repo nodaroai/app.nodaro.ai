@@ -11,6 +11,7 @@ import { registerUseCaseVerbs } from "./verbs-use-case.js"
 import { registerSplitMediaVerb } from "./verbs-split-media.js"
 import { registerShotCutsVerb } from "./verbs-shot-cuts.js"
 import { registerSpeakerMapVerb } from "./verbs-speaker-map.js"
+import { registerSpeakerViewVerb } from "./verbs-speaker-view.js"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../../connected-reference-schema.js"
 import {
   errorResult,
@@ -3589,5 +3590,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         })
       },
     )
+
+    // speaker_view — the speakers laid out on screen (Cloud, like switch_cameras); its own module.
+    registerSpeakerViewVerb({ server, session, fastify })
   }
 }

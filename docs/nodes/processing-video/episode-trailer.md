@@ -122,6 +122,10 @@ A node wired to **Trailers** on an Each wire runs once per format and is charged
 
 The [SDK](../../sdk-reference.md) (`client.edit.episodeTrailer`, `client.edit.estimateEpisodeTrailer`, `client.edit.continueUseCase`), the [CLI](../../cli.md) (`nodaro edit episode-trailer`, `nodaro edit continue-use-case`) and MCP (`make_trailer`, `continue_use_case`) call the same routes.
 
+To quote a run before starting it, nothing created or charged: `client.edit.estimateEpisodeTrailer` in the SDK, `--estimate` on `nodaro edit episode-trailer` in the CLI (the same flags, sent to `POST /v1/episode-trailer/estimate` instead of the run), and MCP's `estimate_use_case` with `node_type: "episode-trailer"` and `make_trailer`'s arguments as `input`.
+
+A `formats` list that names a format twice is refused `400 validation_error` before anything is written or charged, naming the format: *The format 9:16 is listed twice: name each format once.* The run and the estimate answer it alike, so the SDK and the CLI (`--formats 9:16,9:16`) get the same answer, and MCP's `make_trailer` refuses it in the same words before anything is sent.
+
 ## Common Use Cases
 
 - A teaser of a new episode for Instagram Reels, TikTok and YouTube Shorts, and a square and a portrait feed post, from one run.

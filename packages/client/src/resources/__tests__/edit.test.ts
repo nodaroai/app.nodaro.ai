@@ -156,6 +156,15 @@ describe("edit.cameraSwitch — a Speaker Map result", () => {
     ).rejects.toMatchObject({ code: "not_a_speaker_map" })
     expect(fetchMock).not.toHaveBeenCalled()
   })
+
+  it("sends lagMs beside leadMs, and nothing for it when unset", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j" })).mockReturnValueOnce(mockOk({ jobId: "k" }))
+    await client(fetchMock).edit.cameraSwitch({ edl, transcript, leadMs: 150, lagMs: 400 })
+    const sent = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body) as Record<string, unknown>
+    expect(sent).toMatchObject({ leadMs: 150, lagMs: 400 })
+    await client(fetchMock).edit.cameraSwitch({ edl, transcript })
+    expect("lagMs" in (JSON.parse((fetchMock.mock.calls[1][1] as { body: string }).body) as Record<string, unknown>)).toBe(false)
+  })
 })
 
 describe("edit.applyEdl", () => {
@@ -216,6 +225,32 @@ describe("edit.applyEdl", () => {
       mockErr(400, { error: { code: "invalid_edl", message: "EDL failed validation" } }),
     )
     await expect(client(fetchMock).edit.applyEdl({ edl })).rejects.toBeInstanceOf(NodaroError)
+  })
+})
+
+describe("edit.editPlanCapabilities", () => {
+  it("GETs /v1/edit-plan/capabilities with no body and answers the route's object as is", async () => {
+    const answer = { modes: ["tighten", "clips", "chapters", "trailer"], source: "server", perMinute: true }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk(answer))
+    const result = await client(fetchMock).edit.editPlanCapabilities()
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/edit-plan/capabilities")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body?: unknown }
+    expect(init.method).toBe("GET")
+    expect(init.body).toBeUndefined()
+    expect(result).toEqual(answer)
+  })
+
+  it("a self-hosted install that could not reach nodaro.ai: the three original modes, and who answered", async () => {
+    const answer = { modes: ["tighten", "clips", "chapters"], source: "nodaro.ai-unreachable", perMinute: false }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk(answer))
+    const result = await client(fetchMock).edit.editPlanCapabilities()
+    expect(result.modes).not.toContain("trailer")
+    expect(result.source).toBe("nodaro.ai-unreachable")
+  })
+
+  it("surfaces a 401 as a typed NodaroError", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockErr(401, { error: { code: "unauthorized", message: "Authentication required" } }))
+    await expect(client(fetchMock).edit.editPlanCapabilities()).rejects.toBeInstanceOf(NodaroError)
   })
 })
 

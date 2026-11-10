@@ -124,7 +124,7 @@ export interface EpisodeTrailerInput extends UseCaseRecordingsInput {
   mediaUrl?: string
   /** An optional intro card: a short video (15 s at most) played before the trailer. */
   introCardUrl?: string
-  /** The formats to deliver, padded, never cropped (default `["9:16", "1:1", "4:5"]`; an empty list is refused). */
+  /** The formats to deliver, padded, never cropped (default `["9:16", "1:1", "4:5"]`; an empty list, or one that names a format twice, is refused `400 validation_error`). */
   formats?: TrailerFormat[]
   /** Stop at a preview of the trailer; render every format with {@link EditResource.continueUseCase} (`mode: "render-final"`). */
   reviewBeforeRender?: boolean

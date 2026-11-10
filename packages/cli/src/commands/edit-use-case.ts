@@ -1,7 +1,8 @@
 // `nodaro edit`'s use-case node commands (the podcast nodes that run a whole
 // chain in one step): tighten-episode, episode-chapters, episode-trailer,
 // clip-pack, speaker-layout, and continue-use-case for their runs. Registered on the `edit`
-// command by edit.ts, in this order, after apply-edl.
+// command by edit.ts, in this order, after apply-edl. Each run command also takes --estimate:
+// the same flags, quoted by the type's /estimate route instead of run (edit-estimate.ts).
 import type { Command } from "commander"
 import {
   EDIT_PLAN_MAX_CLIP_COUNT,
@@ -32,10 +33,14 @@ import pc from "picocolors"
 import { emit, warn } from "../output.js"
 import { reportQueuedJob } from "../util.js"
 import { readJsonFile, refuseUnknownPlanTier, type GlobalOpts, type WatchOpts } from "./edit-shared.js"
+import { ESTIMATE_HELP, reportUseCaseEstimate } from "./edit-estimate.js"
 import { recordingsInput, withRecordingsOptions, type RecordingsOpts } from "./edit-recordings.js"
 
 /** The emphasis values Speaker View draws: "none", or its atoms joined with "+" (each once). */
 const EMPHASIS_HELP = `none, or ${SPEAKER_EMPHASIS_STYLES.filter((s) => s !== "none").join(", ")} joined with "+" (each once)`
+
+/** The longest instructions or style guide a use-case run takes (the route's limit). */
+const TEXT_MAX = 4000
 
 /** What to do with the job a continuation refusal names, by its code. */
 const CONTINUATION_NEXT_STEP: Readonly<Record<string, (jobId: string) => string>> = {
@@ -63,10 +68,15 @@ export function registerUseCaseCommands(cmd: Command): void {
       "--framing-source <source>",
       `with --framing, how it follows the speakers: ${FRAMING_SOURCES.join(" | ")} (default static: the even split; tracking follows faces with Speaker Frames, charged per started block of 1,000 sampled frames; auto follows faces while Speaker Frames is available to you)`,
     )
+    .option("--music-duck-amount <n>", "with --music, how far the music dips under the voice, 0–100 (default 75)")
     .option("--no-captions", "no captions on a video episode")
+    .option("--caption-style <style>", `the captions' look (default word-highlight): ${ALL_CAPTION_STYLES.join(" | ")}`)
     .option("--review", "stop at a preview to review (render the final with `nodaro edit continue-use-case <jobId> --mode render-final`)")
     .option("--plan-tier <tier>", EDIT_PLAN_TIERS.join(" | "))
     .option("--instructions <text>", "editing instructions for the planner")
+    .option("--style-guide <text>", `a style guide for the planner (up to ${TEXT_MAX} characters)`)
+    .option("--idempotency-key <key>", "sent as Idempotency-Key: a retry with the same key answers the run already started")
+    .option("--estimate", ESTIMATE_HELP)
     .option("--watch", "poll the job until it finishes")
     .option("--poll-interval <ms>", "poll interval with --watch", (v) => parseInt(v, 10))
     .option("--profile <name>")
@@ -77,14 +87,19 @@ export function registerUseCaseCommands(cmd: Command): void {
           WatchOpts &
           RecordingsOpts & {
             music?: string
+            musicDuckAmount?: string
             output?: string
             framing?: string
             layout?: string
             framingSource?: string
             captions: boolean
+            captionStyle?: string
             review?: boolean
             planTier?: string
             instructions?: string
+            styleGuide?: string
+            idempotencyKey?: string
+            estimate?: boolean
           },
         command: Command,
       ) => {
@@ -113,24 +128,50 @@ export function registerUseCaseCommands(cmd: Command): void {
           warn(`--framing-source must be ${FRAMING_SOURCES.join(", ")} (got "${opts.framingSource}")`)
           process.exit(1)
         }
+        if (opts.musicDuckAmount !== undefined && opts.music === undefined) {
+          warn("--music-duck-amount applies with --music only (it is how far the music dips under the voice)")
+          process.exit(1)
+        }
+        const duck = opts.musicDuckAmount !== undefined && opts.musicDuckAmount.trim() !== "" ? Number(opts.musicDuckAmount) : Number.NaN
+        if (opts.musicDuckAmount !== undefined && !(duck >= 0 && duck <= 100)) {
+          warn(`--music-duck-amount must be a number from 0 to 100 (got "${opts.musicDuckAmount}")`)
+          process.exit(1)
+        }
+        if (opts.captionStyle !== undefined && opts.captions === false) {
+          warn("--caption-style applies with captions on (drop --no-captions)")
+          process.exit(1)
+        }
+        if (opts.captionStyle !== undefined && !(ALL_CAPTION_STYLES as readonly string[]).includes(opts.captionStyle)) {
+          warn(`--caption-style must be ${ALL_CAPTION_STYLES.join(", ")} (got "${opts.captionStyle}")`)
+          process.exit(1)
+        }
+        if (opts.styleGuide !== undefined && opts.styleGuide.length > TEXT_MAX) {
+          warn(`--style-guide is at most ${TEXT_MAX} characters (got ${opts.styleGuide.length})`)
+          process.exit(1)
+        }
         const recordings = recordingsInput(opts)
         type Framing = NonNullable<TightenEpisodeInput["framing"]>
+        const input: TightenEpisodeInput = {
+          ...recordings,
+          ...(opts.music ? { musicUrl: opts.music } : {}),
+          ...(opts.musicDuckAmount !== undefined ? { musicDuckAmount: duck } : {}),
+          ...(opts.output ? { output: opts.output as "video" | "audio" } : {}),
+          ...(opts.framing
+            ? { framing: { aspect: opts.framing as Framing["aspect"], layout: (opts.layout ?? "auto") as Framing["layout"] } }
+            : {}),
+          ...(opts.framingSource ? { framingSource: opts.framingSource as NonNullable<TightenEpisodeInput["framingSource"]> } : {}),
+          // commander's --no-captions defaults `captions` to true: send it only when turned off.
+          ...(opts.captions === false ? { captions: false } : {}),
+          ...(opts.captionStyle ? { captionStyle: opts.captionStyle as NonNullable<TightenEpisodeInput["captionStyle"]> } : {}),
+          ...(opts.review ? { reviewBeforeRender: true } : {}),
+          ...(opts.planTier ? { planTier: opts.planTier as NonNullable<TightenEpisodeInput["planTier"]> } : {}),
+          ...(opts.instructions ? { instructions: opts.instructions } : {}),
+          ...(opts.styleGuide ? { styleGuide: opts.styleGuide } : {}),
+        }
         try {
           const client = buildClient(opts.profile)
-          const result = await client.edit.tightenEpisode({
-            ...recordings,
-            ...(opts.music ? { musicUrl: opts.music } : {}),
-            ...(opts.output ? { output: opts.output as "video" | "audio" } : {}),
-            ...(opts.framing
-              ? { framing: { aspect: opts.framing as Framing["aspect"], layout: (opts.layout ?? "auto") as Framing["layout"] } }
-              : {}),
-            ...(opts.framingSource ? { framingSource: opts.framingSource as NonNullable<TightenEpisodeInput["framingSource"]> } : {}),
-            // commander's --no-captions defaults `captions` to true: send it only when turned off.
-            ...(opts.captions === false ? { captions: false } : {}),
-            ...(opts.review ? { reviewBeforeRender: true } : {}),
-            ...(opts.planTier ? { planTier: opts.planTier as NonNullable<TightenEpisodeInput["planTier"]> } : {}),
-            ...(opts.instructions ? { instructions: opts.instructions } : {}),
-          })
+          if (opts.estimate) return reportUseCaseEstimate("Tighten Episode", (await client.edit.estimateTightenEpisode(input)).data, opts)
+          const result = await client.edit.tightenEpisode(input, opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined)
           await reportQueuedJob(result, () => client.jobs.getStatus(result.jobId), {
             json: opts.json,
             watch: opts.watch,
@@ -152,6 +193,7 @@ export function registerUseCaseCommands(cmd: Command): void {
     .option("--instructions <text>", "instructions for the chapters (\"5 to 8 chapters\")")
     .option("--style-guide <text>", "a style guide for the chapter titles")
     .option("--idempotency-key <key>", "sent as Idempotency-Key: a retry with the same key answers the run already started")
+    .option("--estimate", ESTIMATE_HELP)
     .option("--watch", "poll the job until it finishes, then print the chapter list")
     .option("--poll-interval <ms>", "poll interval with --watch", (v) => parseInt(v, 10))
     .option("--profile <name>")
@@ -159,21 +201,20 @@ export function registerUseCaseCommands(cmd: Command): void {
     .action(
       async (
         opts: GlobalOpts &
-          WatchOpts & { media: string; planTier?: string; instructions?: string; styleGuide?: string; idempotencyKey?: string },
+          WatchOpts & { media: string; planTier?: string; instructions?: string; styleGuide?: string; idempotencyKey?: string; estimate?: boolean },
         command: Command,
       ) => {
         refuseUnknownPlanTier(opts.planTier)
+        const input: EpisodeChaptersInput = {
+          mediaUrl: opts.media,
+          ...(opts.planTier ? { planTier: opts.planTier as NonNullable<EpisodeChaptersInput["planTier"]> } : {}),
+          ...(opts.instructions ? { instructions: opts.instructions } : {}),
+          ...(opts.styleGuide ? { styleGuide: opts.styleGuide } : {}),
+        }
         try {
           const client = buildClient(opts.profile)
-          const result = await client.edit.episodeChapters(
-            {
-              mediaUrl: opts.media,
-              ...(opts.planTier ? { planTier: opts.planTier as NonNullable<EpisodeChaptersInput["planTier"]> } : {}),
-              ...(opts.instructions ? { instructions: opts.instructions } : {}),
-              ...(opts.styleGuide ? { styleGuide: opts.styleGuide } : {}),
-            },
-            opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined,
-          )
+          if (opts.estimate) return reportUseCaseEstimate("Chapters", (await client.edit.estimateEpisodeChapters(input)).data, opts)
+          const result = await client.edit.episodeChapters(input, opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined)
           const done = await reportQueuedJob(result, () => client.jobs.getStatus(result.jobId), {
             json: opts.json,
             watch: opts.watch,
@@ -202,6 +243,7 @@ export function registerUseCaseCommands(cmd: Command): void {
     .option("--instructions <text>", "instructions for the trailer")
     .option("--style-guide <text>", "a style guide for the plan")
     .option("--idempotency-key <key>", "sent as Idempotency-Key: a retry with the same key answers the run already started")
+    .option("--estimate", ESTIMATE_HELP)
     .option("--watch", "poll the job until it finishes, then print each format's URL")
     .option("--poll-interval <ms>", "poll interval with --watch", (v) => parseInt(v, 10))
     .option("--profile <name>")
@@ -218,6 +260,7 @@ export function registerUseCaseCommands(cmd: Command): void {
             instructions?: string
             styleGuide?: string
             idempotencyKey?: string
+            estimate?: boolean
           },
       ) => {
         const formats = opts.formats?.split(",").map((f) => f.trim()).filter((f) => f.length > 0)
@@ -227,20 +270,19 @@ export function registerUseCaseCommands(cmd: Command): void {
         }
         refuseUnknownPlanTier(opts.planTier)
         const recordings = recordingsInput(opts)
+        const input: EpisodeTrailerInput = {
+          ...recordings,
+          ...(opts.introCard ? { introCardUrl: opts.introCard } : {}),
+          ...(formats ? { formats: formats as TrailerFormat[] } : {}),
+          ...(opts.review ? { reviewBeforeRender: true } : {}),
+          ...(opts.planTier ? { planTier: opts.planTier as NonNullable<EpisodeTrailerInput["planTier"]> } : {}),
+          ...(opts.instructions ? { instructions: opts.instructions } : {}),
+          ...(opts.styleGuide ? { styleGuide: opts.styleGuide } : {}),
+        }
         try {
           const client = buildClient(opts.profile)
-          const result = await client.edit.episodeTrailer(
-            {
-              ...recordings,
-              ...(opts.introCard ? { introCardUrl: opts.introCard } : {}),
-              ...(formats ? { formats: formats as TrailerFormat[] } : {}),
-              ...(opts.review ? { reviewBeforeRender: true } : {}),
-              ...(opts.planTier ? { planTier: opts.planTier as NonNullable<EpisodeTrailerInput["planTier"]> } : {}),
-              ...(opts.instructions ? { instructions: opts.instructions } : {}),
-              ...(opts.styleGuide ? { styleGuide: opts.styleGuide } : {}),
-            },
-            opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined,
-          )
+          if (opts.estimate) return reportUseCaseEstimate("Trailer", (await client.edit.estimateEpisodeTrailer(input)).data, opts)
+          const result = await client.edit.episodeTrailer(input, opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined)
           const done = await reportQueuedJob(result, () => client.jobs.getStatus(result.jobId), {
             json: opts.json,
             watch: opts.watch,
@@ -290,6 +332,7 @@ export function registerUseCaseCommands(cmd: Command): void {
     .option("--instructions <text>", "instructions for picking the clips")
     .option("--style-guide <text>", "a style guide for the plan")
     .option("--idempotency-key <key>", "sent as Idempotency-Key: a retry with the same key answers the run already started")
+    .option("--estimate", ESTIMATE_HELP)
     .option("--watch", "poll the job until it finishes, then print each clip's URL")
     .option("--poll-interval <ms>", "poll interval with --watch", (v) => parseInt(v, 10))
     .option("--profile <name>")
@@ -297,7 +340,7 @@ export function registerUseCaseCommands(cmd: Command): void {
     .action(
       async (
         opts: GlobalOpts & WatchOpts & RecordingsOpts & { count?: string; length?: string; framing?: string; layout?: string; switch?: string; emphasis?: string; framingSource?: string } & {
-          captions: boolean; captionStyle?: string; review?: boolean; planTier?: string; instructions?: string; styleGuide?: string; idempotencyKey?: string
+          captions: boolean; captionStyle?: string; review?: boolean; planTier?: string; instructions?: string; styleGuide?: string; idempotencyKey?: string; estimate?: boolean
         },
       ) => {
         if (opts.count !== undefined && !isWhole(opts.count, 1, EDIT_PLAN_MAX_CLIP_COUNT)) {
@@ -354,37 +397,36 @@ export function registerUseCaseCommands(cmd: Command): void {
         refuseUnknownPlanTier(opts.planTier)
         const recordings = recordingsInput(opts)
         type Framing = NonNullable<ClipPackInput["framing"]>
+        const input: ClipPackInput = {
+          ...recordings,
+          ...(opts.count !== undefined ? { count: Number(opts.count) } : {}),
+          ...(opts.length !== undefined ? { targetDurationSec: Number(opts.length) } : {}),
+          // none = the recording's shape; an aspect alone leaves the layout to the route (stacked).
+          ...(opts.framing === "none"
+            ? { framing: null }
+            : opts.framing
+              ? {
+                  framing: {
+                    aspect: opts.framing as Framing["aspect"],
+                    ...(opts.layout ? { layout: opts.layout as Framing["layout"] } : {}),
+                    ...(opts.switch ? { switchType: opts.switch as Framing["switchType"] } : {}),
+                    ...(opts.emphasis ? { emphasisStyle: opts.emphasis as Framing["emphasisStyle"] } : {}),
+                  },
+                }
+              : {}),
+          ...(opts.framingSource ? { framingSource: opts.framingSource as NonNullable<ClipPackInput["framingSource"]> } : {}),
+          // commander's --no-captions defaults `captions` to true: send it only when turned off.
+          ...(opts.captions === false ? { captions: false } : {}),
+          ...(opts.captionStyle ? { captionStyle: opts.captionStyle as NonNullable<ClipPackInput["captionStyle"]> } : {}),
+          ...(opts.review ? { reviewBeforeRender: true } : {}),
+          ...(opts.planTier ? { planTier: opts.planTier as NonNullable<ClipPackInput["planTier"]> } : {}),
+          ...(opts.instructions ? { instructions: opts.instructions } : {}),
+          ...(opts.styleGuide ? { styleGuide: opts.styleGuide } : {}),
+        }
         try {
           const client = buildClient(opts.profile)
-          const result = await client.edit.clipPack(
-            {
-              ...recordings,
-              ...(opts.count !== undefined ? { count: Number(opts.count) } : {}),
-              ...(opts.length !== undefined ? { targetDurationSec: Number(opts.length) } : {}),
-              // none = the recording's shape; an aspect alone leaves the layout to the route (stacked).
-              ...(opts.framing === "none"
-                ? { framing: null }
-                : opts.framing
-                  ? {
-                      framing: {
-                        aspect: opts.framing as Framing["aspect"],
-                        ...(opts.layout ? { layout: opts.layout as Framing["layout"] } : {}),
-                        ...(opts.switch ? { switchType: opts.switch as Framing["switchType"] } : {}),
-                        ...(opts.emphasis ? { emphasisStyle: opts.emphasis as Framing["emphasisStyle"] } : {}),
-                      },
-                    }
-                  : {}),
-              ...(opts.framingSource ? { framingSource: opts.framingSource as NonNullable<ClipPackInput["framingSource"]> } : {}),
-              // commander's --no-captions defaults `captions` to true: send it only when turned off.
-              ...(opts.captions === false ? { captions: false } : {}),
-              ...(opts.captionStyle ? { captionStyle: opts.captionStyle as NonNullable<ClipPackInput["captionStyle"]> } : {}),
-              ...(opts.review ? { reviewBeforeRender: true } : {}),
-              ...(opts.planTier ? { planTier: opts.planTier as NonNullable<ClipPackInput["planTier"]> } : {}),
-              ...(opts.instructions ? { instructions: opts.instructions } : {}),
-              ...(opts.styleGuide ? { styleGuide: opts.styleGuide } : {}),
-            },
-            opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined,
-          )
+          if (opts.estimate) return reportUseCaseEstimate("Clip Pack", (await client.edit.estimateClipPack(input)).data, opts)
+          const result = await client.edit.clipPack(input, opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined)
           const done = await reportQueuedJob(result, () => client.jobs.getStatus(result.jobId), {
             json: opts.json,
             watch: opts.watch,
@@ -429,6 +471,7 @@ export function registerUseCaseCommands(cmd: Command): void {
     )
     .option("--review", "stop at a preview to review (render the final with `nodaro edit continue-use-case <jobId> --mode render-final`)")
     .option("--idempotency-key <key>", "sent as Idempotency-Key: a retry with the same key answers the run already started")
+    .option("--estimate", ESTIMATE_HELP)
     .option("--watch", "poll the job until it finishes, then print the framed video's URL")
     .option("--poll-interval <ms>", "poll interval with --watch", (v) => parseInt(v, 10))
     .option("--profile <name>")
@@ -437,7 +480,7 @@ export function registerUseCaseCommands(cmd: Command): void {
       async (
         opts: GlobalOpts &
           WatchOpts &
-          RecordingsOpts & { aspect?: string; layout?: string; switch?: string; emphasis?: string; framingSource?: string; review?: boolean; idempotencyKey?: string },
+          RecordingsOpts & { aspect?: string; layout?: string; switch?: string; emphasis?: string; framingSource?: string; review?: boolean; idempotencyKey?: string; estimate?: boolean },
       ) => {
         if (opts.aspect !== undefined && !(EDL_TARGET_ASPECTS as readonly string[]).includes(opts.aspect)) {
           warn(`--aspect must be ${EDL_TARGET_ASPECTS.join(", ")} (got "${opts.aspect}")`)
@@ -461,20 +504,19 @@ export function registerUseCaseCommands(cmd: Command): void {
         }
         const recordings = recordingsInput(opts)
         type In = SpeakerLayoutInput
+        const input: In = {
+          ...recordings,
+          ...(opts.aspect ? { targetAspect: opts.aspect as NonNullable<In["targetAspect"]> } : {}),
+          ...(opts.layout ? { layout: opts.layout as NonNullable<In["layout"]> } : {}),
+          ...(opts.switch ? { switchType: opts.switch as NonNullable<In["switchType"]> } : {}),
+          ...(opts.emphasis ? { emphasisStyle: opts.emphasis as NonNullable<In["emphasisStyle"]> } : {}),
+          ...(opts.framingSource ? { framingSource: opts.framingSource as NonNullable<In["framingSource"]> } : {}),
+          ...(opts.review ? { reviewBeforeRender: true } : {}),
+        }
         try {
           const client = buildClient(opts.profile)
-          const result = await client.edit.speakerLayout(
-            {
-              ...recordings,
-              ...(opts.aspect ? { targetAspect: opts.aspect as NonNullable<In["targetAspect"]> } : {}),
-              ...(opts.layout ? { layout: opts.layout as NonNullable<In["layout"]> } : {}),
-              ...(opts.switch ? { switchType: opts.switch as NonNullable<In["switchType"]> } : {}),
-              ...(opts.emphasis ? { emphasisStyle: opts.emphasis as NonNullable<In["emphasisStyle"]> } : {}),
-              ...(opts.framingSource ? { framingSource: opts.framingSource as NonNullable<In["framingSource"]> } : {}),
-              ...(opts.review ? { reviewBeforeRender: true } : {}),
-            },
-            opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined,
-          )
+          if (opts.estimate) return reportUseCaseEstimate("Speaker Layout", (await client.edit.estimateSpeakerLayout(input)).data, opts)
+          const result = await client.edit.speakerLayout(input, opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined)
           const done = await reportQueuedJob(result, () => client.jobs.getStatus(result.jobId), {
             json: opts.json,
             watch: opts.watch,

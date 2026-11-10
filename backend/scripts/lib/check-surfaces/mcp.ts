@@ -19,7 +19,7 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import ts from "typescript"
-import { USE_CASE_NODE_TYPES, isUseCaseNodeType, usecaseContinuePath } from "@nodaro/render-rules"
+import { USE_CASE_NODE_TYPES, isUseCaseNodeType, usecaseContinuePath, usecaseEstimatePath } from "@nodaro/render-rules"
 import { lineOf, parseText } from "../../../src/lib/__tests__/source-ast.js"
 import { normalizePath } from "../../../src/lib/route-inventory.js"
 import { captureToolSurface, type ToolSurface } from "../gen-skills/tool-surface.js"
@@ -40,6 +40,8 @@ const POST_HELPERS = new Set(["dispatchJob", "postJob", "postBuilder"])
 const RENDER_RULES_NATIVES: Readonly<Record<string, NativeFn>> = {
   usecaseContinuePath: ([types = [PARAM]]) =>
     types.flatMap((t) => (t.includes(PARAM) ? USE_CASE_NODE_TYPES.map(usecaseContinuePath) : isUseCaseNodeType(t) ? [usecaseContinuePath(t)] : [])),
+  usecaseEstimatePath: ([types = [PARAM]]) =>
+    types.flatMap((t) => (t.includes(PARAM) ? USE_CASE_NODE_TYPES.map(usecaseEstimatePath) : isUseCaseNodeType(t) ? [usecaseEstimatePath(t)] : [])),
 }
 
 /** The RENDER_RULES_NATIVES a file imports from `@nodaro/render-rules`, by local name. */

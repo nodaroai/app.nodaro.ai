@@ -105,4 +105,5 @@ export const ar: ChromeDict = {
   "creatorCard.man": "رجل",
   "creatorCard.photoConsent": "ارفع فقط صورة لك أو لشخص وافق على ذلك.",
   "present.restrictFieldsCount": "تقييد ({n} محدودة)",
+  "speakerView.reason.nothingCut": "لا يُقتطع أي جزء من التسجيل، لذا لا يوجد مكان لتطبيق التلاشي المتقاطع.",
 }

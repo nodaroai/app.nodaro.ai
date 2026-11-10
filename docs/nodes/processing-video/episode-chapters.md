@@ -73,6 +73,8 @@ The estimate counts the recording's minutes the way [Edit Plan](./edit-plan.md#c
 
 The [SDK](../../sdk-reference.md) (`client.edit.episodeChapters`, `client.edit.estimateEpisodeChapters`, `client.edit.continueUseCase`), the [CLI](../../cli.md) (`nodaro edit episode-chapters`, `nodaro edit continue-use-case`) and MCP (`make_chapters`, `continue_use_case`) call the same routes.
 
+To quote a run before starting it, nothing created or charged: `client.edit.estimateEpisodeChapters` in the SDK, `--estimate` on `nodaro edit episode-chapters` in the CLI (the same flags, sent to `POST /v1/episode-chapters/estimate` instead of the run), and MCP's `estimate_use_case` with `node_type: "episode-chapters"` and `make_chapters`'s arguments as `input`.
+
 ## Common Use Cases
 
 - Chapter markers for a podcast episode's show notes or a video description.

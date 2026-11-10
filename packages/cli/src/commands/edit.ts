@@ -15,10 +15,17 @@ import {
   type SpeakerMapInput,
 } from "@nodaro/sdk/edit"
 import { buildClient, handleError } from "../client.js"
-import { warn } from "../output.js"
+import { dim, emit, success, warn } from "../output.js"
 import { reportQueuedJob, collectVariadic } from "../util.js"
 import { readJsonFile, refuseUnknownPlanTier, type GlobalOpts, type WatchOpts } from "./edit-shared.js"
 import { registerUseCaseCommands } from "./edit-use-case.js"
+
+/** Who answered `edit capabilities`, in words (a newer server's value is printed as it is). */
+const CAPABILITIES_SOURCE: Readonly<Record<string, string>> = {
+  server: "this server",
+  "nodaro.ai": "nodaro.ai (this install is connected to it)",
+  "nodaro.ai-unreachable": "this install: nodaro.ai could not be reached, so only the original modes are listed",
+}
 
 function isEditPlanMode(v: string): v is EditPlanMode {
   return (EDIT_PLAN_MODES as readonly string[]).includes(v)
@@ -374,6 +381,29 @@ export function editCommand(): Command {
       },
     )
 
+  // ── capabilities (GET /v1/edit-plan/capabilities) ───────────────────────
+  cmd
+    .command("capabilities")
+    .description("the Edit Plan modes this server can plan, who answered, and how Edit Plan is charged here; nothing is created or charged")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (opts: GlobalOpts) => {
+      try {
+        const caps = await buildClient(opts.profile).edit.editPlanCapabilities()
+        if (opts.json) {
+          emit(caps, opts)
+          return
+        }
+        success(`Edit Plan modes: ${caps.modes.join(", ")}`)
+        const notListed = EDIT_PLAN_MODES.filter((m) => !(caps.modes as readonly string[]).includes(m))
+        if (notListed.length > 0) dim(`not listed: ${notListed.join(", ")}`)
+        dim(`answered by: ${CAPABILITIES_SOURCE[caps.source] ?? caps.source}`)
+        dim(caps.perMinute ? "charged per started minute of the recording" : "charged at the 15/30/60/90/120/180-minute step the recording's length rounds up to")
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
   // ── switch-cameras (podcast B5) ─────────────────────────────────────────
   cmd
     .command("switch-cameras")
@@ -385,6 +415,7 @@ export function editCommand(): Command {
     .option("--speaker-names <file>", "JSON object: speaker label → display name")
     .option("--min-shot-ms <ms>", "shortest shot (default 2500)", (v) => parseInt(v, 10))
     .option("--lead-ms <ms>", "cut this long before the new speaker (default 200)", (v) => parseInt(v, 10))
+    .option("--lag-ms <ms>", "delay each cut by this long, 0–5000 (default 0): --lead-ms's counterpart", (v) => parseInt(v, 10))
     .option("--max-shot-ms <ms>", "with a wide source: break to it after this long (default 20000)", (v) => parseInt(v, 10))
     .option("--wide-every <n>", "with a wide source: every N-th cut to the wide (default 0 = off)", (v) => parseInt(v, 10))
     .option("--layout-hints", "suggest side-by-side / stacked layouts for crosstalk (Apply EDL renders cut-only edits)")
@@ -403,6 +434,7 @@ export function editCommand(): Command {
             speakerNames?: string
             minShotMs?: number
             leadMs?: number
+            lagMs?: number
             maxShotMs?: number
             wideEvery?: number
             layoutHints?: boolean
@@ -418,6 +450,7 @@ export function editCommand(): Command {
             ...(opts.speakerNames ? { speakerNames: readJsonFile(opts.speakerNames) as Record<string, string> } : {}),
             ...(opts.minShotMs !== undefined ? { minShotMs: opts.minShotMs } : {}),
             ...(opts.leadMs !== undefined ? { leadMs: opts.leadMs } : {}),
+            ...(opts.lagMs !== undefined ? { lagMs: opts.lagMs } : {}),
             ...(opts.maxShotMs !== undefined ? { maxShotMs: opts.maxShotMs } : {}),
             ...(opts.wideEvery !== undefined ? { wideEvery: opts.wideEvery } : {}),
             ...(opts.layoutHints ? { layoutHints: true } : {}),

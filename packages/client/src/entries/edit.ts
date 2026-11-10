@@ -32,6 +32,7 @@ export type {
   AudioSyncOffset,
   AudioSyncResult,
   ApplyEdlInput,
+  EditPlanCapabilities,
   EditPlanInput,
   EditPlanSource,
   CameraSwitchInput,

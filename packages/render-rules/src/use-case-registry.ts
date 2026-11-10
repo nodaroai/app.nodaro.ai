@@ -134,6 +134,11 @@ export function usecaseContinuePath(type: UseCaseNodeType): string {
   return `${USE_CASE_DESCRIPTORS[type].route}/continue`
 }
 
+/** The route that quotes a run of `type` (`POST /v1/<type>/estimate`): the run's own body, nothing created or charged. */
+export function usecaseEstimatePath(type: UseCaseNodeType): string {
+  return `${USE_CASE_DESCRIPTORS[type].route}/estimate`
+}
+
 /** Is a node of `type` a use-case node whose own result is a list (Clip Pack's clips, Trailer's formats)? */
 export function usecaseListsItsResult(type: string | null | undefined): boolean {
   if (!isUseCaseNodeType(type)) return false

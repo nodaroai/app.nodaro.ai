@@ -50,6 +50,9 @@ export function speakerViewReasonText(reason: SpeakerViewReason, t: T): string {
     case "no-clock-jump":
       text = t("speakerView.reason.noClockJump", { changes: Number(p.changes) })
       break
+    case "nothing-cut":
+      text = t("speakerView.reason.nothingCut")
+      break
     case "needs-face-tracks":
       text = t("speakerView.reason.needsTracks")
       break

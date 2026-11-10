@@ -12666,6 +12666,7 @@ export const ja: ChromeDict = {
   "speakerView.reason.slotsFixed": "{layout} は枠の位置を固定するため、動かすものがありません。",
   "speakerView.reason.noSameCamera": "ここでパンできる話者の切り替えはありません。",
   "speakerView.reason.noClockJump": "話者の切り替え {changes} 回のどこでも区間が切り取られていないため、クロスフェードをかける箇所がありません。",
+  "speakerView.reason.nothingCut": "録画から切り取られる区間がないため、クロスフェードをかける箇所がありません。",
   "speakerView.reason.clip": "クリップ {clip}: {reason}",
   "speakerView.snappedAspect": "{from} は {aspect} では描画されないため、{to} でレンダリングされます。",
   "speakerView.snappedSpeakers": "{from} はこの編集の話者数に合わないため、{to} でレンダリングされます。",

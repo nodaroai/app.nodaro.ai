@@ -105,4 +105,5 @@ export const fr: ChromeDict = {
   "creatorCard.man": "Homme",
   "creatorCard.photoConsent": "Ne téléversez qu'une photo de vous ou d'une personne qui a donné son accord.",
   "present.restrictFieldsCount": "Restreindre ({n} limités)",
+  "speakerView.reason.nothingCut": "Rien n'est coupé dans l'enregistrement, il n'y a donc aucun fondu enchaîné à appliquer.",
 }

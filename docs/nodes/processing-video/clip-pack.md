@@ -145,6 +145,8 @@ A node wired to **Clips** on an Each wire runs once per clip and is charged once
 
 The [SDK](../../sdk-reference.md) (`client.edit.clipPack`, `client.edit.estimateClipPack`, `client.edit.continueUseCase`), the [CLI](../../cli.md) (`nodaro edit clip-pack`, `nodaro edit continue-use-case`) and MCP (`make_clip_pack`, `continue_use_case`) call the same routes.
 
+To quote a run before starting it, nothing created or charged: `client.edit.estimateClipPack` in the SDK, `--estimate` on `nodaro edit clip-pack` in the CLI (the same flags, sent to `POST /v1/clip-pack/estimate` instead of the run), and MCP's `estimate_use_case` with `node_type: "clip-pack"` and `make_clip_pack`'s arguments as `input`.
+
 ## Common Use Cases
 
 - A week of vertical, captioned clips for Instagram Reels, TikTok and YouTube Shorts from one episode.

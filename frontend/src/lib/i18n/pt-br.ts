@@ -12666,6 +12666,7 @@ export const ptBR: ChromeDict = {
   "speakerView.reason.slotsFixed": "{layout} mantém os quadros no lugar, então não há o que mover.",
   "speakerView.reason.noSameCamera": "Nenhuma troca de falante pode fazer pan aqui.",
   "speakerView.reason.noClockJump": "Nenhuma troca de falante tem trecho cortado (total: {changes}), então não há onde aplicar a fusão.",
+  "speakerView.reason.nothingCut": "Nada é cortado da gravação, então não há onde aplicar a fusão.",
   "speakerView.reason.clip": "Clipe {clip}: {reason}",
   "speakerView.snappedAspect": "{from} não é desenhado para {aspect} — será renderizado como {to}.",
   "speakerView.snappedSpeakers": "{from} não serve para os falantes desta edição — será renderizado como {to}.",

@@ -288,6 +288,9 @@ describe("camera-switch", () => {
       { minShotMs: CAMERA_SWITCH_BOUNDS.minShotMs.min - 1 },
       { minShotMs: CAMERA_SWITCH_BOUNDS.minShotMs.max + 1 },
       { leadMs: CAMERA_SWITCH_BOUNDS.leadMs.max + 1 },
+      { lagMs: CAMERA_SWITCH_BOUNDS.lagMs.max + 1 },
+      { lagMs: -1 },
+      { lagMs: 2.5 },
       { maxShotMs: -1 },
       { wideEvery: CAMERA_SWITCH_BOUNDS.wideEvery.max + 1 },
       { wideEvery: 1.5 },
@@ -309,13 +312,14 @@ describe("camera-switch", () => {
       transcript: diarized,
       minShotMs: CAMERA_SWITCH_BOUNDS.minShotMs.min,
       leadMs: CAMERA_SWITCH_BOUNDS.leadMs.max,
+      lagMs: CAMERA_SWITCH_BOUNDS.lagMs.max,
       maxShotMs: CAMERA_SWITCH_BOUNDS.maxShotMs.max,
       wideEvery: CAMERA_SWITCH_BOUNDS.wideEvery.min,
       speakerNames: { speaker_0: "x".repeat(CAMERA_SWITCH_NAME_MAX) },
       layoutHints: true,
     })
     expect(res.statusCode).toBe(200)
-    expect(mocks.queueAdd.mock.calls[0]![1]).toMatchObject({ minShotMs: CAMERA_SWITCH_BOUNDS.minShotMs.min, wideEvery: 0, layoutHints: true })
+    expect(mocks.queueAdd.mock.calls[0]![1]).toMatchObject({ minShotMs: CAMERA_SWITCH_BOUNDS.minShotMs.min, lagMs: CAMERA_SWITCH_BOUNDS.lagMs.max, wideEvery: 0, layoutHints: true })
   })
 
   it("answers the edit's and the transcript's refusals first, as the cloud route does", async () => {

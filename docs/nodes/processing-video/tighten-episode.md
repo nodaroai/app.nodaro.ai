@@ -143,6 +143,8 @@ For example, a Trim set to **Seconds** with nothing cut, after a Tighten Episode
 
 The [SDK](../../sdk-reference.md) (`client.edit.tightenEpisode`, `client.edit.estimateTightenEpisode`, `client.edit.continueUseCase`), the [CLI](../../cli.md) (`nodaro edit tighten-episode`, `nodaro edit continue-use-case`) and MCP call the same routes.
 
+To quote a run before starting it, nothing created or charged: `client.edit.estimateTightenEpisode` in the SDK, `--estimate` on `nodaro edit tighten-episode` in the CLI (the same flags, sent to `POST /v1/tighten-episode/estimate` instead of the run), and MCP's `estimate_use_case` with `node_type: "tighten-episode"` and `tighten_episode`'s arguments as `input`.
+
 ## Common Use Cases
 
 - Clean up a raw interview recording before publishing.

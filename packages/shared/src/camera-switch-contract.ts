@@ -13,6 +13,9 @@ export const CAMERA_SWITCH_DEFAULTS = Object.freeze({
   minShotMs: 2_500,
   /** Cut this long before the new speaker starts. */
   leadMs: 200,
+  /** Delay each cut by this long — `leadMs`'s counterpart. A route setting
+   *  only: no node carries it (`CAMERA_SWITCH_NODE_SETTINGS`). */
+  lagMs: 0,
   /** With a `wide` camera: break to it after this long on one camera. */
   maxShotMs: 20_000,
   /** With a `wide` camera: every N-th cut goes to the wide (0 = off). */
@@ -60,6 +63,7 @@ export function cameraSwitchCameras(edl: unknown): Array<{ id: string; role?: st
 export const CAMERA_SWITCH_BOUNDS = Object.freeze({
   minShotMs: Object.freeze({ min: 500, max: 60_000 }),
   leadMs: Object.freeze({ min: 0, max: 5_000 }),
+  lagMs: Object.freeze({ min: 0, max: 5_000 }),
   maxShotMs: Object.freeze({ min: 0, max: 600_000 }),
   wideEvery: Object.freeze({ min: 0, max: 20 }),
 })
@@ -68,6 +72,14 @@ export const CAMERA_SWITCH_BOUNDS = Object.freeze({
 export const CAMERA_SWITCH_NAME_MAX = 80
 
 export type CameraSwitchNumericSetting = keyof typeof CAMERA_SWITCH_BOUNDS
+
+/**
+ * The numeric settings a Camera Switch NODE carries (its data, which the
+ * canvas and the server's executor send through `cameraSwitchSettingsPayload`).
+ * `lagMs` is a setting of the route alone — the API, the SDK and the CLI send
+ * it; no node does — so it is not one of them.
+ */
+export const CAMERA_SWITCH_NODE_SETTINGS = Object.freeze(["minShotMs", "leadMs", "maxShotMs", "wideEvery"] as const satisfies readonly CameraSwitchNumericSetting[])
 
 /** A setting as a whole number inside its range; undefined when unset. */
 export function clampCameraSwitchSetting(key: CameraSwitchNumericSetting, value: unknown): number | undefined {
@@ -195,7 +207,7 @@ export function cameraSwitchSettingsPayload(
     speakerNames: cleanSpeakerNames(data.speakerNames),
     layoutHints: data.layoutHints === true,
   }
-  for (const key of Object.keys(CAMERA_SWITCH_BOUNDS) as CameraSwitchNumericSetting[]) {
+  for (const key of CAMERA_SWITCH_NODE_SETTINGS) {
     const v = clampCameraSwitchSetting(key, data[key])
     if (v !== undefined) out[key] = v
   }
