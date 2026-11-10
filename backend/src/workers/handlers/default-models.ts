@@ -5,7 +5,7 @@
 // as the handler will, so neither keeps its own copy. Kept apart from the
 // handler files: importing those pulls in the provider and ffmpeg runtimes.
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
-import { T2I_TO_I2I_VARIANT } from "@nodaro/shared/models"
+import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, T2I_TO_I2I_VARIANT } from "@nodaro/shared/models"
 
 /** image-to-video (handlers/video-ai.ts). */
 export const IMAGE_TO_VIDEO_DEFAULT_PROVIDER = "minimax"
@@ -13,8 +13,8 @@ export const IMAGE_TO_VIDEO_DEFAULT_PROVIDER = "minimax"
 export const TEXT_TO_VIDEO_DEFAULT_PROVIDER = "minimax"
 /** voiced-video: its clip is image-to-video (handlers/video-ai.ts). */
 export const VOICED_VIDEO_DEFAULT_PROVIDER = "minimax"
-/** video-to-video (handlers/video-ai.ts). */
-export const VIDEO_TO_VIDEO_DEFAULT_PROVIDER = "wan"
+/** video-to-video (handlers/video-ai.ts) — the shared default the editor's menu shows too. */
+export const VIDEO_TO_VIDEO_DEFAULT_PROVIDER = DEFAULT_VIDEO_TO_VIDEO_PROVIDER
 /** lip-sync (handlers/video-ai.ts). */
 export const LIP_SYNC_DEFAULT_PROVIDER = "kling-avatar"
 /** motion-transfer (handlers/video-ai.ts). */

@@ -8,6 +8,7 @@
 import { toast } from "sonner"
 import { flushPendingUndoSnapshot } from "@/hooks/use-undo-redo"
 import { mintNodeId, newNodeDefaultData, useWorkflowStore } from "@/hooks/use-workflow-store"
+import { noteNewNodesFromDefaults } from "@/components/editor/config-panels/new-node-models"
 import { tx } from "@/lib/i18n"
 import { isRunInProgress } from "@/components/editor/workflow-editor/clear-run-results"
 import { planAddFaceTracking, type AddFaceTrackingResult } from "@/lib/add-face-tracking"
@@ -25,9 +26,10 @@ export function addFaceTrackingOnCanvas(nodeId: string): AddFaceTrackingOutcome 
   if (!defaults) return "refused"
   // Its own undo step: close whatever step is still open.
   flushPendingUndoSnapshot()
-  const out: { result?: AddFaceTrackingResult } = {}
+  const out: { result?: AddFaceTrackingResult; id?: string } = {}
   store.editGraph((graph) => {
-    out.result = planAddFaceTracking(graph, nodeId, { id: mintNodeId(graph.nodes.map((n) => n.id)), data: defaults })
+    out.id = mintNodeId(graph.nodes.map((n) => n.id))
+    out.result = planAddFaceTracking(graph, nodeId, { id: out.id, data: defaults })
     return out.result.ok ? { nodes: out.result.nodes, edges: out.result.edges } : null
   })
   const result = out.result
@@ -35,6 +37,7 @@ export function addFaceTrackingOnCanvas(nodeId: string): AddFaceTrackingOutcome 
     toast.error(tx(result?.reason === "already-wired" ? "speakerView.tracks.alreadyWired" : "speakerView.tracks.noEdit"))
     return "refused"
   }
+  if (out.id) noteNewNodesFromDefaults([{ id: out.id, type: "speaker-frames", data: defaults }])
   toast.success(tx("speakerView.tracks.added"))
   return "added"
 }

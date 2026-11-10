@@ -23,9 +23,7 @@ import {
   type InstagramScrapeMode,
   type InstagramScrapePeriod,
 } from "@nodaro/shared/social"
-import {
-  STRUCTURED_VISION_MODELS,
-} from "@nodaro/shared/llm-models"
+import { structuredVisionModel } from "@/lib/llm-model-filters"
 import { useT, tx } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import type { InstagramScrapeNodeData } from "@/types/nodes"
@@ -52,7 +50,6 @@ import { CreativeAnalysisView } from "./creative-analysis-view"
 import type { ConfigProps } from "./types"
 import { formatNumber } from "@/lib/i18n/format"
 
-const STRUCTURED_VISION_MODEL_IDS = new Set(STRUCTURED_VISION_MODELS.map((m) => m.id))
 const fieldClass = "h-auto rounded-xl border-[var(--meta-ads-border)] bg-[var(--meta-ads-surface-3)] px-3.5 py-3 text-[14px] font-semibold text-[var(--meta-ads-text)] shadow-none"
 
 function SectionLabel({ children }: { readonly children: ReactNode }) {
@@ -169,7 +166,7 @@ function InstagramConfigTab({ data, onUpdate, sources, fieldMappings, onMapField
           <div className="flex flex-col gap-2.5">
             <div className="flex flex-col gap-1.5">
               <SectionLabel>{t("cfgext.metaAdsAnalyzeModel")}</SectionLabel>
-              <LlmModelSelect feature="meta-ads-analysis" value={data.analysisModel} onChange={(v) => onUpdate({ analysisModel: v })} filter={(m) => STRUCTURED_VISION_MODEL_IDS.has(m.id)} />
+              <LlmModelSelect feature="meta-ads-analysis" value={data.analysisModel} onChange={(v) => onUpdate({ analysisModel: v })} filter={structuredVisionModel} />
             </div>
             <div className="flex flex-col gap-1.5">
               <SectionLabel>{t("cfgext.metaAdsAnalyzeFocus")}</SectionLabel>

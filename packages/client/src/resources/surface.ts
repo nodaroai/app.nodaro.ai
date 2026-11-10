@@ -18,8 +18,14 @@ export interface SurfaceAvailabilityWorld {
 export interface SurfaceAvailability {
   /** Node types the caller is not offered; for an admin, `hiddenFromUsers` names those the admin switch withholds from users only. */
   nodes: { denied: string[]; hiddenFromUsers: string[] }
-  /** Model ids nobody on this deployment is offered. */
-  models: { denied: string[] }
+  /**
+   * `denied`: model ids nobody on this deployment is offered. `restricted`: whether the
+   * deployment restricts models (a profile `models.allow` / `models.deny`, or an Admin →
+   * Availability models override that leaves a model off). A model an admin switched off
+   * is denied without being a restriction. Absent from a server that predates it: read
+   * that as `false`.
+   */
+  models: { denied: string[]; restricted?: boolean }
   /** Web Scrape sources withdrawn with the node that governs them (Instagram follows the Instagram node). */
   webScrapeSources: { denied: string[]; hiddenFromUsers: string[] }
   /** Every world, in the deployment's display order. */

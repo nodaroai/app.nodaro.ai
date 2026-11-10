@@ -23,6 +23,7 @@ import {
 } from "./types";
 import { shouldStopPolling } from "./poll-connection";
 import { tx } from "@/lib/i18n";
+import { noteNewNodesFromDefaults, withOfferedNewNodeModels } from "@/components/editor/config-panels/new-node-models";
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 
 // ---------------------------------------------------------------------------
@@ -284,8 +285,10 @@ export function handleExpandToSceneNodes(
       return isNaN(num) ? max : Math.max(max, num);
     }, 0) + 1;
 
-  const sceneDefaults = NODE_DEFINITIONS.find((d) => d.type === "scene")
-    ?.defaultData as SceneNodeDataType | undefined;
+  // On models the deployment offers, as any node made from its defaults starts.
+  const sceneDefaults = withOfferedNewNodeModels("scene", {
+    ...(NODE_DEFINITIONS.find((d) => d.type === "scene")?.defaultData ?? {}),
+  } as Record<string, unknown>) as unknown as SceneNodeDataType;
 
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
@@ -338,6 +341,7 @@ export function handleExpandToSceneNodes(
   }
 
   store.batchAddNodesAndEdges(newNodes, newEdges);
+  noteNewNodesFromDefaults(newNodes.map((n) => ({ id: n.id, type: "scene", data: sceneDefaults as unknown as Record<string, unknown> })));
   toast.success(tx("nodeRun.createdSceneNodes", { count: scenes.length }));
 
   if (options.autoRun) {
@@ -703,8 +707,10 @@ export function handleCreateSceneNode(
   if (!script || !script.scenes[sceneIndex]) return;
 
   const scene = script.scenes[sceneIndex];
-  const sceneDefaults = NODE_DEFINITIONS.find((d) => d.type === "scene")
-    ?.defaultData as SceneNodeDataType | undefined;
+  // On models the deployment offers, as any node made from its defaults starts.
+  const sceneDefaults = withOfferedNewNodeModels("scene", {
+    ...(NODE_DEFINITIONS.find((d) => d.type === "scene")?.defaultData ?? {}),
+  } as Record<string, unknown>) as unknown as SceneNodeDataType;
   const mapped = mapScriptSceneToNodeData(scene);
 
   const nodeData: SceneNodeDataType = {
@@ -757,6 +763,7 @@ export function handleCreateSceneNode(
   } as WorkflowEdge;
 
   store.batchAddNodesAndEdges([newNode], [newEdge]);
+  noteNewNodesFromDefaults([{ id: newNodeId, type: "scene", data: sceneDefaults as unknown as Record<string, unknown> }]);
   store.selectNode(newNodeId);
   store.setAutoOpenEditorNodeId(newNodeId);
   toast.success(tx("nodeRun.createdSceneNodeForScene", { scene: scene.sceneNumber }));

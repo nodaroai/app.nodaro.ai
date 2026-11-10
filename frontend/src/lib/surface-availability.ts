@@ -36,6 +36,10 @@ import { runtimeSurfaceProfile } from "./surface-profile"
 let fetched: {
   nodes: ReadonlySet<string>
   models: ReadonlySet<string>
+  /** Whether the deployment RESTRICTS models (`models.restricted`): a profile
+   *  allow/deny list or a models override that leaves a model off. A model an
+   *  admin switched off is in `models` without being a restriction. */
+  modelsRestricted: boolean
   hiddenFromUsers: ReadonlySet<string>
   /** Web Scrape SOURCES that follow a withheld node (the Instagram source follows
    *  the Instagram node). The backend sends the result, never the mapping. */
@@ -66,6 +70,16 @@ function subscribe(l: () => void): () => void {
   return () => {
     listeners.delete(l)
   }
+}
+
+/**
+ * Be told, outside React, whenever availability changes (an answer lands, or a
+ * sign-out drops it). Returns the unsubscribe. For module-level readers that
+ * must act once the answer is in — `useSurfaceAvailability` is the component
+ * form of the same subscription.
+ */
+export function subscribeSurfaceAvailability(listener: () => void): () => void {
+  return subscribe(listener)
 }
 const snapshot = (): number => version
 
@@ -127,7 +141,7 @@ async function fetchAnswer(getAuthHeaders: () => Promise<Record<string, string>>
     if (!res.ok || seq !== viewerSeq) return
     const json = (await res.json()) as {
       nodes?: { denied?: unknown; hiddenFromUsers?: unknown }
-      models?: { denied?: unknown }
+      models?: { denied?: unknown; restricted?: unknown }
       webScrapeSources?: { denied?: unknown; hiddenFromUsers?: unknown }
       worlds?: unknown
     }
@@ -137,6 +151,8 @@ async function fetchAnswer(getAuthHeaders: () => Promise<Record<string, string>>
     fetched = {
       nodes: toSet(json.nodes?.denied),
       models: toSet(json.models?.denied),
+      // A server that predates the field restricts nothing as far as we know.
+      modelsRestricted: json.models?.restricted === true,
       hiddenFromUsers: toSet(json.nodes?.hiddenFromUsers),
       webScrapeSources: {
         denied: toSet(json.webScrapeSources?.denied),
@@ -169,6 +185,8 @@ export function __resetSurfaceAvailabilityForTests(
   next?: {
     nodes: string[]
     models: string[]
+    /** `models.restricted`; defaults to false (a test of the new-node rule opts in). */
+    modelsRestricted?: boolean
     hiddenFromUsers?: string[]
     webScrapeSources?: { denied?: string[]; hiddenFromUsers?: string[] }
     worlds?: WorldId[]
@@ -178,6 +196,7 @@ export function __resetSurfaceAvailabilityForTests(
     ? {
         nodes: new Set(next.nodes),
         models: new Set(next.models),
+        modelsRestricted: next.modelsRestricted ?? false,
         hiddenFromUsers: new Set(next.hiddenFromUsers ?? []),
         webScrapeSources: {
           denied: new Set(next.webScrapeSources?.denied ?? []),
@@ -230,6 +249,19 @@ export function isWebScrapeSourceHiddenFromUsers(source: string): boolean {
 export function isModelUnavailable(id: string): boolean {
   if (fetched) return fetched.models.has(id)
   return runtimeSurfaceProfile().models.deny.includes(id)
+}
+
+/**
+ * True when this deployment RESTRICTS models: the server's `models.restricted`
+ * once the answer is in, before it the static profile naming `models.allow` or
+ * `models.deny` (an admin's models override is known only from the answer). A
+ * model an admin switched off is unavailable without being a restriction, so a
+ * deployment that restricts nothing answers false here whatever it switched off.
+ */
+export function modelRestrictionActive(): boolean {
+  if (fetched) return fetched.modelsRestricted
+  const { allow, deny } = runtimeSurfaceProfile().models
+  return allow.length > 0 || deny.length > 0
 }
 
 /**

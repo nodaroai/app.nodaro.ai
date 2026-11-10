@@ -7,6 +7,7 @@
 import { toast } from "sonner"
 import { flushPendingUndoSnapshot } from "@/hooks/use-undo-redo"
 import { mintNodeId, newNodeDefaultData, useWorkflowStore } from "@/hooks/use-workflow-store"
+import { noteNewNodesFromDefaults } from "@/components/editor/config-panels/new-node-models"
 import { tx } from "@/lib/i18n"
 import { isRunInProgress } from "@/components/editor/workflow-editor/clear-run-results"
 import { isCanvasMacroOffered, isCanvasMacroType } from "@/lib/canvas-macros"
@@ -70,7 +71,7 @@ export function insertCanvasMacro(
   if (!defaults.transcribe || !defaults.frames || !defaults.view) return { outcome: "refused" }
   // Its own undo step: close whatever step is still open.
   flushPendingUndoSnapshot()
-  const out: { groupId?: string } = {}
+  const out: { groupId?: string; made?: { id: string; type: string; data: Record<string, unknown> }[] } = {}
   const changed = store.editGraph((graph) => {
     const taken = graph.nodes.map((n) => n.id)
     const ids = {
@@ -86,9 +87,15 @@ export function insertCanvasMacro(
       video: macroVideoSource(graph.nodes, from),
     })
     out.groupId = plan.groupId
+    out.made = [
+      { id: ids.transcribe, type: "transcribe", data: defaults.transcribe! },
+      { id: ids.frames, type: "speaker-frames", data: defaults.frames! },
+      { id: ids.view, type: "speaker-view", data: defaults.view! },
+    ]
     return { nodes: plan.nodes, edges: plan.edges }
   })
   if (!changed || !out.groupId) return { outcome: "refused" }
+  noteNewNodesFromDefaults(out.made ?? [])
   // Centre the viewport on it, as a node added from the menu is.
   useWorkflowStore.getState().onNodeCreated?.(out.groupId)
   return { outcome: "added", groupId: out.groupId }

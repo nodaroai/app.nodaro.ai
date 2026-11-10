@@ -13,6 +13,7 @@ import { toast } from "sonner"
 import { flushPendingUndoSnapshot, pendingUndoSnapshot } from "@/hooks/use-undo-redo"
 import { useUndoRedoStore, type WorkflowSnapshot } from "@/hooks/use-undo-redo-store"
 import { mintNodeId, newNodeDefaultData, useWorkflowStore, type PresentationSettings } from "@/hooks/use-workflow-store"
+import { noteNewNodesFromDefaults } from "@/components/editor/config-panels/new-node-models"
 import { tx } from "@/lib/i18n"
 import { isRunInProgress } from "@/components/editor/workflow-editor/clear-run-results"
 import {
@@ -130,6 +131,7 @@ export function replaceRenderNodeOnCanvas(nodeId: string, toType: string, undo: 
     return "refused"
   }
   const newId = swap.id
+  noteNewNodesFromDefaults([{ id: newId, type: toType, data: defaults }])
   const dropped = result.plan.dropped
   const before = swap.before
 

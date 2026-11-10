@@ -9008,7 +9008,7 @@ users), so it is never shared-cached. Signed out, the answer is a user's.
 
 | Method | Endpoint | Notes |
 |--------|----------|-------|
-| `availability()` | `GET /v1/surface/availability` | `SurfaceAvailability`: `{ nodes: { denied, hiddenFromUsers }, models: { denied }, webScrapeSources: { denied, hiddenFromUsers }, worlds }`. `hiddenFromUsers` is empty for anyone but an admin. `worlds` lists every world (`SurfaceAvailabilityWorld`: `{ id, enabled }`) in the deployment's display order: `explore`, `image`, `video`, `music`, `trends`, `motion`, `voice`, `app`, `studio`; a newer server may add one. A world is `enabled` when the deployment lets it through and every node type it runs is available to the caller. |
+| `availability()` | `GET /v1/surface/availability` | `SurfaceAvailability`: `{ nodes: { denied, hiddenFromUsers }, models: { denied, restricted }, webScrapeSources: { denied, hiddenFromUsers }, worlds }`. `hiddenFromUsers` is empty for anyone but an admin. `models.restricted` is `true` when the deployment restricts models (a profile `models.allow` / `models.deny`, or a models override that leaves a model off); a model an admin switched off is denied without being a restriction. An older server omits it: read that as `false`. `worlds` lists every world (`SurfaceAvailabilityWorld`: `{ id, enabled }`) in the deployment's display order: `explore`, `image`, `video`, `music`, `trends`, `motion`, `voice`, `app`, `studio`; a newer server may add one. A world is `enabled` when the deployment lets it through and every node type it runs is available to the caller. |
 
 ```ts
 // The shared header shows only the worlds this person can use.

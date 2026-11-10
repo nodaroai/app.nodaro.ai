@@ -14,6 +14,7 @@ import {
   clampContentIdeasCount,
 } from "@nodaro/shared/credits"
 import { LlmModelSelect } from "./llm-model-select"
+import { structuredOutputModel } from "@/lib/llm-model-filters"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
 import type { ContentIdeasNodeData, ContentRecipeNodeData } from "@/types/nodes"
@@ -23,7 +24,6 @@ import type { ContentIdeasNodeData, ContentRecipeNodeData } from "@/types/nodes"
  * calls, so the model picker offers every model that can return
  * schema-shaped output (the cloud route refuses the rest).
  */
-const STRUCTURED_MODEL = (m: { structuredOutputMode?: unknown }) => m.structuredOutputMode != null
 
 export function ContentRecipeConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<ContentRecipeNodeData>) {
   const t = useT()
@@ -37,7 +37,7 @@ export function ContentRecipeConfig({ data, onUpdate, sources, fieldMappings, on
         feature="content-recipe"
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
-        filter={STRUCTURED_MODEL}
+        filter={structuredOutputModel}
       />
 
       <MappableField field="focus" label={t("cfgext.contentRecipeFocus")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -80,7 +80,7 @@ export function ContentIdeasConfig({ data, onUpdate, sources, fieldMappings, onM
         feature="content-ideas"
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
-        filter={STRUCTURED_MODEL}
+        filter={structuredOutputModel}
       />
 
       <MappableField

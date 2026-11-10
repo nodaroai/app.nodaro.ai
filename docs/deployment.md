@@ -849,6 +849,21 @@ optional; each array empty = "keep the default"):
   unlisted default. A deployment with no `models.allow` / `models.deny` and no
   models override in Admin → Availability is not affected.
 
+  In the workflow editor, a node made from its defaults (added from the node
+  picker, the sidebar, a handle's add menu, or an action that adds a step)
+  whose default model the deployment withholds starts on the first model its
+  own model menu offers, and the menu shows it. A node that names no model is
+  judged on the default it runs (Describe Image on its feature's default LLM).
+  A saved node keeps the model it holds (its menu still lists it, and a run
+  refuses it), and a copied, pasted or duplicated node keeps its source's
+  model. Where the menu offers no model, the default is kept. Some menus list
+  their models by hand or by values that are not model ids — Suno's versions,
+  the voice changers, Motion Transfer, Video Upscale, Transcribe, Text to
+  Audio, Voice Design, Generate Music, Reference Board and the Generate Video
+  Pro planner — so those nodes keep their defaults: list those defaults, or
+  the nodes are refused at run. A deployment that restricts no models keeps
+  every default as it is, even one an admin switched off on the models page.
+
   The lists hold on the direct API too: every route that spends credits is
   checked as the node it runs, whatever its path — `POST /v1/suno/generate` as
   `suno-generate`, `POST /v1/edit-image` as Upscale Image, Remove Background or

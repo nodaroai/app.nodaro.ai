@@ -2599,7 +2599,7 @@ No scopes required.
 ```json
 {
   "nodes": { "denied": ["social-publish"], "hiddenFromUsers": [] },
-  "models": { "denied": ["flux-flex"] },
+  "models": { "denied": ["flux-flex"], "restricted": true },
   "webScrapeSources": { "denied": [], "hiddenFromUsers": [] },
   "worlds": [
     { "id": "image", "enabled": true },
@@ -2613,6 +2613,7 @@ No scopes required.
 | `nodes.denied` | Node types the caller is not offered. Saving or running one is refused with `node_not_available`. |
 | `nodes.hiddenFromUsers` | For an admin only (empty for anyone else): node types the admin can use and the deployment's users cannot. |
 | `models.denied` | Model ids nobody on this deployment is offered (`model_not_available`). |
+| `models.restricted` | `true` when the deployment restricts models: its [surface profile](./deployment.md#keys-read-by-client-apps) lists `models.allow` or `models.deny`, or a models override in Admin → Availability leaves a model off. A model an admin switched off on the models page is listed in `models.denied` without being a restriction. The workflow editor starts a new node on a model its menu offers only where this is `true`. A server that predates the field omits it: read that as `false`. |
 | `webScrapeSources.denied` / `.hiddenFromUsers` | Web Scrape sources withdrawn with the node that governs them (the Instagram source follows the Instagram node), in the same two views. |
 | `worlds` | Every world of the shared site header — `explore`, `image`, `video`, `music`, `trends`, `motion`, `voice`, `app` (the workflow editor) and `studio` — in the deployment's display order (`worlds.order` in its [surface profile](./deployment.md#keys-read-by-client-apps)). A newer server may add a world; handle an id you do not know. |
 | `worlds[].enabled` | `true` when the deployment's `worlds.allow` lets the world through (or sets none) and every node type the world runs is available to the caller: `image` runs `generate-image`, `video` runs `generate-video` and `text-to-video`, `music` runs `suno-generate`, `trends` and `motion` run `cast-swap`, `voice` runs `voice-changer-pro`; `explore`, `app` and `studio` run no node of their own. The table is published as `WORLD_REQUIRED_NODE_TYPES` in `@nodaro/shared/runtime-config`. |
