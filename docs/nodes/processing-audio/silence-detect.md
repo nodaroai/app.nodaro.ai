@@ -6,7 +6,7 @@
 
 The Silence Detect node runs one local FFmpeg `silencedetect` pass over the connected audio or video and returns the silent spans as a structured JSON payload on its `json` output handle. It never calls an external provider, so it works on a keyless (community) install.
 
-It reads a cheap 16 kHz mono audio proxy of the source, so a long recording is analysed in seconds rather than by downloading and decoding the full-resolution original. Connect an audio track **or** a video (its audio is used automatically) and run.
+It reads a cheap 16 kHz mono audio proxy of the source. The first run on a recording makes that proxy from the original (it downloads and decodes the original once); every later run, and Transcribe on the same recording, reads the stored proxy, so a long recording is analysed in seconds. Connect an audio track **or** a video (its audio is used automatically) and run. A source with no sound (a picture-only video) fails the run, and its credits are refunded.
 
 The output is data, not media — feed it into data/JSON consumers (for example, an editing/EDL step or an Extract Field node), not a media input.
 
@@ -34,9 +34,9 @@ The output is data, not media — feed it into data/JSON consumers (for example,
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| **Silence threshold** (`thresholdDb`) | `-35` | Audio quieter than this (in dBFS, always ≤ 0) counts as silence. A lower value is stricter (only near-total quiet is silence). |
-| **Minimum silence** (`minSilenceMs`) | `700` | Only gaps at least this long (in ms) are reported. |
-| **Speech padding** (`padMs`) | `120` | Padding kept around speech (in ms). Each detected span is shrunk **inward** by this amount at both ends so a downstream cut doesn't clip a breath or the attack of a word. A span that would collapse to nothing after padding is dropped. |
+| **Silence threshold** (`thresholdDb`) | `-35` | Audio quieter than this (in dBFS) counts as silence. A lower value is stricter (only near-total quiet is silence). The slider runs from -60 to -10; the API takes -90 to 0. |
+| **Minimum silence** (`minSilenceMs`) | `700` | Only gaps at least this long (in ms) are reported. The length is measured before the padding below shrinks the span, so a reported range can be shorter than this. The slider runs from 100 to 3000 ms; the API takes 1 to 600000. |
+| **Speech padding** (`padMs`) | `120` | Padding kept around speech (in ms; the slider runs from 0 to 1000, the API takes 0 to 60000). Each detected span is shrunk **inward** by this amount at both ends so a downstream cut doesn't clip a breath or the attack of a word. A span that would collapse to nothing after padding is dropped. |
 
 ## Credits
 

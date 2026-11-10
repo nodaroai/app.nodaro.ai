@@ -254,6 +254,24 @@ describe("CLI extraction", () => {
     expect(cmd("auth login")?.sdk).toEqual([])
     expect(cmd("workspace current")?.sdk).toEqual([])
   })
+
+  it("names the node types a command runs through nodes.run literally, and none for one that takes the type at run time", () => {
+    expect(cmd("media generate-mask")?.sdk).toEqual(expect.arrayContaining(["nodes.run"]))
+    expect(cmd("media generate-mask")?.nodeRunTypes).toEqual(["generate-mask"])
+    expect(cmd("nodes run")?.sdk).toEqual(expect.arrayContaining(["nodes.run"]))
+    expect(cmd("nodes run")?.nodeRunTypes).toBeUndefined()
+  })
+
+  it("credits a named-type command on its own node only; `nodes run` on every node", () => {
+    const report = buildModel(realInputs())
+    const cliOf = (type: string) => report.features.find((f) => f.id === `node:${type}`)!.atoms[0]!.surfaces.cli?.ref ?? ""
+    expect(cliOf("generate-mask")).toContain("media generate-mask")
+    expect(cliOf("generate-mask")).toContain("nodes run")
+    for (const other of ["apply-edl", "generate-image"]) {
+      expect(cliOf(other)).toContain("nodes run")
+      expect(cliOf(other)).not.toContain("media generate-mask")
+    }
+  })
 })
 
 describe("MCP extraction", () => {

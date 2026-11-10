@@ -431,7 +431,7 @@ HTTP 401. Token missing, expired, or invalid.
 HTTP 403. Permission denied. When the server returns
 `code: "insufficient_scope"`, the missing scope is exposed via `missingScope`.
 
-- `code = "forbidden"`, `status = 403` (only `ModelUnavailableError` and `ImportRefusedError` set their own code)
+- `code` is the server's own code (`insufficient_scope`, `node_not_available`, …), `"forbidden"` when it sent none; `status = 403`
 - `missingScope?: string` — set when scope check failed
 - **Constructor:** `new ForbiddenError(message?: string, missingScope?: string, code?: string)`
 
@@ -491,15 +491,15 @@ codes.
 
 HTTP 404. Resource doesn't exist or isn't visible to this caller.
 
-- `code = "not_found"`, `status = 404`
-- **Constructor:** `new NotFoundError(message?: string)`
+- `code` is the server's own code (`continuation_not_found`, …), `"not_found"` when it sent none (the framework's own "no such route" 404 sends none); `status = 404`
+- **Constructor:** `new NotFoundError(message?: string, code?: string)`
 
 ### `class RateLimitedError extends NodaroError`
 
 HTTP 429. Apply backoff and retry.
 
-- `code = "rate_limited"`, `status = 429`
-- **Constructor:** `new RateLimitedError(message?: string)`
+- `code` is the server's own code (`rate_limit_exceeded`, …), `"rate_limited"` when it sent none; `status = 429`
+- **Constructor:** `new RateLimitedError(message?: string, code?: string)`
 
 ### `class InsufficientCreditsError extends NodaroError`
 
@@ -5502,7 +5502,7 @@ Refusals (nothing is written or billed) carry a code from
 | `code` | Thrown as | When |
 |---|---|---|
 | `not_found` | `NotFoundError` | no such run of yours under this app |
-| `continuation_not_found` | `NotFoundError` (its `code` reads `not_found`) | the run's execution is not yours |
+| `continuation_not_found` | `NotFoundError` | the run's execution is not yours |
 | `validation_error` | `NodaroError` (400) | a malformed run id or body, or a component's run (it is continued by the run that called it) |
 | `app_run_version_unavailable` | `NodaroError` (409) | the version the run ran is gone: start the run over |
 | `app_run_version_changed` | `AppRunVersionChangedError` | the app is on another version than the run ran: start over, or send `version: err.runVersion` |
@@ -9013,7 +9013,7 @@ first, [`withWorkspace`](#clientwithworkspaceworkspaceid) is the second.
 
 ### `client.edit`
 
-Editorial primitives for podcast / long-form video editing. Eleven
+Editorial primitives for podcast / long-form video editing. Twelve
 request methods return `{ jobId }` (`EditJobResult`) — poll with
 [`client.jobs.getStatus(jobId)`](#getstatusid) — plus five quotes
 (`estimateTightenEpisode`, `estimateEpisodeChapters`, `estimateEpisodeTrailer`, `estimateClipPack`, `estimateSpeakerLayout`) and one pure local helper.
@@ -9024,7 +9024,7 @@ request methods return `{ jobId }` (`EditJobResult`) — poll with
 | `audioSync(input)` | `POST /v1/audio-sync` | Keyless: measure how far apart 2–6 recordings' clocks are, from their sound. |
 | `speakerMap(input)` | `POST /v1/speaker-map` | Keyless: which camera each speaker is on, from the cameras' own microphones. **Not yet enabled on nodaro.ai.** |
 | `applyEdl(input)` | `POST /v1/apply-edl` | Render an edit decision list (EDL) into a video or audio cut. |
-| `cameraSwitch(input)` | `POST /v1/camera-switch` | Multicam: put each cut of an EDL on the camera of whoever is speaking (Cloud; flat price). |
+| `cameraSwitch(input)` | `POST /v1/camera-switch` | Multicam: put each cut of an EDL on the camera of whoever is speaking (flat price). Runs on nodaro.ai; a self-hosted install relays it once connected (`503 nodaro_connection_required` otherwise). |
 | `editPlan(input)` | `POST /v1/edit-plan` | Transcript-driven planner (tighten / clips / chapters / trailer). On a self-hosted install it relays to nodaro.ai (`503 nodaro_connection_required` when not connected). |
 | `tightenEpisode(input, options?)` | `POST /v1/tighten-episode` | Tighten Episode: one recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map, not yet enabled on nodaro.ai), the tightened episode out — transcribe, plan, render, with optional captions, music and framing, in one call. Core; a self-hosted install needs a nodaro.ai connection for the steps that run there (`503 nodaro_connection_required` otherwise). |
 | `estimateTightenEpisode(input)` | `POST /v1/tighten-episode/estimate` | What a Tighten Episode run is estimated at. Nothing is created or charged. |
@@ -9034,7 +9034,7 @@ request methods return `{ jobId }` (`EditJobResult`) — poll with
 | `estimateEpisodeTrailer(input)` | `POST /v1/episode-trailer/estimate` | What a Trailer run is estimated at. Nothing is created or charged. |
 | `clipPack(input, options?)` | `POST /v1/clip-pack` | Clip Pack: one recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map, not yet enabled on nodaro.ai), a pack of short clips out — each framed for 9:16 with the speakers stacked and captioned by default (audio clips for an audio recording), in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
 | `estimateClipPack(input)` | `POST /v1/clip-pack/estimate` | What a Clip Pack run is estimated at. Nothing is created or charged. |
-| `speakerLayout(input, options?)` | `POST /v1/speaker-layout` | Speaker Layout: one video recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map, not yet enabled on nodaro.ai), the whole recording framed by speaker out — the same length, nothing cut — in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
+| `speakerLayout(input, options?)` | `POST /v1/speaker-layout` | Speaker Layout: one video recording in (or up to six of one conversation, at most five of them cameras, with an optional Master audio — several need Speaker Map, not yet enabled on nodaro.ai), the whole recording framed by speaker out — the same length, nothing cut — in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
 | `estimateSpeakerLayout(input)` | `POST /v1/speaker-layout/estimate` | What a Speaker Layout run is estimated at. Nothing is created or charged. |
 | `continueUseCase(input, options?)` | `POST /v1/<type>/continue` (`/v1/tighten-episode/continue`, `/v1/episode-chapters/continue`, `/v1/episode-trailer/continue`, `/v1/clip-pack/continue`, `/v1/speaker-layout/continue`) | Continue a Tighten Episode, Chapters, Trailer, Clip Pack or Speaker Layout run as a new job: from where it failed, or (Tighten Episode, Trailer, Clip Pack, Speaker Layout) its Render final after a review. The route is the run's own type. |
 | `remapTranscript(edl, transcript)` | — (local) | PURE client-side transform — remaps a transcript through an EDL. **No request.** |
@@ -9050,14 +9050,15 @@ silenceDetect(input: SilenceDetectInput): Promise<EditJobResult>
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `audioUrl` | `string` | yes | Audio or video source (the pass reads the shared audio proxy either way). |
-| `thresholdDb` | `number` | no | dBFS threshold, ≤ 0. Default `-35`. |
-| `minSilenceMs` | `number` | no | Minimum silence length to report. Default `700`. |
-| `padMs` | `number` | no | Padding kept around speech (shrinks each range inward). Default `120`. |
+| `thresholdDb` | `number` | no | dBFS threshold, -90 to 0. Default `-35`. |
+| `minSilenceMs` | `number` | no | Minimum silence length to report, 1–600000 ms, measured before the padding. Default `700`. |
+| `padMs` | `number` | no | Padding kept around speech (shrinks each range inward), 0–60000 ms. Default `120`. |
 | `workflowId` | `string` | no | Associates the run with a workflow (execution-history display). |
 
 The finished job's `output_data.json` is a `SilenceRanges` object
 (`{ version, ranges: [{ startMs, endMs }], durationMs }`) — pass that whole
-object as `editPlan`'s `silence`.
+object as `editPlan`'s `silence`. A source with no sound (a picture-only
+video) fails the job, and its credits are refunded.
 
 #### `audioSync(input)`
 
@@ -9091,7 +9092,7 @@ The finished job's `output_data.json` is an `AudioSyncResult`:
 
 With the master recording as `reference`, each `offsetMs` is exactly that
 source's `EdlSource.offsetMs` (`masterMs = sourceMs + offsetMs`). Credits:
-`10 × (sources − 1)` — 2 sources 10, 4 sources 30, 6 sources 50. A malformed
+`11 × (sources − 1)` — 2 sources 11<!-- credits: audio-sync:2src -->, 4 sources 33<!-- credits: audio-sync:4src -->, 6 sources 55<!-- credits: audio-sync:6src -->. A malformed
 request (fewer than 2 or more than 6 sources, a repeated id, a `reference`
 that is not one of the ids) throws a `NodaroError` (status 400,
 `code: "validation_error"`) naming the problem, before any credits are
@@ -9104,7 +9105,13 @@ const { jobId } = await client.edit.audioSync({
     { id: "camA", url: camAUrl },
   ],
 })
-const sync = (await client.jobs.getStatus(jobId)).data.output_data.json // AudioSyncResult
+// Wait for the job to finish; output_data is typed `unknown`, so name the result's type.
+let job = (await client.jobs.getStatus(jobId)).data
+while (job.status !== "completed" && job.status !== "failed" && job.status !== "cancelled") {
+  await new Promise((r) => setTimeout(r, 2000))
+  job = (await client.jobs.getStatus(jobId)).data
+}
+const sync = (job.output_data as { json: AudioSyncResult }).json
 ```
 
 #### `speakerMap(input)`
@@ -9123,7 +9130,7 @@ speakerMap(input: SpeakerMapInput): Promise<EditJobResult>
 | `transcript` | `Transcript` | yes | The transcript WITH speaker labels. |
 | `offsets` | `AudioSyncResult` | no | An `audioSync` result over the same ids; omit when the recordings already share a clock. |
 | `masterSourceId` | `string` | no | The master audio: hears everyone, so it is no one's camera. |
-| `wideSourceId` | `string` | no | The wide shot: no one's camera; a speaker with no clear camera is shown on it. |
+| `wideSourceId` | `string` | no | The wide shot: no one's camera; a speaker with no clear camera is shown on it. It must be a camera (not `kind: "audio"`) and not the master. |
 | `marginDb` | `number` | no | How much louder (dB) the loudest camera must be than the next for a speaker to get it, 0–30. Default `3`. |
 | `workflowId` | `string` | no | Execution-history display. |
 
@@ -9132,7 +9139,7 @@ The finished job's `output_data.json` is a `SpeakerMapResult`:
 ```ts
 {
   version: 1
-  speakerMap: Record<string, string>   // speaker label → camera id; "" = no clear camera (the wide shot)
+  speakerMap: Record<string, string>   // speaker label → camera id; "" = no clear camera (the wide shot, else any camera with picture)
   confidence: Record<string, { camera: string; marginDb: number | null }> // the loudest camera's lead over the next
   notes: string[]                      // no clear camera, a camera with no sound, …
   edl?: Edl                            // the recordings as one edit (also on output_data.edl)
@@ -9153,7 +9160,8 @@ const { jobId } = await client.edit.speakerMap({
   offsets: sync,          // an audioSync result
   wideSourceId: "wide",
 })
-const map = (await client.jobs.getStatus(jobId)).data.output_data.json // SpeakerMapResult
+// …wait for the job to finish, as for audioSync above, then:
+const map = ((await client.jobs.getStatus(jobId)).data.output_data as { json: SpeakerMapResult }).json
 await client.edit.cameraSwitch({ edl, transcript, speakerMapResult: map })
 ```
 
@@ -9171,8 +9179,8 @@ applyEdl(input: ApplyEdlInput): Promise<EditJobResult>
 | `sources` | `string[]` | no | Positional media-URL overrides for `edl.sources[i].url`. |
 | `transcript` | `Transcript` | no | Transcript remapped through the cut and returned on the job's `json` output. For a **large** transcript where you only need the re-timed result, use `remapTranscript` locally instead. |
 | `output` | `"video" \| "audio"` | no | Default `"video"`. |
-| `quality` | `"proxy" \| "final"` | no | Default `"final"`. `"proxy"` is a 720p preview (lighter mono sound on an audio cut), billed per output minute at its own, lower rate — see [Apply EDL](nodes/processing-video/apply-edl.md#credit-cost). |
-| `crossfadeMs` | `number` | no | Default crossfade on boundaries without an explicit transition; `0` = hard cuts. Default `0`. |
+| `quality` | `"proxy" \| "final"` | no | Default `"final"`. `"proxy"` is a 720p preview (lighter mono sound, on a video cut as on an audio one), billed per output minute at its own, lower rate — see [Apply EDL](nodes/processing-video/apply-edl.md#credit-cost). |
+| `crossfadeMs` | `number` | no | Default crossfade on boundaries without an explicit transition, 0–5000; `0` = hard cuts. Default `0`. |
 | `clipKey` | `string` | no | The plan clip this render cuts — `edlSpanKey(clip)` from `@nodaro/shared` (`"<first inMs>-<last outMs>"`). Returned on the job's `output_data.clipKey`. |
 | `planBasis` | `string` | no | The plan value this render cuts — `renderReadBasis(value)` from `@nodaro/shared`, 16 lowercase hex digits, where `value` is the Edit Plan's Tighten EDL with any review applied, or the clip this render cuts. A hook edit does not change it. Returned on the job's `output_data.planBasis`. Send it only when the EDL you send is that value itself, not one a later step re-cut from an older plan. Anything other than 16 lowercase hex digits is a `400`. |
 | `workflowId` | `string` | no | Execution-history display. |
@@ -9248,10 +9256,13 @@ could not be read.
 Both refuse before anything is created or charged: `400` (`validation_error`,
 `media_unreadable`, `media_has_no_audio`, `media_too_long`,
 `music_has_no_audio`, and on several recordings `too_many_recordings`,
-`recordings_two_audio_only`, `wide_camera_out_of_range`, `invalid_cameras`),
+`recordings_two_audio_only`, `wide_camera_out_of_range`, `invalid_cameras`,
+`master_audio_unreadable`),
 `403 node_not_available`, `503
-nodaro_connection_required` (a self-hosted install not connected to nodaro.ai)
-or `503 use_case_unavailable`. `tightenEpisode` also throws
+nodaro_connection_required` (a self-hosted install not connected to nodaro.ai),
+`503 provider_key_missing` (a self-hosted install with no key for the
+transcription a step needs, and no nodaro.ai connection that covers it; the
+message names the key) or `503 use_case_unavailable`. `tightenEpisode` also throws
 `InsufficientCreditsError` when the balance does not cover the estimate.
 
 #### `episodeChapters(input, options?)` / `estimateEpisodeChapters(input)`
@@ -9270,8 +9281,7 @@ Only `mediaUrl` is required; a field left out takes the node's default.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `mediaUrl` | `string` | one of the two | The recording — a video or audio URL, up to 3 hours. Sent as `mediaUrls: [mediaUrl]`. |
-| `mediaUrls`, `masterAudioUrl`, `cameras` | | no | Instead of `mediaUrl`: the recordings of one conversation, as on `tightenEpisode` ([`UseCaseRecordingsInput`](#tightenepisodeinput-options--estimatetightenepisodeinput)). Several need Speaker Map (refused `403 node_not_available` where it is not available to you). Both `mediaUrl` and `mediaUrls`, or neither, reject with a `TypeError` before any request. |
+| `mediaUrl` | `string` | yes | The recording — a video or audio URL, up to 3 hours. Sent as `mediaUrls: [mediaUrl]`. Chapters reads one recording: there is no `mediaUrls`, Master audio or Cameras setting, and the route refuses more than one recording (`400 validation_error`). |
 | `planTier` | `EditPlanTier` | no | `"economy"` (default) \| `"standard"` \| `"premium"`. |
 | `instructions` | `string` | no | Instructions for the chapters, e.g. "5 to 8 chapters" (up to 4 000 characters). |
 | `styleGuide` | `string` | no | A style guide for the chapter titles (up to 4 000 characters). |
@@ -9286,7 +9296,8 @@ strictly increasing (two chapters in the same second keep the first) — and
 `output_data.json` the list itself, `[{ startMs, title }]`, the same rows; the
 first starts at 0. A run that finds no
 chapters fails ("The plan found no chapters in this recording."), and its fee
-is refunded.
+is refunded. It cannot be continued: every step of it completed, so
+`continueUseCase` answers `409 continuation_not_failed`; run it again instead.
 
 `estimateEpisodeChapters` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec, estimate? } }`:
 the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:episode-chapters --> per run.
@@ -9316,7 +9327,7 @@ left out takes the node's default. **Not yet enabled on nodaro.ai** (see the [no
 | `mediaUrl` | `string` | `mediaUrl` or `mediaUrls` | The recording — a video URL, up to 3 hours (an audio-only recording is refused `media_needs_video`). Sent as `mediaUrls: [mediaUrl]`. |
 | `mediaUrls` | `string[]` | `mediaUrl` or `mediaUrls` | Instead of `mediaUrl`: the recordings of one conversation, in order (Camera 1, Camera 2…) — up to six in all with the Master audio; without one, two or more cameras keep a place for the sound, so up to five. See [Several cameras](./nodes/processing-video/episode-trailer.md#several-cameras). **Needs Speaker Map** (as on `tightenEpisode`). |
 | `masterAudioUrl` | `string` | no | The mixer or recorder track: the trailer's sound and the clock the recordings are lined up to. **Needs Speaker Map**. |
-| `cameras` | `{ wide?, synced?, speakerCameras? }` | no | With several recordings or a Master audio: as on `tightenEpisode`. Ignored on one recording with no Master audio. |
+| `cameras` | `{ wide?, synced?, speakerCameras? }` | no | With several recordings or a Master audio: as on `tightenEpisode`. Ignored on one recording with no Master audio (the CLI, by contrast, refuses its Cameras flags there and exits 1). |
 | `introCardUrl` | `string` | no | A short video, 15 s at most, played before the trailer. Make it the recording's size and shape, or one of the two is letterboxed. |
 | `formats` | `TrailerFormat[]` | no | `"9:16"` \| `"1:1"` \| `"4:5"` \| `"16:9"` (the list is exported as `TRAILER_FORMATS`; 16:9 is a 1920×1080 landscape). Default `["9:16", "1:1", "4:5"]`. At least one: an empty list is sent as is and refused `400 validation_error`. |
 | `reviewBeforeRender` | `boolean` | no | Stop at a quick preview of the trailer for a person to review; render every format afterwards with `continueUseCase({ mode: "render-final" })`. |
@@ -9338,7 +9349,9 @@ is `"proxy"` for a review-on run's preview (`videoUrl` is then the preview, and
 could not be rendered is named in `output_data.failedFormats`: the run
 completes with the others, keeps its fee and is not charged for that format.
 A run with no format rendered fails, and its fee is refunded. A run on several
-recordings or a Master audio adds `output_data.cameras`, as on `tightenEpisode`.
+recordings or a Master audio adds `output_data.cameras`, as on `tightenEpisode`
+(one camera with a Master audio, already in sync, adds none: there is nothing
+to line up or map).
 
 `estimateEpisodeTrailer` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec, estimate? } }`:
 the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:episode-trailer --> per run.
@@ -9374,7 +9387,10 @@ nodaro.ai** (see the [node page](./nodes/processing-video/clip-pack.md)).
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `mediaUrl` | `string` | yes | The recording — a video or audio URL, up to 3 hours. Sent as `mediaUrls: [mediaUrl]`. |
+| `mediaUrl` | `string` | `mediaUrl` or `mediaUrls` | The recording — a video or audio URL, up to 3 hours. Sent as `mediaUrls: [mediaUrl]`. |
+| `mediaUrls` | `string[]` | `mediaUrl` or `mediaUrls` | Instead of `mediaUrl`: the recordings of one conversation, in order, as on `tightenEpisode` (up to six in all with the Master audio). See [Several cameras](./nodes/processing-video/clip-pack.md#several-cameras). **Needs Speaker Map**. Both `mediaUrl` and `mediaUrls`, or neither, reject with a `TypeError` before any request. |
+| `masterAudioUrl` | `string` | no | The mixer or recorder track: the clips' sound and the clock the recordings are lined up to. **Needs Speaker Map**. |
+| `cameras` | `{ wide?, synced?, speakerCameras? }` | no | With several recordings or a Master audio: as on `tightenEpisode`. Ignored on one recording with no Master audio. |
 | `count` | `number` | no | How many clips to find, 1–50 (default 8). The plan may find fewer. |
 | `targetDurationSec` | `number` | no | Each clip's target length in seconds, 5–180 (default 60; the bounds are exported as `CLIP_PACK_MIN_TARGET_SEC` / `CLIP_PACK_MAX_TARGET_SEC`). |
 | `framing` | `{ aspect, layout?, switchType?, emphasisStyle? } \| null` | no | Frame each video clip with Speaker View: `aspect` (`"16:9"` \| `"9:16"` \| `"1:1"` \| `"4:5"`), `layout` (default `"stacked"`; one the shape does not draw is snapped), `switchType` (`SpeakerSwitchId` from `@nodaro/shared/edl`: `"cut"`, `"pan"`, `"zoom"` or `"xfade:<transition>"`, listed in `SPEAKER_SWITCH_IDS`; default `"pan"`), `emphasisStyle` (`ClipPackEmphasis`, default `"scale"`; `"none"`, or `"scale"`, `"border"` and `"dim"` joined with `"+"`, each once — any other is refused `400 validation_error`). Left out: 9:16, stacked, pan, scale. `null`: no framing (the recording's shape). |
@@ -9395,7 +9411,7 @@ entry per clip in the plan's order (`thumbnailUrl` on each video clip), and
 `output_data.videoUrl` the first clip (`audioUrl` for audio clips);
 `output_data.json` is the plan's clip set and `quality` is `"proxy"` for a
 review-on run's previews, `"final"` otherwise; a run on several recordings
-adds `output_data.cameras`. Every clip is tried: a clip that could not be
+or a Master audio adds `output_data.cameras`. Every clip is tried: a clip that could not be
 rendered (or, on several cameras, whose camera switch failed) is skipped and
 not charged, and counted in `output_data.failedClips`; the run completes with the others and keeps its
 fee. A clip whose captions could not be added comes uncaptioned, marked
@@ -9540,7 +9556,7 @@ editPlan(input: EditPlanInput): Promise<EditJobResult>
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `mode` | `EditPlanMode` | yes | `"tighten"` \| `"clips"` \| `"chapters"` \| `"trailer"`. A trailer plan's `output_data` is one `Edl`, like tighten. |
-| `planTier` | `EditPlanTier` | yes | `"economy"` \| `"standard"` \| `"premium"` — affects quality and the credit bucket. |
+| `planTier` | `EditPlanTier` | yes | `"economy"` \| `"standard"` \| `"premium"` — affects quality and the price per minute. |
 | `transcript` | `Transcript` | yes | The timed transcript driving the plan. |
 | `sources` | `EditPlanSource[]` | yes | 1–6 media sources. Each: `{ id, url, kind: "video" \| "audio", role?, speakers?, offsetMs? }`. A source's own `offsetMs` wins over a measured one. |
 | `silence` | `SilenceRanges` | no | The silence-detect job's `output_data.json` — pass the whole object (an input without `ranges` is silently ignored). |
@@ -9550,7 +9566,7 @@ editPlan(input: EditPlanInput): Promise<EditJobResult>
 | `styleGuide` | `string` | no | Style-guide text. |
 | `count` | `number` | no | `"clips"` mode: how many clips to cut. |
 | `targetDurationSec` | `number` | no | `"clips"` mode: target duration per clip. |
-| `targetAspect` | `"16:9" \| "9:16" \| "1:1" \| "4:5"` | no | Clip aspect. |
+| `targetAspect` | `"16:9" \| "9:16" \| "1:1" \| "4:5"` | no | The clips' or the trailer's aspect (Clips and Trailer modes), written into the EDL as a hint. |
 | `platform` | `string` | no | Target platform hint. |
 | `workflowId` | `string` | no | Execution-history display. |
 
@@ -9607,16 +9623,22 @@ cameraSwitch(input: CameraSwitchInput): Promise<EditJobResult>
 |-------|------|----------|-------------|
 | `edl` | `Edl` | yes | One EDL — an `editPlan` result (not a clip set). |
 | `transcript` | `Transcript` | yes | The transcript WITH speaker labels. |
-| `speakerMap` | `Record<string, string>` | no | Speaker label → the EDL source id of their camera. A speaker left out uses the source whose `speakers` names them, else the `wide` source, else any camera with picture. |
+| `speakerMap` | `Record<string, string>` | no | Speaker label (1–200 characters) → the EDL source id of their camera; `""` means *no camera of their own* (shown on the wide, else any camera with picture), and beats a source whose `speakers` names them. A speaker left out uses the source whose `speakers` names them, else the `wide` source, else any camera with picture. |
 | `speakerMapResult` | `SpeakerMapResult \| string` | no | A `speakerMap` job's `output_data.json`, folded into `speakerMap` before the request: a label in `speakerMap` wins, then the result, then the n-th speaker heard gets the n-th camera. Something that is not a Speaker Map result rejects with a `NodaroError` (`code: "not_a_speaker_map"`) before any request. |
-| `speakerNames` | `Record<string, string>` | no | Speaker label → display name. |
-| `minShotMs` / `leadMs` / `maxShotMs` / `wideEvery` | `number` | no | Shortest shot (2 500), cut lead (200), wide break after (20 000, with a wide source), every N-th cut to the wide (0 = off). |
+| `speakerNames` | `Record<string, string>` | no | Speaker label → display name, 1–80 characters. |
+| `minShotMs` / `leadMs` / `maxShotMs` / `wideEvery` | `number` | no | Whole numbers: shortest shot 500–60 000 (default 2 500), cut lead 0–5 000 (200), wide break after 0–600 000 (20 000, with a wide source; 0 = never), every N-th cut to the wide 0–20 (0 = off). The bounds are `CAMERA_SWITCH_BOUNDS` in `@nodaro/shared/edl`. With a wide source, a shot longer than the wide break plus two shortest shots (25 s at the defaults) cuts to the wide one wide break in (20 s), for one shortest shot. |
 | `layoutHints` | `boolean` | no | Overlapping speech → a layout hint (default false; Apply EDL renders cut-only edits). |
+| `workflowId` | `string` | no | Execution-history display. |
 
 The finished job's `output_data.json` is the switched EDL (feed it to `applyEdl`)
 and `output_data.transcript` the transcript with `speakerNames` applied. A
 transcript with no speaker labels rejects with a `NodaroError`
-(`code: "no_speakers"`) before any request or charge. Flat price per run.
+(`code: "no_speakers"`) before any request or charge. The route refuses, before
+anything is charged: an `edl` that is not one edit on the recording's clock (a
+clip set, a chapters plan or a rendered output's EDL) with `400 invalid_edl`, a
+setting outside its range or a name over 80 characters with
+`400 validation_error`, and a transcript with no speaker labels with
+`422 no_speakers`. Flat price per run.
 
 #### `remapTranscript(edl, transcript)`
 

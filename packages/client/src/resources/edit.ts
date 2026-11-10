@@ -725,8 +725,8 @@ export class EditResource {
 
   /**
    * Camera Switch (podcast B5): choose which camera shows each cut of `edl`
-   * by who is speaking — the sound never changes. Cloud edition; a flat
-   * price. The finished job's `output_data.json` is the switched EDL (feed it
+   * by who is speaking — the sound never changes. Runs on nodaro.ai (a
+   * connected self-hosted install relays it); a flat price. The finished job's `output_data.json` is the switched EDL (feed it
    * to {@link applyEdl}) and `output_data.transcript` the transcript with
    * `speakerNames` applied. A transcript with no speaker labels rejects with
    * a {@link NodaroError} (`code: "no_speakers"`) before any request or charge.

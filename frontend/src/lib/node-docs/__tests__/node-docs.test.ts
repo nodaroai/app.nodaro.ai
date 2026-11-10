@@ -38,12 +38,9 @@ const snapshot: Snapshot = JSON.parse(readFileSync(join(__dirname, "..", "node-d
  */
 const AWAITING_DOCS_PAGE: Readonly<Record<string, string>> = {
   "instagram-scrape": "hidden from users in production (availability settings); the page is written and held until release",
-  reframe: "a canvas macro, not a node type (inserts Transcribe, Speaker Frames and Speaker View); the in-repo page is docs/nodes/processing-video/reframe.md and the docs-site page follows its release",
-  "tighten-episode": "new node (podcast use-case); the in-repo page is docs/nodes/processing-video/tighten-episode.md and the docs-site page follows its release",
   "episode-chapters": "new node (podcast use-case, hidden in production until availability enables it); the in-repo page is docs/nodes/processing-video/episode-chapters.md and the docs-site page follows its release",
   "episode-trailer": "new node (podcast use-case, hidden in production until availability enables it); the in-repo page is docs/nodes/processing-video/episode-trailer.md and the docs-site page follows its release",
   "clip-pack": "new node (podcast use-case, hidden in production until availability enables it); the in-repo page is docs/nodes/processing-video/clip-pack.md and the docs-site page follows its release",
-  "site-capture": "new node; the in-repo page is docs/nodes/input/site-capture.md and the docs-site page follows its release",
   "speaker-map": "new node (podcast primitive, hidden in production until availability enables it); the in-repo page is docs/nodes/processing-audio/speaker-map.md and the docs-site page follows its release",
   "speaker-layout": "new node (podcast use-case, hidden in production until availability enables it); the in-repo page is docs/nodes/processing-video/speaker-layout.md and the docs-site page follows its release",
   "shot-cuts": "new node (hidden in production until availability enables it); the in-repo page is docs/nodes/processing-video/shot-cuts.md and the docs-site page follows its release",

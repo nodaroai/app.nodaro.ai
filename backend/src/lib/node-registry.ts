@@ -1761,19 +1761,18 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         { key: "transcript", type: "json" },
         { key: "targetAspect", type: "select", options: ["16:9", "9:16", "1:1", "4:5"] },
         { key: "layout", type: "select", options: ["auto", "single", "side-by-side", "stacked", "grid", "pip"] },
-        { key: "switchType", type: "string" },
-        { key: "switchDurationMs", type: "number" },
-        { key: "emphasisStyle", type: "string" },
-        { key: "emphasisDurationMs", type: "number" },
+        // The route's own keys, as `nodes run` posts them: `{ type, durationMs? }`
+        // and `{ style, durationMs? }` (the node data's flat `switchType` /
+        // `emphasisStyle` are renamed on the way, by speakerViewWireSettings).
+        { key: "switch", type: "object" },
+        { key: "emphasis", type: "object" },
         { key: "accentColor", type: "string" },
         { key: "speakerRegions", type: "object" },
         { key: "quality", type: "select", options: ["proxy", "final"] },
         // P3.9: how tracked slots move. The face tracks themselves come only
         // from Speaker Frames' `tracks` wire (§5), never from a data field.
         { key: "motion", type: "select", options: ["static", "glide"] },
-        // With a Video wired (decided 2026-10-12): refuse the run, before anything
-        // is charged, when a few sampled frames show no face.
-        { key: "requireFaces", type: "boolean" },
+        // `requireFaces` is node data a workflow run reads (a wired Video), not a key the route takes.
       ],
     },
   },
@@ -1797,7 +1796,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         { key: "videoUrl", type: "string" },
         { key: "transcript", type: "json" },
         { key: "excludeSourceIds", type: "object" },
-        { key: "trackAssignments", type: "object" },
+        // `trackAssignments` is node data (who each track is), not a key the route takes.
       ],
     },
   },

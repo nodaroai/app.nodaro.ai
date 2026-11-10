@@ -30,7 +30,7 @@ export class UnauthorizedError extends NodaroError {
 }
 
 export class ForbiddenError extends NodaroError {
-  /** `code` defaults to `"forbidden"`; {@link ModelUnavailableError} passes its own. */
+  /** `code` is the server's own (`node_not_available`, `insufficient_scope`, …), `"forbidden"` when it sent none. */
   constructor(message = "Forbidden", public readonly missingScope?: string, code = "forbidden") {
     super(message, code, 403)
     this.name = "ForbiddenError"
@@ -133,15 +133,17 @@ export class ImportRefusedError extends ForbiddenError {
 }
 
 export class NotFoundError extends NodaroError {
-  constructor(message = "Not found") {
-    super(message, "not_found", 404)
+  /** `code` is the server's own (`continuation_not_found`, …), `"not_found"` when it sent none. */
+  constructor(message = "Not found", code = "not_found") {
+    super(message, code, 404)
     this.name = "NotFoundError"
   }
 }
 
 export class RateLimitedError extends NodaroError {
-  constructor(message = "Rate limited") {
-    super(message, "rate_limited", 429)
+  /** `code` is the server's own (`rate_limit_exceeded`, …), `"rate_limited"` when it sent none. */
+  constructor(message = "Rate limited", code = "rate_limited") {
+    super(message, code, 429)
     this.name = "RateLimitedError"
   }
 }
@@ -723,8 +725,8 @@ function selectError(status: number, body: ApiErrorBody): never {
     throw new AppRunVersionChangedError(message, finite(parsed.runVersion), finite(parsed.appVersion))
   }
   if (status === 422 && code === "job_blocked") throw new JobBlockedError(read.message)
-  // The model, not the caller — before the scope line, so its own code is
-  // kept (a plain ForbiddenError says "forbidden" whatever the server sent).
+  // The model, not the caller — before the scope line, so it gets its own
+  // class (a plain ForbiddenError would carry the same code, as a ForbiddenError).
   const modelCode = read.code as ModelUnavailableCode | undefined
   if (status === 403 && modelCode !== undefined && MODEL_UNAVAILABLE_CODES.has(modelCode)) {
     throw new ModelUnavailableError(modelCode, read.message)
@@ -734,15 +736,17 @@ function selectError(status: number, body: ApiErrorBody): never {
   if (status === 403 && importCode !== undefined && IMPORT_REFUSAL_CODES.has(importCode)) {
     throw new ImportRefusedError(importCode, read.message)
   }
+  // The class says which status it was; `code` keeps the server's own code
+  // (each class's default when it sent none), as every other status does.
   if (status === 403 && code === "insufficient_scope") {
-    throw new ForbiddenError(read.message, envelope.missingScope)
+    throw new ForbiddenError(read.message, envelope.missingScope, code)
   }
-  if (status === 403) throw new ForbiddenError(read.message)
+  if (status === 403) throw new ForbiddenError(read.message, undefined, read.code)
   // A 404 the framework answered itself (no route at that path) carries its
   // message at the top level, not under `error`; `readErrorBody` keeps it so
   // callers can tell "no such route" from "no such resource".
-  if (status === 404) throw new NotFoundError(read.message)
-  if (status === 429) throw new RateLimitedError(read.message)
+  if (status === 404) throw new NotFoundError(read.message, read.code)
+  if (status === 429) throw new RateLimitedError(read.message, read.code)
   if (status === 402) {
     // The credit guard puts `required` / `balance` (an allowance: `remaining`)
     // beside the envelope; an envelope that carries them (`required` /

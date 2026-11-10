@@ -294,7 +294,7 @@ Each row is a route (`GET /v1/characters/:p`, every parameter shown as
 | `openapi` | the OpenAPI document has the operation (shown, never counted as a gap) |
 | `sdk` | an SDK method calls it (`nodes.run` for a node, on the route `nodeRunRoute(type)` in `@nodaro/shared` resolves) |
 | `sdk-doc` | `docs/sdk-reference.md` has that method: a `####` heading or a table row naming it, in the `client.X` section of its resource |
-| `cli` | a CLI command calls one of those SDK methods |
+| `cli` | a CLI command calls one of those SDK methods (a command that calls `nodes.run` with a node type written out, like `media generate-mask`, counts for that node only; `nodes run <type>` counts for every node) |
 | `cli-doc` | `docs/cli.md` or `packages/cli/README.md` shows the command |
 | `mcp` | an MCP tool calls the route (or is the node's tool); a tool that reads or writes the database itself counts for the routes listed for it in `MCP_DIRECT_TOOL_ROUTES` (`backend/scripts/lib/check-surfaces/features.ts`) |
 | `mcp-doc` | `docs/mcp/tools.md` has a hand-written entry for that tool |

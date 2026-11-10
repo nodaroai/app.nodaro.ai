@@ -24,7 +24,7 @@ export function withRecordingsOptions(cmd: Command): Command {
   return cmd
     .requiredOption(
       "--media <url>",
-      "the recording (video or audio URL, up to 3 hours); repeat it for the cameras of one conversation, in order (several need Speaker Map)",
+      "the recording (a video or audio URL, up to 3 hours; a video for episode-trailer and speaker-layout); repeat it for the cameras of one conversation, in order (several need Speaker Map)",
       collectVariadic,
     )
     .option("--master-audio <url>", "the mixer or recorder track: the episode's sound and the clock the recordings are lined up to (needs Speaker Map)")

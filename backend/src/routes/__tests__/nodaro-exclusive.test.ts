@@ -1,3 +1,4 @@
+// @test-units-by-name looks up only the speaker-view descriptor in NODE_REGISTRY
 /**
  * The self-hosted routes for the Nodaro-exclusive nodes (4b). What they must
  * guarantee:
@@ -57,6 +58,9 @@ vi.mock("@/lib/private-plugins/speaker-frames-relay-support.js", async (orig) =>
   speakerFramesRelaySupport: mocks.relaySupport,
 }))
 
+import { speakerViewWireSettings, type SpeakerViewWireSettings } from "@nodaro/render-rules"
+import { CAMERA_SWITCH_BOUNDS, CAMERA_SWITCH_NAME_MAX } from "@nodaro/shared/edl"
+import { NODE_REGISTRY } from "../../lib/node-registry.js"
 import { nodaroExclusiveRoutes } from "../nodaro-exclusive.js"
 
 let app: FastifyInstance
@@ -277,6 +281,47 @@ describe("camera-switch", () => {
       expect(res.json().error.code).toBe("invalid_edl")
     }
     expect(mocks.queueAdd).not.toHaveBeenCalled()
+  })
+
+  it("refuses a setting outside the cloud route's range (400 validation_error) and creates nothing", async () => {
+    const bad: Array<Record<string, unknown>> = [
+      { minShotMs: CAMERA_SWITCH_BOUNDS.minShotMs.min - 1 },
+      { minShotMs: CAMERA_SWITCH_BOUNDS.minShotMs.max + 1 },
+      { leadMs: CAMERA_SWITCH_BOUNDS.leadMs.max + 1 },
+      { maxShotMs: -1 },
+      { wideEvery: CAMERA_SWITCH_BOUNDS.wideEvery.max + 1 },
+      { wideEvery: 1.5 },
+      { speakerNames: { speaker_0: "x".repeat(CAMERA_SWITCH_NAME_MAX + 1) } },
+      { speakerNames: { speaker_0: "" } },
+    ]
+    for (const settings of bad) {
+      const res = await post({ edl, transcript: diarized, ...settings })
+      expect(res.statusCode, JSON.stringify(settings)).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+    }
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+  })
+
+  it("relays settings at the ends of their ranges, and a key it does not check as given", async () => {
+    const res = await post({
+      edl,
+      transcript: diarized,
+      minShotMs: CAMERA_SWITCH_BOUNDS.minShotMs.min,
+      leadMs: CAMERA_SWITCH_BOUNDS.leadMs.max,
+      maxShotMs: CAMERA_SWITCH_BOUNDS.maxShotMs.max,
+      wideEvery: CAMERA_SWITCH_BOUNDS.wideEvery.min,
+      speakerNames: { speaker_0: "x".repeat(CAMERA_SWITCH_NAME_MAX) },
+      layoutHints: true,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mocks.queueAdd.mock.calls[0]![1]).toMatchObject({ minShotMs: CAMERA_SWITCH_BOUNDS.minShotMs.min, wideEvery: 0, layoutHints: true })
+  })
+
+  it("answers the edit's and the transcript's refusals first, as the cloud route does", async () => {
+    const res = await post({ edl: { ...edl, segments: [] }, transcript: diarized, minShotMs: 1 })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_edl")
   })
 
   // A JSON-string edit (the docs allow it) is queued PARSED: the relay re-hosts
@@ -562,6 +607,52 @@ describe("speaker-view", () => {
     it("asks nothing of the database without tracks", async () => {
       await post({ edl, transcript, motion: "glide" })
       expect(mocks.maybeSingle).not.toHaveBeenCalled()
+    })
+  })
+
+  // `GET /v1/nodes` advertises these keys for `nodes run speaker-view`, which
+  // posts them to this route as they are. The route keeps only its own keys,
+  // so a key it does not take is dropped without a word (a switch asked for
+  // under a node-data name rendered as a plain cut).
+  describe("the keys GET /v1/nodes advertises", () => {
+    // The route's settings, as the in-repo funnel writes them (`SpeakerViewWireSettings`).
+    const WIRE_KEYS = ["targetAspect", "layout", "switch", "emphasis", "accentColor", "speakerRegions"] as const satisfies ReadonlyArray<keyof SpeakerViewWireSettings>
+    // A settings key missing from the list above does not compile.
+    const total: Exclude<keyof SpeakerViewWireSettings, (typeof WIRE_KEYS)[number]> extends never ? true : never = true
+    // Beside its settings: the inputs and the stamps a run sends (a `videoUrl` is turned into the one-clip edit before the route reads it).
+    const ROUTE_KEYS = new Set<string>([...WIRE_KEYS, "edl", "videoUrl", "transcript", "quality", "motion", "tracks", "clipKey", "planBasis", "renderBasis"])
+    const advertised = NODE_REGISTRY.find((d) => d.type === "speaker-view")!.inputSchema!.fields.map((f) => f.key)
+
+    it("names only keys the route takes", () => {
+      expect(total).toBe(true)
+      expect(advertised.filter((k) => !ROUTE_KEYS.has(k))).toEqual([])
+    })
+
+    it("the settings funnel writes only those keys", () => {
+      const wire = speakerViewWireSettings({ targetAspect: "16:9", layout: "single", switchType: "cut", switchDurationMs: 300, emphasisStyle: "border", emphasisDurationMs: 200, accentColor: "#ff0000" })
+      expect(Object.keys(wire).filter((k) => !(WIRE_KEYS as readonly string[]).includes(k))).toEqual([])
+    })
+
+    it("a body of every advertised key is accepted and relayed with each key", async () => {
+      const sample: Record<string, unknown> = {
+        edl,
+        transcript,
+        targetAspect: "16:9",
+        layout: "single",
+        switch: { type: "zoom", durationMs: 300 },
+        emphasis: { style: "border", durationMs: 200 },
+        accentColor: "#ff0000",
+        speakerRegions: [{ source: "camA", speaker: "Host", region: { x: 0, y: 0, w: 0.5, h: 1 } }],
+        quality: "final",
+        motion: "static",
+      }
+      // `videoUrl` is the other way in (instead of `edl`), checked by its own guard (speaker-view-video-guard.test.ts).
+      const sent = advertised.filter((k) => k !== "videoUrl")
+      expect(sent.filter((k) => !(k in sample))).toEqual([])
+      const res = await post(Object.fromEntries(sent.map((k) => [k, sample[k]])))
+      expect(res.statusCode).toBe(200)
+      const queued = mocks.queueAdd.mock.calls[0]![1] as Record<string, unknown>
+      for (const k of sent) expect(queued[k], k).toEqual(sample[k])
     })
   })
 })

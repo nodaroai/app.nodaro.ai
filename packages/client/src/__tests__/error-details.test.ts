@@ -11,7 +11,8 @@
  *   deployment's per-user allowance), which is a `CreditCapExceededError` —
  *   still an `InsufficientCreditsError`, so every existing catch keeps working.
  */
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
+import { createClient, StaticTokenAuth } from "../index.js"
 import {
   CREDIT_CAP_CODES,
   CreditCapExceededError,
@@ -21,6 +22,7 @@ import {
   ModelUnavailableError,
   NodaroError,
   NotFoundError,
+  RateLimitedError,
   WorkflowConflictError,
   throwFromResponse,
 } from "../errors.js"
@@ -112,18 +114,25 @@ describe("403 — the model, not the caller", () => {
     expect([...MODEL_UNAVAILABLE_CODES].sort()).toEqual(["model_disabled", "model_not_available"])
   })
 
-  it("insufficient_scope is unchanged: a ForbiddenError with missingScope, code forbidden", () => {
+  it("insufficient_scope: a ForbiddenError with missingScope, keeping the server's code", () => {
     const err = thrown(403, { error: { code: "insufficient_scope", message: "Missing required scope: workflows:write", missingScope: "workflows:write" } })
     expect(err).toBeInstanceOf(ForbiddenError)
     expect(err).not.toBeInstanceOf(ModelUnavailableError)
-    expect(err).toMatchObject({ name: "ForbiddenError", code: "forbidden", status: 403, missingScope: "workflows:write" })
+    expect(err).toMatchObject({ name: "ForbiddenError", code: "insufficient_scope", status: 403, missingScope: "workflows:write" })
+    expect(err.message).toBe("Missing required scope: workflows:write")
+  })
+
+  it("a 403 with another code stays a plain ForbiddenError, keeping the server's code and message", () => {
+    const err = thrown(403, { error: { code: "node_not_available", message: "This node is not available" } })
+    expect(err).toBeInstanceOf(ForbiddenError)
+    expect(err).not.toBeInstanceOf(ModelUnavailableError)
+    expect(err).toMatchObject({ name: "ForbiddenError", code: "node_not_available", status: 403, message: "This node is not available" })
   })
 
   it.each([
-    ["another code", { error: { code: "access_blocked", message: "Access blocked" } }],
     ["no code", { error: { message: "Forbidden here" } }],
     ["an empty body", {}],
-  ])("a 403 with %s stays a plain ForbiddenError with code forbidden", (_label, body) => {
+  ])("a 403 with %s is a plain ForbiddenError with code forbidden", (_label, body) => {
     const err = thrown(403, body)
     expect(err).toBeInstanceOf(ForbiddenError)
     expect(err).not.toBeInstanceOf(ModelUnavailableError)
@@ -134,6 +143,42 @@ describe("403 — the model, not the caller", () => {
     const err = thrown(400, { error: { code: "model_disabled", message: "x" } })
     expect(err).not.toBeInstanceOf(ForbiddenError)
     expect(err).toMatchObject({ name: "NodaroError", code: "model_disabled", status: 400 })
+  })
+})
+
+// The class says which status it was; `code` is the server's own, as on a 400
+// (each class's default only when the server sent none).
+describe("404 and 429 keep the server's code", () => {
+  it.each([
+    [404, "continuation_not_found", NotFoundError, "NotFoundError"],
+    [429, "rate_limit_exceeded", RateLimitedError, "RateLimitedError"],
+  ] as const)("a %i coded %s", (status, code, cls, name) => {
+    const err = thrown(status, { error: { code, message: "Refused" } })
+    expect(err).toBeInstanceOf(cls)
+    expect(err).toMatchObject({ name, code, status, message: "Refused" })
+  })
+
+  it.each([
+    [404, NotFoundError, "not_found", "Not found"],
+    [429, RateLimitedError, "rate_limited", "Rate limited"],
+  ] as const)("a %i with no code keeps the class's own code and message", (status, cls, code, message) => {
+    const err = thrown(status, {})
+    expect(err).toBeInstanceOf(cls)
+    expect(err).toMatchObject({ code, status, message })
+  })
+
+  it("the framework's no-route 404 (no envelope) is still not_found, with its message", () => {
+    const err = thrown(404, { message: "Route POST:/v1/x not found", error: "Not Found", statusCode: 404 })
+    expect(err).toBeInstanceOf(NotFoundError)
+    expect(err).toMatchObject({ code: "not_found", message: "Route POST:/v1/x not found" })
+  })
+
+  it("nodes.run still reads a no-route 404 as a node with no route of its own, and a coded 404 as itself", async () => {
+    const answer = (body: unknown) => vi.fn(async () => ({ ok: false, status: 404, json: async () => body }) as unknown as Response)
+    const run = (fetch: ReturnType<typeof answer>) =>
+      createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetch as unknown as typeof globalThis.fetch }).nodes.run("not-a-real-node-type", {})
+    await expect(run(answer({ message: "Route POST:/v1/not-a-real-node-type not found", error: "Not Found", statusCode: 404 }))).rejects.toMatchObject({ code: "node_not_runnable" })
+    await expect(run(answer({ error: { code: "job_not_found", message: "No such job" } }))).rejects.toMatchObject({ name: "NotFoundError", code: "job_not_found" })
   })
 })
 

@@ -638,8 +638,9 @@ nodaro edit clip-pack --media <url> [--media <url> ...] [--master-audio <url>] [
                                                          # audio clips). --switch is the switch at each speaker change (cut, pan, zoom, or
                                                          # xfade:<transition>, e.g. xfade:fade; default pan); --emphasis how the speaker talking is
                                                          # emphasised (none, or scale, border, dim joined with "+", each once; default scale);
-                                                         # --caption-style the captions' look (default karaoke). Every flag is checked before any
-                                                         # request. With --watch each
+                                                         # --caption-style the captions' look (default karaoke). Every flag's own value is checked
+                                                         # before any request (whether --wide-camera names a recording with picture is the
+                                                         # server's check). With --watch each
                                                          # clip is printed when the run completes ("1  <url>  <title>" per line, "(no captions)"
                                                          # after the title of a clip whose captions could not be added), then "N clips could not
                                                          # be rendered." when some could not. --review stops at previews of the clips
@@ -654,7 +655,8 @@ nodaro edit speaker-layout --media <url> [--media <url> ...] [--master-audio <ur
                                                          # faces aren't named after a speaker yet, so a camera shared by several speakers keeps the
                                                          # even split). Several cameras: the recordings flags of edit tighten-episode, each speaker
                                                          # on their own camera; they need Speaker Map, not yet enabled on nodaro.ai: refused 403
-                                                         # node_not_available until it is. Every flag is checked before any request. With --watch
+                                                         # node_not_available until it is. Every flag's own value is checked before any request
+                                                         # (whether --wide-camera names a recording with picture is the server's check). With --watch
                                                          # the framed video's URL is printed when the run completes. --review stops at a preview and
                                                          # prints the edit continue-use-case command that renders the final (no --edit: the layout
                                                          # has no cut to change). Priced as its steps plus a per-run fee (listed after this block).

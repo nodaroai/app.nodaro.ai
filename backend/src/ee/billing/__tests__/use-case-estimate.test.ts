@@ -296,6 +296,12 @@ describe("the docs' worked examples, at the charged price (tighten-episode.md, W
       expect(chargedOf(c.steps)).toBe(c.docs)
     })
   }
+  // Where the server's Edit Plan charges per started minute (`GET /v1/edit-plan/capabilities` → `perMinute`).
+  it("55-min audio where Edit Plan charges per started minute: Edit Plan at 55 minutes, charged = 894", () => {
+    const steps: Step[] = [["elevenlabs-stt"], ["silence-detect"], ["edit-plan:tighten:standard:per-minute", 55], ["apply-edl", 55], fee]
+    expect(listOf(steps)).toBe(CreditsService.estimateWorkflowBaseCredits([audio(3300), node({})], [wire("audio")], { editPlanPerMinute: true }))
+    expect(chargedOf(steps)).toBe(894)
+  })
   it("a Trim after the node (Seconds, nothing cut), 60-minute video, captions on: the cut's 60 minutes = 7920, never the 8-second 22", async () => {
     const trim = { id: "trim", type: "trim-video", data: { trimMode: "seconds", trimStartSeconds: 0, trimEndSeconds: 0 } }
     const graph = [video(3600), node({})]

@@ -8,13 +8,16 @@ import { DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { Button } from "@/components/ui/button"
 import { useT } from "@/lib/i18n"
 import { copyToClipboard } from "@/lib/utils"
+import { usecaseRunFoundNothing } from "@/lib/use-case-run-result"
 import type { EpisodeChaptersData } from "./types"
 
 /**
  * Chapters (decided 2026-10-14): one recording in, its chapters out — as show
  * notes on `text` and as a list on `json`. Nothing renders and nothing is
  * reviewed. A failed run offers Continue (its finished steps kept, the next
- * single-node run continues it); a list-driven node (one run per item) has none.
+ * single-node run continues it); a list-driven node (one run per item) has
+ * none, and neither has a run that found no chapters (every step finished:
+ * nothing failed to continue from).
  *
  * Only `ChaptersShowNotes` is Chapters' own; the frame around it (run strip,
  * running / failed / empty states, Continue) is the one every use-case node
@@ -43,6 +46,7 @@ function EpisodeChaptersNodeComponent({ id, type, data, selected }: NodeProps) {
       ]}
       hasResult={hasResult}
       result={<ChaptersShowNotes text={text} />}
+      continueBlocked={usecaseRunFoundNothing("episode-chapters", nodeData)}
       // A finished run with no show notes found no chapters; otherwise the node asks for a recording.
       emptyText={t(run.status === "completed" ? "node.chaptersNone" : "node.tightenConnectRecording")}
       pips={
