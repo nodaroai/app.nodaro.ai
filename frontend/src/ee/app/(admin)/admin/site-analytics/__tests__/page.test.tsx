@@ -9,7 +9,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter } from "react-router-dom"
 import type { SiteAnalyticsReport } from "../types"
-import { AT, EMAIL, NOT_SET_UP, REALTIME_OK, answer, onlineData, report, searchData } from "./fixtures"
+import { AT, EMAIL, NOT_SET_UP, REALTIME_OK, answer, onlineData, report, searchData, surfacesData } from "./fixtures"
 
 vi.mock("@/lib/api", () => ({ getAuthHeaders: async () => ({ Authorization: "Bearer t" }) }))
 vi.mock("@/lib/edition", () => ({ hasAdmin: () => true }))
@@ -24,10 +24,12 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-/** The server: the realtime snapshot, whatever a test answers itself, and otherwise the report. */
+/** The server: the realtime snapshot, the two lists of our own, whatever a test answers itself, and otherwise the report. */
 function serve(body: SiteAnalyticsReport, extra: (url: string) => Promise<Response> | undefined = () => undefined) {
   fetchMock.mockImplementation(
-    (url: string) => extra(url) ?? (url.endsWith("/realtime") ? answer(REALTIME_OK) : url.endsWith("/online-users") ? answer(onlineData()) : answer(body)),
+    (url: string) =>
+      extra(url) ??
+      (url.endsWith("/realtime") ? answer(REALTIME_OK) : url.endsWith("/online-users") ? answer(onlineData()) : url.includes("/user-surfaces") ? answer(surfacesData()) : answer(body)),
   )
 }
 

@@ -21,8 +21,8 @@
   ],
   "tutorialCategorySlug": "workflows",
   "tutorialSortOrder": 6,
-  "estimatedCredits": 123,
-  "estimatedPerMinuteCredits": 4,
+  "estimatedCredits": 137,
+  "estimatedPerMinuteCredits": 5,
   "nodeTypesUsed": [
     "upload-video",
     "episode-trailer",

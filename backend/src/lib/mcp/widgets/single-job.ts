@@ -13,7 +13,7 @@
  * `textContent` + `setAttribute` ONLY — never raw HTML assignment.
  */
 import { uiProtocolShim } from "./_common.js"
-import { appBaseUrl } from "../../deployment-urls.js"
+import { flowBaseUrl } from "../../deployment-urls.js"
 
 const SHARED_CSS = `
   /* --fs-top-pad: top inset for fullscreen mode so the image clears the
@@ -426,7 +426,7 @@ ${uiProtocolShim()}
       libLink.textContent = 'Open Nodaro library';
       libLink.addEventListener('click', function () {
         if (window.NodaroMCP && window.NodaroMCP.openLink) {
-          window.NodaroMCP.openLink(${JSON.stringify(`${appBaseUrl()}/gallery`)});
+          window.NodaroMCP.openLink(${JSON.stringify(`${flowBaseUrl()}/gallery`)});
         }
       });
       statusEl.appendChild(libLink);

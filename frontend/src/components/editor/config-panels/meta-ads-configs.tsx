@@ -27,9 +27,7 @@ import {
   type MetaAdsScrapePeriod,
   type MetaAdsScrapeStatus,
 } from "@nodaro/shared/social"
-import {
-  STRUCTURED_VISION_MODELS,
-} from "@nodaro/shared/llm-models"
+import { structuredVisionModel } from "@/lib/llm-model-filters"
 import { useT, tx } from "@/lib/i18n"
 import { useAppDir, useLocaleStore } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
@@ -65,7 +63,6 @@ import { LlmModelSelect } from "./llm-model-select"
 import { CreativeAnalysisView } from "./creative-analysis-view"
 import type { ConfigProps } from "./types"
 
-const STRUCTURED_VISION_MODEL_IDS = new Set(STRUCTURED_VISION_MODELS.map((m) => m.id))
 
 /** Section label — 11/800, .12em, uppercase, muted (design handoff). */
 function SectionLabel({ children, right }: { readonly children: ReactNode; readonly right?: ReactNode }) {
@@ -382,7 +379,7 @@ function MetaAdsScrapeConfigTab({ data, onUpdate, sources, fieldMappings, onMapF
                 feature="meta-ads-analysis"
                 value={data.analysisModel}
                 onChange={(v) => onUpdate({ analysisModel: v })}
-                filter={(m) => STRUCTURED_VISION_MODEL_IDS.has(m.id)}
+                filter={structuredVisionModel}
               />
             </div>
             <div className="flex flex-col gap-1.5">

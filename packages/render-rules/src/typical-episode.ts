@@ -3,7 +3,7 @@
  * listing at (decided 2026-10-07): a typical episode. A listing whose price
  * follows the recording is fixed credits plus credits per minute; the sort
  * orders by the fixed part plus this many minutes of the per-minute part, so
- * "82 + 14/min" sorts as 922, not as 82. The gallery's tooltip states it, and
+ * "91 + 16/min" sorts as 1051, not as 91. The gallery's tooltip states it, and
  * `workflow_templates.typical_episode_credits` (migration 483) is generated
  * from the same number (a guard test reads the migration).
  */

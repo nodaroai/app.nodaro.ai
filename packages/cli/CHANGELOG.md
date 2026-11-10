@@ -1,5 +1,32 @@
 # @nodaro/cli
 
+## 1.47.0
+
+### Minor Changes
+
+- 9e0addc: Camera Switch `lagMs`: delay each cut by this long, in whole milliseconds (0–5000, default 0), the counterpart of `leadMs`. `CAMERA_SWITCH_BOUNDS` gains `lagMs`, and the new `CAMERA_SWITCH_NODE_SETTINGS` lists the four numeric settings a Camera Switch node carries (`lagMs` is a request setting only, so `cameraSwitchSettingsPayload` never sends it). The SDK's `CameraSwitchInput` gains `lagMs` and `client.edit.cameraSwitch` sends it; the CLI gains `nodaro edit switch-cameras --lag-ms <ms>`.
+- 9e0addc: `nodaro edit tighten-episode` gains `--idempotency-key <key>` (sent as `Idempotency-Key`: a retry with the same key answers the run already started), `--style-guide <text>` (up to 4,000 characters), `--caption-style <style>` (not with `--no-captions`) and `--music-duck-amount <0-100>` (with `--music`: how far the music dips under the voice, default 75), the fields the route, the SDK and MCP already take. Each value is checked before any request.
+- 9e0addc: `nodaro edit tighten-episode`, `episode-chapters`, `episode-trailer`, `clip-pack` and `speaker-layout` take `--estimate`: the same flags, quoted by the node's `/estimate` route instead of starting the run. Nothing is created or charged. It prints the total (`≈` when a step is a metered estimate), the steps, the per-run fee and the recording's length; `--json` prints the route's `{ totalCredits, stepsCredits, feeCredits, estimate?, durationSec }`. On an edition without credits it says so.
+
+  `nodaro edit capabilities` prints the Edit Plan modes this server can plan, who answered and whether Edit Plan is charged per started minute (`GET /v1/edit-plan/capabilities`, through the SDK's `editPlanCapabilities()`); `--json` prints the route's `{ modes, source, perMinute }`.
+
+### Patch Changes
+
+- 00c61f3: `nodaro edit` help text: `plan` and `switch-cameras` no longer say "Cloud edition" (they run on nodaro.ai, and a self-hosted install connected to it relays them); `--media` says that `episode-trailer` and `speaker-layout` take a video; `speaker-map --sources-file` rows are `{ id, url, kind? }`.
+- Updated dependencies [9e0addc]
+- Updated dependencies [51ed9d5]
+- Updated dependencies [042d555]
+- Updated dependencies [0bdd91c]
+- Updated dependencies [2574d82]
+- Updated dependencies [0397100]
+- Updated dependencies [9e0addc]
+- Updated dependencies [00c61f3]
+- Updated dependencies [9e0addc]
+- Updated dependencies [1966fd6]
+  - @nodaro/shared@3.59.0
+  - @nodaro/sdk@2.67.0
+  - @nodaro/prompts@1.53.1
+
 ## 1.46.0
 
 ### Minor Changes

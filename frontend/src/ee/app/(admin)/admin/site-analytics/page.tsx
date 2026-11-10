@@ -10,6 +10,7 @@ import { SetupPanel } from "./setup-panel"
 import { SourcesSection } from "./sources-section"
 import { TrafficSection } from "./traffic-section"
 import { SITE_ANALYTICS_DAYS, type SiteAnalyticsDays } from "./types"
+import { UserSurfacesSection } from "./user-surfaces-section"
 import { useRefreshSiteAnalytics, useSiteAnalytics } from "./use-site-analytics"
 
 /** Google's own screen for the same numbers, in a new tab — for whoever has access there. */
@@ -72,8 +73,9 @@ export default function AdminSiteAnalyticsPage() {
         </>
       )}
 
-      {/* Our own record, not Google's: shown whatever the Google report did. */}
+      {/* Our own records, not Google's: shown whatever the Google report did. */}
       <OnlineUsersSection />
+      <UserSurfacesSection />
 
       {data && (
         <>

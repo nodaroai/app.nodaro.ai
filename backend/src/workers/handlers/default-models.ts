@@ -5,7 +5,7 @@
 // as the handler will, so neither keeps its own copy. Kept apart from the
 // handler files: importing those pulls in the provider and ffmpeg runtimes.
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
-import { T2I_TO_I2I_VARIANT } from "@nodaro/shared/models"
+import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, T2I_TO_I2I_VARIANT } from "@nodaro/shared/models"
 
 /** image-to-video (handlers/video-ai.ts). */
 export const IMAGE_TO_VIDEO_DEFAULT_PROVIDER = "minimax"
@@ -13,8 +13,8 @@ export const IMAGE_TO_VIDEO_DEFAULT_PROVIDER = "minimax"
 export const TEXT_TO_VIDEO_DEFAULT_PROVIDER = "minimax"
 /** voiced-video: its clip is image-to-video (handlers/video-ai.ts). */
 export const VOICED_VIDEO_DEFAULT_PROVIDER = "minimax"
-/** video-to-video (handlers/video-ai.ts). */
-export const VIDEO_TO_VIDEO_DEFAULT_PROVIDER = "wan"
+/** video-to-video (handlers/video-ai.ts) — the shared default the editor's menu shows too. */
+export const VIDEO_TO_VIDEO_DEFAULT_PROVIDER = DEFAULT_VIDEO_TO_VIDEO_PROVIDER
 /** lip-sync (handlers/video-ai.ts). */
 export const LIP_SYNC_DEFAULT_PROVIDER = "kling-avatar"
 /** motion-transfer (handlers/video-ai.ts). */
@@ -33,6 +33,12 @@ export const LOCATION_MOTION_DEFAULT_PROVIDER = "kling"
 export const OBJECT_MOTION_DEFAULT_PROVIDER = "kling-turbo"
 /** generate-creature-motion (handlers/entity.ts). */
 export const CREATURE_MOTION_DEFAULT_PROVIDER = "kling-turbo"
+/**
+ * video-retake (handlers/video-ai.ts): the one model a retake runs — LTX 2.3
+ * Pro's retake task. The route and the workflow build write it into the job,
+ * the handler runs it, and a model restriction judges it.
+ */
+export const VIDEO_RETAKE_MODEL = "ltx-2.3-pro" as const
 
 /** The generate-image fields that decide which model runs. */
 export interface GenerateImageModelInput {

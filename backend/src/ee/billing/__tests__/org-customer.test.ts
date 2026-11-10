@@ -18,7 +18,10 @@ const h = vi.hoisted(() => ({
 }))
 
 vi.mock("../../../lib/supabase.js", () => ({ supabase: { from: h.from, rpc: h.rpc } }))
-vi.mock("../../../lib/deployment-urls.js", () => ({ appBaseUrl: () => "https://app.test" }))
+vi.mock("../../../lib/deployment-urls.js", () => ({
+  appBaseUrl: () => "https://app.test",
+  flowBaseUrl: () => "https://flow.test",
+}))
 vi.mock("../stripe-client.js", () => ({
   getStripe: () => ({
     customers: { create: h.customersCreate, update: vi.fn(async () => ({})) },
@@ -31,7 +34,7 @@ vi.mock("../provision-credits.js", () => ({
   captureReceiptUrl: vi.fn(async () => {}),
 }))
 
-const { resolvePayer, routeClawback, handleOrgPackCompleted, createOrgPackCheckout } = await import("../org-customer.js")
+const { resolvePayer, routeClawback, handleOrgPackCompleted, createOrgPackCheckout, getOrgCustomerPortalUrl } = await import("../org-customer.js")
 const { ORG_TOP_UPS, TOP_UPS } = await import("../stripe-config.js")
 
 /** Chainable stub resolving `result` at maybeSingle(). */
@@ -207,6 +210,29 @@ describe("createOrgPackCheckout", () => {
         mode: "payment",
         line_items: [{ price: ORG_TOP_UPS["org-50"].priceId, quantity: 1 }],
         metadata: { payerKind: "org", orgId: "org-1", packId: "org-50", actorUserId: "u-1" },
+      }),
+    )
+  })
+})
+
+describe("org customer portal", () => {
+  it("returns to the org's page on the app's own host", async () => {
+    h.from.mockImplementation((table: string) =>
+      table === "stripe_customers"
+        ? chain({ data: { stripe_customer_id: "cus_org_1" } })
+        : chain({ data: { slug: "acme" } }),
+    )
+    await getOrgCustomerPortalUrl("org-1")
+    expect(h.portalCreate).toHaveBeenCalledWith(expect.objectContaining({ customer: "cus_org_1", return_url: "https://flow.test/org/acme" }))
+  })
+
+  it("a pack checkout still returns to the kept host's /checkout-complete", async () => {
+    h.from.mockImplementation(() => chain({ data: { stripe_customer_id: "cus_org_1" } }))
+    await createOrgPackCheckout("org-1", "actor-1", "org-10")
+    expect(h.checkoutCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success_url: "https://app.test/checkout-complete?status=success",
+        cancel_url: "https://app.test/checkout-complete?status=cancelled",
       }),
     )
   })

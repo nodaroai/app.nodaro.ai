@@ -715,6 +715,13 @@ if [ -n "$RAILWAY_ENVIRONMENT_NAME" ]; then
   if [ -z "${CLIENT_IP_HEADER_FROM+set}" ]; then export CLIENT_IP_HEADER_FROM=100.64.0.0/10; fi
 fi
 
+# The Flow host has two setting names for one origin (docs/deployment.md,
+# "Moving the app's pages to their own host"): FLOW_UI_ORIGIN, read by Caddy and
+# the /config.js writer, and FLOW_PUBLIC_URL, read by the API for its links. The
+# API reads either itself and refuses to start when both are set and disagree;
+# here FLOW_PUBLIC_URL alone reaches Caddy and the writer under their name.
+export FLOW_UI_ORIGIN="${FLOW_UI_ORIGIN:-$FLOW_PUBLIC_URL}"
+
 # Start backend API server on fixed internal port
 cd /app/backend
 export BACKEND_PORT=9000
@@ -812,6 +819,11 @@ done
 #   mediaOrigin     <- the https origin of R2_PUBLIC_URL on a white-label
 #                      surface, as the backend prints it below; absent on any
 #                      other surface, whose config.js is unchanged
+#   flowUiOrigin    <- FLOW_UI_ORIGIN, legacyUiHosts <- LEGACY_UI_HOSTS and
+#   linkOrigin      <- PUBLIC_URL (a deployment that moved its pages to their own
+#                      host): all three, read as the Caddy block reads them, only
+#                      when the move is on and PUBLIC_URL is another https
+#                      origin; else none, with the reason on stderr
 # ALWAYS written — a missing file would fall through try_files to index.html
 # served as JavaScript.
 FRONTEND_SUPABASE_URL_EFFECTIVE="$FRONTEND_SUPABASE_URL"
@@ -842,7 +854,7 @@ if [ "$PUBLIC_URL_SAME_ORIGIN" = "true" ]; then RUNTIME_API_URL_EFFECTIVE="/"; e
 # The writer prints the /config.js line to stdout (log line to stderr), so the
 # redirect captures only the payload; on failure the file is left empty, which
 # the frontend reads as "no override" → build-time values.
-if ! RUNTIME_API_URL="$RUNTIME_API_URL_EFFECTIVE" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" RUNTIME_AUDIOMASS_URL="$AUDIOMASS_URL" RUNTIME_DEFAULT_LOCALE="$DEFAULT_LOCALE" RUNTIME_SURFACE_PROFILE="$RUNTIME_SURFACE_PROFILE_RESOLVED" RUNTIME_PREVIEW_STOP_RULE="$PREVIEW_STOP_RULE_ENABLED" RUNTIME_MEDIA_ORIGIN="$RUNTIME_MEDIA_ORIGIN_RESOLVED" \
+if ! RUNTIME_API_URL="$RUNTIME_API_URL_EFFECTIVE" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" RUNTIME_AUDIOMASS_URL="$AUDIOMASS_URL" RUNTIME_DEFAULT_LOCALE="$DEFAULT_LOCALE" RUNTIME_SURFACE_PROFILE="$RUNTIME_SURFACE_PROFILE_RESOLVED" RUNTIME_PREVIEW_STOP_RULE="$PREVIEW_STOP_RULE_ENABLED" RUNTIME_MEDIA_ORIGIN="$RUNTIME_MEDIA_ORIGIN_RESOLVED" RUNTIME_FLOW_UI_ORIGIN="$FLOW_UI_ORIGIN" RUNTIME_LEGACY_UI_HOSTS="$LEGACY_UI_HOSTS" RUNTIME_LINK_ORIGIN="$PUBLIC_URL" \
   node /app/tools/build-runtime-config.mjs > /app/frontend/dist/config.js; then
   echo "[start.sh] WARNING: could not write /app/frontend/dist/config.js — the frontend keeps its build-time URLs"
 fi

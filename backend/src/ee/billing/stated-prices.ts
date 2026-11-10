@@ -3,7 +3,7 @@
  * states: `docsPricing` over the server's own price-table rule at the hosted
  * deployment's settings. See `docs-pricing.ts` for why text prices this way.
  */
-import { chargedCredits, chargedPriceTableFrom, meteredLlmEstimateIgnoringSwitch } from "./credits.js"
+import { chargedCredits, chargedPriceTableFrom, meteredLlmEstimateIgnoringSwitch, type ChargedPriceTable } from "./credits.js"
 import { parseMeteredLlmId } from "./metered-llm-id.js"
 import type { LlmKeyQuote } from "../../lib/pricing/charged-prices.js"
 import { docsPricing, loadDocsPriceSettings, type ChargeOf, type RateOf } from "./docs-pricing.js"
@@ -28,6 +28,39 @@ export function statedPrices(): StatedPrices {
   const { chargeOf, rateOf } = docsPricing(chargedPriceTableFrom(new Map(), settings), chargedCredits, settings.charged)
   stated = { chargeOf, rateOf, rate: rateOf, credits: (identifier, units = 1) => chargeOf([{ id: identifier, units }]) }
   return stated
+}
+
+let statedTable: ChargedPriceTable | null = null
+
+/**
+ * The server's price table at the hosted deployment's settings — the table
+ * {@link statedPrices} prices one id from — for a figure stored in the
+ * repository that sums many charges: a built-in template's listed price
+ * (`template-card-prices.ts`). Each id is charged as `chargedPriceTableFrom`
+ * charges it over `STATIC_CREDIT_COSTS`, except an id of the settings'
+ * `charged` snapshot (one the deployment charges differently from the in-repo
+ * rule), which is charged its snapshot figure per unit: a whole number of
+ * units is that many times the figure, and any other amount throws, since a
+ * snapshot is a figure, never a rule (`docsPricing`).
+ */
+export function statedPriceTable(): ChargedPriceTable {
+  if (statedTable) return statedTable
+  const settings = loadDocsPriceSettings()
+  const table = chargedPriceTableFrom(new Map(), settings)
+  const snapshot = settings.charged
+  statedTable = {
+    ...table,
+    base: (identifier) => snapshot[identifier] ?? table.base(identifier),
+    charge: (identifier, baseCredits) => {
+      const figure = snapshot[identifier]
+      if (figure === undefined) return table.charge(identifier, baseCredits)
+      if (baseCredits % figure !== 0) {
+        throw new Error(`"${identifier}" is priced from the charged snapshot (${figure}), which cannot price ${baseCredits / figure} units`)
+      }
+      return baseCredits
+    },
+  }
+  return statedTable
 }
 
 let hosted: StatedPrices | null = null

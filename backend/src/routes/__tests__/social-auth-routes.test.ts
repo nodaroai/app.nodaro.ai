@@ -59,6 +59,7 @@ vi.mock("../../lib/queue.js", () => ({
 import { socialAuthRoutes } from "../social-auth.js"
 import { saveOAuthState, savePendingSelection } from "../../services/social/state-store.js"
 import { getRedirectUri } from "../../services/social/oauth.js"
+import { config } from "../../lib/config.js"
 import { encryptToken } from "../../services/social/encryption.js"
 import { getProvider } from "../../services/social/providers/registry.js"
 
@@ -402,6 +403,51 @@ describe("the OAuth callback pages post their result to one configured origin", 
     } finally {
       token.mockRestore()
     }
+  })
+  describe("the app's own host, when it has one", () => {
+    const FLOW = "https://flow.example.test"
+    // A running server with a Flow origin always names a legacy host and a kept origin (any partial set is refused at boot).
+    const MOVE = { LEGACY_UI_HOSTS: "app.example.test", PUBLIC_URL: "https://app.example.test" }
+    let before: { LEGACY_UI_HOSTS?: string; PUBLIC_URL?: string }
+    beforeEach(() => {
+      before = { LEGACY_UI_HOSTS: (config as { LEGACY_UI_HOSTS?: string }).LEGACY_UI_HOSTS, PUBLIC_URL: config.PUBLIC_URL }
+      Object.assign(config, MOVE)
+    })
+    afterEach(() => {
+      delete (config as { FLOW_PUBLIC_URL?: string }).FLOW_PUBLIC_URL
+      delete (config as { FLOW_UI_ORIGIN?: string }).FLOW_UI_ORIGIN
+      Object.assign(config, before)
+    })
+
+    it("a Flow setting without a legacy host is no move: one post, to the callback origin", async () => {
+      ;(config as { FLOW_UI_ORIGIN?: string }).FLOW_UI_ORIGIN = FLOW
+      ;(config as { LEGACY_UI_HOSTS?: string }).LEGACY_UI_HOSTS = ""
+      const r = await app.inject({ method: "GET", url: "/v1/social/callback/facebook?error=access_denied" })
+      const posted = await runPageScript(r.body)
+      expect(posted.map((p) => p.targetOrigin)).toEqual([expectedTarget()])
+    })
+
+    it("posts once per origin, each naming its own exact target, never \"*\"", async () => {
+      ;(config as { FLOW_PUBLIC_URL?: string }).FLOW_PUBLIC_URL = `${FLOW}/`
+      const r = await app.inject({ method: "GET", url: "/v1/social/callback/facebook?error=access_denied" })
+      expect(r.statusCode).toBe(200)
+      const posted = await runPageScript(r.body)
+      expect(posted.map((p) => p.targetOrigin).sort()).toEqual([FLOW, expectedTarget()].sort())
+      expect(posted.every((p) => p.targetOrigin !== "*")).toBe(true)
+    })
+
+    it("FLOW_UI_ORIGIN alone names the same host: one origin, whichever name gives it", async () => {
+      ;(config as { FLOW_UI_ORIGIN?: string }).FLOW_UI_ORIGIN = FLOW
+      const r = await app.inject({ method: "GET", url: "/v1/social/callback/facebook?error=access_denied" })
+      const posted = await runPageScript(r.body)
+      expect(posted.map((p) => p.targetOrigin).sort()).toEqual([FLOW, expectedTarget()].sort())
+    })
+
+    it("with no such host, the page posts exactly as before: one post, to the callback origin", async () => {
+      const r = await app.inject({ method: "GET", url: "/v1/social/callback/facebook?error=access_denied" })
+      const posted = await runPageScript(r.body)
+      expect(posted.map((p) => p.targetOrigin)).toEqual([expectedTarget()])
+    })
   })
 })
 

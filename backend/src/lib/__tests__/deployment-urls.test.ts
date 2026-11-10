@@ -12,12 +12,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 // the environment once at import, so a developer whose backend/.env sets
 // PUBLIC_URL saw these fail locally while CI (clean env) passed — a test that
 // only fails on your machine teaches people to ignore failures.
-const env = { PUBLIC_URL: "", MCP_PUBLIC_URL: "" }
+const env = { PUBLIC_URL: "", MCP_PUBLIC_URL: "", FLOW_PUBLIC_URL: "", FLOW_UI_ORIGIN: "", LEGACY_UI_HOSTS: "" }
 vi.mock("../config.js", () => ({ config: env }))
 
 beforeEach(() => {
   env.PUBLIC_URL = ""
   env.MCP_PUBLIC_URL = ""
+  env.FLOW_PUBLIC_URL = ""
+  env.FLOW_UI_ORIGIN = ""
+  env.LEGACY_UI_HOSTS = ""
   vi.resetModules()
 })
 
@@ -42,6 +45,54 @@ describe("appBaseUrl / mcpBaseUrl", () => {
     const { appBaseUrl, mcpBaseUrl } = await import("../deployment-urls.js")
     expect(appBaseUrl()).toBe("https://nodaro.example.com")
     expect(mcpBaseUrl()).toBe("https://mcp.nodaro.example.com")
+  })
+})
+
+describe("flowBaseUrl: where the app's own pages live", () => {
+  it("unset, it is appBaseUrl() exactly, so an install without it links as before", async () => {
+    env.PUBLIC_URL = "https://nodaro.example.com/"
+    const { appBaseUrl, flowBaseUrl } = await import("../deployment-urls.js")
+    expect(flowBaseUrl()).toBe(appBaseUrl())
+    expect(flowBaseUrl()).toBe("https://nodaro.example.com")
+  })
+
+  it("names the app's own host when set, trailing slash stripped; appBaseUrl() stays the API host", async () => {
+    env.PUBLIC_URL = "https://app.example.com"
+    env.FLOW_PUBLIC_URL = "https://flow.example.com/"
+    env.LEGACY_UI_HOSTS = "app.example.com"
+    const { appBaseUrl, flowBaseUrl } = await import("../deployment-urls.js")
+    expect(flowBaseUrl()).toBe("https://flow.example.com")
+    expect(appBaseUrl()).toBe("https://app.example.com")
+  })
+
+  it("FLOW_UI_ORIGIN alone sets it too: the Flow host has one origin, whichever name gives it", async () => {
+    env.PUBLIC_URL = "https://app.example.com"
+    env.FLOW_UI_ORIGIN = "https://flow.example.com/"
+    env.LEGACY_UI_HOSTS = "app.example.com"
+    const { appBaseUrl, flowBaseUrl } = await import("../deployment-urls.js")
+    expect(flowBaseUrl()).toBe("https://flow.example.com")
+    expect(appBaseUrl()).toBe("https://app.example.com")
+  })
+
+  it("follows the one move-on rule: a Flow setting without a legacy host, or without a kept origin, moves no link", async () => {
+    for (const settings of [
+      { PUBLIC_URL: "https://app.example.com", FLOW_UI_ORIGIN: "https://flow.example.com", LEGACY_UI_HOSTS: "" },
+      { PUBLIC_URL: "https://app.example.com", FLOW_PUBLIC_URL: "https://flow.example.com", LEGACY_UI_HOSTS: "flow.example.com" },
+      { PUBLIC_URL: "http://localhost:3000", FLOW_UI_ORIGIN: "https://flow.example.com", LEGACY_UI_HOSTS: "app.example.com" },
+    ]) {
+      Object.assign(env, { FLOW_UI_ORIGIN: "", FLOW_PUBLIC_URL: "", LEGACY_UI_HOSTS: "" }, settings)
+      vi.resetModules()
+      const { appBaseUrl, flowBaseUrl } = await import("../deployment-urls.js")
+      expect(flowBaseUrl(), JSON.stringify(settings)).toBe(appBaseUrl())
+    }
+  })
+
+  it("the short editor link follows it", async () => {
+    env.PUBLIC_URL = "https://app.example.com"
+    env.FLOW_PUBLIC_URL = "https://flow.example.com"
+    env.LEGACY_UI_HOSTS = "app.example.com"
+    const { workflowEditorUrl } = await import("../deployment-urls.js")
+    expect(workflowEditorUrl("wf1")).toBe("https://flow.example.com/editor/wf1")
   })
 })
 

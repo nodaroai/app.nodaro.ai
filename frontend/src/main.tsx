@@ -14,6 +14,9 @@ import { bootstrapLookPreviews } from "@/lib/look-previews-bootstrap"
 // Which sibling site (e.g. a community's chat) the user arrived from — read
 // from the referrer before anything navigates. See lib/sibling-origin.ts.
 import { rememberSiblingOrigin } from "@/lib/sibling-origin"
+// A deployment that moved the app's pages to a host of their own carries a
+// browser's saved settings over, once. Inert anywhere else. See lib/storage-bridge-import.ts.
+import { importLegacyStorage } from "@/lib/storage-bridge-import"
 
 rememberSiblingOrigin()
 
@@ -76,6 +79,7 @@ const ReactQueryDevtools = lazy(() =>
 )
 
 void bootstrapCatalogs()
+importLegacyStorage()
 bootstrapLookPreviews()
 // The viewer's accessibility choices apply before the first paint (the shared
 // choices on a shared-header build, this browser's elsewhere).

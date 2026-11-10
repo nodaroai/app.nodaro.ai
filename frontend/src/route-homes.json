@@ -1,5 +1,5 @@
 {
-  "comment": "Where each page of the app lives when the deployment has moved its UI to its own host (FLOW_UI_ORIGIN, docs/deployment.md). tools/gen-route-homes.mjs writes the Caddy matcher from this file, and frontend/src/lib/page-homes.ts decides the same way from it; tools/__tests__/route-homes.test.mjs fails when a route in router.tsx is placed nowhere. moved: only these move (an exact page also with its trailing slash; a prefix as written); anything else stays where it is asked. kept: the host the API keeps answers these (OAuth, sign-in, published pages). keptOnly: kept pages whose one home is the kept host, so the Flow host sends them back.",
+  "comment": "Where each page of the app lives when the deployment has moved its UI to its own host (FLOW_UI_ORIGIN, docs/deployment.md). tools/gen-route-homes.mjs writes the Caddy matcher from this file, and frontend/src/lib/page-homes.ts decides the same way from it; tools/__tests__/route-homes.test.mjs fails when a route in router.tsx is placed nowhere. moved: only these move (an exact page also with its trailing slash; a prefix as written); anything else stays where it is asked. kept: the host the API keeps answers these (OAuth, sign-in, published pages). keptOnly: kept pages whose one home is the kept host, so the Flow host sends them back. files: the extensions that are always files, never pages, so never moved.",
   "kept": [
     "/app/*",
     "/embed/*",
@@ -61,5 +61,6 @@
     "/w/*",
     "/mcp",
     "/setup"
-  ]
+  ],
+  "files": ["js", "mjs", "css", "map", "woff2", "woff", "ttf", "otf", "eot", "png", "jpg", "jpeg", "gif", "svg", "webp", "avif", "ico", "mp4", "webm", "mov", "mp3", "wav", "ogg", "m4a", "wasm"]
 }

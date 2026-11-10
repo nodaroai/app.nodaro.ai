@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useT } from "@/lib/i18n"
+import { publicLinkOrigin } from "@/lib/public-links"
 import { nodeDocsLinksShown, useDocsPageUrl } from "@/lib/node-docs/node-docs"
 
 // Cloud serves MCP from its own subdomain; a self-host serves it from the
@@ -14,7 +15,7 @@ import { nodeDocsLinksShown, useDocsPageUrl } from "@/lib/node-docs/node-docs"
 // 2026-08-13).
 const MCP_URL = isCloud()
   ? "https://mcp.nodaro.ai/mcp"
-  : `${window.location.origin}/mcp`
+  : `${publicLinkOrigin()}/mcp`
 
 export default function McpPage() {
   const t = useT()

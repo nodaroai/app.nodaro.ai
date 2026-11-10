@@ -1,7 +1,7 @@
 /**
  * What the app runner's Run button prices (decided 2026-10-07). An app whose
  * listed price follows the length of the recording it is given shows that
- * listing, fixed + per minute ("82 + 14/min"), until the user's recording is
+ * listing, fixed + per minute ("91 + 16/min"), until the user's recording is
  * chosen and its length is known; from then on it shows the exact figure the
  * live estimate prices for that length. An app with no per-minute part shows
  * the live figure, as before. The balance gate reads the live estimate in

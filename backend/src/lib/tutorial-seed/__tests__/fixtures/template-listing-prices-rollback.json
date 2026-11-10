@@ -1,131 +1,131 @@
 {
-  "_comment": "Built-in templates whose listing differs under the tier-pricing rollback (LLM_TIER_PRICING_ROLLBACK): each one's listing as the rollback derives it \u2014 the figure it stored before metered LLM pricing (Task 12). A template not listed here derives the same figure either way. Regenerate an entry from the test's failure when a graph or a price moves.",
+  "_comment": "Built-in templates whose listing differs under the tier-pricing rollback (LLM_TIER_PRICING_ROLLBACK): each one's card as the rollback derives it, at the charged prices (src/ee/billing/template-card-prices.ts). A template not listed here derives the same figure either way. Written by backend/scripts/template-prices.ts --fix.",
   "templates": {
     "2000s-fashion-studio.json": {
-      "estimatedCredits": 126
+      "estimatedCredits": 177
     },
     "ad-ab-studio.json": {
-      "estimatedCredits": 66
+      "estimatedCredits": 93
     },
     "ad-funnel-studio.json": {
-      "estimatedCredits": 516
+      "estimatedCredits": 601
     },
     "ad-localizer-studio.json": {
-      "estimatedCredits": 64
+      "estimatedCredits": 90
     },
     "ad-motion-studio.json": {
-      "estimatedCredits": 489
+      "estimatedCredits": 544
     },
     "ad-remix-studio.json": {
-      "estimatedCredits": 49
+      "estimatedCredits": 69
     },
     "amazon-listing-studio.json": {
-      "estimatedCredits": 87
+      "estimatedCredits": 123
     },
     "beauty-bundle-studio.json": {
-      "estimatedCredits": 107
+      "estimatedCredits": 150
     },
     "brief-to-ad-studio.json": {
-      "estimatedCredits": 51
+      "estimatedCredits": 72
     },
     "camera-angle-studio.json": {
-      "estimatedCredits": 192
+      "estimatedCredits": 270
     },
     "competitor-ad-studio.json": {
-      "estimatedCredits": 34
+      "estimatedCredits": 48
     },
     "cosmetics-ugc-studio.json": {
-      "estimatedCredits": 122
+      "estimatedCredits": 171
     },
     "ecom-model-studio.json": {
-      "estimatedCredits": 77
+      "estimatedCredits": 108
     },
     "editorial-shoot-studio.json": {
-      "estimatedCredits": 79
+      "estimatedCredits": 111
     },
     "explainer-video-studio.json": {
-      "estimatedCredits": 2098
+      "estimatedCredits": 2516
     },
     "eyewear-campaign-studio.json": {
-      "estimatedCredits": 70
+      "estimatedCredits": 99
     },
     "fashion-film-studio.json": {
-      "estimatedCredits": 852
+      "estimatedCredits": 947
     },
     "fashion-photographer-studio.json": {
-      "estimatedCredits": 92
+      "estimatedCredits": 129
     },
     "food-drink-ad-studio.json": {
-      "estimatedCredits": 64
+      "estimatedCredits": 90
     },
     "furniture-studio.json": {
-      "estimatedCredits": 122
+      "estimatedCredits": 171
     },
     "impossible-materials.json": {
-      "estimatedCredits": 1318
+      "estimatedCredits": 1496
     },
     "jewelry-studio.json": {
-      "estimatedCredits": 882
+      "estimatedCredits": 989
     },
     "kids-fashion-studio.json": {
-      "estimatedCredits": 152
+      "estimatedCredits": 213
     },
     "mascot-story-studio.json": {
-      "estimatedCredits": 1288
+      "estimatedCredits": 1456
     },
     "meta-ads-studio.json": {
-      "estimatedCredits": 316
+      "estimatedCredits": 381
     },
     "outdoor-lifestyle-studio.json": {
-      "estimatedCredits": 141
+      "estimatedCredits": 198
     },
     "packshot-studio.json": {
-      "estimatedCredits": 107
+      "estimatedCredits": 150
     },
     "pdp-video-studio.json": {
-      "estimatedCredits": 897
+      "estimatedCredits": 992
     },
     "podcast-testimonial-studio.json": {
-      "estimatedCredits": 929
+      "estimatedCredits": 1028
     },
     "product-ad-set-studio.json": {
-      "estimatedCredits": 96
+      "estimatedCredits": 135
     },
     "product-shoot-studio.json": {
-      "estimatedCredits": 53
+      "estimatedCredits": 75
     },
     "product-spin-studio.json": {
-      "estimatedCredits": 442
+      "estimatedCredits": 487
     },
     "steal-the-format.json": {
-      "estimatedCredits": 1072
+      "estimatedCredits": 1181
     },
     "still-life-studio.json": {
-      "estimatedCredits": 34
+      "estimatedCredits": 48
     },
     "storyboard-film-studio.json": {
-      "estimatedCredits": 2031
+      "estimatedCredits": 2259
     },
     "street-interviews.json": {
-      "estimatedCredits": 3813
+      "estimatedCredits": 9400
     },
     "subway-fooh-studio.json": {
-      "estimatedCredits": 272
+      "estimatedCredits": 318
     },
     "talking-product-research-studio.json": {
-      "estimatedCredits": 974
+      "estimatedCredits": 1091
     },
     "talking-product-studio.json": {
-      "estimatedCredits": 954
+      "estimatedCredits": 1069
     },
     "timeline-ad-studio.json": {
-      "estimatedCredits": 53
+      "estimatedCredits": 75
     },
     "tv-commercial-studio.json": {
-      "estimatedCredits": 2022
+      "estimatedCredits": 2247
     },
     "winning-ad-variations-studio.json": {
-      "estimatedCredits": 53
+      "estimatedCredits": 75
     }
   }
 }

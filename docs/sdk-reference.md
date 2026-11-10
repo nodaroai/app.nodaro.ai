@@ -8868,14 +8868,14 @@ A card's `estimatedCredits` is the template's listed price. When the price
 follows the length of the recording the template is given,
 `estimatedPerMinuteCredits` is above 0 and the price is `estimatedCredits` plus
 that many credits per minute of the recording — the Tighten Episode template
-lists `82` and `14`, or, on a deployment with the preview stop rule on (where it
-renders a Preview first), `132` and `15`: its run plus its Render final. It is
+lists `91` and `16`, or, on a deployment with the preview stop rule on (where it
+renders a Preview first), `146` and `18`: its run plus its Render final. It is
 absent or `0` otherwise.
 
 The route also takes `sort=cheapest`, the Templates page's **Fewest credits**:
 the price of a 60-minute recording first, lowest first (`estimatedCredits` plus
-60 × `estimatedPerMinuteCredits`), so `82` + `14`/min sorts as `922` (`132` +
-`15`/min, with the preview stop rule on, as `1032`). The SDK's
+60 × `estimatedPerMinuteCredits`), so `91` + `16`/min sorts as `1051` (`146` +
+`18`/min, with the preview stop rule on, as `1226`). The SDK's
 `TemplateSort` does not list it yet; pass it through `client.request()`.
 
 ```ts
@@ -9008,7 +9008,7 @@ users), so it is never shared-cached. Signed out, the answer is a user's.
 
 | Method | Endpoint | Notes |
 |--------|----------|-------|
-| `availability()` | `GET /v1/surface/availability` | `SurfaceAvailability`: `{ nodes: { denied, hiddenFromUsers }, models: { denied }, webScrapeSources: { denied, hiddenFromUsers }, worlds }`. `hiddenFromUsers` is empty for anyone but an admin. `worlds` lists every world (`SurfaceAvailabilityWorld`: `{ id, enabled }`) in the deployment's display order: `explore`, `image`, `video`, `music`, `trends`, `motion`, `voice`, `app`, `studio`; a newer server may add one. A world is `enabled` when the deployment lets it through and every node type it runs is available to the caller. |
+| `availability()` | `GET /v1/surface/availability` | `SurfaceAvailability`: `{ nodes: { denied, hiddenFromUsers }, models: { denied, restricted }, webScrapeSources: { denied, hiddenFromUsers }, worlds }`. `hiddenFromUsers` is empty for anyone but an admin. `models.restricted` is `true` when the deployment restricts models (a profile `models.allow` / `models.deny`, or a models override that leaves a model off); a model an admin switched off is denied without being a restriction. An older server omits it: read that as `false`. `worlds` lists every world (`SurfaceAvailabilityWorld`: `{ id, enabled }`) in the deployment's display order: `explore`, `image`, `video`, `music`, `trends`, `motion`, `voice`, `app`, `studio`; a newer server may add one. A world is `enabled` when the deployment lets it through and every node type it runs is available to the caller. |
 
 ```ts
 // The shared header shows only the worlds this person can use.

@@ -4,6 +4,7 @@ import {
   effectiveDeniedModelIds,
   effectiveDeniedWebScrapeSources,
   effectiveWorlds,
+  modelRestrictionConfigured,
   nodesHiddenFromUsers,
   webScrapeSourcesHiddenFromUsers,
 } from "../lib/surface-deny.js"
@@ -35,6 +36,14 @@ import { viewerForUser } from "../lib/availability-viewer.js"
  * it through and every node type it runs is available to this viewer (the
  * table of which node types each world runs is shared data,
  * @nodaro/shared/runtime-config).
+ *
+ * `models.restricted` says whether the deployment RESTRICTS models
+ * (`modelRestrictionConfigured`: a profile `models.allow` / `models.deny`, or a
+ * models override that leaves a model off). `models.denied` alone cannot say
+ * it: it also carries the rows an admin switched off, which a deployment with
+ * no restriction has too. The editor starts a new node on an offered model only
+ * where this is true, so a deployment that restricts nothing keeps every
+ * node's default exactly as it is.
  */
 export async function surfaceAvailabilityRoutes(app: FastifyInstance) {
   app.get("/v1/surface/availability", async (req, reply) => {
@@ -44,7 +53,7 @@ export async function surfaceAvailabilityRoutes(app: FastifyInstance) {
         denied: effectiveDeniedNodeTypes(viewer),
         hiddenFromUsers: viewer.admin ? nodesHiddenFromUsers() : [],
       },
-      models: { denied: effectiveDeniedModelIds() },
+      models: { denied: effectiveDeniedModelIds(), restricted: modelRestrictionConfigured() },
       webScrapeSources: {
         denied: effectiveDeniedWebScrapeSources(viewer),
         hiddenFromUsers: viewer.admin ? webScrapeSourcesHiddenFromUsers() : [],

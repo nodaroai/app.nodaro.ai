@@ -1326,6 +1326,13 @@ export const VIDEO_TO_VIDEO_NODE_PROVIDERS = [...VIDEO_TO_VIDEO_PROVIDERS, ...SE
 export type VideoToVideoNodeProvider = typeof VIDEO_TO_VIDEO_NODE_PROVIDERS[number]
 
 /**
+ * The model a Video to Video request or node that names none runs on: the
+ * route's and the worker's default, and what the node's model menu shows for an
+ * unset model. One constant, so the server and the editor cannot disagree.
+ */
+export const DEFAULT_VIDEO_TO_VIDEO_PROVIDER: VideoToVideoNodeProvider = "wan"
+
+/**
  * The request shape Seedance edit mode requires, sent UP FRONT by the Video to
  * Video node: the output takes the source clip's own ratio and length
  * (`adaptive`, and Auto = `VIDEO_DURATION_AUTO`). Camel-cased twin of the KIE

@@ -41,6 +41,7 @@ import { useT } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { publishedAppUrl } from "@/lib/public-links"
 import { appInputNodeIds, presentationItemNodeIds, readUgcComposedGraph, ugcCreatorsWithoutPhotoInput } from "@/lib/ugc-publish-photo"
 import { ugcComposedKey, ugcSubWorkflowReference, type UgcComposedGraph } from "@nodaro/render-rules"
 
@@ -437,7 +438,7 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
   }, [workflowId, publishName, publishSlug, publishDesc, thumbnailNodeId, isListed, category, outputTypes, tags, supportsRemix, publishType, componentHandles, buildExposedSettings, nodes, t])
 
   const publishedUrl = publishedSlug
-    ? `${window.location.origin}/app/${publishedSlug}`
+    ? publishedAppUrl(publishedSlug)
     : ""
 
   const handleCopyPublished = useCallback(() => {

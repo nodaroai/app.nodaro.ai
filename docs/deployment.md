@@ -129,8 +129,9 @@ here for each one anyway.
 | `PUBLIC_URL_SAME_ORIGIN` | `""` (unset = `apiUrl` is `PUBLIC_URL`) | Set to `true` when the service answers on more than one hostname and the API shares the origin of the app (the default single-container layout, where the bundled proxy fronts both the SPA and `/v1`). `/config.js` then carries `apiUrl: "/"` instead of `PUBLIC_URL`, so the browser's SSE streams stay on whichever hostname the visitor is actually on rather than being pinned to the one `PUBLIC_URL` names. Leave unset for a genuine split origin — an API served from a different host than the app. Only the exact value `true` enables it. Restart to apply |
 | `ROBOTS_NOINDEX` | `""` (unset = search engines follow the app's own route allow-list) | Set to `true` on a deployment search engines must never index, such as a staging environment: every response then carries `X-Robots-Tag: noindex`, whatever serves it. Only the exact value `true` enables it. Restart to apply |
 | `LEGACY_UI_HOSTS` | `""` (unset = no host redirects) | With `FLOW_UI_ORIGIN`, moves the app's pages to their own host: see [Moving the app's pages to their own host](#moving-the-apps-pages-to-their-own-host). Bare host names (separated by commas or spaces, any letter case; no scheme, port, path, tab or line break) on which a top-level visit to a moved page is redirected. Set both, or neither: either one alone, a list naming only the new host, or an entry that is not a bare host name, and the server refuses to start. Restart to apply |
-| `FLOW_UI_ORIGIN` | `""` (unset = the feature is off) | The https origin the moved pages live on, e.g. `https://flow.example.com` (a trailing slash is allowed, no path): see [Moving the app's pages to their own host](#moving-the-apps-pages-to-their-own-host). Set it with `LEGACY_UI_HOSTS`, or not at all. Set alone, to anything but an https origin, or with `PUBLIC_URL` not another https origin, the server refuses to start |
+| `FLOW_UI_ORIGIN` | `""` (unset = `FLOW_PUBLIC_URL`; both unset = the feature is off) | The https origin the moved pages live on, e.g. `https://flow.example.com` (a trailing slash is allowed, no path): see [Moving the app's pages to their own host](#moving-the-apps-pages-to-their-own-host). `FLOW_PUBLIC_URL` is its other name; set either. Set it with `LEGACY_UI_HOSTS`, or not at all. Set alone, to anything but an https origin, to a different origin than `FLOW_PUBLIC_URL`, or with `PUBLIC_URL` not another https origin, the server refuses to start |
 | `LEGACY_UI_REDIRECT_STATUS` | `302` | `302` (never cached) or `301` (cached by the browser only, for an hour). Any other value is `302` |
+| `FLOW_PUBLIC_URL` | `""` (unset = `FLOW_UI_ORIGIN`; both unset = the app's pages live on `PUBLIC_URL`) | The other name of `FLOW_UI_ORIGIN`: the origin the app's own pages live on when a deployment has moved them off `PUBLIC_URL`. Set either one and the other follows; both set to different origins, and the server refuses to start. Links that open one of those pages — the editor, the gallery, the archive, billing — and the social-connect pop-ups use it. The API, the OAuth issuer and every machine-facing address stay on `PUBLIC_URL`. Restart to apply |
 | `CORS_ORIGIN` | `""` | Extra allowed browser origins, comma-separated (PUBLIC_URL is always allowed). These are also the hosts the SSO landing redirect is emitted **relative** on — same-origin by construction — where a request arriving on any other host gets the absolute `PUBLIC_URL` form |
 | `RESEND_API_KEY` | `""` | Cloud, organizations: API key for sending invitation emails through Resend. Unset = invitations are not emailed; the API returns a copy-and-paste link instead |
 | `EMAIL_FROM` | `""` | Cloud, organizations: the From address for invitation emails (a verified sender on the Resend account) |
@@ -838,6 +839,13 @@ optional; each array empty = "keep the default"):
   `provider` (`llmModel`, Suno's `model`, Add Captions' `transcribe_provider`)
   is judged too, before anything is created or charged
   (`403 model_not_available`, on the run and on `POST /v1/quote` alike). A
+  `provider` that names an engine rather than a model is judged as the model
+  that engine runs, never as a model that shares its name: Motion Transfer's
+  Kling options as the motion-transfer models, Generate Script's legacy
+  script providers as the LLM they run, Video Upscale's Topaz as
+  `topaz-video`, and Generate Music's MiniMax music engine as no catalog
+  model at all (the catalog's `minimax` is the MiniMax video model). Video
+  Retake is judged as `ltx-2.3-pro`, the model it runs. A
   workflow run (an app run, a scheduled or webhook run, an MCP or API run)
   judges its nodes the same way: a node that names no model is judged on the
   default it would run — Generate Image's for its ratio, Image to Image's edit
@@ -847,6 +855,21 @@ optional; each array empty = "keep the default"):
   included: a request whose model is not listed is refused, not run on an
   unlisted default. A deployment with no `models.allow` / `models.deny` and no
   models override in Admin → Availability is not affected.
+
+  In the workflow editor, a node made from its defaults (added from the node
+  picker, the sidebar, a handle's add menu, or an action that adds a step)
+  whose default model the deployment withholds starts on the first model its
+  own model menu offers, and the menu shows it. A node that names no model is
+  judged on the default it runs (Describe Image on its feature's default LLM).
+  A saved node keeps the model it holds (its menu still lists it, and a run
+  refuses it), and a copied, pasted or duplicated node keeps its source's
+  model. Where the menu offers no model, the default is kept. Some menus list
+  their models by hand or by values that are not model ids — Suno's versions,
+  the voice changers, Motion Transfer, Video Upscale, Transcribe, Text to
+  Audio, Voice Design, Generate Music, Reference Board and the Generate Video
+  Pro planner — so those nodes keep their defaults: list those defaults, or
+  the nodes are refused at run. A deployment that restricts no models keeps
+  every default as it is, even one an admin switched off on the models page.
 
   The lists hold on the direct API too: every route that spends credits is
   checked as the node it runs, whatever its path — `POST /v1/suno/generate` as
@@ -1497,6 +1520,11 @@ apps read the same key through the contract. With any other header, or an
 `R2_PUBLIC_URL` that is not `https://`, the key is absent and `/config.js` is
 unchanged. There is nothing to set: it follows `R2_PUBLIC_URL` at the next
 restart.
+
+On a deployment that moved its pages to a host of their own, `/config.js` also
+carries `flowUiOrigin`, `legacyUiHosts` and `linkOrigin` (see
+[Moving the app's pages to their own host](#moving-the-apps-pages-to-their-own-host)):
+all three or none, and everywhere else none.
 
 Example (a single-sign-on deployment with its own header, three worlds and
 no link imports):
@@ -2213,21 +2241,51 @@ FLOW_UI_ORIGIN=https://flow.example.com
 - On the new host, a top-level visit to `/app/*`, `/embed/*` or `/present/*` is
   sent back to the origin of `PUBLIC_URL` (the kept host), so each public page
   has one home.
+- Links the server writes to the app's pages (the editor, the gallery, billing,
+  the archive) and the social-connect pop-ups name the new host; the API, the
+  OAuth issuer and every machine-facing address stay on `PUBLIC_URL`.
+- `FLOW_PUBLIC_URL` is another name for `FLOW_UI_ORIGIN`: set either one and
+  the other follows; set both, and they must name the same origin.
 - `FLOW_UI_ORIGIN` and `PUBLIC_URL` are https origins; a trailing slash is
-  allowed. The server refuses to start, naming the setting, on any partial
-  set: `FLOW_UI_ORIGIN` without a host in `LEGACY_UI_HOSTS` other than the new
-  one, `LEGACY_UI_HOSTS` without `FLOW_UI_ORIGIN`, a `LEGACY_UI_HOSTS` entry
-  that is not a bare host name, a `FLOW_UI_ORIGIN` that is not an https
-  origin, or a `PUBLIC_URL` that does not give the kept host's https origin.
-  The image's start script runs the same check before it starts anything, so
-  the proxy never serves a move the server refuses.
+  allowed, nothing else (no path, port or spaces around the value). The server
+  refuses to start, naming the setting, on any partial set: `FLOW_UI_ORIGIN`
+  (or `FLOW_PUBLIC_URL`) without a host in `LEGACY_UI_HOSTS` other than the
+  new one, `LEGACY_UI_HOSTS` without either, a `LEGACY_UI_HOSTS` entry that is
+  not a bare host name, a value that is not an https origin, the two names
+  disagreeing, or a `PUBLIC_URL` that does not give the kept host's https
+  origin. The image's start script runs the same check before it starts
+  anything, so the proxy never serves a move the server refuses. Links the
+  server writes follow the same rule: no link names the new host unless the
+  move is on.
 - The move is on only with all three usable: `FLOW_UI_ORIGIN`, a host in
   `LEGACY_UI_HOSTS` that is not the new host, and a `PUBLIC_URL` that is
   another https origin. The proxy reads every setting per request, so no
   value can stop it from starting; a value it cannot use leaves the site as
   it was. Changing one
   needs a restart, never a rebuild.
+- A browser's saved settings (per origin) are carried over once, on the first
+  visit to the new host, through `/storage-bridge.html` on the kept host: a
+  page there only while the move is on, which only the new host's origin may
+  frame. The import counts as done only when the old host's storage could be
+  read; otherwise the next visit asks again. Without the move, that path
+  answers as any unknown page does, exactly as on an install without the file.
 - Other host names the service answers on are never affected.
+- Pages on the new host call the API same-origin, as they did before: the same
+  service answers under both names. On the new host and on the hosts in
+  `LEGACY_UI_HOSTS`, the addresses people are handed name `PUBLIC_URL`, never
+  the new host: published apps, embeds, shared presentations, webhook URLs and
+  the API examples on the settings page. On any other host name they name that
+  host, as before.
+- `/config.js` tells the page the hosts (`flowUiOrigin`, `legacyUiHosts`,
+  `linkOrigin`), read exactly as the proxy reads them (a trailing slash
+  dropped, the host list split by the same rule), and all three only when the
+  move is on: a valid `FLOW_UI_ORIGIN`, a host in `LEGACY_UI_HOSTS` that is not
+  the new host, and a `PUBLIC_URL` that is another https origin. Otherwise
+  none, and the start log says why. The browser then moves the same
+  navigations the proxy would, from the same list and matching paths the same
+  way, on the same hosts, never a framed page or a pop-up window. Should the
+  two ever disagree, a tab that is sent to the same address twice within ten
+  seconds stays where it is instead of going back and forth.
 
 ## Managed Supabase through the studio origin
 

@@ -1,5 +1,17 @@
 # @nodaro/shared
 
+## 3.59.0
+
+### Minor Changes
+
+- 9e0addc: Camera Switch `lagMs`: delay each cut by this long, in whole milliseconds (0–5000, default 0), the counterpart of `leadMs`. `CAMERA_SWITCH_BOUNDS` gains `lagMs`, and the new `CAMERA_SWITCH_NODE_SETTINGS` lists the four numeric settings a Camera Switch node carries (`lagMs` is a request setting only, so `cameraSwitchSettingsPayload` never sends it). The SDK's `CameraSwitchInput` gains `lagMs` and `client.edit.cameraSwitch` sends it; the CLI gains `nodaro edit switch-cameras --lag-ms <ms>`.
+
+### Patch Changes
+
+- 51ed9d5: GPT Image 2 (`gpt-image-2`, `gpt-image-2-i2i`) renders every aspect ratio it offers at 1K, 2K and 4K, `auto` and 1:1 included. `normalizeModelInput` no longer moves a 2K or 4K request at `auto` to 1K, or a 4K request at 1:1 to 2K, and reports no adjustment for either: the size asked is the size sent, and the price id is that size's (`gpt-image-2:2K`, `gpt-image-2:4K`). The two entries carry no `resolutionsByAspectRatio`, so `resolutionsAtAspectRatio` offers all three sizes at every ratio and `resolutionAtAspectRatio` returns the size asked.
+- 042d555: `isLegacyUiHost` (`@nodaro/shared/runtime-config`): the rule for a host a deployment's app pages move away from, a bare host name in lower case. The server refuses to start on a `LEGACY_UI_HOSTS` entry that is not one.
+- 0397100: The runtime config contract gains three optional keys for a deployment that has moved its app pages to a host of their own: `flowUiOrigin`, `legacyUiHosts` and `linkOrigin`. Absent on every other deployment, so nothing changes for a reader that does not use them.
+
 ## 3.58.0
 
 ### Minor Changes

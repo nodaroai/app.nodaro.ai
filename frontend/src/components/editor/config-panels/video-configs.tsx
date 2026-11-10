@@ -60,7 +60,7 @@ import { TOPAZ_VIDEO_FPS_CHOICES, TOPAZ_VIDEO_RESOLUTIONS, clampTopazVideoFps, i
 import { TOPAZ_VIDEO_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
 import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
 import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, kling4KeyframeFrameCap, KLING_4_MAX_MIDDLE_FRAMES, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
-import { videoSourceTrimMaxSec } from "@nodaro/shared/models"
+import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, videoSourceTrimMaxSec } from "@nodaro/shared/models"
 import { buildVideoCreditModelIdentifier, VIDEO_AUDIT_BUCKET_CREDITS } from "@nodaro/shared/credits"
 import { characterMentionSlug, characterMentionableAssetArrays, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared/entities"
 import { DEFAULT_LABEL_BY_SOURCE, type ReferenceSource, type ConnectedReference } from "@nodaro/shared/types"
@@ -1410,9 +1410,9 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
     snippets: promptSnippets,
     negativeSnippets,
     // Video negative-routing prediction — matches this panel's effective provider.
-    videoProvider: data.provider || "wan",
+    videoProvider: data.provider || DEFAULT_VIDEO_TO_VIDEO_PROVIDER,
   })
-  const provider = data.provider || "wan"
+  const provider = data.provider || DEFAULT_VIDEO_TO_VIDEO_PROVIDER
   const offeredV2vModels = useOfferedModels(VIDEO_V2V_MODELS, provider)
   const isWan = provider === "wan" || provider === "wan-flash"
   const isWanFlash = provider === "wan-flash"

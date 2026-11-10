@@ -73,3 +73,11 @@ test("the page-homes block in frontend/Caddyfile is the one the list generates",
   const current = readFileSync(CADDYFILE_PATH, "utf8")
   assert.equal(spliceBlock(current, renderBlock(homes)), current, "frontend/Caddyfile's page-homes block is out of date. Run: npm run gen:route-homes")
 })
+
+test("the files list is the one the proxy's @missing_file block treats as files", () => {
+  const caddyfile = readFileSync(CADDYFILE_PATH, "utf8")
+  const block = caddyfile.slice(caddyfile.indexOf("@missing_file {"))
+  const line = block.slice(0, block.indexOf("\n", block.indexOf("path ")))
+  const extensions = line.slice(line.indexOf("path ") + "path ".length).trim().split(/\s+/).map((pattern) => pattern.replace(/^\*\./, ""))
+  assert.deepEqual(homes.files, extensions)
+})

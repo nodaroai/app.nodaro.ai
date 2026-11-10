@@ -31,9 +31,6 @@ export const HOMES_PATH = join(repoRoot, "frontend/src/route-homes.json")
 const BEGIN = "\t# BEGIN GENERATED: page homes (tools/gen-route-homes.mjs from frontend/src/route-homes.json)"
 const END = "\t# END GENERATED: page homes"
 
-/** The file types Caddy's `@missing_file` treats as files: never pages, never moved. */
-export const FILE_TYPES = ["js", "mjs", "css", "map", "woff2", "woff", "ttf", "otf", "eot", "png", "jpg", "jpeg", "gif", "svg", "webp", "avif", "ico", "mp4", "webm", "mov", "mp3", "wav", "ogg", "m4a", "wasm"]
-
 export function loadHomes() {
   return JSON.parse(readFileSync(HOMES_PATH, "utf8"))
 }
@@ -84,7 +81,7 @@ export function renderBlock(homes) {
     `\t\texpression \`${MOVE_ON} && ${HOSTS}.exists(h, h != "" && h == {http.request.host}.lowerAscii()) && ${HERE} != ${FLOW} && ${NOT_FRAMED}\``,
     "\t\tmethod GET HEAD",
     `\t\tpath ${caddyPatterns(homes.moved).join(" ")}`,
-    `\t\tnot path ${FILE_TYPES.map((ext) => `*.${ext}`).join(" ")}`,
+    `\t\tnot path ${homes.files.map((ext) => `*.${ext}`).join(" ")}`,
     "\t\tnot file {",
     "\t\t\troot /app/frontend/dist",
     "\t\t}",
@@ -109,6 +106,22 @@ export function renderBlock(homes) {
     `\t\tredir @legacy_ui_permanent ${KEPT}{uri} 301`,
     `\t\tredir @legacy_ui_temporary ${KEPT}{uri} 302`,
     "\t}",
+    "\t# The page that hands a browser's saved settings to the Flow host",
+    "\t# (frontend/public/storage-bridge.html) is there only while the move is on,",
+    "\t# framable only by the Flow origin. Otherwise the path answers exactly as on",
+    "\t# an install without the file: as any unknown page, the app's index.",
+    "\t@storage_bridge_on {",
+    "\t\tpath /storage-bridge.html",
+    `\t\texpression \`${MOVE_ON}\``,
+    "\t}",
+    `\theader @storage_bridge_on Content-Security-Policy "frame-ancestors ${FLOW}"`,
+    "\t# Its trailing-slash form too: the proxy would redirect it to the file, which",
+    "\t# an install without the move does not have.",
+    "\t@storage_bridge_off {",
+    "\t\tpath /storage-bridge.html /storage-bridge.html/",
+    `\t\texpression \`!(${MOVE_ON})\``,
+    "\t}",
+    "\trewrite @storage_bridge_off /index.html",
     END,
     "",
   ]

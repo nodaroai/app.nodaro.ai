@@ -33,7 +33,7 @@ describe("the /config.js writer and the contract agree on every key", () => {
     expect(inputs.length).toBeGreaterThan(0)
     // "true" satisfies every flag and is a non-blank string for every URL; the surface needs a JSON object,
     // and a reader keeps a media origin only when it is one.
-    const inputValue = (name: string) => (name === "RUNTIME_SURFACE_PROFILE" ? "{}" : name === "RUNTIME_MEDIA_ORIGIN" ? "https://media.example.com" : "true")
+    const inputValue = (name: string) => (name === "RUNTIME_SURFACE_PROFILE" ? "{}" : name === "RUNTIME_MEDIA_ORIGIN" ? "https://media.example.com" : name === "RUNTIME_FLOW_UI_ORIGIN" ? "https://flow.example.com" : name === "RUNTIME_LINK_ORIGIN" ? "https://app.example.com" : "true")
     const env = Object.fromEntries(inputs.map((name) => [name, inputValue(name)]))
     const written = Object.keys(buildRuntimeConfig(env) as Record<string, unknown>).sort()
     expect(written).toEqual([...RUNTIME_CONFIG_KEYS].sort())

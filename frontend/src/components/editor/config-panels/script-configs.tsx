@@ -34,6 +34,7 @@ import type {
 } from "@/types/nodes"
 import { IMAGE_CRITIC_MODES, type ImageCriticMode } from "@nodaro/shared/pipeline"
 import { DESCRIBE_TO_PICKER_MODELS } from "@nodaro/shared/llm-models"
+import { describeToPickerModel } from "@/lib/llm-model-filters"
 import { IMAGE_CRITIC_MODE_LABEL } from "@/lib/image-critic-mode-copy"
 import { pickerFanoutTargets } from "@nodaro/prompts/picker-catalogs"
 import { useShallow } from "zustand/react/shallow"
@@ -632,7 +633,7 @@ export function DescribeToPickerConfig({ nodeId, data, onUpdate }: ConfigProps<D
         onChange={(v) => onUpdate({ llmModel: v })}
         reasoningEffort={data.reasoningEffort}
         advancedMode={data.advancedMode === true}
-        filter={(m) => DESCRIBE_TO_PICKER_MODELS.some((v) => v.id === m.id)}
+        filter={describeToPickerModel}
       />
       <ReasoningEffortSelect
         feature="describe-to-picker"

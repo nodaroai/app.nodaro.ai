@@ -1,8 +1,8 @@
 // @test-watches backend/src/lib/tutorial-seed/templates/*.json backend/src/lib/tutorial-seed/__tests__/fixtures/run-estimate-parity.json
 /**
  * The server's half of the run-estimate parity (decided 2026-10-07): the
- * listing a template stores (at the 180-minute cap: fixed + 180 × per
- * minute), the server's RUN estimate (`estimateWorkflowCredits`: the app
+ * listing (at the 180-minute cap: fixed + 180 × per minute; a template's card
+ * stores it charged, `template-card-prices.ts`), the server's RUN estimate (`estimateWorkflowCredits`: the app
  * runner's seeded quote, the API and MCP quotes,
  * `/v1/credits/estimate-workflow`, the Render final quote and balance check)
  * and the editor's run estimate (`estimateRunCreditLines` — also the app
@@ -108,6 +108,14 @@ function listingAtCap({ nodes, edges }: Graph): number {
   const { preview, final } = listingPartsAtCap({ nodes, edges })
   return preview + final
 }
+
+/**
+ * The card a template stores, at the 180-minute cap. It is the listing CHARGED
+ * (decided 2026-11-10: `template-card-prices.ts`, held to the figure by
+ * template-listing-prices.test.ts), so here, at the price-table rows, it is
+ * only held never to quote below the listing.
+ */
+const cardAtCap = (doc: TutorialTemplateDoc): number => doc.estimatedCredits! + 180 * (doc.estimatedPerMinuteCredits ?? 0)
 
 /** Each part of the listing at the 180-minute cap. */
 function listingPartsAtCap({ nodes, edges }: Graph): { preview: number; final: number } {
@@ -371,7 +379,7 @@ describe("with the preview stop rule on, a template's run stops at its Preview",
 describe("the template the sync writes, in each state of the preview stop rule", () => {
   // Rule on: the template as authored, render at Preview — every figure above.
   // Rule off: the render at Final (decided 2026-10-08), so a run renders the
-  // delivery and runs the nodes after it, and the listing stored with it, its
+  // delivery and runs the nodes after it, and the listing of that graph, its
   // run estimate and a whole-graph estimate all quote one figure.
   it("the fixture covers the templates the sync flips", () => {
     expect(Object.keys(fixture.templatesSyncedWithoutStopRule).sort()).toEqual(FLIPPED)
@@ -383,7 +391,7 @@ describe("the template the sync writes, in each state of the preview stop rule",
     const { nodes, edges } = { nodes: doc.nodes as Node[], edges: doc.edges as Edge[] }
     expect(reviewStep({ nodes, edges }), slug).toEqual(authoredReviewStep(slug))
     expect(listingPartsAtCap({ nodes, edges }), `${slug}: listing at the cap`).toEqual({ preview: fixture.templates[slug], final: fixture.templateFinals[slug] })
-    expect(doc.estimatedCredits! + 180 * (doc.estimatedPerMinuteCredits ?? 0), `${slug}: the listing stored`).toBe(fixture.templates[slug]! + fixture.templateFinals[slug]!)
+    expect(cardAtCap(doc), `${slug}: the card stored, never below the listing`).toBeGreaterThanOrEqual(fixture.templates[slug]! + fixture.templateFinals[slug]!)
     expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges), `${slug}: run estimate`).toBe(fixture.templateRunsWithStopRule[slug])
   })
 
@@ -393,7 +401,7 @@ describe("the template the sync writes, in each state of the preview stop rule",
     const credits = fixture.templatesSyncedWithoutStopRule[slug]!
     expect(nodes.filter(isRender).map((n) => n.data?.quality), slug).toEqual(["final"])
     expect(listingPartsAtCap({ nodes, edges }), `${slug}: listing at the cap`).toEqual({ preview: credits, final: 0 })
-    expect(doc.estimatedCredits! + 180 * (doc.estimatedPerMinuteCredits ?? 0), `${slug}: the listing stored`).toBe(credits)
+    expect(cardAtCap(doc), `${slug}: the card stored, never below the listing`).toBeGreaterThanOrEqual(credits)
     expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges), `${slug}: run estimate`).toBe(credits)
     expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges, { scope: "whole-graph" }), `${slug}: whole-graph run estimate`).toBe(credits)
   })
@@ -433,7 +441,7 @@ describe("the one-node podcast templates", () => {
     expect(doc).toBe(docs.get(slug))
     const { nodes, edges } = { nodes: doc.nodes as Node[], edges: doc.edges as Edge[] }
     expect(listingPartsAtCap({ nodes, edges }), "listing at the cap").toEqual({ preview: fixture.templates[slug], final: fixture.templateFinals[slug] })
-    expect(doc.estimatedCredits! + 180 * (doc.estimatedPerMinuteCredits ?? 0), "the listing stored").toBe(fixture.templates[slug]! + fixture.templateFinals[slug]!)
+    expect(cardAtCap(doc), "the card stored, never below the listing").toBeGreaterThanOrEqual(fixture.templates[slug]! + fixture.templateFinals[slug]!)
     expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges), "run estimate").toBe(fixture.templateRunsWithStopRule[slug])
     expect(templateFinalEstimate({ nodes, edges }), "Render final run estimate").toBe(fixture.templateFinals[slug])
   })

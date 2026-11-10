@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Nodaro</title>
+    <meta name="robots" content="noindex" />
+    <script src="/config.js"></script>
+  </head>
+  <body>
+    <script>
+      // When a deployment moves the app's pages to a host of their own, the
+      // browser's saved settings (per origin) stay behind on the old host. The
+      // new host frames this file once and carries them over. Inert without a
+      // moved deployment: flowUiOrigin is absent and nothing runs. The list of
+      // keys is frontend/src/lib/storage-bridge-import.ts's; a test holds the
+      // two equal. No Supabase session key is ever read here.
+      ;(function () {
+        var runtime = window.__NODARO_RUNTIME__ || {}
+        var flow = runtime.flowUiOrigin
+        if (!flow || window.parent === window) return
+        var exact = ["nodaro-active-workspace", "nodaro.a11y.v1", "nodaro:preferred-locale", "nodaro:node-selection-history", "nodaro:heygen-recent-avatars", "prompt-wizard-model", "prompt-wizard-reasoning-effort", "prompt-wizard-preference", "theme"]
+        var prefixes = ["nodaro:nodeMemory:v1:"]
+        var keys = {}
+        // Whether this host's storage could be read at all: when it could not,
+        // the new host does not mark the import done and asks again next time.
+        var readable = true
+        try {
+          var store = window.localStorage
+          for (var i = 0; i < store.length; i++) {
+            var key = store.key(i)
+            if (exact.indexOf(key) !== -1 || prefixes.some(function (p) { return key.indexOf(p) === 0 })) keys[key] = store.getItem(key)
+          }
+        } catch (error) {
+          keys = {}
+          readable = false
+        }
+        // postMessage delivers only when the parent's origin is exactly this one.
+        window.parent.postMessage({ type: "nodaro:storage-bridge", readable: readable, keys: keys }, flow)
+      })()
+    </script>
+  </body>
+</html>

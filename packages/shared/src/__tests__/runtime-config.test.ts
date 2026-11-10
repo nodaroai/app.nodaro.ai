@@ -173,6 +173,24 @@ describe("parseRuntimeConfig — typed, lenient, never throws", () => {
     expect(parseRuntimeConfig(raw)).toEqual({})
   })
 
+  it("keeps legacyUiHosts as the host names it lists, and nothing else", () => {
+    expect(parseRuntimeConfig({ legacyUiHosts: ["app.example.com", "", 7, "Bad Host", "next.app.example.com"] })).toEqual({ legacyUiHosts: ["app.example.com", "next.app.example.com"] })
+    expect("legacyUiHosts" in parseRuntimeConfig({ legacyUiHosts: [] })).toBe(false)
+    expect("legacyUiHosts" in parseRuntimeConfig({ legacyUiHosts: "app.example.com" })).toBe(false)
+  })
+
+  it("keeps flowUiOrigin and linkOrigin only when each is an https origin", () => {
+    expect(parseRuntimeConfig({ apiUrl: "/", flowUiOrigin: "https://flow.example.com", linkOrigin: "https://app.example.com" })).toEqual({
+      apiUrl: "/",
+      flowUiOrigin: "https://flow.example.com",
+      linkOrigin: "https://app.example.com",
+    })
+    for (const malformed of ["http://flow.example.com", "https://flow.example.com/", "nope", ""]) {
+      expect(parseRuntimeConfig({ flowUiOrigin: malformed, linkOrigin: malformed })).toEqual({})
+    }
+    expect("flowUiOrigin" in parseRuntimeConfig({ apiUrl: "/" })).toBe(false)
+  })
+
   it("keeps mediaOrigin only when it is an https origin", () => {
     expect(parseRuntimeConfig({ apiUrl: "/", mediaOrigin: "https://media.example.com" })).toEqual({ apiUrl: "/", mediaOrigin: "https://media.example.com" })
     for (const malformed of ["http://media.example.com", "https://media.example.com/", "https://media.example.com/bucket", "media.example.com", "", "  ", 7, null, ["https://media.example.com"]]) {

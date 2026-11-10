@@ -159,7 +159,6 @@
  "backend/src/lib/tutorial-seed/__tests__/preview-gate.test.ts",
  "backend/src/lib/tutorial-seed/__tests__/seeder-claim-totality.test.ts",
  "backend/src/lib/tutorial-seed/__tests__/seeder-claim.test.ts",
- "backend/src/lib/tutorial-seed/__tests__/template-listing-prices.test.ts",
  "backend/src/lib/tutorial-seed/__tests__/templates-canonical-edges.test.ts",
  "backend/src/providers/__tests__/tts-voice-settings-exits.test.ts",
  "backend/src/providers/apify/__tests__/site-capture-actor.test.ts",

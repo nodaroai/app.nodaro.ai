@@ -1,5 +1,6 @@
 import type Stripe from "stripe"
 import { config } from "../../lib/config.js"
+import { flowBaseUrl } from "../../lib/deployment-urls.js"
 import { supabase } from "../../lib/supabase.js"
 import { deploymentPayerActive, deploymentPayerId } from "../../lib/deployment-payer.js"
 import { sendTransactional, type LoopsDataVariables } from "../lib/loops-client.js"
@@ -111,10 +112,9 @@ const day = (iso: string) => new Date(iso).toLocaleString("en", { day: "numeric"
 const paidRow = (row: PaymentRow) => row.status === null || row.status === undefined || row.status === "completed"
 const inMonth = (iso: string, from: string, to: string) => iso >= from && iso <= to
 
-/** Where the billing page is: the deployment's own origin, else the Nodaro app. */
+/** Where the billing page is: the app's own host, else the deployment's origin, else the Nodaro app. */
 export function billingUrl(): string {
-  const origin = (config.PUBLIC_URL ?? "").trim().replace(/\/$/, "")
-  return `${origin || "https://app.nodaro.ai"}/billing`
+  return `${flowBaseUrl()}/billing`
 }
 
 /**

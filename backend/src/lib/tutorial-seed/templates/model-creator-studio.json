@@ -15,7 +15,7 @@
     "e-commerce"
   ],
   "complexity": "simple",
-  "estimatedCredits": 120,
+  "estimatedCredits": 168,
   "nodeTypesUsed": [
     "person",
     "styling",

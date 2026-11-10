@@ -189,6 +189,10 @@ describe("isForeignOrigin — any page but our own SPA skips the grace", () => {
     expect(call({ origin: "   " })).toBe(false)
   })
 
+  it("is false for a page on a second host name of this service: same-origin calls carry that host as both Origin and Host", () => {
+    expect(call({ origin: "https://flow.nodaro.ai", host: "flow.nodaro.ai" })).toBe(false)
+  })
+
   it("is TRUE for a thin client — the production bug (a recast signup stranded at zero)", () => {
     // recast/studio/person/voice call this API cross-origin and never send
     // the keyed boot-time claim. No allowlist is consulted: every surface the

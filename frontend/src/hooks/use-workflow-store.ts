@@ -1,4 +1,5 @@
 import { curatedNodeDefaults } from "@/lib/curated-node-defaults"
+import { forgetNewNodesAwaitingAvailability, newNodeModelsOf, noteNewNodesFromDefaults, onNewNodesAvailabilityLanded, withOfferedNewNodeModels } from "@/components/editor/config-panels/new-node-models"
 import type { WorkflowWrite } from "./workflow-store-adopted"
 import { create } from "zustand"
 import {
@@ -949,7 +950,12 @@ export function mintNodeId(existingIds: Iterable<string>): string {
 /**
  * The data a new node of `type` starts with, as `addNode` resolves it — the
  * factory defaults under the admin's and then the user's saved defaults, then
- * the curated ones. `undefined` for a type with no definition.
+ * the curated ones, then on models the deployment offers (a withheld model a
+ * restricted deployment would refuse moves to the first row of the node's own
+ * menu, `components/editor/config-panels/new-node-models.ts`). `undefined` for
+ * a type with no definition.
+ * A caller that adds the node also notes it (`noteNewNodesFromDefaults`), so a
+ * node made before availability lands is judged again when it does.
  */
 export function newNodeDefaultData(type: SceneNodeType): Record<string, unknown> | undefined {
   const definition = NODE_DEFINITIONS.find((d) => d.type === type)
@@ -963,7 +969,7 @@ export function newNodeDefaultData(type: SceneNodeType): Record<string, unknown>
     adminDefaults,
     userId: getCachedUserId(),
   })
-  return { ...curatedNodeDefaults(type, resolvedDefaults) }
+  return { ...withOfferedNewNodeModels(type, curatedNodeDefaults(type, resolvedDefaults)) }
 }
 
 /**
@@ -1592,7 +1598,8 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
 
     const id = generateNodeId(get().nodes.map((n) => n.id))
 
-    const nodeData = { ...newNodeDefaultData(type), ...initialData }
+    const defaults = newNodeDefaultData(type) ?? {}
+    const nodeData = { ...defaults, ...initialData }
 
     // Parameter nodes: seed displayMode from the user's per-device preference
     // so a new node opens in whatever mode (picks/prompt/both) they last used.
@@ -1680,6 +1687,9 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
       isDirty: true,
       ...(newNode.selected ? focusPatch(state, id) : {}),
     }))
+    // Made before availability landed: judged again once it does (on what the
+    // defaults gave it — a model the caller passed is its own and stays).
+    noteNewNodesFromDefaults([{ id, type, data: defaults }])
 
     if (type === "teleport-send" || type === "teleport-receive") {
       get().syncTeleporterEdges((newNode.data as TeleportSendData).channel)
@@ -2289,6 +2299,8 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
     const nodes = withRunOverrides(loadedNodes, undefined)
     // What was set in an unsaved workflow's trigger panels never carries over.
     discardUnsavedAccountTriggerIntents()
+    // Node ids name other nodes in another workflow.
+    forgetNewNodesAwaitingAvailability()
     nextNodeId =
       nodes.reduce((max, n) => {
         const num = parseInt(n.id.replace("node_", ""), 10)
@@ -2767,6 +2779,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
 
   clearWorkflow: () => {
     discardUnsavedAccountTriggerIntents()
+    forgetNewNodesAwaitingAvailability()
     nextNodeId = 1
     set((state) => ({
       workflowId: null,
@@ -3487,3 +3500,36 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
       replace as false | undefined,
     )) as typeof direct
 }
+
+/**
+ * A node made from its defaults before the availability answer landed was
+ * judged against the static profile alone. When the answer lands, each such
+ * node still on the canvas on the models it was made with is put on offered
+ * models exactly as it would have been at creation
+ * (`components/editor/config-panels/new-node-models.ts`).
+ * A system correction, not an edit: no undo step and no remembered selection,
+ * but the workflow is dirtied so the save carries it.
+ */
+onNewNodesAvailabilityLanded((waiting) => {
+  const state = useWorkflowStore.getState()
+  if (state.isReadOnly) return
+  let moved = false
+  const nodes = state.nodes.map((node) => {
+    const made = waiting.get(node.id)
+    if (!made || node.type !== made.type) return node
+    const data = node.data as Record<string, unknown>
+    const models = newNodeModelsOf(made.type, data)
+    if (models.length !== made.models.length || models.some((m, i) => m !== made.models[i])) return node
+    const next = withOfferedNewNodeModels(made.type, data)
+    if (next === data) return node
+    moved = true
+    return { ...node, data: next as SceneNodeData }
+  })
+  if (!moved) return
+  setSkipUndoCapture(true)
+  try {
+    useWorkflowStore.setState({ nodes, isDirty: true })
+  } finally {
+    setSkipUndoCapture(false)
+  }
+})

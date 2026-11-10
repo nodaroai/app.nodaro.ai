@@ -36,6 +36,7 @@ import { useT } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
 import { formatDate } from "@/lib/i18n/format"
 import { useDocsPageUrl } from "@/lib/node-docs/node-docs"
+import { publicLinkOrigin } from "@/lib/public-links"
 
 export default function ApiSettingsPage() {
   const t = useT()
@@ -209,31 +210,31 @@ export default function ApiSettingsPage() {
           <CodeExample
             title={t("apiTok.exGetSchema")}
             code={`curl -H 'Authorization: Bearer YOUR_TOKEN' \\
-  '${window.location.origin}/v1/api/schema?workflowId=WORKFLOW_ID'`}
+  '${publicLinkOrigin()}/v1/api/schema?workflowId=WORKFLOW_ID'`}
           />
           <CodeExample
             title={t("apiTok.exRunAsync")}
             code={`curl -X POST -H 'Authorization: Bearer YOUR_TOKEN' \\
   -H 'Content-Type: application/json' \\
-  '${window.location.origin}/v1/api/run' \\
+  '${publicLinkOrigin()}/v1/api/run' \\
   -d '{"workflowId": "WORKFLOW_ID", "inputs": {"node_id": {"text": "A sunset"}}}'`}
           />
           <CodeExample
             title={t("apiTok.exRunSync")}
             code={`curl -X POST -H 'Authorization: Bearer YOUR_TOKEN' \\
   -H 'Content-Type: application/json' \\
-  '${window.location.origin}/v1/api/run?wait=true&timeout=120' \\
+  '${publicLinkOrigin()}/v1/api/run?wait=true&timeout=120' \\
   -d '{"workflowId": "WORKFLOW_ID", "inputs": {"node_id": {"text": "A sunset"}}}'`}
           />
           <CodeExample
             title={t("apiTok.exCheckStatus")}
             code={`curl -H 'Authorization: Bearer YOUR_TOKEN' \\
-  '${window.location.origin}/v1/api/status/EXECUTION_ID'`}
+  '${publicLinkOrigin()}/v1/api/status/EXECUTION_ID'`}
           />
           <CodeExample
             title={t("apiTok.exGetResult")}
             code={`curl -H 'Authorization: Bearer YOUR_TOKEN' \\
-  '${window.location.origin}/v1/api/result/EXECUTION_ID'`}
+  '${publicLinkOrigin()}/v1/api/result/EXECUTION_ID'`}
           />
         </div>
 
@@ -249,7 +250,7 @@ export default function ApiSettingsPage() {
               <span> {t("apiTok.cliDesc")}</span>
             </li>}
             <li>
-              <a className="text-primary-ink hover:underline" href={`${window.location.origin}/v1/openapi.json`} target="_blank" rel="noreferrer">{t("apiTok.openapiLink")}</a>
+              <a className="text-primary-ink hover:underline" href={`${publicLinkOrigin()}/v1/openapi.json`} target="_blank" rel="noreferrer">{t("apiTok.openapiLink")}</a>
               <span> {t("apiTok.openapiDesc")}</span>
             </li>
             {surfacePlatformLinks() && <li>

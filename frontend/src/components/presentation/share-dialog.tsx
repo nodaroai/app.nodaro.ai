@@ -26,6 +26,7 @@ import { CollaboratorsPanel } from "./collaborators-panel"
 import type { PresentationSettings, PresentationViewMode } from "@/hooks/use-workflow-store"
 import { VIEW_MODES, ALL_VIEW_MODES } from "./view-mode-selector"
 import { getNodeLabel } from "@/lib/presentation-utils"
+import { presentationShareUrl } from "@/lib/public-links"
 import type { WorkflowNode } from "@/types/nodes"
 
 interface ShareDialogProps {
@@ -57,7 +58,7 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
   const refetchAccess = useCallback(() => { void refetch() }, [refetch])
 
   const shareUrl = shareToken
-    ? `${window.location.origin}/present/${shareToken}`
+    ? presentationShareUrl(shareToken)
     : ""
 
   const handleShare = useCallback(async () => {

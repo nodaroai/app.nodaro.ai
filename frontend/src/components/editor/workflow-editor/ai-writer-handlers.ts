@@ -7,6 +7,7 @@ import type {
   LLMChatData,
 } from "@/types/nodes";
 import { NODE_DEFINITIONS } from "@/types/nodes";
+import { noteNewNodesFromDefaults, withOfferedNewNodeModels } from "@/components/editor/config-panels/new-node-models";
 import { executeNode } from "./execute-node";
 import type { ExecutionContext } from "./types";
 import { tx } from "@/lib/i18n";
@@ -101,7 +102,8 @@ export function handleCreateNodesFromWriter(writerNodeId: string): void {
   }
 
   const imgDef = NODE_DEFINITIONS.find((d) => d.type === "generate-image");
-  const imgDefaults = imgDef?.defaultData ?? {};
+  // On a model the deployment offers, as any node made from its defaults starts.
+  const imgDefaults = withOfferedNewNodeModels("generate-image", { ...(imgDef?.defaultData ?? {}) } as Record<string, unknown>);
 
   const newNodes: WorkflowNode[] = [];
   const newEdges: WorkflowEdge[] = [];
@@ -169,6 +171,7 @@ export function handleCreateNodesFromWriter(writerNodeId: string): void {
   }
 
   store.batchAddNodesAndEdges(newNodes, newEdges);
+  noteNewNodesFromDefaults(createdIds.map((id) => ({ id, type: "generate-image", data: imgDefaults })));
   store.updateNodeData(writerNodeId, { createdNodeIds: createdIds });
   const refs = [
     faceNode ? tx("nodeRun.refFace") : "",

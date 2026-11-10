@@ -46,6 +46,7 @@ import { surfaceAvailabilityRoutes } from "../surface-availability.js"
 import {
   __resetAvailabilityOverridesForTests,
   __availabilityUniverseReadyForTests,
+  GATEABLE_MODEL_IDS,
 } from "../../lib/availability-override.js"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
 import { __resetModelSwitchForTests } from "../../lib/model-switch.js"
@@ -91,7 +92,7 @@ describe("GET /v1/surface/availability", () => {
     for (const who of [USER, ADMIN]) {
       const body = (await get(who)).json()
       expect(body.nodes).toEqual({ denied: [], hiddenFromUsers: [] })
-      expect(body.models).toEqual({ denied: [] })
+      expect(body.models).toEqual({ denied: [], restricted: false })
     }
   })
 
@@ -101,6 +102,31 @@ describe("GET /v1/surface/availability", () => {
       const body = (await get(who)).json()
       expect(body.models.denied).toEqual(["flux-flex"])
     }
+  })
+
+  // `restricted` is what the editor reads to decide whether a new node may start
+  // on another model than its default; a switched-off row alone is no restriction.
+  it("says whether the deployment restricts models — never for a switched-off row alone", async () => {
+    __resetModelSwitchForTests(["flux-flex"])
+    expect((await get(USER)).json().models.restricted).toBe(false)
+
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ models: { allow: ["flux-flex"] } })
+    __resetSurfaceProfileCacheForTests()
+    expect((await get(USER)).json().models.restricted).toBe(true)
+
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ models: { deny: ["gpt-image-2"] } })
+    __resetSurfaceProfileCacheForTests()
+    expect((await get(ADMIN)).json().models.restricted).toBe(true)
+  })
+
+  it("a models override restricts only when it leaves a gateable model off", async () => {
+    __resetAvailabilityOverridesForTests({ models: new Set(GATEABLE_MODEL_IDS) })
+    expect((await get(USER)).json().models.restricted).toBe(false)
+
+    __resetAvailabilityOverridesForTests({ models: new Set([...GATEABLE_MODEL_IDS].filter((id) => id !== "flux-flex")) })
+    const body = (await get(USER)).json()
+    expect(body.models.restricted).toBe(true)
+    expect(body.models.denied).toContain("flux-flex")
   })
 
   it("a user gets the hidden nodes as denied and is told nothing about what is hidden", async () => {

@@ -1,12 +1,14 @@
+// @test-watches backend/src/routes/pro-3d-render.ts backend/src/routes/3d-scene.ts
 /**
  * TOTALITY: every credit guard decides how a deployment's model restriction
  * judges the model its request RUNS on.
  *
- * The guard's own deny reads the raw `provider` (and generate-image's
- * `models`). A request that names no model runs on a default its route fills
- * in AFTER the guard; a route priced on a composite or a feature id
- * (`gpt-image-2-6-sunburst:medium:1K`, `llm-chat`) never shows the guard the
- * model; and a route whose model field is not `provider` (`llmModel`, Suno's
+ * The guard's own deny reads the raw `provider` when it is the model the
+ * route's node runs (an engine name is not: lib/provider-model.ts), and
+ * generate-image's `models`. A request that names no model runs on a default
+ * its route fills in AFTER the guard; a route priced on a composite or a
+ * feature id (`gpt-image-2-6-sunburst:medium:1K`, `llm-chat`) never shows the
+ * guard the model; and a route whose model field is not `provider` (`llmModel`, Suno's
  * `model`) is invisible to it. Each of those ran a model a deployment withheld
  * with `models.allow` / `models.deny`, at the deployment's expense. So every
  * guard either declares the model its request runs on (`runModel`, or the
@@ -27,6 +29,8 @@
  */
 import { describe, it, expect, expectTypeOf, vi, beforeAll, afterAll } from "vitest"
 import type { FastifyInstance, FastifyRequest } from "fastify"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 
 const h = vi.hoisted(() => {
   const routes: Array<{ method: string; url: string; preHandlers: unknown[] }> = []
@@ -137,7 +141,6 @@ const RUN_MODEL_EXEMPT: Readonly<Record<string, string>> = {
   "POST /v1/video-mask": OUTSIDE_CATALOG,
   "POST /v1/audio-separation": OUTSIDE_CATALOG,
   "POST /v1/voice-remix": OUTSIDE_CATALOG,
-  "POST /v1/video-retake": OUTSIDE_CATALOG,
   "POST /v1/speech-to-video": OUTSIDE_CATALOG,
   "POST /v1/ai-avatar": OUTSIDE_CATALOG,
   "POST /v1/cinematic-avatar": OUTSIDE_CATALOG,
@@ -401,13 +404,39 @@ describe("every declared run model is total and speaks the deny's vocabulary", (
   })
 })
 
+/**
+ * The host's routes whose handler hands the request to a plugin engine that
+ * runs the credit guard (3D Render Pro's run and preview admissions). They are
+ * registered here, but that guard — and its `runModel` — is the plugin's, so
+ * this file never judges it (the 3D scene routes' own Basic guard is judged
+ * above, as an inline guard). Each names the engine dispatcher its route file
+ * calls.
+ */
+const HANDED_TO_A_PLUGIN_ENGINE: Readonly<Record<string, { readonly file: string; readonly dispatch: string }>> = {
+  "/v1/pro-3d-render": { file: "routes/pro-3d-render.ts", dispatch: "dispatchPro3DRender" },
+  "/v1/3d-scene/generate": { file: "routes/3d-scene.ts", dispatch: "dispatchAdvancedScene3D" },
+  "/v1/generate-3d-scene": { file: "routes/3d-scene.ts", dispatch: "dispatchAdvancedScene3D" },
+  "/v1/3d-scene/edit": { file: "routes/3d-scene.ts", dispatch: "dispatchAdvancedScene3D" },
+  "/v1/edit-3d-scene": { file: "routes/3d-scene.ts", dispatch: "dispatchAdvancedScene3D" },
+}
+
 describe("the Cloud plugin's routes declare it plugin-side", () => {
+  const routeKey = (r: string) => r.replace(/:[A-Za-z_][A-Za-z0-9_]*/g, ":")
+
   it("the toolkit's guard options carry the same `runModel`", () => {
     expectTypeOf<NonNullable<PluginCreditGuardOpts["runModel"]>>().toEqualTypeOf<NonNullable<CreditGuardOpts["runModel"]>>()
   })
 
-  it("none of the plugin's routes is registered here (so none is judged by this file)", () => {
-    const urls = new Set(h.routes.map((r) => r.url.replace(/:[A-Za-z_][A-Za-z0-9_]*/g, ":")))
-    expect(PLUGIN_CREDIT_GUARDED_ROUTES.filter((r) => urls.has(r.replace(/:[A-Za-z_][A-Za-z0-9_]*/g, ":")))).toEqual([])
+  it("a plugin-guarded route registered here is one whose handler hands the request to a plugin engine (so no plugin guard is judged by this file)", () => {
+    const urls = new Set(h.routes.map((r) => routeKey(r.url)))
+    expect(PLUGIN_CREDIT_GUARDED_ROUTES.filter((r) => urls.has(routeKey(r))).sort()).toEqual(Object.keys(HANDED_TO_A_PLUGIN_ENGINE).sort())
+  })
+
+  it("each of those is the plugin's, and its route file hands it to the engine", () => {
+    for (const [route, { file, dispatch }] of Object.entries(HANDED_TO_A_PLUGIN_ENGINE)) {
+      expect(PLUGIN_CREDIT_GUARDED_ROUTES, route).toContain(route)
+      const src = readFileSync(join(__dirname, "..", file), "utf8")
+      expect(src.includes(`${dispatch}(`), `${file} calls ${dispatch}`).toBe(true)
+    }
   })
 })
