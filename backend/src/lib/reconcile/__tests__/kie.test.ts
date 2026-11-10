@@ -546,8 +546,9 @@ describe("reconcileKieJob", () => {
         .mockResolvedValueOnce({ resultJson: { resultUrls: ["https://cdn.example/out.mp4"] } })
       mocks.resubmitMock.mockResolvedValueOnce({ outcome: "resent", taskId: "t-edit-2" })
       await reconcileKieJob(row, { claimant: "worker", pollAttempts: 7 })
-      expect(mocks.pollKieTaskMock).toHaveBeenNthCalledWith(1, "t-edit-1", 7)
-      expect(mocks.pollKieTaskMock).toHaveBeenNthCalledWith(2, "t-edit-2", 7)
+      // The job's settings are in hand and name no ratio a person picks.
+      expect(mocks.pollKieTaskMock).toHaveBeenNthCalledWith(1, "t-edit-1", 7, undefined, { requestedAspectRatio: null })
+      expect(mocks.pollKieTaskMock).toHaveBeenNthCalledWith(2, "t-edit-2", 7, undefined, { requestedAspectRatio: null })
       expect(mocks.refundMock).not.toHaveBeenCalled()
       expect(mocks.finalizeMock).toHaveBeenCalledTimes(1)
       expect(mocks.finalizeMock.mock.calls[0]![0]).toMatchObject({ claimant: "worker" })
@@ -932,7 +933,16 @@ describe("reconcileKieJob pollAttempts threading", () => {
       { id: "j-pa", provider_kind: "kie-standard", provider_task_id: "t-pa", reconcile_attempts: 0, job_type: "generate-image" },
       { claimant: "worker", pollAttempts: 120 },
     )
-    expect(mocks.pollKieTaskMock).toHaveBeenCalledWith("t-pa", 120)
+    expect(mocks.pollKieTaskMock).toHaveBeenCalledWith("t-pa", 120, undefined, { requestedAspectRatio: undefined })
+  })
+
+  it("kie-standard: the ratio the job's own settings chose rides the poll, for the failure sentence", async () => {
+    mocks.pollKieTaskMock.mockResolvedValueOnce(successPoll)
+    await reconcileKieJob(
+      { id: "j-ar", provider_kind: "kie-standard", provider_task_id: "t-ar", reconcile_attempts: 0, job_type: "generate-image", input_data: { aspectRatio: "3:2" } },
+      { claimant: "worker", pollAttempts: 120 },
+    )
+    expect(mocks.pollKieTaskMock).toHaveBeenCalledWith("t-ar", 120, undefined, { requestedAspectRatio: "3:2" })
   })
 
   it("kie-standard: defaults to a single probe when opts.pollAttempts is absent (cron path unchanged)", async () => {
@@ -940,7 +950,7 @@ describe("reconcileKieJob pollAttempts threading", () => {
     await reconcileKieJob(
       { id: "j-pa-default", provider_kind: "kie-standard", provider_task_id: "t-pa1", reconcile_attempts: 0, job_type: "generate-image" },
     )
-    expect(mocks.pollKieTaskMock).toHaveBeenCalledWith("t-pa1", 1)
+    expect(mocks.pollKieTaskMock).toHaveBeenCalledWith("t-pa1", 1, undefined, { requestedAspectRatio: undefined })
   })
 
   it("kie-kontext + kie-luma: pollAttempts forwarded to their pollers too", async () => {

@@ -808,6 +808,7 @@
         "backend/src/providers/elevenlabs/voice-changer.ts",
         "backend/src/providers/elevenlabs/voice-settings.ts",
         "backend/src/providers/image/overlay-contract.ts",
+        "backend/src/providers/kie/aspect-ratio-sentence.ts",
         "backend/src/providers/kie/audio.ts",
         "backend/src/providers/kie/client.ts",
         "backend/src/providers/kie/egress-dimensions.ts",
