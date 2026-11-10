@@ -36,6 +36,9 @@ export const RESTYLE_PREVIEWS: Readonly<Record<string, RestylePreview>> = {
   // Source shot: https://cdn.nodaro.ai/picker-renders/4a70c22d-04f0-4b5a-90d4-e9dd7ddb01c4.mp4
   // Generated, no wipe: https://cdn.nodaro.ai/picker-renders/5ab33529-ef2a-42bc-a625-d6b1abfeef1c.mp4
   "felt-puppet": { url: "https://cdn.nodaro.ai/picker-renders/3aa3c81b-ba19-4776-becc-e0c47c700699.mp4" },
+  // Source shot: https://cdn.nodaro.ai/picker-renders/acf379d4-704b-40e5-a5d2-657341f1278a.mp4
+  // Generated, no wipe: https://cdn.nodaro.ai/picker-renders/d3da4317-461f-4a10-a1e6-3d141fbb7802.mp4
+  "low-poly": { url: "https://cdn.nodaro.ai/picker-renders/4a5b1b1a-c3a4-46d4-9623-f57e80fcbb68.mp4", stillAtSeconds: 7 },
   // Source shot: https://cdn.nodaro.ai/picker-renders/b1e77bdc-7c58-4cd8-a2d6-fd49379fee9e.mp4
   // Generated, no wipe: https://cdn.nodaro.ai/picker-renders/a9aeca2d-bcd6-477b-80d7-5e6454ee2c25.mp4
   "oil-painting": { url: "https://cdn.nodaro.ai/picker-renders/73c98260-9444-45e7-bccb-040b5d33fb53.mp4" },
