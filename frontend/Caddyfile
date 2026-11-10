@@ -361,6 +361,14 @@
 	}
 	header @spa_document Supports-Loading-Mode "credentialed-prerender"
 
+	# A deployment search engines must never index (a staging environment):
+	# ROBOTS_NOINDEX=true sends X-Robots-Tag: noindex on every response, whatever
+	# serves it. Unset, or any value but "true", the site is unchanged and the
+	# route allow-list below decides alone. Read per request as {env.…}, never
+	# pasted into the config text, so no value (a quote, a backslash) can stop
+	# Caddy from starting. Changing it needs a restart, never a new build.
+	@robots_noindex expression `{env.ROBOTS_NOINDEX} == "true"`
+	header @robots_noindex X-Robots-Tag "noindex"
 	# Which SPA routes search engines may index: an allow-list, so a route
 	# added later stays out of search unless it is listed here on purpose.
 	# Indexable: "/", /login and /signup (a search for the brand finds the
