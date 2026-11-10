@@ -79,9 +79,10 @@ function plainList(first: number, last: number): string {
  *
  * `image N` (Gemini Omni Flash 1.2) is plain words, each sentence stating what
  * an image IS: "image 3 is the opening (first) frame of the video. image 1 and
- * image 2 are references for the subject; they are not frames." That exact
- * wording put a start frame beside two references on screen as the opening
- * frame in a staging run, where the `@image_N` sentences opened on a reference.
+ * image 2 are references for the subject; they are not frames." It is the form
+ * KIE's own example uses. In staging runs neither wording made 1.2 open on the
+ * frame: beside references the frame is one more reference, so the sentence
+ * guides the clip and never makes the frame exact.
  */
 export function imageBindingFor(syntax: ImageReferenceSyntax): ImageBinding {
   if (syntax === "image N") {

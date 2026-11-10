@@ -2759,7 +2759,8 @@ so a value the model doesn't support is ignored, never a 400:
   `aspectRatio` `16:9` / `9:16` / `auto`, and up to 6 reference images (5 beside
   a source video). A start frame alone, or a start and end frame up to 10 s, are
   exact frames; with references wired, or past 10 s, the frames join the
-  reference list and are named in the prompt. A source video is edited and
+  reference list and are named in the prompt, where they guide the clip but are
+  not exact frames. A source video is edited and
   charged by its own length, up to 15 s (`videoTrimStart` / `videoTrimEnd` pick
   the stretch, a window of up to 15 s; otherwise a longer clip uses its first
   15 s). It takes no `characterReferences`. See

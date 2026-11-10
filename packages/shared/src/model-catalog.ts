@@ -312,9 +312,9 @@ export interface ModelCatalogEntry {
    * Declared only where the provider documents its own form: Grok Imagine's
    * `@image(n)` (docs.kie.ai/market/grok-imagine/image-to-video) and
    * HappyHorse's `[Image N]` (docs.kie.ai/market/happyhorse-1-1/reference-to-video).
-   * Gemini Omni Flash 1.2 documents none and takes plain `image N`: with
-   * `@image_N` sentences a start frame beside references opened on a reference
-   * in a staging run; with plain words it opened on the frame.
+   * Gemini Omni Flash 1.2 documents none and is written plain `image N`, the
+   * form of KIE's own example; beside references its frames only guide the
+   * clip, in either wording.
    */
   referenceSyntax?: "@image(n)" | "[Image N]" | "image N"
   aspectRatios?: readonly string[]

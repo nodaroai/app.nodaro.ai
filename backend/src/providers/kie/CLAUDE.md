@@ -290,7 +290,10 @@ builds an allow-listed body:
   images (`placeFramesAfterReferences`), named in the prompt in plain words
   (`referenceSyntax: "image N"`: "image 3 is the opening (first) frame of the
   video. image 1 and image 2 are references for the subject; they are not
-  frames."). The `@image_N` sentences opened on a reference in a staging run.
+  frames."). There the frame only GUIDES the clip: staging runs (2026-11-10)
+  never opened on it, in this wording or the `@image_N` one, and KIE's schema
+  says `image_urls` is not a first frame. Only the real-frame mode is exact; the
+  editor's `FramesAndReferencesTip` and the docs say so.
 - **Video edit:** `video_list` is one plain URL, up to 15 s, and `duration` must
   not be sent; the output follows the clip. KIE has no trim fields, so
   `prepareGeminiOmni12Source` cuts the clip (the node's trim, else its first 15 s)
