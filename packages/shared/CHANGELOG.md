@@ -1,5 +1,15 @@
 # @nodaro/shared
 
+## 3.57.0
+
+### Minor Changes
+
+- 6c9df11: Add Gemini Omni Flash 1.2 (`gemini-omni-flash-1-2`): 3-15 second video with native sound from 360p to 4K, from text, reference images, exact first and last frames, or a video edit, priced per second.
+
+### Patch Changes
+
+- 838ae6d: Seedance 2.5 now lists `v2v` among its catalog modes: it edits a clip through `/v1/video-to-video`, like the other edit models, and still makes a clip from words or a picture.
+
 ## 3.56.0
 
 ### Minor Changes
