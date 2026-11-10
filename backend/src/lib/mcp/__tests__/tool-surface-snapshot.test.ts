@@ -1449,6 +1449,12 @@ const SPEAKER_VIEW_TOOL_BYTES = 4_079
 // 521_372 total − 521_325 = 47 B (speaker_view 4_079 → 4_126).
 const SPEAKER_VIEW_REGION_LIMITS_BYTES = 47
 
+// RAISED 2026-11-10 by `errorDetail` on the job envelope (`JOB_VIEW_SCHEMA`, the outputSchema of
+// get_job and wait_for_job): the provider's own words for a failure beside `errorMessage`, with
+// its one-sentence description. No tool was added, so the fixture does NOT move. Measured by this
+// suite on the same dev tree: 516_452 total − 516_332 = 120 B.
+const JOB_ERROR_DETAIL_BYTES = 120
+
 // RAISED 2026-11-09 by the owned-settings guard on `update_workflow_json`, and nothing else: its
 // `settings` argument gains a one-sentence description (a stored key another writer owns —
 // `studio`, `mcpConversation`, `mcpHub` — comes back unchanged or the write is refused), and
@@ -1637,6 +1643,7 @@ export const TOOL_WIRE_BUDGET = {
     VOICE_FAVORITES_TOOLS_BYTES +
     GPT_IMAGE_2_6_TOTAL_BYTES +
     OWNED_SETTINGS_GUARD_BYTES +
+    JOB_ERROR_DETAIL_BYTES +
     GEMINI_OMNI_FLASH_1_2_BYTES +
     ESTIMATE_USE_CASE_TOOL_BYTES +
     SPEAKER_VIEW_TOOL_BYTES +

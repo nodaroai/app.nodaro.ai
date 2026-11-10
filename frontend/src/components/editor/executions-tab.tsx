@@ -18,6 +18,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { ExecutionDetailModal } from "./execution-detail-modal"
+import { NodeStateErrorText } from "./node-state-error-text"
 import { TriggerBadge } from "@/components/library/triggers/TriggerBadge"
 import { RetryBadge } from "@/components/library/triggers/RetryBadge"
 import {
@@ -737,7 +738,7 @@ function ExecutionRow({
                                     <AlertCircle className="w-3 h-3 text-red-400 ms-1 inline" />
                                   </TooltipTrigger>
                                   <TooltipContent side="right" className="max-w-xs">
-                                    <p className="text-xs">{state.error}</p>
+                                    <NodeStateErrorText state={state} />
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>

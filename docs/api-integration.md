@@ -1746,6 +1746,27 @@ job payload that carries `error_message`: `GET /v1/jobs`, `GET /v1/jobs/:id`,
 `GET /v1/jobs/:id/status`, `GET /v1/jobs/status`, and
 `POST /v1/jobs/batch-status`.
 
+#### The provider's own words (`error_detail`)
+
+Beside `error_message` — the platform's sentence about what went wrong — a
+failed job carries `error_detail`: what the provider itself said, as the
+server stored it when the job failed. Links in it are cut to their host and
+secrets are removed; otherwise the words are the provider's, verbatim (for
+example `task failed: [400] Request blocked: The uploaded image may contain
+protected or restricted IP content.`). It is `null` when the failure had no
+provider text (a refusal before anything was sent, a timeout, a queue wait that
+ran out) and absent on an older server. Display it next to `error_message`;
+branch on `error_hint`, never on these words. The same job payloads carry it
+(`GET /v1/jobs`, `GET /v1/jobs/:id`, `GET /v1/jobs/:id/status`,
+`GET /v1/jobs/status`, `POST /v1/jobs/batch-status`, and the job inside a
+`job.failed` webhook event), and a failed node of a
+workflow run carries it as `errorDetail` on its entry in `nodeStates`
+(`GET /v1/workflow-executions/:id`); a node that fails inside a sub-workflow
+hands its words to the sub-workflow node's entry. Two exceptions: a trend run's words are
+withheld along with its text (they can quote its hidden input), and a published
+app's runner never receives them (they can quote the creator's prompt) — the
+app run endpoints answer without `errorDetail`.
+
 `POST /v1/text-to-video` takes an optional `contentPolicyRewrite` boolean. Absent
 or `true`, a `copyright` refusal is retried once with a reworded prompt (the job's
 output then carries `contentPolicyRewrite: { original, rewritten }`);

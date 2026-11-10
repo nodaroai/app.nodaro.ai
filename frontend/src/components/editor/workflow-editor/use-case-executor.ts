@@ -49,6 +49,7 @@ import { usecaseEpisodeOf, usecaseFailedRunFields, usecaseJsonFields, usecaseLis
 import { isInputWarningCode } from "@/lib/input-warning-codes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { tx } from "@/lib/i18n"
+import { caughtErrorWords } from "@/lib/failed-job-error"
 import { usecaseLabelVars } from "@/lib/use-case-request-body"
 import type { WorkflowNode } from "@/types/nodes"
 import { nodeRunError } from "./node-run-message"
@@ -239,6 +240,7 @@ const landText: Landing = async (nodeId, nodeType, start, ctx) => {
       executionStatus: "failed",
       errorMessage: message,
       errorHint: blocked ? { kind: "policy-block", policyId: "", reason: message, hookPoint: "request" } : ((err as { errorHint?: unknown } | null)?.errorHint ?? undefined),
+      ...caughtErrorWords(err),
       ...(warning ? { errorCode: code } : {}),
       currentJobId: undefined,
       currentJobProgress: undefined,

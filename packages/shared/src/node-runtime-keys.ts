@@ -25,6 +25,9 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   // lifecycle as errorMessage: a RESULT the user expects to survive reload,
   // never user-edited config.
   "errorHint",
+  // The provider's own words for the failure (the job's `error_detail`),
+  // beside errorMessage and with its lifecycle: a result, never config.
+  "errorDetail",
   // A job policy registered by the deployment held this node's result for a
   // human reviewer (`jobs.status = "pending_review"`). Pure run state, like
   // executionStatus: the node is still "running" and the flag disappears the

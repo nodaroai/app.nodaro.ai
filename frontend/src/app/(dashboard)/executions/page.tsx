@@ -52,6 +52,7 @@ import { RetryBadge } from "@/components/library/triggers/RetryBadge"
 import { ExecutionDetailModal } from "@/components/editor/execution-detail-modal"
 import { useBackToClose } from "@/hooks/use-back-to-close"
 import { getJobStatus, type GlobalExecution } from "@/lib/api"
+import { NodeStateErrorText } from "@/components/editor/node-state-error-text"
 import { StatsOverview } from "@/components/dashboard/stats-overview"
 import { STATISTICS_KEY } from "@/components/dashboard/home/home-tabs"
 import { surfaceTabs } from "@/lib/surface-selectors"
@@ -574,7 +575,7 @@ function GlobalExecutionRow({
                                     <AlertCircle className="w-3 h-3 text-red-400 ms-1 inline" />
                                   </TooltipTrigger>
                                   <TooltipContent side="right" className="max-w-xs">
-                                    <p className="text-xs">{state.error}</p>
+                                    <NodeStateErrorText state={state} />
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>

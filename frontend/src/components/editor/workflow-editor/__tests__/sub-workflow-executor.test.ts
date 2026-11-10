@@ -353,6 +353,33 @@ describe("executeSubWorkflow", () => {
       )
     })
 
+    it("a child node's failure shows on the sub-workflow node with the provider's words", async () => {
+      setupSuccessfulExecution()
+      const words = "Request blocked: The uploaded image may contain protected or restricted IP content."
+      mockExecuteNode.mockRejectedValue(
+        Object.assign(new Error("The model declined one of your pictures."), { errorDetail: words }),
+      )
+      const node = makeNode("sw-1", "sub-workflow", {
+        referencedWorkflowId: "wf-123",
+        selectedRouteId: "route-1",
+        routeSnapshot: {
+          routeId: "route-1",
+          inputLabel: "Process",
+          inputPorts: [{ id: "p1", name: "Prompt", mediaType: "text" }],
+          outputPorts: [{ id: "op1", name: "Image", mediaType: "image" }],
+          visibleOutputPortId: "op1",
+        },
+      })
+
+      await expect(executeSubWorkflow(node, mockCtx)).rejects.toThrow("The model declined one of your pictures.")
+
+      expect(mockUpdateNodeData).toHaveBeenCalledWith("sw-1", expect.objectContaining({
+        executionStatus: "failed",
+        errorMessage: "The model declined one of your pictures.",
+        errorDetail: words,
+      }))
+    })
+
     it("marks node as completed on success", async () => {
       setupSuccessfulExecution()
       const node = makeNode("sw-1", "sub-workflow", {

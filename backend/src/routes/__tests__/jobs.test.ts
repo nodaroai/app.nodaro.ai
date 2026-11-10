@@ -155,7 +155,7 @@ describe("sanitizeJobForPublic", () => {
     expect(regular.input_data).toEqual({ requested: [{ gain: 35 }] })
   })
 
-  it("is an allowlist: unknown columns never reach any caller, error_detail reaches admins only", () => {
+  it("is an allowlist: unknown columns never reach any caller; the provider's words (error_detail) reach the owner and admins alike", () => {
     const withExtra = { ...sampleJob, future_secret_column: "x" } as unknown as JobRecord
     const admin = sanitizeJobForPublic(withExtra, true) as unknown as Record<string, unknown>
     const regular = sanitizeJobForPublic(withExtra, false) as unknown as Record<string, unknown>
@@ -163,7 +163,7 @@ describe("sanitizeJobForPublic", () => {
     expect("future_secret_column" in admin).toBe(false)
     expect("future_secret_column" in regular).toBe(false)
     expect(admin.error_detail).toBe("task failed: [400] aspect_ratio 3:2 not allowed")
-    expect("error_detail" in regular).toBe(false)
+    expect(regular.error_detail).toBe("task failed: [400] aspect_ratio 3:2 not allowed")
   })
 
   it("admins keep input_data internals; regular users get them stripped (parity with the pre-allowlist code)", () => {
@@ -181,7 +181,7 @@ describe("sanitizeJobForPublic", () => {
     const regular = sanitizeJobForPublic(sampleJob, false) as unknown as Record<string, unknown>
     expect(Object.keys(regular).sort()).toEqual(
       [
-        "id", "status", "progress", "input_data", "output_data", "error_message",
+        "id", "status", "progress", "input_data", "output_data", "error_message", "error_detail",
         "created_at", "started_at", "completed_at", "user_id", "credits", "job_type",
       ].sort(),
     )
@@ -474,7 +474,7 @@ describe("GET /v1/jobs/status", () => {
     // `lane_queued_at` is the clock of a waiting job's `queue.waitedSeconds`,
     // read and then removed before answering (jobs-queue.test.ts pins that).
     expect(capturedSelect).toEqual([
-      "id", "status", "progress", "output_data", "error_message", "error_hint", "usage_log_id",
+      "id", "status", "progress", "output_data", "error_message", "error_detail", "error_hint", "usage_log_id",
       "job_type", "input_quality:input_data->>quality", "trend_run_marker:input_data->trend", "lane_queued_at",
     ])
     for (const secret of ["provider_cost", "display_cost", "credits", "provider"]) {

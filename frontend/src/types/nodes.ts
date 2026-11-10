@@ -1902,6 +1902,10 @@ export type GenerateImageData = PromptAffixFields & {
    *  alongside `errorMessage` on failure, cleared alongside it on the next
    *  run/success. */
   errorHint?: JobErrorHint
+  /** The provider's own words for the failure (the job's `error_detail`:
+   *  links cut to their host, secrets removed), shown beside `errorMessage`
+   *  and cleared with it. Display only — never branch on it. */
+  errorDetail?: string
   /** True while this node's job is parked in `pending_review` — generated, but
    *  its output is withheld pending a human review. Written ONLY by the poll
    *  loops (`getJobStatusLeanForNode`) and the orchestrator stream; the

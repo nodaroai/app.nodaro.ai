@@ -3004,6 +3004,7 @@ interface JobPollRow {
   credits_actual: number | null
   credits: number | null
   error_hint: unknown
+  error_detail?: string | null
   slot_wait_ms?: number | null
   lane_wait_ms?: number | null
 }
@@ -3109,7 +3110,7 @@ async function pollJobToCompletion(
     // `slot_wait_ms` (migration 451) and `lane_wait_ms` (migration 568) only
     // once each has reached this shared database: naming a missing column
     // fails the whole select (poll-job-row.ts drops exactly the missing one).
-    const POLL_COLUMNS = "status, output_data, error_message, progress, credits_actual, credits, error_hint"
+    const POLL_COLUMNS = "status, output_data, error_message, progress, credits_actual, credits, error_hint, error_detail"
     const { data: jobRecord } = await readPollJobRow<JobPollRow>(jobId, POLL_COLUMNS)
 
     if (!jobRecord) {
@@ -3177,13 +3178,18 @@ async function pollJobToCompletion(
 
     if (status === "failed" || status === "cancelled") {
       const errorMsg = (jobRecord.error_message as string) ?? `Job ${status}`
-      const err = new Error(errorMsg) as Error & { errorCode?: string; errorHint?: ErrorHint; output?: NodeOutput }
+      const err = new Error(errorMsg) as Error & { errorCode?: string; errorHint?: ErrorHint; errorDetail?: string; output?: NodeOutput }
       // Mirrors the mapped-billing-refusal errorCode precedent above:
       // the caller (orchestrator-worker.ts) copies this onto
       // nodeStates[nodeId] so the editor/MCP can act on it without
       // re-parsing the error_message prose.
       const hint = jobRecord.error_hint as ErrorHint | null | undefined
       if (hint) err.errorHint = hint
+      // …and the provider's own words (`jobs.error_detail`, redacted at the
+      // write): the owner reads them beside the sentence, in the editor's run
+      // history and over the API. Display only; never classified from.
+      const detail = jobRecord.error_detail
+      if (typeof detail === "string" && detail !== "") err.errorDetail = detail
       // …and so does what the refused run RETAINED. `failed` only: a CANCELLED
       // job never published a result, and a refund is in flight for it.
       if (status === "failed") {

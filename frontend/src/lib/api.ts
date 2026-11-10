@@ -6416,6 +6416,9 @@ export interface Job {
     [key: string]: unknown
   }
   error_message?: string
+  /** The provider's own words for the failure (links cut to their host,
+   *  secrets removed); null when the failure had none. Display only. */
+  error_detail?: string | null
   /** Structured detail for a blocked job — a PROVIDER safety-filter block
    *  (after the backend's automatic retry) or a NODARO job-policy block.
    *  Discriminated on `kind`; see `JobErrorHint`. */
@@ -6475,6 +6478,8 @@ export type JobStatusLean = {
   // (`job.output_data?.imageUrl`, etc.) keep their precise field types.
   output_data?: Job["output_data"]
   error_message?: string
+  /** See `Job.error_detail`. */
+  error_detail?: string | null
   /** See `Job.error_hint`. */
   error_hint?: JobErrorHint | null
   /** When the job finished, on the server's clock (null until it has): a result the editor lands from it is stamped with it. */
@@ -6536,6 +6541,8 @@ export interface BatchJobStatus {
   status: string
   output_data: { imageUrl?: string; videoUrl?: string; audioUrl?: string; script?: unknown } | null
   error_message: string | null
+  /** See `Job.error_detail`. */
+  error_detail?: string | null
   /** See `Job.error_hint`. */
   error_hint?: JobErrorHint | null
 }

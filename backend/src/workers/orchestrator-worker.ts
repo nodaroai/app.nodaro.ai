@@ -2129,6 +2129,9 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
           // PR9: a worker safety-block verdict rides the same way (attached
           // at pollJobToCompletion's throw site, node-executor.ts).
           const errorHint = (result.reason as { errorHint?: NodeExecutionState["errorHint"] } | null)?.errorHint
+          // …and the provider's own words for the failure (`jobs.error_detail`,
+          // attached at the same throw site), for the owner to read beside `error`.
+          const errorDetail = (result.reason as { errorDetail?: unknown } | null)?.errorDetail
           // …and so does what a refused run RETAINED (`retainedOutputOfFailedJob`,
           // attached at the same throw site). This object is built FRESH on every
           // failure, so anything not copied here is gone: before `output` was
@@ -2152,6 +2155,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
             error,
             ...(errorCode ? { errorCode } : {}),
             ...(errorHint ? { errorHint } : {}),
+            ...(typeof errorDetail === "string" && errorDetail !== "" ? { errorDetail } : {}),
             ...(output ? { output } : {}),
             ...(charged ? { creditsUsed: charged } : {}),
             ...(fanOut

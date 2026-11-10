@@ -44,6 +44,7 @@ import { usecaseMulticamOffered } from "@/lib/use-case-multicam-viewer"
 import { findNonOverlappingPosition, nodeRect, DEFAULT_PLACEMENT_SIZE } from "@/lib/find-free-position"
 import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
 import { refreshEntityNodes } from "@/lib/entity-node-data"
+import { mergeNodeData } from "@/lib/node-data-merge"
 import { discardUnsavedAccountTriggerIntents } from "@/lib/account-trigger-intent"
 import { orderNodesParentFirst, localToWorld } from "@/components/editor/workflow-editor/group-coords"
 import { MAIN_TEXT_HANDLE, TEXT_PRODUCING_SOURCE_TYPES } from "@/lib/main-text-handle"
@@ -1554,7 +1555,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
       if (videoOverlayTarget) {
         const patch = videoOverlayConnectPatch(videoOverlayTarget.data as { layers?: unknown }, connection.targetHandle)
         if (patch) {
-          newNodes = newNodes.map((n) => (n.id === videoOverlayTarget.id ? { ...n, data: { ...n.data, ...patch } } : n))
+          newNodes = newNodes.map((n) => (n.id === videoOverlayTarget.id ? { ...n, data: mergeNodeData(n.data, patch) } : n))
         }
       }
 
@@ -1791,7 +1792,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
       set((state) => ({
         nodes: state.nodes.map((node) =>
           idSet.has(node.id)
-            ? { ...node, data: { ...node.data, ...patch } as SceneNodeData }
+            ? { ...node, data: mergeNodeData(node.data, patch) }
             : node,
         ),
       }))
@@ -1817,7 +1818,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
           const noChange = patchKeys.every((k) => d[k] === dataRec[k])
           if (noChange) return node
           touched = true
-          return { ...node, data: { ...d, ...data } as SceneNodeData }
+          return { ...node, data: mergeNodeData(node.data, data) }
         })
         if (!touched) return state
         return { nodes }
@@ -1861,7 +1862,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
       const REF_TEXT_FIELDS = ["text", "prompt", "directText", "motionPrompt", "lyrics", "description", "transcript"] as const
       const nodes = state.nodes.map((node) => {
         if (node.id === nodeId) {
-          return { ...node, data: { ...node.data, ...data } as SceneNodeData }
+          return { ...node, data: mergeNodeData(node.data, data) }
         }
         if (!oldRef || !newRef) return node
         const d = node.data as Record<string, unknown>
@@ -1875,7 +1876,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
           }
         }
         if (!changed) return node
-        return { ...node, data: { ...d, ...patch } as SceneNodeData }
+        return { ...node, data: mergeNodeData(node.data, patch) }
       })
 
       return isTransientOnly || opts?.fromDatabase ? { nodes } : { nodes, isDirty: true }
@@ -1923,7 +1924,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
                 ...nodeUpdates,
                 data:
                   dataKeys.length > 0
-                    ? ({ ...n.data, ...dataUpdates } as SceneNodeData)
+                    ? mergeNodeData(n.data, dataUpdates)
                     : n.data,
               }
             : n,

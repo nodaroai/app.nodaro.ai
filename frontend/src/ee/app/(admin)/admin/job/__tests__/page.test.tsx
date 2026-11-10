@@ -29,7 +29,7 @@ function job(over: Record<string, unknown> = {}) {
     workflow_id: null, workflow_name: "Unknown", workflow_execution_id: null, source: null, source_detail: null,
     source_app_name: null, workflow_project_id: null, provider_kind: null, provider_task_id: null,
     reconcile_attempts: 0, reconcile_last_error: null, provider_call_started_at: null,
-    parent_job_id: null, child_count: 0,
+    parent_job_id: null, child_count: 0, error_detail: null,
     ...over,
   }
 }
@@ -81,7 +81,36 @@ describe("AdminJobPage", () => {
   it("shows the error in full beside the input and output", () => {
     pageReturns({ data: { kind: "found", job: job({ status: "failed", error_message: "provider said no" }) }, isError: false })
     renderAt(`/admin/job/${ID}`)
-    expect(within(screen.getByRole("region", { name: "Error" })).getByText("provider said no")).toBeTruthy()
+    const error = screen.getByRole("region", { name: "Error" })
+    expect(within(error).getByText("provider said no")).toBeTruthy()
+    // The provider said nothing about this one: the sentence stands alone, with no word of an unread job.
+    expect(within(error).queryByText("Provider's words")).toBeNull()
+    expect(within(error).queryByText("Couldn't load the provider's words.")).toBeNull()
+  })
+
+  it("shows the provider's own words about the failure under the platform's sentence", () => {
+    const words = "Request blocked: The uploaded image may contain protected or restricted IP content."
+    pageReturns({
+      data: { kind: "found", job: job({ status: "failed", error_message: "The model declined one of your pictures.", error_detail: words }) },
+      isError: false,
+    })
+    renderAt(`/admin/job/${ID}`)
+    const error = screen.getByRole("region", { name: "Error" })
+    const sentence = within(error).getByText("The model declined one of your pictures.")
+    const said = within(error).getByText(words)
+    expect(within(error).getByText("Provider's words")).toBeTruthy()
+    // The sentence first: the words explain it.
+    expect(sentence.compareDocumentPosition(said) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it("a failed job the platform kept no sentence for still shows the provider's words; one that did not fail has no error", () => {
+    pageReturns({ data: { kind: "found", job: job({ status: "failed", error_detail: "Internal Error" }) }, isError: false })
+    renderAt(`/admin/job/${ID}`)
+    expect(within(screen.getByRole("region", { name: "Error" })).getByText("Internal Error")).toBeTruthy()
+    cleanup()
+    pageReturns({ data: { kind: "found", job: job() }, isError: false })
+    renderAt(`/admin/job/${ID}`)
+    expect(screen.queryByRole("region", { name: "Error" })).toBeNull()
   })
 
   it("says when there is no such job, and when it could not be read", () => {
@@ -134,6 +163,27 @@ describe("AdminJobPage", () => {
       }
       expect(within(document.getElementById(`job-${CHILDREN[0]!.id}`)!).getByText("the reference sheet")).toBeTruthy()
       expect(screen.getByRole("button", { name: "Hide child jobs" })).toBeTruthy()
+    })
+
+    it("a failed step shows the provider's own words about its failure, in its own card", () => {
+      const words = "Internal Error"
+      const steps = [
+        CHILDREN[0]!,
+        job({ ...CHILDREN[1]!, error_message: "The image model had a problem on its side.", error_detail: words }),
+        CHILDREN[2]!,
+      ]
+      pageReturns({ data: { kind: "found", job: job({ child_count: 2 }) }, isError: false })
+      vi.mocked(useAdminChildJobs).mockReturnValue({
+        data: { jobs: steps, truncated: false },
+        isError: false,
+      } as unknown as ReturnType<typeof useAdminChildJobs>)
+      renderAt(`/admin/job/${ID}?children=1`)
+      // The run itself and the steps that went through have no error; the failed step has both texts.
+      expect(screen.getAllByRole("region", { name: "Error" })).toHaveLength(1)
+      const error = within(document.getElementById(`job-${steps[1]!.id}`)!).getByRole("region", { name: "Error" })
+      expect(within(error).getByText("The image model had a problem on its side.")).toBeTruthy()
+      expect(within(error).getByText("Provider's words")).toBeTruthy()
+      expect(within(error).getByText(words)).toBeTruthy()
     })
 
     it("says when the child jobs could not be read, or when the run lists more than the page shows", () => {

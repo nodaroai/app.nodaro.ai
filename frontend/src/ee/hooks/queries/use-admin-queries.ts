@@ -164,6 +164,11 @@ export interface AdminJob {
   readonly provider: string | null
   readonly provider_cost: number | null
   readonly display_cost: number | null
+  /**
+   * The sentence the platform showed for a failure. The provider's own words
+   * about it (`jobs.error_detail`) are not a row's: they come with a whole read
+   * of the job (`AdminJobDetail`, `AdminJobPageJob`, `AdminChildJob`).
+   */
   readonly error_message: string | null
   /**
    * In a list row, the job's `type` only (`GET /v1/admin/jobs` keeps the rows
@@ -651,23 +656,47 @@ export function useAdminJobsInfinite(
   })
 }
 
-/** What the detail view reads of one job that a list row leaves out. */
+/** What the detail view reads of one job that a list row leaves out, and its failure as that same read has it. */
 export interface AdminJobDetail {
   readonly input_data: Record<string, unknown> | null
   readonly output_data: Record<string, unknown> | null
+  /**
+   * The sentence the platform showed for a failure, as this read has it. The
+   * detail view shows it with the words below, so the two always describe the
+   * same moment of the job: a list row can be older than the job is now.
+   */
+  readonly error_message: string | null
+  /** The provider's own words about the failure (`jobs.error_detail`, redacted where they were written); null when it said nothing. */
+  readonly error_detail: string | null
 }
 
-/** One job, whole (`GET /v1/admin/jobs/:jobId`): its full input and output. */
+/** One job, whole (`GET /v1/admin/jobs/:jobId`): its full input and output, and a failure's sentence with the provider's own words about it. */
 export async function fetchAdminJobDetail(jobId: string): Promise<AdminJobDetail> {
   const res = await fetch(`/v1/admin/jobs/${encodeURIComponent(jobId)}`, { headers: await getAuthHeaders() })
   if (!res.ok) throw await adminError(res, "Failed to load the job")
-  const body = (await res.json()) as { data: { input_data?: Record<string, unknown> | null; output_data?: Record<string, unknown> | null } }
-  return { input_data: body.data.input_data ?? null, output_data: body.data.output_data ?? null }
+  const body = (await res.json()) as {
+    data: {
+      input_data?: Record<string, unknown> | null
+      output_data?: Record<string, unknown> | null
+      error_message?: string | null
+      error_detail?: string | null
+    }
+  }
+  return {
+    input_data: body.data.input_data ?? null,
+    output_data: body.data.output_data ?? null,
+    error_message: body.data.error_message ?? null,
+    error_detail: body.data.error_detail ?? null,
+  }
 }
 
 /**
- * The full input and output of the job the detail view shows, read each time
- * it opens (`job` null holds the read): the list's rows carry only previews.
+ * The full input and output of the job the detail view shows, and its failure
+ * (the platform's sentence and the provider's own words), read each time it
+ * opens (`job` null holds the read): the list's rows carry only previews, and
+ * never the words. `staleTime: 0` is what makes it each time: the app's query
+ * client otherwise keeps a read fresh for a minute, and a job opened again
+ * inside that minute would show what it was then.
  * The cache is keyed by the row's status and completion time, so a job the
  * list now shows as finished never opens on the output it had before.
  */
@@ -676,6 +705,7 @@ export function useAdminJobDetail(job: Pick<AdminJob, "id" | "status" | "complet
     queryKey: queryKeys.admin.job(job?.id ?? "", job?.status ?? "", job?.completed_at ?? null),
     queryFn: () => fetchAdminJobDetail(job!.id),
     enabled: hasAdmin() && job !== null,
+    staleTime: 0,
   })
 }
 

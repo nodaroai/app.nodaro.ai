@@ -18,6 +18,7 @@ import { speakerViewPricePreflight, speakerViewVideoPreflight } from "./speaker-
 import { nodeRunError } from "@/components/editor/workflow-editor/node-run-message"
 import { speakerViewSourceOrderingEdges } from "@nodaro/render-rules"
 import { speakerViewVideoUrl } from "@/lib/speaker-view-context"
+import { caughtErrorWords } from "@/lib/failed-job-error"
 import { memoizedMeasure, speakerViewDispatchGate, speakerViewRunStartSourceCheck } from "./speaker-view-source"
 import { editorClipMeasure } from "./speaker-view-source-measure"
 
@@ -295,6 +296,7 @@ export async function executeSubWorkflow(
     updateNodeData(node.id, {
       executionStatus: "failed",
       errorMessage: msg,
+      ...caughtErrorWords(err),
       subWorkflowProgress: undefined,
     })
     throw err

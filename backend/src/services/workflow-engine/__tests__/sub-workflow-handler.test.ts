@@ -227,6 +227,50 @@ describe("executeSubWorkflow", () => {
     })
   })
 
+  it("the provider's words and the classified hint ride the rewrap, beside the sentence", async () => {
+    const n = node("sw", "sub-workflow", { workflowId: "ref-wf" })
+    mockSingle.mockResolvedValue({
+      data: {
+        nodes: [node("gen", "generate-image", { prompt: "x" }), node("out", "sub-workflow-output")],
+        edges: [edge("gen", "out")],
+      },
+      error: null,
+    })
+    const hint = { kind: "policy-block", policyId: "", reason: "blocked", hookPoint: "result" }
+    const words = "Request blocked: The uploaded image may contain protected or restricted IP content."
+    vi.mocked(executeNode).mockRejectedValueOnce(
+      Object.assign(new Error("The model declined one of your pictures."), { errorHint: hint, errorDetail: words }),
+    )
+    await expect(executeSubWorkflow(n, {}, ctx())).rejects.toMatchObject({
+      message: "Sub-workflow node gen failed: The model declined one of your pictures.",
+      errorHint: hint,
+      errorDetail: words,
+    })
+  })
+
+  it.each([
+    ["no words at all", {}],
+    ["empty words", { errorDetail: "" }],
+    ["words that are not text", { errorDetail: 42 }],
+  ])("an inner failure with %s gives the rewrap none", async (_name, extra) => {
+    const n = node("sw", "sub-workflow", { workflowId: "ref-wf" })
+    mockSingle.mockResolvedValue({
+      data: {
+        nodes: [node("gen", "generate-image", { prompt: "x" }), node("out", "sub-workflow-output")],
+        edges: [edge("gen", "out")],
+      },
+      error: null,
+    })
+    vi.mocked(executeNode).mockRejectedValueOnce(Object.assign(new Error("provider 503"), extra))
+    const err = await executeSubWorkflow(n, {}, ctx()).then(
+      () => undefined,
+      (e: unknown) => e,
+    )
+    expect(err).toBeInstanceOf(Error)
+    expect((err as Error).message).toBe("Sub-workflow node gen failed: provider 503")
+    expect(Object.prototype.hasOwnProperty.call(err, "errorDetail")).toBe(false)
+  })
+
   it("executes a simple sub-workflow with source + inline nodes", async () => {
     const n = node("sw", "sub-workflow", { workflowId: "ref-wf" })
 

@@ -803,7 +803,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             // status="failed" with no reason, and the polling model assumes a
             // transient error and re-runs a permanently-blocked request.
             // error_hint (migration 376) backs failureGuidance's suggestedProvider.
-            "id, status, progress, job_type, input_data, output_data, error_message, error_hint, created_at, completed_at, credits, user_id",
+            "id, status, progress, job_type, input_data, output_data, error_message, error_detail, error_hint, created_at, completed_at, credits, user_id",
           )
           // A job in the Trash reads as one that does not exist (TRASHED_JOB_COLUMN).
           .is(TRASHED_JOB_COLUMN, null)
@@ -862,6 +862,10 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         }
 
         const reason = (data.error_message as string | null | undefined) ?? null
+        // The provider's own words for a failure (`jobs.error_detail`, redacted
+        // at the write; a trend run's dropped by the mask above), else null.
+        const words = (data as { error_detail?: unknown }).error_detail
+        const providerWords = typeof words === "string" && words !== "" ? words : null
 
         // Failed / cancelled: return a plain-language verdict (the model reads
         // `content`, not `structuredContent`) that states the reason AND
@@ -931,6 +935,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
               jobType: data.job_type,
               completedAt: data.completed_at,
               errorMessage: reason,
+              // The provider's own words, for the owner to read beside the sentence.
+              errorDetail: providerWords,
               retryable,
               ...(suggestedProvider ? { suggestedProvider } : {}),
               outputData: out,

@@ -2,11 +2,11 @@ import { Link, useParams, useSearchParams } from "react-router-dom"
 import { ArrowLeft, ExternalLink, Loader2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import type { AdminJob } from "@/ee/hooks/queries/use-admin-queries"
 import {
   useAdminChildJobs,
   useAdminJobPage,
   type AdminChildJob,
+  type AdminJobPageJob,
 } from "@/ee/hooks/queries/use-admin-job-page"
 import { rowJobType } from "../jobs/job-kinds"
 import { creditCell } from "../jobs/admin-job-credits"
@@ -16,6 +16,7 @@ import {
   formatDateTime,
   formatDuration,
   JobDataView,
+  JobErrorView,
   JobInfoSections,
   JobPageLink,
   statusVariant,
@@ -94,18 +95,20 @@ export default function AdminJobPage() {
   )
 }
 
-/** A job's facts, then its input, its output and its error, each in full. */
-function JobBody({ job }: { job: AdminJob }) {
+/**
+ * A job's facts, then its error, its input and its output, each in full. The
+ * error is the sentence the platform showed and the provider's own words about
+ * the failure; a job that kept either one has the section.
+ */
+function JobBody({ job }: { job: AdminJobPageJob | AdminChildJob }) {
   const full = { input_data: job.input_data, output_data: job.output_data }
   return (
     <div className="flex flex-col gap-6">
       <JobInfoSections job={job} full={full} />
-      {job.error_message && (
+      {(job.error_message || job.error_detail) && (
         <section className="flex flex-col gap-2" aria-label="Error">
           <h2 className="text-sm font-semibold">Error</h2>
-          <pre className="text-xs bg-red-950/30 text-red-400 rounded-lg p-4 overflow-auto max-h-[60vh] whitespace-pre-wrap">
-            {job.error_message}
-          </pre>
+          <JobErrorView message={job.error_message} detail={job.error_detail} size="large" />
         </section>
       )}
       <section className="flex flex-col gap-2" aria-label="Input">

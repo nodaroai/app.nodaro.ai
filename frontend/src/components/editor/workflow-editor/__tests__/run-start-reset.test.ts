@@ -151,6 +151,7 @@ describe("run-start patches reset the whole run state", () => {
       "executionStatus",
       "errorMessage",
       "errorHint",
+      "errorDetail",
       "currentJobId",
       "currentJobProgress",
       "jobAwaitingReview",

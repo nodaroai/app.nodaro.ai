@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
@@ -218,13 +219,13 @@ describe("AdminJobsPage", () => {
       reconcile_attempts: 0, reconcile_last_error: null, provider_call_started_at: null,
     }
 
-    function openDetail() {
+    function openDetail(listRow: { id: string } = ROW) {
       vi.mocked(useAdminJobs).mockReturnValue({
-        data: { jobs: [ROW], userNotFound: false, filtersUnavailable: false },
+        data: { jobs: [listRow], userNotFound: false, filtersUnavailable: false },
         isLoading: false,
       } as unknown as ReturnType<typeof useAdminJobs>)
       renderAt("/admin/jobs")
-      const row = screen.getByText(ROW.id.slice(0, 8)).closest("tr")!
+      const row = screen.getByText(listRow.id.slice(0, 8)).closest("tr")!
       fireEvent.click(within(row).getAllByRole("button").at(-1)!)
       return screen.getByRole("dialog")
     }
@@ -265,6 +266,155 @@ describe("AdminJobsPage", () => {
       vi.mocked(useAdminJobDetail).mockReturnValue({ data: undefined, isError: true } as unknown as ReturnType<typeof useAdminJobDetail>)
       const dialog = openDetail()
       expect(within(dialog).getByText("Couldn't load the job's input and output.")).toBeTruthy()
+    })
+
+    describe("a failed job's Error tab", () => {
+      // A list row carries the sentence the platform showed; the provider's own words come with the whole job.
+      const FAILED = { ...ROW, status: "failed", error_message: "The model declined one of your pictures." }
+      // A failure the platform kept no sentence for.
+      const UNEXPLAINED = { ...ROW, status: "failed" }
+      // A row the list read while the job still ran.
+      const RUNNING = { ...ROW, status: "processing" }
+      const WORDS = "Request blocked: The uploaded image may contain protected or restricted IP content."
+      const UNREAD_NOTICE = "Couldn't load the provider's words."
+
+      type Read = { data: unknown; isError: boolean }
+      const LOADING: Read = { data: undefined, isError: false }
+      // The whole read failed, and no earlier one is there to show.
+      const UNREAD: Read = { data: undefined, isError: true }
+      /** The whole job as one read has it: the platform's sentence and the provider's words together. */
+      const whole = (
+        errorMessage: string | null,
+        errorDetail: string | null,
+        input: Record<string, unknown> = { type: "generate-image" },
+      ): Read => ({
+        data: { input_data: input, output_data: null, error_message: errorMessage, error_detail: errorDetail },
+        isError: false,
+      })
+
+      function reads(read: Read) {
+        vi.mocked(useAdminJobDetail).mockReturnValue(read as unknown as ReturnType<typeof useAdminJobDetail>)
+      }
+
+      /**
+       * A whole read that settles while the dialog is open, as a real one does: the
+       * dialog renders again on the read's own change, with nothing clicked.
+       */
+      function readThatSettles(first: Read) {
+        let settle: (next: Read) => void = () => {}
+        function useRead() {
+          const [read, setRead] = useState(first)
+          settle = setRead
+          return read
+        }
+        vi.mocked(useAdminJobDetail).mockImplementation(useRead as unknown as typeof useAdminJobDetail)
+        return (next: Read) => act(() => settle(next))
+      }
+
+      const errorTab = (dialog: HTMLElement) => within(dialog).queryByRole("tab", { name: "Error" })
+
+      function openErrorTab(listRow: { id: string } = FAILED) {
+        const dialog = openDetail(listRow)
+        fireEvent.mouseDown(within(dialog).getByRole("tab", { name: "Error" }), { button: 0 })
+        return dialog
+      }
+
+      it("shows the platform's sentence, and under it the provider's own words once the whole job is read", () => {
+        reads(whole(FAILED.error_message, WORDS))
+        const dialog = openErrorTab()
+        const sentence = within(dialog).getByText(FAILED.error_message)
+        const said = within(dialog).getByText(WORDS)
+        expect(within(dialog).getByText("Provider's words")).toBeTruthy()
+        // The sentence first: the words explain it.
+        expect(sentence.compareDocumentPosition(said) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        expect(within(dialog).queryByText(UNREAD_NOTICE)).toBeNull()
+      })
+
+      it("shows the sentence alone while the whole job loads, and when the provider said nothing", () => {
+        const loading = openErrorTab()
+        expect(within(loading).getByText(FAILED.error_message)).toBeTruthy()
+        expect(within(loading).queryByText("Provider's words")).toBeNull()
+        expect(within(loading).queryByText(UNREAD_NOTICE)).toBeNull()
+        cleanup()
+        reads(whole(FAILED.error_message, null))
+        const silent = openErrorTab()
+        expect(within(silent).getByText(FAILED.error_message)).toBeTruthy()
+        expect(within(silent).queryByText("Provider's words")).toBeNull()
+        expect(within(silent).queryByText(UNREAD_NOTICE)).toBeNull()
+      })
+
+      it("a failed job the platform kept no sentence for still shows the provider's words", () => {
+        reads(whole(null, WORDS))
+        const dialog = openErrorTab(UNEXPLAINED)
+        expect(within(dialog).getByText("Provider's words")).toBeTruthy()
+        expect(within(dialog).getByText(WORDS)).toBeTruthy()
+      })
+
+      it("that job's Error tab appears while the dialog is open, once the whole job brings the words", () => {
+        const settle = readThatSettles(LOADING)
+        const dialog = openDetail(UNEXPLAINED)
+        expect(errorTab(dialog)).toBeNull()
+        settle(whole(null, WORDS))
+        fireEvent.mouseDown(within(dialog).getByRole("tab", { name: "Error" }), { button: 0 })
+        expect(within(dialog).getByText(WORDS)).toBeTruthy()
+      })
+
+      it("the sentence and the words are one read's: the whole job's sentence stands where the row's is older", () => {
+        // The list still shows the job running; it has failed since.
+        reads(whole(FAILED.error_message, WORDS))
+        const stale = openErrorTab(RUNNING)
+        expect(within(stale).getByText(FAILED.error_message)).toBeTruthy()
+        expect(within(stale).getByText(WORDS)).toBeTruthy()
+        cleanup()
+        // The row's sentence is an earlier attempt's.
+        const later = "The model had a problem on its side."
+        reads(whole(later, "Internal Error"))
+        const dialog = openErrorTab()
+        expect(within(dialog).getByText(later)).toBeTruthy()
+        expect(within(dialog).queryByText(FAILED.error_message)).toBeNull()
+      })
+
+      it("the Error tab leaves when the whole job has no error, and the dialog shows the input instead", () => {
+        const settle = readThatSettles(LOADING)
+        const dialog = openErrorTab()
+        expect(within(dialog).getByText(FAILED.error_message)).toBeTruthy()
+        // The job ran again after the list was read: it has no error now.
+        settle(whole(null, null, { type: "generate-image", prompt: "a red fox in the snow" }))
+        expect(errorTab(dialog)).toBeNull()
+        expect(within(dialog).queryByText(FAILED.error_message)).toBeNull()
+        expect(within(dialog).getByRole("tab", { name: "Input" }).getAttribute("aria-selected")).toBe("true")
+        expect(within(dialog).getByText("a red fox in the snow")).toBeTruthy()
+      })
+
+      it("says when the provider's words could not be read, under the sentence the row carries", () => {
+        reads(UNREAD)
+        const dialog = openErrorTab()
+        expect(within(dialog).getByText(FAILED.error_message)).toBeTruthy()
+        expect(within(dialog).getByText(UNREAD_NOTICE)).toBeTruthy()
+        expect(within(dialog).queryByText("Provider's words")).toBeNull()
+      })
+
+      it("a failed job with no sentence still has its Error tab when the whole job could not be read", () => {
+        reads(UNREAD)
+        const dialog = openErrorTab(UNEXPLAINED)
+        expect(within(dialog).getByText(UNREAD_NOTICE)).toBeTruthy()
+      })
+
+      it("a read that failed after an earlier one keeps what that one had, and adds no notice", () => {
+        // The last read stands: a provider that said nothing is still a provider that said nothing.
+        reads({ ...whole(FAILED.error_message, null), isError: true })
+        const dialog = openErrorTab()
+        expect(within(dialog).getByText(FAILED.error_message)).toBeTruthy()
+        expect(within(dialog).queryByText(UNREAD_NOTICE)).toBeNull()
+      })
+
+      it("a job that did not fail has no Error tab, whether the whole job was read or not", () => {
+        reads(whole(null, null))
+        expect(errorTab(openDetail())).toBeNull()
+        cleanup()
+        reads(UNREAD)
+        expect(errorTab(openDetail())).toBeNull()
+      })
     })
   })
 })

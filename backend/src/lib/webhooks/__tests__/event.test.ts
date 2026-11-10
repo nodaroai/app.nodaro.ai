@@ -71,6 +71,8 @@ const JOB_ROW = {
   output_data: { imageUrl: "https://cdn.example.com/images/a.png" },
   error_message: null,
   error_hint: null,
+  // The provider's own words ride to the owner's endpoint like every other public key.
+  error_detail: "task failed: [500] Internal Error",
   created_at: "2026-10-15T09:59:00+00:00",
   started_at: "2026-10-15T09:59:01+00:00",
   completed_at: "2026-10-15T10:00:00+00:00",
@@ -88,7 +90,6 @@ const JOB_ROW = {
   provider_cost: 0.04,
   display_cost: 0.05,
   credits_actual: 38,
-  error_detail: "raw provider text",
 }
 
 beforeEach(() => {
@@ -120,7 +121,9 @@ describe("eventBodyFor — a job event", () => {
     expect(Object.keys(job)).toEqual(expect.arrayContaining(["session_id", "source", "output_data"]))
     expect(job.input_data).toEqual({ type: "generate-image", prompt: "a lighthouse" })
     expect(job).toMatchObject({ credit_status: "committed", credits_charged: 38, credits: 40, credits_held: 40, credits_released: 2 })
-    expect(built.body).not.toMatch(/provider|usage_log|error_detail|credits_actual|reconcile/)
+    // The provider's own words are the owner's, so the endpoint gets them too.
+    expect(job.error_detail).toBe("task failed: [500] Internal Error")
+    expect(built.body).not.toMatch(/"provider"|usage_log|credits_actual|reconcile/)
   })
 
   it("reads only columns the jobs table has (every public key, and what the sanitizer needs)", () => {

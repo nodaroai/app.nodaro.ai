@@ -705,6 +705,26 @@ describe("GET /v1/admin/jobs/:jobId", () => {
     expect(names.slice(2, -1).sort()).toEqual(["children", "logs", "side", "steps"])
   })
 
+  it("asks for the provider's own words about a failure and returns them with the job", async () => {
+    const words = "Request blocked: The uploaded image may contain protected or restricted IP content."
+    const row = {
+      id: JOB_ID, status: "failed", credits: 30, error_message: "The model declined one of your pictures.",
+      error_detail: words, user_id: VALID_UUID, usage_log_id: null, parent_job_id: null,
+    }
+    const job = jobsChain({ data: row, error: null })
+    const count = jobsChain({ data: null, error: null })
+    count.then = vi.fn().mockImplementation((resolve: (v: unknown) => void) => resolve({ count: 0, error: null }))
+    mockFrom.mockImplementation((table: string) => {
+      if (table !== "jobs") return jobsChain({ data: [], error: null })
+      return mockFrom.mock.calls.filter(([t]) => t === "jobs").length === 1 ? job : count
+    })
+    const res = await adminGet(`/v1/admin/jobs/${JOB_ID}`)
+    expect(res.statusCode).toBe(200)
+    // The stub answers with whatever the row holds, so the column asked for is the proof.
+    expect(job.select.mock.calls[0]![0]).toContain("error_detail")
+    expect(res.json().data.error_detail).toBe(words)
+  })
+
   it("a failed child count reads as unknown, never as none", async () => {
     const job = jobsChain({ data: { id: JOB_ID, status: "completed", user_id: VALID_UUID }, error: null })
     const count = jobsChain({ data: null, error: null })
@@ -736,11 +756,11 @@ describe("GET /v1/admin/jobs/:jobId/children", () => {
 
   /** A `jobs` table answering the filters a query asks for: by id, by owner, by parent. */
   function jobsTable(rows: Array<Record<string, unknown>>) {
-    const reads: Array<{ eq: Array<[string, unknown]>; in: [string, unknown[]] | null; limit: number | null }> = []
+    const reads: Array<{ select: string | null; eq: Array<[string, unknown]>; in: [string, unknown[]] | null; limit: number | null }> = []
     mockFrom.mockImplementation((table: string) => {
-      const q = { eq: [] as Array<[string, unknown]>, in: null as [string, unknown[]] | null, limit: null as number | null, single: false }
+      const q = { select: null as string | null, eq: [] as Array<[string, unknown]>, in: null as [string, unknown[]] | null, limit: null as number | null, single: false }
       const chain: Record<string, unknown> = {}
-      chain.select = () => chain
+      chain.select = (columns: string) => ((q.select = columns), chain)
       chain.order = () => chain
       chain.eq = (c: string, v: unknown) => (q.eq.push([c, v]), chain)
       chain.in = (c: string, v: unknown[]) => ((q.in = [c, v]), chain)
@@ -748,7 +768,7 @@ describe("GET /v1/admin/jobs/:jobId/children", () => {
       chain.maybeSingle = () => ((q.single = true), chain)
       chain.then = (resolve: (v: unknown) => unknown) => {
         if (table !== "jobs") return resolve({ data: [], error: null })
-        reads.push({ eq: q.eq, in: q.in, limit: q.limit })
+        reads.push({ select: q.select, eq: q.eq, in: q.in, limit: q.limit })
         let found = rows.filter((r) => q.eq.every(([c, v]) => r[c] === v) && (!q.in || q.in[1].includes(r[q.in[0]])))
         found = [...found].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
         if (q.limit != null) found = found.slice(0, q.limit)
@@ -793,6 +813,23 @@ describe("GET /v1/admin/jobs/:jobId/children", () => {
     expect(levels.map((r) => r.in![1])).toEqual([[ROOT], ["refs", "video"], ["sheet"]])
     for (const r of levels) expect(r.eq).toContainEqual(["user_id", VALID_UUID])
     expect(serverTimingNames(res)).toEqual(["auth", "job", "tree", "steps", "logs", "side", "total"])
+  })
+
+  it("each job below comes with the provider's own words about its failure, asked for at every level", async () => {
+    const words = "Request blocked: The uploaded image may contain protected or restricted IP content."
+    const reads = jobsTable([
+      { id: ROOT, user_id: VALID_UUID, parent_job_id: null, created_at: at(0) },
+      { id: "frame", user_id: VALID_UUID, parent_job_id: ROOT, created_at: at(1), status: "completed", error_detail: null },
+      { id: "clip", user_id: VALID_UUID, parent_job_id: "frame", created_at: at(2), status: "failed", error_message: "declined", error_detail: words },
+    ])
+    const res = await adminGet(`/v1/admin/jobs/${ROOT}/children`)
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.map((r: { id: string; error_detail: string | null }) => [r.id, r.error_detail]))
+      .toEqual([["frame", null], ["clip", words]])
+    // The stub answers with whatever a row holds, so the column asked for is the proof.
+    const levels = reads.filter((r) => r.in?.[0] === "parent_job_id")
+    expect(levels.map((r) => r.in![1])).toEqual([[ROOT], ["frame"], ["clip"]])
+    for (const r of levels) expect(r.select).toContain("error_detail")
   })
 
   it("says the list is cut short past the page's limit", async () => {

@@ -181,6 +181,7 @@ function GenerateVideoProNodeComponent({ id, data, selected }: NodeProps) {
           updateNodeData(id, {
             executionStatus: "failed",
             errorMessage: job.error_message ?? tx("node.planningFailed"),
+            errorDetail: job.error_detail ?? undefined,
             currentJobId: undefined,
             currentJobProgress: undefined,
           })

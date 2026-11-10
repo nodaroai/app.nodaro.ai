@@ -230,6 +230,63 @@ describe("diagnose_run tool", () => {
     expect(out.resumeHint).toBeUndefined()
   })
 
+  it("carries the provider's own words beside each failed node's error (providerReason): the job's, else the state's", async () => {
+    const words = "task failed: [400] Request blocked: The uploaded image may contain protected or restricted IP content."
+    mockSupabase({
+      execution: {
+        id: "exec1",
+        status: "failed",
+        node_states: {
+          n1: { status: "failed", nodeType: "image-to-video", jobId: "job-v", error: "node-level error" },
+          n2: { status: "failed", nodeType: "generate-image", error: "boom", errorDetail: "the state's own words" },
+          n3: { status: "failed", nodeType: "generate-image", error: "plain" },
+        },
+        error_message: "Execution failed",
+      },
+      jobsBatch: [
+        {
+          id: "job-v",
+          error_message: "The video model declined one of your pictures as possibly copyrighted. Try a different picture.",
+          error_detail: words,
+          input_data: { provider: "gemini-omni-flash" },
+          credits_actual: null,
+        },
+      ],
+    })
+    const server = buildServer()
+    registerDiagnose({ server, session: diagnoseSession(), fastify: Fastify() })
+    const out = parse(await callTool(server, "diagnose_run", { id: "exec1" }))
+    const byNode = Object.fromEntries(out.failures.map((f: { nodeId: string }) => [f.nodeId, f]))
+    expect(byNode.n1.providerReason).toBe(words)
+    expect(byNode.n2.providerReason).toBe("the state's own words")
+    expect(byNode.n3).not.toHaveProperty("providerReason")
+  })
+
+  it("a trend run's provider words are replaced along with its text (an MCP session is never an admin one)", async () => {
+    mockSupabase({
+      execution: {
+        id: "exec1",
+        status: "failed",
+        node_states: { n1: { status: "failed", nodeType: "trend-run", jobId: "job-t", error: "the hidden role was refused" } },
+        error_message: "Execution failed",
+      },
+      jobsBatch: [
+        {
+          id: "job-t",
+          error_message: "the hidden role was refused",
+          error_detail: "task failed: [400] the hidden role was refused",
+          input_data: { trend: { id: "t1" } },
+          credits_actual: null,
+        },
+      ],
+    })
+    const server = buildServer()
+    registerDiagnose({ server, session: diagnoseSession(), fastify: Fastify() })
+    const out = parse(await callTool(server, "diagnose_run", { id: "exec1" }))
+    expect(out.failures[0]).not.toHaveProperty("providerReason")
+    expect(JSON.stringify(out)).not.toContain("hidden role")
+  })
+
   it("a failed saved-workflow run says how to continue it from where it stopped (decided 2026-10-17)", async () => {
     mockSupabase({
       execution: {

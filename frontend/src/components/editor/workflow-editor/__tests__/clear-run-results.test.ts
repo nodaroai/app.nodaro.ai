@@ -49,6 +49,7 @@ describe("what a run left behind is removed", () => {
       executionStatus: "failed",
       errorMessage: "provider said no",
       errorHint: { kind: "policy-block" },
+      errorDetail: "Request blocked by the provider.",
       currentJobId: "j1",
       currentJobProgress: 40,
       kieTaskId: "task-9",
@@ -282,6 +283,8 @@ describe("what a person put on the canvas stays", () => {
       loraTrainingStatus: "succeeded",
       executionStatus: "failed",
       errorMessage: "out of credits",
+      // The provider's words leave with the sentence they explain.
+      errorDetail: "insufficient balance",
       currentJobId: "j9",
     })
     const data = dataOf(clear([character], [])?.nodes[0])

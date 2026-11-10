@@ -45,6 +45,7 @@ import { archiveSupersededResult, resolveSceneCompletion } from "@/lib/scene3d/r
 import { planRevisionId } from "@/lib/scene3d/plan-view";
 import type { Scene3DRevisionContext, Scene3DRevisionEntry } from "@/types/nodes";
 import { tx } from "@/lib/i18n";
+import { failedJobError } from "@/lib/failed-job-error";
 import { localizeJobLabel } from "./job-label";
 
 const POLL_INTERVAL_MS = 2000;
@@ -263,6 +264,7 @@ export function runScene3DJob({ nodeId, start, source, ctx, label, context, extr
                 resolve(active ? "plan-ready" : "");
               } else {
                 ctx.untrackInterval(poll);
+                // provider-words-ok: the failure written below names this job's words (errorDetail), once the retained draft is read
                 const errMsg = job.error_message ?? tx("nodeRun.failed", { label: shown });
                 // A FAILED run can still have retained a draft.
                 //
@@ -308,6 +310,7 @@ export function runScene3DJob({ nodeId, start, source, ctx, label, context, extr
                   ...(retained?.patch ?? {}),
                   executionStatus: "failed",
                   errorMessage: errMsg,
+                  errorDetail: job.error_detail ?? undefined,
                   currentJobId: undefined,
                   currentJobProgress: undefined,
                   sceneJobBaseRevisionId: undefined,
@@ -317,7 +320,7 @@ export function runScene3DJob({ nodeId, start, source, ctx, label, context, extr
                     ? tx("nodeRun.theDraftSceneItBuilt", { error: errMsg })
                     : errMsg,
                 });
-                reject(new Error(errMsg));
+                reject(failedJobError(errMsg, job));
               }
             } catch (err) {
               pollFailures++;

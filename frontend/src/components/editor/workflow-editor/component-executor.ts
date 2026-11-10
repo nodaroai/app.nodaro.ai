@@ -17,6 +17,7 @@ import { ComponentWaitDeadline } from "./component-wait"
 import { QueuedPollClock } from "@/lib/queued-poll-clock"
 import { tx } from "@/lib/i18n"
 import { executionErrorText } from "@/lib/execution-error-text"
+import { caughtErrorWords, failedJobError } from "@/lib/failed-job-error"
 
 const POLL_INTERVAL_MS = 2_500
 
@@ -187,7 +188,7 @@ export async function executeComponent(
       }
 
       if (job.status === "failed") {
-        throw new Error(executionErrorText(job.error_message) ?? "Component execution failed")
+        throw failedJobError(executionErrorText(job.error_message) ?? "Component execution failed", job)
       }
 
       // A wrapper job parked in `pending_review` is waiting on a HUMAN, and a
@@ -220,6 +221,7 @@ export async function executeComponent(
     updateNodeData(node.id, {
       executionStatus: "failed",
       errorMessage: err instanceof Error ? err.message : "Unknown error",
+      ...caughtErrorWords(err),
       currentJobId: undefined,
       currentJobProgress: undefined,
       jobConnectionLost: undefined,

@@ -609,6 +609,10 @@ export async function executeSubWorkflow(
         // rewrap while errorCode survives it.
         const hint = (result.reason as { errorHint?: NodeExecutionState["errorHint"] } | null)?.errorHint
         if (hint) (wrapped as Error & { errorHint?: NodeExecutionState["errorHint"] }).errorHint = hint
+        // …and the provider's own words for that failure (`jobs.error_detail`), which the
+        // orchestrator copies onto the node state for the owner to read beside the sentence.
+        const words = (result.reason as { errorDetail?: unknown } | null)?.errorDetail
+        if (typeof words === "string" && words !== "") (wrapped as Error & { errorDetail?: string }).errorDetail = words
         // …and what the failing node already charged (its own paid child jobs), so the run counts it.
         const charged = chargedCreditsOfRejection(result.reason)
         if (charged) (wrapped as Error & { creditsUsed?: number }).creditsUsed = charged

@@ -9,6 +9,9 @@ const mockExecuteReduce = vi.fn()
 const mockMetaAdsScrape = vi.fn()
 const mockInstagramScrape = vi.fn()
 const mockPollScrapeJobOutput = vi.fn()
+const mockVideoSfx = vi.fn()
+const mockGenerateMask = vi.fn()
+const mockGetJobStatusLeanForNode = vi.fn()
 const mockResolveNodeInputs = vi.fn()
 const mockExtractNodeOutput = vi.fn()
 const mockToastError = vi.fn()
@@ -49,6 +52,7 @@ vi.mock("@/lib/api", () => ({
   // unrelated stubs needed for import
   generateImage: vi.fn(),
   getJobStatusLean: vi.fn(),
+  videoSfx: (...args: unknown[]) => mockVideoSfx(...args),
   generateAIWriterStream: vi.fn(),
   generateSceneGraph: vi.fn(),
   generateAfterEffects: vi.fn(),
@@ -89,7 +93,7 @@ vi.mock("@/lib/api", () => ({
   videoUpscaleApi: vi.fn(),
   extendVideo: vi.fn(),
   faceSwapApi: vi.fn(),
-  generateMask: vi.fn(),
+  generateMask: (...args: unknown[]) => mockGenerateMask(...args),
   mergeVideoAudioApi: vi.fn(),
   trimAudioApi: vi.fn(),
   splitMediaApi: vi.fn(),
@@ -158,6 +162,7 @@ vi.mock("../poll-job", () => ({
   pollJobWithNodeUpdate: vi.fn(),
   setSuppressToasts: () => {},
   pollScrapeJobOutput: (...args: unknown[]) => mockPollScrapeJobOutput(...args),
+  getJobStatusLeanForNode: (...args: unknown[]) => mockGetJobStatusLeanForNode(...args),
   // The budget a background scrape is polled for (its own value: ./poll-job, @nodaro/render-rules).
   SCRAPE_POLL_BUDGET_MS: 46 * 60_000,
   guardedToast: {
@@ -291,6 +296,117 @@ describe("executeNode: meta-ads-scrape", () => {
     await expect(executeNode(adsNode, makeCtx())).rejects.toThrow("Actor run timed out")
     expect(patches().at(-1)).toMatchObject({ lastRunOutcome: "failed", errorMessage: "Actor run timed out" })
   })
+
+  it("a failed job's words go onto the node beside its sentence", async () => {
+    mockMetaAdsScrape.mockResolvedValue({ jobId: "job-ads", status: "pending" })
+    mockPollScrapeJobOutput.mockRejectedValue(Object.assign(new Error("The search could not finish."), { errorDetail: "Request blocked: The uploaded image may contain protected or restricted IP content." }))
+
+    await expect(executeNode(adsNode, makeCtx())).rejects.toThrow("The search could not finish.")
+    expect(patches().at(-1)).toMatchObject({ lastRunOutcome: "failed", errorMessage: "The search could not finish.", errorDetail: "Request blocked: The uploaded image may contain protected or restricted IP content." })
+  })
+
+  it("a failure without words leaves the key to the one merge", async () => {
+    mockMetaAdsScrape.mockResolvedValue({ jobId: "job-ads", status: "pending" })
+    mockPollScrapeJobOutput.mockRejectedValue(new Error("Actor run timed out"))
+
+    await expect(executeNode(adsNode, makeCtx())).rejects.toThrow("Actor run timed out")
+    expect(patches().at(-1)).not.toHaveProperty("errorDetail")
+  })
+})
+
+describe("executeNode: video-sfx", () => {
+  const SENTENCE = "The sound model could not finish this clip."
+  const WORDS = "Request blocked: The uploaded image may contain protected or restricted IP content."
+  const sfxNode = {
+    id: "node_sfx",
+    type: "video-sfx",
+    position: { x: 0, y: 0 },
+    data: { label: "Video SFX", prompt: "rain on a tin roof", currentJobId: "sfx-job" },
+  } as any
+  const patches = () => mockUpdateNodeData.mock.calls.filter((c) => c[0] === "node_sfx").map((c) => c[1] as Record<string, unknown>)
+
+  it("a failed take's words go onto the node beside its sentence", async () => {
+    vi.useFakeTimers()
+    try {
+      mockNodes = [sfxNode]
+      mockResolveNodeInputs.mockReturnValue({ videoUrl: "https://cdn.test/clip.mp4" })
+      mockVideoSfx.mockResolvedValue({ jobId: "sfx-job" })
+      mockGetJobStatusLeanForNode.mockResolvedValue({ status: "failed", error_message: SENTENCE, error_detail: WORDS })
+
+      const run = executeNode(sfxNode, makeCtx())
+      run.catch(() => {})
+      await vi.advanceTimersByTimeAsync(2_100)
+
+      await expect(run).rejects.toMatchObject({ message: SENTENCE, errorDetail: WORDS })
+      expect(patches().at(-1)).toMatchObject({ executionStatus: "failed", errorMessage: SENTENCE, errorDetail: WORDS })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("a take that failed while its status could not be read lands as that failure, with its words", async () => {
+    vi.useFakeTimers()
+    try {
+      const { getJobStatusLean } = await import("@/lib/api")
+      const gone = Object.assign(new Error("Job not found"), { status: 404 })
+      mockNodes = [sfxNode]
+      mockResolveNodeInputs.mockReturnValue({ videoUrl: "https://cdn.test/clip.mp4" })
+      mockVideoSfx.mockResolvedValue({ jobId: "sfx-job" })
+      mockGetJobStatusLeanForNode.mockRejectedValue(gone)
+      vi.mocked(getJobStatusLean).mockResolvedValueOnce({ status: "failed", error_message: SENTENCE, error_detail: WORDS } as never)
+
+      const run = executeNode(sfxNode, makeCtx())
+      run.catch(() => {})
+      for (let k = 0; k < 4; k++) await vi.advanceTimersByTimeAsync(2_000)
+
+      await expect(run).rejects.toMatchObject({ message: SENTENCE, errorDetail: WORDS })
+      expect(patches().at(-1)).toMatchObject({ executionStatus: "failed", errorMessage: SENTENCE, errorDetail: WORDS })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe("executeNode: generate-mask", () => {
+  const SENTENCE = "The mask model could not find that object."
+  const WORDS = "segmentation failed: no instance above threshold"
+  const maskNode = {
+    id: "node_mask",
+    type: "generate-mask",
+    position: { x: 0, y: 0 },
+    data: { label: "Mask", prompt: "the dog", currentJobId: "mask-job" },
+  } as any
+  const patches = () => mockUpdateNodeData.mock.calls.filter((c) => c[0] === "node_mask").map((c) => c[1] as Record<string, unknown>)
+
+  it.each([
+    ["the poll reads it", false],
+    ["only the last check reads it, after the job went quiet", true],
+  ])("a failed job lands with its words when %s", async (_name, quiet) => {
+    vi.useFakeTimers()
+    try {
+      const { getJobStatusLean } = await import("@/lib/api")
+      const failed = { status: "failed", error_message: SENTENCE, error_detail: WORDS }
+      mockNodes = [maskNode]
+      mockResolveNodeInputs.mockReturnValue({ imageUrl: "https://cdn.test/dog.png" })
+      mockGenerateMask.mockResolvedValue({ jobId: "mask-job" })
+      if (quiet) {
+        mockGetJobStatusLeanForNode.mockRejectedValue(Object.assign(new Error("Job not found"), { status: 404 }))
+        vi.mocked(getJobStatusLean).mockResolvedValueOnce(failed as never)
+      } else {
+        mockGetJobStatusLeanForNode.mockResolvedValue(failed)
+      }
+
+      // A ctx that really stops the poll, as the editor's does: a read after the last one would be a test artefact.
+      const run = executeNode(maskNode, makeCtx({ untrackInterval: (i: ReturnType<typeof setInterval>) => clearInterval(i) }))
+      run.catch(() => {})
+      for (let k = 0; k < 4; k++) await vi.advanceTimersByTimeAsync(2_000)
+
+      await expect(run).rejects.toMatchObject({ message: SENTENCE, errorDetail: WORDS })
+      expect(patches().at(-1)).toMatchObject({ executionStatus: "failed", errorMessage: SENTENCE, errorDetail: WORDS })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe("executeNode: instagram-scrape", () => {
@@ -362,5 +478,20 @@ describe("pollScrapeJobOutput: a failed job's classified hint travels with the e
     const plain = await pollScrapeJobOutput("job-2", "node_1").catch((e: unknown) => e)
     expect((plain as Error).message).toBe("provider down")
     expect(plain).not.toHaveProperty("errorHint")
+  })
+
+  it("the provider's words travel with it too; a failure without them carries none", async () => {
+    const { pollScrapeJobOutput } = await vi.importActual<typeof import("../poll-job")>("../poll-job")
+    const { getJobStatusLean } = await import("@/lib/api")
+    vi.mocked(getJobStatusLean).mockResolvedValueOnce({
+      status: "failed", error_message: "blocked", error_detail: "Request blocked: The uploaded image may contain protected or restricted IP content.",
+    } as never)
+    const withWords = await pollScrapeJobOutput("job-1", "node_1").catch((e: unknown) => e)
+    expect((withWords as Error).message).toBe("blocked")
+    expect((withWords as { errorDetail?: string }).errorDetail).toBe("Request blocked: The uploaded image may contain protected or restricted IP content.")
+
+    vi.mocked(getJobStatusLean).mockResolvedValueOnce({ status: "failed", error_message: "provider down", error_detail: null } as never)
+    const plain = await pollScrapeJobOutput("job-2", "node_1").catch((e: unknown) => e)
+    expect(plain).not.toHaveProperty("errorDetail")
   })
 })

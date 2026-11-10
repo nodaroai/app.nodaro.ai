@@ -45,12 +45,26 @@ describe("jobView — the one job envelope", () => {
       outputData: { imageUrl: "https://r2/x.png", prompt: "a cat" },
       input: null,
       errorMessage: null,
+      errorDetail: null,
       credits: 12,
       creditsCharged: null,
       createdAt: base.created_at,
       startedAt: base.started_at,
       completedAt: base.completed_at,
     })
+  })
+
+  it("carries the provider's own words for a failure (errorDetail), null when it had none", () => {
+    const words = "task failed: [400] Request blocked: The uploaded image may contain protected or restricted IP content."
+    const v = jobView({
+      ...base,
+      status: "failed",
+      output_data: null,
+      error_message: "The video model declined one of your pictures as possibly copyrighted. Try a different picture.",
+      error_detail: words,
+    })
+    expect(v.errorDetail).toBe(words)
+    expect(jobView({ ...base, status: "failed", output_data: null, error_message: "Provider timeout" }).errorDetail).toBeNull()
   })
 
   it("carries the output's pixel size when the job recorded one (agents pick an aspect ratio from it), nothing otherwise", () => {

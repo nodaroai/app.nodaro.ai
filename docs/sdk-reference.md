@@ -1404,7 +1404,10 @@ const { data: job } = await client.jobs.get(jobId)
 
 The returned `Job` uses snake_case fields to match the wire format. Non-admin
 callers receive an explicit allowlist of job fields — `id`, `status`,
-`progress`, `input_data`, `output_data`, `error_message`, `error_hint`,
+`progress`, `input_data`, `output_data`, `error_message`, `error_detail` (the
+provider's own words for a failure, links cut to their host and secrets
+removed; `null` when the failure had none — display it beside `error_message`,
+branch on `error_hint`), `error_hint`,
 `created_at`, `started_at`, `completed_at`, `user_id`, `credits`, `job_type`,
 `source`, `source_detail`, `title` (the owner's own name for the job —
 [`rename()`](#renameid-title) — or `null` until named), plus `favorited`
@@ -9811,7 +9814,7 @@ not two.
 
 - `Job` — snake_case wire shape; includes provenance: `source` (`"internal" | "mcp" | "app" | "cli" | "sdk" | "extension" | "web" | "api"`) + `source_detail` (origin host / `extension/<name>` label / `sdk/<version>` / MCP client / app id) so a library view can label or filter media by origin
 - `JobStatus` — `"pending" | "queued" | "processing" | "pending_review" | "completed" | "failed" | "cancelled"`. `pending_review` is **in-flight, not terminal**: a job policy registered by the deployment held the output for human review. Keep waiting — it resolves to `completed` (approved), `failed` (rejected, with `error_hint.kind === "policy-block"`) or `cancelled` (the owner cancelled it; a held job is cancellable like any in-flight job), and `credit_status` reads `"reserved"` for the whole hold. `runAndWait` throws `JobHeldError` on the first held tick rather than waiting it out. Only appears on deployments that register a job policy.
-- `JobStatusResult` — lean poll shape: `{ id, status, progress?, output_data?, error_message?, error_hint?, credit_status?, completed_at?, queue? }`; `queue` is present only while the job waits for a slot (`status: "queued"`)
+- `JobStatusResult` — lean poll shape: `{ id, status, progress?, output_data?, error_message?, error_detail?, error_hint?, credit_status?, completed_at?, queue? }`; `queue` is present only while the job waits for a slot (`status: "queued"`)
 - `JobQueueInfo` — the `queue` field of a job, workflow-run or pipeline read: `{ lane: "provider" | "llm" | "local" | "run", position, limit, running, reason: "user_lane" | "provider_ceiling" | "server_busy", waitedSeconds, upgradeHint: "plan" | "workspace" | null }`; see [Waiting for a slot](./api-integration.md#waiting-for-a-slot)
 - `CancelJobResult` — `{ success: true, cancelled: number }`
 - `DeleteJobResult` — `{ success: true }`

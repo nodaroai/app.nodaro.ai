@@ -56,6 +56,8 @@ const RUN_STATE_KEYS: ReadonlySet<string> = new Set([
   ...[...TRANSIENT_RUNTIME_KEYS].filter((key) => !RUN_RESULT_KEEP_KEYS.has(key)),
   "errorMessage",
   "errorHint",
+  // The provider's own words go with the sentence they explain.
+  "errorDetail",
   "jobRecovering",
   // The Scene card's second status: its video half runs separately from its stills.
   "videoExecutionStatus",

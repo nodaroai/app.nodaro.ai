@@ -26,7 +26,7 @@ import { FiltersUnavailableNotice, JobsFilterBar } from "./jobs-filter-bar"
 import { ADMIN_JOB_STATUSES, jobFiltersKey, parseJobFilters, serializeJobFilters, type AdminJobFilters } from "./jobs-filters"
 import { rowJobType } from "./job-kinds"
 import { creditCell } from "./admin-job-credits"
-import { CopyButton, JobDataView, JobInfoSections, JobPageLink, statusVariant } from "./job-detail-view"
+import { CopyButton, JobDataView, JobErrorView, JobInfoSections, JobPageLink, statusVariant } from "./job-detail-view"
 
 const STATUS_OPTIONS = ["all", ...ADMIN_JOB_STATUSES] as const
 
@@ -67,11 +67,22 @@ function JobDetailDialog({
   tab: string
   onTabChange: (v: string) => void
 }) {
-  const hasError = !!job.error_message
   // A list row carries previews of the input and output; the whole of both is
   // read when the dialog opens, and only the whole is ever shown here.
   const detail = useAdminJobDetail(open ? job : null)
   const full = detail.data
+  // The error is one read's. Once the whole job is in, its sentence and the
+  // provider's own words both come from it: a row never carries the words, and
+  // can be older than the job is now. Until then the row's sentence stands.
+  const message = full ? full.error_message : job.error_message
+  const words = full?.error_detail
+  // The whole read failed and left nothing to show: a failed job's Error tab
+  // says so, where no words would read as the provider having said nothing.
+  const wordsUnread = detail.isError && full === undefined
+  const hasError = !!message || !!words || (wordsUnread && job.status === "failed")
+  // The Error tab can leave while it is the open one (the whole job has no error
+  // where the row had a sentence): the dialog falls back to the input.
+  const shownTab = tab === "error" && !hasError ? "input" : tab
   const dataState = (pick: (d: AdminJobDetail) => Record<string, unknown> | null) => ({
     data: full ? pick(full) : undefined,
     isError: detail.isError,
@@ -93,7 +104,7 @@ function JobDetailDialog({
 
         <JobInfoSections job={job} full={full} />
 
-        <Tabs value={tab} onValueChange={onTabChange}>
+        <Tabs value={shownTab} onValueChange={onTabChange}>
           <TabsList>
             <TabsTrigger value="input">Input</TabsTrigger>
             <TabsTrigger value="output">Output</TabsTrigger>
@@ -107,9 +118,7 @@ function JobDetailDialog({
           </TabsContent>
           {hasError && (
             <TabsContent value="error">
-              <pre className="text-xs bg-red-950/30 text-red-400 rounded-lg p-4 overflow-auto max-h-64 whitespace-pre-wrap">
-                {job.error_message}
-              </pre>
+              <JobErrorView message={message} detail={words} detailUnread={wordsUnread} />
             </TabsContent>
           )}
         </Tabs>

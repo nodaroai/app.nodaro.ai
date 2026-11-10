@@ -7,7 +7,7 @@ import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { sideHoldChargesFor, withSideCharge } from "../../job-step-charge.js"
 import { resumeFailedRunHint } from "./_resume-hint.js"
-import { CHILD_JOB_COLUMN, trendRunErrorText, TRASHED_JOB_COLUMN } from "../../public-job-data.js"
+import { CHILD_JOB_COLUMN, maskTrendRunError, trendRunErrorText, TRASHED_JOB_COLUMN } from "../../public-job-data.js"
 
 const diagnoseGate: ToolGate = { required: ["jobs:read"] }
 
@@ -100,11 +100,15 @@ interface NodeState {
   jobId?: string
   error?: string
   errorCode?: string
+  /** The provider's own words for the failure, carried from the job (`errorDetail` on the wire). */
+  errorDetail?: string | null
 }
 
 interface JobRow {
   id?: string
   error_message?: string | null
+  /** The provider's own words (`jobs.error_detail`, redacted at the write). */
+  error_detail?: string | null
   input_data?: Record<string, unknown> | null
   credits_actual?: number | null
   output_data?: Record<string, unknown> | null
@@ -131,6 +135,10 @@ interface Failure {
   error: string | null
   /** The stable code recorded beside the error, when there is one. */
   errorCode?: string
+  /** The provider's own words for the failure (the job's `error_detail`, else
+   *  the node state's), links cut to their host and secrets removed, when
+   *  there are any. Display only: `class` and `remediation` are the verdict. */
+  providerReason?: string
   class: FailureClass
   remediation: string
   creditsActual: number | null
@@ -144,10 +152,30 @@ function buildFailure(
   provider: string | null,
   creditsActual: number | null,
   errorCode?: string,
+  providerReason?: string,
 ): Failure {
   const coded = errorCode ? CODE_CLASS[errorCode] : undefined
   const { class: cls, remediation } = coded ? mk(coded) : classifyFailure(error)
-  return { nodeId, nodeType, jobId, provider, error, ...(errorCode ? { errorCode } : {}), class: cls, remediation, creditsActual }
+  return {
+    nodeId,
+    nodeType,
+    jobId,
+    provider,
+    error,
+    ...(errorCode ? { errorCode } : {}),
+    ...(providerReason ? { providerReason } : {}),
+    class: cls,
+    remediation,
+    creditsActual,
+  }
+}
+
+/** The provider's words a non-admin may read: the job's `error_detail`, else
+ *  the node state's; a trend run's are withheld along with its text (an MCP
+ *  session is never an admin one). */
+function providerReasonOf(detail: string | null | undefined, inputData: unknown): string | undefined {
+  const masked = maskTrendRunError({ error_detail: detail ?? null, input_data: inputData ?? null }, false)
+  return typeof masked.error_detail === "string" && masked.error_detail !== "" ? masked.error_detail : undefined
 }
 
 export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): void {
@@ -202,7 +230,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
           // and never a child job (CHILD_JOB_COLUMN).
           const { data: jobs } = await supabase
             .from("jobs")
-            .select("id, error_message, input_data, credits_actual, output_data")
+            .select("id, error_message, error_detail, input_data, credits_actual, output_data")
             .in("id", jobIds)
             .eq("user_id", session.userId)
             .is(CHILD_JOB_COLUMN, null)
@@ -227,6 +255,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
             providerOf(job?.input_data),
             withSideCharge(job?.credits_actual ?? null, job?.id, sideCharges),
             s.errorCode ?? jobErrorCode(job),
+            providerReasonOf(job?.error_detail ?? s.errorDetail, job?.input_data),
           )
         })
 
@@ -281,7 +310,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
       const { data: job, error: jobErr } = await supabase
         .from("jobs")
         .select(
-          "id, status, error_message, input_data, credits_actual, output_data, job_type, user_id",
+          "id, status, error_message, error_detail, input_data, credits_actual, output_data, job_type, user_id",
         )
         .eq("id", args.id)
         .eq("user_id", session.userId)
@@ -321,6 +350,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
                 providerOf(j.input_data),
                 withSideCharge(j.credits_actual ?? null, j.id, sideCharges),
                 jobErrorCode(j),
+                providerReasonOf((j as JobRow).error_detail, j.input_data),
               ),
             ]
           : []

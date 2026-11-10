@@ -1790,11 +1790,14 @@ reports `queued` for this reason.
 
 **Job envelope (structuredContent):** `jobId`, `status`, `progress`, `jobType`,
 `assetKind` (`image` / `video` / `audio` / null), `outputUrl`, `width` /
-`height`, `outputData`, `input`, `errorMessage`, `credits`, `creditsCharged`,
+`height`, `outputData`, `input`, `errorMessage`, `errorDetail` (the provider's
+own words for a failure, links cut to their host and secrets removed; `null`
+when it had none — show it, never branch on it), `credits`, `creditsCharged`,
 `creditsHeld`, `creditsReleased`, `createdAt`, `startedAt`, `completedAt`, plus
 `retryable`, `guidance` and `suggestedProvider` on a failed, cancelled or held
 job, and `guidance` on a job waiting for a free slot. `get_asset` and `wait_for_job` return the same envelope (`get_asset`
-without `input` and without the charge figures).
+without `input` and without the charge figures). `diagnose_run` carries the
+same words as `providerReason` on each failed node that has them.
 
 `width` / `height` are the output's pixel size, present when the job recorded
 it: every image job completed after this release (the size of `outputUrl` as

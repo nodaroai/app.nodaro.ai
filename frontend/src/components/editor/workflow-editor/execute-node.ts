@@ -475,6 +475,7 @@ import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings";
 import { pollJobWithNodeUpdate, guardedToast, getJobStatusLeanForNode, pollScrapeJobOutput, RUN_START_RESET, SCRAPE_POLL_BUDGET_MS } from "./poll-job";
 import type { OutputKeySpec } from "./poll-job";
+import { caughtErrorWords, failedJobError } from "@/lib/failed-job-error";
 import { ensureNodeSheetPanels, SHEET_STAGE_A_CANCELLED } from "../reference-sheet/node-sheet-stage-a";
 import { shouldAbandonNode } from "./abandon-guard";
 import {
@@ -2738,11 +2739,12 @@ function executeNodeCore(
                     updateNodeData(node.id, {
                       executionStatus: "failed",
                       errorMessage: errMsg,
+                      errorDetail: job.error_detail ?? undefined,
                       currentJobId: undefined,
                       currentJobProgress: undefined,
                     });
                     guardedToast.error(tx("node.planningFailed"), { description: errMsg });
-                    reject(new Error(errMsg));
+                    reject(failedJobError(errMsg, job));
                   }
                 } catch (err) {
                   pollFailures++;
@@ -4246,11 +4248,12 @@ function executeNodeCore(
                   updateNodeData(node.id, {
                     executionStatus: "failed",
                     errorMessage: errMsg,
+                    errorDetail: job.error_detail ?? undefined,
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
                   guardedToast.error(tx("nodeRun.forcedAlignmentFailed"), { description: errMsg });
-                  reject(new Error(errMsg));
+                  reject(failedJobError(errMsg, job));
                 }
               } catch (err) {
                 pollFailures++;
@@ -4385,11 +4388,12 @@ function executeNodeCore(
                   updateNodeData(node.id, {
                     executionStatus: "failed",
                     errorMessage: errMsg,
+                    errorDetail: job.error_detail ?? undefined,
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
                   guardedToast.error(tx("nodeRun.videoAnalysisFailed"), { description: errMsg });
-                  reject(new Error(errMsg));
+                  reject(failedJobError(errMsg, job));
                 }
               } catch (err) {
                 pollFailures++;
@@ -4482,6 +4486,7 @@ function executeNodeCore(
         updateNodeData(node.id, {
           executionStatus: "failed",
           errorMessage: err?.message || tx("nodeRun.contentRecipeFailed"),
+          ...caughtErrorWords(err),
           currentJobId: undefined,
           currentJobProgress: undefined,
         });
@@ -4544,6 +4549,7 @@ function executeNodeCore(
         updateNodeData(node.id, {
           executionStatus: "failed",
           errorMessage: err?.message || tx("nodeRun.contentIdeasFailed"),
+          ...caughtErrorWords(err),
           currentJobId: undefined,
           currentJobProgress: undefined,
         });
@@ -4675,11 +4681,12 @@ function executeNodeCore(
                   updateNodeData(node.id, {
                     executionStatus: "failed",
                     errorMessage: errMsg,
+                    errorDetail: job.error_detail ?? undefined,
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
                   guardedToast.error(tx("nodeRun.aiAuditFailed"), { description: errMsg });
-                  reject(new Error(errMsg));
+                  reject(failedJobError(errMsg, job));
                 }
               } catch (err) {
                 pollFailures++;
@@ -4919,13 +4926,14 @@ function executeNodeCore(
                   updateNodeData(node.id, {
                     executionStatus: "failed",
                     errorMessage: errMsg,
+                    errorDetail: job.error_detail ?? undefined,
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
                   guardedToast.error(tx("nodeRun.lyricsGenerationFailed"), {
                     description: errMsg,
                   });
-                  reject(new Error(errMsg));
+                  reject(failedJobError(errMsg, job));
                 }
               } catch (err) {
                 pollFailures++;
@@ -5419,13 +5427,14 @@ function executeNodeCore(
                   updateNodeData(node.id, {
                     executionStatus: "failed",
                     errorMessage: errMsg,
+                    errorDetail: job.error_detail ?? undefined,
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
                   guardedToast.error(tx("nodeRun.transcriptionFailed"), {
                     description: errMsg,
                   });
-                  reject(new Error(errMsg));
+                  reject(failedJobError(errMsg, job));
                 }
               } catch (err) {
                 pollFailures++;
@@ -5969,7 +5978,7 @@ function executeNodeCore(
         // Stop → the poll was aborted; the central Stop handler already restored
         // the node, so don't overwrite it with a failure (mirrors llm-chat).
         if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
-        updateNodeData(node.id, applyInstagramScrapeFailure(err.message || "Scrape failed"));
+        updateNodeData(node.id, { ...applyInstagramScrapeFailure(err.message || "Scrape failed"), ...caughtErrorWords(err) });
         guardedToast.error(tx("nodeRun.instagramFailed", { message: err.message }));
         throw err;
       });
@@ -6014,7 +6023,7 @@ function executeNodeCore(
         // Stop → the poll was aborted; the central Stop handler already restored
         // the node, so don't overwrite it with a failure (mirrors instagram-scrape).
         if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
-        updateNodeData(node.id, applySocialSearchFailure(err.message || tx("node.scrapeFailed")));
+        updateNodeData(node.id, { ...applySocialSearchFailure(err.message || tx("node.scrapeFailed")), ...caughtErrorWords(err) });
         guardedToast.error(tx("nodeRun.socialSearchFailed", { message: err.message }));
         throw err;
       });
@@ -6068,7 +6077,7 @@ function executeNodeCore(
         // Stop → the poll was aborted; the central Stop handler already restored
         // the node, so don't overwrite it with a failure (mirrors instagram-scrape).
         if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
-        updateNodeData(node.id, applyMetaAdsScrapeFailure(err.message || "Scrape failed"));
+        updateNodeData(node.id, { ...applyMetaAdsScrapeFailure(err.message || "Scrape failed"), ...caughtErrorWords(err) });
         guardedToast.error(tx("nodeRun.metaAdsFailed", { message: err.message }));
         throw err;
       });
@@ -6118,7 +6127,7 @@ function executeNodeCore(
         // the node, so don't overwrite it with a failure (mirrors instagram-scrape).
         if (err?.name === "AbortError" || ctx.signal?.aborted) return "";
         // Failed runs record the outcome but never touch generatedJson.
-        updateNodeData(node.id, applyWebScrapeFailure(err.message || "Scrape failed"));
+        updateNodeData(node.id, { ...applyWebScrapeFailure(err.message || "Scrape failed"), ...caughtErrorWords(err) });
         guardedToast.error(tx("nodeRun.webScrapeFailed", { message: err.message }));
         throw err;
       });
@@ -7011,7 +7020,7 @@ function executeNodeCore(
                       res({ url, thumbnailUrl, jobId });
                     } else if (job.status === "failed") {
                       ctx.untrackInterval(interval);
-                      rej(new Error(job.error_message ?? "Unknown error"));
+                      rej(failedJobError(job.error_message ?? "Unknown error", job));
                     }
                   } catch (err) {
                     pollFailures++;
@@ -7028,6 +7037,11 @@ function executeNodeCore(
                             res({ url, thumbnailUrl: od.thumbnailUrl as string | undefined, jobId });
                             return;
                           }
+                        }
+                        // A take that failed while its status could not be read: its own failure, with its words.
+                        if (finalJob.status === "failed") {
+                          rej(failedJobError(finalJob.error_message ?? "Unknown error", finalJob));
+                          return;
                         }
                       } catch { /* ignore — fall through to failure */ }
                       rej(err instanceof Error ? err : new Error("Video SFX poll failed"));
@@ -7084,6 +7098,7 @@ function executeNodeCore(
               updateNodeData(node.id, {
                 executionStatus: "failed",
                 errorMessage: errMsg,
+                ...caughtErrorWords(err),
                 currentJobId: undefined,
                 currentJobProgress: undefined,
               });
@@ -7200,6 +7215,21 @@ function executeNodeCore(
         .then(({ jobId }) => {
           guardedToast.info(tx("nodeRun.generateMaskStarted"), { description: tx("run.jobIdLine", { id: jobId }) });
           updateNodeData(node.id, { currentJobId: jobId });
+          // A failed job, read by the poll or by its last check after the status went quiet: its
+          // sentence and the provider's words on the node, and an error that carries them.
+          const failMask = (job: Awaited<ReturnType<typeof getJobStatusLean>>) => {
+            const errMsg = job.error_message ?? "Unknown error";
+            updateNodeData(node.id, {
+              executionStatus: "failed",
+              errorMessage: errMsg,
+              errorDetail: job.error_detail ?? undefined,
+              currentJobId: undefined,
+              currentJobProgress: undefined,
+              jobConnectionLost: undefined,
+            });
+            guardedToast.error(tx("nodeRun.generateMaskFailed"), { description: errMsg });
+            reject(failedJobError(errMsg, job));
+          };
           let pollFailures = 0;
           const poll = ctx.trackInterval(
             setInterval(async () => {
@@ -7262,15 +7292,7 @@ function executeNodeCore(
                   resolve(outMaskUrl);
                 } else if (job.status === "failed") {
                   ctx.untrackInterval(poll);
-                  const errMsg = job.error_message ?? "Unknown error";
-                  updateNodeData(node.id, {
-                    executionStatus: "failed",
-                    errorMessage: errMsg,
-                    currentJobId: undefined,
-                    currentJobProgress: undefined,
-                  });
-                  guardedToast.error(tx("nodeRun.generateMaskFailed"), { description: errMsg });
-                  reject(new Error(errMsg));
+                  failMask(job);
                 }
               } catch (err) {
                 pollFailures++;
@@ -7307,6 +7329,11 @@ function executeNodeCore(
                         resolve(outMaskUrl);
                         return;
                       }
+                    }
+                    // The job failed while its status could not be read: that failure, with its words.
+                    if (finalJob.status === "failed") {
+                      failMask(finalJob);
+                      return;
                     }
                   } catch {
                     // ignore — proceed to failure
@@ -7802,11 +7829,12 @@ function executeNodeCore(
                   updateNodeData(node.id, {
                     executionStatus: "failed",
                     errorMessage: errMsg,
+                    errorDetail: job.error_detail ?? undefined,
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
                   guardedToast.error(tx("nodeRun.editPlanFailed"), { description: errMsg });
-                  reject(new Error(errMsg));
+                  reject(failedJobError(errMsg, job));
                 }
               } catch (err) {
                 pollFailures++;
@@ -7939,11 +7967,12 @@ function executeNodeCore(
                   updateNodeData(node.id, {
                     executionStatus: "failed",
                     errorMessage: errMsg,
+                    errorDetail: job.error_detail ?? undefined,
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
                   guardedToast.error(tx("nodeRun.cameraSwitchFailed"), { description: errMsg });
-                  reject(new Error(errMsg));
+                  reject(failedJobError(errMsg, job));
                 }
               } catch (err) {
                 pollFailures++;
@@ -8181,11 +8210,12 @@ function executeNodeCore(
                   updateNodeData(node.id, {
                     executionStatus: "failed",
                     errorMessage: errMsg,
+                    errorDetail: job.error_detail ?? undefined,
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
                   guardedToast.error(tx("nodeRun.silenceDetectFailed"), { description: errMsg });
-                  reject(new Error(errMsg));
+                  reject(failedJobError(errMsg, job));
                 }
               } catch (err) {
                 pollFailures++;
@@ -8290,11 +8320,12 @@ function executeNodeCore(
                   updateNodeData(node.id, {
                     executionStatus: "failed",
                     errorMessage: errMsg,
+                    errorDetail: job.error_detail ?? undefined,
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
                   guardedToast.error(tx("nodeRun.audioSyncFailed"), { description: errMsg });
-                  reject(new Error(errMsg));
+                  reject(failedJobError(errMsg, job));
                 }
               } catch (err) {
                 pollFailures++;
@@ -8400,9 +8431,9 @@ function executeNodeCore(
               resolve((videoUrls?.[0] ?? audioUrls?.[0]) as string);
             } else if (job.status === "failed") {
               clearInterval(poll);
-              updateNodeData(node.id, { executionStatus: "failed", errorMessage: job.error_message ?? "Failed", currentJobId: undefined });
+              updateNodeData(node.id, { executionStatus: "failed", errorMessage: job.error_message ?? "Failed", errorDetail: job.error_detail ?? undefined, currentJobId: undefined });
               toast.error(tx("nodeRun.splitIntoChunksFailed", { error: job.error_message ?? tx("run.unknownError") }));
-              reject(new Error(job.error_message ?? "Failed"));
+              reject(failedJobError(job.error_message ?? "Failed", job));
             }
           } catch {
             clearInterval(poll);

@@ -313,6 +313,11 @@ export interface NodeExecutionState {
    *  `pollJobToCompletion`'s thrown Error the same way `errorCode` rides a
    *  mapped billing refusal — never re-derived from `error`'s free text. */
   errorHint?: ErrorHint
+  /** The provider's own words for the failure (`jobs.error_detail`, redacted
+   *  at the write), carried from `pollJobToCompletion`'s thrown Error like
+   *  `errorHint`. Display only, for the owner; a published app's runner never
+   *  receives it (`appRunViewStates`). */
+  errorDetail?: string
   startedAt?: string
   completedAt?: string
   /** Total fan-out iterations (when node runs via list/loop) */
