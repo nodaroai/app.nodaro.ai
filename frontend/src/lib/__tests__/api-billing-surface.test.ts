@@ -7,7 +7,7 @@ vi.mock("@/lib/supabase", () => ({
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
-import { getBillingSurface, getBillingAccount } from "../api"
+import { BillingPlansError, getBillingPlans, getBillingSurface, getBillingAccount } from "../api"
 
 function okJson(data: unknown) {
   return vi.fn().mockResolvedValue({
@@ -43,5 +43,24 @@ describe("getBillingAccount", () => {
     vi.stubGlobal("fetch", okJson({ data: { plan: "pro", balance: 42, dailyAllowance: null, unit: "credits" } }))
     const a = await getBillingAccount()
     expect(a).toEqual({ plan: "pro", balance: 42, dailyAllowance: null, unit: "credits" })
+  })
+})
+
+describe("getBillingPlans", () => {
+  it("GETs /v1/billing/plans and returns the list", async () => {
+    mockGetSession.mockResolvedValue({ data: { session: null } })
+    const mock = okJson({ data: [], topUps: [], topUpRange: { min: 5, max: 500, currency: "USD" } })
+    vi.stubGlobal("fetch", mock)
+    const plans = await getBillingPlans()
+    expect(mock.mock.calls[0][0]).toBe("/v1/billing/plans")
+    expect(plans.topUpRange.max).toBe(500)
+  })
+
+  it("a failed answer keeps its HTTP status, so a refusal is never retried", async () => {
+    mockGetSession.mockResolvedValue({ data: { session: null } })
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 403, json: async () => ({ error: { code: "self_serve_disabled" } }) }))
+    const failed = getBillingPlans()
+    await expect(failed).rejects.toBeInstanceOf(BillingPlansError)
+    await expect(failed).rejects.toMatchObject({ status: 403 })
   })
 })

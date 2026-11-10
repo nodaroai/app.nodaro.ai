@@ -22,6 +22,12 @@ vi.mock("@/lib/surface-selectors", async (importOriginal) => ({
   surfaceCreditUnitLabel: () => mockUnitLabel(),
 }))
 
+// The prices the deployment sells: none listed here (the packs are not shown: no self-serve purchase).
+vi.mock("@/ee/hooks/queries/use-billing-queries", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/ee/hooks/queries/use-billing-queries")>()),
+  useBillingPlans: () => ({ data: undefined, isPending: false }),
+}))
+
 import { GetCreditsModal } from "../GetCreditsModal"
 
 function costLine(locale: LocaleId, balance: number, required: number): HTMLParagraphElement {

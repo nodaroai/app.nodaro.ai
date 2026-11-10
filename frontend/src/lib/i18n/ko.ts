@@ -3300,6 +3300,7 @@ export const ko: ChromeDict = {
   "pricing.audience.pro": "전문가 및 팀용",
   "pricing.audience.business": "에이전시 및 스튜디오용",
   "pricing.failedOpenCheckout": "결제 페이지를 열지 못했습니다",
+  "pricing.priceUnavailable": "지금은 구매할 수 없습니다. 잠시 후 다시 시도해 주세요.",
   "pricing.pageTitle": "요금제",
   "pricing.onPlanPrefix": "현재 요금제는",
   "pricing.onPlanSuffix": "입니다.",

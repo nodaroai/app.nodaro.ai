@@ -5,16 +5,15 @@ import { useAuth } from "@/hooks/use-auth"
 import {
   PRICING_TIERS,
   getTierPrice,
-  getTierPriceId,
-  getTierIdFromPriceId,
   getAnnualSavingsDollars,
   type BillingCycle,
   type TierFeature,
 } from "@/lib/pricing-data"
 import { openStripePage, startCheckout, startLoadCheckout } from "@/lib/checkout"
-import { PlanChangePaymentRequiredError } from "@/lib/api"
+import { BillingPlansError, PlanChangePaymentRequiredError } from "@/lib/api"
 import { toast } from "sonner"
-import { useSubscription, useChangePlanMutation } from "@/ee/hooks/queries/use-billing-queries"
+import { useBillingPlans, useSubscription, useChangePlanMutation } from "@/ee/hooks/queries/use-billing-queries"
+import { planCheckoutPriceId, subscriptionTierId } from "@/ee/lib/plan-price-ids"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { TopupSection } from "./topup-section"
 import { useT, type MessageKey } from "@/lib/i18n"
@@ -22,6 +21,7 @@ import { PersonalFreeCreditsOnly } from "@/components/billing/personal-free-cred
 import { creditUnits } from "@/lib/credit-units"
 import { formatNumber } from "@/lib/i18n/format"
 import { whenActivated } from "@/lib/prerender"
+import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
 
 /**
  * Theme-aware pricing page, ported 1:1 from the designer's Pricing mocks
@@ -70,6 +70,24 @@ function SectionHeaderRow({ dotColor, labelColor, label, note, margin }: Section
 
 export default function PricingPage() {
   const t = useT()
+  const { user, loading: authLoading } = useAuth()
+  // The prices this deployment sells: a checkout sends only these (a test-mode
+  // deployment sells its own). Above the edition gate below, so the hook order
+  // never depends on it. Where the deployment does not sell to its users, a
+  // signed-in visitor still asks: its billing account may buy, and the server
+  // answers by checkout's own rule.
+  const {
+    data: plans,
+    isPending: plansPending,
+    isLoading: plansLoading,
+    isFetching: plansFetching,
+    error: plansError,
+  } = useBillingPlans({ when: surfaceBillingSelfServe() || !!user })
+  // What a paid plan without a listed price says: the server's own words for a refusal, else try again shortly.
+  const unpricedNote =
+    plansError instanceof BillingPlansError && plansError.status < 500 && plansError.serverMessage
+      ? plansError.serverMessage
+      : t("pricing.priceUnavailable")
   /** A tier feature in the interface language, its numbers formatted for the locale. */
   const featureText = (f: TierFeature): string =>
     t(f.key, f.vars && Object.fromEntries(Object.entries(f.vars).map(([k, v]) => [k, typeof v === "number" ? formatNumber(v) : v])))
@@ -89,12 +107,12 @@ export default function PricingPage() {
     )
   }
 
-  const { user, loading: authLoading } = useAuth()
   const navigate = useNavigate()
   const [loadingTier, setLoadingTier] = useState<string | null>(null)
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("annual")
   const [searchParams] = useSearchParams()
   const autoCheckoutTriggered = useRef(false)
+  const autoCheckoutUnavailableShown = useRef(false)
 
   const { data: subscription, isLoading: subLoading } = useSubscription(user?.id)
   const changePlanMutation = useChangePlanMutation()
@@ -118,40 +136,54 @@ export default function PricingPage() {
   // Derive current tier from active subscription
   const isActiveSub = subscription &&
     (subscription.status === "active" || subscription.status === "past_due")
-  const currentTierId = isActiveSub ? getTierIdFromPriceId(subscription.stripe_price_id) : null
+  const currentTierId = isActiveSub ? subscriptionTierId(subscription.stripe_price_id, plans) : null
 
   // Auto-open Stripe checkout when redirected from login with ?plan= param
   useEffect(() => {
-    if (authLoading || subLoading || autoCheckoutTriggered.current) return
+    // Wait for a settled answer: a cached failure that is being fetched again is not one.
+    if (authLoading || subLoading || plansPending || plansFetching || autoCheckoutTriggered.current) return
     const planParam = searchParams.get("plan")
     if (!planParam || !user || isActiveSub) return
 
     const tier = PRICING_TIERS.find((t) => t.id === planParam)
     if (!tier) return
 
-    const priceId = getTierPriceId(tier, billingCycle)
-    if (!priceId) return
+    const priceId = planCheckoutPriceId(tier, billingCycle, plans)
 
     // Never from a prerendered page nobody has seen yet (lib/prerender.ts):
-    // checkout must open only for a visitor who is looking at it.
+    // checkout must open only for a visitor who is looking at it. A plan the
+    // deployment lists no price for says so, once, and the checkout stays
+    // pending: it opens if the list later names the price.
     return whenActivated(() => {
       if (autoCheckoutTriggered.current) return
-      autoCheckoutTriggered.current = true
-      handleSubscribe(tier.id, priceId)
+      if (priceId) {
+        autoCheckoutTriggered.current = true
+        handleSubscribe(tier.id, priceId)
+      } else if (!autoCheckoutUnavailableShown.current) {
+        autoCheckoutUnavailableShown.current = true
+        toast.error(unpricedNote)
+      }
     })
-  }, [authLoading, subLoading, user, isActiveSub, searchParams, billingCycle])
+  }, [authLoading, subLoading, plansPending, plansFetching, plans, user, isActiveSub, searchParams, billingCycle, unpricedNote])
 
   // Whether any paid tier has annual savings (for the toggle badge)
   const hasAnnualSavings = PRICING_TIERS.some((t) => t.priceMonthly > 0 && t.priceAnnual < t.priceMonthly)
 
   async function handleSubscribe(tierId: string, priceId: string | null) {
-    if (!priceId) {
+    if (tierId === "free") {
       navigate("/projects")
       return
     }
 
     if (!user) {
       navigate(`/login?plan=${tierId}`)
+      return
+    }
+
+    // A paid plan this deployment lists no price for right now: say so, and
+    // never check out another price (pricing-data's are the live ones).
+    if (!priceId) {
+      toast.error(unpricedNote)
       return
     }
 
@@ -326,9 +358,11 @@ export default function PricingPage() {
             {paidTiers.map((tier) => {
               const isPopular = !!tier.highlighted
               const displayPrice = getTierPrice(tier, billingCycle)
-              const priceId = getTierPriceId(tier, billingCycle)
+              const priceId = planCheckoutPriceId(tier, billingCycle, plans)
+              // Signed in, a plan needs the price this deployment lists; signed out, the click only leads to sign-in.
+              const unpriced = !!user && priceId === null
               const savingsDollars = getAnnualSavingsDollars(tier)
-              const disabled = tier.id === currentTierId || loadingTier === tier.id || subLoading
+              const disabled = tier.id === currentTierId || loadingTier === tier.id || subLoading || unpriced
               const cardFeatures = tier.features.filter((f) => f.key !== CREDITS_FEATURE_KEY)
 
               return (
@@ -452,6 +486,9 @@ export default function PricingPage() {
                   >
                     {getButtonLabel(tier.id)}
                   </button>
+                  {unpriced && !plansLoading && (
+                    <p style={{ marginTop: 8, fontSize: 12, textAlign: "center", color: "var(--blg-t2)" }}>{unpricedNote}</p>
+                  )}
                 </div>
               )
             })}

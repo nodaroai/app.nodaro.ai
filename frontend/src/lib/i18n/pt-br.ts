@@ -3300,6 +3300,7 @@ export const ptBR: ChromeDict = {
   "pricing.audience.pro": "Para profissionais e equipes",
   "pricing.audience.business": "Para agências e estúdios",
   "pricing.failedOpenCheckout": "Não foi possível abrir a página de pagamento",
+  "pricing.priceUnavailable": "A compra não está disponível agora. Tente novamente em instantes.",
   "pricing.pageTitle": "Preços",
   "pricing.onPlanPrefix": "Você está no plano",
   "pricing.onPlanSuffix": ".",

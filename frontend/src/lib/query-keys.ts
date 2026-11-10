@@ -40,6 +40,10 @@ export const queryKeys = {
     subscription: (userId: string) => ["billing", "subscription", userId] as const,
     transactions: (userId: string) => ["billing", "transactions", userId] as const,
     storage: (userId: string) => ["billing", "storage", userId] as const,
+    // What this deployment sells. Scoped by userId ("" signed out): the answer
+    // can depend on who asks (a deployment's billing account), and a sign-out
+    // clears nothing, so the next person on this browser never sees it.
+    plans: (userId: string) => ["billing", "plans", userId] as const,
   },
 
   // Stats

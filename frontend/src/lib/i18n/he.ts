@@ -3385,6 +3385,7 @@ export const he: ChromeDict = {
   "pricing.audience.pro": "למקצוענים ולצוותים",
   "pricing.audience.business": "לסוכנויות ולסטודיואים",
   "pricing.failedOpenCheckout": "פתיחת הקופה נכשלה",
+  "pricing.priceUnavailable": "אי אפשר לבצע רכישה כרגע. נסו שוב בעוד רגע.",
   "pricing.pageTitle": "תמחור",
   "pricing.onPlanPrefix": "אתם על",
   "pricing.onPlanSuffix": ".",

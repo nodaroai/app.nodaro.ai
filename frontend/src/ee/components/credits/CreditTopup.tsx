@@ -3,6 +3,8 @@ import { Coins, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { startCheckout, startLoadCheckout } from "@/lib/checkout"
+import { useBillingPlans } from "@/ee/hooks/queries/use-billing-queries"
+import { packCheckoutPriceId } from "@/ee/lib/plan-price-ids"
 import { TOPUP_PACKAGES, type TopupPackage, creditsForLoadUsd, MIN_LOAD_USD, MAX_LOAD_USD } from "@/lib/pricing-data"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import { tx, useT } from "@/lib/i18n"
@@ -11,6 +13,8 @@ import { formatNumber } from "@/lib/i18n/format"
 export function CreditTopup() {
   const t = useT()
   const [loadingId, setLoadingId] = useState<string | null>(null)
+  // The packs this deployment sells: a checkout sends only these (a test-mode deployment sells its own).
+  const { data: plans, isLoading: plansLoading } = useBillingPlans()
   const [customUsd, setCustomUsd] = useState<string>("")
 
   const parsedUsd = /^\d+$/.test(customUsd) ? parseInt(customUsd, 10) : NaN
@@ -29,9 +33,14 @@ export function CreditTopup() {
   }
 
   async function handlePurchase(pkg: TopupPackage) {
+    const priceId = packCheckoutPriceId(pkg, plans)
+    if (!priceId) {
+      toast.error(tx("pricing.priceUnavailable"))
+      return
+    }
     setLoadingId(pkg.id)
     try {
-      await startCheckout({ priceId: pkg.priceId, mode: "payment" })
+      await startCheckout({ priceId, mode: "payment" })
     } catch {
       toast.error(tx("pricing.failedOpenCheckout"))
     } finally {
@@ -50,7 +59,7 @@ export function CreditTopup() {
           <button
             key={pkg.id}
             onClick={() => handlePurchase(pkg)}
-            disabled={loadingId === pkg.id}
+            disabled={loadingId === pkg.id || packCheckoutPriceId(pkg, plans) === null}
             className={cn(
               "relative flex flex-col items-center rounded-lg border p-4 transition-all",
               "hover:border-[#ff0073]/50 hover:bg-[#ff0073]/5",
@@ -76,6 +85,9 @@ export function CreditTopup() {
           </button>
         ))}
       </div>
+      {!plansLoading && TOPUP_PACKAGES.some((pkg) => packCheckoutPriceId(pkg, plans) === null) && (
+        <p className="text-xs text-muted-foreground">{t("pricing.priceUnavailable")}</p>
+      )}
 
       {/* Pay-as-you-go: load any whole-dollar amount. Preview mirrors the
           backend rate function (pricing-data.ts, sync-pinned). */}

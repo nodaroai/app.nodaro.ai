@@ -56,6 +56,11 @@ vi.mock("@/ee/billing/stripe-config.js", () => ({
 
 vi.mock("@/ee/billing/provision-credits.js", () => ({ ensureStripeCustomer: vi.fn() }))
 
+// The plans list itself (Stripe's prices) is not this test's business: only who may read it.
+vi.mock("@/ee/billing/plans.js", () => ({
+  readBillingPlans: vi.fn(async () => ({ ok: true, plans: { data: [], topUps: [], topUpRange: { min: 5, max: 500, currency: "USD" } } })),
+}))
+
 vi.mock("@/lib/config.js", () => ({
   config: { EDITION: "cloud", STRIPE_SECRET_KEY: "sk_test" },
   isCloud: () => true,
@@ -221,5 +226,43 @@ describe("selfServe:false — the users may not buy", () => {
 
     expect(res.statusCode).toBe(403)
     expect(sessionsCreate).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GET /v1/billing/plans answers whoever checkout lets through, by the same rule
+// ---------------------------------------------------------------------------
+
+describe("GET /v1/billing/plans follows checkout's rule", () => {
+  it("mainline: everyone, cached publicly as before", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/billing/plans" })
+    expect(res.statusCode).toBe(200)
+    expect(res.headers["cache-control"]).toBe("public, max-age=300")
+  })
+
+  it("every answer varies by Authorization: who asks can change it, whatever host reaches the route", async () => {
+    withheldDeployment()
+    for (const headers of [{ "x-user-id": PAYER }, { "x-user-id": USER }, {}]) {
+      const res = await app.inject({ method: "GET", url: "/v1/billing/plans", headers })
+      expect(String(res.headers.vary ?? ""), JSON.stringify(headers)).toMatch(/Authorization/i)
+    }
+    __resetDeploymentPayerForTests()
+    delete process.env.NODARO_SURFACE_PROFILE
+    __resetSurfaceProfileCacheForTests()
+    const open = await app.inject({ method: "GET", url: "/v1/billing/plans" })
+    expect(String(open.headers.vary ?? "")).toMatch(/Authorization/i)
+  })
+
+  it("selfServe:false: the billing account gets the list (it may buy), privately; anyone else is refused as checkout refuses them", async () => {
+    withheldDeployment()
+    const payer = await app.inject({ method: "GET", url: "/v1/billing/plans", headers: { "x-user-id": PAYER } })
+    expect(payer.statusCode).toBe(200)
+    expect(payer.headers["cache-control"]).toBe("private, max-age=300")
+
+    for (const headers of [{ "x-user-id": USER }, {}]) {
+      const res = await app.inject({ method: "GET", url: "/v1/billing/plans", headers })
+      expect(res.statusCode).toBe(403)
+      expect(res.json().error.code).toBe("self_serve_disabled")
+    }
   })
 })

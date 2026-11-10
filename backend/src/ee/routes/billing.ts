@@ -106,8 +106,8 @@ const BILLING_JWT_ONLY_MSG = "Billing management is only available from a logged
  * short-circuits before it reads the payer at all and both routes take exactly
  * today's path.
  */
-function selfServePurchaseAllowed(userId: string): boolean {
-  return runtimeSurfaceProfile().billing.selfServe || userId === deploymentPayerId()
+function selfServePurchaseAllowed(userId: string | undefined): boolean {
+  return runtimeSurfaceProfile().billing.selfServe || (userId !== undefined && userId === deploymentPayerId())
 }
 
 /**
@@ -160,13 +160,17 @@ const SELF_SERVE_DISABLED = {
 
 export async function billingRoutes(app: FastifyInstance) {
   // The plans and credit packs on sale, with what each costs. Public pricing
-  // data (middleware/auth.ts lists the path): no credential is needed and none
-  // is read, so every caller gets the same answer and it may be cached. Where
-  // each figure comes from: ee/billing/plans.ts.
-  app.get("/v1/billing/plans", async (_req, reply) => {
-    // B4 — a deployment that does not sell to its users has nothing on sale;
-    // the same answer its checkout gives.
-    if (!runtimeSurfaceProfile().billing.selfServe) {
+  // data (middleware/auth.ts lists the path): no credential is needed, and one
+  // is read when sent, for checkout's rule below. Where each figure comes
+  // from: ee/billing/plans.ts.
+  app.get("/v1/billing/plans", async (req, reply) => {
+    // Who asks can change the answer (checkout's rule below), on every host that reaches this route.
+    reply.header("Vary", "Authorization")
+    // B4 — the list answers whoever checkout lets through, by checkout's own
+    // rule: everyone where the deployment sells to its users; elsewhere only
+    // its billing account (a signed-in caller; the route reads a token when one
+    // is sent), and anyone else gets checkout's refusal.
+    if (!selfServePurchaseAllowed(req.userId)) {
       return reply.status(403).header("Cache-Control", "no-store").send(SELF_SERVE_DISABLED)
     }
     const result = await readBillingPlans()
@@ -180,7 +184,9 @@ export async function billingRoutes(app: FastifyInstance) {
             error: { code: "plan_prices_unavailable", message: "Plan prices are unavailable right now. Try again shortly." },
           })
     }
-    return reply.header("Cache-Control", "public, max-age=300").send(result.plans)
+    // The same for every caller only where everyone may buy; otherwise the answer depends on who asked.
+    const cache = runtimeSurfaceProfile().billing.selfServe ? "public, max-age=300" : "private, max-age=300"
+    return reply.header("Cache-Control", cache).send(result.plans)
   })
 
   // Get current subscription for a user

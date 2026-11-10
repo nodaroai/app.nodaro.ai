@@ -4128,10 +4128,15 @@ The SDK reads both as `client.billing.surface()` and `client.billing.account()`.
 ## 12c. Plans and prices (Cloud edition)
 
 `GET /v1/billing/plans` lists the plans and the credit packs on sale, with what
-each costs. It is **public**: no token is needed and none is read, so a pricing
-page can call it signed out. Every caller gets the same answer, sent with
-`Cache-Control: public, max-age=300`. Nodaro Cloud only — on Community and
-Business the route is not registered and answers 404. SDK:
+each costs. It is **public**: no token is needed, so a pricing page can call it
+signed out, and every caller gets the same answer, sent with
+`Cache-Control: public, max-age=300`. It answers whoever checkout lets through,
+by checkout's own rule: on a deployment that does not sell to its users, only
+its billing account (signed in) gets the list, with
+`Cache-Control: private, max-age=300`, and anyone else gets checkout's `403`
+(`self_serve_disabled`). Every answer carries `Vary: Authorization`. Nodaro
+Cloud only — on Community and Business the route is not registered and
+answers 404. SDK:
 `client.billing.plans()`; CLI: `nodaro billing plans` (no sign-in needed).
 
 Each figure is read from what charges or grants it: a plan's prices are the

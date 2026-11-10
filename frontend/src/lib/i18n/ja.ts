@@ -3366,6 +3366,7 @@ export const ja: ChromeDict = {
   "pricing.audience.pro": "プロフェッショナルやチーム向け",
   "pricing.audience.business": "エージェンシーやスタジオ向け",
   "pricing.failedOpenCheckout": "決済ページを開けませんでした",
+  "pricing.priceUnavailable": "現在は購入できません。しばらくしてからもう一度お試しください。",
   "pricing.pageTitle": "料金プラン",
   "pricing.onPlanPrefix": "現在のプランは",
   "pricing.onPlanSuffix": " です。",

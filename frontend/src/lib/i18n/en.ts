@@ -3407,6 +3407,7 @@ export const en = {
   "pricing.audience.pro": "For professionals & teams",
   "pricing.audience.business": "For agencies & studios",
   "pricing.failedOpenCheckout": "Failed to open checkout",
+  "pricing.priceUnavailable": "Purchasing isn't available right now. Try again in a moment.",
   "pricing.pageTitle": "Pricing",
   "pricing.onPlanPrefix": "You're on",
   "pricing.onPlanSuffix": ".",

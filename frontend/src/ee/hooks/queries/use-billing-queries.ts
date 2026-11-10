@@ -5,13 +5,17 @@ import {
   getTransactions,
   getManageSubscriptionUrl,
   changePlan,
+  getBillingPlans,
+  BillingPlansError,
 } from "@/lib/api"
 import { createClient } from "@/lib/supabase"
 import { hasCredits } from "@/lib/edition"
+import { surfaceBillingSelfServe } from "@/lib/surface-selectors"
 import { queryKeys } from "@/lib/query-keys"
 import { invalidateBalance } from "@/ee/lib/invalidate-balance"
 import { TIER_STORAGE_BYTES } from "@/lib/pricing-data"
 import { useBillingSurface } from "@/hooks/use-billing-surface"
+import { useCachedUserId } from "@/hooks/use-auth"
 
 export function useSubscription(userId: string | undefined) {
   return useQuery({
@@ -19,6 +23,30 @@ export function useSubscription(userId: string | undefined) {
     queryFn: () => getSubscription(userId!),
     enabled: !!userId && hasCredits(),
     staleTime: 60_000,
+  })
+}
+
+/**
+ * The plans and packs this deployment sells, with their Stripe price ids
+ * (`GET /v1/billing/plans`, public). A checkout sends only these ids
+ * (ee/lib/plan-price-ids.ts), so a deployment on Stripe's test mode sells its
+ * test prices. Asked only on Cloud and only `when` the caller is about to use
+ * it: by default where the deployment sells to its users; a surface that is
+ * mounted before it is shown (a dialog) passes `when: open`, and one that a
+ * deployment's billing account may use where nobody else can buy (the pricing
+ * page) asks for a signed-in visitor too, the server deciding by checkout's
+ * rule.
+ */
+export function useBillingPlans(options: { readonly when?: boolean } = {}) {
+  // Keyed by who is signed in: the answer can depend on it, and a sign-out clears no cache.
+  const userId = useCachedUserId()
+  return useQuery({
+    queryKey: queryKeys.billing.plans(userId ?? ""),
+    queryFn: () => getBillingPlans(),
+    enabled: hasCredits() && (options.when ?? surfaceBillingSelfServe()),
+    staleTime: 5 * 60_000,
+    // A refusal (4xx) is the answer, never retried; a server or network failure is tried once more.
+    retry: (failureCount: number, error: unknown) => !(error instanceof BillingPlansError && error.status < 500) && failureCount < 1,
   })
 }
 
