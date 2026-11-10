@@ -28,6 +28,7 @@ import { describe, it, expect } from "vitest"
 import { LLM_MCP_FIELDS } from "../tools/_llm-fields.js"
 import { SCENE3D_MCP_AUTHORING_FIELDS } from "../tools/verbs-scene3d.js"
 import { imageBatchArgs } from "../tools/_image-batch.js"
+import { imageFormatArgs } from "../tools/_image-format-args.js"
 import { recordingsInputShape } from "../tools/verbs-use-case-recordings.js"
 import { framingSourceInputShape } from "../tools/verbs-use-case-framing.js"
 import { trendRunShape } from "../tools/trends.js"
@@ -141,6 +142,8 @@ const SCHEMA_FRAGMENTS: Record<string, readonly string[]> = {
   // cast_swap: every role kind's preview-only settings (preview_name, in_preview),
   // read by name where the roles are mapped, so they need no mapper below.
   castSwapRolePreviewArgs: Object.keys(castSwapRolePreviewArgs),
+  // generate_image / modify_image / image_to_image: the output format and a GIF's or an SVG's levers.
+  imageFormatArgs: Object.keys(imageFormatArgs),
 }
 
 /**
@@ -156,6 +159,8 @@ const FRAGMENT_CONSUMERS: Record<string, string> = {
   recordingsInputShape: "recordingsPayload(args)",
   framingSourceInputShape: "framingSourcePayload(args)",
   trendRunShape: "runBody(args)",
+  // generate_image passes its `effective` args, the edit verbs `args`.
+  imageFormatArgs: "imageFormatBody(",
 }
 
 /** Keys that a spread fragment contributes, mapped to the consumer call that

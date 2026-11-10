@@ -8,6 +8,7 @@ import { z } from "zod"
 import { clientOriginSchema } from "../lib/client-origin-schema.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { imageBatchFields, imageBatchIssues } from "../lib/image-batch.js"
+import { imageFormatFields, maskFormatConflict } from "../lib/image-format-schema.js"
 import { presetIdSchema, presetVariablesSchema } from "../lib/presets/generate-image-preset-hook.js"
 import { IMAGE_GEN_PROVIDERS, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, IMAGE_BACKGROUND_VALUES, IMAGE_RENDERING_SPEED_VALUES, PROMPT_HARD_CEILING, MAX_REQUEST_IMAGE_LIMIT, requestImageLimit } from "@nodaro/shared/models"
 import { defaultImageModel, gptImage26SentImages } from "@nodaro/shared/model-catalog"
@@ -168,6 +169,8 @@ export const generateImageBody = z.object({
   quality: z.enum(IMAGE_QUALITY_VALUES).optional(),
   /** Image background, on the models that take one (`auto`, `opaque`, `transparent`). */
   background: z.enum(IMAGE_BACKGROUND_VALUES).optional(),
+  // The file written (PNG, JPEG, WebP, GIF, SVG) and a GIF's or an SVG's own levers.
+  ...imageFormatFields,
   negativePrompt: z.string().max(5000).optional(),
   seed: z.number().int().min(0).optional(),
   renderingSpeed: z.enum(IMAGE_RENDERING_SPEED_VALUES).optional(),
@@ -197,6 +200,8 @@ export const generateImageBody = z.object({
  *  object — `applySnappedLevers` and the OpenAPI entry read its `shape`. */
 export const generateImageRequest = generateImageBody.superRefine((data, ctx) => {
   for (const issue of imageBatchIssues(data)) ctx.addIssue({ code: "custom", path: [issue.path], message: issue.message })
+  const maskConflict = maskFormatConflict(data)
+  if (maskConflict) ctx.addIssue({ code: "custom", path: ["maskUrl"], message: maskConflict })
   const references = data.referenceImageUrls ?? []
   // No model named: the limit of the default the route will run it on.
   for (const model of data.models?.length ? data.models : [data.provider ?? defaultImageModel("general", data.aspectRatio)]) {

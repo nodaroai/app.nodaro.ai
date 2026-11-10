@@ -15,6 +15,7 @@
  */
 
 import { providerRegistry } from "./registry.js"
+import { stillInputImage, stillInputImages } from "../lib/still-input-image.js"
 import type {
   ProviderCapability,
   ProviderResult,
@@ -311,13 +312,16 @@ export async function generateImage(
   extraParams?: Record<string, unknown>,
   reconcileOpts?: ReconcileOpts,
 ): Promise<RouteResult> {
+  // A GIF or an SVG input (a GPT Image 2.6 result wired onward) goes to every
+  // provider as a PNG still: its first frame, or drawn (lib/still-input-image.ts).
+  const stillRefs = await stillInputImages(referenceImageUrls)
   return routeAndExecute(
     "image-generation",
     model,
     "generateImage",
     async (instance) => {
       const p = resolveModule<ImageGenerationProvider>(instance, "image")
-      return p.generateImage(prompt, referenceImageUrls, model, extraParams, reconcileOpts)
+      return p.generateImage(prompt, stillRefs, model, extraParams, reconcileOpts)
     }
   )
 }
@@ -329,13 +333,15 @@ export async function editImage(
   extraParams?: Record<string, unknown>,
   reconcileOpts?: ReconcileOpts,
 ): Promise<RouteResult> {
+  // The same still for an edit's source (a task id is no address, so it passes).
+  const stillSource = await stillInputImage(imageUrl)
   return routeAndExecute(
     "image-editing",
     model,
     "editImage",
     async (instance) => {
       const p = resolveModule<ImageGenerationProvider & { editImage: ImageGenerationProvider["generateImage"] }>(instance, "image") as unknown as import("./provider.interface.js").ImageEditingProvider
-      return p.editImage(imageUrl, prompt, model, extraParams, reconcileOpts)
+      return p.editImage(stillSource, prompt, model, extraParams, reconcileOpts)
     }
   )
 }

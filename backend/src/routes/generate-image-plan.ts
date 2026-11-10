@@ -262,7 +262,7 @@ export async function planImageJob(args: {
   // `applySnappedLevers` below rewrites them on `data`, so these locals are the
   // caller's PRE-snap values and are only ever valid as INPUT to the
   // normalizer. Everything downstream reads `data.*`.
-  const { provider, aspectRatio: rawAspectRatio, resolution: rawResolution, quality: rawQuality, background: rawBackground, characterDescriptions, seed, renderingSpeed, styleType, expandPrompt, baseImageUrl, maskUrl, strength, guidanceScale } = data
+  const { provider, aspectRatio: rawAspectRatio, resolution: rawResolution, quality: rawQuality, background: rawBackground, outputFormat: rawOutputFormat, gifFrames: rawGifFrames, gifFrameDurationMs: rawGifFrameDurationMs, svgLevel: rawSvgLevel, characterDescriptions, seed, renderingSpeed, styleType, expandPrompt, baseImageUrl, maskUrl, strength, guidanceScale } = data
   // Reference URLs to use downstream. Two views, intentionally distinct:
   //   • `queueReferenceImageUrls` — the value sent to the worker + recorded in
   //     the job (see `AssembledImageRequest`).
@@ -352,6 +352,10 @@ export async function planImageJob(args: {
     resolution: rawResolution,
     renderingSpeed,
     background: rawBackground,
+    outputFormat: rawOutputFormat,
+    gifFrames: rawGifFrames,
+    gifFrameDurationMs: rawGifFrameDurationMs,
+    svgLevel: rawSvgLevel,
     refCount: sentImages,
     swapToI2i: true,
     sourceImage,
@@ -400,6 +404,10 @@ export async function planImageJob(args: {
     resolution: data.resolution,
     quality: data.quality,
     background: data.background,
+    outputFormat: data.outputFormat,
+    gifFrames: data.gifFrames,
+    gifFrameDurationMs: data.gifFrameDurationMs,
+    svgLevel: data.svgLevel,
     // Structured mode: only the NATIVE negative prompt rides this channel
     // (the non-native one is folded into `prompt`). Flat mode: the raw
     // negative prompt, unchanged.

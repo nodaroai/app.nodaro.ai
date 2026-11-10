@@ -40,6 +40,7 @@ import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
 import { useWiredImageRefCount } from "@/hooks/use-wired-image-ref-count"
+import { imageDownloadExtension } from "@/lib/image"
 
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useProvidersCreditsSum } from "@/ee/hooks/use-providers-credits-sum"
@@ -273,7 +274,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
                   e.stopPropagation()
                   const a = document.createElement('a')
                   a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`
-                  a.download = `${nodeData.label || 'image'}.png`
+                  a.download = `${nodeData.label || 'image'}.${imageDownloadExtension(activeUrl)}`
                   a.click()
                 }} title={t("cfgshared.download")}>
                 <Download className="w-3.5 h-3.5" />

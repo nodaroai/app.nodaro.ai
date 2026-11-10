@@ -1,7 +1,7 @@
 ---
 node_type: modify-image
-generated_at: 2026-11-09T15:19:15.653Z
-generated_from: 45f1902b4
+generated_at: 2026-11-10T19:20:28.620Z
+generated_from: 5b5897436
 ---
 
 # Modify Image
@@ -28,6 +28,10 @@ generated_from: 45f1902b4
 - `resolution?: string`
 - `quality?: string`
 - `background?: string`
+- `outputFormat?: string`
+- `gifFrames?: number`
+- `gifFrameDurationMs?: number`
+- `svgLevel?: string`
 - `negativePrompt?: string`
 - `seed?: number`
 - `renderingSpeed?: string`
@@ -87,6 +91,10 @@ Provide ONE of `image_url` (any publicly fetchable HTTPS URL) or `image_asset_id
 - `resolution`
 - `quality`
 - `background`
+- `output_format`
+- `gif_frames`
+- `gif_frame_duration_ms`
+- `svg_level`
 - `aspect_ratio`
 - `negative_prompt`
 - `structured`

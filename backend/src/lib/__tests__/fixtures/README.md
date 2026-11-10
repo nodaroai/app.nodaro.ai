@@ -263,3 +263,13 @@ test's own function: `bodySchemas["tighten-episode"]` gains `framingSource`
 (`auto`, `static` or `tracking`). Absent reads `static`, the even split, and
 the resolved settings carry it only when a framed episode follows faces, so
 every other row is unchanged.
+
+## `svg/`
+
+Seven SVGs GPT Image 2.6 wrote on KIE (2026-11-10), kept as they came:
+`luna-1k`, `sol-1k` and `terra-1k` (one logo at the three SVG levels, 1K),
+`market-a`, `market-b` and `market-c` (a busy scene) and `teapot-2880` (the
+logo at 4K, 2880 a side). None carries anything the sanitizer removes, so
+`svg-sanitize.test.ts` holds each to the same elements, attributes and pixels
+after sanitizing; `image-output-store.test.ts` and `still-input-image.test.ts`
+store and draw them.

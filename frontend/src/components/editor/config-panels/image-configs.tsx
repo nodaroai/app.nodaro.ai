@@ -42,7 +42,8 @@ import type {
   ManualReferenceImage,
   ImageProvider,
 } from "@/types/nodes"
-import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, imageStylePresets, getAspectRatiosForModel, getSourcePhotoAspectRatios, withPhotoAuto, IMAGE_QUALITY_OPTIONS, IMAGE_BACKGROUND_OPTIONS, imageResolutionOptionsAt, transparentResolutionFor, defaultQualityFor, firstFixedQuality, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor, withoutDeniedModels } from "./model-options"
+import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, imageStylePresets, getAspectRatiosForModel, getSourcePhotoAspectRatios, withPhotoAuto, IMAGE_QUALITY_OPTIONS, IMAGE_BACKGROUND_OPTIONS, imageFormatFailSafe, outputFormatOf, imageResolutionOptionsAt, transparentResolutionFor, defaultQualityFor, firstFixedQuality, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor, withoutDeniedModels } from "./model-options"
+import { ImageFormatFields, ImageBackgroundField } from "./image-format-fields"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
@@ -210,6 +211,12 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
   const qualityDefault = isMulti ? firstFixedQuality(qualityOptions) : defaultQualityFor(currentProvider)
   // One model at a time: a background setting is not offered across several.
   const backgroundOptions = isMulti ? undefined : IMAGE_BACKGROUND_OPTIONS[currentProvider]
+  // The file the node writes, one model at a time too. A GIF is square
+  // (IMAGE_GIF_FRAME_SIZE a frame): its ratio and size do not apply, so both
+  // controls hide while it is chosen (the stored values stay for another format).
+  const formatProvider = isMulti ? undefined : currentProvider
+  const writesFormat = formatProvider ? outputFormatOf(formatProvider, data.outputFormat) : undefined
+  const writesGif = writesFormat === "gif"
   const supportsRefImage = isMulti
     ? intersected.supportsReferenceImage
     : MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(currentProvider)
@@ -276,6 +283,11 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
     } else if (data.background !== undefined) {
       updates.background = undefined
     }
+    // The file the node writes (one model at a time): a format the model does
+    // not write is cleared, a GIF's / an SVG's levers move into its range, and a
+    // transparent background becomes auto with a format that cannot keep it —
+    // before the transparent size snap below reads the background.
+    Object.assign(updates, imageFormatFailSafe(formatProvider, { ...data, ...updates }))
     // KIE renders a transparent background at one size only.
     const transparentAt = transparentResolutionFor(currentProvider)
     if ((updates.background ?? data.background) === "transparent" && transparentAt) {
@@ -298,7 +310,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
     if (Object.keys(updates).length > 0) {
       onUpdate(updates)
     }
-  }, [providersList, currentProvider, data.aspectRatio, data.background]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [providersList, currentProvider, data.aspectRatio, data.background, data.outputFormat]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Migrate legacy single referenceImageUrl to new multi-image format
   useEffect(() => {
@@ -662,14 +674,16 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
         <Separator className="mb-3" />
         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("imgcfg.modelSettings")}</label>
         <div className="flex flex-col gap-3 mt-2">
-          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-            <AspectRatioSelector
-              options={aspectRatioOptions}
-              value={nodeAspectRatio("generate-image", data.aspectRatio)}
-              onValueChange={(v) => onUpdate({ aspectRatio: v })}
-            />
-          </MappableField>
-          {resolutionOptions && (
+          {!writesGif && (
+            <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+              <AspectRatioSelector
+                options={aspectRatioOptions}
+                value={nodeAspectRatio("generate-image", data.aspectRatio)}
+                onValueChange={(v) => onUpdate({ aspectRatio: v })}
+              />
+            </MappableField>
+          )}
+          {resolutionOptions && !writesGif && (
             <MappableField field="resolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
               <Select
                 value={data.resolution || resolutionOptions[0]?.value || "1K"}
@@ -699,21 +713,23 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
               </Select>
             </MappableField>
           )}
-          {backgroundOptions && (
-            <MappableField field="background" label={t("field.background")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-              <Select
-                value={data.background || backgroundOptions[0]?.value}
-                onValueChange={(v) => onUpdate({ background: v })}
-              >
-                <SelectTrigger aria-label={t("field.background")}><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {backgroundOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </MappableField>
-          )}
+          <ImageFormatFields
+            provider={formatProvider}
+            data={data}
+            onUpdate={onUpdate}
+            sources={sources}
+            fieldMappings={fieldMappings}
+            onMapField={onMapField}
+          />
+          <ImageBackgroundField
+            options={backgroundOptions}
+            value={data.background}
+            format={writesFormat}
+            onChange={(v) => onUpdate({ background: v })}
+            sources={sources}
+            fieldMappings={fieldMappings}
+            onMapField={onMapField}
+          />
           {supportsRefImage && (
             <>
               <input ref={refImageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleRefImageUpload} />
@@ -978,6 +994,10 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
   const allResolutionOptions = useMemo(() => !isNanoBananaEdit ? imageResolutionOptionsAt(currentProvider, undefined) : undefined, [currentProvider, isNanoBananaEdit])
   const qualityOptions = useMemo(() => !isNanoBananaEdit ? IMAGE_QUALITY_OPTIONS[currentProvider] : undefined, [currentProvider, isNanoBananaEdit])
   const backgroundOptions = useMemo(() => !isNanoBananaEdit ? IMAGE_BACKGROUND_OPTIONS[currentProvider] : undefined, [currentProvider, isNanoBananaEdit])
+  // The file the edit writes; a GIF is square, so its ratio and size hide
+  // while it is chosen (the stored values stay for another format).
+  const writesFormat = outputFormatOf(currentProvider, data.outputFormat)
+  const writesGif = writesFormat === "gif"
   const qualityDefault = defaultQualityFor(currentProvider)
   const strengthConfig = useMemo(() => !isNanoBananaEdit ? I2I_STRENGTH_SUPPORT[currentProvider] : undefined, [currentProvider, isNanoBananaEdit])
   const supportsSeed = SEED_SUPPORT.has(currentProvider)
@@ -1032,6 +1052,11 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     } else if (data.background !== undefined) {
       updates.background = undefined
     }
+    // The file the edit writes: a format the model does not write is cleared,
+    // a GIF's / an SVG's levers move into its range, and a transparent
+    // background becomes auto with a format that cannot keep it — before the
+    // transparent size snap below reads the background.
+    Object.assign(updates, imageFormatFailSafe(currentProvider, { ...data, ...updates }))
     // KIE renders a transparent background at one size only.
     const transparentAt = transparentResolutionFor(currentProvider)
     if ((updates.background ?? data.background) === "transparent" && transparentAt) {
@@ -1047,7 +1072,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     if (Object.keys(updates).length > 0) {
       onUpdate(updates)
     }
-  }, [currentProvider, data.aspectRatio, data.background]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentProvider, data.aspectRatio, data.background, data.outputFormat]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [isCustomStyle, setIsCustomStyle] = useState(
     () => !!data.style && !imageStylePresets().some((p) => p.value === data.style)
@@ -1720,14 +1745,16 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         <Separator className="mb-3" />
         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("imgcfg.modelSettings")}</label>
         <div className="flex flex-col gap-3 mt-2">
-          <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-            <AspectRatioSelector
-              options={aspectRatioOptions}
-              value={nodeAspectRatio("modify-image", data.aspectRatio)}
-              onValueChange={(v) => onUpdate({ aspectRatio: v })}
-            />
-          </MappableField>
-          {resolutionOptions && (
+          {!writesGif && (
+            <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+              <AspectRatioSelector
+                options={aspectRatioOptions}
+                value={nodeAspectRatio("modify-image", data.aspectRatio)}
+                onValueChange={(v) => onUpdate({ aspectRatio: v })}
+              />
+            </MappableField>
+          )}
+          {resolutionOptions && !writesGif && (
             <MappableField field="resolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
               <Select
                 value={data.resolution || resolutionOptions[0]?.value || "1K"}
@@ -1757,21 +1784,25 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               </Select>
             </MappableField>
           )}
-          {backgroundOptions && (
-            <MappableField field="background" label={t("field.background")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-              <Select
-                value={data.background || backgroundOptions[0]?.value}
-                onValueChange={(v) => onUpdate({ background: v })}
-              >
-                <SelectTrigger aria-label={t("field.background")}><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {backgroundOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </MappableField>
+          {!isNanoBananaEdit && (
+            <ImageFormatFields
+              provider={currentProvider}
+              data={data}
+              onUpdate={onUpdate}
+              sources={sources}
+              fieldMappings={fieldMappings}
+              onMapField={onMapField}
+            />
           )}
+          <ImageBackgroundField
+            options={backgroundOptions}
+            value={data.background}
+            format={writesFormat}
+            onChange={(v) => onUpdate({ background: v })}
+            sources={sources}
+            fieldMappings={fieldMappings}
+            onMapField={onMapField}
+          />
           {strengthConfig && (
             <div>
               <Label className="text-xs">{t("field.strength")}</Label>

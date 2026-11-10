@@ -7,6 +7,7 @@ import { ActionMenu } from "./action-menu"
 import { ActionBar } from "./action-bar"
 import { shareMedia } from "./share-utils"
 import { ELEMENT_SIZES } from "@/lib/presentation-display"
+import { imageDownloadExtension } from "@/lib/image"
 import { useT } from "@/lib/i18n"
 
 interface ImageOutputCardProps {
@@ -53,7 +54,7 @@ function ImageOutputCardImpl({ label, status, url, nodeId, onOpenMedia, elementS
             {/* Toolbar — top-right, visible on hover/touch */}
             {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-static-element-interactions */}
             <div className="media-overlay-controls absolute top-2 end-2 hidden md:flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
-              <GlassButton onClick={() => downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.png`)} title={t("common.download")}>
+              <GlassButton onClick={() => downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.${imageDownloadExtension(url)}`)} title={t("common.download")}>
                 <Download className="w-3.5 h-3.5" />
               </GlassButton>
               <GlassButton onClick={() => copyUrl(url)} title={t("cfgshared.copyUrl")}>

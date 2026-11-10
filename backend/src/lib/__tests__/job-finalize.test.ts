@@ -146,6 +146,15 @@ const autoAttachMocks = vi.hoisted(() => ({
 }))
 
 vi.mock("@/lib/character-auto-attach.js", () => autoAttachMocks)
+// The formatted-image store (lib/image-output-store.ts) is its own suite; here
+// only which path finalize takes, read from the job's recorded request.
+const formatStoreMocks = vi.hoisted(() => ({
+  storeFormattedImages: vi.fn(),
+}))
+vi.mock("@/lib/image-output-store.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/image-output-store.js")>()),
+  storeFormattedImages: formatStoreMocks.storeFormattedImages,
+}))
 vi.mock("@/lib/gpt-image-2-6-settle.js", () => ({
   gptImage26AutoSettledBase: async (k: number | undefined) => (k === undefined ? undefined : Math.ceil(k * 2.5)),
 }))
@@ -397,6 +406,57 @@ describe("finalizeJobWithMedia", () => {
 
     expect(sharedMocks.uploadImageVariantsMaybeWatermark).toHaveBeenCalledTimes(1)
     expect(sharedMocks.uploadVideoMaybeWatermark).not.toHaveBeenCalled()
+  })
+
+  it("an image asked for as a GIF (or SVG, JPEG, WebP) is stored as its format, with its type and still on output_data", async () => {
+    mocks.jobsSingleMock.mockResolvedValueOnce({
+      data: { id: "j-gif", user_id: "u1", should_watermark: true, is_public: true, job_type: "generate-image", workflow_execution_id: null, status: "processing", input_data: { outputFormat: "gif", gifFrames: 9 } },
+      error: null,
+    })
+    formatStoreMocks.storeFormattedImages.mockResolvedValueOnce({
+      urls: ["https://r2.example/images/j-gif.gif"],
+      format: "gif",
+      mimeType: "image/gif",
+      thumbnailUrl: "https://r2.example/images/j-gif-still.png",
+    })
+    const out = await finalizeJobWithMedia({ jobId: "j-gif", jobType: "generate-image", result: { url: "https://kie/out.gif", cost: 0.05, providerUsed: "kie" } })
+
+    expect(out).toEqual({ ok: true })
+    expect(formatStoreMocks.storeFormattedImages).toHaveBeenCalledWith({ sourceUrls: ["https://kie/out.gif"], jobId: "j-gif", userId: "u1", watermark: true })
+    expect(sharedMocks.uploadImageVariantsMaybeWatermark).not.toHaveBeenCalled()
+    const fields = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1]
+    expect(fields.output_data).toMatchObject({
+      imageUrl: "https://r2.example/images/j-gif.gif",
+      imageMimeType: "image/gif",
+      thumbnailUrl: "https://r2.example/images/j-gif-still.png",
+    })
+  })
+
+  it("an image asked for as PNG, or with no format, keeps the PNG path", async () => {
+    for (const input_data of [{ outputFormat: "png" }, {}, null]) {
+      vi.clearAllMocks()
+      resetMocksToHappyPath()
+      mocks.jobsSingleMock.mockResolvedValueOnce({
+        data: { id: "j-png", user_id: "u1", should_watermark: false, is_public: true, job_type: "image-to-image", workflow_execution_id: null, status: "processing", input_data },
+        error: null,
+      })
+      await finalizeJobWithMedia({ jobId: "j-png", jobType: "image-to-image", result: { url: "https://kie/out.png", cost: 0.05, providerUsed: "kie" } })
+      expect(formatStoreMocks.storeFormattedImages).not.toHaveBeenCalled()
+      expect(sharedMocks.uploadImageVariantsMaybeWatermark).toHaveBeenCalledTimes(1)
+      expect(sharedMocks.markJobCompletedDetailed.mock.calls[0]![1].output_data).not.toHaveProperty("imageMimeType")
+    }
+  })
+
+  it("a refused SVG fails finalize before anything is stored or completed, and releases the claim", async () => {
+    mocks.jobsSingleMock.mockResolvedValueOnce({
+      data: { id: "j-svg", user_id: "u1", should_watermark: false, is_public: true, job_type: "generate-image", workflow_execution_id: null, status: "processing", input_data: { outputFormat: "svg" } },
+      error: null,
+    })
+    formatStoreMocks.storeFormattedImages.mockRejectedValueOnce(new Error("refused"))
+    await expect(finalizeJobWithMedia({ jobId: "j-svg", jobType: "generate-image", result: { url: "https://kie/out.svg", cost: 0.05, providerUsed: "kie" } })).rejects.toThrow("refused")
+    expect(sharedMocks.markJobCompletedDetailed).not.toHaveBeenCalled()
+    expect(sharedMocks.commitJobCredits).not.toHaveBeenCalled()
+    expect(mocks.jobsUpdateMock).toHaveBeenCalled()
   })
 
   it("video dispatch: jobType='image-to-video' → uploadVideoMaybeWatermark called, NOT uploadImageVariantsMaybeWatermark", async () => {

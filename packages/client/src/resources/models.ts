@@ -69,6 +69,16 @@ export interface ModelSummary {
    * not sent, so `opaque` there renders as `auto`. Absent otherwise.
    */
   backgroundOnlyAtTransparentResolution?: true
+  /** The files the model writes (`png`, `jpeg`, `webp`, `gif`, `svg`), its default first. Absent: a single format, not a setting. */
+  outputFormats?: string[]
+  /** The pixel size of every frame of a GIF the model writes (square). Present when `outputFormats` lists `gif`. */
+  gifFrameSize?: number
+  /** A GIF's frames: a whole number from `min` to `max`, or one of `values` where the model takes only some. */
+  gifFrames?: { min: number; max: number; default: number; values?: number[] }
+  /** How long each GIF frame shows, in ms: `min` to `max` in steps of `step`. */
+  gifFrameDurationMs?: { min: number; max: number; step: number; default: number }
+  /** The levels of detail an SVG is drawn at (`standard`, `detailed`, `max`), the default first. Present when `outputFormats` lists `svg`. */
+  svgLevels?: string[]
   durations?: number[]
   /** The length (seconds) a request that names no `duration` renders and is
    *  charged at, where the model has one. */

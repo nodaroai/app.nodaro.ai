@@ -54,6 +54,17 @@ describe("imageDimensionsOf", () => {
     expect(await imageDimensionsOf(big.subarray(0, 64 * 1024))).toEqual({ width: 2048, height: 1152 })
   })
 
+  it("reads a GIF as one frame and an SVG as its root's size, else its viewBox, from its leading bytes too", async () => {
+    const frame = await png(48, 32)
+    const gif = await sharp([frame, frame, frame], { join: { animated: true } }).gif().toBuffer()
+    expect(await imageDimensionsOf(gif)).toEqual({ width: 48, height: 32 })
+    const svg = (attrs: string) => Buffer.from(`<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg" ${attrs}><rect width="1" height="1"/>${"<path d='M0 0'/>".repeat(5000)}</svg>`)
+    expect(await imageDimensionsOf(svg(`width="1024" height="1024" viewBox="0 0 512 512"`))).toEqual({ width: 1024, height: 1024 })
+    expect(await imageDimensionsOf(svg(`viewBox="0 0 2880 1620"`))).toEqual({ width: 2880, height: 1620 })
+    expect(await imageDimensionsOf(svg(`viewBox="0 0 2880 1620"`).subarray(0, 300))).toEqual({ width: 2880, height: 1620 })
+    expect(await imageDimensionsOf(svg(`width="100%"`))).toBeUndefined()
+  })
+
   it("reads a local file by its path", async () => {
     const dir = await mkdtemp(join(tmpdir(), "img-dims-"))
     dirs.push(dir)

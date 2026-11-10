@@ -966,6 +966,9 @@ const OPTION_LABELS_KO: Record<string, string> = {
   "Max": "최대",
   "Opaque": "불투명",
   "Transparent": "투명",
+  "SVG Standard": "SVG 표준",
+  "SVG Detailed": "SVG 상세",
+  "SVG Max": "SVG 최대",
   "Medium (Balanced)": "중간(균형)",
   "High (Detailed)": "높음(정밀)",
   "Turbo (fast)": "터보(빠름)",
@@ -1060,6 +1063,9 @@ const OPTION_LABELS_KO: Record<string, string> = {
 
 const OPTION_QUALIFIERS_KO: Record<string, string> = {
   "Landscape": "가로",
+  // The output formats: "GIF (animated)", "SVG (vector)".
+  "Animated": "애니메이션",
+  "Vector": "벡터",
   "Portrait": "세로",
   "Square": "정사각형",
   "Wide": "와이드",

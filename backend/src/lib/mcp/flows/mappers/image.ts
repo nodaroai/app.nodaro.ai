@@ -110,6 +110,7 @@ export const IMAGE_ROUTE_MAPPERS: RouteMappers = {
     fields: new Set([
       "prompt", "provider", "aspectRatio", "resolution", "quality", "background", "negativePrompt",
       "referenceImageUrls", "strength", "guidanceScale", "baseImageUrl", "maskUrl",
+      "outputFormat", "gifFrames", "gifFrameDurationMs", "svgLevel",
     ]),
     map(body) {
       const prompt = str(body.prompt)
@@ -131,6 +132,10 @@ export const IMAGE_ROUTE_MAPPERS: RouteMappers = {
           resolution: str(body.resolution),
           quality: str(body.quality),
           background: str(body.background),
+          outputFormat: str(body.outputFormat),
+          gifFrames: num(body.gifFrames),
+          gifFrameDurationMs: num(body.gifFrameDurationMs),
+          svgLevel: str(body.svgLevel),
           strength: num(body.strength),
           guidanceScale: num(body.guidanceScale),
           baseImageUrl: str(body.baseImageUrl),
@@ -146,6 +151,7 @@ export const IMAGE_ROUTE_MAPPERS: RouteMappers = {
     fields: new Set([
       "imageUrl", "prompt", "provider", "aspectRatio", "resolution", "quality", "background", "negativePrompt",
       "referenceImageUrls", "strength", "seed", "maskUrl",
+      "outputFormat", "gifFrames", "gifFrameDurationMs", "svgLevel",
     ]),
     map(body) {
       const imageUrl = str(body.imageUrl)
@@ -166,6 +172,10 @@ export const IMAGE_ROUTE_MAPPERS: RouteMappers = {
           resolution: str(body.resolution),
           quality: str(body.quality),
           background: str(body.background),
+          outputFormat: str(body.outputFormat),
+          gifFrames: num(body.gifFrames),
+          gifFrameDurationMs: num(body.gifFrameDurationMs),
+          svgLevel: str(body.svgLevel),
           negativePrompt: str(body.negativePrompt),
           strength: num(body.strength),
           seed: num(body.seed),

@@ -25,6 +25,16 @@ describe("localizeOptionLabel", () => {
     expect(localizeOptionLabel("Full cover (default)", "pt-BR")).toBe("Cobertura total (Padrão)")
     expect(localizeOptionLabel("Full cover (default)", "en")).toBe("Full cover (default)")
   })
+  it("translates the image output formats and SVG levels, the format names kept", () => {
+    expect(localizeOptionLabel("GIF (animated)", "he")).toBe("GIF (מונפש)")
+    expect(localizeOptionLabel("SVG (vector)", "ja")).toBe("SVG（ベクター）")
+    expect(localizeOptionLabel("GIF (animated)", "ko")).toBe("GIF(애니메이션)")
+    expect(localizeOptionLabel("SVG (vector)", "pt-BR")).toBe("SVG (Vetorial)")
+    expect(localizeOptionLabel("SVG Detailed", "he")).toBe("SVG מפורט")
+    expect(localizeOptionLabel("SVG Max", "pt-BR")).toBe("SVG máximo")
+    expect(localizeOptionLabel("WebP", "he")).toBe("WebP")
+    expect(localizeOptionLabel("GIF (animated)", "en")).toBe("GIF (animated)")
+  })
   it("passes tokens, brand names and unknown copy through", () => {
     expect(localizeOptionLabel("1080p", "he")).toBe("1080p")
     expect(localizeOptionLabel("Nano Banana Pro", "he")).toBe("Nano Banana Pro")

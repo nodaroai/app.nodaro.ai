@@ -15,12 +15,14 @@
  *
  * The size is the DISPLAYED one: EXIF orientation applied, so a photo stored
  * 3024×4032 with a quarter-turn tag reads 4032×3024, as a browser shows it. A
- * multi-page file (GIF, animated WebP) reads as one page.
+ * multi-page file (GIF, animated WebP) reads as one page, and an SVG as its
+ * root's width and height (else its viewBox).
  *
  * Never throws: a format sharp cannot read, or a header the bytes do not
  * reach, answers `undefined`.
  */
 import sharp from "sharp"
+import { looksLikeSvg, svgIntrinsicSize } from "./svg-sanitize.js"
 
 export interface ImageDimensions {
   readonly width: number
@@ -48,6 +50,13 @@ function isPixelSize(width: unknown, height: unknown): boolean {
  */
 export async function imageDimensionsOf(input: Buffer | string): Promise<ImageDimensions | undefined> {
   if (typeof input !== "string" && input.length === 0) return undefined
+  // An SVG's size is its root's width and height, else its viewBox: read from
+  // the text, so the leading bytes of a large drawing are enough (sharp needs
+  // the whole document) and nothing is drawn to measure it.
+  if (typeof input !== "string" && looksLikeSvg(input)) {
+    const size = svgIntrinsicSize(input.toString("utf8"))
+    return size && isPixelSize(size.width, size.height) ? size : undefined
+  }
   try {
     const meta = await sharp(input).metadata()
     const width = meta.autoOrient?.width ?? meta.width

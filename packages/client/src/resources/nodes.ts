@@ -16,7 +16,7 @@ import {
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
 import type { VideoCharacterReference } from "@nodaro/shared/video"
 import type { ModelInputAdjustment } from "@nodaro/shared/model-catalog"
-import type { ImageBackground, TtsOutputFormat } from "@nodaro/shared/models"
+import type { ImageBackground, ImageOutputFormat, ImageSvgLevel, TtsOutputFormat } from "@nodaro/shared/models"
 import type { VideoDepthProvider, VideoDepthModelSize, VideoDepthColormap, VideoDepthResolution } from "@nodaro/shared/media"
 import type { DirectionFields, SubjectFields } from "@nodaro/prompts/prompt-builder"
 
@@ -314,9 +314,23 @@ export interface GenerateImageParams extends StructuredReferenceParams, Generati
    *  `provider`. models × count is at most 8. With `presetId`, the preset is
    *  applied once per model. */
   models?: string[]
-  /** With `count`, image i gets `seed + i` — one seed would draw the same image every time. */
   /** Image background, on the models that take one. `transparent` renders at 1K. */
   background?: ImageBackground
+  /**
+   * The file the run writes, on the models that list `outputFormats`:
+   * `png` (the default), `jpeg`, `webp`, `gif` (an animation of square frames,
+   * 512 pixels a side: the ratio and size do not apply) or `svg` (a vector
+   * drawing). A transparent background is kept only in `png` and `webp`. A GIF
+   * or an SVG takes no mask. What changed is said in `adjustments`.
+   */
+  outputFormat?: ImageOutputFormat
+  /** A GIF's frames, 2–16 (9 by default); read only with `outputFormat: "gif"`. */
+  gifFrames?: number
+  /** How long each GIF frame shows, in ms: 20–2000 in steps of 10 (200 by default); read only with `outputFormat: "gif"`. */
+  gifFrameDurationMs?: number
+  /** An SVG's level of detail, `standard` (default), `detailed` or `max`; read only with `outputFormat: "svg"`. */
+  svgLevel?: ImageSvgLevel
+  /** With `count`, image i gets `seed + i` — one seed would draw the same image every time. */
   seed?: number
   /** Flat reference image URLs — appended after `connectedReferences`. */
   referenceImageUrls?: string[]

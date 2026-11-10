@@ -130,6 +130,7 @@ vi.mock("../../credits-job-lifecycle.js", () => ({
 }))
 
 import { bumpAttemptsOrExhaust } from "../bump-attempts.js"
+import { SVG_REFUSED_MESSAGE } from "../../svg-sanitize.js"
 import { MAX_ATTEMPTS } from "../types.js"
 
 // G-7 harness accessors (did not exist before this task).
@@ -225,6 +226,13 @@ describe("bumpAttemptsOrExhaust", () => {
     )
     expect(mocks.refundMock).toHaveBeenCalledWith("j-1")
     expect(mocks.anomaliesInsertMock).toHaveBeenCalled()
+  })
+
+  it("an SVG that cannot be made safe force-fails + refunds on the FIRST bump: every attempt refuses it", async () => {
+    mocks.jobsSelectSingleMock.mockResolvedValueOnce({ data: { reconcile_attempts: 0 }, error: null })
+    await bumpAttemptsOrExhaust("j-1", new Error(SVG_REFUSED_MESSAGE))
+    expect(mocks.jobsUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ status: "failed", reconcile_attempts: 1 }))
+    expect(mocks.refundMock).toHaveBeenCalledWith("j-1")
   })
 
   it("storage-limit-exceeded stays transient (quota can self-heal) — bumps only", async () => {

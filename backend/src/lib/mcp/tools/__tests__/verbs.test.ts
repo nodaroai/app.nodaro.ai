@@ -205,6 +205,34 @@ describe("generate_image verb", () => {
   })
 })
 
+describe("the image verbs' output format", () => {
+  it("generate_image, modify_image and image_to_image hand the format and its levers to the route", async () => {
+    const gen = stubRoute("POST", "/v1/generate-image", { jobId: "j-gif" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: gen.fastify })
+    await callTool(server, "generate_image", { prompt: "a flag", model: "gpt-image-2-6-flare", output_format: "GIF", gif_frames: 12, gif_frame_duration_ms: 250 })
+    expect(gen.received.body).toMatchObject({ outputFormat: "gif", gifFrames: 12, gifFrameDurationMs: 250 })
+
+    const mod = stubRoute("POST", "/v1/image-to-image", { jobId: "j-svg" })
+    const server2 = buildServer()
+    registerVerbs({ server: server2, session: executeSession(), fastify: mod.fastify })
+    await callTool(server2, "modify_image", { prompt: "as a logo", image_url: "https://example.com/a.png", model: "gpt-image-2-6-flare-i2i", output_format: "svg", svg_level: "max" })
+    expect(mod.received.body).toMatchObject({ outputFormat: "svg", svgLevel: "max" })
+    await callTool(server2, "image_to_image", { prompt: "as a photo", image_url: "https://example.com/a.png", model: "gpt-image-2-6-flare-i2i", output_format: "jpg" })
+    expect(mod.received.body).toMatchObject({ outputFormat: "jpeg" })
+    expect(mod.received.body).not.toHaveProperty("svgLevel")
+  })
+
+  it("no format named sends none (a PNG, as before)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-image", { jobId: "j-png" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "generate_image", { prompt: "a flag", model: "gpt-image-2-6-flare", gif_frames: 12 })
+    expect(received.body).not.toHaveProperty("outputFormat")
+    expect(received.body).not.toHaveProperty("gifFrames")
+  })
+})
+
 describe("modify_image verb", () => {
   it("calls /v1/image-to-image with image_url + composed prompt", async () => {
     const { fastify, received } = stubRoute("POST", "/v1/image-to-image", { jobId: "j-mi" })

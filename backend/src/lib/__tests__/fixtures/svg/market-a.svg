@@ -1,0 +1,230 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <title>Farmers market at sunset</title>
+  <desc>A busy illustrated farmers market with striped awnings, produce crates, lanterns, shoppers, bicycle and a Fresh Today sign.</desc>
+  <defs>
+    <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ed8b72" />
+      <stop offset=".52" stop-color="#ffad46" />
+      <stop offset="1" stop-color="#f6c75a" />
+    </linearGradient>
+    <linearGradient id="groundGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d48758" />
+      <stop offset="1" stop-color="#edad72" />
+    </linearGradient>
+    <linearGradient id="woodGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9b562b" />
+      <stop offset="1" stop-color="#63351f" />
+    </linearGradient>
+    <linearGradient id="signGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f5d69c" />
+      <stop offset="1" stop-color="#e7b878" />
+    </linearGradient>
+    <radialGradient id="sunGrad">
+      <stop offset="0" stop-color="#fff5a2" />
+      <stop offset="1" stop-color="#ffd55c" />
+    </radialGradient>
+    <linearGradient id="awningRed" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#f5e1bd" />
+      <stop offset=".45" stop-color="#f3d09e" />
+      <stop offset=".46" stop-color="#d24b2b" />
+      <stop offset="1" stop-color="#b73526" />
+    </linearGradient>
+    <linearGradient id="basketGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#edb24e" />
+      <stop offset="1" stop-color="#ad652d" />
+    </linearGradient>
+  </defs>
+
+  <rect id="sky" width="1024" height="700" fill="url(#skyGrad)" />
+  <circle id="sun" cx="578" cy="237" r="57" fill="url(#sunGrad)" />
+  <path id="clouds" d="M470 174c48-14 76-11 110 0 42-19 96-15 132 3 35-6 69-2 91 12H465zM488 136c47 2 87-9 127-2 34-7 74-1 104 8H486z" fill="#f3a342" opacity=".8" />
+  <path id="distantHills" d="M0 390l105-54 91 30 88-64 91 45 100-60 92 61 104-45 95 59 158-42v270H0z" fill="#775047" />
+  <path id="farHillLight" d="M386 373l93-64 93 35 89-58 100 59 70-32 84 54v130H386z" fill="#9c6252" />
+  <path id="ground" d="M0 500h1024v524H0z" fill="url(#groundGrad)" />
+  <path id="pathLight" d="M493 1024c77-131 142-228 209-270 55-34 123-42 221-33l101 25v278z" fill="#f2bc7c" opacity=".75" />
+  <path id="pathShadow1" d="M430 884l313-88 77 19-334 116zM500 978l362-105 47 17-380 119zM720 696l203-52 44 14-216 65z" fill="#a66456" opacity=".7" />
+
+  <g id="backgroundTrees" fill="#405928">
+    <path d="M0 155c35-45 54-45 78-22 12-39 49-41 64-7 31-27 69-8 66 27 42-17 72 22 48 52 28 8 37 37 20 59H0z" />
+    <path d="M771 131c22-35 52-35 69-10 15-48 54-47 67-8 29-20 62 3 55 31 39-2 63 35 40 62 13 14 13 34 3 48H756z" />
+    <path d="M255 207c24-33 47-30 61-5 17-29 48-22 51 9 31-9 52 16 39 40 22 11 19 41-2 51H220z" />
+    <path d="M889 256c17-31 42-31 56-5 19-29 49-19 48 13 24-5 39 17 26 37 10 16 4 35-14 43H858z" />
+  </g>
+  <g id="church" fill="#8d6857">
+    <path d="M603 342h111v103H603z" />
+    <path d="M613 343l47-49 47 49z" />
+    <path d="M661 294l14-72 14 72z" fill="#51495a" />
+    <path d="M675 222l4-29 5 29z" fill="#51495a" />
+    <rect x="619" y="365" width="11" height="22" fill="#d2a65e" />
+    <rect x="652" y="365" width="13" height="22" fill="#d2a65e" />
+    <rect x="688" y="365" width="12" height="22" fill="#d2a65e" />
+  </g>
+
+  <g id="stallLeft">
+    <path id="leftPosts" d="M31 229h18v429H31zM455 256h18v402h-18z" fill="#63351e" />
+    <path d="M20 238l214-126 259 144-8 22L234 139 32 270z" fill="#754021" />
+    <path d="M28 211h438v42H28z" fill="#754021" />
+    <path id="leftAwning" d="M0 26l480 235v54c-15 25-42 23-58-2-19 29-48 24-57-5-21 25-49 19-56-9-22 23-49 14-55-14-23 19-49 7-53-20-24 15-48 0-51-27-23 11-48-7-48-31-22 7-45-14-45-37z" fill="url(#awningRed)" />
+    <path d="M53 53l49 24v184c-17 21-43 13-49-9zM151 102l48 24v181c-18 17-43 8-48-15zM248 150l48 24v178c-19 15-43 5-48-18zM345 197l49 24v174c-18 13-42 0-49-20zM442 244l38 19v147c-14 8-29-2-38-16z" fill="#f4e0bb" />
+    <path d="M0 220h475v16H0z" fill="#6a351e" />
+  </g>
+
+  <g id="lanterns" stroke="#262526" stroke-width="8">
+    <path d="M89 238c0-22 38-22 38 0" fill="none" />
+    <path d="M77 252h63l-8 72c-11 14-36 14-48 0z" fill="#f4b83f" />
+    <path d="M93 261v54M124 261v54" stroke="#6b4027" stroke-width="5" />
+    <path d="M298 283c0-21 35-21 35 0" fill="none" />
+    <path d="M287 296h58l-7 65c-10 13-34 13-45 0z" fill="#f3b43b" />
+    <path d="M301 304v48M331 304v48" stroke="#6b4027" stroke-width="5" />
+    <path d="M778 43c0-20 22-20 22 0" fill="none" />
+    <path d="M765 56h55l-7 104c-13 16-32 16-45 0z" fill="#f3b43b" />
+    <path d="M779 70v79M805 70v79" stroke="#6b4027" stroke-width="5" />
+  </g>
+
+  <g id="middleStall">
+    <path d="M330 343h18v305h-18zM716 351h18v308h-18z" fill="#63351f" />
+    <path d="M323 353l192-119 220 124-9 20-211-111-181 111z" fill="#754021" />
+    <path d="M322 335h405v31H322z" fill="#6c3a21" />
+    <path d="M320 304l392 49v59c-17 18-40 16-52-10-19 23-43 18-53-8-20 22-45 13-50-12-20 19-43 10-50-14-19 15-43 4-47-21-19 10-41-4-44-27-19 6-37-11-40-33z" fill="#5b9e91" />
+    <path d="M375 311l40 6-4 82c-17 13-37 1-39-19zM455 321l42 5v81c-17 12-38 0-40-20zM540 332l42 5v80c-17 11-38-2-40-20zM625 342l42 5v78c-17 10-37-2-39-20zM696 351l16 2v69c-13 9-25-3-27-17z" fill="#f2dfb6" />
+  </g>
+
+  <g id="backgroundPeople">
+    <circle cx="267" cy="435" r="17" fill="#9a4a2d" /><path d="M242 454q26-21 51 0l11 105h-76z" fill="#40566c" />
+    <circle cx="320" cy="450" r="14" fill="#77402d" /><path d="M297 468q25-18 46 0l14 92h-65z" fill="#775b50" />
+    <circle cx="760" cy="445" r="16" fill="#70402e" /><path d="M735 462q28-22 52 0l12 123h-78z" fill="#3e6747" />
+    <circle cx="916" cy="462" r="14" fill="#a15b37" /><path d="M895 478q23-19 45 0l12 105h-65z" fill="#41556c" />
+    <circle cx="215" cy="467" r="13" fill="#72432e" /><path d="M195 481q22-16 42 0l8 89h-59z" fill="#b27136" />
+  </g>
+
+  <g id="signPost">
+    <path d="M870 0h44v790h-44z" fill="url(#woodGrad)" />
+    <path d="M914 0h37v790h-37z" fill="#784323" />
+    <path d="M771 49h171v19H771z" fill="#67391f" />
+    <path d="M801 53l-19-19 12-11 21 21z" fill="#65371f" />
+    <path d="M923 0h101v28H923z" fill="#713d21" />
+    <path d="M942 115l74-18 5 22-74 19z" fill="#9a5c2e" />
+    <path d="M933 151l80-24 7 20-80 27z" fill="#74401f" />
+    <path id="signBoard" d="M766 198q0-12 12-15l230-37q10-2 12 10l15 250q1 14-12 16l-230 25q-12 1-13-12z" fill="url(#signGrad)" stroke="#87502c" stroke-width="5" />
+    <text id="signText" x="790" y="286" fill="#285638" font-family="sans-serif" font-size="66" font-weight="900" font-style="italic" transform="rotate(-7 790 286)">FRESH</text>
+    <text id="signText2" x="803" y="369" fill="#285638" font-family="sans-serif" font-size="67" font-weight="900" font-style="italic" transform="rotate(-7 803 369)">TODAY</text>
+    <path d="M821 397q72-28 143-24" fill="none" stroke="#bd3d2c" stroke-width="10" stroke-linecap="round" transform="rotate(-7 821 397)" />
+    <path d="M795 390q-12-23-32-31 2 26 27 42M975 374q16-20 32-24-5 25-29 35" fill="#3b7139" />
+  </g>
+
+  <g id="produceStalls">
+    <path d="M0 604h191v72H0zM5 730h228v64H5zM229 746h221v78H229zM302 845h172v90H302z" fill="#7a411f" stroke="#5d321d" stroke-width="7" />
+    <path d="M0 618h191v30H0zM5 744h228v28H5zM229 760h221v30H229zM302 858h172v31H302z" fill="#b96b2c" />
+    <path d="M0 655h191M5 782h228M229 801h221M302 900h172" stroke="#5d321d" stroke-width="7" />
+    <g id="apples" fill="#d83b25">
+      <circle cx="24" cy="602" r="20" /><circle cx="57" cy="591" r="23" /><circle cx="92" cy="603" r="21" /><circle cx="129" cy="592" r="23" /><circle cx="165" cy="605" r="20" />
+      <circle cx="22" cy="570" r="18" /><circle cx="57" cy="558" r="22" /><circle cx="95" cy="570" r="19" /><circle cx="130" cy="557" r="21" /><circle cx="166" cy="570" r="18" />
+      <path d="M55 541q5-13 15-15M126 540q4-13 14-15" stroke="#3b6b2e" stroke-width="5" fill="none" />
+    </g>
+    <g id="oranges" fill="#f58d19">
+      <circle cx="25" cy="721" r="25" /><circle cx="68" cy="710" r="29" /><circle cx="114" cy="722" r="25" /><circle cx="161" cy="711" r="28" /><circle cx="207" cy="725" r="24" />
+    </g>
+    <g id="vegetables">
+      <path d="M245 735l35-91 12 6-24 97zM274 746l48-101 12 7-35 102zM305 748l53-91 12 8-40 92zM339 755l51-86 12 8-40 88z" fill="#e96d24" />
+      <path d="M242 656q-3-42 19-62M260 654q13-43 42-57M286 660q28-40 55-41M314 665q42-31 65-25" stroke="#3c7b35" stroke-width="9" fill="none" />
+      <path d="M320 842q-7-30 7-59M348 843q2-36 23-54M377 845q12-31 36-43M406 848q22-25 43-27" stroke="#4a8b35" stroke-width="14" fill="none" />
+      <g fill="#e34627"><circle cx="337" cy="832" r="20" /><circle cx="372" cy="821" r="22" /><circle cx="408" cy="832" r="21" /><circle cx="441" cy="821" r="20" /></g>
+    </g>
+    <path d="M215 697q45-38 101 0l-7 40H218z" fill="#3d7c34" />
+  </g>
+
+  <g id="leftVendor">
+    <ellipse cx="145" cy="330" rx="70" ry="17" fill="#e3a72d" />
+    <path d="M111 330q13-43 48-39 31 5 40 39z" fill="#e5a839" />
+    <circle cx="151" cy="377" r="36" fill="#dc7846" />
+    <path d="M116 374q11-33 39-34 27 3 36 34-23-9-75 0z" fill="#432b21" />
+    <path d="M106 413q47-30 91 1l36 126H70z" fill="#f2dfbd" />
+    <path d="M103 431l-45 105 27 12 52-92zM188 431l67 71-15 18-75-59z" fill="#f2dfbd" />
+    <path d="M115 420l25 119h51l-9-118z" fill="#34744b" />
+    <path d="M165 485q43 5 91 22" fill="none" stroke="#dc7846" stroke-width="23" stroke-linecap="round" />
+    <circle cx="267" cy="508" r="22" fill="#d93d24" />
+    <path d="M268 488q5-14 16-13" stroke="#3d732e" stroke-width="6" fill="none" />
+    <path d="M166 375q22 9 33-1" fill="none" stroke="#542b24" stroke-width="4" />
+  </g>
+
+  <g id="womanForeground">
+    <path d="M398 367q32-32 73-3l47 37-30 17-73-20z" fill="#f4c754" />
+    <path d="M420 363q30-42 61-14l39 42-96-18z" fill="#f6c95b" />
+    <circle cx="439" cy="423" r="43" fill="#d87944" />
+    <path d="M398 423q9-57 60-47 34 6 39 49l-25-24-15 21-44-8z" fill="#3d261f" />
+    <path d="M397 465q45-28 88 1l27 158-105 0z" fill="#dc4a27" />
+    <path d="M405 588l-18 319q39 34 98 0l-3-319z" fill="#f0ddba" />
+    <path d="M484 594l50 304q27 19 56-3l-67-316z" fill="#f4e5c4" />
+    <path d="M397 509l-36 126 22 10 56-112z" fill="#d87944" />
+    <path d="M379 628q35 12 65 4" fill="none" stroke="#d87944" stroke-width="23" stroke-linecap="round" />
+    <path d="M429 441q18 17 34 2" fill="none" stroke="#572c25" stroke-width="4" />
+    <path d="M383 632q-10 9-13 35" fill="none" stroke="#754226" stroke-width="7" />
+    <path d="M356 662q13-8 26 4l-2 48q-16 12-29-2z" fill="url(#basketGrad)" />
+    <path d="M357 674h21M354 687h26M353 701h27" stroke="#9c572d" stroke-width="4" />
+    <path d="M359 661q-1-42 17-51 20 15 9 55" fill="none" stroke="#9c572d" stroke-width="6" />
+    <path d="M365 650q15-24 38-11l-9 37h-35z" fill="#42903c" />
+  </g>
+
+  <g id="shoppers">
+    <circle cx="594" cy="408" r="27" fill="#77402a" />
+    <path d="M558 438q36-29 71 0l11 183-88 0z" fill="#40729a" />
+    <path d="M567 617l-8 179h37l19-179zM625 617l13 177h35l-20-179z" fill="#704321" />
+    <path d="M562 493l-32 111 19 8 45-102M631 492l34 106-19 8-42-99" fill="none" stroke="#d07645" stroke-width="19" />
+    <path d="M532 605q22 9 40 0" fill="none" stroke="#d07645" stroke-width="18" />
+    <path d="M654 602q17 10 28-1" fill="none" stroke="#d07645" stroke-width="17" />
+    <path d="M606 600q-2 44 18 62" fill="none" stroke="#a56531" stroke-width="5" />
+    <path d="M584 641h93v60H584z" fill="url(#basketGrad)" />
+    <path d="M596 641q-1-50 37-49 34 3 37 50" fill="none" stroke="#a56531" stroke-width="7" />
+    <path d="M588 656h86M588 674h87M588 690h87" stroke="#9c572d" stroke-width="4" />
+
+    <circle cx="722" cy="442" r="27" fill="#b8aca0" />
+    <path d="M692 471q36-28 70 0l16 126-102 0z" fill="#7c4c86" />
+    <path d="M699 594l-17 125h40l18-125zM747 594l10 127h39l-15-127z" fill="#393445" />
+    <path d="M695 481l-37 105 19 7 48-90M765 481l25 99-17 6-37-91" fill="none" stroke="#c1afa3" stroke-width="17" />
+    <path d="M721 438q31-3 32 10" fill="none" stroke="#5a4039" stroke-width="5" />
+    <path d="M695 437q-4-20 22-27 31-3 36 22" fill="#c6c1b6" />
+  </g>
+
+  <g id="rightPerson">
+    <circle cx="818" cy="453" r="24" fill="#75422c" />
+    <path d="M785 480q37-23 67 0l22 153H778z" fill="#396a4a" />
+    <path d="M800 620l-8 57h27l12-57zM840 620l13 57h27l-18-57z" fill="#d68e4d" />
+    <path d="M793 496l-33 91 18 7 44-82M851 493l22 96-18 5-34-91" fill="none" stroke="#d68e4d" stroke-width="16" />
+    <path d="M757 584h62v50h-62z" fill="url(#basketGrad)" />
+    <path d="M766 584q-3-42 23-43 25 3 28 43" fill="none" stroke="#a05d2b" stroke-width="6" />
+    <path d="M758 598h60M758 615h61" stroke="#98552b" stroke-width="4" />
+  </g>
+
+  <g id="sunflowers">
+    <path d="M40 937q25-136 67-221M123 947q-7-126-36-205M171 950q20-125 2-217" stroke="#4b7f36" stroke-width="10" fill="none" />
+    <g fill="#f9bf28">
+      <path d="M78 771c-31-25-53 10-25 30-39 9-25 45 8 37-19 33 18 50 38 17 16 30 49 7 31-21 35-2 28-40-6-38 20-32-15-49-31-25z" />
+      <path d="M134 842c-28-26-50 9-23 28-36 10-23 43 8 35-18 31 17 47 35 15 17 27 46 5 29-20 32-4 25-37-6-36 17-30-14-46-29-22z" />
+    </g>
+    <circle cx="78" cy="807" r="22" fill="#754421" /><circle cx="134" cy="874" r="21" fill="#754421" />
+    <path d="M0 955q50-34 98 4 53-45 112 4l-8 61H0z" fill="#7b8583" />
+    <path d="M11 967h180v55H11z" fill="#858d8b" />
+  </g>
+
+  <g id="bicycle">
+    <circle cx="789" cy="859" r="112" fill="none" stroke="#313334" stroke-width="13" />
+    <circle cx="985" cy="857" r="107" fill="none" stroke="#313334" stroke-width="13" />
+    <path d="M789 859l81-140 115 138M789 859l119-1M870 719l35 139M870 719h-48M897 711l57 11" fill="none" stroke="#14799b" stroke-width="10" stroke-linejoin="round" />
+    <path d="M948 730l37-21 40 8" fill="none" stroke="#313334" stroke-width="8" stroke-linecap="round" />
+    <path d="M1017 717l-26-15" stroke="#313334" stroke-width="8" />
+    <path d="M872 721q-7-28 10-43" fill="none" stroke="#313334" stroke-width="8" />
+    <path d="M870 678l-32-5" stroke="#313334" stroke-width="9" />
+    <path d="M909 858q-19-14-29 0 12 16 29 0z" fill="#333" />
+    <path d="M909 858l-19 46M909 858l30 25" stroke="#333" stroke-width="6" />
+    <path d="M936 752q25-8 45 3l-2 13h-45z" fill="#b8662e" />
+    <path d="M952 756l19 2" stroke="#65351f" stroke-width="5" />
+    <path d="M769 1024q26-37 63-4l-1 4zM948 1024q25-38 62-2v2z" fill="#855027" />
+  </g>
+
+  <g id="foregroundPot">
+    <path d="M895 922h129l-13 91H908z" fill="#9c5b2c" />
+    <path d="M882 919h142v19H882z" fill="#75401f" />
+    <path d="M891 915q23-61 61-32 31-42 65 1 8 21-8 40H895z" fill="#438536" />
+    <path d="M930 890q10-36 27-44M970 890q15-35 29-42" stroke="#3c7131" stroke-width="8" fill="none" />
+  </g>
+</svg>

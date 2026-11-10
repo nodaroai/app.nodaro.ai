@@ -138,7 +138,7 @@ import { countImageInputEdges, countRefModalityEdges } from "@nodaro/shared/work
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
 import { gptImage26StaticCosts } from "./gpt-image-2-6-pricing.js"
-import { defaultImageModelForNode, gptImage26EstimatedImages, isGptImage26Tiered, resolutionAtAspectRatio } from "@nodaro/shared/model-catalog"
+import { defaultImageModelForNode, gptImage26EstimatedImages, imageFormatLeversOf, isGptImage26Tiered, resolutionAtAspectRatio } from "@nodaro/shared/model-catalog"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
@@ -668,9 +668,14 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "gpt-image-2-5-sunburst": 15,            // 1K default
   "gpt-image-2-5-sunburst:2K": 25,
   "gpt-image-2-5-sunburst:4K": 40,
-  // GPT Image 2.6: Flare and Sunburst per quality, size and input image
-  // (measured 2026-11-09, see gpt-image-2-6-pricing.ts), Economy flat at 1K.
+  // GPT Image 2.6: Flare and Sunburst per quality, size and input image, and a
+  // GIF by band of frames or an SVG by level (measured 2026-11-09 and
+  // 2026-11-10, see gpt-image-2-6-pricing.ts), Economy flat at 1K.
   ...gptImage26StaticCosts(),
+  // Economy's GIF runs on this flat row, UNMEASURED: KIE's Economy failed every
+  // request when 2.6 shipped, so no GIF of it was ever billed. Measure a real
+  // Economy GIF (each frame count it takes) and give it rows of its own before
+  // the two Economy ids are switched back on at /admin/models (migration 611).
   "gpt-image-2-6-economy": 13,
   "gpt-image-2-6-economy-i2i": 13,
   "reference-sheet:assembly": 40, // Flat sheet-assembly fee; per-panel gen priced separately (bare provider key)
@@ -7022,6 +7027,8 @@ export function getNodeModelIdentifier(
     data.renderingSpeed as string | undefined,
     data.targetResolution as string | undefined,
     isGptImage26Tiered(provider) ? gptImage26EstimatedImages(provider, data, graph.imageRefsWired ?? 0) : undefined,
+    // A GIF's band of frames and an SVG's level, on a model they price (GPT Image 2.6).
+    imageFormatLeversOf(data),
   )
 }
 

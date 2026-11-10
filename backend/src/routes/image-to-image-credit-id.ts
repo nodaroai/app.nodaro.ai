@@ -45,6 +45,10 @@ export function resolveImageToImageCreditIdentifier(req: FastifyRequest): string
     resolution: body?.resolution,
     renderingSpeed: body?.renderingSpeed,
     background: body?.background,
+    outputFormat: body?.outputFormat,
+    gifFrames: body?.gifFrames,
+    gifFrameDurationMs: body?.gifFrameDurationMs,
+    svgLevel: body?.svgLevel,
     refCount: 1 + extraRefs,
     swapToI2i: false,
   }).identifier

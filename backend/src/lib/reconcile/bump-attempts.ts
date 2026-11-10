@@ -3,6 +3,7 @@ import { markJobFailed } from "../job-failure.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { providerDetailOf, redactProviderDetail } from "../provider-error-detail.js"
 import { MAX_ATTEMPTS } from "./types.js"
+import { SVG_REFUSED_MESSAGE } from "../svg-sanitize.js"
 
 /**
  * Bump `jobs.reconcile_attempts` for an inflight job that's still stuck. When
@@ -36,6 +37,13 @@ const DETERMINISTIC_RECONCILE_ERRORS: readonly RegExp[] = [
   /^upload-size-exceeded/,
 ]
 
+/** True for a failure every attempt repeats: an oversized file, or an SVG that
+ *  cannot be made safe (lib/image-output-store.ts), failed now with its refund
+ *  rather than 18 ticks later. */
+function isDeterministicReconcileError(msg: string): boolean {
+  return DETERMINISTIC_RECONCILE_ERRORS.some((re) => re.test(msg)) || msg.startsWith(SVG_REFUSED_MESSAGE)
+}
+
 /** What a job owner sees when reconciliation gives up. The machine detail
  *  goes to the admin-only `error_detail` (W0) and `reconcile_last_error`
  *  keeps its `"exhausted"` tag for the admin Jobs page, so nothing is lost by
@@ -59,7 +67,7 @@ export async function bumpAttemptsOrExhaust(
   const current = ((data as { reconcile_attempts?: number } | null)?.reconcile_attempts ?? 0)
   const next = current + 1
 
-  if (DETERMINISTIC_RECONCILE_ERRORS.some((re) => re.test(msg))) {
+  if (isDeterministicReconcileError(msg)) {
     await forceFailExhausted(jobId, msg, next, detail)
     return
   }

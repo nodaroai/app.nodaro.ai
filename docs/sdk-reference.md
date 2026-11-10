@@ -3310,13 +3310,25 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 >   `maskUrl` (white = the area to change). Every image model can inpaint: the
 >   result's masked area is composited back over the base, and on the models
 >   whose `IMAGE_MASK_MODE` is `"prompt"` the area's position is also written
->   into the prompt. `strength` and `guidanceScale` are typed there too.
+>   into the prompt. `strength` and `guidanceScale` are typed there too. A mask
+>   cannot be used with a GIF or an SVG (`400`).
+> - The file written: `GenerateImageParams` and `ImageToImageParams` type
+>   `outputFormat` (`ImageOutputFormat`: `"png"` by default, `"jpeg"`,
+>   `"webp"`, `"gif"`, `"svg"`, on the models whose `ModelSummary.outputFormats`
+>   list it, GPT Image 2.6 Flare and Sunburst), `gifFrames` (2–16) and
+>   `gifFrameDurationMs` (20–2000, steps of 10) for a GIF, and `svgLevel`
+>   (`ImageSvgLevel`: `"standard"`, `"detailed"`, `"max"`) for an SVG. A GIF is
+>   square, 512×512 a frame: its `aspectRatio` and `resolution` are ignored and
+>   said in `adjustments`; a transparent background is kept only in PNG and
+>   WebP. The finished job's output names the file's type (`imageMimeType`) and,
+>   for a GIF or an SVG, a PNG still (`thumbnailUrl`).
 >
 > ```ts
 > import type { EditImageParams, GenerateImageParams, GenerateMaskParams } from "@nodaro/sdk"
 >
 > const { maskUrl } = await client.nodes.runAndWait("generate-mask", { imageUrl, prompt: "the red car" } satisfies GenerateMaskParams)
 > await client.nodes.runAndWait("generate-image", { prompt: "a blue car", baseImageUrl: imageUrl, maskUrl } satisfies GenerateImageParams)
+> await client.nodes.runAndWait("generate-image", { prompt: "a waving flag", provider: "gpt-image-2-6-flare", outputFormat: "gif", gifFrames: 12 } satisfies GenerateImageParams)
 > const { jobId } = await client.nodes.run("edit-image", { imageUrl, provider: "topaz-image-upscale", upscaleFactor: "4" } satisfies EditImageParams)
 > ```
 
@@ -3848,6 +3860,12 @@ size rules (each absent on every other model, and on an older server):
 - `backgroundOnlyAtTransparentResolution?: true` — the model takes a
   background setting only at `transparentResolution` (GPT Image 2.5): at any
   other size none is sent, so `opaque` there renders as `auto`.
+
+A model that writes more than one kind of file carries `outputFormats?:
+string[]` (its default first) and, where it writes them, `gifFrameSize` (512),
+`gifFrames?: { min, max, default, values? }`,
+`gifFrameDurationMs?: { min, max, step, default }` and `svgLevels?: string[]`
+(each absent on every other model, and on an older server).
 
 `ModelSummary` also types `defaultDuration` (the length an unset `duration`
 renders and is charged at) and `autoDuration` (`duration: -1` lets the model

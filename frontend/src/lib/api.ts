@@ -901,6 +901,11 @@ export async function generateImage(
     strength?: number
     guidanceScale?: number
     background?: string
+    /** The file the run writes, a GIF's frames and speed, an SVG's level (each only when set; the route snaps them per model). */
+    outputFormat?: string
+    gifFrames?: number
+    gifFrameDurationMs?: number
+    svgLevel?: string
   },
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
@@ -965,6 +970,10 @@ export async function generateImage(
   if (inpaint?.background) {
     body.background = inpaint.background
   }
+  if (inpaint?.outputFormat) body.outputFormat = inpaint.outputFormat
+  if (inpaint?.gifFrames != null) body.gifFrames = inpaint.gifFrames
+  if (inpaint?.gifFrameDurationMs != null) body.gifFrameDurationMs = inpaint.gifFrameDurationMs
+  if (inpaint?.svgLevel) body.svgLevel = inpaint.svgLevel
   return apiJson("/v1/generate-image", {
     body,
     workflowId: true,
@@ -1107,6 +1116,11 @@ export async function imageToImage(
     resolution?: string
     quality?: string
     background?: string
+    /** The file the edit writes, a GIF's frames and speed, an SVG's level (each only when set; the route snaps them per model). */
+    outputFormat?: string
+    gifFrames?: number
+    gifFrameDurationMs?: number
+    svgLevel?: string
     negativePrompt?: string
     seed?: number
     renderingSpeed?: string
@@ -1137,6 +1151,10 @@ export async function imageToImage(
   if (options?.resolution) body.resolution = options.resolution
   if (options?.quality) body.quality = options.quality
   if (options?.background) body.background = options.background
+  if (options?.outputFormat) body.outputFormat = options.outputFormat
+  if (options?.gifFrames != null) body.gifFrames = options.gifFrames
+  if (options?.gifFrameDurationMs != null) body.gifFrameDurationMs = options.gifFrameDurationMs
+  if (options?.svgLevel) body.svgLevel = options.svgLevel
   if (options?.negativePrompt) body.negativePrompt = options.negativePrompt
   if (options?.seed != null) body.seed = options.seed
   if (options?.renderingSpeed) body.renderingSpeed = options.renderingSpeed
@@ -1167,6 +1185,10 @@ export async function modifyImage(
     resolution?: string
     quality?: string
     background?: string
+    outputFormat?: string
+    gifFrames?: number
+    gifFrameDurationMs?: number
+    svgLevel?: string
     negativePrompt?: string
     seed?: number
     renderingSpeed?: string

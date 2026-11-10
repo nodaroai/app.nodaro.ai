@@ -63,6 +63,10 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
 - \`resolution\`
 - \`quality\`
 - \`background\`
+- \`output_format\`
+- \`gif_frames\`
+- \`gif_frame_duration_ms\`
+- \`svg_level\`
 - \`aspect_ratio\`
 - \`negative_prompt\`
 - \`reference_image_urls\`
@@ -102,6 +106,10 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
 - \`resolution?: string\`
 - \`quality?: string\`
 - \`background?: string\`
+- \`outputFormat?: string\`
+- \`gifFrames?: number\`
+- \`gifFrameDurationMs?: number\`
+- \`svgLevel?: string\`
 - \`seed?: number\`
 - \`renderingSpeed?: string\`
 - \`styleType?: string\`

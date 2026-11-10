@@ -45,3 +45,21 @@ describe("useGenerateImageStripModel — Auto on every model", () => {
     expect(strip({ provider: "gpt-image-2" }).currentAspect).toBe("auto")
   })
 })
+
+describe("useGenerateImageStripModel — a GIF has no ratio or size", () => {
+  it("hides both while the node writes a GIF, and names the format on the pill", () => {
+    const s = strip({ provider: "gpt-image-2-6-flare", outputFormat: "gif", aspectRatio: "16:9", resolution: "2K" })
+    expect(s.aspectOptions).toEqual([])
+    expect(s.resolutionOptions).toBeUndefined()
+    expect(s.aspectShort).toBe("GIF")
+    expect(s.resolutionShort).toBe("")
+  })
+
+  it("shows both with any other format, and with several models selected", () => {
+    const png = strip({ provider: "gpt-image-2-6-flare", outputFormat: "png", aspectRatio: "16:9", resolution: "2K" })
+    expect(png.aspectOptions.length).toBeGreaterThan(0)
+    expect(png.resolutionShort).toBe("2K")
+    const multi = strip({ provider: "gpt-image-2-6-flare", providers: ["gpt-image-2-6-flare", "nano-banana-pro"], outputFormat: "gif" })
+    expect(multi.aspectOptions.length).toBeGreaterThan(0)
+  })
+})

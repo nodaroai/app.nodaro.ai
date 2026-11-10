@@ -92,6 +92,15 @@ vi.mock("../config.js", () => ({
   resolveMarkup: configMocks.resolveMarkup,
 }))
 
+// A GIF or SVG input becomes a PNG still before any provider sees it
+// (lib/still-input-image.ts, its own suite): here, that the router hands the
+// provider what it answers.
+const stillMocks = vi.hoisted(() => ({
+  stillInputImages: vi.fn(async (urls?: string[]) => urls),
+  stillInputImage: vi.fn(async (url: string) => url),
+}))
+vi.mock("../../lib/still-input-image.js", () => stillMocks)
+
 vi.mock("../registry.js", () => ({
   providerRegistry: {
     supportsModel: registryMocks.supportsModel,
@@ -167,6 +176,25 @@ beforeEach(() => {
 // ===========================================================================
 // 1) routeAndExecute core engine, exercised through generateImage
 // ===========================================================================
+
+describe("a GIF or SVG input reaches every image provider as a still", () => {
+  it("generateImage sends the stills of its references; editImage the still of its source", async () => {
+    const generate = vi.fn().mockResolvedValue({ url: "https://r2/out.png", cost: 0.01 })
+    const edit = vi.fn().mockResolvedValue({ url: "https://r2/out.png", cost: 0.01 })
+    configMocks.buildRoutingDecision.mockResolvedValue(decision({ chain: ["replicate"], active: "replicate" }))
+    registryMocks.supportsModel.mockReturnValue(true)
+    registryMocks.getProvider.mockReturnValue(makeProviderInstance({ image: { generateImage: generate, editImage: edit } }))
+    stillMocks.stillInputImages.mockResolvedValueOnce(["https://scratch/still.png", "https://cdn/b.png"])
+    stillMocks.stillInputImage.mockResolvedValueOnce("https://scratch/source.png")
+
+    await generateImage("a dog", "flux-2-pro", ["https://cdn/a.gif", "https://cdn/b.png"])
+    expect(stillMocks.stillInputImages).toHaveBeenCalledWith(["https://cdn/a.gif", "https://cdn/b.png"])
+    expect(generate).toHaveBeenCalledWith("a dog", ["https://scratch/still.png", "https://cdn/b.png"], "flux-2-pro", undefined, undefined)
+
+    await editImage("https://cdn/a.svg", "recraft-upscale")
+    expect(edit).toHaveBeenCalledWith("https://scratch/source.png", undefined, "recraft-upscale", undefined, undefined)
+  })
+})
 
 describe("routeAndExecute (via generateImage)", () => {
   it("dispatches to the first provider in the chain that supports the model", async () => {

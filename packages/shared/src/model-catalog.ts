@@ -379,6 +379,25 @@ export interface ModelCatalogEntry {
    * `transparentResolution`. Above it nothing is sent.
    */
   backgroundOnlyAtTransparentResolution?: true
+  /**
+   * The files this image model can write (`png`, `jpeg`, `webp`, `gif`, `svg`),
+   * the first being what it writes when none is named. Absent: a single format,
+   * not a setting, and a value sent is dropped. With `gif` the aspect ratio and
+   * size do not apply (a GIF is square, `IMAGE_GIF_FRAME_SIZE` a frame), and a
+   * transparent background is only kept with `png` and `webp`
+   * (`TRANSPARENT_OUTPUT_FORMATS`); `normalizeModelInput` says what it moved.
+   */
+  outputFormats?: readonly string[]
+  /**
+   * How many frames a GIF of this model can have: a whole number from `min` to
+   * `max`, or one of `values` when the provider takes only some. Read only when
+   * `outputFormats` lists `gif`.
+   */
+  gifFrames?: { readonly min: number; readonly max: number; readonly default: number; readonly values?: readonly number[] }
+  /** How long each frame of a GIF shows, in ms: `min` to `max` in steps of `step`. */
+  gifFrameDurationMs?: { readonly min: number; readonly max: number; readonly step: number; readonly default: number }
+  /** The levels of detail an SVG of this model is drawn at (`standard`, `detailed`, `max`), the first the default. Read only when `outputFormats` lists `svg`. */
+  svgLevels?: readonly string[]
   durations?: readonly number[]
   /**
    * The length (seconds) this model renders when the request names no duration
@@ -542,6 +561,17 @@ const GPT_IMAGE_2_6_VALUE_LABELS = {
 // The GPT Image background setting. KIE renders a transparent one at 1K only
 // (`transparentResolution`), which normalizeModelInput enforces.
 const GPT_IMAGE_BACKGROUNDS = ["auto", "opaque", "transparent"] as const
+// GPT Image 2.6's files (docs.kie.ai/market/gpt/gpt-image-2-6-*). Flare and
+// Sunburst write PNG, JPEG, WebP, an animated GIF or an SVG, from a prompt and
+// from an edit; a GIF has 2 to 16 frames (KIE's cap, not the 64 of the model's
+// own guide), each shown 20 to 2000 ms in steps of 10. Economy writes a PNG or
+// a GIF from a prompt and a PNG from an edit, and takes a GIF's frames only as
+// 4, 9, 16, 25, 36 or 64: the platform offers those up to 16.
+const GPT_IMAGE_2_6_FORMATS = ["png", "jpeg", "webp", "gif", "svg"] as const
+const GPT_IMAGE_2_6_GIF_FRAMES = { min: 2, max: 16, default: 9 } as const
+const GPT_IMAGE_2_6_GIF_FRAME_DURATION = { min: 20, max: 2000, step: 10, default: 200 } as const
+const GPT_IMAGE_2_6_ECONOMY_GIF_FRAMES = { min: 4, max: 16, default: 9, values: [4, 9, 16] } as const
+const GPT_IMAGE_2_6_SVG_LEVELS = ["standard", "detailed", "max"] as const
 const IMAGEN4_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
 const IDEOGRAM_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
 const SEEDREAM_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"] as const
@@ -1072,7 +1102,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "openai",
     label: "GPT Image 2.6 Flare",
     series: "GPT Image",
-    description: "Fast GPT Image 2.6 - pick it for speed: posters, product shots and quick iteration, with stronger layouts. Up to 4K, quality from low to max or auto (priced up to the max), a transparent background at 1K.",
+    description: "Fast GPT Image 2.6 - pick it for speed: posters, product shots and quick iteration, with stronger layouts. Up to 4K, quality from low to max or auto (priced up to the max), a transparent background at 1K. Writes PNG, JPEG, WebP, an animated GIF or an SVG.",
     useCases: ["typography", "high-res", "general", "draft"],
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_6_RATIOS,
@@ -1082,6 +1112,10 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     defaultQuality: "medium",
     backgrounds: GPT_IMAGE_BACKGROUNDS,
     transparentResolution: "1K",
+    outputFormats: GPT_IMAGE_2_6_FORMATS,
+    gifFrames: GPT_IMAGE_2_6_GIF_FRAMES,
+    gifFrameDurationMs: GPT_IMAGE_2_6_GIF_FRAME_DURATION,
+    svgLevels: GPT_IMAGE_2_6_SVG_LEVELS,
     pricing: [
       { identifier: "gpt-image-2-6-flare", credits: 20, note: "medium, 1K default" },
       { identifier: "gpt-image-2-6-flare:low:1K", credits: 12, note: "low, 1K" },
@@ -1102,6 +1136,33 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "gpt-image-2-6-flare:auto:1K", credits: 96, note: "auto, 1K: the most it can cost, settled on what it really cost" },
       { identifier: "gpt-image-2-6-flare:auto:2K", credits: 193, note: "auto, 2K: the most it can cost, settled on what it really cost" },
       { identifier: "gpt-image-2-6-flare:auto:4K", credits: 321, note: "auto, 4K: the most it can cost, settled on what it really cost" },
+      { identifier: "gpt-image-2-6-flare:low:gif-2-8", credits: 8, note: "GIF, low, 2 to 8 frames" },
+      { identifier: "gpt-image-2-6-flare:low:gif-9-12", credits: 17, note: "GIF, low, 9 to 12 frames" },
+      { identifier: "gpt-image-2-6-flare:low:gif-13-16", credits: 23, note: "GIF, low, 13 to 16 frames" },
+      { identifier: "gpt-image-2-6-flare:medium:gif-2-8", credits: 14, note: "GIF, medium, 2 to 8 frames" },
+      { identifier: "gpt-image-2-6-flare:medium:gif-9-12", credits: 29, note: "GIF, medium, 9 to 12 frames" },
+      { identifier: "gpt-image-2-6-flare:medium:gif-13-16", credits: 41, note: "GIF, medium, 13 to 16 frames" },
+      { identifier: "gpt-image-2-6-flare:high:gif-2-8", credits: 17, note: "GIF, high, 2 to 8 frames" },
+      { identifier: "gpt-image-2-6-flare:high:gif-9-12", credits: 35, note: "GIF, high, 9 to 12 frames" },
+      { identifier: "gpt-image-2-6-flare:high:gif-13-16", credits: 49, note: "GIF, high, 13 to 16 frames" },
+      { identifier: "gpt-image-2-6-flare:xhigh:gif-2-8", credits: 29, note: "GIF, extra high, 2 to 8 frames" },
+      { identifier: "gpt-image-2-6-flare:xhigh:gif-9-12", credits: 61, note: "GIF, extra high, 9 to 12 frames" },
+      { identifier: "gpt-image-2-6-flare:xhigh:gif-13-16", credits: 86, note: "GIF, extra high, 13 to 16 frames" },
+      { identifier: "gpt-image-2-6-flare:max:gif-2-8", credits: 65, note: "GIF, max, 2 to 8 frames" },
+      { identifier: "gpt-image-2-6-flare:max:gif-9-12", credits: 136, note: "GIF, max, 9 to 12 frames" },
+      { identifier: "gpt-image-2-6-flare:max:gif-13-16", credits: 194, note: "GIF, max, 13 to 16 frames" },
+      { identifier: "gpt-image-2-6-flare:auto:gif-2-8", credits: 65, note: "GIF, auto, 2 to 8 frames: the most it can cost, settled on what it really cost" },
+      { identifier: "gpt-image-2-6-flare:auto:gif-9-12", credits: 136, note: "GIF, auto, 9 to 12 frames: the most it can cost, settled on what it really cost" },
+      { identifier: "gpt-image-2-6-flare:auto:gif-13-16", credits: 194, note: "GIF, auto, 13 to 16 frames: the most it can cost, settled on what it really cost" },
+      { identifier: "gpt-image-2-6-flare:medium:1K:svg-standard", credits: 25, note: "SVG standard, medium, 1K" },
+      { identifier: "gpt-image-2-6-flare:medium:2K:svg-standard", credits: 45, note: "SVG standard, medium, 2K" },
+      { identifier: "gpt-image-2-6-flare:medium:4K:svg-standard", credits: 72, note: "SVG standard, medium, 4K" },
+      { identifier: "gpt-image-2-6-flare:medium:1K:svg-detailed", credits: 64, note: "SVG detailed, medium, 1K" },
+      { identifier: "gpt-image-2-6-flare:medium:2K:svg-detailed", credits: 84, note: "SVG detailed, medium, 2K" },
+      { identifier: "gpt-image-2-6-flare:medium:4K:svg-detailed", credits: 111, note: "SVG detailed, medium, 4K" },
+      { identifier: "gpt-image-2-6-flare:medium:1K:svg-max", credits: 81, note: "SVG max, medium, 1K" },
+      { identifier: "gpt-image-2-6-flare:medium:2K:svg-max", credits: 101, note: "SVG max, medium, 2K" },
+      { identifier: "gpt-image-2-6-flare:medium:4K:svg-max", credits: 128, note: "SVG max, medium, 4K" },
     ],
     valueLabels: GPT_IMAGE_2_6_VALUE_LABELS,
     safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
@@ -1114,7 +1175,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "openai",
     label: "GPT Image 2.6 Flare (I2I)",
     series: "GPT Image",
-    description: "Fast GPT Image 2.6 edits - up to 16 input images, priced per image. Pick it while iterating.",
+    description: "Fast GPT Image 2.6 edits - up to 16 input images, priced per image. Writes PNG, JPEG, WebP, an animated GIF or an SVG. Pick it while iterating.",
     useCases: ["edit", "high-res"],
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_6_RATIOS,
@@ -1124,6 +1185,10 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     defaultQuality: "medium",
     backgrounds: GPT_IMAGE_BACKGROUNDS,
     transparentResolution: "1K",
+    outputFormats: GPT_IMAGE_2_6_FORMATS,
+    gifFrames: GPT_IMAGE_2_6_GIF_FRAMES,
+    gifFrameDurationMs: GPT_IMAGE_2_6_GIF_FRAME_DURATION,
+    svgLevels: GPT_IMAGE_2_6_SVG_LEVELS,
     pricing: [
       { identifier: "gpt-image-2-6-flare-i2i", credits: 20, note: "medium, 1K default" },
       { identifier: "gpt-image-2-6-flare-i2i:low:1K:1ref", credits: 17, note: "low, 1K, one input image (the least)" },
@@ -1131,6 +1196,8 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "gpt-image-2-6-flare-i2i:high:4K:16ref", credits: 169, note: "high, 4K, sixteen input images" },
       { identifier: "gpt-image-2-6-flare-i2i:max:4K:16ref", credits: 409, note: "max, 4K, sixteen input images (the most)" },
       { identifier: "gpt-image-2-6-flare-i2i:auto:1K:1ref", credits: 101, note: "auto, 1K, one input image: the most it can cost, settled on what it really cost" },
+      { identifier: "gpt-image-2-6-flare-i2i:medium:gif-9-12:1ref", credits: 34, note: "GIF, medium, 9 to 12 frames, one input image" },
+      { identifier: "gpt-image-2-6-flare-i2i:medium:1K:svg-standard:1ref", credits: 31, note: "SVG standard, medium, 1K, one input image" },
     ],
     valueLabels: GPT_IMAGE_2_6_VALUE_LABELS,
     safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
@@ -1143,7 +1210,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "openai",
     label: "GPT Image 2.6 Sunburst",
     series: "GPT Image",
-    description: "Precision GPT Image 2.6 - pick it when every detail counts: the strongest consistency across edits and the finest detail. Up to 4K, quality from low to max or auto (priced up to the max), a transparent background at 1K.",
+    description: "Precision GPT Image 2.6 - pick it when every detail counts: the strongest consistency across edits and the finest detail. Up to 4K, quality from low to max or auto (priced up to the max), a transparent background at 1K. Writes PNG, JPEG, WebP, an animated GIF or an SVG.",
     useCases: ["typography", "high-res", "general"],
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_6_RATIOS,
@@ -1153,6 +1220,10 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     defaultQuality: "medium",
     backgrounds: GPT_IMAGE_BACKGROUNDS,
     transparentResolution: "1K",
+    outputFormats: GPT_IMAGE_2_6_FORMATS,
+    gifFrames: GPT_IMAGE_2_6_GIF_FRAMES,
+    gifFrameDurationMs: GPT_IMAGE_2_6_GIF_FRAME_DURATION,
+    svgLevels: GPT_IMAGE_2_6_SVG_LEVELS,
     pricing: [
       { identifier: "gpt-image-2-6-sunburst", credits: 20, note: "medium, 1K default" },
       { identifier: "gpt-image-2-6-sunburst:low:1K", credits: 12, note: "low, 1K" },
@@ -1173,6 +1244,33 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "gpt-image-2-6-sunburst:auto:1K", credits: 96, note: "auto, 1K: the most it can cost, settled on what it really cost" },
       { identifier: "gpt-image-2-6-sunburst:auto:2K", credits: 193, note: "auto, 2K: the most it can cost, settled on what it really cost" },
       { identifier: "gpt-image-2-6-sunburst:auto:4K", credits: 321, note: "auto, 4K: the most it can cost, settled on what it really cost" },
+      { identifier: "gpt-image-2-6-sunburst:low:gif-2-8", credits: 8, note: "GIF, low, 2 to 8 frames" },
+      { identifier: "gpt-image-2-6-sunburst:low:gif-9-12", credits: 17, note: "GIF, low, 9 to 12 frames" },
+      { identifier: "gpt-image-2-6-sunburst:low:gif-13-16", credits: 23, note: "GIF, low, 13 to 16 frames" },
+      { identifier: "gpt-image-2-6-sunburst:medium:gif-2-8", credits: 14, note: "GIF, medium, 2 to 8 frames" },
+      { identifier: "gpt-image-2-6-sunburst:medium:gif-9-12", credits: 29, note: "GIF, medium, 9 to 12 frames" },
+      { identifier: "gpt-image-2-6-sunburst:medium:gif-13-16", credits: 41, note: "GIF, medium, 13 to 16 frames" },
+      { identifier: "gpt-image-2-6-sunburst:high:gif-2-8", credits: 17, note: "GIF, high, 2 to 8 frames" },
+      { identifier: "gpt-image-2-6-sunburst:high:gif-9-12", credits: 35, note: "GIF, high, 9 to 12 frames" },
+      { identifier: "gpt-image-2-6-sunburst:high:gif-13-16", credits: 49, note: "GIF, high, 13 to 16 frames" },
+      { identifier: "gpt-image-2-6-sunburst:xhigh:gif-2-8", credits: 29, note: "GIF, extra high, 2 to 8 frames" },
+      { identifier: "gpt-image-2-6-sunburst:xhigh:gif-9-12", credits: 61, note: "GIF, extra high, 9 to 12 frames" },
+      { identifier: "gpt-image-2-6-sunburst:xhigh:gif-13-16", credits: 86, note: "GIF, extra high, 13 to 16 frames" },
+      { identifier: "gpt-image-2-6-sunburst:max:gif-2-8", credits: 65, note: "GIF, max, 2 to 8 frames" },
+      { identifier: "gpt-image-2-6-sunburst:max:gif-9-12", credits: 136, note: "GIF, max, 9 to 12 frames" },
+      { identifier: "gpt-image-2-6-sunburst:max:gif-13-16", credits: 194, note: "GIF, max, 13 to 16 frames" },
+      { identifier: "gpt-image-2-6-sunburst:auto:gif-2-8", credits: 65, note: "GIF, auto, 2 to 8 frames: the most it can cost, settled on what it really cost" },
+      { identifier: "gpt-image-2-6-sunburst:auto:gif-9-12", credits: 136, note: "GIF, auto, 9 to 12 frames: the most it can cost, settled on what it really cost" },
+      { identifier: "gpt-image-2-6-sunburst:auto:gif-13-16", credits: 194, note: "GIF, auto, 13 to 16 frames: the most it can cost, settled on what it really cost" },
+      { identifier: "gpt-image-2-6-sunburst:medium:1K:svg-standard", credits: 25, note: "SVG standard, medium, 1K" },
+      { identifier: "gpt-image-2-6-sunburst:medium:2K:svg-standard", credits: 45, note: "SVG standard, medium, 2K" },
+      { identifier: "gpt-image-2-6-sunburst:medium:4K:svg-standard", credits: 72, note: "SVG standard, medium, 4K" },
+      { identifier: "gpt-image-2-6-sunburst:medium:1K:svg-detailed", credits: 64, note: "SVG detailed, medium, 1K" },
+      { identifier: "gpt-image-2-6-sunburst:medium:2K:svg-detailed", credits: 84, note: "SVG detailed, medium, 2K" },
+      { identifier: "gpt-image-2-6-sunburst:medium:4K:svg-detailed", credits: 111, note: "SVG detailed, medium, 4K" },
+      { identifier: "gpt-image-2-6-sunburst:medium:1K:svg-max", credits: 81, note: "SVG max, medium, 1K" },
+      { identifier: "gpt-image-2-6-sunburst:medium:2K:svg-max", credits: 101, note: "SVG max, medium, 2K" },
+      { identifier: "gpt-image-2-6-sunburst:medium:4K:svg-max", credits: 128, note: "SVG max, medium, 4K" },
     ],
     valueLabels: GPT_IMAGE_2_6_VALUE_LABELS,
     safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
@@ -1185,7 +1283,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "openai",
     label: "GPT Image 2.6 Sunburst (I2I)",
     series: "GPT Image",
-    description: "Precision GPT Image 2.6 edits - up to 16 input images, priced per image. Pick it for finished, detail-critical edits.",
+    description: "Precision GPT Image 2.6 edits - up to 16 input images, priced per image. Writes PNG, JPEG, WebP, an animated GIF or an SVG. Pick it for finished, detail-critical edits.",
     useCases: ["edit", "high-res"],
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_6_RATIOS,
@@ -1195,6 +1293,10 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     defaultQuality: "medium",
     backgrounds: GPT_IMAGE_BACKGROUNDS,
     transparentResolution: "1K",
+    outputFormats: GPT_IMAGE_2_6_FORMATS,
+    gifFrames: GPT_IMAGE_2_6_GIF_FRAMES,
+    gifFrameDurationMs: GPT_IMAGE_2_6_GIF_FRAME_DURATION,
+    svgLevels: GPT_IMAGE_2_6_SVG_LEVELS,
     pricing: [
       { identifier: "gpt-image-2-6-sunburst-i2i", credits: 20, note: "medium, 1K default" },
       { identifier: "gpt-image-2-6-sunburst-i2i:low:1K:1ref", credits: 17, note: "low, 1K, one input image (the least)" },
@@ -1202,6 +1304,8 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "gpt-image-2-6-sunburst-i2i:high:4K:16ref", credits: 169, note: "high, 4K, sixteen input images" },
       { identifier: "gpt-image-2-6-sunburst-i2i:max:4K:16ref", credits: 409, note: "max, 4K, sixteen input images (the most)" },
       { identifier: "gpt-image-2-6-sunburst-i2i:auto:1K:1ref", credits: 101, note: "auto, 1K, one input image: the most it can cost, settled on what it really cost" },
+      { identifier: "gpt-image-2-6-sunburst-i2i:medium:gif-9-12:1ref", credits: 34, note: "GIF, medium, 9 to 12 frames, one input image" },
+      { identifier: "gpt-image-2-6-sunburst-i2i:medium:1K:svg-standard:1ref", credits: 31, note: "SVG standard, medium, 1K, one input image" },
     ],
     valueLabels: GPT_IMAGE_2_6_VALUE_LABELS,
     safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
@@ -1226,6 +1330,11 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: GPT_IMAGE_2_6_ECONOMY_RATIOS,
     autoAspectFromSourceImage: true,
     backgrounds: GPT_IMAGE_BACKGROUNDS,
+    // A GIF is priced at the flat row for now: check its price on a real run
+    // before Economy is switched back on (backend gpt-image-2-6-pricing.ts).
+    outputFormats: ["png", "gif"],
+    gifFrames: GPT_IMAGE_2_6_ECONOMY_GIF_FRAMES,
+    gifFrameDurationMs: GPT_IMAGE_2_6_GIF_FRAME_DURATION,
     pricing: [{ identifier: "gpt-image-2-6-economy", credits: 13, note: "1K flat" }],
     valueLabels: GPT_IMAGE_2_6_VALUE_LABELS,
     safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
@@ -1245,6 +1354,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: GPT_IMAGE_2_6_ECONOMY_RATIOS,
     autoAspectFromSourceImage: true,
     backgrounds: GPT_IMAGE_BACKGROUNDS,
+    outputFormats: ["png"],
     pricing: [{ identifier: "gpt-image-2-6-economy-i2i", credits: 13, note: "1K flat" }],
     valueLabels: GPT_IMAGE_2_6_VALUE_LABELS,
     safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
@@ -4020,9 +4130,25 @@ function sameOptionValue(a: string | number, b: string | number): boolean {
   return Number.isFinite(fa) && Number.isFinite(fb) && fa === fb
 }
 
+/** Every lever `normalizeModelInput` can correct, as an adjustment names it. */
+export const MODEL_INPUT_ADJUSTMENT_FIELDS = [
+  "aspectRatio", "resolution", "quality", "duration", "background",
+  "outputFormat", "gifFrames", "gifFrameDurationMs", "svgLevel",
+] as const
+export type ModelInputAdjustmentField = (typeof MODEL_INPUT_ADJUSTMENT_FIELDS)[number]
+
+/** The pixel size of every frame of a GIF the platform asks for: a GIF is square. */
+export const IMAGE_GIF_FRAME_SIZE = 512
+
+/** The output formats that take no inpainting mask: the image routes refuse a mask with them (a 400). */
+export const MASKLESS_OUTPUT_FORMATS: readonly string[] = ["gif", "svg"]
+
+/** The output formats that keep a transparent background; with any other a transparent one becomes `auto`. */
+export const TRANSPARENT_OUTPUT_FORMATS: readonly string[] = ["png", "webp"]
+
 /** One correction `normalizeModelInput` made, for disclosure to the user. */
 export interface ModelInputAdjustment {
-  field: "aspectRatio" | "resolution" | "quality" | "duration" | "background"
+  field: ModelInputAdjustmentField
   /** The value that was asked for. */
   from: string | number
   /** What it became — `undefined` means the lever was dropped entirely. */
@@ -4036,6 +4162,10 @@ export interface NormalizedModelInput {
   quality?: string
   duration?: number
   background?: string
+  outputFormat?: string
+  gifFrames?: number
+  gifFrameDurationMs?: number
+  svgLevel?: string
   /** Empty when the input was already valid. */
   adjustments: ModelInputAdjustment[]
 }
@@ -4207,6 +4337,10 @@ export function normalizeModelInput(
     quality?: string
     duration?: number
     background?: string
+    outputFormat?: string
+    gifFrames?: number
+    gifFrameDurationMs?: number
+    svgLevel?: string
   },
   context: ModelInputContext = {},
 ): NormalizedModelInput {
@@ -4251,11 +4385,31 @@ export function normalizeModelInput(
     return next
   }
 
+  // The file first: a GIF's ratio and size, and every format's background, follow it.
+  const format = normalizeOutputFormat(m, input, adjustments)
+  out.outputFormat = format.levers.outputFormat
+  out.gifFrames = format.levers.gifFrames
+  out.gifFrameDurationMs = format.levers.gifFrameDurationMs
+  out.svgLevel = format.levers.svgLevel
+  const gif = format.levers.outputFormat === "gif"
+
   const sourceRatio =
-    autoAspectNeedsSourceImage(modelId, input.aspectRatio) && usableSize(context.sourceImage)
+    !gif && autoAspectNeedsSourceImage(modelId, input.aspectRatio) && usableSize(context.sourceImage)
       ? nearestCatalogAspectRatio(context.sourceImage.width, context.sourceImage.height, m.aspectRatios ?? [])
       : undefined
-  if (sourceRatio !== undefined && input.aspectRatio !== undefined) {
+  if (gif) {
+    // A GIF is square, IMAGE_GIF_FRAME_SIZE a frame: neither lever applies.
+    // "auto" leaves the shape to the model, and square is its answer.
+    if (input.aspectRatio !== undefined && input.aspectRatio !== "1:1" && !isAutoAspectToken(input.aspectRatio)) {
+      adjustments.push({
+        field: "aspectRatio",
+        from: input.aspectRatio,
+        to: "1:1",
+        reason: `A GIF from ${m.label} is square (${IMAGE_GIF_FRAME_SIZE}x${IMAGE_GIF_FRAME_SIZE} a frame), so the aspect ratio does not apply.`,
+      })
+    }
+    out.aspectRatio = input.aspectRatio === undefined ? undefined : "1:1"
+  } else if (sourceRatio !== undefined && input.aspectRatio !== undefined) {
     const { width, height } = context.sourceImage!
     const why = m.autoAspectFromSourceImage === true
       ? `${m.label}'s own "auto" does not keep the photo's shape`
@@ -4270,14 +4424,43 @@ export function normalizeModelInput(
   } else {
     out.aspectRatio = snap("aspectRatio", input.aspectRatio, m.aspectRatios)
   }
-  out.resolution = snap(
-    "resolution",
-    input.resolution,
-    m.resolutions,
-    defaultResolutionFor(modelId),
-  )
+  if (gif) {
+    if (input.resolution !== undefined) {
+      adjustments.push({
+        field: "resolution",
+        from: input.resolution,
+        to: undefined,
+        reason: `A GIF from ${m.label} is ${IMAGE_GIF_FRAME_SIZE}x${IMAGE_GIF_FRAME_SIZE} a frame, so the size does not apply.`,
+      })
+    }
+    out.resolution = undefined
+  } else {
+    out.resolution = snap(
+      "resolution",
+      input.resolution,
+      m.resolutions,
+      defaultResolutionFor(modelId),
+    )
+  }
   out.quality = snap("quality", input.quality, m.qualities, m.defaultQuality)
   out.background = snap("background", input.background, m.backgrounds)
+  // A transparent background is kept only by a format with an alpha channel the
+  // provider fills (PNG, WebP); an SVG takes no background setting at all.
+  const writes = format.levers.outputFormat
+  if (writes !== undefined && out.background !== undefined && out.background !== "auto") {
+    const dropped = writes === "svg" || (out.background === "transparent" && !TRANSPARENT_OUTPUT_FORMATS.includes(writes))
+    if (dropped) {
+      adjustments.push({
+        field: "background",
+        from: out.background,
+        to: "auto",
+        reason: writes === "svg"
+          ? `An SVG from ${m.label} takes no background setting.`
+          : `${m.label} only keeps a transparent background in PNG or WebP, not ${writes.toUpperCase()}.`,
+      })
+      out.background = "auto"
+    }
+  }
   out.duration =
     m.autoDuration === true && isAutoVideoDuration(input.duration)
       ? input.duration
@@ -4337,6 +4520,110 @@ export function normalizeModelInput(
   }
 
   return out
+}
+
+/** The format levers of a request after `normalizeOutputFormat`: a GIF's and an SVG's only when that is the file written. */
+interface NormalizedFormatLevers {
+  outputFormat?: string
+  gifFrames?: number
+  gifFrameDurationMs?: number
+  svgLevel?: string
+}
+
+/**
+ * The file a request writes, snapped to what the model writes, and the levers
+ * of that file: a GIF's frames and speed, an SVG's level. Each takes its
+ * default when the file is written and it is not named (so what is sent and
+ * priced is what is recorded), and is left out for any other file, a value
+ * the canvas keeps on a node for when GIF is chosen again. No format named is
+ * the model's own (PNG), and nothing is set.
+ */
+function normalizeOutputFormat(
+  m: ModelCatalogEntry,
+  input: { outputFormat?: string; gifFrames?: number; gifFrameDurationMs?: number; svgLevel?: string },
+  adjustments: ModelInputAdjustment[],
+): { levers: NormalizedFormatLevers } {
+  if (input.outputFormat === undefined) return { levers: {} }
+  const asked = input.outputFormat.trim().toLowerCase()
+  const value = asked === "jpg" ? "jpeg" : asked
+  const formats = m.outputFormats
+  if (!formats || formats.length === 0) {
+    adjustments.push({
+      field: "outputFormat",
+      from: input.outputFormat,
+      to: undefined,
+      reason: `${m.label} has no outputFormat setting — the value was dropped.`,
+    })
+    return { levers: {} }
+  }
+  let outputFormat = formats.find((f) => f === value)
+  if (outputFormat === undefined) {
+    outputFormat = formats[0]!
+    adjustments.push({
+      field: "outputFormat",
+      from: input.outputFormat,
+      to: outputFormat,
+      reason: `${m.label} does not write "${input.outputFormat}" — using "${outputFormat}" instead. Supported: ${formats.join(", ")}.`,
+    })
+  }
+  if (outputFormat === "gif") {
+    return { levers: { outputFormat, gifFrames: gifFramesFor(m, input.gifFrames, adjustments), gifFrameDurationMs: gifFrameDurationFor(m, input.gifFrameDurationMs, adjustments) } }
+  }
+  if (outputFormat === "svg") {
+    const levels = m.svgLevels ?? []
+    const askedLevel = input.svgLevel?.trim().toLowerCase()
+    let svgLevel = askedLevel === undefined ? levels[0] : levels.find((l) => l === askedLevel)
+    if (input.svgLevel !== undefined && svgLevel === undefined && levels.length > 0) {
+      svgLevel = levels[0]
+      adjustments.push({
+        field: "svgLevel",
+        from: input.svgLevel,
+        to: svgLevel,
+        reason: `${m.label} does not draw an SVG at level "${input.svgLevel}" — using "${svgLevel}" instead. Supported: ${levels.join(", ")}.`,
+      })
+    }
+    return { levers: { outputFormat, ...(svgLevel !== undefined && { svgLevel }) } }
+  }
+  return { levers: { outputFormat } }
+}
+
+/** A GIF's frames on `m`: the default when none, else a whole number in its range, or the nearest it takes. */
+function gifFramesFor(m: ModelCatalogEntry, asked: number | undefined, adjustments: ModelInputAdjustment[]): number | undefined {
+  const spec = m.gifFrames
+  if (!spec) return asked
+  if (asked === undefined || !Number.isFinite(asked)) return spec.default
+  const inRange = Math.min(Math.max(Math.round(asked), spec.min), spec.max)
+  const frames = spec.values && spec.values.length > 0
+    ? spec.values.reduce((best, v) => (Math.abs(v - inRange) < Math.abs(best - inRange) ? v : best), spec.values[0]!)
+    : inRange
+  if (frames !== asked) {
+    adjustments.push({
+      field: "gifFrames",
+      from: asked,
+      to: frames,
+      reason: spec.values && spec.values.length > 0
+        ? `A GIF from ${m.label} has ${spec.values.join(", ")} frames — using ${frames}.`
+        : `A GIF from ${m.label} has ${spec.min} to ${spec.max} frames — using ${frames}.`,
+    })
+  }
+  return frames
+}
+
+/** How long each GIF frame shows on `m`: the default when none, else inside its range, rounded to its step. */
+function gifFrameDurationFor(m: ModelCatalogEntry, asked: number | undefined, adjustments: ModelInputAdjustment[]): number | undefined {
+  const spec = m.gifFrameDurationMs
+  if (!spec) return asked
+  if (asked === undefined || !Number.isFinite(asked)) return spec.default
+  const ms = Math.min(Math.max(Math.round(asked / spec.step) * spec.step, spec.min), spec.max)
+  if (ms !== asked) {
+    adjustments.push({
+      field: "gifFrameDurationMs",
+      from: asked,
+      to: ms,
+      reason: `${m.label} shows each GIF frame ${spec.min} to ${spec.max} ms, in steps of ${spec.step} — using ${ms}.`,
+    })
+  }
+  return ms
 }
 
 /** Aspect tokens that mean "match the input" or "let the provider decide". They
@@ -4729,6 +5016,42 @@ export function backgroundOptionsByKind(kind: ModelKind): Record<string, Labeled
     if (m.kind !== kind) continue
     if (!m.backgrounds) continue
     out[m.id] = m.backgrounds.map((v) => ({ value: v, label: decorateLabel(m, v) }))
+  }
+  return out
+}
+
+/** How an output format is named in a menu. */
+export const IMAGE_OUTPUT_FORMAT_LABELS: Readonly<Record<string, string>> = {
+  png: "PNG",
+  jpeg: "JPEG",
+  webp: "WebP",
+  gif: "GIF (animated)",
+  svg: "SVG (vector)",
+}
+
+/** How an SVG level of detail is named in a menu (its own table: `max` is also a quality). */
+export const IMAGE_SVG_LEVEL_LABELS: Readonly<Record<string, string>> = {
+  standard: "SVG Standard",
+  detailed: "SVG Detailed",
+  max: "SVG Max",
+}
+
+/** The output formats per model of a kind, the model's default first. No entry: a single format, not a setting. */
+export function outputFormatOptionsByKind(kind: ModelKind): Record<string, LabeledOption[]> {
+  const out: Record<string, LabeledOption[]> = {}
+  for (const m of Object.values(MODEL_CATALOG)) {
+    if (m.kind !== kind || !m.outputFormats || m.outputFormats.length < 2) continue
+    out[m.id] = m.outputFormats.map((v) => ({ value: v, label: IMAGE_OUTPUT_FORMAT_LABELS[v] ?? v }))
+  }
+  return out
+}
+
+/** The SVG levels per model of a kind that writes SVG. */
+export function svgLevelOptionsByKind(kind: ModelKind): Record<string, LabeledOption[]> {
+  const out: Record<string, LabeledOption[]> = {}
+  for (const m of Object.values(MODEL_CATALOG)) {
+    if (m.kind !== kind || !m.outputFormats?.includes("svg") || !m.svgLevels) continue
+    out[m.id] = m.svgLevels.map((v) => ({ value: v, label: IMAGE_SVG_LEVEL_LABELS[v] ?? v }))
   }
   return out
 }

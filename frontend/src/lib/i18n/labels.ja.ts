@@ -966,6 +966,9 @@ const OPTION_LABELS_JA: Record<string, string> = {
   "Max": "最大",
   "Opaque": "不透明",
   "Transparent": "透明",
+  "SVG Standard": "SVG 標準",
+  "SVG Detailed": "SVG 詳細",
+  "SVG Max": "SVG 最大",
   "Medium (Balanced)": "中（バランス）",
   "High (Detailed)": "高（高精細）",
   "Turbo (fast)": "ターボ（高速）",
@@ -1060,6 +1063,9 @@ const OPTION_LABELS_JA: Record<string, string> = {
 
 const OPTION_QUALIFIERS_JA: Record<string, string> = {
   "Landscape": "横長",
+  // The output formats: "GIF (animated)", "SVG (vector)".
+  "Animated": "アニメーション",
+  "Vector": "ベクター",
   "Portrait": "縦長",
   "Square": "正方形",
   "Wide": "ワイド",

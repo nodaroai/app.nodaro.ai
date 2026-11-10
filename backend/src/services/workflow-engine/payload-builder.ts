@@ -123,6 +123,7 @@ import {
   seedanceVideoEditCreditId,
   resolveTopazUpscale,
   resolveNormalizedImageGen,
+  imageFormatInputOf,
 } from "@nodaro/shared/credits"
 import {
   TELEGRAM_ACCOUNT_SEND_NODE_TYPE,
@@ -259,6 +260,7 @@ import { labelRefHintContext } from "./label-ref-hint-context.js"
 import type { CharacterDef, ConnectedReference, SceneData } from "@nodaro/shared/types"
 import { boardQuality, boardResolution, plainEntityCreditIdentifier, workflowEntityCreditIdentifier } from "../../lib/entity-credit-identifier.js"
 import { backendHybridRoles } from "../../lib/reference-format.js"
+import { maskFormatConflict } from "../../lib/image-format-schema.js"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { config, llmMeteredPricing } from "../../lib/config.js"
 import { resolveScriptModelId, type ScriptProvider } from "../../providers/script/script-generator.js"
@@ -3299,6 +3301,8 @@ function buildPayloadOf(
         quality: data.quality,
         renderingSpeed: data.renderingSpeed,
         background: data.background,
+        // The file written, and a GIF's or an SVG's own levers (a GIF and an SVG price differently).
+        ...imageFormatInputOf(data),
         // On GPT Image 2.6 the base of an edit is one more image sent.
         refCount: gptImage26SentImages(
           provider,
@@ -3315,6 +3319,12 @@ function buildPayloadOf(
         )
       }
       const routedModel = imageParams.modelId === provider ? undefined : imageParams.modelId
+      // A GIF or an SVG takes no mask: refused here, before anything is reserved, as the route refuses it.
+      const generateMaskConflict = maskFormatConflict({
+        outputFormat: imageParams.outputFormat,
+        maskUrl: resolvedInputs.maskUrl || data.maskUrl,
+      })
+      if (generateMaskConflict) throw new Error(generateMaskConflict)
 
       return {
         jobName: "generate-image",
@@ -3342,6 +3352,10 @@ function buildPayloadOf(
           resolution: imageParams.resolution,
           quality: imageParams.quality,
           background: imageParams.background,
+          outputFormat: imageParams.outputFormat,
+          gifFrames: imageParams.gifFrames,
+          gifFrameDurationMs: imageParams.gifFrameDurationMs,
+          svgLevel: imageParams.svgLevel,
           negativePrompt: result.nativeNegativePrompt,
           seed: data.seed,
           renderingSpeed: data.renderingSpeed,
@@ -3526,9 +3540,12 @@ function buildPayloadOf(
           resolution: data.resolution as string | undefined,
           quality: data.quality as string | undefined,
           background: data.background as string | undefined,
+          ...imageFormatInputOf(data),
         },
         { sourceImage: buildCtx?.sourceImage },
       )
+      const i2iMaskConflict = maskFormatConflict({ outputFormat: i2iParams.outputFormat, maskUrl: resolvedInputs.maskUrl || data.maskUrl })
+      if (i2iMaskConflict) throw new Error(i2iMaskConflict)
       if (i2iParams.adjustments.length > 0) {
         console.warn(
           `[payload-builder] ${node.id} (${provider}): ` +
@@ -3636,6 +3653,9 @@ function buildPayloadOf(
           quality: i2iParams.quality,
           resolution: i2iParams.resolution,
           renderingSpeed: data.renderingSpeed as string | undefined,
+          outputFormat: i2iParams.outputFormat,
+          gifFrames: i2iParams.gifFrames,
+          svgLevel: i2iParams.svgLevel,
           refCount: 1 + (i2iResult.referenceImageUrls?.length ?? 0),
           swapToI2i: false,
         }),
@@ -3650,6 +3670,10 @@ function buildPayloadOf(
           resolution: i2iParams.resolution,
           quality: i2iParams.quality,
           background: i2iParams.background,
+          outputFormat: i2iParams.outputFormat,
+          gifFrames: i2iParams.gifFrames,
+          gifFrameDurationMs: i2iParams.gifFrameDurationMs,
+          svgLevel: i2iParams.svgLevel,
           negativePrompt: i2iResult.nativeNegativePrompt,
           seed: data.seed,
           renderingSpeed: data.renderingSpeed,
@@ -3678,9 +3702,12 @@ function buildPayloadOf(
           resolution: data.resolution as string | undefined,
           quality: data.quality as string | undefined,
           background: data.background as string | undefined,
+          ...imageFormatInputOf(data),
         },
         { sourceImage: buildCtx?.sourceImage },
       )
+      const modMaskConflict = maskFormatConflict({ outputFormat: modParams.outputFormat, maskUrl: resolvedInputs.maskUrl || data.maskUrl })
+      if (modMaskConflict) throw new Error(modMaskConflict)
       if (modParams.adjustments.length > 0) {
         console.warn(
           `[payload-builder] ${node.id} (${provider}): ` +
@@ -3817,6 +3844,9 @@ function buildPayloadOf(
           quality: modParams.quality,
           resolution: modParams.resolution,
           renderingSpeed: data.renderingSpeed as string | undefined,
+          outputFormat: modParams.outputFormat,
+          gifFrames: modParams.gifFrames,
+          svgLevel: modParams.svgLevel,
           refCount: 1 + (i2iResult.referenceImageUrls?.length ?? 0),
           swapToI2i: false,
         }),
@@ -3831,6 +3861,10 @@ function buildPayloadOf(
           resolution: modParams.resolution,
           quality: modParams.quality,
           background: modParams.background,
+          outputFormat: modParams.outputFormat,
+          gifFrames: modParams.gifFrames,
+          gifFrameDurationMs: modParams.gifFrameDurationMs,
+          svgLevel: modParams.svgLevel,
           negativePrompt: i2iResult.nativeNegativePrompt,
           seed: data.seed,
           renderingSpeed: data.renderingSpeed,

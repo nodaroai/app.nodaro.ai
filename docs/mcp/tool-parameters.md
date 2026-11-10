@@ -1083,6 +1083,10 @@ Needs `workflows:execute`.
 | `resolution` | string |  | Resolution: 1K / 2K / 4K. Falls back to nearest supported value. |
 | `quality` | string |  | Quality by model (list_models). Auto bills real cost, up to Max. |
 | `background` | string |  | Models that list it. Transparent renders at 1K. One of `auto`, `opaque`, `transparent`. |
+| `output_format` | string |  | png, jpeg, webp, gif (animated, square) or svg; see outputFormats. |
+| `gif_frames` | number |  | GIF frames 2-16. |
+| `gif_frame_duration_ms` | number |  | GIF ms per frame 20-2000. |
+| `svg_level` | string |  | standard, detailed or max. |
 | `aspect_ratio` | string |  | Aspect ratio (e.g. 16:9, 9:16, 1:1, 4:3, 3:4, 21:9). Default 16:9. 'auto' keeps the shape of base_image_url, else of the first reference image, on every model. Variations like 16x9 / 16-9 are accepted; unsupported values fall back. |
 | `negative_prompt` | string |  | At most 2000 characters. |
 | `reference_image_urls` | string[] or string |  | Reference images (URLs or Nodaro asset ids, up to 14; 16 on GPT Image 2.6) for identity / style / composition guidance — use whenever the output must match a given person, character, or product. Accepts an array; a lone URL or a JSON-stringified array is tolerated and coerced. |
@@ -1767,6 +1771,10 @@ Needs `workflows:execute`.
 | `negative_prompt` | string |  | At most 5000 characters. |
 | `seed` | integer |  | At least 0. |
 | `mask_url` | string (URL) |  | Inpainting mask image URL (white=edit, black=keep). |
+| `output_format` | string |  | png, jpeg, webp, gif (animated, square) or svg; see outputFormats. |
+| `gif_frames` | number |  | GIF frames 2-16. |
+| `gif_frame_duration_ms` | number |  | GIF ms per frame 20-2000. |
+| `svg_level` | string |  | standard, detailed or max. |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
 | `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 
@@ -2242,6 +2250,10 @@ Needs `workflows:execute`.
 | `resolution` | string |  | Resolution: falls back to nearest supported. |
 | `quality` | string |  | Quality by model (list_models). Auto bills real cost, up to Max. |
 | `background` | string |  | Models that list it. Transparent renders at 1K. One of `auto`, `opaque`, `transparent`. |
+| `output_format` | string |  | png, jpeg, webp, gif (animated, square) or svg; see outputFormats. |
+| `gif_frames` | number |  | GIF frames 2-16. |
+| `gif_frame_duration_ms` | number |  | GIF ms per frame 20-2000. |
+| `svg_level` | string |  | standard, detailed or max. |
 | `aspect_ratio` | string |  | Aspect ratio. 'auto' keeps the photo's shape on every model. Variations and unsupported values fall back. |
 | `negative_prompt` | string |  | At most 2000 characters. |
 | `structured` | object |  |  |

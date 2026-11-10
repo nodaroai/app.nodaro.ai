@@ -175,7 +175,8 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "generate-mask": { ids: familyIds("generate-mask") },
   "video-mask": { ids: idsMatching(/^sam-3(?:\.1)?-video:\d+s$/) },
   "reference-board": {
-    ids: familyIds(...REFERENCE_BOARD_PROVIDERS),
+    // A board is a still image: a GPT Image 2.6 GIF or SVG row is not one it is charged.
+    ids: familyIds(...REFERENCE_BOARD_PROVIDERS).filter((id) => !/:(gif|svg)-/.test(id)),
     note: "Pass-through: reserves under the chosen IMAGE provider's own row (routes/reference-board.ts), with no pricing row of its own.",
   },
   "reference-sheet": {

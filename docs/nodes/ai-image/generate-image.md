@@ -16,7 +16,11 @@ Generate Image is the primary text-to-image node. It accepts a text prompt (with
 | Aspect Ratio | select | `"16:9"` | Provider-specific ratio sets (see table below), plus **Auto (match the photo)** on every model. With a photo wired in (the inpaint / refine base when set, else the first reference image), Auto keeps that photo's shape — on models without a native auto, and on GPT Image 2.6 (whose own auto renders a portrait square), the supported shape closest to it. With no photo wired, Auto gives the model's default shape: its own auto where it has one, else its first listed ratio. A node with no ratio set (one written by an agent, an import or a template) is Auto, on the panel and in the run. |
 | Resolution | select | varies | Available for nano-banana-pro, nano-banana-2, nano-banana-2-1, flux, flux-flex, gpt-image-2 and the GPT Image 2.5 and 2.6 models: 1K, 2K, 4K; seedream-5-flash: 1K, 2K (same price at either). GPT Image 2.5 renders 27:16, 16:27, 9:8 and 8:9 at 1K only: at those ratios the panel offers 1K, and a 2K or 4K request runs, and is charged, at 1K and says so. GPT Image 2 renders every ratio it offers, `auto` and 1:1 included, at 1K, 2K and 4K, and is charged at the size asked. |
 | Quality | select | varies | Available for gpt-image (medium/high), GPT Image 2.6 Flare and Sunburst (auto, low, medium, high, extra high, max; medium by default; at auto the model picks the level and the run costs what it really used, at most the max price), seedream/seedream-5-lite (basic 2K / high 4K), and seedream-5-pro (basic 1K / high 2K) |
-| Background | select | Auto | Available for GPT Image 2.5 and 2.6: auto, opaque or transparent. A transparent background renders at 1K: at a larger size the node moves to 1K and says so. On GPT Image 2.5 the setting only applies at 1K; at a larger size the image uses the model's own background. |
+| Background | select | Auto | Available for GPT Image 2.5 and 2.6: auto, opaque or transparent. A transparent background renders at 1K: at a larger size the node moves to 1K and says so. On GPT Image 2.5 the setting only applies at 1K; at a larger size the image uses the model's own background. A transparent background is kept only in PNG and WebP: with GIF or JPEG it becomes auto, and an SVG takes no background setting (see [Formats](#formats-png-jpeg-webp-gif-and-svg)). |
+| Format | select | PNG | GPT Image 2.6 Flare and Sunburst: PNG, JPEG, WebP, GIF (animated) or SVG (vector). See [Formats](#formats-png-jpeg-webp-gif-and-svg). |
+| GIF frames | number | 9 | With Format GIF: 2 to 16 frames. The price is set by the band the count falls in (2–8, 9–12, 13–16). |
+| GIF speed | number | 200 | With Format GIF: how long each frame shows, 20 to 2000 ms in steps of 10. Does not change the price. |
+| SVG detail | select | SVG Standard | With Format SVG: SVG Standard, SVG Detailed or SVG Max, how much detail the drawing is written with. |
 | Rendering Speed | select | -- | Available for ideogram-v3: turbo, balanced, quality |
 | Seed | number | -- | Reproducibility seed (supported by select providers) |
 | Style Type | select | -- | Ideogram-specific style parameter |
@@ -132,6 +136,61 @@ default), high, extra high and max. Draft at low and finish at medium or above.
 At auto the model picks the level, so the price it quotes is the most the run can
 cost (the max price), and you are charged what it really used. Up to 16 input
 images; each one adds to the price, so an edit with fewer images costs less.
+
+### Formats: PNG, JPEG, WebP, GIF and SVG
+
+GPT Image 2.6 Flare and Sunburst write five kinds of file. Pick one with
+**Format** (`outputFormat` on the API and the SDK, `output_format` in MCP):
+
+- **PNG** (the default), **JPEG** and **WebP** cost the same: the prices above.
+  A transparent background is kept in PNG and WebP; with JPEG it becomes auto.
+- **GIF**: a short animation of 2 to 16 frames, each 512×512, so a GIF is
+  always square: the aspect ratio and resolution do not apply, and a request
+  that names them says it ignored them. It follows the quality you choose. Its
+  price is set by its quality and how many frames it has, not by what is drawn:
+
+  | Quality | 2–8 frames | 9–12 frames | 13–16 frames |
+  |---------|-----------|-------------|--------------|
+  | Low | **9 credits**<!-- credits: gpt-image-2-6-flare:low:gif-2-8 --> | **19 credits**<!-- credits: gpt-image-2-6-flare:low:gif-9-12 --> | **26 credits**<!-- credits: gpt-image-2-6-flare:low:gif-13-16 --> |
+  | Medium | **16 credits**<!-- credits: gpt-image-2-6-flare:medium:gif-2-8 --> | **32 credits**<!-- credits: gpt-image-2-6-flare:medium:gif-9-12 --> | **46 credits**<!-- credits: gpt-image-2-6-flare:medium:gif-13-16 --> |
+  | High | **19 credits**<!-- credits: gpt-image-2-6-flare:high:gif-2-8 --> | **39 credits**<!-- credits: gpt-image-2-6-flare:high:gif-9-12 --> | **54 credits**<!-- credits: gpt-image-2-6-flare:high:gif-13-16 --> |
+  | Extra High | **32 credits**<!-- credits: gpt-image-2-6-flare:xhigh:gif-2-8 --> | **68 credits**<!-- credits: gpt-image-2-6-flare:xhigh:gif-9-12 --> | **95 credits**<!-- credits: gpt-image-2-6-flare:xhigh:gif-13-16 --> |
+  | Max | **72 credits**<!-- credits: gpt-image-2-6-flare:max:gif-2-8 --> | **150 credits**<!-- credits: gpt-image-2-6-flare:max:gif-9-12 --> | **214 credits**<!-- credits: gpt-image-2-6-flare:max:gif-13-16 --> |
+
+  **GIF speed** (20–2000 ms a frame, 200 by default) does not change the price.
+  A transparent background becomes auto; opaque is kept.
+- **SVG**: a vector drawing, at the aspect ratio, resolution and quality you
+  choose, written at one of three levels of detail. It costs the same image in
+  PNG plus a fixed amount per level. At medium:
+
+  | Level | 1K | 2K | 4K |
+  |-------|----|----|----|
+  | SVG Standard | **28 credits**<!-- credits: gpt-image-2-6-flare:medium:1K:svg-standard --> | **50 credits**<!-- credits: gpt-image-2-6-flare:medium:2K:svg-standard --> | **80 credits**<!-- credits: gpt-image-2-6-flare:medium:4K:svg-standard --> |
+  | SVG Detailed | **71 credits**<!-- credits: gpt-image-2-6-flare:medium:1K:svg-detailed --> | **93 credits**<!-- credits: gpt-image-2-6-flare:medium:2K:svg-detailed --> | **123 credits**<!-- credits: gpt-image-2-6-flare:medium:4K:svg-detailed --> |
+  | SVG Max | **90 credits**<!-- credits: gpt-image-2-6-flare:medium:1K:svg-max --> | **112 credits**<!-- credits: gpt-image-2-6-flare:medium:2K:svg-max --> | **141 credits**<!-- credits: gpt-image-2-6-flare:medium:4K:svg-max --> |
+
+  An SVG takes no background setting. Every SVG is checked and cleaned before
+  it is saved: scripts, event handlers, embedded pages and any link to another
+  file are removed. A drawing written without its SVG namespace declaration is
+  given it first; any other file that cannot be read safely is not saved (the
+  run fails and you are not charged). On a free plan the drawing carries a
+  small white mark with a dark outline, which reads on light and dark drawings.
+
+With reference images (or a base image), a GIF or an SVG adds the same amount
+per image as a PNG does. At quality **auto** the price shown is the most the run
+can cost (the max price of that format), and you are charged what it really used.
+Sunburst costs the same as Flare in every format.
+
+**Masks.** A GIF or an SVG cannot be inpainted: a request with a mask and either
+format is refused before anything is charged. Choose PNG, JPEG or WebP to edit a
+masked region.
+
+**The result.** It is saved with its own extension (`.jpg`, `.webp`, `.gif`,
+`.svg`), shown animated or drawn on the canvas and in the Library, and its size
+is recorded (512×512 for a GIF). A GIF or an SVG also gets a PNG still beside it
+(`thumbnailUrl` on the job: a GIF's first frame, an SVG drawn). Wired into
+another image node, a GIF reaches that model as its first frame and an SVG as a
+drawn PNG, since image models take still pictures.
 
 ## Inpainting & Refine
 

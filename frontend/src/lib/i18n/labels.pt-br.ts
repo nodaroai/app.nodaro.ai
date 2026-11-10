@@ -966,6 +966,9 @@ const OPTION_LABELS_PT_BR: Record<string, string> = {
   "Max": "Máxima",
   "Opaque": "Opaco",
   "Transparent": "Transparente",
+  "SVG Standard": "SVG padrão",
+  "SVG Detailed": "SVG detalhado",
+  "SVG Max": "SVG máximo",
   "Medium (Balanced)": "Média (equilibrada)",
   "High (Detailed)": "Alta (detalhada)",
   "Turbo (fast)": "Turbo (rápido)",
@@ -1060,6 +1063,9 @@ const OPTION_LABELS_PT_BR: Record<string, string> = {
 
 const OPTION_QUALIFIERS_PT_BR: Record<string, string> = {
   "Landscape": "Paisagem",
+  // The output formats: "GIF (animated)", "SVG (vector)".
+  "Animated": "Animado",
+  "Vector": "Vetorial",
   "Portrait": "Retrato",
   "Square": "Quadrado",
   "Wide": "Horizontal",
