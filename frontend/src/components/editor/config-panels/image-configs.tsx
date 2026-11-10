@@ -73,7 +73,7 @@ import { ConnectedCinematographySources } from "./connected-cinematography-sourc
 import { hasConnectedStyleNode } from "@/lib/cinematography-hints"
 import type { ConfigProps } from "./types"
 import type { SelectedAsset } from "../asset-selection-modal"
-import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
+import { IMAGE_MODEL_ROLE_DEFAULTS, resolutionAtAspectRatio } from "@nodaro/shared/model-catalog"
 
 const AssetSelectionModal = lazy(() => import("../asset-selection-modal").then(m => ({ default: m.AssetSelectionModal })))
 const MaskPainterModal = lazy(() => import("../mask-painter-modal").then(m => ({ default: m.MaskPainterModal })))
@@ -197,12 +197,13 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
     ? intersected.aspectRatios
     : getAspectRatiosForModel(currentProvider)
   const aspectRatioOptions = withPhotoAuto(listedAspectRatios)
-  // One model: only the sizes it renders at the chosen ratio (GPT Image 2.5
-  // draws 27:16, 16:27, 9:8 and 8:9 at 1K only), so a size it cannot render
-  // snaps below when the ratio changes.
+  // One model: only the sizes it renders at the chosen ratio — an unset one is
+  // Auto here, as the run sends it (GPT Image 2 draws Auto at 1K only and 1:1
+  // at 1K or 2K; GPT Image 2.5 draws 27:16, 16:27, 9:8 and 8:9 at 1K only), so
+  // a size it cannot render snaps below when the ratio changes.
   const resolutionOptions = isMulti
     ? (intersected.resolutions.length > 0 ? intersected.resolutions : undefined)
-    : imageResolutionOptionsAt(currentProvider, data.aspectRatio)
+    : imageResolutionOptionsAt(currentProvider, nodeAspectRatio("generate-image", data.aspectRatio))
   const qualityOptions = isMulti
     ? (intersected.qualities.length > 0 ? intersected.qualities : undefined)
     : IMAGE_QUALITY_OPTIONS[currentProvider]
@@ -239,12 +240,15 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
     // the provider default (2 MP Pro/Max, 1 MP Klein) instead of options[0]
     // (0.5 MP) when the current value is absent or invalid.
     const flux2Default = defaultResolutionFor(currentProvider)
-    if (resolutionOptions) {
+    // A size the model does not list snaps to its first (Flux 2: its default).
+    // One model: against its whole list; the ratio's own limit is applied below.
+    const sizeOptions = isMulti ? resolutionOptions : imageResolutionOptionsAt(currentProvider, undefined)
+    if (sizeOptions) {
       if (flux2Default) {
-        const valid = resolutionOptions.some((o) => o.value === data.resolution)
+        const valid = sizeOptions.some((o) => o.value === data.resolution)
         if (!valid && data.resolution !== flux2Default) updates.resolution = flux2Default
-      } else if (data.resolution && !resolutionOptions.some((o) => o.value === data.resolution)) {
-        updates.resolution = resolutionOptions[0]?.value
+      } else if (data.resolution && !sizeOptions.some((o) => o.value === data.resolution)) {
+        updates.resolution = sizeOptions[0]?.value
       }
     } else if (data.resolution !== undefined) {
       updates.resolution = undefined
@@ -256,19 +260,15 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
     } else if (data.quality !== undefined) {
       updates.quality = undefined
     }
-    // KIE constraints for gpt-image-2 (per docs.kie.ai gpt-image-2 spec):
-    //   • aspect_ratio = auto → resolution must be 1K
-    //   • aspect_ratio = 1:1 → resolution cannot be 4K
-    // Apply silently here so the user can't get a 400 at generate-time.
-    const isGptImage2 = currentProvider === "gpt-image-2" || currentProvider === "gpt-image-2-i2i"
-    if (isGptImage2) {
-      const ar = updates.aspectRatio ?? nodeAspectRatio("generate-image", data.aspectRatio)
-      const res = updates.resolution ?? data.resolution
-      if (ar === "auto" && res !== "1K") {
-        updates.resolution = "1K"
-      } else if (ar === "1:1" && res === "4K") {
-        updates.resolution = "2K"
-      }
+    // A size the ratio the run asks for does not render (an unset ratio is
+    // Auto here) moves to the largest one it renders at or below it, the size
+    // the run is sent and priced at (`resolutionsByAspectRatio`: GPT Image 2
+    // renders Auto at 1K only and 1:1 at 1K or 2K; GPT Image 2.5 renders 27:16,
+    // 16:27, 9:8 and 8:9 at 1K only).
+    {
+      const size = updates.resolution ?? data.resolution
+      const fitted = resolutionAtAspectRatio(currentProvider, updates.aspectRatio ?? nodeAspectRatio("generate-image", data.aspectRatio), size)
+      if (fitted !== size) updates.resolution = fitted
     }
     if (backgroundOptions) {
       if (data.background && !backgroundOptions.some((o) => o.value === data.background)) {
@@ -971,8 +971,12 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
   // own ratios. The catalog list is still what a stale ratio snaps to below.
   const aspectRatioOptions = useMemo(() => getSourcePhotoAspectRatios(currentProvider), [currentProvider])
   const listedAspectRatios = useMemo(() => getAspectRatiosForModel(currentProvider), [currentProvider])
-  // Only the sizes the model renders at the chosen ratio (GPT Image 2.5: 1K only at 27:16, 16:27, 9:8 and 8:9).
-  const resolutionOptions = useMemo(() => !isNanoBananaEdit ? imageResolutionOptionsAt(currentProvider, data.aspectRatio) : undefined, [currentProvider, isNanoBananaEdit, data.aspectRatio])
+  // Only the sizes the model renders at the chosen ratio, an unset one being
+  // Auto here as the run sends it (GPT Image 2: 1K only at Auto, 1K or 2K at
+  // 1:1; GPT Image 2.5: 1K only at 27:16, 16:27, 9:8 and 8:9).
+  const resolutionOptions = useMemo(() => !isNanoBananaEdit ? imageResolutionOptionsAt(currentProvider, nodeAspectRatio("modify-image", data.aspectRatio)) : undefined, [currentProvider, isNanoBananaEdit, data.aspectRatio])
+  // The model's whole size list: what a size it does not list at all snaps to.
+  const allResolutionOptions = useMemo(() => !isNanoBananaEdit ? imageResolutionOptionsAt(currentProvider, undefined) : undefined, [currentProvider, isNanoBananaEdit])
   const qualityOptions = useMemo(() => !isNanoBananaEdit ? IMAGE_QUALITY_OPTIONS[currentProvider] : undefined, [currentProvider, isNanoBananaEdit])
   const backgroundOptions = useMemo(() => !isNanoBananaEdit ? IMAGE_BACKGROUND_OPTIONS[currentProvider] : undefined, [currentProvider, isNanoBananaEdit])
   const qualityDefault = defaultQualityFor(currentProvider)
@@ -997,12 +1001,12 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     // the provider default (2 MP Pro/Max, 1 MP Klein) instead of options[0]
     // (0.5 MP) when the current value is absent or invalid.
     const flux2Default = defaultResolutionFor(currentProvider)
-    if (resolutionOptions) {
+    if (allResolutionOptions) {
       if (flux2Default) {
-        const valid = resolutionOptions.some((o) => o.value === data.resolution)
+        const valid = allResolutionOptions.some((o) => o.value === data.resolution)
         if (!valid && data.resolution !== flux2Default) updates.resolution = flux2Default
-      } else if (data.resolution && !resolutionOptions.some((o) => o.value === data.resolution)) {
-        updates.resolution = resolutionOptions[0]?.value
+      } else if (data.resolution && !allResolutionOptions.some((o) => o.value === data.resolution)) {
+        updates.resolution = allResolutionOptions[0]?.value
       }
     } else if (data.resolution !== undefined) {
       updates.resolution = undefined
@@ -1014,17 +1018,13 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     } else if (data.quality !== undefined) {
       updates.quality = undefined
     }
-    // KIE constraints for gpt-image-2-i2i (per docs):
-    //   • aspect_ratio = auto → resolution must be 1K
-    //   • aspect_ratio = 1:1 → resolution cannot be 4K
-    if (currentProvider === "gpt-image-2-i2i") {
-      const ar = updates.aspectRatio ?? nodeAspectRatio("modify-image", data.aspectRatio)
-      const res = updates.resolution ?? data.resolution
-      if (ar === "auto" && res !== "1K") {
-        updates.resolution = "1K"
-      } else if (ar === "1:1" && res === "4K") {
-        updates.resolution = "2K"
-      }
+    // A size the ratio the run asks for does not render (an unset ratio is
+    // Auto here) moves to the largest one it renders at or below it, the size
+    // the run is sent and priced at (`resolutionsByAspectRatio`).
+    if (allResolutionOptions) {
+      const size = updates.resolution ?? data.resolution
+      const fitted = resolutionAtAspectRatio(currentProvider, updates.aspectRatio ?? nodeAspectRatio("modify-image", data.aspectRatio), size)
+      if (fitted !== size) updates.resolution = fitted
     }
     if (backgroundOptions) {
       if (data.background && !backgroundOptions.some((o) => o.value === data.background)) {

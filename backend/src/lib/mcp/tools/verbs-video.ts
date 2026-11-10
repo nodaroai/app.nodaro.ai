@@ -23,7 +23,7 @@ import {
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { widgetModelOf } from "../widget-models.js"
 import { modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
-import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, TOPAZ_VIDEO_RESOLUTIONS, VIDEO_UPSCALE_PROVIDERS, resolveVideoModeForInputs, resolveVideoProviderForMode } from "@nodaro/shared/models"
+import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, TOPAZ_VIDEO_RESOLUTIONS, VIDEO_UPSCALE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, resolveVideoProviderForMode } from "@nodaro/shared/models"
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
 import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
@@ -41,7 +41,7 @@ const MOTION_TRANSFER_PROVIDER_ALIASES: Record<string, string> = {
   "motion-transfer": "kling",
   "kling-3.0-motion": "kling-3.0",
 }
-import { normalizeVideoInput } from "../normalize.js"
+import { normalizeVideoInput, savedVideoModel } from "../normalize.js"
 import { buildEffectiveEdl, validateEffectiveEdl } from "../../apply-edl-plan.js"
 import { APPLY_EDL_CLIP_KEY_PATTERN } from "../../apply-edl-output.js"
 import { hasCredits } from "../../config.js"
@@ -340,7 +340,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           duration: effective.duration as number | undefined,
         },
         {
-          model: userVid.model as string | undefined,
+          // Only a model /v1/text-to-video takes (the saved slot takes any
+          // string); a run with references may move to the image-to-video lane,
+          // which takes every such id too.
+          model: savedVideoModel(userVid.model as string | undefined, TEXT_TO_VIDEO_PROVIDERS),
           aspectRatio: userVid.aspectRatio as string | undefined,
           resolution: userVid.resolution as string | undefined,
           duration: userVid.duration as number | undefined,
@@ -595,7 +598,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           duration: args.duration,
         },
         {
-          model: userVid.model as string | undefined,
+          // Only a model /v1/generate-video takes (the saved slot takes any string).
+          model: savedVideoModel(userVid.model as string | undefined, VIDEO_GEN_PROVIDERS),
           aspectRatio: userVid.aspectRatio as string | undefined,
           resolution: userVid.resolution as string | undefined,
           duration: userVid.duration as number | undefined,
@@ -1343,7 +1347,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             `Lip-sync model. Default kling-avatar. Options (charged price where the model has one fixed price; per-second models show their 15 s bucket; duration-tiered models say so): ` +
             LIP_SYNC_PROVIDERS.map((id) => `${id}${lipSyncPriceSuffix(id)}`).join(", ") +
             `. Input type (image vs video) and which model fits singing, dubbing, cinematic or the cheapest draft: get_node_skill("lip-sync"). ` +
-            `Unknown values fall back to kling-avatar.`,
+            `An unknown model is refused.`,
           ),
         resolution: z
           .enum(["480p", "720p", "1080p"])
@@ -1543,7 +1547,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             `v2v model. Default \`wan\`. Options: ${VIDEO_TO_VIDEO_NODE_PROVIDERS.join(", ")}. ` +
-            "Unknown values fall back to wan. `seedance-2-5` edits the clip by instruction and keeps its " +
+            "An unknown model is refused. `seedance-2-5` edits the clip by instruction and keeps its " +
             "length and ratio (clip 4-30s; billed on input + output seconds, settled to the delivered length).",
           ),
         duration: z.enum(["5", "10"]).optional().describe("Wan / Wan Flash only — 5s or 10s output."),

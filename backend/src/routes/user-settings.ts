@@ -101,37 +101,40 @@ async function updateProfile(userId: string, updates: Record<string, unknown>) {
   return await supabase.from("profiles").update(rest).eq("id", userId)
 }
 
+// Every field takes `null` as well: it clears that saved default (the merge
+// below drops it), so the reader falls back to the tool's own default. An
+// omitted field keeps its stored value.
 const McpPreferencesPatch = z
   .object({
     image: z
       .object({
-        model: z.string().max(64).optional(),
-        aspectRatio: z.string().max(16).optional(),
-        resolution: z.string().max(8).optional(),
-        quality: z.string().max(16).optional(),
+        model: z.string().max(64).nullable().optional(),
+        aspectRatio: z.string().max(16).nullable().optional(),
+        resolution: z.string().max(8).nullable().optional(),
+        quality: z.string().max(16).nullable().optional(),
       })
       .partial()
       .optional(),
     video: z
       .object({
-        model: z.string().max(64).optional(),
-        aspectRatio: z.string().max(16).optional(),
-        duration: z.number().int().min(1).max(60).optional(),
-        resolution: z.string().max(8).optional(),
+        model: z.string().max(64).nullable().optional(),
+        aspectRatio: z.string().max(16).nullable().optional(),
+        duration: z.number().int().min(1).max(60).nullable().optional(),
+        resolution: z.string().max(8).nullable().optional(),
       })
       .partial()
       .optional(),
     audio: z
       .object({
-        ttsModel: z.string().max(64).optional(),
-        musicModel: z.string().max(64).optional(),
+        ttsModel: z.string().max(64).nullable().optional(),
+        musicModel: z.string().max(64).nullable().optional(),
       })
       .partial()
       .optional(),
     // Whether an MCP conversation becomes a flow on the canvas (on unless false).
     flows: z
       .object({
-        enabled: z.boolean().optional(),
+        enabled: z.boolean().nullable().optional(),
       })
       .partial()
       .optional(),

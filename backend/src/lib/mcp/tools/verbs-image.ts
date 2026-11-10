@@ -34,7 +34,7 @@ import { defaultImageModel, isAutoAspectToken, modelIdsByKindMode } from "@nodar
 import { IMAGE_BACKGROUND_VALUES, IMAGE_QUALITY_VALUES, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, requestImageLimit } from "@nodaro/shared/models"
 import { SCRIPT_SCENE_COUNT_RANGE, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TARGET_DURATION_DEFAULT, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared/nodes"
 import { getUserMcpPreferences } from "../user-preferences.js"
-import { imageToImageLevers, normalizeImageInput, requestedAspectRatio } from "../normalize.js"
+import { imageToImageLevers, normalizeImageInput, requestedAspectRatio, savedGenerationModel } from "../normalize.js"
 import { imageToImageAspectRatio } from "../../image-auto-aspect.js"
 import { presetImageBody } from "./_image-preset-call.js"
 import { OVERLAY_MAX_LAYERS } from "../../../providers/image/overlay-contract.js"
@@ -319,7 +319,9 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             quality: effective.quality as string | undefined,
           },
           {
-            model: userImg.model,
+            // The one saved image model only when /v1/generate-image runs it:
+            // after a star on a modify_image result it is an edit id.
+            model: savedGenerationModel(userImg.model),
             aspectRatio: userImg.aspectRatio,
             resolution: userImg.resolution,
             quality: userImg.quality,
@@ -677,7 +679,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         image_asset_id: z.string().optional().describe("Nodaro image job id."),
         prompt: z.string().min(1).max(2000).describe("Transformation description."),
         model: z.string().optional().describe(
-          `img2img model. Default gpt-image-2-6-flare-i2i. Options: ${I2I_MODEL_IDS.join(", ")}. Unknown values fall back to the default.`,
+          `img2img model. Default gpt-image-2-6-flare-i2i. Options: ${I2I_MODEL_IDS.join(", ")}. An unknown model is refused.`,
         ),
         reference_image_urls: z
           .union([z.array(z.string()), z.string()])

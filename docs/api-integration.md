@@ -2457,7 +2457,9 @@ transparent background at 1K:
 
 (Abridged: only the fields this section is about, and not every ratio.) A
 size menu offers, at the chosen ratio, `resolutionsByAspectRatio[ratio]` when
-the ratio is listed there, else `resolutions`. GPT Image 2.6 Flare and
+the ratio is listed there, else `resolutions`. GPT Image 2 (`gpt-image-2` and
+`gpt-image-2-i2i`) lists `"resolutionsByAspectRatio": { "auto": ["1K"], "1:1": ["1K", "2K"] }`:
+`auto` renders 1K only, and 1:1 never 4K. GPT Image 2.6 Flare and
 Sunburst list `transparentResolution: "1K"` and no `resolutionsByAspectRatio`.
 
 `GET /v1/model-makers` returns only the makers, for an app that draws marks
@@ -3925,7 +3927,9 @@ without `tier`) and answers them as saved. On a deployment-payer instance
 `tier` is the deployment's plan (the billing account's grade), and turning
 `publicOutputs` off follows that plan. `promptTemplates` and
 `textTemplates` replace the stored value whole; `mcpPreferences` merges one
-axis at a time. `publicOutputs: false` needs the Standard plan or above on
+axis at a time (`image`, `video`, `audio`, `flows`): a field left out keeps its
+stored value, and a field sent as `null` is cleared, so the MCP tools fall
+back to their own default for it (`{ "mcpPreferences": { "image": { "model": null } } }`). `publicOutputs: false` needs the Standard plan or above on
 Nodaro Cloud (`403`); an invalid value is `400 validation_error`, a patch with
 nothing to change `400`, a missing profile `404`. SDK:
 `client.userSettings.get()` / `update(patch)`.

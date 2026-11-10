@@ -160,6 +160,10 @@ describe("list_models tool (always available)", () => {
     expect(flare26?.transparentResolution).toBe("1K")
     expect(flare26).not.toHaveProperty("resolutionsByAspectRatio")
     expect(models.find((m) => m.id === "nano-banana-2")).not.toHaveProperty("transparentResolution")
+    // GPT Image 2's own rules: Auto renders 1K only, 1:1 never 4K.
+    for (const id of ["gpt-image-2", "gpt-image-2-i2i"]) {
+      expect(models.find((m) => m.id === id)?.resolutionsByAspectRatio, id).toEqual({ auto: ["1K"], "1:1": ["1K", "2K"] })
+    }
   })
 
   it("lists an entry that names no known maker without one, instead of failing the call", async () => {

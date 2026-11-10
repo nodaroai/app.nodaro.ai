@@ -37,6 +37,7 @@ vi.mock("../../supabase.js", () => ({
 }))
 
 const { registerVerbs } = await import("../verbs.js")
+const { generateImageRequest } = await import("../../../../routes/generate-image-body.js")
 
 const SOURCE = "https://cdn.nodaro.ai/uploads/source.png"
 
@@ -311,5 +312,86 @@ describe("image_to_image — the saved model: used only when an edit runs it", (
     const { body } = await imageToImage({})
     expect(body.provider).toBe("flux-kontext")
     expect(body.aspectRatio).toBe("16:9")
+  })
+})
+
+/**
+ * There is one saved image model, and the widget's "Save as default" star
+ * fills it from whichever tool made the picture: after `modify_image` it is an
+ * edit id (`gpt-image-2-6-flare-i2i`), which /v1/generate-image refuses. A
+ * generation runs the saved model only when that route does
+ * (`IMAGE_GEN_PROVIDERS`), the mirror of the edit rule above; otherwise the
+ * generation default runs. Each body is checked against the route's own schema,
+ * so "no 400" is the route's verdict, not the stub's.
+ */
+describe("generate_image — the saved model: used only when generation runs it", () => {
+  // The session's test user id is not a uuid; the route reads the real one from auth.
+  const accepted = (body: Record<string, unknown>) => {
+    const { userId: _userId, ...sent } = body
+    return generateImageRequest.safeParse(sent).success
+  }
+
+  it.each(["gpt-image-2-6-flare-i2i", "gpt-image-2-i2i", "seedream-5-pro-i2i", "recraft-remove-bg"])(
+    "a saved edit-only id (%s) runs the generation default, which the route takes",
+    async (saved) => {
+      savedImage = { model: saved }
+      const body = await generate({})
+      expect(body.provider).toBe(defaultImageModel("general"))
+      expect(accepted(body)).toBe(true)
+    },
+  )
+
+  it("the saved edit id's ratio still applies, fitted to the default", async () => {
+    savedImage = { model: "gpt-image-2-6-flare-i2i", aspectRatio: "9:16" }
+    const body = await generate({})
+    expect(body.provider).toBe(defaultImageModel("general", "9:16"))
+    expect(body.aspectRatio).toBe("9:16")
+    expect(accepted(body)).toBe(true)
+  })
+
+  it("a saved generation model is used", async () => {
+    savedImage = { model: "gpt-image-2-5-flare" }
+    const body = await generate({})
+    expect(body.provider).toBe("gpt-image-2-5-flare")
+    expect(accepted(body)).toBe(true)
+  })
+
+  it("a saved model that generates and edits under one id is used", async () => {
+    savedImage = { model: "nano-banana-pro" }
+    expect((await generate({})).provider).toBe("nano-banana-pro")
+  })
+
+  it("a named model still beats the saved one", async () => {
+    savedImage = { model: "gpt-image-2-5-flare" }
+    expect((await generate({ model: "nano-banana-pro" })).provider).toBe("nano-banana-pro")
+    savedImage = { model: "gpt-image-2-6-flare-i2i" }
+    expect((await generate({ model: "nano-banana-pro" })).provider).toBe("nano-banana-pro")
+  })
+
+  it("the answer's card still compares against the saved model as it was saved", async () => {
+    savedImage = { model: "gpt-image-2-6-flare-i2i" }
+    const { fastify } = stubRoute("POST", "/v1/generate-image", { jobId: "j-1" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "generate_image", { prompt: "a lighthouse" })
+    expect((result.structuredContent as { userDefaults?: { model?: string } }).userDefaults?.model).toBe("gpt-image-2-6-flare-i2i")
+  })
+
+  it("several images of one model: the saved edit id is not sent either", async () => {
+    savedImage = { model: "gpt-image-2-6-flare-i2i" }
+    const batch = { jobIds: ["a", "b"], batchId: "b1", groups: [{ model: defaultImageModel("general"), jobIds: ["a", "b"] }] }
+    const body = await generate({ count: 2 }, batch)
+    expect(body.provider).toBe(defaultImageModel("general"))
+    expect(body.count).toBe(2)
+    expect(accepted(body)).toBe(true)
+  })
+
+  it("several models: only the models named are sent, never the saved one", async () => {
+    savedImage = { model: "gpt-image-2-6-flare-i2i" }
+    const batch = { jobIds: ["a", "b"], batchId: "b1", groups: [{ model: "gpt-image-2", jobIds: ["a"] }, { model: "nano-banana-pro", jobIds: ["b"] }] }
+    const body = await generate({ models: ["gpt-image-2", "nano-banana-pro"] }, batch)
+    expect(body.models).toEqual(["gpt-image-2", "nano-banana-pro"])
+    expect(body).not.toHaveProperty("provider")
+    expect(accepted(body)).toBe(true)
   })
 })

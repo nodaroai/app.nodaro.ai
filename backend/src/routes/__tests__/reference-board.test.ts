@@ -86,6 +86,17 @@ describe("POST /v1/reference-board", () => {
       .toBe("gpt-image-2-5-flare:2K")
   })
 
+  // GPT Image 2 renders Auto at 1K only and 1:1 at 1K or 2K (the catalog's
+  // `resolutionsByAspectRatio`). The board route prices and sends the size the
+  // ratio renders, as a generate-image run does; before those rules were catalog
+  // data it priced and sent the size asked, which the provider refuses.
+  it.each([["auto", "2K", "gpt-image-2"], ["auto", "4K", "gpt-image-2"], ["1:1", "4K", "gpt-image-2:2K"], ["1:1", "2K", "gpt-image-2:2K"], ["16:9", "4K", "gpt-image-2:4K"]])(
+    "GPT Image 2 at %s and %s is priced as %s",
+    (aspectRatio, resolution, id) => {
+      expect(resolveBoardCreditIdentifier({ body: { provider: "gpt-image-2", aspectRatio, resolution } } as never)).toBe(id)
+    },
+  )
+
   it("quote = charge = render: a 4K board at 9:8 reserves the 1K id and is sent at 1K", async () => {
     reserve.mockClear()
     queueAdd.mockClear()

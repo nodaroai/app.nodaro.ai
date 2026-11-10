@@ -353,7 +353,9 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   },
   // GPT Image 2 — newer family. Resolution-based pricing (NOT quality), aspect_ratio includes 16:9/9:16/4:3/3:4
   // See: docs.kie.ai/market/gpt/gpt-image-2-text-to-image.md, gpt-image-2-image-to-image.md
-  // Constraints: 1:1 cannot be 4K; "auto" aspect_ratio limited to 1K
+  // Constraints: 1:1 cannot be 4K; "auto" aspect_ratio limited to 1K. Both are
+  // `resolutionsByAspectRatio` on the catalog entries, which `normalizeModelInput`
+  // applies before a run is priced.
   "gpt-image-2": {
     model: "gpt-image-2-text-to-image",
     credits: 6,

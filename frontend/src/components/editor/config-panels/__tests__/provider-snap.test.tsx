@@ -429,6 +429,32 @@ describe("GenerateImageConfig — provider-snap useEffect", () => {
     expect(merged.resolution).toBe("2K")
   })
 
+  // GPT Image 2's two rules are catalog data (`resolutionsByAspectRatio`): the
+  // panel moves a size the ratio does not render to the largest one it does at
+  // or below it, the size the run is sent and priced at.
+  it("an unset ratio is Auto, as the run sends it: gpt-image-2's 2K moves to 1K", () => {
+    const onUpdate = vi.fn()
+    const data = baseGenerateImageData({ provider: "gpt-image-2", aspectRatio: undefined, resolution: "2K" })
+    render(<GenerateImageConfig {...commonProps(onUpdate, data)} />)
+    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+    expect(merged.resolution).toBe("1K")
+  })
+
+  it.each([["1:1", "2K"], ["16:9", "4K"], ["auto", "1K"]])("keeps gpt-image-2's size at a ratio that renders it (%s, %s)", (aspectRatio, resolution) => {
+    const onUpdate = vi.fn()
+    const data = baseGenerateImageData({ provider: "gpt-image-2", aspectRatio, resolution })
+    render(<GenerateImageConfig {...commonProps(onUpdate, data)} />)
+    for (const [u] of onUpdate.mock.calls) expect("resolution" in u).toBe(false)
+  })
+
+  it("a size gpt-image-2 does not list at all still snaps to its first", () => {
+    const onUpdate = vi.fn()
+    const data = baseGenerateImageData({ provider: "gpt-image-2", aspectRatio: "1:1", resolution: "8K" })
+    render(<GenerateImageConfig {...commonProps(onUpdate, data)} />)
+    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+    expect(merged.resolution).toBe("1K")
+  })
+
   it.each(["27:16", "16:27", "9:8", "8:9"])("snaps GPT Image 2.5's 4K to 1K at %s, the only size it renders there", (aspectRatio) => {
     const onUpdate = vi.fn()
     const data = baseGenerateImageData({ provider: "gpt-image-2-5-flare", aspectRatio, resolution: "4K" })
@@ -560,6 +586,15 @@ describe("ModifyImageConfig — provider-snap useEffect", () => {
     render(<ModifyImageConfig {...commonProps(onUpdate, data)} />)
     const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
     expect(merged.resolution).toBe("1K")
+  })
+
+  it("downgrades gpt-image-2-i2i's 4K to 2K at 1:1, and an unset ratio's 4K to 1K (it runs at Auto)", () => {
+    for (const [aspectRatio, expected] of [["1:1", "2K"], [undefined, "1K"]] as const) {
+      const onUpdate = vi.fn()
+      render(<ModifyImageConfig {...commonProps(onUpdate, baseModifyImageData({ provider: "gpt-image-2-i2i", aspectRatio, resolution: "4K" }))} />)
+      const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+      expect(merged.resolution, String(aspectRatio)).toBe(expected)
+    }
   })
 
   // Modify Image transforms a source photo, so "auto" (keep the photo's shape)

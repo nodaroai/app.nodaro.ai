@@ -48,7 +48,7 @@ Every refine acts on the **realized board** (the image you actually got back) an
 | Negative prompt | text | — | Things to avoid. |
 | Reference images | image[] | — | Subject and/or style references (used at generation and in refine passes). |
 | Aspect ratio | select | `2:3` | The board adapts to the chosen ratio. |
-| Resolution / Quality | select | `4K` | Up to 4K, provider-dependent. GPT Image 2.5 renders 27:16, 16:27, 9:8 and 8:9 at 1K only: a board at those ratios runs, and is charged, at 1K. |
+| Resolution / Quality | select | `4K` | Up to 4K, provider-dependent. GPT Image 2.5 renders 27:16, 16:27, 9:8 and 8:9 at 1K only: a board at those ratios runs, and is charged, at 1K. GPT Image 2 renders `auto` at 1K only and 1:1 at 1K or 2K: a larger board at those ratios runs, and is charged, at the largest size the ratio renders below it. |
 | Seed | number | — | Fix for reproducibility; Re-roll uses a fresh seed. |
 
 ## Output

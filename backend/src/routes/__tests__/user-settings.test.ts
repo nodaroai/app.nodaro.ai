@@ -391,3 +391,74 @@ describe("plan gates under a deployment payer (decided 2026-11-08)", () => {
     expect(res.json().data.tier).toBe("pro")
   })
 })
+
+// ---------------------------------------------------------------------------
+// mcpPreferences: `null` clears one saved default
+// ---------------------------------------------------------------------------
+
+describe("PATCH /v1/user/settings — mcpPreferences null clears a field", () => {
+  const STORED = {
+    defaultWorkspaceId: "ws-1",
+    image: { model: "nano-banana-pro", aspectRatio: "9:16", resolution: "2K", quality: "high" },
+    video: { model: "veo3.1", aspectRatio: "9:16", duration: 6, resolution: "1080p" },
+    audio: { ttsModel: "eleven-v3" },
+  }
+
+  function mockProfile() {
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: { tier: "free", public_outputs: true, prompt_templates: {}, mcp_preferences: structuredClone(STORED) },
+      error: null,
+    })
+    const mockUpdateEq = vi.fn().mockResolvedValue({ error: null })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: mockUpdateEq })
+    vi.mocked(supabase.from).mockReturnValue({
+      select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single: mockSingle }) }),
+      update: mockUpdate,
+    } as never)
+    return mockUpdate
+  }
+
+  async function patch(mcpPreferences: unknown) {
+    return app.inject({ method: "PATCH", url: "/v1/user/settings", payload: { userId: TEST_USER_ID, mcpPreferences } })
+  }
+
+  it("an image field sent as null is removed; the other fields and axes are kept", async () => {
+    const update = mockProfile()
+    const res = await patch({ image: { model: null } })
+    expect(res.statusCode).toBe(200)
+    const expected = { ...STORED, image: { aspectRatio: "9:16", resolution: "2K", quality: "high" } }
+    expect(update).toHaveBeenCalledWith({ mcp_preferences: expected })
+    expect(res.json().data.mcpPreferences).toEqual(expected)
+  })
+
+  it("a video field sent as null is removed, the number one included", async () => {
+    const update = mockProfile()
+    const res = await patch({ video: { model: null, duration: null } })
+    expect(res.statusCode).toBe(200)
+    expect(update).toHaveBeenCalledWith({
+      mcp_preferences: { ...STORED, video: { aspectRatio: "9:16", resolution: "1080p" } },
+    })
+  })
+
+  it("set, cleared and left out in one patch: only the first two change", async () => {
+    const update = mockProfile()
+    const res = await patch({ image: { quality: "low", resolution: null }, audio: { ttsModel: null } })
+    expect(res.statusCode).toBe(200)
+    expect(update).toHaveBeenCalledWith({
+      mcp_preferences: { ...STORED, image: { model: "nano-banana-pro", aspectRatio: "9:16", quality: "low" }, audio: {} },
+    })
+  })
+
+  it("a field left out keeps its stored value", async () => {
+    const update = mockProfile()
+    expect((await patch({ image: { aspectRatio: "1:1" } })).statusCode).toBe(200)
+    expect(update).toHaveBeenCalledWith({ mcp_preferences: { ...STORED, image: { ...STORED.image, aspectRatio: "1:1" } } })
+  })
+
+  it("a value of the wrong type is still refused", async () => {
+    mockProfile()
+    const res = await patch({ image: { model: 5 } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+})

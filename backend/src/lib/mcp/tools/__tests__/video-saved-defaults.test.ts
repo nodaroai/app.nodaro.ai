@@ -36,6 +36,8 @@ vi.mock("../../supabase.js", () => ({
 }))
 
 const { registerVerbs } = await import("../verbs.js")
+const { textToVideoBody } = await import("../../../../routes/text-to-video.js")
+const { generateVideoBody } = await import("../../../../routes/generate-video.js")
 
 const START = "https://cdn.nodaro.ai/uploads/start.png"
 
@@ -131,4 +133,73 @@ describe.each(VERBS)("%s — the saved model, duration and size", (_verb, run) =
     // The cheapest listed size (catalog order is low to high).
     expect(body.resolution).toBe("480p")
   })
+})
+
+/**
+ * The saved video model is any string PATCH /v1/user/settings took. A call
+ * runs it only when the route it sends it to takes it (`savedVideoModel`):
+ * `generate_video`'s prompt-only run goes to /v1/text-to-video, `animate_image`
+ * to /v1/generate-video. Any other id (an image model saved there, an
+ * image-to-video id the text-to-video route lacks) is ignored and the default
+ * runs. Each body is checked against the route's own schema.
+ */
+describe("the saved video model: used only when the route takes it", () => {
+  const routeTakes = (url: string, body: Record<string, unknown>) => {
+    const { userId: _userId, mcp_client: _client, ...sent } = body
+    return (url === "/v1/text-to-video" ? textToVideoBody : generateVideoBody).safeParse(sent).success
+  }
+
+  it.each(["gpt-image-2", "gpt-image-2-6-flare-i2i", "not-a-model"])("a saved %s runs the default on both verbs", async (saved) => {
+    savedVideo = { model: saved }
+    const t2v = await run("generate_video", {})
+    expect(t2v.body.provider).toBe("seedance-2-fast")
+    expect(routeTakes(t2v.url, t2v.body)).toBe(true)
+    const i2v = await run("animate_image", {})
+    expect(i2v.body.provider).toBe("seedance-2-fast")
+    expect(routeTakes(i2v.url, i2v.body)).toBe(true)
+  })
+
+  it("an image-to-video id /v1/text-to-video does not take runs generate_video's default, and animate_image as saved", async () => {
+    savedVideo = { model: "grok-i2v" }
+    const t2v = await run("generate_video", {})
+    expect(t2v.url).toBe("/v1/text-to-video")
+    expect(t2v.body.provider).toBe("seedance-2-fast")
+    expect(routeTakes(t2v.url, t2v.body)).toBe(true)
+    const i2v = await run("animate_image", {})
+    expect(i2v.body.provider).toBe("grok-i2v")
+    expect(routeTakes(i2v.url, i2v.body)).toBe(true)
+  })
+
+  it("a retired id runs as the model that replaced it", async () => {
+    savedVideo = { model: "seedance" }
+    expect((await run("generate_video", {})).body.provider).toBe("seedance-2-mini")
+  })
+
+  it("a saved video model the route takes is used, and a named one still wins", async () => {
+    savedVideo = { model: "kling-4" }
+    const t2v = await run("generate_video", {})
+    expect(t2v.body.provider).toBe("kling-4")
+    expect(routeTakes(t2v.url, t2v.body)).toBe(true)
+    expect((await run("generate_video", { model: "veo3.1" })).body.provider).toBe("veo3.1")
+    expect((await run("animate_image", { model: "veo3.1" })).body.provider).toBe("veo3.1")
+  })
+
+  async function run(tool: "generate_video" | "animate_image", args: Record<string, unknown>) {
+    const fastify = Fastify()
+    let body: Record<string, unknown> = {}
+    let url = ""
+    for (const path of ["/v1/text-to-video", "/v1/generate-video"]) {
+      fastify.post(path, async (req) => {
+        body = req.body as Record<string, unknown>
+        url = path
+        return { jobId: "j-video" }
+      })
+    }
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const base = tool === "generate_video" ? { prompt: "a lighthouse at dusk" } : { image_url: START, prompt: "the waves roll in" }
+    const result = await callTool(server, tool, { ...base, ...args })
+    expect(result.isError).toBeUndefined()
+    return { body, url }
+  }
 })

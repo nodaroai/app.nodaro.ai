@@ -8991,7 +8991,7 @@ back only the fields it changes.
 | Method | Endpoint | Notes |
 |--------|----------|-------|
 | `get()` | `GET /v1/user/settings` | `UserSettings`: `{ tier, publicOutputs, promptTemplates, textTemplates, preferredLocale, mcpPreferences, showRecentNodes, showMostUsedNodes, variableDisplayMode, nodeDoubleClickAction, monthlyStatementEmail }`. `UnauthorizedError` when signed out. |
-| `update(patch)` | `PATCH /v1/user/settings` | Only the fields sent change; answers the settings as saved (without `tier`). `promptTemplates` and `textTemplates` replace the stored value whole (send the full map or list; a template key the server does not know, or a value equal to the default, is dropped), `mcpPreferences` merges one axis at a time. `publicOutputs: false` needs the Standard plan or above on Nodaro Cloud (`ForbiddenError`); an invalid value is a `NodaroError` with status 400 (`validation_error`), and so is a patch with nothing to change; `NotFoundError` with no profile row. `preferredLocale` is one of the languages Nodaro ships (`UserSettingsLocale`). |
+| `update(patch)` | `PATCH /v1/user/settings` | Only the fields sent change; answers the settings as saved (without `tier`). `promptTemplates` and `textTemplates` replace the stored value whole (send the full map or list; a template key the server does not know, or a value equal to the default, is dropped), `mcpPreferences` merges one axis at a time, and `null` clears one of its fields (`UserMcpPreferencesPatch`: `update({ mcpPreferences: { image: { model: null } } })`), so the MCP tools fall back to their own default for it. `publicOutputs: false` needs the Standard plan or above on Nodaro Cloud (`ForbiddenError`); an invalid value is a `NodaroError` with status 400 (`validation_error`), and so is a patch with nothing to change; `NotFoundError` with no profile row. `preferredLocale` is one of the languages Nodaro ships (`UserSettingsLocale`). |
 
 ```ts
 // The monthly statement toggle on a billing screen.
@@ -9725,7 +9725,7 @@ Every type used in a public method signature is re-exported from
 
 ### User settings
 
-- `UserSettings` / `UserSettingsPatch` / `UserSettingsSaved` / `UserSettingsLocale` / `UserTextTemplate` / `UserMcpPreferences` / `VariableDisplayMode` / `NodeDoubleClickAction` — `userSettings.get()` / `userSettings.update()`
+- `UserSettings` / `UserSettingsPatch` / `UserSettingsSaved` / `UserSettingsLocale` / `UserTextTemplate` / `UserMcpPreferences` / `UserMcpPreferencesPatch` / `VariableDisplayMode` / `NodeDoubleClickAction` — `userSettings.get()` / `userSettings.update()`
 
 ### Surface
 

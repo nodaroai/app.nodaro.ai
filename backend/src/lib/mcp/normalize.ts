@@ -14,7 +14,7 @@
  * resolved model). Validation errors are SWALLOWED, not surfaced.
  */
 import { MODEL_CATALOG, VIDEO_DURATION_AUTO, defaultImageModel, defaultResolutionFor, isAutoAspectToken, isAutoVideoDuration, type ModelCatalogEntry } from "@nodaro/shared/model-catalog"
-import { MODIFY_IMAGE_PROVIDERS, canonicalVideoProvider } from "@nodaro/shared/models"
+import { IMAGE_GEN_PROVIDERS, MODIFY_IMAGE_PROVIDERS, canonicalVideoProvider } from "@nodaro/shared/models"
 import { imageToImageAspectRatio } from "../image-auto-aspect.js"
 
 /**
@@ -350,6 +350,36 @@ export function savedEditModel(saved: string | null | undefined): string | undef
   return typeof saved === "string" && (MODIFY_IMAGE_PROVIDERS as readonly string[]).includes(saved) ? saved : undefined
 }
 
+/**
+ * The saved image model (`save_image_defaults`) a generation may run on: the
+ * mirror of `savedEditModel`. The one saved image model is an edit id after
+ * the star on a `modify_image` result (`gpt-image-2-6-flare-i2i`), which
+ * /v1/generate-image refuses. A generation runs it only when that route does
+ * (`IMAGE_GEN_PROVIDERS`, its provider list): an edit-only id is ignored and
+ * the generation default runs; a text-to-image id, or a model that does both
+ * under one id (Nano Banana, Flux 2, Flux Kontext), is used.
+ */
+export function savedGenerationModel(saved: string | null | undefined): string | undefined {
+  return typeof saved === "string" && (IMAGE_GEN_PROVIDERS as readonly string[]).includes(saved) ? saved : undefined
+}
+
+/**
+ * The saved video model (`mcpPreferences.video.model`, which PATCH
+ * /v1/user/settings takes as any string) a video call may run on: the model it
+ * runs as (`canonicalVideoProvider`, for a retired id) when the route the call
+ * sends it to takes it — `accepted` is that route's provider list
+ * (`TEXT_TO_VIDEO_PROVIDERS` for `generate_video`, whose prompt-only run goes to
+ * /v1/text-to-video; `VIDEO_GEN_PROVIDERS` for `animate_image`'s
+ * /v1/generate-video). Any other id (an image or a sound model saved there, an
+ * image-to-video id the text-to-video route does not take) is ignored, and the
+ * call's default runs.
+ */
+export function savedVideoModel(saved: string | null | undefined, accepted: readonly string[]): string | undefined {
+  if (typeof saved !== "string") return undefined
+  const runsAs = canonicalVideoProvider(saved) as string
+  return accepted.includes(runsAs) ? runsAs : undefined
+}
+
 /** The levers `image_to_image` sends /v1/image-to-image; each absent one is left out. */
 export interface ImageToImageLevers {
   provider: string
@@ -443,7 +473,8 @@ export interface NormalizedVideoParams {
  * Compose video-tool normalizations. Mirrors `normalizeImageInput` but
  * with `duration` instead of `quality` since that's the lever video
  * models care about. Each lever: the value the call names, else the person's
- * saved video default (`mcp_preferences.video`), else the catalog's. The ratio
+ * saved video default (`mcp_preferences.video`; a caller hands the model on
+ * through `savedVideoModel`, so only one its route takes), else the catalog's. The ratio
  * is chosen before it is fitted to the model (`requestedAspectRatio`), so a
  * saved one is reached; with neither it is `16:9`, or the model's first listed
  * ratio. `resolution` and `duration` fall through to the model's natural

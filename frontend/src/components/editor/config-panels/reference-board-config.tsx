@@ -33,7 +33,7 @@ import {
 import { REFERENCE_BOARD_PROVIDERS, listBoardTemplates, buildBoardPrompt } from "@nodaro/shared/entities"
 import type { ReferenceBoardData, ManualReferenceImage } from "@/types/nodes"
 import type { ConfigProps } from "./types"
-import { defaultImageModel } from "@nodaro/shared/model-catalog"
+import { defaultImageModel, resolutionAtAspectRatio } from "@nodaro/shared/model-catalog"
 
 // ---------------------------------------------------------------------------
 // SOURCE SEGMENTED CONTROL
@@ -151,9 +151,12 @@ function ReferenceBoardConfigImpl({
   const currentProvider = data.provider || defaultImageModel("character", data.aspectRatio)
 
   const aspectRatioOptions = getAspectRatiosForModel(currentProvider)
-  // Only the sizes the model renders at the chosen ratio (GPT Image 2.5: 1K
-  // only at 27:16, 16:27, 9:8 and 8:9); a size it cannot render snaps below.
+  // Only the sizes the model renders at the chosen ratio (GPT Image 2: 1K only
+  // at Auto, 1K or 2K at 1:1; GPT Image 2.5: 1K only at 27:16, 16:27, 9:8 and
+  // 8:9); a size it cannot render snaps below.
   const resolutionOptions = imageResolutionOptionsAt(currentProvider, data.aspectRatio)
+  // The model's whole size list: what a size it does not list at all snaps to.
+  const allResolutionOptions = imageResolutionOptionsAt(currentProvider, undefined)
   const qualityOptions = IMAGE_QUALITY_OPTIONS[currentProvider]
   const qualityDefault = defaultQualityFor(currentProvider)
 
@@ -171,12 +174,12 @@ function ReferenceBoardConfigImpl({
 
     // Resolution: snap to a valid option or provider default; clear when lever absent.
     const flux2Default = defaultResolutionFor(currentProvider)
-    if (resolutionOptions) {
+    if (allResolutionOptions) {
       if (flux2Default) {
-        const valid = resolutionOptions.some((o) => o.value === data.resolution)
+        const valid = allResolutionOptions.some((o) => o.value === data.resolution)
         if (!valid && data.resolution !== flux2Default) updates.resolution = flux2Default
-      } else if (data.resolution && !resolutionOptions.some((o) => o.value === data.resolution)) {
-        updates.resolution = resolutionOptions[0]?.value
+      } else if (data.resolution && !allResolutionOptions.some((o) => o.value === data.resolution)) {
+        updates.resolution = allResolutionOptions[0]?.value
       }
     } else if (data.resolution !== undefined) {
       updates.resolution = undefined
@@ -191,14 +194,13 @@ function ReferenceBoardConfigImpl({
       updates.quality = undefined
     }
 
-    // gpt-image-2 constraints (per KIE docs):
-    //   • aspect_ratio = auto → resolution must be 1K
-    //   • aspect_ratio = 1:1  → resolution cannot be 4K
-    if (currentProvider === "gpt-image-2") {
-      const ar = updates.aspectRatio ?? data.aspectRatio
-      const res = updates.resolution ?? data.resolution
-      if (ar === "auto" && res !== "1K") updates.resolution = "1K"
-      else if (ar === "1:1" && res === "4K") updates.resolution = "2K"
+    // A size the ratio does not render moves to the largest one it renders at
+    // or below it, the size the board is sent and priced at (`boardResolution`,
+    // the catalog's `resolutionsByAspectRatio`).
+    if (allResolutionOptions) {
+      const size = updates.resolution ?? data.resolution
+      const fitted = resolutionAtAspectRatio(currentProvider, updates.aspectRatio ?? data.aspectRatio, size)
+      if (fitted !== size) updates.resolution = fitted
     }
 
     if (Object.keys(updates).length > 0) {

@@ -14,6 +14,7 @@ export type {
   UserSettingsLocale,
   UserTextTemplate,
   UserMcpPreferences,
+  UserMcpPreferencesPatch,
   VariableDisplayMode,
   NodeDoubleClickAction,
 } from "../resources/user-settings.js"
