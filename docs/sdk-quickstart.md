@@ -695,8 +695,11 @@ const job = await client.jobs.get(jobId)
 
 Your past runs, with their pictures and results, come back from
 `client.trends.runs({ trend: trend.slug })`, and one of them from
-`client.trends.getRun(jobId)`; a draft's newest Full Quality try is a run of
-its own there (`fullQualityOf` names the draft). `client.trends.tags()` lists
+`client.trends.getRun(jobId)`. A run is plain at 480p too; pass `draft: true`
+(Nodaro Motion Prism trends, 480p) for a draft whose same take
+`client.castSwap.fullQuality(jobId)` can finish at 1080p. A draft's newest Full
+Quality try is a run of its own there (`fullQualityOf` names the draft).
+Nodaro Motion Pulse trends have no draft and no Full Quality. `client.trends.tags()` lists
 the catalog's tags with their labels in your language, to filter `list({ tag })`
 by. See [SDK Reference → client.trends](./sdk-reference.md#clienttrends).
 

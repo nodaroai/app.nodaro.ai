@@ -15,10 +15,10 @@ import type { NodaroClientCore } from "../core.js"
  * Locations are not prepared.
  *
  * Engines: a run is made on Nodaro Motion Prism (`engine` left out, or
- * `"motion-prism"`) or Nodaro Motion Pulse (`"motion-pulse"`). Pulse renders 720p
- * (its default) or 1080p and has no draft; it makes a new take guided by the
- * clip and pictures, so its Full Quality is a new take at 1080p rather than
- * the same take re-rendered (`CastSwapFullQualityEstimate.kind`).
+ * `"motion-prism"`) or Nodaro Motion Pulse (`"motion-pulse"`). Prism renders
+ * 480p (the default; plain unless `draft: true`), 720p or 1080p. Pulse renders
+ * 720p (its default) or 1080p and makes a new take guided by the clip and
+ * pictures; it has no draft, so no Full Quality: run it again at 1080p instead.
  *
  * How the clip is prepared for the video model (for one, whether faces are
  * hidden first, and whether a refused clip is retried) is set by Nodaro for
@@ -62,13 +62,12 @@ import type { NodaroClientCore } from "../core.js"
  * The engine a Nodaro Motion run is made on, by its public id. Left out =
  * `"motion-prism"`.
  *
- * - `"motion-prism"` (Nodaro Motion Prism): 480p (the default, a draft unless
- *   `draft: false`), 720p or 1080p; Full Quality re-renders a draft's own take
- *   at 1080p.
+ * - `"motion-prism"` (Nodaro Motion Prism): 480p (the default; plain unless
+ *   `draft: true`), 720p or 1080p; Full Quality finishes a draft's own take at
+ *   1080p.
  * - `"motion-pulse"` (Nodaro Motion Pulse): 720p (the default) or 1080p, never a
- *   draft (`draft: true` answers 400 `draft_unsupported`); Full Quality makes a
- *   new take at 1080p from a completed 720p run's inputs. A preview is still
- *   4 s from `previewStart`.
+ *   draft (`draft: true` answers 400 `draft_unsupported`), so no Full Quality:
+ *   run it again at 1080p instead. A preview is still 4 s from `previewStart`.
  */
 export type CastSwapEngine = "motion-prism" | "motion-pulse"
 
@@ -339,10 +338,11 @@ export interface CastSwapParams {
    */
   resolution?: "480p" | "720p" | "1080p"
   /**
-   * Render as a draft (Nodaro Motion Prism only). Defaults to `true` at 480p and
-   * `false` above it; `true` with `"720p"` or `"1080p"` answers 400 (draft is
-   * 480p only). Nodaro Motion Pulse has no draft: `true` answers 400
-   * `draft_unsupported`.
+   * `true` makes a draft: a 480p run whose same take Full Quality can finish
+   * at 1080p (Nodaro Motion Prism only). Default `false`: a plain run, at 480p
+   * too, which Full Quality cannot finish. `true` with `"720p"` or `"1080p"`
+   * answers 400 (draft is 480p only). Nodaro Motion Pulse has no draft: `true`
+   * answers 400 `draft_unsupported`.
    */
   draft?: boolean
   /**
@@ -452,17 +452,18 @@ export interface CastSwapRunOptions {
 }
 
 /**
- * What a Full Quality version would be: `"same-take"` re-renders a Nodaro
- * Motion Prism draft's own take at 1080p; `"new-take"` makes a new Nodaro Motion Pulse take at
- * 1080p from a 720p run's inputs (it will not match the 720p run frame for
- * frame). The 720p run or draft stays either way.
+ * What a Full Quality version would be: `"same-take"` finishes a Nodaro Motion
+ * Prism draft's own take at 1080p, and the draft stays. `"new-take"` was a new
+ * Nodaro Motion Pulse take at 1080p from a 720p run's inputs; Pulse no longer
+ * has Full Quality, so a quote no longer answers it (kept so code that reads
+ * it still compiles).
  */
 export type CastSwapFullQualityKind = "same-take" | "new-take"
 
 /**
  * What a Full Quality version of a run would cost
  * (`POST /v1/cast-swap/:jobId/full-quality/estimate`): a Nodaro Motion Prism
- * draft, or a completed Nodaro Motion Pulse run at 720p.
+ * draft (a 480p run made with `draft: true`).
  */
 export interface CastSwapFullQualityEstimate {
   /**
@@ -510,8 +511,10 @@ export interface CastSwapFullQualityResult {
  * - `not_found` (404): not your job, or not a Nodaro Motion run; also a
  *   `sessionId` you may not use;
  * - `not_completed` (409): the run has not finished;
- * - `not_a_draft` (409): the run is neither a Nodaro Motion Prism draft nor a
- *   Nodaro Motion Pulse run at 720p (a Pulse run at 1080p is already Full Quality);
+ * - `not_a_draft` (409): the run is not a Nodaro Motion Prism draft: a plain
+ *   run (480p made without `draft: true` included; make a draft with
+ *   `draft: true`), or any Nodaro Motion Pulse run (Pulse makes no drafts: run
+ *   it again at 1080p);
  * - `draft_expired` (410): more than 7 days after the draft completed, or
  *   the draft can no longer be finished at Full Quality;
  * - `full_quality_pending` (409, `details.retryable: true`): not final — an
@@ -649,10 +652,9 @@ export class CastSwapResource {
   /**
    * Quote finishing a run at Full Quality (`POST
    * /v1/cast-swap/:jobId/full-quality/estimate`); spends nothing. `jobId` is a
-   * finished Nodaro Motion Prism DRAFT run, or a finished Nodaro Motion Pulse
-   * run at 720p (a Nodaro Motion or trend run); the quote's `kind` says whether it is the same take
-   * re-rendered or a new take. The quote
-   * does not look for a Full Quality already running: when one is,
+   * finished Nodaro Motion Prism DRAFT run (a Nodaro Motion or trend run made
+   * with `draft: true`), whose same take Full Quality finishes at 1080p. The
+   * quote does not look for a Full Quality already running: when one is,
    * {@link fullQuality} answers it (`existing: true`) and charges nothing.
    * Refusals: {@link CastSwapFullQualityRefusalCode}.
    */
@@ -663,8 +665,7 @@ export class CastSwapResource {
   /**
    * Finish a run at Full Quality (`POST /v1/cast-swap/:jobId/full-quality`):
    * at 1080p, with the clip's audio, as a new job linked to the run — a
-   * Nodaro Motion Prism draft's own take re-rendered, or a new Nodaro Motion Pulse take from a
-   * 720p run's inputs (the quote's `kind`). SPENDS CREDITS: quote it first with
+   * Nodaro Motion Prism draft's own take re-rendered. SPENDS CREDITS: quote it first with
    * {@link fullQualityEstimate}. Answers 202 `{ jobId }`, or 200
    * `{ jobId, existing: true }` when this run's Full Quality is already
    * running or done (one per run; a failed one may be asked again). Follow

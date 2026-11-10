@@ -103,7 +103,8 @@ export function TestPanel({ trendId, slots, hasPreview, previewInput, engine, di
   const [picked, setResolution] = useState<TrendResolution>(resolutions[0]!)
   // A resolution the saved engine does not render (it changed since) falls back to its default.
   const resolution = resolutions.includes(picked) ? picked : resolutions[0]!
-  const [draft, setDraft] = useState(true)
+  // A Prism 480p test runs plain, like a user's default run; the switch makes it a draft.
+  const [draft, setDraft] = useState(false)
   const draftable = hasDraft && resolution === "480p"
   const [details, setDetails] = useState("")
   const [promptOf, setPromptOf] = useState<{ jobId: string; runMode: AdminTrendPromptMode } | null>(null)

@@ -22,8 +22,8 @@ function valueLabel(t: MotionPriceTotal): string {
   if (t.value === null) return "Unknown"
   if (t.dimension === "engine") return engineLabel(t.value)
   if (t.dimension === "style") return styleLabel(t.value)
-  // A 480p run is a draft (the only resolution that is).
-  if (t.dimension === "resolution") return resolutionLabel(t.value, t.value === "480p")
+  // A resolution's row holds every run made at it: at 480p, drafts and plain runs alike.
+  if (t.dimension === "resolution") return resolutionLabel(t.value, false)
   return t.value
 }
 

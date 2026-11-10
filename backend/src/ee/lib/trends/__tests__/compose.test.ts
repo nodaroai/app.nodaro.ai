@@ -336,16 +336,20 @@ describe("composeTrendRun — preview, resolution, source", () => {
     expect(composeTrendRun(trend(version({ previewStart: null })), req()).body.previewStart).toBe(0)
   })
 
-  it("defaults to a 480p draft", () => {
+  it("defaults to plain 480p (draft: false is sent)", () => {
     const { body } = composeTrendRun(trend(), req())
     expect(body.resolution).toBe("480p")
-    expect(body.draft).toBe(true)
+    expect(body.draft).toBe(false)
     expect(body).not.toHaveProperty("quality")
   })
 
-  it("is not a draft above 480p, and draft can be turned off at 480p", () => {
-    expect(composeTrendRun(trend(), req({ resolution: "1080p" })).body).toMatchObject({ resolution: "1080p", draft: false })
+  it("is a draft only with draft: true at 480p; never above it", () => {
+    expect(composeTrendRun(trend(), req({ draft: true })).body).toMatchObject({ resolution: "480p", draft: true })
+    expect(composeTrendRun(trend(), req({ resolution: "480p", draft: true })).body).toMatchObject({ resolution: "480p", draft: true })
+    expect(composeTrendRun(trend(), req({ resolution: "480p" })).body).toMatchObject({ resolution: "480p", draft: false })
     expect(composeTrendRun(trend(), req({ resolution: "480p", draft: false })).body).toMatchObject({ resolution: "480p", draft: false })
+    expect(composeTrendRun(trend(), req({ resolution: "720p" })).body).toMatchObject({ resolution: "720p", draft: false })
+    expect(composeTrendRun(trend(), req({ resolution: "1080p" })).body).toMatchObject({ resolution: "1080p", draft: false })
   })
 
   it("rejects a version with no source clip", () => {
@@ -498,7 +502,7 @@ describe("composeTrendRun — engine", () => {
   it("sends no engine for a Seedance 2.5 version either", () => {
     const { body } = composeTrendRun(trend(version({ engine: "seedance-2-5" })), req())
     expect(body).not.toHaveProperty("engine")
-    expect(body).toMatchObject({ resolution: "480p", draft: true })
+    expect(body).toMatchObject({ resolution: "480p", draft: false })
   })
 
   it("sends Kling 4 at 720p, with no draft, by default", () => {

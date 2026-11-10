@@ -189,8 +189,9 @@ export interface TrendDetail extends TrendCard {
   engineName: string
   /**
    * The resolutions a run of this trend may ask for, its default first:
-   * Nodaro Motion Prism `["480p", "720p", "1080p"]` (480p is the draft),
-   * Nodaro Motion Pulse `["720p", "1080p"]` (no draft).
+   * Nodaro Motion Prism `["480p", "720p", "1080p"]` (480p is plain; a run
+   * makes a draft only with `draft: true`, at 480p), Nodaro Motion Pulse
+   * `["720p", "1080p"]` (no draft).
    */
   resolutions: TrendResolution[]
   /**

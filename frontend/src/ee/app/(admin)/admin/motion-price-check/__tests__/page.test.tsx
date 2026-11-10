@@ -278,7 +278,7 @@ describe("Admin → Motion price check", () => {
       "All",
       "Engine Prism",
       "Engine Pulse",
-      "Resolution 480p (draft)",
+      "Resolution 480p",
       "Resolution 720p",
       "Resolution 1080p",
       "Style Flex",

@@ -2209,7 +2209,8 @@ interface CastSwapParams {
   direction?: { style: string }    // an art style, a `style` picker id, motion-prism only: Flex (see Style only), or Precise where styleChoice() says so
   motionLength?: "cut-end" | "cut-start" // CastSwapMotionLength, motion-pulse only; default "cut-end"
   resolution?: "480p" | "720p" | "1080p" // default "480p"; motion-pulse: "720p" (default) or "1080p"
-  draft?: boolean                  // default true at 480p, false above; true above 480p is a 400;
+  draft?: boolean                  // default false (480p is plain); true = a 480p draft whose same take
+                                   // Full Quality can finish at 1080p; true above 480p is a 400;
                                    // motion-pulse has no draft (true = 400 draft_unsupported)
   prepareReferences?: boolean      // default true: prepare the reference pictures first (see below)
   faceMasking?: CastSwapFaceMasking // @deprecated: accepted and ignored (Nodaro sets it per engine)
@@ -2238,11 +2239,12 @@ interface CastSwapEstimate {
 }
 
 interface CastSwapFullQualityEstimate {
-  kind?: "same-take" | "new-take" // CastSwapFullQualityKind; absent from an older server = "same-take"
+  kind?: "same-take" | "new-take" // CastSwapFullQualityKind: "same-take" (absent from an older server
+                                  // = "same-take"); "new-take" was Nodaro Motion Pulse's, which has none now
   totalCredits: number // base + the render
   breakdown: { base?: number; motionHd?: number; motion?: number } & Record<string, number>
-                       // base: the Full Quality job's own steps; motionHd: a same take's 1080p
-                       // render, 0 when an earlier try's render is reused; motion: a new take
+                       // base: the Full Quality job's own steps; motionHd: the draft's 1080p
+                       // render, 0 when an earlier try's render is reused; motion: a new take (Pulse's, before)
   availableUntil: string // ISO time: 7 days after the run completed
 }
 
@@ -2448,8 +2450,8 @@ const { jobId } = await client.castSwap.run(params, { idempotencyKey: crypto.ran
 Nodaro Motion Prism (`"motion-prism"`), as before. `"motion-pulse"` (Nodaro Motion
 Pulse) makes a new take guided by the clip and the pictures: 720p (its default)
 or 1080p, no draft (`draft: true` is a `400 draft_unsupported`, 480p is
-refused), a 4 s preview as on Prism, and a Full Quality that is a new take
-(below). `motionLength` (`CastSwapMotionLength`) says where a Pulse run cuts the
+refused) and so no Full Quality (run it again at 1080p instead), and a 4 s
+preview as on Prism. `motionLength` (`CastSwapMotionLength`) says where a Pulse run cuts the
 clip to whole seconds: `"cut-end"` (default) or `"cut-start"` drops the
 fraction of a second at that end. A Pulse quote names `engine`, with
 `expectedCredits` = `totalCredits` and `settlesLower: false`. Its own
@@ -2462,18 +2464,17 @@ and read as Prism and Pulse. The trend routes and `estimate()` answer the
 public ids above; for now a job's `input_data.engine` (and its output's
 `engine`) may still name the engine by the id it had before the rename.
 
-**Full Quality.** A finished draft run (a Nodaro Motion run made as a draft,
-or a trend run, whose default is a draft) can be finished at Full Quality within 7
-days: `fullQuality(jobId)` re-renders the same take at 1080p, with the clip's
-audio, as a new job linked to the draft. A finished Nodaro Motion Pulse run at
-720p can be too: Full Quality then makes a NEW take at 1080p from the same inputs (it will
-not match the 720p run frame for frame; the 720p run stays). The quote's
-`kind` (`CastSwapFullQualityKind`: `"same-take"` or `"new-take"`) says which,
-so a client can word it. It spends credits; quote it first with
-`fullQualityEstimate(jobId)` (free), whose `totalCredits` is
-`breakdown.base` plus `breakdown.motionHd` (a same take; 0 when an
-earlier failed try of this draft already finished the 1080p render, which is
-then reused) or `breakdown.motion` (a new take). One Full Quality per draft: a repeat answers the same job with
+**Full Quality.** A finished Nodaro Motion Prism draft (a Nodaro Motion or
+trend run made at 480p with `draft: true`) can be finished at Full Quality
+within 7 days: `fullQuality(jobId)` re-renders the same take at 1080p, with the
+clip's audio, as a new job linked to the draft. Only a draft can: a plain run
+(480p without `draft: true` included) is refused with `409 not_a_draft`, so
+pass `draft: true` when you want to finish the take later. Nodaro Motion Pulse
+makes no drafts and has no Full Quality: run it again at 1080p instead. The
+quote's `kind` is `"same-take"` (`"new-take"` was Pulse's). It spends credits;
+quote it first with `fullQualityEstimate(jobId)` (free), whose `totalCredits`
+is `breakdown.base` plus `breakdown.motionHd` (0 when an earlier failed try of
+this draft already finished the 1080p render, which is then reused). One Full Quality per draft: a repeat answers the same job with
 `existing: true` and charges nothing; the server keys it by the draft, so no
 idempotency key is taken. The new job keeps the draft's origin; `sessionId`
 files it in a session. Refusals carry a `CastSwapFullQualityRefusalCode`:
@@ -2567,7 +2568,7 @@ interface TrendDetail extends TrendCard {
   previewSec: 4 | null                   // 4 when a 4 s preview run is offered
   engine?: "motion-prism" | "motion-pulse" // TrendEngine: the engine every run uses (the trend's choice); absent = motion-prism
   engineName?: string                   // "Nodaro Motion Prism" | "Nodaro Motion Pulse"
-  resolutions: ("480p" | "720p" | "1080p")[] // default first: motion-prism ["480p" (draft), "720p", "1080p"], motion-pulse ["720p", "1080p"]
+  resolutions: ("480p" | "720p" | "1080p")[] // default first: motion-prism ["480p", "720p", "1080p"] (480p plain; a draft only with draft: true), motion-pulse ["720p", "1080p"]
   original?: TrendOriginal               // the clip every run starts from, to show; absent only on a version without a display copy; the first example on a trend that hides its original
   slots: TrendDetailSlot[]
   examples: Array<TrendVideo & { slots: Record<string, string[]> }> // may be []; an optional slot the example kept as in the original has no key in its slots; from the second example on a trend that hides its original
@@ -2592,7 +2593,7 @@ interface TrendRunRequest {
   details?: string      // ≤ 1,000 characters; mention a slot as {slot:<key>}
   preview?: boolean     // 4 s run, when previewSec is 4
   resolution?: "480p" | "720p" | "1080p" // one of the trend's resolutions, default its first; else 400 resolution_unsupported
-  draft?: boolean       // only at 480p on motion-prism; default true there; motion-pulse: true = 400 draft_unsupported
+  draft?: boolean       // default false (480p is plain); true = a 480p draft Full Quality can finish at 1080p, motion-prism only; motion-pulse: true = 400 draft_unsupported
   sessionId?: string    // accepted (and checked), not yet applied: trend runs are not filed into sessions yet
   projectId?: string    // accepted, but not used by the run today
   previewJobId?: string // a full run: the jobId of your own completed preview of this trend (uuid; any other job is ignored)
@@ -2626,7 +2627,7 @@ interface TrendRun {
   creditsReleased?: number | null    // what went back from creditsHeld once every hold in the run settled; null until then
   fullQualityOf: string | null       // a Full Quality version: the draft run it was made from; else null
   fullQuality: { jobId: string; status: string; refused?: true } | null // a draft's newest Full Quality try: a pointer only; refused: the provider refused it, or blocked it for a copyright or a likeness, so another try fails the same way
-  fullQualityUntil: string | null    // until when a completed draft (or motion-pulse 720p run) can be redone in Full Quality
+  fullQualityUntil: string | null    // until when a completed draft can be finished in Full Quality; null for a plain run and every motion-pulse run
 }
 
 interface TrendTag {

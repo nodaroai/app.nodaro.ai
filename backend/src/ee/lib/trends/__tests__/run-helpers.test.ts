@@ -11,6 +11,7 @@ import {
   engineSupports,
   followPreviewMasking,
   fullQualityEligible,
+  mayHaveFullQuality,
   runEngineOf,
   toTrendRun,
   withPreparedPreview,
@@ -511,9 +512,18 @@ describe.each(Object.keys(DECLARED) as (keyof typeof DECLARED)[])("Nodaro Motion
     const { prism, pulse } = RECORDED[gen]
     expect(runEngineOf({ engine: prism })).toBe("seedance-2-5")
     expect(runEngineOf({ engine: pulse })).toBe("kling-4")
-    expect(fullQualityEligible({ engine: pulse, resolution: "720p" })).toBe(true)
-    expect(fullQualityEligible({ engine: pulse, resolution: "1080p" })).toBe(false)
+    // Full Quality finishes a Prism draft only: Pulse makes no drafts, at any resolution.
+    expect(fullQualityEligible({ engine: prism, resolution: "480p", draft: true })).toBe(true)
+    expect(fullQualityEligible({ engine: prism, resolution: "480p", draft: false })).toBe(false)
     expect(fullQualityEligible({ engine: prism, resolution: "720p" })).toBe(false)
+    expect(fullQualityEligible({ engine: pulse, resolution: "720p" })).toBe(false)
+    expect(fullQualityEligible({ engine: pulse, resolution: "1080p" })).toBe(false)
+    // A Pulse 720p run made while Pulse had Full Quality still points at its try (history), but offers no new one.
+    expect(mayHaveFullQuality({ engine: pulse, resolution: "720p" })).toBe(true)
+    expect(mayHaveFullQuality({ engine: pulse, resolution: "1080p" })).toBe(false)
+    expect(mayHaveFullQuality({ engine: prism, resolution: "480p", draft: true })).toBe(true)
+    expect(mayHaveFullQuality({ engine: prism, resolution: "480p", draft: false })).toBe(false)
+    expect(mayHaveFullQuality({ engine: pulse, resolution: "720p", fullQualityOf: "j-1" })).toBe(false)
   })
 
   it("a public failure names a refusal by its kind, and hides any kind it does not list (toTrendRun)", () => {
@@ -622,7 +632,8 @@ describe.each(Object.keys(DECLARED) as (keyof typeof DECLARED)[])("Nodaro Motion
     })
     const pulse = toTrendRun(row(RECORDED[gen].pulse), undefined, NO_RUN_CREDITS)!
     expect(pulse).toMatchObject({ engine: "motion-pulse", engineName: "Nodaro Motion Pulse" })
-    expect(pulse.fullQualityUntil).not.toBeNull()
+    // Pulse has no Full Quality (Full Quality finishes a Prism draft only).
+    expect(pulse.fullQualityUntil).toBeNull()
     expect(toTrendRun(row(RECORDED[gen].prism), undefined, NO_RUN_CREDITS)).toMatchObject({
       engine: "motion-prism",
       engineName: "Nodaro Motion Prism",

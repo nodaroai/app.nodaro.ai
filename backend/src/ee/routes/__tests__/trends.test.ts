@@ -1415,6 +1415,25 @@ describe("POST /v1/trends/:slug/estimate", () => {
   })
 })
 
+describe("a Nodaro Motion Prism trend at 480p", () => {
+  it("plain 480p by default; draft: true makes a draft", async () => {
+    const sent = async (payload: Record<string, unknown>) => {
+      engine.calls = []
+      expect((await app.inject({ method: "POST", url: "/v1/trends/neon-dance/estimate", headers: as(), payload })).statusCode).toBe(200)
+      expect((await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload })).statusCode).toBe(202)
+      expect(engine.calls.map((c) => c.url)).toEqual(["/v1/cast-swap/estimate", "/v1/cast-swap"])
+      return engine.calls.map((c) => c.body as Record<string, unknown>)
+    }
+    // The quote and the run read the same default, so an estimate matches its run.
+    for (const payload of [RUN_BODY, { ...RUN_BODY, resolution: "480p" }, { ...RUN_BODY, draft: false }]) {
+      for (const body of await sent(payload)) expect(body).toMatchObject({ resolution: "480p", draft: false })
+    }
+    for (const payload of [{ ...RUN_BODY, draft: true }, { ...RUN_BODY, resolution: "480p", draft: true }]) {
+      for (const body of await sent(payload)) expect(body).toMatchObject({ resolution: "480p", draft: true })
+    }
+  })
+})
+
 // ── the trend's engine ─────────────────────────────────────────────────────
 
 describe("a Kling 4 trend", () => {
@@ -1576,7 +1595,7 @@ describe("a Prism trend's reference audio", () => {
     }
   })
 
-  it("sends a per-resolution engine the object, and a one-mode engine the run's own resolution's mode (the 480p draft by default)", async () => {
+  it("sends a per-resolution engine the object, and a one-mode engine the run's own resolution's mode (plain 480p by default)", async () => {
     mem.trends.push(trend(T_AUDIO, "voice-dance", "published", 1, versionData({ prismReferenceAudio: { "480p": "full", "720p": "none" } })))
     const run = async (payload: Record<string, unknown>) => {
       engine.calls = []
@@ -2454,7 +2473,7 @@ describe("GET /v1/trends/runs", () => {
   })
 
   // The job stores the engine as the engine recorded it: the internal id, or (an engine that knows them) a public one, earlier or current.
-  for (const stored of ["kling-4", "motion-lite", "motion-pulse"]) it(`a completed Nodaro Motion Pulse run at 720p (stored as ${stored}) can be redone in Full Quality (a new take); at 1080p it cannot`, async () => {
+  for (const stored of ["kling-4", "motion-lite", "motion-pulse"]) it(`a completed Nodaro Motion Pulse run (stored as ${stored}) has no Full Quality at any resolution; a 720p one made while Pulse had it still points at that try`, async () => {
     const KLING_720 = "00000000-0000-4000-8000-0000000000e7"
     const KLING_1080 = "00000000-0000-4000-8000-0000000000e8"
     const fqRow = jobRow(FQ_JOB, {
@@ -2474,10 +2493,12 @@ describe("GET /v1/trends/runs", () => {
     expect(res.statusCode).toBe(200)
     const runs = res.json().data
     expect(runs[0]).toMatchObject({ jobId: FQ_JOB, engine: "motion-pulse", engineName: "Nodaro Motion Pulse", fullQualityOf: KLING_720, fullQuality: null, fullQualityUntil: null })
+    // Full Quality finishes a Prism draft only: nothing offers a new one here (no fullQualityUntil),
+    // and the try made before stays listed as history, pointed at from its run.
     expect(runs[1]).toMatchObject({
       jobId: KLING_720, engine: "motion-pulse", resolution: "720p", draft: false,
       fullQuality: { jobId: FQ_JOB, status: "processing" },
-      fullQualityUntil: "2026-10-27T10:00:00.000Z",
+      fullQualityUntil: null,
     })
     expect(runs[2]).toMatchObject({ jobId: KLING_1080, engine: "motion-pulse", fullQuality: null, fullQualityUntil: null })
     // The upgrades looked up are the 720p run's only.
@@ -2487,6 +2508,20 @@ describe("GET /v1/trends/runs", () => {
       ["input_data->>fullQualityOf", [KLING_720]],
       stepsLookup([FQ_JOB, KLING_720, KLING_1080]),
     ])
+  })
+
+  it("a completed plain Nodaro Motion Prism run at 480p (made without draft: true) has no Full Quality; a draft has", async () => {
+    const PLAIN_480 = "00000000-0000-4000-8000-0000000000e9"
+    feed([
+      jobRow(PLAIN_480, { input_data: runInput({ resolution: "480p", draft: false }) }),
+      jobRow(DRAFT_JOB, { input_data: runInput({ resolution: "480p", draft: true }), created_at: "2026-10-19T10:00:00.000000+00:00" }),
+    ])
+    const res = await app.inject({ method: "GET", url: "/v1/trends/runs", headers: as() })
+    expect(res.statusCode).toBe(200)
+    const [plain, draft] = res.json().data
+    expect(plain).toMatchObject({ jobId: PLAIN_480, engine: "motion-prism", resolution: "480p", draft: false, fullQuality: null, fullQualityUntil: null })
+    expect(draft).toMatchObject({ jobId: DRAFT_JOB, resolution: "480p", draft: true, fullQuality: null })
+    expect(draft.fullQualityUntil).toEqual(expect.any(String))
   })
 
   it("a Full Quality version whose draft was deleted is still listed, with its own result and charge", async () => {

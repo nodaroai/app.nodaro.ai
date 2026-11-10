@@ -210,7 +210,8 @@ export const CAST_SWAP_ENGINE_IDS_ACCEPTED = [
 
 /**
  * The resolutions each engine renders, the default first. Seedance 2.5's 480p
- * is its draft (`draft` is 480p only); Kling 4 has no draft and no 480p.
+ * is plain unless a run asks for a draft (`draft` is 480p only); Kling 4 has
+ * no draft and no 480p.
  */
 export const CAST_SWAP_RESOLUTIONS_BY_ENGINE = {
   "seedance-2-5": ["480p", "720p", "1080p"],

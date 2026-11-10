@@ -49,7 +49,7 @@ const KINDS: readonly Option<MotionPriceFilters["kind"]>[] = [
 ]
 const RESOLUTIONS: readonly Option<MotionPriceFilters["resolution"]>[] = [
   { value: "all", label: "All resolutions" },
-  { value: "480p", label: "480p (draft)" },
+  { value: "480p", label: "480p" },
   { value: "720p", label: "720p" },
   { value: "1080p", label: "1080p" },
 ]

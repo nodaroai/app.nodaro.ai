@@ -1,11 +1,12 @@
 /**
- * MCP Full Quality verbs — a finished Nodaro Motion (Cast Swap) or trend run
- * made again at 1080p, with the clip's audio, as a new job linked to it: a
- * Nodaro Motion Prism DRAFT's own take re-rendered (`kind: "same-take"`), or a
- * new Nodaro Motion Pulse take
- * from a 720p run's inputs (`kind: "new-take"`). The quote's `kind` words it;
- * an older engine answers none (a same take). The MCP face of the Cloud
- * plugin's routes:
+ * MCP Full Quality verbs — a finished Nodaro Motion (Cast Swap) or trend
+ * DRAFT (a 480p Nodaro Motion Prism run made with `draft: true`) made again at
+ * 1080p, with the clip's audio, as a new job linked to it: the draft's own take
+ * re-rendered (`kind: "same-take"`). A plain run and every Nodaro Motion Pulse
+ * run have none. An engine from before Pulse's Full Quality was withdrawn may
+ * still quote a Pulse 720p run as a new take (`kind: "new-take"`), which the
+ * quote then words as one; an older engine answers no kind (a same take). The
+ * MCP face of the Cloud plugin's routes:
  *
  *   estimate_full_quality  POST /v1/cast-swap/:jobId/full-quality/estimate  workflows:execute
  *   full_quality           POST /v1/cast-swap/:jobId/full-quality           workflows:execute
@@ -18,8 +19,7 @@
  * keys the job by the draft, so no client idempotency key is sent.
  *
  * Results are rebuilt field by field from the route's answer (never spread).
- * The route is the authority on every rule (a draft or a Nodaro Motion Pulse 720p run,
- * finished, within 7 days).
+ * The route is the authority on every rule (a draft, finished, within 7 days).
  * Its one refusal that ends on its own, 409 `full_quality_pending` (an earlier
  * try's 1080p render is being reviewed or has not started), says to try again
  * later; every other refusal is passed back as the route words it.
@@ -134,7 +134,7 @@ function refusal(statusCode: number, body: string) {
 
 /** A job id: anything else (a slash, a dot segment) is refused before a request is made. */
 const JOB_ID_RE = /^[A-Za-z0-9-]{1,64}$/
-const JOB_ID_HINT = "The finished run's job id: a cast_swap or trend run made as a draft, or one made on motion-pulse at 720p."
+const JOB_ID_HINT = "The finished draft's job id: a cast_swap or trend run made with draft: true."
 const fullQualityUrl = (id: string) => `/v1/cast-swap/${encodeURIComponent(id)}/full-quality`
 
 export function registerCastSwapFullQualityTools({ server, session, fastify }: RegisterCastSwapFullQualityToolsOpts): void {
@@ -154,8 +154,8 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
     {
       title: "Estimate Full Quality",
       description:
-        "Quote finishing a Nodaro Motion (cast_swap) or trend run at Full Quality (free; nothing starts): a DRAFT's same take re-rendered at 1080p, " +
-        'or, for a motion-pulse run at 720p, a new take at 1080p (the quote\'s kind: "same-take" or "new-take"). ' +
+        "Quote finishing a Nodaro Motion (cast_swap) or trend DRAFT (made with draft: true) at Full Quality (free; nothing starts): its same take re-rendered at 1080p. " +
+        "A plain run and motion-pulse runs have none. " +
         "Within 7 days of the run finishing. If its Full Quality already exists, full_quality returns it free.",
       inputSchema: {
         job_id: z.string().regex(JOB_ID_RE).describe(JOB_ID_HINT),
@@ -177,8 +177,7 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
     {
       title: "Full Quality",
       description:
-        "Finish a Nodaro Motion (cast_swap) or trend run at Full Quality, at 1080p with the clip's audio, as a new job: a DRAFT's same take re-rendered, " +
-        "or a new take of a motion-pulse 720p run (the quote says which). " +
+        "Finish a Nodaro Motion (cast_swap) or trend DRAFT (made with draft: true) at Full Quality, at 1080p with the clip's audio, as a new job: its same take re-rendered. " +
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
         "That returns a job id (the existing one, free, if this run's Full Quality already exists): poll it with wait_for_job.",
       inputSchema: {

@@ -674,9 +674,10 @@ export function composeTrendRun(
       )
     }
   }
-  // The engine's default resolution comes first: Seedance's 480p draft, Kling's 720p.
+  // The engine's default resolution comes first: Seedance's 480p, Kling's 720p.
   const resolution: TrendResolution = req.resolution ?? offered[0]!
-  const draft = castSwapEngineHasDraft(engine) && resolution === "480p" && (req.draft ?? true)
+  // Plain unless the run asks for a draft (`draft: true`, Seedance 480p only); always sent, so the engine never applies a default of its own.
+  const draft = castSwapEngineHasDraft(engine) && resolution === "480p" && req.draft === true
 
   const parts = promptPartTexts(data.promptParts)
   const wording = trendPromptWordingSent(data)
