@@ -222,3 +222,24 @@ describe("node-executor: a dub the voice lock refuses at build time", () => {
     expectNothingStarted()
   })
 })
+
+// A deployment that restricts models refuses, at the end of the build, a node
+// that names no model when the model its build filled in is withheld
+// (payload-builder's `refuseWithheldDefaultModel`, pinned in
+// payload-builder-default-model-deny.test.ts): the same coded refusal a named
+// model gets at the top of the build, so the run handles it the same way.
+describe("node-executor: a node whose default model the deployment withholds", () => {
+  it("deletes the placeholder row, reads nothing, reserves nothing, and carries model_not_available", async () => {
+    const { modelNotAvailableError } = await import("@/lib/surface-deny.js")
+    const refusal = modelNotAvailableError(["elevenlabs-dubbing"])
+    vi.mocked(buildPayload).mockImplementationOnce(() => {
+      throw refusal
+    })
+    await expect(executeNode(makeNode(), {}, [], [], {}, makeCtx())).rejects.toMatchObject({
+      code: "model_not_available",
+      message: refusal.message,
+    })
+    expect(gate.requireImportAllowed).not.toHaveBeenCalled()
+    expectNothingStarted()
+  })
+})

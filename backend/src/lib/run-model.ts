@@ -13,7 +13,7 @@
 import type { FastifyRequest } from "fastify"
 import { LLM_FEATURE_DEFAULTS, llmDefaultsFeature } from "@nodaro/shared/llm-models"
 import { applyDefaultVideoSelection } from "@nodaro/shared/models"
-import { RESOLVED_MODEL_OF_JOB, resolvedModelOfJob } from "./job-resolved-model.js"
+import { judgedModelOfJob, RESOLVED_MODEL_OF_JOB, resolvedModelOfJob } from "./job-resolved-model.js"
 
 /** What `CreditGuardOpts.runModel` takes. */
 export type RunModelResolver = (req: FastifyRequest) => string | readonly string[] | undefined
@@ -92,4 +92,45 @@ export function llmRunModel(feature: string | ((body: Record<string, unknown>) =
     const body = rawBodyRecord(req)
     return textField(body.llmModel) ?? llmFeatureDefault(typeof feature === "string" ? feature : feature(body))
   }
+}
+
+// ── The workflow lane: the model a BUILT job runs ─────────────────────────────
+
+/**
+ * Jobs that run one fixed model and reserve under that model's id, so the id
+ * the build reserves under IS the model that runs — what the workflow lane
+ * judges for them, since no payload field names it. Dubbing's id follows its
+ * target language (`dubbingModelIdentifier`). The census
+ * (services/workflow-engine/__tests__/default-model-judge-census.test.ts)
+ * holds each one's id to a model a restriction can name.
+ */
+export const FIXED_MODEL_JOBS: ReadonlySet<string> = new Set([
+  "audio-isolation",
+  "dubbing",
+  "forced-alignment",
+  "voice-changer",
+  "voice-design",
+])
+
+/** Whether the workflow lane can tell the model a job named `jobName` runs on. */
+export function judgesJobRunModel(jobName: string): boolean {
+  return Object.hasOwn(RESOLVED_MODEL_OF_JOB, jobName) || FIXED_MODEL_JOBS.has(jobName)
+}
+
+/**
+ * The model a job built for a workflow node RUNS on, as a model restriction
+ * judges it — the workflow lane's counterpart of `CreditGuardOpts.runModel`,
+ * read off the BUILT job: its payload, with every default the build filled in,
+ * and the id it reserves under. A job the resolved-model registry knows answers
+ * through `judgedModelOfJob` (as its handler decides, before generate-image's
+ * image-to-image swap); a fixed-model job answers its reserved id; any other
+ * job answers undefined.
+ */
+export function jobRunModelOfBuild(
+  jobName: string,
+  payload: Readonly<Record<string, unknown>>,
+  modelIdentifier: string,
+): string | undefined {
+  if (Object.hasOwn(RESOLVED_MODEL_OF_JOB, jobName)) return judgedModelOfJob(jobName, payload)
+  return FIXED_MODEL_JOBS.has(jobName) ? textField(modelIdentifier) : undefined
 }

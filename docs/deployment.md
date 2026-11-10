@@ -831,8 +831,13 @@ optional; each array empty = "keep the default"):
   default LLM, a route's one fixed model — and a model named outside
   `provider` (`llmModel`, Suno's `model`, Add Captions' `transcribe_provider`)
   is judged too, before anything is created or charged
-  (`403 model_not_available`, on the run and on `POST /v1/quote` alike). So
-  list every model the deployment runs, the LLMs behind its text features
+  (`403 model_not_available`, on the run and on `POST /v1/quote` alike). A
+  workflow run (an app run, a scheduled or webhook run, an MCP or API run)
+  judges its nodes the same way: a node that names no model is judged on the
+  default it would run — Generate Image's for its ratio, Image to Image's edit
+  default, a video or speech node's default, a single-model node's one model —
+  and fails with `model_not_available` before its job is charged. So list
+  every model the deployment runs, the LLMs behind its text features
   included: a request whose model is not listed is refused, not run on an
   unlisted default. A deployment with no `models.allow` / `models.deny` and no
   models override in Admin → Availability is not affected.

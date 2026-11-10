@@ -321,6 +321,12 @@ export function deniedModelRejectionMessage(ids: readonly string[]): string {
   )
 }
 
+/** The coded run-time refusal of a denied model — one shape for every door
+ *  that throws it (the workflow build's backstops), parallel to the node one. */
+export function modelNotAvailableError(ids: readonly string[]): Error & { code: "model_not_available" } {
+  return Object.assign(new Error(deniedModelRejectionMessage(ids)), { code: "model_not_available" as const })
+}
+
 /** Drop models the deployment does not offer (applied at each read/projection site). */
 export function filterDeniedModels<T extends { id: string }>(models: readonly T[]): T[] {
   return models.filter((m) => !isModelDenied(m.id))

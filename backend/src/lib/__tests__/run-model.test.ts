@@ -23,13 +23,17 @@ vi.mock("@/lib/config.js", async (importOriginal) => {
 import {
   adAnalysisRunModel,
   fixedRunModel,
+  FIXED_MODEL_JOBS,
   jobRunModel,
+  jobRunModelOfBuild,
+  judgesJobRunModel,
   llmFeatureDefault,
   llmRunModel,
   providerRunModel,
   rawBodyRecord,
   videoRunModel,
 } from "../run-model.js"
+import { judgedModelOfJob, resolvedModelOfJob } from "../job-resolved-model.js"
 import { resolveImageRunModel } from "../../routes/generate-image-credit-id.js"
 import { resolveImageToImageRunModel } from "../../routes/image-to-image-credit-id.js"
 import { resolveAddCaptionsRunModel } from "../../routes/add-captions.js"
@@ -153,5 +157,45 @@ describe("add-captions judges its transcription model only when it transcribes",
     expect(resolveAddCaptionsRunModel(req({ text: "a static line" }))).toBeUndefined()
     expect(resolveAddCaptionsRunModel(req({ auto_transcribe: false }))).toBeUndefined()
     expect(resolveAddCaptionsRunModel(req({ segments: [{ text: "one" }, { captions: [{ text: "two" }] }] }))).toBeUndefined()
+  })
+})
+
+describe("jobRunModelOfBuild — the model a workflow node's built job runs on", () => {
+  it("a job the registry knows answers as its handler decides, default included", () => {
+    expect(jobRunModelOfBuild("image-to-image", {}, "x")).toBe(defaultImageModel("edit"))
+    expect(jobRunModelOfBuild("image-to-image", { aspectRatio: "9:8" }, "x")).toBe(defaultImageModel("edit", "9:8"))
+    expect(jobRunModelOfBuild("video-upscale", {}, "x")).toBe("topaz-video")
+    expect(jobRunModelOfBuild("suno-generate", { model: "V5" }, "x")).toBe("suno-v5")
+  })
+
+  it("Generate Image and Reference Board are judged on the model chosen, before the image-to-image swap", () => {
+    const swapped = { provider: "gpt-image-2", model: "gpt-image-2-i2i", baseImageUrl: "https://x/a.png" }
+    expect(resolvedModelOfJob("generate-image", swapped)).toBe("gpt-image-2-i2i")
+    expect(jobRunModelOfBuild("generate-image", swapped, "gpt-image-2-i2i")).toBe("gpt-image-2")
+    expect(jobRunModelOfBuild("reference-board", swapped, "gpt-image-2-i2i")).toBe("gpt-image-2")
+    expect(jobRunModelOfBuild("generate-image", { aspectRatio: "4:5" }, "x")).toBe(defaultImageModel("general", "4:5"))
+  })
+
+  it("a 3D scene build with an advanced engine sends no planner model, so nothing is judged", () => {
+    expect(jobRunModelOfBuild("generate-3d-scene", {}, "x")).toBe(LLM_FEATURE_DEFAULTS["3d-scene"])
+    expect(jobRunModelOfBuild("generate-3d-scene", { engine: "an-engine" }, "x")).toBeUndefined()
+    expect(jobRunModelOfBuild("edit-3d-scene", { engine: "an-engine" }, "x")).toBeUndefined()
+    expect(jobRunModelOfBuild("edit-3d-scene", { operations: [] }, "x")).toBeUndefined()
+    // The record of what ran is unchanged.
+    expect(resolvedModelOfJob("generate-3d-scene", { engine: "an-engine" })).toBe(LLM_FEATURE_DEFAULTS["3d-scene"])
+  })
+
+  it("a fixed-model job answers the id it reserves under; any other job answers nothing", () => {
+    expect([...FIXED_MODEL_JOBS].every((j) => judgesJobRunModel(j))).toBe(true)
+    expect(jobRunModelOfBuild("dubbing", {}, "elevenlabs-dubbing-v2")).toBe("elevenlabs-dubbing-v2")
+    expect(jobRunModelOfBuild("dubbing", {}, "")).toBeUndefined()
+    expect(jobRunModelOfBuild("trim-video", {}, "trim-video")).toBeUndefined()
+    expect(judgesJobRunModel("trim-video")).toBe(false)
+  })
+
+  it("judgedModelOfJob differs from the record only where it says so", () => {
+    expect(judgedModelOfJob("image-to-video", { provider: "kling" })).toBe(resolvedModelOfJob("image-to-video", { provider: "kling" }))
+    expect(judgedModelOfJob("text-to-speech", { text: "hi" })).toBe(resolvedModelOfJob("text-to-speech", { text: "hi" }))
+    expect(judgedModelOfJob("not-a-job", {})).toBeUndefined()
   })
 })
