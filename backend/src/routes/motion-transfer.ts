@@ -30,6 +30,7 @@ import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { MOTION_TRANSFER_PROVIDERS, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
 import { buildMotionCreditModelIdentifier } from "@nodaro/shared/credits"
 import { formatZodError } from "../lib/zod-error.js"
+import { jobRunModel } from "../lib/run-model.js"
 
 export const motionTransferBody = z.object({
   imageUrl: safeUrlSchema,
@@ -52,7 +53,7 @@ export async function motionTransferRoutes(app: FastifyInstance) {
       const resolution = (body?.resolution as string) ?? "720p"
       const videoDuration = (body?.videoDuration as number) ?? undefined
       return buildMotionCreditModelIdentifier(provider, resolution, videoDuration)
-    }),
+    }, { runModel: jobRunModel("motion-transfer") }),
   }, async (req, reply) => {
     const parsed = motionTransferBody.safeParse(req.body)
     if (!parsed.success) {

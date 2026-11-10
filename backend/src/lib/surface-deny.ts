@@ -285,6 +285,34 @@ export function isModelDenied(id: string): boolean {
   return isModelFactoryDenied(id)
 }
 
+/**
+ * True when this deployment RESTRICTS models: its profile names `models.allow`
+ * or `models.deny`, or an admin's stored models override (Admin → Availability)
+ * leaves at least one gateable model off — an override that ticks every model
+ * withholds nothing. What gates the credit guard's run-model check
+ * (`CreditGuardOpts.runModel`): a deployment with no restriction never asks
+ * which model a request runs on, so nothing it answers changes. The admin's
+ * per-row model switch is not a restriction in this sense — a run priced on a
+ * switched-off row is refused by the credit check, as it always was.
+ */
+export function modelRestrictionConfigured(): boolean {
+  const { allow, deny } = runtimeSurfaceProfile().models
+  if (allow.length > 0 || deny.length > 0) return true
+  const override = availabilityOverride("models")
+  return override !== null && overrideWithholdsAModel(override)
+}
+
+/** Per loaded override set (each refresh loads a new one): does it leave a gateable model off? */
+const overrideWithholds = new WeakMap<ReadonlySet<string>, boolean>()
+function overrideWithholdsAModel(override: ReadonlySet<string>): boolean {
+  let withholds = overrideWithholds.get(override)
+  if (withholds === undefined) {
+    withholds = [...GATEABLE_MODEL_IDS].some((id) => !override.has(id))
+    overrideWithholds.set(override, withholds)
+  }
+  return withholds
+}
+
 /** Shared refusal text for a denied model, parallel to the node message. */
 export function deniedModelRejectionMessage(ids: readonly string[]): string {
   return (

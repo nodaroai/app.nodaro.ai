@@ -24,6 +24,7 @@ import {
 } from "../lib/llm-structured-request.js"
 import { llmPrecheckBaseCredits, reserveLlmCall } from "../lib/llm-billing.js"
 import { llmPrecheckBody, llmTextChars } from "../lib/llm-metered-route.js"
+import { llmRunModel } from "../lib/run-model.js"
 import type { LlmStructuredJobPayload } from "../workers/handlers/llm-structured.js"
 
 /**
@@ -187,6 +188,7 @@ export async function llmStructuredJobsRoutes(app: FastifyInstance) {
     "/v1/llm/structured/jobs",
     {
       preHandler: creditGuard((req) => resolveLlmCreditId("llm-structured", req.body), {
+        runModel: llmRunModel("llm-structured"),
         // Metered (D1): pre-checked at the body's 1-attempt hold — its text,
         // plus the 600 s analysis bound for a movie run (D5; a reused
         // analysis is read in the handler, which holds its exact size).

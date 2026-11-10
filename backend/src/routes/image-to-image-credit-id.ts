@@ -9,6 +9,18 @@ import { extractProvider } from "../lib/request-helpers.js"
 import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
 import { imageToImageAspectRatio } from "../lib/image-auto-aspect.js"
+import { rawBodyRecord, textField } from "../lib/run-model.js"
+
+/**
+ * The model a request RUNS on, for the guard's surface deny
+ * (`CreditGuardOpts.runModel`): the model it names, else the edit default at
+ * its aspect ratio — the default the handler fills in after the guard, the
+ * same one the credit check below prices.
+ */
+export function resolveImageToImageRunModel(req: FastifyRequest): string {
+  const body = rawBodyRecord(req)
+  return textField(body.provider) ?? defaultImageModel("edit", textField(body.aspectRatio))
+}
 
 /**
  * The credit-CHECK model-identifier resolver (preHandler side). Named + exported

@@ -35,6 +35,7 @@ import {
   buildAssetDescriptionUserMessage,
 } from "../lib/asset-description-prompt.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
+import { providerRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { isFilledText, llmProviderOf, rawBodyOf } from "../lib/concurrency-lanes/live-routes.js"
 
@@ -299,7 +300,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
   // function the handler's DEBIT uses, so CHECK===DEBIT can't drift.
   app.post("/v1/generate-character-asset", {
     preHandler: [
-      creditGuard((req) => resolveEntityImageCreditIdentifier(req.body)),
+      creditGuard((req) => resolveEntityImageCreditIdentifier(req.body), { runModel: providerRunModel(IMAGE_MODEL_ROLE_DEFAULTS.character) }),
       // The lane last, and only for a request that will make the LLM call.
       laneGuard("llm", {
         // The studio path drafts a missing description with an LLM before it reserves.

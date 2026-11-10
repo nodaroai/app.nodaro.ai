@@ -35,6 +35,7 @@ import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 import { acquireStreamLane, llmProviderOf, restampProviderCallStart } from "../lib/concurrency-lanes/live-routes.js"
 import { pickerAnalyzerProvider, wantsEventStream, withDescribeToPickerDefaults } from "../lib/describe-to-picker-request.js"
+import { llmRunModel } from "../lib/run-model.js"
 
 // Shared with text-to-picker, which imports them from here.
 export { pickerAnalyzerProvider, withDescribeToPickerDefaults }
@@ -707,6 +708,7 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
     {
       preHandler: [
         creditGuard((req) => resolveLlmCreditId("describe-to-picker", withDescribeToPickerDefaults(req.body)), {
+          runModel: llmRunModel("describe-to-picker"),
           // Metered (D1): pre-checked at one attempt over the body's TEXT (the
           // image and the legend are counted at the reserve). Undefined under
           // the rollback: the tier row prices it as before.

@@ -12,6 +12,7 @@ import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { jobRunModel } from "../lib/run-model.js"
 import { OBJECT_MOTION_PROVIDERS } from "@nodaro/shared/models"
 import { resolveObjectAspectRatio, OBJECT_ASPECT_OPTIONS } from "@nodaro/shared/entities"
 import { getDurationsForModel } from "@nodaro/shared/model-catalog"
@@ -101,7 +102,7 @@ export async function generateObjectMotionRoutes(app: FastifyInstance) {
           provider, duration, undefined, "image-to-video", undefined, undefined,
           Boolean(b.refineFromVideoUrl),
         )
-      }),
+      }, { runModel: jobRunModel("generate-object-motion") }),
     },
     async (req, reply) => {
       // ───────────────────────────────────────────────────────────────────

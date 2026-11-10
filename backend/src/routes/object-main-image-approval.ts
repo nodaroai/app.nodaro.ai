@@ -10,6 +10,7 @@ import { llmMeteredPricing } from "../lib/config.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
+import { fixedRunModel } from "../lib/run-model.js"
 import { takeLiveLaneIfFree } from "../lib/concurrency-lanes/request-scope.js"
 import { llmProviderOf } from "../lib/concurrency-lanes/live-routes.js"
 
@@ -88,6 +89,7 @@ export async function objectMainImageApprovalRoutes(app: FastifyInstance) {
   // metered (meterOptionalSyncLlm) — the approval route itself has none, so
   // under the rollback nothing about it changes.
   const captionGuard = creditGuard(() => "prompt-helper", {
+    runModel: fixedRunModel(OBJECT_CAPTION_MODEL),
     dedup: false,
     computeCredits: () => llmGuardPrecheck("prompt-helper", undefined, { llmModel: OBJECT_CAPTION_MODEL, maxTokens: 500 }),
   })

@@ -43,6 +43,7 @@ import { syntheticCaptionsFromText, transcribeSegmentsToCaptions, transcriptToCa
 import {
   captionRenderFps,
   captionRenderFpsWithinFrameCap,
+  captionsNeedTranscription,
   captionsNeedWordTimings,
   explicitLevers,
   isStaticTextCaptionSource,
@@ -695,11 +696,9 @@ async function dispatchKineticCaptions(
 
   // Per-segment captions: the shared transcript is only needed for segments that
   // don't carry their own text/captions. If every segment is self-sourced, skip
-  // transcription entirely.
+  // transcription entirely (`captionsNeedTranscription`, below).
   const hasSegments = !!(data.segments && data.segments.length > 0)
   const hasTranscript = data.transcript !== undefined && data.transcript !== null
-  const someSegmentNeedsShared =
-    hasSegments && data.segments!.some((s) => !(s.text || (s.captions && s.captions.length > 0)))
   // `text` on a `subtitle` IS the caption — one static block for the whole clip,
   // never transcribed over, whichever renderer draws it. A styling lever moves
   // that render here (to Remotion), and this path used to ignore `text` and burn
@@ -719,9 +718,9 @@ async function dispatchKineticCaptions(
   // Probe + transcribe in parallel — both depend only on data.videoUrl. A wired
   // transcript IS the shared caption source, so skip the vendor call entirely
   // (otherwise we would pay for a transcription we then discard) — and so is a
-  // static text block.
-  const needTranscribe =
-    !staticText && !data.captions?.length && !hasTranscript && data.auto_transcribe !== false && (!hasSegments || someSegmentNeedsShared)
+  // static text block. One rule with the route's credit guard, which judges the
+  // transcription model only when this says a transcription will run.
+  const needTranscribe = captionsNeedTranscription(data)
   // Does the RENDER need per-word timings, or will phrase lines do? Only the
   // kinetic styles move word by word; a `subtitle` draws whole lines and the
   // Remotion SubtitleOverlay groups/holds them itself. This does NOT decide what

@@ -16,6 +16,7 @@ import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared/credits"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { jobRunModel } from "../lib/run-model.js"
 
 const lipSyncBody = z.object({
   imageUrl: safeUrlSchema.optional(),     // Portrait/face image (required for KIE/SadTalker)
@@ -112,7 +113,7 @@ export function resolveLipSyncIdentifier(body: Record<string, unknown> | undefin
 
 export async function lipSyncRoutes(app: FastifyInstance) {
   app.post("/v1/lip-sync", {
-    preHandler: creditGuard((req) => resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined)),
+    preHandler: creditGuard((req) => resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined), { runModel: jobRunModel("lip-sync") }),
   }, async (req, reply) => {
     const parsed = lipSyncBody.safeParse(req.body)
     if (!parsed.success) {

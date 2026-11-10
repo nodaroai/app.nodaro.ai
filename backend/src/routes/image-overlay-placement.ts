@@ -21,6 +21,7 @@ import { rateLimiter } from "../middleware/rate-limit.js"
 import { OVERLAY_ANCHORS } from "../providers/image/overlay.js"
 import { laneUserMessage, userFacingMessage } from "../lib/user-facing-error.js"
 import { billedContentRefusal, describeErrorChain } from "../lib/llm-errors.js"
+import { llmRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { llmProviderOfBody } from "../lib/concurrency-lanes/live-routes.js"
 
@@ -73,6 +74,7 @@ export async function imageOverlayPlacementRoutes(app: FastifyInstance) {
       preHandler: [
         suggestRateLimit,
         creditGuard((req) => resolveLlmCreditId("image-to-text", req.body), {
+          runModel: llmRunModel("image-to-text"),
           // Metered (D1): the pre-check is the call's 1-attempt hold (text only); undefined under the rollback.
           computeCredits: (body) => llmGuardPrecheck("image-to-text", body, { maxTokens: PLACEMENT_MAX_TOKENS }),
         }),

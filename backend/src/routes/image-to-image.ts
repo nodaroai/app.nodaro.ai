@@ -7,7 +7,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
-import { resolveImageToImageCreditIdentifier } from "./image-to-image-credit-id.js"
+import { resolveImageToImageCreditIdentifier, resolveImageToImageRunModel } from "./image-to-image-credit-id.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
@@ -105,7 +105,7 @@ export { resolveImageToImageCreditIdentifier }
 export async function imageToImageRoutes(app: FastifyInstance) {
   app.post("/v1/image-to-image", {
     preHandler: [
-      creditGuard(resolveImageToImageCreditIdentifier),
+      creditGuard(resolveImageToImageCreditIdentifier, { runModel: resolveImageToImageRunModel }),
       // The lane last, and only for a request that will make the LLM call.
       laneGuard("llm", {
         // The studio refine drafts a missing description with an LLM before it reserves.

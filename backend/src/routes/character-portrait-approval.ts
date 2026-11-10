@@ -12,6 +12,7 @@ import { billedFailureMessage, llmGuardPrecheck, meterOptionalSyncLlm, spendLlmC
 import { sendInternalError } from "../lib/http-errors.js"
 import { PORTRAIT_CAPTION_MODEL } from "../lib/portrait-caption-model.js"
 import { TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
+import { fixedRunModel } from "../lib/run-model.js"
 import { laneGuard, takeLiveLaneIfFree } from "../lib/concurrency-lanes/request-scope.js"
 import { llmProviderOf } from "../lib/concurrency-lanes/live-routes.js"
 
@@ -136,6 +137,7 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
   // caption bills metered (meterOptionalSyncLlm) — under the rollback the
   // approval has none, exactly as before.
   const captionGuard = creditGuard(() => CAPTION_CREDIT_IDENTIFIER, {
+    runModel: fixedRunModel(PORTRAIT_CAPTION_MODEL),
     dedup: false,
     computeCredits: () => llmGuardPrecheck("prompt-helper", undefined, { llmModel: PORTRAIT_CAPTION_MODEL, maxTokens: PORTRAIT_CAPTION_MAX_TOKENS }),
   })
@@ -270,6 +272,7 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
       preHandler: [
         requireAppScope("assets:write"),
         creditGuard(() => CAPTION_CREDIT_IDENTIFIER, {
+          runModel: fixedRunModel(PORTRAIT_CAPTION_MODEL),
           dedup: false,
           // Metered (D3): the pre-check is the caption call's 1-attempt hold; undefined under the rollback.
           computeCredits: () => llmGuardPrecheck("prompt-helper", undefined, { llmModel: PORTRAIT_CAPTION_MODEL, maxTokens: PORTRAIT_CAPTION_MAX_TOKENS }),

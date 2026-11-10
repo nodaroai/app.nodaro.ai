@@ -13,6 +13,7 @@ import { TEXT_TO_AUDIO_PROVIDERS, DEFAULT_TEXT_TO_AUDIO_PROVIDER } from "@nodaro
 import { textToAudioCreditId } from "@nodaro/shared/credits"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { jobRunModel } from "../lib/run-model.js"
 
 const textToAudioBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -28,7 +29,7 @@ export async function textToAudioRoutes(app: FastifyInstance) {
   // Priced by length: the guard and the reservation both read the row
   // `textToAudioCreditId` picks (`elevenlabs-sfx:<n>s` — whole seconds,
   // rounded up; no duration = 5 s), the same row a workflow run reserves.
-  app.post("/v1/text-to-audio", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown> | undefined; return textToAudioCreditId(body?.provider as string | undefined, body?.duration) }) }, async (req, reply) => {
+  app.post("/v1/text-to-audio", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown> | undefined; return textToAudioCreditId(body?.provider as string | undefined, body?.duration) }, { runModel: jobRunModel("text-to-audio") }) }, async (req, reply) => {
     const parsed = textToAudioBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({

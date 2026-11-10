@@ -20,6 +20,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { isFilledText, llmProviderOf, rawBodyOf } from "../lib/concurrency-lanes/live-routes.js"
 import { ASSET_DESCRIPTION_MODEL } from "../lib/asset-description-prompt.js"
+import { jobRunModel } from "../lib/run-model.js"
 
 export const generateCharacterMotionBody = z.object({
   motionPrompt: z.string().min(1).max(2000),
@@ -131,7 +132,7 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
     "/v1/generate-character-motion",
     {
       preHandler: [
-        creditGuard((req) => extractProvider(req.body, "kling")),
+        creditGuard((req) => extractProvider(req.body, "kling"), { runModel: jobRunModel("generate-character-motion") }),
         // The lane last, and only for a request that will make the LLM call.
         laneGuard("llm", {
           // The studio path drafts a missing description / motion with an LLM before it reserves.

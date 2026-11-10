@@ -19,6 +19,7 @@ import { importJobFields, importViaOf } from "../lib/import-via.js"
 import { dubbingSourceIsImport } from "../lib/dubbing-source.js"
 import { unusableLinkError } from "../lib/unusable-link.js"
 import { judgeUnnamedVoices, voiceNotAvailableBody } from "../lib/voice-policy.js"
+import { rawBodyRecord } from "../lib/run-model.js"
 // Duration policy constants live beside the provider (the worker enforces the
 // same cap post-start against ElevenLabs' media_metadata — one source, two
 // seams). A span that can be measured is reserved exactly (and committed as
@@ -194,6 +195,7 @@ export async function dubbingRoutes(app: FastifyInstance) {
       refuseDubbingUnderVoiceLock,
       probeDubbingDurationPreHandler,
       creditGuard((req) => dubbingModelIdentifier((req.body as Record<string, unknown>)?.targetLanguage), {
+        runModel: (req) => dubbingModelIdentifier(rawBodyRecord(req).targetLanguage),
         // Per-minute pricing: the measured span, or the 30-minute ceiling
         // when it could not be read (settled down at delivery) → whole
         // minutes x the per-minute row (admin-editable in model_pricing, so

@@ -34,6 +34,7 @@ import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
+import { llmRunModel } from "../lib/run-model.js"
 
 /** What a row whose answer could not be written records (the call itself answered its caller). */
 const ANSWER_NOT_RECORDED = "The answer was sent but could not be saved. Send the request again with a new key."
@@ -183,7 +184,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
       // last: the request waits for its slot before the handler reserves.
       preHandler: [
         claimKeyedChatCall,
-        creditGuard((req) => resolveLlmCreditId("llm-chat", req.body), { computeCredits: llmChatPrecheck }),
+        creditGuard((req) => resolveLlmCreditId("llm-chat", req.body), { computeCredits: llmChatPrecheck, runModel: llmRunModel("llm-chat") }),
         laneGuard(...syncRouteLane("/v1/llm-chat/generate")),
       ],
       config: { requestTimeout: LLM_ROUTE_REQUEST_TIMEOUT_MS } as Record<string, unknown>,
@@ -389,7 +390,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
   app.post(
     "/v1/llm-chat/generate-stream",
     {
-      preHandler: creditGuard((req) => resolveLlmCreditId("llm-chat", req.body), { computeCredits: llmChatPrecheck }),
+      preHandler: creditGuard((req) => resolveLlmCreditId("llm-chat", req.body), { computeCredits: llmChatPrecheck, runModel: llmRunModel("llm-chat") }),
       config: { requestTimeout: LLM_ROUTE_REQUEST_TIMEOUT_MS } as Record<string, unknown>,
     },
     async (req, reply) => {

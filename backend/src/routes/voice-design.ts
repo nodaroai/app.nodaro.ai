@@ -13,6 +13,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { deniedNodeRejectionMessage } from "../lib/surface-deny.js"
 import { isNodeDeniedForUser } from "../lib/availability-viewer.js"
+import { fixedRunModel } from "../lib/run-model.js"
 
 /** The catalog model every run of this route runs — and the credit id it bills under. */
 const VOICE_DESIGN_MODEL_ID = "elevenlabs-voice-design"
@@ -32,7 +33,7 @@ const voiceDesignBody = z.object({
 
 export async function voiceDesignRoutes(app: FastifyInstance) {
   app.post("/v1/voice-design", {
-    preHandler: creditGuard(() => VOICE_DESIGN_MODEL_ID),
+    preHandler: creditGuard(() => VOICE_DESIGN_MODEL_ID, { runModel: fixedRunModel(VOICE_DESIGN_MODEL_ID) }),
   }, async (req, reply) => {
     const parsed = voiceDesignBody.safeParse(req.body)
     if (!parsed.success) {

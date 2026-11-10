@@ -29,6 +29,7 @@ import { billedContentRefusal, billedProviderCost } from "../lib/llm-errors.js"
 import { StructuredLlmError } from "../lib/llm/structured.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
+import { llmRunModel } from "../lib/run-model.js"
 
 /**
  * The pre-flight, the body schema and the completion live in
@@ -65,6 +66,7 @@ export async function llmStructuredRoutes(app: FastifyInstance) {
     {
       preHandler: [
         creditGuard((req) => resolveLlmCreditId("llm-structured", req.body), {
+          runModel: llmRunModel("llm-structured"),
           // Metered (D1): pre-checked at the body's 1-attempt hold — its text
           // only. Undefined under the rollback, so the tier row prices it as before.
           computeCredits: (body) => {

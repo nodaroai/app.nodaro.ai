@@ -825,6 +825,18 @@ optional; each array empty = "keep the default"):
   `preview`) and workflow-internal pseudo-types are never denied by omission,
   only by an explicit `deny` entry.
 
+  A model restriction holds on the model a request RUNS on, not only on the
+  one it names. A request that names no model is judged as the default its
+  route would run — the image default for its aspect ratio, a feature's
+  default LLM, a route's one fixed model — and a model named outside
+  `provider` (`llmModel`, Suno's `model`, Add Captions' `transcribe_provider`)
+  is judged too, before anything is created or charged
+  (`403 model_not_available`, on the run and on `POST /v1/quote` alike). So
+  list every model the deployment runs, the LLMs behind its text features
+  included: a request whose model is not listed is refused, not run on an
+  unlisted default. A deployment with no `models.allow` / `models.deny` and no
+  models override in Admin → Availability is not affected.
+
   The lists hold on the direct API too: every route that spends credits is
   checked as the node it runs, whatever its path — `POST /v1/suno/generate` as
   `suno-generate`, `POST /v1/edit-image` as Upscale Image, Remove Background or

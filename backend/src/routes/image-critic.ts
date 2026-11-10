@@ -24,6 +24,7 @@ import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { describeErrorChain } from "../lib/llm-errors.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import { llmRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 
@@ -114,6 +115,7 @@ export async function imageCriticRoutes(app: FastifyInstance) {
     {
       preHandler: [
         creditGuard((req) => resolveLlmCreditId("image-critic", req.body), {
+          runModel: llmRunModel("image-critic"),
           // Metered (D1): the pre-check is the call's 1-attempt hold (text only); undefined under the rollback.
           computeCredits: (body) => llmGuardPrecheck("image-critic", body),
         }),

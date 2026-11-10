@@ -42,6 +42,7 @@ import { pickSunoSeparateSource } from "@nodaro/render-rules"
 import { TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
+import { jobRunModel } from "../lib/run-model.js"
 
 const SUNO_VOICE_CREATE_CREDIT_ID = "suno-voice-create"
 const SUNO_VOICE_VALIDATE_TAG = "suno-voice-validate"
@@ -387,7 +388,7 @@ export async function sunoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/suno/generate",
     {
-      preHandler: creditGuard((req) => guardSunoCreditType(req.body, "suno-generate")),
+      preHandler: creditGuard((req) => guardSunoCreditType(req.body, "suno-generate"), { runModel: jobRunModel("suno-generate") }),
     },
     async (req, reply) => {
       const parsed = sunoGenerateBody.safeParse(req.body)
@@ -462,7 +463,7 @@ export async function sunoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/suno/cover",
     {
-      preHandler: creditGuard((req) => guardSunoCreditType(req.body, "suno-cover")),
+      preHandler: creditGuard((req) => guardSunoCreditType(req.body, "suno-cover"), { runModel: jobRunModel("suno-cover") }),
     },
     async (req, reply) => {
       const parsed = sunoCoverBody.safeParse(req.body)
@@ -540,7 +541,7 @@ export async function sunoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/suno/extend",
     {
-      preHandler: creditGuard((req) => guardSunoCreditType(req.body, "suno-extend")),
+      preHandler: creditGuard((req) => guardSunoCreditType(req.body, "suno-extend"), { runModel: jobRunModel("suno-extend") }),
     },
     async (req, reply) => {
       const parsed = sunoExtendBody.safeParse(req.body)
@@ -796,7 +797,7 @@ export async function sunoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/suno/mashup",
     {
-      preHandler: creditGuard(() => "suno-mashup"),
+      preHandler: creditGuard(() => "suno-mashup", { runModel: jobRunModel("suno-mashup") }),
     },
     async (req, reply) => {
       const parsed = sunoMashupBody.safeParse(req.body)
@@ -1013,7 +1014,7 @@ export async function sunoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/suno/add-instrumental",
     {
-      preHandler: creditGuard(() => "suno-add-instrumental"),
+      preHandler: creditGuard(() => "suno-add-instrumental", { runModel: jobRunModel("suno-add-instrumental") }),
     },
     async (req, reply) => {
       const parsed = sunoAddInstrumentalBody.safeParse(req.body)
@@ -1068,7 +1069,7 @@ export async function sunoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/suno/add-vocals",
     {
-      preHandler: creditGuard(() => "suno-add-vocals"),
+      preHandler: creditGuard(() => "suno-add-vocals", { runModel: jobRunModel("suno-add-vocals") }),
     },
     async (req, reply) => {
       const parsed = sunoAddVocalsBody.safeParse(req.body)
@@ -1177,7 +1178,7 @@ export async function sunoRoutes(app: FastifyInstance) {
   app.post(
     "/v1/suno/upload-extend",
     {
-      preHandler: creditGuard(() => "suno-upload-extend"),
+      preHandler: creditGuard(() => "suno-upload-extend", { runModel: jobRunModel("suno-upload-extend") }),
     },
     async (req, reply) => {
       const parsed = sunoUploadExtendBody.safeParse(req.body)

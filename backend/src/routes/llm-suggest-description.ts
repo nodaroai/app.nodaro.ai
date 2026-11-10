@@ -19,6 +19,7 @@ import {
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { userFacingMessage } from "../lib/user-facing-error.js"
+import { fixedRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { llmProviderOf } from "../lib/concurrency-lanes/live-routes.js"
 
@@ -104,6 +105,7 @@ export async function llmSuggestDescriptionRoutes(app: FastifyInstance) {
     {
       preHandler: [
         creditGuard(() => CREDIT_IDENTIFIER, {
+          runModel: fixedRunModel(SUGGEST_MODEL),
           // Metered (D3): the pre-check is the call's 1-attempt hold (the body's
           // text); undefined under the rollback. Every kind caps at ≤ 400 tokens
           // except asset-description (its shared options) — the guard prices the

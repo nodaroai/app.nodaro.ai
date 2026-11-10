@@ -91,6 +91,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import type { Scene3DJobPayload } from "../workers/handlers/scene3d.js"
 import { dispatchAdvancedScene3D, requestedScene3DEngine, scene3DCapabilities } from "../services/scene3d/scene3d-engine.js"
 import { viewerForNode } from "../lib/availability-viewer.js"
+import { jobRunModel } from "../lib/run-model.js"
 
 export const SCENE3D_GENERATE_JOB_TYPE = "generate-3d-scene"
 export const SCENE3D_EDIT_JOB_TYPE = "edit-3d-scene"
@@ -393,7 +394,7 @@ export async function scene3DRoutes(app: FastifyInstance) {
     catch (error) { return sendInternalError(reply, req, error, "Failed to read 3D capabilities") }
   })
 
-  const basicGenerateGuard = creditGuard((req) => resolveLlmCreditId(SCENE3D_LLM_FEATURE, req.body), { computeCredits: scene3DPrecheck })
+  const basicGenerateGuard = creditGuard((req) => resolveLlmCreditId(SCENE3D_LLM_FEATURE, req.body), { computeCredits: scene3DPrecheck, runModel: jobRunModel("generate-3d-scene") })
   const generateOptions = { preHandler: async (req: FastifyRequest, reply: FastifyReply) => {
     const engine = requestedScene3DEngine(req.body)
     if (engine !== undefined && engine !== "basic") return dispatchAdvancedScene3D("generate", req, reply)
@@ -515,7 +516,7 @@ export async function scene3DRoutes(app: FastifyInstance) {
   app.post("/v1/3d-scene/generate", generateOptions, generateHandler)
   app.post("/v1/generate-3d-scene", generateOptions, generateHandler)
 
-  const basicEditGuard = creditGuard((req) => scene3DEditCreditId(req.body), { computeCredits: scene3DPrecheck })
+  const basicEditGuard = creditGuard((req) => scene3DEditCreditId(req.body), { computeCredits: scene3DPrecheck, runModel: jobRunModel("edit-3d-scene") })
   const editOptions = { preHandler: async (req: FastifyRequest, reply: FastifyReply) => {
     const engine = requestedScene3DEngine(req.body)
     if (engine !== undefined && engine !== "basic") return dispatchAdvancedScene3D("edit", req, reply)

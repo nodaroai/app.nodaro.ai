@@ -18,6 +18,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { hasCredits } from "../lib/config.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
+import { providerRunModel } from "../lib/run-model.js"
 
 const generateObjectBody = z.object({
   name: z.string().min(1).max(200),
@@ -85,6 +86,7 @@ export async function generateObjectRoutes(app: FastifyInstance) {
       // markup is applied inside creditGuardImpl so the same final number
       // is both checked AND reserved.
       preHandler: creditGuard((req: FastifyRequest) => plainEntityCheckIdentifier(req.body, IMAGE_MODEL_ROLE_DEFAULTS.general), {
+        runModel: providerRunModel(IMAGE_MODEL_ROLE_DEFAULTS.general),
         computeCredits: async (body) => {
           const count = extractCount(body)
           const identifier = plainEntityCheckIdentifier(body, IMAGE_MODEL_ROLE_DEFAULTS.general)

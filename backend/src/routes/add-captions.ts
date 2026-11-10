@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -31,7 +31,9 @@ import {
   TRANSCRIBE_PROVIDER_CAPABILITIES,
   transcribeProvidersWithWordTimestamps,
 } from "@nodaro/shared/models"
-import { captionsNeedWordTimings, isStaticTextCaptionSource } from "../providers/video/caption-segments.js"
+import { captionsNeedTranscription, captionsNeedWordTimings, isStaticTextCaptionSource } from "../providers/video/caption-segments.js"
+import { ADD_CAPTIONS_DEFAULT_TRANSCRIBE_PROVIDER } from "../lib/transcribe-lane-key.js"
+import { rawBodyRecord, textField } from "../lib/run-model.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
@@ -45,6 +47,31 @@ function safeParseJsonForTranscript(v: string): unknown {
   } catch {
     return undefined
   }
+}
+
+/**
+ * The model this request RUNS on, for the guard's surface deny
+ * (`CreditGuardOpts.runModel`): its transcription model — `transcribe_provider`,
+ * else the default lane — when the render transcribes at all, which
+ * `captionsNeedTranscription` decides for the worker too. A request that brings
+ * its own captions, transcript or text runs no model.
+ */
+export function resolveAddCaptionsRunModel(req: FastifyRequest): string | undefined {
+  const b = rawBodyRecord(req)
+  const segments = Array.isArray(b.segments)
+    ? b.segments
+        .filter((s): s is Record<string, unknown> => s !== null && typeof s === "object")
+        .map((s) => ({ text: s.text, captions: Array.isArray(s.captions) ? s.captions : undefined }))
+    : undefined
+  const transcribes = captionsNeedTranscription({
+    style: typeof b.style === "string" ? b.style : undefined,
+    text: typeof b.text === "string" ? b.text : undefined,
+    captions: Array.isArray(b.captions) ? b.captions : undefined,
+    transcript: b.transcript,
+    segments,
+    auto_transcribe: typeof b.auto_transcribe === "boolean" ? b.auto_transcribe : undefined,
+  })
+  return transcribes ? (textField(b.transcribe_provider) ?? ADD_CAPTIONS_DEFAULT_TRANSCRIBE_PROVIDER) : undefined
 }
 
 function buildAddCaptionsCreditId(body: unknown): string {
@@ -216,7 +243,7 @@ export const addCaptionsBody = z.object({
 })
 
 export async function addCaptionsRoutes(app: FastifyInstance) {
-  app.post("/v1/add-captions", { preHandler: creditGuard((req) => buildAddCaptionsCreditId(req.body)) }, async (req, reply) => {
+  app.post("/v1/add-captions", { preHandler: creditGuard((req) => buildAddCaptionsCreditId(req.body), { runModel: resolveAddCaptionsRunModel }) }, async (req, reply) => {
     const parsed = addCaptionsBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({

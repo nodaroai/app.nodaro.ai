@@ -15,6 +15,7 @@ import { containsMinorAgeHint } from "@nodaro/prompts/picker-catalogs"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
+import { providerRunModel } from "../lib/run-model.js"
 
 const generateFaceBody = z.object({
   name: z.string().min(1).max(200),
@@ -29,7 +30,7 @@ const generateFaceBody = z.object({
 })
 
 export async function generateFaceRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-face", { preHandler: creditGuard((req) => plainEntityCheckIdentifier(req.body, IMAGE_MODEL_ROLE_DEFAULTS.character)) }, async (req, reply) => {
+  app.post("/v1/generate-face", { preHandler: creditGuard((req) => plainEntityCheckIdentifier(req.body, IMAGE_MODEL_ROLE_DEFAULTS.character), { runModel: providerRunModel(IMAGE_MODEL_ROLE_DEFAULTS.character) }) }, async (req, reply) => {
     const parsed = generateFaceBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({

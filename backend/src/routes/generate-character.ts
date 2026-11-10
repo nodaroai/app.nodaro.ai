@@ -23,6 +23,7 @@ import { hasCredits } from "../lib/config.js"
 import { CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio, CHARACTER_REFERENCE_PHOTO_KINDS } from "@nodaro/shared/entities"
 import { sendInternalError } from "../lib/http-errors.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
+import { providerRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { llmProviderOf, rawBodyOf } from "../lib/concurrency-lanes/live-routes.js"
 
@@ -167,6 +168,7 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
       // different tier than the reservation.
       preHandler: [
         creditGuard((req: FastifyRequest) => resolveEntityImageCreditIdentifier(req.body), {
+          runModel: providerRunModel(IMAGE_MODEL_ROLE_DEFAULTS.character),
           computeCredits: async (body) => {
             const count = extractCount(body)
             const identifier = resolveEntityImageCreditIdentifier(body)
