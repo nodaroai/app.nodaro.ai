@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest"
 
 const { invoicesList } = vi.hoisted(() => ({ invoicesList: vi.fn() }))
-vi.mock("@/lib/config.js", () => ({ config: { LOOPS_MONTHLY_STATEMENT_ID: "tx_statement", PUBLIC_URL: "https://app.example.com/" } }))
+vi.mock("@/lib/config.js", () => ({ config: { LOOPS_MONTHLY_STATEMENT_ID: "tx_statement", PUBLIC_URL: "https://app.example.com/", FLOW_PUBLIC_URL: "", LEGACY_UI_HOSTS: "" } }))
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("@/lib/deployment-payer.js", () => ({ deploymentPayerActive: vi.fn(() => false), deploymentPayerId: vi.fn(() => null) }))
 vi.mock("@/ee/lib/loops-client.js", () => ({ sendTransactional: vi.fn() }))
@@ -129,6 +129,8 @@ beforeEach(() => {
   vi.mocked(deploymentPayerActive).mockReturnValue(false)
   vi.mocked(deploymentPayerId).mockReturnValue(null)
   config.PUBLIC_URL = "https://app.example.com/"
+  config.FLOW_PUBLIC_URL = ""
+  config.LEGACY_UI_HOSTS = ""
 })
 
 describe("the month", () => {
@@ -194,6 +196,19 @@ describe("statementVariables", () => {
       expect(typeof v).toBe("string")
       expect(v).not.toBe("")
     }
+  })
+
+  it("links the billing page on the app's own host when the deployment has moved its pages there", () => {
+    config.FLOW_PUBLIC_URL = "https://flow.example.com/"
+    config.LEGACY_UI_HOSTS = "app.example.com"
+    const vars = statementVariables(SECOND, "2026-10", [], [])
+    expect(vars.billingUrl).toBe("https://flow.example.com/billing")
+    expect(vars.documentUrl).toBe("https://flow.example.com/billing")
+  })
+
+  it("a Flow setting without the rest of the move links the billing page where it always was", () => {
+    config.FLOW_PUBLIC_URL = "https://flow.example.com/"
+    expect(statementVariables(SECOND, "2026-10", [], []).billingUrl).toBe("https://app.example.com/billing")
   })
 
   it("names the invoice's PDF when that is the newest linked document, and skips a document without a link for one that has", () => {

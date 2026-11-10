@@ -7,7 +7,7 @@ import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { encryptToken, decryptToken } from "../services/social/encryption.js"
-import { generateAuthUrl, exchangeCodeForTokens, getCallbackOrigin, type TokenSet } from "../services/social/oauth.js"
+import { generateAuthUrl, exchangeCodeForTokens, getCallbackOrigins, type TokenSet } from "../services/social/oauth.js"
 import { getProvider, missingEnv, PROVIDERS, providerPublicInfo } from "../services/social/providers/registry.js"
 import type { AccountChoice, PlatformUserInfo, SocialProvider } from "../services/social/providers/types.js"
 import {
@@ -505,16 +505,19 @@ function scriptLiteral(value: string | Readonly<Record<string, unknown>>): strin
 
 /**
  * The script statement that hands a result (a JavaScript expression) to the
- * window that opened the pop-up. Its target is named here, on the server: the
- * origin the callback is served on, from configuration. Never "*", and never
- * whatever host the page happened to be reached on, so the result reaches no
- * other origin, even when the opener has navigated away mid-flow. With no
- * usable origin configured, the page posts nothing.
+ * window that opened the pop-up. Its targets are named here, on the server,
+ * from configuration: the origin the callback is served on, and the app's own
+ * host when a deployment has moved its pages there. Never "*", and never
+ * whatever host the page happened to be reached on: one post per origin, each
+ * delivered only to an opener on that exact origin, so the result reaches no
+ * other, even when the opener has navigated away mid-flow. With no usable
+ * origin configured, the page posts nothing.
  */
 function postResultToOpener(result: string): string {
-  const target = getCallbackOrigin()
-  if (!target) return ""
-  return `if (window.opener) window.opener.postMessage(${result}, ${scriptLiteral(target)});`
+  const targets = getCallbackOrigins()
+  if (targets.length === 0) return ""
+  const posts = targets.map((target) => `window.opener.postMessage(${result}, ${scriptLiteral(target)});`).join(" ")
+  return `if (window.opener) { ${posts} }`
 }
 
 const PAGE_STYLE = `

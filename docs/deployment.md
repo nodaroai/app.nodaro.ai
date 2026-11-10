@@ -129,8 +129,9 @@ here for each one anyway.
 | `PUBLIC_URL_SAME_ORIGIN` | `""` (unset = `apiUrl` is `PUBLIC_URL`) | Set to `true` when the service answers on more than one hostname and the API shares the origin of the app (the default single-container layout, where the bundled proxy fronts both the SPA and `/v1`). `/config.js` then carries `apiUrl: "/"` instead of `PUBLIC_URL`, so the browser's SSE streams stay on whichever hostname the visitor is actually on rather than being pinned to the one `PUBLIC_URL` names. Leave unset for a genuine split origin — an API served from a different host than the app. Only the exact value `true` enables it. Restart to apply |
 | `ROBOTS_NOINDEX` | `""` (unset = search engines follow the app's own route allow-list) | Set to `true` on a deployment search engines must never index, such as a staging environment: every response then carries `X-Robots-Tag: noindex`, whatever serves it. Only the exact value `true` enables it. Restart to apply |
 | `LEGACY_UI_HOSTS` | `""` (unset = no host redirects) | With `FLOW_UI_ORIGIN`, moves the app's pages to their own host: see [Moving the app's pages to their own host](#moving-the-apps-pages-to-their-own-host). Bare host names (separated by commas or spaces, any letter case; no scheme, port, path, tab or line break) on which a top-level visit to a moved page is redirected. Set both, or neither: either one alone, a list naming only the new host, or an entry that is not a bare host name, and the server refuses to start. Restart to apply |
-| `FLOW_UI_ORIGIN` | `""` (unset = the feature is off) | The https origin the moved pages live on, e.g. `https://flow.example.com` (a trailing slash is allowed, no path): see [Moving the app's pages to their own host](#moving-the-apps-pages-to-their-own-host). Set it with `LEGACY_UI_HOSTS`, or not at all. Set alone, to anything but an https origin, or with `PUBLIC_URL` not another https origin, the server refuses to start |
+| `FLOW_UI_ORIGIN` | `""` (unset = `FLOW_PUBLIC_URL`; both unset = the feature is off) | The https origin the moved pages live on, e.g. `https://flow.example.com` (a trailing slash is allowed, no path): see [Moving the app's pages to their own host](#moving-the-apps-pages-to-their-own-host). `FLOW_PUBLIC_URL` is its other name; set either. Set it with `LEGACY_UI_HOSTS`, or not at all. Set alone, to anything but an https origin, to a different origin than `FLOW_PUBLIC_URL`, or with `PUBLIC_URL` not another https origin, the server refuses to start |
 | `LEGACY_UI_REDIRECT_STATUS` | `302` | `302` (never cached) or `301` (cached by the browser only, for an hour). Any other value is `302` |
+| `FLOW_PUBLIC_URL` | `""` (unset = `FLOW_UI_ORIGIN`; both unset = the app's pages live on `PUBLIC_URL`) | The other name of `FLOW_UI_ORIGIN`: the origin the app's own pages live on when a deployment has moved them off `PUBLIC_URL`. Set either one and the other follows; both set to different origins, and the server refuses to start. Links that open one of those pages — the editor, the gallery, the archive, billing — and the social-connect pop-ups use it. The API, the OAuth issuer and every machine-facing address stay on `PUBLIC_URL`. Restart to apply |
 | `CORS_ORIGIN` | `""` | Extra allowed browser origins, comma-separated (PUBLIC_URL is always allowed). These are also the hosts the SSO landing redirect is emitted **relative** on — same-origin by construction — where a request arriving on any other host gets the absolute `PUBLIC_URL` form |
 | `RESEND_API_KEY` | `""` | Cloud, organizations: API key for sending invitation emails through Resend. Unset = invitations are not emailed; the API returns a copy-and-paste link instead |
 | `EMAIL_FROM` | `""` | Cloud, organizations: the From address for invitation emails (a verified sender on the Resend account) |
@@ -2213,14 +2214,22 @@ FLOW_UI_ORIGIN=https://flow.example.com
 - On the new host, a top-level visit to `/app/*`, `/embed/*` or `/present/*` is
   sent back to the origin of `PUBLIC_URL` (the kept host), so each public page
   has one home.
+- Links the server writes to the app's pages (the editor, the gallery, billing,
+  the archive) and the social-connect pop-ups name the new host; the API, the
+  OAuth issuer and every machine-facing address stay on `PUBLIC_URL`.
+- `FLOW_PUBLIC_URL` is another name for `FLOW_UI_ORIGIN`: set either one and
+  the other follows; set both, and they must name the same origin.
 - `FLOW_UI_ORIGIN` and `PUBLIC_URL` are https origins; a trailing slash is
-  allowed. The server refuses to start, naming the setting, on any partial
-  set: `FLOW_UI_ORIGIN` without a host in `LEGACY_UI_HOSTS` other than the new
-  one, `LEGACY_UI_HOSTS` without `FLOW_UI_ORIGIN`, a `LEGACY_UI_HOSTS` entry
-  that is not a bare host name, a `FLOW_UI_ORIGIN` that is not an https
-  origin, or a `PUBLIC_URL` that does not give the kept host's https origin.
-  The image's start script runs the same check before it starts anything, so
-  the proxy never serves a move the server refuses.
+  allowed, nothing else (no path, port or spaces around the value). The server
+  refuses to start, naming the setting, on any partial set: `FLOW_UI_ORIGIN`
+  (or `FLOW_PUBLIC_URL`) without a host in `LEGACY_UI_HOSTS` other than the
+  new one, `LEGACY_UI_HOSTS` without either, a `LEGACY_UI_HOSTS` entry that is
+  not a bare host name, a value that is not an https origin, the two names
+  disagreeing, or a `PUBLIC_URL` that does not give the kept host's https
+  origin. The image's start script runs the same check before it starts
+  anything, so the proxy never serves a move the server refuses. Links the
+  server writes follow the same rule: no link names the new host unless the
+  move is on.
 - The move is on only with all three usable: `FLOW_UI_ORIGIN`, a host in
   `LEGACY_UI_HOSTS` that is not the new host, and a `PUBLIC_URL` that is
   another https origin. The proxy reads every setting per request, so no

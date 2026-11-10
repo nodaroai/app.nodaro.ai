@@ -15,7 +15,7 @@
  * This module decides WHICH of the two worlds an event belongs to and relays.
  */
 import { supabase } from "../../lib/supabase.js"
-import { appBaseUrl } from "../../lib/deployment-urls.js"
+import { appBaseUrl, flowBaseUrl } from "../../lib/deployment-urls.js"
 import { createStripeCustomer, createCheckoutSession, createPortalSession } from "./stripe-english.js"
 import { getOrgPack } from "./stripe-config.js"
 import { captureReceiptUrl, handleTopupClawback, type TopupClawbackData } from "./provision-credits.js"
@@ -257,7 +257,7 @@ export async function getOrgCustomerPortalUrl(orgId: string): Promise<{ url: str
     .select("slug")
     .eq("id", orgId)
     .maybeSingle()
-  const base = appBaseUrl()
+  const base = flowBaseUrl()
   const portal = await createPortalSession({
     customer: customer.stripe_customer_id as string,
     return_url: org?.slug ? `${base}/org/${org.slug as string}` : base,

@@ -715,6 +715,13 @@ if [ -n "$RAILWAY_ENVIRONMENT_NAME" ]; then
   if [ -z "${CLIENT_IP_HEADER_FROM+set}" ]; then export CLIENT_IP_HEADER_FROM=100.64.0.0/10; fi
 fi
 
+# The Flow host has two setting names for one origin (docs/deployment.md,
+# "Moving the app's pages to their own host"): FLOW_UI_ORIGIN, read by Caddy and
+# the /config.js writer, and FLOW_PUBLIC_URL, read by the API for its links. The
+# API reads either itself and refuses to start when both are set and disagree;
+# here FLOW_PUBLIC_URL alone reaches Caddy and the writer under their name.
+export FLOW_UI_ORIGIN="${FLOW_UI_ORIGIN:-$FLOW_PUBLIC_URL}"
+
 # Start backend API server on fixed internal port
 cd /app/backend
 export BACKEND_PORT=9000

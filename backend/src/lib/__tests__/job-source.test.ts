@@ -47,7 +47,7 @@ describe("deriveJobSource", () => {
     // If the header won, all six would collapse into one undifferentiated
     // "SDK" row and the per-app visibility this feature exists for would be
     // gone. This is the test that pins it.
-    for (const host of ["studio.nodaro.ai", "person.nodaro.ai", "voice.nodaro.ai", "recast.nodaro.ai"]) {
+    for (const host of ["studio.nodaro.ai", "person.nodaro.ai", "voice.nodaro.ai", "recast.nodaro.ai", "flow.nodaro.ai"]) {
       expect(
         deriveJobSource(req({ headers: { origin: `https://${host}`, "x-nodaro-client": "sdk/1.12.0" } })),
         host,

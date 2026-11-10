@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { httpsOriginOf, legacyUiHostList, movedPagesSettingsProblem } from "../moved-pages-settings.js"
+import { httpsOriginOf, legacyUiHostList, movedFlowOrigin, movedPagesSettingsProblem } from "../moved-pages-settings.js"
 
 /**
  * The settings that move a deployment's pages to their own host
@@ -11,10 +11,10 @@ import { httpsOriginOf, legacyUiHostList, movedPagesSettingsProblem } from "../m
 describe("httpsOriginOf: the origin a setting names, as the Caddy block reads it", () => {
   it("takes a bare https origin, a trailing slash allowed", () => {
     expect(httpsOriginOf("https://flow.example.com")).toBe("https://flow.example.com")
-    expect(httpsOriginOf(" https://flow.example.com/ ")).toBe("https://flow.example.com")
+    expect(httpsOriginOf("https://flow.example.com/")).toBe("https://flow.example.com")
   })
-  it("refuses anything else", () => {
-    for (const bad of ["", "http://flow.example.com", "https://flow.example.com/x", "https://Flow.example.com", "https://flow.example.com:8443", 'https://a"b', "flow.example.com", undefined]) {
+  it("refuses anything else, spaces around the value included (the proxy reads the value whole)", () => {
+    for (const bad of ["", "http://flow.example.com", "https://flow.example.com/x", "https://Flow.example.com", "https://flow.example.com:8443", 'https://a"b', "flow.example.com", " https://flow.example.com", "https://flow.example.com/ ", "https://flow.example.com\n", undefined]) {
       expect(httpsOriginOf(bad), String(bad)).toBeNull()
     }
   })
@@ -39,6 +39,7 @@ describe("movedPagesSettingsProblem", () => {
   it("a partial set is refused: the move is on only with both settings, as the proxy and the browser read it", () => {
     expect(movedPagesSettingsProblem({ LEGACY_UI_HOSTS: HOSTS, PUBLIC_URL: "https://app.example.com" })).toMatch(/^LEGACY_UI_HOSTS /)
     expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: "https://flow.example.com", PUBLIC_URL: "https://app.example.com" })).toMatch(/^LEGACY_UI_HOSTS /)
+    expect(movedPagesSettingsProblem({ FLOW_PUBLIC_URL: "https://flow.example.com", PUBLIC_URL: "https://app.example.com" })).toMatch(/^LEGACY_UI_HOSTS /)
     // Naming only the Flow host is no legacy host at all.
     expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: "https://flow.example.com", LEGACY_UI_HOSTS: "Flow.example.com", PUBLIC_URL: "https://app.example.com" })).toMatch(/^LEGACY_UI_HOSTS /)
     expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: "https://flow.example.com", LEGACY_UI_HOSTS: HOSTS, PUBLIC_URL: "https://app.example.com" })).toBeNull()
@@ -54,6 +55,14 @@ describe("movedPagesSettingsProblem", () => {
 
   it("a FLOW_UI_ORIGIN that is not an https origin is refused, naming it", () => {
     expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: "flow.example.com", PUBLIC_URL: "https://app.example.com" })).toMatch(/^FLOW_UI_ORIGIN /)
+    // The proxy would leave the move off for these while links named the Flow host: refused instead.
+    expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: " https://flow.example.com", PUBLIC_URL: "https://app.example.com" })).toMatch(/^FLOW_UI_ORIGIN /)
+    expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: "https://flow.example.com\n", PUBLIC_URL: "https://app.example.com" })).toMatch(/^FLOW_UI_ORIGIN /)
+  })
+
+  it("only an empty value is unset, as the image's start script reads it; spaces alone are refused", () => {
+    expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: "", FLOW_PUBLIC_URL: "", PUBLIC_URL: "http://localhost:3000" })).toBeNull()
+    expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: "   ", FLOW_PUBLIC_URL: "https://flow.example.com", PUBLIC_URL: "https://app.example.com" })).toMatch(/^FLOW_UI_ORIGIN /)
   })
 
   it("with FLOW_UI_ORIGIN set, PUBLIC_URL must give the kept host's https origin, never the Flow host's", () => {
@@ -61,6 +70,38 @@ describe("movedPagesSettingsProblem", () => {
       expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: "https://flow.example.com", LEGACY_UI_HOSTS: HOSTS, PUBLIC_URL }), PUBLIC_URL).toMatch(/^PUBLIC_URL /)
     }
     expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: "https://flow.example.com/", LEGACY_UI_HOSTS: HOSTS, PUBLIC_URL: "https://app.example.com/" })).toBeNull()
+  })
+})
+
+describe("FLOW_UI_ORIGIN and FLOW_PUBLIC_URL: two names, one origin", () => {
+  const PUBLIC_URL = "https://app.example.com"
+  const LEGACY_UI_HOSTS = "app.example.com"
+
+  it("either name gives the Flow origin once the move is on", () => {
+    expect(movedFlowOrigin({ FLOW_UI_ORIGIN: "https://flow.example.com/", LEGACY_UI_HOSTS, PUBLIC_URL })).toBe("https://flow.example.com")
+    expect(movedFlowOrigin({ FLOW_PUBLIC_URL: "https://flow.example.com/", LEGACY_UI_HOSTS, PUBLIC_URL })).toBe("https://flow.example.com")
+    expect(movedFlowOrigin({ FLOW_UI_ORIGIN: "https://flow.example.com", FLOW_PUBLIC_URL: "https://flow.example.com/", LEGACY_UI_HOSTS, PUBLIC_URL })).toBe("https://flow.example.com")
+    expect(movedFlowOrigin({})).toBeNull()
+    expect(movedFlowOrigin({ FLOW_PUBLIC_URL: "http://flow.example.com", LEGACY_UI_HOSTS, PUBLIC_URL })).toBeNull()
+  })
+
+  it("both set to different origins is refused, naming both", () => {
+    expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: "https://flow.example.com", FLOW_PUBLIC_URL: "https://pages.example.com", LEGACY_UI_HOSTS, PUBLIC_URL }))
+      .toMatch(/^FLOW_PUBLIC_URL and FLOW_UI_ORIGIN /)
+    expect(movedPagesSettingsProblem({ FLOW_UI_ORIGIN: "https://flow.example.com", FLOW_PUBLIC_URL: "https://flow.example.com/", LEGACY_UI_HOSTS, PUBLIC_URL })).toBeNull()
+  })
+
+  it("FLOW_PUBLIC_URL alone is held to the same rules, naming it", () => {
+    expect(movedPagesSettingsProblem({ FLOW_PUBLIC_URL: "http://flow.example.com", LEGACY_UI_HOSTS, PUBLIC_URL })).toMatch(/^FLOW_PUBLIC_URL /)
+    expect(movedPagesSettingsProblem({ FLOW_PUBLIC_URL: "https://flow.example.com", LEGACY_UI_HOSTS, PUBLIC_URL: "http://localhost:3000" })).toMatch(/^PUBLIC_URL /)
+    expect(movedPagesSettingsProblem({ FLOW_PUBLIC_URL: "https://app.example.com/", LEGACY_UI_HOSTS, PUBLIC_URL })).toMatch(/^PUBLIC_URL /)
+    expect(movedPagesSettingsProblem({ FLOW_PUBLIC_URL: "https://flow.example.com/", LEGACY_UI_HOSTS, PUBLIC_URL })).toBeNull()
+  })
+
+  it("the server's links follow the one rule: a Flow origin with no legacy host, or no kept origin, moves nothing", () => {
+    expect(movedFlowOrigin({ FLOW_UI_ORIGIN: "https://flow.example.com", PUBLIC_URL })).toBeNull()
+    expect(movedFlowOrigin({ FLOW_PUBLIC_URL: "https://flow.example.com", LEGACY_UI_HOSTS: "flow.example.com", PUBLIC_URL })).toBeNull()
+    expect(movedFlowOrigin({ FLOW_UI_ORIGIN: "https://flow.example.com", LEGACY_UI_HOSTS, PUBLIC_URL: "http://localhost:3000" })).toBeNull()
   })
 })
 
@@ -84,5 +125,14 @@ describe("the server refuses to start on a setting it cannot run", () => {
     vi.stubEnv("LEGACY_UI_HOSTS", "")
     vi.stubEnv("PUBLIC_URL", "https://app.example.com")
     await expect(import("../config.js")).rejects.toThrow(/LEGACY_UI_HOSTS/)
+  })
+
+  it("names both when the Flow host's two names disagree", async () => {
+    vi.resetModules()
+    vi.stubEnv("FLOW_UI_ORIGIN", "https://flow.example.com")
+    vi.stubEnv("FLOW_PUBLIC_URL", "https://pages.example.com")
+    vi.stubEnv("LEGACY_UI_HOSTS", "app.example.com")
+    vi.stubEnv("PUBLIC_URL", "https://app.example.com")
+    await expect(import("../config.js")).rejects.toThrow(/FLOW_PUBLIC_URL and FLOW_UI_ORIGIN/)
   })
 })

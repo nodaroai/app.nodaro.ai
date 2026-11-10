@@ -14,7 +14,7 @@ const startSh = dockerfile.slice(dockerfile.indexOf("COPY <<'EOF' /app/start.sh"
 test("start.sh runs the server's own check of the move's settings before it starts anything, and stops when it fails", () => {
   const check = startSh.indexOf("node /app/backend/dist/lib/moved-pages-check.js")
   assert.ok(check > 0, "start.sh runs the check")
-  for (const later of ["applying database migrations", "node dist/server.js", "supervise worker", "build-runtime-config.mjs", "caddy run"]) {
+  for (const later of ["export FLOW_UI_ORIGIN=", "applying database migrations", "node dist/server.js", "supervise worker", "build-runtime-config.mjs", "caddy run"]) {
     const at = startSh.indexOf(later)
     assert.ok(at > check, `the check runs before ${later}`)
   }

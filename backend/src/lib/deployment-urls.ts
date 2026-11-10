@@ -1,4 +1,5 @@
 import { config } from "./config.js"
+import { movedFlowOrigin } from "./moved-pages-settings.js"
 
 /**
  * Public base URLs of this deployment, for user-facing links baked into MCP
@@ -18,13 +19,26 @@ export function appBaseUrl(): string {
 }
 
 /**
+ * Where the app's own pages live, for links that open one of them (the editor,
+ * the gallery, billing, the archive). The Flow host's origin when the
+ * deployment's move of its pages is on, by the one rule the proxy and the
+ * browser read (`FLOW_PUBLIC_URL` or `FLOW_UI_ORIGIN`, a legacy host, a kept
+ * `PUBLIC_URL`: lib/moved-pages-settings.ts), else `appBaseUrl()` exactly, so
+ * an install without it links as it always has. The API, the OAuth issuer and
+ * every machine-facing address stay on `appBaseUrl()`.
+ */
+export function flowBaseUrl(): string {
+  return movedFlowOrigin(config) ?? appBaseUrl()
+}
+
+/**
  * The link that opens a workflow in the editor: the app's short
  * `/editor/<workflowId>` address, which looks up the workflow's project
  * itself — so the link a tool hands out keeps working after the workflow
  * moves to another project.
  */
 export function workflowEditorUrl(workflowId: string): string {
-  return `${appBaseUrl()}/editor/${encodeURIComponent(workflowId)}`
+  return `${flowBaseUrl()}/editor/${encodeURIComponent(workflowId)}`
 }
 
 /**

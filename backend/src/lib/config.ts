@@ -374,6 +374,8 @@ export const envSchema = z.object({
   SOCIAL_ENCRYPTION_KEY: z.string().default(""),
   /** Base URL for OAuth redirects (e.g. https://app.nodaro.ai or http://localhost:8000) */
   PUBLIC_URL: z.string().default(""),
+  /** The host the app's own pages live on when it has moved them off PUBLIC_URL (see deployment-urls.ts :: flowBaseUrl, docs/deployment.md). Empty: the app's pages are on PUBLIC_URL, as they always were. */
+  FLOW_PUBLIC_URL: z.string().default(""),
   /** Moving the app's pages to their own host (docs/deployment.md): read by the bundled proxy and /config.js; checked here at boot (lib/moved-pages-settings.ts). */
   FLOW_UI_ORIGIN: z.string().default(""),
   LEGACY_UI_HOSTS: z.string().default(""),

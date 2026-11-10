@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto"
 import { config } from "../../lib/config.js"
+import { movedFlowOrigin } from "../../lib/moved-pages-settings.js"
 import type { OAuth2Config, SocialProvider } from "./providers/types.js"
 import { saveOAuthState } from "./state-store.js"
 
@@ -38,6 +39,24 @@ export function getCallbackOrigin(): string | null {
   } catch {
     return null
   }
+}
+
+/**
+ * Every origin a callback page may hand its result to: the callback origin
+ * above, plus the app's own host when a deployment has moved its pages off
+ * PUBLIC_URL, by the one move-on rule (lib/moved-pages-settings.ts :: movedFlowOrigin).
+ * The app may be open on either, so the page posts once per origin;
+ * `postMessage` drops the post for any origin the opener is not on, so only
+ * the right one is delivered, and no post ever names "*". Empty when no origin
+ * is usable.
+ */
+export function getCallbackOrigins(): string[] {
+  const origins = new Set<string>()
+  const callback = getCallbackOrigin()
+  if (callback) origins.add(callback)
+  const flow = movedFlowOrigin(config)
+  if (flow) origins.add(flow)
+  return [...origins]
 }
 
 function requireOAuth(provider: SocialProvider): OAuth2Config {
