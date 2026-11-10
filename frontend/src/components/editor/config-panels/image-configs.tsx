@@ -198,9 +198,9 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
     : getAspectRatiosForModel(currentProvider)
   const aspectRatioOptions = withPhotoAuto(listedAspectRatios)
   // One model: only the sizes it renders at the chosen ratio — an unset one is
-  // Auto here, as the run sends it (GPT Image 2 draws Auto at 1K only and 1:1
-  // at 1K or 2K; GPT Image 2.5 draws 27:16, 16:27, 9:8 and 8:9 at 1K only), so
-  // a size it cannot render snaps below when the ratio changes.
+  // Auto here, as the run sends it (GPT Image 2.5 draws 27:16, 16:27, 9:8 and
+  // 8:9 at 1K only), so a size it cannot render snaps below when the ratio
+  // changes.
   const resolutionOptions = isMulti
     ? (intersected.resolutions.length > 0 ? intersected.resolutions : undefined)
     : imageResolutionOptionsAt(currentProvider, nodeAspectRatio("generate-image", data.aspectRatio))
@@ -262,9 +262,8 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
     }
     // A size the ratio the run asks for does not render (an unset ratio is
     // Auto here) moves to the largest one it renders at or below it, the size
-    // the run is sent and priced at (`resolutionsByAspectRatio`: GPT Image 2
-    // renders Auto at 1K only and 1:1 at 1K or 2K; GPT Image 2.5 renders 27:16,
-    // 16:27, 9:8 and 8:9 at 1K only).
+    // the run is sent and priced at (`resolutionsByAspectRatio`: GPT Image 2.5
+    // renders 27:16, 16:27, 9:8 and 8:9 at 1K only).
     {
       const size = updates.resolution ?? data.resolution
       const fitted = resolutionAtAspectRatio(currentProvider, updates.aspectRatio ?? nodeAspectRatio("generate-image", data.aspectRatio), size)
@@ -972,8 +971,8 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
   const aspectRatioOptions = useMemo(() => getSourcePhotoAspectRatios(currentProvider), [currentProvider])
   const listedAspectRatios = useMemo(() => getAspectRatiosForModel(currentProvider), [currentProvider])
   // Only the sizes the model renders at the chosen ratio, an unset one being
-  // Auto here as the run sends it (GPT Image 2: 1K only at Auto, 1K or 2K at
-  // 1:1; GPT Image 2.5: 1K only at 27:16, 16:27, 9:8 and 8:9).
+  // Auto here as the run sends it (GPT Image 2.5: 1K only at 27:16, 16:27, 9:8
+  // and 8:9).
   const resolutionOptions = useMemo(() => !isNanoBananaEdit ? imageResolutionOptionsAt(currentProvider, nodeAspectRatio("modify-image", data.aspectRatio)) : undefined, [currentProvider, isNanoBananaEdit, data.aspectRatio])
   // The model's whole size list: what a size it does not list at all snaps to.
   const allResolutionOptions = useMemo(() => !isNanoBananaEdit ? imageResolutionOptionsAt(currentProvider, undefined) : undefined, [currentProvider, isNanoBananaEdit])

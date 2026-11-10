@@ -14,7 +14,7 @@
  * resolved model). Validation errors are SWALLOWED, not surfaced.
  */
 import { MODEL_CATALOG, VIDEO_DURATION_AUTO, defaultImageModel, defaultResolutionFor, isAutoAspectToken, isAutoVideoDuration, type ModelCatalogEntry } from "@nodaro/shared/model-catalog"
-import { IMAGE_GEN_PROVIDERS, MODIFY_IMAGE_PROVIDERS, canonicalVideoProvider } from "@nodaro/shared/models"
+import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, MODIFY_IMAGE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, canonicalVideoProvider, resolveVideoProviderForMode, videoProviderRequiresImage } from "@nodaro/shared/models"
 import { imageToImageAspectRatio } from "../image-auto-aspect.js"
 
 /**
@@ -380,6 +380,44 @@ export function savedVideoModel(saved: string | null | undefined, accepted: read
   return accepted.includes(runsAs) ? runsAs : undefined
 }
 
+/** The video lanes a call can take, each with the route it is sent to. */
+export type VideoLane = "image-to-video" | "text-to-video"
+
+/** The provider list of the route each lane is sent to (the image-to-video route runs only image-to-video ids). */
+const VIDEO_LANE_PROVIDERS: Readonly<Record<VideoLane, readonly string[]>> = {
+  "text-to-video": TEXT_TO_VIDEO_PROVIDERS,
+  "image-to-video": IMAGE_TO_VIDEO_PROVIDERS,
+}
+
+/**
+ * The id a video call sends for the lane it takes. A model with one id per mode
+ * (`VIDEO_MODE_ALIASES`: Grok Imagine, Wan, Wan 2.7, HappyHorse) is named by
+ * either id, so the named one may be its other mode's: `grok-i2v` on a
+ * prompt-only `generate_video` runs as `grok`, `grok` with a frame on
+ * `animate_image` as `grok-i2v` (`resolveVideoProviderForMode`). Undefined when
+ * the lane's route does not run the result (an image or a lip-sync model, a
+ * video edit), so the call can say so instead of sending it.
+ */
+export function videoModelForLane(model: string, lane: VideoLane): string | undefined {
+  const sent = resolveVideoProviderForMode(model, lane)
+  return VIDEO_LANE_PROVIDERS[lane].includes(sent) ? sent : undefined
+}
+
+/**
+ * The refusal for a named model the lane's route does not run, naming the
+ * models that do: on the text-to-video lane those that run from a prompt alone.
+ */
+export function videoModelRefusal(tool: string, model: string, lane: VideoLane): string {
+  const works = VIDEO_LANE_PROVIDERS[lane].filter((id) =>
+    MODEL_CATALOG[id]?.mcpHidden !== true &&
+    (lane === "image-to-video" || !videoProviderRequiresImage(id)),
+  )
+  const mode = lane === "image-to-video" ? "i2v" : "t2v"
+  const what = lane === "image-to-video" ? "from an image" : "from a prompt"
+  return `${tool} cannot run "${model}": it is not a model that makes a video ${what}. ` +
+    `Use one of: ${works.join(", ")}. Call list_models { kind: "video", mode: "${mode}" } for what each one does.`
+}
+
 /** The levers `image_to_image` sends /v1/image-to-image; each absent one is left out. */
 export interface ImageToImageLevers {
   provider: string
@@ -399,8 +437,8 @@ export interface ImageToImageLevers {
  * - The model: the one named, else the saved one when an edit runs it
  *   (`savedEditModel`), else the platform's edit default for the ratio.
  * - The ratio: the one named, else the saved one (a saved "auto" handed on as
- *   "auto", as a named one is). With neither, "auto" on the GPT Image 2.5 / 2.6
- *   edit models (`imageToImageAspectRatio`, the route's own rule), and on any
+ *   "auto", as a named one is). With neither, "auto" on the GPT Image 2, 2.5
+ *   and 2.6 edit models (`imageToImageAspectRatio`, the route's own rule), and on any
  *   other model none, so it keeps its own default.
  * - Size and quality: the ones named, else the saved ones where the model
  *   lists them, else none (the model's default).

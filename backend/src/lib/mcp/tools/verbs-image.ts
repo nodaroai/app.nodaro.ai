@@ -527,8 +527,8 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           : defaultImageModel("edit", requestedRatio)
 
         // The ratio sent: the one the call names, else the person's saved one,
-        // else the model's own rule for an unset ratio (GPT Image 2.5 / 2.6
-        // edits run at "auto", as on the route), else the general fallback.
+        // else the model's own rule for an unset ratio (GPT Image 2, 2.5 and
+        // 2.6 edits run at "auto", as on the route), else the general fallback.
         // "auto" keeps the source photo's shape: /v1/image-to-image resolves it
         // against the image (natively, or to the model's nearest listed ratio),
         // so it is handed on instead of snapped to a fixed ratio here.

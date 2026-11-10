@@ -56,6 +56,7 @@ const generate = (args: Record<string, unknown>, response?: object) =>
   call("generate_image", "/v1/generate-image", { prompt: "a lighthouse", ...args }, response)
 
 const UNSET_IS_AUTO = [
+  "gpt-image-2-i2i",
   "gpt-image-2-5-flare-i2i",
   "gpt-image-2-5-sunburst-i2i",
   "gpt-image-2-6-flare-i2i",
@@ -105,12 +106,12 @@ describe("modify_image — the ratio: named, else saved, else the model's rule, 
     expect(body.aspectRatio).toBe("auto")
   })
 
-  it("with neither, another model keeps today's fallback (GPT Image 2's edit: 16:9)", async () => {
-    const body = await modify({ model: "gpt-image-2-i2i" })
+  it("with neither, another model keeps today's fallback (Flux Kontext: 16:9)", async () => {
+    const body = await modify({ model: "flux-kontext" })
     expect(body.aspectRatio).toBe("16:9")
   })
 
-  it("a saved ratio beats the model's rule on the five edit ids", async () => {
+  it("a saved ratio beats the model's rule on the six edit ids", async () => {
     savedImage = { aspectRatio: "4:3" }
     for (const model of UNSET_IS_AUTO.slice(0, 2)) {
       expect((await modify({ model })).aspectRatio).toBe("4:3")
@@ -173,7 +174,7 @@ describe("generate_image — the ratio: named, else saved, else the fallback", (
  * `image_to_image` reads the same saved defaults. A value the call names is
  * sent as it is (the route fits it and reports the change); a saved one is
  * fitted to the model here. With neither, the ratio is the route's own rule
- * ("auto" on the five GPT Image 2.5 / 2.6 edit ids) and any other model is
+ * ("auto" on the six GPT Image 2, 2.5 and 2.6 edit ids) and any other model is
  * sent no ratio, so it keeps its own default, as before.
  */
 const imageToImage = async (args: Record<string, unknown>) => {
@@ -236,7 +237,7 @@ describe("image_to_image — the ratio: named, else saved, else the model's rule
     expect(body.aspectRatio).toBe("auto")
   })
 
-  it.each(["flux-kontext", "gpt-image-2-i2i", "seedream-5-pro-i2i"])(
+  it.each(["flux-kontext", "seedream-5-pro-i2i"])(
     "with neither, %s is sent no ratio and keeps its own default, as before",
     async (model) => {
       const { body } = await imageToImage({ model })
@@ -245,7 +246,7 @@ describe("image_to_image — the ratio: named, else saved, else the model's rule
     },
   )
 
-  it("a saved ratio beats the model's rule on the five edit ids", async () => {
+  it("a saved ratio beats the model's rule on the six edit ids", async () => {
     savedImage = { aspectRatio: "4:3" }
     for (const model of UNSET_IS_AUTO.slice(0, 2)) {
       expect((await imageToImage({ model })).body.aspectRatio).toBe("4:3")

@@ -9,8 +9,8 @@ import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
  * taken only at that size (`backgroundOnlyAtTransparentResolution`). Each is
  * served exactly as the catalog declares it, on the models that declare it,
  * and left out everywhere else, so a client that reads only the SDK knows
- * that GPT Image 2.5 renders 27:16, 16:27, 9:8 and 8:9 at 1K only, and GPT
- * Image 2 Auto at 1K only and 1:1 at 1K or 2K.
+ * that GPT Image 2.5 renders 27:16, 16:27, 9:8 and 8:9 at 1K only, and that
+ * GPT Image 2 renders every ratio it offers at every size.
  */
 
 // Not about prices or marks: both read the database, which this test has none of.
@@ -65,9 +65,9 @@ describe("GET /v1/models — the sizes a ratio renders", () => {
     expect(m.resolutions).toEqual(["1K", "2K", "4K"])
   })
 
-  it.each(["gpt-image-2", "gpt-image-2-i2i"])("%s renders Auto at 1K only and 1:1 at 1K or 2K", (id) => {
+  it.each(["gpt-image-2", "gpt-image-2-i2i"])("%s carries no size rule: every ratio renders 1K, 2K and 4K", (id) => {
     const m = byId(id)
-    expect(m.resolutionsByAspectRatio).toEqual({ auto: ["1K"], "1:1": ["1K", "2K"] })
+    expect(m).not.toHaveProperty("resolutionsByAspectRatio")
     expect(m.resolutions).toEqual(["1K", "2K", "4K"])
   })
 

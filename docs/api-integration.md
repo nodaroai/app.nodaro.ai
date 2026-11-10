@@ -956,12 +956,6 @@ changed:
       "from": "3:2",
       "to": "auto",
       "reason": "GPT Image 2 does not support aspectRatio \"3:2\" — using \"auto\" instead. Supported: auto, 1:1, 16:9, 9:16, 4:3, 3:4."
-    },
-    {
-      "field": "resolution",
-      "from": "4K",
-      "to": "1K",
-      "reason": "GPT Image 2 only renders 1K at the \"auto\" aspect ratio."
     }
   ]
 }
@@ -977,8 +971,9 @@ changed:
   `input_data.warnings`.
 - `to` is absent when the model has no such lever at all and the value was
   dropped (e.g. an `aspectRatio` sent to `recraft-upscale`).
-- **Credits are reserved against the corrected values.** A `gpt-image-2` request
-  for `auto` + `2K` renders and bills at 1K, because `auto` only renders 1K.
+- **Credits are reserved against the corrected values.** A `gpt-image-2-5-flare`
+  request for `9:8` + `2K` renders and bills at 1K, because GPT Image 2.5
+  renders `9:8` at 1K only (`"GPT Image 2.5 Flare only renders 1K at the \"9:8\" aspect ratio."`).
 - **`aspectRatio: "auto"` keeps your photo's shape** on `/v1/image-to-image` and
   `/v1/edit-image`. A model with a native `auto` that keeps the shape receives
   it as is. On a model without one, and on GPT Image 2.6 (`gpt-image-2-6-*`,
@@ -996,16 +991,17 @@ changed:
   the first one assembled from `connectedReferences`). Without a photo, `auto`
   on a model without a native one gives its first listed ratio, as before, and
   GPT Image 2.6 receives its own `auto`.
-- **No `aspectRatio` on a GPT Image 2.5 or 2.6 edit model is `auto`.** On
+- **No `aspectRatio` on a GPT Image 2, 2.5 or 2.6 edit model is `auto`.** On
   `/v1/image-to-image`, a request to `gpt-image-2-6-flare-i2i` (the default),
-  `gpt-image-2-6-sunburst-i2i`, `gpt-image-2-5-flare-i2i` or
-  `gpt-image-2-5-sunburst-i2i` that names no ratio runs exactly as one that
-  sends `"auto"`, instead of the model's 16:9 default: GPT Image 2.5 receives
-  its own `auto`, which keeps the photo's shape, and GPT Image 2.6 the ratio
-  closest to the photo, as above. The job records the ratio sent. It costs the
-  same: these models price by quality, size and the number of input images,
-  not by ratio. Every other model, GPT Image 2 included, keeps its own default
-  when no ratio is named.
+  `gpt-image-2-6-sunburst-i2i`, `gpt-image-2-6-economy-i2i`,
+  `gpt-image-2-5-flare-i2i`, `gpt-image-2-5-sunburst-i2i` or `gpt-image-2-i2i`
+  that names no ratio runs exactly as one that sends `"auto"`, instead of the
+  model's 16:9 default: GPT Image 2 and 2.5 receive their own `auto`, which
+  keeps the photo's shape, and GPT Image 2.6 the ratio closest to the photo,
+  as above. The job records the ratio sent. It costs the same: these models
+  price by quality, size and the number of input images, not by ratio, and
+  render every size at `auto`. Every other model keeps its own default when no
+  ratio is named.
 - The per-model option lists are in `GET /v1/models`; a workflow saved through
   the API or MCP is corrected the same way at write time — except `auto` on a
   generate-image, image-to-image, modify-image or edit-image node, which is
@@ -2458,8 +2454,8 @@ transparent background at 1K:
 (Abridged: only the fields this section is about, and not every ratio.) A
 size menu offers, at the chosen ratio, `resolutionsByAspectRatio[ratio]` when
 the ratio is listed there, else `resolutions`. GPT Image 2 (`gpt-image-2` and
-`gpt-image-2-i2i`) lists `"resolutionsByAspectRatio": { "auto": ["1K"], "1:1": ["1K", "2K"] }`:
-`auto` renders 1K only, and 1:1 never 4K. GPT Image 2.6 Flare and
+`gpt-image-2-i2i`) lists no `resolutionsByAspectRatio`: it renders every ratio
+it offers, `auto` and 1:1 included, at 1K, 2K and 4K. GPT Image 2.6 Flare and
 Sunburst list `transparentResolution: "1K"` and no `resolutionsByAspectRatio`.
 
 `GET /v1/model-makers` returns only the makers, for an app that draws marks

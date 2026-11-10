@@ -500,13 +500,13 @@ const FLUX_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"] as const
 const KONTEXT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9"] as const
 const GROK_RATIOS = ["1:1", "16:9", "9:16", "3:2", "2:3"] as const
 const GPT_IMAGE_RATIOS = ["1:1", "3:2", "2:3"] as const
+// GPT Image 2 (text-to-image and image-to-image) renders every one of these
+// ratios at 1K, 2K and 4K, "auto" and 1:1 included (checked 2026-11-10: 1:1 at
+// 4K came back 2880x2880, "auto" at 2K 2048x2048, and an edit at "auto" and 2K
+// kept a 768x1024 photo's shape at 1536x2048), so it declares no
+// `resolutionsByAspectRatio`. The provider's docs limit 2K and 4K only at ratios
+// it does not offer here (5:4, 4:5, 3:1, 1:3, 9:21).
 const GPT_IMAGE_2_RATIOS = ["auto", "1:1", "16:9", "9:16", "4:3", "3:4"] as const
-// GPT Image 2 (text-to-image and image-to-image) renders "auto" at 1K only, and
-// 1:1 at 1K or 2K, never 4K (docs.kie.ai/market/gpt/gpt-image-2-*).
-// `normalizeModelInput` moves a larger size there before the run is priced.
-const GPT_IMAGE_2_RESOLUTIONS_BY_RATIO = {
-  auto: ["1K"], "1:1": ["1K", "2K"],
-} as const
 // GPT Image 2.5 (Flare + Sunburst) widen the set to thirteen — the GPT Image 2
 // six plus 3:2/2:3, ultra-wide 21:9/27:16, ultra-tall 16:27 and near-square
 // 9:8/8:9 (docs.kie.ai/market/gpt/gpt-image-2-5-*).
@@ -919,7 +919,6 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_RATIOS,
     resolutions: ["1K", "2K", "4K"],
-    resolutionsByAspectRatio: GPT_IMAGE_2_RESOLUTIONS_BY_RATIO,
     pricing: [
       { identifier: "gpt-image-2", credits: 15, note: "1K default" },
       { identifier: "gpt-image-2:2K", credits: 25, note: "2K" },
@@ -942,7 +941,6 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_RATIOS,
     resolutions: ["1K", "2K", "4K"],
-    resolutionsByAspectRatio: GPT_IMAGE_2_RESOLUTIONS_BY_RATIO,
     pricing: [
       { identifier: "gpt-image-2-i2i", credits: 15, note: "1K default" },
       { identifier: "gpt-image-2-i2i:2K", credits: 25, note: "2K" },
@@ -4286,8 +4284,8 @@ export function normalizeModelInput(
       : snap("duration", input.duration, m.durations)
 
   // A size the chosen ratio does not render (`resolutionsByAspectRatio`: GPT
-  // Image 2's "auto" and 1:1, GPT Image 2.5's four 1K-only ratios) moves to the
-  // largest one it does at or below it. After the snaps above, so it sees the
+  // Image 2.5's four 1K-only ratios) moves to the largest one it does at or
+  // below it. After the snaps above, so it sees the
   // ratio and size as they will be sent; before the background rules below,
   // which read the size this leaves, and before any price is built.
   const sized = resolutionAtAspectRatio(modelId, out.aspectRatio, out.resolution)

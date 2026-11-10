@@ -611,9 +611,8 @@ export function transparentResolutionFor(provider: string): string | undefined {
 
 /**
  * An image model's size options at a ratio: only the sizes it renders there
- * (the catalog's `resolutionsByAspectRatio`; GPT Image 2 draws "auto" at 1K
- * only and 1:1 at 1K or 2K, GPT Image 2.5 draws 27:16, 16:27, 9:8 and 8:9 at
- * 1K only). The model's whole list at any other ratio.
+ * (the catalog's `resolutionsByAspectRatio`; GPT Image 2.5 draws 27:16,
+ * 16:27, 9:8 and 8:9 at 1K only). The model's whole list at any other ratio.
  */
 export function imageResolutionOptionsAt(provider: string, aspectRatio: string | undefined): readonly LabeledOption[] | undefined {
   const options = IMAGE_RESOLUTION_OPTIONS[provider]

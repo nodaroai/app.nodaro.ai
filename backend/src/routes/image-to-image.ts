@@ -125,7 +125,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
     if (!parsed.data.provider) {
       parsed.data.provider = defaultImageModel("edit", parsed.data.aspectRatio) as NonNullable<(typeof parsed.data)["provider"]>
     }
-    // No ratio named on a GPT Image 2.5 / 2.6 edit model is "auto", the
+    // No ratio named on a GPT Image 2, 2.5 or 2.6 edit model is "auto", the
     // photo's shape, instead of the provider config's 16:9. Set here, before
     // the levers are read, so the snap, `input_data` and the queue payload all
     // carry it, as the credit check does (`imageToImageAspectRatio`).

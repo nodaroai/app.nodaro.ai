@@ -39,7 +39,7 @@ export function resolveImageToImageCreditIdentifier(req: FastifyRequest): string
   const extraRefs = (body?.referenceImageUrls as string[] | undefined)?.length ?? 0
   return resolveNormalizedImageGen({
     provider,
-    // The ratio the handler runs: none named on a GPT Image 2.5 / 2.6 edit is "auto".
+    // The ratio the handler runs: none named on a GPT Image 2, 2.5 or 2.6 edit is "auto".
     aspectRatio: imageToImageAspectRatio(provider, body?.aspectRatio),
     quality: body?.quality,
     resolution: body?.resolution,

@@ -320,8 +320,10 @@ describe("imageToImageLevers", () => {
     expect(imageToImageLevers({ model: "flux-kontext" }, { aspectRatio: "27:16" }).aspectRatio).toBe("16:9")
   })
 
-  it("with neither ratio: 'auto' on the GPT Image 2.5 / 2.6 edit models, none on the others", () => {
+  it("with neither ratio: 'auto' on the GPT Image 2, 2.5 and 2.6 edit models, none on the others", () => {
     expect(imageToImageLevers({ model: "gpt-image-2-5-flare-i2i" }, {})).toEqual({ provider: "gpt-image-2-5-flare-i2i", aspectRatio: "auto" })
+    expect(imageToImageLevers({ model: "gpt-image-2-i2i", resolution: "2K" }, {})).toEqual({ provider: "gpt-image-2-i2i", aspectRatio: "auto", resolution: "2K" })
+    expect(imageToImageLevers({ model: "gpt-image-2-i2i", aspect_ratio: "3:4" }, {}).aspectRatio).toBe("3:4")
     expect(imageToImageLevers({ model: "flux-kontext" }, {})).toEqual({ provider: "flux-kontext" })
   })
 })

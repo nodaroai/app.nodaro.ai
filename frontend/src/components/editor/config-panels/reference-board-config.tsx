@@ -151,9 +151,8 @@ function ReferenceBoardConfigImpl({
   const currentProvider = data.provider || defaultImageModel("character", data.aspectRatio)
 
   const aspectRatioOptions = getAspectRatiosForModel(currentProvider)
-  // Only the sizes the model renders at the chosen ratio (GPT Image 2: 1K only
-  // at Auto, 1K or 2K at 1:1; GPT Image 2.5: 1K only at 27:16, 16:27, 9:8 and
-  // 8:9); a size it cannot render snaps below.
+  // Only the sizes the model renders at the chosen ratio (GPT Image 2.5: 1K
+  // only at 27:16, 16:27, 9:8 and 8:9); a size it cannot render snaps below.
   const resolutionOptions = imageResolutionOptionsAt(currentProvider, data.aspectRatio)
   // The model's whole size list: what a size it does not list at all snaps to.
   const allResolutionOptions = imageResolutionOptionsAt(currentProvider, undefined)

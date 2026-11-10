@@ -137,7 +137,7 @@ export function imageCreditIdentifierFor(
   // `quality` are pricing dimensions — a snap applied only in the handler would
   // break CHECK === DEBIT (see `resolveNormalizedImageGen`'s docstring).
   // `aspectRatio` is threaded too: it does not price on its own, but the
-  // cross-field rules (gpt-image-2 `auto` → 1K) re-price through it.
+  // cross-field rules (GPT Image 2.5's 1K-only ratios) re-price through it.
   return resolveNormalizedImageGen({
     provider: rawProvider,
     aspectRatio,

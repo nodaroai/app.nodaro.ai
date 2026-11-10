@@ -1112,23 +1112,22 @@ describe("POST /v1/image-to-image", () => {
       }
     }
 
-    it("CHECK === DEBIT for gpt-image-2-i2i + auto + 2K (the cross-field snap re-prices to 1K)", async () => {
+    it.each([["auto", "2K"], ["auto", "4K"], ["1:1", "4K"]])("CHECK === DEBIT for gpt-image-2-i2i at %s + %s: priced and recorded at the size asked", async (aspectRatio, resolution) => {
       const payload = {
         imageUrl: "https://r2.nodaro.ai/in.png",
         prompt: "make it night",
         userId: VALID_UUID,
         provider: "gpt-image-2-i2i",
-        aspectRatio: "auto",
-        resolution: "2K",
+        aspectRatio,
+        resolution,
       }
       const { identifier: debit, inputData } = await debitIdentifierFor(payload)
       const check = checkIdentifierFor(payload)
       expect(check).toBe(debit)
-      // `auto` only renders 1K, so the reserve is the BASE tier, not `:2K`.
-      expect(check).toBe("gpt-image-2-i2i")
-      // …and the job row records the 1K render we actually paid for.
-      expect(inputData.aspectRatio).toBe("auto")
-      expect(inputData.resolution).toBe("1K")
+      // GPT Image 2 renders every size at "auto" and 1:1: the reserve is that size's row.
+      expect(check).toBe(`gpt-image-2-i2i:${resolution}`)
+      expect(inputData.aspectRatio).toBe(aspectRatio)
+      expect(inputData.resolution).toBe(resolution)
     })
 
     it.each(["27:16", "16:27", "9:8", "8:9"])("CHECK === DEBIT for GPT Image 2.5 at %s: a 2K / 4K edit is priced, recorded and sent as 1K", async (aspectRatio) => {
@@ -1182,7 +1181,7 @@ describe("POST /v1/image-to-image", () => {
       }
     })
 
-    it.each(["gpt-image-2-5-flare-i2i", "gpt-image-2-5-sunburst-i2i"])("%s with no ratio is sent its own 'auto'", async (provider) => {
+    it.each(["gpt-image-2-i2i", "gpt-image-2-5-flare-i2i", "gpt-image-2-5-sunburst-i2i"])("%s with no ratio is sent its own 'auto'", async (provider) => {
       const { inputData } = await debitIdentifierFor({ imageUrl: "https://r2.nodaro.ai/in.png", prompt: "make it night", userId: VALID_UUID, provider })
       expect(inputData.aspectRatio).toBe("auto")
       expect(lastQueued().aspectRatio).toBe("auto")
@@ -1194,8 +1193,27 @@ describe("POST /v1/image-to-image", () => {
       expect(queued.aspectRatio).toBe("1:1")
     })
 
-    it("other models keep their own default when no ratio is named (GPT Image 2's edit included)", async () => {
-      for (const provider of ["gpt-image-2-i2i", "nano-banana-edit"]) {
+    // GPT Image 2 prices by size and renders every size at "auto": no ratio at
+    // 2K or 4K is the 2K or 4K row, the price of the same request naming "auto".
+    it.each(["2K", "4K"])("gpt-image-2-i2i with no ratio at %s is priced as 'auto' at that size, quote = charge", async (resolution) => {
+      const payload = { imageUrl: "https://r2.nodaro.ai/in.png", prompt: "make it night", userId: VALID_UUID, provider: "gpt-image-2-i2i", resolution }
+      const named = await debitIdentifierFor({ ...payload, aspectRatio: "auto" })
+      const { identifier: debit, inputData } = await debitIdentifierFor(payload)
+      expect(checkIdentifierFor(payload)).toBe(debit)
+      expect(debit).toBe(named.identifier)
+      expect(debit).toBe(`gpt-image-2-i2i:${resolution}`)
+      expect(inputData.aspectRatio).toBe("auto")
+      expect(inputData.resolution).toBe(resolution)
+      expect(lastQueued().aspectRatio).toBe("auto")
+    })
+
+    it("a named ratio on gpt-image-2-i2i is sent as named", async () => {
+      await debitIdentifierFor({ imageUrl: "https://r2.nodaro.ai/in.png", prompt: "make it night", userId: VALID_UUID, provider: "gpt-image-2-i2i", aspectRatio: "3:4" })
+      expect(lastQueued().aspectRatio).toBe("3:4")
+    })
+
+    it("other models keep their own default when no ratio is named", async () => {
+      for (const provider of ["nano-banana-edit", "flux-kontext"]) {
         const { inputData } = await debitIdentifierFor({ imageUrl: "https://r2.nodaro.ai/in.png", prompt: "make it night", userId: VALID_UUID, provider })
         expect(inputData.aspectRatio).toBeUndefined()
         const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as { aspectRatio?: string }

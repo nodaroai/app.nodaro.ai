@@ -32,20 +32,21 @@ export function aspectRatioForLoraModel(aspectRatio: unknown): string | undefine
 
 /**
  * The edit models on which an image-to-image request that names no aspect
- * ratio runs at "auto": GPT Image 2.5 and 2.6. Their provider config sends
+ * ratio runs at "auto": GPT Image 2, 2.5 and 2.6. Their provider config sends
  * 16:9 when a request names no ratio (`providers/kie/models.ts`), so an edit
  * of a square photo came back wide. "Keep the photo's shape" is what such a
  * request means, so it runs exactly as a request that names "auto": GPT
- * Image 2.5 receives its own auto, which keeps the shape, and GPT Image 2.6,
+ * Image 2 and 2.5 receive their own auto, which keeps the shape (GPT Image 2,
+ * 2026-11-10: a 768x1024 photo at 2K came back 1536x2048), and GPT Image 2.6,
  * whose own auto renders a portrait square, the listed ratio nearest the photo
- * (`autoAspectFromSourceImage` on its catalog entries).
+ * (`autoAspectFromSourceImage` on its catalog entries, and on no other).
  *
- * GPT Image 2's edit (`gpt-image-2-i2i`) is left out on purpose: its "auto"
- * renders 1K only, so the default would move a 2K or 4K request's size and
- * its price. Every listed model prices by quality, size and input images,
- * never by ratio, so the default never moves a price (pinned in the tests).
+ * Every listed model prices by quality, size and input images, never by
+ * ratio, and renders every size at "auto", so the default never moves a price
+ * (pinned in the tests).
  */
 export const UNSET_RATIO_IS_AUTO_EDIT_MODELS: ReadonlySet<string> = new Set([
+  "gpt-image-2-i2i",
   "gpt-image-2-5-flare-i2i",
   "gpt-image-2-5-sunburst-i2i",
   "gpt-image-2-6-flare-i2i",

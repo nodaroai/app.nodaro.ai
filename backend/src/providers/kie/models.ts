@@ -353,9 +353,9 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   },
   // GPT Image 2 — newer family. Resolution-based pricing (NOT quality), aspect_ratio includes 16:9/9:16/4:3/3:4
   // See: docs.kie.ai/market/gpt/gpt-image-2-text-to-image.md, gpt-image-2-image-to-image.md
-  // Constraints: 1:1 cannot be 4K; "auto" aspect_ratio limited to 1K. Both are
-  // `resolutionsByAspectRatio` on the catalog entries, which `normalizeModelInput`
-  // applies before a run is priced.
+  // Every ratio offered (auto, 1:1, 16:9, 9:16, 4:3, 3:4) renders at 1K, 2K and
+  // 4K, so the catalog entries declare no `resolutionsByAspectRatio`: a run is
+  // sent, and priced, at the size it asks for.
   "gpt-image-2": {
     model: "gpt-image-2-text-to-image",
     credits: 6,
@@ -370,6 +370,10 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     // NOTE: 2K, 4K = — handled via composite identifiers "gpt-image-2-i2i:2K" and "gpt-image-2-i2i:4K"
     inputType: "image-to-image",
     imageParam: "input_urls",  // Array, max 16
+    // The 16:9 default is never what /v1/image-to-image sends: a request naming
+    // no ratio goes as "auto" (`imageToImageAspectRatio`, lib/image-auto-aspect.ts),
+    // which keeps the photo's shape. It still applies to a Generate Image run
+    // whose references move `gpt-image-2` onto this id with no ratio.
     extraParams: { aspect_ratio: "16:9", resolution: "1K" },
   },
 

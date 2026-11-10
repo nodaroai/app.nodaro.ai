@@ -71,24 +71,24 @@ describe("normalizeModelInput", () => {
     expect(out.resolution).toBe("2 MP")
   })
 
-  it("applies the gpt-image-2 cross-field rules after snapping", () => {
-    expect(normalizeModelInput("gpt-image-2", { aspectRatio: "auto", resolution: "4K" }).resolution).toBe("1K")
-    expect(normalizeModelInput("gpt-image-2", { aspectRatio: "1:1", resolution: "4K" }).resolution).toBe("2K")
+  it("keeps gpt-image-2's size at auto and 1:1: it renders every size there", () => {
+    for (const aspectRatio of ["auto", "1:1"]) {
+      const out = normalizeModelInput("gpt-image-2", { aspectRatio, resolution: "4K" })
+      expect(out.resolution).toBe("4K")
+      expect(out.adjustments).toEqual([])
+    }
   })
 
-  // GPT Image 2.5 is NOT GPT Image 2. Its docs
-  // (docs.kie.ai/market/gpt/gpt-image-2-5-*) limit four ratios to 1K and
-  // nothing else, so GPT Image 2's own rules (auto → 1K, 1:1 not at 4K) must
-  // NOT be widened to these ids "for consistency" — that would downgrade a paid
-  // 4K render to 1K. The four ratios are the catalog's
-  // `resolutionsByAspectRatio`, tested below.
+  // GPT Image 2.5's docs (docs.kie.ai/market/gpt/gpt-image-2-5-*) limit four
+  // ratios to 1K and nothing else, so auto and 1:1 keep 4K. The four ratios are
+  // the catalog's `resolutionsByAspectRatio`, tested below.
   const GPT_IMAGE_2_5_IDS = [
     "gpt-image-2-5-flare",
     "gpt-image-2-5-flare-i2i",
     "gpt-image-2-5-sunburst",
     "gpt-image-2-5-sunburst-i2i",
   ]
-  it.each(GPT_IMAGE_2_5_IDS)("%s keeps 4K at auto and at 1:1 (GPT Image 2's rules are not its own)", (modelId) => {
+  it.each(GPT_IMAGE_2_5_IDS)("%s keeps 4K at auto and at 1:1", (modelId) => {
     const auto4k = normalizeModelInput(modelId, { aspectRatio: "auto", resolution: "4K" })
     expect(auto4k.resolution).toBe("4K")
     expect(auto4k.adjustments).toEqual([])
