@@ -99,7 +99,7 @@ function isVideoUrl(url: string): boolean {
 
 function isImageUrl(url: string): boolean {
   const lower = url.toLowerCase()
-  return lower.includes(".png") || lower.includes(".jpg") || lower.includes(".jpeg") || lower.includes(".webp") || lower.includes(".gif") || lower.includes(".avif") || lower.includes(".heic") || lower.includes(".heif")
+  return lower.includes(".png") || lower.includes(".jpg") || lower.includes(".jpeg") || lower.includes(".webp") || lower.includes(".gif") || lower.includes(".svg") || lower.includes(".avif") || lower.includes(".heic") || lower.includes(".heif")
 }
 
 function hasCriticOutput(outputData: Job["output_data"]): boolean {

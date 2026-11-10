@@ -940,7 +940,8 @@ organization, adding people, archiving a class — are documented in
 
 `POST /v1/generate-image`, `/v1/image-to-image`, `/v1/edit-image`,
 `/v1/text-to-video` and `/v1/generate-video` accept a single, model-agnostic
-vocabulary for `aspectRatio`, `resolution` and `quality` (and `background` on the
+vocabulary for `aspectRatio`, `resolution` and `quality` (and `background`,
+`outputFormat`, `gifFrames`, `gifFrameDurationMs` and `svgLevel` on the
 image routes) — but no model supports
 all of it. Rather than reject a request (a rejection mid-workflow takes every
 already-generated, already-billed sibling node down with it), the server
@@ -1002,6 +1003,32 @@ changed:
   price by quality, size and the number of input images, not by ratio, and
   render every size at `auto`. Every other model keeps its own default when no
   ratio is named.
+- **`outputFormat`** (`png`, the default, `jpeg`, `webp`, `gif`, `svg`, on the
+  models that list `outputFormats`) is corrected the same way, and so are the
+  levers that follow it:
+  - With `gif` (2 to 16 square frames of 512×512), `aspectRatio` becomes `1:1`
+    and `resolution` is dropped, each reported (an `auto` ratio is not);
+    `gifFrames` (2–16, 9 by default) and `gifFrameDurationMs` (20–2000 ms in
+    steps of 10, 200 by default) are moved inside their range and onto the
+    step, reported, and recorded on the job when not named.
+  - With `svg`, `svgLevel` (`standard`, the default, `detailed`, `max`) is
+    snapped the same way, and a `background` other than `auto` becomes `auto`
+    (an SVG takes no background setting).
+  - A `transparent` background is kept only with `png` and `webp`: with `gif`
+    or `jpeg` it becomes `auto`, reported, and the size is not moved to 1K.
+  - A format the model does not write moves to the model's first; a model with
+    no formats drops the field. A GIF's or an SVG's levers sent with another
+    format are ignored without an adjustment.
+  - **A mask with `gif` or `svg` is a `400`** (`maskUrl` on either route), before
+    anything is reserved.
+  - The price follows: PNG, JPEG and WebP share one price; a GIF is priced by
+    quality and band of frames (2–8, 9–12, 13–16) and an SVG as the PNG at its
+    size plus its level ([Generate Image › Formats](./nodes/ai-image/generate-image.md#formats-png-jpeg-webp-gif-and-svg)).
+  - The job's `output_data` names the stored file's type (`imageMimeType`:
+    `image/jpeg`, `image/webp`, `image/gif`, `image/svg+xml`), its `width` and
+    `height`, and for a GIF or an SVG a PNG still (`thumbnailUrl`). An SVG is
+    sanitized before it is stored; one that cannot be read safely fails the job,
+    refunded.
 - The per-model option lists are in `GET /v1/models`; a workflow saved through
   the API or MCP is corrected the same way at write time — except `auto` on a
   generate-image, image-to-image, modify-image or edit-image node, which is
@@ -2427,7 +2454,7 @@ caches the list for the five minutes may still name one. Returns
 `{ sections, recommendations, totalModels }`: models grouped by kind
 (`image` / `video` / `audio`) and vendor family, each with capability
 sheets (`modes`, `features`, `aspectRatios`, `resolutions`, `qualities`,
-`backgrounds`, `durations`, and the size rules below),
+`backgrounds`, `durations`, the size rules and the output formats below),
 per-variant credit `pricing` — the credits a run is charged, the price
 `GET /v1/credits/model-cost` returns for that variant (Cloud only — like
 `creditCost` on `/v1/nodes`, editions without a credit system omit it), compact
@@ -2478,6 +2505,28 @@ the ratio is listed there, else `resolutions`. GPT Image 2 (`gpt-image-2` and
 `gpt-image-2-i2i`) lists no `resolutionsByAspectRatio`: it renders every ratio
 it offers, `auto` and 1:1 included, at 1K, 2K and 4K. GPT Image 2.6 Flare and
 Sunburst list `transparentResolution: "1K"` and no `resolutionsByAspectRatio`.
+
+A model that writes more than one kind of file lists them (absent on every
+other model, and on an older server):
+
+| Field | Type | Meaning |
+|---|---|---|
+| `outputFormats` | string[] | The files the model writes (`png`, `jpeg`, `webp`, `gif`, `svg`), its default first: the values `outputFormat` takes. |
+| `gifFrameSize` | number | With `gif` listed: the pixel size of every frame (square). A GIF ignores `aspectRatio` and `resolution`. |
+| `gifFrames` | `{ min, max, default, values? }` | With `gif` listed: the frames `gifFrames` takes, a whole number from `min` to `max`, or one of `values` where the model takes only some. |
+| `gifFrameDurationMs` | `{ min, max, step, default }` | With `gif` listed: how long each frame shows, in ms. |
+| `svgLevels` | string[] | With `svg` listed: the levels of detail `svgLevel` takes, the default first. |
+
+```json
+{
+  "id": "gpt-image-2-6-flare",
+  "outputFormats": ["png", "jpeg", "webp", "gif", "svg"],
+  "gifFrameSize": 512,
+  "gifFrames": { "min": 2, "max": 16, "default": 9 },
+  "gifFrameDurationMs": { "min": 20, "max": 2000, "step": 10, "default": 200 },
+  "svgLevels": ["standard", "detailed", "max"]
+}
+```
 
 `GET /v1/model-makers` returns only the makers, for an app that draws marks
 and does not need the catalog: `{ makers: [{ id, name, logoUrl }] }`, every

@@ -26,8 +26,31 @@ export const TEXT_TO_IMAGE_MODEL_OF_SIBLING: Readonly<Record<string, string>> = 
   Object.entries(T2I_TO_I2I_VARIANT).map(([textToImage, sibling]) => [sibling, textToImage]),
 )
 
+/**
+ * The output format's provider params, in the provider's own spelling: nothing
+ * for PNG (what every image model writes when none is named, so a PNG request
+ * is sent exactly as before), the format for any other, and a GIF's frames and
+ * speed or an SVG's level only with that format. The provider maps the level to
+ * its own setting and sends only what the model's schema takes.
+ */
+export function outputFormatParams(levers: {
+  outputFormat?: string
+  gifFrames?: number
+  gifFrameDurationMs?: number
+  svgLevel?: string
+}): Record<string, unknown> {
+  const { outputFormat } = levers
+  if (!outputFormat || outputFormat === "png") return {}
+  return {
+    output_format: outputFormat,
+    ...(outputFormat === "gif" && levers.gifFrames != null && { frame_count: levers.gifFrames }),
+    ...(outputFormat === "gif" && levers.gifFrameDurationMs != null && { frame_duration_ms: levers.gifFrameDurationMs }),
+    ...(outputFormat === "svg" && levers.svgLevel && { svg_level: levers.svgLevel }),
+  }
+}
+
 const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, ctx) {
-  const { prompt, referenceImageUrls, provider, model, aspectRatio, resolution, quality, background, negativePrompt, seed, renderingSpeed, styleType, expandPrompt, extraParams: upstreamExtras, baseImageUrl, maskUrl, strength, guidanceScale } = job.data as {
+  const { prompt, referenceImageUrls, provider, model, aspectRatio, resolution, quality, background, outputFormat, gifFrames, gifFrameDurationMs, svgLevel, negativePrompt, seed, renderingSpeed, styleType, expandPrompt, extraParams: upstreamExtras, baseImageUrl, maskUrl, strength, guidanceScale } = job.data as {
     jobId: string
     prompt: string
     referenceImageUrls?: string[]
@@ -42,6 +65,11 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
     resolution?: string
     quality?: string
     background?: string
+    /** The file the run writes, and a GIF's or an SVG's own levers (catalog-snapped at the route / payload builder). */
+    outputFormat?: string
+    gifFrames?: number
+    gifFrameDurationMs?: number
+    svgLevel?: string
     negativePrompt?: string
     seed?: number
     renderingSpeed?: string
@@ -82,6 +110,7 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
     ...(resolution && { resolution }),
     ...(quality && { quality }),
     ...(background && { background }),
+    ...outputFormatParams({ outputFormat, gifFrames, gifFrameDurationMs, svgLevel }),
     ...(negativePrompt && { negative_prompt: negativePrompt }),
     ...(seed != null && { seed }),
     ...(renderingSpeed && { rendering_speed: renderingSpeed }),
@@ -301,7 +330,7 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
 }
 
 const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx) {
-  const { imageUrl, referenceImageUrls, prompt, provider, resolution, quality, background, strength, aspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale, maskUrl, attachToCharacterId, attachToColumn, attachName, description, realLifeRefs } = job.data as {
+  const { imageUrl, referenceImageUrls, prompt, provider, resolution, quality, background, outputFormat, gifFrames, gifFrameDurationMs, svgLevel, strength, aspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale, maskUrl, attachToCharacterId, attachToColumn, attachName, description, realLifeRefs } = job.data as {
     jobId: string
     imageUrl: string
     referenceImageUrls?: string[]
@@ -310,6 +339,10 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
     resolution?: string
     quality?: string
     background?: string
+    outputFormat?: string
+    gifFrames?: number
+    gifFrameDurationMs?: number
+    svgLevel?: string
     strength?: number
     aspectRatio?: string
     negativePrompt?: string
@@ -340,6 +373,7 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
     ...(resolution && { resolution }),
     ...(quality && { quality }),
     ...(background && { background }),
+    ...outputFormatParams({ outputFormat, gifFrames, gifFrameDurationMs, svgLevel }),
     ...(strength != null && { strength }),
     ...(negativePrompt && { negative_prompt: negativePrompt }),
     ...(seed != null && { seed }),

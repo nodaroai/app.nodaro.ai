@@ -19,6 +19,7 @@ import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import { providerFetch, readUserSafeMessage, type EgressMeta } from "../egress.js"
 import { applyProviderSafety, kieSafetyEntry } from "../../lib/provider-safety.js"
 import { getRuntimeEnv } from "../../lib/runtime-env.js"
+import { aspectRatioRefusalSentence, requestedAspectRatioOf } from "./aspect-ratio-sentence.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 
 const DEBUG = config.NODE_ENV === "development"
@@ -236,7 +237,16 @@ export function createSanitizedError(
   context: string,
   isUpstreamFailure = false,
   contentPolicy = false,
-  opts?: { userSafeMessage?: string | null; upstreamStatus?: UpstreamStatus; inputVideoRefused?: boolean },
+  opts?: {
+    userSafeMessage?: string | null
+    upstreamStatus?: UpstreamStatus
+    inputVideoRefused?: boolean
+    /** The aspect ratio the request chose (`requestedAspectRatioOf`), named in the sentence for a
+     *  ratio the model refused when it is one as a person picks it ("3:2"). `null`: the request is in
+     *  hand and names none; left out: no request in hand, so the ratio the provider's words say it was
+     *  sent is named instead. */
+    requestedAspectRatio?: string | null
+  },
 ): KieError {
   const inputVideoRefused = opts?.inputVideoRefused === true
   // Log the full internal error for debugging (visible in Railway logs)
@@ -247,6 +257,8 @@ export function createSanitizedError(
   // A10: a proxy/decorator may mark a message user-safe STRUCTURALLY (via the
   // egress `observe` hook → readUserSafeMessage). When marked, honor it verbatim
   // — the proxy is the sole author of that text, so it needs no sanitizing.
+  // Our own checks mark their sentence the same way when they write it from
+  // facts in hand (a picture too wide for the model: video.ts).
   // Unmarked (the default: no decorator) sanitizes exactly as before. A blank
   // mark is not a mark.
   const marked = opts?.userSafeMessage
@@ -270,8 +282,9 @@ export function createSanitizedError(
     lowerMsg.includes("aspect ratio")
   ) {
     requestRefused = rejectStatus
-    sanitizedMessage =
-      "Invalid aspect ratio setting. Please try a different option."
+    // The ratio the request chose and the ratios the model takes, or the picture's shape
+    // when the provider's words name a range (aspect-ratio-sentence.ts).
+    sanitizedMessage = aspectRatioRefusalSentence(providerWordsOf(internalMessage), opts?.requestedAspectRatio)
   } else if (
     lowerMsg.includes("timed out") ||
     lowerMsg.includes("timeout")
@@ -495,6 +508,8 @@ export function createUpstreamFailureError(
      *  Never inferred here from `internalMessage`: the caller decides it on the
      *  provider's bare failMsg (pollKieTask does). Default false. */
     inputVideoRefused?: boolean
+    /** The aspect ratio the request chose, for the sentence when the model refused it. */
+    requestedAspectRatio?: string | null
   },
 ): KieError {
   const inputVideoRefused = options?.inputVideoRefused === true
@@ -538,6 +553,7 @@ export function createUpstreamFailureError(
   return createSanitizedError(internalMessage, context, true, contentPolicy, {
     upstreamStatus: options?.upstreamStatus,
     inputVideoRefused,
+    requestedAspectRatio: options?.requestedAspectRatio,
   })
 }
 
@@ -879,7 +895,7 @@ export async function createKieTask(
       "Generation",
       false,
       false,
-      { userSafeMessage: readUserSafeMessage(createResponse), upstreamStatus: createResponse.status },
+      { userSafeMessage: readUserSafeMessage(createResponse), upstreamStatus: createResponse.status, requestedAspectRatio: requestedAspectRatioOf(input) },
     )
   }
 
@@ -906,7 +922,7 @@ export async function createKieTask(
       "Generation",
       false,
       false,
-      { upstreamStatus: createData.code },
+      { upstreamStatus: createData.code, requestedAspectRatio: requestedAspectRatioOf(input) },
     )
   }
 
@@ -930,6 +946,9 @@ export async function createKieTask(
  */
 export interface PollKieTaskOptions {
   onFail?: (failCode: string, failMsg: string) => Error | undefined
+  /** The aspect ratio the task's request chose, for the sentence when the model refuses it.
+   *  A resumed task has no request in hand and leaves it out. */
+  requestedAspectRatio?: string | null
 }
 
 /**
@@ -1074,6 +1093,7 @@ export async function pollKieTask(
           contentPolicyClass: cls,
           upstreamStatus: failCode,
           inputVideoRefused: isInputVideoRefusal(failMsg),
+          requestedAspectRatio: opts?.requestedAspectRatio,
         },
       )
     }
@@ -1147,7 +1167,7 @@ export async function runKieTask(
     dimensions: opts?.dimensions,
   })
   await fireOnTaskCreated(opts, taskId, "[KIE.ai]")
-  return pollKieTask(taskId, maxAttempts, onProgress)
+  return pollKieTask(taskId, maxAttempts, onProgress, { requestedAspectRatio: requestedAspectRatioOf(input) })
 }
 
 /**
@@ -1273,7 +1293,7 @@ export async function runVeoTask(
       "Video generation",
       false,
       false,
-      { upstreamStatus: createResponse.status },
+      { upstreamStatus: createResponse.status, requestedAspectRatio: requestedAspectRatioOf(requestBody) },
     )
   }
 
@@ -1297,7 +1317,7 @@ export async function runVeoTask(
       "Video generation",
       false,
       false,
-      { upstreamStatus: createData.code },
+      { upstreamStatus: createData.code, requestedAspectRatio: requestedAspectRatioOf(requestBody) },
     )
   }
 
@@ -1313,7 +1333,7 @@ export async function runVeoTask(
 
   await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai VEO]")
 
-  const poll = await pollVeoRecordInfo(taskId, "VEO", apiKey)
+  const poll = await pollVeoRecordInfo(taskId, "VEO", apiKey, requestedAspectRatioOf(requestBody))
   return {
     resultJson: { resultUrls: poll.resultUrls },
     costTime: undefined,
@@ -1360,6 +1380,8 @@ async function pollVeoRecordInfo(
   taskId: string,
   label: string,
   apiKey: string,
+  /** The aspect ratio the task's request chose, when it is in hand (`requestedAspectRatioOf`). */
+  requestedAspectRatio?: string | null,
 ): Promise<VeoPollResult> {
   let attempts = 0
   while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
@@ -1442,7 +1464,7 @@ async function pollVeoRecordInfo(
 
     if (successFlag === 2 || successFlag === 3) {
       const errorMsg = detailData.data.errorMessage ?? `Error code: ${detailData.data.errorCode ?? "unknown"}`
-      throw createUpstreamFailureError(`${label} failed: ${errorMsg}`, "Video generation")
+      throw createUpstreamFailureError(`${label} failed: ${errorMsg}`, "Video generation", { requestedAspectRatio })
     }
   }
 

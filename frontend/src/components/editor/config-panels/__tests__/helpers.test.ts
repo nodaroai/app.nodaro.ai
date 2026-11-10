@@ -774,6 +774,29 @@ describe("GPT Image 2.6's estimate", () => {
     expect(buildCreditModelIdentifier("gpt-image-2-6-flare", {}, 1)).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
     expect(buildCreditModelIdentifier("gpt-image-2-6-flare", {})).toBe("gpt-image-2-6-flare:medium:1K")
   })
+
+  it("prices a GIF by its band of frames, an SVG by its level, and PNG / JPEG / WebP alike", () => {
+    // A GIF of the default nine frames, at no size (512 a frame).
+    expect(buildCreditModelIdentifier("gpt-image-2-6-flare", { outputFormat: "gif", resolution: "2K" })).toBe("gpt-image-2-6-flare:medium:gif-9-12")
+    expect(buildCreditModelIdentifier("gpt-image-2-6-flare", { outputFormat: "gif", gifFrames: 14, quality: "high" })).toBe("gpt-image-2-6-flare:high:gif-13-16")
+    expect(buildCreditModelIdentifier("gpt-image-2-6-flare", { outputFormat: "svg", svgLevel: "detailed" })).toBe("gpt-image-2-6-flare:medium:1K:svg-detailed")
+    expect(buildCreditModelIdentifier("gpt-image-2-6-sunburst", { outputFormat: "svg", resolution: "2K" })).toBe("gpt-image-2-6-sunburst:medium:2K:svg-standard")
+    expect(buildCreditModelIdentifier("gpt-image-2-6-flare", { outputFormat: "jpeg" })).toBe("gpt-image-2-6-flare:medium:1K")
+    expect(buildCreditModelIdentifier("gpt-image-2-6-flare", { outputFormat: "webp" })).toBe("gpt-image-2-6-flare:medium:1K")
+    // A GIF's frames kept while another format is chosen do not move the price.
+    expect(buildCreditModelIdentifier("gpt-image-2-6-flare", { outputFormat: "png", gifFrames: 14, svgLevel: "max" })).toBe("gpt-image-2-6-flare:medium:1K")
+  })
+
+  it("an edit's GIF counts its input images too", () => {
+    expect(buildCreditModelIdentifier("gpt-image-2-6-flare", { outputFormat: "gif", gifFrames: 4 }, 2)).toBe("gpt-image-2-6-flare-i2i:medium:gif-2-8:2ref")
+    // An edit id counts the image it edits beside the wired ones (`gptImage26EstimatedImages`).
+    expect(buildCreditModelIdentifier("gpt-image-2-6-flare-i2i", { outputFormat: "svg", svgLevel: "max", resolution: "2K" }, 2)).toBe("gpt-image-2-6-flare-i2i:medium:2K:svg-max:3ref")
+  })
+
+  it("a model not priced by format ignores the levers", () => {
+    expect(buildCreditModelIdentifier("gpt-image-2-6-economy", { outputFormat: "gif", gifFrames: 16 })).toBe(buildCreditModelIdentifier("gpt-image-2-6-economy", {}))
+    expect(buildCreditModelIdentifier("gpt-image-2", { outputFormat: "gif", quality: "high" })).toBe(buildCreditModelIdentifier("gpt-image-2", { quality: "high" }))
+  })
 })
 
 describe("buildCreditModelIdentifier", () => {

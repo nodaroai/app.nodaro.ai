@@ -73,6 +73,21 @@ describe("edit_image becomes the node its provider runs on", () => {
   })
 })
 
+describe("a GIF or SVG call becomes a node that runs the same request", () => {
+  it("generate_image's format and levers land on the Generate Image node and reach its run", () => {
+    const body = { prompt: "a flag", provider: "gpt-image-2-6-flare", outputFormat: "gif", gifFrames: 12, gifFrameDurationMs: 250 }
+    const spec = nodeOf("/v1/generate-image", "generate_image", body)
+    expect(spec.data).toMatchObject({ outputFormat: "gif", gifFrames: 12, gifFrameDurationMs: 250 })
+    expect(run(spec, {}).payload).toMatchObject({ outputFormat: "gif", gifFrames: 12, gifFrameDurationMs: 250 })
+  })
+
+  it("modify_image's SVG level lands on the Modify Image node", () => {
+    const spec = nodeOf("/v1/image-to-image", "modify_image", { imageUrl: IMG, prompt: "as a logo", provider: "gpt-image-2-6-flare-i2i", outputFormat: "svg", svgLevel: "detailed" })
+    expect(spec.data).toMatchObject({ outputFormat: "svg", svgLevel: "detailed" })
+    expect(run(spec, { imageUrl: IMG }).payload).toMatchObject({ outputFormat: "svg", svgLevel: "detailed" })
+  })
+})
+
 describe("image_collage", () => {
   it("wires the images in order and asks for the call's layout", () => {
     const body = { imageUrls: [IMG, IMG2, IMG3], layout: "grid", resolution: "2K", aspectRatio: "16:9", gap: 8, backgroundColor: "#000000", numbered: true, badgePosition: "top-right" }

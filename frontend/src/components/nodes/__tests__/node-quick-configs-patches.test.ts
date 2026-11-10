@@ -138,3 +138,32 @@ describe("a reference board's quality on a model that lists Auto first", () => {
   })
 })
 
+
+describe("Generate Image's ratio and size while the node writes a GIF (square, 512 a frame)", () => {
+  const aspect = control("generate-image", "aspectRatio")
+  const size = control("generate-image", "resolution")
+  const gif = { provider: "gpt-image-2-6-flare", outputFormat: "gif", aspectRatio: "16:9", resolution: "2K" }
+
+  it("both hide, and keep what the node stores for another format", () => {
+    expect(resolveQuickConfigOptions(aspect, gif)).toEqual([])
+    expect(resolveQuickConfigOptions(size, gif)).toEqual([])
+    expect(quickConfigSnapPatch(aspect, "16:9", [], gif)).toBeUndefined()
+    expect(quickConfigSnapPatch(size, "2K", [], gif)).toBeUndefined()
+  })
+
+  it("both show again with any other format", () => {
+    for (const outputFormat of [undefined, "png", "svg"]) {
+      const data = { ...gif, outputFormat }
+      expect(resolveQuickConfigOptions(aspect, data).length).toBeGreaterThan(0)
+      expect(resolveQuickConfigOptions(size, data).map((o) => o.value)).toEqual(["1K", "2K", "4K"])
+    }
+  })
+
+  it("a model with no size setting still clears a stale size", () => {
+    const data = { provider: "nano-banana", resolution: "2K" }
+    expect(resolveQuickConfigOptions(size, data)).toEqual([])
+    expect(quickConfigSnapPatch(size, "2K", [], data)).toEqual({ resolution: undefined })
+    // A GIF named on a model that writes none is no GIF: its size is cleared as any other.
+    expect(quickConfigSnapPatch(size, "2K", [], { ...data, outputFormat: "gif" })).toEqual({ resolution: undefined })
+  })
+})

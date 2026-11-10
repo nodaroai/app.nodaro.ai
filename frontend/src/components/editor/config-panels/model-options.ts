@@ -2,7 +2,7 @@ import { hasCredits } from "@/lib/edition"
 import { creditUnits, creditUnitLabel, formatCreditUnits } from "@/lib/credit-units"
 import { isModelUnavailable } from "@/lib/surface-availability"
 import { isVariablePricedModel, type CreditRange } from "@/lib/model-credit-range"
-import { VIDEO_DURATION_AUTO, aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, backgroundOptionsByKind, getModel, durationsByMode, modelsWithFeature, isFlux2Model, resolutionsAtAspectRatio, type LabeledOption } from "@nodaro/shared/model-catalog"
+import { VIDEO_DURATION_AUTO, aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, backgroundOptionsByKind, outputFormatOptionsByKind, svgLevelOptionsByKind, normalizeModelInput, TRANSPARENT_OUTPUT_FORMATS, getModel, durationsByMode, modelsWithFeature, isFlux2Model, resolutionsAtAspectRatio, type LabeledOption } from "@nodaro/shared/model-catalog"
 import {
   supportsAutoVideoDuration,
   type ImageToVideoProvider,
@@ -435,6 +435,100 @@ export function firstFixedQuality(options: readonly LabeledOption[] | undefined)
 /** The one size this model renders a transparent background at, where it is limited. */
 export function transparentResolutionFor(provider: string): string | undefined {
   return getModel(provider)?.transparentResolution
+}
+
+// Image output formats — derived from MODEL_CATALOG, the model's default
+// first. No entry: the model writes one format, not a setting.
+export const IMAGE_OUTPUT_FORMAT_OPTIONS: Record<string, readonly LabeledOption[]> =
+  outputFormatOptionsByKind("image")
+
+// An SVG's levels of detail, per model that writes SVG — the first the default.
+export const IMAGE_SVG_LEVEL_OPTIONS: Record<string, readonly LabeledOption[]> =
+  svgLevelOptionsByKind("image")
+
+/** How many frames a GIF of this model can have (`values`: only those), where it writes GIF. */
+export function gifFramesFor(provider: string): { readonly min: number; readonly max: number; readonly default: number; readonly values?: readonly number[] } | undefined {
+  return getModel(provider)?.gifFrames
+}
+
+/** How long each frame of this model's GIF shows (ms), where it writes GIF. */
+export function gifFrameDurationFor(provider: string): { readonly min: number; readonly max: number; readonly step: number; readonly default: number } | undefined {
+  return getModel(provider)?.gifFrameDurationMs
+}
+
+/**
+ * The file a node writes on `provider`: its `outputFormat` when the model
+ * writes it, else the model's default (its first). Undefined when the model has
+ * no format setting (it writes its one format).
+ */
+export function outputFormatOf(provider: string, outputFormat: unknown): string | undefined {
+  const options = IMAGE_OUTPUT_FORMAT_OPTIONS[provider]
+  if (!options) return undefined
+  return options.find((o) => o.value === outputFormat)?.value ?? options[0]?.value
+}
+
+/**
+ * Whether the node writes a GIF on `provider`. A GIF is square
+ * (`IMAGE_GIF_FRAME_SIZE` a frame): its aspect ratio and size do not apply, so
+ * the panels and the run strip hide both while it is chosen, keeping what the
+ * node stores for another format.
+ */
+export function writesGif(provider: string | undefined, outputFormat: unknown): boolean {
+  return provider !== undefined && outputFormatOf(provider, outputFormat) === "gif"
+}
+
+/** Whether a file of this format keeps a transparent background (no format named: the model's own, which does). */
+export function keepsTransparentBackground(format: string | undefined): boolean {
+  return format === undefined || TRANSPARENT_OUTPUT_FORMATS.includes(format)
+}
+
+/** The output-format levers of an image node, and the background they constrain. */
+export interface ImageFormatNodeLevers {
+  outputFormat?: string
+  gifFrames?: number
+  gifFrameDurationMs?: number
+  svgLevel?: string
+  background?: string
+}
+
+/**
+ * The config panels' fail-safe for the output format (Provider Enum Sync step
+ * 12b), as a patch for `data` — the node's data as the panel's other snaps
+ * left it. `provider` is the node's one model; undefined when several are
+ * selected, where no format is offered.
+ *  - a format the model does not write is cleared (the model's default runs);
+ *  - a GIF's frames and speed, and an SVG's level, are kept on the node while
+ *    another format is chosen (the run ignores them), and moved into the
+ *    model's range only while that format is the one written — through the
+ *    catalog's own snap, so Economy's 4 / 9 / 16 frames are never re-derived;
+ *  - a transparent background becomes `auto` with a format that cannot keep it.
+ * Never writes a lever the node does not hold.
+ */
+export function imageFormatFailSafe(provider: string | undefined, data: Readonly<ImageFormatNodeLevers>): Partial<ImageFormatNodeLevers> {
+  const updates: Partial<ImageFormatNodeLevers> = {}
+  const options = provider ? IMAGE_OUTPUT_FORMAT_OPTIONS[provider] : undefined
+  let format = data.outputFormat
+  if (format !== undefined && !options?.some((o) => o.value === format)) {
+    updates.outputFormat = undefined
+    format = undefined
+  }
+  if (provider && format === "gif") {
+    const frames = typeof data.gifFrames === "number" ? data.gifFrames : undefined
+    const ms = typeof data.gifFrameDurationMs === "number" ? data.gifFrameDurationMs : undefined
+    if (frames !== undefined || ms !== undefined) {
+      const snapped = normalizeModelInput(provider, { outputFormat: "gif", gifFrames: frames, gifFrameDurationMs: ms })
+      if (frames !== undefined && snapped.gifFrames !== frames) updates.gifFrames = snapped.gifFrames
+      if (ms !== undefined && snapped.gifFrameDurationMs !== ms) updates.gifFrameDurationMs = snapped.gifFrameDurationMs
+    }
+  }
+  if (provider && format === "svg" && typeof data.svgLevel === "string") {
+    const level = normalizeModelInput(provider, { outputFormat: "svg", svgLevel: data.svgLevel }).svgLevel
+    if (level !== data.svgLevel) updates.svgLevel = level
+  }
+  if (data.background === "transparent" && !keepsTransparentBackground(format)) {
+    updates.background = "auto"
+  }
+  return updates
 }
 
 /**

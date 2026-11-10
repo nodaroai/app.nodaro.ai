@@ -8,7 +8,7 @@ import { supabase } from "../../supabase.js"
 import { listUsageTransactions, USAGE_TRANSACTIONS_PAGE_MAX as USAGE_PAGE_MAX } from "../../usage-transactions.js"
 import { CreditsService } from "../../../ee/billing/credits.js"
 import { deploymentPayerActive, deploymentPayerId } from "../../deployment-payer.js"
-import { MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByKindAndFamily, modelMakerOf, type ModelCatalogEntry, type ModelKind, type ModelMakerId, type ModelMode } from "@nodaro/shared/model-catalog"
+import { IMAGE_GIF_FRAME_SIZE, MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByKindAndFamily, modelMakerOf, type ModelCatalogEntry, type ModelKind, type ModelMakerId, type ModelMode } from "@nodaro/shared/model-catalog"
 import { SPEECH_UNIT_CREDIT_SUFFIX } from "@nodaro/shared/credits"
 import { isModelDenied } from "../../surface-deny.js"
 import { loadChargedPrices, type ChargedPrices } from "../../pricing/charged-prices.js"
@@ -107,6 +107,18 @@ export function projectModel(m: ModelCatalogEntry, prices: ChargedPrices, opts: 
   // or drops the setting otherwise, and reports it).
   if (m.transparentResolution !== undefined) out.transparentResolution = m.transparentResolution
   if (m.backgroundOnlyAtTransparentResolution) out.backgroundOnlyAtTransparentResolution = true
+  // The files the model writes (the first is its default) and, when it writes
+  // them, a GIF's frames and frame time and an SVG's levels of detail. A GIF
+  // is square, `gifFrameSize` a frame, whatever ratio or size is asked.
+  if (m.outputFormats && m.outputFormats.length > 1) {
+    out.outputFormats = m.outputFormats
+    if (m.outputFormats.includes("gif")) {
+      out.gifFrameSize = IMAGE_GIF_FRAME_SIZE
+      if (m.gifFrames) out.gifFrames = { ...m.gifFrames, ...(m.gifFrames.values && { values: [...m.gifFrames.values] }) }
+      if (m.gifFrameDurationMs) out.gifFrameDurationMs = { ...m.gifFrameDurationMs }
+    }
+    if (m.outputFormats.includes("svg") && m.svgLevels?.length) out.svgLevels = m.svgLevels
+  }
   if (m.durations?.length) out.durations = m.durations
   // What an unset `duration` renders AND is charged at (the catalog funnel).
   if (m.defaultDuration !== undefined) out.defaultDuration = m.defaultDuration

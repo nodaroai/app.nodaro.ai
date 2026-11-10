@@ -1,5 +1,22 @@
 # @nodaro/sdk
 
+## 2.68.0
+
+### Minor Changes
+
+- 6206af5: `GenerateImageParams` and `ImageToImageParams` type `outputFormat` (`png`, `jpeg`, `webp`, `gif`, `svg`), `gifFrames`, `gifFrameDurationMs` and `svgLevel`, on the models that list them (GPT Image 2.6 Flare and Sunburst). `ModelSummary` carries `outputFormats`, `gifFrameSize`, `gifFrames`, `gifFrameDurationMs` and `svgLevels`.
+- ec3c7fd: A failed job now tells its owner what the provider itself said. `Job.error_detail` and `JobStatusResult.error_detail` carry the provider's own words for the failure (links cut to their host, secrets removed; `null` when the failure had no provider text), beside the platform's `error_message`; a failed node of a workflow run carries them as `errorDetail` on its `NodeExecutionStateWire` entry. Display them, and keep branching on `error_hint` / `errorCode`. `EXECUTION_DATA_KEYS` lists `errorDetail` as run state, so a saved preset never captures it.
+- 712a587: `SurfaceAvailability` (`client.surface.availability()`) types `models.restricted`, which `GET /v1/surface/availability` now serves: `true` when the deployment restricts models (a profile `models.allow` / `models.deny`, or an Admin → Availability models override that leaves a model off). A model an admin switched off is listed in `models.denied` without being a restriction. The field is optional: a server that predates it omits it, which reads as `false`.
+
+### Patch Changes
+
+- Updated dependencies [6206af5]
+- Updated dependencies [ec3c7fd]
+- Updated dependencies [c32360a]
+- Updated dependencies [712a587]
+  - @nodaro/shared@3.60.0
+  - @nodaro/prompts@1.53.2
+
 ## 2.67.0
 
 ### Minor Changes

@@ -103,6 +103,7 @@ export function imageCreditIdentifierFor(
   const resolution = body?.resolution
   const renderingSpeed = body?.renderingSpeed
   const background = body?.background
+  const { outputFormat, gifFrames, gifFrameDurationMs, svgLevel } = body ?? {}
 
   // WI-1b: in structured mode, `connectedReferences` expand to URLs and are
   // gated per-provider INSIDE `buildImagePrompt` — so the billed reference
@@ -145,6 +146,10 @@ export function imageCreditIdentifierFor(
     resolution,
     renderingSpeed,
     background,
+    outputFormat,
+    gifFrames,
+    gifFrameDurationMs,
+    svgLevel,
     refCount,
     swapToI2i: true,
   }).identifier

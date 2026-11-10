@@ -47,6 +47,7 @@ import {
   IMAGE_RESOLUTION_OPTIONS,
   IMAGE_QUALITY_OPTIONS,
   defaultQualityFor,
+  writesGif,
   REFERENCE_BOARD_PROVIDER_OPTIONS,
   VIDEO_GEN_MODELS,
   GVP_PROVIDERS,
@@ -181,8 +182,10 @@ export interface QuickConfigControl {
    *  in image-source mode but the data type still requires it, and billing pins
    *  to a neutral rate regardless). Default behaviour (flag absent) clears the
    *  field on hide — the provider-sync trap fix for enum fields like
-   *  v2v-resolution. */
-  readonly preserveOnHide?: boolean
+   *  v2v-resolution. A function decides per node: a hide that is a mode keeps
+   *  the value, a hide because the model has no such lever clears it
+   *  (generate-image's size: kept while the node writes a GIF). */
+  readonly preserveOnHide?: boolean | ((data: Record<string, unknown>) => boolean)
   /** Write the chosen value as a boolean (`"true"`/`"false"` option values). For
    *  boolean node-data fields surfaced as a 2-option dropdown (suno `instrumental`).
    *  Mutually exclusive with `numeric`. */
@@ -348,7 +351,8 @@ export function quickConfigSnapPatch(
   // purpose: a one-model list whose model is hidden is empty.
   if (listsModels(control) && allQuickConfigOptions(control, data, ctx).some((o) => o.value === value)) return undefined
   if (options.length === 0) {
-    return control.preserveOnHide ? undefined : { [control.field]: undefined }
+    const preserve = typeof control.preserveOnHide === "function" ? control.preserveOnHide(data) : control.preserveOnHide === true
+    return preserve ? undefined : { [control.field]: undefined }
   }
   if (options.some((o) => o.value === value) || isInQuickConfigRange(control, value)) return undefined
   if (quickConfigRetainedOption(control, value)) return undefined
@@ -805,6 +809,9 @@ const contentModelControl = (feature: "content-recipe" | "content-ideas"): Quick
   ...llmModelControl(),
   defaultValue: LLM_FEATURE_DEFAULTS[feature],
 })
+/** Generate Image's model, as its strip reads it (the role default when unset). */
+const generateImageProviderOf = (data: Record<string, unknown>): string =>
+  typeof data.provider === "string" ? data.provider : IMAGE_MODEL_ROLE_DEFAULTS.general
 /** Reference Board: model, then the aspect / resolution / quality the chosen
  *  model takes — the SAME per-model sources its config panel reads, so a model
  *  switch snaps a value the new model would reject. */
@@ -932,13 +939,15 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       ariaLabel: tx("node.aspect"),
       icon: Ratio,
       // Auto (keep a wired photo's shape) on every model; a stale ratio snaps to
-      // the model's first LISTED ratio, never to that Auto tile.
+      // the model's first LISTED ratio, never to that Auto tile. A GIF is
+      // square: hidden while the node writes one, its ratio kept for another format.
       options: (data) => {
-        const provider = typeof data.provider === "string" ? data.provider : IMAGE_MODEL_ROLE_DEFAULTS.general
-        return getSourcePhotoAspectRatios(provider)
+        const provider = generateImageProviderOf(data)
+        return writesGif(provider, data.outputFormat) ? [] : getSourcePhotoAspectRatios(provider)
       },
+      preserveOnHide: (data) => writesGif(generateImageProviderOf(data), data.outputFormat),
       snap: (_value, data) => {
-        const provider = typeof data.provider === "string" ? data.provider : IMAGE_MODEL_ROLE_DEFAULTS.general
+        const provider = generateImageProviderOf(data)
         return getAspectRatiosForModel(provider)[0]?.value ?? "1:1"
       },
     },
@@ -946,10 +955,13 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       field: "resolution",
       ariaLabel: tx("field.resolution"),
       icon: Maximize2,
+      // Hidden (and kept) while the node writes a GIF, 512 a frame; cleared on
+      // a model with no size setting.
       options: (data) => {
-        const provider = typeof data.provider === "string" ? data.provider : IMAGE_MODEL_ROLE_DEFAULTS.general
-        return IMAGE_RESOLUTION_OPTIONS[provider] ?? []
+        const provider = generateImageProviderOf(data)
+        return writesGif(provider, data.outputFormat) ? [] : (IMAGE_RESOLUTION_OPTIONS[provider] ?? [])
       },
+      preserveOnHide: (data) => writesGif(generateImageProviderOf(data), data.outputFormat),
     },
     {
       field: "repeatCount",

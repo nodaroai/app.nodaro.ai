@@ -985,6 +985,9 @@ const OPTION_LABELS_HE: Record<string, string> = {
   "Max": "מקסימלי",
   "Opaque": "אטום",
   "Transparent": "שקוף",
+  "SVG Standard": "SVG רגיל",
+  "SVG Detailed": "SVG מפורט",
+  "SVG Max": "SVG מקסימלי",
   "Medium (Balanced)": "בינוני (מאוזן)",
   "High (Detailed)": "גבוה (מפורט)",
   "Turbo (fast)": "טורבו (מהיר)",
@@ -1081,6 +1084,9 @@ const OPTION_LABELS_HE: Record<string, string> = {
 
 const OPTION_QUALIFIERS_HE: Record<string, string> = {
   "Landscape": "לרוחב",
+  // The output formats: "GIF (animated)", "SVG (vector)".
+  "Animated": "מונפש",
+  "Vector": "וקטורי",
   "Portrait": "לאורך",
   "Square": "ריבוע",
   "Wide": "רחב",

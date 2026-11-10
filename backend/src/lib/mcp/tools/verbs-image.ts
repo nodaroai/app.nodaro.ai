@@ -29,6 +29,7 @@ import {
   tooManyImageModelsResult,
   unknownImageModelsResult,
 } from "./_image-batch.js"
+import { imageFormatArgs, imageFormatBody } from "./_image-format-args.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { defaultImageModel, isAutoAspectToken, modelIdsByKindMode } from "@nodaro/shared/model-catalog"
 import { IMAGE_BACKGROUND_VALUES, IMAGE_QUALITY_VALUES, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, requestImageLimit } from "@nodaro/shared/models"
@@ -130,6 +131,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             .enum(IMAGE_BACKGROUND_VALUES)
             .optional()
             .describe("Models that list it. Transparent renders at 1K."),
+          ...imageFormatArgs,
           aspect_ratio: z
             .string()
             .optional()
@@ -379,6 +381,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           resolution,
           quality,
           ...(effective.background ? { background: effective.background } : {}),
+          ...imageFormatBody(effective),
           negativePrompt: effective.negative_prompt as string | undefined,
           ...(refUrls.length ? { referenceImageUrls: refUrls } : {}),
           ...(args.connected_references ? { connectedReferences: args.connected_references } : {}),
@@ -451,6 +454,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           resolution: z.string().optional().describe("Resolution: falls back to nearest supported."),
           quality: z.string().optional().describe("Quality by model (list_models). Auto bills real cost, up to Max."),
           background: z.enum(IMAGE_BACKGROUND_VALUES).optional().describe("Models that list it. Transparent renders at 1K."),
+          ...imageFormatArgs,
           aspect_ratio: z.string().optional().describe("Aspect ratio. 'auto' keeps the photo's shape on every model. Variations and unsupported values fall back."),
           negative_prompt: z.string().max(2000).optional(),
           structured: StructuredFields.optional(),
@@ -568,6 +572,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           resolution,
           quality,
           ...(args.background ? { background: args.background } : {}),
+          ...imageFormatBody(args),
           negativePrompt: args.negative_prompt,
           mcp_client: session.clientName,
           userId: session.userId,
@@ -696,6 +701,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         negative_prompt: z.string().max(5000).optional(),
         seed: z.number().int().min(0).optional(),
         mask_url: z.string().url().optional().describe("Inpainting mask image URL (white=edit, black=keep)."),
+        ...imageFormatArgs,
       },
       outputSchema: {
         jobId: z.string(),
@@ -752,6 +758,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         ...(args.negative_prompt ? { negativePrompt: args.negative_prompt } : {}),
         ...(args.seed !== undefined ? { seed: args.seed } : {}),
         ...(args.mask_url ? { maskUrl: args.mask_url } : {}),
+        ...imageFormatBody(args),
         mcp_client: session.clientName,
         userId: session.userId,
       }

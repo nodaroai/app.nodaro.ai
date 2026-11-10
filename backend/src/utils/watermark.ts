@@ -3,7 +3,7 @@ import { runFfmpeg, BROWSER_SAFE_VIDEO_ARGS } from "../providers/video/ffmpeg-ut
 
 import { runFfmpegCancellable } from "../providers/video/ffmpeg-cancellable.js"
 
-const WATERMARK_TEXT = "Nodaro.ai"
+export const WATERMARK_TEXT = "Nodaro.ai"
 
 /**
  * Composite a semi-transparent "Nodaro.ai" text watermark
@@ -28,6 +28,36 @@ export async function applyImageWatermark(buffer: Buffer): Promise<Buffer> {
 
   return sharp(buffer)
     .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
+    .toBuffer()
+}
+
+/**
+ * The same watermark on EVERY frame of an animated GIF, which stays an
+ * animated GIF: its frames, their timing and its loop are kept. sharp reads an
+ * animation as its frames stacked one under another, so the mark is drawn for
+ * one frame and tiled down the stack.
+ */
+export async function applyAnimatedGifWatermark(buffer: Buffer): Promise<Buffer> {
+  const metadata = await sharp(buffer, { animated: true }).metadata()
+  const width = metadata.width ?? 512
+  const frameHeight = metadata.pageHeight ?? metadata.height ?? 512
+  const fontSize = Math.max(16, Math.round(width * 0.025))
+  const mark = `<svg width="${width}" height="${frameHeight}">
+    <text
+      x="${width - 20}"
+      y="${frameHeight - 20}"
+      text-anchor="end"
+      font-family="sans-serif"
+      font-size="${fontSize}"
+      fill="rgba(255,255,255,0.5)"
+    >${WATERMARK_TEXT}</text>
+  </svg>`
+  return sharp(buffer, { animated: true })
+    .composite([{ input: Buffer.from(mark), tile: true, gravity: "northwest" }])
+    .gif({
+      ...(metadata.loop !== undefined && { loop: metadata.loop }),
+      ...(metadata.delay !== undefined && { delay: metadata.delay }),
+    })
     .toBuffer()
 }
 

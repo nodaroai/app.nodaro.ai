@@ -112,6 +112,12 @@ export async function imageProxyRoutes(app: FastifyInstance) {
     const disposition = isDownload
       ? { "Content-Disposition": `attachment; filename="${sanitizeFilename(url)}"` }
       : {}
+    // An SVG is a document that can carry script, and this answer comes from
+    // the app's own origin: opened directly it would run there. Sandboxed and
+    // never sniffed, it still draws in an <img> (an image ignores both).
+    const svgHeaders = /^image\/svg\+xml\b/i.test(contentType)
+      ? { "Content-Security-Policy": "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'", "X-Content-Type-Options": "nosniff" }
+      : {}
 
     // Stream response directly without buffering in memory. A ranged video
     // reply keeps the upstream's 206 + Content-Range so the player can seek;
@@ -127,6 +133,7 @@ export async function imageProxyRoutes(app: FastifyInstance) {
       ...(contentLength ? { "Content-Length": contentLength } : {}),
       ...rangeHeaders,
       ...disposition,
+      ...svgHeaders,
     })
     const nodeStream = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
     nodeStream.pipe(reply.raw)

@@ -514,7 +514,7 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 |--------|-------|--------|
 | GPT Image 1.5 (T2I + I2I) | `quality` | `"medium"`, `"high"` |
 | GPT Image 2 (T2I + I2I) | Not supported (uses `resolution` instead) | — |
-| GPT Image 2.6 Flare, Sunburst (T2I + I2I) | `quality` | `"low"`, `"medium"` (default), `"high"` offered (schema also has `xhigh`, `max`, `auto`, not offered). Billed by tokens, with `resolution` beside it |
+| GPT Image 2.6 Flare, Sunburst (T2I + I2I) | `quality` | `"auto"`, `"low"`, `"medium"` (default), `"high"`, `"xhigh"`, `"max"`. Billed by tokens, with `resolution` beside it (a GIF: its band of frames instead) |
 | Seedream 4.5 (T2I + Edit) | `quality` | `"basic"` (2K), `"high"` (4K) |
 | Seedream 5 Lite (T2I + I2I) | `quality` | `"basic"` (2K), `"high"` (4K) |
 | Seedream 5 Pro (T2I + I2I) | `quality` | `"basic"` (1K), `"high"` (2K) — note: one tier LOWER than Lite/4.5 |
@@ -591,9 +591,36 @@ Six SKUs on the standard `createTask` lane. Flare and Sunburst are billed by
 - `moderation` (`auto`, `low`; Flare and Sunburst only) is not sent, so KIE's
   default `low` applies. It is declared as a `choice` lever so the Admin → Provider
   Safety page can tighten it to `auto`.
-- Not wired yet: `mask_url`, `markup`, `output_format` (GIF and SVG, whose fields
-  are `frame_count`, `frame_duration_ms`, `size` and `svg.model`), `complexity`,
-  `output_compression`.
+- **`output_format`** (`png`, `jpeg`, `webp`, `gif`, `svg`; Economy `png`/`gif` from a
+  prompt, `png` from an edit). The field list is per format (`inputFieldsByFormat`,
+  read off the FINAL config after the t2i → i2i swap), and `applyOutputFormat`
+  (`image.ts`) shapes the levers:
+  - PNG sends no `output_format` at all, so a PNG request is what it was before.
+  - JPEG and WebP add `output_format` only; `output_compression` is never sent.
+  - GIF: `frame_count` (2–16, KIE's default 9) and `frame_duration_ms` (20–2000,
+    step 10, default 200); no `aspect_ratio`, `resolution` or `mask_url`. The
+    text-to-image schema has `size` (per-frame size): always `512x512`. **The
+    image-to-image schema has no `size` field** (`additionalProperties: false`),
+    so an edit's GIF sends none and its frame size is read from the stored file.
+    KIE's docs say transparent works with GIF too; the platform moves it to `auto`
+    (a decision, `TRANSPARENT_OUTPUT_FORMATS` = png, webp).
+  - SVG: `svg: { model }`, the writer per level: Standard `gpt-5.6-luna`, Detailed
+    `gpt-5.6-terra`, Max `gpt-6-sol` (`GPT_IMAGE_2_6_SVG_AUTHOR_MODELS`); no GIF
+    fields, no `background`, no `mask_url`. `aspect_ratio` + `resolution` size it as
+    for PNG.
+  - Economy's GIF takes `frame_count` as a STRING enum (`auto`, `4`, `9`, `16`,
+    `25`, `36`, `64`; `gifFrameCountAsString`), the catalog offers 4, 9 and 16, and
+    takes no ratio, size or quality. Economy's GIF is UNMEASURED and priced at its
+    flat row: measure it before Economy is switched back on.
+  - Prices: a GIF by quality and band of frames (2–8, 9–12, 13–16; measured
+    2026-11-10, independent of content), an SVG as the PNG row plus a per-level
+    amount (the busiest drawing measured); `gpt-image-2-6-pricing.ts`. PNG, JPEG
+    and WebP share the PNG rows.
+  - The result is stored as its bytes are (`lib/image-output-store.ts`): `.jpg`,
+    `.webp`, `.gif`, `.svg`, an SVG sanitized first (`lib/svg-sanitize.ts`; a
+    refused one fails the job, refunded), a PNG still of a GIF or SVG as
+    `thumbnailUrl`. A mask with GIF or SVG is a 400 at the routes.
+- Not wired yet: `mask_url`, `markup`, `complexity`, `output_compression`.
 - `prompt` is documented up to 32,000 characters on Flare and Sunburst; the routes
   stop at `PROMPT_HARD_CEILING` (30,000). Economy documents 20,000.
 

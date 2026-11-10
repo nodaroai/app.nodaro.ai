@@ -74,6 +74,39 @@ export type ImageQuality = typeof IMAGE_QUALITY_VALUES[number]
 export const IMAGE_BACKGROUND_VALUES = ["auto", "opaque", "transparent"] as const
 export type ImageBackground = typeof IMAGE_BACKGROUND_VALUES[number]
 
+/**
+ * The `outputFormat` vocabulary of the same two routes: the file a run writes
+ * (vocabulary bound; the catalog snap gates per model, `outputFormats`). No
+ * value is PNG. `gif` is an animation of square frames, `svg` a vector drawing.
+ */
+export const IMAGE_OUTPUT_FORMAT_VALUES = ["png", "jpeg", "webp", "gif", "svg"] as const
+export type ImageOutputFormat = typeof IMAGE_OUTPUT_FORMAT_VALUES[number]
+
+/** The `svgLevel` vocabulary: how much detail an SVG is drawn with, Standard to Max. */
+export const IMAGE_SVG_LEVEL_VALUES = ["standard", "detailed", "max"] as const
+export type ImageSvgLevel = typeof IMAGE_SVG_LEVEL_VALUES[number]
+
+/** The pixel size of every frame of a GIF the platform asks for (square). Declared beside the catalog rule that reads it. */
+export { IMAGE_GIF_FRAME_SIZE } from "./model-catalog.js"
+
+/** The MIME type of each output format, as it is stored and served. */
+export const IMAGE_OUTPUT_FORMAT_MIME: Readonly<Record<ImageOutputFormat, string>> = {
+  png: "image/png",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+}
+
+/** The file extension each output format is stored under. */
+export const IMAGE_OUTPUT_FORMAT_EXT: Readonly<Record<ImageOutputFormat, string>> = {
+  png: "png",
+  jpeg: "jpg",
+  webp: "webp",
+  gif: "gif",
+  svg: "svg",
+}
+
 /** The `renderingSpeed` vocabulary (Ideogram's speed tiers — see {@link RENDERING_SPEED_SUPPORT}). */
 export const IMAGE_RENDERING_SPEED_VALUES = ["TURBO", "BALANCED", "QUALITY"] as const
 export type ImageRenderingSpeed = typeof IMAGE_RENDERING_SPEED_VALUES[number]

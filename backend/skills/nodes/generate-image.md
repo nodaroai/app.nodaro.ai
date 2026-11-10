@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-11-10T16:04:59.250Z
-generated_from: 8b8f6285f
+generated_at: 2026-11-10T19:20:28.607Z
+generated_from: 5b5897436
 ---
 
 # generate-image
@@ -30,6 +30,10 @@ generated_from: 8b8f6285f
 - `resolution?: string`
 - `quality?: string`
 - `background?: string`
+- `outputFormat?: string`
+- `gifFrames?: number`
+- `gifFrameDurationMs?: number`
+- `svgLevel?: string`
 - `seed?: number`
 - `renderingSpeed?: string`
 - `styleType?: string`
@@ -93,6 +97,10 @@ generated_from: 8b8f6285f
 - `resolution`
 - `quality`
 - `background`
+- `output_format`
+- `gif_frames`
+- `gif_frame_duration_ms`
+- `svg_level`
 - `aspect_ratio`
 - `negative_prompt`
 - `reference_image_urls`

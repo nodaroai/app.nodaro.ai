@@ -14,9 +14,9 @@ import type {
 import sharp from "sharp"
 import { KieError, createSanitizedError, runKieTask, type KieResultJson } from "./client.js"
 import { runFluxKontextTask } from "./kontext-client.js"
-import { KIE_IMAGE_MODELS, kieSeedForWire, type KieModelConfig, KIE_CREDIT_USD } from "./models.js"
+import { KIE_IMAGE_MODELS, kieSeedForWire, type KieModelConfig, KIE_CREDIT_USD, GPT_IMAGE_2_6_SVG_AUTHOR_MODELS } from "./models.js"
 import { kieImageCostUsd, kieTaskCreditsConsumed } from "./image-cost.js"
-import { isGptImage26AutoRun } from "@nodaro/shared/model-catalog"
+import { IMAGE_GIF_FRAME_SIZE, isGptImage26AutoRun } from "@nodaro/shared/model-catalog"
 import { ensureImageForProvider } from "./video.js"
 import { TASK_CHAINED_EDIT_PROVIDERS, getMaxImagePromptChars } from "@nodaro/shared/models"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
@@ -214,14 +214,58 @@ function applyResolutionParam(modelConfig: KieModelConfig, input: Record<string,
  * id stops at the same number, so nothing is billed that is not sent. Mutates `input`.
  */
 function keepDeclaredInputFields(modelConfig: KieModelConfig, input: Record<string, unknown>): void {
-  if (!modelConfig.inputFields) return
+  const fields = declaredInputFields(modelConfig, input)
+  if (!fields) return
   for (const key of Object.keys(input)) {
-    if (!modelConfig.inputFields.includes(key)) delete input[key]
+    if (!fields.includes(key)) delete input[key]
   }
   const urls = input.input_urls
   if (modelConfig.maxInputImages !== undefined && Array.isArray(urls) && urls.length > modelConfig.maxInputImages) {
     console.warn(`[KIE.ai] ${modelConfig.model}: ${urls.length} input images, sending the first ${modelConfig.maxInputImages}`)
     input.input_urls = urls.slice(0, modelConfig.maxInputImages)
+  }
+}
+
+/** The keys this request may carry: the list for its output format (no format is PNG), else the model's one list. */
+function declaredInputFields(modelConfig: KieModelConfig, input: Record<string, unknown>): readonly string[] | undefined {
+  const byFormat = modelConfig.inputFieldsByFormat
+  if (!byFormat) return modelConfig.inputFields
+  const format = typeof input.output_format === "string" ? input.output_format : "png"
+  return byFormat[format] ?? byFormat.png ?? modelConfig.inputFields
+}
+
+/**
+ * A model that writes several formats (`inputFieldsByFormat`, GPT Image 2.6)
+ * gets its GIF and SVG levers in its own schema's shape. Mutates `input`:
+ *  - PNG, or a format this model does not write, sends no `output_format`, so
+ *    the request is exactly what it was before formats existed;
+ *  - a GIF sends its frame `size` where the schema has one (512x512, a
+ *    prompt's GIF; an edit's schema has none), and its frame count as a string
+ *    where the schema wants one (Economy);
+ *  - an SVG sends `svg: { model }`, the writer of its level of detail.
+ * The worker's `svg_level` never reaches the wire. Every other model keeps
+ * what it was given (Nano Banana 2 takes its own `output_format`).
+ */
+export function applyOutputFormat(modelConfig: KieModelConfig, input: Record<string, unknown>): void {
+  const byFormat = modelConfig.inputFieldsByFormat
+  const level = input.svg_level
+  delete input.svg_level
+  if (!byFormat) return
+  const format = typeof input.output_format === "string" ? input.output_format : undefined
+  if (format === undefined || format === "png" || !byFormat[format]) {
+    if (format !== undefined && format !== "png") {
+      console.warn(`[KIE.ai] ${modelConfig.model} does not write ${format}: sending a PNG request`)
+    }
+    delete input.output_format
+    return
+  }
+  if (format === "gif") {
+    if (byFormat.gif?.includes("size")) input.size = `${IMAGE_GIF_FRAME_SIZE}x${IMAGE_GIF_FRAME_SIZE}`
+    if (modelConfig.gifFrameCountAsString && typeof input.frame_count === "number") input.frame_count = String(input.frame_count)
+  }
+  if (format === "svg") {
+    const author = (typeof level === "string" && GPT_IMAGE_2_6_SVG_AUTHOR_MODELS[level]) || GPT_IMAGE_2_6_SVG_AUTHOR_MODELS.standard
+    input.svg = { model: author }
   }
 }
 
@@ -467,6 +511,9 @@ export class KieImageProvider
       input.seed = kieSeedForWire(modelConfig, input.seed)
     }
 
+    // The output format's levers in this SKU's shape, read off the FINAL
+    // modelConfig (after the t2i → i2i swap: an edit's GIF schema has no size).
+    applyOutputFormat(modelConfig, input)
     keepDeclaredInputFields(modelConfig, input)
 
     console.log(

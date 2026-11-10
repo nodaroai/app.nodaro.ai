@@ -1835,6 +1835,13 @@ export type GenerateImageData = PromptAffixFields & {
   resolution?: string
   quality?: string
   background?: string
+  /** The file the run writes (`png` when unset), for a model that writes several (GPT Image 2.6: `IMAGE_OUTPUT_FORMAT_OPTIONS`). */
+  outputFormat?: string
+  /** A GIF's frames and how long each shows (ms). Kept while another format is chosen; read only with `outputFormat: "gif"`. */
+  gifFrames?: number
+  gifFrameDurationMs?: number
+  /** An SVG's level of detail. Kept while another format is chosen; read only with `outputFormat: "svg"`. */
+  svgLevel?: string
   seed?: number
   renderingSpeed?: string
   styleType?: string
@@ -1987,6 +1994,11 @@ export type ImageToImageData = {
   resolution?: string
   quality?: string
   background?: string
+  /** See GenerateImageData.outputFormat / gifFrames / gifFrameDurationMs / svgLevel. */
+  outputFormat?: string
+  gifFrames?: number
+  gifFrameDurationMs?: number
+  svgLevel?: string
   negativePrompt?: string
   seed?: number
   renderingSpeed?: string
@@ -2025,6 +2037,11 @@ export type ModifyImageData = PromptAffixFields & {
   resolution?: string
   quality?: string
   background?: string
+  /** See GenerateImageData.outputFormat / gifFrames / gifFrameDurationMs / svgLevel. */
+  outputFormat?: string
+  gifFrames?: number
+  gifFrameDurationMs?: number
+  svgLevel?: string
   negativePrompt?: string
   seed?: number
   renderingSpeed?: string

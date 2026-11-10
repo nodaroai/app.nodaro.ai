@@ -140,6 +140,18 @@ describe("imageToImage", () => {
     expect(JSON.parse(mock.mock.calls[0]![1].body as string).background).toBe("transparent")
   })
 
+  it("sends the output format and its levers, each only when set", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "j1" })
+    vi.stubGlobal("fetch", mock)
+    await imageToImage("http://img.png", "x", "gpt-image-2-6-flare-i2i", undefined, undefined, { outputFormat: "gif", gifFrames: 6, gifFrameDurationMs: 120 })
+    const body = JSON.parse(mock.mock.calls[0]![1].body as string)
+    expect(body).toMatchObject({ outputFormat: "gif", gifFrames: 6, gifFrameDurationMs: 120 })
+    expect(body).not.toHaveProperty("svgLevel")
+    await imageToImage("http://img.png", "x", "gpt-image-2-6-flare-i2i", undefined, undefined, { outputFormat: "svg", svgLevel: "max" })
+    expect(JSON.parse(mock.mock.calls[1]![1].body as string)).toMatchObject({ outputFormat: "svg", svgLevel: "max" })
+  })
+
   it("sends imageUrl and prompt in body", async () => {
     noSession()
     const mock = mockFetchJson({ jobId: "j1" })

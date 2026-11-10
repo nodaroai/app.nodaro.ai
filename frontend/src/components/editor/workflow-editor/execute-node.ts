@@ -1927,14 +1927,21 @@ function executeNodeCore(
         ? imgData.generatedResults?.[imgData.activeResultIndex ?? 0]?.url ??
           imgData.generatedImageUrl
         : undefined);
+    // The file the run writes (and a GIF's frames and speed, an SVG's level)
+    // rides the same options object as the background.
     const inpaint =
-      effectiveBase || imgData.maskUrl || imgData.strength != null || imgData.guidanceScale != null || imgData.background
+      effectiveBase || imgData.maskUrl || imgData.strength != null || imgData.guidanceScale != null || imgData.background ||
+      imgData.outputFormat || imgData.gifFrames != null || imgData.gifFrameDurationMs != null || imgData.svgLevel
         ? {
             baseImageUrl: effectiveBase,
             maskUrl: imgData.maskUrl,
             strength: imgData.strength,
             guidanceScale: imgData.guidanceScale,
             background: imgData.background,
+            outputFormat: imgData.outputFormat,
+            gifFrames: imgData.gifFrames,
+            gifFrameDurationMs: imgData.gifFrameDurationMs,
+            svgLevel: imgData.svgLevel,
           }
         : undefined;
     return runImageGeneration(
@@ -2237,6 +2244,10 @@ function executeNodeCore(
         resolution: i2iData.resolution,
         quality: i2iData.quality,
         background: i2iData.background,
+        outputFormat: i2iData.outputFormat,
+        gifFrames: i2iData.gifFrames,
+        gifFrameDurationMs: i2iData.gifFrameDurationMs,
+        svgLevel: i2iData.svgLevel,
         negativePrompt: result.nativeNegativePrompt,
         seed: i2iData.seed,
         renderingSpeed: i2iData.renderingSpeed,
@@ -2389,6 +2400,10 @@ function executeNodeCore(
         resolution: modData.resolution,
         quality: modData.quality,
         background: modData.background,
+        outputFormat: modData.outputFormat,
+        gifFrames: modData.gifFrames,
+        gifFrameDurationMs: modData.gifFrameDurationMs,
+        svgLevel: modData.svgLevel,
         negativePrompt: result.nativeNegativePrompt,
         seed: modData.seed,
         renderingSpeed: modData.renderingSpeed,

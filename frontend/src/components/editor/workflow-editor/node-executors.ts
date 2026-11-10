@@ -95,6 +95,10 @@ export function runImageGeneration(
     strength?: number
     guidanceScale?: number
     background?: string
+    outputFormat?: string
+    gifFrames?: number
+    gifFrameDurationMs?: number
+    svgLevel?: string
   },
 ): Promise<string> {
   return pollJobWithNodeUpdate(
@@ -171,6 +175,10 @@ export function runImageToImage(
     resolution?: string
     quality?: string
     background?: string
+    outputFormat?: string
+    gifFrames?: number
+    gifFrameDurationMs?: number
+    svgLevel?: string
     negativePrompt?: string
     seed?: number
     renderingSpeed?: string
@@ -207,6 +215,10 @@ export function runModifyImage(
     resolution?: string
     quality?: string
     background?: string
+    outputFormat?: string
+    gifFrames?: number
+    gifFrameDurationMs?: number
+    svgLevel?: string
     negativePrompt?: string
     seed?: number
     renderingSpeed?: string

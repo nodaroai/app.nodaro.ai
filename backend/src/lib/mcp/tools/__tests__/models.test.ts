@@ -160,6 +160,33 @@ describe("list_models tool (always available)", () => {
     expect(flare26?.transparentResolution).toBe("1K")
     expect(flare26).not.toHaveProperty("resolutionsByAspectRatio")
     expect(models.find((m) => m.id === "nano-banana-2")).not.toHaveProperty("transparentResolution")
+  })
+
+  it("lists the files a model writes, with a GIF's and an SVG's options, only where it writes them", async () => {
+    const server = buildServer()
+    registerModels({
+      server,
+      session: newSession({ userId: "u1", scopes: [] as Scope[], clientName: "Claude" }),
+      fastify: Fastify(),
+    })
+    const result = await callTool(server, "list_models", { kind: "image" })
+    const body = JSON.parse(result.content[0]?.text ?? "") as {
+      sections: Array<{ families: Array<{ models: Array<Record<string, unknown> & { id: string }> }> }>
+    }
+    const models = body.sections.flatMap((s) => s.families.flatMap((f) => f.models))
+    for (const id of ["gpt-image-2-6-flare", "gpt-image-2-6-sunburst-i2i"]) {
+      const m = models.find((x) => x.id === id)
+      expect(m?.outputFormats).toEqual(["png", "jpeg", "webp", "gif", "svg"])
+      expect(m?.gifFrameSize).toBe(512)
+      expect(m?.gifFrames).toEqual({ min: 2, max: 16, default: 9 })
+      expect(m?.gifFrameDurationMs).toEqual({ min: 20, max: 2000, step: 10, default: 200 })
+      expect(m?.svgLevels).toEqual(["standard", "detailed", "max"])
+    }
+    for (const id of ["nano-banana-2", "gpt-image-2-5-flare"]) {
+      const m = models.find((x) => x.id === id)
+      expect(m).toBeDefined()
+      for (const key of ["outputFormats", "gifFrames", "gifFrameDurationMs", "gifFrameSize", "svgLevels"]) expect(m).not.toHaveProperty(key)
+    }
     // GPT Image 2 renders every ratio it offers at every size: no rule to carry.
     for (const id of ["gpt-image-2", "gpt-image-2-i2i"]) {
       expect(models.find((m) => m.id === id), id).not.toHaveProperty("resolutionsByAspectRatio")

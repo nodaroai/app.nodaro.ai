@@ -4,9 +4,11 @@ import { useT } from "@/lib/i18n"
 import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import {
   IMAGE_GEN_MODELS,
+  IMAGE_OUTPUT_FORMAT_OPTIONS,
   getSourcePhotoAspectRatios,
   IMAGE_RESOLUTION_OPTIONS,
   withoutDeniedModels,
+  writesGif,
 } from "@/components/editor/config-panels/model-options"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useSurfaceAvailability } from "@/lib/surface-availability"
@@ -57,19 +59,25 @@ export function useGenerateImageStripModel(nodeId: string, data: GenerateImageDa
     return lbl.length > 10 ? lbl.slice(0, 9).trimEnd() + "…" : lbl
   }, [isMulti, providers.length, modelEntry?.label, currentProvider])
 
+  // A GIF is square (512 a frame): neither the ratio nor the size applies, so
+  // both controls hide while it is the file the node writes — as in the panel,
+  // which keeps the stored values for another format.
+  const gif = !isMulti && writesGif(currentProvider, data.outputFormat)
   // Auto (keep a wired photo's shape) on every model; an unset ratio IS Auto —
   // the panel shows it and the run sends it (`nodeAspectRatio`).
-  const aspectOptions = useMemo(() => getSourcePhotoAspectRatios(currentProvider), [currentProvider])
-  const resolutionOptions = IMAGE_RESOLUTION_OPTIONS[currentProvider]
+  const aspectOptions = useMemo(() => (gif ? [] : getSourcePhotoAspectRatios(currentProvider)), [currentProvider, gif])
+  const resolutionOptions = gif ? undefined : IMAGE_RESOLUTION_OPTIONS[currentProvider]
   const currentAspect = nodeAspectRatio("generate-image", data.aspectRatio) ?? ""
   const currentResolution = data.resolution ?? resolutionOptions?.[0]?.value ?? ""
 
   // Short label for the pill — strips the parenthetical descriptor that
   // option labels often carry ("2K (High)" → "2K", "16:9 (Landscape)" →
   // "16:9"). The full label still renders inside the dropdown items, which
-  // translate it; the pill translates what is left ("Auto").
-  const aspectShort = localizeOption(shortenLabel(aspectOptions.find((o) => o.value === currentAspect)?.label ?? currentAspect))
-  const resolutionShort = shortenLabel(resolutionOptions?.find((o) => o.value === currentResolution)?.label ?? currentResolution)
+  // translate it; the pill translates what is left ("Auto"). A GIF's pill
+  // names the format in the ratio's place ("GIF (animated)" → "GIF").
+  const gifLabel = gif ? IMAGE_OUTPUT_FORMAT_OPTIONS[currentProvider]?.find((o) => o.value === "gif")?.label : undefined
+  const aspectShort = localizeOption(shortenLabel(gifLabel ?? aspectOptions.find((o) => o.value === currentAspect)?.label ?? currentAspect))
+  const resolutionShort = gif ? "" : shortenLabel(resolutionOptions?.find((o) => o.value === currentResolution)?.label ?? currentResolution)
 
   // Versions / repeat count — how many results to generate per run. Clamped to
   // 1-4 in this UI (the shared helper allows up to 20; we intentionally narrow

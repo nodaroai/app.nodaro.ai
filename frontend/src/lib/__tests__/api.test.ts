@@ -187,6 +187,21 @@ describe("generateImage", () => {
     expect(body).not.toHaveProperty("userId")
   })
 
+  it("sends the output format and a GIF's frames and speed from the inpaint options", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "j3" })
+    vi.stubGlobal("fetch", mock)
+
+    await generateImage(
+      "a spinning logo", undefined, "gpt-image-2-6-flare", undefined, undefined, undefined, undefined, undefined,
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      { outputFormat: "gif", gifFrames: 12, gifFrameDurationMs: 100 },
+    )
+
+    const body = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(body).toEqual({ prompt: "a spinning logo", provider: "gpt-image-2-6-flare", outputFormat: "gif", gifFrames: 12, gifFrameDurationMs: 100 })
+  })
+
   it("throws Error on non-ok response", async () => {
     noSession()
     vi.stubGlobal(

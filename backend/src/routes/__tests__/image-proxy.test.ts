@@ -191,6 +191,21 @@ describe("GET /v1/image-proxy", () => {
     expect(res.headers["content-disposition"]).toBeUndefined()
   })
 
+  it("an SVG is sandboxed and never sniffed (it is a document that could carry script); other images are not", async () => {
+    const body = () => new ReadableStream({ start(c) { c.enqueue(Buffer.from("<svg/>")); c.close() } })
+    vi.mocked(safeFetch).mockResolvedValue({ ok: true, status: 200, headers: new Headers({ "content-type": "image/svg+xml" }), body: body() } as unknown as Response)
+    const res = await app.inject({ method: "GET", url: "/v1/image-proxy?url=https://example.com/logo.svg" })
+    expect(res.statusCode).toBe(200)
+    expect(res.headers["content-type"]).toBe("image/svg+xml")
+    expect(res.headers["content-security-policy"]).toContain("sandbox")
+    expect(res.headers["content-security-policy"]).toContain("default-src 'none'")
+    expect(res.headers["x-content-type-options"]).toBe("nosniff")
+
+    vi.mocked(safeFetch).mockResolvedValue({ ok: true, status: 200, headers: new Headers({ "content-type": "image/gif" }), body: body() } as unknown as Response)
+    const gif = await app.inject({ method: "GET", url: "/v1/image-proxy?url=https://example.com/a.gif" })
+    expect(gif.headers["content-security-policy"]).toBeUndefined()
+  })
+
   it("rejects non-image content-type when not in download mode", async () => {
     vi.mocked(safeFetch).mockResolvedValue({
       ok: true,

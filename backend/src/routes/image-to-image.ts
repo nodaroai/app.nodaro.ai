@@ -12,6 +12,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.js"
+import { imageFormatFields, maskFormatConflict } from "../lib/image-format-schema.js"
 import { imageToImageAspectRatio } from "../lib/image-auto-aspect.js"
 import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
@@ -47,6 +48,8 @@ export const imageToImageBody = z.object({
   quality: z.enum(IMAGE_QUALITY_VALUES).optional(),
   /** Image background, on the models that take one (`auto`, `opaque`, `transparent`). */
   background: z.enum(IMAGE_BACKGROUND_VALUES).optional(),
+  // The file written (PNG, JPEG, WebP, GIF, SVG) and a GIF's or an SVG's own levers.
+  ...imageFormatFields,
   strength: z.number().min(0).max(1).optional(),
   // The SAME shared vocabulary /v1/generate-image and /v1/edit-image declare
   // (`IMAGE_ASPECT_RATIO_VALUES`) — one tuple, not three drifting literal
@@ -94,6 +97,8 @@ const imageToImageRequest = imageToImageBody.superRefine((data, ctx) => {
   if (1 + (data.referenceImageUrls?.length ?? 0) > limit) {
     ctx.addIssue({ code: "custom", path: ["referenceImageUrls"], message: `This model takes at most ${limit} input images, imageUrl included` })
   }
+  const maskConflict = maskFormatConflict(data)
+  if (maskConflict) ctx.addIssue({ code: "custom", path: ["maskUrl"], message: maskConflict })
 })
 
 const IDENTITY_PRESERVE_SUFFIX =
@@ -135,7 +140,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
     // `applySnappedLevers` below rewrites them on `parsed.data`, so these locals
     // are the caller's PRE-snap values and are only ever valid as INPUT to the
     // normalizer. Everything downstream reads `parsed.data.*`.
-    const { imageUrl, prompt: rawPrompt, provider, referenceImageUrls, resolution: rawResolution, quality: rawQuality, background: rawBackground, strength, aspectRatio: rawAspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale, maskUrl } = parsed.data
+    const { imageUrl, prompt: rawPrompt, provider, referenceImageUrls, resolution: rawResolution, quality: rawQuality, background: rawBackground, outputFormat: rawOutputFormat, gifFrames: rawGifFrames, gifFrameDurationMs: rawGifFrameDurationMs, svgLevel: rawSvgLevel, strength, aspectRatio: rawAspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale, maskUrl } = parsed.data
     let prompt = rawPrompt
     const userId = req.userId
 
@@ -164,6 +169,10 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       resolution: rawResolution,
       renderingSpeed,
       background: rawBackground,
+      outputFormat: rawOutputFormat,
+      gifFrames: rawGifFrames,
+      gifFrameDurationMs: rawGifFrameDurationMs,
+      svgLevel: rawSvgLevel,
       refCount: i2iRefCount,
       swapToI2i: false,
       sourceImage,
@@ -326,6 +335,10 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       resolution: parsed.data.resolution,
       quality: parsed.data.quality,
       background: parsed.data.background,
+      outputFormat: parsed.data.outputFormat,
+      gifFrames: parsed.data.gifFrames,
+      gifFrameDurationMs: parsed.data.gifFrameDurationMs,
+      svgLevel: parsed.data.svgLevel,
       strength,
       aspectRatio: parsed.data.aspectRatio,
       negativePrompt: finalNegativePrompt,

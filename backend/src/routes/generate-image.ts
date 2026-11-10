@@ -26,7 +26,7 @@ import { userDirectionOf, userDirectionPreHandler } from "../lib/user-direction.
 import { applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
 import { readPromptAffixes } from "@nodaro/shared/nodes"
 import { FLUX_LORA_CHARACTER_MODEL_ID, PROMPT_HARD_CEILING } from "@nodaro/shared/models"
-import { defaultImageModel } from "@nodaro/shared/model-catalog"
+import { defaultImageModel, MODEL_INPUT_ADJUSTMENT_FIELDS } from "@nodaro/shared/model-catalog"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { generateImageBody, generateImageRequest, type GenerateImageData } from "./generate-image-body.js"
@@ -104,7 +104,7 @@ openApiRegistry.registerPath({
               jobId: z.string().uuid(),
               /** Present only when a catalog-invalid parameter was corrected. */
               adjustments: z.array(z.object({
-                field: z.enum(["aspectRatio", "resolution", "quality", "duration", "background"]),
+                field: z.enum(MODEL_INPUT_ADJUSTMENT_FIELDS),
                 from: z.union([z.string(), z.number()]),
                 to: z.union([z.string(), z.number()]).optional(),
                 reason: z.string(),

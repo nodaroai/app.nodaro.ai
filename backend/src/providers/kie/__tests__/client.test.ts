@@ -145,11 +145,40 @@ describe("createSanitizedError", () => {
     )
 
     expect(error).toBeInstanceOf(KieError)
-    expect(error.message).toBe(
-      "Invalid aspect ratio setting. Please try a different option."
-    )
+    // The provider's own words name the ratio it was sent.
+    expect(error.message).toBe("This model doesn't take 3:2. Pick another aspect ratio and run again.")
     expect(error.internalDetails).toBe("Invalid aspect_ratio value: 3:2")
     expect(error.context).toBe("Image generation")
+  })
+
+  it.each([
+    ["the ratio it takes", "task failed: [400] aspect_ratio must be one of 16:9, 9:16", "This model doesn't take 3:2. It takes 16:9 and 9:16. Pick one of them and run again."],
+    ["a bracketed list", "task failed: [400] Aspect ratio only supports [16:9, 9:16]", "This model doesn't take 3:2. It takes 16:9 and 9:16. Pick one of them and run again."],
+    ["no list", "task failed: [400] Invalid aspect ratio setting", "This model doesn't take 3:2. Pick another aspect ratio and run again."],
+  ])("an aspect ratio refusal names the chosen ratio and %s", (_name, internal, sentence) => {
+    const error = createSanitizedError(internal, "Generation", true, false, { upstreamStatus: "400", requestedAspectRatio: "3:2" })
+    expect(error.message).toBe(sentence)
+    // Unchanged: a refused request is still a refused request.
+    expect(error.requestRefused).toBe(true)
+  })
+
+  it("reads the provider's own words, never our wrapper around them", () => {
+    // The status in our wrapper ("[400]") must not read as the start of a list: the ratio named is the one it was sent.
+    const error = createSanitizedError("task failed: [400] Invalid aspect_ratio value: 3:2", "Generation", true, false, { upstreamStatus: "400" })
+    expect(error.message).toBe("This model doesn't take 3:2. Pick another aspect ratio and run again.")
+  })
+
+  it("an aspect ratio refusal with no ratio known says the chosen aspect ratio", () => {
+    const error = createSanitizedError("task failed: [400] Invalid aspect ratio setting", "Generation", true, false, { upstreamStatus: "400" })
+    expect(error.message).toBe("This model doesn't take the chosen aspect ratio. Pick another aspect ratio and run again.")
+  })
+
+  it("a request's own spelling of a ratio is never quoted", () => {
+    const error = createSanitizedError("task failed: [400] Invalid aspect ratio setting", "Generation", true, false, {
+      upstreamStatus: "400",
+      requestedAspectRatio: "landscape_16_9",
+    })
+    expect(error.message).toBe("This model doesn't take the chosen aspect ratio. Pick another aspect ratio and run again.")
   })
 
   it("maps unknown errors to generic fallback message", () => {
@@ -344,6 +373,50 @@ describe("split tasks", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  /** A task the provider takes, then fails with `failMsg`. */
+  function failsLater(failMsg: string) {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/createTask")) return new Response(JSON.stringify({ code: 0, data: { taskId: "t-ar" } }), { status: 200 })
+      return new Response(JSON.stringify({ code: 200, data: { taskId: "t-ar", state: "fail", failCode: "400", failMsg } }), { status: 200 })
+    })
+  }
+
+  it("runKieTask: a task failed on its ratio names the ratio the request chose", async () => {
+    failsLater("Invalid aspect ratio setting")
+    const { runKieTask } = await import("../client.js")
+    const err = await withTimers(() => runKieTask("nano-banana", { prompt: "x", aspect_ratio: "3:2" })).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(KieError)
+    expect((err as KieError).message).toBe("This model doesn't take 3:2. Pick another aspect ratio and run again.")
+  })
+
+  it("runKieTask: and the ratios the model takes, when its words name them", async () => {
+    failsLater("aspect_ratio must be one of 16:9, 9:16")
+    const { runKieTask } = await import("../client.js")
+    const err = await withTimers(() => runKieTask("nano-banana", { prompt: "x", aspectRatio: "3:2" })).catch((e: unknown) => e)
+    expect((err as KieError).message).toBe("This model doesn't take 3:2. It takes 16:9 and 9:16. Pick one of them and run again.")
+  })
+
+  it("runKieTask: a request refused on its ratio at creation names the ratio too", async () => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ code: 422, message: "Invalid aspect_ratio" }), { status: 200 }))
+    const { runKieTask } = await import("../client.js")
+    const err = await withTimers(() => runKieTask("nano-banana", { prompt: "x", aspect_ratio: "3:2" })).catch((e: unknown) => e)
+    expect((err as KieError).message).toBe("This model doesn't take 3:2. Pick another aspect ratio and run again.")
+  })
+
+  it("runKieTask: a request refused on its ratio with an HTTP error at creation names the ratio too", async () => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ code: 422, msg: "Invalid aspect_ratio" }), { status: 422 }))
+    const { runKieTask } = await import("../client.js")
+    const err = await withTimers(() => runKieTask("nano-banana", { prompt: "x", aspect_ratio: "3:2" })).catch((e: unknown) => e)
+    expect((err as KieError).message).toBe("This model doesn't take 3:2. Pick another aspect ratio and run again.")
+  })
+
+  it("pollKieTask alone (a resumed task) has no request, so it says the chosen aspect ratio", async () => {
+    failsLater("Invalid aspect ratio setting")
+    const { pollKieTask } = await import("../client.js")
+    const err = await withTimers(() => pollKieTask("t-ar", 3)).catch((e: unknown) => e)
+    expect((err as KieError).message).toBe("This model doesn't take the chosen aspect ratio. Pick another aspect ratio and run again.")
+  })
+
   it("pollKieTask onFail hook replaces the generic failure", async () => {
     fetchMock.mockImplementation(async () => new Response(JSON.stringify({
       code: 200,
@@ -432,6 +505,16 @@ describe("VEO onTaskCreated", () => {
 
     expect(onTaskCreatedTaskId).toBe("veo-1")
     expect(recordInfoCalled).toBe(true)
+  })
+
+  it("runVeoTask: a task failed on its ratio names the ratio its request chose", async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/veo/generate")) return new Response(JSON.stringify({ code: 0, data: { taskId: "veo-ar" } }), { status: 200 })
+      return new Response(JSON.stringify({ code: 0, data: { taskId: "veo-ar", successFlag: 2, errorMessage: "Invalid aspect ratio setting" } }), { status: 200 })
+    })
+    const { runVeoTask } = await import("../client.js")
+    const err = await withTimers(() => runVeoTask("veo3", "a prompt", undefined, { aspectRatio: "1:1" })).catch((e: unknown) => e)
+    expect((err as KieError).message).toBe("This model doesn't take 1:1. Pick another aspect ratio and run again.")
   })
 
   it("runVeoExtendTask calls onTaskCreated with the extend taskId before polling", async () => {

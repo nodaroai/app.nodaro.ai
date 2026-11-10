@@ -3,6 +3,7 @@ import { Share2, Pencil, Download, Link, EyeOff } from "lucide-react"
 import { copyUrl, downloadFile, type MediaType } from "./shared"
 import { CAN_NATIVE_SHARE } from "./share-utils"
 import { useT } from "@/lib/i18n"
+import { imageDownloadExtension } from "@/lib/image"
 
 interface ActionBarProps {
   mediaType: MediaType
@@ -44,7 +45,8 @@ export function ActionBar({ mediaType, url, label, onShare, onEdit, onHide }: Ac
   const canEdit = mediaType !== "text"
   const hasMedia = mediaType !== "text" && !!url
 
-  const ext = mediaType === "image" ? "png" : mediaType === "video" ? "mp4" : "mp3"
+  // An image keeps the file it is (GIF, SVG, JPEG, WebP); PNG otherwise.
+  const ext = mediaType === "image" ? imageDownloadExtension(url) : mediaType === "video" ? "mp4" : "mp3"
   const filename = `${label.replace(/\s+/g, "-").toLowerCase()}.${ext}`
   const shareLabel = CAN_NATIVE_SHARE ? t("common.share") : t("present.copyLink")
 

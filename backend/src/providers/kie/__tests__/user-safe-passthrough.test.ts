@@ -31,6 +31,6 @@ describe("createSanitizedError — honors a structural user-safe mark (A10)", ()
 
   it("no opts at all is byte-identical to today's sanitizer", () => {
     const err = createSanitizedError("aspect_ratio invalid", "Generation")
-    expect(err.message).toBe("Invalid aspect ratio setting. Please try a different option.")
+    expect(err.message).toBe("This model doesn't take the chosen aspect ratio. Pick another aspect ratio and run again.")
   })
 })

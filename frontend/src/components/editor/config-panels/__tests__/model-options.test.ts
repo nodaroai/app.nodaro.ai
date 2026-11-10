@@ -11,6 +11,14 @@ import { SUNO_MODELS as SUNO_MODELS_SHARED, DIALOGUE_PROVIDERS } from "@nodaro/s
 import { VIDEO_DEPTH_PROVIDERS } from "@nodaro/shared/media"
 import {
   IMAGE_QUALITY_OPTIONS,
+  IMAGE_OUTPUT_FORMAT_OPTIONS,
+  IMAGE_SVG_LEVEL_OPTIONS,
+  gifFramesFor,
+  gifFrameDurationFor,
+  outputFormatOf,
+  writesGif,
+  keepsTransparentBackground,
+  imageFormatFailSafe,
   defaultQualityFor,
   firstFixedQuality,
   SUNO_MODELS,
@@ -333,5 +341,87 @@ describe("firstFixedQuality", () => {
     expect(IMAGE_QUALITY_OPTIONS["gpt-image-2-6-flare"]?.[0]?.value).toBe("auto")
     expect(defaultQualityFor("gpt-image-2-6-flare")).toBe("medium")
     expect(defaultQualityFor("gpt-image")).toBeUndefined()
+  })
+})
+
+describe("GPT Image 2.6's output formats", () => {
+  const values = (o: readonly { value: string }[] | undefined) => o?.map((x) => x.value)
+
+  it("Flare and Sunburst write five formats, PNG first, from a prompt and from an edit", () => {
+    for (const id of ["gpt-image-2-6-flare", "gpt-image-2-6-sunburst", "gpt-image-2-6-flare-i2i", "gpt-image-2-6-sunburst-i2i"]) {
+      expect(values(IMAGE_OUTPUT_FORMAT_OPTIONS[id])).toEqual(["png", "jpeg", "webp", "gif", "svg"])
+      expect(values(IMAGE_SVG_LEVEL_OPTIONS[id])).toEqual(["standard", "detailed", "max"])
+    }
+    expect(IMAGE_OUTPUT_FORMAT_OPTIONS["gpt-image-2-6-flare"]?.find((o) => o.value === "gif")?.label).toBe("GIF (animated)")
+  })
+
+  it("Economy writes PNG or GIF, its edit PNG only (no setting), and no model without the lever has one", () => {
+    expect(values(IMAGE_OUTPUT_FORMAT_OPTIONS["gpt-image-2-6-economy"])).toEqual(["png", "gif"])
+    expect(IMAGE_SVG_LEVEL_OPTIONS["gpt-image-2-6-economy"]).toBeUndefined()
+    expect(IMAGE_OUTPUT_FORMAT_OPTIONS["gpt-image-2-6-economy-i2i"]).toBeUndefined()
+    expect(IMAGE_OUTPUT_FORMAT_OPTIONS["gpt-image-2"]).toBeUndefined()
+    expect(IMAGE_OUTPUT_FORMAT_OPTIONS["nano-banana-pro"]).toBeUndefined()
+  })
+
+  it("a GIF's frames and speed come from the catalog", () => {
+    expect(gifFramesFor("gpt-image-2-6-flare")).toMatchObject({ min: 2, max: 16, default: 9 })
+    expect(gifFramesFor("gpt-image-2-6-economy")?.values).toEqual([4, 9, 16])
+    expect(gifFrameDurationFor("gpt-image-2-6-sunburst")).toEqual({ min: 20, max: 2000, step: 10, default: 200 })
+    expect(gifFramesFor("gpt-image-2")).toBeUndefined()
+  })
+
+  it("the format a node writes: its own when listed, else the model's default, none without the lever", () => {
+    expect(outputFormatOf("gpt-image-2-6-flare", undefined)).toBe("png")
+    expect(outputFormatOf("gpt-image-2-6-flare", "svg")).toBe("svg")
+    expect(outputFormatOf("gpt-image-2-6-economy", "svg")).toBe("png")
+    expect(outputFormatOf("gpt-image-2", "gif")).toBeUndefined()
+    expect(writesGif("gpt-image-2-6-flare", "gif")).toBe(true)
+    expect(writesGif("gpt-image-2", "gif")).toBe(false)
+    expect(writesGif(undefined, "gif")).toBe(false)
+  })
+
+  it("only PNG and WebP keep a transparent background", () => {
+    expect(keepsTransparentBackground(undefined)).toBe(true)
+    expect(keepsTransparentBackground("png")).toBe(true)
+    expect(keepsTransparentBackground("webp")).toBe(true)
+    for (const f of ["jpeg", "gif", "svg"]) expect(keepsTransparentBackground(f)).toBe(false)
+  })
+})
+
+describe("imageFormatFailSafe", () => {
+  it("leaves a valid node alone and never writes a lever the node does not hold", () => {
+    expect(imageFormatFailSafe("gpt-image-2-6-flare", {})).toEqual({})
+    expect(imageFormatFailSafe("gpt-image-2-6-flare", { outputFormat: "gif" })).toEqual({})
+    expect(imageFormatFailSafe("gpt-image-2-6-flare", { outputFormat: "svg", svgLevel: "max" })).toEqual({})
+    expect(imageFormatFailSafe("gpt-image-2-6-flare", { outputFormat: "webp", background: "transparent" })).toEqual({})
+  })
+
+  it("clears a format the new model does not write, and any format with several models selected", () => {
+    expect(imageFormatFailSafe("gpt-image-2", { outputFormat: "gif" })).toEqual({ outputFormat: undefined })
+    expect(imageFormatFailSafe("gpt-image-2-6-economy", { outputFormat: "svg" })).toEqual({ outputFormat: undefined })
+    expect(imageFormatFailSafe("gpt-image-2-6-economy-i2i", { outputFormat: "gif" })).toEqual({ outputFormat: undefined })
+    expect(imageFormatFailSafe(undefined, { outputFormat: "jpeg" })).toEqual({ outputFormat: undefined })
+  })
+
+  it("keeps a GIF's and an SVG's levers while another format is chosen", () => {
+    expect(imageFormatFailSafe("gpt-image-2-6-flare", { outputFormat: "png", gifFrames: 40, gifFrameDurationMs: 5, svgLevel: "ultra" })).toEqual({})
+    expect(imageFormatFailSafe("gpt-image-2", { gifFrames: 40, svgLevel: "ultra" })).toEqual({})
+  })
+
+  it("moves them into the model's range while that format is the one written", () => {
+    expect(imageFormatFailSafe("gpt-image-2-6-flare", { outputFormat: "gif", gifFrames: 40, gifFrameDurationMs: 2345 })).toEqual({ gifFrames: 16, gifFrameDurationMs: 2000 })
+    expect(imageFormatFailSafe("gpt-image-2-6-flare", { outputFormat: "gif", gifFrames: 1, gifFrameDurationMs: 205 })).toEqual({ gifFrames: 2, gifFrameDurationMs: 210 })
+    // Economy takes 4, 9 or 16 frames: the catalog's nearest.
+    expect(imageFormatFailSafe("gpt-image-2-6-economy", { outputFormat: "gif", gifFrames: 7 })).toEqual({ gifFrames: 9 })
+    expect(imageFormatFailSafe("gpt-image-2-6-sunburst", { outputFormat: "svg", svgLevel: "ultra" })).toEqual({ svgLevel: "standard" })
+  })
+
+  it("a transparent background becomes auto with a format that cannot keep it", () => {
+    for (const outputFormat of ["jpeg", "gif", "svg"]) {
+      expect(imageFormatFailSafe("gpt-image-2-6-flare", { outputFormat, background: "transparent" })).toEqual({ background: "auto" })
+    }
+    expect(imageFormatFailSafe("gpt-image-2-6-flare", { outputFormat: "jpeg", background: "opaque" })).toEqual({})
+    // A format the model does not write is cleared first: its own PNG keeps transparency.
+    expect(imageFormatFailSafe("gpt-image-2-6-economy", { outputFormat: "svg", background: "transparent" })).toEqual({ outputFormat: undefined })
   })
 })

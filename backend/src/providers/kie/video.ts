@@ -64,6 +64,7 @@ import { withHeifDecodeFallback } from "../../utils/heif-decode.js"
 import { originalCdnImageUrl } from "../../lib/cdn-original-url.js"
 import { imageHasMetadata } from "../../lib/image-metadata.js"
 import { labelInputFailure, urlForLog, type InputStep } from "./input-label.js"
+import { pictureShapeSentence } from "./aspect-ratio-sentence.js"
 import { join } from "node:path"
 import { readFile } from "node:fs/promises"
 import sharp from "sharp"
@@ -806,9 +807,14 @@ async function prepareImageForProvider(
     const min = constraints.minAspectRatio ?? 0
     const max = constraints.maxAspectRatio ?? Infinity
     if (ratio < min || ratio > max) {
+      // The picture's own shape: no ratio setting would make it fit, so the
+      // sentence names its size and the range the model takes.
       throw createSanitizedError(
         `${provider} requires aspect ratio between ${min.toFixed(1)}:1 and ${max.toFixed(1)}:1 (got ${width}:${height})`,
-        context
+        context,
+        false,
+        false,
+        { userSafeMessage: pictureShapeSentence(width, height, min, max) },
       )
     }
   }

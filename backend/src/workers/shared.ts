@@ -1753,11 +1753,12 @@ export async function createAssetFromJob(
         : url
 
       const filename = url.split("/").pop() ?? `${jobId}.${type === "image" ? "png" : type === "video" ? "mp4" : "mp3"}`
-      // A job that knows which audio file it stored says so (`output_data.audioMimeType`: a speech job
-      // asked for a WAV over the API); every other producer keeps the type its rows always had.
-      const declaredAudioMime = output.audioMimeType
+      // A job that knows which file it stored says so: `output_data.audioMimeType` (a speech job asked
+      // for a WAV over the API), `output_data.imageMimeType` (an image written as JPEG, WebP, a GIF or an
+      // SVG, lib/image-output-store.ts). Every other producer keeps the type its rows always had.
+      const declaredMime = type === "audio" ? output.audioMimeType : type === "image" ? output.imageMimeType : undefined
       const mimeType =
-        type === "audio" && typeof declaredAudioMime === "string" && declaredAudioMime.startsWith("audio/") ? declaredAudioMime : mime
+        typeof declaredMime === "string" && declaredMime.startsWith(`${type}/`) ? declaredMime : mime
 
       // Record the real byte size so the cleanup reaper decrements the user's
       // quota by what `trackStorage` added at upload (size_bytes:0 made free-user

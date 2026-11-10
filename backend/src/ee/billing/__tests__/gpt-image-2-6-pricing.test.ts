@@ -28,8 +28,11 @@ describe("GPT Image 2.6 base credits", () => {
     }
   })
 
-  it("has a row for every combination, 616 in all", () => {
-    expect(Object.keys(gptImage26StaticCosts())).toHaveLength(616)
+  it("has a row for every combination: 616 for PNG, JPEG and WebP, 612 for a GIF, 1836 for an SVG", () => {
+    const ids = Object.keys(gptImage26StaticCosts())
+    expect(ids.filter((id) => id.includes(":gif-"))).toHaveLength(612)
+    expect(ids.filter((id) => id.includes(":svg-"))).toHaveLength(1836)
+    expect(ids).toHaveLength(616 + 612 + 1836)
   })
 
   it("prices extra high and max by the same formula", () => {

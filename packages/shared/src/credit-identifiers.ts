@@ -42,9 +42,11 @@ import {
   GPT_IMAGE_2_6_MAX_INPUT_IMAGES,
   GPT_IMAGE_2_6_QUALITIES,
   GPT_IMAGE_2_6_RESOLUTIONS,
+  gptImage26PricedFormat,
   isGptImage26I2i,
   isGptImage26Tiered,
   type GptImage26TieredModel,
+  type ImageFormatLevers,
 } from "./gpt-image-2-6.js"
 import { VIDEO_DURATION_AUTO } from "./video-duration-auto.js"
 import { uiResolutionFill } from "./video-ui-defaults.js"
@@ -89,6 +91,14 @@ function flux2MegapixelTier(model: Flux2Model, resolution?: string): string {
 /**
  * The price id of a GPT Image 2.6 Flare or Sunburst run: `<id>:<quality>:<size>`,
  * and on an edit `<id>:<quality>:<size>:<N>ref`, N being the input images.
+ * PNG, JPEG and WebP cost the same, so they share those ids. Only a format that
+ * prices differently adds a part of its own:
+ *  - a GIF takes no size (it is 512 pixels a frame) and is priced by its band
+ *    of frames: `<id>:<quality>:gif-<band>`, on an edit `…:gif-<band>:<N>ref`
+ *    (`gpt-image-2-6-flare:medium:gif-9-12`);
+ *  - an SVG is priced at its size and its level of detail:
+ *    `<id>:<quality>:<size>:svg-<level>`, on an edit `…:svg-<level>:<N>ref`
+ *    (`gpt-image-2-6-flare-i2i:high:2K:svg-detailed:3ref`).
  *
  * A value off the grid (a stored node, the multi-provider preview pricing one
  * node's data against every model) lands on the default rather than building
@@ -101,13 +111,20 @@ function gptImage26CreditId(
   quality: string | undefined,
   resolution: string | undefined,
   referenceImageCount: number | undefined,
+  imageFormat: ImageFormatLevers | undefined,
 ): string {
   const q = (GPT_IMAGE_2_6_QUALITIES as readonly string[]).includes(quality ?? "") ? quality : GPT_IMAGE_2_6_DEFAULT_QUALITY
   const r = (GPT_IMAGE_2_6_RESOLUTIONS as readonly string[]).includes(resolution ?? "") ? resolution : GPT_IMAGE_2_6_DEFAULT_RESOLUTION
   const images = Math.trunc(referenceImageCount ?? 0)
   const model = !isGptImage26I2i(provider) && images > 0 ? T2I_TO_I2I_VARIANT[provider]! : provider
-  if (!isGptImage26I2i(model)) return `${model}:${q}:${r}`
-  return `${model}:${q}:${r}:${Math.min(Math.max(1, images), GPT_IMAGE_2_6_MAX_INPUT_IMAGES)}ref`
+  const format = gptImage26PricedFormat(imageFormat)
+  const base = format?.kind === "gif"
+    ? `${model}:${q}:gif-${format.band}`
+    : format?.kind === "svg"
+      ? `${model}:${q}:${r}:svg-${format.level}`
+      : `${model}:${q}:${r}`
+  if (!isGptImage26I2i(model)) return base
+  return `${base}:${Math.min(Math.max(1, images), GPT_IMAGE_2_6_MAX_INPUT_IMAGES)}ref`
 }
 
 /**
@@ -126,6 +143,8 @@ export function buildCreditModelIdentifier(
   renderingSpeed?: string,
   targetResolution?: string,
   referenceImageCount?: number,
+  /** The output format, a GIF's frames and an SVG's level: read only by a model whose price depends on them (GPT Image 2.6). */
+  imageFormat?: ImageFormatLevers,
 ): string {
   // Flux 2 family: billed per output megapixel AND per reference image (each
   // ref counts as input megapixels). Resolution arrives as "N MP" strings (the
@@ -137,7 +156,7 @@ export function buildCreditModelIdentifier(
     return `${provider}:${flux2MegapixelTier(provider, resolution)}MP:${Math.min(referenceImageCount ?? 0, 8)}ref`
   }
   if (isGptImage26Tiered(provider)) {
-    return gptImage26CreditId(provider, quality, resolution, referenceImageCount)
+    return gptImage26CreditId(provider, quality, resolution, referenceImageCount, imageFormat)
   }
   if (HIGH_QUALITY_PROVIDERS.has(provider) && quality === "high") {
     return `${provider}:high`
@@ -179,6 +198,13 @@ export interface NormalizedImageGen {
   resolution?: string
   quality?: string
   background?: string
+  /** The file the run writes (`outputFormat`); undefined is PNG. */
+  outputFormat?: string
+  /** A GIF's frames and the time each shows (ms); set only for a GIF. */
+  gifFrames?: number
+  gifFrameDurationMs?: number
+  /** An SVG's level of detail; set only for an SVG. */
+  svgLevel?: string
   /** Empty when the caller's values were already valid for `modelId`. */
   adjustments: ModelInputAdjustment[]
 }
@@ -220,6 +246,26 @@ export function imageGenAutoAspectNeedsSourceImage(opts: {
 }
 
 /**
+ * The output-format levers of a request body or a node's data, typed for
+ * `normalizeModelInput`: a non-string format or level is no value, and a GIF's
+ * numbers may arrive as numeric strings (a form field, a FieldMapping).
+ */
+export function imageFormatInputOf(source: object): { outputFormat?: string; gifFrames?: number; gifFrameDurationMs?: number; svgLevel?: string } {
+  const record = source as Record<string, unknown>
+  const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)
+  const num = (v: unknown): number | undefined => {
+    const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : Number.NaN
+    return Number.isFinite(n) ? n : undefined
+  }
+  return {
+    outputFormat: str(record.outputFormat),
+    gifFrames: num(record.gifFrames),
+    gifFrameDurationMs: num(record.gifFrameDurationMs),
+    svgLevel: str(record.svgLevel),
+  }
+}
+
+/**
  * Snap an image request's catalog-governed levers to a combination the model
  * actually accepts, and price the credit identifier off the SNAPPED values.
  *
@@ -256,6 +302,11 @@ export function resolveNormalizedImageGen(opts: {
   renderingSpeed?: unknown
   /** Does not price on its own, but a transparent background can move the size. */
   background?: unknown
+  /** The file the run writes, and a GIF's frames and speed or an SVG's level: a GIF and an SVG price differently. */
+  outputFormat?: unknown
+  gifFrames?: unknown
+  gifFrameDurationMs?: unknown
+  svgLevel?: unknown
   refCount: number
   swapToI2i?: boolean
   sourceImage?: SourceImageSize
@@ -272,6 +323,7 @@ export function resolveNormalizedImageGen(opts: {
       resolution: str(opts.resolution),
       quality: str(opts.quality),
       background: str(opts.background),
+      ...imageFormatInputOf(opts),
     },
     { sourceImage: opts.sourceImage },
   )
@@ -284,12 +336,17 @@ export function resolveNormalizedImageGen(opts: {
       str(opts.renderingSpeed),
       undefined,
       opts.refCount,
+      { outputFormat: n.outputFormat, gifFrames: n.gifFrames, svgLevel: n.svgLevel },
     ),
     modelId,
     aspectRatio: n.aspectRatio,
     resolution: n.resolution,
     quality: n.quality,
     background: n.background,
+    outputFormat: n.outputFormat,
+    gifFrames: n.gifFrames,
+    gifFrameDurationMs: n.gifFrameDurationMs,
+    svgLevel: n.svgLevel,
     adjustments: n.adjustments,
   }
 }
@@ -318,6 +375,9 @@ export function resolveImageGenCreditIdentifier(opts: {
   quality?: string
   resolution?: string
   renderingSpeed?: string
+  outputFormat?: unknown
+  gifFrames?: unknown
+  svgLevel?: unknown
   refCount: number
   swapToI2i?: boolean
 }): string {

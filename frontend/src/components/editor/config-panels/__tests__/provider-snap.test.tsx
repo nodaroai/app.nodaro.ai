@@ -48,7 +48,7 @@ vi.mock("@/components/ui/separator", () => ({
 vi.mock("@/components/ui/select", () => ({
   Select: ({ children }: any) => <div>{children}</div>,
   SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => <option value={value}>{children}</option>,
+  SelectItem: ({ children, value, disabled }: any) => <option value={value} disabled={disabled}>{children}</option>,
   SelectTrigger: ({ children }: any) => <div>{children}</div>,
   SelectValue: () => <span />,
 }))
@@ -1342,5 +1342,116 @@ describe("VideoToVideoConfig — seed on a model that takes none", () => {
     for (const [u] of onUpdate.mock.calls) {
       expect(Object.prototype.hasOwnProperty.call(u, "seed")).toBe(false)
     }
+  })
+})
+
+// =============================================================================
+// GPT Image 2.6's output format (PNG, JPEG, WebP, an animated GIF, an SVG)
+// =============================================================================
+
+describe("Image panels — the output format", () => {
+  const merged = (onUpdate: ReturnType<typeof vi.fn>): Record<string, unknown> =>
+    onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+  const option = (container: HTMLElement, value: string) =>
+    container.querySelector<HTMLOptionElement>(`option[value="${value}"]`)
+  const gen = (data: Record<string, unknown>) => {
+    const onUpdate = vi.fn()
+    const view = render(<GenerateImageConfig {...commonProps(onUpdate, baseGenerateImageData({ provider: "gpt-image-2-6-flare", ...data }))} />)
+    return { ...view, onUpdate }
+  }
+  const mod = (data: Record<string, unknown>) => {
+    const onUpdate = vi.fn()
+    const view = render(<ModifyImageConfig {...commonProps(onUpdate, baseModifyImageData({ provider: "gpt-image-2-6-flare-i2i", ...data }))} />)
+    return { ...view, onUpdate }
+  }
+
+  it("offers Format only on one model that writes several", () => {
+    expect(option(gen({}).container, "svg")).not.toBeNull()
+    expect(option(gen({ provider: "gpt-image-2" }).container, "svg")).toBeNull()
+    expect(option(gen({ providers: ["gpt-image-2-6-flare", "nano-banana-pro"] }).container, "svg")).toBeNull()
+    expect(option(mod({}).container, "svg")).not.toBeNull()
+    expect(option(mod({ provider: "gpt-image-2-i2i" }).container, "svg")).toBeNull()
+  })
+
+  it("a GIF shows its frames and speed and hides the ratio and size, which stay on the node", () => {
+    for (const open of [gen, mod]) {
+      const { getByLabelText, queryByTestId, container, getByText, onUpdate, unmount } = open({ outputFormat: "gif", aspectRatio: "16:9", resolution: "2K" })
+      expect(getByLabelText("GIF Frames")).toHaveProperty("type", "range")
+      expect(getByLabelText("GIF Frames")).toHaveProperty("value", "9")
+      expect(getByLabelText("GIF Speed (ms per frame)")).toHaveProperty("value", "200")
+      expect(getByText(/A GIF is square, 512×512 a frame/)).toBeTruthy()
+      expect(queryByTestId("aspect-ratio-selector")).toBeNull()
+      expect(option(container, "2K")).toBeNull()
+      const m = merged(onUpdate)
+      expect("aspectRatio" in m).toBe(false)
+      expect("resolution" in m).toBe(false)
+      unmount()
+    }
+  })
+
+  it("PNG shows the ratio and size and no GIF or SVG lever", () => {
+    const { queryByLabelText, queryByTestId, container } = gen({ outputFormat: "png", gifFrames: 4, svgLevel: "max" })
+    expect(queryByTestId("aspect-ratio-selector")).not.toBeNull()
+    expect(option(container, "2K")).not.toBeNull()
+    expect(queryByLabelText("GIF Frames")).toBeNull()
+    expect(option(container, "detailed")).toBeNull()
+  })
+
+  it("Economy's GIF takes 4, 9 or 16 frames: a select, not a slider", () => {
+    const { queryByLabelText, container } = gen({ provider: "gpt-image-2-6-economy", outputFormat: "gif" })
+    expect(queryByLabelText("GIF Frames")).toBeNull()
+    for (const n of ["4", "9", "16"]) expect(option(container, n)).not.toBeNull()
+  })
+
+  it("an SVG shows its level and no background setting", () => {
+    for (const open of [gen, mod]) {
+      const { container, unmount } = open({ outputFormat: "svg" })
+      expect(option(container, "detailed")).not.toBeNull()
+      expect(option(container, "transparent")).toBeNull()
+      unmount()
+    }
+  })
+
+  it("Transparent is greyed with JPEG and GIF, and offered with PNG and WebP", () => {
+    for (const [outputFormat, disabled] of [["jpeg", true], ["gif", true], ["png", false], ["webp", false]] as const) {
+      const { container, unmount } = gen({ outputFormat })
+      expect(option(container, "transparent")?.disabled, outputFormat).toBe(disabled)
+      unmount()
+    }
+  })
+
+  it("the provider-switch fail-safe clears a format the new model does not write", () => {
+    for (const { onUpdate } of [
+      gen({ provider: "gpt-image-2", outputFormat: "gif" }),
+      gen({ providers: ["gpt-image-2-6-flare", "nano-banana-pro"], outputFormat: "jpeg" }),
+      mod({ provider: "gpt-image-2-6-economy-i2i", outputFormat: "svg" }),
+    ]) {
+      const m = merged(onUpdate)
+      expect("outputFormat" in m).toBe(true)
+      expect(m.outputFormat).toBeUndefined()
+    }
+  })
+
+  it("keeps a GIF's levers in range and moves a transparent background to auto", () => {
+    const g = merged(gen({ outputFormat: "gif", gifFrames: 40, gifFrameDurationMs: 5, background: "transparent", resolution: "2K" }).onUpdate)
+    expect(g).toMatchObject({ gifFrames: 16, gifFrameDurationMs: 20, background: "auto" })
+    // The transparent background's 1K-only rule no longer applies, so the size stays.
+    expect("resolution" in g).toBe(false)
+    expect(merged(mod({ outputFormat: "jpeg", background: "transparent" }).onUpdate)).toMatchObject({ background: "auto" })
+    // Kept, out of range, while PNG is the file written: the run ignores them.
+    const p = merged(gen({ outputFormat: "png", gifFrames: 40, svgLevel: "ultra" }).onUpdate)
+    expect("gifFrames" in p).toBe(false)
+    expect("svgLevel" in p).toBe(false)
+  })
+
+  it("warns that a GIF or an SVG refuses a mask, and keeps the mask", () => {
+    for (const outputFormat of ["gif", "svg"]) {
+      const { getByText, onUpdate, unmount } = gen({ outputFormat, maskUrl: "https://cdn.nodaro.ai/m.png" })
+      expect(getByText(/can't be made with an inpainting mask/)).toBeTruthy()
+      expect("maskUrl" in merged(onUpdate)).toBe(false)
+      unmount()
+    }
+    const { queryByText } = gen({ outputFormat: "png", maskUrl: "https://cdn.nodaro.ai/m.png" })
+    expect(queryByText(/can't be made with an inpainting mask/)).toBeNull()
   })
 })

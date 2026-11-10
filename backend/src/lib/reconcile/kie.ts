@@ -45,6 +45,7 @@ import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 import { isEntityMediaJobType, recoverEntityJob } from "./entity-recovery.js"
 import { resubmitSeedanceEdit } from "./seedance-edit-resubmit.js"
+import { requestedAspectRatioOf } from "../../providers/kie/aspect-ratio-sentence.js"
 
 export interface KieJobRow {
   id: string
@@ -149,7 +150,8 @@ async function singlePoll(row: KieJobRow, pollAttempts = 1): Promise<{
     case "kie-seedance-draft":
     case "kie-lip-sync": {
       // Kling avatar / InfiniTalk use the standard /jobs/recordInfo endpoint.
-      const r = await pollKieTask(id, pollAttempts)
+      // The job's own settings name the ratio the person chose, for the sentence if the model refused it.
+      const r = await pollKieTask(id, pollAttempts, undefined, { requestedAspectRatio: requestedAspectRatioOf(row.input_data) })
       const urls = r.resultJson.resultUrls ?? (
         r.resultJson.videoUrl ? [r.resultJson.videoUrl]
         : r.resultJson.audioUrl ? [r.resultJson.audioUrl]

@@ -663,6 +663,20 @@ describe("generate-image", () => {
     )
   })
 
+  it("sends the output format and its levers on the inpaint options, as the background", async () => {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a cat" })
+    mockRunImageGeneration.mockResolvedValue(undefined)
+    mockCollectAncestorRefs.mockReturnValue([])
+    await executeNode(
+      makeNode("generate-image", { provider: "gpt-image-2-6-flare", outputFormat: "gif", gifFrames: 12, gifFrameDurationMs: 150 }),
+      makeCtx(),
+    )
+    expect(mockRunImageGeneration.mock.calls[0]![16]).toMatchObject({ outputFormat: "gif", gifFrames: 12, gifFrameDurationMs: 150 })
+    mockRunImageGeneration.mockClear()
+    await executeNode(makeNode("generate-image", { provider: "gpt-image-2-6-flare", outputFormat: "svg", svgLevel: "max" }), makeCtx())
+    expect(mockRunImageGeneration.mock.calls[0]![16]).toMatchObject({ outputFormat: "svg", svgLevel: "max" })
+  })
+
   it("uses overridePrompt when provided", async () => {
     mockResolveNodeInputs.mockReturnValue({ prompt: "original" })
     mockRunImageGeneration.mockResolvedValue(undefined)
@@ -1037,6 +1051,26 @@ describe("image-to-image", () => {
       makeCtx(),
     )
     expect(mockRunImageToImage.mock.calls[0]![6]).toMatchObject({ background: "transparent" })
+  })
+
+  it("passes the output format and its levers to runImageToImage", async () => {
+    mockResolveNodeInputs.mockReturnValue({ imageUrl: "http://img.png" })
+    mockRunImageToImage.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("image-to-image", { prompt: "make it move", provider: "gpt-image-2-6-flare-i2i", outputFormat: "gif", gifFrames: 6, gifFrameDurationMs: 90 }),
+      makeCtx(),
+    )
+    expect(mockRunImageToImage.mock.calls[0]![6]).toMatchObject({ outputFormat: "gif", gifFrames: 6, gifFrameDurationMs: 90 })
+  })
+
+  it("passes the output format and its levers to runModifyImage", async () => {
+    mockResolveNodeInputs.mockReturnValue({ referenceImageUrls: ["http://img.png"] })
+    mockRunModifyImage.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("modify-image", { prompt: "trace it", provider: "gpt-image-2-6-sunburst-i2i", outputFormat: "svg", svgLevel: "detailed" }),
+      makeCtx(),
+    )
+    expect(mockRunModifyImage.mock.calls[0]![6]).toMatchObject({ outputFormat: "svg", svgLevel: "detailed" })
   })
 
   it("calls runImageToImage with correct args", async () => {

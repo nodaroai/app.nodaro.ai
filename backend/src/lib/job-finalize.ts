@@ -1,6 +1,7 @@
 import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 import { supabase } from "./supabase.js"
 import { uploadToR2 } from "./storage.js"
+import { requestedImageFormat, storeFormattedImages } from "./image-output-store.js"
 import { runPostProcessing } from "./post-processing-error.js"
 import { appendCharacterReferenceVideo } from "./character-auto-attach.js"
 import { FINALIZE_CLAIM_TTL_MS } from "./reconcile/types.js"
@@ -153,8 +154,9 @@ interface JobRow {
   workflow_execution_id: string | null
   status: string
   /** The user-submitted request config (see `lib/job-input-data.ts`). Read
-   *  here only for the reference-video auto-attach intent fields
-   *  (`attachToCharacterId` + `attachReferenceVideoVariant`). */
+   *  here for an image's requested `outputFormat` and the reference-video
+   *  auto-attach intent fields (`attachToCharacterId` +
+   *  `attachReferenceVideoVariant`). */
   input_data: Record<string, unknown> | null
 }
 
@@ -603,7 +605,22 @@ export async function finalizeJobWithMedia(
   // path (the R2 URL we record as the clip's canonical location).
   let videoR2Url: string | undefined
   try {
-    if (IMAGE_TYPES.has(jobType)) {
+    if (IMAGE_TYPES.has(jobType) && requestedImageFormat(job.input_data)) {
+      // A run that asked for JPEG, WebP, a GIF or an SVG: stored as what its
+      // bytes are, an SVG made safe first (a refused one fails the job with a
+      // refund, lib/image-output-store.ts), with a PNG still of a GIF or SVG.
+      const stored = await storeFormattedImages({
+        sourceUrls: [result.url, ...(result.extraUrls ?? [])],
+        jobId,
+        userId: job.user_id ?? undefined,
+        watermark,
+      })
+      outputData = {
+        ...buildImageOutputData(result as Parameters<typeof buildImageOutputData>[0], stored.urls),
+        imageMimeType: stored.mimeType,
+        ...(stored.thumbnailUrl !== undefined && { thumbnailUrl: stored.thumbnailUrl }),
+      }
+    } else if (IMAGE_TYPES.has(jobType)) {
       const r2Urls = await uploadImageVariantsMaybeWatermark(
         [result.url, ...(result.extraUrls ?? [])],
         jobId,

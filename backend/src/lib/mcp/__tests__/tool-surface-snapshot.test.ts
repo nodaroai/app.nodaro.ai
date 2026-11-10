@@ -1464,8 +1464,17 @@ const JOB_ERROR_DETAIL_BYTES = 120
 // per-tool budget).
 const OWNED_SETTINGS_GUARD_BYTES = 262
 
+// RAISED 2026-11-10 by GPT Image 2.6's output formats, and nothing else: four short arguments
+// (`output_format`, `gif_frames`, `gif_frame_duration_ms`, `svg_level`, one clause each, plain
+// strings and numbers normalized by `_image-format-args.ts`) on generate_image, modify_image and
+// image_to_image. `generate_image` is the one tool past the per-tool budget (9_546 → 9_884 B).
+// No tool was added, so the fixture does NOT move. Measured by this suite on the same tree with
+// and without them: 522_444 total − 521_430 = 1_014 B, the four arguments on the three tools.
+const GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES = 334
+const GPT_IMAGE_2_6_FORMAT_TOTAL_BYTES = 1_014
+
 export const TOOL_WIRE_BUDGET = {
-  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES,
+  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES,
   totalBytes:
     337_638 +
     IMAGE_OVERLAY_TOOL_BYTES +
@@ -1647,7 +1656,8 @@ export const TOOL_WIRE_BUDGET = {
     GEMINI_OMNI_FLASH_1_2_BYTES +
     ESTIMATE_USE_CASE_TOOL_BYTES +
     SPEAKER_VIEW_TOOL_BYTES +
-    SPEAKER_VIEW_REGION_LIMITS_BYTES,
+    SPEAKER_VIEW_REGION_LIMITS_BYTES +
+    GPT_IMAGE_2_6_FORMAT_TOTAL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

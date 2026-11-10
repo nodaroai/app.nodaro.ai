@@ -11,6 +11,8 @@ import type {
   ImageAspectRatio,
   ImageBackground,
   ImageEditProvider,
+  ImageOutputFormat,
+  ImageSvgLevel,
   ImageEditTargetResolution,
   ImageQuality,
   ImageRenderingSpeed,
@@ -58,6 +60,20 @@ export interface ImageToImageParams extends GenerationSessionParams {
   quality?: ImageQuality
   /** Image background, on the models that take one. `transparent` renders at 1K. */
   background?: ImageBackground
+  /**
+   * The file the run writes, on the models that list `outputFormats`:
+   * `png` (the default), `jpeg`, `webp`, `gif` (an animation of square frames,
+   * 512 pixels a side: the ratio and size do not apply) or `svg` (a vector
+   * drawing). A transparent background is kept only in `png` and `webp`. A GIF
+   * or an SVG takes no mask. What changed is said in `adjustments`.
+   */
+  outputFormat?: ImageOutputFormat
+  /** A GIF's frames, 2–16 (9 by default); read only with `outputFormat: "gif"`. */
+  gifFrames?: number
+  /** How long each GIF frame shows, in ms: 20–2000 in steps of 10 (200 by default); read only with `outputFormat: "gif"`. */
+  gifFrameDurationMs?: number
+  /** An SVG's level of detail, `standard` (default), `detailed` or `max`; read only with `outputFormat: "svg"`. */
+  svgLevel?: ImageSvgLevel
   /** 0–1: how far the result may move from the source (taken by the models in `I2I_STRENGTH_SUPPORT`). */
   strength?: number
   /** `"auto"` keeps the source image's shape: on a model without a native auto, and on GPT Image 2.6 (whose own auto renders square), as the model's nearest ratio. */

@@ -18,6 +18,7 @@
  * grid, and four models side by side is a comparison; past that a batch only
  * lengthens the queue its own jobs wait in.
  */
+import { MODEL_INPUT_ADJUSTMENT_FIELDS } from "@nodaro/shared/model-catalog"
 import { createHash, randomUUID } from "node:crypto"
 import { z } from "zod"
 import { IMAGE_GEN_PROVIDERS } from "@nodaro/shared/models"
@@ -138,7 +139,7 @@ export interface ImageBatchPlanGroup {
 }
 
 const adjustmentSchema = z.object({
-  field: z.enum(["aspectRatio", "resolution", "quality", "duration", "background"]),
+  field: z.enum(MODEL_INPUT_ADJUSTMENT_FIELDS),
   from: z.union([z.string(), z.number()]),
   to: z.union([z.string(), z.number()]).optional(),
   reason: z.string(),

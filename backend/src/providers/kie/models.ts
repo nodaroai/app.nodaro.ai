@@ -116,6 +116,16 @@ export interface KieModelConfig {
    * whatever a node carries, such as a seed left from another model.
    */
   inputFields?: readonly string[]
+  /**
+   * `inputFields` per output format, for a model that writes several (GPT
+   * Image 2.6): the request's `output_format` (none is `png`) picks its list.
+   * A format with no list is not written by this model; its request keeps the
+   * `png` list. Declaring it also lets the provider shape a GIF's and an SVG's
+   * levers (`applyOutputFormat` in kie/image.ts).
+   */
+  inputFieldsByFormat?: Readonly<Record<string, readonly string[]>>
+  /** The GIF frame count is a string enum on this schema (`"4"`, `"9"`, …), not an integer (GPT Image 2.6 Economy). */
+  gifFrameCountAsString?: true
   /** The most `input_urls` this model accepts: what a request holds past it is not sent. */
   maxInputImages?: number
   requiresDuration?: boolean             // Model schema lists `duration` as REQUIRED — bespoke runners must emit it even in modes where it is ignored (gemini-omni-flash)
@@ -142,6 +152,49 @@ const GPT_IMAGE_2_6_FIELDS = ["prompt", "aspect_ratio", "resolution", "quality",
 const GPT_IMAGE_2_6_FIELDS_I2I = [...GPT_IMAGE_2_6_FIELDS, "input_urls"] as const
 const GPT_IMAGE_2_6_ECONOMY_FIELDS = ["prompt", "aspect_ratio", "background"] as const
 const GPT_IMAGE_2_6_ECONOMY_FIELDS_I2I = [...GPT_IMAGE_2_6_ECONOMY_FIELDS, "input_urls"] as const
+
+/**
+ * What each output format of GPT Image 2.6 Flare and Sunburst may send, per the
+ * KIE schemas (docs.kie.ai/market/gpt/gpt-image-2-6-{flare,sunburst}-{text,image}-to-image,
+ * fetched 2026-11-10; `additionalProperties: false`). PNG sends no format at all
+ * (KIE's default), so a PNG request is the request it always was. JPEG and WebP
+ * add the format and never `output_compression`. A GIF takes no ratio or size:
+ * from a prompt its frame `size` is sent as 512x512; the edit schema has no
+ * `size`, so an edit sends none. An SVG sends `svg.model` and no background.
+ * None of them sends `mask_url` (no 2.6 request does yet).
+ */
+const GPT_IMAGE_2_6_FORMAT_FIELDS = {
+  png: GPT_IMAGE_2_6_FIELDS,
+  jpeg: [...GPT_IMAGE_2_6_FIELDS, "output_format"],
+  webp: [...GPT_IMAGE_2_6_FIELDS, "output_format"],
+  gif: ["prompt", "quality", "background", "moderation", "output_format", "frame_count", "frame_duration_ms", "size"],
+  svg: ["prompt", "aspect_ratio", "resolution", "quality", "moderation", "output_format", "svg"],
+} as const satisfies Record<string, readonly string[]>
+const GPT_IMAGE_2_6_FORMAT_FIELDS_I2I = {
+  png: GPT_IMAGE_2_6_FIELDS_I2I,
+  jpeg: [...GPT_IMAGE_2_6_FIELDS_I2I, "output_format"],
+  webp: [...GPT_IMAGE_2_6_FIELDS_I2I, "output_format"],
+  gif: ["prompt", "input_urls", "quality", "background", "moderation", "output_format", "frame_count", "frame_duration_ms"],
+  svg: ["prompt", "input_urls", "aspect_ratio", "resolution", "quality", "moderation", "output_format", "svg"],
+} as const satisfies Record<string, readonly string[]>
+/** Economy writes a PNG or a GIF from a prompt (its GIF takes no ratio), a PNG from an edit. */
+const GPT_IMAGE_2_6_ECONOMY_FORMAT_FIELDS = {
+  png: GPT_IMAGE_2_6_ECONOMY_FIELDS,
+  gif: ["prompt", "background", "output_format", "frame_count", "frame_duration_ms"],
+} as const satisfies Record<string, readonly string[]>
+const GPT_IMAGE_2_6_ECONOMY_FORMAT_FIELDS_I2I = {
+  png: GPT_IMAGE_2_6_ECONOMY_FIELDS_I2I,
+} as const satisfies Record<string, readonly string[]>
+
+/**
+ * The model KIE has write an SVG, per level of detail (the `svg.model` enum of
+ * the same schemas): Standard is Luna, Detailed Terra, Max Sol.
+ */
+export const GPT_IMAGE_2_6_SVG_AUTHOR_MODELS: Readonly<Record<string, string>> = {
+  standard: "gpt-5.6-luna",
+  detailed: "gpt-5.6-terra",
+  max: "gpt-6-sol",
+}
 
 export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // Google Nano Banana family
@@ -426,8 +479,8 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // KIE's default of low applies. Quality low, medium, high (default medium).
   // Prices were measured on 2026-11-09 against real runs.
   // See: docs.kie.ai/market/gpt/gpt-image-2-6-{flare,sunburst,economy}-{text,image}-to-image.md
-  // `inputFields` is what this release sends of each schema: the masks, GIF and
-  // SVG fields come with those features. The edit ids' 16:9 default is not
+  // `inputFields` is what this release sends of each schema, by output format
+  // (`inputFieldsByFormat`); the masks come with that feature. The edit ids' 16:9 default is not
   // what /v1/image-to-image sends with no ratio named (see the GPT Image 2.5
   // note above). KIE's own `auto` renders 2.6 square whatever the photo, so
   // "auto" with a photo reaches this provider already resolved to the ratio
@@ -435,6 +488,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   "gpt-image-2-6-flare": {
     model: "gpt-image-2-6/flare-text-to-image",
     inputFields: GPT_IMAGE_2_6_FIELDS,
+    inputFieldsByFormat: GPT_IMAGE_2_6_FORMAT_FIELDS,
     safetyLevers: [MODERATION_LEVER],
     credits: 7.82,
     cost: 0.0391,  // medium 1K, 1:1. KIE bills by tokens; the job records the real figure
@@ -444,6 +498,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   "gpt-image-2-6-flare-i2i": {
     model: "gpt-image-2-6/flare-image-to-image",
     inputFields: GPT_IMAGE_2_6_FIELDS_I2I,
+    inputFieldsByFormat: GPT_IMAGE_2_6_FORMAT_FIELDS_I2I,
     maxInputImages: requestImageLimit("gpt-image-2-6-flare-i2i"),
     safetyLevers: [MODERATION_LEVER],
     credits: 7.82,
@@ -456,6 +511,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   "gpt-image-2-6-sunburst": {
     model: "gpt-image-2-6/sunburst-text-to-image",
     inputFields: GPT_IMAGE_2_6_FIELDS,
+    inputFieldsByFormat: GPT_IMAGE_2_6_FORMAT_FIELDS,
     safetyLevers: [MODERATION_LEVER],
     credits: 7.82,
     cost: 0.0391,  // medium 1K, 1:1. KIE bills by tokens; the job records the real figure
@@ -465,6 +521,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   "gpt-image-2-6-sunburst-i2i": {
     model: "gpt-image-2-6/sunburst-image-to-image",
     inputFields: GPT_IMAGE_2_6_FIELDS_I2I,
+    inputFieldsByFormat: GPT_IMAGE_2_6_FORMAT_FIELDS_I2I,
     maxInputImages: requestImageLimit("gpt-image-2-6-sunburst-i2i"),
     safetyLevers: [MODERATION_LEVER],
     credits: 7.82,
@@ -477,6 +534,10 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   "gpt-image-2-6-economy": {
     model: "gpt-image-2-6/economy-text-to-image",
     inputFields: GPT_IMAGE_2_6_ECONOMY_FIELDS,
+    // A GIF: never run yet. Check its schema, its output and what it costs on a
+    // real run before Economy is switched back on (it is off since migration 611).
+    inputFieldsByFormat: GPT_IMAGE_2_6_ECONOMY_FORMAT_FIELDS,
+    gifFrameCountAsString: true,
     credits: 5,
     cost: 0.025,  // flat, 1K
     costFromTaskRecord: true,
@@ -485,6 +546,7 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   "gpt-image-2-6-economy-i2i": {
     model: "gpt-image-2-6/economy-image-to-image",
     inputFields: GPT_IMAGE_2_6_ECONOMY_FIELDS_I2I,
+    inputFieldsByFormat: GPT_IMAGE_2_6_ECONOMY_FORMAT_FIELDS_I2I,
     credits: 5,
     cost: 0.025,  // flat, 1K
     costFromTaskRecord: true,
