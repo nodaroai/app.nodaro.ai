@@ -21,8 +21,8 @@
   ],
   "tutorialCategorySlug": "workflows",
   "tutorialSortOrder": 4,
-  "estimatedCredits": 92,
-  "estimatedPerMinuteCredits": 15,
+  "estimatedCredits": 102,
+  "estimatedPerMinuteCredits": 18,
   "nodeTypesUsed": [
     "sticky-note",
     "upload-video",

@@ -25,8 +25,9 @@
 //      editing templates). Unlike the tutorial slugs, these are platform-owned
 //      SYSTEM slugs NO real user owns, so seeding them under the system account
 //      on the shared cloud carries no user-row-conflict risk. They are
-//      INSERT-if-missing and creator-scoped (seedOne), so a reboot is a no-op
-//      and an admin's later edits (is_active / listed_in) are never clobbered.
+//      creator-scoped (seedOne): a reboot rewrites a row only when its content
+//      changed (the doc's fingerprint), and never the columns an admin owns
+//      (is_active / listed_in, OPERATOR_OWNED_COLUMNS).
 // Nodaro's shared cloud sets neither env by default, so it still returns before
 // a single Supabase call — see seedTutorialTemplates.
 //

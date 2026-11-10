@@ -15,7 +15,7 @@
     "formats"
   ],
   "complexity": "simple",
-  "estimatedCredits": 63,
+  "estimatedCredits": 83,
   "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",

@@ -9,15 +9,24 @@
  * Which nodes flip is read off the template itself (every render set to
  * Preview, `rendersAsPreview`), never a node-id list. A doc opts in by carrying
  * the listing of its Final graph (`withoutPreviewStopRule`): the seeder is core
- * and cannot price a graph, so the figure is authored and pinned here against
- * the estimator, for every built-in template.
+ * and cannot price a graph, so the figure is written on the doc (the charged
+ * card, `template-card-prices.ts`) and pinned here against the estimator, for
+ * every built-in template.
  */
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
+
+// A template's card is priced as the hosted deployment charges, where speech is priced by length.
+vi.mock("@/lib/config.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("@/lib/config.js")>()
+  return { ...orig, speechLengthPricingEnabled: () => true }
+})
+
 import { rendersAsPreview, PREVIEW_RENDER_NODE_TYPES } from "@nodaro/shared/nodes"
 import { CreditsService } from "../../../ee/billing/credits.js"
+import { templateCardPrice } from "../../../ee/billing/template-card-prices.js"
 import { templateForPreviewStopRule } from "../preview-gate.js"
 import type { TutorialTemplateDoc } from "../types.js"
 
@@ -113,28 +122,29 @@ describe("with the preview stop rule off, the sync writes the render at Final", 
     expect(off.edges).toBe(doc.edges)
   })
 
-  it.each(gated)("%s: stores the listing the pricing functions derive for the Final graph", (file) => {
+  it.each(gated)("%s: stores the card the pricing functions derive for the Final graph", (file) => {
     const off = templateForPreviewStopRule(load(file), false)
     const l = listing(off)
     // A Final render has no Render final of its own: the listing is one part.
     expect({ final: l.final, finalPerMinute: l.finalPerMinute }).toEqual({ final: 0, finalPerMinute: 0 })
+    const card = templateCardPrice(off.nodes, off.edges)
     expect({ fixed: off.estimatedCredits, perMinute: off.estimatedPerMinuteCredits ?? 0 }).toEqual({
-      fixed: l.preview,
-      perMinute: l.previewPerMinute,
+      fixed: card.estimatedCredits,
+      perMinute: card.estimatedPerMinuteCredits ?? 0,
     })
   })
 
-  it("pins them with the rule off: their listing at Final (the Trailer + Formats one on its 40-second trailer, decided 2026-10-18)", () => {
+  it("pins them with the rule off: their charged card at Final (the Trailer + Formats one on its 40-second trailer, decided 2026-10-18)", () => {
     const off = (slug: string) => {
       const doc = templateForPreviewStopRule(load(`${slug}.json`), false)
       return [doc.estimatedCredits, doc.estimatedPerMinuteCredits ?? 0]
     }
     expect(Object.fromEntries(PODCAST.map((slug) => [slug, off(slug)]))).toEqual({
-      "podcast-clip-pack": [392, 4],
-      "podcast-multicam-cut": [62, 14],
-      "podcast-tighten-episode": [82, 14],
-      "podcast-trailer-formats": [212, 4],
-      "podcast-vertical-speaker-clip": [66, 12],
+      "podcast-clip-pack": [432, 5],
+      "podcast-multicam-cut": [69, 16],
+      "podcast-tighten-episode": [91, 16],
+      "podcast-trailer-formats": [234, 5],
+      "podcast-vertical-speaker-clip": [74, 14],
     })
   })
 
@@ -151,10 +161,10 @@ describe("with the preview stop rule off, the sync writes the render at Final", 
     expect(JSON.stringify(off.nodes, null, 2)).toBe(JSON.stringify(before.nodes, null, 2))
     expect(JSON.stringify(off.edges)).toBe(JSON.stringify(before.edges))
     expect(JSON.stringify(off.settings)).toBe(JSON.stringify(before.settings))
-    expect([off.estimatedCredits, off.estimatedPerMinuteCredits ?? 0]).toEqual([
-      before.estimatedCredits,
-      before.estimatedPerMinuteCredits ?? 0,
-    ])
+    // Its card is the one the graph before the flip lists, at today's charged prices (the
+    // frozen doc's own figure is the price-table rows it stored then).
+    const card = templateCardPrice(before.nodes, before.edges)
+    expect([off.estimatedCredits, off.estimatedPerMinuteCredits ?? 0]).toEqual([card.estimatedCredits, card.estimatedPerMinuteCredits ?? 0])
   })
 
   it.each(files.filter((f) => !gated.includes(f)))("%s: a template with no Preview render is written as authored", (file) => {

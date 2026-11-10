@@ -14,7 +14,7 @@
     "props"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 48,
+  "estimatedCredits": 62,
   "estimatedCreditsIsEstimate": true,
   "nodeTypesUsed": [
     "upload-image",

@@ -21,11 +21,11 @@
   ],
   "tutorialCategorySlug": "workflows",
   "tutorialSortOrder": 2,
-  "estimatedCredits": 72,
-  "estimatedPerMinuteCredits": 15,
+  "estimatedCredits": 80,
+  "estimatedPerMinuteCredits": 18,
   "withoutPreviewStopRule": {
-    "estimatedCredits": 62,
-    "estimatedPerMinuteCredits": 14,
+    "estimatedCredits": 69,
+    "estimatedPerMinuteCredits": 16,
     "description": "Edit a podcast filmed on several cameras: line the recordings up, tighten the episode, then cut to whoever is talking — the sound stays on the master track throughout.",
     "notes": {
       "multicam-note-intro": {

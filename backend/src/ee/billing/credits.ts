@@ -4908,24 +4908,63 @@ export class CreditsService {
 
   /**
    * The listing (`estimateWorkflowListingCredits`) at `STATIC_CREDIT_COSTS`'
-   * base prices, with no database read, no markup and no UGC seam: what a
-   * built-in template's stored price pins.
+   * base prices, with no database read, no markup and no UGC seam. Nothing a
+   * user sees quotes it: it pins which identifier each node is listed at.
    */
   static estimateWorkflowBaseListing(
     nodes: ReadonlyArray<EstimateNode>,
     edges: ReadonlyArray<EstimateEdge> | undefined,
     publishType: ListingPublishType,
-    options?: {
-      readonly replaceableMediaNodeIds?: ReadonlySet<string>
-      readonly exposedListNodeIds?: ReadonlySet<string>
-      readonly editPlanPerMinute?: boolean
-      readonly speechTextCaps?: ExposedTextCaps
-    },
+    options?: BaseListingOptions & { readonly editPlanPerMinute?: boolean },
+  ): AppListingEstimate {
+    return CreditsService.estimateWorkflowListingAt(staticBasePrices(options?.editPlanPerMinute), nodes, edges, publishType, options)
+  }
+
+  /**
+   * The listing at a given price table, with no database read and no UGC
+   * seam: the same rules as `estimateWorkflowListingCredits`, each node
+   * charged by `prices`. A built-in template's stored price is this at the
+   * hosted deployment's charged prices (`template-card-prices.ts`).
+   */
+  static estimateWorkflowListingAt(
+    prices: ChargedPriceTable,
+    nodes: ReadonlyArray<EstimateNode>,
+    edges: ReadonlyArray<EstimateEdge> | undefined,
+    publishType: ListingPublishType,
+    options?: BaseListingOptions,
+    /** Told each priced node's parts, by the part it is summed into. */
+    onNode?: ListingTally,
   ): AppListingEstimate {
     const graph = asSavedGraph(nodes)
-    const split = listingEstimate(graph, edges ?? [], staticBasePrices(options?.editPlanPerMinute), publishType, undefined, options?.speechTextCaps, options?.replaceableMediaNodeIds, options?.exposedListNodeIds)
+    const split = listingEstimate(graph, edges ?? [], prices, publishType, undefined, options?.speechTextCaps, options?.replaceableMediaNodeIds, options?.exposedListNodeIds, undefined, undefined, onNode)
     return listingHoldsMeteredEstimate(graph, edges, undefined, undefined) ? { ...split, estimate: true } : split
   }
+
+  /**
+   * The run estimate (`estimateWorkflowBaseCredits`) at a given price table,
+   * with no database read and no UGC seam, told each priced node's figure:
+   * what a check holds a listing priced at that table to, step by step.
+   * Prices `nodes` as the graph a run EXECUTES (its overrides already merged).
+   */
+  static estimateWorkflowCreditsAt(
+    prices: ChargedPriceTable,
+    nodes: ReadonlyArray<EstimateNode>,
+    edges: ReadonlyArray<EstimateEdge> | undefined,
+    options?: WorkflowEstimateOptions,
+    onNode?: NodeTally,
+  ): number {
+    return sumWorkflowEstimate(nodes, edges, prices, options, undefined, onNode)
+  }
+}
+
+/** A listing's tally: one priced node's fixed and per-minute credits, in the part they are summed into. */
+export type ListingTally = (nodeId: string, part: "preview" | "final", fixed: number, perMinute: number) => void
+
+/** What a listing priced without the database is given (`estimateWorkflowListingAt`). */
+type BaseListingOptions = {
+  readonly replaceableMediaNodeIds?: ReadonlySet<string>
+  readonly exposedListNodeIds?: ReadonlySet<string>
+  readonly speechTextCaps?: ExposedTextCaps
 }
 
 /**
@@ -6095,6 +6134,8 @@ function sumListingParts(
   speechTextCaps: ExposedTextCaps | undefined,
   /** Sources whose recording the app user or the cloner replaces: priced with no length. */
   replacedMediaIds: ReadonlySet<string>,
+  /** Told each priced node's parts (times the runs it makes), when a caller asks. */
+  onNode?: (nodeId: string, fixed: number, perMinute: number) => void,
 ): ListingParts {
   const gateNodes = listingGateNodes(nodes)
   const gateEdges = listingGateEdges(edges)
@@ -6114,6 +6155,7 @@ function sumListingParts(
       fixed: oneRunCredits(node, nodes, edges, prices, speechTextCaps, unitsOf, wireSec, rerunIds, wireFps),
       perMinute: 0,
     }
+    onNode?.(node.id ?? node.type, parts.fixed * runs, parts.perMinute * runs)
     return { fixed: sum.fixed + parts.fixed * runs, perMinute: sum.perMinute + parts.perMinute * runs }
   }, NO_PARTS)
 }
@@ -6322,6 +6364,8 @@ function listingEstimate(
    * outside the per-node sum `skip` leaves it out of): added to that List's per-item figure.
    */
   ugcPerItem?: ReadonlyMap<string, number>,
+  /** Told each priced node's parts (a use-case node's chain by its steps' ids, its fee under its own id). */
+  onNode?: ListingTally,
 ): AppListingEstimate {
   // A use-case node lists as the chain it builds (decided 2026-10-13): the
   // preview part is what its run executes (a review-on node stops at its
@@ -6331,9 +6375,10 @@ function listingEstimate(
   // The expanded graphs below hold no use-case node, so they need no flag.
   const uc = expandUseCaseNodes(nodes, edges, usecaseExpandFlags(viewer))
   if (uc.expanded) {
-    const run = listingEstimate(uc.nodes, uc.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, exposedListNodeIds, undefined, ugcPerItem)
+    // The tally hears the run's preview part and the whole chain's final part, as they are summed.
+    const run = listingEstimate(uc.nodes, uc.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, exposedListNodeIds, undefined, ugcPerItem, onNode && ((id, part, fixed, perMinute) => part === "preview" && onNode(id, part, fixed, perMinute)))
     const whole = expandUseCaseNodes(nodes, edges, { chain: "whole", ...usecaseExpandFlags(viewer) })
-    const finals = listingEstimate(whole.nodes, whole.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, exposedListNodeIds)
+    const finals = listingEstimate(whole.nodes, whole.edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, exposedListNodeIds, undefined, undefined, onNode && ((id, part, fixed, perMinute) => part === "final" && onNode(id, part, fixed, perMinute)))
     // Each fee counts once per run its node makes (a List's items, Each wires, repeats).
     const reruns = new Set(nodes.flatMap((n) => (n.id && !isFrozenNode(n) ? [n.id] : [])))
     const fees = (graph: ReadonlyArray<EstimateNode>) => usecaseFeesTotal(uc.fees, (id) => usecaseFeeCredits(prices, id), graph, edges, reruns)
@@ -6360,6 +6405,7 @@ function listingEstimate(
         previewPerItem = Math.max(previewPerItem, steps + fees(withItems(saved + 1)) - fees(withItems(saved)))
       }
     }
+    if (onNode) for (const f of uc.fees) onNode(f.nodeId, "preview", usecaseFeesTotal([f], (id) => usecaseFeeCredits(prices, id), nodes, edges, reruns), 0)
     return {
       preview: run.preview + fees(nodes),
       previewPerMinute: run.previewPerMinute,
@@ -6369,7 +6415,7 @@ function listingEstimate(
       ...(finalPerItem ? { finalPerItem } : {}),
     }
   }
-  const parts = listingParts(nodes, edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds)
+  const parts = listingParts(nodes, edges, prices, publishType, skip, speechTextCaps, replaceableMediaNodeIds, onNode)
   if (publishType === "template" || !exposedListNodeIds?.size) return parts
   // A List the app's user fills (decided 2026-10-07): the saved items are in
   // the parts above; each further item is priced as the difference one more
@@ -6444,6 +6490,7 @@ function listingParts(
   skip?: (node: EstimateNode) => boolean,
   speechTextCaps?: ExposedTextCaps,
   replaceableMediaNodeIds?: ReadonlySet<string>,
+  onNode?: ListingTally,
 ): AppListingEstimate {
   // The recordings an app user or a template's cloner replaces with their own
   // (review F2, decided 2026-10-07): the creator's sample length is not theirs.
@@ -6458,7 +6505,7 @@ function listingParts(
   // The preview part is the whole graph at its saved settings — never only
   // the run up to each Preview: a flag-off app run executes all of it, with
   // the fee (see AppListingEstimate). Revisit when production turns the flag on.
-  const preview = sumListingParts(nodes, edges, prices, (n) => !skip?.(n), reruns, speechTextCaps, replaced)
+  const preview = sumListingParts(nodes, edges, prices, (n) => !skip?.(n), reruns, speechTextCaps, replaced, onNode && ((id, fixed, perMinute) => onNode(id, "preview", fixed, perMinute)))
   // A component runs inside its caller's run and never stops at a Preview.
   if (publishType === "component") return { preview: preview.fixed, final: 0, previewPerMinute: preview.perMinute, finalPerMinute: 0 }
   const gateNodes = listingGateNodes(nodes)
@@ -6469,7 +6516,7 @@ function listingParts(
   for (const renderId of previewStopsForListing(gateNodes, gateEdges).previewRenderIds) {
     const runSet = renderFinalRunSet(renderId, gateNodes, gateEdges)
     const atFinal = nodes.map((n) => (n.id === renderId ? { ...n, data: { ...(n.data ?? {}), quality: "final" } } : n))
-    const parts = sumListingParts(atFinal, edges, prices, (n) => !!n.id && runSet.has(n.id) && !frozen(n) && !skip?.(n), reruns, speechTextCaps, replaced)
+    const parts = sumListingParts(atFinal, edges, prices, (n) => !!n.id && runSet.has(n.id) && !frozen(n) && !skip?.(n), reruns, speechTextCaps, replaced, onNode && ((id, fixed, perMinute) => onNode(id, "final", fixed, perMinute)))
     final = { fixed: final.fixed + parts.fixed, perMinute: final.perMinute + parts.perMinute }
   }
   return { preview: preview.fixed, final: final.fixed, previewPerMinute: preview.perMinute, finalPerMinute: final.perMinute }

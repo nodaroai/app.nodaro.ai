@@ -21,11 +21,11 @@
   ],
   "tutorialCategorySlug": "workflows",
   "tutorialSortOrder": 1,
-  "estimatedCredits": 652,
-  "estimatedPerMinuteCredits": 4,
+  "estimatedCredits": 722,
+  "estimatedPerMinuteCredits": 5,
   "withoutPreviewStopRule": {
-    "estimatedCredits": 392,
-    "estimatedPerMinuteCredits": 4,
+    "estimatedCredits": 432,
+    "estimatedPerMinuteCredits": 5,
     "description": "Cut a long recording into a pack of short clips. The editor finds the best moments and each one renders on its own with word-level (karaoke) captions.",
     "notes": {
       "clips-note-intro": {

@@ -21,11 +21,11 @@
   ],
   "tutorialCategorySlug": "workflows",
   "tutorialSortOrder": 0,
-  "estimatedCredits": 132,
-  "estimatedPerMinuteCredits": 15,
+  "estimatedCredits": 146,
+  "estimatedPerMinuteCredits": 18,
   "withoutPreviewStopRule": {
-    "estimatedCredits": 82,
-    "estimatedPerMinuteCredits": 14,
+    "estimatedCredits": 91,
+    "estimatedPerMinuteCredits": 16,
     "description": "Turn a raw recording into a tightened cut: transcribe it, detect the silences, let the editor plan the trims, then render the final video with optional captions.",
     "notes": {
       "tighten-note-intro": {

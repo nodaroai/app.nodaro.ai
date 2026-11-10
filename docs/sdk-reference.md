@@ -8868,14 +8868,14 @@ A card's `estimatedCredits` is the template's listed price. When the price
 follows the length of the recording the template is given,
 `estimatedPerMinuteCredits` is above 0 and the price is `estimatedCredits` plus
 that many credits per minute of the recording — the Tighten Episode template
-lists `82` and `14`, or, on a deployment with the preview stop rule on (where it
-renders a Preview first), `132` and `15`: its run plus its Render final. It is
+lists `91` and `16`, or, on a deployment with the preview stop rule on (where it
+renders a Preview first), `146` and `18`: its run plus its Render final. It is
 absent or `0` otherwise.
 
 The route also takes `sort=cheapest`, the Templates page's **Fewest credits**:
 the price of a 60-minute recording first, lowest first (`estimatedCredits` plus
-60 × `estimatedPerMinuteCredits`), so `82` + `14`/min sorts as `922` (`132` +
-`15`/min, with the preview stop rule on, as `1032`). The SDK's
+60 × `estimatedPerMinuteCredits`), so `91` + `16`/min sorts as `1051` (`146` +
+`18`/min, with the preview stop rule on, as `1226`). The SDK's
 `TemplateSort` does not list it yet; pass it through `client.request()`.
 
 ```ts

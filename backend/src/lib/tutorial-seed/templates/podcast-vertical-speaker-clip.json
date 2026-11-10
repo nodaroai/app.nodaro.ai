@@ -21,11 +21,11 @@
   ],
   "tutorialCategorySlug": "workflows",
   "tutorialSortOrder": 8,
-  "estimatedCredits": 66,
-  "estimatedPerMinuteCredits": 15,
+  "estimatedCredits": 74,
+  "estimatedPerMinuteCredits": 18,
   "withoutPreviewStopRule": {
-    "estimatedCredits": 66,
-    "estimatedPerMinuteCredits": 12,
+    "estimatedCredits": 74,
+    "estimatedPerMinuteCredits": 14,
     "description": "Turn a recording of a conversation into a vertical clip that follows whoever is talking: speakers are found, their faces tracked, and the picture cuts to the speaker.",
     "notes": {
       "vsc-note-intro": {
