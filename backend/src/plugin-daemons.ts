@@ -22,6 +22,7 @@ import { loadContentGuard } from "./lib/content-guard-load.js"
 import { initializeExternalWallet } from "./lib/external-wallet.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 import { useProviderSafetySettings } from "./lib/provider-safety.js"
+import { logStorageDeletesAtBoot } from "./lib/storage-deletes-setting.js"
 import type { PluginDaemonHost } from "./lib/plugin-daemons/host.js"
 
 /** Upper bound on any shutdown: the host's drain window plus a margin, then exit regardless. */
@@ -122,6 +123,8 @@ async function main() {
     console.info("[plugin-daemons] EDITION is not cloud — no plugin daemons to host")
     return
   }
+  // On a deployment that deletes nothing from storage (STORAGE_DELETES=skip), one line saying so, naming this process.
+  logStorageDeletesAtBoot("plugin-daemons")
   await hostDaemons()
 }
 

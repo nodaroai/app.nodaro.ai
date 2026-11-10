@@ -20,6 +20,7 @@ import { setPluginNodeVoicesSource } from "./lib/private-plugins/plugin-node-voi
 import { askApiPluginNodeVoices } from "./services/workflow-engine/plugin-node-voices-loopback.js"
 import { startLaneParking } from "./lib/concurrency-lanes/park.js"
 import { startServerOccupancyPublisher } from "./lib/concurrency-lanes/server-occupancy.js"
+import { logStorageDeletesAtBoot } from "./lib/storage-deletes-setting.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("[orchestrator] Unhandled rejection:", err)
@@ -75,6 +76,8 @@ const worker = createOrchestratorWorker()
 const stopServerOccupancy = startServerOccupancyPublisher()
 
 console.warn("[orchestrator] Worker started, waiting for workflow executions...")
+// On a deployment that deletes nothing from storage (STORAGE_DELETES=skip), one line saying so, naming this process.
+logStorageDeletesAtBoot("orchestrator")
 
 // SHUTDOWN_DRAIN_MS (lib/worker-drain.ts) is the shared Railway grace-window
 // deadline. Mirrors backend/src/worker.ts:31-72 — including the note that this

@@ -60,3 +60,30 @@ describe("storageDeletesSkipped() — the one place the setting is read", () => 
     }
   })
 })
+
+// The proof an operator reads before a copy-of-production deployment runs any
+// job: one line at boot from each process when deletes are off, naming it, and
+// nothing at all otherwise.
+describe("storageDeletesBootLine", () => {
+  it("is null when deletes are on (every install as before)", async () => {
+    const { storageDeletesBootLine } = await import("../storage-deletes-setting.js")
+    const was = config.STORAGE_DELETES
+    try {
+      config.STORAGE_DELETES = "on"
+      expect(storageDeletesBootLine("worker")).toBeNull()
+    } finally {
+      config.STORAGE_DELETES = was
+    }
+  })
+
+  it("names the process and the setting when deletes are off", async () => {
+    const { storageDeletesBootLine } = await import("../storage-deletes-setting.js")
+    const was = config.STORAGE_DELETES
+    try {
+      config.STORAGE_DELETES = "skip"
+      expect(storageDeletesBootLine("worker")).toBe("[storage] worker: storage deletes are off on this deployment (STORAGE_DELETES=skip)")
+    } finally {
+      config.STORAGE_DELETES = was
+    }
+  })
+})

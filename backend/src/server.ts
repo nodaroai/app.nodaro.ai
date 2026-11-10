@@ -39,6 +39,7 @@ import { warmHeygenCatalog } from "./providers/heygen/catalog.js"
 import { warmVoiceLibraryCatalog } from "./providers/elevenlabs/voice-library-catalog.js"
 import { watchTitleColumn } from "./lib/jobs-title-column.js"
 import { ensureStorageBucket } from "./lib/storage.js"
+import { logStorageDeletesAtBoot } from "./lib/storage-deletes-setting.js"
 import { archiveThisBuild } from "./lib/site-asset-archive.js"
 import { initTelegramRoutingTable } from "./lib/telegram-router.js"
 import { pipelineEvents } from "./ee/pipelines/events.js"
@@ -110,6 +111,10 @@ async function main() {
   // And which client address — the line to compare across environments after
   // NETWORK_HASH_SECRET changes (staging and production share one database).
   console.info(describeClientAddressConfig())
+  // And, on a deployment that deletes nothing from storage (STORAGE_DELETES=skip,
+  // a copy of another deployment's database on shared media), one line saying
+  // so: the check an operator makes before such a deployment runs any job.
+  logStorageDeletesAtBoot("server")
 
   // Start billing cleanup cron jobs (cloud edition only)
   if (hasCredits()) {

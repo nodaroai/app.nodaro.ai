@@ -18,6 +18,7 @@ vi.mock("../worker-drain.js", () => ({ beginWorkerDrain: () => {}, SHUTDOWN_DRAI
 vi.mock("../../workers/orchestrator-worker.js", () => ({ createOrchestratorWorker: mocks.startWorker }))
 vi.mock("../concurrency-lanes/park.js", () => ({ startLaneParking: async () => () => {} }))
 vi.mock("../concurrency-lanes/server-occupancy.js", () => ({ startServerOccupancyPublisher: () => () => {} }))
+vi.mock("../storage-deletes-setting.js", () => ({ logStorageDeletesAtBoot: () => {} }))
 
 beforeEach(() => {
   vi.resetModules()
