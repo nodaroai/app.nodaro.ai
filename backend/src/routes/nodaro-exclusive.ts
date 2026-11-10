@@ -24,6 +24,9 @@ import {
   describeAudioSyncOffsetIssue,
   transcriptSpeakerLabels,
   cameraSwitchEdlProblem,
+  CAMERA_SWITCH_BOUNDS,
+  CAMERA_SWITCH_NAME_MAX,
+  type CameraSwitchNumericSetting,
   type Edl
 } from "@nodaro/shared/edl"
 import { safeUrlSchema } from "../lib/url-validator.js"
@@ -112,7 +115,8 @@ const editPlanBody = z.object({
 })
 // camera-switch (podcast B5): the edit + the diarized transcript; the cloud
 // plugin's Zod is the schema authority. Refused here like the cloud route, before
-// anything is created or relayed: no edit, and no speaker labels at all.
+// anything is created or relayed: no edit, no speaker labels at all, and a
+// setting outside its range (`cameraSwitchSettings`).
 const cameraSwitchBody = z.object({
   edl: z.unknown(),
   transcript: z.unknown(),
@@ -133,6 +137,18 @@ function refuseCameraSwitch(body: Record<string, unknown>):
   }
   return { body: { ...body, edl, transcript: parse(body.transcript) } }
 }
+/** The settings' ranges and the 1–80 name limit, the cloud route's own (`CAMERA_SWITCH_BOUNDS`):
+ *  checked after the refusals above, in the cloud route's order, and answered `400 validation_error`
+ *  as there. Every other key passes through to the cloud's schema. */
+const cameraSwitchSetting = (key: CameraSwitchNumericSetting) =>
+  z.number().int().min(CAMERA_SWITCH_BOUNDS[key].min).max(CAMERA_SWITCH_BOUNDS[key].max).optional()
+const cameraSwitchSettings = z.object({
+  minShotMs: cameraSwitchSetting("minShotMs"),
+  leadMs: cameraSwitchSetting("leadMs"),
+  maxShotMs: cameraSwitchSetting("maxShotMs"),
+  wideEvery: cameraSwitchSetting("wideEvery"),
+  speakerNames: z.record(z.string().min(1).max(200), z.string().min(1).max(CAMERA_SWITCH_NAME_MAX)).optional(),
+}).passthrough()
 // speaker-view (Track C, C2.1/C3.1): HOW the speakers are on screen. The cloud
 // plugin's Zod is the schema authority (settings, regions, the edit itself);
 // here only the edit has to be there, PARSED — the relay re-hosts its sources
@@ -373,6 +389,10 @@ export async function nodaroExclusiveRoutes(app: FastifyInstance) {
         if ("refused" in checked) {
           const { status, code, message } = checked.refused
           return reply.status(status).send({ error: { code, message } })
+        }
+        const settings = cameraSwitchSettings.safeParse(checked.body)
+        if (!settings.success) {
+          return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(settings.error) } })
         }
         return enqueueExclusive({ req, reply, jobType, body: checked.body })
       }

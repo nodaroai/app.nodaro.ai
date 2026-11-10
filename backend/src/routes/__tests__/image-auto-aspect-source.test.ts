@@ -167,6 +167,90 @@ describe("/v1/image-to-image — 'auto' keeps the source photo's shape", () => {
   })
 })
 
+/**
+ * GPT Image 2.6's own "auto" renders a portrait square (768x1024 in, 1024x1024
+ * out), so on 2.6 "auto" is sent as the ratio nearest the photo — whether the
+ * request names "auto" or names no ratio at all. 2.5's own auto keeps the
+ * shape, so 2.5 still receives "auto" and nothing is read.
+ */
+describe("/v1/image-to-image — GPT Image 2.6 sends the photo's ratio, never its own 'auto'", () => {
+  const GPT_IMAGE_2_6_EDITS = ["gpt-image-2-6-flare-i2i", "gpt-image-2-6-sunburst-i2i"]
+
+  it.each(GPT_IMAGE_2_6_EDITS)("%s: an explicit 'auto' and a missing ratio both send 3:4 for a 3:4 photo", async (provider) => {
+    await servePng(768, 1024)
+    const explicit = await post("/v1/image-to-image", { imageUrl: SOURCE, prompt: "make it dusk", provider, aspectRatio: "auto" })
+    expect(explicit.queued.aspectRatio).toBe("3:4")
+    expect(explicit.inputData.aspectRatio).toBe("3:4")
+    expect(explicit.body.adjustments).toEqual([expect.objectContaining({ field: "aspectRatio", from: "auto", to: "3:4" })])
+    const missing = await post("/v1/image-to-image", { imageUrl: SOURCE, prompt: "make it dusk", provider })
+    expect(missing.queued.aspectRatio).toBe("3:4")
+    expect(missing.inputData.aspectRatio).toBe("3:4")
+  })
+
+  it("no model and no ratio: the edit default sends the photo's ratio", async () => {
+    await servePng(1920, 1080)
+    const { queued } = await post("/v1/image-to-image", { imageUrl: SOURCE, prompt: "make it dusk" })
+    expect(queued.provider).toBe("gpt-image-2-6-flare-i2i")
+    expect(queued.aspectRatio).toBe("16:9")
+  })
+
+  it("Economy picks from its own shorter list", async () => {
+    await servePng(768, 1024)
+    const { queued } = await post("/v1/image-to-image", { imageUrl: SOURCE, prompt: "make it dusk", provider: "gpt-image-2-6-economy-i2i" })
+    expect(queued.aspectRatio).toBe("2:3")
+  })
+
+  it("quote = charge: the check, which has no size, prices exactly the measured run", async () => {
+    await servePng(768, 1024)
+    for (const levers of [{}, { aspectRatio: "auto" }, { quality: "high", resolution: "4K" }, { aspectRatio: "auto", quality: "low", resolution: "2K", referenceImageUrls: ["https://cdn.example.com/ref.png"] }]) {
+      const payload = { imageUrl: SOURCE, prompt: "make it dusk", provider: "gpt-image-2-6-flare-i2i", userId: USER, ...levers }
+      const { queued } = await post("/v1/image-to-image", payload)
+      expect(queued.aspectRatio).toBe("3:4")
+      const debit = vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]
+      expect(resolveImageToImageCreditIdentifier({ body: payload } as FastifyRequest)).toBe(debit)
+      // The same price as the same request naming the ratio it was sent.
+      expect(resolveImageToImageCreditIdentifier({ body: { ...payload, aspectRatio: "3:4" } } as FastifyRequest)).toBe(debit)
+    }
+  })
+
+  it("a named ratio is sent as named and nothing is read", async () => {
+    await servePng(768, 1024)
+    const { queued } = await post("/v1/image-to-image", { imageUrl: SOURCE, prompt: "make it dusk", provider: "gpt-image-2-6-flare-i2i", aspectRatio: "16:9" })
+    expect(queued.aspectRatio).toBe("16:9")
+    expect(vi.mocked(fetchOwnMedia)).not.toHaveBeenCalled()
+  })
+
+  it("a photo whose size cannot be read keeps the model's own 'auto', as before", async () => {
+    vi.mocked(fetchOwnMedia).mockResolvedValue(new Response("gone", { status: 404 }))
+    const { queued } = await post("/v1/image-to-image", { imageUrl: SOURCE, prompt: "make it dusk", provider: "gpt-image-2-6-flare-i2i", aspectRatio: "auto" })
+    expect(queued.aspectRatio).toBe("auto")
+  })
+
+  it.each(["gpt-image-2-5-flare-i2i", "gpt-image-2-5-sunburst-i2i"])("%s keeps its own 'auto', named or not, and reads nothing", async (provider) => {
+    await servePng(768, 1024)
+    for (const levers of [{}, { aspectRatio: "auto" }]) {
+      const { queued } = await post("/v1/image-to-image", { imageUrl: SOURCE, prompt: "make it dusk", provider, ...levers })
+      expect(queued.aspectRatio).toBe("auto")
+    }
+    expect(vi.mocked(fetchOwnMedia)).not.toHaveBeenCalled()
+  })
+
+  it("a Modify Image node in a workflow run, ratio unset, sends what the route sends", async () => {
+    await servePng(768, 1024)
+    const { queued } = await post("/v1/image-to-image", { imageUrl: SOURCE, prompt: "make it dusk", provider: "gpt-image-2-6-flare-i2i" })
+    const run = await buildPayloadWithSourceSize(
+      { id: "n1", type: "modify-image", data: { prompt: "make it dusk", provider: "gpt-image-2-6-flare-i2i" } },
+      "job-1",
+      { imageUrl: SOURCE },
+      undefined,
+      {},
+    )
+    expect(run.payload.aspectRatio).toBe(queued.aspectRatio)
+    expect(run.payload.aspectRatio).toBe("3:4")
+    expect(run.modelIdentifier).toBe(vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3])
+  })
+})
+
 describe("/v1/edit-image — 'auto' keeps the source photo's shape", () => {
   it("sends the model's ratio nearest the source", async () => {
     await servePng(1104, 1472)

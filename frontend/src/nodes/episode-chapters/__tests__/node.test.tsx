@@ -96,6 +96,17 @@ describe("EpisodeChaptersNode", () => {
     expect(store.updateNodeData).not.toHaveBeenCalledWith("c1", expect.objectContaining({ useCaseContinue: expect.anything() }))
   })
 
+  it("a run that found no chapters offers no Continue: every step finished, nothing failed to continue from", () => {
+    renderNode({ label: "Chapters", executionStatus: "failed", errorMessage: "The plan found no chapters in this recording.", useCaseJobId: "00000000-0000-4000-8000-000000000001", generatedJson: [], fieldMappings: {} })
+    expect(screen.getByText("The plan found no chapters in this recording.")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: t("node.tightenContinue") })).toBeNull()
+  })
+
+  it("a run that stopped at a step (it kept no chapter list) still offers Continue", () => {
+    renderNode({ label: "Chapters", executionStatus: "failed", errorMessage: "Edit Plan: boom", useCaseJobId: "00000000-0000-4000-8000-000000000001", fieldMappings: {} })
+    expect(screen.getByRole("button", { name: t("node.tightenContinue") })).toBeInTheDocument()
+  })
+
   it("a failed run that never started its job offers no Continue", () => {
     renderNode({ label: "Chapters", executionStatus: "failed", errorMessage: "boom", fieldMappings: {} })
     expect(screen.queryByRole("button", { name: t("node.tightenContinue") })).toBeNull()

@@ -5,10 +5,14 @@ import { referenceBoardRoutes, resolveBoardCreditIdentifier } from "../reference
 vi.mock("../../lib/idempotent-insert.js", () => ({
   insertWithIdempotencyKey: async () => ({ row: { id: "job1" }, created: true }),
 }))
-vi.mock("../../lib/queue.js", () => ({ videoQueue: { add: vi.fn() } }))
+const { queueAdd, reserve } = vi.hoisted(() => ({
+  queueAdd: vi.fn(),
+  reserve: vi.fn(async () => ({ usageLogId: "u1" })),
+}))
+vi.mock("../../lib/queue.js", () => ({ videoQueue: { add: queueAdd } }))
 vi.mock("../../middleware/credit-guard.js", () => ({
   creditGuard: () => async () => {},
-  reserveCreditsForJob: async () => ({ usageLogId: "u1" }),
+  reserveCreditsForJob: reserve,
 }))
 vi.mock("../../lib/url-validator.js", async () => {
   const { z } = await import("zod")
@@ -66,5 +70,32 @@ describe("POST /v1/reference-board", () => {
       body: { provider: "nano-banana-pro", resolution: "4K" },
     } as never)
     expect(id).toBe("nano-banana-pro:4K")
+  })
+
+  // GPT Image 2.5 renders 27:16, 16:27, 9:8 and 8:9 at 1K only.
+  it.each(["27:16", "16:27", "9:8", "8:9"])("GPT Image 2.5 at %s: a 2K or 4K board is priced as 1K (the CHECK)", (aspectRatio) => {
+    for (const provider of ["gpt-image-2-5-flare", "gpt-image-2-5-sunburst"]) {
+      for (const resolution of ["2K", "4K"]) {
+        expect(resolveBoardCreditIdentifier({ body: { provider, aspectRatio, resolution } } as never)).toBe(provider)
+      }
+    }
+  })
+
+  it("GPT Image 2.5 at another ratio keeps its 2K / 4K price", () => {
+    expect(resolveBoardCreditIdentifier({ body: { provider: "gpt-image-2-5-flare", aspectRatio: "16:9", resolution: "2K" } } as never))
+      .toBe("gpt-image-2-5-flare:2K")
+  })
+
+  it("quote = charge = render: a 4K board at 9:8 reserves the 1K id and is sent at 1K", async () => {
+    reserve.mockClear()
+    queueAdd.mockClear()
+    const payload = { provider: "gpt-image-2-5-sunburst", boardTemplate: "character/full-board", prompt: "x", aspectRatio: "9:8", resolution: "4K" }
+    const check = resolveBoardCreditIdentifier({ body: payload } as never)
+    const res = await app.inject({ method: "POST", url: "/v1/reference-board", payload })
+    expect(res.statusCode).toBe(200)
+    const debit = (reserve.mock.calls[0] as unknown[])[3]
+    expect(debit).toBe(check)
+    expect(debit).toBe("gpt-image-2-5-sunburst")
+    expect((queueAdd.mock.calls[0] as unknown[])[1]).toMatchObject({ aspectRatio: "9:8", resolution: "1K" })
   })
 })

@@ -1,5 +1,16 @@
 # @nodaro/shared
 
+## 3.58.0
+
+### Minor Changes
+
+- 4caf2ed: GPT Image 2.5 (Flare and Sunburst, text-to-image and edit) renders the 27:16, 16:27, 9:8 and 8:9 aspect ratios at 1K only. A catalog entry can now say which sizes a ratio renders (`resolutionsByAspectRatio`), and the four GPT Image 2.5 entries declare 1K for those four ratios. `normalizeModelInput` moves a 2K or 4K request at such a ratio to 1K and reports the adjustment, before the request is priced, so `resolveNormalizedImageGen` prices the size that renders. Two helpers read the rule: `resolutionsAtAspectRatio(modelId, aspectRatio)` lists the sizes a menu should offer at a ratio, and `resolutionAtAspectRatio(modelId, aspectRatio, resolution)` gives the size a request renders at.
+- 5557a2f: GPT Image 2.6's own `auto` aspect ratio renders a portrait photo square, so the six GPT Image 2.6 catalog entries now carry `autoAspectFromSourceImage: true`: `auto` stays in their `aspectRatios` (every menu still offers it), and `autoAspectNeedsSourceImage` answers true for it, so `"auto"` with a photo is resolved by `normalizeModelInput` to the 2.6 ratio nearest the photo, as on a model without a native auto. With no photo, or one whose size is unknown, the model's own `auto` is kept as before. GPT Image 2.5 keeps its native `auto`. The SDK's `aspectRatio` doc comment on image-to-image says so.
+- 5557a2f: Add `LLM_STRUCTURED_SYSTEM_MAX` (200,000): the `system` prompt of `POST /v1/llm/structured` and `POST /v1/llm/structured/jobs` now takes up to 200,000 characters, twice `LLM_TEXT_INPUT_MAX`, so a client whose schema writes in its own vocabulary has room for that vocabulary to grow. `input` stays at 100,000. The SDK's `LlmStructuredInput.system` doc states the new limit.
+- 90fcdde: Gemini Omni Flash 1.2 names its images in plain words. `VideoReferenceSyntax` and the catalog's `referenceSyntax` gain `"image N"`, declared on `gemini-omni-flash-1-2`. When its frames share the image list with reference images, the prompt now reads "image 3 is the opening (first) frame of the video. image 1 and image 2 are references for the subject; they are not frames.", the form KIE's own example uses, instead of the `@image_N` sentences. In that mode the frame guides the clip, usually as its subject, and is not an exact opening frame in either wording; only a start frame (and end frame) wired without references is sent as an exact frame.
+
+  `@nodaro/prompts`: `imageBindingFor` accepts `"image N"`, and the `ImageBinding` it returns also carries `frames(first, last)` and `identities(first, last)`, so `placeFramesAfterReferences` writes every sentence in the provider's own syntax. New type `ImageReferenceSyntax`.
+
 ## 3.57.0
 
 ### Minor Changes

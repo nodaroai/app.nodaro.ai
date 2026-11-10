@@ -2098,11 +2098,8 @@ describe("generate-video — reference images + mode-alias dispatch", () => {
     // flips the dispatch to i2v exactly as it does for gemini-omni-video. Left
     // as a literal id, a flash node with a source clip fell to text-to-video,
     // `video_list` never reached the payload and the trim inputs were ignored.
-    // A reference IMAGE rides along so the i2v arm's start-frame guard is
-    // satisfied (video-only refs still hard-fail there — a pre-existing gap
-    // shared with gemini-omni-video, unrelated to the family swap). Reference
-    // images alone do NOT flip the mode, so this run reaching i2v is proof the
-    // VIDEO ref did it.
+    // A reference IMAGE rides along; reference images alone do NOT flip the
+    // mode, so this run reaching i2v is proof the VIDEO ref did it.
     mockResolveNodeInputs.mockReturnValue({
       prompt: "restyle this shot",
       referenceVideoUrls: ["http://cdn.example/source.mp4"],
@@ -2116,6 +2113,19 @@ describe("generate-video — reference images + mode-alias dispatch", () => {
     expect(mockRunTextToVideoGeneration).not.toHaveBeenCalled()
     expect(mockRunVideoGeneration).toHaveBeenCalled()
   })
+
+  for (const provider of ["gemini-omni-video", "gemini-omni-flash"]) {
+    it(`${provider} runs a source VIDEO alone as a video edit`, async () => {
+      mockResolveNodeInputs.mockReturnValue({
+        prompt: "restyle this shot",
+        referenceVideoUrls: ["http://cdn.example/source.mp4"],
+      })
+      mockRunVideoGeneration.mockResolvedValue(undefined)
+      await executeNode(makeNode("generate-video", { provider }), makeCtx())
+      expect(mockRunTextToVideoGeneration).not.toHaveBeenCalled()
+      expect(mockRunVideoGeneration).toHaveBeenCalled()
+    })
+  }
 
   it("gemini-omni-flash-1-2 runs a source VIDEO alone as a video edit", async () => {
     mockResolveNodeInputs.mockReturnValue({

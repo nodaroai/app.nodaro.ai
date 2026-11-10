@@ -2,7 +2,7 @@
 import type { NodeDocsSection } from "./node-docs"
 
 /** The date the docs site produced the snapshot. */
-export const NODE_DOCS_SNAPSHOT_DATE = "2026-10-13"
+export const NODE_DOCS_SNAPSHOT_DATE = "2026-11-09"
 
 /** The sections each node's page has, in page order. */
 export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSection[]>> = {
@@ -40,7 +40,7 @@ export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSectio
   "extend-video": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "api", "faq"],
   "edit-video-pro": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "faq"],
   "video-retake": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "limits", "tips", "faq"],
-  "video-to-video": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "faq"],
+  "video-to-video": ["when-to-use", "quick-start", "inputs", "settings", "models", "credits", "tips", "api", "faq"],
   "switchx": ["when-to-use", "quick-start", "inputs", "settings", "limits", "credits", "tips", "faq"],
   "video-depth": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "models", "credits", "tips", "troubleshooting", "api", "faq"],
   "video-mask": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "limits", "credits", "tips", "troubleshooting", "api", "faq"],
@@ -60,6 +60,8 @@ export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSectio
   "camera-switch": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
   "speaker-frames": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
   "speaker-view": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
+  "reframe": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
+  "tighten-episode": ["when-to-use", "quick-start", "inputs", "outputs", "settings", "credits", "tips", "troubleshooting", "api", "faq"],
   "video-sfx": ["when-to-use", "quick-start", "inputs", "settings", "credits", "limits", "tips", "faq"],
   "merge-video-audio": ["when-to-use", "quick-start", "inputs", "settings", "troubleshooting", "tips", "faq"],
   "extract-audio": ["when-to-use", "quick-start", "inputs", "settings", "troubleshooting", "tips", "faq"],
@@ -139,6 +141,7 @@ export const NODE_DOCS_SECTIONS: Readonly<Record<string, readonly NodeDocsSectio
   "webhook-trigger": ["when-to-use", "quick-start", "limits", "credits", "tips", "faq"],
   "telegram-trigger": ["when-to-use", "quick-start", "settings", "credits", "troubleshooting", "faq"],
   "web-scrape": ["when-to-use", "quick-start", "credits", "tips", "api", "faq"],
+  "site-capture": ["when-to-use", "quick-start", "settings", "inputs", "outputs", "credits", "tips", "troubleshooting", "api", "faq"],
   "meta-ads-scrape": ["when-to-use", "quick-start", "settings", "inputs", "outputs", "credits", "tips", "troubleshooting", "api", "faq"],
   "youtube-video": ["when-to-use", "quick-start", "outputs", "tips", "api", "faq"],
   "telegram-channel-feed": ["when-to-use", "quick-start", "settings", "outputs", "credits", "limits", "tips", "faq"],

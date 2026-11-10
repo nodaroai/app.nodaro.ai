@@ -257,7 +257,7 @@ import { getParameterPromptHint, isMinorAge, containsMinorAgeHint } from "@nodar
 import { hookPlateCaptionSegments, CAPTION_SEGMENT_LEVER_KEYS } from "@nodaro/prompts/presets"
 import { labelRefHintContext } from "./label-ref-hint-context.js"
 import type { CharacterDef, ConnectedReference, SceneData } from "@nodaro/shared/types"
-import { boardQuality, plainEntityCreditIdentifier, workflowEntityCreditIdentifier } from "../../lib/entity-credit-identifier.js"
+import { boardQuality, boardResolution, plainEntityCreditIdentifier, workflowEntityCreditIdentifier } from "../../lib/entity-credit-identifier.js"
 import { backendHybridRoles } from "../../lib/reference-format.js"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { config, llmMeteredPricing } from "../../lib/config.js"
@@ -3328,6 +3328,8 @@ export function buildPayload(
 
       // A quality left over from another model is dropped, as on the route.
       const boardRunQuality = boardQuality(provider, data.quality)
+      // The size it renders at its ratio, priced and sent as the route does.
+      const boardRunResolution = boardResolution(provider, data.aspectRatio, data.resolution)
 
       return {
         jobName: "reference-board",
@@ -3335,7 +3337,7 @@ export function buildPayload(
         modelIdentifier: buildCreditModelIdentifier(
           provider,
           boardRunQuality,
-          data.resolution as string | undefined,
+          boardRunResolution,
           undefined,
           undefined,
           refUrls?.length ?? 0,
@@ -3346,7 +3348,7 @@ export function buildPayload(
           referenceImageUrls: refUrls,
           provider,
           aspectRatio: data.aspectRatio,
-          resolution: data.resolution,
+          resolution: boardRunResolution,
           quality: boardRunQuality,
           negativePrompt: data.negativePrompt,
           seed: data.seed,

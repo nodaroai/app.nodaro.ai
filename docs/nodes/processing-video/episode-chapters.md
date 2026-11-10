@@ -4,7 +4,7 @@
 
 **Not yet enabled on nodaro.ai.** The node is built and documented, but it is hidden on nodaro.ai until it is switched on; until then it is not offered in the editor, in `GET /v1/nodes` or as an MCP tool, and its routes refuse a run.
 
-**Needs nodaro.ai on a self-hosted install.** Its planning step runs on nodaro.ai. On a self-hosted install, connect your instance to nodaro.ai (Integrations → nodaro.ai, or paste an API key) and the node runs that step there. Without a connection the node is not listed among the available nodes (`GET /v1/nodes`), and a run is refused before anything starts: `503` with the code `nodaro_connection_required`, no job created. Transcribe uses the install's own ElevenLabs key, or the connection when there is none.
+**Needs nodaro.ai on a self-hosted install.** Its planning step runs on nodaro.ai. On a self-hosted install, connect your instance to nodaro.ai (Integrations → nodaro.ai, or paste an API key) and the node runs that step there. Without a connection the node is not listed among the available nodes (`GET /v1/nodes`), and a run is refused before anything starts: `503` with the code `nodaro_connection_required`, no job created. Transcribe uses the install's own ElevenLabs key, or the connection when there is none; with neither, the run is refused before anything starts with `503 provider_key_missing`, naming the key.
 
 ## Overview
 
@@ -48,7 +48,7 @@ The node shows the list, with a button that copies it. In a published app, the s
 
 The steps that finished stay finished: their results (the transcript) are kept and they are not charged again. Press **Continue** on the node: only the step that failed and the ones after it run again. A node fed by a List runs once per item; it has no Continue — run it again.
 
-A run whose plan finds no chapters fails with "The plan found no chapters in this recording.", and its per-run fee is refunded. Its steps (the transcript and the plan) ran, and are charged at their own rates.
+A run whose plan finds no chapters fails with "The plan found no chapters in this recording.", and its per-run fee is refunded. Its steps (the transcript and the plan) ran, and are charged at their own rates. Such a run cannot be continued — every step of it finished, so there is nothing left to run — and the node offers no **Continue** for it (over the API, a continue answers `409 continuation_not_failed`). Run it again, with other instructions or another recording.
 
 ## Credit Cost
 

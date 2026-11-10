@@ -331,8 +331,8 @@ The mode comes from what you wire:
 | Reference images only | Up to 6 images steer the subject, scene or style. Refer to them as `@image_1`, `@image_2`, … |
 | Start frame only | The clip opens exactly on that image. 3–15 s. |
 | Start and end frames only | The clip runs exactly between them. 3–10 s. |
-| Frames and reference images | Your references come first; the frames follow them in the same list and are named in the prompt as the opening and closing frame. 3–15 s. |
-| A start and end frame at more than 10 s, or an end frame alone | The frames go in that same list, named in the prompt. |
+| Frames and reference images | Your references come first; the frames follow them in the same list, and the prompt names each image in plain words ("image 3 is the opening (first) frame of the video. image 1 and image 2 are references for the subject; they are not frames."). The frame then **guides** the clip, usually as its subject, but the clip does not open on it exactly. For an exact opening frame, wire the frames without references. 3–15 s. |
+| A start and end frame at more than 10 s, or an end frame alone | The frames go in that same list, named in the prompt, and guide the clip the same way: not exact. |
 | Source video | Video-edit: describe the change. Up to 5 reference images can ride along, and any frames you wire count toward those 5. |
 
 **Video-edit.** The result follows the source clip, so `duration` is ignored. The clip can be up to 15 seconds: a longer one uses its first 15 seconds, and `videoTrimStart` / `videoTrimEnd` pick another stretch of up to 15 seconds.

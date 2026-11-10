@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { adoptedAsStored } from "./workflow-store-adopted"
+import { editorSettingsPayload } from "./workflow-settings-payload"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus } from "@/lib/api"
@@ -14,6 +15,7 @@ import { reconcileCompletedSingleNodeJobs, buildScene3DRecoveryPatch, isScene3DN
 import { prefetchModelCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData, JobErrorHint } from "@/types/nodes"
+import type { Json } from "@/types/database.types"
 import { filterCloneNodes, stripTransientRuntimeData } from "@nodaro/shared/workflow"
 import { type RenderQuality, type RunResultRowStamp } from "@nodaro/shared/nodes"
 import { ugcAwaitsPick } from "@nodaro/shared/ugc"
@@ -1187,6 +1189,9 @@ export function useWorkflowPersistence(projectId?: string) {
               flowPromptTemplates: st.flowPromptTemplates,
               presentationSettings: st.presentationSettings,
               savedViewport: st.savedViewport,
+              // The RPC merged the patch into the column key by key: what the
+              // row holds now is the stored column with the patch over it.
+              storedSettings: { ...snapshot.storedSettings, ...settingsPatch },
             }, epochAtStart)
             // The delta went through PostgREST, which never projects trigger
             // nodes onto trigger rows — ask the server to, when it matters.
@@ -1252,6 +1257,8 @@ export function useWorkflowPersistence(projectId?: string) {
               flowPromptTemplates: (freshSettings.flowPromptTemplates ?? st.flowPromptTemplates) as typeof st.flowPromptTemplates,
               presentationSettings: (freshSettings.presentationSettings ?? st.presentationSettings) as typeof st.presentationSettings,
               savedViewport: (freshSettings.viewport ?? st.savedViewport) as typeof st.savedViewport,
+              // The fresh row's whole column: the retry is pinned to its version.
+              storedSettings: freshSettings,
             },
           }))
           if (contested.length > 0) {
@@ -1284,6 +1291,21 @@ export function useWorkflowPersistence(projectId?: string) {
         const nodesBeforeSave = useWorkflowStore.getState().lastSavedSnapshot?.nodes
         let createdWorkflowId: string | null = null
         const viewportAtSave = useWorkflowStore.getState().savedViewport
+        // This write REPLACES the whole `settings` column: it writes the column
+        // as the server holds it at the version the write is pinned to, with
+        // the editor's four keys over it — a key another writer owns (an
+        // assistant's `mcpConversation` / `mcpHub`, Studio's `studio`) rides
+        // through as stored (workflow-settings-payload.ts). Cloned once, as a
+        // whole, out of the store: a store edit made while the write is on the
+        // wire never reaches the payload, and the snapshot below keeps this
+        // same (never mutated) object as what was written.
+        const settings = JSON.parse(JSON.stringify(editorSettingsPayload({
+          characterDefinitions,
+          flowPromptTemplates,
+          presentationSettings,
+          savedViewport: viewportAtSave,
+          lastSavedSnapshot: useWorkflowStore.getState().lastSavedSnapshot,
+        }))) as Record<string, unknown>
         // What this write leaves on the server, so the next save starts from it
         // (the delta path's base, and the trigger sync's "stored graph the save
         // started from") instead of from the last load or delta.
@@ -1295,6 +1317,7 @@ export function useWorkflowPersistence(projectId?: string) {
           flowPromptTemplates,
           presentationSettings,
           savedViewport: viewportAtSave,
+          storedSettings: settings,
         }
         const payload = {
           project_id: resolvedProjectId,
@@ -1305,12 +1328,7 @@ export function useWorkflowPersistence(projectId?: string) {
           // payload from churning on every poll tick.
           nodes: JSON.parse(JSON.stringify(stripTransientRuntimeData(nodes))),
           edges: JSON.parse(JSON.stringify(edges)),
-          settings: {
-            characterDefinitions: JSON.parse(JSON.stringify(characterDefinitions)),
-            flowPromptTemplates: JSON.parse(JSON.stringify(flowPromptTemplates)),
-            presentationSettings: JSON.parse(JSON.stringify(presentationSettings)),
-            viewport: viewportAtSave,
-          },
+          settings: settings as Json,
         }
 
         if (workflowId) {
@@ -1744,6 +1762,9 @@ export function useWorkflowPersistence(projectId?: string) {
           flowTemplates,
           presSettings,
           savedViewport,
+          // The whole column, keys the editor does not manage included: a
+          // full save writes it back with the editor's keys over it.
+          settings,
         )
         // The save baseline is what is STORED: results the server resolved on
         // the way out (lib/workflow-content.ts) differ from it, so the next
@@ -1866,10 +1887,22 @@ export function useWorkflowPersistence(projectId?: string) {
           // single-node Gap-3 restore) would persist it here, re-introducing the
           // autosave-freeze bug those keys are stripped to avoid. Results
           // (generatedResults, …) are NOT transient and still persist.
-          const { data: sideSaved, error: saveError } = await supabase
+          let sideQuery = supabase
             .from("workflows")
             .update({ nodes: JSON.parse(JSON.stringify(stripTransientRuntimeData(orderNodesParentFirst(nodes)))) })
             .eq("id", id)
+          // Pinned to the row the load read, like every other write. Unpinned,
+          // a step another writer landed in between (an assistant's, on a
+          // conversation flow; the realtime subscription is not open yet) was
+          // written over by the loaded nodes — and the cursor moved past it
+          // while the stored settings column stayed the load's, so the next
+          // full save could write that writer's settings keys back through a
+          // CAS that passes. A miss leaves both cursors where the load set
+          // them: the next save conflicts and rebases on the fresh row.
+          const versionAtLoad = (data as { version?: unknown }).version
+          if (typeof versionAtLoad === "number") sideQuery = sideQuery.eq("version", versionAtLoad)
+          else if (typeof data.updated_at === "string") sideQuery = sideQuery.eq("updated_at", data.updated_at)
+          const { data: sideSaved, error: saveError } = await sideQuery
             // `version` too: this write bumps it, and a cursor left at null
             // here demoted the next save to the updated_at string CAS, which
             // any updated_at-only write (thumbnail, share toggle) then broke.

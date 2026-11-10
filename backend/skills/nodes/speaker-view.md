@@ -55,7 +55,7 @@ generated_from: caf9fb638
 
 ## When to use
 
-Turn an edit (Edit Plan's or Camera Switch's EDL) into a finished video that follows who is speaking: wire the EDL into `edl` and, for the speaker turns, a diarized transcript into `transcript`. Its `json` output is an EDL, never a transcript.
+Turn an edit (Edit Plan's or Camera Switch's EDL) into a finished video that follows who is speaking: wire the EDL into `edl` and, for the speaker turns, a diarized transcript into `transcript`. Or wire a plain video into `video` instead of the EDL (never both): the clip is cut whole at the speakers' turns, the diarized transcript is then required, and the target aspect defaults to 9:16. Its `json` output is an EDL, never a transcript.
 
 **Priced per output minute, in two tiers** (rounded up to the next minute). A preview (`quality: "proxy"`) is charged 2.2<!-- credits-rate: speaker-view:proxy --> credits a minute and a final 11<!-- credits-rate: speaker-view --> while every segment shows at most two speakers and nothing zooms; three to six speakers on screen on any segment, or any zoom, 3.3<!-- credits-rate: speaker-view:complex:proxy --> and 13.2<!-- credits-rate: speaker-view:complex -->; a run's total is rounded up to a whole credit. The ids are `speaker-view`, `speaker-view:proxy`, `speaker-view:complex` and `speaker-view:complex:proxy`; `GET /v1/credits/model-cost?model=<id>` gives each one's live rate. The credits are reserved on the edit's length when the render starts and charged on the rendered cut's minutes, never more than was reserved.
 
@@ -64,8 +64,8 @@ Turn an edit (Edit Plan's or Camera Switch's EDL) into a finished video that fol
 
 ## Common gotchas
 
-- **Side by side, Stacked and Picture-in-picture take two speakers.** Over three or more they are drawn as a Grid and priced in the second tier (3 / 12 a minute). An estimate made before the edit is known — or over an edit that names no speakers while its transcript is wired in — cannot count the speakers, so it quotes the second tier for every layout except Single.
-- Per-speaker framing (`speakerRegions`) is written in the node's JSON only; the editor control for it arrives later.
+- **Side by side, Stacked and Picture-in-picture take two speakers.** Over three or more they are drawn as a Grid and priced in the second tier (3.3<!-- credits-rate: speaker-view:complex:proxy --> / 13.2<!-- credits-rate: speaker-view:complex --> a minute). An estimate made before the edit is known — or over an edit that names no speakers while its transcript is wired in — cannot count the speakers, so it quotes the second tier for every layout except Single.
+- Per-speaker framing (`speakerRegions`) is drawn in the panel's **Edit framing…** region editor, or written in the node's JSON.
 - A layout the aspect or the speaker count rules out is snapped at run time (Side by side and Stacked swap, else Grid, else Single); a node written without a `targetAspect` is judged against the edit's own aspect, not 16:9.
 
 <!-- AUTO-GEN:START examples -->

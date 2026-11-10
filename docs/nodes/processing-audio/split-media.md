@@ -38,7 +38,7 @@ Wire a part output into another node in **Each** mode (the default for a new wir
 
 ### Cutting at the shots
 
-With **Cut by: Shots** (`mode: "shots"`), a video is cut into **one part per shot**, at the cuts measured from the video itself — the same rule as the [Shot Cuts](../processing-video/shot-cuts.md) node: every decoded frame is scored and each hard cut starts a new shot. Dissolves and fades are not cuts, and a flash that returns to the same picture is not one either.
+With **Cut by: Shots** (`mode: "shots"`), a video is cut into **one part per shot**, at the cuts measured from the video itself — the same rule as the [Shot Cuts](../processing-video/shot-cuts.md) node: every decoded frame is scored and each hard cut starts a new shot. Dissolves and fades are not cuts, and neither is a flash held for two or three frames before the picture comes back (a one-frame flash is).
 
 - Each part is cut on whole frames, exactly as above, and keeps the video's own sound (never past its picture). There is no minimum length: a one-frame shot is a one-frame part.
 - A video only: the audio input is not used — with an audio file connected the run fails with a message (disconnect it, or cut by part length).

@@ -312,10 +312,31 @@ export interface ModelCatalogEntry {
    * Declared only where the provider documents its own form: Grok Imagine's
    * `@image(n)` (docs.kie.ai/market/grok-imagine/image-to-video) and
    * HappyHorse's `[Image N]` (docs.kie.ai/market/happyhorse-1-1/reference-to-video).
+   * Gemini Omni Flash 1.2 documents none and is written plain `image N`, the
+   * form of KIE's own example; beside references its frames only guide the
+   * clip, in either wording.
    */
-  referenceSyntax?: "@image(n)" | "[Image N]"
+  referenceSyntax?: "@image(n)" | "[Image N]" | "image N"
   aspectRatios?: readonly string[]
+  /**
+   * The model lists "auto", but its own auto does not keep the photo's shape
+   * (GPT Image 2.6 renders a portrait square). "auto" with a photo is then
+   * resolved as on a model without a native auto: to the listed ratio nearest
+   * the photo (`autoAspectNeedsSourceImage`, `normalizeModelInput`). With no
+   * photo, or one whose size cannot be read, the model's own "auto" is sent,
+   * as before. "auto" stays in `aspectRatios`, so every menu still offers it.
+   */
+  autoAspectFromSourceImage?: true
   resolutions?: readonly string[]
+  /**
+   * The aspect ratios at which this model renders fewer sizes than
+   * `resolutions`: each one names the sizes it renders, in the catalog's own
+   * spelling. A ratio not listed renders every entry of `resolutions`.
+   * `normalizeModelInput` moves a size such a ratio does not render to the
+   * largest one it does at or below it, and says so, before the run is priced;
+   * a menu reads the sizes on offer with `resolutionsAtAspectRatio`.
+   */
+  resolutionsByAspectRatio?: Readonly<Record<string, readonly string[]>>
   /** The resolution a caller who names none lands on when it is not the
    *  cheapest entry (see `defaultResolutionFor`). */
   defaultResolution?: string
@@ -482,15 +503,23 @@ const GPT_IMAGE_RATIOS = ["1:1", "3:2", "2:3"] as const
 const GPT_IMAGE_2_RATIOS = ["auto", "1:1", "16:9", "9:16", "4:3", "3:4"] as const
 // GPT Image 2.5 (Flare + Sunburst) widen the set to thirteen — the GPT Image 2
 // six plus 3:2/2:3, ultra-wide 21:9/27:16, ultra-tall 16:27 and near-square
-// 9:8/8:9 (docs.kie.ai/market/gpt/gpt-image-2-5-*). Unlike GPT Image 2, the 2.5
-// docs state NO aspect-ratio x resolution restriction, so no cross-field
-// constraint is registered for these ids in normalizeModelInput below.
+// 9:8/8:9 (docs.kie.ai/market/gpt/gpt-image-2-5-*).
 const GPT_IMAGE_2_5_RATIOS = [
   "auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16",
   "21:9", "27:16", "16:27", "9:8", "8:9",
 ] as const
+// GPT Image 2.5 renders 27:16, 16:27, 9:8 and 8:9 at 1K only; 2K and 4K are for
+// its other ratios (the aspect_ratio field of every 2.5 page: Flare and
+// Sunburst, text-to-image and image-to-image). `normalizeModelInput` moves a
+// larger size there to 1K before the run is priced.
+const GPT_IMAGE_2_5_RESOLUTIONS_BY_RATIO = {
+  "27:16": ["1K"], "16:27": ["1K"], "9:8": ["1K"], "8:9": ["1K"],
+} as const
 // GPT Image 2.6 Flare and Sunburst: auto plus fifteen ratios, Economy a shorter
-// list of its own (docs.kie.ai/market/gpt/gpt-image-2-6-*).
+// list of its own (docs.kie.ai/market/gpt/gpt-image-2-6-*). Every 2.6 entry
+// carries `autoAspectFromSourceImage`: 2.6's own auto renders a portrait photo
+// square (measured 2026-11-10: 768x1024 in, 1024x1024 out; 2.5's auto kept
+// it at 3:4), so "auto" with a photo is sent as the ratio nearest the photo.
 const GPT_IMAGE_2_6_RATIOS = [
   "auto", "1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16",
   "2:1", "1:2", "21:9", "9:21", "3:1", "1:3",
@@ -926,6 +955,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_5_RATIOS,
     resolutions: ["1K", "2K", "4K"],
+    resolutionsByAspectRatio: GPT_IMAGE_2_5_RESOLUTIONS_BY_RATIO,
     backgrounds: GPT_IMAGE_BACKGROUNDS,
     transparentResolution: "1K",
     backgroundOnlyAtTransparentResolution: true,
@@ -954,6 +984,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_5_RATIOS,
     resolutions: ["1K", "2K", "4K"],
+    resolutionsByAspectRatio: GPT_IMAGE_2_5_RESOLUTIONS_BY_RATIO,
     backgrounds: GPT_IMAGE_BACKGROUNDS,
     transparentResolution: "1K",
     backgroundOnlyAtTransparentResolution: true,
@@ -982,6 +1013,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_5_RATIOS,
     resolutions: ["1K", "2K", "4K"],
+    resolutionsByAspectRatio: GPT_IMAGE_2_5_RESOLUTIONS_BY_RATIO,
     backgrounds: GPT_IMAGE_BACKGROUNDS,
     transparentResolution: "1K",
     backgroundOnlyAtTransparentResolution: true,
@@ -1010,6 +1042,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_5_RATIOS,
     resolutions: ["1K", "2K", "4K"],
+    resolutionsByAspectRatio: GPT_IMAGE_2_5_RESOLUTIONS_BY_RATIO,
     backgrounds: GPT_IMAGE_BACKGROUNDS,
     transparentResolution: "1K",
     backgroundOnlyAtTransparentResolution: true,
@@ -1037,6 +1070,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["typography", "high-res", "general", "draft"],
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_6_RATIOS,
+    autoAspectFromSourceImage: true,
     resolutions: ["1K", "2K", "4K"],
     qualities: ["auto", "low", "medium", "high", "xhigh", "max"],
     defaultQuality: "medium",
@@ -1078,6 +1112,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["edit", "high-res"],
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_6_RATIOS,
+    autoAspectFromSourceImage: true,
     resolutions: ["1K", "2K", "4K"],
     qualities: ["auto", "low", "medium", "high", "xhigh", "max"],
     defaultQuality: "medium",
@@ -1106,6 +1141,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["typography", "high-res", "general"],
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_6_RATIOS,
+    autoAspectFromSourceImage: true,
     resolutions: ["1K", "2K", "4K"],
     qualities: ["auto", "low", "medium", "high", "xhigh", "max"],
     defaultQuality: "medium",
@@ -1147,6 +1183,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["edit", "high-res"],
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_6_RATIOS,
+    autoAspectFromSourceImage: true,
     resolutions: ["1K", "2K", "4K"],
     qualities: ["auto", "low", "medium", "high", "xhigh", "max"],
     defaultQuality: "medium",
@@ -1181,6 +1218,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["general", "draft"],
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_6_ECONOMY_RATIOS,
+    autoAspectFromSourceImage: true,
     backgrounds: GPT_IMAGE_BACKGROUNDS,
     pricing: [{ identifier: "gpt-image-2-6-economy", credits: 13, note: "1K flat" }],
     valueLabels: GPT_IMAGE_2_6_VALUE_LABELS,
@@ -1199,6 +1237,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["edit", "draft"],
     features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_6_ECONOMY_RATIOS,
+    autoAspectFromSourceImage: true,
     backgrounds: GPT_IMAGE_BACKGROUNDS,
     pricing: [{ identifier: "gpt-image-2-6-economy-i2i", credits: 13, note: "1K flat" }],
     valueLabels: GPT_IMAGE_2_6_VALUE_LABELS,
@@ -1940,6 +1979,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Google Gemini Omni Flash 1.2 — 3–15s video with native sound, from 360p to 4K: from text, up to 6 reference images, exact first and last frames, or a video edit. Priced per second.",
     useCases: ["cinematic", "fast"],
     features: ["audio", "reference-image", "reference-to-video", "end-frame"],
+    referenceSyntax: "image N",
     aspectRatios: ["16:9", "9:16", "auto"],
     resolutions: ["360p", "720p", "1080p", "4k"],
     defaultResolution: "720p",
@@ -4004,8 +4044,9 @@ export interface SourceImageSize {
 export interface ModelInputContext {
   /**
    * The image an image-to-image or edit request transforms. Only read to
-   * resolve "auto" on a model without a native auto; absent or unusable means
-   * the size is unknown and "auto" snaps the way it always has.
+   * resolve "auto" on a model without a native auto, or whose own auto does
+   * not keep the photo's shape (`autoAspectFromSourceImage`); absent or
+   * unusable means the size is unknown and "auto" snaps the way it always has.
    */
   sourceImage?: SourceImageSize
 }
@@ -4066,14 +4107,59 @@ export function nearestCatalogAspectRatio(
 
 /**
  * True when `aspectRatio` is "auto" and `modelId`'s catalog ratio list does not
- * carry "auto" — the one case where the source image's size decides the ratio.
- * A caller that has to fetch the size asks this first, so a request that will
- * not use it never pays for the read.
+ * carry "auto", or carries it but the model's own auto does not keep the
+ * photo's shape (`autoAspectFromSourceImage`) — the cases where the source
+ * image's size decides the ratio. A caller that has to fetch the size asks
+ * this first, so a request that will not use it never pays for the read.
  */
 export function autoAspectNeedsSourceImage(modelId: string | undefined, aspectRatio: unknown): boolean {
   if (!modelId || !isAutoAspectToken(aspectRatio)) return false
-  const ratios = MODEL_CATALOG[modelId]?.aspectRatios
-  return ratios !== undefined && ratios.length > 0 && !ratios.some(isAutoAspectToken)
+  const entry = MODEL_CATALOG[modelId]
+  const ratios = entry?.aspectRatios
+  if (ratios === undefined || ratios.length === 0) return false
+  return entry?.autoAspectFromSourceImage === true || !ratios.some(isAutoAspectToken)
+}
+
+/**
+ * The sizes `modelId` renders at `aspectRatio`, in the catalog's order: its
+ * `resolutions`, narrowed where `resolutionsByAspectRatio` lists that ratio.
+ * `undefined` for an unknown model or one with no size setting. What a menu
+ * offers once a ratio is chosen.
+ */
+export function resolutionsAtAspectRatio(modelId: string, aspectRatio: unknown): readonly string[] | undefined {
+  const m = MODEL_CATALOG[modelId]
+  const all = m?.resolutions
+  if (!all || all.length === 0) return undefined
+  const byRatio = m.resolutionsByAspectRatio
+  const ratio = typeof aspectRatio === "string" ? aspectRatio.trim() : undefined
+  // Own keys only: a ratio such as "constructor" must not read the prototype.
+  const only = byRatio && ratio !== undefined && Object.prototype.hasOwnProperty.call(byRatio, ratio)
+    ? byRatio[ratio]
+    : undefined
+  return only ? all.filter((r) => only.includes(r)) : all
+}
+
+/**
+ * The size `modelId` renders `resolution` at, at `aspectRatio`: the same size
+ * where that ratio renders it (or the model limits no ratio), else the largest
+ * size the ratio renders at or below it, else its smallest. A size the model
+ * does not list comes back as it is: snapping the lever itself is
+ * `normalizeModelInput`'s. A route that prices a run without that function
+ * prices and sends the size this returns, so the two agree.
+ */
+export function resolutionAtAspectRatio(
+  modelId: string,
+  aspectRatio: unknown,
+  resolution: string | undefined,
+): string | undefined {
+  if (resolution === undefined) return undefined
+  const all = MODEL_CATALOG[modelId]?.resolutions
+  const offered = resolutionsAtAspectRatio(modelId, aspectRatio)
+  if (!all || !offered || offered.length === 0 || offered.includes(resolution)) return resolution
+  const at = all.indexOf(resolution)
+  if (at < 0) return resolution
+  const atOrBelow = offered.filter((r) => all.indexOf(r) <= at)
+  return atOrBelow.length > 0 ? atOrBelow[atOrBelow.length - 1]! : offered[0]!
 }
 
 /**
@@ -4090,10 +4176,11 @@ export function autoAspectNeedsSourceImage(modelId: string | undefined, aspectRa
  *
  * Rules, mirroring the config panels' provider-change snap:
  *  - Model has no such lever → drop the value (sending it 400s upstream).
- *  - "auto" on a model whose list lacks it, with a known `context.sourceImage`
- *    → the listed ratio nearest the source's shape (`nearestCatalogAspectRatio`).
- *    "auto" asks to keep the source photo's shape; the first listed ratio
- *    would reframe every source of another shape.
+ *  - "auto" on a model whose list lacks it, or whose own auto does not keep
+ *    the photo's shape (`autoAspectFromSourceImage`), with a known
+ *    `context.sourceImage` → the listed ratio nearest the source's shape
+ *    (`nearestCatalogAspectRatio`). "auto" asks to keep the source photo's
+ *    shape; the first listed ratio would reframe every source of another shape.
  *  - Value outside the model's allow-list → snap to the model's default
  *    (`defaultResolutionFor`) or the first valid option.
  *  - Then apply cross-field constraints that only hold for certain models.
@@ -4162,11 +4249,14 @@ export function normalizeModelInput(
       : undefined
   if (sourceRatio !== undefined && input.aspectRatio !== undefined) {
     const { width, height } = context.sourceImage!
+    const why = m.autoAspectFromSourceImage === true
+      ? `${m.label}'s own "auto" does not keep the photo's shape`
+      : `${m.label} has no "auto" aspect ratio`
     adjustments.push({
       field: "aspectRatio",
       from: input.aspectRatio,
       to: sourceRatio,
-      reason: `${m.label} has no "auto" aspect ratio — using "${sourceRatio}", the supported ratio closest to the source image's shape (${width}x${height}).`,
+      reason: `${why} — using "${sourceRatio}", the supported ratio closest to the source image's shape (${width}x${height}).`,
     })
     out.aspectRatio = sourceRatio
   } else {
@@ -4184,6 +4274,21 @@ export function normalizeModelInput(
     m.autoDuration === true && isAutoVideoDuration(input.duration)
       ? input.duration
       : snap("duration", input.duration, m.durations)
+
+  // A size the chosen ratio does not render (`resolutionsByAspectRatio`) moves
+  // to the largest one it does at or below it. Before the background rules
+  // below, which read the size this leaves, and before any price is built.
+  const sized = resolutionAtAspectRatio(modelId, out.aspectRatio, out.resolution)
+  if (out.resolution !== undefined && sized !== undefined && sized !== out.resolution) {
+    const offered = resolutionsAtAspectRatio(modelId, out.aspectRatio) ?? [sized]
+    adjustments.push({
+      field: "resolution",
+      from: out.resolution,
+      to: sized,
+      reason: `${m.label} only renders ${offered.join(" or ")} at the "${out.aspectRatio}" aspect ratio.`,
+    })
+    out.resolution = sized
+  }
 
   // Cross-field constraints — a pair that is individually valid but jointly
   // rejected upstream. GPT Image 2 (per docs.kie.ai): `auto` requires 1K, and

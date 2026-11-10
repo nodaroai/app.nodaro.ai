@@ -24,6 +24,7 @@ import { pathToFileURL } from "node:url"
 import ts from "typescript"
 import { lineOf, parseText } from "../../../src/lib/__tests__/source-ast.js"
 import { unwrap } from "./render-path.js"
+import { NODE_RUN_METHODS } from "./types.js"
 
 export const CLI_DIR = "packages/cli/src"
 
@@ -34,6 +35,13 @@ export interface CliCommand {
   ref?: string
   /** SDK method keys the action calls (`characters.list`). Empty: a local-only command. */
   sdk: string[]
+  /**
+   * The node types its `nodes.run` / `nodes.runAndWait` calls name, when each
+   * names one literally (`media generate-mask` → `["generate-mask"]`): such a
+   * command runs those nodes only. Absent when it calls neither, or when a call
+   * takes its type at run time (`nodes run <type>` runs every node).
+   */
+  nodeRunTypes?: string[]
 }
 
 export interface CliInventory {
@@ -171,6 +179,30 @@ function isClientRoot(e: ts.Expression, scopes: Locals[]): boolean {
   return false
 }
 
+/** What `node`'s `client.nodes.run(…)` calls run: the node types named literally, and whether any call takes its type at run time. */
+function nodeRunTypesOf(node: ts.Node, scopes: Locals[]): { literal: string[]; dynamic: boolean } {
+  const literal = new Set<string>()
+  let dynamic = false
+  const visit = (n: ts.Node): void => {
+    if (ts.isCallExpression(n)) {
+      const parts: string[] = []
+      let cur = unwrap(n.expression)
+      while (ts.isPropertyAccessExpression(cur)) {
+        parts.unshift(cur.name.text)
+        cur = unwrap(cur.expression)
+      }
+      if (NODE_RUN_METHODS.has(parts.join(".")) && isClientRoot(cur, scopes)) {
+        const arg = n.arguments[0] ? unwrap(n.arguments[0]) : undefined
+        if (arg && (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg))) literal.add(arg.text)
+        else dynamic = true
+      }
+    }
+    n.forEachChild(visit)
+  }
+  visit(node)
+  return { literal: [...literal], dynamic }
+}
+
 /** SDK method keys called under `node` (`client.a.b(…)`, `client.a.b.c(…)`). */
 function sdkCalls(node: ts.Node, scopes: Locals[], sdkKeys: ReadonlySet<string>): string[] {
   const out = new Set<string>()
@@ -210,6 +242,7 @@ interface AstAction {
   parent?: string
   leaf: string
   sdk: string[]
+  nodeRunTypes?: string[]
 }
 
 /**
@@ -235,16 +268,29 @@ export function astActions(file: string, text: string, rel: string, sdkKeys: Rea
           const fn = n.arguments[0]
           const fnScopes = [localsOf(fn), ...inner]
           const sdk = new Set(sdkCalls(fn, fnScopes, sdkKeys))
+          const runs = nodeRunTypesOf(fn, fnScopes)
+          const runTypes = new Set(runs.literal)
+          let runsAny = runs.dynamic
           // Same-file helpers the action calls, one hop (pickAppInteractively(client)).
           const visitCalls = (m: ts.Node): void => {
             if (ts.isCallExpression(m) && ts.isIdentifier(m.expression) && helpers.has(m.expression.text)) {
               const h = helpers.get(m.expression.text)!
               for (const k of sdkCalls(h, [localsOf(h)], sdkKeys)) sdk.add(k)
+              const inner = nodeRunTypesOf(h, [localsOf(h)])
+              for (const t of inner.literal) runTypes.add(t)
+              runsAny ||= inner.dynamic
             }
             m.forEachChild(visitCalls)
           }
           visitCalls(fn)
-          out.push({ file: rel, line: lineOf(sf, n.arguments[0]), parent: target.parent ?? defaultParent, leaf: target.leaf, sdk: [...sdk] })
+          out.push({
+            file: rel,
+            line: lineOf(sf, n.arguments[0]),
+            parent: target.parent ?? defaultParent,
+            leaf: target.leaf,
+            sdk: [...sdk],
+            ...(!runsAny && runTypes.size > 0 ? { nodeRunTypes: [...runTypes].sort() } : {}),
+          })
         }
       }
     }
@@ -290,7 +336,7 @@ export async function extractCli(repoRoot: string, sdkKeys: ReadonlySet<string>)
     const pick = candidates.find((a) => a.file === groupFile)
       ?? candidates.find((a) => groupFile !== undefined && siblingsOf.get(groupFile)?.has(a.file))
       ?? (candidates.length === 1 ? candidates[0] : undefined)
-    return { path: p.join(" "), ref: pick ? `${pick.file}:${pick.line}` : undefined, sdk: pick?.sdk ?? [] }
+    return { path: p.join(" "), ref: pick ? `${pick.file}:${pick.line}` : undefined, sdk: pick?.sdk ?? [], ...(pick?.nodeRunTypes ? { nodeRunTypes: pick.nodeRunTypes } : {}) }
   })
   return { commands, groups }
 }

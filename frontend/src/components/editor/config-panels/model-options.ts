@@ -2,7 +2,7 @@ import { hasCredits } from "@/lib/edition"
 import { creditUnits, creditUnitLabel, formatCreditUnits } from "@/lib/credit-units"
 import { isModelUnavailable } from "@/lib/surface-availability"
 import { isVariablePricedModel, type CreditRange } from "@/lib/model-credit-range"
-import { VIDEO_DURATION_AUTO, aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, backgroundOptionsByKind, getModel, durationsByMode, modelsWithFeature, isFlux2Model, type LabeledOption } from "@nodaro/shared/model-catalog"
+import { VIDEO_DURATION_AUTO, aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, backgroundOptionsByKind, getModel, durationsByMode, modelsWithFeature, isFlux2Model, resolutionsAtAspectRatio, type LabeledOption } from "@nodaro/shared/model-catalog"
 import {
   supportsAutoVideoDuration,
   isGvpSupportedProvider,
@@ -607,6 +607,17 @@ export function firstFixedQuality(options: readonly LabeledOption[] | undefined)
 /** The one size this model renders a transparent background at, where it is limited. */
 export function transparentResolutionFor(provider: string): string | undefined {
   return getModel(provider)?.transparentResolution
+}
+
+/**
+ * An image model's size options at a ratio: only the sizes it renders there
+ * (the catalog's `resolutionsByAspectRatio`; GPT Image 2.5 draws 27:16, 16:27,
+ * 9:8 and 8:9 at 1K only). The model's whole list at any other ratio.
+ */
+export function imageResolutionOptionsAt(provider: string, aspectRatio: string | undefined): readonly LabeledOption[] | undefined {
+  const options = IMAGE_RESOLUTION_OPTIONS[provider]
+  const offered = resolutionsAtAspectRatio(provider, aspectRatio)
+  return options && offered ? options.filter((o) => offered.includes(o.value)) : options
 }
 
 /**

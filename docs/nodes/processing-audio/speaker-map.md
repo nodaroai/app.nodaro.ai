@@ -11,7 +11,7 @@ In a multicam podcast or interview, each guest usually has their own camera, and
 The rule, per speaker:
 
 - Over all of that speaker's turns, the camera that hears them **loudest** is theirs, when it leads the next-loudest camera by at least the **lead** you set (3 dB by default).
-- When no camera leads by that much (the cameras are too close together, or the speaker sits between two), the speaker gets **no clear camera** (`""`) and Camera Switch shows them on the **wide shot**. A note names the speaker and how far ahead the loudest camera was.
+- When no camera leads by that much (the cameras are too close together, or the speaker sits between two), the speaker gets **no clear camera** (`""`) and Camera Switch shows them on the **wide shot** (with no wide shot, on any camera with picture). A note names the speaker and how far ahead the loudest camera was.
 - The **wide shot** and the **master recording** are no one's camera: they hear everyone, so they never win a speaker.
 - A camera with no sound (no audio track, a muted microphone, or one that heard none of the turns) is never a failure: it simply cannot win a speaker, and a note names it.
 
@@ -47,9 +47,9 @@ The **Speaker map** output:
 }
 ```
 
-- `speakerMap`: speaker label → the camera's id; `""` means no clear camera (the wide shot).
+- `speakerMap`: speaker label → the camera's id; `""` means no clear camera (the wide shot, else any camera with picture).
 - `confidence`: per speaker, the camera they got and how far, in dB, the loudest camera led the next (`null` when fewer than two cameras heard them).
-- `edl` (when the recordings could be read): the same edit as the **Edit (EDL)** output, also on `output_data.edl`.
+- `edl` (when the recordings could be read and one besides the master has picture; absent when only the master does): the same edit as the **Edit (EDL)** output, also on `output_data.edl`.
 - `notes`: plain-language warnings: a speaker with no clear camera, a speaker fewer than two cameras heard, a camera with no audio track, a camera that heard none of the turns.
 
 ## Configuration
@@ -65,7 +65,7 @@ The **Speaker map** output:
 
 Speaker Map costs 11 credits<!-- credits: speaker-map --> per run, whatever the length or the number of recordings. Community and Business editions have no credits.
 
-**Refused before charging:** fewer than 2 or more than 6 recordings, two recordings with the same id, a master or wide id that is not one of the recordings, a wide shot that is a sound-only recording (on the canvas, an audio node; over the API, a source sent with `kind: "audio"`), a missing transcript, and a transcript with **no speaker labels at all** (turn on speaker detection in Transcribe and run it again).
+**Refused before charging:** fewer than 2 or more than 6 recordings, two recordings with the same id, a wide shot that is a sound-only recording (on the canvas, an audio node; over the API, a source sent with `kind: "audio"`), and over the API a master or wide id that is not one of the recordings (on the canvas, such a setting is ignored rather than refused), a wide that is also the master, and `offsets` that are not an Audio Sync result; a missing transcript, and a transcript with **no speaker labels at all** (turn on speaker detection in Transcribe and run it again).
 
 ## API
 

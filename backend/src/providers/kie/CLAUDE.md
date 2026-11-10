@@ -287,7 +287,13 @@ builds an allow-listed body:
   `last_frame_url`. KIE takes no other image beside them, no lone last frame, and
   first + last holds only up to 10 s. Anything else wired, or a lone end frame, or
   first + last past 10 s: the frames join `image_urls` after the caller's own
-  images (`placeFramesAfterReferences`), named in the prompt.
+  images (`placeFramesAfterReferences`), named in the prompt in plain words
+  (`referenceSyntax: "image N"`: "image 3 is the opening (first) frame of the
+  video. image 1 and image 2 are references for the subject; they are not
+  frames."). There the frame only GUIDES the clip: staging runs (2026-11-10)
+  never opened on it, in this wording or the `@image_N` one, and KIE's schema
+  says `image_urls` is not a first frame. Only the real-frame mode is exact; the
+  editor's `FramesAndReferencesTip` and the docs say so.
 - **Video edit:** `video_list` is one plain URL, up to 15 s, and `duration` must
   not be sent; the output follows the clip. KIE has no trim fields, so
   `prepareGeminiOmni12Source` cuts the clip (the node's trim, else its first 15 s)
@@ -555,7 +561,19 @@ Six SKUs on the standard `createTask` lane. Flare and Sunburst are billed by
   reservation, the Max price, with an `[ALERT]` line. In the one live run tried
   (2026-11-09) KIE picked low and the run was charged that, not the Max it held.
 - 27:16, 16:27, 9:8 and 8:9, 2.5's extra ratios, are refused on 2.6 ("Invalid aspect
-  ratio", no charge, tried 2026-11-09). KIE's docs don't list them either.
+  ratio", no charge, tried 2026-11-09). KIE's docs don't list them either. On 2.5
+  they render **1K only** (the `aspect_ratio` field of all four 2.5 pages: "The
+  27:16, 16:27, 9:8 and 8:9 aspect ratios support 1K only. 2K and 4K are available
+  for other aspect ratios."). `resolutionsByAspectRatio` on the four 2.5 catalog
+  entries says so; `normalizeModelInput` moves 2K/4K there to 1K before pricing,
+  and the Reference Board (which prices without it) reads `resolutionAtAspectRatio`.
+- **2.6's own `aspect_ratio: "auto"` renders square** whatever the photo (2026-11-10:
+  a 768x1024 source came back 1024x1024 on Flare; 2.5 Flare kept it at 880x1184).
+  The six 2.6 catalog entries keep `auto` on offer but carry
+  `autoAspectFromSourceImage`, so "auto" with a photo is sent as the 2.6 ratio
+  nearest it (`autoAspectNeedsSourceImage` → the routes' and the workflow's photo
+  probe). Only a request with no photo, or one whose size cannot be read, still
+  sends `auto`.
 - Up to 16 input images on Flare and Sunburst; the routes hold every other model to
   14 (`requestImageLimit`, separate from `REF_IMAGE_MAX_LIMITS`).
 - All six 2.6 models send an explicit field list (`inputFields` in `models.ts`):

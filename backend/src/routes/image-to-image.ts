@@ -12,6 +12,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.js"
+import { imageToImageAspectRatio } from "../lib/image-auto-aspect.js"
 import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { llmComplete } from "../lib/llm-client.js"
@@ -124,6 +125,11 @@ export async function imageToImageRoutes(app: FastifyInstance) {
     if (!parsed.data.provider) {
       parsed.data.provider = defaultImageModel("edit", parsed.data.aspectRatio) as NonNullable<(typeof parsed.data)["provider"]>
     }
+    // No ratio named on a GPT Image 2.5 / 2.6 edit model is "auto", the
+    // photo's shape, instead of the provider config's 16:9. Set here, before
+    // the levers are read, so the snap, `input_data` and the queue payload all
+    // carry it, as the credit check does (`imageToImageAspectRatio`).
+    parsed.data.aspectRatio = imageToImageAspectRatio(parsed.data.provider, parsed.data.aspectRatio)
 
     // The three catalog-governed levers are destructured as `raw*` on purpose:
     // `applySnappedLevers` below rewrites them on `parsed.data`, so these locals

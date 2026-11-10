@@ -6,7 +6,7 @@
 
 ## Overview
 
-Shot Cuts reads a video and lists its shots: where each one starts, where it ends and how long it lasts. It measures the file itself: every decoded frame is compared with the one before it, and a frame that changes sharply from a quiet background starts a new shot. A camera flash, or a frame that jumps and comes straight back, is not counted as a cut; a one-frame flash can occasionally start a shot. It is the same rule the platform uses for Video Mask's per-shot masking.
+Shot Cuts reads a video and lists its shots: where each one starts, where it ends and how long it lasts. It measures the file itself: every decoded frame is compared with the one before it, and a frame that changes sharply from a quiet background starts a new shot. A camera flash held for two or three frames before the picture comes back is not counted as a cut; a one-frame flash does start a new shot. It is the same rule the platform uses for Video Mask's per-shot masking.
 
 Turn on **Save first and last frames** to also get each shot's exact first frame and its last frame (the frame just before the next cut, or the video's final frame) as images.
 
@@ -62,13 +62,13 @@ The **Shots** output (also the job's `output_data.json`):
 
 - A hard cut, where one frame differs sharply from the frames around it, starts a new shot.
 - Gradual transitions (a dissolve, a fade through black) spread the change over many frames and are **not** cuts: the shots on both sides count as one.
-- A flash that returns to the same picture within a few frames is not a cut. A cut immediately followed (within three frames) by a second large change, such as a whip pan, can be missed.
+- A flash held for two or three frames that returns to the same picture is not a cut; a one-frame flash is. A cut immediately followed (within three frames) by a second large change, such as a whip pan, can be missed.
 
 ## Credit Cost
 
 2 credits<!-- credits: shot-cuts --> per run, with or without frames, whatever the length of the video. Community and Business editions have no credits.
 
-**Fails and is refunded:** a file that is not a readable video, a video longer than 30 minutes (trim it first), and, with frames on, a video with more than 1,000 shots (turn frames off to get the times alone, or trim the video).
+**Fails and is refunded:** a file that is not a readable video, a file over about 10.7 GiB (the download stops there), a video longer than 30 minutes (trim it first), and, with frames on, a video with more than 1,000 shots (turn frames off to get the times alone, or trim the video).
 
 ## API
 
@@ -82,5 +82,5 @@ The **Shots** output (also the job's `output_data.json`):
 
 ## Tips
 
-- Wire the **Shots** output into Extract Field or a list node to read a single shot's times.
+- Wire the **Shots** output into Extract Field (field `shots`, Output Type `list`) or a list node to read a single shot's times.
 - Frames are the exact decoded frames, saved without loss. They are as large as the video's picture.

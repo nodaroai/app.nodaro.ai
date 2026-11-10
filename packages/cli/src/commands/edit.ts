@@ -156,7 +156,7 @@ export function editCommand(): Command {
       "a camera (or the master / wide) as url or id=url (repeatable, 2-6); ids are minted as source-N when omitted",
       collectVariadic,
     )
-    .option("--sources-file <file>", "JSON array of { id, url } rows (overrides --source)")
+    .option("--sources-file <file>", "JSON array of { id, url, kind? } rows, kind \"audio\" for a sound-only recording (overrides --source)")
     .requiredOption("--transcript <file>", "path to the transcript JSON WITH speaker labels (transcribe with speaker detection)")
     .option("--offsets <file>", "an audio-sync result JSON (the job's output_data.json); omit when the recordings share a clock")
     .option("--master <id>", "the master audio's id: hears everyone, so it is no one's camera")
@@ -173,7 +173,7 @@ export function editCommand(): Command {
       ) => {
         const sources = opts.sourcesFile ? readJsonFile(opts.sourcesFile) : (opts.source ?? []).map(parseAudioSyncSource)
         if (!Array.isArray(sources) || sources.length < 2 || sources.length > 6) {
-          warn("speaker-map takes 2-6 recordings — pass --source <url> (repeatable) or --sources-file <file> (a JSON array of { id, url } rows)")
+          warn("speaker-map takes 2-6 recordings — pass --source <url> (repeatable) or --sources-file <file> (a JSON array of { id, url, kind? } rows)")
           process.exit(1)
         }
         try {
@@ -266,7 +266,7 @@ export function editCommand(): Command {
   // ── plan (edit-plan) ──────────────────────────────────────────────────────
   cmd
     .command("plan")
-    .description("plan a transcript-driven cut / clips / chapters / trailer (Cloud edition)")
+    .description("plan a transcript-driven cut / clips / chapters / trailer (runs on nodaro.ai; a connected self-hosted install relays it)")
     .requiredOption("--mode <mode>", EDIT_PLAN_MODES.join(" | "))
     .requiredOption("--plan-tier <tier>", "economy | standard | premium")
     .requiredOption("--transcript <file>", "path to a timed transcript JSON file")
@@ -377,7 +377,7 @@ export function editCommand(): Command {
   // ── switch-cameras (podcast B5) ─────────────────────────────────────────
   cmd
     .command("switch-cameras")
-    .description("choose which camera shows each cut of an edit by who is speaking (Cloud edition; flat price)")
+    .description("choose which camera shows each cut of an edit by who is speaking (runs on nodaro.ai; a connected self-hosted install relays it; flat price)")
     .requiredOption("--edl <file>", "path to ONE EDL JSON (an `edit plan` result)")
     .requiredOption("--transcript <file>", "path to the transcript JSON WITH speaker labels (transcribe with speaker detection)")
     .option("--speaker-map <file>", "JSON object: speaker label → EDL source id of their camera")

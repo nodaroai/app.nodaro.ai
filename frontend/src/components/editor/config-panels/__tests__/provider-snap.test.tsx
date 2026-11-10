@@ -429,6 +429,21 @@ describe("GenerateImageConfig — provider-snap useEffect", () => {
     expect(merged.resolution).toBe("2K")
   })
 
+  it.each(["27:16", "16:27", "9:8", "8:9"])("snaps GPT Image 2.5's 4K to 1K at %s, the only size it renders there", (aspectRatio) => {
+    const onUpdate = vi.fn()
+    const data = baseGenerateImageData({ provider: "gpt-image-2-5-flare", aspectRatio, resolution: "4K" })
+    render(<GenerateImageConfig {...commonProps(onUpdate, data)} />)
+    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+    expect(merged.resolution).toBe("1K")
+  })
+
+  it("keeps GPT Image 2.5's 4K at a ratio that renders it", () => {
+    const onUpdate = vi.fn()
+    const data = baseGenerateImageData({ provider: "gpt-image-2-5-flare", aspectRatio: "21:9", resolution: "4K" })
+    render(<GenerateImageConfig {...commonProps(onUpdate, data)} />)
+    for (const [u] of onUpdate.mock.calls) expect("resolution" in u).toBe(false)
+  })
+
   it("does not snap when stable provider state is consistent", () => {
     // nano-banana-pro + 2K + 16:9 — all valid. No effect-driven onUpdate calls.
     const onUpdate = vi.fn()
@@ -507,6 +522,14 @@ describe("ModifyImageConfig — provider-snap useEffect", () => {
     const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
     expect(merged.resolution).toBeUndefined()
     expect("resolution" in merged).toBe(true)
+  })
+
+  it("snaps GPT Image 2.5's 2K to 1K at 9:8, the only size it renders there", () => {
+    const onUpdate = vi.fn()
+    const data = baseModifyImageData({ provider: "gpt-image-2-5-sunburst-i2i", aspectRatio: "9:8", resolution: "2K" })
+    render(<ModifyImageConfig {...commonProps(onUpdate, data)} />)
+    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+    expect(merged.resolution).toBe("1K")
   })
 
   it("clears quality when nano-banana-edit (no quality lever)", () => {

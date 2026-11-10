@@ -201,7 +201,8 @@ export interface AppRunResumeResult {
  * - `app_run_version_changed` as `AppRunVersionChangedError`;
  * - `already_running` as `AlreadyRunningError` (with the live `executionId`);
  * - `not_found` and `continuation_not_found` as `NotFoundError`, whose `code`
- *   is always `not_found` (the server's message is kept);
+ *   is the server's own (`not_found` or `continuation_not_found`, with the
+ *   server's message);
  * - `insufficient_credits` and `insufficient_app_credits` as
  *   `InsufficientCreditsError`, whose `code` is always `insufficient_credits`
  *   (the server's message says which);

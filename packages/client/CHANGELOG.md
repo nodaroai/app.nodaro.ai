@@ -1,5 +1,18 @@
 # @nodaro/sdk
 
+## 2.66.1
+
+### Patch Changes
+
+- 5557a2f: GPT Image 2.6's own `auto` aspect ratio renders a portrait photo square, so the six GPT Image 2.6 catalog entries now carry `autoAspectFromSourceImage: true`: `auto` stays in their `aspectRatios` (every menu still offers it), and `autoAspectNeedsSourceImage` answers true for it, so `"auto"` with a photo is resolved by `normalizeModelInput` to the 2.6 ratio nearest the photo, as on a model without a native auto. With no photo, or one whose size is unknown, the model's own `auto` is kept as before. GPT Image 2.5 keeps its native `auto`. The SDK's `aspectRatio` doc comment on image-to-image says so.
+- 5557a2f: Add `LLM_STRUCTURED_SYSTEM_MAX` (200,000): the `system` prompt of `POST /v1/llm/structured` and `POST /v1/llm/structured/jobs` now takes up to 200,000 characters, twice `LLM_TEXT_INPUT_MAX`, so a client whose schema writes in its own vocabulary has room for that vocabulary to grow. `input` stays at 100,000. The SDK's `LlmStructuredInput.system` doc states the new limit.
+- Updated dependencies [4caf2ed]
+- Updated dependencies [5557a2f]
+- Updated dependencies [5557a2f]
+- Updated dependencies [90fcdde]
+  - @nodaro/shared@3.58.0
+  - @nodaro/prompts@1.53.0
+
 ## 2.66.0
 
 ### Minor Changes

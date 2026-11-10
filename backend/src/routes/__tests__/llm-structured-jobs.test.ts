@@ -57,6 +57,7 @@ vi.mock("@/lib/supabase.js", () => {
 })
 
 import { llmStructuredJobsRoutes } from "../llm-structured-jobs.js"
+import { LLM_STRUCTURED_SYSTEM_MAX, LLM_TEXT_INPUT_MAX } from "@nodaro/shared/models"
 
 const USER_ID = "00000000-0000-4000-8000-000000000001"
 const SCHEMA = { type: "object", properties: { title: { type: "string" } }, required: ["title"], additionalProperties: false }
@@ -119,6 +120,12 @@ describe("refusals that cost nothing", () => {
     expect(mocks.insertJob).not.toHaveBeenCalled()
   })
 
+  it("a system prompt is held to LLM_STRUCTURED_SYSTEM_MAX (200,000 chars), the input to LLM_TEXT_INPUT_MAX", async () => {
+    expect((await post({ ...VALID, system: "x".repeat(LLM_STRUCTURED_SYSTEM_MAX + 1) })).statusCode).toBe(400)
+    expect((await post({ ...VALID, input: "x".repeat(LLM_TEXT_INPUT_MAX + 1) })).statusCode).toBe(400)
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+  })
+
   it("400 on a root anyOf/oneOf/allOf before any row exists — the schema no provider lane can take", async () => {
     // This is the route the Studio Director uses (`llm.structuredJob`); the
     // 2026-09-10 outage was exactly this shape reaching a provider.
@@ -156,6 +163,22 @@ describe("a story run", () => {
     expect(payload).not.toHaveProperty("userId")
     expect(analysisSeen).toBeNull()
   })
+  it("takes a Director-sized system prompt past the old 100,000-char ceiling, carried whole to the worker and stored as a digest", async () => {
+    // A rendered vocabulary: lines of markdown, so the JSON body escapes its newlines.
+    const line = "- `seamless-match`: the two shots blend over about 1 second.\n"
+    const system = line.repeat(Math.ceil(LLM_STRUCTURED_SYSTEM_MAX / line.length)).slice(0, LLM_STRUCTURED_SYSTEM_MAX)
+    const res = await post({ ...VALID, system })
+    expect(res.statusCode).toBe(200)
+    expect(mocks.insertJob.mock.calls[0][1].input_data.system).toMatchObject({ chars: LLM_STRUCTURED_SYSTEM_MAX })
+    expect(mocks.queueAdd.mock.calls[0][1].system).toBe(system)
+  })
+
+  it("a body at both ceilings in three-byte characters still fits the request size limit", async () => {
+    // Fastify's default bodyLimit is the app's own (1 MiB, app.ts).
+    const res = await post({ ...VALID, system: "€".repeat(LLM_STRUCTURED_SYSTEM_MAX), input: "€".repeat(LLM_TEXT_INPUT_MAX) })
+    expect(res.statusCode).toBe(200)
+  })
+
   it("rollback is byte-identical: the tier id, reserved with today's four arguments, and its usage log rides to the worker", async () => {
     expect((await post({ ...VALID, llmModel: "claude-fable-5" })).statusCode).toBe(200)
     expect(mocks.reserveCreditsForJob).toHaveBeenCalledTimes(1)

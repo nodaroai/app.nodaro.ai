@@ -93,15 +93,14 @@ describe("buildGeminiOmni12Request", () => {
     expect(input).not.toHaveProperty("last_frame_url")
     expect(input.image_urls).toEqual(["s", "e"])
     expect(input.duration).toBe(12)
-    expect(input.prompt).toContain("@image_1")
-    expect(input.prompt).toContain("@image_2")
+    expect(input.prompt).toBe("a cat plays piano\n\nimage 1 is the opening (first) frame and image 2 is the closing (last) frame of the video.")
   })
 
   it("a lone end frame never goes out as last_frame_url", () => {
     const { input } = buildGeminiOmni12Request({ ...base, endFrameUrl: "e" })
     expect(input).not.toHaveProperty("last_frame_url")
     expect(input.image_urls).toEqual(["e"])
-    expect(input.prompt).toContain("closing")
+    expect(input.prompt).toBe("a cat plays piano\n\nimage 1 is the closing (last) frame of the video.")
   })
 
   it("frames beside references join the list after them, named in the prompt", () => {
@@ -109,8 +108,18 @@ describe("buildGeminiOmni12Request", () => {
     expect(mode).toBe("reference")
     expect(input).not.toHaveProperty("first_frame_url")
     expect(input.image_urls).toEqual(["r1", "r2", "s", "e"])
-    expect(input.prompt).toContain("@image_3")
-    expect(input.prompt).toContain("@image_4")
+    expect(input.prompt).toBe(
+      "a cat plays piano\n\nimage 3 is the opening (first) frame and image 4 is the closing (last) frame of the video. image 1 and image 2 are references for the subject; they are not frames.",
+    )
+  })
+
+  it("names a start frame beside references in plain words, the wording that held the frame on staging", () => {
+    const { input } = buildGeminiOmni12Request({ ...base, startFrameUrl: "s", referenceImageUrls: ["r1", "r2"] })
+    expect(input.image_urls).toEqual(["r1", "r2", "s"])
+    expect(input.prompt).toBe(
+      "a cat plays piano\n\nimage 3 is the opening (first) frame of the video. image 1 and image 2 are references for the subject; they are not frames.",
+    )
+    expect(input.prompt).not.toContain("@image")
   })
 
   it("at the cap the frames stay and trailing references go", () => {

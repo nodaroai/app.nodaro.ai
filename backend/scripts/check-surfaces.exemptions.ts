@@ -190,12 +190,20 @@ export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
     atom: "DELETE /v1/moodboards/:p",
     reason: "deleting a moodboard is destructive and makes every run that names it fail: a person does it in the app, the CLI or the API, never an agent",
   },
+  // Edit Plan's mode list: what the editor greys out before a run. An agent asks plan_edit for the
+  // mode it wants, and plan_edit refuses a mode this deployment cannot run before anything is charged.
   {
-    feature: "node:site-capture",
-    surface: "node-doc-live",
+    feature: "edit",
+    surface: "mcp",
+    atom: "GET /v1/edit-plan/capabilities",
     reason:
-      "new node: the docs-site page is written and published once the node is in production; remove this entry, and the node's AWAITING_DOCS_PAGE row, when the node-docs snapshot is refreshed",
+      "it only tells the editor which Edit Plan modes to grey out; an agent asks plan_edit for a mode, and plan_edit refuses one this deployment cannot run before anything is charged",
   },
+  // Not an entry (the checker scores routes, not their fields, so one would be stale at once):
+  // Apply EDL's `planBasis` field is on the REST route and the SDK only, not on the CLI
+  // (`edit apply-edl`) or MCP (`apply_edl`), on purpose. It is a fingerprint the caller computes
+  // from the plan value it renders (`renderReadBasis` in @nodaro/shared), which no result returns;
+  // leaving it out only means the take is not matched to a plan value.
   ...(["cli", "mcp"] as const).flatMap((surface) =>
     WELCOME_OFFER_SESSION_ONLY.map((atom) => ({ feature: "credits", surface, atom, reason: WELCOME_OFFER_REASONS[surface] })),
   ),

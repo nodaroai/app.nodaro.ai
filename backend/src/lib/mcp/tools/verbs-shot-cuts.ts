@@ -27,7 +27,7 @@ const messageOf = (err: unknown): string => (err instanceof Error ? err.message 
 export function shotCutsDescription(nodeType: string): string {
   return (
     "Find where every shot of a video starts and ends — measured from the file (local ffmpeg, no AI): every decoded frame is scored " +
-    "and each hard cut starts a new shot (dissolves and fades are not cuts; a returning flash is not a cut). Videos up to 30 minutes (MP4, MOV, MKV, WebM). " +
+    "and each hard cut starts a new shot (dissolves, fades and a flash held 2-3 frames are not cuts). Videos up to 30 minutes (MP4, MOV, MKV, WebM). " +
     "Pass `video_url` or `video_asset_id`. `frames: true` also saves each shot's exact first and last frame as PNG images (up to 1,000 shots; same price). " +
     "Returns a job_id; read `get_job` / `wait_for_job` `outputData.json`: `{ shotCount, cutsSec, durationSec, shots: [{ index, startSec, endSec, durationSec, firstFrameUrl?, lastFrameUrl? }] }` " +
     "— seconds from the first frame; `cutsSec` ascending, never 0, `[]` for a single shot. With frames, `outputData.firstFrames` / `lastFrames` list the frame URLs in shot order. " +

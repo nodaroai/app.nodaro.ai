@@ -445,11 +445,19 @@ describe("payload-builder-auto-aspect-source.test.ts", () => {
     it("no photo: every model without a native auto is sent today's snapped ratio", () => {
       vi.spyOn(console, "warn").mockImplementation(() => {})
       const failures: string[] = []
-      for (const provider of IMAGE_GEN_PROVIDERS.filter((p) => autoAspectNeedsSourceImage(p, "auto"))) {
+      for (const provider of IMAGE_GEN_PROVIDERS.filter((p) => autoAspectNeedsSourceImage(p, "auto") && !MODEL_CATALOG[p]!.aspectRatios!.includes("auto"))) {
         const sent = buildPayload(gen({ provider, aspectRatio: "auto" }), "job-1", {}).payload.aspectRatio
         if (sent === "auto" || sent !== todays(provider)) failures.push(`${provider} → ${String(sent)}`)
       }
       expect(failures).toEqual([])
+    })
+
+    /** GPT Image 2.6 lists "auto" but resolves it from a photo; with none, its own "auto" goes, as before. */
+    it("no photo: GPT Image 2.6 is sent its own 'auto'", () => {
+      for (const provider of ["gpt-image-2-6-flare", "gpt-image-2-6-sunburst"]) {
+        expect(autoAspectNeedsSourceImage(provider, "auto")).toBe(true)
+        expect(buildPayload(gen({ provider, aspectRatio: "auto" }), "job-1", {}).payload.aspectRatio).toBe("auto")
+      }
     })
 
     /**
@@ -507,10 +515,18 @@ describe("payload-builder-auto-aspect-source.test.ts", () => {
       expect(autoAspectSourceImageUrl(node("image-to-image", { provider: "seedream-5-pro-i2i", aspectRatio: "16:9" }), inputs)).toBeUndefined()
       expect(autoAspectSourceImageUrl(node("generate-image", { provider: "seedream-5-pro", aspectRatio: "auto" }), inputs)).toBeUndefined()
       expect(autoAspectSourceImageUrl(node("image-to-image", { provider: "seedream-5-pro-i2i", aspectRatio: "auto" }), {})).toBeUndefined()
-      // Each branch's own default model when the node names none: the edit
-      // default has a native auto, and edit-image's default has no ratio lever.
-      expect(autoAspectSourceImageUrl(node("modify-image", { aspectRatio: "auto" }), inputs)).toBeUndefined()
+      // A native auto that keeps the shape (GPT Image 2.5's edit), and
+      // edit-image's default, which has no ratio lever.
+      expect(autoAspectSourceImageUrl(node("modify-image", { provider: "gpt-image-2-5-flare-i2i", aspectRatio: "auto" }), inputs)).toBeUndefined()
       expect(autoAspectSourceImageUrl(node("edit-image", { aspectRatio: "auto" }), inputs)).toBeUndefined()
+    })
+
+    it("names the photo for the edit default, GPT Image 2.6, whose own auto renders square", () => {
+      const inputs = { imageUrl: SOURCE }
+      // The node names no model: the edit default runs it. Unset ratio is Auto.
+      expect(autoAspectSourceImageUrl(node("modify-image", { aspectRatio: "auto" }), inputs)).toBe(SOURCE)
+      expect(autoAspectSourceImageUrl(node("modify-image", {}), inputs)).toBe(SOURCE)
+      expect(autoAspectSourceImageUrl(node("image-to-image", { provider: "gpt-image-2-6-sunburst-i2i", aspectRatio: "auto" }), inputs)).toBe(SOURCE)
     })
 
     /**

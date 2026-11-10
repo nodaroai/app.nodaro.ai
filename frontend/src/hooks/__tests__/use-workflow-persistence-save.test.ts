@@ -1341,6 +1341,112 @@ describe("useWorkflowPersistence — save", () => {
   })
 
   // -----------------------------------------------------------------------
+  // Keys of `settings` the editor does not manage. The full save REPLACES
+  // the whole column, so a save that rebuilt it from the editor's four keys
+  // erased every other writer's key — an assistant's conversation record
+  // (`mcpConversation`), a month's hub marker (`mcpHub`), Studio's document.
+  // The save writes the column as the server holds it at the version the
+  // write is pinned to, with the editor's keys over it.
+  // -----------------------------------------------------------------------
+
+  describe("keys of settings the editor does not manage ride through a full save", () => {
+    const conversation = {
+      client: "claude-code",
+      clientName: "Claude Code (nodaro)",
+      key: null,
+      startedAt: "2026-11-09T18:00:00.000Z",
+      lastActivityAt: "2026-11-09T18:05:00.000Z",
+      firstRequest: "a knight on a hill",
+      steps: 2,
+    }
+
+    function storedSnapshot(storedSettings: Record<string, unknown>) {
+      return {
+        nodes: [makeNode("n1")],
+        edges: [],
+        name: "Test Workflow",
+        characterDefinitions: [],
+        flowPromptTemplates: {},
+        presentationSettings: { runTarget: "workflow" },
+        savedViewport: null,
+        storedSettings,
+      }
+    }
+
+    async function fullSave(storedSettings: Record<string, unknown>, overrides: Record<string, unknown> = {}) {
+      resetStoreState({
+        workflowId: "w1",
+        nodes: [makeNode("n1"), makeNode("n2")],
+        loadedUpdatedAt: "2026-11-09T18:00:00.000Z",
+        loadedVersion: 7,
+        lastSavedSnapshot: storedSnapshot(storedSettings),
+        ...overrides,
+      })
+      const { update } = setupSupabaseUpdate()
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      await act(async () => {
+        await result.current.save()
+      })
+      expect(update).toHaveBeenCalledTimes(1)
+      return { update, payload: update.mock.calls[0]![0] as { settings: Record<string, unknown> } }
+    }
+
+    it("an MCP conversation flow keeps settings.mcpConversation exactly as stored", async () => {
+      const { payload } = await fullSave({ mcpConversation: conversation, viewport: { x: 0, y: 0, zoom: 1 } })
+      expect(payload.settings.mcpConversation).toEqual(conversation)
+    })
+
+    it("a month's hub keeps settings.mcpHub exactly as stored", async () => {
+      const { payload } = await fullSave({ mcpHub: { month: "2026-11" } })
+      expect(payload.settings.mcpHub).toEqual({ month: "2026-11" })
+    })
+
+    it("any other writer's key rides through too, and the editor's own keys are the editor's", async () => {
+      const { payload } = await fullSave(
+        {
+          studio: { shots: [{ id: "s1" }] },
+          demoSeed: true,
+          flowPromptTemplates: { n1: "stored before this session" },
+          viewport: { x: 0, y: 0, zoom: 1 },
+        },
+        { flowPromptTemplates: { n1: "edited here" }, savedViewport: { x: 5, y: 6, zoom: 2 } },
+      )
+      expect(payload.settings.studio).toEqual({ shots: [{ id: "s1" }] })
+      expect(payload.settings.demoSeed).toBe(true)
+      expect(payload.settings.flowPromptTemplates).toEqual({ n1: "edited here" })
+      expect(payload.settings.viewport).toEqual({ x: 5, y: 6, zoom: 2 })
+      expect(payload.settings.characterDefinitions).toEqual([])
+      expect(payload.settings.presentationSettings).toEqual({ runTarget: "workflow" })
+    })
+
+    it("the write stays pinned to the version the stored keys were read at (the version CAS)", async () => {
+      const { update } = await fullSave({ mcpConversation: conversation })
+      const eqId = update.mock.results[0]!.value.eq as ReturnType<typeof vi.fn>
+      expect(eqId).toHaveBeenCalledWith("id", "w1")
+      const eqCas = eqId.mock.results[0]!.value.eq as ReturnType<typeof vi.fn>
+      expect(eqCas).toHaveBeenCalledWith("version", 7)
+    })
+
+    it("the snapshot the save leaves behind holds the settings it wrote, so the next save starts from them", async () => {
+      await fullSave({ mcpConversation: conversation })
+      const snapshot = mockApplySaveSuccess.mock.calls[0]![2] as { storedSettings: Record<string, unknown> }
+      expect(snapshot.storedSettings.mcpConversation).toEqual(conversation)
+      expect(Object.keys(snapshot.storedSettings).sort()).toEqual(
+        ["characterDefinitions", "flowPromptTemplates", "mcpConversation", "presentationSettings", "viewport"],
+      )
+    })
+
+    it("a payload key is a copy: equal to the stored record, never the same object, and the stored record is left untouched", async () => {
+      const stored = { mcpConversation: conversation }
+      const before = structuredClone(stored)
+      const { payload } = await fullSave(stored)
+      expect(payload.settings.mcpConversation).toEqual(conversation)
+      expect(payload.settings.mcpConversation).not.toBe(conversation)
+      expect(stored).toEqual(before)
+    })
+  })
+
+  // -----------------------------------------------------------------------
   // Exception handling
   // -----------------------------------------------------------------------
 
@@ -1508,6 +1614,9 @@ describe("useWorkflowPersistence — save", () => {
     })
   }
 
+  /** A stored key the editor does not manage: it must ride through a delta's snapshot and a rebase alike. */
+  const deltaConversation = { client: "claude-code", clientName: "Claude Code (nodaro)", key: null, startedAt: "T0", lastActivityAt: "T0", steps: 1 }
+
   function deltaState() {
     const unchanged = makeNode("keep")
     const baseEdited = makeNode("edit")
@@ -1519,6 +1628,7 @@ describe("useWorkflowPersistence — save", () => {
       flowPromptTemplates: {},
       presentationSettings: { runTarget: "workflow" },
       savedViewport: null,
+      storedSettings: { mcpConversation: deltaConversation },
     }
     const edited = { ...baseEdited, data: { ...baseEdited.data, prompt: "changed" } }
     resetStoreState({
@@ -1554,10 +1664,12 @@ describe("useWorkflowPersistence — save", () => {
       expect(args.p_base_version).toBe(41)
       const sent = args.p_upsert_nodes as Array<{ id: string }>
       expect(sent.map((n) => n.id)).toEqual([edited.id])
+      // The snapshot left behind keeps the stored settings column — a key the
+      // editor does not manage included — as the base the next full save writes.
       expect(mockApplySaveSuccess).toHaveBeenCalledWith(
         "2026-06-12T02:00:00Z",
         42,
-        expect.objectContaining({ name: "Test Workflow" }),
+        expect.objectContaining({ name: "Test Workflow", storedSettings: { mcpConversation: deltaConversation } }),
         0,
       )
     } finally {
@@ -1754,10 +1866,13 @@ describe("useWorkflowPersistence — save", () => {
       rpcResolves([{ ok: false, version: 43, updated_at: "2026-06-12T02:01:00Z" }])
       // fresh fetch: remote added node "r1", kept ours untouched
       const remoteNew = makeNode("r1")
+      // The fresh row's settings column moved too (an assistant's step): the
+      // rebase must adopt it whole as the base the next full save writes.
+      const movedConversation = { ...deltaConversation, lastActivityAt: "T43", steps: 2 }
       const freshMaybeSingle = vi.fn().mockResolvedValue({
         data: {
           nodes: [JSON.parse(JSON.stringify(unchanged)), JSON.parse(JSON.stringify({ ...edited, data: { label: "Test", executionStatus: "idle" } })), remoteNew],
-          edges: [], settings: {}, name: "Test Workflow",
+          edges: [], settings: { mcpConversation: movedConversation }, name: "Test Workflow",
           version: 43, updated_at: "2026-06-12T02:01:00Z",
         },
         error: null,

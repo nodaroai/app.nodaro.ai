@@ -8,7 +8,7 @@ import type { NodaroClientCore } from "../core.js"
  * the platform cannot know — Nodaro Studio's production plan is the first).
  */
 export interface LlmStructuredInput {
-  /** The system prompt (≤ 100,000 chars). */
+  /** The system prompt (≤ 200,000 chars, `LLM_STRUCTURED_SYSTEM_MAX` in `@nodaro/shared`). */
   system: string
   /** The user turn (1–100,000 chars). */
   input: string

@@ -3073,11 +3073,11 @@ function executeNodeCore(
     // as i2v). Video/audio-only refs keep the older provider-specific checks.
     const i2vRefsCarried =
       (VIDEO_REF_LIMITS_BY_PROVIDER[nodeProvider ?? ""]?.images ?? 0) > 0 && (i2vMergedRefs?.length ?? 0) > 0
-    // Kling 4.0 Keyframes and Omni Flash 1.2 take an end frame alone, and Omni
-    // Flash 1.2 runs a source video alone as a video edit.
+    // Kling 4.0 Keyframes and Omni Flash 1.2 take an end frame alone, and every
+    // Gemini Omni model runs a source video alone as a video edit.
     const i2vOmniPerSecond = isGeminiOmniPerSecondProvider(nodeProvider)
     const i2vLoneEndFrame = (i2vKeyframesModel || i2vOmniPerSecond) && !!endFrameUrl
-    const i2vSourceVideoAlone = i2vOmniPerSecond && Boolean((inputs.referenceVideoUrls as string[] | undefined)?.length)
+    const i2vSourceVideoAlone = isGeminiOmniProvider(nodeProvider) && Boolean((inputs.referenceVideoUrls as string[] | undefined)?.length)
     if (!startFrameUrl && !isVeoRefMode && !isSeedance2RefOnly && !i2vRefsCarried && !i2vLoneEndFrame && !i2vSourceVideoAlone) {
       const debugSources = edges.filter((e) => e.target === node.id).map((e) => `${e.sourceHandle ?? "?"}→${e.targetHandle ?? "?"}`).join(", ")
       toast.error(nodeRunError(i2vData.label, "nodeRun.noStartFrameImageFound", { startFrame: inputs.startFrameUrl ?? "none", imageUrl: inputs.imageUrl ?? "none", edges: debugSources || "none" }));

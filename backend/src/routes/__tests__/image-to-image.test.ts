@@ -67,6 +67,15 @@ vi.mock("@/lib/url-validator.js", async () => {
   return { safeUrlSchema: z.string().url() }
 })
 
+// No network: a request whose "auto" is resolved from the photo (GPT Image 2.6,
+// the edit default) reads the photo's size, and here no photo can be read, so
+// "auto" keeps its fallback. The measured ratio itself is covered, with a real
+// image, in image-auto-aspect-source.test.ts.
+vi.mock("@/lib/fetch-own-media.js", () => ({
+  fetchOwnMedia: vi.fn(async () => new Response("gone", { status: 404 })),
+  isOwnMediaUrl: () => false,
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -78,6 +87,8 @@ import { llmComplete } from "../../lib/llm-client.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { IMAGE_ASPECT_RATIO_VALUES, MODIFY_IMAGE_PROVIDERS } from "@nodaro/shared/models"
 import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
+import { defaultImageModel } from "@nodaro/shared/model-catalog"
+import { UNSET_RATIO_IS_AUTO_EDIT_MODELS } from "../../lib/image-auto-aspect.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -1118,6 +1129,78 @@ describe("POST /v1/image-to-image", () => {
       // …and the job row records the 1K render we actually paid for.
       expect(inputData.aspectRatio).toBe("auto")
       expect(inputData.resolution).toBe("1K")
+    })
+
+    it.each(["27:16", "16:27", "9:8", "8:9"])("CHECK === DEBIT for GPT Image 2.5 at %s: a 2K / 4K edit is priced, recorded and sent as 1K", async (aspectRatio) => {
+      for (const provider of ["gpt-image-2-5-flare-i2i", "gpt-image-2-5-sunburst-i2i"]) {
+        for (const resolution of ["2K", "4K"]) {
+          const payload = { imageUrl: "https://r2.nodaro.ai/in.png", prompt: "make it night", userId: VALID_UUID, provider, aspectRatio, resolution }
+          const { identifier: debit, inputData } = await debitIdentifierFor(payload)
+          expect(checkIdentifierFor(payload)).toBe(debit)
+          expect(debit).toBe(provider)
+          expect(inputData.resolution).toBe("1K")
+          expect((vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as { resolution?: string }).resolution).toBe("1K")
+        }
+      }
+    })
+
+    it("GPT Image 2.5 at another ratio keeps its 2K price", async () => {
+      const payload = { imageUrl: "https://r2.nodaro.ai/in.png", prompt: "make it night", userId: VALID_UUID, provider: "gpt-image-2-5-flare-i2i", aspectRatio: "21:9", resolution: "2K" }
+      const { identifier: debit } = await debitIdentifierFor(payload)
+      expect(checkIdentifierFor(payload)).toBe(debit)
+      expect(debit).toBe("gpt-image-2-5-flare-i2i:2K")
+    })
+
+    const lastQueued = () => vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as { provider?: string; aspectRatio?: string }
+
+    it("no ratio on the default edit model is sent exactly as a request naming 'auto', at the same price", async () => {
+      const payload = { imageUrl: "https://r2.nodaro.ai/in.png", prompt: "make it night", userId: VALID_UUID }
+      const named = await debitIdentifierFor({ ...payload, aspectRatio: "auto" })
+      const namedQueued = lastQueued()
+      const { identifier: debit, inputData } = await debitIdentifierFor(payload)
+      expect(checkIdentifierFor(payload)).toBe(debit)
+      expect(debit).toBe(named.identifier)
+      expect(inputData.provider).toBe(defaultImageModel("edit"))
+      expect(inputData.aspectRatio).toBe(named.inputData.aspectRatio)
+      expect(lastQueued().provider).toBe(defaultImageModel("edit"))
+      expect(lastQueued().aspectRatio).toBe(namedQueued.aspectRatio)
+    })
+
+    it.each([...UNSET_RATIO_IS_AUTO_EDIT_MODELS])("%s with no ratio is sent as with 'auto', priced the same", async (provider) => {
+      for (const levers of [{}, { resolution: "4K" }, { resolution: "2K", quality: "high" }]) {
+        const payload = { imageUrl: "https://r2.nodaro.ai/in.png", prompt: "make it night", userId: VALID_UUID, provider, ...levers }
+        const named = await debitIdentifierFor({ ...payload, aspectRatio: "auto" })
+        const namedQueued = lastQueued()
+        const { identifier: debit, inputData } = await debitIdentifierFor(payload)
+        expect(checkIdentifierFor(payload)).toBe(debit)
+        expect(checkIdentifierFor({ ...payload, aspectRatio: "auto" })).toBe(debit)
+        expect(debit).toBe(named.identifier)
+        expect(inputData.aspectRatio).toBe(named.inputData.aspectRatio)
+        expect(lastQueued().aspectRatio).toBe(namedQueued.aspectRatio)
+        // Never left unset (the provider config's 16:9).
+        expect(lastQueued().aspectRatio).toBeDefined()
+      }
+    })
+
+    it.each(["gpt-image-2-5-flare-i2i", "gpt-image-2-5-sunburst-i2i"])("%s with no ratio is sent its own 'auto'", async (provider) => {
+      const { inputData } = await debitIdentifierFor({ imageUrl: "https://r2.nodaro.ai/in.png", prompt: "make it night", userId: VALID_UUID, provider })
+      expect(inputData.aspectRatio).toBe("auto")
+      expect(lastQueued().aspectRatio).toBe("auto")
+    })
+
+    it("a named ratio on those models is sent as named", async () => {
+      await debitIdentifierFor({ imageUrl: "https://r2.nodaro.ai/in.png", prompt: "make it night", userId: VALID_UUID, aspectRatio: "1:1" })
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as { aspectRatio?: string }
+      expect(queued.aspectRatio).toBe("1:1")
+    })
+
+    it("other models keep their own default when no ratio is named (GPT Image 2's edit included)", async () => {
+      for (const provider of ["gpt-image-2-i2i", "nano-banana-edit"]) {
+        const { inputData } = await debitIdentifierFor({ imageUrl: "https://r2.nodaro.ai/in.png", prompt: "make it night", userId: VALID_UUID, provider })
+        expect(inputData.aspectRatio).toBeUndefined()
+        const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as { aspectRatio?: string }
+        expect(queued.aspectRatio).toBeUndefined()
+      }
     })
 
     it("snaps an off-list ratio before enqueue and discloses it", async () => {

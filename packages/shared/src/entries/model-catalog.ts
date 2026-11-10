@@ -63,6 +63,8 @@ export {
   nearestCatalogAspectRatio,
   autoAspectNeedsSourceImage,
   isAutoAspectToken,
+  resolutionsAtAspectRatio,
+  resolutionAtAspectRatio,
 } from "../model-catalog.js"
 export type {
   NormalizedVideoRequest,

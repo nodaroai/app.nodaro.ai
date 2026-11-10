@@ -18,7 +18,7 @@ import { isAutoAspectToken, MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import type { McpSession } from "../session.js"
 import { registerTask } from "../tasks.js"
 import { mcpInject } from "../internal-request.js"
-import { normalizeAspectRatio, normalizeModel, normalizeQuality, normalizeResolution } from "../normalize.js"
+import { normalizeAspectRatio, normalizeModel, normalizeQuality, normalizeResolution, requestedAspectRatio } from "../normalize.js"
 import { cardResultText, dispatchJob, errorResult, parseFailure, type SingleJobStructuredContent } from "./_verb-helpers.js"
 import { presetCallFields } from "./_image-preset-call.js"
 
@@ -110,7 +110,8 @@ export function fanOutLevers(
   const resolutions = unionOf(models, "resolutions")
   const qualities = unionOf(models, "qualities")
   return {
-    aspectRatio: normalizeAspectRatio(raw.aspect_ratio, ratios, "16:9") ?? normalizeAspectRatio(saved.aspectRatio, ratios, "16:9"),
+    // The saved ratio is chosen before the fit: an unset ratio fits to 16:9, never to nothing.
+    aspectRatio: normalizeAspectRatio(requestedAspectRatio(raw.aspect_ratio, saved.aspectRatio), ratios, "16:9"),
     resolution: normalizeResolution(raw.resolution, resolutions) ?? normalizeResolution(saved.resolution, resolutions),
     quality: normalizeQuality(raw.quality, qualities) ?? normalizeQuality(saved.quality, qualities),
   }

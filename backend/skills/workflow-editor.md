@@ -48,7 +48,7 @@ Every edge connects a SOURCE node's output handle to a TARGET node's input handl
 <!-- SECTION:update-contract -->
 ## update_workflow_json contract
 
-`update_workflow_json({ workflow_id, nodes, edges, settings?, expected_version? })` overwrites the workflow's full graph. `nodes` and `edges` are TOP-LEVEL parameters (not nested under a `workflow` object) and must be sent together. Use it after each approved stage to attach new content to the user's canvas — the user watches it assemble during conversation.
+`update_workflow_json({ workflow_id, nodes, edges, settings?, expected_version? })` overwrites the workflow's full graph. `nodes` and `edges` are TOP-LEVEL parameters (not nested under a `workflow` object) and must be sent together. Use it after each approved stage to attach new content to the user's canvas — the user watches it assemble during conversation. `settings` replaces the whole settings object: a stored key another writer owns (`studio`, `mcpConversation`, `mcpHub`) must come back unchanged — copy it from `get_workflow_json` — or leave `settings` out; a write that changes or drops one is refused.
 
 - **`workflow_id`** — UUID from `create_workflow`.
 - **`nodes` + `edges`** — the full graph. You must include ALL existing nodes + the new ones (no partial diff support).

@@ -1429,6 +1429,15 @@ const GPT_IMAGE_2_6_TOTAL_BYTES = 544
 // reference caps in the descriptions of `generate_video` / `animate_image`.
 const GEMINI_OMNI_FLASH_1_2_BYTES = 109
 
+// RAISED 2026-11-09 by the owned-settings guard on `update_workflow_json`, and nothing else: its
+// `settings` argument gains a one-sentence description (a stored key another writer owns —
+// `studio`, `mcpConversation`, `mcpHub` — comes back unchanged or the write is refused), and
+// `delta.set.settings` says what the server does (merged key by key) instead of "replaces
+// wholesale", which it never did. No tool was added, so the fixture does NOT move. Measured by
+// this suite: 516_188 total − 515_926 = 262 B, both on update_workflow_json (far under the
+// per-tool budget).
+const OWNED_SETTINGS_GUARD_BYTES = 262
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES,
   totalBytes:
@@ -1607,6 +1616,7 @@ export const TOOL_WIRE_BUDGET = {
     CAST_SWAP_STYLE_ONLY_BYTES +
     VOICE_FAVORITES_TOOLS_BYTES +
     GPT_IMAGE_2_6_TOTAL_BYTES +
+    OWNED_SETTINGS_GUARD_BYTES +
     GEMINI_OMNI_FLASH_1_2_BYTES,
 }
 

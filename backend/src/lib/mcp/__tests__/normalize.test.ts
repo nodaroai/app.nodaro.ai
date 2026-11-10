@@ -5,7 +5,9 @@ import {
   normalizeQuality,
   normalizeDuration,
   normalizeImageInput,
+  requestedAspectRatio,
 } from "../normalize.js"
+import { fanOutLevers } from "../tools/_image-batch.js"
 
 describe("normalizeAspectRatio", () => {
   const supported = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
@@ -174,6 +176,27 @@ describe("normalizeImageInput", () => {
     expect(out.model).toBe("nano-banana-pro")
   })
 
+  // The ratio helper fills an unset value with its fallback, so the saved ratio
+  // must be chosen before it — it was once a `??` alternative never reached.
+  it("uses the saved ratio when the call names none, and the named one over it", () => {
+    expect(normalizeImageInput({}, { aspectRatio: "9:16" }, "nano-banana-2").aspectRatio).toBe("9:16")
+    expect(normalizeImageInput({ aspect_ratio: "" }, { aspectRatio: "9:16" }, "nano-banana-2").aspectRatio).toBe("9:16")
+    expect(normalizeImageInput({ aspect_ratio: "1:1" }, { aspectRatio: "9:16" }, "nano-banana-2").aspectRatio).toBe("1:1")
+  })
+
+  it("fits a saved ratio to the model, and falls back to 16:9 with neither", () => {
+    // 21:9 on a model without it → its nearest listed ratio.
+    expect(normalizeImageInput({ model: "z-image" }, { aspectRatio: "21:9" }, "nano-banana-2").aspectRatio).toBe("16:9")
+    expect(normalizeImageInput({ model: "z-image" }, {}, "nano-banana-2").aspectRatio).toBe("16:9")
+  })
+
+  it("uses the saved size and quality the same way", () => {
+    const saved = normalizeImageInput({ model: "gpt-image-2-6-flare" }, { resolution: "2K", quality: "high" }, "nano-banana-2")
+    expect([saved.resolution, saved.quality]).toEqual(["2K", "high"])
+    const named = normalizeImageInput({ model: "gpt-image-2-6-flare", resolution: "4K", quality: "low" }, { resolution: "2K", quality: "high" }, "nano-banana-2")
+    expect([named.resolution, named.quality]).toEqual(["4K", "low"])
+  })
+
   it("falls back to catalog default when both explicit and saved are bad", () => {
     const out = normalizeImageInput(
       { model: "made-up-model" },
@@ -234,5 +257,24 @@ describe("normalizeImageInput", () => {
         "nano-banana-2",
       ),
     ).not.toThrow()
+  })
+})
+
+describe("requestedAspectRatio", () => {
+  it("is the named ratio, else the saved one, else undefined; a blank names nothing", () => {
+    expect(requestedAspectRatio("1:1", "9:16")).toBe("1:1")
+    expect(requestedAspectRatio(undefined, "9:16")).toBe("9:16")
+    expect(requestedAspectRatio("", "9:16")).toBe("9:16")
+    expect(requestedAspectRatio("  ", null)).toBeUndefined()
+    expect(requestedAspectRatio(null, undefined)).toBeUndefined()
+  })
+})
+
+describe("fanOutLevers", () => {
+  it("uses the saved ratio when the call names none, and the named one over it", () => {
+    const models = ["gpt-image-2", "nano-banana-pro"]
+    expect(fanOutLevers(models, {}, { aspectRatio: "9:16" }).aspectRatio).toBe("9:16")
+    expect(fanOutLevers(models, { aspect_ratio: "1:1" }, { aspectRatio: "9:16" }).aspectRatio).toBe("1:1")
+    expect(fanOutLevers(models, {}, {}).aspectRatio).toBe("16:9")
   })
 })

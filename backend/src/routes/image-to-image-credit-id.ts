@@ -8,6 +8,7 @@ import type { FastifyRequest } from "fastify"
 import { extractProvider } from "../lib/request-helpers.js"
 import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
+import { imageToImageAspectRatio } from "../lib/image-auto-aspect.js"
 
 /**
  * The credit-CHECK model-identifier resolver (preHandler side). Named + exported
@@ -26,7 +27,8 @@ export function resolveImageToImageCreditIdentifier(req: FastifyRequest): string
   const extraRefs = (body?.referenceImageUrls as string[] | undefined)?.length ?? 0
   return resolveNormalizedImageGen({
     provider,
-    aspectRatio: body?.aspectRatio,
+    // The ratio the handler runs: none named on a GPT Image 2.5 / 2.6 edit is "auto".
+    aspectRatio: imageToImageAspectRatio(provider, body?.aspectRatio),
     quality: body?.quality,
     resolution: body?.resolution,
     renderingSpeed: body?.renderingSpeed,

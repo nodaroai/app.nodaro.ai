@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { editPlanBasis } from "@nodaro/shared/edl"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 import { runResultIdentity } from "@/lib/run-result-identity"
-import { usecaseFailedRunFields } from "@/lib/use-case-run-result"
+import { usecaseFailedRunFields, usecaseRunFoundNothing } from "@/lib/use-case-run-result"
 
 const PLAN = { version: 1, sources: [{ id: "rec", url: "https://r2/ep.mp4" }], clips: [{ sourceId: "rec", inMs: 0, outMs: 1000 }] }
 const NEW_PLAN = { ...PLAN, clips: [{ sourceId: "rec", inMs: 0, outMs: 2000 }] }
@@ -116,6 +116,18 @@ describe("a Chapters run (a text result) lands on the node through the same mapp
     expect(usecaseFailedRunFields("episode-chapters", { transcript: TRANSCRIPT }, {}, JOB)).toEqual({
       generatedText: undefined, generatedJson: undefined, generatedTranscript: TRANSCRIPT, useCaseJobId: JOB, errorCode: undefined,
     })
+  })
+
+  it("a run that found no chapters keeps the empty list, and offers no Continue; a run stopped at a step keeps none, and does", () => {
+    // The finished plan's list, empty: the wrapper failed only for delivering nothing.
+    const empty: Record<string, unknown> = { executionStatus: "failed", ...usecaseFailedRunFields("episode-chapters", { json: [], plan: { version: 1, chapters: [] } }, {}, JOB) }
+    expect(empty.generatedJson).toEqual([])
+    expect(usecaseRunFoundNothing("episode-chapters", empty)).toBe(true)
+    const stopped: Record<string, unknown> = { executionStatus: "failed", ...usecaseFailedRunFields("episode-chapters", { transcript: TRANSCRIPT }, {}, JOB) }
+    expect(usecaseRunFoundNothing("episode-chapters", stopped)).toBe(false)
+    // Only a failure, and only a text result.
+    expect(usecaseRunFoundNothing("episode-chapters", { executionStatus: "completed", generatedJson: [] })).toBe(false)
+    expect(usecaseRunFoundNothing("tighten-episode", { executionStatus: "failed", generatedJson: [] })).toBe(false)
   })
 
   it("a take never keeps a Chapters run (it has no takes)", () => {

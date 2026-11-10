@@ -23,6 +23,9 @@ export const SURFACES = [
 ] as const
 export type Surface = (typeof SURFACES)[number]
 
+/** The SDK methods whose first argument is the node type they run. */
+export const NODE_RUN_METHODS: ReadonlySet<string> = new Set(["nodes.run", "nodes.runAndWait"])
+
 /** Columns whose absence is never a gap: the OpenAPI spec is a curated subset. */
 export const REPORT_ONLY_SURFACES: ReadonlySet<Surface> = new Set<Surface>(["openapi"])
 

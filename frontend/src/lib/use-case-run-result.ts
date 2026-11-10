@@ -158,6 +158,17 @@ function listResultFields(nodeType: string, output: Output | null | undefined, j
   return { ...(delivered ? list : {}), ...usecaseFailedDeliveriesField(nodeType, output) }
 }
 
+/**
+ * A failed text run (Chapters) whose plan finished and found nothing: what it
+ * kept is the chapter list, empty. Its steps all completed — the run failed
+ * only because it delivered nothing — so there is no failed step to continue
+ * from (the continue route answers `409 continuation_not_failed`), and the
+ * node offers no Continue. A run that stopped at a step keeps no list.
+ */
+export function usecaseRunFoundNothing(nodeType: string | null | undefined, data: { readonly executionStatus?: unknown; readonly generatedJson?: unknown } | undefined): boolean {
+  return usecaseResultIsText(nodeType) && data?.executionStatus === "failed" && Array.isArray(data.generatedJson) && data.generatedJson.length === 0
+}
+
 /** The run's wrapper job on the node, as the canvas's own run keeps it (`useCaseJobId`). */
 function wrapperOf(jobId: string | null | undefined): { useCaseJobId?: string } {
   return typeof jobId === "string" && jobId !== "" ? { useCaseJobId: jobId } : {}

@@ -77,8 +77,8 @@ vi.mock("sharp", () => {
   return { default: mockSharp }
 })
 
-import { VIDEO_GEN_PROVIDERS, videoProviderFoldsLoneEndFrame } from "@nodaro/shared/models"
-import { REF_BINDING } from "@nodaro/prompts/assembly"
+import { VIDEO_GEN_PROVIDERS, videoProviderFoldsLoneEndFrame, videoProviderReferenceSyntax } from "@nodaro/shared/models"
+import { imageBindingFor } from "@nodaro/prompts/assembly"
 import { KieVideoProvider } from "../video.js"
 
 let provider: KieVideoProvider
@@ -122,7 +122,7 @@ describe("videoProviderFoldsLoneEndFrame — every provider it names really fold
       expect(input.last_frame_url).toBeUndefined()
       expect(input.first_frame_url).toBeUndefined()
       // The closing-frame hint is what tells the model which end it is.
-      expect(input.prompt).toContain(REF_BINDING.frame(1, "closing"))
+      expect(input.prompt).toContain(imageBindingFor(videoProviderReferenceSyntax(p)).frame(1, "closing"))
     })
   }
 })

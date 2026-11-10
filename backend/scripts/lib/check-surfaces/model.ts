@@ -14,6 +14,7 @@ import type { McpInventory } from "./mcp.js"
 import type { Classifier, RouteEntry } from "./routes.js"
 import type { SdkInventory } from "./sdk.js"
 import {
+  NODE_RUN_METHODS,
   REPORT_ONLY_SURFACES,
   type Atom,
   type Cell,
@@ -165,6 +166,25 @@ export function buildModel(inp: ModelInputs): SurfaceReport {
   const cliBySdk = new Map<string, string[]>()
   for (const c of inp.cli.commands) for (const s of c.sdk) cliBySdk.set(s, [...(cliBySdk.get(s) ?? []), c.path])
   const cliRef = new Map(inp.cli.commands.map((c) => [c.path, c.ref]))
+  // A command that runs node types it names (`media generate-mask` →
+  // nodes.run("generate-mask")) reaches only those types' routes through
+  // nodes.run, never every node's: the atoms each one reaches.
+  const nodeRunReach = new Map<string, Set<string>>()
+  for (const c of inp.cli.commands) {
+    if (!c.nodeRunTypes) continue
+    const keys = new Set<string>()
+    for (const t of c.nodeRunTypes) {
+      const own = nodeRunRoute(t)
+      for (const p of [...(own ? [own] : []), ...inp.sdk.nodeRunRoutes(t)]) {
+        const k = findAtom("POST", p)
+        if (k) keys.add(k)
+      }
+    }
+    nodeRunReach.set(c.path, keys)
+  }
+  /** The commands that call `sdkKey` for atom `atomKey`: a named-type command's nodes.run only for its own types' atoms. */
+  const cliFor = (sdkKey: string, atomKey: string | undefined): string[] =>
+    (cliBySdk.get(sdkKey) ?? []).filter((c) => !NODE_RUN_METHODS.has(sdkKey) || !nodeRunReach.has(c) || (atomKey !== undefined && nodeRunReach.get(c)!.has(atomKey)))
   const openapiHas = (key: string) => {
     if (!inp.openapi) return false
     const { method, path } = splitKey(key)
@@ -172,13 +192,13 @@ export function buildModel(inp: ModelInputs): SurfaceReport {
   }
 
   /** The cells every route-shaped atom shares, from its SDK methods, CLI commands and MCP tools. */
-  const surfaceCells = (sdkKeys: string[], toolNames: string[]): Partial<Record<Surface, Cell>> => {
+  const surfaceCells = (sdkKeys: string[], toolNames: string[], atomKey: string | undefined): Partial<Record<Surface, Cell>> => {
     const cells: Partial<Record<Surface, Cell>> = {}
     if (sdkKeys.length) {
       cells.sdk = present(sdkKeys.map((k) => `${k} ${inp.sdk.methods.get(k)?.ref ?? ""}`.trim()).join(", "))
       const docd = sdkKeys.find((k) => inp.sdkDocs.methods.has(k))
       cells["sdk-doc"] = docd ? present(`${docd} ${inp.sdkDocs.methods.get(docd)}`) : missing()
-      const cmds = [...new Set(sdkKeys.flatMap((k) => cliBySdk.get(k) ?? []))]
+      const cmds = [...new Set(sdkKeys.flatMap((k) => cliFor(k, atomKey)))]
       if (cmds.length) {
         cells.cli = present(cmds.map((c) => `${c}${cliRef.get(c) ? ` ${cliRef.get(c)}` : ""}`).join(", "))
         const d = cmds.find((c) => inp.cliDocs.has(c))
@@ -227,7 +247,7 @@ export function buildModel(inp: ModelInputs): SurfaceReport {
       const viaRun = sdkPaths.some((p) => matches("POST", p, key!))
       if (viaRun) sdkKeys.unshift("nodes.run")
       const toolNames = [...new Set([...(mcpByAtom.get(key!) ?? []), ...(inp.nodeTools[node.type] && inp.mcp.tools.has(inp.nodeTools[node.type]!) ? [inp.nodeTools[node.type]!] : [])])]
-      Object.assign(cells, surfaceCells([...new Set(sdkKeys)], toolNames))
+      Object.assign(cells, surfaceCells([...new Set(sdkKeys)], toolNames, key!))
       if (!viaRun && cells.sdk?.status === "missing") {
         cells.sdk = missing(`nodes.run("${node.type}") posts ${sdkPaths.join(" | ")}, not ${splitKey(key!).path}`)
       }
@@ -267,7 +287,7 @@ export function buildModel(inp: ModelInputs): SurfaceReport {
     const cells: Partial<Record<Surface, Cell>> = {}
     cells.route = reg ? present(reg.ref) : bucket === "plugin" ? na("plugin") : missing(apiDocByAtom.has(key) && !sdkByAtom.has(key) && !mcpByAtom.has(key) ? "only the docs name it" : undefined)
     cells.openapi = openapiHas(key) ? present(key) : { status: "report-only" }
-    Object.assign(cells, surfaceCells(sdkByAtom.get(key) ?? [], mcpByAtom.get(key) ?? []))
+    Object.assign(cells, surfaceCells(sdkByAtom.get(key) ?? [], mcpByAtom.get(key) ?? [], key))
     const doc = apiDocByAtom.get(key)
     cells["api-doc"] = doc ? present(`${doc.ref}${doc.section ? ` §${doc.section}` : ""}`) : missing()
     routeAtoms.set(key, { key, kind: "route", bucket, ...(reg?.anonymous ? { anonymous: true } : {}), surfaces: cells })
