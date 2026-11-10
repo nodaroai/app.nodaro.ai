@@ -2,11 +2,12 @@
  * TOTALITY: every credit guard decides how a deployment's model restriction
  * judges the model its request RUNS on.
  *
- * The guard's own deny reads the raw `provider` (and generate-image's
- * `models`). A request that names no model runs on a default its route fills
- * in AFTER the guard; a route priced on a composite or a feature id
- * (`gpt-image-2-6-sunburst:medium:1K`, `llm-chat`) never shows the guard the
- * model; and a route whose model field is not `provider` (`llmModel`, Suno's
+ * The guard's own deny reads the raw `provider` when it is the model the
+ * route's node runs (an engine name is not: lib/provider-model.ts), and
+ * generate-image's `models`. A request that names no model runs on a default
+ * its route fills in AFTER the guard; a route priced on a composite or a
+ * feature id (`gpt-image-2-6-sunburst:medium:1K`, `llm-chat`) never shows the
+ * guard the model; and a route whose model field is not `provider` (`llmModel`, Suno's
  * `model`) is invisible to it. Each of those ran a model a deployment withheld
  * with `models.allow` / `models.deny`, at the deployment's expense. So every
  * guard either declares the model its request runs on (`runModel`, or the
@@ -137,7 +138,6 @@ const RUN_MODEL_EXEMPT: Readonly<Record<string, string>> = {
   "POST /v1/video-mask": OUTSIDE_CATALOG,
   "POST /v1/audio-separation": OUTSIDE_CATALOG,
   "POST /v1/voice-remix": OUTSIDE_CATALOG,
-  "POST /v1/video-retake": OUTSIDE_CATALOG,
   "POST /v1/speech-to-video": OUTSIDE_CATALOG,
   "POST /v1/ai-avatar": OUTSIDE_CATALOG,
   "POST /v1/cinematic-avatar": OUTSIDE_CATALOG,

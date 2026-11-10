@@ -264,6 +264,8 @@ import { config, llmMeteredPricing } from "../../lib/config.js"
 import { resolveScriptModelId, type ScriptProvider } from "../../providers/script/script-generator.js"
 import { isNodeDenied, nodeNotAvailableError, isModelDenied, modelNotAvailableError, modelRestrictionConfigured, USER_VIEWER, type AvailabilityViewer } from "../../lib/surface-deny.js"
 import { jobRunModelOfBuild } from "../../lib/run-model.js"
+import { providerIsItsModel } from "../../lib/provider-model.js"
+import { VIDEO_RETAKE_MODEL } from "../../workers/handlers/default-models.js"
 import { safeUrlSchema } from "../../lib/url-validator.js"
 import { scene3DFrameFromNode, scene3DNodePreflightError, scene3DReferencesFromNode } from "../../lib/scene3d-node.js"
 import { scene3DReferenceListError } from "../scene3d/index.js"
@@ -2859,8 +2861,9 @@ export function buildPayload(
 
 /**
  * A node that names a model was judged on it at the top of the build
- * (`effectiveDispatchProvider`); one that names none runs the model its build
- * filled in, judged here. The node is read as the build read it (`nodeAsBuilt`).
+ * (`effectiveDispatchProvider`); one that names none — or names an engine
+ * rather than a model (lib/provider-model.ts) — runs the model its build filled
+ * in, judged here. The node is read as the build read it (`nodeAsBuilt`).
  */
 function refuseWithheldDefaultModel(
   rawNode: SimpleNode,
@@ -2869,7 +2872,10 @@ function refuseWithheldDefaultModel(
   built: PayloadResult,
 ): void {
   const node = nodeAsBuilt(rawNode, buildCtx?.edges ?? [])
-  if (effectiveDispatchProvider(node.type, node.data, handed)) return
+  const named = effectiveDispatchProvider(node.type, node.data, handed)
+  // Judged at the top of the build: a provider that IS the model it runs. An
+  // engine name (lib/provider-model.ts) is not, and its model is judged here.
+  if (named && providerIsItsModel([node.type], named, node.data ?? {})) return
   const runsOn = jobRunModelOfBuild(built.jobName, built.payload, built.modelIdentifier)
   if (runsOn && isModelDenied(runsOn)) throw modelNotAvailableError([runsOn])
 }
@@ -2910,8 +2916,12 @@ function buildPayloadOf(
   // dispatches an auto-wired `resolvedInputs.provider` ahead of `data.provider` —
   // can't slip a denied model through an unset `data.provider`. Throw here too,
   // mirroring the node-deny shape exactly, so a denied model fails honestly at run.
+  // Only a provider that IS the model the node runs: an engine name that
+  // shares an id with another model (Generate Music's `minimax`, Motion
+  // Transfer's `kling`) is no model of this node, and the model it runs is
+  // judged after the build (`refuseWithheldDefaultModel`).
   const dispatchProvider = effectiveDispatchProvider(type, data, resolvedInputs)
-  if (typeof dispatchProvider === "string" && isModelDenied(dispatchProvider)) {
+  if (typeof dispatchProvider === "string" && providerIsItsModel([type], dispatchProvider, data ?? {}) && isModelDenied(dispatchProvider)) {
     throw modelNotAvailableError([dispatchProvider])
   }
 
@@ -5752,7 +5762,7 @@ function buildPayloadOf(
         modelIdentifier: LTX_RETAKE_PER_SECOND_CREDIT_ID,
         payload: {
           jobId,
-          provider: "ltx-2.3-pro",
+          provider: VIDEO_RETAKE_MODEL,
           video: resolvedInputs.videoUrl || (data.videoUrl as string | undefined),
           prompt: promptFor("video-retake"),
           retake_start_time: data.retakeStartTime as number | undefined,

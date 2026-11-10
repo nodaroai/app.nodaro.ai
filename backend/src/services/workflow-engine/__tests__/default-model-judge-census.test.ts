@@ -54,9 +54,6 @@ const JOB_JUDGE_EXEMPT: Readonly<Record<string, string>> = {
   "suno-music-video": OUTSIDE_CATALOG,
   "suno-replace-section": OUTSIDE_CATALOG,
   "suno-convert-wav": OUTSIDE_CATALOG,
-  // The retake operation has no catalog entry of its own (it is priced as
-  // `ltx-2.3-pro-retake`); its route is exempt for the same reason.
-  "video-retake": OUTSIDE_CATALOG,
   "extract-youtube-audio": NO_AI,
   "llm-structured": ROUTE_ONLY,
   "web-scrape": ROUTE_ONLY,

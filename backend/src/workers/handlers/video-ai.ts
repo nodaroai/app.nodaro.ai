@@ -2,7 +2,7 @@
 import { dirname } from "node:path"
 import {
   IMAGE_TO_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, MOTION_TRANSFER_DEFAULT_PROVIDER, TEXT_TO_VIDEO_DEFAULT_PROVIDER,
-  VIDEO_TO_VIDEO_DEFAULT_PROVIDER, VIDEO_UPSCALE_DEFAULT_PROVIDER, VOICED_VIDEO_DEFAULT_PROVIDER,
+  VIDEO_RETAKE_MODEL, VIDEO_TO_VIDEO_DEFAULT_PROVIDER, VIDEO_UPSCALE_DEFAULT_PROVIDER, VOICED_VIDEO_DEFAULT_PROVIDER,
 } from "./default-models.js"
 import { uploadToR2 } from "../../lib/storage.js"
 import {
@@ -1690,7 +1690,7 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
 
 const handleVideoRetake: HandlerFn = async function handleVideoRetake(job, ctx) {
   const d = job.data as Record<string, unknown>
-  console.log(`[worker] video-retake ${ctx.jobId} (provider: ltx-2.3-pro)`)
+  console.log(`[worker] video-retake ${ctx.jobId} (provider: ${VIDEO_RETAKE_MODEL})`)
   // Best-effort progress nudge so the widget bar moves while the long
   // Replicate wait blocks. The 20-min reconcile cron is the safety net
   // if this worker dies mid-wait — the prediction id is persisted by
@@ -1700,7 +1700,7 @@ const handleVideoRetake: HandlerFn = async function handleVideoRetake(job, ctx) 
   let result
   try {
     result = await runLtxRetake({
-      variant: "ltx-2.3-pro",
+      variant: VIDEO_RETAKE_MODEL,
       video: d.video as string,
       prompt: (d.prompt as string | undefined) ?? "",
       retakeStartTime: d.retake_start_time as number,

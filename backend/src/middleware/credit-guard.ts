@@ -14,6 +14,8 @@ import {
   routeNodeGate,
   unclassifiedRouteMessage,
 } from "../lib/route-node-gate.js"
+import { providerIsItsModel } from "../lib/provider-model.js"
+import { rawBodyRecord } from "../lib/run-model.js"
 import { findForeignCatalogIdsInBody, foreignCatalogIdMessage } from "@nodaro/prompts/picker-catalogs"
 import {
   computeFingerprint,
@@ -281,11 +283,25 @@ export function creditGuard(
         typeof (req.body as { provider?: unknown } | undefined)?.provider === "string"
           ? (req.body as { provider: string }).provider
           : undefined
-      if (rawProvider && isModelDenied(rawProvider)) {
+      // The node this route RUNS (lib/route-node-gate.ts) — not its path: a
+      // nested route (`/v1/suno/generate`) runs a node its path does not name,
+      // and a plugin route reaches this same guard through the toolkit.
+      const route = req.routeOptions?.url ?? ""
+      const gate = routeNodeGate(route, req.body)
+      // The raw provider is judged here only when it IS the model the node
+      // runs. An engine name (lib/provider-model.ts: Generate Music's
+      // `minimax`, Motion Transfer's `kling`) shares its id with another model
+      // and is no model of this node; the model it runs is judged with the
+      // run's own model below (`runModel`), where models are restricted.
+      const judgedProvider =
+        rawProvider && providerIsItsModel(gate.kind === "node" ? gate.types : [], rawProvider, rawBodyRecord(req))
+          ? rawProvider
+          : undefined
+      if (judgedProvider && isModelDenied(judgedProvider)) {
         return reply.code(403).send({
           error: {
             code: "model_not_available",
-            message: deniedModelRejectionMessage([rawProvider]),
+            message: deniedModelRejectionMessage([judgedProvider]),
           },
         })
       }
@@ -305,6 +321,7 @@ export function creditGuard(
       // is priced from, so the model denied is the model billed and run.
       if (opts?.denyResolvedModel) {
         const resolved = modelResolver(req)
+        // Not when it is the raw provider: that was judged above, or is an engine name that is no model.
         if (typeof resolved === "string" && resolved && resolved !== rawProvider && isModelDenied(resolved)) {
           return reply.code(403).send({
             error: {
@@ -319,7 +336,7 @@ export function creditGuard(
       // default the route fills in after this guard, and that default is a
       // model the deployment may withhold.
       {
-        const denied = withheldRunModels(req, opts?.runModel, rawProvider)
+        const denied = withheldRunModels(req, opts?.runModel, judgedProvider)
         if (denied.length > 0) {
           return reply.code(403).send({
             error: {
@@ -329,11 +346,6 @@ export function creditGuard(
           })
         }
       }
-      // The node this route RUNS (lib/route-node-gate.ts) — not its path: a
-      // nested route (`/v1/suno/generate`) runs a node its path does not name,
-      // and a plugin route reaches this same guard through the toolkit.
-      const route = req.routeOptions?.url ?? ""
-      const gate = routeNodeGate(route, req.body)
       const nodeType = gate.kind === "node" ? gate.types[0] : undefined
       // Per USER, not per credential: the admin switch hides a node from users,
       // and an admin's run reaches this door three ways — their browser session,

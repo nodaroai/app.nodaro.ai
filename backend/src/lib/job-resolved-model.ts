@@ -31,7 +31,7 @@ import { DEFAULT_VIDEO_MASK_PROVIDER } from "@nodaro/shared/media"
 import {
   CHARACTER_MOTION_DEFAULT_PROVIDER, CREATURE_MOTION_DEFAULT_PROVIDER, EDIT_IMAGE_DEFAULT_PROVIDER, generateImageModelOf,
   IMAGE_TO_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, LOCATION_MOTION_DEFAULT_PROVIDER, MOTION_TRANSFER_DEFAULT_PROVIDER,
-  OBJECT_MOTION_DEFAULT_PROVIDER, TEXT_TO_VIDEO_DEFAULT_PROVIDER, VIDEO_DEPTH_DEFAULT_PROVIDER, VIDEO_TO_VIDEO_DEFAULT_PROVIDER,
+  OBJECT_MOTION_DEFAULT_PROVIDER, TEXT_TO_VIDEO_DEFAULT_PROVIDER, VIDEO_DEPTH_DEFAULT_PROVIDER, VIDEO_RETAKE_MODEL, VIDEO_TO_VIDEO_DEFAULT_PROVIDER,
   VIDEO_UPSCALE_DEFAULT_PROVIDER, VOICED_VIDEO_DEFAULT_PROVIDER, type GenerateImageModelInput,
 } from "../workers/handlers/default-models.js"
 import { lottieModelId } from "./lottie-request.js"
@@ -108,6 +108,8 @@ export const RESOLVED_MODEL_OF_JOB: Readonly<Record<string, (d: Data) => string 
   // The four extensions (veo-extend, runway-extend, ltx-2.3-pro, seedance-2-extend) are catalog ids; `model` is a tier.
   "extend-video": (d) => str(d.provider),
   "video-depth": withDefault(VIDEO_DEPTH_DEFAULT_PROVIDER),
+  // A retake runs LTX 2.3 Pro's retake task, whatever its payload says (it is priced on its own retake row).
+  "video-retake": () => VIDEO_RETAKE_MODEL,
   "video-mask": withDefault(DEFAULT_VIDEO_MASK_PROVIDER),
   // Audio
   "text-to-speech": (d) => ttsModelOf(str(d.provider), typeof d.text === "string" ? d.text : ""),

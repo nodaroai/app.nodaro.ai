@@ -33,6 +33,12 @@ export const LOCATION_MOTION_DEFAULT_PROVIDER = "kling"
 export const OBJECT_MOTION_DEFAULT_PROVIDER = "kling-turbo"
 /** generate-creature-motion (handlers/entity.ts). */
 export const CREATURE_MOTION_DEFAULT_PROVIDER = "kling-turbo"
+/**
+ * video-retake (handlers/video-ai.ts): the one model a retake runs — LTX 2.3
+ * Pro's retake task. The route and the workflow build write it into the job,
+ * the handler runs it, and a model restriction judges it.
+ */
+export const VIDEO_RETAKE_MODEL = "ltx-2.3-pro" as const
 
 /** The generate-image fields that decide which model runs. */
 export interface GenerateImageModelInput {

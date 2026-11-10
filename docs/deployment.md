@@ -839,6 +839,13 @@ optional; each array empty = "keep the default"):
   `provider` (`llmModel`, Suno's `model`, Add Captions' `transcribe_provider`)
   is judged too, before anything is created or charged
   (`403 model_not_available`, on the run and on `POST /v1/quote` alike). A
+  `provider` that names an engine rather than a model is judged as the model
+  that engine runs, never as a model that shares its name: Motion Transfer's
+  Kling options as the motion-transfer models, Generate Script's legacy
+  script providers as the LLM they run, Video Upscale's Topaz as
+  `topaz-video`, and Generate Music's MiniMax music engine as no catalog
+  model at all (the catalog's `minimax` is the MiniMax video model). Video
+  Retake is judged as `ltx-2.3-pro`, the model it runs. A
   workflow run (an app run, a scheduled or webhook run, an MCP or API run)
   judges its nodes the same way: a node that names no model is judged on the
   default it would run — Generate Image's for its ratio, Image to Image's edit

@@ -20,6 +20,8 @@ import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { fixedRunModel } from "../lib/run-model.js"
+import { VIDEO_RETAKE_MODEL } from "../workers/handlers/default-models.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
@@ -51,6 +53,8 @@ export async function videoRetakeRoutes(app: FastifyInstance) {
       // user-supplied duration. checkCredits + reserveCredits both use this
       // value so they stay in sync.
       computeCredits: (body) => ltxRetakeBaseCredits((body as Record<string, unknown>).retakeDuration),
+      // Priced on its retake row, but it runs LTX 2.3 Pro — the model a restriction names.
+      runModel: fixedRunModel(VIDEO_RETAKE_MODEL),
     }),
   }, async (req, reply) => {
     const parsed = videoRetakeBody.safeParse(req.body)
@@ -118,7 +122,7 @@ export async function videoRetakeRoutes(app: FastifyInstance) {
 
     await videoQueue.add("video-retake", {
       jobId: job.id,
-      provider: "ltx-2.3-pro",
+      provider: VIDEO_RETAKE_MODEL,
       video: videoUrl,
       prompt: finalPrompt ?? "",
       retake_start_time: retakeStartTime,
