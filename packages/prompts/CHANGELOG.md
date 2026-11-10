@@ -1,5 +1,16 @@
 # @nodaro/prompts
 
+## 1.53.1
+
+### Patch Changes
+
+- 2574d82: `RESTYLE_PREVIEWS` has an approved clip for the `toy-figure-3d` style: a street walk in an orange puffer jacket wiping into glossy vinyl toy figures, its still at 7 s, where he lowers his sunglasses.
+- Updated dependencies [9e0addc]
+- Updated dependencies [51ed9d5]
+- Updated dependencies [042d555]
+- Updated dependencies [0397100]
+  - @nodaro/shared@3.59.0
+
 ## 1.53.0
 
 ### Minor Changes

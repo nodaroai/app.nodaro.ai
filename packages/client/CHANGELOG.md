@@ -1,5 +1,26 @@
 # @nodaro/sdk
 
+## 2.67.0
+
+### Minor Changes
+
+- 9e0addc: Camera Switch `lagMs`: delay each cut by this long, in whole milliseconds (0–5000, default 0), the counterpart of `leadMs`. `CAMERA_SWITCH_BOUNDS` gains `lagMs`, and the new `CAMERA_SWITCH_NODE_SETTINGS` lists the four numeric settings a Camera Switch node carries (`lagMs` is a request setting only, so `cameraSwitchSettingsPayload` never sends it). The SDK's `CameraSwitchInput` gains `lagMs` and `client.edit.cameraSwitch` sends it; the CLI gains `nodaro edit switch-cameras --lag-ms <ms>`.
+- 0bdd91c: `ModelSummary` (`client.models.list()`) types the fields `GET /v1/models` now serves on a model whose sizes depend on its aspect ratio or its background: `resolutionsByAspectRatio` (the ratios at which the model renders fewer sizes than `resolutions`, each with the sizes it renders there; a ratio not listed renders every size — GPT Image 2.5 renders 27:16, 16:27, 9:8 and 8:9 at 1K only), `transparentResolution` (the one size a transparent background renders at) and `backgroundOnlyAtTransparentResolution` (the model takes a background setting at that size only). It also types `defaultDuration` and `autoDuration`, which the endpoint already served.
+- 9e0addc: `client.edit.editPlanCapabilities()` reads `GET /v1/edit-plan/capabilities`: the Edit Plan modes this server can plan (`modes`), who answered (`source`: `server`, `nodaro.ai` or `nodaro.ai-unreachable`) and whether Edit Plan is charged per started minute (`perMinute`), typed as the new `EditPlanCapabilities`. A mode it does not list is refused by `editPlan` before anything is charged.
+- 00c61f3: `err.code` on a 403, 404 or 429 error now carries the server's own code — for example `node_not_available`, `insufficient_scope`, `continuation_not_found` or `rate_limit_exceeded` — as every other status already did. Before, a `ForbiddenError`, `NotFoundError` or `RateLimitedError` always read `forbidden`, `not_found` or `rate_limited`, whatever the server sent. The classes, their messages and `ForbiddenError.missingScope` are unchanged, and `code` still reads `forbidden`, `not_found` or `rate_limited` when the server sends no code. Code that compares `err.code` with `forbidden`, `not_found` or `rate_limited` should compare the error class instead (`err instanceof ForbiddenError`, `NotFoundError`, `RateLimitedError`); code that already checks the class needs no change.
+- 1966fd6: `userSettings.update({ mcpPreferences })` takes `null` for a field, which clears that saved MCP default so the tools fall back to their own (`update({ mcpPreferences: { image: { model: null } } })`). The patch is typed by the new `UserMcpPreferencesPatch`; `UserMcpPreferences` stays the shape the settings are read in. The server used to refuse a `null` with `400 validation_error`.
+
+### Patch Changes
+
+- 9e0addc: `EpisodeTrailerInput.formats`: a list that names a format twice is now refused by the server (`400 validation_error`, naming the format: "The format 9:16 is listed twice: name each format once.") before anything is written or charged, on `episodeTrailer` and `estimateEpisodeTrailer` alike. It used to be accepted and each format delivered once.
+- Updated dependencies [9e0addc]
+- Updated dependencies [51ed9d5]
+- Updated dependencies [042d555]
+- Updated dependencies [2574d82]
+- Updated dependencies [0397100]
+  - @nodaro/shared@3.59.0
+  - @nodaro/prompts@1.53.1
+
 ## 2.66.1
 
 ### Patch Changes
