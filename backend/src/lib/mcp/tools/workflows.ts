@@ -5,7 +5,6 @@ import { findCloudOnlyNodeTypes, cloudOnlyRejectionMessage } from "../../cloud-o
 import { deniedNodeRejectionMessage } from "../../surface-deny.js"
 import { findDeniedNodeTypesForUser } from "../../availability-viewer.js"
 import { z } from "zod"
-import { isDeepStrictEqual } from "node:util"
 import { clientRequestIdSchema, idempotencyHeaders } from "./_verb-helpers.js"
 import type { FastifyInstance } from "fastify"
 import { stripExportContent, stripUnownedRefs, stripTransientRuntimeData, type WorkflowExport } from "@nodaro/shared/workflow"
@@ -40,6 +39,7 @@ import { config } from "../../config.js"
 import { workflowEditorUrl } from "../../deployment-urls.js"
 import { registerTask } from "../tasks.js"
 import { ensureMcpProject } from "./_mcp-project.js"
+import { ownedSettingsRefusal } from "./_settings-guard.js"
 import { loadMcpWorkflow } from "./_workflow-access.js"
 import { previewPendingHint } from "./_resume-hint.js"
 import type { HeldFinalRun } from "../../continuation-held-final.js"
@@ -201,27 +201,6 @@ function mcpRouteError(statusCode: number, body: string): string {
  * `userId` in the body); the rest query Supabase directly, scoped by
  * `user_id` (the service-role client bypasses RLS).
  */
-/**
- * THE STUDIO-DOCUMENT GUARD (audit 2026-09-06 fix #6, C-13(3)). A Studio
- * production lives in its workflow's `settings.studio` — shots, result
- * histories, the plan. `update_workflow_json` replaces `settings` wholesale,
- * so an agent that read the workflow, edited one key and wrote the object
- * back without `studio` erased a production in one call. The guard refuses a
- * settings replace that changes or drops a STORED `settings.studio`; echoing
- * it back unchanged (as `get_workflow_json` returned it) passes. A workflow
- * with no stored `studio` is untouched by this — the key may be created.
- */
-export function studioSettingsClobbered(next: unknown, stored: unknown): boolean {
-  const storedStudio = (stored as { studio?: unknown } | null | undefined)?.studio
-  if (storedStudio === undefined || storedStudio === null) return false
-  const nextStudio = (next as { studio?: unknown } | null | undefined)?.studio
-  return !isDeepStrictEqual(nextStudio, storedStudio)
-}
-
-export const STUDIO_SETTINGS_GUARD_MESSAGE =
-  "This workflow is a Studio production: `settings.studio` holds its shots, results and plan and is owned by Studio. " +
-  "Send it back unchanged (copy `settings.studio` from get_workflow_json into your settings) or leave `settings` out."
-
 export function registerWorkflows({
   server,
   session,
@@ -558,7 +537,12 @@ export function registerWorkflows({
           workflow_id: z.string().uuid(),
           nodes: z.array(z.record(z.string(), z.unknown())).optional(),
           edges: z.array(z.record(z.string(), z.unknown())).optional(),
-          settings: z.record(z.string(), z.unknown()).optional(),
+          settings: z
+            .record(z.string(), z.unknown())
+            .optional()
+            .describe(
+              "Replaces settings wholesale. A stored key another writer owns (`studio`, `mcpConversation`, `mcpHub`) must come back unchanged, copied from get_workflow_json, or the write is refused.",
+            ),
           thumbnail_url: z
             .string()
             .url()
@@ -591,7 +575,7 @@ export function registerWorkflows({
               set: z
                 .object({
                   name: z.string().min(1).max(200).optional(),
-                  settings: z.record(z.string(), z.unknown()).optional().describe("Replaces settings wholesale — subject to the same `settings.studio` guard as a full-body settings write."),
+                  settings: z.record(z.string(), z.unknown()).optional().describe("Merged key by key: a key you send replaces the stored one, a key you leave out stays. An owned key (`studio`, `mcpConversation`, `mcpHub`) may only be sent unchanged."),
                 })
                 .optional(),
             })
@@ -619,8 +603,12 @@ export function registerWorkflows({
           }
           const loaded = await loadMcpWorkflow(session, args.workflow_id, "edit", "id, settings")
           if (!loaded.ok) return err(loaded.message)
-          if (args.delta.set?.settings !== undefined && studioSettingsClobbered(args.delta.set.settings, loaded.row.settings)) {
-            return err(STUDIO_SETTINGS_GUARD_MESSAGE)
+          // The owned-settings guard (_settings-guard.ts). The RPC merges
+          // `set.settings` key by key, so a key left out is kept: only an
+          // owned key SENT changed (or as null) is refused.
+          if (args.delta.set?.settings !== undefined) {
+            const refusal = ownedSettingsRefusal(args.delta.set.settings, loaded.row.settings, "merge")
+            if (refusal) return err(refusal)
           }
           const d = args.delta
           const res = await mcpInject(fastify, session, {
@@ -674,10 +662,15 @@ export function registerWorkflows({
         const isWorkspace = session.workspaceId !== undefined
         let mcpProjectId: string | null = null
         let storedSettings: unknown
+        // The version the stored settings were read at: a settings replace is
+        // pinned to it below, so the guard never judges a column that moved.
+        let storedVersion: number | undefined
         if (isWorkspace) {
-          const loaded = await loadMcpWorkflow(session, args.workflow_id, "edit", "id, settings")
+          const loaded = await loadMcpWorkflow(session, args.workflow_id, "edit", "id, settings, version")
           if (!loaded.ok) return err(loaded.message)
           storedSettings = loaded.row.settings
+          const v = (loaded.row as { version?: unknown }).version
+          storedVersion = typeof v === "number" ? v : undefined
         } else {
           mcpProjectId = await ensureMcpProject(session)
         }
@@ -697,23 +690,28 @@ export function registerWorkflows({
           )
         }
 
-        // The Studio-document guard (see studioSettingsClobbered). The workspace
-        // fork loaded `settings` above; the no-workspace fork reads it here,
-        // only when a settings replace is on the table, under the same floor
-        // the UPDATE below uses.
+        // The owned-settings guard (_settings-guard.ts): a full-body replace
+        // that changes or drops a stored key another writer owns — Studio's
+        // document, an assistant conversation's record, a hub's month marker
+        // — is refused. The workspace fork loaded `settings` above; the
+        // no-workspace fork reads it here, only when a settings replace is on
+        // the table, under the same floor the UPDATE below uses.
         if (args.settings !== undefined) {
           if (!isWorkspace) {
             const { data: current, error: readError } = await supabase
               .from("workflows")
-              .select("settings")
+              .select("settings, version")
               .eq("id", args.workflow_id)
               .eq("user_id", session.userId)
               .eq("project_id", mcpProjectId!)
               .maybeSingle()
             if (readError) return err(`Error: ${readError.message}`)
-            storedSettings = (current as { settings?: unknown } | null)?.settings
+            const row = current as { settings?: unknown; version?: unknown } | null
+            storedSettings = row?.settings
+            storedVersion = typeof row?.version === "number" ? row.version : undefined
           }
-          if (studioSettingsClobbered(args.settings, storedSettings)) return err(STUDIO_SETTINGS_GUARD_MESSAGE)
+          const refusal = ownedSettingsRefusal(args.settings, storedSettings, "replace")
+          if (refusal) return err(refusal)
         }
 
         // Audience gate — workspace only. A settings write that would change WHO
@@ -794,6 +792,14 @@ export function registerWorkflows({
         if (args.expected_version !== undefined) {
           query = query.eq("version", args.expected_version)
         }
+        // A settings replace is pinned to the version its guard read the
+        // column at, whatever the caller pinned: a step the server wrote in
+        // between (an assistant conversation's record moves on every step)
+        // would otherwise be replaced by what the agent echoed, past a guard
+        // that judged a column that no longer exists. A caller's own pin only
+        // narrows the match further; a miss reads as "modified since".
+        const pinnedToRead = args.settings !== undefined && storedVersion !== undefined
+        if (pinnedToRead) query = query.eq("version", storedVersion)
         const { data, error } = await query.select("id, name, updated_at, version, user_id").maybeSingle()
         if (error) return err(`Error: ${error.message}`)
         if (data && updates.nodes !== undefined) {
@@ -805,7 +811,7 @@ export function registerWorkflows({
         if (!data) {
           // 0 rows matched. Distinguish a stale-version conflict from a genuine
           // not-found (only does the extra read on this rare path).
-          if (args.expected_updated_at !== undefined || args.expected_version !== undefined) {
+          if (args.expected_updated_at !== undefined || args.expected_version !== undefined || pinnedToRead) {
             let existsQuery = supabase
               .from("workflows")
               .select("id")

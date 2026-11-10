@@ -190,8 +190,13 @@ function setupSupabaseLoad(workflowData: Record<string, unknown>) {
           }),
         }),
         eq: () => ({
-          select: () => ({
-            maybeSingle: async () => ({ data: { updated_at: "2026-01-02T00:00:00Z" }, error: null }),
+          select: (cols: string) => ({
+            maybeSingle: async () => ({
+              data: cols.includes("version")
+                ? { updated_at: "2026-01-02T00:00:00Z", version: 7 }
+                : { updated_at: "2026-01-02T00:00:00Z" },
+              error: null,
+            }),
           }),
         }),
       }),
@@ -254,6 +259,23 @@ describe("useWorkflowPersistence — syncNodeResultsFromDB (via load)", () => {
     })
 
     expect(mockGetBatchJobStatus).not.toHaveBeenCalled()
+  })
+
+  it("hands the store the row's whole settings column — keys the editor does not manage included — as the base a full save writes back", async () => {
+    // The store keeps it as `lastSavedSnapshot.storedSettings`; a load that
+    // dropped this argument would bring back the save that erased an
+    // assistant's conversation record.
+    const conversation = { client: "claude-code", clientName: "Claude Code (nodaro)", key: null, startedAt: "T0", lastActivityAt: "T0", steps: 1 }
+    const settings = { characterDefinitions: [], mcpConversation: conversation, viewport: null }
+    setupSupabaseLoad({ id: "w1", name: "Test", nodes: [], edges: [], settings })
+
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+
+    const calls = mockLoadWorkflow.mock.calls
+    expect(calls[calls.length - 1]![8]).toEqual(settings)
   })
 
   it("drops a paid run's mark found in a row: a load has no run out to hold the freeze back", async () => {
@@ -412,6 +434,50 @@ describe("useWorkflowPersistence — syncNodeResultsFromDB (via load)", () => {
     expect(mockSetLoadedVersion).toHaveBeenCalledWith(6)
     expect(mockSetLoadedUpdatedAt).toHaveBeenLastCalledWith("2026-01-02T00:00:00Z")
     expect(mockSetLoadedVersion).toHaveBeenLastCalledWith(7)
+  })
+
+  it("the side-save is pinned to the version the load read, and a miss leaves both cursors where the load set them", async () => {
+    // Unpinned, the side-save landed over a step another writer made between
+    // the load and this write (an assistant's, on a conversation flow — the
+    // realtime subscription is not open yet), and the cursor moved past that
+    // step while the stored settings column stayed the load's: the next full
+    // save then wrote that writer's settings keys back through a CAS that
+    // passed. Pinned, the row that moved is a 0-row miss, nothing advances,
+    // and the next save conflicts and rebases on the fresh row.
+    const nodes = [
+      makeNode({
+        id: "n1",
+        type: "generate-image",
+        data: { label: "Img", executionStatus: "running", currentJobId: VALID_UUID, generatedResults: [] },
+      }),
+    ]
+    mockGetBatchJobStatus.mockResolvedValue([
+      { id: VALID_UUID, status: "completed", output_data: { imageUrl: "https://cdn.example.com/img.png" }, error_message: null },
+    ])
+    const filters: Array<[string, unknown]> = []
+    const row = { id: "w1", name: "Test", nodes, edges: [], settings: {}, version: 6, updated_at: "2026-01-01T00:00:00Z", user_id: "u1" }
+    const miss = {
+      eq: (col: string, val: unknown) => {
+        filters.push([col, val])
+        return miss
+      },
+      // The row moved: the pinned UPDATE matches nothing.
+      select: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
+    }
+    mockSupabaseFrom.mockReturnValue({
+      select: () => rowQuery(row),
+      update: () => miss,
+    })
+
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+
+    expect(filters).toContainEqual(["id", "w1"])
+    expect(filters).toContainEqual(["version", 6])
+    expect(mockSetLoadedVersion).toHaveBeenLastCalledWith(6)
+    expect(mockSetLoadedUpdatedAt).toHaveBeenLastCalledWith("2026-01-01T00:00:00Z")
   })
 
   it("updates completed job with videoUrl", async () => {

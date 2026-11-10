@@ -153,6 +153,12 @@ Flexible curated I/O system for published apps and presentation mode:
 
 ---
 
+## The workflow `settings` column (editor writers)
+
+`workflows.settings` is one JSON column shared by several writers: the editor's four keys (`characterDefinitions`, `flowPromptTemplates`, `presentationSettings`, `viewport`), an assistant's MCP conversation record (`mcpConversation`) and a month's hub marker (`mcpHub`), Studio's document (`studio`), seed flags. Both editor writers REPLACE the column — the full save (`hooks/use-workflow-persistence.ts`, PostgREST `update`) and the unload keepalive PATCH (`workflow-editor/unload-save.ts`) — so each writes `editorSettingsPayload(state)` (`hooks/workflow-settings-payload.ts`): the column as the server holds it (`lastSavedSnapshot.storedSettings`) with the editor's keys over it. Rebuilding the column from the editor's keys alone erased every other writer's key (the MCP conversation record, on every save). `storedSettings` is refreshed wherever a stored row is adopted — load, remote reconcile, the delta conflict rebase, a save's own write — and each write stays pinned to the row it read (the full save to `loadedVersion`, the unload PATCH to `loadedUpdatedAt`), so a key another writer moved since the load fails the CAS and is re-read; the delta save (`apply_workflow_delta`) merges key by key and needs none of this. A new editor-managed key joins `EDITOR_SETTINGS_KEYS` and the payload; a new writer of the column goes through the same helper.
+
+---
+
 ## SSE Client (`frontend/src/lib/sse-client.ts`)
 
 Async generator for SSE from POST requests (native `EventSource` only supports GET):

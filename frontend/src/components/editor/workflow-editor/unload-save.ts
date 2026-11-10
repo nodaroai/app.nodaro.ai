@@ -14,6 +14,7 @@
 import { flushPendingReviews } from "@/lib/edl-review/write-review"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { isSaveRefused } from "@/hooks/workflow-save-refusal"
+import { editorSettingsPayload } from "@/hooks/workflow-settings-payload"
 import { orderNodesParentFirst } from "./group-coords"
 
 export interface UnloadSaveAuth {
@@ -49,18 +50,14 @@ export function unloadSaveRequest(auth: UnloadSaveAuth): UnloadSaveRequest | nul
   const payload = {
     nodes: structuredClone(orderNodesParentFirst(state.nodes)),
     edges: structuredClone(state.edges),
-    settings: {
-      // MUST mirror the normal save in use-workflow-persistence.ts (~L534):
-      // PostgREST PATCH REPLACES the whole `settings` JSONB column, so any
-      // subfield omitted here is DESTROYED on unload. Omitting
-      // presentationSettings + viewport silently wiped all published-app I/O
-      // curation (inputItems/outputItems/cardMeta/view modes/share settings)
-      // and the saved viewport whenever a tab was closed mid-edit.
-      characterDefinitions: structuredClone(state.characterDefinitions),
-      flowPromptTemplates: structuredClone(state.flowPromptTemplates),
-      presentationSettings: structuredClone(state.presentationSettings),
-      viewport: state.savedViewport,
-    },
+    // PostgREST PATCH REPLACES the whole `settings` JSONB column, so this is
+    // the same column the normal save writes (workflow-settings-payload.ts):
+    // the column as stored, with the editor's four keys over it. Omitting a
+    // key here DESTROYS it on unload — omitting presentationSettings +
+    // viewport once wiped every published app's I/O curation and the saved
+    // viewport whenever a tab was closed mid-edit, and rebuilding the column
+    // from the editor's keys alone wiped an assistant's conversation record.
+    settings: structuredClone(editorSettingsPayload(state)),
   }
 
   // Optimistic locking on the unload-flush: PostgREST treats each

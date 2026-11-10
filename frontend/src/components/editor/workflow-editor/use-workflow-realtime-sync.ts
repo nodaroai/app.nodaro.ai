@@ -136,14 +136,15 @@ interface RealtimeWorkflowRow {
   /** Monotonic content version (workflows.version, trigger-bumped). */
   readonly version?: number | null
   /**
-   * The full JSONB settings column: `{ characterDefinitions,
-   * flowPromptTemplates, presentationSettings, viewport }`. Forwarded
-   * to the reconcile callback so the store can re-apply more than just
-   * the canvas nodes/edges (a remote character-name rename or
-   * presentation-settings change would otherwise be silently overwritten
-   * on this tab's next autosave). Tab-local fields like `viewport` are
-   * intentionally NOT reconciled by the caller — each tab keeps its
-   * own pan/zoom.
+   * The full JSONB settings column: the editor's keys (`characterDefinitions`,
+   * `flowPromptTemplates`, `presentationSettings`, `viewport`) and every key
+   * another writer owns (an assistant's `mcpConversation` / `mcpHub`, Studio's
+   * `studio`). Forwarded whole to the reconcile callback: the store re-applies
+   * the editor's fields (a remote character-name rename or presentation-
+   * settings change would otherwise be silently overwritten on this tab's next
+   * autosave) and keeps the whole column as the base a full save writes back
+   * (`lastSavedSnapshot.storedSettings`). Tab-local fields like `viewport` are
+   * intentionally NOT reconciled by the caller — each tab keeps its own pan/zoom.
    */
   readonly settings: Record<string, unknown> | null
 }

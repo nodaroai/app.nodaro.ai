@@ -551,6 +551,42 @@ describe("useWorkflowStore", () => {
       expect(useWorkflowStore.getState().selectedNodeId).toBe("n2")
     })
 
+    it("adopts the broadcast's whole settings column into the saved snapshot — keys the editor does not manage included", () => {
+      const store = useWorkflowStore.getState()
+      const conversation = { client: "claude-code", clientName: "Claude", key: null, startedAt: "T0", lastActivityAt: "T0", steps: 1 }
+      store.loadWorkflow("wf-1", "Test", [], [], [], {}, undefined, null, { mcpConversation: conversation, characterDefinitions: [] })
+      store.setLoadedVersion(5)
+      expect(useWorkflowStore.getState().lastSavedSnapshot?.storedSettings).toEqual({ mcpConversation: conversation, characterDefinitions: [] })
+
+      // The assistant wrote a step: its record moved on, with the version.
+      const moved = { ...conversation, lastActivityAt: "T6", steps: 2 }
+      store.reconcileFromRemote({
+        nodes: [],
+        edges: [],
+        updatedAt: "T6",
+        version: 6,
+        settings: { mcpConversation: moved, flowPromptTemplates: { n1: "remote" } },
+      })
+
+      const snapshot = useWorkflowStore.getState().lastSavedSnapshot
+      expect(snapshot?.storedSettings).toEqual({ mcpConversation: moved, flowPromptTemplates: { n1: "remote" } })
+      expect(useWorkflowStore.getState().loadedVersion).toBe(6)
+    })
+
+    it("a broadcast that carries no settings column keeps the stored settings this tab holds", () => {
+      const store = useWorkflowStore.getState()
+      store.loadWorkflow("wf-1", "Test", [], [], [], {}, undefined, null, { mcpHub: { month: "2026-11" } })
+
+      store.reconcileFromRemote({ nodes: [], edges: [], updatedAt: "T2", settings: null })
+
+      expect(useWorkflowStore.getState().lastSavedSnapshot?.storedSettings).toEqual({ mcpHub: { month: "2026-11" } })
+    })
+
+    it("a load without a settings column records an empty stored settings object", () => {
+      useWorkflowStore.getState().loadWorkflow("wf-1", "Test", [], [])
+      expect(useWorkflowStore.getState().lastSavedSnapshot?.storedSettings).toEqual({})
+    })
+
     it("applies characterDefinitions / flowPromptTemplates / presentationSettings from the settings payload", () => {
       const store = useWorkflowStore.getState()
       store.loadWorkflow("wf-1", "Test", [], [])

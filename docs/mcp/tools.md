@@ -394,11 +394,22 @@ its `upsert_edges` (each with its own `id` — the delta protocol matches by id)
 judged against the graph the delta leaves behind (the stored nodes, minus the deleted
 ones, plus the upserted ones).
 
-**Studio productions:** a workflow whose stored `settings.studio` exists is a
-Studio production (its shots, results and plan live there). A `settings`
-replace — full-body or `delta.set.settings` — that changes or drops
-`settings.studio` is refused; echo it back unchanged (copy it from
-`get_workflow_json`) or leave `settings` out.
+**Settings keys another writer owns:** `workflows.settings` is one column
+shared by several writers, and a full-body `settings` replaces it whole. Three
+stored keys are not yours to change: `settings.studio` (a workflow with it is a
+Studio production — its shots, results and plan live there),
+`settings.mcpConversation` (a flow an assistant built over MCP: which chat built
+it and how far it got; the server reads it to continue the chat and to list it)
+and `settings.mcpHub` (the month marker of the hub a month's conversations hang
+under). A full-body `settings` that changes or drops one of them is refused;
+echo it back unchanged (copy it from `get_workflow_json`) or leave `settings`
+out. A full-body `settings` is always written against the version it was read
+at for this check (your own `expected_version` / `expected_updated_at` only
+narrows the match further), so a workflow that moved in between (an assistant's
+conversation record moves on every step) answers the same conflict as a stale
+`expected_version`: read it again and retry. `delta.set.settings` is merged key by key, so a key you
+leave out stays — there only an owned key sent changed, or sent as `null`, is
+refused.
 
 **Optimistic concurrency:** Pass the `updated_at` value from a prior
 `get_workflow_json` call as `expected_updated_at`. If the workflow has been

@@ -1018,6 +1018,145 @@ describe("update_workflow_json — settings.studio guard", () => {
   })
 })
 
+// ── update_workflow_json — the assistant conversation record ────────────────
+// A flow an assistant built over MCP carries which chat built it in
+// `settings.mcpConversation`, and the month's hub it hangs under carries
+// `settings.mcpHub`; both are the server's (lib/mcp/flows/conversation-store.ts).
+// A settings replace from an agent that read the workflow, edited a key and
+// wrote the object back without them erased the record — the chat could no
+// longer be continued, and its list entry lost its source and first request.
+// The same guard as the Studio document's: changed or dropped → refused;
+// echoed unchanged → passes; no stored copy → untouched.
+describe("update_workflow_json — settings.mcpConversation / settings.mcpHub guard", () => {
+  const conversation = {
+    client: "claude-code",
+    clientName: "Claude Code (nodaro)",
+    key: null,
+    startedAt: "2026-11-09T18:00:00.000Z",
+    lastActivityAt: "2026-11-09T18:05:00.000Z",
+    firstRequest: "a knight on a hill",
+    steps: 2,
+  }
+
+  it("refuses a full-body settings replace that drops the stored conversation record", async () => {
+    fromMock.mockReturnValueOnce(chain({ data: { settings: { mcpConversation: conversation, viewport: null } }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "update_workflow_json", { workflow_id: WORKFLOW_ID, settings: { viewport: null } })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("settings.mcpConversation")
+    expect(fromMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("refuses a full-body settings replace that changes the stored conversation record", async () => {
+    fromMock.mockReturnValueOnce(chain({ data: { settings: { mcpConversation: conversation } }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "update_workflow_json", {
+      workflow_id: WORKFLOW_ID,
+      settings: { mcpConversation: { ...conversation, steps: 50 } },
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("settings.mcpConversation")
+  })
+
+  it("refuses a full-body settings replace that drops a hub's month marker", async () => {
+    fromMock.mockReturnValueOnce(chain({ data: { settings: { mcpHub: { month: "2026-11" } } }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "update_workflow_json", { workflow_id: WORKFLOW_ID, settings: { other: 1 } })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("settings.mcpHub")
+    expect(fromMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("accepts a full-body settings replace that echoes the record unchanged", async () => {
+    fromMock
+      .mockReturnValueOnce(chain({ data: { settings: { mcpConversation: conversation, other: 1 } }, error: null }))
+      .mockReturnValueOnce(chain({ data: { id: WORKFLOW_ID, name: "Flow", updated_at: "t5", version: 5 }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "update_workflow_json", {
+      workflow_id: WORKFLOW_ID,
+      settings: { other: 2, mcpConversation: JSON.parse(JSON.stringify(conversation)) },
+    })
+    expect(result.isError).toBeUndefined()
+    expect(result.structuredContent?.updated_at).toBe("t5")
+  })
+
+  it("refuses a delta whose set.settings changes the stored record — before the route is reached", async () => {
+    const fastify = Fastify()
+    let hits = 0
+    fastify.patch("/v1/workflows/:id", async (_req, reply) => {
+      hits += 1
+      return reply.status(200).send({ data: { id: WORKFLOW_ID, version: 8 } })
+    })
+    fromMock.mockReturnValueOnce(chain({ data: { id: WORKFLOW_ID, settings: { mcpConversation: conversation } }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify })
+    const result = await callTool(server, "update_workflow_json", {
+      workflow_id: WORKFLOW_ID,
+      delta: { base_version: 7, set: { settings: { mcpConversation: null } } },
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("settings.mcpConversation")
+    expect(hits).toBe(0)
+  })
+
+  it("a settings replace is pinned to the version the guard read: a row that moved in between is answered as modified, never written over", async () => {
+    // The agent read the record at version 3 and echoes it unchanged; a step the
+    // server wrote meanwhile moved the row. Unpinned, the echo would have put the
+    // older record back past a guard that judged the older column.
+    const read = chain({ data: { settings: { mcpConversation: conversation, other: 1 }, version: 3 }, error: null })
+    const write = chain({ data: null, error: null })
+    const exists = chain({ data: { id: WORKFLOW_ID }, error: null })
+    fromMock.mockReturnValueOnce(read).mockReturnValueOnce(write).mockReturnValueOnce(exists)
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "update_workflow_json", {
+      workflow_id: WORKFLOW_ID,
+      settings: { other: 2, mcpConversation: JSON.parse(JSON.stringify(conversation)) },
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("modified since")
+    expect(write.eq).toHaveBeenCalledWith("version", 3)
+  })
+
+  it("a settings replace the caller pinned itself is pinned to both: the caller's version and the one the guard read", async () => {
+    // The guard judged the column at version 3; the caller's own pin only
+    // narrows the match. A caller who pins a version the row is not at (a
+    // guess at the next one, say) cannot land an older record over a newer one.
+    const read = chain({ data: { settings: { other: 1 }, version: 3 }, error: null })
+    const write = chain({ data: { id: WORKFLOW_ID, name: "Flow", updated_at: "t9", version: 9 }, error: null })
+    fromMock.mockReturnValueOnce(read).mockReturnValueOnce(write)
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "update_workflow_json", { workflow_id: WORKFLOW_ID, settings: { other: 2 }, expected_version: 8 })
+    expect(result.isError).toBeUndefined()
+    expect(write.eq).toHaveBeenCalledWith("version", 8)
+    expect(write.eq).toHaveBeenCalledWith("version", 3)
+  })
+
+  it("a delta whose set.settings leaves the record out passes — the server merges settings key by key, so the record stays", async () => {
+    const fastify = Fastify()
+    let hits = 0
+    fastify.patch("/v1/workflows/:id", async (_req, reply) => {
+      hits += 1
+      return reply.status(200).send({ data: { id: WORKFLOW_ID, version: 8, updatedAt: "t8" } })
+    })
+    fromMock.mockReturnValueOnce(chain({ data: { id: WORKFLOW_ID, settings: { mcpConversation: conversation, studio: { shots: [] } } }, error: null }))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify })
+    const result = await callTool(server, "update_workflow_json", {
+      workflow_id: WORKFLOW_ID,
+      delta: { base_version: 7, set: { settings: { other: 2 } } },
+    })
+    expect(result.isError).toBeUndefined()
+    expect(hits).toBe(1)
+    expect(result.structuredContent?.version).toBe(8)
+  })
+})
+
 // ── editor links on every workflow tool ─────────────────────────────────────
 // An assistant can only offer the user the flow in the app if the tool hands it
 // the link: create/import always did; every other workflow tool does too now.

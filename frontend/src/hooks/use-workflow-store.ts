@@ -488,6 +488,15 @@ export interface WorkflowState {
     readonly flowPromptTemplates: Record<string, string>
     readonly presentationSettings: PresentationSettings
     readonly savedViewport: { x: number; y: number; zoom: number } | null
+    /**
+     * The row's whole `settings` column as the server holds it at
+     * `loadedVersion` — the editor's four keys AND every key another writer
+     * owns (an assistant's `mcpConversation` / `mcpHub`, Studio's `studio`).
+     * A full save replaces the column, so it writes this with the editor's
+     * keys over it (`editorSettingsPayload`); refreshed wherever a stored row
+     * is adopted (load, remote reconcile, conflict rebase, a save's own write).
+     */
+    readonly storedSettings: Record<string, unknown>
   } | null
   /**
    * Most recent `updated_at` observed on a realtime broadcast that did
@@ -671,7 +680,8 @@ export interface WorkflowState {
   readonly saveRefusedFor: string | null
   readonly needsAutoLayout: boolean
   readonly setNeedsAutoLayout: (v: boolean) => void
-  readonly loadWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[], characterDefinitions?: CharacterDefinition[], flowPromptTemplates?: Record<string, string>, presentationSettings?: PresentationSettings, viewport?: { x: number; y: number; zoom: number } | null) => void
+  /** `storedSettings`: the row's whole `settings` column (see `lastSavedSnapshot.storedSettings`); left out, an empty column. */
+  readonly loadWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[], characterDefinitions?: CharacterDefinition[], flowPromptTemplates?: Record<string, string>, presentationSettings?: PresentationSettings, viewport?: { x: number; y: number; zoom: number } | null, storedSettings?: Record<string, unknown>) => void
   readonly clearWorkflow: () => void
   readonly markClean: () => void
   readonly setSaveStatus: (status: SaveStatus, error?: string | null) => void
@@ -2271,7 +2281,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
     set({ flowPromptTemplates: templates, isDirty: true })
   },
 
-  loadWorkflow: (id, name, loadedNodes, edges, characterDefinitions, flowPromptTemplates, presentationSettings, viewport) => {
+  loadWorkflow: (id, name, loadedNodes, edges, characterDefinitions, flowPromptTemplates, presentationSettings, viewport, storedSettings) => {
     // A saved graph as a plain run reads it (the shared funnel, no overrides):
     // a run-only field saved before it was stripped on save (a use-case node's
     // continuation) is stale, so the editor's estimates and preview gate never
@@ -2727,6 +2737,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
         flowPromptTemplates: flowPromptTemplates ?? {},
         presentationSettings: presentationSettings ?? DEFAULT_PRESENTATION_SETTINGS,
         savedViewport: viewport ?? null,
+        storedSettings: storedSettings ?? {},
       },
       selectedNodeId: null,
       isDirty: false,
@@ -2846,7 +2857,13 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
       }
       // The adopted remote graph becomes the next delta base. Meta fields
       // mirror what this reconcile leaves in the store (settings fields are
-      // overwritten below when present on the broadcast).
+      // overwritten below when present on the broadcast). The stored settings
+      // column is the broadcast's whole column: the version moved with it, so
+      // a full save pinned to that version must write what the row holds now
+      // (an assistant's conversation record that moved on, Studio's document)
+      // — a broadcast without the column keeps the one this tab holds.
+      const broadcastSettings =
+        settings && typeof settings === "object" && !Array.isArray(settings) ? (settings as Record<string, unknown>) : null
       next.lastSavedSnapshot = {
         nodes: orderedNodes,
         edges: migratedEdges,
@@ -2855,6 +2872,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
         flowPromptTemplates: state.flowPromptTemplates,
         presentationSettings: state.presentationSettings,
         savedViewport: state.savedViewport,
+        storedSettings: broadcastSettings ?? state.lastSavedSnapshot?.storedSettings ?? {},
       }
 
       // Clear the selection if the selected node id no longer exists

@@ -3405,7 +3405,7 @@ Needs `workflows:write`.
 | `workflow_id` | string | yes |  |
 | `nodes` | object (map of any)[] |  |  |
 | `edges` | object (map of any)[] |  |  |
-| `settings` | object (map of any) |  |  |
+| `settings` | object (map of any) |  | Replaces settings wholesale. A stored key another writer owns (`studio`, `mcpConversation`, `mcpHub`) must come back unchanged, copied from get_workflow_json, or the write is refused. |
 | `thumbnail_url` | string (URL) or null |  | Public URL of the workflow's thumbnail/preview image, or null to clear it. Must be an already-hosted image URL. |
 | `expected_updated_at` | string |  | Optimistic concurrency — the updated_at from get_workflow_json. If provided and the DB updated_at doesn't match, returns a conflict error. |
 | `expected_version` | integer |  | Integer CAS — the version from get_workflow_json. Preferred over expected_updated_at (monotonic counter bumped by the DB on every content change). At least 1. |
@@ -3417,7 +3417,7 @@ Needs `workflows:write`.
 | `delta.delete_edge_ids` | string[] |  | Edge ids to remove. |
 | `delta.set` | object |  |  |
 | `delta.set.name` | string |  | From 1 to 200 characters. |
-| `delta.set.settings` | object (map of any) |  | Replaces settings wholesale — subject to the same `settings.studio` guard as a full-body settings write. |
+| `delta.set.settings` | object (map of any) |  | Merged key by key: a key you send replaces the stored one, a key you leave out stays. An owned key (`studio`, `mcpConversation`, `mcpHub`) may only be sent unchanged. |
 
 ## `upload_audio_widget`
 

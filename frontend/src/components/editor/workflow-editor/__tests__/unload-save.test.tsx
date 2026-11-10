@@ -105,6 +105,66 @@ describe("the editor's unload handlers write a pending review first", () => {
   })
 })
 
+/**
+ * The keepalive PATCH replaces the whole `settings` column, exactly as the
+ * normal save does — so it too must write the column as the server holds it,
+ * with the editor's four keys over it. Rebuilding it from the four keys erased
+ * an assistant's conversation record (`mcpConversation`) and a month's hub
+ * marker (`mcpHub`) whenever a tab was closed mid-edit.
+ */
+describe("the unload save keeps the settings keys the editor does not manage", () => {
+  const conversation = {
+    client: "claude-code",
+    clientName: "Claude Code (nodaro)",
+    key: null,
+    startedAt: "2026-11-09T18:00:00.000Z",
+    lastActivityAt: "2026-11-09T18:05:00.000Z",
+    steps: 1,
+  }
+
+  function storedWith(storedSettings: Record<string, unknown>) {
+    const st = useWorkflowStore.getState()
+    useWorkflowStore.setState({
+      isDirty: true,
+      lastSavedSnapshot: {
+        nodes: st.nodes,
+        edges: st.edges,
+        name: "W",
+        characterDefinitions: [],
+        flowPromptTemplates: {},
+        presentationSettings: st.presentationSettings,
+        savedViewport: null,
+        storedSettings,
+      },
+    } as never)
+  }
+
+  function sentSettings(): Record<string, unknown> {
+    const request = unloadSaveRequest(AUTH)
+    expect(request).not.toBeNull()
+    return (JSON.parse(request!.init.body as string) as { settings: Record<string, unknown> }).settings
+  }
+
+  it("an MCP conversation flow keeps settings.mcpConversation", () => {
+    storedWith({ mcpConversation: conversation, viewport: null })
+    expect(sentSettings().mcpConversation).toEqual(conversation)
+  })
+
+  it("a month's hub keeps settings.mcpHub", () => {
+    storedWith({ mcpHub: { month: "2026-11" } })
+    expect(sentSettings().mcpHub).toEqual({ month: "2026-11" })
+  })
+
+  it("the editor's own keys are this tab's, not the stored copies", () => {
+    storedWith({ mcpConversation: conversation, flowPromptTemplates: { plan: "stored" } })
+    useWorkflowStore.setState({ flowPromptTemplates: { plan: "edited here" } } as never)
+    const settings = sentSettings()
+    expect(settings.flowPromptTemplates).toEqual({ plan: "edited here" })
+    expect(settings.mcpConversation).toEqual(conversation)
+    expect(Object.keys(settings).sort()).toEqual(["characterDefinitions", "flowPromptTemplates", "mcpConversation", "presentationSettings", "viewport"])
+  })
+})
+
 describe("workflow-editor-main's beforeunload handlers go through unload-save", () => {
   const source = readFileSync(join(__dirname, "..", "workflow-editor-main.tsx"), "utf8")
 

@@ -234,6 +234,34 @@ describe("update_workflow_json — workspace audience gate", () => {
     // A content-only edit never consults the visibility authority.
     expect(canChangeVis).not.toHaveBeenCalled()
   })
+
+  it("a settings replace is pinned to the version the workspace read judged the column at", async () => {
+    // The workspace branch loads `version` beside `settings` for the owned-
+    // settings guard; the write is pinned to it (no pin of the caller's here).
+    accessFromRow.mockResolvedValue("edit")
+    const database = chain({
+      data: {
+        id: WORKFLOW_ID,
+        user_id: "creator-other",
+        workspace_id: WS_ID,
+        visibility: "workspace",
+        name: "WF",
+        settings: { other: 1 },
+        updated_at: "t",
+        version: 5,
+      },
+      error: null,
+    })
+    fromMock.mockReturnValue(database)
+
+    const server = buildServer()
+    registerWorkflows({ server, session: wsSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "update_workflow_json", { workflow_id: WORKFLOW_ID, settings: { other: 2 } })
+
+    expect(result.isError).toBeUndefined()
+    expect(database.update).toHaveBeenCalled()
+    expect(database.eq).toHaveBeenCalledWith("version", 5)
+  })
 })
 
 // ── get_workflow_json / export_workflow (a `view` reader's settings) ─────────
