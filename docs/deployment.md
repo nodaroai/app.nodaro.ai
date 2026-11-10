@@ -876,9 +876,12 @@ optional; each array empty = "keep the default"):
   `suno-generate`, `POST /v1/edit-image` as Upscale Image, Remove Background or
   Modify Image by its `provider`, `POST /v1/social/publish` as the platform's
   post node or Publish to Social, an entity's sheet, motion and caption routes
-  as that entity's node, a node's `/continue` and streaming routes as the node.
+  as that entity's node, a node's `/continue` and streaming routes as the node,
+  Recast's routes (its script revisions and plan included) as
+  `generate-video-pro`, the render a recast produces, and a Studio production's
+  sequence generation as `generate-video`.
   One gateable id has no canvas node: `cast-swap` is Nodaro Motion —
-  `POST /v1/cast-swap` and its routes, and every trend run
+  `POST /v1/cast-swap` and its routes (a trend's face mask included), and every trend run
   (`POST /v1/trends/:slug/estimate` and `/runs` answer `node_not_available`
   where it is not offered, and the MCP tools `cast_swap`, the Full Quality pair
   and the trend tools are not listed). With `nodes.allow` set, a credit-spending route that

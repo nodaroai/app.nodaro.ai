@@ -143,6 +143,9 @@ export const ROUTE_NODES: Readonly<Record<string, string | BodyResolver>> = Obje
 
   // ── Nodaro Motion (cast-swap): its own routes and its engine's helpers ──
   "/v1/cast-swap/:jobId/full-quality": "cast-swap",
+  // A trend's face mask, made once by the same engine (the platform's own
+  // internal call from the trend editor).
+  "/v1/cast-swap/face-mask": "cast-swap",
   "/v1/video-face-mesh": "cast-swap",
   "/v1/mask-erase": "cast-swap",
   "/v1/mask-outline": "cast-swap",
@@ -155,13 +158,24 @@ export const ROUTE_NODES: Readonly<Record<string, string | BodyResolver>> = Obje
   // The split step of UGC Clips' prelude (a job of its own, `ugc-segments`).
   "/v1/ugc/segments": "ugc-clips",
   // Recast produces a Generate Video Pro render (its continue reserves under
-  // that node's pricing): every Recast route follows that node.
+  // that node's pricing): every Recast route follows that node, its script
+  // revisions, recommendation and plan included.
   "/v1/recast": "generate-video-pro",
   "/v1/recast/:id/continue": "generate-video-pro",
   "/v1/recast/:id/candidates": "generate-video-pro",
   "/v1/recast/:id/refine": "generate-video-pro",
   "/v1/recast/:id/rescore": "generate-video-pro",
   "/v1/recast/:id/audio-derive": "generate-video-pro",
+  "/v1/recast/revise": "generate-video-pro",
+  "/v1/recast/recommend": "generate-video-pro",
+  "/v1/recast/:id/retake/revise": "generate-video-pro",
+  "/v1/recast/:id/plan": "generate-video-pro",
+  // A Studio production's sequence unit renders one Generate Video request:
+  // the unified video node's two modes are the unit's two lanes (with a start
+  // frame on POST /v1/generate-video, without on the text-to-video route, each
+  // gated as its own node when it runs). The body cannot say which lane (the
+  // stored take decides), so the route follows the node that offers both.
+  "/v1/studio/productions/:id/sequences/:sequenceId/takes/:takeId/units/:unitId/generate": "generate-video",
 })
 
 /**
@@ -202,6 +216,14 @@ export const PLUGIN_CREDIT_GUARDED_ROUTES: readonly string[] = Object.freeze([
   "/v1/recast/:id/refine",
   "/v1/recast/:id/rescore",
   "/v1/recast/:id/audio-derive",
+  // The model and node checks alone (each route keeps its own price and
+  // reservation), since plugin 0.464.0.
+  "/v1/recast/revise",
+  "/v1/recast/recommend",
+  "/v1/recast/:id/retake/revise",
+  "/v1/recast/:id/plan",
+  "/v1/cast-swap/face-mask",
+  "/v1/studio/productions/:id/sequences/:sequenceId/takes/:takeId/units/:unitId/generate",
   "/v1/social-search",
   "/v1/speaker-frames",
   "/v1/speaker-view",

@@ -122,7 +122,76 @@ describe("routeNodeGate — what is no node", () => {
   })
 })
 
+/**
+ * Every route the Cloud plugin runs the credit guard on as of plugin 0.464.0,
+ * read from its source (the routes it registers, and the host routes it guards
+ * inside), with the node each runs. 0.464.0 added six that run the model and
+ * node checks alone: Recast's revise, recommend, retake revise and plan, the
+ * trend face mask (the platform's own internal call) and a Studio sequence
+ * unit's generate. A guarded route the platform leaves unmapped is
+ * unclassified, and a `nodes.allow` deployment refuses it whatever it lists.
+ * When a plugin release guards another route, it joins this table and
+ * PLUGIN_CREDIT_GUARDED_ROUTES together.
+ */
+const PLUGIN_GUARDED_ROUTE_NODES: Readonly<Record<string, string>> = {
+  "/v1/camera-switch": "camera-switch",
+  "/v1/cast-swap": "cast-swap",
+  "/v1/cast-swap/:jobId/full-quality": "cast-swap",
+  "/v1/cast-swap/face-mask": "cast-swap",
+  "/v1/competitor-scan": "competitor-scan",
+  "/v1/content-ideas": "content-ideas",
+  "/v1/content-recipe": "content-recipe",
+  "/v1/edit-plan": "edit-plan",
+  "/v1/edit-video-pro": "edit-video-pro",
+  "/v1/generate-video-pro": "generate-video-pro",
+  "/v1/generate-video-pro/continue": "generate-video-pro",
+  "/v1/recast": "generate-video-pro",
+  "/v1/recast/:id/continue": "generate-video-pro",
+  "/v1/recast/:id/candidates": "generate-video-pro",
+  "/v1/recast/:id/refine": "generate-video-pro",
+  "/v1/recast/:id/rescore": "generate-video-pro",
+  "/v1/recast/:id/audio-derive": "generate-video-pro",
+  "/v1/recast/revise": "generate-video-pro",
+  "/v1/recast/recommend": "generate-video-pro",
+  "/v1/recast/:id/retake/revise": "generate-video-pro",
+  "/v1/recast/:id/plan": "generate-video-pro",
+  "/v1/social-search": "social-search",
+  "/v1/speaker-frames": "speaker-frames",
+  "/v1/speaker-view": "speaker-view",
+  "/v1/studio/productions/:id/sequences/:sequenceId/takes/:takeId/units/:unitId/generate": "generate-video",
+  "/v1/ugc/clip": "ugc-clip",
+  "/v1/ugc/script": "ugc-script",
+  "/v1/ugc/segments": "ugc-clips",
+  "/v1/ugc/finish": "ugc-finish-clips",
+  "/v1/video-analysis": "video-analysis",
+  "/v1/video-audit": "video-audit",
+  "/v1/voice-changer-pro": "voice-changer-pro",
+  "/v1/voice-changer-pro/analyze": "voice-changer-pro",
+  "/v1/voice-changer-pro/export": "voice-changer-pro",
+  "/v1/voice-changer-pro/translate": "voice-changer-pro",
+  "/v1/pro-3d-render": "pro-3d-render",
+  "/v1/3d-scene/generate": "generate-3d-scene",
+  "/v1/generate-3d-scene": "generate-3d-scene",
+  "/v1/3d-scene/edit": "edit-3d-scene",
+  "/v1/edit-3d-scene": "edit-3d-scene",
+}
+
 describe("routeNodeGate — the Cloud plugin's credit-guarded routes", () => {
+  it("every route plugin 0.464.0 guards is listed, and runs exactly its node", () => {
+    const listed = new Set(PLUGIN_CREDIT_GUARDED_ROUTES)
+    for (const [route, node] of Object.entries(PLUGIN_GUARDED_ROUTE_NODES)) {
+      expect(listed.has(route), `${route} is in PLUGIN_CREDIT_GUARDED_ROUTES`).toBe(true)
+      const gate = routeNodeGate(route, {})
+      expect(gate.kind, route).toBe("node")
+      if (gate.kind === "node") expect(gate.types, route).toEqual([node])
+    }
+  })
+
+  it("lists no route the plugin does not guard (the table above is the whole record)", () => {
+    expect(PLUGIN_CREDIT_GUARDED_ROUTES.filter((r) => !Object.hasOwn(PLUGIN_GUARDED_ROUTE_NODES, r))).toEqual([])
+    expect(new Set(PLUGIN_CREDIT_GUARDED_ROUTES).size).toBe(PLUGIN_CREDIT_GUARDED_ROUTES.length)
+  })
+
   it("every one resolves to a node the availability funnel knows", () => {
     for (const route of PLUGIN_CREDIT_GUARDED_ROUTES) {
       const gate = routeNodeGate(route, {})
