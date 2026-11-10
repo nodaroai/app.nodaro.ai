@@ -1,0 +1,190 @@
+# Applies supabase/migrations to the staging database, so staging runs the
+# schema its own code expects instead of production's.
+#
+# Off until it is configured, in two steps on purpose:
+#   1. the repository secret SUPABASE_STAGING_PROJECT_ID names the staging
+#      project (see the guard below: never production's);
+#   2. a manual run with dry_run: true (workflow_dispatch) shows what a push
+#      would apply; only then does the repository variable
+#      STAGING_MIGRATE_ENABLED=true turn on the automatic run on every push to
+#      dev that touches a migration.
+#
+# Production is untouched: its migrations still reach it only on a push to
+# main, by ci.yml's migrate job and the Supabase integration. Every project
+# the repository has known as production is refused here by name.
+#
+# Only dev's own code ever runs: a push to dev, or a manual run on dev (a dry
+# run unless dry_run is off). A manual run from any other branch is skipped.
+#
+# It never leaves a failing check: dev can sit on the same commit as main's
+# head (after a release), where a red check makes Railway skip the production
+# deploy. A failure (the gate's refusal, the link, the push, the dry run
+# included) is written to the job summary and to an open issue labelled
+# staging-migrate-failure, which the next clean run closes.
+#
+# Staging takes migrations in the order they merge to dev, which can differ
+# from their numbers (two PRs in flight; the later number merges first). A
+# plain `supabase db push` refuses a migration numbered below the newest one
+# applied, and every later run would fail; here it is applied too
+# (--include-all). Production's push stays plain: a release brings its
+# migrations in number order.
+name: Staging Database Migrations
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - supabase/migrations/**
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Show what would be applied, change nothing"
+        required: true
+        type: boolean
+        default: true
+
+permissions: { contents: read, issues: write }
+
+concurrency:
+  group: staging-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate-staging:
+    name: Push migrations to the staging database
+    runs-on: ubuntu-latest
+    # The mirror must never touch a database; only dev runs it (a manual run
+    # started from any other branch, main included, is skipped, so it can never
+    # leave a red check there: a dry run still fails when staging holds
+    # migrations that branch lacks); a push runs only once the automatic run is
+    # switched on; a manual run on dev may always go (it dry-runs by default).
+    if: >-
+      github.repository == 'nodaroai/app.nodaro.ai-internal' &&
+      github.ref == 'refs/heads/dev' &&
+      (github.event_name == 'workflow_dispatch' || vars.STAGING_MIGRATE_ENABLED == 'true')
+    env:
+      # See ci.yml migrate: the CLI's telemetry flush can time out on a runner
+      # and surface as a spurious exit 1 after the command already succeeded.
+      SUPABASE_TELEMETRY_DISABLED: "1"
+    # No run may leave a failing check. Checks attach to the commit, not the
+    # branch: after a release dev sits on main's merge commit, and a red check
+    # there makes Railway skip the production deploy. So no step fails the job:
+    # each one that can fail is contained (continue-on-error, its own timeout),
+    # and the last step reports any failure in an issue labelled
+    # staging-migrate-failure and in the job summary. The job's own limit is
+    # well above the sum of the steps' limits, so the report step always runs.
+    timeout-minutes: 75
+    steps:
+      - name: Stop unless a staging project is named
+        id: gate
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          STAGING_PROJECT_ID: ${{ secrets.SUPABASE_STAGING_PROJECT_ID }}
+          PRODUCTION_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: |
+          if [ -z "$STAGING_PROJECT_ID" ]; then
+            echo "::notice::SUPABASE_STAGING_PROJECT_ID is not set, so there is no staging database to migrate."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Never production's project, whatever the settings say: neither the one
+          # the production secret names nor any the repository has known as
+          # production (the current one and the retired one). Refused without a
+          # failing step; the report step opens the issue.
+          case "$STAGING_PROJECT_ID" in
+            wtklnihbnotyrixkouyl|kvitmiiswsbtxvjgvbkw)
+              echo "::warning::SUPABASE_STAGING_PROJECT_ID names a production project. It must name the staging project; nothing was run."
+              echo "proceed=false" >> "$GITHUB_OUTPUT"
+              echo "refused=SUPABASE_STAGING_PROJECT_ID names a production project" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
+          if [ -z "$PRODUCTION_PROJECT_ID" ] || [ "$STAGING_PROJECT_ID" = "$PRODUCTION_PROJECT_ID" ]; then
+            echo "::warning::SUPABASE_STAGING_PROJECT_ID must name the staging project, never production's; nothing was run."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            echo "refused=SUPABASE_STAGING_PROJECT_ID is production's project, or SUPABASE_PROJECT_ID is not set to tell them apart" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v5
+        id: checkout
+        if: steps.gate.outputs.proceed == 'true'
+        continue-on-error: true
+        timeout-minutes: 5
+        with:
+          persist-credentials: false
+      - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1
+        id: cli
+        if: steps.checkout.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 5
+        with:
+          # The same pinned version as ci.yml's migrate job.
+          version: 2.105.0
+      - name: Link the staging project
+        id: link
+        if: steps.cli.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 5
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+        env:
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_STAGING_PROJECT_ID }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      - name: Push migrations
+        id: push
+        if: steps.link.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 15
+        run: supabase db push --include-all ${DRY_RUN:+--dry-run}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          # Really applies only for dev's own code: a push to dev, or a manual run
+          # on dev with dry_run off. Every other run (another branch) is a dry run.
+          DRY_RUN: ${{ !(github.ref == 'refs/heads/dev' && (github.event_name == 'push' || !inputs.dry_run)) && 'yes' || '' }}
+      - name: Report the outcome (never a failing check)
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PROCEED: ${{ steps.gate.outputs.proceed }}
+          REFUSED: ${{ steps.gate.outputs.refused }}
+          GATE: ${{ steps.gate.outcome }}
+          CHECKOUT: ${{ steps.checkout.outcome }}
+          CLI: ${{ steps.cli.outcome }}
+          LINK: ${{ steps.link.outcome }}
+          PUSH: ${{ steps.push.outcome }}
+          DRY_RUN: ${{ !(github.ref == 'refs/heads/dev' && (github.event_name == 'push' || !inputs.dry_run)) && 'yes' || '' }}
+        run: |
+          failed="${REFUSED:+the gate refused: $REFUSED}"
+          for step in "gate:${GATE:-}" "checkout:$CHECKOUT" "Supabase CLI setup:$CLI" "link:$LINK" "push:$PUSH"; do
+            if [ "${step##*:}" = "failure" ]; then failed="${failed:+$failed; }${step%:*} failed"; fi
+          done
+          {
+            echo "## Staging database migrations"
+            if [ -n "$failed" ]; then
+              echo "**Failed:** ${failed}. See the step's log above."
+              echo
+              echo "This job never fails its check (it may run on a commit that is main's head); the failure is tracked in an issue labelled staging-migrate-failure."
+            elif [ "$PROCEED" != "true" ]; then
+              echo "Nothing to do: no staging project is named."
+            else
+              echo "Pushed${DRY_RUN:+ as a dry run}: see the push step's log."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --label staging-migrate-failure --state open --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          if [ -n "$failed" ]; then
+            gh label create staging-migrate-failure --repo "$GITHUB_REPOSITORY" --color B60205 --description "staging-migrate run failed" --force >/dev/null 2>&1 || true
+            if [ -n "$open" ]; then
+              gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body "Again: ${failed}. $RUN_URL" >/dev/null 2>&1 || true
+            else
+              gh issue create --repo "$GITHUB_REPOSITORY" --label staging-migrate-failure \
+                --title "staging-migrate is failing: the staging database is not getting dev's migrations" \
+                --body "$(printf 'The staging migration run failed: %s.\n\n%s\n\nThe job never fails its check, so this issue is where it shows. It closes itself on the next clean run.' "$failed" "$RUN_URL")" >/dev/null 2>&1 || true
+            fi
+          elif [ "$PROCEED" = "true" ] && [ -n "$open" ]; then
+            gh issue close "$open" --repo "$GITHUB_REPOSITORY" --comment "Green again: $RUN_URL" >/dev/null 2>&1 || true
+          fi
+          exit 0
