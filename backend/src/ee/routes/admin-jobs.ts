@@ -116,8 +116,13 @@ const ADMIN_JOB_COLUMNS = [
   "reconcile_last_error", "provider_call_started_at", "usage_log_id",
 ].join(", ")
 
-/** The one-job reads': every column the page renders, and the job's parent. */
-const ONE_JOB_COLUMNS = `${ADMIN_JOB_COLUMNS}, parent_job_id`
+/**
+ * The one-job reads': every column the page renders, the job's parent, and the
+ * provider's own words about a failure (`error_detail`, redacted where they
+ * were written). The list's rows leave the words out: they are read for the
+ * one job an admin opens, never for a page of jobs.
+ */
+const ONE_JOB_COLUMNS = `${ADMIN_JOB_COLUMNS}, parent_job_id, error_detail`
 
 /** How many child jobs a job has (its owner's only, like every walk down `parent_job_id`); null when the count fails. */
 async function countChildJobs(row: { id: string; user_id: string }): Promise<number | null> {
@@ -400,8 +405,9 @@ export async function adminJobsRoutes(app: FastifyInstance): Promise<void> {
 
   /**
    * GET /v1/admin/jobs/:jobId -- one job, whole: what the list's lighter rows
-   * leave out (`input_data` and `output_data` in full), for the detail dialog
-   * and the job page (`/admin/job/:id`). Any job, the ones in the Trash
+   * leave out (`input_data` and `output_data` in full, and `error_detail`, the
+   * provider's own words about a failure), for the detail dialog and the job
+   * page (`/admin/job/:id`). Any job, the ones in the Trash
    * included, like the list. The page opens from a link with no list row
    * behind it, so the job comes with its charge (`credit`, read like the
    * list's), its `parent_job_id` and how many child jobs it has
@@ -435,9 +441,10 @@ export async function adminJobsRoutes(app: FastifyInstance): Promise<void> {
 
   /**
    * GET /v1/admin/jobs/:jobId/children -- every job below one (its steps,
-   * theirs, …) in flow order, each whole and with its own charge and its
-   * `depth` below the job (`admin-job-children.ts`). `truncated` when the tree
-   * is bigger than the page lists.
+   * theirs, …) in flow order, each whole (its `error_detail` included, like
+   * the one-job read) and with its own charge and its `depth` below the job
+   * (`admin-job-children.ts`). `truncated` when the tree is bigger than the
+   * page lists.
    */
   app.get<{ Params: { jobId: string } }>(
     "/v1/admin/jobs/:jobId/children",

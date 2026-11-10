@@ -7,7 +7,7 @@
  *  - cancelled (from another tab, the jobs list, the API) → a cancelled
  *    outcome, never a failure;
  *  - failed → an error carrying the job's message (or "Unknown error" in the
- *    reader's language) and its classified hint;
+ *    reader's language), its classified hint and the provider's own words;
  *  - a run that outlasts `longRunMs` is never given up on: `onLongRun` is told
  *    once, and the run is then followed less often until it ends. The time
  *    the run is seen waiting for a free slot (`queued`) does not count toward
@@ -24,6 +24,7 @@
  * engine's import cycle.
  */
 import { cancelJob } from "@/lib/api"
+import { failedJobError } from "@/lib/failed-job-error"
 import { tx } from "@/lib/i18n"
 import { QueuedPollClock } from "@/lib/queued-poll-clock"
 import type { ExecutionContext } from "./types"
@@ -43,6 +44,7 @@ export interface UseCaseTextJobStatus {
   readonly output_data?: unknown
   readonly error_message?: string | null
   readonly error_hint?: unknown
+  readonly error_detail?: string | null
   readonly progress?: number | null
 }
 
@@ -113,7 +115,7 @@ export function pollUseCaseTextJob(jobId: string, nodeId: string, ctx: PollCtx, 
         if (job.status === "cancelled") return finish(() => resolve({ kind: "cancelled" }))
         if (job.status === "failed") {
           const message = job.error_message || tx("run.unknownError")
-          return finish(() => reject(Object.assign(new Error(message), job.error_hint ? { errorHint: job.error_hint } : {})))
+          return finish(() => reject(failedJobError(message, job)))
         }
         if (typeof job.progress === "number" && job.progress !== lastProgress) {
           lastProgress = job.progress

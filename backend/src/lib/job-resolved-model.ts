@@ -17,7 +17,7 @@
  * Callers: the routes that enqueue these jobs (at insert) and the workflow
  * engine's orchestrator rows (`node-executor.ts`, from the built payload).
  */
-import { buildMotionCreditModelIdentifier } from "@nodaro/shared/credits"
+import { motionTransferModelOf, videoUpscaleModelOf } from "@nodaro/render-rules"
 import { LLM_FEATURE_DEFAULTS, resolveScriptModelId } from "@nodaro/shared/llm-models"
 import { defaultImageModel, IMAGE_MODEL_ROLE_DEFAULTS, MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import {
@@ -53,14 +53,10 @@ const withDefault = (defaultModel: string) => (d: Data): string => str(d.provide
  * the model is the base of the credit id the route bills it under (Kling 2.6 is
  * catalog `motion-transfer`, Kling 3.0 `kling-3.0-motion`).
  */
-const motionTransfer = (d: Data): string =>
-  buildMotionCreditModelIdentifier(str(d.provider) ?? MOTION_TRANSFER_DEFAULT_PROVIDER, "720p").split(":")[0]!
+const motionTransfer = (d: Data): string => motionTransferModelOf(str(d.provider) ?? MOTION_TRANSFER_DEFAULT_PROVIDER)
 
 /** The upscale node's "topaz" is the catalog's `topaz-video` (frontend `free-video-locks.ts` reads it the same way). */
-const videoUpscale = (d: Data): string => {
-  const provider = str(d.provider) ?? VIDEO_UPSCALE_DEFAULT_PROVIDER
-  return provider === "topaz" ? "topaz-video" : provider
-}
+const videoUpscale = (d: Data): string => videoUpscaleModelOf(str(d.provider) ?? VIDEO_UPSCALE_DEFAULT_PROVIDER)
 
 /** A Suno version ("V5") is the catalog entry that carries it as `dataValue` (`suno-v5`). */
 const SUNO_CATALOG_ID_BY_VERSION: ReadonlyMap<string, string> = new Map(

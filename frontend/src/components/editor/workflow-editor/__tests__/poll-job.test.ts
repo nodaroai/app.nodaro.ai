@@ -1124,3 +1124,117 @@ describe("pollImageRefineToNode — the job-policy hold and block", () => {
     expect(mockToastError).toHaveBeenCalled()
   })
 })
+
+// A failed job's sentence and the provider's own words about it travel together: onto the node
+// the poll writes, and on the error the poll ends with, so whoever catches it can write both.
+describe("a failed job's sentence travels with the provider's words", () => {
+  const SENTENCE = "The model declined one of your pictures."
+  const WORDS = "Request blocked: The uploaded image may contain protected or restricted IP content."
+  const HINT = { kind: "policy-block", policyId: "sai", reason: "Blocked by content policy", hookPoint: "result" }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    mockNodes.length = 0
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const failedPatch = () =>
+    mockUpdateNodeData.mock.calls.map((c) => c[1]).find((patch) => patch.executionStatus === "failed")
+  const ownKey = (value: unknown, key: string) => Object.prototype.hasOwnProperty.call(value, key)
+
+  it("pollJobWithNodeUpdate: the node's failure names the job's words, and its error carries them with the hint", async () => {
+    const apiCall = vi.fn().mockResolvedValue({ jobId: "j1" })
+    mockGetJobStatusLean.mockResolvedValue({ status: "failed", error_message: SENTENCE, error_detail: WORDS, error_hint: HINT })
+    mockNodes.push({ id: "n1", data: {} })
+
+    const promise = pollJobWithNodeUpdate("n1", apiCall, "generatedVideoUrl", "Video", makeCtx())
+    promise.catch(() => {})
+    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(2000)
+
+    await expect(promise).rejects.toMatchObject({ message: SENTENCE, errorDetail: WORDS, errorHint: HINT })
+    expect(failedPatch()).toMatchObject({ errorMessage: SENTENCE, errorDetail: WORDS })
+  })
+
+  it("pollJobWithNodeUpdate: a job with no words names the key empty on the node, and its error has none", async () => {
+    const apiCall = vi.fn().mockResolvedValue({ jobId: "j1" })
+    mockGetJobStatusLean.mockResolvedValue({ status: "failed", error_message: "Render error", error_detail: null })
+    mockNodes.push({ id: "n1", data: { executionStatus: "failed", errorMessage: SENTENCE, errorDetail: WORDS } })
+
+    const promise = pollJobWithNodeUpdate("n1", apiCall, "generatedVideoUrl", "Video", makeCtx())
+    const settled = promise.then(() => undefined, (e: unknown) => e)
+    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(2000)
+    const err = await settled
+
+    expect((err as Error).message).toBe("Render error")
+    expect(ownKey(err, "errorDetail")).toBe(false)
+    const patch = failedPatch()!
+    expect(ownKey(patch, "errorDetail")).toBe(true)
+    expect(patch.errorDetail).toBeUndefined()
+    expect(mockNodes[0]!.data.errorDetail).toBeUndefined()
+  })
+
+  it("pollImageRefineToNode: the node's failure names the job's words, and its error carries them", async () => {
+    const apiCall = vi.fn().mockResolvedValue({ jobId: "j1" })
+    mockGetJobStatusLean.mockResolvedValue({ status: "failed", error_message: SENTENCE, error_detail: WORDS, error_hint: HINT })
+    mockNodes.push({ id: "n1", data: {} })
+
+    const promise = pollImageRefineToNode("n1", apiCall, "Refine")
+    promise.catch(() => {})
+    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(2000)
+
+    await expect(promise).rejects.toMatchObject({ message: SENTENCE, errorDetail: WORDS, errorHint: HINT })
+    expect(failedPatch()).toMatchObject({ errorMessage: SENTENCE, errorDetail: WORDS })
+  })
+
+  it("pollJobToCompletion: the error it ends with carries the words and the hint", async () => {
+    mockGetJobStatusLean.mockResolvedValue({ status: "failed", error_message: SENTENCE, error_detail: WORDS, error_hint: HINT })
+
+    const promise = pollJobToCompletion("job-1", makeCtx())
+    promise.catch(() => {})
+    await vi.advanceTimersByTimeAsync(2000)
+
+    await expect(promise).rejects.toMatchObject({ message: SENTENCE, errorDetail: WORDS, errorHint: HINT })
+  })
+
+  it("pollJobWithNodeUpdate: a failure found by the last check, after the job went quiet, lands as that failure", async () => {
+    const apiCall = vi.fn().mockResolvedValue({ jobId: "j1" })
+    const gone = Object.assign(new Error("Job not found"), { status: 404 })
+    mockGetJobStatusLean
+      .mockRejectedValueOnce(gone)
+      .mockRejectedValueOnce(gone)
+      .mockRejectedValueOnce(gone)
+      .mockResolvedValueOnce({ status: "failed", error_message: SENTENCE, error_detail: WORDS, error_hint: HINT })
+    mockNodes.push({ id: "n1", data: {} })
+
+    const promise = pollJobWithNodeUpdate("n1", apiCall, "generatedVideoUrl", "Video", makeCtx())
+    promise.catch(() => {})
+    await vi.advanceTimersByTimeAsync(100)
+    for (let k = 0; k < 3; k++) await vi.advanceTimersByTimeAsync(2000)
+
+    await expect(promise).rejects.toMatchObject({ message: SENTENCE, errorDetail: WORDS, errorHint: HINT })
+    expect(failedPatch()).toMatchObject({ errorMessage: SENTENCE, errorDetail: WORDS, errorHint: HINT })
+  })
+
+  it("pollJobToCompletion: a failure found by the last check after the job went quiet carries them too", async () => {
+    const gone = Object.assign(new Error("Job not found"), { status: 404 })
+    mockGetJobStatusLean
+      .mockRejectedValueOnce(gone)
+      .mockRejectedValueOnce(gone)
+      .mockRejectedValueOnce(gone)
+      .mockResolvedValueOnce({ status: "failed", error_message: SENTENCE, error_detail: WORDS, error_hint: HINT })
+
+    const promise = pollJobToCompletion("job-1", makeCtx())
+    promise.catch(() => {})
+    await vi.advanceTimersByTimeAsync(2000)
+    await vi.advanceTimersByTimeAsync(2000)
+    await vi.advanceTimersByTimeAsync(2000)
+
+    await expect(promise).rejects.toMatchObject({ message: SENTENCE, errorDetail: WORDS, errorHint: HINT })
+  })
+})

@@ -30,6 +30,8 @@ import {
 import { NodePresetNameTakenError, type FactoryNodePreset, type NodePreset, type NodePresetGroup } from "@/lib/api"
 import { buildPresetTree, factoryPresetIdMatchesQuery, presetMatchesQuery, buildResetToDefaultData } from "@/lib/preset-tree"
 import { NodePresetManageDialog } from "./node-preset-manage-dialog"
+import { noteNewNodesFromDefaults, withOfferedResetModels } from "./new-node-models"
+import { mergeNodeData } from "@/lib/node-data-merge"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import { cn } from "@/lib/utils"
 import { NODE_TITLE_TYPOGRAPHY } from "@/lib/node-title-style"
@@ -391,7 +393,12 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
       return
     }
     const defaultData = NODE_DEF_MAP.get(nodeType)?.defaultData as Record<string, unknown> | undefined
-    updateNodeData(nodeId, curatedNodeDefaults(nodeType, buildResetToDefaultData(data, defaultData, nodeType)))
+    // The defaults on models the deployment offers: a reset starts the node
+    // where a new one starts (new-node-models.ts), judged again once if the
+    // availability answer has not landed yet.
+    const reset = withOfferedResetModels(nodeType, data, curatedNodeDefaults(nodeType, buildResetToDefaultData(data, defaultData, nodeType)))
+    updateNodeData(nodeId, reset)
+    noteNewNodesFromDefaults([{ id: nodeId, type: nodeType, data: mergeNodeData(data, reset) }])
     toast.success(t("preset.wasReset"))
   }
 

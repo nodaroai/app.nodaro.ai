@@ -110,18 +110,23 @@ function isTrendRun(row: Record<string, unknown>): boolean {
 /**
  * A job row as a job read returns it: the trend-run marker (if selected)
  * removed, and — for a NON-ADMIN — a trend run's `error_message` replaced with
- * `TREND_RUN_FAILURE_MESSAGE`. A trend run's failure can quote any part of its
- * hidden input (the source clip, a role name, the trend prompt), whole or in
- * pieces, so no filter over the text is safe. `error_hint` stays: it is the
- * user-safe channel. A row with no failure text keeps its null. Admins author
- * the hidden data and read the real text. Never mutates the row.
+ * `TREND_RUN_FAILURE_MESSAGE` and its `error_detail` (the provider's own
+ * words, which the owner of any other job reads) dropped to null. A trend
+ * run's failure can quote any part of its hidden input (the source clip, a
+ * role name, the trend prompt), whole or in pieces, so no filter over either
+ * text is safe. `error_hint` stays: it is the user-safe channel. A row with no
+ * failure text keeps its nulls. Admins author the hidden data and read the
+ * real text. Never mutates the row.
  */
 export function maskTrendRunError<T extends object>(row: T, isAdmin: boolean): T {
   const rec = row as unknown as Record<string, unknown>
-  const trend = isTrendRun(rec)
-  if (!(TREND_RUN_MARKER in rec) && (isAdmin || !trend || rec.error_message == null)) return row
+  const masks = !isAdmin && isTrendRun(rec) && (rec.error_message != null || rec.error_detail != null)
+  if (!(TREND_RUN_MARKER in rec) && !masks) return row
   const { [TREND_RUN_MARKER]: _marker, ...rest } = rec
-  if (!isAdmin && trend && rest.error_message != null) rest.error_message = TREND_RUN_FAILURE_MESSAGE
+  if (masks) {
+    if (rest.error_message != null) rest.error_message = TREND_RUN_FAILURE_MESSAGE
+    if (rest.error_detail != null) rest.error_detail = null
+  }
   return rest as unknown as T
 }
 

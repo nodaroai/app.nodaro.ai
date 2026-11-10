@@ -542,6 +542,46 @@ describe("Scene3D retained-draft recovery (a FAILED job)", () => {
     expect(updates.errorMessage).toBe(REFUSAL)
   })
 
+  const WORDS = "Visual review: the scene does not match the brief (3 of 5 checks failed)."
+  const refusedJobWithWords = (revisionId: string, words: string | null) => async () => ({
+    ...(await refusedJob(revisionId)()),
+    error_detail: words,
+  })
+
+  it("puts the provider's words beside the verdict", async () => {
+    const patches = await computeCompletedJobPatches(failedRef, [node("n1", "generate-3d-scene", {})], refusedJobWithWords(REV_A, WORDS), NOW)
+    expect(patches[0].updates.errorMessage).toBe(REFUSAL)
+    expect(patches[0].updates.errorDetail).toBe(WORDS)
+  })
+
+  it("re-asserts the verdict alone when the draft, its sentence and its words already reached the canvas", async () => {
+    const held = {
+      scenePlan: plan(REV_A),
+      sceneHistory: [{ revisionId: REV_A, source: "generate", plan: plan(REV_A) }],
+      errorMessage: REFUSAL,
+      errorDetail: WORDS,
+    }
+    const patches = await computeCompletedJobPatches(failedRef, [node("n1", "generate-3d-scene", held)], refusedJobWithWords(REV_A, WORDS), NOW)
+    expect(patches).toEqual([{ nodeId: "n1", updates: { executionStatus: "failed" } }])
+  })
+
+  it.each([
+    ["the same words", WORDS, WORDS],
+    ["no words", null, undefined],
+  ])("a new sentence names the words with it (%s), so an earlier failure's never stay", async (_name, words, expected) => {
+    const held = {
+      scenePlan: plan(REV_A),
+      sceneHistory: [{ revisionId: REV_A, source: "generate", plan: plan(REV_A) }],
+      errorMessage: "An earlier sentence.",
+      errorDetail: WORDS,
+    }
+    const patches = await computeCompletedJobPatches(failedRef, [node("n1", "generate-3d-scene", held)], refusedJobWithWords(REV_A, words), NOW)
+    const updates = patches[0].updates
+    expect(updates.errorMessage).toBe(REFUSAL)
+    expect(Object.prototype.hasOwnProperty.call(updates, "errorDetail")).toBe(true)
+    expect(updates.errorDetail).toBe(expected)
+  })
+
   it("re-asserts the verdict alone when the draft already reached the canvas live", async () => {
     // The live lane adopted it; `executionStatus` did not survive the save.
     const held = {

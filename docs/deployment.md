@@ -857,15 +857,37 @@ optional; each array empty = "keep the default"):
   models override in Admin → Availability is not affected.
 
   In the workflow editor, a node made from its defaults (added from the node
-  picker, the sidebar, a handle's add menu, or an action that adds a step)
+  picker, the sidebar, a handle's add menu, or an action that adds a step),
+  and a node reset to its defaults (Reset to default in its preset menu),
   whose default model the deployment withholds starts on the first model its
-  own model menu offers, and the menu shows it. A node that names no model is
-  judged on the default it runs (Describe Image on its feature's default LLM).
+  own model menu offers that the account can run, and the menu shows it. On
+  a video model menu that marks the models an account's free-credit video
+  limits lock (Generate Video's, Extend Video's), a locked model is skipped;
+  when every model the menu offers is locked, the first one it offers is
+  taken. A node that names no model is judged on the default it
+  runs (Describe Image on its feature's default LLM).
   A saved node keeps the model it holds (its menu still lists it, and a run
   refuses it), and a copied, pasted or duplicated node keeps its source's
-  model. Where the menu offers no model, the default is kept. Some menus list
-  their models by hand or by values that are not model ids — Suno's versions,
-  the voice changers, Motion Transfer, Video Upscale, Transcribe, Text to
+  model. Where the menu offers no model, the default is kept.
+
+  Nodes the server creates follow the same rule, over the same menus in the
+  same order: a workflow an MCP client writes (`create_workflow`,
+  `update_workflow_json`, `import_workflow`), the nodes a Copilot edit adds,
+  a template's Use template, and the starter workflow of a new account. There
+  it applies to a node new to the workflow whose model is not named — it
+  would run its default; a model the writer names is kept (and refused at run
+  where it is withheld). The MCP tools and the Copilot say which nodes they
+  started on another model. A workflow written through the REST API
+  (`POST /v1/workflows`, `PATCH /v1/workflows/:id`, `POST /v1/workflows/import`)
+  is stored as sent.
+
+  A model menu judges each of its options as the model it makes the node
+  run, as the run does: Generate Music's MiniMax engine is offered even where
+  the MiniMax video model is withheld, and Motion Transfer's Kling options
+  follow the motion models they run (Kling 2.6 is `motion-transfer`, Kling 3.0
+  `kling-3.0-motion`). Some menus list their models by hand or by values that
+  are not model ids — Suno's versions,
+  the voice changers, Video Upscale, Transcribe, Text to
   Audio, Voice Design, Generate Music, Reference Board and the Generate Video
   Pro planner — so those nodes keep their defaults: list those defaults, or
   the nodes are refused at run. A deployment that restricts no models keeps
@@ -876,16 +898,25 @@ optional; each array empty = "keep the default"):
   `suno-generate`, `POST /v1/edit-image` as Upscale Image, Remove Background or
   Modify Image by its `provider`, `POST /v1/social/publish` as the platform's
   post node or Publish to Social, an entity's sheet, motion and caption routes
-  as that entity's node, a node's `/continue` and streaming routes as the node.
+  as that entity's node, a node's `/continue` and streaming routes as the node,
+  Recast's routes (its script revisions and plan included) as
+  `generate-video-pro`, the render a recast produces, and a Studio production's
+  sequence generation as `generate-video`.
   One gateable id has no canvas node: `cast-swap` is Nodaro Motion —
-  `POST /v1/cast-swap` and its routes, and every trend run
+  `POST /v1/cast-swap` and its routes (a trend's face mask included), and every trend run
   (`POST /v1/trends/:slug/estimate` and `/runs` answer `node_not_available`
   where it is not offered, and the MCP tools `cast_swap`, the Full Quality pair
   and the trend tools are not listed). With `nodes.allow` set, a credit-spending route that
   is linked to no node is refused with `node_not_available` (the whitelist never
   allowed it) and logged once; the few routes that run no node (Copilot, which
   `features.hide` governs; Video Director; a pipeline's stage actions) are not
-  node-gated. An admin can further adjust availability at
+  node-gated. Also with `nodes.allow` set, a step a Cloud plugin engine's job
+  sends to another route is gated as the node the user ran, the engine's own:
+  Nodaro Motion's depth, mask, composite and audio-separation steps, and the
+  image, video and text generations its job asks for, follow `cast-swap`, so
+  allowing Motion is enough. Each step's models are still judged as the
+  step's own, and a direct call to one of those routes is gated by its own
+  node. An admin can further adjust availability at
   runtime from **Admin → Availability** (full list with per-item toggles); a
   stored runtime override replaces this factory set until "Reset to factory".
   The two layers differ in who they apply to. A **node type left off in Admin →

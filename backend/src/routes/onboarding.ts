@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase.js"
 import { ensureDefaultProject, PERSONAL_SPACE_DISABLED_ERROR } from "../lib/default-project.js"
 import { buildDemoWorkflow } from "../lib/demo-workflow.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { withOfferedServerNodeModels } from "../lib/new-node-models.js"
 
 /**
  * PostgREST error codes meaning "profiles.demo_seeded_at does not exist yet".
@@ -85,6 +86,8 @@ export async function onboardingRoutes(app: FastifyInstance) {
     }
 
     const demo = buildDemoWorkflow()
+    // A demo node that names no model starts on one this deployment offers, as a new node does in the editor.
+    const { nodes: demoNodes } = await withOfferedServerNodeModels(demo.nodes, { userId, billingContext: req.billingContext })
     const { data: workflow, error: insertError } = await supabase
       .from("workflows")
       .insert({
@@ -92,7 +95,7 @@ export async function onboardingRoutes(app: FastifyInstance) {
         user_id: userId,
         name: demo.name,
         description: demo.description,
-        nodes: demo.nodes,
+        nodes: demoNodes,
         edges: demo.edges,
         settings: demo.settings,
         thumbnail_url: demo.thumbnailUrl,

@@ -10,6 +10,7 @@ import { REPEAT_PLACEHOLDER, decodeProviderItem, settledWithLimit, fanOutTextFee
 import { FAN_OUT_ALL_OR_NOTHING_TYPES, isRenderNodeType, type FanOutItemMeta } from "@nodaro/shared/nodes"
 import { setSuppressToasts, RUN_START_RESET } from "./poll-job";
 import { UGC_NEWER_TAKE_WINS_TYPE, ugcCanvasRunMark } from "@/lib/ugc-run-patch";
+import { caughtErrorWords } from "@/lib/failed-job-error";
 import { browserRenderRowSentStamps } from "./apply-edl-stamps";
 import { fanOutRowStamps } from "./fan-out-row-stamps";
 import { USE_CASE_LIST_DRIVEN, isUseCaseNodeType, usecaseFanOutRefusalOf } from "@nodaro/render-rules";
@@ -168,6 +169,8 @@ export async function executeNodeForList(
     const results: string[] = new Array(items.length).fill("");
     // Toasts are muted for the batch, so the node's summary has to say why.
     let firstReason: string | undefined;
+    // The provider's words about that same failure, shown under the summary.
+    let firstWords: string | undefined;
     // The items that never ran (`settled` is task-aligned: slot i is item i).
     const cancelledRows = new Set<number>();
     for (const [slot, entry] of settled.entries()) {
@@ -176,7 +179,11 @@ export async function executeNodeForList(
       } else {
         failedCount++;
         if (isCancellation(entry.reason)) cancelledRows.add(slot);
-        firstReason ??= failureReason(entry.reason);
+        const itemReason = failureReason(entry.reason);
+        if (firstReason === undefined && itemReason !== undefined) {
+          firstReason = itemReason;
+          firstWords = caughtErrorWords(entry.reason).errorDetail;
+        }
         // Cancel remaining on first non-cancellation failure
         if (!cancelRef.cancelled) {
           cancelRef.cancelled = true;
@@ -232,6 +239,8 @@ export async function executeNodeForList(
         failedCount > 0
           ? `${completedCount}/${items.length} succeeded, ${failedCount} failed${firstReason ? ` — ${firstReason}` : ""}`
           : undefined,
+      // Named always, so an earlier run's words never stay under this summary.
+      errorDetail: firstWords,
       // UGC Clip fanned out over its tickets: the batch is this canvas run, so it is stamped as
       // one (on the server's clock) — a reopen then tells its takes from an older or a newer run's
       // (lib/ugc-run-patch.ts). Only once a take landed: a batch that landed none leaves the node's

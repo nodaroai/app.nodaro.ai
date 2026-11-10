@@ -11,6 +11,7 @@ import {
 } from "./surface-deny.js"
 import { ROUTE_GATES_GENERATION } from "./availability-override.js"
 import { hasAdmin } from "./config.js"
+import { childStepNodeType } from "./child-step-node.js"
 
 /**
  * Who is asking? — turns a user id into the `AvailabilityViewer` that
@@ -130,7 +131,12 @@ export function requireNodeAvailable(
   // RETURNS the reply on a refusal: in a Fastify async hook that is what halts
   // the lifecycle (a bare `await reply.send()` lets the handler run anyway).
   const gate = async (req: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | void> => {
-    const denied = await deniedCapabilityForUser(type, req.body, req.userId, ROUTE_GATES_GENERATION)
+    // A step a plugin engine's job sends is gated as its parent's node, as the credit guard gates it.
+    const childNode = await childStepNodeType(req)
+    const denied =
+      childNode !== undefined
+        ? await deniedCapabilityForUser(childNode, {}, req.userId, ROUTE_GATES_GENERATION)
+        : await deniedCapabilityForUser(type, req.body, req.userId, ROUTE_GATES_GENERATION)
     if (denied) {
       return reply.code(403).send({ error: { code: "node_not_available", message: deniedNodeRejectionMessage([denied]) } })
     }

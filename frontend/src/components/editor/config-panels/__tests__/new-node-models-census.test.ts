@@ -12,10 +12,11 @@
  *     filter) the lever offers from — or is listed with its reason.
  *  3. Every node type whose panel renders a lever's menu is that lever's type
  *     (a new node type that reuses a panel with a model menu needs a decision).
- *  4. Every place that makes a node from its default data goes through the rule
- *     (`newNodeDefaultData`, or `withOfferedNewNodeModels` on the definition's
- *     defaults) and notes what it made (`noteNewNodesFromDefaults`); every other
- *     reader of `defaultData` is listed with what it reads it for.
+ *  4. Every place that makes a node from its default data, or resets one to
+ *     them, goes through the rule (`newNodeDefaultData`, `withOfferedNewNodeModels`
+ *     on the definition's defaults, `withOfferedResetModels` on a reset) and
+ *     notes what it made (`noteNewNodesFromDefaults`); every other reader of
+ *     `defaultData` is listed with what it reads it for.
  */
 import { describe, it, expect } from "vitest"
 import { readFileSync, readdirSync, statSync } from "node:fs"
@@ -66,7 +67,6 @@ const EXEMPT_FIELDS: Readonly<Record<string, string>> = {
 const EXEMPT_MENUS: Readonly<Record<string, string>> = {
   "kling3-studio-config.tsx#Kling3StudioConfig":
     "renders in place of a video node's own panel only while the node is on Kling 3.0; a new node starts on its type's default, whose menu is that type's panel",
-  "video-configs.tsx#MotionTransferConfigImpl": `${RAW_VALUES} (\`kling\` is judged as the Kling video model while the run is the catalog's \`motion-transfer\`)`,
   "audio-configs.tsx#SunoGenerateConfig": RAW_VALUES,
   "audio-configs.tsx#SunoCoverConfig": RAW_VALUES,
   "audio-configs.tsx#SunoExtendConfig": RAW_VALUES,
@@ -88,8 +88,6 @@ const DEFAULT_DATA_READERS: Readonly<Record<string, string>> = {
   "components/nodes/loop-node.tsx": "a comment",
   "lib/replace-render-node.ts": "the target type's default label and medium (the swap's data comes from `newNodeDefaultData`)",
   "lib/preset-tree.ts": "a preset's diff against the defaults",
-  "components/editor/config-panels/node-preset-dropdown.tsx":
-    "Reset to default on an EXISTING node — not a new node, so it is left as it was (not decided here)",
   "components/presentation/exposable-fields.ts": "which fields an app may expose",
   "components/editor/workflow-editor/clear-run-results.ts": "what Clear results resets a node's run fields to",
   "lib/generate-video-audio-migration.ts": "a load-time migration of a SAVED graph (its Merge node runs no model)",
@@ -305,6 +303,18 @@ describe("2. every model menu a panel renders is a lever's, with its registry, o
     const found = new Set(SITES.map((s) => s.site))
     expect(Object.keys(EXEMPT_MENUS).filter((site) => !found.has(site))).toEqual([])
   })
+
+  it("a lever skips the rows the account cannot run exactly where its menu marks them locked (the free-credit video limits)", () => {
+    const blocksByFile = new Map([...panelFiles, ...unitPanels].map(({ path, label }) => [label, topLevelBlocks(readFileSync(path, "utf8"))]))
+    const wrong = leverEntries.filter(({ lever }) => {
+      const [file, fn] = lever.menu.site.split("#") as [string, string]
+      const text = blocksByFile.get(file)?.get(fn) ?? ""
+      const marks = /\blockedVideoModel\(|\blockFor=/.test(text)
+      return marks !== (lever.shared.marksLocks === true)
+    })
+    expect(wrong.map(({ type, lever }) => `${type}: ${lever.menu.site} marks locks ${lever.shared.marksLocks ? "not" : ""}`.trim())).toEqual([])
+    expect(leverEntries.filter(({ lever }) => lever.shared.marksLocks).map(({ type }) => type).sort()).toEqual(["extend-video", "generate-video", "image-to-video", "text-to-video"])
+  })
 })
 
 describe("3. every node type whose panel renders a lever's menu is that lever's type", () => {
@@ -362,7 +372,8 @@ describe("4. every place that makes a node from its default data goes through th
     const readers = files.filter((f) => /\.defaultData\b/.test(f.text))
     const unexplained = readers
       .filter((f) => !DEFAULT_DATA_READERS[f.rel])
-      .filter((f) => !(/\bwithOfferedNewNodeModels\(/.test(f.text) && /\bnoteNewNodesFromDefaults\(/.test(f.text)))
+      // A new node (`withOfferedNewNodeModels`) or a node reset to its defaults (`withOfferedResetModels`).
+      .filter((f) => !(/\bwithOffered(?:NewNode|Reset)Models\(/.test(f.text) && /\bnoteNewNodesFromDefaults\(/.test(f.text)))
     expect(unexplained.map((f) => f.rel)).toEqual([])
   })
 

@@ -83,7 +83,28 @@ export function appRunFinalContinuedExecution(chain: readonly AppRunChainFinal[]
 export function appRunViewStates(baseStates: unknown, finalChain: readonly AppRunChainFinal[], editedStates: unknown): unknown {
   let states = baseStates as Record<string, unknown> | null | undefined
   for (const final of appRunLaidFinals(finalChain)) states = appRunFinalStates(states, final.nodeStates)
-  return mergeNodeStateEdits(states, editedStates)
+  return withoutProviderWords(mergeNodeStateEdits(states, editedStates))
+}
+
+/**
+ * A failed node's `errorDetail` — the provider's own words for the failure
+ * (`jobs.error_detail`) — can quote the creator's prompt, so it is the
+ * creator's: the editor and the API show it to the workflow's owner, a
+ * published app's runner never receives it. Every other field of every state
+ * stays as it was; a view with no states stays null.
+ */
+function withoutProviderWords(states: unknown): unknown {
+  if (!isRecord(states)) return states ?? null
+  const carrying = Object.entries(states).filter(([, state]) => isRecord(state) && "errorDetail" in state)
+  // Nothing to drop: the states as they came, the same object (a view with no
+  // final and no edits is the run's own states, by identity).
+  if (carrying.length === 0) return states
+  const out: Record<string, unknown> = { ...states }
+  for (const [nodeId, state] of carrying) {
+    const { errorDetail: _words, ...rest } = state as Record<string, unknown>
+    out[nodeId] = rest
+  }
+  return out
 }
 
 /** Does a render's state in a run hold a Preview: its take, or a row of its batch, stamped `proxy`? */

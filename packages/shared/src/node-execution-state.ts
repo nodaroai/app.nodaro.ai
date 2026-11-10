@@ -90,6 +90,14 @@ export interface NodeExecutionStateWire<TOutput = Record<string, unknown>> {
   /** Stable code for a refusal a client may branch on — never on the text. */
   errorCode?: string
   /**
+   * The provider's own words for a `failed` node's failure (the job's
+   * `error_detail`), with links cut to their host and secrets removed; absent
+   * when the failure had no provider text (a platform refusal, a timeout).
+   * Display-only, beside `error`: branch on `errorCode` or the hint, never on
+   * these words. A published app's runner never receives it.
+   */
+  errorDetail?: string | null
+  /**
    * What the node produced.
    *
    * Present for a `completed` node, and for a `failed` node whose run RETAINED

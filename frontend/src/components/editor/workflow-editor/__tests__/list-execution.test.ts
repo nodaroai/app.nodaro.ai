@@ -320,6 +320,41 @@ describe("executeNodeForList", () => {
     expect(lastCall[1].errorMessage).toBe("0/1 succeeded, 1 failed")
   })
 
+  it("puts the provider's words of the failure it names under the summary, never another item's", async () => {
+    const words = "Request blocked: The uploaded image may contain protected or restricted IP content."
+    let callCount = 0
+    mockExecuteNode.mockImplementation(async () => {
+      callCount++
+      // A stopped item names no reason, so its words are not the ones shown either.
+      if (callCount === 1) throw Object.assign(new Error("Cancelled"), { errorDetail: "a stopped item's words" })
+      if (callCount === 2) throw Object.assign(new Error("The model declined one of your pictures."), { errorDetail: words })
+      throw Object.assign(new Error("A later failure."), { errorDetail: "a later item's words" })
+    })
+
+    await executeNodeForList(mockNodes[0] as unknown as WorkflowNode, ["a", "b", "c"], makeCtx())
+
+    const lastCall = mockUpdateNodeData.mock.calls[mockUpdateNodeData.mock.calls.length - 1]
+    expect(lastCall[1].errorMessage).toBe("0/3 succeeded, 3 failed — The model declined one of your pictures.")
+    expect(lastCall[1].errorDetail).toBe(words)
+  })
+
+  it.each([
+    ["a failure with no words", () => mockExecuteNode.mockRejectedValue(new Error("This post's video link has expired."))],
+    ["a batch with no failure", () => {
+      mockExecuteNode.mockResolvedValue(undefined)
+      mockExtractNodeOutput.mockReturnValue("result.png")
+    }],
+  ])("%s names the words empty, so an earlier run's words never stay under the summary", async (_name, arrange) => {
+    mockNodes = [makeNode({ data: { label: "Gen Image", executionStatus: "failed", errorMessage: "An earlier sentence.", errorDetail: "an earlier run's words" } })]
+    arrange()
+
+    await executeNodeForList(mockNodes[0] as unknown as WorkflowNode, ["a"], makeCtx())
+
+    const lastCall = mockUpdateNodeData.mock.calls[mockUpdateNodeData.mock.calls.length - 1]
+    expect(Object.prototype.hasOwnProperty.call(lastCall[1], "errorDetail")).toBe(true)
+    expect(lastCall[1].errorDetail).toBeUndefined()
+  })
+
   it("stops early when workflow is stale", async () => {
     let callCount = 0
     const ctx = makeCtx({

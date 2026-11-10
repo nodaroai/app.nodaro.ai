@@ -126,6 +126,15 @@ describe("Chapters on the canvas: a text result", () => {
     expect(dataNow().generatedText).toBeUndefined()
   })
 
+  it("a failed run shows the provider's words under its failure, and its error carries them", async () => {
+    const words = "upstream request timed out after 300s"
+    jobAnswers({ status: "failed", error_message: "Edit Plan: the planner timed out", error_detail: words })
+    api.getJobStatus.mockResolvedValue(null)
+    const node = chaptersNode()
+    await expect(run(node)).rejects.toMatchObject({ message: "Edit Plan: the planner timed out", errorDetail: words })
+    expect(dataNow()).toMatchObject({ executionStatus: "failed", errorMessage: "Edit Plan: the planner timed out", errorDetail: words })
+  })
+
   it("a failure with no message of its own says so in the reader's language — never a scrape", async () => {
     useLocaleStore.setState({ locale: "he" })
     jobAnswers({ status: "failed" })

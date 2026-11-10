@@ -30,7 +30,7 @@ const jobsReadGate: ToolGate = { required: ["jobs:read"] }
 // What get_job reads. display_cost (USD) is excluded — see list_jobs.
 // error_hint (migration 376) backs failureGuidance's suggestedProvider.
 const GET_JOB_COLUMNS =
-  "id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, job_type, credits, user_id, usage_log_id" as const
+  "id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, job_type, credits, user_id, usage_log_id" as const
 // Rating a job writes to it, as REST's PUT /v1/jobs/:id/rating needs assets:write.
 const jobsRateGate: ToolGate = { required: ["assets:write"] }
 
@@ -201,7 +201,7 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       // the agent's response (Claude was rendering "" in chat for
       // every job before this was stripped).
       const baseSelect =
-        "id, status, progress, input_data, output_data, error_message, created_at, completed_at, job_type, credits"
+        "id, status, progress, input_data, output_data, error_message, error_detail, created_at, completed_at, job_type, credits"
       // Build the filter chain BEFORE order/limit so the supabase mock
       // chain in tests (.from().select().eq().order().limit()) matches.
       // For the public gallery, force is_public=true, status=completed,
@@ -566,7 +566,7 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       // carries credits, timestamps and the failure guidance.
       const { data: row } = await supabase
         .from("jobs")
-        .select("id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, job_type, credits, usage_log_id")
+        .select("id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, job_type, credits, usage_log_id")
         .eq("id", args.job_id)
         .eq("user_id", session.userId)
         .is(CHILD_JOB_COLUMN, null)

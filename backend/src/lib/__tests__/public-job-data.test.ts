@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { nonAdminJobInputData, redactPrivateJobData } from "../public-job-data.js"
+import { maskTrendRunError, nonAdminJobInputData, redactPrivateJobData, TREND_RUN_FAILURE_MESSAGE } from "../public-job-data.js"
 
 describe("redactPrivateJobData", () => {
   it("removes unscoredUrl recursively while preserving siblings and arrays", () => {
@@ -110,5 +110,40 @@ describe("nonAdminJobInputData", () => {
     expect(nonAdminJobInputData(undefined)).toBeUndefined()
     expect(nonAdminJobInputData(["provider"])).toEqual(["provider"])
     expect(nonAdminJobInputData("x")).toBe("x")
+  })
+})
+
+describe("maskTrendRunError — a trend run's provider words are the admin's, like its failure text", () => {
+  const trendRun = {
+    input_data: { trend: { id: "t1" }, prompt: "a hidden role name" },
+    error_message: "Generation failed: the provider rejected these settings for this model.",
+    error_detail: "task failed: [400] the hidden role name was refused",
+  }
+
+  it("a non-admin reads neither the text nor the provider's words", () => {
+    const masked = maskTrendRunError(trendRun, false)
+    expect(masked.error_message).toBe(TREND_RUN_FAILURE_MESSAGE)
+    expect(masked.error_detail).toBeNull()
+    // Never mutates the row.
+    expect(trendRun.error_detail).toBe("task failed: [400] the hidden role name was refused")
+  })
+
+  it("an admin reads both, the row as it was", () => {
+    expect(maskTrendRunError(trendRun, true)).toBe(trendRun)
+  })
+
+  it("a plain job's provider words pass through for a non-admin", () => {
+    const plain = { input_data: { prompt: "x" }, error_message: "m", error_detail: "d" }
+    expect(maskTrendRunError(plain, false)).toBe(plain)
+  })
+
+  it("a trend run that failed with provider words but no text still loses the words", () => {
+    const row = { input_data: { trend: { id: "t1" } }, error_message: null, error_detail: "task failed: [500] words" }
+    expect(maskTrendRunError(row, false)).toEqual({ input_data: { trend: { id: "t1" } }, error_message: null, error_detail: null })
+  })
+
+  it("a trend run with no failure at all is left as it is", () => {
+    const row = { input_data: { trend: { id: "t1" } }, error_message: null, error_detail: null }
+    expect(maskTrendRunError(row, false)).toBe(row)
   })
 })

@@ -10,6 +10,7 @@ import type { FastifyInstance } from "fastify"
 import { stripExportContent, stripUnownedRefs, stripTransientRuntimeData, type WorkflowExport } from "@nodaro/shared/workflow"
 import { stripStudioDraftWorkflow } from "@nodaro/shared/pipeline"
 import { normalizeNodeModelParams, describeNodeAdjustments } from "@nodaro/shared/nodes"
+import { describeServerNodeModelMoves, storedWorkflowNodeIds, withOfferedServerNodeModels, type ServerNodeModelMove } from "../../new-node-models.js"
 import { normalizeVideoOverlayNodes } from "@nodaro/shared/video"
 import type { GenericNode } from "@nodaro/shared/types"
 import type { McpSession } from "../session.js"
@@ -421,6 +422,10 @@ export function registerWorkflows({
         )
         if (edgeResult.errors.length > 0) return err(edgeProblems(edgeResult.errors))
         const createEdgeWarnings = [...edgeResult.warnings, ...edgeResult.dropped]
+        // A node that names no model starts on one the deployment offers, as in the editor (new-node-models.ts).
+        const offered = await withOfferedServerNodeModels((args.nodes ?? []) as Array<{ id?: unknown; type?: unknown; data?: unknown }>, {
+          userId: session.userId,
+        })
         // Heal impossible provider/parameter pairs at the write boundary —
         // same reason as update_workflow_json: an agent-authored node never
         // renders the config panel, so nothing else ever snaps its values.
@@ -430,9 +435,7 @@ export function registerWorkflows({
         const storedNodes = stripTransientRuntimeData(
           normalizeSpeakerViewNodes(
             normalizeVideoOverlayNodes(
-              normalizeNodeModelParams(
-                (args.nodes ?? []) as Array<{ id?: unknown; type?: unknown; data?: unknown }>,
-              ).nodes,
+              normalizeNodeModelParams(offered.nodes).nodes,
               edgeResult.edges,
             ),
           ) as Array<{ data?: Record<string, unknown> }>,
@@ -454,9 +457,16 @@ export function registerWorkflows({
         const row = data as Record<string, unknown>
         await projectTriggers(row.id as string, session.userId, session.userId, storedNodes)
         const editorUrl = workflowEditorUrl(row.id as string)
+        const createMoves = describeServerNodeModelMoves(offered.moved)
         return ok(
-          `Created workflow "${row.name as string}" (id ${row.id as string}) in the mcp project. Open it in the editor: ${editorUrl}${edgeNote(edgeResult.adjustments, createEdgeWarnings)}`,
-          { id: row.id, name: row.name, editorUrl, ...edgeStructured(edgeResult.adjustments, createEdgeWarnings) },
+          `Created workflow "${row.name as string}" (id ${row.id as string}) in the mcp project. Open it in the editor: ${editorUrl}${createMoves ? `\n\n${createMoves}` : ""}${edgeNote(edgeResult.adjustments, createEdgeWarnings)}`,
+          {
+            id: row.id,
+            name: row.name,
+            editorUrl,
+            ...(offered.moved.length > 0 ? { modelMoves: offered.moved } : {}),
+            ...edgeStructured(edgeResult.adjustments, createEdgeWarnings),
+          },
         )
       },
     )
@@ -739,6 +749,7 @@ export function registerWorkflows({
           updated_at: new Date().toISOString(),
         }
         let nodeAdjustments: ReturnType<typeof normalizeNodeModelParams>["adjustments"] = []
+        let modelMoves: readonly ServerNodeModelMove[] = []
         let edgeAdjustments: EdgeAdjustment[] = []
         let edgeWarnings: string[] = []
         if (hasNodes) {
@@ -753,9 +764,20 @@ export function registerWorkflows({
           const migratedEdges = edgeResult.edges
           edgeAdjustments = edgeResult.adjustments
           edgeWarnings = [...edgeResult.warnings, ...edgeResult.dropped]
+          // A NEW node that names no model starts on one the deployment offers, as in the editor
+          // (new-node-models.ts); a node already in the stored graph keeps what it holds.
+          const offered = await withOfferedServerNodeModels(args.nodes as Array<{ id?: unknown; type?: unknown; data?: unknown }>, {
+            userId: session.userId,
+            storedIds: storedWorkflowNodeIds(() => {
+              let read = supabase.from("workflows").select("nodes").eq("id", args.workflow_id)
+              if (!isWorkspace) read = read.eq("user_id", session.userId).eq("project_id", mcpProjectId!)
+              return read.maybeSingle()
+            }),
+          })
+          modelMoves = offered.moved
           // Server-side strip of transient run-state (status/jobId/progress) —
           // agent-authored graphs must never seed phantom "running" state.
-          const stripped = stripTransientRuntimeData(args.nodes as Array<{ data?: Record<string, unknown> }>)
+          const stripped = stripTransientRuntimeData(offered.nodes as Array<{ data?: Record<string, unknown> }>)
           // …and heal impossible provider/parameter pairs. An agent writing JSON
           // never renders the config panel, so the panel's provider-aware
           // dropdown and its stale-value snap never run for these nodes. Left
@@ -841,8 +863,9 @@ export function registerWorkflows({
               describeNodeAdjustments(nodeAdjustments).map((l) => `  - ${l}`).join("\n")
             : ""
         const updatedEditorUrl = workflowEditorUrl(args.workflow_id)
+        const moveNote = describeServerNodeModelMoves(modelMoves)
         return ok(
-          `Updated workflow ${args.workflow_id} (${changed.join(", ")}). Open it in the editor: ${updatedEditorUrl}${healNote}${edgeNote(edgeAdjustments, edgeWarnings)}`,
+          `Updated workflow ${args.workflow_id} (${changed.join(", ")}). Open it in the editor: ${updatedEditorUrl}${moveNote ? `\n\n${moveNote}` : ""}${healNote}${edgeNote(edgeAdjustments, edgeWarnings)}`,
           {
             id: updated.id,
             name: updated.name,
@@ -850,6 +873,7 @@ export function registerWorkflows({
             updated_at: updated.updated_at,
             version: updated.version,
             ...(nodeAdjustments.length > 0 ? { adjustments: nodeAdjustments } : {}),
+            ...(modelMoves.length > 0 ? { modelMoves } : {}),
             ...edgeStructured(edgeAdjustments, edgeWarnings),
           },
         )
@@ -914,13 +938,16 @@ export function registerWorkflows({
         // bundle can carry values authored against a different model (or a
         // hand-edited JSON), and nothing downstream re-checks them. The remap
         // re-points node entity fields AND the `@`-chips in node data (#1088).
-        const remappedNodes = normalizeNodeModelParams(
+        // Every imported node is new here: one that names no model starts on one this deployment offers.
+        const importOffered = await withOfferedServerNodeModels(
           remapNodeAssetIds(
             portableNodes,
             assetIdMap,
             droppedAssetIdsFromReport(importReport.assetsSkipped),
           ) as Array<{ id?: unknown; type?: unknown; data?: unknown }>,
-        ).nodes
+          { userId: session.userId },
+        )
+        const remappedNodes = normalizeNodeModelParams(importOffered.nodes).nodes
         // The settings blob's chips follow the same rows as the graph's.
         const remappedSettings = remapSettingsReferences(portableSettings, assetIdMap) ?? {}
         if (portableAssets) {
@@ -972,12 +999,20 @@ export function registerWorkflows({
           ...(importReport.notes ?? []),
         ].filter(Boolean)
         const editorUrl = workflowEditorUrl(row.id as string)
+        const importMoves = describeServerNodeModelMoves(importOffered.moved)
         return ok(
           [
             `Imported workflow "${row.name as string}" (id ${row.id as string}) into the mcp project. Open it in the editor: ${editorUrl}`,
             ...mediaNotes,
-          ].join(" ") + edgeNote(importEdgeResult.adjustments, importEdgeWarnings),
-          { id: row.id, name: row.name, editorUrl, importReport, ...edgeStructured(importEdgeResult.adjustments, importEdgeWarnings) },
+          ].join(" ") + (importMoves ? `\n\n${importMoves}` : "") + edgeNote(importEdgeResult.adjustments, importEdgeWarnings),
+          {
+            id: row.id,
+            name: row.name,
+            editorUrl,
+            importReport,
+            ...(importOffered.moved.length > 0 ? { modelMoves: importOffered.moved } : {}),
+            ...edgeStructured(importEdgeResult.adjustments, importEdgeWarnings),
+          },
         )
       },
     )

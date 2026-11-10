@@ -10,6 +10,7 @@ import { siteCaptureMaxStills, siteCaptureNodeOutputs, siteCapturePageUrl } from
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { siteCapture } from "@/lib/api"
 import { tx } from "@/lib/i18n"
+import { caughtErrorWords } from "@/lib/failed-job-error"
 import { scrapeResultPatch } from "@/components/nodes/scrape-result-recovery"
 import { applySiteCaptureFailure, applySiteCaptureResult, siteCaptureRunStartPatch } from "@/components/nodes/site-capture-run-state"
 import type { SiteCaptureNodeData, WorkflowNode } from "@/types/nodes"
@@ -42,7 +43,7 @@ export async function executeSiteCapture(node: WorkflowNode, inputs: FrontendRes
     const error = err as Error
     // Stop: the poll was aborted and the central Stop handler restored the node.
     if (error?.name === "AbortError" || ctx.signal?.aborted) return ""
-    updateNodeData(node.id, applySiteCaptureFailure(error.message || tx("node.captureFailed")))
+    updateNodeData(node.id, { ...applySiteCaptureFailure(error.message || tx("node.captureFailed")), ...caughtErrorWords(error) })
     guardedToast.error(tx("nodeRun.siteCaptureFailed", { message: error.message }))
     throw error
   }

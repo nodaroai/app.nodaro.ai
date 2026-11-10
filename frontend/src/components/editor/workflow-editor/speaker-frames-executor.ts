@@ -31,6 +31,7 @@ import {
 import type { Edl } from "@nodaro/shared/edl"
 import { speakerFrames } from "@/lib/api"
 import { tx } from "@/lib/i18n"
+import { failedJobError } from "@/lib/failed-job-error"
 import type { SpeakerFramesNodeData, WorkflowNode } from "@/types/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { shouldAbandonNode } from "./abandon-guard"
@@ -83,8 +84,15 @@ export function executeSpeakerFrames(node: WorkflowNode, inputs: SpeakerFramesIn
   updateNodeData(node.id, { ...RUN_START_RESET, generatedJson: undefined, currentJobProgress: undefined })
 
   return new Promise<string>((resolve, reject) => {
-    const failRun = (message: string, err: unknown) => {
-      updateNodeData(node.id, { executionStatus: "failed", errorMessage: message, currentJobId: undefined, currentJobProgress: undefined })
+    // With the failed job in hand its own words are named, absent ones included; a failure with no job names none.
+    const failRun = (message: string, err: unknown, job?: { error_detail?: string | null }) => {
+      updateNodeData(node.id, {
+        executionStatus: "failed",
+        errorMessage: message,
+        ...(job ? { errorDetail: job.error_detail ?? undefined } : {}),
+        currentJobId: undefined,
+        currentJobProgress: undefined,
+      })
       reject(err instanceof Error ? err : new Error(message))
     }
     speakerFrames({
@@ -123,7 +131,7 @@ export function executeSpeakerFrames(node: WorkflowNode, inputs: SpeakerFramesIn
                 ctx.untrackInterval(poll)
                 const errMsg = job.error_message ?? "Speaker Frames failed"
                 guardedToast.error(tx("nodeRun.speakerFramesFailed"), { description: errMsg })
-                failRun(errMsg, new Error(errMsg))
+                failRun(errMsg, failedJobError(errMsg, job), job)
               }
             } catch (err) {
               pollFailures++

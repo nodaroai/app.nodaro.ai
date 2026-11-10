@@ -34,7 +34,7 @@ import {
   PARAMETER_REJECT_MESSAGES,
 } from "./__fixtures__/log-pull-fail-messages.js"
 import { isContentRejection, isRetryableFailure } from "@/lib/mcp/tools/_job-error.js"
-import { safetyBlockOf } from "@/lib/safety-block.js"
+import { errorHintFor, safetyBlockOf } from "@/lib/safety-block.js"
 
 describe("KIE content-policy classification", () => {
   it("matches copyright/IP/policy failMsgs", () => {
@@ -536,6 +536,60 @@ describe("log-pull moderation texts (§11.3) — 10 rows that matched neither re
         .toBe(CONTENT_POLICY_MESSAGES.safety)
     },
   )
+})
+
+describe("input-image IP block (gemini-omni-flash, prod 2026-11-09)", () => {
+  // The provider's own wording for a reference picture it refused as protected
+  // IP. None of the copyright words the classifier knew appear in it, so the
+  // 400 fell to the status branch and read as "rejected these settings" —
+  // sending the person after duration and aspect ratio when the picture was
+  // the problem.
+  const FAIL_MSG = "Request blocked: The uploaded image may contain protected or restricted IP content."
+  const WIRE = `task failed: [400] ${FAIL_MSG}`
+
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+  })
+
+  it("is a copyright block that names the input image", () => {
+    expect(classifyContentPolicyClass(FAIL_MSG)).toBe("copyright")
+    expect(copyrightSubjectOf(FAIL_MSG)).toBe("input_image")
+  })
+
+  it("the upstream helper gives the input-image sentence, the class and the flag", () => {
+    const err = createUpstreamFailureError(WIRE, "Generation", { upstreamStatus: "400" })
+    expect(err.contentPolicy).toBe(true)
+    expect(err.contentPolicyClass).toBe("copyright")
+    expect(err.inputImageRefused).toBe(true)
+    expect(err.inputVideoRefused).toBe(false)
+    expect(err.message).toBe(INPUT_COPYRIGHT_MESSAGES.input_image)
+    // W0's other half: the provider's words still ride along for error_detail.
+    expect(err.internalDetails).toContain(FAIL_MSG)
+  })
+
+  it("the sanitizer alone says the same, never 'rejected these settings'", () => {
+    const err = createSanitizedError(WIRE, "Generation", true, false, { upstreamStatus: "400" })
+    expect(err.message).toBe(INPUT_COPYRIGHT_MESSAGES.input_image)
+  })
+
+  it("the hint names the picture, and the failure is not retryable as the same request", () => {
+    const err = createUpstreamFailureError(WIRE, "Generation", { upstreamStatus: "400" })
+    const block = safetyBlockOf(err, "gemini-omni-flash")
+    expect(block?.class).toBe("copyright")
+    expect(errorHintFor(block!, false, { inputImageRefused: err.inputImageRefused })).toMatchObject({
+      kind: "safety-block",
+      class: "copyright",
+      subject: "input_image",
+    })
+    expect(isRetryableFailure(err.message)).toBe(false)
+    expect(isContentRejection(err.message)).toBe(true)
+  })
+
+  it("the adjectives alone, without the noun, are no block", () => {
+    expect(classifyContentPolicyClass("ship the clip to a protected bucket")).toBeNull()
+    expect(classifyContentPolicyClass("restricted zip file")).toBeNull()
+    expect(copyrightSubjectOf("the uploaded image is too large")).toBeNull()
+  })
 })
 
 describe("Google safety review block (gemini-omni-flash, prod 2026-10-06)", () => {

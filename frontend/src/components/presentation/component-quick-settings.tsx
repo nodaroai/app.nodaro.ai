@@ -3,6 +3,7 @@ import {
   getQuickConfigs,
   readQuickConfigValue,
   resolveQuickConfigOptions,
+  type NodeQuickConfigControl,
   type QuickConfigControl,
 } from "@/components/nodes/node-quick-configs"
 import { exposedOptionValue, type ResolvedExposableField } from "./exposable-fields"
@@ -33,7 +34,7 @@ export function quickFieldContext(
       return Reflect.has(target, prop)
     },
   })
-  resolveQuickConfigOptions(control, proxy)
+  resolveQuickConfigOptions({ ...control, nodeType }, proxy)
   readQuickConfigValue(control, proxy)
   for (const sibling of getQuickConfigs(nodeType)) reads.add(sibling.field)
   const out: Record<string, Primitive> = {}
@@ -76,7 +77,7 @@ export function quickExposedSetting(
 }
 
 /** The quick control a published quick setting stands for, if this editor still offers it. */
-export function quickSettingControl(setting: ExposedSetting): QuickConfigControl | undefined {
+export function quickSettingControl(setting: ExposedSetting): NodeQuickConfigControl | undefined {
   if (!setting.quick) return undefined
   return getQuickConfigs(setting.quick.nodeType).find((c) => c.field === setting.field && c.exposable !== false && !c.needsGraph)
 }

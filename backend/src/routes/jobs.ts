@@ -78,14 +78,14 @@ export interface JobRecord {
  *  column now requires adding it here on purpose. `recovering` is derived. */
 export const PUBLIC_JOB_KEYS = [
   "id", "status", "progress", "input_data", "output_data", "error_message",
-  "error_hint", "created_at", "started_at", "completed_at", "user_id", "credits",
+  "error_hint", "error_detail", "created_at", "started_at", "completed_at", "user_id", "credits",
   "job_type", "source", "source_detail", "session_id", "title",
 ] as const
 
 /** Keys admins see in addition — provider internals, USD costs, the raw
  *  provider error, the reconcile counter. */
 export const ADMIN_ONLY_JOB_KEYS = [
-  "provider", "provider_cost", "display_cost", "credits_actual", "error_detail", "reconcile_attempts",
+  "provider", "provider_cost", "display_cost", "credits_actual", "reconcile_attempts",
 ] as const
 
 export type PublicJob = Pick<JobRecord, Extract<(typeof PUBLIC_JOB_KEYS)[number], keyof JobRecord>> & { recovering?: true }
@@ -215,7 +215,7 @@ export async function jobRoutes(app: FastifyInstance) {
     const { data, error } = await readWithLaneStamp("job", (stamp) => {
       let query = supabase
         .from("jobs")
-        .select(`id, status, progress, output_data, error_message, error_hint, usage_log_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
+        .select(`id, status, progress, output_data, error_message, error_detail, error_hint, usage_log_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
         .in("id", ids)
         .eq("user_id", userId)
         // A job in the Trash is left out like an id that does not exist.
@@ -341,7 +341,7 @@ export async function jobRoutes(app: FastifyInstance) {
     const { data: read, error } = await readWithLaneStamp("job", (stamp) => {
       let query = supabase
         .from("jobs")
-        .select(`id, status, progress, output_data, error_message, error_hint, completed_at, reconcile_attempts, usage_log_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
+        .select(`id, status, progress, output_data, error_message, error_detail, error_hint, completed_at, reconcile_attempts, usage_log_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
         .eq("id", id)
         .is(TRASHED_JOB_COLUMN, null)
 
@@ -468,7 +468,7 @@ export async function jobRoutes(app: FastifyInstance) {
     let query = supabase
       // trash-read: applyJobListFilters below leaves the Trash out.
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, source, source_detail, session_id" + titleSelect() + ", usage_log_id, workflow_execution_id, workflow_executions!workflow_execution_id(is_component_execution, trigger_type)" + jobListFilterSelect(filters))
+      .select("id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, source, source_detail, session_id" + titleSelect() + ", usage_log_id, workflow_execution_id, workflow_executions!workflow_execution_id(is_component_execution, trigger_type)" + jobListFilterSelect(filters))
       .order("created_at", { ascending: false })
       .limit(limitNum)
 
@@ -643,7 +643,7 @@ export async function jobRoutes(app: FastifyInstance) {
     const { data: jobs, error } = await readWithLaneStamp("job", (stamp) => {
       let query = supabase
         .from("jobs")
-        .select(`id, status, output_data, error_message, error_hint, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
+        .select(`id, status, output_data, error_message, error_detail, error_hint, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
         .in("id", jobIds)
         .is(TRASHED_JOB_COLUMN, null)
 

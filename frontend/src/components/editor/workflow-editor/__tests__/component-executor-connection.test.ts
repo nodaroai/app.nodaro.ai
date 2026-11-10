@@ -92,3 +92,43 @@ describe("executeComponent — a lost connection is not a failed component", () 
     expect(mockNodes[0].data.errorMessage).toMatch(/can't be found/)
   })
 })
+
+describe("executeComponent — a failed job's sentence and the provider's words", () => {
+  const SENTENCE = "The model declined one of your pictures."
+  const WORDS = "Request blocked: The uploaded image may contain protected or restricted IP content."
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    mockNodes.length = 0
+    mockUpdateNodeData.mockClear()
+    mockGetJobStatusLean.mockReset()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("the node shows the job's words under its sentence, and the error carries them", async () => {
+    const node = componentNode()
+    mockGetJobStatusLean.mockResolvedValue({ status: "failed", error_message: SENTENCE, error_detail: WORDS })
+
+    const run = executeComponent(node, {} as never, ctx)
+    run.catch(() => {})
+    await vi.advanceTimersByTimeAsync(2_500)
+
+    await expect(run).rejects.toMatchObject({ message: SENTENCE, errorDetail: WORDS })
+    expect(mockNodes[0].data).toMatchObject({ executionStatus: "failed", errorMessage: SENTENCE, errorDetail: WORDS })
+  })
+
+  it("a failed job with no words puts none on the node", async () => {
+    const node = componentNode()
+    mockGetJobStatusLean.mockResolvedValue({ status: "failed", error_message: SENTENCE, error_detail: null })
+
+    const run = executeComponent(node, {} as never, ctx)
+    run.catch(() => {})
+    await vi.advanceTimersByTimeAsync(2_500)
+
+    await expect(run).rejects.toThrow(SENTENCE)
+    expect(mockNodes[0].data.executionStatus).toBe("failed")
+    expect(mockNodes[0].data.errorDetail).toBeUndefined()
+  })
+})

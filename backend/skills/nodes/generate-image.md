@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-11-09T10:40:11.443Z
-generated_from: ab64e4563
+generated_at: 2026-11-10T16:04:59.250Z
+generated_from: 8b8f6285f
 ---
 
 # generate-image
@@ -57,6 +57,7 @@ generated_from: ab64e4563
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `errorHint?: JobErrorHint`
+- `errorDetail?: string`
 - `jobAwaitingReview?: boolean`
 - `generatedImageUrl?: string`
 - `generatedResults?: GeneratedResult[]`

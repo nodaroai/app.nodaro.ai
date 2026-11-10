@@ -289,6 +289,14 @@ describe("executeNode: web-scrape", () => {
     expect(mockToastError).toHaveBeenCalledWith("Web Scrape failed: Actor run timed out")
   })
 
+  it("a failed job's words go onto the node beside its sentence", async () => {
+    mockWebScrape.mockResolvedValue({ jobId: "job-9", status: "pending" })
+    mockPollScrapeJobOutput.mockRejectedValue(Object.assign(new Error("The page could not be read."), { errorDetail: "Request blocked: The uploaded image may contain protected or restricted IP content." }))
+
+    await expect(executeNode(crawlNode, makeCtx())).rejects.toThrow("The page could not be read.")
+    expect(patches().at(-1)).toMatchObject({ executionStatus: "failed", errorMessage: "The page could not be read.", errorDetail: "Request blocked: The uploaded image may contain protected or restricted IP content." })
+  })
+
   it("a Stop is not a failure — the aborted poll leaves the node to the Stop handler", async () => {
     const controller = new AbortController()
     mockWebScrape.mockResolvedValue({ jobId: "job-9", status: "pending" })

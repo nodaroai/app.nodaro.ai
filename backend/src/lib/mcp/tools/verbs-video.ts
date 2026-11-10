@@ -14,6 +14,7 @@ import { registerSpeakerMapVerb } from "./verbs-speaker-map.js"
 import { registerSpeakerViewVerb } from "./verbs-speaker-view.js"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../../connected-reference-schema.js"
 import {
+  coerceStringArray,
   errorResult,
   dispatchJob,
   resolveRefArray,
@@ -188,7 +189,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             "Identity/reference images (URLs or Nodaro asset IDs), capped at the model's own " +
             "limit (seedance-2-5 30, seedance-2 family + minimax-h3 9, wan-3 / wan-3-prime 10, " +
             "gemini-omni-video / gemini-omni-flash 7, gemini-omni-flash-1-2 6, veo3/veo3.1 3, ...). " +
-            "Dropped on models with no reference path. Accepts an array; a lone URL or " +
+            "Dropped on models with no reference path, except where the model's image-to-video " +
+            "id takes them: grok then runs as grok-i2v (7). Accepts an array; a lone URL or " +
             "JSON-stringified array is coerced.",
           ),
         reference_video_urls: z
@@ -354,11 +356,33 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         effective.prompt as string,
         effective.structured as Parameters<typeof buildCompositePrompt>[1],
       )
-      // Flat identity/reference arrays, capped at the resolved model's own
-      // limits from the shared table (same source the route enforces). Models
-      // absent from the table have no reference path — args dropped, matching
-      // route behavior.
-      const t2vRefLimits = VIDEO_REF_LIMITS_BY_PROVIDER[model] ?? {}
+      // The lane is the SAME shared decision both engines make: a run with
+      // reference images and no start frame takes image-to-video when the model
+      // runs from references alone but has no text-to-video mode (Vidu Q4,
+      // HappyHorse Ref2V) or when only its i2v twin carries them (Grok Imagine
+      // 1). /v1/text-to-video would refuse those as "image required"; everything
+      // else (Seedance, Wan 3.0, Gemini Omni, a prompt-only run) stays on it.
+      // It is asked with the pictures the CALL carries, before any limit is
+      // read: the named id's limit would drop a twin's pictures first (`grok`
+      // takes none, so its references never reached `grok-i2v`, which takes 7).
+      const lane = resolveVideoModeForInputs(model, {
+        hasStartFrame: false,
+        hasImageRefs: coerceStringArray(args.reference_image_urls, 1).length > 0 || (args.connected_references?.length ?? 0) > 0,
+      })
+      // The id the lane's route runs: a named mode twin moves to its sibling
+      // (`grok-i2v` with no reference runs as `grok`, `grok` with one as
+      // `grok-i2v`). A model the route does not run at all (an image or a
+      // lip-sync model) is refused here, naming the ones that work, instead of
+      // reaching the route as a bare 400.
+      const provider = videoModelForLane(model, lane)
+      if (!provider) {
+        return { content: [{ type: "text" as const, text: videoModelRefusal("generate_video", model, lane) }], isError: true as const }
+      }
+      // Flat identity/reference arrays, capped at the limits of the id that is
+      // SENT, from the shared table (same source the route enforces), so the
+      // route prices and runs what it is sent. Models absent from the table
+      // have no reference path — args dropped, matching route behavior.
+      const t2vRefLimits = VIDEO_REF_LIMITS_BY_PROVIDER[provider] ?? {}
       const t2vRefImages = t2vRefLimits.images ? await resolveRefArray(args.reference_image_urls, session.userId, "image", t2vRefLimits.images) : []
       const t2vRefVideos = t2vRefLimits.videos ? await resolveRefArray(args.reference_video_urls, session.userId, "video", t2vRefLimits.videos) : []
       const t2vRefAudio = t2vRefLimits.audio ? await resolveRefArray(args.reference_audio_urls, session.userId, "audio", t2vRefLimits.audio) : []
@@ -369,24 +393,6 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       const t2vRefCaptions = Array.isArray(args.reference_video_captions) && args.reference_video_captions.length > 0
         ? args.reference_video_captions.slice(0, t2vRefVideos.length)
         : undefined
-      // The lane is the SAME shared decision both engines make: a run with
-      // reference images and no start frame takes image-to-video when the model
-      // runs from references alone but has no text-to-video mode (Vidu Q4,
-      // HappyHorse Ref2V) or when only its i2v twin carries them (Grok Imagine
-      // 1). /v1/text-to-video would refuse those as "image required"; everything
-      // else (Seedance, Wan 3.0, Gemini Omni, a prompt-only run) stays on it.
-      const lane = resolveVideoModeForInputs(model, {
-        hasStartFrame: false,
-        hasImageRefs: t2vRefImages.length > 0 || (args.connected_references?.length ?? 0) > 0,
-      })
-      // The id the lane's route runs: a named mode twin moves to its sibling
-      // (`grok-i2v` with no reference runs as `grok`). A model the route does
-      // not run at all (an image or a lip-sync model) is refused here, naming
-      // the ones that work, instead of reaching the route as a bare 400.
-      const provider = videoModelForLane(model, lane)
-      if (!provider) {
-        return { content: [{ type: "text" as const, text: videoModelRefusal("generate_video", model, lane) }], isError: true as const }
-      }
       // Fitted to the id that is sent: a twin has a sheet of its own (`grok-i2v`
       // lists no ratio; `grok` no size or length).
       const { aspectRatio, resolution, duration } = provider === model

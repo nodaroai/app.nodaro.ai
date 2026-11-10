@@ -399,8 +399,8 @@ describe("useAdminJobDetail", () => {
     // A job the list now shows as finished is a different entry: never its earlier output.
     expect(running.queryKey).toEqual(["admin", "job", "j1", "processing", ""])
     expect(finished.queryKey).toEqual(["admin", "job", "j1", "completed", "2026-11-02T10:00:00Z"])
-    // No staleTime: reopening reads it again.
-    expect(running.staleTime).toBeUndefined()
+    // The app's query client keeps a read fresh for a minute: zero is what makes a reopen read again.
+    expect(running.staleTime).toBe(0)
     expect(running.enabled).toBe(true)
   })
 
@@ -418,8 +418,26 @@ describe("useAdminJobDetail", () => {
     await expect(mockUseQuery.mock.calls[0][0].queryFn()).resolves.toEqual({
       input_data: { type: "x", prompt: "p" },
       output_data: { imageUrl: "https://cdn.test/a.png" },
+      error_message: null,
+      error_detail: null,
     })
     expect(String(mockFetch.mock.calls[0]![0])).toBe("/v1/admin/jobs/j1")
+  })
+
+  it("returns a failed job's sentence and the provider's own words about it, from the one read", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: { id: "j1", input_data: { type: "x" }, output_data: null, error_message: "declined", error_detail: "Request blocked: restricted content." },
+      }),
+    })
+    useAdminJobDetail({ id: "j1", status: "failed", completed_at: null })
+    await expect(mockUseQuery.mock.calls[0][0].queryFn()).resolves.toEqual({
+      input_data: { type: "x" },
+      output_data: null,
+      error_message: "declined",
+      error_detail: "Request blocked: restricted content.",
+    })
   })
 })
 

@@ -22,7 +22,7 @@ import type { JobErrorHint } from "@/types/nodes"
  */
 export function NodePolicyOverlay({ nodeId }: { readonly nodeId: string }) {
   const t = useT()
-  const { awaiting, hint, failed } = useWorkflowStore(
+  const { awaiting, hint, failed, providerWords } = useWorkflowStore(
     useShallow((s: { nodes: Array<{ id: string; data?: unknown }> }) => {
       const d = s.nodes.find((n) => n.id === nodeId)?.data as Record<string, unknown> | undefined
       return {
@@ -34,6 +34,9 @@ export function NodePolicyOverlay({ nodeId }: { readonly nodeId: string }) {
         awaiting: d?.jobAwaitingReview === true && d?.executionStatus === "running",
         hint: d?.errorHint as JobErrorHint | undefined,
         failed: d?.executionStatus === "failed",
+        // The provider's own words for the failure (`errorDetail`), when the
+        // job carried any: shown as they are, under the card's own error line.
+        providerWords: typeof d?.errorDetail === "string" && d.errorDetail !== "" ? d.errorDetail : null,
       }
     }),
   )
@@ -63,6 +66,22 @@ export function NodePolicyOverlay({ nodeId }: { readonly nodeId: string }) {
               ? t("node.policyBlock.outputWithheld")
               : t("node.policyBlock.desc"))}
         </span>
+      </div>
+    )
+  }
+
+  // Any other failure that carries the provider's own words: a strip along
+  // the card's bottom edge with the words as the provider wrote them (the
+  // card's own red line above it keeps our sentence). Mounted once in
+  // BaseNode, so no card has to remember it. Hover for the whole text.
+  if (failed && providerWords) {
+    return (
+      <div
+        className="absolute inset-x-1 bottom-1 z-20 rounded-md border border-red-500/40 bg-red-950/85 px-2 py-1 text-[11px] leading-snug text-red-100/90 line-clamp-2 break-words"
+        title={providerWords}
+        data-testid="node-provider-words"
+      >
+        {providerWords}
       </div>
     )
   }

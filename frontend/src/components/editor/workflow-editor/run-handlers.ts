@@ -13,6 +13,7 @@ import {
 import { withWiredSettings, type RenderQuality, type RunResultRowStamp } from "@nodaro/shared/nodes";
 import { ugcRunWaitsForPick } from "@nodaro/shared/ugc";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
+import { mergeNodeData } from "@/lib/node-data-merge";
 import { getJobStatusLean, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry , NodaroConnectionRequiredError } from "@/lib/api";
 import { generateIdempotencyKey } from "@/lib/idempotency-key";
 import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-output";
@@ -1474,6 +1475,8 @@ export function restorePollingForRunningJobs(
               ...(isScrapeNodeType(nodeType)
                 ? applyWebScrapeFailure(errMsg)
                 : { executionStatus: "failed", errorMessage: errMsg }),
+              // The job's own words about this failure, absent ones included.
+              errorDetail: job.error_detail ?? undefined,
               currentJobId: undefined,
               currentJobProgress: undefined,
               jobAwaitingReview: undefined,
@@ -1513,6 +1516,7 @@ export function restorePollingForRunningJobs(
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
                   errorMessage: finalJob.error_message ?? "Unknown error",
+                  errorDetail: finalJob.error_detail ?? undefined,
                   currentJobId: undefined,
                   currentJobProgress: undefined,
                   jobAwaitingReview: undefined,
@@ -1523,6 +1527,8 @@ export function restorePollingForRunningJobs(
             updateNodeData(nodeId, {
               executionStatus: "failed",
               errorMessage: jobGoneMessage(),
+              // No job answered: this failure has no provider words.
+              errorDetail: undefined,
               currentJobId: undefined,
               currentJobProgress: undefined,
               jobAwaitingReview: undefined,
@@ -1639,7 +1645,8 @@ export function applyRestoredJobCompletion(
     const settled = { currentJobId: undefined, currentJobProgress: undefined, jobAwaitingReview: undefined };
     if (!patch) {
       const errMsg = ugcJobNoOutputMessage(jobId);
-      updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg, ...settled });
+      // A finished job that holds nothing: the provider said nothing about it.
+      updateNodeData(nodeId, { executionStatus: "failed", errorMessage: errMsg, errorDetail: undefined, ...settled });
       toast.error(tx("run.jobFailed"), { description: errMsg });
       return;
     }
@@ -2219,6 +2226,8 @@ export interface NodeExecutionState {
   errorCode?: string;
   /** Structured safety-block detail mirrored from the failed job (see `JobErrorHint`). */
   errorHint?: JobErrorHint;
+  /** The provider's own words for the failure (`jobs.error_detail`), display only. Mirrors the shared wire contract. */
+  errorDetail?: string | null;
   /** Mirrors `NodeExecutionState.awaitingReview` on the backend: this node's job
    *  is parked in `pending_review`. A SIDECAR beside `status`, which stays
    *  "running" on purpose — a new `NodeExecutionStatus` member would be
@@ -2714,6 +2723,7 @@ function syncNodeStatesToStore(
         executionStatus: "failed",
         errorMessage: nodeStateErrorText(state, node.type),
         errorHint: state.errorHint,
+        errorDetail: typeof state.errorDetail === "string" && state.errorDetail !== "" ? state.errorDetail : undefined,
         jobAwaitingReview: undefined,
         ...(data.__runSkipReason !== undefined ? { __runSkipReason: undefined } : {}),
         ...endedMark(state),
@@ -2749,7 +2759,7 @@ function syncNodeStatesToStore(
     nodes: prev.nodes.map((n) => {
       const patch = patchMap.get(n.id);
       if (!patch) return n;
-      return { ...n, data: { ...n.data, ...patch } };
+      return { ...n, data: mergeNodeData(n.data, patch) };
     }),
     ...(hasPersistentChange ? { isDirty: true } : {}),
   }));

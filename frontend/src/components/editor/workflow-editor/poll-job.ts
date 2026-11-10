@@ -22,6 +22,7 @@ import { sunoVariantFields } from "@/lib/suno-ids";
 import { shouldAbandonNode } from "./abandon-guard";
 import { isInputWarningCode } from "@/lib/input-warning-codes";
 import { tx } from "@/lib/i18n";
+import { failedJobError } from "@/lib/failed-job-error";
 import { localizeJobLabel } from "./job-label";
 import { clearJobConnectionLost, jobGoneMessage, shouldStopPolling } from "./poll-connection";
 import { isUgcFinishNode } from "@/lib/ugc-run-patch";
@@ -141,8 +142,9 @@ export async function pollJobOutputWithEnd(
     }
     if (job.status === "failed" || job.status === "cancelled") {
       // The route's classified hint travels with the error, so a caller can tell a
-      // moderation block from any other failure (UGC Creator drops a blocked option).
-      throw Object.assign(new Error(job.error_message || "Scrape failed"), job.error_hint ? { errorHint: job.error_hint } : {});
+      // moderation block from any other failure (UGC Creator drops a blocked option),
+      // and so do the provider's words, for the node the caller writes the failure on.
+      throw failedJobError(job.error_message || "Scrape failed", job);
     }
   }
   throw new Error("The scrape did not finish in time");
@@ -220,6 +222,7 @@ export const RUN_START_RESET = {
   executionStatus: "running",
   errorMessage: undefined,
   errorHint: undefined,
+  errorDetail: undefined,
   currentJobId: undefined,
   currentJobProgress: 0,
   // Re-running after a hold must not flash the previous run's overlay.
@@ -256,7 +259,7 @@ export function pollJobToCompletion(
             resolve(job.output_data?.imageUrl ?? "");
           } else if (job.status === "failed") {
             ctx.untrackInterval(poll);
-            reject(new Error(job.error_message ?? "Failed"));
+            reject(failedJobError(job.error_message ?? "Failed", job));
           }
         } catch (err) {
           pollFailures++;
@@ -270,7 +273,7 @@ export function pollJobToCompletion(
                 return;
               }
               if (finalJob.status === "failed") {
-                reject(new Error(finalJob.error_message ?? "Failed"));
+                reject(failedJobError(finalJob.error_message ?? "Failed", finalJob));
                 return;
               }
             } catch { /* final check also failed */ }
@@ -431,6 +434,36 @@ export function pollJobWithNodeUpdate(
       ? handleJsonJobCompleted(job.output_data as Record<string, unknown> | null | undefined, opts.jsonLanding, { nodeId, label, updateNodeData, resolve, success: (m) => guardedToast.success(m) })
       : handleJobCompleted(job, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve, opts.resultFields);
 
+  /**
+   * A failed job, read by the poll or by its last check after the status went quiet: the node
+   * shows its sentence, its classified hint and the provider's words, and the run ends with an
+   * error that carries them (`failedJobError`).
+   */
+  const landFailedJob = (job: Awaited<ReturnType<typeof getJobStatusLean>>, reject: (err: Error) => void) => {
+    const errMsg = job.error_message ?? "Unknown error";
+    updateNodeData(nodeId, {
+      executionStatus: "failed",
+      errorMessage: errMsg,
+      // Structured safety-block detail (kind/class/retried/suggestedProvider),
+      // when the backend attached one — the editor's one-click fallback reads
+      // this. `?? undefined` clears any hint left over from a previous failure.
+      errorHint: job.error_hint ?? undefined,
+      // The provider's own words, for the owner to read beside the
+      // sentence; `?? undefined` clears a previous failure's.
+      errorDetail: job.error_detail ?? undefined,
+      currentJobId: undefined,
+      currentJobProgress: undefined,
+      // A REJECTED hold arrives here: pending_review -> failed. The
+      // hold flag must go with it, or the amber "awaiting review"
+      // chrome would sit on top of the block explanation.
+      jobAwaitingReview: undefined,
+      // A failure read after the status went quiet: the reconnecting badge goes with it.
+      jobConnectionLost: undefined,
+    });
+    guardedToast.error(tx("nodeRun.failed", { label: localizeJobLabel(label) }), { description: errMsg });
+    reject(failedJobError(errMsg, job));
+  };
+
   return new Promise<string>((resolve, reject) => {
     apiCall()
       .then(async ({ jobId }) => {
@@ -524,6 +557,7 @@ export function pollJobWithNodeUpdate(
                     // Defensive: this is a different failure than any prior
                     // safety-block, so a stale hint must not survive onto it.
                     errorHint: undefined,
+                    errorDetail: undefined,
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                     jobAwaitingReview: undefined,
@@ -533,24 +567,7 @@ export function pollJobWithNodeUpdate(
                 }
               } else if (job.status === "failed") {
                 ctx.untrackInterval(poll);
-                const errMsg = job.error_message ?? "Unknown error";
-                updateNodeData(nodeId, {
-                  executionStatus: "failed",
-                  errorMessage: errMsg,
-                  // Structured safety-block detail (kind/class/retried/suggestedProvider),
-                  // when the backend attached one — the editor's one-click fallback
-                  // (e.g. "Try on Nano Banana Pro") reads this. `?? undefined` clears
-                  // any hint left over from a previous, unrelated failure.
-                  errorHint: job.error_hint ?? undefined,
-                  currentJobId: undefined,
-                  currentJobProgress: undefined,
-                  // A REJECTED hold arrives here: pending_review -> failed. The
-                  // hold flag must go with it, or the amber "awaiting review"
-                  // chrome would sit on top of the block explanation.
-                  jobAwaitingReview: undefined,
-                });
-                guardedToast.error(tx("nodeRun.failed", { label: localizeJobLabel(label) }), { description: errMsg });
-                reject(new Error(errMsg));
+                landFailedJob(job, reject);
               }
             } catch (err) {
               pollFailures++;
@@ -577,6 +594,11 @@ export function pollJobWithNodeUpdate(
                       return;
                     }
                   }
+                  // The job failed while its status could not be read: that failure, not "gone".
+                  if (finalJob.status === "failed") {
+                    landFailedJob(finalJob, reject);
+                    return;
+                  }
                 } catch { /* final check also failed */ }
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
@@ -584,6 +606,7 @@ export function pollJobWithNodeUpdate(
                   // Defence in depth beside the run-start reset: giving up is a
                   // different failure than any earlier policy block.
                   errorHint: undefined,
+                  errorDetail: undefined,
                   currentJobId: undefined,
                   currentJobProgress: undefined,
                   jobAwaitingReview: undefined,
@@ -625,6 +648,7 @@ export function pollJobWithNodeUpdate(
           errorHint: isPolicyBlock
             ? { kind: "policy-block", policyId: "", reason: msg, hookPoint: "request" }
             : undefined,
+          errorDetail: undefined,
           ...(isPolicyBlock
             ? { errorMessage: msg }
             : isWarning
@@ -699,6 +723,7 @@ export function pollImageRefineToNode(
                   executionStatus: "failed",
                   errorMessage: errMsg,
                   errorHint: undefined,
+                  errorDetail: undefined,
                   currentJobId: undefined,
                   currentJobProgress: undefined,
                   jobAwaitingReview: undefined,
@@ -748,6 +773,7 @@ export function pollImageRefineToNode(
                 // row's own hint; carrying it renders the policy overlay instead
                 // of a generic red failure. `?? undefined` clears a stale one.
                 errorHint: job.error_hint ?? undefined,
+                errorDetail: job.error_detail ?? undefined,
                 currentJobId: undefined,
                 currentJobProgress: undefined,
                 // A REJECTED hold is pending_review -> failed: the amber chrome
@@ -755,7 +781,7 @@ export function pollImageRefineToNode(
                 jobAwaitingReview: undefined,
               });
               guardedToast.error(tx("nodeRun.failed", { label: localizeJobLabel(label) }), { description: errMsg });
-              reject(new Error(errMsg));
+              reject(failedJobError(errMsg, job));
             }
           } catch (err) {
             pollFailures++;
@@ -771,6 +797,7 @@ export function pollImageRefineToNode(
                 executionStatus: "failed",
                 errorMessage: jobGoneMessage(),
                 errorHint: undefined,
+                errorDetail: undefined,
                 currentJobId: undefined,
                 currentJobProgress: undefined,
                 jobAwaitingReview: undefined,
@@ -797,6 +824,7 @@ export function pollImageRefineToNode(
           errorHint: isPolicyBlock
             ? { kind: "policy-block", policyId: "", reason: msg, hookPoint: "request" }
             : undefined,
+          errorDetail: undefined,
           currentJobId: undefined,
           currentJobProgress: undefined,
           jobAwaitingReview: undefined,

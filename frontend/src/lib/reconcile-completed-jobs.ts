@@ -356,6 +356,8 @@ export function buildScene3DRetainedDraftPatch(
   source: "generate" | "edit",
   jobId: string,
   errorMessage?: string | null,
+  /** The provider's own words about the failure (the job's `error_detail`): they go with the sentence. */
+  errorDetail?: string | null,
 ): Record<string, unknown> | null {
   if (!output?.scenePlan) return null
   // Plan half — null when this revision was already filed (live, or an earlier
@@ -371,6 +373,11 @@ export function buildScene3DRetainedDraftPatch(
   const patch: Record<string, unknown> = { ...(draft ?? {}), executionStatus: "failed" }
   const message = typeof errorMessage === "string" && errorMessage ? errorMessage : undefined
   if (message && data.errorMessage !== message) patch.errorMessage = message
+  // The provider's words about this failure: written with the sentence, the same words included,
+  // so the one merge (lib/node-data-merge.ts) never reads a new sentence as leaving an earlier
+  // failure's words; otherwise only when they differ, for the reason the sentence is.
+  const words = typeof errorDetail === "string" && errorDetail ? errorDetail : undefined
+  if ("errorMessage" in patch || words !== (data.errorDetail ?? undefined)) patch.errorDetail = words
   return patch
 }
 
@@ -489,6 +496,7 @@ export async function computeCompletedJobPatches(
     status: string
     output_data?: Record<string, unknown> | null
     error_message?: string | null
+    error_detail?: string | null
   } | null>,
   nowIso: string,
   /** Live node data by id, re-read after each `fetchOutput` await. Omitted →
@@ -540,6 +548,7 @@ export async function computeCompletedJobPatches(
         node.type === "edit-3d-scene" ? "edit" : "generate",
         jobId,
         job.error_message,
+        job.error_detail,
       )
       if (patch) out.push({ nodeId, updates: patch })
       continue
@@ -578,6 +587,7 @@ export async function reconcileCompletedSingleNodeJobs(
       status: string
       output_data?: Record<string, unknown> | null
       error_message?: string | null
+      error_detail?: string | null
     }>
     nowIso?: string
     readLiveData?: (nodeId: string) => Record<string, unknown> | undefined
@@ -600,7 +610,7 @@ export async function reconcileCompletedSingleNodeJobs(
     })
     if (refs.length === 0) return
     const fetchOutput =
-      deps.fetchOutput ?? (async (jobId: string) => (await getJobStatusLean(jobId)) as { status: string; output_data?: Record<string, unknown> | null })
+      deps.fetchOutput ?? (async (jobId: string) => (await getJobStatusLean(jobId)) as { status: string; output_data?: Record<string, unknown> | null; error_message?: string | null; error_detail?: string | null })
     const patches = await computeCompletedJobPatches(
       refs,
       nodes,

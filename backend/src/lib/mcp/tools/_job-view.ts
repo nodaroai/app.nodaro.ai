@@ -142,6 +142,8 @@ export const JOB_VIEW_SCHEMA = {
   /** Safe subset of the job's input: prompt (rendered), userPrompt (source), direction, frames, provider, duration… */
   input: z.record(z.string(), z.unknown()).nullable().optional(),
   errorMessage: z.string().nullable().optional(),
+  /** The provider's own words for the failure, links cut to their host and secrets removed; null when it had none. Display only — read `retryable` and `guidance`, never these words. */
+  errorDetail: z.string().nullable().optional(),
   /** On failed/cancelled/pending_review: false means the same request will fail (or be held) again — change the input, do not re-run. */
   retryable: z.boolean().optional(),
   guidance: z.string().optional(),
@@ -169,6 +171,8 @@ export interface JobRowLike {
   output_data?: Record<string, unknown> | null
   input_data?: Record<string, unknown> | null
   error_message?: string | null
+  /** The provider's own words (`jobs.error_detail`, redacted at the write). */
+  error_detail?: string | null
   error_hint?: unknown
   credits?: number | null
   /** The run's settled charge (lib/job-credit-status.ts); absent when the caller did not look it up. */
@@ -197,6 +201,7 @@ export function jobView(row: JobRowLike): JobView {
     outputData: out,
     input: jobInputView(row.input_data),
     errorMessage: row.error_message ?? null,
+    errorDetail: row.error_detail ?? null,
     credits: row.credits ?? null,
     creditsCharged: row.credits_charged ?? null,
     ...(row.credits_held !== undefined ? { creditsHeld: row.credits_held } : {}),

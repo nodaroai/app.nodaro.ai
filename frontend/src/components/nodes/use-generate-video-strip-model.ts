@@ -70,7 +70,7 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
 
   const aspectOptions = useMemo(() => getAspectRatiosForVideoModel(currentProvider), [currentProvider])
   const modelOptions = useMemo(
-    () => withoutDeniedModels(VIDEO_GEN_MODELS).map((o) => ({ ...o, locked: lockedVideoModel(freeVideoLimits, o.value) })),
+    () => withoutDeniedModels(VIDEO_GEN_MODELS, { nodeType: "generate-video" }).map((o) => ({ ...o, locked: lockedVideoModel(freeVideoLimits, o.value) })),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `availability` is the version the filter reads through
     [freeVideoLimits, availability],
   )

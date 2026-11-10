@@ -345,7 +345,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                 <ModelSearchSelect
                   value={data.provider || "seedance-2-fast"}
                   onChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
-                  options={withoutDeniedModels(VIDEO_I2V_MODELS)}
+                  options={withoutDeniedModels(VIDEO_I2V_MODELS, { nodeType: "image-to-video" })}
                   ariaLabel={t("field.model")}
                 />
               </MappableField>

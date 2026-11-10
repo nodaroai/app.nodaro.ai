@@ -11,8 +11,9 @@ import { creditDetailLines } from "./admin-job-credits"
 /**
  * One job's details, shared by the Jobs page's detail dialog and the job page
  * (`/admin/job/:id`): the steps it skipped, a Cast Swap run's preparation
- * steps, the facts grid and the reconciliation box. Where the input and the
- * output go is each surface's own: tabs in the dialog, one long page there.
+ * steps, the facts grid, the reconciliation box and a failed job's error.
+ * Where the input, the output and the error go is each surface's own: tabs in
+ * the dialog, one long page there.
  */
 
 /** The address of a job's own page. */
@@ -99,6 +100,49 @@ export function JobDataView({ state, size }: { state: JobDataState; size?: "comp
   return (
     <div className="flex justify-center py-6" aria-label="Loading the job's input and output">
       <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+    </div>
+  )
+}
+
+/**
+ * A failed job's error: the sentence the platform showed for it, and under it
+ * the provider's own words about the failure when the job kept any (redacted
+ * where they were written). The words come with a whole read of the job: a
+ * list row never carries them, so `detail` is undefined until that read is in.
+ * A read that failed says so (`detailUnread`): showing no words must never
+ * read as the provider having said nothing.
+ */
+export function JobErrorView({
+  message,
+  detail,
+  detailUnread = false,
+  size = "compact",
+}: {
+  message: string | null
+  /** The provider's own words: null when it said nothing, undefined while the whole job loads. */
+  detail: string | null | undefined
+  /** The whole read failed and left no words to show. */
+  detailUnread?: boolean
+  size?: "compact" | "large"
+}) {
+  const height = size === "large" ? "max-h-[60vh]" : "max-h-64"
+  return (
+    <div className="flex flex-col gap-3">
+      {message && (
+        <pre className={`text-xs bg-red-950/30 text-red-400 rounded-lg p-4 overflow-auto ${height} whitespace-pre-wrap`}>
+          {message}
+        </pre>
+      )}
+      {detail ? (
+        <div className="flex flex-col gap-1">
+          <p className="text-xs text-muted-foreground">Provider&apos;s words</p>
+          <pre className={`text-xs bg-muted/40 text-foreground rounded-lg p-4 overflow-auto ${height} whitespace-pre-wrap`}>
+            {detail}
+          </pre>
+        </div>
+      ) : detailUnread ? (
+        <p className="text-sm text-destructive">Couldn&apos;t load the provider&apos;s words.</p>
+      ) : null}
     </div>
   )
 }

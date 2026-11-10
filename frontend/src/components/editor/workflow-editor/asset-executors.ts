@@ -37,6 +37,7 @@ import { pollJobToCompletion, guardedToast, getJobStatusLeanForNode, RUN_START_R
 import { shouldAbandonNode } from "./abandon-guard";
 import { resolveCharacterAssets } from "./node-input-resolver";
 import { tx, type MessageKey } from "@/lib/i18n";
+import { failedJobError } from "@/lib/failed-job-error";
 
 type EntityAssetType = "expressions" | "poses" | "lighting" | "angles" | "materials" | "variations" | "timeOfDay" | "weather";
 
@@ -186,12 +187,13 @@ export function runCharacterGeneration(
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
                   errorMessage: errMsg,
+                  errorDetail: job.error_detail ?? undefined,
                   currentJobId: undefined,
                 });
                 guardedToast.error(tx("nodeRun.characterGenerationFailed"), {
                   description: errMsg,
                 });
-                reject(new Error(errMsg));
+                reject(failedJobError(errMsg, job));
               }
             } catch (err) {
               pollFailures++;
@@ -354,12 +356,13 @@ export function runFaceGeneration(
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
                   errorMessage: errMsg,
+                  errorDetail: job.error_detail ?? undefined,
                   currentJobId: undefined,
                 });
                 guardedToast.error(tx("nodeRun.faceHeadshotGenerationFailed"), {
                   description: errMsg,
                 });
-                reject(new Error(errMsg));
+                reject(failedJobError(errMsg, job));
               }
             } catch (err) {
               pollFailures++;
@@ -546,12 +549,13 @@ export function runObjectGeneration(
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
                   errorMessage: errMsg,
+                  errorDetail: job.error_detail ?? undefined,
                   currentJobId: undefined,
                 });
                 guardedToast.error(tx("nodeRun.objectGenerationFailed"), {
                   description: errMsg,
                 });
-                reject(new Error(errMsg));
+                reject(failedJobError(errMsg, job));
               }
             } catch (err) {
               pollFailures++;
@@ -739,12 +743,13 @@ export function runCreatureGeneration(
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
                   errorMessage: errMsg,
+                  errorDetail: job.error_detail ?? undefined,
                   currentJobId: undefined,
                 });
                 guardedToast.error(tx("nodeRun.creatureGenerationFailed"), {
                   description: errMsg,
                 });
-                reject(new Error(errMsg));
+                reject(failedJobError(errMsg, job));
               }
             } catch (err) {
               pollFailures++;
@@ -905,12 +910,13 @@ export function runLocationGeneration(
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
                   errorMessage: errMsg,
+                  errorDetail: job.error_detail ?? undefined,
                   currentJobId: undefined,
                 });
                 guardedToast.error(tx("nodeRun.locationGenerationFailed"), {
                   description: errMsg,
                 });
-                reject(new Error(errMsg));
+                reject(failedJobError(errMsg, job));
               }
             } catch (err) {
               pollFailures++;

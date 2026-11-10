@@ -37,7 +37,7 @@ export function useGenerateImageStripModel(nodeId: string, data: GenerateImageDa
   // The node's CURRENT model is read off the full list: a hidden model a saved
   // node holds keeps its name on the pill.
   const availability = useSurfaceAvailability()
-  const modelOptions = useMemo(() => withoutDeniedModels(IMAGE_GEN_MODELS), [availability])
+  const modelOptions = useMemo(() => withoutDeniedModels(IMAGE_GEN_MODELS, { nodeType: "generate-image" }), [availability])
 
   const providers = data.providers && data.providers.length > 0
     ? data.providers

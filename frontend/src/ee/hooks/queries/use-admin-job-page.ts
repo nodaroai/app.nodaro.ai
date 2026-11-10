@@ -10,8 +10,14 @@ import { adminError, enrichAdminJobRows, type AdminJob, type JobRow } from "./us
  * account's address, the workflow) — and, on request, every job below it.
  */
 
+/** What a whole read of a job carries that a list row never does. */
+interface WholeJob extends AdminJob {
+  /** The provider's own words about the failure (`jobs.error_detail`, redacted where they were written); null when it said nothing. */
+  readonly error_detail: string | null
+}
+
 /** One job as its page shows it: a list row's fields, its whole input and output, and where it sits in its run. */
-export interface AdminJobPageJob extends AdminJob {
+export interface AdminJobPageJob extends WholeJob {
   /** The job this one is a step of; null for a top-level job. */
   readonly parent_job_id: string | null
   /** How many child jobs it has; null when the count could not be read. */
@@ -19,7 +25,7 @@ export interface AdminJobPageJob extends AdminJob {
 }
 
 /** A job below the page's job, in flow order. */
-export interface AdminChildJob extends AdminJob {
+export interface AdminChildJob extends WholeJob {
   readonly parent_job_id: string | null
   /** Levels below the page's job: 1 for a direct child. */
   readonly depth: number
@@ -34,7 +40,12 @@ export interface AdminChildJobs {
 /** The page's answer for a job: the job, or that there is none with that id. */
 export type AdminJobPageResult = { readonly kind: "found"; readonly job: AdminJobPageJob } | { readonly kind: "missing" }
 
-type ServerJob = JobRow & { parent_job_id?: string | null; child_count?: number | null; depth?: number }
+type ServerJob = JobRow & {
+  parent_job_id?: string | null
+  child_count?: number | null
+  depth?: number
+  error_detail?: string | null
+}
 
 export async function fetchAdminJobPage(jobId: string): Promise<AdminJobPageResult> {
   const res = await fetch(`/v1/admin/jobs/${encodeURIComponent(jobId)}`, { headers: await getAuthHeaders() })
@@ -42,10 +53,16 @@ export async function fetchAdminJobPage(jobId: string): Promise<AdminJobPageResu
   if (res.status === 404 || res.status === 400) return { kind: "missing" }
   if (!res.ok) throw await adminError(res, "Failed to load the job")
   const { data } = (await res.json()) as { data: ServerJob }
+  // The enrichment keeps a list row's fields only: what a whole read adds is put back beside it.
   const [job] = await enrichAdminJobRows([data])
   return {
     kind: "found",
-    job: { ...job!, parent_job_id: data.parent_job_id ?? null, child_count: typeof data.child_count === "number" ? data.child_count : null },
+    job: {
+      ...job!,
+      parent_job_id: data.parent_job_id ?? null,
+      child_count: typeof data.child_count === "number" ? data.child_count : null,
+      error_detail: data.error_detail ?? null,
+    },
   }
 }
 
@@ -54,9 +71,20 @@ export async function fetchAdminChildJobs(jobId: string): Promise<AdminChildJobs
   if (!res.ok) throw await adminError(res, "Failed to load the child jobs")
   const body = (await res.json()) as { data: ServerJob[]; truncated?: boolean }
   const rows = body.data ?? []
-  const enriched = await enrichAdminJobRows(rows)
+  // The flow's order is the server's. The enrichment keeps a list row's fields only, so what a
+  // whole read adds is put back beside each step by its id, never by where the enrichment left it.
+  const enriched = new Map((await enrichAdminJobRows(rows)).map((job) => [job.id, job] as const))
   return {
-    jobs: enriched.map((job, i) => ({ ...job, parent_job_id: rows[i]!.parent_job_id ?? null, depth: rows[i]!.depth ?? 1 })),
+    jobs: rows.flatMap((row) => {
+      const job = enriched.get(row.id)
+      if (!job) return []
+      return [{
+        ...job,
+        parent_job_id: row.parent_job_id ?? null,
+        depth: row.depth ?? 1,
+        error_detail: row.error_detail ?? null,
+      }]
+    }),
     truncated: body.truncated === true,
   }
 }

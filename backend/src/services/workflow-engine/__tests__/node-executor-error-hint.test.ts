@@ -108,11 +108,35 @@ describe("pollJobToCompletion — error_hint propagation", () => {
     })
   })
 
-  it("leaves errorHint undefined for a failed job with no classified hint", async () => {
+  it("attaches errorDetail — the provider's own words (`jobs.error_detail`) — when the failed job carries them", async () => {
+    const words = "task failed: [400] Request blocked: The uploaded image may contain protected or restricted IP content."
+    jobRecord = {
+      status: "failed",
+      output_data: null,
+      error_message: "The video model declined one of your pictures as possibly copyrighted. Try a different picture.",
+      error_detail: words,
+      progress: 0,
+    }
+
+    const node = vaNode()
+    let caught: unknown
+    try {
+      await executeNode(node, {}, [], [node], {}, makeCtx())
+      throw new Error("expected executeNode to reject")
+    } catch (err) {
+      caught = err
+    }
+
+    expect((caught as Error).message).toBe("The video model declined one of your pictures as possibly copyrighted. Try a different picture.")
+    expect((caught as { errorDetail?: unknown }).errorDetail).toBe(words)
+  })
+
+  it("leaves errorHint and errorDetail undefined for a failed job with no classified hint and no provider words", async () => {
     jobRecord = {
       status: "failed",
       output_data: null,
       error_message: "Provider timeout after 30s",
+      error_detail: null,
       progress: 0,
     }
 
@@ -127,5 +151,6 @@ describe("pollJobToCompletion — error_hint propagation", () => {
 
     expect((caught as Error).message).toBe("Provider timeout after 30s")
     expect((caught as { errorHint?: unknown }).errorHint).toBeUndefined()
+    expect((caught as { errorDetail?: unknown }).errorDetail).toBeUndefined()
   })
 })

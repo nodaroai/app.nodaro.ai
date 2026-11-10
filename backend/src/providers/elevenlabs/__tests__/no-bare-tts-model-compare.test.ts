@@ -1,4 +1,4 @@
-// @test-watches backend/src/**/*.{js,jsx,ts,tsx,cjs,cts,mjs,mts} backend/scripts/**/*.{js,jsx,ts,tsx,cjs,cts,mjs,mts} frontend/src/**/*.{js,jsx,ts,tsx,cjs,cts,mjs,mts} packages/{shared,prompts,client,cli,picker-ui,remotion}/src/**/*.{js,jsx,ts,tsx,cjs,cts,mjs,mts} tools/**/*.{js,jsx,ts,tsx,cjs,cts,mjs,mts} scripts/**/*.{js,jsx,ts,tsx,cjs,cts,mjs,mts}
+// @test-watches backend/src/**/*.{js,jsx,ts,tsx,cjs,cts,mjs,mts} backend/scripts/**/*.{js,jsx,ts,tsx,cjs,cts,mjs,mts} frontend/src/**/*.{js,jsx,ts,tsx,cjs,cts,mjs,mts} packages/{shared,prompts,client,cli,picker-ui,remotion,render-rules}/src/**/*.{js,jsx,ts,tsx,cjs,cts,mjs,mts} tools/**/*.{js,jsx,ts,tsx,cjs,cts,mjs,mts} scripts/**/*.{js,jsx,ts,tsx,cjs,cts,mjs,mts}
 /**
  * Guard: nothing decides anything by comparing a provider id to the `"elevenlabs-v3"`
  * or `"elevenlabs-v4"` literal, and a source file cannot start naming either id
@@ -43,6 +43,7 @@ const ROOTS = [
   "backend/scripts",
   "frontend/src",
   "packages/shared/src",
+  "packages/render-rules/src",
   "packages/prompts/src",
   "packages/client/src",
   "packages/cli/src",
@@ -62,7 +63,7 @@ const MAY_NAME_THE_IDS: Readonly<Record<string, string>> = {
   "backend/src/providers/elevenlabs/tts-models.ts": "the wire-model table",
   "backend/src/routes/voices.ts": "the Voice Library's verified-provider order",
   "frontend/src/components/editor/config-panels/audio-configs.tsx": "the panel shows the legacy `elevenlabs` id as v3 (a known display mismatch, unchanged), and Voice Design's v3 model reads the v3 sheet",
-  "frontend/src/components/editor/config-panels/model-options.ts": "the picker's model list",
+  "packages/render-rules/src/model-menus.ts": "the picker's model list (the menus' rows)",
   "frontend/src/types/nodes.ts": "the text-to-speech node's exposable Model options (its default data reads DEFAULT_TTS_PROVIDER)",
   "packages/shared/src/model-catalog.ts": "the catalog entries and the narration recommendation",
   "packages/shared/src/model-constants.ts": "TTS_PROVIDERS, and DEFAULT_TTS_PROVIDER — the one place the default model is spelled",

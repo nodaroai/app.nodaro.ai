@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase"
 import { useWorkflowStore, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus } from "@/lib/api"
 import { readWorkflowContent, savedBaselineNodes } from "@/lib/workflow-content"
+import { mergeNodeData } from "@/lib/node-data-merge"
 import { withoutRunsInFlight } from "@/lib/run-in-flight-mark"
 import { applyWorkflowAccess, requestAccessRecheck } from "@/hooks/workflow-access-mode"
 import { classifyZeroRowSave, isSaveRefused } from "@/hooks/workflow-save-refusal"
@@ -147,6 +148,8 @@ interface NodeExecutionState {
   errorCode?: string
   /** Structured safety-block detail mirrored from the failed job (see `JobErrorHint`). */
   errorHint?: JobErrorHint
+  /** The provider's own words for the failure (`jobs.error_detail`) — mirrors backend NodeExecutionState. */
+  errorDetail?: string | null
   /** Mirrors the backend sidecar: this node's job is parked in `pending_review`.
    *  `status` stays "running" on purpose (see run-handlers.ts's NodeExecutionState). */
   awaitingReview?: boolean
@@ -451,6 +454,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
           executionStatus: "failed",
           errorMessage: job.error_message ?? "Job failed",
           errorHint: job.error_hint ?? undefined,
+          errorDetail: job.error_detail ?? undefined,
           currentJobId: undefined,
           currentJobProgress: undefined,
           jobAwaitingReview: undefined,
@@ -662,12 +666,15 @@ export function applyBackendExecutionState(
       if (showsRun) return node
       // A use-case continuation refused before any work is no failed run: the node as it was, with its Preview.
       const refused = usecaseRefusedBeforeWorkPatch(node.type, state.errorCode, data)
-      if (refused) return { ...node, data: { ...data, ...refused } as SceneNodeData }
+      if (refused) return { ...node, data: mergeNodeData(data, refused) as SceneNodeData }
       data.executionStatus = "failed"
       // A use-case node keeps what its run finished and its wrapper, for Continue.
       Object.assign(data, usecaseFailedRunFields(node.type, state.output as Record<string, unknown> | undefined, data, state.jobId, state.errorCode))
       if (state.error) data.errorMessage = state.error
-      if (state.errorHint) data.errorHint = state.errorHint
+      // The run's own hint, absent ones included: an earlier failure's policy block would cover this one's words.
+      data.errorHint = state.errorHint ?? undefined
+      // The run's own words about this failure, absent ones included: an earlier failure's never stay under this one.
+      data.errorDetail = typeof state.errorDetail === "string" && state.errorDetail !== "" ? state.errorDetail : undefined
       data.jobAwaitingReview = undefined
       // UGC Creator's credits stop retains the options already checked.
       if (node.type === "ugc-creator") Object.assign(data, ugcStopPatch(state.output as Record<string, unknown> | undefined))
@@ -741,7 +748,7 @@ export function applyCompletedExecutionResults(
       const patch = buildScene3DRecoveryPatch(data, {
         scenePlan: state.output.plan, changeSummary: state.output.changeSummary,
       }, node.type === "edit-3d-scene" ? "edit" : "generate", state.jobId)
-      return patch ? { ...node, data: { ...data, ...patch } as SceneNodeData } : node
+      return patch ? { ...node, data: mergeNodeData(data, patch) as SceneNodeData } : node
     }
 
     // A scraper: its posts / ads / pages, once per job (the patch stamps
@@ -757,7 +764,7 @@ export function applyCompletedExecutionResults(
       const apply = settledAt
         ? scrapeJobNeedsApplying(data, { id: state.jobId ?? "", createdAt: settledAt })
         : data.generatedJson === undefined
-      return apply ? { ...node, data: { ...data, ...scrapePatch } as SceneNodeData } : node
+      return apply ? { ...node, data: mergeNodeData(data, scrapePatch) as SceneNodeData } : node
     }
 
     // UGC Clip, a video node, follows the newer run too, and so do the UGC video's join, overlay
@@ -783,7 +790,7 @@ export function applyCompletedExecutionResults(
     if (isContentNodeType(node.type)) {
       if (data.generatedJson || data.generatedText) return node
       const patch = contentRunResultPatch(node.type, state.output as Record<string, unknown>)
-      return patch ? { ...node, data: { ...data, ...patch } as SceneNodeData } : node
+      return patch ? { ...node, data: mergeNodeData(data, patch) as SceneNodeData } : node
     }
 
     // Edit Plan, Transcribe, Extract Field, …: exactly what the node's canvas

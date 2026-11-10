@@ -16,7 +16,7 @@ import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { speakerViewQuickConfigs } from "./speaker-view-quick-configs"
 import { ClampedNumberInput } from "@/components/ui/clamped-number-input"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { isModelUnavailable, useSurfaceAvailability } from "@/lib/surface-availability"
+import { useSurfaceAvailability } from "@/lib/surface-availability"
 import { llmPickerPriceLabel, useLlmModelPrices } from "@/hooks/use-llm-price"
 import { llmPricingMode, useLlmPricingMode } from "@/hooks/use-llm-pricing-mode"
 import { llmModelFor, llmNodeFeature } from "@/lib/llm-price-ids"
@@ -56,6 +56,7 @@ import {
   getDurationsForVideoModel,
   getVideoResolutionOptions,
   VIDEO_RESOLUTION_OPTIONS,
+  isMenuRowWithheld,
 } from "@/components/editor/config-panels/model-options"
 import { availableReasoningEfforts, defaultReasoningEffort, DESCRIBE_TO_PICKER_MODELS, LLM_FEATURE_DEFAULTS, LLM_MODELS, type LlmFeature, type LlmModelDef, orderedLlmModels, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER } from "@nodaro/shared/llm-models"
 import {
@@ -129,6 +130,13 @@ export interface QuickConfigContext {
   readonly nodes: ReadonlyArray<WorkflowNode>
   readonly edges: ReadonlyArray<WorkflowEdge>
 }
+
+/**
+ * A strip control as a node type's registry hands it out (`getQuickConfigs`):
+ * stamped with that node type, so a control that lists models judges each row
+ * as the model it makes THIS node run.
+ */
+export type NodeQuickConfigControl = QuickConfigControl & { readonly nodeType: string }
 
 export interface QuickConfigControl {
   /** Node data field this dropdown writes. */
@@ -258,16 +266,21 @@ export function allQuickConfigOptions(
 
 /** Resolve a control's options against the node's current data — minus the
  *  models this deployment does not offer (the config panels' `withoutDeniedModels`,
- *  applied here once for every strip and app card). A component that renders
- *  these must subscribe with `useSurfaceAvailability()`: the set arrives after
- *  the first paint. */
+ *  applied here once for every strip and app card), each row judged as the
+ *  model it makes the control's node run (`isMenuRowWithheld`): Generate
+ *  Music's `minimax` engine is never the MiniMax video model. A component that
+ *  renders these must subscribe with `useSurfaceAvailability()`: the set
+ *  arrives after the first paint. */
 export function resolveQuickConfigOptions(
-  control: QuickConfigControl,
+  control: NodeQuickConfigControl,
   data: Record<string, unknown>,
   ctx?: QuickConfigContext,
 ): ReadonlyArray<QuickConfigOption> {
   const all = allQuickConfigOptions(control, data, ctx)
-  return listsModels(control) ? all.filter((o) => !isModelUnavailable(o.value)) : all
+  if (!listsModels(control)) return all
+  // Each row judged as the model it makes this node run (an engine name is no model that shares its id).
+  const menu = { nodeType: control.nodeType, field: control.field, data }
+  return all.filter((o) => !isMenuRowWithheld(menu, o.value))
 }
 const resolveOptions = resolveQuickConfigOptions
 
@@ -1378,8 +1391,10 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
 }
 
 /** Quick-config controls for a node type (empty array when none registered). */
-export function getQuickConfigs(nodeType: string | undefined): ReadonlyArray<QuickConfigControl> {
-  return (nodeType && NODE_QUICK_CONFIGS()[nodeType]) || []
+export function getQuickConfigs(nodeType: string | undefined): ReadonlyArray<NodeQuickConfigControl> {
+  if (!nodeType) return []
+  const controls = NODE_QUICK_CONFIGS()[nodeType]
+  return controls ? controls.map((control) => ({ ...control, nodeType })) : []
 }
 
 const NO_NODES: ReadonlyArray<WorkflowNode> = []
@@ -1402,7 +1417,7 @@ export function QuickConfigSelect({
   wiredFrom,
 }: {
   readonly nodeId: string
-  readonly control: QuickConfigControl
+  readonly control: NodeQuickConfigControl
   readonly value: string
   /** Full node data — drives provider-aware option lists (see {@link QuickConfigControl.options}). */
   readonly data: Record<string, unknown>

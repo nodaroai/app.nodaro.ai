@@ -40,8 +40,7 @@ import { allowanceFor } from "../billing/deployment-allowance-service.js"
 import { externalWalletActive, externalWalletBalance } from "../billing/external-wallet.js"
 import { refusePayerBalanceToProgrammaticCaller } from "../lib/payer-balance-guard.js"
 import { getFreeVideoLimits } from "../lib/free-video-config.js"
-import { hasPurchaseOnRecord } from "../billing/purchase-on-record.js"
-import { spendGates } from "../billing/org-entitlements.js"
+import { freeVideoLimitsApply } from "../lib/free-video-limits-for.js"
 import { clientAddress } from "../../lib/client-address.js"
 
 /**
@@ -309,11 +308,8 @@ export async function creditsRoutes(app: FastifyInstance) {
       // reads: free-tier gates under this request's payer (a member working in
       // a paid workspace is not limited), an effective tier of free, and no
       // real payment on record.
-      const videoLimitsApply =
-        !dep &&
-        balance.effectiveTier === "free" &&
-        spendGates(balance.effectiveTier, { billingContext: req.billingContext }).freeSemantics &&
-        !(await hasPurchaseOnRecord(userId))
+      // The same decision the server's new-node rule reads (free-video-limits-for.ts).
+      const videoLimitsApply = await freeVideoLimitsApply(userId, balance.effectiveTier, req.billingContext)
       const videoLimits = videoLimitsApply ? await getFreeVideoLimits() : null
       const data: UserBalance = {
         ...balance,

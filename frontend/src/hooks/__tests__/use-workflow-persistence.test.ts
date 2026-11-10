@@ -851,6 +851,37 @@ describe("useWorkflowPersistence — syncNodeResultsFromDB (via load)", () => {
     })
   })
 
+  it("a failed job's provider words (error_detail) land on the node beside the sentence, and a job without them leaves none", async () => {
+    const words = "task failed: [400] Request blocked: The uploaded image may contain protected or restricted IP content."
+    const nodes = [
+      makeNode({ id: "n1", data: { label: "Img", executionStatus: "running", currentJobId: VALID_UUID, generatedResults: [] } }),
+      makeNode({ id: "n2", data: { label: "Img2", executionStatus: "running", currentJobId: VALID_UUID_2, generatedResults: [] } }),
+    ]
+    mockGetBatchJobStatus.mockResolvedValue([
+      {
+        id: VALID_UUID,
+        status: "failed",
+        output_data: null,
+        error_message: "The video model declined one of your pictures as possibly copyrighted. Try a different picture.",
+        error_detail: words,
+      },
+      { id: VALID_UUID_2, status: "failed", output_data: null, error_message: "Provider timeout", error_detail: null },
+    ])
+    setupSupabaseLoad({ id: "w1", name: "Test", nodes, edges: [], settings: {} })
+
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+
+    const synced = getSyncedNodes()
+    const first = synced[0].data as Record<string, unknown>
+    const second = synced[1].data as Record<string, unknown>
+    expect(first.executionStatus).toBe("failed")
+    expect(first.errorDetail).toBe(words)
+    expect(second.errorDetail).toBeUndefined()
+  })
+
   it("returns still-running jobs for pending status", async () => {
     const nodes = [
       makeNode({

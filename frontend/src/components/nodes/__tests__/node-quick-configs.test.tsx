@@ -27,14 +27,15 @@ vi.mock("@/components/ui/popover", () => ({
   PopoverContent: ({ children }: any) => <div data-testid="popover-content">{children}</div>,
 }))
 
-import { QuickConfigSelect, getQuickConfigs, type QuickConfigControl } from "../node-quick-configs"
+import { QuickConfigSelect, getQuickConfigs, type NodeQuickConfigControl, type QuickConfigControl } from "../node-quick-configs"
 import { VIDEO_V2V_MODELS } from "@/components/editor/config-panels/model-options"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { VIDEO_DEPTH_COLORMAPS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_RESOLUTIONS } from "@nodaro/shared/media"
 
 // A provider-aware control mirroring video-to-video's resolution: runway-aleph
 // has no resolution lever (returns []), every other provider gets 720p/1080p.
-const control: QuickConfigControl = {
+const control: NodeQuickConfigControl = {
+  nodeType: "test-node",
   field: "v2vResolution",
   ariaLabel: "Resolution",
   options: (data) =>
@@ -144,7 +145,7 @@ describe("ai-avatar NODE_QUICK_CONFIGS registration", () => {
 // cinematic-avatar quick-config registration
 // ===========================================================================
 describe("cinematic-avatar NODE_QUICK_CONFIGS registration", () => {
-  const resolve = (c: QuickConfigControl, data: Record<string, unknown> = {}) =>
+  const resolve = (c: NodeQuickConfigControl, data: Record<string, unknown> = {}) =>
     typeof c.options === "function" ? c.options(data) : c.options
 
   it("registers 3 controls: resolution, aspectRatio, duration", () => {
@@ -197,7 +198,7 @@ describe("cinematic-avatar NODE_QUICK_CONFIGS registration", () => {
 // route rejects a value the strip let the user pick.
 // ===========================================================================
 describe("assemble-narrated-video NODE_QUICK_CONFIGS registration", () => {
-  const resolve = (c: QuickConfigControl, data: Record<string, unknown> = {}) =>
+  const resolve = (c: NodeQuickConfigControl, data: Record<string, unknown> = {}) =>
     typeof c.options === "function" ? c.options(data) : c.options
 
   it("registers exactly 3 controls: voiceVolume, clipAudioVolume, maxSlowdown", () => {
@@ -256,7 +257,7 @@ import { COMPOSITION_RATIOS } from "@/components/editor/config-panels/model-opti
 import { NODE_DEFINITIONS } from "@/types/nodes"
 
 describe("generate-3d-scene NODE_QUICK_CONFIGS registration", () => {
-  const resolve = (c: QuickConfigControl, data: Record<string, unknown> = {}) =>
+  const resolve = (c: NodeQuickConfigControl, data: Record<string, unknown> = {}) =>
     typeof c.options === "function" ? c.options(data) : c.options
   const defaults = NODE_DEFINITIONS.find((d) => d.type === "generate-3d-scene")!.defaultData as Record<string, unknown>
 
@@ -304,7 +305,7 @@ describe("generate-3d-scene NODE_QUICK_CONFIGS registration", () => {
 import { VIDEO_ANALYSIS_TIER_ORDER, DEFAULT_VIDEO_ANALYSIS_TIER, LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
 
 describe("video-analysis NODE_QUICK_CONFIGS registration", () => {
-  const resolve = (c: QuickConfigControl, data: Record<string, unknown> = {}) =>
+  const resolve = (c: NodeQuickConfigControl, data: Record<string, unknown> = {}) =>
     typeof c.options === "function" ? c.options(data) : c.options
 
   it("registers exactly 2 controls: llmModel (tier), selectionMode", () => {
@@ -354,7 +355,8 @@ describe("QuickConfigSelect provider-aware fail-safe", () => {
   })
 
   it("preserveOnHide hides the control WITHOUT clearing the stored value", () => {
-    const preserveControl: QuickConfigControl = {
+    const preserveControl: NodeQuickConfigControl = {
+      nodeType: "test-node",
       field: "engine",
       ariaLabel: "Engine",
       preserveOnHide: true,
@@ -399,7 +401,8 @@ describe("QuickConfigSelect provider-aware fail-safe", () => {
   })
 
   it("supports plain static option arrays (no provider awareness)", () => {
-    const staticControl: QuickConfigControl = {
+    const staticControl: NodeQuickConfigControl = {
+      nodeType: "test-node",
       field: "provider",
       ariaLabel: "Model",
       options: [{ value: "minimax", label: "MiniMax" }],
@@ -442,7 +445,7 @@ import { SUNO_MODELS as SUNO_MODELS_SHARED } from "@nodaro/shared/models"
 import { NODE_QUICK_CONFIGS, readQuickConfigValue } from "../node-quick-configs"
 
 describe("suno-generate quick configs", () => {
-  const controls = NODE_QUICK_CONFIGS()["suno-generate"]
+  const controls = getQuickConfigs("suno-generate")
   it("is Model, Instrumental, Vocal", () => {
     expect(controls.map((c) => c.field)).toEqual(["model", "instrumental", "vocalGender"])
   })
@@ -460,7 +463,7 @@ describe("suno-generate quick configs", () => {
     expect(optsFn({ instrumental: false }).map((o) => o.value)).toEqual(["auto", "male", "female"])
   })
   it("other suno-* nodes keep just the model control", () => {
-    expect(NODE_QUICK_CONFIGS()["suno-cover"].map((c) => c.field)).toEqual(["model"])
+    expect(getQuickConfigs("suno-cover").map((c) => c.field)).toEqual(["model"])
   })
 
   // The strip offers every Suno version, in the shared order (V6 first). Static
@@ -485,7 +488,7 @@ describe("LLM-backed quick configs — reasoningEffortControl", () => {
   })
 
   it("describe-to-picker registers [llmModel, reasoningEffort] via the vision-model control", () => {
-    expect(NODE_QUICK_CONFIGS()["describe-to-picker"].map((c) => c.field)).toEqual(["llmModel", "reasoningEffort"])
+    expect(getQuickConfigs("describe-to-picker").map((c) => c.field)).toEqual(["llmModel", "reasoningEffort"])
   })
 
   it("forced-alignment has NO quick-config entry (fixed-price node — ForcedAlignmentData has no llmModel/reasoningEffort field)", () => {
@@ -493,19 +496,19 @@ describe("LLM-backed quick configs — reasoningEffortControl", () => {
   })
 
   it("returns [] for a model with no declared reasoning levels (control self-hides)", () => {
-    const effortControl = NODE_QUICK_CONFIGS()["generate-script"].find((c) => c.field === "reasoningEffort")!
+    const effortControl = getQuickConfigs("generate-script").find((c) => c.field === "reasoningEffort")!
     const opts = typeof effortControl.options === "function" ? effortControl.options({ llmModel: "gpt-5.2" }) : effortControl.options
     expect(opts).toEqual([])
   })
 
   it("returns [] when no llmModel is set on the node yet", () => {
-    const effortControl = NODE_QUICK_CONFIGS()["qa-check"].find((c) => c.field === "reasoningEffort")!
+    const effortControl = getQuickConfigs("qa-check").find((c) => c.field === "reasoningEffort")!
     const opts = typeof effortControl.options === "function" ? effortControl.options({}) : effortControl.options
     expect(opts).toEqual([])
   })
 
   it("returns Auto + the model's declared reasoning levels with friendly labels", () => {
-    const effortControl = NODE_QUICK_CONFIGS()["generate-script"].find((c) => c.field === "reasoningEffort")!
+    const effortControl = getQuickConfigs("generate-script").find((c) => c.field === "reasoningEffort")!
     const opts = typeof effortControl.options === "function" ? effortControl.options({ llmModel: "gpt-5.6-terra" }) : effortControl.options
     expect(opts.map((o) => o.value)).toEqual(["auto", "none", "low", "medium", "high", "xhigh", "max"])
     // Auto is the sentinel (unset ⇒ vendor default); levels use the shared friendly labels
@@ -517,7 +520,7 @@ describe("LLM-backed quick configs — reasoningEffortControl", () => {
 
   it("the effort labels say what a level costs in the pricing mode the server's LAST answer showed — a rollback mid-session included", async () => {
     const { notePricingAnswer, forgetLlmPricingMode } = await import("@/hooks/use-llm-pricing-mode")
-    const effortControl = NODE_QUICK_CONFIGS()["generate-script"].find((c) => c.field === "reasoningEffort")!
+    const effortControl = getQuickConfigs("generate-script").find((c) => c.field === "reasoningEffort")!
     const optsOf = () => (typeof effortControl.options === "function" ? effortControl.options({ llmModel: "gpt-5.6-terra" }) : effortControl.options)
     try {
       notePricingAnswer({ estimates: ["llm-chat:gpt-5.6-terra"] })
@@ -540,7 +543,7 @@ describe("LLM-backed quick configs — reasoningEffortControl", () => {
   it("a strip already on screen re-words its effort levels when an answer changes the pricing mode (no remount)", async () => {
     const { notePricingAnswer, forgetLlmPricingMode } = await import("@/hooks/use-llm-pricing-mode")
     const { act } = await import("@testing-library/react")
-    const effortControl = NODE_QUICK_CONFIGS()["generate-script"].find((c) => c.field === "reasoningEffort")!
+    const effortControl = getQuickConfigs("generate-script").find((c) => c.field === "reasoningEffort")!
     const { getByTestId } = render(<QuickConfigSelect nodeId="n1" control={effortControl} value="max" data={{ llmModel: "gpt-5.6-terra", reasoningEffort: "max" }} />)
     try {
       expect(getByTestId("item-max").textContent).toBe("Max")
@@ -554,7 +557,7 @@ describe("LLM-backed quick configs — reasoningEffortControl", () => {
   })
 
   it("the other LLM nodes keep their effort control as it was: an unset effort reads unset, whatever the model", () => {
-    const effortControl = NODE_QUICK_CONFIGS()["qa-check"].find((c) => c.field === "reasoningEffort")!
+    const effortControl = getQuickConfigs("qa-check").find((c) => c.field === "reasoningEffort")!
     expect(readQuickConfigValue(effortControl, {})).toBe("")
     expect(readQuickConfigValue(effortControl, { llmModel: "gpt-5.6-terra" })).toBe("")
   })
@@ -567,8 +570,8 @@ describe("LLM-backed quick configs — reasoningEffortControl", () => {
 // strip must SHOW them: an untouched node runs Gemini 3.8 Flash at Auto, not
 // "the first model, no effort lever".
 describe("describe-to-picker quick configs — the strip shows the default the run uses", () => {
-  const [modelControl, effortControl] = NODE_QUICK_CONFIGS()["describe-to-picker"]
-  const optionsOf = (control: QuickConfigControl, data: Record<string, unknown>) =>
+  const [modelControl, effortControl] = getQuickConfigs("describe-to-picker")
+  const optionsOf = (control: NodeQuickConfigControl, data: Record<string, unknown>) =>
     typeof control.options === "function" ? control.options(data) : control.options
 
   it("an untouched node shows the default model, which the strip offers", () => {
@@ -672,7 +675,8 @@ describe("generate-video-pro quick configs", () => {
 })
 
 describe("QuickConfigSelect customRange (slider + manual input)", () => {
-  const durationControl: QuickConfigControl = {
+  const durationControl: NodeQuickConfigControl = {
+    nodeType: "test-node",
     field: "duration",
     ariaLabel: "Duration",
     numeric: true,
@@ -748,7 +752,8 @@ describe("QuickConfigSelect customRange (slider + manual input)", () => {
 })
 
 describe("QuickConfigSelect defaultValue (unset-field display)", () => {
-  const aspectControl: QuickConfigControl = {
+  const aspectControl: NodeQuickConfigControl = {
+    nodeType: "test-node",
     field: "aspectRatio",
     ariaLabel: "Aspect",
     options: [
@@ -779,7 +784,7 @@ describe("QuickConfigSelect defaultValue (unset-field display)", () => {
 // video-to-video quick-config registration
 // ===========================================================================
 describe("video-to-video NODE_QUICK_CONFIGS registration", () => {
-  const resolve = (c: QuickConfigControl, data: Record<string, unknown> = {}) =>
+  const resolve = (c: NodeQuickConfigControl, data: Record<string, unknown> = {}) =>
     typeof c.options === "function" ? c.options(data) : c.options
 
   it("registers 3 controls: provider, v2vResolution, draft", () => {
@@ -828,7 +833,7 @@ describe("video-to-video NODE_QUICK_CONFIGS registration", () => {
 })
 
 describe("video-depth NODE_QUICK_CONFIGS registration", () => {
-  const resolve = (c: QuickConfigControl, data: Record<string, unknown> = {}) =>
+  const resolve = (c: NodeQuickConfigControl, data: Record<string, unknown> = {}) =>
     (typeof c.options === "function" ? c.options(data) : c.options).map((o) => o.value)
   const control = (field: string) => getQuickConfigs("video-depth").find((c) => c.field === field)!
 

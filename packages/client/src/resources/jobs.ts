@@ -215,6 +215,12 @@ export interface Job {
   input_data: unknown
   output_data: unknown
   error_message: string | null
+  /** The provider's own words for a failure, as the server stored them with
+   *  links cut to their host and secrets removed; `null` when the failure had
+   *  no provider text (a platform refusal, a timeout, a queue wait that ran
+   *  out). Display it beside `error_message`; branch on `error_hint`, never on
+   *  these words. Absent on an older server. */
+  error_detail?: string | null
   /** Present on a failed job the worker classified as a provider
    *  content-policy block (`kind: "safety-block"`) or that a deployment's job
    *  policy rejected (`kind: "policy-block"`); absent/null otherwise.
@@ -422,6 +428,8 @@ export interface JobStatusResult {
   progress?: number
   output_data?: unknown
   error_message?: string | null
+  /** See {@link Job.error_detail}. */
+  error_detail?: string | null
   /** PR9: see {@link Job.error_hint}. */
   error_hint?: JobErrorHint | null
   /** PR9: see {@link Job.credit_status}. */

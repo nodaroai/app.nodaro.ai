@@ -164,6 +164,8 @@ export interface NodeState {
   /** Resolved inputs fed to this node (for debugging). */
   inputs?: Record<string, unknown>
   error?: string
+  /** The provider's own words for the failure (`jobs.error_detail`), shown under `error`; display only. */
+  errorDetail?: string | null
   /** Why the RUN skipped this node (`empty_input`); absent on a router-gated one. */
   skipReason?: string
   startedAt?: string

@@ -23,10 +23,15 @@ import { FRONTEND_SRC, unitComponentFiles } from "@/test-utils/unit-component-fi
 const DIR = path.resolve(__dirname, "..")
 const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")
 
-/** Everything model-options.ts exports (constants and preset getters) is a raw-English table. */
-const MODEL_OPTIONS_EXPORTS = new Set(
-  [...strip(fs.readFileSync(path.join(DIR, "model-options.ts"), "utf8")).matchAll(/^export (?:const|function) (\w+)/gm)].map((m) => m[1]),
-)
+/** Everything model-options.ts exports (constants and preset getters) is a raw-English table — the menus'
+ *  rows it re-exports from @nodaro/render-rules included. */
+const MODEL_OPTIONS_SOURCE = strip(fs.readFileSync(path.join(DIR, "model-options.ts"), "utf8"))
+const MODEL_OPTIONS_EXPORTS = new Set([
+  ...[...MODEL_OPTIONS_SOURCE.matchAll(/^export (?:const|function) (\w+)/gm)].map((m) => m[1]),
+  ...[...MODEL_OPTIONS_SOURCE.matchAll(/^export \{([^}]*)\} from "@nodaro\/render-rules"/gm)].flatMap((m) =>
+    m[1].split(",").map((part) => part.trim()).filter((name) => /^[A-Z][A-Z0-9_]+$/.test(name)),
+  ),
+])
 
 /** Names a file imports from a raw-table module. */
 export function rawTableImports(src: string): Set<string> {

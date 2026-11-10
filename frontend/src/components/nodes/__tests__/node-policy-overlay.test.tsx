@@ -96,4 +96,41 @@ describe("NodePolicyOverlay", () => {
     })
     expect(container).toBeEmptyDOMElement()
   })
+
+  // The provider's own words for a failure (`errorDetail`, the job's
+  // `error_detail`): a strip along the card's bottom edge, the words as the
+  // provider wrote them, the whole text on hover.
+  const WORDS = "task failed: [400] Request blocked: The uploaded image may contain protected or restricted IP content."
+
+  it("a failed node with the provider's words shows them along the bottom edge, whole on hover", () => {
+    renderFor({
+      executionStatus: "failed",
+      errorMessage: "The video model declined one of your pictures as possibly copyrighted. Try a different picture.",
+      errorHint: { kind: "safety-block", class: "copyright", retried: false, subject: "input_image" },
+      errorDetail: WORDS,
+    })
+    const strip = screen.getByTestId("node-provider-words")
+    expect(strip).toHaveTextContent(WORDS)
+    expect(strip).toHaveAttribute("title", WORDS)
+  })
+
+  it("a policy block keeps its panel; the words do not paint over it", () => {
+    renderFor({
+      executionStatus: "failed",
+      errorHint: { kind: "policy-block", policyId: "p", reason: "Blocked by the deployment's policy", hookPoint: "result" },
+      errorDetail: WORDS,
+    })
+    expect(screen.getByText("Blocked by the deployment's policy")).toBeInTheDocument()
+    expect(screen.queryByTestId("node-provider-words")).toBeNull()
+  })
+
+  it("words left on a node that is not failed paint nothing", () => {
+    const { container } = renderFor({ executionStatus: "completed", errorDetail: WORDS })
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it("a failed node without the words gets no strip", () => {
+    const { container } = renderFor({ executionStatus: "failed", errorMessage: "Provider timeout", errorDetail: "" })
+    expect(container).toBeEmptyDOMElement()
+  })
 })

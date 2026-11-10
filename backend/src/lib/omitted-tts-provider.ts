@@ -1,5 +1,3 @@
-import { DEFAULT_TTS_PROVIDER, getMaxTtsChars, type TtsProvider } from "@nodaro/shared/models"
-
 /**
  * The speech model a request runs on when nothing names one — the ONE rule every
  * omitted-provider lane reads: the REST route (its credit guard and its handler), the
@@ -13,18 +11,11 @@ import { DEFAULT_TTS_PROVIDER, getMaxTtsChars, type TtsProvider } from "@nodaro/
  * truncated or rejected. Reads the model and its cap from the shared constants, so
  * moving the default moves this rule with it.
  *
- * `text` is the text that is actually sent (after any pre/post text). A caller that
- * names a model never comes here: the length rule never overrides a chosen model.
+ * `ttsModelOf` is the speech model a text-to-speech request runs: the one it names
+ * (the legacy "elevenlabs" is turbo), else the omitted-provider rule. The route's
+ * credit guard, its handler and the job's recorded model all read it, and so does
+ * the editor's speech menu (`@nodaro/render-rules`, where both live, so a menu row
+ * is judged as the model it runs). A caller that names a model never reaches the
+ * length rule: it never overrides a chosen model.
  */
-export function resolveOmittedTtsProvider(text: string): TtsProvider {
-  return text.length <= getMaxTtsChars(DEFAULT_TTS_PROVIDER) ? DEFAULT_TTS_PROVIDER : "elevenlabs-turbo"
-}
-
-/**
- * The speech model a text-to-speech request runs: the one it names (the legacy
- * "elevenlabs" is turbo), else the omitted-provider rule above. The route's
- * credit guard, its handler and the job's recorded model all read this.
- */
-export function ttsModelOf(provider: string | undefined, text: string): string {
-  return provider === "elevenlabs" ? "elevenlabs-turbo" : (provider ?? resolveOmittedTtsProvider(text))
-}
+export { resolveOmittedTtsProvider, ttsModelOf } from "@nodaro/render-rules"

@@ -236,7 +236,7 @@ export function usecaseRefusedBeforeWorkPatch(
   data: Readonly<Record<string, unknown>>,
 ): Record<string, unknown> | undefined {
   if (!isUseCaseNodeType(nodeType) || typeof errorCode !== "string" || !USE_CASE_REFUSED_BEFORE_WORK_CODES.has(errorCode)) return undefined
-  return { executionStatus: "completed", errorCode: undefined, errorMessage: undefined, errorHint: undefined, jobAwaitingReview: undefined, ...shownRunList(nodeType, data) }
+  return { executionStatus: "completed", errorCode: undefined, errorMessage: undefined, errorHint: undefined, errorDetail: undefined, jobAwaitingReview: undefined, ...shownRunList(nodeType, data) }
 }
 
 /** The node's own list of the run whose take is on show, rebuilt from that run's takes; empty when it has none. */

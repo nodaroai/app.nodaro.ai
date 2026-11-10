@@ -19,6 +19,7 @@ import {
   IMAGE_GEN_MODELS,
   LIP_SYNC_MODELS,
   MODIFY_IMAGE_MODELS,
+  MOTION_TRANSFER_MODELS,
   TTS_MODELS,
   UPSCALE_IMAGE_MODELS,
   VIDEO_DEPTH_MODELS,
@@ -33,6 +34,7 @@ import { PROVIDER_NODE_CATEGORIES } from "@/lib/provider-node-models"
 import { DESCRIBE_TO_PICKER_MODELS, LLM_FEATURE_DEFAULTS, LLM_MODELS, STRUCTURED_VISION_MODELS, orderedLlmModels, type LlmModelDef } from "@nodaro/shared/llm-models"
 import { MODEL_CATALOG, normalizeModelInput } from "@nodaro/shared/model-catalog"
 import { VIDEO_MASK_PROVIDERS } from "@nodaro/shared/media"
+import { motionTransferModelOf } from "@nodaro/render-rules"
 
 afterEach(() => __resetSurfaceAvailabilityForTests(null))
 
@@ -55,7 +57,13 @@ const structured = new Set(STRUCTURED_VISION_MODELS.map((m) => m.id))
  * written out again here from the panel's own registry so the rule is held to
  * the menu, not to itself (the census pins each panel to the same registry).
  */
-const MENU_ROWS: Readonly<Record<string, { readonly field: string; readonly rows: () => readonly string[]; readonly data?: Record<string, unknown> }>> = {
+const MENU_ROWS: Readonly<Record<string, {
+  readonly field: string
+  readonly rows: () => readonly string[]
+  readonly data?: Record<string, unknown>
+  /** The model a row runs, for a menu whose rows are engine names (Motion Transfer's). */
+  readonly modelOf?: (row: string) => string
+}>> = {
   "generate-image": { field: "provider", rows: () => values(IMAGE_GEN_MODELS) },
   "modify-image": { field: "provider", rows: () => values(MODIFY_IMAGE_MODELS) },
   "upscale-image": { field: "provider", rows: () => values(UPSCALE_IMAGE_MODELS) },
@@ -69,6 +77,8 @@ const MENU_ROWS: Readonly<Record<string, { readonly field: string; readonly rows
   "video-to-video": { field: "provider", rows: () => values(VIDEO_V2V_MODELS) },
   "video-depth": { field: "provider", rows: () => values(VIDEO_DEPTH_MODELS) },
   "video-mask": { field: "provider", rows: () => [...VIDEO_MASK_PROVIDERS] },
+  // Its rows are engines of catalog models: `kling` runs `motion-transfer`, `kling-3.0` runs `kling-3.0-motion`.
+  "motion-transfer": { field: "provider", rows: () => values(MOTION_TRANSFER_MODELS), modelOf: motionTransferModelOf },
   "lip-sync": { field: "provider", rows: () => values(LIP_SYNC_MODELS) },
   provider: { field: "provider", rows: () => values(PROVIDER_NODE_CATEGORIES.video.models) },
   "text-to-speech": { field: "provider", rows: () => values(TTS_MODELS) },
@@ -101,6 +111,9 @@ const read = (data: Record<string, unknown>, field: string): unknown => {
   return tail === undefined ? v : (v as Record<string, unknown> | undefined)?.[tail]
 }
 
+/** The model a menu row makes the node run. */
+const modelOfRow = (menu: (typeof MENU_ROWS)[string], row: string): string => (menu.modelOf ? menu.modelOf(row) : row)
+
 /** The model a covered node runs from its defaults, before the rule. */
 const defaultModelOf = (type: string, data: Record<string, unknown>) => NEW_NODE_MODEL_LEVERS[type]![0]!.runs(data)
 
@@ -117,12 +130,12 @@ describe("a node made from its defaults on a restricted deployment", () => {
     restrictedWithholding([model!])
 
     const plan = planNewNodeModels(type, data)
-    const expected = menu.rows().find((row) => row !== model)
+    const expected = menu.rows().find((row) => modelOfRow(menu, row) !== model)
     expect(plan.moved).toEqual([{ field: menu.field, from: model, to: expected }])
     expect(read(plan.data, menu.field)).toBe(expected)
     // The node now runs the chosen model, which its menu shows as its first row.
-    expect(defaultModelOf(type, plan.data)).toBe(expected)
-    expect(menu.rows().filter((row) => row === expected || !isModelUnavailable(row))[0]).toBe(expected)
+    expect(defaultModelOf(type, plan.data)).toBe(modelOfRow(menu, expected!))
+    expect(menu.rows().filter((row) => row === expected || !isModelUnavailable(modelOfRow(menu, row)))[0]).toBe(expected)
     // Nothing else in the data moved for a node whose settings do not follow its model.
     if (!["generate-image", "modify-image", "generate-video"].includes(type)) {
       const { [menu.field.split(".")[0]!]: _moved, ...rest } = plan.data
@@ -135,9 +148,9 @@ describe("a node made from its defaults on a restricted deployment", () => {
     const menu = MENU_ROWS[type]!
     const data = { ...defaultsOf(type), ...menu.data }
     const model = defaultModelOf(type, data)!
-    const others = menu.rows().filter((row) => row !== model)
+    const others = menu.rows().filter((row) => modelOfRow(menu, row) !== model)
     if (others.length < 2) return
-    restrictedWithholding([model, others[0]!])
+    restrictedWithholding([model, modelOfRow(menu, others[0]!)])
     expect(read(withOfferedNewNodeModels(type, data), menu.field)).toBe(others[1])
   })
 
@@ -145,7 +158,7 @@ describe("a node made from its defaults on a restricted deployment", () => {
     const menu = MENU_ROWS[type]!
     const data = { ...defaultsOf(type), ...menu.data }
     const model = defaultModelOf(type, data)!
-    restrictedWithholding([model, ...menu.rows()])
+    restrictedWithholding([model, ...menu.rows().map((row) => modelOfRow(menu, row))])
     const plan = planNewNodeModels(type, data)
     expect(plan.data).toBe(data)
     expect(plan.moved).toEqual([])
@@ -294,7 +307,7 @@ describe("byte-identical where models are not restricted", () => {
     const data = defaultsOf("modify-image")
     expect(withOfferedNewNodeModels("modify-image", data)).toBe(data)
     // The menu still hides it for anyone who opens it, as before.
-    expect(withoutDeniedModels(MODIFY_IMAGE_MODELS).map((m) => m.value)).not.toContain("gpt-image-2-6-flare-i2i")
+    expect(withoutDeniedModels(MODIFY_IMAGE_MODELS, { nodeType: "modify-image" }).map((m) => m.value)).not.toContain("gpt-image-2-6-flare-i2i")
   })
 })
 

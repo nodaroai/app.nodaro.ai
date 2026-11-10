@@ -281,7 +281,7 @@ export function FaceConfig({ data, onUpdate, sources, fieldMappings, onMapField 
         <ModelSearchSelect
           value={data.provider || IMAGE_MODEL_ROLE_DEFAULTS.character}
           onChange={(v) => onUpdate({ provider: v })}
-          options={withoutDeniedModels(IMAGE_GEN_MODELS)}
+          options={withoutDeniedModels(IMAGE_GEN_MODELS, { nodeType: "face" })}
           triggerClassName="h-8 text-xs mt-1"
           contentClassName="z-[9999]"
           ariaLabel={t("pipe.imageModel")}

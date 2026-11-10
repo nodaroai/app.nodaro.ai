@@ -127,7 +127,7 @@ function showsThisRun(nodeId: string): boolean {
 
 /** An input the wires refuse: the node fails with the wires' sentence before any call. */
 function refuse(node: WorkflowNode, message: string): Promise<never> {
-  write(node.id, { executionStatus: "failed", errorMessage: message, errorHint: undefined, currentJobId: undefined, currentJobProgress: undefined })
+  write(node.id, { executionStatus: "failed", errorMessage: message, errorHint: undefined, errorDetail: undefined, currentJobId: undefined, currentJobProgress: undefined })
   guardedToast.error(tx("nodeRun.failed", { label: labelOf(node) }), { description: ugcNodeMessageText(message) })
   return Promise.reject(new Error(message))
 }
@@ -144,6 +144,8 @@ async function guardedRun(node: WorkflowNode, ctx: ExecutionContext, run: () => 
       errorMessage: message,
       // A moderation block's classified hint, when the job carried one; a stale one goes.
       errorHint: (err as { errorHint?: unknown } | null)?.errorHint ?? undefined,
+      // The provider's own words, when the job carried them; a stale one goes.
+      errorDetail: (err as { errorDetail?: unknown } | null)?.errorDetail ?? undefined,
       currentJobId: undefined,
       currentJobProgress: undefined,
       jobAwaitingReview: undefined,

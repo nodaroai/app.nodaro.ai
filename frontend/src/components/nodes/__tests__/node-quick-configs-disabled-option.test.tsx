@@ -34,10 +34,11 @@ vi.mock("@/components/ui/select", async () => {
   }
 })
 
-import { QuickConfigSelect, type QuickConfigControl } from "../node-quick-configs"
+import { QuickConfigSelect, type NodeQuickConfigControl, type QuickConfigControl } from "../node-quick-configs"
 
 const REASON = "Nothing was cut out between the speakers."
-const control: QuickConfigControl = {
+const control: NodeQuickConfigControl = {
+  nodeType: "test-node",
   field: "switchType",
   ariaLabel: "Switch",
   options: [
@@ -73,7 +74,7 @@ describe("QuickConfigSelect: a greyed option", () => {
   })
 
   it("does not snap a stored value that is only greyed", () => {
-    const stored: QuickConfigControl = { ...control, options: [{ value: "cut", label: "Cut" }, { value: "xfade:wipe-left", label: "Wipe Left", disabled: true, reason: REASON }] }
+    const stored: NodeQuickConfigControl = { ...control, options: [{ value: "cut", label: "Cut" }, { value: "xfade:wipe-left", label: "Wipe Left", disabled: true, reason: REASON }] }
     render(<QuickConfigSelect nodeId="n1" control={stored} value="xfade:wipe-left" data={{}} />)
     expect(updateNodeData).not.toHaveBeenCalled()
   })

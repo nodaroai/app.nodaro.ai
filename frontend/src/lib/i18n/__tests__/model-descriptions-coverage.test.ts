@@ -1,3 +1,4 @@
+// @test-watches frontend/src/components/editor/config-panels/model-options.ts packages/render-rules/src/model-menus.ts
 import { describe, it, expect } from "vitest"
 import fs from "node:fs"
 import path from "node:path"
@@ -7,8 +8,9 @@ import { LABEL_TABLES, localizeModelDescription } from "../labels"
 
 /**
  * Model DESCRIPTIONS ("Higher detail, production images") are marketing
- * micro-copy that ships as `desc:` strings in config-panels/model-options.ts
- * and in @nodaro/shared's LLM / voice-changer tables. They render under the
+ * micro-copy that ships as `desc:` strings in config-panels/model-options.ts,
+ * in the menus' rows (@nodaro/render-rules model-menus.ts) and in
+ * @nodaro/shared's LLM / voice-changer tables. They render under the
  * model name in every provider dropdown and in the description hint below
  * it, and were the last English left in a translated config panel. Like node
  * labels, they are looked up by their English string — an unmapped one
@@ -19,7 +21,8 @@ const SRC = path.resolve(__dirname, "../../..")
 const read = (rel: string) => fs.readFileSync(path.join(SRC, rel), "utf8")
 
 function shippedDescriptions(): string[] {
-  const options = read("components/editor/config-panels/model-options.ts")
+  // The menus' rows live in @nodaro/render-rules (model-menus.ts), the rest of the tables in model-options.ts.
+  const options = read("components/editor/config-panels/model-options.ts") + "\n" + read("../../packages/render-rules/src/model-menus.ts")
   // `desc:` AND `description:` — the upscale / modify tables use the long form.
   // Read as source text, so a `–` escape is decoded to the character the
   // runtime string (and the tables' keys) actually hold.

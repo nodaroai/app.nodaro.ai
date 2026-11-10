@@ -84,6 +84,36 @@ describe("sanitizeJobForPublic — the model in input_data", () => {
   })
 })
 
+describe("sanitizeJobForPublic — the provider's own words (error_detail) reach the owner", () => {
+  const failed = {
+    ...(baseJob as Record<string, unknown>),
+    status: "failed",
+    error_message: "The video model declined one of your pictures as possibly copyrighted. Try a different picture.",
+    error_detail: "task failed: [400] Request blocked: The uploaded image may contain protected or restricted IP content.",
+    reconcile_last_error: "upstream_failed",
+    reconcile_attempts: 0,
+  }
+
+  it("the owner reads the redacted provider text beside the sentence; the operator's bookkeeping stays hidden", () => {
+    const out = sanitizeJobForPublic(failed as never, false) as unknown as Record<string, unknown>
+    expect(out.error_detail).toBe(failed.error_detail)
+    expect(out.error_message).toBe(failed.error_message)
+    expect(out).not.toHaveProperty("reconcile_last_error")
+    expect(out).not.toHaveProperty("reconcile_attempts")
+    expect(out).not.toHaveProperty("provider_cost")
+  })
+
+  it("an admin reads it too", () => {
+    const out = sanitizeJobForPublic(failed as never, true) as unknown as Record<string, unknown>
+    expect(out.error_detail).toBe(failed.error_detail)
+  })
+
+  it("a failure with no provider text carries no words", () => {
+    const out = sanitizeJobForPublic({ ...failed, error_detail: null } as never, false) as unknown as Record<string, unknown>
+    expect(out.error_detail ?? null).toBeNull()
+  })
+})
+
 /**
  * THE LEAK PROOF (spec D6), as a test.
  *

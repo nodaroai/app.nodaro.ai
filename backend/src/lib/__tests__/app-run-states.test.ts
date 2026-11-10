@@ -34,6 +34,31 @@ describe("mergeNodeStateEdits — the runner's edits over a run's states", () =>
   })
 })
 
+describe("appRunViewStates — the provider's words are the creator's, never the runner's", () => {
+  it("drops errorDetail from every state a runner sees and keeps the rest as it was", () => {
+    const view = appRunViewStates(
+      {
+        a: { status: "failed", error: "The video model declined one of your pictures as possibly copyrighted.", errorDetail: "words that can quote the creator's prompt" },
+        b: { status: "completed", output: { url: "x" } },
+      },
+      [],
+      null,
+    ) as Record<string, Record<string, unknown>>
+    expect(view.a).toEqual({ status: "failed", error: "The video model declined one of your pictures as possibly copyrighted." })
+    expect(view.b).toEqual({ status: "completed", output: { url: "x" } })
+  })
+
+  it("drops them from a final's states and from the runner's edits too", () => {
+    const view = appRunViewStates(
+      { render: preview },
+      [done({ render: { ...final, errorDetail: "final words" } })],
+      { render: { errorDetail: "edited words", output: { note: "kept" } } },
+    ) as Record<string, Record<string, unknown>>
+    expect(view.render).not.toHaveProperty("errorDetail")
+    expect((view.render.output as Record<string, unknown>).note).toBe("kept")
+  })
+})
+
 describe("appRunViewStates — the final's results over the preview's", () => {
   it("a node the final completed shows the final", () => {
     const view = appRunViewStates({ render: preview, tail: { status: "skipped" } }, [done({

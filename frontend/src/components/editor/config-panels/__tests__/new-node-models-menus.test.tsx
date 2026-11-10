@@ -47,7 +47,7 @@ describe("the menu of a new node shows the model it starts on", () => {
 
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <ModelSearchSelect value={String(data.provider)} onChange={() => {}} options={withoutDeniedModels(VIDEO_GEN_MODELS)} ariaLabel="Provider" />
+        <ModelSearchSelect value={String(data.provider)} onChange={() => {}} options={withoutDeniedModels(VIDEO_GEN_MODELS, { nodeType: "generate-video" })} ariaLabel="Provider" />
       </QueryClientProvider>,
     )
     const trigger = screen.getByRole("combobox", { name: "Provider" })

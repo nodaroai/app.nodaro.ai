@@ -566,6 +566,12 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                         <div className="rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 p-4">
                           <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-1">{t("common.error")}</p>
                           <p className="text-sm text-red-500 dark:text-red-300/70">{state.error}</p>
+                          {/* The provider's own words about the failure, under the sentence. */}
+                          {typeof state.errorDetail === "string" && state.errorDetail !== "" && (
+                            <p data-testid="node-state-provider-words" className="mt-2 text-[11px] leading-snug text-red-700 dark:text-red-200 break-words">
+                              {state.errorDetail}
+                            </p>
+                          )}
                         </div>
                       ) : state.status === "running" ? (
                         <div className="flex flex-col items-center justify-center h-64 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
@@ -897,6 +903,12 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                         <p className="text-sm text-red-600 dark:text-red-400 mb-2 font-medium">{t("run.jobFailed")}</p>
                         {job.error_message && (
                           <p className="text-xs text-red-500 dark:text-red-300/70 text-center">{job.error_message}</p>
+                        )}
+                        {/* The provider's own words about the failure, under the sentence: the owner's own job. */}
+                        {job.error_detail && (
+                          <p data-testid="job-provider-words" className="mt-2 max-w-full text-[11px] leading-snug text-red-700 dark:text-red-200 text-center break-words">
+                            {job.error_detail}
+                          </p>
                         )}
                       </div>
                     ) : hasCriticOutput(job.output_data) ? (

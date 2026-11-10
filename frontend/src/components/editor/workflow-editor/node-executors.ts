@@ -37,6 +37,7 @@ import { pollJobWithNodeUpdate, guardedToast, getJobStatusLeanForNode, RUN_START
 import { runResultIdentity } from "@/lib/run-result-identity";
 import { shouldAbandonNode } from "./abandon-guard";
 import { tx } from "@/lib/i18n";
+import { failedJobError } from "@/lib/failed-job-error";
 
 /** Extract kieTaskId from output data for downstream video chaining. */
 const extractKieTaskId = (od: Record<string, unknown>) => {
@@ -631,12 +632,13 @@ export function runScriptGeneration(
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
                   errorMessage: errMsg,
+                  errorDetail: job.error_detail ?? undefined,
                   currentJobId: undefined,
                 });
                 guardedToast.error(tx("nodeRun.scriptGenerationFailed"), {
                   description: errMsg,
                 });
-                reject(new Error(errMsg));
+                reject(failedJobError(errMsg, job));
               }
             } catch (err) {
               pollFailures++;
@@ -759,12 +761,13 @@ export function runLottiePlanGeneration(
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
                   errorMessage: errMsg,
+                  errorDetail: job.error_detail ?? undefined,
                   currentJobId: undefined,
                 });
                 guardedToast.error(tx("nodeRun.lottieGenerationFailed"), {
                   description: errMsg,
                 });
-                reject(new Error(errMsg));
+                reject(failedJobError(errMsg, job));
               }
             } catch (err) {
               pollFailures++;
