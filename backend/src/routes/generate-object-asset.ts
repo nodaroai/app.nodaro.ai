@@ -21,6 +21,7 @@ import {
   buildObjectAssetDescriptionUserMessage,
 } from "../lib/object-asset-description.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
+import { providerRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { isFilledText, llmProviderOf, rawBodyOf } from "../lib/concurrency-lanes/live-routes.js"
 import { ASSET_DESCRIPTION_MODEL } from "../lib/asset-description-prompt.js"
@@ -104,7 +105,7 @@ function buildVariantPrompt(
 export async function generateObjectAssetRoutes(app: FastifyInstance) {
   app.post("/v1/generate-object-asset", {
     preHandler: [
-      creditGuard((req) => plainEntityCheckIdentifier(req.body, IMAGE_MODEL_ROLE_DEFAULTS.general)),
+      creditGuard((req) => plainEntityCheckIdentifier(req.body, IMAGE_MODEL_ROLE_DEFAULTS.general), { runModel: providerRunModel(IMAGE_MODEL_ROLE_DEFAULTS.general) }),
       // The lane last, and only for a request that will make the LLM call.
       laneGuard("llm", {
         // The studio path drafts a missing description with an LLM before it reserves.

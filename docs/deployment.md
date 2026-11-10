@@ -127,12 +127,18 @@ here for each one anyway.
 | `EDITION` | `community` | `community` · `business` · `cloud` — see §5 |
 | `PUBLIC_URL` | `http://localhost:3000` | The install's public origin: OAuth callbacks, media URLs, CORS. On Cloud it also names the environment in the [template seeder claim](#template-seeder-claim-cloud) |
 | `PUBLIC_URL_SAME_ORIGIN` | `""` (unset = `apiUrl` is `PUBLIC_URL`) | Set to `true` when the service answers on more than one hostname and the API shares the origin of the app (the default single-container layout, where the bundled proxy fronts both the SPA and `/v1`). `/config.js` then carries `apiUrl: "/"` instead of `PUBLIC_URL`, so the browser's SSE streams stay on whichever hostname the visitor is actually on rather than being pinned to the one `PUBLIC_URL` names. Leave unset for a genuine split origin — an API served from a different host than the app. Only the exact value `true` enables it. Restart to apply |
+| `ROBOTS_NOINDEX` | `""` (unset = search engines follow the app's own route allow-list) | Set to `true` on a deployment search engines must never index, such as a staging environment: every response then carries `X-Robots-Tag: noindex`, whatever serves it. Only the exact value `true` enables it. Restart to apply |
+| `LEGACY_UI_HOSTS` | `""` (unset = no host redirects) | With `FLOW_UI_ORIGIN`, moves the app's pages to their own host: see [Moving the app's pages to their own host](#moving-the-apps-pages-to-their-own-host). Bare host names (separated by commas or spaces, any letter case; no scheme, port, path, tab or line break) on which a top-level visit to a moved page is redirected. Set both, or neither: either one alone, a list naming only the new host, or an entry that is not a bare host name, and the server refuses to start. Restart to apply |
+| `FLOW_UI_ORIGIN` | `""` (unset = the feature is off) | The https origin the moved pages live on, e.g. `https://flow.example.com` (a trailing slash is allowed, no path): see [Moving the app's pages to their own host](#moving-the-apps-pages-to-their-own-host). Set it with `LEGACY_UI_HOSTS`, or not at all. Set alone, to anything but an https origin, or with `PUBLIC_URL` not another https origin, the server refuses to start |
+| `LEGACY_UI_REDIRECT_STATUS` | `302` | `302` (never cached) or `301` (cached by the browser only, for an hour). Any other value is `302` |
 | `CORS_ORIGIN` | `""` | Extra allowed browser origins, comma-separated (PUBLIC_URL is always allowed). These are also the hosts the SSO landing redirect is emitted **relative** on — same-origin by construction — where a request arriving on any other host gets the absolute `PUBLIC_URL` form |
 | `RESEND_API_KEY` | `""` | Cloud, organizations: API key for sending invitation emails through Resend. Unset = invitations are not emailed; the API returns a copy-and-paste link instead |
 | `EMAIL_FROM` | `""` | Cloud, organizations: the From address for invitation emails (a verified sender on the Resend account) |
 | `CLOUDFLARE_API_TOKEN` | `""` | Cloud, trends: a Cloudflare API token allowed to purge the zone's cache. With `CLOUDFLARE_ZONE_ID`, every change to the published trend catalog drops Cloudflare's copies of the guest catalog (by the `Cache-Tag: trends-catalog`), and a guest answer that names its language (`?locale=`) then says `s-maxage=86400`, so the edge may keep it a day. The process that made the change purges, and so does every API process within 10 s of seeing the catalog move (a change made from somewhere without these keys, such as another environment on the same database or a script, is purged too). Unset = no purge and no `s-maxage`: nothing promises the edge a copy it cannot drop. Cloudflare caches `/v1/trends*` only with a Cache Rule that makes it eligible, and that rule **must bypass the cache for requests that carry `Authorization`**: Cloudflare does not honour `Vary`, so without it a signed-in caller could be served a guest's copy (no favorites). Read at call time |
 | `CLOUDFLARE_ZONE_ID` | `""` | Cloud, trends: the Cloudflare zone of the deployment's hostnames, for the purge above. Both must be set. The same two keys let a content restriction drop the edge's copies of a restricted file's address (see [Content restrictions](./api-integration.md#13k-content-restrictions)): the zone must be the one serving `R2_PUBLIC_URL` and `R2_PUBLIC_FALLBACK_DOMAIN` (the edge answers success for a host it does not serve, and drops nothing). Without the keys the restriction still moves the file out of reach and records the purge as not configured. A restricted file's bytes wait under the `evidence/` prefix of the media bucket: on Cloudflare, add a rule on the media hosts that refuses the path `/evidence/*` (a self-hosted bucket's policy denies it already) |
 | `LOOPS_API_KEY` | `""` | Cloud: API key for syncing marketing-email consent to Loops (loops.so). Unset = the consent-to-contact sync is inert; consent is still recorded locally and reconciled once a key is set |
+| `STRIPE_TEST_CATALOG` | `""` | Cloud, a deployment on Stripe's test mode (a staging environment): the test-mode prices it sells, as JSON `{ "products": { "basic" \| "standard" \| "pro" \| "business": { "productId", "monthly", "yearly" } }, "retired": { "<price id>": { "plan", "interval" } }, "topUps": { "<price id>": <credits> } }`. Read only when `STRIPE_SECRET_KEY` is a test-mode key (`sk_test_`, or a restricted `rk_test_`); a live key always sells the live catalogue. Used only when whole: all four plans with both intervals, distinct ids, and packs that grant the live packs' credits one for one. Otherwise the live ids stay, with a warning at boot, and test mode shows those prices as unavailable. Restart to apply |
+| `STRIPE_REQUIRE_TEST_MODE` | `""` (unset = nothing is checked) | `true` for a deployment that must never reach Stripe's live mode, such as a staging environment on a copy of production's database: the server refuses to start while any setting holds a live Stripe key (`sk_live_`, `rk_live_` or `pk_live_`), naming each such setting, never the key. Any other value than `true` (`TRUE`, `1`, a trailing newline) also stops it from starting, so a typo never leaves the guard off. Restart to apply |
 | `LOOPS_MONTHLY_STATEMENT_ID` | `""` | Cloud: the Loops transactional template id of the monthly statement, sent on the 1st to each person who opted in (`monthlyStatementEmail` in their settings) and paid in the month: a short email with the month's payment documents. Unset = no statements are sent. The template's data variables: `name`, `month`, `paidUsd` (net of refunds), `documents` (`1 invoice and 2 receipts`), `documentTitle`, `documentLabel` and `documentUrl` (the newest linked document: the Stripe invoice's PDF, else the receipt's page, else the billing page), `balance`, `billingUrl` (all strings, never empty). Each person's month is claimed in `monthly_statements` before the send, so it never goes twice |
 | `LOOPS_COMPLAINT_VERIFY_ID` | `""` | Cloud: the Loops transactional template id of the public complaints form's email verification (`POST /v1/content-complaints`): the one-time link that proves the complainant's email. Data variables: `reference` (the case's number) and `verifyUrl` (the link, good for 72 hours). Unset = the case is still opened and recorded; the handler sees it was never mailed |
 | `LOOPS_COMPLAINT_RECEIVED_ID` | `""` | Cloud: the Loops transactional template id of the complaint acknowledgment, sent once the complainant's email is proven. Data variable: `reference`. Unset = no acknowledgment is sent; the case stands |
@@ -824,6 +830,23 @@ optional; each array empty = "keep the default"):
   The inversion is scoped to gateable ids — utility nodes (`sticky-note`,
   `preview`) and workflow-internal pseudo-types are never denied by omission,
   only by an explicit `deny` entry.
+
+  A model restriction holds on the model a request RUNS on, not only on the
+  one it names. A request that names no model is judged as the default its
+  route would run — the image default for its aspect ratio, a feature's
+  default LLM, a route's one fixed model — and a model named outside
+  `provider` (`llmModel`, Suno's `model`, Add Captions' `transcribe_provider`)
+  is judged too, before anything is created or charged
+  (`403 model_not_available`, on the run and on `POST /v1/quote` alike). A
+  workflow run (an app run, a scheduled or webhook run, an MCP or API run)
+  judges its nodes the same way: a node that names no model is judged on the
+  default it would run — Generate Image's for its ratio, Image to Image's edit
+  default, a video or speech node's default, a single-model node's one model —
+  and fails with `model_not_available` before its job is charged. So list
+  every model the deployment runs, the LLMs behind its text features
+  included: a request whose model is not listed is refused, not run on an
+  unlisted default. A deployment with no `models.allow` / `models.deny` and no
+  models override in Admin → Availability is not affected.
 
   The lists hold on the direct API too: every route that spends credits is
   checked as the node it runs, whatever its path — `POST /v1/suno/generate` as
@@ -2160,6 +2183,51 @@ working — a confusing state worth ruling out first.
 Direct-lane keys are unaffected: set `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`
 and those models leave KIE entirely, proxy or no proxy (see "Gemini
 routing").
+
+## Moving the app's pages to their own host
+
+A deployment can answer on a second host name (the same service, its own
+domain) and send visits to the app's pages there, while the original host
+keeps the API, OAuth, published apps, embeds and shared pages. Two settings
+turn it on, with `PUBLIC_URL` the kept host's https origin:
+
+```
+LEGACY_UI_HOSTS=app.example.com
+FLOW_UI_ORIGIN=https://flow.example.com
+```
+
+- On a host named in `LEGACY_UI_HOSTS` (separated by commas or spaces, any
+  letter case), a top-level `GET` or `HEAD` of a moved page answers one
+  redirect to the same path and query on `FLOW_UI_ORIGIN`: `302` with
+  `no-store` (the default), or `301` with a one-hour browser-only cache
+  (`private, max-age=3600`) when `LEGACY_UI_REDIRECT_STATUS=301`.
+- Only the pages listed as moved in `frontend/src/route-homes.json` move: an
+  exact page with or without its trailing slash, a section with everything
+  under it. Everything else stays where it was asked: the API, OAuth and
+  sign-in, published apps, embeds, shared presentations, every file, unknown
+  paths and the routes of other apps served on the host. Paths are matched as
+  the proxy matches them: letter case ignored, `//` merged, `%2F` decoded.
+  `npm run gen:route-homes` writes the proxy matcher from that list.
+- A framed load (`Sec-Fetch-Dest` of `iframe`, `frame`, `embed` or `object`) is
+  never redirected, so account pages framed by another product keep working.
+- On the new host, a top-level visit to `/app/*`, `/embed/*` or `/present/*` is
+  sent back to the origin of `PUBLIC_URL` (the kept host), so each public page
+  has one home.
+- `FLOW_UI_ORIGIN` and `PUBLIC_URL` are https origins; a trailing slash is
+  allowed. The server refuses to start, naming the setting, on any partial
+  set: `FLOW_UI_ORIGIN` without a host in `LEGACY_UI_HOSTS` other than the new
+  one, `LEGACY_UI_HOSTS` without `FLOW_UI_ORIGIN`, a `LEGACY_UI_HOSTS` entry
+  that is not a bare host name, a `FLOW_UI_ORIGIN` that is not an https
+  origin, or a `PUBLIC_URL` that does not give the kept host's https origin.
+  The image's start script runs the same check before it starts anything, so
+  the proxy never serves a move the server refuses.
+- The move is on only with all three usable: `FLOW_UI_ORIGIN`, a host in
+  `LEGACY_UI_HOSTS` that is not the new host, and a `PUBLIC_URL` that is
+  another https origin. The proxy reads every setting per request, so no
+  value can stop it from starting; a value it cannot use leaves the site as
+  it was. Changing one
+  needs a restart, never a rebuild.
+- Other host names the service answers on are never affected.
 
 ## Managed Supabase through the studio origin
 

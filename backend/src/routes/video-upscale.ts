@@ -39,6 +39,7 @@ import { TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import { planTopazVideoUpscale, topazVideoHoldBaseCredits, TopazVideoSourceUnreadableError, TopazVideoTooLongError } from "../lib/topaz-video-plan.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { jobRunModel } from "../lib/run-model.js"
 import {
   resolveSeedanceDraftFinalize,
   seedanceDraftFinalizeBaseCredits,
@@ -156,6 +157,7 @@ export const videoUpscalePricing: RoutePricing = {
   prechecks: [seedanceDraftFinalizePreHandler, topazPlanPreHandler],
   modelResolver: resolveCreditModel,
   opts: {
+    runModel: jobRunModel("video-upscale"),
     computeCredits: async (_body, req) => {
       if (req.topazVideoUpscale) return topazVideoHoldBaseCredits(req.topazVideoUpscale)
       if (!req.seedanceDraftFinalize?.hasRefVideo) return undefined

@@ -11,6 +11,8 @@ const mockGetManageSubscriptionUrl = vi.fn()
 const mockChangePlan = vi.fn()
 const mockHasCredits = vi.fn()
 const mockCreateClient = vi.fn()
+const mockSelfServe = vi.fn()
+const mockGetBillingPlans = vi.fn()
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: (opts: unknown) => mockUseQuery(opts),
@@ -25,6 +27,21 @@ vi.mock("@/lib/api", () => ({
   changePlan: (...args: unknown[]) => mockChangePlan(...args),
   // useStorageProfile reads the billing surface (useBillingSurface) for the deployment-payer flag.
   getBillingSurface: vi.fn(),
+  getBillingPlans: (...args: unknown[]) => mockGetBillingPlans(...args),
+  BillingPlansError: class BillingPlansError extends Error {
+    constructor(readonly status: number) {
+      super(`GET /v1/billing/plans answered ${status}`)
+    }
+  },
+}))
+
+vi.mock("@/lib/surface-selectors", () => ({
+  surfaceBillingSelfServe: () => mockSelfServe(),
+}))
+
+const mockUserId = vi.fn((): string | undefined => undefined)
+vi.mock("@/hooks/use-auth", () => ({
+  useCachedUserId: () => mockUserId(),
 }))
 
 vi.mock("@/lib/edition", () => ({
@@ -39,6 +56,7 @@ vi.mock("@/lib/query-keys", () => ({
   queryKeys: {
     billing: {
       subscription: (id: string) => ["billing", "subscription", id],
+      plans: (id: string) => ["billing", "plans", id],
       transactions: (id: string) => ["billing", "transactions", id],
       storage: (id: string) => ["billing", "storage", id],
     },
@@ -59,7 +77,9 @@ vi.mock("@/lib/pricing-data", () => ({
   },
 }))
 
+import { BillingPlansError } from "@/lib/api"
 import {
+  useBillingPlans,
   useSubscription,
   useTransactions,
   useStorageProfile,
@@ -264,5 +284,57 @@ describe("useChangePlanMutation", () => {
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
       queryKey: ["user-settings", "u1"],
     })
+  })
+})
+
+describe("useBillingPlans", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasCredits.mockReturnValue(true)
+    mockSelfServe.mockReturnValue(true)
+    mockUseQuery.mockReturnValue({ data: undefined })
+  })
+
+  it("asks only where the deployment sells: Cloud, with self-serve purchase", () => {
+    useBillingPlans()
+    expect(mockUseQuery.mock.calls[0][0].enabled).toBe(true)
+    mockSelfServe.mockReturnValue(false)
+    useBillingPlans()
+    expect(mockUseQuery.mock.calls[1][0].enabled).toBe(false)
+    mockHasCredits.mockReturnValue(false)
+    mockSelfServe.mockReturnValue(true)
+    useBillingPlans()
+    expect(mockUseQuery.mock.calls[2][0].enabled).toBe(false)
+  })
+
+  it("a caller about to use it says so (a dialog while open, the pricing page for a signed-in visitor); never off Cloud", () => {
+    mockSelfServe.mockReturnValue(false)
+    useBillingPlans({ when: true })
+    expect(mockUseQuery.mock.calls[0][0].enabled).toBe(true)
+    mockSelfServe.mockReturnValue(true)
+    useBillingPlans({ when: false })
+    expect(mockUseQuery.mock.calls[1][0].enabled).toBe(false)
+    mockHasCredits.mockReturnValue(false)
+    useBillingPlans({ when: true })
+    expect(mockUseQuery.mock.calls[2][0].enabled).toBe(false)
+  })
+
+  it("keys the answer by the signed-in person, so one person's list is never shown to the next on this browser", () => {
+    mockUserId.mockReturnValue("user-a")
+    useBillingPlans()
+    expect(mockUseQuery.mock.calls[0][0].queryKey).toEqual(["billing", "plans", "user-a"])
+    mockUserId.mockReturnValue(undefined)
+    useBillingPlans()
+    expect(mockUseQuery.mock.calls[1][0].queryKey).toEqual(["billing", "plans", ""])
+  })
+
+  it("never retries a refusal (4xx); retries a server or network failure once", () => {
+    useBillingPlans()
+    const { retry } = mockUseQuery.mock.calls[0][0] as { retry: (count: number, error: unknown) => boolean }
+    expect(retry(0, new BillingPlansError(403))).toBe(false)
+    expect(retry(0, new BillingPlansError(404))).toBe(false)
+    expect(retry(0, new BillingPlansError(503))).toBe(true)
+    expect(retry(1, new BillingPlansError(503))).toBe(false)
+    expect(retry(0, new TypeError("Failed to fetch"))).toBe(true)
   })
 })

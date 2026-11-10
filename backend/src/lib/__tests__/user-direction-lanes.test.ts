@@ -50,7 +50,7 @@ describe("the route lane", () => {
   it("resolves the caller's palette / moodboard on the body that runs, before the credit guard prices it", () => {
     // (`replayImageBatch` first: a keyed batch repeated is answered from its jobs.)
     expect(route).toMatch(
-      /preHandler:\s*\[\s*replayImageBatch\s*,\s*applyGenerateImagePreset\s*,\s*userDirectionPreHandler\s*,\s*creditGuard\(resolveImageCreditIdentifier, \{ batchIdentifiers: resolveImageBatchCreditIdentifiers \}\)\s*,?\s*\]/,
+      /preHandler:\s*\[\s*replayImageBatch\s*,\s*applyGenerateImagePreset\s*,\s*userDirectionPreHandler\s*,\s*creditGuard\(resolveImageCreditIdentifier, \{ batchIdentifiers: resolveImageBatchCreditIdentifiers, runModel: resolveImageRunModel \}\)\s*,?\s*\]/,
     )
   })
 

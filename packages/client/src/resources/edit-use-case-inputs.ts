@@ -14,7 +14,7 @@ import type { CaptionStyle } from "@nodaro/shared/captions"
  * `mediaUrls`, not both.
  *
  * Several recordings or a Master audio need Speaker Map, which tells who is on
- * which camera: where it is not available to you (not yet on nodaro.ai) the
+ * which camera: where it is not available to you the
  * request is refused `403 node_not_available` — send one recording.
  */
 export interface UseCaseRecordingsInput {
@@ -124,7 +124,7 @@ export interface EpisodeTrailerInput extends UseCaseRecordingsInput {
   mediaUrl?: string
   /** An optional intro card: a short video (15 s at most) played before the trailer. */
   introCardUrl?: string
-  /** The formats to deliver, padded, never cropped (default `["9:16", "1:1", "4:5"]`; an empty list is refused). */
+  /** The formats to deliver, padded, never cropped (default `["9:16", "1:1", "4:5"]`; an empty list, or one that names a format twice, is refused `400 validation_error`). */
   formats?: TrailerFormat[]
   /** Stop at a preview of the trailer; render every format with {@link EditResource.continueUseCase} (`mode: "render-final"`). */
   reviewBeforeRender?: boolean

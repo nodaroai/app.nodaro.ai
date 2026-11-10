@@ -86,6 +86,28 @@ describe("POST /v1/reference-board", () => {
       .toBe("gpt-image-2-5-flare:2K")
   })
 
+  // GPT Image 2 renders every ratio it offers at every size, Auto and 1:1
+  // included: a board is priced at the size it asks for.
+  it.each([["auto", "2K", "gpt-image-2:2K"], ["auto", "4K", "gpt-image-2:4K"], ["1:1", "4K", "gpt-image-2:4K"], ["1:1", "2K", "gpt-image-2:2K"], ["16:9", "4K", "gpt-image-2:4K"]])(
+    "GPT Image 2 at %s and %s is priced as %s",
+    (aspectRatio, resolution, id) => {
+      expect(resolveBoardCreditIdentifier({ body: { provider: "gpt-image-2", aspectRatio, resolution } } as never)).toBe(id)
+    },
+  )
+
+  it.each([["1:1", "4K"], ["auto", "2K"]])("quote = charge = render: a GPT Image 2 board at %s and %s reserves and is sent at that size", async (aspectRatio, resolution) => {
+    reserve.mockClear()
+    queueAdd.mockClear()
+    const payload = { provider: "gpt-image-2", boardTemplate: "character/full-board", prompt: "x", aspectRatio, resolution }
+    const check = resolveBoardCreditIdentifier({ body: payload } as never)
+    const res = await app.inject({ method: "POST", url: "/v1/reference-board", payload })
+    expect(res.statusCode).toBe(200)
+    const debit = (reserve.mock.calls[0] as unknown[])[3]
+    expect(debit).toBe(check)
+    expect(debit).toBe(`gpt-image-2:${resolution}`)
+    expect((queueAdd.mock.calls[0] as unknown[])[1]).toMatchObject({ aspectRatio, resolution })
+  })
+
   it("quote = charge = render: a 4K board at 9:8 reserves the 1K id and is sent at 1K", async () => {
     reserve.mockClear()
     queueAdd.mockClear()

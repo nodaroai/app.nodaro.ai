@@ -9,7 +9,10 @@
  * the `@nodaro/shared` defaults the handlers read), never a second copy. The
  * value is in the vocabulary of `MODEL_CATALOG` ids / `LLM_MODELS` ids wherever
  * the model has one; a model the catalog does not list keeps the id its payload
- * names. Recording only: nothing here changes what a job runs or bills.
+ * names. Nothing here changes what a job runs or bills. It does decide one
+ * refusal: on a deployment that restricts models, a workflow node that names
+ * no model is judged on the model its built job runs, read through
+ * `judgedModelOfJob` below (`lib/run-model.ts` `jobRunModelOfBuild`).
  *
  * Callers: the routes that enqueue these jobs (at insert) and the workflow
  * engine's orchestrator rows (`node-executor.ts`, from the built payload).
@@ -130,6 +133,34 @@ export function resolvedModelOfJob(jobName: string, data: unknown): string | und
   const resolve = Object.hasOwn(RESOLVED_MODEL_OF_JOB, jobName) ? RESOLVED_MODEL_OF_JOB[jobName]! : undefined
   if (!resolve) return undefined
   return resolve(data !== null && typeof data === "object" ? (data as Data) : {})
+}
+
+/**
+ * Where the model a deployment's restriction judges differs from the model the
+ * registry records — each entry overriding its job's registry entry:
+ *  - generate-image / reference-board: the model named or defaulted — the
+ *    payload's `provider`, else the general default — BEFORE the image-to-image
+ *    swap the workflow build (`model`) or the handler (`effectiveModel`)
+ *    applies, as a named `provider` is judged (the route's run model judges the
+ *    same model);
+ *  - a 3D scene build with an advanced `engine`: none — that build sends no
+ *    planner model (`scene3d-http.ts` drops it), and the engine is judged where
+ *    it runs.
+ */
+const imageModelChosen = (d: Data): string | undefined =>
+  str(generateImageModelOf({ provider: str(d.provider), aspectRatio: str(d.aspectRatio) }).resolvedModel)
+
+const JUDGED_OVERRIDES: Readonly<Record<string, (d: Data) => string | undefined>> = Object.freeze({
+  "generate-image": imageModelChosen,
+  "reference-board": imageModelChosen,
+  "generate-3d-scene": (d) => (d.engine ? undefined : scene3d(d)),
+  "edit-3d-scene": (d) => (d.engine ? undefined : scene3d(d)),
+})
+
+/** The model a job named `jobName` runs with this payload, as a model restriction judges it. */
+export function judgedModelOfJob(jobName: string, data: unknown): string | undefined {
+  if (!Object.hasOwn(JUDGED_OVERRIDES, jobName)) return resolvedModelOfJob(jobName, data)
+  return JUDGED_OVERRIDES[jobName]!(data !== null && typeof data === "object" ? (data as Data) : {})
 }
 
 /** `inputData` with the model the job runs recorded as `resolvedModel` (unchanged when none can be told). */

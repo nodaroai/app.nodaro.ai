@@ -19,6 +19,30 @@ export const TRAILER_RENDER_TYPE = "apply-edl"
 export const TRAILER_FORMATS = ["9:16", "1:1", "4:5", "16:9"] as const
 export type TrailerFormat = (typeof TRAILER_FORMATS)[number]
 
+/**
+ * The first format a list names twice, or null. A list that repeats a format
+ * is refused, in {@link trailerRepeatedFormatMessage}'s words, wherever a run
+ * is asked for: the route's body (its run and its estimate, so the SDK and the
+ * CLI), MCP's `make_trailer`, and a saved node's Run on every lane — both
+ * engines send the node's `formats` as stored (`usecaseSentSettings`), so the
+ * route answers it 400 before anything is charged. Only the graph expansion
+ * and the review reader resolve a list (`resolveEpisodeTrailerSettings`),
+ * which keeps each format once.
+ */
+export function trailerRepeatedFormat(formats: readonly string[]): string | null {
+  const seen = new Set<string>()
+  for (const format of formats) {
+    if (seen.has(format)) return format
+    seen.add(format)
+  }
+  return null
+}
+
+/** The refusal of a format listed twice, naming it — one sentence on every surface. */
+export function trailerRepeatedFormatMessage(format: string): string {
+  return `The format ${format} is listed twice: name each format once.`
+}
+
 /** Each format's platform spec (the template's three, and a 1920×1080 landscape) and the node that delivers it. */
 export const TRAILER_FORMAT_SPECS = Object.freeze({
   "9:16": { specKey: "instagram:story-reel", platform: "instagram", contentType: "story-reel", label: "Story / Reel (9:16)", nodeId: "uc-format-9x16" },

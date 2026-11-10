@@ -91,8 +91,22 @@ export function projectModel(m: ModelCatalogEntry, prices: ChargedPrices, opts: 
   if (m.features?.length) out.features = m.features
   if (m.aspectRatios?.length) out.aspectRatios = m.aspectRatios
   if (m.resolutions?.length) out.resolutions = m.resolutions
+  // The ratios at which the model renders fewer sizes than `resolutions`, each
+  // with the sizes it renders there (GPT Image 2.5: 1K only at 27:16, 16:27,
+  // 9:8 and 8:9); a ratio not listed renders every size. A copy, in the
+  // catalog's shape, so a client can offer only the sizes a ratio renders.
+  if (m.resolutionsByAspectRatio && Object.keys(m.resolutionsByAspectRatio).length > 0) {
+    out.resolutionsByAspectRatio = Object.fromEntries(
+      Object.entries(m.resolutionsByAspectRatio).map(([ratio, sizes]) => [ratio, [...sizes]]),
+    )
+  }
   if (m.qualities?.length) out.qualities = m.qualities
   if (m.backgrounds?.length) out.backgrounds = m.backgrounds
+  // The one size a transparent background renders at, and whether the model
+  // takes a background setting only at that size (`normalizeModelInput` moves
+  // or drops the setting otherwise, and reports it).
+  if (m.transparentResolution !== undefined) out.transparentResolution = m.transparentResolution
+  if (m.backgroundOnlyAtTransparentResolution) out.backgroundOnlyAtTransparentResolution = true
   if (m.durations?.length) out.durations = m.durations
   // What an unset `duration` renders AND is charged at (the catalog funnel).
   if (m.defaultDuration !== undefined) out.defaultDuration = m.defaultDuration

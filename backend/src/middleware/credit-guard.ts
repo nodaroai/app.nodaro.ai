@@ -5,6 +5,7 @@ import {
   isModelDenied,
   deniedModelRejectionMessage,
   deniedNodeRejectionMessage,
+  modelRestrictionConfigured,
 } from "../lib/surface-deny.js"
 import { deniedRouteCapabilityForUser } from "../lib/availability-viewer.js"
 import {
@@ -148,8 +149,28 @@ export interface CreditGuardOpts {
    *  `body.provider` first, so a route that sets this refuses everything it did
    *  before. Leave it off where the resolver returns a PRICING id that differs
    *  from the dispatch id (text-to-video's `grok` -> `grok-i2v`), or the deny
-   *  would match a model the caller never named. */
+   *  would match a model the caller never named — such a route declares
+   *  `runModel` instead. */
   denyResolvedModel?: boolean
+  /** The model this request RUNS on, for the surface deny: the model it names,
+   *  or — when it names none — the default the route fills in AFTER this guard
+   *  (by aspect ratio, by text length, by feature), in the deny's vocabulary
+   *  (`MODEL_CATALOG` / `LLM_MODELS` ids), before any internal swap (an
+   *  image-to-image sibling, a safety retry, a fallback model). For a route
+   *  whose `modelResolver` returns a pricing id that is no model id (a
+   *  composite such as `gpt-image-2-6-sunburst:medium:1K`, a feature id such
+   *  as `llm-chat`), or whose request names its model outside `provider`
+   *  (`llmModel`, Suno's `model`). A list is judged id by id.
+   *
+   *  Asked ONLY when the deployment restricts models
+   *  (`modelRestrictionConfigured()`): one with no restriction never calls it,
+   *  so its answers are unchanged — the admin's per-row model switch stays with
+   *  the credit check. `denyResolvedModel` runs the deny whatever the
+   *  configuration, and is kept as it is for the routes that already declare
+   *  it. Must never throw: it reads the RAW body, before validation. Every
+   *  credit-guarded route declares one of the two or carries a reason
+   *  (src/__tests__/credit-guard-run-model-census.test.ts). */
+  runModel?: (req: FastifyRequest) => string | readonly string[] | undefined
   /** A request that creates SEVERAL jobs in one call (generate-image `count` /
    *  `models`): the credit identifier of every job it will reserve, in order,
    *  or undefined for a single-job request (the guard then runs exactly as
@@ -178,6 +199,26 @@ export interface RoutePricing {
   readonly prechecks: readonly ((req: FastifyRequest, reply: FastifyReply) => Promise<unknown>)[]
   readonly modelResolver: (req: FastifyRequest) => string
   readonly opts?: CreditGuardOpts
+}
+
+/**
+ * The models `req` RUNS on (`CreditGuardOpts.runModel`) that this deployment
+ * withholds — empty without a model restriction, and then `runModel` is never
+ * called. `alreadyJudged` is the raw `provider` the deny has already passed.
+ * The guard refuses with these; `POST /v1/quote` asks the same question of the
+ * run's own pricing chain, so a quote never prices what the run refuses.
+ */
+export function withheldRunModels(
+  req: FastifyRequest,
+  runModel: CreditGuardOpts["runModel"],
+  alreadyJudged?: string,
+): string[] {
+  if (!runModel || !modelRestrictionConfigured()) return []
+  const runsOn = runModel(req)
+  const ids: readonly unknown[] = typeof runsOn === "string" ? [runsOn] : Array.isArray(runsOn) ? runsOn : []
+  return [...new Set(ids)].filter(
+    (id): id is string => typeof id === "string" && id !== "" && id !== alreadyJudged && isModelDenied(id),
+  )
 }
 
 /** The model ids a request names in `models` (generate-image's fan-out), for the surface deny. */
@@ -269,6 +310,21 @@ export function creditGuard(
             error: {
               code: "model_not_available",
               message: deniedModelRejectionMessage([resolved]),
+            },
+          })
+        }
+      }
+      // The model the request RUNS on (`CreditGuardOpts.runModel`), asked only
+      // where models are restricted: a request that names no model runs on a
+      // default the route fills in after this guard, and that default is a
+      // model the deployment may withhold.
+      {
+        const denied = withheldRunModels(req, opts?.runModel, rawProvider)
+        if (denied.length > 0) {
+          return reply.code(403).send({
+            error: {
+              code: "model_not_available",
+              message: deniedModelRejectionMessage(denied),
             },
           })
         }
@@ -397,7 +453,33 @@ export function creditGuard(
     const impl = await loadCreditGuardImpl()
     return impl.creditGuardImpl(modelResolver, opts)(req, reply)
   }
-  return Object.assign(guard, { [CREDIT_GUARD]: true as const })
+  const model: CreditGuardModel = {
+    modelResolver,
+    runModel: opts?.runModel,
+    denyResolvedModel: opts?.denyResolvedModel === true,
+  }
+  return Object.assign(guard, { [CREDIT_GUARD]: true as const, [CREDIT_GUARD_MODEL]: model })
+}
+
+/** What a credit guard judges a request's model by, for the route census. */
+export interface CreditGuardModel {
+  readonly modelResolver: (req: FastifyRequest) => string
+  readonly runModel: CreditGuardOpts["runModel"]
+  readonly denyResolvedModel: boolean
+}
+
+/**
+ * Carried by every preHandler {@link creditGuard} returns: the resolver it
+ * prices from and how it judges the model the request runs on, so a test that
+ * boots the app can hold every guarded route to a decision
+ * (src/__tests__/credit-guard-run-model-census.test.ts).
+ */
+export const CREDIT_GUARD_MODEL: unique symbol = Symbol.for("nodaro.creditGuard.model")
+
+/** The {@link CreditGuardModel} of a preHandler built by {@link creditGuard}; undefined for anything else. */
+export function creditGuardModelOf(fn: unknown): CreditGuardModel | undefined {
+  if (!isCreditGuard(fn)) return undefined
+  return (fn as unknown as { [CREDIT_GUARD_MODEL]?: CreditGuardModel })[CREDIT_GUARD_MODEL]
 }
 
 /**
@@ -410,6 +492,7 @@ export const CREDIT_GUARD: unique symbol = Symbol.for("nodaro.creditGuard")
 /** What {@link creditGuard} returns: the preHandler, marked. */
 export type CreditGuardPreHandler = ((req: FastifyRequest, reply: FastifyReply) => Promise<void>) & {
   readonly [CREDIT_GUARD]: true
+  readonly [CREDIT_GUARD_MODEL]: CreditGuardModel
 }
 
 /** Is `fn` a preHandler built by {@link creditGuard}? */

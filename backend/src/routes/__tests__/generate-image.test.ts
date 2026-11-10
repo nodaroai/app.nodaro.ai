@@ -1750,23 +1750,22 @@ describe("POST /v1/generate-image", () => {
     // collects an upward delta, the reserve IS the charge. These two cases pin
     // the three-way record: CHECK identifier === DEBIT identifier === the
     // levers persisted on the job row.
-    it("CHECK === DEBIT for gpt-image-2 + auto + 2K (the cross-field snap re-prices to 1K)", async () => {
+    it.each([["auto", "2K"], ["auto", "4K"], ["1:1", "4K"]])("CHECK === DEBIT for gpt-image-2 at %s + %s: priced and recorded at the size asked", async (aspectRatio, resolution) => {
       const body = {
         prompt: "a lighthouse",
         userId: VALID_UUID,
         provider: "gpt-image-2",
-        aspectRatio: "auto",
-        resolution: "2K",
+        aspectRatio,
+        resolution,
         direction: DIRECTION,
       }
       const { identifier: debit, inputData } = await debitIdentifierFor(body)
       const check = checkIdentifierFor(body)
       expect(check).toBe(debit)
-      // `auto` only renders 1K, so the reserve is the BASE tier, not :2K.
-      expect(check).toBe("gpt-image-2")
-      // …and the job row records the 1K render we actually paid for.
-      expect(inputData.aspectRatio).toBe("auto")
-      expect(inputData.resolution).toBe("1K")
+      // GPT Image 2 renders every size at "auto" and 1:1: the reserve is that size's row.
+      expect(check).toBe(`gpt-image-2:${resolution}`)
+      expect(inputData.aspectRatio).toBe(aspectRatio)
+      expect(inputData.resolution).toBe(resolution)
     })
 
     it.each(["27:16", "16:27", "9:8", "8:9"])("CHECK === DEBIT for GPT Image 2.5 at %s: a 2K / 4K image is priced and recorded as 1K", async (aspectRatio) => {
@@ -1794,11 +1793,11 @@ describe("POST /v1/generate-image", () => {
       const { identifier: debit, inputData } = await debitIdentifierFor(body)
       const check = checkIdentifierFor(body)
       expect(check).toBe(debit)
-      // 3:2 is off-list → snaps to the catalog's first ratio (`auto`), which in
-      // turn cascades 4K → 1K. Priced off the SNAPPED pair, not the caller's.
-      expect(check).toBe("gpt-image-2")
+      // 3:2 is off-list → snaps to the catalog's first ratio (`auto`), which
+      // renders 4K too. Priced off the SNAPPED pair, not the caller's.
+      expect(check).toBe("gpt-image-2:4K")
       expect(inputData.aspectRatio).toBe("auto")
-      expect(inputData.resolution).toBe("1K")
+      expect(inputData.resolution).toBe("4K")
     })
 
     it("CHECK === DEBIT for flux-2-max + 1K (the snap moves a per-megapixel pricing tier)", async () => {
@@ -1877,8 +1876,8 @@ describe("catalog parameter normalization (P1 aspect ratio)", () => {
       resolution?: string
     }
     expect(GPT_IMAGE_2_RATIOS).toContain(queued.aspectRatio)
-    // "auto" only renders 1K — the cross-field rule cascades.
-    expect(queued.resolution).toBe("1K")
+    // "auto" renders 4K too: the size is sent as asked.
+    expect(queued.resolution).toBe("4K")
   })
 
   it("persists the SNAPPED levers in input_data, not the caller's originals", async () => {

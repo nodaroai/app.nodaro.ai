@@ -823,6 +823,14 @@ describe("buildCreditModelIdentifier", () => {
     expect(buildCreditModelIdentifier("gpt-image-2-5-flare", { aspectRatio: "16:9", resolution: "4K" })).toBe("gpt-image-2-5-flare:4K")
     expect(buildCreditModelIdentifier("gpt-image-2-5-flare", { resolution: "2K" })).toBe("gpt-image-2-5-flare:2K")
   })
+
+  // GPT Image 2 renders every ratio it offers at every size: the badge shows
+  // the size the node asks for, at Auto and 1:1 too.
+  it.each([["auto", "2K"], ["auto", "4K"], ["1:1", "4K"], ["1:1", "2K"]])("prices GPT Image 2 at %s and %s as that size", (aspectRatio, resolution) => {
+    for (const provider of ["gpt-image-2", "gpt-image-2-i2i"]) {
+      expect(buildCreditModelIdentifier(provider, { aspectRatio, resolution })).toBe(`${provider}:${resolution}`)
+    }
+  })
 })
 
 describe("getModelIdentifier: an image node naming no model", () => {

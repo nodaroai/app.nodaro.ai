@@ -396,3 +396,13 @@ describe("the UI-string key manifest", () => {
     expect(JSON.stringify(manifest)).not.toContain("left of")
   })
 })
+
+describe("isLegacyUiHost: the one rule for a host the app's pages move away from", () => {
+  it("is a bare host name, lower case, nothing around it", async () => {
+    const { isLegacyUiHost } = await import("../runtime-config/contract.js")
+    for (const host of ["app.example.com", "next.app.example.com", "localhost"]) expect(isLegacyUiHost(host), host).toBe(true)
+    for (const bad of ["app.example.com\n", "https://app.example.com", "app.example.com:443", "app.example.com/", "a.test\tb.test", "App.example.com", "", " app.example.com", 42, null]) {
+      expect(isLegacyUiHost(bad), JSON.stringify(bad)).toBe(false)
+    }
+  })
+})

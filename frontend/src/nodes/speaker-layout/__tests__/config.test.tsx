@@ -40,8 +40,8 @@ import {
   SPEAKER_LAYOUT_DEFAULTS,
   resolveSpeakerLayoutSettings,
   tightenFramingLayouts,
+  speakerLayoutCrossfade,
   usecaseDescriptor,
-  validSpeakerCrossfade,
   validSpeakerEmphasis,
   validSpeakerSwitches,
 } from "@nodaro/render-rules"
@@ -154,18 +154,44 @@ describe("SpeakerLayoutConfig: shape and layout", () => {
 
 describe("SpeakerLayoutConfig: switch and emphasis are Speaker View's own (the two panels never drift)", () => {
   for (const layout of ["stacked", "single", "pip", "auto"] as const) {
-    it(`${layout}: the switches, crossfade and emphasis atoms the primitive offers for that layout`, () => {
+    it(`${layout}: the switches and emphasis atoms the primitive offers for that layout; the crossfade greyed`, () => {
       const data = { targetAspect: "9:16" as const, layout, switchType: "pan", emphasisStyle: "scale" }
       renderConfig({ data })
       const resolved = resolveSpeakerLayoutSettings(data, "video")
       const sv = { targetAspect: resolved.targetAspect, layout: resolved.layout, switchType: resolved.switchType, emphasisStyle: resolved.emphasisStyle }
       expect(sections.switch!.options).toEqual(validSpeakerSwitches(sv, undefined))
-      expect(sections.switch!.crossfade).toEqual(validSpeakerCrossfade(sv, undefined))
+      expect(sections.switch!.crossfade).toEqual(speakerLayoutCrossfade())
       expect(sections.switch!.value).toBe(resolved.switchType)
       expect(sections.emphasis!.options).toEqual(validSpeakerEmphasis(sv))
       expect(sections.emphasis!.value).toBe(resolved.emphasisStyle)
     })
   }
+
+  it("the crossfade is greyed under every layout, with its reason: nothing is cut out of the recording", () => {
+    for (const layout of ["auto", "single", "side-by-side", "stacked", "grid", "pip"] as const) {
+      renderConfig({ data: { targetAspect: "1:1", layout } })
+      expect(sections.switch!.crossfade, layout).toEqual({ id: "crossfade", allowed: false, reason: { code: "nothing-cut", params: {} } })
+      cleanup()
+    }
+  })
+
+  it("Pan and Zoom are greyed under the layouts that keep their slots (drawn as a cut there), and offered where they are drawn", () => {
+    const switches = (layout: NonNullable<SpeakerLayoutData["layout"]>) => {
+      renderConfig({ data: { targetAspect: "1:1", layout } })
+      const options = sections.switch!.options as Array<{ id: string; allowed: boolean; reason?: { code: string } }>
+      cleanup()
+      return Object.fromEntries(options.map((o) => [o.id, o.allowed ? "allowed" : o.reason?.code]))
+    }
+    for (const layout of ["stacked", "grid"] as const) expect(switches(layout), layout).toEqual({ cut: "allowed", pan: "slots-fixed", zoom: "slots-fixed" })
+    for (const layout of ["single", "pip", "auto"] as const) expect(switches(layout), layout).toEqual({ cut: "allowed", pan: "allowed", zoom: "allowed" })
+  })
+
+  it("a crossfade already stored is shown as it is (greyed, never rewritten)", () => {
+    const onUpdate = vi.fn()
+    renderConfig({ data: { targetAspect: "9:16", layout: "stacked", switchType: "xfade:fade" }, onUpdate })
+    expect(sections.switch!.value).toBe("xfade:fade")
+    expect(onUpdate).not.toHaveBeenCalled()
+  })
 
   it("no tween sliders: a layout's run sets no switch or emphasis duration", () => {
     renderConfig({ data: {} })

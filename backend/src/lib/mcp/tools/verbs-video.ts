@@ -11,6 +11,7 @@ import { registerUseCaseVerbs } from "./verbs-use-case.js"
 import { registerSplitMediaVerb } from "./verbs-split-media.js"
 import { registerShotCutsVerb } from "./verbs-shot-cuts.js"
 import { registerSpeakerMapVerb } from "./verbs-speaker-map.js"
+import { registerSpeakerViewVerb } from "./verbs-speaker-view.js"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../../connected-reference-schema.js"
 import {
   errorResult,
@@ -23,7 +24,7 @@ import {
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { widgetModelOf } from "../widget-models.js"
 import { modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
-import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, TOPAZ_VIDEO_RESOLUTIONS, VIDEO_UPSCALE_PROVIDERS, resolveVideoModeForInputs, resolveVideoProviderForMode } from "@nodaro/shared/models"
+import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, TOPAZ_VIDEO_RESOLUTIONS, VIDEO_UPSCALE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs } from "@nodaro/shared/models"
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
 import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
@@ -41,7 +42,7 @@ const MOTION_TRANSFER_PROVIDER_ALIASES: Record<string, string> = {
   "motion-transfer": "kling",
   "kling-3.0-motion": "kling-3.0",
 }
-import { normalizeVideoInput } from "../normalize.js"
+import { normalizeVideoInput, savedVideoModel, videoModelForLane, videoModelRefusal } from "../normalize.js"
 import { buildEffectiveEdl, validateEffectiveEdl } from "../../apply-edl-plan.js"
 import { APPLY_EDL_CLIP_KEY_PATTERN } from "../../apply-edl-output.js"
 import { hasCredits } from "../../config.js"
@@ -332,21 +333,22 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         const userPrefs = await getUserMcpPreferences(session.userId)
         userVid = (userPrefs.video as Record<string, string | number | undefined>) ?? {}
       } catch { /* swallow */ }
-      const { model, aspectRatio, resolution, duration } = normalizeVideoInput(
-        {
-          model: effective.model as string | undefined,
-          aspect_ratio: effective.aspect_ratio as string | undefined,
-          resolution: effective.resolution as string | undefined,
-          duration: effective.duration as number | undefined,
-        },
-        {
-          model: userVid.model as string | undefined,
-          aspectRatio: userVid.aspectRatio as string | undefined,
-          resolution: userVid.resolution as string | undefined,
-          duration: userVid.duration as number | undefined,
-        },
-        "seedance-2-fast",
-      )
+      const t2vLevers = {
+        aspect_ratio: effective.aspect_ratio as string | undefined,
+        resolution: effective.resolution as string | undefined,
+        duration: effective.duration as number | undefined,
+      }
+      const t2vSaved = {
+        // Only a model /v1/text-to-video takes (the saved slot takes any
+        // string); a run with references may move to the image-to-video lane,
+        // which takes every such id too.
+        model: savedVideoModel(userVid.model as string | undefined, TEXT_TO_VIDEO_PROVIDERS),
+        aspectRatio: userVid.aspectRatio as string | undefined,
+        resolution: userVid.resolution as string | undefined,
+        duration: userVid.duration as number | undefined,
+      }
+      const named = normalizeVideoInput({ model: effective.model as string | undefined, ...t2vLevers }, t2vSaved, "seedance-2-fast")
+      const { model } = named
 
       const compositePrompt = buildCompositePrompt(
         effective.prompt as string,
@@ -377,9 +379,22 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         hasStartFrame: false,
         hasImageRefs: t2vRefImages.length > 0 || (args.connected_references?.length ?? 0) > 0,
       })
+      // The id the lane's route runs: a named mode twin moves to its sibling
+      // (`grok-i2v` with no reference runs as `grok`). A model the route does
+      // not run at all (an image or a lip-sync model) is refused here, naming
+      // the ones that work, instead of reaching the route as a bare 400.
+      const provider = videoModelForLane(model, lane)
+      if (!provider) {
+        return { content: [{ type: "text" as const, text: videoModelRefusal("generate_video", model, lane) }], isError: true as const }
+      }
+      // Fitted to the id that is sent: a twin has a sheet of its own (`grok-i2v`
+      // lists no ratio; `grok` no size or length).
+      const { aspectRatio, resolution, duration } = provider === model
+        ? named
+        : normalizeVideoInput({ model: provider, ...t2vLevers }, t2vSaved, "seedance-2-fast")
       const payload = {
         prompt: compositePrompt,
-        provider: lane === "image-to-video" ? resolveVideoProviderForMode(model, lane) : model,
+        provider,
         duration,
         aspectRatio,
         resolution,
@@ -391,7 +406,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         generateAudio: effective.sound as boolean | undefined,
         negativePrompt: effective.negative_prompt as string | undefined,
         seed: effective.seed as number | undefined,
-        ...(args.draft === true && isSeedanceDraftCapable(model) ? { draft: true } : {}),
+        ...(args.draft === true && isSeedanceDraftCapable(provider) ? { draft: true } : {}),
         ...(args.connected_references ? { connectedReferences: args.connected_references } : {}),
         ...(args.described_references ? { describedReferences: args.described_references } : {}),
         ...(args.reference_order ? { referenceOrder: args.reference_order } : {}),
@@ -587,21 +602,28 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         const userPrefs = await getUserMcpPreferences(session.userId)
         userVid = (userPrefs.video as Record<string, string | number | undefined>) ?? {}
       } catch { /* swallow */ }
-      const { model, aspectRatio, resolution, duration } = normalizeVideoInput(
-        {
-          model: args.model,
-          aspect_ratio: args.aspect_ratio,
-          resolution: undefined,
-          duration: args.duration,
-        },
-        {
-          model: userVid.model as string | undefined,
-          aspectRatio: userVid.aspectRatio as string | undefined,
-          resolution: userVid.resolution as string | undefined,
-          duration: userVid.duration as number | undefined,
-        },
-        "seedance-2-fast",
-      )
+      const i2vLevers = { aspect_ratio: args.aspect_ratio, resolution: undefined, duration: args.duration }
+      const i2vSaved = {
+        // Only a model /v1/generate-video takes (the saved slot takes any string).
+        model: savedVideoModel(userVid.model as string | undefined, VIDEO_GEN_PROVIDERS),
+        aspectRatio: userVid.aspectRatio as string | undefined,
+        resolution: userVid.resolution as string | undefined,
+        duration: userVid.duration as number | undefined,
+      }
+      const named = normalizeVideoInput({ model: args.model, ...i2vLevers }, i2vSaved, "seedance-2-fast")
+      // The id the image-to-video route runs: a named text-to-video twin moves
+      // to its sibling (`grok` runs as `grok-i2v`). /v1/generate-video's schema
+      // takes `grok` too, but no image-to-video provider runs it, so it failed
+      // only once the job was queued. A model with no image-to-video id (an
+      // image or a lip-sync model) is refused here, naming the ones that work.
+      const model = videoModelForLane(named.model, "image-to-video")
+      if (!model) {
+        return { content: [{ type: "text" as const, text: videoModelRefusal("animate_image", named.model, "image-to-video") }], isError: true as const }
+      }
+      // Fitted to the id that is sent: a twin has a sheet of its own.
+      const { aspectRatio, resolution, duration } = model === named.model
+        ? named
+        : normalizeVideoInput({ model, ...i2vLevers }, i2vSaved, "seedance-2-fast")
 
       const imageUrl =
         args.image_url ??
@@ -1343,7 +1365,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             `Lip-sync model. Default kling-avatar. Options (charged price where the model has one fixed price; per-second models show their 15 s bucket; duration-tiered models say so): ` +
             LIP_SYNC_PROVIDERS.map((id) => `${id}${lipSyncPriceSuffix(id)}`).join(", ") +
             `. Input type (image vs video) and which model fits singing, dubbing, cinematic or the cheapest draft: get_node_skill("lip-sync"). ` +
-            `Unknown values fall back to kling-avatar.`,
+            `An unknown model is refused.`,
           ),
         resolution: z
           .enum(["480p", "720p", "1080p"])
@@ -1543,7 +1565,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             `v2v model. Default \`wan\`. Options: ${VIDEO_TO_VIDEO_NODE_PROVIDERS.join(", ")}. ` +
-            "Unknown values fall back to wan. `seedance-2-5` edits the clip by instruction and keeps its " +
+            "An unknown model is refused. `seedance-2-5` edits the clip by instruction and keeps its " +
             "length and ratio (clip 4-30s; billed on input + output seconds, settled to the delivered length).",
           ),
         duration: z.enum(["5", "10"]).optional().describe("Wan / Wan Flash only — 5s or 10s output."),
@@ -3585,5 +3607,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         })
       },
     )
+
+    // speaker_view — the speakers laid out on screen (Cloud, like switch_cameras); its own module.
+    registerSpeakerViewVerb({ server, session, fastify })
   }
 }

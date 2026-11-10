@@ -21,6 +21,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { hasCredits } from "../lib/config.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
+import { providerRunModel } from "../lib/run-model.js"
 
 const generateCreatureBody = z.object({
   name: z.string().min(1).max(200),
@@ -102,6 +103,7 @@ export async function generateCreatureRoutes(app: FastifyInstance) {
       // NOTE: priced by the request `provider` (e.g. nano-banana) — there is
       // NO flat `"generate-creature"` credit identifier (matches object).
       preHandler: creditGuard((req: FastifyRequest) => plainEntityCheckIdentifier(req.body, IMAGE_MODEL_ROLE_DEFAULTS.character), {
+        runModel: providerRunModel(IMAGE_MODEL_ROLE_DEFAULTS.character),
         computeCredits: async (body) => {
           const count = extractCount(body)
           const identifier = plainEntityCheckIdentifier(body, IMAGE_MODEL_ROLE_DEFAULTS.character)

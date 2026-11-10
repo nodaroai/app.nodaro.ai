@@ -25,6 +25,7 @@ import { config, llmMeteredPricing } from "../lib/config.js"
 import { shouldRunOnCloud } from "../providers/nodaro/run-on-cloud.js"
 import { callCloudRoute } from "../providers/nodaro/client.js"
 import { extendSocketTimeout } from "../lib/llm-route-timeout.js"
+import { adAnalysisRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 import {
@@ -124,7 +125,7 @@ export async function metaAdsScrapeRoutes(app: FastifyInstance) {
     // malformed body is checked at the fixed mid tier and the 400 below fires
     // before any reservation is made.
     preHandler: [
-      creditGuard((req) => resolveMetaAdsScrapeCreditId(req.body)),
+      creditGuard((req) => resolveMetaAdsScrapeCreditId(req.body), { runModel: adAnalysisRunModel }),
       // The lane last: a synchronous run waits for its slot before the handler
       // resolves advertisers or reserves; its ad analysis runs under the same
       // slot. A job-id-first request answers at once and takes none.

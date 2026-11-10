@@ -3824,6 +3824,38 @@ on an older server):
   address as given; it carries its file's version, so a replaced mark arrives
   under a new address. The MCP tool omits it.
 
+A model whose sizes depend on its aspect ratio or its background carries the
+size rules (each absent on every other model, and on an older server):
+
+- `resolutionsByAspectRatio?: Record<string, string[]>` — the aspect ratios at
+  which the model renders fewer sizes than `resolutions`, each with the sizes
+  it renders there. A ratio not listed renders every entry of `resolutions`.
+  GPT Image 2.5 (`gpt-image-2-5-flare`, `gpt-image-2-5-sunburst` and their
+  `-i2i` edit models): `{ "27:16": ["1K"], "16:27": ["1K"], "9:8": ["1K"],
+  "8:9": ["1K"] }`. A request for a size its ratio does not render runs, and is
+  charged, at the largest size the ratio renders at or below it (reported in
+  `adjustments`).
+- `transparentResolution?: string` — the one size a transparent background
+  renders at (`"1K"` on GPT Image 2.5, and on GPT Image 2.6 Flare and
+  Sunburst); a transparent request at another size runs, and is charged, at
+  this one.
+- `backgroundOnlyAtTransparentResolution?: true` — the model takes a
+  background setting only at `transparentResolution` (GPT Image 2.5): at any
+  other size none is sent, so `opaque` there renders as `auto`.
+
+`ModelSummary` also types `defaultDuration` (the length an unset `duration`
+renders and is charged at) and `autoDuration` (`duration: -1` lets the model
+pick the length).
+
+```ts
+const { sections } = await client.models.list({ kind: "image" })
+const m = sections.flatMap((s) => s.families.flatMap((f) => f.models)).find((x) => x.id === "gpt-image-2-5-flare")!
+// The sizes to offer at the chosen ratio:
+const sizesAt = (ratio: string) => m.resolutionsByAspectRatio?.[ratio] ?? m.resolutions ?? []
+sizesAt("27:16") // ["1K"]
+sizesAt("16:9")  // ["1K", "2K", "4K"]
+```
+
 ```ts
 const catalog = await client.models.list({ kind: "video", mode: "i2v" })
 for (const section of catalog.sections)
@@ -6677,7 +6709,7 @@ const { jobId } = await client.media.splitMedia({ videoUrl: "https://example.com
 shotCuts(input: { videoUrl: string; frames?: boolean }): Promise<{ jobId: string }>
 ```
 
-**Not yet enabled on nodaro.ai.** Where every shot of a video starts and ends
+Where every shot of a video starts and ends
 (`POST /v1/shot-cuts`), measured from the file: every decoded frame is scored and
 each hard cut starts a new shot (dissolves and fades are not cuts). Videos up to
 30 minutes. `frames: true` also saves each shot's exact first and last frame as PNG
@@ -7755,7 +7787,7 @@ const current = plans.find((p) => p.id === effectiveTier) // undefined: pay-as-y
 
 | Method | Returns | Notes |
 |--------|---------|-------|
-| `plans()` | `Promise<BillingPlansResult>` | `GET /v1/billing/plans`. **Public** — no credential needed, the same answer for every caller. `{ data: BillingPlan[], topUps: BillingTopUp[], topUpRange }`. Nodaro Cloud only (`NotFoundError` on a self-hosted instance). Throws `ForbiddenError` on a deployment that does not sell to its users (the server's code is `self_serve_disabled`), and a `NodaroError` with `status` 503 and `code` `stripe_not_configured`, or `plan_prices_unavailable` for a moment. |
+| `plans()` | `Promise<BillingPlansResult>` | `GET /v1/billing/plans`. **Public** — no credential needed, the same answer for every caller where the deployment sells to its users; elsewhere only its billing account (signed in) gets the list. `{ data: BillingPlan[], topUps: BillingTopUp[], topUpRange }`. Nodaro Cloud only (`NotFoundError` on a self-hosted instance). Throws `ForbiddenError` on a deployment that does not sell to its users (the server's code is `self_serve_disabled`), and a `NodaroError` with `status` 503 and `code` `stripe_not_configured`, or `plan_prices_unavailable` for a moment. |
 | `subscription()` | `Promise<BillingSubscriptionResult>` | `GET /v1/billing/subscription`. `{ data: BillingSubscription \| null, effectiveTier }` — `data` is `null` when the account never subscribed. `effectiveTier` is the tier its entitlements follow: usually a `BillingPlan` `id`; `"payg"` (no subscription, credits bought); or a tier not on sale, such as `"enterprise"`. Needs a signed-in session, a personal API token without a workflow limit, or an app's OAuth token (a workflow-limited key gets `ForbiddenError`). Nodaro Cloud only. |
 | `surface()` | `Promise<BillingSurface>` | `GET /v1/billing/surface`. Public, every edition: whether the deployment meters usage at all (`providerId` is `"none"` when it does not) and the unit costs display in (`displayUnit`). |
 | `account()` | `Promise<BillingAccountSummary \| null>` | `GET /v1/billing/account`. The caller's `plan`, `balance` and `dailyAllowance` as the deployment's billing provider reports them, in its `unit`, plus optional fields a provider may add ([§ 12b](./api-integration.md#12b-billing-surface)). `null` when the provider could not answer — not a zero balance. Every edition. |
@@ -8959,7 +8991,7 @@ back only the fields it changes.
 | Method | Endpoint | Notes |
 |--------|----------|-------|
 | `get()` | `GET /v1/user/settings` | `UserSettings`: `{ tier, publicOutputs, promptTemplates, textTemplates, preferredLocale, mcpPreferences, showRecentNodes, showMostUsedNodes, variableDisplayMode, nodeDoubleClickAction, monthlyStatementEmail }`. `UnauthorizedError` when signed out. |
-| `update(patch)` | `PATCH /v1/user/settings` | Only the fields sent change; answers the settings as saved (without `tier`). `promptTemplates` and `textTemplates` replace the stored value whole (send the full map or list; a template key the server does not know, or a value equal to the default, is dropped), `mcpPreferences` merges one axis at a time. `publicOutputs: false` needs the Standard plan or above on Nodaro Cloud (`ForbiddenError`); an invalid value is a `NodaroError` with status 400 (`validation_error`), and so is a patch with nothing to change; `NotFoundError` with no profile row. `preferredLocale` is one of the languages Nodaro ships (`UserSettingsLocale`). |
+| `update(patch)` | `PATCH /v1/user/settings` | Only the fields sent change; answers the settings as saved (without `tier`). `promptTemplates` and `textTemplates` replace the stored value whole (send the full map or list; a template key the server does not know, or a value equal to the default, is dropped), `mcpPreferences` merges one axis at a time, and `null` clears one of its fields (`UserMcpPreferencesPatch`: `update({ mcpPreferences: { image: { model: null } } })`), so the MCP tools fall back to their own default for it. `publicOutputs: false` needs the Standard plan or above on Nodaro Cloud (`ForbiddenError`); an invalid value is a `NodaroError` with status 400 (`validation_error`), and so is a patch with nothing to change; `NotFoundError` with no profile row. `preferredLocale` is one of the languages Nodaro ships (`UserSettingsLocale`). |
 
 ```ts
 // The monthly statement toggle on a billing screen.
@@ -9016,25 +9048,27 @@ first, [`withWorkspace`](#clientwithworkspaceworkspaceid) is the second.
 Editorial primitives for podcast / long-form video editing. Twelve
 request methods return `{ jobId }` (`EditJobResult`) — poll with
 [`client.jobs.getStatus(jobId)`](#getstatusid) — plus five quotes
-(`estimateTightenEpisode`, `estimateEpisodeChapters`, `estimateEpisodeTrailer`, `estimateClipPack`, `estimateSpeakerLayout`) and one pure local helper.
+(`estimateTightenEpisode`, `estimateEpisodeChapters`, `estimateEpisodeTrailer`, `estimateClipPack`, `estimateSpeakerLayout`), one read
+(`editPlanCapabilities`) and one pure local helper.
 
 | Method | Endpoint | Notes |
 |--------|----------|-------|
 | `silenceDetect(input)` | `POST /v1/silence-detect` | Keyless ffmpeg silence pass over an audio **or** video source. |
 | `audioSync(input)` | `POST /v1/audio-sync` | Keyless: measure how far apart 2–6 recordings' clocks are, from their sound. |
-| `speakerMap(input)` | `POST /v1/speaker-map` | Keyless: which camera each speaker is on, from the cameras' own microphones. **Not yet enabled on nodaro.ai.** |
+| `speakerMap(input)` | `POST /v1/speaker-map` | Keyless: which camera each speaker is on, from the cameras' own microphones. |
 | `applyEdl(input)` | `POST /v1/apply-edl` | Render an edit decision list (EDL) into a video or audio cut. |
 | `cameraSwitch(input)` | `POST /v1/camera-switch` | Multicam: put each cut of an EDL on the camera of whoever is speaking (flat price). Runs on nodaro.ai; a self-hosted install relays it once connected (`503 nodaro_connection_required` otherwise). |
+| `editPlanCapabilities()` | `GET /v1/edit-plan/capabilities` | The Edit Plan modes this server can plan, who answered, and whether Edit Plan is charged per started minute. Nothing is created or charged. |
 | `editPlan(input)` | `POST /v1/edit-plan` | Transcript-driven planner (tighten / clips / chapters / trailer). On a self-hosted install it relays to nodaro.ai (`503 nodaro_connection_required` when not connected). |
-| `tightenEpisode(input, options?)` | `POST /v1/tighten-episode` | Tighten Episode: one recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map, not yet enabled on nodaro.ai), the tightened episode out — transcribe, plan, render, with optional captions, music and framing, in one call. Core; a self-hosted install needs a nodaro.ai connection for the steps that run there (`503 nodaro_connection_required` otherwise). |
+| `tightenEpisode(input, options?)` | `POST /v1/tighten-episode` | Tighten Episode: one recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map), the tightened episode out — transcribe, plan, render, with optional captions, music and framing, in one call. Core; a self-hosted install needs a nodaro.ai connection for the steps that run there (`503 nodaro_connection_required` otherwise). |
 | `estimateTightenEpisode(input)` | `POST /v1/tighten-episode/estimate` | What a Tighten Episode run is estimated at. Nothing is created or charged. |
-| `episodeChapters(input, options?)` | `POST /v1/episode-chapters` | Chapters: one recording in, its chapters out — transcribe, then plan the chapters, in one call; nothing is rendered. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
+| `episodeChapters(input, options?)` | `POST /v1/episode-chapters` | Chapters: one recording in, its chapters out — transcribe, then plan the chapters, in one call; nothing is rendered. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). |
 | `estimateEpisodeChapters(input)` | `POST /v1/episode-chapters/estimate` | What a Chapters run is estimated at. Nothing is created or charged. |
-| `episodeTrailer(input, options?)` | `POST /v1/episode-trailer` | Trailer: one video recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map, not yet enabled on nodaro.ai), a 20–40 second trailer out in each chosen social format (padded, never cropped), optionally after an intro card, in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
+| `episodeTrailer(input, options?)` | `POST /v1/episode-trailer` | Trailer: one video recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map), a 20–40 second trailer out in each chosen social format (padded, never cropped), optionally after an intro card, in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). |
 | `estimateEpisodeTrailer(input)` | `POST /v1/episode-trailer/estimate` | What a Trailer run is estimated at. Nothing is created or charged. |
-| `clipPack(input, options?)` | `POST /v1/clip-pack` | Clip Pack: one recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map, not yet enabled on nodaro.ai), a pack of short clips out — each framed for 9:16 with the speakers stacked and captioned by default (audio clips for an audio recording), in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
+| `clipPack(input, options?)` | `POST /v1/clip-pack` | Clip Pack: one recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map), a pack of short clips out — each framed for 9:16 with the speakers stacked and captioned by default (audio clips for an audio recording), in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). |
 | `estimateClipPack(input)` | `POST /v1/clip-pack/estimate` | What a Clip Pack run is estimated at. Nothing is created or charged. |
-| `speakerLayout(input, options?)` | `POST /v1/speaker-layout` | Speaker Layout: one video recording in (or up to six of one conversation, at most five of them cameras, with an optional Master audio — several need Speaker Map, not yet enabled on nodaro.ai), the whole recording framed by speaker out — the same length, nothing cut — in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
+| `speakerLayout(input, options?)` | `POST /v1/speaker-layout` | Speaker Layout: one video recording in (or up to six of one conversation, at most five of them cameras, with an optional Master audio — several need Speaker Map), the whole recording framed by speaker out — the same length, nothing cut — in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). |
 | `estimateSpeakerLayout(input)` | `POST /v1/speaker-layout/estimate` | What a Speaker Layout run is estimated at. Nothing is created or charged. |
 | `continueUseCase(input, options?)` | `POST /v1/<type>/continue` (`/v1/tighten-episode/continue`, `/v1/episode-chapters/continue`, `/v1/episode-trailer/continue`, `/v1/clip-pack/continue`, `/v1/speaker-layout/continue`) | Continue a Tighten Episode, Chapters, Trailer, Clip Pack or Speaker Layout run as a new job: from where it failed, or (Tighten Episode, Trailer, Clip Pack, Speaker Layout) its Render final after a review. The route is the run's own type. |
 | `remapTranscript(edl, transcript)` | — (local) | PURE client-side transform — remaps a transcript through an EDL. **No request.** |
@@ -9115,8 +9149,6 @@ const sync = (job.output_data as { json: AudioSyncResult }).json
 ```
 
 #### `speakerMap(input)`
-
-**Not yet enabled on nodaro.ai.**
 
 ```ts
 speakerMap(input: SpeakerMapInput): Promise<EditJobResult>
@@ -9228,8 +9260,8 @@ music bed under it. Only the recording is required (`mediaUrl`, or
 | `musicDuckAmount` | `number` | no | How far the music dips under the voice, 0–100 (default 75). |
 
 Passing both `mediaUrl` and `mediaUrls`, or neither, rejects with a
-`TypeError` before any request. **Several recordings or a Master audio need Speaker Map**,
-which is not yet enabled on nodaro.ai: until it is, such a request is refused
+`TypeError` before any request. **Several recordings or a Master audio need Speaker Map**:
+where it is not available to you, such a request is refused
 `403 node_not_available` before anything is probed or charged — send one
 recording.
 
@@ -9275,7 +9307,7 @@ estimateEpisodeChapters(input: EpisodeChaptersInput): Promise<{ data: UseCaseEst
 List a podcast recording's chapters in one call: the run transcribes it, then
 plans its chapters, each with a title and a start time. Nothing is rendered.
 Only `mediaUrl` is required; a field left out takes the node's default.
-**Not yet enabled on nodaro.ai** (see the [node page](./nodes/processing-video/episode-chapters.md)).
+See the [node page](./nodes/processing-video/episode-chapters.md).
 
 **`EpisodeChaptersInput`:**
 
@@ -9318,7 +9350,7 @@ trailer from its strongest moments (the plan picks the length and joins the
 moments with its own short crossfades; neither is a setting), renders it,
 plays an optional intro card first, and pads it to every format — never
 cropped. Only the recording is required (`mediaUrl`, or `mediaUrls`); a field
-left out takes the node's default. **Not yet enabled on nodaro.ai** (see the [node page](./nodes/processing-video/episode-trailer.md)).
+left out takes the node's default. See the [node page](./nodes/processing-video/episode-trailer.md).
 
 **`EpisodeTrailerInput`** (with `UseCaseRecordingsInput`, its recordings):
 
@@ -9329,7 +9361,7 @@ left out takes the node's default. **Not yet enabled on nodaro.ai** (see the [no
 | `masterAudioUrl` | `string` | no | The mixer or recorder track: the trailer's sound and the clock the recordings are lined up to. **Needs Speaker Map**. |
 | `cameras` | `{ wide?, synced?, speakerCameras? }` | no | With several recordings or a Master audio: as on `tightenEpisode`. Ignored on one recording with no Master audio (the CLI, by contrast, refuses its Cameras flags there and exits 1). |
 | `introCardUrl` | `string` | no | A short video, 15 s at most, played before the trailer. Make it the recording's size and shape, or one of the two is letterboxed. |
-| `formats` | `TrailerFormat[]` | no | `"9:16"` \| `"1:1"` \| `"4:5"` \| `"16:9"` (the list is exported as `TRAILER_FORMATS`; 16:9 is a 1920×1080 landscape). Default `["9:16", "1:1", "4:5"]`. At least one: an empty list is sent as is and refused `400 validation_error`. |
+| `formats` | `TrailerFormat[]` | no | `"9:16"` \| `"1:1"` \| `"4:5"` \| `"16:9"` (the list is exported as `TRAILER_FORMATS`; 16:9 is a 1920×1080 landscape). Default `["9:16", "1:1", "4:5"]`. At least one, each once: an empty list, or one that names a format twice, is sent as is and refused `400 validation_error` (a repeat is named: "The format 9:16 is listed twice: name each format once."). |
 | `reviewBeforeRender` | `boolean` | no | Stop at a quick preview of the trailer for a person to review; render every format afterwards with `continueUseCase({ mode: "render-final" })`. |
 | `planTier` | `EditPlanTier` | no | `"economy"` \| `"standard"` (default) \| `"premium"`. |
 | `instructions` | `string` | no | Instructions for the trailer (up to 4 000 characters). |
@@ -9338,7 +9370,7 @@ left out takes the node's default. **Not yet enabled on nodaro.ai** (see the [no
 `options.idempotencyKey` works as on `tightenEpisode`. Passing both `mediaUrl`
 and `mediaUrls`, or neither, rejects with a `TypeError` before any request;
 several recordings or a Master audio are refused `403 node_not_available`
-where Speaker Map is not available to you (not yet on nodaro.ai).
+where Speaker Map is not available to you.
 
 `episodeTrailer` answers `UseCaseJobResult` — `{ jobId, executionId?, deduped? }`.
 Poll `jobId`: the finished job's `output_data.formats` is `[{ format, url }]`,
@@ -9380,8 +9412,8 @@ clips, with no framing or captions. Only the recording is required; a field
 left out takes the node's default. It takes the cameras of one conversation
 as Tighten Episode does (`mediaUrls`, `masterAudioUrl`, `cameras` —
 `ClipPackInput` extends `UseCaseRecordingsInput`; each clip then cuts to
-whoever is talking), with the same need for Speaker Map. **Not yet enabled on
-nodaro.ai** (see the [node page](./nodes/processing-video/clip-pack.md)).
+whoever is talking), with the same need for Speaker Map. See the
+[node page](./nodes/processing-video/clip-pack.md).
 
 **`ClipPackInput`:**
 
@@ -9439,8 +9471,8 @@ cut: the run transcribes the recording and frames each speaker with Speaker
 View over the whole of it. With several recordings of one conversation, they
 are lined up and each speaker is shown on their own camera. Only the
 recording is required (`mediaUrl`, or `mediaUrls`); a field left out takes
-the node's default. **Not yet enabled on nodaro.ai** (see the
-[node page](./nodes/processing-video/speaker-layout.md)).
+the node's default. See the
+[node page](./nodes/processing-video/speaker-layout.md).
 
 **`SpeakerLayoutInput`** (with `UseCaseRecordingsInput`, its recordings, as on `tightenEpisode`):
 
@@ -9613,6 +9645,36 @@ const done = await client.jobs.getStatus(jobId)
 const plan = unwrapEditPlanOutput(done.data.output_data)  // Edl[] for clips
 ```
 
+#### `editPlanCapabilities()`
+
+```ts
+editPlanCapabilities(): Promise<EditPlanCapabilities>
+```
+
+The Edit Plan modes this server can plan (`GET /v1/edit-plan/capabilities`).
+Nothing is created or charged. Ask it before offering a mode: `editPlan` with a
+mode the answer does not list is refused before anything is charged
+(`400 mode_not_available`).
+
+**`EditPlanCapabilities`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `modes` | `EditPlanMode[]` | The modes this server plans. `tighten`, `clips` and `chapters` are always listed; `trailer` once the server can plan a trailer. |
+| `source` | `"server" \| "nodaro.ai" \| "nodaro.ai-unreachable"` | Who answered: this server (nodaro.ai, or a self-hosted install that is not connected), nodaro.ai for a connected self-hosted install, or a connected self-hosted install that could not reach nodaro.ai (only the three original modes are listed then). A newer server may add a value. |
+| `perMinute` | `boolean` | `true` when Edit Plan is charged per started minute of the recording, `false` when at the 15/30/60/90/120/180-minute step its length rounds up to — see [Edit Plan](./nodes/processing-video/edit-plan.md#credit-cost). |
+
+The answer is never cached (`Cache-Control: private, no-store`): a server update
+can change it. The route and its reasons are described under
+[Edit Plan modes](./api-integration.md#edit-plan-modes).
+
+```ts
+const { modes } = await client.edit.editPlanCapabilities()
+if (modes.includes("trailer")) {
+  await client.edit.editPlan({ mode: "trailer", planTier: "standard", transcript, sources })
+}
+```
+
 #### `cameraSwitch(input)`
 
 ```ts
@@ -9627,6 +9689,7 @@ cameraSwitch(input: CameraSwitchInput): Promise<EditJobResult>
 | `speakerMapResult` | `SpeakerMapResult \| string` | no | A `speakerMap` job's `output_data.json`, folded into `speakerMap` before the request: a label in `speakerMap` wins, then the result, then the n-th speaker heard gets the n-th camera. Something that is not a Speaker Map result rejects with a `NodaroError` (`code: "not_a_speaker_map"`) before any request. |
 | `speakerNames` | `Record<string, string>` | no | Speaker label → display name, 1–80 characters. |
 | `minShotMs` / `leadMs` / `maxShotMs` / `wideEvery` | `number` | no | Whole numbers: shortest shot 500–60 000 (default 2 500), cut lead 0–5 000 (200), wide break after 0–600 000 (20 000, with a wide source; 0 = never), every N-th cut to the wide 0–20 (0 = off). The bounds are `CAMERA_SWITCH_BOUNDS` in `@nodaro/shared/edl`. With a wide source, a shot longer than the wide break plus two shortest shots (25 s at the defaults) cuts to the wide one wide break in (20 s), for one shortest shot. |
+| `lagMs` | `number` | no | Delay each cut by this long, in whole ms, 0–5 000 (default 0): the counterpart of `leadMs`. In `CAMERA_SWITCH_BOUNDS` too. A route setting only: a Camera Switch node on the canvas has no control for it. |
 | `layoutHints` | `boolean` | no | Overlapping speech → a layout hint (default false; Apply EDL renders cut-only edits). |
 | `workflowId` | `string` | no | Execution-history display. |
 
@@ -9695,7 +9758,7 @@ Every type used in a public method signature is re-exported from
 
 ### User settings
 
-- `UserSettings` / `UserSettingsPatch` / `UserSettingsSaved` / `UserSettingsLocale` / `UserTextTemplate` / `UserMcpPreferences` / `VariableDisplayMode` / `NodeDoubleClickAction` — `userSettings.get()` / `userSettings.update()`
+- `UserSettings` / `UserSettingsPatch` / `UserSettingsSaved` / `UserSettingsLocale` / `UserTextTemplate` / `UserMcpPreferences` / `UserMcpPreferencesPatch` / `VariableDisplayMode` / `NodeDoubleClickAction` — `userSettings.get()` / `userSettings.update()`
 
 ### Surface
 

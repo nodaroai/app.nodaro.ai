@@ -22,6 +22,7 @@ import { buildApp } from "./app.js"
 import { createVideoDirectorWorker } from "./workers/video-director-worker.js"
 import { startLaneParking } from "./lib/concurrency-lanes/park.js"
 import { startServerOccupancyPublisher } from "./lib/concurrency-lanes/server-occupancy.js"
+import { logStorageDeletesAtBoot } from "./lib/storage-deletes-setting.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("[video-director] Unhandled rejection:", err)
@@ -45,6 +46,8 @@ const worker = createVideoDirectorWorker(app)
 const stopServerOccupancy = startServerOccupancyPublisher()
 
 console.log("[video-director] Worker started, waiting for director jobs...")
+// On a deployment that deletes nothing from storage (STORAGE_DELETES=skip), one line saying so, naming this process.
+logStorageDeletesAtBoot("video-director")
 
 // Graceful shutdown
 const shutdown = async () => {

@@ -105,4 +105,5 @@ export const hi: ChromeDict = {
   "creatorCard.man": "पुरुष",
   "creatorCard.photoConsent": "केवल अपनी या ऐसे व्यक्ति की फ़ोटो अपलोड करें जिसने इसके लिए सहमति दी हो।",
   "present.restrictFieldsCount": "प्रतिबंधित करें ({n} सीमित)",
+  "speakerView.reason.nothingCut": "रिकॉर्डिंग से कुछ भी नहीं काटा जाता, इसलिए क्रॉसफ़ेड लगाने की कोई जगह नहीं है।",
 }

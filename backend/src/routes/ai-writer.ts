@@ -30,6 +30,7 @@ import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
+import { llmRunModel } from "../lib/run-model.js"
 
 const aiWriterBody = z.object({
   // LLM_TEXT_INPUT_MAX (100K) — same rationale as llm-chat: the input feeds an
@@ -137,7 +138,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
     {
       // The lane last: the request waits for its slot before the handler reserves.
       preHandler: [
-        creditGuard((req) => resolveLlmCreditId("ai-writer", req.body), { computeCredits: aiWriterPrecheck }),
+        creditGuard((req) => resolveLlmCreditId("ai-writer", req.body), { computeCredits: aiWriterPrecheck, runModel: llmRunModel("ai-writer") }),
         laneGuard(...syncRouteLane("/v1/ai-writer/generate")),
       ],
       config: { requestTimeout: LLM_ROUTE_REQUEST_TIMEOUT_MS } as Record<string, unknown>,
@@ -301,7 +302,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
   app.post(
     "/v1/ai-writer/generate-stream",
     {
-      preHandler: creditGuard((req) => resolveLlmCreditId("ai-writer", req.body), { computeCredits: aiWriterPrecheck }),
+      preHandler: creditGuard((req) => resolveLlmCreditId("ai-writer", req.body), { computeCredits: aiWriterPrecheck, runModel: llmRunModel("ai-writer") }),
       config: { requestTimeout: LLM_ROUTE_REQUEST_TIMEOUT_MS } as Record<string, unknown>,
     },
     async (req, reply) => {

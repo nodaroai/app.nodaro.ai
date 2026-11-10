@@ -105,4 +105,5 @@ export const ru: ChromeDict = {
   "creatorCard.man": "Мужчина",
   "creatorCard.photoConsent": "Загружайте только своё фото или фото человека, который на это согласился.",
   "present.restrictFieldsCount": "Ограничить (ограничено: {n})",
+  "speakerView.reason.nothingCut": "Из записи ничего не вырезается, поэтому плавный переход применить негде.",
 }

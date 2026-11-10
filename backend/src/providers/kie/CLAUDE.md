@@ -503,7 +503,7 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 | Nano Banana 2 | `resolution` | `"1K"`, `"2K"`, `"4K"` |
 | Nano Banana 2.1 | `resolution` | `"1K"`, `"2K"`, `"4K"` |
 | Nano Banana 2 Lite | Not supported — 1K ONLY (no resolution param; `image.ts` strips stale values) | — |
-| GPT Image 2 (T2I + I2I) | `resolution` | `"1K"`, `"2K"`, `"4K"` (1:1 cannot use 4K; `auto` aspect_ratio limited to 1K) |
+| GPT Image 2 (T2I + I2I) | `resolution` | `"1K"`, `"2K"`, `"4K"` at every ratio it offers, `auto` and 1:1 included (checked 2026-11-10; older docs limited `auto` to 1K and 1:1 to 2K) |
 | Flux (all variants) | `resolution` | `"1K"`, `"2K"` |
 | Seedream 5 Flash (T2I + I2I) | **`size`** — our `resolution`, renamed on the wire by `resolutionParam: "size"` in `models.ts` (`image.ts` `applyResolutionParam`, both lanes) | `"1K"`, `"2K"` offered (schema also has `"1.5K"`, not offered); flat price at every size |
 | Other image models | Not supported | — |

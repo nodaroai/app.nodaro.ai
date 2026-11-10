@@ -16,6 +16,7 @@ import { CHARACTER_ASPECT_OPTIONS, LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
+import { providerRunModel } from "../lib/run-model.js"
 
 // Single source of truth for the asset-type and attach-column enums lives in
 // `@nodaro/shared/entity-prompts` — reused by the MCP `generate_location` verb
@@ -190,7 +191,7 @@ function buildVariantPrompt(
 export async function generateLocationAssetRoutes(app: FastifyInstance) {
   // Quality/resolution-aware identifier via the shared resolver — the SAME
   // function the handler's DEBIT uses, so CHECK===DEBIT can't drift.
-  app.post("/v1/generate-location-asset", { preHandler: creditGuard((req) => resolveEntityImageCreditIdentifier(req.body)) }, async (req, reply) => {
+  app.post("/v1/generate-location-asset", { preHandler: creditGuard((req) => resolveEntityImageCreditIdentifier(req.body), { runModel: providerRunModel(IMAGE_MODEL_ROLE_DEFAULTS.general) }) }, async (req, reply) => {
     const parsed = generateLocationAssetBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({

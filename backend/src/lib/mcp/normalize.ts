@@ -13,8 +13,9 @@
  * accept (or undefined when the lever genuinely doesn't apply to the
  * resolved model). Validation errors are SWALLOWED, not surfaced.
  */
-import { MODEL_CATALOG, VIDEO_DURATION_AUTO, defaultResolutionFor, isAutoVideoDuration, type ModelCatalogEntry } from "@nodaro/shared/model-catalog"
-import { canonicalVideoProvider } from "@nodaro/shared/models"
+import { MODEL_CATALOG, VIDEO_DURATION_AUTO, defaultImageModel, defaultResolutionFor, isAutoAspectToken, isAutoVideoDuration, type ModelCatalogEntry } from "@nodaro/shared/model-catalog"
+import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, MODIFY_IMAGE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, canonicalVideoProvider, resolveVideoProviderForMode, videoProviderRequiresImage } from "@nodaro/shared/models"
+import { imageToImageAspectRatio } from "../image-auto-aspect.js"
 
 /**
  * Resolve any model id (or freeform string) to a known catalog entry id.
@@ -336,6 +337,152 @@ export function normalizeImageInput(
 }
 
 /**
+ * The saved image model (`save_image_defaults`) an edit may run on. The person
+ * has ONE saved image model, which the widget's "Save as default" star fills
+ * from whichever tool made the picture: a text-to-image id after
+ * `generate_image`, an edit id after `modify_image`. An edit runs it only when
+ * /v1/image-to-image does (`MODIFY_IMAGE_PROVIDERS`, which `modify_image`
+ * snaps to as well): a text-to-image-only id (GPT Image 2, Seedream 5) is not
+ * an edit model and is ignored; an edit id, or a model that does both under one
+ * id (Nano Banana, Flux 2, Flux Kontext), is used.
+ */
+export function savedEditModel(saved: string | null | undefined): string | undefined {
+  return typeof saved === "string" && (MODIFY_IMAGE_PROVIDERS as readonly string[]).includes(saved) ? saved : undefined
+}
+
+/**
+ * The saved image model (`save_image_defaults`) a generation may run on: the
+ * mirror of `savedEditModel`. The one saved image model is an edit id after
+ * the star on a `modify_image` result (`gpt-image-2-6-flare-i2i`), which
+ * /v1/generate-image refuses. A generation runs it only when that route does
+ * (`IMAGE_GEN_PROVIDERS`, its provider list): an edit-only id is ignored and
+ * the generation default runs; a text-to-image id, or a model that does both
+ * under one id (Nano Banana, Flux 2, Flux Kontext), is used.
+ */
+export function savedGenerationModel(saved: string | null | undefined): string | undefined {
+  return typeof saved === "string" && (IMAGE_GEN_PROVIDERS as readonly string[]).includes(saved) ? saved : undefined
+}
+
+/**
+ * The saved video model (`mcpPreferences.video.model`, which PATCH
+ * /v1/user/settings takes as any string) a video call may run on: the model it
+ * runs as (`canonicalVideoProvider`, for a retired id) when the route the call
+ * sends it to takes it — `accepted` is that route's provider list
+ * (`TEXT_TO_VIDEO_PROVIDERS` for `generate_video`, whose prompt-only run goes to
+ * /v1/text-to-video; `VIDEO_GEN_PROVIDERS` for `animate_image`'s
+ * /v1/generate-video). Any other id (an image or a sound model saved there, an
+ * image-to-video id the text-to-video route does not take) is ignored, and the
+ * call's default runs.
+ */
+export function savedVideoModel(saved: string | null | undefined, accepted: readonly string[]): string | undefined {
+  if (typeof saved !== "string") return undefined
+  const runsAs = canonicalVideoProvider(saved) as string
+  return accepted.includes(runsAs) ? runsAs : undefined
+}
+
+/** The video lanes a call can take, each with the route it is sent to. */
+export type VideoLane = "image-to-video" | "text-to-video"
+
+/** The provider list of the route each lane is sent to (the image-to-video route runs only image-to-video ids). */
+const VIDEO_LANE_PROVIDERS: Readonly<Record<VideoLane, readonly string[]>> = {
+  "text-to-video": TEXT_TO_VIDEO_PROVIDERS,
+  "image-to-video": IMAGE_TO_VIDEO_PROVIDERS,
+}
+
+/**
+ * The id a video call sends for the lane it takes. A model with one id per mode
+ * (`VIDEO_MODE_ALIASES`: Grok Imagine, Wan, Wan 2.7, HappyHorse) is named by
+ * either id, so the named one may be its other mode's: `grok-i2v` on a
+ * prompt-only `generate_video` runs as `grok`, `grok` with a frame on
+ * `animate_image` as `grok-i2v` (`resolveVideoProviderForMode`). Undefined when
+ * the lane's route does not run the result (an image or a lip-sync model, a
+ * video edit), so the call can say so instead of sending it.
+ */
+export function videoModelForLane(model: string, lane: VideoLane): string | undefined {
+  const sent = resolveVideoProviderForMode(model, lane)
+  return VIDEO_LANE_PROVIDERS[lane].includes(sent) ? sent : undefined
+}
+
+/**
+ * The refusal for a named model the lane's route does not run, naming the
+ * models that do: on the text-to-video lane those that run from a prompt alone.
+ */
+export function videoModelRefusal(tool: string, model: string, lane: VideoLane): string {
+  const works = VIDEO_LANE_PROVIDERS[lane].filter((id) =>
+    MODEL_CATALOG[id]?.mcpHidden !== true &&
+    (lane === "image-to-video" || !videoProviderRequiresImage(id)),
+  )
+  const mode = lane === "image-to-video" ? "i2v" : "t2v"
+  const what = lane === "image-to-video" ? "from an image" : "from a prompt"
+  return `${tool} cannot run "${model}": it is not a model that makes a video ${what}. ` +
+    `Use one of: ${works.join(", ")}. Call list_models { kind: "video", mode: "${mode}" } for what each one does.`
+}
+
+/** The levers `image_to_image` sends /v1/image-to-image; each absent one is left out. */
+export interface ImageToImageLevers {
+  provider: string
+  aspectRatio?: string
+  resolution?: string
+  quality?: string
+}
+
+/**
+ * `image_to_image`'s model, ratio, size and quality: what the call names, else
+ * the person's saved image defaults, else the model's own rule.
+ *
+ * A value the call names is sent as it is, as before: the route fits it to the
+ * model and reports what it changed. A saved value is fitted to the model here,
+ * because it may have been saved for another model.
+ *
+ * - The model: the one named, else the saved one when an edit runs it
+ *   (`savedEditModel`), else the platform's edit default for the ratio.
+ * - The ratio: the one named, else the saved one (a saved "auto" handed on as
+ *   "auto", as a named one is). With neither, "auto" on the GPT Image 2, 2.5
+ *   and 2.6 edit models (`imageToImageAspectRatio`, the route's own rule), and on any
+ *   other model none, so it keeps its own default.
+ * - Size and quality: the ones named, else the saved ones where the model
+ *   lists them, else none (the model's default).
+ */
+export function imageToImageLevers(
+  named: {
+    model?: string | null
+    aspect_ratio?: string | null
+    resolution?: string | null
+    quality?: string | null
+  },
+  saved: {
+    model?: string
+    aspectRatio?: string
+    resolution?: string
+    quality?: string
+  },
+): ImageToImageLevers {
+  const given = (v: string | null | undefined) => (typeof v === "string" && v.trim() !== "" ? v : undefined)
+  const requestedRatio = requestedAspectRatio(named.aspect_ratio, saved.aspectRatio)
+  const provider = given(named.model) ?? savedEditModel(saved.model) ?? defaultImageModel("edit", requestedRatio)
+  const entry = MODEL_CATALOG[provider]
+
+  const savedRatio = given(saved.aspectRatio)
+  const fittedSavedRatio = isAutoAspectToken(savedRatio)
+    ? "auto"
+    : savedRatio !== undefined
+      ? normalizeAspectRatio(savedRatio, entry?.aspectRatios, "16:9")
+      : undefined
+  const aspectRatio =
+    given(named.aspect_ratio) ?? fittedSavedRatio ?? imageToImageAspectRatio(provider, undefined)
+
+  const resolution = given(named.resolution) ?? normalizeResolution(saved.resolution, entry?.resolutions)
+  const quality = given(named.quality) ?? normalizeQuality(saved.quality, entry?.qualities)
+
+  return {
+    provider,
+    ...(aspectRatio !== undefined ? { aspectRatio } : {}),
+    ...(resolution !== undefined ? { resolution } : {}),
+    ...(quality !== undefined ? { quality } : {}),
+  }
+}
+
+/**
  * Like `normalizeModel` but returns undefined for empty / unknown so the
  * caller can chain to a saved-pref / catalog-default fallback.
  */
@@ -363,8 +510,13 @@ export interface NormalizedVideoParams {
 /**
  * Compose video-tool normalizations. Mirrors `normalizeImageInput` but
  * with `duration` instead of `quality` since that's the lever video
- * models care about. `aspectRatio` defaults to `16:9`; `resolution` and
- * `duration` fall through to the model's natural default if not picked.
+ * models care about. Each lever: the value the call names, else the person's
+ * saved video default (`mcp_preferences.video`; a caller hands the model on
+ * through `savedVideoModel`, so only one its route takes), else the catalog's. The ratio
+ * is chosen before it is fitted to the model (`requestedAspectRatio`), so a
+ * saved one is reached; with neither it is `16:9`, or the model's first listed
+ * ratio. `resolution` and `duration` fall through to the model's natural
+ * default if not picked.
  */
 export function normalizeVideoInput(
   raw: {
@@ -388,9 +540,14 @@ export function normalizeVideoInput(
   const model = explicitModel ?? savedModel ?? fallbackModel
   const modelEntry = MODEL_CATALOG[model]
 
-  const aspectRatio =
-    normalizeAspectRatio(raw.aspect_ratio, modelEntry?.aspectRatios, "16:9")
-    ?? normalizeAspectRatio(saved.aspectRatio, modelEntry?.aspectRatios, "16:9")
+  // `normalizeAspectRatio` never answers empty for a model with ratios (an unset
+  // value is its 16:9 fallback), so a `?? saved` after it would never be
+  // reached: the saved ratio is picked first, then fitted.
+  const aspectRatio = normalizeAspectRatio(
+    requestedAspectRatio(raw.aspect_ratio, saved.aspectRatio),
+    modelEntry?.aspectRatios,
+    "16:9",
+  )
 
   const resolution =
     normalizeResolution(raw.resolution, modelEntry?.resolutions)

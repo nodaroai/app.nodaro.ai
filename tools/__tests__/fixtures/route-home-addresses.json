@@ -1,0 +1,30 @@
+{
+  "comment": "One table of addresses and where each one's page lives, run against real Caddy (tools/__tests__/legacy-ui-redirects-caddy.test.mjs) and against the browser's guard (frontend/src/lib/__tests__/page-homes.test.ts), so the two can never decide differently. legacy: on a host LEGACY_UI_HOSTS names, 'move' (one redirect to the Flow origin) or 'stay'. flow: on the Flow host, 'back' (one redirect to PUBLIC_URL's origin) or 'stay'. Caddy's path matcher ignores case, merges '//', resolves dot segments and decodes '%2F'; so must the guard.",
+  "addresses": [
+    { "path": "/", "legacy": "move", "flow": "stay" },
+    { "path": "/projects", "legacy": "move", "flow": "stay" },
+    { "path": "/Projects", "legacy": "move", "flow": "stay" },
+    { "path": "/projects/", "legacy": "move", "flow": "stay" },
+    { "path": "/projects/p1/workflows/w1", "legacy": "move", "flow": "stay" },
+    { "path": "//projects", "legacy": "move", "flow": "stay" },
+    { "path": "/PIPELINE", "legacy": "move", "flow": "stay" },
+    { "path": "/billing/", "legacy": "move", "flow": "stay" },
+    { "path": "/gallery", "legacy": "move", "flow": "stay" },
+    { "path": "/join/abc.def", "legacy": "move", "flow": "stay" },
+    { "path": "/app/x", "legacy": "stay", "flow": "back" },
+    { "path": "/App/x", "legacy": "stay", "flow": "back" },
+    { "path": "/EMBED/x", "legacy": "stay", "flow": "back" },
+    { "path": "/Present/t", "legacy": "stay", "flow": "back" },
+    { "path": "//app/x", "legacy": "stay", "flow": "back" },
+    { "path": "/app%2Fx", "legacy": "stay", "flow": "back" },
+    { "path": "/app/x/", "legacy": "stay", "flow": "back" },
+    { "path": "/projects/../app/x", "legacy": "stay", "flow": "back" },
+    { "path": "/login", "legacy": "stay", "flow": "stay" },
+    { "path": "/login/", "legacy": "stay", "flow": "stay" },
+    { "path": "/Login", "legacy": "stay", "flow": "stay" },
+    { "path": "/auth/callback/", "legacy": "stay", "flow": "stay" },
+    { "path": "/oauth/authorize/", "legacy": "stay", "flow": "stay" },
+    { "path": "/some/unknown/page", "legacy": "stay", "flow": "stay" },
+    { "path": "/tools/x", "legacy": "stay", "flow": "stay" }
+  ]
+}

@@ -2,8 +2,6 @@
 
 > Work out which camera each speaker is on, from the cameras' own microphones, so a multicam edit switches to the right person without anyone filling in a table.
 
-**Not yet enabled on nodaro.ai.**
-
 ## Overview
 
 In a multicam podcast or interview, each guest usually has their own camera, and every camera has a microphone of its own. While a guest is talking, the camera pointed at them hears them loudest. Speaker Map uses that: it takes a transcript with speaker labels, listens to each camera during every speaker's turns, and decides whose camera is whose. The result goes into [Camera Switch](../processing-video/camera-switch.md)'s **Speaker map** input, which then puts each cut on the speaking person's camera.

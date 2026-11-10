@@ -61,7 +61,7 @@ Each podcast use-case has a one-node verb. Reach for it first when it is in your
   `media_urls` + `master_audio_url` (and `cameras`) — each speaker is shown on their own camera; it needs Speaker Map
   (refused `403 node_not_available` where it is not available). Set `review_before_render: true` to stop at a preview;
   then `continue_use_case` with `mode: "render-final"` and no `edited_edl` (there is no cut to edit). To cut the episode
-  as well, use `tighten_episode` with a framing instead. Not yet enabled on nodaro.ai.
+  as well, use `tighten_episode` with a framing instead.
 
 A failed run of any of them continues with `continue_use_case` and `mode: "from-failed"` — finished steps are kept. The
 primitive chains below are the advanced path: use them when you need control the one-node verbs do not give (several
@@ -148,7 +148,7 @@ automatic map). It lines the recordings up, transcribes the sound, works out who
 camera (Speaker Map), plans the tightened cut, switches to whoever is talking and renders it —
 the steps below, as one job. Read `output_data.cameras` back to the user: who went on which
 camera (`camera: null` = the wide shot) and the line-up and map notes. Several recordings or a
-Master audio need Speaker Map; where it is not available to the user (not yet on nodaro.ai) the
+Master audio need Speaker Map; where it is not available to the user the
 call is refused `403 node_not_available` — then use the steps below, or send one recording.
 
 The steps by hand, when you need more control (a hand-edited switch, clips or chapters of a

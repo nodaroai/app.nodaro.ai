@@ -23,6 +23,7 @@ import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
+import { llmRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { llmProviderOfBody } from "../lib/concurrency-lanes/live-routes.js"
 
@@ -289,7 +290,7 @@ export async function promptHelperRoutes(app: FastifyInstance) {
     "/v1/prompt-helper/wizard",
     {
       preHandler: [
-        creditGuard((req) => resolveLlmCreditId("prompt-helper", req.body), { computeCredits: promptHelperPrecheck }),
+        creditGuard((req) => resolveLlmCreditId("prompt-helper", req.body), { computeCredits: promptHelperPrecheck, runModel: llmRunModel("prompt-helper") }),
         // The lane last: the request waits for its slot before the handler reserves.
         laneGuard("llm", { provider: llmProviderOfBody(LLM_FEATURE_DEFAULTS["prompt-helper"]) }),
       ],

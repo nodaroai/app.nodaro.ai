@@ -13,7 +13,26 @@ import { userDirectionOf, type ResolvedUserDirection } from "../lib/user-directi
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared/models"
 import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { defaultImageModel, gptImage26SentImages } from "@nodaro/shared/model-catalog"
+import { generateImageModelOf } from "../workers/handlers/default-models.js"
+import { rawBodyRecord, textField } from "../lib/run-model.js"
 import { assembledRefsForPricing, isStructuredImageMode } from "./generate-image-plan.js"
+
+/**
+ * The model a request RUNS on, for the guard's surface deny
+ * (`CreditGuardOpts.runModel`): the model it names, else the general default
+ * at its aspect ratio — the default the handler fills in after the guard (a
+ * ratio the role's model cannot draw, 4:5 or 5:4 among them, moves to another
+ * model). Judged before the image-to-image swap, as a
+ * named `provider` is. A fan-out names its models in `models`, which the guard
+ * already judges; a Character LoRA run (the `_internalLora` hint with routing
+ * on) runs the LoRA model, as the credit check prices it.
+ */
+export function resolveImageRunModel(req: FastifyRequest): string | undefined {
+  const body = rawBodyRecord(req)
+  if (Array.isArray(body.models) && body.models.length > 0) return undefined
+  if ("_internalLora" in body && config.CHARACTER_LORA_ROUTING_ENABLED) return FLUX_LORA_CHARACTER_MODEL_ID
+  return generateImageModelOf({ provider: textField(body.provider), aspectRatio: textField(body.aspectRatio) }).resolvedModel
+}
 
 /**
  * The credit-CHECK model-identifier resolver (preHandler side). Extracted as a
@@ -118,7 +137,7 @@ export function imageCreditIdentifierFor(
   // `quality` are pricing dimensions — a snap applied only in the handler would
   // break CHECK === DEBIT (see `resolveNormalizedImageGen`'s docstring).
   // `aspectRatio` is threaded too: it does not price on its own, but the
-  // cross-field rules (gpt-image-2 `auto` → 1K) re-price through it.
+  // cross-field rules (GPT Image 2.5's 1K-only ratios) re-price through it.
   return resolveNormalizedImageGen({
     provider: rawProvider,
     aspectRatio,

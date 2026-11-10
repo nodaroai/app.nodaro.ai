@@ -58,6 +58,8 @@ export interface SpeakerViewNodeSettings {
  *  - no-same-camera-change: no speaker change stays inside one camera.
  *  - no-clock-jump: no speaker change crosses a jump of the master clock, the
  *    only place the plugin writes a crossfade (SV21 c).
+ *  - nothing-cut: nothing is cut out of the recording (Speaker Layout keeps it
+ *    whole), so no speaker change can cross such a jump.
  *  - needs-face-tracks: Glide follows face tracks, and none are wired (P3-10).
  */
 export type SpeakerViewReasonCode =
@@ -69,6 +71,7 @@ export type SpeakerViewReasonCode =
   | "slots-fixed"
   | "no-same-camera-change"
   | "no-clock-jump"
+  | "nothing-cut"
   | "needs-face-tracks"
 
 export interface SpeakerViewReason {
@@ -168,6 +171,17 @@ export function validSpeakerCrossfade(_data: SpeakerViewNodeSettings, ctx?: Spea
   const changes = ctx ? noQualifyingChange(ctx, "jumpChanges") : undefined
   if (changes !== undefined) return ruledOut(SPEAKER_VIEW_CROSSFADE_ID, "no-clock-jump", { changes })
   return allowed(SPEAKER_VIEW_CROSSFADE_ID)
+}
+
+/**
+ * Speaker Layout's Crossfade: always ruled out. The layout keeps the whole
+ * recording, so no speaker change crosses a jump of the master clock — the
+ * only place a crossfade is drawn (`validSpeakerCrossfade`) — and a crossfade
+ * would render as a cut. Its panel greys the option with this reason; a
+ * crossfade already stored on a node is shown as it is.
+ */
+export function speakerLayoutCrossfade(): SpeakerViewOption {
+  return ruledOut(SPEAKER_VIEW_CROSSFADE_ID, "nothing-cut")
 }
 
 /** The emphasis atoms with whether they apply (SV2): Single shows one speaker,

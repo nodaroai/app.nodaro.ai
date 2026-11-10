@@ -19,9 +19,10 @@ vi.mock("../../../lib/app-settings.js", () => ({
 }))
 vi.mock("../../../lib/url-validator.js", () => ({ safeUrlSchema: z.string().url() }))
 // One model this deployment does not offer, so the quote's deny is exercised.
+const deniedModels = vi.hoisted(() => new Set<string>(["runway-aleph"]))
 vi.mock("../../../lib/surface-deny.js", async () => {
   const actual = await vi.importActual<typeof import("../../../lib/surface-deny.js")>("../../../lib/surface-deny.js")
-  return { ...actual, isModelDenied: (m: string) => m === "runway-aleph" }
+  return { ...actual, isModelDenied: (m: string) => deniedModels.has(m) }
 })
 
 const probe = vi.hoisted(() => ({ probeMediaDuration: vi.fn(async (_url?: unknown): Promise<number> => 10) }))
@@ -367,6 +368,35 @@ describe("POST /v1/quote refusals", () => {
     expect(res.statusCode).toBe(403)
     expect(res.json().error.code).toBe("model_not_available")
     await app.close()
+  })
+
+  it("refuses a body that names no model when the default it would run is withheld — run and quote alike, and only where models are restricted", async () => {
+    const { DEFAULT_VIDEO_PROVIDER } = await import("@nodaro/shared/models")
+    const { __resetSurfaceProfileCacheForTests } = await import("../../../lib/surface-profile.js")
+    const params = { prompt: "a fox runs through snow" }
+    deniedModels.add(DEFAULT_VIDEO_PROVIDER)
+    try {
+      // No restriction configured: the run model is never asked, so nothing changes.
+      const open = await buildApp()
+      expect((await open.inject({ method: "POST", url: "/v1/quote", payload: { type: "text-to-video", params } })).statusCode).toBe(200)
+      await open.close()
+
+      process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ models: { deny: ["runway-aleph"] } })
+      __resetSurfaceProfileCacheForTests()
+      const app = await buildApp()
+      for (const [url, payload] of [["/v1/quote", { type: "text-to-video", params }], ["/v1/text-to-video", params]] as const) {
+        const res = await app.inject({ method: "POST", url, payload })
+        expect(res.statusCode, url).toBe(403)
+        expect(res.json().error.code).toBe("model_not_available")
+        expect(res.json().error.message).toContain(DEFAULT_VIDEO_PROVIDER)
+      }
+      expect(reserveSpy).not.toHaveBeenCalled()
+      await app.close()
+    } finally {
+      deniedModels.delete(DEFAULT_VIDEO_PROVIDER)
+      delete process.env.NODARO_SURFACE_PROFILE
+      __resetSurfaceProfileCacheForTests()
+    }
   })
 
   it("names the quotable types for one it cannot price", async () => {

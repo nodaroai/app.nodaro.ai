@@ -468,6 +468,8 @@ export async function registerCopilotRoutes(app: FastifyInstance): Promise<void>
         paygSurfaceGuard(),
         creditGuard((req) => tierSpecFromBody(req).creditId, {
           dedup: false,
+          // The turn runs its tier's model.
+          runModel: (req) => tierSpecFromBody(req).registryId,
           // Reserve the ceiling, but never more than the user actually has:
           // a low balance should shorten a turn, not refuse it outright.
           computeCredits: async (_body, req) => resolveReservation(req),

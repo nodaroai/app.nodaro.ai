@@ -2035,6 +2035,13 @@ export interface PluginCreditGuardOpts {
    *  Additive-optional (no CONTRACT_VERSION bump); today's plugin routes all
    *  reserve in-request via `tk.reserveCreditsForJob` and take the default. */
   checkOnly?: boolean
+  /** The model this request RUNS on — the model it names, or the default the
+   *  route fills in when it names none — in catalog / LLM-registry ids, before
+   *  any internal swap. Judged by the deployment's model restriction before
+   *  anything is reserved, and asked only where models are restricted; must
+   *  not throw on a malformed body. A route whose request can run a model by
+   *  default declares it. Additive-optional (no CONTRACT_VERSION bump). */
+  runModel?: (req: FastifyRequest) => string | readonly string[] | undefined
 }
 
 /**

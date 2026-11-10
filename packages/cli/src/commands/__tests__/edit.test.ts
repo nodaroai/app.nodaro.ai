@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { editCommand } from "../edit.js"
-import { warn } from "../../output.js"
+import { dim, emit, success, warn } from "../../output.js"
 
 const mocks = {
   silenceDetect: vi.fn(),
@@ -13,6 +13,7 @@ const mocks = {
   cameraSwitch: vi.fn(),
   applyEdl: vi.fn(),
   editPlan: vi.fn(),
+  editPlanCapabilities: vi.fn(),
   tightenEpisode: vi.fn(),
   episodeChapters: vi.fn(),
   episodeTrailer: vi.fn(),
@@ -30,6 +31,7 @@ vi.mock("../../client.js", () => ({
       cameraSwitch: mocks.cameraSwitch,
       applyEdl: mocks.applyEdl,
       editPlan: mocks.editPlan,
+      editPlanCapabilities: mocks.editPlanCapabilities,
       tightenEpisode: mocks.tightenEpisode,
       episodeChapters: mocks.episodeChapters,
       episodeTrailer: mocks.episodeTrailer,
@@ -345,5 +347,47 @@ describe("edit switch-cameras --speaker-map-result", () => {
       "--speaker-map-result", fixture("r.json", result), "--json",
     )
     expect(mocks.cameraSwitch).toHaveBeenCalledWith(expect.objectContaining({ speakerMap: { speaker_1: "b" }, speakerMapResult: result }))
+  })
+})
+
+describe("edit switch-cameras --lag-ms", () => {
+  it("sends --lag-ms beside --lead-ms, and nothing for it when not given", async () => {
+    mocks.cameraSwitch.mockResolvedValue({ jobId: "j-cs" })
+    const base = ["edit", "switch-cameras", "--edl", fixture("edl.json", EDL), "--transcript", fixture("t.json", TRANSCRIPT), "--json"]
+    await runCmd(...base, "--lead-ms", "150", "--lag-ms", "400")
+    expect(mocks.cameraSwitch).toHaveBeenLastCalledWith(expect.objectContaining({ leadMs: 150, lagMs: 400 }))
+    await runCmd(...base)
+    expect(mocks.cameraSwitch.mock.calls.at(-1)![0]).not.toHaveProperty("lagMs")
+  })
+})
+
+describe("edit capabilities", () => {
+  beforeEach(() => {
+    for (const f of [emit, success, dim]) vi.mocked(f).mockClear()
+  })
+
+  it("--json prints the route's answer as it is", async () => {
+    const caps = { modes: ["tighten", "clips", "chapters", "trailer"], source: "server", perMinute: true }
+    mocks.editPlanCapabilities.mockResolvedValueOnce(caps)
+    await runCmd("edit", "capabilities", "--json")
+    expect(mocks.editPlanCapabilities).toHaveBeenCalledWith()
+    expect(vi.mocked(emit)).toHaveBeenCalledWith(caps, expect.anything())
+  })
+
+  it("names the modes, the ones not listed, who answered and how Edit Plan is charged", async () => {
+    mocks.editPlanCapabilities.mockResolvedValueOnce({ modes: ["tighten", "clips", "chapters"], source: "nodaro.ai-unreachable", perMinute: false })
+    await runCmd("edit", "capabilities")
+    expect(vi.mocked(success)).toHaveBeenCalledWith("Edit Plan modes: tighten, clips, chapters")
+    expect(vi.mocked(dim).mock.calls.map((c) => c[0])).toEqual([
+      "not listed: trailer",
+      "answered by: this install: nodaro.ai could not be reached, so only the original modes are listed",
+      "charged at the 15/30/60/90/120/180-minute step the recording's length rounds up to",
+    ])
+  })
+
+  it("a source a newer server adds is printed as it is", async () => {
+    mocks.editPlanCapabilities.mockResolvedValueOnce({ modes: ["tighten", "clips", "chapters", "trailer"], source: "elsewhere", perMinute: true })
+    await runCmd("edit", "capabilities")
+    expect(vi.mocked(dim).mock.calls.map((c) => c[0])).toEqual(["answered by: elsewhere", "charged per started minute of the recording"])
   })
 })

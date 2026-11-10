@@ -140,6 +140,32 @@ describe("list_models tool (always available)", () => {
     expect(text).not.toContain("logoUrl")
   })
 
+  it("carries the size rules as GET /v1/models does: the sizes a ratio renders, the transparent size", async () => {
+    const server = buildServer()
+    registerModels({
+      server,
+      session: newSession({ userId: "u1", scopes: [] as Scope[], clientName: "Claude" }),
+      fastify: Fastify(),
+    })
+    const result = await callTool(server, "list_models", { kind: "image" })
+    const body = JSON.parse(result.content[0]?.text ?? "") as {
+      sections: Array<{ families: Array<{ models: Array<Record<string, unknown> & { id: string }> }> }>
+    }
+    const models = body.sections.flatMap((s) => s.families.flatMap((f) => f.models))
+    const flare25 = models.find((m) => m.id === "gpt-image-2-5-flare")
+    expect(flare25?.resolutionsByAspectRatio).toEqual({ "27:16": ["1K"], "16:27": ["1K"], "9:8": ["1K"], "8:9": ["1K"] })
+    expect(flare25?.transparentResolution).toBe("1K")
+    expect(flare25?.backgroundOnlyAtTransparentResolution).toBe(true)
+    const flare26 = models.find((m) => m.id === "gpt-image-2-6-flare")
+    expect(flare26?.transparentResolution).toBe("1K")
+    expect(flare26).not.toHaveProperty("resolutionsByAspectRatio")
+    expect(models.find((m) => m.id === "nano-banana-2")).not.toHaveProperty("transparentResolution")
+    // GPT Image 2 renders every ratio it offers at every size: no rule to carry.
+    for (const id of ["gpt-image-2", "gpt-image-2-i2i"]) {
+      expect(models.find((m) => m.id === id), id).not.toHaveProperty("resolutionsByAspectRatio")
+    }
+  })
+
   it("lists an entry that names no known maker without one, instead of failing the call", async () => {
     const { MODEL_CATALOG } = await import("@nodaro/shared/model-catalog")
     MODEL_CATALOG["no-maker-probe"] = { ...MODEL_CATALOG["veo3"]!, id: "no-maker-probe", maker: "acme" as never }

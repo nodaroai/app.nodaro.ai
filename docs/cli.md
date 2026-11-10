@@ -575,7 +575,7 @@ nodaro edit audio-sync (--source <[id=]url> ... | --sources-file <file.json>) [-
                                                          # output_data.json = { reference, offsets: [{ sourceId, offsetMs, confidence,
                                                          # driftMsPerHour }], notes } with referenceMs = sourceMs + offsetMs.
 nodaro edit speaker-map (--source <[id=]url> ... | --sources-file <file.json>) --transcript <file.json> [--offsets <file.json>] [--master <id>] [--wide <id>] [--margin-db <db>] [--watch] [--poll-interval <ms>] [--json]
-                                                         # Not yet enabled on nodaro.ai. Which camera each speaker is on, from the cameras'
+                                                         # Which camera each speaker is on, from the cameras'
                                                          # own microphones (2-6 recordings, the same --source parser as audio-sync; keyless).
                                                          # --offsets = an audio-sync result; --master / --wide = no one's camera.
                                                          # --sources-file rows may carry kind: "audio" (a sound-only recording, never a camera).
@@ -590,29 +590,38 @@ nodaro edit plan --mode tighten|clips|chapters|trailer --plan-tier economy|stand
                                                          # source ids (both commands default to source-1, source-2, …); each source's
                                                          # offset is applied before the request — refused if one was not measured or
                                                          # matched weakly (set its offsetMs in --sources-file).
-nodaro edit switch-cameras --edl <file.json> --transcript <file.json> [--speaker-map <file.json>] [--speaker-map-result <file.json>] [--speaker-names <file.json>] [--min-shot-ms <ms>] [--lead-ms <ms>] [--max-shot-ms <ms>] [--wide-every <n>] [--layout-hints] [--watch] [--poll-interval <ms>] [--json]
+nodaro edit capabilities [--json]
+                                                         # the Edit Plan modes this server can plan (GET /v1/edit-plan/capabilities), who answered
+                                                         # (this server, or nodaro.ai for a connected self-hosted install) and whether Edit Plan is
+                                                         # charged per started minute; --json prints { modes, source, perMinute }. Nothing is charged.
+nodaro edit switch-cameras --edl <file.json> --transcript <file.json> [--speaker-map <file.json>] [--speaker-map-result <file.json>] [--speaker-names <file.json>] [--min-shot-ms <ms>] [--lead-ms <ms>] [--lag-ms <ms>] [--max-shot-ms <ms>] [--wide-every <n>] [--layout-hints] [--watch] [--poll-interval <ms>] [--json]
                                                          # multicam: each cut on the speaker's camera; the transcript needs speaker labels.
                                                          # --speaker-map-result = a speaker-map result: a label in --speaker-map wins over it.
+                                                         # --lag-ms delays each cut by this long (0–5000 ms, default 0): --lead-ms's counterpart.
                                                          # Multicam end to end: audio transcribe --provider elevenlabs-stt --diarize → edit audio-sync
                                                          # → edit plan --offsets → edit switch-cameras → edit apply-edl --quality proxy (review) → --quality final.
-nodaro edit tighten-episode --media <url> [--media <url> ...] [--master-audio <url>] [--wide-camera <n>] [--synced] [--speaker-camera <speaker>=<recording> ...] [--music <url>] [--output video|audio] [--framing 16:9|9:16|1:1|4:5 [--layout auto|single|side-by-side|stacked|grid|pip] [--framing-source auto|static|tracking]] (--layout and --framing-source only with --framing) [--no-captions] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--watch] [--poll-interval <ms>] [--json]
+nodaro edit tighten-episode --media <url> [--media <url> ...] [--master-audio <url>] [--wide-camera <n>] [--synced] [--speaker-camera <speaker>=<recording> ...] [--music <url> [--music-duck-amount <0-100>]] [--output video|audio] [--framing 16:9|9:16|1:1|4:5 [--layout auto|single|side-by-side|stacked|grid|pip] [--framing-source auto|static|tracking]] (--layout and --framing-source only with --framing) [--no-captions | --caption-style subtitle|word-highlight|karaoke|tiktok-words|word-pop|bouncy] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--style-guide <text>] [--idempotency-key <key>] [--estimate] [--watch] [--poll-interval <ms>] [--json]
                                                          # Tighten Episode: one recording (video or audio, up to 3 hours) in, the tightened
                                                          # episode out — transcribe, plan, render, plus captions / music / framing as set.
                                                          # Several cameras: repeat --media (in order), --master-audio for the mixer track;
                                                          # --wide-camera, --synced, --speaker-camera 1=2 (0 = the wide shot) set the Cameras.
-                                                         # Several recordings or a master need Speaker Map (not yet enabled on nodaro.ai:
-                                                         # refused 403 node_not_available until it is).
+                                                         # Several recordings or a master need Speaker Map (refused 403
+                                                         # node_not_available where it is not available to you).
                                                          # --framing-source: static (default) splits the frame evenly by speaker; tracking
                                                          # follows faces with Speaker Frames (per started block of 1,000 sampled frames;
                                                          # refused 403 where Speaker Frames is not available to you); auto follows faces
                                                          # while it is available to you, else the even split.
                                                          # Priced as its steps plus a per-run fee (the fees are listed after this block).
                                                          # --review stops at a preview; render its final with edit continue-use-case.
+                                                         # --music-duck-amount (with --music): how far the music dips under the voice,
+                                                         # 0–100 (default 75). --caption-style the captions' look (default word-highlight).
+                                                         # --style-guide: a style guide for the planner (up to 4,000 characters).
+                                                         # --idempotency-key: a retry with the same key answers the run already started.
 nodaro edit episode-chapters --media <url> [--plan-tier economy|standard|premium] [--instructions <text>] [--style-guide <text>] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
                                                          # Chapters: one recording (video or audio, up to 3 hours) in, its chapters out —
                                                          # transcribe, then plan the chapters; nothing is rendered. With --watch the show
                                                          # notes are printed when the run completes: one "0:00 Title" line per chapter.
-                                                         # Priced as its steps plus a per-run fee (listed after this block). Not yet enabled on nodaro.ai.
+                                                         # Priced as its steps plus a per-run fee (listed after this block).
 nodaro edit episode-trailer --media <url> [--media <url> ...] [--master-audio <url>] [--wide-camera <n>] [--synced] [--speaker-camera <speaker>=<recording> ...] [--intro-card <url>] [--formats 9:16,1:1,4:5,16:9] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--style-guide <text>] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
                                                          # Trailer: one video recording (up to 3 hours) in, a 20–40 second trailer out in each
                                                          # format of --formats (comma-separated; default 9:16,1:1,4:5), padded, never cropped;
@@ -621,16 +630,17 @@ nodaro edit episode-trailer --media <url> [--media <url> ...] [--master-audio <u
                                                          # that could not be rendered ("Could not render: 1:1"). --review stops at
                                                          # a preview of the trailer and prints the edit continue-use-case command that renders
                                                          # every format. Priced as its steps plus a per-run fee (listed after this block).
+                                                         # A format listed twice in --formats is refused by the server (400 validation_error,
+                                                         # naming it) before anything is written or charged.
                                                          # Several cameras: the recordings flags of edit tighten-episode (repeat --media,
                                                          # --master-audio, --wide-camera, --synced, --speaker-camera); they need Speaker Map
-                                                         # (not yet enabled on nodaro.ai: refused 403 node_not_available until it is).
-                                                         # Not yet enabled on nodaro.ai.
+                                                         # (refused 403 node_not_available where it is not available to you).
 nodaro edit clip-pack --media <url> [--media <url> ...] [--master-audio <url>] [--wide-camera <n>] [--synced] [--speaker-camera <speaker>=<recording> ...] [--count <n>] [--length <sec>] [--framing 16:9|9:16|1:1|4:5|none [--layout auto|single|side-by-side|stacked|grid|pip] [--switch <id>] [--emphasis <style>]] (--layout, --switch and --emphasis only with --framing <aspect>) [--framing-source auto|static|tracking] (not with --framing none) [--no-captions | --caption-style subtitle|word-highlight|karaoke|tiktok-words|word-pop|bouncy] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--style-guide <text>] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
                                                          # Clip Pack: one recording (video or audio, up to 3 hours) in, a pack of short clips
                                                          # (several cameras: the recordings flags of edit tighten-episode — repeat --media,
                                                          # --master-audio, --wide-camera, --synced, --speaker-camera; each clip cuts to the
-                                                         # speaker; they need Speaker Map, not yet enabled on nodaro.ai: refused 403
-                                                         # node_not_available until it is; --framing-source tracking follows faces with
+                                                         # speaker; they need Speaker Map: refused 403 node_not_available where it is not
+                                                         # available to you; --framing-source tracking follows faces with
                                                          # one Speaker Frames run over the whole pack)
                                                          # out — --count clips (1–50, default 8; the plan may find fewer) of about --length
                                                          # seconds each (5–180, default 60), framed for 9:16 with the speakers stacked and
@@ -645,7 +655,7 @@ nodaro edit clip-pack --media <url> [--media <url> ...] [--master-audio <url>] [
                                                          # after the title of a clip whose captions could not be added), then "N clips could not
                                                          # be rendered." when some could not. --review stops at previews of the clips
                                                          # and prints the edit continue-use-case command that renders the kept clips. Priced as
-                                                         # its steps plus a per-run fee (listed after this block). Not yet enabled on nodaro.ai.
+                                                         # its steps plus a per-run fee (listed after this block).
 nodaro edit speaker-layout --media <url> [--media <url> ...] [--master-audio <url>] [--wide-camera <n>] [--synced] [--speaker-camera <speaker>=<recording> ...] [--aspect 16:9|9:16|1:1|4:5] [--layout auto|single|side-by-side|stacked|grid|pip] [--switch <id>] [--emphasis <style>] [--framing-source auto|static|tracking] [--review] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
                                                          # Speaker Layout: a whole video recording (up to 3 hours) framed by speaker — the same
                                                          # length, nothing cut. --aspect the shape (default 9:16), --layout (default stacked),
@@ -654,13 +664,12 @@ nodaro edit speaker-layout --media <url> [--media <url> ...] [--master-audio <ur
                                                          # auto: follows faces with Speaker Frames while it is available to you, else the even split;
                                                          # faces aren't named after a speaker yet, so a camera shared by several speakers keeps the
                                                          # even split). Several cameras: the recordings flags of edit tighten-episode, each speaker
-                                                         # on their own camera; they need Speaker Map, not yet enabled on nodaro.ai: refused 403
-                                                         # node_not_available until it is. Every flag's own value is checked before any request
+                                                         # on their own camera; they need Speaker Map: refused 403 node_not_available where
+                                                         # it is not available to you. Every flag's own value is checked before any request
                                                          # (whether --wide-camera names a recording with picture is the server's check). With --watch
                                                          # the framed video's URL is printed when the run completes. --review stops at a preview and
                                                          # prints the edit continue-use-case command that renders the final (no --edit: the layout
                                                          # has no cut to change). Priced as its steps plus a per-run fee (listed after this block).
-                                                         # Not yet enabled on nodaro.ai.
 nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <file.json>] [--type tighten-episode|episode-chapters|episode-trailer|clip-pack|speaker-layout] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
                                                          # continue a Tighten Episode, Chapters, Trailer, Clip Pack or Speaker Layout run as a new job. from-failed: keep the steps
                                                          # that finished, run the rest (the fee is held again; the failed run's was refunded).
@@ -677,6 +686,12 @@ nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <f
                                                          # --type the job is read for its type. When it cannot be read (a token
                                                          # without jobs:read, or a job that records no use-case type) nothing is
                                                          # sent: the command exits 1 asking for --type (code use_case_type_unknown).
+                                                         # [--estimate] on tighten-episode, episode-chapters, episode-trailer, clip-pack or
+                                                         # speaker-layout: quote the run the same flags would start (POST /v1/<type>/estimate)
+                                                         # and start nothing — no job is created, nothing is charged. It prints the total (≈
+                                                         # when a step is a metered estimate), the steps and the per-run fee, and the recording's
+                                                         # length; --json prints { totalCredits, stepsCredits, feeCredits, estimate?, durationSec }.
+                                                         # On an edition without credits it says so. --watch and --idempotency-key are not used.
 
 # Organizations — only on instances that have them
 nodaro org list [--json]

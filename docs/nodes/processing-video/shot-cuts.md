@@ -2,8 +2,6 @@
 
 > Find where every shot of a video starts and ends, measured from the file itself, and optionally save each shot's first and last frame as images.
 
-**Not yet enabled on nodaro.ai.**
-
 ## Overview
 
 Shot Cuts reads a video and lists its shots: where each one starts, where it ends and how long it lasts. It measures the file itself: every decoded frame is compared with the one before it, and a frame that changes sharply from a quiet background starts a new shot. A camera flash held for two or three frames before the picture comes back is not counted as a cut; a one-frame flash does start a new shot. It is the same rule the platform uses for Video Mask's per-shot masking.

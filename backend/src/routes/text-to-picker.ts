@@ -26,6 +26,7 @@ import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { LlmSpend, llmPrecheckBaseCredits, reserveLlmCall, settleLlmJob, type LlmPlannedCall, stampSyncLlmCallStart } from "../lib/llm-billing.js"
 import { chargedFailureMessage, llmPrecheckBody, llmTextChars, plannedStructuredCall } from "../lib/llm-metered-route.js"
 import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
+import { llmRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 
 /**
@@ -166,6 +167,7 @@ export async function textToPickerRoutes(app: FastifyInstance) {
     {
       preHandler: [
         creditGuard((req) => resolveLlmCreditId(TEXT_TO_PICKER_CREDIT_FEATURE, withDescribeToPickerDefaults(req.body)), {
+          runModel: llmRunModel(TEXT_TO_PICKER_CREDIT_FEATURE),
           // Metered (D1): pre-checked at one attempt over the body's text (the
           // legends are added at the reserve, which holds every batch). Undefined
           // under the rollback: the tier row prices it as before.

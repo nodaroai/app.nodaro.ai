@@ -262,7 +262,8 @@ import { backendHybridRoles } from "../../lib/reference-format.js"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { config, llmMeteredPricing } from "../../lib/config.js"
 import { resolveScriptModelId, type ScriptProvider } from "../../providers/script/script-generator.js"
-import { isNodeDenied, nodeNotAvailableError, isModelDenied, deniedModelRejectionMessage, USER_VIEWER, type AvailabilityViewer } from "../../lib/surface-deny.js"
+import { isNodeDenied, nodeNotAvailableError, isModelDenied, modelNotAvailableError, modelRestrictionConfigured, USER_VIEWER, type AvailabilityViewer } from "../../lib/surface-deny.js"
+import { jobRunModelOfBuild } from "../../lib/run-model.js"
 import { safeUrlSchema } from "../../lib/url-validator.js"
 import { scene3DFrameFromNode, scene3DNodePreflightError, scene3DReferencesFromNode } from "../../lib/scene3d-node.js"
 import { scene3DReferenceListError } from "../scene3d/index.js"
@@ -2643,7 +2644,9 @@ function scene3DWarningsField(args: {
  * mirror the TTS case's precedence byte-for-byte (an empty-string provider must
  * fall through exactly as dispatch does). The omitted-provider fallback
  * (`resolveOmittedTtsProvider`) is intentionally NOT folded in — see the backstop's
- * `typeof` guard.
+ * `typeof` guard: a node that names no model is judged after the build instead,
+ * on the model the build filled in, and only on a deployment that restricts
+ * models (`buildPayload` → `refuseWithheldDefaultModel`).
  *
  * Exported so B3's egress-key derivation can consume the same helper later.
  */
@@ -2829,7 +2832,49 @@ function voiceLockRefusal(message: string): Error & { code?: string } {
   return err
 }
 
+/**
+ * The job a workflow node runs. The build is `buildPayloadOf`; what it returns
+ * is judged once more on a deployment that restricts models: a node that names
+ * no model runs the one its build filled in (its type's default, by aspect
+ * ratio, by text length, by feature — `jobRunModelOfBuild` reads it off the
+ * built job), and a model the deployment withholds is refused the way a named
+ * one is refused at the top of the build (`model_not_available`), before the
+ * executor reserves anything. Without a restriction the build is returned as
+ * it was built, and nothing is judged.
+ */
 export function buildPayload(
+  rawNode: SimpleNode,
+  jobId: string,
+  resolvedInputs: ResolvedInputs,
+  usageLogId?: string,
+  buildCtx?: PayloadBuildContext,
+): PayloadResult {
+  const restricted = modelRestrictionConfigured()
+  // The provider the node was handed, read before the build (which may rewrite `resolvedInputs`).
+  const handed = restricted ? { provider: resolvedInputs.provider } : undefined
+  const built = buildPayloadOf(rawNode, jobId, resolvedInputs, usageLogId, buildCtx)
+  if (handed) refuseWithheldDefaultModel(rawNode, handed, buildCtx, built)
+  return built
+}
+
+/**
+ * A node that names a model was judged on it at the top of the build
+ * (`effectiveDispatchProvider`); one that names none runs the model its build
+ * filled in, judged here. The node is read as the build read it (`nodeAsBuilt`).
+ */
+function refuseWithheldDefaultModel(
+  rawNode: SimpleNode,
+  handed: Pick<ResolvedInputs, "provider">,
+  buildCtx: PayloadBuildContext | undefined,
+  built: PayloadResult,
+): void {
+  const node = nodeAsBuilt(rawNode, buildCtx?.edges ?? [])
+  if (effectiveDispatchProvider(node.type, node.data, handed)) return
+  const runsOn = jobRunModelOfBuild(built.jobName, built.payload, built.modelIdentifier)
+  if (runsOn && isModelDenied(runsOn)) throw modelNotAvailableError([runsOn])
+}
+
+function buildPayloadOf(
   rawNode: SimpleNode,
   jobId: string,
   resolvedInputs: ResolvedInputs,
@@ -2867,9 +2912,7 @@ export function buildPayload(
   // mirroring the node-deny shape exactly, so a denied model fails honestly at run.
   const dispatchProvider = effectiveDispatchProvider(type, data, resolvedInputs)
   if (typeof dispatchProvider === "string" && isModelDenied(dispatchProvider)) {
-    const err = new Error(deniedModelRejectionMessage([dispatchProvider])) as Error & { code?: string }
-    err.code = "model_not_available"
-    throw err
+    throw modelNotAvailableError([dispatchProvider])
   }
 
   // Build label→output map for resolving {Node Label} refs in text fields

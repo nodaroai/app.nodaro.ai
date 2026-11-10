@@ -9,6 +9,7 @@ import { creditGuard } from "../middleware/credit-guard.js"
 import { billedFailureMessage, llmGuardPrecheck } from "../lib/meter-sync-llm.js"
 import { meterSyncLlmMetered } from "../lib/llm-billing.js"
 import { llmMeteredPricing } from "../lib/config.js"
+import { fixedRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { llmProviderOf } from "../lib/concurrency-lanes/live-routes.js"
 
@@ -57,6 +58,7 @@ export async function locationLlmCaptionRoutes(app: FastifyInstance) {
       preHandler: [
         requireAppScope("assets:write"),
         creditGuard(() => CREDIT_IDENTIFIER, {
+          runModel: fixedRunModel(LOCATION_CAPTION_MODEL),
           dedup: false,
           // Metered (D3): the pre-check is the caption call's 1-attempt hold; undefined under the rollback.
           computeCredits: () => llmGuardPrecheck("prompt-helper", undefined, { llmModel: LOCATION_CAPTION_MODEL, maxTokens: 500 }),

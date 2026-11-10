@@ -16,6 +16,7 @@ import { LLM_MODEL_IDS, LLM_REASONING_EFFORTS, buildLlmCreditIdentifier, resolve
 import { SCRIPT_SCENE_COUNT_RANGE, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared/nodes"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { jobRunModel } from "../lib/run-model.js"
 
 const generateScriptBody = z.object({
   // LLM_TEXT_INPUT_MAX (100K) — same rationale as llm-chat: LLM input, huge
@@ -58,7 +59,7 @@ function scriptPrecheck(body: unknown): Promise<number | undefined> {
 }
 
 export async function generateScriptRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-script", { preHandler: creditGuard((req) => resolveLlmCreditId("generate-script", req.body), { computeCredits: scriptPrecheck }) }, async (req, reply) => {
+  app.post("/v1/generate-script", { preHandler: creditGuard((req) => resolveLlmCreditId("generate-script", req.body), { computeCredits: scriptPrecheck, runModel: jobRunModel("generate-script") }) }, async (req, reply) => {
     const parsed = generateScriptBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({

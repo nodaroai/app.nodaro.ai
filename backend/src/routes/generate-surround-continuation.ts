@@ -17,6 +17,7 @@ import { buildSurroundFillPrompt } from "@nodaro/prompts/assembly"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
+import { providerRunModel } from "../lib/run-model.js"
 
 /**
  * S8 (2026-07): surround-continuation was ungated at birth (Community and
@@ -92,6 +93,7 @@ export async function generateSurroundContinuationRoutes(app: FastifyInstance) {
     "/v1/generate-surround-continuation",
     {
       preHandler: creditGuard((req) => plainEntityCreditIdentifier(extractProvider(req.body, IMAGE_MODEL_ROLE_DEFAULTS.general), 1), {
+        runModel: providerRunModel(IMAGE_MODEL_ROLE_DEFAULTS.general),
         // Add the opt-in refine upscale as a credit addon on top of the image
         // provider's base. Returns BASE credits (markup applied in creditGuard so
         // the same number is checked + reserved). Mirrors generate-character.

@@ -29,6 +29,7 @@ import type { LlmRequest } from "../lib/llm/types.js"
 import { buildLottieRequest } from "../lib/lottie-request.js"
 import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
 import { extendSocketTimeout } from "../lib/llm-route-timeout.js"
+import { llmRunModel, textField } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 
@@ -60,6 +61,7 @@ export async function motionGraphicsAIRoutes(app: FastifyInstance) {
           const feature = motionGraphicsFeature(body?.engine as string | undefined)
           return resolveLlmCreditId(feature, req.body)
         }, {
+          runModel: llmRunModel((body) => motionGraphicsFeature(textField(body.engine))),
           // Metered pre-check (a UX check — the reserve holds the real request);
           // undefined under the rollback, so the tier row prices it as before.
           computeCredits: (raw) => {

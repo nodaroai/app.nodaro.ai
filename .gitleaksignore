@@ -58,3 +58,11 @@ ffd6dc89479c59b6ab90ec2eadb945a14d34f2a6:frontend/src/ee/app/billing-admin/__tes
 2a279ad2c4a707c360b8e4af88afd7ab2a3b6415:frontend/src/ee/app/billing-admin/__tests__/integrations-block.test.tsx:generic-api-key:54
 334088553155641a789d8874bfc73be05c1bfa3f:backend/src/ee/video-director/__tests__/video-director-lane-clocks.test.ts:generic-api-key:48
 334088553155641a789d8874bfc73be05c1bfa3f:backend/src/ee/video-director/__tests__/video-director-lane-clocks.test.ts:generic-api-key:76
+
+# backend/src/lib/__tests__/stripe-mode-settings.test.ts: FAKE Stripe-key-shaped test values
+# (`sk_live_abc123` and the like) in one already-pushed PR commit, read as generic API keys.
+# Not credentials. The live tree builds its fake keys at runtime (no key-shaped literal), so
+# the squash commit carries none; these lines only neutralise that branch commit.
+061b62e353849b6370fa4b5c3ef042c20d3b0ae0:backend/src/lib/__tests__/stripe-mode-settings.test.ts:generic-api-key:11
+061b62e353849b6370fa4b5c3ef042c20d3b0ae0:backend/src/lib/__tests__/stripe-mode-settings.test.ts:generic-api-key:23
+061b62e353849b6370fa4b5c3ef042c20d3b0ae0:backend/src/lib/__tests__/stripe-mode-settings.test.ts:generic-api-key:42

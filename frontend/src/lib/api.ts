@@ -1,3 +1,4 @@
+import type { BillingPlansResult } from "@nodaro/sdk/billing"
 import { pollClipMeasure, type ClipMeasureAnswer, type MeasuredClipAnswer } from "./clip-measure-poll"
 import { usecaseContinuePath, usecaseDescriptor, type SpeakerViewWireSettings, type UgcEstimateInput, type UgcEstimatePart, type UgcReuseClaim, type UseCaseNodeType } from "@nodaro/render-rules"
 import { createClient } from "@/lib/supabase"
@@ -7373,6 +7374,42 @@ export async function getBillingSurface(): Promise<BillingSurface> {
     label: "apiErr.loadBillingSurface",
   })
   return res.data
+}
+
+/**
+ * A failed `GET /v1/billing/plans`, its HTTP status kept (a refusal, 4xx, is an
+ * answer, never retried) with the server's code and words, which a purchase it
+ * refuses shows as they are.
+ */
+export class BillingPlansError extends Error {
+  readonly status: number
+  readonly code: string | undefined
+  readonly serverMessage: string | undefined
+
+  constructor(status: number, code?: string, serverMessage?: string) {
+    super(`GET /v1/billing/plans answered ${status}`)
+    this.name = "BillingPlansError"
+    this.status = status
+    this.code = code
+    this.serverMessage = serverMessage
+  }
+}
+
+/**
+ * `GET /v1/billing/plans`: the plans and packs this deployment sells, with their
+ * Stripe price ids (public; the same for every caller). A checkout sends only
+ * these ids (ee/lib/plan-price-ids.ts); without the list, a purchase says it is
+ * unavailable.
+ */
+export async function getBillingPlans(): Promise<BillingPlansResult> {
+  const res = await fetch(`${API_BASE_URL}/v1/billing/plans`, { method: "GET", headers: await getAuthHeaders() })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: { code?: unknown; message?: unknown } } | null
+    const code = typeof body?.error?.code === "string" ? body.error.code : undefined
+    const message = typeof body?.error?.message === "string" ? body.error.message : undefined
+    throw new BillingPlansError(res.status, code, message)
+  }
+  return (await res.json()) as BillingPlansResult
 }
 
 export async function getBillingAccount(): Promise<BillingAccount | null> {

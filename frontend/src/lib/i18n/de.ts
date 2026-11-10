@@ -105,4 +105,5 @@ export const de: ChromeDict = {
   "creatorCard.man": "Mann",
   "creatorCard.photoConsent": "Lade nur ein Foto von dir selbst oder von jemandem hoch, der damit einverstanden ist.",
   "present.restrictFieldsCount": "Einschränken ({n} begrenzt)",
+  "speakerView.reason.nothingCut": "Aus der Aufnahme wird nichts herausgeschnitten, daher gibt es nichts zu überblenden.",
 }

@@ -31,6 +31,7 @@ import {
 } from "@nodaro/shared/credits"
 import { buildObjectMotionPrompt } from "@nodaro/prompts/doctrine"
 import { sendInternalError } from "../lib/http-errors.js"
+import { jobRunModel } from "../lib/run-model.js"
 /**
  * Body schema for `POST /v1/generate-creature-motion`.
  *
@@ -113,7 +114,7 @@ export async function generateCreatureMotionRoutes(app: FastifyInstance) {
           provider, duration, undefined, "image-to-video", undefined, undefined,
           Boolean(b.refineFromVideoUrl),
         )
-      }),
+      }, { runModel: jobRunModel("generate-creature-motion") }),
     },
     async (req, reply) => {
       // ───────────────────────────────────────────────────────────────────

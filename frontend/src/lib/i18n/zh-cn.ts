@@ -105,4 +105,5 @@ export const zhCN: ChromeDict = {
   "creatorCard.man": "男性",
   "creatorCard.photoConsent": "仅上传你自己或已同意的人的照片。",
   "present.restrictFieldsCount": "限制（已限制 {n} 项）",
+  "speakerView.reason.nothingCut": "录制内容中没有被剪掉的部分，因此没有可以应用交叉淡化的地方。",
 }

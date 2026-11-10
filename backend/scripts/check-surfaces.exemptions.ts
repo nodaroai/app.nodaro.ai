@@ -199,6 +199,16 @@ export const SURFACE_EXEMPTIONS: readonly SurfaceExemption[] = [
     reason:
       "it only tells the editor which Edit Plan modes to grey out; an agent asks plan_edit for a mode, and plan_edit refuses one this deployment cannot run before anything is charged",
   },
+  // Speaker Frames' face tracks feed only Speaker View, and the speaker_view tool takes no face tracks
+  // (an agent renders an edit or a video framed by its settings and drawn crops), so a Speaker Frames
+  // tool would make tracks an agent has nowhere to send. Revisit if speaker_view takes `tracks`.
+  {
+    feature: "node:speaker-frames",
+    surface: "mcp",
+    atom: "node:speaker-frames",
+    reason:
+      "its face tracks feed only Speaker View, and the speaker_view tool takes no face tracks, so an agent would have nowhere to send them; face tracking is set up in the editor",
+  },
   // Not an entry (the checker scores routes, not their fields, so one would be stale at once):
   // Apply EDL's `planBasis` field is on the REST route and the SDK only, not on the CLI
   // (`edit apply-edl`) or MCP (`apply_edl`), on purpose. It is a fingerprint the caller computes

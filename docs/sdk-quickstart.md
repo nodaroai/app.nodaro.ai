@@ -538,7 +538,7 @@ cameras' recordings in order as `mediaUrls`, the mixer track as
 `masterAudioUrl`, and optionally `cameras` (`wide`, `synced`,
 `speakerCameras`). The run lines them up, works out who is on which camera and
 cuts to whoever is talking; `output_data.cameras` says who went where. This
-needs Speaker Map, which is not yet enabled on nodaro.ai: until it is, the
+needs Speaker Map: where it is not available to you, the
 request is refused `403 node_not_available`.
 
 ```ts
@@ -552,7 +552,7 @@ const multicam = await client.edit.tightenEpisode({
 Its chapters, for the show notes, are one call too: `client.edit.episodeChapters`
 transcribes the recording and plans its chapters; nothing is rendered. Its fee
 is 11 credits<!-- credits: use-case-fee:episode-chapters --> per run, on top of its steps (quote it with
-`estimateEpisodeChapters`). Not yet enabled on nodaro.ai.
+`estimateEpisodeChapters`).
 
 ```ts
 const chapters = await client.edit.episodeChapters({ mediaUrl: masterUrl })
@@ -563,7 +563,7 @@ A trailer for social media is one call as well: `client.edit.episodeTrailer`
 cuts a 20–40 second trailer from the recording and pads it to each format you
 choose (default 9:16, 1:1 and 4:5; also 16:9), optionally after an intro card.
 Its fee is 11 credits<!-- credits: use-case-fee:episode-trailer --> per run, on top of its steps (quote it with
-`estimateEpisodeTrailer`). Not yet enabled on nodaro.ai. It takes the cameras
+`estimateEpisodeTrailer`). It takes the cameras
 of one conversation as Tighten Episode does (`mediaUrls`, `masterAudioUrl`,
 `cameras`), with the same need for Speaker Map.
 
@@ -577,7 +577,7 @@ best moments of the recording (8 by default, about 60 seconds each) and
 renders each as its own clip, framed for 9:16 with the speakers stacked and
 captioned by default (`framing: null` keeps the recording's shape).
 Its fee is 11 credits<!-- credits: use-case-fee:clip-pack --> per run, on top of its steps (quote it with
-`estimateClipPack`). Not yet enabled on nodaro.ai. It takes the cameras of
+`estimateClipPack`). It takes the cameras of
 one conversation as Tighten Episode does (`mediaUrls`, `masterAudioUrl`,
 `cameras`; each clip then cuts to whoever is talking), with the same need for
 Speaker Map, and `framingSource: "tracking"` follows faces.
@@ -592,7 +592,7 @@ To frame a whole recording by speaker without cutting anything, call
 speaker framed in turn (9:16 with the speakers stacked by default; set
 `targetAspect`, `layout`, `switchType`, `emphasisStyle`).
 Its fee is 11 credits<!-- credits: use-case-fee:speaker-layout --> per run, on top of its steps (quote it with
-`estimateSpeakerLayout`). Not yet enabled on nodaro.ai. It takes the cameras
+`estimateSpeakerLayout`). It takes the cameras
 of one conversation as Tighten Episode does (each speaker is then shown on
 their own camera), with the same need for Speaker Map.
 

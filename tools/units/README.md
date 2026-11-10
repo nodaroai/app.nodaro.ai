@@ -97,7 +97,10 @@ npm run gen:units -- --new <type> --category <category> --kind <worker|sync|inli
      `settingKeys` in its spec, its handles in `unit.json` and the matching
      `types.ts` fields;
   3. its MCP verb: the `REGISTER_BY_BUILDER` entry for its builder in
-     `backend/src/lib/mcp/tools/verbs-use-case.ts` (typecheck fails until it is
+     `backend/src/lib/mcp/tools/verbs-use-case.ts`, and the verb's input in
+     `INPUT_BY_BUILDER` beside it (`useCaseVerbInput`: its tool name, argument
+     shape and body, the one value the verb registers and posts and
+     `estimate_use_case` validates and quotes; typecheck fails until both are
      there), and that tool's entry in `docs/mcp/tools.md` (gen:skills:check);
   4. its settings table: a `SETTINGS_TABLES` row in
      `backend/src/lib/__tests__/use-case-graph-validity.test.ts` (typecheck
@@ -139,9 +142,10 @@ live:
   (beside `useUseCaseListDriven(nodeId)`), never the workflow store (G5).
   Beyond its folders it needs its builder in `use-case-specs.ts` (first), its
   MCP verb (the `REGISTER_BY_BUILDER` entry for its builder in
-  `backend/src/lib/mcp/tools/verbs-use-case.ts`, a typed total table), and a
-  `SETTINGS_TABLES` row in `backend/src/lib/__tests__/use-case-graph-validity.test.ts`;
-  typecheck fails until both of the last two exist.
+  `backend/src/lib/mcp/tools/verbs-use-case.ts`, a typed total table, and its
+  input in `INPUT_BY_BUILDER` beside it, another), and a `SETTINGS_TABLES` row
+  in `backend/src/lib/__tests__/use-case-graph-validity.test.ts`; typecheck
+  fails until all three exist.
 
   Its spec (`USE_CASE_SPECS.<builder>`, composed with the node's row into its
   `UseCaseDescriptor`) states, beside its graph, what the engines read about

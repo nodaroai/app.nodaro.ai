@@ -38,7 +38,7 @@ import {
   type AssembledImageRequest,
   type ImageJobPlan,
 } from "./generate-image-plan.js"
-import { imageCreditIdentifierFor, modelCreditIdentifier, resolveImageCreditIdentifier } from "./generate-image-credit-id.js"
+import { imageCreditIdentifierFor, modelCreditIdentifier, resolveImageCreditIdentifier, resolveImageRunModel } from "./generate-image-credit-id.js"
 
 // Re-exported for the key-set drift guard in `__tests__/generate-image.test.ts`.
 // The canonical definition now lives in `lib/connected-reference-schema.ts`
@@ -203,7 +203,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
       replayImageBatch,
       applyGenerateImagePreset,
       userDirectionPreHandler,
-      creditGuard(resolveImageCreditIdentifier, { batchIdentifiers: resolveImageBatchCreditIdentifiers }),
+      creditGuard(resolveImageCreditIdentifier, { batchIdentifiers: resolveImageBatchCreditIdentifiers, runModel: resolveImageRunModel }),
     ],
   }, async (req, reply) => {
     const parsed = generateImageRequest.safeParse(req.body)

@@ -27,6 +27,7 @@ import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { extendSocketTimeout } from "../lib/llm-route-timeout.js"
+import { llmRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 
@@ -52,6 +53,7 @@ export async function afterEffectsAIRoutes(app: FastifyInstance) {
       preHandler: [
         aiRateLimit,
         creditGuard((req) => resolveLlmCreditId("after-effects", req.body), {
+          runModel: llmRunModel("after-effects"),
           // Metered (D1): the pre-check is the call's 1-attempt hold; undefined under the rollback.
           computeCredits: (body) => llmGuardPrecheck("after-effects", body),
         }),

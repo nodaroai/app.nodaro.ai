@@ -33,3 +33,25 @@ export const STORAGE_DELETES_OFF = "storage deletes are off on this deployment (
 export function storageDeletesSkipped(): boolean {
   return config.STORAGE_DELETES === "skip"
 }
+
+/**
+ * The line a process logs at boot when deletes are off, naming itself, else
+ * null. Every process the image starts can delete (the API, the job worker, the
+ * render worker, the orchestrator, the pipeline worker, the plugin daemon
+ * host), and an operator reads one line from each before a deployment on a
+ * copy of another's database runs any job: the setting is in effect in every
+ * running process, not only in its settings.
+ */
+export function storageDeletesBootLine(processName: string): string | null {
+  return storageDeletesSkipped() ? `[storage] ${processName}: ${STORAGE_DELETES_OFF}` : null
+}
+
+/**
+ * Logs `storageDeletesBootLine` when deletes are off; nothing otherwise. Called
+ * by every process entry (backend/src/<name>.ts) as it starts, with the name
+ * start.sh starts it by (lib/__tests__/storage-deletes-boot-processes.test.ts).
+ */
+export function logStorageDeletesAtBoot(processName: string): void {
+  const line = storageDeletesBootLine(processName)
+  if (line) console.warn(line)
+}

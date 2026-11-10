@@ -11,6 +11,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { fixedRunModel } from "../lib/run-model.js"
 
 const forcedAlignmentBody = z.object({
   audioUrl: safeUrlSchema,
@@ -21,7 +22,7 @@ const forcedAlignmentBody = z.object({
 
 export async function forcedAlignmentRoutes(app: FastifyInstance) {
   app.post("/v1/forced-alignment", {
-    preHandler: creditGuard(() => FORCED_ALIGNMENT_CREDIT_ID),
+    preHandler: creditGuard(() => FORCED_ALIGNMENT_CREDIT_ID, { runModel: fixedRunModel(FORCED_ALIGNMENT_CREDIT_ID) }),
   }, async (req, reply) => {
     const parsed = forcedAlignmentBody.safeParse(req.body)
     if (!parsed.success) {

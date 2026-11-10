@@ -27,6 +27,7 @@ import { markJobFailed } from "../lib/job-failure.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 import { judgeModelOf, requestedStrategy } from "../lib/reduce-request.js"
+import { llmFeatureDefault } from "../lib/run-model.js"
 
 // Zod schema. strategyConfig is validated per-strategy inside the dispatcher
 // (each strategy parses its own config), so at the route layer we accept any
@@ -107,6 +108,8 @@ export async function reduceRoutes(app: FastifyInstance) {
       // never want two distinct runs to silently collapse into one.
       preHandler: [
         creditGuard((req) => reduceCreditIdentifier(req.body), {
+          // The AI judge runs the model it names, else its feature's default.
+          runModel: (req) => (requestedStrategy(req.body) === "pick-best-llm" ? (judgeModelOf(req.body) ?? llmFeatureDefault("reduce:pick-best-llm")) : undefined),
           dedup: false,
           // The AI judge bills metered (D1): its pre-check is the judge call's
           // 1-attempt hold; every other strategy (and the rollback) prices its row.

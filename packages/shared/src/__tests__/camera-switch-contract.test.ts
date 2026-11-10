@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import {
-  CAMERA_SWITCH_BOUNDS, CAMERA_SWITCH_DEFAULTS, CAMERA_SWITCH_NAME_MAX, cameraSwitchCameras, cameraSwitchEdlProblem,
+  CAMERA_SWITCH_BOUNDS, CAMERA_SWITCH_DEFAULTS, CAMERA_SWITCH_NAME_MAX, CAMERA_SWITCH_NODE_SETTINGS, cameraSwitchCameras, cameraSwitchEdlProblem,
   cameraSwitchSettingsPayload, cameraSwitchSpeakerMap, clampCameraSwitchSetting, cleanSpeakerNames, defaultSpeakerMap, transcriptSpeakerLabels,
 } from "../camera-switch-contract.js"
 
@@ -51,7 +51,7 @@ describe("defaultSpeakerMap — the table pre-filled by order (decided 2026-10-0
 })
 
 it("the defaults are the decided ones", () => {
-  expect(CAMERA_SWITCH_DEFAULTS).toEqual({ minShotMs: 2_500, leadMs: 200, maxShotMs: 20_000, wideEvery: 0, layoutHints: false })
+  expect(CAMERA_SWITCH_DEFAULTS).toEqual({ minShotMs: 2_500, leadMs: 200, lagMs: 0, maxShotMs: 20_000, wideEvery: 0, layoutHints: false })
 })
 
 // The Cloud route answers 400 outside these ranges — every caller clamps first
@@ -59,9 +59,18 @@ it("the defaults are the decided ones", () => {
 describe("settings bounds", () => {
   it("are the route's ranges", () => {
     expect(CAMERA_SWITCH_BOUNDS).toEqual({
-      minShotMs: { min: 500, max: 60_000 }, leadMs: { min: 0, max: 5_000 }, maxShotMs: { min: 0, max: 600_000 }, wideEvery: { min: 0, max: 20 },
+      minShotMs: { min: 500, max: 60_000 }, leadMs: { min: 0, max: 5_000 }, lagMs: { min: 0, max: 5_000 }, maxShotMs: { min: 0, max: 600_000 }, wideEvery: { min: 0, max: 20 },
     })
     expect(CAMERA_SWITCH_NAME_MAX).toBe(80)
+  })
+  it("lagMs is a route setting only: a node's data never sends it (the node settings are the other four)", () => {
+    expect(CAMERA_SWITCH_NODE_SETTINGS).toEqual(["minShotMs", "leadMs", "maxShotMs", "wideEvery"])
+    expect(Object.keys(CAMERA_SWITCH_BOUNDS).filter((k) => !(CAMERA_SWITCH_NODE_SETTINGS as readonly string[]).includes(k))).toEqual(["lagMs"])
+    const edl = { version: 1, clock: "master", sources: [{ id: "a", url: "https://x/a.mp4", kind: "video" }], segments: [{ inMs: 0, outMs: 1000, video: "a" }] }
+    const transcript = { version: 1, words: [{ text: "hi", startMs: 0, endMs: 400, speaker: "s0" }] }
+    const sent = cameraSwitchSettingsPayload({ leadMs: 300, lagMs: 400 } as Parameters<typeof cameraSwitchSettingsPayload>[0], edl, transcript)
+    expect(sent).toMatchObject({ leadMs: 300 })
+    expect(sent).not.toHaveProperty("lagMs")
   })
   it("clamp into range as whole numbers; unset stays unset", () => {
     expect(clampCameraSwitchSetting("minShotMs", 0)).toBe(500)

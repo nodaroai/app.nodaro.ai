@@ -17,6 +17,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { config, llmMeteredPricing } from "../lib/config.js"
+import { adAnalysisRunModel } from "../lib/run-model.js"
 import { shouldRunOnCloud } from "../providers/nodaro/run-on-cloud.js"
 import { INSTAGRAM_SCRAPE_JOB_TYPE, instagramScrapeBody, type InstagramScrapeJobData } from "../lib/background-scrape/instagram.js"
 import { enqueueBackgroundScrape } from "../lib/background-scrape/enqueue.js"
@@ -24,7 +25,7 @@ import { enqueueBackgroundScrape } from "../lib/background-scrape/enqueue.js"
 export async function instagramScrapeRoutes(app: FastifyInstance) {
   // Literal path on purpose: sync-http-route-parity.test.ts greps for it.
   app.post("/v1/instagram-scrape", {
-    preHandler: creditGuard((req) => resolveInstagramScrapeCreditId(req.body)),
+    preHandler: creditGuard((req) => resolveInstagramScrapeCreditId(req.body), { runModel: adAnalysisRunModel }),
   }, async (req, reply) => {
     const parsed = instagramScrapeBody.safeParse(req.body)
     if (!parsed.success) {

@@ -504,6 +504,18 @@ describe("Trailer through the same factory", () => {
     expect(m.insertJob).not.toHaveBeenCalled()
   })
 
+  it("a format listed twice is a 400 naming it, on the run and the estimate alike, before anything is probed or written", async () => {
+    for (const url of ["/v1/episode-trailer", "/v1/episode-trailer/estimate"]) {
+      const res = await (await makeApp()).inject({ method: "POST", url, payload: { mediaUrls: ["https://r2/ep.mp4"], formats: ["9:16", "1:1", "9:16"] } })
+      expect(res.statusCode, url).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+      expect(res.json().error.message).toBe("formats: The format 9:16 is listed twice: name each format once.")
+    }
+    expect(m.prepare).not.toHaveBeenCalled()
+    expect(m.insertJob).not.toHaveBeenCalled()
+    expect(m.reserve).not.toHaveBeenCalled()
+  })
+
   it("an intro card that probes without video: 400 intro_card_unreadable, no row", async () => {
     refusedWith("intro_card_unreadable", "The intro card could not be read as a video.")()
     const res = await postTrailer({ mediaUrls: ["https://r2/ep.mp4"], introCardUrl: "https://r2/card.png" })

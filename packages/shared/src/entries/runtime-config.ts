@@ -26,6 +26,7 @@ export {
   isBrandLogoRef,
   isSameSitePath,
   isHttpsOrigin,
+  isLegacyUiHost,
   resolveRuntimeApiBase,
   resolveRuntimeSupabaseUrl,
   parseRuntimeSurface,

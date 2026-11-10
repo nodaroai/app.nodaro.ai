@@ -20,6 +20,7 @@ import {
 } from "@nodaro/shared/models"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { jobRunModel } from "../lib/run-model.js"
 
 // The providers this route ACCEPTS that can also honour word timestamps —
 // derived from the capability table, intersected with the route's own enum so
@@ -76,7 +77,7 @@ export async function transcribeRoutes(app: FastifyInstance) {
     preHandler: creditGuard((req) => {
       const body = req.body as Record<string, unknown>
       return (body?.provider as string) ?? DEFAULT_TRANSCRIBE_PROVIDER
-    }),
+    }, { runModel: jobRunModel("transcribe") }),
   }, async (req, reply) => {
     const parsed = transcribeBody.safeParse(req.body)
     if (!parsed.success) {

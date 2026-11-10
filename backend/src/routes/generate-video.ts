@@ -50,6 +50,7 @@ import { backendHybridRoles } from "../lib/reference-format.js"
 import { generateVideoChildFields, seedance25OutputFormatFor } from "../lib/seedance25-output-format.js"
 import { CONTENT_RESTRICTED_MESSAGE, restrictedInputKey } from "../lib/content-restriction-gate.js"
 import { jobBlockedBody } from "../lib/job-policy.js"
+import { videoRunModel } from "../lib/run-model.js"
 
 // Character-voice orchestration (voiced-video). All optional + additive: absent
 // => today's behaviour. A "voiced" request ALSO requires a dialogue-capable
@@ -809,6 +810,7 @@ export const generateVideoPricing: RoutePricing = {
     )
   },
   opts: {
+    runModel: videoRunModel,
     computeCredits: async (body, req) => {
       const b = body as Record<string, unknown>
       const hasVideoRef = Array.isArray(b?.referenceVideoUrls) && (b.referenceVideoUrls as unknown[]).length > 0

@@ -9,7 +9,7 @@ import { buildServer, callTool, executeSession, stubRoute } from "./_helpers.js"
  *  - `image_to_image` names, in its answer, the model the job really runs
  *    (the platform's edit default), never a fixed label;
  *  - `modify_image` asks for "auto" when no ratio is named on a GPT Image
- *    2.5 / 2.6 edit model, as /v1/image-to-image itself does.
+ *    2, 2.5 or 2.6 edit model, as /v1/image-to-image itself does.
  */
 
 vi.mock("../../asset-resolver.js", () => ({ resolveAssetId: vi.fn(async () => null) }))
@@ -67,14 +67,14 @@ describe("image_to_image — the answer names the model that runs", () => {
   })
 })
 
-describe("modify_image — no ratio named on a GPT Image 2.5 / 2.6 edit is 'auto'", () => {
+describe("modify_image — no ratio named on a GPT Image 2, 2.5 or 2.6 edit is 'auto'", () => {
   it("on the default edit model", async () => {
     const { body } = await call("modify_image", {})
     expect(body.provider).toBe(defaultImageModel("edit"))
     expect(body.aspectRatio).toBe("auto")
   })
 
-  it.each(["gpt-image-2-5-flare-i2i", "gpt-image-2-5-sunburst-i2i", "gpt-image-2-6-sunburst-i2i"])("on %s", async (model) => {
+  it.each(["gpt-image-2-i2i", "gpt-image-2-5-flare-i2i", "gpt-image-2-5-sunburst-i2i", "gpt-image-2-6-sunburst-i2i"])("on %s", async (model) => {
     const { body } = await call("modify_image", { model })
     expect(body.provider).toBe(model)
     expect(body.aspectRatio).toBe("auto")
@@ -85,9 +85,14 @@ describe("modify_image — no ratio named on a GPT Image 2.5 / 2.6 edit is 'auto
     expect(body.aspectRatio).toBe("16:9")
   })
 
-  it("leaves another model's unset ratio as it was (GPT Image 2's edit)", async () => {
-    const { body } = await call("modify_image", { model: "gpt-image-2-i2i" })
-    expect(body.provider).toBe("gpt-image-2-i2i")
+  it("keeps a named ratio on GPT Image 2's edit", async () => {
+    const { body } = await call("modify_image", { model: "gpt-image-2-i2i", aspect_ratio: "3:4" })
+    expect(body.aspectRatio).toBe("3:4")
+  })
+
+  it("leaves another model's unset ratio as it was", async () => {
+    const { body } = await call("modify_image", { model: "flux-kontext" })
+    expect(body.provider).toBe("flux-kontext")
     expect(body.aspectRatio).toBe("16:9")
   })
 })

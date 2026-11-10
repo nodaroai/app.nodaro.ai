@@ -7,7 +7,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
-import { resolveImageToImageCreditIdentifier } from "./image-to-image-credit-id.js"
+import { resolveImageToImageCreditIdentifier, resolveImageToImageRunModel } from "./image-to-image-credit-id.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
@@ -105,7 +105,7 @@ export { resolveImageToImageCreditIdentifier }
 export async function imageToImageRoutes(app: FastifyInstance) {
   app.post("/v1/image-to-image", {
     preHandler: [
-      creditGuard(resolveImageToImageCreditIdentifier),
+      creditGuard(resolveImageToImageCreditIdentifier, { runModel: resolveImageToImageRunModel }),
       // The lane last, and only for a request that will make the LLM call.
       laneGuard("llm", {
         // The studio refine drafts a missing description with an LLM before it reserves.
@@ -125,7 +125,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
     if (!parsed.data.provider) {
       parsed.data.provider = defaultImageModel("edit", parsed.data.aspectRatio) as NonNullable<(typeof parsed.data)["provider"]>
     }
-    // No ratio named on a GPT Image 2.5 / 2.6 edit model is "auto", the
+    // No ratio named on a GPT Image 2, 2.5 or 2.6 edit model is "auto", the
     // photo's shape, instead of the provider config's 16:9. Set here, before
     // the levers are read, so the snap, `input_data` and the queue payload all
     // carry it, as the credit check does (`imageToImageAspectRatio`).

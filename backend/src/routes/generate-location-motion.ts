@@ -13,6 +13,7 @@ import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { resolveLocationAspectRatio } from "../lib/aspect-ratio.js"
+import { jobRunModel } from "../lib/run-model.js"
 import { LOCATION_ATMOSPHERE_PROVIDERS } from "@nodaro/shared/models"
 import { CHARACTER_ASPECT_OPTIONS } from "@nodaro/shared/entities"
 import { buildLocationMotionPrompt } from "@nodaro/prompts/doctrine"
@@ -58,7 +59,7 @@ export const generateLocationMotionBody = z.object({
 export async function generateLocationMotionRoutes(app: FastifyInstance) {
   app.post(
     "/v1/generate-location-motion",
-    { preHandler: creditGuard((req) => extractProvider(req.body, "kling")) },
+    { preHandler: creditGuard((req) => extractProvider(req.body, "kling"), { runModel: jobRunModel("generate-location-motion") }) },
     async (req, reply) => {
       // ───────────────────────────────────────────────────────────────────
       // 1. Authentication

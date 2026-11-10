@@ -18,6 +18,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
+import { providerRunModel } from "../lib/run-model.js"
 
 const generateLocationBody = z.object({
   name: z.string().min(1).max(200),
@@ -83,6 +84,7 @@ export async function generateLocationRoutes(app: FastifyInstance) {
       // handler's DEBIT uses, so the advisory CHECK can never price a
       // different tier than the reservation.
       preHandler: creditGuard((req: FastifyRequest) => resolveEntityImageCreditIdentifier(req.body), {
+        runModel: providerRunModel(IMAGE_MODEL_ROLE_DEFAULTS.general),
         computeCredits: async (body) => {
           const count = extractCount(body)
           const identifier = resolveEntityImageCreditIdentifier(body)

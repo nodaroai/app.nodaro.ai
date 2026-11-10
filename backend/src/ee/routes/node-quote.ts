@@ -4,7 +4,7 @@ import { openApiRegistry } from "../../lib/openapi-registry.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { deniedModelRejectionMessage, isModelDenied } from "../../lib/surface-deny.js"
 import { EMPTY_PRICE_NOTES, type PriceNotes } from "../../lib/price-notes.js"
-import type { RoutePricing } from "../../middleware/credit-guard.js"
+import { withheldRunModels, type RoutePricing } from "../../middleware/credit-guard.js"
 import { handlePriceNotConfigured, markedUpCredits, reservedCreditsFor } from "../lib/credit-guard-impl.js"
 import { textToVideoBody, textToVideoPricing } from "../../routes/text-to-video.js"
 import { generateVideoBody, generateVideoPricing } from "../../routes/generate-video.js"
@@ -105,6 +105,12 @@ export function registerNodeQuote(app: FastifyInstance): void {
     for (const precheck of entry.pricing.prechecks) {
       await precheck(req, reply)
       if (reply.sent) return reply
+    }
+    // The model the run would run on — the default, for a body that names
+    // none — refused as the run's guard refuses it.
+    const withheld = withheldRunModels(req, entry.pricing.opts?.runModel, provider)
+    if (withheld.length > 0) {
+      return reply.status(403).send({ error: { code: "model_not_available", message: deniedModelRejectionMessage(withheld) } })
     }
     try {
       const identifier = entry.pricing.modelResolver(req)

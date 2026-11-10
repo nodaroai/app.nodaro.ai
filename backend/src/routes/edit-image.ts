@@ -19,6 +19,7 @@ import { IMAGE_ASPECT_RATIO_VALUES, IMAGE_EDIT_PROVIDERS, IMAGE_EDIT_TARGET_RESO
 import { buildCreditModelIdentifier, resolveNormalizedImageGen, resolveTopazUpscale, TOPAZ_UPSCALE_FACTORS } from "@nodaro/shared/credits"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { jobRunModel } from "../lib/run-model.js"
 
 export const editImageBody = z.object({
   // imageUrl is required for every provider EXCEPT the task-chained Grok ops
@@ -141,6 +142,7 @@ async function retiredEditProviderPreHandler(req: FastifyRequest, reply: Fastify
 }
 
 const editImageGuard = creditGuard(resolveEditImageCreditIdentifier, {
+  runModel: jobRunModel("edit-image"),
   computeCredits: async (_body, req) =>
     req.topazImageSizeUnits !== undefined
       ? topazImageSizeBaseCredits(resolveEditImageCreditIdentifier(req), req.topazImageSizeUnits)

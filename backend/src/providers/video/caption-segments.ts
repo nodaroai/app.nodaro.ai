@@ -157,6 +157,34 @@ export function isStaticTextCaptionSource(input: {
   return typeof input.text === "string" && /\S/.test(input.text)
 }
 
+/**
+ * Whether an Add Captions render transcribes its audio: it carries no caption
+ * source of its own — no captions, no wired transcript, no static text block —
+ * auto-transcribe is not turned off, and its segments (when it has any) do not
+ * all carry their own text or captions. The worker decides with it; the route's
+ * credit guard asks it so a request is judged on its transcription model only
+ * when one will run.
+ */
+export function captionsNeedTranscription(input: {
+  style?: string | null
+  text?: string | null
+  captions?: readonly unknown[] | null
+  transcript?: unknown
+  segments?: ReadonlyArray<{ readonly text?: unknown; readonly captions?: readonly unknown[] | null }> | null
+  auto_transcribe?: boolean | null
+}): boolean {
+  const hasSegments = !!(input.segments && input.segments.length > 0)
+  const hasTranscript = input.transcript !== undefined && input.transcript !== null
+  const someSegmentNeedsShared = hasSegments && input.segments!.some((s) => !(s.text || (s.captions && s.captions.length > 0)))
+  return (
+    !isStaticTextCaptionSource(input) &&
+    !input.captions?.length &&
+    !hasTranscript &&
+    input.auto_transcribe !== false &&
+    (!hasSegments || someSegmentNeedsShared)
+  )
+}
+
 /** Shown for this long when the source clip's duration could not be probed. */
 const STATIC_TEXT_FALLBACK_MS = 5000
 

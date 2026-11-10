@@ -32,6 +32,7 @@ import { applyPromptPoliciesToCharacterReferences } from "../lib/character-refer
 import { subjectSchema } from "../lib/subject-schema.js"
 import { assembleVideoConnectedReferences, hasVideoReferenceChannels, REFERENCE_TOKEN_PROBE, validateRefVideoDurationPreHandler, validateSeedance2AudioPreHandler, applyAudioSoundtrackPreHandler } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { videoRunModel } from "../lib/run-model.js"
 import { seedance25OutputFormatFor } from "../lib/seedance25-output-format.js"
 
 export const textToVideoBody = z.object({
@@ -154,6 +155,7 @@ export const textToVideoPricing: RoutePricing = {
     )
   },
   opts: {
+    runModel: videoRunModel,
     computeCredits: async (body, req) => {
       const b = body as Record<string, unknown>
       const hasVideoRef = Array.isArray(b?.referenceVideoUrls) && (b.referenceVideoUrls as unknown[]).length > 0

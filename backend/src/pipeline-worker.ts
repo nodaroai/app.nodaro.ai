@@ -21,6 +21,7 @@ import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 import { useProviderSafetySettings } from "./lib/provider-safety.js"
 import { startLaneParking } from "./lib/concurrency-lanes/park.js"
 import { startServerOccupancyPublisher } from "./lib/concurrency-lanes/server-occupancy.js"
+import { logStorageDeletesAtBoot } from "./lib/storage-deletes-setting.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("[pipeline-worker] Unhandled rejection:", err)
@@ -59,6 +60,8 @@ async function main() {
   const stopServerOccupancy = startServerOccupancyPublisher()
 
   console.log("[pipeline-worker] started, waiting for pipeline orchestration jobs...")
+  // On a deployment that deletes nothing from storage (STORAGE_DELETES=skip), one line saying so, naming this process.
+  logStorageDeletesAtBoot("pipeline-worker")
 
   const shutdown = async () => {
     console.log("[pipeline-worker] shutting down...")

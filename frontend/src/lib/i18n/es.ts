@@ -105,4 +105,5 @@ export const es: ChromeDict = {
   "creatorCard.man": "Hombre",
   "creatorCard.photoConsent": "Sube solo una foto tuya o de alguien que haya dado su consentimiento.",
   "present.restrictFieldsCount": "Restringir ({n} limitados)",
+  "speakerView.reason.nothingCut": "No se recorta nada de la grabación, así que no hay dónde aplicar un fundido cruzado.",
 }

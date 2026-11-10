@@ -23,6 +23,7 @@ import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { extendSocketTimeout } from "../lib/llm-route-timeout.js"
+import { llmRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 
@@ -51,6 +52,7 @@ export async function sceneGraphAIRoutes(app: FastifyInstance) {
     {
       preHandler: [
         creditGuard((req) => resolveLlmCreditId("scene-graph-ai", req.body), {
+          runModel: llmRunModel("scene-graph-ai"),
           // Metered (D1): the pre-check is the call's 1-attempt hold; undefined under the rollback.
           computeCredits: (body) => llmGuardPrecheck("scene-graph-ai", body),
         }),

@@ -22,6 +22,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { describeErrorChain } from "../lib/llm-errors.js"
+import { llmRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 
@@ -45,6 +46,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
     {
       preHandler: [
         creditGuard((req) => resolveLlmCreditId("image-to-text", req.body), {
+          runModel: llmRunModel("image-to-text"),
           // Metered (D1): the pre-check is the call's 1-attempt hold (text only); undefined under the rollback.
           computeCredits: (body) => llmGuardPrecheck("image-to-text", body),
         }),

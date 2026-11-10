@@ -11,14 +11,15 @@ import {
 
 const LISTED = [...UNSET_RATIO_IS_AUTO_EDIT_MODELS]
 
-describe("imageToImageAspectRatio — no ratio on a GPT Image 2.5 / 2.6 edit is 'auto'", () => {
-  it("lists exactly the GPT Image 2.5 and 2.6 edit models", () => {
+describe("imageToImageAspectRatio — no ratio on a GPT Image 2, 2.5 or 2.6 edit is 'auto'", () => {
+  it("lists exactly the GPT Image 2, 2.5 and 2.6 edit models", () => {
     expect(LISTED.sort()).toEqual([
       "gpt-image-2-5-flare-i2i",
       "gpt-image-2-5-sunburst-i2i",
       "gpt-image-2-6-economy-i2i",
       "gpt-image-2-6-flare-i2i",
       "gpt-image-2-6-sunburst-i2i",
+      "gpt-image-2-i2i",
     ])
     // The platform's edit default is one of them, so a request naming neither
     // a model nor a ratio is covered.
@@ -37,9 +38,13 @@ describe("imageToImageAspectRatio — no ratio on a GPT Image 2.5 / 2.6 edit is 
     expect(imageToImageAspectRatio(provider, "auto")).toBe("auto")
   })
 
-  it("leaves every other model's unset ratio unset, GPT Image 2's edit included", () => {
-    // GPT Image 2's "auto" renders 1K only: defaulting it would re-price a 2K / 4K edit.
-    expect(imageToImageAspectRatio("gpt-image-2-i2i", undefined)).toBeUndefined()
+  it("GPT Image 2's edit keeps its own auto: no source-photo ratio is read for it", () => {
+    // Its native auto keeps the photo's shape; only GPT Image 2.6's goes square.
+    expect(imageToImageAspectRatio("gpt-image-2-i2i", undefined)).toBe("auto")
+    expect(MODEL_CATALOG["gpt-image-2-i2i"]?.autoAspectFromSourceImage).toBeUndefined()
+  })
+
+  it("leaves every other model's unset ratio unset", () => {
     expect(imageToImageAspectRatio("nano-banana-edit", undefined)).toBeUndefined()
     expect(imageToImageAspectRatio("flux-kontext", undefined)).toBeUndefined()
     // The text-to-image ids are not image-to-image models.

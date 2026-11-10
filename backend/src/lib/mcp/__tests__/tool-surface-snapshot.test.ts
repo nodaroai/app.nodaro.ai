@@ -1428,6 +1428,26 @@ const GPT_IMAGE_2_6_TOTAL_BYTES = 544
 // Gemini Omni Flash 1.2: its id in the video verbs' provider lists, and its
 // reference caps in the descriptions of `generate_video` / `animate_image`.
 const GEMINI_OMNI_FLASH_1_2_BYTES = 109
+// RAISED 2026-11-10 by one NEW tool, `estimate_use_case` (verbs-use-case-estimate.ts: one quote for
+// every offered podcast use-case node, keyed by `node_type`, its `input` the node's run-tool
+// arguments, validated and posted by that verb's own input), and nothing else. Registered beside the
+// run verbs and gated the same way, so BOTH the cloud/all AND the community/all fixtures move by
+// exactly that name. Measured by this suite on the same tree with and without it: 517_338 total −
+// 516_324 = 1_014 B, far under the per-tool budget. Moving the five run verbs' arguments into
+// shared inputs changed none of their bytes (measured before and after).
+const ESTIMATE_USE_CASE_TOOL_BYTES = 1_014
+// RAISED 2026-11-10 by one NEW tool, `speaker_view` (verbs-speaker-view.ts: the MCP face of
+// POST /v1/speaker-view — an edit, or a whole video with its diarized transcript, rendered with the
+// speakers laid out on screen; no face tracks), and nothing else. Registered beside switch_cameras
+// inside hasCredits() (the route is the Cloud plugin's), so only the cloud/all fixture moves, by that
+// one name. Measured by this suite on the same tree with and without it: 521_417 total − 517_338 =
+// 4_079 B, under the per-tool budget.
+const SPEAKER_VIEW_TOOL_BYTES = 4_079
+// RAISED 2026-11-10 by `speaker_view`'s crops taking the route's limits in the schema (ids of 200
+// characters at most, 500 crops at most; inside the frame is a refinement, which costs nothing on the
+// wire), and nothing else. Measured by this suite on the same tree with and without it:
+// 521_372 total − 521_325 = 47 B (speaker_view 4_079 → 4_126).
+const SPEAKER_VIEW_REGION_LIMITS_BYTES = 47
 
 // RAISED 2026-11-09 by the owned-settings guard on `update_workflow_json`, and nothing else: its
 // `settings` argument gains a one-sentence description (a stored key another writer owns —
@@ -1617,7 +1637,10 @@ export const TOOL_WIRE_BUDGET = {
     VOICE_FAVORITES_TOOLS_BYTES +
     GPT_IMAGE_2_6_TOTAL_BYTES +
     OWNED_SETTINGS_GUARD_BYTES +
-    GEMINI_OMNI_FLASH_1_2_BYTES,
+    GEMINI_OMNI_FLASH_1_2_BYTES +
+    ESTIMATE_USE_CASE_TOOL_BYTES +
+    SPEAKER_VIEW_TOOL_BYTES +
+    SPEAKER_VIEW_REGION_LIMITS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

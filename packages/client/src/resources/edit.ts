@@ -274,6 +274,32 @@ export interface EditPlanInput {
   workflowId?: string
 }
 
+/**
+ * What {@link EditResource.editPlanCapabilities} answers: the Edit Plan modes
+ * this server can plan, who answered, and how Edit Plan is priced here.
+ */
+export interface EditPlanCapabilities {
+  /**
+   * The modes this server plans. `tighten`, `clips` and `chapters` are always
+   * listed; `trailer` once the server can plan a trailer. A mode not listed is
+   * refused before anything is charged (`400 mode_not_available`).
+   */
+  modes: EditPlanMode[]
+  /**
+   * Who answered: `"server"` (nodaro.ai, or a self-hosted install that is not
+   * connected), `"nodaro.ai"` (a connected self-hosted install, with
+   * nodaro.ai's answer), or `"nodaro.ai-unreachable"` (a connected self-hosted
+   * install that could not reach nodaro.ai; only the three original modes are
+   * listed then). A newer server may add a value.
+   */
+  source: "server" | "nodaro.ai" | "nodaro.ai-unreachable" | (string & {})
+  /**
+   * `true` when Edit Plan is charged per started minute of the recording,
+   * `false` when at the 15/30/60/90/120/180-minute step its length rounds up to.
+   */
+  perMinute: boolean
+}
+
 /** Input for {@link EditResource.cameraSwitch} (podcast B5). */
 export interface CameraSwitchInput {
   /** One EDL — an `editPlan` result (`unwrapEditPlanOutput`), not a clip set. */
@@ -293,6 +319,8 @@ export interface CameraSwitchInput {
   minShotMs?: number
   /** Cut this long before the new speaker starts, ms (default 200). */
   leadMs?: number
+  /** Delay each cut by this long, ms (0–5 000, default 0): `leadMs`'s counterpart. */
+  lagMs?: number
   /** With a `wide` source: break to it after this long on one camera, ms (default 20 000). */
   maxShotMs?: number
   /** With a `wide` source: every N-th cut goes to the wide (default 0 = off). */
@@ -414,7 +442,8 @@ function idempotencyHeaders(options?: UseCaseRequestOptions): { headers?: Record
  *
  * Every request method except the estimates ({@link estimateTightenEpisode},
  * {@link estimateEpisodeChapters}, {@link estimateEpisodeTrailer},
- * {@link estimateClipPack}, {@link estimateSpeakerLayout}: a quote, `{ data }`) returns
+ * {@link estimateClipPack}, {@link estimateSpeakerLayout}: a quote, `{ data }`)
+ * and {@link editPlanCapabilities} (a read: {@link EditPlanCapabilities}) returns
  * {@link EditJobResult} (the use-case runs a {@link UseCaseJobResult}); poll the
  * `jobId` with `client.jobs.getStatus(jobId)`.
  */
@@ -724,6 +753,16 @@ export class EditResource {
   }
 
   /**
+   * The Edit Plan modes this server can plan (`GET /v1/edit-plan/capabilities`),
+   * who answered, and whether Edit Plan is charged per started minute. Ask it
+   * before offering a mode: one it does not list is refused by
+   * {@link editPlan} before anything is charged. Nothing is created or charged.
+   */
+  editPlanCapabilities(): Promise<EditPlanCapabilities> {
+    return this.client.request<EditPlanCapabilities>("GET", "/v1/edit-plan/capabilities")
+  }
+
+  /**
    * Camera Switch (podcast B5): choose which camera shows each cut of `edl`
    * by who is speaking — the sound never changes. Runs on nodaro.ai (a
    * connected self-hosted install relays it); a flat price. The finished job's `output_data.json` is the switched EDL (feed it
@@ -750,6 +789,7 @@ export class EditResource {
         ...(input.speakerNames !== undefined ? { speakerNames: input.speakerNames } : {}),
         ...(input.minShotMs !== undefined ? { minShotMs: input.minShotMs } : {}),
         ...(input.leadMs !== undefined ? { leadMs: input.leadMs } : {}),
+        ...(input.lagMs !== undefined ? { lagMs: input.lagMs } : {}),
         ...(input.maxShotMs !== undefined ? { maxShotMs: input.maxShotMs } : {}),
         ...(input.wideEvery !== undefined ? { wideEvery: input.wideEvery } : {}),
         ...(input.layoutHints !== undefined ? { layoutHints: input.layoutHints } : {}),

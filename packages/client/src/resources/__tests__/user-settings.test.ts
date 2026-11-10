@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { createClient, StaticTokenAuth, UnauthorizedError, ForbiddenError, NodaroError } from "../../index.js"
-import type { UserSettings } from "../../index.js"
+import type { UserSettings, UserMcpPreferencesPatch } from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -43,6 +43,16 @@ describe("userSettings", () => {
     const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
     expect(init.method).toBe("PATCH")
     expect(JSON.parse(init.body)).toEqual({ monthlyStatementEmail: false })
+  })
+
+  it("update() sends null to clear one MCP default, and leaves out the fields it does not change", async () => {
+    const { tier: _tier, ...saved } = { ...SETTINGS, mcpPreferences: { image: { aspectRatio: "9:16" } } }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: saved }))
+    const mcpPreferences: UserMcpPreferencesPatch = { image: { model: null }, video: { duration: null } }
+    expect(await client(fetchMock).userSettings.update({ mcpPreferences })).toEqual(saved)
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toEqual({
+      mcpPreferences: { image: { model: null }, video: { duration: null } },
+    })
   })
 
   it("throws UnauthorizedError signed out, ForbiddenError for private outputs below the plan, and a NodaroError with the server's code on a bad value", async () => {

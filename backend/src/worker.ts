@@ -9,6 +9,7 @@ import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 import { useProviderSafetySettings } from "./lib/provider-safety.js"
 import { startLaneParking } from "./lib/concurrency-lanes/park.js"
 import { startServerOccupancyPublisher } from "./lib/concurrency-lanes/server-occupancy.js"
+import { logStorageDeletesAtBoot } from "./lib/storage-deletes-setting.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err)
@@ -41,6 +42,8 @@ const worker = createVideoWorker()
 const stopServerOccupancy = startServerOccupancyPublisher()
 
 console.log("Worker started, waiting for jobs...")
+// On a deployment that deletes nothing from storage (STORAGE_DELETES=skip), one line saying so, naming this process.
+logStorageDeletesAtBoot("worker")
 // One line, on boot: which ffmpeg is this worker rendering with? Output is
 // version-dependent (see the Dockerfile FFMPEG_VERSION pin).
 logFfmpegVersion("worker")

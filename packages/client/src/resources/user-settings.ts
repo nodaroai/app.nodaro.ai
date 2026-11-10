@@ -31,12 +31,24 @@ export interface UserTextTemplate {
   requiresImageRef?: boolean
 }
 
-/** Per-user MCP defaults, sparse: a key left out keeps its stored value. */
+/** Per-user MCP defaults as stored, sparse: a default never saved is absent. */
 export interface UserMcpPreferences {
   image?: { model?: string; aspectRatio?: string; resolution?: string; quality?: string }
   video?: { model?: string; aspectRatio?: string; duration?: number; resolution?: string }
   audio?: { ttsModel?: string; musicModel?: string }
   flows?: { enabled?: boolean }
+}
+
+/**
+ * A change to the MCP defaults (`update({ mcpPreferences })`), merged one axis
+ * at a time: a key left out keeps its stored value, a value replaces it, and
+ * `null` clears it, so the tool's own default applies again.
+ */
+export interface UserMcpPreferencesPatch {
+  image?: { model?: string | null; aspectRatio?: string | null; resolution?: string | null; quality?: string | null }
+  video?: { model?: string | null; aspectRatio?: string | null; duration?: number | null; resolution?: string | null }
+  audio?: { ttsModel?: string | null; musicModel?: string | null }
+  flows?: { enabled?: boolean | null }
 }
 
 export interface UserSettings {
@@ -63,7 +75,8 @@ export interface UserSettings {
  * What `update()` sends: only the fields to change. `promptTemplates` and
  * `textTemplates` REPLACE the stored value whole (send the full map or list;
  * a template key the server does not know, or a value equal to the default,
- * is dropped); `mcpPreferences` merges one axis at a time.
+ * is dropped); `mcpPreferences` merges one axis at a time, and `null` clears a
+ * field of it.
  */
 export interface UserSettingsPatch {
   /** `false` needs the Standard plan or above on Nodaro Cloud (`ForbiddenError` otherwise). */
@@ -72,7 +85,7 @@ export interface UserSettingsPatch {
   /** Up to 100. */
   textTemplates?: UserTextTemplate[]
   preferredLocale?: UserSettingsLocale | null
-  mcpPreferences?: UserMcpPreferences
+  mcpPreferences?: UserMcpPreferencesPatch
   showRecentNodes?: boolean
   showMostUsedNodes?: boolean
   variableDisplayMode?: VariableDisplayMode

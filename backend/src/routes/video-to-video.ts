@@ -16,6 +16,7 @@ import { buildSeedanceVideoEditPrompt } from "@nodaro/prompts/assembly"
 import { handleTextToVideoRequest, textToVideoBody, textToVideoPricing } from "./text-to-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { jobRunModel } from "../lib/run-model.js"
 
 const SEEDANCE_EDIT_ONLY_LISTS = ["referenceImageUrls", "referenceVideoUrls", "referenceAudioUrls"] as const
 
@@ -140,6 +141,7 @@ export const videoToVideoPricing: RoutePricing = {
     ? textToVideoPricing.modelResolver(req)
     : ((req.body as Record<string, unknown> | undefined)?.provider as string | undefined) ?? VIDEO_TO_VIDEO_DEFAULT_PROVIDER,
   opts: {
+    runModel: jobRunModel("video-to-video"),
     computeCredits: (body, req) => isSeedanceEdit(req) ? textToVideoPricing.opts?.computeCredits?.(body, req) : undefined,
   },
 }

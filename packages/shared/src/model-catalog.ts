@@ -500,6 +500,12 @@ const FLUX_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"] as const
 const KONTEXT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9"] as const
 const GROK_RATIOS = ["1:1", "16:9", "9:16", "3:2", "2:3"] as const
 const GPT_IMAGE_RATIOS = ["1:1", "3:2", "2:3"] as const
+// GPT Image 2 (text-to-image and image-to-image) renders every one of these
+// ratios at 1K, 2K and 4K, "auto" and 1:1 included (checked 2026-11-10: 1:1 at
+// 4K came back 2880x2880, "auto" at 2K 2048x2048, and an edit at "auto" and 2K
+// kept a 768x1024 photo's shape at 1536x2048), so it declares no
+// `resolutionsByAspectRatio`. The provider's docs limit 2K and 4K only at ratios
+// it does not offer here (5:4, 4:5, 3:1, 1:3, 9:21).
 const GPT_IMAGE_2_RATIOS = ["auto", "1:1", "16:9", "9:16", "4:3", "3:4"] as const
 // GPT Image 2.5 (Flare + Sunburst) widen the set to thirteen — the GPT Image 2
 // six plus 3:2/2:3, ultra-wide 21:9/27:16, ultra-tall 16:27 and near-square
@@ -4183,7 +4189,9 @@ export function resolutionAtAspectRatio(
  *    shape; the first listed ratio would reframe every source of another shape.
  *  - Value outside the model's allow-list → snap to the model's default
  *    (`defaultResolutionFor`) or the first valid option.
- *  - Then apply cross-field constraints that only hold for certain models.
+ *  - Then apply the cross-field constraints the catalog declares: a size the
+ *    ratio does not render (`resolutionsByAspectRatio`), and the size a
+ *    background setting renders at (`transparentResolution`).
  *
  * Unknown model ids pass through untouched — the route's Zod model enum is the
  * right gate for those, exactly as in `validateModelInput`.
@@ -4275,9 +4283,11 @@ export function normalizeModelInput(
       ? input.duration
       : snap("duration", input.duration, m.durations)
 
-  // A size the chosen ratio does not render (`resolutionsByAspectRatio`) moves
-  // to the largest one it does at or below it. Before the background rules
-  // below, which read the size this leaves, and before any price is built.
+  // A size the chosen ratio does not render (`resolutionsByAspectRatio`: GPT
+  // Image 2.5's four 1K-only ratios) moves to the largest one it does at or
+  // below it. After the snaps above, so it sees the
+  // ratio and size as they will be sent; before the background rules below,
+  // which read the size this leaves, and before any price is built.
   const sized = resolutionAtAspectRatio(modelId, out.aspectRatio, out.resolution)
   if (out.resolution !== undefined && sized !== undefined && sized !== out.resolution) {
     const offered = resolutionsAtAspectRatio(modelId, out.aspectRatio) ?? [sized]
@@ -4288,29 +4298,6 @@ export function normalizeModelInput(
       reason: `${m.label} only renders ${offered.join(" or ")} at the "${out.aspectRatio}" aspect ratio.`,
     })
     out.resolution = sized
-  }
-
-  // Cross-field constraints — a pair that is individually valid but jointly
-  // rejected upstream. GPT Image 2 (per docs.kie.ai): `auto` requires 1K, and
-  // 1:1 cannot go to 4K. Applied last so it sees the already-snapped values.
-  if (modelId === "gpt-image-2" || modelId === "gpt-image-2-i2i") {
-    if (out.aspectRatio === "auto" && out.resolution !== undefined && out.resolution !== "1K") {
-      adjustments.push({
-        field: "resolution",
-        from: out.resolution,
-        to: "1K",
-        reason: `${m.label} only renders 1K at the "auto" aspect ratio.`,
-      })
-      out.resolution = "1K"
-    } else if (out.aspectRatio === "1:1" && out.resolution === "4K") {
-      adjustments.push({
-        field: "resolution",
-        from: "4K",
-        to: "2K",
-        reason: `${m.label} cannot render 4K at a 1:1 aspect ratio.`,
-      })
-      out.resolution = "2K"
-    }
   }
 
   // A transparent background only renders at the size the provider allows it.

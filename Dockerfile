@@ -619,6 +619,15 @@ COPY <<'EOF' /app/start.sh
 
 echo "Starting with PORT=${PORT:-3000}"
 
+# The settings that move the app's pages to their own host (docs/deployment.md):
+# checked by the server's own rule before anything starts. This script starts
+# Caddy and writes /config.js whatever the API does, so a value the server
+# refuses would otherwise still turn the proxy's or the browser's half on.
+if ! node /app/backend/dist/lib/moved-pages-check.js; then
+  echo "[start.sh] the settings that move the app's pages are invalid (see the line above): nothing was started"
+  exit 1
+fi
+
 # Generate an internal orchestrator secret if not provided so every
 # sibling process in this container inherits the SAME value. Required
 # for orchestrator → API auth; without it, the auth hook rejects

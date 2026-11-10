@@ -941,24 +941,33 @@ describe("resolveNormalizedImageGen", () => {
       refCount: 0,
       swapToI2i: true,
     })
-    // 3:2 is not in GPT_IMAGE_2_RATIOS -> allowed[0] ("auto"), which then
-    // cascades resolution to 1K via the model's cross-field rule.
+    // 3:2 is not in GPT_IMAGE_2_RATIOS -> allowed[0] ("auto"), which renders
+    // 4K too: the size, and so the price, stay as asked.
     expect(out.aspectRatio).toBe("auto")
-    expect(out.resolution).toBe("1K")
-    expect(out.identifier).toBe("gpt-image-2")
-    expect(out.adjustments.map((a) => a.field)).toEqual(["aspectRatio", "resolution"])
+    expect(out.resolution).toBe("4K")
+    expect(out.identifier).toBe("gpt-image-2:4K")
+    expect(out.adjustments.map((a) => a.field)).toEqual(["aspectRatio"])
   })
 
-  it("prices the SNAPPED resolution — gpt-image-2 auto + 2K reserves the 1K tier", () => {
+  it("prices the SNAPPED resolution — GPT Image 2.5 Flare at 9:8 + 2K reserves the 1K tier", () => {
     const out = resolveNormalizedImageGen({
-      provider: "gpt-image-2",
-      aspectRatio: "auto",
+      provider: "gpt-image-2-5-flare",
+      aspectRatio: "9:8",
       resolution: "2K",
       refCount: 0,
       swapToI2i: true,
     })
     expect(out.resolution).toBe("1K")
-    expect(out.identifier).toBe("gpt-image-2")
+    expect(out.identifier).toBe("gpt-image-2-5-flare")
+  })
+
+  it("prices gpt-image-2 at auto and 1:1 at the size asked", () => {
+    for (const [aspectRatio, resolution, id] of [["auto", "2K", "gpt-image-2:2K"], ["auto", "4K", "gpt-image-2:4K"], ["1:1", "4K", "gpt-image-2:4K"]] as const) {
+      const out = resolveNormalizedImageGen({ provider: "gpt-image-2", aspectRatio, resolution, refCount: 0, swapToI2i: true })
+      expect(out.resolution).toBe(resolution)
+      expect(out.identifier).toBe(id)
+      expect(out.adjustments).toEqual([])
+    }
   })
 
   it("drops a lever the model does not have, and reports it", () => {

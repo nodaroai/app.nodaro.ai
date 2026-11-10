@@ -5,8 +5,8 @@ import { buildServer, callTool, executeSession, stubRoute } from "./_helpers.js"
 
 /**
  * The person's saved image defaults (`save_image_defaults`, stored on
- * `profiles.mcp_preferences.image`) as `generate_image` and `modify_image`
- * read them. Each lever: the value the call names, else the saved one, else —
+ * `profiles.mcp_preferences.image`) as `generate_image`, `modify_image` and
+ * `image_to_image` read them. Each lever: the value the call names, else the saved one, else —
  * for the ratio — the model's own rule for an unset ratio (a GPT Image 2.5 /
  * 2.6 edit runs at "auto"), else today's fallback.
  *
@@ -37,6 +37,7 @@ vi.mock("../../supabase.js", () => ({
 }))
 
 const { registerVerbs } = await import("../verbs.js")
+const { generateImageRequest } = await import("../../../../routes/generate-image-body.js")
 
 const SOURCE = "https://cdn.nodaro.ai/uploads/source.png"
 
@@ -55,6 +56,7 @@ const generate = (args: Record<string, unknown>, response?: object) =>
   call("generate_image", "/v1/generate-image", { prompt: "a lighthouse", ...args }, response)
 
 const UNSET_IS_AUTO = [
+  "gpt-image-2-i2i",
   "gpt-image-2-5-flare-i2i",
   "gpt-image-2-5-sunburst-i2i",
   "gpt-image-2-6-flare-i2i",
@@ -104,12 +106,12 @@ describe("modify_image — the ratio: named, else saved, else the model's rule, 
     expect(body.aspectRatio).toBe("auto")
   })
 
-  it("with neither, another model keeps today's fallback (GPT Image 2's edit: 16:9)", async () => {
-    const body = await modify({ model: "gpt-image-2-i2i" })
+  it("with neither, another model keeps today's fallback (Flux Kontext: 16:9)", async () => {
+    const body = await modify({ model: "flux-kontext" })
     expect(body.aspectRatio).toBe("16:9")
   })
 
-  it("a saved ratio beats the model's rule on the five edit ids", async () => {
+  it("a saved ratio beats the model's rule on the six edit ids", async () => {
     savedImage = { aspectRatio: "4:3" }
     for (const model of UNSET_IS_AUTO.slice(0, 2)) {
       expect((await modify({ model })).aspectRatio).toBe("4:3")
@@ -165,5 +167,232 @@ describe("generate_image — the ratio: named, else saved, else the fallback", (
     savedImage = { aspectRatio: "9:16" }
     expect((await generate({ models: ["gpt-image-2", "nano-banana-pro"] }, batch)).aspectRatio).toBe("9:16")
     expect((await generate({ models: ["gpt-image-2", "nano-banana-pro"], aspect_ratio: "1:1" }, batch)).aspectRatio).toBe("1:1")
+  })
+})
+
+/**
+ * `image_to_image` reads the same saved defaults. A value the call names is
+ * sent as it is (the route fits it and reports the change); a saved one is
+ * fitted to the model here. With neither, the ratio is the route's own rule
+ * ("auto" on the six GPT Image 2, 2.5 and 2.6 edit ids) and any other model is
+ * sent no ratio, so it keeps its own default, as before.
+ */
+const imageToImage = async (args: Record<string, unknown>) => {
+  const { fastify, received } = stubRoute("POST", "/v1/image-to-image", { jobId: "j-i2i" })
+  const server = buildServer()
+  registerVerbs({ server, session: executeSession(), fastify })
+  const result = await callTool(server, "image_to_image", { image_url: SOURCE, prompt: "restyle", ...args })
+  expect(result.isError).toBeUndefined()
+  return { body: received.body ?? {}, answer: (result.structuredContent ?? {}) as Record<string, unknown> }
+}
+
+describe("image_to_image — the ratio: named, else saved, else the model's rule, else none", () => {
+  it("uses the saved ratio when the call names none", async () => {
+    savedImage = { aspectRatio: "1:1" }
+    const { body } = await imageToImage({})
+    expect(body.provider).toBe(defaultImageModel("edit", "1:1"))
+    expect(body.aspectRatio).toBe("1:1")
+  })
+
+  it("a named ratio beats the saved one", async () => {
+    savedImage = { aspectRatio: "1:1" }
+    expect((await imageToImage({ aspect_ratio: "16:9" })).body.aspectRatio).toBe("16:9")
+  })
+
+  it("a blank named ratio names nothing: the saved one applies", async () => {
+    savedImage = { aspectRatio: "3:4" }
+    expect((await imageToImage({ aspect_ratio: "" })).body.aspectRatio).toBe("3:4")
+  })
+
+  it("a saved ratio the default model lacks picks the edit model that draws it", async () => {
+    savedImage = { aspectRatio: "27:16" }
+    const { body, answer } = await imageToImage({})
+    expect(body.provider).toBe(defaultImageModel("edit", "27:16"))
+    expect(body.aspectRatio).toBe("27:16")
+    expect(answer.model).toBe(body.provider)
+  })
+
+  it("a saved ratio is fitted to the model named: a typo is mended, a ratio it lacks moves to its nearest", async () => {
+    savedImage = { aspectRatio: "16x9" }
+    expect((await imageToImage({ model: "flux-kontext" })).body.aspectRatio).toBe("16:9")
+    savedImage = { aspectRatio: "27:16" }
+    expect((await imageToImage({ model: "flux-kontext" })).body.aspectRatio).toBe("16:9")
+  })
+
+  it("a saved 'auto' is handed on as 'auto', as a named one is", async () => {
+    savedImage = { aspectRatio: "auto" }
+    expect((await imageToImage({ model: "gpt-image-2-i2i" })).body.aspectRatio).toBe("auto")
+    expect((await imageToImage({ model: "flux-kontext" })).body.aspectRatio).toBe("auto")
+  })
+
+  it.each(UNSET_IS_AUTO)("with neither, %s runs at 'auto'", async (model) => {
+    const { body } = await imageToImage({ model })
+    expect(body.provider).toBe(model)
+    expect(body.aspectRatio).toBe("auto")
+  })
+
+  it("with neither, the default edit model runs at 'auto'", async () => {
+    const { body } = await imageToImage({})
+    expect(body.provider).toBe(defaultImageModel("edit"))
+    expect(body.aspectRatio).toBe("auto")
+  })
+
+  it.each(["flux-kontext", "seedream-5-pro-i2i"])(
+    "with neither, %s is sent no ratio and keeps its own default, as before",
+    async (model) => {
+      const { body } = await imageToImage({ model })
+      expect(body.provider).toBe(model)
+      expect(body).not.toHaveProperty("aspectRatio")
+    },
+  )
+
+  it("a saved ratio beats the model's rule on the six edit ids", async () => {
+    savedImage = { aspectRatio: "4:3" }
+    for (const model of UNSET_IS_AUTO.slice(0, 2)) {
+      expect((await imageToImage({ model })).body.aspectRatio).toBe("4:3")
+    }
+  })
+})
+
+describe("image_to_image — saved size and quality", () => {
+  it("uses the saved size and quality when the call names none", async () => {
+    savedImage = { resolution: "2K", quality: "high" }
+    const { body } = await imageToImage({ model: "gpt-image-2-6-flare-i2i" })
+    expect(body.resolution).toBe("2K")
+    expect(body.quality).toBe("high")
+  })
+
+  it("named values beat the saved ones", async () => {
+    savedImage = { resolution: "2K", quality: "high" }
+    const { body } = await imageToImage({ model: "gpt-image-2-6-flare-i2i", resolution: "4K", quality: "low" })
+    expect(body.resolution).toBe("4K")
+    expect(body.quality).toBe("low")
+  })
+
+  it("a saved size or quality the model does not take is left out", async () => {
+    savedImage = { resolution: "2K", quality: "high" }
+    const { body } = await imageToImage({ model: "flux-kontext" })
+    expect(body).not.toHaveProperty("resolution")
+    expect(body).not.toHaveProperty("quality")
+  })
+
+  it("with neither, nothing is sent: the model's own default", async () => {
+    const { body } = await imageToImage({ model: "gpt-image-2-6-flare-i2i" })
+    expect(body).not.toHaveProperty("resolution")
+    expect(body).not.toHaveProperty("quality")
+  })
+})
+
+describe("image_to_image — the saved model: used only when an edit runs it", () => {
+  it("a saved edit model runs when the call names none, and the answer names it", async () => {
+    savedImage = { model: "gpt-image-2-i2i" }
+    const { body, answer } = await imageToImage({})
+    expect(body.provider).toBe("gpt-image-2-i2i")
+    expect(answer.model).toBe("gpt-image-2-i2i")
+  })
+
+  it("a named model beats the saved one", async () => {
+    savedImage = { model: "gpt-image-2-i2i" }
+    expect((await imageToImage({ model: "flux-kontext" })).body.provider).toBe("flux-kontext")
+  })
+
+  it("a saved text-to-image-only model is not an edit model: the edit default runs", async () => {
+    savedImage = { model: "gpt-image-2" }
+    expect((await imageToImage({})).body.provider).toBe(defaultImageModel("edit"))
+    savedImage = { model: "seedream-5-pro" }
+    expect((await imageToImage({})).body.provider).toBe(defaultImageModel("edit"))
+  })
+
+  it("a saved model that runs both under one id is used for the edit", async () => {
+    savedImage = { model: "nano-banana-pro" }
+    expect((await imageToImage({})).body.provider).toBe("nano-banana-pro")
+  })
+
+  it("the saved ratio is fitted to the saved model", async () => {
+    savedImage = { model: "flux-kontext", aspectRatio: "27:16" }
+    const { body } = await imageToImage({})
+    expect(body.provider).toBe("flux-kontext")
+    expect(body.aspectRatio).toBe("16:9")
+  })
+})
+
+/**
+ * There is one saved image model, and the widget's "Save as default" star
+ * fills it from whichever tool made the picture: after `modify_image` it is an
+ * edit id (`gpt-image-2-6-flare-i2i`), which /v1/generate-image refuses. A
+ * generation runs the saved model only when that route does
+ * (`IMAGE_GEN_PROVIDERS`), the mirror of the edit rule above; otherwise the
+ * generation default runs. Each body is checked against the route's own schema,
+ * so "no 400" is the route's verdict, not the stub's.
+ */
+describe("generate_image — the saved model: used only when generation runs it", () => {
+  // The session's test user id is not a uuid; the route reads the real one from auth.
+  const accepted = (body: Record<string, unknown>) => {
+    const { userId: _userId, ...sent } = body
+    return generateImageRequest.safeParse(sent).success
+  }
+
+  it.each(["gpt-image-2-6-flare-i2i", "gpt-image-2-i2i", "seedream-5-pro-i2i", "recraft-remove-bg"])(
+    "a saved edit-only id (%s) runs the generation default, which the route takes",
+    async (saved) => {
+      savedImage = { model: saved }
+      const body = await generate({})
+      expect(body.provider).toBe(defaultImageModel("general"))
+      expect(accepted(body)).toBe(true)
+    },
+  )
+
+  it("the saved edit id's ratio still applies, fitted to the default", async () => {
+    savedImage = { model: "gpt-image-2-6-flare-i2i", aspectRatio: "9:16" }
+    const body = await generate({})
+    expect(body.provider).toBe(defaultImageModel("general", "9:16"))
+    expect(body.aspectRatio).toBe("9:16")
+    expect(accepted(body)).toBe(true)
+  })
+
+  it("a saved generation model is used", async () => {
+    savedImage = { model: "gpt-image-2-5-flare" }
+    const body = await generate({})
+    expect(body.provider).toBe("gpt-image-2-5-flare")
+    expect(accepted(body)).toBe(true)
+  })
+
+  it("a saved model that generates and edits under one id is used", async () => {
+    savedImage = { model: "nano-banana-pro" }
+    expect((await generate({})).provider).toBe("nano-banana-pro")
+  })
+
+  it("a named model still beats the saved one", async () => {
+    savedImage = { model: "gpt-image-2-5-flare" }
+    expect((await generate({ model: "nano-banana-pro" })).provider).toBe("nano-banana-pro")
+    savedImage = { model: "gpt-image-2-6-flare-i2i" }
+    expect((await generate({ model: "nano-banana-pro" })).provider).toBe("nano-banana-pro")
+  })
+
+  it("the answer's card still compares against the saved model as it was saved", async () => {
+    savedImage = { model: "gpt-image-2-6-flare-i2i" }
+    const { fastify } = stubRoute("POST", "/v1/generate-image", { jobId: "j-1" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "generate_image", { prompt: "a lighthouse" })
+    expect((result.structuredContent as { userDefaults?: { model?: string } }).userDefaults?.model).toBe("gpt-image-2-6-flare-i2i")
+  })
+
+  it("several images of one model: the saved edit id is not sent either", async () => {
+    savedImage = { model: "gpt-image-2-6-flare-i2i" }
+    const batch = { jobIds: ["a", "b"], batchId: "b1", groups: [{ model: defaultImageModel("general"), jobIds: ["a", "b"] }] }
+    const body = await generate({ count: 2 }, batch)
+    expect(body.provider).toBe(defaultImageModel("general"))
+    expect(body.count).toBe(2)
+    expect(accepted(body)).toBe(true)
+  })
+
+  it("several models: only the models named are sent, never the saved one", async () => {
+    savedImage = { model: "gpt-image-2-6-flare-i2i" }
+    const batch = { jobIds: ["a", "b"], batchId: "b1", groups: [{ model: "gpt-image-2", jobIds: ["a"] }, { model: "nano-banana-pro", jobIds: ["b"] }] }
+    const body = await generate({ models: ["gpt-image-2", "nano-banana-pro"] }, batch)
+    expect(body.models).toEqual(["gpt-image-2", "nano-banana-pro"])
+    expect(body).not.toHaveProperty("provider")
+    expect(accepted(body)).toBe(true)
   })
 })

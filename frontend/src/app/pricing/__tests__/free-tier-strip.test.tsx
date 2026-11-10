@@ -19,6 +19,7 @@ vi.mock("@/hooks/use-billing-surface", () => ({ useBillingSurface: () => ({ surf
 vi.mock("@/ee/hooks/queries/use-billing-queries", () => ({
   useSubscription: () => ({ data: undefined, isLoading: false }),
   useChangePlanMutation: () => ({ mutateAsync: vi.fn() }),
+  useBillingPlans: () => ({ data: undefined, isPending: false }),
 }))
 vi.mock("@/ee/hooks/queries/use-credits-queries", () => ({ useUserCredits: () => ({ data: undefined }) }))
 vi.mock("@/lib/checkout", () => ({ openStripePage: vi.fn(), startCheckout: vi.fn(), startLoadCheckout: vi.fn() }))

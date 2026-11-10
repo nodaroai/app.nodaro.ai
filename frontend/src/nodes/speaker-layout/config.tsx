@@ -1,10 +1,10 @@
 import { EDL_TARGET_ASPECTS, type EdlTargetAspect } from "@nodaro/shared/edl"
 import {
   resolveSpeakerLayoutSettings,
+  speakerLayoutCrossfade,
   tightenFramingLayouts,
   usecaseDescriptor,
   usecaseRecordingsProblem,
-  validSpeakerCrossfade,
   validSpeakerEmphasis,
   validSpeakerSwitches,
   type SpeakerViewNodeSettings,
@@ -40,10 +40,12 @@ const resolved = (data: SpeakerLayoutData) => resolveSpeakerLayoutSettings(data 
  *    shape does not draw shows as the run snaps it, and a new shape writes the
  *    layout the run would read at it;
  *  - the switch and emphasis through Speaker View's own sections, fed the same
- *    rules the primitive offers (`validSpeakerSwitches`,
- *    `validSpeakerCrossfade`, `validSpeakerEmphasis`), so the two panels never
- *    drift: a choice the layout rules out is greyed with its reason. A layout's
- *    run sets no tween length, so neither slider is offered;
+ *    rules the primitive offers (`validSpeakerSwitches`, `validSpeakerEmphasis`),
+ *    so the two panels never drift: a choice the layout rules out is greyed with
+ *    its reason (Pan and Zoom under Side by side, Stacked and Grid, which keep
+ *    their slots). The Crossfade is always greyed (`speakerLayoutCrossfade`):
+ *    the layout cuts nothing out, so there is no jump to crossfade over. A
+ *    layout's run sets no tween length, so neither slider is offered;
  *  - where the boxes come from (`UseCaseFramingSourceField`): a node with none
  *    shows what an absent one reads as for this type, its spec's
  *    `absentFramingSource` (automatic);
@@ -117,7 +119,7 @@ export function ConfigPanel({ data: raw, onUpdate, nodeId, nodes, edges, sources
 
       <SpeakerViewSwitchSection
         options={validSpeakerSwitches(sv, undefined)}
-        crossfade={validSpeakerCrossfade(sv, undefined)}
+        crossfade={speakerLayoutCrossfade()}
         value={settings.switchType}
         durationMs={undefined}
         counts={null}
