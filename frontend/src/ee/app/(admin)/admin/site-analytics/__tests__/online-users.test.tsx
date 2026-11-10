@@ -9,7 +9,7 @@ import { act, render, screen, within } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter } from "react-router-dom"
 import type { OnlineUser } from "../types"
-import { AT, REALTIME_OK, answer, onlineData, report } from "./fixtures"
+import { AT, REALTIME_OK, answer, onlineData, report, surfacesData } from "./fixtures"
 
 vi.mock("@/lib/api", () => ({ getAuthHeaders: async () => ({ Authorization: "Bearer t" }) }))
 vi.mock("@/lib/edition", () => ({ hasAdmin: () => true }))
@@ -52,7 +52,9 @@ afterEach(() => {
 })
 
 function serve(online: () => Promise<Response>) {
-  fetchMock.mockImplementation((url: string) => (url.endsWith("/online-users") ? online() : url.endsWith("/realtime") ? answer(REALTIME_OK) : answer(report())))
+  fetchMock.mockImplementation((url: string) =>
+    url.endsWith("/online-users") ? online() : url.endsWith("/realtime") ? answer(REALTIME_OK) : url.includes("/user-surfaces") ? answer(surfacesData()) : answer(report()),
+  )
 }
 
 const onlineCalls = () => fetchMock.mock.calls.filter(([url]) => String(url) === "/v1/admin/online-users").length
@@ -129,7 +131,11 @@ describe("Signed in now", () => {
 describe("Signed in now, without Google", () => {
   it("shows whoever is here even when the Google report could not load", async () => {
     fetchMock.mockImplementation((url: string) =>
-      url.endsWith("/online-users") ? answer(onlineData([DANA])) : answer({ error: { code: "internal_error", message: "Google is down" } }, 500),
+      url.endsWith("/online-users")
+        ? answer(onlineData([DANA]))
+        : url.includes("/user-surfaces")
+          ? answer(surfacesData())
+          : answer({ error: { code: "internal_error", message: "Google is down" } }, 500),
     )
     renderPage()
     expect(await (await section()).findByRole("link", { name: "Dana Levi" })).toBeInTheDocument()

@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { getAuthHeaders } from "@/lib/api"
 import { hasAdmin } from "@/lib/edition"
 import { queryKeys } from "@/lib/query-keys"
-import type { IndexStatus, OnlineUsersReport, RealtimeSnapshot, SectionResult, SiteAnalyticsDays, SiteAnalyticsReport } from "./types"
+import type { IndexStatus, OnlineUsersReport, RealtimeSnapshot, SectionResult, SiteAnalyticsDays, SiteAnalyticsReport, SurfaceSource, UserSurfacesReport } from "./types"
 
 /** The server's reason, or a plain one when it sent none. */
 async function failureMessage(res: Response, fallback: string): Promise<string> {
@@ -67,6 +67,25 @@ export function useOnlineUsers(enabled: boolean) {
     enabled: hasAdmin() && enabled,
     ...ONLINE_USERS_POLLING,
     staleTime: 15_000,
+  })
+}
+
+/**
+ * The surfaces each account has used, one kind of caller or all — a table
+ * kept for good, so nothing polls; a minute here. The last kind stays on
+ * screen while the next loads.
+ */
+export function useUserSurfaces(source: SurfaceSource | null) {
+  return useQuery({
+    queryKey: queryKeys.admin.siteAnalyticsUserSurfaces(source),
+    queryFn: async (): Promise<UserSurfacesReport> => {
+      const res = await fetch(`/v1/admin/user-surfaces${source ? `?source=${source}` : ""}`, { headers: await getAuthHeaders() })
+      if (!res.ok) throw new Error(await failureMessage(res, "Failed to load the surfaces people use"))
+      return (await res.json()) as UserSurfacesReport
+    },
+    enabled: hasAdmin(),
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
   })
 }
 

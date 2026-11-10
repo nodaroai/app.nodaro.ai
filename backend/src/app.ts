@@ -269,6 +269,7 @@ import { adminHostedDeploymentsRoutes } from "./ee/routes/admin-hosted-deploymen
 import { adminSiteAnalyticsRoutes } from "./ee/routes/admin-site-analytics.js"
 import { adminHeaderVersionsRoutes } from "./ee/routes/admin-header-versions.js"
 import { adminOnlineUsersRoutes } from "./ee/routes/admin-online-users.js"
+import { adminUserSurfacesRoutes } from "./ee/routes/admin-user-surfaces.js"
 import { adminUserLookupRoutes } from "./ee/routes/admin-user-lookup.js"
 import { adminLanesRoutes } from "./ee/routes/admin-lanes.js"
 import { recordPresence } from "./ee/lib/presence-instance.js"
@@ -893,6 +894,8 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   // The shared header's versions across Nodaro's own products: the platform's fleet, so Cloud only.
   if (isCloud()) await app.register(adminHeaderVersionsRoutes)
   if (hasAdmin()) await app.register(adminOnlineUsersRoutes)
+  // The surfaces each account has used, kept for good (migration 607): the durable sibling of the list above.
+  if (hasAdmin()) await app.register(adminUserSurfacesRoutes)
   // The admin pickers' accounts: search, by address, by id, the admins (never the whole table).
   if (hasAdmin()) await app.register(adminUserLookupRoutes)
   // Concurrency lanes: the switch in every edition with an admin; sizes and ceilings on Cloud (the route checks).

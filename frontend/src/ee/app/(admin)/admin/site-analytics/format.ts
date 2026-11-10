@@ -61,5 +61,8 @@ export const dayText = (day: string): string => formatDate(`${day}T12:00:00`, { 
 
 export const momentText = (iso: string): string => formatDateTime(iso, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
 
+/** "Nov 8, 2026" — a day with its year, for a moment that may be long past. */
+export const dateText = (iso: string): string => formatDate(iso, { month: "short", day: "numeric", year: "numeric" })
+
 /** The time of day, to the second — when a realtime snapshot was taken. */
 export const clockText = (iso: string): string => formatTime(iso, { hour: "2-digit", minute: "2-digit", second: "2-digit" })

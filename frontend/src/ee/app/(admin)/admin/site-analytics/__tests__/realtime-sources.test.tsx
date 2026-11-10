@@ -10,7 +10,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter } from "react-router-dom"
 import type { RealtimeSnapshot, SectionResult, SiteAnalyticsReport, SourceRow } from "../types"
-import { AT, answer, onlineData, realtimeData, report, sourcesData } from "./fixtures"
+import { AT, answer, onlineData, realtimeData, report, sourcesData, surfacesData } from "./fixtures"
 
 vi.mock("@/lib/api", () => ({ getAuthHeaders: async () => ({ Authorization: "Bearer t" }) }))
 vi.mock("@/lib/edition", () => ({ hasAdmin: () => true }))
@@ -35,7 +35,7 @@ const OK: SectionResult<RealtimeSnapshot> = { status: "ok", fetchedAt: AT, data:
 
 function serve(realtime: SectionResult<RealtimeSnapshot> = OK, body: SiteAnalyticsReport = report()) {
   fetchMock.mockImplementation((url: string) =>
-    url.endsWith("/realtime") ? answer(realtime) : url.endsWith("/online-users") ? answer(onlineData()) : answer(body),
+    url.endsWith("/realtime") ? answer(realtime) : url.endsWith("/online-users") ? answer(onlineData()) : url.includes("/user-surfaces") ? answer(surfacesData()) : answer(body),
   )
 }
 

@@ -177,6 +177,39 @@ export interface OnlineUsersReport {
   users: OnlineUser[]
 }
 
+/** The surfaces each account has used — mirrors backend/src/ee/lib/user-surfaces-list.ts. */
+export const SURFACE_SOURCES = ["web", "extension", "mcp", "app", "cli", "sdk", "api"] as const
+export type SurfaceSource = (typeof SURFACE_SOURCES)[number]
+
+export interface UserSurfaceRow {
+  userId: string
+  email: string | null
+  name: string | null
+  source: SurfaceSource
+  /** A host, an app id, an MCP client, a client version; none for a bare API call. */
+  detail: string | null
+  /** APP, STUDIO, EXT, CLI, "MCP · Claude", a developer app's name. */
+  label: string
+  firstSeenAt: string
+  lastSeenAt: string
+  /** The server's hourly touches — about the hours the surface was in use, not requests. */
+  touches: number
+}
+
+export interface UserSurfacesReport {
+  checkedAt: string
+  source: SurfaceSource | null
+  /** When recording began: the oldest first sighting in the table; null while it is empty. */
+  recordedSince: string | null
+  /** One per account and surface, the latest first. */
+  rows: UserSurfaceRow[]
+  /** Distinct accounts among `rows`. */
+  people: number
+  /** Rows matching the filter in all; `rows` holds the newest of them. */
+  total: number
+  truncated: boolean
+}
+
 export interface SiteAnalyticsReport {
   days: SiteAnalyticsDays
   setup: SetupView
