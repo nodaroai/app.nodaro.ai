@@ -9,7 +9,7 @@ import { describe, it, expect, afterEach } from "vitest"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import { runtimeApiUrl, runtimeDefaultLocale, runtimeMediaOrigin, runtimeSupabaseAnonKey, runtimeSupabaseUrl, runtimeUploadModerationEnabled, runtimePreviewStopRule } from "../runtime-config"
+import { runtimeApiUrl, runtimeDefaultLocale, runtimeFlowUiOrigin, runtimeIsOnFlowUiHost, runtimeIsOnMovedHost, runtimeLegacyUiHosts, runtimeLinkOrigin, runtimeMediaOrigin, runtimeSupabaseAnonKey, runtimeSupabaseUrl, runtimeUploadModerationEnabled, runtimePreviewStopRule } from "../runtime-config"
 
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")
 
@@ -173,5 +173,62 @@ describe("runtimeMediaOrigin (a white-label deployment's media host)", () => {
   it("is no value when the key is not a string at all", () => {
     window.__NODARO_RUNTIME__ = { mediaOrigin: 7 as unknown as string }
     expect(runtimeMediaOrigin()).toBeUndefined()
+  })
+})
+
+/**
+ * A deployment that moved its pages to a host of their own: browser calls from
+ * that host stay same-origin (it is the same service), the developer-facing
+ * link origin is separate, and on every other deployment nothing changes.
+ */
+describe("runtimeFlowUiOrigin / runtimeIsOnFlowUiHost / runtimeLinkOrigin", () => {
+  afterEach(() => { delete window.__NODARO_RUNTIME__ })
+  const FLOW = "https://flow.example.test"
+  const APP = "https://app.example.test"
+  const ON = { apiUrl: APP, flowUiOrigin: FLOW, legacyUiHosts: ["app.example.test"], linkOrigin: APP }
+
+  it("unset: no Flow origin, no link origin, runtimeApiUrl unchanged", () => {
+    window.__NODARO_RUNTIME__ = { apiUrl: APP }
+    expect(runtimeFlowUiOrigin()).toBe("")
+    expect(runtimeLinkOrigin()).toBe("")
+    expect(runtimeIsOnFlowUiHost(FLOW)).toBe(false)
+    expect(runtimeApiUrl(FLOW)).toBe(APP)
+  })
+
+  it("on the Flow host the API is same-origin; on the kept host it stays the kept host", () => {
+    window.__NODARO_RUNTIME__ = ON
+    expect(runtimeFlowUiOrigin()).toBe(FLOW)
+    expect(runtimeLinkOrigin()).toBe(APP)
+    expect(runtimeLegacyUiHosts()).toEqual(["app.example.test"])
+    expect(runtimeIsOnFlowUiHost(FLOW)).toBe(true)
+    expect(runtimeApiUrl(FLOW)).toBe("")
+    expect(runtimeApiUrl(APP)).toBe(APP)
+  })
+
+  it("the move is on only as the proxy reads it: all three keys, a legacy host that is not the Flow host, a kept origin that is not the Flow origin", () => {
+    for (const runtime of [
+      { ...ON, legacyUiHosts: undefined },
+      { ...ON, legacyUiHosts: ["flow.example.test"] },
+      { ...ON, linkOrigin: undefined },
+      { ...ON, linkOrigin: FLOW },
+      { ...ON, linkOrigin: `${APP}/` },
+      { ...ON, flowUiOrigin: "http://flow.example.test" },
+    ]) {
+      window.__NODARO_RUNTIME__ = runtime
+      expect(runtimeFlowUiOrigin(), JSON.stringify(runtime)).toBe("")
+      expect(runtimeLinkOrigin(), JSON.stringify(runtime)).toBe("")
+      expect(runtimeLegacyUiHosts(), JSON.stringify(runtime)).toEqual([])
+      expect(runtimeIsOnFlowUiHost(FLOW), JSON.stringify(runtime)).toBe(false)
+      expect(runtimeApiUrl(FLOW), JSON.stringify(runtime)).toBe(APP)
+    }
+  })
+
+  it("runtimeIsOnMovedHost: the Flow host and the named legacy hosts, never any other host the service answers on", () => {
+    window.__NODARO_RUNTIME__ = ON
+    expect(runtimeIsOnMovedHost(FLOW)).toBe(true)
+    expect(runtimeIsOnMovedHost(APP)).toBe(true)
+    expect(runtimeIsOnMovedHost("https://sai.example.test")).toBe(false)
+    delete window.__NODARO_RUNTIME__
+    expect(runtimeIsOnMovedHost(FLOW)).toBe(false)
   })
 })

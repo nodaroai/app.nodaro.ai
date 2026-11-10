@@ -9,6 +9,40 @@ import { readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 
 const pick = (v) => (typeof v === "string" && v.trim() ? v.trim() : undefined)
+/**
+ * An https origin read exactly as frontend/Caddyfile's page-homes block reads
+ * one (tools/gen-route-homes.mjs): the whole value, a trailing slash allowed
+ * and dropped, no path, no port, no spaces around it. Else undefined.
+ */
+function proxyOrigin(value) {
+  const match = typeof value === "string" ? /^(https:\/\/[a-z0-9.-]+)\/?$/.exec(value) : null
+  return match ? match[1] : undefined
+}
+
+/** LEGACY_UI_HOSTS by the proxy's one rule: ASCII letter case ignored, commas are spaces, runs of spaces separate. */
+function legacyHostList(value) {
+  const lower = (typeof value === "string" ? value : "").replace(/[A-Z]/g, (letter) => letter.toLowerCase())
+  return lower.replace(/,/g, " ").split(" ").filter((host) => host !== "")
+}
+
+/**
+ * The moved-pages keys: all three exactly when the proxy's half is on (a Flow
+ * origin, a legacy host that is not the Flow host) and PUBLIC_URL gives a kept
+ * origin that is not the Flow origin; else none. The browser then never acts
+ * where the proxy does not, and no public link it writes can name the Flow
+ * host. `problem` says why a move that is asked for stays off: the server
+ * refuses to start in that state too (backend/src/lib/moved-pages-settings.ts).
+ */
+export function movedPages(env) {
+  const flow = proxyOrigin(env.RUNTIME_FLOW_UI_ORIGIN)
+  const hosts = legacyHostList(env.RUNTIME_LEGACY_UI_HOSTS)
+  if (!flow || !hosts.some((host) => `https://${host}` !== flow)) return { keys: {} }
+  const link = proxyOrigin(env.RUNTIME_LINK_ORIGIN)
+  if (!link || link === flow) {
+    return { keys: {}, problem: "PUBLIC_URL is not an https origin other than FLOW_UI_ORIGIN's, so the browser leaves the app's pages where they are" }
+  }
+  return { keys: { flowUiOrigin: flow, legacyUiHosts: hosts, linkOrigin: link } }
+}
 
 /**
  * The surface block is a VERBATIM pass-through (SAI-3 / H10). RUNTIME_SURFACE_PROFILE
@@ -58,6 +92,12 @@ export function buildRuntimeConfig(env) {
     // --media-origin): the https origin of the deployment's media host on a
     // white-label surface, "" everywhere else, so no other /config.js changes.
     mediaOrigin: pick(env.RUNTIME_MEDIA_ORIGIN),
+    // A deployment that moved its pages to their own host (FLOW_UI_ORIGIN with
+    // LEGACY_UI_HOSTS): the page's own calls go same-origin on that host, a
+    // navigation on a legacy host goes to its page's home, and the addresses
+    // developers are handed keep naming linkOrigin, PUBLIC_URL. Absent on every
+    // other deployment, so nothing changes there.
+    ...movedPages(env).keys,
   }
   for (const k of Object.keys(cfg)) if (cfg[k] === undefined) delete cfg[k]
   return cfg
@@ -290,5 +330,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const cfg = buildRuntimeConfig(process.env)
   process.stdout.write("window.__NODARO_RUNTIME__=" + JSON.stringify(cfg) + ";\n")
   console.error("[start.sh] frontend runtime config:", Object.keys(cfg).join(",") || "(none — build-time values)")
+  const { problem } = movedPages(process.env)
+  if (problem) console.error(`[start.sh] moving the app's pages: ${problem}`)
   writeBrandHead(indexHtmlPath(process.argv.slice(2)), cfg.surface?.brand)
 }

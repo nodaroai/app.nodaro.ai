@@ -1499,6 +1499,11 @@ apps read the same key through the contract. With any other header, or an
 unchanged. There is nothing to set: it follows `R2_PUBLIC_URL` at the next
 restart.
 
+On a deployment that moved its pages to a host of their own, `/config.js` also
+carries `flowUiOrigin`, `legacyUiHosts` and `linkOrigin` (see
+[Moving the app's pages to their own host](#moving-the-apps-pages-to-their-own-host)):
+all three or none, and everywhere else none.
+
 Example (a single-sign-on deployment with its own header, three worlds and
 no link imports):
 
@@ -2237,6 +2242,22 @@ FLOW_UI_ORIGIN=https://flow.example.com
   it was. Changing one
   needs a restart, never a rebuild.
 - Other host names the service answers on are never affected.
+- Pages on the new host call the API same-origin, as they did before: the same
+  service answers under both names. On the new host and on the hosts in
+  `LEGACY_UI_HOSTS`, the addresses people are handed name `PUBLIC_URL`, never
+  the new host: published apps, embeds, shared presentations, webhook URLs and
+  the API examples on the settings page. On any other host name they name that
+  host, as before.
+- `/config.js` tells the page the hosts (`flowUiOrigin`, `legacyUiHosts`,
+  `linkOrigin`), read exactly as the proxy reads them (a trailing slash
+  dropped, the host list split by the same rule), and all three only when the
+  move is on: a valid `FLOW_UI_ORIGIN`, a host in `LEGACY_UI_HOSTS` that is not
+  the new host, and a `PUBLIC_URL` that is another https origin. Otherwise
+  none, and the start log says why. The browser then moves the same
+  navigations the proxy would, from the same list and matching paths the same
+  way, on the same hosts, never a framed page or a pop-up window. Should the
+  two ever disagree, a tab that is sent to the same address twice within ten
+  seconds stays where it is instead of going back and forth.
 
 ## Managed Supabase through the studio origin
 

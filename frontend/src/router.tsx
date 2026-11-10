@@ -5,6 +5,7 @@ import { hasAdmin, hasCredits, isCloud, isMultiUser, hasOrganizations } from "@/
 import { surfaceNavHidden, surfaceBillingSelfServe } from "@/lib/surface-selectors"
 import { accessibilityStatementShown } from "@/lib/accessibility-statement"
 import { registerAppRoutes } from "@/lib/sign-in-redirect"
+import { installPageHomeGuard } from "@/lib/page-homes"
 
 // Error handling
 import RouteErrorBoundary from "@/components/route-error-boundary"
@@ -567,3 +568,7 @@ export const router = createBrowserRouter([
 // belongs to another product served beside the app, and gets a full page load
 // (lib/sign-in-redirect.ts).
 registerAppRoutes(router.routes)
+
+// On a deployment that moved its pages to a host of their own, a navigation the
+// proxy never sees (a sign-in landing on a moved page) goes to that page's host.
+installPageHomeGuard(router)

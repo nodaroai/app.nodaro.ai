@@ -64,6 +64,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { Label } from "@/components/ui/label"
 import { APP_CATEGORIES, OUTPUT_TYPES, CATEGORY_COLORS, categoryLabel, getCategoryLabelKey, outputTypeLabel } from "@/lib/app-categories"
 import { useT } from "@/lib/i18n"
+import { embedPageUrl, publishedAppUrl } from "@/lib/public-links"
 
 import {
   useAppBrowseInfinite,
@@ -221,12 +222,12 @@ export default function AppsPage() {
   })
 
   const handleCopyUrl = useCallback((slug: string) => {
-    navigator.clipboard.writeText(`${window.location.origin}/app/${slug}`)
+    navigator.clipboard.writeText(publishedAppUrl(slug))
     toast.success(t("apps.urlCopied"))
   }, [t])
 
   const handleCopyEmbed = useCallback((slug: string) => {
-    const embedCode = `<iframe src="${window.location.origin}/embed/${slug}" width="100%" height="600" frameborder="0" allow="clipboard-write"></iframe>`
+    const embedCode = `<iframe src="${embedPageUrl(slug)}" width="100%" height="600" frameborder="0" allow="clipboard-write"></iframe>`
     navigator.clipboard.writeText(embedCode)
     toast.success(t("apps.embedCodeCopied"))
   }, [t])

@@ -19,6 +19,7 @@ import { AccountRow } from "./account-row"
 import { describeProvider } from "./platform-meta"
 import { TelegramConnectDialog, FieldsConnectDialog } from "./connect-dialogs"
 import { classifySocialConnectMessage } from "./social-connect-message"
+import { publicLinkOrigin } from "@/lib/public-links"
 
 /**
  * One connectable network. Everything about it comes from the registry entry,
@@ -83,7 +84,7 @@ export function PlatformCard({ provider, connections, onConnectionChange }: Plat
       const handler = (e: MessageEvent) => {
         const verdict = classifySocialConnectMessage(e, {
           popup,
-          expectedOrigin: window.location.origin,
+          expectedOrigin: publicLinkOrigin(),
           platform: provider.id,
         })
         if (verdict.kind === "ignore") return

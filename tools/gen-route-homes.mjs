@@ -31,9 +31,6 @@ export const HOMES_PATH = join(repoRoot, "frontend/src/route-homes.json")
 const BEGIN = "\t# BEGIN GENERATED: page homes (tools/gen-route-homes.mjs from frontend/src/route-homes.json)"
 const END = "\t# END GENERATED: page homes"
 
-/** The file types Caddy's `@missing_file` treats as files: never pages, never moved. */
-export const FILE_TYPES = ["js", "mjs", "css", "map", "woff2", "woff", "ttf", "otf", "eot", "png", "jpg", "jpeg", "gif", "svg", "webp", "avif", "ico", "mp4", "webm", "mov", "mp3", "wav", "ogg", "m4a", "wasm"]
-
 export function loadHomes() {
   return JSON.parse(readFileSync(HOMES_PATH, "utf8"))
 }
@@ -84,7 +81,7 @@ export function renderBlock(homes) {
     `\t\texpression \`${MOVE_ON} && ${HOSTS}.exists(h, h != "" && h == {http.request.host}.lowerAscii()) && ${HERE} != ${FLOW} && ${NOT_FRAMED}\``,
     "\t\tmethod GET HEAD",
     `\t\tpath ${caddyPatterns(homes.moved).join(" ")}`,
-    `\t\tnot path ${FILE_TYPES.map((ext) => `*.${ext}`).join(" ")}`,
+    `\t\tnot path ${homes.files.map((ext) => `*.${ext}`).join(" ")}`,
     "\t\tnot file {",
     "\t\t\troot /app/frontend/dist",
     "\t\t}",

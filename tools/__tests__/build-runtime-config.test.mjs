@@ -425,3 +425,65 @@ test("CLI entry: a white-label deployment gets exactly one more key, after every
     'window.__NODARO_RUNTIME__={"apiUrl":"https://app.nodaro.ai","supabaseAnonKey":"public-anon-key","mediaOrigin":"https://media.example.com"};\n',
   )
 })
+
+test("the moved-pages keys exist exactly when the proxy's half is on, all three together", () => {
+  const on = { RUNTIME_FLOW_UI_ORIGIN: "https://flow.example.com", RUNTIME_LEGACY_UI_HOSTS: "app.example.com, next.app.example.com", RUNTIME_LINK_ORIGIN: "https://app.example.com" }
+  const cfg = buildRuntimeConfig(on)
+  assert.equal(cfg.flowUiOrigin, "https://flow.example.com")
+  assert.deepEqual(cfg.legacyUiHosts, ["app.example.com", "next.app.example.com"])
+  assert.equal(cfg.linkOrigin, "https://app.example.com")
+  const none = (env) => {
+    const c = buildRuntimeConfig(env)
+    return !("flowUiOrigin" in c) && !("legacyUiHosts" in c) && !("linkOrigin" in c)
+  }
+  // PUBLIC_URL alone (the usual case), FLOW_UI_ORIGIN alone, or hosts alone: nothing.
+  assert.ok(none({ RUNTIME_LINK_ORIGIN: "https://app.example.com" }))
+  assert.ok(none({ RUNTIME_FLOW_UI_ORIGIN: "https://flow.example.com", RUNTIME_LINK_ORIGIN: "https://app.example.com" }))
+  assert.ok(none({ RUNTIME_LEGACY_UI_HOSTS: "app.example.com" }))
+  // What the Caddy block refuses, the browser never acts on either.
+  assert.ok(none({ ...on, RUNTIME_FLOW_UI_ORIGIN: "http://flow.example.com" }))
+  assert.ok(none({ ...on, RUNTIME_FLOW_UI_ORIGIN: " https://flow.example.com" }))
+  assert.ok(none({ ...on, RUNTIME_FLOW_UI_ORIGIN: "https://flow.example.com/x" }))
+  assert.ok(none({ ...on, RUNTIME_LEGACY_UI_HOSTS: "flow.example.com" }))
+  // With no kept origin to name, the move never turns on in the browser: no public link may name the Flow host
+  // (and the server refuses to start in this state: backend/src/lib/moved-pages-settings.ts).
+  assert.ok(none({ ...on, RUNTIME_LINK_ORIGIN: "" }))
+  assert.ok(none({ ...on, RUNTIME_LINK_ORIGIN: "http://app.example.com" }))
+  assert.ok(none({ ...on, RUNTIME_LINK_ORIGIN: "https://app.example.com/v1" }))
+  assert.ok(none({ ...on, RUNTIME_LINK_ORIGIN: "https://flow.example.com/" }))
+  assert.deepEqual(Object.keys(buildRuntimeConfig({})), [])
+})
+
+test("both origins are read as the proxy reads them: a trailing slash is allowed and dropped", () => {
+  const cfg = buildRuntimeConfig({ RUNTIME_FLOW_UI_ORIGIN: "https://flow.example.com/", RUNTIME_LEGACY_UI_HOSTS: "app.example.com", RUNTIME_LINK_ORIGIN: "https://app.example.com/" })
+  assert.equal(cfg.flowUiOrigin, "https://flow.example.com")
+  assert.equal(cfg.linkOrigin, "https://app.example.com")
+})
+
+test("the host list is split by the proxy's one rule: commas are spaces, runs of spaces separate, letter case is ignored", () => {
+  const cfg = buildRuntimeConfig({ RUNTIME_FLOW_UI_ORIGIN: "https://flow.example.com", RUNTIME_LEGACY_UI_HOSTS: " App.Example.com,,Next.app.example.com  flow.example.com ", RUNTIME_LINK_ORIGIN: "https://app.example.com" })
+  assert.deepEqual(cfg.legacyUiHosts, ["app.example.com", "next.app.example.com", "flow.example.com"])
+})
+
+test("CLI entry: a move it cannot turn on says why, on stderr, and writes the rest of /config.js", () => {
+  const res = spawnSync(process.execPath, [ENTRY], {
+    encoding: "utf8",
+    env: { ...NODARO_DEPLOYMENT_ENV, RUNTIME_FLOW_UI_ORIGIN: "https://flow.example.com", RUNTIME_LEGACY_UI_HOSTS: "app.nodaro.ai", RUNTIME_LINK_ORIGIN: "http://localhost:3000" },
+  })
+  assert.equal(res.status, 0)
+  assert.equal(res.stdout, NODARO_CONFIG_JS)
+  assert.match(res.stderr, /PUBLIC_URL/)
+})
+
+test("start.sh names the settings the moved-pages keys come from", () => {
+  const dockerfile = readFileSync(resolve(dirname(ENTRY), "..", "Dockerfile"), "utf8")
+  const writerCall = dockerfile.slice(dockerfile.indexOf("RUNTIME_API_URL=\"$RUNTIME_API_URL_EFFECTIVE\""))
+  const line = writerCall.slice(0, writerCall.indexOf("build-runtime-config.mjs"))
+  assert.match(line, /RUNTIME_FLOW_UI_ORIGIN="\$FLOW_UI_ORIGIN"/)
+  assert.match(line, /RUNTIME_LEGACY_UI_HOSTS="\$LEGACY_UI_HOSTS"/)
+  assert.match(line, /RUNTIME_LINK_ORIGIN="\$PUBLIC_URL"/)
+})
+
+test("CLI entry: with the move's settings blank, /config.js is byte-identical", () => {
+  assert.equal(configJs({ ...NODARO_DEPLOYMENT_ENV, RUNTIME_FLOW_UI_ORIGIN: "", RUNTIME_LEGACY_UI_HOSTS: "", RUNTIME_LINK_ORIGIN: "https://app.nodaro.ai" }), NODARO_CONFIG_JS)
+})

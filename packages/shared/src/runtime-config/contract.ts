@@ -29,6 +29,9 @@ export const RUNTIME_CONFIG_KEYS = Object.freeze([
   "moderation",
   "previewStopRule",
   "mediaOrigin",
+  "flowUiOrigin",
+  "legacyUiHosts",
+  "linkOrigin",
 ] as const)
 export type RuntimeConfigKey = (typeof RUNTIME_CONFIG_KEYS)[number]
 
@@ -138,6 +141,20 @@ export interface NodaroRuntimeConfig {
    * beyond its own site.
    */
   readonly mediaOrigin?: string
+  /**
+   * The https origin the app's own pages live on, when this deployment moved
+   * them to a host of their own. A page on it calls the API same-origin.
+   * Absent: the deployment has one host.
+   */
+  readonly flowUiOrigin?: string
+  /** The hosts the app's pages moved away from (with `flowUiOrigin`): a navigation on one goes to the page's home. */
+  readonly legacyUiHosts?: readonly string[]
+  /**
+   * The https origin developer-facing links name (published apps, embeds, API
+   * examples) when the app's pages live elsewhere. Absent: the page's own
+   * origin, as ever.
+   */
+  readonly linkOrigin?: string
 }
 
 // ── Rules shared by the platform and its readers ─────────────────────────────
@@ -490,6 +507,12 @@ export function parseRuntimeConfig(raw: unknown): NodaroRuntimeConfig {
   if (isRecord(raw.moderation) && raw.moderation.uploadImage === true) out.moderation = { uploadImage: true }
   if (raw.previewStopRule === true) out.previewStopRule = true
   if (isHttpsOrigin(raw.mediaOrigin)) out.mediaOrigin = raw.mediaOrigin
+  if (isHttpsOrigin(raw.flowUiOrigin)) out.flowUiOrigin = raw.flowUiOrigin
+  if (Array.isArray(raw.legacyUiHosts)) {
+    const hosts = raw.legacyUiHosts.filter(isLegacyUiHost)
+    if (hosts.length > 0) out.legacyUiHosts = hosts
+  }
+  if (isHttpsOrigin(raw.linkOrigin)) out.linkOrigin = raw.linkOrigin
   return out
 }
 

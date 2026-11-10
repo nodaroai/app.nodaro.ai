@@ -65,8 +65,73 @@ const pick = (override: string | undefined, baked: string | undefined): string =
  * The sentinel's rule is the shared contract's, so every product reading this
  * file resolves it the same way and none falls back to an absolute URL.
  */
-export function runtimeApiUrl(): string {
+export function runtimeApiUrl(currentOrigin: string = pageOrigin()): string {
+  // On the app's own host (the deployment moved its pages to one) the API is
+  // this same service under this same origin: every browser call stays here.
+  if (runtimeIsOnFlowUiHost(currentOrigin)) return ""
   return resolveRuntimeApiBase({ apiUrl: pick(runtime().apiUrl, import.meta.env.VITE_API_URL as string | undefined) }) ?? ""
+}
+
+function pageOrigin(): string {
+  return typeof window !== "undefined" ? window.location.origin : ""
+}
+
+/**
+ * A deployment that moved its pages to a host of their own, as /config.js
+ * describes it, or null. On exactly when the proxy's half is on
+ * (tools/gen-route-homes.mjs): a Flow origin, at least one legacy host that is
+ * not the Flow host, and a kept origin (PUBLIC_URL) that is not the Flow
+ * origin. All three or nothing, so the browser never acts where the proxy does
+ * not, and no link it writes can name the Flow host.
+ */
+function movedPages(): { readonly flow: string; readonly hosts: readonly string[]; readonly link: string } | null {
+  const { flowUiOrigin: flow, legacyUiHosts, linkOrigin: link } = runtime()
+  if (!isHttpsOrigin(flow) || !isHttpsOrigin(link) || link === flow || !Array.isArray(legacyUiHosts)) return null
+  const hosts = legacyUiHosts.filter((host): host is string => typeof host === "string" && host !== "")
+  return hosts.some((host) => `https://${host}` !== flow) ? { flow, hosts, link } : null
+}
+
+/**
+ * The https origin the app's own pages live on, when this deployment moved them
+ * to a host of their own (FLOW_UI_ORIGIN), else "".
+ */
+export function runtimeFlowUiOrigin(): string {
+  return movedPages()?.flow ?? ""
+}
+
+/** The hosts the app's pages moved away from, on a deployment that moved them (LEGACY_UI_HOSTS); else none. */
+export function runtimeLegacyUiHosts(): readonly string[] {
+  return movedPages()?.hosts ?? []
+}
+
+/** Whether this page is on the app's own host (only ever true on a deployment that has one). */
+export function runtimeIsOnFlowUiHost(currentOrigin: string = pageOrigin()): boolean {
+  const flow = runtimeFlowUiOrigin()
+  return flow !== "" && currentOrigin === flow
+}
+
+/**
+ * Whether this page is on a host the move names: the Flow host or one of the
+ * legacy hosts. Any other host the service answers on is left as it was.
+ */
+export function runtimeIsOnMovedHost(currentOrigin: string = pageOrigin()): boolean {
+  const moved = movedPages()
+  if (moved === null) return false
+  if (currentOrigin === moved.flow) return true
+  try {
+    return moved.hosts.includes(new URL(currentOrigin).hostname)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The https origin developer-facing links name when the app's pages live on
+ * their own host (PUBLIC_URL, the host the API keeps), else "": the page's own
+ * origin, as ever, for the one-host deployment. See lib/public-links.ts.
+ */
+export function runtimeLinkOrigin(): string {
+  return movedPages()?.link ?? ""
 }
 
 /** The Supabase URL the BROWSER uses (auth + PostgREST). */
