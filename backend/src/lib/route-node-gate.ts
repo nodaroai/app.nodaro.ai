@@ -174,11 +174,16 @@ export const UNGATED_LEGACY_NODE_TYPES: Readonly<Record<string, string>> = Objec
 })
 
 /**
- * The credit-guarded routes the Cloud plugin registers (`tk.http.creditGuard`),
- * read from its source: a plugin route is invisible to this repo's route scan
- * and to a test that boots the app without the plugin, so the list is the
- * record that each one resolves (route-node-gate.test.ts). One the plugin adds
- * later and nobody lists is unclassified: refused under a whitelist, reported.
+ * The routes on which the Cloud plugin runs the credit guard
+ * (`tk.http.creditGuard`), read from its source: the routes it registers, and
+ * the host's own routes whose handler hands the request to a plugin engine
+ * that guards it (3D Render Pro's run and preview admissions). A plugin route
+ * is invisible to this repo's route scan and to a test that boots the app
+ * without the plugin, and a guard a plugin engine runs is invisible to the
+ * boot either way, so the list is the record that each one resolves
+ * (route-node-gate.test.ts) and that its run model is declared plugin-side
+ * (credit-guard-run-model-census.test.ts). One the plugin adds later and
+ * nobody lists is unclassified: refused under a whitelist, reported.
  */
 export const PLUGIN_CREDIT_GUARDED_ROUTES: readonly string[] = Object.freeze([
   "/v1/camera-switch",
@@ -210,6 +215,15 @@ export const PLUGIN_CREDIT_GUARDED_ROUTES: readonly string[] = Object.freeze([
   "/v1/voice-changer-pro/analyze",
   "/v1/voice-changer-pro/export",
   "/v1/voice-changer-pro/translate",
+  // Host routes whose handler hands the request to the plugin's 3D engine,
+  // which runs the guard: the Pro render's run admission
+  // (routes/pro-3d-render.ts) and the advanced lane's preview admission
+  // (routes/3d-scene.ts, generate and edit, each under both paths).
+  "/v1/pro-3d-render",
+  "/v1/3d-scene/generate",
+  "/v1/generate-3d-scene",
+  "/v1/3d-scene/edit",
+  "/v1/edit-3d-scene",
 ])
 
 const EXEMPT_BY_KEY: ReadonlyMap<string, string> = new Map(Object.entries(EXEMPT_ROUTES).map(([r, why]) => [routeKey(r), why]))

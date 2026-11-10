@@ -83,10 +83,12 @@ const REPO_ROOT = join(__dirname, "..", "..", "..")
 /**
  * Routes whose credit guard runs inside a wrapper preHandler or the handler —
  * invisible to the boot, so listed. 3D scene picks the Basic guard or the Pro
- * engine's own admission; Extend Video one of two guards by provider; an entity
- * approval meters its optional caption through `meterOptionalSyncLlm`.
+ * engine's own admission; 3D Render Pro hands every run to that engine's
+ * admission; Extend Video one of two guards by provider; an entity approval
+ * meters its optional caption through `meterOptionalSyncLlm`.
  */
 const INLINE_GUARD_ROUTES = [
+  "POST /v1/pro-3d-render",
   "POST /v1/3d-scene/generate",
   "POST /v1/generate-3d-scene",
   "POST /v1/3d-scene/edit",
