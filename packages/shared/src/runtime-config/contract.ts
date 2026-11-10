@@ -263,6 +263,17 @@ export function surfaceUnitLabel(labels: Readonly<Record<string, string>> | unde
 }
 
 /**
+ * A host the app's pages move away from, on a deployment that moved them to a
+ * host of their own (`LEGACY_UI_HOSTS`, `legacyUiHosts`): a bare host name in
+ * lower case, with no scheme, port, path or space. The one rule for it: the
+ * server refuses to start on an entry that is not one, and a reader of
+ * /config.js drops it.
+ */
+export function isLegacyUiHost(value: unknown): value is string {
+  return typeof value === "string" && /^[a-z0-9.-]+$/.test(value)
+}
+
+/**
  * An https origin, spelled exactly as a browser spells one
  * (`https://media.example.com`, a port only when it is not 443): what
  * `new URL(src).origin` is compared with, so a path, a trailing slash,

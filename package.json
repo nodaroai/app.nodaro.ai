@@ -29,7 +29,8 @@
     "gen": "npm run gen:units && npm run gen:tiles && npm -w backend run gen:skills",
     "changeset": "changeset",
     "version": "changeset version",
-    "release": "npm run build && changeset publish"
+    "release": "npm run build && changeset publish",
+    "gen:route-homes": "node tools/gen-route-homes.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.0",

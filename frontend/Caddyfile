@@ -136,6 +136,56 @@
 		}
 	}
 
+	# BEGIN GENERATED: page homes (tools/gen-route-homes.mjs from frontend/src/route-homes.json)
+	# A page of the app moved to its own host: a top-level visit to a moved page on a
+	# host named in LEGACY_UI_HOSTS answers one redirect to the same path and query on
+	# FLOW_UI_ORIGIN (302 no-store, or 301 with LEGACY_UI_REDIRECT_STATUS=301 and a one-hour
+	# browser-only cache). Only the listed pages move: kept pages (OAuth, sign-in, published
+	# apps), unknown paths, other apps' routes, files and framed loads (Sec-Fetch-Dest
+	# iframe/frame/embed/object: every product's account pop-up) stay. Settings are read per
+	# request; with them unset or malformed (PUBLIC_URL included) the block never answers. See docs/deployment.md.
+	# The two origins, a trailing slash allowed; empty unless the value is an https origin.
+	map {env.FLOW_UI_ORIGIN} {nodaro_flow_origin} {
+		~^(https://[a-z0-9.-]+)/?$ "${1}"
+		default ""
+	}
+	map {env.PUBLIC_URL} {nodaro_kept_origin} {
+		~^(https://[a-z0-9.-]+)/?$ "${1}"
+		default ""
+	}
+	@legacy_ui_permanent expression `{env.LEGACY_UI_REDIRECT_STATUS} == "301"`
+	@legacy_ui_temporary expression `{env.LEGACY_UI_REDIRECT_STATUS} != "301"`
+	@legacy_ui_page {
+		expression `{nodaro_flow_origin} != "" && {nodaro_kept_origin} != "" && {nodaro_kept_origin} != {nodaro_flow_origin} && {env.LEGACY_UI_HOSTS}.lowerAscii().replace(",", " ").split(" ").exists(h, h != "" && "https://" + h != {nodaro_flow_origin}) && {env.LEGACY_UI_HOSTS}.lowerAscii().replace(",", " ").split(" ").exists(h, h != "" && h == {http.request.host}.lowerAscii()) && "https://" + {http.request.host}.lowerAscii() != {nodaro_flow_origin} && !({http.request.header.Sec-Fetch-Dest} in ["iframe", "frame", "embed", "object"])`
+		method GET HEAD
+		path / /projects /projects/ /projects/* /editor/* /Pipeline /Pipeline/ /Pipeline/* /video-director /video-director/ /billing /billing/ /billing-admin /billing-admin/ /settings /settings/ /settings/* /executions /executions/ /usage /usage/ /archived-runs /archived-runs/ /shared /shared/ /my-files /my-files/ /library /library/ /library/* /inspiration /inspiration/ /collections /collections/ /collections/* /competitors /competitors/ /integrations /integrations/ /apps /apps/ /apps/* /templates /templates/ /gallery /gallery/ /_gallery /_gallery/ /pricing /pricing/ /_pricing /_pricing/ /tutorials/* /accessibility /accessibility/ /copyright-complaints /copyright-complaints/ /admin /admin/ /admin/* /explore /explore/ /join /join/ /join/* /org/* /w/* /mcp /mcp/ /setup /setup/
+		not path *.js *.mjs *.css *.map *.woff2 *.woff *.ttf *.otf *.eot *.png *.jpg *.jpeg *.gif *.svg *.webp *.avif *.ico *.mp4 *.webm *.mov *.mp3 *.wav *.ogg *.m4a *.wasm
+		not file {
+			root /app/frontend/dist
+		}
+	}
+	handle @legacy_ui_page {
+		header @legacy_ui_permanent Cache-Control "private, max-age=3600"
+		header @legacy_ui_temporary Cache-Control "no-store"
+		header Vary "Sec-Fetch-Dest"
+		redir @legacy_ui_permanent {nodaro_flow_origin}{uri} 301
+		redir @legacy_ui_temporary {nodaro_flow_origin}{uri} 302
+	}
+	# On the Flow host, the public pages whose one home is the kept host go back to it.
+	@flow_host_public_page {
+		expression `{nodaro_flow_origin} != "" && {nodaro_kept_origin} != "" && {nodaro_kept_origin} != {nodaro_flow_origin} && {env.LEGACY_UI_HOSTS}.lowerAscii().replace(",", " ").split(" ").exists(h, h != "" && "https://" + h != {nodaro_flow_origin}) && "https://" + {http.request.host}.lowerAscii() == {nodaro_flow_origin} && !({http.request.header.Sec-Fetch-Dest} in ["iframe", "frame", "embed", "object"])`
+		method GET HEAD
+		path /app/* /embed/* /present/*
+	}
+	handle @flow_host_public_page {
+		header @legacy_ui_permanent Cache-Control "private, max-age=3600"
+		header @legacy_ui_temporary Cache-Control "no-store"
+		header Vary "Sec-Fetch-Dest"
+		redir @legacy_ui_permanent {nodaro_kept_origin}{uri} 301
+		redir @legacy_ui_temporary {nodaro_kept_origin}{uri} 302
+	}
+	# END GENERATED: page homes
+
 	# Self-host media path: proxies the bundled MinIO so ONE origin serves both
 	# the app and stored media. R2_PUBLIC_URL=http://localhost:3000/storage/<bucket>
 	# works from the browser AND from server-side fetches inside this container

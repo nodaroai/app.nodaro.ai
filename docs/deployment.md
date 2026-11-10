@@ -128,6 +128,9 @@ here for each one anyway.
 | `PUBLIC_URL` | `http://localhost:3000` | The install's public origin: OAuth callbacks, media URLs, CORS. On Cloud it also names the environment in the [template seeder claim](#template-seeder-claim-cloud) |
 | `PUBLIC_URL_SAME_ORIGIN` | `""` (unset = `apiUrl` is `PUBLIC_URL`) | Set to `true` when the service answers on more than one hostname and the API shares the origin of the app (the default single-container layout, where the bundled proxy fronts both the SPA and `/v1`). `/config.js` then carries `apiUrl: "/"` instead of `PUBLIC_URL`, so the browser's SSE streams stay on whichever hostname the visitor is actually on rather than being pinned to the one `PUBLIC_URL` names. Leave unset for a genuine split origin — an API served from a different host than the app. Only the exact value `true` enables it. Restart to apply |
 | `ROBOTS_NOINDEX` | `""` (unset = search engines follow the app's own route allow-list) | Set to `true` on a deployment search engines must never index, such as a staging environment: every response then carries `X-Robots-Tag: noindex`, whatever serves it. Only the exact value `true` enables it. Restart to apply |
+| `LEGACY_UI_HOSTS` | `""` (unset = no host redirects) | With `FLOW_UI_ORIGIN`, moves the app's pages to their own host: see [Moving the app's pages to their own host](#moving-the-apps-pages-to-their-own-host). Bare host names (separated by commas or spaces, any letter case; no scheme, port, path, tab or line break) on which a top-level visit to a moved page is redirected. Set both, or neither: either one alone, a list naming only the new host, or an entry that is not a bare host name, and the server refuses to start. Restart to apply |
+| `FLOW_UI_ORIGIN` | `""` (unset = the feature is off) | The https origin the moved pages live on, e.g. `https://flow.example.com` (a trailing slash is allowed, no path): see [Moving the app's pages to their own host](#moving-the-apps-pages-to-their-own-host). Set it with `LEGACY_UI_HOSTS`, or not at all. Set alone, to anything but an https origin, or with `PUBLIC_URL` not another https origin, the server refuses to start |
+| `LEGACY_UI_REDIRECT_STATUS` | `302` | `302` (never cached) or `301` (cached by the browser only, for an hour). Any other value is `302` |
 | `CORS_ORIGIN` | `""` | Extra allowed browser origins, comma-separated (PUBLIC_URL is always allowed). These are also the hosts the SSO landing redirect is emitted **relative** on — same-origin by construction — where a request arriving on any other host gets the absolute `PUBLIC_URL` form |
 | `RESEND_API_KEY` | `""` | Cloud, organizations: API key for sending invitation emails through Resend. Unset = invitations are not emailed; the API returns a copy-and-paste link instead |
 | `EMAIL_FROM` | `""` | Cloud, organizations: the From address for invitation emails (a verified sender on the Resend account) |
@@ -2180,6 +2183,51 @@ working — a confusing state worth ruling out first.
 Direct-lane keys are unaffected: set `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`
 and those models leave KIE entirely, proxy or no proxy (see "Gemini
 routing").
+
+## Moving the app's pages to their own host
+
+A deployment can answer on a second host name (the same service, its own
+domain) and send visits to the app's pages there, while the original host
+keeps the API, OAuth, published apps, embeds and shared pages. Two settings
+turn it on, with `PUBLIC_URL` the kept host's https origin:
+
+```
+LEGACY_UI_HOSTS=app.example.com
+FLOW_UI_ORIGIN=https://flow.example.com
+```
+
+- On a host named in `LEGACY_UI_HOSTS` (separated by commas or spaces, any
+  letter case), a top-level `GET` or `HEAD` of a moved page answers one
+  redirect to the same path and query on `FLOW_UI_ORIGIN`: `302` with
+  `no-store` (the default), or `301` with a one-hour browser-only cache
+  (`private, max-age=3600`) when `LEGACY_UI_REDIRECT_STATUS=301`.
+- Only the pages listed as moved in `frontend/src/route-homes.json` move: an
+  exact page with or without its trailing slash, a section with everything
+  under it. Everything else stays where it was asked: the API, OAuth and
+  sign-in, published apps, embeds, shared presentations, every file, unknown
+  paths and the routes of other apps served on the host. Paths are matched as
+  the proxy matches them: letter case ignored, `//` merged, `%2F` decoded.
+  `npm run gen:route-homes` writes the proxy matcher from that list.
+- A framed load (`Sec-Fetch-Dest` of `iframe`, `frame`, `embed` or `object`) is
+  never redirected, so account pages framed by another product keep working.
+- On the new host, a top-level visit to `/app/*`, `/embed/*` or `/present/*` is
+  sent back to the origin of `PUBLIC_URL` (the kept host), so each public page
+  has one home.
+- `FLOW_UI_ORIGIN` and `PUBLIC_URL` are https origins; a trailing slash is
+  allowed. The server refuses to start, naming the setting, on any partial
+  set: `FLOW_UI_ORIGIN` without a host in `LEGACY_UI_HOSTS` other than the new
+  one, `LEGACY_UI_HOSTS` without `FLOW_UI_ORIGIN`, a `LEGACY_UI_HOSTS` entry
+  that is not a bare host name, a `FLOW_UI_ORIGIN` that is not an https
+  origin, or a `PUBLIC_URL` that does not give the kept host's https origin.
+  The image's start script runs the same check before it starts anything, so
+  the proxy never serves a move the server refuses.
+- The move is on only with all three usable: `FLOW_UI_ORIGIN`, a host in
+  `LEGACY_UI_HOSTS` that is not the new host, and a `PUBLIC_URL` that is
+  another https origin. The proxy reads every setting per request, so no
+  value can stop it from starting; a value it cannot use leaves the site as
+  it was. Changing one
+  needs a restart, never a rebuild.
+- Other host names the service answers on are never affected.
 
 ## Managed Supabase through the studio origin
 
