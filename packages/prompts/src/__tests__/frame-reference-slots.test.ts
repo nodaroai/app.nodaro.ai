@@ -30,6 +30,22 @@ describe("placeFramesAfterReferences", () => {
     )
   })
 
+  it("writes plain `image N` sentences that say what each image is", () => {
+    const start = placeFramesAfterReferences({ firstFrameUrl: "F", refImageUrls: R(2), imageCap: 6, syntax: "image N", bindIdentities: true })
+    expect(start.promptSuffix).toBe(
+      "image 3 is the opening (first) frame of the video. image 1 and image 2 are references for the subject; they are not frames.",
+    )
+    const both = placeFramesAfterReferences({ firstFrameUrl: "F", lastFrameUrl: "L", refImageUrls: R(3), imageCap: 6, syntax: "image N", bindIdentities: true })
+    expect(both.promptSuffix).toBe(
+      "image 4 is the opening (first) frame and image 5 is the closing (last) frame of the video. image 1, image 2 and image 3 are references for the subject; they are not frames.",
+    )
+    const one = placeFramesAfterReferences({ lastFrameUrl: "L", refImageUrls: R(1), imageCap: 6, syntax: "image N", bindIdentities: true })
+    expect(one.promptSuffix).toBe("image 2 is the closing (last) frame of the video. image 1 is a reference for the subject; it is not a frame.")
+    // Never the platform's `@image_N` duplicate check: a prompt carrying it is not this syntax's binding.
+    const prompted = placeFramesAfterReferences({ prompt: "use @image_2 as the first frame", firstFrameUrl: "F", refImageUrls: R(1), imageCap: 6, syntax: "image N" })
+    expect(prompted.promptSuffix).toBe("image 2 is the opening (first) frame of the video.")
+  })
+
   it("skips the opening sentence when the prompt already binds it (@image_N form)", () => {
     const r = placeFramesAfterReferences({ prompt: "use @image_2 as the first frame", firstFrameUrl: "F", refImageUrls: R(1), imageCap: 9 })
     expect(r.promptSuffix).toBe("")

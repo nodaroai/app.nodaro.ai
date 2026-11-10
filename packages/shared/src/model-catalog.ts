@@ -312,8 +312,11 @@ export interface ModelCatalogEntry {
    * Declared only where the provider documents its own form: Grok Imagine's
    * `@image(n)` (docs.kie.ai/market/grok-imagine/image-to-video) and
    * HappyHorse's `[Image N]` (docs.kie.ai/market/happyhorse-1-1/reference-to-video).
+   * Gemini Omni Flash 1.2 documents none and takes plain `image N`: with
+   * `@image_N` sentences a start frame beside references opened on a reference
+   * in a staging run; with plain words it opened on the frame.
    */
-  referenceSyntax?: "@image(n)" | "[Image N]"
+  referenceSyntax?: "@image(n)" | "[Image N]" | "image N"
   aspectRatios?: readonly string[]
   /**
    * The model lists "auto", but its own auto does not keep the photo's shape
@@ -1958,6 +1961,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Google Gemini Omni Flash 1.2 — 3–15s video with native sound, from 360p to 4K: from text, up to 6 reference images, exact first and last frames, or a video edit. Priced per second.",
     useCases: ["cinematic", "fast"],
     features: ["audio", "reference-image", "reference-to-video", "end-frame"],
+    referenceSyntax: "image N",
     aspectRatios: ["16:9", "9:16", "auto"],
     resolutions: ["360p", "720p", "1080p", "4k"],
     defaultResolution: "720p",

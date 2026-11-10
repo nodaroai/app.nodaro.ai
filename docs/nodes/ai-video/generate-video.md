@@ -331,7 +331,7 @@ The mode comes from what you wire:
 | Reference images only | Up to 6 images steer the subject, scene or style. Refer to them as `@image_1`, `@image_2`, … |
 | Start frame only | The clip opens exactly on that image. 3–15 s. |
 | Start and end frames only | The clip runs exactly between them. 3–10 s. |
-| Frames and reference images | Your references come first; the frames follow them in the same list and are named in the prompt as the opening and closing frame. 3–15 s. |
+| Frames and reference images | Your references come first; the frames follow them in the same list. The prompt then names each image in plain words, for example "image 3 is the opening (first) frame of the video. image 1 and image 2 are references for the subject; they are not frames." 3–15 s. |
 | A start and end frame at more than 10 s, or an end frame alone | The frames go in that same list, named in the prompt. |
 | Source video | Video-edit: describe the change. Up to 5 reference images can ride along, and any frames you wire count toward those 5. |
 

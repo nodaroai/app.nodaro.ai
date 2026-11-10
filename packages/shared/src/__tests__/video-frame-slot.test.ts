@@ -75,6 +75,11 @@ describe("videoProviderReferenceSyntax", () => {
     expect(videoProviderReferenceSyntax("happyhorse-ref2v")).toBe("[Image N]")
   })
 
+  it("names Gemini Omni Flash 1.2's images in plain words", () => {
+    expect(videoProviderReferenceSyntax("gemini-omni-flash-1-2")).toBe("image N")
+    expect(videoProviderReferenceSyntax("gemini-omni-flash")).toBe("@image_N")
+  })
+
   it("is declared only on reference-capable video models", () => {
     for (const m of Object.values(MODEL_CATALOG)) {
       if (!m.referenceSyntax) continue

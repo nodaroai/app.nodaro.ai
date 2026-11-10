@@ -19,6 +19,7 @@
 import { dirname } from "node:path"
 import sharp from "sharp"
 import { placeFramesAfterReferences } from "@nodaro/prompts/assembly"
+import { videoProviderReferenceSyntax } from "@nodaro/shared/models"
 import { resolveFrameFitAspect } from "@nodaro/shared/video"
 import { fetchOwnMedia } from "../../lib/fetch-own-media.js"
 import { uploadJobScratchFile } from "../../lib/job-scratch.js"
@@ -28,6 +29,8 @@ import { trimVideo } from "../video/trim-video.js"
 import { createSanitizedError } from "./client.js"
 import { atInputStep, urlForLog } from "./input-label.js"
 
+/** Our id for this model: its catalog entry says how the prompt names images. */
+const MODEL_KEY = "gemini-omni-flash-1-2"
 /** Most images in `image_urls`. */
 const MAX_IMAGES = 6
 /** images + {@link VIDEO_QUOTA_UNITS} for a source video must stay within this. */
@@ -135,6 +138,7 @@ export function buildGeminiOmni12Request(args: GeminiOmni12RequestArgs): GeminiO
     lastFrameUrl: endFrameUrl,
     refImageUrls: refs,
     imageCap: Math.min(MAX_IMAGES, INPUT_QUOTA - (sourceVideoUrl ? VIDEO_QUOTA_UNITS : 0)),
+    syntax: videoProviderReferenceSyntax(MODEL_KEY),
     bindIdentities: true,
   })
   return {

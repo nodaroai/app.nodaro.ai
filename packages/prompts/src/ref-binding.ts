@@ -48,24 +48,60 @@ export const REF_BINDING = {
     `Use @image_${n} as the ${role} (${role === "opening" ? "first" : "last"}) frame of the video.`,
 } as const
 
-/** A binding sentence's ordinal + frame directive in one provider syntax. */
+/** How a video provider addresses its images in the prompt, by array order
+ *  (`VideoReferenceSyntax` in @nodaro/shared). */
+export type ImageReferenceSyntax = "@image_N" | "@image(n)" | "[Image N]" | "image N"
+
+/** The binding sentences — frames and identity references — in one provider syntax. */
 export interface ImageBinding {
   ordinal: (n: number) => string
+  /** One frame: the opening or the closing one. */
   frame: (n: number, role: "opening" | "closing") => string
+  /** A start and an end frame together. */
+  frames: (first: number, last: number) => string
+  /** Seats `first`..`last` are references, not frames. */
+  identities: (first: number, last: number) => string
+}
+
+const roleWords = (role: "opening" | "closing") => `${role} (${role === "opening" ? "first" : "last"})`
+
+/** "image 1", "image 1 and image 2", "image 1, image 2 and image 3". */
+function plainList(first: number, last: number): string {
+  const names = Array.from({ length: last - first + 1 }, (_, i) => `image ${first + i}`)
+  return names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
 }
 
 /**
  * The image binding in a provider's OWN reference syntax
  * (`videoProviderReferenceSyntax` in @nodaro/shared). `@image_N` IS
- * {@link REF_BINDING} — the platform swap point, byte for byte; the other two
- * spell the same sentence in the form the provider documents.
+ * {@link REF_BINDING} — the platform swap point, byte for byte; `@image(n)` and
+ * `[Image N]` spell the same sentences in the form the provider documents.
+ *
+ * `image N` (Gemini Omni Flash 1.2) is plain words, each sentence stating what
+ * an image IS: "image 3 is the opening (first) frame of the video. image 1 and
+ * image 2 are references for the subject; they are not frames." That exact
+ * wording put a start frame beside two references on screen as the opening
+ * frame in a staging run, where the `@image_N` sentences opened on a reference.
  */
-export function imageBindingFor(syntax: "@image_N" | "@image(n)" | "[Image N]"): ImageBinding {
-  if (syntax === "@image_N") return { ordinal: REF_BINDING.ordinal, frame: REF_BINDING.frame }
-  const ordinal = syntax === "@image(n)" ? (n: number) => `@image(${n})` : (n: number) => `[Image ${n}]`
+export function imageBindingFor(syntax: ImageReferenceSyntax): ImageBinding {
+  if (syntax === "image N") {
+    return {
+      ordinal: (n) => `image ${n}`,
+      frame: (n, role) => `image ${n} is the ${roleWords(role)} frame of the video.`,
+      frames: (first, last) => `image ${first} is the ${roleWords("opening")} frame and image ${last} is the ${roleWords("closing")} frame of the video.`,
+      identities: (first, last) => first === last
+        ? `image ${first} is a reference for the subject; it is not a frame.`
+        : `${plainList(first, last)} are references for the subject; they are not frames.`,
+    }
+  }
+  const ordinal = syntax === "@image_N"
+    ? REF_BINDING.ordinal
+    : syntax === "@image(n)" ? (n: number) => `@image(${n})` : (n: number) => `[Image ${n}]`
   return {
     ordinal,
-    frame: (n, role) => `Use ${ordinal(n)} as the ${role} (${role === "opening" ? "first" : "last"}) frame of the video.`,
+    frame: syntax === "@image_N" ? REF_BINDING.frame : (n, role) => `Use ${ordinal(n)} as the ${roleWords(role)} frame of the video.`,
+    frames: (first, last) => `Use ${ordinal(first)} as the ${roleWords("opening")} frame and ${ordinal(last)} as the ${roleWords("closing")} frame of the video.`,
+    identities: (first, last) => identityRefsSentence(first, last, ordinal),
   }
 }
 

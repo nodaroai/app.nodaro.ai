@@ -1207,7 +1207,7 @@ export function resolveVideoModeForInputs(
 }
 
 /** The prompt syntax a video provider addresses its images in, by array order. */
-export type VideoReferenceSyntax = "@image_N" | "@image(n)" | "[Image N]"
+export type VideoReferenceSyntax = "@image_N" | "@image(n)" | "[Image N]" | "image N"
 
 /**
  * The syntax this video model's frame / identity binding sentences are written

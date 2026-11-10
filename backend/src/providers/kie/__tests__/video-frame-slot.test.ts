@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { imageBindingFor } from "@nodaro/prompts/assembly"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import {
   IMAGE_TO_VIDEO_PROVIDERS,
@@ -96,8 +97,6 @@ function sent(): { images: string[]; prompt: string } {
   return { images: images ?? [], prompt: String(input.prompt ?? "") }
 }
 
-const ordinalIn = (syntax: string, n: number) =>
-  syntax === "@image(n)" ? `@image(${n})` : syntax === "[Image N]" ? `[Image ${n}]` : `@image_${n}`
 
 const appending = (IMAGE_TO_VIDEO_PROVIDERS as readonly string[]).filter(
   (p) => videoProviderAppendsFrames(p) && !VIDEO_PROVIDERS_WITHOUT_DISPATCH.has(p) && p in KIE_VIDEO_MODELS,
@@ -116,8 +115,7 @@ describe("frames after references, at the wire", () => {
       expect(images.slice(0, 2), `${provider} refs`).toEqual(REFS)
       const seat = images.indexOf(FRAME) + 1
       expect(seat, `${provider} frame seat`).toBe(3)
-      const ordinal = ordinalIn(videoProviderReferenceSyntax(provider), seat)
-      expect(prompt, `${provider} binding`).toContain(`${ordinal} as the opening (first) frame`)
+      expect(prompt, `${provider} binding`).toContain(imageBindingFor(videoProviderReferenceSyntax(provider)).frame(seat, "opening"))
       expect(MODEL_CATALOG[provider]?.features, provider).toContain("reference-image")
     })
   }

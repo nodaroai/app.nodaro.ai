@@ -287,7 +287,10 @@ builds an allow-listed body:
   `last_frame_url`. KIE takes no other image beside them, no lone last frame, and
   first + last holds only up to 10 s. Anything else wired, or a lone end frame, or
   first + last past 10 s: the frames join `image_urls` after the caller's own
-  images (`placeFramesAfterReferences`), named in the prompt.
+  images (`placeFramesAfterReferences`), named in the prompt in plain words
+  (`referenceSyntax: "image N"`: "image 3 is the opening (first) frame of the
+  video. image 1 and image 2 are references for the subject; they are not
+  frames."). The `@image_N` sentences opened on a reference in a staging run.
 - **Video edit:** `video_list` is one plain URL, up to 15 s, and `duration` must
   not be sent; the output follows the clip. KIE has no trim fields, so
   `prepareGeminiOmni12Source` cuts the clip (the node's trim, else its first 15 s)

@@ -1,4 +1,4 @@
-import { identityRefsSentence, imageBindingFor } from "./ref-binding.js"
+import { imageBindingFor, type ImageReferenceSyntax } from "./ref-binding.js"
 
 /**
  * WHERE A START / END FRAME GOES WHEN IT SHARES A MODEL'S REFERENCE LIST — the
@@ -29,7 +29,7 @@ export interface FrameReferenceSlotsArgs {
   /** The provider's image cap — frames and references together. */
   imageCap: number
   /** The provider's reference syntax (`videoProviderReferenceSyntax`). */
-  syntax?: "@image_N" | "@image(n)" | "[Image N]"
+  syntax?: ImageReferenceSyntax
   bindIdentities?: boolean
 }
 
@@ -65,14 +65,14 @@ export function placeFramesAfterReferences(args: FrameReferenceSlotsArgs): Frame
   if (promptBindsStart && firstFrameOrdinal > 0 && lastFrameOrdinal === 0) {
     // The prompt already binds the first frame at its own (working) position.
   } else if (firstFrameOrdinal > 0 && lastFrameOrdinal > 0) {
-    frameSentence = `Use ${binding.ordinal(firstFrameOrdinal)} as the opening (first) frame and ${binding.ordinal(lastFrameOrdinal)} as the closing (last) frame of the video.`
+    frameSentence = binding.frames(firstFrameOrdinal, lastFrameOrdinal)
   } else if (firstFrameOrdinal > 0) {
     frameSentence = binding.frame(firstFrameOrdinal, "opening")
   } else if (lastFrameOrdinal > 0) {
     frameSentence = binding.frame(lastFrameOrdinal, "closing")
   }
   const identitySentence = args.bindIdentities && kept.length > 0 && frameCount > 0
-    ? identityRefsSentence(1, kept.length, binding.ordinal)
+    ? binding.identities(1, kept.length)
     : ""
   const promptSuffix = [frameSentence, identitySentence].filter(Boolean).join(" ")
   return { imageUrls, promptSuffix, droppedRefImages, firstFrameOrdinal, lastFrameOrdinal }
