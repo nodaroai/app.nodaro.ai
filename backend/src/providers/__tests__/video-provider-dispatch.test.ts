@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest"
 import {
   IMAGE_TO_VIDEO_PROVIDERS,
   TEXT_TO_VIDEO_PROVIDERS,
+  VIDEO_GEN_PROVIDERS,
   VIDEO_PROVIDERS_REQUIRING_IMAGE,
   resolveVideoProviderForMode,
 } from "@nodaro/shared/models"
@@ -40,6 +41,22 @@ describe("video provider dispatch totality", () => {
       expect(
         dispatchable("image-to-video", resolved),
         `${id} (resolved: ${resolved}) is offered by the i2v route but NO registered provider claims it — every run would fail at the router`,
+      ).toBe(true)
+    }
+  })
+
+  // /v1/generate-video's schema takes every VIDEO_GEN_PROVIDERS member, the
+  // text-to-video twins of VIDEO_MODE_ALIASES included (`grok`), and the route
+  // sends each as `resolveVideoProviderForMode(id, "image-to-video")`
+  // (`imageToVideoModelPreHandler`). Checked over the route's own list, since
+  // IMAGE_TO_VIDEO_PROVIDERS alone left `grok` out: it passed the route, held
+  // credits, and failed at the router.
+  it("every id /v1/generate-video accepts runs, as the route sends it, on a registered image-to-video provider", () => {
+    for (const id of VIDEO_GEN_PROVIDERS) {
+      const resolved = resolveVideoProviderForMode(id, "image-to-video")
+      expect(
+        dispatchable("image-to-video", resolved),
+        `${id} (sent as: ${resolved}) passes /v1/generate-video but NO registered image-to-video provider claims it — every run would fail at the router`,
       ).toBe(true)
     }
   })

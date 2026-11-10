@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify from "fastify"
+import type { FastifyRequest } from "fastify"
 import {
   IMAGE_TO_VIDEO_PROVIDERS,
   TEXT_TO_VIDEO_PROVIDERS,
   VIDEO_GEN_PROVIDERS,
   VIDEO_MODE_ALIASES,
+  VIDEO_REF_LIMITS_BY_PROVIDER,
 } from "@nodaro/shared/models"
 import { _resetRegistry } from "../../tasks.js"
 import { buildServer, callTool, executeSession } from "./_helpers.js"
@@ -46,7 +48,7 @@ vi.mock("../../supabase.js", () => ({
 
 const { registerVerbs } = await import("../verbs.js")
 const { textToVideoBody } = await import("../../../../routes/text-to-video.js")
-const { generateVideoBody } = await import("../../../../routes/generate-video.js")
+const { generateVideoBody, generateVideoPricing } = await import("../../../../routes/generate-video.js")
 
 const START = "https://cdn.nodaro.ai/uploads/start.png"
 const REF = "https://cdn.nodaro.ai/uploads/ref-1.png"
@@ -174,7 +176,92 @@ describe("a model no video lane runs is refused, naming the ones that work", () 
   })
 })
 
+/** The credit id /v1/generate-video prices a body on (its credit guard's resolver). */
+const generateVideoCreditId = (body: Record<string, unknown>) => {
+  const { userId: _userId, mcp_client: _client, ...sent } = body
+  return generateVideoPricing.modelResolver({ body: sent } as unknown as FastifyRequest)
+}
+
+const takesImages = (id: string) => (VIDEO_REF_LIMITS_BY_PROVIDER[id]?.images ?? 0) > 0
+const refsOf = (n: number) => Array.from({ length: n }, (_, i) => `https://cdn.nodaro.ai/uploads/ref-${i + 1}.png`)
+
+/**
+ * The reference limit used to be read on the NAMED id, before the lane was
+ * chosen: `grok` takes no reference pictures, so they were dropped and the run
+ * was prompt-only, though its image-to-video twin `grok-i2v` takes 7. The lane
+ * is now chosen from the pictures the call carries, and the limit read on the
+ * id that is sent.
+ */
+describe("generate_video's reference pictures run on the twin that takes them", () => {
+  // Twins whose image-to-video id takes pictures and whose text-to-video id does not.
+  const MOVES = VIDEO_MODE_ALIASES.filter((g) => takesImages(g.i2v) && !takesImages(g.t2v))
+  const STAYS = VIDEO_MODE_ALIASES.filter((g) => !takesImages(g.i2v) && !takesImages(g.t2v))
+
+  it("covers Grok Imagine, and the twins that take none", () => {
+    expect(MOVES.map((g) => g.t2v)).toEqual(["grok"])
+    expect(STAYS.map((g) => g.t2v)).toEqual(expect.arrayContaining(["wan", "wan-2.7-t2v", "happyhorse"]))
+  })
+
+  it.each(MOVES.map((g) => [g.t2v, g.i2v] as const))(
+    "%s with reference images runs as %s on /v1/generate-video, with them, priced as that id",
+    async (t2v, i2v) => {
+      const refs = refsOf(9)
+      const { result, hits, hit } = await run("generate_video", { model: t2v, reference_image_urls: refs })
+      expect(result.isError).toBeUndefined()
+      expect(hits).toHaveLength(1)
+      expect(hit!.url).toBe("/v1/generate-video")
+      expect(hit!.body.provider).toBe(i2v)
+      // Capped at the twin's own limit.
+      expect(hit!.body.referenceImageUrls).toEqual(refs.slice(0, VIDEO_REF_LIMITS_BY_PROVIDER[i2v]!.images))
+      expect(routeRuns(hit!.url, hit!.body)).toBe(true)
+      // The route prices it exactly as a call naming the twin.
+      const named = (await run("generate_video", { model: i2v, reference_image_urls: refs })).hit!
+      expect(named.body.provider).toBe(i2v)
+      expect(generateVideoCreditId(hit!.body)).toBe(generateVideoCreditId(named.body))
+      expect(generateVideoCreditId(hit!.body).startsWith(i2v)).toBe(true)
+    },
+  )
+
+  it("a lone reference URL counts as a reference", async () => {
+    const { hit } = await run("generate_video", { model: "grok", reference_image_urls: REF })
+    expect(hit!.url).toBe("/v1/generate-video")
+    expect(hit!.body.provider).toBe("grok-i2v")
+    expect(hit!.body.referenceImageUrls).toEqual([REF])
+  })
+
+  it("grok with no reference is unchanged: prompt-only, on /v1/text-to-video", async () => {
+    const { hit } = await run("generate_video", { model: "grok" })
+    expect(hit!.url).toBe("/v1/text-to-video")
+    expect(hit!.body.provider).toBe("grok")
+    expect(hit!.body.referenceImageUrls).toBeUndefined()
+  })
+
+  it.each(STAYS.map((g) => g.t2v))("%s with reference images: no twin takes them, so they are dropped as before", async (t2v) => {
+    const { hit } = await run("generate_video", { model: t2v, reference_image_urls: [REF] })
+    expect(hit!.url).toBe("/v1/text-to-video")
+    expect(hit!.body.provider).toBe(t2v)
+    expect(hit!.body.referenceImageUrls).toBeUndefined()
+    expect(routeRuns(hit!.url, hit!.body)).toBe(true)
+  })
+
+  it("a model that takes pictures itself keeps its lane and its own limit", async () => {
+    const refs = refsOf(12)
+    const { hit } = await run("generate_video", { model: "seedance-2", reference_image_urls: refs })
+    expect(hit!.url).toBe("/v1/text-to-video")
+    expect(hit!.body.provider).toBe("seedance-2")
+    expect(hit!.body.referenceImageUrls).toEqual(refs.slice(0, VIDEO_REF_LIMITS_BY_PROVIDER["seedance-2"]!.images))
+  })
+})
+
 describe("every video generation model still reaches a lane that runs it", () => {
+  it.each([...VIDEO_GEN_PROVIDERS])("%s with a reference image", async (model) => {
+    // Sent with the picture exactly when the id sent takes pictures.
+    const { result, hit } = await run("generate_video", { model, reference_image_urls: [REF] })
+    expect(result.isError, model).toBeUndefined()
+    expect(routeRuns(hit!.url, hit!.body), model).toBe(true)
+    expect(hit!.body.referenceImageUrls !== undefined, model).toBe(takesImages(hit!.body.provider as string))
+  })
+
   it.each([...VIDEO_GEN_PROVIDERS])("%s", async (model) => {
     // A prompt-only generate_video: an image-required model still reaches
     // /v1/text-to-video, whose own refusal says it needs an image.

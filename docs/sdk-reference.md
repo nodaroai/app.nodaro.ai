@@ -3246,7 +3246,10 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `GenerateVideoParams` / `TextToVideoParams` (all extend
 > `StructuredReferenceParams`). `text-to-video` is the prompt-only video lane, so
 > its `prompt` is REQUIRED and the frame fields (`imageUrl` / `endFrameUrl`)
-> belong to `generate-video`, the image-to-video lane.
+> belong to `generate-video`, the image-to-video lane. A model with one id per
+> mode runs on `generate-video` as its image-to-video id (`grok` as `grok-i2v`,
+> priced as that id); see
+> [API integration](api-integration.md#structured-references-connectedreferences-on-video).
 > Pass `connectedReferences: ConnectedReference[]` (the
 > editor's wired-reference shape, re-exported from the SDK) + `referenceOrder` for
 > labeled, ordered references the route assembles into `@image_N` directives —

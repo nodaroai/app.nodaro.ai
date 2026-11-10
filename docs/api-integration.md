@@ -2916,6 +2916,18 @@ orchestrator already use):
   are an alternative for that model — derived from the same reference caps the
   guard above uses, so a model with no image-reference capability is told it
   needs a start frame.
+- **A model with one id per mode runs as the id of the route's lane.** Some
+  models have a text-to-video id and an image-to-video id (today Grok Imagine
+  `grok` / `grok-i2v`, Wan `wan` / `wan-i2v`, Wan 2.7 `wan-2.7-t2v` /
+  `wan-2.7-i2v` and HappyHorse `happyhorse` / `happyhorse-i2v`).
+  `POST /v1/generate-video` is the image-to-video lane, so a request naming the
+  text-to-video id runs as the image-to-video one (`grok` with an `imageUrl` or
+  reference images runs as `grok-i2v`): it is priced, recorded on the job and
+  sent as that id, and `POST /v1/quote` quotes it the same way. A prompt-only
+  request naming either id gets the `400 validation_error` above, before
+  anything is reserved. On `POST /v1/text-to-video` name the text-to-video id:
+  an image-to-video id there is a `400 validation_error`, also before anything
+  is reserved.
 - **Backward compatible.** Omit `connectedReferences` and the route behaves
   exactly as before — a pre-assembled `prompt` + flat `referenceImageUrls` pass
   through unchanged. `connectedReferences` feeds the **image** channel only;

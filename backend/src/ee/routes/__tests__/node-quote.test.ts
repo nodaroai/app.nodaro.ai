@@ -191,6 +191,17 @@ describe("POST /v1/quote equals what the run reserves on the same body", () => {
     expect(quote.reserve).toBe(reserved)
   })
 
+  // `grok` is Grok Imagine's text-to-video id; /v1/generate-video runs it as
+  // `grok-i2v` (`imageToVideoModelPreHandler`), and the quote prices that id too.
+  it.each(["grok", "grok-i2v"])("generate-video naming %s is quoted and reserved as grok-i2v", async (provider) => {
+    const { quote, identifier, reserved } = await quoteThenRun("generate-video", {
+      prompt: "the waves roll in", provider, imageUrl: "https://cdn.example.com/start.png", duration: 6,
+    })
+    expect(quote.identifier).toBe(identifier)
+    expect(quote.reserve).toBe(reserved)
+    expect(identifier).toMatch(/^grok-i2v(:|$)/)
+  })
+
   it("video-to-video (a flat per-model price)", async () => {
     const { quote, identifier, reserved } = await quoteThenRun("video-to-video", {
       videoUrl: CLIP, prompt: "make it noir", provider: "luma-modify",

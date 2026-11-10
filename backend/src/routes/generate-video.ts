@@ -31,7 +31,7 @@ import { judgeVoicesUnderLock } from "../lib/voice-lock.js"
 import { voiceNotAvailableBody } from "../lib/voice-policy.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoSourceTrimMaxSec, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderRefModeFrameSeats } from "@nodaro/shared/models"
+import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoSourceTrimMaxSec, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderRefModeFrameSeats, resolveVideoProviderForMode } from "@nodaro/shared/models"
 import { VIDEO_DURATION_AUTO, isAutoVideoDuration, isSeedanceDraftCapable, hasFeature } from "@nodaro/shared/model-catalog"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, FRAME_FITS, FRAME_DELIVERIES } from "@nodaro/shared/video"
@@ -644,12 +644,38 @@ openApiRegistry.registerPath({
 })
 
 /**
+ * A model with one id per mode (`VIDEO_MODE_ALIASES`: Grok Imagine, Wan,
+ * Wan 2.7, HappyHorse) may be named by its text-to-video id (`grok`). This
+ * route is the image-to-video lane, which no provider runs that id on: the job
+ * was queued and its credits held, then it failed in the worker and was
+ * refunded only after the queue's retries. The request runs as the model's
+ * image-to-video id instead (`grok-i2v`), through `resolveVideoProviderForMode`,
+ * the mapping the editor, the workflow run and the MCP tools already apply, as
+ * a retired id runs as the model it became (middleware/retired-video-provider.ts).
+ *
+ * The FIRST pricing pre-check, so every later check, the credit guard (its
+ * model checks and its price), the route's schema, the job and the queue all
+ * read the id that runs, and `POST /v1/quote`, which runs these pre-checks,
+ * quotes it. Every other id is left as it is. A prompt-only request still gets
+ * the handler's own answer that this is the image-to-video lane.
+ */
+export async function imageToVideoModelPreHandler(req: FastifyRequest): Promise<void> {
+  const body = req.body
+  if (!body || typeof body !== "object" || Array.isArray(body)) return
+  const named = (body as { provider?: unknown }).provider
+  if (typeof named !== "string") return
+  const sent = resolveVideoProviderForMode(named, "image-to-video")
+  if (sent !== named) req.body = { ...(body as Record<string, unknown>), provider: sent }
+}
+
+/**
  * Plays the first reference audio clip as the soundtrack on a model that would
- * otherwise take it only as a voice sample (lib/audio-soundtrack.ts). The FIRST
- * pricing pre-check of both video routes, so every later check and the price
- * read the request as the run sends it: one more reference video, one audio
- * clip fewer. Refuses with a 400 before anything is reserved when the clip has
- * no reference-video place left or cannot be read.
+ * otherwise take it only as a voice sample (lib/audio-soundtrack.ts). The first
+ * pricing pre-check of /v1/text-to-video, and the first after the model's lane
+ * id on this route, so every later check and the price read the request as the
+ * run sends it: one more reference video, one audio clip fewer. Refuses with a
+ * 400 before anything is reserved when the clip has no reference-video place
+ * left or cannot be read.
  */
 export async function applyAudioSoundtrackPreHandler(
   req: FastifyRequest,
@@ -782,7 +808,7 @@ export async function validateRefVideoDurationPreHandler(
  * is what the run reserves).
  */
 export const generateVideoPricing: RoutePricing = {
-  prechecks: [applyAudioSoundtrackPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
+  prechecks: [imageToVideoModelPreHandler, applyAudioSoundtrackPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
   modelResolver: (req) => {
     const body = req.body as Record<string, unknown>
     const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
