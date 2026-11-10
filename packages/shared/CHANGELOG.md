@@ -1,5 +1,13 @@
 # @nodaro/shared
 
+## 3.60.0
+
+### Minor Changes
+
+- 6206af5: GPT Image 2.6 Flare and Sunburst write PNG, JPEG, WebP, an animated GIF or an SVG. Adds the `outputFormat` vocabulary (`IMAGE_OUTPUT_FORMAT_VALUES`, `ImageOutputFormat`, `IMAGE_OUTPUT_FORMAT_MIME`, `IMAGE_OUTPUT_FORMAT_EXT`) and `svgLevel` (`IMAGE_SVG_LEVEL_VALUES`, `ImageSvgLevel`); catalog entries carry `outputFormats`, `gifFrames`, `gifFrameDurationMs` and `svgLevels` (`outputFormatOptionsByKind`, `svgLevelOptionsByKind`, `IMAGE_GIF_FRAME_SIZE`, `TRANSPARENT_OUTPUT_FORMATS`). `normalizeModelInput` and `resolveNormalizedImageGen` snap the format and its levers (a GIF ignores the aspect ratio and size, a transparent background is kept only in PNG and WebP) and report them in `adjustments` (new fields in `MODEL_INPUT_ADJUSTMENT_FIELDS`). `buildCreditModelIdentifier` takes an optional `imageFormat` argument: a GIF is priced by its band of frames (`<id>:<quality>:gif-<band>`) and an SVG by its level (`<id>:<quality>:<size>:svg-<level>`); PNG, JPEG and WebP keep their ids. Adds `imageFormatInputOf`, `imageFormatLeversOf`, `gptImage26GifBand` and `gptImage26PricedFormat`.
+- ec3c7fd: A failed job now tells its owner what the provider itself said. `Job.error_detail` and `JobStatusResult.error_detail` carry the provider's own words for the failure (links cut to their host, secrets removed; `null` when the failure had no provider text), beside the platform's `error_message`; a failed node of a workflow run carries them as `errorDetail` on its `NodeExecutionStateWire` entry. Display them, and keep branching on `error_hint` / `errorCode`. `EXECUTION_DATA_KEYS` lists `errorDetail` as run state, so a saved preset never captures it.
+- 712a587: `DEFAULT_VIDEO_TO_VIDEO_PROVIDER` (`@nodaro/shared/models`): the model a Video to Video request or node that names none runs on (`wan`). The route, the worker and the editor's model menu now read this one constant.
+
 ## 3.59.0
 
 ### Minor Changes

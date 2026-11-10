@@ -1,5 +1,15 @@
 # @nodaro/prompts
 
+## 1.53.2
+
+### Patch Changes
+
+- c32360a: `RESTYLE_PREVIEWS` has an approved clip for the `low-poly` style: a four-person street dance crew in a night car park wiping into faceted low-poly figures, its still at 7 s, where the crew fills the frame.
+- Updated dependencies [6206af5]
+- Updated dependencies [ec3c7fd]
+- Updated dependencies [712a587]
+  - @nodaro/shared@3.60.0
+
 ## 1.53.1
 
 ### Patch Changes
