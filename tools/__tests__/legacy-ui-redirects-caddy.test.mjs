@@ -46,6 +46,7 @@ async function withSite(env, run) {
   writeFileSync(join(dist, "robots.txt"), "User-agent: *")
   writeFileSync(join(dist, "embed.js"), "// embed")
   writeFileSync(join(dist, "config.js"), "window.__NODARO_RUNTIME__={};")
+  writeFileSync(join(dist, "storage-bridge.html"), "<!doctype html><title>bridge</title>")
   // Another app served on this host, the way a deployment's image adds one (sites.d).
   const sites = join(temp, "sites.d").replace(/\\/g, "/")
   mkdirSync(sites, { recursive: true })
@@ -198,6 +199,40 @@ test("on the Flow host, the public pages that live on the kept host go back ther
     assert.deepEqual(JSON.parse(bot.body), { url: "/og/app/my-app" })
     assert.equal(bot.status, 200)
   })
+})
+
+/** A response as a browser would compare it: status, body and every header but the clock's. */
+const answer = (res) => ({ status: res.status, body: res.body, headers: Object.fromEntries(Object.entries(res.headers).filter(([name]) => name !== "date")) })
+
+test("the settings bridge page exists only while the move is on, framable only by the Flow origin", { skip: !available }, async () => {
+  for (const env of [ON, { ...ON, FLOW_UI_ORIGIN: `${FLOW_ORIGIN}/` }]) {
+    await withSite(env, async (get) => {
+      for (const host of [LEGACY, FLOW]) {
+        const res = await get("/storage-bridge.html", { host })
+        assert.equal(res.status, 200, "served, never redirected")
+        assert.equal(res.headers.location, undefined)
+        assert.match(res.body, /<title>bridge<\/title>/)
+        assert.equal(res.headers["content-security-policy"], `frame-ancestors ${FLOW_ORIGIN}`)
+      }
+    })
+  }
+})
+
+test("without the move (unset, or a value the proxy cannot use), /storage-bridge.html answers exactly as an install without the file", { skip: !available }, async () => {
+  for (const env of [{}, { ...ON, FLOW_UI_ORIGIN: "*" }, { ...ON, FLOW_UI_ORIGIN: "https://*.example.test" }, { ...ON, LEGACY_UI_HOSTS: "" }, { ...ON, PUBLIC_URL: `http://${LEGACY}` }]) {
+    await withSite(env, async (get) => {
+      for (const host of [LEGACY, FLOW]) {
+        const bridge = await get("/storage-bridge.html", { host })
+        const unknown = await get("/no-such-page.html", { host })
+        assert.deepEqual(answer(bridge), answer(unknown), `${JSON.stringify(env)} on ${host}`)
+        assert.equal(bridge.headers["content-security-policy"], undefined)
+        // Its trailing-slash forms too: no redirect to the file an install without it does not have.
+        for (const [path, twin] of [["/storage-bridge.html/", "/no-such-page.html/"], ["/storage-bridge.html%2F", "/no-such-page.html%2F"], ["/Storage-Bridge.HTML/", "/No-Such-Page.HTML/"]]) {
+          assert.deepEqual(answer(await get(path, { host })), answer(await get(twin, { host })), `${JSON.stringify(env)} ${host}${path}`)
+        }
+      }
+    })
+  }
 })
 
 test("with no setting, or an incomplete one, every host answers as before", { skip: !available }, async () => {

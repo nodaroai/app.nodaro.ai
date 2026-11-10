@@ -184,6 +184,22 @@
 		redir @legacy_ui_permanent {nodaro_kept_origin}{uri} 301
 		redir @legacy_ui_temporary {nodaro_kept_origin}{uri} 302
 	}
+	# The page that hands a browser's saved settings to the Flow host
+	# (frontend/public/storage-bridge.html) is there only while the move is on,
+	# framable only by the Flow origin. Otherwise the path answers exactly as on
+	# an install without the file: as any unknown page, the app's index.
+	@storage_bridge_on {
+		path /storage-bridge.html
+		expression `{nodaro_flow_origin} != "" && {nodaro_kept_origin} != "" && {nodaro_kept_origin} != {nodaro_flow_origin} && {env.LEGACY_UI_HOSTS}.lowerAscii().replace(",", " ").split(" ").exists(h, h != "" && "https://" + h != {nodaro_flow_origin})`
+	}
+	header @storage_bridge_on Content-Security-Policy "frame-ancestors {nodaro_flow_origin}"
+	# Its trailing-slash form too: the proxy would redirect it to the file, which
+	# an install without the move does not have.
+	@storage_bridge_off {
+		path /storage-bridge.html /storage-bridge.html/
+		expression `!({nodaro_flow_origin} != "" && {nodaro_kept_origin} != "" && {nodaro_kept_origin} != {nodaro_flow_origin} && {env.LEGACY_UI_HOSTS}.lowerAscii().replace(",", " ").split(" ").exists(h, h != "" && "https://" + h != {nodaro_flow_origin}))`
+	}
+	rewrite @storage_bridge_off /index.html
 	# END GENERATED: page homes
 
 	# Self-host media path: proxies the bundled MinIO so ONE origin serves both

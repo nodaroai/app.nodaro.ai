@@ -2241,6 +2241,12 @@ FLOW_UI_ORIGIN=https://flow.example.com
   value can stop it from starting; a value it cannot use leaves the site as
   it was. Changing one
   needs a restart, never a rebuild.
+- A browser's saved settings (per origin) are carried over once, on the first
+  visit to the new host, through `/storage-bridge.html` on the kept host: a
+  page there only while the move is on, which only the new host's origin may
+  frame. The import counts as done only when the old host's storage could be
+  read; otherwise the next visit asks again. Without the move, that path
+  answers as any unknown page does, exactly as on an install without the file.
 - Other host names the service answers on are never affected.
 - Pages on the new host call the API same-origin, as they did before: the same
   service answers under both names. On the new host and on the hosts in
