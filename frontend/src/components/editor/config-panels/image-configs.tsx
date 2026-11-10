@@ -443,7 +443,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
       <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <MultiProviderPicker
           providers={providersList}
-          options={withoutDeniedModels(IMAGE_GEN_MODELS)}
+          options={withoutDeniedModels(IMAGE_GEN_MODELS, { nodeType: "generate-image" })}
           onChange={(next) => onUpdate({ providers: next, provider: next[0] })}
           renderHint={(p) => <ModelDescriptionHint modelId={p} />}
         />
@@ -955,7 +955,7 @@ export const GenerateImageConfig = memo(GenerateImageConfigImpl)
 
 function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ModifyImageData> & { nodeId?: string }) {
   const localizeOption = useLocalizeOptionLabel()
-  const offeredModifyModels = useOfferedModels(MODIFY_IMAGE_MODELS, data.provider || IMAGE_MODEL_ROLE_DEFAULTS.edit)
+  const offeredModifyModels = useOfferedModels(MODIFY_IMAGE_MODELS, { nodeType: "modify-image" }, data.provider || IMAGE_MODEL_ROLE_DEFAULTS.edit)
   const styleCatalog = useLocalizedCatalog("style")
   // imageStylePresets() curates at read; subscribe so a late pack registration re-renders the dropdown.
   useCatalogPacksVersion()
@@ -1895,7 +1895,7 @@ export const ModifyImageConfig = memo(ModifyImageConfigImpl)
 export function UpscaleImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<UpscaleImageData>) {
   const localizeOption = useLocalizeOptionLabel()
   const t = useT()
-  const offeredUpscaleModels = useOfferedModels(UPSCALE_IMAGE_MODELS, data.provider || "recraft-upscale")
+  const offeredUpscaleModels = useOfferedModels(UPSCALE_IMAGE_MODELS, { nodeType: "upscale-image" }, data.provider || "recraft-upscale")
   useEffect(() => { prefetchModelCredits(UPSCALE_IMAGE_MODELS.map((m) => m.value)) }, [])
   // Legacy node data carried a `targetResolution` (2K/4K/8K) that had no
   // provider parameter behind it. Fold it into the one real lever the first

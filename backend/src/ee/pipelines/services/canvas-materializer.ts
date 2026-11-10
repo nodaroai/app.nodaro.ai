@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { randomUUID } from "node:crypto"
+import { withOfferedServerNodeModels } from "../../../lib/new-node-models.js"
 
 /**
  * Canvas materialization service.
@@ -123,9 +124,12 @@ export async function materializeEntityOnCanvas(
   //    reconciliation pass can detect / repair). For Phase 1B.1, the
   //    user-visible effect of a double-write is harmless (two nodes on canvas)
   //    and is gated upstream by `approveEntity`'s optimistic-concurrency check.
+  // The node built from its defaults starts on a model the deployment offers,
+  // as a new node does in the editor (lib/new-node-models.ts).
+  const [placed] = (await withOfferedServerNodeModels([node], { userId: null, storedIds: existingNodes.map((n) => n.id) })).nodes
   await args.supabase
     .from("workflows")
-    .update({ nodes: [...existingNodes, node] })
+    .update({ nodes: [...existingNodes, placed ?? node] })
     .eq("id", workflowId)
 
   await args.supabase.from("pipeline_entity_nodes").insert({

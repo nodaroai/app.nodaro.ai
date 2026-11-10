@@ -315,6 +315,15 @@ transcript output (Transcribe's `json`, Text to Dialogue's `json`, Camera Switch
 Apply EDL's `json`, Speaker View's `transcript`) wired into an `edl` input. Two edges with the same
 `id` refuse the whole write; nothing is stored.
 
+**A new node starts on a model the deployment offers** (`create_workflow`,
+`update_workflow_json`, `import_workflow`). On a deployment that restricts models, a node
+new to the workflow that names no model, and whose default model is withheld, is
+written on the first model its editor menu offers that your account can run, as the
+editor starts a new node. A model you name is kept (a run refuses it where it is
+withheld), and a node the workflow already holds keeps what it holds. Each move is
+listed in the reply and in `structuredContent.modelMoves` (`nodeId`, `type`, `field`,
+`from`, `to`). A deployment that restricts no models stores every node as sent.
+
 ---
 
 ### `delete_workflow`

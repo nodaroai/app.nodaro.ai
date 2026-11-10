@@ -7,7 +7,7 @@ import {
   isInQuickConfigRange,
   quickConfigRetainedOption,
   resolveQuickConfigOptions,
-  type QuickConfigControl,
+  type NodeQuickConfigControl,
 } from "../node-quick-configs"
 
 /**
@@ -16,7 +16,7 @@ import {
  * The asymmetry is deliberate and pinned here: a USER choice passes the node's data to `write` and applies
  * `additionalClear`; the fail-safe snap calls `write` without data and clears nothing else.
  */
-const control = (type: string, field: string): QuickConfigControl => {
+const control = (type: string, field: string): NodeQuickConfigControl => {
   const c = getQuickConfigs(type).find((q) => q.field === field)
   if (!c) throw new Error(`${type} has no ${field} control`)
   return c

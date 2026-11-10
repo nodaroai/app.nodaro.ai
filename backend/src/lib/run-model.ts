@@ -11,7 +11,7 @@
  * route in src/__tests__/credit-guard-run-model-census.test.ts.
  */
 import type { FastifyRequest } from "fastify"
-import { LLM_FEATURE_DEFAULTS, llmDefaultsFeature } from "@nodaro/shared/llm-models"
+import { llmFeatureDefaultModel } from "@nodaro/render-rules"
 import { applyDefaultVideoSelection } from "@nodaro/shared/models"
 import { judgedModelOfJob, RESOLVED_MODEL_OF_JOB, resolvedModelOfJob } from "./job-resolved-model.js"
 
@@ -61,11 +61,9 @@ export function jobRunModel(jobName: string): RunModelResolver {
 export const videoRunModel: RunModelResolver = (req) =>
   applyDefaultVideoSelection({ provider: textField(rawBodyRecord(req).provider) }).provider
 
-/** The default model of an LLM feature (through `llmDefaultsFeature`); undefined for an unknown one. */
-export function llmFeatureDefault(feature: string): string | undefined {
-  const own = llmDefaultsFeature(feature)
-  return Object.hasOwn(LLM_FEATURE_DEFAULTS, own) ? (LLM_FEATURE_DEFAULTS as Record<string, string>)[own] : undefined
-}
+/** The default model of an LLM feature (through `llmDefaultsFeature`); undefined for an unknown one. The
+ *  editor's menus and the new-node rule read the same function (`@nodaro/render-rules`). */
+export const llmFeatureDefault: (feature: string) => string | undefined = llmFeatureDefaultModel
 
 /**
  * A scrape that analyses what it finds (Meta Ads Library, Instagram): with

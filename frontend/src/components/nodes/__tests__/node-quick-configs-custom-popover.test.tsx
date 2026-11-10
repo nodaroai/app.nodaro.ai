@@ -36,9 +36,10 @@ vi.mock("@/components/ui/select", async () => {
   }
 })
 
-import { QuickConfigSelect, type QuickConfigControl } from "../node-quick-configs"
+import { QuickConfigSelect, type NodeQuickConfigControl, type QuickConfigControl } from "../node-quick-configs"
 
-const durationControl: QuickConfigControl = {
+const durationControl: NodeQuickConfigControl = {
+  nodeType: "test-node",
   field: "duration",
   ariaLabel: "Duration",
   numeric: true,

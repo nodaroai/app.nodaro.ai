@@ -38,6 +38,7 @@ import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
 import { exposedMediaNodeIds, exposedTextCaps } from "../lib/exposed-text-caps.js"
 import { ugcPublishedGraph, type UgcKeptResults, type UgcPublishedGraph } from "../lib/ugc-composed-graph.js"
 import { UGC_EXAMPLE_LINES_KEY } from "@nodaro/render-rules"
+import { withOfferedServerNodeModels } from "../lib/new-node-models.js"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -1071,7 +1072,13 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     // showing the real run it teaches, not empty grey boxes (spec B5 §5.5).
     // Do NOT reintroduce a strip step here — the clone-preserves-baked-results
     // guard test in workflow-templates.test.ts pins this.
-    const snapshotNodes = (template.snapshot_nodes || []) as Array<Record<string, unknown>>
+    // A cloned node that names no model starts on one this deployment offers,
+    // as a new node does in the editor (lib/new-node-models.ts); a model the
+    // template names is kept.
+    const { nodes: snapshotNodes } = await withOfferedServerNodeModels((template.snapshot_nodes || []) as Array<Record<string, unknown>>, {
+      userId,
+      billingContext: req.billingContext,
+    })
 
     // Create new workflow in target project. It starts with no thumbnail: the
     // template's preview is its author's pick, never the cloner's, and a template

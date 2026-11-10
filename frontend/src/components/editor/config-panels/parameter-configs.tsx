@@ -186,7 +186,7 @@ export function ProviderConfig({ data, onUpdate }: ConfigProps<ProviderData>) {
         <ModelSearchSelect
           value={provider}
           onChange={(v) => onUpdate({ provider: v })}
-          options={withoutDeniedModels(PROVIDER_NODE_CATEGORIES[category].models)}
+          options={withoutDeniedModels(PROVIDER_NODE_CATEGORIES[category].models, { nodeType: "provider" })}
           ariaLabel={t("field.model")}
         />
         <p className="mt-1.5 text-xs text-muted-foreground">{t("paramcfg.providerSettingsHint")}</p>

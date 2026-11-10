@@ -12,12 +12,12 @@ import {
   getQuickConfigs,
   quickConfigSnapPatch,
   resolveQuickConfigOptions,
-  type QuickConfigControl,
+  type NodeQuickConfigControl,
 } from "../node-quick-configs"
 
 afterEach(() => __resetSurfaceAvailabilityForTests(null))
 
-function providerControlOf(type: string): QuickConfigControl {
+function providerControlOf(type: string): NodeQuickConfigControl {
   const control = getQuickConfigs(type).find((c) => c.field === "provider")
   if (!control) throw new Error(`${type} has no provider control`)
   return control
@@ -47,7 +47,8 @@ describe("quick-strip model menus and the deployment's model availability", () =
   })
 
   it("a node holding the ONLY model of a one-model menu keeps it when that model is hidden", () => {
-    const control: QuickConfigControl = {
+    const control: NodeQuickConfigControl = {
+      nodeType: "lip-sync",
       field: "provider",
       ariaLabel: "Model",
       options: [{ value: "only-model", label: "Only" }],

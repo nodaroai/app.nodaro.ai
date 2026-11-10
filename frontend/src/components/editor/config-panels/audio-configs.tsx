@@ -179,7 +179,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
   // follow — a known gap), so it shows that. The legacy `elevenlabs` id still shows as v3 although it runs as turbo
   // — a known display mismatch, unchanged here (it has no entry in TTS_MODELS).
   const shownModel = data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || DEFAULT_TTS_PROVIDER)
-  const offeredTtsModels = useOfferedModels(TTS_MODELS, shownModel)
+  const offeredTtsModels = useOfferedModels(TTS_MODELS, { nodeType: "text-to-speech" }, shownModel)
   const promptSnippets = useSnippetPool("audio", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "directText")
   const finalPrompt = useFinalPromptSegments({
@@ -473,7 +473,7 @@ export function SunoVoiceConfig({ data }: ConfigProps<SunoVoiceData>) {
 
 export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoGenerateData> & { nodeId?: string }) {
   const t = useT()
-  const offeredSunoModels = useOfferedModels(SUNO_MODELS, data.model || DEFAULT_SUNO_MODEL)
+  const offeredSunoModels = useOfferedModels(SUNO_MODELS, { nodeType: "suno-generate", field: "model" }, data.model || DEFAULT_SUNO_MODEL)
   const promptSnippets = useSnippetPool("audio", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
@@ -623,7 +623,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
 
 export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoCoverData> & { nodeId?: string }) {
   const t = useT()
-  const offeredSunoModels = useOfferedModels(SUNO_MODELS, data.model || DEFAULT_SUNO_MODEL)
+  const offeredSunoModels = useOfferedModels(SUNO_MODELS, { nodeType: "suno-cover", field: "model" }, data.model || DEFAULT_SUNO_MODEL)
   const promptSnippets = useSnippetPool("audio", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
@@ -750,7 +750,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
 
 export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoExtendData> & { nodeId?: string }) {
   const t = useT()
-  const offeredSunoModels = useOfferedModels(SUNO_MODELS, data.model || DEFAULT_SUNO_MODEL)
+  const offeredSunoModels = useOfferedModels(SUNO_MODELS, { nodeType: "suno-extend", field: "model" }, data.model || DEFAULT_SUNO_MODEL)
   // The ids a connected Suno node will hand this node at run time — shown so a
   // wired node reads as configured, not empty (#819).
   const inherited = useMemo(() => findUpstreamSunoIds(nodeId, nodes, edges), [nodeId, nodes, edges])
@@ -1279,7 +1279,7 @@ export function SunoMusicVideoConfig({ data, onUpdate, nodes, edges, nodeId }: C
 
 export function SunoMashupConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SunoMashupData>) {
   const t = useT()
-  const offeredSunoModels = useOfferedModels(SUNO_MODELS, data.model || DEFAULT_SUNO_MODEL)
+  const offeredSunoModels = useOfferedModels(SUNO_MODELS, { nodeType: "suno-mashup", field: "model" }, data.model || DEFAULT_SUNO_MODEL)
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">{t("audiocfg.hintMashup")}</p>
@@ -1445,7 +1445,7 @@ export function SunoStyleBoostConfig({ data, onUpdate, sources, fieldMappings, o
 
 export function SunoAddInstrumentalConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeId }: ConfigProps<SunoAddInstrumentalData> & { nodeId?: string }) {
   const t = useT()
-  const offeredSunoModels = useOfferedModels(SUNO_ADD_TRACK_MODEL_OPTIONS, data.model || DEFAULT_SUNO_MODEL)
+  const offeredSunoModels = useOfferedModels(SUNO_ADD_TRACK_MODEL_OPTIONS, { nodeType: "suno-add-instrumental", field: "model" }, data.model || DEFAULT_SUNO_MODEL)
   // The ids a connected Suno node will hand this node at run time — shown so a
   // wired node reads as configured, not empty (#819).
   const inherited = useMemo(() => findUpstreamSunoIds(nodeId, nodes, edges), [nodeId, nodes, edges])
@@ -1471,7 +1471,7 @@ export function SunoAddInstrumentalConfig({ data, onUpdate, sources, fieldMappin
 
 export function SunoAddVocalsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeId }: ConfigProps<SunoAddVocalsData> & { nodeId?: string }) {
   const t = useT()
-  const offeredSunoModels = useOfferedModels(SUNO_ADD_TRACK_MODEL_OPTIONS, data.model || DEFAULT_SUNO_MODEL)
+  const offeredSunoModels = useOfferedModels(SUNO_ADD_TRACK_MODEL_OPTIONS, { nodeType: "suno-add-vocals", field: "model" }, data.model || DEFAULT_SUNO_MODEL)
   // The ids a connected Suno node will hand this node at run time — shown so a
   // wired node reads as configured, not empty (#819).
   const inherited = useMemo(() => findUpstreamSunoIds(nodeId, nodes, edges), [nodeId, nodes, edges])
@@ -1511,7 +1511,7 @@ export function SunoConvertWavConfig({ data, onUpdate, nodes, edges, nodeId }: C
 
 export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoUploadExtendData> & { nodeId?: string }) {
   const t = useT()
-  const offeredSunoModels = useOfferedModels(SUNO_MODELS, data.model || DEFAULT_SUNO_MODEL)
+  const offeredSunoModels = useOfferedModels(SUNO_MODELS, { nodeType: "suno-upload-extend", field: "model" }, data.model || DEFAULT_SUNO_MODEL)
   const promptSnippets = useSnippetPool("audio", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
@@ -1704,7 +1704,7 @@ function lipSyncResolutionOptions(
 
 export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<LipSyncData> & { nodeId?: string }) {
   const t = useT()
-  const offeredLipSyncModels = useOfferedModels(LIP_SYNC_MODELS, data.provider || "kling-avatar")
+  const offeredLipSyncModels = useOfferedModels(LIP_SYNC_MODELS, { nodeType: "lip-sync" }, data.provider || "kling-avatar")
   const promptSnippets = useSnippetPool("audio", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
@@ -2146,7 +2146,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
   // what the backend accepts (three copies drifted before). An unset provider
   // reads as v3 dialogue, which is what the node runs as.
   const shownModel = dialogueProviderOf(data.provider)
-  const offeredDialogueModels = useOfferedModels(DIALOGUE_MODELS, shownModel)
+  const offeredDialogueModels = useOfferedModels(DIALOGUE_MODELS, { nodeType: "text-to-dialogue" }, shownModel)
   const maxChars = getDialogueCapabilities(data.provider).maxChars
   // Probed ElevenLabs hard limit: an 11th unique voice → 400 max_voices_exceeded.
   const uniqueVoices = new Set(dialogue.filter((l) => l.voice).map((l) => l.voice)).size
@@ -2351,7 +2351,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
 
 export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<VoiceChangerData>) {
   const localizeOption = useLocalizeOptionLabel()
-  const offeredVoiceChangerModels = useOfferedModels(VOICE_CHANGER_MODELS, data.model || DEFAULT_VOICE_CHANGER_MODEL)
+  const offeredVoiceChangerModels = useOfferedModels(VOICE_CHANGER_MODELS, { nodeType: "voice-changer", field: "model" }, data.model || DEFAULT_VOICE_CHANGER_MODEL)
   const t = useT()
   const localizeDesc = useLocalizeModelDescription()
   const voiceLabelId = useId()
@@ -2743,7 +2743,7 @@ const VOICE_FX_NONE = "__none__"
 
 export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChangerProData>) {
   const localizeOption = useLocalizeOptionLabel()
-  const offeredVoiceChangerModels = useOfferedModels(VOICE_CHANGER_MODELS, data.model || DEFAULT_VOICE_CHANGER_MODEL)
+  const offeredVoiceChangerModels = useOfferedModels(VOICE_CHANGER_MODELS, { nodeType: "voice-changer-pro", field: "model" }, data.model || DEFAULT_VOICE_CHANGER_MODEL)
   const t = useT()
   const voices = data.orderedVoices ?? []
   const addVoice = (voiceId: string, voiceLabel: string, voiceType: "premade" | "custom" | "library") =>

@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest"
-import { getQuickConfigs, quickConfigSnapPatch, resolveQuickConfigOptions, type QuickConfigControl } from "../node-quick-configs"
+import { getQuickConfigs, quickConfigSnapPatch, resolveQuickConfigOptions, type NodeQuickConfigControl } from "../node-quick-configs"
 
 /**
  * Mask Composite's strip: Background fit and Audio do nothing with a pixelate / blur fill (the background is the
  * frame and the only sound), so both hide there — as in the panel — and keep their stored value for the Video fill.
  */
-const control = (field: string): QuickConfigControl => {
+const control = (field: string): NodeQuickConfigControl => {
   const c = getQuickConfigs("mask-composite").find((q) => q.field === field)
   if (!c) throw new Error(`mask-composite has no ${field} control`)
   return c

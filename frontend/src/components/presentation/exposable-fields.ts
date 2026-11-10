@@ -8,6 +8,7 @@ import {
   quickConfigOptionValue,
   readQuickConfigValue,
   resolveQuickConfigOptions,
+  type NodeQuickConfigControl,
   type QuickConfigControl,
   type QuickConfigOption,
 } from "@/components/nodes/node-quick-configs"
@@ -29,8 +30,8 @@ import {
  * — reads this, so the three cannot disagree about which fields a node has.
  */
 export interface ResolvedExposableField extends ExposableField {
-  /** The strip control a derived field comes from. Absent on a hand-declared field. */
-  readonly quick?: QuickConfigControl
+  /** The strip control a derived field comes from (as its node type's registry hands it out). Absent on a hand-declared field. */
+  readonly quick?: NodeQuickConfigControl
 }
 
 /**
@@ -78,7 +79,7 @@ function restrictableOptions(control: QuickConfigControl): ExposableField["optio
   return opts.map((o) => ({ value: o.value, label: o.label }))
 }
 
-function deriveField(control: QuickConfigControl, defaultData: Record<string, unknown>): ResolvedExposableField {
+function deriveField(control: NodeQuickConfigControl, defaultData: Record<string, unknown>): ResolvedExposableField {
   const ownDefault = Object.hasOwn(defaultData, control.field)
     ? defaultData[control.field]
     : control.defaultValue !== undefined

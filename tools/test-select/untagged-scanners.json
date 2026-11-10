@@ -343,7 +343,6 @@
  "frontend/src/lib/__tests__/workspace-scope-coverage.test.ts",
  "frontend/src/lib/__tests__/youtube-audio-extraction.test.ts",
  "frontend/src/lib/i18n/__tests__/config-panel-glossary.test.ts",
- "frontend/src/lib/i18n/__tests__/model-descriptions-coverage.test.ts",
  "frontend/src/lib/i18n/__tests__/no-hardcoded-copy.test.ts",
  "frontend/src/lib/i18n/__tests__/ui-locale-formatting.test.ts",
  "frontend/src/lib/node-docs/__tests__/docs-page-url.test.ts",

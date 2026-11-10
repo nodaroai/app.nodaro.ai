@@ -870,3 +870,60 @@ export {
   BACKGROUND_SCRAPE_ATTEMPT_MAX_MS,
   BACKGROUND_SCRAPE_POLL_BUDGET_MS,
 } from "./background-scrape-timing"
+// The editor's model menus, and the new-node rule both the editor and the
+// server run over them: a node made from its defaults whose default model is
+// withheld starts on the first row its menu offers (decided 2026-11-10).
+export {
+  DIALOGUE_MODELS,
+  EVP_PROVIDERS,
+  EXTEND_VIDEO_MODELS,
+  GVP_PROVIDERS,
+  IMAGE_GEN_MODELS,
+  IMAGE_I2I_MODELS,
+  LIP_SYNC_MODELS,
+  MODIFY_IMAGE_MODELS,
+  MOTION_TRANSFER_MODELS,
+  TTS_MODELS,
+  UPSCALE_IMAGE_MODELS,
+  VIDEO_DEPTH_MODELS,
+  VIDEO_GEN_MODELS,
+  VIDEO_I2V_MODELS,
+  VIDEO_T2V_MODELS,
+  VIDEO_V2V_MODELS,
+} from "./model-menus"
+export { describeToPickerModel, structuredOutputModel, structuredVisionModel } from "./llm-model-filters"
+export {
+  DEFAULT_PROVIDER_NODE_CATEGORY,
+  PROVIDER_NODE_CATEGORY_MODELS,
+  isProviderNodeCategory,
+  validProviderSelection,
+  type ProviderNodeCategory,
+  type ProviderNodeCategoryModels,
+} from "./provider-node-categories"
+export {
+  PROVIDER_MODEL_OF_NODE,
+  llmFeatureDefaultModel,
+  menuRowModel,
+  motionTransferModelOf,
+  providerIsItsModel,
+  providerModelOf,
+  resolveOmittedTtsProvider,
+  ttsModelOf,
+  videoUpscaleModelOf,
+  type ProviderModel,
+} from "./provider-model"
+export {
+  EDIT_IMAGE_DEFAULT_PROVIDER,
+  EXTEND_VIDEO_DEFAULT_PROVIDER,
+  LIP_SYNC_DEFAULT_PROVIDER,
+  MOTION_TRANSFER_DEFAULT_PROVIDER,
+} from "./node-default-models"
+export {
+  NODE_MODEL_LEVERS,
+  nodeModelLevers,
+  offeredLeverRows,
+  planNodeModels,
+  type NodeModelJudge,
+  type NodeModelLever,
+  type NodeModelPlan,
+} from "./node-model-levers"

@@ -40,6 +40,7 @@ import { MAX_ASSET_REFS, resolveCopilotAssetRefs, type ResolvedAsset } from "./a
 import { collectAssetIds, rejectInventedFileSyntax, stampAssetRefs } from "./asset-wiring.js"
 import { knownNodeTypes, suggestNodeTypes, validateWorkflowEdges, type EdgeLike } from "./edge-validation.js"
 import type { CopilotToolContext } from "./types.js"
+import { withOfferedServerNodeModels, type ServerNodeModelMove } from "../../../lib/new-node-models.js"
 
 /** A Telegram Account Trigger's settings that are the person's alone (see the write pipeline). */
 const ACCOUNT_TRIGGER_PERSON_FIELDS = [
@@ -598,6 +599,11 @@ function applyLayout(
   )
 }
 
+/** What the model is told when a node it added names no model and its default is not offered. */
+function describeModelMove(m: ServerNodeModelMove): string {
+  return `${m.nodeId}: ${m.field} set to "${m.to}" — the default "${m.from}" is not offered on this deployment`
+}
+
 export async function runEditWorkflow(ctx: CopilotToolContext, args: EditWorkflowArgs): Promise<EditWorkflowResult> {
   // Outside the retry loop on purpose: these ids come from the ARGS, so they
   // cannot change between attempts, and the check costs a query per kind.
@@ -618,11 +624,18 @@ export async function runEditWorkflow(ctx: CopilotToolContext, args: EditWorkflo
       if (ids.length > 0) assets = await resolveCopilotAssetRefs(ids, ctx.userId)
     }
     const prepared = prepare(args, stored, assets, ctx.allowPublishing, ctx.userLinks)
+    // A NEW node that names no model starts on one the deployment offers, as in
+    // the editor (lib/new-node-models.ts); a node the graph already holds keeps
+    // what it holds.
+    const offered = await withOfferedServerNodeModels(prepared.upsertNodes, {
+      userId: ctx.userId,
+      storedIds: stored.nodes.map((n) => n.id),
+    })
 
     const { data, error } = await supabase.rpc("apply_workflow_delta", {
       p_workflow_id: ctx.workflowId,
       p_base_version: stored.version,
-      p_upsert_nodes: prepared.upsertNodes,
+      p_upsert_nodes: offered.nodes,
       p_delete_node_ids: prepared.deleteNodeIds,
       p_upsert_edges: prepared.upsertEdges,
       p_delete_edge_ids: prepared.deleteEdgeIds,
@@ -649,7 +662,7 @@ export async function runEditWorkflow(ctx: CopilotToolContext, args: EditWorkflo
         nodeCount: prepared.fullNodes.length,
         edgeCount: prepared.fullEdges.length,
         wiredAssets: prepared.wiredAssets,
-        adjustments: prepared.adjustments,
+        adjustments: [...prepared.adjustments, ...offered.moved.map(describeModelMove)],
         warnings: prepared.warnings,
       }
       ctx.emit({

@@ -9,6 +9,7 @@ import {
   quickConfigSnapWrite,
   readQuickConfigValue,
   resolveQuickConfigOptions,
+  type NodeQuickConfigControl,
   type QuickConfigControl,
   type QuickConfigOption,
 } from "@/components/nodes/node-quick-configs"
@@ -26,7 +27,7 @@ const LABEL_CLS = "text-xs font-medium text-muted-foreground uppercase tracking-
 const CUSTOM = "__custom__"
 
 export interface QuickFieldCardProps {
-  readonly control: QuickConfigControl
+  readonly control: NodeQuickConfigControl
   /** The node's data with this run's values on top — the options are the ones the node can take NOW. */
   readonly nodeData: Record<string, unknown>
   /** The publisher's restriction (node-data values), if any. */

@@ -16,21 +16,24 @@ const MODELS = [
   { value: "c-model", label: "C" },
 ] as const
 
+/** A menu of a node type whose `provider` values are model ids. */
+const MENU = { nodeType: "generate-image" } as const
+
 afterEach(() => __resetSurfaceAvailabilityForTests(null))
 
 describe("withoutDeniedModels", () => {
   it("drops a denied model, and keeps the node's stored one even when denied", () => {
     __resetSurfaceAvailabilityForTests({ nodes: [], models: ["b-model", "c-model"] })
-    expect(withoutDeniedModels(MODELS).map((m) => m.value)).toEqual(["a-model"])
-    expect(withoutDeniedModels(MODELS, "b-model").map((m) => m.value)).toEqual(["a-model", "b-model"])
+    expect(withoutDeniedModels(MODELS, MENU).map((m) => m.value)).toEqual(["a-model"])
+    expect(withoutDeniedModels(MODELS, MENU, "b-model").map((m) => m.value)).toEqual(["a-model", "b-model"])
     // A stored value that is not denied changes nothing.
-    expect(withoutDeniedModels(MODELS, "a-model").map((m) => m.value)).toEqual(["a-model"])
+    expect(withoutDeniedModels(MODELS, MENU, "a-model").map((m) => m.value)).toEqual(["a-model"])
   })
 })
 
 describe("useOfferedModels", () => {
   it("re-reads the list when availability changes, keeping the stored model", () => {
-    const { result } = renderHook(() => useOfferedModels(MODELS, "c-model"))
+    const { result } = renderHook(() => useOfferedModels(MODELS, MENU, "c-model"))
     expect(result.current.map((m) => m.value)).toEqual(["a-model", "b-model", "c-model"])
 
     // An admin switches two models off: the menu follows at once; the node's

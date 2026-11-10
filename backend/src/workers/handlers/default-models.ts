@@ -7,6 +7,14 @@
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
 import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, T2I_TO_I2I_VARIANT } from "@nodaro/shared/models"
 
+/**
+ * lip-sync, motion-transfer and edit-image (handlers/video-ai.ts,
+ * handlers/image-ai.ts): their defaults live in `@nodaro/render-rules`, which the
+ * new-node rule reads too, so a node that names no model is judged on the model
+ * its handler runs.
+ */
+export { EDIT_IMAGE_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, MOTION_TRANSFER_DEFAULT_PROVIDER } from "@nodaro/render-rules"
+
 /** image-to-video (handlers/video-ai.ts). */
 export const IMAGE_TO_VIDEO_DEFAULT_PROVIDER = "minimax"
 /** text-to-video (handlers/video-ai.ts). */
@@ -15,16 +23,10 @@ export const TEXT_TO_VIDEO_DEFAULT_PROVIDER = "minimax"
 export const VOICED_VIDEO_DEFAULT_PROVIDER = "minimax"
 /** video-to-video (handlers/video-ai.ts) — the shared default the editor's menu shows too. */
 export const VIDEO_TO_VIDEO_DEFAULT_PROVIDER = DEFAULT_VIDEO_TO_VIDEO_PROVIDER
-/** lip-sync (handlers/video-ai.ts). */
-export const LIP_SYNC_DEFAULT_PROVIDER = "kling-avatar"
-/** motion-transfer (handlers/video-ai.ts). */
-export const MOTION_TRANSFER_DEFAULT_PROVIDER = "kling"
 /** video-upscale (handlers/video-ai.ts). */
 export const VIDEO_UPSCALE_DEFAULT_PROVIDER = "topaz"
 /** video-depth (handlers/video-depth.ts). */
 export const VIDEO_DEPTH_DEFAULT_PROVIDER = "video-depth-anything"
-/** edit-image (handlers/image-ai.ts). */
-export const EDIT_IMAGE_DEFAULT_PROVIDER = "recraft-upscale"
 /** generate-character-motion (handlers/entity.ts). */
 export const CHARACTER_MOTION_DEFAULT_PROVIDER = "kling"
 /** generate-location-motion (handlers/entity.ts). */

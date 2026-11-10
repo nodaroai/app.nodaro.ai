@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { ConfigFieldRenderer } from "../config-field-renderer"
 import { QuickFieldCard } from "../quick-field-card"
-import { getQuickConfigs, type QuickConfigControl } from "@/components/nodes/node-quick-configs"
+import { getQuickConfigs, type NodeQuickConfigControl, type QuickConfigControl } from "@/components/nodes/node-quick-configs"
 
 /**
  * The app card for a field derived from a quick-strip control. It offers the strip's options for the node's
@@ -10,7 +10,7 @@ import { getQuickConfigs, type QuickConfigControl } from "@/components/nodes/nod
  * set several fields — Draft also pins 480p), and snaps a value the current model cannot take, so an app run
  * that changed the model never carries the old model's resolution into the route's enum.
  */
-const control = (type: string, field: string): QuickConfigControl =>
+const control = (type: string, field: string): NodeQuickConfigControl =>
   getQuickConfigs(type).find((c) => c.field === field)!
 
 async function choose(name: string, option: string) {

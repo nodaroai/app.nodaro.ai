@@ -172,7 +172,7 @@ export function GenerateImageQuickToolbar({
   } = useGenerateImageStripModel(nodeId, stripData)
   // The deployment's hidden models leave the menu; the node's own stays listed
   // (never silently moved). Subscribed: an admin's switch flips it while open.
-  const offeredImageModels = useOfferedModels(IMAGE_GEN_MODELS, currentProvider)
+  const offeredImageModels = useOfferedModels(IMAGE_GEN_MODELS, { nodeType: "generate-image" }, currentProvider)
 
   // Ghost select trigger — no border, no background by default, subtle
   // hover only. Icon prefix + value + small chevron. `!` modifiers beat
