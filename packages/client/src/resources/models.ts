@@ -41,10 +41,40 @@ export interface ModelSummary {
   features?: string[]
   aspectRatios?: string[]
   resolutions?: string[]
+  /**
+   * The aspect ratios at which the model renders fewer sizes than
+   * `resolutions`, each with the sizes it renders there, in the spelling of
+   * `resolutions` — e.g. GPT Image 2.5 `{ "27:16": ["1K"], "16:27": ["1K"],
+   * "9:8": ["1K"], "8:9": ["1K"] }`. A ratio not listed renders every entry of
+   * `resolutions`. Absent when every ratio renders every size (and on an
+   * older server). A request for a size its ratio does not render runs, and
+   * is charged, at the largest size the ratio renders at or below it; the
+   * response's `adjustments` say so. A size menu offers, at the chosen ratio,
+   * `resolutionsByAspectRatio?.[ratio] ?? resolutions`.
+   */
+  resolutionsByAspectRatio?: Record<string, string[]>
   qualities?: string[]
   /** The image background settings the model takes (`auto`, `opaque`, `transparent`). */
   backgrounds?: string[]
+  /**
+   * The one size a transparent background renders at, where the model limits
+   * it (`"1K"` on GPT Image 2.5, and 2.6 Flare and Sunburst). A transparent
+   * request at another size runs, and is charged, at this one. Absent when
+   * the model sets no such limit (and on an older server).
+   */
+  transparentResolution?: string
+  /**
+   * `true` when the model takes a background setting only at
+   * `transparentResolution` (GPT Image 2.5): at any other size the setting is
+   * not sent, so `opaque` there renders as `auto`. Absent otherwise.
+   */
+  backgroundOnlyAtTransparentResolution?: true
   durations?: number[]
+  /** The length (seconds) a request that names no `duration` renders and is
+   *  charged at, where the model has one. */
+  defaultDuration?: number
+  /** `true` when the model accepts `duration: -1`: it picks the length itself. */
+  autoDuration?: true
   /** Compact per-model prompting tips (present when a doctrine exists). */
   promptTips?: string[]
   /** TRUE only when a sourced per-family prompt doctrine exists for this

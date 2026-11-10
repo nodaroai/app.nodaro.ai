@@ -93,4 +93,40 @@ describe("models resource", () => {
       ["kling-3.0", "kuaishou", "Kuaishou", null],
     ])
   })
+
+  // vitest does not typecheck: the `@ts-expect-error` lines below are held by
+  // CI's "SDK type tests" step (`tsc -p packages/client/tsconfig.type-tests.json`).
+  it("types the sizes a ratio renders and the transparent background's size", async () => {
+    const gptImage25: ModelSummary = {
+      id: "gpt-image-2-5-flare",
+      label: "GPT Image 2.5 Flare",
+      maker: { id: "openai", name: "OpenAI" },
+      description: "Ultra-wide and near-square cinema ratios.",
+      modes: ["t2i"],
+      useCases: ["typography"],
+      aspectRatios: ["1:1", "16:9", "27:16", "16:27", "9:8", "8:9"],
+      resolutions: ["1K", "2K", "4K"],
+      resolutionsByAspectRatio: { "27:16": ["1K"], "16:27": ["1K"], "9:8": ["1K"], "8:9": ["1K"] },
+      backgrounds: ["auto", "opaque", "transparent"],
+      transparentResolution: "1K",
+      backgroundOnlyAtTransparentResolution: true,
+      doctrineCovered: false,
+    }
+    const seedance: ModelSummary = { ...VEO, id: "seedance-2-fast", durations: [4, 8, 15], defaultDuration: 8, autoDuration: true }
+    // @ts-expect-error — the sizes of a ratio are a list
+    const notAList: ModelSummary = { ...gptImage25, resolutionsByAspectRatio: { "27:16": "1K" } }
+    // @ts-expect-error — one size, not a list
+    const severalSizes: ModelSummary = { ...gptImage25, transparentResolution: ["1K"] }
+    const fetchMock = vi.fn<typeof fetch>().mockReturnValueOnce(
+      mockOk({ ...CATALOG, sections: [{ kind: "image", families: [{ family: "OpenAI", models: [gptImage25] }] }] }),
+    )
+    const m = (await client(fetchMock).models.list({ kind: "image" })).sections[0]!.families[0]!.models[0]!
+    // A size menu at a ratio: the ratio's own list, else every size.
+    const sizesAt = (ratio: string) => m.resolutionsByAspectRatio?.[ratio] ?? m.resolutions
+    expect(sizesAt("27:16")).toEqual(["1K"])
+    expect(sizesAt("16:9")).toEqual(["1K", "2K", "4K"])
+    expect(m.transparentResolution).toBe("1K")
+    expect(m.backgroundOnlyAtTransparentResolution).toBe(true)
+    expect([seedance.defaultDuration, seedance.autoDuration, notAList, severalSizes]).toHaveLength(4)
+  })
 })

@@ -3824,6 +3824,38 @@ on an older server):
   address as given; it carries its file's version, so a replaced mark arrives
   under a new address. The MCP tool omits it.
 
+A model whose sizes depend on its aspect ratio or its background carries the
+size rules (each absent on every other model, and on an older server):
+
+- `resolutionsByAspectRatio?: Record<string, string[]>` — the aspect ratios at
+  which the model renders fewer sizes than `resolutions`, each with the sizes
+  it renders there. A ratio not listed renders every entry of `resolutions`.
+  GPT Image 2.5 (`gpt-image-2-5-flare`, `gpt-image-2-5-sunburst` and their
+  `-i2i` edit models): `{ "27:16": ["1K"], "16:27": ["1K"], "9:8": ["1K"],
+  "8:9": ["1K"] }`. A request for a size its ratio does not render runs, and is
+  charged, at the largest size the ratio renders at or below it (reported in
+  `adjustments`).
+- `transparentResolution?: string` — the one size a transparent background
+  renders at (`"1K"` on GPT Image 2.5, and on GPT Image 2.6 Flare and
+  Sunburst); a transparent request at another size runs, and is charged, at
+  this one.
+- `backgroundOnlyAtTransparentResolution?: true` — the model takes a
+  background setting only at `transparentResolution` (GPT Image 2.5): at any
+  other size none is sent, so `opaque` there renders as `auto`.
+
+`ModelSummary` also types `defaultDuration` (the length an unset `duration`
+renders and is charged at) and `autoDuration` (`duration: -1` lets the model
+pick the length).
+
+```ts
+const { sections } = await client.models.list({ kind: "image" })
+const m = sections.flatMap((s) => s.families.flatMap((f) => f.models)).find((x) => x.id === "gpt-image-2-5-flare")!
+// The sizes to offer at the chosen ratio:
+const sizesAt = (ratio: string) => m.resolutionsByAspectRatio?.[ratio] ?? m.resolutions ?? []
+sizesAt("27:16") // ["1K"]
+sizesAt("16:9")  // ["1K", "2K", "4K"]
+```
+
 ```ts
 const catalog = await client.models.list({ kind: "video", mode: "i2v" })
 for (const section of catalog.sections)

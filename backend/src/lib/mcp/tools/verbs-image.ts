@@ -34,7 +34,7 @@ import { defaultImageModel, isAutoAspectToken, modelIdsByKindMode } from "@nodar
 import { IMAGE_BACKGROUND_VALUES, IMAGE_QUALITY_VALUES, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, requestImageLimit } from "@nodaro/shared/models"
 import { SCRIPT_SCENE_COUNT_RANGE, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TARGET_DURATION_DEFAULT, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared/nodes"
 import { getUserMcpPreferences } from "../user-preferences.js"
-import { normalizeImageInput, requestedAspectRatio } from "../normalize.js"
+import { imageToImageLevers, normalizeImageInput, requestedAspectRatio } from "../normalize.js"
 import { imageToImageAspectRatio } from "../../image-auto-aspect.js"
 import { presetImageBody } from "./_image-preset-call.js"
 import { OVERLAY_MAX_LAYERS } from "../../../providers/image/overlay-contract.js"
@@ -715,12 +715,26 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           : null)
       if (!imageUrl) return { content: [{ type: "text" as const, text: "Pass image_url or image_asset_id." }], isError: true }
 
+      // The person's saved image defaults (`save_image_defaults`) fill what the
+      // call leaves out, as on modify_image. A failed read is no saved default.
+      let userImg: Record<string, string | undefined> = {}
+      try {
+        userImg = ((await getUserMcpPreferences(session.userId)).image as Record<string, string | undefined>) ?? {}
+      } catch {
+        /* swallow */
+      }
       // The model this call runs on, resolved ONCE: the one named, else the
-      // platform's edit default for the ratio. The references' limit, the
-      // route's `provider` and the answer's `model` all read it, so the answer
-      // names the model the job really runs (it used to say a fixed
-      // "nano-banana" whenever no model was named).
-      const provider = args.model ?? defaultImageModel("edit", args.aspect_ratio)
+      // saved one when an edit runs it, else the platform's edit default for
+      // the ratio. The references' limit, the route's `provider` and the
+      // answer's `model` all read it, so the answer names the model the job
+      // really runs (it used to say a fixed "nano-banana" whenever no model
+      // was named). The ratio, size and quality: named, else saved, else the
+      // model's own rule (`imageToImageLevers`).
+      const levers = imageToImageLevers(
+        { model: args.model, aspect_ratio: args.aspect_ratio, resolution: args.resolution, quality: args.quality },
+        { model: userImg.model, aspectRatio: userImg.aspectRatio, resolution: userImg.resolution, quality: userImg.quality },
+      )
+      const { provider } = levers
       // Resolve asset ids → URLs (route's referenceImageUrls is URL-only);
       // tolerant of array | lone string | JSON-stringified array inputs.
       const i2iRefs = await resolveRefArray(args.reference_image_urls, session.userId, "image", requestImageLimit(provider) - 1)
@@ -729,10 +743,10 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         prompt: args.prompt,
         provider,
         ...(i2iRefs.length ? { referenceImageUrls: i2iRefs } : {}),
-        ...(args.resolution ? { resolution: args.resolution } : {}),
-        ...(args.quality ? { quality: args.quality } : {}),
+        ...(levers.resolution ? { resolution: levers.resolution } : {}),
+        ...(levers.quality ? { quality: levers.quality } : {}),
         ...(args.strength !== undefined ? { strength: args.strength } : {}),
-        ...(args.aspect_ratio ? { aspectRatio: args.aspect_ratio } : {}),
+        ...(levers.aspectRatio ? { aspectRatio: levers.aspectRatio } : {}),
         ...(args.negative_prompt ? { negativePrompt: args.negative_prompt } : {}),
         ...(args.seed !== undefined ? { seed: args.seed } : {}),
         ...(args.mask_url ? { maskUrl: args.mask_url } : {}),

@@ -5,7 +5,10 @@ import {
   normalizeQuality,
   normalizeDuration,
   normalizeImageInput,
+  normalizeVideoInput,
   requestedAspectRatio,
+  savedEditModel,
+  imageToImageLevers,
 } from "../normalize.js"
 import { fanOutLevers } from "../tools/_image-batch.js"
 
@@ -276,5 +279,49 @@ describe("fanOutLevers", () => {
     expect(fanOutLevers(models, {}, { aspectRatio: "9:16" }).aspectRatio).toBe("9:16")
     expect(fanOutLevers(models, { aspect_ratio: "1:1" }, { aspectRatio: "9:16" }).aspectRatio).toBe("1:1")
     expect(fanOutLevers(models, {}, {}).aspectRatio).toBe("16:9")
+  })
+})
+
+describe("normalizeVideoInput", () => {
+  // The same trap as the image ratio: the helper fills an unset value with its
+  // fallback, so the saved ratio is chosen before it, never as a `??` after it.
+  it("uses the saved ratio when the call names none, and the named one over it", () => {
+    expect(normalizeVideoInput({}, { aspectRatio: "9:16" }, "seedance-2-fast").aspectRatio).toBe("9:16")
+    expect(normalizeVideoInput({ aspect_ratio: "" }, { aspectRatio: "9:16" }, "seedance-2-fast").aspectRatio).toBe("9:16")
+    expect(normalizeVideoInput({ aspect_ratio: "1:1" }, { aspectRatio: "9:16" }, "seedance-2-fast").aspectRatio).toBe("1:1")
+  })
+
+  it("fits a saved ratio to the model, and falls back to 16:9 with neither", () => {
+    expect(normalizeVideoInput({ model: "veo3.1" }, { aspectRatio: "3:4" }, "seedance-2-fast").aspectRatio).toBe("9:16")
+    expect(normalizeVideoInput({}, {}, "seedance-2-fast").aspectRatio).toBe("16:9")
+  })
+
+  it("uses the saved model, size and duration the same way", () => {
+    const saved = normalizeVideoInput({}, { model: "veo3.1", resolution: "1080p", duration: 6 }, "seedance-2-fast")
+    expect([saved.model, saved.resolution, saved.duration]).toEqual(["veo3.1", "1080p", 6])
+    const named = normalizeVideoInput({ resolution: "4k", duration: 8 }, { model: "veo3.1", resolution: "1080p", duration: 6 }, "seedance-2-fast")
+    expect([named.resolution, named.duration]).toEqual(["4k", 8])
+  })
+})
+
+describe("savedEditModel", () => {
+  it("is the saved model only when an image-to-image request runs it", () => {
+    expect(savedEditModel("gpt-image-2-6-flare-i2i")).toBe("gpt-image-2-6-flare-i2i")
+    expect(savedEditModel("nano-banana-pro")).toBe("nano-banana-pro")
+    expect(savedEditModel("gpt-image-2")).toBeUndefined()
+    expect(savedEditModel("made-up-model")).toBeUndefined()
+    expect(savedEditModel(undefined)).toBeUndefined()
+  })
+})
+
+describe("imageToImageLevers", () => {
+  it("sends a named value as it is, and fits a saved one to the model", () => {
+    expect(imageToImageLevers({ model: "flux-kontext", aspect_ratio: "27:16" }, { aspectRatio: "1:1" }).aspectRatio).toBe("27:16")
+    expect(imageToImageLevers({ model: "flux-kontext" }, { aspectRatio: "27:16" }).aspectRatio).toBe("16:9")
+  })
+
+  it("with neither ratio: 'auto' on the GPT Image 2.5 / 2.6 edit models, none on the others", () => {
+    expect(imageToImageLevers({ model: "gpt-image-2-5-flare-i2i" }, {})).toEqual({ provider: "gpt-image-2-5-flare-i2i", aspectRatio: "auto" })
+    expect(imageToImageLevers({ model: "flux-kontext" }, {})).toEqual({ provider: "flux-kontext" })
   })
 })

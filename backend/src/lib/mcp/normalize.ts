@@ -13,8 +13,9 @@
  * accept (or undefined when the lever genuinely doesn't apply to the
  * resolved model). Validation errors are SWALLOWED, not surfaced.
  */
-import { MODEL_CATALOG, VIDEO_DURATION_AUTO, defaultResolutionFor, isAutoVideoDuration, type ModelCatalogEntry } from "@nodaro/shared/model-catalog"
-import { canonicalVideoProvider } from "@nodaro/shared/models"
+import { MODEL_CATALOG, VIDEO_DURATION_AUTO, defaultImageModel, defaultResolutionFor, isAutoAspectToken, isAutoVideoDuration, type ModelCatalogEntry } from "@nodaro/shared/model-catalog"
+import { MODIFY_IMAGE_PROVIDERS, canonicalVideoProvider } from "@nodaro/shared/models"
+import { imageToImageAspectRatio } from "../image-auto-aspect.js"
 
 /**
  * Resolve any model id (or freeform string) to a known catalog entry id.
@@ -336,6 +337,84 @@ export function normalizeImageInput(
 }
 
 /**
+ * The saved image model (`save_image_defaults`) an edit may run on. The person
+ * has ONE saved image model, which the widget's "Save as default" star fills
+ * from whichever tool made the picture: a text-to-image id after
+ * `generate_image`, an edit id after `modify_image`. An edit runs it only when
+ * /v1/image-to-image does (`MODIFY_IMAGE_PROVIDERS`, which `modify_image`
+ * snaps to as well): a text-to-image-only id (GPT Image 2, Seedream 5) is not
+ * an edit model and is ignored; an edit id, or a model that does both under one
+ * id (Nano Banana, Flux 2, Flux Kontext), is used.
+ */
+export function savedEditModel(saved: string | null | undefined): string | undefined {
+  return typeof saved === "string" && (MODIFY_IMAGE_PROVIDERS as readonly string[]).includes(saved) ? saved : undefined
+}
+
+/** The levers `image_to_image` sends /v1/image-to-image; each absent one is left out. */
+export interface ImageToImageLevers {
+  provider: string
+  aspectRatio?: string
+  resolution?: string
+  quality?: string
+}
+
+/**
+ * `image_to_image`'s model, ratio, size and quality: what the call names, else
+ * the person's saved image defaults, else the model's own rule.
+ *
+ * A value the call names is sent as it is, as before: the route fits it to the
+ * model and reports what it changed. A saved value is fitted to the model here,
+ * because it may have been saved for another model.
+ *
+ * - The model: the one named, else the saved one when an edit runs it
+ *   (`savedEditModel`), else the platform's edit default for the ratio.
+ * - The ratio: the one named, else the saved one (a saved "auto" handed on as
+ *   "auto", as a named one is). With neither, "auto" on the GPT Image 2.5 / 2.6
+ *   edit models (`imageToImageAspectRatio`, the route's own rule), and on any
+ *   other model none, so it keeps its own default.
+ * - Size and quality: the ones named, else the saved ones where the model
+ *   lists them, else none (the model's default).
+ */
+export function imageToImageLevers(
+  named: {
+    model?: string | null
+    aspect_ratio?: string | null
+    resolution?: string | null
+    quality?: string | null
+  },
+  saved: {
+    model?: string
+    aspectRatio?: string
+    resolution?: string
+    quality?: string
+  },
+): ImageToImageLevers {
+  const given = (v: string | null | undefined) => (typeof v === "string" && v.trim() !== "" ? v : undefined)
+  const requestedRatio = requestedAspectRatio(named.aspect_ratio, saved.aspectRatio)
+  const provider = given(named.model) ?? savedEditModel(saved.model) ?? defaultImageModel("edit", requestedRatio)
+  const entry = MODEL_CATALOG[provider]
+
+  const savedRatio = given(saved.aspectRatio)
+  const fittedSavedRatio = isAutoAspectToken(savedRatio)
+    ? "auto"
+    : savedRatio !== undefined
+      ? normalizeAspectRatio(savedRatio, entry?.aspectRatios, "16:9")
+      : undefined
+  const aspectRatio =
+    given(named.aspect_ratio) ?? fittedSavedRatio ?? imageToImageAspectRatio(provider, undefined)
+
+  const resolution = given(named.resolution) ?? normalizeResolution(saved.resolution, entry?.resolutions)
+  const quality = given(named.quality) ?? normalizeQuality(saved.quality, entry?.qualities)
+
+  return {
+    provider,
+    ...(aspectRatio !== undefined ? { aspectRatio } : {}),
+    ...(resolution !== undefined ? { resolution } : {}),
+    ...(quality !== undefined ? { quality } : {}),
+  }
+}
+
+/**
  * Like `normalizeModel` but returns undefined for empty / unknown so the
  * caller can chain to a saved-pref / catalog-default fallback.
  */
@@ -363,8 +442,12 @@ export interface NormalizedVideoParams {
 /**
  * Compose video-tool normalizations. Mirrors `normalizeImageInput` but
  * with `duration` instead of `quality` since that's the lever video
- * models care about. `aspectRatio` defaults to `16:9`; `resolution` and
- * `duration` fall through to the model's natural default if not picked.
+ * models care about. Each lever: the value the call names, else the person's
+ * saved video default (`mcp_preferences.video`), else the catalog's. The ratio
+ * is chosen before it is fitted to the model (`requestedAspectRatio`), so a
+ * saved one is reached; with neither it is `16:9`, or the model's first listed
+ * ratio. `resolution` and `duration` fall through to the model's natural
+ * default if not picked.
  */
 export function normalizeVideoInput(
   raw: {
@@ -388,9 +471,14 @@ export function normalizeVideoInput(
   const model = explicitModel ?? savedModel ?? fallbackModel
   const modelEntry = MODEL_CATALOG[model]
 
-  const aspectRatio =
-    normalizeAspectRatio(raw.aspect_ratio, modelEntry?.aspectRatios, "16:9")
-    ?? normalizeAspectRatio(saved.aspectRatio, modelEntry?.aspectRatios, "16:9")
+  // `normalizeAspectRatio` never answers empty for a model with ratios (an unset
+  // value is its 16:9 fallback), so a `?? saved` after it would never be
+  // reached: the saved ratio is picked first, then fitted.
+  const aspectRatio = normalizeAspectRatio(
+    requestedAspectRatio(raw.aspect_ratio, saved.aspectRatio),
+    modelEntry?.aspectRatios,
+    "16:9",
+  )
 
   const resolution =
     normalizeResolution(raw.resolution, modelEntry?.resolutions)

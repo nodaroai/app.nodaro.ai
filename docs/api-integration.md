@@ -2408,7 +2408,8 @@ switch refuses a run of it (`403 model_not_available`), so a client that
 caches the list for the five minutes may still name one. Returns
 `{ sections, recommendations, totalModels }`: models grouped by kind
 (`image` / `video` / `audio`) and vendor family, each with capability
-sheets (`modes`, `features`, `aspectRatios`, `resolutions`, `durations`),
+sheets (`modes`, `features`, `aspectRatios`, `resolutions`, `qualities`,
+`backgrounds`, `durations`, and the size rules below),
 per-variant credit `pricing` — the credits a run is charged, the price
 `GET /v1/credits/model-cost` returns for that variant (Cloud only — like
 `creditCost` on `/v1/nodes`, editions without a credit system omit it), compact
@@ -2426,6 +2427,37 @@ Every model also names its **maker** and carries the maker's mark:
 A mark is published by the instance's operator, and the server lists its
 address only once the file is in storage — never before it is uploaded (see
 [Model maker marks](./deployment.md#model-maker-marks-logourl)).
+
+A few image models render fewer sizes at some aspect ratios, or a transparent
+background at one size only. Their capability sheets say so, with these
+fields (absent on every other model, and on an older server):
+
+| Field | Type | Meaning |
+|---|---|---|
+| `resolutionsByAspectRatio` | `{ [ratio]: string[] }` | The aspect ratios at which the model renders fewer sizes than `resolutions`, each with the sizes it renders there, spelled as in `resolutions`. A ratio not listed renders every entry of `resolutions`. A request for a size its ratio does not render runs, and is charged, at the largest size the ratio renders at or below it, and the response's `adjustments` say so ([4d](#4d-parameter-corrections-adjustments)). |
+| `transparentResolution` | string | The one size a transparent background (`background: "transparent"`) renders at. A transparent request at another size runs, and is charged, at this one, reported in `adjustments`. |
+| `backgroundOnlyAtTransparentResolution` | `true` | The model takes a background setting only at `transparentResolution`: at any other size none is sent, so `opaque` there renders as `auto` (reported in `adjustments`). |
+
+GPT Image 2.5 (`gpt-image-2-5-flare`, `gpt-image-2-5-sunburst` and their
+`-i2i` edit models) renders 27:16, 16:27, 9:8 and 8:9 at 1K only, and a
+transparent background at 1K:
+
+```json
+{
+  "id": "gpt-image-2-5-flare",
+  "aspectRatios": ["auto", "1:1", "16:9", "9:16", "27:16", "16:27", "9:8", "8:9"],
+  "resolutions": ["1K", "2K", "4K"],
+  "resolutionsByAspectRatio": { "27:16": ["1K"], "16:27": ["1K"], "9:8": ["1K"], "8:9": ["1K"] },
+  "backgrounds": ["auto", "opaque", "transparent"],
+  "transparentResolution": "1K",
+  "backgroundOnlyAtTransparentResolution": true
+}
+```
+
+(Abridged: only the fields this section is about, and not every ratio.) A
+size menu offers, at the chosen ratio, `resolutionsByAspectRatio[ratio]` when
+the ratio is listed there, else `resolutions`. GPT Image 2.6 Flare and
+Sunburst list `transparentResolution: "1K"` and no `resolutionsByAspectRatio`.
 
 `GET /v1/model-makers` returns only the makers, for an app that draws marks
 and does not need the catalog: `{ makers: [{ id, name, logoUrl }] }`, every
