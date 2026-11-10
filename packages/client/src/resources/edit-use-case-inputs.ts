@@ -14,7 +14,7 @@ import type { CaptionStyle } from "@nodaro/shared/captions"
  * `mediaUrls`, not both.
  *
  * Several recordings or a Master audio need Speaker Map, which tells who is on
- * which camera: where it is not available to you (not yet on nodaro.ai) the
+ * which camera: where it is not available to you the
  * request is refused `403 node_not_available` — send one recording.
  */
 export interface UseCaseRecordingsInput {

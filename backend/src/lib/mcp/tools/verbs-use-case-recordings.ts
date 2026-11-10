@@ -59,7 +59,7 @@ export type RecordingsArgs = {
 
 /** What a description says about several recordings: who may run them, and what the run reports. */
 export const RECORDINGS_SENTENCE =
-  "Several recordings or a Master audio need Speaker Map: where it is not available to you (not yet on nodaro.ai) " +
+  "Several recordings or a Master audio need Speaker Map: where it is not available to you " +
   "the request is refused 403 — send one recording. Such a run reports who is on which camera in `output_data.cameras` " +
   "(`speakers` [{ speaker, ordinal, camera, marginDb }], camera null = the wide shot; `syncNotes`, `mapNotes`)."
 

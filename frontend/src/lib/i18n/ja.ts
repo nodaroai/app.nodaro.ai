@@ -11134,7 +11134,7 @@ export const ja: ChromeDict = {
   "proccfg.usecaseCameraAuto": "自動",
   "proccfg.usecaseCameraWide": "引きのショット",
   "proccfg.usecaseWhoHint": "話者 1 は最初に聞こえた声です。",
-  "proccfg.usecaseNeedsSpeakerMap": "複数の録音とマスターオーディオには「話者マップ」が必要ですが、ここではまだ有効になっていません。それまでは、実行時に最初の録音だけが読み込まれます。",
+  "proccfg.usecaseNeedsSpeakerMap": "複数の録音とマスターオーディオには「話者マップ」が必要ですが、ここではご利用いただけないため、実行時に最初の録音だけが読み込まれます。",
   "proccfg.usecaseFramingSource": "フレーミングの方法",
   "proccfg.usecaseFramingAuto": "自動（顔を追従）",
   "proccfg.usecaseFramingStatic": "均等分割",

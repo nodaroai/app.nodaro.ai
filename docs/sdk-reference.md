@@ -6709,7 +6709,7 @@ const { jobId } = await client.media.splitMedia({ videoUrl: "https://example.com
 shotCuts(input: { videoUrl: string; frames?: boolean }): Promise<{ jobId: string }>
 ```
 
-**Not yet enabled on nodaro.ai.** Where every shot of a video starts and ends
+Where every shot of a video starts and ends
 (`POST /v1/shot-cuts`), measured from the file: every decoded frame is scored and
 each hard cut starts a new shot (dissolves and fades are not cuts). Videos up to
 30 minutes. `frames: true` also saves each shot's exact first and last frame as PNG
@@ -9054,19 +9054,19 @@ request methods return `{ jobId }` (`EditJobResult`) — poll with
 |--------|----------|-------|
 | `silenceDetect(input)` | `POST /v1/silence-detect` | Keyless ffmpeg silence pass over an audio **or** video source. |
 | `audioSync(input)` | `POST /v1/audio-sync` | Keyless: measure how far apart 2–6 recordings' clocks are, from their sound. |
-| `speakerMap(input)` | `POST /v1/speaker-map` | Keyless: which camera each speaker is on, from the cameras' own microphones. **Not yet enabled on nodaro.ai.** |
+| `speakerMap(input)` | `POST /v1/speaker-map` | Keyless: which camera each speaker is on, from the cameras' own microphones. |
 | `applyEdl(input)` | `POST /v1/apply-edl` | Render an edit decision list (EDL) into a video or audio cut. |
 | `cameraSwitch(input)` | `POST /v1/camera-switch` | Multicam: put each cut of an EDL on the camera of whoever is speaking (flat price). Runs on nodaro.ai; a self-hosted install relays it once connected (`503 nodaro_connection_required` otherwise). |
 | `editPlan(input)` | `POST /v1/edit-plan` | Transcript-driven planner (tighten / clips / chapters / trailer). On a self-hosted install it relays to nodaro.ai (`503 nodaro_connection_required` when not connected). |
-| `tightenEpisode(input, options?)` | `POST /v1/tighten-episode` | Tighten Episode: one recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map, not yet enabled on nodaro.ai), the tightened episode out — transcribe, plan, render, with optional captions, music and framing, in one call. Core; a self-hosted install needs a nodaro.ai connection for the steps that run there (`503 nodaro_connection_required` otherwise). |
+| `tightenEpisode(input, options?)` | `POST /v1/tighten-episode` | Tighten Episode: one recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map), the tightened episode out — transcribe, plan, render, with optional captions, music and framing, in one call. Core; a self-hosted install needs a nodaro.ai connection for the steps that run there (`503 nodaro_connection_required` otherwise). |
 | `estimateTightenEpisode(input)` | `POST /v1/tighten-episode/estimate` | What a Tighten Episode run is estimated at. Nothing is created or charged. |
-| `episodeChapters(input, options?)` | `POST /v1/episode-chapters` | Chapters: one recording in, its chapters out — transcribe, then plan the chapters, in one call; nothing is rendered. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
+| `episodeChapters(input, options?)` | `POST /v1/episode-chapters` | Chapters: one recording in, its chapters out — transcribe, then plan the chapters, in one call; nothing is rendered. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). |
 | `estimateEpisodeChapters(input)` | `POST /v1/episode-chapters/estimate` | What a Chapters run is estimated at. Nothing is created or charged. |
-| `episodeTrailer(input, options?)` | `POST /v1/episode-trailer` | Trailer: one video recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map, not yet enabled on nodaro.ai), a 20–40 second trailer out in each chosen social format (padded, never cropped), optionally after an intro card, in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
+| `episodeTrailer(input, options?)` | `POST /v1/episode-trailer` | Trailer: one video recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map), a 20–40 second trailer out in each chosen social format (padded, never cropped), optionally after an intro card, in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). |
 | `estimateEpisodeTrailer(input)` | `POST /v1/episode-trailer/estimate` | What a Trailer run is estimated at. Nothing is created or charged. |
-| `clipPack(input, options?)` | `POST /v1/clip-pack` | Clip Pack: one recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map, not yet enabled on nodaro.ai), a pack of short clips out — each framed for 9:16 with the speakers stacked and captioned by default (audio clips for an audio recording), in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
+| `clipPack(input, options?)` | `POST /v1/clip-pack` | Clip Pack: one recording in (or up to six of one conversation, with an optional Master audio — several need Speaker Map), a pack of short clips out — each framed for 9:16 with the speakers stacked and captioned by default (audio clips for an audio recording), in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). |
 | `estimateClipPack(input)` | `POST /v1/clip-pack/estimate` | What a Clip Pack run is estimated at. Nothing is created or charged. |
-| `speakerLayout(input, options?)` | `POST /v1/speaker-layout` | Speaker Layout: one video recording in (or up to six of one conversation, at most five of them cameras, with an optional Master audio — several need Speaker Map, not yet enabled on nodaro.ai), the whole recording framed by speaker out — the same length, nothing cut — in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). **Not yet enabled on nodaro.ai.** |
+| `speakerLayout(input, options?)` | `POST /v1/speaker-layout` | Speaker Layout: one video recording in (or up to six of one conversation, at most five of them cameras, with an optional Master audio — several need Speaker Map), the whole recording framed by speaker out — the same length, nothing cut — in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). |
 | `estimateSpeakerLayout(input)` | `POST /v1/speaker-layout/estimate` | What a Speaker Layout run is estimated at. Nothing is created or charged. |
 | `continueUseCase(input, options?)` | `POST /v1/<type>/continue` (`/v1/tighten-episode/continue`, `/v1/episode-chapters/continue`, `/v1/episode-trailer/continue`, `/v1/clip-pack/continue`, `/v1/speaker-layout/continue`) | Continue a Tighten Episode, Chapters, Trailer, Clip Pack or Speaker Layout run as a new job: from where it failed, or (Tighten Episode, Trailer, Clip Pack, Speaker Layout) its Render final after a review. The route is the run's own type. |
 | `remapTranscript(edl, transcript)` | — (local) | PURE client-side transform — remaps a transcript through an EDL. **No request.** |
@@ -9147,8 +9147,6 @@ const sync = (job.output_data as { json: AudioSyncResult }).json
 ```
 
 #### `speakerMap(input)`
-
-**Not yet enabled on nodaro.ai.**
 
 ```ts
 speakerMap(input: SpeakerMapInput): Promise<EditJobResult>
@@ -9260,8 +9258,8 @@ music bed under it. Only the recording is required (`mediaUrl`, or
 | `musicDuckAmount` | `number` | no | How far the music dips under the voice, 0–100 (default 75). |
 
 Passing both `mediaUrl` and `mediaUrls`, or neither, rejects with a
-`TypeError` before any request. **Several recordings or a Master audio need Speaker Map**,
-which is not yet enabled on nodaro.ai: until it is, such a request is refused
+`TypeError` before any request. **Several recordings or a Master audio need Speaker Map**:
+where it is not available to you, such a request is refused
 `403 node_not_available` before anything is probed or charged — send one
 recording.
 
@@ -9307,7 +9305,7 @@ estimateEpisodeChapters(input: EpisodeChaptersInput): Promise<{ data: UseCaseEst
 List a podcast recording's chapters in one call: the run transcribes it, then
 plans its chapters, each with a title and a start time. Nothing is rendered.
 Only `mediaUrl` is required; a field left out takes the node's default.
-**Not yet enabled on nodaro.ai** (see the [node page](./nodes/processing-video/episode-chapters.md)).
+See the [node page](./nodes/processing-video/episode-chapters.md).
 
 **`EpisodeChaptersInput`:**
 
@@ -9350,7 +9348,7 @@ trailer from its strongest moments (the plan picks the length and joins the
 moments with its own short crossfades; neither is a setting), renders it,
 plays an optional intro card first, and pads it to every format — never
 cropped. Only the recording is required (`mediaUrl`, or `mediaUrls`); a field
-left out takes the node's default. **Not yet enabled on nodaro.ai** (see the [node page](./nodes/processing-video/episode-trailer.md)).
+left out takes the node's default. See the [node page](./nodes/processing-video/episode-trailer.md).
 
 **`EpisodeTrailerInput`** (with `UseCaseRecordingsInput`, its recordings):
 
@@ -9370,7 +9368,7 @@ left out takes the node's default. **Not yet enabled on nodaro.ai** (see the [no
 `options.idempotencyKey` works as on `tightenEpisode`. Passing both `mediaUrl`
 and `mediaUrls`, or neither, rejects with a `TypeError` before any request;
 several recordings or a Master audio are refused `403 node_not_available`
-where Speaker Map is not available to you (not yet on nodaro.ai).
+where Speaker Map is not available to you.
 
 `episodeTrailer` answers `UseCaseJobResult` — `{ jobId, executionId?, deduped? }`.
 Poll `jobId`: the finished job's `output_data.formats` is `[{ format, url }]`,
@@ -9412,8 +9410,8 @@ clips, with no framing or captions. Only the recording is required; a field
 left out takes the node's default. It takes the cameras of one conversation
 as Tighten Episode does (`mediaUrls`, `masterAudioUrl`, `cameras` —
 `ClipPackInput` extends `UseCaseRecordingsInput`; each clip then cuts to
-whoever is talking), with the same need for Speaker Map. **Not yet enabled on
-nodaro.ai** (see the [node page](./nodes/processing-video/clip-pack.md)).
+whoever is talking), with the same need for Speaker Map. See the
+[node page](./nodes/processing-video/clip-pack.md).
 
 **`ClipPackInput`:**
 
@@ -9471,8 +9469,8 @@ cut: the run transcribes the recording and frames each speaker with Speaker
 View over the whole of it. With several recordings of one conversation, they
 are lined up and each speaker is shown on their own camera. Only the
 recording is required (`mediaUrl`, or `mediaUrls`); a field left out takes
-the node's default. **Not yet enabled on nodaro.ai** (see the
-[node page](./nodes/processing-video/speaker-layout.md)).
+the node's default. See the
+[node page](./nodes/processing-video/speaker-layout.md).
 
 **`SpeakerLayoutInput`** (with `UseCaseRecordingsInput`, its recordings, as on `tightenEpisode`):
 

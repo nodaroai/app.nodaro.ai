@@ -11344,7 +11344,7 @@ export const he: ChromeDict = {
   "proccfg.usecaseCameraAuto": "אוטומטי",
   "proccfg.usecaseCameraWide": "צילום רחב",
   "proccfg.usecaseWhoHint": "דובר 1 הוא הקול הראשון שנשמע.",
-  "proccfg.usecaseNeedsSpeakerMap": "כמה הקלטות ואודיו ראשי דורשים את ״מפת דוברים״, שעדיין לא זמינה כאן. עד אז הרצה קוראת רק את ההקלטה הראשונה.",
+  "proccfg.usecaseNeedsSpeakerMap": "כמה הקלטות ואודיו ראשי דורשים את ״מפת דוברים״, שאינה זמינה לך כאן, ולכן הרצה קוראת רק את ההקלטה הראשונה.",
   "proccfg.usecaseFramingSource": "מקור המסגור",
   "proccfg.usecaseFramingAuto": "אוטומטי (מעקב אחר פנים)",
   "proccfg.usecaseFramingStatic": "חלוקה שווה",

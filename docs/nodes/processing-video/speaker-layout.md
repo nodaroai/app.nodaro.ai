@@ -2,15 +2,13 @@
 
 > Frame a whole recording by speaker in one step — the same length, nothing cut: each speaker framed in turn, or, with several cameras of one conversation, each speaker shown on their own camera.
 
-**Not yet enabled on nodaro.ai.**
-
 **Needs nodaro.ai on a self-hosted install.** Its render (Speaker View) runs on nodaro.ai. On a self-hosted install, connect your instance to nodaro.ai (Integrations → nodaro.ai, or paste an API key) and the node runs those steps there. Without a connection the node is not listed among the available nodes (`GET /v1/nodes`), and a run is refused before anything starts: `503` with the code `nodaro_connection_required`, no job created. Transcribe uses the install's own ElevenLabs key, or the connection when there is none; with neither, the run is refused before anything starts with `503 provider_key_missing`, naming the key.
 
 ## Overview
 
 Speaker Layout takes a recording and returns it framed by speaker, from start to end: nothing is cut, so the video is as long as the recording. Inside, it runs the same steps you can wire by hand — [Transcribe](../ai-text/transcribe.md) (speakers labelled, word timings), then [Speaker View](./speaker-view.md) over the whole recording, boxing each speaker on screen and switching to whoever is talking. Each step runs as its own job, so a long recording, a cancel or a failure behaves as it does in a hand-built workflow.
 
-With [several cameras](#several-cameras) of one conversation (not yet enabled on nodaro.ai), the recordings are lined up and each speaker is shown on their own camera. To cut the recording too (silences, filler, a tighter episode), use [Tighten Episode](./tighten-episode.md) with a framing instead; for short clips, [Clip Pack](./clip-pack.md).
+With [several cameras](#several-cameras) of one conversation, the recordings are lined up and each speaker is shown on their own camera. To cut the recording too (silences, filler, a tighter episode), use [Tighten Episode](./tighten-episode.md) with a framing instead; for short clips, [Clip Pack](./clip-pack.md).
 
 ## Inputs
 
@@ -56,7 +54,7 @@ Where Speaker Frames is not available to you, the panel offers no framing source
 
 ## Several cameras
 
-**Not yet enabled on nodaro.ai.** Several recordings and a Master audio need [Speaker Map](../processing-audio/speaker-map.md), which works out who is on which camera and is not yet available on nodaro.ai. Until it is, a run in the editor, an app or a workflow reads its first recording only (see [Inputs](#inputs)), and a request over the API, the SDK, the CLI or MCP that sends several recordings or a Master audio is refused before anything is probed or charged: `403 node_not_available`.
+Several recordings and a Master audio need [Speaker Map](../processing-audio/speaker-map.md), which works out who is on which camera. Where Speaker Map is not available to you, a run in the editor, an app or a workflow reads its first recording only (see [Inputs](#inputs)), and a request over the API, the SDK, the CLI or MCP that sends several recordings or a Master audio is refused before anything is probed or charged: `403 node_not_available`. While Speaker Map is withheld from users, a published app's or template's listed price is that of its first recording (a listing is priced as any user would run it, whoever published it).
 
 Wire each camera's recording into **Recordings** and, when you have one, the mixer or recorder track into **Master audio**. The run then lines the recordings up ([Audio Sync](../processing-audio/audio-sync.md)), transcribes the sound, works out which camera each speaker is on (Speaker Map, over the whole recording), puts each stretch on whoever is talking ([Camera Switch](./camera-switch.md), with two or more cameras), and frames it with Speaker View — each camera's own shot.
 
@@ -89,7 +87,7 @@ Speaker Layout is charged **its steps at their own rates, plus a per-run fee of 
 - Transcribe (`elevenlabs-stt`): 25 credits<!-- credits: elevenlabs-stt -->
 - Speaker View, per minute of the recording, at its own rates (see [Speaker View](./speaker-view.md#credit-cost)). The estimate prices it at the higher (complex) rate, since the layout is not known before the run; a recording with at most two speakers on screen and no zoom is charged the lower one. A Preview is charged at the preview rates.
 - Following faces, Speaker Frames: 2.2<!-- credits-rate: speaker-frames --> credits per started block of 1,000 sampled frames, the run's total rounded up once. One recording samples the whole video at 2 frames per second; several cameras sample every camera over the recording's length plus 2 seconds at each end (see [Speaker Frames](./speaker-frames.md#credit-cost)).
-- [Several cameras](#several-cameras) (not yet enabled on nodaro.ai): Audio Sync over the sound and each camera, 11<!-- credits-rate: audio-sync:2src --> credits for each recording it lines up to the sound (none when the recordings are already in sync); Speaker Map, 11 credits<!-- credits: speaker-map -->; Camera Switch, 11 credits<!-- credits: camera-switch -->, with two or more cameras. Speaker View is priced at the sound's length (the Master audio's, else the longest recording's).
+- [Several cameras](#several-cameras): Audio Sync over the sound and each camera, 11<!-- credits-rate: audio-sync:2src --> credits for each recording it lines up to the sound (none when the recordings are already in sync); Speaker Map, 11 credits<!-- credits: speaker-map -->; Camera Switch, 11 credits<!-- credits: camera-switch -->, with two or more cameras. Speaker View is priced at the sound's length (the Master audio's, else the longest recording's).
 - **Plus the per-run fee of 11 credits<!-- credits: use-case-fee:speaker-layout -->.** A Render final after a review is not charged the fee again.
 
 You are charged for the framed video's own minutes, not for the estimate.

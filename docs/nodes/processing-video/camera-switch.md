@@ -18,7 +18,7 @@ The **Multicam Cut** template in the template marketplace is this chain, ready t
 |--------|------|----------|-------------|
 | EDL | json | **Yes** | One edit — wire Edit Plan's EDL output (Tighten mode, or Clips mode: each clip fans out to its own Camera Switch run). A chapters plan is refused. A Transcript output cannot be wired here; the editor refuses it. |
 | Transcript | json | **Yes** | The word transcript **with speaker labels** — a Transcribe node run with speaker detection on. An EDL output cannot be wired here; the editor refuses it. |
-| Speaker map | json | No | **Not yet enabled on nodaro.ai** — the input is shown once [Speaker Map](../processing-audio/speaker-map.md) is. A Speaker Map result: which camera each speaker is on, worked out from the cameras' own microphones. It fills the Speakers table for every speaker you have not set yourself (see *Speakers and cameras* below). Wired but not run yet, or wired to something that is not a Speaker Map result, the run is refused and the panel says so. |
+| Speaker map | json | No | Shown where [Speaker Map](../processing-audio/speaker-map.md) is available to you, and whenever a wire already lands on it. A Speaker Map result: which camera each speaker is on, worked out from the cameras' own microphones. It fills the Speakers table for every speaker you have not set yourself (see *Speakers and cameras* below). Wired but not run yet, or wired to something that is not a Speaker Map result, the run is refused and the panel says so. |
 
 The **Speaker map input** (a wire) and the **Speakers table** (the node's `speakerMap` setting) are two different things: the input carries what Speaker Map worked out, the table is what you set by hand, and the table wins.
 

@@ -84,7 +84,7 @@ export const definition = {
   "producer": "video",
   "docs": {
     "page": "docs/nodes/processing-video/speaker-layout.md",
-    "useCase": "A whole podcast or interview framed for 9:16 (or any shape) by speaker, nothing cut; with several cameras, each speaker on their own camera. Not yet enabled on nodaro.ai"
+    "useCase": "A whole podcast or interview framed for 9:16 (or any shape) by speaker, nothing cut; with several cameras, each speaker on their own camera"
   },
   "priceRows": {
     "use-case-fee:speaker-layout": 10

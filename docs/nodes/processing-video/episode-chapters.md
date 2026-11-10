@@ -2,8 +2,6 @@
 
 > List a podcast or interview recording's chapters in one step: transcribe it and find its chapters, each with a title and a start time, ready to paste into show notes.
 
-**Not yet enabled on nodaro.ai.** The node is built and documented, but it is hidden on nodaro.ai until it is switched on; until then it is not offered in the editor, in `GET /v1/nodes` or as an MCP tool, and its routes refuse a run.
-
 **Needs nodaro.ai on a self-hosted install.** Its planning step runs on nodaro.ai. On a self-hosted install, connect your instance to nodaro.ai (Integrations → nodaro.ai, or paste an API key) and the node runs that step there. Without a connection the node is not listed among the available nodes (`GET /v1/nodes`), and a run is refused before anything starts: `503` with the code `nodaro_connection_required`, no job created. Transcribe uses the install's own ElevenLabs key, or the connection when there is none; with neither, the run is refused before anything starts with `503 provider_key_missing`, naming the key.
 
 ## Overview

@@ -11134,7 +11134,7 @@ export const ko: ChromeDict = {
   "proccfg.usecaseCameraAuto": "자동",
   "proccfg.usecaseCameraWide": "와이드 샷",
   "proccfg.usecaseWhoHint": "화자 1은 처음 들린 목소리입니다.",
-  "proccfg.usecaseNeedsSpeakerMap": "여러 녹음과 마스터 오디오에는 ‘화자 맵’이 필요하지만 아직 여기에서 사용할 수 없습니다. 그때까지는 실행 시 첫 번째 녹음만 읽습니다.",
+  "proccfg.usecaseNeedsSpeakerMap": "여러 녹음과 마스터 오디오에는 ‘화자 맵’이 필요하지만 여기에서는 사용할 수 없으므로 실행 시 첫 번째 녹음만 읽습니다.",
   "proccfg.usecaseFramingSource": "프레이밍 방식",
   "proccfg.usecaseFramingAuto": "자동 (얼굴 따라가기)",
   "proccfg.usecaseFramingStatic": "균등 분할",

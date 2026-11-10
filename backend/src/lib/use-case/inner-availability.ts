@@ -1,8 +1,8 @@
 // @registry-lookup looks up the label of each node type it is given (NODE_REGISTRY), never the table
 /**
  * A use-case run whose built chain holds a step the caller may not run (a
- * node withheld on this deployment — Speaker Map before its release, which a
- * run on several cameras needs) is refused up front, 403, before any row or
+ * node withheld on this deployment — Speaker Map where it is not available,
+ * which a run on several cameras needs) is refused up front, 403, before any row or
  * hold (decided 2026-10-17). Without it the run would start, charge
  * Transcribe and Audio Sync, and fail at that step's own deny check.
  *
@@ -33,8 +33,8 @@ import { isNodeDenied, USER_VIEWER } from "../surface-deny.js"
 /**
  * Whether `userId` may run a use-case node on several recordings or a Master
  * audio (decided 2026-10-19): only while Speaker Map — the step that tells
- * who is on which camera — is available to them (admins, while it is hidden
- * from users). Otherwise a node reads its first recording only, exactly as
+ * who is on which camera — is available to them (to admins only, where it
+ * is withheld from users). Otherwise a node reads its first recording only, exactly as
  * before multicam (`usecaseRunMaxRecordings`). An answer that cannot be read
  * is "no": the run as before, never a refusal.
  */

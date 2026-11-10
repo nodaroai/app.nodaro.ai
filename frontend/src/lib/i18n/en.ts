@@ -11436,7 +11436,7 @@ export const en = {
   "proccfg.usecaseCameraAuto": "Automatic",
   "proccfg.usecaseCameraWide": "Wide shot",
   "proccfg.usecaseWhoHint": "Speaker 1 is the first voice heard.",
-  "proccfg.usecaseNeedsSpeakerMap": "Several recordings and Master audio need Speaker Map, which is not enabled here yet. Until then a run reads the first recording only.",
+  "proccfg.usecaseNeedsSpeakerMap": "Several recordings and a Master audio need Speaker Map, which is not available to you here, so a run reads the first recording only.",
   "proccfg.usecaseFramingSource": "Framing source",
   "proccfg.usecaseFramingAuto": "Automatic (follow faces)",
   "proccfg.usecaseFramingStatic": "Even split",

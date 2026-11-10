@@ -11134,7 +11134,7 @@ export const ptBR: ChromeDict = {
   "proccfg.usecaseCameraAuto": "Automático",
   "proccfg.usecaseCameraWide": "Plano aberto",
   "proccfg.usecaseWhoHint": "O falante 1 é a primeira voz ouvida.",
-  "proccfg.usecaseNeedsSpeakerMap": "Várias gravações e o Áudio principal precisam do Mapa de falantes, que ainda não está ativado aqui. Até lá, uma execução lê apenas a primeira gravação.",
+  "proccfg.usecaseNeedsSpeakerMap": "Várias gravações e o Áudio principal precisam do Mapa de falantes, que não está disponível para você aqui, então uma execução lê apenas a primeira gravação.",
   "proccfg.usecaseFramingSource": "Origem do enquadramento",
   "proccfg.usecaseFramingAuto": "Automático (seguir rostos)",
   "proccfg.usecaseFramingStatic": "Divisão igual",
