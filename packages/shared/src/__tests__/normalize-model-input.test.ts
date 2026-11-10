@@ -76,18 +76,19 @@ describe("normalizeModelInput", () => {
     expect(normalizeModelInput("gpt-image-2", { aspectRatio: "1:1", resolution: "4K" }).resolution).toBe("2K")
   })
 
-  // GPT Image 2.5 is NOT GPT Image 2. Its KIE docs
-  // (docs.kie.ai/market/gpt/gpt-image-2-5-*) state no aspect_ratio x resolution
-  // restriction, so the cross-field block above must NOT be widened to these
-  // ids "for consistency" — doing so would silently downgrade a paid 4K render
-  // to 1K. If GPT Image 2.5 ever documents such a limit, add it deliberately
-  // and change this test in the same commit.
-  it.each([
+  // GPT Image 2.5 is NOT GPT Image 2. Its docs
+  // (docs.kie.ai/market/gpt/gpt-image-2-5-*) limit four ratios to 1K and
+  // nothing else, so GPT Image 2's own rules (auto → 1K, 1:1 not at 4K) must
+  // NOT be widened to these ids "for consistency" — that would downgrade a paid
+  // 4K render to 1K. The four ratios are the catalog's
+  // `resolutionsByAspectRatio`, tested below.
+  const GPT_IMAGE_2_5_IDS = [
     "gpt-image-2-5-flare",
     "gpt-image-2-5-flare-i2i",
     "gpt-image-2-5-sunburst",
     "gpt-image-2-5-sunburst-i2i",
-  ])("%s has NO cross-field aspect-ratio x resolution rule", (modelId) => {
+  ]
+  it.each(GPT_IMAGE_2_5_IDS)("%s keeps 4K at auto and at 1:1 (GPT Image 2's rules are not its own)", (modelId) => {
     const auto4k = normalizeModelInput(modelId, { aspectRatio: "auto", resolution: "4K" })
     expect(auto4k.resolution).toBe("4K")
     expect(auto4k.adjustments).toEqual([])
@@ -95,6 +96,59 @@ describe("normalizeModelInput", () => {
     const square4k = normalizeModelInput(modelId, { aspectRatio: "1:1", resolution: "4K" })
     expect(square4k.resolution).toBe("4K")
     expect(square4k.adjustments).toEqual([])
+  })
+
+  const ONE_K_ONLY_RATIOS = ["27:16", "16:27", "9:8", "8:9"]
+  describe.each(GPT_IMAGE_2_5_IDS)("%s renders 27:16, 16:27, 9:8 and 8:9 at 1K only", (modelId) => {
+    it.each(ONE_K_ONLY_RATIOS.flatMap((ratio) => ["2K", "4K"].map((size) => [ratio, size] as const)))(
+      "%s at %s moves to 1K and says so",
+      (ratio, size) => {
+        const out = normalizeModelInput(modelId, { aspectRatio: ratio, resolution: size })
+        expect(out.aspectRatio).toBe(ratio)
+        expect(out.resolution).toBe("1K")
+        expect(out.adjustments).toEqual([{
+          field: "resolution",
+          from: size,
+          to: "1K",
+          reason: `${MODEL_CATALOG[modelId].label} only renders 1K at the "${ratio}" aspect ratio.`,
+        }])
+      },
+    )
+
+    it.each(ONE_K_ONLY_RATIOS)("%s at 1K, or with no size, is left as it is", (ratio) => {
+      expect(normalizeModelInput(modelId, { aspectRatio: ratio, resolution: "1K" }).adjustments).toEqual([])
+      const unset = normalizeModelInput(modelId, { aspectRatio: ratio })
+      expect(unset.resolution).toBeUndefined()
+      expect(unset.adjustments).toEqual([])
+    })
+
+    it.each(["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9"])("%s keeps 2K and 4K", (ratio) => {
+      for (const size of ["2K", "4K"]) {
+        const out = normalizeModelInput(modelId, { aspectRatio: ratio, resolution: size })
+        expect(out.resolution).toBe(size)
+        expect(out.adjustments).toEqual([])
+      }
+    })
+
+    it("an opaque background at 27:16 and 2K keeps its setting, as the size it renders is 1K", () => {
+      const out = normalizeModelInput(modelId, { aspectRatio: "27:16", resolution: "2K", background: "opaque" })
+      expect(out.resolution).toBe("1K")
+      expect(out.background).toBe("opaque")
+      expect(out.adjustments.map((a) => a.field)).toEqual(["resolution"])
+    })
+
+    it("a transparent background at 9:8 and 4K is one move to 1K", () => {
+      const out = normalizeModelInput(modelId, { aspectRatio: "9:8", resolution: "4K", background: "transparent" })
+      expect(out.resolution).toBe("1K")
+      expect(out.background).toBe("transparent")
+      expect(out.adjustments).toHaveLength(1)
+    })
+  })
+
+  it("GPT Image 2.6 offers none of the four ratios, so the rule never reaches it", () => {
+    for (const id of Object.keys(MODEL_CATALOG).filter((m) => m.startsWith("gpt-image-2-6"))) {
+      expect(MODEL_CATALOG[id].resolutionsByAspectRatio, id).toBeUndefined()
+    }
   })
 
   // The four ratios 2.5 introduced are new to the platform vocabulary; the snap

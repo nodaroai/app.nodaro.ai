@@ -138,7 +138,7 @@ import { countImageInputEdges, countRefModalityEdges } from "@nodaro/shared/work
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
 import { gptImage26StaticCosts } from "./gpt-image-2-6-pricing.js"
-import { defaultImageModelForNode, gptImage26EstimatedImages, isGptImage26Tiered } from "@nodaro/shared/model-catalog"
+import { defaultImageModelForNode, gptImage26EstimatedImages, isGptImage26Tiered, resolutionAtAspectRatio } from "@nodaro/shared/model-catalog"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
@@ -6966,11 +6966,12 @@ export function getNodeModelIdentifier(
   }
 
   // Image/edit nodes with quality/resolution variable pricing. The input images
-  // reach the id for a model priced per image.
+  // reach the id for a model priced per image. The size is the one the run
+  // renders at its ratio (GPT Image 2.5: 1K only at 27:16, 16:27, 9:8 and 8:9).
   return buildCreditModelIdentifier(
     provider,
     data.quality as string | undefined,
-    data.resolution as string | undefined,
+    typeof data.resolution === "string" ? resolutionAtAspectRatio(provider, data.aspectRatio, data.resolution) : undefined,
     data.renderingSpeed as string | undefined,
     data.targetResolution as string | undefined,
     isGptImage26Tiered(provider) ? gptImage26EstimatedImages(provider, data, graph.imageRefsWired ?? 0) : undefined,

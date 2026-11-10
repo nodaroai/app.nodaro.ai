@@ -1769,6 +1769,19 @@ describe("POST /v1/generate-image", () => {
       expect(inputData.resolution).toBe("1K")
     })
 
+    it.each(["27:16", "16:27", "9:8", "8:9"])("CHECK === DEBIT for GPT Image 2.5 at %s: a 2K / 4K image is priced and recorded as 1K", async (aspectRatio) => {
+      for (const provider of ["gpt-image-2-5-flare", "gpt-image-2-5-sunburst"]) {
+        for (const resolution of ["2K", "4K"]) {
+          const body = { prompt: "a lighthouse", userId: VALID_UUID, provider, aspectRatio, resolution, direction: DIRECTION }
+          const { identifier: debit, inputData } = await debitIdentifierFor(body)
+          expect(checkIdentifierFor(body)).toBe(debit)
+          expect(debit).toBe(provider)
+          expect(inputData.aspectRatio).toBe(aspectRatio)
+          expect(inputData.resolution).toBe("1K")
+        }
+      }
+    })
+
     it("CHECK === DEBIT for gpt-image-2 + an off-list ratio", async () => {
       const body = {
         prompt: "a lighthouse",

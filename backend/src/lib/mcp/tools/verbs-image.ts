@@ -34,7 +34,7 @@ import { defaultImageModel, isAutoAspectToken, modelIdsByKindMode } from "@nodar
 import { IMAGE_BACKGROUND_VALUES, IMAGE_QUALITY_VALUES, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, requestImageLimit } from "@nodaro/shared/models"
 import { SCRIPT_SCENE_COUNT_RANGE, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TARGET_DURATION_DEFAULT, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared/nodes"
 import { getUserMcpPreferences } from "../user-preferences.js"
-import { normalizeImageInput } from "../normalize.js"
+import { normalizeImageInput, requestedAspectRatio } from "../normalize.js"
 import { imageToImageAspectRatio } from "../../image-auto-aspect.js"
 import { presetImageBody } from "./_image-preset-call.js"
 import { OVERLAY_MAX_LAYERS } from "../../../providers/image/overlay-contract.js"
@@ -309,6 +309,8 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         } catch {
           // Pref read failed (DB blip, missing column) → proceed with no saved prefs.
         }
+        // The ratio asked for: the call's, else the saved default.
+        const requestedRatio = requestedAspectRatio(effective.aspect_ratio as string | undefined, userImg.aspectRatio)
         const normalized = normalizeImageInput(
           {
             model: effective.model as string | undefined,
@@ -322,7 +324,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             resolution: userImg.resolution,
             quality: userImg.quality,
           },
-          defaultImageModel("general", (effective.aspect_ratio as string | undefined) ?? userImg.aspectRatio),
+          defaultImageModel("general", requestedRatio),
         )
         const { model } = normalized
         // A fan-out's levers are only spelled here, against every model's
@@ -350,11 +352,12 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         // "auto" keeps the shape of the photo the call sends (the base image,
         // else the first reference): /v1/generate-image resolves it against
         // that photo — natively, or to the model's nearest listed ratio — so a
-        // call carrying one hands "auto" on, as `modify_image` does. With no
-        // photo, "auto" is snapped here exactly as before.
+        // call carrying one hands "auto" on, as `modify_image` does, whether
+        // the call names it or the person saved it. With no photo, "auto" is
+        // snapped here exactly as before.
         const sendsPhoto =
           Boolean(effective.base_image_url) || refUrls.length > 0 || (args.connected_references?.length ?? 0) > 0
-        const aspectRatio = isAutoAspectToken(effective.aspect_ratio) && sendsPhoto ? "auto" : levers.aspectRatio
+        const aspectRatio = isAutoAspectToken(requestedRatio) && sendsPhoto ? "auto" : levers.aspectRatio
         // The user's own palette / moodboard, as the route's direction ids
         // (`palette:<id>` / `moodboard:<id>`); the route resolves them.
         for (const [arg, id] of [["palette_id", args.palette_id], ["moodboard_id", args.moodboard_id]] as const) {
@@ -493,6 +496,8 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         } catch {
           /* swallow */
         }
+        // The ratio asked for: the call's, else the saved default.
+        const requestedRatio = requestedAspectRatio(args.aspect_ratio, userImg.aspectRatio)
         const normalized = normalizeImageInput(
           {
             model: args.model,
@@ -506,7 +511,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             resolution: userImg.resolution,
             quality: userImg.quality,
           },
-          defaultImageModel("edit", args.aspect_ratio ?? userImg.aspectRatio),
+          defaultImageModel("edit", requestedRatio),
         )
         const { model, resolution, quality } = normalized
 
@@ -517,18 +522,19 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         // advertised-but-unsupported model degrades to a working edit, not a 400.
         const provider = (MODIFY_IMAGE_PROVIDERS as readonly string[]).includes(model)
           ? model
-          : defaultImageModel("edit", args.aspect_ratio ?? userImg.aspectRatio)
+          : defaultImageModel("edit", requestedRatio)
 
+        // The ratio sent: the one the call names, else the person's saved one,
+        // else the model's own rule for an unset ratio (GPT Image 2.5 / 2.6
+        // edits run at "auto", as on the route), else the general fallback.
         // "auto" keeps the source photo's shape: /v1/image-to-image resolves it
         // against the image (natively, or to the model's nearest listed ratio),
-        // so it is handed on instead of snapped to a fixed ratio here. A call
-        // that names no ratio (and has none saved) on a GPT Image 2.5 / 2.6 edit
-        // model asks for "auto" too, as on the route; normalizeImageInput would
-        // otherwise fill in 16:9.
-        const namesNoRatio = !args.aspect_ratio && !userImg.aspectRatio
-        const aspectRatio = isAutoAspectToken(args.aspect_ratio)
+        // so it is handed on instead of snapped to a fixed ratio here.
+        const aspectRatio = isAutoAspectToken(requestedRatio)
           ? "auto"
-          : (namesNoRatio ? imageToImageAspectRatio(provider, undefined) : undefined) ?? normalized.aspectRatio
+          : requestedRatio === undefined
+            ? imageToImageAspectRatio(provider, undefined) ?? normalized.aspectRatio
+            : normalized.aspectRatio
 
         const imageUrl =
           args.image_url ??

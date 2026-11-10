@@ -1131,6 +1131,26 @@ describe("POST /v1/image-to-image", () => {
       expect(inputData.resolution).toBe("1K")
     })
 
+    it.each(["27:16", "16:27", "9:8", "8:9"])("CHECK === DEBIT for GPT Image 2.5 at %s: a 2K / 4K edit is priced, recorded and sent as 1K", async (aspectRatio) => {
+      for (const provider of ["gpt-image-2-5-flare-i2i", "gpt-image-2-5-sunburst-i2i"]) {
+        for (const resolution of ["2K", "4K"]) {
+          const payload = { imageUrl: "https://r2.nodaro.ai/in.png", prompt: "make it night", userId: VALID_UUID, provider, aspectRatio, resolution }
+          const { identifier: debit, inputData } = await debitIdentifierFor(payload)
+          expect(checkIdentifierFor(payload)).toBe(debit)
+          expect(debit).toBe(provider)
+          expect(inputData.resolution).toBe("1K")
+          expect((vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as { resolution?: string }).resolution).toBe("1K")
+        }
+      }
+    })
+
+    it("GPT Image 2.5 at another ratio keeps its 2K price", async () => {
+      const payload = { imageUrl: "https://r2.nodaro.ai/in.png", prompt: "make it night", userId: VALID_UUID, provider: "gpt-image-2-5-flare-i2i", aspectRatio: "21:9", resolution: "2K" }
+      const { identifier: debit } = await debitIdentifierFor(payload)
+      expect(checkIdentifierFor(payload)).toBe(debit)
+      expect(debit).toBe("gpt-image-2-5-flare-i2i:2K")
+    })
+
     const lastQueued = () => vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as { provider?: string; aspectRatio?: string }
 
     it("no ratio on the default edit model is sent exactly as a request naming 'auto', at the same price", async () => {

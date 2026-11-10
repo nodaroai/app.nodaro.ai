@@ -809,6 +809,20 @@ describe("buildCreditModelIdentifier", () => {
   it("returns 'ideogram-v3' for BALANCED renderingSpeed (default, no suffix)", () => {
     expect(buildCreditModelIdentifier("ideogram-v3", { renderingSpeed: "BALANCED" })).toBe("ideogram-v3")
   })
+
+  // GPT Image 2.5 renders 27:16, 16:27, 9:8 and 8:9 at 1K only: the badge
+  // shows the price the run is charged, whatever size the node still holds.
+  it.each(["27:16", "16:27", "9:8", "8:9"])("prices GPT Image 2.5 at %s as 1K, whatever size the node holds", (aspectRatio) => {
+    for (const provider of ["gpt-image-2-5-flare", "gpt-image-2-5-sunburst-i2i"]) {
+      expect(buildCreditModelIdentifier(provider, { aspectRatio, resolution: "4K" })).toBe(provider)
+      expect(buildCreditModelIdentifier(provider, { aspectRatio, resolution: "2K" })).toBe(provider)
+    }
+  })
+
+  it("keeps GPT Image 2.5's 2K / 4K price at another ratio", () => {
+    expect(buildCreditModelIdentifier("gpt-image-2-5-flare", { aspectRatio: "16:9", resolution: "4K" })).toBe("gpt-image-2-5-flare:4K")
+    expect(buildCreditModelIdentifier("gpt-image-2-5-flare", { resolution: "2K" })).toBe("gpt-image-2-5-flare:2K")
+  })
 })
 
 describe("getModelIdentifier: an image node naming no model", () => {

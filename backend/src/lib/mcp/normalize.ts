@@ -270,9 +270,28 @@ export interface NormalizedImageParams {
 }
 
 /**
+ * The aspect ratio an image call asks for: the one it names, else the one the
+ * person saved (`save_image_defaults`), else `undefined`. A blank value names
+ * nothing. `normalizeAspectRatio` never answers empty (an unset ratio is its
+ * 16:9 fallback), so the saved ratio has to be chosen BEFORE it, never as its
+ * `??` alternative, which is never reached.
+ */
+export function requestedAspectRatio(
+  named: string | null | undefined,
+  saved: string | null | undefined,
+): string | undefined {
+  const given = (v: string | null | undefined) => (typeof v === "string" && v.trim() !== "" ? v : undefined)
+  return given(named) ?? given(saved)
+}
+
+/**
  * Compose all four image-tool normalizations against the catalog.
  * Returns guaranteed-valid values for the resolved model — caller can
  * forward straight to the route without further validation.
+ *
+ * Each lever: the value the call names, else the person's saved default,
+ * else the catalog's (a ratio: `fallback` 16:9 or the model's first; a size or
+ * a quality: none, so the model's own default applies).
  */
 export function normalizeImageInput(
   raw: {
@@ -294,10 +313,17 @@ export function normalizeImageInput(
   const model = explicitModel ?? savedModel ?? fallbackModel
   const modelEntry = MODEL_CATALOG[model]
 
-  const aspectRatio =
-    normalizeAspectRatio(raw.aspect_ratio, modelEntry?.aspectRatios, "16:9")
-    ?? normalizeAspectRatio(saved.aspectRatio, modelEntry?.aspectRatios, "16:9")
+  // With neither named nor saved, this is the general fallback: a caller with a
+  // rule of its own for an unset ratio (`imageToImageAspectRatio`) asks
+  // `requestedAspectRatio` and applies it in its place.
+  const aspectRatio = normalizeAspectRatio(
+    requestedAspectRatio(raw.aspect_ratio, saved.aspectRatio),
+    modelEntry?.aspectRatios,
+    "16:9",
+  )
 
+  // Unlike the ratio's, these helpers answer undefined for an unset value, so
+  // the saved default is reached through `??`.
   const resolution =
     normalizeResolution(raw.resolution, modelEntry?.resolutions)
     ?? normalizeResolution(saved.resolution, modelEntry?.resolutions)

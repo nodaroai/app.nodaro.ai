@@ -558,7 +558,12 @@ Six SKUs on the standard `createTask` lane. Flare and Sunburst are billed by
   reservation, the Max price, with an `[ALERT]` line. In the one live run tried
   (2026-11-09) KIE picked low and the run was charged that, not the Max it held.
 - 27:16, 16:27, 9:8 and 8:9, 2.5's extra ratios, are refused on 2.6 ("Invalid aspect
-  ratio", no charge, tried 2026-11-09). KIE's docs don't list them either.
+  ratio", no charge, tried 2026-11-09). KIE's docs don't list them either. On 2.5
+  they render **1K only** (the `aspect_ratio` field of all four 2.5 pages: "The
+  27:16, 16:27, 9:8 and 8:9 aspect ratios support 1K only. 2K and 4K are available
+  for other aspect ratios."). `resolutionsByAspectRatio` on the four 2.5 catalog
+  entries says so; `normalizeModelInput` moves 2K/4K there to 1K before pricing,
+  and the Reference Board (which prices without it) reads `resolutionAtAspectRatio`.
 - **2.6's own `aspect_ratio: "auto"` renders square** whatever the photo (2026-11-10:
   a 768x1024 source came back 1024x1024 on Flare; 2.5 Flare kept it at 880x1184).
   The six 2.6 catalog entries keep `auto` on offer but carry

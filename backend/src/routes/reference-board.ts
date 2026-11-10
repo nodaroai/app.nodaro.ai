@@ -10,7 +10,7 @@ import { insertJobIdempotent } from "../lib/insert-job.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { buildCreditModelIdentifier } from "@nodaro/shared/credits"
-import { boardQuality } from "../lib/entity-credit-identifier.js"
+import { boardQuality, boardResolution } from "../lib/entity-credit-identifier.js"
 import { REFERENCE_BOARD_PROVIDERS, buildBoardPrompt } from "@nodaro/shared/entities"
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
 import { formatZodError } from "../lib/zod-error.js"
@@ -45,7 +45,8 @@ export function resolveBoardCreditIdentifier(req: FastifyRequest): string {
   return buildCreditModelIdentifier(
     provider,
     boardQuality(provider, b.quality),
-    b.resolution as string | undefined,
+    // The size it renders at its ratio (GPT Image 2.5: 1K only at four ratios).
+    boardResolution(provider, b.aspectRatio, b.resolution),
     undefined,
     undefined,
     Array.isArray(b.referenceImageUrls) ? b.referenceImageUrls.length : 0,
@@ -58,6 +59,9 @@ export async function referenceBoardRoutes(app: FastifyInstance): Promise<void> 
     if (!parsed.success) return reply.status(400).send(formatZodError(parsed.error))
 
     const body = parsed.data
+    // The size this board renders at, which the CHECK priced (boardResolution):
+    // recorded and sent as priced.
+    body.resolution = boardResolution(body.provider, body.aspectRatio, body.resolution) as typeof body.resolution
     // Derive userId ONLY from the authenticated session (set by the auth
     // middleware — from the JWT/API token, or from the body solely when the
     // internal-orchestrator secret is verified). Never trust a body userId here

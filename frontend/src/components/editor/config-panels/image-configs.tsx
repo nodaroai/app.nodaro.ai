@@ -42,7 +42,7 @@ import type {
   ManualReferenceImage,
   ImageProvider,
 } from "@/types/nodes"
-import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, imageStylePresets, getAspectRatiosForModel, getSourcePhotoAspectRatios, withPhotoAuto, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, IMAGE_BACKGROUND_OPTIONS, transparentResolutionFor, defaultQualityFor, firstFixedQuality, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor, withoutDeniedModels } from "./model-options"
+import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, imageStylePresets, getAspectRatiosForModel, getSourcePhotoAspectRatios, withPhotoAuto, IMAGE_QUALITY_OPTIONS, IMAGE_BACKGROUND_OPTIONS, imageResolutionOptionsAt, transparentResolutionFor, defaultQualityFor, firstFixedQuality, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor, withoutDeniedModels } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
@@ -197,9 +197,12 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
     ? intersected.aspectRatios
     : getAspectRatiosForModel(currentProvider)
   const aspectRatioOptions = withPhotoAuto(listedAspectRatios)
+  // One model: only the sizes it renders at the chosen ratio (GPT Image 2.5
+  // draws 27:16, 16:27, 9:8 and 8:9 at 1K only), so a size it cannot render
+  // snaps below when the ratio changes.
   const resolutionOptions = isMulti
     ? (intersected.resolutions.length > 0 ? intersected.resolutions : undefined)
-    : IMAGE_RESOLUTION_OPTIONS[currentProvider]
+    : imageResolutionOptionsAt(currentProvider, data.aspectRatio)
   const qualityOptions = isMulti
     ? (intersected.qualities.length > 0 ? intersected.qualities : undefined)
     : IMAGE_QUALITY_OPTIONS[currentProvider]
@@ -968,7 +971,8 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
   // own ratios. The catalog list is still what a stale ratio snaps to below.
   const aspectRatioOptions = useMemo(() => getSourcePhotoAspectRatios(currentProvider), [currentProvider])
   const listedAspectRatios = useMemo(() => getAspectRatiosForModel(currentProvider), [currentProvider])
-  const resolutionOptions = useMemo(() => !isNanoBananaEdit ? IMAGE_RESOLUTION_OPTIONS[currentProvider] : undefined, [currentProvider, isNanoBananaEdit])
+  // Only the sizes the model renders at the chosen ratio (GPT Image 2.5: 1K only at 27:16, 16:27, 9:8 and 8:9).
+  const resolutionOptions = useMemo(() => !isNanoBananaEdit ? imageResolutionOptionsAt(currentProvider, data.aspectRatio) : undefined, [currentProvider, isNanoBananaEdit, data.aspectRatio])
   const qualityOptions = useMemo(() => !isNanoBananaEdit ? IMAGE_QUALITY_OPTIONS[currentProvider] : undefined, [currentProvider, isNanoBananaEdit])
   const backgroundOptions = useMemo(() => !isNanoBananaEdit ? IMAGE_BACKGROUND_OPTIONS[currentProvider] : undefined, [currentProvider, isNanoBananaEdit])
   const qualityDefault = defaultQualityFor(currentProvider)

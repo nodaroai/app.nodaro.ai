@@ -2,7 +2,7 @@ import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from 
 import type { SourceNodeInfo } from "./types"
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
-import { defaultImageModelForNode, gptImage26EstimatedImages, isGptImage26Tiered } from "@nodaro/shared/model-catalog"
+import { defaultImageModelForNode, gptImage26EstimatedImages, isGptImage26Tiered, resolutionAtAspectRatio } from "@nodaro/shared/model-catalog"
 import { countImageInputEdges } from "@nodaro/shared/workflow"
 import {
   buildCreditModelIdentifier as sharedBuildCreditModelIdentifier,
@@ -806,10 +806,15 @@ export function buildCreditModelIdentifier(provider: string, data: Record<string
         targetResolution: data.targetResolution as string | undefined,
       }).creditTier
     : (data.targetResolution as string | undefined)
+  // The size the run renders at its ratio: GPT Image 2.5 draws 27:16, 16:27,
+  // 9:8 and 8:9 at 1K only, and the run is charged that size.
+  const resolution = typeof data.resolution === "string"
+    ? resolutionAtAspectRatio(provider, data.aspectRatio, data.resolution)
+    : undefined
   return sharedBuildCreditModelIdentifier(
     provider,
     data.quality as string | undefined,
-    data.resolution as string | undefined,
+    resolution,
     data.renderingSpeed as string | undefined,
     targetResolution,
     refCount,

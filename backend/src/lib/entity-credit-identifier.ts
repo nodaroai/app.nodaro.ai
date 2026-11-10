@@ -1,11 +1,22 @@
 import { buildCreditModelIdentifier, resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { extractProvider } from "./request-helpers.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS, getModel, isGptImage26Tiered } from "@nodaro/shared/model-catalog"
+import { IMAGE_MODEL_ROLE_DEFAULTS, getModel, isGptImage26Tiered, resolutionAtAspectRatio } from "@nodaro/shared/model-catalog"
 
 /** The quality a Reference Board runs at: dropped when its model does not offer it. */
 export function boardQuality(provider: unknown, quality: unknown): string | undefined {
   if (typeof provider !== "string" || typeof quality !== "string") return undefined
   return getModel(provider)?.qualities?.includes(quality) ? quality : undefined
+}
+
+/**
+ * The size a Reference Board renders at: the one asked for, moved to a size
+ * its ratio renders where the model limits that ratio (GPT Image 2.5 draws
+ * 27:16, 16:27, 9:8 and 8:9 at 1K only). The route's CHECK and DEBIT, its
+ * queue payload and the workflow branch all price and send this one value.
+ */
+export function boardResolution(provider: unknown, aspectRatio: unknown, resolution: unknown): string | undefined {
+  if (typeof resolution !== "string") return undefined
+  return typeof provider === "string" ? resolutionAtAspectRatio(provider, aspectRatio, resolution) : resolution
 }
 
 /**

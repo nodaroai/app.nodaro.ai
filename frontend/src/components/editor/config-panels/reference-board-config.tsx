@@ -23,7 +23,7 @@ import { PromptEditor } from "@/lib/picker-ui"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
 import { prefetchModelCredits } from "@/ee/hooks/use-model-credits"
 import {
-  IMAGE_RESOLUTION_OPTIONS,
+  imageResolutionOptionsAt,
   IMAGE_QUALITY_OPTIONS,
   defaultQualityFor,
   getAspectRatiosForModel,
@@ -151,7 +151,9 @@ function ReferenceBoardConfigImpl({
   const currentProvider = data.provider || defaultImageModel("character", data.aspectRatio)
 
   const aspectRatioOptions = getAspectRatiosForModel(currentProvider)
-  const resolutionOptions = IMAGE_RESOLUTION_OPTIONS[currentProvider]
+  // Only the sizes the model renders at the chosen ratio (GPT Image 2.5: 1K
+  // only at 27:16, 16:27, 9:8 and 8:9); a size it cannot render snaps below.
+  const resolutionOptions = imageResolutionOptionsAt(currentProvider, data.aspectRatio)
   const qualityOptions = IMAGE_QUALITY_OPTIONS[currentProvider]
   const qualityDefault = defaultQualityFor(currentProvider)
 
