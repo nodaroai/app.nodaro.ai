@@ -556,6 +556,13 @@ Six SKUs on the standard `createTask` lane. Flare and Sunburst are billed by
   (2026-11-09) KIE picked low and the run was charged that, not the Max it held.
 - 27:16, 16:27, 9:8 and 8:9, 2.5's extra ratios, are refused on 2.6 ("Invalid aspect
   ratio", no charge, tried 2026-11-09). KIE's docs don't list them either.
+- **2.6's own `aspect_ratio: "auto"` renders square** whatever the photo (2026-11-10:
+  a 768x1024 source came back 1024x1024 on Flare; 2.5 Flare kept it at 880x1184).
+  The six 2.6 catalog entries keep `auto` on offer but carry
+  `autoAspectFromSourceImage`, so "auto" with a photo is sent as the 2.6 ratio
+  nearest it (`autoAspectNeedsSourceImage` → the routes' and the workflow's photo
+  probe). Only a request with no photo, or one whose size cannot be read, still
+  sends `auto`.
 - Up to 16 input images on Flare and Sunburst; the routes hold every other model to
   14 (`requestImageLimit`, separate from `REF_IMAGE_MAX_LIMITS`).
 - All six 2.6 models send an explicit field list (`inputFields` in `models.ts`):

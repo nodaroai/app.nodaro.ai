@@ -376,6 +376,10 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // 8:9). Unlike GPT Image 2, the 2.5 docs state NO aspect_ratio x resolution
   // restriction.
   // See: docs.kie.ai/market/gpt/gpt-image-2-5-{flare,sunburst}-{text,image}-to-image.md
+  // The edit ids' 16:9 default is never what /v1/image-to-image sends: a
+  // request naming no ratio goes as "auto" (`imageToImageAspectRatio`,
+  // lib/image-auto-aspect.ts). It still applies to a Generate Image run whose
+  // references move a text-to-image id onto its edit sibling with no ratio.
   "gpt-image-2-5-flare": {
     model: "gpt-image-2-5-flare-text-to-image",
     credits: 6,
@@ -416,7 +420,11 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // Prices were measured on 2026-11-09 against real runs.
   // See: docs.kie.ai/market/gpt/gpt-image-2-6-{flare,sunburst,economy}-{text,image}-to-image.md
   // `inputFields` is what this release sends of each schema: the masks, GIF and
-  // SVG fields come with those features.
+  // SVG fields come with those features. The edit ids' 16:9 default is not
+  // what /v1/image-to-image sends with no ratio named (see the GPT Image 2.5
+  // note above). KIE's own `auto` renders 2.6 square whatever the photo, so
+  // "auto" with a photo reaches this provider already resolved to the ratio
+  // nearest it (`autoAspectFromSourceImage` on the catalog entries).
   "gpt-image-2-6-flare": {
     model: "gpt-image-2-6/flare-text-to-image",
     inputFields: GPT_IMAGE_2_6_FIELDS,

@@ -57,6 +57,7 @@ import {
   IMAGE_GEN_PROVIDERS,
 } from "@nodaro/shared/models"
 import {
+  MODEL_CATALOG,
   autoAspectNeedsSourceImage,
   normalizeModelInput,
 } from "@nodaro/shared/model-catalog"
@@ -72,8 +73,9 @@ const MISSING = "https://cdn.example.com/missing.png"
 /** Today's answer for "auto" with no photo: the catalog snap on its own. */
 const todays = (modelId: string) => normalizeModelInput(modelId, { aspectRatio: "auto" }).aspectRatio
 
-/** Every Generate Image model whose catalog ratios lack "auto". */
-const NO_NATIVE_AUTO = IMAGE_GEN_PROVIDERS.filter((p) => autoAspectNeedsSourceImage(p, "auto"))
+/** Every Generate Image model whose catalog ratios lack "auto". (GPT Image 2.6
+ *  lists "auto" but resolves it from the photo; it has a block of its own.) */
+const NO_NATIVE_AUTO = IMAGE_GEN_PROVIDERS.filter((p) => autoAspectNeedsSourceImage(p, "auto") && !MODEL_CATALOG[p]?.aspectRatios?.includes("auto"))
 
 let app: FastifyInstance
 const images = new Map<string, Buffer>()
@@ -213,6 +215,47 @@ describe("/v1/generate-image — 'auto' with a wired photo", () => {
       { lora_replicate_version: "owner/char:abc", lora_trigger_word: "TOK_kira", lora_training_status: "succeeded" },
     )
     expect(queued.aspectRatio).toBe("16:9")
+  })
+})
+
+/**
+ * GPT Image 2.6's own "auto" renders a portrait square, so with a reference
+ * its "auto" is sent as the photo's ratio (the reference swaps the run onto
+ * its edit model); with no photo the model's own "auto" goes, as before.
+ */
+describe("/v1/generate-image — GPT Image 2.6 with a reference sends the photo's ratio", () => {
+  const PORTRAIT_3_4 = "https://cdn.example.com/portrait-3-4.png"
+
+  it.each(["gpt-image-2-6-flare", "gpt-image-2-6-sunburst"])("%s + a 3:4 reference + 'auto' → 3:4 on its edit model", async (provider) => {
+    images.set(PORTRAIT_3_4, await png(768, 1024))
+    const { queued, inputData } = await post({ provider, referenceImageUrls: [PORTRAIT_3_4], aspectRatio: "auto" })
+    expect(queued.provider).toBe(`${provider}-i2i`)
+    expect(queued.aspectRatio).toBe("3:4")
+    expect(inputData.aspectRatio).toBe("3:4")
+    expect(fetched()).toEqual([PORTRAIT_3_4])
+  })
+
+  it.each(["gpt-image-2-6-flare", "gpt-image-2-6-sunburst"])("%s with no photo still sends its own 'auto' and reads nothing", async (provider) => {
+    const { queued } = await post({ provider, aspectRatio: "auto" })
+    expect(queued.provider).toBe(provider)
+    expect(queued.aspectRatio).toBe("auto")
+    expect(fetched()).toEqual([])
+  })
+
+  it("quote = charge: the pre-check, which has no size, prices the measured run", async () => {
+    images.set(PORTRAIT_3_4, await png(768, 1024))
+    const payload = { userId: USER, prompt: "a lighthouse at dusk", provider: "gpt-image-2-6-flare", referenceImageUrls: [PORTRAIT_3_4], aspectRatio: "auto", quality: "high", resolution: "2K" }
+    await post(payload)
+    const debit = vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]
+    expect(resolveImageCreditIdentifier({ body: payload } as FastifyRequest)).toBe(debit)
+    expect(vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1]).toMatchObject({ aspectRatio: "3:4" })
+  })
+
+  it("2.5 keeps its own 'auto' with a reference and reads nothing", async () => {
+    const { queued } = await post({ provider: "gpt-image-2-5-flare", referenceImageUrls: [PORTRAIT], aspectRatio: "auto" })
+    expect(queued.provider).toBe("gpt-image-2-5-flare-i2i")
+    expect(queued.aspectRatio).toBe("auto")
+    expect(fetched()).toEqual([])
   })
 })
 

@@ -16,6 +16,7 @@ import {
   type LlmModelDef,
 } from "@nodaro/shared/llm-models"
 import {
+  LLM_STRUCTURED_SYSTEM_MAX,
   LLM_TEXT_INPUT_MAX,
 } from "@nodaro/shared/models"
 import { VIDEO_ANALYSIS_MAX_DURATION_SEC } from "@nodaro/shared/credits"
@@ -172,9 +173,11 @@ export function convertJsonSchema(
 }
 
 export const llmStructuredBody = z.object({
-  /** The caller's system prompt. Held to the platform's LLM text ceiling like
-   *  every other LLM text input — a rendered catalog legend runs ~56k chars. */
-  system: z.string().max(LLM_TEXT_INPUT_MAX),
+  /** The caller's system prompt: its own vocabulary, which grows with its
+   *  catalogs (Studio's production format is close to 100k chars), so it has a
+   *  ceiling of its own, twice the LLM text ceiling `input` keeps. The prompt
+   *  is stored as a digest (`structuredJobInputData`), never whole. */
+  system: z.string().max(LLM_STRUCTURED_SYSTEM_MAX),
   input: z.string().min(1).max(LLM_TEXT_INPUT_MAX),
   jsonSchema: z
     .record(z.string(), z.unknown())
@@ -364,7 +367,7 @@ export function llmStructuredVideoBound(
 
 /**
  * The `jobs.input_data` projection: the body minus the two things not to
- * store per row — a 100k-char system prompt and a 64 KB schema. The digest
+ * store per row — a system prompt of up to 200k chars and a 64 KB schema. The digest
  * identifies the prompt, the head makes it recognisable in the admin job
  * view; the schema's name and size answer "what config produced this".
  * `resolvedModel` is the model the call runs — the prepared request's, the

@@ -5,7 +5,7 @@
 
 ## Overview
 
-Image to Image takes a source image and a text prompt to generate a transformed version. Unlike Edit Image (which focuses on utility operations like upscaling), Image to Image performs creative transformations: restyling, subject replacement, inpainting, reframing, and remix operations. It supports 21 provider models with varying capabilities including strength control, mask-based inpainting, guidance scale, and resolution options. The default provider is Nano Banana.
+Image to Image takes a source image and a text prompt to generate a transformed version. Unlike Edit Image (which focuses on utility operations like upscaling), Image to Image performs creative transformations: restyling, subject replacement, inpainting, reframing, and remix operations. It supports 21 provider models with varying capabilities including strength control, mask-based inpainting, guidance scale, and resolution options. The default provider is GPT Image 2.6 Flare (`gpt-image-2-6-flare-i2i`).
 
 ## Configuration
 
@@ -17,7 +17,7 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | Negative Prompt | text | `""` | Elements to exclude from the result |
 | Strength | slider (0-1) | varies | How much to deviate from the source image. Higher values mean more change. Only available for providers that support it. |
 | Guidance Scale | number | varies | Prompt adherence strength. Only available for providers that support it. |
-| Aspect Ratio | select | varies | Provider-specific ratio sets (same sets as Generate Image). **Auto** keeps your photo's shape; on models without a native auto it picks the closest supported shape. |
+| Aspect Ratio | select | varies | Provider-specific ratio sets (same sets as Generate Image). **Auto** keeps your photo's shape; on models without a native auto, and on GPT Image 2.6 (whose own auto renders a portrait square), it picks the closest supported shape. An API request that names no ratio runs at Auto on the GPT Image 2.5 and 2.6 models (the default included), at the same price; other models keep their own default. |
 | Background | select | Auto | Available for GPT Image 2.5 and 2.6: auto, opaque or transparent. A transparent background renders at 1K. On GPT Image 2.5 the setting only applies at 1K. |
 | Resolution | select | varies | Available for the GPT Image 2, 2.5 and 2.6 models: 1K, 2K, 4K; flux-i2i, flux-pro-i2i: 1K, 2K; seedream-5-flash-i2i: 1K, 2K (same price at either) |
 | Quality | select | varies | Available for GPT Image 2.6 Flare and Sunburst (auto, low, medium, high, extra high, max; medium by default; at auto the run costs what it really used, at most the max price), gpt-image-i2i (medium/high), seedream-edit (basic/high), seedream-5-lite-i2i (basic/high), seedream-5-pro-i2i (basic 1K / high 2K) |

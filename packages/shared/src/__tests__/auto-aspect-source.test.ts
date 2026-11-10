@@ -111,6 +111,99 @@ describe("autoAspectNeedsSourceImage", () => {
   })
 })
 
+/**
+ * GPT Image 2.6's own "auto" renders a portrait photo square (a 768x1024
+ * source came back 1024x1024; GPT Image 2.5's auto kept it at 3:4). So every
+ * 2.6 entry keeps "auto" on offer but has it resolved from the photo, exactly
+ * as on a model without a native auto, while 2.5 keeps its native auto.
+ */
+describe("GPT Image 2.6 — 'auto' is resolved from the photo, never sent as the model's own", () => {
+  const GPT_IMAGE_2_6 = [
+    "gpt-image-2-6-flare", "gpt-image-2-6-flare-i2i",
+    "gpt-image-2-6-sunburst", "gpt-image-2-6-sunburst-i2i",
+    "gpt-image-2-6-economy", "gpt-image-2-6-economy-i2i",
+  ]
+  const portrait = { width: 768, height: 1024 }
+
+  it("keeps 'auto' on offer in every 2.6 ratio list, so the menus are unchanged", () => {
+    for (const id of GPT_IMAGE_2_6) {
+      expect(MODEL_CATALOG[id]!.aspectRatios, id).toContain("auto")
+      expect(MODEL_CATALOG[id]!.autoAspectFromSourceImage, id).toBe(true)
+    }
+  })
+
+  it("asks for the photo's size on every 2.6 id, and not on 2.5 or GPT Image 2", () => {
+    for (const id of GPT_IMAGE_2_6) expect(autoAspectNeedsSourceImage(id, "auto"), id).toBe(true)
+    for (const id of GPT_IMAGE_2_6) expect(autoAspectNeedsSourceImage(id, "3:4"), id).toBe(false)
+    for (const id of ["gpt-image-2-5-flare-i2i", "gpt-image-2-5-sunburst-i2i", "gpt-image-2-5-flare", "gpt-image-2-i2i"]) {
+      expect(autoAspectNeedsSourceImage(id, "auto"), id).toBe(false)
+    }
+  })
+
+  it.each(["gpt-image-2-6-flare-i2i", "gpt-image-2-6-sunburst-i2i"])("%s: a 3:4 photo is sent 3:4, and says why", (id) => {
+    const out = normalizeModelInput(id, { aspectRatio: "auto" }, { sourceImage: portrait })
+    expect(out.aspectRatio).toBe("3:4")
+    expect(out.adjustments).toHaveLength(1)
+    expect(out.adjustments[0]).toMatchObject({ field: "aspectRatio", from: "auto", to: "3:4" })
+    expect(out.adjustments[0].reason).toContain(`own "auto" does not keep the photo's shape`)
+  })
+
+  it("Economy picks from its own shorter list", () => {
+    // 3:4 is not on Economy's list; 2:3 is the nearest that is.
+    expect(normalizeModelInput("gpt-image-2-6-economy-i2i", { aspectRatio: "auto" }, { sourceImage: portrait }).aspectRatio).toBe("2:3")
+  })
+
+  it("never picks a ratio 2.6 refuses (2.5's 27:16, 16:27, 9:8, 8:9)", () => {
+    const refused = new Set(["27:16", "16:27", "9:8", "8:9"])
+    for (const id of GPT_IMAGE_2_6) {
+      for (const sourceImage of [{ width: 2700, height: 1600 }, { width: 1600, height: 2700 }, { width: 1125, height: 1000 }, { width: 1000, height: 1125 }]) {
+        const out = normalizeModelInput(id, { aspectRatio: "auto" }, { sourceImage })
+        expect(refused.has(out.aspectRatio!), `${id} ${sourceImage.width}x${sourceImage.height} → ${out.aspectRatio}`).toBe(false)
+        expect(MODEL_CATALOG[id]!.aspectRatios).toContain(out.aspectRatio)
+      }
+    }
+  })
+
+  it("with no photo, or one that cannot be read, still sends the model's own 'auto', as before", () => {
+    for (const id of GPT_IMAGE_2_6) {
+      expect(normalizeModelInput(id, { aspectRatio: "auto" }).aspectRatio, id).toBe("auto")
+      expect(normalizeModelInput(id, { aspectRatio: "auto" }, { sourceImage: { width: 0, height: 0 } }).aspectRatio, id).toBe("auto")
+    }
+  })
+
+  it("Generate Image with a reference on a 2.6 model resolves 'auto' from the photo; with none it sends 'auto'", () => {
+    const withRef = resolveNormalizedImageGen({ provider: "gpt-image-2-6-flare", aspectRatio: "auto", refCount: 1, swapToI2i: true, sourceImage: portrait })
+    expect(withRef.modelId).toBe("gpt-image-2-6-flare-i2i")
+    expect(withRef.aspectRatio).toBe("3:4")
+    expect(imageGenAutoAspectNeedsSourceImage({ provider: "gpt-image-2-6-flare", aspectRatio: "auto", refCount: 1 })).toBe(true)
+    const noRef = resolveNormalizedImageGen({ provider: "gpt-image-2-6-flare", aspectRatio: "auto", refCount: 0, swapToI2i: true })
+    expect(noRef.aspectRatio).toBe("auto")
+  })
+
+  it("2.5 keeps its native 'auto' even when the photo's size is known", () => {
+    const out = normalizeModelInput("gpt-image-2-5-flare-i2i", { aspectRatio: "auto" }, { sourceImage: portrait })
+    expect(out.aspectRatio).toBe("auto")
+    expect(out.adjustments).toEqual([])
+  })
+
+  it("the measured ratio never moves the price id", () => {
+    for (const provider of ["gpt-image-2-6-flare-i2i", "gpt-image-2-6-sunburst-i2i", "gpt-image-2-6-economy-i2i"]) {
+      for (const quality of [undefined, "low", "medium", "high", "xhigh", "max", "auto"]) {
+        for (const resolution of [undefined, "1K", "2K", "4K"]) {
+          for (const refCount of [1, 5, 16]) {
+            const base = { provider, quality, resolution, refCount, swapToI2i: false }
+            const unset = resolveNormalizedImageGen({ ...base }).identifier
+            const auto = resolveNormalizedImageGen({ ...base, aspectRatio: "auto" }).identifier
+            const measured = resolveNormalizedImageGen({ ...base, aspectRatio: "auto", sourceImage: portrait })
+            expect(measured.identifier).toBe(auto)
+            expect(auto).toBe(unset)
+          }
+        }
+      }
+    }
+  })
+})
+
 describe("normalizeModelInput — 'auto' with a source image", () => {
   const portrait = { width: 1104, height: 1472 }
 

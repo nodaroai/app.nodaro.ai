@@ -980,17 +980,32 @@ changed:
 - **Credits are reserved against the corrected values.** A `gpt-image-2` request
   for `auto` + `2K` renders and bills at 1K, because `auto` only renders 1K.
 - **`aspectRatio: "auto"` keeps your photo's shape** on `/v1/image-to-image` and
-  `/v1/edit-image`. A model with a native `auto` receives it as is. On a model
-  without one, the server reads the size of `imageUrl` and uses the supported
-  ratio closest to it — a 1104x1472 portrait sent to `seedream-5-pro-i2i`
-  renders at `3:4` — and reports the choice in `adjustments`. If the image's
-  size cannot be read, `auto` falls back to the model's first listed ratio.
-  The ratio never changes the price on these models.
+  `/v1/edit-image`. A model with a native `auto` that keeps the shape receives
+  it as is. On a model without one, and on GPT Image 2.6 (`gpt-image-2-6-*`,
+  whose own `auto` renders a portrait photo square), the server reads the size
+  of `imageUrl` and uses the supported ratio closest to it — a 1104x1472
+  portrait sent to `seedream-5-pro-i2i` renders at `3:4`, a 768x1024 one sent
+  to `gpt-image-2-6-flare-i2i` at `3:4` — and reports the choice in
+  `adjustments`. If the image's size cannot be read, `auto` falls back to the
+  model's first listed ratio, or to the model's own `auto` on GPT Image 2.6.
+  The ratio never changes the price on these models. `auto` stays a choice on
+  every model that lists it (`GET /v1/models`); only what is sent changes.
 - **`/v1/generate-image` does the same when a photo is wired in**: the photo is
   the first image the request sends the model — `baseImageUrl` (inpaint /
   refine) when set, else the first reference image (`referenceImageUrls`, or
   the first one assembled from `connectedReferences`). Without a photo, `auto`
-  on a model without a native one gives its first listed ratio, as before.
+  on a model without a native one gives its first listed ratio, as before, and
+  GPT Image 2.6 receives its own `auto`.
+- **No `aspectRatio` on a GPT Image 2.5 or 2.6 edit model is `auto`.** On
+  `/v1/image-to-image`, a request to `gpt-image-2-6-flare-i2i` (the default),
+  `gpt-image-2-6-sunburst-i2i`, `gpt-image-2-5-flare-i2i` or
+  `gpt-image-2-5-sunburst-i2i` that names no ratio runs exactly as one that
+  sends `"auto"`, instead of the model's 16:9 default: GPT Image 2.5 receives
+  its own `auto`, which keeps the photo's shape, and GPT Image 2.6 the ratio
+  closest to the photo, as above. The job records the ratio sent. It costs the
+  same: these models price by quality, size and the number of input images,
+  not by ratio. Every other model, GPT Image 2 included, keeps its own default
+  when no ratio is named.
 - The per-model option lists are in `GET /v1/models`; a workflow saved through
   the API or MCP is corrected the same way at write time — except `auto` on a
   generate-image, image-to-image, modify-image or edit-image node, which is
@@ -3547,8 +3562,9 @@ a whole production plan with it.
 
 Body: `{ system, input, jsonSchema, schemaName?, llmModel?, reasoningEffort?,
 maxRetries?, origin?, advancedMode?, temperature?, maxTokens? }`. `system` and
-`input` are plain text (each at most 100,000 characters; `input` must be at
-least 1 character). `schemaName` names the forced-output tool the provider
+`input` are plain text: `system` at most 200,000 characters (room for a
+vocabulary your schema writes in), `input` from 1 to 100,000 characters.
+`schemaName` names the forced-output tool the provider
 sees and caps at 64 characters. Omit `llmModel` and the call runs on
 `gemini-3.6-flash`, the generic `llm-chat` default. `jsonSchema` is a JSON
 Schema **object** (`type: "object"`, at most 64 KB serialized and 20 levels of

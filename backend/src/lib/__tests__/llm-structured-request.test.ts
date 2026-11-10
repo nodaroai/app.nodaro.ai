@@ -17,7 +17,9 @@ vi.mock("../llm-client.js", () => ({ llmCompleteStructured: mocks.llmCompleteStr
   LLM_MAX_LANES_PER_CALL: 2, LLM_STRUCTURED_DIRECT_BACKUP_ASKS: 1 }))
 
 import { LLM_FEATURE_DEFAULTS, getLlmModel } from "@nodaro/shared/llm-models"
+import { LLM_STRUCTURED_SYSTEM_MAX, LLM_TEXT_INPUT_MAX } from "@nodaro/shared/models"
 import {
+  JSON_SCHEMA_MAX_BYTES,
   convertJsonSchema,
   llmStructuredBody,
   prepareStructuredRequest,
@@ -67,6 +69,30 @@ describe("llmStructuredBody — origin", () => {
     const base = { system: "s", input: "i", jsonSchema: SCHEMA }
     expect(llmStructuredBody.safeParse({ ...base, origin: "Studio App" }).success).toBe(false)
     expect(llmStructuredBody.safeParse({ ...base, origin: "a".repeat(41) }).success).toBe(false)
+  })
+})
+
+describe("llmStructuredBody — text ceilings", () => {
+  const base = { system: "s", input: "i", jsonSchema: SCHEMA }
+
+  it("takes a system prompt up to LLM_STRUCTURED_SYSTEM_MAX (200,000 chars), twice the LLM text ceiling", () => {
+    expect(LLM_STRUCTURED_SYSTEM_MAX).toBe(200_000)
+    expect(LLM_STRUCTURED_SYSTEM_MAX).toBe(2 * LLM_TEXT_INPUT_MAX)
+    // A client's vocabulary past the old 100,000 ceiling (Studio's format is near it).
+    expect(llmStructuredBody.safeParse({ ...base, system: "x".repeat(150_000) }).success).toBe(true)
+    expect(llmStructuredBody.safeParse({ ...base, system: "x".repeat(LLM_STRUCTURED_SYSTEM_MAX) }).success).toBe(true)
+    expect(llmStructuredBody.safeParse({ ...base, system: "x".repeat(LLM_STRUCTURED_SYSTEM_MAX + 1) }).success).toBe(false)
+  })
+
+  it("keeps `input` at the LLM text ceiling", () => {
+    expect(llmStructuredBody.safeParse({ ...base, input: "x".repeat(LLM_TEXT_INPUT_MAX) }).success).toBe(true)
+    expect(llmStructuredBody.safeParse({ ...base, input: "x".repeat(LLM_TEXT_INPUT_MAX + 1) }).success).toBe(false)
+  })
+
+  it("a body at both ceilings, in three-byte characters, with the largest schema, fits the API's 1 MB request limit", () => {
+    // 3 bytes is the most UTF-8 spends on one JSON string unit that is not an escape.
+    const worstBytes = 3 * (LLM_STRUCTURED_SYSTEM_MAX + LLM_TEXT_INPUT_MAX) + JSON_SCHEMA_MAX_BYTES
+    expect(worstBytes).toBeLessThan(1_048_576)
   })
 })
 

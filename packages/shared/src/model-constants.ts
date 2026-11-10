@@ -227,6 +227,19 @@ export const PROMPT_HARD_CEILING = 30000
 export const LLM_TEXT_INPUT_MAX = 100_000
 
 /**
+ * Ceiling for the `system` prompt of the structured-output routes
+ * (`POST /v1/llm/structured` and `POST /v1/llm/structured/jobs`). A client
+ * that has the model write in its own vocabulary sends that vocabulary as the
+ * system prompt, and it grows with the client's catalogs (Nodaro Studio's
+ * production format is close to 100,000 chars), so this is twice
+ * {@link LLM_TEXT_INPUT_MAX}. The routes' `input`, and every other LLM text
+ * field, stay at LLM_TEXT_INPUT_MAX. 200,000 chars is roughly 50,000 to
+ * 100,000 tokens, and a body at both ceilings still fits the API's 1 MB
+ * request limit.
+ */
+export const LLM_STRUCTURED_SYSTEM_MAX = 200_000
+
+/**
  * Per-provider maximum VIDEO prompt length (chars), VERIFIED against each model's
  * official docs.kie.ai schema (2026-06). Absent → {@link VIDEO_PROMPT_MAX} (8000)
  * default (used for models whose schema states NO limit: veo3 family, kling-3.0,

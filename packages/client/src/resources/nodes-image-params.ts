@@ -60,7 +60,7 @@ export interface ImageToImageParams extends GenerationSessionParams {
   background?: ImageBackground
   /** 0–1: how far the result may move from the source (taken by the models in `I2I_STRENGTH_SUPPORT`). */
   strength?: number
-  /** `"auto"` on a model without a native auto keeps the source image's shape (the model's nearest ratio). */
+  /** `"auto"` keeps the source image's shape: on a model without a native auto, and on GPT Image 2.6 (whose own auto renders square), as the model's nearest ratio. */
   aspectRatio?: ImageAspectRatio
   /** Up to 5,000 characters. */
   negativePrompt?: string
