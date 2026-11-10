@@ -8,6 +8,8 @@ import {
   modelRestrictionConfigured,
 } from "../lib/surface-deny.js"
 import { deniedRouteCapabilityForUser } from "../lib/availability-viewer.js"
+import { childStepNodeType } from "../lib/child-step-node.js"
+import { ROUTE_GATES_GENERATION } from "../lib/availability-override.js"
 import {
   refusesUnclassifiedRoutes,
   reportUnclassifiedRoute,
@@ -355,8 +357,19 @@ export function creditGuard(
       // host a capability another node governs: Web Scrape's Instagram source
       // follows the Instagram node, and this guard is the one place every run
       // of it passes (editor, SDK, orchestrator, a keyless install's relay).
+      //
+      // A step a plugin engine's job sends (Nodaro Motion's depth, mask or
+      // audio-separation step) is gated as the node the user ran, its parent
+      // job's (lib/child-step-node.ts) — only the NODE: its models were judged
+      // above as this route's own. A door that opened with that rule, like
+      // the route doors (`ROUTE_GATES_GENERATION`).
+      const childNode = await childStepNodeType(req)
       const deniedCapability =
-        gate.kind === "node" ? await deniedRouteCapabilityForUser(gate.types, req.body, req.userId, gate.since) : undefined
+        childNode !== undefined
+          ? await deniedRouteCapabilityForUser([childNode], {}, req.userId, ROUTE_GATES_GENERATION)
+          : gate.kind === "node"
+            ? await deniedRouteCapabilityForUser(gate.types, req.body, req.userId, gate.since)
+            : undefined
       if (deniedCapability) {
         return reply.code(403).send({
           error: {
@@ -368,7 +381,7 @@ export function creditGuard(
       // A credit-spending route no node accounts for: a whitelist deployment
       // never allowed it (its rule is "not listed ⇒ unavailable"), and every
       // deployment is told once, loudly, so the route gets its node named.
-      if (gate.kind === "unclassified" && route) {
+      if (childNode === undefined && gate.kind === "unclassified" && route) {
         const refused = refusesUnclassifiedRoutes()
         reportUnclassifiedRoute(route, refused)
         if (refused) {

@@ -248,6 +248,25 @@ export const PLUGIN_CREDIT_GUARDED_ROUTES: readonly string[] = Object.freeze([
   "/v1/edit-3d-scene",
 ])
 
+/**
+ * The node a plugin engine's job runs as, for the job names that are not a
+ * node type themselves (a job named after its node, `cast-swap`, runs as that
+ * node). A step such a job sends to another route — a worker-side child
+ * request — is gated as this node, the node the user ran
+ * (lib/child-step-node.ts). Read from the Cloud plugin's source.
+ */
+export const PLUGIN_JOB_NODES: Readonly<Record<string, string>> = Object.freeze({
+  // Nodaro Motion's Full Quality render and a trend's face-mask make.
+  "cast-swap-full-quality": "cast-swap",
+  "cast-swap-face-mask": "cast-swap",
+})
+
+/** The node a job named `jobType` runs as, or undefined when no node accounts for it. */
+export function nodeOfJobType(jobType: string): string | undefined {
+  if (Object.hasOwn(PLUGIN_JOB_NODES, jobType)) return PLUGIN_JOB_NODES[jobType]
+  return isKnownNodeType(jobType) ? jobType : undefined
+}
+
 const EXEMPT_BY_KEY: ReadonlyMap<string, string> = new Map(Object.entries(EXEMPT_ROUTES).map(([r, why]) => [routeKey(r), why]))
 const NODE_BY_KEY: ReadonlyMap<string, string | BodyResolver> = new Map(Object.entries(ROUTE_NODES).map(([r, n]) => [routeKey(r), n]))
 

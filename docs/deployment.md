@@ -888,7 +888,13 @@ optional; each array empty = "keep the default"):
   is linked to no node is refused with `node_not_available` (the whitelist never
   allowed it) and logged once; the few routes that run no node (Copilot, which
   `features.hide` governs; Video Director; a pipeline's stage actions) are not
-  node-gated. An admin can further adjust availability at
+  node-gated. Also with `nodes.allow` set, a step a Cloud plugin engine's job
+  sends to another route is gated as the node the user ran, the engine's own:
+  Nodaro Motion's depth, mask, composite and audio-separation steps, and the
+  image, video and text generations its job asks for, follow `cast-swap`, so
+  allowing Motion is enough. Each step's models are still judged as the
+  step's own, and a direct call to one of those routes is gated by its own
+  node. An admin can further adjust availability at
   runtime from **Admin → Availability** (full list with per-item toggles); a
   stored runtime override replaces this factory set until "Reset to factory".
   The two layers differ in who they apply to. A **node type left off in Admin →
