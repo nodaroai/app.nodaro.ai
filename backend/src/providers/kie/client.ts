@@ -362,10 +362,9 @@ export function createSanitizedError(
     // this message, not the "violat" match below. KIE's copyright failMsg says
     // "restrictions", not "violation", so without these patterns it fell to the
     // generic "please try again" fallback — actively wrong advice, the block is
-    // deterministic on the same inputs (prod report 2026-08-03).
-    lowerMsg.includes("copyright") ||
-    lowerMsg.includes("intellectual property") ||
-    lowerMsg.includes("trademark")
+    // deterministic on the same inputs (prod report 2026-08-03). ONE vocabulary
+    // with the classifier (`COPYRIGHT_RE`): a wording it learns is learned here.
+    COPYRIGHT_RE.test(internalMessage)
   ) {
     // The provider named the INPUT (a picture or a video it was sent), not
     // the output: rephrasing the prompt cannot help, so say which input.
@@ -560,7 +559,13 @@ export function isUpstreamKieFailure(err: unknown): boolean {
  *  likeness, then the generic safety/moderation vocabulary. */
 export type ContentPolicyClass = "copyright" | "likeness" | "safety"
 
-const COPYRIGHT_RE = /copyright|intellectual.?property|trademark/i
+/** Copyright / IP vocabulary. The last alternative is a provider's wording for
+ *  a picture it refused as protected IP — "The uploaded image may contain
+ *  protected or restricted IP content." (an image-to-video run, prod
+ *  2026-11-09): none of the first three words appear in it, so the 400 fell to
+ *  the status branch and read as "rejected these settings". The adjective must
+ *  precede `IP` as a whole word, so "clip", "ship" and "zip" never match. */
+const COPYRIGHT_RE = /copyright|intellectual.?property|trademark|\b(?:protected|restricted)(?: or (?:protected|restricted))? ip\b/i
 const LIKENESS_RE = /public.?figure|celebrit|real.?person|likeness/i
 /**
  * Unambiguous safety/moderation vocabulary. Widened 2026-09-02 by the
@@ -627,14 +632,15 @@ export function isInputVideoRefusal(failMsg: string): boolean {
 /** Which INPUT a copyright refusal names, when it names one. The provider
  *  refuses a picture it was sent with "The request failed because the input
  *  image may be related to copyright restrictions." (Seedance 2.5, staging
- *  2026-10-28) and a clip with "Input video may be related to copyright
- *  restrictions…". Either way the prompt is not the problem. Plural and
- *  "picture"/"photo" spellings are accepted; the word "copyright" must follow
- *  within the same sentence, so an unrelated mention of an input image never
- *  matches. */
+ *  2026-10-28) or "The uploaded image may contain protected or restricted IP
+ *  content." (an image-to-video model, prod 2026-11-09), and a clip with
+ *  "Input video may be related to copyright restrictions…". Either way the
+ *  prompt is not the problem. Plural and "picture"/"photo" spellings are
+ *  accepted; "copyright", "protected" or "restricted" must follow within the
+ *  same sentence, so an unrelated mention of an input image never matches. */
 export type CopyrightSubject = "input_image" | "input_video"
 
-const INPUT_IMAGE_COPYRIGHT_RE = /\binput (?:image|picture|photo)s?\b[^.]{0,80}\bcopyright/i
+const INPUT_IMAGE_COPYRIGHT_RE = /\b(?:input|uploaded) (?:image|picture|photo)s?\b[^.]{0,80}\b(?:copyright|protected|restricted)/i
 const INPUT_VIDEO_COPYRIGHT_RE = /\binput (?:video|clip)s?\b[^.]{0,80}\bcopyright/i
 
 /** The input a copyright refusal names, or null when it names none (the
