@@ -27,6 +27,7 @@
     "characterize": {
       "job": "characterize",
       "inputs": [
+        "backend/src/ee/billing/stripe-catalog.ts",
         "backend/src/ee/billing/stripe-config.ts",
         "backend/src/ee/pipelines/llms/prompt-registry.ts",
         "backend/src/lib/account-measure-error.ts",
@@ -115,6 +116,7 @@
         "backend/src/lib/storage-deletes-setting.ts",
         "backend/src/lib/storage-timeouts.ts",
         "backend/src/lib/storage.ts",
+        "backend/src/lib/stripe-mode-settings.ts",
         "backend/src/lib/supabase.ts",
         "backend/src/lib/surface-profile-client-keys.ts",
         "backend/src/lib/surface-profile.ts",
@@ -247,6 +249,7 @@
         "backend/src/ee/billing/signup-grant-policy.ts",
         "backend/src/ee/billing/signup-grant.ts",
         "backend/src/ee/billing/stated-prices.ts",
+        "backend/src/ee/billing/stripe-catalog.ts",
         "backend/src/ee/billing/stripe-client.ts",
         "backend/src/ee/billing/stripe-config.ts",
         "backend/src/ee/billing/stripe-english.ts",
@@ -707,6 +710,7 @@
         "backend/src/lib/storage-deletes-setting.ts",
         "backend/src/lib/storage-timeouts.ts",
         "backend/src/lib/storage.ts",
+        "backend/src/lib/stripe-mode-settings.ts",
         "backend/src/lib/studio-audience.ts",
         "backend/src/lib/subject-schema.ts",
         "backend/src/lib/supabase.ts",
@@ -999,6 +1003,7 @@
     "media_e2e": {
       "job": "media-e2e",
       "inputs": [
+        "backend/src/ee/billing/stripe-catalog.ts",
         "backend/src/ee/billing/stripe-config.ts",
         "backend/src/ee/lib/trends/__tests__/crop-media.e2e.test.ts",
         "backend/src/ee/lib/trends/crop.ts",
@@ -1063,6 +1068,7 @@
         "backend/src/lib/storage-deletes-setting.ts",
         "backend/src/lib/storage-timeouts.ts",
         "backend/src/lib/storage.ts",
+        "backend/src/lib/stripe-mode-settings.ts",
         "backend/src/lib/supabase.ts",
         "backend/src/lib/surface-profile-client-keys.ts",
         "backend/src/lib/surface-profile.ts",

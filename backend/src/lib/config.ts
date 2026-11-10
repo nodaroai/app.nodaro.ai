@@ -10,6 +10,7 @@ import {
   type ProviderKeyId,
 } from "./provider-keys-runtime.js"
 import { llmMeteredSchemaReady } from "./llm-metered-schema-gate.js"
+import { liveStripeKeyProblem } from "./stripe-mode-settings.js"
 
 /**
  * An overridable service base URL: defaults to the vendor's own host, and
@@ -354,6 +355,10 @@ export const envSchema = z.object({
   CORS_ORIGIN: z.string().default(""),
   STRIPE_SECRET_KEY: z.string().default(""),
   STRIPE_WEBHOOK_SECRET: z.string().default(""),
+  /** A test-mode deployment's own Stripe catalogue (JSON; ee/billing/stripe-catalog.ts), read from the environment by stripe-config.ts at load. Used only with an sk_test_ key; a live key always sells the live catalogue. */
+  STRIPE_TEST_CATALOG: z.string().default(""),
+  /** `true`: refuse to start while any setting holds a live Stripe key (lib/stripe-mode-settings.ts), for a deployment that must stay on Stripe's test mode. */
+  STRIPE_REQUIRE_TEST_MODE: z.string().default(""),
   /** Number of parallel browser tabs for Remotion renders. null = Remotion default (50% CPU cores) */
   REMOTION_CONCURRENCY: z.coerce.number().int().min(1).max(32).nullable().default(null),
   /** KIE.ai account unique ID for credit audit API (constant per account) */
@@ -736,6 +741,9 @@ function loadConfig() {
     const missing = result.error.issues.map((i) => i.path.join(".")).join(", ")
     throw new Error(`Missing or invalid env vars: ${missing}`)
   }
+  // A deployment that must stay on Stripe's test mode: refused here, at boot, in every process, naming the setting.
+  const liveStripeKey = liveStripeKeyProblem(process.env)
+  if (liveStripeKey) throw new Error(`Invalid env vars: ${liveStripeKey}`)
   return result.data
 }
 
