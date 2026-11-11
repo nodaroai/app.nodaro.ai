@@ -9,8 +9,12 @@ import { config } from "../config.js"
 import { __resetSurfaceProfileCacheForTests, parseSurfaceProfile, surfaceJobErrorDetailReaders } from "../surface-profile.js"
 import { renderSurfaceProfileForRuntimeConfig } from "../surface-profile-runtime-config.js"
 import {
+  jobRowNeedsRunRelation,
   jobRowProviderWords,
   jobRowProviderWordsFor,
+  jobRowProviderWordsTo,
+  runIdOf,
+  webhookBodyNeedsRunRelation,
   nodeStatesCarryProviderWords,
   providerWordsShown,
   providerWordsShownTo,
@@ -296,6 +300,46 @@ describe("the funnel", () => {
       const noWords = JSON.stringify({ ...event, data: { job: { ...event.data.job, error_detail: null } } })
       const ping = JSON.stringify({ id: "d2", type: "ping", createdAt: event.createdAt, data: { webhookId: "w1" } })
       for (const text of [noWords, ping, "not json", "[]"]) expect(webhookBodyProviderWords(text)).toBe(text)
+    })
+
+    it("of a run's job its owner cannot open: error_detail null whatever the setting; the same text when there is nothing to withhold", () => {
+      expect(webhookBodyProviderWords(body, false)).toBe(JSON.stringify({ ...event, data: { job: { ...event.data.job, error_detail: null } } }))
+      expect(webhookBodyProviderWords(body, true)).toBe(body)
+      const ping = JSON.stringify({ id: "d2", type: "ping", createdAt: event.createdAt, data: { webhookId: "w1" } })
+      for (const text of [ping, "not json"]) expect(webhookBodyProviderWords(text, false)).toBe(text)
+    })
+
+    it("asks for the run only for a body whose job carries words, where an owner may read them", () => {
+      expect(webhookBodyNeedsRunRelation(body)).toBe(true)
+      expect(webhookBodyNeedsRunRelation(JSON.stringify({ ...event, data: { job: { ...event.data.job, error_detail: null } } }))).toBe(false)
+      expect(webhookBodyNeedsRunRelation(null)).toBe(false)
+      expect(webhookBodyNeedsRunRelation("not json")).toBe(false)
+      setProfile({ jobs: { errorDetail: "admin" } })
+      expect(webhookBodyNeedsRunRelation(body)).toBe(false)
+    })
+  })
+
+  describe("a run's job (decided 2026-11-11)", () => {
+    const ofRun = { ...failed, workflow_execution_id: "run-1" }
+
+    it("a reader who may read: the same object; one who may not: error_detail null, same keys; an admin: the same object", () => {
+      expect(jobRowProviderWordsTo(ofRun, { isAdmin: false, canRead: true })).toBe(ofRun)
+      const out = jobRowProviderWordsTo(ofRun, { isAdmin: false, canRead: false })
+      expect(out).toEqual({ ...ofRun, error_detail: null })
+      expect(Object.keys(out)).toEqual(Object.keys(ofRun))
+      expect(jobRowProviderWordsTo(ofRun, { isAdmin: true, canRead: false })).toBe(ofRun)
+    })
+
+    it("asks for the run only for a run's job with words, a reader who is not an admin, and a deployment that shows words to owners", () => {
+      expect(runIdOf(ofRun)).toBe("run-1")
+      expect(runIdOf(failed)).toBeNull()
+      expect(runIdOf({ ...failed, workflow_execution_id: "" })).toBeNull()
+      expect(jobRowNeedsRunRelation(ofRun, false)).toBe(true)
+      expect(jobRowNeedsRunRelation(ofRun, true)).toBe(false)
+      expect(jobRowNeedsRunRelation({ ...ofRun, error_detail: null }, false)).toBe(false)
+      expect(jobRowNeedsRunRelation({ ...ofRun, workflow_execution_id: null }, false)).toBe(false)
+      setProfile({ jobs: { errorDetail: "admin" } })
+      expect(jobRowNeedsRunRelation(ofRun, false)).toBe(false)
     })
   })
 })

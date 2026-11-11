@@ -218,7 +218,9 @@ export interface Job {
   /** The provider's own words for a failure, as the server stored them with
    *  links cut to their host and secrets removed; `null` when the failure had
    *  no provider text (a platform refusal, a timeout, a queue wait that ran
-   *  out), and on a deployment that keeps these words for its administrators.
+   *  out), on a job of a workflow run whose workflow you cannot open (someone
+   *  else's share link or published app you ran — the words can quote its
+   *  prompt), and on a deployment that keeps these words for its administrators.
    *  Display it beside `error_message`; branch on `error_hint`, never on
    *  these words. Absent on an older server. */
   error_detail?: string | null

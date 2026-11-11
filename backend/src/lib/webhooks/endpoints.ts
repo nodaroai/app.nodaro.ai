@@ -108,7 +108,12 @@ export async function childJobIdsOf(jobIds: ReadonlyArray<string | null>): Promi
   return new Set(((data ?? []) as Array<{ id: string }>).map((r) => r.id))
 }
 
-export function toDeliveryResponse(row: DeliveryRow, hideBody = false) {
+/**
+ * A delivery as its log shows it. `canRead` false when its job belongs to a run
+ * of a workflow its owner cannot open (`webhookJobsWithheld`,
+ * lib/provider-words-readers.ts): the kept body then leaves its job's words out.
+ */
+export function toDeliveryResponse(row: DeliveryRow, hideBody = false, canRead = true) {
   return {
     id: row.id,
     webhookId: row.webhook_id,
@@ -121,8 +126,9 @@ export function toDeliveryResponse(row: DeliveryRow, hideBody = false) {
     durationMs: row.duration_ms,
     error: row.last_error,
     // The body as recorded — less the provider words of its job where this
-    // deployment keeps them for its admins (lib/provider-words.ts).
-    requestBody: !hideBody && typeof row.payload === "string" ? webhookBodyProviderWords(row.payload) : null,
+    // deployment keeps them for its admins, or where the job belongs to a run of
+    // a workflow its owner cannot open (lib/provider-words.ts).
+    requestBody: !hideBody && typeof row.payload === "string" ? webhookBodyProviderWords(row.payload, canRead) : null,
     createdAt: row.created_at,
     lastAttemptAt: row.last_attempt_at,
     nextAttemptAt: row.status === "pending" ? row.next_retry_at : null,

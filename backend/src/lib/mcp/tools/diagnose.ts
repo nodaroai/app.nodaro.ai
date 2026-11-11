@@ -9,7 +9,7 @@ import { sideHoldChargesFor, withSideCharge } from "../../job-step-charge.js"
 import { resumeFailedRunHint } from "./_resume-hint.js"
 import { CHILD_JOB_COLUMN, maskTrendRunError, trendRunErrorText, TRASHED_JOB_COLUMN } from "../../public-job-data.js"
 import { providerWordsShownTo, type ProviderWordsReader } from "../../provider-words.js"
-import { readerCanOpenWorkflow } from "../../provider-words-readers.js"
+import { readerCanOpenWorkflow, runJobsProviderWords } from "../../provider-words-readers.js"
 
 const diagnoseGate: ToolGate = { required: ["jobs:read"] }
 
@@ -332,7 +332,8 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
       const { data: job, error: jobErr } = await supabase
         .from("jobs")
         .select(
-          "id, status, error_message, error_detail, input_data, credits_actual, output_data, job_type, user_id",
+          // workflow_execution_id is read for the run rule alone (runJobsProviderWords).
+          "id, status, error_message, error_detail, input_data, credits_actual, output_data, job_type, user_id, workflow_execution_id",
         )
         .eq("id", args.id)
         .eq("user_id", session.userId)
@@ -359,7 +360,10 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
         }
       }
 
-      const j = job as JobRow & { status?: string; job_type?: string }
+      // A run's job keeps its provider words only when the caller can open the
+      // run's workflow, as the run itself does above.
+      const [judged] = await runJobsProviderWords([job as JobRow & { status?: string; job_type?: string }], { isAdmin: false, userId: session.userId })
+      const j = judged!
       const sideCharges = await sideHoldChargesFor([j.id])
       const failures: Failure[] =
         j.status === "failed"

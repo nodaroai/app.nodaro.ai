@@ -1808,7 +1808,10 @@ words for its administrators — show it, never branch on it), `credits`, `credi
 job, and `guidance` on a job waiting for a free slot. `get_asset` and `wait_for_job` return the same envelope (`get_asset`
 without `input` and without the charge figures). The words are a job's owner's:
 `get_asset` on another user's public job and `list_jobs` with `scope: "public"`
-answer `null` for them. `diagnose_run` carries the
+answer `null` for them, and neither returns that user's id. A job that belongs to
+a workflow run carries them only when you can open the run's workflow, so a job
+of someone else's share link or published app you ran answers `null` on
+`get_job`, `wait_for_job`, `list_jobs`, `get_asset` and `diagnose_run`. `diagnose_run` carries the
 same words as `providerReason` on each failed node that has them, and leaves
 it out on a run of a workflow you cannot open (someone else's share link or
 published app, whose prompt the words can quote) and where the deployment keeps

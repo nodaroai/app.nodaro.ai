@@ -53,6 +53,7 @@ import {
   type EndpointCaller,
   type EndpointRow,
 } from "../lib/webhooks/endpoints.js"
+import { webhookJobsWithheld } from "../lib/provider-words-readers.js"
 import {
   DEFAULT_GRACE_SECONDS,
   createEndpointBody,
@@ -370,7 +371,11 @@ export async function webhookEndpointRoutes(app: FastifyInstance) {
     } catch (err) {
       return dbFailure(reply, req, err, "Failed to fetch the webhook delivery")
     }
-    return { data: toDeliveryResponse(row, row.job_id !== null && children.has(row.job_id)) }
+    // A run's job's words are kept out unless its owner can open the run's
+    // workflow (looked up only when the kept body carries words).
+    const withheld = await webhookJobsWithheld(own.caller.userId, [row])
+    const canRead = row.job_id === null || !withheld.has(row.job_id)
+    return { data: toDeliveryResponse(row, row.job_id !== null && children.has(row.job_id), canRead) }
   })
 
   // The delivery log: the endpoint's deliveries, newest first (kept 30 days).
@@ -407,8 +412,12 @@ export async function webhookEndpointRoutes(app: FastifyInstance) {
     } catch (err) {
       return dbFailure(reply, req, err, "Failed to list webhook deliveries")
     }
+    // A run's job's words are kept out unless its owner can open the run's
+    // workflow: one read for the page's jobs whose kept body carries words,
+    // then one for their runs and one per distinct workflow.
+    const withheld = await webhookJobsWithheld(own.caller.userId, rows)
     return {
-      data: rows.map((r) => toDeliveryResponse(r, r.job_id !== null && children.has(r.job_id))),
+      data: rows.map((r) => toDeliveryResponse(r, r.job_id !== null && children.has(r.job_id), r.job_id === null || !withheld.has(r.job_id))),
       next: rows.length === limit && last ? encodeCursor({ at: last.created_at, id: last.id }) : null,
     }
   })

@@ -16,11 +16,12 @@ import { surfaceJobErrorDetailReaders } from "./surface-profile.js"
  *    SDK type changes.
  *
  * Whatever the setting, the words go only to a reader who may read them: a
- * job's to its owner, a run's node states to a reader who can open the run's
- * workflow (the words can quote its creator's prompt — so a person running
- * someone else's share link or published app never receives them), and a
- * share page's saved node data to the workflow's creator. Admins read them on
- * every read that treats them as admins.
+ * job's to its owner — and a run's job (`workflow_execution_id` set) only when
+ * its owner can also open the run's workflow — a run's node states to a reader
+ * who can open the run's workflow (the words can quote its creator's prompt —
+ * so a person running someone else's share link or published app never
+ * receives them), and a share page's saved node data to the workflow's
+ * creator. Admins read them on every read that treats them as admins.
  *
  * "Admin" is the reader as each surface already decides it: a public job or
  * run read takes its route's own test (`req.userRole` is admin or super_admin,
@@ -84,6 +85,35 @@ export function jobRowProviderWordsFor<T extends object>(row: T, reader: { reado
   if (rec.error_detail == null) return row
   if (providerWordsShownTo({ isAdmin: reader.isAdmin, canRead: rec.user_id === reader.userId })) return row
   return { ...rec, error_detail: null } as unknown as T
+}
+
+/**
+ * A job row as this reader may read it: `error_detail` null when the words are
+ * withheld from them, every other key as it came. The same object when the
+ * row carries no words or the reader sees them. Never mutates.
+ */
+export function jobRowProviderWordsTo<T extends object>(row: T, reader: ProviderWordsReader): T {
+  const rec = row as unknown as Record<string, unknown>
+  if (rec.error_detail == null || providerWordsShownTo(reader)) return row
+  return { ...rec, error_detail: null } as unknown as T
+}
+
+/**
+ * Whether serving this job row depends on its reader's relation to the RUN it
+ * belongs to: true only when the row carries words, belongs to a run (its
+ * `workflow_execution_id`), the reader is not an admin, and the deployment
+ * lets a reader who may read them do so. When false, no lookup is needed —
+ * the answer is the same either way (a job with no run is its owner's).
+ */
+export function jobRowNeedsRunRelation(row: object, isAdmin: boolean): boolean {
+  const rec = row as Record<string, unknown>
+  return !isAdmin && rec.error_detail != null && runIdOf(rec) !== null && providerWordsShown(false)
+}
+
+/** The run a job row belongs to (its `workflow_execution_id`), or null for a job with no run. */
+export function runIdOf(row: object): string | null {
+  const id = (row as Record<string, unknown>).workflow_execution_id
+  return typeof id === "string" && id !== "" ? id : null
 }
 
 /**
@@ -158,21 +188,40 @@ export function withoutNodeStateProviderWords<T>(states: T): T {
  * retry sends again and what the endpoint's delivery log shows — as a delivery
  * reader (never an admin one) may read it: its job's `error_detail` null when
  * the words are withheld. A body recorded while the words were shown would
- * otherwise carry them after the deployment withheld them. The same text,
- * byte for byte, whenever there is nothing to withhold (the words shown, no
- * job, no words, or a body that is not an event).
+ * otherwise carry them after the deployment withheld them, or after its job
+ * was found to belong to a run of a workflow its owner cannot open
+ * (`canRead` false, from lib/provider-words-readers.ts; true for a job with no
+ * run, whose words are its owner's). The same text, byte for byte, whenever
+ * there is nothing to withhold (the words shown, no job, no words, or a body
+ * that is not an event).
  */
-export function webhookBodyProviderWords(body: string): string {
-  if (providerWordsShown(false)) return body
+export function webhookBodyProviderWords(body: string, canRead = true): string {
+  if (providerWordsShownTo({ isAdmin: false, canRead })) return body
+  const event = jobEventCarryingWords(body)
+  if (!event) return body
+  const job = jobRowProviderWordsTo(event.data.job, { isAdmin: false, canRead })
+  return JSON.stringify({ ...event, data: { ...event.data, job } })
+}
+
+/**
+ * Whether serving a recorded webhook body depends on whether its job belongs
+ * to a run its owner cannot open: true only when the body's job carries words
+ * and the deployment lets an owner read them. When false, no lookup is needed.
+ */
+export function webhookBodyNeedsRunRelation(body: unknown): boolean {
+  return typeof body === "string" && providerWordsShown(false) && jobEventCarryingWords(body) !== null
+}
+
+/** A recorded job event whose job carries provider words, parsed; null for any other body. */
+function jobEventCarryingWords(body: string): { data: { job: Record<string, unknown> } & Record<string, unknown> } & Record<string, unknown> | null {
   let event: unknown
   try {
     event = JSON.parse(body)
   } catch {
-    return body
+    return null
   }
-  if (!isRecord(event) || !isRecord(event.data) || !isRecord(event.data.job) || event.data.job.error_detail == null) return body
-  const job = jobRowProviderWords(event.data.job, false)
-  return JSON.stringify({ ...event, data: { ...event.data, job } })
+  if (!isRecord(event) || !isRecord(event.data) || !isRecord(event.data.job) || event.data.job.error_detail == null) return null
+  return event as { data: { job: Record<string, unknown> } & Record<string, unknown> } & Record<string, unknown>
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

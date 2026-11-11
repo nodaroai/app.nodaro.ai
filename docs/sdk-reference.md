@@ -1406,9 +1406,10 @@ The returned `Job` uses snake_case fields to match the wire format. Non-admin
 callers receive an explicit allowlist of job fields — `id`, `status`,
 `progress`, `input_data`, `output_data`, `error_message`, `error_detail` (the
 provider's own words for a failure, links cut to their host and secrets
-removed; `null` when the failure had none, and on a deployment that keeps these
-words for its administrators — display it beside `error_message`, branch on
-`error_hint`), `error_hint`,
+removed; `null` when the failure had none, on a job of a workflow run whose
+workflow you cannot open — someone else's share link or published app you
+ran — and on a deployment that keeps these words for its administrators —
+display it beside `error_message`, branch on `error_hint`), `error_hint`,
 `created_at`, `started_at`, `completed_at`, `user_id`, `credits`, `job_type`,
 `source`, `source_detail`, `title` (the owner's own name for the job —
 [`rename()`](#renameid-title) — or `null` until named), plus `favorited`

@@ -209,13 +209,14 @@ describe("eventBodyFor — a job event", () => {
 })
 
 describe("eventBodyFor — a retry and a ping", () => {
-  it("sends the first attempt's exact text again, reading only whether the job is a child", async () => {
+  it("sends the first attempt's exact text again, reading only whether the job is a child (and its run)", async () => {
     const first = '{"id":"d1","type":"job.failed","createdAt":"2026-10-15T10:00:00.123Z","data":{"job":{"id":"j"}}}'
     db.job = { parent_job_id: null }
     const built = await eventBodyFor(delivery({ payload: first, attempts: 3 }))
     expect(built).toEqual({ kind: "body", body: first, fresh: false })
+    // The run rides the same read; a body with no words looks nothing else up.
     expect(db.calls).toEqual([
-      { table: "jobs", op: "select", args: ["parent_job_id"] },
+      { table: "jobs", op: "select", args: ["parent_job_id, workflow_execution_id"] },
       { table: "jobs", op: "eq", args: ["id", JOB] },
       { table: "jobs", op: "maybeSingle", args: [] },
     ])

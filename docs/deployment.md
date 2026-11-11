@@ -1087,10 +1087,11 @@ optional; each array empty = "keep the default"):
   all-accounts run list) use the admin check, which an administrator's own
   token passes too, and keep the words. A webhook delivery is never an
   administrator's. Whatever this says, the words go only to whoever may read
-  them: a job's to its owner (never on another user's job), and a run's to a
-  reader who can open the workflow the run executed (never to a published
-  app's runner or a person running someone else's share link, nor on a share
-  page to anyone but its creator).
+  them: a job's to its owner (never on another user's job), and a run's — its
+  node states, and the jobs that belong to it — to a reader who can open the
+  workflow the run executed (never to a published app's runner or a person
+  running someone else's share link, nor on a share page to anyone but its
+  creator).
   Backend-only: stripped from `/config.js`. The key governs what the server
   serves from a job and from a run. Words an editor has already saved onto a
   workflow's nodes, before the key was set or on an administrator's own

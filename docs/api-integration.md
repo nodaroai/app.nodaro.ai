@@ -1817,7 +1817,13 @@ open the workflow the run executed (its creator, or someone it is shared with),
 since they can quote that workflow's prompt: a published app's runner never
 receives them (the app run endpoints answer without `errorDetail`), and neither
 does a person running someone else's share link, on the share link's run status
-(`GET /v1/present/:token/status/:execId`) or on the run reads above. The share
+(`GET /v1/present/:token/status/:execId`) or on the run reads above. The same
+goes for the jobs of a run: the person who started it owns them, but a job that
+belongs to a workflow run carries its words, on every job payload above and in
+the `job.failed` webhook event, only when its owner can open the run's
+workflow — so running someone else's share link gives you its jobs with
+`error_detail: null`. A job that belongs to no run (one node run on its own)
+carries its words to its owner, as before. The share
 page (`GET /v1/present/:token`) leaves the words its creator's editor saved out
 of every node it shows anyone but the creator. A deployment can also keep these
 words for its administrators (`jobs.errorDetail` in its surface profile, see

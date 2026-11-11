@@ -18,6 +18,7 @@ import { jobOwnerStateFor, ownerStateFields, type JobOwnerStateMap } from "../li
 import { applyJobListFilters, jobListFilterSelect, parseJobListQuery, ratingsNotAvailable, withoutFilterEmbeds } from "../lib/job-list-filters.js"
 import { queueField, queueInfoFor, waitingRowsOf, withoutLaneStamp } from "../lib/concurrency-lanes/queue-info.js"
 import { readWithLaneStamp } from "../lib/concurrency-lanes/columns.js"
+import { runJobsProviderWords } from "../lib/provider-words-readers.js"
 
 const batchStatusBody = z.object({
   jobIds: z.array(z.string().min(1)).min(1).max(100),
@@ -218,7 +219,7 @@ export async function jobRoutes(app: FastifyInstance) {
     const { data, error } = await readWithLaneStamp("job", (stamp) => {
       let query = supabase
         .from("jobs")
-        .select(`id, status, progress, output_data, error_message, error_detail, error_hint, usage_log_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
+        .select(`id, status, progress, output_data, error_message, error_detail, error_hint, usage_log_id, workflow_execution_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
         .in("id", ids)
         .eq("user_id", userId)
         // A job in the Trash is left out like an id that does not exist.
@@ -232,9 +233,14 @@ export async function jobRoutes(app: FastifyInstance) {
     }
 
     // An old render carries no stored Preview label: fill it from the order
-    // (read-time only, never written; the lean answer stays lean).
+    // (read-time only, never written; the lean answer stays lean). A run's
+    // job keeps its provider words only for a reader who can open the run's
+    // workflow (runJobsProviderWords, which also takes the run id off).
     const rows = fillJobsRenderQuality(
-      maskTrendRunErrors((data ?? []) as unknown as (Record<string, unknown> & { usage_log_id?: string | null })[], isAdmin),
+      maskTrendRunErrors(
+        await runJobsProviderWords((data ?? []) as unknown as (Record<string, unknown> & { usage_log_id?: string | null })[], { isAdmin, userId }),
+        isAdmin,
+      ),
       { dropJobType: true },
     )
     const creditMap = await creditStatusMapFor(rows.map((r) => r.usage_log_id))
@@ -269,7 +275,7 @@ export async function jobRoutes(app: FastifyInstance) {
     const { data: read, error } = await readWithLaneStamp("job", (stamp) => {
       let query = supabase
         .from("jobs")
-        .select(`id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, reconcile_attempts, source, source_detail, session_id, usage_log_id${titleSelect()}${stamp}`)
+        .select(`id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, reconcile_attempts, source, source_detail, session_id, usage_log_id, workflow_execution_id${titleSelect()}${stamp}`)
         .eq("id", id)
         // A job in the Trash answers, for every caller, as one that does not exist.
         .is(TRASHED_JOB_COLUMN, null)
@@ -305,12 +311,14 @@ export async function jobRoutes(app: FastifyInstance) {
     }
     // Where a job waiting for a slot stands (no gate read for any other job).
     const queues = await queueInfoFor(waitingRowsOf("job", [job]))
+    // A run's job keeps its provider words only for a reader who can open the run's workflow.
+    const [judged] = await runJobsProviderWords([job], { isAdmin, userId })
 
     return {
       data: {
         // An old render has no stored Preview label: fill it from the order
         // (read-time only; the Executions tab reads this job).
-        ...sanitizeJobForPublic(fillJobRenderQuality(job) as unknown as JobRecord, isAdmin),
+        ...sanitizeJobForPublic(fillJobRenderQuality(judged!) as unknown as JobRecord, isAdmin),
         credit_status: runCredits.get(job.id)?.status ?? null,
         // What the run was charged once its hold settled, its steps included,
         // and the run's hold; `credits` stays the job's own hold.
@@ -344,7 +352,7 @@ export async function jobRoutes(app: FastifyInstance) {
     const { data: read, error } = await readWithLaneStamp("job", (stamp) => {
       let query = supabase
         .from("jobs")
-        .select(`id, status, progress, output_data, error_message, error_detail, error_hint, completed_at, reconcile_attempts, usage_log_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
+        .select(`id, status, progress, output_data, error_message, error_detail, error_hint, completed_at, reconcile_attempts, usage_log_id, workflow_execution_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
         .eq("id", id)
         .is(TRASHED_JOB_COLUMN, null)
 
@@ -369,13 +377,16 @@ export async function jobRoutes(app: FastifyInstance) {
     // An old render carries no stored Preview label: a reopened workflow, a
     // finishing background job and the completed-job check all restore from
     // this read, so it fills the label from the order (never written back).
+    // A run's job keeps its provider words only for a reader who can open the
+    // run's workflow (runJobsProviderWords, which also takes the run id off).
+    const [judged] = await runJobsProviderWords([job as unknown as Record<string, unknown>], { isAdmin, userId })
     const {
       reconcile_attempts: attempts,
       usage_log_id: usageLogId,
       // Read for the queue's clock only; never sent.
       lane_queued_at: _laneQueuedAt,
       ...rest
-    } = fillJobRenderQuality(maskTrendRunError(job as unknown as Record<string, unknown>, isAdmin), { dropJobType: true }) as Record<string, unknown> & { usage_log_id?: string | null }
+    } = fillJobRenderQuality(maskTrendRunError(judged!, isAdmin), { dropJobType: true }) as Record<string, unknown> & { usage_log_id?: string | null }
     const creditMap = await creditStatusMapFor([usageLogId])
     // Where a job waiting for a slot stands (no gate read for any other job).
     const queues = await queueInfoFor(waitingRowsOf("job", [job]))
@@ -552,8 +563,14 @@ export async function jobRoutes(app: FastifyInstance) {
       return execution?.is_component_execution !== true && execution?.trigger_type !== "use_case"
     })
 
-    // Strip the joined workflow_executions data and the filters' embeds (only used for filtering)
-    const cleanedJobs = visibleJobs.map(({ workflow_executions: _we, ...job }) => withoutFilterEmbeds(job))
+    // Strip the joined workflow_executions data and the filters' embeds (only
+    // used for filtering). A run's job keeps its provider words only for a
+    // reader who can open the run's workflow (runJobsProviderWords: one read
+    // for the page's runs, one per distinct workflow, only for rows with words).
+    const cleanedJobs = await runJobsProviderWords(
+      visibleJobs.map(({ workflow_executions: _we, ...job }) => withoutFilterEmbeds(job)),
+      { isAdmin, userId: currentUserId },
+    )
     // One usage_logs read for the whole page: each job's billing lifecycle and
     // settled charge. `usage_log_id` is in neither key allowlist, so the
     // sanitizer below strips it.
@@ -646,7 +663,7 @@ export async function jobRoutes(app: FastifyInstance) {
     const { data: jobs, error } = await readWithLaneStamp("job", (stamp) => {
       let query = supabase
         .from("jobs")
-        .select(`id, status, output_data, error_message, error_detail, error_hint, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
+        .select(`id, status, output_data, error_message, error_detail, error_hint, workflow_execution_id, ${ORDER_QUALITY_COLUMNS}, ${TREND_RUN_MARKER_SELECT}${stamp}`)
         .in("id", jobIds)
         .is(TRASHED_JOB_COLUMN, null)
 
@@ -663,8 +680,11 @@ export async function jobRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to fetch job statuses")
     }
 
-    // A job waiting for a slot says where it stands: one gate read for every waiting job, none when none waits.
-    const rows = (jobs ?? []) as unknown as Record<string, unknown>[]
+    // A job waiting for a slot says where it stands: one gate read for every
+    // waiting job, none when none waits. A run's job keeps its provider words
+    // only for a reader who can open the run's workflow (runJobsProviderWords,
+    // which also takes the run id off).
+    const rows = await runJobsProviderWords((jobs ?? []) as unknown as Record<string, unknown>[], { isAdmin, userId })
     const queues = await queueInfoFor(waitingRowsOf("job", rows))
     // The reopen restore reads this: an old render's Preview label comes from
     // the order (read-time only; the answer stays lean).

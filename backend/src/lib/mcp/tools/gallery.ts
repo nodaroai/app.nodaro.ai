@@ -13,6 +13,7 @@ import { resumeFailedRunHint } from "./_resume-hint.js"
 import { failureGuidance } from "./_job-error.js"
 import { CHILD_JOB_COLUMN, maskTrendRunError, redactPrivateJobData, TRASHED_JOB_COLUMN } from "../../public-job-data.js"
 import { jobRowProviderWordsFor } from "../../provider-words.js"
+import { runJobsProviderWords } from "../../provider-words-readers.js"
 import { ASSET_SEARCH_COLUMNS, textSearchFilters } from "../../text-search.js"
 import { fillAssetRenderQuality, fillJobRenderQuality } from "../../render-label-fill.js"
 import { isPreviewRender } from "../../preview-render.js"
@@ -804,7 +805,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             // status="failed" with no reason, and the polling model assumes a
             // transient error and re-runs a permanently-blocked request.
             // error_hint (migration 376) backs failureGuidance's suggestedProvider.
-            "id, status, progress, job_type, input_data, output_data, error_message, error_detail, error_hint, created_at, completed_at, credits, user_id",
+            // workflow_execution_id is read for the run rule alone (runJobsProviderWords takes it off).
+            "id, status, progress, job_type, input_data, output_data, error_message, error_detail, error_hint, created_at, completed_at, credits, user_id, workflow_execution_id",
           )
           // A job in the Trash reads as one that does not exist (TRASHED_JOB_COLUMN).
           .is(TRASHED_JOB_COLUMN, null)
@@ -833,8 +835,18 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         // only; decided 2026-10-06).
         // A trend run's failure text is replaced (an MCP session is never an admin one),
         // and someone else's public job never carries its provider's words: they are
-        // its owner's (lib/provider-words.ts), judged by the row's `user_id`.
-        const data = jobRowProviderWordsFor(maskTrendRunError(redactPrivateJobData(fillJobRenderQuality(rawData)), false), { isAdmin: false, userId: session.userId })
+        // its owner's (lib/provider-words.ts), judged by the row's `user_id`. Your own
+        // run's job keeps them only when you can open the run's workflow
+        // (runJobsProviderWords, asked after the owner rule so someone else's job
+        // needs no lookup; it takes the run id off).
+        const [data] = await runJobsProviderWords(
+          [jobRowProviderWordsFor(maskTrendRunError(redactPrivateJobData(fillJobRenderQuality(rawData)), false), { isAdmin: false, userId: session.userId })],
+          { isAdmin: false, userId: session.userId },
+        )
+        if (!data) return { content: [{ type: "text", text: `Asset ${args.job_id} not found` }], isError: true }
+        // Someone else's job is answered without their id, as list_jobs' public scope does.
+        const { user_id: owner, ...othersJob } = data
+        const shownJob = owner === session.userId ? data : othersJob
 
         // Extract the public asset URL from output_data (varies by job_type:
         // imageUrl / videoUrl / audioUrl / outputUrl). The widget polls this
@@ -949,7 +961,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         }
 
         return {
-          content: [{ type: "text", text: JSON.stringify({ data }, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify({ data: shownJob }, null, 2) }],
           structuredContent: {
             jobId: data.id,
             status: data.status,
