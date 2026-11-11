@@ -7482,12 +7482,20 @@ function executeNodeCore(
       return Promise.reject(new Error("Video Overlay needs a base video"));
     }
     // The ONE assembly both engines run (@nodaro/shared): per slot the wired
-    // image, else the layer's own imageUrl; a wired slot with no settings is
+    // source — a videoUrl on a slot the resolver read as a video, else an
+    // imageUrl — else the layer's own source; a wired slot with no settings is
     // the default corner badge (D2); empty slots dropped; `slot` stamped;
     // presets expanded. Mirrors backend payload-builder.ts case "video-overlay".
     const wired = inputs.overlayImageUrls ?? [];
+    const videoSlots = inputs.overlayVideoSlots;
     // A wired layer plan rides in `planLayers` (plan layers first, then the slot layers).
-    const request = assembleVideoOverlayRequest({ videoUrl: baseUrl, data: d, wiredImageUrls: wired, planLayers: inputs.layerPlan });
+    const request = assembleVideoOverlayRequest({
+      videoUrl: baseUrl,
+      data: d,
+      wiredImageUrls: wired,
+      ...(videoSlots ? { wiredVideoSlots: new Set(videoSlots) } : {}),
+      planLayers: inputs.layerPlan,
+    });
     // An empty plan with no other layer outputs the base unchanged — free, no job (R14).
     const pass = videoOverlayPassThrough({ videoUrl: baseUrl, planWired: inputs.layerPlan !== undefined, layerCount: request.layers.length });
     if (pass && !request.planError) return Promise.resolve(completeAsPassThrough(node.id, pass));
@@ -7503,7 +7511,7 @@ function executeNodeCore(
     // It also rides on the request (within the route's bound): the worker
     // echoes it into output_data, so a run that lands after a page reload
     // (restore / reconcile read the REST job) reads fresh as well.
-    const resultCompositionKey = videoOverlayCompositionKey({ baseUrl, sources: videoOverlaySlotSources(d.layers ?? [], wired), data: d, planLayers: inputs.layerPlan });
+    const resultCompositionKey = videoOverlayCompositionKey({ baseUrl, sources: videoOverlaySlotSources(d.layers ?? [], wired), data: d, planLayers: inputs.layerPlan, videoSlots });
     const sentKey = resultCompositionKey.length <= VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH ? { resultCompositionKey } : {};
     setUserPromptTemplate(undefined);
     return runProcessingNode(

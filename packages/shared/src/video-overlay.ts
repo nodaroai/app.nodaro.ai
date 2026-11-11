@@ -1,5 +1,5 @@
 /**
- * Video Overlay — timed image layers over a video. The wire contract of the
+ * Video Overlay — timed image and video layers over a video. The wire contract of the
  * `video-overlay` node, `POST /v1/video-overlay`, the `overlay_images` MCP
  * verb, `client.media.videoOverlay` and `nodaro media video-overlay`, defined
  * ONCE:
@@ -12,8 +12,8 @@
  *     never switch on the tag;
  *   - `expandVideoOverlayLayer` / `expandVideoOverlayPresets`: the one
  *     normaliser every write boundary calls;
- *   - `resolveVideoOverlayGeometry`: the one placement function the canvas
- *     preview and the ffmpeg worker both call;
+ *   - `resolveVideoOverlayGeometry` (in `video-overlay-geometry.ts`): the one
+ *     placement function the canvas preview and the ffmpeg worker both call;
  *   - `assembleVideoOverlayRequest`: the one node-data → request assembly both
  *     workflow engines call;
  *   - `videoOverlayCompositionKey` (+ `videoOverlaySlotSources`): the freshness
@@ -22,14 +22,18 @@
  *     `VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH`) and the DAG payload compute
  *     it with this one function, and the node compares it against the key of
  *     its current settings;
- *   - `validateVideoOverlayRequest`: what a schema cannot express, at every
- *     engine entry. It returns a CODE, never English: `formatVideoOverlayError`
- *     renders the route / worker text, the canvas renders the code through its
- *     dictionaries.
+ *   - `validateVideoOverlayRequest` (in `video-overlay-validate.ts`): what a
+ *     schema cannot express, at every engine entry. It returns a CODE, never
+ *     English: `formatVideoOverlayError` renders the route / worker text, the
+ *     canvas renders the code through its dictionaries.
+ * The geometry and validator siblings import from this file; it imports
+ * nothing from them.
  * Wire contract only — no prompt content, no I/O.
  */
-import { OVERLAY_ANCHORS, type OverlayAnchor } from "./image-overlay-layers.js"
-import { ASPECT_RATIO_DIMENSIONS } from "./model-constants.js"
+import type { OverlayAnchor } from "./image-overlay-layers.js"
+import { asLayer, isFit, nonEmpty, storedLayout } from "./video-overlay-input.js"
+import { isVideoOverlayVideoLayer, withoutEmptyVideoOverlaySources, withoutImpliedVideoOverlayAnimate, withoutVideoOverlaySound } from "./video-overlay-video-layers.js"
+import type { VideoOverlayLayoutId } from "./video-overlay-layout-ids.js"
 
 /** Engine + MCP contract: layers per request. */
 export const VIDEO_OVERLAY_MAX_LAYERS = 20
@@ -72,6 +76,22 @@ export const VIDEO_OVERLAY_BOUNDS = {
 } as const
 /** Σ downloaded layer bytes per job. */
 export const VIDEO_OVERLAY_MAX_TOTAL_LAYER_BYTES = 100 * 1024 * 1024
+/** A video layer's `sound.volume` (1 = as recorded). */
+export const VIDEO_OVERLAY_VOLUME_BOUNDS = [0, 1] as const
+/**
+ * Video layers per request. Measured on the pinned ffmpeg: a 60 s base with
+ * two video layers renders well inside the 10-minute limit (three times its
+ * slowest render), and three video layers do not at 60 s.
+ */
+export const VIDEO_OVERLAY_MAX_VIDEO_LAYERS = 2
+/**
+ * The longest base video, seconds, for a run with a video layer — the
+ * longest base for which one and two video layers both render within the
+ * 10-minute limit with room for three times the slowest measured render.
+ */
+export const VIDEO_OVERLAY_VIDEO_MAX_BASE_SEC = 60
+/** One video layer's file, bytes. */
+export const VIDEO_OVERLAY_MAX_LAYER_VIDEO_BYTES = 200 * 1024 * 1024
 /** Fade + scale ramp, seconds each way (clamped to half of a short layer). */
 export const VIDEO_OVERLAY_ANIMATION_SEC = 0.15
 /** The scale a layer grows from and shrinks back to during the ramp. */
@@ -83,11 +103,13 @@ export const VIDEO_OVERLAY_BADGE_INSET = 4
 export const VIDEO_OVERLAY_DEFAULT_BACKGROUND = "#000000"
 /** The six box fields — exactly what a preset writes. */
 export const VIDEO_OVERLAY_BOX_FIELDS = ["anchor", "x", "y", "width", "height", "fit"] as const
-export const VIDEO_OVERLAY_WARNING_CODES = ["clipped", "skipped", "animated_first_frame", "audio_reencoded"] as const
+export const VIDEO_OVERLAY_WARNING_CODES = ["clipped", "skipped", "animated_first_frame", "audio_reencoded", "layer_no_audio"] as const
 export type VideoOverlayWarningCode = (typeof VIDEO_OVERLAY_WARNING_CODES)[number]
 export const VIDEO_OVERLAY_ERROR_CODES = [
   "no_layers", "too_many_layers", "incomplete_box", "layer_without_image",
   "time_out_of_range", "end_before_start", "fit_without_aspect", "field_out_of_bounds", "invalid_layer_plan",
+  "layer_two_sources", "too_many_video_layers", "sound_without_video",
+  "base_box_needs_aspect", "layout_needs_aspect", "layout_needs_video_layer", "layout_conflicts_base_box",
 ] as const
 export type VideoOverlayErrorCode = (typeof VIDEO_OVERLAY_ERROR_CODES)[number]
 
@@ -99,6 +121,14 @@ export interface VideoOverlayBox {
   readonly height?: number
   readonly fit: VideoOverlayFit
 }
+/** A box as a writer may send it (the base box from workflow JSON): every field optional; `null` means absent. */
+export type VideoOverlayBoxInput = { readonly [K in keyof VideoOverlayBox]?: VideoOverlayBox[K] | null }
+
+/** A video layer's sound, mixed with the base's during the layer's window. Absent = the layer is silent. */
+export interface VideoOverlaySound {
+  /** 0..1 (`VIDEO_OVERLAY_VOLUME_BOUNDS`). */
+  readonly volume: number
+}
 
 /** A layer as stored and enqueued — complete: every box and look field present. */
 export interface VideoOverlayLayer {
@@ -109,6 +139,14 @@ export interface VideoOverlayLayer {
    * and the run-time merge is still `wired ?? imageUrl` everywhere.
    */
   imageUrl?: string
+  /**
+   * The layer's video, instead of `imageUrl` — never both. Cleared by wiring
+   * exactly as `imageUrl` is; a wired handle's source is a video when the
+   * assembly is told so (`wiredVideoSlots`).
+   */
+  videoUrl?: string
+  /** A video layer only. */
+  sound?: VideoOverlaySound
   /** 1-based canvas slot (overlay = 1 … overlay12 = 12; 13 and up handle-less), stamped by both engine assemblies. Messages prefer it. */
   slot?: number
   /** 1-based entry of a wired layer plan, stamped by the assembly. Messages prefer it. */
@@ -128,12 +166,12 @@ export interface VideoOverlayLayer {
   y: number
   /** % of the output canvas width (1..100). */
   width: number
-  /** % of the output canvas height (1..100); absent = follows the image's aspect. */
+  /** % of the output canvas height (1..100); absent = follows the image's (or video's) aspect. */
   height?: number
   fit: VideoOverlayFit
   /** 0..1 */
   opacity: number
-  /** Fade + slight scale in and out, 0.15 s each way. */
+  /** Fade + slight scale in and out, 0.15 s each way. Default on for an image, off for a video. */
   animate: boolean
   /** Integer 0..100; absent = its position (slot − 1: layer 1 lowest). */
   zIndex?: number
@@ -142,24 +180,50 @@ export interface VideoOverlayLayer {
 /** A layer as a WRITER may send it (workflow JSON, a template, the canvas): every field optional; `null` means absent. */
 export type VideoOverlayLayerInput = { [K in keyof VideoOverlayLayer]?: VideoOverlayLayer[K] | null }
 
-/** A layer on the REST / SDK wire: image and start required; the box may be a preset, explicit fields, or nothing (→ the corner-badge default). */
-export type VideoOverlayLayerSpec = { imageUrl: string; start: number } & Partial<Omit<VideoOverlayLayer, "imageUrl" | "start">>
+/**
+ * A layer on the REST / SDK wire: exactly one of `imageUrl` / `videoUrl`, and
+ * `start`, required; the box may be a preset, explicit fields, or nothing
+ * (→ the corner-badge default).
+ */
+export type VideoOverlayLayerSpec = { start: number } & Partial<Omit<VideoOverlayLayer, "imageUrl" | "videoUrl" | "start">> &
+  ({ imageUrl: string; videoUrl?: never } | { videoUrl: string; imageUrl?: never })
+
+/**
+ * A base box on the REST / SDK wire: `anchor` and `width` required; `x` and
+ * `y` default to 0 and `fit` to contain (`expandVideoOverlayLayout`), and no
+ * `height` follows the base's own aspect.
+ */
+export type VideoOverlayBaseBoxSpec = Pick<VideoOverlayBox, "anchor" | "width"> & Partial<Omit<VideoOverlayBox, "anchor" | "width">>
 
 /** The `POST /v1/video-overlay` body. */
 export interface VideoOverlayRequest {
   videoUrl: string
-  /** 1..20 */
+  /** 1..20, at most `VIDEO_OVERLAY_MAX_VIDEO_LAYERS` (2) of them videos. */
   layers: VideoOverlayLayerSpec[]
   outputAspect?: VideoOverlayOutputAspect
   /** Only with `outputAspect`; default cover. */
   baseFit?: VideoOverlayFit
   /** `#rrggbb`, only with `outputAspect` (drawn under `contain`); default `#000000`. */
   backgroundColor?: string
+  /** Where the base sits, in a layer's box vocabulary; only with `outputAspect`. Overrides `baseFit`; uncovered canvas shows `backgroundColor`. Refused with a stack layout. */
+  baseBox?: VideoOverlayBaseBoxSpec
+  /**
+   * A named layout that writes the boxes (`expandVideoOverlayLayout`): an
+   * explicit `baseBox` wins over `video-bottom` / `video-top`; a stack places
+   * the base itself and takes none; `pip` replaces the first video layer's box.
+   */
+  layout?: VideoOverlayLayoutId
 }
 
 /** A request whose layers went through `expandVideoOverlayPresets`. */
-export interface ExpandedVideoOverlayRequest extends Omit<VideoOverlayRequest, "layers"> {
+export interface ExpandedVideoOverlayRequest extends Omit<VideoOverlayRequest, "layers" | "baseBox"> {
   layers: VideoOverlayLayer[]
+  /**
+   * The base box as stored or sent, its `null` fields dropped — any field may
+   * be absent. The validator refuses one without an anchor and a width; the
+   * worker fills the rest (`expandVideoOverlayLayout`) after it.
+   */
+  baseBox?: Partial<VideoOverlayBox>
   /** Set by the assembly when a wired layer plan could not be read; `validateVideoOverlayRequest` reports it first. */
   planError?: "invalid_layer_plan"
 }
@@ -223,20 +287,6 @@ export function isVideoOverlayCorner(v: unknown): v is VideoOverlayCorner {
 export function isVideoOverlayOutputAspect(v: unknown): v is VideoOverlayOutputAspect {
   return typeof v === "string" && (VIDEO_OVERLAY_OUTPUT_ASPECTS as readonly string[]).includes(v)
 }
-function isFit(v: unknown): v is VideoOverlayFit {
-  return v === "contain" || v === "cover"
-}
-
-/**
- * A `layers[]` entry as a layer, or null when it is not a plain object. Layer
- * arrays reach this module from untrusted workflow JSON (the MCP write sites
- * type nodes as `record<string, unknown>`), so a bare string / number / array
- * entry is read as an ABSENT layer — never spread, never `in`-probed.
- */
-function asLayer(v: unknown): VideoOverlayLayerInput | null {
-  return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as VideoOverlayLayerInput) : null
-}
-
 /** 1-based slot of a layer handle id (`overlay` → 1 … `overlay12` → 12); 0 for anything else. */
 export function videoOverlaySlotOfHandle(handle: string | null | undefined): number {
   return (VIDEO_OVERLAY_HANDLE_IDS as readonly string[]).indexOf(handle ?? "") + 1
@@ -248,7 +298,8 @@ export function videoOverlayPresetBox(preset: VideoOverlayPresetId, corner?: Vid
     : VIDEO_OVERLAY_PRESETS[preset]
 }
 
-const TRAILING_DEFAULTS = { x: 0, y: 0, fit: "contain", opacity: 1, animate: true } as const
+/** Filled when absent; `animate` too, by the layer's kind (on for an image, off for a video). */
+const TRAILING_DEFAULTS = { x: 0, y: 0, fit: "contain", opacity: 1 } as const
 
 function usable(key: string, value: unknown): boolean {
   if (value === null || value === undefined) return false
@@ -283,27 +334,33 @@ function sameShallow(a: Readonly<Record<string, unknown>>, b: unknown): boolean 
  *   fields, the layer's own fields winning (D8): `{}` → the full default.
  * - no `preset` + a PARTIAL box (not anchor AND width) → returned untouched;
  *   the validator answers `incomplete_box`.
- * Trailing defaults x 0, y 0, fit contain, opacity 1, animate true are filled
- * here and nowhere else. `null` reads as absent. Returned BY REFERENCE when
- * nothing changes; idempotent, tag included.
+ * Trailing defaults x 0, y 0, fit contain, opacity 1, and animate (true for an
+ * image, false for a video layer — in every branch, the default layer's included)
+ * are filled here and nowhere else. A VIDEO layer with a preset and no `start`
+ * starts at 0, like the default layer; an image one is left to the validator
+ * (`time_out_of_range`), as it always was. `null` reads as absent. Returned BY
+ * REFERENCE when nothing changes; idempotent, tag included.
  */
 export function expandVideoOverlayLayer(raw: VideoOverlayLayerInput | null | undefined): VideoOverlayLayer {
   const obj = asLayer(raw)
   const layer = obj ? clean(obj) : {}
+  const animateDefault = !isVideoOverlayVideoLayer(layer)
   const present = VIDEO_OVERLAY_BOX_FIELDS.filter((f) => layer[f] !== undefined)
   let out: Record<string, unknown>
   if (isVideoOverlayPresetId(layer.preset)) {
     const box = videoOverlayPresetBox(layer.preset, layer.corner)
-    out = { ...box, ...layer }
+    // A video layer tagged with a preset starts at 0 when it names no start (as the default layer does); an image layer is left for the validator, as before.
+    out = { ...box, ...(animateDefault || layer.start !== undefined ? {} : { start: 0 }), ...layer }
     if (present.some((f) => layer[f] !== box[f])) delete out.preset
   } else if (present.length === 0) {
-    out = { ...DEFAULT_VIDEO_OVERLAY_LAYER, ...videoOverlayPresetBox("corner-badge", layer.corner), ...layer }
+    out = { ...DEFAULT_VIDEO_OVERLAY_LAYER, animate: animateDefault, ...videoOverlayPresetBox("corner-badge", layer.corner), ...layer }
   } else if (layer.anchor === undefined || layer.width === undefined) {
     return raw as VideoOverlayLayer
   } else {
     out = { ...layer }
   }
   for (const [k, v] of Object.entries(TRAILING_DEFAULTS)) if (out[k] === undefined) out[k] = v
+  if (out.animate === undefined) out.animate = animateDefault
   return sameShallow(out, raw) ? (raw as VideoOverlayLayer) : (out as unknown as VideoOverlayLayer)
 }
 
@@ -343,10 +400,11 @@ export function toCustomVideoOverlayLayer(layer: VideoOverlayLayerInput | null |
 }
 
 /**
- * D10 — delete `imageUrl` from every layer whose canvas handle is wired
- * (`wiredSlots`: 1-based). Pure over `layers` (the route has no edges, so this
- * is a sibling of the expansion, not part of it). Slots 13 and up have no handle
- * and are never touched. The input array by reference when nothing changes.
+ * D10 — delete `imageUrl` AND `videoUrl` from every layer whose canvas handle
+ * is wired (`wiredSlots`: 1-based): the wire is the layer's source, whichever
+ * kind it is. Pure over `layers` (the route has no edges, so this is a sibling
+ * of the expansion, not part of it). Slots 13 and up have no handle and are
+ * never touched. The input array by reference when nothing changes.
  */
 export function clearWiredVideoOverlayImageUrls<T extends VideoOverlayLayerInput | null | undefined>(
   layers: readonly T[],
@@ -356,9 +414,9 @@ export function clearWiredVideoOverlayImageUrls<T extends VideoOverlayLayerInput
   for (const slot of wiredSlots) {
     if (!Number.isInteger(slot) || slot < 1 || slot > VIDEO_OVERLAY_HANDLE_IDS.length) continue
     const layer = layers[slot - 1]
-    if (!asLayer(layer) || !("imageUrl" in (layer as object))) continue
+    if (!asLayer(layer) || !("imageUrl" in (layer as object) || "videoUrl" in (layer as object))) continue
     out ??= [...layers]
-    const { imageUrl: _cleared, ...rest } = layer as VideoOverlayLayerInput
+    const { imageUrl: _image, videoUrl: _video, ...rest } = layer as VideoOverlayLayerInput
     out[slot - 1] = rest as T
   }
   return out ?? layers
@@ -404,11 +462,14 @@ export function normalizeVideoOverlayNodes<T extends NodeLike>(nodes: readonly T
     }
     const cleared = clearWiredVideoOverlayImageUrls(layers, wired)
     let layersChanged = cleared !== layers
-    const next = cleared.map((l) => {
+    const next = cleared.map((l, i) => {
       // null / missing stays as stored; a non-object entry is left untouched so
       // the validator sees it (it reads as an absent layer everywhere).
       if (!asLayer(l)) return l
-      const e = expandVideoOverlayLayer(l)
+      // A wired slot's fade default follows its wire's kind, read at the run:
+      // only a fade it was written with is stored.
+      const expanded = expandVideoOverlayLayer(l)
+      const e = wired.has(i + 1) ? withoutImpliedVideoOverlayAnimate(expanded, l) : expanded
       if (e !== l) layersChanged = true
       return e
     })
@@ -455,239 +516,6 @@ export function videoOverlayRenderOrder(layers: ReadonlyArray<VideoOverlayOrdera
     .map((e) => e.i)
 }
 
-export interface VideoOverlayRect {
-  readonly left: number
-  readonly top: number
-  readonly width: number
-  readonly height: number
-}
-export interface VideoOverlayCanvas {
-  readonly w: number
-  readonly h: number
-}
-export interface VideoOverlayGeometry {
-  readonly box: VideoOverlayRect
-  readonly drawn: VideoOverlayRect
-}
-
-const evenFloor = (n: number): number => Math.max(2, Math.floor(n / 2) * 2)
-
-/**
- * The output canvas: `ASPECT_RATIO_DIMENSIONS[outputAspect]` when a target
- * aspect is set; otherwise the base's DISPLAY size (rotation already applied by
- * the caller's probe) with the sample aspect ratio resolved and both sides
- * rounded down to even — `trunc(iw*sar/2)*2 × trunc(ih/2)*2`, what the ffmpeg
- * base chain produces. null when neither is known.
- */
-export function videoOverlayCanvas(
-  display: { readonly width: number; readonly height: number; readonly sar?: number } | null | undefined,
-  outputAspect?: string | null,
-): VideoOverlayCanvas | null {
-  if (isVideoOverlayOutputAspect(outputAspect)) {
-    const d = ASPECT_RATIO_DIMENSIONS[outputAspect]!
-    return { w: d.width, h: d.height }
-  }
-  if (!display || !(display.width > 0) || !(display.height > 0)) return null
-  const sar = typeof display.sar === "number" && Number.isFinite(display.sar) && display.sar > 0 ? display.sar : 1
-  return { w: evenFloor(display.width * sar), h: evenFloor(display.height) }
-}
-
-function anchorFactors(anchor: OverlayAnchor): readonly [number, number] {
-  const h = anchor.endsWith("left") ? 0 : anchor.endsWith("right") ? 1 : 0.5
-  const v = anchor.startsWith("top") ? 0 : anchor.startsWith("bottom") ? 1 : 0.5
-  return [h, v]
-}
-
-/**
- * Spec §3.4. `width%` → px of the canvas width; height follows the image's
- * aspect unless `height%` is set; nine anchors; x/y are additive offsets in %
- * of the canvas. An aspect-following box taller than the canvas is fitted
- * inside it (both sides scaled, aspect kept) — so `drawn` never exceeds the
- * canvas, which is what bounds the sharp pre-fit at one canvas of RGBA. `fit`:
- * contain → the image scaled inside the box, centred; cover → the box itself.
- * The only post-processing is rounding `drawn` DOWN to even, floored at 2 × 2.
- * Differences from Image Overlay's copies (on purpose): no 8192 edge shrink,
- * the canvas clamp, the even rounding.
- */
-export function resolveVideoOverlayGeometry(
-  canvas: VideoOverlayCanvas,
-  layer: Pick<VideoOverlayLayer, "anchor" | "x" | "y" | "width" | "height" | "fit">,
-  imageAspect: number,
-): VideoOverlayGeometry {
-  const aspect = Number.isFinite(imageAspect) && imageAspect > 0 ? imageAspect : 1
-  let bw = Math.max(1, Math.round((layer.width / 100) * canvas.w))
-  let bh = layer.height !== undefined ? Math.max(1, Math.round((layer.height / 100) * canvas.h)) : Math.max(1, Math.round(bw / aspect))
-  if (layer.height === undefined && bh > canvas.h) {
-    bw = Math.max(1, Math.round(bw * (canvas.h / bh)))
-    bh = canvas.h
-  }
-  const [ax, ay] = anchorFactors(layer.anchor)
-  const left = Math.round(ax * (canvas.w - bw) + (layer.x / 100) * canvas.w)
-  const top = Math.round(ay * (canvas.h - bh) + (layer.y / 100) * canvas.h)
-  let dw: number
-  let dh: number
-  if (layer.fit === "cover") {
-    dw = bw
-    dh = bh
-  } else if (bw / bh > aspect) {
-    dh = bh
-    dw = bh * aspect
-  } else {
-    dw = bw
-    dh = bw / aspect
-  }
-  const width = evenFloor(dw)
-  const height = evenFloor(dh)
-  return {
-    box: { left, top, width: bw, height: bh },
-    drawn: { left: left + Math.floor((bw - width) / 2), top: top + Math.floor((bh - height) / 2), width, height },
-  }
-}
-
-export interface VideoOverlayIssue {
-  readonly ok: false
-  readonly code: VideoOverlayErrorCode
-  /** 0-based index into the validated `layers[]`. */
-  readonly layer?: number
-  readonly slot?: number
-  readonly planLayer?: number
-  readonly params: Readonly<Record<string, string | number>>
-}
-export type VideoOverlayValidation = { readonly ok: true } | VideoOverlayIssue
-
-export interface VideoOverlayValidationInput {
-  readonly layers?: ReadonlyArray<VideoOverlayLayerInput | null | undefined> | null
-  readonly outputAspect?: string | null
-  readonly baseFit?: string | null
-  readonly backgroundColor?: string | null
-  /** From `assembleVideoOverlayRequest`: the wired layer plan was unreadable. */
-  readonly planError?: "invalid_layer_plan"
-}
-
-const inTimeRange = (v: unknown): v is number =>
-  typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= VIDEO_OVERLAY_MAX_TIME_SEC
-
-type BoundedField = keyof typeof VIDEO_OVERLAY_BOUNDS
-const BOUNDED_FIELDS = Object.keys(VIDEO_OVERLAY_BOUNDS) as BoundedField[]
-
-/**
- * The first present (non-null) box / look field outside its domain, with the
- * domain as a symbolic `allowed` string; null when every present field is in
- * range. Only PRESENT fields are checked, so the verdict is the same before and
- * after the expansion (it fills in-range defaults only). This is what keeps a
- * JSON-written layer (MCP `update_workflow_json`, copilot, templates) from
- * reaching the geometry with an unbounded box — `drawn ≤ canvas` (§3.4) holds
- * only for boxes inside these bounds.
- */
-function outOfBounds(l: VideoOverlayLayerInput): { field: string; allowed: string } | null {
-  for (const f of BOUNDED_FIELDS) {
-    const v = l[f]
-    if (v === undefined || v === null) continue
-    const [min, max] = VIDEO_OVERLAY_BOUNDS[f]
-    const integer = f === "zIndex"
-    if (typeof v !== "number" || !Number.isFinite(v) || v < min || v > max || (integer && !Number.isInteger(v))) {
-      return { field: f, allowed: `${integer ? "integers " : ""}${min}..${max}` }
-    }
-  }
-  if (l.anchor != null && !(OVERLAY_ANCHORS as readonly unknown[]).includes(l.anchor)) {
-    return { field: "anchor", allowed: OVERLAY_ANCHORS.join(", ") }
-  }
-  if (l.fit != null && !isFit(l.fit)) return { field: "fit", allowed: VIDEO_OVERLAY_FITS.join(", ") }
-  if (l.animate != null && typeof l.animate !== "boolean") return { field: "animate", allowed: "true, false" }
-  return null
-}
-
-/**
- * Can `resolveVideoOverlayGeometry` place this layer? True when its box is what
- * the validator's box checks require: `anchor` one of the nine anchors, `width`
- * a finite number, and every present box / look field in range
- * (`VIDEO_OVERLAY_BOUNDS`, enums). A partial box saved from workflow JSON
- * (`{ imageUrl, start, width }`, `anchor: null`) is stored as written — the
- * expansion leaves it for the validator's `incomplete_box` — so any reader
- * that DRAWS a stored layer (the canvas stage) must skip one that fails this;
- * the geometry would throw on it.
- */
-export function hasDrawableVideoOverlayBox(layer: unknown): boolean {
-  const l = asLayer(layer)
-  if (!l) return false
-  if (!(OVERLAY_ANCHORS as readonly unknown[]).includes(l.anchor)) return false
-  if (typeof l.width !== "number" || !Number.isFinite(l.width)) return false
-  return outOfBounds(l) === null
-}
-
-/**
- * Spec §3.5 — what a schema cannot express, and what the DAG path skips. Run
- * at every engine entry: the route (`.superRefine`, before the expansion), the
- * canvas single-node run, payload-builder and the worker (after it) — the
- * verdict is the same on either side of the expansion (no code reads an
- * expanded field). Also refuses a PRESENT box / look field outside
- * `VIDEO_OVERLAY_BOUNDS` or its enum / type (`field_out_of_bounds`, spec §4.4's
- * "out-of-bounds box/opacity/zIndex" row — on the DAG path this validator is
- * the only check). A non-object `layers[]` entry reads as an empty layer. The
- * FIRST failure, as a code.
- */
-export function validateVideoOverlayRequest(body: VideoOverlayValidationInput): VideoOverlayValidation {
-  if (body.planError) return { ok: false, code: "invalid_layer_plan", params: {} }
-  const layers = Array.isArray(body.layers) ? body.layers : []
-  if (layers.length === 0) return { ok: false, code: "no_layers", params: {} }
-  if (layers.length > VIDEO_OVERLAY_MAX_LAYERS) {
-    return { ok: false, code: "too_many_layers", params: { max: VIDEO_OVERLAY_MAX_LAYERS, count: layers.length } }
-  }
-  for (let i = 0; i < layers.length; i++) {
-    const l: VideoOverlayLayerInput = asLayer(layers[i]) ?? {}
-    const at = (code: VideoOverlayErrorCode, params: Record<string, string | number> = {}): VideoOverlayIssue => ({
-      ok: false,
-      code,
-      layer: i,
-      ...(typeof l.slot === "number" ? { slot: l.slot } : {}),
-      ...(typeof l.planLayer === "number" ? { planLayer: l.planLayer } : {}),
-      params,
-    })
-    const boxFields = VIDEO_OVERLAY_BOX_FIELDS.filter((f) => l[f] !== undefined && l[f] !== null)
-    if (!isVideoOverlayPresetId(l.preset) && boxFields.length > 0 && (l.anchor == null || l.width == null)) return at("incomplete_box")
-    const bad = outOfBounds(l)
-    if (bad) return at("field_out_of_bounds", bad)
-    if (typeof l.imageUrl !== "string" || l.imageUrl.length === 0) return at("layer_without_image")
-    if (!inTimeRange(l.start)) return at("time_out_of_range", { field: "start", max: VIDEO_OVERLAY_MAX_TIME_SEC })
-    if (l.end !== undefined && l.end !== null) {
-      if (!inTimeRange(l.end)) return at("time_out_of_range", { field: "end", max: VIDEO_OVERLAY_MAX_TIME_SEC })
-      if (!(l.end > l.start)) return at("end_before_start", { start: l.start, end: l.end })
-    }
-  }
-  if (!isVideoOverlayOutputAspect(body.outputAspect) && (body.baseFit != null || body.backgroundColor != null)) {
-    return { ok: false, code: "fit_without_aspect", params: {} }
-  }
-  return { ok: true }
-}
-
-const MESSAGES: { readonly [C in VideoOverlayErrorCode]: (p: Readonly<Record<string, string | number>>) => string } = {
-  no_layers: () => "At least 1 layer is required",
-  too_many_layers: (p) => `At most ${p.max} layers (got ${p.count})`,
-  incomplete_box: () => "anchor and width are required without a preset",
-  layer_without_image: () => "no image — connect one to the layer's handle or set imageUrl",
-  time_out_of_range: (p) => `${p.field} must be between 0 and ${p.max} s`,
-  end_before_start: (p) => `end (${p.end} s) must be after start (${p.start} s)`,
-  fit_without_aspect: () => "baseFit and backgroundColor need an outputAspect",
-  field_out_of_bounds: (p) => `${p.field} is out of range (allowed: ${p.allowed})`,
-  invalid_layer_plan: () => "the layer plan must be a list of layers",
-}
-
-const PLAN_LAYER_WITHOUT_IMAGE = "no image — set imageUrl on this layer in the plan."
-
-/** `Plan layer <n>` for a layer-plan entry, `Layer <slot>` when the layer came from the canvas, else `layers[<index>]`; "" for a request-wide failure. */
-export function videoOverlayLayerLabel(ref: { readonly layer?: number; readonly slot?: number; readonly planLayer?: number }): string {
-  if (typeof ref.planLayer === "number") return `Plan layer ${ref.planLayer}`
-  return typeof ref.slot === "number" ? `Layer ${ref.slot}` : typeof ref.layer === "number" ? `layers[${ref.layer}]` : ""
-}
-
-/** The ONE English rendering of a verdict — the route's 400 text and the worker's error message. */
-export function formatVideoOverlayError(issue: VideoOverlayIssue): string {
-  const label = videoOverlayLayerLabel(issue)
-  // A plan layer has no handle to connect — its image can only come from its own imageUrl.
-  const text = issue.code === "layer_without_image" && typeof issue.planLayer === "number" ? PLAN_LAYER_WITHOUT_IMAGE : MESSAGES[issue.code](issue.params)
-  return label ? `${label}: ${text}` : text
-}
-
 /** The wired `layerPlan` value (a JSON string or an array) → its layers, or `invalid_layer_plan`. */
 export function parseVideoOverlayLayerPlan(raw: unknown): { layers: VideoOverlayLayerInput[] } | { error: "invalid_layer_plan" } {
   let value: unknown = raw
@@ -704,12 +532,18 @@ export function parseVideoOverlayLayerPlan(raw: unknown): { layers: VideoOverlay
   return { layers: value as VideoOverlayLayerInput[] }
 }
 
+/** A stored base box without its `null` fields (by reference when it has none); a non-object as stored, for the validator. */
+const storedBaseBox = (box: VideoOverlayBoxInput): Partial<VideoOverlayBox> => (asLayer(box) ? clean(box as VideoOverlayLayerInput) : box) as Partial<VideoOverlayBox>
+
 /** The node-data fields the assembly reads. */
 export interface VideoOverlayNodeFields {
   readonly layers?: ReadonlyArray<VideoOverlayLayerInput | null | undefined> | null
   readonly outputAspect?: string | null
   readonly baseFit?: string | null
   readonly backgroundColor?: string | null
+  /** As written, like the fields above: the validator, not the type, refuses a malformed box or an unknown layout. */
+  readonly baseBox?: VideoOverlayBoxInput | null
+  readonly layout?: string | null
 }
 
 /**
@@ -717,8 +551,12 @@ export interface VideoOverlayNodeFields {
  * payload-builder (so both engines refuse identically). Per slot i over
  * max(wired handles (≤ 12), stored layers) — every stored slot, so more than
  * 20 layers that render reach the validator's `too_many_layers` instead of
- * being dropped: the image is the wired handle's,
- * else the layer's own `imageUrl`; a slot with neither is dropped; a slot with
+ * being dropped: the source is the wired handle's — a `videoUrl` when its slot
+ * is in `wiredVideoSlots`, else an `imageUrl` (a stored `sound` skipped, so a
+ * wire read as an image at the run never refuses it), replacing both stored
+ * sources — else the layer's own `imageUrl` / `videoUrl` as stored (both stored reach
+ * the validator's `layer_two_sources`; an empty-string one is dropped —
+ * `withoutEmptyVideoOverlaySources`, plan layers too); a slot with neither is dropped; a slot with
  * no settings is the default layer (D2 — a `null` / missing / `{}` entry);
  * `slot = i + 1` is stamped; the layer is expanded. `baseFit` /
  * `backgroundColor` ride as stored, WITH or WITHOUT an `outputAspect`: the
@@ -728,6 +566,12 @@ export interface VideoOverlayNodeFields {
  * (The canvas never builds that request: its two aspect writers clear both
  * fields with the aspect.) A value the route's schema would reject — an
  * unknown aspect or fit, a colour that is not `#rrggbb` — is dropped here.
+ * `baseBox` and `layout` ride AS STORED (a `""` layout reads as absent, like
+ * `null`; a box's `null` fields are dropped, as a layer's are by its
+ * expansion — every reader treats them as absent, and the REST route's schema
+ * takes no `null`, so the canvas run's request stays one the route accepts): a
+ * malformed box or an unknown layout reaches the validator, which refuses it
+ * on both engines.
  *
  * A wired layer plan (`planLayers`, a JSON string or an array) contributes its
  * layers FIRST, then the slot layers: plan layers carry `planLayer` (1-based)
@@ -738,7 +582,10 @@ export interface VideoOverlayNodeFields {
 export function assembleVideoOverlayRequest(input: {
   readonly videoUrl: string
   readonly data: VideoOverlayNodeFields
+  /** Each wired handle's source, by slot (images and videos alike). */
   readonly wiredImageUrls: ReadonlyArray<string | null | undefined>
+  /** 1-based slots whose wired source is a video (`videoOverlayWiredLayerKind`); absent = every wire is an image. */
+  readonly wiredVideoSlots?: ReadonlySet<number>
   /** The wired `layerPlan` value (string or array); absent when nothing is wired. */
   readonly planLayers?: unknown
 }): ExpandedVideoOverlayRequest {
@@ -751,12 +598,19 @@ export function assembleVideoOverlayRequest(input: {
   const slots = Math.max(wired.length, stored.length)
   const layers: VideoOverlayLayer[] = []
   for (let i = 0; i < slots; i++) {
-    const raw = asLayer(stored[i])
+    const own = asLayer(stored[i])
+    const raw = own && withoutEmptyVideoOverlaySources(own)
     const wiredUrl = wired[i]
-    const own = raw?.imageUrl
-    const image = typeof wiredUrl === "string" && wiredUrl.length > 0 ? wiredUrl : typeof own === "string" && own.length > 0 ? own : undefined
-    if (!image) continue
-    layers.push(expandVideoOverlayLayer({ ...(raw ?? {}), imageUrl: image, slot: i + 1 }))
+    if (nonEmpty(wiredUrl)) {
+      // The wire is the source: the other kind's stored field goes, its own kind's is replaced.
+      const video = input.wiredVideoSlots?.has(i + 1) === true
+      const [kind, other] = video ? (["videoUrl", "imageUrl"] as const) : (["imageUrl", "videoUrl"] as const)
+      const { [other]: _replaced, ...keep } = raw ?? {}
+      // An image wire skips a stored sound (`withoutVideoOverlaySound`); the expansion fills the fade default by the wire's kind.
+      layers.push(expandVideoOverlayLayer({ ...(video ? keep : withoutVideoOverlaySound(keep)), [kind]: wiredUrl, slot: i + 1 }))
+    } else if (nonEmpty(raw?.imageUrl) || nonEmpty(raw?.videoUrl)) {
+      layers.push(expandVideoOverlayLayer({ ...raw, slot: i + 1 }))
+    }
   }
   const outputAspect = isVideoOverlayOutputAspect(input.data.outputAspect) ? input.data.outputAspect : undefined
   const baseFit = isFit(input.data.baseFit) ? input.data.baseFit : undefined
@@ -766,11 +620,13 @@ export function assembleVideoOverlayRequest(input: {
     ...(outputAspect ? { outputAspect } : {}),
     ...(baseFit ? { baseFit } : {}),
     ...(backgroundColor ? { backgroundColor } : {}),
+    ...(input.data.baseBox != null ? { baseBox: storedBaseBox(input.data.baseBox) } : {}),
+    ...(storedLayout(input.data.layout) !== undefined ? { layout: input.data.layout as VideoOverlayLayoutId } : {}),
   }
   if (input.planLayers === undefined) return { videoUrl: input.videoUrl, layers, ...rest }
   const plan = parseVideoOverlayLayerPlan(input.planLayers)
   if ("error" in plan) return { videoUrl: input.videoUrl, layers, ...rest, planError: plan.error }
-  const planned = expandVideoOverlayPresets(plan.layers).map((l, i) => {
+  const planned = expandVideoOverlayPresets(plan.layers.map(withoutEmptyVideoOverlaySources)).map((l, i) => {
     const { slot: _slot, ...own } = l
     return { ...own, planLayer: i + 1 }
   })
@@ -778,12 +634,13 @@ export function assembleVideoOverlayRequest(input: {
 }
 
 /**
- * Slot i's image: the wired handle's, else the layer's own `imageUrl` — the
- * one source rule the stage, the panel, the canvas executor and the DAG
- * payload share (the render's merge is the same `wired ?? imageUrl`, spec
- * §3.5). Every stored slot, past 20 too: the limit is the layer COUNT, not
- * the slot (layers 1–4 removed from a 24-layer node leave 20 at slots 5–24).
- * Only the wired list is capped, at the 12 handles.
+ * Slot i's source: the wired handle's, else the layer's own `imageUrl`, else
+ * its own `videoUrl` — the one source rule the stage, the panel, the canvas
+ * executor and the DAG payload share (the render's merge is the same
+ * `wired ?? imageUrl ?? videoUrl`, spec §3.5). Every stored slot, past 20 too:
+ * the limit is the layer COUNT, not the slot (layers 1–4 removed from a
+ * 24-layer node leave 20 at slots 5–24). Only the wired list is capped, at the
+ * 12 handles.
  */
 export function videoOverlaySlotSources(
   layers: ReadonlyArray<VideoOverlayLayerInput | null | undefined> | null | undefined,
@@ -793,9 +650,9 @@ export function videoOverlaySlotSources(
   const wired = wiredImageUrls.slice(0, VIDEO_OVERLAY_HANDLE_IDS.length)
   return Array.from({ length: Math.max(stored.length, wired.length) }, (_, i) => {
     const w = wired[i]
-    if (typeof w === "string" && w.length > 0) return w
-    const own = asLayer(stored[i])?.imageUrl
-    return typeof own === "string" && own.length > 0 ? own : undefined
+    if (nonEmpty(w)) return w
+    const own = asLayer(stored[i])
+    return nonEmpty(own?.imageUrl) ? own.imageUrl : nonEmpty(own?.videoUrl) ? own.videoUrl : undefined
   })
 }
 
@@ -803,12 +660,14 @@ export function videoOverlaySlotSources(
 export interface VideoOverlayComposition {
   /** The resolved base video URL. */
   readonly baseUrl?: string | null
-  /** The image each slot draws, by slot index (`videoOverlaySlotSources`). */
+  /** The image or video each slot draws, by slot index (`videoOverlaySlotSources`). */
   readonly sources: ReadonlyArray<string | null | undefined>
   /** The node's stored settings — never the expanded request. */
   readonly data: VideoOverlayNodeFields
   /** The wired `layerPlan` value (string or array); absent when nothing is wired. */
   readonly planLayers?: unknown
+  /** The 1-based slots whose wired source is a video (the assembly's `wiredVideoSlots`); absent or empty = every wire is an image. */
+  readonly videoSlots?: Iterable<number> | null
 }
 
 /**
@@ -842,8 +701,9 @@ export const VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH = 65_536
 
 /**
  * The composition key a run stamps on its result (`resultCompositionKey`): the
- * base, every slot's image, the layers, the output aspect, the fit and the pad
- * colour. A later change to any of them marks the result "Result (old)".
+ * base, every slot's image, the layers, the output aspect, the fit, the pad
+ * colour, the base box, the layout and which wired slots are videos. A later
+ * change to any of them marks the result "Result (old)".
  * Canonical — independent of object key order, of absent vs undefined vs null
  * fields, and of trailing empty slots — so the canvas (the node and its
  * single-node Run) and the DAG payload give one key for one composition.
@@ -865,5 +725,13 @@ export function videoOverlayCompositionKey(c: VideoOverlayComposition): string {
     const plan = parseVideoOverlayLayerPlan(c.planLayers)
     parts.push("error" in plan ? "invalid" : plan.layers)
   }
+  // Likewise only when set, as ONE object — never confused with the plan (an array or "invalid").
+  const layout = storedLayout(c.data.layout)
+  if (c.data.baseBox != null || layout !== undefined) parts.push({ baseBox: c.data.baseBox, layout })
+  // A wired slot's kind can change while its URL does not (an extension-less
+  // link, a List column's type); only when a wire is a video, so an
+  // image-only node keeps its key.
+  const videoSlots = [...new Set(c.videoSlots ?? [])].sort((a, b) => a - b)
+  if (videoSlots.length > 0) parts.push({ videoSlots })
   return JSON.stringify(canonicalValue(parts))
 }

@@ -1,20 +1,29 @@
 // backend/src/providers/video/video-overlay.ts
 /**
  * Video Overlay provider — spec §4.2, in the order that makes a bad input
- * cheap: base → probe → validate + clamp → images (fetched and gated one at a
- * time) → geometry → ONE sharp pre-fit pass (decision D1) inside one shared
- * ffmpeg slot → the pure graph → a cancel check → ONE ffmpeg render. The
- * caller (the worker handler) owns `workDir` and removes it on every path.
+ * cheap: base → probe → validate + layout + clamp → each kept layer, one at a
+ * time (an image fetched and gated; a video fetched and probed) → geometry →
+ * ONE sharp pre-fit pass of the images (decision D1) inside one shared ffmpeg
+ * slot → the pure graph → a cancel check → ONE ffmpeg render. A video layer is
+ * never pre-fitted (its fit is in the graph); its fetch and its probe are
+ * `video-overlay-video-layers.ts`, its placement `placeVideoOverlayVideos`
+ * (@nodaro/shared, the one the canvas preview draws with). The caller (the worker
+ * handler) owns `workDir` and removes it on every path.
  */
 import { join } from "node:path"
 import {
   VIDEO_OVERLAY_DEFAULT_BACKGROUND,
+  expandVideoOverlayLayout,
   expandVideoOverlayPresets,
+  firstVideoLayerIndex,
   formatVideoOverlayError,
+  placeVideoOverlayVideos,
   resolveVideoOverlayGeometry,
   validateVideoOverlayRequest,
   videoOverlayCanvas,
   videoOverlayLayerLabel,
+  type VideoOverlayBox,
+  type VideoOverlayBoxInput,
   type VideoOverlayFit,
   type VideoOverlayLayer,
   type VideoOverlayLayerInput,
@@ -22,12 +31,19 @@ import {
   type VideoOverlayWarning,
 } from "@nodaro/shared/video"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
+import { videoOverlayRefusalAtLength, videoOverlayRefusalForCharge } from "../../lib/video-overlay-refusal.js"
 import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
-import { downloadFile, probeVideoOverlayBase, runFfmpeg, withFfmpegSlot } from "./ffmpeg-utils.js"
+import { downloadFile, probeVideoOverlayBase, runFfmpeg, withFfmpegSlot, type VideoOverlayBaseProbe } from "./ffmpeg-utils.js"
 import { DEFAULT_FFMPEG_TIMEOUT_MS } from "./ffmpeg-timeouts.js"
 import { buildVideoOverlayGraph, type VideoOverlayGraphLayer } from "./video-overlay-graph.js"
 import { fetchVideoOverlayImage, gateVideoOverlayImage, inspectVideoOverlayImage, type VideoOverlayImageTotals } from "./video-overlay-images.js"
 import { prefitVideoOverlayLayer } from "./video-overlay-prefit.js"
+import {
+  fetchVideoOverlayVideoLayer,
+  videoOverlayAudioOffset,
+  videoOverlayDisplayAspect,
+  videoOverlayPeakMemoryMiB,
+} from "./video-overlay-video-layers.js"
 
 /** The queue payload (the route's expanded body, or payload-builder's). */
 export interface VideoOverlayJobPayload {
@@ -36,12 +52,23 @@ export interface VideoOverlayJobPayload {
   readonly outputAspect?: VideoOverlayOutputAspect
   readonly baseFit?: VideoOverlayFit
   readonly backgroundColor?: string
+  /** Where the base sits, as written (the validator refuses a malformed one). */
+  readonly baseBox?: VideoOverlayBoxInput | null
+  /** A named layout (`expandVideoOverlayLayout`); `""` / null = none. */
+  readonly layout?: string | null
   /**
    * The freshness key (`videoOverlayCompositionKey`) a DAG payload stamps, or
    * the canvas sends with a REST single-node Run; the handler echoes it into
    * output_data. Not read by the render; absent from a REST call that sent none.
    */
   readonly resultCompositionKey?: string
+  /**
+   * A run with a video layer: the units of the video row it was charged for —
+   * written by the route or the workflow run from its own measurement of the
+   * base (a client's field is stripped before the payload is built). The render
+   * refuses a base that has grown past them (`videoOverlayRefusalForCharge`).
+   */
+  readonly billedUnits?: number
 }
 
 export interface VideoOverlayRenderResult {
@@ -125,12 +152,25 @@ export async function renderVideoOverlay(payload: VideoOverlayJobPayload, workDi
   await downloadFile(payload.videoUrl, inputPath)
   // 3. Probe BEFORE any image is fetched — a base that is not a video fails once, here.
   const probe = await probeVideoOverlayBase(inputPath)
-  // 4. Validate (the last net: a queue payload can come from either engine), then clamp.
-  const layers = expandVideoOverlayPresets(payload.layers ?? [])
-  const verdict = validateVideoOverlayRequest({ ...payload, layers })
+  // 4. Validate (the last net: a queue payload can come from either engine),
+  // then write what the layout writes (the verdict is the same either side), then clamp.
+  const expanded = expandVideoOverlayPresets(payload.layers ?? [])
+  const verdict = validateVideoOverlayRequest({ ...payload, layers: expanded })
   if (!verdict.ok) throw new DeterministicJobError(formatVideoOverlayError(verdict))
+  const request = expandVideoOverlayLayout({ ...payload, layers: expanded })
+  const layers = request.layers
+  // What the base's length decides — the cap for a run with a video layer, and a
+  // length that leaves nothing to draw or nothing to stack — by the rule the
+  // route and the workflow run refused it with before charging; then that the
+  // run was charged for this length (the base may have changed since its price
+  // was measured). Refused before anything is fetched, and refunded.
+  const lengthRefusal = videoOverlayRefusalAtLength(request, probe.streamDurationSec) ?? videoOverlayRefusalForCharge(layers, payload.billedUnits, probe.streamDurationSec)
+  if (lengthRefusal) throw new DeterministicJobError(lengthRefusal.message)
   const { kept, warnings } = clampVideoOverlayLayers(layers, probe.streamDurationSec)
-  // 5. Fetch and gate every kept image, one at a time — a bad image stops the next download.
+  const firstVideo = firstVideoLayerIndex(layers)
+  // 5. Fetch every kept layer, one at a time — a bad one stops the next download.
+  // An image is fetched and gated; a video is fetched under its own byte cap and
+  // probed (its bytes are not the images' total).
   let totals: VideoOverlayImageTotals = { bytes: 0, pixels: 0 }
   const images: Array<{
     readonly kept: KeptVideoOverlayLayer
@@ -138,8 +178,18 @@ export async function renderVideoOverlay(payload: VideoOverlayJobPayload, workDi
     readonly path: string
     readonly aspect: number
   }> = []
+  const videos: Array<{ readonly kept: KeptVideoOverlayLayer; readonly path: string; readonly probe: VideoOverlayBaseProbe; readonly aspect: number }> = []
   for (const k of kept) {
     const ref = { layer: k.index, ...(k.layer.slot !== undefined ? { slot: k.layer.slot } : {}), ...(k.layer.planLayer !== undefined ? { planLayer: k.layer.planLayer } : {}) }
+    if (k.layer.videoUrl) {
+      const path = join(workDir, `video-${k.index}`)
+      const fetched = await fetchVideoOverlayVideoLayer(k.layer.videoUrl, path, ref)
+      if (k.layer.sound && fetched.probe.audioCodec === null) {
+        warnings.push({ ...ref, code: "layer_no_audio", detail: "the video has no sound, so none was mixed in" })
+      }
+      videos.push({ kept: k, path, ...fetched })
+      continue
+    }
     const path = join(workDir, `image-${k.index}`)
     await fetchVideoOverlayImage(k.layer.imageUrl!, path, ref)
     const gate = gateVideoOverlayImage(await inspectVideoOverlayImage(path), totals, ref)
@@ -149,9 +199,37 @@ export async function renderVideoOverlay(payload: VideoOverlayJobPayload, workDi
   }
   // 6–7. Geometry on the output canvas, then ONE pre-fit pass inside ONE shared
   // ffmpeg slot — released before the render acquires its own (a nested acquire
-  // would hold two slots per job and can deadlock at concurrency 4).
+  // would hold two slots per job and can deadlock at concurrency 4). A run with
+  // no image holds no slot here.
   const canvas = videoOverlayCanvas(probe, payload.outputAspect)!
-  const graphLayers = await withFfmpegSlot(async () => {
+  const placement = placeVideoOverlayVideos({
+    canvas,
+    layout: request.layout,
+    ...(request.baseBox != null ? { baseBox: request.baseBox as VideoOverlayBox } : {}),
+    baseAspect: videoOverlayDisplayAspect(probe),
+    firstVideo,
+    videos: videos.map((v) => ({ index: v.kept.index, layer: v.kept.layer, aspect: v.aspect })),
+  })
+  const videoLayers: VideoOverlayGraphLayer[] = videos.map((v) => {
+    const { layer } = v.kept
+    const { drawn, fit } = placement.layers.get(v.kept.index)!
+    return {
+      index: v.kept.index,
+      ...(layer.slot !== undefined ? { slot: layer.slot } : {}),
+      ...(layer.planLayer !== undefined ? { planLayer: layer.planLayer } : {}),
+      path: v.path,
+      // No pre-fit runs for a video: the graph fits it to `drawn`.
+      prefit: { width: drawn.width, height: drawn.height },
+      start: layer.start,
+      end: v.kept.end,
+      drawn,
+      opacity: layer.opacity,
+      animate: layer.animate,
+      ...(layer.zIndex !== undefined ? { zIndex: layer.zIndex } : {}),
+      video: { fit, hasAudio: v.probe.audioCodec !== null, ...(layer.sound ? { sound: layer.sound } : {}), ...videoOverlayAudioOffset(v.probe) },
+    }
+  })
+  const imageLayers = images.length === 0 ? [] : await withFfmpegSlot(async () => {
     const out: VideoOverlayGraphLayer[] = []
     for (const img of images) {
       const { layer } = img.kept
@@ -176,7 +254,10 @@ export async function renderVideoOverlay(payload: VideoOverlayJobPayload, workDi
     // Raster prefits in an ffmpeg slot: the same limit as an ffmpeg run, so the
     // slot is always released (Track 0.13, decided 2026-10-04).
   }, { timeoutMs: DEFAULT_FFMPEG_TIMEOUT_MS, label: "Video Overlay layer prefit" })
-  // 8. The pure graph.
+  // 8. The pure graph, its layers in kept order (the graph orders them for drawing).
+  const byIndex = new Map([...imageLayers, ...videoLayers].map((l) => [l.index, l]))
+  const graphLayers = kept.map((k) => byIndex.get(k.index)!)
+  const { basePlacement } = placement
   const outputPath = join(workDir, "output.mp4")
   const graph = buildVideoOverlayGraph({
     inputPath,
@@ -186,15 +267,23 @@ export async function renderVideoOverlay(payload: VideoOverlayJobPayload, workDi
     ...(payload.outputAspect ? { outputAspect: payload.outputAspect } : {}),
     baseFit: payload.baseFit ?? "cover",
     backgroundColor: payload.backgroundColor ?? VIDEO_OVERLAY_DEFAULT_BACKGROUND,
+    ...(basePlacement ? { basePlacement } : {}),
     layers: graphLayers,
   })
-  if (graph.audioReencoded) warnings.push({ code: "audio_reencoded", detail: `the base's ${probe.audioCodec} audio was re-encoded to AAC` })
+  // A mixed soundtrack is AAC by construction: nothing of the base's codec is kept to report.
+  if (graph.audioReencoded && !graph.audioMixed) warnings.push({ code: "audio_reencoded", detail: `the base's ${probe.audioCodec} audio was re-encoded to AAC` })
   // 9. A cancel during the downloads costs no render. Once the base probed
   // cleanly every render failure is a pure function of the inputs: one attempt,
-  // a refund, ffmpeg's tail for the operator only.
+  // a refund, ffmpeg's tail for the operator only. A run that decodes more than
+  // the base (a video layer, or the base's canvas copy) reserves for it; an
+  // image-only run launches exactly as before, on the default estimate.
   await throwIfJobCancelled()
   try {
-    await runFfmpeg(graph.args)
+    if (videos.length === 0 && !basePlacement) await runFfmpeg(graph.args)
+    else {
+      const decoded = [probe, ...videos.map((v) => v.probe)]
+      await runFfmpeg(graph.args, DEFAULT_FFMPEG_TIMEOUT_MS, { peakMemoryMiB: videoOverlayPeakMemoryMiB(canvas, decoded, !!basePlacement) })
+    }
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err)
     const message =

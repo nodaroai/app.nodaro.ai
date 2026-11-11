@@ -666,6 +666,10 @@ export interface ResolvedInputs {
    *  handle is unwired; the payload builder skips the holes and aligns
    *  data.layers[i] by index. */
   overlayImageUrls?: (string | undefined)[]
+  /** Video Overlay: the 1-based slots whose wired source is a video
+   *  (`videoOverlayWiredLayerKind`), ascending — the assembly's
+   *  `wiredVideoSlots`. Absent when every wired layer is an image. */
+  overlayVideoSlots?: number[]
   /** Video Overlay's reserved JSON layer-plan input (VIDEO_OVERLAY_LAYER_PLAN_HANDLE).
    *  Read by the assembly (plan layers first). */
   layerPlan?: string

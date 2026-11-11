@@ -2,13 +2,12 @@ import { describe, expect, it } from "vitest"
 import {
   VIDEO_OVERLAY_MAX_LAYERS,
   assembleVideoOverlayRequest,
-  formatVideoOverlayError,
   parseVideoOverlayLayerPlan,
-  validateVideoOverlayRequest,
   videoOverlayCompositionKey,
   videoOverlayRenderOrder,
   videoOverlaySlotSources,
 } from "../video-overlay.js"
+import { formatVideoOverlayError, validateVideoOverlayRequest } from "../video-overlay-validate.js"
 
 const box = { anchor: "top", x: 0, y: 12, width: 78, height: 52, fit: "contain" } as const
 const plan = [
@@ -47,13 +46,13 @@ describe("the layerPlan input (SP2 D6, spec §6.1)", () => {
     expect(verdict.ok).toBe(false)
     if (!verdict.ok) {
       expect(verdict.code).toBe("layer_without_image")
-      expect(formatVideoOverlayError(verdict)).toBe("Plan layer 1: no image — set imageUrl on this layer in the plan.")
+      expect(formatVideoOverlayError(verdict)).toBe("Plan layer 1: no image or video — set imageUrl or videoUrl on this layer in the plan.")
     }
   })
   it("a handle layer without an image keeps the handle wording", () => {
     const verdict = validateVideoOverlayRequest({ layers: [{ start: 0, slot: 2 }] })
     expect(verdict.ok).toBe(false)
-    if (!verdict.ok) expect(formatVideoOverlayError(verdict)).toBe("Layer 2: no image — connect one to the layer's handle or set imageUrl")
+    if (!verdict.ok) expect(formatVideoOverlayError(verdict)).toBe("Layer 2: no image or video — connect one to the layer's handle or set imageUrl or videoUrl")
   })
   it("reports an unparseable plan as invalid_layer_plan", () => {
     const req = assembleVideoOverlayRequest({ videoUrl: "https://cdn.example/v.mp4", data: { layers: [] }, wiredImageUrls: [], planLayers: "not json" })

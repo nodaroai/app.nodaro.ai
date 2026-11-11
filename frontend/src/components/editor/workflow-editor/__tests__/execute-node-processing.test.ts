@@ -2192,6 +2192,75 @@ describe("video-overlay", () => {
     })
   })
 
+  it("a wired video slot is sent as the layer's videoUrl (fade off), and its kind is in the key the result is stamped with", async () => {
+    const clip = "http://x/signed/clip"
+    const wired = ["http://a.png", clip]
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: V, overlayImageUrls: wired, overlayVideoSlots: [2] })
+    mockVideoOverlayApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    const node = makeNode("video-overlay", { layers: [null, { start: 1, sound: { volume: 0.5 } }], outputAspect: "9:16", layout: "stack-whole" })
+    await executeNode(node, makeCtx())
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    const key = videoOverlayCompositionKey({ baseUrl: V, sources: videoOverlaySlotSources(node.data.layers, wired), data: node.data, videoSlots: [2] })
+    expect(mockVideoOverlayApi).toHaveBeenCalledWith({
+      videoUrl: V,
+      layers: [
+        { ...DEFAULT_VIDEO_OVERLAY_LAYER, imageUrl: "http://a.png", slot: 1 },
+        { ...DEFAULT_VIDEO_OVERLAY_LAYER, animate: false, start: 1, sound: { volume: 0.5 }, videoUrl: clip, slot: 2 },
+      ],
+      outputAspect: "9:16",
+      layout: "stack-whole",
+      userId: "u1",
+      resultCompositionKey: key,
+    })
+    expect(key).not.toBe(videoOverlayCompositionKey({ baseUrl: V, sources: videoOverlaySlotSources(node.data.layers, wired), data: node.data }))
+    const extra = mockPollJobWithNodeUpdate.mock.calls[0][5] as (od: Record<string, unknown>) => Record<string, unknown>
+    expect(extra({}).resultCompositionKey).toBe(key)
+  })
+
+  // A wired slot's kind is read at the run: a sound stored while its wire was a
+  // video is skipped once the wire is an image — the run goes ahead, silent,
+  // fade on by the image default — exactly as the DAG's payload-builder sends it.
+  it("a wired IMAGE slot with a stored sound runs: the sound is skipped, its fade default follows the image", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: V, overlayImageUrls: ["http://a.png"] })
+    mockVideoOverlayApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("video-overlay", { layers: [{ start: 1, sound: { volume: 0.5 } }] }), makeCtx())
+    expect(mockToastError).not.toHaveBeenCalled()
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    expect(mockVideoOverlayApi.mock.calls[0][0].layers).toEqual([{ ...DEFAULT_VIDEO_OVERLAY_LAYER, imageUrl: "http://a.png", start: 1, slot: 1 }])
+  })
+
+  // The base's length cap is the server's to decide (it measures the file): the canvas run never refuses on a length it read.
+  it("a video layer on a base the canvas measured past 60 s still runs: the route measures the file and decides", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: V, overlayImageUrls: ["http://x/clip"], overlayVideoSlots: [1] })
+    mockVideoOverlayApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("video-overlay", { layers: [], probedVideo: { url: V, durationSec: 61 } }), makeCtx())
+    expect(mockToastError).not.toHaveBeenCalled()
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    expect(mockVideoOverlayApi).toHaveBeenCalledTimes(1)
+  })
+
+  // The DAG sends the same request (video-overlay-wiring.test.ts, same fixture).
+  it("a base box the canvas wrote rides in the request as stored, with the layers, the key and nothing else changed", async () => {
+    const baseBox = { anchor: "center", x: 10, y: -5, width: 60, height: 40, fit: "cover" }
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: V, overlayImageUrls: ["http://a.png"] })
+    mockVideoOverlayApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    const node = makeNode("video-overlay", { layers: [], outputAspect: "9:16", baseBox })
+    await executeNode(node, makeCtx())
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    expect(mockVideoOverlayApi).toHaveBeenCalledWith({
+      videoUrl: V,
+      layers: [{ ...DEFAULT_VIDEO_OVERLAY_LAYER, imageUrl: "http://a.png", slot: 1 }],
+      outputAspect: "9:16",
+      baseBox,
+      userId: "u1",
+      resultCompositionKey: videoOverlayCompositionKey({ baseUrl: V, sources: videoOverlaySlotSources([], ["http://a.png"]), data: node.data }),
+    })
+  })
+
   it("a key past the route's bound is not sent (the run still starts; only a reload would read it old)", async () => {
     const long = `http://${"x".repeat(VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH)}.png`
     mockResolveNodeInputs.mockReturnValue({ videoUrl: V, overlayImageUrls: [long] })

@@ -6,9 +6,6 @@ import { AlertCircle, Braces, Film, Image as ImageIcon, Layers, LayoutGrid, Load
 import {
   VIDEO_OVERLAY_DEFAULT_BACKGROUND,
   VIDEO_OVERLAY_HANDLE_IDS,
-  assembleVideoOverlayRequest,
-  expandVideoOverlayLayer,
-  parseVideoOverlayLayerPlan,
   validateVideoOverlayRequest,
   videoOverlayCanvas,
   videoOverlayCompositionKey,
@@ -19,18 +16,24 @@ import {
 } from "@nodaro/shared/nodes"
 import { useT } from "@/lib/i18n"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { VIDEO_OVERLAY_PRICING, videoOverlayVideoUnits } from "@nodaro/shared/credits"
 import { useModelCredits } from "@/hooks/use-model-credit-cost"
+import { useUnitQuoteCredits } from "@/hooks/use-unit-quote-credits"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { useUpstreamVideoProbe } from "@/hooks/use-upstream-video-probe"
 import { useVideoOverlayUpstream } from "@/hooks/use-video-overlay-upstream"
 import { useVideoOverlayLayers } from "@/hooks/use-video-overlay-layers"
-import { useVideoOverlaySelection } from "@/hooks/use-video-overlay-selection"
+import { useVideoOverlayBaseSelection, useVideoOverlaySelection } from "@/hooks/use-video-overlay-selection"
 import { isValidVideoOverlayConnection } from "@/lib/image-producer-handles"
 import { DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { FFMPEG_COLORS } from "@/lib/ffmpeg-handles"
 import { videoOverlayResultFresh } from "@/lib/video-overlay-composition"
 import { videoOverlayIssueText } from "@/lib/video-overlay-i18n"
+import { assembleVideoOverlayNode, videoOverlaySlotStage } from "@/lib/video-overlay-view"
 import { computeDeleteResultUpdates } from "@/lib/utils"
+import { videoOverlayQuotedSec, videoOverlayQuotesVideoOf } from "@/lib/video-utility-estimate"
+import { NODE_CREDIT_COSTS } from "@/components/editor/workflow-editor/types"
+// @registry-lookup reads its own rows only (NODE_CREDIT_COSTS)
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { OVERLAY_MAX_LAYERS, visibleOverlayLayerCount, type VideoOverlayData } from "@/types/nodes"
@@ -58,7 +61,17 @@ function VideoOverlayNodeComponent({ id, data, selected }: NodeProps) {
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const updateNodeInternals = useUpdateNodeInternals()
-  const credits = useModelCredits("video-overlay", 20)
+  // The price the run is charged (the rule the server's estimate reads): an
+  // image-only node is the flat row; one that can carry a video layer is the
+  // video row per started 5 s of its base, as a whole run (lib/unit-quote.ts).
+  // A base not measured yet shows "one unit – the 60 s cap", and Run quotes the cap.
+  const quotesVideo = useWorkflowStore((s) => videoOverlayQuotesVideoOf({ id, type: "video-overlay", data: nodeData }, s.nodes, s.edges))
+  const baseSec = useWorkflowStore((s) => videoOverlayQuotedSec({ id, data: nodeData }, s.nodes, s.edges))
+  const imageRow = useModelCredits(VIDEO_OVERLAY_PRICING.IMAGE_CREDIT_ID, NODE_CREDIT_COSTS[VIDEO_OVERLAY_PRICING.IMAGE_CREDIT_ID])
+  const videoRow = useModelCredits(VIDEO_OVERLAY_PRICING.VIDEO_CREDIT_ID, NODE_CREDIT_COSTS[VIDEO_OVERLAY_PRICING.VIDEO_CREDIT_ID])
+  const videoAtLength = useUnitQuoteCredits(VIDEO_OVERLAY_PRICING.VIDEO_CREDIT_ID, videoOverlayVideoUnits(baseSec), NODE_CREDIT_COSTS[VIDEO_OVERLAY_PRICING.VIDEO_CREDIT_ID])
+  const creditsRange = quotesVideo && baseSec === null && videoRow > 0 ? { min: videoRow, max: videoAtLength } : undefined
+  const credits = !quotesVideo ? imageRow : baseSec === null ? undefined : videoAtLength
 
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -75,23 +88,45 @@ function VideoOverlayNodeComponent({ id, data, selected }: NodeProps) {
   const handleCount = visibleOverlayLayerCount(nodeData.layerCount, Math.min(layers.length, OVERLAY_MAX_LAYERS), upstream.layers.length)
   useEffect(() => { updateNodeInternals(id) }, [handleCount, id, updateNodeInternals])
 
-  const { setLayer, reorder, removeLayer } = useVideoOverlayLayers(id)
+  const { setLayer, setBaseBox, reorder, removeLayer } = useVideoOverlayLayers(id)
   const [selectedLayer, setSelectedLayer] = useVideoOverlaySelection(id)
+  // The base is selected only from the panel's Base video card; it is let go on
+  // Escape, on a press outside it (and outside its card), and when the panel
+  // closes or shows another node.
+  const [baseSelected, setBaseSelected] = useVideoOverlayBaseSelection(id)
+  useEffect(() => {
+    if (baseSelected && !isSettingsOpen) setBaseSelected(false)
+  }, [baseSelected, isSettingsOpen, setBaseSelected])
+  useEffect(() => {
+    if (!baseSelected) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setBaseSelected(false) }
+    const onDown = (e: PointerEvent) => {
+      const el = e.target instanceof Element ? e.target : null
+      // Its handles, its card, and a menu the card opened (portalled, but marked as the card's) are not "outside" — any other menu is.
+      if (el?.closest(`[data-video-overlay-base="${id}"]`)) return
+      setBaseSelected(false)
+    }
+    document.addEventListener("keydown", onKey)
+    document.addEventListener("pointerdown", onDown)
+    return () => {
+      document.removeEventListener("keydown", onKey)
+      document.removeEventListener("pointerdown", onDown)
+    }
+  }, [baseSelected, id, setBaseSelected])
   const sources = useMemo(() => videoOverlaySlotSources(layers, upstream.layers), [layers, upstream.layers])
-  const expanded = useMemo(() => sources.map((_, i) => expandVideoOverlayLayer(layers[i])), [sources, layers])
-  // The wired plan's layers, drawn read-only under the handle layers. The same
-  // parse + expansion the assembly runs; an unreadable plan draws nothing (the
-  // Run button's verdict says why).
-  const planLayers = useMemo(() => {
-    if (upstream.plan === undefined) return []
-    const parsed = parseVideoOverlayLayerPlan(upstream.plan)
-    return "error" in parsed ? [] : parsed.layers.map((l) => expandVideoOverlayLayer(l))
-  }, [upstream.plan])
+  // The ONE assembly both engines run, with the wires the run reads (a wired
+  // video is a video layer): the Run button's verdict below, and what the stage draws.
+  const request = useMemo(() => assembleVideoOverlayNode(nodeData, upstream), [nodeData, upstream])
+  // The stage draws each slot as the run assembles it (its kind, the default
+  // badge for an untouched wired slot); a slot with no source draws nothing.
+  // The wired plan's layers are drawn read-only under the handle layers; an
+  // unreadable plan draws nothing (the Run button's verdict says why).
+  const stageInput = useMemo(() => videoOverlaySlotStage(layers, upstream.layers, request), [layers, upstream.layers, request])
 
   // Preview ⇄ Result (UX-8): automatic until the user picks; a composition
   // change resets to automatic, and only a result stamped with the current
   // composition counts as fresh (no size fallback — audit U10).
-  const compositionKey = videoOverlayCompositionKey({ baseUrl: upstream.base, sources, data: nodeData, planLayers: upstream.plan })
+  const compositionKey = videoOverlayCompositionKey({ baseUrl: upstream.base, sources, data: nodeData, planLayers: upstream.plan, videoSlots: upstream.wiredVideoSlots })
   const [view, setView] = useState<"preview" | "result" | null>(null)
   const [seenComposition, setSeenComposition] = useState(compositionKey)
   useEffect(() => {
@@ -114,8 +149,8 @@ function VideoOverlayNodeComponent({ id, data, selected }: NodeProps) {
 
   // The strip's Run button: sugar over the real refusal in execute-node (C-4).
   // An empty wired plan with no other layer is not a refusal: Run passes the base through, free (R14).
-  const request = assembleVideoOverlayRequest({ videoUrl: upstream.base ?? "", data: nodeData, wiredImageUrls: upstream.layers, planLayers: upstream.plan })
   const passesThrough = !request.planError && !!videoOverlayPassThrough({ videoUrl: upstream.base, planWired: upstream.plan !== undefined, layerCount: request.layers.length })
+  // The validator's verdict (exact). The base's length cap is the server's to decide: the panel only warns of it.
   const verdict = passesThrough ? ({ ok: true } as const) : validateVideoOverlayRequest(request)
   const disabledReason = !upstream.base ? t("node.videoOverlayNoBase") : verdict.ok ? undefined : videoOverlayIssueText(verdict, t)
 
@@ -144,12 +179,14 @@ function VideoOverlayNodeComponent({ id, data, selected }: NodeProps) {
         icon={<Layers className="h-4 w-4" />}
         category="processing"
         credits={credits}
+        creditsRange={creditsRange}
+        creditsRangeBasis="length"
         selected={selected}
         isRunning={status === "running"}
         {...videoNodeSizing(sizingAspect)}
         hideHeader
         topToolbarContent={
-          <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} disabled={!!disabledReason} disabledReason={disabledReason} />
+          <NodeQuickStrip nodeId={id} credits={creditsRange?.max ?? credits} isRunning={status === "running"} disabled={!!disabledReason} disabledReason={disabledReason} />
         }
         bottomToolbarContent={
           showThumbnails && canBrowseAlternates && !showPreview ? (
@@ -200,16 +237,21 @@ function VideoOverlayNodeComponent({ id, data, selected }: NodeProps) {
             {showPreview && upstream.base && (
               <VideoOverlayPreview
                 baseUrl={upstream.base}
-                sources={sources}
-                layers={expanded}
-                planLayers={planLayers}
+                sources={stageInput.sources}
+                layers={stageInput.layers}
+                planLayers={stageInput.planLayers}
                 outputAspect={nodeData.outputAspect}
                 baseFit={nodeData.baseFit ?? "cover"}
                 backgroundColor={nodeData.backgroundColor ?? VIDEO_OVERLAY_DEFAULT_BACKGROUND}
+                layout={nodeData.layout}
+                baseBox={nodeData.baseBox}
                 fallbackDisplay={probed?.width && probed.height ? { width: probed.width, height: probed.height } : undefined}
                 selected={selectedLayer}
                 onSelect={setSelectedLayer}
                 onLayerChange={setLayer}
+                baseSelected={baseSelected}
+                baseMarker={id}
+                onBaseChange={setBaseBox}
                 onReorder={(i, direction) => reorder(i, direction, handleCount)}
                 onRemove={(i) => { removeLayer(i); setSelectedLayer(null) }}
               />

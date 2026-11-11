@@ -2350,9 +2350,11 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `video_url` | string (URL) |  | Base video URL. |
 | `video_asset_id` | string |  | Base video as a Nodaro video job id or an uploaded video's id. |
-| `layers` | object[] | yes | 1–20 layers, each { url } or { asset_id } plus start (and optionally end) in seconds. From 1 to 20 items. |
+| `layers` | object[] | yes | 1–20 layers, each an image (url / asset_id) or a video (video_url / video_asset_id) plus start (and optionally end) in seconds. From 1 to 20 items. |
 | `layers[].url` | string (URL) |  |  |
 | `layers[].asset_id` | string |  |  |
+| `layers[].video_url` | string (URL) |  |  |
+| `layers[].video_asset_id` | string |  |  |
 | `layers[].start` | number | yes | From 0 to 3600. |
 | `layers[].end` | number |  | From 0 to 3600. |
 | `layers[].preset` | string |  | One of `card`, `corner-badge`, `full-frame`. |
@@ -2366,9 +2368,19 @@ Needs `workflows:execute`.
 | `layers[].opacity` | number |  | From 0 to 1. |
 | `layers[].animate` | boolean |  |  |
 | `layers[].z_index` | integer |  | From 0 to 100. |
+| `layers[].sound` | object |  | Video layer: mix its audio in at this volume. |
+| `layers[].sound.volume` | number | yes | From 0 to 1. |
 | `output_aspect` | string |  | Render onto this aspect's canvas instead of the video's own size. One of `16:9`, `9:16`, `1:1`, `4:5`. |
 | `base_fit` | string |  | How the video fills output_aspect (default cover). One of `contain`, `cover`. |
 | `background_color` | string |  | Padding colour for base_fit contain (default #000000). |
+| `layout` | string |  | Places the base and/or first video layer; all but pip need output_aspect. One of `video-bottom`, `video-top`, `stack-whole`, `stack-filled`, `pip`. |
+| `base_box` | object |  | Where the base sits, as a layer box; needs output_aspect. |
+| `base_box.anchor` | string |  | One of `top-left`, `top`, `top-right`, `left`, `center`, `right`, `bottom-left`, `bottom`, `bottom-right`. |
+| `base_box.x` | number |  | From -100 to 100. |
+| `base_box.y` | number |  | From -100 to 100. |
+| `base_box.width` | number |  | From 1 to 100. |
+| `base_box.height` | number |  | From 1 to 100. |
+| `base_box.fit` | string |  | One of `contain`, `cover`. |
 
 ## `ping`
 

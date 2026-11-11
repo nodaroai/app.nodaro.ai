@@ -7,13 +7,12 @@ import { useT, type MessageKey } from "@/lib/i18n"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   VIDEO_OVERLAY_BOUNDS,
   VIDEO_OVERLAY_CORNERS,
+  VIDEO_OVERLAY_VOLUME_BOUNDS,
   type VideoOverlayCanvas,
   type VideoOverlayCorner,
-  type VideoOverlayFit,
   type VideoOverlayIssue,
   type VideoOverlayLayer,
   type VideoOverlayLayerInput,
@@ -21,7 +20,8 @@ import {
   isVideoOverlayPresetId,
 } from "@nodaro/shared/video"
 import { videoOverlayIssueMessage } from "@/lib/video-overlay-i18n"
-import { AnchorGrid, PctSlider, Section, pctPx } from "./panel-section"
+import { PctSlider, Section } from "./panel-section"
+import { VideoOverlayBoxFields, num, optNum } from "./video-overlay-box-fields"
 
 const PLACEMENTS: ReadonlyArray<{ id: VideoOverlayPresetId | "custom"; label: MessageKey }> = [
   { id: "card", label: "proccfg.videoOverlay.preset.card" },
@@ -37,17 +37,12 @@ const CORNER_LABELS: { readonly [C in VideoOverlayCorner]: MessageKey } = {
   "bottom-right": "proccfg.videoOverlay.corner.bottomRight",
 }
 
-/**
- * A stored number, or `fallback` when it is absent / not a finite number. The
- * layer handed to the card is typed as expanded, but a PARTIAL box (written as
- * workflow JSON — `update_workflow_json`, a template, a REST full-body save)
- * comes back from `expandVideoOverlayLayer` untouched, so any field may be
- * missing and `preset` may be an unknown string. The card reads every field
- * through this / `isVideoOverlayPresetId` so such a layer renders (with its
- * `incomplete_box` alert) instead of crashing or reading "NaN".
- */
-const num = (v: unknown, fallback: number): number => (typeof v === "number" && Number.isFinite(v) ? v : fallback)
-const optNum = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined)
+// The layer handed to the card is typed as expanded, but a PARTIAL box (written
+// as workflow JSON — `update_workflow_json`, a template, a REST full-body save)
+// comes back from `expandVideoOverlayLayer` untouched, so any field may be
+// missing and `preset` may be an unknown string. The card reads every field
+// through `num` / `optNum` / `isVideoOverlayPresetId` so such a layer renders
+// (with its `incomplete_box` alert) instead of crashing or reading "NaN".
 
 /** Seconds shown to 2 decimals WITHOUT rounding what is stored (word-aligned ms survive). */
 const shownSeconds = (v: number | undefined): string => (v === undefined ? "" : String(Math.round(v * 100) / 100))
@@ -80,8 +75,16 @@ function SecondsInput({ id, value, placeholder, onCommit }: { id: string; value:
 export interface VideoOverlayLayerCardProps {
   /** 0-based slot index. */
   readonly index: number
-  /** The slot's layer, EXPANDED (the default badge for an untouched slot). */
+  /**
+   * The slot's layer, EXPANDED, as the run assembles it (the default badge for
+   * an untouched slot; a wired video's fade default off) and as the stage draws
+   * it (a layout's box written in).
+   */
   readonly layer: VideoOverlayLayer
+  /** The slot is a video layer (a wired video, or its own `videoUrl`): it has a Sound section. */
+  readonly video: boolean
+  /** Set when the slot is a picture-in-picture layout's inset: the layout places it, in this corner — its corner picker moves it and keeps the layout. */
+  readonly pipCorner?: VideoOverlayCorner
   /** "connected (overlay2)" / "image URL" / "not connected (overlay3)" … */
   readonly sourceTag: string
   readonly sourceOk: boolean
@@ -101,7 +104,7 @@ export interface VideoOverlayLayerCardProps {
   readonly onRemove: () => void
 }
 
-/** One layer's card (UX §2.4): Timing · Placement · Look. */
+/** One layer's card (UX §2.4): Timing · Placement · Look, and Sound for a video layer. */
 export function VideoOverlayLayerCard(p: VideoOverlayLayerCardProps) {
   const t = useT()
   const { layer, index } = p
@@ -111,11 +114,10 @@ export function VideoOverlayLayerCard(p: VideoOverlayLayerCardProps) {
   const start = storedStart ?? 0
   const end = optNum(layer.end)
   const opacity = num(layer.opacity, 1)
-  const animate = typeof layer.animate === "boolean" ? layer.animate : true
-  const width = num(layer.width, VIDEO_OVERLAY_BOUNDS.width[0])
-  const x = num(layer.x, 0)
-  const y = num(layer.y, 0)
-  const height = optNum(layer.height)
+  // The expansion fills the fade by the layer's kind; a malformed stored value falls back to the kind's default too.
+  const animate = typeof layer.animate === "boolean" ? layer.animate : !p.video
+  const sound = layer.sound && typeof layer.sound === "object" ? layer.sound : undefined
+  const volume = Math.round(num(sound?.volume, VIDEO_OVERLAY_VOLUME_BOUNDS[1]) * 100)
   const zIndex = optNum(layer.zIndex)
   const d = p.durationSec
   const amber =
@@ -189,41 +191,25 @@ export function VideoOverlayLayerCard(p: VideoOverlayLayerCardProps) {
             ))}
           </div>
         )}
+        {p.pipCorner && (
+          <div className="grid grid-cols-2 gap-1" role="radiogroup" aria-label={t("proccfg.videoOverlay.corner")}>
+            {VIDEO_OVERLAY_CORNERS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                role="radio"
+                aria-checked={p.pipCorner === c}
+                className={`h-6 rounded border text-[11px] ${p.pipCorner === c ? "bg-cta border-cta text-white" : "bg-muted/40 border-border/60 hover:bg-muted"}`}
+                onClick={() => p.onPatch({ corner: c })}
+              >
+                {t(CORNER_LABELS[c])}
+              </button>
+            ))}
+          </div>
+        )}
         {placement === "custom" && (
           <>
-            <div className="flex items-start gap-3">
-              <div>
-                <Label className="text-xs">{t("proccfg.overlay.anchor")}</Label>
-                <AnchorGrid value={layer.anchor} label={t("proccfg.overlay.anchor")} onChange={(anchor) => p.onPatch({ anchor })} />
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-5 flex-1">{t("proccfg.videoOverlay.anchorHint")}</p>
-            </div>
-            <PctSlider id={`vo-${index}-w`} label={t("proccfg.overlay.width")} value={width} min={VIDEO_OVERLAY_BOUNDS.width[0]} max={VIDEO_OVERLAY_BOUNDS.width[1]} hint={`%${pctPx(width, p.canvas?.w)}`} onChange={(width) => p.onPatch({ width })} />
-            <PctSlider id={`vo-${index}-x`} label={t("proccfg.overlay.offsetX")} value={x} min={VIDEO_OVERLAY_BOUNDS.x[0]} max={VIDEO_OVERLAY_BOUNDS.x[1]} hint={`%${pctPx(x, p.canvas?.w)}`} onChange={(x) => p.onPatch({ x })} />
-            <PctSlider id={`vo-${index}-y`} label={t("proccfg.overlay.offsetY")} value={y} min={VIDEO_OVERLAY_BOUNDS.y[0]} max={VIDEO_OVERLAY_BOUNDS.y[1]} hint={`%${pctPx(y, p.canvas?.h)}`} onChange={(y) => p.onPatch({ y })} />
-            <div>
-              <Label htmlFor={`vo-${index}-h`} className="text-xs">{t("proccfg.videoOverlay.height")}</Label>
-              <Input
-                id={`vo-${index}-h`}
-                type="number" min={VIDEO_OVERLAY_BOUNDS.height[0]} max={VIDEO_OVERLAY_BOUNDS.height[1]} step={1}
-                placeholder={t("proccfg.overlay.heightAuto")}
-                value={height ?? ""}
-                onChange={(e) => p.onPatch({ height: e.target.value === "" ? undefined : Math.min(VIDEO_OVERLAY_BOUNDS.height[1], Math.max(VIDEO_OVERLAY_BOUNDS.height[0], Number(e.target.value))) })}
-                className="h-8 text-xs"
-              />
-            </div>
-            {height !== undefined && (
-              <div>
-                <Label className="text-xs">{t("proccfg.overlay.fit")}</Label>
-                <Select value={layer.fit ?? "contain"} onValueChange={(v) => p.onPatch({ fit: v as VideoOverlayFit })}>
-                  <SelectTrigger aria-label={t("proccfg.overlay.fit")}><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="contain">{t("proccfg.overlay.fitContain")}</SelectItem>
-                    <SelectItem value="cover">{t("proccfg.overlay.fitCover")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            <VideoOverlayBoxFields idPrefix={`vo-${index}`} box={layer} canvas={p.canvas} anchorHint={t("proccfg.videoOverlay.anchorHint")} onPatch={p.onPatch} />
             <div>
               <Label htmlFor={`vo-${index}-z`} className="text-xs">{t("proccfg.overlay.zIndex")}</Label>
               <Input
@@ -250,6 +236,30 @@ export function VideoOverlayLayerCard(p: VideoOverlayLayerCardProps) {
           <p className="text-[11px] text-muted-foreground">{t("proccfg.videoOverlay.animateHint")}</p>
         </div>
       </Section>
+
+      {p.video && (
+        <Section title={t("proccfg.videoOverlay.section.sound")} summary={sound ? t("proccfg.videoOverlay.soundOn", { volume }) : t("proccfg.videoOverlay.soundOff")} defaultOpen={false}>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <Label htmlFor={`vo-${index}-sound`} className="text-xs">{t("proccfg.videoOverlay.sound")}</Label>
+              {/* Off removes the setting: a layer with no `sound` is silent. */}
+              <Switch id={`vo-${index}-sound`} checked={!!sound} onCheckedChange={(on) => p.onPatch({ sound: on ? { volume: VIDEO_OVERLAY_VOLUME_BOUNDS[1] } : null })} />
+            </div>
+            <p className="text-[11px] text-muted-foreground">{t("proccfg.videoOverlay.soundHint")}</p>
+          </div>
+          {sound && (
+            <PctSlider
+              id={`vo-${index}-volume`}
+              label={t("proccfg.videoOverlay.volume")}
+              value={volume}
+              min={VIDEO_OVERLAY_VOLUME_BOUNDS[0] * 100}
+              max={VIDEO_OVERLAY_VOLUME_BOUNDS[1] * 100}
+              hint="%"
+              onChange={(v) => p.onPatch({ sound: { volume: v / 100 } })}
+            />
+          )}
+        </Section>
+      )}
     </div>
   )
 }

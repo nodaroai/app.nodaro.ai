@@ -279,6 +279,7 @@ export {
   type RunWireLengthOptions,
   type WireLength,
 } from "./utility-wire-length"
+export { videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo } from "./video-overlay-pricing"
 export {
   UGC_CREATOR_NO_IMAGE_MESSAGE,
   UGC_SPEND_REFUSAL_CODES,

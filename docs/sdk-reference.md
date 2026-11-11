@@ -6851,37 +6851,66 @@ videoOverlay(input: VideoOverlayRequest): Promise<{ jobId: string }>
 // VideoOverlayRequest (from @nodaro/shared)
 {
   videoUrl: string
-  layers: Array<{                 // 1–20
-    imageUrl: string
+  layers: Array<{                 // 1–20, at most 2 of them videos
+    imageUrl?: string             // an image layer — or, instead:
+    videoUrl?: string             // a video layer (exactly one of imageUrl / videoUrl)
+    sound?: { volume: number }    // a video layer only; 0..1; omitted = the layer is silent
     start: number                 // seconds, 0–3600
     end?: number                  // seconds, after start; omitted = to the end of the video
     preset?: "card" | "corner-badge" | "full-frame"
-    corner?: "top-left" | "top-right" | "bottom-left" | "bottom-right"   // corner-badge; default bottom-right
+    corner?: "top-left" | "top-right" | "bottom-left" | "bottom-right"   // corner-badge and pip; default bottom-right
     anchor?: OverlayAnchor        // the nine image-overlay anchors
     x?: number                    // −100..100, % of the output frame width
     y?: number                    // −100..100, % of the output frame height
     width?: number                // 1..100, % of the output frame width
-    height?: number               // 1..100; omitted = follows the image's aspect
+    height?: number               // 1..100; omitted = follows the image's or video's aspect
     fit?: "contain" | "cover"
     opacity?: number              // 0..1
-    animate?: boolean             // default true
+    animate?: boolean             // default true for an image, false for a video
     zIndex?: number               // 0..100
   }>
   outputAspect?: "16:9" | "9:16" | "1:1" | "4:5"
   baseFit?: "contain" | "cover"   // with outputAspect; default cover
   backgroundColor?: string        // #RRGGBB, with outputAspect; default #000000
+  baseBox?: { anchor: OverlayAnchor; width: number; x?: number; y?: number; height?: number; fit?: "contain" | "cover" }
+                                  // where the base sits; with outputAspect; not with a stack layout;
+                                  // x and y default to 0, fit to contain, no height = the base's own aspect
+  layout?: "video-bottom" | "video-top" | "stack-whole" | "stack-filled" | "pip"
 }
 ```
 
-Place 1–20 timed image layers over a video (`POST /v1/video-overlay`) —
-locally rendered (FFmpeg) in one pass, **22 credits**<!-- credits: video-overlay --> per run whatever the
-layer count or length; the base audio is kept untouched. An explicit box
-field overrides the preset, and a layer with neither is a corner badge
-(bottom-right, or the `corner` it names). Without `outputAspect` the output
-keeps the video's own size and frame rate. Poll `jobs.get(jobId)`: the output carries `videoUrl`, `thumbnailUrl`,
-`width`, `height`, `durationSec` and `warnings[]`
+Place 1–20 timed image or video layers over a video (`POST /v1/video-overlay`) —
+locally rendered (FFmpeg) in one pass. An explicit box field overrides the
+preset, and a layer with neither is a corner badge (bottom-right, or the
+`corner` it names). Without `outputAspect` the output keeps the video's own
+size and frame rate.
+
+A video layer plays from its first frame at its `start`, stops at its `end`
+(or the base's end) and holds its last frame if it runs out first. It is
+silent unless it has `sound`: its audio is then mixed with the base's during
+its window, under a limiter that holds peaks at or below −1 dBFS, as AAC.
+With no layer's sound on, the base audio is kept untouched.
+
+`baseBox` places the base video in a layer's box vocabulary (the uncovered
+canvas shows `backgroundColor`). `layout` places the base, the first video
+layer or both: `video-bottom` / `video-top` (the base whole, full width,
+against that edge), `stack-whole` (the base whole directly above the first video layer,
+the pair centred), `stack-filled` (the base fills the top half, the video
+layer the bottom half, both cropped) and `pip` (the first video layer 30 % of
+the frame wide, 4 % in from its `corner`). Every layout but `pip` needs
+`outputAspect`; the stacks and `pip` need a video layer; a stack takes no
+`baseBox`.
+
+Price: an image-only run is **22 credits**<!-- credits: video-overlay --> whatever the layer count
+or length. A run with any video layer is **11 credits**<!-- credits-rate: video-overlay:video --> **per started 5 s of
+the base** (10 s → 22<!-- credits: video-overlay:video@2 -->, 60 s → 132<!-- credits: video-overlay:video@12 -->), takes a base of up to 60 s and at most
+2 video layers of up to 200 MB each; the base is measured before anything is
+charged (over 60 s → `video_overlay_too_long`, unreadable →
+`invalid_media_duration`, every layer starting after its end →
+`video_overlay_starts_after_end`). Poll `jobs.get(jobId)`: the output carries `videoUrl`,
+`thumbnailUrl`, `width`, `height`, `durationSec` and `warnings[]`
 (`{ layer?, slot?, code, detail }` — `clipped`, `skipped`,
-`animated_first_frame`, `audio_reencoded`). Full reference:
+`animated_first_frame`, `audio_reencoded`, `layer_no_audio`). Full reference:
 [Video Overlay](./nodes/processing-video/video-overlay.md).
 
 #### `videoMask(input)`

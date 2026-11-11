@@ -70,6 +70,7 @@ import { isVisualPickerType } from "@/lib/parameter-picker-types";
 import { appendVideoAsMixTrack } from "./mix-audio-video-track";
 import { routeUseCaseInput, usecaseHandsOnEpisode, usecaseHoldsVideo, type UseCaseResolvedInputs } from "./use-case-io";
 import { routeUnitInput, type UnitResolvedInputs } from "./unit-inputs";
+import { videoOverlayWireKindOf, withVideoOverlayWireKind } from "@/lib/video-overlay-wire-kind";
 export { resolveSourceThroughConnectedList };
 
 /** Empty picker-type set — reused for location/character branches until they
@@ -711,6 +712,10 @@ export interface FrontendResolvedInputs extends UseCaseResolvedInputs, UnitResol
   overlayQrText?: string;
   /** Video Overlay's JSON layer-plan input — read by the assembly (plan layers first). Mirrors backend ResolvedInputs.layerPlan. */
   layerPlan?: string;
+  /** Video Overlay: the 1-based layer slots whose wired source is a video (the
+   *  assembly's `wiredVideoSlots`), sorted; absent when every wired layer is an
+   *  image. Mirrors backend ResolvedInputs.overlayVideoSlots. */
+  overlayVideoSlots?: number[];
   audioUrl?: string;
   audioUrl2?: string;
   audioUrls?: string[];
@@ -1868,7 +1873,9 @@ export function resolveNodeInputs(
     }
 
     // Video Overlay routes by HANDLE too: "video" is the base, "overlay".."overlay12"
-    // the layer images (index-aligned with data.layers[]), the JSON id
+    // the layer sources (index-aligned with data.layers[]) — an image, or a
+    // video when the shared wired-kind rule says so (its slot lands in
+    // overlayVideoSlots, the assembly's wiredVideoSlots); the JSON id
     // "layerPlan" is read by the assembly (plan layers first). An edge with no known handle
     // fills the base only while it is empty. Mirrors backend input-resolver.ts.
     if (node.type === "video-overlay") {
@@ -1882,6 +1889,11 @@ export function resolveNodeInputs(
         const next = [...(inputs.overlayImageUrls ?? [])];
         next[slot - 1] = output;
         inputs.overlayImageUrls = next;
+        // The last wire on a slot decides its kind, as it decides its URL —
+        // the routed source and the teleport origin's pip, as the server reads them.
+        const videoSlots = withVideoOverlayWireKind(inputs.overlayVideoSlots, slot, videoOverlayWireKindOf(src, resolvedSourceHandle, output));
+        if (videoSlots) inputs.overlayVideoSlots = videoSlots;
+        else delete inputs.overlayVideoSlots;
       } else if (handle === "video" || !inputs.videoUrl) {
         inputs.videoUrl = output;
       }

@@ -71,6 +71,9 @@ import {
   videoLinkPageUrl,
   VIDEO_OVERLAY_LAYER_PLAN_HANDLE,
   videoOverlaySlotOfHandle,
+  videoOverlayWiredLayerKind,
+  declaredOutputMediaType,
+  listColumnMediaType,
 } from "@nodaro/shared/video"
 import {
   SUNO_TRACK_SOURCE_TYPES
@@ -438,7 +441,7 @@ export function resolveNodeInputs(
         if (ARRAY_ACCUMULATING_TYPES.has(targetNode.type)) {
           const routed = routedAs(sourceNode, effectiveSourceHandle)
           for (const item of filtered) {
-            if (item) routeOutput(inputs, routed, targetNode, item, edge, edges, allNodes, nodeStates)
+            if (item) routeOutput(inputs, routed, targetNode, item, edge, edges, allNodes, nodeStates, effectiveSourceHandle)
           }
           continue
         }
@@ -670,7 +673,7 @@ export function resolveNodeInputs(
 
     // Route the output to the correct input field based on source type + target
     // node type — the source as the producer its pip behaves as (routedAs).
-    routeOutput(inputs, routedAs(sourceNode, effectiveSourceHandle), targetNode, output, edge, edges, allNodes, nodeStates)
+    routeOutput(inputs, routedAs(sourceNode, effectiveSourceHandle), targetNode, output, edge, edges, allNodes, nodeStates, effectiveSourceHandle)
   }
 
   // --- Post-processing: selectedNodeId fallbacks (matches frontend) ---
@@ -1713,6 +1716,8 @@ function routeOutput(
   allEdges: SimpleEdge[],
   allNodes: SimpleNode[],
   nodeStates: Record<string, NodeExecutionState>,
+  /** The handle the wire leaves on `src`, through any teleport (`edge.sourceHandle` is the teleport's). */
+  sourceHandle: string | null | undefined,
 ): void {
   const srcType = src.type
   const targetType = target.type
@@ -1791,8 +1796,10 @@ function routeOutput(
   }
 
   // --- Video Overlay: routed by HANDLE like Image Overlay. "video" is the
-  // base; "overlay".."overlay12" are the layer images, index-aligned with
-  // data.layers[]; the JSON id "layerPlan" lands in inputs.layerPlan, read by
+  // base; "overlay".."overlay12" are the layer sources, index-aligned with
+  // data.layers[] — an image, or a video when `videoOverlayWiredLayerKind`
+  // says so (its slot lands in overlayVideoSlots, the assembly's
+  // wiredVideoSlots); the JSON id "layerPlan" lands in inputs.layerPlan, read by
   // the assembly (plan layers first). A wire on an unknown / missing handle fills the
   // base only while it is still empty (an API-authored edge still runs).
   if (targetType === "video-overlay") {
@@ -1806,6 +1813,16 @@ function routeOutput(
       const next = [...(inputs.overlayImageUrls ?? [])]
       next[slot - 1] = output
       inputs.overlayImageUrls = next
+      // The last wire on a slot decides its kind, as it decides its URL. The
+      // kind is the shared rule's (the canvas calls the same one): this hands
+      // it what is known here — the source, its handle, its declared port medium
+      // and a List column's type (which ranks below the file's extension).
+      const videoSlots = (inputs.overlayVideoSlots ?? []).filter((s) => s !== slot)
+      const declaredMediaType = declaredOutputMediaType(srcType, src.data, sourceHandle)
+      const columnMediaType = listColumnMediaType(srcType, src.data, sourceHandle)
+      if (videoOverlayWiredLayerKind({ type: srcType, handle: sourceHandle, declaredMediaType, columnMediaType }, output) === "video") videoSlots.push(slot)
+      if (videoSlots.length > 0) inputs.overlayVideoSlots = videoSlots.sort((a, b) => a - b)
+      else delete inputs.overlayVideoSlots
       return
     }
     if (handle === "video" || !inputs.videoUrl) {

@@ -76,6 +76,12 @@ import {
   __availabilityUniverseReadyForTests,
 } from "../../lib/availability-override.js"
 
+/** A WIRED slot's stored layer: expanded, but with no fade setting it was not written with — its default follows the wire's kind, read at the run. */
+function wiredLayer(l: Parameters<typeof expandVideoOverlayLayer>[0]) {
+  const { animate: _byWireKind, ...rest } = expandVideoOverlayLayer(l)
+  return rest
+}
+
 const OWNER = "00000000-0000-4000-8000-000000000001"
 const PROJECT_ID = "00000000-0000-4000-8000-000000000010"
 const WORKFLOW_ID = "00000000-0000-4000-8000-000000000030"
@@ -181,7 +187,7 @@ describe("PATCH /v1/workflows/:id — delta — Video Overlay (D10)", () => {
     const vo = rpcArgs().p_upsert_nodes.find((n) => n.id === "vo")
     expect(vo).toBeDefined()
     expect(vo!.position).toEqual({ x: 400, y: 0 })
-    expect(vo!.data.layers![0]).toEqual(expandVideoOverlayLayer({ start: 1, preset: "card" }))
+    expect(vo!.data.layers![0]).toEqual(wiredLayer({ start: 1, preset: "card" }))
     expect(vo!.data.layers![1]).toEqual(expandVideoOverlayLayer({ imageUrl: OWN, start: 2 }))
     expect(rpcArgs().p_upsert_edges).toEqual([edge])
   })
@@ -209,7 +215,7 @@ describe("REST full-body saves — Video Overlay (D10)", () => {
 
   function assertD10(layers: Array<Record<string, unknown>>) {
     expect(layers[0]).not.toHaveProperty("imageUrl")
-    expect(layers[0]).toEqual(expandVideoOverlayLayer({ start: 1, preset: "card" }))
+    expect(layers[0]).toEqual(wiredLayer({ start: 1, preset: "card" }))
     expect(layers[1]).toEqual(expandVideoOverlayLayer({ imageUrl: OWN, start: 2 }))
   }
 

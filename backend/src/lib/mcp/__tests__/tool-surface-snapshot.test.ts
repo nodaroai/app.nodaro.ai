@@ -1428,6 +1428,13 @@ const GPT_IMAGE_2_6_TOTAL_BYTES = 544
 // Gemini Omni Flash 1.2: its id in the video verbs' provider lists, and its
 // reference caps in the descriptions of `generate_video` / `animate_image`.
 const GEMINI_OMNI_FLASH_1_2_BYTES = 109
+// RAISED by `overlay_images` taking video layers, and nothing else: a layer's `video_url` /
+// `video_asset_id` and `sound: { volume }`, the tool's `layout` and `base_box` (the six box
+// fields), and one sentence of its description in place of the one that said the base audio
+// is always untouched. No tool was added, so the fixture does NOT move. Measured by this suite
+// on the same tree with and without the change: 517_228 total − 516_069 = 1_159 B
+// (overlay_images 3_805 → 4_964 B, under the per-tool budget); the list keeps the headroom it had.
+const VIDEO_OVERLAY_VIDEO_LAYERS_BYTES = 1_159
 // RAISED 2026-11-10 by one NEW tool, `estimate_use_case` (verbs-use-case-estimate.ts: one quote for
 // every offered podcast use-case node, keyed by `node_type`, its `input` the node's run-tool
 // arguments, validated and posted by that verb's own input), and nothing else. Registered beside the
@@ -1692,6 +1699,7 @@ export const TOOL_WIRE_BUDGET = {
     EXTEND_SEEDANCE_SPLIT_BYTES +
     I2I_MASK_MODELS_BYTES +
     MODIFY_IMAGE_MASK_BYTES +
+    VIDEO_OVERLAY_VIDEO_LAYERS_BYTES +
     KLING_4_FLASH_MODELS_BYTES,
 }
 

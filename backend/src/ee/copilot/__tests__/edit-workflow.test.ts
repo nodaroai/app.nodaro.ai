@@ -19,6 +19,12 @@ const { runEditWorkflow, EditRejected } = await import("../tools/edit-workflow.j
 import { expandVideoOverlayLayer } from "@nodaro/shared/video"
 import type { CopilotToolContext } from "../tools/types.js"
 
+/** A WIRED slot's stored layer: expanded, but with no fade setting it was not written with — its default follows the wire's kind, read at the run. */
+function wiredLayer(l: Parameters<typeof expandVideoOverlayLayer>[0]) {
+  const { animate: _byWireKind, ...rest } = expandVideoOverlayLayer(l)
+  return rest
+}
+
 const emitted: Array<{ type: string; data: Record<string, unknown> }> = []
 const ctx = {
   userId: "u1",
@@ -443,7 +449,7 @@ describe("edit_workflow — Video Overlay (D10)", () => {
     const vo = args.p_upsert_nodes.find((n) => n.id === "vo")
     expect(vo).toBeDefined()
     expect(vo!.position).toEqual({ x: 400, y: 0 })
-    expect(vo!.data.layers[0]).toEqual(expandVideoOverlayLayer({ start: 1, preset: "card" }))
+    expect(vo!.data.layers[0]).toEqual(wiredLayer({ start: 1, preset: "card" }))
     expect(vo!.data.layers[1]).toEqual(expandVideoOverlayLayer({ imageUrl: OWN, start: 2 }))
   })
 

@@ -8,22 +8,26 @@ import {
   clearWiredVideoOverlayImageUrls,
   expandVideoOverlayLayer,
   expandVideoOverlayPresets,
-  formatVideoOverlayError,
-  hasDrawableVideoOverlayBox,
   normalizeVideoOverlayNodes,
-  resolveVideoOverlayGeometry,
   toCustomVideoOverlayLayer,
-  validateVideoOverlayRequest,
-  videoOverlayCanvas,
   VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH,
   VIDEO_OVERLAY_MAX_LAYERS,
   videoOverlayCompositionKey,
   videoOverlayRenderOrder,
   videoOverlaySlotOfHandle,
   videoOverlaySlotSources,
-  type VideoOverlayIssue,
+  VIDEO_OVERLAY_ERROR_CODES,
+  VIDEO_OVERLAY_MAX_LAYER_VIDEO_BYTES,
+  VIDEO_OVERLAY_MAX_VIDEO_LAYERS,
+  VIDEO_OVERLAY_VIDEO_MAX_BASE_SEC,
+  VIDEO_OVERLAY_VOLUME_BOUNDS,
+  VIDEO_OVERLAY_WARNING_CODES,
   type VideoOverlayLayerInput,
+  type VideoOverlayLayerSpec,
 } from "../video-overlay.js"
+import { formatVideoOverlayError, hasDrawableVideoOverlayBox, validateVideoOverlayRequest, type VideoOverlayIssue } from "../video-overlay-validate.js"
+import { videoOverlayHasVideoLayer, videoOverlayWiredLayerKind } from "../video-overlay-video-layers.js"
+import { DYNAMIC_PRODUCER_TYPES } from "../producer-types.js"
 
 const IMG = "https://cdn.example/a.png"
 
@@ -177,76 +181,29 @@ describe("normalizeVideoOverlayNodes (the JSON write-boundary pass)", () => {
     expect(layers[1]).toEqual(expandVideoOverlayLayer({ imageUrl: IMG, start: 1 }))
     expect(validateVideoOverlayRequest({ layers: layers as VideoOverlayLayerInput[] })).toMatchObject({ ok: false, code: "layer_without_image", layer: 0 })
   })
+  it("a wired slot's layer keeps only the fade setting it was written with: its default follows the wire's kind, read at the run", () => {
+    const [out] = normalizeVideoOverlayNodes([node([{ start: 1, preset: "card" }, { start: 2, animate: true }, { imageUrl: IMG, start: 3 }])], [
+      { target: "vo", targetHandle: "overlay" },
+      { target: "vo", targetHandle: "overlay2" },
+    ])
+    const layers = (out!.data as { layers: VideoOverlayLayerInput[] }).layers
+    expect(layers[0]).toMatchObject({ ...VIDEO_OVERLAY_PRESETS.card, start: 1, opacity: 1 })
+    expect(layers[0]).not.toHaveProperty("animate")
+    expect(layers[1]).toMatchObject({ start: 2, animate: true })
+    // An unwired slot's kind is its own source: expanded in full, as before.
+    expect(layers[2]).toEqual(expandVideoOverlayLayer({ imageUrl: IMG, start: 3 }))
+    // Idempotent, by reference.
+    const again = normalizeVideoOverlayNodes([out!], [{ target: "vo", targetHandle: "overlay" }, { target: "vo", targetHandle: "overlay2" }])
+    expect(again[0]).toBe(out)
+    // A video wired in later runs without a fade, as a video layer's default.
+    const run = assembleVideoOverlayRequest({ videoUrl: "v", data: { layers }, wiredImageUrls: ["https://x/clip"], wiredVideoSlots: new Set([1]) })
+    expect(run.layers[0]).toMatchObject({ videoUrl: "https://x/clip", animate: false })
+  })
   it("a null slot STAYS null — wired or not; only the engine assemblies and the stage synthesise the default (Review Focus 1)", () => {
     const [out] = normalizeVideoOverlayNodes([node([null, { imageUrl: IMG, start: 1 }, null])], [{ target: "vo", targetHandle: "overlay3" }])
     expect((out!.data as { layers: unknown[] }).layers).toEqual([null, expandVideoOverlayLayer({ imageUrl: IMG, start: 1 }), null])
     const clean = [node([null, DEFAULT_VIDEO_OVERLAY_LAYER])]
     expect(normalizeVideoOverlayNodes(clean, [])).toBe(clean)
-  })
-})
-
-describe("resolveVideoOverlayGeometry (§3.4 — shared by the preview and the worker)", () => {
-  it("the card preset on 1080×1920 (the spec's worked example)", () => {
-    expect(resolveVideoOverlayGeometry({ w: 1080, h: 1920 }, VIDEO_OVERLAY_PRESETS.card, 1080 / 2160)).toEqual({
-      box: { left: 119, top: 307, width: 842, height: 1152 },
-      drawn: { left: 252, top: 307, width: 576, height: 1152 },
-    })
-  })
-  it("full-frame on a 9:16 canvas is the whole canvas — no edge shrink", () => {
-    expect(resolveVideoOverlayGeometry({ w: 1080, h: 1920 }, VIDEO_OVERLAY_PRESETS["full-frame"], 16 / 9).drawn).toEqual({ left: 0, top: 0, width: 1080, height: 1920 })
-  })
-  it("a corner badge on 16:9", () => {
-    expect(resolveVideoOverlayGeometry({ w: 1920, h: 1080 }, VIDEO_OVERLAY_PRESETS["corner-badge"]["bottom-right"], 1).drawn).toEqual({ left: 1497, top: 691, width: 346, height: 346 })
-  })
-  it("an odd drawn size is rounded DOWN to even (libx264 yuv420p)", () => {
-    expect(resolveVideoOverlayGeometry({ w: 1000, h: 1000 }, { anchor: "top-left", x: 0, y: 0, width: 25, fit: "contain" }, 3).drawn).toEqual({ left: 1, top: 0, width: 248, height: 82 })
-  })
-  it("a very tall image at width 60 % with no height is fitted inside the canvas (the clamp): 192 × 1920", () => {
-    expect(resolveVideoOverlayGeometry({ w: 1080, h: 1920 }, { anchor: "center", x: 0, y: 0, width: 60, fit: "contain" }, 400 / 4000)).toEqual({
-      box: { left: 444, top: 0, width: 192, height: 1920 },
-      drawn: { left: 444, top: 0, width: 192, height: 1920 },
-    })
-  })
-  it("…and with height 60 % set: box 648 × 1152, contain → 114 × 1152, no clamp", () => {
-    const g = resolveVideoOverlayGeometry({ w: 1080, h: 1920 }, { anchor: "center", x: 0, y: 0, width: 60, height: 60, fit: "contain" }, 400 / 4000)
-    expect(g.box).toEqual({ left: 216, top: 384, width: 648, height: 1152 })
-    expect(g.drawn).toEqual({ left: 483, top: 384, width: 114, height: 1152 })
-  })
-  it("a drawn size that would round below 2 px is floored at 2 × 2 (Review Focus 4)", () => {
-    expect(resolveVideoOverlayGeometry({ w: 100, h: 100 }, { anchor: "top-left", x: 0, y: 0, width: 1, fit: "contain" }, 1).drawn).toMatchObject({ width: 2, height: 2 })
-  })
-  it("property: drawn is even, ≥ 2 and never larger than the canvas", () => {
-    const canvases = [{ w: 1080, h: 1920 }, { w: 1920, h: 1080 }, { w: 100, h: 100 }, { w: 640, h: 360 }]
-    for (const canvas of canvases) {
-      for (let width = 1; width <= 100; width += 7) {
-        for (const height of [undefined, 1, 14, 60, 100]) {
-          for (const aspect of [0.05, 0.5, 1, 2, 20]) {
-            for (const fit of ["contain", "cover"] as const) {
-              const { drawn } = resolveVideoOverlayGeometry(canvas, { anchor: "center", x: 0, y: 0, width, height, fit }, aspect)
-              expect(drawn.width % 2).toBe(0)
-              expect(drawn.height % 2).toBe(0)
-              expect(drawn.width).toBeGreaterThanOrEqual(2)
-              expect(drawn.width).toBeLessThanOrEqual(canvas.w)
-              expect(drawn.height).toBeLessThanOrEqual(canvas.h)
-            }
-          }
-        }
-      }
-    }
-  })
-})
-
-describe("videoOverlayCanvas", () => {
-  it("is the display size: SAR resolved, even-rounded", () => {
-    expect(videoOverlayCanvas({ width: 540, height: 1920, sar: 2 })).toEqual({ w: 1080, h: 1920 })
-    expect(videoOverlayCanvas({ width: 1079, height: 1919 })).toEqual({ w: 1078, h: 1918 })
-  })
-  it("a target aspect wins", () => {
-    expect(videoOverlayCanvas({ width: 1920, height: 1080 }, "9:16")).toEqual({ w: 1080, h: 1920 })
-    expect(videoOverlayCanvas(null, "4:5")).toEqual({ w: 1080, h: 1350 })
-  })
-  it("unknown size and no aspect → null", () => {
-    expect(videoOverlayCanvas(null)).toBeNull()
   })
 })
 
@@ -291,129 +248,6 @@ describe("videoOverlayRenderOrder", () => {
     const request = assembleVideoOverlayRequest({ videoUrl: "v", data: { layers: stored }, wiredImageUrls: [] })
     const kept = request.layers.map((l, index) => ({ index, slot: l.slot, zIndex: l.zIndex })).filter((l) => l.index !== 0)
     expect(videoOverlayRenderOrder(kept).map((k) => kept[k]!.slot)).toEqual(stageSlots(stored).filter((s) => s !== 1))
-  })
-})
-
-describe("hasDrawableVideoOverlayBox", () => {
-  it("a complete (expanded) layer is drawable", () => {
-    expect(hasDrawableVideoOverlayBox(expandVideoOverlayLayer({ imageUrl: IMG, start: 0 }))).toBe(true)
-    expect(hasDrawableVideoOverlayBox(expandVideoOverlayLayer({ imageUrl: IMG, start: 0, preset: "card" }))).toBe(true)
-  })
-
-  it("a stored partial box is not — the expansion leaves it as written, the geometry would throw", () => {
-    const noAnchor = { imageUrl: IMG, start: 0, width: 40 }
-    const nullAnchor = { imageUrl: IMG, start: 0, anchor: null, width: 30 }
-    expect(expandVideoOverlayLayer(noAnchor)).toBe(noAnchor)
-    expect(hasDrawableVideoOverlayBox(noAnchor)).toBe(false)
-    expect(hasDrawableVideoOverlayBox(nullAnchor)).toBe(false)
-    expect(hasDrawableVideoOverlayBox({ imageUrl: IMG, start: 0, anchor: "center" })).toBe(false)
-  })
-
-  it("an unknown anchor, a non-finite width or an out-of-range field is not", () => {
-    const ok = expandVideoOverlayLayer({ imageUrl: IMG, start: 0 })
-    expect(hasDrawableVideoOverlayBox({ ...ok, anchor: "middle" })).toBe(false)
-    expect(hasDrawableVideoOverlayBox({ ...ok, width: Number.NaN })).toBe(false)
-    expect(hasDrawableVideoOverlayBox({ ...ok, width: "40" })).toBe(false)
-    expect(hasDrawableVideoOverlayBox({ ...ok, x: 500 })).toBe(false)
-    expect(hasDrawableVideoOverlayBox(null)).toBe(false)
-    expect(hasDrawableVideoOverlayBox("layer")).toBe(false)
-  })
-
-  it("agrees with the validator: whatever it passes is drawable", () => {
-    const layers = [
-      expandVideoOverlayLayer({ imageUrl: IMG, start: 0, anchor: "top-left", width: 30 }),
-      expandVideoOverlayLayer({ imageUrl: IMG, start: 0, preset: "full-frame" }),
-    ]
-    expect(validateVideoOverlayRequest({ layers }).ok).toBe(true)
-    for (const l of layers) expect(hasDrawableVideoOverlayBox(l)).toBe(true)
-  })
-})
-
-describe("validateVideoOverlayRequest (§3.5)", () => {
-  const ok = { imageUrl: IMG, start: 0 }
-  const fail = (body: Parameters<typeof validateVideoOverlayRequest>[0]) => validateVideoOverlayRequest(body) as VideoOverlayIssue
-  it("returns a code, the 0-based layer, the slot when present, and params — never English", () => {
-    const r = fail({ layers: [ok, ok, { imageUrl: IMG, start: 5, end: 4 }] })
-    expect(r).toEqual({ ok: false, code: "end_before_start", layer: 2, params: { start: 5, end: 4 } })
-    expect(formatVideoOverlayError(r)).toBe("layers[2]: end (4 s) must be after start (5 s)")
-    const s = fail({ layers: [{ imageUrl: IMG, start: 5, end: 4, slot: 3 }] })
-    expect(formatVideoOverlayError(s)).toBe("Layer 3: end (4 s) must be after start (5 s)")
-  })
-  it("layer count 1..20", () => {
-    expect(fail({ layers: [] }).code).toBe("no_layers")
-    const many = fail({ layers: Array.from({ length: 21 }, () => ok) })
-    expect(many.code).toBe("too_many_layers")
-    expect(formatVideoOverlayError(many)).toBe("At most 20 layers (got 21)")
-  })
-  it("times finite within 0..3600", () => {
-    expect(fail({ layers: [{ imageUrl: IMG, start: -1 }] }).code).toBe("time_out_of_range")
-    expect(fail({ layers: [{ imageUrl: IMG, start: 0, end: 3601 }] }).code).toBe("time_out_of_range")
-    expect(fail({ layers: [{ imageUrl: IMG, start: Number.POSITIVE_INFINITY }] }).code).toBe("time_out_of_range")
-  })
-  it("a no-preset partial box is incomplete_box; no preset and no box is fine before AND after expansion (D8)", () => {
-    const partial = fail({ layers: [{ start: 0, width: 40 }] })
-    expect(partial.code).toBe("incomplete_box")
-    expect(formatVideoOverlayError(partial)).toBe("layers[0]: anchor and width are required without a preset")
-    expect(validateVideoOverlayRequest({ layers: [{ imageUrl: IMG, start: 0 }] })).toEqual({ ok: true })
-    expect(validateVideoOverlayRequest({ layers: expandVideoOverlayPresets([{ imageUrl: IMG, start: 0 }]) })).toEqual({ ok: true })
-    expect(validateVideoOverlayRequest({ layers: [{ imageUrl: IMG, start: 0, preset: "card", width: 50 }] })).toEqual({ ok: true })
-  })
-  it("a present box / look field outside VIDEO_OVERLAY_BOUNDS or its enum / type is field_out_of_bounds (spec §4.4, the DAG path's only check)", () => {
-    const code = (extra: Record<string, unknown>) => {
-      const r = validateVideoOverlayRequest({ layers: [ok, { imageUrl: IMG, start: 0, anchor: "center", width: 30, ...extra } as VideoOverlayLayerInput] })
-      return r.ok ? "ok" : ([r.code, r.layer, r.params.field] as const)
-    }
-    expect(code({ width: 500, height: 100, fit: "cover" })).toEqual(["field_out_of_bounds", 1, "width"])
-    expect(code({ width: 101 })).toEqual(["field_out_of_bounds", 1, "width"])
-    expect(code({ width: "50" })).toEqual(["field_out_of_bounds", 1, "width"])
-    expect(code({ x: -101 })).toEqual(["field_out_of_bounds", 1, "x"])
-    expect(code({ height: 0 })).toEqual(["field_out_of_bounds", 1, "height"])
-    expect(code({ y: Number.NaN })).toEqual(["field_out_of_bounds", 1, "y"])
-    expect(code({ opacity: 5 })).toEqual(["field_out_of_bounds", 1, "opacity"])
-    expect(code({ opacity: 9 })).toEqual(["field_out_of_bounds", 1, "opacity"])
-    expect(code({ zIndex: 2.5 })).toEqual(["field_out_of_bounds", 1, "zIndex"])
-    expect(code({ zIndex: -3 })).toEqual(["field_out_of_bounds", 1, "zIndex"])
-    expect(code({ anchor: 7 })).toEqual(["field_out_of_bounds", 1, "anchor"])
-    expect(code({ anchor: "middle" })).toEqual(["field_out_of_bounds", 1, "anchor"])
-    expect(code({ fit: "stretch" })).toEqual(["field_out_of_bounds", 1, "fit"])
-    expect(code({ animate: "yes" })).toEqual(["field_out_of_bounds", 1, "animate"])
-    // null reads as absent; the bounds themselves are inclusive
-    expect(code({ height: null, zIndex: null, opacity: null })).toBe("ok")
-    expect(code({ x: -100, y: 100, width: 100, height: 1, opacity: 0, zIndex: 100, fit: "cover", animate: false })).toBe("ok")
-  })
-  it("field_out_of_bounds carries the slot, a symbolic range, and renders one English line", () => {
-    const r = fail({ layers: [{ imageUrl: IMG, start: 0, anchor: "center", width: 30, zIndex: 2.5, slot: 4 }] })
-    expect(r).toEqual({ ok: false, code: "field_out_of_bounds", layer: 0, slot: 4, params: { field: "zIndex", allowed: "integers 0..100" } })
-    expect(formatVideoOverlayError(r)).toBe("Layer 4: zIndex is out of range (allowed: integers 0..100)")
-    expect(fail({ layers: [{ imageUrl: IMG, start: 0, anchor: "center", width: 30, fit: "stretch" } as unknown as VideoOverlayLayerInput] }).params).toEqual({ field: "fit", allowed: "contain, cover" })
-  })
-  it("the bounds verdict is the same before and after the expansion (§3.5 order-independence)", () => {
-    const bad = [{ imageUrl: IMG, start: 0, preset: "card" as const, width: 500 }]
-    expect(fail({ layers: bad }).code).toBe("field_out_of_bounds")
-    expect(fail({ layers: expandVideoOverlayPresets(bad) }).code).toBe("field_out_of_bounds")
-    const good = [{ imageUrl: IMG, start: 0, preset: "card" as const }]
-    expect(validateVideoOverlayRequest({ layers: good })).toEqual({ ok: true })
-    expect(validateVideoOverlayRequest({ layers: expandVideoOverlayPresets(good) })).toEqual({ ok: true })
-    const noBoxBadLook = [{ imageUrl: IMG, start: 0, opacity: 5 }]
-    expect(fail({ layers: noBoxBadLook }).code).toBe("field_out_of_bounds")
-    expect(fail({ layers: expandVideoOverlayPresets(noBoxBadLook) }).code).toBe("field_out_of_bounds")
-  })
-  it("an assembled JSON-written layer with an unbounded box is refused before it reaches the geometry (the DAG path)", () => {
-    const req = assembleVideoOverlayRequest({
-      videoUrl: "v",
-      data: { layers: [{ anchor: "center", width: 100000, height: 100, fit: "cover", start: 0 } as VideoOverlayLayerInput] },
-      wiredImageUrls: [IMG],
-    })
-    expect(validateVideoOverlayRequest(req)).toMatchObject({ ok: false, code: "field_out_of_bounds", slot: 1, params: { field: "width" } })
-    const anchor = assembleVideoOverlayRequest({ videoUrl: "v", data: { layers: [{ anchor: 7, width: 30, start: 0 } as unknown as VideoOverlayLayerInput] }, wiredImageUrls: [IMG] })
-    expect(validateVideoOverlayRequest(anchor)).toMatchObject({ ok: false, code: "field_out_of_bounds", params: { field: "anchor" } })
-  })
-  it("every layer needs an image", () => {
-    expect(fail({ layers: [{ start: 0 }] }).code).toBe("layer_without_image")
-  })
-  it("baseFit / backgroundColor only with an outputAspect", () => {
-    expect(fail({ layers: [ok], baseFit: "contain" }).code).toBe("fit_without_aspect")
-    expect(validateVideoOverlayRequest({ layers: [ok], outputAspect: "9:16", baseFit: "contain", backgroundColor: "#ff0000" })).toEqual({ ok: true })
   })
 })
 
@@ -568,5 +402,257 @@ describe("VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH — the bound the REST route 
       data: { layers, outputAspect: "9:16", baseFit: "contain", backgroundColor: "#101010" },
     })
     expect(key.length).toBeLessThan(VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH)
+  })
+})
+
+describe("video layers — a layer carries an image or a video, never both", () => {
+  const I = "https://cdn.example/i.png"
+  const V = "https://cdn.example/v.mp4"
+  const B = "https://cdn.example/base.mp4"
+  const validate = (layers: VideoOverlayLayerInput[]) => validateVideoOverlayRequest({ layers })
+  const codeOf = (layers: VideoOverlayLayerInput[]) => {
+    const r = validate(layers)
+    return r.ok ? "ok" : r.code
+  }
+  const videoLayers = (n: number): VideoOverlayLayerInput[] => Array.from({ length: n }, (_, i) => ({ videoUrl: `https://cdn.example/v${i}.mp4`, start: 0 }))
+  const threeVideoLayers = videoLayers(3)
+
+  it("the contract's bounds, measured caps and codes", () => {
+    expect(VIDEO_OVERLAY_VOLUME_BOUNDS).toEqual([0, 1])
+    expect(VIDEO_OVERLAY_MAX_VIDEO_LAYERS).toBe(2)
+    expect(VIDEO_OVERLAY_VIDEO_MAX_BASE_SEC).toBe(60)
+    expect(VIDEO_OVERLAY_MAX_LAYER_VIDEO_BYTES).toBe(200 * 1024 * 1024)
+    expect(VIDEO_OVERLAY_ERROR_CODES).toEqual(expect.arrayContaining(["layer_two_sources", "too_many_video_layers", "sound_without_video"]))
+    expect(VIDEO_OVERLAY_WARNING_CODES).toContain("layer_no_audio")
+  })
+
+  it("a video layer defaults animate off; an image layer stays on", () => {
+    expect(expandVideoOverlayLayer({ videoUrl: V, start: 0, preset: "full-frame" }).animate).toBe(false)
+    expect(expandVideoOverlayLayer({ imageUrl: I, start: 0, preset: "full-frame" }).animate).toBe(true)
+    expect(expandVideoOverlayLayer({ videoUrl: V, start: 0, preset: "full-frame", animate: true }).animate).toBe(true)
+  })
+  it("a video layer with no box and no preset is the default corner badge with animate off — and stays put on a second pass", () => {
+    const l = expandVideoOverlayLayer({ videoUrl: V, start: 0 })
+    expect(l).toEqual({ ...DEFAULT_VIDEO_OVERLAY_LAYER, videoUrl: V, animate: false })
+    expect(expandVideoOverlayLayer(l)).toBe(l)
+    expect(expandVideoOverlayLayer({ videoUrl: V, start: 0, animate: true }).animate).toBe(true)
+    expect(expandVideoOverlayLayer({ videoUrl: V, start: 0, anchor: "top", width: 50 }).animate).toBe(false)
+    expect(expandVideoOverlayLayer({ imageUrl: I, start: 0 }).animate).toBe(true)
+  })
+
+  // A preset-tagged layer with no `start` (written as JSON): the default layer
+  // starts at 0, and a VIDEO layer tagged with a preset now does too. An image
+  // layer is left as it was — its request is refused today (time_out_of_range),
+  // and filling it would turn an existing image-only refusal into a run.
+  it("a video layer with a preset tag and no start starts at 0; an image layer stays as it was (refused)", () => {
+    const video = expandVideoOverlayLayer({ videoUrl: V, preset: "card" })
+    expect(video).toMatchObject({ videoUrl: V, start: 0, preset: "card", animate: false, anchor: "center", width: 78 })
+    expect(expandVideoOverlayLayer(video)).toBe(video)
+    expect(codeOf([video])).toBe("ok")
+    const image = expandVideoOverlayLayer({ imageUrl: I, preset: "card" })
+    expect(image).not.toHaveProperty("start")
+    expect(codeOf([image])).toBe("time_out_of_range")
+    // An explicit start is kept; a wired video slot tagged with a preset runs from 0.
+    expect(expandVideoOverlayLayer({ videoUrl: V, preset: "full-frame", start: 3 }).start).toBe(3)
+    const wired = assembleVideoOverlayRequest({ videoUrl: B, data: { layers: [{ preset: "corner-badge", corner: "top-left" }] }, wiredImageUrls: [V], wiredVideoSlots: new Set([1]) })
+    expect(wired.layers[0]).toMatchObject({ start: 0, videoUrl: V, slot: 1 })
+    expect(validateVideoOverlayRequest(wired)).toEqual({ ok: true })
+  })
+
+  it("refuses a layer with both sources", () => {
+    expect(codeOf([{ imageUrl: I, videoUrl: V, start: 0 }])).toBe("layer_two_sources")
+    expect(formatVideoOverlayError(validate([{ imageUrl: I, videoUrl: V, start: 0, slot: 2 }]) as VideoOverlayIssue)).toBe(
+      "Layer 2: has both an image and a video — keep one (imageUrl or videoUrl)",
+    )
+  })
+  it("a video-only layer is a complete layer; a layer with neither source names both", () => {
+    expect(codeOf([{ videoUrl: V, start: 0 }])).toBe("ok")
+    expect(codeOf([{ imageUrl: "", videoUrl: V, start: 0 }])).toBe("ok")
+    expect(formatVideoOverlayError(validate([{ start: 0, slot: 3 }]) as VideoOverlayIssue)).toBe(
+      "Layer 3: no image or video — connect one to the layer's handle or set imageUrl or videoUrl",
+    )
+  })
+
+  it("refuses a third video layer", () => {
+    expect(validate(threeVideoLayers)).toMatchObject({ code: "too_many_video_layers", params: { max: 2, count: 3 } })
+    expect(formatVideoOverlayError(validate(threeVideoLayers) as VideoOverlayIssue)).toBe("At most 2 video layers (got 3)")
+    expect(codeOf([...videoLayers(2), { imageUrl: I, start: 0 }, { imageUrl: I, start: 0 }])).toBe("ok")
+  })
+
+  it("refuses sound on an image layer", () => {
+    expect(codeOf([{ imageUrl: I, start: 0, sound: { volume: 1 } }])).toBe("sound_without_video")
+    expect(formatVideoOverlayError(validate([{ imageUrl: I, start: 0, sound: { volume: 1 } }]) as VideoOverlayIssue)).toBe(
+      "layers[0]: sound is only for a video layer — remove it or set videoUrl",
+    )
+    expect(codeOf([{ videoUrl: V, start: 0, sound: { volume: 0.8 } }])).toBe("ok")
+    expect(codeOf([{ imageUrl: I, start: 0, sound: null }])).toBe("ok")
+  })
+
+  it("bounds the volume", () => {
+    expect(codeOf([{ videoUrl: V, start: 0, sound: { volume: 1.5 } }])).toBe("field_out_of_bounds")
+    expect(validate([{ videoUrl: V, start: 0, sound: { volume: -0.1 } }])).toMatchObject({ params: { field: "sound.volume", allowed: "0..1" } })
+    for (const sound of [{ volume: Number.NaN }, { volume: "1" }, {}, "loud", 1]) {
+      expect(codeOf([{ videoUrl: V, start: 0, sound } as unknown as VideoOverlayLayerInput])).toBe("field_out_of_bounds")
+    }
+    expect(codeOf([{ videoUrl: V, start: 0, sound: { volume: 0 } }, { videoUrl: V, start: 0, sound: { volume: 1 } }])).toBe("ok")
+  })
+  it("a bad volume does not make the layer undrawable (the stage still places it)", () => {
+    expect(hasDrawableVideoOverlayBox({ ...expandVideoOverlayLayer({ videoUrl: V, start: 0 }), sound: { volume: 5 } })).toBe(true)
+  })
+
+  it("a wired video slot becomes videoUrl", () => {
+    const r = assembleVideoOverlayRequest({ videoUrl: B, data: {}, wiredImageUrls: [V], wiredVideoSlots: new Set([1]) })
+    expect(r.layers[0]).toMatchObject({ videoUrl: V, slot: 1, animate: false })
+    expect(r.layers[0].imageUrl).toBeUndefined()
+  })
+  it("a wire replaces whichever source the slot stored; an unwired slot keeps its own", () => {
+    const stored: VideoOverlayLayerInput[] = [{ videoUrl: "https://x/stored.mp4", start: 1 }, { imageUrl: "https://x/stored.png", start: 2 }, { videoUrl: V, start: 3 }]
+    const r = assembleVideoOverlayRequest({ videoUrl: B, data: { layers: stored }, wiredImageUrls: [I, V], wiredVideoSlots: new Set([2]) })
+    expect(r.layers.map((l) => [l.slot, l.imageUrl, l.videoUrl])).toEqual([[1, I, undefined], [2, undefined, V], [3, undefined, V]])
+    expect(r.layers.map((l) => l.start)).toEqual([1, 2, 3])
+    expect(validateVideoOverlayRequest(r)).toEqual({ ok: true })
+  })
+  it("an unwired slot stored with both sources reaches the validator as it is", () => {
+    const r = assembleVideoOverlayRequest({ videoUrl: B, data: { layers: [{ imageUrl: I, videoUrl: V, start: 0 }] }, wiredImageUrls: [] })
+    expect(validateVideoOverlayRequest(r)).toMatchObject({ ok: false, code: "layer_two_sources", slot: 1 })
+  })
+  it("an empty-string source is dropped, so the layer runs as the kind it has on both engines (the route refuses an empty URL)", () => {
+    const r = assembleVideoOverlayRequest({
+      videoUrl: B,
+      data: { layers: [{ imageUrl: I, videoUrl: "", start: 0 }, { imageUrl: "", videoUrl: V, start: 1 }] },
+      wiredImageUrls: [],
+      planLayers: [{ imageUrl: I, videoUrl: "", start: 2 }],
+    })
+    expect(r.layers.map((l) => [Object.hasOwn(l, "imageUrl"), Object.hasOwn(l, "videoUrl")])).toEqual([[true, false], [true, false], [false, true]])
+    expect(r.layers.map((l) => l.animate)).toEqual([true, true, false])
+    expect(validateVideoOverlayRequest(r)).toEqual({ ok: true })
+    // Both empty is no source at all: the slot is dropped, as before.
+    expect(assembleVideoOverlayRequest({ videoUrl: B, data: { layers: [{ imageUrl: "", videoUrl: "", start: 0 }] }, wiredImageUrls: [] }).layers).toEqual([])
+  })
+  it("an image-only assembly is unchanged without wiredVideoSlots", () => {
+    const r = assembleVideoOverlayRequest({ videoUrl: B, data: { layers: [{ imageUrl: "https://x/own.png", start: 2 }] }, wiredImageUrls: [I] })
+    expect(r.layers).toEqual([{ ...DEFAULT_VIDEO_OVERLAY_LAYER, imageUrl: I, start: 2, slot: 1 }])
+  })
+
+  // A WIRED slot's kind is its wire's, read at the run: a `sound` left on the
+  // slot from when its wire was a video is skipped when the wire is an image
+  // (the run goes ahead), and its fade default follows the image. A layer that
+  // carries its OWN image (the API, MCP, an unwired slot, a plan) is refused.
+  it("a wired image slot drops a stored sound and runs, its fade default on; wired to a video it keeps the sound, fade off", () => {
+    const layers: VideoOverlayLayerInput[] = [{ start: 1, sound: { volume: 0.4 } }]
+    const image = assembleVideoOverlayRequest({ videoUrl: B, data: { layers }, wiredImageUrls: [I] })
+    expect(image.layers).toEqual([{ ...DEFAULT_VIDEO_OVERLAY_LAYER, imageUrl: I, start: 1, slot: 1 }])
+    expect(validateVideoOverlayRequest(image)).toEqual({ ok: true })
+    const video = assembleVideoOverlayRequest({ videoUrl: B, data: { layers }, wiredImageUrls: [V], wiredVideoSlots: new Set([1]) })
+    expect(video.layers).toEqual([{ ...DEFAULT_VIDEO_OVERLAY_LAYER, animate: false, videoUrl: V, start: 1, sound: { volume: 0.4 }, slot: 1 }])
+    // Even a volume the validator would refuse: the sound is skipped, not judged.
+    const bad = assembleVideoOverlayRequest({ videoUrl: B, data: { layers: [{ start: 0, sound: { volume: 5 } }] }, wiredImageUrls: [I] })
+    expect(validateVideoOverlayRequest(bad)).toEqual({ ok: true })
+  })
+  it("a fade the wired slot was written with stays as written, whichever kind its wire is", () => {
+    const layers: VideoOverlayLayerInput[] = [{ start: 0, animate: true }, { start: 0, animate: false }]
+    const r = assembleVideoOverlayRequest({ videoUrl: B, data: { layers }, wiredImageUrls: [V, I], wiredVideoSlots: new Set([1]) })
+    expect(r.layers.map((l) => [l.slot, l.animate])).toEqual([[1, true], [2, false]])
+  })
+  it("sound on a layer with its own image is still refused: an unwired slot and a plan layer", () => {
+    const own = assembleVideoOverlayRequest({ videoUrl: B, data: { layers: [null, { imageUrl: I, start: 0, sound: { volume: 1 } }] }, wiredImageUrls: [] })
+    expect(validateVideoOverlayRequest(own)).toMatchObject({ ok: false, code: "sound_without_video", slot: 2 })
+    const plan = assembleVideoOverlayRequest({ videoUrl: B, data: {}, wiredImageUrls: [], planLayers: [{ imageUrl: I, start: 0, sound: { volume: 1 } }] })
+    expect(validateVideoOverlayRequest(plan)).toMatchObject({ ok: false, code: "sound_without_video", planLayer: 1 })
+  })
+
+  it("wiring clears both stored sources", () => {
+    expect(clearWiredVideoOverlayImageUrls([{ videoUrl: V, start: 0 }], new Set([1]))[0]).not.toHaveProperty("videoUrl")
+    expect(clearWiredVideoOverlayImageUrls([{ imageUrl: I, videoUrl: V, start: 0 }], new Set([1]))[0]).toEqual({ start: 0 })
+    const untouched = [{ start: 0 }]
+    expect(clearWiredVideoOverlayImageUrls(untouched, new Set([1]))).toBe(untouched)
+    const [out] = normalizeVideoOverlayNodes(
+      [{ id: "vo", type: "video-overlay", data: { layers: [{ videoUrl: V, start: 0 }] } }],
+      [{ target: "vo", targetHandle: "overlay" }],
+    )
+    expect((out!.data as { layers: VideoOverlayLayerInput[] }).layers[0]).not.toHaveProperty("videoUrl")
+  })
+
+  it("slot sources read a stored video", () => {
+    expect(videoOverlaySlotSources([{ videoUrl: V, start: 0 }], [])).toEqual([V])
+    expect(videoOverlaySlotSources([{ videoUrl: V, start: 0 }], [I])).toEqual([I])
+  })
+
+  it("kinds a wired source by producer, else by extension", () => {
+    expect(videoOverlayWiredLayerKind({ type: "generate-video" }, "https://x/a")).toBe("video")
+    expect(videoOverlayWiredLayerKind({ type: "generate-image" }, "https://x/a.mp4")).toBe("image")
+    const dynamic = [...DYNAMIC_PRODUCER_TYPES][0]
+    expect(videoOverlayWiredLayerKind({ type: dynamic }, "https://x/a.mp4?sig=1")).toBe("video")
+    expect(videoOverlayWiredLayerKind({ type: dynamic }, "https://x/a.png")).toBe("image")
+  })
+  it("the extension test reads the path only, case-insensitively, and defaults to image", () => {
+    for (const url of ["https://x/a.MOV", "https://x/a.webm#t=2", "https://x/a.m4v", "/uploads/a.mp4?x=1"]) {
+      expect(videoOverlayWiredLayerKind({}, url)).toBe("video")
+    }
+    for (const url of ["https://x/a.png?f=.mp4", "https://x/a.mp4.png", "https://x/mp4", "https://x/a.avi", "", "not a url"]) {
+      expect(videoOverlayWiredLayerKind({}, url)).toBe("image")
+    }
+  })
+
+  it("videoOverlayHasVideoLayer: any layer with a video", () => {
+    expect(videoOverlayHasVideoLayer([{ imageUrl: I, start: 0 }, null, { videoUrl: V, start: 0 }])).toBe(true)
+    expect(videoOverlayHasVideoLayer([{ imageUrl: I, start: 0 }, { videoUrl: "", start: 0 }, null])).toBe(false)
+    expect(videoOverlayHasVideoLayer([])).toBe(false)
+    expect(videoOverlayHasVideoLayer(null)).toBe(false)
+    expect(videoOverlayHasVideoLayer(["https://x/a.mp4"] as unknown as VideoOverlayLayerInput[])).toBe(false)
+  })
+
+  it("the wire type takes exactly one source", () => {
+    const image: VideoOverlayLayerSpec = { imageUrl: I, start: 0 }
+    const video: VideoOverlayLayerSpec = { videoUrl: V, start: 0, sound: { volume: 0.5 } }
+    // @ts-expect-error — both sources
+    const both: VideoOverlayLayerSpec = { imageUrl: I, videoUrl: V, start: 0 }
+    // @ts-expect-error — neither source
+    const neither: VideoOverlayLayerSpec = { start: 0 }
+    expect([image, video, both, neither]).toHaveLength(4)
+  })
+
+  // Captured by running videoOverlayCompositionKey on IMAGE_ONLY_FIXTURE before video layers existed.
+  const IMAGE_ONLY_FIXTURE = {
+    baseUrl: "https://x/base.mp4",
+    sources: ["https://x/wired.png", undefined, "https://x/own.png"],
+    data: {
+      layers: [
+        { start: 1, end: 4, preset: "card" as const },
+        null,
+        { imageUrl: "https://x/own.png", start: 0, anchor: "top-left" as const, x: 2, y: 3, width: 30, fit: "cover" as const, opacity: 0.5, animate: true, zIndex: 4 },
+      ],
+      outputAspect: "9:16",
+      baseFit: "contain",
+      backgroundColor: "#101010",
+    },
+  }
+  const KEY_CAPTURED_BEFORE_THIS_CHANGE = String.raw`["https://x/base.mp4",["https://x/wired.png",null,"https://x/own.png"],[{"end":4,"preset":"card","start":1},null,{"anchor":"top-left","animate":true,"fit":"cover","imageUrl":"https://x/own.png","opacity":0.5,"start":0,"width":30,"x":2,"y":3,"zIndex":4}],"9:16","contain","#101010"]`
+
+  it("an image-only composition keeps today's key", () => {
+    expect(videoOverlayCompositionKey(IMAGE_ONLY_FIXTURE)).toBe(KEY_CAPTURED_BEFORE_THIS_CHANGE)
+  })
+  it("a layer's video and its sound change the key", () => {
+    const withVideo = (layer: VideoOverlayLayerInput) => {
+      const layers = [layer]
+      return videoOverlayCompositionKey({ baseUrl: B, sources: videoOverlaySlotSources(layers, []), data: { layers } })
+    }
+    const k = withVideo({ videoUrl: V, start: 0 })
+    expect(withVideo({ videoUrl: "https://x/other.mp4", start: 0 })).not.toBe(k)
+    expect(withVideo({ videoUrl: V, start: 0, sound: { volume: 1 } })).not.toBe(k)
+    expect(withVideo({ videoUrl: V, start: 0, sound: { volume: 0.5 } })).not.toBe(withVideo({ videoUrl: V, start: 0, sound: { volume: 1 } }))
+  })
+  it("a wired slot's kind changes the key, even when its URL does not (videoSlots: 1-based, in any order)", () => {
+    const wired = { baseUrl: B, sources: ["https://x/signed/clip?sig=1", "https://x/b.png"], data: { layers: [] } }
+    const asImages = videoOverlayCompositionKey(wired)
+    const slot1Video = videoOverlayCompositionKey({ ...wired, videoSlots: [1] })
+    expect(slot1Video).not.toBe(asImages)
+    expect(videoOverlayCompositionKey({ ...wired, videoSlots: [2] })).not.toBe(slot1Video)
+    expect(videoOverlayCompositionKey({ ...wired, videoSlots: new Set([2, 1]) })).toBe(videoOverlayCompositionKey({ ...wired, videoSlots: [1, 2] }))
+  })
+  it("no wired video slot keeps the image-only key, whether absent, null or empty", () => {
+    expect(videoOverlayCompositionKey({ ...IMAGE_ONLY_FIXTURE, videoSlots: [] })).toBe(KEY_CAPTURED_BEFORE_THIS_CHANGE)
+    expect(videoOverlayCompositionKey({ ...IMAGE_ONLY_FIXTURE, videoSlots: new Set() })).toBe(KEY_CAPTURED_BEFORE_THIS_CHANGE)
+    expect(videoOverlayCompositionKey({ ...IMAGE_ONLY_FIXTURE, videoSlots: null })).toBe(KEY_CAPTURED_BEFORE_THIS_CHANGE)
   })
 })

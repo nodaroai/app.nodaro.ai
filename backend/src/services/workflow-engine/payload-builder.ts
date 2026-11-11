@@ -7215,7 +7215,9 @@ function buildPayloadOf(
 
     case "video-overlay": {
       // The ONE node → request assembly both engines run (@nodaro/shared):
-      // per slot the wired handle's image, else the layer's own imageUrl; a
+      // per slot the wired handle's source — a videoUrl on a slot the input
+      // resolver recorded as a video, else an imageUrl — else the layer's own
+      // imageUrl / videoUrl; a
       // wired slot with no settings is the default corner badge (D2 — on this
       // path an untouched slot is undefined, never {}); empty slots dropped;
       // `slot` stamped; presets expanded. Then the shared validator: a throw
@@ -7227,20 +7229,24 @@ function buildPayloadOf(
         videoUrl: resolvedInputs.videoUrl ?? "",
         data: overlayData,
         wiredImageUrls,
+        ...(resolvedInputs.overlayVideoSlots ? { wiredVideoSlots: new Set(resolvedInputs.overlayVideoSlots) } : {}),
         planLayers: resolvedInputs.layerPlan,
       })
       const verdict = validateVideoOverlayRequest(request)
       if (!verdict.ok) throw new Error(`Video Overlay: ${formatVideoOverlayError(verdict)}`)
       // The freshness key the canvas compares against (`resultCompositionKey`):
       // the SAME shared function over the same inputs the canvas uses — the
-      // resolved base, each slot's `wired ?? imageUrl`, the STORED settings
-      // (never the expanded request). The worker echoes it into output_data,
-      // so a backend run of the current settings reads fresh on the node.
+      // resolved base, each slot's `wired ?? imageUrl ?? videoUrl`, the STORED
+      // settings (never the expanded request) and the wired slots that are
+      // videos (only when one is, so an image-only node keeps its key). The
+      // worker echoes it into output_data, so a backend run of the current
+      // settings reads fresh on the node.
       const resultCompositionKey = videoOverlayCompositionKey({
         baseUrl: resolvedInputs.videoUrl,
         sources: videoOverlaySlotSources(overlayData.layers, wiredImageUrls),
         data: overlayData,
         planLayers: resolvedInputs.layerPlan,
+        videoSlots: resolvedInputs.overlayVideoSlots,
       })
       return ffmpegResult("video-overlay", { jobId, ...request, resultCompositionKey, usageLogId })
     }

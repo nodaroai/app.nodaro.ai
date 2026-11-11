@@ -13,7 +13,7 @@ vi.mock("node:child_process", async (importOriginal) => ({
   },
 }))
 
-import { parseVideoOverlayProbe, probeVideoOverlayBase } from "../ffmpeg-utils.js"
+import { parseVideoOverlayProbe, probeVideoOverlayBase, probeVideoOverlayBaseSource } from "../ffmpeg-utils.js"
 import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
 
 const video = (over: Record<string, unknown> = {}) => ({
@@ -40,6 +40,13 @@ describe("parseVideoOverlayProbe", () => {
       width: 1080, height: 1920, rotation: 0, sar: 1, rFrameRate: "30/1", avgFrameRate: "30/1",
       streamDurationSec: 24.8, startTimeSec: 0, audioCodec: "aac",
     })
+  })
+  it("reads the first audio stream's start time when it states one (a video layer keeps its picture/sound offset), and leaves it out otherwise", () => {
+    const withStart = { ...audio(), start_time: "0.000000" }
+    expect(parseVideoOverlayProbe(json([video({ start_time: "0.066667" }), withStart, { ...audio("mp3"), start_time: "5" }]))).toMatchObject({ startTimeSec: 0.066667, audioStartTimeSec: 0 })
+    expect(parseVideoOverlayProbe(json([video(), { ...audio(), start_time: "N/A" }]))).not.toHaveProperty("audioStartTimeSec")
+    expect(parseVideoOverlayProbe(json([video(), audio()]))).not.toHaveProperty("audioStartTimeSec")
+    expect(parseVideoOverlayProbe(json([video({ start_time: "0.1" })]))).not.toHaveProperty("audioStartTimeSec")
   })
   it("keeps a VFR base's rationals verbatim (the builder picks the cadence)", () => {
     expect(parseVideoOverlayProbe(json([video({ r_frame_rate: "0/0", avg_frame_rate: "30000/1001" })]))).toMatchObject({ rFrameRate: "0/0", avgFrameRate: "30000/1001", audioCodec: null })
@@ -101,5 +108,33 @@ describe("probeVideoOverlayBase", () => {
   it("an ffprobe TIMEOUT stays a plain, retryable error", async () => {
     exec.next = { error: Object.assign(new Error("timed out"), { killed: true, code: null }), stdout: "", stderr: "" }
     await expect(probeVideoOverlayBase("/w/input.mp4")).rejects.toSatisfy((e: unknown) => !isDeterministicJobError(e) && (e as { timedOut?: boolean }).timedOut === true)
+  })
+})
+
+describe("probeVideoOverlayBaseSource — the same probe on the base's link, before anything is downloaded", () => {
+  beforeEach(() => {
+    exec.calls.length = 0
+    exec.next = { error: null, stdout: json([video(), audio()]), stderr: "" }
+  })
+  it("asks for the worker's own entries, confined to file and http(s), and parses them the worker's way", async () => {
+    const probe = await probeVideoOverlayBaseSource("/w/input.mp4")
+    expect(exec.calls).toHaveLength(1)
+    const args = exec.calls[0]!
+    expect(args[args.indexOf("-show_entries") + 1]).toBe(
+      "stream=index,codec_type,codec_name,width,height,sample_aspect_ratio,r_frame_rate,avg_frame_rate,duration,start_time,nb_frames" +
+        ":stream_side_data=rotation:stream_disposition=attached_pic:stream_tags=rotate:format=duration",
+    )
+    expect(args[args.indexOf("-protocol_whitelist") + 1]).toBe("file,http,https,tcp,tls")
+    expect(args).not.toContain("-select_streams")
+    expect(probe.streamDurationSec).toBe(24.8)
+  })
+  it("skips an embedded cover picture, as the worker does: the length is the real video stream's", async () => {
+    const cover = video({ index: 0, codec_name: "mjpeg", width: 600, height: 600, duration: "0.040000", disposition: { attached_pic: 1 } })
+    exec.next = { error: null, stdout: json([cover, video({ index: 1, duration: "9.500000" }), audio()]), stderr: "" }
+    expect((await probeVideoOverlayBaseSource("/w/input.mp4")).streamDurationSec).toBe(9.5)
+  })
+  it("refuses a private address before ffprobe runs", async () => {
+    await expect(probeVideoOverlayBaseSource("http://10.0.0.5/base.mp4")).rejects.toThrow(/blocked private\/reserved IP/)
+    expect(exec.calls).toHaveLength(0)
   })
 })

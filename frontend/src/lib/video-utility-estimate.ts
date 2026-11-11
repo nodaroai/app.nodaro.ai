@@ -14,12 +14,13 @@ import {
   estimateTrimVideoCredits,
   VIDEO_UTIL_PRICING,
   PITCH_TEMPO_PRICING,
+  videoOverlayVideoUnits,
   type CombineVideosEstimatorInput,
   type LoopVideoEstimatorInput,
   type TrimVideoEstimatorInput,
 } from "@nodaro/shared/credits"
 import { maskCompositeLeadHandle, maskCompositeUnits } from "@nodaro/shared/media"
-import { fanInClipCount, forwardedVideoLengthSec, maskCompositeLeadSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle } from "@nodaro/render-rules"
+import { fanInClipCount, forwardedVideoLengthSec, maskCompositeLeadSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo } from "@nodaro/render-rules"
 import { clampTopazVideoFps, isTopazVideoResolution, resolveTopazVideoTarget, type TopazVideoResolution, type TopazVideoSource } from "@nodaro/shared/models"
 import { withWiredSettings } from "@nodaro/shared/nodes"
 import { resolveGraphOrigin, topazVideoEstimateUnits } from "@nodaro/render-rules"
@@ -244,6 +245,71 @@ export function maskCompositePricingUnits(
   rerunIds: ReadonlySet<string> = new Set(),
 ): number {
   return maskCompositeUnits(maskCompositeQuotedSec(node, nodes, edges, rerunIds))
+}
+
+/**
+ * Whether a Video Overlay is QUOTED on its video row — the shared rule the
+ * server's run estimate reads (`videoOverlayQuotesVideo`): a stored video
+ * layer on a slot no wire replaces, a layer handle wired from a source that
+ * can carry a video, or a layer-plan wire. Otherwise its flat image row.
+ */
+export function videoOverlayQuotesVideoOf(
+  node: Pick<WorkflowNode, "id" | "type" | "data">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+): boolean {
+  return videoOverlayQuotesVideo({ id: node.id, type: node.type, data: node.data }, nodes, edges)
+}
+
+/**
+ * The base length, in seconds, a Video Overlay with a video layer is QUOTED
+ * at, or `null` when it is not known (the 60 s cap): its `video` wire's length
+ * as the graph gives it (`videoOverlayBaseSec`) — exactly the server's run
+ * estimate's reading. No fallback to a length the upstream node merely stores
+ * (an upload's earlier file): the server does not read one, and a quote below
+ * the run, or one that differs between paths, is what this rule rules out.
+ */
+export function videoOverlayQuotedSec(
+  node: Pick<WorkflowNode, "id" | "data">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number | null {
+  const inputs = edges.filter((e) => e.target === node.id)
+  const lengthOf = wireDurationReader(nodes, edges, rerunIds)
+  return videoOverlayBaseSec(inputs, inputs.map((e) => lengthOf(e.source))) ?? null
+}
+
+/**
+ * The base's length, in seconds, from the SAME wire reading the quote uses
+ * ({@link videoOverlayQuotedSec}), before the quote's cap — or `null` when it
+ * is not known. The panel warns a base past the cap from it (show-only: the
+ * server measures the real file and decides).
+ */
+export function videoOverlayWireBaseSec(
+  node: Pick<WorkflowNode, "id">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+): number | null {
+  const inputs = edges.filter((e) => e.target === node.id)
+  const lengthOf = wireDurationReader(nodes, edges, new Set())
+  return videoOverlayBaseWireSec(inputs, inputs.map((e) => lengthOf(e.source))) ?? null
+}
+
+/**
+ * Video Overlay's pricing units: 1 for an image-only node (its flat row); one
+ * per started 5 s of the base ({@link videoOverlayQuotedSec}) for a node with a
+ * video layer, or the 60 s cap's 12 when that length is not known yet — an
+ * upper bound, as the server's run estimate quotes it.
+ */
+export function videoOverlayPricingUnits(
+  node: WorkflowNode,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number {
+  if (!videoOverlayQuotesVideoOf(node, nodes, edges)) return 1
+  return videoOverlayVideoUnits(videoOverlayQuotedSec(node, nodes, edges, rerunIds))
 }
 
 /** Is a Video Upscale set to Topaz — the provider a node that names none runs on? */

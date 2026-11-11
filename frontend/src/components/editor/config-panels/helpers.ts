@@ -27,6 +27,7 @@ import {
   seedanceExtendCreditId,
   pitchTempoQuoteCreditId,
   videoGenerationCreditId,
+  videoOverlayCreditId,
 } from "@nodaro/shared/credits"
 import {
   buildLlmCreditIdentifier,
@@ -51,7 +52,7 @@ import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
-import { isTopazVideoUpscaleProvider, pitchTempoQuotedSec, videoMaskQuotedSec, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
+import { isTopazVideoUpscaleProvider, pitchTempoQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
@@ -703,6 +704,12 @@ export function getModelIdentifier(
   if (nodeType === "video-sfx") {
     return videoSfxQuoteCreditId(videoSfxQuotedSec(node, nodes ?? [], edges ?? [], reruns))
   }
+
+  // Video Overlay: the flat image row, or — for a node that can carry a video
+  // layer (the shared rule the server's run estimate reads) — the per-5-second
+  // video row, × the base's units (`getExactPricingUnits`). The route and the
+  // workflow run measure the base and reserve on the same row.
+  if (nodeType === "video-overlay") return videoOverlayCreditId(videoOverlayQuotesVideoOf(node, nodes ?? [], edges ?? []))
 
   // Pitch & Tempo: per started minute of its input (decided 2026-10-12) — the
   // `pitch-tempo:<N>m` id the route and the workflow run reserve from the

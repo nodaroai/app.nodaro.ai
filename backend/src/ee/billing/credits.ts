@@ -44,6 +44,8 @@ import {
   pitchTempoQuoteCreditId,
   videoGenerationCreditId,
   parseUnitQuoteCreditId,
+  VIDEO_OVERLAY_PRICING,
+  videoOverlayVideoUnits,
 } from "@nodaro/shared/credits"
 import {
   videoMaskCreditId,
@@ -98,7 +100,7 @@ import {
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
 import { ugcGraphVideos, ugcRunSetVideos, ugcVideoEstimate } from "./ugc-run-set.js"
 import { UgcListingUnpricedError, UgcPartUnpricedError } from "./ugc-listing-unpriced.js"
-import { EXTEND_VIDEO_DEFAULT_PROVIDER, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, type UseCaseViewerFlags } from "@nodaro/render-rules"
+import { EXTEND_VIDEO_DEFAULT_PROVIDER, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, type UseCaseViewerFlags } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -2295,9 +2297,12 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "speed-ramp:smooth": 50, // motion-compensated interpolation (minterpolate) — 5-20x slower than fast
   "loop-video": 10,
   "fade-video": 10,
-  // Video Overlay — timed image layers over a video in one local FFmpeg pass
-  // (no provider cost). Flat per run, whatever the layer count or length.
+  // Video Overlay — timed image and video layers over a video in one local
+  // FFmpeg pass (no provider cost). An image-only run: flat, whatever the layer
+  // count or length. A run with a video layer: ONE pricing unit = 5 s of the
+  // output (the base's length, `videoOverlayVideoUnits`), like Mask Composite.
   "video-overlay": 20,
+  "video-overlay:video": 10,
   // Still to Video — one still + one audio → MP4 via local ffmpeg (no
   // provider cost). Deliberately ZERO credits: the free bridge from a still
   // into the video pipeline. The 0-cost reservation path still creates a
@@ -5631,6 +5636,16 @@ function estimateNodeCredits(
     const credits = chargedCredits(prices, "mask-composite", maskCompositeUnits(maskCompositeLeadSecOf(node, edges, wireSec)))
     if (credits !== undefined) return credits
   }
+  // Video Overlay that can carry a video layer (`videoOverlayQuotesVideo`, the
+  // rule the editor quotes by): the `video-overlay:video` row × one unit per
+  // started 5 s of its base (its `video` wire's length when a run estimate knows
+  // it, else the 60 s cap — the run measures the base before it reserves).
+  // Marked up once as a whole, the way the route's creditGuard and the workflow
+  // run reserve it. An image-only node falls through to its flat row.
+  if (node.type === "video-overlay") {
+    const credits = videoOverlayVideoCredits(node, nodes, edges, prices, wireSec)
+    if (credits !== undefined) return credits
+  }
   // Dubbing: its language's per-minute row × the started minutes of the span
   // (the window, else the source's length where a run estimate knows it),
   // marked up once as a whole — what the dubbing route and the workflow run
@@ -5804,6 +5819,26 @@ function dubbingSourceSecOf(
   const wire = handle === undefined ? undefined : inputs.find((e) => e.targetHandle === handle)
   if (wire === undefined) return undefined
   return wireSec(wire.source) ?? mediaLengthSecOf(nodes.find((n) => n.id === wire.source)?.data)
+}
+
+/**
+ * A Video Overlay's run estimate on the video row, or undefined for a node the
+ * shared rule quotes as image-only (`videoOverlayQuotesVideo`): its flat row
+ * then prices it. Units from its base's wire (`videoOverlayBaseSec`), the cap
+ * when not known (`videoOverlayVideoUnits`).
+ */
+function videoOverlayVideoCredits(
+  node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  prices: ChargedPriceTable,
+  wireSec: WireSecOf,
+): number | undefined {
+  const self = { id: node.id ?? "", type: node.type, data: node.data }
+  if (!videoOverlayQuotesVideo(self, listingGateNodes(nodes), listingGateEdges(edges ?? []))) return undefined
+  const inputs = node.id === undefined ? [] : (edges ?? []).filter((e) => e.target === node.id)
+  const units = videoOverlayVideoUnits(videoOverlayBaseSec(inputs, inputs.map((e) => wireSec(e.source))))
+  return chargedCredits(prices, VIDEO_OVERLAY_PRICING.VIDEO_CREDIT_ID, units)
 }
 
 /**

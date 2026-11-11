@@ -450,20 +450,42 @@ export class MediaResource {
   }
 
   /**
-   * Place 1–20 timed image layers over a video (`POST /v1/video-overlay`) —
-   * rendered locally (FFmpeg) in one pass, no AI; the base audio is kept
-   * untouched. Each layer has an `imageUrl`, a `start` and an optional `end`
-   * in seconds (no `end` = to the end of the video) and a placement: a
-   * `preset` (`"card"`, `"corner-badge"` with a `corner`, `"full-frame"`) or
-   * an explicit box in {@link MediaResource.imageOverlay}'s percent vocabulary
-   * (`anchor`, `x`, `y`, `width`, `height`, `fit`) — an explicit box field
-   * overrides the preset, and a layer with neither is a corner badge
-   * (bottom-right, or the `corner` it names). `outputAspect` renders onto a
-   * 16:9 / 9:16 / 1:1 / 4:5 canvas
-   * (`baseFit` cover by default; `backgroundColor` pads `contain`). Poll
-   * `jobs.get(jobId)`: the output carries `videoUrl`, `thumbnailUrl`, `width`,
-   * `height`, `durationSec` and `warnings[]` (a layer clipped or skipped at the
-   * video's end, an animated image's first frame, re-encoded audio).
+   * Place 1–20 timed image or video layers over a video
+   * (`POST /v1/video-overlay`) — rendered locally (FFmpeg) in one pass, no AI.
+   * Each layer has exactly one source, `imageUrl` or `videoUrl` (at most 2
+   * video layers), a `start` and an optional `end` in seconds (no `end` = to
+   * the end of the video) and a placement: a `preset` (`"card"`,
+   * `"corner-badge"` with a `corner`, `"full-frame"`) or an explicit box in
+   * {@link MediaResource.imageOverlay}'s percent vocabulary (`anchor`, `x`,
+   * `y`, `width`, `height`, `fit`) — an explicit box field overrides the
+   * preset, and a layer with neither is a corner badge (bottom-right, or the
+   * `corner` it names). `animate` (a short fade in and out) defaults on for an
+   * image and off for a video.
+   *
+   * A video layer plays from its first frame at its `start`, stops at its
+   * `end` (or the base's end) and holds its last frame if it runs out first.
+   * It is silent unless it has `sound: { volume }` (0–1): its audio is then
+   * mixed with the base's during its window, under a limiter, as AAC. With no
+   * layer's sound on, the base audio is kept untouched.
+   *
+   * `outputAspect` renders onto a 16:9 / 9:16 / 1:1 / 4:5 canvas (`baseFit`
+   * cover by default; `backgroundColor` pads `contain`). `baseBox` places the
+   * base itself in a layer's box vocabulary (needs `outputAspect`; `anchor`
+   * and `width` are required, `x` and `y` default to 0 and `fit` to
+   * contain); the canvas it leaves uncovered shows `backgroundColor`. `layout` writes the boxes:
+   * `"video-bottom"` / `"video-top"` (the base whole, full width, against that
+   * edge), `"stack-whole"` / `"stack-filled"` (the base above the first video
+   * layer, both whole or each cropped to half the frame; no `baseBox`) and
+   * `"pip"` (the first video layer 30 % wide in its `corner`, default
+   * bottom-right). Every layout but `"pip"` needs `outputAspect`; the stacks
+   * and `"pip"` need a video layer.
+   *
+   * A run with a video layer takes a base of up to 60 s and is priced per
+   * started 5 s of it; an image-only run is one flat price. Poll
+   * `jobs.get(jobId)`: the output carries `videoUrl`, `thumbnailUrl`,
+   * `width`, `height`, `durationSec` and `warnings[]` (a layer clipped or
+   * skipped at the video's end, an animated image's first frame, re-encoded
+   * audio, a video layer with sound on but no audio track).
    */
   videoOverlay(input: VideoOverlayRequest): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/video-overlay", { body: input })

@@ -4,7 +4,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes, speakerFramesEstimateBlocks } from "@/lib/apply-edl-estimate";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
 import { EACH_WIRE_FAN_OUT as SHARED_EACH_WIRE_FAN_OUT, nodeFanOut, PRODUCER_FAN_OUT as SHARED_PRODUCER_FAN_OUT, renderEstimateCreditId, type ProducerFanOut } from "@nodaro/render-rules";
-import { dubbingQuotedMinutesOf, maskCompositePricingUnits, videoUpscalePricingUnits, videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
+import { dubbingQuotedMinutesOf, maskCompositePricingUnits, videoOverlayPricingUnits, videoUpscalePricingUnits, videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
 import { extendVideoPricingUnits } from "@/lib/extend-video-estimate";
 import { videoRetakePricingUnits } from "@/lib/video-retake-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
@@ -150,6 +150,8 @@ export const NODE_CREDIT_COSTS: Record<string, number> = composeRecord("NODE_CRE
   "image-collage": 20,
   "image-overlay": 10,
   "video-overlay": 20,
+  // A run with a video layer: one unit = 5 s of the output (the base's length).
+  "video-overlay:video": 10,
   "merge-video-audio": 20,
   "trim-audio": 10,
   "split-media": 20,
@@ -983,6 +985,9 @@ const PRICING_UNIT_ESTIMATORS: Readonly<
   "combine-videos": videoUtilityPricingUnits,
   "assemble-narrated-video": videoUtilityPricingUnits,
   "mask-composite": maskCompositePricingUnits,
+  // Video Overlay: 1 for an image-only node (its flat row); with a video layer,
+  // the started 5 s of its base — the cap's 12 while the base is not known.
+  "video-overlay": videoOverlayPricingUnits,
   "extend-video": extendVideoPricingUnits,
   "video-retake": videoRetakePricingUnits,
   "text-to-speech": speechPricingUnits,

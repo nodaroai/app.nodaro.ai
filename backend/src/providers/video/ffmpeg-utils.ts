@@ -911,6 +911,8 @@ export interface VideoOverlayBaseProbe {
   readonly frameCount?: number
   /** codec_name of the FIRST audio stream; null when the base is silent. */
   readonly audioCodec: string | null
+  /** start_time of that first audio stream, when it states one. With `startTimeSec`: the file's picture/sound offset, which a Video Overlay video layer keeps. */
+  readonly audioStartTimeSec?: number
 }
 
 /**
@@ -965,6 +967,8 @@ export function parseVideoOverlayProbe(json: string): VideoOverlayBaseProbe {
   const sar = parseSampleAspect(video.sample_aspect_ratio)
   const start = Number(video.start_time)
   const frames = Number(video.nb_frames)
+  // `Number(undefined)` / `Number("N/A")` are NaN: no stated start, no field.
+  const audioStart = audio ? Number(audio.start_time) : Number.NaN
   return {
     width: swap ? storedH : storedW,
     height: swap ? storedW : storedH,
@@ -977,7 +981,29 @@ export function parseVideoOverlayProbe(json: string): VideoOverlayBaseProbe {
     startTimeSec: Number.isFinite(start) ? start : 0,
     ...(Number.isInteger(frames) && frames > 0 ? { frameCount: frames } : {}),
     audioCodec: audio && typeof audio.codec_name === "string" ? audio.codec_name : null,
+    ...(Number.isFinite(audioStart) ? { audioStartTimeSec: audioStart } : {}),
   }
+}
+
+/**
+ * The same probe on the base's LINK, before anything is downloaded — what the
+ * route and the workflow run price a run with a video layer by
+ * (lib/video-overlay-length.ts), so they measure the very stream the worker's
+ * {@link probeVideoOverlayBase} will (cover pictures skipped, the video
+ * stream's length). Guarded like `probeVideoSource`: no private address, and
+ * ffprobe confined to file and http(s). Any failure throws; the caller refuses
+ * the run before anything is reserved.
+ */
+export async function probeVideoOverlayBaseSource(srcUrlOrPath: string): Promise<VideoOverlayBaseProbe> {
+  await assertSafeProbeSource(srcUrlOrPath)
+  const out = await runFfprobe([
+    "-v", "error",
+    "-protocol_whitelist", "file,http,https,tcp,tls",
+    "-show_entries", VIDEO_OVERLAY_PROBE_ENTRIES,
+    "-of", "json",
+    srcUrlOrPath,
+  ])
+  return parseVideoOverlayProbe(out)
 }
 
 /**

@@ -81,3 +81,11 @@ export {
   pitchTempoBaseCredits,
   semitonesToPitchRatio,
 } from "./pitch-tempo.js"
+
+export {
+  VIDEO_OVERLAY_PRICING,
+  VIDEO_OVERLAY_REMEASURE_SLACK_SEC,
+  videoOverlayCreditId,
+  videoOverlayVideoUnits,
+  videoOverlayBaseTooLong,
+} from "./video-overlay.js"
