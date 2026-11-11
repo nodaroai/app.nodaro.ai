@@ -236,6 +236,7 @@
         "backend/src/ee/billing/load-rate.ts",
         "backend/src/ee/billing/managed-job-settlement.ts",
         "backend/src/ee/billing/metered-llm-id.ts",
+        "backend/src/ee/billing/minimax-h3-image-pricing.ts",
         "backend/src/ee/billing/model-availability.ts",
         "backend/src/ee/billing/org-customer.ts",
         "backend/src/ee/billing/org-entitlements.ts",

@@ -7,6 +7,7 @@ import {
   IMAGE_OUTPUT_FORMAT_OPTIONS,
   getSourcePhotoAspectRatios,
   IMAGE_RESOLUTION_OPTIONS,
+  declaredDefaultResolution,
   withoutDeniedModels,
   writesGif,
 } from "@/components/editor/config-panels/model-options"
@@ -68,7 +69,12 @@ export function useGenerateImageStripModel(nodeId: string, data: GenerateImageDa
   const aspectOptions = useMemo(() => (gif ? [] : getSourcePhotoAspectRatios(currentProvider)), [currentProvider, gif])
   const resolutionOptions = gif ? undefined : IMAGE_RESOLUTION_OPTIONS[currentProvider]
   const currentAspect = nodeAspectRatio("generate-image", data.aspectRatio) ?? ""
-  const currentResolution = data.resolution ?? resolutionOptions?.[0]?.value ?? ""
+  // An unset size is the one the run renders: the model's declared default
+  // (MiniMax H3 Image: 2K), else its first listed size.
+  const currentResolution = data.resolution
+    ?? resolutionOptions?.find((o) => o.value === declaredDefaultResolution(currentProvider))?.value
+    ?? resolutionOptions?.[0]?.value
+    ?? ""
 
   // Short label for the pill — strips the parenthetical descriptor that
   // option labels often carry ("2K (High)" → "2K", "16:9 (Landscape)" →

@@ -643,6 +643,8 @@ const MODEL_DESCRIPTIONS_JA: Record<string, string> = {
   "Fast 1K edits, up to 10 reference images": "高速な 1K 編集、最大 10 枚のリファレンス画像",
   "Fast, low-cost Seedream at 1K or 2K": "高速・低コストの Seedream、1K または 2K",
   "Fast, low-cost Seedream edits, up to 10 input images": "高速・低コストの Seedream 編集、入力画像は最大 10 枚",
+  "Readable text in the picture, up to 4K, same price at 1K and 2K": "画像内の文字も読みやすく、最大 4K、1K と 2K は同じ価格",
+  "Up to 16 reference images in one edit, readable text, up to 4K": "1 回の編集でリファレンス画像を最大 16 枚、読みやすい文字、最大 4K",
   "Fast Gemini, agentic-tuned": "高速な Gemini、エージェント向けに調整",
   "Fast Gemini, sharper reasoning": "高速な Gemini、より鋭い推論",
   "Fast Imagen, lower latency": "高速な Imagen、低レイテンシー",

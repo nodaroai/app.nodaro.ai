@@ -2,7 +2,7 @@ import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from 
 import type { SourceNodeInfo } from "./types"
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
-import { defaultImageModelForNode, gptImage26EstimatedImages, imageFormatLeversOf, isGptImage26Tiered, maskedEditResolution, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
+import { defaultImageModelForNode, imageFormatLeversOf, isPricedPerInputImage, maskedEditResolution, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { countImageInputEdges, nodeIsMasked, wiredImageSize } from "@nodaro/shared/workflow"
 import {
   buildCreditModelIdentifier as sharedBuildCreditModelIdentifier,
@@ -744,7 +744,7 @@ export function getModelIdentifier(
 
   // A node naming no model whose default is priced per input image: as the server estimate.
   const nodeDefault = data.provider ? undefined : defaultImageModelForNode(nodeType, data.aspectRatio as string | undefined)
-  const provider = (data.provider as string | undefined) ?? (nodeDefault && isGptImage26Tiered(nodeDefault) ? nodeDefault : undefined)
+  const provider = (data.provider as string | undefined) ?? (nodeDefault && isPricedPerInputImage(nodeDefault) ? nodeDefault : undefined)
   if (!provider) return nodeType
 
   // Video to Video, Seedance EDIT lane: Seedance has no v2v endpoint — the node
@@ -780,7 +780,7 @@ export function getModelIdentifier(
   return buildCreditModelIdentifier(
     provider,
     data,
-    edges && isGptImage26Tiered(provider) ? countImageInputEdges(edges, node.id) : 0,
+    edges && isPricedPerInputImage(provider) ? countImageInputEdges(edges, node.id) : 0,
     // A masked edit on a model that follows its photo is priced at the size
     // nearest the photo, when the node it comes from records the photo's size.
     {
@@ -808,8 +808,9 @@ export function buildCreditModelIdentifier(
   // ref count from `data.referenceImageUrls` (panel-local mirror of the wired
   // refs) so the displayed credit number matches what the route will charge.
   const refs = data.referenceImageUrls as string[] | undefined
-  // GPT Image 2.6 counts every image the run will send.
-  const refCount = isGptImage26Tiered(provider) ? gptImage26EstimatedImages(provider, data, wiredImageRefs) : (refs?.length ?? 0)
+  // A model priced per input image (GPT Image 2.6, MiniMax H3 Image) counts
+  // every image the run will send.
+  const refCount = isPricedPerInputImage(provider) ? pricedEstimatedImages(provider, data, wiredImageRefs) : (refs?.length ?? 0)
   // Topaz bills on the upscale FACTOR. The legacy `targetResolution` still on
   // stored node data is mapped forward by resolveTopazUpscale — the same
   // authority the route, the estimator and the worker use — so the credit badge

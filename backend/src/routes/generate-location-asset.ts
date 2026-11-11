@@ -1,5 +1,5 @@
 import { IMAGE_QUALITY_VALUES } from "@nodaro/shared/models"
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
@@ -50,6 +50,25 @@ export function locationAssetGate(
   if (!row) return { ok: false, code: "location_not_found" }
   if (!row.source_image_url) return { ok: false, code: "main_image_required" }
   return { ok: true }
+}
+
+/**
+ * The images a Location Studio run sends its model, read off the raw request:
+ * its own `sourceImageUrl`, or, when it attaches to a location, that
+ * location's approved image. The gate above refuses an attaching run whose
+ * location has none, so an attaching run that goes ahead always sends one.
+ * This lets the credit CHECK, which runs before the location row is read,
+ * price what the DEBIT prices and the worker sends.
+ */
+export function locationAssetSentImages(body: unknown): number {
+  const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>
+  const named = (v: unknown) => typeof v === "string" && v.length > 0
+  return named(b.sourceImageUrl) || named(b.attachToLocationId) ? 1 : 0
+}
+
+/** The credit CHECK of POST /v1/generate-location-asset (the preHandler's identifier). */
+export function resolveLocationAssetCreditIdentifier(req: FastifyRequest): string {
+  return resolveEntityImageCreditIdentifier(req.body, locationAssetSentImages(req.body))
 }
 
 const generateLocationAssetBody = z.object({
@@ -191,7 +210,7 @@ function buildVariantPrompt(
 export async function generateLocationAssetRoutes(app: FastifyInstance) {
   // Quality/resolution-aware identifier via the shared resolver — the SAME
   // function the handler's DEBIT uses, so CHECK===DEBIT can't drift.
-  app.post("/v1/generate-location-asset", { preHandler: creditGuard((req) => resolveEntityImageCreditIdentifier(req.body), { runModel: providerRunModel(IMAGE_MODEL_ROLE_DEFAULTS.general) }) }, async (req, reply) => {
+  app.post("/v1/generate-location-asset", { preHandler: creditGuard(resolveLocationAssetCreditIdentifier, { runModel: providerRunModel(IMAGE_MODEL_ROLE_DEFAULTS.general) }) }, async (req, reply) => {
     const parsed = generateLocationAssetBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -255,9 +274,18 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
       anchorDescription = (locRow?.canonical_description as string | null) ?? null
     }
 
-    // Composite identifier (provider[:quality|:resolution|…]) — derived by
-    // the SAME resolver the preHandler ran on the raw body, so CHECK===DEBIT.
-    const entityParams = resolveEntityImageParams(parsed.data)
+    // Use the location's anchor image as the i2i source when the studio path
+    // runs, UNLESS the caller passed an explicit sourceImageUrl (their choice
+    // wins). Outside the studio path, behavior is unchanged.
+    const resolvedSourceImageUrl = sourceImageUrl ?? sourceImageUrlAnchor ?? undefined
+
+    // Composite identifier (provider[:quality|:resolution|…]) — derived by the
+    // SAME resolver the preHandler ran, given the image this job really sends:
+    // the location's anchor counts too (`locationAssetSentImages` lets the
+    // CHECK count it before the row is read). A model priced per input image
+    // (GPT Image 2.6, MiniMax H3 Image, Flux 2) is reserved for it, as on the
+    // object and creature asset routes.
+    const entityParams = resolveEntityImageParams(parsed.data, resolvedSourceImageUrl ? 1 : 0)
     const modelIdentifier = entityParams.identifier
     // Record and enqueue the levers this run was PRICED on. `aspectRatio` is
     // pinned to the caller's own value on purpose: the worker clamps it
@@ -269,10 +297,6 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
       generateLocationAssetBody,
     )
 
-    // Use the location's anchor image as the i2i source when the studio path
-    // runs, UNLESS the caller passed an explicit sourceImageUrl (their choice
-    // wins). Outside the studio path, behavior is unchanged.
-    const resolvedSourceImageUrl = sourceImageUrl ?? sourceImageUrlAnchor ?? undefined
     // The ROW is the identity truth when attaching: its real name beats the
     // caller's placeholder, and the canonical description (when the caller
     // sent none) keeps the variant on-model even before the image lands.

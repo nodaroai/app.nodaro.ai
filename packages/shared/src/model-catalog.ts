@@ -30,6 +30,7 @@
 
 import { isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION } from "./seedance-draft.js"
 import { isFlux2Model } from "./flux2-pricing.js"
+import { MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION, MINIMAX_H3_IMAGE_RESOLUTIONS } from "./minimax-h3-image.js"
 import { isAutoVideoDuration } from "./video-duration-auto.js"
 
 export type ModelKind = "image" | "video" | "audio"
@@ -610,6 +611,10 @@ const GPT_IMAGE_2_6_SVG_LEVELS = ["standard", "detailed", "max"] as const
 const IMAGEN4_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
 const IDEOGRAM_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
 const SEEDREAM_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"] as const
+// MiniMax H3 Image: ten fixed ratios at every size, and "auto" — listed last, so
+// a fallback that takes the first ratio never lands on it
+// (docs.kie.ai/market/minimax-h3/text-to-image + image-edit).
+const MINIMAX_H3_IMAGE_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "5:4", "4:5", "21:9", "auto"] as const
 const Z_IMAGE_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
 
 const VIDEO_RATIOS_HV = ["16:9", "9:16"] as const
@@ -1650,6 +1655,66 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: SEEDREAM_RATIOS,
     resolutions: ["1K", "2K"],
     pricing: [{ identifier: "seedream-5-flash-i2i", credits: 10, note: "1K / 2K flat" }],
+  },
+
+  // ── MiniMax H3 Image ──
+  // MiniMax's H3 image model (KIE `minimax-h3/text-to-image` and
+  // `minimax-h3/image-edit`). Not the H3 video model `minimax-h3`. A prompt
+  // runs the text-to-image id; with reference images the run moves to the
+  // edit id (`T2I_TO_I2I_VARIANT`). Priced by size, 1K and 2K the same, and an
+  // edit by its reference images (`minimaxH3ImageCreditId`). "auto" is listed
+  // LAST so a fallback that takes the first ratio lands on a real one: from a
+  // prompt KIE's rewriter picks the ratio, in an edit it follows the first
+  // reference image. KIE's prompt expansion is left on and its custom
+  // width/height is not offered.
+  // See: docs.kie.ai/market/minimax-h3/text-to-image.md
+  //      docs.kie.ai/market/minimax-h3/image-edit.md
+  "minimax-h3-image": {
+    id: "minimax-h3-image",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "MiniMax",
+    maker: "minimax",
+    label: "MiniMax H3 Image",
+    series: "MiniMax Image",
+    description: "MiniMax H3 Image: detailed pictures up to about 16 MP at 4K, with readable text inside the picture. Ten shapes plus auto, the same price at 1K and 2K (2K by default), PNG or JPEG.",
+    useCases: ["typography", "high-res", "general"],
+    features: ["reference-image"],
+    aspectRatios: MINIMAX_H3_IMAGE_RATIOS,
+    resolutions: MINIMAX_H3_IMAGE_RESOLUTIONS,
+    defaultResolution: MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION,
+    outputFormats: ["png", "jpeg"],
+    pricing: [
+      { identifier: "minimax-h3-image", credits: 5, note: "2K default" },
+      { identifier: "minimax-h3-image:1K", credits: 5, note: "1K" },
+      { identifier: "minimax-h3-image:2K", credits: 5, note: "2K" },
+      { identifier: "minimax-h3-image:4K", credits: 14, note: "4K" },
+    ],
+  },
+  "minimax-h3-image-i2i": {
+    id: "minimax-h3-image-i2i",
+    kind: "image",
+    modes: ["i2i"] as const,
+    family: "MiniMax",
+    maker: "minimax",
+    label: "MiniMax H3 Image (I2I)",
+    series: "MiniMax Image",
+    description: "MiniMax H3 Image edits: change or combine up to 16 reference images in one edit, with readable text, up to about 16 MP at 4K. Priced by size and by reference image; auto keeps the first image's shape.",
+    useCases: ["edit", "typography", "multi-reference"],
+    features: ["reference-image"],
+    aspectRatios: MINIMAX_H3_IMAGE_RATIOS,
+    resolutions: MINIMAX_H3_IMAGE_RESOLUTIONS,
+    defaultResolution: MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION,
+    outputFormats: ["png", "jpeg"],
+    pricing: [
+      { identifier: "minimax-h3-image-i2i", credits: 6, note: "2K, one reference image" },
+      { identifier: "minimax-h3-image-i2i:1K:1ref", credits: 6, note: "1K, one reference image (the least)" },
+      { identifier: "minimax-h3-image-i2i:2K:1ref", credits: 6, note: "2K, one reference image" },
+      { identifier: "minimax-h3-image-i2i:2K:4ref", credits: 10, note: "2K, four reference images" },
+      { identifier: "minimax-h3-image-i2i:4K:1ref", credits: 15, note: "4K, one reference image" },
+      { identifier: "minimax-h3-image-i2i:2K:16ref", credits: 25, note: "2K, sixteen reference images" },
+      { identifier: "minimax-h3-image-i2i:4K:16ref", credits: 34, note: "4K, sixteen reference images (the most)" },
+    ],
   },
 
   // ── Alibaba Qwen ──

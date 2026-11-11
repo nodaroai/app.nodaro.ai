@@ -30,6 +30,24 @@ export {
   isGptImage26Tiered,
 } from "../gpt-image-2-6.js"
 export type { GptImage26GifBand, GptImage26PricedFormat, GptImage26SvgLevel, ImageFormatLevers } from "../gpt-image-2-6.js"
+export {
+  MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION,
+  MINIMAX_H3_IMAGE_I2I,
+  MINIMAX_H3_IMAGE_MAX_INPUT_IMAGES,
+  MINIMAX_H3_IMAGE_RESOLUTIONS,
+  MINIMAX_H3_IMAGE_T2I,
+  isMinimaxH3Image,
+  isMinimaxH3ImageI2i,
+  minimaxH3ImageCreditId,
+} from "../minimax-h3-image.js"
+export type { MinimaxH3ImageModel, MinimaxH3ImageResolution } from "../minimax-h3-image.js"
+// The models priced by the input images a run sends, and how a run's images are counted.
+export {
+  isPricedPerInputImage,
+  isPricedPerInputImageEdit,
+  pricedEstimatedImages,
+  pricedSentImages,
+} from "../input-image-pricing.js"
 export type { Flux2Model } from "../flux2-pricing.js"
 // Model catalog (single source of truth for MCP `list_models` and the
 // frontend config-panel registries).

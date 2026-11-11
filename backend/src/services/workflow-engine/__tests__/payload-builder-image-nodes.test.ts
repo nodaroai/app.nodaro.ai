@@ -737,3 +737,44 @@ describe("GPT Image 2.6 in a workflow run", () => {
     expect(kept.modelIdentifier).toBe("gpt-image-2-6-flare:high:1K")
   })
 })
+
+describe("MiniMax H3 Image in a workflow run", () => {
+  const SRC = "https://media.nodaro.ai/src.png"
+  const REF = "https://media.nodaro.ai/ref.png"
+  const node = (type: string, data: Record<string, unknown>): SimpleNode => ({ id: "n1", type, data })
+
+  it("Generate Image is priced by its size, 2K when none is named", () => {
+    expect(buildPayload(node("generate-image", { prompt: "a", provider: "minimax-h3-image", aspectRatio: "16:9" }), "j", {}, "u").modelIdentifier)
+      .toBe("minimax-h3-image:2K")
+    expect(buildPayload(node("generate-image", { prompt: "a", provider: "minimax-h3-image", aspectRatio: "16:9", resolution: "4K" }), "j", {}, "u").modelIdentifier)
+      .toBe("minimax-h3-image:4K")
+  })
+
+  it("Generate Image with references and a base runs the edit, priced per image sent", () => {
+    const r = buildPayload(
+      node("generate-image", { prompt: "a", provider: "minimax-h3-image", aspectRatio: "16:9", resolution: "4K", referenceImageUrls: [REF], baseImageUrl: SRC }),
+      "j",
+      {},
+      "u",
+    )
+    expect(r.modelIdentifier).toBe("minimax-h3-image-i2i:4K:2ref")
+  })
+
+  it("Image to Image counts its source", () => {
+    const r = buildPayload(node("image-to-image", { prompt: "a", provider: "minimax-h3-image-i2i", resolution: "1K" }), "j", { imageUrl: SRC }, "u")
+    expect(r.modelIdentifier).toBe("minimax-h3-image-i2i:1K:1ref")
+  })
+
+  it("a face node with a source image is priced as an edit at the size it sends", () => {
+    expect(buildPayload(node("face", { name: "n", description: "d", provider: "minimax-h3-image", sourceImageUrl: SRC }), "j", {}, "u").modelIdentifier)
+      .toBe("minimax-h3-image-i2i:2K:1ref")
+    expect(buildPayload(node("face", { name: "n", description: "d", provider: "minimax-h3-image" }), "j", {}, "u").modelIdentifier)
+      .toBe("minimax-h3-image:2K")
+  })
+
+  it("a character node is priced on what its job sends, not on a size it never carries", () => {
+    const r = buildPayload(node("character", { name: "n", description: "d", provider: "minimax-h3-image", resolution: "4K" }), "j", {}, "u")
+    expect(r.payload.resolution).toBeUndefined()
+    expect(r.modelIdentifier).toBe("minimax-h3-image:2K")
+  })
+})

@@ -52,6 +52,8 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | ⭐ Z-Image | Tongyi-MAI | Everyday | 3<!-- credits: z-image --> | t2i | Cheapest model in catalog. Fast, stylized output. Limited aspect ratios. |
 | Flux 2 Klein (Open) | Black Forest Labs | Everyday | 4<!-- credits: flux-2-klein --> | t2i | Open Flux 2 9B from BFL — fast. Runs direct on Replicate. |
 | Recraft Remove BG | Recraft | Everyday | 4<!-- credits: recraft-remove-bg --> | remove-bg | Remove image background. Cheap utility. |
+| MiniMax H3 Image | MiniMax | Everyday | 6<!-- credits: minimax-h3-image --> | t2i | MiniMax H3 Image: detailed pictures up to about 16 MP at 4K, with readable text inside the picture. Ten shapes plus auto, the same price at 1K and 2K (2K by default), PNG or JPEG. |
+| MiniMax H3 Image (I2I) | MiniMax | Everyday | 7<!-- credits: minimax-h3-image-i2i --> | i2i | MiniMax H3 Image edits: change or combine up to 16 reference images in one edit, with readable text, up to about 16 MP at 4K. Priced by size and by reference image; auto keeps the first image's shape. |
 | Grok Imagine | xAI | Everyday | 11<!-- credits: grok --> | t2i, t2v | Expressive, high-contrast output. Supports both image and video. |
 | Grok Imagine (I2I) | xAI | Everyday | 11<!-- credits: grok-i2i --> | i2i | Image-to-image with Grok. |
 | Grok Imagine 2 | xAI | Everyday | 11<!-- credits: grok-2 --> | t2i | Grok Imagine Image 2.0 — expressive, high-contrast t2i. Generations chain into grok-2-segment (free named region masks) and grok-2-edit (region-targeted edits). |

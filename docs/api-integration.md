@@ -992,17 +992,19 @@ changed:
   the first one assembled from `connectedReferences`). Without a photo, `auto`
   on a model without a native one gives its first listed ratio, as before, and
   GPT Image 2.6 receives its own `auto`.
-- **No `aspectRatio` on a GPT Image 2, 2.5 or 2.6 edit model is `auto`.** On
-  `/v1/image-to-image`, a request to `gpt-image-2-6-flare-i2i` (the default),
-  `gpt-image-2-6-sunburst-i2i`, `gpt-image-2-6-economy-i2i`,
-  `gpt-image-2-5-flare-i2i`, `gpt-image-2-5-sunburst-i2i` or `gpt-image-2-i2i`
+- **No `aspectRatio` on a GPT Image 2, 2.5 or 2.6 edit model, or on MiniMax
+  H3 Image's, is `auto`.** On `/v1/image-to-image`, a request to
+  `gpt-image-2-6-flare-i2i` (the default), `gpt-image-2-6-sunburst-i2i`,
+  `gpt-image-2-6-economy-i2i`, `gpt-image-2-5-flare-i2i`,
+  `gpt-image-2-5-sunburst-i2i`, `gpt-image-2-i2i` or `minimax-h3-image-i2i`
   that names no ratio runs exactly as one that sends `"auto"`, instead of the
   model's 16:9 default: GPT Image 2 and 2.5 receive their own `auto`, which
-  keeps the photo's shape, and GPT Image 2.6 the ratio closest to the photo,
-  as above. The job records the ratio sent. It costs the same: these models
-  price by quality, size and the number of input images, not by ratio, and
-  render every size at `auto`. Every other model keeps its own default when no
-  ratio is named.
+  keeps the photo's shape, MiniMax H3 Image its own `auto`, which follows the
+  first image, and GPT Image 2.6 the ratio closest to the photo, as above. The
+  job records the ratio sent. It costs the same: these models price by
+  quality, size and the number of input images, not by ratio, and render every
+  size at `auto`. Every other model keeps its own default when no ratio is
+  named.
 - **`outputFormat`** (`png`, the default, `jpeg`, `webp`, `gif`, `svg`, on the
   models that list `outputFormats`) is corrected the same way, and so are the
   levers that follow it:

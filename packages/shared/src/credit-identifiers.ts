@@ -48,6 +48,7 @@ import {
   type GptImage26TieredModel,
   type ImageFormatLevers,
 } from "./gpt-image-2-6.js"
+import { isMinimaxH3Image, minimaxH3ImageCreditId } from "./minimax-h3-image.js"
 import { VIDEO_DURATION_AUTO } from "./video-duration-auto.js"
 import { uiResolutionFill } from "./video-ui-defaults.js"
 import { MODEL_CATALOG, autoAspectNeedsSourceImage, normalizeModelInput, normalizeVideoRequestParams, defaultResolutionFor, type ModelInputAdjustment, type SourceImageSize } from "./model-catalog.js"
@@ -157,6 +158,11 @@ export function buildCreditModelIdentifier(
   }
   if (isGptImage26Tiered(provider)) {
     return gptImage26CreditId(provider, quality, resolution, referenceImageCount, imageFormat)
+  }
+  // MiniMax H3 Image: by size, and on an edit by its reference images
+  // (`minimax-h3-image:2K`, `minimax-h3-image-i2i:4K:3ref`).
+  if (isMinimaxH3Image(provider)) {
+    return minimaxH3ImageCreditId(provider, resolution, referenceImageCount)
   }
   if (HIGH_QUALITY_PROVIDERS.has(provider) && quality === "high") {
     return `${provider}:high`

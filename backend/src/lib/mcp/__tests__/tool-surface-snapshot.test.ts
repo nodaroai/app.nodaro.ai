@@ -1483,8 +1483,14 @@ const I2I_MASK_MODELS_BYTES = 126
 // by this suite: 522_874 total − 522_636 = 238 B, all on modify_image.
 const MODIFY_IMAGE_MASK_BYTES = 238
 
+// RAISED 2026-11-11 by MiniMax H3 Image, and nothing else: `minimax-h3-image` joins
+// generate_image's derived model list, and its reference-image limit names the model beside
+// GPT Image 2.6 (16 images). `generate_image` is the one tool past the per-tool budget
+// (9_884 → 9_916 B). No tool was added, so the fixture does NOT move.
+const MINIMAX_H3_IMAGE_PER_TOOL_BYTES = 32
+
 export const TOOL_WIRE_BUDGET = {
-  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES,
+  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES,
   totalBytes:
     337_638 +
     IMAGE_OVERLAY_TOOL_BYTES +

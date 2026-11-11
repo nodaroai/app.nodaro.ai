@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { GPT_IMAGE_2_KIE_CREDITS, KIE_CREDIT_USD, KIE_IMAGE_MODELS } from "../models.js"
-import { kieImageCostUsd, kieTaskCreditsConsumed } from "../image-cost.js"
+import { GPT_IMAGE_2_KIE_CREDITS, KIE_CREDIT_USD, KIE_IMAGE_MODELS, MINIMAX_H3_IMAGE_KIE_HUNDREDTHS, MINIMAX_H3_IMAGE_REFERENCE_KIE_HUNDREDTHS } from "../models.js"
+import { expectedKieCreditsFor, kieImageCostUsd, kieTaskCreditsConsumed } from "../image-cost.js"
 
 const GPT_IMAGE_2_IDS = ["gpt-image-2", "gpt-image-2-i2i"]
 
@@ -66,5 +66,56 @@ describe("kieTaskCreditsConsumed", () => {
     expect(kieTaskCreditsConsumed(record({}))).toBeUndefined()
     expect(kieTaskCreditsConsumed(record({ creditsConsumed: 0 }))).toBeUndefined()
     expect(kieTaskCreditsConsumed(record({ creditsConsumed: "many" }))).toBeUndefined()
+  })
+})
+
+describe("kieImageCostUsd: MiniMax H3 Image", () => {
+  const t2i = KIE_IMAGE_MODELS["minimax-h3-image"]!
+  const i2i = KIE_IMAGE_MODELS["minimax-h3-image-i2i"]!
+
+  it("is KIE's figure per picture: 1.8 KIE credits at 1K or 2K, 5.5 at 4K, 0.5 more per reference image", () => {
+    expect(MINIMAX_H3_IMAGE_KIE_HUNDREDTHS).toEqual({ "1K": 180, "2K": 180, "4K": 550 })
+    expect(MINIMAX_H3_IMAGE_REFERENCE_KIE_HUNDREDTHS).toBe(50)
+  })
+
+  it("a prompt is priced by the size sent, KIE's 2K when none is", () => {
+    expect(kieImageCostUsd("minimax-h3-image", t2i, "1K")).toBeCloseTo(1.8 * KIE_CREDIT_USD, 10)
+    expect(kieImageCostUsd("minimax-h3-image", t2i, "4K")).toBeCloseTo(5.5 * KIE_CREDIT_USD, 10)
+    expect(kieImageCostUsd("minimax-h3-image", t2i, "4k")).toBeCloseTo(5.5 * KIE_CREDIT_USD, 10)
+    expect(kieImageCostUsd("minimax-h3-image", t2i, undefined)).toBeCloseTo(1.8 * KIE_CREDIT_USD, 10)
+  })
+
+  it("an edit adds every reference image sent", () => {
+    expect(kieImageCostUsd("minimax-h3-image-i2i", i2i, "2K", 1)).toBeCloseTo(2.3 * KIE_CREDIT_USD, 10)
+    expect(kieImageCostUsd("minimax-h3-image-i2i", i2i, "4K", 16)).toBeCloseTo(13.5 * KIE_CREDIT_USD, 10)
+  })
+
+  it("the entries state the 2K figure, an edit's with one reference", () => {
+    expect(t2i.credits).toBe(1.8)
+    expect(t2i.cost).toBeCloseTo(1.8 * KIE_CREDIT_USD, 10)
+    expect(i2i.credits).toBe(2.3)
+    expect(i2i.cost).toBeCloseTo(2.3 * KIE_CREDIT_USD, 10)
+  })
+})
+
+describe("expectedKieCreditsFor — the credit audit's expected figure", () => {
+  it("is every image entry's own figure at its own listed cost: nothing changes for a price that never varies", () => {
+    for (const [id, config] of Object.entries(KIE_IMAGE_MODELS)) {
+      // At the default size with one input image: the figure each entry states.
+      expect(expectedKieCreditsFor(config, kieImageCostUsd(id, config, undefined, 1)), id).toBe(
+        id === "gpt-image-2" || id === "gpt-image-2-i2i" ? GPT_IMAGE_2_KIE_CREDITS["1K"] : config.credits,
+      )
+    }
+  })
+
+  it("follows what was sent: GPT Image 2 by size, MiniMax H3 Image by size and references", () => {
+    const gpt2 = KIE_IMAGE_MODELS["gpt-image-2"]!
+    expect(expectedKieCreditsFor(gpt2, kieImageCostUsd("gpt-image-2", gpt2, "2K"))).toBe(10)
+    expect(expectedKieCreditsFor(gpt2, kieImageCostUsd("gpt-image-2", gpt2, "4K"))).toBe(16)
+    const edit = KIE_IMAGE_MODELS["minimax-h3-image-i2i"]!
+    expect(expectedKieCreditsFor(edit, kieImageCostUsd("minimax-h3-image-i2i", edit, "4K", 16))).toBe(13.5)
+    expect(expectedKieCreditsFor(edit, kieImageCostUsd("minimax-h3-image-i2i", edit, "2K", 3))).toBe(3.3)
+    const t2i = KIE_IMAGE_MODELS["minimax-h3-image"]!
+    expect(expectedKieCreditsFor(t2i, kieImageCostUsd("minimax-h3-image", t2i, "4K"))).toBe(5.5)
   })
 })

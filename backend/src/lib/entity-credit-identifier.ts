@@ -1,6 +1,6 @@
 import { buildCreditModelIdentifier, resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import { extractProvider } from "./request-helpers.js"
-import { IMAGE_MODEL_ROLE_DEFAULTS, getModel, isGptImage26Tiered, resolutionAtAspectRatio } from "@nodaro/shared/model-catalog"
+import { IMAGE_MODEL_ROLE_DEFAULTS, getModel, isPricedPerInputImage, resolutionAtAspectRatio } from "@nodaro/shared/model-catalog"
 
 /** The quality a Reference Board runs at: dropped when its model does not offer it. */
 export function boardQuality(provider: unknown, quality: unknown): string | undefined {
@@ -87,13 +87,14 @@ export function resolveEntityImageCreditIdentifier(body: unknown, refCountOverri
 
 /**
  * The credit id of an image route or node priced on the plain model (face,
- * object, creature, their asset routes, surround fill, a Scene). GPT Image 2.6
- * is priced by quality, size and input images, so what such a run sends sets its
- * id: these send no quality or size (medium, 1K) and `inputImages` pictures.
- * Every other model keeps its plain id.
+ * object, creature, their asset routes, surround fill, a Scene). A model priced
+ * per input image (GPT Image 2.6 Flare and Sunburst, MiniMax H3 Image) is
+ * priced on what such a run sends: no quality or size (the model's default —
+ * medium 1K on GPT Image 2.6, 2K on MiniMax H3 Image) and `inputImages`
+ * pictures. Every other model keeps its plain id.
  */
 export function plainEntityCreditIdentifier(provider: string, inputImages: number): string {
-  if (!isGptImage26Tiered(provider)) return provider
+  if (!isPricedPerInputImage(provider)) return provider
   return buildCreditModelIdentifier(provider, undefined, undefined, undefined, undefined, inputImages)
 }
 
@@ -108,13 +109,13 @@ export function plainEntityCheckIdentifier(body: unknown, defaultProvider: strin
 
 /**
  * The credit id of a workflow Character or Location node. The job it queues
- * carries no quality or size, so GPT Image 2.6 is priced on what it really
- * sends: medium, 1K and its source image. Every other model keeps the id built
- * from the node's own settings.
+ * carries no quality or size, so a model priced per input image is priced on
+ * what it really sends: the model's default size (and quality) and its source
+ * image. Every other model keeps the id built from the node's own settings.
  */
 export function workflowEntityCreditIdentifier(data: unknown): string {
   const provider = extractProvider(data, IMAGE_MODEL_ROLE_DEFAULTS.character)
-  return isGptImage26Tiered(provider)
+  return isPricedPerInputImage(provider)
     ? plainEntityCheckIdentifier(data, IMAGE_MODEL_ROLE_DEFAULTS.character)
     : resolveEntityImageCreditIdentifier(data)
 }

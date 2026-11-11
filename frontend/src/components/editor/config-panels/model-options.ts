@@ -543,12 +543,26 @@ export function imageResolutionOptionsAt(provider: string, aspectRatio: string |
 }
 
 /**
- * Default resolution for the Flux 2 family when no (or a stale) resolution is
- * set on the node. Flux 2 uses ascending MP options ("0.5 MP" … "4 MP"), so
+ * The size a model renders when none is set, where its catalog entry declares
+ * one because it is not the first listed (`defaultResolution`: MiniMax H3
+ * Image renders 2K, not 1K). What a panel, the quick strip and a published
+ * app show and write for an unset size. Undefined for every other model, which
+ * keeps showing its first listed size.
+ */
+export function declaredDefaultResolution(provider: string): string | undefined {
+  return getModel(provider)?.defaultResolution
+}
+
+/**
+ * Default resolution when no (or a stale) resolution is set on the node: the
+ * catalog's declared default first (`declaredDefaultResolution`), else the
+ * Flux 2 family's. Flux 2 uses ascending MP options ("0.5 MP" … "4 MP"), so
  * snapping to options[0] would wrongly land on 0.5 MP. Returns undefined for
- * all non-flux-2 providers (let the caller use the existing options[0] logic).
+ * every other provider (let the caller use the existing options[0] logic).
  */
 export function defaultResolutionFor(provider: string): string | undefined {
+  const declared = declaredDefaultResolution(provider)
+  if (declared) return declared
   if (!isFlux2Model(provider)) return undefined
   return provider === "flux-2-klein" ? "1 MP" : "2 MP"
 }

@@ -15,7 +15,7 @@ import sharp from "sharp"
 import { KieError, createSanitizedError, runKieTask, type KieResultJson } from "./client.js"
 import { runFluxKontextTask } from "./kontext-client.js"
 import { KIE_IMAGE_MODELS, kieSeedForWire, type KieModelConfig, KIE_CREDIT_USD, GPT_IMAGE_2_6_SVG_AUTHOR_MODELS } from "./models.js"
-import { kieImageCostUsd, kieTaskCreditsConsumed } from "./image-cost.js"
+import { expectedKieCreditsFor, kieImageCostUsd, kieTaskCreditsConsumed } from "./image-cost.js"
 import { IMAGE_GIF_FRAME_SIZE, isGptImage26AutoRun } from "@nodaro/shared/model-catalog"
 import { ensureImageForProvider } from "./video.js"
 import { TASK_CHAINED_EDIT_PROVIDERS, getMaxImagePromptChars } from "@nodaro/shared/models"
@@ -83,12 +83,13 @@ function withIdeogramEditHint(provider: string, err: unknown): unknown {
 // reference image(s) are present, `generateImage` swaps the t2i provider for its
 // i2i sibling below so the anchor is actually honored.
 //
-// TARGETED to GPT Image only — do NOT widen to a blanket "any t2i + refs → i2i"
+// TARGETED to GPT Image (and MiniMax H3 Image, whose text-to-image endpoint
+// takes no image at all) — do NOT widen to a blanket "any t2i + refs → i2i"
 // rule: models like nano-banana and seedream t2i legitimately accept reference
 // images via `image_input` as a STYLE reference, and remapping them would change
-// their behavior. Pricing parity holds (each pair costs identically at every
-// tier) and credit reservation already happened at the route on the ORIGINAL
-// provider id — this swap only affects the actual KIE call.
+// their behavior. Credit reservation already happened at the route; a model
+// priced per input image prices a text-to-image id sent images on its edit id
+// (`buildCreditModelIdentifier`), so the price follows this swap.
 const GPT_IMAGE_T2I_TO_I2I: Record<string, string> = {
   "gpt-image-2": "gpt-image-2-i2i",
   "gpt-image-2-5-flare": "gpt-image-2-5-flare-i2i",
@@ -97,6 +98,7 @@ const GPT_IMAGE_T2I_TO_I2I: Record<string, string> = {
   "gpt-image-2-6-sunburst": "gpt-image-2-6-sunburst-i2i",
   "gpt-image-2-6-economy": "gpt-image-2-6-economy-i2i",
   "gpt-image": "gpt-image-i2i",
+  "minimax-h3-image": "minimax-h3-image-i2i",
 }
 
 // Map ratio strings → named image_size values for models that require them
@@ -245,10 +247,11 @@ function keepDeclaredInputFields(modelConfig: KieModelConfig, input: Record<stri
   for (const key of Object.keys(input)) {
     if (!fields.includes(key)) delete input[key]
   }
-  const urls = input.input_urls
+  const imageKey = modelConfig.imageParam ?? "input_urls"
+  const urls = input[imageKey]
   if (modelConfig.maxInputImages !== undefined && Array.isArray(urls) && urls.length > modelConfig.maxInputImages) {
     console.warn(`[KIE.ai] ${modelConfig.model}: ${urls.length} input images, sending the first ${modelConfig.maxInputImages}`)
-    input.input_urls = urls.slice(0, modelConfig.maxInputImages)
+    input[imageKey] = urls.slice(0, modelConfig.maxInputImages)
   }
 }
 
@@ -331,8 +334,32 @@ async function applyMaskFormat(
   return modelConfig.maskEditRedrawsOutside ? source : undefined
 }
 
+/**
+ * The request's seed as this SKU takes it (`kieSeedForWire`): in the type its
+ * schema declares, or removed, with a warning, when it is outside the range
+ * the SKU declares, so KIE never refuses the task for it after the reservation.
+ * Mutates `input`.
+ */
+function applySeedForWire(modelConfig: KieModelConfig, input: Record<string, unknown>): void {
+  if (input.seed === undefined) return
+  const seed = kieSeedForWire(modelConfig, input.seed)
+  if (seed === undefined) {
+    console.warn(`[KIE.ai] ${modelConfig.model}: seed ${String(input.seed)} is outside ${modelConfig.seedRange?.min}-${modelConfig.seedRange?.max}, sending none`)
+    delete input.seed
+    return
+  }
+  input.seed = seed
+}
+
 function wireResolution(modelConfig: KieModelConfig, input: Record<string, unknown>): string | number | undefined {
   return input[modelConfig.resolutionParam ?? "resolution"] as string | number | undefined
+}
+
+/** How many input images the request sends, as sent: an array param's length, else one URL or none. */
+function wireImageCount(modelConfig: KieModelConfig, input: Record<string, unknown>): number {
+  const value = input[modelConfig.imageParam ?? "image"]
+  if (Array.isArray(value)) return value.length
+  return typeof value === "string" && value.length > 0 ? 1 : 0
 }
 
 export class KieImageProvider
@@ -568,10 +595,9 @@ export class KieImageProvider
 
     // The seed in the type this SKU's schema declares (models.ts `seedType`):
     // google/imagen4 and imagen4-ultra take a string and refuse the number the
-    // worker hands over. Read off the FINAL modelConfig, after the t2i → i2i swap.
-    if (input.seed !== undefined) {
-      input.seed = kieSeedForWire(modelConfig, input.seed)
-    }
+    // worker hands over. A seed outside the SKU's declared range (`seedRange`)
+    // is dropped. Read off the FINAL modelConfig, after the t2i → i2i swap.
+    applySeedForWire(modelConfig, input)
 
     // The output format's levers in this SKU's shape, read off the FINAL
     // modelConfig (after the t2i → i2i swap: an edit's GIF schema has no size).
@@ -586,7 +612,7 @@ export class KieImageProvider
     )
 
     const resolution = wireResolution(modelConfig, input)
-    const listedCost = kieImageCostUsd(provider, modelConfig, resolution)
+    const listedCost = kieImageCostUsd(provider, modelConfig, resolution, wireImageCount(modelConfig, input))
 
     // Egress money-metadata: OUR Nodaro key is `provider` (NOT modelConfig.model,
     // the KIE id two of our keys can collapse onto); the resolution/quality lever
@@ -639,10 +665,14 @@ export class KieImageProvider
       `[KIE.ai] Image completed: ${imageUrl}${extraUrls.length ? ` (+${extraUrls.length} variants)` : ""} (cost: $${cost.toFixed(4)})`
     )
 
-    // Log credit audit entry (fire-and-forget)
+    // Log credit audit entry (fire-and-forget). The expected figure is KIE's
+    // listed price for what this request sent (`kieImageCostUsd`: the size on
+    // GPT Image 2, the size and the references on MiniMax H3 Image), so a 4K or
+    // multi-reference run is not logged as a mismatch; a model whose listed
+    // price never varies keeps its entry's figure.
     logCreditAudit({
       modelKey: provider,
-      expectedKieCredits: modelConfig.credits,
+      expectedKieCredits: expectedKieCreditsFor(modelConfig, listedCost),
       modelConfig: { ...(extraParams ?? {}), provider },
       rawResponseSample: rawInfo,
       actualKieCredits: taskCredits ?? (extractCreditFields(rawInfo)?.credits as number | undefined),
@@ -846,15 +876,14 @@ export class KieImageProvider
       provider === "seedream-5-lite-i2i" ||
       provider === "seedream-5-pro-i2i" ||
       provider === "seedream-5-flash-i2i" ||
+      provider === "minimax-h3-image-i2i" ||
       provider === "grok-2-edit"
     )) {
       input.prompt = clampPromptForProvider(prompt, provider)
     }
 
-    // Same seed-type rule as generateImage (models.ts `seedType`).
-    if (input.seed !== undefined) {
-      input.seed = kieSeedForWire(modelConfig, input.seed)
-    }
+    // Same seed rules as generateImage (models.ts `seedType`, `seedRange`).
+    applySeedForWire(modelConfig, input)
 
     keepDeclaredInputFields(modelConfig, input)
 
@@ -864,7 +893,7 @@ export class KieImageProvider
     )
 
     const resolution = wireResolution(modelConfig, input)
-    const cost = kieImageCostUsd(provider, modelConfig, resolution)
+    const cost = kieImageCostUsd(provider, modelConfig, resolution, wireImageCount(modelConfig, input))
     const { resultJson, providerMs, taskId } = await runKieTask(
       modelConfig.model,
       input,

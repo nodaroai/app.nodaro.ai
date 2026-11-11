@@ -148,7 +148,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             .union([z.array(z.string()), z.string()])
             .optional()
             .describe(
-              "Reference images (URLs or Nodaro asset ids, up to 14; 16 on GPT Image 2.6) for identity / " +
+              "Reference images (URLs or Nodaro asset ids, up to 14; 16 on GPT Image 2.6 or MiniMax H3) for identity / " +
               "style / composition guidance — use whenever the output must match a " +
               "given person, character, or product. Accepts an array; a lone URL or " +
               "a JSON-stringified array is tolerated and coerced.",
@@ -695,7 +695,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           .union([z.array(z.string()), z.string()])
           .optional()
           .describe(
-            "Extra reference images (URLs or Nodaro asset ids, up to 13; 15 on GPT Image 2.6) for multi-ref " +
+            "Extra reference images (URLs or Nodaro asset ids, up to 13; 15 on GPT Image 2.6 or MiniMax H3) for multi-ref " +
             "models — asset ids are resolved server-side. Accepts an array; a lone URL " +
             "or a JSON-stringified array is coerced.",
           ),

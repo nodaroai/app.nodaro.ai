@@ -138,7 +138,8 @@ import { countImageInputEdges, countRefModalityEdges, nodeIsMasked, wiredImageSi
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
 import { gptImage26StaticCosts } from "./gpt-image-2-6-pricing.js"
-import { defaultImageModelForNode, gptImage26EstimatedImages, imageFormatLeversOf, isGptImage26Tiered, maskedEditResolution, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
+import { minimaxH3ImageStaticCosts } from "./minimax-h3-image-pricing.js"
+import { defaultImageModelForNode, imageFormatLeversOf, isPricedPerInputImage, maskedEditResolution, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
@@ -691,6 +692,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "seedream-5-pro": 18,           // (basic / 1K default)
   "seedream-5-pro:high": 60,      // high / 2K
   "seedream-5-flash": 10,         // 1K / 2K flat (KIE size lever, no composites)
+  // MiniMax H3 Image: by size (1K and 2K the same) and, on an edit, by
+  // reference image, both ids (see minimax-h3-image-pricing.ts).
+  ...minimaxH3ImageStaticCosts(),
   "flux-flex": 35,                // (1K default)
   "flux-flex:2K": 60,
   "z-image": 2,
@@ -6922,7 +6926,7 @@ export function getNodeModelIdentifier(
   // A node naming no model whose default is priced per input image: the node-type
   // row would quote below what the run reserves.
   const nodeDefault = data.provider ? undefined : defaultImageModelForNode(nodeType, data.aspectRatio as string | undefined)
-  const provider = (data.provider as string | undefined) ?? (nodeDefault && isGptImage26Tiered(nodeDefault) ? nodeDefault : undefined)
+  const provider = (data.provider as string | undefined) ?? (nodeDefault && isPricedPerInputImage(nodeDefault) ? nodeDefault : undefined)
   if (!provider) return nodeType
 
   // Extend-video: VEO quality costs more than fast
@@ -7037,7 +7041,7 @@ export function getNodeModelIdentifier(
     followedSize ?? (typeof data.resolution === "string" ? resolutionAtAspectRatio(provider, data.aspectRatio, data.resolution) : undefined),
     data.renderingSpeed as string | undefined,
     data.targetResolution as string | undefined,
-    isGptImage26Tiered(provider) ? gptImage26EstimatedImages(provider, data, graph.imageRefsWired ?? 0) : undefined,
+    isPricedPerInputImage(provider) ? pricedEstimatedImages(provider, data, graph.imageRefsWired ?? 0) : undefined,
     // A GIF's band of frames and an SVG's level, on a model they price (GPT Image 2.6).
     imageFormatLeversOf(data),
   )

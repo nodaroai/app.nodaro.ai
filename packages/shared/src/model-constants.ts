@@ -174,7 +174,9 @@ export const MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   //   grok, qwen-i2i, seedream-5-pro, seedream-5-pro-i2i
   //   (docs.kie.ai/market/seedream/5-pro-text-to-image + 5-pro-image-to-image),
   //   seedream-5-flash, seedream-5-flash-i2i (both "4–5000 characters";
-  //   docs.kie.ai/market/seedream/5-flash-text-to-image + 5-flash-image-to-image).
+  //   docs.kie.ai/market/seedream/5-flash-text-to-image + 5-flash-image-to-image),
+  //   minimax-h3-image, minimax-h3-image-i2i (both "1–5000 characters";
+  //   docs.kie.ai/market/minimax-h3/text-to-image + image-edit).
   // grok-i2i: doc states 390000 (78× its t2i sibling) — treated as a KIE schema
   //   typo and left at the 5000 default per the sanity-cap decision.
   // UNVERIFIED (no limit stated in schema) → 5000 default: flux-kontext(-max)
@@ -600,6 +602,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "seedream-5-lite",
   "seedream-5-pro",
   "seedream-5-flash",
+  "minimax-h3-image",
   "flux",
   "flux-flex",
   // Image editing / image-to-image (reference = source image)
@@ -624,6 +627,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "seedream-5-lite-i2i",
   "seedream-5-pro-i2i",
   "seedream-5-flash-i2i",
+  "minimax-h3-image-i2i",
   "grok-i2i",
   // Upscale / background ops (source acts as the reference)
   "recraft-remove-bg",
@@ -663,6 +667,8 @@ export const T2I_TO_I2I_VARIANT: Record<string, string> = {
   "seedream-5-lite": "seedream-5-lite-i2i",
   "seedream-5-pro": "seedream-5-pro-i2i",
   "seedream-5-flash": "seedream-5-flash-i2i",
+  // MiniMax H3 Image: its text-to-image endpoint takes no image at all.
+  "minimax-h3-image": "minimax-h3-image-i2i",
   "flux": "flux-pro-i2i",
   "flux-flex": "flux-i2i",
 }
@@ -703,6 +709,8 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "seedream-5-pro-i2i": 16,
   // Flash takes at most 10 `image_urls` (docs.kie.ai/market/seedream/5-flash-image-to-image) — not the family's 16.
   "seedream-5-flash-i2i": 10,
+  // 1 to 16 `image_urls` (docs.kie.ai/market/minimax-h3/image-edit).
+  "minimax-h3-image-i2i": 16,
   // Single-source i2i (one input image)
   "flux-kontext": 1,
   "flux-kontext-max": 1,
@@ -769,6 +777,7 @@ export const DEFAULT_REQUEST_IMAGE_LIMIT = 14
 const REQUEST_IMAGE_LIMITS: Record<string, number> = {
   "gpt-image-2-6-flare-i2i": 16,
   "gpt-image-2-6-sunburst-i2i": 16,
+  "minimax-h3-image-i2i": 16,
 }
 
 /** The largest per-model limit: the outer bound of the routes' array schemas. */
@@ -812,6 +821,9 @@ export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution" | 
   "ideogram-v3": "rendering-speed",
   "wan-2.7": "resolution",
   "wan-2.7-pro": "resolution",
+  // Also priced per reference image on an edit (`minimaxH3ImageCreditId`).
+  "minimax-h3-image": "resolution",
+  "minimax-h3-image-i2i": "resolution",
 }
 
 
@@ -873,6 +885,7 @@ export const IMAGE_GEN_PROVIDERS = [
   "seedream-5-lite",
   "seedream-5-pro",
   "seedream-5-flash",
+  "minimax-h3-image",
   "flux-flex",
   "flux-kontext",
   "flux-kontext-max",
@@ -911,6 +924,7 @@ export const IMAGE_I2I_PROVIDERS = [
   "seedream-5-lite-i2i",
   "seedream-5-pro-i2i",
   "seedream-5-flash-i2i",
+  "minimax-h3-image-i2i",
   "flux-kontext",
   "flux-kontext-max",
   // Replicate Open (uncensored) — multi-image Kontext via Replicate
@@ -1859,6 +1873,7 @@ export const IMAGE_MASK_MODE: Record<ImageGenProvider, ImageMaskMode> = {
   "seedream-5-lite": "prompt",
   "seedream-5-pro": "prompt",
   "seedream-5-flash": "prompt",
+  "minimax-h3-image": "prompt",
   "qwen": "prompt",
   "flux-kontext": "prompt",
   "flux-kontext-max": "prompt",
@@ -1890,6 +1905,7 @@ export const SEED_SUPPORT = new Set([
   "qwen", "qwen-i2i", "qwen-edit",
   "flux", "flux-flex", "flux-i2i", "flux-pro-i2i", "flux-kontext", "flux-kontext-max",
   "flux-2-klein", "kontext-multi",
+  "minimax-h3-image", "minimax-h3-image-i2i",
 ])
 
 /** Ideogram models that support rendering_speed selection (TURBO/BALANCED/QUALITY) */

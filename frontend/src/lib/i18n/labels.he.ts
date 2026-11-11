@@ -659,6 +659,8 @@ const MODEL_DESCRIPTIONS_HE: Record<string, string> = {
   "Fast 1K edits, up to 10 reference images": "עריכות 1K מהירות, עד 10 תמונות ייחוס",
   "Fast, low-cost Seedream at 1K or 2K": "Seedream מהיר וזול ב-1K או 2K",
   "Fast, low-cost Seedream edits, up to 10 input images": "עריכות Seedream מהירות וזולות, עד 10 תמונות קלט",
+  "Readable text in the picture, up to 4K, same price at 1K and 2K": "טקסט קריא בתוך התמונה, עד 4K, אותו מחיר ב-1K וב-2K",
+  "Up to 16 reference images in one edit, readable text, up to 4K": "עד 16 תמונות ייחוס בעריכה אחת, טקסט קריא, עד 4K",
   "Fast Gemini, agentic-tuned": "Gemini מהיר, מכוונן לעבודת סוכנים",
   "Fast Gemini, sharper reasoning": "Gemini מהיר, חשיבה חדה יותר",
   "Fast Imagen, lower latency": "Imagen מהיר, השהיה נמוכה יותר",

@@ -79,7 +79,7 @@ import {
 } from "@nodaro/shared/video"
 import {
   defaultImageModel,
-  gptImage26SentImages,
+  pricedSentImages,
   IMAGE_MODEL_ROLE_DEFAULTS,
   isSeedanceDraftCapable,
   SEEDANCE_DRAFT_FINALIZE_PROVIDER,
@@ -3303,8 +3303,8 @@ function buildPayloadOf(
         background: data.background,
         // The file written, and a GIF's or an SVG's own levers (a GIF and an SVG price differently).
         ...imageFormatInputOf(data),
-        // On GPT Image 2.6 the base of an edit is one more image sent.
-        refCount: gptImage26SentImages(
+        // On a model priced per input image the base of an edit is one more image sent.
+        refCount: pricedSentImages(
           provider,
           result.referenceImageUrls ?? [],
           resolvedInputs.baseImageUrl || data.baseImageUrl,

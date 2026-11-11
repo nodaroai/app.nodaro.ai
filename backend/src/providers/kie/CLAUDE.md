@@ -72,6 +72,8 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `seedream-5-pro-i2i` | `seedream/5-pro-image-to-image` | [seedream 5 pro i2i](https://docs.kie.ai/market/seedream/5-pro-image-to-image.md) |
 | `seedream-5-flash` | `seedream/5-flash-text-to-image` | [seedream 5 flash t2i](https://docs.kie.ai/market/seedream/5-flash-text-to-image.md) |
 | `seedream-5-flash-i2i` | `seedream/5-flash-image-to-image` | [seedream 5 flash i2i](https://docs.kie.ai/market/seedream/5-flash-image-to-image.md) |
+| `minimax-h3-image` | `minimax-h3/text-to-image` (NOT the H3 video model `minimax-h3`) | [minimax-h3 t2i](https://docs.kie.ai/market/minimax-h3/text-to-image.md) |
+| `minimax-h3-image-i2i` | `minimax-h3/image-edit` | [minimax-h3 image edit](https://docs.kie.ai/market/minimax-h3/image-edit.md) |
 | `z-image` | `z-image` | [z-image](https://docs.kie.ai/market/z-image/z-image.md) |
 | ~~`topaz-image-upscale`~~ | ~~`topaz/image-upscale`~~ | **RETIRED 2026-10-25** — runs on Replicate (`providers/replicate/topaz.ts`); config kept for the credit audit, `KIE_RETIRED_MODEL_KEYS` keeps it out of routing |
 | `recraft-remove-bg` | `recraft/remove-background` | [recraft bg remove](https://docs.kie.ai/market/recraft/remove-background.md) |
@@ -480,7 +482,7 @@ Different models use different param names for input images — getting this wro
 | Pattern | Models | Param |
 |---------|--------|-------|
 | Single URL string | minimax, kling-turbo, kling-avatar, topaz, ideogram-edit, ideogram-remix, qwen-i2i, qwen-edit, topaz-image-upscale | `image_url` |
-| Array of URLs | kling, grok, sora2-pro, flux, gpt-image, nano-banana-edit, seedream-edit, nano-banana-2-lite (up to 10, NOT the family's `image_input`), seedream-5-flash-i2i (up to 10, not the family's 16) | `image_urls` or `input_urls` |
+| Array of URLs | kling, grok, sora2-pro, flux, gpt-image, nano-banana-edit, seedream-edit, nano-banana-2-lite (up to 10, NOT the family's `image_input`), seedream-5-flash-i2i (up to 10, not the family's 16), minimax-h3-image-i2i (1 to 16) | `image_urls` or `input_urls` |
 | VEO array | veo3, veo3.1 | `imageUrls` (camelCase!) |
 | Video URL | wan v2v | `video_urls` (array) |
 | Video URL | topaz upscale | `video_url` (string) |
@@ -512,6 +514,7 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 |--------|-------|--------|
 | Nano Banana family | `output_format` | `"png"`, `"jpeg"` (hardcoded `"png"`) |
 | Qwen | `output_format` | `"png"`, `"jpeg"` |
+| MiniMax H3 Image (T2I + edit) | `output_format` | `"png"` (KIE's default: nothing is sent), `"jpeg"` (catalog `outputFormats`, `inputFieldsByFormat`) |
 | Other image models | Not supported | — |
 
 ### resolution Support
@@ -525,6 +528,7 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 | GPT Image 2 (T2I + I2I) | `resolution` | `"1K"`, `"2K"`, `"4K"` at every ratio it offers, `auto` and 1:1 included (checked 2026-11-10; older docs limited `auto` to 1K and 1:1 to 2K) |
 | Flux (all variants) | `resolution` | `"1K"`, `"2K"` |
 | Seedream 5 Flash (T2I + I2I) | **`size`** — our `resolution`, renamed on the wire by `resolutionParam: "size"` in `models.ts` (`image.ts` `applyResolutionParam`, both lanes) | `"1K"`, `"2K"` offered (schema also has `"1.5K"`, not offered); flat price at every size |
+| MiniMax H3 Image (T2I + edit) | `resolution` | `"1K"`, `"2K"` (default), `"4K"` at every ratio; 1K and 2K cost the same |
 | Other image models | Not supported | — |
 
 ### quality Support
@@ -643,6 +647,51 @@ Six SKUs on the standard `createTask` lane. Flare and Sunburst are billed by
 - `prompt` is documented up to 32,000 characters on Flare and Sunburst; the routes
   stop at `PROMPT_HARD_CEILING` (30,000). Economy documents 20,000.
 
+### MiniMax H3 Image wire notes (`minimax-h3-image` / `minimax-h3-image-i2i`)
+
+MiniMax's H3 image model, a different model from the H3 video model `minimax-h3`
+(the ids extend that string: never match either by prefix).
+
+- The text-to-image endpoint takes **no image**. With references the provider
+  moves the run to `minimax-h3/image-edit` (`GPT_IMAGE_T2I_TO_I2I` in
+  `image.ts`, and `T2I_TO_I2I_VARIANT` for the routes), and the price follows
+  the swap: `buildCreditModelIdentifier` prices a text-to-image id sent images
+  on the edit id, so the entity routes and pipeline pins, which do not swap,
+  are priced as the edit they run.
+- An edit takes 1 to 16 `image_urls` (each up to 20 MB and 64 MP); the prompt
+  names them `<Picture 1>`, `<Picture 2>`, … in array order. The platform's
+  image prompts write references as `Image N` for every model (there is no
+  per-model reference syntax for images, only for video), so nothing rewrites
+  them to `<Picture N>`.
+- `aspect_ratio`: auto, 1:1, 5:4, 4:3, 3:2, 16:9, 21:9, 4:5, 3:4, 2:3, 9:16, every
+  ratio at every size. KIE's `auto` lets its prompt rewriter pick the ratio from
+  a prompt and follows the first reference in an edit. The catalog lists `auto`
+  LAST, so a fallback that takes the first ratio lands on 1:1. The configs' 16:9
+  is sent only for a direct API request (`/v1/generate-image`) that names no
+  ratio. A Generate Image or Modify Image node saved with no ratio sends `auto`
+  (`nodeAspectRatio` in the payload builder and the editor, the platform's rule
+  for every model with its own `auto`), so a prompt-only node lets KIE's
+  rewriter pick the shape; an edit through `/v1/image-to-image` that names none
+  runs at `auto` too (`UNSET_RATIO_IS_AUTO_EDIT_MODELS`). New nodes start at
+  16:9.
+- The body is an explicit list (`inputFields` / `inputFieldsByFormat`), though
+  the schemas are not `additionalProperties: false`: `expand_prompt` is never
+  sent (KIE's default, on, applies; with it off a seed reproduces and `auto`
+  becomes 1:1), nor `width` / `height` (a custom size, billed by its pixels, not
+  offered), nor a lever another model takes. PNG sends no `output_format`.
+- `seed` is an integer 0 to 2147483647 (`seedRange` on both configs): our API
+  and MCP take any whole number ≥ 0, so a seed outside it is dropped before the
+  request is sent (`kieSeedForWire`), never refused by KIE after the reservation.
+- No content-filter field in either schema, so no `safetyLevers`.
+- **Billing:** per picture by the size, 1.8 KIE credits at 1K or 2K and 5.5 at 4K,
+  plus 0.5 per reference image on an edit, the first included
+  (`MINIMAX_H3_IMAGE_KIE_HUNDREDTHS`, `models.ts`). The credit rows sum it in
+  hundredths and round once (`ee/billing/minimax-h3-image-pricing.ts`:
+  `minimax-h3-image:<size>`, `minimax-h3-image-i2i:<size>:<N>ref`), and
+  `kieImageCostUsd` records the size and the references sent as
+  `provider_cost`. The number of references counted is what the run sends,
+  a Generate Image base included (`pricedSentImages`).
+
 ### seed type
 
 KIE checks `seed` against the TYPE in each SKU's schema. Our API/MCP carry a number, and a SKU whose schema says `type: string` refuses it at createTask (`"seed must be a string"`), which fails the job. When adding an image SKU, read its doc's `seed` type; for a string, declare `seedType: "string"` on its `models.ts` entry (with doc URL + fetch date) and `image.ts` converts the seed through `kieSeedForWire` on both lanes.
@@ -650,10 +699,10 @@ KIE checks `seed` against the TYPE in each SKU's schema. Our API/MCP carry a num
 | Seed type | Image SKUs (docs fetched 2026-10-04) |
 |-----------|--------------------------------------|
 | string (`seedType: "string"`) | `imagen4`, `imagen4-ultra` |
-| integer (default — declare nothing) | `imagen4-fast`, ideogram, qwen, wan-2.7 |
+| integer (default — declare nothing) | `imagen4-fast`, ideogram, qwen, wan-2.7, `minimax-h3-image` and its edit (0 to 2147483647; fetched 2026-11-11) |
 | no `seed` in the schema | every other image SKU |
 
-Do not declare it per family — the Imagen 4 tiers disagree. Only the image lanes read `seedType`; `__tests__/models.test.ts` fails if a video/audio SKU declares it.
+Do not declare it per family — the Imagen 4 tiers disagree. A SKU whose schema bounds the seed declares `seedRange: { min, max }` (MiniMax H3 Image: 0 to 2147483647), and a seed outside it is dropped before the request goes out. Only the image lanes read `seedType` and `seedRange`; `__tests__/models.test.ts` fails if a video/audio SKU declares either.
 
 ---
 

@@ -45,6 +45,7 @@ import {
   getAspectRatiosForModel,
   getSourcePhotoAspectRatios,
   IMAGE_RESOLUTION_OPTIONS,
+  declaredDefaultResolution,
   IMAGE_QUALITY_OPTIONS,
   defaultQualityFor,
   writesGif,
@@ -962,6 +963,10 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
         return writesGif(provider, data.outputFormat) ? [] : (IMAGE_RESOLUTION_OPTIONS[provider] ?? [])
       },
       preserveOnHide: (data) => writesGif(generateImageProviderOf(data), data.outputFormat),
+      // A stale size snaps to the size the model renders unset where its
+      // catalog declares one (MiniMax H3 Image: 2K); else ("" is no option) to
+      // the first listed, as before.
+      snap: (_value, data) => declaredDefaultResolution(generateImageProviderOf(data)) ?? "",
     },
     {
       field: "repeatCount",

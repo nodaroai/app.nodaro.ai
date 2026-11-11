@@ -643,6 +643,8 @@ const MODEL_DESCRIPTIONS_KO: Record<string, string> = {
   "Fast 1K edits, up to 10 reference images": "빠른 1K 편집, 레퍼런스 이미지 최대 10장",
   "Fast, low-cost Seedream at 1K or 2K": "빠르고 저렴한 Seedream, 1K 또는 2K",
   "Fast, low-cost Seedream edits, up to 10 input images": "빠르고 저렴한 Seedream 편집, 입력 이미지 최대 10장",
+  "Readable text in the picture, up to 4K, same price at 1K and 2K": "이미지 속 텍스트도 선명하게, 최대 4K, 1K와 2K 같은 가격",
+  "Up to 16 reference images in one edit, readable text, up to 4K": "한 번의 편집에 레퍼런스 이미지 최대 16장, 선명한 텍스트, 최대 4K",
   "Fast Gemini, agentic-tuned": "빠른 Gemini, 에이전트 작업에 맞게 튜닝",
   "Fast Gemini, sharper reasoning": "빠른 Gemini, 더 정교한 추론",
   "Fast Imagen, lower latency": "빠른 Imagen, 더 낮은 지연 시간",

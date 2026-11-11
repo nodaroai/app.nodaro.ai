@@ -13,6 +13,7 @@ import { sunoCreditType, SUNO_SELECT_OPERATIONS, buildVideoCreditModelIdentifier
 import { SUNO_MODELS, applyDefaultVideoSelection, DEFAULT_TRANSCRIBE_NODE_PROVIDER } from "@nodaro/shared/models"
 import { mergeNodeInputOverrides } from "@nodaro/shared/apps"
 import type { SourceNodeInfo } from "../types"
+import { getAspectRatiosForModel } from "../model-options"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 function makeSource(overrides: Partial<SourceNodeInfo> = {}): SourceNodeInfo {
@@ -764,6 +765,22 @@ describe("getModelIdentifier", () => {
         expect(getModelIdentifier(node, [])).toBe(provider)
       }
     })
+  })
+})
+
+describe("MiniMax H3 Image's estimate", () => {
+  it("is priced by its size, and an edit by every image the run will send", () => {
+    expect(buildCreditModelIdentifier("minimax-h3-image", {})).toBe("minimax-h3-image:2K")
+    expect(buildCreditModelIdentifier("minimax-h3-image", { resolution: "4K" })).toBe("minimax-h3-image:4K")
+    expect(buildCreditModelIdentifier("minimax-h3-image", { resolution: "1K" }, 3)).toBe("minimax-h3-image-i2i:1K:3ref")
+    expect(buildCreditModelIdentifier("minimax-h3-image", { baseImageUrl: "https://a.png", referenceImageUrls: ["https://b.png"] })).toBe("minimax-h3-image-i2i:2K:2ref")
+    // An edit id counts the image it edits beside the wired ones.
+    expect(buildCreditModelIdentifier("minimax-h3-image-i2i", { resolution: "4K" }, 2)).toBe("minimax-h3-image-i2i:4K:3ref")
+  })
+
+  it("a stale ratio on its panel snaps to a real ratio, never to auto", () => {
+    expect(getAspectRatiosForModel("minimax-h3-image")[0]?.value).toBe("1:1")
+    expect(getAspectRatiosForModel("minimax-h3-image-i2i")[0]?.value).toBe("1:1")
   })
 })
 

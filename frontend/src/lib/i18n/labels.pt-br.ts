@@ -643,6 +643,8 @@ const MODEL_DESCRIPTIONS_PT_BR: Record<string, string> = {
   "Fast 1K edits, up to 10 reference images": "Edições 1K rápidas, até 10 imagens de referência",
   "Fast, low-cost Seedream at 1K or 2K": "Seedream rápido e de baixo custo em 1K ou 2K",
   "Fast, low-cost Seedream edits, up to 10 input images": "Edições Seedream rápidas e de baixo custo, até 10 imagens de entrada",
+  "Readable text in the picture, up to 4K, same price at 1K and 2K": "Texto legível na imagem, até 4K, mesmo preço em 1K e 2K",
+  "Up to 16 reference images in one edit, readable text, up to 4K": "Até 16 imagens de referência em uma edição, texto legível, até 4K",
   "Fast Gemini, agentic-tuned": "Gemini rápido, ajustado para agentes",
   "Fast Gemini, sharper reasoning": "Gemini rápido, raciocínio mais afiado",
   "Fast Imagen, lower latency": "Imagen rápido, menor latência",

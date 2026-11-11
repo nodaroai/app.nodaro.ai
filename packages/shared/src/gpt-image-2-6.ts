@@ -119,6 +119,9 @@ export function isGptImage26AutoRun(provider: unknown, quality: unknown): boolea
  * and, when it edits a base image, that image too (the worker puts it first,
  * unless it is already one of the references). Any other model is priced on its
  * references alone.
+ *
+ * @deprecated Use `pricedSentImages` (`input-image-pricing.ts`), which counts
+ * the base for every model priced per input image, MiniMax H3 Image included.
  */
 export function gptImage26SentImages(
   provider: string | undefined,
@@ -154,6 +157,9 @@ function namesMoodboard(direction: unknown): boolean {
  * per input image: every list on the node, its source or base image, what is
  * wired in, a moodboard its direction names, and an image-to-image model's own
  * source. An estimate may over-quote, never under.
+ *
+ * @deprecated Use `pricedEstimatedImages` (`input-image-pricing.ts`), which
+ * counts for every model priced per input image, MiniMax H3 Image included.
  */
 export function gptImage26EstimatedImages(
   model: string,
