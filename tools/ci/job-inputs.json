@@ -819,6 +819,7 @@
         "backend/src/providers/kie/luma-client.ts",
         "backend/src/providers/kie/models.ts",
         "backend/src/providers/kie/omni-character.ts",
+        "backend/src/providers/kie/reference-video-reencode.ts",
         "backend/src/providers/kie/reference-video-size.ts",
         "backend/src/providers/kie/runway-client.ts",
         "backend/src/providers/kie/seedance-cost.ts",

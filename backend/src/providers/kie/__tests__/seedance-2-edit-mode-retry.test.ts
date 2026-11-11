@@ -38,6 +38,12 @@ vi.mock("../client.js", () => ({
 
 vi.mock("../kling3-client.js", () => ({ kling3Generate: mocks.mockKling3Generate }))
 
+// The reference-video re-encode is tested on its own
+// (reference-video-reencode.test.ts); here every clip passes through as sent.
+vi.mock("../reference-video-reencode.js", () => ({
+  reencodeReferenceVideos: async (urls: string[]) => urls,
+}))
+
 vi.mock("../../../lib/storage.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/storage.js")>()),
   uploadBufferToR2: mocks.mockUploadBufferToR2,

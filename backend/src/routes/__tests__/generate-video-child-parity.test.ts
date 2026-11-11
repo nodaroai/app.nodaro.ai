@@ -69,6 +69,12 @@ vi.mock("@/providers/kie/reference-video-size.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/providers/kie/reference-video-size.js")>()),
   ensureVideoFitsSize: vi.fn(async (u: string) => u),
 }))
+// Seedance's reference-video re-encode (its own tests cover it) passes every
+// clip through, so both lanes are compared on the clips they were sent.
+vi.mock("@/providers/kie/reference-video-reencode.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/providers/kie/reference-video-reencode.js")>()),
+  reencodeReferenceVideos: vi.fn(async (urls: string[]) => urls),
+}))
 // Reference images are downloaded and inspected: an already-fine 1024² JPEG.
 vi.mock("@/lib/safe-fetch.js", () => ({ safeFetch: mocks.safeFetch }))
 // The mocked download is not a real file, so the metadata walker would rightly

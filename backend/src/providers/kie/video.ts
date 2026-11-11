@@ -59,6 +59,7 @@ import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir } from "../video/ffmpeg-utils.js"
 import { uploadJobScratchBuffer } from "../../lib/job-scratch.js"
 import { ensureVideoFitsSize, KLING_4_REF_VIDEO_LIMIT } from "./reference-video-size.js"
+import { reencodeReferenceVideos } from "./reference-video-reencode.js"
 import { fetchOwnMedia } from "../../lib/fetch-own-media.js"
 import { withHeifDecodeFallback } from "../../utils/heif-decode.js"
 import { originalCdnImageUrl } from "../../lib/cdn-original-url.js"
@@ -1074,6 +1075,21 @@ async function normalizeReferenceImages(
     refs.map((u, i) => ensureImageForProvider(u, provider, { ...constraints, inputLabel: `reference image #${i + 1}` })),
   )
   return { ...options, referenceImageUrls: processed }
+}
+
+/**
+ * Swap a prepared Seedance 2 body's `reference_video_urls` for re-encoded
+ * copies (`reference-video-reencode.ts`: a clip Seedance produced, sent as
+ * it came, is returned near-unedited). Runs AFTER `applySeedance2Params`, so
+ * exactly the clips that go on the wire are encoded (none the resolver
+ * dropped past a cap), and BEFORE the task is created, so the edit-mode
+ * resubmit sends the same copies without a second encode. A body with no
+ * reference video is left as it is.
+ */
+async function reencodeSeedanceReferenceVideos(input: Record<string, unknown>, provider: string): Promise<void> {
+  const urls = input.reference_video_urls
+  if (!Array.isArray(urls) || urls.length === 0) return
+  input.reference_video_urls = await reencodeReferenceVideos(urls as string[], provider)
 }
 
 /**
@@ -2430,6 +2446,8 @@ export class KieVideoProvider
       // touched again.
       const seedance2Options = await normalizeReferenceImages(provider, options)
       applySeedance2Params(input, seedance2Options, provider)
+      // Reference videos go re-encoded, never as the file they came in.
+      await reencodeSeedanceReferenceVideos(input, provider)
     }
 
     if (isMinimaxH3Provider(provider)) {
@@ -2753,6 +2771,8 @@ export class KieVideoProvider
       // same rationale as the i2v path (applySeedance2Params is synchronous).
       const seedance2Options = await normalizeReferenceImages(provider, options)
       applySeedance2Params(input, seedance2Options, provider)
+      // Reference videos go re-encoded, never as the file they came in.
+      await reencodeSeedanceReferenceVideos(input, provider)
     }
 
     if (isMinimaxH3Provider(provider)) {
