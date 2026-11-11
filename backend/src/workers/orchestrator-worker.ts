@@ -535,7 +535,12 @@ export async function runOrchestratorJob(
       await processWorkflowExecution(job)
     } catch (err) {
       if (err instanceof DrainAbortError) {
-        await parkForDrain(job, token, "interrupted by worker drain", err)
+        // A house-model node whose availability the API could not answer yet
+        // (lib/house-models-served.ts) is handed back the drain's way, but is no drain.
+        const what = err.name === "HouseModelsServedUnknownError"
+          ? "handed back: its API has not said which house models it serves"
+          : "interrupted by worker drain"
+        await parkForDrain(job, token, what, err)
       }
       throw err
     }

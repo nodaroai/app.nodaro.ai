@@ -113,6 +113,7 @@ const WORDS: Readonly<Record<string, Lane<WordsKind>>> = {
   "lib/reconcile/bump-attempts.ts": lane("writes", "writes the redacted reason an exhausted reconcile gives up on"),
   "lib/reconcile/elevenlabs.ts": lane("writes", "writes the provider's failure a reconcile finds"),
   "lib/reconcile/fal.ts": lane("writes", "writes the provider's failure a reconcile finds"),
+  "lib/reconcile/house-model.ts": lane("writes", "writes a house model's neutral failure detail a reconcile finds (never the upstream's words)"),
   "lib/reconcile/kie.ts": lane("writes", "writes the provider's failure a reconcile finds"),
   "lib/reconcile/nodaro-cloud.ts": lane("writes", "writes the relayed job's failure a reconcile finds"),
   "lib/reconcile/replicate.ts": lane("writes", "writes the provider's failure a reconcile finds"),

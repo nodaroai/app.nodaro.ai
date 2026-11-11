@@ -15,6 +15,7 @@ import { DelayedError } from "bullmq"
 import type { Job } from "bullmq"
 import type { WorkflowExecutionJob } from "../../services/workflow-engine/types.js"
 import { DrainAbortError, beginWorkerDrain, _resetWorkerDrainForTests } from "../../lib/worker-drain.js"
+import { HouseModelsServedUnknownError } from "../../lib/house-models-served.js"
 
 // ---------------------------------------------------------------------------
 // Mocks — leaf I/O only (harness mirrors freeze-lottie-override.test.ts).
@@ -289,6 +290,19 @@ describe("orchestrator drain safety", () => {
 
     expect(failedWrites().length).toBeGreaterThan(0)
     expect(job.moveToDelayed).not.toHaveBeenCalled()
+  })
+
+  it("a house-model node whose availability is not known yet is parked the drain's way, logged as what it is", async () => {
+    mocks.setExecuteNodeImpl(async () => { throw new HouseModelsServedUnknownError() })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const job = makeJob()
+    await expect(runOrchestratorJob(job, "tok")).rejects.toBeInstanceOf(DelayedError)
+    expect(job.moveToDelayed).toHaveBeenCalledTimes(1)
+    expect(failedWrites()).toEqual([])
+    const lines = warn.mock.calls.map((c) => String(c[0])).join("\n")
+    expect(lines).toContain("handed back: its API has not said which house models it serves")
+    expect(lines).not.toContain("interrupted by worker drain")
+    warn.mockRestore()
   })
 
   it("parks the job with moveToDelayed + DelayedError rather than a plain rethrow", async () => {

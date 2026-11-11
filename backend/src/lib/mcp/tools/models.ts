@@ -10,7 +10,7 @@ import { CreditsService } from "../../../ee/billing/credits.js"
 import { deploymentPayerActive, deploymentPayerId } from "../../deployment-payer.js"
 import { IMAGE_GIF_FRAME_SIZE, MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByKindAndFamily, modelMakerOf, type ModelCatalogEntry, type ModelKind, type ModelMakerId, type ModelMode } from "@nodaro/shared/model-catalog"
 import { SPEECH_UNIT_CREDIT_SUFFIX } from "@nodaro/shared/credits"
-import { isModelDenied } from "../../surface-deny.js"
+import { isModelDenied, recommendationsServedHere } from "../../surface-deny.js"
 import { loadChargedPrices, type ChargedPrices } from "../../pricing/charged-prices.js"
 import { getPromptTips, getPromptDoctrine } from "@nodaro/prompts/doctrine"
 
@@ -250,7 +250,8 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
 
       // Trim recommendations to those whose target intent matches the kind
       // filter (otherwise audio recs leak into a "kind=image" call).
-      const allRecs = [...MODEL_RECOMMENDATIONS]
+      // A house model this install does not serve is recommended nowhere.
+      const allRecs = recommendationsServedHere(MODEL_RECOMMENDATIONS)
       const recs = args.kind
         ? allRecs.filter((r) =>
             r.modelIds.some((id) => MODEL_CATALOG[id]?.kind === args.kind),

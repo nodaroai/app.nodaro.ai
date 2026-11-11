@@ -41,6 +41,7 @@ import {
   ELEVENLABS_RECOVER_KINDS as ELEVENLABS_KINDS,
   FAL_RECOVER_KINDS as FAL_KINDS,
   NODARO_CLOUD_RECOVER_KINDS as NODARO_CLOUD_KINDS,
+  HOUSE_MODEL_RECOVER_KINDS as HOUSE_MODEL_KINDS,
 } from "../lib/reconcile/types.js"
 import { DrainAbortError } from "../lib/worker-drain.js"
 import { MAX_POLL_ATTEMPTS } from "../providers/kie/client.js"
@@ -114,6 +115,24 @@ export async function tryInlineReconcile(row: InlineReconcileRow): Promise<void>
         reconcile_attempts: row.reconcile_attempts,
         job_type: row.job_type,
       }, { claimant: "worker" })
+      return
+    }
+    if (HOUSE_MODEL_KINDS.has(kind)) {
+      const { reconcileHouseModelJob } = await import("../lib/reconcile/house-model.js")
+      console.log(
+        `[worker:inline-reconcile] Stall-retry recovery for job ${row.id} ` +
+        `(kind=${kind}, task=${row.provider_task_id}) — reading the house model's task inline`,
+      )
+      // Inside a live queue handler: a run the dead worker left still going is
+      // read to its end here, on the model's own cadence, as the provider path
+      // does — not read once and parked for the cron's staleness threshold.
+      await reconcileHouseModelJob({
+        id: row.id,
+        provider_task_id: row.provider_task_id,
+        reconcile_attempts: row.reconcile_attempts,
+        job_type: row.job_type,
+        input_data: row.input_data ?? null,
+      }, { claimant: "worker", pollToEnd: true })
       return
     }
     // Unknown async kind — leave to the cron's catch-all sync sweep.

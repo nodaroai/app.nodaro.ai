@@ -990,6 +990,21 @@ await check("discovery does not advertise nodes this edition cannot run", async 
   return `${types.size} nodes, none of the ${cloudOnly.size} cloud-only types, no creditCost`
 })
 
+await check("discovery offers no house model without the deployment's service", async () => {
+  // A house model (a catalog entry offered under the deployment's own label,
+  // `ownLabel`, docs/design/house-models.md) runs only where a private plugin
+  // serves it; a community install has none, so it must list none. Such a
+  // model names no maker, so "every listed model names its maker" holds
+  // whichever house models the catalog carries, without a list in this file.
+  const { status, json } = await api("/v1/models")
+  assert(status === 200, `GET /v1/models expected 200, got ${status}`)
+  const models = (json?.sections ?? []).flatMap((s) => (s?.families ?? []).flatMap((f) => f?.models ?? []))
+  assert(models.length > 0, "/v1/models listed no model")
+  const unmade = models.filter((m) => !m?.maker?.id).map((m) => m?.id)
+  assert(unmade.length === 0, `community lists a model with no maker (a house model it cannot serve?): ${unmade.join(", ")}`)
+  return `${models.length} models, each with its maker`
+})
+
 /**
  * Read the cloud-only set from the frontend module rather than hardcoding it —
  * a list copied into this file would drift the first time a node is gated, and

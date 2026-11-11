@@ -319,6 +319,7 @@ import { voicesRoutes } from "./routes/voices.js"
 import { voiceFavoriteRoutes } from "./routes/voice-favorites.js"
 import { voiceLibraryFacetRoutes } from "./routes/voice-library-facets.js"
 import { pluginNodeVoicesRoutes } from "./routes/plugin-node-voices.js"
+import { houseModelsServedRoutes } from "./routes/house-models-served.js"
 import { heygenCatalogRoutes } from "./routes/heygen-catalog.js"
 import { voiceCloneRoutes } from "./routes/voice-clones.js"
 import { voiceChangerRoutes } from "./routes/voice-changer.js"
@@ -953,6 +954,9 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   // under the voice lock (internal only; read per request — the plugins load
   // further down).
   await app.register(pluginNodeVoicesRoutes)
+  // The house models this deployment serves, for the standalone orchestrator
+  // (internal only; read per request — the plugins load further down).
+  await app.register(houseModelsServedRoutes)
   await app.register(heygenCatalogRoutes)
   await app.register(voiceCloneRoutes)
   await app.register(voiceChangerRoutes)

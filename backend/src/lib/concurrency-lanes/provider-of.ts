@@ -5,6 +5,8 @@
 //
 // A job:
 //   1. a local-lane job (ffmpeg, sharp, Remotion) → "local";
+//   1b. a job whose payload `provider` is a house model (an own-label catalog
+//      id, lib/house-models.ts) → "house-models", whatever the job;
 //   2. a handler that calls one provider client whatever its payload →
 //      HANDLER_PROVIDERS (the core handlers ∪ the node units whose worker
 //      names its provider, `provider:*`, through unit-descriptors.ts providerOf);
@@ -64,6 +66,7 @@ import {
 import { composeRecord, unitRecord } from "../unit-compose.js"
 import { providerOf, UNIT_NODE_DESCRIPTORS } from "../unit-descriptors.js"
 import { laneClassOf } from "./registry.js"
+import { HOUSE_MODELS_PROVIDER, isOwnLabelModel } from "../house-models-served.js"
 
 /**
  * Core handlers that call one provider client whatever the payload (each
@@ -239,10 +242,13 @@ export function primaryProviderOfJob(jobName: string, data: unknown): string | n
     return cls.kind === "leaf" && cls.lane === "local"
   })
   if (isLocal) return "local"
+  const d = data !== null && typeof data === "object" ? (data as Data) : {}
+  // A house model (an own-label catalog id, lib/house-models.ts) runs through
+  // the deployment's own service whatever the job: one neutral name, never an upstream's.
+  if (isOwnLabelModel(d.provider)) return HOUSE_MODELS_PROVIDER
   if (Object.hasOwn(HANDLER_PROVIDERS, jobName)) return HANDLER_PROVIDERS[jobName]!
   const routed = Object.hasOwn(ROUTED_JOBS, jobName) ? ROUTED_JOBS[jobName]! : undefined
   if (!routed) return null
-  const d = data !== null && typeof data === "object" ? (data as Data) : {}
   return routed(d)
 }
 

@@ -1,6 +1,8 @@
 import { getRegisteredPickerCatalogs, type PickerCatalog } from "@nodaro/prompts/picker-catalogs"
 import { SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts/prompt-builder"
 import { isModelFactoryDenied } from "../surface-deny.js"
+import { houseModelServed, isOwnLabelModel } from "../house-models-served.js"
+import { pluginServicesLoaded } from "../private-plugins/services-registry.js"
 import { getRegisteredPresetPacks, type PackPreset } from "./app-presets.js"
 
 /**
@@ -13,7 +15,13 @@ import { getRegisteredPresetPacks, type PackPreset } from "./app-presets.js"
  *  - MODELS: every id named in a field a run takes its model from must be one
  *    the surface profile offers (`isModelFactoryDenied`). The profile ALONE:
  *    the admin override and the admin's model switch change at run time, so
- *    judging by them would let a click in Admin stop the next restart.
+ *    judging by them would let a click in Admin stop the next restart. A house
+ *    model (an own-label catalog entry) must also be one this deployment
+ *    serves — known only once the private plugins have loaded, so before that
+ *    it is not judged here, and the plugin loader judges it right after the
+ *    load (`presetPackHouseModelProblems`, the overlay loader's
+ *    `judgeOverlayPresetPacksAfterPlugins`): an unserved one refuses the boot
+ *    exactly as a model the profile withholds does.
  *  - PICKER IDS: every id in a field that holds picker ids must be an option of
  *    the COMPOSED catalog that field reads, base catalogs plus every registered
  *    catalog pack — so a preset cannot bring back an option the deployment's
@@ -119,16 +127,40 @@ export function subjectKeyCatalog(key: string, catalogs: readonly PickerCatalog[
   return SUBJECT_GROUP_CATALOGS.find((id) => fieldOptions(catalogs, id, key) !== undefined)
 }
 
-function modelProblems(preset: PackPreset): string[] {
+function modelProblems(preset: PackPreset, houseModelsOnly = false): string[] {
   const out: string[] = []
   for (const field of MODEL_FIELDS) {
     for (const id of picks(preset.data[field])) {
-      if (isModelFactoryDenied(id)) {
+      const withheld = houseModelsOnly ? houseModelUnservedHere(id) : isModelFactoryDenied(id) || houseModelUnservedHere(id)
+      if (withheld) {
         out.push(`${preset.id}: data.${field} names model "${id}", which this deployment does not offer`)
       }
     }
   }
   return out
+}
+
+/**
+ * A house model this deployment does not serve — judged only once this
+ * process has loaded the private plugins (before that, no house model reads
+ * as served, and a serving deployment would refuse its own boot).
+ */
+function houseModelUnservedHere(id: string): boolean {
+  return isOwnLabelModel(id) && pluginServicesLoaded() && !houseModelServed(id)
+}
+
+/**
+ * The MODELS check for house models alone, run once the private plugins have
+ * loaded (the overlay's own check runs before them in the API): every house
+ * model a registered preset names must be one this deployment serves. Empty
+ * before the plugins have loaded.
+ */
+export function presetPackHouseModelProblems(): string[] {
+  const problems: string[] = []
+  for (const pack of getRegisteredPresetPacks()) {
+    for (const preset of pack.presets) problems.push(...modelProblems(preset, true))
+  }
+  return problems
 }
 
 function pickerProblems(nodeType: string, preset: PackPreset, catalogs: readonly PickerCatalog[]): string[] {

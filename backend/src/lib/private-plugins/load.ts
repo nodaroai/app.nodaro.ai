@@ -137,6 +137,7 @@ import { setPluginRecipes } from "./recipe-registry.js"
 export { getPluginSupports } from "./supports-registry.js"
 import { setPluginSupports } from "./supports-registry.js"
 import { setPluginNodeVoiceReaders } from "./node-voices-registry.js"
+import { runOverlayChecksAfterPlugins } from "../overlay/after-plugins.js"
 
 /**
  * Publish stand-in services without loading a plugin, for a process that only
@@ -252,6 +253,14 @@ function workerAppOf(opts: LoadPrivatePluginsOpts): BuildToolkitOptions["workerA
 export async function loadPrivatePlugins(
   opts: LoadPrivatePluginsOpts = {},
 ): Promise<LoadPrivatePluginsResult> {
+  const result = await loadPrivatePluginsOnce(opts)
+  // Every outcome: the overlay's preset packs are judged now on the house
+  // models they name, which read as unserved until this load (lib/overlay/load.ts).
+  await runOverlayChecksAfterPlugins()
+  return result
+}
+
+async function loadPrivatePluginsOnce(opts: LoadPrivatePluginsOpts): Promise<LoadPrivatePluginsResult> {
   if (!hasCredits()) {
     // No plugins in this edition: recorded, so the enforcement precondition
     // "every plugin job type declares its lane" reads as met, not unknown.

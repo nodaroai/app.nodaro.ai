@@ -26,6 +26,8 @@
  * it needs an overlay must not boot silently without it.
  */
 
+import { resetOverlayChecksAfterPluginsForTests, setOverlayCheckAfterPlugins } from "./after-plugins.js"
+
 const OVERLAY_PACKAGE_ENV = "NODARO_OVERLAY_PACKAGE"
 
 export const OVERLAY_CONTRACT_VERSION = 1
@@ -65,6 +67,8 @@ export interface LoadOverlayResult {
  * A failed load exits the process, so its result needs no retry path.
  */
 let overlayLoad: Promise<LoadOverlayResult> | undefined
+/** The exit the overlay was loaded with: the plugin loader's later check of its preset packs fails through it too. */
+let overlayExit: (code: number) => never = process.exit
 
 export function loadOverlay(opts: LoadOverlayOpts = {}): Promise<LoadOverlayResult> {
   const name = (opts.packageName ?? process.env[OVERLAY_PACKAGE_ENV] ?? "").trim()
@@ -76,12 +80,37 @@ export function loadOverlay(opts: LoadOverlayOpts = {}): Promise<LoadOverlayResu
 /** Test hook: forget the once-per-process load, so a test can load again. */
 export function resetOverlayLoadForTests(): void {
   overlayLoad = undefined
+  overlayExit = process.exit
+  resetOverlayChecksAfterPluginsForTests()
+}
+
+/**
+ * The overlay's preset packs judged on the house models they name, once this
+ * process has loaded the private plugins (registered when a load starts, and
+ * run by `loadPrivatePlugins` after every load: lib/overlay/after-plugins.ts). The overlay's own check runs before the plugins load in the API
+ * (`app.ts`), when no house model reads as served yet, so it leaves house
+ * models to this one. A pack naming a house model this deployment does not
+ * serve refuses the boot exactly as one naming any other model this
+ * deployment withholds does: one fatal message, exit 1. A no-op with no
+ * overlay, or before its load has settled.
+ */
+export async function judgeOverlayPresetPacksAfterPlugins(): Promise<void> {
+  if (!overlayLoad) return
+  const { loaded } = await overlayLoad
+  if (!loaded) return
+  const { presetPackHouseModelProblems } = await import("../presets/preset-pack-check.js")
+  const problems = presetPackHouseModelProblems()
+  if (problems.length > 0) {
+    fail(`overlay "${loaded}" registered preset packs this deployment cannot serve — ${problems.join("; ")}`, overlayExit)
+  }
 }
 
 async function loadOverlayOnce(name: string, opts: LoadOverlayOpts): Promise<LoadOverlayResult> {
 
   const importer = opts.importer ?? ((n: string) => import(n))
   const exit = opts.exit ?? process.exit
+  overlayExit = exit
+  setOverlayCheckAfterPlugins(judgeOverlayPresetPacksAfterPlugins)
 
   let raw: unknown
   try {

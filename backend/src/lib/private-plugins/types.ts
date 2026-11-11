@@ -5467,6 +5467,72 @@ export interface PluginServices {
    * The free signup grant's decision (see `PluginSignupGateService`).
    */
   signupGate?: PluginSignupGateService
+  /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   * House models: models a deployment offers under its own label. The plugin
+   * owns the upstream (its client, its key, the request, the result parsing and
+   * the rates); core owns the job (hold, queue, checkpoint, poll loop, reconcile,
+   * finalize, commit, refund) and treats the upstream as an opaque task
+   * (`lib/house-models.ts`, docs/design/house-models.md).
+   */
+  houseModels?: PluginHouseModelsService
+}
+
+// ============================================================================
+// House models — models a deployment offers under its own label
+// ============================================================================
+
+/**
+ * A house-model run the upstream refused or failed. `start` rejects with an
+ * Error carrying these as own properties; `poll`'s failed state carries them
+ * as fields. The flags are the ones a `PluginHandlerFn` error already carries
+ * (see that type's doc comment), with the same meanings.
+ */
+export interface PluginHouseModelFailure {
+  /** The upstream's own words. Admin-only: never shown to the person. */
+  message: string
+  deterministic?: boolean
+  requestRefused?: boolean
+  requestRefusedSubject?: "input_video"
+  inputImageRefused?: boolean
+  inputVideoRefused?: boolean
+  promptRefused?: boolean
+  contentPolicy?: boolean
+}
+
+export type PluginHouseModelPoll =
+  | { state: "running" }
+  | {
+      state: "done"
+      /** The result files, in order. Core re-hosts them. */
+      resultUrls: readonly string[]
+      width?: number
+      height?: number
+      /** What the upstream billed for the run, in USD, when the task reports it. Overrides `plan`'s figure. */
+      providerCostUsd?: number
+    }
+  | ({ state: "failed" } & PluginHouseModelFailure)
+
+export interface PluginHouseModelsService {
+  /** The house-model ids this deployment serves. */
+  ids(): readonly string[]
+  /**
+   * Pure, no I/O. The upstream cost of one run in USD, or null when `id` is
+   * not served or `args` describe no valid run (core refuses before any hold).
+   */
+  plan(id: string, args: Readonly<Record<string, unknown>>): { providerCostUsd: number } | null
+  /**
+   * Submits the run upstream. Resolves with an opaque reference; core stores
+   * it on the job before any other await. Rejects with an Error carrying
+   * `PluginHouseModelFailure` flags as own properties.
+   */
+  start(
+    id: string,
+    args: Readonly<Record<string, unknown>>,
+    ctx: { jobId: string },
+  ): Promise<{ taskRef: string }>
+  /** One status read of a started run. An upstream failure is RETURNED, never thrown; a throw means the read itself failed (core retries the read). */
+  poll(id: string, taskRef: string): Promise<PluginHouseModelPoll>
 }
 
 // ============================================================================

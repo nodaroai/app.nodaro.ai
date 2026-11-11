@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { listModels, groupByKindAndFamily, MODEL_RECOMMENDATIONS, MODEL_CATALOG, MODEL_MAKERS, type ModelKind, type ModelMakerId, type ModelMode } from "@nodaro/shared/model-catalog"
 import { projectModel } from "../lib/mcp/tools/models.js"
-import { isModelDenied } from "../lib/surface-deny.js"
+import { isModelDenied, recommendationsServedHere } from "../lib/surface-deny.js"
 import { loadChargedPrices } from "../lib/pricing/charged-prices.js"
 import { makerLogoUrls } from "../lib/maker-logos.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -59,7 +59,8 @@ export async function modelsRoutes(app: FastifyInstance) {
       families: families.map(({ family: fam, models }) => ({ family: fam, models: models.map((m) => projectModel(m, prices, { logos })) })),
     }))
 
-    const allRecs = [...MODEL_RECOMMENDATIONS]
+    // A house model this install does not serve is recommended nowhere.
+    const allRecs = recommendationsServedHere(MODEL_RECOMMENDATIONS)
     const recommendations = kind
       ? allRecs.filter((r) => r.modelIds.some((id) => MODEL_CATALOG[id]?.kind === kind))
       : allRecs
