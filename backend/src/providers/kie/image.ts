@@ -21,6 +21,7 @@ import { ensureImageForProvider } from "./video.js"
 import { TASK_CHAINED_EDIT_PROVIDERS, getMaxImagePromptChars } from "@nodaro/shared/models"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { uploadJobScratchBuffer } from "../../lib/job-scratch.js"
+import { hasTransparentPixels } from "../../lib/image-transparency.js"
 import { safeFetch } from "../../lib/safe-fetch.js"
 
 // Models that need output_format forced to "png" (legacy Nano Banana family).
@@ -152,6 +153,15 @@ export async function prepareMask(
   maskUrl: string,
   opts: { form: KieMaskForm },
 ): Promise<string> {
+  return (await fitMaskToSource(imageUrl, maskUrl, opts)).url
+}
+
+/** `prepareMask`, with the source image it downloaded to size the mask. */
+async function fitMaskToSource(
+  imageUrl: string,
+  maskUrl: string,
+  opts: { form: KieMaskForm },
+): Promise<{ url: string; source: Buffer }> {
   const [img, mask] = await Promise.all([
     downloadAndMeasure(imageUrl),
     downloadAndMeasure(maskUrl),
@@ -159,7 +169,7 @@ export async function prepareMask(
 
   const resize = img.width !== mask.width || img.height !== mask.height
   if (!resize && opts.form === "white-edits") {
-    return maskUrl
+    return { url: maskUrl, source: img.buffer }
   }
 
   if (resize) {
@@ -177,7 +187,7 @@ export async function prepareMask(
     : await (opts.form === "black-edits" ? pipeline.removeAlpha().greyscale().negate() : pipeline).png().toBuffer()
 
   // A provider input: the running job's scratch folder, emptied when the job ends.
-  return uploadJobScratchBuffer(prepared, "prepared-mask", "png", "image/png")
+  return { url: await uploadJobScratchBuffer(prepared, "prepared-mask", "png", "image/png"), source: img.buffer }
 }
 
 /**
@@ -314,6 +324,13 @@ function firstInputImage(modelConfig: KieModelConfig, input: Record<string, unkn
  * a mask that would not be sent. Returns that source when the model redraws
  * outside the mask (`maskEditRedrawsOutside`), for the handler to paste back.
  * A model without a `maskFormat` is left as it is.
+ *
+ * A masked edit of an opaque photo asks for an opaque picture
+ * (`background: "opaque"`, on a model whose field list takes `background`),
+ * unless the caller asked for a transparent one: left to `auto`, GPT Image 2.6
+ * can hand back a picture that is partly transparent inside the mask (a live
+ * run, 2026-11-11: alpha down to 37 there; `opaque` returned RGB at 1K, 2K
+ * and 4K). A photo with transparent pixels keeps the caller's choice.
  */
 async function applyMaskFormat(
   modelConfig: KieModelConfig,
@@ -330,7 +347,11 @@ async function applyMaskFormat(
     delete input.mask_url
     return undefined
   }
-  input.mask_url = await prepareMask(source, callerMask, { form: modelConfig.maskFormat })
+  const fitted = await fitMaskToSource(source, callerMask, { form: modelConfig.maskFormat })
+  input.mask_url = fitted.url
+  if (fields?.includes("background") && input.background !== "transparent" && !(await hasTransparentPixels(fitted.source))) {
+    input.background = "opaque"
+  }
   return modelConfig.maskEditRedrawsOutside ? source : undefined
 }
 

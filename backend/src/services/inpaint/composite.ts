@@ -5,6 +5,7 @@ import { uploadBufferToR2 } from "../../lib/storage.js"
 import { uploadJobScratchBuffer } from "../../lib/job-scratch.js"
 import { sniffImageFormat } from "../../lib/image-output-store.js"
 import { inpaintCompositeKey } from "../../lib/job-output-keys.js"
+import { hasTransparentPixels } from "../../lib/image-transparency.js"
 
 const WHITE_THRESHOLD = 128
 
@@ -42,11 +43,17 @@ export type CompositeFormat = "png" | "jpeg" | "webp"
  * resized to the base, so the output is the base's size.
  *
  * Defaults (the Generate Image inpaint): the feather is centred on the mask's
- * edge, transparency is flattened, and the file is a PNG. Options:
+ * edge, the output is opaque, and the file is a PNG. Opaque, the result is
+ * laid OVER the base: a pixel the result leaves transparent shows the base,
+ * never a hole. Options:
  *  - `featherInward`: the soft edge lies inside the white area only, so every
  *    pixel the mask leaves black is the base's own;
- *  - `keepAlpha`: the base's and the result's transparency are kept (outside
- *    the mask the base's, inside it the result's);
+ *  - `keepAlpha`: transparency is kept (outside the mask the base's, inside it
+ *    the result's), but only when there is any to keep: the base has a pixel
+ *    that is not fully opaque, or `transparent` says a transparent background
+ *    was asked for. An opaque photo edited with no such request stays opaque,
+ *    whatever alpha the model's picture carries (GPT Image 2.6 can hand back a
+ *    partly transparent one: nodaro, 2026-11-11);
  *  - `format`: the file written (JPEG and WebP at quality 95).
  */
 export async function compositeMaskedRegion(opts: {
@@ -56,6 +63,7 @@ export async function compositeMaskedRegion(opts: {
   featherSigma?: number
   featherInward?: boolean
   keepAlpha?: boolean
+  transparent?: boolean
   format?: CompositeFormat
 }): Promise<Buffer> {
   const baseMeta = await sharp(opts.base).metadata()
@@ -69,10 +77,10 @@ export async function compositeMaskedRegion(opts: {
     : await centredFeatheredMask(opts.mask, W, H, opts.featherSigma)
 
   const keepsAlpha = opts.keepAlpha === true &&
-    (baseMeta.hasAlpha === true || (await sharp(opts.result).metadata()).hasAlpha === true)
+    (opts.transparent === true || (await hasTransparentPixels(opts.base)))
   const out = keepsAlpha
     ? await blendKeepingAlpha(opts.base, opts.result, alpha, W, H)
-    // Base (opaque) ← result (alpha = mask) via "over".
+    // Base (opaque) ← result (alpha = mask × the result's own) via "over".
     : sharp(opts.base)
         .resize(W, H, { fit: "fill" })
         .removeAlpha()
@@ -124,11 +132,23 @@ async function inwardFeatheredMask(mask: Buffer, W: number, H: number, featherSi
   return out
 }
 
-/** The result as RGB at the base's size, the mask attached as its alpha. */
+/**
+ * The result as RGB at the base's size, its alpha the mask times the result's
+ * own alpha: where the result is transparent, nothing of it is laid down and
+ * the base shows (an opaque result: the mask alone).
+ */
 async function resultOpaque(result: Buffer, alpha: Buffer, W: number, H: number): Promise<Buffer> {
-  const resultRgb = await sharp(result).resize(W, H, { fit: "fill" }).removeAlpha().toBuffer()
-  return sharp(resultRgb)
-    .joinChannel(alpha, { raw: { width: W, height: H, channels: 1 } })
+  const { data: rgba } = await sharp(result).resize(W, H, { fit: "fill" }).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+  const rgb = Buffer.alloc(W * H * 3)
+  const weight = Buffer.alloc(W * H)
+  for (let i = 0; i < W * H; i++) {
+    rgb[i * 3] = rgba[i * 4]!
+    rgb[i * 3 + 1] = rgba[i * 4 + 1]!
+    rgb[i * 3 + 2] = rgba[i * 4 + 2]!
+    weight[i] = Math.round((alpha[i]! * rgba[i * 4 + 3]!) / 255)
+  }
+  return sharp(rgb, { raw: { width: W, height: H, channels: 3 } })
+    .joinChannel(weight, { raw: { width: W, height: H, channels: 1 } })
     .png()
     .toBuffer()
 }
@@ -189,7 +209,11 @@ export function maskFeatherSigma(width: number, height: number): number {
  *  - The result is resized to the source first: the delivered picture is the
  *    source's size.
  *  - The soft edge lies inside the mask, a few pixels wide (`maskFeatherSigma`).
- *  - Transparency is kept, and the file is written in the result's own format.
+ *  - Transparency is kept only where there is any to keep: a source with
+ *    transparent pixels, or `transparent` (the run asked for a transparent
+ *    background). An opaque photo otherwise gives an opaque picture, the
+ *    source showing wherever the model's picture is transparent.
+ *  - The file is written in the result's own format.
  * A result that is not a PNG, JPEG or WebP is left as it is (`undefined`).
  * Stored in the job's scratch folder: finalize stores the delivered copy.
  * Throws a PLAIN Error on any failure, so the handler fails the job and refunds.
@@ -199,6 +223,7 @@ export async function pasteSourceOutsideMask(opts: {
   resultUrl: string
   maskUrl: string
   jobId: string
+  transparent?: boolean
 }): Promise<string | undefined> {
   const [source, result, mask] = await Promise.all([
     fetchBytes(opts.sourceUrl),
@@ -216,6 +241,7 @@ export async function pasteSourceOutsideMask(opts: {
     featherSigma: maskFeatherSigma(meta.width, meta.height),
     featherInward: true,
     keepAlpha: true,
+    transparent: opts.transparent === true,
     format,
   })
   return uploadJobScratchBuffer(out, "mask-composite", IMAGE_OUTPUT_FORMAT_EXT[format], IMAGE_OUTPUT_FORMAT_MIME[format], opts.jobId)
