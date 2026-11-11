@@ -42,7 +42,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { uploadImage } from "@/lib/api"
-import { USAGE_MODES, type UsageMode, characterMentionSlug, usageModeLabel } from "@nodaro/shared/entities"
+import { USAGE_MODES, type UsageMode, characterMentionSlug, characterOwnName, entityImageUrl, wiredCharacterNamesOf, usageModeLabel } from "@nodaro/shared/entities"
+import { bypassTeleports } from "@nodaro/render-rules"
 import type {
   ExtraRef,
   WorkflowNode,
@@ -84,6 +85,9 @@ function buildCharacterOptions(
   if (!consumerNodeId) return []
   const out: CharacterVariantOption[] = []
   const incoming = edges.filter((e) => e.target === consumerNodeId)
+  // Named as the run names them (each unnamed node its own "Character N"); a
+  // node wired only by its image pip goes by its own name.
+  const names = wiredCharacterNamesOf(consumerNodeId, nodes, bypassTeleports(nodes, edges))
   for (const e of incoming) {
     const upstream = nodes.find((n) => n.id === e.source)
     if (!upstream || upstream.type !== "character") continue
@@ -91,14 +95,14 @@ function buildCharacterOptions(
     // Latin identity seed, NOT display copy: `characterMentionSlug` keeps only
     // [a-z0-9], so a localized fallback slugifies to "" and the character is
     // skipped. The picker localizes the name at render (node-label table).
-    const charName = charData.characterName || (charData.label as string) || "Character"
-    const slug = characterMentionSlug(charName)
+    const named = names.get(upstream.id)
+    const charName = named ? named.name : characterOwnName(charData)
+    const slug = named ? named.slug : characterMentionSlug(charName)
     if (!slug) continue
 
     // Canonical entry (the character's portrait / source image).
-    const canonicalUrl = charData.defaultAssetUrl as string | undefined
-      ?? charData.sourceImageUrl
-      ?? ""
+    // The character's portrait: the node's output (entityImageUrl, the run's rule).
+    const canonicalUrl = entityImageUrl(charData) ?? ""
     if (canonicalUrl) {
       out.push({
         key: `${upstream.id}__canonical`,

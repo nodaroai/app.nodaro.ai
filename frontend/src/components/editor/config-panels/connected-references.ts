@@ -1,5 +1,5 @@
 import { DEFAULT_LABEL_BY_SOURCE, type ConnectedReference, type ReferenceSource } from "@nodaro/shared/types"
-import { characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences, characterMentionableAssetArrays, resolveEffectiveSourceType, sourceRefKey } from "@nodaro/shared/entities"
+import { characterMentionSlug, entityImageUrl, locationMentionSlug, expandExtraRefsToConnectedReferences, characterMentionableAssetArrays, resolveEffectiveSourceType, sourceRefKey } from "@nodaro/shared/entities"
 import { FRAME_TARGET_HANDLES } from "@nodaro/shared/workflow"
 import { characterLockToRefLock } from "@nodaro/prompts/doctrine"
 import { entityActiveImageUrl } from "@/lib/entity-output-url"
@@ -10,6 +10,7 @@ import type {
   ManualReferenceImage,
 } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
+import { characterContextLookup, sourceCharacterNames, sourceOriginId } from "./source-character-names"
 import type { RefImageItem } from "./tag-textarea"
 
 /**
@@ -153,6 +154,8 @@ export function buildImageConnectedReferences(params: {
     })
   }
 
+  // What each wired character is called — the run's own rule, over every wire.
+  const characterNames = sourceCharacterNames(sources)
   // Wired upstream nodes (sources from @xyflow incoming edges).
   for (const s of sources) {
     // Start/end KEYFRAMES are NOT `{image:N}` references — the backend appends
@@ -168,8 +171,9 @@ export function buildImageConnectedReferences(params: {
     const nd = s.nodeData ?? {}
     if (effectiveType === "character") {
       const charData = nd as unknown as CharacterNodeData
-      const charName = charData.characterName || s.label || "Character"
-      const slug = characterMentionSlug(charName)
+      const named = characterNames.get(sourceOriginId(s))
+      const charName = named?.name ?? ""
+      const slug = named?.slug ?? ""
       if (slug) {
         const defaultUsageMode = charData.defaultUsageMode
         // Node-default role + mapped identity-lock (Character Node Role+Lock) —
@@ -178,8 +182,8 @@ export function buildImageConnectedReferences(params: {
         const defaultRole = charData.defaultRole
         const identityLock = characterLockToRefLock(charData.identityLock)
         const canonicalUrl =
-          charData.defaultAssetUrl ||
-          charData.sourceImageUrl ||
+          // The portrait the run sends: the node's output (entityImageUrl).
+          entityImageUrl(nd) ||
           (nd.generatedImageUrl as string) ||
           (nd.url as string) ||
           ""
@@ -360,23 +364,7 @@ export function buildImageConnectedReferences(params: {
   }
   // User-attached extras — appended after regular refs so they get the last
   // positional slots, matching the runtime `execute-node.ts` order.
-  const ctxLookup = (slug: string) => {
-    for (const n of nodes) {
-      if (n.type !== "character") continue
-      const cd = n.data as CharacterNodeData
-      const name = cd.characterName || (cd.label as string) || ""
-      if (characterMentionSlug(name) === slug) {
-        return {
-          defaultUsageMode: cd.defaultUsageMode,
-          canonicalDescription: cd.canonicalDescription ?? null,
-          displayName: name,
-          defaultRole: cd.defaultRole,
-          identityLock: characterLockToRefLock(cd.identityLock),
-        }
-      }
-    }
-    return undefined
-  }
+  const ctxLookup = characterContextLookup(characterNames, nodes)
   const extras = expandExtraRefsToConnectedReferences(data.extraRefs, ctxLookup)
   for (const e of extras) ordered.push(e)
   return ordered

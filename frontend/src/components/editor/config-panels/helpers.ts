@@ -166,6 +166,7 @@ function sourcesEqual(
     const n = next[i]
     if (
       p.id !== n.id ||
+      p.originId !== n.originId ||
       p.type !== n.type ||
       p.label !== n.label ||
       p.value !== n.value ||
@@ -209,6 +210,7 @@ export function getConnectedSources(
     const d = source.data as Record<string, unknown>
     sources.push({
       id: drawnSourceId(edge),
+      ...(source.id !== drawnSourceId(edge) ? { originId: source.id } : {}),
       type: source.type as string,
       label: (d.label as string) ?? source.type ?? source.id,
       value: extractDisplayValue(d, source.type as string),

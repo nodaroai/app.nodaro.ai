@@ -21,7 +21,7 @@
  * (`FreeVideoLock`), so each side words it in its own language.
  */
 import { MODEL_CATALOG, isAutoVideoDuration, type ModelCatalogEntry } from "@nodaro/shared/model-catalog"
-import { PRICING_DEFAULT_RESOLUTION, VIDEO_MODE_ALIASES } from "@nodaro/shared/models"
+import { PRICING_DEFAULT_RESOLUTION, VIDEO_MODE_ALIASES, videoDefaultDurationSec } from "@nodaro/shared/models"
 
 /** The video parameters of one request, as a route body or a node payload carries them. */
 export interface FreeVideoRequest {
@@ -159,14 +159,22 @@ export function freeVideoModelLock(provider: string, limits: FreeVideoLimits, op
   return null
 }
 
-/** Whether one DURATION option of an open model is locked (`undefined` = the model's default). */
+/**
+ * Whether one DURATION option of an open model is locked. A length that is not
+ * set, cannot be read, or is 0 or below (other than Auto) is judged as the
+ * model's DEFAULT — what such a run renders and is priced at
+ * (`pricedOutputDurationSec`): a `duration: 0` written into a workflow would
+ * otherwise slip a 5 s Kling 4.0 Flash or an 8 s Seedance 2 Fast clip past the
+ * limit.
+ */
 export function freeVideoDurationLock(provider: string, duration: FreeVideoRequest["duration"], limits: FreeVideoLimits): FreeVideoLock | null {
   if (!limits.enabled) return null
   const entry = freeVideoEntry(provider)
   if (!entry || !isGeneration(entry) || !(entry.durations ?? []).length) return null
   const max = limits.maxSeconds
   if (duration !== null && duration !== undefined && isAutoVideoDuration(duration)) return { kind: "auto", label: entry.label, max }
-  const asked = toSeconds(duration) ?? entry.defaultDuration ?? Math.min(...(entry.durations ?? []))
+  const named = toSeconds(duration)
+  const asked = named !== null && named > 0 ? named : videoDefaultDurationSec(entry.id)
   return asked > max ? { kind: "duration", label: entry.label, max } : null
 }
 

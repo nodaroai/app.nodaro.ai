@@ -230,6 +230,10 @@ import {
   referenceSheetCreditId,
   resolveEffectiveSourceType,
   characterMentionSlug,
+  wiredCharacterNamesOf,
+  wiredCharacterKey,
+  aliasRetiredCharacterMentions,
+  entityImageUrl,
   expandExtraRefsToConnectedReferences,
   findImageMentionTokens,
   knownImageSlugsFromRefs,
@@ -1191,6 +1195,9 @@ function expandWiredCharacterRefs(
   const out: ConnectedReference[] = []
   const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
   const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
+  // The ONE naming the editor's Run and panels read too: a node keeps its own
+  // name, and each unnamed node is its own "Character N".
+  const names = wiredCharacterNamesOf(consumerNodeId, buildCtx.nodes, buildCtx.edges)
   for (const e of incoming) {
     const upstream = nodeById.get(e.source)
     // The entity `image` handle is a PLAIN image, not an identity ref
@@ -1198,12 +1205,10 @@ function expandWiredCharacterRefs(
     // routes as a plain reference via resolvedInputs.referenceImageUrls.
     if (!upstream || resolveEffectiveSourceType(upstream.type, e.sourceHandle) !== "character") continue
     const charData = upstream.data
-    const charName =
-      (charData.characterName as string | undefined) ??
-      (charData.label as string | undefined) ??
-      ""
-    const characterSlug = characterMentionSlug(charName)
-    if (!characterSlug) continue // unnamed character — no slug to @-mention or canonical-fold in the core
+    const named = names.get(upstream.id)
+    if (!named?.slug) continue // a typed name with no letter or digit — nothing to @-mention or canonical-fold in the core
+    const charName = named.name
+    const characterSlug = named.slug
 
     const description = charData.description as string | undefined
     const canonicalDescription =
@@ -1230,9 +1235,9 @@ function expandWiredCharacterRefs(
     const loraFields = extractCharacterLoraFields(
       charData as { loraReplicateVersion?: string | null; loraTriggerWord?: string | null; loraTrainingStatus?: string | null },
     )
-    const canonicalUrl =
-      (charData.defaultAssetUrl as string | undefined) ||
-      (charData.sourceImageUrl as string | undefined)
+    // The portrait IS the node's output (`entityImageUrl`, the editor's rule
+    // too): the one image the character sends, never a second beside it.
+    const canonicalUrl = entityImageUrl(charData)
     if (canonicalUrl) {
       out.push({
         id: `char_${upstream.id}`,
@@ -1297,7 +1302,8 @@ function expandWiredCharacterRefs(
  * REPLACES the old flat `collectCinematographyHints` character fold, which
  * appended the fragment to the prompt BODY (the global tail). Routing it through
  * the per-character ref lets the shared builder place it INSIDE the bullet.
- * Deduped per character node; merges when two nodes share a slug.
+ * Deduped per character node; merges when two nodes share a typed name (the
+ * same character), never two unnamed nodes (each is its own "Character N").
  */
 function collectCharacterElementInjections(
   consumerNodeId: string,
@@ -1307,6 +1313,7 @@ function collectCharacterElementInjections(
   const edges = ctx?.edges ?? []
   const bySlug = new Map<string, string>()
   const seen = new Set<string>()
+  const names = wiredCharacterNamesOf(consumerNodeId, nodes, edges)
   for (const edge of edges) {
     if (edge.target !== consumerNodeId) continue
     const charNode = nodes.find((n) => n.id === edge.source)
@@ -1323,10 +1330,9 @@ function collectCharacterElementInjections(
       if (hint && hint.trim()) frags.push(hint.trim())
     }
     if (frags.length === 0) continue
-    const data = charNode.data as Record<string, unknown> | undefined
-    const name = (data?.characterName as string) || (data?.label as string) || ""
-    const slug = characterMentionSlug(name)
-    if (!slug) continue
+    // Filed under the character's wired slug, so it stamps onto that
+    // character's bullet; never merged into another unnamed node's.
+    const slug = wiredCharacterKey(names, charNode.id, charNode.data)
     const joined = frags.join(", ")
     const prev = bySlug.get(slug)
     bySlug.set(slug, prev ? `${prev}, ${joined}` : joined)
@@ -1674,16 +1680,13 @@ function buildExtraRefCharacterContextLookup(
   if (!buildCtx?.nodes || !buildCtx.edges) return () => undefined
   const bySlug = new Map<string, ExtraRefCharacterContext>()
   const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
-  const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
-  for (const e of incoming) {
-    const upstream = nodeById.get(e.source)
-    if (!upstream || resolveEffectiveSourceType(upstream.type, e.sourceHandle) !== "character") continue
+  // The wired characters, named as everywhere else (wiredCharacterNamesOf).
+  for (const [id, named] of wiredCharacterNamesOf(consumerNodeId, buildCtx.nodes, buildCtx.edges)) {
+    const upstream = nodeById.get(id)
+    if (!upstream) continue
     const charData = upstream.data
-    const charName =
-      (charData.characterName as string | undefined) ??
-      (charData.label as string | undefined) ??
-      ""
-    const slug = characterMentionSlug(charName)
+    const charName = named.name
+    const slug = named.slug
     if (!slug) continue
     if (!bySlug.has(slug)) {
       bySlug.set(slug, {
@@ -1725,6 +1728,16 @@ function readStringArray(value: unknown): readonly string[] | undefined {
     if (typeof v === "string" && v.length > 0) out.push(v)
   }
   return out.length > 0 ? out : undefined
+}
+
+/** {@link aliasRetiredCharacterMentions} over the Character nodes wired into `consumerNodeId`. */
+function aliasRetiredMentionsOf<T extends string | undefined>(
+  prompt: T,
+  consumerNodeId: string,
+  buildCtx: PayloadBuildContext | undefined,
+): T {
+  if (!buildCtx?.nodes || !buildCtx.edges) return prompt
+  return aliasRetiredCharacterMentions(prompt, wiredCharacterNamesOf(consumerNodeId, buildCtx.nodes, buildCtx.edges))
 }
 
 /**
@@ -1804,6 +1817,9 @@ function resolveVideoPromptMentions(
     videoCaptions?: readonly string[]
   },
 ): { prompt: string | undefined; additionalUrls: string[] } {
+  // A mention saved before unnamed characters were numbered reads as the one
+  // unnamed character wired here (the editor's rule too).
+  prompt = aliasRetiredMentionsOf(prompt, consumerNodeId, buildCtx)
   // ── BE-only expansion: wire upstream Character nodes → ConnectedReference[].
   // Canonical-suppression filtering lives in the shared core (single source of
   // truth) — pass the raw expansion + the suppressed set straight through. ──
@@ -3112,6 +3128,9 @@ function buildPayloadOf(
         const identityClause = collectIdentityLockClause(node.id, buildCtx)
         if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
       }
+      // A mention saved before unnamed characters were numbered reads as the
+      // one unnamed character wired here (the editor's rule too).
+      rawPrompt = aliasRetiredMentionsOf(rawPrompt, node.id, buildCtx)
 
       // Wired-character @-mention expansion: when an upstream Character node
       // is wired, ALWAYS route through `connectedReferences` so buildImagePrompt's
@@ -3610,6 +3629,9 @@ function buildPayloadOf(
         const identityClause = collectIdentityLockClause(node.id, buildCtx)
         if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
       }
+      // A mention saved before unnamed characters were numbered reads as the
+      // one unnamed character wired here (the editor's rule too).
+      rawPrompt = aliasRetiredMentionsOf(rawPrompt, node.id, buildCtx)
 
       // Wired-character @-mention expansion: see generate-image case above.
       // Same uniform-path strategy — always route through `connectedReferences`
@@ -3784,6 +3806,9 @@ function buildPayloadOf(
         const identityClause = collectIdentityLockClause(node.id, buildCtx)
         if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
       }
+      // A mention saved before unnamed characters were numbered reads as the
+      // one unnamed character wired here (the editor's rule too).
+      rawPrompt = aliasRetiredMentionsOf(rawPrompt, node.id, buildCtx)
 
       // Wired-character @-mention expansion: see generate-image case above.
       // Uniform-path: always use `connectedReferences` when any wired

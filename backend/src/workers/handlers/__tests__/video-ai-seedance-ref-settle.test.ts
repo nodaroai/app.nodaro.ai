@@ -397,3 +397,44 @@ describe("Seedance 2.5 — the recorded provider cost", () => {
     expect(finalResult()).toEqual(relayed)
   })
 })
+
+describe("Kling 4.0 and Kling 4.0 Flash — the recorded provider cost of a reference-video run", () => {
+  // The provider bills a reference-video run per second of output + the longer
+  // of output and the reference clips, at its with-video rate (KIE credits/s:
+  // Flash 11.3; Kling 4.0 17 @720p, 25.5 @1080p). The runner cannot see the
+  // clips' lengths, so it reports the 2 × output floor; the worker records the
+  // cost over the very seconds the charge settled on.
+  const i2v = videoAIHandlers["image-to-video"]
+  const t2v = videoAIHandlers["text-to-video"]
+  const finalResult = () => finalizeArg().result as Record<string, unknown>
+
+  it("Flash: a 5 s output with a 12 s clip records 11.3 × (5 + 12) KIE credits, not the 2 × 5 s floor", async () => {
+    mocks.mockMeasure.mockResolvedValueOnce(measured(489, 5, 12))
+    await t2v(makeJob("text-to-video", { prompt: "p", provider: "kling-4-flash", resolution: "720p", duration: 5, referenceVideoUrls: REFS, refVideoDurationsSec: [12] }) as never, ctx as never)
+    expect(finalResult().cost).toBeCloseTo(11.3 * 17 * KIE_CREDIT_USD, 12)
+    expect(finalizeArg().meteredBaseCredits).toBe(489)
+  })
+
+  it("Kling 4.0 at 1080p, a 6 s output with a 9 s clip: 25.5 × (6 + 9)", async () => {
+    mocks.mockMeasure.mockResolvedValueOnce(measured(957, 6, 9))
+    await i2v(
+      makeJob("image-to-video", { imageUrl: "https://x.png", provider: "kling-4", resolution: "1080p", duration: 6, referenceVideoUrls: REFS, refVideoDurationsSec: [9] }) as never,
+      ctx as never,
+    )
+    expect(finalResult().cost).toBeCloseTo(25.5 * 15 * KIE_CREDIT_USD, 12)
+  })
+
+  it("a clip shorter than the output counts as the output's length: Kling 4.0 720p, 10 s + a 4 s clip = 17 × 20", async () => {
+    mocks.mockMeasure.mockResolvedValueOnce(measured(850, 10, 4))
+    await t2v(makeJob("text-to-video", { prompt: "p", provider: "kling-4", resolution: "720p", duration: 10, referenceVideoUrls: REFS, refVideoDurationsSec: [4] }) as never, ctx as never)
+    expect(finalResult().cost).toBeCloseTo(17 * 20 * KIE_CREDIT_USD, 12)
+  })
+
+  it("a failed measurement, or a run with no reference video, keeps the runner's own figure", async () => {
+    await t2v(makeJob("text-to-video", { prompt: "p", provider: "kling-4-flash", duration: 5, referenceVideoUrls: REFS, refVideoDurationsSec: [12] }) as never, ctx as never)
+    expect(finalResult()).toEqual(RESULT)
+    mocks.mockFinalizeJobWithMedia.mockClear()
+    await t2v(makeJob("text-to-video", { prompt: "p", provider: "kling-4-flash", duration: 5 }) as never, ctx as never)
+    expect(finalResult()).toEqual(RESULT)
+  })
+})

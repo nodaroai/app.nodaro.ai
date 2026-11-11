@@ -62,7 +62,8 @@ import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
 import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, KLING_4_MAX_MIDDLE_FRAMES, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
 import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, videoSourceTrimMaxSec, isSeedanceExtendProvider, pricedOutputDurationSec, snapToNearestDuration, type SeedanceExtendProvider } from "@nodaro/shared/models"
 import { VIDEO_AUDIT_BUCKET_CREDITS, ltxExtendDurationSec, seedanceExtendCreditId } from "@nodaro/shared/credits"
-import { characterMentionSlug, characterMentionableAssetArrays, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared/entities"
+import { characterMentionSlug, characterMentionableAssetArrays, entityImageUrl, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared/entities"
+import { sourceCharacterNames, sourceOriginId } from "./source-character-names"
 import { DEFAULT_LABEL_BY_SOURCE, type ReferenceSource, type ConnectedReference } from "@nodaro/shared/types"
 import { FRAME_TARGET_HANDLES } from "@nodaro/shared/workflow"
 import { VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, VIDEO_ANALYSIS_TIERS, VIDEO_ANALYSIS_LEGACY_MODELS, DEFAULT_VIDEO_ANALYSIS_TIER, isVideoAnalysisTier, pickableLlmModels } from "@nodaro/shared/llm-models"
@@ -208,6 +209,8 @@ export function buildVideoRefAutocomplete(
   sources: ReadonlyArray<SourceNodeInfo>,
 ): VideoRefAutocompleteEntry[] {
   const out: VideoRefAutocompleteEntry[] = []
+  // What each wired character is called — the run's own rule (each unnamed node its own "Character N").
+  const characterNames = sourceCharacterNames(sources)
   for (const s of sources) {
     const effectiveType = resolveEffectiveSourceType(s.type, s.sourceHandle)
     const refSource = VIDEO_REF_SOURCE_BY_TYPE[effectiveType]
@@ -218,18 +221,17 @@ export function buildVideoRefAutocomplete(
     // so the `@kira` / `@kira-smile` typeahead in the prompt editor sees them.
     if (effectiveType === "character") {
       const charData = nd as unknown as CharacterNodeData
-      // Latin identity seed, NOT display copy: `characterMentionSlug` keeps only
-      // [a-z0-9], so a localized fallback slugifies to "" and the expansion is
-      // silently skipped. execute-node.ts / connected-references.ts seed the same
-      // literal — they must not diverge by locale.
-      const charName = charData.characterName || s.label || "Character"
-      const slug = characterMentionSlug(charName)
+      // Latin identity seed, NOT display copy: the same `wiredCharacterNames`
+      // the run reads, never a localized fallback (a slug keeps only [a-z0-9]).
+      const named = characterNames.get(sourceOriginId(s))
+      const charName = named?.name ?? ""
+      const slug = named?.slug ?? ""
       if (slug) {
         const defaultUsageMode = charData.defaultUsageMode
         const loraTrainingStatus = charData.loraTrainingStatus ?? null
         const canonicalUrl =
-          charData.defaultAssetUrl ||
-          charData.sourceImageUrl ||
+          // The portrait the run sends: the node's output (entityImageUrl).
+          entityImageUrl(nd) ||
           (nd.generatedImageUrl as string) ||
           (nd.url as string) ||
           ""

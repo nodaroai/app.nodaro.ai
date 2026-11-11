@@ -14,11 +14,12 @@
  * `computeInjectedRefs` or `<InjectedReferenceList>`.
  */
 
-import { characterMentionSlug, characterMentionableAssetArrays, resolveEffectiveSourceType } from "@nodaro/shared/entities"
+import { characterMentionSlug, characterMentionableAssetArrays, entityImageUrl, resolveEffectiveSourceType } from "@nodaro/shared/entities"
 import type { ConnectedReference, ReferenceSource } from "@nodaro/shared/types"
 import type { CharacterNodeData } from "@/types/nodes"
 import { entityActiveImageUrl } from "@/lib/entity-output-url"
 import type { SourceNodeInfo } from "./types"
+import { sourceCharacterNames, sourceOriginId } from "./source-character-names"
 
 /** Same mapping as `buildVideoRefAutocomplete` — accept image-y upstreams. */
 const SOURCE_TYPE_MAP: Record<string, ReferenceSource> = {
@@ -52,6 +53,8 @@ export function buildConnectedRefsFromSources(
   sources: ReadonlyArray<SourceNodeInfo>,
 ): ConnectedReference[] {
   const out: ConnectedReference[] = []
+  // What each wired character is called — the run's own rule (each unnamed node its own "Character N").
+  const characterNames = sourceCharacterNames(sources)
   for (const s of sources) {
     const effectiveType = resolveEffectiveSourceType(s.type, s.sourceHandle)
     const refSource = SOURCE_TYPE_MAP[effectiveType]
@@ -60,13 +63,14 @@ export function buildConnectedRefsFromSources(
 
     if (effectiveType === "character") {
       const charData = nd as unknown as CharacterNodeData
-      const charName = charData.characterName || s.label || "Character"
-      const slug = characterMentionSlug(charName)
+      const named = characterNames.get(sourceOriginId(s))
+      const charName = named?.name ?? ""
+      const slug = named?.slug ?? ""
       if (slug) {
         const defaultUsageMode = charData.defaultUsageMode
         const canonicalUrl =
-          charData.defaultAssetUrl ||
-          charData.sourceImageUrl ||
+          // The portrait the run sends: the node's output (entityImageUrl).
+          entityImageUrl(nd) ||
           (nd.generatedImageUrl as string) ||
           (nd.url as string) ||
           ""

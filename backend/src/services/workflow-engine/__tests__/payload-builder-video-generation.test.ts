@@ -783,6 +783,36 @@ describe("payload-builder.kling-4.test.ts", () => {
       .toBe("kling-4-flash:12s:720p-ref")
   })
 
+  it("an unnamed Character node (no characterName, the default label) is kept as Character 1, in wiring order", () => {
+    // What a Character node looks like before anyone types a name: the
+    // factory data's empty characterName and its default label. It is named
+    // as the editor's Run names it (wiredCharacterNames), never "Character Asset".
+    const unnamed: SimpleNode = {
+      id: "char-u",
+      type: "character",
+      data: { label: "Character Asset", characterName: "", defaultAssetUrl: "https://cdn.example/anon.png", expressions: [{ name: "smile", url: "https://cdn.example/anon-smile.png" }] },
+    }
+    const named: SimpleNode = {
+      id: "char-1",
+      type: "character",
+      data: { characterName: "Maya", defaultAssetUrl: "https://cdn.example/maya.png", expressions: [{ name: "smile", url: "https://cdn.example/maya-smile.png" }] },
+    }
+    for (const provider of ["kling-4", "kling-4-flash"]) {
+      const r = build(n(provider), { referenceAudioUrls: ["https://cdn.example/a1.mp3", "https://cdn.example/a2.mp3"] }, {
+        nodes: [unnamed, named],
+        edges: [
+          { id: "u->k4-1", source: "char-u", target: "k4-1", sourceHandle: "characterRef", targetHandle: "assets" },
+          { id: "m->k4-1", source: "char-1", target: "k4-1", sourceHandle: "characterRef", targetHandle: "assets" },
+        ],
+      })
+      // Both characters, in wiring order — so voice clip 1 stays the unnamed one's.
+      expect((r.payload.characterReferences as Array<{ name: string; imageUrl: string }>).map((c) => [c.name, c.imageUrl]), provider).toEqual([
+        ["Character 1", "https://cdn.example/anon.png"],
+        ["Maya", "https://cdn.example/maya.png"],
+      ])
+    }
+  })
+
   it("Kling 4.0 Flash takes no end frame: a lone one becomes the start frame, as on every model without one", () => {
     const r = build(n("kling-4-flash"), { endFrameUrl: END })
     expect(r.jobName).toBe("image-to-video")

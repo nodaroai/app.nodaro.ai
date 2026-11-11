@@ -825,6 +825,7 @@
         "backend/src/providers/kie/gemini-omni-12.ts",
         "backend/src/providers/kie/input-label.ts",
         "backend/src/providers/kie/kling3-client.ts",
+        "backend/src/providers/kie/kling4-cost.ts",
         "backend/src/providers/kie/kling4.ts",
         "backend/src/providers/kie/luma-client.ts",
         "backend/src/providers/kie/models.ts",

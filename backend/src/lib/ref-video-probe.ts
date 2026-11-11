@@ -97,13 +97,17 @@ export function rememberRefVideoDuration(url: string, durationSec: number): void
  * a usable length is cached: a failed probe rejects as before (the caller turns
  * it into NaN) and is tried again next time, so a blip is never remembered.
  */
-async function probeDurationCached(url: string): Promise<number> {
-  if (!isOwnMediaUrl(url)) return probeMediaDuration(url)
+async function probeDurationCached(url: string, timeoutMs?: number): Promise<number> {
+  // Unbudgeted calls stay exactly as they were (ffprobe's own watchdog).
+  const measure = (): Promise<number> => (timeoutMs === undefined ? probeMediaDuration(url) : probeMediaDuration(url, { timeoutMs }))
+  if (!isOwnMediaUrl(url)) return measure()
   const hit = probeCache.get(url)
   if (hit && Date.now() - hit.at < PROBE_CACHE_TTL_MS) return hit.durationSec
-  const pending = inFlight.get(url)
+  // A budgeted probe neither joins nor lends itself to another caller's probe
+  // of the same clip: it must not wait out an unbudgeted one, nor cut one short.
+  const pending = timeoutMs === undefined ? inFlight.get(url) : undefined
   if (pending) return pending
-  const probe = probeMediaDuration(url)
+  const probe = measure()
     .then((durationSec) => {
       if (Number.isFinite(durationSec) && durationSec > 0) {
         probeCache.delete(url)
@@ -112,27 +116,62 @@ async function probeDurationCached(url: string): Promise<number> {
       }
       return durationSec
     })
-    .finally(() => inFlight.delete(url))
-  inFlight.set(url, probe)
-  return probe
+  if (timeoutMs !== undefined) return probe
+  const shared = probe.finally(() => inFlight.delete(url))
+  inFlight.set(url, shared)
+  return shared
 }
 
-/** Settle every URL's probe, at most {@link PROBE_CONCURRENCY} at a time. */
-async function probeAllSettled(urls: readonly string[]): Promise<PromiseSettledResult<number>[]> {
+/**
+ * A time budget for one probe pass: each clip may take at most `clipTimeoutMs`
+ * (its ffprobe is killed then) and the whole pass at most `totalMs` (no clip
+ * starts after it, and the pass answers when it runs out). A clip not read
+ * within the budget reports NaN — unusable, exactly like a failed probe.
+ */
+export interface RefVideoProbeBudget {
+  readonly clipTimeoutMs: number
+  readonly totalMs: number
+}
+
+const BUDGET_EXHAUSTED = new Error("reference-video probe budget exhausted")
+
+/** Reject after `ms`, so a probe that outlives its budget answers as failed. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const expired = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(BUDGET_EXHAUSTED), ms) })
+  return Promise.race([promise, expired]).finally(() => clearTimeout(timer))
+}
+
+/** Settle every URL's probe, at most {@link PROBE_CONCURRENCY} at a time, within `budget` when given. */
+async function probeAllSettled(urls: readonly string[], budget?: RefVideoProbeBudget): Promise<PromiseSettledResult<number>[]> {
   const results: PromiseSettledResult<number>[] = new Array(urls.length)
+  const deadline = budget ? Date.now() + budget.totalMs : Number.POSITIVE_INFINITY
   let next = 0
   const worker = async (): Promise<void> => {
     while (next < urls.length) {
       const i = next++
+      const left = deadline - Date.now()
+      if (left <= 0) {
+        results[i] = { status: "rejected", reason: BUDGET_EXHAUSTED }
+        continue
+      }
       try {
-        results[i] = { status: "fulfilled", value: await probeDurationCached(urls[i]!) }
+        const clipMs = budget ? Math.min(budget.clipTimeoutMs, left) : undefined
+        const value = clipMs === undefined
+          ? await probeDurationCached(urls[i]!)
+          : await withTimeout(probeDurationCached(urls[i]!, clipMs), clipMs)
+        results[i] = { status: "fulfilled", value }
       } catch (reason) {
         results[i] = { status: "rejected", reason }
       }
     }
   }
-  await Promise.all(Array.from({ length: Math.min(PROBE_CONCURRENCY, urls.length) }, worker))
-  return results
+  const pass = Promise.all(Array.from({ length: Math.min(PROBE_CONCURRENCY, urls.length) }, worker))
+  // The ceiling holds whatever a probe does: past it, every clip not yet read
+  // answers as failed.
+  if (budget) await withTimeout(pass, budget.totalMs).catch(() => undefined)
+  else await pass
+  return Array.from({ length: urls.length }, (_, i) => results[i] ?? { status: "rejected", reason: BUDGET_EXHAUSTED })
 }
 
 /**
@@ -156,13 +195,23 @@ async function probeAllSettled(urls: readonly string[]): Promise<PromiseSettledR
 export async function probeRefVideoDurations(args: {
   provider: string
   referenceVideoUrls: readonly unknown[]
+  /** A time budget for the pass (see {@link RefVideoProbeBudget}); none = each clip's ffprobe watchdog alone. */
+  budget?: RefVideoProbeBudget
 }): Promise<number[]> {
-  const candidates = args.referenceVideoUrls
-    .slice(0, refVideoCapFor(args.provider))
-    .filter((u): u is string => typeof u === "string" && u.length > 0)
-
-  const settled = await probeAllSettled(candidates)
+  const settled = await probeAllSettled(refVideoProbeCandidates(args.provider, args.referenceVideoUrls), args.budget)
   return settled.map((r) => (r.status === "fulfilled" ? r.value : NaN))
+}
+
+/**
+ * The URLs {@link probeRefVideoDurations} probes, in its order — the list its
+ * result is index-aligned with. Exported so a caller holding an earlier probe
+ * (the settlement, re-measuring a clip the reservation could not read) maps
+ * each duration back to its clip by the very same rule.
+ */
+export function refVideoProbeCandidates(provider: string, referenceVideoUrls: readonly unknown[]): string[] {
+  return referenceVideoUrls
+    .slice(0, refVideoCapFor(provider))
+    .filter((u): u is string => typeof u === "string" && u.length > 0)
 }
 
 /** Outcome of {@link probeAndCheckRefVideoDurations}. */

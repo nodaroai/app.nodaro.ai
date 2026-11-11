@@ -289,6 +289,10 @@ import {
   locationReferencePhotoKindLabel,
   type LocationReferencePhotoKind,
   characterMentionSlug,
+  characterOwnName,
+  wiredCharacterNamesOf,
+  aliasRetiredCharacterMentions,
+  entityImageUrl,
   characterMentionableAssetArrays,
   expandExtraRefsToConnectedReferences,
   type ExtraRefCharacterContext
@@ -881,12 +885,16 @@ function buildExtraRefCharacterContextLookup(
 ): (slug: string) => ExtraRefCharacterContext | undefined {
   const bySlug = new Map<string, ExtraRefCharacterContext>();
   const incoming = edges.filter((e) => e.target === consumerNodeId);
+  // Named as the workflow run names them (each unnamed node its own
+  // "Character N"); a node wired only by its image pip goes by its own name.
+  const names = wiredCharacterNamesOf(consumerNodeId, nodes, edges);
   for (const e of incoming) {
     const upstream = nodes.find((n) => n.id === e.source);
     if (!upstream || upstream.type !== "character") continue;
     const charData = upstream.data as CharacterNodeData;
-    const charName = charData.characterName || (charData.label as string) || "";
-    const slug = characterMentionSlug(charName);
+    const named = names.get(upstream.id);
+    const charName = named ? named.name : characterOwnName(charData);
+    const slug = named ? named.slug : characterMentionSlug(charName);
     if (!slug) continue;
     if (!bySlug.has(slug)) {
       bySlug.set(slug, {
@@ -981,9 +989,12 @@ export function buildConnectedRefsForI2I(
     .filter((x) => resolveEffectiveSourceType(x.node.type, x.sourceHandle) === "character")
     .map((x) => x.node);
   const characterUrlsCovered = new Set<string>();
+  // The ONE naming the workflow run reads too: each unnamed node is its own "Character N".
+  const wiredNames = wiredCharacterNamesOf(consumerNodeId, nodes, edges);
   for (const upstream of characterUpstreams) {
-    const expansion = expandCharacterNodeIntoRefs(upstream);
-    if (expansion.length === 0) continue; // unnamed character — fall through to step 2
+    const named = wiredNames.get(upstream.id);
+    const expansion = named ? expandCharacterNodeIntoRefs(upstream, named) : [];
+    if (expansion.length === 0) continue; // a typed name with no letter or digit — fall through to step 2
     for (const [id, meta] of expansion) {
       refMetaMap.set(id, meta);
       if (meta.url) characterUrlsCovered.add(meta.url);
@@ -1045,7 +1056,14 @@ export function buildConnectedRefsForI2I(
         })
       : undefined;
     if (source === "wired-character" && characterSlug && matchingCharNode) {
-      const expansion = expandCharacterNodeIntoRefs(matchingCharNode, c.referenceImageUrl);
+      // A library character: the node's own name, else the library's.
+      const libraryName = characterOwnName(matchingCharNode.data) || c.name;
+      const libraryData = matchingCharNode.data as CharacterNodeData;
+      const expansion = expandCharacterNodeIntoRefs(
+        matchingCharNode,
+        { name: libraryName, slug: characterMentionSlug(libraryName) },
+        libraryData.defaultAssetUrl || c.referenceImageUrl || libraryData.sourceImageUrl,
+      );
       // Re-key under `char_<id>...` so we don't collide with the wired-upstream
       // expansion (step 1) that keyed under `<nodeId>...`.
       for (const [id, meta] of expansion) {
@@ -1576,6 +1594,8 @@ function executeNodeCore(
         .map((e) => ({ node: nodes.find((n) => n.id === e.source), sourceHandle: e.sourceHandle }))
         .filter((x): x is { node: WorkflowNode; sourceHandle: string | null | undefined } =>
           Boolean(x.node && x.node.type && x.node.type in wiredSourceTypeMap));
+      // The ONE naming the workflow run reads too: each unnamed node is its own "Character N".
+      const wiredNames = wiredCharacterNamesOf(node.id, nodes, edges);
       for (let i = 0; i < chainRefs.length; i++) {
         const entry = wiredSources[i];
         if (entry) {
@@ -1591,8 +1611,9 @@ function executeNodeCore(
           // mention resolution.
           if (effectiveType === "character") {
             const charData = upstream.data as CharacterNodeData;
-            const charName = charData.characterName || (upstreamData.label as string) || "Character";
-            const characterSlug = characterMentionSlug(charName);
+            const named = wiredNames.get(upstream.id);
+            const charName = named?.name ?? "";
+            const characterSlug = named?.slug ?? "";
             if (characterSlug) {
               // Propagate the character node's default usage mode into every
               // derived entry — `resolveCharacterMentions` reads this as the
@@ -1602,7 +1623,9 @@ function executeNodeCore(
               const defaultUsageMode = charData.defaultUsageMode;
               const defaultRole = charData.defaultRole;
               const identityLock = characterLockToRefLock(charData.identityLock);
-              const canonicalUrl = charData.defaultAssetUrl || chainRefs[i] || charData.sourceImageUrl;
+              // The portrait is the node's output (`entityImageUrl`, the
+              // workflow run's rule too) — the same image as chainRefs[i].
+              const canonicalUrl = entityImageUrl(charData) || chainRefs[i];
               if (canonicalUrl) {
                 refMetaMap.set(upstream.id, {
                   defaultName: charName,
@@ -1838,6 +1861,9 @@ function executeNodeCore(
       const identityClause = collectIdentityLockClause(node.id, nodes, edges);
       if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
     }
+    // A mention saved before unnamed characters were numbered reads as the one
+    // unnamed character wired here (the workflow run's rule too).
+    prompt = aliasRetiredCharacterMentions(prompt, wiredCharacterNamesOf(node.id, nodes, edges));
 
     // Character LoRA routing decision — shared helper between frontend
     // (single-node Run → `_internalLora` body hint) and backend
@@ -1851,16 +1877,17 @@ function executeNodeCore(
     const loraRouting = selectLoraRoutingForMentions(connectedReferences);
     let internalLora: { characterId: string } | undefined;
     if (loraRouting) {
-      const matchingCharNode = nodes.find(
-        (n) =>
-          n.type === "character" &&
-          (n.data as CharacterNodeData).characterDbId &&
-          characterMentionSlug(
-            ((n.data as CharacterNodeData).characterName as string) ||
-              ((n.data as CharacterNodeData).label as string) ||
-              "",
-          ) === loraRouting.characterSlug,
+      // The routed character by the slug its refs carry: a wired node this
+      // node names so (an unnamed one is "Character N" only here), else a
+      // node by its own name (a library character).
+      const loraSlug = loraRouting.characterSlug;
+      const wiredWithSlug = new Set(
+        [...wiredCharacterNamesOf(node.id, nodes, edges)].filter(([, n]) => n.slug === loraSlug).map(([id]) => id),
       );
+      const withDbId = (n: WorkflowNode) => n.type === "character" && !!(n.data as CharacterNodeData).characterDbId;
+      const matchingCharNode =
+        nodes.find((n) => withDbId(n) && wiredWithSlug.has(n.id)) ??
+        nodes.find((n) => withDbId(n) && characterMentionSlug(characterOwnName(n.data)) === loraSlug);
       const characterId = (matchingCharNode?.data as CharacterNodeData | undefined)?.characterDbId;
       if (characterId) internalLora = { characterId };
     }
@@ -2165,6 +2192,9 @@ function executeNodeCore(
       const identityClause = collectIdentityLockClause(node.id, nodes, edges);
       if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause;
     }
+    // A mention saved before unnamed characters were numbered reads as the one
+    // unnamed character wired here (the workflow run's rule too).
+    rawPrompt = aliasRetiredCharacterMentions(rawPrompt, wiredCharacterNamesOf(node.id, nodes, edges));
 
     // Collect reference images from connected nodes + character assets.
     // chainRefs = upstream image URLs MINUS the main `imageUrl` (which the i2i
@@ -2322,6 +2352,9 @@ function executeNodeCore(
       const identityClause = collectIdentityLockClause(node.id, nodes, edges);
       if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause;
     }
+    // A mention saved before unnamed characters were numbered reads as the one
+    // unnamed character wired here (the workflow run's rule too).
+    rawPrompt = aliasRetiredCharacterMentions(rawPrompt, wiredCharacterNamesOf(node.id, nodes, edges));
 
     // Collect reference images from connected nodes + character assets.
     // chainRefs = upstream image URLs MINUS the main `imageUrl` (which the

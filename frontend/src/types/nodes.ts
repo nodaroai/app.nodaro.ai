@@ -10378,6 +10378,10 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   // Character
   {
     type: "character",
+    // A node still carrying this label is UNNAMED: it must equal
+    // CHARACTER_NODE_DEFAULT_LABEL (@nodaro/shared, wired-character-names.ts),
+    // pinned by character-name-reads.test.ts. A literal, as gen:skills reads
+    // NODE_DEFINITIONS statically.
     label: "Character Asset",
     category: "character",
     inputs: ["assets", "in"],

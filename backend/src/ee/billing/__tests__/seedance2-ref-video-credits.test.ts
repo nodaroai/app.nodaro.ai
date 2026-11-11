@@ -4,11 +4,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 // settlement tests decide what the delivered clip and the reference clips
 // measure (a rejected promise = an unusable probe).
 const probe = vi.hoisted(() => ({
-  durations: new Map<string, number | Error>(),
-  probeMediaDuration: vi.fn(async (url: string) => {
+  durations: new Map<string, number | Error | "hang">(),
+  probeMediaDuration: vi.fn(async (url: string): Promise<number> => {
     const d = probe.durations.get(url)
     if (d === undefined) throw new Error(`unexpected probe of ${url}`)
     if (d instanceof Error) throw d
+    // A probe that never answers (a stalled host).
+    if (d === "hang") return new Promise<number>(() => {})
     return d
   }),
 }))
@@ -17,6 +19,8 @@ vi.mock("../../../providers/video/ffmpeg-utils.js", () => ({ probeMediaDuration:
 import { MODEL_CATALOG, VIDEO_DURATION_AUTO } from "@nodaro/shared/model-catalog"
 import { VIDEO_REF_RATE_PROVIDERS, billsReferenceVideoSeconds, pricedOutputDurationSec, supportsAutoVideoDuration } from "@nodaro/shared/models"
 import {
+  SETTLE_REMEASURE_CLIP_TIMEOUT_MS,
+  SETTLE_REMEASURE_TOTAL_MS,
   refVideoWorstCaseSecFor,
   seedance2RefVideoActualBaseCredits,
   seedance2RefVideoActualSeconds,
@@ -248,6 +252,55 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
     await expect(
       seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF] }),
     ).resolves.toBe(3990)
+  })
+
+  it("a clip the reservation could not read is measured again at the settlement and billed at its real length", async () => {
+    probe.durations.set(OUT, 12)
+    probe.durations.set(REF, 6)
+    // Stored probe [NaN] (null once it has been through JSON): reserved as the 30s cap.
+    for (const stored of [[Number.NaN], [null]]) {
+      await expect(
+        seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: stored }),
+      ).resolves.toBe(Math.ceil(95 * (6 + 12)))
+    }
+  })
+
+  it("a clip measured only at the settlement never counts above the worst case the reservation held (no cap of its own on Seedance 2.0: 15s)", async () => {
+    probe.durations.set(OUT, 8)
+    probe.durations.set(REF, 40)
+    const measured = await seedance2RefVideoActualBaseCredits({ provider: "seedance-2", resolution: "720p", requestedDuration: 8, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [Number.NaN] })
+    const heldAtWorst = await seedance2RefVideoActualBaseCredits({ provider: "seedance-2", resolution: "720p", requestedDuration: 8, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [15] })
+    expect(measured).toBe(heldAtWorst)
+  })
+
+  it("ten reference clips whose probes all hang: the re-measure stops at its overall ceiling and keeps the worst case", async () => {
+    vi.useFakeTimers()
+    try {
+      const refs = Array.from({ length: 10 }, (_, i) => `https://r2.example.com/videos/ref-${i}.mp4`)
+      probe.durations.set(OUT, 12)
+      for (const r of refs) probe.durations.set(r, "hang")
+      let done = false
+      const settled = seedance2RefVideoActualBaseCredits({
+        provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, outputUrl: OUT,
+        referenceVideoUrls: refs, durationsSec: refs.map(() => Number.NaN),
+      }).finally(() => { done = true })
+      // Four at a time, ten clips would take three rounds of the per-clip budget; the ceiling allows two.
+      expect(3 * SETTLE_REMEASURE_CLIP_TIMEOUT_MS).toBeGreaterThan(SETTLE_REMEASURE_TOTAL_MS)
+      await vi.advanceTimersByTimeAsync(SETTLE_REMEASURE_TOTAL_MS - 1)
+      expect(done).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(done).toBe(true)
+      // Every clip at the 30 s cap, capped at 30 s in all: ceil(95 × (30 + 12)), as reserved.
+      await expect(settled).resolves.toBe(3990)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("a clip already measured by the reservation is not probed again", async () => {
+    probe.durations.set(OUT, 12)
+    await seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [6] })
+    expect(probe.probeMediaDuration).toHaveBeenCalledTimes(1)
   })
 
   it("a delivered clip that cannot be measured THROWS — the caller then commits the reservation", async () => {

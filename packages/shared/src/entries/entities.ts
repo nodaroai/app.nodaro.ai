@@ -42,6 +42,20 @@ export {
   parseCharacterMentionToken,
   findCharacterMentionTokens,
 } from "../character-mention-slug.js"
+export {
+  CHARACTER_NODE_DEFAULT_LABEL,
+  CHARACTER_NODE_RETIRED_DEFAULT_LABELS,
+  UNNAMED_CHARACTER_NAME_PREFIX,
+  characterOwnName,
+  wiredCharacterNames,
+  wiredCharacterNamesOf,
+  wiredCharacterBySlug,
+  wiredCharacterKey,
+  aliasRetiredCharacterMentions,
+  RETIRED_CHARACTER_MENTION_SLUGS,
+} from "../wired-character-names.js"
+export { entityImageUrl } from "../entity-image-url.js"
+export type { WiredCharacterSource, WiredCharacterName } from "../wired-character-names.js"
 export type { CharacterMentionTokenInfo } from "../character-mention-slug.js"
 export {
   CHARACTER_VARIANT_ASSET_BUCKETS,

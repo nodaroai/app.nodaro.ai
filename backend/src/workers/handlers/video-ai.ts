@@ -61,6 +61,7 @@ import { discardFailedRunCopies } from "../../lib/discard-job-copies.js"
 import { seedance25OutputFormat } from "../../providers/kie/video.js"
 import { runSeedanceDraftFinalize } from "../../providers/kie/seedance-draft.js"
 import { seedance25CostUsd } from "../../providers/kie/seedance-cost.js"
+import { kling4CostUsd } from "../../providers/kie/kling4-cost.js"
 import { measureSeedanceDraftRenderSec, draftRenderOutputData, positiveSeconds, seedanceDraftFinalizeQueuedBilledSec } from "../../lib/seedance-draft-finalize.js"
 import { generateVideoAudioMergeRecipe, voiceTrackMuxRecipe, draftAudioMuxMergeArgs, draftAudioMuxOutputData, readDraftAudioMux, type DraftAudioMux } from "../../lib/seedance-draft-audio.js"
 import { applyDraftAudioMux, draftAudioWarningOutputData } from "../../lib/seedance-draft-audio-apply.js"
@@ -74,6 +75,7 @@ import {
 import { unitRateBaseCredits } from "../../lib/credit-base-cost.js"
 import { TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import type { TopazVideoResolution } from "@nodaro/shared/models"
+import { isKling4RunnerProvider } from "@nodaro/shared/models"
 import { applySmartLoopCutToR2Url } from "../../providers/video/apply-smart-loop-cut.js"
 import { join } from "node:path"
 import { readFile, rm } from "node:fs/promises"
@@ -266,18 +268,23 @@ async function dispatchLtxIfRequested(
 }
 
 /**
- * A Seedance 2.5 render's result with the cost KIE billed for it, from the
- * seconds its charge was measured from (`measureSeedance2Settle`) — or, for a
- * run with no reference video and a fixed duration, that duration. Recorded
- * only: finalize hands `result.cost` to the commit, where neither the reserved
- * tier nor the measured `meteredBaseCredits` reads it. Shared by the i2v and
- * t2v lanes.
+ * A render's result with the cost KIE billed for it, from the seconds its
+ * charge was measured from (`measureSeedance2Settle`):
+ *  - Seedance 2.5: those seconds — or, for a run with no reference video and a
+ *    fixed duration, that duration;
+ *  - Kling 4.0 / Kling 4.0 Flash with a reference video: output + the longer
+ *    of output and the reference clips, the seconds the charge bills (the
+ *    runner cannot see the clips' lengths and reports only the 2 × output
+ *    floor).
+ * Recorded only: finalize hands `result.cost` to the commit, where neither the
+ * reserved tier nor the measured `meteredBaseCredits` reads it. Shared by the
+ * i2v and t2v lanes.
  *
  * Unchanged: every other model; a result with no cost of its own (a relayed
  * run, billed to the far end's account); and a length that could not be
  * measured, which keeps the adapter's figure.
  */
-function withSeedance25RenderCost<R extends { cost: number | null }>(
+function withMeasuredRenderCost<R extends { cost: number | null }>(
   result: R,
   run: {
     provider: string
@@ -289,8 +296,14 @@ function withSeedance25RenderCost<R extends { cost: number | null }>(
     settle: Seedance2Settle
   },
 ): R {
-  if (run.provider !== "seedance-2-5" || typeof result.cost !== "number") return result
+  if (typeof result.cost !== "number") return result
   const hasVideoRef = Array.isArray(run.referenceVideoUrls) && run.referenceVideoUrls.length > 0
+  if (isKling4RunnerProvider(run.provider)) {
+    const seconds = run.settle.seconds
+    if (!hasVideoRef || !seconds) return result
+    return { ...result, cost: kling4CostUsd({ provider: run.provider, resolution: run.resolution, hasVideoRef, outputSec: seconds.outputSec, inputSec: seconds.inputSec }) }
+  }
+  if (run.provider !== "seedance-2-5") return result
   const fixedSec = hasVideoRef ? undefined : positiveSeconds(run.duration)
   const outputSec = run.settle.seconds?.outputSec ?? fixedSec
   if (outputSec === undefined) return result
@@ -464,7 +477,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     jobId: ctx.jobId,
   })
   const meteredBaseCredits = settle.baseCredits
-  const recorded = withSeedance25RenderCost(result, { provider: resolvedI2vProvider, resolution, draft, referenceVideoUrls, duration, settle })
+  const recorded = withMeasuredRenderCost(result, { provider: resolvedI2vProvider, resolution, draft, referenceVideoUrls, duration, settle })
   // A Seedance DRAFT records its RAW take length — before the loop-cut / audio
   // merge below — because the 1080p finalize re-renders (and bills) that take.
   const draftRenderSec = await measureSeedanceDraftRenderSec({ draft, provider: resolvedI2vProvider, outputUrl: result.url })
@@ -791,7 +804,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     jobId: ctx.jobId,
   })
   const meteredBaseCredits = settle.baseCredits
-  const recorded = withSeedance25RenderCost(result, { provider: resolvedT2vProvider, resolution, draft, referenceVideoUrls, duration, settle })
+  const recorded = withMeasuredRenderCost(result, { provider: resolvedT2vProvider, resolution, draft, referenceVideoUrls, duration, settle })
   // Seedance DRAFT: record the raw take length the 1080p finalize bills.
   const draftRenderSec = await measureSeedanceDraftRenderSec({ draft, provider: resolvedT2vProvider, outputUrl: result.url })
 

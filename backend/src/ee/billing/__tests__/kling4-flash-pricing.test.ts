@@ -4,11 +4,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 // ffprobe is stubbed per URL: the settlement tests decide what the delivered
 // clip and the reference clips measure.
 const probe = vi.hoisted(() => ({
-  durations: new Map<string, number | Error>(),
-  probeMediaDuration: vi.fn(async (url: string) => {
+  durations: new Map<string, number | Error | "hang">(),
+  probeMediaDuration: vi.fn(async (url: string): Promise<number> => {
     const d = probe.durations.get(url)
     if (d === undefined) throw new Error(`unexpected probe of ${url}`)
     if (d instanceof Error) throw d
+    // A probe that never answers (a stalled host).
+    if (d === "hang") return new Promise<number>(() => {})
     return d
   }),
 }))
@@ -25,6 +27,7 @@ import {
 } from "@nodaro/shared/models"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
 import {
+  SETTLE_REMEASURE_CLIP_TIMEOUT_MS,
   billedRefVideoSeconds,
   seedance2RefVideoActualBaseCredits,
   seedance2RefVideoBaseCredits,
@@ -177,6 +180,52 @@ describe("kling-4-flash reference-video billing (output + max(output, input))", 
         seedance2RefVideoActualBaseCredits({ provider: ID, resolution: "720p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [4.04] }),
       ).resolves.toBe(288)
       expect(probe.probeMediaDuration).toHaveBeenCalledTimes(1)
+    })
+
+    it("a clip the reservation could not measure is measured again: 5 s out + a 3 s clip bills 10 s, not the 20 s worst case", async () => {
+      probe.durations.set(OUT, 5.04)
+      probe.durations.set(REF, 3)
+      // The reservation's probe failed (NaN, stored on the job as null).
+      for (const stored of [[Number.NaN], [null]]) {
+        await expect(
+          seedance2RefVideoActualBaseCredits({ provider: ID, resolution: "720p", requestedDuration: 5, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: stored }),
+        ).resolves.toBe(288)
+      }
+    })
+
+    it("a clip that still cannot be read keeps the worst case (5 s out + 20 s = 25 s)", async () => {
+      probe.durations.set(OUT, 5.04)
+      probe.durations.set(REF, new Error("probe failed"))
+      await expect(
+        seedance2RefVideoActualBaseCredits({ provider: ID, resolution: "720p", requestedDuration: 5, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [Number.NaN] }),
+      ).resolves.toBe(Math.ceil(28.75 * 25))
+    })
+
+    it("a clip whose probe hangs past the per-clip budget keeps the worst case, and the settlement answers at that budget", async () => {
+      vi.useFakeTimers()
+      try {
+        probe.durations.set(OUT, 5.04)
+        probe.durations.set(REF, "hang")
+        let done = false
+        const settled = seedance2RefVideoActualBaseCredits({ provider: ID, resolution: "720p", requestedDuration: 5, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [Number.NaN] })
+          .finally(() => { done = true })
+        await vi.advanceTimersByTimeAsync(SETTLE_REMEASURE_CLIP_TIMEOUT_MS - 1)
+        expect(done).toBe(false)
+        await vi.advanceTimersByTimeAsync(1)
+        expect(done).toBe(true)
+        // 5 s out + the 20 s worst case: the charge the run reserved, never more.
+        await expect(settled).resolves.toBe(Math.ceil(28.75 * 25))
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it("a clip measured now is never counted above the worst case the reservation held", async () => {
+      probe.durations.set(OUT, 5.04)
+      probe.durations.set(REF, 45)
+      await expect(
+        seedance2RefVideoActualBaseCredits({ provider: ID, resolution: "720p", requestedDuration: 5, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [Number.NaN] }),
+      ).resolves.toBe(Math.ceil(28.75 * 25))
     })
 
     it("an input longer than the output bills output + input, at 720p whatever was asked", async () => {

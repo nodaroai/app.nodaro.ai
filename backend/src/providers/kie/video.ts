@@ -41,6 +41,7 @@ import { deriveKieEgressDimensions } from "./egress-dimensions.js"
 import { resolveOmniCharacterIds, forgetOmniCharacters, isInvalidOmniCharacterError, isInvalidOmniAudioError } from "./omni-character.js"
 import { kling3Generate } from "./kling3-client.js"
 import { buildKling4Request } from "./kling4.js"
+import { kling4CostUsd } from "./kling4-cost.js"
 import { runRunwayTask, runAlephTask } from "./runway-client.js"
 import { runLumaModifyTask } from "./luma-client.js"
 import {
@@ -1761,26 +1762,6 @@ async function runViduQ4(
 }
 
 /**
- * Provider per-second rate (USD) for Kling 4.0 by WIRE resolution, reported as
- * ProviderResult.cost (audit/provider_cost only — the USER charge is the seeded
- * composite). Both endpoints share the no-video rate; a reference-video run
- * bills the `ref` rate × (output + max(output, input seconds)), which the runner
- * cannot measure, so it reports the floor (input ≤ output → 2 × output).
- */
-const KLING_4_RATE_USD_PER_SEC: Record<"720p" | "1080p", { plain: number; ref: number }> = {
-  "720p": { plain: 0.1425, ref: 0.085 },
-  "1080p": { plain: 0.2125, ref: 0.1275 },
-}
-
-/**
- * Kling 4.0 Flash's provider rate (USD/s), the same on both endpoints: 17 KIE
- * cr/s, and 11.3 cr/s over output + max(output, input) with a reference video
- * (KIE's price page, read 2026-11-11; $0.005 per KIE credit). Audit /
- * provider_cost only, with the same reference-video floor as Kling 4.0.
- */
-const KLING_4_FLASH_RATE_USD_PER_SEC = { plain: 0.085, ref: 0.0565 } as const
-
-/**
  * Kling 4.0 — every id (`kling-4` reference-to-video, `kling-4-keyframes`
  * keyframe-to-video, `kling-4-flash` over Flash's two endpoints). The body is
  * built by the pure `buildKling4Request` (kling4.ts), which maps the
@@ -1870,9 +1851,18 @@ async function runKling4(
     )
   }
 
-  const resolution = input.resolution as "720p" | "1080p"
-  const rate = modelKey === "kling-4-flash" ? KLING_4_FLASH_RATE_USD_PER_SEC : KLING_4_RATE_USD_PER_SEC[resolution]
-  const tierCostUsd = Array.isArray(input.video_urls) ? rate.ref * snapped * 2 : rate.plain * snapped
+  // Provider cost (audit / provider_cost only — the user's charge is the seeded
+  // composite), from the one Kling rate table (kling4-cost.ts). A reference-video
+  // run bills output + max(output, input seconds), and the runner cannot see the
+  // clips' lengths: it reports the floor (input ≤ output), and the worker
+  // records the full figure from the seconds the charge settles on.
+  const tierCostUsd = kling4CostUsd({
+    provider: modelKey,
+    resolution: input.resolution as string,
+    hasVideoRef: Array.isArray(input.video_urls),
+    outputSec: snapped,
+    inputSec: 0,
+  })
 
   console.log(`[KIE.ai] ${logLabel} (${model}) input:`, JSON.stringify(input, null, 2))
   const { resultJson, taskId, providerMs } = await runKieTask(

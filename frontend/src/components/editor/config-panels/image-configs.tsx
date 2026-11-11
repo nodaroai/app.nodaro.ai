@@ -59,8 +59,9 @@ import type { RefImageItem } from "./tag-textarea"
 import { PromptEditor, useCatalogPacksVersion } from "@/lib/picker-ui"
 import { usePromptEditorRefs } from "@/components/nodes/inline-node-prompt/use-prompt-editor-refs"
 import { ReferenceSupportWarning } from "./reference-support-warning"
+import { characterContextLookup, sourceCharacterNames, sourceOriginId } from "./source-character-names"
 import { DEFAULT_LABEL_BY_SOURCE, type ConnectedReference, type ReferenceSource } from "@nodaro/shared/types"
-import { characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences, resolveEffectiveSourceType, sourceRefKey } from "@nodaro/shared/entities"
+import { characterMentionSlug, entityImageUrl, locationMentionSlug, expandExtraRefsToConnectedReferences, resolveEffectiveSourceType, sourceRefKey } from "@nodaro/shared/entities"
 import { getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared/models"
 import { resolveTopazUpscale } from "@nodaro/shared/credits"
 import { entityActiveImageUrl } from "@/lib/entity-output-url"
@@ -1150,23 +1151,25 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     // Wired upstream nodes. For `character` upstreams, expand into canonical +
     // per-variant entries (expressions / poses / motions / angles / etc.) so the
     // `@kira` / `@kira-smile` typeahead in the prompt editor sees them. Mirrors
-    // `execute-node.ts` (runtime path).
+    // `execute-node.ts` (runtime path), naming each character as the run does.
+    const characterNames = sourceCharacterNames(sources)
     for (const s of sources) {
       const effectiveType = resolveEffectiveSourceType(s.type, s.sourceHandle)
       if (!(effectiveType in wiredSourceTypeMap)) continue
       const nd = s.nodeData ?? {}
       if (effectiveType === "character") {
         const charData = nd as unknown as CharacterNodeData
-        const charName = charData.characterName || s.label || t("field.character")
-        const slug = characterMentionSlug(charName)
+        const named = characterNames.get(sourceOriginId(s))
+        const charName = named?.name ?? ""
+        const slug = named?.slug ?? ""
         if (slug) {
           // Propagate the character node's default usage mode into every
           // derived entry — keeps the modify-image final-view in sync
           // with the runtime path through `buildImagePrompt`.
           const defaultUsageMode = charData.defaultUsageMode
           const canonicalUrl =
-            charData.defaultAssetUrl ||
-            charData.sourceImageUrl ||
+            // The portrait the run sends: the node's output (entityImageUrl).
+            entityImageUrl(nd) ||
             (nd.generatedImageUrl as string) ||
             (nd.url as string) ||
             ""
@@ -1321,20 +1324,10 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     const base = Array.from(map.values())
     // User-attached extras — appended after regular refs so they get the
     // last positional slots, matching the runtime `execute-node.ts` order.
+    const lookup = characterContextLookup(characterNames, nodes)
     const ctxLookup = (slug: string) => {
-      for (const n of nodes) {
-        if (n.type !== "character") continue
-        const cd = n.data as CharacterNodeData
-        const name = cd.characterName || (cd.label as string) || ""
-        if (characterMentionSlug(name) === slug) {
-          return {
-            defaultUsageMode: cd.defaultUsageMode,
-            canonicalDescription: cd.canonicalDescription ?? null,
-            displayName: name,
-          }
-        }
-      }
-      return undefined
+      const c = lookup(slug)
+      return c && { defaultUsageMode: c.defaultUsageMode, canonicalDescription: c.canonicalDescription, displayName: c.displayName }
     }
     const extras = expandExtraRefsToConnectedReferences(data.extraRefs, ctxLookup)
     return [...base, ...extras]

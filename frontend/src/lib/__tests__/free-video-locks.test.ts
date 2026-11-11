@@ -58,6 +58,13 @@ describe("free-credit video locks in the editor", () => {
     expect(lockedVideoModel(LIMITS, "kling-4-flash", { extend: true })).toBe(lockedVideoModel(LIMITS, "seedance-2-5-extend"))
   })
 
+  it("a length of 0 or below that is not Auto is the model's default (5 s on Flash, 8 s on Seedance 2 Fast): locked", () => {
+    for (const d of [0, -2]) {
+      expect(lockedVideoDuration(LIMITS, "kling-4-flash", d)).not.toBeNull()
+      expect(lockedVideoDuration(LIMITS, "seedance-2-fast", d)).not.toBeNull()
+    }
+  })
+
   it("no limits (the account paid) locks nothing", () => {
     expect(lockedVideoModel(null, "kling-3.0")).toBeNull()
     expect(lockedVideoDuration(null, "seedance-2-fast", 10)).toBeNull()

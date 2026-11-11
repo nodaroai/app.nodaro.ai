@@ -10,7 +10,7 @@ import { getParameterPromptHint, PICKER_CATALOGS } from "@nodaro/prompts/picker-
 import { PERSON_FIELD_BY_DIMENSION } from "@nodaro/prompts/person"
 import { SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts/prompt-builder"
 import { UGC_CREATOR_PICKER_TYPES, UGC_NODE_TYPES, ugcClipSavedList } from "@nodaro/shared/ugc"
-import { outputPipSourceType, characterMentionSlug, type EntityKind } from "@nodaro/shared/entities"
+import { outputPipSourceType, wiredCharacterNamesOf, wiredCharacterKey, type EntityKind } from "@nodaro/shared/entities"
 import { bypassTeleports, editPlanProducerKind, splitMediaParts } from "@nodaro/render-rules"
 import {
   DYNAMIC_PRODUCER_TYPES,
@@ -237,7 +237,8 @@ export function resolveCharacterAssets(
  * appended the fragment to the prompt BODY (the global tail). Routing it through
  * the per-character ref instead lets the shared `buildImagePrompt` /
  * `resolveVideoPromptMentions` weave it INTO that character's identity bullet.
- * Deduped per character node; merges when two nodes share a slug.
+ * Deduped per character node; merges when two nodes share a typed name (the
+ * same character), never two unnamed nodes (each is its own "Character N").
  */
 export function collectCharacterElementInjections(
   consumerNodeId: string,
@@ -247,6 +248,7 @@ export function collectCharacterElementInjections(
   const edges = bypassTeleports(nodes, rawEdges);
   const bySlug = new Map<string, string>();
   const seen = new Set<string>();
+  const names = wiredCharacterNamesOf(consumerNodeId, nodes, edges);
   for (const edge of edges) {
     if (edge.target !== consumerNodeId) continue;
     const srcNode = nodes.find((n) => n.id === edge.source);
@@ -254,10 +256,8 @@ export function collectCharacterElementInjections(
     seen.add(srcNode.id);
     const injected = resolveCharacterAssets({ id: srcNode.id }, edges, nodes).injectedAssets.trim();
     if (!injected) continue;
-    const data = srcNode.data as Record<string, unknown> | undefined;
-    const name = (data?.characterName as string) || (data?.label as string) || "";
-    const slug = characterMentionSlug(name);
-    if (!slug) continue;
+    // Filed under the character's wired slug (the workflow run's rule too).
+    const slug = wiredCharacterKey(names, srcNode.id, srcNode.data);
     const prev = bySlug.get(slug);
     bySlug.set(slug, prev ? `${prev}, ${injected}` : injected);
   }

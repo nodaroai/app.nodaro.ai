@@ -77,6 +77,7 @@ import {
   resolveVideoLinkOutput
 } from "@nodaro/shared/video"
 import type { SceneData } from "@nodaro/shared/types"
+import { entityImageUrl } from "@nodaro/shared/entities"
 import { UGC_NODE_TYPES, ugcClipOutputs, ugcPipValue, ugcScriptOutputs, ugcScriptResult, type UgcOutputs } from "@nodaro/shared/ugc"
 import { buildScenePrompt } from "@nodaro/prompts/prompt-builder"
 import { unitDescriptorOf } from "../../lib/unit-descriptors.js"
@@ -1787,13 +1788,11 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
 
   // Entity nodes → imageUrl mirrors the node's displayed thumbnail: the
   // user-selected default asset (starred in the Studio) wins, else the active
-  // generated result, else the persisted source image. Matches the frontend
-  // `entityActiveImageUrl` helper. `||` so an empty defaultAssetUrl falls through.
+  // generated result, else the persisted source image — the shared
+  // `entityImageUrl`, which the editor reads too and which is a wired
+  // Character's portrait on both paths.
   if (ENTITY_RESULT_TYPES.has(type)) {
-    const url =
-      (data.defaultAssetUrl as string | undefined) ||
-      getActiveResultUrl(data) ||
-      (data.sourceImageUrl as string | undefined)
+    const url = entityImageUrl(data)
     return url ? { imageUrl: url } : undefined
   }
 

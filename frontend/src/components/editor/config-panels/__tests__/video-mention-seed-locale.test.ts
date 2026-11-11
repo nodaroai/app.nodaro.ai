@@ -8,7 +8,8 @@ import type { SourceNodeInfo } from "../types"
 // and the Hebrew seed slugifies to "" and the whole expansion is skipped —
 // while execute-node.ts / connected-references.ts (the runtime + image paths)
 // still seed with the English literal, so the UI and the run would disagree by
-// language. These pin the seed to the Latin literal.
+// language. These pin the seed to the Latin literal (for an unnamed character,
+// the shared "Character N" naming every path reads).
 const src = (over: Partial<SourceNodeInfo>): SourceNodeInfo => ({
   id: "s1",
   type: "character",
@@ -25,7 +26,7 @@ describe("video ref autocomplete mention seeds", () => {
     const en = buildVideoRefAutocomplete(sources)
     useLocaleStore.getState().setLocale("he")
     const he = buildVideoRefAutocomplete(sources)
-    expect(en.map((e) => e.characterSlug)).toContain("character")
+    expect(en.map((e) => e.characterSlug)).toContain("character-1")
     expect(he).toEqual(en)
   })
 

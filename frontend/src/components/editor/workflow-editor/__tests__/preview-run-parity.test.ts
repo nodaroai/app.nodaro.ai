@@ -1097,3 +1097,146 @@ describe("preview↔run parity — suno", () => {
     })
   })
 })
+
+// ===========================================================================
+// Unnamed Character nodes (decided 2026-11-11): the editor's Run names them as
+// the workflow run does — each its own "Character N", in wire order, skipping a
+// number another wired character is called. The literal names here are the
+// workflow run's too (backend `payload-builder-unnamed-characters.test.ts`).
+// ===========================================================================
+
+describe("unnamed Character nodes — the editor's Run names them as the workflow run does", () => {
+  function character(id: string, extra: Record<string, unknown> = {}) {
+    return {
+      id,
+      type: "character",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "Character Asset",
+        characterName: "",
+        sourceImageUrl: `http://${id}/portrait.png`,
+        canonicalDescription: `the ${id} look`,
+        expressions: [{ name: "smile", url: `http://${id}/smile.png` }],
+        ...extra,
+      },
+    }
+  }
+  const wire = (source: string) => ({ id: `${source}->n1`, source, target: "n1", sourceHandle: "characterRef", targetHandle: "assets" })
+
+  async function klingRun(chars: ReturnType<typeof character>[]) {
+    const node = makeNode("generate-video", { prompt: "they walk out into the rain", provider: "kling-4" })
+    mockNodes = [...chars, node]
+    mockEdges = chars.map((c) => wire(c.id))
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+    await executeNode(node as any, makeCtx())
+    expect(mockRunTextToVideoGeneration).toHaveBeenCalledTimes(1)
+    const [, prompt, , , options] = mockRunTextToVideoGeneration.mock.calls[0] as [string, string, unknown, string, { characterReferences?: Array<{ name: string; imageUrl: string }> }]
+    return { node, prompt, subjects: options.characterReferences ?? [] }
+  }
+
+  it("Kling 4.0: two unnamed nodes are two subjects with different names; the preview prompt matches", async () => {
+    const { node, prompt, subjects } = await klingRun([character("u1"), character("u2")])
+    expect(subjects.map((s) => [s.name, s.imageUrl])).toEqual([
+      ["Character 1", "http://u1/portrait.png"],
+      ["Character 2", "http://u2/portrait.png"],
+    ])
+    expect(prompt).toContain("Character 1")
+    expect(prompt).toContain("Character 2")
+    expect(prompt).not.toContain("Character Asset")
+    expect(assembleVideoPrompt("generate-video", assemblerArgs(node))).toBe(prompt)
+  })
+
+  it("a mixed list (named, unnamed, named, unnamed)", async () => {
+    const { subjects } = await klingRun([
+      character("a", { characterName: "Maya" }),
+      character("b"),
+      character("c", { characterName: "Leo" }),
+      character("d"),
+    ])
+    expect(subjects.map((s) => s.name)).toEqual(["Maya", "Character 1", "Leo", "Character 2"])
+  })
+
+  it("an unnamed node beside one named Character 1 is Character 2", async () => {
+    const { subjects } = await klingRun([character("u1"), character("named1", { characterName: "Character 1" })])
+    expect(subjects.map((s) => s.name)).toEqual(["Character 2", "Character 1"])
+  })
+
+  async function imageRun(chars: ReturnType<typeof character>[]) {
+    const node = makeNode("generate-image", { prompt: "a portrait in the rain", provider: "nano-banana-pro" })
+    mockNodes = [...chars, node]
+    mockEdges = chars.map((c) => wire(c.id))
+    // What the editor's resolver hands a Character's wire: its portrait.
+    mockResolveNodeInputs.mockReturnValue({ referenceImageUrls: chars.map((c) => c.data.sourceImageUrl) })
+    mockRunImageGeneration.mockResolvedValue(undefined)
+    await executeNode(node as any, makeCtx())
+    expect(mockRunImageGeneration).toHaveBeenCalledTimes(1)
+    const [, prompt, , refs] = mockRunImageGeneration.mock.calls[0] as [string, string, unknown, string[]]
+    return { prompt, refs }
+  }
+
+  it("Generate Image: two unnamed nodes send both portraits and both identities", async () => {
+    const { prompt, refs } = await imageRun([character("u1"), character("u2")])
+    expect(refs).toEqual(["http://u1/portrait.png", "http://u2/portrait.png"])
+    expect(prompt).toContain("(Character 1) — the u1 look")
+    expect(prompt).toContain("(Character 2) — the u2 look")
+    expect(prompt).not.toContain("Character Asset")
+  })
+
+  it("Generate Image: one unnamed node is Character 1; a typed label is the name", async () => {
+    expect((await imageRun([character("u1")])).prompt).toContain("(Character 1) — the u1 look")
+    mockRunImageGeneration.mockClear()
+    expect((await imageRun([character("u1", { label: "Hero" })])).prompt).toContain("(Hero) — the u1 look")
+  })
+
+  // One image per character: the portrait is the node's output (entityImageUrl).
+  const generated = { generatedResults: [{ url: "http://u1/result.png" }], activeResultIndex: 0 }
+
+  it("source image + generated result, no starred asset: Generate Image sends exactly the result, one identity", async () => {
+    for (const extra of [generated, { ...generated, characterName: "Maya" }]) {
+      mockRunImageGeneration.mockClear()
+      // The editor's resolver hands the wire the node's output: the result.
+      const node = makeNode("generate-image", { prompt: "a portrait in the rain", provider: "nano-banana-pro" })
+      const char = character("u1", extra)
+      mockNodes = [char, node]
+      mockEdges = [wire("u1")]
+      mockResolveNodeInputs.mockReturnValue({ referenceImageUrls: ["http://u1/result.png"] })
+      mockRunImageGeneration.mockResolvedValue(undefined)
+      await executeNode(node as any, makeCtx())
+      const [, prompt, , refs] = mockRunImageGeneration.mock.calls[0] as [string, string, unknown, string[]]
+      expect(refs).toEqual(["http://u1/result.png"])
+      expect(prompt.match(/^- Image \d/gm)).toHaveLength(1)
+    }
+  })
+
+  it("Kling 4.0's subject starts with that same portrait", async () => {
+    const { subjects } = await klingRun([character("u1", generated)])
+    expect(subjects.map((s) => [s.name, s.imageUrl])).toEqual([["Character 1", "http://u1/result.png"]])
+  })
+
+  it("an old @character-asset mention reads as the one unnamed character; with two it stays plain; the preview agrees", async () => {
+    const one = makeNode("generate-video", { prompt: "@character-asset:1 waves", provider: "kling-4" })
+    mockNodes = [character("u1"), one]
+    mockEdges = [wire("u1")]
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+    await executeNode(one as any, makeCtx())
+    const resolved = mockRunTextToVideoGeneration.mock.calls[0][1] as string
+    expect(resolved).not.toContain("@character-asset")
+    expect(assembleVideoPrompt("generate-video", assemblerArgs(one))).toBe(resolved)
+
+    mockRunTextToVideoGeneration.mockClear()
+    mockNodes = [character("u1"), character("u2"), one]
+    mockEdges = [wire("u1"), wire("u2")]
+    await executeNode(one as any, makeCtx())
+    expect(mockRunTextToVideoGeneration.mock.calls[0][1] as string).toContain("@character-asset:1")
+  })
+
+  it("non-Latin names (he / ja / ko) are characters, under their own names", async () => {
+    for (const typed of ["מאיה", "マヤ", "마야"]) {
+      mockRunTextToVideoGeneration.mockClear()
+      const { subjects } = await klingRun([character("u1"), character("x", { characterName: typed }), character("l", { characterName: "Leo" })])
+      expect(subjects.map((s) => s.name)).toEqual(["Character 1", typed, "Leo"])
+    }
+  })
+})

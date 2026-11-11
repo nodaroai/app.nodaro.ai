@@ -663,13 +663,15 @@ export function logFfmpegVersion(tag: string): void {
   console.log(`[${tag}] ${describeFfmpegMemoryBudget(ffmpegMemoryBudgetNow())}`)
 }
 
-export function runFfprobe(args: readonly string[]): Promise<string> {
+export function runFfprobe(args: readonly string[], opts?: { timeoutMs?: number }): Promise<string> {
   return new Promise((resolve, reject) => {
     // Watchdog: ffprobe accepts remote http(s) inputs (probeVideoSource) and
     // a stalled edge/socket would otherwise hang the worker indefinitely —
     // there is no BullMQ-side rescue for a live-but-stuck handler. 120s
-    // matches the safeFetch download timeout.
-    execFile("ffprobe", args as string[], { maxBuffer: 5 * 1024 * 1024, timeout: FFPROBE_TIMEOUT_MS }, (error, stdout, stderr) => {
+    // matches the safeFetch download timeout. A caller on a tighter budget
+    // (`opts.timeoutMs`, never above it) has the process killed sooner.
+    const timeout = Math.min(FFPROBE_TIMEOUT_MS, opts?.timeoutMs ?? FFPROBE_TIMEOUT_MS)
+    execFile("ffprobe", args as string[], { maxBuffer: 5 * 1024 * 1024, timeout }, (error, stdout, stderr) => {
       if (error) {
         reject(Object.assign(new Error(`ffprobe failed: ${stderr || error.message}`), execFailureFlags(error)))
       } else {
@@ -1099,7 +1101,7 @@ export async function probeVideoSource(srcUrlOrPath: string): Promise<{
  * Used by the ai-avatar AUDIO-mode reserve preHandler to bucket the credit
  * hold by the ACTUAL clip length instead of a coarse worst-case ceiling.
  */
-export async function probeMediaDuration(srcUrlOrPath: string): Promise<number> {
+export async function probeMediaDuration(srcUrlOrPath: string, opts?: { timeoutMs?: number }): Promise<number> {
   await assertSafeProbeSource(srcUrlOrPath)
   const output = await runFfprobe([
     "-v", "error",
@@ -1107,7 +1109,7 @@ export async function probeMediaDuration(srcUrlOrPath: string): Promise<number> 
     "-show_entries", "format=duration",
     "-of", "csv=p=0",
     srcUrlOrPath,
-  ])
+  ], opts)
   const duration = parseFloat(output.trim())
   if (Number.isNaN(duration) || duration <= 0) {
     throw new Error(`probeMediaDuration failed to parse: "${output.trim()}"`)
