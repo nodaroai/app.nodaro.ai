@@ -1655,7 +1655,7 @@ All errors share the same shape:
 | 403 | `api_tokens_payer_only` | — | On a deployment-payer instance only the billing account may create a personal API token; every other user is refused. Existing tokens stay listable and revocable by their owner. |
 | 403 | `payer_balance_jwt_only` | — | (Deployment-payer instances only) A credit-balance read (`GET /v1/credits/balance`, `GET /v1/user/credits`, `GET /v1/credits/check`) authenticated **as the billing account** with an API token or an OAuth app token. The deployment's pool is the operator's number and is answered only to that account's own browser session — see [§3](#3-public-api-endpoints). No other identity is affected. |
 | 403 | `subscription_required` | — | (Cloud edition only) A pay-as-you-go account tried to spend from a first-party consumer surface (browser session in the studio or another Nodaro app). Payg credits are redeemable via the API/SDK/CLI/MCP — this never fires for token-authenticated calls. Rollout-gated: availability may lag this document. |
-| 403 | `node_not_available` | — | A run of a node this deployment does not offer you (it is hidden or not yet released). Every route that spends credits is checked as the node it runs, whatever its path (`POST /v1/suno/generate` as `suno-generate`; a trend run, `POST /v1/trends/:slug/runs` and `/estimate`, as `cast-swap`, Nodaro Motion). On Tighten Episode, Trailer, Clip Pack and Speaker Layout (`POST /v1/tighten-episode`, `POST /v1/episode-trailer`, `POST /v1/clip-pack`, `POST /v1/speaker-layout` and their `/estimate`) also a request with several recordings (`mediaUrls`) or a Master audio (`masterAudioUrl`) while Speaker Map, which they need, is not available to you. Refused before anything is probed or charged; send one recording. See [Tighten Episode → Several cameras](./nodes/processing-video/tighten-episode.md#several-cameras), [Trailer → Several cameras](./nodes/processing-video/episode-trailer.md#several-cameras) and [Clip Pack → Several cameras](./nodes/processing-video/clip-pack.md#several-cameras) and [Speaker Layout → Several cameras](./nodes/processing-video/speaker-layout.md#several-cameras). |
+| 403 | `node_not_available` | — | A run of a node this deployment does not offer you (it is hidden or not yet released). Every route that spends credits is checked as the node it runs, whatever its path (`POST /v1/suno/generate` as `suno-generate`; a trend run, `POST /v1/trends/:slug/runs` and `/estimate`, as `cast-swap`, Nodaro Motion; `POST /v1/video-director/run` as `video-director`, the Video Director; `POST /v1/pipelines` and the pipeline routes that start or continue work as `film-pipeline`, the film pipeline — see [§14](#14-pipelines)). On Tighten Episode, Trailer, Clip Pack and Speaker Layout (`POST /v1/tighten-episode`, `POST /v1/episode-trailer`, `POST /v1/clip-pack`, `POST /v1/speaker-layout` and their `/estimate`) also a request with several recordings (`mediaUrls`) or a Master audio (`masterAudioUrl`) while Speaker Map, which they need, is not available to you. Refused before anything is probed or charged; send one recording. See [Tighten Episode → Several cameras](./nodes/processing-video/tighten-episode.md#several-cameras), [Trailer → Several cameras](./nodes/processing-video/episode-trailer.md#several-cameras) and [Clip Pack → Several cameras](./nodes/processing-video/clip-pack.md#several-cameras) and [Speaker Layout → Several cameras](./nodes/processing-video/speaker-layout.md#several-cameras). |
 | 404 | `not_found` | — | Workflow, execution, or token not found. |
 | 404 | `workspace_not_found` | — | (Cloud edition, organizations) The workspace named by workspace-paid work does not exist (or was deleted mid-flight). Rollout-gated. |
 | 409 | `workspace_archived` | — | (Cloud edition, organizations) Workspace-paid work into an archived workspace. Unarchive it or move the work. Rollout-gated. |
@@ -6172,6 +6172,23 @@ in to the app (`/v1/admin/complaints/:id/infringement`,
 
 Story-to-Video pipelines orchestrate multi-stage AI production: script → characters
 → objects → locations → shot list → scene images → animate + audio + edit → post merge.
+
+### Availability
+
+A deployment offers the film pipeline or withholds it like a node: its
+availability id is `film-pipeline` (`nodes.allow` / `nodes.deny`, Admin →
+Availability — see [Deployment](./deployment.md)). Where it is not offered to
+you, `POST /v1/pipelines` and every `POST` under `/v1/pipelines/:id/…` that
+starts or continues a pipeline's work — branch, fork, stage approve, edit,
+reject and chat, applying a chat proposal, scene and shot regenerations,
+retries, entity, sub-gate and scene-helper actions — answer `403 node_not_available`, before
+anything is reserved or charged. The reads (`GET`), switching a run to manual
+(`PATCH /v1/pipelines/:id`) and `POST /v1/pipelines/:id/cancel` stay open, so a
+pipeline you started before can still be followed and stopped. A pipeline
+already running when the feature is withheld does not start its next stage (an
+automatic run included): it ends `failed` with `failure_reason:
+"node_not_available"`, and its unspent reservation is refunded. One paused at an
+approval gate stays paused.
 
 ### Branch (re-run from stage)
 

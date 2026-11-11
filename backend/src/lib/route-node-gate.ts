@@ -2,7 +2,13 @@ import { NODE_RUN_ROUTES } from "@nodaro/shared/nodes"
 import { SOCIAL_POST_NODE_PLATFORM } from "@nodaro/shared/social"
 import { MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, UPSCALE_IMAGE_PROVIDERS } from "@nodaro/shared/models"
 import { USE_CASE_NODE_TYPES, usecaseContinuePath, usecaseDescriptor } from "@nodaro/render-rules"
-import { KNOWN_NODE_TYPES, ROUTE_GATES_GENERATION, nodeUniverseLoaded } from "./availability-override.js"
+import {
+  FILM_PIPELINE_FEATURE,
+  KNOWN_NODE_TYPES,
+  ROUTE_GATES_GENERATION,
+  VIDEO_DIRECTOR_FEATURE,
+  nodeUniverseLoaded,
+} from "./availability-override.js"
 import { isCapabilityHost } from "./surface-deny.js"
 import { runtimeSurfaceProfile } from "./surface-profile.js"
 
@@ -65,8 +71,6 @@ function routeKey(route: string): string {
  */
 export const EXEMPT_ROUTES: Readonly<Record<string, string>> = Object.freeze({
   "/v1/copilot/threads/:id/messages": "Copilot is no node; the surface profile's features.hide (\"copilot\") switches it off",
-  "/v1/video-director/run": "Video Director (create_explainer / create_launch_video) is no node and has no availability lever yet",
-  "/v1/pipelines/:id/stages/script/regenerate-scene": "a step of a pipeline already started; pipelines are no node and have no availability lever yet",
 })
 
 /** `/v1/edit-image` by provider: the canvas node that sends the same request. */
@@ -149,6 +153,17 @@ export const ROUTE_NODES: Readonly<Record<string, string | BodyResolver>> = Obje
   "/v1/video-face-mesh": "cast-swap",
   "/v1/mask-erase": "cast-swap",
   "/v1/mask-outline": "cast-swap",
+
+  // ── The film pipeline and the Video Director (gateable features with no
+  //    canvas node, lib/availability-override.ts) ─────────────────────────
+  // A scene's regeneration, a step of a pipeline already started. Every other
+  // pipeline route that starts or continues work (a scene helper's included)
+  // is refused by the route family's hook, which asks the same id
+  // (lib/film-pipeline-availability.ts).
+  "/v1/pipelines/:id/stages/script/regenerate-scene": FILM_PIPELINE_FEATURE,
+  // MCP create_explainer / create_launch_video. Its speech, alignment and
+  // render steps are gated as their own nodes by their own routes.
+  "/v1/video-director/run": VIDEO_DIRECTOR_FEATURE,
 
   // ── The Cloud plugin's nested routes ───────────────────────────────────
   "/v1/generate-video-pro/continue": "generate-video-pro",

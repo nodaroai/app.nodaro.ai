@@ -59,6 +59,12 @@ export const GATEABLE_NODE_TYPES: ReadonlySet<string> = gateableNodeTypes
 const knownNodeTypes = new Set<string>()
 export const KNOWN_NODE_TYPES: ReadonlySet<string> = knownNodeTypes
 
+/** The availability id of the film pipeline (Story → Video): {@link GATEABLE_FEATURES}. */
+export const FILM_PIPELINE_FEATURE = "film-pipeline"
+
+/** The availability id of the Video Director: {@link GATEABLE_FEATURES}. */
+export const VIDEO_DIRECTOR_FEATURE = "video-director"
+
 /** A gateable id with no canvas node: see {@link GATEABLE_FEATURES}. */
 export interface GateableFeature {
   readonly type: string
@@ -80,6 +86,14 @@ export interface GateableFeature {
 export const GATEABLE_FEATURES: readonly GateableFeature[] = Object.freeze([
   // `POST /v1/cast-swap` and the routes of the same engine; every trend run is one.
   Object.freeze({ type: "cast-swap", label: "Nodaro Motion (Cast Swap)", category: "ai-video" }),
+  // The film pipeline (Story → Video): `POST /v1/pipelines` and every route that
+  // starts or continues a pipeline's work, and the MCP pipeline tools. The canvas
+  // node that opens one (`generative-pipeline`) is a node of its own.
+  Object.freeze({ type: FILM_PIPELINE_FEATURE, label: "Film pipeline (Story → Video)", category: "composition" }),
+  // The Video Director: `POST /v1/video-director/run` (MCP create_explainer /
+  // create_launch_video). Its speech, alignment and render steps are each gated
+  // as their own node by their own routes.
+  Object.freeze({ type: VIDEO_DIRECTOR_FEATURE, label: "Video Director (explainer / launch video)", category: "composition" }),
 ])
 
 for (const f of GATEABLE_FEATURES) {
@@ -123,10 +137,11 @@ export const NOT_OVERRIDE_GATED_NODE_TYPES: ReadonlySet<string> = new Set(["site
 // A brand-new node is generation 0 — gated by any override from its first day,
 // the release switch unchanged. Only an id that was live and UNGATED before it
 // joined the universe gets a generation: bump GATING_GENERATION and list the id
-// at the new number.
+// at the new number. (Generation 1: cast-swap, and route gating. Generation 2:
+// the film pipeline and the Video Director.)
 
 /** The generation this code saves an override at. */
-export const GATING_GENERATION = 1
+export const GATING_GENERATION = 2
 
 /** The generation route gating arrived in: a route refused under a node the
  *  old path derivation never named (lib/route-node-gate.ts). */
@@ -136,6 +151,11 @@ export const ROUTE_GATES_GENERATION = 1
 const GATED_SINCE: ReadonlyMap<string, number> = new Map([
   // Nodaro Motion (POST /v1/cast-swap, every trend run): live long before it was gateable.
   ["cast-swap", 1],
+  // The film pipeline and the Video Director (decided 2026-11-11): both served
+  // REST and MCP callers long before either was gateable, so an override saved
+  // at generation 1 (which already knew cast-swap) never decided them either.
+  [FILM_PIPELINE_FEATURE, 2],
+  [VIDEO_DIRECTOR_FEATURE, 2],
 ])
 
 /** The generation `type` became gateable in (0 = since the beginning). */

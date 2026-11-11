@@ -90,6 +90,27 @@ describe("tk.pipelines + tk.jobs.readJob", () => {
       expect(typeof (passedSupabase as { from?: unknown }).from).toBe("function")
       expect(result).toEqual({ pipelineId: "pipe-1", reservedCredits: 42 })
     })
+
+    it("refuses with the sendable 403 node_not_available where the deployment withholds the film pipeline — before the seed service", async () => {
+      const { __resetSurfaceProfileCacheForTests } = await import("../../surface-profile.js")
+      const { __availabilityUniverseReadyForTests } = await import("../../availability-override.js")
+      const { PluginHttpError } = await import("../types.js")
+      await __availabilityUniverseReadyForTests()
+      process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ nodes: { allow: ["generate-image"] } })
+      __resetSurfaceProfileCacheForTests()
+      try {
+        const err = await tk.pipelines
+          .createSeeded({ userId: "user-1", workflowId: "wf-1", inputPrompt: "x", plan: { target_duration_seconds: 20 } } as never)
+          .catch((e: unknown) => e)
+        expect(err).toBeInstanceOf(PluginHttpError)
+        expect((err as InstanceType<typeof PluginHttpError>).statusCode).toBe(403)
+        expect((err as InstanceType<typeof PluginHttpError>).body.error.code).toBe("node_not_available")
+        expect(mockCreateSeededPipeline).not.toHaveBeenCalled()
+      } finally {
+        delete process.env.NODARO_SURFACE_PROFILE
+        __resetSurfaceProfileCacheForTests()
+      }
+    })
   })
 
   // -------------------------------------------------------------------------

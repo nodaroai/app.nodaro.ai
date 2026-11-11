@@ -2375,6 +2375,17 @@ Pipeline tools appear only when your authorization grants the relevant
 **Nodaro Cloud only** (the Story-to-Video pipeline engine): self-hosted
 Community and Business installs do not register them.
 
+`start_pipeline`, `branch_pipeline`, `chat_pipeline_stage` and
+`apply_chat_proposal` start or continue a pipeline's work, and are not listed
+where the deployment does not offer the film pipeline (`film-pipeline` in
+its node lists or Admin → Availability — see
+[Deployment](../deployment.md)). A call that still arrives there is refused
+with `403 node_not_available` before anything is reserved. The read tools
+stay listed, so a pipeline made before can still be followed. A pipeline a
+tool starts is paid for exactly as one started through `POST /v1/pipelines`:
+on a deployment that pays for its users' generations, by that deployment,
+counted against the user's allowance.
+
 | Tool | Scope | Description |
 |------|-------|-------------|
 | `branch_pipeline` | `pipelines:execute` | Create a branch of an existing pipeline from a given stage. |
@@ -2520,6 +2531,13 @@ Author and render a narrated, time-coded concept-led explainer video in one
 call. Priced as the `video-director` entry in `list_models` (authoring,
 speech, alignment and render stages; credits vary by deployment). Returns a
 `job_id`.
+
+Not listed where the deployment does not offer the Video Director
+(`video-director` in its node lists or Admin → Availability); a call that still
+arrives is refused with `403 node_not_available` before anything is reserved.
+Its speech, alignment and render steps are each checked as their own node
+(`text-to-speech`, `forced-alignment`, `render-video`). The same holds for
+`create_launch_video`.
 
 **Input:** `topic` (string, 1–8000 chars) — what the explainer should cover.
 

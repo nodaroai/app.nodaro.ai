@@ -69,6 +69,10 @@ const ROUTES = [
   "/v1/copilot/threads/:id/messages",
   "/v1/brand-new/thing",
   "/v1/another-new/thing",
+  // The Video Director and a pipeline scene's regeneration: gateable features
+  // with no canvas node (lib/availability-override.ts), once exempt.
+  "/v1/video-director/run",
+  "/v1/pipelines/:id/stages/script/regenerate-scene",
 ] as const
 
 async function buildApp(): Promise<FastifyInstance> {
@@ -276,5 +280,55 @@ describe("a trend run follows cast-swap, as Nodaro Motion's own route does", () 
     __resetAvailabilityOverridesForTests({ nodes: new Set(storedNodesEnabled(["generate-image"])) })
     expect((await post("/v1/trends/dance/runs")).statusCode).toBe(403)
     expect((await post("/v1/trends/dance/runs", {}, ADMIN)).statusCode).toBe(200)
+  })
+})
+
+describe("the Video Director and a pipeline's scene regeneration follow their features (once exempt)", () => {
+  const DIRECTOR = "/v1/video-director/run"
+  const REGENERATE = "/v1/pipelines/p1/stages/script/regenerate-scene"
+
+  it("run on a deployment with no lists and no override", async () => {
+    expect((await post(DIRECTOR)).statusCode).toBe(200)
+    expect((await post(REGENERATE)).statusCode).toBe(200)
+  })
+
+  it("are refused under nodes.allow without their ids — node_not_available, before the handler", async () => {
+    setProfile({ nodes: { allow: ["generate-image", "cast-swap"] } })
+    for (const [url, id] of [[DIRECTOR, "video-director"], [REGENERATE, "film-pipeline"]] as const) {
+      const res = await post(url)
+      expect(res.statusCode, url).toBe(403)
+      expect(res.json().error, url).toMatchObject({ code: "node_not_available" })
+      expect(res.json().error.message, url).toContain(id)
+    }
+    expect(ran.urls).toEqual([])
+  })
+
+  it("run where the list names them", async () => {
+    setProfile({ nodes: { allow: ["generate-image", "video-director", "film-pipeline"] } })
+    expect((await post(DIRECTOR)).statusCode).toBe(200)
+    expect((await post(REGENERATE)).statusCode).toBe(200)
+  })
+
+  it("follow a deny entry of their own id", async () => {
+    setProfile({ nodes: { deny: ["video-director"] } })
+    expect((await post(DIRECTOR)).statusCode).toBe(403)
+    expect((await post(REGENERATE)).statusCode).toBe(200)
+  })
+
+  it("keep running under an override stored before they were gateable (generation 1 or none)", async () => {
+    __resetAvailabilityOverridesForTests({ nodes: new Set(storedNodesEnabled(["generate-image", "cast-swap"], 1)) })
+    expect((await post(DIRECTOR)).statusCode).toBe(200)
+    expect((await post(REGENERATE)).statusCode).toBe(200)
+    __resetAvailabilityOverridesForTests({ nodes: new Set(["generate-image"]) })
+    expect((await post(DIRECTOR)).statusCode).toBe(200)
+    expect((await post(REGENERATE)).statusCode).toBe(200)
+  })
+
+  it("are withheld from users, not admins, by an override saved by this code with them off", async () => {
+    __resetAvailabilityOverridesForTests({ nodes: new Set(storedNodesEnabled(["generate-image"])) })
+    expect((await post(DIRECTOR)).statusCode).toBe(403)
+    expect((await post(REGENERATE)).statusCode).toBe(403)
+    expect((await post(DIRECTOR, {}, ADMIN)).statusCode).toBe(200)
+    expect((await post(REGENERATE, {}, ADMIN)).statusCode).toBe(200)
   })
 })

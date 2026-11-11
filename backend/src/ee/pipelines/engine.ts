@@ -8,6 +8,8 @@ import { incrementCriticRetry, failPipelineWithCriticReason } from "./stage-util
 import { validateCanvasAgainstPlan, getStageExpectedEntityIds } from "./drift.js"
 import { applyStageEdit } from "./chat/apply-stage-edit.js"
 import { creditAdmittedPipelineWait } from "../../lib/concurrency-lanes/coordinator-wait.js"
+import { deniedCapabilityForUser } from "../../lib/availability-viewer.js"
+import { FILM_PIPELINE_FEATURE } from "../../lib/availability-override.js"
 
 export interface DriveArgs {
   supabase: SupabaseClient
@@ -159,6 +161,28 @@ export async function drivePipeline(args: DriveArgs): Promise<void> {
       })
       return
     }
+  }
+
+  // The deployment's availability of the film pipeline (`film-pipeline`),
+  // asked again before every stage it runs — as the workflow orchestrator asks
+  // a node's availability before each node it runs. Every POST that starts or
+  // continues a pipeline is refused at its door (lib/film-pipeline-availability.ts),
+  // but an auto-mode run, the reconcile cron and a resume go on with no request:
+  // where the feature is now withheld from the pipeline's owner, the next stage
+  // does not start and the pipeline fails, its unspent reservation refunded.
+  // A pipeline paused at an approval gate stays paused (returned above). On a
+  // deployment with no node lists and no override nothing is refused.
+  const withheld = await deniedCapabilityForUser(FILM_PIPELINE_FEATURE, undefined, pipeline.user_id)
+  if (withheld) {
+    console.warn(`[pipeline] ${pipelineId}: ${withheld} is not available to its owner — failing it before stage ${stageToRun}`)
+    await failPipelineWithCriticReason({
+      supabase,
+      pipelineId,
+      failureReason: "node_not_available",
+      stageName: stageToRun,
+      pipelineRow: pipeline,
+    })
+    return
   }
 
   // Dispatch.

@@ -175,6 +175,81 @@ describe("an override saved by this code (generation stored)", () => {
   })
 })
 
+/**
+ * The film pipeline (`film-pipeline`) and the Video Director (`video-director`)
+ * became gateable at generation 2, after cast-swap. Both served users long
+ * before. Nodaro production holds a stored override saved before them — at
+ * generation 0 or at generation 1 (by the code that made cast-swap gateable),
+ * and either way it never lists them. Read as an enabled-set, that would switch
+ * both off for every user; the factory set must answer instead.
+ */
+describe("the film pipeline and the Video Director: gateable features that were live before (generation 2)", () => {
+  const FEATURES = ["film-pipeline", "video-director"] as const
+
+  it("are in the gateable universe, at a generation newer than cast-swap", () => {
+    for (const id of FEATURES) expect(GATEABLE_NODE_TYPES.has(id), id).toBe(true)
+    expect(GATING_GENERATION).toBe(2)
+  })
+
+  it("follow the profile with no override stored: on without lists, off when a whitelist leaves them out", () => {
+    for (const id of FEATURES) expect(isNodeDenied(id, USER_VIEWER), id).toBe(false)
+    setProfile({ nodes: { allow: ["generate-image"] } })
+    for (const id of FEATURES) expect(isNodeDenied(id, USER_VIEWER), id).toBe(true)
+    setProfile({ nodes: { allow: ["generate-image", ...FEATURES] } })
+    for (const id of FEATURES) expect(isNodeDenied(id, USER_VIEWER), id).toBe(false)
+    setProfile({ nodes: { deny: ["video-director"] } })
+    expect(isNodeDenied("film-pipeline", USER_VIEWER)).toBe(false)
+    expect(isNodeDenied("video-director", USER_VIEWER)).toBe(true)
+  })
+
+  it("an override stored at generation 1 (it knew cast-swap, not these) does NOT switch them off", async () => {
+    // What production may hold: saved by the code that made cast-swap gateable.
+    await storedRow(storedNodesEnabled(["generate-image", "suno-generate", "cast-swap"], 1))
+    expect(nodesOverrideGeneration()).toBe(1)
+    for (const id of FEATURES) {
+      expect(isNodeDenied(id, USER_VIEWER), id).toBe(false)
+      expect(isNodeDenied(id, ADMIN_VIEWER), id).toBe(false)
+    }
+    for (const id of FEATURES) expect(effectiveDeniedNodeTypes(USER_VIEWER), id).not.toContain(id)
+    // Everything it did decide stays decided: the release switch is unchanged.
+    expect(isNodeDenied("pitch-tempo", USER_VIEWER)).toBe(true)
+    expect(isNodeDenied("cast-swap", USER_VIEWER)).toBe(false)
+  })
+
+  it("an override stored at generation 1 that left cast-swap OFF keeps it off, and still decides neither feature", async () => {
+    await storedRow(storedNodesEnabled(["generate-image"], 1))
+    expect(isNodeDenied("cast-swap", USER_VIEWER)).toBe(true)
+    for (const id of FEATURES) expect(isNodeDenied(id, USER_VIEWER), id).toBe(false)
+  })
+
+  it("an override stored before any generation does not switch them off either", async () => {
+    await storedRow(["generate-image", "suno-generate"])
+    for (const id of FEATURES) expect(isNodeDenied(id, USER_VIEWER), id).toBe(false)
+  })
+
+  it("under a whitelist that leaves them out, an older override changes nothing: the factory set withholds them", async () => {
+    setProfile({ nodes: { allow: ["generate-image"] } })
+    await storedRow(storedNodesEnabled(["generate-image", "cast-swap"], 1))
+    for (const id of FEATURES) expect(isNodeDenied(id, USER_VIEWER), id).toBe(true)
+  })
+
+  it("an override saved by this code decides them: left off withholds them from users (admins keep them), ticked releases them", async () => {
+    await storedRow(storedNodesEnabled(["generate-image"]))
+    for (const id of FEATURES) {
+      expect(isNodeDenied(id, USER_VIEWER), id).toBe(true)
+      expect(isNodeDenied(id, ADMIN_VIEWER), id).toBe(false)
+    }
+    setProfile({ nodes: { allow: ["generate-image"] } })
+    await storedRow(storedNodesEnabled(["generate-image", ...FEATURES]))
+    for (const id of FEATURES) expect(isNodeDenied(id, USER_VIEWER), id).toBe(false)
+  })
+
+  it("re-saved by the previous build (generation 1, which does not know them) reads as undecided again", async () => {
+    await storedRow(storedNodesEnabled(["generate-image"], 1))
+    for (const id of FEATURES) expect(isNodeDenied(id, USER_VIEWER), id).toBe(false)
+  })
+})
+
 describe("the admin page shows what users get", () => {
   async function getAvailability() {
     const app = Fastify({ logger: false })
@@ -198,6 +273,18 @@ describe("the admin page shows what users get", () => {
     expect(body.nodes.items.find((i) => i.id === "cast-swap")?.enabled).toBe(true)
     expect(body.nodes.items.find((i) => i.id === "pitch-tempo")?.enabled).toBe(false)
     expect(body.nodes.gating).toEqual({ stored: 0, current: GATING_GENERATION })
+  })
+
+  it("lists the film pipeline and the Video Director, with their factory state under an override saved before them", async () => {
+    let body = await getAvailability()
+    expect(body.nodes.items.find((i) => i.id === "film-pipeline")).toMatchObject({ category: "composition", enabled: true, factoryEnabled: true })
+    expect(body.nodes.items.find((i) => i.id === "video-director")).toMatchObject({ category: "composition", enabled: true, factoryEnabled: true })
+    await storedRow(storedNodesEnabled(["generate-image", "cast-swap"], 1))
+    body = await getAvailability()
+    expect(body.nodes.items.find((i) => i.id === "film-pipeline")?.enabled).toBe(true)
+    expect(body.nodes.items.find((i) => i.id === "video-director")?.enabled).toBe(true)
+    expect(body.nodes.items.find((i) => i.id === "cast-swap")?.enabled).toBe(true)
+    expect(body.nodes.gating).toEqual({ stored: 1, current: GATING_GENERATION })
   })
 
   it("under an override saved by this code: cast-swap shows the stored choice", async () => {

@@ -76,6 +76,10 @@ const JUDGES_NODES_ITSELF: Readonly<Record<string, string>> = {
   "lib/mcp/tools/verbs-speaker-map.ts": "lists the MCP tool only where its node is offered",
   "lib/mcp/tools/verbs-speaker-view.ts": "lists the MCP tool only where its node is offered",
   "lib/mcp/tools/verbs-use-case.ts": "lists the MCP tools only where their node is offered",
+  "lib/mcp/tools/pipelines.ts": "lists the pipeline tools only where the film pipeline is offered, and refuses a stale call before the services it calls directly (no route)",
+  "lib/mcp/tools/video-director-tools.ts": "lists the MCP tools only where the Video Director is offered",
+  "ee/pipelines/engine.ts": "the pipeline engine's check before each stage it runs, asked as the pipeline's owner (a worker, no route)",
+  "lib/private-plugins/toolkit.ts": "`tk.pipelines.createSeeded`: a seeded pipeline is the film pipeline whoever asks for it (a toolkit method, no route)",
 }
 
 const BACKEND_SRC = join(REPO_ROOT, "backend/src")

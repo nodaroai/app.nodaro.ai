@@ -9,6 +9,19 @@ tool call. The video director is a three-tool family built on the Phase-0
 - `create_explainer` — one-shot: author + render a concept-led explainer video.
 - `create_launch_video` — one-shot: author + render a product-launch video.
 
+## Availability
+
+`create_explainer` and `create_launch_video` are the Video Director, which a
+deployment offers or withholds like a node: the availability id is
+`video-director` (its `nodes.allow` / `nodes.deny` lists and Admin →
+Availability, see [Deployment](../deployment.md)). Where it is not offered,
+neither tool is listed, and `POST /v1/video-director/run` answers
+`403 node_not_available` before anything is reserved. The run's speech,
+alignment and render steps are each checked as their own node
+(`text-to-speech`, `forced-alignment`, `render-video`).
+`start_video_director` stays listed: it only returns the doctrine, and every
+tool it drives is checked as its own node.
+
 ## Motion graphics vs. animated footage
 
 `start_video_director`, `create_explainer`, and `create_launch_video` are the

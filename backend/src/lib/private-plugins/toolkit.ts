@@ -129,6 +129,9 @@ import { reserveLlmSideHold, sideCreditsFor, sideHoldFor, sideHoldPayerOf, sideH
 import { appBaseUrl } from "../deployment-urls.js"
 import { voiceLockActive } from "../voice-policy.js"
 import { surfaceAllowsLinkImports } from "../surface-profile.js"
+import { deniedCapabilityForUser } from "../availability-viewer.js"
+import { FILM_PIPELINE_FEATURE } from "../availability-override.js"
+import { deniedNodeRejectionMessage, nodeNotAvailableError } from "../surface-deny.js"
 import { judgeVoice, VoiceNotAvailableError, voiceNotAvailableBody } from "../voice-gender.js"
 import { getAppSettings, settingsReadFailed } from "../app-settings.js"
 import { withEarlierMaskingKeys } from "../nodaro-motion-masking.js"
@@ -2279,6 +2282,16 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       // tk.pipelines is only ever called by a loaded Cloud plugin, and the
       // seed lane guards its own prompt availability internally.
       createSeeded: async (input) => {
+        // A seeded pipeline is the film pipeline: refused where this
+        // deployment withholds it from the user, before anything is created
+        // or reserved — the REST and MCP doors' 403 `node_not_available`
+        // (lib/film-pipeline-availability.ts), sendable as it is, as
+        // `voices.assertAllowed` sends its refusal.
+        const withheld = await deniedCapabilityForUser(FILM_PIPELINE_FEATURE, undefined, input.userId)
+        if (withheld) {
+          const message = deniedNodeRejectionMessage([withheld])
+          throw new PluginHttpError(403, { error: { code: "node_not_available", message } }, nodeNotAvailableError([withheld]))
+        }
         const { createSeededPipeline } = await import("../../ee/pipelines/seed-pipeline.js")
         return createSeededPipeline(supabase, input)
       },

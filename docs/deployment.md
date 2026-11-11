@@ -902,15 +902,40 @@ optional; each array empty = "keep the default"):
   Recast's routes (its script revisions and plan included) as
   `generate-video-pro`, the render a recast produces, and a Studio production's
   sequence generation as `generate-video`.
-  One gateable id has no canvas node: `cast-swap` is Nodaro Motion —
-  `POST /v1/cast-swap` and its routes (a trend's face mask included), and every trend run
-  (`POST /v1/trends/:slug/estimate` and `/runs` answer `node_not_available`
-  where it is not offered, and the MCP tools `cast_swap`, the Full Quality pair
-  and the trend tools are not listed). With `nodes.allow` set, a credit-spending route that
-  is linked to no node is refused with `node_not_available` (the whitelist never
-  allowed it) and logged once; the few routes that run no node (Copilot, which
-  `features.hide` governs; Video Director; a pipeline's stage actions) are not
-  node-gated. Also with `nodes.allow` set, a step a Cloud plugin engine's job
+  Three gateable ids have no canvas node, and are listed in `nodes.allow` /
+  `nodes.deny` and Admin → Availability exactly like a node:
+  - `cast-swap` is Nodaro Motion — `POST /v1/cast-swap` and its routes (a
+    trend's face mask included), and every trend run (`POST /v1/trends/:slug/estimate`
+    and `/runs` answer `node_not_available` where it is not offered, and the MCP
+    tools `cast_swap`, the Full Quality pair and the trend tools are not listed).
+  - `film-pipeline` is the film pipeline (Story → Video, Cloud) — `POST /v1/pipelines`
+    and every pipeline route that starts or continues a pipeline's work (branch,
+    fork, stage approvals, edits and rejections, scene and shot regenerations,
+    retries, entity actions, sub-gates, scene helpers, stage chat and applying
+    a chat proposal)
+    answer `node_not_available` where it is not offered, before anything is
+    reserved. Reading a pipeline, its events and its stages, switching a run to
+    manual, and `POST /v1/pipelines/:id/cancel` stay open, so a pipeline started
+    before can still be followed and stopped. The MCP tools `start_pipeline`,
+    `branch_pipeline`, `chat_pipeline_stage` and `apply_chat_proposal` are not
+    listed (the read tools stay). A pipeline already running when the feature is
+    withheld does not start its next stage — an automatic run included: it
+    fails with `node_not_available` and its unspent reservation is refunded. A
+    pipeline paused at an approval gate stays paused. The canvas node that opens one (`generative-pipeline`,
+    Story → Video) is a node of its own: list both for the editor's pipeline.
+    The film pipeline's image and video prompts do not pass this deployment's
+    prompt policy (`PromptPolicy`), so a deployment that relies on one should
+    not list `film-pipeline`.
+  - `video-director` is the Video Director — `POST /v1/video-director/run`
+    (the MCP tools `create_explainer` and `create_launch_video`, which are not
+    listed where it is not offered). Its speech, alignment and render steps are
+    each gated as their own node (`text-to-speech`, `forced-alignment`,
+    `render-video`), so list those too.
+
+  With `nodes.allow` set, a credit-spending route that is linked to no node is
+  refused with `node_not_available` (the whitelist never allowed it) and logged
+  once; the one route that runs no node (Copilot, which `features.hide`
+  governs) is not node-gated. Also with `nodes.allow` set, a step a Cloud plugin engine's job
   sends to another route is gated as the node the user ran, the engine's own:
   Nodaro Motion's depth, mask, composite and audio-separation steps, and the
   image, video and text generations its job asks for, follow `cast-swap`, so
@@ -931,7 +956,8 @@ optional; each array empty = "keep the default"):
   at all: a model turned off is off for admins too.
 
   A stored override decides only what it was saved knowing. An id that became
-  gateable after the override was stored (`cast-swap`), and a route that is
+  gateable after the override was stored (`cast-swap`, and later
+  `film-pipeline` and `video-director`), and a route that is
   checked as its node only since then (the nested routes above), keep their
   factory state until the override is saved again — so upgrading never turns
   off something users had. Admin → Availability says when the stored override

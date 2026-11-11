@@ -5,6 +5,8 @@ import { WIDGET_URI } from "../widgets/registrar.js"
 import { brandTokensSchema } from "../../plan-schemas.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { siteCaptureOffered } from "./verbs-site-capture.js"
+import { VIDEO_DIRECTOR_FEATURE } from "../../availability-override.js"
+import { isNodeDenied, USER_VIEWER } from "../../surface-deny.js"
 
 /**
  * One-shot "make me a video" director tools (HyperFrames Phase 1 — Unit E).
@@ -56,6 +58,11 @@ export function launchVideoDescription(): string {
 
 export function registerVideoDirectorTools({ server, session, fastify }: RegisterOpts): void {
   if (!passesGate(session, executeGate)) return
+  // Discovery shows the users' view: a deployment that does not offer the Video
+  // Director (`video-director`, a gateable feature) lists neither tool. A call
+  // that still arrives is refused by the route's credit guard (403
+  // `node_not_available`), before anything is reserved.
+  if (isNodeDenied(VIDEO_DIRECTOR_FEATURE, USER_VIEWER)) return
 
   // ── create_explainer ──
   server.registerTool(
