@@ -88,6 +88,9 @@ export interface RouteResult {
   relayCredits?: number | null
   /** See ProviderResult.billedUnits. */
   billedUnits?: number
+  /** See ProviderResult.maskEditSourceUrl: present only when the run sent a
+   *  mask to a model that redraws outside it. */
+  maskEditSourceUrl?: string
 }
 
 // ─── Core routing engine ──────────────────────────────────────────
@@ -294,6 +297,9 @@ async function walkChainAndExecute(
       // conditional for the same reason: absent on every other result.
       ...(result.billedUnits !== undefined ? { billedUnits: result.billedUnits } : {}),
       ...(result.autoQualityKieCredits !== undefined ? { autoQualityKieCredits: result.autoQualityKieCredits } : {}),
+      // A masked edit whose model redrew outside the mask: absent on every
+      // other result, so a handler pastes the source back only when it is set.
+      ...(result.maskEditSourceUrl ? { maskEditSourceUrl: result.maskEditSourceUrl } : {}),
     }
   }
 

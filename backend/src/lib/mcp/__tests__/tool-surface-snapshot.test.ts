@@ -1473,6 +1473,16 @@ const OWNED_SETTINGS_GUARD_BYTES = 262
 const GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES = 334
 const GPT_IMAGE_2_6_FORMAT_TOTAL_BYTES = 1_014
 
+// RAISED 2026-11-11 by image_to_image's `mask_url` naming the models that take a mask
+// (`I2I_MASK_SUPPORT`, now with GPT Image 2.6 Flare's and Sunburst's edits), and that it is
+// refused with a GIF or an SVG, and nothing else. No tool was added, so the fixture does NOT move.
+// Measured by this suite: 522_636 total − 522_510 = 126 B, all on image_to_image.
+const I2I_MASK_MODELS_BYTES = 126
+// RAISED 2026-11-11 by `mask_url` on modify_image (the same argument image_to_image takes, its
+// description shared), and nothing else. No tool was added, so the fixture does NOT move. Measured
+// by this suite: 522_874 total − 522_636 = 238 B, all on modify_image.
+const MODIFY_IMAGE_MASK_BYTES = 238
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES,
   totalBytes:
@@ -1657,7 +1667,9 @@ export const TOOL_WIRE_BUDGET = {
     ESTIMATE_USE_CASE_TOOL_BYTES +
     SPEAKER_VIEW_TOOL_BYTES +
     SPEAKER_VIEW_REGION_LIMITS_BYTES +
-    GPT_IMAGE_2_6_FORMAT_TOTAL_BYTES,
+    GPT_IMAGE_2_6_FORMAT_TOTAL_BYTES +
+    I2I_MASK_MODELS_BYTES +
+    MODIFY_IMAGE_MASK_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

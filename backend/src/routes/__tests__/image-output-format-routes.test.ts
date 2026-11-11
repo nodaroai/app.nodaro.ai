@@ -191,4 +191,34 @@ describe("POST /v1/image-to-image with a format", () => {
     expect(JSON.stringify(body)).toContain(MASK_WITH_FORMAT_MESSAGE)
     expect(reserveCreditsForJob).not.toHaveBeenCalled()
   })
+
+  it("a mask with a GIF is a 400 on Sunburst too", async () => {
+    const { res } = await post("/v1/image-to-image", {
+      imageUrl: "https://cdn.example.com/src.png", prompt: "x", provider: "gpt-image-2-6-sunburst-i2i",
+      outputFormat: "gif", maskUrl: "https://cdn.example.com/mask.png",
+    })
+    expect(res.statusCode).toBe(400)
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+  })
+})
+
+// GPT Image 2.6 Flare and Sunburst take a mask of their own. It costs nothing
+// extra: the run is priced on the edit's own row, the mask not counted as an
+// input image, CHECK === DEBIT.
+describe("POST /v1/image-to-image with a mask on GPT Image 2.6", () => {
+  for (const provider of ["gpt-image-2-6-flare-i2i", "gpt-image-2-6-sunburst-i2i"] as const) {
+    for (const outputFormat of [undefined, "png", "jpeg", "webp"] as const) {
+      it(`${provider}${outputFormat ? `, ${outputFormat}` : ""}: takes it and queues it, priced as the same edit without one`, async () => {
+        const base = { imageUrl: "https://cdn.example.com/src.png", referenceImageUrls: ["https://cdn.example.com/r.png"], prompt: "paint it green", provider, quality: "high", resolution: "2K", aspectRatio: "1:1", ...(outputFormat && { outputFormat }) }
+        const plain = await post("/v1/image-to-image", base)
+        const masked = await post("/v1/image-to-image", { ...base, maskUrl: "https://cdn.example.com/mask.png" })
+        expect(masked.res.statusCode).toBe(200)
+        expect(masked.queued).toMatchObject({ provider, maskUrl: "https://cdn.example.com/mask.png" })
+        expect(masked.inputData).toMatchObject({ maskUrl: "https://cdn.example.com/mask.png" })
+        expect(masked.debit).toBe(`${provider}:high:2K:2ref`)
+        expect(masked.debit).toBe(plain.debit)
+        expect(checkEdit({ ...base, maskUrl: "https://cdn.example.com/mask.png" })).toBe(masked.debit)
+      })
+    }
+  }
 })

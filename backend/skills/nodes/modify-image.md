@@ -1,7 +1,7 @@
 ---
 node_type: modify-image
-generated_at: 2026-11-10T19:20:28.620Z
-generated_from: 5b5897436
+generated_at: 2026-11-11T12:19:38.630Z
+generated_from: 5b01a9588
 ---
 
 # Modify Image
@@ -97,6 +97,7 @@ Provide ONE of `image_url` (any publicly fetchable HTTPS URL) or `image_asset_id
 - `svg_level`
 - `aspect_ratio`
 - `negative_prompt`
+- `mask_url`
 - `structured`
 - `user_request`
 - `flow_id`

@@ -37,6 +37,9 @@ export function resolveImageToImageCreditIdentifier(req: FastifyRequest): string
   // refCount = 1 + extras (the worker concatenates them into `allImages` before
   // dispatching). swapToI2i:false because i2i is already an i2i provider.
   const extraRefs = (body?.referenceImageUrls as string[] | undefined)?.length ?? 0
+  // A masked edit on a model that follows its photo is priced at the size
+  // nearest the photo: the size the preHandler read, the one the handler's
+  // reservation reads too (`req.imageSourceSize`).
   return resolveNormalizedImageGen({
     provider,
     // The ratio the handler runs: none named on a GPT Image 2, 2.5 or 2.6 edit is "auto".
@@ -51,5 +54,12 @@ export function resolveImageToImageCreditIdentifier(req: FastifyRequest): string
     svgLevel: body?.svgLevel,
     refCount: 1 + extraRefs,
     swapToI2i: false,
+    sourceImage: req.imageSourceSize ?? undefined,
+    masked: isMasked(body?.maskUrl),
   }).identifier
+}
+
+/** True for a request that carries an inpainting mask. */
+export function isMasked(maskUrl: unknown): boolean {
+  return typeof maskUrl === "string" && maskUrl.length > 0
 }

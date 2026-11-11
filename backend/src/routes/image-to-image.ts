@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyRequest } from "fastify"
 import { sendInternalError } from "../lib/http-errors.js"
 import { insertJob } from "../lib/insert-job.js"
 import { z } from "zod"
@@ -7,20 +7,20 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
-import { resolveImageToImageCreditIdentifier, resolveImageToImageRunModel } from "./image-to-image-credit-id.js"
+import { isMasked, resolveImageToImageCreditIdentifier, resolveImageToImageRunModel } from "./image-to-image-credit-id.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.js"
 import { imageFormatFields, maskFormatConflict } from "../lib/image-format-schema.js"
 import { imageToImageAspectRatio } from "../lib/image-auto-aspect.js"
-import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
+import { probeImageDisplaySize, sourceImageForAutoAspect } from "../lib/image-source-size.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { MODIFY_IMAGE_PROVIDERS, IMAGE_ASPECT_RATIO_VALUES, IMAGE_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, IMAGE_BACKGROUND_VALUES, IMAGE_RENDERING_SPEED_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, MAX_REQUEST_IMAGE_LIMIT, requestImageLimit } from "@nodaro/shared/models"
 import { IMAGE_TO_IMAGE_ATTACH_COLUMNS } from "@nodaro/shared/entities"
 import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
-import { defaultImageModel } from "@nodaro/shared/model-catalog"
+import { defaultImageModel, sourceImageSizeNeeded, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { formatZodError } from "../lib/zod-error.js"
 import {
   ASSET_DESCRIPTION_MODEL,
@@ -107,9 +107,31 @@ const IDENTITY_PRESERVE_SUFFIX =
 // The credit-CHECK resolver lives in image-to-image-credit-id.ts; re-exported for its importers.
 export { resolveImageToImageCreditIdentifier }
 
+/**
+ * Reads the source photo's size ONCE, before the credit check, when it can
+ * change what the run sends: "auto" that keeps the photo's shape, or a masked
+ * edit on a model that follows its photo, whose size is then a pricing
+ * dimension. The check and the handler's reservation both read the answer
+ * (`req.imageSourceSize`), so they price the same size; `null` when it could
+ * not be read (the size asked is kept). Runs before Zod, so it reads only a
+ * valid url and never refuses anything.
+ */
+export async function readImageSourceSize(req: FastifyRequest): Promise<void> {
+  const body = req.body as Record<string, unknown> | null
+  if (!body) return
+  const provider = typeof body.provider === "string" && body.provider.length > 0
+    ? body.provider
+    : defaultImageModel("edit", typeof body.aspectRatio === "string" ? body.aspectRatio : undefined)
+  const aspectRatio = imageToImageAspectRatio(provider, body.aspectRatio)
+  if (!sourceImageSizeNeeded(provider, aspectRatio, isMasked(body.maskUrl))) return
+  if (typeof body.imageUrl !== "string" || !safeUrlSchema.safeParse(body.imageUrl).success) return
+  req.imageSourceSize = (await probeImageDisplaySize(body.imageUrl)) ?? null
+}
+
 export async function imageToImageRoutes(app: FastifyInstance) {
   app.post("/v1/image-to-image", {
     preHandler: [
+      readImageSourceSize,
       creditGuard(resolveImageToImageCreditIdentifier, { runModel: resolveImageToImageRunModel }),
       // The lane last, and only for a request that will make the LLM call.
       laneGuard("llm", {
@@ -156,12 +178,18 @@ export async function imageToImageRoutes(app: FastifyInstance) {
     // gives both the reserved tier and the parameters we actually send.
     //
     // "auto" on a model without a native auto keeps the source photo's shape:
-    // `imageUrl`'s size, read from its header (and only in that case), picks
-    // the model's nearest ratio. The CHECK above runs before the size is known
-    // and still prices the same tier — the ratio is not a pricing dimension on
-    // any such model (pinned in @nodaro/shared's auto-aspect-source test).
+    // `imageUrl`'s size, read from its header (and only then), picks the
+    // model's nearest ratio. A masked edit on a model that follows its photo
+    // (GPT Image 2.6 Flare and Sunburst) also takes its size from the photo,
+    // and the size is priced, so the check and this reservation read the one
+    // size `readImageSourceSize` read before the check.
     const i2iRefCount = 1 + (referenceImageUrls?.length ?? 0)
-    const sourceImage = await sourceImageForAutoAspect(provider, rawAspectRatio, imageUrl)
+    // The size the preHandler read for the credit check, so the reservation
+    // prices the same size; read here only when it was not (a direct call).
+    const masked = isMasked(maskUrl)
+    const sourceImage: SourceImageSize | undefined = req.imageSourceSize !== undefined
+      ? req.imageSourceSize ?? undefined
+      : await sourceImageForAutoAspect(provider, rawAspectRatio, imageUrl, masked)
     const normalized = resolveNormalizedImageGen({
       provider,
       aspectRatio: rawAspectRatio,
@@ -176,6 +204,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       refCount: i2iRefCount,
       swapToI2i: false,
       sourceImage,
+      masked,
     })
     const modelIdentifier = normalized.identifier
 

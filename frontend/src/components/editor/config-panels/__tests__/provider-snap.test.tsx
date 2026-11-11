@@ -593,6 +593,29 @@ describe("ModifyImageConfig — provider-snap useEffect", () => {
     expect("maskUrl" in merged).toBe(true)
   })
 
+  for (const provider of ["gpt-image-2-6-flare-i2i", "gpt-image-2-6-sunburst-i2i", "ideogram-edit", "flux-fill"]) {
+    it(`${provider} takes a mask: the mask section shows and a painted mask is kept`, () => {
+      const onUpdate = vi.fn()
+      const data = baseModifyImageData({ provider, maskUrl: "https://example.com/mask.png" })
+      const { getByText, getByAltText } = render(<ModifyImageConfig {...commonProps(onUpdate, data)} />)
+      for (const [u] of onUpdate.mock.calls) expect("maskUrl" in u, provider).toBe(false)
+      expect(getByText("Inpainting Mask")).toBeTruthy()
+      expect(getByAltText("Mask")).toBeTruthy()
+    })
+  }
+
+  for (const provider of ["gpt-image-2-6-economy-i2i", "gpt-image-2-5-flare-i2i", "gpt-image-2-i2i"]) {
+    it(`${provider} takes no mask: no mask section, a stale mask cleared`, () => {
+      const onUpdate = vi.fn()
+      const data = baseModifyImageData({ provider, maskUrl: "https://example.com/mask.png" })
+      const { queryByText } = render(<ModifyImageConfig {...commonProps(onUpdate, data)} />)
+      const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+      expect("maskUrl" in merged).toBe(true)
+      expect(merged.maskUrl).toBeUndefined()
+      expect(queryByText("Inpainting Mask")).toBeNull()
+    })
+  }
+
   it("flux-2-pro (modify-image) with stale '2K' → snaps to '2 MP'", () => {
     // flux-2-pro is a valid modify-image provider. Stale "2K" must snap to
     // "2 MP" (the provider default), not options[0] = "0.5 MP".

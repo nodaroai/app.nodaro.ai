@@ -62,6 +62,12 @@ declare module "fastify" {
     /** A Topaz image upscale's output size in the provider's units, set by
      *  `/v1/edit-image`'s preHandler BEFORE creditGuard. */
     topazImageSizeUnits?: number
+    /** The source photo's size, read ONCE by `/v1/image-to-image`'s preHandler
+     *  BEFORE creditGuard when it can change what the run sends ("auto" that
+     *  keeps the photo's shape, a masked edit that follows its photo), so the
+     *  credit check and the handler's reservation price the same size. `null`
+     *  when it was read and could not be known; absent when it was not read. */
+    imageSourceSize?: import("@nodaro/shared/model-catalog").SourceImageSize | null
     storageSnapshot?: import("./credit-guard.js").StorageSnapshot
     /** SHA-256 fingerprint of (req.url + stable-stringified body), set by
      *  creditGuard for anti-double-click dedup. Route handlers should write

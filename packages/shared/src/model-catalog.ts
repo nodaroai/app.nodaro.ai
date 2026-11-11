@@ -327,6 +327,21 @@ export interface ModelCatalogEntry {
    * as before. "auto" stays in `aspectRatios`, so every menu still offers it.
    */
   autoAspectFromSourceImage?: true
+  /**
+   * The pixel size (width, height) this model renders at each aspect ratio and
+   * size, from the provider's own table, for a PNG, JPEG or WebP. Read where a
+   * run's size is chosen from its photo's size (`maskEditMatchesSource`).
+   */
+  outputSizes?: Readonly<Record<string, Readonly<Record<string, readonly [number, number]>>>>
+  /**
+   * A masked edit on this model follows its photo: the result is pasted back
+   * onto the photo at the photo's own size, so the run keeps the photo's shape
+   * ("auto", whatever ratio it names) and renders at the size of `outputSizes`
+   * whose long side is nearest the photo's, priced at that size
+   * (`normalizeModelInput` with `context.masked`; `resolutionNearestSource`).
+   * With the photo's size unknown, the size asked is kept.
+   */
+  maskEditMatchesSource?: true
   resolutions?: readonly string[]
   /**
    * The aspect ratios at which this model renders fewer sizes than
@@ -550,6 +565,26 @@ const GPT_IMAGE_2_6_RATIOS = [
   "2:1", "1:2", "21:9", "9:21", "3:1", "1:3",
 ] as const
 const GPT_IMAGE_2_6_ECONOMY_RATIOS = ["auto", "1:1", "16:9", "9:16", "3:2", "2:3", "21:9", "4:3"] as const
+// What GPT Image 2.6 Flare and Sunburst render at each ratio and size, for a
+// PNG, JPEG or WebP (the `resolution` table of docs.kie.ai/market/gpt/
+// gpt-image-2-6-{flare,sunburst}-image-to-image, fetched 2026-11-11).
+const GPT_IMAGE_2_6_OUTPUT_SIZES = {
+  "1:1": { "1K": [1024, 1024], "2K": [2048, 2048], "4K": [2880, 2880] },
+  "3:2": { "1K": [1536, 1024], "2K": [2048, 1360], "4K": [3520, 2336] },
+  "2:3": { "1K": [1024, 1536], "2K": [1360, 2048], "4K": [2336, 3520] },
+  "4:3": { "1K": [1024, 768], "2K": [2048, 1536], "4K": [3312, 2480] },
+  "3:4": { "1K": [768, 1024], "2K": [1536, 2048], "4K": [2480, 3312] },
+  "5:4": { "1K": [1280, 1024], "2K": [2560, 2048], "4K": [3216, 2576] },
+  "4:5": { "1K": [1024, 1280], "2K": [2048, 2560], "4K": [2576, 3216] },
+  "16:9": { "1K": [1536, 864], "2K": [2048, 1152], "4K": [3840, 2160] },
+  "9:16": { "1K": [864, 1536], "2K": [1152, 2048], "4K": [2160, 3840] },
+  "2:1": { "1K": [2048, 1024], "2K": [2688, 1344], "4K": [3840, 1920] },
+  "1:2": { "1K": [1024, 2048], "2K": [1344, 2688], "4K": [1920, 3840] },
+  "21:9": { "1K": [2016, 864], "2K": [2688, 1152], "4K": [3840, 1648] },
+  "9:21": { "1K": [864, 2016], "2K": [1152, 2688], "4K": [1648, 3840] },
+  "3:1": { "1K": [1536, 512], "2K": [3072, 1024], "4K": [3840, 1280] },
+  "1:3": { "1K": [512, 1536], "2K": [1024, 3072], "4K": [1280, 3840] },
+} as const satisfies Record<string, Record<string, readonly [number, number]>>
 const GPT_IMAGE_2_6_VALUE_LABELS = {
   "3:2": "3:2 (Landscape)", "2:3": "2:3 (Portrait)",
   "5:4": "5:4 (Near-square)", "4:5": "4:5 (Near-square)",
@@ -1175,11 +1210,13 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "openai",
     label: "GPT Image 2.6 Flare (I2I)",
     series: "GPT Image",
-    description: "Fast GPT Image 2.6 edits - up to 16 input images, priced per image. Writes PNG, JPEG, WebP, an animated GIF or an SVG. Pick it while iterating.",
-    useCases: ["edit", "high-res"],
-    features: ["reference-image"],
+    description: "Fast GPT Image 2.6 edits - up to 16 input images, priced per image. Writes PNG, JPEG, WebP, an animated GIF or an SVG. Takes an inpainting mask (PNG, JPEG or WebP; the rest of the picture is kept as it was). Pick it while iterating.",
+    useCases: ["edit", "inpaint", "high-res"],
+    features: ["reference-image", "mask"],
     aspectRatios: GPT_IMAGE_2_6_RATIOS,
     autoAspectFromSourceImage: true,
+    outputSizes: GPT_IMAGE_2_6_OUTPUT_SIZES,
+    maskEditMatchesSource: true,
     resolutions: ["1K", "2K", "4K"],
     qualities: ["auto", "low", "medium", "high", "xhigh", "max"],
     defaultQuality: "medium",
@@ -1283,11 +1320,13 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "openai",
     label: "GPT Image 2.6 Sunburst (I2I)",
     series: "GPT Image",
-    description: "Precision GPT Image 2.6 edits - up to 16 input images, priced per image. Writes PNG, JPEG, WebP, an animated GIF or an SVG. Pick it for finished, detail-critical edits.",
-    useCases: ["edit", "high-res"],
-    features: ["reference-image"],
+    description: "Precision GPT Image 2.6 edits - up to 16 input images, priced per image. Writes PNG, JPEG, WebP, an animated GIF or an SVG. Takes an inpainting mask (PNG, JPEG or WebP; the rest of the picture is kept as it was). Pick it for finished, detail-critical edits.",
+    useCases: ["edit", "inpaint", "high-res"],
+    features: ["reference-image", "mask"],
     aspectRatios: GPT_IMAGE_2_6_RATIOS,
     autoAspectFromSourceImage: true,
+    outputSizes: GPT_IMAGE_2_6_OUTPUT_SIZES,
+    maskEditMatchesSource: true,
     resolutions: ["1K", "2K", "4K"],
     qualities: ["auto", "low", "medium", "high", "xhigh", "max"],
     defaultQuality: "medium",
@@ -4183,8 +4222,80 @@ export interface ModelInputContext {
    * resolve "auto" on a model without a native auto, or whose own auto does
    * not keep the photo's shape (`autoAspectFromSourceImage`); absent or
    * unusable means the size is unknown and "auto" snaps the way it always has.
+   * Also read by a masked edit on a model whose result follows its photo
+   * (`maskEditMatchesSource`): it decides the ratio and the size.
    */
   sourceImage?: SourceImageSize
+  /** The request carries an inpainting mask (`maskUrl`). */
+  masked?: boolean
+}
+
+/**
+ * True when a masked request on `modelId` follows its photo
+ * (`maskEditMatchesSource`): its ratio and size come from the photo's size.
+ */
+export function maskEditMatchesSource(modelId: string | undefined, masked: unknown): boolean {
+  return masked === true && !!modelId && MODEL_CATALOG[modelId]?.maskEditMatchesSource === true
+}
+
+/**
+ * True when the photo's size can change what a request on `modelId` sends:
+ * "auto" that keeps the photo's shape (`autoAspectNeedsSourceImage`), or a
+ * masked edit that follows its photo (`maskEditMatchesSource`). A caller that
+ * has to fetch the size asks this first.
+ */
+export function sourceImageSizeNeeded(modelId: string | undefined, aspectRatio: unknown, masked: unknown): boolean {
+  return autoAspectNeedsSourceImage(modelId, aspectRatio) || maskEditMatchesSource(modelId, masked)
+}
+
+/**
+ * The size a MASKED request on `modelId` runs, and is priced, at once its
+ * photo's size is known — what `normalizeModelInput` sends for it. For an
+ * estimate that knows the photo's size (the editor's badge, a workflow
+ * estimate). `undefined` when the model does not follow its photo
+ * (`maskEditMatchesSource`) or the size is unusable: the caller keeps its own.
+ */
+export function maskedEditResolution(
+  modelId: string,
+  levers: { aspectRatio?: unknown; resolution?: unknown; background?: unknown; outputFormat?: unknown },
+  sourceImage: SourceImageSize | undefined,
+): string | undefined {
+  if (!maskEditMatchesSource(modelId, true) || !usableSize(sourceImage)) return undefined
+  const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)
+  return normalizeModelInput(
+    modelId,
+    { aspectRatio: str(levers.aspectRatio), resolution: str(levers.resolution), background: str(levers.background), outputFormat: str(levers.outputFormat) },
+    { sourceImage, masked: true },
+  ).resolution
+}
+
+/**
+ * The size of `modelId` whose rendered long side, at `aspectRatio`, is nearest
+ * the photo's long side (`outputSizes`; nearest by ratio, so 1500 px is nearer
+ * 2048 than 1024; a tie goes to the larger size). `undefined` when the model
+ * has no size table for that ratio or the photo's size is unusable.
+ */
+export function resolutionNearestSource(
+  modelId: string,
+  aspectRatio: unknown,
+  source: SourceImageSize | undefined,
+): string | undefined {
+  const m = MODEL_CATALOG[modelId]
+  const table = m?.outputSizes
+  if (!table || typeof aspectRatio !== "string" || !usableSize(source)) return undefined
+  // Own keys only: a ratio such as "constructor" must not read the prototype.
+  if (!Object.prototype.hasOwnProperty.call(table, aspectRatio)) return undefined
+  const sizes = table[aspectRatio]!
+  const long = Math.max(source.width, source.height)
+  let best: string | undefined
+  let bestDist = Infinity
+  for (const resolution of m.resolutions ?? Object.keys(sizes)) {
+    const px = Object.prototype.hasOwnProperty.call(sizes, resolution) ? sizes[resolution] : undefined
+    if (!px) continue
+    const dist = Math.abs(Math.log(Math.max(px[0], px[1]) / long))
+    if (dist <= bestDist + ASPECT_TIE_EPSILON) { bestDist = dist; best = resolution }
+  }
+  return best
 }
 
 /** True for the "auto" aspect token in any case or padding. */
@@ -4392,12 +4503,31 @@ export function normalizeModelInput(
   out.gifFrameDurationMs = format.levers.gifFrameDurationMs
   out.svgLevel = format.levers.svgLevel
   const gif = format.levers.outputFormat === "gif"
+  // A masked edit that follows its photo runs at "auto" whatever ratio it
+  // names, and at the size nearest the photo (`maskEditMatchesSource`).
+  const followsSource = !gif && maskEditMatchesSource(modelId, context.masked)
+  const askedRatio = followsSource ? "auto" : input.aspectRatio
 
   const sourceRatio =
-    !gif && autoAspectNeedsSourceImage(modelId, input.aspectRatio) && usableSize(context.sourceImage)
+    !gif && autoAspectNeedsSourceImage(modelId, askedRatio) && usableSize(context.sourceImage)
       ? nearestCatalogAspectRatio(context.sourceImage.width, context.sourceImage.height, m.aspectRatios ?? [])
       : undefined
-  if (gif) {
+  if (followsSource && input.aspectRatio !== undefined && !isAutoAspectToken(input.aspectRatio)) {
+    const to = sourceRatio ?? "auto"
+    if (to !== input.aspectRatio) {
+      adjustments.push({
+        field: "aspectRatio",
+        from: input.aspectRatio,
+        to,
+        reason: sourceRatio !== undefined
+          ? `A masked edit on ${m.label} keeps the photo's shape — using "${sourceRatio}", the supported ratio closest to the source image (${context.sourceImage!.width}x${context.sourceImage!.height}).`
+          : `A masked edit on ${m.label} keeps the photo's shape — using "auto".`,
+      })
+    }
+    out.aspectRatio = to
+  } else if (followsSource && input.aspectRatio === undefined) {
+    out.aspectRatio = sourceRatio ?? "auto"
+  } else if (gif) {
     // A GIF is square, IMAGE_GIF_FRAME_SIZE a frame: neither lever applies.
     // "auto" leaves the shape to the model, and square is its answer.
     if (input.aspectRatio !== undefined && input.aspectRatio !== "1:1" && !isAutoAspectToken(input.aspectRatio)) {
@@ -4409,14 +4539,14 @@ export function normalizeModelInput(
       })
     }
     out.aspectRatio = input.aspectRatio === undefined ? undefined : "1:1"
-  } else if (sourceRatio !== undefined && input.aspectRatio !== undefined) {
+  } else if (sourceRatio !== undefined && askedRatio !== undefined) {
     const { width, height } = context.sourceImage!
     const why = m.autoAspectFromSourceImage === true
       ? `${m.label}'s own "auto" does not keep the photo's shape`
       : `${m.label} has no "auto" aspect ratio`
     adjustments.push({
       field: "aspectRatio",
-      from: input.aspectRatio,
+      from: input.aspectRatio ?? askedRatio,
       to: sourceRatio,
       reason: `${why} — using "${sourceRatio}", the supported ratio closest to the source image's shape (${width}x${height}).`,
     })
@@ -4424,7 +4554,23 @@ export function normalizeModelInput(
   } else {
     out.aspectRatio = snap("aspectRatio", input.aspectRatio, m.aspectRatios)
   }
-  if (gif) {
+  if (followsSource) {
+    // The size whose long side is nearest the photo's: the result is the
+    // photo's own size, so the run is rendered, and priced, near it.
+    const asked = snap("resolution", input.resolution, m.resolutions, defaultResolutionFor(modelId))
+    const nearest = resolutionNearestSource(modelId, out.aspectRatio, context.sourceImage)
+    const from = asked ?? m.defaultResolution ?? m.resolutions?.[0]
+    if (nearest !== undefined && from !== undefined && nearest !== from) {
+      const { width, height } = context.sourceImage!
+      adjustments.push({
+        field: "resolution",
+        from,
+        to: nearest,
+        reason: `A masked edit on ${m.label} is delivered at the photo's own size (${width}x${height}) — rendering at ${nearest}, the size nearest it.`,
+      })
+    }
+    out.resolution = nearest ?? asked
+  } else if (gif) {
     if (input.resolution !== undefined) {
       adjustments.push({
         field: "resolution",

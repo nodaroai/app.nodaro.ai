@@ -134,10 +134,21 @@ describe("another model is untouched by the format levers", () => {
     ])
   })
 
-  it("no format sends a mask, a markup or a compression", () => {
+  it("no format sends a markup or a compression", () => {
     for (const [id, config] of Object.entries(KIE_IMAGE_MODELS)) {
       for (const [format, fields] of Object.entries(config.inputFieldsByFormat ?? {})) {
-        for (const never of ["mask_url", "markup", "output_compression"]) expect(fields, `${id} ${format}`).not.toContain(never)
+        for (const never of ["markup", "output_compression"]) expect(fields, `${id} ${format}`).not.toContain(never)
+      }
+    }
+  })
+
+  // KIE refuses a mask with a GIF or an SVG; only a model that reads a mask in
+  // its own form (`maskFormat`) sends one, and then with PNG, JPEG and WebP.
+  it("a mask is sent only by a model with a maskFormat, never with a GIF or an SVG", () => {
+    for (const [id, config] of Object.entries(KIE_IMAGE_MODELS)) {
+      for (const [format, fields] of Object.entries(config.inputFieldsByFormat ?? {})) {
+        const sendsMask = config.maskFormat !== undefined && ["png", "jpeg", "webp"].includes(format)
+        expect(fields.includes("mask_url"), `${id} ${format}`).toBe(sendsMask)
       }
     }
   })

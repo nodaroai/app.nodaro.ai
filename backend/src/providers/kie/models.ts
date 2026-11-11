@@ -105,6 +105,24 @@ export interface KieModelConfig {
    */
   maskEditColor?: "black"
   /**
+   * SCHEMA FACT: the file an inpainting `mask_url` must be, when it is not a
+   * plain grey image. `"alpha-transparent-edits"` ⇒ a PNG with an alpha
+   * channel, the size of the source image, fully transparent where the picture
+   * should change and opaque where it is kept (an opaque white-on-black mask
+   * is refused). `generateImage` in kie/image.ts converts a caller's mask
+   * (white = change) into it, a grey level becoming a partial transparency.
+   * The mask is sent only with the output formats whose field list names
+   * `mask_url` (`inputFieldsByFormat`).
+   */
+  maskFormat?: "alpha-transparent-edits"
+  /**
+   * MODEL FACT: a masked edit redraws the whole picture, outside the mask too
+   * (closely, but not the source's own pixels). A run that sent a caller's
+   * mask says so on its result (`maskEditSourceUrl`), and the image-to-image
+   * handler pastes the source back everywhere outside the mask.
+   */
+  maskEditRedrawsOutside?: true
+  /**
    * KIE bills this model by what each run used, so a job records the task's own
    * `creditsConsumed` as its cost. `credits` / `cost` stay the listed figure,
    * used only when a record does not carry one.
@@ -161,7 +179,9 @@ const GPT_IMAGE_2_6_ECONOMY_FIELDS_I2I = [...GPT_IMAGE_2_6_ECONOMY_FIELDS, "inpu
  * add the format and never `output_compression`. A GIF takes no ratio or size:
  * from a prompt its frame `size` is sent as 512x512; the edit schema has no
  * `size`, so an edit sends none. An SVG sends `svg.model` and no background.
- * None of them sends `mask_url` (no 2.6 request does yet).
+ * An edit's PNG, JPEG and WebP also send `mask_url` when the caller gave a
+ * mask (fetched 2026-11-11: the schema refuses it with a GIF, an SVG or
+ * `markup`, so neither list names it and no request sends `markup`).
  */
 const GPT_IMAGE_2_6_FORMAT_FIELDS = {
   png: GPT_IMAGE_2_6_FIELDS,
@@ -171,9 +191,9 @@ const GPT_IMAGE_2_6_FORMAT_FIELDS = {
   svg: ["prompt", "aspect_ratio", "resolution", "quality", "moderation", "output_format", "svg"],
 } as const satisfies Record<string, readonly string[]>
 const GPT_IMAGE_2_6_FORMAT_FIELDS_I2I = {
-  png: GPT_IMAGE_2_6_FIELDS_I2I,
-  jpeg: [...GPT_IMAGE_2_6_FIELDS_I2I, "output_format"],
-  webp: [...GPT_IMAGE_2_6_FIELDS_I2I, "output_format"],
+  png: [...GPT_IMAGE_2_6_FIELDS_I2I, "mask_url"],
+  jpeg: [...GPT_IMAGE_2_6_FIELDS_I2I, "output_format", "mask_url"],
+  webp: [...GPT_IMAGE_2_6_FIELDS_I2I, "output_format", "mask_url"],
   gif: ["prompt", "input_urls", "quality", "background", "moderation", "output_format", "frame_count", "frame_duration_ms"],
   svg: ["prompt", "input_urls", "aspect_ratio", "resolution", "quality", "moderation", "output_format", "svg"],
 } as const satisfies Record<string, readonly string[]>
@@ -480,7 +500,8 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
   // Prices were measured on 2026-11-09 against real runs.
   // See: docs.kie.ai/market/gpt/gpt-image-2-6-{flare,sunburst,economy}-{text,image}-to-image.md
   // `inputFields` is what this release sends of each schema, by output format
-  // (`inputFieldsByFormat`); the masks come with that feature. The edit ids' 16:9 default is not
+  // (`inputFieldsByFormat`). Flare's and Sunburst's edits take an inpainting
+  // mask (`maskFormat`, `maskEditRedrawsOutside`); Economy's takes none. The edit ids' 16:9 default is not
   // what /v1/image-to-image sends with no ratio named (see the GPT Image 2.5
   // note above). KIE's own `auto` renders 2.6 square whatever the photo, so
   // "auto" with a photo reaches this provider already resolved to the ratio
@@ -506,6 +527,10 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     costFromTaskRecord: true,
     inputType: "image-to-image",
     imageParam: "input_urls",  // Array, max 16
+    // A live masked run (2026-11-11): an opaque mask is refused; a transparent
+    // area is where it changes, and outside it the picture is redrawn closely.
+    maskFormat: "alpha-transparent-edits",
+    maskEditRedrawsOutside: true,
     extraParams: { aspect_ratio: "16:9", resolution: "1K", quality: "medium" },
   },
   "gpt-image-2-6-sunburst": {
@@ -529,6 +554,8 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     costFromTaskRecord: true,
     inputType: "image-to-image",
     imageParam: "input_urls",  // Array, max 16
+    maskFormat: "alpha-transparent-edits",
+    maskEditRedrawsOutside: true,
     extraParams: { aspect_ratio: "16:9", resolution: "1K", quality: "medium" },
   },
   "gpt-image-2-6-economy": {

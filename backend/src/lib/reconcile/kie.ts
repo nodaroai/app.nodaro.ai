@@ -43,6 +43,7 @@ import { readDraftAudioMux, draftAudioMuxOutputData } from "../seedance-draft-au
 import { applyDraftAudioMux, draftAudioWarningOutputData, type DraftAudioMuxResult } from "../seedance-draft-audio-apply.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
+import { recoveredMaskComposite } from "./mask-paste-back.js"
 import { isEntityMediaJobType, recoverEntityJob } from "./entity-recovery.js"
 import { resubmitSeedanceEdit } from "./seedance-edit-resubmit.js"
 import { requestedAspectRatioOf } from "../../providers/kie/aspect-ratio-sentence.js"
@@ -479,6 +480,10 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
     // audio mux exactly as the worker would (recipe stamped on the job).
     const finalizeMedia = await draftFinalizeMedia(row, input, result.url)
     const mediaUrl = finalizeMedia?.url
+    // A recovered inpaint or masked edit gets the paste-back its worker runs
+    // before finalize (REFUND-CRITICAL there too: a failure throws into the
+    // catch below, never a redraw finalized as the result).
+    const composite = await recoveredMaskComposite(row, result.url)
 
     await finalizeJobWithMedia({
       jobId: row.id,
@@ -488,12 +493,13 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
       ...(loopTrimAddon > 0 && { loopTrimAddonRefundCredits: loopTrimAddon }),
       ...(meteredBaseCredits !== undefined && { meteredBaseCredits }),
       result: {
-        url: result.url,
-        extraUrls: result.extraUrls,
+        url: composite?.url ?? result.url,
+        ...(composite ? {} : { extraUrls: result.extraUrls }),
         cost: null,  // committed at reservation; actual cost is unknown post-reconcile
         providerUsed: null,
         providerMs: result.providerMs,
       },
+      ...(composite?.extraOutputData && { extraOutputData: composite.extraOutputData }),
       ...(finalizeMedia?.warning && { extraOutputData: draftAudioWarningOutputData(finalizeMedia) }),
       // A recovered draft is the RAW clip: no audio merge / voice mux ran, so
       // it records the take length and `draftAudioMux: null` — what the stored

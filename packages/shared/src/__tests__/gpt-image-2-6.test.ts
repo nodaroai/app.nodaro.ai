@@ -208,6 +208,13 @@ describe("GPT Image 2.6: the images a run sends", () => {
     expect(gptImage26EstimatedImages(edit, { referenceImageUrl: A }, 0)).toBe(2)
   })
 
+  it("a mask is not an input image: neither a painted one nor a wired one is counted", () => {
+    const edit = "gpt-image-2-6-flare-i2i"
+    const wires = [{ target: "n", targetHandle: "image" }, { target: "n", targetHandle: "mask" }]
+    expect(countImageInputEdges(wires, "n")).toBe(0)
+    expect(gptImage26EstimatedImages(edit, { maskUrl: A }, countImageInputEdges(wires, "n"))).toBe(1)
+  })
+
   it("wires count reference images, identity nodes and every image wire after the source, for this node only", () => {
     const edges = [
       { target: "n", targetHandle: "references" },

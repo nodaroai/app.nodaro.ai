@@ -13,6 +13,7 @@ describe("per-image prices on the canvas", () => {
   it.each(NODES)("%s passes its wired images to the price id", (file) => {
     const source = readFileSync(resolve(__dirname, "..", file), "utf8")
     expect(source).toContain("useWiredImageRefCount(id)")
-    expect(source).toMatch(/buildCreditModelIdentifier\([\s\S]*?wiredImageRefs,?\s*\)/)
+    // The wired-image count is passed; a later argument (the masked edit's photo) may follow it.
+    expect(source).toMatch(/buildCreditModelIdentifier\([^;]*?\bwiredImageRefs\b[^;]*?\)/)
   })
 })

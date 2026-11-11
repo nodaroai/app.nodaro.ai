@@ -56,6 +56,11 @@ export interface ProviderResult {
    *  this figure. Absent on every other run, and on an Auto run whose task
    *  record has no figure (that run commits its reservation). */
   autoQualityKieCredits?: number
+  /** Set only when the run sent the caller's inpainting mask to a model that
+   *  redraws the whole picture, outside the mask too: the source image exactly
+   *  as it was sent (the image the mask is aligned to). The image-to-image
+   *  handler pastes it back everywhere outside the mask. */
+  maskEditSourceUrl?: string
 }
 
 // Capabilities a provider can support

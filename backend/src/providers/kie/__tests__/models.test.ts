@@ -179,3 +179,32 @@ describe("maskEditColor (an inpainting mask read black = edit)", () => {
     expect(blackEdit.filter((id) => (IMAGE_EDIT_PROVIDERS as readonly string[]).includes(id))).toEqual([])
   })
 })
+
+describe("maskFormat / maskEditRedrawsOutside (a mask in a form of the model's own)", () => {
+  const declaring = (pick: (c: KieModelConfig) => unknown) =>
+    Object.entries(KIE_IMAGE_MODELS).filter(([, c]) => pick(c)).map(([id]) => id).sort()
+
+  it("is declared on GPT Image 2.6 Flare's and Sunburst's edits, and on nothing else", () => {
+    expect(declaring((c) => c.maskFormat)).toEqual(["gpt-image-2-6-flare-i2i", "gpt-image-2-6-sunburst-i2i"])
+    expect(declaring((c) => c.maskEditRedrawsOutside)).toEqual(["gpt-image-2-6-flare-i2i", "gpt-image-2-6-sunburst-i2i"])
+  })
+
+  // generateImage converts the mask; the editImage lane forwards mask_url as it is.
+  it("is declared on no SKU the edit-image lane can send a mask to", () => {
+    const declared = declaring((c) => c.maskFormat || c.maskEditRedrawsOutside)
+    expect(declared.filter((id) => (IMAGE_EDIT_PROVIDERS as readonly string[]).includes(id))).toEqual([])
+  })
+
+  it("lets each such model send mask_url with a PNG, a JPEG or a WebP, never with a GIF or an SVG", () => {
+    for (const id of declaring((c) => c.maskFormat)) {
+      const byFormat = KIE_IMAGE_MODELS[id]!.inputFieldsByFormat!
+      for (const format of ["png", "jpeg", "webp"]) expect(byFormat[format]).toContain("mask_url")
+      for (const format of ["gif", "svg"]) expect(byFormat[format]).not.toContain("mask_url")
+      for (const format of Object.keys(byFormat)) expect(byFormat[format]).not.toContain("markup")
+    }
+  })
+
+  it("leaves the mask out of Economy's edit", () => {
+    expect(KIE_IMAGE_MODELS["gpt-image-2-6-economy-i2i"]!.inputFieldsByFormat!.png).not.toContain("mask_url")
+  })
+})

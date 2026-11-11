@@ -32,7 +32,7 @@ import {
 import { imageFormatArgs, imageFormatBody } from "./_image-format-args.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { defaultImageModel, isAutoAspectToken, modelIdsByKindMode } from "@nodaro/shared/model-catalog"
-import { IMAGE_BACKGROUND_VALUES, IMAGE_QUALITY_VALUES, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, requestImageLimit } from "@nodaro/shared/models"
+import { I2I_MASK_SUPPORT, IMAGE_BACKGROUND_VALUES, IMAGE_QUALITY_VALUES, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, requestImageLimit } from "@nodaro/shared/models"
 import { SCRIPT_SCENE_COUNT_RANGE, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TARGET_DURATION_DEFAULT, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared/nodes"
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { imageToImageLevers, normalizeImageInput, requestedAspectRatio, savedGenerationModel } from "../normalize.js"
@@ -48,6 +48,9 @@ import { OVERLAY_LAYER_KINDS, overlayTextStyleSchema, overlayQrStyleSchema, over
 // to Claude without locking the schema down.
 const T2I_MODEL_IDS = modelIdsByKindMode("image", ["t2i"], { includeHidden: true })
 const I2I_MODEL_IDS = modelIdsByKindMode("image", ["i2i", "edit"], { includeHidden: true })
+// `mask_url` on modify_image and image_to_image: the models that take a mask of their own.
+const I2I_MASK_URL_DESCRIPTION =
+  `Inpainting mask image URL (white=edit, black=keep). Used by ${[...I2I_MASK_SUPPORT].join(", ")}; others ignore it. Not with GIF or SVG.`
 // _wait-for-job.ts is intentionally retained but unimported. It implements
 // a sync block-on-completion path for tools (used briefly in #1830 to test
 // whether Cursor's tool-call cancellation was async-related — it wasn't,
@@ -457,6 +460,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           ...imageFormatArgs,
           aspect_ratio: z.string().optional().describe("Aspect ratio. 'auto' keeps the photo's shape on every model. Variations and unsupported values fall back."),
           negative_prompt: z.string().max(2000).optional(),
+          mask_url: z.string().url().optional().describe(I2I_MASK_URL_DESCRIPTION),
           structured: StructuredFields.optional(),
         },
                 outputSchema: {
@@ -574,6 +578,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           ...(args.background ? { background: args.background } : {}),
           ...imageFormatBody(args),
           negativePrompt: args.negative_prompt,
+          ...(args.mask_url ? { maskUrl: args.mask_url } : {}),
           mcp_client: session.clientName,
           userId: session.userId,
         }
@@ -700,7 +705,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         aspect_ratio: z.string().optional(),
         negative_prompt: z.string().max(5000).optional(),
         seed: z.number().int().min(0).optional(),
-        mask_url: z.string().url().optional().describe("Inpainting mask image URL (white=edit, black=keep)."),
+        mask_url: z.string().url().optional().describe(I2I_MASK_URL_DESCRIPTION),
         ...imageFormatArgs,
       },
       outputSchema: {

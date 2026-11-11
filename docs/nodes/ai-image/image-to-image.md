@@ -26,16 +26,28 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | Quality | select | varies | Available for GPT Image 2.6 Flare and Sunburst (auto, low, medium, high, extra high, max; medium by default; at auto the run costs what it really used, at most the max price), gpt-image-i2i (medium/high), seedream-edit (basic/high), seedream-5-lite-i2i (basic/high), seedream-5-pro-i2i (basic 1K / high 2K) |
 | Rendering Speed | select | -- | Available for ideogram variants: turbo, balanced, quality |
 | Seed | number | -- | Reproducibility seed (select providers) |
-| Mask | image/canvas | -- | Inpainting mask for the mask models (ideogram-edit, flux-fill). White = the area to change, black = keep — the same on every model. Painted via a mask editor modal. |
+| Mask | image/canvas | -- | Inpainting mask for the mask models (ideogram-edit, flux-fill, gpt-image-2-6-flare-i2i, gpt-image-2-6-sunburst-i2i). White = the area to change, black = keep — the same on every model. Painted via a mask editor modal, or wired in from a Paint Mask or Generate Mask node. See [Masks](#masks). |
 | Reference Image | image | -- | Additional reference for style guidance |
 
 ## Inputs & Outputs
 
 **Inputs:**
 - `image` -- source image from an upstream node (Upload Image, Generate Image, etc.)
+- `mask` -- *optional* inpainting mask (white = change), shown on the mask models only
 
 **Outputs:**
 - `out` -- transformed image URL
+
+## Masks
+
+A mask limits the edit to the area painted white; black is kept. Four models take one: Ideogram Edit, FLUX Fill, and GPT Image 2.6 Flare and Sunburst (`gpt-image-2-6-flare-i2i`, `gpt-image-2-6-sunburst-i2i`). On any other model the mask is ignored (the editor hides it and clears a painted one).
+
+- **GPT Image 2.6 keeps the rest of the picture exactly as it was.** The model redraws the whole picture, so after the run the source image is pasted back everywhere outside the mask, with a soft edge a few pixels wide just inside the painted area, so no seam shows. The result is the source image's size. In a PNG the area outside the mask is the source's own pixels; a JPEG or WebP is saved once more in its format. The job's output says so (`maskComposited: true`).
+- **The size and shape follow the photo.** A masked GPT Image 2.6 edit always keeps the photo's shape (a ratio set on the node is ignored, and Auto picks the supported ratio nearest the photo), and renders at the size (1K, 2K or 4K) whose long side is nearest the photo's, by the model's own size table: a 768×1024 photo runs at 1K, a 3000×4000 one at 4K, whatever size is set. It is priced at that size, so you never pay for 4K and get a 1K picture. What changed is reported in the response's `adjustments`. When the photo's size cannot be read, the size set is kept.
+- **A mask costs nothing extra.** A masked GPT Image 2.6 edit is priced exactly as the same edit without one at that size: by quality, size and input images, and the mask is not counted as an input image. The editor's price follows the photo when the node it comes from records the photo's size (a generated or uploaded image).
+- **Not with a GIF or an SVG.** A mask with Format GIF or SVG is refused before anything is charged (`400`). PNG, JPEG and WebP take one.
+- On GPT Image 2.6, grey in the mask is a partial change, so a soft brush edge stays soft.
+
 ## Supported Providers
 
 | Provider | Label | Description | Key Capability |
@@ -52,8 +64,8 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | gpt-image-2-i2i | GPT Image 2 | Higher resolution GPT Image; 1K/2K/4K | Resolution options |
 | gpt-image-2-5-flare-i2i | GPT Image 2.5 Flare | Fast GPT Image 2.5 edits, up to 16 source images; 1K/2K/4K at **17<!-- credits: gpt-image-2-5-flare-i2i --> / 28<!-- credits: gpt-image-2-5-flare-i2i:2K --> / 44 credits**<!-- credits: gpt-image-2-5-flare-i2i:4K --> | Resolution options |
 | gpt-image-2-5-sunburst-i2i | GPT Image 2.5 Sunburst | Precision GPT Image 2.5 edits, up to 16 source images — tightest control for demanding retouches, slower; same **17<!-- credits: gpt-image-2-5-sunburst-i2i --> / 28<!-- credits: gpt-image-2-5-sunburst-i2i:2K --> / 44 credits**<!-- credits: gpt-image-2-5-sunburst-i2i:4K --> | Resolution options |
-| gpt-image-2-6-flare-i2i | GPT Image 2.6 Flare | The default edit model. Fast GPT Image 2.6 edits, up to 16 input images, priced per image: at medium 1K, **29 credits**<!-- credits: gpt-image-2-6-flare-i2i:medium:1K:1ref --> with one image, **47 credits**<!-- credits: gpt-image-2-6-flare-i2i:medium:1K:4ref --> with four. As a 9–12 frame GIF at medium with one image, **38 credits**<!-- credits: gpt-image-2-6-flare-i2i:medium:gif-9-12:1ref -->; as an SVG Standard at medium 1K, **35 credits**<!-- credits: gpt-image-2-6-flare-i2i:medium:1K:svg-standard:1ref --> | Quality, resolution and format options |
-| gpt-image-2-6-sunburst-i2i | GPT Image 2.6 Sunburst | Precision GPT Image 2.6 edits, up to 16 input images, for finished, detail-critical work. Same price as Flare | Quality and resolution options |
+| gpt-image-2-6-flare-i2i | GPT Image 2.6 Flare | The default edit model. Fast GPT Image 2.6 edits, up to 16 input images, priced per image: at medium 1K, **29 credits**<!-- credits: gpt-image-2-6-flare-i2i:medium:1K:1ref --> with one image, **47 credits**<!-- credits: gpt-image-2-6-flare-i2i:medium:1K:4ref --> with four. As a 9–12 frame GIF at medium with one image, **38 credits**<!-- credits: gpt-image-2-6-flare-i2i:medium:gif-9-12:1ref -->; as an SVG Standard at medium 1K, **35 credits**<!-- credits: gpt-image-2-6-flare-i2i:medium:1K:svg-standard:1ref --> | Quality, resolution and format options; mask-based inpainting, the rest kept as it was |
+| gpt-image-2-6-sunburst-i2i | GPT Image 2.6 Sunburst | Precision GPT Image 2.6 edits, up to 16 input images, for finished, detail-critical work. Same price as Flare | Quality and resolution options; mask-based inpainting, the rest kept as it was |
 | ideogram-edit | Ideogram Edit | AI-guided image editing | Mask-based inpainting |
 | ideogram-remix | Ideogram Remix | Restyle with character consistency | Character-consistent restyling |
 | qwen-i2i | Qwen | Versatile image transformation | General I2I |
@@ -71,7 +83,7 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 ## Best Practices
 
 - Start with a low strength value (0.3-0.5) to preserve more of the original image structure, then increase if you want more dramatic changes.
-- Use Ideogram Edit with the mask painter for precise inpainting -- paint over the region you want changed and describe the replacement in the prompt.
+- Use GPT Image 2.6 Flare or Sunburst (or Ideogram Edit, FLUX Fill) with the mask painter for precise inpainting -- paint over the region you want changed and describe the replacement in the prompt. On GPT Image 2.6 everything outside the mask stays exactly as it was.
 - Ideogram Reframe (`ideogram-reframe`) was retired on 2026-09-15 — the provider stopped serving the model, so it is no longer selectable. For an aspect-ratio change with AI fill, use `nano-banana-edit` with the target `aspectRatio` and a prompt such as "extend the scene naturally into the new space, matching light and perspective".
 - For character-consistent restyling, use Ideogram Remix which preserves identity while changing the artistic style.
 - Use Flux Kontext or Flux Kontext Max when you need context-aware editing that understands the semantic content of the image.
@@ -86,7 +98,7 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 
 ## Tips
 
-- Not all providers support every configuration field. The config panel dynamically shows/hides fields based on the selected provider. For example, mask is only available for ideogram-edit, and strength is only shown for providers that support it.
+- Not all providers support every configuration field. The config panel dynamically shows/hides fields based on the selected provider. For example, mask is only available for the mask models (see [Masks](#masks)), and strength is only shown for providers that support it.
 - Ideogram providers use rendering speed (turbo/balanced/quality) instead of resolution to control output quality and cost -- turbo is cheapest, quality is most expensive.
 - When chaining Image to Image after Generate Image, the output of Generate Image connects to the `image` input handle. The `out` output handle feeds downstream nodes.
 - **An `{image:N}` token with no reference image at its position becomes its label** — `{image:1:person}` reads as `person`, a bare `{image:1}` is left out, and an image label is any text up to the closing brace (`{image:1:man's jacket}` reads as `man's jacket`).

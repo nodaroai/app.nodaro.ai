@@ -3288,8 +3288,14 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > - `run("image-to-image" | "edit-image" | "generate-mask", …)` answers
 >   `ImageJobStarted` — `{ jobId: string; adjustments? }` — so `result.jobId`
 >   needs no cast. `ImageToImageParams` requires `imageUrl` and `prompt`; its
->   `maskUrl` (white = the area to change, on both models) is sent to the model
->   as its own mask, so only `ideogram-edit` and `flux-fill` use it.
+>   `maskUrl` (white = the area to change, on every model) is sent to the
+>   model as its own mask, so only `ideogram-edit`, `flux-fill`,
+>   `gpt-image-2-6-flare-i2i` and `gpt-image-2-6-sunburst-i2i` use it
+>   (`I2I_MASK_SUPPORT`). On GPT Image 2.6 the rest of the picture is kept
+>   exactly as it was: the source is pasted back outside the mask, and the
+>   result is the source's size; the run keeps the photo's shape and is
+>   rendered and priced at the size nearest the photo (`adjustments` says so).
+>   A mask costs nothing extra.
 > - `EditImageParams` is one of two forms: `imageUrl` for every provider except
 >   the Grok task ops, or `taskId` plus `provider: "grok-2-edit" |
 >   "grok-2-segment"` (a prior Grok 2 generation's task id, its job's

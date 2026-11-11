@@ -133,12 +133,12 @@ import { getLlmTier, defaultReasoningEffort, llmDefaultsFeature, LLM_FEATURE_DEF
 import { FLUX2_RES_MP, type Flux2Model } from "@nodaro/shared/model-catalog"
 import { renderVideoCreditId, scene3DRenderTierCredits } from "@nodaro/shared/scene3d"
 import { META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SCRAPE_ANALYSIS_FEATURE, scrapeAnalysisPriceParts, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS } from "@nodaro/shared/social"
-import { countImageInputEdges, countRefModalityEdges } from "@nodaro/shared/workflow"
+import { countImageInputEdges, countRefModalityEdges, nodeIsMasked, wiredImageSize } from "@nodaro/shared/workflow"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
 import { gptImage26StaticCosts } from "./gpt-image-2-6-pricing.js"
-import { defaultImageModelForNode, gptImage26EstimatedImages, imageFormatLeversOf, isGptImage26Tiered, resolutionAtAspectRatio } from "@nodaro/shared/model-catalog"
+import { defaultImageModelForNode, gptImage26EstimatedImages, imageFormatLeversOf, isGptImage26Tiered, maskedEditResolution, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
@@ -5546,6 +5546,9 @@ function estimateNodeCredits(
     videoFaceMeshSec: node.type === "video-face-mesh" ? videoMaskClipSecOf(node, edges, wireSec, wireFps) : undefined,
     videoRefWired: videoRefWired(node, edges),
     imageRefsWired: edges && node.id ? countImageInputEdges(edges, node.id) : undefined,
+    // A masked edit on a model that follows its photo is priced at the photo's size, when its source records it.
+    sourceImage: edges && node.id ? wiredImageSize(node.id, nodes, edges) : undefined,
+    masked: node.id ? nodeIsMasked(node.id, node.data, edges) : undefined,
   })
   // An LLM Chat node that says how large its call is (`data.expectedUsage`, a plugin's quote graph): that call on
   // the model's primary lane, never below the feature's typical one (each token count floored at it, so the field
@@ -6648,6 +6651,10 @@ export function getNodeModelIdentifier(
     videoRefWired?: boolean
     /** Reference images wired into an image node (a GRAPH fact; undefined = unknown → the node's own list). */
     imageRefsWired?: number
+    /** The size of the photo wired into an image node, as its source node records it (a GRAPH fact). */
+    sourceImage?: SourceImageSize
+    /** The node carries an inpainting mask, its own or wired (a GRAPH fact; undefined = its own `maskUrl` only). */
+    masked?: boolean
   } = {},
 ): string {
   // A retired video model is quoted as the model it runs as — what the run reserves.
@@ -7019,11 +7026,15 @@ export function getNodeModelIdentifier(
 
   // Image/edit nodes with quality/resolution variable pricing. The input images
   // reach the id for a model priced per image. The size is the one the run
-  // renders at its ratio (GPT Image 2.5: 1K only at 27:16, 16:27, 9:8 and 8:9).
+  // renders at its ratio (GPT Image 2.5: 1K only at 27:16, 16:27, 9:8 and 8:9);
+  // a masked edit on a model that follows its photo (GPT Image 2.6 Flare and
+  // Sunburst) is priced at the size nearest the photo when its size is known.
+  const masked = graph.masked ?? (typeof data.maskUrl === "string" && data.maskUrl.length > 0)
+  const followedSize = masked ? maskedEditResolution(provider, data, graph.sourceImage) : undefined
   return buildCreditModelIdentifier(
     provider,
     data.quality as string | undefined,
-    typeof data.resolution === "string" ? resolutionAtAspectRatio(provider, data.aspectRatio, data.resolution) : undefined,
+    followedSize ?? (typeof data.resolution === "string" ? resolutionAtAspectRatio(provider, data.aspectRatio, data.resolution) : undefined),
     data.renderingSpeed as string | undefined,
     data.targetResolution as string | undefined,
     isGptImage26Tiered(provider) ? gptImage26EstimatedImages(provider, data, graph.imageRefsWired ?? 0) : undefined,

@@ -901,3 +901,49 @@ describe("reconcileReplicateJob", () => {
     })
   })
 })
+
+// A recovered Generate Image inpaint gets its worker's composite before finalize
+// (lib/reconcile/mask-paste-back.ts), never the raw result.
+const inpaint = vi.hoisted(() => ({
+  compositeInpaint: vi.fn(async () => "https://r2/inpaint/j-ip.png"),
+  pasteSourceOutsideMask: vi.fn(async () => undefined),
+}))
+vi.mock("../../../services/inpaint/composite.js", () => inpaint)
+
+describe("reconcileReplicateJob: a recovered inpaint", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    global.fetch = mocks.fetchMock as unknown as typeof fetch
+    mocks.finalizeMock.mockResolvedValue({ ok: true })
+    mocks.jobsSingleMock.mockResolvedValue({ data: { reconcile_attempts: 0 }, error: null })
+    mocks.fetchMock.mockResolvedValue({ ok: true, json: async () => ({ id: "p-ip", status: "succeeded", output: "https://replicate.example/raw.png" }) })
+  })
+
+  it("is composited over its base before it is finalized", async () => {
+    await reconcileReplicateJob({
+      id: "j-ip", provider_kind: "replicate-prediction", provider_task_id: "p-ip", reconcile_attempts: 0, job_type: "generate-image",
+      input_data: { provider: "flux-2-pro", baseImageUrl: "https://r2/base.png", maskUrl: "https://r2/mask.png" },
+    } as ReplicateJobRow)
+    expect(inpaint.compositeInpaint).toHaveBeenCalledWith({ baseUrl: "https://r2/base.png", resultUrl: "https://replicate.example/raw.png", maskUrl: "https://r2/mask.png", jobId: "j-ip" })
+    expect(mocks.finalizeMock.mock.calls[0]![0].result.url).toBe("https://r2/inpaint/j-ip.png")
+  })
+
+  it("a failed composite is never finalized", async () => {
+    inpaint.compositeInpaint.mockRejectedValueOnce(new Error("compositeInpaint: failed to fetch https://r2/base.png (500)"))
+    await reconcileReplicateJob({
+      id: "j-ip", provider_kind: "replicate-prediction", provider_task_id: "p-ip", reconcile_attempts: 0, job_type: "generate-image",
+      input_data: { provider: "flux-2-pro", baseImageUrl: "https://r2/base.png", maskUrl: "https://r2/mask.png" },
+    } as ReplicateJobRow)
+    expect(mocks.finalizeMock).not.toHaveBeenCalled()
+  })
+
+  it("an image-to-image mask on FLUX Fill (which keeps the outside itself) is finalized as it is", async () => {
+    await reconcileReplicateJob({
+      id: "j-ff", provider_kind: "replicate-prediction", provider_task_id: "p-ip", reconcile_attempts: 0, job_type: "image-to-image",
+      input_data: { provider: "flux-fill", imageUrl: "https://r2/src.png", maskUrl: "https://r2/mask.png" },
+    } as ReplicateJobRow)
+    expect(inpaint.compositeInpaint).not.toHaveBeenCalled()
+    expect(inpaint.pasteSourceOutsideMask).not.toHaveBeenCalled()
+    expect(mocks.finalizeMock.mock.calls[0]![0].result.url).toBe("https://replicate.example/raw.png")
+  })
+})

@@ -1820,8 +1820,18 @@ export type VoiceDesignModel = typeof VOICE_DESIGN_MODELS[number]
  */
 export const DEFAULT_VOICE_DESIGN_MODEL: VoiceDesignModel = "eleven_ttv_v3"
 
-/** I2I providers that support mask-based inpainting */
-export const I2I_MASK_SUPPORT = new Set(["ideogram-edit", "flux-fill"])
+/**
+ * I2I providers that take an inpainting mask (`maskUrl`, white = the area to
+ * change, black = keep) as the model's own mask. The provider converts the
+ * mask into the form its model reads. Every catalog entry listing the
+ * `"mask"` feature (`/v1/models`, MCP `list_models`) is one of these.
+ */
+export const I2I_MASK_SUPPORT = new Set([
+  "ideogram-edit",
+  "flux-fill",
+  "gpt-image-2-6-flare-i2i",
+  "gpt-image-2-6-sunburst-i2i",
+])
 
 /**
  * Mask edit tier per image-gen provider (single source of truth for inpaint).

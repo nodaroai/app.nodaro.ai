@@ -21,7 +21,7 @@
  *      `undefined`, which leaves "auto" on its usual fallback. Never a reason
  *      for a run to fail.
  */
-import { autoAspectNeedsSourceImage, type SourceImageSize } from "@nodaro/shared/model-catalog"
+import { sourceImageSizeNeeded, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { fetchOwnMedia, isOwnMediaUrl } from "./fetch-own-media.js"
 import { IMAGE_HEADER_FIRST_READ_BYTES, IMAGE_HEADER_MAX_READ_BYTES, imageDimensionsOf } from "./image-dimensions.js"
 
@@ -157,15 +157,17 @@ export async function probeImageDisplaySize(url: string): Promise<SourceImageSiz
 
 /**
  * The source size an image request needs, or undefined without any I/O when
- * it would not be used: only "auto" on a model whose catalog ratios lack
- * "auto" reads it (`autoAspectNeedsSourceImage`), and only for a real url.
+ * it would not be used: only "auto" that keeps the photo's shape, or a masked
+ * edit on a model that follows its photo, reads it (`sourceImageSizeNeeded`),
+ * and only for a real url.
  */
 export async function sourceImageForAutoAspect(
   modelId: string | undefined,
   aspectRatio: unknown,
   imageUrl: unknown,
+  masked = false,
 ): Promise<SourceImageSize | undefined> {
-  if (!autoAspectNeedsSourceImage(modelId, aspectRatio)) return undefined
+  if (!sourceImageSizeNeeded(modelId, aspectRatio, masked)) return undefined
   if (typeof imageUrl !== "string" || imageUrl.length === 0) return undefined
   return probeImageDisplaySize(imageUrl)
 }

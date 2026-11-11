@@ -1029,6 +1029,27 @@ changed:
     `height`, and for a GIF or an SVG a PNG still (`thumbnailUrl`). An SVG is
     sanitized before it is stored; one that cannot be read safely fails the job,
     refunded.
+- **`maskUrl` on `/v1/image-to-image`** (white = the area to change, black =
+  keep) is the model's own inpainting mask on
+  `ideogram-edit`, `flux-fill`, `gpt-image-2-6-flare-i2i` and
+  `gpt-image-2-6-sunburst-i2i`, the models whose `GET /v1/models` entry lists
+  the `mask` feature; other models ignore it.
+  - On GPT Image 2.6 the rest of the picture is kept exactly as it was. The
+    model redraws the whole picture, so the source (`imageUrl`) is pasted back
+    everywhere outside the mask, with a soft edge a few pixels wide inside the
+    painted area. The result is `imageUrl`'s size, in the format asked for (a
+    PNG keeps the source's own pixels outside the mask; a JPEG or WebP is
+    encoded once more), and the job's `output_data.maskComposited` is `true`.
+    Grey in the mask is a partial change, so a soft edge stays soft.
+  - On GPT Image 2.6 the size and shape follow the photo: any `aspectRatio`
+    is replaced by `auto` (the supported ratio nearest the photo), and
+    `resolution` by the size (`1K`, `2K` or `4K`) whose long side is nearest
+    the photo's, by the model's own size table. The run is priced at that
+    size (the credit check and the charge read the photo's size once, before
+    the check), and both changes come back in `adjustments`. If the photo's
+    size cannot be read, the `resolution` asked is kept.
+  - A mask costs nothing extra: the run is priced as the same edit without
+    one at that size, and the mask is not counted as an input image.
 - The per-model option lists are in `GET /v1/models`; a workflow saved through
   the API or MCP is corrected the same way at write time — except `auto` on a
   generate-image, image-to-image, modify-image or edit-image node, which is
