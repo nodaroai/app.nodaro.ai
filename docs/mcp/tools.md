@@ -1801,15 +1801,19 @@ reports `queued` for this reason.
 `assetKind` (`image` / `video` / `audio` / null), `outputUrl`, `width` /
 `height`, `outputData`, `input`, `errorMessage`, `errorDetail` (the provider's
 own words for a failure, links cut to their host and secrets removed; `null`
-when it had none, and on a deployment that keeps these words for its
-administrators — show it, never branch on it), `credits`, `creditsCharged`,
+when it had none, on someone else's job, and on a deployment that keeps these
+words for its administrators — show it, never branch on it), `credits`, `creditsCharged`,
 `creditsHeld`, `creditsReleased`, `createdAt`, `startedAt`, `completedAt`, plus
 `retryable`, `guidance` and `suggestedProvider` on a failed, cancelled or held
 job, and `guidance` on a job waiting for a free slot. `get_asset` and `wait_for_job` return the same envelope (`get_asset`
-without `input` and without the charge figures). `diagnose_run` carries the
+without `input` and without the charge figures). The words are a job's owner's:
+`get_asset` on another user's public job and `list_jobs` with `scope: "public"`
+answer `null` for them. `diagnose_run` carries the
 same words as `providerReason` on each failed node that has them, and leaves
-it out where the deployment keeps the words for its administrators (an MCP
-session never reads as an administrator's).
+it out on a run of a workflow you cannot open (someone else's share link or
+published app, whose prompt the words can quote) and where the deployment keeps
+the words for its administrators (an MCP session never reads as an
+administrator's).
 
 `width` / `height` are the output's pixel size, present when the job recorded
 it: every image job completed after this release (the size of `outputUrl` as

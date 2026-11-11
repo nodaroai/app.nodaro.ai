@@ -12,6 +12,7 @@ import { isUuid } from "./_id-guard.js"
 import { resumeFailedRunHint } from "./_resume-hint.js"
 import { failureGuidance } from "./_job-error.js"
 import { CHILD_JOB_COLUMN, maskTrendRunError, redactPrivateJobData, TRASHED_JOB_COLUMN } from "../../public-job-data.js"
+import { jobRowProviderWordsFor } from "../../provider-words.js"
 import { ASSET_SEARCH_COLUMNS, textSearchFilters } from "../../text-search.js"
 import { fillAssetRenderQuality, fillJobRenderQuality } from "../../render-label-fill.js"
 import { isPreviewRender } from "../../preview-render.js"
@@ -830,8 +831,10 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         // An old render carries no stored Preview label: fill it from the order by
         // the rule get_job uses, so both readers say the same of one job (response
         // only; decided 2026-10-06).
-        // A trend run's failure text is replaced (an MCP session is never an admin one).
-        const data = maskTrendRunError(redactPrivateJobData(fillJobRenderQuality(rawData)), false)
+        // A trend run's failure text is replaced (an MCP session is never an admin one),
+        // and someone else's public job never carries its provider's words: they are
+        // its owner's (lib/provider-words.ts), judged by the row's `user_id`.
+        const data = jobRowProviderWordsFor(maskTrendRunError(redactPrivateJobData(fillJobRenderQuality(rawData)), false), { isAdmin: false, userId: session.userId })
 
         // Extract the public asset URL from output_data (varies by job_type:
         // imageUrl / videoUrl / audioUrl / outputUrl). The widget polls this

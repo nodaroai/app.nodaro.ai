@@ -10,8 +10,13 @@ import { __resetSurfaceProfileCacheForTests, parseSurfaceProfile, surfaceJobErro
 import { renderSurfaceProfileForRuntimeConfig } from "../surface-profile-runtime-config.js"
 import {
   jobRowProviderWords,
-  nodeStatesProviderWords,
+  jobRowProviderWordsFor,
+  nodeStatesCarryProviderWords,
   providerWordsShown,
+  providerWordsShownTo,
+  runStatesNeedReaderRelation,
+  runStatesProviderWords,
+  savedNodesProviderWords,
   webhookBodyProviderWords,
   withoutNodeStateProviderWords,
 } from "../provider-words.js"
@@ -164,31 +169,111 @@ describe("the funnel", () => {
       c: { status: "failed", error: "Timed out." },
     }
 
-    it("the same object when shown", () => {
-      expect(nodeStatesProviderWords(states, false)).toBe(states)
+    const opener = { isAdmin: false, canRead: true }
+    const stranger = { isAdmin: false, canRead: false }
+    const admin = { isAdmin: true, canRead: false }
+
+    it("the same object for a reader who can open the run's workflow, and for an admin", () => {
+      expect(runStatesProviderWords(states, opener)).toBe(states)
+      expect(runStatesProviderWords(states, admin)).toBe(states)
       setProfile({ jobs: { errorDetail: "admin" } })
-      expect(nodeStatesProviderWords(states, true)).toBe(states)
+      expect(runStatesProviderWords(states, admin)).toBe(states)
     })
 
-    it("withheld: the key is gone from each failed state that had words, everything else as it was", () => {
+    it("withheld from a reader who cannot open the workflow, whatever the setting, and from a non-admin under admin", () => {
+      const without = { a: { status: "failed", error: "Generation failed.", jobId: "j1" }, b: states.b, c: states.c }
+      expect(runStatesProviderWords(states, stranger)).toEqual(without)
       setProfile({ jobs: { errorDetail: "admin" } })
-      const out = nodeStatesProviderWords(states, false)
-      expect(out).toEqual({ a: { status: "failed", error: "Generation failed.", jobId: "j1" }, b: states.b, c: states.c })
+      const out = runStatesProviderWords(states, opener)
+      expect(out).toEqual(without)
       expect("errorDetail" in out.a).toBe(false)
       expect(out.b).toBe(states.b)
       expect(states.a.errorDetail).toBe(WORDS)
     })
 
     it("no states and states with nothing to drop pass as they are", () => {
-      setProfile({ jobs: { errorDetail: "admin" } })
-      expect(nodeStatesProviderWords(null, false)).toBeNull()
-      expect(nodeStatesProviderWords(undefined, false)).toBeUndefined()
+      expect(runStatesProviderWords(null, stranger)).toBeNull()
+      expect(runStatesProviderWords(undefined, stranger)).toBeUndefined()
       const clean = { b: states.b, c: states.c }
-      expect(nodeStatesProviderWords(clean, false)).toBe(clean)
+      expect(runStatesProviderWords(clean, stranger)).toBe(clean)
+    })
+
+    it("a reader's relation is needed only when a state carries words a non-admin could be shown", () => {
+      expect(nodeStatesCarryProviderWords(states)).toBe(true)
+      expect(nodeStatesCarryProviderWords({ b: states.b, c: states.c })).toBe(false)
+      expect(nodeStatesCarryProviderWords(null)).toBe(false)
+      expect(runStatesNeedReaderRelation(states, false)).toBe(true)
+      expect(runStatesNeedReaderRelation(states, true)).toBe(false)
+      expect(runStatesNeedReaderRelation({ c: states.c }, false)).toBe(false)
+      setProfile({ jobs: { errorDetail: "admin" } })
+      expect(runStatesNeedReaderRelation(states, false)).toBe(false)
     })
 
     it("the runner's view drops them whatever the setting", () => {
       expect(withoutNodeStateProviderWords(states)).toEqual({ a: { status: "failed", error: "Generation failed.", jobId: "j1" }, b: states.b, c: states.c })
+    })
+  })
+
+  it("the decision with a relation: an admin always; anyone else only for words that are theirs, where the deployment lets them", () => {
+    expect(providerWordsShownTo({ isAdmin: false, canRead: true })).toBe(true)
+    expect(providerWordsShownTo({ isAdmin: false, canRead: false })).toBe(false)
+    expect(providerWordsShownTo({ isAdmin: true, canRead: false })).toBe(true)
+    setProfile({ jobs: { errorDetail: "admin" } })
+    expect(providerWordsShownTo({ isAdmin: false, canRead: true })).toBe(false)
+    expect(providerWordsShownTo({ isAdmin: true, canRead: false })).toBe(true)
+  })
+
+  describe("a job row from a read that can return someone else's job", () => {
+    const own = { ...failed, user_id: "me" }
+    const theirs = { ...failed, user_id: "someone-else" }
+
+    it("the owner's own row is the same object; someone else's has error_detail null, same keys", () => {
+      expect(jobRowProviderWordsFor(own, { isAdmin: false, userId: "me" })).toBe(own)
+      const out = jobRowProviderWordsFor(theirs, { isAdmin: false, userId: "me" })
+      expect(out).toEqual({ ...theirs, error_detail: null })
+      expect(Object.keys(out)).toEqual(Object.keys(theirs))
+    })
+
+    it("an admin reads anyone's; a row without the owner column never carries them; a row without words is as it came", () => {
+      expect(jobRowProviderWordsFor(theirs, { isAdmin: true, userId: "me" })).toBe(theirs)
+      expect(jobRowProviderWordsFor(failed, { isAdmin: false, userId: "me" })).toEqual({ ...failed, error_detail: null })
+      const noWords = { ...theirs, error_detail: null }
+      expect(jobRowProviderWordsFor(noWords, { isAdmin: false, userId: "me" })).toBe(noWords)
+    })
+
+    it("under admin, the owner's own row loses them too", () => {
+      setProfile({ jobs: { errorDetail: "admin" } })
+      expect(jobRowProviderWordsFor(own, { isAdmin: false, userId: "me" })).toEqual({ ...own, error_detail: null })
+    })
+  })
+
+  describe("a workflow's saved nodes, as a share page serves them", () => {
+    const nodes = [
+      { id: "n1", type: "generate-image", data: { label: "Image", executionStatus: "failed", errorMessage: "Generation failed.", errorDetail: WORDS } },
+      { id: "n2", type: "text-prompt", data: { label: "Prompt", text: "a cat" } },
+    ]
+
+    it("the same array for the creator and an admin", () => {
+      expect(savedNodesProviderWords(nodes, { isAdmin: false, canRead: true })).toBe(nodes)
+      expect(savedNodesProviderWords(nodes, { isAdmin: true, canRead: false })).toBe(nodes)
+    })
+
+    it("anyone else: each node's data without errorDetail, everything else as it was", () => {
+      const out = savedNodesProviderWords(nodes, { isAdmin: false, canRead: false })
+      expect(out).toEqual([
+        { id: "n1", type: "generate-image", data: { label: "Image", executionStatus: "failed", errorMessage: "Generation failed." } },
+        nodes[1],
+      ])
+      expect(out[1]).toBe(nodes[1])
+      expect(nodes[0]!.data.errorDetail).toBe(WORDS)
+    })
+
+    it("nodes with nothing to drop, and a value that is not a node list, pass as they are; under admin the creator loses them", () => {
+      const clean = [nodes[1]]
+      expect(savedNodesProviderWords(clean, { isAdmin: false, canRead: false })).toBe(clean)
+      expect(savedNodesProviderWords(null, { isAdmin: false, canRead: false })).toBeNull()
+      setProfile({ jobs: { errorDetail: "admin" } })
+      expect(savedNodesProviderWords(nodes, { isAdmin: false, canRead: true })[0]).not.toHaveProperty("data.errorDetail")
     })
   })
 

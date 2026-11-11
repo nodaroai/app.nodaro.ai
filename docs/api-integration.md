@@ -1810,10 +1810,16 @@ branch on `error_hint`, never on these words. The same job payloads carry it
 `job.failed` webhook event), and a failed node of a
 workflow run carries it as `errorDetail` on its entry in `nodeStates`
 (`GET /v1/workflow-executions/:id`); a node that fails inside a sub-workflow
-hands its words to the sub-workflow node's entry. Two exceptions: a trend run's words are
-withheld along with its text (they can quote its hidden input), and a published
-app's runner never receives them (they can quote the creator's prompt) — the
-app run endpoints answer without `errorDetail`. A deployment can also keep these
+hands its words to the sub-workflow node's entry. The words go only to whoever
+may read them. A trend run's are withheld along with its text (they can quote
+its hidden input). A run's node states carry them only for a caller who can
+open the workflow the run executed (its creator, or someone it is shared with),
+since they can quote that workflow's prompt: a published app's runner never
+receives them (the app run endpoints answer without `errorDetail`), and neither
+does a person running someone else's share link, on the share link's run status
+(`GET /v1/present/:token/status/:execId`) or on the run reads above. The share
+page (`GET /v1/present/:token`) leaves the words its creator's editor saved out
+of every node it shows anyone but the creator. A deployment can also keep these
 words for its administrators (`jobs.errorDetail` in its surface profile, see
 [deployment.md](./deployment.md#surface-profile-nodaro_surface_profile)): there
 every caller who is not an administrator gets `error_detail: null` on each of

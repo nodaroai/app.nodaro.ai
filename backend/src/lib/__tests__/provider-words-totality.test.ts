@@ -30,7 +30,17 @@
  *     `workflow_executions` row is read only where the states are served
  *     through the funnel;
  *  6. a webhook body recorded before the setting (a retry, the delivery log)
- *     passes the funnel too.
+ *     passes the funnel too;
+ *  7. WHOSE WORDS (decided 2026-11-11): a job's words are its owner's, a run's
+ *     are a reader's who can open the run's workflow, a share page's saved
+ *     ones are its creator's. So a `jobs` read naming `error_detail` whose own
+ *     chain does not pin `.eq("user_id", …)` — one that can return someone
+ *     else's job — is counted per file and classified, and one that serves
+ *     other users' jobs must judge each row by its owner
+ *     (`jobRowProviderWordsFor`); a file that serves a run's states with the
+ *     words must establish the reader's relation to the run (a lookup in
+ *     lib/provider-words-readers.ts), never pass `canRead: true` by hand; and
+ *     the share page's saved nodes and the share link's run status are pinned.
  *
  * What the nets cannot see, stated: a column list built in one file and
  * selected in another (the file that spells the column is the one classified,
@@ -63,7 +73,13 @@ const NAMES_THE_KEY_LIST = /\bPUBLIC_JOB_KEYS\b/
 const NAMES_NODE_STATES = /\bnode_states\b/
 const LISTENS_TO_RUN_EVENTS = /\bexecutionEvents\.(?:on|once|addListener|prependListener)\(/
 /** A call of the funnel, or of a wrapper that is held (below) to delegate to it. */
-const THROUGH_THE_FUNNEL = /\b(?:providerWordsShown|jobRowProviderWords|nodeStatesProviderWords|withoutNodeStateProviderWords|webhookBodyProviderWords|maskTrendRunErrors?|sanitizeJobForPublic|appRunViewStates)\s*\(/
+const THROUGH_THE_FUNNEL = /\b(?:providerWordsShown(?:To)?|jobRowProviderWords(?:For)?|runStatesProviderWords|withoutNodeStateProviderWords|savedNodesProviderWords|webhookBodyProviderWords|maskTrendRunErrors?|sanitizeJobForPublic|appRunViewStates)\s*\(/
+/** A call that serves a run's states (or what they say) as a reader may read them. */
+const RUN_STATES_SHAPE = /\b(?:runStatesProviderWords|providerWordsShownTo|withoutNodeStateProviderWords|appRunViewStates)\s*\(/
+/** A shape that shows the words only when told the reader may read them — it needs the relation looked up. */
+const NEEDS_A_RELATION = /\b(?:runStatesProviderWords|providerWordsShownTo)\s*\(/
+/** The lookups of a reader's relation to a run (lib/provider-words-readers.ts). */
+const LOOKS_UP_THE_RELATION = /\b(?:runStatesReader|readerCanOpenWorkflow|workflowsReaderCanOpen|readerCreatedWorkflow)\s*\(/
 const ADMIN_ONLY = /\brequireAdmin\b/
 
 type WordsKind = "funnel" | "setting" | "serves" | "admin" | "writes" | "carries" | "internal"
@@ -75,15 +91,14 @@ const lane = <K>(kind: K, why: string): Lane<K> => ({ kind, why })
  * that carries them), and what it does with them.
  */
 const WORDS: Readonly<Record<string, Lane<WordsKind>>> = {
-  "lib/provider-words.ts": lane("funnel", "the funnel: the one decision and the shapes each surface serves the words in"),
-  "lib/surface-profile.ts": lane("setting", "parses `jobs.errorDetail` and its one reader, surfaceJobErrorDetailReaders"),
+  "lib/provider-words.ts": lane("funnel", "the funnel: the one decision and the shapes each surface serves the words in"),  "lib/surface-profile.ts": lane("setting", "parses `jobs.errorDetail` and its one reader, surfaceJobErrorDetailReaders"),
   "lib/public-job-data.ts": lane("serves", "maskTrendRunError, which every job read applies, hands each row to jobRowProviderWords first"),
   "routes/jobs.ts": lane("serves", "the job reads (list, by id, both status polls, batch-status) through maskTrendRunError(s) / sanitizeJobForPublic; PUBLIC_JOB_KEYS names the column"),
   "lib/webhooks/event.ts": lane("serves", "a job event's body is sanitizeJobForPublic's non-admin row over PUBLIC_JOB_KEYS; a kept body passes webhookBodyProviderWords"),
   "lib/mcp/tools/_job-view.ts": lane("serves", "the MCP job envelope maps errorDetail through jobRowProviderWords as a non-admin reader"),
-  "lib/mcp/tools/jobs.ts": lane("serves", "list_jobs / get_job / wait_for_job select the column and pass every row through maskTrendRunError(s)"),
-  "lib/mcp/tools/gallery.ts": lane("serves", "get_asset selects the column and passes the row through maskTrendRunError before reading it"),
-  "lib/mcp/tools/diagnose.ts": lane("serves", "diagnose_run's providerReason (the job's words, else the node state's) goes through maskTrendRunError"),
+  "lib/mcp/tools/jobs.ts": lane("serves", "list_jobs / get_job / wait_for_job select the column and pass every row through maskTrendRunError(s); the public scope also judges each row by its owner (jobRowProviderWordsFor)"),
+  "lib/mcp/tools/gallery.ts": lane("serves", "get_asset selects the column and passes the row through maskTrendRunError and jobRowProviderWordsFor (it can read another user's public job)"),
+  "lib/mcp/tools/diagnose.ts": lane("serves", "diagnose_run's providerReason (the job's words, else the node state's) goes through maskTrendRunError, and on a run through providerWordsShownTo with the reader's relation to the run's workflow"),
   "ee/routes/admin-jobs.ts": lane("admin", "the admin one-job and child-jobs reads, behind requireAdmin: admins keep the words"),
   "lib/job-failure.ts": lane("writes", "markJobFailed writes the column a failure's caller hands it"),
   "lib/reconcile/bump-attempts.ts": lane("writes", "writes the redacted reason an exhausted reconcile gives up on"),
@@ -103,18 +118,25 @@ const WORDS: Readonly<Record<string, Lane<WordsKind>>> = {
   "lib/app-run-content.ts": lane("internal", "the expunge's column list: clears the words, never reads them out"),
 }
 
-type StatesKind = "serves" | "fields" | "internal"
+/**
+ * `serves`: serves a run's states (or what they say) through a reader-aware
+ * shape (verified). `fields`: serves only fields it names, never the words
+ * (verified: it never names them). `fields-beside-jobs`: its run read serves
+ * named fields only, while the same file serves a job's words through the
+ * funnel (verified: it calls the funnel). `internal`: never served.
+ */
+type StatesKind = "serves" | "fields" | "fields-beside-jobs" | "internal"
 
 /**
  * Every file whose code names `node_states` or listens to a run's live events,
  * and what it does with the states.
  */
 const NODE_STATES: Readonly<Record<string, Lane<StatesKind>>> = {
-  "routes/workflow-execution.ts": lane("serves", "the run reads, the stream's snapshots and live events, and both run lists pass the states through nodeStatesProviderWords with the reader's role"),
-  "routes/presentation.ts": lane("serves", "a shared workflow's run status passes node_states through nodeStatesProviderWords"),
+  "routes/workflow-execution.ts": lane("serves", "the run reads, the stream's snapshots and live events, and both run lists pass the states through runStatesProviderWords with whether the reader can open the run's workflow"),
+  "routes/presentation.ts": lane("serves", "a share link's run status passes node_states through runStatesProviderWords with whether the reader created the workflow; the share page's saved nodes through savedNodesProviderWords"),
   "routes/app-runner.ts": lane("serves", "a published app's runner reads the states through appRunViewStates, which never carries the words"),
-  "lib/mcp/tools/diagnose.ts": lane("serves", "lists each node's id, type, status and job only; a failed node's words go through maskTrendRunError (providerReason)"),
-  "lib/mcp/tools/gallery.ts": lane("serves", "get_app_run serves summarizeNodeStates' named fields only; the file's job read (get_asset) serves the words through maskTrendRunError"),
+  "lib/mcp/tools/diagnose.ts": lane("serves", "lists each node's id, type, status and job only; a failed node's words (providerReason) go through providerWordsShownTo with whether the reader can open the run's workflow"),
+  "lib/mcp/tools/gallery.ts": lane("fields-beside-jobs", "get_app_run serves summarizeNodeStates' named fields only; the file's job read (get_asset) serves the words through maskTrendRunError and jobRowProviderWordsFor"),
   "lib/execution-result.ts": lane("fields", "summarizeNodeStates / formatExecutionResult: outputs, status, error, skip reason — named fields only"),
   "routes/api-tokens.ts": lane("fields", "the API token's status and result: counts, outcome and formatExecutionResult's outputs"),
   "ee/copilot/tools/get-graph.ts": lane("fields", "the Copilot's view of the last run: each node's status and error sentence"),
@@ -174,6 +196,88 @@ function rootTable(call: ts.CallExpression): string | null {
   }
 }
 
+/**
+ * The column list a `.select(…)` argument spells: a string, a template (its
+ * parts and the same-file consts it interpolates), a same-file const, a `+`
+ * of those. Anything else (a call, a parameter) reads as "" — the residual the
+ * header states.
+ */
+function selectText(node: ts.Node | undefined, consts: ReadonlyMap<string, ts.Expression>, depth = 0): string {
+  if (!node || depth > 8) return ""
+  if (ts.isStringLiteralLike(node)) return node.text
+  if (ts.isTemplateExpression(node)) return node.head.text + node.templateSpans.map((s) => selectText(s.expression, consts, depth + 1) + s.literal.text).join("")
+  if (ts.isIdentifier(node)) return selectText(consts.get(node.text), consts, depth + 1)
+  if (ts.isAsExpression(node) || ts.isParenthesizedExpression(node) || ts.isSatisfiesExpression(node)) return selectText(node.expression, consts, depth + 1)
+  if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) return selectText(node.left, consts, depth + 1) + selectText(node.right, consts, depth + 1)
+  return ""
+}
+
+/** Each node's parent, recorded on the way down (the shared parser keeps no parent pointers). */
+function parentsOf(root: ts.Node): Map<ts.Node, ts.Node> {
+  const parents = new Map<ts.Node, ts.Node>()
+  const down = (node: ts.Node): void => {
+    node.forEachChild((child) => {
+      parents.set(child, node)
+      down(child)
+    })
+  }
+  down(root)
+  return parents
+}
+
+/** Does the chain the call sits in go on to `.eq("user_id", …)` — the read pinned to one owner's rows? */
+function pinsTheOwner(call: ts.CallExpression, parents: ReadonlyMap<ts.Node, ts.Node>): boolean {
+  let cur: ts.Node = call
+  for (;;) {
+    const access = parents.get(cur)
+    const next = access ? parents.get(access) : undefined
+    if (!access || !ts.isPropertyAccessExpression(access) || !next || !ts.isCallExpression(next) || next.expression !== access) return false
+    const arg = next.arguments[0]
+    if (access.name.text === "eq" && arg && ts.isStringLiteralLike(arg) && arg.text === "user_id") return true
+    cur = next
+  }
+}
+
+/** The same-file consts a column list may name. */
+function constsOf(sf: ts.SourceFile): Map<string, ts.Expression> {
+  const consts = new Map<string, ts.Expression>()
+  walk(sf, (n) => {
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer) consts.set(n.name.text, n.initializer)
+  })
+  return consts
+}
+
+/** Per file, the `jobs` reads naming `error_detail` whose own chain does not pin the owner. */
+function unpinnedWordReads(): Record<string, number> {
+  const counts: Record<string, number> = {}
+  eachSourceFile(["error_detail"], (sf, rel) => {
+    const consts = constsOf(sf)
+    const parents = parentsOf(sf)
+    walk(sf, (n) => {
+      if (!ts.isCallExpression(n) || !ts.isPropertyAccessExpression(n.expression) || n.expression.name.text !== "select") return
+      if (rootTable(n) !== "jobs" || !/\berror_detail\b/.test(selectText(n.arguments[0], consts))) return
+      if (!pinsTheOwner(n, parents)) counts[rel] = (counts[rel] ?? 0) + 1
+    })
+  })
+  return counts
+}
+
+/**
+ * `jobs` reads naming `error_detail` that are not pinned to one owner in their
+ * own chain, per file, and why each may return someone else's job:
+ * `admin-reader` — pinned for a non-admin in a later statement, any job only for
+ * an admin reader (verified: the file tests `isAdmin` and pins `user_id`);
+ * `others` — can return another user's job, so each row is judged by its owner
+ * (verified: `jobRowProviderWordsFor`); `admin` — an admin-only route
+ * (verified: requireAdmin).
+ */
+const UNPINNED_WORD_READS: Readonly<Record<string, { readonly count: number; readonly kind: "admin-reader" | "others" | "admin"; readonly why: string }>> = {
+  "routes/jobs.ts": { count: 4, kind: "admin-reader", why: "GET /v1/jobs/:id, its status poll, the list and batch-status: a non-admin's rows are pinned to them in the next statement (or by the list's owner filter); an admin reads any job" },
+  "lib/mcp/tools/jobs.ts": { count: 1, kind: "others", why: "list_jobs' public scope reads other users' public jobs: each row passes jobRowProviderWordsFor before its user_id goes" },
+  "lib/mcp/tools/gallery.ts": { count: 1, kind: "others", why: "get_asset reads the caller's job or anyone's public one: the row passes jobRowProviderWordsFor" },
+  "ee/routes/admin-jobs.ts": { count: 1, kind: "admin", why: "the admin one-job read, behind requireAdmin" },
+}
+
 /** A function's body text, from its declaration to the matching close (comments stripped). */
 function bodyOf(code: string, name: string): string {
   const start = code.search(new RegExp(`export function ${name}\\b`))
@@ -195,9 +299,37 @@ describe("the scan recognizes what it counts", () => {
     expect(NAMES_NODE_STATES.test(`.select("id, node_states")`)).toBe(true)
     expect(LISTENS_TO_RUN_EVENTS.test("executionEvents.on(execId, handler)")).toBe(true)
     expect(LISTENS_TO_RUN_EVENTS.test("executionEvents.emit(id, event)")).toBe(false)
-    expect(THROUGH_THE_FUNNEL.test("nodeStatesProviderWords(states, isAdmin)")).toBe(true)
+    expect(THROUGH_THE_FUNNEL.test("runStatesProviderWords(states, reader)")).toBe(true)
+    expect(THROUGH_THE_FUNNEL.test("jobRowProviderWordsFor(row, { isAdmin: false, userId })")).toBe(true)
     expect(THROUGH_THE_FUNNEL.test("maskTrendRunErrors(rows, false)")).toBe(true)
     expect(THROUGH_THE_FUNNEL.test("import { maskTrendRunError } from")).toBe(false)
+    expect(LOOKS_UP_THE_RELATION.test("await readerCanOpenWorkflow(req.userId, row.workflow_id)")).toBe(true)
+  })
+
+  it("the select reader resolves the shapes a column list takes, and the owner pin is read off the chain", () => {
+    const sf = ts.createSourceFile(
+      "probe.ts",
+      [
+        'const COLS = "id, error_detail"',
+        "const MORE = `${COLS}, user_id`",
+        'supabase.from("jobs").select(MORE).eq("user_id", me)',
+        'supabase.from("jobs").select(`id, status, ${COLS}`).neq("user_id", me)',
+        'supabase.from("jobs").select("id, " + COLS).or("user_id.eq.x")',
+      ].join("\n"),
+      ts.ScriptTarget.Latest,
+      false,
+    )
+    const consts = constsOf(sf)
+    const parents = parentsOf(sf)
+    const selects: Array<{ text: string; pinned: boolean }> = []
+    walk(sf, (n) => {
+      if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && n.expression.name.text === "select") selects.push({ text: selectText(n.arguments[0], consts), pinned: pinsTheOwner(n, parents) })
+    })
+    expect(selects).toEqual([
+      { text: "id, error_detail, user_id", pinned: true },
+      { text: "id, status, id, error_detail", pinned: false },
+      { text: "id, id, error_detail", pinned: false },
+    ])
   })
 
   it("the scan is wired to something", () => {
@@ -210,8 +342,11 @@ describe("the scan recognizes what it counts", () => {
 describe("the setting has one reader, and the funnel is its one caller", () => {
   it("surfaceJobErrorDetailReaders is called only by the funnel's decision", () => {
     const callers = shipped().filter((f) => /\bsurfaceJobErrorDetailReaders\s*\(/.test(f.code) && f.rel !== "lib/surface-profile.ts").map((f) => f.rel)
-    expect(callers, "only lib/provider-words.ts may read the setting: every other place asks providerWordsShown").toEqual(["lib/provider-words.ts"])
-    expect(bodyOf(codeOf("lib/provider-words.ts"), "providerWordsShown")).toMatch(/surfaceJobErrorDetailReaders\(\)/)
+    expect(callers, "only lib/provider-words.ts may read the setting: every other place asks providerWordsShownTo").toEqual(["lib/provider-words.ts"])
+    const funnel = codeOf("lib/provider-words.ts")
+    expect(bodyOf(funnel, "providerWordsShownTo")).toMatch(/surfaceJobErrorDetailReaders\(\)/)
+    expect(funnel.match(/surfaceJobErrorDetailReaders\(\)/g), "the setting is read in the one decision only").toHaveLength(1)
+    expect(bodyOf(funnel, "providerWordsShown")).toMatch(/providerWordsShownTo\(\{ isAdmin, canRead: true \}\)/)
   }, SCAN_TIMEOUT_MS)
 
   it("no file but the profile's own reads the key off the profile", () => {
@@ -221,9 +356,11 @@ describe("the setting has one reader, and the funnel is its one caller", () => {
 
   it("every shape the funnel serves the words in asks the one decision", () => {
     const funnel = codeOf("lib/provider-words.ts")
-    for (const shape of ["jobRowProviderWords", "nodeStatesProviderWords", "webhookBodyProviderWords"]) {
-      expect(bodyOf(funnel, shape), `${shape} does not ask providerWordsShown`).toMatch(/providerWordsShown\(/)
+    for (const shape of ["jobRowProviderWords", "jobRowProviderWordsFor", "runStatesProviderWords", "savedNodesProviderWords", "webhookBodyProviderWords"]) {
+      expect(bodyOf(funnel, shape), `${shape} does not ask the decision`).toMatch(/providerWordsShown(?:To)?\(/)
     }
+    // A job read that can return someone else's job judges the row by its owner.
+    expect(bodyOf(funnel, "jobRowProviderWordsFor")).toMatch(/canRead: rec\.user_id === reader\.userId/)
   })
 })
 
@@ -282,13 +419,67 @@ describe("every file that reads a run's node states is classified", () => {
     for (const [rel, l] of Object.entries(NODE_STATES)) expect(l.why.length, `${rel}: say why`).toBeGreaterThan(20)
   }, SCAN_TIMEOUT_MS)
 
-  it("a file that serves them goes through the funnel; one that serves named fields never names the words", () => {
+  it("a file that serves them goes through a reader-aware shape; one that serves named fields never names the words", () => {
     for (const [rel, l] of Object.entries(NODE_STATES)) {
       const code = codeOf(rel)
-      if (l.kind === "serves") expect(THROUGH_THE_FUNNEL.test(code), `${rel} is marked serves but never calls the funnel`).toBe(true)
+      if (l.kind === "serves") expect(RUN_STATES_SHAPE.test(code), `${rel} is marked serves but serves a run's states through no reader-aware shape`).toBe(true)
       if (l.kind === "fields") expect(NAMES_THE_WORDS.test(code), `${rel} is marked fields but names the provider's words: route it through the funnel and mark it serves`).toBe(false)
+      if (l.kind === "fields-beside-jobs") expect(THROUGH_THE_FUNNEL.test(code), `${rel} is marked fields-beside-jobs but its job read never calls the funnel`).toBe(true)
     }
   }, SCAN_TIMEOUT_MS)
+
+  it("a file that shows a run's words to a reader who may read them looks that relation up", () => {
+    for (const [rel, l] of Object.entries(NODE_STATES)) {
+      if (l.kind !== "serves") continue
+      const code = codeOf(rel)
+      if (!NEEDS_A_RELATION.test(code)) continue
+      expect(LOOKS_UP_THE_RELATION.test(code), `${rel} serves a run's states with the words but never asks lib/provider-words-readers.ts who the reader is to the run`).toBe(true)
+    }
+  }, SCAN_TIMEOUT_MS)
+
+  it("no file outside the funnel tells a shape by hand that the reader may read a run's words", () => {
+    const byHand = shipped()
+      .filter((f) => f.rel !== "lib/provider-words.ts" && /\b(?:runStatesProviderWords|providerWordsShownTo)\([^)]*canRead:\s*true\b/.test(f.code))
+      .map((f) => f.rel)
+    expect(byHand, "`canRead: true` passed straight to a run-state shape skips the reader's relation: look it up (lib/provider-words-readers.ts)").toEqual([])
+  }, SCAN_TIMEOUT_MS)
+})
+
+describe("whose words: a job's are its owner's", () => {
+  it("every jobs read naming error_detail that is not pinned to one owner is counted and classified", () => {
+    const counts = unpinnedWordReads()
+    expect(
+      counts,
+      "a jobs read names error_detail and can return someone else's job (its chain pins no .eq(\"user_id\", …)): " +
+        "judge each row by its owner (jobRowProviderWordsFor) and classify it in UNPINNED_WORD_READS",
+    ).toEqual(Object.fromEntries(Object.entries(UNPINNED_WORD_READS).map(([rel, { count }]) => [rel, count])))
+    for (const [rel, entry] of Object.entries(UNPINNED_WORD_READS)) expect(entry.why.length, `${rel}: say why`).toBeGreaterThan(20)
+  }, SCAN_TIMEOUT_MS)
+
+  it("each classification holds: others judged by owner, an admin reader's read pins a non-admin, an admin route is behind requireAdmin", () => {
+    for (const [rel, entry] of Object.entries(UNPINNED_WORD_READS)) {
+      const code = codeOf(rel)
+      if (entry.kind === "others") expect(code, `${rel} serves other users' jobs but never judges a row by its owner`).toMatch(/\bjobRowProviderWordsFor\(/)
+      if (entry.kind === "admin-reader") {
+        expect(code, `${rel}: an admin reader's read must test isAdmin`).toMatch(/\bisAdmin\b/)
+        expect(code, `${rel}: an admin reader's read must pin a non-admin to their own rows`).toMatch(/\.eq\("user_id",/)
+      }
+      if (entry.kind === "admin") expect(ADMIN_ONLY.test(code), `${rel} is marked admin but has no requireAdmin`).toBe(true)
+    }
+  })
+})
+
+describe("a share link's reads are the creator's", () => {
+  it("the run status keeps a failed node's words for the workflow's creator only, and never sends the run's workflow id", () => {
+    const code = codeOf("routes/presentation.ts")
+    expect(code).toMatch(/const \{ workflow_id: runWorkflowId, \.\.\.execution \} = read/)
+    expect(code).toMatch(/await readerCreatedWorkflow\(req\.userId, runWorkflowId\)/)
+    expect(code).toMatch(/node_states: runStatesProviderWords\(execution\.node_states, reader\)/)
+  })
+
+  it("the share page's saved nodes keep the words for the creator only", () => {
+    expect(codeOf("routes/presentation.ts")).toMatch(/canRead: isOwner \}[\s\S]*nodes: savedNodesProviderWords\(isOwner \? nodes : stripStudioTakeVoiceRecords\(shown\), pageReader\)/)
+  })
 })
 
 describe("whole rows", () => {

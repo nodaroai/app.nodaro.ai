@@ -31,7 +31,8 @@ import { exposedTextCaps, exposedVideoLinkNodeIds } from "../lib/exposed-text-ca
 import { ugcPublishedGraph } from "../lib/ugc-composed-graph.js"
 import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
 import { UGC_APP_PHOTO_REQUIRED, ugcRunMissesPhoto } from "../lib/ugc-app-run.js"
-import { nodeStatesProviderWords } from "../lib/provider-words.js"
+import { runStatesNeedReaderRelation, runStatesProviderWords, savedNodesProviderWords } from "../lib/provider-words.js"
+import { readerCreatedWorkflow } from "../lib/provider-words-readers.js"
 
 const workflowIdParams = z.object({
   id: z.string().uuid(),
@@ -253,11 +254,16 @@ export async function presentationRoutes(app: FastifyInstance) {
     const settings = (workflow.settings ?? {}) as Record<string, unknown>
     const presentationSettings = settings.presentationSettings as { runTarget: string; subWorkflowNodeId?: string } | undefined
 
+    // The provider's words the creator's editor saved with a failed result are
+    // the creator's: the page carries them for the creator (and an admin) only,
+    // where the deployment lets them (lib/provider-words.ts, decided 2026-11-11).
+    const pageReader = { isAdmin: req.userRole === "admin" || req.userRole === "super_admin", canRead: isOwner }
+
     return reply.send({
       workflowId: workflow.id,
       name: workflow.name,
       // A take's voice record is the owner's (studio ruling T42); so are a UGC video's runs and photo.
-      nodes: isOwner ? nodes : stripStudioTakeVoiceRecords(shown),
+      nodes: savedNodesProviderWords(isOwner ? nodes : stripStudioTakeVoiceRecords(shown), pageReader),
       edges: workflow.edges,
       isOwner,
       ...(estimate ? { estimatedCost: estimate.credits } : {}),
@@ -477,26 +483,37 @@ export async function presentationRoutes(app: FastifyInstance) {
 
     const { execId } = parsed.data
 
-    // Verify execution belongs to the viewer
-    const { data: execution, error: execError } = await supabase
+    // Verify execution belongs to the viewer. `workflow_id` is read for the
+    // provider-words rule below only; it is never sent.
+    const { data: read, error: execError } = await supabase
       .from("workflow_executions")
-      .select("id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, completed_at")
+      .select("id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, completed_at, workflow_id")
       .eq("id", execId)
       .eq("user_id", req.userId)
       .single()
 
-    if (execError || !execution) {
+    if (execError || !read) {
       return reply.status(404).send({
         error: { code: "not_found", message: "Execution not found" },
       })
     }
+    const { workflow_id: runWorkflowId, ...execution } = read
+
+    // A failed node's provider words can quote the shared workflow's prompt, so
+    // they are its creator's: a person running someone else's share link never
+    // receives them on their run, as a published app's runner does not
+    // (decided 2026-11-11). The creator is asked only when a failed node carries
+    // words a non-admin reader could be shown.
+    const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
+    const reader = {
+      isAdmin,
+      canRead: runStatesNeedReaderRelation(execution.node_states, isAdmin) ? await readerCreatedWorkflow(req.userId, runWorkflowId) : true,
+    }
 
     return reply.send({
       ...execution,
-      // The viewer's run, as the viewer may read it: a failed node's provider
-      // words withheld from a non-admin where the deployment keeps them for its
-      // admins (lib/provider-words.ts). Same key, same place in the answer.
-      node_states: nodeStatesProviderWords(execution.node_states, req.userRole === "admin" || req.userRole === "super_admin"),
+      // Same key, same place in the answer.
+      node_states: runStatesProviderWords(execution.node_states, reader),
       outcome: executionOutcome(execution.status, execution.node_states as Record<string, { status?: unknown; skipReason?: unknown }> | null),
     })
   })

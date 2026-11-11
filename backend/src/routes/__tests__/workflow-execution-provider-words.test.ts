@@ -3,13 +3,16 @@
  * run reads of routes/workflow-execution.ts, as the deployment's
  * `jobs.errorDetail` setting decides them (lib/provider-words.ts):
  *
- *  - no setting: the run's owner reads them, exactly as before;
+ *  - no setting: the run's owner, who here also created the run's workflow,
+ *    reads them exactly as before;
  *  - "admin": a reader who is not an admin gets the node state without the
  *    key (every other field, and every other node, as it was); an admin reader
  *    still gets them.
  *
  * Covered: the detail read, the stream (its two snapshots and its live
- * events), both run lists, and `toExecutionSummary` on its own.
+ * events), both run lists, and `toExecutionSummary` on its own. Who else may
+ * read them (a reader whose run executed someone else's workflow, a
+ * collaborator) is in workflow-execution-creator-provider-words.test.ts.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
@@ -150,15 +153,19 @@ function executionRow(status = "failed", states: Record<string, unknown> = nodeS
 type Answer = { data: unknown; error: unknown }
 const NOT_FOUND: Answer = { data: null, error: { code: "PGRST116", message: "not found" } }
 
+/** The run's workflow, created by the reader: the words on its runs are the reader's to read. */
+const READERS_WORKFLOW: Answer = { data: { id: TEST_WORKFLOW_ID, user_id: TEST_USER_ID }, error: null }
+
 /**
  * Every read answered by table: `workflow_executions` holds `row` (a list read
- * gets `[row]`, a `.single()` read gets the row); every other table holds
+ * gets `[row]`, a `.single()` read gets the row); a by-id read of `workflows`
+ * gets the run's workflow, created by the reader; every other table holds
  * nothing (a list read gets `[]`, a `.single()` read misses).
  */
 function mockReads(row: Record<string, unknown>) {
   vi.mocked(supabase.from).mockImplementation((table: string) => {
     const list: Answer = table === "workflow_executions" ? { data: [row], error: null } : { data: [], error: null }
-    const single: Answer = table === "workflow_executions" ? { data: row, error: null } : NOT_FOUND
+    const single: Answer = table === "workflow_executions" ? { data: row, error: null } : table === "workflows" ? READERS_WORKFLOW : NOT_FOUND
     const proxy: unknown = new Proxy(() => {}, {
       get(_t, prop) {
         if (prop === "then") return (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => Promise.resolve(list).then(ok, ko)
@@ -439,9 +446,16 @@ describe("GET /v1/executions — a failed node's provider words in the list rows
 // toExecutionSummary
 // ==========================================================================
 
-describe("toExecutionSummary — with no reader named, the reader is not an admin", () => {
-  it("with no setting, keeps them", () => {
+describe("toExecutionSummary — with no reader named, the reader may not read them", () => {
+  it("with no setting, withholds them from an unnamed reader and leaves every other field and node as it was", () => {
     const summary = toExecutionSummary(executionRow()) as { nodeStates: States }
+    expect(summary.nodeStates.n1).not.toHaveProperty("errorDetail")
+    expect(summary.nodeStates.n1).toEqual(failedWithoutWords())
+    expect(summary.nodeStates.n2).toEqual(completed())
+  })
+
+  it("with no setting, keeps them for a reader who may read them", () => {
+    const summary = toExecutionSummary(executionRow(), { isAdmin: false, canRead: true }) as { nodeStates: States }
     expect(summary.nodeStates).toEqual(nodeStates())
   })
 
@@ -453,9 +467,15 @@ describe("toExecutionSummary — with no reader named, the reader is not an admi
     expect(summary.nodeStates.n2).toEqual(completed())
   })
 
-  it("kept for admins, keeps them for a reader named as an admin", () => {
+  it("kept for admins, withholds them even from a reader who may read them but is not an admin", () => {
     keepWordsForAdmins()
-    const summary = toExecutionSummary(executionRow(), true) as { nodeStates: States }
+    const summary = toExecutionSummary(executionRow(), { isAdmin: false, canRead: true }) as { nodeStates: States }
+    expect(summary.nodeStates.n1).toEqual(failedWithoutWords())
+  })
+
+  it("kept for admins, keeps them for a reader named as an admin, even one who could not otherwise read them", () => {
+    keepWordsForAdmins()
+    const summary = toExecutionSummary(executionRow(), { isAdmin: true, canRead: false }) as { nodeStates: States }
     expect(summary.nodeStates).toEqual(nodeStates())
   })
 

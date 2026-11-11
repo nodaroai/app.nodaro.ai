@@ -1,10 +1,12 @@
 /**
  * `GET /v1/present/:token/status/:execId` — a shared workflow viewer's own run,
- * polled. A failed node's provider words (`errorDetail` on `node_states`) follow
- * the deployment's `jobs.errorDetail` setting (lib/provider-words.ts): with no
- * setting the answer is exactly what it was; kept for admins, a viewer who is
- * not an admin gets the node state without the key, in an answer whose keys
- * are in the same order; an admin viewer still gets them.
+ * polled. Here the viewer also created the shared workflow, so a failed node's
+ * provider words (`errorDetail` on `node_states`) follow the deployment's
+ * `jobs.errorDetail` setting alone (lib/provider-words.ts): with no setting the
+ * answer is exactly what it was; kept for admins, a viewer who is not an admin
+ * gets the node state without the key, in an answer whose keys are in the same
+ * order; an admin viewer still gets them. A viewer who did not create the
+ * workflow is in presentation-creator-provider-words.test.ts.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
@@ -44,6 +46,7 @@ import { supabase } from "../../lib/supabase.js"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
 
 const VIEWER_ID = "00000000-0000-4000-8000-000000000002"
+const WORKFLOW_ID = "00000000-0000-4000-8000-000000000020"
 const EXEC_ID = "00000000-0000-4000-8000-000000000060"
 const TOKEN = "share-token-abc"
 
@@ -54,7 +57,8 @@ const failedWithoutWords = () => ({ status: "failed", error: "Generation failed"
 const completed = () => ({ status: "completed", output: { imageUrl: "https://cdn.example/x.png" }, jobId: "j2" })
 
 /**
- * The viewer's run, as the route reads it (its columns, in its select's order).
+ * The viewer's run as the answer carries it (the route's columns, in its
+ * select's order, but the run's `workflow_id`, which it reads and never sends).
  * A "completed" run can hold a failed node (a node whose siblings are tried
  * anyway) and is the one status whose answer carries an `outcome`.
  */
@@ -70,11 +74,27 @@ const executionRow = (status: "failed" | "completed" = "failed") => ({
   completed_at: "2026-01-01T00:05:00Z",
 })
 
-/** `.from("workflow_executions")…single()` → the viewer's run. */
+/**
+ * `.from("workflow_executions")…single()` → the viewer's run, as the route
+ * reads it (its `workflow_id` last); `.from("workflows")…maybeSingle()` → the
+ * run's workflow, created by the viewer.
+ */
 function mockRun(status: "failed" | "completed" = "failed") {
-  const single = vi.fn().mockResolvedValue({ data: executionRow(status), error: null })
-  const chain: Record<string, unknown> = { select: vi.fn(() => chain), eq: vi.fn(() => chain), single }
-  vi.mocked(supabase.from).mockReturnValue(chain as never)
+  vi.mocked(supabase.from).mockImplementation((table: string) => {
+    const answer =
+      table === "workflow_executions"
+        ? { data: { ...executionRow(status), workflow_id: WORKFLOW_ID }, error: null }
+        : table === "workflows"
+          ? { data: { user_id: VIEWER_ID }, error: null }
+          : { data: null, error: null }
+    const chain: Record<string, unknown> = {
+      select: vi.fn(() => chain),
+      eq: vi.fn(() => chain),
+      single: vi.fn().mockResolvedValue(answer),
+      maybeSingle: vi.fn().mockResolvedValue(answer),
+    }
+    return chain as never
+  })
 }
 
 const prevProfile = process.env.NODARO_SURFACE_PROFILE
@@ -132,6 +152,9 @@ describe("GET /v1/present/:token/status/:execId — a failed node's provider wor
     // Byte for byte, key order included.
     expect(res.body).toBe(JSON.stringify(before))
     expect(res.json().node_states.n1.errorDetail).toBe(WORDS)
+    // The run's workflow id was read to decide the words, and is never sent.
+    expect(res.json()).not.toHaveProperty("workflow_id")
+    expect(res.body).not.toContain(WORKFLOW_ID)
   })
 
   it("kept for admins, a viewer who is not an admin gets the node without them and every other field as it was", async () => {

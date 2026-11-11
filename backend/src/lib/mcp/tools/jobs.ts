@@ -7,6 +7,7 @@ import { supabase } from "../../supabase.js"
 import { isUuid } from "./_id-guard.js"
 import { failureGuidance } from "./_job-error.js"
 import { CHILD_JOB_COLUMN, TREND_RUN_MARKER_SELECT, maskTrendRunError, maskTrendRunErrors, redactPrivateJobData, trendRunErrorText, TRASHED_JOB_COLUMN } from "../../public-job-data.js"
+import { jobRowProviderWordsFor } from "../../provider-words.js"
 import { JOB_STATUSES } from "../../job-status.js"
 import { jobView, JOB_VIEW_SCHEMA, outputSizeOf } from "./_job-view.js"
 import { waitForJob, waitForJobCallSeconds, WAIT_FOR_JOB_CALL_CEILING_S } from "./_wait-for-job.js"
@@ -328,6 +329,9 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       if (moderation) {
         shown = (rows as Array<Record<string, unknown>>)
           .filter((r) => !galleryHides(moderation, { userId: r.user_id as string | undefined, inputData: r.input_data, outputData: r.output_data }))
+          // Someone else's job never carries its provider's words: they are its
+          // owner's (lib/provider-words.ts), judged by `user_id` before it goes.
+          .map((r) => jobRowProviderWordsFor(r, { isAdmin: false, userId: session.userId }))
           .map(({ user_id: _owner, ...row }) => row)
       } else {
         const charged = await withCreditsCharged(rows, session.userId)
