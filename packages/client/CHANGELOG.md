@@ -1,5 +1,16 @@
 # @nodaro/sdk
 
+## 2.68.2
+
+### Patch Changes
+
+- 8a4de41: `ImageToImageParams.maskUrl` documents the GPT Image 2.6 Flare and Sunburst edits among the models that take a mask: the rest of the picture is kept as it was, the result is the source's size, and a mask costs nothing extra.
+- b1a17e6: A deployment can keep a failed job's provider words for its administrators. There, `Job.error_detail` and `JobStatusResult.error_detail` are `null`, and a failed node's `errorDetail` is absent from its `NodeExecutionStateWire` entry, for every caller who is not an administrator, exactly as for a failure that had no provider text. The types are unchanged; their documentation now says so.
+- Updated dependencies [8a4de41]
+- Updated dependencies [8a4de41]
+- Updated dependencies [b1a17e6]
+  - @nodaro/shared@3.61.0
+
 ## 2.68.1
 
 ### Patch Changes
