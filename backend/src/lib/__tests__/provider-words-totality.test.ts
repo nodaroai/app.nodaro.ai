@@ -88,7 +88,7 @@ const RUN_STATES_SHAPE = /\b(?:runStatesProviderWords|providerWordsShownTo|witho
 /** A shape that shows the words only when told the reader may read them — it needs the relation looked up. */
 const NEEDS_A_RELATION = /\b(?:runStatesProviderWords|providerWordsShownTo)\s*\(/
 /** The lookups of a reader's relation to a run (lib/provider-words-readers.ts). */
-const LOOKS_UP_THE_RELATION = /\b(?:runStatesReader|readerCanOpenWorkflow|workflowsReaderCanOpen|readerCreatedWorkflow)\s*\(/
+const LOOKS_UP_THE_RELATION = /\b(?:runStatesReader|runWordsReadable|readerCanOpenWorkflow|workflowsReaderCanOpen|readerCreatedWorkflow)\s*\(/
 const ADMIN_ONLY = /\brequireAdmin\b/
 
 type WordsKind = "funnel" | "setting" | "serves" | "admin" | "writes" | "carries" | "internal"
@@ -539,12 +539,42 @@ describe("a run's jobs are judged by the run's workflow", () => {
     expect(rule).toMatch(/needing\.length > 0 \? await runsReaderMayRead\(/)
     expect(rule).toMatch(/jobRowProviderWordsTo\(row, \{ isAdmin: reader\.isAdmin, canRead: openable\.has\(runIdOf\(row\)!\) \}\)/)
     expect(rule).toMatch(/const \{ workflow_execution_id: _run, \.\.\.rest \} = judged/)
-    // The run's workflow, read from the reader's own runs, and asked once per distinct workflow.
+    // The reader's own runs, read with what the run rule judges them by, then the run rule itself.
     const runs = bodyOf(readers, "runsReaderMayRead")
-    // A run that names no workflow (a use-case node's inner run) is judged as a job with no run: its owner's.
-    expect(runs).toMatch(/run\.workflow_id == null \|\| \(typeof run\.workflow_id === "string" && openable\.has\(run\.workflow_id\)\)/)
-    expect(runs).toMatch(/\.from\("workflow_executions"\)\s*\.select\("id, workflow_id"\)\s*\.in\("id", ids\)\s*\.eq\("user_id", readerId\)/)
-    expect(runs).toMatch(/workflowsReaderCanOpen\(readerId,/)
+    expect(runs).toMatch(/\.from\("workflow_executions"\)\s*\.select\(RUN_RELATION_COLUMNS\)\s*\.in\("id", ids\)\s*\.eq\("user_id", readerId\)/)
+    expect(runs).toMatch(/return runsWordsReadable\(readerId, runs\)/)
+  })
+})
+
+describe("a run's states and its jobs are judged by one rule, so they cannot disagree", () => {
+  it("the run reads of a run that may name no workflow ask the run rule with the run's row", () => {
+    const readers = codeOf("lib/provider-words-readers.ts")
+    expect(bodyOf(readers, "runStatesReader")).toMatch(/canRead: await runWordsReadable\(reader\.userId, reader\.run\)/)
+    expect(bodyOf(readers, "runWordsReadable")).toMatch(/runsWordsReadable\(readerId, \[run\]\)/)
+    const runReads = codeOf("routes/workflow-execution.ts")
+    expect(runReads).toMatch(/await runStatesReader\(execution\.node_states, \{ isAdmin, userId: req\.userId, run: execution \}\)/)
+    expect(runReads).toMatch(/needsRelation \? runWordsReadable\(req\.userId, execution\) : Promise\.resolve\(true\)/)
+    expect(codeOf("lib/mcp/tools/diagnose.ts")).toMatch(/canRead: anyWords \? await runWordsReadable\(session\.userId, execution\) : true/)
+  }, SCAN_TIMEOUT_MS)
+
+  it("no run read judges a run by its workflow column alone", () => {
+    // A run's `workflow_id` is null on a use-case node's inner run: asking about the column alone
+    // withholds the words from its own owner, while its jobs (runJobsProviderWords) read them.
+    const byColumn = Object.entries(NODE_STATES)
+      .filter(([, l]) => l.kind === "serves")
+      .map(([rel]) => rel)
+      .filter((rel) => /\b(?:readerCanOpenWorkflow|readerCreatedWorkflow)\([^)]*\.workflow_id\b/.test(codeOf(rel)))
+    expect(byColumn, "judge a run that may name no workflow by the run rule (runWordsReadable / runStatesReader with the run's row)").toEqual([])
+    // The two run lists judge by the workflow column: the by-workflow list's runs all name its
+    // workflow, and the general list never holds a use-case node's inner run.
+    expect(codeOf("routes/workflow-execution.ts")).toMatch(/execQuery = execQuery\.neq\("trigger_type", "use_case"\)/)
+  }, SCAN_TIMEOUT_MS)
+})
+
+describe("the run rule's lookups, and the webhook body", () => {
+  it("are looked up once per distinct workflow", () => {
+    const readers = codeOf("lib/provider-words-readers.ts")
+    expect(bodyOf(readers, "runsWordsReadable")).toMatch(/workflowsReaderCanOpen\(readerId,/)
   })
 
   it("a job.failed webhook body is judged by its job's run: fresh, on a retry and in the delivery log", () => {

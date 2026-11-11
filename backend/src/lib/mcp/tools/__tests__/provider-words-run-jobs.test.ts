@@ -108,7 +108,7 @@ function project(row: Row, select: string): Row {
   return out
 }
 
-/** The run rule's reads of the runs (`id, workflow_id`) — diagnose_run's own read of a run by its id is not one. */
+/** The run rule's reads of the runs (RUN_RELATION_COLUMNS) — diagnose_run's own read of a run by its id is not one. */
 const reads: Record<string, number> = {}
 
 /** A table holding `rows`: records its select and applies eq / in / is (a column the row lacks passes). */
@@ -124,7 +124,7 @@ function table(name: string, rows: Row[]): unknown {
       if (prop === "select") {
         return (s: string) => {
           select = s
-          if (name === "workflow_executions" && s === "id, workflow_id") reads[name] = (reads[name] ?? 0) + 1
+          if (name === "workflow_executions" && s === "id, user_id, workflow_id, trigger_type, trigger_data") reads[name] = (reads[name] ?? 0) + 1
           return proxy
         }
       }

@@ -9,7 +9,7 @@ import { sideHoldChargesFor, withSideCharge } from "../../job-step-charge.js"
 import { resumeFailedRunHint } from "./_resume-hint.js"
 import { CHILD_JOB_COLUMN, maskTrendRunError, trendRunErrorText, TRASHED_JOB_COLUMN } from "../../public-job-data.js"
 import { providerWordsShownTo, type ProviderWordsReader } from "../../provider-words.js"
-import { readerCanOpenWorkflow, runJobsProviderWords } from "../../provider-words-readers.js"
+import { runJobsProviderWords, runWordsReadable } from "../../provider-words-readers.js"
 
 const diagnoseGate: ToolGate = { required: ["jobs:read"] }
 
@@ -251,8 +251,9 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
         const sideCharges = await sideHoldChargesFor([...jobMap.keys()])
 
         // A failed node's provider words can quote the prompt of the workflow the
-        // run executed: the reader's only when they can open it (a person who ran
-        // someone else's share link or published app cannot), asked only when a
+        // run executed: the reader's only when they may read them by the run rule
+        // (runWordsReadable: they can open it — a person who ran someone else's
+        // share link or published app cannot — or own a run that names none), asked only when a
         // failed node has words they could be shown (lib/provider-words.ts).
         // (The words a reader who may read them would be shown: none for a trend
         // run, none where the deployment keeps them for its admins.)
@@ -262,7 +263,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
         })
         const runReader: ProviderWordsReader = {
           isAdmin: false,
-          canRead: anyWords ? await readerCanOpenWorkflow(session.userId, execution.workflow_id) : true,
+          canRead: anyWords ? await runWordsReadable(session.userId, execution) : true,
         }
 
         const failures: Failure[] = failedEntries.map(([nodeId, s]) => {

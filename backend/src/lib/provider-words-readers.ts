@@ -71,45 +71,79 @@ export async function readerCreatedWorkflow(readerId: string, workflowId: unknow
   }
 }
 
+/** The columns a run is judged by: whose it is, the workflow it names, and its lane and `trigger_data` (its stamps). */
+export const RUN_RELATION_COLUMNS = "id, user_id, workflow_id, trigger_type, trigger_data"
+
+/** A run as read back with `RUN_RELATION_COLUMNS` (or more: a whole row). */
+export interface RunRelationRow {
+  readonly id: string
+  readonly user_id?: unknown
+  readonly workflow_id?: unknown
+  readonly trigger_type?: unknown
+  readonly trigger_data?: unknown
+}
+
 /**
- * The reader of one run's states: whether they can open the run's workflow,
+ * THE run rule, for a run's states and its jobs alike (decided 2026-11-11):
+ * which of these runs' provider words this reader may read.
+ *
+ *  - A run that names a workflow: when the reader can open that workflow.
+ *  - A run that names none — the inner run a use-case node starts outside any
+ *    workflow run (a standalone use-case job) — is its owner's, as a job with
+ *    no run is.
+ *
+ * One access lookup per distinct workflow. A lookup that fails withholds.
+ */
+export async function runsWordsReadable(readerId: string, runs: readonly RunRelationRow[]): Promise<Set<string>> {
+  const openable = await workflowsReaderCanOpen(readerId, runs.map((run) => run.workflow_id))
+  const readable = runs.filter((run) => {
+    if (typeof run.workflow_id === "string" && run.workflow_id !== "") return openable.has(run.workflow_id)
+    return run.workflow_id == null && run.user_id === readerId
+  })
+  return new Set(readable.map((run) => run.id))
+}
+
+/** `runsWordsReadable` for one run. */
+export async function runWordsReadable(readerId: string, run: RunRelationRow): Promise<boolean> {
+  return (await runsWordsReadable(readerId, [run])).has(run.id)
+}
+
+/**
+ * The reader of one run's states, by the run rule (`runsWordsReadable`),
  * looked up only when `states` carry words a non-admin reader could be shown.
- * (`canRead: true` otherwise, which then changes nothing.)
+ * (`canRead: true` otherwise, which then changes nothing.) `run` is the run's
+ * row as read back.
  */
 export async function runStatesReader(
   states: unknown,
-  reader: { readonly isAdmin: boolean; readonly userId: string; readonly workflowId: unknown },
+  reader: { readonly isAdmin: boolean; readonly userId: string; readonly run: RunRelationRow },
 ): Promise<ProviderWordsReader> {
   if (!runStatesNeedReaderRelation(states, reader.isAdmin)) return { isAdmin: reader.isAdmin, canRead: true }
-  return { isAdmin: reader.isAdmin, canRead: await readerCanOpenWorkflow(reader.userId, reader.workflowId) }
+  return { isAdmin: reader.isAdmin, canRead: await runWordsReadable(reader.userId, reader.run) }
 }
 
 /**
  * Which of these runs — the reader's own (a run's jobs are its owner's,
- * migration 474) — have jobs whose words the reader may read: a run of a
- * workflow the reader can open; and a run that names no workflow (the inner
- * run a use-case node starts, `workflow_id` null), which is judged as a job
- * with no run is, its owner's — it is not told from its row which workflow it
- * served. One read of the runs, then one access lookup per distinct workflow.
- * A run that cannot be read is not in the set.
+ * migration 474) — have jobs whose words the reader may read: one read of the
+ * runs, then the run rule (`runsWordsReadable`), the same one a read of the
+ * run's own states asks. A run that cannot be read is not in the set.
  */
 export async function runsReaderMayRead(readerId: string, runIds: Iterable<string>): Promise<Set<string>> {
   const ids = [...new Set(runIds)]
   if (ids.length === 0) return new Set()
-  let runs: Array<{ id: string; workflow_id: unknown }>
+  let runs: RunRelationRow[]
   try {
     const { data, error } = await supabase
       .from("workflow_executions")
-      .select("id, workflow_id")
+      .select(RUN_RELATION_COLUMNS)
       .in("id", ids)
       .eq("user_id", readerId)
     if (error) return new Set()
-    runs = (data ?? []) as Array<{ id: string; workflow_id: unknown }>
+    runs = (data ?? []) as unknown as RunRelationRow[]
   } catch {
     return new Set()
   }
-  const openable = await workflowsReaderCanOpen(readerId, runs.map((run) => run.workflow_id))
-  return new Set(runs.filter((run) => run.workflow_id == null || (typeof run.workflow_id === "string" && openable.has(run.workflow_id))).map((run) => run.id))
+  return runsWordsReadable(readerId, runs)
 }
 
 /**

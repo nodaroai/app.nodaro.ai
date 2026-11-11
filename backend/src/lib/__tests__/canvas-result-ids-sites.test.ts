@@ -177,6 +177,7 @@ const STATE_EXEMPT: ReadonlyMap<string, string> = new Map([
   ["lib/app-expunge-targets.ts", "reads the job ids an app run's executions name, to find use-case wrappers to erase; hands nothing out"],
   ["lib/execution-inline-graph.ts", "reads an inline execution's graph snapshot (its select names a constant, not node_states); no states"],
   ["lib/concurrency-lanes/run-admit.ts", "reads an execution's status and owner for its run-lane admission (its select names a constant, not node_states); no states"],
+  ["lib/provider-words-readers.ts", "reads a run's owner, workflow, lane and stamps to decide who may read its provider words (its select names a constant, RUN_RELATION_COLUMNS, not node_states); no states"],
   ["lib/app-run-final-column.ts", "an app run's final, shown to its runner over the run; seeds no run (the final's own seeds were resolved by the orchestrator)"],
   ["lib/app-report-sweep.ts", "files reports for failed executions; hands no output to a run"],
   ["scripts/recover-stuck-execution.ts", "an operator script repairing one execution's status"],

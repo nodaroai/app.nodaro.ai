@@ -61,7 +61,7 @@ import { accessAtLeast, canRunWorkflow, workflowAccessFromRow } from "../lib/wor
 import { toAccessRow } from "../lib/workflow-route-access.js"
 import { limitedKeyWorkflows, refuseLimitedKey } from "../middleware/token-workflow-scope.js"
 import { nodeStatesCarryProviderWords, providerWordsShown, runStatesNeedReaderRelation, runStatesProviderWords, type ProviderWordsReader } from "../lib/provider-words.js"
-import { readerCanOpenWorkflow, runStatesReader, workflowsReaderCanOpen } from "../lib/provider-words-readers.js"
+import { readerCanOpenWorkflow, runStatesReader, runWordsReadable, workflowsReaderCanOpen } from "../lib/provider-words-readers.js"
 import { deriveRenderFinalRun, isRenderFinalRefusal, parseRenderFinalBody, renderFinalCredits, type ContinuationPricing } from "../lib/render-final-run.js"
 import {
   CONTINUATION_REFUSAL_MESSAGE,
@@ -1206,7 +1206,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       const queues = await queueInfoFor(waitingRowsOf("execution", [execution]))
       // Whether the reader can open the run's workflow, asked only when a
       // failed node carries provider words they could be shown.
-      const reader = await runStatesReader(execution.node_states, { isAdmin, userId: req.userId, workflowId: execution.workflow_id })
+      const reader = await runStatesReader(execution.node_states, { isAdmin, userId: req.userId, run: execution })
       return {
         data: { ...toExecutionResponse(execution, reader), ...queueField(execution.id as string, queues) },
       }
@@ -1326,15 +1326,16 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
 
     const terminalStatuses = new Set(["completed", "failed", "cancelled", "timed_out", "discarded"])
     const terminal = terminalStatuses.has(execution.status as string)
-    // Whether the reader can open the run's workflow — the provider's words on
-    // its states are theirs only then (lib/provider-words.ts) — looked up once
+    // Whether the reader may read the run's words by the run rule
+    // (runWordsReadable: they can open the run's workflow, or own a run that
+    // names none) — the provider's words on its states (lib/provider-words.ts) — looked up once
     // for the whole stream, beside opening it so no event waits on it. Only for
     // a reader who is not an admin, where the deployment lets such a reader
     // read the words, and only while the run can still carry them.
     const needsRelation = !isAdmin && providerWordsShown(false) && (!terminal || nodeStatesCarryProviderWords(execution.node_states))
     const [sse, canRead] = await Promise.all([
       createSSEStream(req, reply),
-      needsRelation ? readerCanOpenWorkflow(req.userId, execution.workflow_id) : Promise.resolve(true),
+      needsRelation ? runWordsReadable(req.userId, execution) : Promise.resolve(true),
     ])
     const reader: ProviderWordsReader = { isAdmin, canRead }
 
