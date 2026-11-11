@@ -39,6 +39,7 @@ vi.mock("../../lib/presets/preview-copy.js", () => ({
   releasePresetPreviews: async () => {},
 }))
 
+import { presetShelf, presetShelfRank } from "@nodaro/prompts/presets"
 import { nodePresetRoutes } from "../node-presets.js"
 import { supabase } from "../../lib/supabase.js"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
@@ -260,6 +261,41 @@ describe("node-presets routes", () => {
     expect(Array.isArray(body.data)).toBe(true)
     expect(body.data.length).toBeGreaterThan(0)
     expect(body.popularIds).toBeUndefined()
+  })
+
+  it("GET /v1/node-presets/factory/groups lists the catalog's categories: name, shelf, count and first picture, in a picker's order", async () => {
+    const app = buildApp(false)
+    await app.register(nodePresetRoutes)
+    const res = await app.inject({ method: "GET", url: "/v1/node-presets/factory/groups?nodeType=generate-image" })
+    expect(res.statusCode).toBe(200)
+    expect(res.headers["cache-control"]).toBe("public, max-age=300")
+    const groups = res.json().data as Array<{ group: string; shelf: string; count: number; previewUrl: string | null }>
+    const catalog = (await app.inject({ method: "GET", url: "/v1/node-presets/factory?nodeType=generate-image" })).json().data as Array<{ group?: string; previewUrl?: string | null }>
+    const named = [...new Set(catalog.map((preset) => preset.group).filter((group): group is string => typeof group === "string" && group.length > 0))]
+    expect([...groups.map((entry) => entry.group)].sort()).toEqual([...named].sort())
+    // Shelf by shelf, a shelf's named groups in the design's order, the rest in catalog order.
+    const shelfOrder = ["video", "marketing", "photos", "creative", "life", "more", "pro"]
+    const rankOf = (group: string) => (presetShelfRank(group) === -1 ? Number.MAX_SAFE_INTEGER : presetShelfRank(group))
+    const expected = [...named].sort((a, b) => shelfOrder.indexOf(presetShelf(a)) - shelfOrder.indexOf(presetShelf(b)) || rankOf(a) - rankOf(b))
+    expect(groups.map((entry) => entry.group)).toEqual(expected)
+    expect(groups.map((entry) => entry.group).indexOf("YouTube")).toBe(0)
+    for (const entry of groups) {
+      const presets = catalog.filter((preset) => preset.group === entry.group)
+      expect(entry.count, entry.group).toBe(presets.length)
+      expect(entry.previewUrl, entry.group).toBe(presets.find((preset) => preset.previewUrl)?.previewUrl ?? null)
+      expect(["video", "marketing", "photos", "creative", "life", "more", "pro"], entry.group).toContain(entry.shelf)
+    }
+    expect(groups.find((entry) => entry.group === "YouTube")?.shelf).toBe("video")
+    expect(fromMock).not.toHaveBeenCalled()
+  })
+
+  it("GET /v1/node-presets/factory/groups requires a nodeType, and answers an empty list for one with no catalog", async () => {
+    const app = buildApp(false)
+    await app.register(nodePresetRoutes)
+    expect((await app.inject({ method: "GET", url: "/v1/node-presets/factory/groups" })).statusCode).toBe(400)
+    const none = await app.inject({ method: "GET", url: "/v1/node-presets/factory/groups?nodeType=constructor" })
+    expect(none.statusCode).toBe(200)
+    expect(none.json().data).toEqual([])
   })
 
   it("GET /v1/node-presets/factory requires a nodeType", async () => {

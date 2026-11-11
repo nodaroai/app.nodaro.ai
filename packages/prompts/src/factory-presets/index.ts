@@ -15,6 +15,8 @@ import { LOTTIE_OVERLAY_PRESETS } from "./lottie-overlay.js"
 
 export type { FactoryPreset, FactoryPresetGroup } from "./types.js"
 export { groupFactoryPresets } from "./types.js"
+export type { PresetShelf } from "./shelves.js"
+export { PRESET_SHELF_ORDER, presetShelf, presetShelfRank } from "./shelves.js"
 export { MAX_PRESET_REFERENCES, presetMinReferences } from "./references.js"
 export {
   FACTORY_PRESET_PREVIEW_FILES,

@@ -8132,6 +8132,26 @@ if (board.needsImage && photos.length >= (board.minReferences ?? 0)) {
 }
 ```
 
+#### `listFactoryGroups(nodeType)`
+
+```ts
+listFactoryGroups(nodeType: string): Promise<FactoryPresetGroupSummary[]>  // [{ group, shelf, count, previewUrl }]
+```
+
+`GET /v1/node-presets/factory/groups` → the built-in catalog's categories for
+`nodeType`, in the order a picker shows them (shelf by shelf; a shelf's named groups in the design's order, the rest in catalog order): each group's name, the shelf a picker files it
+under (`"video"`, `"marketing"`, `"photos"`, `"creative"`, `"life"`, `"pro"`,
+or `"more"` for a group no shelf names yet; shown in that order), how many
+presets it holds, and the example picture of its first preset that has one
+(`previewUrl`, or `null`). A few KB where `listFactory()` is the whole
+catalog: for a menu or a shelf that lists the categories. **Public**, as
+`listFactory()` is.
+
+```ts
+const groups = await visitor.presets.listFactoryGroups("generate-image")
+const video = groups.filter((g) => g.shelf === "video")   // YouTube, Shorts · TikTok
+```
+
 #### `create(input)`
 
 ```ts

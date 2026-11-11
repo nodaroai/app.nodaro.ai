@@ -215,6 +215,8 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; pattern?
   // generate. Exact path, GET only — a user's OWN presets (`/v1/node-presets`,
   // `/favorites`, the groups) stay behind a credential.
   { method: "GET", path: "/v1/node-presets/factory" },
+  // Its categories (each group's name, shelf, count and first picture): derived from that same catalog.
+  { method: "GET", path: "/v1/node-presets/factory/groups" },
   // The Nodaro Keepers shelf (ee/routes/keepers.ts, multi-user editions; a
   // community install has no such route and answers 404): the deployment's shared
   // catalog of characters / creatures / locations / objects — display fields
