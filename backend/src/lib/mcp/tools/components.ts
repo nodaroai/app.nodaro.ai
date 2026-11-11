@@ -9,6 +9,7 @@ import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
+import { surfaceAllowsPublicOutputs } from "../../surface-profile.js"
 import type { ComponentMetadata } from "@nodaro/shared/apps"
 import {
   extractComponentInputSchema,
@@ -76,6 +77,16 @@ export function registerComponents({
           return {
             content: [{ type: "text", text: 'scope="mine" requires authentication.' }],
             isError: true,
+          }
+        }
+        // The marketplace is other people's published work: a deployment that
+        // does not allow public work (`surfaceAllowsPublicOutputs`) has none, so
+        // the public scope lists nothing, and reads no component to find that
+        // out (as `list_apps`, `browse_gallery` and `list_jobs` do). The
+        // caller's own components stay listed under scope "mine".
+        if (scope !== "mine" && !surfaceAllowsPublicOutputs()) {
+          return {
+            content: [{ type: "text", text: JSON.stringify({ data: [], scope, next_cursor: null }, null, 2) }],
           }
         }
         // With the listed per-minute price (decided 2026-10-07), unless its

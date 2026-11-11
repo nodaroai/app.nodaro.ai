@@ -20,6 +20,7 @@ import { isPreviewRender } from "../../preview-render.js"
 import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "../../render-listing.js"
 import { bannedGalleryUsersFilter, galleryHides, loadGalleryModeration } from "../../gallery-moderation.js"
 import { favoritableJobFilter } from "../../gallery-favorites.js"
+import { readableJobsFilter } from "../../public-job-read.js"
 import { surfaceAllowsPublicOutputs } from "../../surface-profile.js"
 import { countEmptyInputSkips, executionOutcome } from "@nodaro/shared/workflow"
 import { isRenderNodeType } from "@nodaro/shared/nodes"
@@ -726,7 +727,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             // public+completed) — same predicate as get_asset/display_asset.
             // Without this, favoriting another user's job UUID would leak its
             // output_data URLs + input_data prompt.
-            .or(`user_id.eq.${session.userId},and(is_public.eq.true,status.eq.completed)`)
+            .or(readableJobsFilter(session.userId))
             // Never a child job (CHILD_JOB_COLUMN), favorited by its id or not.
             .is(CHILD_JOB_COLUMN, null)
           items = ((jobsData ?? []) as GalleryRow[])
@@ -811,9 +812,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           // A job in the Trash reads as one that does not exist (TRASHED_JOB_COLUMN).
           .is(TRASHED_JOB_COLUMN, null)
           .eq("id", args.job_id)
-          .or(
-            `user_id.eq.${session.userId},and(is_public.eq.true,status.eq.completed)`,
-          )
+          .or(readableJobsFilter(session.userId))
           // A child job reads as one that does not exist (CHILD_JOB_COLUMN).
           .is(CHILD_JOB_COLUMN, null)
           .maybeSingle()
@@ -1050,9 +1049,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           )
           .is(TRASHED_JOB_COLUMN, null)
           .eq("id", args.job_id)
-          .or(
-            `user_id.eq.${session.userId},and(is_public.eq.true,status.eq.completed)`,
-          )
+          .or(readableJobsFilter(session.userId))
           // A child job reads as one that does not exist (CHILD_JOB_COLUMN).
           .is(CHILD_JOB_COLUMN, null)
           .maybeSingle()

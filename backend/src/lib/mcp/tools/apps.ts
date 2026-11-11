@@ -18,6 +18,7 @@ import { cardResultText, clientRequestIdSchema, errorResult, idempotencyHeaders 
 import { isPreviewRefusalCode } from "@nodaro/shared/nodes"
 import { isUuid } from "./_id-guard.js"
 import { hasCredits } from "../../config.js"
+import { surfaceAllowsPublicOutputs } from "../../surface-profile.js"
 import { LISTING_ESTIMATE_FLAG_COLUMN, listingEstimateFlag, selectWithEstimateFlag } from "../../listing-estimate-flag-column.js"
 
 const appsReadGate: ToolGate = { required: ["apps:read"] }
@@ -89,6 +90,16 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           return {
             content: [{ type: "text", text: 'scope="mine" requires authentication.' }],
             isError: true,
+          }
+        }
+        // The marketplace is other people's published work: a deployment that
+        // does not allow public work (`surfaceAllowsPublicOutputs`) has none, so
+        // the public scope lists nothing, and reads no app to find that out
+        // (as `browse_gallery` and `list_jobs` do). The caller's own apps stay
+        // listed under scope "mine".
+        if (scope !== "mine" && !surfaceAllowsPublicOutputs()) {
+          return {
+            content: [{ type: "text", text: JSON.stringify({ data: [], scope, next_cursor: null }, null, 2) }],
           }
         }
         // With the listed per-minute price (decided 2026-10-07), unless its

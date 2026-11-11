@@ -1016,13 +1016,38 @@ optional; each array empty = "keep the default"):
   may be left out beside the other locale keys and then means shown; before,
   leaving it out discarded the whole `locale` block, `default` included
 - `outputs.allowPublic`: `false` forces every output private regardless of the
-  user's preference, and every listing of other people's work answers as if
-  there were none: the public view of `GET /v1/gallery`, the community listings
-  (browse and favorites list nothing; a listing's card, its full detail and a
-  clone are not found) and the `scope: "public"` of the MCP `browse_gallery` and
-  `list_jobs` tools. Work marked public before the switch was set, or carried
-  over in a copied database, is therefore not listed either. A person's own
-  gallery and jobs are unchanged.
+  user's preference, and every read that hands one person's work to someone
+  else answers as if nothing were public:
+  - **Listings** list nothing: the public view of `GET /v1/gallery`, the
+    community listings (browse and favorites), the app and component
+    marketplace (`GET /v1/apps/browse`), the template marketplace
+    (`GET /v1/templates/browse`), and the `scope: "public"` of the MCP
+    `browse_gallery`, `list_jobs`, `list_apps` and `list_components` tools.
+  - **Pages** of that work are not found (`404 not_found`): a community
+    listing's card, its full detail and its clone; a template someone else
+    listed on the marketplace, by its page and its clone; and the gallery's
+    report form.
+  - **Links shared before the switch was set** stop working for everyone but
+    the owner: a workflow shared with `settings.studio.shared`
+    (`GET /v1/public/workflows/:id`, which takes no sign-in) answers exactly as
+    one that is not shared, its editable copy is refused, and a public Cine shot
+    (`GET /v1/shots/:id`) reads as a private one. The share flag itself is left
+    as its owner set it; only the reads change.
+  - **Another person's job by its id** reads as not found: the MCP `get_asset`
+    and `display_asset` tools, the items `list_favorites` returns, and adding a
+    favorite (`POST /v1/gallery/favorite`, MCP `favorite_asset`).
+
+  Work marked public before the switch was set, or carried over in a copied
+  database, is therefore not served either. A person's own gallery, jobs, apps,
+  templates, shots and shared workflows are unchanged for them.
+
+  What the switch does **not** close: the presentation share links
+  (`/v1/present/:token`, a separate feature), a published app's own page and
+  runs (`GET /v1/app/:slug`, its link card and embed, MCP `get_app_inputs` /
+  `run_app` / `get_component_inputs` / `run_component`), and the catalogs an
+  administrator curates (tutorials, the Keepers shelf, trends, the shared
+  library). A file's address
+  in your storage stays readable by whoever holds it.
 - `voice.allowedGenders`: `["male"]` / `["female"]` / `["neutral"]` (any subset) —
   restrict voice pickers, policy-owned default voices, and TTS / speech requests to
   these voice genders. Empty (`[]`) = all genders, and nothing below is looked up.

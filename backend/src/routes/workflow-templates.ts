@@ -30,6 +30,7 @@ import { hasAdmin } from "../lib/config.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { surfaceAllowsPublicOutputs } from "../lib/surface-profile.js"
 import { accessAtLeast, workflowAccessFromRow } from "../lib/workflow-access.js"
 import { toAccessRow } from "../lib/workflow-route-access.js"
 import { findUnpublishableNodeTypes, unpublishableNodesMessage } from "../lib/surface-deny.js"
@@ -205,6 +206,18 @@ const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+
 function readListedIn(row: Record<string, unknown>): string[] {
   const v = row.listed_in
   return Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === "string") : []
+}
+
+/**
+ * Whether a template is listed for everyone — what lets anyone but its creator
+ * read its page or clone it. The marketplace is the CREATOR's own listing of
+ * their work, so on a deployment that does not allow public work
+ * (`outputs.allowPublic: false`) it lists nobody's (as `GET /v1/templates/browse`
+ * answers there); the tutorial channel is the administrator's curation of the
+ * deployment's own catalog (`GET /v1/tutorials`), and stays.
+ */
+function listedForEveryone(listed: readonly string[]): boolean {
+  return (listed.includes(MARKETPLACE) && surfaceAllowsPublicOutputs()) || listed.includes(TUTORIAL)
 }
 
 /**
@@ -400,6 +413,16 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       favoriteIds = (favorites ?? []).map((f: { template_id: string }) => f.template_id)
       reply.header("Cache-Control", "private, no-store")
       if (favoriteIds.length === 0) return reply.send({ data: [], nextCursor: null })
+    }
+
+    // The marketplace is other people's published work: a deployment that does
+    // not allow public work (`outputs.allowPublic: false`) has none, so every
+    // browse — the Favorites view included — lists nothing, without reading a
+    // template. A person's own templates stay listed by GET /v1/templates/mine,
+    // and the administrator's tutorial channel by GET /v1/tutorials.
+    if (!surfaceAllowsPublicOutputs()) {
+      if (!favoriteIds) reply.header("Cache-Control", "public, max-age=30, stale-while-revalidate=86400")
+      return reply.send({ data: [], nextCursor: null })
     }
 
     // Card-only columns (no snapshot_nodes/edges/settings)
@@ -955,8 +978,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     // from Admin → Templates; the role is asked only when nothing else lets
     // the request through.
     const row = template as Record<string, unknown>
-    const listed = readListedIn(row)
-    const isListedPublicly = listed.includes(MARKETPLACE) || listed.includes(TUTORIAL)
+    const isListedPublicly = listedForEveryone(readListedIn(row))
     const isOwner = !!req.userId && req.userId === row.creator_id
     const visible = row.is_active === true && (isListedPublicly || isOwner)
     if (!visible && !(await viewerIsAdmin(req.userId))) {
@@ -1051,6 +1073,13 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       .maybeSingle()
 
     if (tplError || !template) {
+      return reply.status(404).send({ error: { code: "not_found", message: "Template not found" } })
+    }
+    // A deployment that does not allow public work (`outputs.allowPublic:
+    // false`) has no marketplace: someone else's template is cloned only from
+    // the administrator's tutorial channel, and is otherwise not found — as its
+    // page answers. The creator clones their own as before.
+    if (!surfaceAllowsPublicOutputs() && template.creator_id !== userId && !listedForEveryone(readListedIn(template as Record<string, unknown>))) {
       return reply.status(404).send({ error: { code: "not_found", message: "Template not found" } })
     }
 

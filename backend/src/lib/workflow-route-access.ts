@@ -5,6 +5,7 @@ import { accessAtLeast, workflowAccessFromRow, type AccessLevel } from "./workfl
 import type { WorkflowAccessRow } from "./private-plugins/types.js"
 import { withResolvedResultIds } from "./canvas-result-ids.js"
 import { ugcPublishedGraph } from "./ugc-composed-graph.js"
+import { surfaceAllowsPublicOutputs } from "./surface-profile.js"
 
 /**
  * Turning a workflow row a route already loaded into the facts the access rule
@@ -150,8 +151,13 @@ async function loadWorkflowSnapshot(
   const row = data as unknown as Record<string, unknown>
   let access = await workflowAccessFromRow(userId, toAccessRow(row))
   const studio = (row.settings as { studio?: { shared?: unknown; allowEditableCopy?: unknown } } | null)?.studio
+  // The copy reads the same `studio.shared` opt-in the public read does, so a
+  // deployment that does not allow public work (`outputs.allowPublic: false`)
+  // grants no copy through it either: without this, the closed public read
+  // would still be open one door over. Anyone the workflow is otherwise shared
+  // with keeps the access their own grant gives.
   if (editableCopy && min === "view" && access === "none"
-    && studio?.shared === true && studio.allowEditableCopy === true) access = "view"
+    && studio?.shared === true && studio.allowEditableCopy === true && surfaceAllowsPublicOutputs()) access = "view"
   if (access === "none") {
     reply.status(404).send({ error: { code: "not_found", message: "Workflow not found" } })
     return { ok: false }

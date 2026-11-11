@@ -145,6 +145,19 @@ gets `403 insufficient_scope` with `missingScope`. The public catalog
 scope. Session tokens and personal API tokens are not scope-checked. See
 [OAuth scope vocabulary](./oauth-flow.md#4-scope-vocabulary).
 
+**On a deployment that does not allow public work** (`outputs.allowPublic: false`,
+see [Deployment](./deployment.md)), the marketplaces list nothing:
+`GET /v1/apps/browse` (apps and components, `favoritesOnly=true` included) and
+`GET /v1/templates/browse` (its Favorites view included) answer
+`{ data: [], nextCursor: null }`. A template someone else listed on the
+marketplace is also not found by its page (`GET /v1/templates/:slug`) or its
+clone (`POST /v1/templates/:slug/clone`): `404 not_found`. Its creator reads
+and clones it as before, an admin still previews its page, and a template in
+the tutorial channel (`GET /v1/tutorials`, which an administrator curates) is
+read and cloned by anyone as before. Your own apps and templates stay listed by
+`GET /v1/apps/mine` and `GET /v1/templates/mine`. A published app's own page
+(`GET /v1/app/:slug`) and its runs are unchanged.
+
 ### HTTP credentials (Webhook Output)
 
 A Webhook Output node can send with a stored credential — a header name and a
@@ -431,7 +444,11 @@ a published app or component
 every sub-workflow they reach the same way, at every depth, with the
 workflow's character definitions shipped as above. A workflow read by link
 (`GET /v1/public/workflows/:id`) or copied from a shared production gives
-anyone but its owner a UGC video the same way too. Anyone the workflow itself
+anyone but its owner a UGC video the same way too. On a deployment that does
+not allow public work (`outputs.allowPublic: false`) neither is open: the read
+by link answers everyone but the workflow's signed-in owner exactly as for a
+workflow that is not shared (`404 not_found`), and a shared production cannot
+be copied by anyone it is not otherwise shared with. Anyone the workflow itself
 is shared with — a member of its workspace, or someone it is shared with
 directly — who opens it (`GET /v1/workflows/:id`), exports it
 (`GET /v1/workflows/:id/export`, MCP `export_workflow` or `get_workflow_json`)
@@ -4660,7 +4677,10 @@ reads stay `jobs:read`. A deployment that hides the gallery serves none of the
 public work (`outputs.allowPublic: false`, see
 [Deployment](./deployment.md)) answers every `GET /v1/gallery` view but your
 own with an empty page, `{ data: [], nextCursor: null, totalCount: 0 }`: your
-own `userId` with your token still lists your work. On a server whose database does not
+own `userId` with your token still lists your work. There, `POST /v1/gallery/favorite`
+adds only your own jobs (anyone else's is `404 not_found`; removing a favorite
+always works), and `POST /v1/gallery/report` answers every item
+`404 not_found`. On a server whose database does not
 have ratings yet, the rating write and a `rating=` filter answer
 `503 not_available`, and every job reads `rating: null`.
 
@@ -7326,7 +7346,7 @@ and one-click remixing.
 | Endpoint | Auth | Purpose |
 |---|---|---|
 | `POST /v1/shots` | Bearer | Create; body carries `mode`, `selectionState` (verbatim `{ pickerNodeType → valueId \| { field: valueId } }`), optional `freeText` / `negativePrompt` / `assembledPrompt` / `perModelPrompts` / `models` / `entityRefs` / `resultUrls`, and `visibility` (**default `private`**). Returns `{ id }`. |
-| `GET /v1/shots/:id` | **public** | Read for the share page / remix hydration. The id is the capability; private shots return 404 to everyone but their owner. Rate-limited per IP. |
+| `GET /v1/shots/:id` | **public** | Read for the share page / remix hydration. The id is the capability; private shots return 404 to everyone but their owner. On a deployment that does not allow public work (`outputs.allowPublic: false`, see [Deployment](./deployment.md)) every shot reads as a private one: 404 to everyone but its signed-in owner. Rate-limited per IP. |
 | `PATCH /v1/shots/:id` | owner | Update any subset — including flipping `visibility` to `public` (the explicit "make shareable" action). |
 | `DELETE /v1/shots/:id` | owner | Delete. |
 

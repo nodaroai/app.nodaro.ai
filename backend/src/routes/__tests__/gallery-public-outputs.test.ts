@@ -126,3 +126,27 @@ describe("GET /v1/gallery — a deployment that does not allow public outputs", 
     expect((res.json().data as Array<{ id: string }>).map((item) => item.id)).toEqual(["job-1"])
   })
 })
+
+describe("POST /v1/gallery/report — a deployment that does not allow public outputs", () => {
+  const JOB_ID = "00000000-0000-4000-8000-0000000000aa"
+  const report = () =>
+    app.inject({ method: "POST", url: "/v1/gallery/report", payload: { jobId: JOB_ID, reason: "spam" } })
+
+  it("every item answers as one that is not in the gallery, and no job is read", async () => {
+    const res = await report()
+    expect(res.statusCode).toBe(404)
+    expect(res.json()).toEqual({ error: { code: "not_found", message: "Gallery item not found" } })
+    expect(supabase.from).not.toHaveBeenCalled()
+  })
+
+  it("a malformed report is still refused as one", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/gallery/report", payload: { jobId: "x", reason: "spam" } })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("with the switch on (the default), the report reads the item as before", async () => {
+    setProfile(null)
+    await report()
+    expect(supabase.from).toHaveBeenCalledWith("jobs")
+  })
+})

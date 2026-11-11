@@ -1627,7 +1627,10 @@ List your favorited gallery items, most recent first. A favorited Apply EDL rend
 
 Fetch metadata for a single asset (job) by id, including output URL, prompt,
 provider. Visible for your own jobs (any status) and any user's public
-completed jobs. For a **failed** job it returns the failure reason plus a
+completed jobs — on a deployment that does not allow public work
+(`outputs.allowPublic: false`), your own jobs only: anyone else's reads as not
+found. The same holds for `display_asset`, the items `list_favorites` returns
+and `favorite_asset`. For a **failed** job it returns the failure reason plus a
 `retryable` flag, a `guidance` sentence, and — when the provider's safety
 filter blocked the output and the catalog offers a fallback model —
 `suggestedProvider`. `retryable: false` (a content-policy block, or a
@@ -1713,7 +1716,8 @@ cancelled run has a `status`, not an outcome. See
 **Scope:** `assets:write`
 
 Mark or unmark a gallery asset as a favorite: one of your own jobs, or a public
-one. `list_jobs` with `favorited: true` lists your favorited jobs.
+one (your own only, on a deployment that does not allow public work). Unmarking
+always works. `list_jobs` with `favorited: true` lists your favorited jobs.
 
 **Input:** `{ job_id: string, favorited: boolean }`
 
@@ -1934,6 +1938,11 @@ went wrong, there was nothing to work on.
 List published apps. Supports `scope: "public" | "mine"` and ordering by
 recency.
 
+On a deployment that does not allow public work (`outputs.allowPublic: false`),
+the public scope (the default) lists nothing:
+`{ "data": [], "scope": "public", "next_cursor": null }`. Your own apps are still
+listed with `scope: "mine"`.
+
 **Input:** `scope`, `limit`, `cursor`
 
 **Output:** each row's `estimated_credits` is the app's listed price. When the
@@ -2084,7 +2093,13 @@ deletion waits until the run has finished or been stopped).
 List your saved workflow components (reusable sub-graphs). Ordered by most
 recently updated.
 
-**Input:** `limit`, `cursor`
+`scope: "public"` (the default) lists the components marketplace and
+`scope: "mine"` lists your own. On a deployment that does not allow public work
+(`outputs.allowPublic: false`), the public scope lists nothing:
+`{ "data": [], "scope": "public", "next_cursor": null }`. `scope: "mine"` is
+unchanged.
+
+**Input:** `scope`, `limit`, `cursor`, `search`
 
 **Output:** each row carries `estimated_credits`, `per_minute_credits` and
 `per_item_credits`, read the same way as in `list_apps`.

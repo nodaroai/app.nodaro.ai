@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { rateLimiter } from "../middleware/rate-limit.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { surfaceAllowsPublicOutputs } from "../lib/surface-profile.js"
 
 /**
  * Cine shots — the Share → Remix record (spec: backend-share-remix.md).
@@ -132,8 +133,12 @@ export async function shotsRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to load shot")
     }
     // Private shots exist only for their owner — 404 either way (the id is
-    // the capability; existence of a private shot is not leaked).
-    if (!data || (data.visibility !== "public" && data.owner_id !== req.userId)) {
+    // the capability; existence of a private shot is not leaked). On a
+    // deployment that does not allow public work (`outputs.allowPublic:
+    // false`) every shot reads as private: a link shared before the switch
+    // was set answers everyone but its signed-in owner as a private shot does.
+    const sharedPublicly = data?.visibility === "public" && surfaceAllowsPublicOutputs()
+    if (!data || (!sharedPublicly && data.owner_id !== req.userId)) {
       return reply.status(404).send(NOT_FOUND)
     }
     return reply.send({ shot: toWire(data) })

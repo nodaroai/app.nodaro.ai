@@ -419,6 +419,12 @@ export function __isPublicRouteForTest(method: string, url: string): boolean {
   return isPublicRoute(method, url)
 }
 
+/** Test-only copy of every public-route row, for the guard that classifies
+ *  what each one serves (`lib/__tests__/public-outputs-reads-totality.test.ts`). */
+export function __publicRoutesForTest(): ReadonlyArray<{ method?: string; path: string; prefix?: boolean; pattern?: string; bearer?: true }> {
+  return PUBLIC_ROUTES.map(({ pattern, ...row }) => ({ ...row, ...(pattern ? { pattern: pattern.source } : {}) }))
+}
+
 // ---------------------------------------------------------------------------
 // Auth hook registration
 // ---------------------------------------------------------------------------

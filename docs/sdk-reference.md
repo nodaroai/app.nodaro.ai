@@ -814,7 +814,9 @@ of `settings.studio`, and each finished take's voice record (`revoiceTo` /
 `voiceMode`) is left off the nodes' `data.generatedResults` rows. A UGC video
 comes back to anyone but the workflow's owner as a published app ships it: its
 UGC nodes and every node made from them without their runs' results, and never
-the owner's photo.
+the owner's photo. On a deployment that does not allow public work
+(`outputs.allowPublic: false`) it throws `NotFoundError` for everyone but the
+workflow's signed-in owner, exactly as for a workflow that is not shared.
 
 ```ts
 const { data: wf } = await client.workflows.getPublic(workflowId)
@@ -5448,8 +5450,11 @@ methods authenticate as the caller.
 list(params?: ListAppsParams): Promise<ListAppsResult>
 ```
 
-Cursor-paginated browse of published apps. Optional `search`, `category`, and
-`limit` (server caps at 50).
+Cursor-paginated browse of published apps (`GET /v1/apps/browse`). Optional
+`search`, `category`, and `limit` (server caps at 50). On a deployment that does
+not allow public work (`outputs.allowPublic: false`) the marketplace lists
+nothing: `{ data: [], nextCursor: null }`. `get()` and `run()` by slug are
+unchanged there.
 
 Each app's `estimatedCredits` is its listed price per run. When its price
 follows the length of the recording the app is given (an Edit Plan pass, the
@@ -8772,7 +8777,9 @@ stores builder state (picker `selectionState`, prompts, target `models`,
 `@`-mention `entityRefs`, `resultUrls`) under an unguessable 12-char id that
 doubles as the share capability. Rows default to **private**; sharing is an
 explicit visibility toggle. `resultUrls` must be plain public http(s) URLs —
-signed URLs are rejected so a token can never leak into a share record.
+signed URLs are rejected so a token can never leak into a share record. On a
+deployment that does not allow public work (`outputs.allowPublic: false`) every
+shot reads as a private one: `get` 404s for everyone but its signed-in owner.
 
 ```ts
 create(input?: CreateShotInput): Promise<{ id: string }>   // POST /v1/shots
@@ -8931,7 +8938,9 @@ required). `params`: `cursor`, `limit`, `category`, `outputType`, `tag`,
 `search` (full-text), `sort` (`"newest"` default | `"popular"` |
 `"most-favorited"`), `nodeType`, `provider`, `complexity`. Returns
 `{ data: TemplateBrowseCard[], nextCursor: string | null }` — pass
-`nextCursor` back as `cursor` for the next page.
+`nextCursor` back as `cursor` for the next page. On a deployment that does
+not allow public work (`outputs.allowPublic: false`) the marketplace lists
+nothing: `{ data: [], nextCursor: null }`.
 
 A card's `estimatedCredits` is the template's listed price. When the price
 follows the length of the recording the template is given,
@@ -8959,7 +8968,10 @@ get(slug: string): Promise<Template>
 
 `GET /v1/templates/:slug` → one public template including its full workflow
 snapshot (`snapshotNodes` / `snapshotEdges` / `snapshotSettings`) for
-read-only viewers. 404 when the slug is unknown, unlisted, or inactive.
+read-only viewers. 404 when the slug is unknown, unlisted, or inactive — and,
+on a deployment that does not allow public work, when it is someone else's
+template listed only on the marketplace (one in the tutorial channel still
+answers).
 
 #### `clone(slug, params)`
 
@@ -8970,7 +8982,9 @@ clone(slug: string, params: CloneTemplateParams): Promise<CloneTemplateResult>
 `POST /v1/templates/:slug/clone` → clone the template into one of the
 caller's projects. Free — no credits charged. `params`:
 `{ projectId, name? }` (name defaults to the template's). Returns
-`{ workflowId, projectId }`.
+`{ workflowId, projectId }`. On a deployment that does not allow public work,
+someone else's marketplace template is `404 not_found` (your own, and a
+tutorial template, clone as before).
 
 ```ts
 const { workflowId } = await client.templates.clone("noir-trailer", { projectId })

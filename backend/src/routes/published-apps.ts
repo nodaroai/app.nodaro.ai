@@ -19,6 +19,7 @@ import { perMinuteOf, selectWithPerMinute, writeWithPerMinute } from "../lib/lis
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
 import { bareOriginSchema } from "../lib/url-validator.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { surfaceAllowsPublicOutputs } from "../lib/surface-profile.js"
 import { requireAnyAppScope, requireAppScope } from "../lib/scope-prehandler.js"
 import type { Scope } from "../lib/scopes.js"
 import { accessAtLeast, workflowAccessFromRow } from "../lib/workflow-access.js"
@@ -281,6 +282,16 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     if (favoritesOnly) {
       await requireAnyAppScope(APP_READ_SCOPES)(req, reply)
       if (reply.sent) return reply
+    }
+
+    // The marketplace is other people's published work: a deployment that does
+    // not allow public work (`outputs.allowPublic: false`) has none, so every
+    // browse — favorites included — lists nothing, without reading an app (as
+    // MCP `list_apps` / `list_components` in their public scope). A person's
+    // own apps stay listed by GET /v1/apps/mine.
+    if (!surfaceAllowsPublicOutputs()) {
+      reply.header("Cache-Control", "public, max-age=30, stale-while-revalidate=86400")
+      return reply.send({ data: [], nextCursor: null })
     }
 
     // Card-only columns (no snapshot_nodes/edges/settings)

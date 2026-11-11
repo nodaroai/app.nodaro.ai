@@ -620,8 +620,22 @@ export function surfaceSsoOnly(): boolean {
  *    being listed.
  * Inert by default: the switch defaults on, and a person's own work is never
  * "public" to themselves, so their own views are untouched.
+ *
+ * The READ side covers every read that hands one person's work to someone
+ * else: the listings above, the shared-by-link reads (a workflow shared with
+ * `settings.studio.shared`, its editable copy, a public Cine shot), the
+ * marketplace browses of apps, components and templates (and a template's
+ * page and clone), and the reads of another person's job by its id
+ * (`lib/public-job-read.ts`). `lib/__tests__/public-outputs-reads-totality.test.ts`
+ * classifies every public route and every cross-user read, so a new one
+ * cannot be added without saying what it does here.
+ *
+ * The unset case returns before the profile is read, as `surfaceAllowsLinkImports`
+ * does: every install without a profile answers here, on hot public reads, and a
+ * route suite that mocks the config module partially cannot break on this gate.
  */
 export function surfaceAllowsPublicOutputs(): boolean {
+  if (!process.env.NODARO_SURFACE_PROFILE?.trim()) return true
   return runtimeSurfaceProfile().outputs.allowPublic
 }
 

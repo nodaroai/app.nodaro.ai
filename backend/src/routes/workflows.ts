@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { hasCredits, hasOrganizations } from "../lib/config.js"
 import { findCloudOnlyNodeTypes, cloudOnlyRejectionMessage } from "../lib/cloud-only-nodes.js"
 import { deniedNodeRejectionMessage } from "../lib/surface-deny.js"
+import { surfaceAllowsPublicOutputs } from "../lib/surface-profile.js"
 import { findDeniedNodeTypesForUser } from "../lib/availability-viewer.js"
 import { z } from "zod"
 import {
@@ -1392,7 +1393,14 @@ export async function workflowRoutes(app: FastifyInstance) {
     // `client_apps.workflows_listed` (per-app) can express. Do not "finish the
     // migration" by deleting this check: without it every workflow in the
     // database becomes readable by id, with no auth.
-    if (settings?.studio?.shared !== true) {
+    const ownerReads = req.userId !== undefined && req.userId === data.user_id
+    // A deployment that does not allow public work (`outputs.allowPublic:
+    // false`) has no work shared by link either: every caller but the signed-in
+    // owner is answered as for a workflow that is not shared — the same 404 at
+    // the same point, before any lookup — so a link handed out before the
+    // switch was set reveals nothing, not even that the workflow exists. Only
+    // the read changes; the flag itself stays as the owner set it.
+    if (settings?.studio?.shared !== true || (!ownerReads && !surfaceAllowsPublicOutputs())) {
       // Not shared → indistinguishable from not-found (don't leak existence).
       return notFound(reply, "Workflow not found")
     }
@@ -1411,7 +1419,7 @@ export async function workflowRoutes(app: FastifyInstance) {
     const ownSettings = full.settings && typeof full.settings === "object" && !Array.isArray(full.settings)
       ? full.settings as Record<string, unknown> : {}
     // The settings too: a character definition whose picture is tainted ships without it.
-    const published = req.userId !== undefined && req.userId === data.user_id
+    const published = ownerReads
       ? null
       : await ugcPublishedGraph(listed, edges as Array<{ source?: string; target?: string; sourceHandle?: string | null; targetHandle?: string | null }>, data.user_id, { settings: ownSettings })
     const shown = published ? published.nodes : listed
