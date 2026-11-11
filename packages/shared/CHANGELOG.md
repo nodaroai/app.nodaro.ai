@@ -1,5 +1,11 @@
 # @nodaro/shared
 
+## 3.60.1
+
+### Patch Changes
+
+- da7c94b: The `CAST_SWAP_RESOLUTIONS_BY_ENGINE` doc comment says a Nodaro Motion Prism run at 480p is plain unless it asks for a draft.
+
 ## 3.60.0
 
 ### Minor Changes
