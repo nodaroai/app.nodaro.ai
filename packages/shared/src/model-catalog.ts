@@ -203,15 +203,20 @@ export function isModelMakerId(value: unknown): value is ModelMakerId {
 }
 
 /**
- * The maker of a catalog entry, in its wire shape — undefined when its `maker`
- * is not a registry id (an entry built at run time without one). Never throws,
- * so one bad entry cannot fail a whole model listing.
+ * The maker of a catalog entry, in its wire shape — undefined for a model
+ * offered under the deployment's own label (`ownLabel`, which names none —
+ * even an entry built at run time, or by a JavaScript caller, that also names a
+ * maker) and when its `maker` is not a registry id (an entry built at run time
+ * without one). Never throws, so one bad entry cannot fail a whole model
+ * listing.
  */
-export function modelMakerOf(entry: Pick<ModelCatalogEntry, "maker">): ModelMaker | undefined {
+export function modelMakerOf(entry: Pick<ModelCatalogEntry, "maker" | "ownLabel">): ModelMaker | undefined {
+  if (entry.ownLabel === true) return undefined
   return isModelMakerId(entry.maker) ? { id: entry.maker, name: MODEL_MAKERS[entry.maker].name } : undefined
 }
 
-export interface ModelCatalogEntry {
+/** Every field of a catalog entry but who it is offered under (`maker` / `ownLabel`, {@link ModelCatalogEntry}). */
+export interface ModelCatalogEntryFields {
   id: string
   kind: ModelKind
   /**
@@ -224,12 +229,6 @@ export interface ModelCatalogEntry {
   modes: readonly ModelMode[]
   /** Vendor / lab that produced the model. Used for UI grouping. */
   family: string
-  /**
-   * The company that made the model (see {@link MODEL_MAKERS}). REQUIRED, so a
-   * new model cannot ship without one; every model of a `family` names the same
-   * maker.
-   */
-  maker: ModelMakerId
   /** Display name (NOT the id — the id is the API enum value). */
   label: string
   /**
@@ -479,6 +478,23 @@ export interface ModelCatalogEntry {
    */
   tts?: TtsCapabilities
 }
+
+/**
+ * Who a model is offered under — exactly one of:
+ *
+ * - `maker`: the company that made it (see {@link MODEL_MAKERS}). Every model
+ *   names one unless it is marked `ownLabel`, so a new model cannot ship
+ *   without saying whose it is; every model of a `family` names the same maker.
+ * - `ownLabel: true`: the model is offered under the deployment's own label and
+ *   names no maker (decided 2026-11-11). `GET /v1/models` leaves `maker` out
+ *   for it and returns `logoUrl: null`; MCP `list_models` leaves `maker` out (it
+ *   never carries `logoUrl`); a client shows no maker. Such a model may not
+ *   carry a `maker` (`model-makers.test.ts`).
+ */
+export type ModelCatalogEntry = ModelCatalogEntryFields & (
+  | { maker: ModelMakerId; ownLabel?: never }
+  | { ownLabel: true; maker?: never }
+)
 
 /**
  * Editorial recommendations — short "best for X" picks Claude can echo back

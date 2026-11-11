@@ -63,7 +63,8 @@ vi.mock("../../../config.js", async (importOriginal) => {
   return { ...orig, hasCredits: () => mockHasCredits }
 })
 
-const { registerModels } = await import("../models.js")
+const { registerModels, projectModel } = await import("../models.js")
+const { MODEL_CATALOG } = await import("@nodaro/shared/model-catalog")
 const { supabase } = await import("../../../supabase.js")
 
 beforeEach(() => {
@@ -136,8 +137,32 @@ describe("list_models tool (always available)", () => {
     const models = body.sections.flatMap((s) => s.families.flatMap((f) => f.models))
     expect(models.find((m) => m.id === "veo3")?.maker).toEqual({ id: "google", name: "Google" })
     expect(models.find((m) => m.id === "kling-3.0")?.maker).toEqual({ id: "kuaishou", name: "Kuaishou" })
-    expect(models.every((m) => typeof m.maker?.id === "string" && typeof m.maker?.name === "string")).toBe(true)
+    // Every model but one offered under the deployment's own label, which names none.
+    const named = models.filter((m) => MODEL_CATALOG[m.id]?.ownLabel !== true)
+    expect(named.every((m) => typeof m.maker?.id === "string" && typeof m.maker?.name === "string")).toBe(true)
+    expect(models.filter((m) => MODEL_CATALOG[m.id]?.ownLabel === true).every((m) => m.maker === undefined)).toBe(true)
     expect(text).not.toContain("logoUrl")
+  })
+
+  it("lists a model offered under the deployment's own label with no maker and no mark, and does not log it as a fault", async () => {
+    const { loadChargedPrices } = await import("../../../pricing/charged-prices.js")
+    const prices = await loadChargedPrices()
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const entry = { ...MODEL_CATALOG["veo3"]!, maker: undefined, ownLabel: true as const, id: "house-model" }
+    const listed = projectModel(entry, prices, { logos: new Map([["google", "https://cdn.example/google.svg"]]) })
+    expect(listed).not.toHaveProperty("maker")
+    expect(listed.logoUrl).toBeNull()
+    expect(warn).not.toHaveBeenCalled()
+    // One built at run time that is marked ownLabel AND names a maker is still listed with none.
+    const both = { ...entry, id: "house-model-with-maker", maker: "google" } as never
+    const listedBoth = projectModel(both, prices, { logos: new Map([["google", "https://cdn.example/google.svg"]]) })
+    expect(listedBoth).not.toHaveProperty("maker")
+    expect(listedBoth.logoUrl).toBeNull()
+    expect(warn).not.toHaveBeenCalled()
+    // An entry that names neither (built at run time) is listed without one and logged.
+    projectModel({ ...entry, id: "broken-model", ownLabel: undefined } as never, prices, { logos: "omit" })
+    expect(warn).toHaveBeenCalledTimes(1)
+    warn.mockRestore()
   })
 
   it("carries the size rules as GET /v1/models does: the sizes a ratio renders, the transparent size", async () => {

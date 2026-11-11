@@ -54,7 +54,8 @@ export type { Flux2Model } from "../flux2-pricing.js"
 export {
   MODEL_CATALOG,
   MODEL_RECOMMENDATIONS,
-  // The companies behind the models (`maker` on every entry; the wire's `maker`).
+  // The companies behind the models (`maker` on every entry but one offered
+  // under the deployment's own label, `ownLabel`; the wire's `maker`).
   MODEL_MAKERS,
   isModelMakerId,
   modelMakerOf,
@@ -107,6 +108,7 @@ export {
 export type {
   NormalizedVideoRequest,
   ModelCatalogEntry,
+  ModelCatalogEntryFields,
   ModelKind,
   ModelMaker,
   ModelMakerId,

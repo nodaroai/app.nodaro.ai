@@ -702,8 +702,9 @@ an environment with no `PUBLIC_URL` seeds again without taking it.
 
 ### Model maker marks (`logoUrl`)
 
-`GET /v1/models` names each model's maker (`maker: { id, name }`) and can carry
-the maker's official mark as `logoUrl`, for apps that draw a model picker. A
+`GET /v1/models` names each model's maker (`maker: { id, name }`; a model the
+instance offers under its own label names none) and can carry the maker's
+official mark as `logoUrl`, for apps that draw a model picker. A
 company's mark is its trademark, so none ships with the app: an instance
 publishes the marks it has the right to show, and every other maker's
 `logoUrl` is `null` (apps then draw the maker's name or initial). This works on
@@ -720,7 +721,7 @@ To publish a maker's mark:
    The maker ids are the `maker.id` values the API returns:
 
    ```bash
-   curl -s "$PUBLIC_URL/v1/models" | jq -r '[.sections[].families[].models[].maker.id] | unique[]'
+   curl -s "$PUBLIC_URL/v1/models" | jq -r '[.sections[].families[].models[].maker.id // empty] | unique[]'
    ```
 
    Use the R2 dashboard, the MinIO console, or any S3 client, for example

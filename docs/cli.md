@@ -183,8 +183,8 @@ nodaro nodes run generate-image --param prompt="…" [--count 1-4] [--models <id
 
 # Models — browse the model catalog (makers, capability sheets, credit pricing, prompt tips)
 nodaro models list [--kind image|video|audio] [--mode t2v|i2v|t2i|tts|…] [--family <vendor>] [--featured] [--json]
-#   table shows id, kind, family, maker (the company that made the model), modes, credit tiers, featured ★ and the doctrine ✓ flag
-#   --json for the full sheets, incl. each model's maker { id, name } and the maker's logoUrl (null when the instance publishes no mark)
+#   table shows id, kind, family, maker (the company that made the model; "-" for a model offered under the instance's own label), modes, credit tiers, featured ★ and the doctrine ✓ flag
+#   --json for the full sheets, incl. each model's maker { id, name } (absent on an own-label model) and the maker's logoUrl (null when the instance publishes no mark)
 nodaro models cost <id…> [--json]                       # what each identifier is charged (POST /v1/credits/model-costs)
 #   an id is a model id, a credit id, or a metered LLM price key <feature>:<model>[:direct] (llmPriceKey)
 #   a metered LLM call is charged for the tokens it uses, so its figure is an estimate and prints as ≈N;

@@ -3840,14 +3840,16 @@ surfaces cannot drift. Public endpoint; cached 5 minutes.
 Each `ModelSummary` names its maker and carries the maker's mark (both absent
 on an older server):
 
-- `maker?: ModelMaker` — `{ id, name }`, the company that made the model. `id`
+- `maker?: ModelMaker` — `{ id, name }`, the company that made the model;
+  absent on a model the instance offers under its own label. `id`
   is stable (one per company: `"google"`, `"black-forest-labs"`), so you can
   key your own assets on it; a newer server can add makers, so handle an id
   you do not know. It is not always the `family` the model is grouped under
   (Tongyi-MAI and HappyHorse are Alibaba's, Depth Anything is ByteDance's).
 - `logoUrl?: string | null` — the maker's official mark (an SVG) on the
   instance's own media CDN, or `null` when the instance does not publish one
-  for that maker: draw a fallback (the maker's name or initial) then. Use the
+  for that maker: draw a fallback (the maker's name or initial) then. It is
+  also `null` for a model the instance offers under its own label. Use the
   address as given; it carries its file's version, so a replaced mark arrives
   under a new address. The MCP tool omits it.
 
