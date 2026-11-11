@@ -40,7 +40,8 @@ export interface JobRecord {
   input_data: unknown
   output_data: unknown
   error_message: string | null
-  /** W0: redacted raw provider error. Admin-only — see sanitizeJobForPublic. */
+  /** W0: the provider's own words, redacted. The owner's, or admins' only where
+   *  the deployment keeps them for its admins — see sanitizeJobForPublic. */
   error_detail?: string | null
   /** Migration 376: a user-safe, machine-readable failure verdict written by
    *  the worker on a final content-policy block. User-safe by construction —
@@ -107,10 +108,12 @@ function pickKeys(row: Record<string, unknown>, keys: readonly string[]): Record
  * Sanitize job data for public API response.
  *
  * Non-admin callers get exactly PUBLIC_JOB_KEYS (credits, never USD; never the
- * provider id, never the raw provider error). Admins get PUBLIC + ADMIN_ONLY.
- * Nobody gets a key outside those two lists, and the private Recast remux
- * base is redacted for every caller (redactPrivateJobData). A non-admin reads
- * a trend run's failure as `TREND_RUN_FAILURE_MESSAGE` (maskTrendRunError).
+ * provider id). Admins get PUBLIC + ADMIN_ONLY. Nobody gets a key outside those
+ * two lists, and the private Recast remux base is redacted for every caller
+ * (redactPrivateJobData). A non-admin reads a trend run's failure as
+ * `TREND_RUN_FAILURE_MESSAGE`, and `error_detail` null where the deployment
+ * keeps the provider's words for its admins (maskTrendRunError, which applies
+ * lib/provider-words.ts).
  */
 export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecord | PublicJob {
   // A trend run's failure text is replaced for a non-admin (maskTrendRunError).

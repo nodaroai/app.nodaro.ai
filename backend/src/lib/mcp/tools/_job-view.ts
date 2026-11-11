@@ -11,6 +11,7 @@
 import { z } from "zod"
 import { DIRECTION_KEYS, getRegisteredSubjectKeys } from "@nodaro/prompts/prompt-builder"
 import { redactPrivateJobData, redactPrivateJobOutput } from "../../public-job-data.js"
+import { jobRowProviderWords } from "../../provider-words.js"
 import { failureGuidance } from "./_job-error.js"
 import { isPreviewRender } from "../../preview-render.js"
 
@@ -201,7 +202,9 @@ export function jobView(row: JobRowLike): JobView {
     outputData: out,
     input: jobInputView(row.input_data),
     errorMessage: row.error_message ?? null,
-    errorDetail: row.error_detail ?? null,
+    // The provider's words as an MCP reader (never an admin one) may read them:
+    // null where the deployment keeps them for its admins (lib/provider-words.ts).
+    errorDetail: jobRowProviderWords(row, false).error_detail ?? null,
     credits: row.credits ?? null,
     creditsCharged: row.credits_charged ?? null,
     ...(row.credits_held !== undefined ? { creditsHeld: row.credits_held } : {}),

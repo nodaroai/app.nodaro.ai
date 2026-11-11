@@ -658,6 +658,7 @@
         "backend/src/lib/provider-safety-guard-probe.ts",
         "backend/src/lib/provider-safety-settings.ts",
         "backend/src/lib/provider-safety.ts",
+        "backend/src/lib/provider-words.ts",
         "backend/src/lib/public-job-data.ts",
         "backend/src/lib/public-video-frame.ts",
         "backend/src/lib/public-workflow-projection.ts",

@@ -31,6 +31,7 @@ import { exposedTextCaps, exposedVideoLinkNodeIds } from "../lib/exposed-text-ca
 import { ugcPublishedGraph } from "../lib/ugc-composed-graph.js"
 import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
 import { UGC_APP_PHOTO_REQUIRED, ugcRunMissesPhoto } from "../lib/ugc-app-run.js"
+import { nodeStatesProviderWords } from "../lib/provider-words.js"
 
 const workflowIdParams = z.object({
   id: z.string().uuid(),
@@ -492,6 +493,10 @@ export async function presentationRoutes(app: FastifyInstance) {
 
     return reply.send({
       ...execution,
+      // The viewer's run, as the viewer may read it: a failed node's provider
+      // words withheld from a non-admin where the deployment keeps them for its
+      // admins (lib/provider-words.ts). Same key, same place in the answer.
+      node_states: nodeStatesProviderWords(execution.node_states, req.userRole === "admin" || req.userRole === "super_admin"),
       outcome: executionOutcome(execution.status, execution.node_states as Record<string, { status?: unknown; skipReason?: unknown }> | null),
     })
   })

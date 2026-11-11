@@ -28,6 +28,7 @@ import { fillJobRenderQuality } from "../render-label-fill.js"
 import { titleColumnPresent } from "../jobs-title-column.js"
 import { CHILD_JOB_COLUMN } from "../public-job-data.js"
 import { publicCreditFieldsOf, runCreditsFor } from "../job-credit-status.js"
+import { webhookBodyProviderWords } from "../provider-words.js"
 import type { WebhookEventType } from "./event-types.js"
 
 export const MAX_EVENT_BYTES = 64 * 1024
@@ -169,7 +170,10 @@ export async function eventBodyFor(d: ClaimedDelivery): Promise<BuiltEvent> {
     // for a child (before migration 550 stopped the capture) holds the child's
     // input, so it is never sent again — the job reads as gone.
     if (d.jobId && (await isChildJob(d.jobId, d.deliveryId))) return { kind: "missing" }
-    return { kind: "body", body: d.payload, fresh: false }
+    // The same text, unless it carries provider words this deployment now
+    // keeps for its admins (lib/provider-words.ts): a body recorded before the
+    // setting would otherwise send them again.
+    return { kind: "body", body: webhookBodyProviderWords(d.payload), fresh: false }
   }
   if (d.event === "ping") {
     return { kind: "body", body: envelope(d, { webhookId: d.webhookId }), fresh: true }

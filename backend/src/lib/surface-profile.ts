@@ -178,6 +178,30 @@ export interface SurfaceProfile {
    * against the key manifest each product's build emits (surface-strings.ts).
    */
   strings?: unknown
+  /**
+   * Who reads a failed job's provider words (`jobs.error_detail`, a run's
+   * node-state `errorDetail`): see SurfaceJobs. Absent unless configured.
+   * BACKEND-ONLY: surface-profile-runtime-config.ts strips it from /config.js,
+   * since no page reads it (the server decides what each response carries).
+   */
+  jobs?: SurfaceJobs
+}
+
+/** Who may read a failed job's provider words. */
+export const JOB_ERROR_DETAIL_READERS = ["owner", "admin"] as const
+export type JobErrorDetailReaders = (typeof JOB_ERROR_DETAIL_READERS)[number]
+
+/**
+ * `jobs.errorDetail`: who reads what the provider itself said about a failed
+ * job (`error_detail` on the job reads, `errorDetail` on a run's node states and
+ * the MCP job envelope, `providerReason` on diagnose_run). `"owner"` — the
+ * job's owner and admins, today's behaviour and what an absent key means;
+ * `"admin"` — admins only: every other reader sees the job as one the provider
+ * said nothing about. The one reader is `surfaceJobErrorDetailReaders`, and
+ * `lib/provider-words.ts` is the one place that applies it.
+ */
+export interface SurfaceJobs {
+  errorDetail: JobErrorDetailReaders
 }
 
 export const SURFACE_PROFILE_DEFAULT: SurfaceProfile = {
@@ -287,6 +311,30 @@ const lenientPublicFlag = lenientFlag("outputs.allowPublic", true, "public", { w
 const lenientSelfServeFlag = lenientFlag("billing.selfServe", true, "self-serve on", { warnOnAbsent: false })
 
 const BILLING_DEFAULT: SurfaceBilling = { costTab: "inherit", sidebarCard: "inherit", selfServe: true }
+
+/**
+ * `jobs`, leniently, and a SAFETY control: absent (or an object that leaves
+ * `errorDetail` out) is no key, today's behaviour. Any value that is not one of
+ * JOB_ERROR_DETAIL_READERS — and a `jobs` that is not an object — falls to the
+ * restrictive side, `"admin"`, loudly: a typo must never hand the provider's
+ * words to more readers than the deployment asked for. Degrades alone; never
+ * fails the profile.
+ */
+const surfaceJobsSchema = z
+  .unknown()
+  .optional()
+  .transform((raw): SurfaceJobs | undefined => {
+    if (raw === undefined) return undefined
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+      console.warn('[surface-profile] jobs must be an object { errorDetail } — the provider\'s words are kept for admins ("admin")')
+      return { errorDetail: "admin" }
+    }
+    const value = (raw as Record<string, unknown>).errorDetail
+    if (value === undefined) return undefined
+    if ((JOB_ERROR_DETAIL_READERS as readonly unknown[]).includes(value)) return { errorDetail: value as JobErrorDetailReaders }
+    console.warn(`[surface-profile] jobs.errorDetail ${JSON.stringify(value)} is not one of ${JOB_ERROR_DETAIL_READERS.join(" | ")} — using the restrictive "admin"`)
+    return { errorDetail: "admin" }
+  })
 
 /**
  * The unit trio is validated HERE, as a unit, and dropped as a unit (§3.5):
@@ -473,6 +521,7 @@ export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
   imports: surfaceImportsSchema.optional(),
   header: surfaceHeaderSchema.optional(),
   strings: z.unknown().optional(),
+  jobs: surfaceJobsSchema.optional(),
 }) as z.ZodType<SurfaceProfile>
 
 /** One-level-deep merge: each override sub-object replaces the default's, keys
@@ -499,6 +548,7 @@ function mergeOverDefault(override: Partial<SurfaceProfile>): SurfaceProfile {
     ...(override.imports ? { imports: override.imports } : {}),
     ...(override.header ? { header: override.header } : {}),
     ...(override.strings !== undefined ? { strings: override.strings } : {}),
+    ...(override.jobs ? { jobs: override.jobs } : {}),
   }
 }
 
@@ -589,6 +639,21 @@ export function surfaceAllowsPublicOutputs(): boolean {
 export function surfaceAllowsLinkImports(): boolean {
   if (!process.env.NODARO_SURFACE_PROFILE?.trim()) return true
   return runtimeSurfaceProfile().imports?.links !== false
+}
+
+/**
+ * Who reads a failed job's provider words on this deployment (`jobs.errorDetail`):
+ * `"owner"` (the job's owner and admins — absent, or no profile at all, which is
+ * exactly today's behaviour) or `"admin"` (admins only). The one reader of the
+ * key; `lib/provider-words.ts` is its one caller (provider-words-totality.test.ts).
+ *
+ * The unset case returns before the profile is read, as `surfaceAllowsLinkImports`
+ * does: every install without a profile answers here, on every job read, and a
+ * route suite that mocks the config module partially cannot break on it.
+ */
+export function surfaceJobErrorDetailReaders(): JobErrorDetailReaders {
+  if (!process.env.NODARO_SURFACE_PROFILE?.trim()) return "owner"
+  return runtimeSurfaceProfile().jobs?.errorDetail ?? "owner"
 }
 
 /**

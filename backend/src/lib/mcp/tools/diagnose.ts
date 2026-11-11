@@ -172,7 +172,9 @@ function buildFailure(
 
 /** The provider's words a non-admin may read: the job's `error_detail`, else
  *  the node state's; a trend run's are withheld along with its text (an MCP
- *  session is never an admin one). */
+ *  session is never an admin one), and so is every job's where the deployment
+ *  keeps them for its admins — `maskTrendRunError` applies that setting
+ *  (lib/provider-words.ts) to both texts. */
 function providerReasonOf(detail: string | null | undefined, inputData: unknown): string | undefined {
   const masked = maskTrendRunError({ error_detail: detail ?? null, input_data: inputData ?? null }, false)
   return typeof masked.error_detail === "string" && masked.error_detail !== "" ? masked.error_detail : undefined

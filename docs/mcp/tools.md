@@ -1801,12 +1801,15 @@ reports `queued` for this reason.
 `assetKind` (`image` / `video` / `audio` / null), `outputUrl`, `width` /
 `height`, `outputData`, `input`, `errorMessage`, `errorDetail` (the provider's
 own words for a failure, links cut to their host and secrets removed; `null`
-when it had none — show it, never branch on it), `credits`, `creditsCharged`,
+when it had none, and on a deployment that keeps these words for its
+administrators — show it, never branch on it), `credits`, `creditsCharged`,
 `creditsHeld`, `creditsReleased`, `createdAt`, `startedAt`, `completedAt`, plus
 `retryable`, `guidance` and `suggestedProvider` on a failed, cancelled or held
 job, and `guidance` on a job waiting for a free slot. `get_asset` and `wait_for_job` return the same envelope (`get_asset`
 without `input` and without the charge figures). `diagnose_run` carries the
-same words as `providerReason` on each failed node that has them.
+same words as `providerReason` on each failed node that has them, and leaves
+it out where the deployment keeps the words for its administrators (an MCP
+session never reads as an administrator's).
 
 `width` / `height` are the output's pixel size, present when the job recorded
 it: every image job completed after this release (the size of `outputUrl` as

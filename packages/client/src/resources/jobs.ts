@@ -218,7 +218,8 @@ export interface Job {
   /** The provider's own words for a failure, as the server stored them with
    *  links cut to their host and secrets removed; `null` when the failure had
    *  no provider text (a platform refusal, a timeout, a queue wait that ran
-   *  out). Display it beside `error_message`; branch on `error_hint`, never on
+   *  out), and on a deployment that keeps these words for its administrators.
+   *  Display it beside `error_message`; branch on `error_hint`, never on
    *  these words. Absent on an older server. */
   error_detail?: string | null
   /** Present on a failed job the worker classified as a provider

@@ -1792,7 +1792,12 @@ workflow run carries it as `errorDetail` on its entry in `nodeStates`
 hands its words to the sub-workflow node's entry. Two exceptions: a trend run's words are
 withheld along with its text (they can quote its hidden input), and a published
 app's runner never receives them (they can quote the creator's prompt) — the
-app run endpoints answer without `errorDetail`.
+app run endpoints answer without `errorDetail`. A deployment can also keep these
+words for its administrators (`jobs.errorDetail` in its surface profile, see
+[deployment.md](./deployment.md#surface-profile-nodaro_surface_profile)): there
+every caller who is not an administrator gets `error_detail: null` on each of
+these payloads and no `errorDetail` on a node's entry — exactly what a failure
+with no provider text looks like, so a client needs no change.
 
 `POST /v1/text-to-video` takes an optional `contentPolicyRewrite` boolean. Absent
 or `true`, a `copyright` refusal is retried once with a reworded prompt (the job's
