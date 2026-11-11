@@ -620,8 +620,22 @@ export function surfaceSsoOnly(): boolean {
  *    being listed.
  * Inert by default: the switch defaults on, and a person's own work is never
  * "public" to themselves, so their own views are untouched.
+ *
+ * The READ side covers every read that hands one person's work to someone
+ * else: the listings above, the shared-by-link reads (a workflow shared with
+ * `settings.studio.shared`, its editable copy, a public Cine shot), the
+ * marketplace browses of apps, components and templates (and a template's
+ * page and clone), and the reads of another person's job by its id
+ * (`lib/public-job-read.ts`). `lib/__tests__/public-outputs-reads-totality.test.ts`
+ * classifies every public route and every cross-user read, so a new one
+ * cannot be added without saying what it does here.
+ *
+ * The unset case returns before the profile is read, as `surfaceAllowsLinkImports`
+ * does: every install without a profile answers here, on hot public reads, and a
+ * route suite that mocks the config module partially cannot break on this gate.
  */
 export function surfaceAllowsPublicOutputs(): boolean {
+  if (!process.env.NODARO_SURFACE_PROFILE?.trim()) return true
   return runtimeSurfaceProfile().outputs.allowPublic
 }
 
@@ -639,6 +653,23 @@ export function surfaceAllowsPublicOutputs(): boolean {
 export function surfaceAllowsLinkImports(): boolean {
   if (!process.env.NODARO_SURFACE_PROFILE?.trim()) return true
   return runtimeSurfaceProfile().imports?.links !== false
+}
+
+/**
+ * Which pictures this deployment shows on picker options (`catalogs.images`):
+ * `"default"` (the platform's — absent, or no profile at all, which is exactly
+ * today's behaviour), `"none"`, or `"own"` (the deployment's own, which has no
+ * registry yet and so shows none). The one reader of the key on the server;
+ * `lib/picker-images.ts` is its one caller (picker-images-totality.test.ts).
+ * The client apps read it through /config.js (`surfaceCatalogImages()`).
+ *
+ * The unset case returns before the profile is read, as `surfaceAllowsLinkImports`
+ * does: every install without a profile answers here, on every catalog read,
+ * and a route suite that mocks the config module partially cannot break on it.
+ */
+export function surfaceCatalogImages(): SurfaceCatalogImages {
+  if (!process.env.NODARO_SURFACE_PROFILE?.trim()) return "default"
+  return runtimeSurfaceProfile().catalogs?.images ?? "default"
 }
 
 /**

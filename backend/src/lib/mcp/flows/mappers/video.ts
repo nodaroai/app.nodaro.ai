@@ -1,4 +1,4 @@
-import { isSeedanceVideoEditProvider } from "@nodaro/shared/models"
+import { canonicalVideoProvider, isSeedanceExtendProvider, isSeedanceVideoEditProvider } from "@nodaro/shared/models"
 import { bool, defined, inputsOf, num, str, urls, type Body, type FlowNodeSpec, type RouteMapper, type RouteMappers } from "./kit.js"
 
 /** `loopTrim`: the route takes a Loop trim (the text-to-video route drops one, so its node must not keep it). */
@@ -75,19 +75,22 @@ function videoNode(type: string, handle: string, videoUrl: string, data: Record<
 }
 
 /**
- * Extend Video. Seedance 2 extends the video by URL (wired on `video`); VEO and
- * Runway continue their own task, which the node holds as `kieTaskId`. The
- * verb's reference images have no place on the node: such a call is no node.
+ * Extend Video. Seedance 2.5 and Seedance 2.0 extend the video by URL (wired on
+ * `video`); VEO and Runway continue their own task, which the node holds as
+ * `kieTaskId`. A retired provider id (the earlier `seedance-2-extend`) makes a
+ * node on the model it runs as. The verb's reference images have no place on
+ * the node: such a call is no node.
  */
 const extendVideo: RouteMapper = {
   tools: ["extend_video"],
   fields: new Set(["videoUrl", "prompt", "provider", "duration", "resolution", "generateAudio", "taskId", "model", "seeds", "quality"]),
   map(body) {
-    const provider = str(body.provider)
+    const sent = str(body.provider)
+    const provider = sent === undefined ? undefined : canonicalVideoProvider(sent)
     const prompt = str(body.prompt)
     if (!provider || !prompt) return null
     const base = { label: "Extend Video", provider, prompt, negativePrompt: "" }
-    if (provider === "seedance-2-extend") {
+    if (isSeedanceExtendProvider(provider)) {
       const videoUrl = str(body.videoUrl)
       if (!videoUrl || body.taskId !== undefined) return null
       return videoNode("extend-video", "video", videoUrl, {

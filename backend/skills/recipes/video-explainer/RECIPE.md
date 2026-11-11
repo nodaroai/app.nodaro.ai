@@ -28,7 +28,7 @@ applies; read each "call X" as "add the X node".
   spoken narration lives ONLY in the per-block voice takes. This invariant is what makes
   the assembler's slow-to-fit safe — a talking mouth in a retimed clip desyncs. Ban
   lip-sync in every `NEGATIVE:`.
-- **ONE engine for the whole video.** Do not mix `gemini-omni-video` and `seedance-2`
+- **ONE engine for the whole video.** Do not mix `gemini-omni-video` and `seedance-2-5`
   across blocks — mixing models is style-drift bait even with the key attached.
 - **ONE style key for the whole video.** The single Phase-1 image is the reference input
   for every subsequent generation (every t2v call, or every keyframe). It is what locks
@@ -121,15 +121,15 @@ gemini-omni does). This collapses keyframe + animate into one call per block. Co
 output minute. **`gemini-omni-video` output is SILENT on Nodaro** — the voice carries
 the block alone; do not rely on clip audio.
 
-**Budget / continuity: `seedance-2` or `seedance-2-fast`, image-to-video.** For each
+**Continuity: `seedance-2-5`, image-to-video.** For each
 block: `generate_image` a keyframe (style key as reference) → `animate_image` with that
-keyframe as `image_url`, `model: "seedance-2"` (or `"seedance-2-fast"`), `duration: 10`.
-This is the ONLY engine compatible with continuity mode (§3.1). Consult the model's
+keyframe as `image_url`, `model: "seedance-2-5"`, `duration: 10`.
+This is the ONLY engine compatible with continuity mode (§3.1): its clips continue on the
+same model (`seedance-2-5-extend`). Consult the model's
 `pricing` array via `list_models { kind: "video", mode: "i2v" }` for the exact 10s cost
-(seedance scales with duration/resolution; `seedance-2-fast` at 480p is the cheapest
-anchor). If you want ambient audio, `animate_image` has a `sound` toggle (Seedance 2
-included) — but the narration still carries the block; keep clips speech-free
-regardless.
+(Seedance 2.5 scales with duration and resolution). If you want ambient audio,
+`animate_image` has a `sound` toggle (Seedance 2.5 included) — but the narration still
+carries the block; keep clips speech-free regardless.
 
 Either engine: **10s clips, no speech, style key on every clip.** Re-verify model ids
 against `list_models` if this recipe's `version` looks stale.
@@ -165,8 +165,9 @@ Assembler credit cost is `3 + ceil(N / 6)` units, charged as one: 6 blocks → 4
 | `trim_end_frames` | 0–120, default 0 | frames trimmed off the end of each non-final block (interior joins only) |
 | `trim_start_frames` | 0–120, default 0 | frames trimmed off the start of each non-first block (interior joins only) |
 
-Leave `trim_end_frames` / `trim_start_frames` at 0 for plain hard-cut explainers (the
-default; trimming eats content from clean cuts). Set them only in continuity mode (§3.1).
+Leave `trim_end_frames` / `trim_start_frames` at 0 (the default; trimming eats content
+from clean cuts) — in continuity mode too: its joins are stitched inside the extend
+output before assembly (§3.1).
 
 ---
 
@@ -174,27 +175,32 @@ default; trimming eats content from clean cuts). Set them only in continuity mod
 
 For consecutive beats INSIDE the same scene, you may generate clip N+1 as a
 *continuation* of clip N instead of from a fresh keyframe — motion flows unbroken across
-the join. Continuity mode **requires the seedance engine for the WHOLE video**:
+the join. Continuity mode **requires Seedance 2.5 (`seedance-2-5`) for the WHOLE video**:
 `gemini-omni-video` is not in `EXTEND_VIDEO_PROVIDERS`, and its `:vref` path is
 video-*edit* semantics, not continuation — do NOT substitute it.
 
 Per continuation join:
 
-1. `trim_video` the **last ~2 seconds** of clip N and feed only that tail — never the
-   whole clip. (Seedance video input bills input + output duration; 2s in + 10s out ≪
-   10s + 10s.)
-2. Continue with `extend_video`, `model: "seedance-2-extend"`, block N+1's prompt as the
-   continuation (describe only what happens next). `extend_video` has **no
-   image-reference input** — the look carries forward only through the trimmed source
-   tail from step 1, so there is nothing to re-attach on an extend. This is exactly why
-   chained extends drift over multiple joins, and why scene breaks (below) MUST restart
-   from a fresh style-key keyframe — that is the only re-anchor point.
-3. The extend output contains ONLY the continuation — there is no overlap to cut. At
-   assembly, set **`trim_end_frames: 4, trim_start_frames: 3`** (the "seamless merge"
-   setting) to hide the boundary flash at these interior joins.
+1. Continue with `extend_video`, `model: "seedance-2-5-extend"`, `duration: 10`, the
+   **WHOLE** clip N as the source (`video_asset_id` / `video_url`), block N+1's prompt as
+   the continuation (describe only what happens next). Never `trim_video` the clip first
+   and feed only its end: the extend cuts its own reference from the end of the source,
+   and its price follows the seconds it adds, never the source's length. The look carries
+   forward through the end of the source, and chained extends drift over multiple joins —
+   so re-attach the style key image on EVERY extend (its URL in `reference_image_urls`,
+   named `@image_1` in the prompt) to hold the look. Scene breaks (below) still MUST
+   restart from a fresh style-key keyframe.
+2. The extend output is clip N **and** its continuation, already stitched into one
+   seamless clip — the join is done; there is nothing to cut or trim. It REPLACES clip N:
+   never place it after clip N (that plays clip N twice). To continue again, extend this
+   output (whole) the same way.
+3. At assembly, the group's last extend output is ONE block, voiced by ONE take that
+   speaks the group's lines in order (one `generate_speech` call on those lines) — the
+   assembler fits it like any other block. This is the one exception to "Block N's line →
+   take N".
 
 **Scene breaks always restart from a fresh keyframe.** A fresh keyframe re-anchors the
 look AND restores parallelism: clips within different scene groups render in parallel,
 whereas a fully chained 60-block video serializes (one clip at a time, each waiting on
-its predecessor's tail). Use continuity within a scene; break to a fresh keyframe between
-scenes.
+its predecessor's whole output). Use continuity within a scene; break to a fresh keyframe
+between scenes.

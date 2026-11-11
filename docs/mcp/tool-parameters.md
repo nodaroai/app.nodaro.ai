@@ -133,7 +133,7 @@ Needs `workflows:execute`.
 | `prompt` | string |  | At most 8000 characters. |
 | `image_url` | string (URL) |  |  |
 | `image_asset_id` | string |  |  |
-| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, bytedance-pro-fast, gemini-omni-flash, gemini-omni-flash-1-2, gemini-omni-video, grok-i2v, grok-imagine-video-1.5, hailuo-2.3, hailuo-2.3-pro, hailuo-standard, happyhorse-i2v, happyhorse-ref2v, kling, kling-3-omni, kling-3.0, kling-4, kling-4-keyframes, kling-master, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, runway-kie, seedance-2, seedance-2-5, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, vidu-q4, wan-2.7-i2v, wan-3, wan-3-prime, wan-i2v, wan-turbo. Unknown values silently fall back. Call list_models { kind: "video", mode: "i2v" } for capabilities + recommendations. |
+| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, bytedance-pro-fast, gemini-omni-flash, gemini-omni-flash-1-2, gemini-omni-video, grok-i2v, grok-imagine-video-1.5, hailuo-2.3, hailuo-2.3-pro, hailuo-standard, happyhorse-i2v, happyhorse-ref2v, kling, kling-3-omni, kling-3.0, kling-4, kling-4-flash, kling-4-keyframes, kling-master, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, runway-kie, seedance-2, seedance-2-5, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, vidu-q4, wan-2.7-i2v, wan-3, wan-3-prime, wan-i2v, wan-turbo. Unknown values silently fall back. Call list_models { kind: "video", mode: "i2v" } for capabilities + recommendations. |
 | `duration` | number |  | Duration (seconds). Snaps to nearest supported. |
 | `aspect_ratio` | string |  | Aspect ratio. Variations / unsupported fall back. |
 | `resolution` | string |  | Output resolution. Provider-dependent — common values: 480p, 720p, 1080p, 4k. Unknown values fall back to the model's default. |
@@ -857,15 +857,15 @@ Needs `workflows:execute`.
 | `prompt` | string | yes | From 1 to 8000 characters. |
 | `task_id` | string |  | Task id of the prior generation, its output providerTaskId (veo-extend / runway-extend only). At least 1 character. |
 | `kie_task_id` | string |  | Use task_id. At least 1 character. |
-| `video_url` | string (URL) |  | Source video URL (seedance-2-extend only) |
-| `video_asset_id` | string |  | Nodaro job/upload asset id whose output is a video (seedance-2-extend only) |
-| `model` | string | yes | One of `veo-extend`, `runway-extend`, `seedance-2-extend`. |
+| `video_url` | string (URL) |  | Source video URL (seedance-2-5-extend / seedance-2-0-extend only) |
+| `video_asset_id` | string |  | Nodaro job/upload asset id whose output is a video (seedance-2-5-extend / seedance-2-0-extend only) |
+| `model` | string | yes | One of `veo-extend`, `runway-extend`, `seedance-2-5-extend`, `seedance-2-0-extend`. |
 | `veo_quality` | string |  | One of `fast`, `quality`. |
 | `runway_resolution` | string |  | One of `720p`, `1080p`. |
-| `duration` | integer |  | Seconds to add (seedance-2-extend, default 8). From 4 to 15. |
-| `resolution` | string |  | Extension resolution (seedance-2-extend, default 720p — match the source for the cleanest seam). One of `480p`, `720p`, `1080p`, `4k`. |
-| `generate_audio` | boolean |  | Continue the soundtrack into the extension (seedance-2-extend, default true) |
-| `reference_image_urls` | string (URL)[] |  | Reference images for the extension (seedance-2-extend only, up to 8 — one seat is reserved for the continuation anchor). Mention them in the prompt as @image_1…@image_N in list order. At most 8 items. |
+| `duration` | integer |  | Seconds to add: seedance-2-5-extend 4–30 seconds (default 8), seedance-2-0-extend 4–15 seconds (default 8). Any other length is refused. From 4 to 30. |
+| `resolution` | string |  | Extension resolution (seedance-2-5-extend / seedance-2-0-extend, default 720p — match the source for the cleanest seam). One of `480p`, `720p`, `1080p`. |
+| `generate_audio` | boolean |  | Continue the soundtrack into the extension (seedance-2-5-extend / seedance-2-0-extend, default true) |
+| `reference_image_urls` | string (URL)[] |  | Reference images for the extension (seedance-2-5-extend / seedance-2-0-extend only, up to 8 — one seat is reserved for the continuation anchor). Mention them in the prompt as @image_1…@image_N in list order. At most 8 items. |
 | `seed` | integer |  | From 10000 to 99999. |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
 | `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
@@ -1077,7 +1077,7 @@ Needs `workflows:execute`.
 | `prompt` | string |  | Free-text image prompt. From 1 to 4000 characters. |
 | `presetId` | string |  | Apply a built-in/custom preset by id from list_node_presets, exactly as the editor does; explicit fields below override it, your prompt is wrapped in its pre/post text. From 1 to 200 characters. |
 | `variables` | object (map of string) |  | Values for a preset's placeholders that have no default, e.g. { BRAND: "Acme" }. |
-| `model` | string |  | Image model. Default gpt-image-2. Recommended: flux, flux-2-klein, flux-2-max, flux-2-pro, flux-flex, flux-kontext, flux-kontext-max, gpt-image, gpt-image-2, gpt-image-2-5-flare, gpt-image-2-5-sunburst, gpt-image-2-6-flare, gpt-image-2-6-sunburst, grok, grok-2, ideogram-v3, imagen4, imagen4-fast, imagen4-ultra, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-pro, qwen, seedream, seedream-5-flash, seedream-5-lite, seedream-5-pro, wan-2.7, wan-2.7-pro, z-image. Unknown values silently fall back to the default. Call list_models for capability details. |
+| `model` | string |  | Image model. Default gpt-image-2. Recommended: flux, flux-2-klein, flux-2-max, flux-2-pro, flux-flex, flux-kontext, flux-kontext-max, gpt-image, gpt-image-2, gpt-image-2-5-flare, gpt-image-2-5-sunburst, gpt-image-2-6-flare, gpt-image-2-6-sunburst, grok, grok-2, ideogram-v3, imagen4, imagen4-fast, imagen4-ultra, minimax-h3-image, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-pro, qwen, seedream, seedream-5-flash, seedream-5-lite, seedream-5-pro, wan-2.7, wan-2.7-pro, z-image. Unknown values silently fall back to the default. Call list_models for capability details. |
 | `count` | integer |  | 1-4 images per model. |
 | `models` | string[] |  | 2-4 models instead of model. |
 | `resolution` | string |  | Resolution: 1K / 2K / 4K. Falls back to nearest supported value. |
@@ -1089,7 +1089,7 @@ Needs `workflows:execute`.
 | `svg_level` | string |  | standard, detailed or max. |
 | `aspect_ratio` | string |  | Aspect ratio (e.g. 16:9, 9:16, 1:1, 4:3, 3:4, 21:9). Default 16:9. 'auto' keeps the shape of base_image_url, else of the first reference image, on every model. Variations like 16x9 / 16-9 are accepted; unsupported values fall back. |
 | `negative_prompt` | string |  | At most 2000 characters. |
-| `reference_image_urls` | string[] or string |  | Reference images (URLs or Nodaro asset ids, up to 14; 16 on GPT Image 2.6) for identity / style / composition guidance — use whenever the output must match a given person, character, or product. Accepts an array; a lone URL or a JSON-stringified array is tolerated and coerced. |
+| `reference_image_urls` | string[] or string |  | Reference images (URLs or Nodaro asset ids, up to 14; 16 on GPT Image 2.6 or MiniMax H3) for identity / style / composition guidance — use whenever the output must match a given person, character, or product. Accepts an array; a lone URL or a JSON-stringified array is tolerated and coerced. |
 | `base_image_url` | string (URL) |  | Image to edit; the masked region is regenerated and composited back over it. Enables inpaint. |
 | `mask_url` | string (URL) |  | Inpainting mask image URL (white=edit, black=keep). Requires base_image_url. |
 | `strength` | number |  | How much the prompt overrides the base image (0=subtle, 1=full repaint). Provider-dependent. From 0 to 1. |
@@ -1366,7 +1366,7 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `prompt` | string |  | From 1 to 8000 characters. |
 | `presetId` | string |  | Apply a built-in/custom preset by id from list_node_presets; explicit fields below override it. A preset's promptPrefix/promptSuffix wrap your prompt. From 1 to 200 characters. |
-| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, gemini-omni-flash, gemini-omni-flash-1-2, gemini-omni-video, grok, hailuo-standard, happyhorse, kling, kling-3.0, kling-4, kling-4-keyframes, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, runway-kie, seedance-2, seedance-2-5, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, wan, wan-2.7-t2v, wan-3, wan-3-prime, wan-turbo. Unknown values silently fall back to the default. Call list_models { kind: "video", mode: "t2v" } for capability details. |
+| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, gemini-omni-flash, gemini-omni-flash-1-2, gemini-omni-video, grok, hailuo-standard, happyhorse, kling, kling-3.0, kling-4, kling-4-flash, kling-4-keyframes, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, runway-kie, seedance-2, seedance-2-5, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, wan, wan-2.7-t2v, wan-3, wan-3-prime, wan-turbo. Unknown values silently fall back to the default. Call list_models { kind: "video", mode: "t2v" } for capability details. |
 | `duration` | number |  | Duration (seconds). Snaps to nearest supported value. -1 = Auto (Seedance 2): the model picks the length. |
 | `aspect_ratio` | string |  | Aspect ratio (16:9, 9:16, 1:1, etc.). Variations and unsupported values fall back. |
 | `resolution` | string |  | Output resolution. Provider-dependent — common values: 480p, 720p, 1080p, 4k. |
@@ -1434,17 +1434,17 @@ Needs `workflows:execute`.
 | `described_references[].description` | string | yes | At most 2000 characters. |
 | `reference_order` | string[] |  | Advanced: reorder connected_references by their stable ids; renumbers the @image_N bindings. At most 14 items. |
 | `reference_image_urls` | string[] or string |  | Identity/reference images (URLs or Nodaro asset IDs), capped at the model's own limit (seedance-2-5 30, seedance-2 family + minimax-h3 9, wan-3 / wan-3-prime 10, gemini-omni-video / gemini-omni-flash 7, gemini-omni-flash-1-2 6, veo3/veo3.1 3, ...). Dropped on models with no reference path, except where the model's image-to-video id takes them: grok then runs as grok-i2v (7). Accepts an array; a lone URL or JSON-stringified array is coerced. |
-| `reference_video_urls` | string[] or string |  | Reference videos for style/motion transfer, capped at the model's own limit (seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime / kling-4 5, gemini-omni-video / gemini-omni-flash / gemini-omni-flash-1-2 1). Wan 3.0 takes each clip at 1-15s and ≤15s combined, and input video seconds + output duration must stay ≤30s. Dropped on models without video-reference support. |
+| `reference_video_urls` | string[] or string |  | Reference videos for style/motion transfer, capped at the model's own limit (seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime / kling-4(-flash) 5, gemini-omni-video / gemini-omni-flash / gemini-omni-flash-1-2 1). Wan 3.0 takes each clip at 1-15s and ≤15s combined, and input video seconds + output duration must stay ≤30s. Dropped on models without video-reference support. |
 | `reference_video_captions` | string[] |  | Index-aligned with reference_video_urls: what each clip is FOR. Rendered `@video_N: <caption>.`. At most 10 items. |
-| `reference_audio_urls` | string[] or string |  | Reference audio, capped per model (seedance-2-5 10; seedance-2 family, minimax-h3 3; wan-3 5, 1-15s each, ≤15s total; kling-4 3, clip 1 = soundtrack); else dropped. |
-| `character_references` | object[] |  | Keeps a person's face (gemini-omni-video / gemini-omni-flash / kling-4 only); see docs/nodes/ai-video/generate-video.md. At most 7 items. |
+| `reference_audio_urls` | string[] or string |  | Reference audio, capped per model (seedance-2-5 10; seedance-2 family, minimax-h3 3; wan-3 5, 1-15s each, ≤15s total; kling-4 3, clip 1 = soundtrack; kling-4-flash 7, clip N = character N's voice if it has 2-4 images); else dropped. |
+| `character_references` | object[] |  | Keeps a person's face (gemini-omni-video / gemini-omni-flash / kling-4 / kling-4-flash only); see docs/nodes/ai-video/generate-video.md. At most 7 items. |
 | `character_references[].image_url` | string | yes |  |
 | `character_references[].body_image_url` | string |  |  |
-| `character_references[].extra_image_urls` | string[] |  | kling-4: more views (2-4 per subject). At most 3 items. |
+| `character_references[].extra_image_urls` | string[] |  | kling-4(-flash): more views (2-4 per subject). At most 3 items. |
 | `character_references[].description` | string | yes |  |
 | `character_references[].name` | string |  |  |
 | `character_references[].voice_preset` | string |  | Gemini voice id (e.g. kore): pins this character's voice. |
-| `keep_original_sound` | boolean |  | kling-4: keep ref videos' sound. |
+| `keep_original_sound` | boolean |  | kling-4(-flash): keep ref videos' sound. |
 | `audio_soundtrack` | boolean |  | kling-4: false = every audio clip a voice, no soundtrack. |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
 | `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
@@ -1762,8 +1762,8 @@ Needs `workflows:execute`.
 | `image_url` | string (URL) |  | Source image URL. |
 | `image_asset_id` | string |  | Nodaro image job id. |
 | `prompt` | string | yes | Transformation description. From 1 to 2000 characters. |
-| `model` | string |  | img2img model. Default gpt-image-2-6-flare-i2i. Options: flux-2-max, flux-2-pro, flux-i2i, flux-kontext, flux-kontext-max, flux-pro-i2i, gpt-image-2-5-flare-i2i, gpt-image-2-5-sunburst-i2i, gpt-image-2-6-flare-i2i, gpt-image-2-6-sunburst-i2i, gpt-image-2-i2i, gpt-image-i2i, grok-2-edit, grok-2-i2i, grok-2-segment, grok-i2i, ideogram-edit, ideogram-remix, kontext-multi, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-edit, nano-banana-pro, qwen-edit, qwen-i2i, seedream-5-flash-i2i, seedream-5-lite-i2i, seedream-5-pro-i2i, seedream-edit. An unknown model is refused. |
-| `reference_image_urls` | string[] or string |  | Extra reference images (URLs or Nodaro asset ids, up to 13; 15 on GPT Image 2.6) for multi-ref models — asset ids are resolved server-side. Accepts an array; a lone URL or a JSON-stringified array is coerced. |
+| `model` | string |  | img2img model. Default gpt-image-2-6-flare-i2i. Options: flux-2-max, flux-2-pro, flux-i2i, flux-kontext, flux-kontext-max, flux-pro-i2i, gpt-image-2-5-flare-i2i, gpt-image-2-5-sunburst-i2i, gpt-image-2-6-flare-i2i, gpt-image-2-6-sunburst-i2i, gpt-image-2-i2i, gpt-image-i2i, grok-2-edit, grok-2-i2i, grok-2-segment, grok-i2i, ideogram-edit, ideogram-remix, kontext-multi, minimax-h3-image-i2i, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-edit, nano-banana-pro, qwen-edit, qwen-i2i, seedream-5-flash-i2i, seedream-5-lite-i2i, seedream-5-pro-i2i, seedream-edit. An unknown model is refused. |
+| `reference_image_urls` | string[] or string |  | Extra reference images (URLs or Nodaro asset ids, up to 13; 15 on GPT Image 2.6 or MiniMax H3) for multi-ref models — asset ids are resolved server-side. Accepts an array; a lone URL or a JSON-stringified array is coerced. |
 | `resolution` | string |  | One of `1K`, `2K`, `4K`. |
 | `quality` | string |  | One of `auto`, `low`, `medium`, `high`, `xhigh`, `max`, `basic`. |
 | `strength` | number |  | How much the prompt overrides the source image (0=subtle, 1=full repaint). From 0 to 1. |
@@ -2246,7 +2246,7 @@ Needs `workflows:execute`.
 | `prompt` | string | yes | From 1 to 8000 characters. |
 | `image_url` | string (URL) |  |  |
 | `image_asset_id` | string |  |  |
-| `model` | string |  | I2I / edit model. Default gpt-image-2-6-flare-i2i. Recommended: flux-2-max, flux-2-pro, flux-i2i, flux-kontext, flux-kontext-max, flux-pro-i2i, gpt-image-2-5-flare-i2i, gpt-image-2-5-sunburst-i2i, gpt-image-2-6-flare-i2i, gpt-image-2-6-sunburst-i2i, gpt-image-2-i2i, gpt-image-i2i, grok-2-edit, grok-2-i2i, grok-2-segment, grok-i2i, ideogram-edit, ideogram-remix, kontext-multi, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-edit, nano-banana-pro, qwen-edit, qwen-i2i, seedream-5-flash-i2i, seedream-5-lite-i2i, seedream-5-pro-i2i, seedream-edit. For identity-preserving edits use gpt-image-2-i2i. Unknown values fall back. Call list_models for capability details. |
+| `model` | string |  | I2I / edit model. Default gpt-image-2-6-flare-i2i. Recommended: flux-2-max, flux-2-pro, flux-i2i, flux-kontext, flux-kontext-max, flux-pro-i2i, gpt-image-2-5-flare-i2i, gpt-image-2-5-sunburst-i2i, gpt-image-2-6-flare-i2i, gpt-image-2-6-sunburst-i2i, gpt-image-2-i2i, gpt-image-i2i, grok-2-edit, grok-2-i2i, grok-2-segment, grok-i2i, ideogram-edit, ideogram-remix, kontext-multi, minimax-h3-image-i2i, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-edit, nano-banana-pro, qwen-edit, qwen-i2i, seedream-5-flash-i2i, seedream-5-lite-i2i, seedream-5-pro-i2i, seedream-edit. For identity-preserving edits use gpt-image-2-i2i. Unknown values fall back. Call list_models for capability details. |
 | `resolution` | string |  | Resolution: falls back to nearest supported. |
 | `quality` | string |  | Quality by model (list_models). Auto bills real cost, up to Max. |
 | `background` | string |  | Models that list it. Transparent renders at 1K. One of `auto`, `opaque`, `transparent`. |

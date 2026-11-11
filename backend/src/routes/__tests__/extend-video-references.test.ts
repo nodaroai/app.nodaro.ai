@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 // ---------------------------------------------------------------------------
-// /v1/extend-video reference-image plumbing: refs are accepted ONLY for
-// seedance-2-extend (whose i2v transport has a native reference_image_urls
-// array), assembled through the shared video assembler with one image seat
+// /v1/extend-video reference-image plumbing: refs are accepted ONLY for the
+// Seedance extend providers (whose i2v transport has a native
+// reference_image_urls array), assembled through the shared video assembler with one image seat
 // reserved for the worker's last-frame anchor, and forwarded on the queue
 // payload. Every other provider refuses refs with a 400 — honest failure
 // over the silently-dropped-reference bug class.
@@ -78,7 +78,12 @@ vi.mock("@/lib/video-schemas.js", async () => {
 
 vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
-  return { ...actual, probeMediaDuration: vi.fn() }
+  return {
+    ...actual,
+    probeMediaDuration: vi.fn(),
+    // Seedance extend measures its source before the guard: a 10 s clip.
+    probeVideoSource: vi.fn().mockResolvedValue({ width: 1280, height: 720, durationSeconds: 10, videoDurationSeconds: 10 }),
+  }
 })
 
 // ---------------------------------------------------------------------------
@@ -127,7 +132,7 @@ const refUrl = (i: number) => `https://cdn.example.com/ref-${i}.png`
 function seedanceBody(extra: Record<string, unknown> = {}) {
   return {
     userId: USER,
-    provider: "seedance-2-extend",
+    provider: "seedance-2-5-extend",
     videoUrl: SOURCE,
     prompt: "she walks out of frame",
     ...extra,
@@ -156,7 +161,8 @@ describe("POST /v1/extend-video — reference-image gating", () => {
       })
       expect(res.statusCode).toBe(400)
       expect(res.json().error.code).toBe("validation_error")
-      expect(res.json().error.message).toContain("seedance-2-extend")
+      expect(res.json().error.message).toContain("seedance-2-5-extend")
+      expect(res.json().error.message).toContain("seedance-2-0-extend")
       expect(videoQueue.add).not.toHaveBeenCalled()
     },
   )
@@ -175,13 +181,13 @@ describe("POST /v1/extend-video — reference-image gating", () => {
       },
     })
     expect(res.statusCode).toBe(400)
-    expect(res.json().error.message).toContain("seedance-2-extend")
+    expect(res.json().error.message).toContain("seedance-2-5-extend")
     expect(videoQueue.add).not.toHaveBeenCalled()
   })
 })
 
 describe("POST /v1/extend-video — described references", () => {
-  it("assembles them for seedance-2-extend without any image reference", async () => {
+  it("assembles them for a Seedance extend without any image reference", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/extend-video",
@@ -215,7 +221,17 @@ describe("POST /v1/extend-video — described references", () => {
   })
 })
 
-describe("POST /v1/extend-video — seedance-2-extend reference plumbing", () => {
+describe("POST /v1/extend-video — Seedance extend reference plumbing", () => {
+  it("Seedance 2.0 takes the same references", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/extend-video",
+      payload: seedanceBody({ provider: "seedance-2-0-extend", referenceImageUrls: [refUrl(1)] }),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(queuedPayload().referenceImageUrls).toEqual([refUrl(1)])
+  })
+
   it("forwards flat referenceImageUrls on the queue payload, prompt untouched", async () => {
     const res = await app.inject({
       method: "POST",

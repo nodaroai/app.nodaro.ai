@@ -9,11 +9,11 @@
  * pipeline, the bridge works end-to-end.
  *
  * Usage:
- *   PROBE_BASE_URL=https://next.nodaro.ai \
+ *   PROBE_BASE_URL=https://next.app.nodaro.ai \
  *   PROBE_SUPABASE_TOKEN=<your supabase access token> \
  *   npx tsx src/scripts/probe-sse-stream.ts <pipelineId>
  *
- * Get a Supabase token by opening DevTools on next.nodaro.ai →
+ * Get a Supabase token by opening DevTools on next.app.nodaro.ai →
  * Application → Local Storage → look for `sb-*-auth-token`. The JWT is
  * inside the `access_token` field of the JSON value.
  */
@@ -22,7 +22,7 @@ import { config } from "../lib/config.js"
 const pipelineId = process.argv[2]
 if (!pipelineId) {
   console.error("usage: probe-sse-stream.ts <pipelineId>")
-  console.error("env: PROBE_BASE_URL=https://next.nodaro.ai PROBE_SUPABASE_TOKEN=<jwt>")
+  console.error("env: PROBE_BASE_URL=https://next.app.nodaro.ai PROBE_SUPABASE_TOKEN=<jwt>")
   process.exit(1)
 }
 

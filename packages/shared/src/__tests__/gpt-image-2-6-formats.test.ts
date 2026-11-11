@@ -21,8 +21,10 @@ describe("which models write which files", () => {
 
   it("a menu offers a format only on a model that writes more than one", () => {
     const formats = outputFormatOptionsByKind("image")
-    expect(Object.keys(formats).sort()).toEqual(["gpt-image-2-6-economy", "gpt-image-2-6-flare", "gpt-image-2-6-flare-i2i", "gpt-image-2-6-sunburst", "gpt-image-2-6-sunburst-i2i"])
+    expect(Object.keys(formats).sort()).toEqual(["gpt-image-2-6-economy", "gpt-image-2-6-flare", "gpt-image-2-6-flare-i2i", "gpt-image-2-6-sunburst", "gpt-image-2-6-sunburst-i2i", "minimax-h3-image", "minimax-h3-image-i2i"])
     expect(formats[FLARE]!.map((o) => o.value)).toEqual(["png", "jpeg", "webp", "gif", "svg"])
+    expect(formats["minimax-h3-image"]!.map((o) => o.value)).toEqual(["png", "jpeg"])
+    expect(formats["minimax-h3-image-i2i"]!.map((o) => o.value)).toEqual(["png", "jpeg"])
     expect(Object.keys(svgLevelOptionsByKind("image")).sort()).toEqual(["gpt-image-2-6-flare", "gpt-image-2-6-flare-i2i", "gpt-image-2-6-sunburst", "gpt-image-2-6-sunburst-i2i"])
     expect(svgLevelOptionsByKind("image")[FLARE]!.map((o) => o.label)).toEqual(["SVG Standard", "SVG Detailed", "SVG Max"])
   })

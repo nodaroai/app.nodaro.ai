@@ -1,4 +1,5 @@
 // frontend/src/lib/person-app.ts
+import { characterArtUrl } from "@nodaro/picker-ui"
 
 const PERSON_APP_BASE_URL =
   (import.meta.env.VITE_PERSON_URL as string | undefined)?.replace(/\/+$/, "") ||
@@ -9,15 +10,16 @@ export function personAppBaseUrl(): string {
   return PERSON_APP_BASE_URL
 }
 
+/** The Person picker's Type options whose photos fan across the Person card on the home screen. */
+export const PERSON_APP_COLLAGE_IDS: ReadonlyArray<string> = ["supermodel", "silver-fox", "graceful-woman", "elf-woman"]
+
 /**
- * The photos fanned across the Person card on the home screen: four of the
- * Person picker's own Type photos, self-hosted under
- * frontend/public/picker-art/character/person/. Their names carry a content
- * hash; flagship-apps.test.tsx fails if they drift from the picker's map.
+ * The Person card's photos: the picker's own photos of those options, through
+ * the same lookup the picker uses, so the card follows the deployment's
+ * picture setting (empty when it shows no platform pictures). Asked at render,
+ * never at import: the setting is applied at start, after the imports
+ * (look-previews-bootstrap.ts).
  */
-export const PERSON_APP_COLLAGE: ReadonlyArray<string> = [
-  "/picker-art/character/person/supermodel.09201ad9.webp",
-  "/picker-art/character/person/silver-fox.a88e888d.webp",
-  "/picker-art/character/person/graceful-woman.a68a59e0.webp",
-  "/picker-art/character/person/elf-woman.d16020ff.webp",
-]
+export function personAppCollage(): ReadonlyArray<string> {
+  return PERSON_APP_COLLAGE_IDS.map((id) => characterArtUrl("person", id)).filter((url): url is string => url !== undefined)
+}

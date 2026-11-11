@@ -462,11 +462,15 @@ export interface GenerateVideoParams extends StructuredReferenceParams, Referenc
    *   `extraImageUrls`; one with a single image is sent as a reference image.
    *   Counts toward the model's 15 materials. No `voice` (send a recorded
    *   voice as `referenceAudioUrls`).
+   * - Kling 4.0 Flash (`kling-4-flash`): the same named subjects, and
+   *   `referenceAudioUrls` clip N becomes the voice of entry N. An entry needs
+   *   2–4 images to carry a voice; otherwise its clip is dropped, as is any
+   *   clip past the last entry.
    */
   characterReferences?: VideoCharacterReference[]
-  /** Kling 4.0 (`kling-4`): keep the reference videos' own sound instead of
-   *  generating new sound. Ignored without a reference video and by every
-   *  other model. */
+  /** Kling 4.0 (`kling-4`, `kling-4-flash`): keep the reference videos' own
+   *  sound instead of generating new sound. Ignored without a reference video
+   *  and by every other model. */
   keepOriginalSound?: boolean
   /** Kling 4.0 (`kling-4`): play the first `referenceAudioUrls` clip as the
    *  result's soundtrack — it is sent as one more reference video (a still
@@ -519,7 +523,7 @@ export interface TextToVideoParams extends StructuredReferenceParams, ReferenceC
   referenceAudioUrls?: string[]
   /** Identity inputs that keep a real person's face — see {@link GenerateVideoParams.characterReferences}. */
   characterReferences?: VideoCharacterReference[]
-  /** Kling 4.0 (`kling-4`): keep the reference videos' own sound — see {@link GenerateVideoParams.keepOriginalSound}. */
+  /** Kling 4.0 (`kling-4`, `kling-4-flash`): keep the reference videos' own sound — see {@link GenerateVideoParams.keepOriginalSound}. */
   keepOriginalSound?: boolean
   /** Kling 4.0 (`kling-4`): play the first audio clip as the soundtrack — see {@link GenerateVideoParams.audioSoundtrack}. */
   audioSoundtrack?: boolean

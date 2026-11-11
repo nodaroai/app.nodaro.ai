@@ -31,8 +31,11 @@ is no daily cap. Details of what each tier includes are on the
 Until an account buys anything, its video runs within these limits:
 
 - **Not available:** every Kling model (generation, motion transfer, lip-sync)
-  and Seedance 2.5 (including its HD finalize step), video upscaling
-  (VEO 1080p / 4K, Topaz), and extending a video.
+  except Kling 4.0 Flash, and Seedance 2.5 (including its HD finalize step),
+  video upscaling (VEO 1080p / 4K, Topaz), and extending a video.
+- **Kling 4.0 Flash** (`kling-4-flash`) is the one Kling model open to free
+  credits, within the limits below: 3 or 4 second clips at 720p, its only
+  resolution.
 - **Every other video model:** clips of **up to 4 seconds**, at the model's
   **lowest resolution** (for example 480p on Seedance 2 Fast, 720p on VEO 3.1
   Lite). A model whose shortest clip is longer than 4 seconds is not

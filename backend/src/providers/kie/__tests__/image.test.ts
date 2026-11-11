@@ -6,8 +6,15 @@ const mocks = vi.hoisted(() => {
   const mockSafeFetch = vi.fn()
   const mockUploadBufferToR2 = vi.fn()
   const mockRunFluxKontextTask = vi.fn()
-  return { mockRunKieTask, mockCreateSanitizedError, mockSafeFetch, mockUploadBufferToR2, mockRunFluxKontextTask }
+  const mockLogCreditAudit = vi.fn()
+  return { mockRunKieTask, mockCreateSanitizedError, mockSafeFetch, mockUploadBufferToR2, mockRunFluxKontextTask, mockLogCreditAudit }
 })
+
+// The credit audit row: what the run is expected to cost, read below.
+vi.mock("../../../lib/credit-audit.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/credit-audit.js")>()),
+  logCreditAudit: mocks.mockLogCreditAudit,
+}))
 
 vi.mock("../client.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../client.js")>()
@@ -59,6 +66,9 @@ vi.mock("../models.js", async (importOriginal) => {
       "gpt-image-2-6-economy": actual.KIE_IMAGE_MODELS["gpt-image-2-6-economy"],
       "gpt-image-2-6-economy-i2i": actual.KIE_IMAGE_MODELS["gpt-image-2-6-economy-i2i"],
       "gpt-image-2-6-sunburst-i2i": actual.KIE_IMAGE_MODELS["gpt-image-2-6-sunburst-i2i"],
+      // MiniMax H3 Image — the REAL configs: an allow-listed body, priced by size and references.
+      "minimax-h3-image": actual.KIE_IMAGE_MODELS["minimax-h3-image"],
+      "minimax-h3-image-i2i": actual.KIE_IMAGE_MODELS["minimax-h3-image-i2i"],
       "gpt-image-2-5-flare": { model: "gpt-image-2-5-flare-text-to-image", cost: 0.03, extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
       "gpt-image-2-5-flare-i2i": { model: "gpt-image-2-5-flare-image-to-image", cost: 0.03, inputType: "image-to-image", imageParam: "input_urls", extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
       "grok-i2i": { model: "grok-imagine/image-to-image", cost: 0.04, inputType: "image-to-image", imageParam: "image_urls", extraParams: {} },
@@ -835,5 +845,94 @@ describe("GPT Image 2.6 masks (models.ts `maskFormat`: transparent = change)", (
     const result = await provider.generateImage("a cat", undefined, "gpt-image-2-6-flare", { mask_url: "https://x/mask.png" })
     expect(sentInput()).not.toHaveProperty("mask_url")
     expect(result.maskEditSourceUrl).toBeUndefined()
+  })
+})
+
+describe("MiniMax H3 Image on the wire", () => {
+  const REFS = (n: number) => Array.from({ length: n }, (_, i) => `https://cdn.example.com/ref-${i + 1}.png`)
+  const sent = () => mocks.mockRunKieTask.mock.calls[0]!
+
+  it("a prompt sends only what the schema takes: never expand_prompt, width, height or another model's lever", async () => {
+    const result = await provider.generateImage("a poster that reads OPEN", undefined, "minimax-h3-image", {
+      aspect_ratio: "21:9",
+      resolution: "4K",
+      seed: 7,
+      expand_prompt: false,
+      negative_prompt: "blur",
+      quality: "high",
+      background: "transparent",
+      width: 1920,
+      height: 1080,
+      mask_url: "https://cdn.example.com/mask.png",
+    })
+    const [model, input, , , opts] = sent()
+    expect(model).toBe("minimax-h3/text-to-image")
+    expect(input).toEqual({ prompt: "a poster that reads OPEN", aspect_ratio: "21:9", resolution: "4K", seed: 7 })
+    expect(opts).toMatchObject({ modelKey: "minimax-h3-image" })
+    expect(result.cost).toBeCloseTo(5.5 * KIE_CREDIT_USD, 10)
+  })
+
+  it("names no size: KIE's default, 2K, is sent and recorded", async () => {
+    const result = await provider.generateImage("a cat", undefined, "minimax-h3-image")
+    expect(sent()[1]).toEqual({ prompt: "a cat", aspect_ratio: "16:9", resolution: "2K" })
+    expect(result.cost).toBeCloseTo(1.8 * KIE_CREDIT_USD, 10)
+  })
+
+  it("references move the run to the edit endpoint, in image_urls, and each one is recorded", async () => {
+    const result = await provider.generateImage("put <Picture 1> on a table", REFS(3), "minimax-h3-image", { aspect_ratio: "auto", resolution: "1K" })
+    const [model, input, , , opts] = sent()
+    expect(model).toBe("minimax-h3/image-edit")
+    expect(input).toEqual({ prompt: "put <Picture 1> on a table", aspect_ratio: "auto", resolution: "1K", image_urls: REFS(3) })
+    expect(opts).toMatchObject({ modelKey: "minimax-h3-image-i2i" })
+    expect(result.cost).toBeCloseTo((1.8 + 0.5 * 3) * KIE_CREDIT_USD, 10)
+  })
+
+  it("an edit at 4K records the 4K figure and each reference", async () => {
+    const result = await provider.generateImage("x", REFS(2), "minimax-h3-image-i2i", { resolution: "4K" })
+    expect(result.cost).toBeCloseTo((5.5 + 0.5 * 2) * KIE_CREDIT_USD, 10)
+  })
+
+  it("sends at most sixteen reference images", async () => {
+    await provider.generateImage("x", REFS(18), "minimax-h3-image-i2i")
+    expect((sent()[1] as { image_urls: string[] }).image_urls).toEqual(REFS(16))
+  })
+
+  it.each([
+    [-1, undefined],
+    [0, 0],
+    [2147483647, 2147483647],
+    [2147483648, undefined],
+    [1.5, undefined],
+  ])("a seed of %s is sent as %s: only 0 to 2147483647, the schema's range", async (seed, sentSeed) => {
+    await provider.generateImage("x", undefined, "minimax-h3-image", { seed })
+    expect((sent()[1] as Record<string, unknown>).seed).toBe(sentSeed)
+    expect(sent()[1]).toEqual(sentSeed === undefined
+      ? { prompt: "x", aspect_ratio: "16:9", resolution: "2K" }
+      : { prompt: "x", aspect_ratio: "16:9", resolution: "2K", seed: sentSeed })
+  })
+
+  it("drops an out-of-range seed on the edit too, and keeps a model with no declared range as it was", async () => {
+    await provider.generateImage("x", REFS(1), "minimax-h3-image", { seed: 2147483648 })
+    expect(sent()[1]).not.toHaveProperty("seed")
+    mocks.mockRunKieTask.mockClear()
+    await provider.generateImage("x", undefined, "string-seed-t2i", { seed: 2147483648 })
+    expect((sent()[1] as Record<string, unknown>).seed).toBe("2147483648")
+  })
+
+  it("the credit audit expects what this request was listed at: its size and its references", async () => {
+    await provider.generateImage("x", REFS(16), "minimax-h3-image", { resolution: "4K" })
+    expect(mocks.mockLogCreditAudit.mock.calls.at(-1)?.[0]).toMatchObject({ modelKey: "minimax-h3-image-i2i", expectedKieCredits: 13.5 })
+    await provider.generateImage("x", undefined, "minimax-h3-image", { resolution: "1K" })
+    expect(mocks.mockLogCreditAudit.mock.calls.at(-1)?.[0]).toMatchObject({ modelKey: "minimax-h3-image", expectedKieCredits: 1.8 })
+  })
+
+  it("JPEG sends output_format; PNG and a format it does not write send none", async () => {
+    await provider.generateImage("x", undefined, "minimax-h3-image", { output_format: "jpeg" })
+    expect(sent()[1]).toMatchObject({ output_format: "jpeg" })
+    for (const format of ["png", "webp"]) {
+      mocks.mockRunKieTask.mockClear()
+      await provider.generateImage("x", undefined, "minimax-h3-image", { output_format: format })
+      expect(sent()[1]).not.toHaveProperty("output_format")
+    }
   })
 })

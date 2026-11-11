@@ -19,7 +19,7 @@
  *    offered row, as in the editor. A menu that offers nothing keeps the
  *    default.
  */
-import { freeVideoModelLock, nodeModelLevers, planNodeModels, type FreeVideoLimits, type NodeModelJudge } from "@nodaro/render-rules"
+import { freeVideoModelLock, nodeModelLevers, planNodeModels, type FreeVideoLimits, type FreeVideoModelLockOptions, type NodeModelJudge } from "@nodaro/render-rules"
 import type { BillingContext } from "./billing-context.js"
 import { hasCredits } from "./config.js"
 import { isModelDenied, modelRestrictionConfigured } from "./surface-deny.js"
@@ -71,7 +71,8 @@ function judgeOf(limits: FreeVideoLimits | null): NodeModelJudge {
   return {
     restricted: true,
     withheld: isModelDenied,
-    ...(limits ? { locked: (model: string) => freeVideoModelLock(model, limits) !== null } : {}),
+    // The lever says how its rows run (`lockAs`: an Extend Video row is an extension).
+    ...(limits ? { locked: (model: string, opts?: FreeVideoModelLockOptions) => freeVideoModelLock(model, limits, opts) !== null } : {}),
   }
 }
 

@@ -42,7 +42,7 @@ import type {
   ManualReferenceImage,
   ImageProvider,
 } from "@/types/nodes"
-import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, imageStylePresets, getAspectRatiosForModel, getSourcePhotoAspectRatios, withPhotoAuto, IMAGE_QUALITY_OPTIONS, IMAGE_BACKGROUND_OPTIONS, imageFormatFailSafe, outputFormatOf, imageResolutionOptionsAt, transparentResolutionFor, defaultQualityFor, firstFixedQuality, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor, withoutDeniedModels } from "./model-options"
+import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, imageStylePresets, getAspectRatiosForModel, getSourcePhotoAspectRatios, withPhotoAuto, IMAGE_QUALITY_OPTIONS, IMAGE_BACKGROUND_OPTIONS, imageFormatFailSafe, outputFormatOf, imageResolutionOptionsAt, transparentResolutionFor, defaultQualityFor, firstFixedQuality, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor, declaredDefaultResolution, withoutDeniedModels } from "./model-options"
 import { ImageFormatFields, ImageBackgroundField } from "./image-format-fields"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelSearchSelect } from "./model-search-select"
@@ -686,7 +686,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
           {resolutionOptions && !writesGif && (
             <MappableField field="resolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
               <Select
-                value={data.resolution || resolutionOptions[0]?.value || "1K"}
+                value={data.resolution || resolutionOptions.find((o) => o.value === declaredDefaultResolution(currentProvider))?.value || resolutionOptions[0]?.value || "1K"}
                 onValueChange={(v) => onUpdate({ resolution: v })}
               >
                 <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
@@ -1757,7 +1757,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           {resolutionOptions && !writesGif && (
             <MappableField field="resolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
               <Select
-                value={data.resolution || resolutionOptions[0]?.value || "1K"}
+                value={data.resolution || resolutionOptions.find((o) => o.value === declaredDefaultResolution(currentProvider))?.value || resolutionOptions[0]?.value || "1K"}
                 onValueChange={(v) => onUpdate({ resolution: v })}
               >
                 <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>

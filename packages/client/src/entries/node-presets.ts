@@ -12,6 +12,7 @@ export type {
   NodePresetGroup,
   FactoryPresetEntry,
   FactoryPresetsResult,
+  FactoryPresetGroupSummary,
   CreateNodePresetInput,
   UpdateNodePresetInput,
   ImportNodePresetInput,

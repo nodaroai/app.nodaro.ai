@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-11-09T18:58:47.498Z
-generated_from: c519bec05
+generated_at: 2026-11-11T18:06:58.065Z
+generated_from: 98d2c4dc4
 ---
 
 # Generate Video
@@ -498,6 +498,31 @@ subject → action → scene/environment → lighting → camera movement → st
 
 Source: KIE Kling 4.0 market contracts (docs.kie.ai/market/kling/v4-reference-to-video,
 docs.kie.ai/market/kling/v4-keyframe-to-video), live-probed 2026-10-23.
+
+### Kling 4.0 Flash (kling-4-flash)
+
+Prompt structure (no public Kling 4.0 Flash prompt guide is captured — the KIE API contract is
+the doctrine source; platform-standard structure applies):
+subject → action → scene/environment → lighting → camera movement → style → constraints.
+
+**One model, two endpoints (picked by what is connected)**
+- A start frame with nothing else — no reference image, no reference video, no character — runs keyframe-to-video: the frame is the exact opening frame and the clip takes its shape. Name it @first_frame.
+- Anything else — text only, reference images, reference videos, characters, or a start frame beside any of them — runs reference-to-video. A start frame there joins the reference images and is named as the opening frame, as on kling-4.
+
+**Naming materials in the prompt**
+- @image_1 … for reference images, @video_1 … for reference videos, a character by its own name (@Maya). Kling refuses a prompt that names a material the request does not carry; the platform removes the "@" from such a mention so the run still starts.
+- There are no standalone voices. Reference audio clip N becomes the voice of character N, in the order the characters are wired. A character needs 2-4 images to carry a voice: a clip whose character has one image, and any clip past the last character, is dropped (the run still starts). Write who speaks by the character's name ("@Maya says…"), never @audio_1.
+
+**Limits**
+- Reference images 10, reference videos 5, characters 7 — 15 in all. Reference videos together must be 2-20 seconds; a longer set is refused before the run starts.
+- No end frame and no in-between frames: describe how the shot ends in words.
+
+**Duration, resolution, audio**
+- 3-20 seconds (default 5); 720p only; aspect auto (follows the materials, 16:9 with none) / 16:9 / 9:16 / 1:1 / 21:9. Prompts up to 8,000 characters.
+- Native audio is always generated; keep-original-sound keeps a reference video's own audio. Not yet verified for scripted lines here, so plan key dialogue as a TTS + lip-sync pass.
+
+Source: KIE Kling 4.0 Flash market contracts (docs.kie.ai/market/kling/v4-flash-reference-to-video,
+docs.kie.ai/market/kling/v4-flash-keyframe-to-video), read 2026-11-11.
 
 ### HappyHorse 1.1 (happyhorse, happyhorse-i2v, happyhorse-ref2v)
 

@@ -1744,6 +1744,40 @@ describe("POST /v1/generate-image", () => {
       expect(check).toContain("seedream-5-lite-i2i")
     })
 
+    it.each([0, 1, 3])("CHECK === DEBIT for minimax-h3-image at 4K with %d connectedReferences", async (n) => {
+      const body = {
+        prompt: "a shop sign that reads OPEN",
+        userId: VALID_UUID,
+        provider: "minimax-h3-image",
+        aspectRatio: "16:9",
+        resolution: "4K",
+        connectedReferences: mkManualRefs(n),
+        direction: DIRECTION,
+      }
+      const { identifier: debit, inputData } = await debitIdentifierFor(body)
+      const check = checkIdentifierFor(body)
+      expect(check).toBe(debit)
+      // Priced at the size asked and, with references, as the edit it runs as, per image.
+      expect(check).toBe(n === 0 ? "minimax-h3-image:4K" : `minimax-h3-image-i2i:4K:${n}ref`)
+      expect(inputData.resolution).toBe("4K")
+    })
+
+    it("CHECK === DEBIT for minimax-h3-image with a base image and references: the base counts once more", async () => {
+      const body = {
+        prompt: "put the product on a marble counter",
+        userId: VALID_UUID,
+        provider: "minimax-h3-image",
+        aspectRatio: "16:9",
+        referenceImageUrls: ["https://r2.nodaro.ai/a.png", "https://r2.nodaro.ai/b.png"],
+        baseImageUrl: "https://r2.nodaro.ai/base.png",
+        direction: DIRECTION,
+      }
+      const { identifier: debit } = await debitIdentifierFor(body)
+      const check = checkIdentifierFor(body)
+      expect(check).toBe(debit)
+      expect(check).toBe("minimax-h3-image-i2i:2K:3ref")
+    })
+
     // ─── P1: the catalog snap is a PRICING event ────────────────────────────
     // `resolution` and `quality` are pricing dimensions, so a snap applied at
     // only one of the two sites silently mis-bills — `commit_credits` never

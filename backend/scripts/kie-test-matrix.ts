@@ -600,6 +600,38 @@ export const IMAGE_TEST_CONFIGS: TestConfig[] = [
     estimatedTimeSec: 15,
     skipByDefault: false,
   },
+  // MiniMax H3 Image — priced by size (1.8 at 1K or 2K, 5.5 at 4K) plus 0.5 per
+  // reference image on an edit, the first included.
+  {
+    modelKey: "minimax-h3-image",
+    category: "image",
+    kieModel: "minimax-h3/text-to-image",
+    expectedKieCredits: 1.8,
+    expectedCostUsd: 0.009,
+    configDesc: "MiniMax H3 Image T2I (2K)",
+    apiType: "standard",
+    input: { prompt: "a shop sign that reads OPEN", aspect_ratio: "16:9", resolution: "2K" },
+    requiresImage: false,
+    requiresAudio: false,
+    requiresVideo: false,
+    estimatedTimeSec: 60,
+    skipByDefault: false,
+  },
+  {
+    modelKey: "minimax-h3-image-i2i",
+    category: "image",
+    kieModel: "minimax-h3/image-edit",
+    expectedKieCredits: 2.3,
+    expectedCostUsd: 0.0115,
+    configDesc: "MiniMax H3 Image edit (2K, 1 reference image)",
+    apiType: "standard",
+    input: { prompt: "make the background of <Picture 1> blue", image_urls: ["{{IMAGE}}"], aspect_ratio: "auto", resolution: "2K" },
+    requiresImage: true,
+    requiresAudio: false,
+    requiresVideo: false,
+    estimatedTimeSec: 60,
+    skipByDefault: false,
+  },
 
   // --- Z-Image ---
   {

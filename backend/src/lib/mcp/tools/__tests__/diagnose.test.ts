@@ -233,9 +233,13 @@ describe("diagnose_run tool", () => {
   it("carries the provider's own words beside each failed node's error (providerReason): the job's, else the state's", async () => {
     const words = "task failed: [400] Request blocked: The uploaded image may contain protected or restricted IP content."
     mockSupabase({
+      // The run executed the caller's own workflow: its words are theirs to
+      // read (who else may is provider-words-diagnose.test.ts).
+      mcpWorkflow: { id: "wf-1", user_id: "u1" },
       execution: {
         id: "exec1",
         status: "failed",
+        workflow_id: "wf-1",
         node_states: {
           n1: { status: "failed", nodeType: "image-to-video", jobId: "job-v", error: "node-level error" },
           n2: { status: "failed", nodeType: "generate-image", error: "boom", errorDetail: "the state's own words" },

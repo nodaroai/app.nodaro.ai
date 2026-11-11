@@ -41,10 +41,17 @@ describe("the public-route matcher", () => {
     expect(isAnonymousRoute("GET", "/v1/node-presets/factory")).toBe(true)
   })
 
+  it("GET /v1/node-presets/factory/groups (the catalog's categories) takes no credential either", () => {
+    expect(isPublicRoute("GET", "/v1/node-presets/factory/groups")).toBe(true)
+    expect(isPublicRoute("GET", "/v1/node-presets/factory/groups?nodeType=generate-image")).toBe(true)
+    expect(isAnonymousRoute("GET", "/v1/node-presets/factory/groups")).toBe(true)
+  })
+
   it("nothing else under /v1/node-presets does", () => {
     expect(isPublicRoute("POST", "/v1/node-presets/factory")).toBe(false)
     expect(isPublicRoute("GET", "/v1/node-presets/factoryX")).toBe(false)
     expect(isPublicRoute("GET", "/v1/node-presets/factory/x")).toBe(false)
+    expect(isPublicRoute("POST", "/v1/node-presets/factory/groups")).toBe(false)
     // The user's own library stays behind a credential.
     expect(isPublicRoute("GET", "/v1/node-presets")).toBe(false)
     expect(isPublicRoute("GET", "/v1/node-presets?nodeType=generate-image")).toBe(false)

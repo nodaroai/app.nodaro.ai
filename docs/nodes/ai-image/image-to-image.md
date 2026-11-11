@@ -5,24 +5,24 @@
 
 ## Overview
 
-Image to Image takes a source image and a text prompt to generate a transformed version. Unlike Edit Image (which focuses on utility operations like upscaling), Image to Image performs creative transformations: restyling, subject replacement, inpainting, reframing, and remix operations. It supports 21 provider models with varying capabilities including strength control, mask-based inpainting, guidance scale, and resolution options. The default provider is GPT Image 2.6 Flare (`gpt-image-2-6-flare-i2i`).
+Image to Image takes a source image and a text prompt to generate a transformed version. Unlike Edit Image (which focuses on utility operations like upscaling), Image to Image performs creative transformations: restyling, subject replacement, inpainting, reframing, and remix operations. It supports 22 provider models with varying capabilities including strength control, mask-based inpainting, guidance scale, and resolution options. The default provider is GPT Image 2.6 Flare (`gpt-image-2-6-flare-i2i`).
 
 ## Configuration
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Provider | select | `gpt-image-2-6-flare-i2i` | AI model to use for transformation (24 options) |
+| Provider | select | `gpt-image-2-6-flare-i2i` | AI model to use for transformation (25 options) |
 | Prompt | text | `""` | Description of the desired transformation |
 | Style | select | `""` | 16 presets + "Custom..." free text (same as Generate Image) |
 | Negative Prompt | text | `""` | Elements to exclude from the result |
 | Strength | slider (0-1) | varies | How much to deviate from the source image. Higher values mean more change. Only available for providers that support it. |
 | Guidance Scale | number | varies | Prompt adherence strength. Only available for providers that support it. |
-| Aspect Ratio | select | varies | Provider-specific ratio sets (same sets as Generate Image). **Auto** keeps your photo's shape; on models without a native auto, and on GPT Image 2.6 (whose own auto renders a portrait square), it picks the closest supported shape. An API request that names no ratio runs at Auto on the GPT Image 2, 2.5 and 2.6 models (the default included), at the same price; other models keep their own default. |
+| Aspect Ratio | select | varies | Provider-specific ratio sets (same sets as Generate Image). **Auto** keeps your photo's shape; on models without a native auto, and on GPT Image 2.6 (whose own auto renders a portrait square), it picks the closest supported shape. An API request that names no ratio runs at Auto on the GPT Image 2, 2.5 and 2.6 models (the default included) and on MiniMax H3 Image, at the same price; other models keep their own default. |
 | Background | select | Auto | Available for GPT Image 2.5 and 2.6: auto, opaque or transparent. A transparent background renders at 1K. On GPT Image 2.5 the setting only applies at 1K. Transparent is kept only in PNG and WebP (with GIF or JPEG it becomes auto; an SVG takes no background setting). |
-| Format | select | PNG | GPT Image 2.6 Flare and Sunburst: PNG, JPEG, WebP, GIF (animated, square, 512×512 a frame: the ratio and resolution do not apply) or SVG (vector). PNG, JPEG and WebP cost the same; a GIF is priced by quality and band of frames, an SVG as the PNG plus its level. Prices and rules: [Generate Image › Formats](./generate-image.md#formats-png-jpeg-webp-gif-and-svg). A mask cannot be used with a GIF or an SVG. |
+| Format | select | PNG | GPT Image 2.6 Flare and Sunburst: PNG, JPEG, WebP, GIF (animated, square, 512×512 a frame: the ratio and resolution do not apply) or SVG (vector). PNG, JPEG and WebP cost the same; a GIF is priced by quality and band of frames, an SVG as the PNG plus its level. Prices and rules: [Generate Image › Formats](./generate-image.md#formats-png-jpeg-webp-gif-and-svg). A mask cannot be used with a GIF or an SVG. MiniMax H3 Image: PNG or JPEG, the same price. |
 | GIF frames / GIF speed | number | 9 / 200 | With Format GIF: 2 to 16 frames (2–8, 9–12 and 13–16 price differently), each shown 20 to 2000 ms. |
 | SVG detail | select | SVG Standard | With Format SVG: SVG Standard, SVG Detailed or SVG Max. |
-| Resolution | select | varies | Available for the GPT Image 2, 2.5 and 2.6 models: 1K, 2K, 4K; flux-i2i, flux-pro-i2i: 1K, 2K; seedream-5-flash-i2i: 1K, 2K (same price at either). GPT Image 2.5 renders 27:16, 16:27, 9:8 and 8:9 at 1K only: a 2K or 4K request at those ratios runs, and is charged, at 1K and says so. GPT Image 2 renders every ratio it offers, `auto` and 1:1 included, at 1K, 2K and 4K, and is charged at the size asked. |
+| Resolution | select | varies | Available for the GPT Image 2, 2.5 and 2.6 models: 1K, 2K, 4K; flux-i2i, flux-pro-i2i: 1K, 2K; seedream-5-flash-i2i: 1K, 2K (same price at either); minimax-h3-image-i2i: 1K, 2K (its default) or 4K, the same price at 1K and 2K. GPT Image 2.5 renders 27:16, 16:27, 9:8 and 8:9 at 1K only: a 2K or 4K request at those ratios runs, and is charged, at 1K and says so. GPT Image 2 renders every ratio it offers, `auto` and 1:1 included, at 1K, 2K and 4K, and is charged at the size asked. |
 | Quality | select | varies | Available for GPT Image 2.6 Flare and Sunburst (auto, low, medium, high, extra high, max; medium by default; at auto the run costs what it really used, at most the max price), gpt-image-i2i (medium/high), seedream-edit (basic/high), seedream-5-lite-i2i (basic/high), seedream-5-pro-i2i (basic 1K / high 2K) |
 | Rendering Speed | select | -- | Available for ideogram variants: turbo, balanced, quality |
 | Seed | number | -- | Reproducibility seed (select providers) |
@@ -74,6 +74,7 @@ A mask limits the edit to the area painted white; black is kept. Four models tak
 | seedream-5-lite-i2i | Seedream 5 Lite | Latest Seedream image-to-image | Quality options (basic/high) |
 | seedream-5-pro-i2i | Seedream 5 Pro | Flagship Seedream image-to-image, multi-reference instruction edits. **21 credits**<!-- credits: seedream-5-pro-i2i --> at basic (1K) / **66 credits**<!-- credits: seedream-5-pro-i2i:high --> at high (2K). | Quality options (basic/high) |
 | seedream-5-flash-i2i | Seedream 5 Flash | Fast, low-cost Seedream edits; flat **11 credits**<!-- credits: seedream-5-flash-i2i --> at 1K or 2K | Up to 10 input images, resolution options (1K/2K) |
+| minimax-h3-image-i2i | MiniMax H3 Image | Change or combine up to 16 images in one edit, with readable text inside the picture, up to about 16 MP at 4K. Priced by size, the same at 1K and 2K (2K by default), and by each image the edit is given, the source included: at 2K, **7 credits**<!-- credits: minimax-h3-image-i2i:2K:1ref --> with one image, **11 credits**<!-- credits: minimax-h3-image-i2i:2K:4ref --> with four, **28 credits**<!-- credits: minimax-h3-image-i2i:2K:16ref --> with sixteen; at 4K, **17 credits**<!-- credits: minimax-h3-image-i2i:4K:1ref --> with one and **38 credits**<!-- credits: minimax-h3-image-i2i:4K:16ref --> with sixteen. Auto keeps the first image's shape | Up to 16 input images, resolution options (1K/2K/4K), seed, PNG or JPEG |
 | flux-kontext | Flux Kontext | Context-aware editing via Kontext | Context-aware transforms |
 | flux-kontext-max | Flux Kontext Max | Highest quality Kontext editing | Premium context-aware transforms |
 | kontext-multi | Kontext Multi (Open) | Multi-image Flux Kontext Pro via Replicate | Up to 2 reference images. 33 credits<!-- credits: kontext-multi --> |

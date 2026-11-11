@@ -30,6 +30,7 @@
 
 import { isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION } from "./seedance-draft.js"
 import { isFlux2Model } from "./flux2-pricing.js"
+import { MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION, MINIMAX_H3_IMAGE_RESOLUTIONS } from "./minimax-h3-image.js"
 import { isAutoVideoDuration } from "./video-duration-auto.js"
 
 export type ModelKind = "image" | "video" | "audio"
@@ -202,15 +203,20 @@ export function isModelMakerId(value: unknown): value is ModelMakerId {
 }
 
 /**
- * The maker of a catalog entry, in its wire shape — undefined when its `maker`
- * is not a registry id (an entry built at run time without one). Never throws,
- * so one bad entry cannot fail a whole model listing.
+ * The maker of a catalog entry, in its wire shape — undefined for a model
+ * offered under the deployment's own label (`ownLabel`, which names none —
+ * even an entry built at run time, or by a JavaScript caller, that also names a
+ * maker) and when its `maker` is not a registry id (an entry built at run time
+ * without one). Never throws, so one bad entry cannot fail a whole model
+ * listing.
  */
-export function modelMakerOf(entry: Pick<ModelCatalogEntry, "maker">): ModelMaker | undefined {
+export function modelMakerOf(entry: Pick<ModelCatalogEntry, "maker" | "ownLabel">): ModelMaker | undefined {
+  if (entry.ownLabel === true) return undefined
   return isModelMakerId(entry.maker) ? { id: entry.maker, name: MODEL_MAKERS[entry.maker].name } : undefined
 }
 
-export interface ModelCatalogEntry {
+/** Every field of a catalog entry but who it is offered under (`maker` / `ownLabel`, {@link ModelCatalogEntry}). */
+export interface ModelCatalogEntryFields {
   id: string
   kind: ModelKind
   /**
@@ -223,12 +229,6 @@ export interface ModelCatalogEntry {
   modes: readonly ModelMode[]
   /** Vendor / lab that produced the model. Used for UI grouping. */
   family: string
-  /**
-   * The company that made the model (see {@link MODEL_MAKERS}). REQUIRED, so a
-   * new model cannot ship without one; every model of a `family` names the same
-   * maker.
-   */
-  maker: ModelMakerId
   /** Display name (NOT the id — the id is the API enum value). */
   label: string
   /**
@@ -291,8 +291,10 @@ export interface ModelCatalogEntry {
    * `"voice-references"` (video models only) means the model takes each
    * reference AUDIO clip as a VOICE sample — who speaks and how they sound —
    * and makes its own soundtrack, rather than conditioning on the audio itself
-   * (Kling 4.0: KIE `voices`, `@VoiceN` in the prompt). The editor names that
-   * input "Voice Refs" for such a model.
+   * (Kling 4.0: KIE `voices`, `@VoiceN` in the prompt; Kling 4.0 Flash: each
+   * clip is a wired character's voice, KIE `elements[].voice_url` — see
+   * `audioBindsToCharacters`). The editor names that input "Voice Refs" for
+   * such a model.
    *
    * `"audio-soundtrack"` (video models only) means the platform can play the
    * model's FIRST reference audio clip as the result's soundtrack: it sends
@@ -480,6 +482,23 @@ export interface ModelCatalogEntry {
 }
 
 /**
+ * Who a model is offered under — exactly one of:
+ *
+ * - `maker`: the company that made it (see {@link MODEL_MAKERS}). Every model
+ *   names one unless it is marked `ownLabel`, so a new model cannot ship
+ *   without saying whose it is; every model of a `family` names the same maker.
+ * - `ownLabel: true`: the model is offered under the deployment's own label and
+ *   names no maker (decided 2026-11-11). `GET /v1/models` leaves `maker` out
+ *   for it and returns `logoUrl: null`; MCP `list_models` leaves `maker` out (it
+ *   never carries `logoUrl`); a client shows no maker. Such a model may not
+ *   carry a `maker` (`model-makers.test.ts`).
+ */
+export type ModelCatalogEntry = ModelCatalogEntryFields & (
+  | { maker: ModelMakerId; ownLabel?: never }
+  | { ownLabel: true; maker?: never }
+)
+
+/**
  * Editorial recommendations — short "best for X" picks Claude can echo back
  * to the user when they don't know which model to use. Surfaces as a "Quick
  * recommendations" footer in MCP `list_models` output.
@@ -610,6 +629,10 @@ const GPT_IMAGE_2_6_SVG_LEVELS = ["standard", "detailed", "max"] as const
 const IMAGEN4_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
 const IDEOGRAM_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
 const SEEDREAM_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"] as const
+// MiniMax H3 Image: ten fixed ratios at every size, and "auto" — listed last, so
+// a fallback that takes the first ratio never lands on it
+// (docs.kie.ai/market/minimax-h3/text-to-image + image-edit).
+const MINIMAX_H3_IMAGE_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "5:4", "4:5", "21:9", "auto"] as const
 const Z_IMAGE_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
 
 const VIDEO_RATIOS_HV = ["16:9", "9:16"] as const
@@ -1652,6 +1675,66 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     pricing: [{ identifier: "seedream-5-flash-i2i", credits: 10, note: "1K / 2K flat" }],
   },
 
+  // ── MiniMax H3 Image ──
+  // MiniMax's H3 image model (KIE `minimax-h3/text-to-image` and
+  // `minimax-h3/image-edit`). Not the H3 video model `minimax-h3`. A prompt
+  // runs the text-to-image id; with reference images the run moves to the
+  // edit id (`T2I_TO_I2I_VARIANT`). Priced by size, 1K and 2K the same, and an
+  // edit by its reference images (`minimaxH3ImageCreditId`). "auto" is listed
+  // LAST so a fallback that takes the first ratio lands on a real one: from a
+  // prompt KIE's rewriter picks the ratio, in an edit it follows the first
+  // reference image. KIE's prompt expansion is left on and its custom
+  // width/height is not offered.
+  // See: docs.kie.ai/market/minimax-h3/text-to-image.md
+  //      docs.kie.ai/market/minimax-h3/image-edit.md
+  "minimax-h3-image": {
+    id: "minimax-h3-image",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "MiniMax",
+    maker: "minimax",
+    label: "MiniMax H3 Image",
+    series: "MiniMax Image",
+    description: "MiniMax H3 Image: detailed pictures up to about 16 MP at 4K, with readable text inside the picture. Ten shapes plus auto, the same price at 1K and 2K (2K by default), PNG or JPEG.",
+    useCases: ["typography", "high-res", "general"],
+    features: ["reference-image"],
+    aspectRatios: MINIMAX_H3_IMAGE_RATIOS,
+    resolutions: MINIMAX_H3_IMAGE_RESOLUTIONS,
+    defaultResolution: MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION,
+    outputFormats: ["png", "jpeg"],
+    pricing: [
+      { identifier: "minimax-h3-image", credits: 5, note: "2K default" },
+      { identifier: "minimax-h3-image:1K", credits: 5, note: "1K" },
+      { identifier: "minimax-h3-image:2K", credits: 5, note: "2K" },
+      { identifier: "minimax-h3-image:4K", credits: 14, note: "4K" },
+    ],
+  },
+  "minimax-h3-image-i2i": {
+    id: "minimax-h3-image-i2i",
+    kind: "image",
+    modes: ["i2i"] as const,
+    family: "MiniMax",
+    maker: "minimax",
+    label: "MiniMax H3 Image (I2I)",
+    series: "MiniMax Image",
+    description: "MiniMax H3 Image edits: change or combine up to 16 reference images in one edit, with readable text, up to about 16 MP at 4K. Priced by size and by reference image; auto keeps the first image's shape.",
+    useCases: ["edit", "typography", "multi-reference"],
+    features: ["reference-image"],
+    aspectRatios: MINIMAX_H3_IMAGE_RATIOS,
+    resolutions: MINIMAX_H3_IMAGE_RESOLUTIONS,
+    defaultResolution: MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION,
+    outputFormats: ["png", "jpeg"],
+    pricing: [
+      { identifier: "minimax-h3-image-i2i", credits: 6, note: "2K, one reference image" },
+      { identifier: "minimax-h3-image-i2i:1K:1ref", credits: 6, note: "1K, one reference image (the least)" },
+      { identifier: "minimax-h3-image-i2i:2K:1ref", credits: 6, note: "2K, one reference image" },
+      { identifier: "minimax-h3-image-i2i:2K:4ref", credits: 10, note: "2K, four reference images" },
+      { identifier: "minimax-h3-image-i2i:4K:1ref", credits: 15, note: "4K, one reference image" },
+      { identifier: "minimax-h3-image-i2i:2K:16ref", credits: 25, note: "2K, sixteen reference images" },
+      { identifier: "minimax-h3-image-i2i:4K:16ref", credits: 34, note: "4K, sixteen reference images (the most)" },
+    ],
+  },
+
   // ── Alibaba Qwen ──
   "qwen": {
     id: "qwen",
@@ -2323,6 +2406,49 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "kling-4-keyframes:5s:1080p", credits: 540, note: "5s 1080p" },
       { identifier: "kling-4-keyframes:3s:720p", credits: 220, note: "3s 720p (min)" },
       { identifier: "kling-4-keyframes:30s:1080p", credits: 3190, note: "30s 1080p (max)" },
+    ],
+  },
+  // Kling 4.0 Flash — ONE id over KIE's two Flash endpoints, picked by what is
+  // wired (backend kie/kling4.ts): a start frame alone runs on
+  // docs.kie.ai/market/kling/v4-flash-keyframe-to-video, where it is the exact
+  // opening frame; everything else (text, reference images, videos,
+  // characters, or a start frame beside any of them) runs on
+  // docs.kie.ai/market/kling/v4-flash-reference-to-video, where a start frame
+  // joins the reference images as on kling-4. Reference: up to 10 images, 5
+  // videos (2-20s together) and 7 characters (15 in all). No standalone voices:
+  // audio clip N becomes wired character N's voice when that character has 2-4
+  // images (otherwise the clip is dropped). No end
+  // frame, no 1080p, no seed. 3-20s, 720p, native audio always on. Per-second
+  // billing; a reference-video run bills its input seconds too.
+  "kling-4-flash": {
+    id: "kling-4-flash",
+    kind: "video",
+    modes: ["i2v", "t2v"] as const,
+    family: "Kuaishou",
+    maker: "kuaishou",
+    label: "Kling 4.0 Flash",
+    series: "Kling",
+    description: "Kling 4.0 Flash — the faster, lower-cost Kling 4.0 at 720p, up to 20s with native audio; a start frame, reference images, videos and characters (each can carry a voice clip), or plain text.",
+    useCases: ["fast", "cheap", "narrative", "reference"],
+    // No `voices` array on Flash: a reference audio clip is a character's voice
+    // (`voice-references` names that input "Voice Refs"). No `audio-soundtrack`
+    // (the clips are voices, never a soundtrack), no `end-frame`, no
+    // `video-reference` (the generate-video-pro extend chain is unwired, as on
+    // kling-4).
+    features: ["audio", "reference-image", "reference-to-video", "character-subjects", "voice-references"],
+    aspectRatios: VIDEO_RATIOS_KLING_4,
+    durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+    defaultDuration: 5,
+    resolutions: ["720p"],
+    unlistedResolutionRendersAs: "720p",
+    noSeed: true,  // neither Flash schema has a `seed` (additionalProperties: false)
+    pricing: [
+      { identifier: "kling-4-flash", credits: 220, note: "default 5s 720p — see :Ns:720p variants for exact" },
+      { identifier: "kling-4-flash:5s:720p", credits: 220, note: "5s 720p (the default tier)" },
+      { identifier: "kling-4-flash:3s:720p", credits: 130, note: "3s 720p (min)" },
+      { identifier: "kling-4-flash:10s:720p", credits: 430, note: "10s 720p" },
+      { identifier: "kling-4-flash:20s:720p", credits: 850, note: "20s 720p (max)" },
+      { identifier: "kling-4-flash:8s:720p-ref", credits: 230, note: "per-second anchor with a reference video: billed × (output + max(output, input seconds)) ÷ 8" },
     ],
   },
 
@@ -3042,24 +3168,45 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["extend"],
     pricing: [{ identifier: "runway-extend", credits: 320 }],
   },
-  "seedance-2-extend": {
-    id: "seedance-2-extend",
+  // Seedance extends ANY video, one provider per model. Each is priced on its
+  // own rows (`seedanceExtendCreditId`), one per second added and resolution.
+  // The earlier single id `seedance-2-extend` is retired and runs as Seedance 2.5.
+  "seedance-2-5-extend": {
+    id: "seedance-2-5-extend",
     kind: "video",
     modes: ["extend"] as const,
     family: "Bytedance",
     maker: "bytedance",
-    label: "Seedance 2 Extend",
+    label: "Seedance 2.5 Extend",
     series: "Seedance",
-    description: "Extend ANY video: generates the continuation (audio included) and trim-stitches it into one seamless clip.",
+    description: "Extend ANY video with Seedance 2.5: 4–30s continuation (audio included), stitched into one seamless clip.",
+    useCases: ["extend"],
+    durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+    defaultDuration: 8,
+    resolutions: ["480p", "720p", "1080p"],
+    pricing: [
+      { identifier: "seedance-2-5-extend:8s:720p", credits: 950, note: "default 8s 720p — see :Ns:res variants for exact" },
+      { identifier: "seedance-2-5-extend:8s:480p", credits: 425, note: "8s 480p" },
+      { identifier: "seedance-2-5-extend:8s:1080p", credits: 2375, note: "8s 1080p" },
+    ],
+  },
+  "seedance-2-0-extend": {
+    id: "seedance-2-0-extend",
+    kind: "video",
+    modes: ["extend"] as const,
+    family: "Bytedance",
+    maker: "bytedance",
+    label: "Seedance 2.0 Extend",
+    series: "Seedance",
+    description: "Extend ANY video with Seedance 2.0: 4–15s continuation (audio included), stitched into one seamless clip.",
     useCases: ["extend"],
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     defaultDuration: 8,
     resolutions: ["480p", "720p", "1080p"],
     pricing: [
-      { identifier: "seedance-2-extend", credits: 530, note: "default 8s 720p (ref-mode 50 + 3 stitch) — see :NsR variants" },
-      { identifier: "seedance-2-extend:8s:480p", credits: 260, note: "8s 480p (23+3)" },
-      { identifier: "seedance-2-extend:8s:720p", credits: 530, note: "8s 720p (50+3)" },
-      { identifier: "seedance-2-extend:8s:1080p", credits: 780, note: "8s 1080p (75+3)" },
+      { identifier: "seedance-2-0-extend:8s:720p", credits: 625, note: "default 8s 720p — see :Ns:res variants for exact" },
+      { identifier: "seedance-2-0-extend:8s:480p", credits: 288, note: "8s 480p" },
+      { identifier: "seedance-2-0-extend:8s:1080p", credits: 1550, note: "8s 1080p" },
     ],
   },
   "veo-1080p": {

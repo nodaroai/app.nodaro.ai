@@ -18,6 +18,7 @@ import {
   KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS,
   KIE_SPEECH_TO_VIDEO_MODELS, KIE_SPECIAL_MODELS,
   VIDU_Q4_REFERENCE_MODEL,
+  KLING_4_FLASH_KEYFRAME_MODEL,
 } from "../../providers/kie/models.js"
 import type { KieModelConfig } from "../../providers/kie/models.js"
 import { KIE_CREDIT_USD } from "../../providers/kie/models.js"
@@ -203,6 +204,10 @@ export function buildModelMap(): Map<string, ModelMapping[]> {
   // Vidu Q4: one key over two KIE endpoints — the reference-to-video id is not
   // any config's `model`, so map it back to the key that bills it.
   addAlias(VIDU_Q4_REFERENCE_MODEL, "vidu-q4", "i2v")
+
+  // Kling 4.0 Flash: one key over two KIE endpoints — the keyframe endpoint is
+  // not any config's `model` (the reference endpoint is), so map it back too.
+  addAlias(KLING_4_FLASH_KEYFRAME_MODEL, "kling-4-flash", "i2v")
 
   return map
 }

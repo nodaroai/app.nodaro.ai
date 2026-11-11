@@ -500,6 +500,50 @@ describe("extend_video verb", () => {
     const tools = await listTools(server)
     expect(tools.map((t) => t.name)).not.toContain("extend_video")
   })
+
+  const EXTEND_SOURCE = "https://media.nodaro.ai/videos/11111111-2222-3333-4444-555555555555.mp4"
+
+  it("extend_video offers seedance-2-5-extend and seedance-2-0-extend and accepts the retired id", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "extend_video")!
+    const schema = tool.inputSchema as { required?: string[]; properties: Record<string, { enum?: unknown[]; minimum?: number; maximum?: number }> }
+    const properties = schema.properties
+    // Every Extend Video provider but LTX 2.3 Pro, which this tool does not offer; still a required argument.
+    expect(properties.model.enum).toEqual(["veo-extend", "runway-extend", "seedance-2-5-extend", "seedance-2-0-extend"])
+    expect(schema.required).toEqual(expect.arrayContaining(["prompt", "model"]))
+    // The retired id is accepted, never offered or named.
+    expect(JSON.stringify(tool)).not.toContain("seedance-2-extend")
+    // Seconds to add: the Seedance windows, 4–30 on Seedance 2.5 and 4–15 on Seedance 2.0.
+    expect([properties.duration.minimum, properties.duration.maximum]).toEqual([4, 30])
+    expect(tool.description).toContain("seedance-2-5-extend")
+    expect(tool.description).toContain("seedance-2-0-extend")
+    // The resolutions the route takes: no 4k.
+    expect(properties.resolution.enum).toEqual(["480p", "720p", "1080p"])
+
+    for (const [model, provider] of [
+      ["seedance-2-extend", "seedance-2-5-extend"],
+      ["seedance-2-5-extend", "seedance-2-5-extend"],
+      ["seedance-2-0-extend", "seedance-2-0-extend"],
+    ] as const) {
+      const { fastify, received } = stubRoute("POST", "/v1/extend-video", { jobId: "j-ex" })
+      const calling = buildServer()
+      registerVerbs({ server: calling, session: executeSession(), fastify })
+      const result = await callTool(calling, "extend_video", { prompt: "the car drives off", model, video_url: EXTEND_SOURCE, duration: 12 })
+      expect(result.isError).toBeUndefined()
+      expect(received.body).toMatchObject({ provider, videoUrl: EXTEND_SOURCE, duration: 12, prompt: "the car drives off" })
+    }
+  })
+
+  it("a Seedance extend with no source names the video it needs, and sends nothing", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/extend-video", { jobId: "j-ex" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "extend_video", { prompt: "more", model: "seedance-2-0-extend" })
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toBe("seedance-2-0-extend requires video_url or video_asset_id")
+    expect(received.body).toBeUndefined()
+  })
 })
 
 describe("combine_videos verb", () => {

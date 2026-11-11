@@ -232,7 +232,7 @@ here for each one anyway.
 | `HEADER_VERSIONS_PRODUCTS` · `HEADER_VERSIONS_GITHUB_TOKEN` | `""` (the page lists nothing, and explains the setup) | Cloud only — the admin panel's **Header versions** page: which version of the shared header each product's live and test site serves, beside the newest release, and what each newer release brought. In order: the products, a JSON array of `{ "id", "label", "repo", "production", "staging", "source", "icon"? }` (`repo` as `owner/name`, the two hosts bare, `source` `lockfile` — the version is the deployed commit's lockfile — or `site-file` — the site publishes it at `/shell-version.json`, as this app's cloud build does; `icon`, optional, names the product's picture on the page — one of the names in `frontend/src/ee/app/(admin)/admin/header-versions/product-icon.tsx`, else its first letter is drawn); and a read-only fine-grained GitHub token with **Contents** and **Deployments** read access to those repositories and the header's own. The server reads each environment's last successful deployment and the version that commit installs, and each newer release's merged changes between its tag and the one before (said in plain words by a model once per release, a platform cost). It also shows the header repository's own explanations of how the header works, read from its default branch, and asks each of the header's world links what it answers. Where each site's worlds row leads comes from the file the site publishes at `/shell-worlds.json` (`{ "worldsRow": true, "worldHrefs": { "<world>": "https://…" or "/path" } }`), and every address a site leads to is asked too, once per check; a site without the file (this app's own, whose hosted header holds its links itself) is shown as not reported. Without the token only the sites' own files answer |
 | `ORGS_ENABLED` | off | Cloud only — multi-tenant organizations (schools / teams) rollout gate. Ships dark; the schema migrations run in every edition regardless |
 | `MCP_ENABLED` | off | Serve the MCP endpoint (§10) |
-| `SPEECH_LENGTH_PRICING_ENABLED` | off | Cloud only — price Text to Speech and Text to Dialogue by length (every started 100 characters, with a minimum per request) instead of a flat amount per request. On at `app.nodaro.ai` and `next.nodaro.ai` since 2026-10-08. See the Credits section of each node's page |
+| `SPEECH_LENGTH_PRICING_ENABLED` | off | Cloud only — price Text to Speech and Text to Dialogue by length (every started 100 characters, with a minimum per request) instead of a flat amount per request. On at `app.nodaro.ai` and `next.app.nodaro.ai` since 2026-10-08. See the Credits section of each node's page |
 | `LLM_TIER_PRICING_ROLLBACK` | unset | Cloud only — a rollback switch. Unset, LLM nodes and helpers are charged for the tokens each call actually used on the model that ran it: a small hold is reserved before the call, and the settled charge is the call's real cost (which can be above the hold). `true` or `1` returns every LLM call to the earlier pricing by model tier, and the model pickers then show no per-model price; every live estimate surface (workflow and node estimates, `GET /v1/nodes`, the listing flags `estimatedCreditsIsEstimate`) answers with the tier figures and no estimate mark. Stored listings keep the figure they were published with: run `npm run backfill:llm-listing-prices -- --allow-rollback --include-templates --apply` (in `backend/`, with the switch set) to restore their tier figures. Text generated into the repository does NOT follow the switch: the node skills' `**Credit cost:**` lines (gen:skills) state the hosted default — a metered LLM node's `≈N` estimate — even while a deployment runs rolled back, and the built-in templates' seeded prices are their metered listings. Any other value is ignored. Community and Business have no credits, so it changes nothing there |
 | `COPILOT_ENABLED` | off | Cloud only — the in-app [Workflow Copilot](./features/workflow-copilot.md). Needs `ANTHROPIC_API_KEY`; admins can also pause it at runtime from Settings |
 | `UPLOAD_FASTSTART_ENABLED` | on | Optional kill switch. An uploaded MP4/MOV whose index sits at the end of the file (an OBS or phone recording) is rewritten with the index in front before it is stored, so the first seek into a large file is fast. Set it to `false` to store every upload exactly as sent, on all upload lanes; it is read at boot, so redeploy or restart after changing it. Uploads already stored are never touched either way |
@@ -702,8 +702,9 @@ an environment with no `PUBLIC_URL` seeds again without taking it.
 
 ### Model maker marks (`logoUrl`)
 
-`GET /v1/models` names each model's maker (`maker: { id, name }`) and can carry
-the maker's official mark as `logoUrl`, for apps that draw a model picker. A
+`GET /v1/models` names each model's maker (`maker: { id, name }`; a model the
+instance offers under its own label names none) and can carry the maker's
+official mark as `logoUrl`, for apps that draw a model picker. A
 company's mark is its trademark, so none ships with the app: an instance
 publishes the marks it has the right to show, and every other maker's
 `logoUrl` is `null` (apps then draw the maker's name or initial). This works on
@@ -720,7 +721,7 @@ To publish a maker's mark:
    The maker ids are the `maker.id` values the API returns:
 
    ```bash
-   curl -s "$PUBLIC_URL/v1/models" | jq -r '[.sections[].families[].models[].maker.id] | unique[]'
+   curl -s "$PUBLIC_URL/v1/models" | jq -r '[.sections[].families[].models[].maker.id // empty] | unique[]'
    ```
 
    Use the R2 dashboard, the MinIO console, or any S3 client, for example
@@ -902,15 +903,40 @@ optional; each array empty = "keep the default"):
   Recast's routes (its script revisions and plan included) as
   `generate-video-pro`, the render a recast produces, and a Studio production's
   sequence generation as `generate-video`.
-  One gateable id has no canvas node: `cast-swap` is Nodaro Motion —
-  `POST /v1/cast-swap` and its routes (a trend's face mask included), and every trend run
-  (`POST /v1/trends/:slug/estimate` and `/runs` answer `node_not_available`
-  where it is not offered, and the MCP tools `cast_swap`, the Full Quality pair
-  and the trend tools are not listed). With `nodes.allow` set, a credit-spending route that
-  is linked to no node is refused with `node_not_available` (the whitelist never
-  allowed it) and logged once; the few routes that run no node (Copilot, which
-  `features.hide` governs; Video Director; a pipeline's stage actions) are not
-  node-gated. Also with `nodes.allow` set, a step a Cloud plugin engine's job
+  Three gateable ids have no canvas node, and are listed in `nodes.allow` /
+  `nodes.deny` and Admin → Availability exactly like a node:
+  - `cast-swap` is Nodaro Motion — `POST /v1/cast-swap` and its routes (a
+    trend's face mask included), and every trend run (`POST /v1/trends/:slug/estimate`
+    and `/runs` answer `node_not_available` where it is not offered, and the MCP
+    tools `cast_swap`, the Full Quality pair and the trend tools are not listed).
+  - `film-pipeline` is the film pipeline (Story → Video, Cloud) — `POST /v1/pipelines`
+    and every pipeline route that starts or continues a pipeline's work (branch,
+    fork, stage approvals, edits and rejections, scene and shot regenerations,
+    retries, entity actions, sub-gates, scene helpers, stage chat and applying
+    a chat proposal)
+    answer `node_not_available` where it is not offered, before anything is
+    reserved. Reading a pipeline, its events and its stages, switching a run to
+    manual, and `POST /v1/pipelines/:id/cancel` stay open, so a pipeline started
+    before can still be followed and stopped. The MCP tools `start_pipeline`,
+    `branch_pipeline`, `chat_pipeline_stage` and `apply_chat_proposal` are not
+    listed (the read tools stay). A pipeline already running when the feature is
+    withheld does not start its next stage — an automatic run included: it
+    fails with `node_not_available` and its unspent reservation is refunded. A
+    pipeline paused at an approval gate stays paused. The canvas node that opens one (`generative-pipeline`,
+    Story → Video) is a node of its own: list both for the editor's pipeline.
+    The film pipeline's image and video prompts do not pass this deployment's
+    prompt policy (`PromptPolicy`), so a deployment that relies on one should
+    not list `film-pipeline`.
+  - `video-director` is the Video Director — `POST /v1/video-director/run`
+    (the MCP tools `create_explainer` and `create_launch_video`, which are not
+    listed where it is not offered). Its speech, alignment and render steps are
+    each gated as their own node (`text-to-speech`, `forced-alignment`,
+    `render-video`), so list those too.
+
+  With `nodes.allow` set, a credit-spending route that is linked to no node is
+  refused with `node_not_available` (the whitelist never allowed it) and logged
+  once; the one route that runs no node (Copilot, which `features.hide`
+  governs) is not node-gated. Also with `nodes.allow` set, a step a Cloud plugin engine's job
   sends to another route is gated as the node the user ran, the engine's own:
   Nodaro Motion's depth, mask, composite and audio-separation steps, and the
   image, video and text generations its job asks for, follow `cast-swap`, so
@@ -931,7 +957,8 @@ optional; each array empty = "keep the default"):
   at all: a model turned off is off for admins too.
 
   A stored override decides only what it was saved knowing. An id that became
-  gateable after the override was stored (`cast-swap`), and a route that is
+  gateable after the override was stored (`cast-swap`, and later
+  `film-pipeline` and `video-director`), and a route that is
   checked as its node only since then (the nested routes above), keep their
   factory state until the override is saved again — so upgrading never turns
   off something users had. Admin → Availability says when the stored override
@@ -989,13 +1016,38 @@ optional; each array empty = "keep the default"):
   may be left out beside the other locale keys and then means shown; before,
   leaving it out discarded the whole `locale` block, `default` included
 - `outputs.allowPublic`: `false` forces every output private regardless of the
-  user's preference, and every listing of other people's work answers as if
-  there were none: the public view of `GET /v1/gallery`, the community listings
-  (browse and favorites list nothing; a listing's card, its full detail and a
-  clone are not found) and the `scope: "public"` of the MCP `browse_gallery` and
-  `list_jobs` tools. Work marked public before the switch was set, or carried
-  over in a copied database, is therefore not listed either. A person's own
-  gallery and jobs are unchanged.
+  user's preference, and every read that hands one person's work to someone
+  else answers as if nothing were public:
+  - **Listings** list nothing: the public view of `GET /v1/gallery`, the
+    community listings (browse and favorites), the app and component
+    marketplace (`GET /v1/apps/browse`), the template marketplace
+    (`GET /v1/templates/browse`), and the `scope: "public"` of the MCP
+    `browse_gallery`, `list_jobs`, `list_apps` and `list_components` tools.
+  - **Pages** of that work are not found (`404 not_found`): a community
+    listing's card, its full detail and its clone; a template someone else
+    listed on the marketplace, by its page and its clone; and the gallery's
+    report form.
+  - **Links shared before the switch was set** stop working for everyone but
+    the owner: a workflow shared with `settings.studio.shared`
+    (`GET /v1/public/workflows/:id`, which takes no sign-in) answers exactly as
+    one that is not shared, its editable copy is refused, and a public Cine shot
+    (`GET /v1/shots/:id`) reads as a private one. The share flag itself is left
+    as its owner set it; only the reads change.
+  - **Another person's job by its id** reads as not found: the MCP `get_asset`
+    and `display_asset` tools, the items `list_favorites` returns, and adding a
+    favorite (`POST /v1/gallery/favorite`, MCP `favorite_asset`).
+
+  Work marked public before the switch was set, or carried over in a copied
+  database, is therefore not served either. A person's own gallery, jobs, apps,
+  templates, shots and shared workflows are unchanged for them.
+
+  What the switch does **not** close: the presentation share links
+  (`/v1/present/:token`, a separate feature), a published app's own page and
+  runs (`GET /v1/app/:slug`, its link card and embed, MCP `get_app_inputs` /
+  `run_app` / `get_component_inputs` / `run_component`), and the catalogs an
+  administrator curates (tutorials, the Keepers shelf, trends, the shared
+  library). A file's address
+  in your storage stays readable by whoever holds it.
 - `voice.allowedGenders`: `["male"]` / `["female"]` / `["neutral"]` (any subset) —
   restrict voice pickers, policy-owned default voices, and TTS / speech requests to
   these voice genders. Empty (`[]`) = all genders, and nothing below is looked up.
@@ -1086,8 +1138,14 @@ optional; each array empty = "keep the default"):
   administrator's there; the admin-only reads (the admin job pages, the
   all-accounts run list) use the admin check, which an administrator's own
   token passes too, and keep the words. A webhook delivery is never an
-  administrator's, and a published app's runner never receives the words,
-  whatever this says.
+  administrator's. Whatever this says, the words go only to whoever may read
+  them: a job's to its owner (never on another user's job), and a run's — its
+  node states, and the jobs that belong to it — to a reader who can open the
+  workflow the run executed (never to a published app's runner or a person
+  running someone else's share link, nor on a share page to anyone but its
+  creator). A job that is not linked to the workflow run that started it (a few
+  node types; a use-case node's hidden run, states and jobs alike; and a run
+  whose workflow was deleted) is its owner's, like a job that belongs to no run.
   Backend-only: stripped from `/config.js`. The key governs what the server
   serves from a job and from a run. Words an editor has already saved onto a
   workflow's nodes, before the key was set or on an administrator's own
@@ -1467,9 +1525,10 @@ editor — the shared header, its worlds and their pickers — which read
 `/config.js` through the published `@nodaro/shared/runtime-config` contract.
 Each is **absent unless you set it**, so `/config.js` stays exactly as it was
 until you do, and an absent key keeps today's behaviour. **The platform does
-not enforce them itself yet**, with one exception: `imports.links: false` is
-enforced by the server (below). The editor itself reads `header` and the keys of
-its white-label header (below). A malformed value of a key that limits what
+not enforce them itself yet**, with two exceptions: `imports.links: false` is
+enforced by the server, and `catalogs.images` is applied by the API and the
+editor (both below). The editor itself reads `header` and the keys of its
+white-label header (below). A malformed value of a key that limits what
 visitors can do falls to its restrictive side, with a warning; a malformed
 logo is dropped with a warning and the rest of `brand` is kept.
 
@@ -1528,7 +1587,33 @@ logo is dropped with a warning and the rest of `brand` is kept.
   network filter still answers for them.
 - `catalogs.images`: the pictures on picker options — `"default"` (the
   platform's), `"none"` or `"own"` (the deployment's own). Default
-  `"default"`; any other value reads as `"none"`.
+  `"default"`; any other value reads as `"none"`, with a warning.
+
+  **The platform applies it.** With any value but `"default"`:
+  - the API leaves every picture out of the picker catalogs. No option carries
+    an `imageUrl` or `imageSrcSet`, no Person / Styling topic carries an
+    `imageUrl`, and every `imageCount` in the directory is `0`. This covers
+    `GET /v1/picker-catalogs`, `GET /v1/picker-catalogs/{nodeType}`,
+    `GET /v1/catalogs` and the MCP tool `get_picker_catalog`. Everything else
+    in those replies is unchanged.
+  - the editor shows none of the platform's pictures: no rendered preview from
+    the Nodaro CDN, and none of the photos, emoji and flags it serves itself.
+    Each picker, the canvas nodes and the app input cards show what they show
+    for an option with no picture (a drawn preview, an icon or the label), and
+    the Person card on the home screen shows no photos.
+
+  `"own"` shows no pictures for now, exactly like `"none"`: there is no way
+  yet to give a deployment's own pictures. Setting it states the intent, and
+  the platform's pictures never show.
+
+  Absent or `"default"`, every reply and the editor are exactly as before.
+  The Community edition does not read the profile, so its pictures always
+  show.
+
+  **Known limit:** the picture files themselves are still served. With
+  `"none"`, a file under `/picker-art/` (or a render on the Nodaro CDN) still
+  loads for anyone who asks for its address directly; the API and the editor
+  just stop naming them.
 - `locale.offered`: the languages a visitor may pick from, as locale ids
   (`["he","en"]`), read in the platform's own spelling (`pt-br` becomes
   `pt-BR`). Every language list in the editor offers only these: the header's
@@ -2204,7 +2289,7 @@ the flow itself.
 
 | Where | Variable | Meaning |
 |---|---|---|
-| Your instance (community / business, or a self-hosted copy of a dedicated deployment) | `NODARO_CLOUD_URL` | The cloud host this instance relays to — where the **Connect nodaro.ai** button registers, **and** where every call made with `NODARO_API_KEY` goes (relayed generations, uploads, the LLM proxy). Default `https://app.nodaro.ai`. A self-hosted copy of a dedicated deployment points it at that deployment's own hosted instance; set `https://next.nodaro.ai` for a staging soak. Read at boot. |
+| Your instance (community / business, or a self-hosted copy of a dedicated deployment) | `NODARO_CLOUD_URL` | The cloud host this instance relays to — where the **Connect nodaro.ai** button registers, **and** where every call made with `NODARO_API_KEY` goes (relayed generations, uploads, the LLM proxy). Default `https://app.nodaro.ai`. A self-hosted copy of a dedicated deployment points it at that deployment's own hosted instance; set `https://next.app.nodaro.ai` for a staging soak. Read at boot. |
 | Your instance (community / business, or a self-hosted copy of a dedicated deployment) | `NODARO_API_KEY` | nodaro.ai as a provider like KIE or Replicate: a personal API token (`ndr_…`) minted on the host named by `NODARO_CLOUD_URL` under **Settings → API**, billed to that account. The key alone arms the relay — no cloud-side flag and no OAuth registration are needed. What it is: a credential with **no scope, no spend cap and no expiry** (at most 10 per account; revoke it by deleting or deactivating it on the same page). What it cannot do: money routes are session-only — a key can spend, never allocate allowances, buy credits or administer (`payer_balance_jwt_only`). On a deployment that names a `billing.payerAccount`, **only the billing account may create one** (`403 api_tokens_payer_only`), and the Settings card is hidden for everyone — the billing account opens `/settings/api` directly. Alternative to the OAuth connect flow — both light the same **nodaro.ai** tile on `/setup`; if both exist the OAuth connection is used (it carries per-instance spend caps and Connected Instances visibility, and needs `COMMUNITY_CONNECT_ENABLED` on the cloud side). |
 | The cloud (a `cloud`-edition deployment) | `COMMUNITY_CONNECT_ENABLED` | Master switch for accepting self-hosted registrations (`software_id: nodaro-community` at `/v1/oauth/register`) and for the account's **Connected Instances** page. Default `false`. Enabled on `app.nodaro.ai` since 2026-08-16. Requires migration 312 (`developer_apps.kind = community_instance`). Read at boot — redeploy after changing. |
 

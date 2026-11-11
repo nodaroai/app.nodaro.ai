@@ -54,6 +54,7 @@ import { mcpInject } from "../internal-request.js"
 import { TTS_NEIGHBOUR_TEXT_MAX_CHARS, normalizeTtsNeighbourText } from "../../../providers/elevenlabs/neighbour-text.js"
 import { VOICE_CHANGER_PRO_ENGINES } from "./voice-changer-pro-engines.js"
 import { TRASHED_JOB_COLUMN } from "../../public-job-data.js"
+import { jobReadableBy } from "../../public-job-read.js"
 
 /**
  * Look up the Suno task / track ids stored on a completed Nodaro job's
@@ -78,10 +79,9 @@ async function resolveSunoIds(
     .is(TRASHED_JOB_COLUMN, null)
     .maybeSingle()
   if (!data) return null
-  // Allow caller's own jobs OR public completed jobs (mirrors get_asset).
-  const isOwn = data.user_id === userId
-  const isPublic = data.is_public === true && data.status === "completed"
-  if (!isOwn && !isPublic) return null
+  // Allow caller's own jobs OR public completed jobs (mirrors get_asset;
+  // own only where public work is not allowed — lib/public-job-read.ts).
+  if (!jobReadableBy(data, userId)) return null
   const out = (data.output_data ?? {}) as Record<string, unknown>
   const sunoTaskId = out.sunoTaskId as string | undefined
   const sunoTrackId = out.sunoTrackId as string | undefined

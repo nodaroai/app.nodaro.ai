@@ -713,6 +713,7 @@ export {
 export {
   FREE_BLOCKED_VIDEO_MODELS,
   FREE_BLOCKED_VIDEO_SERIES,
+  FREE_OPEN_VIDEO_MODELS,
   FREE_VIDEO_LIMITS_DEFAULTS,
   freeVideoDurationLock,
   freeVideoEntry,
@@ -723,6 +724,7 @@ export {
   resolutionHeight,
   type FreeVideoLimits,
   type FreeVideoLock,
+  type FreeVideoModelLockOptions,
   type FreeVideoRequest,
 } from "./free-video-limits"
 // The recordings of one conversation as one master-clock edit (Speaker Layout on two or more recordings).

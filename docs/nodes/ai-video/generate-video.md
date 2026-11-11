@@ -9,7 +9,7 @@ The Generate Video node is a single, mode-aware video generation node that repla
 - **Text-to-video** — no image input, prompt only
 - **Image-to-video** — wire a start frame
 - **First + last frame** — wire both start and end frames (VEO 3.x, Kling Turbo, Hailuo Standard, Bytedance Lite, MiniMax); Kling 4.0 Keyframes adds up to 8 in-between frames
-- **Reference mode** — wire image / video / audio references (Seedance 2, HappyHorse Ref2V, VEO 3.1 **Fast / Lite**, Kling 4.0)
+- **Reference mode** — wire image / video / audio references (Seedance 2, HappyHorse Ref2V, VEO 3.1 **Fast / Lite**, Kling 4.0, Kling 4.0 Flash)
 
 Mode is chosen automatically at execution time from the wiring shape — there is no UI toggle. The same provider catalog is available across all modes; if a provider can't run the requested mode, the route returns a validation error.
 
@@ -90,6 +90,7 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 | Runway (KIE) | `runway-kie` | T2V, I2V | Fixed configurations |
 | Kling 3 Omni | `kling-3-omni` | I2V (input image required) | 3–15s; 720p / 1080p; end frame + up to 7 reference images; native audio; runs on Replicate |
 | Kling 4.0 | `kling-4` (Kling 4.0), `kling-4-keyframes` (Kling 4.0 Keyframes) | `kling-4`: T2V, reference (images, videos, characters, voices); `kling-4-keyframes`: T2V, start / in-between / end frames | **3–30s, any whole second** (default 5); **720p (default) / 1080p** — any other value renders and bills 720p; aspect **auto** (default; follows the materials, 16:9 with none) / 16:9 / 9:16 / 1:1 / 21:9; native audio always on (no toggle); no seed; prompt up to 8,000 characters. `kling-4` takes up to **10 image + 5 video refs, 7 characters and 3 voice clips — 15 materials in all**; `kling-4-keyframes` takes a start frame, up to **8 in-between frames** and an end frame, capped by duration. See [Kling 4.0](#kling-40-references-characters-and-keyframes) |
+| Kling 4.0 Flash | `kling-4-flash` | T2V, I2V (start frame), reference (images, videos, characters, each character's voice) | **3–20s, any whole second** (default 5); **720p only** — any other value renders and bills 720p; aspect **auto** (default) / 16:9 / 9:16 / 1:1 / 21:9; native audio always on (no toggle); no seed; no end frame; prompt up to 8,000 characters. One id over two provider endpoints, picked by what is wired: a **start frame alone** is the exact opening frame; anything else runs in reference mode with up to **10 image + 5 video refs and 7 characters — 15 materials in all**, reference videos **2–20s together**, and Audio Refs clip N becomes **character N's voice** (a character needs 2–4 images to carry one). See [Kling 4.0 Flash](#kling-40-flash) |
 | LTX 2.3 | `ltx-2.3-pro`, `ltx-2.3-fast` | T2V, I2V, audio→V (Pro only) | Pro: 6 / 8 / 10s; Fast: 6–20s; 1080p / 2k / 4k; aspect 16:9 / 9:16; fps 24 / 25 / 48 / 50; supports `last_frame_image` (end-frame interpolation). Fast does not accept audio. |
 
 > **Seedance 1.5 (`seedance`) was retired on 2026-10-25** — the provider stopped serving it. A saved node, an app input or an API call that still names `seedance` runs, and is charged, as **`seedance-2-mini`**: same duration (4 / 8 / 12s are all within Mini's 4–15s), and 1080p runs, and is charged, as 720p, Mini's highest resolution (it renders 480p / 720p). A node that never set a resolution runs at Mini's default, 480p. The run confirmation quotes that Mini price.
@@ -141,6 +142,24 @@ Kling 4.0 is two model ids over two provider endpoints. Both run **3–30 s** (a
 | Frames in all, at most | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
 
 More frames than the cap, or more than 8 in-between frames, is refused with a `400` (`validation_error`) before any credits are reserved — for example "Kling 4.0 Keyframes takes at most 4 frames in all (start + in-between + end) for a 3s clip; …". In the prompt, name the frames `@first_frame`, `@keyframe_1` … and `@last_frame`; the editor's `@image_N` tokens become `@keyframe_N` on this model. Kling 4.0 Keyframes takes no reference videos, audio or characters.
+
+#### Kling 4.0 Flash
+
+Kling 4.0 Flash (`kling-4-flash`) is the faster, lower-cost Kling 4.0. It runs **3–20 s** (any whole second, default 5) at **720p** only — any other resolution renders and bills 720p — with native audio always on (there is no toggle), no seed, no end frame and a prompt of up to 8,000 characters. The aspect ratio is `auto` (default: it follows the materials, and renders 16:9 when there are none), `16:9`, `9:16`, `1:1` or `21:9`. It is the one Kling model that runs on [free credits](../../features/free-credits.md), within their limits: a 3 or 4 second clip at 720p.
+
+It is one model id over two provider endpoints, and the platform picks the endpoint from what is wired:
+
+- **A start frame on its own** — no reference image, no reference video, no character — is the **exact opening frame**: the clip starts on it and takes its shape, so the aspect ratio is not used (the settings panel hides it). In the prompt the frame is `@first_frame`; an `@image_1` is read as the frame too.
+- **Anything else** — a prompt alone, reference images, reference videos, characters, or a start frame beside any of them — runs in reference mode. With nothing wired it is text-to-video. A start frame there joins the reference images after your own and is named in the prompt as the opening frame, exactly as on `kling-4`.
+
+In reference mode it takes up to **10 reference images, 5 reference videos and 7 characters, at most 15 materials in all** (a wired start frame counts as an image). Over 15 is refused with a `400` before any credits are reserved (`character_references_quota` when the request carries `characterReferences`, `validation_error` otherwise).
+
+- **Characters become named subjects**, as on `kling-4`: a wired Character node's portrait plus up to 3 more of its images, called `@Name` in the prompt; a character with only one image stays a plain reference image. Through the API, send them in `characterReferences` with up to 3 `extraImageUrls`.
+- **Audio Refs clip N becomes the voice of character N.** Flash has no standalone voice and no soundtrack: the first clip is the voice of the first wired character, the second clip the second character's, and so on, in the order the characters are wired. A character needs **2 to 4 images** to carry a voice; a character with one image is sent as a plain reference image, so its clip is dropped. A clip past the last character is dropped too. The run still starts either way, and a clip takes no place in the 15. A clip cannot be named in the prompt — the platform removes the `@` from `@audio_1` — so write who speaks by the character's name. The editor names the input **Voice Refs**.
+- **Reference videos** must be **2–20 seconds together** (and each 2–20 s); a set outside that range is refused before the run starts, so no credits are spent. As on `kling-4`, a clip over 2048 px on its long side, or over 1920×1080 pixels, is scaled down to fit before it is sent, and `keepOriginalSound: true` keeps a reference video's own sound instead of generating new sound.
+- **Naming materials in the prompt.** `@image_1` … for reference images, `@video_1` … for reference videos, a character by `@Name`. The provider refuses a prompt that names a material the request does not carry, so the platform removes the `@` from any such mention — the word stays in the prompt — and the run still starts.
+- **No end frame.** The editor offers none. One that arrives anyway is not sent to the model: a workflow run makes a lone end frame the start frame (as on every model that takes no end frame), `POST /v1/generate-video` answers a lone end frame with `400` (`imageUrl is required`) unless references are wired, and an end frame beside a start frame or references is left out of the request.
+- **Price.** Reference images, characters and voice clips add nothing. A reference **video** switches the run to a per-second reference rate on a longer billed duration — see [Credit pricing](#credit-pricing).
 
 #### Referencing wired assets in the prompt (`{image:N}` / `{video:N}` / `{audio:N}` tokens)
 
@@ -211,10 +230,10 @@ LTX 2.3 Pro's `audioReferences` input takes one clip; LTX 2.3 Fast has it muted 
 
 Reference images steer a Gemini Omni clip but do not hold a face: the provider treats an image reference as loose context for "characters, scenes, styles, or storyboard guidance", and the person in the clip comes back looking different. To keep a real person's face, send a **character reference** — a portrait plus a description — through the API (`characterReferences` on `POST /v1/generate-video` and `POST /v1/text-to-video`, `character_references` on the MCP `generate_video` tool, `characterReferences` on the SDK's `GenerateVideoParams` / `TextToVideoParams`). The editor node has no control for it yet.
 
-Each entry takes the portrait `imageUrl`, a `description` (appearance, clothing, style; ≤ 2000 characters), an optional full-body `bodyImageUrl`, an optional `name` (≤ 100 characters) and an optional `voice` (see [Pinning a voice](#pinning-a-voice-to-a-character-reference)). Up to **3** per request on Gemini Omni, **7** on Kling 4.0.
+Each entry takes the portrait `imageUrl`, a `description` (appearance, clothing, style; ≤ 2000 characters), an optional full-body `bodyImageUrl`, an optional `name` (≤ 100 characters) and an optional `voice` (see [Pinning a voice](#pinning-a-voice-to-a-character-reference)). Up to **3** per request on Gemini Omni, **7** on Kling 4.0 and Kling 4.0 Flash.
 
-- **Models:** `gemini-omni-video`, `gemini-omni-flash` and Kling 4.0 (`kling-4`). Any other model answers `400` (`character_references_unsupported`) rather than running without the face lock.
-- **Kling 4.0 takes them as named subjects**, and the rest of this list describes Gemini Omni. On `kling-4` each entry's `imageUrl`, `bodyImageUrl` and up to 3 `extraImageUrls` are the subject's images (2–4; an entry with a single image is sent as a plain reference image), the prompt calls it `@<name>`, and a start or end frame is allowed. Characters count against Kling's 15-material budget instead of the unit budget below, there is no character to create, and a `voice` is refused with `400` (`character_voice_unsupported`) — Kling's voices are audio clips (`referenceAudioUrls`). See [Kling 4.0](#kling-40-references-characters-and-keyframes).
+- **Models:** `gemini-omni-video`, `gemini-omni-flash`, Kling 4.0 (`kling-4`) and Kling 4.0 Flash (`kling-4-flash`). Any other model answers `400` (`character_references_unsupported`) rather than running without the face lock.
+- **Kling 4.0 takes them as named subjects**, and the rest of this list describes Gemini Omni. On `kling-4` each entry's `imageUrl`, `bodyImageUrl` and up to 3 `extraImageUrls` are the subject's images (2–4; an entry with a single image is sent as a plain reference image), the prompt calls it `@<name>`, and a start or end frame is allowed. Characters count against Kling's 15-material budget instead of the unit budget below, there is no character to create, and a `voice` is refused with `400` (`character_voice_unsupported`) — Kling's voices are audio clips (`referenceAudioUrls`). See [Kling 4.0](#kling-40-references-characters-and-keyframes). Kling 4.0 Flash takes them the same way, except that audio clip N becomes the voice of entry N when that entry has 2–4 images (otherwise the clip is dropped) — see [Kling 4.0 Flash](#kling-40-flash).
 - **No start or end frame.** A character reference cannot be combined with a start frame (`imageUrl`) or an end frame (`endFrameUrl`); the request answers `400` (`character_references_with_start_frame` / `character_references_with_end_frame`) instead of silently dropping one of them. This is a current Nodaro limit, not a provider rule. Use references and, if needed, a source video in the same request.
 - **Input budget.** Characters share the model's 7-unit input quota with reference images (1 unit each) and a source video (2 units): `images + 2 × videos + characters ≤ 7`, where a character counts 1 unit, or 2 when it carries a `bodyImageUrl`. Over budget answers `400` (`character_references_quota`) — nothing is truncated.
 - **Same character, reused.** Nodaro creates the character from your portrait on the first run and remembers it for 24 hours, so an identical reference (same images, description, name and voice) is not created again on the next run. A voiced and an unvoiced copy of the same person are two different characters.
@@ -257,7 +276,7 @@ Left to itself the model improvises a voice for each clip, so the same person so
 
 Nodaro creates the persona once and attaches it to the character **and** to the video request, so it drives that character's speech; an identical voice is remembered for 24 hours and reused. A voice is a preset plus your description — it is never a recording of a real speaker (use a source video for that).
 
-- **Models and limits.** Gemini Omni only (Kling 4.0 refuses a `voice` — give it a voice clip instead). A request carries at most **3 distinct voices** (a voice is its preset, description, example line and the character's `name`; two characters with all four identical count once); more answers `400` (`character_voices_over_limit`). Voices do not count against the 7-unit input budget.
+- **Models and limits.** Gemini Omni only (Kling 4.0 and Kling 4.0 Flash refuse a `voice` — give them a voice clip instead). A request carries at most **3 distinct voices** (a voice is its preset, description, example line and the character's `name`; two characters with all four identical count once); more answers `400` (`character_voices_over_limit`). Voices do not count against the 7-unit input budget.
 - **Description and policy.** The voice `description` is treated like the character `description`: it passes through the same content policies. The `preset` must be one of the ids below or the request answers `400` (`validation_error`).
 - **A failed voice creation fails the run** — it never falls back to an unvoiced character — and credits are refunded like any failed generation. A voice adds **no credit charge**.
 - **MCP.** The `generate_video` tool exposes the preset only, as `voice_preset` on each `character_references` entry; the description and example line are API / SDK levers.
@@ -315,7 +334,7 @@ Composite credit identifier: `<model>:<resolution_prefix>:<duration>` — e.g. `
 | Video-edit · 720p / 1080p (flat) | 462<!-- credits: gemini-omni-flash:vref --> | 660<!-- credits: gemini-omni-video:vref --> |
 | Video-edit · 4K (flat) | 693<!-- credits: gemini-omni-flash:4k:vref --> | 990<!-- credits: gemini-omni-video:4k:vref --> |
 
-> **Free credits:** until an account buys anything, video is limited to clips of up to 4 seconds at the model's lowest resolution, and Kling and Seedance 2.5 are not available — see [Free credits](../../features/free-credits.md#video-on-free-credits).
+> **Free credits:** until an account buys anything, video is limited to clips of up to 4 seconds at the model's lowest resolution, and Kling (except Kling 4.0 Flash) and Seedance 2.5 are not available — see [Free credits](../../features/free-credits.md#video-on-free-credits).
 
 > **Note:** 4K is blocked on the free tier. Free-tier requests at 4K resolution are rejected with a `tier_restriction` error — upgrade to Basic or higher to use 4K output.
 
@@ -556,6 +575,11 @@ nearest length it does:
 | `kling-4` | 5s out | 720p | reference | + 4s reference video (billed 10s) | 468<!-- credits: kling-4:8s:720p-ref@1.25 --> |
 | `kling-4` | 10s out | 720p | reference | + 15s reference video (billed 25s) | 1170<!-- credits: kling-4:8s:720p-ref@3.125 --> |
 | `kling-4-keyframes` | 10s | 720p | keyframes | any frames | 792<!-- credits: kling-4-keyframes:10s:720p --> |
+| `kling-4-flash` | 3s | 720p | any | no ref video | 143<!-- credits: kling-4-flash:3s:720p --> |
+| `kling-4-flash` | 5s | 720p (default) | any | no ref video | 242<!-- credits: kling-4-flash:5s:720p --> |
+| `kling-4-flash` | 20s | 720p | any | no ref video | 935<!-- credits: kling-4-flash:20s:720p --> |
+| `kling-4-flash` | 5s out | 720p | reference | + 4s reference video (billed 10s) | 317<!-- credits: kling-4-flash:8s:720p-ref@1.25 --> |
+| `kling-4-flash` | 10s out | 720p | reference | + 15s reference video (billed 25s) | 791<!-- credits: kling-4-flash:8s:720p-ref@3.125 --> |
 | `gemini-omni-flash` | 8s | 720p | any | no ref | 297<!-- credits: gemini-omni-flash:8 --> |
 | `gemini-omni-flash` | 10s | 4K | any | no ref | 583<!-- credits: gemini-omni-flash:4k:10 --> |
 | `gemini-omni-flash` | — | 720p | video-edit | 1 source video | 462<!-- credits: gemini-omni-flash:vref --> |
@@ -631,6 +655,8 @@ Examples — 5s: 540p = 99<!-- credits: vidu-q4:5s:540p -->, 720p = 209<!-- cred
 
 **Reference videos on Kling 4.0 bill output + the longer of output and input.** A `kling-4` run with a reference video is priced per second of **billed duration = output + max(output, total reference-video seconds)** — a clip shorter than the output counts as the output's length. It is billed at the reference-video rate, the `kling-4:8s:<resolution>-ref` price ÷ 8 a second (about 47 credits a second @720p, about 70 @1080p), the whole run priced once and rounded up to a credit. Examples @720p: a 5 s output with a 4 s clip bills 5 + 5 = 10 s = **468**<!-- credits: kling-4:8s:720p-ref@1.25 -->; a 10 s output with a 15 s clip bills 10 + 15 = 25 s = **1170**<!-- credits: kling-4:8s:720p-ref@3.125 -->. As on Seedance 2, the clips are measured when the run is reserved (a clip that cannot be measured counts as 30 s), the run reserves that worst case, and on completion it settles to the length actually delivered, refunding any difference. Unlike a Seedance edit, Kling 4.0 always renders the requested length, so a reference clip never lengthens the output. Reference images, characters and voice clips without a video stay on the plain per-second ladder above.
 
+**Kling 4.0 Flash** (`kling-4-flash`) is per-second priced via `kling-4-flash:<N>s:720p` (N = 3–20) — one price per second of length, the same whether the run takes its start-frame endpoint or its reference endpoint. Audio is always on and included, and reference images, characters, voice clips and the start frame add nothing. Examples: 3s = 143<!-- credits: kling-4-flash:3s:720p -->, 5s = 242<!-- credits: kling-4-flash:5s:720p -->, 10s = 473<!-- credits: kling-4-flash:10s:720p -->, 20s = 935<!-- credits: kling-4-flash:20s:720p -->. **Whatever `resolution` is sent, the run renders *and* bills at 720p, and when `duration` is omitted it renders and bills 5s** — so the bare identifier `kling-4-flash` (242<!-- credits: kling-4-flash -->) is the 5s default. A run with a reference video bills **output + max(output, total reference-video seconds)** at its reference rate, the `kling-4-flash:8s:720p-ref` price ÷ 8 a second, the whole run priced once and rounded up to a credit — the same rule as `kling-4`. Examples: a 5 s output with a 4 s clip bills 5 + 5 = 10 s = **317**<!-- credits: kling-4-flash:8s:720p-ref@1.25 -->; a 10 s output with a 15 s clip bills 10 + 15 = 25 s = **791**<!-- credits: kling-4-flash:8s:720p-ref@3.125 -->. The clips are measured when the run is reserved (one that cannot be measured counts as 20 s, and the clips together count at most 20 s), the run reserves that worst case, and on completion it settles to the length actually delivered, refunding any difference. Unlike the other Kling models it runs on free credits, as a 3 or 4 second clip.
+
 Every figure above is what a run is charged on Nodaro Cloud; `GET /v1/credits/model-cost?model=<composite>` returns the live price of any composite.
 
 ### Loop trim add-on
@@ -691,7 +717,7 @@ The clip and its add-on are priced as one run, so the add-on adds exactly the am
 
 ### Fallback behavior
 
-- **Provider can't voice dialogue** (`none` / `ambient` models — minimax, kling, hailuo, Gemini Omni, Wan 3.0, Vidu Q4, Kling 4.0, …): the spec is **ignored**, the clip still generates (never failed), and the response carries a non-fatal warning `{ code: "voice_unsupported_for_provider" }`. No audio add-on is charged. Clients should gate the voice UI on `videoModelCanSpeakDialogue` and confirm with the user before sending.
+- **Provider can't voice dialogue** (`none` / `ambient` models — minimax, kling, hailuo, Gemini Omni, Wan 3.0, Vidu Q4, Kling 4.0, Kling 4.0 Flash, …): the spec is **ignored**, the clip still generates (never failed), and the response carries a non-fatal warning `{ code: "voice_unsupported_for_provider" }`. No audio add-on is charged. Clients should gate the voice UI on `videoModelCanSpeakDialogue` and confirm with the user before sending.
 - **No voice resolves** (dialogue / voices empty or unparseable): the clip generates silently and the reserved audio add-on is refunded automatically (committed at the video provider cost only).
 - **A chain step fails** (TTS / revoice / generation): the whole job fails and credits are fully refunded.
 
@@ -756,7 +782,7 @@ value actually sent to the provider.**
   nearest one — a 7s LTX request renders and bills 6s.
 - **A few models ignore an unsupported resolution** and render a fixed default
   rather than the nearest band: `minimax-h3` renders 2K for anything that is not
-  `768P`, and the `wan-3` family, `vidu-q4` and both Kling 4.0 ids render 720p. For those the correction targets
+  `768P`, and the `wan-3` family, `vidu-q4` and the Kling 4.0 ids (Flash included) render 720p. For those the correction targets
   the band the provider will actually produce, so the price still matches the
   render.
 

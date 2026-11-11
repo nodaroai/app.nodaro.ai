@@ -1,4 +1,5 @@
 import {
+  SURFACE_CATALOG_IMAGES,
   surfaceRequiresSignIn,
   worldAllowed,
   type SurfaceCatalogImages,
@@ -279,9 +280,15 @@ export function surfaceLinkImportsAllowed(): boolean {
   return runtimeSurfaceProfile().imports?.links !== false
 }
 
-/** Pictures on picker options: the platform's, none, or the deployment's own. */
+/**
+ * Pictures on picker options: the platform's, none, or the deployment's own.
+ * A value this build does not know reads as "none": a reader older than its
+ * platform must not show more. Read once, by look-previews-bootstrap.ts.
+ */
 export function surfaceCatalogImages(): SurfaceCatalogImages {
-  return runtimeSurfaceProfile().catalogs?.images ?? "default"
+  const images: unknown = runtimeSurfaceProfile().catalogs?.images
+  if (images === undefined) return "default"
+  return (SURFACE_CATALOG_IMAGES as readonly unknown[]).includes(images) ? (images as SurfaceCatalogImages) : "none"
 }
 
 /** The languages a visitor may pick from; undefined = every language the product ships. */

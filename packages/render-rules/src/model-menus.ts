@@ -52,6 +52,7 @@ export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string
   { value: "seedream-5-lite", label: "Seedream 5 Lite", desc: "Latest Seedream, fast and sharp" },
   { value: "seedream-5-pro", label: "Seedream 5 Pro", desc: "Flagship Seedream, best instruction following" },
   { value: "seedream-5-flash", label: "Seedream 5 Flash", desc: "Fast, low-cost Seedream at 1K or 2K" },
+  { value: "minimax-h3-image", label: "MiniMax H3 Image", desc: "Readable text in the picture, up to 4K, same price at 1K and 2K" },
   { value: "z-image", label: "Z-Image", desc: "Fast, lightweight generation" },
   { value: "wan-2.7",     label: "Wan 2.7",     desc: "T2I, 1K/2K/4K, up to 9 ref images" },
   { value: "wan-2.7-pro", label: "Wan 2.7 Pro", desc: "Higher quality T2I, 1K/2K/4K" },
@@ -85,6 +86,7 @@ export const IMAGE_I2I_MODELS: readonly { value: ImageI2IProvider; label: string
   { value: "seedream-5-lite-i2i", label: "Seedream 5 Lite", desc: "Latest Seedream image-to-image" },
   { value: "seedream-5-pro-i2i", label: "Seedream 5 Pro", desc: "Pro Seedream image-to-image, multi-reference edits" },
   { value: "seedream-5-flash-i2i", label: "Seedream 5 Flash", desc: "Fast, low-cost Seedream edits, up to 10 input images" },
+  { value: "minimax-h3-image-i2i", label: "MiniMax H3 Image", desc: "Up to 16 reference images in one edit, readable text, up to 4K" },
   { value: "seedream-edit", label: "Seedream Edit", desc: "Photorealistic image editing" },
   { value: "kontext-multi", label: "Kontext Multi (Open)", desc: "Multi-image Flux Kontext via Replicate — up to 4 refs" },
   { value: "flux-2-pro", label: "Flux 2 Pro (Safety Tolerance)", desc: "BFL Flux 2 Pro via Replicate — flagship quality" },
@@ -143,6 +145,7 @@ export const VIDEO_I2V_MODELS = [
   { value: "vidu-q4", label: "Vidu Q4", desc: "ShengShu Vidu Q4, 3–16s, 540p–4K, native audio, start frame or 15 image + 3 MP3 audio refs" },
   { value: "kling-4", label: "Kling 4.0", desc: "Kuaishou Kling 4.0, 3–30s, 720p/1080p, native audio, image/video/character/voice refs" },
   { value: "kling-4-keyframes", label: "Kling 4.0 Keyframes", desc: "Kuaishou Kling 4.0, 3–30s, start + up to 8 in-between + end frames, native audio" },
+  { value: "kling-4-flash", label: "Kling 4.0 Flash", desc: "Kuaishou Kling 4.0 Flash, 3–20s, 720p, native audio, start frame or image/video/character refs, voice per character" },
   { value: "gemini-omni-flash", label: "Gemini Omni Flash", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
   { value: "gemini-omni-flash-1-2", label: "Gemini Omni Flash 1.2", desc: "Google, 3–15s, 360p to 4K, native audio, refs + video-edit" },
 ]
@@ -178,6 +181,7 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "vidu-q4", label: "Vidu Q4", desc: "ShengShu Vidu Q4, 3–16s, 540p–4K, native audio (image required)" },
   { value: "kling-4", label: "Kling 4.0", desc: "Kuaishou Kling 4.0, 3–30s, 720p/1080p, native audio, image/video/character/voice refs" },
   { value: "kling-4-keyframes", label: "Kling 4.0 Keyframes", desc: "Kuaishou Kling 4.0, 3–30s, start + up to 8 in-between + end frames, native audio" },
+  { value: "kling-4-flash", label: "Kling 4.0 Flash", desc: "Kuaishou Kling 4.0 Flash, 3–20s, 720p, native audio, start frame or image/video/character refs, voice per character" },
   { value: "gemini-omni-flash", label: "Gemini Omni Flash", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
   { value: "gemini-omni-flash-1-2", label: "Gemini Omni Flash 1.2", desc: "Google, 3–15s, 360p to 4K, native audio, refs + video-edit" },
 ]
@@ -249,11 +253,13 @@ export const VIDEO_V2V_MODELS: readonly { value: VideoToVideoNodeProvider; label
   { value: "wan-flash", label: "Wan 2.6 Flash", desc: "Fast V2V with audio & multi-shot" },
 ]
 
+/** Seedance first, one row per model (decided 2026-11-11); a new Extend node still starts on VEO (`EXTEND_VIDEO_DEFAULT_PROVIDER`). */
 export const EXTEND_VIDEO_MODELS = [
-  { value: "runway-extend", label: "Runway Extend" },
+  { value: "seedance-2-5-extend", label: "Seedance 2.5" },
+  { value: "seedance-2-0-extend", label: "Seedance 2.0" },
   { value: "veo-extend", label: "VEO Extend" },
+  { value: "runway-extend", label: "Runway Extend" },
   { value: "ltx-2.3-pro", label: "LTX 2.3 Pro" },
-  { value: "seedance-2-extend", label: "Seedance 2 Extend" },
 ] as const
 
 export const LIP_SYNC_MODELS: readonly { value: LipSyncProvider; label: string; desc: string }[] = [

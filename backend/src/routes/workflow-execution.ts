@@ -60,7 +60,8 @@ import { migrateLegacyNodeType } from "../services/workflow-engine/normalize-nod
 import { accessAtLeast, canRunWorkflow, workflowAccessFromRow } from "../lib/workflow-access.js"
 import { toAccessRow } from "../lib/workflow-route-access.js"
 import { limitedKeyWorkflows, refuseLimitedKey } from "../middleware/token-workflow-scope.js"
-import { nodeStatesProviderWords } from "../lib/provider-words.js"
+import { nodeStatesCarryProviderWords, providerWordsShown, runStatesNeedReaderRelation, runStatesProviderWords, type ProviderWordsReader } from "../lib/provider-words.js"
+import { readerCanOpenWorkflow, runStatesReader, runWordsReadable, workflowsReaderCanOpen } from "../lib/provider-words-readers.js"
 import { deriveRenderFinalRun, isRenderFinalRefusal, parseRenderFinalBody, renderFinalCredits, type ContinuationPricing } from "../lib/render-final-run.js"
 import {
   CONTINUATION_REFUSAL_MESSAGE,
@@ -1203,8 +1204,11 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       // A run waiting for its run slot stays `pending` and says where it
       // stands (a row the lanes never stamped costs no gate read).
       const queues = await queueInfoFor(waitingRowsOf("execution", [execution]))
+      // Whether the reader can open the run's workflow, asked only when a
+      // failed node carries provider words they could be shown.
+      const reader = await runStatesReader(execution.node_states, { isAdmin, userId: req.userId, run: execution })
       return {
-        data: { ...toExecutionResponse(execution, isAdmin), ...queueField(execution.id as string, queues) },
+        data: { ...toExecutionResponse(execution, reader), ...queueField(execution.id as string, queues) },
       }
     }
 
@@ -1320,21 +1324,33 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       return reply
     }
 
-    const sse = await createSSEStream(req, reply)
+    const terminalStatuses = new Set(["completed", "failed", "cancelled", "timed_out", "discarded"])
+    const terminal = terminalStatuses.has(execution.status as string)
+    // Whether the reader may read the run's words by the run rule
+    // (runWordsReadable: they can open the run's workflow, or own a run that
+    // names none) — the provider's words on its states (lib/provider-words.ts) — looked up once
+    // for the whole stream, beside opening it so no event waits on it. Only for
+    // a reader who is not an admin, where the deployment lets such a reader
+    // read the words, and only while the run can still carry them.
+    const needsRelation = !isAdmin && providerWordsShown(false) && (!terminal || nodeStatesCarryProviderWords(execution.node_states))
+    const [sse, canRead] = await Promise.all([
+      createSSEStream(req, reply),
+      needsRelation ? runWordsReadable(req.userId, execution) : Promise.resolve(true),
+    ])
+    const reader: ProviderWordsReader = { isAdmin, canRead }
 
     // Send current DB state as initial metadata so late-connecting clients
     // never miss state that was written before the SSE connection opened.
     sse.sendEvent({
       type: "metadata",
-      data: toExecutionResponse(execution, isAdmin) as unknown as Record<string, unknown>,
+      data: toExecutionResponse(execution, reader) as unknown as Record<string, unknown>,
     })
 
     // If already terminal, send done immediately and close
-    const terminalStatuses = new Set(["completed", "failed", "cancelled", "timed_out", "discarded"])
-    if (terminalStatuses.has(execution.status as string)) {
+    if (terminal) {
       sse.sendEvent({
         type: "done",
-        data: toExecutionResponse(execution, isAdmin) as unknown as Record<string, unknown>,
+        data: toExecutionResponse(execution, reader) as unknown as Record<string, unknown>,
       })
       sse.close()
       return reply
@@ -1355,9 +1371,9 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         data: {
           eventType: event.type,
           // The live states as this reader may read them: a failed node's
-          // provider words withheld from a non-admin where the deployment keeps
-          // them for its admins (lib/provider-words.ts).
-          nodeStates: nodeStatesProviderWords(event.nodeStates, isAdmin),
+          // provider words only for a reader who can open the run's workflow
+          // (or an admin), where the deployment lets them (lib/provider-words.ts).
+          nodeStates: runStatesProviderWords(event.nodeStates, reader),
           completedNodes: event.completedNodes,
           failedNodes: event.failedNodes,
           totalNodes: event.totalNodes,
@@ -1724,7 +1740,13 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
 
     // Merge both sources, sort by created_at desc, take limit + 1
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
-    const execRows = (execResult.data ?? []).map((row) => toExecutionSummary(row, isAdmin))
+    // The reader's runs of this one workflow: whether they can open it is asked
+    // once, and only when a failed node carries provider words they could be shown.
+    const execData = execResult.data ?? []
+    const canRead = execData.some((row) => runStatesNeedReaderRelation(row.node_states, isAdmin))
+      ? await readerCanOpenWorkflow(req.userId, workflowId)
+      : true
+    const execRows = execData.map((row) => toExecutionSummary(row, { isAdmin, canRead }))
     // Each standalone job as a run (its steps' charges included), in one read per table.
     const jobCredits = await runCreditsFor(jobsResult.data ?? [], req.userId)
     const jobRows = (jobsResult.data ?? []).map((row) => jobToExecutionSummary(row, isAdmin, jobCredits))
@@ -1869,7 +1891,17 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // role every job read takes: it decides whether the runs' states carry the
     // provider's words (lib/provider-words.ts).
     const readerIsAdmin = isAdminViewAll || req.userRole === "admin" || req.userRole === "super_admin"
-    const execRows = (execResult.data ?? []).map((row) => ({ ...toExecutionSummary(row, readerIsAdmin), workflowId: row.workflow_id, userId: row.user_id, _source: "exec" as const }))
+    // Which of the runs' workflows the reader can open, each asked once, and
+    // only for a run whose failed node carries provider words they could be shown.
+    const execData = execResult.data ?? []
+    const relationNeeded = (row: Record<string, unknown>) => runStatesNeedReaderRelation(row.node_states, readerIsAdmin)
+    const openable = await workflowsReaderCanOpen(req.userId, execData.filter(relationNeeded).map((row) => row.workflow_id))
+    const execRows = execData.map((row) => ({
+      ...toExecutionSummary(row, { isAdmin: readerIsAdmin, canRead: !relationNeeded(row) || openable.has(row.workflow_id as string) }),
+      workflowId: row.workflow_id,
+      userId: row.user_id,
+      _source: "exec" as const,
+    }))
     // Each standalone job as a run (its steps' charges included), in one read per table.
     const jobCredits = await runCreditsFor(jobsResult.data ?? [], [...new Set((jobsResult.data ?? []).map((row) => row.user_id as string))])
     const jobRows = (jobsResult.data ?? []).map((row) => ({ ...jobToExecutionSummary(row, isAdminViewAll, jobCredits), workflowId: row.workflow_id, userId: row.user_id, _source: "job" as const }))
@@ -1984,11 +2016,11 @@ function executionRetryOf(row: Record<string, unknown>): { attempt: number; maxA
 
 /**
  * A run as its reader reads it (GET /v1/workflow-executions/:id and the
- * stream's snapshots). `isAdmin` is the reader's: a failed node's provider
- * words (`errorDetail`) are withheld from a non-admin where the deployment
- * keeps them for its admins (lib/provider-words.ts).
+ * stream's snapshots). A failed node's provider words (`errorDetail`) are the
+ * reader's only when `reader` says so (lib/provider-words.ts): an admin, or a
+ * reader who can open the run's workflow, where the deployment lets them.
  */
-function toExecutionResponse(row: Record<string, unknown>, isAdmin: boolean) {
+function toExecutionResponse(row: Record<string, unknown>, reader: ProviderWordsReader) {
   const retry = executionRetryOf(row)
   return {
     id: row.id,
@@ -2005,7 +2037,7 @@ function toExecutionResponse(row: Record<string, unknown>, isAdmin: boolean) {
     // consumer (verified across frontend/backend), so it's omitted here to
     // trim the hot-path detail/poll response. The per-node `inputs` blobs are
     // also stripped — pollers read `node_states[].output`, never `inputs`.
-    nodeStates: nodeStatesProviderWords(stripNodeStateInputs(row.node_states), isAdmin),
+    nodeStates: runStatesProviderWords(stripNodeStateInputs(row.node_states), reader),
     // What a continue-from-failed of this run sent no nodeIds considers,
     // besides what it left unfinished (lib/continue-from-failed-lineage.ts):
     // the editor predicts the server's set by it. null: every node.
@@ -2024,10 +2056,10 @@ function toExecutionResponse(row: Record<string, unknown>, isAdmin: boolean) {
 
 /**
  * A run as a list row (GET /v1/workflows/:id/executions, GET /v1/executions).
- * `isAdmin` is the reader's, as on `toExecutionResponse`; absent reads as a
- * non-admin (the side that withholds the provider's words).
+ * `reader` as on `toExecutionResponse`; absent reads as a reader who may not
+ * read the provider's words (the side that withholds them).
  */
-export function toExecutionSummary(row: Record<string, unknown>, isAdmin = false) {
+export function toExecutionSummary(row: Record<string, unknown>, reader: ProviderWordsReader = { isAdmin: false, canRead: false }) {
   const retry = executionRetryOf(row)
   return {
     id: row.id,
@@ -2042,7 +2074,7 @@ export function toExecutionSummary(row: Record<string, unknown>, isAdmin = false
     // modal render status/type/timing/error/output, never `inputs`, so this
     // trims the paginated (and polled) list payload without changing the UI.
     // Full node_states (incl. inputs) remain on GET /v1/workflow-executions/:id.
-    nodeStates: nodeStatesProviderWords(stripNodeStateInputs(row.node_states), isAdmin),
+    nodeStates: runStatesProviderWords(stripNodeStateInputs(row.node_states), reader),
     totalNodes: row.total_nodes,
     completedNodes: row.completed_nodes,
     failedNodes: row.failed_nodes,

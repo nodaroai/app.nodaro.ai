@@ -1,12 +1,18 @@
 /**
  * Extend Video Route
  *
- * Extends a VEO or Runway video with a new prompt.
- * Requires the original KIE taskId from the upstream video generation job.
+ * Continues a video with a new prompt.
  *
  * Providers:
- * - veo-extend: VEO 3.1 extend (POST /api/v1/veo/extend)
- * - runway-extend: Runway extend (POST /api/v1/runway/extend)
+ * - veo-extend: VEO 3.1 extend (POST /api/v1/veo/extend) — needs the source
+ *   generation's KIE taskId
+ * - runway-extend: Runway extend (POST /api/v1/runway/extend) — likewise
+ * - ltx-2.3-pro: LTX 2.3 Pro extend, from a video URL
+ * - seedance-2-5-extend / seedance-2-0-extend: Seedance 2.5 / Seedance 2.0,
+ *   from a video URL — the tail recipe (lib/extend-recipe.ts): the source's
+ *   last seconds as the `@video_1` reference, then a stitch. The earlier id
+ *   `seedance-2-extend` is retired: the app-wide hook
+ *   (middleware/retired-video-provider.ts) runs it as `seedance-2-5-extend`.
  */
 
 import type { FastifyInstance } from "fastify"
@@ -22,25 +28,39 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
-import { EXTEND_VIDEO_PROVIDERS, PROMPT_HARD_CEILING, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, applyVideoNegativePrompt } from "@nodaro/shared/models"
-import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec } from "@nodaro/shared/credits"
+import {
+  EXTEND_VIDEO_PROVIDERS,
+  PROMPT_HARD_CEILING,
+  SEEDANCE_2_REF_LIMITS,
+  SEEDANCE_2_5_REF_LIMITS,
+  applyVideoNegativePrompt,
+  canonicalVideoProvider,
+  isSeedanceExtendProvider,
+} from "@nodaro/shared/models"
+import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, seedanceExtendCreditId } from "@nodaro/shared/credits"
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
-import { buildSeedanceExtendCreditIdentifier } from "../lib/seedance-extend-model.js"
+import { extendSourceTooShortMessage, isTailRecipeProvider, tailRecipeSeconds, TAIL_RECIPES } from "../lib/extend-recipe.js"
+import { EXTEND_DURATION_MAX_SEC, EXTEND_DURATION_SECONDS, describeSeconds } from "../lib/extend-durations.js"
 import { ltxExtendBaseCredits } from "../lib/ltx-extend-credits.js"
+import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
 import { assembleVideoConnectedReferences } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
+/** The providers that take reference images (Seedance's i2v transport has a native `reference_image_urls`). */
+const REFERENCE_IMAGE_PROVIDERS = EXTEND_VIDEO_PROVIDERS.filter(isSeedanceExtendProvider)
+
 // veo-extend and runway-extend continue an upstream generation and need its
-// provider task id; LTX 2.3 Pro takes a raw videoUrl. Both fields are optional
-// at the schema level and conditionally required inside the handler so each
-// provider's required input set is enforced precisely.
+// provider task id; LTX 2.3 Pro and Seedance take a raw videoUrl. Both fields
+// are optional at the schema level and required per provider by
+// `extendRequestProblem`, so each provider's required input set is enforced
+// precisely.
 export const extendVideoBody = z.object({
   taskId: z.string().min(1).optional(),    // Required for veo-extend / runway-extend (the job output's providerTaskId)
   kieTaskId: z.string().min(1).optional(), // Deprecated alias of taskId, still accepted
-  videoUrl: safeUrlSchema.optional(),       // Required for ltx-2.3-pro
-  prompt: z.string().min(1).max(PROMPT_HARD_CEILING).optional(),    // Required for veo-extend / runway-extend; optional for LTX
+  videoUrl: safeUrlSchema.optional(),       // Required for ltx-2.3-pro and the Seedance providers
+  prompt: z.string().min(1).max(PROMPT_HARD_CEILING).optional(),    // Required for every provider but LTX
   negativePrompt: z.string().max(PROMPT_HARD_CEILING).optional(), // Always optional — injected into prompt as "Avoid: …" for non-native providers
   userPrompt: z.string().max(PROMPT_HARD_CEILING).optional(),
   provider: z.enum(EXTEND_VIDEO_PROVIDERS),
@@ -48,12 +68,14 @@ export const extendVideoBody = z.object({
   seeds: z.number().int().min(10000).max(99999).optional(), // VEO only
   quality: z.enum(["720p", "1080p"]).optional(), // Runway only
   extendMode: z.enum(["start", "end"]).optional(), // LTX 2.3 Pro only
-  duration: z.number().int().min(1).max(20).optional(), // Seconds to add — LTX 1-20; seedance-2-extend snaps to 4-15 in the worker
-  resolution: z.enum(["480p", "720p", "1080p"]).optional(), // seedance-2-extend only
-  generateAudio: z.boolean().optional(), // seedance-2-extend only (default true)
-  // Reference images for the extension (seedance-2-extend only — the other
-  // extend transports have no reference path, and a ref they'd silently drop
-  // is refused with a 400 instead). Wire ceiling mirrors generate-video (the
+  // Seconds to add, one of the provider's own (`EXTEND_DURATION_SECONDS`):
+  // Seedance 2.5 4–30, Seedance 2.0 4–15, LTX / VEO / Runway 1–20.
+  duration: z.number().int().min(1).max(EXTEND_DURATION_MAX_SEC).optional(),
+  resolution: z.enum(["480p", "720p", "1080p"]).optional(), // Seedance only
+  generateAudio: z.boolean().optional(), // Seedance only (default true)
+  // Reference images for the extension (Seedance only — the other extend
+  // transports have no reference path, and a ref they'd silently drop is
+  // refused with a 400 instead). Wire ceiling mirrors generate-video (the
   // widest provider's cap); the actual budget is enforced at assembly.
   referenceImageUrls: z.array(safeUrlSchema).max(SEEDANCE_2_5_REF_LIMITS.images).optional(),
   // Structured references (parity with generate-video): assembled server-side
@@ -69,17 +91,16 @@ export const extendVideoBody = z.object({
 })
 
 /**
- * The model whose REFERENCE LIMITS this route's assembly caps derive from.
+ * The model whose REFERENCE LIMITS this route's assembly caps derive from,
+ * for both Seedance providers.
  *
- * Deliberately pinned to 2.0 even when SEEDANCE_EXTEND_GENERATION_MODEL
- * dispatches on Seedance 2.5: 2.0's 9/3/3 caps are a strict subset of 2.5's
- * 30/10/10, so keeping this constant leaves the assembled prompt and reference
- * list byte-identical under the lever — a widened cap would silently change
- * the prompt a user's saved node produces. The model actually DISPATCHED comes
- * from `lib/seedance-extend-model.ts`, which the worker and the credit
- * identifier both read.
+ * Deliberately Seedance 2.0's, on Seedance 2.5 too: 2.0's 9/3/3 caps are a
+ * strict subset of 2.5's 30/10/10, so the assembled prompt and reference list
+ * are the same whichever provider runs — a widened cap would silently change
+ * the prompt a user's saved node produces. The model a run GENERATES on is its
+ * provider's (`TAIL_RECIPES[provider].genModel`).
  */
-export const SEEDANCE_2_EXTEND_GENERATION_MODEL = "seedance-2"
+const EXTEND_REFERENCE_CAPS_MODEL = "seedance-2"
 
 /**
  * Image-reference slots the extend transport consumes on its own: the source's
@@ -105,7 +126,7 @@ export function assembleExtendVideoReferences(args: {
 }): { prompt: string | undefined; referenceImageUrls: string[] | undefined } {
   return assembleVideoConnectedReferences({
     prompt: args.prompt,
-    provider: SEEDANCE_2_EXTEND_GENERATION_MODEL,
+    provider: EXTEND_REFERENCE_CAPS_MODEL,
     connectedReferences: args.connectedReferences ?? [],
     ...(args.describedReferences !== undefined ? { describedReferences: args.describedReferences } : {}),
     baseReferenceImageUrls: args.referenceImageUrls,
@@ -119,10 +140,14 @@ export function assembleExtendVideoReferences(args: {
 // downstream credit reservation. Keeping these in sync is critical — a
 // divergence would charge the preHandler's price but reserve at a different
 // price, which can let under-funded users through or over-charge paying ones.
-// Exported so the lever's three producers (here, the workflow payload builder,
-// the workflow estimate) can be asserted equal in one test.
+// Exported so the three producers of a Seedance extend's id (here, the
+// workflow payload builder, the workflow estimate) can be asserted equal in
+// one test.
 export function resolveExtendVideoIdentifier(body: Record<string, unknown> | undefined): string {
-  const provider = (body?.provider as string) ?? "veo-extend"
+  // A retired id is priced as the provider it runs as. A request's was already
+  // rewritten by the app-wide hook; a direct caller gets the same answer
+  // rather than the retired id's own (Seedance 2.0) price row.
+  const provider = canonicalVideoProvider(typeof body?.provider === "string" ? body.provider : "veo-extend")
   if (provider === "veo-extend" && body?.model === "quality") {
     return "veo-extend:quality"
   }
@@ -130,17 +155,105 @@ export function resolveExtendVideoIdentifier(body: Record<string, unknown> | und
   // the guard and the workflow run multiply by the seconds
   // (ltxExtendBaseCredits).
   if (provider === "ltx-2.3-pro") return LTX_EXTEND_PER_SECOND_CREDIT_ID
-  if (provider === "seedance-2-extend") {
-    // Duration tier × resolution composites, priced for the model
-    // SEEDANCE_EXTEND_GENERATION_MODEL actually dispatches on. Same builder
-    // the workflow payload builder and the ee credits resolver use, so guard
-    // + reserve + node cost display can never diverge.
-    return buildSeedanceExtendCreditIdentifier(
-      body?.duration as number | undefined,
-      body?.resolution as string | undefined,
-    )
+  // Each Seedance provider on its own rows (per second added × resolution)
+  // — the one builder every surface prices a Seedance extend with.
+  if (isSeedanceExtendProvider(provider)) {
+    const duration = typeof body?.duration === "number" || typeof body?.duration === "string" ? body.duration : undefined
+    const resolution = typeof body?.resolution === "string" ? body.resolution : undefined
+    return seedanceExtendCreditId(provider, duration, resolution)
   }
   return provider
+}
+
+type ExtendVideoBody = z.infer<typeof extendVideoBody>
+
+/**
+ * What the schema cannot say, being the union of every provider's fields:
+ * each provider's required inputs, the seconds it can add, and whether it
+ * takes reference images. The refusal's message, or null for a valid request.
+ */
+function extendRequestProblem(data: ExtendVideoBody): string | null {
+  const { provider, videoUrl, prompt, duration } = data
+  if (provider === "ltx-2.3-pro") {
+    if (!videoUrl) return "videoUrl is required for ltx-2.3-pro"
+  } else if (isTailRecipeProvider(provider)) {
+    // URL-based like LTX, but the continuation CONTENT is required — the
+    // recipe wraps it in its prompt ("extend @video_1 as follows: …"); an
+    // empty continuation has nothing to say.
+    if (!videoUrl) return `videoUrl is required for ${provider}`
+    if (!prompt) return `prompt (what happens next) is required for ${provider}`
+  } else {
+    // veo-extend, runway-extend — KIE-based, require the task id from
+    // upstream + a prompt.
+    if (!(data.taskId ?? data.kieTaskId)) return `taskId (the source generation's providerTaskId) is required for ${provider}`
+    if (!prompt) return "prompt is required for KIE-based extend providers"
+  }
+  const offered = EXTEND_DURATION_SECONDS[provider]
+  if (duration !== undefined && !offered.includes(duration)) {
+    return `duration must be ${describeSeconds(offered)} for ${provider}`
+  }
+  // Reference images ride ONLY the Seedance transport (i2v with a native
+  // reference_image_urls array). The other extend providers have no reference
+  // path at all — refuse instead of silently dropping, so a caller learns at
+  // submit time rather than after a billed generation.
+  const hasImageRefs = (data.referenceImageUrls?.length ?? 0) > 0 || (data.connectedReferences?.length ?? 0) > 0
+  if (hasImageRefs && !isSeedanceExtendProvider(provider)) {
+    return `referenceImageUrls / connectedReferences are only supported by the Seedance extend providers (${REFERENCE_IMAGE_PROVIDERS.join(", ")})`
+  }
+  return null
+}
+
+/**
+ * A request that named a retired id (the earlier `seedance-2-extend`, run as
+ * the provider it became by the app-wide hook: `req.retiredVideoProvider`)
+ * keeps the lengths the old id took. It accepted 1–20 s and snapped a length
+ * under its 4 s floor up to it, where the providers it became refuse a length
+ * outside their window — so its length is held in the window instead
+ * (`tailRecipeSeconds`, the seconds the run is priced at and generates). A
+ * request naming a current provider keeps the refusal.
+ */
+function retiredLengthInWindow(data: ExtendVideoBody, retiredId: string | undefined): ExtendVideoBody {
+  if (retiredId === undefined || data.duration === undefined || !isTailRecipeProvider(data.provider)) return data
+  const seconds = tailRecipeSeconds(data.provider, data.duration)
+  return seconds === data.duration ? data : { ...data, duration: seconds }
+}
+
+/** {@link checkExtendSource}'s answer. */
+export type ExtendSourceCheck = { ok: true } | { ok: false; code: "video_too_short"; message: string }
+
+/**
+ * Whether a tail-recipe provider can continue `videoUrl`. The run sends the
+ * last seconds of the source's PICTURE as its `@video_1` reference, and the
+ * model refuses a reference shorter than its floor (`minSourceSec`, 1.8 s for
+ * Seedance — the floor the worker holds too, a little under the 2 s tail, so
+ * a nominal 2 s clip that probes a frame short still runs). A shorter picture
+ * is refused here — before anything is reserved — instead of failing in the
+ * worker after the reservation. The picture's length is the video stream's
+ * own (`videoDurationSeconds`: the sound can run past the last frame), the
+ * container's when the stream reports none.
+ *
+ * Best-effort, like the route's other source probes: a probe that fails (the
+ * source unreachable from here, a timeout) answers ok — `onProbeError` hears
+ * why — and the worker measures the source again before it generates. A
+ * provider with no tail, or a value that is no safe http(s) URL (the probe
+ * reads local paths too), is not probed at all.
+ */
+export async function checkExtendSource(
+  provider: string,
+  videoUrl: string,
+  onProbeError?: (err: unknown) => void,
+): Promise<ExtendSourceCheck> {
+  if (!isTailRecipeProvider(provider) || !safeUrlSchema.safeParse(videoUrl).success) return { ok: true }
+  let pictureSec: number
+  try {
+    const probe = await probeVideoSource(videoUrl)
+    pictureSec = probe.videoDurationSeconds ?? probe.durationSeconds
+  } catch (err) {
+    onProbeError?.(err)
+    return { ok: true }
+  }
+  if (pictureSec >= TAIL_RECIPES[provider].minSourceSec) return { ok: true }
+  return { ok: false, code: "video_too_short", message: extendSourceTooShortMessage(provider, pictureSec) }
 }
 
 export async function extendVideoRoutes(app: FastifyInstance) {
@@ -153,11 +266,42 @@ export async function extendVideoRoutes(app: FastifyInstance) {
   const rowPricedGuard = creditGuard((req) => resolveExtendVideoIdentifier(req.body as Record<string, unknown> | undefined))
 
   app.post("/v1/extend-video", {
+    // Everything that refuses a request is answered here, BEFORE the credit
+    // guard: the schema and each provider's own rules, then (a tail recipe)
+    // whether the source is long enough for the model to continue — so
+    // nothing is checked against a balance, probed or reserved for a request
+    // that cannot run. The source is probed only once its URL passed the schema.
     preHandler: async (req, reply) => {
-      const body = req.body as Record<string, unknown> | undefined
-      await (body?.provider === "ltx-2.3-pro" ? ltxExtendGuard : rowPricedGuard)(req, reply)
+      const parsed = extendVideoBody.safeParse(req.body)
+      if (!parsed.success) {
+        return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
+      }
+      // The snapped length replaces the body's, so the guard, the
+      // reservation, the job and the queue all read the seconds that run.
+      const data = retiredLengthInWindow(parsed.data, req.retiredVideoProvider)
+      if (data !== parsed.data) req.body = { ...(req.body as Record<string, unknown>), duration: data.duration }
+      const problem = extendRequestProblem(data)
+      if (problem) {
+        return reply.status(400).send({ error: { code: "validation_error", message: problem } })
+      }
+      const { provider, videoUrl, duration, resolution } = data
+      if (isTailRecipeProvider(provider) && videoUrl && req.userId) {
+        const source = await checkExtendSource(provider, videoUrl, (err) => {
+          req.log.warn({ err, provider }, "extend-video: source ffprobe failed; the worker measures it again")
+        })
+        if (!source.ok) return reply.status(400).send({ error: { code: source.code, message: source.message } })
+      }
+      // The free-credit video limits judge the provider the request RUNS, as
+      // an extension (no extension on free credits). Left to themselves they
+      // read the price row's name, and a row can be named for no catalog
+      // model — LTX 2.3 Pro (`ltx-2.3-pro-extend:per-second`) extends under
+      // its generation model's id — so an account that never paid would get
+      // through. Every provider is marked alike.
+      req.freeVideoRequest = { provider, duration: duration ?? null, resolution: resolution ?? null, videoSize: null, extend: true }
+      await (provider === "ltx-2.3-pro" ? ltxExtendGuard : rowPricedGuard)(req, reply)
     },
   }, async (req, reply) => {
+    // Validated in the preHandler; parsed again for its types.
     const parsed = extendVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -184,67 +328,16 @@ export async function extendVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    // Per-provider required fields. The Zod schema makes everything optional
-    // because the union is wider than any single provider; we enforce per
-    // provider here so error messages stay specific instead of asking the
-    // user to fill fields that don't apply to their provider.
-    if (provider === "ltx-2.3-pro") {
-      if (!videoUrl) {
-        return reply.status(400).send({
-          error: { code: "validation_error", message: "videoUrl is required for ltx-2.3-pro" },
-        })
-      }
-    } else if (provider === "seedance-2-extend") {
-      // URL-based like LTX, but the continuation CONTENT is required — the
-      // worker wraps it in the spike-proven bare template ("Generate the
-      // content after Video 1: …"); an empty continuation has nothing to say.
-      if (!videoUrl) {
-        return reply.status(400).send({
-          error: { code: "validation_error", message: "videoUrl is required for seedance-2-extend" },
-        })
-      }
-      if (!prompt) {
-        return reply.status(400).send({
-          error: { code: "validation_error", message: "prompt (what happens next) is required for seedance-2-extend" },
-        })
-      }
-    } else {
-      // veo-extend, runway-extend — KIE-based, require the kieTaskId from
-      // upstream + a prompt.
-      if (!kieTaskId) {
-        return reply.status(400).send({
-          error: { code: "validation_error", message: `taskId (the source generation's providerTaskId) is required for ${provider}` },
-        })
-      }
-      if (!prompt) {
-        return reply.status(400).send({
-          error: { code: "validation_error", message: "prompt is required for KIE-based extend providers" },
-        })
-      }
-    }
-
-    // Reference images ride ONLY the seedance-2-extend transport (i2v with a
-    // native reference_image_urls array). The other extend providers have no
-    // reference path at all — refuse instead of silently dropping, so a
-    // caller learns at submit time rather than after a billed generation.
     const hasImageRefs =
       (parsed.data.referenceImageUrls?.length ?? 0) > 0 ||
       (parsed.data.connectedReferences?.length ?? 0) > 0
-    if (hasImageRefs && provider !== "seedance-2-extend") {
-      return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: "referenceImageUrls / connectedReferences are only supported by the seedance-2-extend provider",
-        },
-      })
-    }
 
     // Assembly (seedance only) rewrites the prompt — {image:N} tokens resolve,
     // entity chips gain identity directives — and produces the final capped
     // reference list. It must run BEFORE the negative injection so the
     // "Avoid: …" clause stays the prompt's last line.
     // Described references have no url, so they are NOT part of `hasImageRefs`
-    // (which gates the transport refusal above) — but they still need assembling
+    // (which gates the transport refusal, `extendRequestProblem`) — but they still need assembling
     // or the names they describe would reach the model undescribed.
     const hasDescribedRefs = (parsed.data.describedReferences?.length ?? 0) > 0
     const assembled = hasImageRefs || hasDescribedRefs
@@ -318,7 +411,7 @@ export async function extendVideoRoutes(app: FastifyInstance) {
             extend_mode: extendMode ?? "end",
             usageLogId,
           }
-        : provider === "seedance-2-extend"
+        : isTailRecipeProvider(provider)
         ? {
             jobId: job.id,
             provider,
@@ -327,7 +420,9 @@ export async function extendVideoRoutes(app: FastifyInstance) {
             // the seedance-correct constraint placement (no native param) —
             // plus the assembled reference directives when refs are present.
             prompt: effectivePrompt,
-            duration,
+            // The seconds the guard priced (the provider's 8 s default when
+            // none was given), in its window: what the worker generates.
+            duration: tailRecipeSeconds(provider, duration),
             resolution: parsed.data.resolution,
             generateAudio: parsed.data.generateAudio,
             // Assembled + anchor-budgeted user refs; the worker forwards them

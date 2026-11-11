@@ -494,6 +494,44 @@ Source: KIE Kling 4.0 market contracts (docs.kie.ai/market/kling/v4-reference-to
 docs.kie.ai/market/kling/v4-keyframe-to-video), live-probed 2026-10-23.`,
 }
 
+// Kling 4.0 Flash — one id over KIE's two Flash endpoints, picked by what is
+// wired (a start frame alone → keyframe endpoint; anything else → reference
+// endpoint). KIE contract facts plus the platform-standard structure, as for
+// Kling 4.0. The provider runner names subjects (`@Name`), binds each voice
+// clip to a subject, and drops the `@` from any undeclared mention.
+const KLING_4_FLASH_DOCTRINE: ProviderPromptDoctrine = {
+  providers: ["kling-4-flash"],
+  heading: "Kling 4.0 Flash (kling-4-flash)",
+  tips: [
+    "A start frame alone is the exact opening frame (@first_frame). Beside references it joins the reference images, like kling-4.",
+    "References: up to 10 images, 5 videos (2-20s together) and 7 characters (15 in all). Name each: @image_1, @video_1, a character's @Name.",
+    "No standalone voice: voice clip N is the voice of wired character N, if that character has 2-4 images (else the clip is dropped); write the character, never @audio_N.",
+    "3-20s (default 5), 720p only, native audio always on, no end frame. Prompt cap 8,000 chars. Aspect auto / 16:9 / 9:16 / 1:1 / 21:9 (a start frame alone sets its own shape).",
+  ],
+  doctrine: `Prompt structure (no public Kling 4.0 Flash prompt guide is captured — the KIE API contract is
+the doctrine source; platform-standard structure applies):
+subject → action → scene/environment → lighting → camera movement → style → constraints.
+
+**One model, two endpoints (picked by what is connected)**
+- A start frame with nothing else — no reference image, no reference video, no character — runs keyframe-to-video: the frame is the exact opening frame and the clip takes its shape. Name it @first_frame.
+- Anything else — text only, reference images, reference videos, characters, or a start frame beside any of them — runs reference-to-video. A start frame there joins the reference images and is named as the opening frame, as on kling-4.
+
+**Naming materials in the prompt**
+- @image_1 … for reference images, @video_1 … for reference videos, a character by its own name (@Maya). Kling refuses a prompt that names a material the request does not carry; the platform removes the "@" from such a mention so the run still starts.
+- There are no standalone voices. Reference audio clip N becomes the voice of character N, in the order the characters are wired. A character needs 2-4 images to carry a voice: a clip whose character has one image, and any clip past the last character, is dropped (the run still starts). Write who speaks by the character's name ("@Maya says…"), never @audio_1.
+
+**Limits**
+- Reference images 10, reference videos 5, characters 7 — 15 in all. Reference videos together must be 2-20 seconds; a longer set is refused before the run starts.
+- No end frame and no in-between frames: describe how the shot ends in words.
+
+**Duration, resolution, audio**
+- 3-20 seconds (default 5); 720p only; aspect auto (follows the materials, 16:9 with none) / 16:9 / 9:16 / 1:1 / 21:9. Prompts up to 8,000 characters.
+- Native audio is always generated; keep-original-sound keeps a reference video's own audio. Not yet verified for scripted lines here, so plan key dialogue as a TTS + lip-sync pass.
+
+Source: KIE Kling 4.0 Flash market contracts (docs.kie.ai/market/kling/v4-flash-reference-to-video,
+docs.kie.ai/market/kling/v4-flash-keyframe-to-video), read 2026-11-11.`,
+}
+
 const HAPPYHORSE_DOCTRINE: ProviderPromptDoctrine = {
   providers: ["happyhorse", "happyhorse-i2v", "happyhorse-ref2v", "happyhorse-edit"],
   heading: "HappyHorse 1.1 (happyhorse, happyhorse-i2v, happyhorse-ref2v)",
@@ -555,6 +593,7 @@ export const PROVIDER_PROMPT_DOCTRINES: readonly ProviderPromptDoctrine[] = [
   WAN_3_DOCTRINE,
   VIDU_Q4_DOCTRINE,
   KLING_4_DOCTRINE,
+  KLING_4_FLASH_DOCTRINE,
   HAPPYHORSE_DOCTRINE,
   RUNWAY_KIE_DOCTRINE,
 ]

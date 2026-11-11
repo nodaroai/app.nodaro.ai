@@ -62,7 +62,7 @@ Generate a token at `https://app.nodaro.ai/settings/api`, then save it locally:
 nodaro auth login                                   # interactive (opens a browser by default; use --no-browser to paste a token)
 nodaro auth login --token "$NODARO_TOKEN"           # non-interactive
 nodaro auth login --no-browser                      # skip browser flow, paste token instead
-nodaro auth login --profile staging --base-url https://next.nodaro.ai
+nodaro auth login --profile staging --base-url https://next.app.nodaro.ai
 ```
 
 The token is stored at `~/.config/nodaro/config.json` with `chmod 0600`. Override the location with `NODARO_CONFIG_DIR`.
@@ -78,7 +78,7 @@ Switch between staging / prod / local instances with `--profile`:
 
 ```bash
 nodaro auth login --profile prod    --base-url https://app.nodaro.ai
-nodaro auth login --profile staging --base-url https://next.nodaro.ai
+nodaro auth login --profile staging --base-url https://next.app.nodaro.ai
 nodaro auth login --profile local   --base-url http://localhost:8000
 
 nodaro projects list --profile staging
@@ -183,8 +183,8 @@ nodaro nodes run generate-image --param prompt="…" [--count 1-4] [--models <id
 
 # Models — browse the model catalog (makers, capability sheets, credit pricing, prompt tips)
 nodaro models list [--kind image|video|audio] [--mode t2v|i2v|t2i|tts|…] [--family <vendor>] [--featured] [--json]
-#   table shows id, kind, family, maker (the company that made the model), modes, credit tiers, featured ★ and the doctrine ✓ flag
-#   --json for the full sheets, incl. each model's maker { id, name } and the maker's logoUrl (null when the instance publishes no mark)
+#   table shows id, kind, family, maker (the company that made the model; "-" for a model offered under the instance's own label), modes, credit tiers, featured ★ and the doctrine ✓ flag
+#   --json for the full sheets, incl. each model's maker { id, name } (absent on an own-label model) and the maker's logoUrl (null when the instance publishes no mark)
 nodaro models cost <id…> [--json]                       # what each identifier is charged (POST /v1/credits/model-costs)
 #   an id is a model id, a credit id, or a metered LLM price key <feature>:<model>[:direct] (llmPriceKey)
 #   a metered LLM call is charged for the tokens it uses, so its figure is an estimate and prints as ≈N;

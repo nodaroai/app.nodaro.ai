@@ -18,7 +18,7 @@ vi.mock("../../ee/lib/free-video-limits-for.js", () => ({
 
 import { DEFAULT_VIDEO_PROVIDER } from "@nodaro/shared/models"
 import { LLM_FEATURE_DEFAULTS } from "@nodaro/shared/llm-models"
-import { NODE_MODEL_LEVERS, VIDEO_GEN_MODELS, freeVideoModelLock, nodeModelLevers } from "@nodaro/render-rules"
+import { EXTEND_VIDEO_DEFAULT_PROVIDER, EXTEND_VIDEO_MODELS, NODE_MODEL_LEVERS, VIDEO_GEN_MODELS, freeVideoModelLock, nodeModelLevers } from "@nodaro/render-rules"
 import { describeServerNodeModelMoves, withOfferedServerNodeModels } from "../new-node-models.js"
 import { __resetSurfaceProfileCacheForTests } from "../surface-profile.js"
 import { __availabilityUniverseReadyForTests, __resetAvailabilityOverridesForTests } from "../availability-override.js"
@@ -122,6 +122,21 @@ describe("withOfferedServerNodeModels", () => {
     withholding([DEFAULT_VIDEO_PROVIDER, ...open])
     const out = await withOfferedServerNodeModels([{ id: "v", type: "generate-video", data: {} }], { userId: "u1" })
     expect(out.moved[0]!.to).toBe(videoRows().filter((v) => v !== DEFAULT_VIDEO_PROVIDER && !open.includes(v))[0])
+  })
+
+  it("an Extend Video node is judged as an extension: no row is runnable on free credits, LTX 2.3 Pro included", async () => {
+    // A free clip may be 10 s here, so LTX's generation model (shortest clip 6 s) is open on its own.
+    const ROOMY = { enabled: true, maxSeconds: 10 }
+    limits.current = ROOMY
+    const offered = EXTEND_VIDEO_MODELS.map((m) => m.value).filter((v) => v !== EXTEND_VIDEO_DEFAULT_PROVIDER)
+    // LTX 2.3 Pro extends under its generation id: judged as that model alone, it would look open.
+    expect(offered).toContain("ltx-2.3-pro")
+    expect(freeVideoModelLock("ltx-2.3-pro", ROOMY)).toBeNull()
+    withholding([EXTEND_VIDEO_DEFAULT_PROVIDER])
+    const out = await withOfferedServerNodeModels([{ id: "e", type: "extend-video", data: { prompt: "x" } }], { userId: "u1" })
+    // Every offered row is locked, so the first offered row is taken — never LTX as the "runnable" one.
+    expect(out.moved).toEqual([{ nodeId: "e", type: "extend-video", field: "provider", from: EXTEND_VIDEO_DEFAULT_PROVIDER, to: offered[0] }])
+    expect(limits.asked).toBe(1)
   })
 
   it("a lever whose menu marks no lock takes its first offered row, whatever the limits (Grok on an image node is no video model)", async () => {

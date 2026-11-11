@@ -145,6 +145,19 @@ gets `403 insufficient_scope` with `missingScope`. The public catalog
 scope. Session tokens and personal API tokens are not scope-checked. See
 [OAuth scope vocabulary](./oauth-flow.md#4-scope-vocabulary).
 
+**On a deployment that does not allow public work** (`outputs.allowPublic: false`,
+see [Deployment](./deployment.md)), the marketplaces list nothing:
+`GET /v1/apps/browse` (apps and components, `favoritesOnly=true` included) and
+`GET /v1/templates/browse` (its Favorites view included) answer
+`{ data: [], nextCursor: null }`. A template someone else listed on the
+marketplace is also not found by its page (`GET /v1/templates/:slug`) or its
+clone (`POST /v1/templates/:slug/clone`): `404 not_found`. Its creator reads
+and clones it as before, an admin still previews its page, and a template in
+the tutorial channel (`GET /v1/tutorials`, which an administrator curates) is
+read and cloned by anyone as before. Your own apps and templates stay listed by
+`GET /v1/apps/mine` and `GET /v1/templates/mine`. A published app's own page
+(`GET /v1/app/:slug`) and its runs are unchanged.
+
 ### HTTP credentials (Webhook Output)
 
 A Webhook Output node can send with a stored credential — a header name and a
@@ -431,7 +444,11 @@ a published app or component
 every sub-workflow they reach the same way, at every depth, with the
 workflow's character definitions shipped as above. A workflow read by link
 (`GET /v1/public/workflows/:id`) or copied from a shared production gives
-anyone but its owner a UGC video the same way too. Anyone the workflow itself
+anyone but its owner a UGC video the same way too. On a deployment that does
+not allow public work (`outputs.allowPublic: false`) neither is open: the read
+by link answers everyone but the workflow's signed-in owner exactly as for a
+workflow that is not shared (`404 not_found`), and a shared production cannot
+be copied by anyone it is not otherwise shared with. Anyone the workflow itself
 is shared with — a member of its workspace, or someone it is shared with
 directly — who opens it (`GET /v1/workflows/:id`), exports it
 (`GET /v1/workflows/:id/export`, MCP `export_workflow` or `get_workflow_json`)
@@ -992,17 +1009,19 @@ changed:
   the first one assembled from `connectedReferences`). Without a photo, `auto`
   on a model without a native one gives its first listed ratio, as before, and
   GPT Image 2.6 receives its own `auto`.
-- **No `aspectRatio` on a GPT Image 2, 2.5 or 2.6 edit model is `auto`.** On
-  `/v1/image-to-image`, a request to `gpt-image-2-6-flare-i2i` (the default),
-  `gpt-image-2-6-sunburst-i2i`, `gpt-image-2-6-economy-i2i`,
-  `gpt-image-2-5-flare-i2i`, `gpt-image-2-5-sunburst-i2i` or `gpt-image-2-i2i`
+- **No `aspectRatio` on a GPT Image 2, 2.5 or 2.6 edit model, or on MiniMax
+  H3 Image's, is `auto`.** On `/v1/image-to-image`, a request to
+  `gpt-image-2-6-flare-i2i` (the default), `gpt-image-2-6-sunburst-i2i`,
+  `gpt-image-2-6-economy-i2i`, `gpt-image-2-5-flare-i2i`,
+  `gpt-image-2-5-sunburst-i2i`, `gpt-image-2-i2i` or `minimax-h3-image-i2i`
   that names no ratio runs exactly as one that sends `"auto"`, instead of the
   model's 16:9 default: GPT Image 2 and 2.5 receive their own `auto`, which
-  keeps the photo's shape, and GPT Image 2.6 the ratio closest to the photo,
-  as above. The job records the ratio sent. It costs the same: these models
-  price by quality, size and the number of input images, not by ratio, and
-  render every size at `auto`. Every other model keeps its own default when no
-  ratio is named.
+  keeps the photo's shape, MiniMax H3 Image its own `auto`, which follows the
+  first image, and GPT Image 2.6 the ratio closest to the photo, as above. The
+  job records the ratio sent. It costs the same: these models price by
+  quality, size and the number of input images, not by ratio, and render every
+  size at `auto`. Every other model keeps its own default when no ratio is
+  named.
 - **`outputFormat`** (`png`, the default, `jpeg`, `webp`, `gif`, `svg`, on the
   models that list `outputFormats`) is corrected the same way, and so are the
   levers that follow it:
@@ -1079,7 +1098,7 @@ Three video-specific rules:
 
 A few models **ignore** an unsupported resolution and render a fixed default
 instead of the nearest band — `minimax-h3` renders 2K for anything that is not
-`768P`, and the `wan-3` family, `vidu-q4` and `kling-4` / `kling-4-keyframes` render 720p (all described under
+`768P`, and the `wan-3` family, `vidu-q4` and `kling-4` / `kling-4-keyframes` / `kling-4-flash` render 720p (all described under
 [Seedance 2 video capabilities](#seedance-2-video-capabilities)).
 For those the correction targets the band the provider will actually produce, so
 the price still matches the render. Each such model declares this in the catalog
@@ -1655,7 +1674,7 @@ All errors share the same shape:
 | 403 | `api_tokens_payer_only` | — | On a deployment-payer instance only the billing account may create a personal API token; every other user is refused. Existing tokens stay listable and revocable by their owner. |
 | 403 | `payer_balance_jwt_only` | — | (Deployment-payer instances only) A credit-balance read (`GET /v1/credits/balance`, `GET /v1/user/credits`, `GET /v1/credits/check`) authenticated **as the billing account** with an API token or an OAuth app token. The deployment's pool is the operator's number and is answered only to that account's own browser session — see [§3](#3-public-api-endpoints). No other identity is affected. |
 | 403 | `subscription_required` | — | (Cloud edition only) A pay-as-you-go account tried to spend from a first-party consumer surface (browser session in the studio or another Nodaro app). Payg credits are redeemable via the API/SDK/CLI/MCP — this never fires for token-authenticated calls. Rollout-gated: availability may lag this document. |
-| 403 | `node_not_available` | — | A run of a node this deployment does not offer you (it is hidden or not yet released). Every route that spends credits is checked as the node it runs, whatever its path (`POST /v1/suno/generate` as `suno-generate`; a trend run, `POST /v1/trends/:slug/runs` and `/estimate`, as `cast-swap`, Nodaro Motion). On Tighten Episode, Trailer, Clip Pack and Speaker Layout (`POST /v1/tighten-episode`, `POST /v1/episode-trailer`, `POST /v1/clip-pack`, `POST /v1/speaker-layout` and their `/estimate`) also a request with several recordings (`mediaUrls`) or a Master audio (`masterAudioUrl`) while Speaker Map, which they need, is not available to you. Refused before anything is probed or charged; send one recording. See [Tighten Episode → Several cameras](./nodes/processing-video/tighten-episode.md#several-cameras), [Trailer → Several cameras](./nodes/processing-video/episode-trailer.md#several-cameras) and [Clip Pack → Several cameras](./nodes/processing-video/clip-pack.md#several-cameras) and [Speaker Layout → Several cameras](./nodes/processing-video/speaker-layout.md#several-cameras). |
+| 403 | `node_not_available` | — | A run of a node this deployment does not offer you (it is hidden or not yet released). Every route that spends credits is checked as the node it runs, whatever its path (`POST /v1/suno/generate` as `suno-generate`; a trend run, `POST /v1/trends/:slug/runs` and `/estimate`, as `cast-swap`, Nodaro Motion; `POST /v1/video-director/run` as `video-director`, the Video Director; `POST /v1/pipelines` and the pipeline routes that start or continue work as `film-pipeline`, the film pipeline — see [§14](#14-pipelines)). On Tighten Episode, Trailer, Clip Pack and Speaker Layout (`POST /v1/tighten-episode`, `POST /v1/episode-trailer`, `POST /v1/clip-pack`, `POST /v1/speaker-layout` and their `/estimate`) also a request with several recordings (`mediaUrls`) or a Master audio (`masterAudioUrl`) while Speaker Map, which they need, is not available to you. Refused before anything is probed or charged; send one recording. See [Tighten Episode → Several cameras](./nodes/processing-video/tighten-episode.md#several-cameras), [Trailer → Several cameras](./nodes/processing-video/episode-trailer.md#several-cameras) and [Clip Pack → Several cameras](./nodes/processing-video/clip-pack.md#several-cameras) and [Speaker Layout → Several cameras](./nodes/processing-video/speaker-layout.md#several-cameras). |
 | 404 | `not_found` | — | Workflow, execution, or token not found. |
 | 404 | `workspace_not_found` | — | (Cloud edition, organizations) The workspace named by workspace-paid work does not exist (or was deleted mid-flight). Rollout-gated. |
 | 409 | `workspace_archived` | — | (Cloud edition, organizations) Workspace-paid work into an archived workspace. Unarchive it or move the work. Rollout-gated. |
@@ -1810,10 +1829,29 @@ branch on `error_hint`, never on these words. The same job payloads carry it
 `job.failed` webhook event), and a failed node of a
 workflow run carries it as `errorDetail` on its entry in `nodeStates`
 (`GET /v1/workflow-executions/:id`); a node that fails inside a sub-workflow
-hands its words to the sub-workflow node's entry. Two exceptions: a trend run's words are
-withheld along with its text (they can quote its hidden input), and a published
-app's runner never receives them (they can quote the creator's prompt) — the
-app run endpoints answer without `errorDetail`. A deployment can also keep these
+hands its words to the sub-workflow node's entry. The words go only to whoever
+may read them. A trend run's are withheld along with its text (they can quote
+its hidden input). A run's node states carry them only for a caller who can
+open the workflow the run executed (its creator, or someone it is shared with),
+since they can quote that workflow's prompt: a published app's runner never
+receives them (the app run endpoints answer without `errorDetail`), and neither
+does a person running someone else's share link, on the share link's run status
+(`GET /v1/present/:token/status/:execId`) or on the run reads above. The same
+goes for the jobs of a run: the person who started it owns them, but a job that
+belongs to a workflow run carries its words, on every job payload above and in
+the `job.failed` webhook event, only when its owner can open the run's
+workflow — so running someone else's share link gives you its jobs with
+`error_detail: null`. A job that belongs to no run (one node run on its own)
+carries its words to its owner, as before, and so does a run that executes no
+saved workflow — the hidden run a use-case node such as Tighten Episode starts —
+on its node states and on its jobs alike. Some jobs are their owner's even when
+a workflow run started them: those of a few node types, which are not linked to
+that run; a use-case node's hidden run and its jobs, which are not linked to the
+run whose node started them; and the jobs of a run whose workflow has since been
+deleted (the run is deleted with it). Their words go to their owner, as a job
+that belongs to no run does. The share
+page (`GET /v1/present/:token`) leaves the words its creator's editor saved out
+of every node it shows anyone but the creator. A deployment can also keep these
 words for its administrators (`jobs.errorDetail` in its surface profile, see
 [deployment.md](./deployment.md#surface-profile-nodaro_surface_profile)): there
 every caller who is not an administrator gets `error_detail: null` on each of
@@ -2488,11 +2526,13 @@ per-variant credit `pricing` — the credits a run is charged, the price
 `doctrineCovered` truth flag (`true` only when a sourced per-family prompt
 doctrine exists — gate "vendor doctrine" badges on it; never overclaim).
 
-Every model also names its **maker** and carries the maker's mark:
+Every model also names its **maker** and carries the maker's mark, except a
+model offered under the instance's own label, which names no maker (`maker` is
+absent and `logoUrl` is `null`):
 
 | Field | Type | Meaning |
 |---|---|---|
-| `maker` | `{ id, name }` | The company that made the model. `id` is stable — one per company, the company's name lowercased and hyphenated (`google`, `black-forest-labs`, `bytedance`) — so an app can key its own assets on it; a newer server can add makers, so handle an id you do not know. It is not always the `family` the model is grouped under: a few families name a lab, a product line or a cloud brand (Tongyi-MAI and HappyHorse are Alibaba's, Depth Anything and Volcengine are ByteDance's, InfiniTalk is Meituan's). |
+| `maker` | `{ id, name }`, absent on a model offered under the instance's own label | The company that made the model. `id` is stable — one per company, the company's name lowercased and hyphenated (`google`, `black-forest-labs`, `bytedance`) — so an app can key its own assets on it; a newer server can add makers, so handle an id you do not know. It is not always the `family` the model is grouped under: a few families name a lab, a product line or a cloud brand (Tongyi-MAI and HappyHorse are Alibaba's, Depth Anything and Volcengine are ByteDance's, InfiniTalk is Meituan's). |
 | `logoUrl` | string \| `null` | The maker's official mark (an SVG) on this instance's own media CDN, or `null` when the instance does not publish one for that maker — draw a fallback then (the maker's name or initial). Use the address as given: it carries its file's version (`?v=…`), so a replaced mark arrives under a new address. |
 
 A mark is published by the instance's operator, and the server lists its
@@ -2878,6 +2918,32 @@ so a value the model doesn't support is ignored, never a 400:
   always on (`sound` is ignored); no `seed`; `prompt` up to 8,000 characters.
   Priced per second on one ladder per resolution. Not available on the free
   tier.
+- **`kling-4-flash`** (Kling 4.0 Flash) is one id over two provider
+  endpoints, picked by what is sent: an `imageUrl` with no
+  `referenceImageUrls`, no `referenceVideoUrls` and no `characterReferences`
+  is the **exact opening frame** (`aspectRatio` is not used; the prompt names
+  the frame `@first_frame`); anything else — a prompt alone, references,
+  characters, or a start frame beside them — runs in reference mode, where an
+  `imageUrl` joins the reference images after your own, as on `kling-4`.
+  Reference mode takes `referenceImageUrls` (≤ 10), `referenceVideoUrls` (≤ 5,
+  **2–20 s together** — a set outside that is a `400` before anything is
+  reserved) and `characterReferences` (≤ 7 named subjects, as on `kling-4`),
+  **at most 15 materials in all**. There are no standalone voices:
+  `referenceAudioUrls` clip N (≤ 7) becomes the voice of `characterReferences`
+  entry N, in order. A character needs 2–4 images to carry a voice: a clip
+  whose character has one image, and any clip past the last character, is
+  dropped (the run still starts). A clip takes no material seat, and an
+  `@audio_N` mention has its `@` removed. `keepOriginalSound` works as on
+  `kling-4`; there is no `audioSoundtrack`. `duration` 3–20 (default 5);
+  **720p only** — any `resolution` renders and bills 720p; `aspectRatio` as on
+  `kling-4`; native audio always on; no `seed`; `prompt` up to 8,000
+  characters. **No end frame:** an `endFrameUrl` beside an `imageUrl` or
+  references is not sent to the model, and an `endFrameUrl` alone on
+  `POST /v1/generate-video` is a `400` (`imageUrl is required`). Priced per
+  second, one ladder for both endpoints; a reference-video run bills
+  **output + max(output, total reference-video seconds)** at its `-ref` rate.
+  Unlike the other Kling models it runs on free credits, as a 3 or 4 second
+  clip.
 - **`gemini-omni-flash`** takes exactly the same fields as
   `gemini-omni-video` on the same 720p / 1080p / 4K tiers, the same 4 / 6 / 8 /
   10 `duration` menu (an omitted duration renders and bills as 8 s), the same
@@ -2904,9 +2970,9 @@ so a value the model doesn't support is ignored, never a 400:
   `-ref` rate (see the [Generate Video node](nodes/ai-video/generate-video.md)
   for the live per-resolution rates) by the input-video duration plus the
   output duration, so longer source clips reserve proportionally more credits.
-  `kling-4` counts the input differently: it bills output + max(output, total
-  reference-video seconds), so a clip shorter than the output counts as the
-  output's length.
+  `kling-4` and `kling-4-flash` count the input differently: they bill output +
+  max(output, total reference-video seconds), so a clip shorter than the output
+  counts as the output's length.
 
 ### `{image:N}` tokens on the image routes
 
@@ -3028,16 +3094,17 @@ orchestrator already use):
   exactly as before — a pre-assembled `prompt` + flat `referenceImageUrls` pass
   through unchanged. `connectedReferences` feeds the **image** channel only;
   `referenceVideoUrls` / `referenceAudioUrls` stay as explicit flat inputs.
-- **Extend Video: Seedance 2 Extend only, with one seat reserved.** On
+- **Extend Video: the Seedance providers only, with one seat reserved.** On
   `POST /v1/extend-video` both `connectedReferences` and the flat
-  `referenceImageUrls` are accepted when `provider` is `seedance-2-extend` — the
-  only extend transport with a reference path; any other extend provider
-  refuses them with a 400 rather than silently dropping. The image budget is
-  the Seedance 2 cap **minus one** (up to **8** user references): the extension
+  `referenceImageUrls` are accepted when `provider` is `seedance-2-5-extend`
+  (Seedance 2.5) or `seedance-2-0-extend` (Seedance 2.0) — the only extend
+  transports with a reference path; any other extend provider refuses them with
+  a 400 rather than silently dropping. The image budget, on both, is the
+  Seedance 2.0 cap **minus one** (up to **8** user references): the extension
   pipeline itself occupies one reference seat with the source's last frame (the
   continuation anchor), appended AFTER the user references so `@image_1…@image_8`
-  ordinals never shift. The source's 2-second tail rides as `@video_1` and is
-  already priced into the extend rates — reference images add no extra credits.
+  ordinals never shift. The source's 2-second tail rides as `@video_1`.
+  Reference images add no extra credits.
 
 Each ref's `url` rides the same SSRF gate as the flat `referenceImageUrls`, so a
 ref pointing at a private address / non-http(s) scheme is rejected at the route
@@ -3110,9 +3177,9 @@ IS, for this run only:
   references that actually ship, so a caption can never bind a slot the payload
   dropped. Leave an entry blank to skip it without breaking the alignment.
 - **`characterReferences` (`POST /v1/generate-video` and `POST /v1/text-to-video`,
-  up to 3 on Gemini Omni, 7 on Kling 4.0).** Identity inputs that keep a real person's face on models with a
+  up to 3 on Gemini Omni, 7 on Kling 4.0 and Kling 4.0 Flash).** Identity inputs that keep a real person's face on models with a
   dedicated character channel — today `gemini-omni-video`,
-  `gemini-omni-flash` and `kling-4`. Each entry is `{ imageUrl, description, bodyImageUrl?,
+  `gemini-omni-flash`, `kling-4` and `kling-4-flash`. Each entry is `{ imageUrl, description, bodyImageUrl?,
   extraImageUrls?, name?, voice? }`: a portrait URL, a description of the person (appearance, clothing,
   style; ≤ 2000 chars), an optional full-body image and an optional name (≤ 100
   chars). Unlike `referenceImageUrls`, which a multimodal model treats as loose
@@ -3135,6 +3202,10 @@ IS, for this run only:
   15-material budget rather than the 7-unit one. A `voice` is refused there
   (`400` `character_voice_unsupported`) — send voice clips as
   `referenceAudioUrls`. See [Kling 4.0](nodes/ai-video/generate-video.md#kling-40-references-characters-and-keyframes).
+  `kling-4-flash` takes them the same way, and `referenceAudioUrls` clip N
+  becomes entry N's voice when that entry has 2–4 images (otherwise the clip is
+  dropped) — see
+  [Kling 4.0 Flash](nodes/ai-video/generate-video.md#kling-40-flash).
 
 ### Naming an image reference in the prompt (`@<name-slug>:<index>[:<role>]`)
 
@@ -3526,7 +3597,7 @@ discovery (`Cache-Control: public, max-age=300`).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/picker-catalogs` | Directory of every picker (`{ data: PickerCatalogSummary[] }`) — each `{ nodeType, label, catalogId, kind, valueField?, fields?, optionCount, imageCount }`; `imageCount` is how many of its options carry an `imageUrl` (0 = no pictures). |
+| `GET` | `/v1/picker-catalogs` | Directory of every picker (`{ data: PickerCatalogSummary[] }`) — each `{ nodeType, label, catalogId, kind, valueField?, fields?, optionCount, imageCount }`; `imageCount` is how many of its options carry an `imageUrl` (0 = no pictures, as for every picker on a deployment that turned pictures off). |
 | `GET` | `/v1/picker-catalogs/:nodeType` | One picker's catalog (`{ data: PickerCatalog }`). 404 `not_found` for an unknown type. |
 
 `GET /v1/picker-catalogs/:nodeType` accepts these query params (a bad value
@@ -3603,6 +3674,14 @@ pickers show:
   imageUrl? }`, where `fields` are the node-data fields of the settings in
   that topic (`Identity` → `type`, `age`, `ethnicity`, `regionalAesthetic`)
   and `imageUrl` is the topic's round picture.
+- **A deployment without pictures.** A deployment can turn the platform's
+  pictures off (`catalogs.images` in its surface profile; see
+  [deployment.md](./deployment.md#keys-read-by-client-apps)). Its replies then
+  carry no picture at all: no `imageUrl` or `imageSrcSet` on any option, no
+  `imageUrl` on a topic, and an `imageCount` of `0` for every picker in the
+  directory. The same holds for `GET /v1/catalogs` and the MCP
+  `get_picker_catalog` tool. Everything else is unchanged, so a client that
+  draws a label when an option has no `imageUrl` needs nothing more.
 
 ```bash
 curl -s https://app.nodaro.ai/v1/picker-catalogs/person | jq '.data.sections[0], .data.dimensions[0].options[0]'
@@ -4526,7 +4605,7 @@ Send `{}` (no draft) for the lowest price any draft can finalize for, returned w
 
 ### Seedance reference-video estimates
 
-`POST /v1/credits/seedance-ref-estimate` returns the credits a Seedance 2 or Kling 4.0 generation with reference video(s) reserves (`seedance-2`, `seedance-2-fast`, `seedance-2-mini`, `seedance-2-5`, `kling-4`) — Generate Video with reference videos wired, or Video to Video's Seedance 2.5 Edit lane, whose source clip is reference video 1. Such a run is billed for the reference clips' seconds plus the output seconds (on `kling-4`, the output plus the longer of the output and the clips), so the price depends on the clips' real lengths: the server measures them and prices them exactly as the run's reservation does. It reads prices without creating a job or reserving credits. Cloud only; requires authentication; rate-limited to 60 requests a minute.
+`POST /v1/credits/seedance-ref-estimate` returns the credits a Seedance 2 or Kling 4.0 generation with reference video(s) reserves (`seedance-2`, `seedance-2-fast`, `seedance-2-mini`, `seedance-2-5`, `kling-4`, `kling-4-flash`) — Generate Video with reference videos wired, or Video to Video's Seedance 2.5 Edit lane, whose source clip is reference video 1. Such a run is billed for the reference clips' seconds plus the output seconds (on `kling-4` and `kling-4-flash`, the output plus the longer of the output and the clips), so the price depends on the clips' real lengths: the server measures them and prices them exactly as the run's reservation does. It reads prices without creating a job or reserving credits. Cloud only; requires authentication; rate-limited to 60 requests a minute.
 
 ```json
 {"provider":"seedance-2-5","resolution":"720p","duration":8,"referenceVideoUrls":["https://…/clip.mp4"]}
@@ -4534,7 +4613,7 @@ Send `{}` (no draft) for the lowest price any draft can finalize for, returned w
 
 | Field | Type | Meaning |
 |---|---|---|
-| `provider` | string | A Seedance 2 model or `kling-4`. Any other model is a `400 validation_error` whose message names the models that qualify (Seedance 2, Kling 4.0). |
+| `provider` | string | A Seedance 2 model, `kling-4` or `kling-4-flash`. Any other model is a `400 validation_error` whose message names the models that qualify (Seedance 2, Kling 4.0, Kling 4.0 Flash). |
 | `resolution` | string? | As the run sends it; omitted = the model's default. |
 | `duration` | number? | Output seconds; `-1` = Auto, priced as the run reserves it: the first clip's length rounded up to a whole second plus one second (never above the model's longest clip), or the model's longest clip while a clip is unmeasured or unknown. Omitted = the model's default. |
 | `draft` | boolean? | Seedance 2.5 Draft: priced at 480p. |
@@ -4599,7 +4678,10 @@ reads stay `jobs:read`. A deployment that hides the gallery serves none of the
 public work (`outputs.allowPublic: false`, see
 [Deployment](./deployment.md)) answers every `GET /v1/gallery` view but your
 own with an empty page, `{ data: [], nextCursor: null, totalCount: 0 }`: your
-own `userId` with your token still lists your work. On a server whose database does not
+own `userId` with your token still lists your work. There, `POST /v1/gallery/favorite`
+adds only your own jobs (anyone else's is `404 not_found`; removing a favorite
+always works), and `POST /v1/gallery/report` answers every item
+`404 not_found`. On a server whose database does not
 have ratings yet, the rating write and a `rating=` filter answer
 `503 not_available`, and every job reads `rating: null`.
 
@@ -6153,6 +6235,23 @@ in to the app (`/v1/admin/complaints/:id/infringement`,
 Story-to-Video pipelines orchestrate multi-stage AI production: script → characters
 → objects → locations → shot list → scene images → animate + audio + edit → post merge.
 
+### Availability
+
+A deployment offers the film pipeline or withholds it like a node: its
+availability id is `film-pipeline` (`nodes.allow` / `nodes.deny`, Admin →
+Availability — see [Deployment](./deployment.md)). Where it is not offered to
+you, `POST /v1/pipelines` and every `POST` under `/v1/pipelines/:id/…` that
+starts or continues a pipeline's work — branch, fork, stage approve, edit,
+reject and chat, applying a chat proposal, scene and shot regenerations,
+retries, entity, sub-gate and scene-helper actions — answer `403 node_not_available`, before
+anything is reserved or charged. The reads (`GET`), switching a run to manual
+(`PATCH /v1/pipelines/:id`) and `POST /v1/pipelines/:id/cancel` stay open, so a
+pipeline you started before can still be followed and stopped. A pipeline
+already running when the feature is withheld does not start its next stage (an
+automatic run included): it ends `failed` with `failure_reason:
+"node_not_available"`, and its unspent reservation is refunded. One paused at an
+approval gate stays paused.
+
 ### Branch (re-run from stage)
 
 #### `POST /v1/pipelines/:id/branch`
@@ -6238,6 +6337,7 @@ factory catalog it reads as anyone can.
 |---|---|---|---|
 | `GET` | `/v1/node-presets` | `nodeType` (optional) | Your custom presets (newest first). |
 | `GET` | `/v1/node-presets/factory` | `nodeType` (**required**) | The built-in catalog for a node type. **No auth needed.** |
+| `GET` | `/v1/node-presets/factory/groups` | `nodeType` (**required**) | The built-in catalog's categories, in the order a picker shows them (shelf by shelf; a shelf's named groups in the design's order, the rest in catalog order): `{ data: [{ group, shelf, count, previewUrl }] }`, each group's name, the shelf a picker files it under (`video`, `marketing`, `photos`, `creative`, `life`, `pro`, or `more` for a group no shelf names yet), how many presets it holds and the example picture of its first preset that has one (or `null`). A few KB, for a menu or a shelf that lists the categories without the whole catalog. **No auth needed.** |
 | `GET` | `/v1/node-presets/favorites` | `nodeType` (**required**) | Your favorite preset ids (see [Favorites](#favorites)). |
 | `GET` | `/v1/node-preset-groups` | `nodeType` (optional) | Your preset folders/sections. |
 
@@ -7247,7 +7347,7 @@ and one-click remixing.
 | Endpoint | Auth | Purpose |
 |---|---|---|
 | `POST /v1/shots` | Bearer | Create; body carries `mode`, `selectionState` (verbatim `{ pickerNodeType → valueId \| { field: valueId } }`), optional `freeText` / `negativePrompt` / `assembledPrompt` / `perModelPrompts` / `models` / `entityRefs` / `resultUrls`, and `visibility` (**default `private`**). Returns `{ id }`. |
-| `GET /v1/shots/:id` | **public** | Read for the share page / remix hydration. The id is the capability; private shots return 404 to everyone but their owner. Rate-limited per IP. |
+| `GET /v1/shots/:id` | **public** | Read for the share page / remix hydration. The id is the capability; private shots return 404 to everyone but their owner. On a deployment that does not allow public work (`outputs.allowPublic: false`, see [Deployment](./deployment.md)) every shot reads as a private one: 404 to everyone but its signed-in owner. Rate-limited per IP. |
 | `PATCH /v1/shots/:id` | owner | Update any subset — including flipping `visibility` to `public` (the explicit "make shareable" action). |
 | `DELETE /v1/shots/:id` | owner | Delete. |
 

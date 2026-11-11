@@ -59,6 +59,7 @@ const mockVoiceChangerProApi = vi.fn()
 const mockVoiceChangerApi = vi.fn()
 const mockImageCollageApi = vi.fn()
 const mockTranscribeApi = vi.fn()
+const mockExtendVideo = vi.fn()
 let mockNodes: any[] = []
 let mockEdges: any[] = []
 let mockCharacterDefinitions: any[] = []
@@ -148,6 +149,7 @@ vi.mock("@/lib/api", () => ({
   voiceChangerProApi: (...args: unknown[]) => mockVoiceChangerProApi(...args),
   voiceChangerApi: (...args: unknown[]) => mockVoiceChangerApi(...args),
   imageCollageApi: (...args: unknown[]) => mockImageCollageApi(...args),
+  extendVideo: (...args: unknown[]) => mockExtendVideo(...args),
   combineVideos: vi.fn(),
   editImage: vi.fn(),
   imageToImage: vi.fn(),
@@ -504,6 +506,45 @@ describe("motion-transfer", () => {
       undefined,
       undefined,
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// extend-video
+// ---------------------------------------------------------------------------
+
+// A model picked on the canvas quick strip changes only `provider`: the
+// panel's fail-safe never runs, so the run itself sends what the estimate
+// prices — never a length set on another model that the route refuses.
+describe("extend-video: the seconds sent are the ones the estimate prices", () => {
+  async function sent(data: Record<string, unknown>) {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://source.mp4" })
+    mockExtendVideo.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("extend-video", { prompt: "she turns", ...data }), makeCtx())
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    return mockExtendVideo.mock.calls[0][0] as Record<string, unknown>
+  }
+
+  it("Seedance 2.5 at 25 s switched to Seedance 2.0 sends 2.0's longest, 15 s", async () => {
+    expect(await sent({ provider: "seedance-2-0-extend", duration: 25 })).toMatchObject({ provider: "seedance-2-0-extend", duration: 15, videoUrl: "http://source.mp4" })
+  })
+
+  it("Seedance 2.5 at 25 s switched to LTX 2.3 Pro sends LTX's longest, 20 s", async () => {
+    expect(await sent({ provider: "ltx-2.3-pro", duration: 25 })).toMatchObject({ provider: "ltx-2.3-pro", duration: 20 })
+  })
+
+  it("a length the model offers is sent as is; none sends the model's default", async () => {
+    expect(await sent({ provider: "seedance-2-5-extend", duration: 25 })).toMatchObject({ provider: "seedance-2-5-extend", duration: 25 })
+    vi.clearAllMocks()
+    expect(await sent({ provider: "seedance-2-0-extend" })).toMatchObject({ duration: 8 })
+    vi.clearAllMocks()
+    // LTX with no length: the 6 s its estimate prices (and a workflow run sends).
+    expect(await sent({ provider: "ltx-2.3-pro" })).toMatchObject({ duration: 6 })
+  })
+
+  it("a node on the retired id runs, and is sent, as Seedance 2.5", async () => {
+    expect(await sent({ provider: "seedance-2-extend", duration: 12 })).toMatchObject({ provider: "seedance-2-5-extend", duration: 12 })
   })
 })
 

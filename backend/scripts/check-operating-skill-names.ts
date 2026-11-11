@@ -1,5 +1,5 @@
-// NODARO_TOKEN=<bearer> npx tsx backend/scripts/check-operating-skill-names.ts --api https://next.nodaro.ai
-//   railway run --service <service> -- npx tsx backend/scripts/check-operating-skill-names.ts --api https://next.nodaro.ai
+// NODARO_TOKEN=<bearer> npx tsx backend/scripts/check-operating-skill-names.ts --api https://next.app.nodaro.ai
+//   railway run --service <service> -- npx tsx backend/scripts/check-operating-skill-names.ts --api https://next.app.nodaro.ai
 //
 // Run it from the REPO ROOT (the fixture path below is repo-relative), with the
 // backend env present: it imports the tool module for the name list, and that

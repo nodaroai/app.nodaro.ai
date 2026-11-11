@@ -5,6 +5,15 @@
 Generates an editable Nodaro graph from a single text prompt by orchestrating
 multiple LLMs and generation steps under approval gates.
 
+## Availability
+
+A deployment offers the pipeline itself as `film-pipeline` (its node lists and
+Admin → Availability, see [Deployment](../../deployment.md)), apart from this
+canvas node (`generative-pipeline`): where `film-pipeline` is not offered,
+`POST /v1/pipelines` and every pipeline route that starts or continues work
+answer `403 node_not_available`, so the node cannot start a pipeline. Reading a
+pipeline and cancelling it stay open.
+
 ## Inputs
 
 | Field | Type | Required | Notes |

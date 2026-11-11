@@ -1,4 +1,5 @@
-import { resolveBillingContext } from "../../billing-context.js"
+import { resolveBillingContext, type BillingContext } from "../../billing-context.js"
+import { deploymentPayerActive } from "../../deployment-payer.js"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import { PIPELINE_STAGE_NAMES, PIPELINE_FORMATS, PIPELINE_MODES, PIPELINE_OUTPUT_RESOLUTIONS, PipelineInputSchema, CHAT_ENABLED_STAGES, CHAT_WIRED_STAGES, CHAT_TURN_CAPS, type ChatEnabledStage, type JsonPatch, type ProposedChange } from "@nodaro/shared/pipeline"
@@ -6,10 +7,55 @@ import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { randomUUID } from "node:crypto"
+import { FILM_PIPELINE_FEATURE } from "../../availability-override.js"
+import { deniedCapabilityForUser } from "../../availability-viewer.js"
+import { deniedNodeRejectionMessage, isNodeDenied, USER_VIEWER } from "../../surface-deny.js"
+import { errorResult } from "./_verb-helpers.js"
 
 const executeGate: ToolGate = { required: ["pipelines:execute"] }
 const approveGate: ToolGate = { required: ["pipelines:approve"] }
 const readGate: ToolGate = { required: ["pipelines:read"] }
+
+/**
+ * Whether this deployment offers the film pipeline (`film-pipeline`, a gateable
+ * feature) — asked as users get it, like the Nodaro Motion and trend tools ask
+ * about `cast-swap`. Where it is withheld, the tools that start or continue a
+ * pipeline's work are not listed; the read tools stay, so a pipeline made
+ * before can still be followed.
+ */
+function filmPipelineOffered(): boolean {
+  return !isNodeDenied(FILM_PIPELINE_FEATURE, USER_VIEWER)
+}
+
+/**
+ * The refusal of a call that reached a pipeline tool where the film pipeline
+ * is not offered to this user (the list it was listed from is older than the
+ * deployment's answer). The tools call the pipeline services directly, past
+ * every route door, so they ask here: the same answer, in the same shape, as
+ * the REST routes' 403 `node_not_available` (routes/pipelines.ts).
+ */
+async function filmPipelineRefusal(userId: string) {
+  const denied = await deniedCapabilityForUser(FILM_PIPELINE_FEATURE, undefined, userId)
+  if (!denied) return undefined
+  return errorResult(403, JSON.stringify({ error: { code: "node_not_available", message: deniedNodeRejectionMessage([denied]) } }))
+}
+
+/**
+ * The payer of a pipeline this session starts, resolved once, here, at the
+ * enqueue-shaped call; the pipeline keeps it (P14 — one payer per pipeline).
+ *
+ *  - A deployment payer (one account pays for every user's generations): its
+ *    context, so its pools pay and the user's allowance counts the run — as
+ *    the billing hook stamps a `POST /v1/pipelines` (`resolveBillingContext`
+ *    takes that rung first).
+ *  - A session bound to a workspace: rung 2, that workspace.
+ *  - Otherwise, a personal account: no stamp at all, exactly as before (the
+ *    pipeline then reads as its owner's personal payer).
+ */
+async function sessionPipelinePayer(session: McpSession): Promise<BillingContext | undefined> {
+  if (!deploymentPayerActive() && !session.workspaceId) return undefined
+  return resolveBillingContext({ userId: session.userId, explicitWorkspaceId: session.workspaceId })
+}
 
 /**
  * The chat stages these tools take: only those whose chat is wired end to end.
@@ -54,7 +100,9 @@ function okJson(value: unknown) {
  * service helper so the route + this MCP tool share a single implementation.
  */
 export function registerPipelineTools({ server, session }: RegisterPipelineToolsOpts): void {
-  if (passesGate(session, executeGate)) {
+  // Starting or continuing a pipeline is the film pipeline feature: not listed
+  // where the deployment withholds it (the read tools below stay).
+  if (passesGate(session, executeGate) && filmPipelineOffered()) {
     server.registerTool(
       "branch_pipeline",
       {
@@ -72,6 +120,8 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
         annotations: { readOnlyHint: false, destructiveHint: false },
       },
       async (args) => {
+        const refused = await filmPipelineRefusal(session.userId)
+        if (refused) return refused
         const { branchPipeline, BranchPipelineError } = await import(
           "../../../ee/pipelines/branch-pipeline.js"
         )
@@ -81,17 +131,8 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
             originalPipelineId: args.pipeline_id,
             fromStage: args.from_stage,
             userId: session.userId,
-            // P14: the MCP session's payer — rung 2 (the session's bound
-            // workspace), resolved once at this enqueue-shaped call. No
-            // bound workspace = trivially personal: skip the resolve AND the
-            // stamp (flag-off byte-identity — same short-circuit as the
-            // billing hook's).
-            billingContext: session.workspaceId
-              ? await resolveBillingContext({
-                  userId: session.userId,
-                  explicitWorkspaceId: session.workspaceId,
-                })
-              : undefined,
+            // P14: the MCP session's payer, as the REST lane resolves it.
+            billingContext: await sessionPipelinePayer(session),
           })
           return ok(
             `Branched pipeline ${args.pipeline_id} from stage '${args.from_stage}'. ` +
@@ -152,6 +193,8 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
         annotations: { readOnlyHint: false, destructiveHint: false },
       },
       async (args) => {
+        const refused = await filmPipelineRefusal(session.userId)
+        if (refused) return refused
         try {
           const { createPipeline } = await import(
             "../../../ee/pipelines/create-pipeline.js"
@@ -176,17 +219,10 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
             supabase,
             userId: session.userId,
             input,
-            // P14: the MCP session's payer — rung 2 (the session's bound
-            // workspace), resolved once at this enqueue-shaped call. No
-            // bound workspace = trivially personal: skip the resolve AND the
-            // stamp (flag-off byte-identity — same short-circuit as the
-            // billing hook's).
-            billingContext: session.workspaceId
-              ? await resolveBillingContext({
-                  userId: session.userId,
-                  explicitWorkspaceId: session.workspaceId,
-                })
-              : undefined,
+            // P14: the MCP session's payer, as the REST lane resolves it — a
+            // deployment payer included, so its pools pay and the user's
+            // allowance counts the run.
+            billingContext: await sessionPipelinePayer(session),
           })
           if (!result.ok) {
             return err(
@@ -209,7 +245,7 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
   }
 
   // ── chat_pipeline_stage (pipelines:approve) ──────────────────────────────
-  if (passesGate(session, approveGate)) {
+  if (passesGate(session, approveGate) && filmPipelineOffered()) {
     server.registerTool(
       "chat_pipeline_stage",
       {
@@ -232,6 +268,8 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
         annotations: { readOnlyHint: false, destructiveHint: false },
       },
       async (args) => {
+        const refused = await filmPipelineRefusal(session.userId)
+        if (refused) return refused
         const stageName = args.stage as ChatEnabledStage
 
         // Gate on the shared CHAT_WIRED_STAGES source of truth (mirrors the
@@ -424,6 +462,8 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
         annotations: { readOnlyHint: false, destructiveHint: false },
       },
       async (args) => {
+        const refused = await filmPipelineRefusal(session.userId)
+        if (refused) return refused
         const stageName = args.stage as ChatEnabledStage
 
         if (!CHAT_WIRED_STAGES[stageName]) {

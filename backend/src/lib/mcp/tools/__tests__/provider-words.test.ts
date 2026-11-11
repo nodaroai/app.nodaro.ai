@@ -5,7 +5,9 @@
  * Off (no surface profile, today's behaviour): the owner reads the words.
  * "admin": an MCP session is never an admin reader, so every job read answers
  * exactly as it does for a failure the provider said nothing about — the same
- * keys, `error_detail` / `errorDetail` null.
+ * keys, `error_detail` / `errorDetail` null. Someone else's job (list_jobs'
+ * public scope, get_asset on a public job) never carries them, whatever the
+ * setting: they are its owner's.
  *
  * Each "admin" case runs the same failed job twice — once carrying words, once
  * without — and requires the two answers to be identical. diagnose_run has its
@@ -22,7 +24,7 @@ import { __resetSurfaceProfileCacheForTests } from "../../../surface-profile.js"
 vi.mock("../../../supabase.js", () => ({
   supabase: { from: vi.fn() },
 }))
-// The public scope loads the gallery's moderation; these tests list the caller's own jobs.
+// The public scope loads the gallery's moderation: here none hides a job.
 vi.mock("../../../gallery-moderation.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../gallery-moderation.js")>()
   return { ...actual, loadGalleryModeration: async () => actual.OWNER_VIEW_MODERATION }
@@ -136,9 +138,12 @@ function mockListJobs(rows: unknown[]): void {
   fromMock().mockReturnValue({ select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ is }) }) })
 }
 
-/** get_asset's read, whatever its filter chain: `maybeSingle()` answers the row. */
-function mockAssetRead(row: unknown): void {
-  const promise = Promise.resolve({ data: row, error: null })
+/**
+ * A read whatever its filter chain — get_asset's, list_jobs' public scope's:
+ * `maybeSingle()`, or awaiting the chain, answers `data`.
+ */
+function mockAssetRead(data: unknown): void {
+  const promise = Promise.resolve({ data, error: null })
   const chain: unknown = new Proxy(function () {}, {
     get(_target, prop) {
       if (prop === "then") return promise.then.bind(promise)
@@ -258,6 +263,35 @@ describe("list_jobs — the provider's words on each of your failed jobs", () =>
     const none = await listed(rows(null, null))
     expect(withheld.data).toEqual(none.data)
   })
+
+  it("scope mine is unchanged: rows as its select returns them, with no owner column, keep their words", async () => {
+    const page = rows(WORDS, OTHER_WORDS).map(({ user_id: _owner, ...row }) => row)
+    const { data } = await listed(page)
+    expect(data.map((r) => r.error_detail)).toEqual([WORDS, OTHER_WORDS])
+  })
+})
+
+describe("list_jobs scope public — someone else's jobs never carry their provider's words", () => {
+  const OTHER_WORDS = "task failed: [422] the reference clip is longer than the model accepts."
+  /** Other users' public, completed jobs, as the public select returns them (with `user_id`). */
+  const theirs = [
+    failedJob(WORDS, { id: "p1", user_id: "someone-else", status: "completed", output_data: { imageUrl: "https://cdn.example/p1.png" } }),
+    failedJob(OTHER_WORDS, { id: "p2", user_id: "another-one", status: "completed", job_type: "image-to-video", output_data: { videoUrl: "https://cdn.example/p2.mp4" } }),
+  ]
+
+  it("every row has error_detail null (the key kept), no owner column, and the words nowhere, with the setting off", async () => {
+    mockAssetRead(theirs)
+    const result = await callTool(serverWithJobTools(), "list_jobs", { scope: "public", limit: 10 })
+    expect(result.isError).toBeUndefined()
+    const { data } = textJson(result) as { data: Array<Record<string, unknown>> }
+    expect(data.map((r) => r.id)).toEqual(["p1", "p2"])
+    for (const row of data) {
+      expect(row).toHaveProperty("error_detail", null)
+      expect(row).not.toHaveProperty("user_id")
+    }
+    expect(JSON.stringify(result)).not.toContain(WORDS)
+    expect(JSON.stringify(result)).not.toContain(OTHER_WORDS)
+  })
 })
 
 describe("get_asset — the provider's words on a failed job", () => {
@@ -283,5 +317,25 @@ describe("get_asset — the provider's words on a failed job", () => {
     const none = await getAsset(failedJob(null))
     expect(structured(withheld)).toEqual(structured(none))
     expect(withheld.content).toEqual(none.content)
+  })
+})
+
+describe("get_asset on someone else's public job — never their provider's words", () => {
+  it("a public completed job (the only one of theirs the read returns): error_detail null and the words nowhere, with the setting off", async () => {
+    mockAssetRead(failedJob(WORDS, { user_id: "someone-else", status: "completed", output_data: { imageUrl: "https://cdn.example/a.png" } }))
+    const result = await callTool(serverWithJobTools(), "get_asset", { job_id: JOB })
+    expect(result.isError).toBeUndefined()
+    expect(structured(result).status).toBe("completed")
+    expect(textJson(result).data).toHaveProperty("error_detail", null)
+    expect(JSON.stringify(result)).not.toContain(WORDS)
+  })
+
+  it("a failed one of theirs, were it to reach the read: errorDetail null and the words nowhere", async () => {
+    mockAssetRead(failedJob(WORDS, { user_id: "someone-else" }))
+    const result = await callTool(serverWithJobTools(), "get_asset", { job_id: JOB })
+    expect(result.isError).toBeUndefined()
+    expect(structured(result).status).toBe("failed")
+    expect(structured(result)).toHaveProperty("errorDetail", null)
+    expect(JSON.stringify(result)).not.toContain(WORDS)
   })
 })

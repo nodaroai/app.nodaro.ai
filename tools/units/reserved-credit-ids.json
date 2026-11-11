@@ -12,6 +12,8 @@
     "gpt-image-2-6-sunburst",
     "gpt-image-2-6-sunburst-i2i",
     "instagram-analysis",
-    "meta-ads-analysis"
+    "meta-ads-analysis",
+    "minimax-h3-image",
+    "minimax-h3-image-i2i"
   ]
 }

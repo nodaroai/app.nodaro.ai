@@ -1,15 +1,19 @@
 /**
  * Kling 4.0 request bodies — pure, no I/O.
  *
- * Two KIE endpoints, two Nodaro ids:
+ * Four KIE endpoints, three Nodaro ids:
  *   - `kling-4`           → `kling-4.0/reference-to-video`
  *     (docs.kie.ai/market/kling/v4-reference-to-video)
  *   - `kling-4-keyframes` → `kling-4.0/keyframe-to-video`
  *     (docs.kie.ai/market/kling/v4-keyframe-to-video)
+ *   - `kling-4-flash`     → `kling-4.0/flash-keyframe-to-video` for a start
+ *     frame alone, `kling-4.0/flash-reference-to-video` for everything else
+ *     ({@link kling4FlashEndpoint}; docs.kie.ai/market/kling/v4-flash-*)
  *
- * Both schemas are `additionalProperties: false`, so each body is an explicit
+ * Every schema is `additionalProperties: false`, so each body is an explicit
  * allow-list: integer `duration`, lowercase `resolution`, no seed, no negative
- * prompt.
+ * prompt. Flash adds: 720p only, no end frame, no `voices` (a reference audio
+ * clip is a subject's `voice_url`), no in-between frames.
  *
  * NAMES. Kling addresses every material by an `@` name in the prompt, and KIE
  * REFUSES a prompt that names a material the request does not carry (live,
@@ -25,10 +29,15 @@
  * — editor, workflow, API, MCP — can reach the 422.
  */
 import type { VideoCharacterReference } from "@nodaro/shared/video"
-import { kling4KeyframeFrameCap, KLING_4_MAX_MIDDLE_FRAMES, normalizeKling4Resolution } from "@nodaro/shared/models"
+import { kling4KeyframeFrameCap, KLING_4_MAX_MIDDLE_FRAMES, normalizeKling4Resolution, KLING_4_FLASH_RESOLUTION } from "@nodaro/shared/models"
 import { placeFramesAfterReferences } from "@nodaro/prompts/assembly"
 
-import { KLING_4_REFERENCE_MODEL, KLING_4_KEYFRAME_MODEL } from "./models.js"
+import {
+  KLING_4_REFERENCE_MODEL,
+  KLING_4_KEYFRAME_MODEL,
+  KLING_4_FLASH_REFERENCE_MODEL,
+  KLING_4_FLASH_KEYFRAME_MODEL,
+} from "./models.js"
 
 /** KIE caps (reference-to-video). */
 const MAX_IMAGES = 10
@@ -45,9 +54,9 @@ const KLING_4_ASPECTS = new Set(["auto", "16:9", "9:16", "1:1", "21:9"])
 const RESERVED_NAME = /^(image|video|keyframe|object|audio)_\d+$|^(first|last)_frame$/i
 
 export interface Kling4RequestArgs {
-  provider: "kling-4" | "kling-4-keyframes"
+  provider: "kling-4" | "kling-4-keyframes" | "kling-4-flash"
   prompt: string
-  /** Already snapped to 3..30. */
+  /** Already snapped to the model's durations (3..30; Flash 3..20). */
   durationSec: number
   resolution?: string
   aspectRatio?: string
@@ -129,7 +138,62 @@ function withPromptSuffix(prompt: string, suffix: string): string {
 }
 
 export function buildKling4Request(args: Kling4RequestArgs): Kling4Request {
+  if (args.provider === "kling-4-flash") return buildFlash(args)
   return args.provider === "kling-4-keyframes" ? buildKeyframes(args) : buildReference(args)
+}
+
+/** A character reference with at least one usable image (it reaches the
+ *  reference endpoint as a subject, or as a reference image when it has one). */
+const hasCharacterImage = (ref: VideoCharacterReference): boolean =>
+  cleanList([ref.imageUrl, ref.bodyImageUrl ?? "", ...(ref.extraImageUrls ?? [])]).length > 0
+
+/**
+ * Which Kling 4.0 Flash endpoint a run takes (decided 2026-11-11): a start
+ * frame with no reference image, no reference video and no character runs on
+ * the KEYFRAME endpoint, where the frame is the exact opening frame. Anything
+ * else — plain text, references, characters, or a start frame beside any of
+ * them — runs on the REFERENCE endpoint, where a start frame joins the
+ * reference images (as on `kling-4`). Reference audio does not decide it: with
+ * no character to carry it, a clip has nowhere to go on either endpoint.
+ */
+export function kling4FlashEndpoint(args: Pick<Kling4RequestArgs, "startFrameUrl" | "referenceImageUrls" | "referenceVideoUrls" | "characterReferences">): "keyframe" | "reference" {
+  const start = args.startFrameUrl?.trim()
+  const anyReference =
+    cleanList(args.referenceImageUrls).length > 0 ||
+    cleanList(args.referenceVideoUrls).length > 0 ||
+    (args.characterReferences ?? []).some(hasCharacterImage)
+  return start && !anyReference ? "keyframe" : "reference"
+}
+
+function buildFlash(args: Kling4RequestArgs): Kling4Request {
+  const notes: string[] = []
+  // Flash takes no end frame on either endpoint (the keyframe schema refuses
+  // `last_frame`, and the editor offers none); one that arrives is dropped.
+  if (args.endFrameUrl?.trim()) notes.push("dropped the end frame: Kling 4.0 Flash takes none")
+  if (kling4FlashEndpoint(args) === "keyframe") return buildFlashKeyframe(args, notes)
+  return buildReference({ ...args, endFrameUrl: undefined }, { flash: true, notes })
+}
+
+function buildFlashKeyframe(args: Kling4RequestArgs, notes: string[]): Kling4Request {
+  const first = args.startFrameUrl!.trim()
+  const audio = cleanList(args.referenceAudioUrls)
+  if (audio.length > 0) {
+    notes.push(`dropped ${audio.length} reference audio clip(s): Kling 4.0 Flash binds clip N to character N as its voice, and no character that can carry one (2-4 images) is connected`)
+  }
+  // The frame is the run's only image: a prompt naming it `@image_1` (the seat
+  // it takes on the reference endpoint) means `@first_frame` here. Every other
+  // mention is undeclared and loses its `@`.
+  let prompt = renumber(args.prompt, "image", (n) => (n === 1 ? "first_frame" : undefined))
+  prompt = neutralizeUndeclaredMentions(prompt, ["first_frame"])
+  // No `aspect_ratio`: this endpoint is reached only with a frame, and the clip
+  // follows the frame's shape.
+  const input: Record<string, unknown> = {
+    prompt,
+    duration: args.durationSec,
+    resolution: KLING_4_FLASH_RESOLUTION,
+    first_frame_url: first,
+  }
+  return { model: KLING_4_FLASH_KEYFRAME_MODEL, input, notes }
 }
 
 function buildKeyframes(args: Kling4RequestArgs): Kling4Request {
@@ -175,8 +239,18 @@ interface Subject {
   description?: string
 }
 
-function buildReference(args: Kling4RequestArgs): Kling4Request {
-  const notes: string[] = []
+/**
+ * The reference-to-video body. `flash` builds Kling 4.0 Flash's (its own KIE
+ * model, 720p whatever was asked, and no `voices`): reference audio clip N
+ * belongs to wired character N, in `characterReferences` order (decided
+ * 2026-11-11) — that character's `voice_url` when it is a subject (2-4
+ * images), dropped with a note when it is not (one image makes a plain
+ * reference image, which cannot carry a voice) or when there is no character
+ * N. `@audio_N` is left undeclared so it loses its `@`.
+ */
+function buildReference(args: Kling4RequestArgs, opts: { flash?: boolean; notes?: string[] } = {}): Kling4Request {
+  const notes: string[] = opts.notes ?? []
+  const flash = opts.flash === true
   const taken = new Set<string>()
 
   // Frames cannot ride this endpoint as frames: they join the reference images
@@ -197,14 +271,17 @@ function buildReference(args: Kling4RequestArgs): Kling4Request {
   // single image stays a reference image.
   const subjects: Subject[] = []
   const singleImageRefs: Array<{ rawName?: string; url: string }> = []
+  /** Per wired character, in arrival order: its subject's index, or undefined when it is none. */
+  const subjectOfCharacter: Array<number | undefined> = []
   for (const ref of (args.characterReferences ?? []).slice(0, MAX_SUBJECTS)) {
     const images = [...new Set(cleanList([ref.imageUrl, ref.bodyImageUrl ?? "", ...(ref.extraImageUrls ?? [])]))]
       .slice(0, MAX_SUBJECT_IMAGES)
-    if (images.length === 0) continue
     if (images.length < 2) {
-      singleImageRefs.push({ rawName: ref.name, url: images[0]! })
+      subjectOfCharacter.push(undefined)
+      if (images.length === 1) singleImageRefs.push({ rawName: ref.name, url: images[0]! })
       continue
     }
+    subjectOfCharacter.push(subjects.length)
     subjects.push({
       name: uniqueName(kling4Name(ref.name, `Character${subjects.length + 1}`), taken),
       rawName: ref.name,
@@ -251,9 +328,27 @@ function buildReference(args: Kling4RequestArgs): Kling4Request {
   }
 
   const videos = cleanList(args.referenceVideoUrls).slice(0, MAX_VIDEOS)
-  const audio = cleanList(args.referenceAudioUrls).slice(0, MAX_VOICES)
-  const voices = audio.map((url, i) => ({ name: uniqueName(`Voice${i + 1}`, taken), audio_url: url }))
-  prompt = renumber(prompt, "audio", (n) => voices[n - 1]?.name)
+  let voices: Array<{ name: string; audio_url: string }> = []
+  /** Flash: subject i's voice clip, index-aligned with `subjects`. */
+  const subjectVoices: Array<string | undefined> = subjects.map(() => undefined)
+  if (flash) {
+    // No standalone voice on Flash: clip N is wired character N's voice. A clip
+    // has no `@` name of its own, so `@audio_N` stays undeclared below.
+    cleanList(args.referenceAudioUrls).forEach((url, i) => {
+      const subject = subjectOfCharacter[i]
+      if (subject !== undefined) {
+        subjectVoices[subject] = url
+      } else if (i < subjectOfCharacter.length) {
+        notes.push(`dropped reference audio clip ${i + 1}: character ${i + 1} has fewer than 2 images, so it cannot carry a voice`)
+      } else {
+        notes.push(`dropped reference audio clip ${i + 1}: no character ${i + 1} is connected to carry it`)
+      }
+    })
+  } else {
+    const audio = cleanList(args.referenceAudioUrls).slice(0, MAX_VOICES)
+    voices = audio.map((url, i) => ({ name: uniqueName(`Voice${i + 1}`, taken), audio_url: url }))
+    prompt = renumber(prompt, "audio", (n) => voices[n - 1]?.name)
+  }
 
   const declared = [
     ...images.map((_, i) => `image_${i + 1}`),
@@ -266,7 +361,7 @@ function buildReference(args: Kling4RequestArgs): Kling4Request {
   const input: Record<string, unknown> = {
     prompt,
     duration: args.durationSec,
-    resolution: normalizeKling4Resolution(args.resolution),
+    resolution: flash ? KLING_4_FLASH_RESOLUTION : normalizeKling4Resolution(args.resolution),
   }
   const aspect = args.aspectRatio?.trim()
   if (aspect && KLING_4_ASPECTS.has(aspect)) input.aspect_ratio = aspect
@@ -276,13 +371,15 @@ function buildReference(args: Kling4RequestArgs): Kling4Request {
     input.keep_original_sound = args.keepOriginalSound === true
   }
   if (subjects.length > 0) {
-    input.elements = subjects.map((s) => ({
+    input.elements = subjects.map((s, i) => ({
       name: s.name,
       image_urls: s.imageUrls,
+      // Only a `character` subject may carry a voice (KIE): always this tag.
       tag: "character",
       ...(s.description ? { description: s.description } : {}),
+      ...(subjectVoices[i] ? { voice_url: subjectVoices[i] } : {}),
     }))
   }
   if (voices.length > 0) input.voices = voices
-  return { model: KLING_4_REFERENCE_MODEL, input, notes }
+  return { model: flash ? KLING_4_FLASH_REFERENCE_MODEL : KLING_4_REFERENCE_MODEL, input, notes }
 }

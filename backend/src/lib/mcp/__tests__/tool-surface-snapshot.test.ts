@@ -1473,6 +1473,13 @@ const OWNED_SETTINGS_GUARD_BYTES = 262
 const GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES = 334
 const GPT_IMAGE_2_6_FORMAT_TOTAL_BYTES = 1_014
 
+// RAISED 2026-11-11 by Extend Video's Seedance split, and nothing else: `extend_video` offers
+// `seedance-2-5-extend` and `seedance-2-0-extend` where it offered one Seedance id, its Seedance-only
+// arguments name both, and `duration` states each model's window (4–30 s and 4–15 s, now listed up to
+// 30). No tool was added, so the fixture does NOT move. Measured by this suite on the same tree with
+// and without it: extend_video 2_722 → 2_974 B.
+const EXTEND_SEEDANCE_SPLIT_BYTES = 252
+
 // RAISED 2026-11-11 by image_to_image's `mask_url` naming the models that take a mask
 // (`I2I_MASK_SUPPORT`, now with GPT Image 2.6 Flare's and Sunburst's edits), and that it is
 // refused with a GIF or an SVG, and nothing else. No tool was added, so the fixture does NOT move.
@@ -1482,9 +1489,23 @@ const I2I_MASK_MODELS_BYTES = 126
 // description shared), and nothing else. No tool was added, so the fixture does NOT move. Measured
 // by this suite: 522_874 total − 522_636 = 238 B, all on modify_image.
 const MODIFY_IMAGE_MASK_BYTES = 238
+// RAISED 2026-11-11 by Kling 4.0 Flash (`kling-4-flash`) and nothing else: the id joins every
+// catalog-derived model enum and the character-reference provider list, and generate_video's
+// reference-video / reference-audio / extra-image / keep-original-sound descriptions name it (each
+// voice clip is a character's voice). No tool was added, so the fixture does NOT move. Measured by
+// this suite on the same tree with and without it: 522_991 total − 522_874 = 117 B, plus 21 B when
+// the reference-audio clause gained "if it has 2-4 images" (the clip goes to character N only when
+// that character can carry a voice): 138 B.
+const KLING_4_FLASH_MODELS_BYTES = 138
+
+// RAISED 2026-11-11 by MiniMax H3 Image, and nothing else: `minimax-h3-image` joins
+// generate_image's derived model list, and its reference-image limit names the model beside
+// GPT Image 2.6 (16 images). `generate_image` is the one tool past the per-tool budget
+// (9_884 → 9_916 B). No tool was added, so the fixture does NOT move.
+const MINIMAX_H3_IMAGE_PER_TOOL_BYTES = 32
 
 export const TOOL_WIRE_BUDGET = {
-  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES,
+  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES,
   totalBytes:
     337_638 +
     IMAGE_OVERLAY_TOOL_BYTES +
@@ -1668,8 +1689,10 @@ export const TOOL_WIRE_BUDGET = {
     SPEAKER_VIEW_TOOL_BYTES +
     SPEAKER_VIEW_REGION_LIMITS_BYTES +
     GPT_IMAGE_2_6_FORMAT_TOTAL_BYTES +
+    EXTEND_SEEDANCE_SPLIT_BYTES +
     I2I_MASK_MODELS_BYTES +
-    MODIFY_IMAGE_MASK_BYTES,
+    MODIFY_IMAGE_MASK_BYTES +
+    KLING_4_FLASH_MODELS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

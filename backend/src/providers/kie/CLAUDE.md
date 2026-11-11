@@ -72,6 +72,8 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `seedream-5-pro-i2i` | `seedream/5-pro-image-to-image` | [seedream 5 pro i2i](https://docs.kie.ai/market/seedream/5-pro-image-to-image.md) |
 | `seedream-5-flash` | `seedream/5-flash-text-to-image` | [seedream 5 flash t2i](https://docs.kie.ai/market/seedream/5-flash-text-to-image.md) |
 | `seedream-5-flash-i2i` | `seedream/5-flash-image-to-image` | [seedream 5 flash i2i](https://docs.kie.ai/market/seedream/5-flash-image-to-image.md) |
+| `minimax-h3-image` | `minimax-h3/text-to-image` (NOT the H3 video model `minimax-h3`) | [minimax-h3 t2i](https://docs.kie.ai/market/minimax-h3/text-to-image.md) |
+| `minimax-h3-image-i2i` | `minimax-h3/image-edit` | [minimax-h3 image edit](https://docs.kie.ai/market/minimax-h3/image-edit.md) |
 | `z-image` | `z-image` | [z-image](https://docs.kie.ai/market/z-image/z-image.md) |
 | ~~`topaz-image-upscale`~~ | ~~`topaz/image-upscale`~~ | **RETIRED 2026-10-25** — runs on Replicate (`providers/replicate/topaz.ts`); config kept for the credit audit, `KIE_RETIRED_MODEL_KEYS` keeps it out of routing |
 | `recraft-remove-bg` | `recraft/remove-background` | [recraft bg remove](https://docs.kie.ai/market/recraft/remove-background.md) |
@@ -95,6 +97,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `vidu-q4` | `vidu-q4/image-to-video` (bespoke `runViduQ4`; swaps to `vidu-q4/reference-to-video` — `VIDU_Q4_REFERENCE_MODEL` — when a reference image or audio is wired). No t2v entry: KIE has no Q4 text-to-video. | [vidu q4 i2v](https://docs.kie.ai/market/vidu-q4/image-to-video.md) / [r2v](https://docs.kie.ai/market/vidu-q4/reference-to-video.md) |
 | `kling-4` | `kling-4.0/reference-to-video` (bespoke `runKling4`, body from `kling4.ts`) | [kling 4.0 reference](https://docs.kie.ai/market/kling/v4-reference-to-video.md) |
 | `kling-4-keyframes` | `kling-4.0/keyframe-to-video` (bespoke `runKling4`) | [kling 4.0 keyframe](https://docs.kie.ai/market/kling/v4-keyframe-to-video.md) |
+| `kling-4-flash` | `kling-4.0/flash-reference-to-video` (bespoke `runKling4`; swaps to `kling-4.0/flash-keyframe-to-video` — `KLING_4_FLASH_KEYFRAME_MODEL` — for a start frame alone, see `kling4FlashEndpoint`) | [flash reference](https://docs.kie.ai/market/kling/v4-flash-reference-to-video.md) / [flash keyframe](https://docs.kie.ai/market/kling/v4-flash-keyframe-to-video.md) |
 | `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (via `runGeminiOmni`; the pro sibling's id is the bare `gemini-omni-video`) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
 | `gemini-omni-flash-1-2` | `google/gemini-omni-flash-1-2` (bespoke `runGeminiOmni12`, body from `gemini-omni-12.ts`) | [gemini omni flash 1.2](https://docs.kie.ai/market/google/gemini-omni-flash-1-2.md) |
 | `gemini-omni-video` | `gemini-omni-video` (via `runGeminiOmni`; the pro sibling of flash) | [gemini omni video](https://docs.kie.ai/market/gemini-omni-video.md) |
@@ -125,6 +128,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `wan-3-prime` | `wan/3-0-video-prime` (ONE KIE id serves both modes) | [wan 3.0 prime](https://docs.kie.ai/market/wan/3-0-video-prime.md) |
 | `kling-4` | `kling-4.0/reference-to-video` (ONE KIE id serves both modes) | [kling 4.0 reference](https://docs.kie.ai/market/kling/v4-reference-to-video.md) |
 | `kling-4-keyframes` | `kling-4.0/keyframe-to-video` (ONE KIE id serves both modes) | [kling 4.0 keyframe](https://docs.kie.ai/market/kling/v4-keyframe-to-video.md) |
+| `kling-4-flash` | `kling-4.0/flash-reference-to-video` (text-only runs; the keyframe endpoint needs a start frame) | [flash reference](https://docs.kie.ai/market/kling/v4-flash-reference-to-video.md) |
 | `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (ONE KIE id serves both modes) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
 | `gemini-omni-flash-1-2` | `google/gemini-omni-flash-1-2` (ONE KIE id serves every mode) | [gemini omni flash 1.2](https://docs.kie.ai/market/google/gemini-omni-flash-1-2.md) |
 | `gemini-omni-video` | `gemini-omni-video` (ONE KIE id serves both modes) | [gemini omni video](https://docs.kie.ai/market/gemini-omni-video.md) |
@@ -273,6 +277,57 @@ afterwards (300-65536 px per side, aspect 0.4-2.5, our 2048 px cap).
   reservation and settlement reuse the Seedance machinery
   (`billsReferenceVideoSeconds`, `billedRefVideoSeconds` in
   `ee/billing/seedance2-ref-video-credits.ts`); subjects and voices are free.
+
+### Kling 4.0 Flash wire notes (`kling-4-flash`, bespoke `runKling4`)
+
+ONE Nodaro id over two KIE endpoints, picked by `kling4FlashEndpoint`
+(`kling4.ts`, decided 2026-11-11): a start frame with no reference image, no
+reference video and no character (any character with an image — a one-image
+character becomes a reference image) → `kling-4.0/flash-keyframe-to-video`;
+everything else → `kling-4.0/flash-reference-to-video`. NOT a member of
+`KLING_4_PROVIDERS` (that set's branches carry 1080p, `voices`, the Keyframes
+frame table and Kling 4.0's materials rule); it opts in through
+`isKling4RunnerProvider` (dispatch, UI defaults, provider snap) and
+`isKling4FlashProvider`.
+
+- Both schemas are `additionalProperties: false`: explicit allow-list, INTEGER
+  `duration` 3-20, `resolution` always `720p` (`KLING_4_FLASH_RESOLUTION`,
+  whatever was asked — the only value either schema takes), no seed, no audio
+  lever. `__tests__/kling4-flash.test.ts` holds every body to the schema's
+  property list across a sweep of wiring shapes.
+- **Keyframe body:** `{ prompt, duration, resolution, first_frame_url }` — no
+  `aspect_ratio` (only reached with a frame; the clip takes its shape), no
+  `keyframes`, no `last_frame` (KIE refuses both). `@image_1` is rewritten to
+  `@first_frame`; every other mention loses its `@`. Reference audio has nowhere
+  to go and is dropped with a server-log note.
+- **Reference body:** Kling 4.0's (`buildReference` with `flash`): a start
+  frame joins `image_urls` after the caller's own, subjects are characters with
+  2-4 images (`tag: "character"`), `keep_original_sound` only with videos. NO
+  `voices`: reference audio clip N belongs to WIRED CHARACTER N, in
+  `characterReferences` order (decided 2026-11-11) — that character's
+  `voice_url` when it is a subject (only a `character` subject may carry one);
+  a clip whose character has one image (a plain reference image) or that has
+  no character N is dropped with a server-log note. `@audio_N` is left
+  undeclared so it loses its `@`.
+- **No end frame** on either endpoint: one that reaches the runner is dropped
+  with a note (`dropped the end frame: Kling 4.0 Flash takes none`).
+- Limits: 10 images, 5 videos, 7 subjects, 15 in all — voice clips take no seat
+  (`audioBindsToCharacters` on `VIDEO_REF_LIMITS_BY_PROVIDER`), refused before
+  the reservation by `lib/kling4-inputs.ts` and `videoCharacterRefProblem`.
+  Reference videos 2-20 s each and **2-20 s together** — KIE fails the task at
+  COMPLETION otherwise, so `VIDEO_REF_VIDEO_DURATION_LIMITS["kling-4-flash"]`
+  refuses it in the routes' preHandler and the DAG gate. Reference videos are
+  shrunk to `KLING_4_REF_VIDEO_LIMIT` like Kling 4.0's (unprobed for Flash; the
+  limit is the family's). Images get Kling 4.0's JPEG/PNG-only treatment
+  (`JPEG_PNG_ONLY_PROVIDERS`; the Flash schemas state no format).
+- **Billing:** per second, one ladder for both endpoints (KIE 17 cr/s). With a
+  reference video KIE bills 11.3 cr/s over output + max(output, Σ input
+  seconds) — the Kling 4.0 rule through the same Seedance machinery
+  (`VIDEO_REF_RATE_PROVIDERS`). The `-ref` rows are rounded up to the next 10
+  per row, so the reservation's 8 s anchor (230 ÷ 8 = 28.75 credits/s) is a
+  little above the bare rate — deliberate. `runKling4` reports
+  `KLING_4_FLASH_RATE_USD_PER_SEC` as the provider cost (a reference-video run
+  at the 2 × output floor, as for Kling 4.0). Not yet probed live.
 
 ### Gemini Omni Flash 1.2 wire notes (`gemini-omni-flash-1-2`, bespoke `runGeminiOmni12`)
 
@@ -480,7 +535,7 @@ Different models use different param names for input images — getting this wro
 | Pattern | Models | Param |
 |---------|--------|-------|
 | Single URL string | minimax, kling-turbo, kling-avatar, topaz, ideogram-edit, ideogram-remix, qwen-i2i, qwen-edit, topaz-image-upscale | `image_url` |
-| Array of URLs | kling, grok, sora2-pro, flux, gpt-image, nano-banana-edit, seedream-edit, nano-banana-2-lite (up to 10, NOT the family's `image_input`), seedream-5-flash-i2i (up to 10, not the family's 16) | `image_urls` or `input_urls` |
+| Array of URLs | kling, grok, sora2-pro, flux, gpt-image, nano-banana-edit, seedream-edit, nano-banana-2-lite (up to 10, NOT the family's `image_input`), seedream-5-flash-i2i (up to 10, not the family's 16), minimax-h3-image-i2i (1 to 16) | `image_urls` or `input_urls` |
 | VEO array | veo3, veo3.1 | `imageUrls` (camelCase!) |
 | Video URL | wan v2v | `video_urls` (array) |
 | Video URL | topaz upscale | `video_url` (string) |
@@ -512,6 +567,7 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 |--------|-------|--------|
 | Nano Banana family | `output_format` | `"png"`, `"jpeg"` (hardcoded `"png"`) |
 | Qwen | `output_format` | `"png"`, `"jpeg"` |
+| MiniMax H3 Image (T2I + edit) | `output_format` | `"png"` (KIE's default: nothing is sent), `"jpeg"` (catalog `outputFormats`, `inputFieldsByFormat`) |
 | Other image models | Not supported | — |
 
 ### resolution Support
@@ -525,6 +581,7 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 | GPT Image 2 (T2I + I2I) | `resolution` | `"1K"`, `"2K"`, `"4K"` at every ratio it offers, `auto` and 1:1 included (checked 2026-11-10; older docs limited `auto` to 1K and 1:1 to 2K) |
 | Flux (all variants) | `resolution` | `"1K"`, `"2K"` |
 | Seedream 5 Flash (T2I + I2I) | **`size`** — our `resolution`, renamed on the wire by `resolutionParam: "size"` in `models.ts` (`image.ts` `applyResolutionParam`, both lanes) | `"1K"`, `"2K"` offered (schema also has `"1.5K"`, not offered); flat price at every size |
+| MiniMax H3 Image (T2I + edit) | `resolution` | `"1K"`, `"2K"` (default), `"4K"` at every ratio; 1K and 2K cost the same |
 | Other image models | Not supported | — |
 
 ### quality Support
@@ -643,6 +700,51 @@ Six SKUs on the standard `createTask` lane. Flare and Sunburst are billed by
 - `prompt` is documented up to 32,000 characters on Flare and Sunburst; the routes
   stop at `PROMPT_HARD_CEILING` (30,000). Economy documents 20,000.
 
+### MiniMax H3 Image wire notes (`minimax-h3-image` / `minimax-h3-image-i2i`)
+
+MiniMax's H3 image model, a different model from the H3 video model `minimax-h3`
+(the ids extend that string: never match either by prefix).
+
+- The text-to-image endpoint takes **no image**. With references the provider
+  moves the run to `minimax-h3/image-edit` (`GPT_IMAGE_T2I_TO_I2I` in
+  `image.ts`, and `T2I_TO_I2I_VARIANT` for the routes), and the price follows
+  the swap: `buildCreditModelIdentifier` prices a text-to-image id sent images
+  on the edit id, so the entity routes and pipeline pins, which do not swap,
+  are priced as the edit they run.
+- An edit takes 1 to 16 `image_urls` (each up to 20 MB and 64 MP); the prompt
+  names them `<Picture 1>`, `<Picture 2>`, … in array order. The platform's
+  image prompts write references as `Image N` for every model (there is no
+  per-model reference syntax for images, only for video), so nothing rewrites
+  them to `<Picture N>`.
+- `aspect_ratio`: auto, 1:1, 5:4, 4:3, 3:2, 16:9, 21:9, 4:5, 3:4, 2:3, 9:16, every
+  ratio at every size. KIE's `auto` lets its prompt rewriter pick the ratio from
+  a prompt and follows the first reference in an edit. The catalog lists `auto`
+  LAST, so a fallback that takes the first ratio lands on 1:1. The configs' 16:9
+  is sent only for a direct API request (`/v1/generate-image`) that names no
+  ratio. A Generate Image or Modify Image node saved with no ratio sends `auto`
+  (`nodeAspectRatio` in the payload builder and the editor, the platform's rule
+  for every model with its own `auto`), so a prompt-only node lets KIE's
+  rewriter pick the shape; an edit through `/v1/image-to-image` that names none
+  runs at `auto` too (`UNSET_RATIO_IS_AUTO_EDIT_MODELS`). New nodes start at
+  16:9.
+- The body is an explicit list (`inputFields` / `inputFieldsByFormat`), though
+  the schemas are not `additionalProperties: false`: `expand_prompt` is never
+  sent (KIE's default, on, applies; with it off a seed reproduces and `auto`
+  becomes 1:1), nor `width` / `height` (a custom size, billed by its pixels, not
+  offered), nor a lever another model takes. PNG sends no `output_format`.
+- `seed` is an integer 0 to 2147483647 (`seedRange` on both configs): our API
+  and MCP take any whole number ≥ 0, so a seed outside it is dropped before the
+  request is sent (`kieSeedForWire`), never refused by KIE after the reservation.
+- No content-filter field in either schema, so no `safetyLevers`.
+- **Billing:** per picture by the size, 1.8 KIE credits at 1K or 2K and 5.5 at 4K,
+  plus 0.5 per reference image on an edit, the first included
+  (`MINIMAX_H3_IMAGE_KIE_HUNDREDTHS`, `models.ts`). The credit rows sum it in
+  hundredths and round once (`ee/billing/minimax-h3-image-pricing.ts`:
+  `minimax-h3-image:<size>`, `minimax-h3-image-i2i:<size>:<N>ref`), and
+  `kieImageCostUsd` records the size and the references sent as
+  `provider_cost`. The number of references counted is what the run sends,
+  a Generate Image base included (`pricedSentImages`).
+
 ### seed type
 
 KIE checks `seed` against the TYPE in each SKU's schema. Our API/MCP carry a number, and a SKU whose schema says `type: string` refuses it at createTask (`"seed must be a string"`), which fails the job. When adding an image SKU, read its doc's `seed` type; for a string, declare `seedType: "string"` on its `models.ts` entry (with doc URL + fetch date) and `image.ts` converts the seed through `kieSeedForWire` on both lanes.
@@ -650,10 +752,10 @@ KIE checks `seed` against the TYPE in each SKU's schema. Our API/MCP carry a num
 | Seed type | Image SKUs (docs fetched 2026-10-04) |
 |-----------|--------------------------------------|
 | string (`seedType: "string"`) | `imagen4`, `imagen4-ultra` |
-| integer (default — declare nothing) | `imagen4-fast`, ideogram, qwen, wan-2.7 |
+| integer (default — declare nothing) | `imagen4-fast`, ideogram, qwen, wan-2.7, `minimax-h3-image` and its edit (0 to 2147483647; fetched 2026-11-11) |
 | no `seed` in the schema | every other image SKU |
 
-Do not declare it per family — the Imagen 4 tiers disagree. Only the image lanes read `seedType`; `__tests__/models.test.ts` fails if a video/audio SKU declares it.
+Do not declare it per family — the Imagen 4 tiers disagree. A SKU whose schema bounds the seed declares `seedRange: { min, max }` (MiniMax H3 Image: 0 to 2147483647), and a seed outside it is dropped before the request goes out. Only the image lanes read `seedType` and `seedRange`; `__tests__/models.test.ts` fails if a video/audio SKU declares either.
 
 ---
 

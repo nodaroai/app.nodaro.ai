@@ -70,11 +70,12 @@ export interface ModelProjectionOpts {
  */
 export function projectModel(m: ModelCatalogEntry, prices: ChargedPrices, opts: ModelProjectionOpts): Record<string, unknown> {
   // The company that made the model — one id per company (`family` is the
-  // grouping label, and a few families name a lab or a product line). An entry
-  // built at run time without a known maker is listed without one, never fails
-  // the listing.
+  // grouping label, and a few families name a lab or a product line). A model
+  // offered under the deployment's own label (`ownLabel`) names none and is
+  // listed without one; so is an entry built at run time without a known maker
+  // (logged), which never fails the listing.
   const maker = modelMakerOf(m)
-  if (!maker) warnNoMaker(m)
+  if (!maker && m.ownLabel !== true) warnNoMaker(m)
   const out: Record<string, unknown> = {
     id: m.id,
     label: m.label,

@@ -15,10 +15,11 @@ import {
 } from "../models.js"
 import { IMAGE_EDIT_PROVIDERS } from "@nodaro/shared/models"
 
-describe("seedType — honoured by the KIE image lanes only", () => {
-  // `seedType` sits on the shared KieModelConfig, but only kie/image.ts reads
-  // it. On a video/audio SKU the declaration would be silently ignored and the
-  // number would still go out — the "seed must be a string" failure again.
+describe("seedType and seedRange — honoured by the KIE image lanes only", () => {
+  // `seedType` and `seedRange` sit on the shared KieModelConfig, but only
+  // kie/image.ts reads them. On a video/audio SKU the declaration would be
+  // silently ignored and the seed would still go out as it came — the "seed
+  // must be a string" failure, or a seed KIE refuses after the reservation.
   it("is declared on no SKU outside KIE_IMAGE_MODELS", () => {
     const tables = Object.entries(kieModels).filter(
       ([name]) => /^KIE_[A-Z0-9_]+_MODELS$/.test(name) && name !== "KIE_IMAGE_MODELS",
@@ -26,7 +27,7 @@ describe("seedType — honoured by the KIE image lanes only", () => {
     expect(tables.length).toBeGreaterThan(5) // the scan really saw the non-image tables
     const offenders = tables.flatMap(([name, table]) =>
       Object.entries(table as Record<string, KieModelConfig>)
-        .filter(([, config]) => config.seedType !== undefined)
+        .filter(([, config]) => config.seedType !== undefined || config.seedRange !== undefined)
         .map(([key]) => `${name}.${key}`),
     )
     expect(

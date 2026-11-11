@@ -49,6 +49,12 @@ vi.mock("@/lib/url-validator.js", async () => {
   return { safeUrlSchema: z.string().url() }
 })
 
+// Seedance extend measures its source before the guard; a 10 s clip (no network probe).
+vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  probeVideoSource: vi.fn().mockResolvedValue({ width: 1280, height: 720, durationSeconds: 10, videoDurationSeconds: 10 }),
+}))
+
 vi.mock("@/lib/request-helpers.js", () => ({
   extractWorkflowId: vi.fn().mockReturnValue(null),
   extractNodeId: vi.fn().mockReturnValue(null),
@@ -156,29 +162,29 @@ describe("POST /v1/extend-video — Zod validation", () => {
     expect(res.statusCode).not.toBe(400)
   })
 
-  // — seedance-2-extend: URL-based trim-stitch extend —
+  // — Seedance extend (2.5 / 2.0): URL-based trim-stitch extend —
 
   const seedanceBody = {
     videoUrl: "https://example.com/source.mp4",
     prompt: "the ball keeps rolling until it hits a cup",
-    provider: "seedance-2-extend",
+    provider: "seedance-2-5-extend",
     userId: "user-123",
   }
 
-  it("accepts a valid seedance-2-extend body (videoUrl + prompt, no kieTaskId)", async () => {
-    const res = await app.inject({ method: "POST", url: "/v1/extend-video", payload: seedanceBody })
+  it.each(["seedance-2-5-extend", "seedance-2-0-extend"])("accepts a valid %s body (videoUrl + prompt, no kieTaskId)", async (provider) => {
+    const res = await app.inject({ method: "POST", url: "/v1/extend-video", payload: { ...seedanceBody, provider } })
     expect(res.statusCode).toBe(200)
     expect(res.json().jobId).toBe("job-1")
   })
 
-  it("rejects seedance-2-extend without videoUrl", async () => {
+  it("rejects a Seedance extend without videoUrl", async () => {
     const { videoUrl: _, ...body } = seedanceBody
     const res = await app.inject({ method: "POST", url: "/v1/extend-video", payload: body })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.message).toMatch(/videoUrl/)
   })
 
-  it("rejects seedance-2-extend without prompt (continuation content is required)", async () => {
+  it("rejects a Seedance extend without prompt (continuation content is required)", async () => {
     const { prompt: _, ...body } = seedanceBody
     const res = await app.inject({ method: "POST", url: "/v1/extend-video", payload: body })
     expect(res.statusCode).toBe(400)
@@ -208,7 +214,7 @@ describe("POST /v1/extend-video — Zod validation", () => {
     expect(res.statusCode).toBe(200)
     expect(vi.mocked(videoQueue.add)).toHaveBeenCalledWith("extend-video", expect.objectContaining({
       jobId: "job-1",
-      provider: "seedance-2-extend",
+      provider: "seedance-2-5-extend",
       video: seedanceBody.videoUrl,
       prompt: seedanceBody.prompt,
       duration: 12,
@@ -220,13 +226,17 @@ describe("POST /v1/extend-video — Zod validation", () => {
     expect(payload.kieTaskId).toBeUndefined()
   })
 
-  it("reserves credits at the duration×resolution composite (default 8s/720p)", async () => {
+  it("reserves credits at each provider's duration×resolution row (default 8s/720p)", async () => {
     await app.inject({ method: "POST", url: "/v1/extend-video", payload: seedanceBody })
-    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("seedance-2-extend:8s:720p")
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("seedance-2-5-extend:8s:720p")
 
-    vi.clearAllMocks()
+    vi.mocked(reserveCreditsForJob).mockClear()
     await app.inject({ method: "POST", url: "/v1/extend-video", payload: { ...seedanceBody, duration: 12, resolution: "1080p" } })
-    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("seedance-2-extend:12s:1080p")
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("seedance-2-5-extend:12s:1080p")
+
+    vi.mocked(reserveCreditsForJob).mockClear()
+    await app.inject({ method: "POST", url: "/v1/extend-video", payload: { ...seedanceBody, provider: "seedance-2-0-extend", duration: 12, resolution: "1080p" } })
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("seedance-2-0-extend:12s:1080p")
   })
 })
 

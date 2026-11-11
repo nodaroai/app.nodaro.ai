@@ -12,7 +12,7 @@ import { presetFanOutBodies } from "../lib/presets/generate-image-preset-hook.js
 import { userDirectionOf, type ResolvedUserDirection } from "../lib/user-direction.js"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared/models"
 import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
-import { defaultImageModel, gptImage26SentImages } from "@nodaro/shared/model-catalog"
+import { defaultImageModel, pricedSentImages } from "@nodaro/shared/model-catalog"
 import { generateImageModelOf } from "../workers/handlers/default-models.js"
 import { rawBodyRecord, textField } from "../lib/run-model.js"
 import { assembledRefsForPricing, isStructuredImageMode } from "./generate-image-plan.js"
@@ -125,8 +125,9 @@ export function imageCreditIdentifierFor(
   const references = structured
     ? assembledRefsForPricing(pricedBody as Parameters<typeof assembledRefsForPricing>[0], userDirection)
     : (flatRefs ?? [])
-  // On GPT Image 2.6 the base of an edit is one more image sent, as in the DEBIT.
-  const refCount = gptImage26SentImages(rawProvider, references, body?.baseImageUrl)
+  // On a model priced per input image the base of an edit is one more image
+  // sent, as in the DEBIT.
+  const refCount = pricedSentImages(rawProvider, references, body?.baseImageUrl)
 
   // Shared reference-aware builder: mirrors the handler's T2I→I2I auto-swap
   // (triggered by refs being attached — in structured mode the ASSEMBLED count,

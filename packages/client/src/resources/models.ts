@@ -22,13 +22,15 @@ export interface ModelSummary {
   /** The company that made the model. Not the same as the family it is
    *  grouped under: a few families name a lab or a product line (Tongyi-MAI
    *  and HappyHorse are Alibaba's, Depth Anything is ByteDance's). Absent on
-   *  an older server. */
+   *  a model the instance offers under its own label (it names no maker), and
+   *  on an older server. */
   maker?: ModelMaker
   /** The maker's official mark (an SVG) on this deployment's media CDN, or
    *  null when the deployment does not publish one for this maker — draw a
-   *  fallback (the maker's name or initial) then. The address carries its
-   *  file's version, so a replaced mark arrives under a new address. Absent
-   *  on an older server. */
+   *  fallback (the maker's name or initial) then — and null for a model the
+   *  instance offers under its own label (it names no maker). The address
+   *  carries its file's version, so a replaced mark arrives under a new
+   *  address. Absent on an older server. */
   logoUrl?: string | null
   description: string
   modes: string[]

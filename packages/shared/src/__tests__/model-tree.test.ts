@@ -69,6 +69,19 @@ describe("buildModelTree", () => {
     expect(flux?.models.some((m) => m.label.toLowerCase().includes("kontext"))).toBe(true)
     expect(tree.some((l) => l.series.toLowerCase().includes("kontext"))).toBe(false)
   })
+  it("keeps the Hailuo line the video line it was, and MiniMax H3 Image in a line of its own", () => {
+    const hailuo = tree.filter((l) => l.series === "Hailuo")
+    expect(hailuo).toHaveLength(1)
+    expect(hailuo[0]!.kind).toBe("video")
+    // The members the line had before MiniMax H3 Image was added: no image model joins it.
+    expect(hailuo[0]!.models.map((m) => m.id).sort()).toEqual(
+      ["hailuo-2.3", "hailuo-2.3-pro", "hailuo-avatar", "hailuo-standard", "minimax", "minimax-h3"],
+    )
+    const image = tree.filter((l) => l.series === "MiniMax Image")
+    expect(image).toHaveLength(1)
+    expect(image[0]!.kind).toBe("image")
+    expect(image[0]!.models.map((m) => m.id).sort()).toEqual(["minimax-h3-image", "minimax-h3-image-i2i"])
+  })
 })
 
 describe("searchModelVariants", () => {

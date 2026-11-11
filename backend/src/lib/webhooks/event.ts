@@ -28,7 +28,8 @@ import { fillJobRenderQuality } from "../render-label-fill.js"
 import { titleColumnPresent } from "../jobs-title-column.js"
 import { CHILD_JOB_COLUMN } from "../public-job-data.js"
 import { publicCreditFieldsOf, runCreditsFor } from "../job-credit-status.js"
-import { webhookBodyProviderWords } from "../provider-words.js"
+import { runIdOf, webhookBodyProviderWords } from "../provider-words.js"
+import { runJobsProviderWords, webhookBodyCanRead } from "../provider-words-readers.js"
 import type { WebhookEventType } from "./event-types.js"
 
 export const MAX_EVENT_BYTES = 64 * 1024
@@ -81,18 +82,24 @@ function envelope(d: ClaimedDelivery, data: Record<string, unknown>): string {
   return JSON.stringify({ id: d.deliveryId, type: d.event, createdAt: isoTime(d.createdAt), data })
 }
 
-/** Whether the delivery's job is a child job (CHILD_JOB_COLUMN). Throws on a database error (the attempt is retried). */
-async function isChildJob(jobId: string, deliveryId: string): Promise<boolean> {
-  const { data, error } = await supabase.from("jobs").select(CHILD_JOB_COLUMN).eq("id", jobId).maybeSingle()
+/**
+ * Whether the delivery's job is a child job (CHILD_JOB_COLUMN), and the run it
+ * belongs to (null for a job with no run) — what a kept body's provider words
+ * are judged by. Throws on a database error (the attempt is retried).
+ */
+async function keptJobFacts(jobId: string, deliveryId: string): Promise<{ child: boolean; runId: string | null }> {
+  const { data, error } = await supabase.from("jobs").select(`${CHILD_JOB_COLUMN}, workflow_execution_id`).eq("id", jobId).maybeSingle()
   if (error) throw new Error(`could not read the job for webhook delivery ${deliveryId}`)
-  return (data as Record<string, unknown> | null)?.[CHILD_JOB_COLUMN] != null
+  const row = (data as Record<string, unknown> | null) ?? {}
+  return { child: row[CHILD_JOB_COLUMN] != null, runId: runIdOf(row) }
 }
 
 async function jobFor(d: ClaimedDelivery): Promise<Record<string, unknown> | null> {
   if (!d.jobId) return null
   const { data, error } = await supabase
     .from("jobs")
-    .select(jobEventColumns())
+    // The run id is read for the run rule alone (runJobsProviderWords takes it off).
+    .select(`${jobEventColumns()}, workflow_execution_id`)
     .eq("id", d.jobId)
     .eq("user_id", d.userId)
     // A child job is reported only through its parent: the capture records no
@@ -103,7 +110,9 @@ async function jobFor(d: ClaimedDelivery): Promise<Record<string, unknown> | nul
   if (error) throw new Error(`could not read the job for webhook delivery ${d.deliveryId}`)
   if (!data) return null
 
-  const row = data as unknown as Record<string, unknown>
+  // The endpoint's owner is the job's: a run's job keeps its provider words
+  // only when they can open the run's workflow.
+  const [row] = (await runJobsProviderWords([data as unknown as Record<string, unknown>], { isAdmin: false, userId: d.userId })) as [Record<string, unknown>]
   const usageLogId = (row.usage_log_id as string | null | undefined) ?? null
   // The job as a run: its steps (child jobs) and settled side holds included.
   const credits = await runCreditsFor([
@@ -169,11 +178,14 @@ export async function eventBodyFor(d: ClaimedDelivery): Promise<BuiltEvent> {
     // A kept body is trusted only for a job that is not a child: one recorded
     // for a child (before migration 550 stopped the capture) holds the child's
     // input, so it is never sent again — the job reads as gone.
-    if (d.jobId && (await isChildJob(d.jobId, d.deliveryId))) return { kind: "missing" }
-    // The same text, unless it carries provider words this deployment now
-    // keeps for its admins (lib/provider-words.ts): a body recorded before the
-    // setting would otherwise send them again.
-    return { kind: "body", body: webhookBodyProviderWords(d.payload), fresh: false }
+    const kept = d.jobId ? await keptJobFacts(d.jobId, d.deliveryId) : { child: false, runId: null }
+    if (kept.child) return { kind: "missing" }
+    // The same text, unless it carries provider words its owner may not read
+    // (lib/provider-words.ts): a body recorded before the deployment kept them
+    // for its admins, or for a run's job whose workflow its owner cannot open
+    // (looked up only when the body carries words), would otherwise send them again.
+    const canRead = await webhookBodyCanRead(d.userId, d.payload, kept.runId)
+    return { kind: "body", body: webhookBodyProviderWords(d.payload, canRead), fresh: false }
   }
   if (d.event === "ping") {
     return { kind: "body", body: envelope(d, { webhookId: d.webhookId }), fresh: true }

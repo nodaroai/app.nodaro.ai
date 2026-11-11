@@ -4,6 +4,7 @@ import { z } from "zod"
 import { BridgeToNextSceneInputSchema, FixContinuityInputSchema, GenerateMotionInputSchema, ImprovePromptInputSchema, OptimizeForModelInputSchema, ValidateMatchCutInputSchema, type ImprovePromptInput, type SceneHelperName, type SceneNodeData, type ShowrunnerPlan, type ShotSpec } from "@nodaro/shared/pipeline"
 import { hasCredits } from "../lib/config.js"
 import { paygSurfaceSpendHook } from "../middleware/credit-guard.js"
+import { filmPipelineAvailabilityHook } from "../lib/film-pipeline-availability.js"
 import { requireScope, type Scope } from "../lib/scopes.js"
 import { supabase } from "../lib/supabase.js"
 import { ownedSceneNodeData } from "../lib/pipeline-asset-ownership.js"
@@ -385,6 +386,9 @@ function registerHelperRoute(app: FastifyInstance, cfg: HelperConfig<unknown>) {
 }
 
 export async function sceneHelpersRoutes(app: FastifyInstance) {
+  // A scene helper works on a pipeline: the film pipeline's availability door
+  // (`film-pipeline`), FIRST, as on pipelinesRoutes — before anything is reserved.
+  app.addHook("preHandler", filmPipelineAvailabilityHook())
   // Same spend-surface gate as pipelinesRoutes — helper runs reserve credits
   // via the direct RPC path, so the block must sit at the route entry.
   app.addHook("preHandler", paygSurfaceSpendHook())

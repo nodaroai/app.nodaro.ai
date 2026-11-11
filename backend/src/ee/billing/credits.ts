@@ -14,6 +14,7 @@ import {
   buildCreditModelIdentifier,
   buildVideoCreditModelIdentifier,
   seedanceVideoEditCreditId,
+  seedanceExtendCreditId,
   buildMotionCreditModelIdentifier,
   AI_AVATAR_DURATION_BUCKETS,
   resolveAiAvatarCreditId,
@@ -62,6 +63,8 @@ import {
   dialogueProviderOf,
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
   isSeedanceVideoEditProvider,
+  isSeedanceExtendProvider,
+  canonicalVideoProvider,
   sunoSeparateCreditId,
   audioSoundtrackActive,
   applyDefaultVideoSelection,
@@ -95,7 +98,7 @@ import {
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
 import { ugcGraphVideos, ugcRunSetVideos, ugcVideoEstimate } from "./ugc-run-set.js"
 import { UgcListingUnpricedError, UgcPartUnpricedError } from "./ugc-listing-unpriced.js"
-import { bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, type UseCaseViewerFlags } from "@nodaro/render-rules"
+import { EXTEND_VIDEO_DEFAULT_PROVIDER, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, forwardedVideoLengthSec, runWireFps, runWireLengthSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChainInput, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits, type UseCaseViewerFlags } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -125,7 +128,6 @@ import { getAppSettings } from "../../lib/app-settings.js"
 import { APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE, APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE } from "../../lib/apply-edl-plan.js"
 import { SPEAKER_VIEW_CREDITS_PER_OUTPUT_MINUTE } from "../../lib/speaker-view-plan.js"
 import { AUDIO_SYNC_CREDIT_COSTS, audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
-import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
 import { PIPELINE_ACCEPTED_SCRIPT_LLMS } from "@nodaro/shared/pipeline"
 import { captionRoutesToRemotion } from "@nodaro/shared/captions"
@@ -138,7 +140,8 @@ import { countImageInputEdges, countRefModalityEdges, nodeIsMasked, wiredImageSi
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
 import { gptImage26StaticCosts } from "./gpt-image-2-6-pricing.js"
-import { defaultImageModelForNode, gptImage26EstimatedImages, imageFormatLeversOf, isGptImage26Tiered, maskedEditResolution, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
+import { minimaxH3ImageStaticCosts } from "./minimax-h3-image-pricing.js"
+import { defaultImageModelForNode, imageFormatLeversOf, isPricedPerInputImage, maskedEditResolution, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
@@ -691,6 +694,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "seedream-5-pro": 18,           // (basic / 1K default)
   "seedream-5-pro:high": 60,      // high / 2K
   "seedream-5-flash": 10,         // 1K / 2K flat (KIE size lever, no composites)
+  // MiniMax H3 Image: by size (1K and 2K the same) and, on an edit, by
+  // reference image, both ids (see minimax-h3-image-pricing.ts).
+  ...minimaxH3ImageStaticCosts(),
   "flux-flex": 35,                // (1K default)
   "flux-flex:2K": 60,
   "z-image": 2,
@@ -1435,6 +1441,26 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "kling-4-keyframes:18s:1080p": 1920, "kling-4-keyframes:19s:1080p": 2020, "kling-4-keyframes:20s:1080p": 2130, "kling-4-keyframes:21s:1080p": 2240, "kling-4-keyframes:22s:1080p": 2340,
   "kling-4-keyframes:23s:1080p": 2450, "kling-4-keyframes:24s:1080p": 2550, "kling-4-keyframes:25s:1080p": 2660, "kling-4-keyframes:26s:1080p": 2770, "kling-4-keyframes:27s:1080p": 2870,
   "kling-4-keyframes:28s:1080p": 2980, "kling-4-keyframes:29s:1080p": 3090, "kling-4-keyframes:30s:1080p": 3190,
+  // ── Kling 4.0 Flash (KIE kling-4.0/flash-reference-to-video + flash-keyframe-to-video) ──
+  //    ONE id over both endpoints (picked by what is wired), ONE ROW PER SECOND
+  //    across 3-20s at 720p (its only tier): credits = KIE cr/s × seconds × 2.5,
+  //    rounded UP to the next 10 (the Kling 4.0 rule). KIE cr/s: 17 on both
+  //    endpoints. `-ref` rows for a run with a reference VIDEO, from KIE's
+  //    with-video rate (11.3 cr/s): they price one second of BILLED duration —
+  //    the reservation scales the 8s row ÷ 8 by output + max(output, input
+  //    seconds) (ee/billing/seedance2-ref-video-credits.ts). The rounded 8s row
+  //    (230) is deliberate. The bare id is the DEFAULT render (5s @ 720p).
+  //    Audio is always on and priced in. Machine-generated with its seed
+  //    migration (`*_kling_4_flash_pricing.sql`) — never edit one value by hand.
+  "kling-4-flash": 220,   // (5s 720p default render)
+  "kling-4-flash:3s:720p": 130, "kling-4-flash:4s:720p": 170, "kling-4-flash:5s:720p": 220, "kling-4-flash:6s:720p": 260, "kling-4-flash:7s:720p": 300,
+  "kling-4-flash:8s:720p": 340, "kling-4-flash:9s:720p": 390, "kling-4-flash:10s:720p": 430, "kling-4-flash:11s:720p": 470, "kling-4-flash:12s:720p": 510,
+  "kling-4-flash:13s:720p": 560, "kling-4-flash:14s:720p": 600, "kling-4-flash:15s:720p": 640, "kling-4-flash:16s:720p": 680, "kling-4-flash:17s:720p": 730,
+  "kling-4-flash:18s:720p": 770, "kling-4-flash:19s:720p": 810, "kling-4-flash:20s:720p": 850,
+  "kling-4-flash:3s:720p-ref": 90, "kling-4-flash:4s:720p-ref": 120, "kling-4-flash:5s:720p-ref": 150, "kling-4-flash:6s:720p-ref": 170, "kling-4-flash:7s:720p-ref": 200,
+  "kling-4-flash:8s:720p-ref": 230, "kling-4-flash:9s:720p-ref": 260, "kling-4-flash:10s:720p-ref": 290, "kling-4-flash:11s:720p-ref": 320, "kling-4-flash:12s:720p-ref": 340,
+  "kling-4-flash:13s:720p-ref": 370, "kling-4-flash:14s:720p-ref": 400, "kling-4-flash:15s:720p-ref": 430, "kling-4-flash:16s:720p-ref": 460, "kling-4-flash:17s:720p-ref": 490,
+  "kling-4-flash:18s:720p-ref": 510, "kling-4-flash:19s:720p-ref": 540, "kling-4-flash:20s:720p-ref": 570,
   "wan-i2v": 175,                 // (5s 720p fallback)
   // Wan I2V duration-tiered pricing (720p default)
   "wan-i2v:5s": 180,
@@ -1498,8 +1524,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // LTX extend + retake (Pro only, 1080p): per-second × duration at credit-guard time.
   // 5 cr/sec matches Pro:1080p rate (extend output is at the input's resolution; retake is locked 1080p).
   "ltx-2.3-pro-extend:per-second": 40,
-  // ── Seedance 2 Extend — trim-stitch continuation of ANY video (rates =
-  //    seedance-2 -ref matrix + 3cr ffmpeg stitch; spike findings 2026-06-11) ──
+  // ── Seedance 2 Extend, the earlier length-tier rows. No run is priced on
+  //    them any more (Seedance 2.0 Extend has its own per-second rows below);
+  //    kept so the model_pricing rows they seeded keep a static twin. ──
   "seedance-2-extend": 530,             // default 8s 720p
   "seedance-2-extend:4s:480p": 150,
   "seedance-2-extend:8s:480p": 260,
@@ -1513,6 +1540,131 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "seedance-2-extend:8s:1080p":   780,
   "seedance-2-extend:12s:1080p":  1160,
   "seedance-2-extend:15s:1080p":  1440,
+  // ── Seedance 2.5 Extend — one row per second added (4–30s) × resolution.
+  //    Each row is what the run bills for that length, reference clip
+  //    included; extend-price-rows.test.ts holds them to the reference-video
+  //    price, so a reprice of the seedance-2-5 -ref rows fails it until these
+  //    follow (with a migration). ──
+  "seedance-2-5-extend:4s:480p": 255,
+  "seedance-2-5-extend:5s:480p": 298,
+  "seedance-2-5-extend:6s:480p": 340,
+  "seedance-2-5-extend:7s:480p": 383,
+  "seedance-2-5-extend:8s:480p": 425,
+  "seedance-2-5-extend:9s:480p": 468,
+  "seedance-2-5-extend:10s:480p": 510,
+  "seedance-2-5-extend:11s:480p": 553,
+  "seedance-2-5-extend:12s:480p": 595,
+  "seedance-2-5-extend:13s:480p": 638,
+  "seedance-2-5-extend:14s:480p": 680,
+  "seedance-2-5-extend:15s:480p": 723,
+  "seedance-2-5-extend:16s:480p": 765,
+  "seedance-2-5-extend:17s:480p": 808,
+  "seedance-2-5-extend:18s:480p": 850,
+  "seedance-2-5-extend:19s:480p": 893,
+  "seedance-2-5-extend:20s:480p": 935,
+  "seedance-2-5-extend:21s:480p": 978,
+  "seedance-2-5-extend:22s:480p": 1020,
+  "seedance-2-5-extend:23s:480p": 1063,
+  "seedance-2-5-extend:24s:480p": 1105,
+  "seedance-2-5-extend:25s:480p": 1148,
+  "seedance-2-5-extend:26s:480p": 1190,
+  "seedance-2-5-extend:27s:480p": 1233,
+  "seedance-2-5-extend:28s:480p": 1275,
+  "seedance-2-5-extend:29s:480p": 1318,
+  "seedance-2-5-extend:30s:480p": 1360,
+  "seedance-2-5-extend:4s:720p": 570,
+  "seedance-2-5-extend:5s:720p": 665,
+  "seedance-2-5-extend:6s:720p": 760,
+  "seedance-2-5-extend:7s:720p": 855,
+  "seedance-2-5-extend:8s:720p": 950,
+  "seedance-2-5-extend:9s:720p": 1045,
+  "seedance-2-5-extend:10s:720p": 1140,
+  "seedance-2-5-extend:11s:720p": 1235,
+  "seedance-2-5-extend:12s:720p": 1330,
+  "seedance-2-5-extend:13s:720p": 1425,
+  "seedance-2-5-extend:14s:720p": 1520,
+  "seedance-2-5-extend:15s:720p": 1615,
+  "seedance-2-5-extend:16s:720p": 1710,
+  "seedance-2-5-extend:17s:720p": 1805,
+  "seedance-2-5-extend:18s:720p": 1900,
+  "seedance-2-5-extend:19s:720p": 1995,
+  "seedance-2-5-extend:20s:720p": 2090,
+  "seedance-2-5-extend:21s:720p": 2185,
+  "seedance-2-5-extend:22s:720p": 2280,
+  "seedance-2-5-extend:23s:720p": 2375,
+  "seedance-2-5-extend:24s:720p": 2470,
+  "seedance-2-5-extend:25s:720p": 2565,
+  "seedance-2-5-extend:26s:720p": 2660,
+  "seedance-2-5-extend:27s:720p": 2755,
+  "seedance-2-5-extend:28s:720p": 2850,
+  "seedance-2-5-extend:29s:720p": 2945,
+  "seedance-2-5-extend:30s:720p": 3040,
+  "seedance-2-5-extend:4s:1080p": 1425,
+  "seedance-2-5-extend:5s:1080p": 1663,
+  "seedance-2-5-extend:6s:1080p": 1900,
+  "seedance-2-5-extend:7s:1080p": 2138,
+  "seedance-2-5-extend:8s:1080p": 2375,
+  "seedance-2-5-extend:9s:1080p": 2613,
+  "seedance-2-5-extend:10s:1080p": 2850,
+  "seedance-2-5-extend:11s:1080p": 3088,
+  "seedance-2-5-extend:12s:1080p": 3325,
+  "seedance-2-5-extend:13s:1080p": 3563,
+  "seedance-2-5-extend:14s:1080p": 3800,
+  "seedance-2-5-extend:15s:1080p": 4038,
+  "seedance-2-5-extend:16s:1080p": 4275,
+  "seedance-2-5-extend:17s:1080p": 4513,
+  "seedance-2-5-extend:18s:1080p": 4750,
+  "seedance-2-5-extend:19s:1080p": 4988,
+  "seedance-2-5-extend:20s:1080p": 5225,
+  "seedance-2-5-extend:21s:1080p": 5463,
+  "seedance-2-5-extend:22s:1080p": 5700,
+  "seedance-2-5-extend:23s:1080p": 5938,
+  "seedance-2-5-extend:24s:1080p": 6175,
+  "seedance-2-5-extend:25s:1080p": 6413,
+  "seedance-2-5-extend:26s:1080p": 6650,
+  "seedance-2-5-extend:27s:1080p": 6888,
+  "seedance-2-5-extend:28s:1080p": 7125,
+  "seedance-2-5-extend:29s:1080p": 7363,
+  "seedance-2-5-extend:30s:1080p": 7600,
+  // ── Seedance 2.0 Extend — one row per second added (4–15s) × resolution,
+  //    held to the seedance-2 reference-video price the same way (the
+  //    earlier seedance-2-extend:<tier>:<res> rows above are no longer read). ──
+  "seedance-2-0-extend:4s:480p": 173,
+  "seedance-2-0-extend:5s:480p": 202,
+  "seedance-2-0-extend:6s:480p": 230,
+  "seedance-2-0-extend:7s:480p": 259,
+  "seedance-2-0-extend:8s:480p": 288,
+  "seedance-2-0-extend:9s:480p": 317,
+  "seedance-2-0-extend:10s:480p": 345,
+  "seedance-2-0-extend:11s:480p": 374,
+  "seedance-2-0-extend:12s:480p": 403,
+  "seedance-2-0-extend:13s:480p": 432,
+  "seedance-2-0-extend:14s:480p": 460,
+  "seedance-2-0-extend:15s:480p": 489,
+  "seedance-2-0-extend:4s:720p": 375,
+  "seedance-2-0-extend:5s:720p": 438,
+  "seedance-2-0-extend:6s:720p": 500,
+  "seedance-2-0-extend:7s:720p": 563,
+  "seedance-2-0-extend:8s:720p": 625,
+  "seedance-2-0-extend:9s:720p": 688,
+  "seedance-2-0-extend:10s:720p": 750,
+  "seedance-2-0-extend:11s:720p": 813,
+  "seedance-2-0-extend:12s:720p": 875,
+  "seedance-2-0-extend:13s:720p": 938,
+  "seedance-2-0-extend:14s:720p": 1000,
+  "seedance-2-0-extend:15s:720p": 1063,
+  "seedance-2-0-extend:4s:1080p": 930,
+  "seedance-2-0-extend:5s:1080p": 1085,
+  "seedance-2-0-extend:6s:1080p": 1240,
+  "seedance-2-0-extend:7s:1080p": 1395,
+  "seedance-2-0-extend:8s:1080p": 1550,
+  "seedance-2-0-extend:9s:1080p": 1705,
+  "seedance-2-0-extend:10s:1080p": 1860,
+  "seedance-2-0-extend:11s:1080p": 2015,
+  "seedance-2-0-extend:12s:1080p": 2170,
+  "seedance-2-0-extend:13s:1080p": 2325,
+  "seedance-2-0-extend:14s:1080p": 2480,
+  "seedance-2-0-extend:15s:1080p": 2635,
   "ltx-2.3-pro-retake:per-second": 40,
   "runway-kie": 30,               // (5s, 720p)
   // ── Video Extend ──
@@ -3676,7 +3828,7 @@ export class CreditsService {
     }
 
     // An account that never paid generates video only within the free limits:
-    // no Kling, Seedance 2.5, upscaling or extension, the lowest resolution, a
+    // no Kling (Kling 4.0 Flash aside), Seedance 2.5, upscaling or extension, the lowest resolution, a
     // short clip (free-video-limits.ts). Anyone who ever bought credits or a
     // plan is not limited (owner decisions 2026-10-14) — the effective tier,
     // and, for a stored-free account, a purchase on record (a cancelled
@@ -6920,9 +7072,13 @@ export function getNodeModelIdentifier(
   if (nodeType === "video-upscale" && isTopazVideoUpscaleNode(node)) return TOPAZ_VIDEO_UNIT_CREDIT_ID
 
   // A node naming no model whose default is priced per input image: the node-type
-  // row would quote below what the run reserves.
+  // row would quote below what the run reserves. An Extend Video node naming no
+  // provider runs on the node's default (`EXTEND_VIDEO_DEFAULT_PROVIDER`, the
+  // payload builder's too) and is quoted as that run, never the node-type row.
   const nodeDefault = data.provider ? undefined : defaultImageModelForNode(nodeType, data.aspectRatio as string | undefined)
-  const provider = (data.provider as string | undefined) ?? (nodeDefault && isGptImage26Tiered(nodeDefault) ? nodeDefault : undefined)
+  const provider = (data.provider as string | undefined)
+    ?? (nodeType === "extend-video" ? EXTEND_VIDEO_DEFAULT_PROVIDER : undefined)
+    ?? (nodeDefault && isPricedPerInputImage(nodeDefault) ? nodeDefault : undefined)
   if (!provider) return nodeType
 
   // Extend-video: VEO quality costs more than fast
@@ -6934,15 +7090,16 @@ export function getNodeModelIdentifier(
   // which sumWorkflowEstimate multiplies by the seconds (estimatePricingUnits).
   if (nodeType === "extend-video" && provider === "ltx-2.3-pro") return LTX_EXTEND_PER_SECOND_CREDIT_ID
 
-  // Extend-video: seedance trim-stitch extend prices by duration tier ×
-  // resolution, for the model SEEDANCE_EXTEND_GENERATION_MODEL actually
-  // dispatches on (the 2.0 rows already include the ffmpeg stitch overhead).
-  // The estimate must follow the reservation or the quote lies.
-  if (nodeType === "extend-video" && provider === "seedance-2-extend") {
-    return buildSeedanceExtendCreditIdentifier(
-      data.duration as number | undefined,
-      data.resolution as string | undefined,
-    )
+  // Extend-video: each Seedance provider (2.5, 2.0) is priced on its own rows
+  // (seconds added × resolution) through the one builder the route and the
+  // workflow run reserve with — the estimate must follow the reservation or
+  // the quote lies. A retired id (`seedance-2-extend`) is quoted as the
+  // provider it runs as.
+  const seedanceExtend = nodeType === "extend-video" ? canonicalVideoProvider(provider) : undefined
+  if (isSeedanceExtendProvider(seedanceExtend)) {
+    const duration = typeof data.duration === "number" || typeof data.duration === "string" ? data.duration : undefined
+    const resolution = typeof data.resolution === "string" ? data.resolution : undefined
+    return seedanceExtendCreditId(seedanceExtend, duration, resolution)
   }
 
   // Motion transfer: duration-tiered pricing
@@ -7037,7 +7194,7 @@ export function getNodeModelIdentifier(
     followedSize ?? (typeof data.resolution === "string" ? resolutionAtAspectRatio(provider, data.aspectRatio, data.resolution) : undefined),
     data.renderingSpeed as string | undefined,
     data.targetResolution as string | undefined,
-    isGptImage26Tiered(provider) ? gptImage26EstimatedImages(provider, data, graph.imageRefsWired ?? 0) : undefined,
+    isPricedPerInputImage(provider) ? pricedEstimatedImages(provider, data, graph.imageRefsWired ?? 0) : undefined,
     // A GIF's band of frames and an SVG's level, on a model they price (GPT Image 2.6).
     imageFormatLeversOf(data),
   )

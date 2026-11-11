@@ -9,14 +9,17 @@
  */
 import { supabase } from "./supabase.js"
 import { CHILD_JOB_COLUMN, TRASHED_JOB_COLUMN } from "./public-job-data.js"
+import { readableJobsFilter } from "./public-job-read.js"
 
 /**
  * Which jobs a person may favorite, as a PostgREST `or()` filter: their own
- * job, or any public completed one (what the public gallery shows). Shared by
- * the REST toggle and MCP `favorite_asset`, so the two agree.
+ * job, or any public completed one (what the public gallery shows) — the jobs
+ * they may read by id (`lib/public-job-read.ts`, which narrows to their own on
+ * a deployment that does not allow public work). Shared by the REST toggle and
+ * MCP `favorite_asset`, so the two agree.
  */
 export function favoritableJobFilter(userId: string): string {
-  return `user_id.eq.${userId},and(is_public.eq.true,status.eq.completed)`
+  return readableJobsFilter(userId)
 }
 
 export type ToggleFavoriteOutcome = { kind: "toggled"; favorited: boolean } | { kind: "not_found" }

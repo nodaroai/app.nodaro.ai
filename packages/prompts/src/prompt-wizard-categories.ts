@@ -182,6 +182,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "seedream-5-lite": "Lighter Seedream, faster artistic generation",
     "seedream-5-pro": "Flagship Seedream — strongest instruction following, 2K via high quality",
     "seedream-5-flash": "Fast, low-cost Seedream 5 — quick drafts and iteration at 1K or 2K",
+    "minimax-h3-image": "MiniMax H3 — readable text in the picture, up to about 16 MP at 4K, same price at 1K and 2K",
     "z-image": "Experimental, novel generation approaches",
     "wan-2.7":     "Wan 2.7 T2I — 1K/2K/4K, up to 9 ref images",
     "wan-2.7-pro": "Wan 2.7 Pro T2I — higher quality, 1K/2K/4K",
@@ -210,6 +211,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "seedream-5-lite-i2i": "Light artistic transformation",
     "seedream-5-pro-i2i": "Pro-grade instruction-based edits, multi-reference",
     "seedream-5-flash-i2i": "Fast, low-cost Seedream edits — up to 10 input images",
+    "minimax-h3-image-i2i": "MiniMax H3 edits — up to 16 reference images in one edit, readable text, up to 4K",
     "flux-kontext": "Character-consistent edits with reference awareness",
     "flux-kontext-max": "Premium character-consistent editing",
     "kontext-multi": "Multi-image Kontext via Replicate — up to 4 refs",
@@ -238,6 +240,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "seedream-5-lite-i2i": "Light artistic transformation",
     "seedream-5-pro-i2i": "Pro-grade instruction-based edits, multi-reference",
     "seedream-5-flash-i2i": "Fast, low-cost Seedream edits — up to 10 input images",
+    "minimax-h3-image-i2i": "MiniMax H3 edits — up to 16 reference images in one edit, readable text, up to 4K",
     "flux-kontext": "Character-consistent edits with reference awareness",
     "flux-kontext-max": "Premium character-consistent editing",
     "kontext-multi": "Multi-image Kontext via Replicate — up to 4 refs",
@@ -279,6 +282,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "vidu-q4": "Vidu Q4 — start frame or up to 15 reference images + 3 MP3 audio refs, native audio, 3–16s, 540p–4K (image required)",
     "kling-4": "Kling 4.0 — text, or up to 10 reference images / 5 videos / 7 characters / 3 voices; native audio, 3–30s, 720p/1080p",
     "kling-4-keyframes": "Kling 4.0 Keyframes — start frame, up to 8 in-between frames and an end frame; native audio, 3–30s, 720p/1080p",
+    "kling-4-flash": "Kling 4.0 Flash — text, or up to 10 reference images / 5 videos / 7 characters (a voice clip per character); native audio, 3–20s, 720p",
     "grok-imagine-video-1.5": "Grok Imagine 1.5 — image-to-video only; requires an input image",
   },
   "image-to-video": {
@@ -318,6 +322,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "vidu-q4": "Vidu Q4 — animate a start frame, or direct up to 15 reference images + 3 MP3 audio refs; native audio, 3–16s, 540p–4K",
     "kling-4": "Kling 4.0 — a start frame joins up to 10 reference images, 5 videos, 7 characters and 3 voices; native audio, 3–30s, 720p/1080p",
     "kling-4-keyframes": "Kling 4.0 Keyframes — start frame, up to 8 in-between frames and an end frame; native audio, 3–30s, 720p/1080p",
+    "kling-4-flash": "Kling 4.0 Flash — a start frame alone is the exact opening frame; beside up to 10 reference images, 5 videos and 7 characters it joins them; native audio, 3–20s, 720p",
     "grok-imagine-video-1.5": "Grok Imagine 1.5 — stylized animation, 1–15s, 480p/720p (image required)",
   },
   "video-to-video": {
@@ -335,7 +340,8 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
   "extend-video": {
     "veo-extend": "Extend VEO-generated videos",
     "runway-extend": "Extend Runway-generated videos",
-    "seedance-2-extend": "Extend ANY video by URL — seamless trim-stitched continuation with audio (Seedance 2.0)",
+    "seedance-2-5-extend": "Extend ANY video by URL — seamless trim-stitched continuation with audio, 4–30s added (Seedance 2.5)",
+    "seedance-2-0-extend": "Extend ANY video by URL — seamless trim-stitched continuation with audio, 4–15s added (Seedance 2.0)",
   },
   "speech-to-video": {
     "wan-speech": "Wan 2.2 speech-driven video generation",

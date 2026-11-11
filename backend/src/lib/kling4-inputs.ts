@@ -1,5 +1,6 @@
 import {
   isKling4Provider,
+  isKling4FlashProvider,
   kling4KeyframeFrameCap,
   pricedOutputDurationSec,
   KLING_4_MAX_MIDDLE_FRAMES,
@@ -19,6 +20,16 @@ import {
  *     most 8 in-between frames.
  *   - `kling-4`: images (a start or end frame counts as one) + videos +
  *     characters + voices ≤ 15 (docs.kie.ai/market/kling/v4-reference-to-video).
+ *   - `kling-4-flash`: images (a start frame counts as one) + videos +
+ *     characters ≤ 15 (docs.kie.ai/market/kling/v4-flash-reference-to-video).
+ *     A voice clip rides its character (`audioBindsToCharacters`) and an end
+ *     frame is dropped, so neither takes a seat. A start frame alone runs on the
+ *     keyframe endpoint, where nothing else is counted — and one material is
+ *     always within the budget, so the rule needs no endpoint of its own.
+ *
+ * Reference-video LENGTHS are a separate, data-driven check
+ * (`VIDEO_REF_VIDEO_DURATION_LIMITS`, run by `probeAndCheckRefVideoDurations`
+ * in the routes' preHandler and the DAG gate).
  *
  * Returns null when the run is legal, or for any other provider.
  */
@@ -33,7 +44,8 @@ export function kling4InputProblem(args: {
   referenceAudioCount: number
   characterCount: number
 }): { code: "validation_error"; message: string } | null {
-  if (!isKling4Provider(args.provider)) return null
+  const flash = isKling4FlashProvider(args.provider)
+  if (!isKling4Provider(args.provider) && !flash) return null
   if (args.provider === "kling-4-keyframes") {
     const durationSec = pricedOutputDurationSec(args.provider, args.durationSec)
     const cap = kling4KeyframeFrameCap(durationSec)
@@ -54,20 +66,26 @@ export function kling4InputProblem(args: {
     }
     return null
   }
-  const materials = VIDEO_REF_LIMITS_BY_PROVIDER[args.provider as string]?.materials ?? 15
+  const limits = VIDEO_REF_LIMITS_BY_PROVIDER[args.provider as string]
+  const materials = limits?.materials ?? 15
+  const audioSeats = limits?.audioBindsToCharacters ? 0 : args.referenceAudioCount
+  // Flash drops an end frame (it takes none); Kling 4.0 seats it as an image.
+  const endSeat = args.hasEndFrame && !flash ? 1 : 0
   const used =
     args.referenceImageCount +
     (args.hasStartFrame ? 1 : 0) +
-    (args.hasEndFrame ? 1 : 0) +
+    endSeat +
     args.referenceVideoCount +
-    args.referenceAudioCount +
+    audioSeats +
     args.characterCount
   if (used > materials) {
     return {
       code: "validation_error",
-      message:
-        `Kling 4.0 takes at most ${materials} materials in all — reference images (a start or end frame counts as one), ` +
-        `reference videos, characters and voice clips. This run has ${used}. Remove some.`,
+      message: flash
+        ? `Kling 4.0 Flash takes at most ${materials} materials in all — reference images (a start frame counts as one), ` +
+          `reference videos and characters (a voice clip rides its character). This run has ${used}. Remove some.`
+        : `Kling 4.0 takes at most ${materials} materials in all — reference images (a start or end frame counts as one), ` +
+          `reference videos, characters and voice clips. This run has ${used}. Remove some.`,
     }
   }
   return null

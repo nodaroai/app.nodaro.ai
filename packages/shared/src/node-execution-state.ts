@@ -94,9 +94,10 @@ export interface NodeExecutionStateWire<TOutput = Record<string, unknown>> {
    * `error_detail`), with links cut to their host and secrets removed; absent
    * when the failure had no provider text (a platform refusal, a timeout).
    * Display-only, beside `error`: branch on `errorCode` or the hint, never on
-   * these words. A published app's runner never receives it, and neither does
-   * any reader who is not an administrator on a deployment that keeps these
-   * words for its administrators.
+   * these words. Only a reader who can open the workflow the run executed
+   * receives it — never a published app's runner, nor a person running
+   * someone else's share link — and on a deployment that keeps these words for
+   * its administrators, no reader who is not one.
    */
   errorDetail?: string | null
   /**

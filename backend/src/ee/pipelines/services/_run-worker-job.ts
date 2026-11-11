@@ -197,7 +197,10 @@ export async function runPipelineWorkerJob(
  *    profile, the admin override, the admin's switch), asked of the job's
  *    BASE model id as well as its credit id — a shot priced under a composite
  *    (`kling:5s:720p`) has no pricing row of its own to carry the switch,
- *    which lives on the base row (`lib/model-switch.ts`).
+ *    which lives on the base row (`lib/model-switch.ts`) — and, for a video
+ *    job, of the catalog model its payload names: a row's name is not always
+ *    its model's (LTX 2.3 Pro Extend is priced on
+ *    `ltx-2.3-pro-extend:per-second`, and the model is `ltx-2.3-pro`).
  * 2. For a video job, the credit check's free-credit video refusal (and its
  *    own `model_disabled`, read fresh off the pricing row). Any other answer
  *    (a short balance) is left to the reservation, as before; a job that is
@@ -213,11 +216,17 @@ async function assertModelAdmitted(
   creditOverride: number | undefined,
 ): Promise<void> {
   const base = modelIdentifier.split(":")[0] || modelIdentifier
+  const video = freeVideoRequestForJob(jobName, modelIdentifier, inputData)
   for (const id of new Set([base, modelIdentifier])) {
     if (isModelSwitchedOff(id)) throw new Error("This model is currently disabled")
     if (isModelDenied(id)) throw new Error(deniedModelRejectionMessage([base]))
   }
-  const video = freeVideoRequestForJob(jobName, modelIdentifier, inputData)
+  // Only a provider that is itself a catalog video id: a mode twin such as
+  // Grok Imagine's text-to-video `grok` shares its id with the IMAGE model.
+  if (video && video.provider !== base && isVideoModelId(video.provider)) {
+    if (isModelSwitchedOff(video.provider)) throw new Error("This model is currently disabled")
+    if (isModelDenied(video.provider)) throw new Error(deniedModelRejectionMessage([video.provider]))
+  }
   if (!video && !isVideoModelId(base)) return
   const { CreditsService } = await import("../../billing/credits.js")
   const check = await CreditsService.checkCredits(userId, modelIdentifier, false, creditOverride, { billingContext, ...(video ? { video } : {}) })

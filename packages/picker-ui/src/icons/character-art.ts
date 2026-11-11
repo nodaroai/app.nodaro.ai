@@ -6,6 +6,7 @@ import {
   characterSectionSlug,
   type CharacterArtFamily,
 } from "@nodaro/prompts/picker-art"
+import { platformPickerPicturesShown } from "./platform-pictures"
 
 /**
  * Photos for the options of the character pickers (Person, Styling, Held Prop,
@@ -28,19 +29,23 @@ export { characterSectionSlug }
 /** Root-relative, so the picture is always served by the app's own origin. */
 export const CHARACTER_ART_BASE = CHARACTER_ART_PATH
 
-/** The photo of one option, or undefined (the caller shows its fallback). */
+/**
+ * The photo of one option, or undefined (the caller shows its fallback):
+ * always undefined when the deployment shows no platform pictures
+ * (platform-pictures.ts).
+ */
 export function characterArtUrl(family: CharacterArtFamily, id: string): string | undefined {
-  return characterArtPath(family, id)
+  return platformPickerPicturesShown() ? characterArtPath(family, id) : undefined
 }
 
-/** Whether any option of the family has a photo. */
+/** Whether any option of the family has a photo this deployment shows. */
 export function hasCharacterArt(family: string): family is CharacterArtFamily {
-  return family !== "sections" && Object.keys(CHARACTER_ART_FILES[family] ?? {}).length > 0
+  return platformPickerPicturesShown() && family !== "sections" && Object.keys(CHARACTER_ART_FILES[family] ?? {}).length > 0
 }
 
-/** The round icon of a picker topic (by its English label), or undefined. */
+/** The round icon of a picker topic (by its English label), or undefined (also when the deployment shows no platform pictures). */
 export function characterSectionIconUrl(sectionLabel: string): string | undefined {
-  return characterSectionArtPath(sectionLabel)
+  return platformPickerPicturesShown() ? characterSectionArtPath(sectionLabel) : undefined
 }
 
 /**

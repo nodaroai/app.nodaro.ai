@@ -30,6 +30,6 @@ describe("Seedance 2.5 in the catalog", () => {
 
   it("is not listed as an extend model: extending is a model of its own", () => {
     expect(entry.modes).not.toContain("extend")
-    expect(MODEL_CATALOG["seedance-2-extend"]?.modes).toContain("extend")
+    expect(MODEL_CATALOG["seedance-2-5-extend"]?.modes).toContain("extend")
   })
 })

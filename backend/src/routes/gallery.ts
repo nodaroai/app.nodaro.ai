@@ -192,6 +192,15 @@ export async function galleryRoutes(app: FastifyInstance) {
     }
 
     const { jobId, reason, details } = parsed.data
+    // A deployment that does not allow public work has no public gallery to
+    // report from: every item answers as one that is not in it, without
+    // reading a job — so the form says nothing about a row marked public
+    // before the switch was set.
+    if (!surfaceAllowsPublicOutputs()) {
+      return reply.status(404).send({
+        error: { code: "not_found", message: "Gallery item not found" },
+      })
+    }
     // The reporter's HASHED network, not an address: `reporter_ip` (text) has
     // only ever served the one-hour dedup below, and an anonymous reporter's
     // address is personal data kept forever. One shared value for an address

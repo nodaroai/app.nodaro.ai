@@ -7,6 +7,8 @@ import { supabase } from "../../supabase.js"
 import { isUuid } from "./_id-guard.js"
 import { failureGuidance } from "./_job-error.js"
 import { CHILD_JOB_COLUMN, TREND_RUN_MARKER_SELECT, maskTrendRunError, maskTrendRunErrors, redactPrivateJobData, trendRunErrorText, TRASHED_JOB_COLUMN } from "../../public-job-data.js"
+import { jobRowProviderWordsFor } from "../../provider-words.js"
+import { runJobsProviderWords } from "../../provider-words-readers.js"
 import { JOB_STATUSES } from "../../job-status.js"
 import { jobView, JOB_VIEW_SCHEMA, outputSizeOf } from "./_job-view.js"
 import { waitForJob, waitForJobCallSeconds, WAIT_FOR_JOB_CALL_CEILING_S } from "./_wait-for-job.js"
@@ -29,8 +31,10 @@ const jobsReadGate: ToolGate = { required: ["jobs:read"] }
 
 // What get_job reads. display_cost (USD) is excluded — see list_jobs.
 // error_hint (migration 376) backs failureGuidance's suggestedProvider.
+// workflow_execution_id is read for the run rule alone (runJobsProviderWords
+// judges a run's job's words by the run's workflow, then takes it off).
 const GET_JOB_COLUMNS =
-  "id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, job_type, credits, user_id, usage_log_id" as const
+  "id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, job_type, credits, user_id, usage_log_id, workflow_execution_id" as const
 // Rating a job writes to it, as REST's PUT /v1/jobs/:id/rating needs assets:write.
 const jobsRateGate: ToolGate = { required: ["assets:write"] }
 
@@ -217,7 +221,7 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       let filtered =
         scope === "mine"
           // trash-read: applyJobListFilters below leaves the Trash out.
-          ? supabase.from("jobs").select(`${baseSelect}, usage_log_id${jobListFilterSelect(filters)}`).eq("user_id", session.userId)
+          ? supabase.from("jobs").select(`${baseSelect}, usage_log_id, workflow_execution_id${jobListFilterSelect(filters)}`).eq("user_id", session.userId)
           : supabase
               .from("jobs")
               .select(`${baseSelect}, user_id`)
@@ -313,6 +317,12 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
         return Object.keys(setForKind).filter((k) => setForKind[k]?.includes(type))
       }
       if (kinds) rows = rows.filter((r) => listedUnder(r).some((k) => kinds.includes(k as "image" | "video" | "audio")))
+      // Your own run's job keeps its provider words only when you can open the
+      // run's workflow (one read for the page's runs, one per distinct
+      // workflow, only for rows with words); the run id is read for that alone
+      // and taken off. The public scope reads no run id: its rows are never
+      // yours, and lose their words below.
+      rows = await runJobsProviderWords(rows, { isAdmin: false, userId: session.userId })
       // An old render carries no stored Preview label: fill it from the order,
       // by the rule the job-status routes use (decided 2026-10-06; response only).
       // A trend run's failure text is replaced (maskTrendRunError): an MCP
@@ -328,6 +338,9 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       if (moderation) {
         shown = (rows as Array<Record<string, unknown>>)
           .filter((r) => !galleryHides(moderation, { userId: r.user_id as string | undefined, inputData: r.input_data, outputData: r.output_data }))
+          // Someone else's job never carries its provider's words: they are its
+          // owner's (lib/provider-words.ts), judged by `user_id` before it goes.
+          .map((r) => jobRowProviderWordsFor(r, { isAdmin: false, userId: session.userId }))
           .map(({ user_id: _owner, ...row }) => row)
       } else {
         const charged = await withCreditsCharged(rows, session.userId)
@@ -421,14 +434,16 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       const waiting = waitingRowsOf("job", [read])
       const queue = waiting.length > 0 ? (await queueInfoFor(waiting)).get(read.id) : undefined
       const guidance = queue ? queuedGuidance(queue) : undefined
-      const data = withoutLaneStamp(read)
+      // A run's job keeps its provider words only when the caller can open the
+      // run's workflow; the run id is read for that alone and taken off.
+      const [data] = await runJobsProviderWords([withoutLaneStamp(read)], { isAdmin: false, userId: session.userId })
       // On failure, add an explicit `retryable` flag (mirrors get_asset) plus
       // `guidance` and — for a safety-block with a catalog fallback —
       // `suggestedProvider`, a real model id the SAME request can retry on.
       // An old render carries no stored Preview label: fill it from the order
       // (response only, never written back), as the job-status routes do.
       // A trend run's failure text is replaced before either envelope is built.
-      const [charged] = await withCreditsCharged([maskTrendRunError(data, false)], session.userId)
+      const [charged] = await withCreditsCharged([maskTrendRunError(data!, false)], session.userId)
       const filled = fillJobRenderQuality(charged!)
       const publicData = redactPrivateJobData(filled)
       const failed = publicData.status === "failed" || publicData.status === "cancelled"
@@ -564,14 +579,16 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       }
       // Terminal or held: read the full public row once so the envelope
       // carries credits, timestamps and the failure guidance.
-      const { data: row } = await supabase
+      const { data: read } = await supabase
         .from("jobs")
-        .select("id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, job_type, credits, usage_log_id")
+        .select("id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, job_type, credits, usage_log_id, workflow_execution_id")
         .eq("id", args.job_id)
         .eq("user_id", session.userId)
         .is(CHILD_JOB_COLUMN, null)
         .is(TRASHED_JOB_COLUMN, null)
         .maybeSingle()
+      // A run's job keeps its provider words only when the caller can open the run's workflow.
+      const row = read ? (await runJobsProviderWords([read], { isAdmin: false, userId: session.userId }))[0] : null
       const charged = row ? (await withCreditsCharged([maskTrendRunError(row, false)], session.userId))[0] : null
       // Without the row (gone between the two reads), the wait's own error
       // text, a trend run's replaced as everywhere else.

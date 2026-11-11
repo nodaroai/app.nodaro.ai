@@ -209,6 +209,24 @@ describe("every credit-guarded route runs a node the availability funnel knows",
   })
 })
 
+describe("the film pipeline and the Video Director are gated features, not exemptions", () => {
+  it("their credit-guarded routes resolve to their availability ids", () => {
+    const registeredGuarded = new Set(guarded().map((r) => `${r.method} ${r.url}`))
+    for (const [route, id] of [
+      ["/v1/video-director/run", "video-director"],
+      ["/v1/pipelines/:id/stages/script/regenerate-scene", "film-pipeline"],
+    ] as const) {
+      expect(registeredGuarded.has(`POST ${route}`), route).toBe(true)
+      expect(routeNodeGate(route, {}), route).toMatchObject({ kind: "node", types: [id] })
+      expect(isKnownNodeType(id), id).toBe(true)
+    }
+  })
+
+  it("the only exemption left is the Copilot (governed by features.hide)", () => {
+    expect(Object.keys(EXEMPT_ROUTES)).toEqual(["/v1/copilot/threads/:id/messages"])
+  })
+})
+
 describe("the trend run paths follow cast-swap", () => {
   it("estimate and run carry Nodaro Motion's node gate", () => {
     for (const url of ["/v1/trends/:slug/estimate", "/v1/trends/:slug/runs"]) {

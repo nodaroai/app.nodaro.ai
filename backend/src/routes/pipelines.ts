@@ -15,6 +15,7 @@ import { withdrawFromLane } from "../lib/concurrency-lanes/withdraw.js"
 import { readWithLaneStamp } from "../lib/concurrency-lanes/columns.js"
 import { queueField, queueInfoFor, waitingRowsOf } from "../lib/concurrency-lanes/queue-info.js"
 import { creditGuard, paygSurfaceSpendHook, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { filmPipelineAvailabilityHook } from "../lib/film-pipeline-availability.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
@@ -155,6 +156,13 @@ const PIPELINE_READ_COLUMNS =
   "id,status,current_stage,spent_credits,reserved_credits,upfront_credit_estimate,user_id,branched_from_pipeline_id,branched_from_stage,mode,failure_reason,current_progress_message"
 
 export async function pipelinesRoutes(app: FastifyInstance) {
+  // The deployment's availability of the film pipeline (`film-pipeline`, a
+  // gateable feature: `nodes.allow` / `nodes.deny`, Admin → Availability).
+  // FIRST, before any other check and before anything is reserved: every
+  // POST but /cancel starts or continues a pipeline's work
+  // (lib/film-pipeline-availability.ts).
+  app.addHook("preHandler", filmPipelineAvailabilityHook())
+
   // Spend-surface gate for every pipeline POST (creation, approvals, edits,
   // regenerations, chat — they all reserve credits later, inside the pipeline
   // worker, where the calling surface is gone). GETs pass; /cancel passes so

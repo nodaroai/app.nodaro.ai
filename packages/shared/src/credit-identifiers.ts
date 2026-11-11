@@ -28,12 +28,16 @@ import {
   isViduQ4Provider,
   isKling4Provider,
   normalizeKling4Resolution,
+  isKling4FlashProvider,
+  KLING_4_FLASH_RESOLUTION,
   VIDEO_REF_RATE_PROVIDERS,
   normalizeMinimaxH3Resolution,
   normalizeWan3Resolution,
   normalizeViduQ4Resolution,
   getVideoAudioCapability,
   canonicalVideoProvider,
+  isSeedanceExtendProvider,
+  type SeedanceExtendProvider,
 } from "./model-constants.js"
 import { isFlux2Model, FLUX2_RES_MP, type Flux2Model } from "./flux2-pricing.js"
 import {
@@ -48,6 +52,7 @@ import {
   type GptImage26TieredModel,
   type ImageFormatLevers,
 } from "./gpt-image-2-6.js"
+import { isMinimaxH3Image, minimaxH3ImageCreditId } from "./minimax-h3-image.js"
 import { VIDEO_DURATION_AUTO } from "./video-duration-auto.js"
 import { uiResolutionFill } from "./video-ui-defaults.js"
 import { MODEL_CATALOG, autoAspectNeedsSourceImage, normalizeModelInput, normalizeVideoRequestParams, defaultResolutionFor, type ModelInputAdjustment, type SourceImageSize } from "./model-catalog.js"
@@ -157,6 +162,11 @@ export function buildCreditModelIdentifier(
   }
   if (isGptImage26Tiered(provider)) {
     return gptImage26CreditId(provider, quality, resolution, referenceImageCount, imageFormat)
+  }
+  // MiniMax H3 Image: by size, and on an edit by its reference images
+  // (`minimax-h3-image:2K`, `minimax-h3-image-i2i:4K:3ref`).
+  if (isMinimaxH3Image(provider)) {
+    return minimaxH3ImageCreditId(provider, resolution, referenceImageCount)
   }
   if (HIGH_QUALITY_PROVIDERS.has(provider) && quality === "high") {
     return `${provider}:high`
@@ -458,6 +468,8 @@ function wireNormalizedResolution(provider: string, resolution: string | undefin
   if (isWan3Provider(provider)) return normalizeWan3Resolution(resolution).toLowerCase()
   if (isViduQ4Provider(provider)) return normalizeViduQ4Resolution(resolution)
   if (isKling4Provider(provider)) return normalizeKling4Resolution(resolution)
+  // Kling 4.0 Flash renders 720p whatever it is asked (its runner sends 720p).
+  if (isKling4FlashProvider(provider)) return KLING_4_FLASH_RESOLUTION
   return resolution
 }
 
@@ -472,6 +484,9 @@ export function buildVideoCreditModelIdentifier(
 ): string {
   // A retired model (RETIRED_VIDEO_PROVIDERS) is priced as the model it runs as.
   const provider = canonicalVideoProvider(rawProvider) as string
+  // A Seedance Extend Video provider is priced on its own rows — the one
+  // builder every surface that prices an extend reads.
+  if (isSeedanceExtendProvider(provider)) return seedanceExtendCreditId(provider, duration, resolution)
   // T2V overrides: some providers have different base costs for text-to-video
   let effectiveProvider = provider
   if (nodeType === "text-to-video") {
@@ -701,6 +716,45 @@ export function seedanceVideoEditCreditId(provider: string, resolution?: string,
     draft,
     hasVideoRef: true,
   })
+}
+
+/** The resolution a Seedance extend that names none, or one it does not offer, is priced and run at. */
+const SEEDANCE_EXTEND_DEFAULT_RESOLUTION = "720p"
+
+/**
+ * The resolution a Seedance Extend Video run is priced at, and so the one it
+ * must render at: the requested one when it is among the provider's catalog
+ * `resolutions`, else 720p (also when none is named). The workflow run queues
+ * it and the worker holds the job to it, so a stored or sent resolution the
+ * model does not offer (`4k`) can never render above the row it reserved.
+ */
+export function seedanceExtendResolution(provider: SeedanceExtendProvider, resolution?: unknown): string {
+  return typeof resolution === "string" && MODEL_CATALOG[provider]?.resolutions?.includes(resolution)
+    ? resolution
+    : SEEDANCE_EXTEND_DEFAULT_RESOLUTION
+}
+
+/**
+ * The credit identifier one Seedance Extend Video run is priced at — the one
+ * builder every surface that prices it reads (the route's guard and
+ * reservation, the workflow reservation and estimate, the editor), so none of
+ * them can name a different row.
+ *
+ * The seconds added snap into the provider's catalog `durations` (its catalog
+ * `defaultDuration` when unset, through {@link pricedOutputDurationSec}); the
+ * resolution is {@link seedanceExtendResolution}'s. Each provider has its own
+ * rows, one per second of its window and resolution: `<provider>:<N>s:<res>`
+ * (`seedance-2-5-extend` 4–30 s, `seedance-2-0-extend` 4–15 s).
+ *
+ * A retired id (`seedance-2-extend`) is not a {@link SeedanceExtendProvider}:
+ * pass a stored or sent provider through `canonicalVideoProvider` first.
+ */
+export function seedanceExtendCreditId(
+  provider: SeedanceExtendProvider,
+  duration?: number | string,
+  resolution?: string,
+): string {
+  return `${provider}:${pricedOutputDurationSec(provider, duration)}s:${seedanceExtendResolution(provider, resolution)}`
 }
 
 /** What the video credit identifier PRICES for a request, for the levers whose

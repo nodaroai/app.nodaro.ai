@@ -2,8 +2,10 @@ import {
   freeVideoDurationLock,
   freeVideoModelLock,
   freeVideoResolutionLock,
+  nodeModelLevers,
   type FreeVideoLimits,
   type FreeVideoLock,
+  type FreeVideoModelLockOptions,
 } from "@nodaro/render-rules"
 import { tx } from "@/lib/i18n"
 import { queryClient } from "@/lib/query-client"
@@ -60,12 +62,26 @@ export function freeVideoLockText(lock: FreeVideoLock): string {
   }
 }
 
-/** Why a video MODEL option is locked, or null. */
-export function lockedVideoModel(limits: FreeVideoLimits | null, provider: string | undefined): string | null {
+/**
+ * Why a video MODEL option is locked, or null. `opts`: how the option runs,
+ * where its id cannot say it — a menu's lever carries it (`lockAs`: every
+ * Extend Video row is an extension).
+ */
+export function lockedVideoModel(limits: FreeVideoLimits | null, provider: string | undefined, opts?: FreeVideoModelLockOptions): string | null {
   if (!limits || !provider) return null
-  const lock = freeVideoModelLock(catalogId(provider), limits)
+  const lock = freeVideoModelLock(catalogId(provider), limits, opts)
   return lock ? freeVideoLockText(lock) : null
 }
+
+/**
+ * How an Extend Video model row is judged: as an extension, whatever its model
+ * — its menu lever says so (`lockAs`, `@nodaro/render-rules`), the one the
+ * server's new-node judge reads too, so LTX 2.3 Pro (which extends under its
+ * generation id) is locked on every editor surface exactly as the server
+ * refuses it. Pass it to {@link lockedVideoModel} for an Extend Video row.
+ */
+export const EXTEND_VIDEO_ROW_LOCK: FreeVideoModelLockOptions | undefined =
+  nodeModelLevers("extend-video").find((lever) => lever.field === "provider")?.lockAs
 
 /** Why a DURATION option of this model is locked, or null. */
 export function lockedVideoDuration(limits: FreeVideoLimits | null, provider: string | undefined, duration: number | string | undefined): string | null {

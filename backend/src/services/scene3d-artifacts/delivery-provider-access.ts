@@ -75,7 +75,7 @@ const DELIVERY_ASSET_PATH = /^\/v1\/3d-scene\/deliveries\/([^/]+)\/assets\/([^/]
  * what the route's own params accept and what `authorizeScene3DDeliveryArtifact`
  * requires; anything else is not a URL this function can speak for.
  *
- * Host-agnostic: the same delivery is `next.nodaro.ai` on staging, the install's
+ * Host-agnostic: the same delivery is `next.app.nodaro.ai` on staging, the install's
  * own origin in a self-host and a bare path in a same-origin write, and all
  * three name the same artifact.
  */

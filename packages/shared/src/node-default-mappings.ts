@@ -188,6 +188,9 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   // Seedream 5 Flash's lever is size (sent as KIE `size`), flat-priced — resolution-style.
   "seedream-5-flash":     { field: "resolution", values: { low: "1K", mid: "2K", high: "2K" } },
   "seedream-5-flash-i2i": { field: "resolution", values: { low: "1K", mid: "2K", high: "2K" } },
+  // MiniMax H3 Image: 1K and 2K cost the same, 2K is its default.
+  "minimax-h3-image":     { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
+  "minimax-h3-image-i2i": { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
   // Video gen — resolution-style (720p/1080p)
   "veo3":                { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "veo3.1":              { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
@@ -209,6 +212,8 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   // Kling 4.0 — two tiers on both endpoints.
   "kling-4":             { field: "resolution", values: { low: "720p", mid: "720p", high: "1080p" } },
   "kling-4-keyframes":   { field: "resolution", values: { low: "720p", mid: "720p", high: "1080p" } },
+  // Kling 4.0 Flash — 720p only, so every level lands on it.
+  "kling-4-flash":       { field: "resolution", values: { low: "720p", mid: "720p", high: "720p" } },
   "wan-2.7-i2v":         { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "wan-2.7-t2v":         { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "happyhorse":          { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },

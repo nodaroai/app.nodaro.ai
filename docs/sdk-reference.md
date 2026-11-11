@@ -814,7 +814,9 @@ of `settings.studio`, and each finished take's voice record (`revoiceTo` /
 `voiceMode`) is left off the nodes' `data.generatedResults` rows. A UGC video
 comes back to anyone but the workflow's owner as a published app ships it: its
 UGC nodes and every node made from them without their runs' results, and never
-the owner's photo.
+the owner's photo. On a deployment that does not allow public work
+(`outputs.allowPublic: false`) it throws `NotFoundError` for everyone but the
+workflow's signed-in owner, exactly as for a workflow that is not shared.
 
 ```ts
 const { data: wf } = await client.workflows.getPublic(workflowId)
@@ -1406,9 +1408,10 @@ The returned `Job` uses snake_case fields to match the wire format. Non-admin
 callers receive an explicit allowlist of job fields — `id`, `status`,
 `progress`, `input_data`, `output_data`, `error_message`, `error_detail` (the
 provider's own words for a failure, links cut to their host and secrets
-removed; `null` when the failure had none, and on a deployment that keeps these
-words for its administrators — display it beside `error_message`, branch on
-`error_hint`), `error_hint`,
+removed; `null` when the failure had none, on a job of a workflow run whose
+workflow you cannot open — someone else's share link or published app you
+ran — and on a deployment that keeps these words for its administrators —
+display it beside `error_message`, branch on `error_hint`), `error_hint`,
 `created_at`, `started_at`, `completed_at`, `user_id`, `credits`, `job_type`,
 `source`, `source_detail`, `title` (the owner's own name for the job —
 [`rename()`](#renameid-title) — or `null` until named), plus `favorited`
@@ -3183,6 +3186,15 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `resolution` `720p` / `1080p` (anything else → 720p); `aspectRatio` `auto` /
 > `16:9` / `9:16` / `1:1` / `21:9`; audio always on; no seed. See
 > [Kling 4.0](nodes/ai-video/generate-video.md#kling-40-references-characters-and-keyframes).
+> **Kling 4.0 Flash** (`kling-4-flash`) takes an `imageUrl` alone as the exact
+> opening frame; anything else (a prompt alone, `referenceImageUrls` ≤ 10,
+> `referenceVideoUrls` ≤ 5 at 2–20 s together, `characterReferences` ≤ 7, or a
+> start frame beside them) runs in reference mode, 15 materials in all.
+> `referenceAudioUrls` clip N (≤ 7) becomes the voice of `characterReferences`
+> entry N; a character needs 2–4 images to carry a voice, otherwise its clip is
+> dropped, as is any clip past the last character. `duration` 3–20 (default 5), 720p only
+> (anything else → 720p), no end frame, no seed, no `audioSoundtrack`. See
+> [Kling 4.0 Flash](nodes/ai-video/generate-video.md#kling-40-flash).
 > **Gemini Omni Flash** (`gemini-omni-flash`) is the cheaper, faster sibling of
 > `gemini-omni-video` on an identical request shape — same 4 / 6 / 8 / 10
 > `duration` menu (8 s when omitted), same 720p / 1080p / 4K tiers, same
@@ -3389,13 +3401,15 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `voice` is `{ preset, description?, exampleLine? }` — `preset` is one of the
 > `GEMINI_OMNI_VOICE_PRESETS` ids exported by `@nodaro/shared`, and pins one voice
 > to that character across clips).
-> Only `gemini-omni-video` / `gemini-omni-flash` and `kling-4` accept them (any
+> Only `gemini-omni-video` / `gemini-omni-flash`, `kling-4` and `kling-4-flash` accept them (any
 > other model answers `400`). On Gemini Omni they cannot be combined with a
 > start frame (`imageUrl`), and they share the model's 7-unit input budget with
 > reference images and a source video (a character is 1 unit, 2 with a
 > `bodyImageUrl`). On `kling-4` (up to 7) each one is a named subject built from
 > `imageUrl`, `bodyImageUrl` and up to 3 `extraImageUrls`, a start frame is
-> allowed, and `voice` is refused. They add no credit charge. Prefer them over
+> allowed, and `voice` is refused; `kling-4-flash` takes them the same way, with
+> `referenceAudioUrls` clip N as entry N's voice when that entry has 2–4 images
+> (otherwise the clip is dropped). They add no credit charge. Prefer them over
 > `referenceImageUrls` whenever the face must hold.
 
 > **Naming an image reference in the prompt.** On
@@ -3839,14 +3853,16 @@ surfaces cannot drift. Public endpoint; cached 5 minutes.
 Each `ModelSummary` names its maker and carries the maker's mark (both absent
 on an older server):
 
-- `maker?: ModelMaker` — `{ id, name }`, the company that made the model. `id`
+- `maker?: ModelMaker` — `{ id, name }`, the company that made the model;
+  absent on a model the instance offers under its own label. `id`
   is stable (one per company: `"google"`, `"black-forest-labs"`), so you can
   key your own assets on it; a newer server can add makers, so handle an id
   you do not know. It is not always the `family` the model is grouped under
   (Tongyi-MAI and HappyHorse are Alibaba's, Depth Anything is ByteDance's).
 - `logoUrl?: string | null` — the maker's official mark (an SVG) on the
   instance's own media CDN, or `null` when the instance does not publish one
-  for that maker: draw a fallback (the maker's name or initial) then. Use the
+  for that maker: draw a fallback (the maker's name or initial) then. It is
+  also `null` for a model the instance offers under its own label. Use the
   address as given; it carries its file's version, so a replaced mark arrives
   under a new address. The MCP tool omits it.
 
@@ -5434,8 +5450,11 @@ methods authenticate as the caller.
 list(params?: ListAppsParams): Promise<ListAppsResult>
 ```
 
-Cursor-paginated browse of published apps. Optional `search`, `category`, and
-`limit` (server caps at 50).
+Cursor-paginated browse of published apps (`GET /v1/apps/browse`). Optional
+`search`, `category`, and `limit` (server caps at 50). On a deployment that does
+not allow public work (`outputs.allowPublic: false`) the marketplace lists
+nothing: `{ data: [], nextCursor: null }`. `get()` and `run()` by slug are
+unchanged there.
 
 Each app's `estimatedCredits` is its listed price per run. When its price
 follows the length of the recording the app is given (an Edit Plan pass, the
@@ -8132,6 +8151,26 @@ if (board.needsImage && photos.length >= (board.minReferences ?? 0)) {
 }
 ```
 
+#### `listFactoryGroups(nodeType)`
+
+```ts
+listFactoryGroups(nodeType: string): Promise<FactoryPresetGroupSummary[]>  // [{ group, shelf, count, previewUrl }]
+```
+
+`GET /v1/node-presets/factory/groups` → the built-in catalog's categories for
+`nodeType`, in the order a picker shows them (shelf by shelf; a shelf's named groups in the design's order, the rest in catalog order): each group's name, the shelf a picker files it
+under (`"video"`, `"marketing"`, `"photos"`, `"creative"`, `"life"`, `"pro"`,
+or `"more"` for a group no shelf names yet; shown in that order), how many
+presets it holds, and the example picture of its first preset that has one
+(`previewUrl`, or `null`). A few KB where `listFactory()` is the whole
+catalog: for a menu or a shelf that lists the categories. **Public**, as
+`listFactory()` is.
+
+```ts
+const groups = await visitor.presets.listFactoryGroups("generate-image")
+const video = groups.filter((g) => g.shelf === "video")   // YouTube, Shorts · TikTok
+```
+
 #### `create(input)`
 
 ```ts
@@ -8587,7 +8626,8 @@ list(): Promise<{ data: PickerCatalogSummary[] }>
 `GET /v1/picker-catalogs` → a directory of every picker: `nodeType`, `label`,
 `catalogId`, `kind` (`"single"` / `"multi"`), `valueField` (single-dim) or
 `fields` (multi-dim), `optionCount`, and `imageCount` — how many of its options
-carry an `imageUrl` (0 = no pictures; absent from servers that predate pictures).
+carry an `imageUrl` (0 = no pictures, as for every picker on a deployment that
+turned the platform's pictures off; absent from servers that predate pictures).
 
 ```ts
 const { data } = await client.pickerCatalogs.list()
@@ -8638,7 +8678,9 @@ styling, held prop, material, animal) and the music / voice art are served by
 the installation itself, so the URLs use its public address; the rendered look
 previews come from the Nodaro CDN and only Nodaro Cloud returns them. Use the
 URLs as given — file names carry a content hash, so they can be cached for good,
-and any origin may load them. See
+and any origin may load them. A deployment that turned the platform's pictures
+off (`catalogs.images` in its surface profile) returns no `imageUrl` at all, so
+draw the `label` whenever an option has none. See
 [Pictures](./api-integration.md#pictures-imageurl-sections) for the full rules.
 
 ```ts
@@ -8735,7 +8777,9 @@ stores builder state (picker `selectionState`, prompts, target `models`,
 `@`-mention `entityRefs`, `resultUrls`) under an unguessable 12-char id that
 doubles as the share capability. Rows default to **private**; sharing is an
 explicit visibility toggle. `resultUrls` must be plain public http(s) URLs —
-signed URLs are rejected so a token can never leak into a share record.
+signed URLs are rejected so a token can never leak into a share record. On a
+deployment that does not allow public work (`outputs.allowPublic: false`) every
+shot reads as a private one: `get` 404s for everyone but its signed-in owner.
 
 ```ts
 create(input?: CreateShotInput): Promise<{ id: string }>   // POST /v1/shots
@@ -8894,7 +8938,9 @@ required). `params`: `cursor`, `limit`, `category`, `outputType`, `tag`,
 `search` (full-text), `sort` (`"newest"` default | `"popular"` |
 `"most-favorited"`), `nodeType`, `provider`, `complexity`. Returns
 `{ data: TemplateBrowseCard[], nextCursor: string | null }` — pass
-`nextCursor` back as `cursor` for the next page.
+`nextCursor` back as `cursor` for the next page. On a deployment that does
+not allow public work (`outputs.allowPublic: false`) the marketplace lists
+nothing: `{ data: [], nextCursor: null }`.
 
 A card's `estimatedCredits` is the template's listed price. When the price
 follows the length of the recording the template is given,
@@ -8922,7 +8968,10 @@ get(slug: string): Promise<Template>
 
 `GET /v1/templates/:slug` → one public template including its full workflow
 snapshot (`snapshotNodes` / `snapshotEdges` / `snapshotSettings`) for
-read-only viewers. 404 when the slug is unknown, unlisted, or inactive.
+read-only viewers. 404 when the slug is unknown, unlisted, or inactive — and,
+on a deployment that does not allow public work, when it is someone else's
+template listed only on the marketplace (one in the tutorial channel still
+answers).
 
 #### `clone(slug, params)`
 
@@ -8933,7 +8982,9 @@ clone(slug: string, params: CloneTemplateParams): Promise<CloneTemplateResult>
 `POST /v1/templates/:slug/clone` → clone the template into one of the
 caller's projects. Free — no credits charged. `params`:
 `{ projectId, name? }` (name defaults to the template's). Returns
-`{ workflowId, projectId }`.
+`{ workflowId, projectId }`. On a deployment that does not allow public work,
+someone else's marketplace template is `404 not_found` (your own, and a
+tutorial template, clone as before).
 
 ```ts
 const { workflowId } = await client.templates.clone("noir-trailer", { projectId })

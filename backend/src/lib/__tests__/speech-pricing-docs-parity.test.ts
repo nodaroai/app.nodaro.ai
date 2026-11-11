@@ -47,7 +47,7 @@ describe("text-to-speech.md Credits", () => {
       expect(tts).toContain(`<!-- credits-rate: ${row} -->`)
     }
     // The flag has been on in production since 2026-10-08; the note states that and keeps the flag-off fallback.
-    expect(tts).toContain("Length-based pricing is on at `app.nodaro.ai` and `next.nodaro.ai`")
+    expect(tts).toContain("Length-based pricing is on at `app.nodaro.ai` and `next.app.nodaro.ai`")
     expect(tts).toContain("leaves `SPEECH_LENGTH_PRICING_ENABLED` off instead charges the flat amount")
     expect(tts).not.toContain("Rolling out")
   })
@@ -94,7 +94,7 @@ describe("voice-changer-pro.md Credit Pricing — a Re-speak voice on the engine
     expect(voiceChangerPro).toContain("costs **exactly what the same\ntext costs on the [Text to Speech](./text-to-speech.md) node for the same\nmodel**")
     expect(voiceChangerPro).toContain(`minimum of ${SPEECH_FLOOR_UNITS}\nunits per voice`)
     expect(voiceChangerPro).toContain("re-speak voice = max(8, ceil(chars / 100)) × 4.4")
-    expect(voiceChangerPro).toContain("Length-based speech pricing is on at `app.nodaro.ai` and `next.nodaro.ai`")
+    expect(voiceChangerPro).toContain("Length-based speech pricing is on at `app.nodaro.ai` and `next.app.nodaro.ai`")
     expect(voiceChangerPro).not.toContain("Rolling out")
     expect(voiceChangerPro).toMatch(/340 characters cost \d+<!-- credits: voice-changer-pro-respeak -->, 1,500 cost \d+<!-- credits: voice-changer-pro-respeak@2 -->/)
     expect(voiceChangerPro).toContain("1,000 characters per Re-speak voice")

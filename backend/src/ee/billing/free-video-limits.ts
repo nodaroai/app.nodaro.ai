@@ -16,6 +16,7 @@ import {
 export {
   FREE_BLOCKED_VIDEO_MODELS,
   FREE_BLOCKED_VIDEO_SERIES,
+  FREE_OPEN_VIDEO_MODELS,
   FREE_VIDEO_LIMITS_DEFAULTS,
   lowestResolution,
   resolutionHeight,
@@ -89,10 +90,19 @@ const VIDEO_JOB_NAMES: ReadonlySet<string> = new Set([
 /**
  * A job's video request to judge, or undefined when the job is no video run:
  * a video job type, or a job reserving under a video model / wrapper id. A
- * music job whose provider is `minimax` is not a Hailuo video.
+ * music job whose provider is `minimax` is not a Hailuo video. An Extend Video
+ * job is always a request, marked an extension: LTX 2.3 Pro extends under its
+ * generation model's id, which the catalog alone would judge as a generation,
+ * and a provider no catalog entry knows (a retired id that reached the job
+ * unmapped, a new lane ahead of its catalog entry) is still an extension —
+ * judged by the provider it names, else by the id it reserves under.
  */
 export function freeVideoRequestForJob(jobName: string, reservedId: string, raw: Record<string, unknown> | null | undefined): FreeVideoRequest | undefined {
   const base = reservedId.split(":")[0] ?? ""
+  if (jobName === "extend-video") {
+    const named = typeof raw?.provider === "string" && raw.provider !== "" ? raw.provider : base
+    return { ...videoParamsOf(named, raw), extend: true }
+  }
   return VIDEO_JOB_NAMES.has(jobName) || readsVideoBody(base) ? freeVideoRequestOf(raw) : undefined
 }
 
@@ -115,6 +125,10 @@ export function readsVideoBody(reservedBase: string): boolean {
 export function freeVideoRequestOf(raw: Record<string, unknown> | null | undefined): FreeVideoRequest | undefined {
   const provider = typeof raw?.provider === "string" ? raw.provider : null
   if (!provider || !freeVideoEntry(provider)) return undefined
+  return videoParamsOf(provider, raw)
+}
+
+function videoParamsOf(provider: string, raw: Record<string, unknown> | null | undefined): FreeVideoRequest {
   return {
     provider,
     duration: raw?.duration as FreeVideoRequest["duration"],

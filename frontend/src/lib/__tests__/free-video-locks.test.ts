@@ -31,9 +31,31 @@ describe("free-credit video locks in the editor", () => {
 
   it("Kling, extension and upscaling are locked; the default model is open", () => {
     expect(lockedVideoModel(LIMITS, "kling-3.0")).not.toBeNull()
-    expect(lockedVideoModel(LIMITS, "seedance-2-extend")).not.toBeNull()
+    expect(lockedVideoModel(LIMITS, "seedance-2-5-extend")).not.toBeNull()
+    expect(lockedVideoModel(LIMITS, "seedance-2-0-extend")).not.toBeNull()
     expect(lockedVideoModel(LIMITS, "topaz")).not.toBeNull()
     expect(lockedVideoModel(LIMITS, "seedance-2-fast")).toBeNull()
+  })
+
+  it("a model asked to extend is locked as an extension, even one that extends under its generation id (LTX 2.3 Pro)", () => {
+    const extension = lockedVideoModel(LIMITS, "seedance-2-5-extend")
+    // As a generation model LTX is locked only by its shortest clip (6 s): open once a free clip may be 10 s.
+    const ROOMY = { enabled: true, maxSeconds: 10 }
+    expect(lockedVideoModel(ROOMY, "ltx-2.3-pro")).toBeNull()
+    expect(lockedVideoModel(ROOMY, "ltx-2.3-pro", { extend: true })).toBe(extension)
+    expect(lockedVideoModel(LIMITS, "ltx-2.3-pro", { extend: true })).toBe(extension)
+    expect(lockedVideoModel(null, "ltx-2.3-pro", { extend: true })).toBeNull()
+  })
+
+  it("Kling 4.0 Flash is the one open Kling model: its 3-4 s at 720p are open, longer is locked", () => {
+    expect(lockedVideoModel(LIMITS, "kling-4-flash")).toBeNull()
+    expect(lockedVideoModel(LIMITS, "kling-4")).not.toBeNull()
+    expect(lockedVideoModel(LIMITS, "kling-4-keyframes")).not.toBeNull()
+    expect(lockedVideoDuration(LIMITS, "kling-4-flash", 4)).toBeNull()
+    expect(lockedVideoDuration(LIMITS, "kling-4-flash", 5)).not.toBeNull()
+    expect(lockedVideoResolution(LIMITS, "kling-4-flash", "720p")).toBeNull()
+    // Open as a generation model, still locked when asked to extend.
+    expect(lockedVideoModel(LIMITS, "kling-4-flash", { extend: true })).toBe(lockedVideoModel(LIMITS, "seedance-2-5-extend"))
   })
 
   it("no limits (the account paid) locks nothing", () => {

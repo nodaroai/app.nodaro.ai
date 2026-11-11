@@ -783,7 +783,7 @@ prompt with no questions round-trip.
 |------|-------------|
 | `generate_video` | Text-to-video generation. Accepts `prompt`, `model`, `duration`, `aspect_ratio`, `resolution`, `sound`, `negative_prompt`, `seed`, and optional `structured` fields. Not every model takes a `seed` (Seedance 2.5 and HappyHorse 1.1, for example, have none); on a model that takes none it is ignored and repeat runs vary. Advanced callers can also pass `connected_references` + `reference_order` (structured wired-reference shape) for labeled/ordered references on reference-capable models (Seedance 2, Gemini Omni, VEO 3.1 Fast / Lite, Kling 3 Omni, Grok i2v, HappyHorse Ref2V — **not** VEO 3.1 Quality, which has no reference-to-video mode), and `described_references` (up to 10 `{name, description}` entries for a subject you can name but have no picture for — no url, nothing attached, rendered as a `<Name> — <description>.` line). `reference_video_captions` describes the clips you attached: one caption per `reference_video_urls` entry in the same order, rendered into the prompt as `@video_N: <caption>.` — the seat to say what a reference clip is FOR and what to ignore (a Scene3D clay render needs exactly that; see [3D scenes](3d-scenes.md)). Captions past the last attached clip are dropped rather than binding a seat the model never receives. `draft: true` on `seedance-2-5` renders a 480p draft (same price as a 480p run) that `video_upscale` with `model: "seedance-2-5-hd"` finalizes as the same take at 1080p; ignored on other models. Also accepts `presetId` (from `list_node_presets { nodeType: "generate-video" }`) to apply a built-in or saved preset's config server-side; any explicit field above overrides the preset, and `prompt` may be omitted when the preset supplies one. To animate from a still or use start/end frames, use `animate_image`. A preset's `promptPrefix` / `promptSuffix` wrap your `prompt`. |
 | `animate_image` | Image-to-video animation — bring a still image to life. Accepts `image_url` / `image_asset_id`, optional `prompt`, `model`, `duration`, `aspect_ratio`, `sound`, and `end_frame_url` (start/end-frame animation). Advanced callers can also pass `connected_references` + `reference_order` for labeled/ordered identity references, and `described_references` for a named subject with no picture (rendered as a `<Name> — <description>.` line, nothing attached). `draft: true` on `seedance-2-5` renders a 480p draft — see `generate_video`. |
-| `extend_video` | Extend an existing video clip forward in time: a `prompt` and a `model` — `veo-extend`, `runway-extend` or `seedance-2-extend`. VEO and Runway continue a clip they generated, named by its `task_id` (the source job's output `providerTaskId`; `kie_task_id` is still accepted as a deprecated alias) (`veo_quality`, `runway_resolution`); Seedance 2 continues any clip, given as `video_url` or `video_asset_id` (`duration` 4–15 s, `resolution`, `generate_audio`), and takes `reference_image_urls` — up to 8 reference images, mentioned as `@image_1…@image_N` in the prompt; one Seedance reference seat is reserved for the continuation anchor. Optional `seed`. |
+| `extend_video` | Extend an existing video clip forward in time: a `prompt` and a `model` — `veo-extend`, `runway-extend`, `seedance-2-5-extend` (Seedance 2.5) or `seedance-2-0-extend` (Seedance 2.0). VEO and Runway continue a clip they generated, named by its `task_id` (the source job's output `providerTaskId`; `kie_task_id` is still accepted as a deprecated alias) (`veo_quality`, `runway_resolution`); Seedance 2.5 and Seedance 2.0 continue any clip, given as `video_url` or `video_asset_id` (`duration`: 4–30 s on Seedance 2.5, 4–15 s on Seedance 2.0, default 8; `resolution` 480p / 720p / 1080p; `generate_audio`), and take `reference_image_urls` — up to 8 reference images, mentioned as `@image_1…@image_N` in the prompt; one Seedance reference seat is reserved for the continuation anchor. A length outside the model's window, or a source with under 1.8 s of picture, is refused before anything is charged. Optional `seed`. LTX 2.3 Pro Extend is not offered by this tool. |
 | `loop_video` | Create a seamless looping clip from a short video segment. Accepts `video_url` and optional loop-trim parameters. |
 | `modify_video` | Video-to-video transformation — apply a style or prompt transformation to an existing clip. Accepts `video_url`/`video_asset_id`, `prompt`, `model`, `resolution`, `seed` (ignored by models that take none, e.g. `seedance-2-5` and `happyhorse-edit`) plus per-model levers (`duration`, `aspect_ratio`, `audio`, `multi_shots`, `reference_image_url`). **`seedance-2-5`** is a whole-clip EDIT: your prompt is sent as `edit @video_1 as follows: …`, the result keeps the source clip's length and aspect ratio (clip must be 4–30 s), and `reference_image_urls` (up to 30) attaches images you cite positionally as `{image:1}`, `{image:2}` in the prompt. It is billed like a Generate Video Seedance 2.5 reference-video run — input + output seconds on the `-ref` ladder, reserved for the source clip's length rounded up to a whole second plus one second (the model's longest clip while the clip cannot be measured) and settled to the delivered length (see [Video to Video](../nodes/ai-video/video-to-video.md#seedance-25-edit--credits)). `draft: true` renders the edit as a 480p draft you can finalize at 1080p with `video_upscale` (`model: "seedance-2-5-hd"`). |
 | `relight_video` | Relight & switch/composite a clip from its own pixels (Beeble SwitchX). Accepts `video_url`/`video_asset_id` + `prompt` and/or `reference_image_url`, `alpha_mode` (auto/fill/select/custom), `mask_url`, `alpha_keyframe_index`, `max_resolution` (720/1080), `seed`. |
@@ -877,11 +877,13 @@ prompt with no questions round-trip.
 
 **Kling 4.0 (`model: "kling-4"`)** runs `generate_video` prompt-only as text-to-video, or from `reference_image_urls` (≤ 10), `reference_video_urls` (≤ 5, each 2–30 s and 30 s in total — a set over that is refused before any credits are reserved; a clip over 2048 px on its long side or over 1920×1080's pixels is scaled down to fit, shape kept, before it is sent), `character_references` (≤ 7, each a named subject — see below) and `reference_audio_urls` (≤ 3, each a named voice), at most **15 materials in all** (a start or end frame counts as an image and joins the reference images as the opening / closing frame); more is refused before anything is reserved. `keep_original_sound: true` keeps a reference video's own sound (ignored without one). The first `reference_audio_urls` clip plays as the result's soundtrack by default — sent as one more reference video carrying the audio, so it takes one of the 5 video places and the run bills as a reference-video run; further clips stay voices; `audio_soundtrack: false` keeps every clip a voice. In the prompt, name materials `@image_1` …, `@video_1` …, a character `@<name>`, a voice clip `@audio_1` …; a mention of a material the call does not carry has its `@` removed so the run still starts. A reference-video run bills output + max(output, total clip seconds) at the `-ref` rate. **Kling 4.0 Keyframes (`model: "kling-4-keyframes"`)** takes a start frame (`image_url`), up to 8 in-between frames as `reference_image_urls` (in order) and an `end_frame_url` (an end frame alone is allowed; no frame is text-to-video); the frames in all are capped by `duration` (3 s → 4, 4 s → 5 … 8 s → 9, 9 s or longer → 10), and more is refused before anything is reserved. Name them `@first_frame`, `@keyframe_1` …, `@last_frame` (`@image_N` becomes `@keyframe_N`). Both: `duration` 3–30 (default 5); `resolution` `"720p"` (default) / `"1080p"`, anything else renders and bills 720p; `aspect_ratio` `"auto"` (default) / `"16:9"` / `"9:16"` / `"1:1"` / `"21:9"` (Keyframes applies it only with no frame); native audio always on; no seed; not available on the free tier.
 
+**Kling 4.0 Flash (`model: "kling-4-flash"`)** is the faster, lower-cost Kling 4.0: `duration` 3–20 (default 5), 720p only (any `resolution` renders and bills 720p), `aspect_ratio` as on `kling-4`, native audio always on, no seed and no end frame (an `end_frame_url` is not sent to the model). `animate_image` with a start frame and nothing else makes that frame the exact opening frame. Anything else — a prompt-only `generate_video`, `reference_image_urls` (≤ 10), `reference_video_urls` (≤ 5, 2–20 s together — a set outside that is refused before any credits are reserved), `character_references` (≤ 7 named subjects, as on `kling-4`), or a start frame beside any of them — runs in reference mode, at most **15 materials in all**. There are no standalone voices: `reference_audio_urls` clip N (≤ 7) becomes the voice of `character_references` entry N, in order. A character needs 2–4 images to carry a voice: a clip whose character has one image, and any clip past the last character, is dropped and the run still starts. Write who speaks by the character's name (an `@audio_1` mention has its `@` removed). `animate_image` takes no `character_references`, so on Flash its `reference_audio_urls` have no character to carry them and are dropped — send voices through `generate_video`. `keep_original_sound: true` keeps a reference video's own sound; there is no `audio_soundtrack`. A reference-video run bills output + max(output, total clip seconds) at the `-ref` rate. Unlike the other Kling models it runs on free credits, as a 3 or 4 second clip.
+
 **Gemini Omni Flash (`model: "gemini-omni-flash"`)** is the cheaper, faster sibling of `gemini-omni-video` on an identical request shape: the same `image_urls` reference surface under a 7-unit quota (each image 1 unit, a source video 2), the same video-edit mode through the same handle, `duration` one of `"4"` / `"6"` / `"8"` / `"10"` (an omitted duration renders and bills as 8 s), `aspect_ratio` restricted to `"16:9"` or `"9:16"`, and `resolution` `"720p"` / `"1080p"` / `"4k"` (4K is not available on the free tier). Like the Pro SKU it forwards `audio_ids` only for a character's pinned voice (below): otherwise the model generates its own audio track (steer it in the prompt) and there is no platform-managed voice on this path, so both SKUs are excluded from the saved-character voice pipeline.
 
 **Gemini Omni Flash 1.2 (`model: "gemini-omni-flash-1-2"`)** is the newest Omni Flash, priced per second: `duration` any whole second from 3 to 15, `resolution` `"360p"` / `"720p"` / `"1080p"` / `"4k"` (720p when omitted; 4K is not available on the free tier), `aspect_ratio` `"16:9"` / `"9:16"` / `"auto"`, and up to 6 reference images (5 beside a source video). A start frame alone, or a start and end frame up to 10 s, are sent as exact frames; with references wired, or past 10 s, the frames join the reference list and are named in the prompt, where they guide the clip but are not exact frames (for an exact opening, send the frames without references). A source video is edited and charged by its own length, up to 15 s; a longer clip uses its first 15 s. It does not take `character_references`.
 
-**Keeping a person's face (`character_references`).** On Kling 4.0 (`kling-4`), each of up to 7 entries becomes a named subject: `image_url`, `body_image_url` and up to 3 `extra_image_urls` are its 2–4 images (one image alone is sent as a plain reference image), the prompt calls it `@<name>`, a start frame is allowed, and `voice_preset` is refused. To hold a real person's face on either Gemini Omni SKU, pass `character_references` to `generate_video` — up to 3 entries of `{ image_url, description, body_image_url?, name?, voice_preset? }` (a portrait URL and a description of the person). It is the model's dedicated identity input, so it holds the face where `reference_image_urls` only steers the clip. Other models answer an error rather than running without it; it cannot be combined with a start frame, and it shares the 7-unit input budget with reference images (1 unit each) and a source video (2 units) — a character counts 1 unit, 2 with a `body_image_url`. `voice_preset` (one of the 30 Gemini voice ids, e.g. `kore`) pins one voice to that character across clips; the voice description and example line are API / SDK levers (`voice` on `characterReferences`), and the preset list is in [Pinning a voice](../nodes/ai-video/generate-video.md#pinning-a-voice-to-a-character-reference). It adds no credit charge. See [Character references (Gemini Omni)](../nodes/ai-video/generate-video.md#character-references-gemini-omni).
+**Keeping a person's face (`character_references`).** On Kling 4.0 (`kling-4`) and Kling 4.0 Flash (`kling-4-flash`), each of up to 7 entries becomes a named subject: `image_url`, `body_image_url` and up to 3 `extra_image_urls` are its 2–4 images (one image alone is sent as a plain reference image), the prompt calls it `@<name>`, a start frame is allowed, and `voice_preset` is refused. To hold a real person's face on either Gemini Omni SKU, pass `character_references` to `generate_video` — up to 3 entries of `{ image_url, description, body_image_url?, name?, voice_preset? }` (a portrait URL and a description of the person). It is the model's dedicated identity input, so it holds the face where `reference_image_urls` only steers the clip. Other models answer an error rather than running without it; it cannot be combined with a start frame, and it shares the 7-unit input budget with reference images (1 unit each) and a source video (2 units) — a character counts 1 unit, 2 with a `body_image_url`. `voice_preset` (one of the 30 Gemini voice ids, e.g. `kore`) pins one voice to that character across clips; the voice description and example line are API / SDK levers (`voice` on `characterReferences`), and the preset list is in [Pinning a voice](../nodes/ai-video/generate-video.md#pinning-a-voice-to-a-character-reference). It adds no credit charge. See [Character references (Gemini Omni)](../nodes/ai-video/generate-video.md#character-references-gemini-omni).
 
 ### `video_analysis`
 
@@ -1625,7 +1627,10 @@ List your favorited gallery items, most recent first. A favorited Apply EDL rend
 
 Fetch metadata for a single asset (job) by id, including output URL, prompt,
 provider. Visible for your own jobs (any status) and any user's public
-completed jobs. For a **failed** job it returns the failure reason plus a
+completed jobs — on a deployment that does not allow public work
+(`outputs.allowPublic: false`), your own jobs only: anyone else's reads as not
+found. The same holds for `display_asset`, the items `list_favorites` returns
+and `favorite_asset`. For a **failed** job it returns the failure reason plus a
 `retryable` flag, a `guidance` sentence, and — when the provider's safety
 filter blocked the output and the catalog offers a fallback model —
 `suggestedProvider`. `retryable: false` (a content-policy block, or a
@@ -1711,7 +1716,8 @@ cancelled run has a `status`, not an outcome. See
 **Scope:** `assets:write`
 
 Mark or unmark a gallery asset as a favorite: one of your own jobs, or a public
-one. `list_jobs` with `favorited: true` lists your favorited jobs.
+one (your own only, on a deployment that does not allow public work). Unmarking
+always works. `list_jobs` with `favorited: true` lists your favorited jobs.
 
 **Input:** `{ job_id: string, favorited: boolean }`
 
@@ -1801,15 +1807,22 @@ reports `queued` for this reason.
 `assetKind` (`image` / `video` / `audio` / null), `outputUrl`, `width` /
 `height`, `outputData`, `input`, `errorMessage`, `errorDetail` (the provider's
 own words for a failure, links cut to their host and secrets removed; `null`
-when it had none, and on a deployment that keeps these words for its
-administrators — show it, never branch on it), `credits`, `creditsCharged`,
+when it had none, on someone else's job, and on a deployment that keeps these
+words for its administrators — show it, never branch on it), `credits`, `creditsCharged`,
 `creditsHeld`, `creditsReleased`, `createdAt`, `startedAt`, `completedAt`, plus
 `retryable`, `guidance` and `suggestedProvider` on a failed, cancelled or held
 job, and `guidance` on a job waiting for a free slot. `get_asset` and `wait_for_job` return the same envelope (`get_asset`
-without `input` and without the charge figures). `diagnose_run` carries the
+without `input` and without the charge figures). The words are a job's owner's:
+`get_asset` on another user's public job and `list_jobs` with `scope: "public"`
+answer `null` for them, and neither returns that user's id. A job that belongs to
+a workflow run carries them only when you can open the run's workflow, so a job
+of someone else's share link or published app you ran answers `null` on
+`get_job`, `wait_for_job`, `list_jobs`, `get_asset` and `diagnose_run`. `diagnose_run` carries the
 same words as `providerReason` on each failed node that has them, and leaves
-it out where the deployment keeps the words for its administrators (an MCP
-session never reads as an administrator's).
+it out on a run of a workflow you cannot open (someone else's share link or
+published app, whose prompt the words can quote) and where the deployment keeps
+the words for its administrators (an MCP session never reads as an
+administrator's).
 
 `width` / `height` are the output's pixel size, present when the job recorded
 it: every image job completed after this release (the size of `outputUrl` as
@@ -1924,6 +1937,11 @@ went wrong, there was nothing to work on.
 
 List published apps. Supports `scope: "public" | "mine"` and ordering by
 recency.
+
+On a deployment that does not allow public work (`outputs.allowPublic: false`),
+the public scope (the default) lists nothing:
+`{ "data": [], "scope": "public", "next_cursor": null }`. Your own apps are still
+listed with `scope: "mine"`.
 
 **Input:** `scope`, `limit`, `cursor`
 
@@ -2075,7 +2093,13 @@ deletion waits until the run has finished or been stopped).
 List your saved workflow components (reusable sub-graphs). Ordered by most
 recently updated.
 
-**Input:** `limit`, `cursor`
+`scope: "public"` (the default) lists the components marketplace and
+`scope: "mine"` lists your own. On a deployment that does not allow public work
+(`outputs.allowPublic: false`), the public scope lists nothing:
+`{ "data": [], "scope": "public", "next_cursor": null }`. `scope: "mine"` is
+unchanged.
+
+**Input:** `scope`, `limit`, `cursor`, `search`
 
 **Output:** each row carries `estimated_credits`, `per_minute_credits` and
 `per_item_credits`, read the same way as in `list_apps`.
@@ -2116,7 +2140,9 @@ durations, features, and — on editions with a credit system — per-variant
 credit pricing, the credits a run is charged; community/business installs
 omit `pricing`) and a
 `recommendations` array. Every model names its `maker` — `{ id, name }`, the
-company that made it (a family can name a lab or a product line instead).
+company that made it (a family can name a lab or a product line instead) —
+except a model offered under the instance's own label, which carries no
+`maker`.
 The maker's mark (`logoUrl`) is left out here: it is for apps that draw a
 picker, and `GET /v1/models` serves it. Models with model-family prompting guidance (e.g. Seedance 2.0)
 also carry a `promptTips` array — short prompting rules worth applying
@@ -2368,6 +2394,17 @@ Pipeline tools appear only when your authorization grants the relevant
 **Nodaro Cloud only** (the Story-to-Video pipeline engine): self-hosted
 Community and Business installs do not register them.
 
+`start_pipeline`, `branch_pipeline`, `chat_pipeline_stage` and
+`apply_chat_proposal` start or continue a pipeline's work, and are not listed
+where the deployment does not offer the film pipeline (`film-pipeline` in
+its node lists or Admin → Availability — see
+[Deployment](../deployment.md)). A call that still arrives there is refused
+with `403 node_not_available` before anything is reserved. The read tools
+stay listed, so a pipeline made before can still be followed. A pipeline a
+tool starts is paid for exactly as one started through `POST /v1/pipelines`:
+on a deployment that pays for its users' generations, by that deployment,
+counted against the user's allowance.
+
 | Tool | Scope | Description |
 |------|-------|-------------|
 | `branch_pipeline` | `pipelines:execute` | Create a branch of an existing pipeline from a given stage. |
@@ -2513,6 +2550,13 @@ Author and render a narrated, time-coded concept-led explainer video in one
 call. Priced as the `video-director` entry in `list_models` (authoring,
 speech, alignment and render stages; credits vary by deployment). Returns a
 `job_id`.
+
+Not listed where the deployment does not offer the Video Director
+(`video-director` in its node lists or Admin → Availability); a call that still
+arrives is refused with `403 node_not_available` before anything is reserved.
+Its speech, alignment and render steps are each checked as their own node
+(`text-to-speech`, `forced-alignment`, `render-video`). The same holds for
+`create_launch_video`.
 
 **Input:** `topic` (string, 1–8000 chars) — what the explainer should cover.
 
@@ -2680,7 +2724,9 @@ Example (`node_type: "person"`, trimmed):
 ```
 
 The host is the installation's own public address; rendered look-picker
-previews (Nodaro CDN) are returned on Nodaro Cloud only. Rules:
+previews (Nodaro CDN) are returned on Nodaro Cloud only. On a deployment that
+turned the platform's pictures off (`catalogs.images` in its surface profile),
+no option or topic carries an `imageUrl` and every `imageCount` is `0`. Rules:
 [Pictures](../api-integration.md#pictures-imageurl-sections).
 
 See [Parameter Picker Catalogs](../picker-catalogs.md) for the underlying

@@ -1,8 +1,8 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId } from "@nodaro/shared/models"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, isSeedanceExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
-import { defaultImageModelForNode, gptImage26EstimatedImages, imageFormatLeversOf, isGptImage26Tiered, maskedEditResolution, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
+import { defaultImageModelForNode, imageFormatLeversOf, isPricedPerInputImage, maskedEditResolution, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { countImageInputEdges, nodeIsMasked, wiredImageSize } from "@nodaro/shared/workflow"
 import {
   buildCreditModelIdentifier as sharedBuildCreditModelIdentifier,
@@ -22,6 +22,7 @@ import {
   textToAudioCreditId,
   LTX_EXTEND_PER_SECOND_CREDIT_ID,
   LTX_RETAKE_PER_SECOND_CREDIT_ID,
+  seedanceExtendCreditId,
   pitchTempoQuoteCreditId,
   videoGenerationCreditId,
 } from "@nodaro/shared/credits"
@@ -39,7 +40,7 @@ import { referenceSheetCreditId } from "@nodaro/shared/entities"
 import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared/edl"
 import { isRenderNodeType, withWiredSettings } from "@nodaro/shared/nodes"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
-import { isUseCaseNodeType, renderEstimateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
+import { EXTEND_VIDEO_DEFAULT_PROVIDER, isUseCaseNodeType, renderEstimateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { sendsReferenceVideo } from "@/lib/audio-reference-handles"
 import { bypassTeleports, drawnSourceId } from "@nodaro/render-rules"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
@@ -743,8 +744,13 @@ export function getModelIdentifier(
   if (nodeType === "video-upscale" && isTopazVideoUpscaleProvider(data.provider)) return TOPAZ_VIDEO_UNIT_CREDIT_ID
 
   // A node naming no model whose default is priced per input image: as the server estimate.
+  // An Extend Video node naming no provider runs on the node's default
+  // (`EXTEND_VIDEO_DEFAULT_PROVIDER`) and is quoted as that run, never the
+  // node-type row (mirror of the backend estimator).
   const nodeDefault = data.provider ? undefined : defaultImageModelForNode(nodeType, data.aspectRatio as string | undefined)
-  const provider = (data.provider as string | undefined) ?? (nodeDefault && isGptImage26Tiered(nodeDefault) ? nodeDefault : undefined)
+  const provider = (data.provider as string | undefined)
+    ?? (nodeType === "extend-video" ? EXTEND_VIDEO_DEFAULT_PROVIDER : undefined)
+    ?? (nodeDefault && isPricedPerInputImage(nodeDefault) ? nodeDefault : undefined)
   if (!provider) return nodeType
 
   // Video to Video, Seedance EDIT lane: Seedance has no v2v endpoint — the node
@@ -768,6 +774,17 @@ export function getModelIdentifier(
   // which every estimate multiplies by the seconds (PRICING_UNIT_ESTIMATORS).
   if (nodeType === "extend-video" && provider === "ltx-2.3-pro") return LTX_EXTEND_PER_SECOND_CREDIT_ID
 
+  // Extend-video on Seedance: each model on its own rows, by the seconds added
+  // and the resolution — the one builder the route's guard and the workflow
+  // run reserve on. A retired id (`seedance-2-extend`) is priced as the model
+  // it runs as.
+  if (nodeType === "extend-video") {
+    const runsAs = canonicalVideoProvider(provider)
+    if (isSeedanceExtendProvider(runsAs)) {
+      return seedanceExtendCreditId(runsAs, data.duration as number | string | undefined, data.resolution as string | undefined)
+    }
+  }
+
   // Motion transfer: duration-tiered pricing
   if (nodeType === "motion-transfer") {
     return buildMotionCreditModelIdentifier(
@@ -780,7 +797,7 @@ export function getModelIdentifier(
   return buildCreditModelIdentifier(
     provider,
     data,
-    edges && isGptImage26Tiered(provider) ? countImageInputEdges(edges, node.id) : 0,
+    edges && isPricedPerInputImage(provider) ? countImageInputEdges(edges, node.id) : 0,
     // A masked edit on a model that follows its photo is priced at the size
     // nearest the photo, when the node it comes from records the photo's size.
     {
@@ -808,8 +825,9 @@ export function buildCreditModelIdentifier(
   // ref count from `data.referenceImageUrls` (panel-local mirror of the wired
   // refs) so the displayed credit number matches what the route will charge.
   const refs = data.referenceImageUrls as string[] | undefined
-  // GPT Image 2.6 counts every image the run will send.
-  const refCount = isGptImage26Tiered(provider) ? gptImage26EstimatedImages(provider, data, wiredImageRefs) : (refs?.length ?? 0)
+  // A model priced per input image (GPT Image 2.6, MiniMax H3 Image) counts
+  // every image the run will send.
+  const refCount = isPricedPerInputImage(provider) ? pricedEstimatedImages(provider, data, wiredImageRefs) : (refs?.length ?? 0)
   // Topaz bills on the upscale FACTOR. The legacy `targetResolution` still on
   // stored node data is mapped forward by resolveTopazUpscale — the same
   // authority the route, the estimator and the worker use — so the credit badge

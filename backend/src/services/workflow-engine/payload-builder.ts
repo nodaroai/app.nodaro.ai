@@ -4,6 +4,7 @@ import { moodboardWarnings, type ResolvedUserDirection } from "../../lib/user-di
 import { buildSpeakerFramesPayload } from "./speaker-frames-payload.js"
 import { DUBBING_VOICE_LOCK_MESSAGE, dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { retiredEditProviderReason } from "../../lib/retired-edit-providers.js"
+import { tailRecipeSeconds } from "../../lib/extend-recipe.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import { AUDIO_ISOLATION_CREDIT_ID, FORCED_ALIGNMENT_CREDIT_ID, REMOVE_BACKGROUND_CREDIT_ID } from "../../lib/fixed-row-credit-ids.js"
 import {
@@ -62,7 +63,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, pickSunoSeparateSource, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, pickSunoSeparateSource, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -79,7 +80,7 @@ import {
 } from "@nodaro/shared/video"
 import {
   defaultImageModel,
-  gptImage26SentImages,
+  pricedSentImages,
   IMAGE_MODEL_ROLE_DEFAULTS,
   isSeedanceDraftCapable,
   SEEDANCE_DRAFT_FINALIZE_PROVIDER,
@@ -121,6 +122,8 @@ import {
   validateCinematicAvatarPayload,
   speedRampCreditId,
   seedanceVideoEditCreditId,
+  seedanceExtendCreditId,
+  seedanceExtendResolution,
   resolveTopazUpscale,
   resolveNormalizedImageGen,
   imageFormatInputOf,
@@ -146,6 +149,8 @@ import {
   isVeoProvider,
   isSeedance2Provider,
   isSeedanceVideoEditProvider,
+  isSeedanceExtendProvider,
+  canonicalVideoProvider,
   SEEDANCE_VIDEO_EDIT_SHAPE,
   isMinimaxH3Provider,
   isWan3Provider,
@@ -287,7 +292,6 @@ import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { speechRunsAs } from "../../lib/speech-credits.js"
 import { applyPromptPolicies } from "../../lib/prompt-policy.js"
 import { ltxCameraMotionFromUpstream } from "../../lib/ltx-camera-motion.js"
-import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { buildEffectiveEdl, effectiveRenderBasis, validateEffectiveEdl } from "../../lib/apply-edl-plan.js"
 import { audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES } from "../../providers/audio/audio-sync-budget.js"
@@ -3303,8 +3307,8 @@ function buildPayloadOf(
         background: data.background,
         // The file written, and a GIF's or an SVG's own levers (a GIF and an SVG price differently).
         ...imageFormatInputOf(data),
-        // On GPT Image 2.6 the base of an edit is one more image sent.
-        refCount: gptImage26SentImages(
+        // On a model priced per input image the base of an edit is one more image sent.
+        refCount: pricedSentImages(
           provider,
           result.referenceImageUrls ?? [],
           resolvedInputs.baseImageUrl || data.baseImageUrl,
@@ -5672,7 +5676,7 @@ function buildPayloadOf(
     }
 
     case "extend-video": {
-      const evProvider = (data.provider as string) ?? "veo-extend"
+      const evProvider = (data.provider as string | undefined) ?? EXTEND_VIDEO_DEFAULT_PROVIDER
 
       // ─── LTX 2.3 Pro extend ──────────────────────────────────────────────
       // LTX extend operates on the source video URL (no KIE taskId — Replicate
@@ -5718,31 +5722,34 @@ function buildPayloadOf(
         return pWithNeg
       }
 
-      // ─── Seedance 2 trim-stitch extend ───────────────────────────────────
+      // ─── Seedance trim-stitch extend (Seedance 2.5, Seedance 2.0) ────────
       // URL-based like LTX, but the continuation CONTENT is required — the
       // worker wraps it in the spike-proven bare temporal template and then
-      // trim-stitches source+extension. Composite credits (duration tier ×
-      // resolution) via the same shared builder the HTTP route uses, so
-      // orchestrator and single-node runs reserve identically.
-      if (evProvider === "seedance-2-extend") {
+      // trim-stitches source+extension. Each provider is priced on its own
+      // rows (seconds added × resolution) through the one builder the HTTP
+      // route (`resolveExtendVideoIdentifier`) and the estimate use, so
+      // orchestrator and single-node runs reserve identically — commit_credits
+      // only ever refunds a surplus, so a lower reservation would be a
+      // permanent shortfall. A retired id (`seedance-2-extend`) runs, and is
+      // priced, as the provider it became. The job carries the length and the
+      // resolution the row is priced at, never the node's raw values: a stored
+      // length or resolution the model does not offer (a graph written by MCP,
+      // an import, an API save) would otherwise render above what it reserved.
+      const seedanceProvider = canonicalVideoProvider(evProvider)
+      if (isSeedanceExtendProvider(seedanceProvider)) {
+        const duration = typeof data.duration === "number" || typeof data.duration === "string" ? data.duration : undefined
+        const resolution = typeof data.resolution === "string" ? data.resolution : undefined
         return {
           jobName: "extend-video",
           queueName: "video-generation",
-          // Priced for the model SEEDANCE_EXTEND_GENERATION_MODEL actually
-          // dispatches on — the orchestrator reserves for real, and
-          // commit_credits only ever refunds a surplus, so a 2.0 reservation
-          // against a 2.5 generation would be a permanent shortfall.
-          modelIdentifier: buildSeedanceExtendCreditIdentifier(
-            data.duration as number | undefined,
-            data.resolution as string | undefined,
-          ),
+          modelIdentifier: seedanceExtendCreditId(seedanceProvider, duration, resolution),
           payload: {
             jobId,
-            provider: evProvider,
+            provider: seedanceProvider,
             video: resolvedInputs.videoUrl || data.videoUrl,
             prompt: buildExtendPrompt(),
-            duration: data.duration,
-            resolution: data.resolution,
+            duration: tailRecipeSeconds(seedanceProvider, duration),
+            resolution: seedanceExtendResolution(seedanceProvider, resolution),
             generateAudio: data.generateAudio,
             usageLogId,
           },

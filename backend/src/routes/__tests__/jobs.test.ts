@@ -473,8 +473,11 @@ describe("GET /v1/jobs/status", () => {
     // failure-text mask a trend run; it is removed before answering too.
     // `lane_queued_at` is the clock of a waiting job's `queue.waitedSeconds`,
     // read and then removed before answering (jobs-queue.test.ts pins that).
+    // `workflow_execution_id` tells a run's job, whose provider words follow
+    // the run's workflow; it is removed before answering too
+    // (jobs-run-provider-words.test.ts pins that).
     expect(capturedSelect).toEqual([
-      "id", "status", "progress", "output_data", "error_message", "error_detail", "error_hint", "usage_log_id",
+      "id", "status", "progress", "output_data", "error_message", "error_detail", "error_hint", "usage_log_id", "workflow_execution_id",
       "job_type", "input_quality:input_data->>quality", "trend_run_marker:input_data->trend", "lane_queued_at",
     ])
     for (const secret of ["provider_cost", "display_cost", "credits", "provider"]) {

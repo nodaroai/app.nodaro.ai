@@ -74,6 +74,25 @@ export interface FactoryPresetsResult {
   data: FactoryPresetEntry[]
 }
 
+/**
+ * One category (group) of the built-in catalog, as `listFactoryGroups()` lists
+ * it: enough to show the categories (a menu, a shelf) without the whole catalog.
+ */
+export interface FactoryPresetGroupSummary {
+  /** The group's name, as the presets carry it (`FactoryPresetEntry.group`). */
+  group: string
+  /**
+   * The shelf a picker files it under: `"video"`, `"marketing"`, `"photos"`,
+   * `"creative"`, `"life"`, `"pro"` (the pro catalog), or `"more"` (a group no
+   * shelf names yet). Shown in that order.
+   */
+  shelf: string
+  /** How many presets it holds. */
+  count: number
+  /** The example picture of its first preset that has one, or null. */
+  previewUrl: string | null
+}
+
 /** `POST /v1/node-presets` body. */
 export interface CreateNodePresetInput {
   /** The node type the preset configures, e.g. `"generate-image"`. */
@@ -188,6 +207,22 @@ export class PresetsResource {
       "GET",
       `/v1/node-presets/factory?nodeType=${encodeURIComponent(nodeType)}`,
     )
+  }
+
+  /**
+   * `GET /v1/node-presets/factory/groups` → the built-in catalog's categories for
+   * `nodeType`, in the order a picker shows them (shelf by shelf, then the
+   * design's order, then catalog order): each group's name, its shelf, how many
+   * presets it holds and its first example picture. A few KB where `listFactory()` is the
+   * whole catalog: for a menu or a shelf that lists the categories. Public, as
+   * `listFactory()` is: no credential needed.
+   */
+  async listFactoryGroups(nodeType: string): Promise<FactoryPresetGroupSummary[]> {
+    const res = await this.client.request<{ data: FactoryPresetGroupSummary[] }>(
+      "GET",
+      `/v1/node-presets/factory/groups?nodeType=${encodeURIComponent(nodeType)}`,
+    )
+    return res.data
   }
 
   /** `POST /v1/node-presets` → the new preset. */

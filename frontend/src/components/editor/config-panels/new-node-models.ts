@@ -31,6 +31,7 @@ import {
   NODE_MODEL_LEVERS,
   offeredLeverRows,
   planNodeModels,
+  type FreeVideoModelLockOptions,
   type NodeModelJudge,
   type NodeModelLever,
 } from "@nodaro/render-rules"
@@ -155,9 +156,10 @@ function editorJudge(): NodeModelJudge {
   return {
     restricted: modelRestrictionActive(),
     withheld: isModelUnavailable,
-    locked: (model: string) => {
+    // The lever says how its rows run (`lockAs`: an Extend Video row is an extension).
+    locked: (model: string, opts?: FreeVideoModelLockOptions) => {
       limits ??= cachedFreeVideoLimits()
-      return limits !== null && lockedVideoModel(limits, model) !== null
+      return limits !== null && lockedVideoModel(limits, model, opts) !== null
     },
   }
 }

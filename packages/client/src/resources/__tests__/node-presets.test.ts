@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { createClient, StaticTokenAuth } from "../../index.js"
-import type { Auth, NodePreset, NodePresetGroup, FactoryPresetsResult } from "../../index.js"
+import type { Auth, NodePreset, NodePresetGroup, FactoryPresetGroupSummary, FactoryPresetsResult } from "../../index.js"
 
 function mockOk<T>(body: T, status = 200) {
   return Promise.resolve({ ok: true, status, json: async () => body } as unknown as Response)
@@ -97,6 +97,20 @@ describe("presets resource — reads", () => {
     const headers = (fetchMock.mock.calls[0][1] as { headers: Record<string, string> }).headers
     expect(headers.Authorization).toBeUndefined()
     expect(out).toEqual(result)
+  })
+
+  it("listFactoryGroups() GETs the catalog's categories, signed out too, and returns their list", async () => {
+    const groups: FactoryPresetGroupSummary[] = [
+      { group: "YouTube", shelf: "video", count: 60, previewUrl: "https://app.example.com/preset-previews/generate-image/yt.webp" },
+      { group: "Reference Sheet", shelf: "pro", count: 12, previewUrl: null },
+    ]
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: groups }))
+    const out = await client(fetchMock, NO_TOKEN).presets.listFactoryGroups("generate-image")
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/node-presets/factory/groups?nodeType=generate-image")
+    const headers = (fetchMock.mock.calls[0][1] as { headers: Record<string, string> }).headers
+    expect(headers.Authorization).toBeUndefined()
+    expect(out).toEqual(groups)
   })
 
   it("favorites() GETs the favorite ids for a node type", async () => {

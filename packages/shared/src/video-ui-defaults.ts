@@ -34,7 +34,7 @@ import {
   isMinimaxH3Provider,
   isWan3Provider,
   isViduQ4Provider,
-  isKling4Provider,
+  isKling4RunnerProvider,
   isGeminiOmniProvider,
   isGeminiOmniPerSecondProvider,
 } from "./model-constants.js"
@@ -43,16 +43,18 @@ import { MODEL_CATALOG } from "./model-catalog.js"
 /** `adaptive` is the aspect default for Seedance 2, MiniMax H3 and Wan 3.0. */
 export function uiAspectRatioFill(provider: string): string | undefined {
   if (isSeedance2Provider(provider) || isMinimaxH3Provider(provider) || isWan3Provider(provider)) return "adaptive"
-  // Kling 4.0: `auto` follows the materials (frames / references) and renders
-  // 16:9 with none — KIE's own default when the field is omitted.
-  if (isKling4Provider(provider)) return "auto"
+  // Kling 4.0 (and Flash): `auto` follows the materials (frames / references)
+  // and renders 16:9 with none — KIE's own default when the field is omitted.
+  // Flash's keyframe endpoint has no `auto`, but it runs only with a start
+  // frame, where the ratio is never sent (the clip follows the frame).
+  if (isKling4RunnerProvider(provider)) return "auto"
   return undefined
 }
 
 /** See the file docstring — per-family on purpose; never a generic
  *  PRICING_DEFAULT_RESOLUTION read (that would reprice seedance-2-5). */
 export function uiResolutionFill(provider: string): string | undefined {
-  if (isWan3Provider(provider) || isViduQ4Provider(provider) || isKling4Provider(provider) || isGeminiOmniPerSecondProvider(provider)) return PRICING_DEFAULT_RESOLUTION[provider]
+  if (isWan3Provider(provider) || isViduQ4Provider(provider) || isKling4RunnerProvider(provider) || isGeminiOmniPerSecondProvider(provider)) return PRICING_DEFAULT_RESOLUTION[provider]
   if (isSeedance2Provider(provider)) return MODEL_CATALOG[provider]?.resolutions?.[0]
   return undefined
 }
@@ -66,7 +68,7 @@ export function uiResolutionFill(provider: string): string | undefined {
  * undefined and the caller keeps `durations[0]`.
  */
 export function uiDurationFill(provider: string): number | undefined {
-  if (isWan3Provider(provider) || isViduQ4Provider(provider) || isKling4Provider(provider)) return 5
+  if (isWan3Provider(provider) || isViduQ4Provider(provider) || isKling4RunnerProvider(provider)) return 5
   if (isGeminiOmniProvider(provider)) return 8
   return undefined
 }

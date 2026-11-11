@@ -13,6 +13,7 @@ import {
   getVideoResolutionOptions,
   IMAGE_QUALITY_OPTIONS,
   IMAGE_RESOLUTION_OPTIONS,
+  declaredDefaultResolution,
   defaultQualityFor,
 } from "@/components/editor/config-panels/model-options"
 // Single source of truth for the duration-slider cap — defined once in the
@@ -522,6 +523,7 @@ function renderGenerateImage(
           allowedValues={allowedValues}
           readOnly={readOnly}
           autoReset
+          resetTo={declaredDefaultResolution(provider)}
         />
       )
     }

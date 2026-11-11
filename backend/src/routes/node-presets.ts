@@ -19,6 +19,7 @@ import { PRESET_IMPORT_LIMIT, PRESET_WRITE_LIMIT, presetWriteAccess } from "../l
 import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
 import { supabase } from "../lib/supabase.js"
 import { requireScope } from "../lib/scopes.js"
+import { PRESET_SHELF_ORDER, presetShelf, presetShelfRank, type PresetShelf } from "@nodaro/prompts/presets"
 
 const MAX_DATA_BYTES = 64 * 1024
 
@@ -226,6 +227,37 @@ export async function nodePresetRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "validation_error", message: "nodeType query param is required" } })
     }
     const data = presetCatalog(nodeType).map((p) => factoryPresetView(nodeType, p))
+    reply.header("Cache-Control", "public, max-age=300")
+    return reply.send({ data })
+  })
+
+  // The catalog's CATEGORIES (its groups), for a menu or a shelf that lists them without the whole catalog:
+  // each group with its shelf (`presetShelf`, the one mapping every picker uses), how many presets it holds
+  // and its first example picture, in the order a picker shows them: shelf by shelf, a shelf's named groups
+  // in the design's order (`presetShelfRank`), then the rest in catalog order. PUBLIC like `/factory` (middleware/auth.ts PUBLIC_ROUTES):
+  // derived from the same catalog, the same for every caller, cached as public; nothing here reads a user.
+  app.get("/v1/node-presets/factory/groups", async (req, reply) => {
+    const nodeType = (req.query as { nodeType?: string }).nodeType
+    if (!nodeType) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "nodeType query param is required" } })
+    }
+    const byGroup = new Map<string, { group: string; shelf: PresetShelf; count: number; previewUrl: string | null }>()
+    for (const preset of presetCatalog(nodeType).map((p) => factoryPresetView(nodeType, p))) {
+      const group = preset.group
+      if (!group) continue
+      const entry = byGroup.get(group) ?? { group, shelf: presetShelf(group), count: 0, previewUrl: null }
+      entry.count += 1
+      entry.previewUrl ??= preset.previewUrl ?? null
+      byGroup.set(group, entry)
+    }
+    const rank = (group: string) => {
+      const named = presetShelfRank(group)
+      return named === -1 ? Number.MAX_SAFE_INTEGER : named
+    }
+    // Array.prototype.sort is stable, so groups of equal place keep catalog order.
+    const data = [...byGroup.values()].sort(
+      (a, b) => PRESET_SHELF_ORDER.indexOf(a.shelf) - PRESET_SHELF_ORDER.indexOf(b.shelf) || rank(a.group) - rank(b.group),
+    )
     reply.header("Cache-Control", "public, max-age=300")
     return reply.send({ data })
   })

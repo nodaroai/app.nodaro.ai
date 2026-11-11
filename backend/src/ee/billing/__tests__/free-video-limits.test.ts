@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest"
 import { MODEL_CATALOG, VIDEO_DURATION_AUTO, type ModelCatalogEntry } from "@nodaro/shared/model-catalog"
 import {
+  FREE_OPEN_VIDEO_MODELS,
   FREE_VIDEO_LIMITS_DEFAULTS,
+  freeVideoModelRefusal,
   freeVideoRefusal,
   freeVideoRequestForJob,
   freeVideoRequestOf,
@@ -11,13 +13,14 @@ import {
 } from "../free-video-limits.js"
 import { parseFreeVideoMaxSeconds } from "../../lib/free-video-config.js"
 import { IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS } from "@nodaro/shared/models"
+import { freeVideoLock } from "@nodaro/render-rules"
 
 const ON = FREE_VIDEO_LIMITS_DEFAULTS
 const videos = Object.values(MODEL_CATALOG as Record<string, ModelCatalogEntry>).filter((e) => e.kind === "video")
 
 describe("free-credit video limits — blocked models", () => {
-  it("every Kling model and Seedance 2.5 (and its HD finalizer) is refused, whatever the settings", () => {
-    const blocked = videos.filter((e) => e.series === "Kling" || e.id === "seedance-2-5" || e.id.startsWith("seedance-2-5-"))
+  it("every Kling model but Kling 4.0 Flash, and Seedance 2.5 (and its HD finalizer), is refused, whatever the settings", () => {
+    const blocked = videos.filter((e) => (e.series === "Kling" && e.id !== "kling-4-flash") || e.id === "seedance-2-5" || e.id.startsWith("seedance-2-5-"))
     // The catalog's own Kling series: generation, motion transfer and lip-sync.
     expect(blocked.map((e) => e.id)).toEqual(expect.arrayContaining(["kling", "kling-3.0", "kling-3-omni", "kling-3.0-motion", "kling-avatar", "seedance-2-5", "seedance-2-5-hd"]))
     for (const e of blocked) {
@@ -28,6 +31,28 @@ describe("free-credit video limits — blocked models", () => {
   it("a new Kling SKU is covered by its series, with no list to edit", () => {
     const kling = videos.filter((e) => e.series === "Kling")
     expect(kling.length).toBeGreaterThan(5)
+  })
+
+  it("Kling 4.0 Flash is the one open Kling model (decided 2026-11-11), and only it", () => {
+    expect(FREE_OPEN_VIDEO_MODELS).toEqual(["kling-4-flash"])
+    expect(freeVideoModelRefusal("kling-4-flash", ON)).toBeNull()
+    for (const id of ["kling-4", "kling-4-keyframes", "kling-3.0", "kling"]) {
+      expect(freeVideoModelRefusal(id, ON), id).not.toBeNull()
+    }
+    // Exact ids: no catalog model rides the exception by prefix.
+    expect(videos.filter((e) => e.id.startsWith("kling-4-flash")).map((e) => e.id)).toEqual(["kling-4-flash"])
+  })
+
+  it("Kling 4.0 Flash runs on free credits within the limits: 3-4 s at 720p, its only resolution", () => {
+    expect(freeVideoRefusal({ provider: "kling-4-flash", duration: 3, resolution: "720p" }, ON)).toBeNull()
+    expect(freeVideoRefusal({ provider: "kling-4-flash", duration: 4, resolution: "720p" }, ON)).toBeNull()
+    // An omitted resolution is its billed default, 720p.
+    expect(freeVideoRefusal({ provider: "kling-4-flash", duration: 4 }, ON)).toBeNull()
+    // Past 4 s, or with no length named (its default is 5 s), it is refused like any open model.
+    expect(freeVideoRefusal({ provider: "kling-4-flash", duration: 5, resolution: "720p" }, ON)).not.toBeNull()
+    expect(freeVideoRefusal({ provider: "kling-4-flash", resolution: "720p" }, ON)).not.toBeNull()
+    // The workflow lane reads the same rule from the node payload.
+    expect(freeVideoRefusal(freeVideoRequestOf({ provider: "kling-4-flash", duration: 4, resolution: "720p" })!, ON)).toBeNull()
   })
 
   it("the trigger case: two 7-second 1080p Kling 3.0 clips", () => {
@@ -96,7 +121,7 @@ describe("free-credit video limits — length and resolution", () => {
 
   it("video extension is refused: 4 s at 480p must not become 15 s at 1080p", () => {
     const extenders = videos.filter((e) => e.modes.includes("extend"))
-    expect(extenders.map((e) => e.id)).toEqual(expect.arrayContaining(["seedance-2-extend"]))
+    expect(extenders.map((e) => e.id)).toEqual(expect.arrayContaining(["seedance-2-5-extend", "seedance-2-0-extend"]))
     for (const e of extenders) expect(freeVideoRefusal({ provider: e.id, duration: 4, resolution: "480p" }, ON), e.id).not.toBeNull()
   })
 
@@ -155,5 +180,49 @@ describe("free-credit video limits — only video lanes are judged", () => {
   it("a video job is judged, including Grok's text-to-video id", () => {
     expect(freeVideoRequestForJob("text-to-video", "grok:6s", { provider: "grok", duration: 6 })?.provider).toBe("grok")
     expect(freeVideoRequestForJob("generate-video-pro", "generate-video-pro", { provider: "seedance-2", duration: 30 })?.duration).toBe(30)
+  })
+
+  // LTX 2.3 Pro extends under its GENERATION model's id (`ltx-2.3-pro`), so its
+  // catalog entry cannot say the run is an extension. The job's lane says it:
+  // an Extend Video job carries the extension mark and is refused with the
+  // lock VEO and Runway get — never judged by the generation model's lengths
+  // and resolutions, which let it through once the length setting reaches 6 s.
+  // The workflow lane (node-executor) and the pipeline lane both read this.
+  it("an Extend Video job is an extension whatever model its provider names (LTX 2.3 Pro)", () => {
+    const ltx = freeVideoRequestForJob("extend-video", "ltx-2.3-pro-extend:per-second", { provider: "ltx-2.3-pro", duration: 6, resolution: "1080p" })
+    expect(ltx?.extend).toBe(true)
+    for (const limits of [ON, { enabled: true, maxSeconds: 10 }]) {
+      expect(freeVideoRefusal(ltx!, limits)?.error, String(limits.maxSeconds)).toMatch(/^Extending video is not available on free credits/)
+    }
+    expect(freeVideoRefusal(ltx!, { enabled: false, maxSeconds: 4 })).toBeNull()
+    for (const provider of ["veo-extend", "runway-extend", "seedance-2-5-extend", "seedance-2-0-extend"]) {
+      const job = freeVideoRequestForJob("extend-video", provider, { provider })
+      expect(freeVideoRefusal(job!, ON)?.error, provider).toMatch(/^Extending video is not available on free credits/)
+    }
+  })
+
+  // Defence in depth: an Extend Video job whose provider no catalog entry
+  // knows (a retired id that slipped past normalization, a provider added to
+  // the lane before the catalog) is still an extension, refused by its id.
+  it("an Extend Video job is refused even when its provider names no catalog model (label = the provider id)", () => {
+    for (const provider of ["seedance-2-extend", "no-such-extend"]) {
+      const job = freeVideoRequestForJob("extend-video", `${provider}:8s:720p`, { provider, duration: 8, resolution: "720p" })
+      expect(job, provider).toMatchObject({ provider, duration: 8, resolution: "720p", extend: true })
+      expect(freeVideoLock(job!, ON), provider).toEqual({ kind: "extend", label: provider })
+      expect(freeVideoRefusal(job!, ON)?.error, provider).toMatch(/^Extending video is not available on free credits/)
+      expect(freeVideoRefusal(job!, { enabled: false, maxSeconds: 4 }), provider).toBeNull()
+    }
+    // A payload that names no provider is judged by the id it reserves under.
+    const unnamed = freeVideoRequestForJob("extend-video", "veo-extend:quality", {})
+    expect(unnamed).toMatchObject({ provider: "veo-extend", extend: true })
+    expect(freeVideoRefusal(unnamed!, ON)?.error).toMatch(/^Extending video is not available on free credits/)
+    // Any other job naming no catalog model is still no video request.
+    expect(freeVideoRequestForJob("generate-video", "no-such-model:8s", { provider: "no-such-model" })).toBeUndefined()
+  })
+
+  it("LTX 2.3 Pro generation is still judged as generation (the extension mark rides the Extend Video lane only)", () => {
+    const gen = freeVideoRequestForJob("generate-video", "ltx-2.3-pro:1080p:6s", { provider: "ltx-2.3-pro", duration: 6, resolution: "1080p" })
+    expect(gen?.extend).toBeUndefined()
+    expect(freeVideoRefusal(gen!, { enabled: true, maxSeconds: 10 })).toBeNull()
   })
 })

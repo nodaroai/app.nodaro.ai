@@ -45,6 +45,7 @@ import {
   getAspectRatiosForModel,
   getSourcePhotoAspectRatios,
   IMAGE_RESOLUTION_OPTIONS,
+  declaredDefaultResolution,
   IMAGE_QUALITY_OPTIONS,
   defaultQualityFor,
   writesGif,
@@ -99,7 +100,7 @@ import {
   maskCompositeUsesForeground
 } from "@nodaro/shared/media"
 import { MASK_COMPOSITE_AUDIO_LABEL_KEYS, MASK_COMPOSITE_FIT_LABEL_KEYS } from "@/components/editor/config-panels/mask-composite-config"
-import { cachedFreeVideoLimits, lockedVideoDuration, lockedVideoModel, lockedVideoResolution, type FreeVideoLimits } from "@/lib/free-video-locks"
+import { EXTEND_VIDEO_ROW_LOCK, cachedFreeVideoLimits, lockedVideoDuration, lockedVideoModel, lockedVideoResolution, type FreeVideoLimits } from "@/lib/free-video-locks"
 
 /**
  * Data-driven quick-config controls for {@link NodeQuickStrip}. Each AI node
@@ -613,6 +614,12 @@ const videoUpscaleProviderControl = (): QuickConfigControl => ({
     { value: "seedance-2-5-hd", label: "Seedance 2.5 HD (from draft)" },
   ], (v, limits) => lockedVideoModel(limits, v)),
 })
+/** Extend Video model — mirrors video-configs.tsx `ExtendVideoConfig`: each
+ *  row is an extension, locked on free credits as its lever says. */
+const extendVideoProviderControl = (): QuickConfigControl => ({
+  ...providerControl(EXTEND_VIDEO_MODELS, "veo-extend"),
+  options: (_data) => withFreeVideoLocks(toOptions(EXTEND_VIDEO_MODELS), (v, limits) => lockedVideoModel(limits, v, EXTEND_VIDEO_ROW_LOCK)),
+})
 /** video-upscale target resolution — Topaz's lever only (the shared
  *  `TOPAZ_VIDEO_RESOLUTIONS`, as `VideoUpscaleConfig` lists it): `[]` on every
  *  other provider, so the strip hides it and clears the stale value. Choosing
@@ -962,6 +969,10 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
         return writesGif(provider, data.outputFormat) ? [] : (IMAGE_RESOLUTION_OPTIONS[provider] ?? [])
       },
       preserveOnHide: (data) => writesGif(generateImageProviderOf(data), data.outputFormat),
+      // A stale size snaps to the size the model renders unset where its
+      // catalog declares one (MiniMax H3 Image: 2K); else ("" is no option) to
+      // the first listed, as before.
+      snap: (_value, data) => declaredDefaultResolution(generateImageProviderOf(data)) ?? "",
     },
     {
       field: "repeatCount",
@@ -1235,7 +1246,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       ],
     },
   ],
-  "extend-video": [providerControl(EXTEND_VIDEO_MODELS, "veo-extend")],
+  "extend-video": [extendVideoProviderControl()],
   "lip-sync": [providerControl(LIP_SYNC_MODELS, "kling-avatar")],
   "text-to-speech": [ttsProviderControl()],
   "motion-transfer": [providerControl(MOTION_TRANSFER_MODELS)],

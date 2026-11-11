@@ -92,6 +92,32 @@ describe("models command", () => {
     ])
   })
 
+  it("a model offered under the instance's own label names no maker: the table shows a dash", async () => {
+    const ownLabel = {
+      sections: [{
+        kind: "video",
+        families: [{
+          family: "House",
+          models: [{
+            id: "house-model",
+            label: "House Model",
+            logoUrl: null,
+            description: "A model with no maker.",
+            modes: ["video-upscale"],
+            useCases: ["upscale"],
+            doctrineCovered: false,
+          }],
+        }],
+      }],
+      recommendations: [],
+      totalModels: 1,
+    }
+    mocks.list.mockResolvedValueOnce(ownLabel)
+    await runCmd("models", "list")
+    const [rows] = vi.mocked(table).mock.calls[0]!
+    expect(rows.map((r) => [r.id, r.maker])).toEqual([["house-model", "-"]])
+  })
+
   it("--json passes the catalog through whole, maker and logoUrl included", async () => {
     mocks.list.mockResolvedValueOnce(CATALOG)
     await runCmd("models", "list", "--json")

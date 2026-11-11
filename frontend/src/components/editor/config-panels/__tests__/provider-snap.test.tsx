@@ -482,6 +482,23 @@ describe("GenerateImageConfig — provider-snap useEffect", () => {
     expect(merged.resolution).toBe("2 MP")
   })
 
+  it("minimax-h3-image with no resolution → writes '2K', the size it renders (not options[0] 1K)", () => {
+    const onUpdate = vi.fn()
+    const data = baseGenerateImageData({ provider: "minimax-h3-image" })
+    render(<GenerateImageConfig {...commonProps(onUpdate, data)} />)
+    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+    expect(merged.resolution).toBe("2K")
+  })
+
+  it("minimax-h3-image with a stale '2 MP' → snaps to '2K'; a valid '1K' is kept", () => {
+    const stale = vi.fn()
+    render(<GenerateImageConfig {...commonProps(stale, baseGenerateImageData({ provider: "minimax-h3-image", resolution: "2 MP" }))} />)
+    expect(stale.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {}).resolution).toBe("2K")
+    const kept = vi.fn()
+    render(<GenerateImageConfig {...commonProps(kept, baseGenerateImageData({ provider: "minimax-h3-image", resolution: "1K" }))} />)
+    expect(kept.mock.calls.some(([u]: any) => "resolution" in u)).toBe(false)
+  })
+
   it("flux-2-klein with no resolution → snaps to '1 MP'", () => {
     const onUpdate = vi.fn()
     const data = baseGenerateImageData({ provider: "flux-2-klein" })

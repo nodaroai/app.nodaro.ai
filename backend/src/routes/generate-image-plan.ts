@@ -16,7 +16,7 @@ import { aspectRatioForLoraModel, imageJobPhotoUrl } from "../lib/image-auto-asp
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_PROMPT_MAX } from "@nodaro/shared/models"
 import { normalizedImageGenModelId, resolveNormalizedImageGen } from "@nodaro/shared/credits"
-import { defaultImageModel, gptImage26SentImages, type ModelInputAdjustment } from "@nodaro/shared/model-catalog"
+import { defaultImageModel, pricedSentImages, type ModelInputAdjustment } from "@nodaro/shared/model-catalog"
 import { assembleImageInput, type AssembleImageInput } from "@nodaro/prompts/assembly"
 import { REFERENCE_RULES, REFERENCE_RULES_MULTI_PERSON } from "@nodaro/prompts/doctrine"
 import { backendHybridRoles } from "../lib/reference-format.js"
@@ -272,9 +272,9 @@ export async function planImageJob(args: {
   //     billed count always equals the count actually sent to the provider.
   const { queueReferenceImageUrls } = args.assembled
   const assembledRefs = queueReferenceImageUrls ?? []
-  // What the run sends, for a price by input image: on GPT Image 2.6 the base of
-  // an edit counts too (the worker sends it first).
-  const sentImages = gptImage26SentImages(provider, assembledRefs, baseImageUrl)
+  // What the run sends, for a price by input image: on a model priced per input
+  // image the base of an edit counts too (the worker sends it first).
+  const sentImages = pricedSentImages(provider, assembledRefs, baseImageUrl)
   let effectiveNegativePrompt = args.assembled.negativePrompt
 
   // Append character descriptions to prompt. In structured mode the base is

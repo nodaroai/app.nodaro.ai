@@ -8,6 +8,8 @@ import { supabase } from "../../supabase.js"
 import { sideHoldChargesFor, withSideCharge } from "../../job-step-charge.js"
 import { resumeFailedRunHint } from "./_resume-hint.js"
 import { CHILD_JOB_COLUMN, maskTrendRunError, trendRunErrorText, TRASHED_JOB_COLUMN } from "../../public-job-data.js"
+import { providerWordsShownTo, type ProviderWordsReader } from "../../provider-words.js"
+import { runJobsProviderWords, runWordsReadable } from "../../provider-words-readers.js"
 
 const diagnoseGate: ToolGate = { required: ["jobs:read"] }
 
@@ -174,10 +176,13 @@ function buildFailure(
  *  the node state's; a trend run's are withheld along with its text (an MCP
  *  session is never an admin one), and so is every job's where the deployment
  *  keeps them for its admins — `maskTrendRunError` applies that setting
- *  (lib/provider-words.ts) to both texts. */
-function providerReasonOf(detail: string | null | undefined, inputData: unknown): string | undefined {
+ *  (lib/provider-words.ts) to both texts. A run's are the reader's only when
+ *  they can open its workflow (`reader`, lib/provider-words-readers.ts); a
+ *  job of the reader's own is theirs (the default). */
+function providerReasonOf(detail: string | null | undefined, inputData: unknown, reader: ProviderWordsReader = { isAdmin: false, canRead: true }): string | undefined {
   const masked = maskTrendRunError({ error_detail: detail ?? null, input_data: inputData ?? null }, false)
-  return typeof masked.error_detail === "string" && masked.error_detail !== "" ? masked.error_detail : undefined
+  const words = typeof masked.error_detail === "string" && masked.error_detail !== "" ? masked.error_detail : undefined
+  return words !== undefined && providerWordsShownTo(reader) ? words : undefined
 }
 
 export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): void {
@@ -245,6 +250,22 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
         // R53: a step's charge includes its settled metered side holds (554).
         const sideCharges = await sideHoldChargesFor([...jobMap.keys()])
 
+        // A failed node's provider words can quote the prompt of the workflow the
+        // run executed: the reader's only when they may read them by the run rule
+        // (runWordsReadable: they can open it — a person who ran someone else's
+        // share link or published app cannot — or own a run that names none), asked only when a
+        // failed node has words they could be shown (lib/provider-words.ts).
+        // (The words a reader who may read them would be shown: none for a trend
+        // run, none where the deployment keeps them for its admins.)
+        const anyWords = failedEntries.some(([, s]) => {
+          const job = s.jobId ? jobMap.get(s.jobId) : undefined
+          return providerReasonOf(job?.error_detail ?? s.errorDetail, job?.input_data) !== undefined
+        })
+        const runReader: ProviderWordsReader = {
+          isAdmin: false,
+          canRead: anyWords ? await runWordsReadable(session.userId, execution) : true,
+        }
+
         const failures: Failure[] = failedEntries.map(([nodeId, s]) => {
           const job = s.jobId ? jobMap.get(s.jobId) : undefined
           // A trend run's failure text is replaced (an MCP session is never an admin one).
@@ -257,7 +278,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
             providerOf(job?.input_data),
             withSideCharge(job?.credits_actual ?? null, job?.id, sideCharges),
             s.errorCode ?? jobErrorCode(job),
-            providerReasonOf(job?.error_detail ?? s.errorDetail, job?.input_data),
+            providerReasonOf(job?.error_detail ?? s.errorDetail, job?.input_data, runReader),
           )
         })
 
@@ -312,7 +333,8 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
       const { data: job, error: jobErr } = await supabase
         .from("jobs")
         .select(
-          "id, status, error_message, error_detail, input_data, credits_actual, output_data, job_type, user_id",
+          // workflow_execution_id is read for the run rule alone (runJobsProviderWords).
+          "id, status, error_message, error_detail, input_data, credits_actual, output_data, job_type, user_id, workflow_execution_id",
         )
         .eq("id", args.id)
         .eq("user_id", session.userId)
@@ -339,7 +361,10 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
         }
       }
 
-      const j = job as JobRow & { status?: string; job_type?: string }
+      // A run's job keeps its provider words only when the caller can open the
+      // run's workflow, as the run itself does above.
+      const [judged] = await runJobsProviderWords([job as JobRow & { status?: string; job_type?: string }], { isAdmin: false, userId: session.userId })
+      const j = judged!
       const sideCharges = await sideHoldChargesFor([j.id])
       const failures: Failure[] =
         j.status === "failed"

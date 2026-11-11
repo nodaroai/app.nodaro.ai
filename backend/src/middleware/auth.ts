@@ -41,8 +41,10 @@ declare module "fastify" {
     /** Set by the video routes' credit-identifier preHandler: the provider,
      *  duration and resolution the run will generate at, judged by the credit
      *  guard against the free-credit video limits. Other routes fall back to
-     *  their body's own `provider`/`duration`/`resolution`. */
-    freeVideoRequest?: { provider: string; duration?: number | string | null; resolution?: string | null; videoSize?: string | null }
+     *  their body's own `provider`/`duration`/`resolution`. `extend`: the run
+     *  extends a video (Extend Video), refused as an extension whatever model
+     *  its provider names. */
+    freeVideoRequest?: { provider: string; duration?: number | string | null; resolution?: string | null; videoSize?: string | null; extend?: boolean }
     /** RAW per-reference-video ffprobe durations (seconds), in request order,
      *  set by the video routes' `validateRefVideoDurationPreHandler` BEFORE
      *  creditGuard runs. A FAILED probe is carried as `NaN`, never dropped:
@@ -215,6 +217,8 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; pattern?
   // generate. Exact path, GET only — a user's OWN presets (`/v1/node-presets`,
   // `/favorites`, the groups) stay behind a credential.
   { method: "GET", path: "/v1/node-presets/factory" },
+  // Its categories (each group's name, shelf, count and first picture): derived from that same catalog.
+  { method: "GET", path: "/v1/node-presets/factory/groups" },
   // The Nodaro Keepers shelf (ee/routes/keepers.ts, multi-user editions; a
   // community install has no such route and answers 404): the deployment's shared
   // catalog of characters / creatures / locations / objects — display fields
@@ -415,6 +419,12 @@ export function isAnonymousRoute(method: string, url: string): boolean {
  *  strip lives inside `isPublicRoute`, so tests exercise the real path split). */
 export function __isPublicRouteForTest(method: string, url: string): boolean {
   return isPublicRoute(method, url)
+}
+
+/** Test-only copy of every public-route row, for the guard that classifies
+ *  what each one serves (`lib/__tests__/public-outputs-reads-totality.test.ts`). */
+export function __publicRoutesForTest(): ReadonlyArray<{ method?: string; path: string; prefix?: boolean; pattern?: string; bearer?: true }> {
+  return PUBLIC_ROUTES.map(({ pattern, ...row }) => ({ ...row, ...(pattern ? { pattern: pattern.source } : {}) }))
 }
 
 // ---------------------------------------------------------------------------

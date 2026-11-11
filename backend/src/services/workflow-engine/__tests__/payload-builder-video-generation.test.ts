@@ -744,6 +744,51 @@ describe("payload-builder.kling-4.test.ts", () => {
     ])
     expect(r.payload.keepOriginalSound).toBe(true)
   })
+
+  /**
+   * Kling 4.0 Flash: the workflow run hands the worker BOTH the wired
+   * characters and the reference audio — the provider runner binds clip N to
+   * character N's voice (kie/kling4.ts), so neither may be lost on the way.
+   */
+  it("Kling 4.0 Flash sends a wired Character and the reference audio together, at 720p", () => {
+    const character: SimpleNode = {
+      id: "char-1",
+      type: "character",
+      data: {
+        characterName: "Maya",
+        defaultAssetUrl: "https://cdn.example/maya.png",
+        canonicalDescription: "Short silver hair",
+        expressions: [{ name: "smile", url: "https://cdn.example/maya-smile.png" }],
+      },
+    }
+    const r = build(n("kling-4-flash", { resolution: "1080p" }), { referenceAudioUrls: ["https://cdn.example/voice.mp3"] }, {
+      nodes: [character],
+      edges: [{ id: "char-1->k4-1", source: "char-1", target: "k4-1", sourceHandle: "characterRef", targetHandle: "assets" }],
+    })
+    expect(r.payload.provider).toBe("kling-4-flash")
+    expect(r.payload.imageUrl).toBeUndefined()
+    expect(r.payload.characterReferences).toEqual([
+      { imageUrl: "https://cdn.example/maya.png", extraImageUrls: ["https://cdn.example/maya-smile.png"], description: "Short silver hair", name: "Maya" },
+    ])
+    expect(r.payload.referenceAudioUrls).toEqual(["https://cdn.example/voice.mp3"])
+    expect(r.modelIdentifier).toBe("kling-4-flash:5s:720p")
+  })
+
+  it("Kling 4.0 Flash takes a start frame alone image-to-video; a reference video bills its -ref rate", () => {
+    const start = build(n("kling-4-flash"), { startFrameUrl: MID(0) })
+    expect(start.jobName).toBe("image-to-video")
+    expect(start.payload.imageUrl).toBe(MID(0))
+    expect(start.modelIdentifier).toBe("kling-4-flash:5s:720p")
+    expect(build(n("kling-4-flash", { duration: 12 }), { referenceVideoUrls: ["https://cdn.example/v.mp4"] }).modelIdentifier)
+      .toBe("kling-4-flash:12s:720p-ref")
+  })
+
+  it("Kling 4.0 Flash takes no end frame: a lone one becomes the start frame, as on every model without one", () => {
+    const r = build(n("kling-4-flash"), { endFrameUrl: END })
+    expect(r.jobName).toBe("image-to-video")
+    expect(r.payload.imageUrl).toBe(END)
+    expect(r.payload.endFrameUrl).toBeUndefined()
+  })
 })
 
 describe("payload-builder: a wired Style node's wording follows the consumer's surface", () => {

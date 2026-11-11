@@ -74,7 +74,7 @@ vi.mock("@/lib/url-validator.js", async () => {
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { generateLocationAssetRoutes } from "../generate-location-asset.js"
+import { generateLocationAssetRoutes, locationAssetSentImages, resolveLocationAssetCreditIdentifier } from "../generate-location-asset.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
@@ -624,5 +624,75 @@ describe("POST /v1/generate-location-asset — catalog snap parity", () => {
     const { enqueued, inputData } = await run({ provider: "gpt-image", quality: "basic", aspectRatio: "16:9" })
     expect(enqueued.aspectRatio).toBe("16:9")
     expect(inputData.aspectRatio).toBe("16:9")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The image this route sends is the image it prices: CHECK === DEBIT === sent
+// ---------------------------------------------------------------------------
+/**
+ * An attaching run sends the location's approved image as its source, though
+ * the request names none. A model priced per input image (MiniMax H3 Image,
+ * GPT Image 2.6) must be reserved for it, and the preHandler CHECK, which runs
+ * before the row is read, must price the same image (the gate refuses an
+ * attaching run whose location has no approved image).
+ */
+describe("POST /v1/generate-location-asset — the image sent is the image priced", () => {
+  const BASE = { assetType: "seasons", variant: "winter", name: "Forest Glade" }
+  const ANCHOR = "https://r2.example/anchor.png"
+  const OWN = "https://r2.example/own.png"
+
+  async function run(payload: Record<string, unknown>) {
+    const body = { ...BASE, ...payload }
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-location-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: body,
+    })
+    expect(res.statusCode).toBe(200)
+    const enqueued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+    return {
+      check: resolveLocationAssetCreditIdentifier({ body } as never),
+      debit: vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3],
+      sent: enqueued.sourceImageUrl,
+    }
+  }
+
+  it.each([
+    ["minimax-h3-image", "minimax-h3-image:2K", "minimax-h3-image-i2i:2K:1ref"],
+    ["gpt-image-2-6-flare", "gpt-image-2-6-flare:medium:1K", "gpt-image-2-6-flare-i2i:medium:1K:1ref"],
+  ])("%s: no image sent, none priced", async (provider, plain) => {
+    const { check, debit, sent } = await run({ provider })
+    expect(sent).toBeUndefined()
+    expect(check).toBe(debit)
+    expect(debit).toBe(plain)
+  })
+
+  it.each([
+    ["minimax-h3-image", "minimax-h3-image-i2i:2K:1ref"],
+    ["gpt-image-2-6-flare", "gpt-image-2-6-flare-i2i:medium:1K:1ref"],
+  ])("%s: the location's anchor is sent and priced, at the CHECK and the DEBIT", async (provider, edit) => {
+    const { check, debit, sent } = await run({ provider, attachToLocationId: TEST_LOCATION_ID, attachToColumn: "seasons", attachName: "winter" })
+    expect(sent).toBe(ANCHOR)
+    expect(check).toBe(debit)
+    expect(debit).toBe(edit)
+  })
+
+  it.each([
+    ["minimax-h3-image", "minimax-h3-image-i2i:2K:1ref"],
+    ["gpt-image-2-6-flare", "gpt-image-2-6-flare-i2i:medium:1K:1ref"],
+  ])("%s: the caller's own image wins over the anchor and is priced once", async (provider, edit) => {
+    const { check, debit, sent } = await run({ provider, sourceImageUrl: OWN, attachToLocationId: TEST_LOCATION_ID, attachToColumn: "seasons", attachName: "winter" })
+    expect(sent).toBe(OWN)
+    expect(check).toBe(debit)
+    expect(debit).toBe(edit)
+  })
+
+  it("counts one image for a source image or an attach, none otherwise", () => {
+    expect(locationAssetSentImages({})).toBe(0)
+    expect(locationAssetSentImages({ sourceImageUrl: OWN })).toBe(1)
+    expect(locationAssetSentImages({ attachToLocationId: TEST_LOCATION_ID })).toBe(1)
+    expect(locationAssetSentImages({ sourceImageUrl: "", attachToLocationId: "" })).toBe(0)
   })
 })

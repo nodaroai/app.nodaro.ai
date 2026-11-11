@@ -159,8 +159,12 @@ export function referenceVideoTargetBitRate(probe: ReferenceVideoProbe, maxBytes
   return max !== undefined ? Math.min(source, max) : source
 }
 
-/** The picture encode shared by both passes (`pass` only with a known bitrate). */
-function pictureArgs(probe: ReferenceVideoProbe, maxBytes: number, pass?: { n: 1 | 2; log: string }): string[] {
+/**
+ * The picture encode shared by both passes (`pass` only with a known bitrate):
+ * the source's quality, as the module header sets out. Also the picture of a
+ * chained extend's cut (`lib/seedance-extend-mov-chain.ts`).
+ */
+export function referenceVideoPictureArgs(probe: ReferenceVideoProbe, maxBytes: number, pass?: { n: 1 | 2; log: string }): string[] {
   const pix = probe.pixFmt === "yuvj420p" ? "yuv420p" : probe.pixFmt
   const pixFmt = pix && KEPT_PIX_FMTS.has(pix) ? pix : "yuv420p"
   const tag = (flag: string, v: string | undefined) => (v && v !== "unknown" ? [flag, v] : [])
@@ -186,7 +190,7 @@ function pictureArgs(probe: ReferenceVideoProbe, maxBytes: number, pass?: { n: 1
 /**
  * The ffmpeg arguments that write the copy of `input` to `output`: the first
  * picture and the first sound track only (chapters, data tracks and metadata
- * dropped), the picture re-encoded (`pictureArgs`), the sound copied or, with
+ * dropped), the picture re-encoded (`referenceVideoPictureArgs`), the sound copied or, with
  * `audio: "aac"`, encoded to AAC. `maxBytes`: the provider's size limit
  * (`referenceVideoMaxBytes`). `passLog`: the second of two passes, which reads
  * the first pass's measurements (`reencodeFirstPassArgs`).
@@ -203,7 +207,7 @@ export function reencodeReferenceVideoArgs(
     "-y", "-i", input,
     "-map", "0:v:0", "-map", "0:a:0?",
     "-map_metadata", "-1", "-map_chapters", "-1",
-    ...pictureArgs(probe, maxBytes, passLog ? { n: 2, log: passLog } : undefined),
+    ...referenceVideoPictureArgs(probe, maxBytes, passLog ? { n: 2, log: passLog } : undefined),
     ...(audio === "copy" ? ["-c:a", "copy"] : ["-c:a", "aac", "-b:a", "192k"]),
     "-movflags", "+faststart",
     output,
@@ -215,7 +219,7 @@ export function reencodeFirstPassArgs(input: string, probe: ReferenceVideoProbe,
   return [
     "-y", "-i", input,
     "-map", "0:v:0", "-an",
-    ...pictureArgs(probe, maxBytes, { n: 1, log: passLog }),
+    ...referenceVideoPictureArgs(probe, maxBytes, { n: 1, log: passLog }),
     "-f", "null", "-",
   ]
 }
@@ -268,7 +272,7 @@ export function parseReferenceVideoProbe(json: string): ReferenceVideoProbe {
 }
 
 /** Probe the local `file`. Never throws: an unreadable probe is an empty one (constant quality, container by address). */
-async function probeReferenceVideo(file: string): Promise<ReferenceVideoProbe> {
+export async function probeReferenceVideo(file: string): Promise<ReferenceVideoProbe> {
   try {
     return parseReferenceVideoProbe(await runFfprobe([
       "-v", "error",

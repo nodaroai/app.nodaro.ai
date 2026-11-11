@@ -49,13 +49,14 @@ Modify Image exposes the full image-to-image provider catalog plus Nano Banana E
 | Nano Banana / Nano Banana Pro | Fast iteration; Pro for higher detail |
 | Qwen / Qwen Edit | Versatile transformation and targeted editing |
 | Seedream 5 Pro / Seedream 5 Lite / Seedream 5 Flash / Seedream Edit | Seedream image-to-image — Pro for flagship instruction edits, Flash for fast low-cost edits (1K or 2K), Lite and Edit for lighter transforms |
+| MiniMax H3 Image | Change or combine up to 16 images in one edit, with readable text inside the picture, up to about 16 MP at 4K; priced by size and by each image |
 | Kontext Multi (Open) | Multi-image Flux Kontext via Replicate (up to 2 reference images) |
 | Flux 2 Pro / Flux 2 Max (Safety Tolerance) | BFL Flux 2 via Replicate; Max supports up to 8 refs |
 | Nano Banana Edit | Context-aware editing from a text instruction (style presets, negative prompt, aspect ratio, seed, asset references) |
 
 ## Pricing
 
-Credits depend on the selected provider, and several providers cost more at higher quality/resolution settings. Typical costs range from **11 credits**<!-- credits: nano-banana --> (Nano Banana) to **~682 credits** (Flux 2 Max at 4 MP with 8 references). Representative prices:
+Credits depend on the selected provider, and several providers cost more at higher quality/resolution settings. Typical costs range from **7 credits**<!-- credits: minimax-h3-image-i2i:2K:1ref --> (MiniMax H3 Image, one image at 1K or 2K) to **~682 credits** (Flux 2 Max at 4 MP with 8 references). Representative prices:
 
 | Provider | Credits |
 |----------|---------|
@@ -66,6 +67,7 @@ Credits depend on the selected provider, and several providers cost more at high
 | GPT Image | 11<!-- credits: gpt-image-i2i --> (medium) → 66<!-- credits: gpt-image-i2i:high --> (high) |
 | Seedream 5 Pro | 21<!-- credits: seedream-5-pro-i2i --> (basic / 1K) → 66<!-- credits: seedream-5-pro-i2i:high --> (high / 2K) |
 | Seedream 5 Flash | 11<!-- credits: seedream-5-flash-i2i --> (1K or 2K) |
+| MiniMax H3 Image | 7<!-- credits: minimax-h3-image-i2i:2K:1ref --> (1K or 2K, one image) → 17<!-- credits: minimax-h3-image-i2i:4K:1ref --> (4K, one image); 28<!-- credits: minimax-h3-image-i2i:2K:16ref --> at 2K with sixteen images |
 | Ideogram Edit / Remix | 50<!-- credits: ideogram-edit --> (Balanced) → 33<!-- credits: ideogram-edit:TURBO --> (Turbo) / 66<!-- credits: ideogram-edit:QUALITY --> (Quality) |
 | Nano Banana Pro | 50<!-- credits: nano-banana-pro --> (1K/2K) → 66<!-- credits: nano-banana-pro:4K --> (4K) |
 | Flux 2 Max | 77 credits<!-- credits: flux-2-max:2MP:0ref --> at default (2 MP, 0 refs); ranges 20<!-- credits: flux-2-max:0.5MP:0ref -->–682<!-- credits: flux-2-max:4MP:8ref --> depending on resolution and reference count |

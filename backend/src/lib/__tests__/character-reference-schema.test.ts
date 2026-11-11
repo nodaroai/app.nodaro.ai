@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { isGeminiOmniProvider, isKling4Provider, VIDEO_REF_LIMITS_BY_PROVIDER, GEMINI_OMNI_VOICE_PRESET_IDS } from "@nodaro/shared/models"
+import { isGeminiOmniProvider, isKling4RunnerProvider, VIDEO_REF_LIMITS_BY_PROVIDER, GEMINI_OMNI_VOICE_PRESET_IDS } from "@nodaro/shared/models"
 import { videoCharacterRefProviders } from "@nodaro/shared/video"
 import { characterReferenceSchema, characterReferencesSchema } from "../character-reference-schema.js"
 
@@ -69,8 +69,9 @@ describe("characterReferences consumer guard", () => {
       .filter(([, l]) => (l?.characters ?? 0) > 0)
       .map(([id]) => id)
     expect(withCap.length).toBeGreaterThan(0)
-    // Consumers: `runGeminiOmni` (character_ids) and `runKling4` (elements).
-    for (const id of withCap) expect(isGeminiOmniProvider(id) || isKling4Provider(id), `${id} declares characters but has no consumer`).toBe(true)
+    // Consumers: `runGeminiOmni` (character_ids) and `runKling4` (elements —
+    // Kling 4.0 and Kling 4.0 Flash).
+    for (const id of withCap) expect(isGeminiOmniProvider(id) || isKling4RunnerProvider(id), `${id} declares characters but has no consumer`).toBe(true)
     expect(videoCharacterRefProviders().sort()).toEqual(withCap.sort())
   })
 })

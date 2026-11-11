@@ -11,7 +11,7 @@ import { imageBatchFields, imageBatchIssues } from "../lib/image-batch.js"
 import { imageFormatFields, maskFormatConflict } from "../lib/image-format-schema.js"
 import { presetIdSchema, presetVariablesSchema } from "../lib/presets/generate-image-preset-hook.js"
 import { IMAGE_GEN_PROVIDERS, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, IMAGE_BACKGROUND_VALUES, IMAGE_RENDERING_SPEED_VALUES, PROMPT_HARD_CEILING, MAX_REQUEST_IMAGE_LIMIT, requestImageLimit } from "@nodaro/shared/models"
-import { defaultImageModel, gptImage26SentImages } from "@nodaro/shared/model-catalog"
+import { defaultImageModel, pricedSentImages } from "@nodaro/shared/model-catalog"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
 import { subjectSchema } from "../lib/subject-schema.js"
@@ -206,7 +206,7 @@ export const generateImageRequest = generateImageBody.superRefine((data, ctx) =>
   // No model named: the limit of the default the route will run it on.
   for (const model of data.models?.length ? data.models : [data.provider ?? defaultImageModel("general", data.aspectRatio)]) {
     const limit = requestImageLimit(model)
-    if (gptImage26SentImages(model, references, data.baseImageUrl) > limit) {
+    if (pricedSentImages(model, references, data.baseImageUrl) > limit) {
       ctx.addIssue({ code: "custom", path: ["referenceImageUrls"], message: `${model} takes at most ${limit} input images` })
       break
     }

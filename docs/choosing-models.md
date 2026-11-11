@@ -52,6 +52,8 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | ⭐ Z-Image | Tongyi-MAI | Everyday | 3<!-- credits: z-image --> | t2i | Cheapest model in catalog. Fast, stylized output. Limited aspect ratios. |
 | Flux 2 Klein (Open) | Black Forest Labs | Everyday | 4<!-- credits: flux-2-klein --> | t2i | Open Flux 2 9B from BFL — fast. Runs direct on Replicate. |
 | Recraft Remove BG | Recraft | Everyday | 4<!-- credits: recraft-remove-bg --> | remove-bg | Remove image background. Cheap utility. |
+| MiniMax H3 Image | MiniMax | Everyday | 6<!-- credits: minimax-h3-image --> | t2i | MiniMax H3 Image: detailed pictures up to about 16 MP at 4K, with readable text inside the picture. Ten shapes plus auto, the same price at 1K and 2K (2K by default), PNG or JPEG. |
+| MiniMax H3 Image (I2I) | MiniMax | Everyday | 7<!-- credits: minimax-h3-image-i2i --> | i2i | MiniMax H3 Image edits: change or combine up to 16 reference images in one edit, with readable text, up to about 16 MP at 4K. Priced by size and by reference image; auto keeps the first image's shape. |
 | Grok Imagine | xAI | Everyday | 11<!-- credits: grok --> | t2i, t2v | Expressive, high-contrast output. Supports both image and video. |
 | Grok Imagine (I2I) | xAI | Everyday | 11<!-- credits: grok-i2i --> | i2i | Image-to-image with Grok. |
 | Grok Imagine 2 | xAI | Everyday | 11<!-- credits: grok-2 --> | t2i | Grok Imagine Image 2.0 — expressive, high-contrast t2i. Generations chain into grok-2-segment (free named region masks) and grok-2-edit (region-targeted edits). |
@@ -136,6 +138,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Vidu Q4 | Vidu | Everyday | 209<!-- credits: vidu-q4 --> | i2v | Vidu Q4 — start-frame or reference-driven video (up to 15 reference images + 3 MP3 voice/sound clips), native audio, 3-16s at 540p to 4K. |
 | Hailuo 2.3 Pro | MiniMax | Standard | 220<!-- credits: hailuo-2.3-pro --> | i2v | Hailuo 2.3 Pro — newer Hailuo with 768P / 1080P resolutions. |
 | Wan 3.0 | Alibaba | Standard | 220<!-- credits: wan-3 --> | i2v, t2v | Wan 3.0 — multimodal: first/last frame or image/video/audio references, native audio, 2-30s at 480p/720p/1080p. |
+| Kling 4.0 Flash | Kuaishou | Standard | 242<!-- credits: kling-4-flash --> | i2v, t2v | Kling 4.0 Flash — the faster, lower-cost Kling 4.0 at 720p, up to 20s with native audio; a start frame, reference images, videos and characters (each can carry a voice clip), or plain text. |
 | LTX 2.3 Pro | Lightricks | Standard | 264<!-- credits: ltx-2.3-pro --> | i2v, t2v | Lightricks LTX 2.3 Pro — text/image/audio→video up to 4K, 6/8/10s, end-frame interpolation. |
 | Kling 3 Omni | Kuaishou | Standard | 275<!-- credits: kling-3-omni --> | i2v | Kling 3 Omni via Replicate — 3-15s, 720p/1080p, end frame + reference images, native audio. |
 | Gemini Omni Flash | Google | Standard | 297<!-- credits: gemini-omni-flash --> | i2v, t2v | Google Gemini Omni Flash — faster/cheaper Omni tier: multimodal video with native audio, text/image-to-video + video-edit. |
@@ -161,10 +164,11 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Kling 2.1 Master | Kuaishou | Premium | 440<!-- credits: kling-master --> | i2v | Master tier I2V — strong cinematic quality. |
 | InfiniTalk | InfiniTalk | Premium | 462<!-- credits: infinitalk --> | lip-sync | Audio-driven talking-head from a still image. 480p / 720p. |
 | ⭐ Kling 3.0 | Kuaishou | Premium | 550<!-- credits: kling-3.0 --> | i2v, t2v | Premium Kling 3.0 — variable 3-15s duration, native audio, 720P/1080P. |
-| Seedance 2 Extend | Bytedance | Premium | 583<!-- credits: seedance-2-extend --> | extend | Extend ANY video: generates the continuation (audio included) and trim-stitches it into one seamless clip. |
 | minimax-h3 | MiniMax | Premium | 605<!-- credits: minimax-h3 --> | i2v, t2v | MiniMax H3 — premium multimodal tier: first/last frame + image/video/audio references, native audio, 2K (default) or 768P output, 4-15s per-second pricing. |
 | Kling Avatar Pro | Kuaishou | Premium | 616<!-- credits: kling-avatar-pro --> | lip-sync | Premium lip-sync — better mouth shape and timing. |
+| Seedance 2.0 Extend | Bytedance | Premium | 688<!-- credits: seedance-2-0-extend:8s:720p --> | extend | Extend ANY video with Seedance 2.0: 4–15s continuation (audio included), stitched into one seamless clip. |
 | Video Analysis (Fast) | Nodaro | Premium | 933<!-- credits: video-analysis:gemini-3-flash --> | video-analysis | Analyze a video into a structured shot list (scenes, camera, audio) — fast, economy tier. Billed per duration bucket. |
+| Seedance 2.5 Extend | Bytedance | Premium | 1045<!-- credits: seedance-2-5-extend:8s:720p --> | extend | Extend ANY video with Seedance 2.5: 4–30s continuation (audio included), stitched into one seamless clip. |
 | Video Analysis (Fast — legacy) | Nodaro | Premium | 1092<!-- credits: video-analysis:gemini-3.6-flash --> | video-analysis | Legacy fast-tier analysis model (backed the fast tier from 2026-07 until 2026-07-29). Kept so stored raw-model configs keep running and keep pricing under their own identifier; new fast-tier runs use the current fast model. |
 | ⭐ VEO 3.1 Quality | Google | Premium | 1100<!-- credits: veo3 --> | i2v, t2v | Google VEO 3.1 Quality — premium cinematic video. 4/6/8s clips, optional end frame, native audio. No reference-to-video mode (Fast/Lite only). Flat per-generation pricing across durations. |
 | Video Analysis (Pro) | Nodaro | Premium | 1162<!-- credits: video-analysis:gemini-3.1-pro --> | video-analysis | Analyze a video into a structured shot list (scenes, camera, audio) — higher-fidelity, default tier. Billed per duration bucket. |

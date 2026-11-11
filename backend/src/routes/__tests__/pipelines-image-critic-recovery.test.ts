@@ -29,6 +29,9 @@ vi.mock("../../lib/config.js", () => ({
   hasCredits: vi.fn(() => true),
   hasAdmin: vi.fn(() => true),
   isCommunity: vi.fn(() => false),
+  // The Cloud edition: the film pipeline's availability door reads the surface profile.
+  isBusiness: vi.fn(() => false),
+  isCloud: vi.fn(() => true),
 }))
 
 vi.mock("../../ee/pipelines/queue.js", () => ({

@@ -24,8 +24,8 @@ import {
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { widgetModelOf } from "../widget-models.js"
-import { modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
-import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, TOPAZ_VIDEO_RESOLUTIONS, VIDEO_UPSCALE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs } from "@nodaro/shared/models"
+import { MODEL_CATALOG, modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
+import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, TOPAZ_VIDEO_RESOLUTIONS, VIDEO_UPSCALE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, type ExtendVideoProvider } from "@nodaro/shared/models"
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
 import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
@@ -47,6 +47,7 @@ import { normalizeVideoInput, savedVideoModel, videoModelForLane, videoModelRefu
 import { buildEffectiveEdl, validateEffectiveEdl } from "../../apply-edl-plan.js"
 import { APPLY_EDL_CLIP_KEY_PATTERN } from "../../apply-edl-output.js"
 import { hasCredits } from "../../config.js"
+import { EXTEND_DURATION_SECONDS, describeSeconds } from "../../extend-durations.js"
 import { editPlanModeRefusal, editPlanModeVerdict } from "../../private-plugins/edit-plan-mode-gate.js"
 import { plannableEditPlanModes } from "../../private-plugins/plannable-edit-plan-modes.js"
 import { getUserMcpPreferences } from "../user-preferences.js"
@@ -97,6 +98,42 @@ const VIDEO_AUDIT_PRICING_HINT = [true, false]
   })
   .join("; ")
 
+/**
+ * How `extend_video` names the clip each Extend Video provider continues: the
+ * prior generation's task id (`task`), the video itself by URL or asset id
+ * (`url`), or `null` for a provider the tool does not offer. Keyed by the
+ * provider type, so a new provider fails the typecheck here until it says which.
+ */
+const EXTEND_SOURCE_INPUT: Readonly<Record<ExtendVideoProvider, "task" | "url" | null>> = {
+  "veo-extend": "task",
+  "runway-extend": "task",
+  // LTX 2.3 Pro Extend (prepend or append, its `extendMode`) is not offered by this tool.
+  "ltx-2.3-pro": null,
+  "seedance-2-5-extend": "url",
+  "seedance-2-0-extend": "url",
+}
+
+/** The models `extend_video` offers, in the provider list's order. */
+const EXTEND_MODELS = EXTEND_VIDEO_PROVIDERS.filter((p) => EXTEND_SOURCE_INPUT[p] !== null)
+/** The offered models that continue any video by URL, with their length / resolution / audio / reference levers. */
+const URL_EXTEND_MODELS = EXTEND_MODELS.filter((p) => EXTEND_SOURCE_INPUT[p] === "url")
+const URL_EXTEND_LABEL = URL_EXTEND_MODELS.join(" / ")
+const URL_EXTEND_SECONDS = URL_EXTEND_MODELS.flatMap((p) => EXTEND_DURATION_SECONDS[p])
+/** The resolutions the URL models render, as their catalog entries declare them. */
+const URL_EXTEND_RESOLUTIONS = [...new Set(URL_EXTEND_MODELS.flatMap((p) => MODEL_CATALOG[p]?.resolutions ?? []))]
+/** "seedance-2-5-extend 4–30 seconds (default 8)", one per URL model. */
+const URL_EXTEND_WINDOWS = URL_EXTEND_MODELS.map((p) => {
+  const defaultSec = MODEL_CATALOG[p]?.defaultDuration
+  return `${p} ${describeSeconds(EXTEND_DURATION_SECONDS[p])}${defaultSec !== undefined ? ` (default ${defaultSec})` : ""}`
+}).join(", ")
+
+/**
+ * The `model` argument: one of {@link EXTEND_MODELS}. A retired id (the earlier
+ * `seedance-2-extend`) is still accepted, never listed, and read as the model
+ * it runs as (`canonicalVideoProvider`). `nonoptional()` keeps it listed as
+ * required: a preprocess alone is listed as optional, its input being anything.
+ */
+const extendModelArg = z.preprocess((v) => canonicalVideoProvider(v), z.enum(EXTEND_MODELS)).nonoptional()
 
 /** A-14 (audit 2026-09-06): the lip_sync model list derives from LIP_SYNC_PROVIDERS and
  *  its prices from `lipSyncPriceSuffix` (`_credit-hint.ts`) — a flat price, a per-second
@@ -198,7 +235,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Reference videos for style/motion transfer, capped at the model's own limit " +
-            "(seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime / kling-4 5, " +
+            "(seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime / kling-4(-flash) 5, " +
             "gemini-omni-video / gemini-omni-flash / gemini-omni-flash-1-2 1). Wan 3.0 takes each clip at 1-15s and " +
             "≤15s combined, and input video seconds + output duration must stay ≤30s. " +
             "Dropped on models without video-reference support.",
@@ -215,13 +252,13 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Reference audio, capped per model (seedance-2-5 10; seedance-2 family, minimax-h3 3; " +
-            "wan-3 5, 1-15s each, ≤15s total; kling-4 3, clip 1 = soundtrack); else dropped.",
+            "wan-3 5, 1-15s each, ≤15s total; kling-4 3, clip 1 = soundtrack; kling-4-flash 7, clip N = character N's voice if it has 2-4 images); else dropped.",
           ),
         character_references: z
           .array(z.object({
             image_url: z.string(),
             body_image_url: z.string().optional(),
-            extra_image_urls: z.array(z.string()).max(VIDEO_CHARACTER_EXTRA_IMAGES_MAX).optional().describe("kling-4: more views (2-4 per subject)."),
+            extra_image_urls: z.array(z.string()).max(VIDEO_CHARACTER_EXTRA_IMAGES_MAX).optional().describe("kling-4(-flash): more views (2-4 per subject)."),
             description: z.string(),
             name: z.string().optional(),
             voice_preset: z.string().optional().describe("Gemini voice id (e.g. kore): pins this character's voice."),
@@ -231,7 +268,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .describe(
             `Keeps a person's face (${videoCharacterRefProviders().join(" / ")} only); see docs/nodes/ai-video/generate-video.md.`,
           ),
-        keep_original_sound: z.boolean().optional().describe("kling-4: keep ref videos' sound."),
+        keep_original_sound: z.boolean().optional().describe("kling-4(-flash): keep ref videos' sound."),
         audio_soundtrack: z.boolean().optional().describe("kling-4: false = every audio clip a voice, no soundtrack."),
       },
               outputSchema: {
@@ -747,26 +784,32 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       title: "Extend Video",
       description:
         "Extend a video. veo-extend / runway-extend continue a previously-generated VEO or Runway video and require the task_id from that job (NOT the URL). " +
-        "seedance-2-extend extends ANY video by URL (or asset id) — it generates what happens next (audio included) and trim-stitches it into one seamless clip; " +
+        `${URL_EXTEND_LABEL} extend ANY video by URL (or asset id) — they generate what happens next (audio included) and trim-stitch it into one seamless clip; ` +
         "describe only the continuation content in `prompt` (plain action description — no 'reference video' phrasing needed).",
       inputSchema: {
         prompt: z.string().min(1).max(8000),
         task_id: z.string().min(1).optional().describe("Task id of the prior generation, its output providerTaskId (veo-extend / runway-extend only)"),
         kie_task_id: z.string().min(1).optional().describe("Use task_id."),
-        video_url: z.string().url().optional().describe("Source video URL (seedance-2-extend only)"),
-        video_asset_id: z.string().optional().describe("Nodaro job/upload asset id whose output is a video (seedance-2-extend only)"),
-        model: z.enum(["veo-extend", "runway-extend", "seedance-2-extend"]),
+        video_url: z.string().url().optional().describe(`Source video URL (${URL_EXTEND_LABEL} only)`),
+        video_asset_id: z.string().optional().describe(`Nodaro job/upload asset id whose output is a video (${URL_EXTEND_LABEL} only)`),
+        model: extendModelArg,
         veo_quality: z.enum(["fast", "quality"]).optional(),
         runway_resolution: z.enum(["720p", "1080p"]).optional(),
-        duration: z.number().int().min(4).max(15).optional().describe("Seconds to add (seedance-2-extend, default 8)"),
-        resolution: z.enum(["480p", "720p", "1080p", "4k"]).optional().describe("Extension resolution (seedance-2-extend, default 720p — match the source for the cleanest seam)"),
-        generate_audio: z.boolean().optional().describe("Continue the soundtrack into the extension (seedance-2-extend, default true)"),
+        duration: z
+          .number()
+          .int()
+          .min(Math.min(...URL_EXTEND_SECONDS))
+          .max(Math.max(...URL_EXTEND_SECONDS))
+          .optional()
+          .describe(`Seconds to add: ${URL_EXTEND_WINDOWS}. Any other length is refused.`),
+        resolution: z.enum(URL_EXTEND_RESOLUTIONS).optional().describe(`Extension resolution (${URL_EXTEND_LABEL}, default 720p — match the source for the cleanest seam)`),
+        generate_audio: z.boolean().optional().describe(`Continue the soundtrack into the extension (${URL_EXTEND_LABEL}, default true)`),
         reference_image_urls: z
           .array(z.string().url())
           .max(SEEDANCE_2_REF_LIMITS.images - 1)
           .optional()
           .describe(
-            "Reference images for the extension (seedance-2-extend only, up to 8 — one seat is reserved for the continuation anchor). Mention them in the prompt as @image_1…@image_N in list order.",
+            `Reference images for the extension (${URL_EXTEND_LABEL} only, up to 8 — one seat is reserved for the continuation anchor). Mention them in the prompt as @image_1…@image_N in list order.`,
           ),
         seed: z.number().int().min(10000).max(99999).optional(),
       },
@@ -793,7 +836,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     },
     },
     async (args) => {
-      if (args.model === "seedance-2-extend") {
+      if (EXTEND_SOURCE_INPUT[args.model] === "url") {
         const videoUrl =
           args.video_url ??
           (args.video_asset_id
@@ -806,7 +849,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         if (!videoUrl) {
           return {
             content: [
-              { type: "text", text: "seedance-2-extend requires video_url or video_asset_id" },
+              { type: "text", text: `${args.model} requires video_url or video_asset_id` },
             ],
             isError: true,
           }

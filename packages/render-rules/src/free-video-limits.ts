@@ -5,9 +5,12 @@
  * before anything is reserved) and by the editor (it locks the options it
  * would refuse, with the reason), so the two can never disagree:
  *
- *   1. No Kling (any model of the catalog's Kling series), no Seedance 2.5
- *      (and its HD finalizer), no video upscaling (any `video-upscale` model),
- *      no video extension (any `extend` model).
+ *   1. No Kling (any model of the catalog's Kling series, except the ids in
+ *      `FREE_OPEN_VIDEO_MODELS` — Kling 4.0 Flash, decided 2026-11-11), no
+ *      Seedance 2.5 (and its HD finalizer), no video upscaling (any
+ *      `video-upscale` model), no video extension (any `extend` model, or any
+ *      request marked `extend` — an Extend Video run on a model that extends
+ *      under its generation id).
  *   2. Every other video GENERATION model (an i2v / t2v mode) runs only at its
  *      lowest resolution and at most `maxSeconds` long; a model whose shortest
  *      clip is longer is unavailable, and "Auto" length is refused (it reserves
@@ -27,6 +30,13 @@ export interface FreeVideoRequest {
   resolution?: string | null
   /** Hailuo's size lever; "high" is the upper tier. */
   videoSize?: string | null
+  /**
+   * The request EXTENDS a video (an Extend Video run), whatever model its
+   * provider names. Most extend providers are extend models of their own (the
+   * catalog's `extend` mode says so), but LTX 2.3 Pro extends under its
+   * generation model's id, which the catalog cannot mark — the lane marks it.
+   */
+  extend?: boolean
 }
 
 export interface FreeVideoLimits {
@@ -40,8 +50,16 @@ export const FREE_VIDEO_LIMITS_DEFAULTS: FreeVideoLimits = { enabled: true, maxS
 export const FREE_BLOCKED_VIDEO_SERIES: readonly string[] = ["Kling"]
 /** Model ids (and their `<id>-…` variants) that are paid-only. */
 export const FREE_BLOCKED_VIDEO_MODELS: readonly string[] = ["seedance-2-5"]
+/**
+ * Model ids open to free credits although their SERIES is paid-only (Kling 4.0
+ * Flash, decided 2026-11-11). Exact ids, never a prefix: a later variant is
+ * judged by its series again. An id here still runs only within rule 2 (the
+ * lowest resolution, at most `maxSeconds`), and a `FREE_BLOCKED_VIDEO_MODELS`
+ * id is never opened by it.
+ */
+export const FREE_OPEN_VIDEO_MODELS: readonly string[] = ["kling-4-flash"]
 
-/** Why an option is locked. `label` is the catalog's model name. */
+/** Why an option is locked. `label` is the catalog's model name (an extension on a provider the catalog does not know: its id). */
 export type FreeVideoLock =
   | { readonly kind: "model"; readonly label: string }
   | { readonly kind: "upscale"; readonly label: string }
@@ -73,8 +91,9 @@ export function freeVideoEntry(provider: string): ModelCatalogEntry | null {
 }
 
 function isBlockedModel(entry: ModelCatalogEntry): boolean {
-  if (entry.series && FREE_BLOCKED_VIDEO_SERIES.includes(entry.series)) return true
-  return FREE_BLOCKED_VIDEO_MODELS.some((id) => entry.id === id || entry.id.startsWith(`${id}-`))
+  if (FREE_BLOCKED_VIDEO_MODELS.some((id) => entry.id === id || entry.id.startsWith(`${id}-`))) return true
+  if (FREE_OPEN_VIDEO_MODELS.includes(entry.id)) return false
+  return !!entry.series && FREE_BLOCKED_VIDEO_SERIES.includes(entry.series)
 }
 
 /**
@@ -111,13 +130,25 @@ function isGeneration(entry: ModelCatalogEntry): boolean {
   return entry.modes.some((m) => GENERATION_MODES.has(m))
 }
 
-/** Whether the MODEL itself is locked, whatever its settings. */
-export function freeVideoModelLock(provider: string, limits: FreeVideoLimits): FreeVideoLock | null {
+/** How a model is asked to run, where the model id alone cannot say it. */
+export interface FreeVideoModelLockOptions {
+  /** It is asked to extend a video (an Extend Video run). */
+  readonly extend?: boolean
+}
+
+/**
+ * Whether the MODEL itself is locked, whatever its settings. `opts.extend`:
+ * the model is asked to extend a video (an Extend Video run), which is locked
+ * whatever the model — a model that extends under its generation id (LTX 2.3
+ * Pro) has no `extend` mode in the catalog to say so, and a provider the
+ * catalog does not know at all is locked too, named by its id.
+ */
+export function freeVideoModelLock(provider: string, limits: FreeVideoLimits, opts?: FreeVideoModelLockOptions): FreeVideoLock | null {
   if (!limits.enabled) return null
   const entry = freeVideoEntry(provider)
-  if (!entry) return null
+  if (!entry) return opts?.extend ? { kind: "extend", label: provider } : null
   if (entry.modes.includes("video-upscale")) return { kind: "upscale", label: entry.label }
-  if (entry.modes.includes("extend")) return { kind: "extend", label: entry.label }
+  if (opts?.extend || entry.modes.includes("extend")) return { kind: "extend", label: entry.label }
   if (isBlockedModel(entry)) return { kind: "model", label: entry.label }
   if (!isGeneration(entry)) return null
   const durations = entry.durations ?? []
@@ -164,7 +195,7 @@ export function freeVideoResolutionLock(provider: string, resolution: string | n
 
 /** Why this whole request cannot run on free credits, or null when it can (or is not video at all). */
 export function freeVideoLock(req: FreeVideoRequest, limits: FreeVideoLimits): FreeVideoLock | null {
-  const model = freeVideoModelLock(req.provider, limits)
+  const model = freeVideoModelLock(req.provider, limits, req.extend ? { extend: true } : undefined)
   if (model) return model
   const duration = freeVideoDurationLock(req.provider, req.duration, limits)
   if (duration) return duration

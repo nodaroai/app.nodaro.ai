@@ -4,6 +4,7 @@ import {
   normalizeMinimaxH3Resolution,
   normalizeWan3Resolution,
   normalizeViduQ4Resolution,
+  KLING_4_FLASH_RESOLUTION,
   VIDEO_GEN_PROVIDERS,
 } from "../model-constants.js"
 
@@ -56,6 +57,14 @@ describe("unlistedResolutionRendersAs matches the provider's own collapse rule",
     for (const off of ["480p", "8k", "nonsense"]) {
       expect(normalizeViduQ4Resolution(off), `vidu-q4 renders ${off} as`).toBe(declared)
       expect(normalizeVideoRequestParams("vidu-q4", { resolution: off }).resolution).toBe(declared)
+    }
+  })
+
+  it("kling-4-flash declares the one band it renders — the runner sends 720p for anything", () => {
+    const declared = MODEL_CATALOG["kling-4-flash"]!.unlistedResolutionRendersAs
+    expect(declared).toBe(KLING_4_FLASH_RESOLUTION)
+    for (const off of ["480p", "1080p", "4k", "nonsense"]) {
+      expect(normalizeVideoRequestParams("kling-4-flash", { resolution: off }).resolution).toBe(declared)
     }
   })
 

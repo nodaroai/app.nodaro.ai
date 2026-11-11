@@ -31,6 +31,21 @@ export const GPT_IMAGE_2_KIE_CREDITS: Readonly<Record<"1K" | "2K" | "4K", number
   "4K": 16,
 }
 
+/**
+ * What KIE bills for one MiniMax H3 Image picture, in hundredths of a KIE
+ * credit so sums are exact: 1.8 at 1K or 2K (up to 4.5 MP), 5.5 at 4K (up to
+ * 20 MP), and on an edit 0.5 more for each reference image, the first
+ * included (kie.ai/minimax-h3-image and KIE's price list, read 2026-11-11).
+ * `kieImageCostUsd` (image-cost.ts) records it as the job's provider cost; the
+ * credit rows are built from it (ee/billing/minimax-h3-image-pricing.ts).
+ */
+export const MINIMAX_H3_IMAGE_KIE_HUNDREDTHS: Readonly<Record<"1K" | "2K" | "4K", number>> = {
+  "1K": 180,
+  "2K": 180,
+  "4K": 550,
+}
+export const MINIMAX_H3_IMAGE_REFERENCE_KIE_HUNDREDTHS = 50
+
 /** Vidu Q4's second KIE endpoint — `runViduQ4` swaps to it whenever a reference
  *  image or reference audio is wired (the `vidu-q4` config's own model is the
  *  image-to-video endpoint). Exported so every reverse map of KIE ids (the
@@ -42,6 +57,14 @@ export const VIDU_Q4_REFERENCE_MODEL = "vidu-q4/reference-to-video"
  *  reverse map of KIE ids (the admin credit audit). */
 export const KLING_4_REFERENCE_MODEL = "kling-4.0/reference-to-video"
 export const KLING_4_KEYFRAME_MODEL = "kling-4.0/keyframe-to-video"
+
+/** Kling 4.0 Flash's two KIE endpoints under ONE Nodaro id (`kling-4-flash`):
+ *  the config's own model is the reference endpoint, and the request builder
+ *  (kling4.ts) swaps to the keyframe endpoint for a start frame alone. Exported
+ *  so every reverse map of KIE ids (the admin credit audit) resolves both back
+ *  to `kling-4-flash`. */
+export const KLING_4_FLASH_REFERENCE_MODEL = "kling-4.0/flash-reference-to-video"
+export const KLING_4_FLASH_KEYFRAME_MODEL = "kling-4.0/flash-keyframe-to-video"
 
 export interface KieModelConfig {
   model: string           // KIE.ai model identifier
@@ -96,6 +119,15 @@ export interface KieModelConfig {
    * declares it. Each declaration cites its doc URL and fetch date.
    */
   seedType?: "string"
+  /**
+   * SCHEMA FACT: the seeds this SKU's KIE schema accepts (`minimum` /
+   * `maximum`). Our API and MCP take any whole number ≥ 0 and a workflow
+   * passes along what a node carries, while KIE refuses a seed outside the
+   * range after the credits are reserved. A seed outside it is dropped before
+   * the request is sent (the run goes ahead unseeded), through `kieSeedForWire`
+   * on the image lanes. Each declaration cites its doc URL and fetch date.
+   */
+  seedRange?: { readonly min: number; readonly max: number }
   /**
    * SCHEMA FACT: which colour of an inpainting `mask_url` marks the area to
    * change. Absent ⇒ white, the platform's one convention (Mask Painter,
@@ -166,6 +198,24 @@ const GROK_2_SEGMENT_EDIT_MODEL = "grok-imagine-image-2-0/segment-edit"
 // =============================================================================
 // IMAGE GENERATION MODELS
 // =============================================================================
+// MiniMax H3 Image: what this release sends of each schema, by output format.
+// The schemas are not `additionalProperties: false`, but a worker passes along
+// whatever a node carries, so the body is still an explicit list: never
+// `expand_prompt` (KIE's default, on, applies), never `width` / `height` (a
+// custom size, not offered), never a lever of another model. PNG sends no
+// `output_format` (KIE's default); JPEG sends it.
+const MINIMAX_H3_IMAGE_FIELDS = ["prompt", "aspect_ratio", "resolution", "seed"] as const
+// `seed` is an integer from 0 to 2147483647 on both schemas (fetched 2026-11-11).
+const MINIMAX_H3_IMAGE_SEED_RANGE = { min: 0, max: 2147483647 } as const
+const MINIMAX_H3_IMAGE_FIELDS_I2I = [...MINIMAX_H3_IMAGE_FIELDS, "image_urls"] as const
+const MINIMAX_H3_IMAGE_FORMAT_FIELDS = {
+  png: MINIMAX_H3_IMAGE_FIELDS,
+  jpeg: [...MINIMAX_H3_IMAGE_FIELDS, "output_format"],
+} as const satisfies Record<string, readonly string[]>
+const MINIMAX_H3_IMAGE_FORMAT_FIELDS_I2I = {
+  png: MINIMAX_H3_IMAGE_FIELDS_I2I,
+  jpeg: [...MINIMAX_H3_IMAGE_FIELDS_I2I, "output_format"],
+} as const satisfies Record<string, readonly string[]>
 const GPT_IMAGE_2_6_FIELDS = ["prompt", "aspect_ratio", "resolution", "quality", "background", "moderation"] as const
 const GPT_IMAGE_2_6_FIELDS_I2I = [...GPT_IMAGE_2_6_FIELDS, "input_urls"] as const
 const GPT_IMAGE_2_6_ECONOMY_FIELDS = ["prompt", "aspect_ratio", "background"] as const
@@ -765,6 +815,41 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     imageParam: "image_urls",  // Array of URLs, max 10
     resolutionParam: "size",
     extraParams: { aspect_ratio: "16:9", resolution: "1K", output_format: "png" },
+  },
+
+  // MiniMax H3 Image (NOT the H3 video model `minimax-h3`). The text-to-image
+  // endpoint takes no image: with references the provider moves the run to the
+  // edit id (GPT_IMAGE_T2I_TO_I2I in image.ts). An edit takes 1 to 16
+  // `image_urls` (each up to 20 MB and 64 MP), named <Picture 1>, <Picture 2>,
+  // ... in `image_urls` order. Ratios auto, 1:1, 5:4, 4:3, 3:2, 16:9, 21:9, 4:5,
+  // 3:4, 2:3, 9:16 at every size; `resolution` 1K / 2K (KIE's default) / 4K;
+  // `seed` an integer 0 to 2147483647; `output_format` png (default) or jpeg.
+  // No content-filter field in either schema. Priced per picture by size and
+  // per reference image (MINIMAX_H3_IMAGE_KIE_HUNDREDTHS above). `credits` /
+  // `cost` state the 2K figure (an edit's with one reference); the job records
+  // the size and the references sent (image-cost.ts).
+  // See: docs.kie.ai/market/minimax-h3/text-to-image.md (fetched 2026-11-11)
+  //      docs.kie.ai/market/minimax-h3/image-edit.md (fetched 2026-11-11)
+  "minimax-h3-image": {
+    model: "minimax-h3/text-to-image",
+    seedRange: MINIMAX_H3_IMAGE_SEED_RANGE,
+    inputFields: MINIMAX_H3_IMAGE_FIELDS,
+    inputFieldsByFormat: MINIMAX_H3_IMAGE_FORMAT_FIELDS,
+    credits: 1.8,
+    cost: 0.009,
+    extraParams: { aspect_ratio: "16:9", resolution: "2K" },
+  },
+  "minimax-h3-image-i2i": {
+    model: "minimax-h3/image-edit",
+    seedRange: MINIMAX_H3_IMAGE_SEED_RANGE,
+    inputFields: MINIMAX_H3_IMAGE_FIELDS_I2I,
+    inputFieldsByFormat: MINIMAX_H3_IMAGE_FORMAT_FIELDS_I2I,
+    maxInputImages: requestImageLimit("minimax-h3-image-i2i"),
+    credits: 2.3,
+    cost: 0.0115,
+    inputType: "image-to-image",
+    imageParam: "image_urls",  // Array, 1 to 16
+    extraParams: { aspect_ratio: "16:9", resolution: "2K" },
   },
 
   // Flux-2 Flex text-to-image (we already have Flex I2I but were missing T2I)
@@ -1375,6 +1460,25 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
   },
 
+  // Kling 4.0 Flash — ONE Nodaro id over two KIE endpoints, registered in BOTH
+  // maps (both endpoints also run with no image). Dispatched through the same
+  // bespoke `runKling4` (bodies built by kling4.ts, which picks the endpoint:
+  // keyframe-to-video for a start frame alone, reference-to-video otherwise).
+  // Both schemas are `additionalProperties: false` with an INTEGER duration, so
+  // the generic builder never runs and these configs carry no extraParams.
+  // 3-20s, 720p only, native audio always on (no lever), no seed, no end frame.
+  // `credits`/`cost` are the KIE-side default tier (5s @720p: 17 KIE cr/s) for
+  // audit logging only; runKling4 reports the per-tier cost.
+  // See: docs.kie.ai/market/kling/v4-flash-reference-to-video.md + v4-flash-keyframe-to-video.md
+  "kling-4-flash": {
+    model: KLING_4_FLASH_REFERENCE_MODEL,
+    credits: 85,
+    cost: 0.425,
+    omitSeed: true,
+    acceptsResolution: true,  // `resolution` 720p (both Flash schemas; the only value)
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+  },
+
   // Wan 3.0 Prime — KIE's HIGH-SPEED Wan 3.0 tier (faster turnaround at a higher
   // per-second rate, NOT a higher-quality tier). Identical request surface to
   // wan-3; same bespoke runWan3 dispatch and the same declarative-only
@@ -1707,6 +1811,18 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     omitSeed: true,
     acceptsResolution: true,  // `resolution` 720p | 1080p (both Kling 4.0 schemas)
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+  },
+
+  // Kling 4.0 Flash — the t2v twin of the i2v entry (same id, same bespoke
+  // runKling4). Text-only runs take the reference endpoint with no materials.
+  // `credits`/`cost`: 5s @720p at 17 KIE cr/s, audit logging only.
+  "kling-4-flash": {
+    model: KLING_4_FLASH_REFERENCE_MODEL,
+    credits: 85,
+    cost: 0.425,
+    omitSeed: true,
+    acceptsResolution: true,  // `resolution` 720p (both Flash schemas; the only value)
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
   },
 
   // Wan 3.0 Prime T2V — the high-speed tier (faster, higher per-second rate).
@@ -2136,12 +2252,27 @@ export function kieModelAcceptsResolution(provider: string, modelConfig: KieMode
 
 /**
  * `seed` in the JSON type this SKU's KIE schema declares (see
- * `KieModelConfig.seedType`). Only a number on a `"string"` SKU changes; any
- * other value, and every SKU that declares nothing, passes through untouched,
- * so those models send exactly what they sent before.
+ * `KieModelConfig.seedType`), or undefined when it is outside the range the
+ * SKU declares (`seedRange`), for the caller to drop. Only a number on a
+ * `"string"` SKU changes; any other value, and every SKU that declares
+ * nothing, passes through untouched, so those models send exactly what they
+ * sent before.
  */
-export function kieSeedForWire(modelConfig: Pick<KieModelConfig, "seedType">, seed: unknown): unknown {
+export function kieSeedForWire(modelConfig: Pick<KieModelConfig, "seedType" | "seedRange">, seed: unknown): unknown {
+  if (!kieSeedInRange(modelConfig, seed)) return undefined
   return modelConfig.seedType === "string" && typeof seed === "number" ? String(seed) : seed
+}
+
+/**
+ * Whether `seed` fits the range this SKU declares (`KieModelConfig.seedRange`):
+ * a whole number, given as a number or a numeric string, from `min` to `max`.
+ * A SKU that declares no range takes every seed, as before.
+ */
+export function kieSeedInRange(modelConfig: Pick<KieModelConfig, "seedRange">, seed: unknown): boolean {
+  const range = modelConfig.seedRange
+  if (!range) return true
+  const n = typeof seed === "number" ? seed : typeof seed === "string" && seed.trim() !== "" ? Number(seed) : Number.NaN
+  return Number.isInteger(n) && n >= range.min && n <= range.max
 }
 
 // =============================================================================

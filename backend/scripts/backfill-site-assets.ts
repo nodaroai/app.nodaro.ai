@@ -7,8 +7,8 @@
  * latest session replays point at — would be lost at the next deploy. Run
  * this right before that deploy, once per site:
  *
- *   cd backend && npx tsx scripts/backfill-site-assets.ts --dry-run https://app.nodaro.ai https://next.nodaro.ai
- *   cd backend && npx tsx scripts/backfill-site-assets.ts https://app.nodaro.ai https://next.nodaro.ai
+ *   cd backend && npx tsx scripts/backfill-site-assets.ts --dry-run https://app.nodaro.ai https://next.app.nodaro.ai
+ *   cd backend && npx tsx scripts/backfill-site-assets.ts https://app.nodaro.ai https://next.app.nodaro.ai
  *
  * (Storage settings come from backend/.env, like every script here; the
  * backend's config also wants INTERNAL_ORCHESTRATOR_SECRET, 32+ characters.)

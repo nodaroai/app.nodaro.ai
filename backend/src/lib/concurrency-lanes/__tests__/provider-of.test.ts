@@ -105,6 +105,8 @@ describe("primaryProviderOfJob", () => {
   it("payload-dependent jobs follow their handler's branch", () => {
     expect(primaryProviderOfJob("extend-video", { provider: "ltx-2.3-pro" })).toBe("replicate")
     expect(primaryProviderOfJob("extend-video", { provider: "veo-extend" })).toBe("kie")
+    expect(primaryProviderOfJob("extend-video", { provider: "seedance-2-5-extend" })).toBe("kie")
+    expect(primaryProviderOfJob("extend-video", { provider: "seedance-2-0-extend" })).toBe("kie")
     expect(primaryProviderOfJob("extend-video", { provider: "seedance-2-extend" })).toBe("kie")
     expect(primaryProviderOfJob("text-to-audio", {})).toBe("elevenlabs")
     expect(primaryProviderOfJob("text-to-audio", { provider: "tangoflux" })).toBe("replicate")
@@ -113,6 +115,27 @@ describe("primaryProviderOfJob", () => {
     expect(primaryProviderOfJob("video-depth", {})).not.toBeNull()
     expect(primaryProviderOfJob("video-depth", { provider: "no-such-depth" })).toBeNull()
     expect(primaryProviderOfJob("voiced-video", {})).toBe("kie")
+  })
+
+  it("a Seedance extend counts against whoever serves its provider's own model", async () => {
+    const { providerRegistry } = await import("../../../providers/registry.js")
+    const asked = vi.spyOn(providerRegistry, "supportsModel")
+    const askedFor = () => asked.mock.calls.filter(([, capability]) => capability === "image-to-video").map(([, , model]) => model)
+    try {
+      primaryProviderOfJob("extend-video", { provider: "seedance-2-0-extend" })
+      expect(new Set(askedFor())).toEqual(new Set(["seedance-2"]))
+
+      asked.mockClear()
+      primaryProviderOfJob("extend-video", { provider: "seedance-2-5-extend" })
+      expect(new Set(askedFor())).toEqual(new Set(["seedance-2-5"]))
+
+      // The retired id runs as Seedance 2.5.
+      asked.mockClear()
+      primaryProviderOfJob("extend-video", { provider: "seedance-2-extend" })
+      expect(new Set(askedFor())).toEqual(new Set(["seedance-2-5"]))
+    } finally {
+      asked.mockRestore()
+    }
   })
 
   it("reference-sheet counts as local", () => {

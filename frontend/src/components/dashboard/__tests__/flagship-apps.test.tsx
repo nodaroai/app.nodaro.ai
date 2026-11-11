@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from "vitest"
+import { afterEach, describe, it, expect, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
-import { characterArtUrl } from "@nodaro/picker-ui"
+import { characterArtUrl, resetPlatformPickerPicturesForTests, setPlatformPickerPictures } from "@nodaro/picker-ui"
 
 // Coming-soon cards call sonner's toast on click; stub it (no Toaster in jsdom).
 vi.mock("sonner", () => ({ toast: vi.fn() }))
@@ -11,7 +11,9 @@ vi.mock("@/components/ui/preview-video", () => ({ PreviewVideo: () => null }))
 import { FlagshipApps } from "../flagship-apps"
 import { studioBaseUrl } from "@/lib/studio"
 import { voiceBaseUrl } from "@/lib/voice"
-import { PERSON_APP_COLLAGE, personAppBaseUrl } from "@/lib/person-app"
+import { PERSON_APP_COLLAGE_IDS, personAppBaseUrl, personAppCollage } from "@/lib/person-app"
+
+afterEach(() => resetPlatformPickerPicturesForTests())
 
 describe("FlagshipApps", () => {
   it("renders the three flagship products", () => {
@@ -60,13 +62,19 @@ describe("FlagshipApps", () => {
   it("fans the Person picker's own photos across the Person card", () => {
     const { container } = render(<FlagshipApps />)
     const srcs = [...container.querySelectorAll("img")].map((img) => img.getAttribute("src"))
-    expect(srcs).toEqual([...PERSON_APP_COLLAGE])
+    expect(srcs).toEqual(PERSON_APP_COLLAGE_IDS.map((id) => characterArtUrl("person", id)))
   })
 
-  it("the collage photos still exist under those content-hashed names", () => {
-    // The names carry a content hash: a re-encoded photo gets a new name, and
-    // this is what catches a stale one here.
-    const ids = ["supermodel", "silver-fox", "graceful-woman", "elf-woman"]
-    expect([...PERSON_APP_COLLAGE]).toEqual(ids.map((id) => characterArtUrl("person", id)))
+  it("every collage option has a photo in the picker's map", () => {
+    expect(personAppCollage()).toHaveLength(PERSON_APP_COLLAGE_IDS.length)
+    for (const src of personAppCollage()) expect(src).toMatch(/^\/picker-art\/character\/person\/[a-z-]+\.[0-9a-f]{8}\.webp$/)
+  })
+
+  it("shows no photo when the deployment shows no platform pictures", () => {
+    setPlatformPickerPictures(false)
+    expect(personAppCollage()).toEqual([])
+    const { container } = render(<FlagshipApps />)
+    expect(container.querySelectorAll("img")).toHaveLength(0)
+    expect(screen.getByRole("link", { name: /Open Person/i })).toBeInTheDocument()
   })
 })

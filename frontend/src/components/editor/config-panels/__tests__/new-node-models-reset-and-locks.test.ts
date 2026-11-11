@@ -1,4 +1,4 @@
-// @test-units-by-name looks up only the node types it names (modify-image, generate-video)
+// @test-units-by-name looks up only the node types it names (modify-image, generate-video, extend-video)
 /**
  * The new-node rule (`new-node-models.ts`, decided 2026-11-10), two more ways:
  *  - Reset to default applies it: a node reset to its defaults starts where a
@@ -20,7 +20,7 @@ vi.mock("@/lib/free-video-locks", async (importOriginal) => ({
 import { __resetSurfaceAvailabilityForTests } from "@/lib/surface-availability"
 import { lockedVideoModel } from "@/lib/free-video-locks"
 import { planNewNodeModels, withOfferedResetModels } from "@/components/editor/config-panels/new-node-models"
-import { MODIFY_IMAGE_MODELS, VIDEO_GEN_MODELS } from "@/components/editor/config-panels/model-options"
+import { EXTEND_VIDEO_MODELS, MODIFY_IMAGE_MODELS, VIDEO_GEN_MODELS } from "@/components/editor/config-panels/model-options"
 import { buildResetToDefaultData } from "@/lib/preset-tree"
 import { curatedNodeDefaults } from "@/lib/curated-node-defaults"
 import { NODE_DEFINITIONS } from "@/types/nodes"
@@ -97,5 +97,19 @@ describe("the model chosen is the first offered one the user can run", () => {
     const def = defaultsOf("generate-video").provider as string
     withholding([def])
     expect(planNewNodeModels("generate-video", defaultsOf("generate-video")).moved[0]!.to).toBe(VIDEO_GEN_MODELS.find((m) => m.value !== def)!.value)
+  })
+
+  it("an Extend Video row is judged as an extension: none is runnable on free credits, LTX 2.3 Pro included", () => {
+    // A free clip may be 10 s here, so LTX's generation model (shortest clip 6 s) is open on its own.
+    const ROOMY = { enabled: true, maxSeconds: 10 }
+    limits.current = ROOMY
+    const def = defaultsOf("extend-video").provider as string
+    const offered = EXTEND_VIDEO_MODELS.map((m) => m.value).filter((v) => v !== def)
+    // LTX 2.3 Pro extends under its generation id: judged as that model alone, it would look open.
+    expect(offered).toContain("ltx-2.3-pro")
+    expect(lockedVideoModel(ROOMY, "ltx-2.3-pro")).toBeNull()
+    withholding([def])
+    // Every offered row is locked, so the first offered row is taken — never LTX as the "runnable" one.
+    expect(planNewNodeModels("extend-video", defaultsOf("extend-video")).moved[0]!.to).toBe(offered[0])
   })
 })
