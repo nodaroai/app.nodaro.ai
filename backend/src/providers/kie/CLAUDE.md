@@ -353,6 +353,25 @@ parked in `held_completion_fields` so a review approve replays it
 requested duration; an edit of a 30s clip from a node set to 12s pays for 30s.
 An unmeasurable delivery commits the reservation.
 
+**Reference videos are re-encoded (`reference-video-reencode.ts`).** Both
+Seedance branches of `KieVideoProvider` (i2v + t2v) swap the prepared body's
+`reference_video_urls` for re-encoded copies AFTER `applySeedance2Params` and
+BEFORE `runVideoTaskWithSeedanceEditRetry` (one encode; the resubmit reuses
+it). A clip Seedance produced, sent byte for byte as an edit's source, comes
+back as a near-copy of its input; any re-encode of the same footage is edited.
+The copy keeps every frame (`-fps_mode passthrough`, no trim/scale/filter),
+the source's picture bitrate (two-pass; CRF 14 when unknown), 8-bit pixel
+format and colour tags, MOV for a QuickTime source, the sound copied when the
+container plays it (else AAC), and the model's size cap (`referenceVideoMaxBytes`:
+200 MB on `seedance-2-5`, 50 MB on the 2.0 family) only bites on a source
+already over it (or a two-pass overshoot past it). Clips are encoded in
+parallel, and a failure waits for every sibling to finish before it fails
+the run. A failure fails the run
+(sanitized error → refund) — never a fallback to the original URL. Every
+clip goes through it, plugin-prepared ones included (format-preserving, so a
+4:4:4 PCM MOV stays one). A test that drives the provider with
+`referenceVideoUrls` must mock the module (pass-through), or it downloads.
+
 `gemini-omni-flash` shares the pro sibling's request shape through
 `runGeminiOmni`, with one difference: its schema marks `duration` **required**,
 so the emitted body always carries it (`requiresDuration` on the model config).

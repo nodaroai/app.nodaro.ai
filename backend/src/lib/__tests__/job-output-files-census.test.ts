@@ -195,6 +195,7 @@ const SCRATCH_CALL_SITES: Readonly<Record<string, string>> = {
   "providers/kie/video.ts :: \"provider-stripped\"": "KIE input images re-encoded only to drop embedded metadata: inside a video-worker job (the running job's id)",
   "providers/kie/gemini-omni-12.ts :: \"provider-omni-source\"": "a Gemini Omni Flash 1.2 source clip cut to what the provider takes: called from the KIE video provider, inside a video-worker job (the running job's id)",
   "providers/kie/reference-video-size.ts :: \"provider-shrunk\"": "a Kling 4 reference video shrunk to the provider's size limit: called from the KIE video provider, inside a video-worker job (the running job's id)",
+  "providers/kie/reference-video-reencode.ts :: \"provider-reencoded\"": "a Seedance 2 reference video re-encoded so the provider never receives the clip's original bitstream: called from the KIE video provider, inside a video-worker job or a plugin's job handler (the running job's id)",
   "workers/handlers/heygen-avatar-audio-cap.ts :: \"ai-avatar-audio-cap\"": "HeyGen's capped audio: `jobId` is the avatar handler's `ctx.jobId`",
   "workers/handlers/video-ai.ts :: \"extend-tail\"": "a Seedance extend's source tail: `ctx.jobId`",
   "workers/handlers/video-ai.ts :: \"extend-last-frame\"": "a Seedance extend's last frame: `ctx.jobId`",

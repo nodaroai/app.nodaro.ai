@@ -62,7 +62,11 @@ Seedance has **no video-to-video endpoint**. It edits a video it is given as a
 *reference* when the prompt reads as an edit instruction. So this model's lane
 on the node is dispatched as a **text-to-video** job in edit shape:
 
-- The source clip is sent as **reference video 1**.
+- The source clip is sent as **reference video 1**, re-encoded first (as every
+  Seedance reference video is): the same resolution, frames, frame rate and
+  length, sound kept. A clip Seedance produced itself, sent as it came, can
+  come back as a near-copy of the input instead of an edit. The result's
+  length and the price are unchanged.
 - Your prompt is prefixed with `edit @video_1 as follows:` and a newline, so the
   model reads the whole sentence as an instruction about that clip. If your
   prompt already opens with that instruction, it is not added twice.
