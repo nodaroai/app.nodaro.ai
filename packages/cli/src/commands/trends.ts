@@ -24,7 +24,11 @@ interface RunFlags {
   details?: string
   preview?: boolean
   resolution?: TrendResolution
-  /** Commander defaults a lone `--no-draft` to `true`; only `false` (the flag given) is sent. */
+  /**
+   * `true` with `--draft`, `false` with `--no-draft`, absent with neither (both
+   * flags are defined, `--draft` first, so Commander sets no default). Sent only
+   * when given: a run is plain without it.
+   */
   draft?: boolean
 }
 
@@ -49,7 +53,8 @@ function addRunFlags(cmd: Command): Command {
     .addOption(
       new Option("--resolution <r>", "one the trend offers (`trends get`); default its first: 480p, or 720p on a Nodaro Motion Pulse trend").choices([...RESOLUTIONS]),
     )
-    .option("--no-draft", "a full run instead of a draft (a draft is 480p only, and the default there; a Nodaro Motion Pulse trend has none)")
+    .option("--draft", "make a 480p draft that Full Quality can finish at 1080p (Nodaro Motion Prism only; without it a run is plain)")
+    .option("--no-draft", "a plain run, the default (still accepted)")
 }
 
 function checkSlotKey(flag: string, spec: string, key: string): void {
@@ -124,7 +129,7 @@ function buildRequest(flags: RunFlags): TrendRunRequest {
   if (flags.details !== undefined) request.details = flags.details
   if (flags.preview) request.preview = true
   if (flags.resolution) request.resolution = flags.resolution
-  if (flags.draft === false) request.draft = false
+  if (flags.draft !== undefined) request.draft = flags.draft
   return request
 }
 

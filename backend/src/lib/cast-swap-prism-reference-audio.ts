@@ -240,7 +240,7 @@ export function engineMeetsPrismReferenceAudioRequirement(
   return takesPitch(cs) && lists(cs, requirement)
 }
 
-/** The resolutions a Prism run renders, the default (its 480p draft) first. */
+/** The resolutions a Prism run renders, the default (480p) first. */
 export const CAST_SWAP_PRISM_RESOLUTIONS = CAST_SWAP_RESOLUTIONS_BY_ENGINE["seedance-2-5"]
 
 export type CastSwapPrismResolution = (typeof CAST_SWAP_PRISM_RESOLUTIONS)[number]

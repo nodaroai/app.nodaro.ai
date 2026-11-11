@@ -331,7 +331,8 @@ describe("the run's pick (composeTrendRun)", () => {
       preview: false,
       previewStart: 0,
       resolution: "480p",
-      draft: true,
+      // Plain 480p, the default (a draft only with `draft: true`).
+      draft: false,
       // Which input the run edits (compose.ts); dropped for an engine that does not take a prepared preview (run-helpers.ts).
       sourceAsset: { kind: "full", durationSec: 12 },
       trendRun: {

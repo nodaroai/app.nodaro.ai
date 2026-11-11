@@ -205,13 +205,24 @@ describe("trends command", () => {
     expect(vi.mocked(success).mock.calls[0]![0]).toContain("j1")
   })
 
-  it("run without --no-draft sends no draft (so 720p is not sent as a draft)", async () => {
+  it("run without --draft sends no draft (a plain run, at 480p too)", async () => {
+    for (const resolution of ["720p", "480p"]) {
+      mocks.run.mockResolvedValueOnce({ jobId: "j1" })
+      await runCmd("trends", "run", "dance", "--slot", "p=https://u", "--resolution", resolution)
+      const body = mocks.run.mock.calls.at(-1)![1] as Record<string, unknown>
+      expect(body).toEqual({ slots: { p: { images: ["https://u"] } }, resolution })
+      expect("draft" in body).toBe(false)
+      expect("preview" in body).toBe(false)
+    }
+  })
+
+  it("--draft sends draft: true (a 480p draft that Full Quality can finish at 1080p)", async () => {
     mocks.run.mockResolvedValueOnce({ jobId: "j1" })
-    await runCmd("trends", "run", "dance", "--slot", "p=https://u", "--resolution", "720p")
-    const body = mocks.run.mock.calls[0]![1] as Record<string, unknown>
-    expect(body).toEqual({ slots: { p: { images: ["https://u"] } }, resolution: "720p" })
-    expect("draft" in body).toBe(false)
-    expect("preview" in body).toBe(false)
+    await runCmd("trends", "run", "dance", "--slot", "p=https://u", "--draft")
+    expect(mocks.run.mock.calls[0]![1]).toEqual({ slots: { p: { images: ["https://u"] } }, draft: true })
+    mocks.estimate.mockResolvedValueOnce({ expectedCredits: 40, holdCredits: 40, breakdown: {} })
+    await runCmd("trends", "estimate", "dance", "--slot", "p=https://u", "--resolution", "480p", "--draft")
+    expect(mocks.estimate.mock.calls[0]![1]).toEqual({ slots: { p: { images: ["https://u"] } }, resolution: "480p", draft: true })
   })
 
   it("run --json prints the raw result", async () => {

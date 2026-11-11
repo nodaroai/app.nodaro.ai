@@ -244,8 +244,9 @@ export interface TrendDetail extends TrendCard {
   engineName?: string
   /**
    * The resolutions a run may ask for, the default first. Nodaro Motion Prism:
-   * `["480p", "720p", "1080p"]`, where 480p is a draft (show it as one);
-   * Nodaro Motion Pulse: `["720p", "1080p"]`, no draft. Offer exactly these.
+   * `["480p", "720p", "1080p"]`, where 480p is plain unless the run asks for a
+   * draft ({@link TrendRunRequest.draft}); Nodaro Motion Pulse: `["720p", "1080p"]`,
+   * no draft. Offer exactly these.
    */
   resolutions: TrendResolution[]
   slots: TrendDetailSlot[]
@@ -292,8 +293,10 @@ export interface TrendRunRequest {
    */
   resolution?: TrendResolution
   /**
-   * A draft run, only at 480p on a Nodaro Motion Prism trend. Default `true` at
-   * 480p. `true` on a Nodaro Motion Pulse trend answers 400 `draft_unsupported`.
+   * `true` makes a draft: a 480p run whose same take Full Quality can finish at
+   * 1080p (Nodaro Motion Prism trends only). Default `false`: a plain run, at
+   * 480p too. `true` on a Nodaro Motion Pulse trend answers 400
+   * `draft_unsupported`.
    */
   draft?: boolean
   /**
@@ -437,10 +440,15 @@ export interface TrendRun {
   creditsHeld?: number | null
   /** What went back from `creditsHeld` once every hold in the run settled; `null` until then. Absent from an older server. */
   creditsReleased?: number | null
-  /** A Full Quality version: the job id of the run (a draft, or a Nodaro Motion Pulse 720p run) it was made from. `null` for any other run. */
+  /**
+   * A Full Quality version: the job id of the run it was made from (a draft,
+   * or a Nodaro Motion Pulse 720p run from when Pulse had Full Quality). `null`
+   * for any other run.
+   */
   fullQualityOf: string | null
   /**
-   * A draft's (or Nodaro Motion Pulse 720p run's) newest Full Quality try, if one was started: a pointer only,
+   * A draft's newest Full Quality try (or a Nodaro Motion Pulse 720p run's, made
+   * when Pulse had Full Quality), if one was started: a pointer only,
    * to know an upgrade exists and how it is going. Its video and charge are on
    * that run, listed on its own (its `fullQualityOf` is this run's `jobId`) —
    * read it there (`getRun(fullQuality.jobId)`). Older tries of the draft (a
@@ -451,9 +459,9 @@ export interface TrendRun {
    */
   fullQuality: { jobId: string; status: string; refused?: true } | null
   /**
-   * Until when a completed run can be redone in Full Quality — a Nodaro Motion
-   * Prism draft (the same take at 1080p) or a Nodaro Motion Pulse run at 720p (a new take at
-   * 1080p); `null` otherwise.
+   * Until when a completed run can be finished in Full Quality — a Nodaro
+   * Motion Prism draft only (the same take at 1080p); `null` otherwise, a plain
+   * run and every Nodaro Motion Pulse run included.
    */
   fullQualityUntil: string | null
 }

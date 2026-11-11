@@ -24,8 +24,9 @@
  * `motion_length`, and `face_masking` is accepted, ignored and never sent.
  *
  * The route is the authority on every rule (role counts, the 30-image total,
- * draft only at 480p, each engine's resolutions and Nodaro Motion Pulse's lack
- * of a draft, the clip's length, the pre / post prompt's `{role:N}`
+ * draft only at 480p and only with `draft: true` (480p is plain by default),
+ * each engine's resolutions and Nodaro Motion Pulse's lack of a draft (and so
+ * of Full Quality), the clip's length, the pre / post prompt's `{role:N}`
  * mentions, the preview-only role settings); this tool maps snake_case to
  * the route's body and leaves the rest to it. The user travels in
  * `mcpInject`'s header, never the body.
@@ -137,7 +138,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         "By default each person, pet and product's images are first made into one clean reference picture (extra credits, about a minute; prepare_references: false skips it). " +
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
         "That returns a job id: poll it with wait_for_job. `preview: true` renders 4 s first, a cheaper check of the look. " +
-        'engine picks the engine: "motion-prism" (Nodaro Motion Prism, the default; 480p draft, 720p, 1080p) or "motion-pulse" (Nodaro Motion Pulse; 720p default or 1080p, no draft). ' +
+        'engine picks the engine: "motion-prism" (Nodaro Motion Prism, the default; 480p, 720p, 1080p) or "motion-pulse" (Nodaro Motion Pulse; 720p default or 1080p, no draft). ' +
         "Image and video URLs must be http(s): upload local files with the upload tools first.",
       // A LOOSE object: an argument the tool no longer lists still reaches the handler, which
       // takes an older client's `kling_length` as `motion_length` and ignores `face_masking`
@@ -200,7 +201,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         preview_start: z.number().min(0).optional().describe("Seconds, default 0; preview_start + 4 must fit the clip."),
         engine: castSwapEngineArg
           .optional()
-          .describe('Default "motion-prism" (Nodaro Motion Prism). "motion-pulse" (Nodaro Motion Pulse): 720p or 1080p only, no draft; its Full Quality is a new take.'),
+          .describe('Default "motion-prism" (Nodaro Motion Prism). "motion-pulse" (Nodaro Motion Pulse): 720p or 1080p only, no draft, no Full Quality.'),
         style: z
           .enum(CAST_SWAP_STYLES)
           .optional()
@@ -216,7 +217,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
           .optional()
           .describe('motion-pulse only: cut the clip to whole seconds at its end (default) or start.'),
         resolution: z.enum(["480p", "720p", "1080p"]).optional().describe('Default "480p" (motion-pulse: "720p"; no 480p).'),
-        draft: z.boolean().optional().describe("Render as a draft, 480p motion-prism only. Default true at 480p, false above."),
+        draft: z.boolean().optional().describe("true = a 480p draft (motion-prism only) that full_quality can finish at 1080p. Default false: plain."),
         prepare_references: z.boolean().optional().describe("Default true: prepare the reference pictures first."),
         quality: z.enum(["draft"]).optional().describe('Deprecated: use resolution + draft. "draft" means a 480p draft.'),
         session_id: z.string().min(1).optional().describe("A generation session to file the result in."),

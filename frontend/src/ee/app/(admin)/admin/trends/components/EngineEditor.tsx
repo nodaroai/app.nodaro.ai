@@ -30,12 +30,12 @@ const ENGINES: ReadonlyArray<{ value: AdminTrendEngine; label: string; hint: str
   {
     value: "seedance-2-5",
     label: "Nodaro Motion Prism (Seedance 2.5, default)",
-    hint: "Edits the clip itself. Runs at 480p (a draft), 720p or 1080p; Full Quality redoes a draft's own take at 1080p.",
+    hint: "Edits the clip itself. Runs at 480p, 720p or 1080p; a 480p draft (\"1080p, preview first\") can be finished as the same take at 1080p with Full Quality.",
   },
   {
     value: "kling-4",
     label: "Nodaro Motion Pulse (Kling 4)",
-    hint: "Makes a new take guided by the clip and the pictures. Runs at 720p or 1080p, with no draft; Full Quality makes a new take at 1080p.",
+    hint: "Makes a new take guided by the clip and the pictures. Runs at 720p or 1080p, with no draft and no Full Quality.",
   },
 ]
 

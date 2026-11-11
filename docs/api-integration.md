@@ -4926,8 +4926,9 @@ mentions roles as `{role:N}`, like `postPrompt`), `postPrompt`, `preview`,
 `previewStart`, `engine` (see below), `style` (see below), `direction` (an art
 style, see below), `resolution` (`"480p"` — the default —
 `"720p"` or `"1080p"`; on Nodaro Motion Pulse `"720p"` — its default — or
-`"1080p"`), `draft` (on by default at 480p, off above it; `true` above 480p is
-refused, and Nodaro Motion Pulse has no draft), `prepareReferences` (default
+`"1080p"`), `draft` (off by default, so a 480p run is plain; `true` makes a
+480p draft whose same take [Full Quality](#full-quality) can finish at 1080p;
+`true` above 480p is refused, and Nodaro Motion Pulse has no draft), `prepareReferences` (default
 `true`, see below), `sessionId` and `origin`.
 `quality: "draft"` is still accepted and means 480p draft; it is deprecated:
 use `resolution` + `draft`. The field-by-field shape is in the
@@ -4935,16 +4936,15 @@ use `resolution` + `draft`. The field-by-field shape is in the
 
 **Engines.** `engine` chooses the engine: `"motion-prism"` (Nodaro Motion Prism,
 the default when `engine` is left out) or `"motion-pulse"` (Nodaro Motion
-Pulse). Prism renders 480p (a draft by default), 720p or 1080p, and its Full
-Quality re-renders a draft's own take at 1080p. Pulse makes a new take guided
-by the clip and your images: it renders 720p (the default) or 1080p, with no
-draft (`draft: true` answers `400 draft_unsupported`, and 480p is refused).
+Pulse). Prism renders 480p (plain unless `draft: true`), 720p or 1080p, and
+its Full Quality re-renders a draft's own take at 1080p. Pulse makes a new take
+guided by the clip and your images: it renders 720p (the default) or 1080p,
+with no draft (`draft: true` answers `400 draft_unsupported`, and 480p is
+refused), so it has no Full Quality: run it again at 1080p instead.
 Pulse renders whole seconds, so the clip is cut to whole seconds:
 `motionLength` says where — `"cut-end"` (the default: the fraction of a second
 at its end is dropped) or `"cut-start"` (at its start); Prism ignores it. A
-preview is still 4 s from `previewStart`, and Pulse's Full Quality makes a new
-take at 1080p from a completed 720p run's inputs (see
-[Full Quality](#full-quality)). A trend's preview run (see
+preview is still 4 s from `previewStart`. A trend's preview run (see
 [Trends](#13g-trends-cloud-edition)) may instead send the trend's prepared
 preview input clip as `videoUrl` with `preparedPreview: true` — `preview`
 true and `previewStart` 0, the engine editing the clip as it is; only the
@@ -5144,19 +5144,19 @@ Refusals, all before anything is charged (bodies are
 
 ### Full Quality
 
-A finished run can be finished at Full Quality, at 1080p, fitted to the clip
-and given its original audio back, as a new job linked to it:
+A finished Nodaro Motion Prism DRAFT run (a Nodaro Motion or trend run made
+at 480p with `draft: true`) can be finished at Full Quality: the same take
+re-rendered at 1080p, fitted to the clip and given its original audio back, as
+a new job linked to it. The draft itself stays.
 
-- a Nodaro Motion Prism DRAFT run (a Nodaro Motion run made as a draft, or a
-  trend run whose default is a draft): the same take re-rendered at 1080p;
-- a Nodaro Motion Pulse run at 720p: a NEW take at 1080p from the run's own
-  inputs (for a trend run, recomposed from the trend version it ran on). Pulse
-  cannot redo a take sharper, so it will not match the 720p run frame for
-  frame.
+Only a draft has one. A plain run (a 480p run made without `draft: true`
+included) is refused with `409 not_a_draft`; to finish a 480p take at 1080p
+later, make it with `draft: true`. Nodaro Motion Pulse makes no drafts, so it
+has no Full Quality: run it again at 1080p instead. A Pulse Full Quality made
+before that changed stays listed as a run of its own.
 
-The run itself stays either way. The quote's `kind` says which it is
-(`"same-take"` or `"new-take"`; an older server leaves it out: a same
-take). It is available for 7 days after the run completed
+The quote's `kind` is `"same-take"` (an older server leaves it out: a same
+take; `"new-take"` was Pulse's). It is available for 7 days after the draft completed
 (SDK: [`client.castSwap.fullQuality`](./sdk-reference.md#clientcastswap),
 MCP: [`estimate_full_quality` / `full_quality`](./mcp/tools.md), CLI:
 `nodaro cast-swap full-quality estimate|run`).
@@ -5166,10 +5166,9 @@ MCP: [`estimate_full_quality` / `full_quality`](./mcp/tools.md), CLI:
 | `POST` | `/v1/cast-swap/:jobId/full-quality/estimate` | Quote it. Free: nothing is created or reserved. Returns `{ kind, totalCredits, breakdown, availableUntil }`. |
 | `POST` | `/v1/cast-swap/:jobId/full-quality` | Start it. Returns `202 { jobId }`, or `200 { jobId, existing: true }` when this run's Full Quality is already running or done (nothing new is started or charged). Optional body `{ sessionId }`. |
 
-`:jobId` is the draft's (or Nodaro Motion Pulse 720p run's) job id. The quote
+`:jobId` is the draft's job id. The quote
 is `totalCredits`: `breakdown.base` (the Full Quality job's own steps)
-plus `breakdown.motionHd` (a same take: the 1080p render of the draft's take)
-or `breakdown.motion` (Pulse's new take). `motionHd` is 0 when an earlier
+plus `breakdown.motionHd` (the 1080p render of the draft's take). `motionHd` is 0 when an earlier
 failed try of this draft already finished that render: it is reused, and only
 the finishing is charged. `availableUntil` is when the 7 days end. Quote first:
 the price depends on the draft. The quote does not look for a Full Quality
@@ -5191,7 +5190,7 @@ Refusals, all before anything is charged (bodies are
 | `402` | `insufficient_credits` | Your credits cannot cover it (start only). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
 | `404` | `not_found` | Not your job, or not a Nodaro Motion run; also a `sessionId` you may not use (start only). |
 | `409` | `not_completed` | The run has not finished. |
-| `409` | `not_a_draft` | The run is neither a Nodaro Motion Prism draft nor a Nodaro Motion Pulse run at 720p. |
+| `409` | `not_a_draft` | The run is not a Nodaro Motion Prism draft: a plain run (480p made without `draft: true` included; make a draft with `draft: true`), or any Nodaro Motion Pulse run (Pulse makes no drafts: run it again at 1080p). |
 | `409` | `full_quality_pending` | **Not final — try again later** (`retryable: true`): an earlier try's 1080p render of this draft is being reviewed (try again once the review ends), or has not started yet. |
 | `409` | `full_quality_unavailable` | **Final:** the run cannot be finished at Full Quality — nothing kept to re-render, no readable completion time, or the 1080p finalize refuses this draft. On the start only, also when every try failed ("failed too many times") or no try can be started for this run. |
 | `410` | `draft_expired` | More than 7 days after the draft completed, or the draft can no longer be finished at Full Quality. |
@@ -5240,7 +5239,7 @@ answered as a guest. Every other route below needs a signed-in caller.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/v1/trends` | The catalog, in the catalog's own order: `{ data: TrendCard[], next }`. Each card is `{ id, slug, name, description?, tags, badges, cover, original?, examples, needs, durationSec, isFavorite }`: `cover` is the first example, else the original; `original` is the original's display copy `{ videoUrl, posterUrl?, width, height }` (the same address as the page's `original`, absent on a version without one); `examples` is every example's video in order, `{ videoUrl, posterUrl?, width, height }` each, without the pictures its slots used (those are on the page; `[]` on a trend with only its original). Every video (`cover`, `original`, each of `examples`, and the page's `original` and `examples`) may also carry `webUrl` and `webSizeBytes`: a light copy the platform made for playback (H.264 ~2.5 Mbit/s, AAC 160 kbit/s), to play as it is with no CDN transform, and its size in bytes; both are absent until it is made (a version published before it), and `videoUrl` is then the one to play. A trend can hide its original clip: its `original` is then its first example, and `examples` starts from its second example, so the original clip is never sent. Query: `q` (search), `tag`, `favorites=1` (only yours), `locale`, `cursor`, `limit` (1–60, default 30). |
-| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its original, slots, examples, preview length, `engine` and `resolutions`). `original` is the clip every run starts from, as you may show it: `{ videoUrl, posterUrl?, width, height, durationSec, previewStartSec? }`, a browser-safe (H.264 MP4) copy, with where the 4 s preview starts when the trend has one (`0` included). `examples` may be empty (a trend with only its original); the card's `cover` is then the original. On a trend that hides its original clip, `original` is its first example (that example's video, poster, size and length, with the trend's own `previewStartSec`) and `examples` starts from its second example; the original clip is never sent. `engine` is the engine every run of the trend uses (`"motion-prism"` or `"motion-pulse"`, with its name in `engineName`: "Nodaro Motion Prism" or "Nodaro Motion Pulse"; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Nodaro Motion Prism (480p is the draft), `["720p", "1080p"]` on Nodaro Motion Pulse (no draft). Each slot is `{ key, label, kind, required, hint?, hintImageUrl?, chips, defaults? }` (`hintImageUrl`: a picture of who or what the slot is in the original): `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
+| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its original, slots, examples, preview length, `engine` and `resolutions`). `original` is the clip every run starts from, as you may show it: `{ videoUrl, posterUrl?, width, height, durationSec, previewStartSec? }`, a browser-safe (H.264 MP4) copy, with where the 4 s preview starts when the trend has one (`0` included). `examples` may be empty (a trend with only its original); the card's `cover` is then the original. On a trend that hides its original clip, `original` is its first example (that example's video, poster, size and length, with the trend's own `previewStartSec`) and `examples` starts from its second example; the original clip is never sent. `engine` is the engine every run of the trend uses (`"motion-prism"` or `"motion-pulse"`, with its name in `engineName`: "Nodaro Motion Prism" or "Nodaro Motion Pulse"; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Nodaro Motion Prism (480p is plain; a run makes a draft only with `draft: true`), `["720p", "1080p"]` on Nodaro Motion Pulse (no draft). Each slot is `{ key, label, kind, required, hint?, hintImageUrl?, chips, defaults? }` (`hintImageUrl`: a picture of who or what the slot is in the original): `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
 | `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, engine, engineName, breakdown, privacyCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `engine` is the engine the run was priced on, the trend's own (`"motion-prism"` or `"motion-pulse"`, as on its page), with its name in `engineName` ("Nodaro Motion Prism" or "Nodaro Motion Pulse"). `breakdown` names the quote's parts for display only (some sit outside the totals: read the totals, never the sum). `privacyCredits`, on a trend that retries a clip the video model refuses, is what is charged on top if that retry runs; it is not in `expectedCredits` or `holdCredits`, and is 0 when the trend's clip was prepared ahead of time. |
 | `POST` | `/v1/trends/:slug/runs` | Start a run. Returns `202 { data: { jobId } }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key`: a repeat with the same key answers with the first run's job and starts nothing new. |
 | `GET` | `/v1/trends/runs` | Your trend runs, newest first: `{ data: TrendRun[], next }`. Query: `trend` (a slug), `cursor`, `limit` (1–60, default 30). A run stays readable after its trend moves on to a new version, is unpublished or is archived. |
@@ -5281,9 +5280,10 @@ The estimate and run body is
 - `preview: true` runs 4 seconds (only when the trend's `previewSec` is 4).
 - `resolution`: one of the trend's `resolutions`, default its first
   (`"480p"`, or `"720p"` on a Nodaro Motion Pulse trend); another is a `400`
-  `resolution_unsupported`. `draft` (default `true`) is only available at 480p
-  on a Nodaro Motion Prism trend; `draft: true` on a Nodaro Motion Pulse trend is
-  a `400` `draft_unsupported`.
+  `resolution_unsupported`. `draft` (default `false`, so a 480p run is plain):
+  `true` makes a 480p draft whose same take [Full Quality](#full-quality) can
+  finish at 1080p, only on a Nodaro Motion Prism trend; `draft: true` on a
+  Nodaro Motion Pulse trend is a `400` `draft_unsupported`.
 - `sessionId`: one of your generation sessions. Accepted (one you may not
   use is still a `404`), but not yet applied: trend runs are not filed into
   sessions yet.
@@ -5393,9 +5393,10 @@ original, a run that used the example shown as the original has no `example`
 key.
 
 Each run carries its `engine` (`"motion-prism"` or `"motion-pulse"`) and
-`engineName`. A completed Nodaro Motion Prism draft, or a completed Nodaro
-Motion Pulse run at 720p, has `fullQualityUntil` (the end of its 7 days) and
-can be finished at [Full Quality](#full-quality); on Pulse that is a new take.
+`engineName`. A completed Nodaro Motion Prism draft (a run made with
+`draft: true`) has `fullQualityUntil` (the end of its 7 days) and can be
+finished at [Full Quality](#full-quality). A plain run and every Nodaro Motion
+Pulse run have `fullQualityUntil: null`.
 
 A run's `creditsCharged` is what the whole run cost once settled: its own
 charge plus every step it ran (the reference preparation, the mask, the
@@ -5404,7 +5405,7 @@ settles. `creditsHeld` is the run's hold (its own plus its steps'), and
 `creditsReleased` what went back from it once every hold in the run settled
 (`null` until then).
 
-A Full Quality version of a draft run (or of a Nodaro Motion Pulse 720p run) is a run of its own in
+A Full Quality version of a draft run (or of a Nodaro Motion Pulse 720p run, made while Pulse had Full Quality) is a run of its own in
 `GET /v1/trends/runs` and `GET /v1/trends/runs/:jobId`: its own `jobId`,
 `status`, `videoUrl` and `creditsCharged` (at `resolution: "1080p"`,
 `draft: false`), with `fullQualityOf` set to the draft's job id (`null` on any

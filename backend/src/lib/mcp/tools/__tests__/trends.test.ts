@@ -477,6 +477,15 @@ describe("trend verbs — what the descriptions promise", () => {
   it("says session_id is accepted but not applied yet", async () => {
     expect(await schemaText("run_trend")).toContain("not yet applied")
   })
+
+  it("says a run at 480p is plain unless it asks for a draft", async () => {
+    for (const tool of ["estimate_trend", "run_trend"]) {
+      const text = await schemaText(tool)
+      expect(text, tool).toContain("Default false")
+      expect(text, tool).not.toContain("Default true")
+    }
+    expect(await schemaText("get_trend")).not.toContain("480p is a draft")
+  })
 })
 
 describe("trend verbs are gated on the edition", () => {

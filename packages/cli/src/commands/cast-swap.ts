@@ -13,12 +13,12 @@ interface GlobalOpts extends OutputOpts {
  */
 function fullQualityCommand(): Command {
   const cmd = new Command("full-quality").description(
-    "finish a run (Nodaro Motion or trend) at Full Quality at 1080p, as a new job: a draft's same take, or a new take of a Nodaro Motion Pulse 720p run — `estimate` quotes it (free), `run` SPENDS CREDITS",
+    "finish a Nodaro Motion Prism draft (a Nodaro Motion or trend run made with draft: true) at Full Quality: its same take at 1080p, as a new job; Nodaro Motion Pulse has none — `estimate` quotes it (free), `run` SPENDS CREDITS",
   )
 
   cmd
     .command("estimate <jobId>")
-    .description("quote finishing the run at Full Quality (free): same or new take, the credits, and until when it can be finished")
+    .description("quote finishing the draft at Full Quality (free): the credits, and until when it can be finished")
     .option("--profile <name>")
     .option("--json")
     .action(async (jobId: string, opts: GlobalOpts) => {
@@ -29,7 +29,8 @@ function fullQualityCommand(): Command {
           return
         }
         info(`about ${quote.totalCredits} credits`)
-        // An older engine sends no kind: its Full Quality is the same take.
+        // An older engine sends no kind: its Full Quality is the same take. A
+        // new take was Pulse's, answered only by an engine from before it was withdrawn.
         if (quote.kind === "new-take") dim("a NEW take at 1080p from the same inputs (the 720p run stays)")
         else dim("the same take at 1080p")
         for (const [part, credits] of Object.entries(quote.breakdown)) {

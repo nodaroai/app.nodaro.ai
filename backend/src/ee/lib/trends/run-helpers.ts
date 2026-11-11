@@ -126,7 +126,7 @@ type Chips = Partial<Record<"body" | "outfit" | "hair" | "coat" | "shape" | "fin
 
 export const SLOT_KINDS: readonly TrendSlotKind[] = ["person", "location", "product", "pet"]
 const CHIP_KEYS = ["body", "outfit", "hair", "coat", "shape", "finish"] as const
-/** A completed draft run (or Kling 4 run at 720p) can be redone in Full Quality for this long (its depth map kept past it: cast-swap-depth-clips-sweep.ts). */
+/** A completed draft run can be redone in Full Quality for this long (its depth map kept past it: cast-swap-depth-clips-sweep.ts). */
 const FULL_QUALITY_WINDOW_MS = CAST_SWAP_FULL_QUALITY_WINDOW_MS
 
 /**
@@ -140,14 +140,23 @@ export function runEngineOf(input: Rec): CastSwapEngine {
 
 /**
  * Whether a run can be redone in Full Quality (once completed, within the
- * window): a Seedance 2.5 draft (the same take at 1080p), or a Kling 4 run at
- * 720p (a new take at 1080p from the same inputs). A Full Quality version
- * itself never is.
+ * window): a Seedance 2.5 draft only (made with `draft: true`), the same take
+ * at 1080p. A plain run is not, nor is any Kling 4 run (Kling 4 makes no
+ * drafts: it is run again at 1080p instead), nor a Full Quality version itself.
  */
 export function fullQualityEligible(input: Rec): boolean {
-  if (input.fullQualityOf != null) return false
-  if (input.draft === true) return true
-  return runEngineOf(input) === "kling-4" && input.resolution === "720p"
+  return input.fullQualityOf == null && input.draft === true
+}
+
+/**
+ * Whether a run may have a Full Quality try to point at (`TrendRun.fullQuality`):
+ * one that can be redone now, or a Kling 4 run at 720p, which could be until
+ * Kling 4's Full Quality (a new take at 1080p) was withdrawn. Such a try stays
+ * as history; nothing offers a new one (`fullQualityEligible`).
+ */
+export function mayHaveFullQuality(input: Rec): boolean {
+  if (fullQualityEligible(input)) return true
+  return input.fullQualityOf == null && runEngineOf(input) === "kling-4" && input.resolution === "720p"
 }
 
 export const RUN_JOB_COLS =
@@ -283,7 +292,7 @@ export function toTrendRun(
       ? new Date(Date.parse(completedAt) + FULL_QUALITY_WINDOW_MS).toISOString()
       : null
   const details = str(input.details)
-  const fqRow = fq && eligible ? redactPrivateJobData(fq) : null
+  const fqRow = fq && mayHaveFullQuality(input) ? redactPrivateJobData(fq) : null
   return {
     jobId: row.id,
     status: row.status,
@@ -418,7 +427,7 @@ export async function toTrendRuns(
   audience: RunAudience = "public",
 ): Promise<TrendRun[]> {
   if (page.length === 0) return []
-  const drafts = page.filter((r) => isRec(r.input_data) && fullQualityEligible(r.input_data)).map((r) => r.id)
+  const drafts = page.filter((r) => isRec(r.input_data) && mayHaveFullQuality(r.input_data)).map((r) => r.id)
   const [fqByDraft, credits, hiding] = await Promise.all([
     fullQualityByDraft(drafts, owners),
     runCreditsFor(page, owners),

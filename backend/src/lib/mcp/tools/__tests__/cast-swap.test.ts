@@ -436,6 +436,16 @@ describe("cast_swap", () => {
     expect(properties.art_style.description).toContain("where the engine takes style-only runs")
   })
 
+  it("says 480p is plain by default, a draft only with draft: true, and that motion-pulse has no Full Quality", async () => {
+    const { fastify } = stubFastify({})
+    const tool = (await listTools(serverWith(fastify))).find((t) => t.name === "cast_swap")!
+    const properties = (tool.inputSchema as { properties: Record<string, { description?: string }> }).properties
+    expect(properties.draft.description).toContain("Default false")
+    expect(properties.draft.description).toContain("full_quality")
+    expect(properties.engine.description).toContain("no Full Quality")
+    expect(JSON.stringify(tool)).not.toMatch(/Default true at 480p|480p draft,|Full Quality is a new take/)
+  })
+
   it("takes an older client's kling_length as motion_length (unlisted), and refuses one that is not a length fit", async () => {
     const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
     await callTool(serverWith(fastify), "cast_swap", { ...ARGS, kling_length: "cut-start" })

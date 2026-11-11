@@ -19,7 +19,7 @@ import type {
 } from "@/lib/api"
 import { SHARED_SETTING_ENVIRONMENTS } from "./clip-preparation"
 
-/** The resolutions a Prism run renders, in the order the screens show them (its 480p draft first). */
+/** The resolutions a Prism run renders, in the order the screens show them (480p first). */
 export const PRISM_RESOLUTIONS: readonly TrendResolution[] = CAST_SWAP_RESOLUTIONS_BY_ENGINE["seedance-2-5"]
 
 /** The modes, in the order the screens offer them. */

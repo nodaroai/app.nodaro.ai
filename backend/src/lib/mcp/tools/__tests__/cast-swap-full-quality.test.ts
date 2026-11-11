@@ -130,6 +130,16 @@ describe("estimate_full_quality", () => {
     expect(res.content[0]!.text).toMatch(/could not be read/i)
   })
 
+  it("offers Full Quality on a draft only: neither tool offers a motion-pulse run one", async () => {
+    const { fastify } = stubFastify({})
+    for (const name of ["estimate_full_quality", "full_quality"]) {
+      const text = JSON.stringify((await listTools(serverWith(fastify))).find((t) => t.name === name))
+      expect(text, name).toContain("draft: true")
+      expect(text, name).not.toMatch(/new take|motion-pulse at 720p|motion-pulse 720p/)
+    }
+  })
+
+  // An engine from before Nodaro Motion Pulse's Full Quality was withdrawn may still answer one.
   it("words a Nodaro Motion Pulse new take as one, and passes its kind and every numeric part through", async () => {
     const newTake = { kind: "new-take", totalCredits: 420, breakdown: { castSwap: 40, kling: 380, note: "x" }, availableUntil: "2026-10-28T10:00:00.000Z" }
     const { fastify } = stubFastify({ [EST_URL]: { statusCode: 200, body: newTake } })

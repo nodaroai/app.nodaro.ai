@@ -380,6 +380,22 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     expect(body).not.toHaveProperty("draft")
   })
 
+  it("a saved Prism draft tests at plain 480p by default: the Draft switch starts off and the run sends draft: false", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { engine: "seedance-2-5" }) } })
+    routes[`POST ${BASE}/test-runs`] = () => ({ status: 202, body: { data: { jobId: RUN_ID } } })
+    renderEditor()
+    const group = await screen.findByRole("group", { name: "Resolution" })
+    expect(within(group).getByRole("button", { name: "480p" })).toHaveAttribute("aria-pressed", "true")
+    expect(screen.getByRole("switch", { name: "Draft" })).not.toBeChecked()
+    await user.type(screen.getByLabelText("Pictures for dancer (0 / 3): URL"), "https://u.example/me.png{Enter}")
+    await user.click(screen.getByRole("button", { name: /run test/i }))
+    await waitFor(() => expect(sentTo(`POST ${BASE}/test-runs`)).toHaveLength(1))
+    const [body] = sentTo(`POST ${BASE}/test-runs`) as Array<Record<string, unknown>>
+    expect(body.resolution).toBe("480p")
+    expect(body.draft).toBe(false)
+  })
+
   it("holds Save while a face masking value is out of range", async () => {
     const user = userEvent.setup()
     routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { faceMasking: { mode: "always" } }) } })

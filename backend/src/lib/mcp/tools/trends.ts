@@ -93,7 +93,7 @@ export const trendRunShape = {
   details: z.string().max(1000).optional().describe("The user's own words; mention a slot as {slot:<key>}."),
   preview: z.boolean().optional().describe("true = a 4 s preview (when the trend's previewSec is 4)."),
   resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("One of get_trend's resolutions; default its first."),
-  draft: z.boolean().optional().describe("Default true; only at 480p (a motion-pulse trend has none)."),
+  draft: z.boolean().optional().describe("true = a 480p draft that full_quality can finish at 1080p (a motion-pulse trend has none). Default false: plain."),
   preview_job_id: z.string().regex(JOB_ID_RE).optional().describe("For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over."),
 }
 
@@ -336,7 +336,7 @@ export function registerTrendTools({ server, session, fastify }: RegisterTrendTo
         title: "Get Trend",
         description:
           "One trend: its original (the clip it recasts, or its first example if the trend hides it; previewStartSec), its slots (key, label, kind, required, hint, hintImageUrl, chips the user may set, their defaults), " +
-          "its examples (the result video and the pictures each slot used; may be none), previewSec, engine (\"motion-prism\" or \"motion-pulse\") with its engineName and resolutions (default first; 480p is a draft). Fill estimate_trend / run_trend `slots` by these keys and chips.",
+          "its examples (the result video and the pictures each slot used; may be none), previewSec, engine (\"motion-prism\" or \"motion-pulse\") with its engineName and resolutions (default first). Fill estimate_trend / run_trend `slots` by these keys and chips.",
         inputSchema: {
           slug: z.string().regex(SLUG_RE).refine(notReserved, RESERVED).describe("The trend's slug (from list_trends)."),
         },

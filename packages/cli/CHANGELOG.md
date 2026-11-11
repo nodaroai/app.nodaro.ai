@@ -1,5 +1,18 @@
 # @nodaro/cli
 
+## 1.48.0
+
+### Minor Changes
+
+- da7c94b: `nodaro trends estimate|run` take `--draft`: a 480p draft (Nodaro Motion Prism trends only) that Full Quality can finish at 1080p. Without it a run is plain, at 480p too; `--no-draft` is still accepted and sends `draft: false`. `nodaro cast-swap full-quality` now describes Full Quality as finishing a Prism draft only: Nodaro Motion Pulse runs have none.
+
+### Patch Changes
+
+- Updated dependencies [da7c94b]
+- Updated dependencies [da7c94b]
+  - @nodaro/sdk@2.68.1
+  - @nodaro/shared@3.60.1
+
 ## 1.47.0
 
 ### Minor Changes
