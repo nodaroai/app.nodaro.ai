@@ -1482,6 +1482,14 @@ const I2I_MASK_MODELS_BYTES = 126
 // description shared), and nothing else. No tool was added, so the fixture does NOT move. Measured
 // by this suite: 522_874 total − 522_636 = 238 B, all on modify_image.
 const MODIFY_IMAGE_MASK_BYTES = 238
+// RAISED 2026-11-11 by Kling 4.0 Flash (`kling-4-flash`) and nothing else: the id joins every
+// catalog-derived model enum and the character-reference provider list, and generate_video's
+// reference-video / reference-audio / extra-image / keep-original-sound descriptions name it (each
+// voice clip is a character's voice). No tool was added, so the fixture does NOT move. Measured by
+// this suite on the same tree with and without it: 522_991 total − 522_874 = 117 B, plus 21 B when
+// the reference-audio clause gained "if it has 2-4 images" (the clip goes to character N only when
+// that character can carry a voice): 138 B.
+const KLING_4_FLASH_MODELS_BYTES = 138
 
 // RAISED 2026-11-11 by MiniMax H3 Image, and nothing else: `minimax-h3-image` joins
 // generate_image's derived model list, and its reference-image limit names the model beside
@@ -1675,7 +1683,8 @@ export const TOOL_WIRE_BUDGET = {
     SPEAKER_VIEW_REGION_LIMITS_BYTES +
     GPT_IMAGE_2_6_FORMAT_TOTAL_BYTES +
     I2I_MASK_MODELS_BYTES +
-    MODIFY_IMAGE_MASK_BYTES,
+    MODIFY_IMAGE_MASK_BYTES +
+    KLING_4_FLASH_MODELS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

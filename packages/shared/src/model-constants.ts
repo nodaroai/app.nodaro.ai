@@ -316,6 +316,9 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   // (docs.kie.ai/market/kling/v4-reference-to-video and /v4-keyframe-to-video).
   "kling-4": 8000,
   "kling-4-keyframes": 8000,
+  // Kling 4.0 Flash — 8000 chars on both endpoints
+  // (docs.kie.ai/market/kling/v4-flash-reference-to-video and /v4-flash-keyframe-to-video).
+  "kling-4-flash": 8000,
   "bytedance-lite": 10000,
   "bytedance-pro": 10000,
   "bytedance-pro-fast": 10000,
@@ -1048,6 +1051,9 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   // listed here AND in TEXT_TO_VIDEO_PROVIDERS's main section (like wan-3).
   "kling-4",
   "kling-4-keyframes",
+  // Kling 4.0 Flash — one id over KIE's two Flash endpoints (picked by what is
+  // wired); both run with no image, so it is listed in both arrays too.
+  "kling-4-flash",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
   // xAI Grok Imagine Video 1.5 — KIE i2v (image_urls required). Also listed in
@@ -1096,6 +1102,7 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   // no materials, keyframe-to-video with no frame).
   "kling-4",
   "kling-4-keyframes",
+  "kling-4-flash",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
   // ── i2v-only providers (image required) ──────────────────────────────────
@@ -1963,6 +1970,9 @@ export const DURATION_PRICED_PROVIDERS = new Set([
   // video rate on `kling-4`, see VIDEO_REF_RATE_PROVIDERS).
   "kling-4",
   "kling-4-keyframes",
+  // Kling 4.0 Flash — per-second billing at 720p, the same rate on both
+  // endpoints, plus a reference-video rate (VIDEO_REF_RATE_PROVIDERS).
+  "kling-4-flash",
   // Gemini Omni Flash 1.2 — per-second billing at four resolution rates. The
   // only Omni SKU here: the per-clip SKUs price in their own branch of
   // buildVideoCreditModelIdentifier.
@@ -2155,6 +2165,37 @@ export function kling4KeyframeFrameCap(durationSec: number | string | undefined)
   // nearest legal second — the same funnel the price reads.
   const d = pricedOutputDurationSec("kling-4-keyframes", Number.isFinite(Number(durationSec)) ? durationSec : undefined)
   return Math.min(10, d + 1)
+}
+
+/**
+ * Kling 4.0 Flash — ONE Nodaro id over KIE's two Flash endpoints
+ * (`kling-4.0/flash-reference-to-video` and `kling-4.0/flash-keyframe-to-video`),
+ * picked by what is wired: a start frame alone runs on the keyframe endpoint,
+ * everything else on the reference endpoint (backend `kling4.ts`).
+ *
+ * Deliberately NOT a member of {@link KLING_4_PROVIDERS}: that set's branches
+ * carry Kling 4.0's 1080p tier, its `voices` array, its Keyframes frame table
+ * and its materials rule, none of which Flash has. Every place Flash shares
+ * with Kling 4.0 opts in explicitly ({@link isKling4RunnerProvider}).
+ */
+export const KLING_4_FLASH_PROVIDER = "kling-4-flash"
+
+export function isKling4FlashProvider(provider: string | undefined): provider is "kling-4-flash" {
+  return provider === KLING_4_FLASH_PROVIDER
+}
+
+/** The one resolution Kling 4.0 Flash renders (both schemas: `720p` only). */
+export const KLING_4_FLASH_RESOLUTION = "720p"
+
+/**
+ * Every id the bespoke Kling 4.0 runner serves — Kling 4.0, its Keyframes twin
+ * and Flash. Read only where the three behave the same: the provider dispatch,
+ * the image normalization, the editor's UI defaults (aspect `auto`, 720p, 5s).
+ * Anything about resolutions, frames, voices or the materials budget asks
+ * {@link isKling4Provider} or {@link isKling4FlashProvider} instead.
+ */
+export function isKling4RunnerProvider(provider: string | undefined): provider is "kling-4" | "kling-4-keyframes" | "kling-4-flash" {
+  return isKling4Provider(provider) || isKling4FlashProvider(provider)
 }
 
 /**
@@ -2691,6 +2732,15 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
      * (`videoCharacterRefProblem`).
      */
     materials?: number
+    /**
+     * Reference audio rides ON a character subject (its voice), not as a
+     * material of its own: clip N belongs to wired character N, in the order
+     * the characters arrive, and takes no seat in `materials`. A character with
+     * fewer than 2 images is no subject and cannot carry a voice, so its clip
+     * is dropped, as is a clip past the last character (Kling 4.0 Flash: KIE
+     * `elements[].voice_url`, no standalone `voices`).
+     */
+    audioBindsToCharacters?: true
   } | undefined
 > = {
   // Seedance 2 — full multimodal caps.
@@ -2740,6 +2790,13 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   // (`keyframe_urls`, max 8; the clip's duration lowers the cap, see
   // kling4KeyframeFrameCap). No reference videos or audio.
   "kling-4-keyframes": { images: KLING_4_MAX_MIDDLE_FRAMES },
+  // Kling 4.0 Flash (reference endpoint) — 10 images, 5 videos, 7 subjects,
+  // 15 in all (docs.kie.ai/market/kling/v4-flash-reference-to-video). No
+  // standalone voices: reference audio clip N becomes wired character N's voice
+  // (`voice_url`) when that character is a subject (2-4 images), so at most one
+  // per character (7) and none takes a material seat. A wired start frame takes one of the 10 image slots when it
+  // runs on this endpoint.
+  "kling-4-flash": { images: 10, videos: 5, audio: 7, characters: 7, materials: 15, audioBindsToCharacters: true },
   "grok-i2v": { images: 7 },         // backend kie/models.ts maxRefImages: 7
   "happyhorse-ref2v": { images: 9 }, // backend kie/models.ts maxRefImages: 9
   // VEO 3.x — REFERENCE_2_VIDEO path caps refs at 3 (kie/video.ts slices to
@@ -2807,6 +2864,11 @@ export const VIDEO_REF_VIDEO_DURATION_LIMITS: Record<string, RefVideoDurationLim
   // while two 14 s ones were accepted (a production run with two 20 s
   // references had reached users as the generic "rejected these settings").
   "kling-4": { minSec: 2, maxSec: 30, maxTotalSec: 30 },
+  // Kling 4.0 Flash — the reference videos' COMBINED length must be 2-20 s,
+  // and KIE fails the task at completion otherwise ("video_1 duration must be
+  // between 2 and 20 seconds, got 45", docs.kie.ai/market/kling/v4-flash-reference-to-video).
+  // A 2 s floor per clip makes the combined floor hold too.
+  "kling-4-flash": { minSec: 2, maxSec: 20, maxTotalSec: 20 },
 }
 
 /**
@@ -2901,6 +2963,9 @@ export const RESOLUTION_DURATION_PRICING: Record<string, readonly string[]> = {
   // (VIDEO_REF_RATE_PROVIDERS).
   "kling-4": ["720p", "1080p"],
   "kling-4-keyframes": ["720p", "1080p"],
+  // Kling 4.0 Flash — 720p only (both schemas), one rate on both endpoints,
+  // plus a `-ref` rate for a run with a reference video (VIDEO_REF_RATE_PROVIDERS).
+  "kling-4-flash": ["720p"],
   // Gemini Omni Flash 1.2 — per-second billing at four resolution rates.
   // Ascending; the billed default (720p) is declared in PRICING_DEFAULT_RESOLUTION.
   "gemini-omni-flash-1-2": ["360p", "720p", "1080p", "4k"],
@@ -2915,6 +2980,8 @@ export const RESOLUTION_DURATION_PRICING: Record<string, readonly string[]> = {
  */
 export const VIDEO_REF_RATE_PROVIDERS = new Set<string>([
   "kling-4",
+  // Kling 4.0 Flash — the same rule at its own with-video rate.
+  "kling-4-flash",
 ])
 
 /**
@@ -3164,6 +3231,8 @@ export const VIDEO_AUDIO_CAPABILITY: Record<string, VideoAudioCapability> = {
   // dialogue; priced into the per-second rate.
   "kling-4": { mode: "ambient", alwaysOn: true, defaultOn: true },
   "kling-4-keyframes": { mode: "ambient", alwaysOn: true, defaultOn: true },
+  // Kling 4.0 Flash — the same: native audio on both endpoints, no lever.
+  "kling-4-flash": { mode: "ambient", alwaysOn: true, defaultOn: true },
   // Gemini Omni Flash 1.2 — native audio with no on/off input in its schema.
   "gemini-omni-flash-1-2": { mode: "ambient", alwaysOn: true },
   // Gemini Omni (both SKUs — the pro `gemini-omni-video` and the faster
@@ -3337,6 +3406,8 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
   // reference-video rate.
   "kling-4": "duration+resolution+ref",
   "kling-4-keyframes": "duration+resolution",
+  // Kling 4.0 Flash — per-second at 720p, plus the reference-video rate.
+  "kling-4-flash": "duration+resolution+ref",
   // Gemini Omni Flash 1.2 — per-second at four resolution rates; a video edit
   // bills the same rates over the source clip.
   "gemini-omni-flash-1-2": "duration+resolution",
@@ -3459,6 +3530,8 @@ export const PRICING_DEFAULT_RESOLUTION: Record<string, string> = {
   // normalizeKling4Resolution pins the same tier for anything unknown.
   "kling-4": "720p",
   "kling-4-keyframes": "720p",
+  // Kling 4.0 Flash — 720p is its only tier.
+  "kling-4-flash": "720p",
   // Gemini Omni Flash 1.2 — KIE renders 720p when `resolution` is omitted, and
   // the runner sends 720p for anything off its list.
   "gemini-omni-flash-1-2": "720p",
@@ -3520,6 +3593,12 @@ const VIDU_Q4_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = Ar
 /** Kling 4.0 per-second tiers — one per allowed duration (3-30s), both ids. */
 const KLING_4_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = Array.from(
   { length: 28 },
+  (_, i) => ({ maxSeconds: i + 3, suffix: `${i + 3}s` }),
+)
+
+/** Kling 4.0 Flash per-second tiers — one per allowed duration (3-20s). */
+const KLING_4_FLASH_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = Array.from(
+  { length: 18 },
   (_, i) => ({ maxSeconds: i + 3, suffix: `${i + 3}s` }),
 )
 
@@ -3603,6 +3682,7 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
   "vidu-q4": VIDU_Q4_DURATION_TIERS,
   "kling-4": KLING_4_DURATION_TIERS,
   "kling-4-keyframes": KLING_4_DURATION_TIERS,
+  "kling-4-flash": KLING_4_FLASH_DURATION_TIERS,
   "gemini-omni-flash-1-2": GEMINI_OMNI_12_DURATION_TIERS,
   // MiniMax Hailuo 3 — true per-second billing (KIE 36.5 cr/s @2K, 22.5 cr/s
   // @768P). One tier per allowed second (4-15s) so the composite identifier

@@ -5,9 +5,10 @@
  * before anything is reserved) and by the editor (it locks the options it
  * would refuse, with the reason), so the two can never disagree:
  *
- *   1. No Kling (any model of the catalog's Kling series), no Seedance 2.5
- *      (and its HD finalizer), no video upscaling (any `video-upscale` model),
- *      no video extension (any `extend` model).
+ *   1. No Kling (any model of the catalog's Kling series, except the ids in
+ *      `FREE_OPEN_VIDEO_MODELS` — Kling 4.0 Flash, decided 2026-11-11), no
+ *      Seedance 2.5 (and its HD finalizer), no video upscaling (any
+ *      `video-upscale` model), no video extension (any `extend` model).
  *   2. Every other video GENERATION model (an i2v / t2v mode) runs only at its
  *      lowest resolution and at most `maxSeconds` long; a model whose shortest
  *      clip is longer is unavailable, and "Auto" length is refused (it reserves
@@ -40,6 +41,14 @@ export const FREE_VIDEO_LIMITS_DEFAULTS: FreeVideoLimits = { enabled: true, maxS
 export const FREE_BLOCKED_VIDEO_SERIES: readonly string[] = ["Kling"]
 /** Model ids (and their `<id>-…` variants) that are paid-only. */
 export const FREE_BLOCKED_VIDEO_MODELS: readonly string[] = ["seedance-2-5"]
+/**
+ * Model ids open to free credits although their SERIES is paid-only (Kling 4.0
+ * Flash, decided 2026-11-11). Exact ids, never a prefix: a later variant is
+ * judged by its series again. An id here still runs only within rule 2 (the
+ * lowest resolution, at most `maxSeconds`), and a `FREE_BLOCKED_VIDEO_MODELS`
+ * id is never opened by it.
+ */
+export const FREE_OPEN_VIDEO_MODELS: readonly string[] = ["kling-4-flash"]
 
 /** Why an option is locked. `label` is the catalog's model name. */
 export type FreeVideoLock =
@@ -73,8 +82,9 @@ export function freeVideoEntry(provider: string): ModelCatalogEntry | null {
 }
 
 function isBlockedModel(entry: ModelCatalogEntry): boolean {
-  if (entry.series && FREE_BLOCKED_VIDEO_SERIES.includes(entry.series)) return true
-  return FREE_BLOCKED_VIDEO_MODELS.some((id) => entry.id === id || entry.id.startsWith(`${id}-`))
+  if (FREE_BLOCKED_VIDEO_MODELS.some((id) => entry.id === id || entry.id.startsWith(`${id}-`))) return true
+  if (FREE_OPEN_VIDEO_MODELS.includes(entry.id)) return false
+  return !!entry.series && FREE_BLOCKED_VIDEO_SERIES.includes(entry.series)
 }
 
 /**

@@ -211,17 +211,20 @@ export function videoCharacterRefProblem(args: {
   // A provider that counts every material against ONE budget (Kling 4.0: 15
   // images + videos + subjects + voices) takes characters beside a start frame
   // (the frame joins the reference images) — the Gemini Omni unit rules below
-  // do not apply to it.
-  const materials = VIDEO_REF_LIMITS_BY_PROVIDER[provider as string]?.materials
+  // do not apply to it. Where audio rides on the characters as their voices
+  // (`audioBindsToCharacters`, Kling 4.0 Flash), a clip takes no seat.
+  const limits = VIDEO_REF_LIMITS_BY_PROVIDER[provider as string]
+  const materials = limits?.materials
   if (materials !== undefined) {
+    const audioSeats = limits?.audioBindsToCharacters ? 0 : (args.audioCount ?? 0)
     const used =
-      args.imageCount + (args.hasStartFrame ? 1 : 0) + args.videoCount + characterReferences.length + (args.audioCount ?? 0)
+      args.imageCount + (args.hasStartFrame ? 1 : 0) + args.videoCount + characterReferences.length + audioSeats
     if (used > materials) {
       return {
         code: "character_references_quota",
         message:
           `${provider} takes at most ${materials} materials in all — reference images (a start frame counts as one), ` +
-          `reference videos, characters and voices. This request uses ${used}. Remove some.`,
+          `reference videos, characters${limits?.audioBindsToCharacters ? "" : " and voices"}. This request uses ${used}. Remove some.`,
       }
     }
     return videoCharacterVoiceProblem({ provider, characterReferences })

@@ -43,6 +43,7 @@ describe("generate-video-pro node registry", () => {
       "gemini-omni-flash",
       "gemini-omni-flash-1-2",
       "kling-4",
+      "kling-4-flash",
       "grok-i2v",
       "wan-3",
       "wan-3-prime",

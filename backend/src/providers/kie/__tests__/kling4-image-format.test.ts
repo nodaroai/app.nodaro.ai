@@ -42,7 +42,7 @@ function serve(buffer: Buffer) {
 
 const uploaded = () => mocks.uploadBufferToR2.mock.calls.at(-1) as [Buffer, string, string]
 
-describe.each(["kling-4", "kling-4-keyframes"])("%s takes JPG and PNG only", (provider) => {
+describe.each(["kling-4", "kling-4-keyframes", "kling-4-flash"])("%s takes JPG and PNG only", (provider) => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.uploadBufferToR2.mockImplementation(async (_b: Buffer, key: string) => `https://cdn.test/${key}`)

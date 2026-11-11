@@ -22,13 +22,19 @@ const portrait = (over: Partial<VideoCharacterReference> = {}): VideoCharacterRe
 })
 
 describe("character reference capability (data-driven)", () => {
-  it("both Gemini Omni SKUs declare a 3-character cap, Kling 4.0 a 7-subject cap; nothing else does", () => {
+  it("both Gemini Omni SKUs declare a 3-character cap, Kling 4.0 and Kling 4.0 Flash a 7-subject cap; nothing else does", () => {
     expect(VIDEO_REF_LIMITS_BY_PROVIDER["gemini-omni-video"]?.characters).toBe(3)
     expect(VIDEO_REF_LIMITS_BY_PROVIDER["gemini-omni-flash"]?.characters).toBe(3)
     expect(VIDEO_REF_LIMITS_BY_PROVIDER["kling-4"]?.characters).toBe(7)
+    expect(VIDEO_REF_LIMITS_BY_PROVIDER["kling-4-flash"]?.characters).toBe(7)
     const others = Object.entries(VIDEO_REF_LIMITS_BY_PROVIDER)
-      .filter(([id, l]) => !id.startsWith("gemini-omni") && id !== "kling-4" && (l?.characters ?? 0) > 0)
+      .filter(([id, l]) => !id.startsWith("gemini-omni") && id !== "kling-4" && id !== "kling-4-flash" && (l?.characters ?? 0) > 0)
     expect(others).toEqual([])
+  })
+
+  it("only Kling 4.0 Flash binds its audio to the characters", () => {
+    const binders = Object.entries(VIDEO_REF_LIMITS_BY_PROVIDER).filter(([, l]) => l?.audioBindsToCharacters).map(([id]) => id)
+    expect(binders).toEqual(["kling-4-flash"])
   })
 
   it("the wire ceiling is the widest declared cap", () => {
@@ -114,6 +120,18 @@ describe("videoCharacterRefProblem", () => {
     expect(videoCharacterRefProblem({ ...base, imageCount: 3, characterReferences: [withBody, withBody] })).toBeNull()
     expect(videoCharacterRefProblem({ ...base, imageCount: 4, characterReferences: [withBody, withBody] })?.code)
       .toBe("character_references_quota")
+  })
+
+  it("Kling 4.0 counts voice clips in its 15 materials; Flash's clips ride the characters and take no seat", () => {
+    const two = [portrait(), portrait()]
+    // 10 images + 1 start frame + 2 videos + 2 characters = 15.
+    const shape = { imageCount: 10, videoCount: 2, hasStartFrame: true, characterReferences: two }
+    expect(videoCharacterRefProblem({ ...shape, provider: "kling-4", audioCount: 0 })).toBeNull()
+    expect(videoCharacterRefProblem({ ...shape, provider: "kling-4", audioCount: 1 })?.code).toBe("character_references_quota")
+    expect(videoCharacterRefProblem({ ...shape, provider: "kling-4-flash", audioCount: 2 })).toBeNull()
+    const over = videoCharacterRefProblem({ ...shape, provider: "kling-4-flash", imageCount: 11, audioCount: 2 })
+    expect(over?.code).toBe("character_references_quota")
+    expect(over?.message).not.toContain("voices")
   })
 })
 

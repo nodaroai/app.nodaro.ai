@@ -36,6 +36,15 @@ describe("free-credit video locks in the editor", () => {
     expect(lockedVideoModel(LIMITS, "seedance-2-fast")).toBeNull()
   })
 
+  it("Kling 4.0 Flash is the one open Kling model: its 3-4 s at 720p are open, longer is locked", () => {
+    expect(lockedVideoModel(LIMITS, "kling-4-flash")).toBeNull()
+    expect(lockedVideoModel(LIMITS, "kling-4")).not.toBeNull()
+    expect(lockedVideoModel(LIMITS, "kling-4-keyframes")).not.toBeNull()
+    expect(lockedVideoDuration(LIMITS, "kling-4-flash", 4)).toBeNull()
+    expect(lockedVideoDuration(LIMITS, "kling-4-flash", 5)).not.toBeNull()
+    expect(lockedVideoResolution(LIMITS, "kling-4-flash", "720p")).toBeNull()
+  })
+
   it("no limits (the account paid) locks nothing", () => {
     expect(lockedVideoModel(null, "kling-3.0")).toBeNull()
     expect(lockedVideoDuration(null, "seedance-2-fast", 10)).toBeNull()

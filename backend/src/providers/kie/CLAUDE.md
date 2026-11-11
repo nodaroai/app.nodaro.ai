@@ -97,6 +97,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `vidu-q4` | `vidu-q4/image-to-video` (bespoke `runViduQ4`; swaps to `vidu-q4/reference-to-video` — `VIDU_Q4_REFERENCE_MODEL` — when a reference image or audio is wired). No t2v entry: KIE has no Q4 text-to-video. | [vidu q4 i2v](https://docs.kie.ai/market/vidu-q4/image-to-video.md) / [r2v](https://docs.kie.ai/market/vidu-q4/reference-to-video.md) |
 | `kling-4` | `kling-4.0/reference-to-video` (bespoke `runKling4`, body from `kling4.ts`) | [kling 4.0 reference](https://docs.kie.ai/market/kling/v4-reference-to-video.md) |
 | `kling-4-keyframes` | `kling-4.0/keyframe-to-video` (bespoke `runKling4`) | [kling 4.0 keyframe](https://docs.kie.ai/market/kling/v4-keyframe-to-video.md) |
+| `kling-4-flash` | `kling-4.0/flash-reference-to-video` (bespoke `runKling4`; swaps to `kling-4.0/flash-keyframe-to-video` — `KLING_4_FLASH_KEYFRAME_MODEL` — for a start frame alone, see `kling4FlashEndpoint`) | [flash reference](https://docs.kie.ai/market/kling/v4-flash-reference-to-video.md) / [flash keyframe](https://docs.kie.ai/market/kling/v4-flash-keyframe-to-video.md) |
 | `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (via `runGeminiOmni`; the pro sibling's id is the bare `gemini-omni-video`) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
 | `gemini-omni-flash-1-2` | `google/gemini-omni-flash-1-2` (bespoke `runGeminiOmni12`, body from `gemini-omni-12.ts`) | [gemini omni flash 1.2](https://docs.kie.ai/market/google/gemini-omni-flash-1-2.md) |
 | `gemini-omni-video` | `gemini-omni-video` (via `runGeminiOmni`; the pro sibling of flash) | [gemini omni video](https://docs.kie.ai/market/gemini-omni-video.md) |
@@ -127,6 +128,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `wan-3-prime` | `wan/3-0-video-prime` (ONE KIE id serves both modes) | [wan 3.0 prime](https://docs.kie.ai/market/wan/3-0-video-prime.md) |
 | `kling-4` | `kling-4.0/reference-to-video` (ONE KIE id serves both modes) | [kling 4.0 reference](https://docs.kie.ai/market/kling/v4-reference-to-video.md) |
 | `kling-4-keyframes` | `kling-4.0/keyframe-to-video` (ONE KIE id serves both modes) | [kling 4.0 keyframe](https://docs.kie.ai/market/kling/v4-keyframe-to-video.md) |
+| `kling-4-flash` | `kling-4.0/flash-reference-to-video` (text-only runs; the keyframe endpoint needs a start frame) | [flash reference](https://docs.kie.ai/market/kling/v4-flash-reference-to-video.md) |
 | `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (ONE KIE id serves both modes) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
 | `gemini-omni-flash-1-2` | `google/gemini-omni-flash-1-2` (ONE KIE id serves every mode) | [gemini omni flash 1.2](https://docs.kie.ai/market/google/gemini-omni-flash-1-2.md) |
 | `gemini-omni-video` | `gemini-omni-video` (ONE KIE id serves both modes) | [gemini omni video](https://docs.kie.ai/market/gemini-omni-video.md) |
@@ -275,6 +277,57 @@ afterwards (300-65536 px per side, aspect 0.4-2.5, our 2048 px cap).
   reservation and settlement reuse the Seedance machinery
   (`billsReferenceVideoSeconds`, `billedRefVideoSeconds` in
   `ee/billing/seedance2-ref-video-credits.ts`); subjects and voices are free.
+
+### Kling 4.0 Flash wire notes (`kling-4-flash`, bespoke `runKling4`)
+
+ONE Nodaro id over two KIE endpoints, picked by `kling4FlashEndpoint`
+(`kling4.ts`, decided 2026-11-11): a start frame with no reference image, no
+reference video and no character (any character with an image — a one-image
+character becomes a reference image) → `kling-4.0/flash-keyframe-to-video`;
+everything else → `kling-4.0/flash-reference-to-video`. NOT a member of
+`KLING_4_PROVIDERS` (that set's branches carry 1080p, `voices`, the Keyframes
+frame table and Kling 4.0's materials rule); it opts in through
+`isKling4RunnerProvider` (dispatch, UI defaults, provider snap) and
+`isKling4FlashProvider`.
+
+- Both schemas are `additionalProperties: false`: explicit allow-list, INTEGER
+  `duration` 3-20, `resolution` always `720p` (`KLING_4_FLASH_RESOLUTION`,
+  whatever was asked — the only value either schema takes), no seed, no audio
+  lever. `__tests__/kling4-flash.test.ts` holds every body to the schema's
+  property list across a sweep of wiring shapes.
+- **Keyframe body:** `{ prompt, duration, resolution, first_frame_url }` — no
+  `aspect_ratio` (only reached with a frame; the clip takes its shape), no
+  `keyframes`, no `last_frame` (KIE refuses both). `@image_1` is rewritten to
+  `@first_frame`; every other mention loses its `@`. Reference audio has nowhere
+  to go and is dropped with a server-log note.
+- **Reference body:** Kling 4.0's (`buildReference` with `flash`): a start
+  frame joins `image_urls` after the caller's own, subjects are characters with
+  2-4 images (`tag: "character"`), `keep_original_sound` only with videos. NO
+  `voices`: reference audio clip N belongs to WIRED CHARACTER N, in
+  `characterReferences` order (decided 2026-11-11) — that character's
+  `voice_url` when it is a subject (only a `character` subject may carry one);
+  a clip whose character has one image (a plain reference image) or that has
+  no character N is dropped with a server-log note. `@audio_N` is left
+  undeclared so it loses its `@`.
+- **No end frame** on either endpoint: one that reaches the runner is dropped
+  with a note (`dropped the end frame: Kling 4.0 Flash takes none`).
+- Limits: 10 images, 5 videos, 7 subjects, 15 in all — voice clips take no seat
+  (`audioBindsToCharacters` on `VIDEO_REF_LIMITS_BY_PROVIDER`), refused before
+  the reservation by `lib/kling4-inputs.ts` and `videoCharacterRefProblem`.
+  Reference videos 2-20 s each and **2-20 s together** — KIE fails the task at
+  COMPLETION otherwise, so `VIDEO_REF_VIDEO_DURATION_LIMITS["kling-4-flash"]`
+  refuses it in the routes' preHandler and the DAG gate. Reference videos are
+  shrunk to `KLING_4_REF_VIDEO_LIMIT` like Kling 4.0's (unprobed for Flash; the
+  limit is the family's). Images get Kling 4.0's JPEG/PNG-only treatment
+  (`JPEG_PNG_ONLY_PROVIDERS`; the Flash schemas state no format).
+- **Billing:** per second, one ladder for both endpoints (KIE 17 cr/s). With a
+  reference video KIE bills 11.3 cr/s over output + max(output, Σ input
+  seconds) — the Kling 4.0 rule through the same Seedance machinery
+  (`VIDEO_REF_RATE_PROVIDERS`). The `-ref` rows are rounded up to the next 10
+  per row, so the reservation's 8 s anchor (230 ÷ 8 = 28.75 credits/s) is a
+  little above the bare rate — deliberate. `runKling4` reports
+  `KLING_4_FLASH_RATE_USD_PER_SEC` as the provider cost (a reference-video run
+  at the 2 × output floor, as for Kling 4.0). Not yet probed live.
 
 ### Gemini Omni Flash 1.2 wire notes (`gemini-omni-flash-1-2`, bespoke `runGeminiOmni12`)
 

@@ -282,6 +282,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "vidu-q4": "Vidu Q4 — start frame or up to 15 reference images + 3 MP3 audio refs, native audio, 3–16s, 540p–4K (image required)",
     "kling-4": "Kling 4.0 — text, or up to 10 reference images / 5 videos / 7 characters / 3 voices; native audio, 3–30s, 720p/1080p",
     "kling-4-keyframes": "Kling 4.0 Keyframes — start frame, up to 8 in-between frames and an end frame; native audio, 3–30s, 720p/1080p",
+    "kling-4-flash": "Kling 4.0 Flash — text, or up to 10 reference images / 5 videos / 7 characters (a voice clip per character); native audio, 3–20s, 720p",
     "grok-imagine-video-1.5": "Grok Imagine 1.5 — image-to-video only; requires an input image",
   },
   "image-to-video": {
@@ -321,6 +322,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "vidu-q4": "Vidu Q4 — animate a start frame, or direct up to 15 reference images + 3 MP3 audio refs; native audio, 3–16s, 540p–4K",
     "kling-4": "Kling 4.0 — a start frame joins up to 10 reference images, 5 videos, 7 characters and 3 voices; native audio, 3–30s, 720p/1080p",
     "kling-4-keyframes": "Kling 4.0 Keyframes — start frame, up to 8 in-between frames and an end frame; native audio, 3–30s, 720p/1080p",
+    "kling-4-flash": "Kling 4.0 Flash — a start frame alone is the exact opening frame; beside up to 10 reference images, 5 videos and 7 characters it joins them; native audio, 3–20s, 720p",
     "grok-imagine-video-1.5": "Grok Imagine 1.5 — stylized animation, 1–15s, 480p/720p (image required)",
   },
   "video-to-video": {

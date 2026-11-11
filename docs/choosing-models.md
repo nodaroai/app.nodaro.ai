@@ -138,6 +138,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Vidu Q4 | Vidu | Everyday | 209<!-- credits: vidu-q4 --> | i2v | Vidu Q4 — start-frame or reference-driven video (up to 15 reference images + 3 MP3 voice/sound clips), native audio, 3-16s at 540p to 4K. |
 | Hailuo 2.3 Pro | MiniMax | Standard | 220<!-- credits: hailuo-2.3-pro --> | i2v | Hailuo 2.3 Pro — newer Hailuo with 768P / 1080P resolutions. |
 | Wan 3.0 | Alibaba | Standard | 220<!-- credits: wan-3 --> | i2v, t2v | Wan 3.0 — multimodal: first/last frame or image/video/audio references, native audio, 2-30s at 480p/720p/1080p. |
+| Kling 4.0 Flash | Kuaishou | Standard | 242<!-- credits: kling-4-flash --> | i2v, t2v | Kling 4.0 Flash — the faster, lower-cost Kling 4.0 at 720p, up to 20s with native audio; a start frame, reference images, videos and characters (each can carry a voice clip), or plain text. |
 | LTX 2.3 Pro | Lightricks | Standard | 264<!-- credits: ltx-2.3-pro --> | i2v, t2v | Lightricks LTX 2.3 Pro — text/image/audio→video up to 4K, 6/8/10s, end-frame interpolation. |
 | Kling 3 Omni | Kuaishou | Standard | 275<!-- credits: kling-3-omni --> | i2v | Kling 3 Omni via Replicate — 3-15s, 720p/1080p, end frame + reference images, native audio. |
 | Gemini Omni Flash | Google | Standard | 297<!-- credits: gemini-omni-flash --> | i2v, t2v | Google Gemini Omni Flash — faster/cheaper Omni tier: multimodal video with native audio, text/image-to-video + video-edit. |

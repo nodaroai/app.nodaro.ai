@@ -42,4 +42,18 @@ describe("kling4InputProblem", () => {
       expect(kling4InputProblem({ ...k, referenceImageCount: 5, hasStartFrame: true, referenceVideoCount: 5, characterCount: 3, referenceAudioCount: 2 })?.message).toMatch(/at most 15 materials.*16/)
     })
   })
+
+  describe("kling-4-flash — 15 materials, voice clips ride their characters", () => {
+    const f = { ...base, provider: "kling-4-flash" }
+    it("accepts 15 and refuses 16; voice clips and an end frame take no seat", () => {
+      expect(kling4InputProblem({ ...f, referenceImageCount: 6, hasStartFrame: true, referenceVideoCount: 5, characterCount: 3, referenceAudioCount: 7, hasEndFrame: true })).toBeNull()
+      const over = kling4InputProblem({ ...f, referenceImageCount: 7, hasStartFrame: true, referenceVideoCount: 5, characterCount: 3 })
+      expect(over?.code).toBe("validation_error")
+      expect(over?.message).toMatch(/Kling 4\.0 Flash takes at most 15 materials.*16/)
+    })
+    it("has no frame cap of its own: a start frame alone (the keyframe endpoint) and any duration pass", () => {
+      expect(kling4InputProblem({ ...f, hasStartFrame: true, durationSec: 3 })).toBeNull()
+      expect(kling4InputProblem({ ...f, hasStartFrame: true, hasEndFrame: true, durationSec: 20, referenceImageCount: 8 })).toBeNull()
+    })
+  })
 })

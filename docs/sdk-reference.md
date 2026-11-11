@@ -3184,6 +3184,15 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `resolution` `720p` / `1080p` (anything else → 720p); `aspectRatio` `auto` /
 > `16:9` / `9:16` / `1:1` / `21:9`; audio always on; no seed. See
 > [Kling 4.0](nodes/ai-video/generate-video.md#kling-40-references-characters-and-keyframes).
+> **Kling 4.0 Flash** (`kling-4-flash`) takes an `imageUrl` alone as the exact
+> opening frame; anything else (a prompt alone, `referenceImageUrls` ≤ 10,
+> `referenceVideoUrls` ≤ 5 at 2–20 s together, `characterReferences` ≤ 7, or a
+> start frame beside them) runs in reference mode, 15 materials in all.
+> `referenceAudioUrls` clip N (≤ 7) becomes the voice of `characterReferences`
+> entry N; a character needs 2–4 images to carry a voice, otherwise its clip is
+> dropped, as is any clip past the last character. `duration` 3–20 (default 5), 720p only
+> (anything else → 720p), no end frame, no seed, no `audioSoundtrack`. See
+> [Kling 4.0 Flash](nodes/ai-video/generate-video.md#kling-40-flash).
 > **Gemini Omni Flash** (`gemini-omni-flash`) is the cheaper, faster sibling of
 > `gemini-omni-video` on an identical request shape — same 4 / 6 / 8 / 10
 > `duration` menu (8 s when omitted), same 720p / 1080p / 4K tiers, same
@@ -3390,13 +3399,15 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `voice` is `{ preset, description?, exampleLine? }` — `preset` is one of the
 > `GEMINI_OMNI_VOICE_PRESETS` ids exported by `@nodaro/shared`, and pins one voice
 > to that character across clips).
-> Only `gemini-omni-video` / `gemini-omni-flash` and `kling-4` accept them (any
+> Only `gemini-omni-video` / `gemini-omni-flash`, `kling-4` and `kling-4-flash` accept them (any
 > other model answers `400`). On Gemini Omni they cannot be combined with a
 > start frame (`imageUrl`), and they share the model's 7-unit input budget with
 > reference images and a source video (a character is 1 unit, 2 with a
 > `bodyImageUrl`). On `kling-4` (up to 7) each one is a named subject built from
 > `imageUrl`, `bodyImageUrl` and up to 3 `extraImageUrls`, a start frame is
-> allowed, and `voice` is refused. They add no credit charge. Prefer them over
+> allowed, and `voice` is refused; `kling-4-flash` takes them the same way, with
+> `referenceAudioUrls` clip N as entry N's voice when that entry has 2–4 images
+> (otherwise the clip is dropped). They add no credit charge. Prefer them over
 > `referenceImageUrls` whenever the face must hold.
 
 > **Naming an image reference in the prompt.** On

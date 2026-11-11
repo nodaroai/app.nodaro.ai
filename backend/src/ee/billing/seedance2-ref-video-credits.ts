@@ -5,6 +5,8 @@ import {
   isGeminiOmniPerSecondProvider,
   isKling4Provider,
   normalizeKling4Resolution,
+  isKling4FlashProvider,
+  KLING_4_FLASH_RESOLUTION,
   pricedOutputDurationSec,
   supportsAutoVideoDuration,
 } from "@nodaro/shared/models"
@@ -86,12 +88,15 @@ export function seedance2RefVideoBaseCredits(args: {
   // an unsupported tier to the top (last) priced tier — mirrors credit-identifiers.ts.
   // A VIDEO_REF_RATE_PROVIDERS model (Kling 4.0) renders through its own
   // normalizer instead, which collapses an unknown tier to 720p — billed the
-  // same way, so render == billed.
+  // same way, so render == billed. Kling 4.0 Flash renders 720p whatever it is
+  // asked (it has no other tier, and no `1080p-ref` row).
   const supported = MODEL_CATALOG[provider]?.resolutions ?? ["480p", "720p", "1080p"]
   const want = resolution === "4k" ? "4k" : resolution === "1080p" ? "1080p" : resolution === "720p" ? "720p" : "480p"
-  const res = isKling4Provider(provider)
-    ? normalizeKling4Resolution(resolution)
-    : supported.includes(want) ? want : (supported[supported.length - 1] ?? "480p")
+  const res = isKling4FlashProvider(provider)
+    ? KLING_4_FLASH_RESOLUTION
+    : isKling4Provider(provider)
+      ? normalizeKling4Resolution(resolution)
+      : supported.includes(want) ? want : (supported[supported.length - 1] ?? "480p")
 
   const identifier = `${provider}:8s:${res}-ref`
   const composite8s = STATIC_CREDIT_COSTS[identifier]

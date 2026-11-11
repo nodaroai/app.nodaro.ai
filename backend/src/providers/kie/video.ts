@@ -21,7 +21,7 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, supportsAutoVideoDuration, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isViduQ4Provider, normalizeViduQ4Resolution, isKling4Provider, isVeoProvider, videoProviderReferenceSyntax, applyVideoNegativePrompt, applyVideoAudioToggle, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
+import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, supportsAutoVideoDuration, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isViduQ4Provider, normalizeViduQ4Resolution, isKling4RunnerProvider, isVeoProvider, videoProviderReferenceSyntax, applyVideoNegativePrompt, applyVideoAudioToggle, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
 import { VIDEO_DURATION_AUTO, isAutoVideoDuration, getModel, isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION } from "@nodaro/shared/model-catalog"
 import { getLipSyncMaxAudioSeconds } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared/video"
@@ -627,11 +627,13 @@ const JPEG_PNG_WEBP = new Set(["jpeg", "png", "webp"])
 // Providers that only accept JPEG/PNG (no WebP).
 // Kling 2.6 motion control also rejects WebP but its I2V endpoint accepts it.
 // Motion-transfer always goes through this check; I2V only for kling-3.0 and wan-i2v.
-const JPEG_PNG_ONLY_PROVIDERS = new Set(["kling-3.0", "kling-4", "kling-4-keyframes"])
+// Kling 4.0 Flash takes the same treatment as Kling 4.0: its schemas state no
+// image format, so it is held to its family's rule rather than probed.
+const JPEG_PNG_ONLY_PROVIDERS = new Set(["kling-3.0", "kling-4", "kling-4-keyframes", "kling-4-flash"])
 
 // Of those, the ones that get a WebP as a PNG rather than a JPEG: a WebP is
 // already lossy, so a PNG adds no further loss and keeps its transparency.
-const WEBP_AS_PNG_PROVIDERS = new Set(["kling-4", "kling-4-keyframes"])
+const WEBP_AS_PNG_PROVIDERS = new Set(["kling-4", "kling-4-keyframes", "kling-4-flash"])
 
 // Max image file size (10 MB per KIE docs, applies to all models)
 const IMAGE_MAX_BYTES = 10 * 1024 * 1024
@@ -1771,17 +1773,26 @@ const KLING_4_RATE_USD_PER_SEC: Record<"720p" | "1080p", { plain: number; ref: n
 }
 
 /**
- * Kling 4.0 — both ids (`kling-4` reference-to-video, `kling-4-keyframes`
- * keyframe-to-video). The body is built by the pure `buildKling4Request`
- * (kling4.ts), which maps the platform's `@image_N` / `@audio_N` numbering and
- * wired characters onto Kling's names and drops the `@` from any mention the
+ * Kling 4.0 Flash's provider rate (USD/s), the same on both endpoints: 17 KIE
+ * cr/s, and 11.3 cr/s over output + max(output, input) with a reference video
+ * (KIE's price page, read 2026-11-11; $0.005 per KIE credit). Audit /
+ * provider_cost only, with the same reference-video floor as Kling 4.0.
+ */
+const KLING_4_FLASH_RATE_USD_PER_SEC = { plain: 0.085, ref: 0.0565 } as const
+
+/**
+ * Kling 4.0 — every id (`kling-4` reference-to-video, `kling-4-keyframes`
+ * keyframe-to-video, `kling-4-flash` over Flash's two endpoints). The body is
+ * built by the pure `buildKling4Request` (kling4.ts), which maps the
+ * platform's `@image_N` / `@audio_N` numbering and wired characters onto
+ * Kling's names, picks Flash's endpoint, and drops the `@` from any mention the
  * body does not declare (KIE 422s an undeclared one). Images are normalized
  * AFTER the build: the builder matches character seats by the raw URLs.
  */
 async function runKling4(
   modelConfig: KieModelConfig,
   /** OUR Nodaro key (NOT modelConfig.model, the KIE id) for the egress seam. */
-  modelKey: "kling-4" | "kling-4-keyframes",
+  modelKey: "kling-4" | "kling-4-keyframes" | "kling-4-flash",
   prompt: string,
   duration: number | undefined,
   aspectRatioValue: string | undefined,
@@ -1860,7 +1871,7 @@ async function runKling4(
   }
 
   const resolution = input.resolution as "720p" | "1080p"
-  const rate = KLING_4_RATE_USD_PER_SEC[resolution]
+  const rate = modelKey === "kling-4-flash" ? KLING_4_FLASH_RATE_USD_PER_SEC : KLING_4_RATE_USD_PER_SEC[resolution]
   const tierCostUsd = Array.isArray(input.video_urls) ? rate.ref * snapped * 2 : rate.plain * snapped
 
   console.log(`[KIE.ai] ${logLabel} (${model}) input:`, JSON.stringify(input, null, 2))
@@ -2242,7 +2253,7 @@ export class KieVideoProvider
     // integer duration, Kling's own material names. Frames are passed RAW: the
     // runner normalizes every image after the build. MUST stay above the
     // generic createTask path.
-    if (isKling4Provider(provider)) {
+    if (isKling4RunnerProvider(provider)) {
       return runKling4(
         modelConfig,
         provider,
@@ -2682,7 +2693,7 @@ export class KieVideoProvider
     // Kling 4.0 — both endpoints run image-less (reference-to-video with no
     // materials, or with references alone; keyframe-to-video with in-between
     // frames alone or none). Same bespoke runner as the i2v path.
-    if (isKling4Provider(provider)) {
+    if (isKling4RunnerProvider(provider)) {
       return runKling4(
         modelConfig,
         provider,

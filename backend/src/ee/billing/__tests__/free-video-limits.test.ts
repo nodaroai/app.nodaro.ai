@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest"
 import { MODEL_CATALOG, VIDEO_DURATION_AUTO, type ModelCatalogEntry } from "@nodaro/shared/model-catalog"
 import {
+  FREE_OPEN_VIDEO_MODELS,
   FREE_VIDEO_LIMITS_DEFAULTS,
+  freeVideoModelRefusal,
   freeVideoRefusal,
   freeVideoRequestForJob,
   freeVideoRequestOf,
@@ -16,8 +18,8 @@ const ON = FREE_VIDEO_LIMITS_DEFAULTS
 const videos = Object.values(MODEL_CATALOG as Record<string, ModelCatalogEntry>).filter((e) => e.kind === "video")
 
 describe("free-credit video limits — blocked models", () => {
-  it("every Kling model and Seedance 2.5 (and its HD finalizer) is refused, whatever the settings", () => {
-    const blocked = videos.filter((e) => e.series === "Kling" || e.id === "seedance-2-5" || e.id.startsWith("seedance-2-5-"))
+  it("every Kling model but Kling 4.0 Flash, and Seedance 2.5 (and its HD finalizer), is refused, whatever the settings", () => {
+    const blocked = videos.filter((e) => (e.series === "Kling" && e.id !== "kling-4-flash") || e.id === "seedance-2-5" || e.id.startsWith("seedance-2-5-"))
     // The catalog's own Kling series: generation, motion transfer and lip-sync.
     expect(blocked.map((e) => e.id)).toEqual(expect.arrayContaining(["kling", "kling-3.0", "kling-3-omni", "kling-3.0-motion", "kling-avatar", "seedance-2-5", "seedance-2-5-hd"]))
     for (const e of blocked) {
@@ -28,6 +30,28 @@ describe("free-credit video limits — blocked models", () => {
   it("a new Kling SKU is covered by its series, with no list to edit", () => {
     const kling = videos.filter((e) => e.series === "Kling")
     expect(kling.length).toBeGreaterThan(5)
+  })
+
+  it("Kling 4.0 Flash is the one open Kling model (decided 2026-11-11), and only it", () => {
+    expect(FREE_OPEN_VIDEO_MODELS).toEqual(["kling-4-flash"])
+    expect(freeVideoModelRefusal("kling-4-flash", ON)).toBeNull()
+    for (const id of ["kling-4", "kling-4-keyframes", "kling-3.0", "kling"]) {
+      expect(freeVideoModelRefusal(id, ON), id).not.toBeNull()
+    }
+    // Exact ids: no catalog model rides the exception by prefix.
+    expect(videos.filter((e) => e.id.startsWith("kling-4-flash")).map((e) => e.id)).toEqual(["kling-4-flash"])
+  })
+
+  it("Kling 4.0 Flash runs on free credits within the limits: 3-4 s at 720p, its only resolution", () => {
+    expect(freeVideoRefusal({ provider: "kling-4-flash", duration: 3, resolution: "720p" }, ON)).toBeNull()
+    expect(freeVideoRefusal({ provider: "kling-4-flash", duration: 4, resolution: "720p" }, ON)).toBeNull()
+    // An omitted resolution is its billed default, 720p.
+    expect(freeVideoRefusal({ provider: "kling-4-flash", duration: 4 }, ON)).toBeNull()
+    // Past 4 s, or with no length named (its default is 5 s), it is refused like any open model.
+    expect(freeVideoRefusal({ provider: "kling-4-flash", duration: 5, resolution: "720p" }, ON)).not.toBeNull()
+    expect(freeVideoRefusal({ provider: "kling-4-flash", resolution: "720p" }, ON)).not.toBeNull()
+    // The workflow lane reads the same rule from the node payload.
+    expect(freeVideoRefusal(freeVideoRequestOf({ provider: "kling-4-flash", duration: 4, resolution: "720p" })!, ON)).toBeNull()
   })
 
   it("the trigger case: two 7-second 1080p Kling 3.0 clips", () => {

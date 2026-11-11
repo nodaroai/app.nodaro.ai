@@ -291,8 +291,10 @@ export interface ModelCatalogEntryFields {
    * `"voice-references"` (video models only) means the model takes each
    * reference AUDIO clip as a VOICE sample — who speaks and how they sound —
    * and makes its own soundtrack, rather than conditioning on the audio itself
-   * (Kling 4.0: KIE `voices`, `@VoiceN` in the prompt). The editor names that
-   * input "Voice Refs" for such a model.
+   * (Kling 4.0: KIE `voices`, `@VoiceN` in the prompt; Kling 4.0 Flash: each
+   * clip is a wired character's voice, KIE `elements[].voice_url` — see
+   * `audioBindsToCharacters`). The editor names that input "Voice Refs" for
+   * such a model.
    *
    * `"audio-soundtrack"` (video models only) means the platform can play the
    * model's FIRST reference audio clip as the result's soundtrack: it sends
@@ -2404,6 +2406,49 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "kling-4-keyframes:5s:1080p", credits: 540, note: "5s 1080p" },
       { identifier: "kling-4-keyframes:3s:720p", credits: 220, note: "3s 720p (min)" },
       { identifier: "kling-4-keyframes:30s:1080p", credits: 3190, note: "30s 1080p (max)" },
+    ],
+  },
+  // Kling 4.0 Flash — ONE id over KIE's two Flash endpoints, picked by what is
+  // wired (backend kie/kling4.ts): a start frame alone runs on
+  // docs.kie.ai/market/kling/v4-flash-keyframe-to-video, where it is the exact
+  // opening frame; everything else (text, reference images, videos,
+  // characters, or a start frame beside any of them) runs on
+  // docs.kie.ai/market/kling/v4-flash-reference-to-video, where a start frame
+  // joins the reference images as on kling-4. Reference: up to 10 images, 5
+  // videos (2-20s together) and 7 characters (15 in all). No standalone voices:
+  // audio clip N becomes wired character N's voice when that character has 2-4
+  // images (otherwise the clip is dropped). No end
+  // frame, no 1080p, no seed. 3-20s, 720p, native audio always on. Per-second
+  // billing; a reference-video run bills its input seconds too.
+  "kling-4-flash": {
+    id: "kling-4-flash",
+    kind: "video",
+    modes: ["i2v", "t2v"] as const,
+    family: "Kuaishou",
+    maker: "kuaishou",
+    label: "Kling 4.0 Flash",
+    series: "Kling",
+    description: "Kling 4.0 Flash — the faster, lower-cost Kling 4.0 at 720p, up to 20s with native audio; a start frame, reference images, videos and characters (each can carry a voice clip), or plain text.",
+    useCases: ["fast", "cheap", "narrative", "reference"],
+    // No `voices` array on Flash: a reference audio clip is a character's voice
+    // (`voice-references` names that input "Voice Refs"). No `audio-soundtrack`
+    // (the clips are voices, never a soundtrack), no `end-frame`, no
+    // `video-reference` (the generate-video-pro extend chain is unwired, as on
+    // kling-4).
+    features: ["audio", "reference-image", "reference-to-video", "character-subjects", "voice-references"],
+    aspectRatios: VIDEO_RATIOS_KLING_4,
+    durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+    defaultDuration: 5,
+    resolutions: ["720p"],
+    unlistedResolutionRendersAs: "720p",
+    noSeed: true,  // neither Flash schema has a `seed` (additionalProperties: false)
+    pricing: [
+      { identifier: "kling-4-flash", credits: 220, note: "default 5s 720p — see :Ns:720p variants for exact" },
+      { identifier: "kling-4-flash:5s:720p", credits: 220, note: "5s 720p (the default tier)" },
+      { identifier: "kling-4-flash:3s:720p", credits: 130, note: "3s 720p (min)" },
+      { identifier: "kling-4-flash:10s:720p", credits: 430, note: "10s 720p" },
+      { identifier: "kling-4-flash:20s:720p", credits: 850, note: "20s 720p (max)" },
+      { identifier: "kling-4-flash:8s:720p-ref", credits: 230, note: "per-second anchor with a reference video: billed × (output + max(output, input seconds)) ÷ 8" },
     ],
   },
 

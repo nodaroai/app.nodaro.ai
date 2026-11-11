@@ -15,7 +15,7 @@ import {
   isGeminiOmniPerSecondProvider,
   isWan3Provider,
   isViduQ4Provider,
-  isKling4Provider,
+  isKling4RunnerProvider,
   supportsAutoVideoDuration,
   videoSourceTrimMaxSec,
 } from "@nodaro/shared/models"
@@ -119,8 +119,8 @@ export function generateVideoProviderSnap(
     // path fills for an untouched node.
     if (data.aspectRatio == null) updates.aspectRatio = "adaptive"
   }
-  if (isViduQ4Provider(provider) || isKling4Provider(provider) || isGeminiOmniPerSecondProvider(provider)) {
-    // Same rule as Wan 3.0 (Vidu Q4, Kling 4.0, Omni Flash 1.2): the bare credit identifier is a declared
+  if (isViduQ4Provider(provider) || isKling4RunnerProvider(provider) || isGeminiOmniPerSecondProvider(provider)) {
+    // Same rule as Wan 3.0 (Vidu Q4, Kling 4.0 and its Flash tier, Omni Flash 1.2): the bare credit identifier is a declared
     // duration @ 720p tier while the catalog ladders start lower (3s / 360p, 540p), so persist the declared
     // defaults rather than `opts[0]`. No aspect fill — a frame run takes the
     // frame's shape and a reference run defaults to 16:9.

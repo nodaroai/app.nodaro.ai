@@ -198,7 +198,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Reference videos for style/motion transfer, capped at the model's own limit " +
-            "(seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime / kling-4 5, " +
+            "(seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime / kling-4(-flash) 5, " +
             "gemini-omni-video / gemini-omni-flash / gemini-omni-flash-1-2 1). Wan 3.0 takes each clip at 1-15s and " +
             "≤15s combined, and input video seconds + output duration must stay ≤30s. " +
             "Dropped on models without video-reference support.",
@@ -215,13 +215,13 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Reference audio, capped per model (seedance-2-5 10; seedance-2 family, minimax-h3 3; " +
-            "wan-3 5, 1-15s each, ≤15s total; kling-4 3, clip 1 = soundtrack); else dropped.",
+            "wan-3 5, 1-15s each, ≤15s total; kling-4 3, clip 1 = soundtrack; kling-4-flash 7, clip N = character N's voice if it has 2-4 images); else dropped.",
           ),
         character_references: z
           .array(z.object({
             image_url: z.string(),
             body_image_url: z.string().optional(),
-            extra_image_urls: z.array(z.string()).max(VIDEO_CHARACTER_EXTRA_IMAGES_MAX).optional().describe("kling-4: more views (2-4 per subject)."),
+            extra_image_urls: z.array(z.string()).max(VIDEO_CHARACTER_EXTRA_IMAGES_MAX).optional().describe("kling-4(-flash): more views (2-4 per subject)."),
             description: z.string(),
             name: z.string().optional(),
             voice_preset: z.string().optional().describe("Gemini voice id (e.g. kore): pins this character's voice."),
@@ -231,7 +231,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .describe(
             `Keeps a person's face (${videoCharacterRefProviders().join(" / ")} only); see docs/nodes/ai-video/generate-video.md.`,
           ),
-        keep_original_sound: z.boolean().optional().describe("kling-4: keep ref videos' sound."),
+        keep_original_sound: z.boolean().optional().describe("kling-4(-flash): keep ref videos' sound."),
         audio_soundtrack: z.boolean().optional().describe("kling-4: false = every audio clip a voice, no soundtrack."),
       },
               outputSchema: {

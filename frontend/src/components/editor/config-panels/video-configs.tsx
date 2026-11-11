@@ -59,7 +59,7 @@ import {
 import { TOPAZ_VIDEO_FPS_CHOICES, TOPAZ_VIDEO_RESOLUTIONS, clampTopazVideoFps, isTopazVideoResolution, type TopazVideoResolution } from "@nodaro/shared/models"
 import { TOPAZ_VIDEO_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
 import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
-import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, kling4KeyframeFrameCap, KLING_4_MAX_MIDDLE_FRAMES, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
+import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, KLING_4_MAX_MIDDLE_FRAMES, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
 import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, videoSourceTrimMaxSec } from "@nodaro/shared/models"
 import { buildVideoCreditModelIdentifier, VIDEO_AUDIT_BUCKET_CREDITS } from "@nodaro/shared/credits"
 import { characterMentionSlug, characterMentionableAssetArrays, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared/entities"
@@ -2977,6 +2977,9 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
   const isWan3 = isWan3Provider(currentProvider)
   const isViduQ4 = isViduQ4Provider(currentProvider)
   const isKling4 = isKling4Provider(currentProvider)
+  // Kling 4.0 Flash shares the Kling 4.0 block below (720p only, no frames
+  // past the start, no 1080p) — never a member of the Kling 4.0 family set.
+  const isKling4Flash = isKling4FlashProvider(currentProvider)
   // Kling 4.0 Keyframes: Image References are in-between FRAMES (catalog
   // feature `keyframes`), capped by the clip's length.
   const isKeyframesModel = isKling4 && hasFeature(currentProvider, "keyframes")
@@ -3102,6 +3105,13 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
   const keyframeCap = kling4KeyframeFrameCap(keyframeSeconds)
   const keyframeEnds = (connectedImages.some((i) => i.targetHandle === "startFrame") ? 1 : 0) + (hasEndFrame ? 1 : 0)
   const keyframeUsed = keyframeEnds + connectedRefImages.length
+  // Kling 4.0 Flash runs a start frame ALONE on its keyframe endpoint (the
+  // frame is the exact opening frame and the clip takes its shape); anything
+  // beside it — a reference image or video, a character — takes the reference
+  // endpoint, where the ratio applies (backend kie/kling4.ts kling4FlashEndpoint).
+  const flashStartFrameOnly = isKling4Flash
+    && connectedImages.some((i) => i.targetHandle === "startFrame")
+    && connectedRefImages.length === 0 && connectedRefVideos.length === 0 && !connectedCharacter
 
   const maxRefImages = isGeminiOmni
     ? Math.max(0, Math.min(refCaps?.images ?? 7, 7 - geminiVideoCount * 2) - (geminiHasStartFrame ? 1 : 0) - (geminiHasEndFrame ? 1 : 0))
@@ -3902,11 +3912,12 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         </>
       )}
 
-      {isKling4 && (
+      {(isKling4 || isKling4Flash) && (
         <>
-          {/* Resolution — catalog-driven (720p / 1080p). The displayed default
-              is 720p (uiResolutionFill): the tier the bare credit identifier,
-              the fail-safe persist above and `runKling4` all default to. */}
+          {/* Resolution — catalog-driven (720p / 1080p; Flash 720p only). The
+              displayed default is 720p (uiResolutionFill): the tier the bare
+              credit identifier, the fail-safe persist above and `runKling4` all
+              default to. */}
           {(() => {
             const opts = getVideoResolutionOptions(currentProvider)
             return opts && opts.length > 0 ? (
@@ -3927,7 +3938,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           })()}
           {/* Keyframes follows the start frame's shape once any frame is
               attached, so the ratio is offered only for a frameless run. */}
-          {!(isKeyframesModel && keyframeUsed > 0) && (
+          {!(isKeyframesModel && keyframeUsed > 0) && !flashStartFrameOnly && (
             <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
               <AspectRatioSelector
                 options={getAspectRatiosForVideoModel(currentProvider)}
@@ -3948,7 +3959,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               <label htmlFor="gv-kling4KeepSound" className="text-xs">{t("vidcfg.keepOriginalSound")}</label>
             </div>
           )}
-          <p className="text-[11px] text-muted-foreground px-1">{t(isKeyframesModel ? "vidcfg.kling4KeyframesNote" : "vidcfg.kling4Note")}</p>
+          <p className="text-[11px] text-muted-foreground px-1">{t(isKeyframesModel ? "vidcfg.kling4KeyframesNote" : isKling4Flash ? "vidcfg.kling4FlashNote" : "vidcfg.kling4Note")}</p>
         </>
       )}
 

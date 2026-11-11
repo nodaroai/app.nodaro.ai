@@ -28,6 +28,8 @@ import {
   isViduQ4Provider,
   isKling4Provider,
   normalizeKling4Resolution,
+  isKling4FlashProvider,
+  KLING_4_FLASH_RESOLUTION,
   VIDEO_REF_RATE_PROVIDERS,
   normalizeMinimaxH3Resolution,
   normalizeWan3Resolution,
@@ -464,6 +466,8 @@ function wireNormalizedResolution(provider: string, resolution: string | undefin
   if (isWan3Provider(provider)) return normalizeWan3Resolution(resolution).toLowerCase()
   if (isViduQ4Provider(provider)) return normalizeViduQ4Resolution(resolution)
   if (isKling4Provider(provider)) return normalizeKling4Resolution(resolution)
+  // Kling 4.0 Flash renders 720p whatever it is asked (its runner sends 720p).
+  if (isKling4FlashProvider(provider)) return KLING_4_FLASH_RESOLUTION
   return resolution
 }
 

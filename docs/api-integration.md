@@ -1081,7 +1081,7 @@ Three video-specific rules:
 
 A few models **ignore** an unsupported resolution and render a fixed default
 instead of the nearest band — `minimax-h3` renders 2K for anything that is not
-`768P`, and the `wan-3` family, `vidu-q4` and `kling-4` / `kling-4-keyframes` render 720p (all described under
+`768P`, and the `wan-3` family, `vidu-q4` and `kling-4` / `kling-4-keyframes` / `kling-4-flash` render 720p (all described under
 [Seedance 2 video capabilities](#seedance-2-video-capabilities)).
 For those the correction targets the band the provider will actually produce, so
 the price still matches the render. Each such model declares this in the catalog
@@ -2901,6 +2901,32 @@ so a value the model doesn't support is ignored, never a 400:
   always on (`sound` is ignored); no `seed`; `prompt` up to 8,000 characters.
   Priced per second on one ladder per resolution. Not available on the free
   tier.
+- **`kling-4-flash`** (Kling 4.0 Flash) is one id over two provider
+  endpoints, picked by what is sent: an `imageUrl` with no
+  `referenceImageUrls`, no `referenceVideoUrls` and no `characterReferences`
+  is the **exact opening frame** (`aspectRatio` is not used; the prompt names
+  the frame `@first_frame`); anything else — a prompt alone, references,
+  characters, or a start frame beside them — runs in reference mode, where an
+  `imageUrl` joins the reference images after your own, as on `kling-4`.
+  Reference mode takes `referenceImageUrls` (≤ 10), `referenceVideoUrls` (≤ 5,
+  **2–20 s together** — a set outside that is a `400` before anything is
+  reserved) and `characterReferences` (≤ 7 named subjects, as on `kling-4`),
+  **at most 15 materials in all**. There are no standalone voices:
+  `referenceAudioUrls` clip N (≤ 7) becomes the voice of `characterReferences`
+  entry N, in order. A character needs 2–4 images to carry a voice: a clip
+  whose character has one image, and any clip past the last character, is
+  dropped (the run still starts). A clip takes no material seat, and an
+  `@audio_N` mention has its `@` removed. `keepOriginalSound` works as on
+  `kling-4`; there is no `audioSoundtrack`. `duration` 3–20 (default 5);
+  **720p only** — any `resolution` renders and bills 720p; `aspectRatio` as on
+  `kling-4`; native audio always on; no `seed`; `prompt` up to 8,000
+  characters. **No end frame:** an `endFrameUrl` beside an `imageUrl` or
+  references is not sent to the model, and an `endFrameUrl` alone on
+  `POST /v1/generate-video` is a `400` (`imageUrl is required`). Priced per
+  second, one ladder for both endpoints; a reference-video run bills
+  **output + max(output, total reference-video seconds)** at its `-ref` rate.
+  Unlike the other Kling models it runs on free credits, as a 3 or 4 second
+  clip.
 - **`gemini-omni-flash`** takes exactly the same fields as
   `gemini-omni-video` on the same 720p / 1080p / 4K tiers, the same 4 / 6 / 8 /
   10 `duration` menu (an omitted duration renders and bills as 8 s), the same
@@ -2927,9 +2953,9 @@ so a value the model doesn't support is ignored, never a 400:
   `-ref` rate (see the [Generate Video node](nodes/ai-video/generate-video.md)
   for the live per-resolution rates) by the input-video duration plus the
   output duration, so longer source clips reserve proportionally more credits.
-  `kling-4` counts the input differently: it bills output + max(output, total
-  reference-video seconds), so a clip shorter than the output counts as the
-  output's length.
+  `kling-4` and `kling-4-flash` count the input differently: they bill output +
+  max(output, total reference-video seconds), so a clip shorter than the output
+  counts as the output's length.
 
 ### `{image:N}` tokens on the image routes
 
@@ -3133,9 +3159,9 @@ IS, for this run only:
   references that actually ship, so a caption can never bind a slot the payload
   dropped. Leave an entry blank to skip it without breaking the alignment.
 - **`characterReferences` (`POST /v1/generate-video` and `POST /v1/text-to-video`,
-  up to 3 on Gemini Omni, 7 on Kling 4.0).** Identity inputs that keep a real person's face on models with a
+  up to 3 on Gemini Omni, 7 on Kling 4.0 and Kling 4.0 Flash).** Identity inputs that keep a real person's face on models with a
   dedicated character channel — today `gemini-omni-video`,
-  `gemini-omni-flash` and `kling-4`. Each entry is `{ imageUrl, description, bodyImageUrl?,
+  `gemini-omni-flash`, `kling-4` and `kling-4-flash`. Each entry is `{ imageUrl, description, bodyImageUrl?,
   extraImageUrls?, name?, voice? }`: a portrait URL, a description of the person (appearance, clothing,
   style; ≤ 2000 chars), an optional full-body image and an optional name (≤ 100
   chars). Unlike `referenceImageUrls`, which a multimodal model treats as loose
@@ -3158,6 +3184,10 @@ IS, for this run only:
   15-material budget rather than the 7-unit one. A `voice` is refused there
   (`400` `character_voice_unsupported`) — send voice clips as
   `referenceAudioUrls`. See [Kling 4.0](nodes/ai-video/generate-video.md#kling-40-references-characters-and-keyframes).
+  `kling-4-flash` takes them the same way, and `referenceAudioUrls` clip N
+  becomes entry N's voice when that entry has 2–4 images (otherwise the clip is
+  dropped) — see
+  [Kling 4.0 Flash](nodes/ai-video/generate-video.md#kling-40-flash).
 
 ### Naming an image reference in the prompt (`@<name-slug>:<index>[:<role>]`)
 
@@ -4557,7 +4587,7 @@ Send `{}` (no draft) for the lowest price any draft can finalize for, returned w
 
 ### Seedance reference-video estimates
 
-`POST /v1/credits/seedance-ref-estimate` returns the credits a Seedance 2 or Kling 4.0 generation with reference video(s) reserves (`seedance-2`, `seedance-2-fast`, `seedance-2-mini`, `seedance-2-5`, `kling-4`) — Generate Video with reference videos wired, or Video to Video's Seedance 2.5 Edit lane, whose source clip is reference video 1. Such a run is billed for the reference clips' seconds plus the output seconds (on `kling-4`, the output plus the longer of the output and the clips), so the price depends on the clips' real lengths: the server measures them and prices them exactly as the run's reservation does. It reads prices without creating a job or reserving credits. Cloud only; requires authentication; rate-limited to 60 requests a minute.
+`POST /v1/credits/seedance-ref-estimate` returns the credits a Seedance 2 or Kling 4.0 generation with reference video(s) reserves (`seedance-2`, `seedance-2-fast`, `seedance-2-mini`, `seedance-2-5`, `kling-4`, `kling-4-flash`) — Generate Video with reference videos wired, or Video to Video's Seedance 2.5 Edit lane, whose source clip is reference video 1. Such a run is billed for the reference clips' seconds plus the output seconds (on `kling-4` and `kling-4-flash`, the output plus the longer of the output and the clips), so the price depends on the clips' real lengths: the server measures them and prices them exactly as the run's reservation does. It reads prices without creating a job or reserving credits. Cloud only; requires authentication; rate-limited to 60 requests a minute.
 
 ```json
 {"provider":"seedance-2-5","resolution":"720p","duration":8,"referenceVideoUrls":["https://…/clip.mp4"]}
@@ -4565,7 +4595,7 @@ Send `{}` (no draft) for the lowest price any draft can finalize for, returned w
 
 | Field | Type | Meaning |
 |---|---|---|
-| `provider` | string | A Seedance 2 model or `kling-4`. Any other model is a `400 validation_error` whose message names the models that qualify (Seedance 2, Kling 4.0). |
+| `provider` | string | A Seedance 2 model, `kling-4` or `kling-4-flash`. Any other model is a `400 validation_error` whose message names the models that qualify (Seedance 2, Kling 4.0, Kling 4.0 Flash). |
 | `resolution` | string? | As the run sends it; omitted = the model's default. |
 | `duration` | number? | Output seconds; `-1` = Auto, priced as the run reserves it: the first clip's length rounded up to a whole second plus one second (never above the model's longest clip), or the model's longest clip while a clip is unmeasured or unknown. Omitted = the model's default. |
 | `draft` | boolean? | Seedance 2.5 Draft: priced at 480p. |

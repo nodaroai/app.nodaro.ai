@@ -722,6 +722,7 @@ const MODEL_DESCRIPTIONS_HE: Record<string, string> = {
   "ShengShu Vidu Q4, 3\u201316s, 540p\u20134K, native audio (image required)": "ShengShu Vidu Q4, 3–16 שניות, 540p–4K, אודיו מובנה (נדרשת תמונה)",
   "Kuaishou Kling 4.0, 3\u201330s, 720p/1080p, native audio, image/video/character/voice refs": "Kuaishou Kling 4.0, 3–30 שניות, 720p/1080p, אודיו מובנה, ייחוסי תמונה/וידאו/דמות/קול",
   "Kuaishou Kling 4.0, 3\u201330s, start + up to 8 in-between + end frames, native audio": "Kuaishou Kling 4.0, 3–30 שניות, פריים פתיחה + עד 8 פריימים באמצע + פריים סיום, אודיו מובנה",
+  "Kuaishou Kling 4.0 Flash, 3\u201320s, 720p, native audio, start frame or image/video/character refs, voice per character": "Kuaishou Kling 4.0 Flash, 3–20 שניות, 720p, אודיו מובנה, פריים פתיחה או ייחוסי תמונה/וידאו/דמות, קול לכל דמות",
   "Higher detail, production images": "יותר פרטים, תמונות לפרודקשן",
   "Higher detail, production-ready images": "יותר פרטים, תמונות מוכנות לפרודקשן",
   "Higher quality Bytedance": "Bytedance באיכות גבוהה יותר",

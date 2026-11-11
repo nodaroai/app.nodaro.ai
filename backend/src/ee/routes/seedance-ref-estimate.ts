@@ -83,7 +83,7 @@ export function registerSeedanceRefEstimate(app: FastifyInstance): void {
     const { provider, resolution, duration, draft, referenceVideoUrls } = parsed.data
     const unknownClips = parsed.data.unknownReferenceVideos ?? 0
     if (!billsReferenceVideoSeconds(provider)) {
-      return reply.status(400).send({ error: { code: "validation_error", message: `"${provider}" is not a model whose price follows its reference clips (Seedance 2, Kling 4.0, Gemini Omni Flash 1.2).` } })
+      return reply.status(400).send({ error: { code: "validation_error", message: `"${provider}" is not a model whose price follows its reference clips (Seedance 2, Kling 4.0, Kling 4.0 Flash, Gemini Omni Flash 1.2).` } })
     }
     const soundtrack = parsed.data.soundtrackAudioUrl !== undefined || parsed.data.unknownSoundtrack === true
     if (referenceVideoUrls.length + unknownClips === 0 && !soundtrack) {

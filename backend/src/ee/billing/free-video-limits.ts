@@ -16,6 +16,7 @@ import {
 export {
   FREE_BLOCKED_VIDEO_MODELS,
   FREE_BLOCKED_VIDEO_SERIES,
+  FREE_OPEN_VIDEO_MODELS,
   FREE_VIDEO_LIMITS_DEFAULTS,
   lowestResolution,
   resolutionHeight,

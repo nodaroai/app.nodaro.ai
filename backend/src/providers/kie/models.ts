@@ -58,6 +58,14 @@ export const VIDU_Q4_REFERENCE_MODEL = "vidu-q4/reference-to-video"
 export const KLING_4_REFERENCE_MODEL = "kling-4.0/reference-to-video"
 export const KLING_4_KEYFRAME_MODEL = "kling-4.0/keyframe-to-video"
 
+/** Kling 4.0 Flash's two KIE endpoints under ONE Nodaro id (`kling-4-flash`):
+ *  the config's own model is the reference endpoint, and the request builder
+ *  (kling4.ts) swaps to the keyframe endpoint for a start frame alone. Exported
+ *  so every reverse map of KIE ids (the admin credit audit) resolves both back
+ *  to `kling-4-flash`. */
+export const KLING_4_FLASH_REFERENCE_MODEL = "kling-4.0/flash-reference-to-video"
+export const KLING_4_FLASH_KEYFRAME_MODEL = "kling-4.0/flash-keyframe-to-video"
+
 export interface KieModelConfig {
   model: string           // KIE.ai model identifier
   cost: number            // Cost in USD per generation
@@ -1452,6 +1460,25 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
   },
 
+  // Kling 4.0 Flash — ONE Nodaro id over two KIE endpoints, registered in BOTH
+  // maps (both endpoints also run with no image). Dispatched through the same
+  // bespoke `runKling4` (bodies built by kling4.ts, which picks the endpoint:
+  // keyframe-to-video for a start frame alone, reference-to-video otherwise).
+  // Both schemas are `additionalProperties: false` with an INTEGER duration, so
+  // the generic builder never runs and these configs carry no extraParams.
+  // 3-20s, 720p only, native audio always on (no lever), no seed, no end frame.
+  // `credits`/`cost` are the KIE-side default tier (5s @720p: 17 KIE cr/s) for
+  // audit logging only; runKling4 reports the per-tier cost.
+  // See: docs.kie.ai/market/kling/v4-flash-reference-to-video.md + v4-flash-keyframe-to-video.md
+  "kling-4-flash": {
+    model: KLING_4_FLASH_REFERENCE_MODEL,
+    credits: 85,
+    cost: 0.425,
+    omitSeed: true,
+    acceptsResolution: true,  // `resolution` 720p (both Flash schemas; the only value)
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+  },
+
   // Wan 3.0 Prime — KIE's HIGH-SPEED Wan 3.0 tier (faster turnaround at a higher
   // per-second rate, NOT a higher-quality tier). Identical request surface to
   // wan-3; same bespoke runWan3 dispatch and the same declarative-only
@@ -1784,6 +1811,18 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     omitSeed: true,
     acceptsResolution: true,  // `resolution` 720p | 1080p (both Kling 4.0 schemas)
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+  },
+
+  // Kling 4.0 Flash — the t2v twin of the i2v entry (same id, same bespoke
+  // runKling4). Text-only runs take the reference endpoint with no materials.
+  // `credits`/`cost`: 5s @720p at 17 KIE cr/s, audit logging only.
+  "kling-4-flash": {
+    model: KLING_4_FLASH_REFERENCE_MODEL,
+    credits: 85,
+    cost: 0.425,
+    omitSeed: true,
+    acceptsResolution: true,  // `resolution` 720p (both Flash schemas; the only value)
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
   },
 
   // Wan 3.0 Prime T2V — the high-speed tier (faster, higher per-second rate).

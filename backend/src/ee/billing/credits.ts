@@ -1439,6 +1439,26 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "kling-4-keyframes:18s:1080p": 1920, "kling-4-keyframes:19s:1080p": 2020, "kling-4-keyframes:20s:1080p": 2130, "kling-4-keyframes:21s:1080p": 2240, "kling-4-keyframes:22s:1080p": 2340,
   "kling-4-keyframes:23s:1080p": 2450, "kling-4-keyframes:24s:1080p": 2550, "kling-4-keyframes:25s:1080p": 2660, "kling-4-keyframes:26s:1080p": 2770, "kling-4-keyframes:27s:1080p": 2870,
   "kling-4-keyframes:28s:1080p": 2980, "kling-4-keyframes:29s:1080p": 3090, "kling-4-keyframes:30s:1080p": 3190,
+  // ── Kling 4.0 Flash (KIE kling-4.0/flash-reference-to-video + flash-keyframe-to-video) ──
+  //    ONE id over both endpoints (picked by what is wired), ONE ROW PER SECOND
+  //    across 3-20s at 720p (its only tier): credits = KIE cr/s × seconds × 2.5,
+  //    rounded UP to the next 10 (the Kling 4.0 rule). KIE cr/s: 17 on both
+  //    endpoints. `-ref` rows for a run with a reference VIDEO, from KIE's
+  //    with-video rate (11.3 cr/s): they price one second of BILLED duration —
+  //    the reservation scales the 8s row ÷ 8 by output + max(output, input
+  //    seconds) (ee/billing/seedance2-ref-video-credits.ts). The rounded 8s row
+  //    (230) is deliberate. The bare id is the DEFAULT render (5s @ 720p).
+  //    Audio is always on and priced in. Machine-generated with its seed
+  //    migration (`*_kling_4_flash_pricing.sql`) — never edit one value by hand.
+  "kling-4-flash": 220,   // (5s 720p default render)
+  "kling-4-flash:3s:720p": 130, "kling-4-flash:4s:720p": 170, "kling-4-flash:5s:720p": 220, "kling-4-flash:6s:720p": 260, "kling-4-flash:7s:720p": 300,
+  "kling-4-flash:8s:720p": 340, "kling-4-flash:9s:720p": 390, "kling-4-flash:10s:720p": 430, "kling-4-flash:11s:720p": 470, "kling-4-flash:12s:720p": 510,
+  "kling-4-flash:13s:720p": 560, "kling-4-flash:14s:720p": 600, "kling-4-flash:15s:720p": 640, "kling-4-flash:16s:720p": 680, "kling-4-flash:17s:720p": 730,
+  "kling-4-flash:18s:720p": 770, "kling-4-flash:19s:720p": 810, "kling-4-flash:20s:720p": 850,
+  "kling-4-flash:3s:720p-ref": 90, "kling-4-flash:4s:720p-ref": 120, "kling-4-flash:5s:720p-ref": 150, "kling-4-flash:6s:720p-ref": 170, "kling-4-flash:7s:720p-ref": 200,
+  "kling-4-flash:8s:720p-ref": 230, "kling-4-flash:9s:720p-ref": 260, "kling-4-flash:10s:720p-ref": 290, "kling-4-flash:11s:720p-ref": 320, "kling-4-flash:12s:720p-ref": 340,
+  "kling-4-flash:13s:720p-ref": 370, "kling-4-flash:14s:720p-ref": 400, "kling-4-flash:15s:720p-ref": 430, "kling-4-flash:16s:720p-ref": 460, "kling-4-flash:17s:720p-ref": 490,
+  "kling-4-flash:18s:720p-ref": 510, "kling-4-flash:19s:720p-ref": 540, "kling-4-flash:20s:720p-ref": 570,
   "wan-i2v": 175,                 // (5s 720p fallback)
   // Wan I2V duration-tiered pricing (720p default)
   "wan-i2v:5s": 180,
@@ -3680,7 +3700,7 @@ export class CreditsService {
     }
 
     // An account that never paid generates video only within the free limits:
-    // no Kling, Seedance 2.5, upscaling or extension, the lowest resolution, a
+    // no Kling (Kling 4.0 Flash aside), Seedance 2.5, upscaling or extension, the lowest resolution, a
     // short clip (free-video-limits.ts). Anyone who ever bought credits or a
     // plan is not limited (owner decisions 2026-10-14) — the effective tier,
     // and, for a stored-free account, a purchase on record (a cancelled
