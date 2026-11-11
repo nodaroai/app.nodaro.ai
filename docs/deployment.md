@@ -1470,9 +1470,10 @@ editor — the shared header, its worlds and their pickers — which read
 `/config.js` through the published `@nodaro/shared/runtime-config` contract.
 Each is **absent unless you set it**, so `/config.js` stays exactly as it was
 until you do, and an absent key keeps today's behaviour. **The platform does
-not enforce them itself yet**, with one exception: `imports.links: false` is
-enforced by the server (below). The editor itself reads `header` and the keys of
-its white-label header (below). A malformed value of a key that limits what
+not enforce them itself yet**, with two exceptions: `imports.links: false` is
+enforced by the server, and `catalogs.images` is applied by the API and the
+editor (both below). The editor itself reads `header` and the keys of its
+white-label header (below). A malformed value of a key that limits what
 visitors can do falls to its restrictive side, with a warning; a malformed
 logo is dropped with a warning and the rest of `brand` is kept.
 
@@ -1531,7 +1532,33 @@ logo is dropped with a warning and the rest of `brand` is kept.
   network filter still answers for them.
 - `catalogs.images`: the pictures on picker options — `"default"` (the
   platform's), `"none"` or `"own"` (the deployment's own). Default
-  `"default"`; any other value reads as `"none"`.
+  `"default"`; any other value reads as `"none"`, with a warning.
+
+  **The platform applies it.** With any value but `"default"`:
+  - the API leaves every picture out of the picker catalogs. No option carries
+    an `imageUrl` or `imageSrcSet`, no Person / Styling topic carries an
+    `imageUrl`, and every `imageCount` in the directory is `0`. This covers
+    `GET /v1/picker-catalogs`, `GET /v1/picker-catalogs/{nodeType}`,
+    `GET /v1/catalogs` and the MCP tool `get_picker_catalog`. Everything else
+    in those replies is unchanged.
+  - the editor shows none of the platform's pictures: no rendered preview from
+    the Nodaro CDN, and none of the photos, emoji and flags it serves itself.
+    Each picker, the canvas nodes and the app input cards show what they show
+    for an option with no picture (a drawn preview, an icon or the label), and
+    the Person card on the home screen shows no photos.
+
+  `"own"` shows no pictures for now, exactly like `"none"`: there is no way
+  yet to give a deployment's own pictures. Setting it states the intent, and
+  the platform's pictures never show.
+
+  Absent or `"default"`, every reply and the editor are exactly as before.
+  The Community edition does not read the profile, so its pictures always
+  show.
+
+  **Known limit:** the picture files themselves are still served. With
+  `"none"`, a file under `/picker-art/` (or a render on the Nodaro CDN) still
+  loads for anyone who asks for its address directly; the API and the editor
+  just stop naming them.
 - `locale.offered`: the languages a visitor may pick from, as locale ids
   (`["he","en"]`), read in the platform's own spelling (`pt-br` becomes
   `pt-BR`). Every language list in the editor offers only these: the header's

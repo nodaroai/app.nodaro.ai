@@ -3532,7 +3532,7 @@ discovery (`Cache-Control: public, max-age=300`).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/picker-catalogs` | Directory of every picker (`{ data: PickerCatalogSummary[] }`) — each `{ nodeType, label, catalogId, kind, valueField?, fields?, optionCount, imageCount }`; `imageCount` is how many of its options carry an `imageUrl` (0 = no pictures). |
+| `GET` | `/v1/picker-catalogs` | Directory of every picker (`{ data: PickerCatalogSummary[] }`) — each `{ nodeType, label, catalogId, kind, valueField?, fields?, optionCount, imageCount }`; `imageCount` is how many of its options carry an `imageUrl` (0 = no pictures, as for every picker on a deployment that turned pictures off). |
 | `GET` | `/v1/picker-catalogs/:nodeType` | One picker's catalog (`{ data: PickerCatalog }`). 404 `not_found` for an unknown type. |
 
 `GET /v1/picker-catalogs/:nodeType` accepts these query params (a bad value
@@ -3609,6 +3609,14 @@ pickers show:
   imageUrl? }`, where `fields` are the node-data fields of the settings in
   that topic (`Identity` → `type`, `age`, `ethnicity`, `regionalAesthetic`)
   and `imageUrl` is the topic's round picture.
+- **A deployment without pictures.** A deployment can turn the platform's
+  pictures off (`catalogs.images` in its surface profile; see
+  [deployment.md](./deployment.md#keys-read-by-client-apps)). Its replies then
+  carry no picture at all: no `imageUrl` or `imageSrcSet` on any option, no
+  `imageUrl` on a topic, and an `imageCount` of `0` for every picker in the
+  directory. The same holds for `GET /v1/catalogs` and the MCP
+  `get_picker_catalog` tool. Everything else is unchanged, so a client that
+  draws a label when an option has no `imageUrl` needs nothing more.
 
 ```bash
 curl -s https://app.nodaro.ai/v1/picker-catalogs/person | jq '.data.sections[0], .data.dimensions[0].options[0]'

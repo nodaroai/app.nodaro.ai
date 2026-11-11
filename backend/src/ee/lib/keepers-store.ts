@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto"
-import { lookPreviewStillUrl } from "@nodaro/prompts/picker-art"
 // The shelf bounds are public contract (`@nodaro/shared`): the route's zod, the
 // cursor check below and the Studio dialog hold `catalog_sort` within
 // ±KEEPER_CATALOG_SORT_MAX and the heading to KEEPER_CATALOG_CATEGORY_MAX.
 import { KEEPER_CATALOG_CATEGORY_MAX, KEEPER_CATALOG_SORT_MAX } from "@nodaro/shared/entities"
 import { supabase } from "../../lib/supabase.js"
+import { lookPreviewStillUrl } from "../../lib/picker-images.js"
 import { deriveAvailableName } from "../../lib/entity-naming.js"
 import { ensureDefaultProject } from "../../lib/default-project.js"
 import { reserveStorageIfWithinLimit } from "../../utils/file-validation.js"

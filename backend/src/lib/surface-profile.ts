@@ -642,6 +642,23 @@ export function surfaceAllowsLinkImports(): boolean {
 }
 
 /**
+ * Which pictures this deployment shows on picker options (`catalogs.images`):
+ * `"default"` (the platform's — absent, or no profile at all, which is exactly
+ * today's behaviour), `"none"`, or `"own"` (the deployment's own, which has no
+ * registry yet and so shows none). The one reader of the key on the server;
+ * `lib/picker-images.ts` is its one caller (picker-images-totality.test.ts).
+ * The client apps read it through /config.js (`surfaceCatalogImages()`).
+ *
+ * The unset case returns before the profile is read, as `surfaceAllowsLinkImports`
+ * does: every install without a profile answers here, on every catalog read,
+ * and a route suite that mocks the config module partially cannot break on it.
+ */
+export function surfaceCatalogImages(): SurfaceCatalogImages {
+  if (!process.env.NODARO_SURFACE_PROFILE?.trim()) return "default"
+  return runtimeSurfaceProfile().catalogs?.images ?? "default"
+}
+
+/**
  * Who reads a failed job's provider words on this deployment (`jobs.errorDetail`):
  * `"owner"` (the job's owner and admins — absent, or no profile at all, which is
  * exactly today's behaviour) or `"admin"` (admins only). The one reader of the

@@ -7,7 +7,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { PreviewVideo } from "@/components/ui/preview-video"
 import { studioBaseUrl } from "@/lib/studio"
 import { voiceBaseUrl } from "@/lib/voice"
-import { PERSON_APP_COLLAGE, personAppBaseUrl } from "@/lib/person-app"
+import { personAppCollage, personAppBaseUrl } from "@/lib/person-app"
 
 /**
  * Flagship "Nodaro apps" band — Nodaro's dedicated, purpose-built products
@@ -31,8 +31,12 @@ interface FlagshipApp {
   readonly icon: LucideIcon
   readonly href?: string
   readonly media?: { readonly type: "video" | "image"; readonly url: string }
-  /** Photos fanned along the card's end edge (same-origin files). */
-  readonly collage?: ReadonlyArray<string>
+  /**
+   * Photos fanned along the card's end edge (same-origin files), asked at
+   * render: they follow the deployment's picture setting, which is applied
+   * after this module loads. None (an empty list) leaves the card without one.
+   */
+  readonly collage?: () => ReadonlyArray<string>
 }
 
 const FLAGSHIP_APPS: readonly FlagshipApp[] = [
@@ -72,7 +76,7 @@ const FLAGSHIP_APPS: readonly FlagshipApp[] = [
     status: "new",
     icon: UserRound,
     href: personAppBaseUrl(),
-    collage: PERSON_APP_COLLAGE,
+    collage: personAppCollage,
   },
 ]
 
@@ -100,6 +104,7 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
   const isVideo = app.media?.type === "video"
   const Icon = app.icon
   const taglineKey = FLAGSHIP_TAGLINE_KEYS[app.id]
+  const collage = app.collage?.() ?? []
 
   const inner = (
     <>
@@ -159,9 +164,9 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
 
       {/* Photo collage along the end edge (Person). Decorative: the name and
           tagline carry the meaning. */}
-      {app.collage && (
+      {collage.length > 0 && (
         <div aria-hidden className="pointer-events-none absolute -end-4 top-14 grid rotate-[-7deg] grid-cols-2 gap-2">
-          {app.collage.map((src, i) => (
+          {collage.map((src, i) => (
             <img
               key={src}
               src={src}
@@ -192,7 +197,7 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
             {app.meta && <div className="mt-0.5 font-mono text-[11px] text-white/60">{app.meta}</div>}
           </div>
         </div>
-        <p className={"text-sm leading-relaxed text-white/80 " + (app.collage ? "max-w-[58%]" : "max-w-[46ch]")}>
+        <p className={"text-sm leading-relaxed text-white/80 " + (collage.length > 0 ? "max-w-[58%]" : "max-w-[46ch]")}>
           {taglineKey ? t(taglineKey) : app.tagline}
         </p>
         {/* De-emphasized ghost "chip". The WHOLE card is the click target (the

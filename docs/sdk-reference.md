@@ -8607,7 +8607,8 @@ list(): Promise<{ data: PickerCatalogSummary[] }>
 `GET /v1/picker-catalogs` → a directory of every picker: `nodeType`, `label`,
 `catalogId`, `kind` (`"single"` / `"multi"`), `valueField` (single-dim) or
 `fields` (multi-dim), `optionCount`, and `imageCount` — how many of its options
-carry an `imageUrl` (0 = no pictures; absent from servers that predate pictures).
+carry an `imageUrl` (0 = no pictures, as for every picker on a deployment that
+turned the platform's pictures off; absent from servers that predate pictures).
 
 ```ts
 const { data } = await client.pickerCatalogs.list()
@@ -8658,7 +8659,9 @@ styling, held prop, material, animal) and the music / voice art are served by
 the installation itself, so the URLs use its public address; the rendered look
 previews come from the Nodaro CDN and only Nodaro Cloud returns them. Use the
 URLs as given — file names carry a content hash, so they can be cached for good,
-and any origin may load them. See
+and any origin may load them. A deployment that turned the platform's pictures
+off (`catalogs.images` in its surface profile) returns no `imageUrl` at all, so
+draw the `label` whenever an option has none. See
 [Pictures](./api-integration.md#pictures-imageurl-sections) for the full rules.
 
 ```ts

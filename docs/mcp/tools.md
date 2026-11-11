@@ -2684,7 +2684,9 @@ Example (`node_type: "person"`, trimmed):
 ```
 
 The host is the installation's own public address; rendered look-picker
-previews (Nodaro CDN) are returned on Nodaro Cloud only. Rules:
+previews (Nodaro CDN) are returned on Nodaro Cloud only. On a deployment that
+turned the platform's pictures off (`catalogs.images` in its surface profile),
+no option or topic carries an `imageUrl` and every `imageCount` is `0`. Rules:
 [Pictures](../api-integration.md#pictures-imageurl-sections).
 
 See [Parameter Picker Catalogs](../picker-catalogs.md) for the underlying

@@ -7,6 +7,7 @@ import {
   type SoundArtKey,
   type SoundArtMap,
 } from "@nodaro/prompts/picker-art"
+import { platformPickerPicturesShown } from "./platform-pictures"
 
 /**
  * Pictures for the options of the five music / voice pickers (Music Genre,
@@ -33,8 +34,9 @@ export interface SoundArt {
 /** Root-relative, so the picture is always served by the app's own origin. */
 export const SOUND_ART_BASE = PICKER_ART_PATH
 
+/** One picture's address, or undefined (always, when the deployment shows no platform pictures: platform-pictures.ts). */
 export function soundArtUrl(key: SoundArtKey): string | undefined {
-  return soundArtFilePath(key)
+  return platformPickerPicturesShown() ? soundArtFilePath(key) : undefined
 }
 
 /** The picture for one option, or undefined (the tile then shows its label only). */
