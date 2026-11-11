@@ -74,6 +74,7 @@ describe("image-to-image: the source pasted back outside a mask", () => {
       resultUrl: "https://kie.example.com/result.png",
       maskUrl: "https://m.example.com/mask.png",
       jobId: "job-1",
+      transparent: false,
     })
     const input = mocks.finalize.mock.calls[0]![0]
     expect(input.jobType).toBe("image-to-image")
@@ -82,6 +83,13 @@ describe("image-to-image: the source pasted back outside a mask", () => {
     expect(input.extraOutputData).toEqual({ maskComposited: true })
     expect(mocks.paste.mock.invocationCallOrder[0]).toBeLessThan(mocks.finalize.mock.invocationCallOrder[0]!)
     expect(mocks.compositeInpaint).not.toHaveBeenCalled()
+  })
+
+  it("a run that asked for a transparent background keeps the result's transparency in the paste-back", async () => {
+    mocks.generateImage.mockResolvedValue(REDRAWN)
+    mocks.paste.mockResolvedValue("https://scratch.example.com/mask-composite.png")
+    await handler(job({ ...MASKED, background: "transparent" }) as never, ctx as never)
+    expect(mocks.paste).toHaveBeenCalledWith(expect.objectContaining({ transparent: true }))
   })
 
   it("a failed paste fails the job before finalize (refund, not a redraw delivered)", async () => {

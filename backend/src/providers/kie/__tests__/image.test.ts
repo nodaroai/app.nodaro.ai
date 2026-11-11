@@ -846,6 +846,41 @@ describe("GPT Image 2.6 masks (models.ts `maskFormat`: transparent = change)", (
     expect(sentInput()).not.toHaveProperty("mask_url")
     expect(result.maskEditSourceUrl).toBeUndefined()
   })
+
+  // Left to `auto`, a live masked run (2026-11-11) came back partly
+  // transparent inside the mask; `opaque` came back RGB at 1K, 2K and 4K.
+  describe("the background of a masked edit", () => {
+    for (const background of [undefined, "auto", "opaque"] as const) {
+      it(`an opaque photo asks for an opaque picture (background ${background ?? "not set"})`, async () => {
+        await provider.generateImage("make it green", [SOURCE], "gpt-image-2-6-flare-i2i", { mask_url: "https://x/mask.png", ...(background && { background }) })
+        expect(sentInput().background).toBe("opaque")
+      })
+    }
+
+    it("a photo whose alpha channel is fully opaque counts as opaque", async () => {
+      const opaqueRgba = await sharp({ create: { width: 8, height: 8, channels: 4, background: { r: 51, g: 102, b: 204, alpha: 1 } } }).png().toBuffer()
+      serve({ "https://x/mask.png": mask8, [SOURCE]: opaqueRgba })
+      await provider.generateImage("make it green", [SOURCE], "gpt-image-2-6-flare-i2i", { mask_url: "https://x/mask.png", background: "auto" })
+      expect(sentInput().background).toBe("opaque")
+    })
+
+    it("a transparent background asked for is sent as it is", async () => {
+      await provider.generateImage("make it green", [SOURCE], "gpt-image-2-6-flare-i2i", { mask_url: "https://x/mask.png", background: "transparent" })
+      expect(sentInput().background).toBe("transparent")
+    })
+
+    it("a photo with transparent pixels keeps the caller's choice", async () => {
+      const cutout = await sharp({ create: { width: 8, height: 8, channels: 4, background: { r: 51, g: 102, b: 204, alpha: 0.5 } } }).png().toBuffer()
+      serve({ "https://x/mask.png": mask8, [SOURCE]: cutout })
+      await provider.generateImage("make it green", [SOURCE], "gpt-image-2-6-flare-i2i", { mask_url: "https://x/mask.png", background: "auto" })
+      expect(sentInput().background).toBe("auto")
+    })
+
+    it("an edit with no mask keeps the caller's background", async () => {
+      await provider.generateImage("make it green", [SOURCE], "gpt-image-2-6-flare-i2i", { background: "auto" })
+      expect(sentInput().background).toBe("auto")
+    })
+  })
 })
 
 describe("MiniMax H3 Image on the wire", () => {

@@ -696,7 +696,25 @@ Six SKUs on the standard `createTask` lane. Flare and Sunburst are billed by
     `.webp`, `.gif`, `.svg`, an SVG sanitized first (`lib/svg-sanitize.ts`; a
     refused one fails the job, refunded), a PNG still of a GIF or SVG as
     `thumbnailUrl`. A mask with GIF or SVG is a 400 at the routes.
-- Not wired yet: `mask_url`, `markup`, `complexity`, `output_compression`.
+- **Masked edits** (`mask_url`, Flare and Sunburst edit ids only: `I2I_MASK_SUPPORT`).
+  KIE refuses a white-on-black mask ("must be a PNG with an alpha channel"), so the
+  platform's mask (white = change) is sent as an RGBA PNG at the photo's size,
+  transparent where it changes (`maskFormat: "alpha-transparent-edits"`,
+  `applyMaskFormat` / `prepareMask` in `image.ts`). The model redraws a little
+  outside the mask, so the photo is pasted back there (`maskEditRedrawsOutside`,
+  `pasteSourceOutsideMask` in `services/inpaint/composite.ts`; the reconcile lane
+  through `lib/reconcile/mask-paste-back.ts`). Sized and priced as the photo
+  (`maskEditMatchesSource`, `maskedEditResolution`).
+  - **An opaque photo gives an opaque picture.** Left to `background: "auto"`, the
+    model can hand back a picture that is partly transparent inside the mask
+    (production, 2026-11-11: alpha down to 37 there, seen as dark holes). So a
+    masked edit of a photo with no transparent pixels sends `background: "opaque"`
+    unless the caller asked for `transparent` (a direct probe the same day: `opaque`
+    came back RGB with no alpha at 1K, 2K and 4K). And the paste-back keeps alpha only
+    for a photo with transparent pixels or a run that asked for a transparent
+    background; otherwise the picture is opaque and a pixel the model left
+    transparent shows the photo (`hasTransparentPixels`, `lib/image-transparency.ts`).
+- Not wired yet: `markup`, `complexity`, `output_compression`.
 - `prompt` is documented up to 32,000 characters on Flare and Sunburst; the routes
   stop at `PROMPT_HARD_CEILING` (30,000). Economy documents 20,000.
 

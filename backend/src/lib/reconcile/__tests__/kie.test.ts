@@ -1154,11 +1154,16 @@ describe("reconcileKieJob: a recovered mask job is pasted back before it is fina
 
   it("a GPT Image 2.6 mask edit: the source pasted back outside the mask, recorded as maskComposited", async () => {
     await reconcileKieJob(row("image-to-image", { provider: "gpt-image-2-6-flare-i2i", imageUrl: "https://r2/src.png", maskUrl: "https://r2/mask.png" }))
-    expect(pasteBack.pasteSourceOutsideMask).toHaveBeenCalledWith({ sourceUrl: "https://r2/src.png", resultUrl: "https://kie.example/out.png", maskUrl: "https://r2/mask.png", jobId: "j-mask" })
+    expect(pasteBack.pasteSourceOutsideMask).toHaveBeenCalledWith({ sourceUrl: "https://r2/src.png", resultUrl: "https://kie.example/out.png", maskUrl: "https://r2/mask.png", jobId: "j-mask", transparent: false })
     const input = mocks.finalizeMock.mock.calls[0]![0]
     expect(input.result.url).toBe("https://scratch/mask-composite.png")
     expect(input.result).not.toHaveProperty("extraUrls")
     expect(input.extraOutputData).toEqual({ maskComposited: true })
+  })
+
+  it("a recovered mask edit that asked for a transparent background keeps it in the paste-back", async () => {
+    await reconcileKieJob(row("image-to-image", { provider: "gpt-image-2-6-flare-i2i", imageUrl: "https://r2/src.png", maskUrl: "https://r2/mask.png", background: "transparent" }))
+    expect(pasteBack.pasteSourceOutsideMask).toHaveBeenCalledWith(expect.objectContaining({ transparent: true }))
   })
 
   it("a Generate Image inpaint: the result composited over its base", async () => {

@@ -416,6 +416,8 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
         resultUrl: result.url,
         maskUrl,
         jobId: ctx.jobId,
+        // Transparency only when the run asked for it (or the photo has some).
+        transparent: background === "transparent",
       })
     : undefined
   const { extraUrls: _unpasted, ...single } = result
