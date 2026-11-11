@@ -645,6 +645,8 @@ const MODEL_DESCRIPTIONS_PT_BR: Record<string, string> = {
   "Fast, low-cost Seedream edits, up to 10 input images": "Edições Seedream rápidas e de baixo custo, até 10 imagens de entrada",
   "Readable text in the picture, up to 4K, same price at 1K and 2K": "Texto legível na imagem, até 4K, mesmo preço em 1K e 2K",
   "Up to 16 reference images in one edit, readable text, up to 4K": "Até 16 imagens de referência em uma edição, texto legível, até 4K",
+  "Natural light, materials and skin, small text, transparent backgrounds": "Luz, materiais e pele naturais, texto pequeno, fundo transparente",
+  "Edits that keep the rest of the picture, up to 10 input images": "Edições que mantêm o resto da imagem, até 10 imagens de entrada",
   "Fast Gemini, agentic-tuned": "Gemini rápido, ajustado para agentes",
   "Fast Gemini, sharper reasoning": "Gemini rápido, raciocínio mais afiado",
   "Fast Imagen, lower latency": "Imagen rápido, menor latência",
@@ -1082,6 +1084,8 @@ const OPTION_QUALIFIERS_PT_BR: Record<string, string> = {
   "Standard": "Padrão",
   "Social": "Redes sociais",
   "High": "Alta",
+  // "1.5K (Medium)", Seedream 5.5's middle size.
+  "Medium": "Média",
   "Ultra": "Ultra",
   "Detailed": "Detalhada",
   "Default": "Padrão",

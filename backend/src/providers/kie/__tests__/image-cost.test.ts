@@ -69,6 +69,29 @@ describe("kieTaskCreditsConsumed", () => {
   })
 })
 
+describe("kieImageCostUsd: Seedream 5.5", () => {
+  const config = (id: string) => ({ ...KIE_IMAGE_MODELS[id]!, cost: 0.123 })
+
+  it("text to image: 3.6 KIE credits at 1K and 1.5K, 6.3 at 2K, its default when none is sent", () => {
+    expect(kieImageCostUsd("seedream-5-5", config("seedream-5-5"), "1K")).toBeCloseTo(3.6 * KIE_CREDIT_USD, 10)
+    expect(kieImageCostUsd("seedream-5-5", config("seedream-5-5"), "1.5K")).toBeCloseTo(3.6 * KIE_CREDIT_USD, 10)
+    expect(kieImageCostUsd("seedream-5-5", config("seedream-5-5"), "2K")).toBeCloseTo(6.3 * KIE_CREDIT_USD, 10)
+    expect(kieImageCostUsd("seedream-5-5", config("seedream-5-5"), undefined)).toBeCloseTo(6.3 * KIE_CREDIT_USD, 10)
+  })
+
+  it("an edit adds 1.44 KIE credits for each input image sent, at least its source", () => {
+    // KIE's own example: a 2K edit with two inputs is 6.3 + 2 × 1.44 = 9.18.
+    expect(kieImageCostUsd("seedream-5-5-i2i", config("seedream-5-5-i2i"), "2K", 2)).toBeCloseTo(9.18 * KIE_CREDIT_USD, 10)
+    expect(kieImageCostUsd("seedream-5-5-i2i", config("seedream-5-5-i2i"), "1K", 10)).toBeCloseTo(18 * KIE_CREDIT_USD, 10)
+    expect(kieImageCostUsd("seedream-5-5-i2i", config("seedream-5-5-i2i"), "1.5K", 0)).toBeCloseTo(5.04 * KIE_CREDIT_USD, 10)
+  })
+
+  it("the model entries state the default: 2K, and an edit with its one source", () => {
+    expect(KIE_IMAGE_MODELS["seedream-5-5"]!.credits).toBe(6.3)
+    expect(KIE_IMAGE_MODELS["seedream-5-5-i2i"]!.credits).toBeCloseTo(7.74, 10)
+  })
+})
+
 describe("kieImageCostUsd: MiniMax H3 Image", () => {
   const t2i = KIE_IMAGE_MODELS["minimax-h3-image"]!
   const i2i = KIE_IMAGE_MODELS["minimax-h3-image-i2i"]!

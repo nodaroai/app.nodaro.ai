@@ -15,6 +15,7 @@
  */
 
 import { requestImageLimit } from "@nodaro/shared/models"
+import { SEEDREAM_5_5_DEFAULT_RESOLUTION, type Seedream55Resolution } from "@nodaro/shared/model-catalog"
 import { confirmedByRun, ENABLE_SAFETY_CHECKER_LEVER, NSFW_CHECKER_LEVER, NSFW_CHECKER_SENT_FALSE_LEVER, type SafetyLever, MODERATION_LEVER } from "../safety-levers.js"
 
 /** 1 KIE credit = $0.005 USD */
@@ -45,6 +46,21 @@ export const MINIMAX_H3_IMAGE_KIE_HUNDREDTHS: Readonly<Record<"1K" | "2K" | "4K"
   "4K": 550,
 }
 export const MINIMAX_H3_IMAGE_REFERENCE_KIE_HUNDREDTHS = 50
+
+/**
+ * What KIE bills for one Seedream 5.5 picture, in hundredths of a KIE credit so
+ * sums are exact: 3.6 at 1K or 1.5K, 6.3 at 2K (the size sent as `size`), and
+ * on an edit 1.44 more for each input image (kie.ai/seedream-5-5 and KIE's
+ * price list, read 2026-11-11). `kieImageCostUsd` (image-cost.ts) records it
+ * as the job's provider cost; the credit rows are built from it
+ * (ee/billing/seedream-5-5-pricing.ts).
+ */
+export const SEEDREAM_5_5_KIE_HUNDREDTHS: Readonly<Record<Seedream55Resolution, number>> = {
+  "1K": 360,
+  "1.5K": 360,
+  "2K": 630,
+}
+export const SEEDREAM_5_5_INPUT_IMAGE_KIE_HUNDREDTHS = 144
 
 /** Vidu Q4's second KIE endpoint — `runViduQ4` swaps to it whenever a reference
  *  image or reference audio is wired (the `vidu-q4` config's own model is the
@@ -215,6 +231,24 @@ const MINIMAX_H3_IMAGE_FORMAT_FIELDS = {
 const MINIMAX_H3_IMAGE_FORMAT_FIELDS_I2I = {
   png: MINIMAX_H3_IMAGE_FIELDS_I2I,
   jpeg: [...MINIMAX_H3_IMAGE_FIELDS_I2I, "output_format"],
+} as const satisfies Record<string, readonly string[]>
+// Seedream 5.5: what this release sends of each schema, by output format, in
+// KIE's own names (`size` is our `resolution`, renamed before this list is
+// applied). The schemas are not `additionalProperties: false`, but a worker
+// passes along whatever a node carries, so the body is an explicit list: never
+// a `seed` (neither schema has one), a `strength`, a `guidance_scale` or a
+// `mask_url`. PNG sends no `output_format` (KIE's default); JPEG sends it.
+// `nsfw_checker` is not sent; an admin's Provider Safety setting adds it after
+// this list, at the client.
+const SEEDREAM_5_5_FIELDS = ["prompt", "aspect_ratio", "size", "background"] as const
+const SEEDREAM_5_5_FIELDS_I2I = [...SEEDREAM_5_5_FIELDS, "image_urls"] as const
+const SEEDREAM_5_5_FORMAT_FIELDS = {
+  png: SEEDREAM_5_5_FIELDS,
+  jpeg: [...SEEDREAM_5_5_FIELDS, "output_format"],
+} as const satisfies Record<string, readonly string[]>
+const SEEDREAM_5_5_FORMAT_FIELDS_I2I = {
+  png: SEEDREAM_5_5_FIELDS_I2I,
+  jpeg: [...SEEDREAM_5_5_FIELDS_I2I, "output_format"],
 } as const satisfies Record<string, readonly string[]>
 const GPT_IMAGE_2_6_FIELDS = ["prompt", "aspect_ratio", "resolution", "quality", "background", "moderation"] as const
 const GPT_IMAGE_2_6_FIELDS_I2I = [...GPT_IMAGE_2_6_FIELDS, "input_urls"] as const
@@ -816,10 +850,50 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     resolutionParam: "size",
     extraParams: { aspect_ratio: "16:9", resolution: "1K", output_format: "png" },
   },
+  // Seedream 5.5 — a different model from 5 Lite, Pro and Flash. Like Flash its
+  // size lever is KIE's `size` (1K / 1.5K / 2K, KIE default 2K), carried as our
+  // `resolution` and renamed by `resolutionParam`. Billed per image by size plus
+  // a fixed amount for each input image of an edit (SEEDREAM_5_5_KIE_HUNDREDTHS
+  // above; `kieImageCostUsd` records it). The text-to-image `aspect_ratio` is
+  // REQUIRED and has no `auto`, so its default is a real ratio; the edit's own
+  // default is `auto`. `output_format` is `png` (KIE's default, sent as
+  // nothing) or `jpeg`; `background` is `auto`, `opaque` or `transparent` (PNG
+  // only: the catalog moves it to `auto` with JPEG). Prompts 5–5000 characters
+  // (the minimum is refused before a run is reserved). The edit takes 1–10
+  // `image_urls` (JPEG, PNG, WebP, ≤10 MB each): `maxInputImages` keeps a
+  // request at 10, the most its price counts. Neither schema has a seed.
+  // `nsfw_checker` (default false) is not sent, as on the other Seedream
+  // models; an admin's Provider Safety setting adds it at the client.
+  // The body is an explicit field list (SEEDREAM_5_5_FORMAT_FIELDS), by format.
+  // See: docs.kie.ai/market/seedream/5-5-text-to-image.md
+  //      docs.kie.ai/market/seedream/5-5-image-to-image.md
+  "seedream-5-5": {
+    model: "seedream/5-5-text-to-image",
+    safetyLevers: [NSFW_CHECKER_LEVER],
+    inputFields: SEEDREAM_5_5_FIELDS,
+    inputFieldsByFormat: SEEDREAM_5_5_FORMAT_FIELDS,
+    credits: SEEDREAM_5_5_KIE_HUNDREDTHS["2K"] / 100,
+    cost: (SEEDREAM_5_5_KIE_HUNDREDTHS["2K"] / 100) * KIE_CREDIT_USD,  // 2K default; kieImageCostUsd records the size sent
+    resolutionParam: "size",
+    extraParams: { aspect_ratio: "16:9", resolution: SEEDREAM_5_5_DEFAULT_RESOLUTION },
+  },
+  "seedream-5-5-i2i": {
+    model: "seedream/5-5-image-to-image",
+    safetyLevers: [NSFW_CHECKER_LEVER],
+    inputFields: SEEDREAM_5_5_FIELDS_I2I,
+    inputFieldsByFormat: SEEDREAM_5_5_FORMAT_FIELDS_I2I,
+    credits: (SEEDREAM_5_5_KIE_HUNDREDTHS["2K"] + SEEDREAM_5_5_INPUT_IMAGE_KIE_HUNDREDTHS) / 100,
+    cost: ((SEEDREAM_5_5_KIE_HUNDREDTHS["2K"] + SEEDREAM_5_5_INPUT_IMAGE_KIE_HUNDREDTHS) / 100) * KIE_CREDIT_USD,  // 2K, one input image
+    inputType: "image-to-image",
+    imageParam: "image_urls",  // Array of URLs, 1–10
+    maxInputImages: requestImageLimit("seedream-5-5-i2i"),
+    resolutionParam: "size",
+    extraParams: { aspect_ratio: "auto", resolution: SEEDREAM_5_5_DEFAULT_RESOLUTION },
+  },
 
   // MiniMax H3 Image (NOT the H3 video model `minimax-h3`). The text-to-image
   // endpoint takes no image: with references the provider moves the run to the
-  // edit id (GPT_IMAGE_T2I_TO_I2I in image.ts). An edit takes 1 to 16
+  // edit id (GPT_IMAGE_T2I_TO_I2I, image-edit-sibling.ts). An edit takes 1 to 16
   // `image_urls` (each up to 20 MB and 64 MP), named <Picture 1>, <Picture 2>,
   // ... in `image_urls` order. Ratios auto, 1:1, 5:4, 4:3, 3:2, 16:9, 21:9, 4:5,
   // 3:4, 2:3, 9:16 at every size; `resolution` 1K / 2K (KIE's default) / 4K;

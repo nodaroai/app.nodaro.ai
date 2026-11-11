@@ -918,6 +918,28 @@ describe("POST /v1/generate-image", () => {
       it("the array's outer bound still stops past 16 for any model", async () => {
         expect((await post("gpt-image-2-6-flare", 17)).statusCode).toBe(400)
       })
+
+      it("Seedream 5.5 takes 10, a base image included", async () => {
+        setupSupabaseMock({})
+        expect((await post("seedream-5-5", 10)).statusCode).toBe(200)
+        expect((await post("seedream-5-5", 11)).statusCode).toBe(400)
+        const withBase = await post("seedream-5-5", 10, { baseImageUrl: "https://r2.nodaro.ai/base.png" })
+        expect(withBase.statusCode).toBe(400)
+        expect(withBase.json().error.code).toBe("validation_error")
+      })
+
+      it("Seedream 5.5 refuses a prompt shorter than 5 characters, before any job row", async () => {
+        setupSupabaseMock({})
+        const res = await app.inject({
+          method: "POST",
+          url: "/v1/generate-image",
+          payload: { prompt: "cat", userId: VALID_UUID, provider: "seedream-5-5" },
+        })
+        expect(res.statusCode).toBe(400)
+        expect(res.json().error.code).toBe("validation_error")
+        expect(res.json().error.message).toContain("at least 5 characters")
+        expect(videoQueue.add).not.toHaveBeenCalled()
+      })
     })
 
     it("preserves `referenceImageUrls: undefined` on the queue when the old shape omits refs", async () => {

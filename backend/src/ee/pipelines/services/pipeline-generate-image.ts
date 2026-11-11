@@ -76,8 +76,8 @@ export async function pipelineGenerateImage(
     args.modelIdentifier ?? args.userOverride ?? defaultImageModel("general", aspectRatio)
 
   // The id the run is priced on: a model priced per input image (GPT Image 2.6,
-  // MiniMax H3 Image) pays for the references it is sent; every other model is
-  // its own id.
+  // MiniMax H3 Image, Seedream 5.5) pays for the references it is sent; every
+  // other model is its own id.
   const creditIdentifier = isPricedPerInputImage(modelIdentifier)
     ? buildCreditModelIdentifier(modelIdentifier, undefined, undefined, undefined, undefined, referenceImageUrls?.length ?? 0)
     : modelIdentifier

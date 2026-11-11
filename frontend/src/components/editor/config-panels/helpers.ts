@@ -838,8 +838,8 @@ export function buildCreditModelIdentifier(
   // ref count from `data.referenceImageUrls` (panel-local mirror of the wired
   // refs) so the displayed credit number matches what the route will charge.
   const refs = data.referenceImageUrls as string[] | undefined
-  // A model priced per input image (GPT Image 2.6, MiniMax H3 Image) counts
-  // every image the run will send.
+  // A model priced per input image (GPT Image 2.6, MiniMax H3 Image, Seedream
+  // 5.5) counts every image the run will send.
   const refCount = isPricedPerInputImage(provider) ? pricedEstimatedImages(provider, data, wiredImageRefs) : (refs?.length ?? 0)
   // Topaz bills on the upscale FACTOR. The legacy `targetResolution` still on
   // stored node data is mapped forward by resolveTopazUpscale — the same

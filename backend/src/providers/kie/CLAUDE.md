@@ -74,6 +74,8 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `seedream-5-flash-i2i` | `seedream/5-flash-image-to-image` | [seedream 5 flash i2i](https://docs.kie.ai/market/seedream/5-flash-image-to-image.md) |
 | `minimax-h3-image` | `minimax-h3/text-to-image` (NOT the H3 video model `minimax-h3`) | [minimax-h3 t2i](https://docs.kie.ai/market/minimax-h3/text-to-image.md) |
 | `minimax-h3-image-i2i` | `minimax-h3/image-edit` | [minimax-h3 image edit](https://docs.kie.ai/market/minimax-h3/image-edit.md) |
+| `seedream-5-5` | `seedream/5-5-text-to-image` | [seedream 5.5 t2i](https://docs.kie.ai/market/seedream/5-5-text-to-image.md) |
+| `seedream-5-5-i2i` | `seedream/5-5-image-to-image` | [seedream 5.5 i2i](https://docs.kie.ai/market/seedream/5-5-image-to-image.md) |
 | `z-image` | `z-image` | [z-image](https://docs.kie.ai/market/z-image/z-image.md) |
 | ~~`topaz-image-upscale`~~ | ~~`topaz/image-upscale`~~ | **RETIRED 2026-10-25** — runs on Replicate (`providers/replicate/topaz.ts`); config kept for the credit audit, `KIE_RETIRED_MODEL_KEYS` keeps it out of routing |
 | `recraft-remove-bg` | `recraft/remove-background` | [recraft bg remove](https://docs.kie.ai/market/recraft/remove-background.md) |
@@ -535,7 +537,7 @@ Different models use different param names for input images — getting this wro
 | Pattern | Models | Param |
 |---------|--------|-------|
 | Single URL string | minimax, kling-turbo, kling-avatar, topaz, ideogram-edit, ideogram-remix, qwen-i2i, qwen-edit, topaz-image-upscale | `image_url` |
-| Array of URLs | kling, grok, sora2-pro, flux, gpt-image, nano-banana-edit, seedream-edit, nano-banana-2-lite (up to 10, NOT the family's `image_input`), seedream-5-flash-i2i (up to 10, not the family's 16), minimax-h3-image-i2i (1 to 16) | `image_urls` or `input_urls` |
+| Array of URLs | kling, grok, sora2-pro, flux, gpt-image, nano-banana-edit, seedream-edit, nano-banana-2-lite (up to 10, NOT the family's `image_input`), seedream-5-flash-i2i (up to 10, not the family's 16), minimax-h3-image-i2i (1 to 16), seedream-5-5-i2i (1 to 10, priced per image; `maxInputImages` sends at most 10) | `image_urls` or `input_urls` |
 | VEO array | veo3, veo3.1 | `imageUrls` (camelCase!) |
 | Video URL | wan v2v | `video_urls` (array) |
 | Video URL | topaz upscale | `video_url` (string) |
@@ -568,6 +570,7 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 | Nano Banana family | `output_format` | `"png"`, `"jpeg"` (hardcoded `"png"`) |
 | Qwen | `output_format` | `"png"`, `"jpeg"` |
 | MiniMax H3 Image (T2I + edit) | `output_format` | `"png"` (KIE's default: nothing is sent), `"jpeg"` (catalog `outputFormats`, `inputFieldsByFormat`) |
+| Seedream 5.5 (T2I + I2I) | `output_format` | `"png"` (default, sent as nothing), `"jpeg"` — the catalog's `outputFormats`; a transparent background with JPEG is moved to `auto` before the run is priced |
 | Other image models | Not supported | — |
 
 ### resolution Support
@@ -582,6 +585,7 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 | Flux (all variants) | `resolution` | `"1K"`, `"2K"` |
 | Seedream 5 Flash (T2I + I2I) | **`size`** — our `resolution`, renamed on the wire by `resolutionParam: "size"` in `models.ts` (`image.ts` `applyResolutionParam`, both lanes) | `"1K"`, `"2K"` offered (schema also has `"1.5K"`, not offered); flat price at every size |
 | MiniMax H3 Image (T2I + edit) | `resolution` | `"1K"`, `"2K"` (default), `"4K"` at every ratio; 1K and 2K cost the same |
+| Seedream 5.5 (T2I + I2I) | **`size`**, as Flash | `"1K"`, `"1.5K"`, `"2K"` (default, and KIE's): priced per size, 1K and 1.5K the same (see the wire notes below) |
 | Other image models | Not supported | — |
 
 ### quality Support
@@ -725,7 +729,7 @@ MiniMax's H3 image model, a different model from the H3 video model `minimax-h3`
 
 - The text-to-image endpoint takes **no image**. With references the provider
   moves the run to `minimax-h3/image-edit` (`GPT_IMAGE_T2I_TO_I2I` in
-  `image.ts`, and `T2I_TO_I2I_VARIANT` for the routes), and the price follows
+  `image-edit-sibling.ts`, and `T2I_TO_I2I_VARIANT` for the routes), and the price follows
   the swap: `buildCreditModelIdentifier` prices a text-to-image id sent images
   on the edit id, so the entity routes and pipeline pins, which do not swap,
   are priced as the edit they run.
@@ -762,6 +766,69 @@ MiniMax's H3 image model, a different model from the H3 video model `minimax-h3`
   `kieImageCostUsd` records the size and the references sent as
   `provider_cost`. The number of references counted is what the run sends,
   a Generate Image base included (`pricedSentImages`).
+
+### Seedream 5.5 wire notes (`seedream-5-5` / `seedream-5-5-i2i`)
+
+Two Nodaro ids on the standard `createTask` lane; the person picks Seedream 5.5,
+and references (or a base image) move a run onto the edit id: in the route
+(`T2I_TO_I2I_VARIANT`) and, for the callers that do not swap (the entity routes,
+a pipeline pin), in `generateImage` here (`GPT_IMAGE_T2I_TO_I2I`,
+`image-edit-sibling.ts`), since the
+text-to-image schema has no image field at all.
+
+- `size` is `1K`, `1.5K` or `2K` (KIE's default). It is our `resolution`, renamed
+  by `resolutionParam: "size"`; the catalog's `defaultResolution` and every place
+  that fills an unset size read `SEEDREAM_5_5_DEFAULT_RESOLUTION` (2K). `1.5K` is
+  a size label no other model lists: it is in the routes' vocabulary
+  (`IMAGE_RESOLUTION_VALUES`), and `normalizeModelInput` moves it on any other
+  model to a size that model lists.
+- `aspect_ratio` is REQUIRED on text to image and has no `auto`: the catalog lists
+  the eight real ratios, so `auto` (an unset Generate Image ratio) becomes the
+  ratio nearest a photo, else 1:1, and the config's default is 16:9. The edit lists
+  `auto` first (KIE's default there); an image-to-image request naming no ratio
+  runs at `auto` (`UNSET_RATIO_IS_AUTO_EDIT_MODELS`). Whether the edit's `auto`
+  keeps a portrait photo's shape is not yet measured: if it renders square, give
+  the entry `autoAspectFromSourceImage`.
+- `output_format` `png` (sent as nothing) or `jpeg`; `background` `auto`, `opaque`
+  or `transparent`, the last only with PNG (`TRANSPARENT_OUTPUT_FORMATS` moves it
+  to `auto` with JPEG, before the run is priced).
+- Prompts 5 to 5000 characters. The minimum (`MIN_IMAGE_PROMPT_CHARS_BY_PROVIDER`),
+  counted after trimming, is refused before a run is reserved:
+  `lib/image-prompt-minimum.ts` in `/v1/generate-image`, `/v1/image-to-image`
+  and the workflow payload builder (Generate Image, Image to Image, Modify
+  Image, and the Character, Face, Object, Creature, Location and Scene lanes,
+  which send a node's raw description or prompt when it has no name). The
+  entity routes build their prompts from templates and are not checked.
+- The body is an explicit list (`inputFields` / `inputFieldsByFormat`): `prompt`,
+  `aspect_ratio`, `size`, `background`, `image_urls` on the edit, `output_format`
+  with JPEG only. A stray `seed`, `strength`, `guidance_scale`, `mask_url`,
+  `quality` or `negative_prompt` is never sent. `nsfw_checker` is not in the
+  list: nothing sends it today, and an admin's Provider Safety setting adds it at
+  the client, after this list.
+- Both entries declare `strictAspectRatios` (the schema marks `aspect_ratio`
+  required, with a closed list). The Scene node and the surround continuation
+  pass every other model's ratio on as stored, and check only a strict model's
+  (`aspectRatioForStrictModel`, `lib/aspect-ratio.ts`), against the model the
+  request reaches (`kieImageModelSent`, `image-edit-sibling.ts`): with no image
+  a stored `auto` or 4:5 reaches the text-to-image model as the nearest ratio it
+  lists; with one (a Scene's references, surround's composite, always) the edit
+  takes `auto` as stored. Do not widen that check to models without the flag:
+  GPT Image 2 renders 21:9 and 4:5 (measured 2026-11-11) though its catalog
+  list names neither.
+- 1 to 10 input images (JPEG, PNG, WebP, 10 MB each: `ensureImageForProvider`'s
+  defaults). The routes refuse more than 10 (`requestImageLimit`, a base image
+  counted); a workflow run prices and sends the first 10 (`maxInputImages`), and
+  MCP caps references without counting a base image; the price id counts no more
+  than 10.
+- Billing: 3.6 KIE credits per picture at 1K or 1.5K, 6.3 at 2K, plus 1.44 for
+  each input image of an edit (`SEEDREAM_5_5_KIE_HUNDREDTHS`, `models.ts`). Rows
+  in `ee/billing/seedream-5-5-pricing.ts`
+  (`seedream-5-5:<size>`, `seedream-5-5-i2i:<size>:<N>ref`), every path that
+  reserves counting the images through `pricedSentImages` /
+  `pricedEstimatedImages`; `kieImageCostUsd` records the same figures as
+  `jobs.provider_cost`.
+- No `seed` in either schema. `nsfw_checker` (default false) is declared as
+  `NSFW_CHECKER_LEVER` and not sent, as on the other Seedream models.
 
 ### seed type
 

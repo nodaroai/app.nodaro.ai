@@ -126,11 +126,12 @@ describe("another model is untouched by the format levers", () => {
     expect(input).toEqual({ prompt: "x", output_format: "jpg" })
   })
 
-  it("only the six 2.6 configs and MiniMax H3 Image's two declare per-format fields", () => {
+  it("only the six 2.6 configs, MiniMax H3 Image's two and Seedream 5.5's two declare per-format fields", () => {
     const declaring = Object.entries(KIE_IMAGE_MODELS).filter(([, c]) => c.inputFieldsByFormat).map(([id]) => id).sort()
     expect(declaring).toEqual([
       "gpt-image-2-6-economy", "gpt-image-2-6-economy-i2i", "gpt-image-2-6-flare", "gpt-image-2-6-flare-i2i",
       "gpt-image-2-6-sunburst", "gpt-image-2-6-sunburst-i2i", "minimax-h3-image", "minimax-h3-image-i2i",
+      "seedream-5-5", "seedream-5-5-i2i",
     ])
   })
 

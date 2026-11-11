@@ -661,6 +661,7 @@ describe("POST /v1/generate-location-asset — the image sent is the image price
 
   it.each([
     ["minimax-h3-image", "minimax-h3-image:2K", "minimax-h3-image-i2i:2K:1ref"],
+    ["seedream-5-5", "seedream-5-5:2K", "seedream-5-5-i2i:2K:1ref"],
     ["gpt-image-2-6-flare", "gpt-image-2-6-flare:medium:1K", "gpt-image-2-6-flare-i2i:medium:1K:1ref"],
   ])("%s: no image sent, none priced", async (provider, plain) => {
     const { check, debit, sent } = await run({ provider })
@@ -671,6 +672,7 @@ describe("POST /v1/generate-location-asset — the image sent is the image price
 
   it.each([
     ["minimax-h3-image", "minimax-h3-image-i2i:2K:1ref"],
+    ["seedream-5-5", "seedream-5-5-i2i:2K:1ref"],
     ["gpt-image-2-6-flare", "gpt-image-2-6-flare-i2i:medium:1K:1ref"],
   ])("%s: the location's anchor is sent and priced, at the CHECK and the DEBIT", async (provider, edit) => {
     const { check, debit, sent } = await run({ provider, attachToLocationId: TEST_LOCATION_ID, attachToColumn: "seasons", attachName: "winter" })
@@ -681,6 +683,7 @@ describe("POST /v1/generate-location-asset — the image sent is the image price
 
   it.each([
     ["minimax-h3-image", "minimax-h3-image-i2i:2K:1ref"],
+    ["seedream-5-5", "seedream-5-5-i2i:2K:1ref"],
     ["gpt-image-2-6-flare", "gpt-image-2-6-flare-i2i:medium:1K:1ref"],
   ])("%s: the caller's own image wins over the anchor and is priced once", async (provider, edit) => {
     const { check, debit, sent } = await run({ provider, sourceImageUrl: OWN, attachToLocationId: TEST_LOCATION_ID, attachToColumn: "seasons", attachName: "winter" })

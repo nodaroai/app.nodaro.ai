@@ -1010,15 +1010,16 @@ changed:
   on a model without a native one gives its first listed ratio, as before, and
   GPT Image 2.6 receives its own `auto`.
 - **No `aspectRatio` on a GPT Image 2, 2.5 or 2.6 edit model, or on MiniMax
-  H3 Image's, is `auto`.** On `/v1/image-to-image`, a request to
+  H3 Image's or Seedream 5.5's, is `auto`.** On `/v1/image-to-image`, a request to
   `gpt-image-2-6-flare-i2i` (the default), `gpt-image-2-6-sunburst-i2i`,
   `gpt-image-2-6-economy-i2i`, `gpt-image-2-5-flare-i2i`,
-  `gpt-image-2-5-sunburst-i2i`, `gpt-image-2-i2i` or `minimax-h3-image-i2i`
-  that names no ratio runs exactly as one that sends `"auto"`, instead of the
-  model's 16:9 default: GPT Image 2 and 2.5 receive their own `auto`, which
-  keeps the photo's shape, MiniMax H3 Image its own `auto`, which follows the
-  first image, and GPT Image 2.6 the ratio closest to the photo, as above. The
-  job records the ratio sent. It costs the same: these models price by
+  `gpt-image-2-5-sunburst-i2i`, `gpt-image-2-i2i`, `minimax-h3-image-i2i` or
+  `seedream-5-5-i2i` that names no ratio runs exactly as one that sends
+  `"auto"`, instead of the model's 16:9 default: GPT Image 2 and 2.5 receive
+  their own `auto`, which keeps the photo's shape, MiniMax H3 Image its own
+  `auto`, which follows the first image, Seedream 5.5 its own `auto` (KIE's
+  default there), and GPT Image 2.6 the ratio closest to the photo, as above.
+  The job records the ratio sent. It costs the same: these models price by
   quality, size and the number of input images, not by ratio, and render every
   size at `auto`. Every other model keeps its own default when no ratio is
   named.
@@ -2199,7 +2200,7 @@ The image-generating routes (`/v1/generate-character`,
 `/v1/generate-character-asset`, and the location equivalents
 `/v1/generate-location` / `/v1/generate-location-asset`) also accept optional
 `quality` (`"medium"` / `"high"` / `"basic"`) and `resolution` (`"1K"` /
-`"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`). These are
+`"1.5K"` / `"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`). These are
 **credit-affecting** and price exactly like `/v1/generate-image` (composite
 ids such as `gpt-image:high` / `nano-banana-pro:4K`) — a 4K / high run
 reserves more credits than the same model at its base tier. A value the chosen

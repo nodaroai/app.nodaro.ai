@@ -279,6 +279,9 @@ import { scene3DReferenceListError } from "../scene3d/index.js"
 import { mergeScene3DReferences } from "../scene3d/scene3d-references.js"
 import { imageRequiredMessage } from "../../lib/video-image-required.js"
 import { viduQ4InputProblem } from "../../lib/vidu-q4-inputs.js"
+import { imagePromptTooShort } from "../../lib/image-prompt-minimum.js"
+import { aspectRatioForStrictModel } from "../../lib/aspect-ratio.js"
+import { kieImageModelSent } from "../../providers/kie/image-edit-sibling.js"
 import { kling4InputProblem } from "../../lib/kling4-inputs.js"
 import {
   judgeResolvedVoices,
@@ -308,6 +311,17 @@ import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNod
 import { OVERLAY_MAX_LAYERS } from "../../providers/image/overlay-contract.js"
 import { dropNullCaptionLevers } from "../../providers/video/caption-segments.js"
 import { editPlanModeRefusal } from "../../lib/private-plugins/edit-plan-mode-gate.js"
+
+/**
+ * Throw when the prompt an entity or Scene job sends is shorter than its model
+ * takes (`imagePromptTooShort`), before any job row or reservation exists: those
+ * lanes send a node's raw description or prompt when it has no name or scene
+ * fields to build one from. A no-op for every model with no minimum.
+ */
+function assertImagePromptLongEnough(provider: string, prompt: string | undefined): void {
+  const tooShort = imagePromptTooShort(provider, prompt)
+  if (tooShort) throw new Error(tooShort.message)
+}
 
 /** Throw the Vidu Q4 input rule's message (a no-op for every other provider). */
 function assertViduQ4Inputs(args: Parameters<typeof viduQ4InputProblem>[0]): void {
@@ -3329,6 +3343,9 @@ function buildPayloadOf(
         maskUrl: resolvedInputs.maskUrl || data.maskUrl,
       })
       if (generateMaskConflict) throw new Error(generateMaskConflict)
+      // A prompt shorter than the model takes: refused before any job row, as on the route.
+      const generateTooShort = lora ? null : imagePromptTooShort(imageParams.modelId, result.prompt)
+      if (generateTooShort) throw new Error(generateTooShort.message)
 
       return {
         jobName: "generate-image",
@@ -3646,6 +3663,9 @@ function buildPayloadOf(
             suppressedCanonicalLocationIds: i2iSuppressedLoc,
           })
       const i2iResult = withImagePromptPolicy(rawI2iResult)
+      // A prompt shorter than the model takes: refused before any job row, as on the route.
+      const i2iTooShort = imagePromptTooShort(provider, i2iResult.prompt)
+      if (i2iTooShort) throw new Error(i2iTooShort.message)
 
       return {
         jobName: "image-to-image",
@@ -3839,6 +3859,10 @@ function buildPayloadOf(
           },
         }
       }
+
+      // A prompt shorter than the model takes: refused before any job row, as on the route.
+      const modTooShort = imagePromptTooShort(provider, i2iResult.prompt)
+      if (modTooShort) throw new Error(modTooShort.message)
 
       return {
         jobName: "image-to-image",
@@ -7603,6 +7627,7 @@ function buildPayloadOf(
           })
         : resolveRefs(data.description as string | undefined, refMap)
           ?? resolveRefs(data.prompt as string | undefined, refMap)
+      assertImagePromptLongEnough(provider, entityPrompt)
       return {
         jobName: "generate-character",
         queueName: "video-generation",
@@ -7655,6 +7680,7 @@ function buildPayloadOf(
         entityPrompt = resolveRefs(data.description as string | undefined, refMap)
           ?? resolveRefs(data.prompt as string | undefined, refMap)
       }
+      assertImagePromptLongEnough(provider, entityPrompt)
       return {
         jobName: "generate-face",
         queueName: "video-generation",
@@ -7695,6 +7721,7 @@ function buildPayloadOf(
           })
         : resolveRefs(data.description as string | undefined, refMap)
           ?? resolveRefs(data.prompt as string | undefined, refMap)
+      assertImagePromptLongEnough(provider, entityPrompt)
       return {
         jobName: "generate-object",
         queueName: "video-generation",
@@ -7724,6 +7751,7 @@ function buildPayloadOf(
           })
         : resolveRefs(data.description as string | undefined, refMap)
           ?? resolveRefs(data.prompt as string | undefined, refMap)
+      assertImagePromptLongEnough(provider, entityPrompt)
       return {
         jobName: "generate-creature",
         queueName: "video-generation",
@@ -7752,6 +7780,7 @@ function buildPayloadOf(
           })
         : resolveRefs(augmentedDescription, refMap)
           ?? resolveRefs(data.prompt as string | undefined, refMap)
+      assertImagePromptLongEnough(provider, entityPrompt)
       return {
         jobName: "generate-location",
         queueName: "video-generation",
@@ -7816,6 +7845,7 @@ function buildPayloadOf(
         // Malformed scene data — fall back to raw prompt fields
         scenePrompt = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || ""
       }
+      assertImagePromptLongEnough(provider, scenePrompt)
 
       return {
         jobName: "generate-image",
@@ -7826,7 +7856,16 @@ function buildPayloadOf(
           prompt: scenePrompt,
           provider,
           referenceImageUrls: sceneRefUrls.length > 0 ? sceneRefUrls : undefined,
-          aspectRatio: data.aspectRatio,
+          // Sent as stored, except on a model whose endpoint refuses a ratio it
+          // does not list (`strictAspectRatios`, Seedream 5.5 only): there a
+          // stored "auto" or 4:5 goes as the nearest ratio it lists, never
+          // refused by the provider after the reservation. Checked against the
+          // model the request reaches (`kieImageModelSent`): with references,
+          // Seedream 5.5 runs on its edit, which takes "auto".
+          aspectRatio: aspectRatioForStrictModel(
+            data.aspectRatio as string | undefined,
+            kieImageModelSent(provider, sceneRefUrls.length),
+          ),
           usageLogId,
         },
       }

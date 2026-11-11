@@ -3,9 +3,11 @@ import {
   KIE_CREDIT_USD,
   MINIMAX_H3_IMAGE_KIE_HUNDREDTHS,
   MINIMAX_H3_IMAGE_REFERENCE_KIE_HUNDREDTHS,
+  SEEDREAM_5_5_INPUT_IMAGE_KIE_HUNDREDTHS,
+  SEEDREAM_5_5_KIE_HUNDREDTHS,
   type KieModelConfig,
 } from "./models.js"
-import { MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION, isMinimaxH3Image, isMinimaxH3ImageI2i } from "@nodaro/shared/model-catalog"
+import { MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION, isMinimaxH3Image, isMinimaxH3ImageI2i, isSeedream55, isSeedream55I2i, seedream55Resolution } from "@nodaro/shared/model-catalog"
 
 /**
  * What KIE bills for one picture, recorded as the job's provider cost
@@ -14,7 +16,8 @@ import { MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION, isMinimaxH3Image, isMinimaxH3Image
  *
  * GPT Image 2 bills by the resolution sent, so the model entry's one figure
  * (its 1K price) would understate a 2K or 4K picture. MiniMax H3 Image bills by
- * the size sent and, on an edit, by each reference image sent.
+ * the size sent and, on an edit, by each reference image sent; Seedream 5.5 by
+ * the size sent and, on an edit, by each input image sent.
  */
 
 const GPT_IMAGE_2_PROVIDERS: ReadonlySet<string> = new Set(["gpt-image-2", "gpt-image-2-i2i"])
@@ -37,6 +40,7 @@ export function kieImageCostUsd(
   inputImages = 0,
 ): number {
   if (isMinimaxH3Image(provider)) return minimaxH3ImageCostUsd(provider, resolution, inputImages)
+  if (isSeedream55(provider)) return seedream55CostUsd(provider, resolution, inputImages)
   if (!GPT_IMAGE_2_PROVIDERS.has(provider)) return modelConfig.cost
   const sent = resolution ?? "1K"
   return isGptImage2Resolution(sent) ? GPT_IMAGE_2_KIE_CREDITS[sent] * KIE_CREDIT_USD : modelConfig.cost
@@ -63,6 +67,16 @@ function minimaxH3ImageCostUsd(provider: string, resolution: string | number | u
   const size = sent === "1K" || sent === "2K" || sent === "4K" ? sent : MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION
   const references = isMinimaxH3ImageI2i(provider) ? Math.max(0, Math.trunc(inputImages)) : 0
   const hundredths = MINIMAX_H3_IMAGE_KIE_HUNDREDTHS[size] + MINIMAX_H3_IMAGE_REFERENCE_KIE_HUNDREDTHS * references
+  return (hundredths / 100) * KIE_CREDIT_USD
+}
+
+/**
+ * Seedream 5.5: the size sent (`size`, KIE's default 2K when none is, matched
+ * in any case), and on an edit every input image sent, at least its source.
+ */
+function seedream55CostUsd(provider: string, resolution: string | number | undefined, inputImages: number): number {
+  const images = isSeedream55I2i(provider) ? Math.max(1, Math.trunc(inputImages)) : 0
+  const hundredths = SEEDREAM_5_5_KIE_HUNDREDTHS[seedream55Resolution(resolution)] + SEEDREAM_5_5_INPUT_IMAGE_KIE_HUNDREDTHS * images
   return (hundredths / 100) * KIE_CREDIT_USD
 }
 

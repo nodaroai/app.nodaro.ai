@@ -11,6 +11,7 @@ import {
   VOICE_DESIGN_MODELS,
 } from "./model-constants.js"
 import { LLM_MODEL_IDS } from "./llm-models.js"
+import { SEEDREAM_5_5_DEFAULT_RESOLUTION } from "./seedream-5-5.js"
 
 // ──────────────────────────────────────────────────────────────────────────
 // Types
@@ -191,6 +192,10 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   // MiniMax H3 Image: 1K and 2K cost the same, 2K is its default.
   "minimax-h3-image":     { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
   "minimax-h3-image-i2i": { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
+  // Seedream 5.5's lever is its size too (KIE `size`): mid is its default, 2K;
+  // low the cheapest, 1K (1.5K costs the same, and is the panel's to pick).
+  "seedream-5-5":         { field: "resolution", values: { low: "1K", mid: SEEDREAM_5_5_DEFAULT_RESOLUTION, high: "2K" } },
+  "seedream-5-5-i2i":     { field: "resolution", values: { low: "1K", mid: SEEDREAM_5_5_DEFAULT_RESOLUTION, high: "2K" } },
   // Video gen — resolution-style (720p/1080p)
   "veo3":                { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "veo3.1":              { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },

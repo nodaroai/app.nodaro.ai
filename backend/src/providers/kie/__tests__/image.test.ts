@@ -42,6 +42,9 @@ vi.mock("../models.js", async (importOriginal) => {
       // declaration (its schema has no `resolution`/`quality`) is what is tested.
       "seedream-5-flash": actual.KIE_IMAGE_MODELS["seedream-5-flash"],
       "seedream-5-flash-i2i": actual.KIE_IMAGE_MODELS["seedream-5-flash-i2i"],
+      // Seedream 5.5 — the REAL configs: `size`, the per-image cost and the 10-image cap.
+      "seedream-5-5": actual.KIE_IMAGE_MODELS["seedream-5-5"],
+      "seedream-5-5-i2i": actual.KIE_IMAGE_MODELS["seedream-5-5-i2i"],
       "nano-banana": { model: "nano-banana-pro", cost: 0.02, inputType: "text-to-image", extraParams: { output_format: "png" } },
       "nano-banana-pro": actual.KIE_IMAGE_MODELS["nano-banana-pro"],
       "flux": { model: "flux-2/pro-text-to-image", cost: 0.05, inputType: "text-to-image", extraParams: {} },
@@ -557,6 +560,55 @@ describe("Seedream 5 Flash — resolution goes out as `size`", () => {
     expect(lastInput()).toMatchObject({ prompt: "make it winter", image_urls: ["https://src.png"], size: "2K" })
     expect(lastInput()).not.toHaveProperty("resolution")
     expect(lastOpts().dimensions).toMatchObject({ resolution: "2K" })
+  })
+})
+
+describe("Seedream 5.5 — the exact body, input images and what each picture costs", () => {
+  const lastModel = () => mocks.mockRunKieTask.mock.calls.at(-1)?.[0] as string
+  const lastInput = () => mocks.mockRunKieTask.mock.calls.at(-1)?.[1] as Record<string, unknown>
+  const urls = (n: number) => Array.from({ length: n }, (_, i) => `https://cdn.example.com/${i}.png`)
+  // What a worker may pass along from a node that once ran another model.
+  const STRAYS = { seed: 7, strength: 0.4, guidance_scale: 6, mask_url: "https://cdn.example.com/mask.png", quality: "high", negative_prompt: "blur", nsfw_checker: true }
+
+  it("text to image: a real ratio and the default 2K, as `size`, and nothing else", async () => {
+    const result = await provider.generateImage("a glass serum bottle", undefined, "seedream-5-5")
+    expect(lastModel()).toBe("seedream/5-5-text-to-image")
+    expect(lastInput()).toEqual({ prompt: "a glass serum bottle", aspect_ratio: "16:9", size: "2K" })
+    expect(result.cost).toBeCloseTo(6.3 * KIE_CREDIT_USD, 10)
+  })
+
+  it("text to image at 1.5K, as a JPEG with an opaque background: each lever in KIE's own name, strays dropped", async () => {
+    const result = await provider.generateImage("a poster", undefined, "seedream-5-5", { ...STRAYS, resolution: "1.5K", aspect_ratio: "21:9", output_format: "jpeg", background: "opaque" })
+    expect(lastInput()).toEqual({ prompt: "a poster", aspect_ratio: "21:9", size: "1.5K", output_format: "jpeg", background: "opaque" })
+    expect(result.cost).toBeCloseTo(3.6 * KIE_CREDIT_USD, 10)
+  })
+
+  it("a PNG sends no output_format (KIE's default)", async () => {
+    await provider.generateImage("a poster", undefined, "seedream-5-5", { aspect_ratio: "1:1", output_format: "png", background: "transparent" })
+    expect(lastInput()).toEqual({ prompt: "a poster", aspect_ratio: "1:1", size: "2K", background: "transparent" })
+  })
+
+  it("text to image sent references runs on the edit endpoint, which reads them", async () => {
+    const result = await provider.generateImage("the same bottle, at night", urls(2), "seedream-5-5", { ...STRAYS, resolution: "2K", aspect_ratio: "1:1" })
+    expect(lastModel()).toBe("seedream/5-5-image-to-image")
+    expect(lastInput()).toEqual({ prompt: "the same bottle, at night", image_urls: urls(2), aspect_ratio: "1:1", size: "2K" })
+    // 6.3 + 2 × 1.44
+    expect(result.cost).toBeCloseTo(9.18 * KIE_CREDIT_USD, 10)
+  })
+
+  it("an edit naming no ratio sends KIE's own auto; more than 10 images send the first 10, and cost 10", async () => {
+    const result = await provider.generateImage("make it winter", urls(12), "seedream-5-5-i2i", { resolution: "1K", output_format: "jpeg" })
+    expect(lastModel()).toBe("seedream/5-5-image-to-image")
+    expect(lastInput()).toEqual({ prompt: "make it winter", image_urls: urls(10), aspect_ratio: "auto", size: "1K", output_format: "jpeg" })
+    // 3.6 + 10 × 1.44
+    expect(result.cost).toBeCloseTo(18 * KIE_CREDIT_USD, 10)
+  })
+
+  it("editImage lane: the prompt is kept and the one source is priced", async () => {
+    const result = await provider.editImage("https://src.png", "make it winter", "seedream-5-5-i2i", { ...STRAYS, resolution: "1.5K" })
+    expect(lastModel()).toBe("seedream/5-5-image-to-image")
+    expect(lastInput()).toEqual({ prompt: "make it winter", image_urls: ["https://src.png"], aspect_ratio: "auto", size: "1.5K" })
+    expect(result.cost).toBeCloseTo(5.04 * KIE_CREDIT_USD, 10)
   })
 })
 

@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { CHARACTER_ASPECT_OPTIONS } from "@nodaro/shared/entities"
+import { IMAGE_ASPECT_RATIO_VALUES } from "@nodaro/shared/models"
 
 // ---------------------------------------------------------------------------
 // Mocks — hoisted before the handler import. Verifies the refine money-path:
@@ -108,6 +111,35 @@ describe("generate-surround-continuation handler", () => {
     // result is still delivered + attached
     expect(mocks.markJobCompleted).toHaveBeenCalled()
     expect(mocks.autoAttachLocationAsset).toHaveBeenCalled()
+  })
+
+  it("checks only Seedream 5.5's ratio, against the edit the composite reaches", async () => {
+    const sent = () => (mocks.generateImage.mock.calls.at(-1)?.[3] as Record<string, unknown> | undefined)?.aspect_ratio
+    // The composite always goes, so Seedream 5.5 runs on its edit, which takes "auto"
+    // (its text-to-image model does not, and would have turned it into 1:1).
+    await handler(makeJob({ provider: "seedream-5-5", aspectRatio: "auto" }), ctx)
+    expect(sent()).toBe("auto")
+    await handler(makeJob({ provider: "seedream-5-5", aspectRatio: "4:5" }), ctx)
+    expect(sent()).toBe("3:4")
+    await handler(makeJob({ provider: "seedream-5-5", aspectRatio: "21:9" }), ctx)
+    expect(sent()).toBe("21:9")
+    await handler(makeJob({ provider: "seedream-5-5" }), ctx)
+    expect(mocks.generateImage.mock.calls.at(-1)?.[3]).toBeUndefined()
+  })
+
+  it("sends every other model's ratio exactly as it came (a catalog list is not what the provider refuses)", async () => {
+    // Every ratio the surround route takes, the Scene panel's, every ratio the routes
+    // know, and "auto": GPT Image 2 renders 21:9 and 4:5 although its list omits them.
+    const sendable = [...new Set(["auto", "16:9", "9:16", "1:1", "4:3", "21:9", "4:5", ...CHARACTER_ASPECT_OPTIONS, ...IMAGE_ASPECT_RATIO_VALUES])]
+    const sent = () => (mocks.generateImage.mock.calls.at(-1)?.[3] as Record<string, unknown> | undefined)?.aspect_ratio
+    const models = Object.values(MODEL_CATALOG).filter((m) => m.kind === "image" && !m.strictAspectRatios)
+    expect(models.length).toBeGreaterThan(30)
+    for (const m of models) {
+      for (const ratio of sendable) {
+        await handler(makeJob({ provider: m.id, aspectRatio: ratio }), ctx)
+        expect(sent(), `${m.id} ${ratio}`).toBe(ratio)
+      }
+    }
   })
 
   it("resolves the per-direction carried fraction (tilt up → 0.12) when the payload omits it", async () => {

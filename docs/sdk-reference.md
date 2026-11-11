@@ -4076,7 +4076,7 @@ candidate: it completes and lists like any other, but only `approvePortrait()`
 sets the portrait.
 
 Optional `quality` (`"medium"` / `"high"` / `"basic"`) and `resolution`
-(`"1K"` / `"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`)
+(`"1K"` / `"1.5K"` / `"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`)
 select the image model's output tier and are **credit-affecting** — they price
 exactly like Generate Image (composite ids such as `gpt-image:high` /
 `nano-banana-pro:4K`, so a 4K/high run reserves more than the model's base
@@ -4430,7 +4430,7 @@ result directly to the row's `source_image_url`; otherwise call
 `approveMainImage()` after picking a candidate.
 
 Optional `quality` (`"medium"` / `"high"` / `"basic"`) and `resolution`
-(`"1K"` / `"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`)
+(`"1K"` / `"1.5K"` / `"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`)
 select the image model's output tier and are **credit-affecting** — they price
 exactly like Generate Image (composite ids such as `gpt-image:high` /
 `nano-banana-pro:4K`, so a 4K/high run reserves more than the model's base

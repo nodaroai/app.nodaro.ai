@@ -143,6 +143,7 @@ import { countImageInputEdges, countRefModalityEdges, nodeIsMasked, wiredImageSi
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
 import { gptImage26StaticCosts } from "./gpt-image-2-6-pricing.js"
 import { minimaxH3ImageStaticCosts } from "./minimax-h3-image-pricing.js"
+import { seedream55StaticCosts } from "./seedream-5-5-pricing.js"
 import { defaultImageModelForNode, imageFormatLeversOf, isPricedPerInputImage, maskedEditResolution, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { applyServiceMarkup } from "./service-margin.js"
@@ -699,6 +700,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // MiniMax H3 Image: by size (1K and 2K the same) and, on an edit, by
   // reference image, both ids (see minimax-h3-image-pricing.ts).
   ...minimaxH3ImageStaticCosts(),
+  // Seedream 5.5: per size, and an edit per input image too (seedream-5-5-pricing.ts).
+  ...seedream55StaticCosts(),
   "flux-flex": 35,                // (1K default)
   "flux-flex:2K": 60,
   "z-image": 2,

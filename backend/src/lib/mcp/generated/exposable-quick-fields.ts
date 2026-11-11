@@ -67,7 +67,7 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "reasoningEffort": { valueType: "string", fixed: false, values: ["high","low","max","medium","none","xhigh"] },
   },
   "generate-image": {
-    "resolution": { valueType: "string", fixed: false, values: ["0.5 MP","1 MP","1K","2 MP","2K","4 MP","4K"] },
+    "resolution": { valueType: "string", fixed: false, values: ["0.5 MP","1 MP","1.5K","1K","2 MP","2K","4 MP","4K"] },
   },
   "generate-mask": {
     "threshold": { valueType: "number", fixed: true, values: [0.2,0.3,0.45] },

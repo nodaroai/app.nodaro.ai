@@ -57,13 +57,21 @@ export const IMAGE_ASPECT_RATIO_VALUES = [
 export type ImageAspectRatio = typeof IMAGE_ASPECT_RATIO_VALUES[number]
 
 /**
- * The `resolution` vocabulary `/v1/generate-image` and `/v1/image-to-image`
- * accept: the K tiers (`1K`/`2K`/`4K`) and the Flux 2 megapixel tiers. Like
- * {@link IMAGE_ASPECT_RATIO_VALUES} it is a vocabulary bound, not a per-model
- * gate — the catalog snap corrects a value the chosen model does not declare.
- * One tuple for the route Zod enums and the SDK's `ImageResolution`.
+ * The K tiers of {@link IMAGE_RESOLUTION_VALUES}, smallest first. `1.5K` is
+ * Seedream 5.5's middle size; no other model lists it, and the catalog snap
+ * moves it to a size the chosen model does list.
  */
-export const IMAGE_RESOLUTION_VALUES = ["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"] as const
+export const IMAGE_K_RESOLUTION_VALUES = ["1K", "1.5K", "2K", "4K"] as const
+
+/**
+ * The `resolution` vocabulary `/v1/generate-image` and `/v1/image-to-image`
+ * accept: the K tiers ({@link IMAGE_K_RESOLUTION_VALUES}) and the Flux 2
+ * megapixel tiers. Like {@link IMAGE_ASPECT_RATIO_VALUES} it is a vocabulary
+ * bound, not a per-model gate — the catalog snap corrects a value the chosen
+ * model does not declare. One tuple for the route Zod enums (the entity routes'
+ * too) and the SDK's `ImageResolution`.
+ */
+export const IMAGE_RESOLUTION_VALUES = [...IMAGE_K_RESOLUTION_VALUES, "0.5 MP", "1 MP", "2 MP", "4 MP"] as const
 export type ImageResolution = typeof IMAGE_RESOLUTION_VALUES[number]
 
 /** The `quality` vocabulary of the same two routes (vocabulary bound; the catalog snap gates per model). */
@@ -176,7 +184,10 @@ export const MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   //   seedream-5-flash, seedream-5-flash-i2i (both "4–5000 characters";
   //   docs.kie.ai/market/seedream/5-flash-text-to-image + 5-flash-image-to-image),
   //   minimax-h3-image, minimax-h3-image-i2i (both "1–5000 characters";
-  //   docs.kie.ai/market/minimax-h3/text-to-image + image-edit).
+  //   docs.kie.ai/market/minimax-h3/text-to-image + image-edit),
+  //   seedream-5-5, seedream-5-5-i2i (both "5–5000 characters"; the minimum is
+  //   MIN_IMAGE_PROMPT_CHARS_BY_PROVIDER below;
+  //   docs.kie.ai/market/seedream/5-5-text-to-image + 5-5-image-to-image).
   // grok-i2i: doc states 390000 (78× its t2i sibling) — treated as a KIE schema
   //   typo and left at the 5000 default per the sanity-cap decision.
   // UNVERIFIED (no limit stated in schema) → 5000 default: flux-kontext(-max)
@@ -189,6 +200,24 @@ export const MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
  *  assembler, the over-limit warning, and the image-route ceiling. */
 export function getMaxImagePromptChars(provider: string | undefined): number {
   return (provider && MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER[provider]) || IMAGE_PROMPT_MAX
+}
+
+/**
+ * The fewest characters (after trimming) the prompt a provider is SENT may have,
+ * where its schema states a minimum it refuses below. Unlike the maximum, a
+ * short prompt cannot be fixed by the platform without writing words for the
+ * person, so a run whose final prompt is shorter is refused before anything is
+ * reserved (the image routes and the workflow run). Only a value quoted from
+ * the provider's schema is listed; a provider absent here has no minimum.
+ */
+export const MIN_IMAGE_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
+  "seedream-5-5": 5,     // docs.kie.ai/market/seedream/5-5-text-to-image ("5–5000 characters")
+  "seedream-5-5-i2i": 5, // docs.kie.ai/market/seedream/5-5-image-to-image
+}
+
+/** The minimum prompt length for a provider ({@link MIN_IMAGE_PROMPT_CHARS_BY_PROVIDER}), 0 when it states none. */
+export function getMinImagePromptChars(provider: string | undefined): number {
+  return (provider && MIN_IMAGE_PROMPT_CHARS_BY_PROVIDER[provider]) || 0
 }
 
 /**
@@ -607,6 +636,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "seedream-5-pro",
   "seedream-5-flash",
   "minimax-h3-image",
+  "seedream-5-5",
   "flux",
   "flux-flex",
   // Image editing / image-to-image (reference = source image)
@@ -632,6 +662,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "seedream-5-pro-i2i",
   "seedream-5-flash-i2i",
   "minimax-h3-image-i2i",
+  "seedream-5-5-i2i",
   "grok-i2i",
   // Upscale / background ops (source acts as the reference)
   "recraft-remove-bg",
@@ -673,6 +704,9 @@ export const T2I_TO_I2I_VARIANT: Record<string, string> = {
   "seedream-5-flash": "seedream-5-flash-i2i",
   // MiniMax H3 Image: its text-to-image endpoint takes no image at all.
   "minimax-h3-image": "minimax-h3-image-i2i",
+  // Seedream 5.5's text-to-image endpoint takes no image at all: its edit
+  // endpoint is the only one that reads them (the provider swaps too).
+  "seedream-5-5": "seedream-5-5-i2i",
   "flux": "flux-pro-i2i",
   "flux-flex": "flux-i2i",
 }
@@ -715,6 +749,8 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "seedream-5-flash-i2i": 10,
   // 1 to 16 `image_urls` (docs.kie.ai/market/minimax-h3/image-edit).
   "minimax-h3-image-i2i": 16,
+  // Seedream 5.5 takes 1–10 `image_urls` (docs.kie.ai/market/seedream/5-5-image-to-image).
+  "seedream-5-5-i2i": 10,
   // Single-source i2i (one input image)
   "flux-kontext": 1,
   "flux-kontext-max": 1,
@@ -773,15 +809,19 @@ export function imageReferenceLimit(provider: string | undefined): number {
 export const DEFAULT_REQUEST_IMAGE_LIMIT = 14
 
 /**
- * Models a request may give more input images than
+ * Models whose request may carry a different number of input images than
  * {@link DEFAULT_REQUEST_IMAGE_LIMIT}. Separate from
  * {@link REF_IMAGE_MAX_LIMITS}, the cap the canvas and the assembler honour: the
- * routes have their own, lower ceiling, and it rises per model only here.
+ * routes have their own ceiling, and it moves per model only here. GPT Image
+ * 2.6 takes more; a model priced per input image whose provider takes fewer
+ * (Seedream 5.5: 10) is held to its own, so a request is refused before it is
+ * reserved instead of failing at the provider.
  */
 const REQUEST_IMAGE_LIMITS: Record<string, number> = {
   "gpt-image-2-6-flare-i2i": 16,
   "gpt-image-2-6-sunburst-i2i": 16,
   "minimax-h3-image-i2i": 16,
+  "seedream-5-5-i2i": 10,
 }
 
 /** The largest per-model limit: the outer bound of the routes' array schemas. */
@@ -819,6 +859,8 @@ export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution" | 
   "seedream-5-lite-i2i": "quality",
   "seedream-5-pro": "quality",
   "seedream-5-pro-i2i": "quality",
+  "seedream-5-5": "resolution",
+  "seedream-5-5-i2i": "resolution",
   "topaz-image-upscale": "resolution",
   "ideogram-edit": "rendering-speed",
   "ideogram-remix": "rendering-speed",
@@ -890,6 +932,7 @@ export const IMAGE_GEN_PROVIDERS = [
   "seedream-5-pro",
   "seedream-5-flash",
   "minimax-h3-image",
+  "seedream-5-5",
   "flux-flex",
   "flux-kontext",
   "flux-kontext-max",
@@ -929,6 +972,7 @@ export const IMAGE_I2I_PROVIDERS = [
   "seedream-5-pro-i2i",
   "seedream-5-flash-i2i",
   "minimax-h3-image-i2i",
+  "seedream-5-5-i2i",
   "flux-kontext",
   "flux-kontext-max",
   // Replicate Open (uncensored) — multi-image Kontext via Replicate
@@ -1904,6 +1948,7 @@ export const IMAGE_MASK_MODE: Record<ImageGenProvider, ImageMaskMode> = {
   "seedream-5-pro": "prompt",
   "seedream-5-flash": "prompt",
   "minimax-h3-image": "prompt",
+  "seedream-5-5": "prompt",
   "qwen": "prompt",
   "flux-kontext": "prompt",
   "flux-kontext-max": "prompt",

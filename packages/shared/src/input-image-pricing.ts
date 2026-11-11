@@ -1,6 +1,6 @@
 /**
  * The image models whose price depends on how many input images a run sends:
- * GPT Image 2.6 Flare and Sunburst, and MiniMax H3 Image. Every place that
+ * GPT Image 2.6 Flare and Sunburst, MiniMax H3 Image and Seedream 5.5. Every place that
  * prices a run counts those images through here, so a model that joins
  * `isPricedPerInputImage` is counted on every path at once.
  */
@@ -10,15 +10,16 @@ import {
   isGptImage26Tiered,
 } from "./gpt-image-2-6.js"
 import { isMinimaxH3Image, isMinimaxH3ImageI2i } from "./minimax-h3-image.js"
+import { isSeedream55, isSeedream55I2i } from "./seedream-5-5.js"
 
 /** True for a model whose price counts the input images a run sends. */
 export function isPricedPerInputImage(model: unknown): boolean {
-  return typeof model === "string" && (isGptImage26Tiered(model) || isMinimaxH3Image(model))
+  return typeof model === "string" && (isGptImage26Tiered(model) || isMinimaxH3Image(model) || isSeedream55(model))
 }
 
 /** True for the edit id of such a model: it always sends at least its source. */
 export function isPricedPerInputImageEdit(model: unknown): boolean {
-  return typeof model === "string" && (isGptImage26I2i(model) || isMinimaxH3ImageI2i(model))
+  return typeof model === "string" && (isGptImage26I2i(model) || isMinimaxH3ImageI2i(model) || isSeedream55I2i(model))
 }
 
 /**

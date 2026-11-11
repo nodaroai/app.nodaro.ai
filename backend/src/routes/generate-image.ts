@@ -9,6 +9,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { withAdjustments } from "../lib/image-gen-normalize.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
+import { imagePromptTooShort } from "../lib/image-prompt-minimum.js"
 import { runJobBatch, type PlannedBatchJob } from "../lib/job-batch.js"
 import {
   batchSeed,
@@ -314,6 +315,12 @@ export async function generateImageRoutes(app: FastifyInstance) {
     const plans: ImageJobPlan[] = []
     for (const [i, request] of perModel.entries()) {
       plans.push(await planImageJob({ data: request, assembled: assembled[i]!, resolvedLora: trained.lora, identityText, userDirection, log: req.log }))
+    }
+    // A prompt shorter than the model sent takes is refused here, before any job
+    // row or reservation: the provider would refuse it after both.
+    for (const plan of plans) {
+      const tooShort = imagePromptTooShort(plan.queueData.provider as string | undefined, plan.queueData.prompt as string | undefined)
+      if (tooShort) return reply.status(400).send({ error: tooShort })
     }
 
     const mcpClient = extractMcpClient(req.body)

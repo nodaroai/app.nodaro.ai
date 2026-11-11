@@ -314,7 +314,7 @@ export interface GenerateImageParams extends StructuredReferenceParams, Generati
    *  `provider`. models × count is at most 8. With `presetId`, the preset is
    *  applied once per model. */
   models?: string[]
-  /** Image background, on the models that take one. `transparent` renders at 1K. */
+  /** Image background, on the models that take one. On GPT Image `transparent` renders at 1K; Seedream 5.5 renders it at any size, as a PNG. */
   background?: ImageBackground
   /**
    * The file the run writes, on the models that list `outputFormats`:

@@ -661,6 +661,8 @@ const MODEL_DESCRIPTIONS_HE: Record<string, string> = {
   "Fast, low-cost Seedream edits, up to 10 input images": "עריכות Seedream מהירות וזולות, עד 10 תמונות קלט",
   "Readable text in the picture, up to 4K, same price at 1K and 2K": "טקסט קריא בתוך התמונה, עד 4K, אותו מחיר ב-1K וב-2K",
   "Up to 16 reference images in one edit, readable text, up to 4K": "עד 16 תמונות ייחוס בעריכה אחת, טקסט קריא, עד 4K",
+  "Natural light, materials and skin, small text, transparent backgrounds": "תאורה, חומרים ועור טבעיים, טקסט קטן, רקע שקוף",
+  "Edits that keep the rest of the picture, up to 10 input images": "עריכות ששומרות על שאר התמונה, עד 10 תמונות קלט",
   "Fast Gemini, agentic-tuned": "Gemini מהיר, מכוונן לעבודת סוכנים",
   "Fast Gemini, sharper reasoning": "Gemini מהיר, חשיבה חדה יותר",
   "Fast Imagen, lower latency": "Imagen מהיר, השהיה נמוכה יותר",
@@ -1103,6 +1105,8 @@ const OPTION_QUALIFIERS_HE: Record<string, string> = {
   "Standard": "רגיל",
   "Social": "רשתות חברתיות",
   "High": "גבוה",
+  // "1.5K (Medium)", Seedream 5.5's middle size.
+  "Medium": "בינוני",
   "Ultra": "אולטרה",
   "Detailed": "מפורט",
   "Default": "ברירת מחדל",

@@ -53,6 +53,14 @@ import {
   type ImageFormatLevers,
 } from "./gpt-image-2-6.js"
 import { isMinimaxH3Image, minimaxH3ImageCreditId } from "./minimax-h3-image.js"
+import {
+  SEEDREAM_5_5_I2I,
+  SEEDREAM_5_5_MAX_INPUT_IMAGES,
+  isSeedream55,
+  isSeedream55I2i,
+  seedream55Resolution,
+  type Seedream55Model,
+} from "./seedream-5-5.js"
 import { VIDEO_DURATION_AUTO } from "./video-duration-auto.js"
 import { uiResolutionFill } from "./video-ui-defaults.js"
 import { MODEL_CATALOG, autoAspectNeedsSourceImage, normalizeModelInput, normalizeVideoRequestParams, defaultResolutionFor, type ModelInputAdjustment, type SourceImageSize } from "./model-catalog.js"
@@ -133,6 +141,31 @@ function gptImage26CreditId(
 }
 
 /**
+ * The price id of a Seedream 5.5 run: `seedream-5-5:<size>`, and on an edit
+ * `seedream-5-5-i2i:<size>:<N>ref`, N being the input images (1 to 10). Each
+ * size has its own id, 1K and 1.5K at the same price.
+ *
+ * A size off its list (a stored node, the multi-provider preview pricing one
+ * node's data against every model) or none lands on the default, 2K, which is
+ * what the provider renders with none. A text-to-image id sent input images
+ * runs on the edit endpoint (the provider swaps it), so a caller that does not
+ * swap the model first (the entity routes, a pipeline pin) is priced there too.
+ * An edit always has at least its source, and is priced for at most the images
+ * the provider takes (what a request holds past it is not sent).
+ */
+function seedream55CreditId(
+  provider: Seedream55Model,
+  resolution: string | undefined,
+  referenceImageCount: number | undefined,
+): string {
+  const size = seedream55Resolution(resolution)
+  const images = Math.trunc(referenceImageCount ?? 0)
+  const model = !isSeedream55I2i(provider) && images > 0 ? SEEDREAM_5_5_I2I : provider
+  if (!isSeedream55I2i(model)) return `${model}:${size}`
+  return `${model}:${size}:${Math.min(Math.max(1, images), SEEDREAM_5_5_MAX_INPUT_IMAGES)}ref`
+}
+
+/**
  * Compute composite model identifier for variable credit pricing.
  * Examples: "gpt-image:high", "flux:2K", "nano-banana-pro:4K", "ideogram:TURBO",
  *           "flux-2-pro:2MP", "flux-2-max:2MP:1ref" (Flux 2 — billed per megapixel).
@@ -167,6 +200,9 @@ export function buildCreditModelIdentifier(
   // (`minimax-h3-image:2K`, `minimax-h3-image-i2i:4K:3ref`).
   if (isMinimaxH3Image(provider)) {
     return minimaxH3ImageCreditId(provider, resolution, referenceImageCount)
+  }
+  if (isSeedream55(provider)) {
+    return seedream55CreditId(provider, resolution, referenceImageCount)
   }
   if (HIGH_QUALITY_PROVIDERS.has(provider) && quality === "high") {
     return `${provider}:high`

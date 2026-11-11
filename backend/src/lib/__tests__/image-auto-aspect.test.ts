@@ -11,8 +11,8 @@ import {
 
 const LISTED = [...UNSET_RATIO_IS_AUTO_EDIT_MODELS]
 
-describe("imageToImageAspectRatio — no ratio on a GPT Image 2, 2.5 or 2.6 edit is 'auto'", () => {
-  it("lists exactly the GPT Image 2, 2.5 and 2.6 edit models and MiniMax H3 Image's edit", () => {
+describe("imageToImageAspectRatio — no ratio on a GPT Image 2, 2.5 or 2.6, a MiniMax H3 Image or a Seedream 5.5 edit is 'auto'", () => {
+  it("lists exactly the GPT Image 2, 2.5 and 2.6 edit models, MiniMax H3 Image's edit and Seedream 5.5's", () => {
     expect(LISTED.sort()).toEqual([
       "gpt-image-2-5-flare-i2i",
       "gpt-image-2-5-sunburst-i2i",
@@ -21,6 +21,7 @@ describe("imageToImageAspectRatio — no ratio on a GPT Image 2, 2.5 or 2.6 edit
       "gpt-image-2-6-sunburst-i2i",
       "gpt-image-2-i2i",
       "minimax-h3-image-i2i",
+      "seedream-5-5-i2i",
     ])
     // The platform's edit default is one of them, so a request naming neither
     // a model nor a ratio is covered.

@@ -16,6 +16,8 @@ import { providerKindForImageModel } from "../../lib/reconcile/provider-kind.js"
 import { autoAttachLocationAsset } from "../../lib/location-auto-attach.js"
 import type { PluginSurroundEngine } from "../../lib/private-plugins/types.js"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
+import { aspectRatioForStrictModel } from "../../lib/aspect-ratio.js"
+import { kieImageModelSent } from "../../providers/kie/image-edit-sibling.js"
 
 const DEFAULT_REFINE_PROVIDER = "recraft-upscale"
 
@@ -86,8 +88,15 @@ function makeHandler(engine: PluginSurroundEngine): HandlerFn {
     })
     await setJobProgress(job, ctx.jobId, 20)
 
-    // 2. Paint the gray region (i2i off the composite).
-    const extraParams = aspectRatio ? { aspect_ratio: aspectRatio } : undefined
+    // 2. Paint the gray region (i2i off the composite). The ratio goes as it
+    // came, except on a model whose endpoint refuses a ratio it does not list
+    // (`strictAspectRatios`, Seedream 5.5 only): there a ratio it does not list
+    // goes as the nearest one it does, never refused by the provider after the
+    // reservation. The composite always goes with the request, so the check is
+    // against the model it reaches (`kieImageModelSent`): Seedream 5.5 runs on
+    // its edit, which takes "auto".
+    const sentAspectRatio = aspectRatioForStrictModel(aspectRatio, kieImageModelSent(resolvedProvider, 1))
+    const extraParams = sentAspectRatio ? { aspect_ratio: sentAspectRatio } : undefined
     const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForImageModel(resolvedProvider))
     const result = await generateImage(prompt, resolvedProvider, [compositeUrl], extraParams, { onTaskCreated })
     await setJobProgress(job, ctx.jobId, 50)

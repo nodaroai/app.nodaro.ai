@@ -645,6 +645,8 @@ const MODEL_DESCRIPTIONS_KO: Record<string, string> = {
   "Fast, low-cost Seedream edits, up to 10 input images": "빠르고 저렴한 Seedream 편집, 입력 이미지 최대 10장",
   "Readable text in the picture, up to 4K, same price at 1K and 2K": "이미지 속 텍스트도 선명하게, 최대 4K, 1K와 2K 같은 가격",
   "Up to 16 reference images in one edit, readable text, up to 4K": "한 번의 편집에 레퍼런스 이미지 최대 16장, 선명한 텍스트, 최대 4K",
+  "Natural light, materials and skin, small text, transparent backgrounds": "자연스러운 빛·재질·피부, 작은 글자, 투명 배경",
+  "Edits that keep the rest of the picture, up to 10 input images": "나머지는 그대로 두는 편집, 입력 이미지 최대 10장",
   "Fast Gemini, agentic-tuned": "빠른 Gemini, 에이전트 작업에 맞게 튜닝",
   "Fast Gemini, sharper reasoning": "빠른 Gemini, 더 정교한 추론",
   "Fast Imagen, lower latency": "빠른 Imagen, 더 낮은 지연 시간",
@@ -1082,6 +1084,8 @@ const OPTION_QUALIFIERS_KO: Record<string, string> = {
   "Standard": "표준",
   "Social": "SNS용",
   "High": "고화질",
+  // "1.5K (Medium)", Seedream 5.5's middle size.
+  "Medium": "중간 화질",
   "Ultra": "초고화질",
   "Detailed": "정밀",
   "Default": "기본값",

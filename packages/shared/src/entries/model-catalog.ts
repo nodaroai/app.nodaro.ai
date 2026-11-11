@@ -41,6 +41,18 @@ export {
   minimaxH3ImageCreditId,
 } from "../minimax-h3-image.js"
 export type { MinimaxH3ImageModel, MinimaxH3ImageResolution } from "../minimax-h3-image.js"
+export {
+  SEEDREAM_5_5_DEFAULT_RESOLUTION,
+  SEEDREAM_5_5_I2I,
+  SEEDREAM_5_5_MAX_INPUT_IMAGES,
+  SEEDREAM_5_5_MIN_PROMPT_CHARS,
+  SEEDREAM_5_5_RESOLUTIONS,
+  SEEDREAM_5_5_T2I,
+  isSeedream55,
+  isSeedream55I2i,
+  seedream55Resolution,
+} from "../seedream-5-5.js"
+export type { Seedream55Model, Seedream55Resolution } from "../seedream-5-5.js"
 // The models priced by the input images a run sends, and how a run's images are counted.
 export {
   isPricedPerInputImage,

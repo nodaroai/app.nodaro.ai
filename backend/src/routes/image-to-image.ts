@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify"
+import { imagePromptTooShort } from "../lib/image-prompt-minimum.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { insertJob } from "../lib/insert-job.js"
 import { z } from "zod"
@@ -334,6 +335,11 @@ export async function imageToImageRoutes(app: FastifyInstance) {
     const finalNegativePrompt = policed.negativePrompt || undefined
     parsed.data.prompt = prompt
     parsed.data.negativePrompt = finalNegativePrompt
+
+    // A prompt shorter than the model takes is refused before the job row and
+    // the reservation: the provider would refuse it after both.
+    const tooShort = imagePromptTooShort(normalized.modelId, prompt)
+    if (tooShort) return reply.status(400).send({ error: tooShort })
 
     const mcpClient = extractMcpClient(req.body)
     const forcePrivate = isStudioPath ? true : (extractForcePrivate(req.body) || undefined)
