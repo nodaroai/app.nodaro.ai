@@ -54,7 +54,7 @@ vi.mock("@/lib/house-model-claim.js", () => ({
   claimHouseModelStart: async () => ({ state: "claimed" }),
   saveHouseModelReference: async (_jobId: string, _ref: string, cost: number) => {
     m.savedCosts.push(cost)
-    return true
+    return "saved"
   },
 }))
 vi.mock("@/lib/job-cancellation.js", async (importOriginal) => ({

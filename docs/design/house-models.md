@@ -46,10 +46,15 @@ model availability follows from that one rule:
 - Admin → Availability shows no switch for it.
 - A request that runs it is refused before any credit is reserved
   (`model_not_available`), and so is a workflow run.
-- A deployment overlay's preset pack that names it refuses the boot, as one
-  naming any model the deployment withholds does. It is judged once the
-  private plugins have loaded, since before that no house model reads as
-  served (the API loads its overlay first).
+- A deployment overlay's preset pack that names it logs a warning at boot,
+  naming the pack, the preset and the model, and the process starts. The
+  preset is refused when it runs, before any hold. Whether a house model is
+  served depends on its upstream key being present in that process. That
+  differs between services (the pipeline worker never needs it) and changes
+  at run time (a key added, rotated or removed), so refusing the boot could
+  crash-loop a whole service. The check runs once the private plugins have
+  loaded, since before that no house model reads as served. A preset naming
+  a model the profile withholds still refuses the boot.
 - While the catalog has a house model this install does not serve, the
   deployment counts as restricting models (`modelRestrictionConfigured`). A
   route that names the model it runs only through `runModel` is then judged
@@ -116,7 +121,11 @@ retired model's remap.
    So a rejected `start` is final: the job fails and is refunded, and nothing
    runs the lane again. The reference then replaces the claim at once, with a
    second compare-and-set on the claim's own value, together with the start's
-   planned cost.
+   planned cost. That save lands only while the job is still live (pending,
+   queued or processing). A worker whose lock lapsed while `start` ran can find
+   its job already failed and refunded by the re-pick. It then stops: it does
+   not poll, it logs that the job was ended, and it leaves the row as it is
+   (`HouseModelJobEndedError`, final).
 3. Polls until the run is done or failed, or the per-model poll budget runs out.
    A failed status (a finished task with no usable file comes back as one) is
    the run's end: final. Every tick honours a cancel. A status read that throws

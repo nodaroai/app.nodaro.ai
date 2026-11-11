@@ -71,20 +71,22 @@ describe("claimHouseModelStart", () => {
 })
 
 describe("saveHouseModelReference", () => {
-  it("replaces only the claim, with the planned cost in the same write", async () => {
+  it("replaces only the claim of a job still live, with the planned cost in the same write", async () => {
     db.answers.push({ data: [{ id: "job-1" }], error: null })
-    await expect(saveHouseModelReference("job-1", "ref-1", 0.25)).resolves.toBe(true)
+    await expect(saveHouseModelReference("job-1", "ref-1", 0.25)).resolves.toBe("saved")
     const [update, ...filters] = ops()
     expect(update![1]).toMatchObject({ provider_task_id: "ref-1", provider_cost: 0.25 })
     expect(filters).toContainEqual(["eq", "provider_kind", "house-model"])
     expect(filters).toContainEqual(["eq", "provider_task_id", HOUSE_MODEL_CLAIM_REF])
+    // Live only: a job a re-pick failed and refunded while `start` ran is not written over.
+    expect(filters).toContainEqual(["in", "status", ["pending", "queued", "processing"]])
   })
 
-  it("answers false when nothing was claimed to replace, or the write failed — never throws", async () => {
+  it("a job no longer live (or no longer claimed) is not-live; a write that failed is an error — never throws", async () => {
     db.answers.push({ data: [], error: null })
-    await expect(saveHouseModelReference("job-1", "ref-1", 0.25)).resolves.toBe(false)
+    await expect(saveHouseModelReference("job-1", "ref-1", 0.25)).resolves.toBe("not-live")
     db.answers.push({ data: null, error: { message: "timeout" } })
-    await expect(saveHouseModelReference("job-1", "ref-1", 0.25)).resolves.toBe(false)
+    await expect(saveHouseModelReference("job-1", "ref-1", 0.25)).resolves.toBe("error")
   })
 })
 

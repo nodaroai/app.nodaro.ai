@@ -21,6 +21,8 @@ const harness = vi.hoisted(() => ({
   claim: { state: "claimed" } as { state: "claimed" } | { state: "started"; taskRef: string } | { state: "taken" } | { state: "error"; message: string },
   claims: 0,
   draining: false,
+  /** Overrides what saving the reference finds (else: `saves` true → saved, false → error). */
+  saveOutcome: undefined as "saved" | "not-live" | "error" | undefined,
 }))
 
 // A catalog with one entry offered under the deployment's own label.
@@ -50,8 +52,9 @@ vi.mock("@/lib/house-model-claim.js", () => ({
   saveHouseModelReference: async (jobId: string, taskRef: string, cost: number) => {
     harness.events.push(`checkpoint:${jobId}:house-model:${taskRef}`)
     harness.savedCosts.push(cost)
-    if (harness.saves) harness.claim = { state: "started", taskRef }
-    return harness.saves
+    const outcome = harness.saveOutcome ?? (harness.saves ? "saved" : "error")
+    if (outcome === "saved") harness.claim = { state: "started", taskRef }
+    return outcome
   },
 }))
 vi.mock("@/lib/worker-drain.js", async (importOriginal) => ({
@@ -80,6 +83,7 @@ import {
   isHouseModelRunFinal,
   isHouseModelRunPending,
   HouseModelStartRefusedError,
+  HouseModelJobEndedError,
   houseModelServed,
   planHouseModelRun,
   runHouseModelTask,
@@ -123,6 +127,7 @@ beforeEach(() => {
   harness.claim = { state: "claimed" }
   harness.claims = 0
   harness.draining = false
+  harness.saveOutcome = undefined
   resetOwnLabelModelIdsForTests()
   vi.spyOn(console, "warn").mockImplementation(() => {})
 })
@@ -539,6 +544,17 @@ describe("runHouseModelTask: one start per job", () => {
     expect(start).not.toHaveBeenCalled()
     expect(isHouseModelRunFinal(err)).toBe(false)
     expect(isHouseModelRunPending(err)).toBe(false)
+  })
+
+  it("a job ended while its start ran (this worker's lock lapsed, a re-pick refunded it): no poll, final, the row left as it is", async () => {
+    harness.saveOutcome = "not-live"
+    const poll = vi.fn(async () => ({ state: "running" as const }))
+    setPluginServices({ houseModels: fakeService({ poll }) })
+    const err = await runHouseModelTask(ID, {}, OPTS).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(HouseModelJobEndedError)
+    expect(isHouseModelRunFinal(err)).toBe(true)
+    expect(poll).not.toHaveBeenCalled()
+    expect(harness.events).toEqual(["start", "checkpoint:job-1:house-model:ref-1"])
   })
 
   it("a start that hands back the claim's own value is no reference: final", async () => {

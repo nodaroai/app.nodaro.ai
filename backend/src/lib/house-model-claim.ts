@@ -84,12 +84,25 @@ export async function claimHouseModelStart(jobId: string): Promise<HouseModelCla
 }
 
 /**
+ * What saving the run's reference found:
+ *   - `saved`: the reference replaced the claim;
+ *   - `not-live`: the row is no longer this run's to save on — it left the
+ *     live statuses (a re-pick failed and refunded it while `start` ran, a
+ *     cancel) or no longer holds the claim. Nothing was written;
+ *   - `error`: the database could not be asked; whether it landed is unknown.
+ */
+export type HouseModelReferenceSave = "saved" | "not-live" | "error"
+
+/**
  * Replaces the claim with the run's reference, and records the start's planned
  * cost (`jobs.provider_cost`) in the same write: a job the recovery finishes
  * keeps that figure when the upstream reports none. Lands only on the claim
- * (never overwrites a reference). True when it landed; never throws.
+ * (never overwrites a reference) of a job that is still live (pending, queued
+ * or processing): a worker whose lock lapsed while `start` ran may find its job
+ * already failed and refunded by the re-pick, and must not write over it.
+ * Never throws.
  */
-export async function saveHouseModelReference(jobId: string, taskRef: string, plannedCostUsd: number): Promise<boolean> {
+export async function saveHouseModelReference(jobId: string, taskRef: string, plannedCostUsd: number): Promise<HouseModelReferenceSave> {
   try {
     const { data, error } = await supabase
       .from("jobs")
@@ -101,14 +114,15 @@ export async function saveHouseModelReference(jobId: string, taskRef: string, pl
       .eq("id", jobId)
       .eq("provider_kind", HOUSE_MODEL_PROVIDER_KIND)
       .eq("provider_task_id", HOUSE_MODEL_CLAIM_REF)
+      .in("status", [...CLAIMABLE_STATUSES])
       .select("id")
     if (error) {
       console.warn(`[house-models] job ${jobId}: saving the run's reference failed: ${error.message}`)
-      return false
+      return "error"
     }
-    return Array.isArray(data) && data.length > 0
+    return Array.isArray(data) && data.length > 0 ? "saved" : "not-live"
   } catch (err) {
     console.warn(`[house-models] job ${jobId}: saving the run's reference failed: ${err instanceof Error ? err.message : String(err)}`)
-    return false
+    return "error"
   }
 }

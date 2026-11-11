@@ -146,6 +146,23 @@ export class HouseModelStartRefusedError extends DeterministicJobError {
 }
 
 /**
+ * A run whose job was ended (failed and refunded by a re-pick, or cancelled)
+ * while its `start` ran — found when its reference could not be saved on a
+ * job that is no longer live. Final: nothing polls the run, and the row is
+ * left as the one that ended it wrote it (the worker's failure write cannot
+ * take a row that is no longer live).
+ */
+export class HouseModelJobEndedError extends DeterministicJobError {
+  readonly houseModelRefusal = "job-ended" as const
+
+  constructor(id: string) {
+    super(`${houseModelLabel(id)} could not complete this run.`)
+    this.name = "HouseModelJobEndedError"
+    Object.setPrototypeOf(this, new.target.prototype)
+  }
+}
+
+/**
  * The refusal of a run with an input file that is not a file of this
  * install's own storage — final, nothing was started. A lane copies an
  * outside file to our storage before it measures, bills or sends it; this is
@@ -332,7 +349,10 @@ export interface HouseModelRunResult {
  *   FINAL: the job fails and is refunded, and nothing runs the lane again.
  * - The reference replaces the claim at once (`saveHouseModelReference`, with
  *   the planned cost): a worker that dies after it is never re-submitted — a
- *   queue re-pick finds the task id and the reconcile reads its status.
+ *   queue re-pick finds the task id and the reconcile reads its status. The
+ *   save lands only on a job still live: one ended while `start` ran (this
+ *   worker's lock lapsed and a re-pick failed it) stops the run here, unread
+ *   (`HouseModelJobEndedError`, final), with the row left as it is.
  * - A drain (`isWorkerDraining`) hands the job back (`DrainAbortError`) once
  *   the reference is saved; the re-pick reads the run. A run whose reference
  *   could not be saved keeps polling: handing it back could not resume it.
@@ -424,7 +444,15 @@ export async function runHouseModelTask(
     }
     taskRef = started
     // The planned cost rides with the reference: a job the recovery finishes keeps it when the upstream reports none.
-    saved = await saveHouseModelReference(opts.jobId, taskRef, planned.providerCostUsd)
+    const save = await saveHouseModelReference(opts.jobId, taskRef, planned.providerCostUsd)
+    if (save === "not-live") {
+      // This worker's lock lapsed while `start` ran, and the job was ended meanwhile
+      // (the re-pick failed and refunded it, or it was cancelled): nothing to poll
+      // for, and the row is left as it is. The run that was started is not read.
+      console.warn(`[house-models] job ${opts.jobId} (${id}): the job was ended while its run was being started; the run is not read and the row is left as it is`)
+      throw new HouseModelJobEndedError(id)
+    }
+    saved = save === "saved"
     if (!saved) console.warn(`[house-models] job ${opts.jobId} (${id}): the run's reference could not be saved; any failure from here is final`)
   }
   /** A failure after `start`: retryable only when a re-pick can find the saved reference. */

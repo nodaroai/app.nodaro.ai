@@ -19,7 +19,7 @@ vi.mock("@nodaro/shared/model-catalog", async (importOriginal) => {
 })
 
 import { registerCatalogPack, resetCatalogPacks } from "@nodaro/prompts/catalog-packs"
-import { judgeOverlayPresetPacksAfterPlugins, loadOverlay, OVERLAY_CONTRACT_VERSION, resetOverlayLoadForTests } from "../load.js"
+import { loadOverlay, OVERLAY_CONTRACT_VERSION, resetOverlayLoadForTests, warnOverlayPresetPacksOnHouseModels } from "../load.js"
 import { runOverlayChecksAfterPlugins } from "../after-plugins.js"
 import { _resetPluginServicesForTests, setPluginServices } from "../../private-plugins/services-registry.js"
 import type { PluginHouseModelsService } from "../../private-plugins/types.js"
@@ -116,9 +116,12 @@ describe("loadOverlay — preset packs the overlay registered", () => {
   })
 })
 
-describe("preset packs naming a house model: judged once the plugins have loaded", () => {
+describe("preset packs naming a house model: a warning, never a boot refusal", () => {
   const HOUSE_LOOK = { ...LOOK, id: "generate-image/overlay-house-look", data: { ...LOOK.data, provider: "house-fixture" } }
   const registeringHouseLook = () => overlayRegistering(() => registerPresetPack({ nodeType: "generate-image", presets: [HOUSE_LOOK] }))
+  const WARNING =
+    '[overlay] acme-overlay: preset pack for "generate-image": preset "generate-image/overlay-house-look" names house model "house-fixture" (data.provider), ' +
+    "which this process does not serve — the preset is refused when it runs"
 
   function plugins(served: readonly string[]): void {
     const houseModels: PluginHouseModelsService = {
@@ -130,36 +133,60 @@ describe("preset packs naming a house model: judged once the plugins have loaded
     setPluginServices({ houseModels })
   }
 
-  it("a deployment that serves it boots — the overlay's check, before the plugins, does not judge it — and the preset runs", async () => {
+  /** The preset's own run, as the workflow engine builds it: refused before any hold where the model is withheld. */
+  async function runThePreset(): Promise<unknown> {
+    const { buildPayload } = await import("../../../services/workflow-engine/payload-builder.js")
+    const node = { id: "n-1", type: "generate-image", data: { ...HOUSE_LOOK.data } }
+    try {
+      buildPayload(node, "job-1", {}, undefined, { nodes: [node], edges: [], nodeStates: {} })
+      return undefined
+    } catch (err) {
+      return err
+    }
+  }
+
+  it("a deployment that serves it boots with no warning, and the preset runs", async () => {
     const exit = vi.fn() as unknown as (code: number) => never
     vi.spyOn(console, "log").mockImplementation(() => {})
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
     // The API's order: the overlay loads first (app.ts), the plugins after.
     await expect(loadOverlay({ ...registeringHouseLook(), exit })).resolves.toEqual({ loaded: "acme-overlay" })
     plugins(["house-fixture"])
-    await judgeOverlayPresetPacksAfterPlugins()
+    await runOverlayChecksAfterPlugins()
     expect(exit).not.toHaveBeenCalled()
+    expect(warn).not.toHaveBeenCalled()
     expect(presetCatalog("generate-image").at(-1)).toEqual(HOUSE_LOOK)
     expect(isModelDenied("house-fixture")).toBe(false)
+    expect(((await runThePreset()) as { code?: unknown } | undefined)?.code).not.toBe("model_not_available")
   })
 
-  it("a deployment that does not serve it refuses the boot once the plugins load, exactly as for a model the profile withholds — and the preset is refused when it runs", async () => {
+  it("a deployment that does not serve it WARNS (pack, preset, model) and boots — and the preset is refused when it runs", async () => {
     const exit = vi.fn() as unknown as (code: number) => never
-    const error = vi.spyOn(console, "error").mockImplementation(() => {})
     vi.spyOn(console, "log").mockImplementation(() => {})
-    await loadOverlay({ ...registeringHouseLook(), exit })
-    expect(exit).not.toHaveBeenCalled()
-    // The plugins load and do not serve it (a community install loads none: the same answer).
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    await expect(loadOverlay({ ...registeringHouseLook(), exit })).resolves.toEqual({ loaded: "acme-overlay" })
+    // The plugins load and do not serve it (its key is absent in this process; a community install loads none).
     plugins([])
-    await judgeOverlayPresetPacksAfterPlugins()
-    expect(exit).toHaveBeenCalledWith(1)
-    const message = String(error.mock.calls[0]?.[0])
-    expect(message).toMatch(/^\[overlay\] FATAL: overlay "acme-overlay" registered preset packs this deployment cannot serve/)
-    expect(message).toContain('generate-image/overlay-house-look: data.provider names model "house-fixture", which this deployment does not offer')
-    // Its run: refused like any withheld model (`model_not_available`).
+    await runOverlayChecksAfterPlugins()
+    expect(exit).not.toHaveBeenCalled()
+    expect(warn.mock.calls.map((c) => String(c[0]))).toEqual([WARNING])
+    // Its run: refused before any hold, like any withheld model.
     expect(isModelDenied("house-fixture")).toBe(true)
+    expect(await runThePreset()).toMatchObject({ code: "model_not_available" })
   })
 
-  it("the same message as a pack naming a model the profile withholds", async () => {
+  it("where the plugins load first (the video worker), the overlay's own load warns, once", async () => {
+    plugins([])
+    const exit = vi.fn() as unknown as (code: number) => never
+    vi.spyOn(console, "log").mockImplementation(() => {})
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    await expect(loadOverlay({ ...registeringHouseLook(), exit })).resolves.toEqual({ loaded: "acme-overlay" })
+    await runOverlayChecksAfterPlugins()
+    expect(exit).not.toHaveBeenCalled()
+    expect(warn.mock.calls.map((c) => String(c[0]))).toEqual([WARNING])
+  })
+
+  it("a model the profile withholds still refuses the boot", async () => {
     process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ models: { deny: ["gpt-image-2"] } })
     __resetSurfaceProfileCacheForTests()
     const exit = vi.fn() as unknown as (code: number) => never
@@ -169,35 +196,17 @@ describe("preset packs naming a house model: judged once the plugins have loaded
     expect(String(error.mock.calls[0]?.[0])).toContain('generate-image/overlay-look: data.provider names model "gpt-image-2", which this deployment does not offer')
   })
 
-  it("where the plugins load first (the video worker), the overlay's own check judges it", async () => {
+  it("no overlay, nothing to look at", async () => {
     plugins([])
-    const exit = vi.fn() as unknown as (code: number) => never
-    const error = vi.spyOn(console, "error").mockImplementation(() => {})
-    await loadOverlay({ ...registeringHouseLook(), exit })
-    expect(exit).toHaveBeenCalledWith(1)
-    expect(String(error.mock.calls[0]?.[0])).toContain('data.provider names model "house-fixture", which this deployment does not offer')
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    await expect(warnOverlayPresetPacksOnHouseModels()).resolves.toBeUndefined()
+    expect(warn).not.toHaveBeenCalled()
   })
 
-  it("no overlay, nothing to judge", async () => {
-    plugins([])
-    await expect(judgeOverlayPresetPacksAfterPlugins()).resolves.toBeUndefined()
-  })
-
-  it("the plugin loader judges the overlay's packs after every load", () => {
+  it("the plugin loader runs the overlay's check after every load", () => {
     const src = readFileSync(fileURLToPath(new URL("../../private-plugins/load.ts", import.meta.url)), "utf8")
     const entry = src.slice(src.indexOf("export async function loadPrivatePlugins("), src.indexOf("async function loadPrivatePluginsOnce("))
     expect(entry).toContain("const result = await loadPrivatePluginsOnce(opts)")
     expect(entry.indexOf("await runOverlayChecksAfterPlugins()")).toBeGreaterThan(entry.indexOf("loadPrivatePluginsOnce(opts)"))
-  })
-
-  it("an overlay load registers the check the plugin loader runs", async () => {
-    const exit = vi.fn() as unknown as (code: number) => never
-    const error = vi.spyOn(console, "error").mockImplementation(() => {})
-    vi.spyOn(console, "log").mockImplementation(() => {})
-    await loadOverlay({ ...registeringHouseLook(), exit })
-    plugins([])
-    await runOverlayChecksAfterPlugins()
-    expect(exit).toHaveBeenCalledWith(1)
-    expect(String(error.mock.calls[0]?.[0])).toContain('data.provider names model "house-fixture"')
   })
 })
