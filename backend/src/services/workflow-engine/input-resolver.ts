@@ -473,7 +473,7 @@ export function resolveNodeInputs(
             if (!item) continue
             if (ugcHandle) { inputs.ugc = { ...inputs.ugc, [ugcHandle]: item }; continue }
             if (routeUnitInput(inputs, targetNode, edge, sourceNode, effectiveSourceHandle, item, TEXT_SOURCE_NODE_TYPES)) continue
-            routeOutput(inputs, routed, targetNode, item, edge, edges, allNodes, nodeStates)
+            routeOutput(inputs, routed, targetNode, item, edge, edges, allNodes, nodeStates, effectiveSourceHandle)
           }
           continue
         }
