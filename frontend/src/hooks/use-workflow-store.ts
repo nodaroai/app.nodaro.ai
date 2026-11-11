@@ -35,7 +35,7 @@ import type { PipelineStatus } from "@nodaro/shared/pipeline"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import type { NodeDoubleClickAction } from "@/lib/node-double-click-action"
 import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
-import { previewTypeOfNodeType } from "@/lib/preview-node-types"
+import { previewTypeOfNodeType, previewTypeOfPip } from "@/lib/preview-node-types"
 import { videoOverlayConnectPatch } from "@/lib/video-overlay-connect"
 import { initialEdgeData } from "@/lib/initial-edge-data"
 import { ensureNodePositions } from "@/lib/node-position"
@@ -164,6 +164,9 @@ export function classifyPreviewValue(
   value: string,
   sourceHandle?: string | null,
 ): PreviewItem["type"] {
+  // A JSON output beside a node unit's media take is data — before the extension checks (its JSON may name an image).
+  const byPip = previewTypeOfPip(nodeType, sourceHandle)
+  if (byPip) return byPip
   if (nodeType === "voice-design" && sourceHandle === "voiceId") return "text"
   if (nodeType === "forced-alignment") return "data"
   // Must precede the extension checks below — video-analysis (and

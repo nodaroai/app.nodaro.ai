@@ -1,6 +1,6 @@
 import { unitDefinitionOf } from "@/lib/unit-definitions";
 import { unitOutputValue } from "@/lib/unit-compose";
-import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES, previewTypeOfNodeType } from "@/lib/preview-node-types";
+import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES, previewTypeOfNodeType, previewTypeOfPip } from "@/lib/preview-node-types";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { runGraph } from "./run-graph";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
@@ -1229,6 +1229,9 @@ export function detectPreviewItemType(
   value?: string,
   sourceHandle?: string,
 ): "image" | "video" | "audio" | "data" | "text" {
+  // A JSON output beside a node unit's media take is data, whatever its node's medium.
+  const byPip = previewTypeOfPip(nodeType, sourceHandle)
+  if (byPip) return byPip
   if (nodeType === "voice-design" && sourceHandle === "voiceId") return "text"
   // Text to Dialogue's `json` pip is its Transcript (data); its audio pip falls
   // through to the node-type sets (lib/preview-node-types.ts). Must come before them.

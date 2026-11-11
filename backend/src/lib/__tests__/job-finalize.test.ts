@@ -1445,3 +1445,137 @@ describe("finalizeJobWithMedia — relay provenance (router lane)", () => {
     expect(Object.keys(commitReplay).some((k) => k.startsWith("relay"))).toBe(false)
   })
 })
+
+// ===========================================================================
+// Extra image sets — the images an image job delivers beside its result
+// (every layer of a split image): stored like the result, their URLs on
+// output_data[key], and a `library` set filed in the Library under its names.
+// ===========================================================================
+describe("finalizeJobWithMedia — extra image sets", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetMocksToHappyPath()
+    // Each upload answers with a URL named after the key it was given.
+    sharedMocks.uploadImageVariantsMaybeWatermark.mockImplementation(async (_urls, key) => [`https://r2.example/images/${key}.png`])
+  })
+
+  const layers = [
+    { url: "https://kie.example/l1.png", name: "Arctic fox" },
+    { url: "https://kie.example/l2.png", name: "  Title text " },
+    { url: "https://kie.example/l3.png" },
+  ]
+
+  it("stores each image under the job's own key family, in order, and lands the stored URLs on output_data[key]", async () => {
+    const result = await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "edit-image",
+      result: { url: "https://kie.example/base.png", cost: 0.1, providerUsed: "kie" },
+      extraImageSets: [{ key: "layers", images: layers, library: true }],
+    })
+    expect(result.ok).toBe(true)
+    const keys = sharedMocks.uploadImageVariantsMaybeWatermark.mock.calls.map((c) => c[1])
+    expect(keys).toEqual(["j1", "j1-layers-1", "j1-layers-2", "j1-layers-3"])
+    for (const call of sharedMocks.uploadImageVariantsMaybeWatermark.mock.calls) expect((call as unknown as unknown[]).slice(2)).toEqual(["u1", false])
+    const out = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1].output_data as Record<string, unknown>
+    expect(out.imageUrl).toBe("https://r2.example/images/j1.png")
+    expect(out.layers).toEqual(["https://r2.example/images/j1-layers-1.png", "https://r2.example/images/j1-layers-2.png", "https://r2.example/images/j1-layers-3.png"])
+    // Never variants of the result: a canvas would read those as takes.
+    expect(out.imageUrls).toBeUndefined()
+    expect(out.libraryImages).toEqual([
+      { url: "https://r2.example/images/j1-layers-1.png", name: "Arctic fox" },
+      { url: "https://r2.example/images/j1-layers-2.png", name: "Title text" },
+      { url: "https://r2.example/images/j1-layers-3.png" },
+    ])
+    expect(sharedMocks.createAssetFromJob).toHaveBeenCalledWith("j1", "u1")
+  })
+
+  it("the watermark rule of the job applies to every extra image", async () => {
+    mocks.jobsSingleMock.mockResolvedValue({
+      data: { id: "j1", user_id: "u1", should_watermark: true, is_public: true, job_type: "edit-image", workflow_execution_id: null, status: "processing" },
+      error: null,
+    })
+    await finalizeJobWithMedia({ jobId: "j1", jobType: "edit-image", result: { url: "https://kie.example/base.png", cost: 0 }, extraImageSets: [{ key: "layers", images: layers }] })
+    for (const call of sharedMocks.uploadImageVariantsMaybeWatermark.mock.calls) expect((call as unknown as unknown[])[3]).toBe(true)
+  })
+
+  it("a set without `library` is stored but not filed", async () => {
+    await finalizeJobWithMedia({ jobId: "j1", jobType: "edit-image", result: { url: "https://kie.example/base.png", cost: 0 }, extraImageSets: [{ key: "frames", images: layers }] })
+    const out = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1].output_data as Record<string, unknown>
+    expect(out.frames).toHaveLength(3)
+    expect(out.libraryImages).toBeUndefined()
+  })
+
+  it("extraOutputData as a function is handed the stored URLs by key", async () => {
+    const seen: unknown[] = []
+    await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "edit-image",
+      result: { url: "https://kie.example/base.png", cost: 0 },
+      extraImageSets: [{ key: "layers", images: layers.slice(0, 2) }],
+      extraOutputData: (stored) => {
+        seen.push(stored)
+        return { layerData: stored.layers!.map((url, i) => ({ zIndex: i + 1, url })) }
+      },
+    })
+    expect(seen).toEqual([{ layers: ["https://r2.example/images/j1-layers-1.png", "https://r2.example/images/j1-layers-2.png"] }])
+    const out = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1].output_data as Record<string, unknown>
+    expect(out.layerData).toEqual([{ zIndex: 1, url: "https://r2.example/images/j1-layers-1.png" }, { zIndex: 2, url: "https://r2.example/images/j1-layers-2.png" }])
+  })
+
+  it("uploads a few at a time, never the whole set at once", async () => {
+    let inFlight = 0
+    let most = 0
+    sharedMocks.uploadImageVariantsMaybeWatermark.mockImplementation(async (_urls, key) => {
+      inFlight++
+      most = Math.max(most, inFlight)
+      await new Promise((r) => setTimeout(r, 1))
+      inFlight--
+      return [`https://r2.example/images/${key}.png`]
+    })
+    const many = Array.from({ length: 20 }, (_, i) => ({ url: `https://kie.example/l${i}.png` }))
+    await finalizeJobWithMedia({ jobId: "j1", jobType: "edit-image", result: { url: "https://kie.example/base.png", cost: 0 }, extraImageSets: [{ key: "layers", images: many }] })
+    expect(most).toBeLessThanOrEqual(6)
+    const out = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1].output_data as Record<string, unknown>
+    expect((out.layers as string[])[19]).toBe("https://r2.example/images/j1-layers-20.png")
+  })
+
+  it("a failed extra upload releases the claim and fails the finalize, completing nothing", async () => {
+    sharedMocks.uploadImageVariantsMaybeWatermark.mockImplementation(async (_urls, key) => {
+      if (key === "j1-layers-2") throw new Error("R2 down")
+      return [`https://r2.example/images/${key}.png`]
+    })
+    await expect(finalizeJobWithMedia({ jobId: "j1", jobType: "edit-image", result: { url: "https://kie.example/base.png", cost: 0 }, extraImageSets: [{ key: "layers", images: layers }] })).rejects.toThrow("R2 down")
+    expect(sharedMocks.markJobCompletedDetailed).not.toHaveBeenCalled()
+    expect(mocks.jobsUpdateMock).toHaveBeenCalledWith({ finalize_claimed_at: null, finalize_claimed_by: null })
+  })
+
+  it("an extraOutputData function that throws releases the claim and fails the finalize, completing nothing", async () => {
+    await expect(finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "edit-image",
+      result: { url: "https://kie.example/base.png", cost: 0 },
+      extraImageSets: [{ key: "layers", images: layers }],
+      extraOutputData: () => { throw new Error("bad layer data") },
+    })).rejects.toThrow("bad layer data")
+    expect(sharedMocks.markJobCompletedDetailed).not.toHaveBeenCalled()
+    expect(mocks.jobsUpdateMock).toHaveBeenCalledWith({ finalize_claimed_at: null, finalize_claimed_by: null })
+  })
+
+  it("refuses, before any claim or write: a non-image job, a key finalize writes, a key that is not a plain word, a key used twice", async () => {
+    const run = (jobType: Parameters<typeof finalizeJobWithMedia>[0]["jobType"], keys: string[]) =>
+      finalizeJobWithMedia({ jobId: "j1", jobType, result: { url: "https://x/v.mp4", cost: 0 }, extraImageSets: keys.map((key) => ({ key, images: layers })) })
+    await expect(run("image-to-video", ["layers"])).rejects.toThrow(/extra image sets are for an image job/)
+    for (const keys of [["imageUrl"], ["imageUrls"], ["libraryImages"], ["layer-urls"], ["Layers"], ["layers", "layers"]]) {
+      await expect(run("edit-image", keys), keys.join(",")).rejects.toThrow(/must be a plain word, used once, and not one finalize writes/)
+    }
+    expect(mocks.rpcMock).not.toHaveBeenCalled()
+    expect(sharedMocks.markJobCompletedDetailed).not.toHaveBeenCalled()
+  })
+
+  it("without extra sets nothing changes: no extra uploads, no libraryImages", async () => {
+    await finalizeJobWithMedia({ jobId: "j1", jobType: "edit-image", result: { url: "https://kie.example/base.png", cost: 0 }, extraOutputData: { segments: [] } })
+    expect(sharedMocks.uploadImageVariantsMaybeWatermark).toHaveBeenCalledTimes(1)
+    const out = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1].output_data as Record<string, unknown>
+    expect(out).toEqual({ imageUrl: "https://r2.example/images/j1.png", segments: [] })
+  })
+})

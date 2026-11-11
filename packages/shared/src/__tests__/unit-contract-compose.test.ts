@@ -17,6 +17,7 @@ type Rows = {
   UNIT_REVIEW_HOLDS?: readonly string[]
   UNIT_PRESENTS?: ReadonlyArray<readonly [string, string]>
   UNIT_FAN_OUT_EACH?: ReadonlyArray<readonly [string, { each: readonly string[]; primary: string }]>
+  UNIT_LIST_PIPS?: ReadonlyArray<readonly [string, readonly string[]]>
 }
 
 function withRows(rows: Rows): void {
@@ -29,6 +30,7 @@ function withRows(rows: Rows): void {
     UNIT_REVIEW_HOLDS: [],
     UNIT_PRESENTS: [],
     UNIT_FAN_OUT_EACH: [],
+    UNIT_LIST_PIPS: [],
     ...rows,
   }))
 }
@@ -85,10 +87,27 @@ describe("a node unit's contract rows join the published tables", () => {
     expect(listResultsServeHandle("fixture-case", "json")).toBe(false)
   })
 
+  it("a list pip's edges run the next node once per item by default; the unit's other pips and an edge naming none keep Selected", async () => {
+    withRows({ UNIT_LIST_PIPS: [["fixture-layers", ["layers"]]] })
+    const { LIST_OUTPUT_HANDLES, defaultEdgeOutputMode, isListOutputHandle } = await import("../producer-types.js")
+    expect(LIST_OUTPUT_HANDLES).toEqual({ "fixture-layers": ["layers"] })
+    expect(isListOutputHandle("fixture-layers", "layers")).toBe(true)
+    expect(isListOutputHandle("fixture-layers", "base")).toBe(false)
+    expect(isListOutputHandle("fixture-layers", undefined)).toBe(false)
+    expect(isListOutputHandle("constructor", "layers")).toBe(false)
+    expect(defaultEdgeOutputMode("fixture-layers", "layers")).toBe("each")
+    expect(defaultEdgeOutputMode("fixture-layers", "base")).toBe("last")
+    expect(defaultEdgeOutputMode("fixture-layers", undefined)).toBe("last")
+    // A legacy node's default is untouched.
+    expect(defaultEdgeOutputMode("split-text", undefined)).toBe("each")
+    expect(defaultEdgeOutputMode("generate-image", "image")).toBe("last")
+  })
+
   it("with no rows every table is exactly its hand-written entries", async () => {
     withRows({})
-    const { FAN_OUT_EACH_HANDLES } = await import("../producer-types.js")
+    const { FAN_OUT_EACH_HANDLES, LIST_OUTPUT_HANDLES } = await import("../producer-types.js")
     expect(Object.keys(FAN_OUT_EACH_HANDLES)).toEqual(["camera-switch", "ugc-clips"])
+    expect(LIST_OUTPUT_HANDLES).toEqual({})
     const { NON_PROMPT_TEXT_LANES } = await import("../fan-out-rows.js")
     const { REVIEW_HOLDING_USE_CASE_TYPES } = await import("../preview-gate.js")
     expect(NON_PROMPT_TEXT_LANES.music).toBeUndefined()
@@ -112,6 +131,13 @@ describe("a type that is hand-written and a node unit refuses to load", () => {
       await expect(import(/* @vite-ignore */ mod)).rejects.toThrow(message)
     })
   }
+})
+
+describe("a node unit with two list-pip rows refuses to load", () => {
+  it("../producer-types.js", async () => {
+    withRows({ UNIT_LIST_PIPS: [["fixture-layers", ["layers"]], ["fixture-layers", ["frames"]]] })
+    await expect(import("../producer-types.js")).rejects.toThrow(/LIST_OUTPUT_HANDLES: node unit fixture-layers has more than one row/)
+  })
 })
 
 describe("a node unit with two fan-out rows refuses to load", () => {

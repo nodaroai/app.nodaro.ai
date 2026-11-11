@@ -10,7 +10,7 @@ import { LEGACY_SOURCE_HANDLE_ALIASES, listResultsServeHandle } from "@nodaro/sh
 // Re-export for tests and downstream consumers.
 export type { FilterListCondition }
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeOutput, NodeExecutionState, OrchestratorContext } from "./types.js"
-import { getPrimaryOutput, extractSourceNodeOutput, structuredJsonOf } from "./output-extractor.js"
+import { getPrimaryOutput, extractSourceNodeOutput, structuredJsonOf, unitListOf, unitLookPipJsonFor } from "./output-extractor.js"
 import { getNodeOutput } from "./input-resolver.js"
 import { savedDataAllowed } from "./saved-data.js"
 import { isSourceNode, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES } from "./execution-graph.js"
@@ -296,7 +296,8 @@ function extractSavedTextFallback(src: SimpleNode): string | undefined {
 
 /**
  * Collect list items from every upstream edge. For each incoming connection,
- * in priority order:
+ * in priority order (after a selector's channel, and a node unit's list or
+ * look pip — that pip's own files or JSON, never the take batch):
  *   1. `output.listResults` — include every element (already split by the
  *      producer, e.g. extract-field in "list" mode, split-text).
  *   2. `output.json` — structured JSON. Arrays are spread so each element
@@ -350,6 +351,17 @@ function collectItemsForEdge(
     return items
   }
 
+  // A node unit's list pip: the files that one run made on it — every one, not
+  // the first a plain wire carries, nor the node's per-iteration takes.
+  const unitList = unitListOf(output, srcNode.type, resolvedEdge.sourceHandle)
+  if (unitList) return [...unitList]
+
+  // A node unit's look pip: every entry of its own JSON, none when it holds
+  // none — read before `listResults`, which on a unit whose take carries side
+  // outputs is its take batch (`__listResults`), never this pip's value.
+  const unitJson = unitLookPipJsonFor(srcNode, nodeStates[srcNode.id], resolvedEdge.sourceHandle)
+  if (unitJson) return jsonListItems(unitJson.value)
+
   const listResults = output.listResults
   if (listResults && listResults.length > 0) {
     for (const item of listResults) {
@@ -384,25 +396,27 @@ function collectItemsForEdge(
   // carry no "text" handle, so they are unaffected.
   // The JSON of the pip the wire leaves from (a node unit's look pip: its own output).
   const json = structuredJsonOf(output, srcNode.type, resolvedEdge.sourceHandle)
-  if (json !== undefined && resolvedEdge.sourceHandle !== "text") {
-    if (json !== null) {
-      if (Array.isArray(json)) {
-        for (const element of json) {
-          if (element === undefined || element === null) continue
-          items.push(typeof element === "string" ? element : JSON.stringify(element))
-        }
-      } else if (typeof json === "object") {
-        items.push(JSON.stringify(json))
-      } else {
-        items.push(String(json))
-      }
-    }
-    return items
-  }
+  if (json !== undefined && resolvedEdge.sourceHandle !== "text") return jsonListItems(json)
 
   const primary = getPrimaryOutput(output, srcNode.type, resolvedEdge.sourceHandle)
   if (primary != null && primary !== "") items.push(primary)
   return items
+}
+
+/**
+ * A structured JSON value as list items: an array's elements (a string as it
+ * is, anything else serialised; null and undefined skipped), an object one
+ * serialised item, any other value its text, nothing for null or undefined.
+ * The editor's twin is `jsonListItems` (frontend/src/lib/unit-compose.ts).
+ */
+function jsonListItems(json: unknown): string[] {
+  if (json === undefined || json === null) return []
+  if (Array.isArray(json)) {
+    return json
+      .filter((element) => element !== undefined && element !== null)
+      .map((element) => (typeof element === "string" ? element : JSON.stringify(element)))
+  }
+  return [typeof json === "object" ? JSON.stringify(json) : String(json)]
 }
 
 function collectUpstreamListItems(

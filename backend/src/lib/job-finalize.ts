@@ -484,6 +484,82 @@ async function reopenWorkflowExecutionIfSoleCause(
     .eq("status", "failed")  // CAS — preserve a user cancel that landed in this window
 }
 
+/**
+ * A set of extra images a job delivers beside its result — every layer of a
+ * split image. Finalize stores them exactly as it stores the result (the same
+ * uploader: the watermark rule and the user's storage), each under its own key
+ * in this job's key family (`<jobId>-<key>-<n>`), and writes their stored URLs,
+ * in order, on `output_data[key]`.
+ */
+export interface ExtraImageSet {
+  /** The `output_data` key the stored URLs land on: a plain word (letters and digits), never one finalize writes itself. */
+  readonly key: string
+  /** Each image: the provider's URL and, filed in the Library, the name it is filed under. */
+  readonly images: ReadonlyArray<{ readonly url: string; readonly name?: string }>
+  /** File each image in the Library beside the result, under its name (`output_data.libraryImages`, read by createAssetFromJob). */
+  readonly library?: true
+}
+
+/** The stored URLs of each extra image set, by its key, in its order. */
+export type StoredExtraImages = Readonly<Record<string, readonly string[]>>
+
+/** How many extra images are stored at once: a 100-layer split must not open 100 uploads together. */
+export const EXTRA_IMAGE_UPLOAD_CONCURRENCY = 6
+
+/** The output_data keys finalize writes on an image job, which an extra set may never take. */
+const FINALIZE_IMAGE_KEYS: ReadonlySet<string> = new Set([
+  "imageUrl", "imageUrls", "imageMimeType", "thumbnailUrl", "providerTaskId", "kieTaskId", "seed", "fallbackUsed", "providerMs", "libraryImages",
+])
+
+/** Refuses an extra-set declaration finalize cannot honour; thrown before any claim or write. */
+function assertExtraImageSets(jobType: FinalizeJobType, sets: ReadonlyArray<ExtraImageSet> | undefined): void {
+  if (!sets?.length) return
+  if (!IMAGE_TYPES.has(jobType)) throw new Error(`[job-finalize] ${jobType}: extra image sets are for an image job`)
+  const seen = new Set<string>()
+  for (const set of sets) {
+    if (!/^[a-z][A-Za-z0-9]*$/.test(set.key) || FINALIZE_IMAGE_KEYS.has(set.key) || seen.has(set.key)) {
+      throw new Error(`[job-finalize] extra image set key "${set.key}" must be a plain word, used once, and not one finalize writes`)
+    }
+    seen.add(set.key)
+  }
+}
+
+/**
+ * Store every extra image set: each image through `uploadImageVariantsMaybeWatermark`
+ * (the result's own uploader — watermark and storage accounting alike) under
+ * `<jobId>-<key>-<n>` (n from 1), a few at a time. Post-provider, like the
+ * result's upload: a failure is the uploader's PostProcessingError.
+ */
+async function storeExtraImageSets(
+  sets: ReadonlyArray<ExtraImageSet>,
+  jobId: string,
+  userId: string | undefined,
+  watermark: boolean,
+): Promise<StoredExtraImages> {
+  const out: Record<string, readonly string[]> = {}
+  for (const set of sets) {
+    const stored: string[] = []
+    for (let i = 0; i < set.images.length; i += EXTRA_IMAGE_UPLOAD_CONCURRENCY) {
+      const batch = set.images.slice(i, i + EXTRA_IMAGE_UPLOAD_CONCURRENCY)
+      const urls = await Promise.all(batch.map(async (image, j) => {
+        const [url] = await uploadImageVariantsMaybeWatermark([image.url], `${jobId}-${set.key}-${i + j + 1}`, userId, watermark)
+        return url!
+      }))
+      stored.push(...urls)
+    }
+    out[set.key] = stored
+  }
+  return out
+}
+
+/** The Library entries of the sets that ask to be filed: each stored URL with its name. */
+function libraryImagesOf(sets: ReadonlyArray<ExtraImageSet>, stored: StoredExtraImages): Array<{ url: string; name?: string }> {
+  return sets.filter((set) => set.library).flatMap((set) => set.images.map((image, i) => ({
+    url: stored[set.key]![i]!,
+    ...(typeof image.name === "string" && image.name.trim() ? { name: image.name.trim() } : {}),
+  })))
+}
+
 export interface FinalizeInput {
   jobId: string
   jobType: FinalizeJobType
@@ -499,8 +575,15 @@ export interface FinalizeInput {
   mediaUrl?: string
   /** Extra fields merged into `output_data` (e.g., `thumbnailUrl`,
    *  provider-meta extras). Useful for video handlers that need to record
-   *  a thumbnail alongside the main URL. */
-  extraOutputData?: Record<string, unknown>
+   *  a thumbnail alongside the main URL. A function is handed the stored URLs
+   *  of `extraImageSets` (by key), for fields that name them (each layer's
+   *  data beside its stored file). */
+  extraOutputData?: Record<string, unknown> | ((stored: StoredExtraImages) => Record<string, unknown>)
+  /** Extra images an IMAGE job delivers beside its result (every layer of a
+   *  split image): stored like the result, their URLs on `output_data[key]`,
+   *  and — for a set with `library` — filed in the Library under their names.
+   *  Absent: finalize is exactly as before. */
+  extraImageSets?: ReadonlyArray<ExtraImageSet>
   /** Credits for work NOT reflected in the provider's USD cost (e.g. a
    *  successful loop-trim add-on). Passed through to commitJobCredits so the
    *  provider-cost reconciliation doesn't refund it. Defaults to none. */
@@ -562,6 +645,7 @@ export async function finalizeJobWithMedia(
     // accounting (#2386). Fail before any claim or write.
     throw new Error(`[job-finalize] ${jobType}: pass the image as result.url, not mediaUrl`)
   }
+  assertExtraImageSets(jobType, input.extraImageSets)
 
   // 1. Load job row (the shape we need for upload / asset / reopen).
   const { data: jobRow } = await supabase
@@ -604,6 +688,8 @@ export async function finalizeJobWithMedia(
   // Captured for the reference-video auto-attach below — set only on the video
   // path (the R2 URL we record as the clip's canonical location).
   let videoR2Url: string | undefined
+  // The extra image sets' stored URLs, by key (none without extraImageSets).
+  let storedExtras: StoredExtraImages = {}
   try {
     if (IMAGE_TYPES.has(jobType) && requestedImageFormat(job.input_data)) {
       // A run that asked for JPEG, WebP, a GIF or an SVG: stored as what its
@@ -654,16 +740,27 @@ export async function finalizeJobWithMedia(
     } else {
       throw new Error(`[job-finalize] unknown jobType: ${jobType}`)
     }
+    // Extra images beside the result (an image job only — refused above
+    // otherwise): stored inside the claim, so a failure releases it below.
+    const sets = input.extraImageSets ?? []
+    if (sets.length > 0) {
+      storedExtras = await storeExtraImageSets(sets, jobId, job.user_id ?? undefined, watermark)
+      const library = libraryImagesOf(sets, storedExtras)
+      outputData = { ...outputData, ...storedExtras, ...(library.length > 0 ? { libraryImages: library } : {}) }
+    }
+    // The caller's extra fields — inside the claim too: a function handed the
+    // stored URLs runs the caller's code, and a throw there must release the
+    // claim like a failed upload, not leave the job waiting out its lifetime.
+    if (input.extraOutputData) {
+      const extra = typeof input.extraOutputData === "function" ? input.extraOutputData(storedExtras) : input.extraOutputData
+      outputData = { ...outputData, ...extra }
+    }
   } catch (err) {
     // Failed media step: release our claim so a BullMQ retry or the next
     // reconcile tick can re-attempt immediately, then surface the error
     // unchanged (refund classification stays the caller's concern).
     if (claim.ts) await releaseJobFinalizeClaim(jobId, claim.ts)
     throw err
-  }
-
-  if (input.extraOutputData) {
-    outputData = { ...outputData, ...input.extraOutputData }
   }
 
   // 4. CAS-guarded markJobCompleted (live statuses only). Null provider /

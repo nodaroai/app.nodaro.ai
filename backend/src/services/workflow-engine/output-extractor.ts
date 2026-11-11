@@ -80,7 +80,7 @@ import type { SceneData } from "@nodaro/shared/types"
 import { UGC_NODE_TYPES, ugcClipOutputs, ugcPipValue, ugcScriptOutputs, ugcScriptResult, type UgcOutputs } from "@nodaro/shared/ugc"
 import { buildScenePrompt } from "@nodaro/prompts/prompt-builder"
 import { unitDescriptorOf } from "../../lib/unit-descriptors.js"
-import { isUnitJsonWorker, unitJobOutput, unitLookPipOf, unitPipJson, unitPipValue, unitSavedOutput } from "../../lib/unit-compose.js"
+import { isUnitJsonWorker, unitHasSideOutputs, unitJobOutput, unitListPipItems, unitListPipOf, unitLookPipOf, unitPipJson, unitPipValue, unitSavedOutput } from "../../lib/unit-compose.js"
 export { extractVideoDurationFromNode } from "@nodaro/shared/video"
 export { extractAllGeneratedResults }
 
@@ -744,6 +744,18 @@ export function structuredJsonOf(output: NodeOutput | undefined, sourceType: str
 }
 
 /**
+ * The files a wire from a node unit's LIST pip hands a consumer that takes a
+ * list (the list operators): that pip's own list off `output` (`unitLists`),
+ * empty when it holds none. Undefined for any other source or pip, which keep
+ * their own reads. The twin of structuredJsonOf for list pips.
+ */
+export function unitListOf(output: NodeOutput | undefined, sourceType: string | undefined, sourceHandle: string | null | undefined): readonly string[] | undefined {
+  const unit = output ? unitDescriptorOf(sourceType) : undefined
+  if (!output || !unit || !unitListPipOf(unit, sourceHandle)) return undefined
+  return unitListPipItems(unit, output, sourceHandle) ?? []
+}
+
+/**
  * What a wire from a node unit's look pip hands a fan-out: that output's own
  * JSON (`unitPipJson`) — this run's output, or the seeded saved one, else (no
  * state) its saved data. Undefined for any other source or pip, which keep the
@@ -757,8 +769,46 @@ export function unitLookPipJsonFor(
 ): { readonly value: unknown } | undefined {
   const unit = unitDescriptorOf(node.type)
   if (!unit || !unitLookPipOf(unit, sourceHandle)) return undefined
-  const output = state ? state.output : extractSavedNodeOutput(node)
+  const output = unitPipOutputOf(node, state)
   return { value: output ? unitPipJson(unit, output, sourceHandle) : undefined }
+}
+
+/**
+ * What a wire from a node unit's LIST pip lists: the files that one run made on
+ * that pip (`unitLists`) — this run's output, or the seeded saved one, else (no
+ * state) its saved data; `items` undefined when it holds none (an empty list is
+ * no value — never another output's, nor the node's take history). Undefined
+ * for any other source or pip, which keep their own list reads. Mirrors the
+ * editor's extractNodeOutputAsList.
+ */
+export function unitListPipItemsFor(
+  node: SimpleNode,
+  state: NodeExecutionState | undefined,
+  sourceHandle: string | null | undefined,
+): { readonly items: readonly string[] | undefined } | undefined {
+  const unit = unitDescriptorOf(node.type)
+  if (!unit || !unitListPipOf(unit, sourceHandle)) return undefined
+  const output = unitPipOutputOf(node, state)
+  return { items: output ? unitListPipItems(unit, output, sourceHandle) : undefined }
+}
+
+/**
+ * The batch a wire from the take pip of a node unit whose takes carry side
+ * outputs lists: the takes of a run once per upstream item — this run's
+ * (`listResults`), or with no state its saved last batch (`unitSavedOutput`,
+ * from `__listResults`) — never its take history. Mirrors the editor's unitPipList.
+ */
+export function unitTakeBatchFor(node: SimpleNode, state: NodeExecutionState | undefined): string[] | undefined {
+  return unitPipOutputOf(node, state)?.listResults
+}
+
+/**
+ * The output a node unit's side pip (look or list) is read from: this run's
+ * state's, or — with no state at all (savedDataAllowed's first case) — its
+ * saved output. A seeded state carries its saved output already.
+ */
+function unitPipOutputOf(node: SimpleNode, state: NodeExecutionState | undefined): NodeOutput | undefined {
+  return state ? state.output : extractSavedNodeOutput(node)
 }
 
 /**
@@ -798,10 +848,11 @@ export function getPrimaryOutput(
     return sourceType === "ugc-clip" || sourceType === "ugc-finish-clips" ? output.videoUrl || value : value
   }
 
-  // A node unit's JSON (look) pip hands on its own JSON string (unitOutputs);
-  // its media and text pips take the paths below. Mirrors the editor's unitOutputValue.
+  // A node unit's JSON (look) pip hands on its own JSON string (unitOutputs), a
+  // list pip its first file (unitLists) — nothing when it holds none, never the
+  // take; its media and text pips take the paths below. Mirrors the editor's unitOutputValue.
   const unit = unitDescriptorOf(sourceType)
-  if (unit && unitLookPipOf(unit, sourceHandle)) return unitPipValue(unit, output, sourceHandle)
+  if (unit && (unitLookPipOf(unit, sourceHandle) || unitListPipOf(unit, sourceHandle))) return unitPipValue(unit, output, sourceHandle)
 
   // Sub-workflow / component output routing by handle (matches frontend)
   if (sourceType === "sub-workflow" || sourceType === "component") {
@@ -2243,8 +2294,8 @@ export function buildNodeOutputFromJobData(
   // on its json only.
   if (nodeType === "site-capture") return siteCaptureNodeOutputs(outputData)
   // A JSON worker unit (look outputs only): each output's value under its id, read by its manifest alone.
-  const jsonUnit = unitDescriptorOf(nodeType)
-  if (jsonUnit && isUnitJsonWorker(jsonUnit)) return unitJobOutput(jsonUnit, outputData)
+  const unit = unitDescriptorOf(nodeType)
+  if (unit && isUnitJsonWorker(unit)) return unitJobOutput(unit, outputData)
 
   const output: NodeOutput = {}
 
@@ -2463,6 +2514,16 @@ export function buildNodeOutputFromJobData(
       else if (storageType === "audio") output.audioUrl = storageUrl
       else if (storageType === "image") output.imageUrl = storageUrl
     }
+  }
+
+  // A node unit whose media take carries side outputs (decided 2026-11-11): the
+  // take is read above as for any media node; beside it each list output's files
+  // (`unitLists`) and each JSON output's string (`unitOutputs`), under the
+  // output's id in the row. Never `json`, which is a JSON-only unit's first output.
+  if (unit && unitHasSideOutputs(unit)) {
+    const side = unitJobOutput(unit, outputData)
+    if (side.unitLists) output.unitLists = side.unitLists
+    if (side.unitOutputs) output.unitOutputs = side.unitOutputs
   }
 
   return output

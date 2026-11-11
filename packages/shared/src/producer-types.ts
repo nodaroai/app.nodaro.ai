@@ -15,7 +15,7 @@
  * execution time (the prior drift bug, see issue 1 of the Task 4.1 review).
  */
 import { UGC_PRIMARY_HANDLE } from "./ugc-node-wires.js"
-import { composeUnitRecord, composeUnitSet, unitFanOutEach, unitProducers } from "./unit-contract-compose.js"
+import { composeUnitRecord, composeUnitSet, unitFanOutEach, unitListPips, unitProducers } from "./unit-contract-compose.js"
 
 // Each producer set below is its hand-written members ∪ the node units
 // (tools/units/README.md) of that producer kind, from their generated contract
@@ -358,6 +358,27 @@ export function ownsItsList(nodeType: string | null | undefined): boolean {
   return typeof nodeType === "string" && OWN_LIST_NODE_TYPES.has(nodeType)
 }
 
+/**
+ * The output pips that carry the LIST one run produced — several files on one
+ * pip (a node unit's `handles.outputs[].list`: each layer of a split image). An
+ * edge leaving one runs the next node once per item by default ("each"); a
+ * Bundle hands the whole list to a node that takes several. Unlike
+ * FAN_OUT_EACH_HANDLES, the list is what ONE run made on that pip, never the
+ * node's per-iteration results. An edge naming no pip reads the node's primary
+ * output, which is never a list pip (tools/units/json-output-rules.mjs).
+ * Node units only (generated/unit-contracts.ts UNIT_LIST_PIPS).
+ */
+export const LIST_OUTPUT_HANDLES: Readonly<Record<string, readonly string[]>> = composeUnitRecord("LIST_OUTPUT_HANDLES", {}, unitListPips())
+
+/** Whether an edge leaving `sourceHandle` of a `sourceType` node carries a list one run produced (LIST_OUTPUT_HANDLES). */
+export function isListOutputHandle(
+  sourceType: string | null | undefined,
+  sourceHandle: string | null | undefined,
+): boolean {
+  if (typeof sourceType !== "string" || typeof sourceHandle !== "string" || !Object.hasOwn(LIST_OUTPUT_HANDLES, sourceType)) return false
+  return LIST_OUTPUT_HANDLES[sourceType]!.includes(sourceHandle)
+}
+
 /** The `outputMode` an edge has when none is set on it — the ONE rule both
  *  engines, the credit estimate and the editor read. */
 export function defaultEdgeOutputMode(
@@ -366,6 +387,7 @@ export function defaultEdgeOutputMode(
 ): "each" | "last" {
   if (typeof sourceType !== "string") return "last"
   if (FAN_OUT_EACH_TYPES.has(sourceType)) return "each"
+  if (isListOutputHandle(sourceType, sourceHandle)) return "each"
   const entry = FAN_OUT_EACH_HANDLES[sourceType]
   if (!entry) return "last"
   return entry.each.includes(sourceHandle || entry.primary) ? "each" : "last"

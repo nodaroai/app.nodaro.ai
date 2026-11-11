@@ -54,6 +54,21 @@ export const CONTRACT_KEYS = ["producer", "jsonPips", "nonPromptInputs", "review
  */
 export const REGISTRY_CATEGORIES = ["input", "parameter", "processing", "output", "utility"]
 
+/**
+ * `NodeCategory` of backend/src/lib/node-registry.ts — every category /v1/nodes
+ * lists. A unit whose editor category is not one of REGISTRY_CATEGORIES (ai,
+ * scene, character, …) names its /v1/nodes category here in `registry.category`
+ * ("ai-image" for an AI image node); a unit whose category is shared names none.
+ */
+export const SERVER_CATEGORIES = ["input", "parameter", "ai-image", "ai-video", "ai-audio", "ai-text", "processing", "composition", "trigger", "output", "control", "entity", "utility"]
+
+/**
+ * The output kinds that may carry a LIST (`handles.outputs[].list: true`): one
+ * run's several files on one pip (each layer of a split image). An Each wire
+ * runs the next node once per item; a plain wire reads the first item.
+ */
+export const LIST_OUTPUT_KINDS = ["image", "video", "audio"]
+
 /** `OutputType | "none"` of backend/src/lib/node-registry.ts (`NodeDescriptor.outputType`). */
 export const OUTPUT_TYPES = ["image", "video", "audio", "text", "data", "none"]
 

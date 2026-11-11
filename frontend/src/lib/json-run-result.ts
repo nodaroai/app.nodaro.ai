@@ -1,8 +1,9 @@
 // @registry-enumerates JSON_RUN_RESULT_TYPES carries every worker node unit whose outputs are JSON (look)
+// (unitSideRunFields / unitSideJobFields land the side outputs of the one node unit a lane writes — unitDefinitionOf(nodeType))
 import { editPlanResultPatch, unwrapEditPlanOutput } from "@nodaro/shared/edl"
 import { telegramPostsFrom } from "@nodaro/shared/social"
 import { UNIT_NODE_DEFINITIONS, unitDefinitionOf } from "./unit-definitions"
-import { composeSet, unitJsonRunPatch, unitJsonWorkers } from "./unit-compose"
+import { composeSet, unitJsonRunPatch, unitJsonWorkers, unitSideJobPatch, unitSideRunPatch } from "./unit-compose"
 
 /**
  * A finished node's JSON result, under the fields its card and its output
@@ -331,6 +332,31 @@ export function jsonRunResultPatch(
   // node's data now, the review included.
   if (nodeType === "edit-plan") return { ...editPlanResultPatch(output.json, take.data?.editedEdl) }
   return { generatedJson: output.json }
+}
+
+/**
+ * The side outputs a lane lands beside a node unit's media take (a list output,
+ * JSON beside the media — `unitSideOutputs`), from a server run's node output:
+ * the JSON pips off `unitOutputs`, the list pips off `unitLists`. Such a unit is
+ * NOT a JSON run result type: the lane writes its media take as for any media
+ * node, then these — on the node AND on the take it writes, as the canvas run
+ * does (`runProcessingNode`). A side output the output does not carry is
+ * written as undefined, so an earlier run's never stays beside this take.
+ * Undefined for every other node type.
+ */
+export function unitSideRunFields(
+  nodeType: string | null | undefined,
+  // Any lane's node output: its side outputs ride on `unitOutputs` / `unitLists` when it carries them.
+  output: object | null | undefined,
+): Record<string, unknown> | undefined {
+  const unit = typeof nodeType === "string" ? unitDefinitionOf(nodeType) : undefined
+  return unit ? unitSideRunPatch(unit, output as { readonly unitOutputs?: unknown; readonly unitLists?: unknown } | null | undefined) : undefined
+}
+
+/** `unitSideRunFields` from a job row's `output_data` (each side output's value under its id): a restored poll, a reconciled job. */
+export function unitSideJobFields(nodeType: string | null | undefined, outputData: unknown): Record<string, unknown> | undefined {
+  const unit = typeof nodeType === "string" ? unitDefinitionOf(nodeType) : undefined
+  return unit ? unitSideJobPatch(unit, outputData) : undefined
 }
 
 /**

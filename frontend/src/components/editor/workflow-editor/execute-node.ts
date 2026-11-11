@@ -94,7 +94,7 @@ import { executeUseCase, type UseCaseContinueParams } from "./use-case-executor"
 import { usecaseListDriven } from "./use-case-render-final-set";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { contentRunResultPatch } from "@/lib/content-run-output";
-import { sourceJsonOf } from "@/lib/edit-plan-saved-output";
+import { sourceJsonOf, unitSourceJsonOf } from "@/lib/edit-plan-saved-output";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 // @registry-lookup runs the one executor of the node type it is given (UNIT_EXECUTORS[node.type])
@@ -715,6 +715,10 @@ function collectItemsForEdgeFrontend(
   if (listItems && listItems.length > 0) {
     return listItems.filter((item): item is string => item != null);
   }
+  // A node unit's look pip holding an EMPTY list lists nothing — never the
+  // "[]" string its scalar read hands on (the server's collectItemsForEdge).
+  const unitJson = unitSourceJsonOf(src, resolvedEdge.sourceHandle);
+  if (unitJson && Array.isArray(unitJson.value)) return [];
   const primary = extractNodeOutput(src, resolvedEdge.sourceHandle ?? undefined);
   return primary != null && primary !== "" ? [primary] : [];
 }

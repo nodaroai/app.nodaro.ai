@@ -28,6 +28,7 @@ const FIXTURE: UnitDescriptor = {
   },
   execution: { kind: "use-case", builder: "fixture" },
   capabilities: ["edition:nodaro-exclusive"],
+  producer: null,
 }
 const USE_CASE: UnitUseCase = {
   body: z.object({ mediaUrls: z.array(z.string()).min(1).max(1), depth: z.number().optional() }),

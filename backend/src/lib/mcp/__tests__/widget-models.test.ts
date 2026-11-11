@@ -33,6 +33,7 @@ const unit = (type: string, tools?: string[]): UnitDescriptor => ({
   handles: { inputs: [], outputs: [] },
   execution: { kind: "worker", queue: "video" },
   capabilities: [],
+  producer: null,
   ...(tools ? { mcp: { widgetModelFor: tools } } : {}),
 })
 

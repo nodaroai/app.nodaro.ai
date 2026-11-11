@@ -7,9 +7,9 @@
 // @reads frontend/src/nodes/** backend/src/nodes/** tools/units/legacy-nodes.json frontend/src/lib/node-families.ts frontend/src/lib/node-options.tsx frontend/src/lib/*macro*.ts backend/src/ee/billing/credits.ts backend/src/providers/video/__characterization__/operations.ts packages/render-rules/src/use-case-specs.ts
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import path from "node:path"
-import { dataInterfaceName, LANE_CAPABILITIES, loadUnits, repoContext, TYPE_ID, validateUnits } from "./manifest.mjs"
+import { dataInterfaceName, LANE_CAPABILITIES, loadUnits, PROVIDER_CAPABILITIES, repoContext, TYPE_ID, validateUnits } from "./manifest.mjs"
 import { UNIT_ROOTS } from "./seams.mjs"
-import { EXECUTION_KINDS } from "./vocabulary.mjs"
+import { EXECUTION_KINDS, REGISTRY_CATEGORIES, SERVER_CATEGORIES } from "./vocabulary.mjs"
 import { apiTs, characterizeTs, configTsx, execTs, nodeTsx, optionTsx, payloadTs, priceTs, routeTs, typesTs, unitJson, useCaseTs, workerTs } from "./scaffold-templates.mjs"
 
 /** The harness that composes every unit's characterize.char.ts (tools/units/seams.mjs "characterizations"). */
@@ -21,11 +21,13 @@ export const USAGE = [
   "         (--family <family id> --picker-after <type|first> | --no-picker)",
   "         [--label \"<Label>\"] [--price <credits>   (worker, sync and use-case: required)]",
   `         [--lane <${LANE_CAPABILITIES.map((c) => c.slice("lane:".length)).join("|")}>   (worker: required — the concurrency lane its job counts in)]`,
+  `         [--provider <${PROVIDER_CAPABILITIES.map((c) => c.slice("provider:".length)).join("|")}>   (a provider-lane worker: required — the provider its job calls)]`,
+  `         [--registry-category <${SERVER_CATEGORIES.join("|")}>   (a category /v1/nodes does not share, e.g. ai: required)]`,
   "         [--builder <key>   (use-case: required — its graph builder's key in packages/render-rules/src/use-case-specs.ts)]",
   "         [--characterize <operation it follows|first>   (worker: its ffmpeg characterization, characterize.char.ts)]",
 ].join("\n")
 
-const FLAGS_WITH_VALUE = new Set(["--new", "--category", "--kind", "--after", "--description", "--family", "--picker-after", "--label", "--price", "--characterize", "--builder", "--lane"])
+const FLAGS_WITH_VALUE = new Set(["--new", "--category", "--kind", "--after", "--description", "--family", "--picker-after", "--label", "--price", "--characterize", "--builder", "--lane", "--provider", "--registry-category"])
 const BOOLEAN_FLAGS = new Set(["--no-picker"])
 
 /** `--flag value` / `--flag=value` into { new, category, … }; unknown or valueless flags are errors. */
@@ -89,6 +91,19 @@ export function scaffoldOptions(raw) {
     if (raw.lane === undefined || raw.lane === "") errors.push(`--lane is required for --kind worker: the concurrency lane its job counts in (${lanes.join(", ")}) — provider for a call to an external AI provider, llm for an LLM text call, local for in-house compute (ffmpeg, sharp, Remotion)`)
     else if (!lanes.includes(raw.lane)) errors.push(`--lane "${raw.lane}" is not one of ${lanes.join(", ")}`)
   } else if (raw.lane !== undefined) errors.push(`--lane is only for --kind worker (--kind ${raw.kind} runs no worker job)`)
+  // A provider-lane worker counts against one provider's ceiling (concurrency-lanes/provider-of.ts): stated, never defaulted.
+  const providers = PROVIDER_CAPABILITIES.map((c) => c.slice("provider:".length))
+  if (raw.kind === "worker" && raw.lane === "provider") {
+    if (raw.provider === undefined || raw.provider === "") errors.push(`--provider is required for a worker in the provider lane: the provider its job calls (${providers.join(", ")})`)
+    else if (!providers.includes(raw.provider)) errors.push(`--provider "${raw.provider}" is not one of ${providers.join(", ")}`)
+  } else if (raw.provider !== undefined) errors.push("--provider is only for a worker in the provider lane (--lane provider)")
+  // A category /v1/nodes does not share names the one it is listed under (registry.category),
+  // stated with the flag — and only then. Refused here, in the flag's words, before the validator
+  // would name the manifest field.
+  const sharedCategory = raw.category === undefined || REGISTRY_CATEGORIES.includes(raw.category)
+  if (raw["registry-category"] !== undefined && !SERVER_CATEGORIES.includes(raw["registry-category"])) errors.push(`--registry-category "${raw["registry-category"]}" is not a /v1/nodes category (${SERVER_CATEGORIES.join(", ")})`)
+  else if (raw["registry-category"] !== undefined && sharedCategory && raw.category !== undefined) errors.push(`--registry-category is only for a category /v1/nodes does not share: "${raw.category}" is one of ${REGISTRY_CATEGORIES.join(", ")} — drop --registry-category`)
+  if (raw["registry-category"] === undefined && !sharedCategory) errors.push(`--registry-category is required for --category "${raw.category}" (not a /v1/nodes category): the one /v1/nodes lists it under (${SERVER_CATEGORIES.join(", ")})`)
   if (raw.characterize !== undefined && raw.kind !== "worker") errors.push(`--characterize is only for --kind worker: the characterization harness renders an ffmpeg worker's output (--kind ${raw.kind} runs none)`)
   const type = raw.new ?? ""
   if (type && !TYPE_ID.test(type)) errors.push(`"${type}" is not a kebab-case type id`)
@@ -106,6 +121,10 @@ export function scaffoldOptions(raw) {
     characterizeAfter: raw.characterize === undefined ? undefined : place(raw.characterize),
     // worker: the concurrency lane its job counts in; set only for that kind.
     ...(raw.kind === "worker" ? { lane: raw.lane } : {}),
+    // a provider-lane worker: the provider its job calls.
+    ...(raw.provider !== undefined ? { provider: raw.provider } : {}),
+    // its /v1/nodes category, when its own is not one the server shares.
+    ...(raw["registry-category"] !== undefined ? { registryCategory: raw["registry-category"] } : {}),
     // use-case: its graph builder's key (USE_CASE_SPECS); set only for that kind.
     ...(chargesAFee ? { builder: raw.builder } : {}),
   }

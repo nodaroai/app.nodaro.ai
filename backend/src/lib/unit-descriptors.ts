@@ -4,14 +4,16 @@
 // derived from a unit's manifest — the required-media table, the saved-output
 // reader, the finalize sets, the video-length rules, the worker map's
 // membership, the MCP handle table, the MCP verbs' widget model
-// (mcp/widget-models.ts), the concurrency-lane registry (laneOf) — read it
-// here, not the generated aggregate.
+// (mcp/widget-models.ts), the concurrency-lane registry (laneOf), the provider
+// attribution (providerOf), the image source types — read it here, not the
+// generated aggregate.
 // Each reader declares `@registry-enumerates` (a table over every unit) or
 // `@registry-lookup` (it asks only `unitDescriptorOf(type)`).
 import { unitInputHandleIn } from "@nodaro/render-rules"
 import { UNIT_REGISTRY } from "../nodes/_generated/registry.js"
 import type { UnitDescriptor, UnitInputHandle } from "../nodes/kit.js"
 import { isLeafLane, type LeafLane } from "./concurrency-lanes/leaf-lanes.js"
+import { unitProviderOf } from "./unit-compose.js"
 
 /** Every node unit's descriptor (backend/src/nodes/<type>/descriptor.generated.ts), sorted by type. */
 export const UNIT_NODE_DESCRIPTORS: ReadonlyArray<UnitDescriptor> = Object.values(UNIT_REGISTRY)
@@ -46,4 +48,16 @@ export function laneOf(type: string | undefined): LeafLane | undefined {
   const lane = cap?.slice(LANE_CAPABILITY.length)
   // The validator admits only the closed list; a lane outside it is never answered.
   return isLeafLane(lane) ? lane : undefined
+}
+
+/**
+ * The provider unit `type`'s worker job counts against — its one `provider:*`
+ * capability (tools/units/capabilities.mjs; the validator requires exactly one
+ * on every provider-lane worker unit and refuses it on any other unit), "kie"
+ * for `provider:kie` — or undefined for a legacy node, an unknown type, or a
+ * unit that names none. The provider attribution reads it
+ * (concurrency-lanes/provider-of.ts).
+ */
+export function providerOf(type: string | undefined): string | undefined {
+  return unitProviderOf(unitDescriptorOf(type))
 }

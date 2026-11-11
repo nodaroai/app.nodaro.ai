@@ -4,17 +4,18 @@
  * Stateless function with no React/Zustand dependencies.
  */
 
-import { UNIT_NODE_DESCRIPTORS } from "../../lib/unit-descriptors.js"
-import { composeSet, unitsWith } from "../../lib/unit-compose.js"
+import { UNIT_NODE_DESCRIPTORS, unitDescriptorOf } from "../../lib/unit-descriptors.js"
+import { composeSet, unitPipKindOf, unitsWith, unitTakePipOf } from "../../lib/unit-compose.js"
 // @registry-enumerates ENTITY_SUBJECT_TARGET_TYPES carries every node unit with the "input:entity-subject" capability
 // @registry-enumerates TEXT_SOURCE_NODE_TYPES carries every node unit whose primary output is text
+// @registry-enumerates routedAs and isUnitTakePip also ask the output pip of the one source type they are given (unitDescriptorOf)
 import type {
   SimpleNode,
   SimpleEdge,
   NodeExecutionState,
   ResolvedInputs,
 } from "./types.js"
-import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, getPrimaryOutput, savedOutputFor, unitLookPipJsonFor, ANALYSIS_PRODUCER_TYPES, type ExtractContext } from "./output-extractor.js"
+import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, getPrimaryOutput, savedOutputFor, unitListPipItemsFor, unitLookPipJsonFor, unitTakeBatchFor, ANALYSIS_PRODUCER_TYPES, type ExtractContext } from "./output-extractor.js"
 import {
   pro3DRenderShotStills
 } from "@nodaro/shared/scene3d"
@@ -154,15 +155,36 @@ function pickerOwnFields(data: Readonly<Record<string, unknown>>, fields: readon
   }))
 }
 
+/** The source type a node unit's image pip routes as (routedAs): the plain image source. */
+const UNIT_IMAGE_PIP_ROUTES_AS = "upload-image"
+
+/**
+ * Whether a wire from `sourceHandle` reads the media take of a node unit whose
+ * takes carry side outputs (unit-compose.ts unitTakePipOf): such a pip lists
+ * only this run's takes (a run once per upstream item), never the node's saved
+ * take history — each take carries its own side outputs. Mirrors the editor's
+ * extractNodeOutputAsList.
+ */
+function isUnitTakePip(type: string, sourceHandle: string | null | undefined): boolean {
+  const unit = unitDescriptorOf(type)
+  return unit !== undefined && unitTakePipOf(unit, sourceHandle)
+}
+
 /**
  * The node a wire is routed as. A pip that emits a plain medium although its
  * node is no producer of it (`OUTPUT_PIP_EFFECTIVE_TYPES`: UGC Creator's
  * `image`, the UGC text pips) routes as the producer it behaves as — the type
  * the editor's validators judge the wire by — so it reaches every input it
- * connects to. Its value was read from the node itself. Every other wire
- * routes as its node. Mirrors the frontend node-input-resolver.
+ * connects to. Its value was read from the node itself. A node unit's image
+ * pip (the pip the wire leaves; an edge naming none reads its first output)
+ * routes as an image source — an Upload Image, the plain image every image
+ * input takes — whatever the unit's type (decided 2026-11-11); its video and
+ * audio pips route as the unit, by its producer set. Every other wire routes
+ * as its node. Mirrors the frontend node-input-resolver.
  */
 function routedAs(node: SimpleNode, sourceHandle: string | null | undefined): SimpleNode {
+  const unit = unitDescriptorOf(node.type)
+  if (unit && unitPipKindOf(unit, sourceHandle) === "image") return { ...node, type: UNIT_IMAGE_PIP_ROUTES_AS }
   const type = outputPipSourceType(node.type, sourceHandle)
   return type === node.type ? node : { ...node, type }
 }
@@ -316,9 +338,15 @@ export function resolveNodeInputs(
     // A node unit's look pip lists its own output (an array is its list), never
     // another output's (unitLookPipJsonFor; the editor's extractNodeOutputAsList).
     const unitPipJson = unitLookPipJsonFor(sourceNode, state, effectiveSourceHandle)
+    // A node unit's list pip lists the files that one run made on it — nothing
+    // when it holds none, never the node's take history (unitListPipItemsFor).
+    const unitList = unitListPipItemsFor(sourceNode, state, effectiveSourceHandle)
+    // The take pip of a unit whose takes carry side outputs lists only this
+    // run's takes, never its saved take history (isUnitTakePip).
+    const takeOnly = isUnitTakePip(sourceNode.type, effectiveSourceHandle)
     const effectiveListResults = isLlmChatItemsEdge || !servesList
       ? undefined
-      : selectorListResults ?? splitParts ?? (unitPipJson ? jsonArrayItems(unitPipJson.value) : isUseCaseNodeType(sourceNode.type) && effectiveSourceHandle === "json" ? usecasePlanListFor(sourceNode, state, effectiveSourceHandle) : listFor(sourceNode, state))
+      : selectorListResults ?? splitParts ?? (unitList ? unitList.items?.slice() : unitPipJson ? jsonArrayItems(unitPipJson.value) : isUseCaseNodeType(sourceNode.type) && effectiveSourceHandle === "json" ? usecasePlanListFor(sourceNode, state, effectiveSourceHandle) : takeOnly ? unitTakeBatchFor(sourceNode, state) : listFor(sourceNode, state))
     // What a fan-out iteration indexes BY ROW: the row-aligned twin when the
     // source publishes one (Extract Field), else the list itself. Addressing by
     // position (item / item:N / range / Bundle) keeps using the public list above.
@@ -424,6 +452,25 @@ export function resolveNodeInputs(
             if (!item) continue
             const type = VIDEO_URL_RE.test(item) ? "video" : "photo"
             inputs.mediaItems = [...(inputs.mediaItems ?? []), { type, url: item }]
+          }
+          continue
+        }
+        // A node unit's list pip hands EVERY file, each as its own — a Bundle
+        // into Generate Image's references adds each as a reference — into any
+        // other target, never one ", "-joined string (decided 2026-11-11). A
+        // unit target's lane input (unit-inputs.ts) takes each first, as it
+        // takes any wire.
+        if (unitList) {
+          const routed = routedAs(sourceNode, effectiveSourceHandle)
+          // A UGC node reads each wire on its own handle (`inputs.ugc`, the UGC
+          // block below), never the media routes: each item lands there as the
+          // editor's per-item wires do (the last one is the handle's value).
+          const ugcHandle = UGC_NODE_TYPES.has(targetNode.type) && edge.targetHandle && edge.targetHandle !== "pickers" ? edge.targetHandle : undefined
+          for (const item of filtered) {
+            if (!item) continue
+            if (ugcHandle) { inputs.ugc = { ...inputs.ugc, [ugcHandle]: item }; continue }
+            if (routeUnitInput(inputs, targetNode, edge, sourceNode, effectiveSourceHandle, item, TEXT_SOURCE_NODE_TYPES)) continue
+            routeOutput(inputs, routed, targetNode, item, edge, edges, allNodes, nodeStates)
           }
           continue
         }
@@ -1210,7 +1257,17 @@ export function getListFanOutForNode(
       continue
     }
 
-    // 4c. A node unit's look pip lists its own output (an array is its list) —
+    // 4c. A node unit's list pip lists the files that one run made on it — never
+    //     the node's take history, nor another output's (unitListPipItemsFor;
+    //     the editor's extractNodeOutputAsList). An edge with no mode on it is
+    //     an Each wire (defaultEdgeOutputMode, above).
+    const unitList = unitListPipItemsFor(sourceNode, state, edge.sourceHandle)
+    if (unitList) {
+      if (unitList.items) consider(edge, selectListItems(unitList.items.slice(), selectorArg))
+      continue
+    }
+
+    // 4c'. A node unit's look pip lists its own output (an array is its list) —
     //     never another output's (unitLookPipJsonFor; the editor's extractNodeOutputAsList).
     const unitJson = unitLookPipJsonFor(sourceNode, state, edge.sourceHandle)
     if (unitJson) {
@@ -1226,6 +1283,16 @@ export function getListFanOutForNode(
       const before = candidates.length
       consider(edge, selectListItems(state.output.alignedListResults ?? state.output.listResults, selectorArg))
       if (candidates.length > before) continue
+    }
+
+    // 4d. The take pip of a node unit whose takes carry side outputs lists only
+    //     its batch of takes from a run once per upstream item — this run's
+    //     (step 4), else its saved last batch — never its saved take history
+    //     (steps 5–6), each take carrying its own side outputs (isUnitTakePip).
+    if (isUnitTakePip(sourceNode.type, edge.sourceHandle)) {
+      const batch = unitTakeBatchFor(sourceNode, state)
+      if (batch && batch.length > 1) consider(edge, selectListItems(batch, selectorArg))
+      continue
     }
 
     // A node this run ran (or gated) holds only what THIS run produced: a JSON

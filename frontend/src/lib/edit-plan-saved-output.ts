@@ -1,8 +1,8 @@
-// @registry-lookup reads the JSON of the one node unit a wire leaves from (unitDefinitionOf(src.type))
+// @registry-lookup reads the JSON and the list of the one node unit a wire leaves from (unitDefinitionOf(src.type))
 import { editPlanSavedOutput, resolveEditPlanOutput, type EditPlanEditStatus, type EditPlanSavedOutput } from "@nodaro/shared/edl"
 import { isUseCaseNodeType, usecaseDescriptor, usecaseKindHasPlan, type UseCaseNodeType } from "@nodaro/render-rules"
 import { unitDefinitionOf } from "./unit-definitions"
-import { unitPipJson } from "./unit-compose"
+import { unitPipJson, unitPipList } from "./unit-compose"
 
 /**
  * An Edit Plan node's saved output with the person's review applied — the ONE
@@ -58,6 +58,17 @@ export function usecaseJsonOf(nodeType: string | null | undefined, data: Readonl
 export function unitSourceJsonOf(src: { readonly type?: string; readonly data: unknown }, sourceHandle: string | null | undefined): { readonly value: unknown } | undefined {
   const unit = unitDefinitionOf(src.type)
   return unit ? unitPipJson(unit, src.data as Readonly<Record<string, unknown>>, sourceHandle) : undefined
+}
+
+/**
+ * What an Each wire from a media pip of a node unit whose take carries side
+ * outputs fans out over (`unitPipList`): a list pip's items, and nothing on
+ * its media take's pip; undefined for every other pip and node, which keep the
+ * generic list read.
+ */
+export function unitSourceListOf(src: { readonly type?: string; readonly data: unknown }, sourceHandle: string | null | undefined): { readonly items: readonly string[] } | undefined {
+  const unit = unitDefinitionOf(src.type)
+  return unit ? unitPipList(unit, src.data as Readonly<Record<string, unknown>>, sourceHandle) : undefined
 }
 
 /**

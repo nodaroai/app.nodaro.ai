@@ -1733,17 +1733,24 @@ export async function createAssetFromJob(
       { key: "audioUrl", type: "audio", mime: "audio/mpeg" },
     ]
 
+    // A job that files extra images beside its result (`output_data.libraryImages`,
+    // job-finalize.ts extraImageSets) holds several image rows, so its result is
+    // found by its url; every other job keeps the one-row-per-type check.
+    const libraryImages = libraryImagesOf(output)
+
     for (const { key, type, mime } of mediaFields) {
       const url = output[key]
       if (typeof url !== "string" || !url) continue
 
       // Check if an asset already exists for this job + type
-      const { data: existing } = await supabase
-        .from("assets")
-        .select("id")
-        .eq("job_id", jobId)
-        .eq("type", type)
-        .maybeSingle()
+      const { data: existing } = libraryImages.length > 0
+        ? await supabase.from("assets").select("id").eq("job_id", jobId).eq("r2_url", url).maybeSingle()
+        : await supabase
+          .from("assets")
+          .select("id")
+          .eq("job_id", jobId)
+          .eq("type", type)
+          .maybeSingle()
 
       if (existing) continue
 
@@ -1812,9 +1819,56 @@ export async function createAssetFromJob(
         metadata: generatedAssetMetadata(output, job.job_type),
       })
     }
+
+    // The extra images the job filed beside its result, each under its name.
+    for (const image of libraryImages) {
+      const r2Key = config.R2_PUBLIC_URL ? image.url.replace(config.R2_PUBLIC_URL + "/", "") : image.url
+      // Only this job's own files: an extra image is one finalize stored for it.
+      if (!isOwnedObjectKey(jobId, r2Key)) continue
+      const { data: existing } = await supabase.from("assets").select("id").eq("job_id", jobId).eq("r2_url", image.url).maybeSingle()
+      if (existing) continue
+      const stored = image.url.split("/").pop() ?? `${jobId}.png`
+      const ext = stored.includes(".") ? stored.slice(stored.lastIndexOf(".") + 1).toLowerCase() : "png"
+      await supabase.from("assets").insert({
+        user_id: userId,
+        job_id: jobId,
+        type: "image",
+        r2_key: r2Key,
+        r2_url: image.url,
+        filename: image.name ? `${libraryFileStem(image.name)}.${ext}` : stored,
+        mime_type: LIBRARY_IMAGE_MIME[ext] ?? "image/png",
+        size_bytes: await getR2ObjectSize(r2Key),
+        upload_source: "generated",
+        relay_job_id: null,
+        source: job.source ?? null,
+        source_detail: job.source_detail ?? null,
+        metadata: image.name ? { name: image.name } : {},
+      })
+    }
   } catch (err) {
     console.error(`[worker] Failed to create asset records for job ${jobId}:`, err)
   }
+}
+
+/** The image types an extra Library image is stored as, by extension. */
+const LIBRARY_IMAGE_MIME: Readonly<Record<string, string>> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp" }
+
+/** `output_data.libraryImages`: the extra images to file, each a stored url and, when given, its name. */
+function libraryImagesOf(output: Record<string, unknown>): Array<{ url: string; name?: string }> {
+  const raw = output.libraryImages
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((entry) => {
+    if (typeof entry !== "object" || entry === null) return []
+    const { url, name } = entry as { url?: unknown; name?: unknown }
+    if (typeof url !== "string" || !url) return []
+    return [{ url, ...(typeof name === "string" && name.trim() ? { name: name.trim() } : {}) }]
+  })
+}
+
+/** A Library filename from an image's name: its words kept, path and control characters dropped, 100 characters at most. */
+export function libraryFileStem(name: string): string {
+  const stem = name.replace(/[\u0000-\u001f\u007f/\\:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 100).trim()
+  return stem || "image"
 }
 
 // ============================================================================

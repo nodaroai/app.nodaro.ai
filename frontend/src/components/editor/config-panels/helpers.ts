@@ -1,5 +1,7 @@
+// @registry-lookup getModelIdentifier asks the one node type it prices for its unit price id (unitCreditIdOf(node.type, data))
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
+import { unitCreditIdOf } from "@/lib/unit-price-ids"
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, isSeedanceExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
 import { defaultImageModelForNode, imageFormatLeversOf, isPricedPerInputImage, maskedEditResolution, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
@@ -385,6 +387,10 @@ export function getModelIdentifier(
   // Priced as it runs: a wired Settings input sets the model and length.
   const node = withWiredSettings(storedNode, nodes, edges)
   const data = node.data as Record<string, unknown>
+  // A node unit priced by its settings (its price-id.ts): the row its run
+  // reserves, named by the same rule as its backend price.ee.ts creditId.
+  const unitCreditId = unitCreditIdOf(node.type, data)
+  if (unitCreditId !== undefined) return unitCreditId
   // Dubbing: its language's per-minute row (Hebrew rides the separately priced
   // project API) — the row the route and the workflow run reserve on, × the
   // started minutes of the span (`getExactPricingUnits`).

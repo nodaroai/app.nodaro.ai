@@ -6,7 +6,7 @@
  * the tables that compose its rows (producer-types, presentation-utils,
  * json-kinds, fan-out-rows, preview-gate) are what consumers read.
  */
-import { UNIT_CONTRACTS, UNIT_FAN_OUT_EACH, UNIT_JSON_PIPS, UNIT_NON_PROMPT_INPUTS, UNIT_PRESENTS, UNIT_REVIEW_HOLDS } from "./generated/unit-contracts.js"
+import { UNIT_CONTRACTS, UNIT_FAN_OUT_EACH, UNIT_JSON_PIPS, UNIT_LIST_PIPS, UNIT_NON_PROMPT_INPUTS, UNIT_PRESENTS, UNIT_REVIEW_HOLDS } from "./generated/unit-contracts.js"
 
 /**
  * `legacy ∪ units` as a set, `legacy` first, refusing a type that is in both —
@@ -53,3 +53,6 @@ export const unitReviewHolds = (): readonly string[] => UNIT_REVIEW_HOLDS
 
 /** Each node unit's fan-out "each" outputs and primary pip (`contract.fanOutEach`), in generated order. */
 export const unitFanOutEach = (): ReadonlyArray<readonly [string, { readonly each: ReadonlyArray<string>; readonly primary: string }]> => UNIT_FAN_OUT_EACH
+
+/** Each node unit's list outputs (`handles.outputs[].list`: one run's several files on one pip), in generated order. */
+export const unitListPips = (): ReadonlyArray<readonly [string, ReadonlyArray<string>]> => UNIT_LIST_PIPS

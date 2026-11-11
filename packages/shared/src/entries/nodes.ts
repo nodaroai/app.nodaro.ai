@@ -206,6 +206,8 @@ export {
   ownsItsList,
   defaultEdgeOutputMode,
   listResultsServeHandle,
+  LIST_OUTPUT_HANDLES,
+  isListOutputHandle,
   FAN_IN_TARGETS,
   isFanInNodeType,
   isFanInEdge,

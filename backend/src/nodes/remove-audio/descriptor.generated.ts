@@ -56,5 +56,6 @@ export const descriptor = {
     "finalize:own-writer",
     "length:exact-video",
     "lane:local"
-  ]
+  ],
+  "producer": "video"
 } as const

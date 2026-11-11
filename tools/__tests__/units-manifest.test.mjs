@@ -431,6 +431,7 @@ test("unit.schema.json's enums are the validator's vocabularies", () => {
   assert.deepEqual(schema.properties.registry.properties.outputType.enum, vocabulary.OUTPUT_TYPES)
   assert.deepEqual(schema.properties.contract.properties.producer.enum, vocabulary.PRODUCER_KINDS)
   assert.deepEqual(schema.properties.contract.properties.presents.enum, vocabulary.PRESENTS)
+  assert.deepEqual(schema.properties.registry.properties.category.enum, vocabulary.SERVER_CATEGORIES)
   assert.deepEqual(schema.properties.contract.properties.jsonPips.additionalProperties.enum, vocabulary.JSON_PIP_KINDS)
   assert.deepEqual(schema.properties.picker.oneOf[1].properties.alsoOnTabs.items.enum, vocabulary.PICKER_TABS)
   assert.deepEqual(Object.keys(schema.properties.contract.properties), vocabulary.CONTRACT_KEYS)
@@ -572,17 +573,86 @@ test("a JSON (look) output of a unit that is not a use case names the field it l
   )
 })
 
-test("a JSON (look) output stands only beside other look outputs (no lane lands a job's JSON and its media together yet)", () => {
-  for (const kind of ["video", "text"]) {
-    const errs = problemsAfter((root) => withManifest(root, (m) => {
-      asJsonWorker(m)
-      m.handles.outputs.push({ id: "extra", label: "Extra", kind, from: kind === "video" ? "generatedVideoUrl" : "generatedText" })
-      if (kind === "video") m.contract.producer = "video"
-    }))
-    expectProblem(errs, /^fixture-echo: handles\.outputs: a unit with a JSON \(look\) output has only look outputs/)
-  }
+test("a JSON (look) output stands only beside other look outputs or media (no lane lands a job's JSON beside a text yet)", () => {
+  const errs = problemsAfter((root) => withManifest(root, (m) => {
+    asJsonWorker(m)
+    m.handles.outputs.push({ id: "extra", label: "Extra", kind: "text", from: "generatedText" })
+  }))
+  expectProblem(errs, /^fixture-echo: handles\.outputs: a unit with a JSON \(look\) output has only look or media \(image\/video\/audio\) outputs beside it — no lane lands a job's JSON beside its text yet/)
+  // Beside media it stands, the media take first (runProcessingNode lands the take, then the JSON beside it).
+  assert.deepEqual(problemsAfter((root) => withManifest(root, (m) => {
+    asJsonWorker(m)
+    m.handles.outputs.unshift({ id: "video-out", label: "Video", kind: "video", from: "generatedVideoUrl" })
+    m.contract.producer = "video"
+  })), [])
   // A use-case node's outputs are read by the use-case reader: media, text and JSON together.
-  assert.deepEqual(problemsAfter(() => {}).filter((e) => /only look outputs/.test(e)), [])
+  assert.deepEqual(problemsAfter(() => {}).filter((e) => /only look or media/.test(e)), [])
+})
+
+// The media worker with side outputs both engines' list-output tests derive from
+// fixture-echo (tools/units/__fixtures__/unit-list-outputs.json): it validates as a manifest.
+const LIST_UNIT = JSON.parse(readFileSync(path.join(here, "../units/__fixtures__/unit-list-outputs.json"), "utf8")).unit
+const asListUnit = (m) => {
+  m.handles.outputs = structuredClone(LIST_UNIT.outputs)
+  m.contract = structuredClone(LIST_UNIT.contract)
+  m.registry.outputType = LIST_UNIT.outputType
+}
+
+test("a list output beside the media take: the engines' list-output unit validates", () => {
+  assert.deepEqual(problemsAfter((root) => withManifest(root, asListUnit)), [])
+})
+
+test("a list output: only true, only on an image/video/audio output, with from, never runtime-typed", () => {
+  const listAt = (edit) => problemsAfter((root) => withManifest(root, (m) => { asListUnit(m); edit(m.handles.outputs) }))
+  expectProblem(listAt((o) => { o[1].list = false }), /^fixture-echo: handles\.outputs\[1\]\.list: only true \(or absent\)$/)
+  expectProblem(listAt((o) => { o[2].list = true }), /^fixture-echo: handles\.outputs\[2\]\.list: only on a image\/video\/audio output — a list pip carries files$/)
+  expectProblem(listAt((o) => { delete o[1].from }), /^fixture-echo: handles\.outputs\[1\]\.list: a list output names the node-data field its list lands on — add from$/)
+  expectProblem(listAt((o) => { o[1].runtimeTyped = true }), /^fixture-echo: handles\.outputs\[1\]\.list: a list output's medium is its kind, never decided at run time — remove runtimeTyped$/)
+})
+
+test("side outputs ride on the media take: the first output is a plain media output", () => {
+  const order = (edit) => problemsAfter((root) => withManifest(root, (m) => { asListUnit(m); edit(m.handles.outputs) }))
+  const FIRST = /^fixture-echo: handles\.outputs\[0\]: a unit with list or JSON outputs beside its media puts the media take first/
+  expectProblem(order((o) => { o.reverse() }), FIRST)
+  expectProblem(order((o) => { o.push(o.shift()) }), FIRST)
+  // A list with no plain media output beside it has no take to ride on.
+  expectProblem(order((o) => { o.splice(0, 1) }), FIRST)
+})
+
+test("a list output needs the contracts seam (its UNIT_LIST_PIPS row)", () => {
+  const off = liveSeams(Object.fromEntries(ALL_SEAM_IDS.map((id) => [id, id !== "contracts"])))
+  expectProblem(problemsAfter((root) => withManifest(root, asListUnit), { live: off }), /^fixture-echo: handles\.outputs\[\]\.list needs the "contracts" seam/)
+})
+
+test("registry.category: required when the category is not a /v1/nodes one, refused when it is, a server category", () => {
+  const cat = (edit) => problemsAfter((root) => withManifest(root, edit))
+  expectProblem(cat((m) => { m.category = "ai" }), /^fixture-echo: category "ai" is not a \/v1\/nodes category .* — name the one \/v1\/nodes lists it under in registry\.category/)
+  assert.deepEqual(cat((m) => { m.category = "ai"; m.registry.category = "ai-image" }), [])
+  expectProblem(cat((m) => { m.registry.category = "ai-image" }), /^fixture-echo: registry\.category: category "utility" is a \/v1\/nodes category already — remove registry\.category$/)
+  expectProblem(cat((m) => { m.category = "ai"; m.registry.category = "ai" }), /^fixture-echo: registry\.category: "ai" is not a \/v1\/nodes category/)
+  assert.deepEqual(vocabulary.SERVER_CATEGORIES.filter((c) => vocabulary.CATEGORIES.includes(c)), vocabulary.REGISTRY_CATEGORIES)
+})
+
+test("provider:* — a worker in the provider lane names the one provider it calls; no other unit does", () => {
+  const capabilities = CAPABILITIES
+  const caps = (list, dir = UNIT) => problemsAfter((root) => withManifest(root, (m) => { m.capabilities = list }, dir), { capabilities })
+  expectProblem(caps(["lane:provider"]), /^fixture-echo: a worker in the provider lane names the provider it calls \(provider:kie\)/)
+  assert.deepEqual(caps(["lane:provider", "provider:kie"]), [])
+  expectProblem(caps(["lane:local", "provider:kie"]), /^fixture-echo: capability "provider:kie" attributes a provider-lane worker's job; this unit has no "lane:provider" worker job$/)
+  expectProblem(caps(["provider:kie"], CASE), /^fixture-case: capability "provider:kie" attributes a provider-lane worker's job/)
+  assert.deepEqual(CAPABILITIES["provider:kie"].seams, ["registry"])
+})
+
+test("price-id.ts: a worker whose price.ee.ts names its id from the node's data has the editor's twin, and only such a unit", () => {
+  // fixture-echo's price.ee.ts exports creditId, and its price-id.ts is the editor's rule.
+  assert.deepEqual(problemsAfter(() => {}), [])
+  expectProblem(problemsAfter((root) => rmSync(path.join(root, UNIT, "price-id.ts"))), /^fixture-echo: price\.ee\.ts names the credit id from the node's data \(creditId\): the editor needs the same rule — add frontend\/src\/nodes\/fixture-echo\/price-id\.ts$/)
+  // A flat-priced unit (its comment may say "no creditId resolver") has none.
+  const flat = 'export const staticCosts = { "fixture-echo": 3 } as const\n// Flat-priced: there is no creditId resolver.\nexport const price = { staticCosts }\n'
+  expectProblem(problemsAfter((root) => writeFileSync(path.join(root, BACKEND, "price.ee.ts"), flat)), /^fixture-echo: price-id\.ts is only for a worker or sync unit whose price\.ee\.ts exports creditId/)
+  assert.deepEqual(problemsAfter((root) => { writeFileSync(path.join(root, BACKEND, "price.ee.ts"), flat); rmSync(path.join(root, UNIT, "price-id.ts")) }), [])
+  // A use-case node's fee is its own branch.
+  expectProblem(problemsAfter((root) => writeFileSync(path.join(root, CASE, "price-id.ts"), "export const creditId = () => \"x\"\n")), /^fixture-case: price-id\.ts is only for a worker or sync unit/)
 })
 
 test("contract.reviewHold, nonPromptInputs and presents", () => {

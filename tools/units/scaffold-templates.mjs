@@ -92,8 +92,10 @@ export function unitJson(o) {
     execution: o.kind === "use-case" ? { ...shape.execution, builder: o.builder } : shape.execution,
     // ffmpeg-media: its inputs follow the canvas's ffmpeg media rule; a characterized worker needs it.
     // lane:<lane>: the concurrency lane a worker's job counts in.
-    capabilities: [...(o.characterizeAfter !== undefined ? ["ffmpeg-media"] : []), ...(o.lane !== undefined ? [`lane:${o.lane}`] : [])],
-    registry: { description: o.description, outputType: shape.outputType },
+    // provider:<provider>: the provider a provider-lane worker's job counts against.
+    capabilities: [...(o.characterizeAfter !== undefined ? ["ffmpeg-media"] : []), ...(o.lane !== undefined ? [`lane:${o.lane}`] : []), ...(o.provider !== undefined ? [`provider:${o.provider}`] : [])],
+    // registry.category: its /v1/nodes category when its own category is not one the server shares.
+    registry: { description: o.description, outputType: shape.outputType, ...(o.registryCategory !== undefined ? { category: o.registryCategory } : {}) },
     ...(shape.producer || shape.contract ? { contract: { ...(shape.producer ? { producer: shape.producer } : {}), ...shape.contract } } : {}),
     docs: { awaiting: `scaffolded: write docs/nodes/<folder>/${o.type}.md, then set docs.page` },
   })
@@ -598,16 +600,14 @@ export function priceTs(o) {
   return [
     "// Enterprise License (the .ee. filename). A price change ships with its",
     "// model_pricing seed migration (supabase/migrations/NNN_*.sql) in the same PR:",
-    "// static-costs-match-migrations.test.ts holds the two together.",
+    "// static-costs-match-migrations.test.ts holds the two together. Flat-priced: a",
+    "// run reserves its type's row. A unit priced by its settings adds creditId(data)",
+    "// here and the same rule in its frontend price-id.ts (tools/units/README.md).",
     'import type { UnitPrice } from "../kit.js"',
     "",
     `export const staticCosts = { ${JSON.stringify(o.type)}: ${o.price} } as const`,
     "",
-    "export function creditId(): string {",
-    `  return ${JSON.stringify(o.type)}`,
-    "}",
-    "",
-    "export const price: UnitPrice = { staticCosts, creditId }",
+    "export const price: UnitPrice = { staticCosts }",
     "",
   ].join("\n")
 }

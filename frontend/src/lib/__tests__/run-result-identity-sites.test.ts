@@ -48,6 +48,17 @@ describe("every lane that lands a take lands its identity", () => {
     }
   })
 
+  it("every server-run lane that lands a take also lands a node unit's side outputs beside it (unitSideRunFields / unitSideJobFields)", () => {
+    // A unit whose media take carries a list or JSON beside it (lib/json-run-result.ts):
+    // each take site of a lane writes them on the node and on that take.
+    for (const where of ["components/editor/workflow-editor/run-handlers.ts", "hooks/use-workflow-persistence.ts", "lib/reconcile-completed-jobs.ts"]) {
+      const text = code(join(SRC, where))
+      const identities = count(text, /\brunResultIdentity\(/g)
+      expect(identities, where).toBeGreaterThan(0)
+      expect(count(text, /\bunitSide(?:Run|Job)Fields\(/g), `${where}: a lane lands a take without its side outputs`).toBe(identities)
+    }
+  })
+
   it("the single-node run puts a render's identity on the result only, and the browser fan-out keeps what each iteration landed", () => {
     const executors = code(join(SRC, "components/editor/workflow-editor/node-executors.ts"))
     expect(executors).toMatch(/resultFields: \(od\) => runResultIdentity\("apply-edl", od\)/)

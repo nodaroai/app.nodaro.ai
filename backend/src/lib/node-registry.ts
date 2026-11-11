@@ -2169,9 +2169,18 @@ function withPromptAffixFields(registry: NodeDescriptor[]): NodeDescriptor[] {
 // The /v1/nodes categories a unit's manifest category maps onto (tools/units/vocabulary.mjs REGISTRY_CATEGORIES).
 const UNIT_REGISTRY_CATEGORIES = ["input", "parameter", "processing", "output", "utility"] as const satisfies readonly NodeCategory[]
 
+// Every NodeCategory (tools/units/vocabulary.mjs SERVER_CATEGORIES): what a unit's
+// registry.category may name when its own category is not one the server shares.
+// `satisfies` keeps it inside the union; the Record below makes it every member.
+const NODE_CATEGORY_MEMBERS = {
+  input: true, parameter: true, "ai-image": true, "ai-video": true, "ai-audio": true, "ai-text": true, processing: true,
+  composition: true, trigger: true, output: true, control: true, entity: true, utility: true,
+} as const satisfies Record<NodeCategory, true>
+const NODE_CATEGORIES = Object.keys(NODE_CATEGORY_MEMBERS) as NodeCategory[]
+
 /** A node unit's descriptor as /v1/nodes serves it (its price comes from STATIC_CREDIT_COSTS, as for every node). */
 function unitNodeDescriptor(u: UnitDescriptor): NodeDescriptor {
-  const base = { type: u.type, label: u.label, category: registryCategoryOf(u, UNIT_REGISTRY_CATEGORIES), description: u.description, outputType: u.outputType }
+  const base = { type: u.type, label: u.label, category: registryCategoryOf(u, UNIT_REGISTRY_CATEGORIES, NODE_CATEGORIES), description: u.description, outputType: u.outputType }
   if (u.execution.kind !== "use-case") return base
   // A use-case node: its steps bill per minute at their own rates plus its per-run fee
   // (price.ee.ts) — the band every use-case entry declares; its fields are its body's (use-case.ts).

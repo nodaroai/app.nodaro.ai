@@ -45,5 +45,6 @@ export const descriptor = {
     "kind": "use-case",
     "builder": "fixture"
   },
-  "capabilities": []
+  "capabilities": [],
+  "producer": null
 } as const

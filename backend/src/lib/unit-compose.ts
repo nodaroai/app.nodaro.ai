@@ -5,7 +5,7 @@
 // and the unit collection in — so lib/__tests__/unit-compose.test.ts proves
 // every seam on an in-memory fixture unit, and an EMPTY unit collection
 // returns every legacy table unchanged.
-import type { UnitDescriptor, UnitPrice } from "../nodes/kit.js"
+import type { UnitDescriptor, UnitOutputHandle, UnitPrice } from "../nodes/kit.js"
 
 /** Throws when a unit key is also a legacy key: a node type lives in exactly one place (G1). */
 function assertDisjoint(what: string, legacy: Iterable<string>, units: Iterable<string>): void {
@@ -130,11 +130,43 @@ export function unitStaticCosts(prices: Readonly<Record<string, UnitPrice>>): Re
   return out
 }
 
-/** The /v1/nodes category of a unit: the manifest's when the server shares that name (tools/units/vocabulary.mjs REGISTRY_CATEGORIES). */
-export function registryCategoryOf<C extends string>(u: UnitDescriptor, categories: ReadonlyArray<C>): C {
-  const c = categories.find((x) => x === u.category)
-  if (!c) throw new Error(`${u.type}: category "${u.category}" has no /v1/nodes category (${categories.join(", ")})`)
+/**
+ * The /v1/nodes category of a unit: its `registryCategory` (unit.json
+ * registry.category, one of `serverCategories` — every category /v1/nodes
+ * lists) when it states one, else the manifest's own category when the server
+ * shares that name (`shared`, tools/units/vocabulary.mjs REGISTRY_CATEGORIES).
+ */
+export function registryCategoryOf<C extends string, S extends string = C>(
+  u: UnitDescriptor,
+  shared: ReadonlyArray<C>,
+  serverCategories: ReadonlyArray<S> = shared as unknown as ReadonlyArray<S>,
+): C | S {
+  if (u.registryCategory !== undefined) {
+    const s = serverCategories.find((x) => x === u.registryCategory)
+    if (!s) throw new Error(`${u.type}: registry.category "${u.registryCategory}" is no /v1/nodes category (${serverCategories.join(", ")})`)
+    return s
+  }
+  const c = shared.find((x) => x === u.category)
+  if (!c) throw new Error(`${u.type}: category "${u.category}" has no /v1/nodes category (${shared.join(", ")})`)
   return c
+}
+
+/** The node units whose `contract.producer` is `kind` (UnitDescriptor.producer), in collection order. */
+export const unitProducers = (units: ReadonlyArray<UnitDescriptor>, kind: NonNullable<UnitDescriptor["producer"]>): string[] =>
+  units.filter((u) => u.producer === kind).map((u) => u.type)
+
+const PROVIDER_CAPABILITY = "provider:"
+
+/**
+ * The provider a unit's worker job counts against — the one its `provider:*`
+ * capability names (tools/units/capabilities.mjs; the validator requires exactly
+ * one on every provider-lane worker and refuses it anywhere else) — or
+ * undefined (no unit, or a unit with none).
+ */
+export function unitProviderOf(u: UnitDescriptor | undefined): string | undefined {
+  const cap = u?.capabilities.find((c) => c.startsWith(PROVIDER_CAPABILITY))
+  const provider = cap?.slice(PROVIDER_CAPABILITY.length)
+  return provider ? provider : undefined
 }
 
 /**
@@ -158,48 +190,138 @@ export function unitJsonValue(v: unknown): unknown {
   }
 }
 
-const lookOutputs = (u: UnitDescriptor) => u.handles.outputs.filter((h) => h.kind === "look")
+const MEDIA_KINDS: ReadonlyArray<string> = ["image", "video", "audio"]
+const isMediaOutput = (h: UnitOutputHandle | undefined): boolean => h !== undefined && MEDIA_KINDS.includes(h.kind)
+/** An output that rides on the media take: a JSON (look) output, or a list of files. */
+const isSideOutput = (h: UnitOutputHandle): boolean => h.kind === "look" || h.list === true
 
 /**
- * A worker unit whose job's result is JSON: it has look outputs, and (the
- * validator, tools/units/json-output-rules.mjs) nothing but look outputs. Its
- * job writes each output's value under the output's id.
+ * A worker unit whose job's result is JSON: every output is a look output (the
+ * validator, tools/units/json-output-rules.mjs, lets a look output stand only
+ * beside look or media outputs; a unit with media is a media unit whose JSON
+ * rides beside its take — `unitHasSideOutputs`). Its job writes each output's
+ * value under the output's id.
  */
 export function isUnitJsonWorker(u: UnitDescriptor): boolean {
-  return u.execution.kind === "worker" && lookOutputs(u).length > 0
+  const outputs = u.handles.outputs
+  return u.execution.kind === "worker" && outputs.length > 0 && outputs.every((h) => h.kind === "look")
 }
 
-/** What a unit's JSON outputs put on the node output (NodeOutput's `unitOutputs` and `json`). */
+/**
+ * A unit whose media take carries SIDE outputs (decided 2026-11-11): its first
+ * output is a plain media output (the take, what an edge naming no pip reads)
+ * and beside it a list output and/or a JSON (look) output. Never a use case
+ * (the use-case reader reads those).
+ */
+export function unitHasSideOutputs(u: UnitDescriptor): boolean {
+  const [first, ...rest] = u.handles.outputs
+  return u.execution.kind !== "use-case" && isMediaOutput(first) && first!.list !== true && rest.some(isSideOutput)
+}
+
+/** What a unit's side outputs put on the node output (NodeOutput's `unitOutputs`, `unitLists` and `json`). */
 export interface UnitJsonOutput {
   /** By look output id: its value as the JSON string a wire carries. */
   readonly unitOutputs?: Readonly<Record<string, string>>
-  /** The primary (first) look output's JSON value, for the readers that read `output.json`. */
+  /** By list output id: the files one run made on that pip, in order (never empty). */
+  readonly unitLists?: Readonly<Record<string, readonly string[]>>
+  /** The first output's JSON value when the first output is a look output (a JSON-only worker), for the readers that read `output.json`. */
   readonly json?: unknown
 }
 
-/** The look outputs' values, each read by `read(output)`. Empty when none has a value. */
-function lookOutputValues(u: UnitDescriptor, read: (h: { readonly id: string; readonly from?: string }) => unknown): UnitJsonOutput {
-  const unitOutputs: Record<string, string> = {}
-  let json: unknown
-  const looks = lookOutputs(u)
-  for (const h of looks) {
-    const raw = read(h)
-    const value = unitJsonString(raw)
-    if (value === undefined) continue
-    unitOutputs[h.id] = value
-    if (h === looks[0]) json = unitJsonValue(raw)
-  }
-  if (Object.keys(unitOutputs).length === 0) return {}
-  return json === undefined ? { unitOutputs } : { unitOutputs, json }
+/** A list output's value as its items: the non-empty strings of an array, in order; undefined when none (an empty list is no value). */
+export function unitListItems(v: unknown): string[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const items = v.filter((x): x is string => typeof x === "string" && x !== "")
+  return items.length > 0 ? items : undefined
 }
 
 /**
- * A JSON worker unit's finished job as its node output: each look output's
- * `output_data[<output id>]` (decided 2026-10-18); a key that names no output
- * is dropped. `{}` when the job wrote none — the poll then fails the node.
+ * The side outputs' values — every look output on `unitOutputs`, every list
+ * output on `unitLists` — each read by `read(output)`. `json` is the first
+ * output's value only when that output is a look output (a JSON-only worker):
+ * never for a media unit. Empty when none has a value.
+ */
+function sideOutputValues(u: UnitDescriptor, read: (h: UnitOutputHandle) => unknown): UnitJsonOutput {
+  const unitOutputs: Record<string, string> = {}
+  const unitLists: Record<string, readonly string[]> = {}
+  let json: unknown
+  const first = u.handles.outputs[0]
+  for (const h of u.handles.outputs) {
+    if (h.kind === "look") {
+      const raw = read(h)
+      const value = unitJsonString(raw)
+      if (value === undefined) continue
+      unitOutputs[h.id] = value
+      if (h === first) json = unitJsonValue(raw)
+    } else if (h.list === true) {
+      const items = unitListItems(read(h))
+      if (items) unitLists[h.id] = items
+    }
+  }
+  return {
+    ...(Object.keys(unitOutputs).length > 0 ? { unitOutputs } : {}),
+    ...(Object.keys(unitLists).length > 0 ? { unitLists } : {}),
+    ...(json !== undefined ? { json } : {}),
+  }
+}
+
+/**
+ * A unit's finished job's side outputs: each look or list output's
+ * `output_data[<output id>]` (decided 2026-10-18 for JSON, 2026-11-11 for
+ * lists and JSON beside media); a key that names no output is dropped. For a
+ * JSON-only worker that is its whole node output — `{}` when the job wrote
+ * none, and the poll then fails the node; a media unit's take is read the way
+ * every media node's is, these beside it.
  */
 export function unitJobOutput(u: UnitDescriptor, outputData: Readonly<Record<string, unknown>>): UnitJsonOutput {
-  return lookOutputValues(u, (h) => (Object.hasOwn(outputData, h.id) ? outputData[h.id] : undefined))
+  return sideOutputValues(u, (h) => (Object.hasOwn(outputData, h.id) ? outputData[h.id] : undefined))
+}
+
+/**
+ * The list output a wire from `sourceHandle` reads — only the one it names (an
+ * edge naming no pip reads the first output, which is never a list:
+ * tools/units/json-output-rules.mjs); undefined when that output is not a list
+ * or the unit is a use case.
+ */
+export function unitListPipOf(u: UnitDescriptor, sourceHandle: string | null | undefined): string | undefined {
+  if (u.execution.kind === "use-case" || !sourceHandle) return undefined
+  const h = u.handles.outputs.find((o) => o.id === sourceHandle)
+  return h?.list === true ? h.id : undefined
+}
+
+/** The items a wire from a unit's list pip hands on (`unitLists`); undefined when the pip has none, or is not a list pip. */
+export function unitListPipItems(
+  u: UnitDescriptor,
+  output: { readonly unitLists?: Readonly<Record<string, readonly string[]>> },
+  sourceHandle: string | null | undefined,
+): readonly string[] | undefined {
+  const pip = unitListPipOf(u, sourceHandle)
+  return pip === undefined ? undefined : output.unitLists?.[pip]
+}
+
+/**
+ * Whether a wire from `sourceHandle` reads the media TAKE of a unit whose take
+ * carries side outputs (`unitHasSideOutputs`): the pip it names when that is
+ * neither a list nor a look output, or (naming none or an unknown one) the
+ * first output. Such a pip lists only what this run made — its takes carry
+ * their own side outputs, so its saved take history is never a list (the
+ * unit-list-outputs fixture, decided 2026-11-11).
+ */
+export function unitTakePipOf(u: UnitDescriptor, sourceHandle: string | null | undefined): boolean {
+  return unitHasSideOutputs(u) && unitLookPipOf(u, sourceHandle) === undefined && unitListPipOf(u, sourceHandle) === undefined
+}
+
+/**
+ * The kind of the output a wire from `sourceHandle` leaves — the one it names,
+ * else the first (what an edge naming no pip reads) — when it is a declared
+ * medium; undefined for a use case (routed by its type), and for a pip whose
+ * medium is decided at run time (`runtimeTyped`).
+ */
+export function unitPipKindOf(u: UnitDescriptor, sourceHandle: string | null | undefined): UnitOutputHandle["kind"] | undefined {
+  if (u.execution.kind === "use-case") return undefined
+  const outputs = u.handles.outputs
+  const h = (sourceHandle ? outputs.find((o) => o.id === sourceHandle) : undefined) ?? outputs[0]
+  return h === undefined || h.runtimeTyped ? undefined : h.kind
 }
 
 /**
@@ -214,14 +336,19 @@ export function unitLookPipOf(u: UnitDescriptor, sourceHandle: string | null | u
   return h?.kind === "look" ? h.id : undefined
 }
 
-/** What a wire from a unit's look pip carries: that output's JSON string off the node output (`unitOutputs`). */
+/**
+ * What a plain wire from a unit's side pip carries: a look pip's JSON string
+ * off the node output (`unitOutputs`), a list pip's FIRST item (`unitLists`).
+ * Undefined for any other pip (its media and text take the generic reads).
+ */
 export function unitPipValue(
   u: UnitDescriptor,
-  output: { readonly unitOutputs?: Readonly<Record<string, string>> },
+  output: { readonly unitOutputs?: Readonly<Record<string, string>>; readonly unitLists?: Readonly<Record<string, readonly string[]>> },
   sourceHandle: string | null | undefined,
 ): string | undefined {
   const pip = unitLookPipOf(u, sourceHandle)
-  return pip === undefined ? undefined : output.unitOutputs?.[pip]
+  if (pip !== undefined) return output.unitOutputs?.[pip]
+  return unitListPipItems(u, output, sourceHandle)?.[0]
 }
 
 /**
@@ -234,7 +361,8 @@ export function unitPipJson(
   output: { readonly unitOutputs?: Readonly<Record<string, string>> },
   sourceHandle: string | null | undefined,
 ): unknown {
-  const value = unitPipValue(u, output, sourceHandle)
+  const pip = unitLookPipOf(u, sourceHandle)
+  const value = pip === undefined ? undefined : output.unitOutputs?.[pip]
   return value === undefined ? undefined : unitJsonValue(value)
 }
 
@@ -244,15 +372,21 @@ export interface UnitSavedOutput extends UnitJsonOutput {
   readonly audioUrl?: string
   readonly imageUrl?: string
   readonly text?: string
+  /** A unit with side outputs that ran once per upstream item: its last batch of takes (`__listResults`), what its take pip lists. */
+  readonly listResults?: string[]
 }
 
 /**
  * A unit's saved output, read the way every media node's is: per output
  * handle whose `from` names the node-data field, `<kind>Url` (videoUrl,
- * audioUrl, imageUrl) from the ACTIVE generated result's url, else the field;
- * `text` for a text output; a JSON (look) output's field on `unitOutputs` (and
- * the first one's value on `json`), as a finished job's are (`unitJobOutput`).
- * Undefined when nothing is saved yet.
+ * audioUrl, imageUrl) from the ACTIVE generated result's url, else the field
+ * (a list output never — it is a side output); `text` for a text output; its
+ * side outputs as a finished job's are (`unitJobOutput`): a JSON (look)
+ * output's field on `unitOutputs` (and, for a JSON-only worker, the first
+ * one's value on `json`), a list output's on `unitLists`. A media unit's side
+ * output reads the ACTIVE take's own field when that take carries it (a take
+ * holds the side fields it was made with), else the node's field. Undefined
+ * when nothing is saved yet.
  */
 export function unitSavedOutput(u: UnitDescriptor, data: Readonly<Record<string, unknown>>): UnitSavedOutput | undefined {
   const out: Record<string, string> = {}
@@ -261,16 +395,25 @@ export function unitSavedOutput(u: UnitDescriptor, data: Readonly<Record<string,
   // nullish — an empty one included, which then saves nothing — else the field.
   const results = (data.generatedResults as ReadonlyArray<{ url?: string }> | undefined) ?? []
   const active = (data.activeResultIndex as number | undefined) ?? 0
+  const activeTake: unknown = results[active]
   const activeUrl = results[active]?.url
   for (const h of u.handles.outputs) {
-    if (!h.from) continue
+    if (!h.from || h.list === true) continue
     const value = data[h.from] as string | undefined
     if (h.kind === "video" || h.kind === "audio" || h.kind === "image") {
       const url = activeUrl ?? value
       if (url && out[`${h.kind}Url`] === undefined) out[`${h.kind}Url`] = url
     } else if (h.kind === "text" && typeof value === "string" && value && out.text === undefined) out.text = value
   }
-  const json = lookOutputValues(u, (h) => (h.from ? data[h.from] : undefined))
-  const saved: UnitSavedOutput = { ...out, ...json }
+  // A media unit's take carries its side fields; a JSON-only worker reads its node's fields as it always has.
+  const take = unitHasSideOutputs(u) && typeof activeTake === "object" && activeTake !== null ? (activeTake as Readonly<Record<string, unknown>>) : undefined
+  const side = sideOutputValues(u, (h) => {
+    if (!h.from) return undefined
+    return take && Object.hasOwn(take, h.from) ? take[h.from] : data[h.from]
+  })
+  // Its take pip lists the last batch of a run once per upstream item (as a
+  // per-item node's each pip does, savedListFor) — never its take history.
+  const batch = unitHasSideOutputs(u) ? unitListItems(data.__listResults) : undefined
+  const saved: UnitSavedOutput = { ...out, ...side, ...(batch ? { listResults: batch } : {}) }
   return Object.keys(saved).length ? saved : undefined
 }

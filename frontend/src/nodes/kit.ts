@@ -11,6 +11,7 @@
 //   option.tsx              → `option: UnitOption`
 //   exec.ts                 → `executor: UnitExecutor`             (exec-kit.ts)
 //   labels.generated.ts     → `labels: UnitLabels` (generated from strings.json)
+//   price-id.ts             → `creditId: UnitCreditId` (a unit priced by its settings)
 // The aggregates (frontend/src/nodes/_generated/) are typed with these, so a
 // unit whose export does not fit fails typecheck at its aggregate line.
 //
@@ -46,6 +47,12 @@ export interface UnitOutputHandle {
   readonly from?: string
   /** Its medium is decided at run time (contract.producer "dynamic"): the pip gets no HANDLE_OUTPUT_TYPES row. */
   readonly runtimeTyped?: true
+  /**
+   * It carries one run's list of files (an image/video/audio output): its `from`
+   * field holds the list, an Each wire runs the next node once per item (the
+   * default) and a plain wire reads the first.
+   */
+  readonly list?: true
 }
 
 /** `contract.producer` (tools/units/vocabulary.mjs PRODUCER_KINDS). */
@@ -97,6 +104,14 @@ export interface UnitDefinition {
   /** The unit's job declares a budget (its backend budget.ts), projected by gen:units: a reload re-attaches its poll for the long horizon (single-node-restore.ts). */
   readonly longRunning?: true
 }
+
+/**
+ * price-id.ts — the credit id a run of the unit reserves, named from the node's
+ * data by the same rule as its backend price.ee.ts `creditId` (a unit priced by
+ * its settings: the editor's Run button, config panel and run estimate quote
+ * that row). Composed by lib/unit-price-ids.ts.
+ */
+export type UnitCreditId = (data: Readonly<Record<string, unknown>>) => string
 
 /** node.tsx — the canvas component. */
 export type UnitNodeComponent = ComponentType<NodeProps>

@@ -89,6 +89,22 @@ test("scaffoldOptions: the place, the picker and the description are always stat
   assert.match(errs(argsFor("a-b", "worker").map((a) => (a === "local" ? "run" : a))).join(), /--lane "run" is not one of provider, llm, local/)
   assert.match(errs(argsFor("a-b", "sync", ["--lane", "llm"])).join(), /--lane is only for --kind worker \(--kind sync runs no worker job\)/)
   assert.equal(scaffoldOptions(parseScaffoldArgs(argsFor("a-b", "worker")).opts).o.lane, "local")
+  // A provider-lane worker names the provider its job calls; no other node takes --provider.
+  const providerLane = (extra) => argsFor("a-b", "worker").map((a) => (a === "local" ? "provider" : a)).concat(extra)
+  assert.match(errs(providerLane([])).join(), /--provider is required for a worker in the provider lane: the provider its job calls \(.*kie.*\)/)
+  assert.match(errs(providerLane(["--provider", "nope"])).join(), /--provider "nope" is not one of /)
+  assert.match(errs(argsFor("a-b", "worker", ["--provider", "kie"])).join(), /--provider is only for a worker in the provider lane \(--lane provider\)/)
+  assert.deepEqual(errs(providerLane(["--provider", "kie"])), [])
+  assert.equal(scaffoldOptions(parseScaffoldArgs(providerLane(["--provider", "kie"])).opts).o.provider, "kie")
+  // --registry-category: a /v1/nodes category, written as registry.category.
+  assert.match(errs(argsFor("a-b", "worker", ["--registry-category", "nope"])).join(), /--registry-category "nope" is not a \/v1\/nodes category/)
+  const aiWorker = (extra) => argsFor("a-b", "worker", extra).map((a) => (a === "processing" ? "ai" : a))
+  assert.equal(scaffoldOptions(parseScaffoldArgs(aiWorker(["--registry-category", "ai-image"])).opts).o.registryCategory, "ai-image")
+  assert.deepEqual(errs(aiWorker(["--registry-category", "ai-image"])), [])
+  // Refused in the flag's words, never the manifest field's.
+  assert.match(errs(aiWorker([])).join(), /--registry-category is required for --category "ai" \(not a \/v1\/nodes category\)/)
+  assert.match(errs(argsFor("a-b", "worker", ["--registry-category", "ai-image"])).join(), /--registry-category is only for a category \/v1\/nodes does not share: "processing" is one of .* — drop --registry-category/)
+  for (const e of [...errs(aiWorker([])), ...errs(argsFor("a-b", "worker", ["--registry-category", "ai-image"]))]) assert.doesNotMatch(e, /registry\.category/)
   const { o, errors } = scaffoldOptions(parseScaffoldArgs(["--new", "echo-twice", "--category", "utility", "--kind", "source", "--after", "first", "--no-picker", "--description", "d"]).opts)
   assert.deepEqual(errors, [])
   assert.deepEqual(o, { type: "echo-twice", category: "utility", kind: "source", label: "Echo Twice", description: "d", after: null, family: null, pickerAfter: null, price: null, characterizeAfter: undefined })
@@ -128,6 +144,10 @@ test("scaffoldFiles: the files each execution.kind requires, and option.tsx only
   assert.deepEqual(JSON.parse(characterized.get(fe("unit.json"))).capabilities, ["ffmpeg-media"])
   const laned = scaffoldFiles({ type: "x-y", category: "processing", kind: "worker", label: "X Y", description: "d", after: null, family: "f", pickerAfter: null, price: 1, characterizeAfter: "op", lane: "local" })
   assert.deepEqual(JSON.parse(laned.get(fe("unit.json"))).capabilities, ["ffmpeg-media", "lane:local"])
+  // --provider and --registry-category land in the manifest.
+  const provided = JSON.parse(scaffoldFiles({ type: "x-y", category: "ai", kind: "worker", label: "X Y", description: "d", after: null, family: "f", pickerAfter: null, price: 1, lane: "provider", provider: "kie", registryCategory: "ai-image" }).get(fe("unit.json")))
+  assert.deepEqual(provided.capabilities, ["lane:provider", "provider:kie"])
+  assert.deepEqual(provided.registry, { description: "d", outputType: provided.registry.outputType, category: "ai-image" })
   assert.deepEqual(JSON.parse(scaffoldFiles({ type: "x-y", category: "processing", kind: "worker", label: "X Y", description: "d", after: null, family: "f", pickerAfter: null, price: 1 }).get(fe("unit.json"))).capabilities, [])
 })
 
@@ -161,7 +181,7 @@ test("refusals write nothing: a legacy type, an existing unit, an unknown family
     assert.match(refused(argsFor("fixture-echo", "source")), /frontend\/src\/nodes\/fixture-echo and backend\/src\/nodes\/fixture-echo already exist — --new never overwrites/)
     assert.match(refused(argsFor("new-one", "source").map((a) => (a === "fixture-family" ? "no-such-family" : a))), /picker\.family "no-such-family" is not a family id/)
     assert.match(refused(argsFor("new-one", "source").map((a) => (a === "upload-video" ? "no-such-type" : a))), /position\.after: "no-such-type" is not a node type/)
-    assert.match(refused(argsFor("new-one", "source").map((a) => (a === "processing" ? "ai" : a))), /category "ai" has no \/v1\/nodes category yet/)
+    assert.match(refused(argsFor("new-one", "source").map((a) => (a === "processing" ? "ai" : a))), /--registry-category is required for --category "ai" \(not a \/v1\/nodes category\)/)
     const err = sink()
     assert.equal(await main(argsFor("upload-video", "source"), root, sink(), err, { ctx: ctxFor(root) }), 1)
     assert.match(err.lines.join(""), /refused, nothing written/)
@@ -178,6 +198,12 @@ test("the real repo today: a worker unit scaffolds; sync, inline and source wait
     ...(kind === "worker" ? ["--lane", "local"] : []),
   ]).opts, { root: REPO })
   assert.deepEqual(real("worker").errors, [])
+  // A provider-lane worker: the validator requires its provider:* capability, so
+  // the scaffold must write it (it refused every provider-lane worker without --provider).
+  const providerWorker = (extra) => planScaffold(parseScaffoldArgs(["--new", "scaffold-probe", "--category", "processing", "--kind", "worker", "--after", "remove-audio",
+    "--family", "video-sound", "--picker-after", "remove-audio", "--description", "A probe.", "--price", "1", "--lane", "provider", ...extra]).opts, { root: REPO }).errors
+  assert.deepEqual(providerWorker(["--provider", "kie"]), [])
+  assert.match(providerWorker([]).join("\n"), /--provider is required for a worker in the provider lane/)
   const characterize = (op) => planScaffold(parseScaffoldArgs(["--new", "scaffold-probe", "--category", "processing", "--kind", "worker", "--after", "remove-audio",
     "--family", "video-sound", "--picker-after", "remove-audio", "--description", "A probe.", "--price", "1", "--lane", "local", "--characterize", op]).opts, { root: REPO }).errors
   assert.deepEqual(characterize("remove-audio"), [], "a unit's own characterization is an operation to follow")

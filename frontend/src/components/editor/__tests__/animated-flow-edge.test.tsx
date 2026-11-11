@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
-import { render, cleanup } from "@testing-library/react"
+import { render, cleanup, fireEvent } from "@testing-library/react"
 
 // AnimatedFlowEdge pulls BaseEdge / EdgeLabelRenderer / the path helpers /
 // useStore from @xyflow/react. We mock the whole module to exactly the surface
@@ -131,5 +131,25 @@ describe("AnimatedFlowEdge — unused prompt edge", () => {
     expect(edge.style.opacity).toBe("0.9")
     // No unused-prompt hover target / tooltip for a normal edge.
     expect(container.querySelector("title")).toBeNull()
+  })
+})
+
+describe("AnimatedFlowEdge — the mode menu of a wire from a list pip", () => {
+  /** The mode options the menu offers once opened. */
+  function openMenu(data: EdgeData) {
+    const view = renderEdge({ data, selected: true })
+    fireEvent.click(view.getByLabelText("Change output mode"))
+    const options = ["Selected", "Item", "Each", "Bundle"].filter((label) => view.queryByText(label) !== null)
+    return { options }
+  }
+
+  it("a node unit's list pip (sourceListPip): Selected hidden, Each the default, Bundle offered into a node that takes several", () => {
+    const { options } = openMenu({ sourceNodeType: "fixture-layers", sourceListPip: true, targetNodeType: "generate-image", edgeModeLabel: "each" })
+    expect(options).toEqual(["Item", "Each", "Bundle"])
+  })
+
+  it("the same node's other pips are not list-like: Selected stays, Bundle only into a node that takes several", () => {
+    expect(openMenu({ sourceNodeType: "fixture-layers", targetNodeType: "upscale-image", edgeModeLabel: "selected" }).options).toEqual(["Selected", "Item", "Each"])
+    expect(openMenu({ sourceNodeType: "fixture-layers", sourceListPip: true, targetNodeType: "upscale-image", edgeModeLabel: "each" }).options).toEqual(["Item", "Each"])
   })
 })
