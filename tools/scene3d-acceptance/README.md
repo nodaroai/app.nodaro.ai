@@ -20,8 +20,8 @@ What it does instead of a mock:
 ## Before you run anything
 
 ```bash
-export NODARO_API_KEY=...                      # never on the command line — it lands in shell history
-export NODARO_BASE_URL=https://next.nodaro.ai  # staging; production is https://app.nodaro.ai
+export NODARO_API_KEY=...                          # never on the command line — it lands in shell history
+export NODARO_BASE_URL=https://next.app.nodaro.ai  # staging; production is https://app.nodaro.ai
 ```
 
 Those two environment variables are the **only** source of credentials. The CLI
@@ -161,7 +161,7 @@ compiler refused the recipe, and the retained draft is in the failed job's own
 
 ## Staging first
 
-Run these against `https://next.nodaro.ai`, in this order. Each one names the
+Run these against `https://next.app.nodaro.ai`, in this order. Each one names the
 plan-repo receipt it is expected to become.
 
 ```bash

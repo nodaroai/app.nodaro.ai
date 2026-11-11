@@ -1,7 +1,7 @@
 /**
  * Which deployment is this process? — one source of truth, no I/O.
  *
- * Staging (`next.nodaro.ai`) and production (`app.nodaro.ai`) share ONE
+ * Staging (`next.app.nodaro.ai`) and production (`app.nodaro.ai`) share ONE
  * Supabase database but have SEPARATE Redis instances, so each environment
  * runs its own BullMQ `workflow-orchestration` queue. Both environments'
  * reconcile sweeps scan the SAME `workflow_executions` rows and look the

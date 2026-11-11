@@ -168,7 +168,7 @@ frequently cited rules:
 - Branch naming: `feat/`, `fix/`, `refactor/`, `docs/`, `chore/`,
   `test/`. Example: `feat/whisper-tts-node`.
 - After your PR is merged, Railway automatically deploys `dev` to
-  the staging instance at `next.nodaro.ai`. Try your change there.
+  the staging instance at `next.app.nodaro.ai`. Try your change there.
 - After ~24h staging soak, a maintainer opens a PR from `dev` to
   `main`. This must be a **regular merge**, never a squash —
   squashing causes `dev` to diverge from `main` and breaks

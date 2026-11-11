@@ -44,7 +44,7 @@ export async function makeClient({ baseUrl } = {}) {
   if (!resolvedBase) {
     throw new HarnessError("NODARO_BASE_URL is not set", {
       code: "no_base_url",
-      hint: "export NODARO_BASE_URL=https://next.nodaro.ai for staging",
+      hint: "export NODARO_BASE_URL=https://next.app.nodaro.ai for staging",
     })
   }
   const { createClient, StaticTokenAuth } = await import("@nodaro/sdk/client")

@@ -92,7 +92,7 @@ A node that stores a model keeps it: a node saved on v3 still runs on v3, and v3
 
 ## Credits
 
-> Length-based pricing is on at `app.nodaro.ai` and `next.nodaro.ai` (since 2026-10-08). A Cloud-edition install that leaves `SPEECH_LENGTH_PRICING_ENABLED` off instead charges the flat amount listed for the model (33 credits<!-- credits: elevenlabs-v4 --> on v4, v3 and Multilingual v2; 17<!-- credits: elevenlabs-v4-turbo --> on Turbo v2.5 and v4 Turbo), whatever the length. The editor's price badges, the workflow estimate and a published app's advertised price follow the same switch: the flat amount where length pricing is off, the length price where it is on.
+> Length-based pricing is on at `app.nodaro.ai` and `next.app.nodaro.ai` (since 2026-10-08). A Cloud-edition install that leaves `SPEECH_LENGTH_PRICING_ENABLED` off instead charges the flat amount listed for the model (33 credits<!-- credits: elevenlabs-v4 --> on v4, v3 and Multilingual v2; 17<!-- credits: elevenlabs-v4-turbo --> on Turbo v2.5 and v4 Turbo), whatever the length. The editor's price badges, the workflow estimate and a published app's advertised price follow the same switch: the flat amount where length pricing is off, the length price where it is on.
 
 A request is priced on the text actually sent — after the per-request cap is applied and, on Turbo v2.5 and Multilingual v2, after `[audio tags]` are stripped — in **units of 100 characters, every started unit counting, with a minimum of 8 units per request**, the request's total rounded up to a whole credit:
 

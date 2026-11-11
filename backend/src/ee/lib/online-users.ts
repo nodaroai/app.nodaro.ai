@@ -44,7 +44,7 @@ const NODARO = ".nodaro.ai"
  * A surface's label, derived — never a host→name table, which a new
  * subdomain would silently miss (`job-source.ts` makes the same point): a web
  * host loses ".nodaro.ai" and its port (studio.nodaro.ai → STUDIO,
- * next.nodaro.ai → NEXT); any other host is shown as it is.
+ * next.app.nodaro.ai → NEXT.APP); any other host is shown as it is.
  */
 export function surfaceLabel(source: PresenceSource, detail: string | null, app?: { name: string; mcp: boolean }): string {
   switch (source) {

@@ -12,7 +12,7 @@
  *
  * ONE ENVIRONMENT, ONE SCAN (migration 374). Several deployments can share a
  * single Supabase database while each has its OWN Redis — that is exactly how
- * staging (next.nodaro.ai) and production (app.nodaro.ai) run. The orphan gate
+ * staging (next.app.nodaro.ai) and production (app.nodaro.ai) run. The orphan gate
  * below asks `orchestrationQueue.getJob(row.id)`, which can only ever see jobs
  * THIS environment enqueued, so an execution belonging to another environment
  * looks orphaned no matter how healthy it is. Unscoped, this tick killed live

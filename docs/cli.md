@@ -62,7 +62,7 @@ Generate a token at `https://app.nodaro.ai/settings/api`, then save it locally:
 nodaro auth login                                   # interactive (opens a browser by default; use --no-browser to paste a token)
 nodaro auth login --token "$NODARO_TOKEN"           # non-interactive
 nodaro auth login --no-browser                      # skip browser flow, paste token instead
-nodaro auth login --profile staging --base-url https://next.nodaro.ai
+nodaro auth login --profile staging --base-url https://next.app.nodaro.ai
 ```
 
 The token is stored at `~/.config/nodaro/config.json` with `chmod 0600`. Override the location with `NODARO_CONFIG_DIR`.
@@ -78,7 +78,7 @@ Switch between staging / prod / local instances with `--profile`:
 
 ```bash
 nodaro auth login --profile prod    --base-url https://app.nodaro.ai
-nodaro auth login --profile staging --base-url https://next.nodaro.ai
+nodaro auth login --profile staging --base-url https://next.app.nodaro.ai
 nodaro auth login --profile local   --base-url http://localhost:8000
 
 nodaro projects list --profile staging
