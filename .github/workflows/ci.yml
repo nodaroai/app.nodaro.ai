@@ -1385,7 +1385,25 @@ jobs:
           MIGRATIONS_WAIT_SECONDS: "60"
         run: node backend/scripts/run-migrations.mjs
       - name: Install psql
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+        # The runner image ships psql, so this installs nothing there and needs
+        # no network. Fetching the package unconditionally failed the whole job,
+        # on every branch, whenever the runner could not reach the package
+        # mirror. Where psql is missing, the install is tried a few times.
+        run: |
+          if command -v psql >/dev/null 2>&1; then
+            psql --version
+            exit 0
+          fi
+          for attempt in 1 2 3 4; do
+            if sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client; then
+              psql --version
+              exit 0
+            fi
+            echo "psql install attempt ${attempt} failed"
+            sleep $((attempt * 15))
+          done
+          echo "::error::could not install psql after 4 attempts"
+          exit 1
       - name: Verify retained image reservation concurrency
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
