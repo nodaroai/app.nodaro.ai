@@ -101,7 +101,7 @@ export const RESOLVED_MODEL_OF_JOB: Readonly<Record<string, (d: Data) => string 
   "generate-location-motion": withDefault(LOCATION_MOTION_DEFAULT_PROVIDER),
   "generate-object-motion": withDefault(OBJECT_MOTION_DEFAULT_PROVIDER),
   "generate-creature-motion": withDefault(CREATURE_MOTION_DEFAULT_PROVIDER),
-  // The four extensions (veo-extend, runway-extend, ltx-2.3-pro, seedance-2-extend) are catalog ids; `model` is a tier.
+  // The extensions (veo-extend, runway-extend, ltx-2.3-pro, seedance-2-5-extend, seedance-2-0-extend) are catalog ids; `model` is a tier.
   "extend-video": (d) => str(d.provider),
   "video-depth": withDefault(VIDEO_DEPTH_DEFAULT_PROVIDER),
   // A retake runs LTX 2.3 Pro's retake task, whatever its payload says (it is priced on its own retake row).

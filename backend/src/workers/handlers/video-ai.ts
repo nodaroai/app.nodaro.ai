@@ -34,11 +34,10 @@ import {
 import { config } from "../../lib/config.js"
 import { loopTrimAddonCreditsFor } from "../../lib/loop-trim-addon.js"
 import {
+  canonicalVideoProvider,
   FAL_LIP_SYNC_PROVIDERS,
-  pricedOutputDurationSec,
   REPLICATE_LIP_SYNC_PROVIDERS,
   SEEDANCE_2_EXTEND_STITCH,
-  SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC,
   SEEDANCE_LIP_SYNC_PROVIDERS,
   getDialogueCapabilities,
   dialogueProviderOf,
@@ -46,7 +45,7 @@ import {
   getVideoAudioCapability,
   type VideoUpscaleProvider
 } from "@nodaro/shared/models"
-import { ltxExtendDurationSec, ltxRetakeDurationSec } from "@nodaro/shared/credits"
+import { ltxExtendDurationSec, ltxRetakeDurationSec, seedanceExtendResolution } from "@nodaro/shared/credits"
 import { ttsSupportsAudioTags, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared/model-catalog"
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared/pipeline"
 import type { VideoCharacterReference, FrameFit, FrameDelivery } from "@nodaro/shared/video"
@@ -55,9 +54,9 @@ import { combineVideos } from "../../providers/video/combine-videos.js"
 import { extractTailToFile } from "../../providers/video/extract-tail.js"
 import { extractFrame } from "../../providers/video/extract-frame.js"
 import { resolveSourceMatchedAspect } from "../../providers/video/source-matched-aspect.js"
-import { seedanceExtendGenerationModel, seedanceExtendDurationWindow } from "../../lib/seedance-extend-model.js"
-import { findChainedMovReference, isMovUrl } from "../../lib/seedance-extend-mov-chain.js"
-import { rawExtensionObjectId, rawExtensionReferenceObjectId, silentVideoKey } from "../../lib/job-output-keys.js"
+import { extendSourceTooShortMessage, isTailRecipeProvider, tailRecipeSeconds, TAIL_RECIPES } from "../../lib/extend-recipe.js"
+import { cutChainedMovTail, findChainedMovReference, isMovUrl } from "../../lib/seedance-extend-mov-chain.js"
+import { rawExtensionObjectId, silentVideoKey } from "../../lib/job-output-keys.js"
 import { discardFailedRunCopies } from "../../lib/discard-job-copies.js"
 import { seedance25OutputFormat } from "../../providers/kie/video.js"
 import { runSeedanceDraftFinalize } from "../../providers/kie/seedance-draft.js"
@@ -1332,7 +1331,8 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
 
 const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) {
   const d = job.data as Record<string, unknown>
-  const provider = d.provider as "veo-extend" | "runway-extend" | "ltx-2.3-pro" | "seedance-2-extend"
+  // A retired id runs as the provider it became (`seedance-2-extend` → `seedance-2-5-extend`).
+  const provider = canonicalVideoProvider(d.provider as string)
 
   // ─── LTX 2.3 Pro extend ────────────────────────────────────────────────
   // Synchronous `replicate.wait()` — the prediction id is persisted on the
@@ -1392,38 +1392,36 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     return
   }
 
-  // ─── Seedance 2 smart-stitch extend ────────────────────────────────────
-  // Extends ANY video by URL: generate the continuation through the
-  // seedance-2 i2v transport — the source's LAST FRAME as the first-frame
-  // anchor + its LAST SECOND as the @video_1 reference, with the
-  // spike-validated "extend @video_1 as follows:" template — then
+  // ─── Tail-recipe smart-stitch extend (Seedance 2.5 / Seedance 2.0) ─────
+  // Extends ANY video by URL: generate the continuation on the provider's own
+  // model (`TAIL_RECIPES`, lib/extend-recipe.ts) through the i2v transport —
+  // the source's LAST FRAME as the first-frame anchor + its last seconds as
+  // the @video_1 reference, with the recipe's prompt (Seedance: the
+  // spike-validated "extend @video_1 as follows:" template) — then
   // smart-stitch source+extension into one seamless clip (PSNR boundary
   // matching; the fixed trim counts are the no-match fallback).
-  if (provider === "seedance-2-extend") {
+  if (isTailRecipeProvider(provider)) {
+    const recipe = TAIL_RECIPES[provider]
     const { video: sourceUrl, prompt: userPrompt, duration, resolution, generateAudio, referenceImageUrls } = job.data as {
       jobId: string
       video: string
       prompt: string
       duration?: number
-      resolution?: "480p" | "720p" | "1080p"
+      resolution?: string
       generateAudio?: boolean
       /** Route-assembled user refs (anchor-budgeted) — seats @image_1…N. */
       referenceImageUrls?: string[]
     }
-    console.log(`[worker] extend-video ${ctx.jobId} (provider: seedance-2-extend)`)
+    console.log(`[worker] extend-video ${ctx.jobId} (provider: ${provider})`)
 
-    // Which model this transport dispatches through — `seedance-2` unless
-    // SEEDANCE_EXTEND_GENERATION_MODEL says 2.5. The credit reservation reads
-    // the SAME lever (lib/seedance-extend-model.ts), so reserve and generation
-    // can't diverge.
-    const genModel = seedanceExtendGenerationModel()
-    // Snap into the chosen model's native window (2.0: 4–15s, 2.5: 4–30s); an
-    // unset duration is the catalog default the credit reservation prices.
-    const genWindow = seedanceExtendDurationWindow(genModel)
-    const extSeconds = Math.min(
-      genWindow.max,
-      Math.max(genWindow.min, Math.round(pricedOutputDurationSec(genModel === "seedance-2-5" ? "seedance-2-5" : "seedance-2-extend", duration))),
-    )
+    // The job's provider picks the model the continuation is generated on;
+    // the credit id is the provider's own row (`seedanceExtendCreditId`), so
+    // reserve and generation can't diverge.
+    const genModel = recipe.genModel
+    // The seconds the run is priced for — the funnel the credit id reads
+    // (the provider's catalog default when unset) — held in the recipe's
+    // window (2.0: 4–15s, 2.5: 4–30s): what the route queued.
+    const extSeconds = tailRecipeSeconds(provider, duration)
 
     // The extension must match the SOURCE's shape or the stitch letterboxes.
     // seedance-2 natively accepts aspect_ratio "adaptive" (adopts the
@@ -1435,84 +1433,70 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     await setJobProgress(job, ctx.jobId, 5)
 
     // Spike-validated generation inputs (2026-07-12): the @video_1 reference
-    // is the source's last moments only (SEEDANCE_2_CONTINUATION_REF_SEC — a
-    // short tail keeps the model continuing the boundary motion instead of
-    // re-staging the whole clip, floored by KIE's r2v ≥1.8s reference-video
-    // minimum) — and the source's LAST FRAME anchors the extension as its
-    // first frame (i2v transport), so the continuation starts pixel-adjacent
-    // to the boundary and the smart-stitch reliably finds+drops the duplicate.
+    // is the source's last moments only (`recipe.tailSec` — a short tail keeps
+    // the model continuing the boundary motion instead of re-staging the whole
+    // clip, floored by KIE's r2v ≥1.8s reference-video minimum), measured from
+    // the PICTURE's end (the sound may run past the last frame) — and the
+    // source's LAST FRAME anchors the extension as its first frame (i2v
+    // transport), so the continuation starts pixel-adjacent to the boundary
+    // and the smart-stitch reliably finds+drops the duplicate.
+    //
+    // On 2.5, a source that is a previous 2.5 extension of ours, its raw mov
+    // kept: the reference is that mov's last seconds instead
+    // (`cutChainedMovTail`), in its own container, pixel format and PCM — the
+    // tail cut here is re-encoded to 4:2:0, which throws away exactly the
+    // colour fidelity `output_format: "mov"` was requested for. Nothing found
+    // (a foreign source, a first extension, an mp4 chain) or a failed cut (the
+    // source's clip already expired, say) falls back to the tail, the
+    // transport that works today.
     const prepDir = await createWorkDir("extend-prep")
     let tailUrl: string
     let lastFrameUrl: string
+    let chainTailUrl: string | undefined
     try {
       const srcLocal = join(prepDir, "source.mp4")
       await downloadFile(sourceUrl, srcLocal)
-      // A source shorter than the provider floor yields a tail KIE will
-      // 400-reject after ~90s of queueing — fail fast with a clear message.
+      // A source whose picture is shorter than the provider floor
+      // (`recipe.minSourceSec`, the floor the route refuses at) yields a tail
+      // KIE will 400-reject after ~90s of queueing — fail fast with a clear
+      // message.
       const srcProbe = await probeVideoSource(srcLocal)
-      if (srcProbe.durationSeconds < SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC) {
-        throw new Error(
-          `Source video is too short to extend: Seedance 2 needs at least ${SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC}s of footage to continue from (got ${srcProbe.durationSeconds.toFixed(2)}s).`,
-        )
-      }
-      const tailPath = await extractTailToFile(srcLocal, SEEDANCE_2_EXTEND_STITCH.referenceTailSeconds)
-      // Generation inputs only, never the deliverable: both go to the job's
-      // scratch folder (`lib/job-scratch.ts`), emptied when the job ends,
-      // and count against no one's quota.
+      const pictureSec = srcProbe.videoDurationSeconds ?? srcProbe.durationSeconds
+      if (pictureSec < recipe.minSourceSec) throw new Error(extendSourceTooShortMessage(provider, pictureSec))
+      const tailPath = await extractTailToFile(srcLocal, recipe.tailSec, { measureFrom: "picture" })
+      // Generation inputs only, never the deliverable: the tail, the frame and
+      // a chained cut go to the job's scratch folder (`lib/job-scratch.ts`),
+      // emptied when the job ends, and count against no one's quota.
       tailUrl = await uploadJobScratchFile(tailPath, "extend-tail", "mp4", "video/mp4", ctx.jobId)
       // Last frame of the tail IS the source's last frame; the tail is
       // already on R2, so the frame-exact extractor can read it directly.
       const frame = await extractFrame({ videoUrl: tailUrl, mode: "last" })
       lastFrameUrl = await uploadJobScratchFile(frame.imagePath, "extend-last-frame", "png", "image/png", ctx.jobId)
       await cleanupWorkDir(dirname(frame.imagePath))
+      const chainedMovUrl = genModel === "seedance-2-5" ? await findChainedMovReference(sourceUrl, ctx.jobUserId) : undefined
+      if (chainedMovUrl) {
+        try {
+          const cutPath = await cutChainedMovTail(chainedMovUrl, recipe.tailSec, prepDir)
+          chainTailUrl = await uploadJobScratchFile(cutPath, "extend-chain-tail", "mov", "video/quicktime", ctx.jobId)
+        } catch (err) {
+          console.warn(`[worker] Job ${ctx.jobId}: chained mov cut failed, extending from the tail:`, err)
+        }
+      }
     } finally {
       await cleanupWorkDir(prepDir)
     }
     await setJobProgress(job, ctx.jobId, 10)
 
-    const kiePrompt = `extend @video_1 as follows:\n${String(userPrompt ?? "").trim()}`
-
-    // On 2.5, prefer the PREVIOUS extension's raw mov over the tail we just
-    // cut: the tail is re-encoded to 4:2:0 by ffmpeg, which throws away
-    // exactly the colour fidelity `output_format: "mov"` was requested for.
-    // Nothing found (a foreign source, a first extension, an mp4 chain) falls
-    // back to the tail, which is the transport that works today.
-    //
-    // The clip is COPIED into this job's own family first
-    // (`rawExtensionReferenceObjectId`: `videos/<jobId>-raw-ref.mov`, decided
-    // 2026-10-08) and the generation reads the copy: this job owns what it
-    // needs, so the source job's expiry can never pull it away mid-run, and
-    // the copy is named in this job's output so its own expiry deletes it. A
-    // key of its own, never the `-raw` slot this job's raw extension takes
-    // below: objects are served immutable, so no url is ever written twice.
-    // A failed copy (the source's clip already expired, say) falls back to
-    // the tail like every other miss.
-    const chainedMovUrl =
-      genModel === "seedance-2-5" ? await findChainedMovReference(sourceUrl, ctx.jobUserId) : undefined
-    let chainReferenceUrl: string | undefined
-    if (chainedMovUrl) {
-      try {
-        chainReferenceUrl = await uploadToR2(
-          chainedMovUrl,
-          rawExtensionReferenceObjectId(ctx.jobId),
-          "video",
-          ctx.jobUserId,
-          { ext: "mov" },
-        )
-      } catch (err) {
-        console.warn(`[worker] Job ${ctx.jobId}: chained mov copy failed, extending from the tail:`, err)
-      }
-    }
-    const referenceVideoUrl = chainReferenceUrl ?? tailUrl
+    const kiePrompt = recipe.prompt(userPrompt)
+    const referenceVideoUrl = chainTailUrl ?? tailUrl
     // `mp4` is KIE's default and is sent as no field at all, so the mp4
     // payload stays byte-identical to today.
     const outputFormat = genModel === "seedance-2-5" ? seedance25OutputFormat() : "mp4"
 
-    // The copies above and below are named only in a COMPLETED job's output,
-    // which is how expiry finds a job's files: a run that fails after them
-    // discards them on the way out (`discardFailedRunCopies`), or they would
-    // stay in storage, on the user's quota, for good.
-    const chainCopyUrl = chainReferenceUrl && chainReferenceUrl !== chainedMovUrl ? chainReferenceUrl : undefined
+    // The raw copy below is named only in a COMPLETED job's output, which is
+    // how expiry finds a job's files: a run that fails after it discards it
+    // on the way out (`discardFailedRunCopies`), or it would stay in storage,
+    // on the user's quota, for good.
     let rawCopyUrl: string | undefined
     try {
       const seedanceRamp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 75 })
@@ -1524,7 +1508,10 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         // extension (silent wrong output). If the worker dies mid-wait,
         // BullMQ's stalled-job recovery re-runs the whole handler instead.
         gen = await imageToVideo(lastFrameUrl, genModel, kiePrompt, extSeconds, undefined, {
-          resolution: resolution ?? "720p",
+          // The resolution the run was priced at (`seedanceExtendResolution`,
+          // the credit id's own reading): one the model offers, else 720p — a
+          // job naming any other can never render above the row it reserved.
+          resolution: seedanceExtendResolution(provider, resolution),
           generateAudio: generateAudio ?? true,
           // User references (route-assembled) ride alongside the tail; the
           // shared seedance resolver seats them as @image_1…N and appends the
@@ -1541,7 +1528,8 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       // A mov extension is worth keeping: it is the next extension's reference,
       // and KIE's own URL expires long before then. Stored as `<jobId>-raw`
       // (`rawExtensionObjectId`): in the job's own family, so the job's expiry
-      // deletes it with the job (a later extend reads its own copy, above) —
+      // deletes it with the job (a later extend cuts what it sends from it
+      // into its own scratch folder, above, before it generates) —
       // but never the job's bare key, which stays reserved for the stitched
       // deliverable (an object sitting there could be mistaken for the result).
       // No KIE task is persisted either way (see the onTaskCreated note above),
@@ -1596,7 +1584,7 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         result: {
           url: stitchedR2Url,
           cost: gen.cost ?? null,
-          providerUsed: "seedance-2-extend",
+          providerUsed: provider,
           // Same rebuilt-literal carry as lip-sync (:868) and video-upscale
           // (:1060), same reason: `gen` IS the RouteResult from the capability
           // router above, and on a keyless connected install the chain is
@@ -1611,23 +1599,20 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         extraOutputData: {
           thumbnailUrl: stitchedThumbUrl,
           // Raw (unstitched) extension clip — provenance/debug, AND the mov
-          // reference the next extension in this chain will use.
+          // the next extension in this chain cuts its reference from.
           rawExtensionUrl,
-          // This job's own copy of the clip it continued from (above), named so
-          // the job's expiry deletes it with the job.
-          ...(chainCopyUrl ? { chainReferenceUrl: chainCopyUrl } : {}),
           // Where the stitch actually cut (smart-cut decision + PSNR).
           ...(stitchCuts ? { smartCuts: stitchCuts } : {}),
         },
       })
       if (seedanceOk) {
         console.log(
-          `[worker] Job ${ctx.jobId} completed: ${stitchedR2Url} (provider: seedance-2-extend, cost: $${gen.cost?.toFixed(6) ?? "N/A"})`,
+          `[worker] Job ${ctx.jobId} completed: ${stitchedR2Url} (provider: ${provider}, cost: $${gen.cost?.toFixed(6) ?? "N/A"})`,
         )
       }
       return
     } catch (err) {
-      await discardFailedRunCopies(ctx.jobId, ctx.jobUserId, [chainCopyUrl, rawCopyUrl])
+      await discardFailedRunCopies(ctx.jobId, ctx.jobUserId, [rawCopyUrl])
       throw err
     }
   }

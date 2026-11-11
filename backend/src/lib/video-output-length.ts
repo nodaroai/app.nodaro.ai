@@ -42,6 +42,7 @@ import {
 import {
   MODEL_CATALOG,
 } from "@nodaro/shared/model-catalog"
+import { canonicalVideoProvider } from "@nodaro/shared/models"
 import {
   PRO3D_RENDER_LIMITS,
 } from "@nodaro/shared/scene3d"
@@ -50,7 +51,7 @@ import {
 } from "@nodaro/shared/video"
 import { maskCompositeLeadHandle } from "@nodaro/shared/media"
 import { LENGTH_KEEPING_VIDEO_TYPES, USE_CASE_NODE_TYPES, usecaseDescriptor, utilityOutputLength, type UseCaseOutputLength } from "@nodaro/render-rules"
-import { seedanceExtendDurationWindow, seedanceExtendGenerationModel } from "./seedance-extend-model.js"
+import { isTailRecipeProvider, tailRecipeSeconds } from "./extend-recipe.js"
 import { generatedVideoLengthSec } from "./generated-video-length.js"
 import { generateVideoProLengthSec } from "./generate-video-pro-length.js"
 // @registry-enumerates VIDEO_OUTPUT_LENGTH_RULES and UNBOUNDED_LENGTH_REASONS carry every node unit with the "length:unknown" capability, and the rules every use-case node whose spec declares an outputLength
@@ -204,18 +205,15 @@ export const UNBOUNDED_LENGTH_REASONS: Readonly<Record<string, string>> = compos
 
 // ── The rules ──────────────────────────────────────────────────────────────
 
-/** The extension Extend Video adds, by provider: `ltxExtendDurationSec` and the Seedance extend tier (`data.duration ?? 8`, snapped into the model's window: seedance-extend-model.ts). */
+/** The extension Extend Video adds, by provider: `ltxExtendDurationSec`, and a tail recipe's seconds (`tailRecipeSeconds`: the priced seconds in the recipe's window, extend-recipe.ts). */
 function extendLength(node: LengthNode, inputs: readonly WireInput[]): WireLength {
   const data = dataOf(node)
-  const provider = (data.provider as string | undefined) ?? "veo-extend"
+  const provider = canonicalVideoProvider((data.provider as string | undefined) ?? "veo-extend")
   const input = knownLength(videoIn(inputs))
   if (!input) return "unknown"
   if (provider === "ltx-2.3-pro") return addSec(input, ltxExtendDurationSec(data.duration))
-  if (provider === "seedance-2-extend") {
-    // What the worker generates: the duration (8 s unset) snapped into the model's window (video-ai.ts).
-    const window = seedanceExtendDurationWindow(seedanceExtendGenerationModel())
-    return addSec(input, Math.min(window.max, Math.max(window.min, Math.round(num(data.duration) ?? 8))))
-  }
+  // What the worker generates (video-ai.ts) and the route queues: the same seconds.
+  if (isTailRecipeProvider(provider)) return addSec(input, tailRecipeSeconds(provider, data.duration))
   return "unknown"
 }
 

@@ -47,6 +47,9 @@ import {
   FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS,
   isSeedance2Provider,
   isSeedanceVideoEditProvider,
+  isSeedanceExtendProvider,
+  canonicalVideoProvider,
+  pricedOutputDurationSec,
   SEEDANCE_VIDEO_EDIT_SHAPE,
   supportsExtendRender,
   isMinimaxH3Provider,
@@ -258,7 +261,8 @@ import {
 import {
   clampContentIdeasCount,
   CONTENT_IDEAS_MAX_RECIPE_INPUTS,
-  resolveTopazUpscale
+  resolveTopazUpscale,
+  ltxExtendDurationSec
 } from "@nodaro/shared/credits";
 import {
   ttsSupportsStitching,
@@ -6668,16 +6672,18 @@ function executeNodeCore(
 
   if (node.type === "extend-video") {
     const evData = node.data as unknown as ExtendVideoData;
-    const isLtx = evData.provider === "ltx-2.3-pro";
-    const isSeedanceExtend = evData.provider === "seedance-2-extend";
+    // The provider the node runs as: a retired id (`seedance-2-extend`) runs as the model it became.
+    const runsAs = canonicalVideoProvider(evData.provider);
 
     // ─── LTX 2.3 Pro path ───────────────────────────────────────────────
     // Replicate-hosted, takes a raw videoUrl + extendMode + duration. No
     // kieTaskId, no prompt requirement (LTX retake takes optional prompt
     // for guidance only). Matches the orchestrator's payload-builder LTX
     // branch (services/workflow-engine/payload-builder.ts case "extend-video"
-    // -> LTX branch).
-    if (isLtx) {
+    // -> LTX branch). The seconds sent are the ones the estimate prices
+    // (`ltxExtendDurationSec`, 1–20, 6 when none): a length set on another
+    // provider (Seedance 2.5 adds up to 30) is never sent as is.
+    if (runsAs === "ltx-2.3-pro") {
       const videoUrl = inputs.videoUrl as string | undefined;
       if (!videoUrl) {
         toast.error(nodeRunError(evData.label, "nodeRun.noUpstreamVideoWireA"));
@@ -6690,7 +6696,7 @@ function executeNodeCore(
             videoUrl,
             provider: "ltx-2.3-pro",
             extendMode: evData.extendMode ?? "end",
-            duration: evData.duration ?? 8,
+            duration: ltxExtendDurationSec(evData.duration),
             userId: ctx.userId,
           }),
         "generatedVideoUrl",
@@ -6703,8 +6709,12 @@ function executeNodeCore(
     // URL-based like LTX, but the continuation CONTENT is required — the
     // worker wraps it in the bare temporal template, generates via the
     // seedance-2 ref-video transport, and trim-stitches source+extension.
-    // Mirrors payload-builder's seedance branch.
-    if (isSeedanceExtend) {
+    // Mirrors payload-builder's seedance branch: the provider is sent as the
+    // node names it, so the server runs and prices that model, and the
+    // seconds as that model's estimate prices them — snapped into its window
+    // (a length set on Seedance 2.5, up to 30 s, never reaches 2.0's 4–15 s
+    // as is), its catalog default when none.
+    if (isSeedanceExtendProvider(runsAs)) {
       const videoUrl = inputs.videoUrl as string | undefined;
       if (!videoUrl) {
         toast.error(nodeRunError(evData.label, "nodeRun.noUpstreamVideoWireA"));
@@ -6733,8 +6743,8 @@ function executeNodeCore(
             videoUrl,
             prompt: seedancePrompt,
             negativePrompt: inputs.negativePrompt || evData.negativePrompt || undefined,
-            provider: "seedance-2-extend",
-            duration: evData.duration ?? 8,
+            provider: runsAs,
+            duration: pricedOutputDurationSec(runsAs, evData.duration),
             resolution: evData.resolution,
             generateAudio: evData.generateAudio,
             userId: ctx.userId,

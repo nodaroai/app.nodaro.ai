@@ -1227,9 +1227,13 @@ describe("buildPayload", () => {
       expect(result.payload.model).toBe("fast")
     })
 
-    it("extend-video seedance-2-extend — URL payload + duration×resolution composite", () => {
+    it.each([
+      // Each Seedance model: a row per second added.
+      ["seedance-2-5-extend", "seedance-2-5-extend:12s:1080p"],
+      ["seedance-2-0-extend", "seedance-2-0-extend:12s:1080p"],
+    ])("extend-video %s — URL payload + its own duration×resolution row", (provider, row) => {
       const n = node("n1", "extend-video", {
-        provider: "seedance-2-extend",
+        provider,
         prompt: "the ball keeps rolling",
         duration: 12,
         resolution: "1080p",
@@ -1238,9 +1242,9 @@ describe("buildPayload", () => {
       const inputs: ResolvedInputs = { videoUrl: "https://cdn.example.com/source.mp4" }
       const result = buildPayload(n, jobId, inputs)
       expect(result.jobName).toBe("extend-video")
-      expect(result.modelIdentifier).toBe("seedance-2-extend:12s:1080p")
+      expect(result.modelIdentifier).toBe(row)
       expect(result.payload).toMatchObject({
-        provider: "seedance-2-extend",
+        provider,
         video: "https://cdn.example.com/source.mp4",
         prompt: "the ball keeps rolling",
         duration: 12,
@@ -1250,15 +1254,20 @@ describe("buildPayload", () => {
       expect(result.payload.kieTaskId).toBeUndefined()
     })
 
-    it("extend-video seedance-2-extend defaults reserve at the 8s/720p tier", () => {
-      const n = node("n1", "extend-video", { provider: "seedance-2-extend", prompt: "keep going" })
+    it.each([
+      ["seedance-2-5-extend", "seedance-2-5-extend:8s:720p"],
+      ["seedance-2-0-extend", "seedance-2-0-extend:8s:720p"],
+      // The retired id runs, and reserves, as Seedance 2.5.
+      ["seedance-2-extend", "seedance-2-5-extend:8s:720p"],
+    ])("extend-video %s defaults reserve at the 8s/720p row", (provider, row) => {
+      const n = node("n1", "extend-video", { provider, prompt: "keep going" })
       const result = buildPayload(n, jobId, { videoUrl: "https://v.mp4" })
-      expect(result.modelIdentifier).toBe("seedance-2-extend:8s:720p")
+      expect(result.modelIdentifier).toBe(row)
     })
 
-    it("extend-video seedance-2-extend injects negative as in-prompt Avoid", () => {
+    it("extend-video on a Seedance provider injects negative as in-prompt Avoid", () => {
       const n = node("n1", "extend-video", {
-        provider: "seedance-2-extend",
+        provider: "seedance-2-5-extend",
         prompt: "she walks away",
         negativePrompt: "blur",
       })

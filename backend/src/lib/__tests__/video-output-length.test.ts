@@ -68,8 +68,8 @@ import {
   type WireLength,
 } from "../video-output-length.js"
 import { USE_CASE_SPECS, editPlanRenderEstimateLength, renderLengthSec, TRAILER_MAX_SEC, usecaseTypeOfBuilder } from "@nodaro/render-rules"
-import { seedanceExtendDurationWindow, seedanceExtendGenerationModel } from "../seedance-extend-model.js"
 import { generateVideoProClampedSec, generateVideoProLengthSec } from "../generate-video-pro-length.js"
+import { tailRecipeSeconds } from "../extend-recipe.js"
 import { computeGenerateVideoProPricing } from "../../ee/billing/generate-video-pro-credits.js"
 
 const fixed = (sec: number): InputLength => ({ fixedSec: sec, perEpisodeSec: 0 })
@@ -308,19 +308,30 @@ describe("Extend Video: the input and what the extension adds", () => {
     expect(run("extend-video", [video(fixed(30))], { provider: "ltx-2.3-pro", duration: 10 })).toEqual(fixed(30 + ltxExtendDurationSec(10)))
     expect(run("extend-video", [video(fixed(30))], { provider: "ltx-2.3-pro" })).toEqual(fixed(30 + ltxExtendDurationSec(undefined)))
   })
-  it("Seedance extend adds its duration, 8 s when unset, as its price counts it", () => {
-    expect(run("extend-video", [video(fixed(30))], { provider: "seedance-2-extend", duration: 12 })).toEqual(fixed(42))
-    expect(run("extend-video", [video(fixed(30))], { provider: "seedance-2-extend" })).toEqual(fixed(38))
-    expect(run("extend-video", [video(episode)], { provider: "seedance-2-extend", duration: 4 })).toEqual({ fixedSec: 4, perEpisodeSec: 60 })
+  // Both Seedance providers, and the retired id (it runs as Seedance 2.5).
+  const SEEDANCE_EXTENDS = ["seedance-2-5-extend", "seedance-2-0-extend", "seedance-2-extend"]
+  it.each(SEEDANCE_EXTENDS)("Seedance extend adds its duration, 8 s when unset, as its price counts it (%s)", (provider) => {
+    expect(run("extend-video", [video(fixed(30))], { provider, duration: 12 })).toEqual(fixed(42))
+    expect(run("extend-video", [video(fixed(30))], { provider })).toEqual(fixed(38))
+    expect(run("extend-video", [video(episode)], { provider, duration: 4 })).toEqual({ fixedSec: 4, perEpisodeSec: 60 })
   })
-  it("Seedance extend adds what the run generates: its duration snapped up to the model's 4-second floor", () => {
-    expect(run("extend-video", [video(fixed(30))], { provider: "seedance-2-extend", duration: 2 })).toEqual(fixed(34))
-    expect(run("extend-video", [video(fixed(30))], { provider: "seedance-2-extend", duration: 1.4 })).toEqual(fixed(34))
+  it.each(SEEDANCE_EXTENDS)("Seedance extend adds what the run generates: its duration snapped up to the 4-second floor (%s)", (provider) => {
+    expect(run("extend-video", [video(fixed(30))], { provider, duration: 2 })).toEqual(fixed(34))
+    expect(run("extend-video", [video(fixed(30))], { provider, duration: 1.4 })).toEqual(fixed(34))
   })
-  it("Seedance extend adds at most the model's window ceiling", () => {
-    const ceiling = seedanceExtendDurationWindow(seedanceExtendGenerationModel()).max
-    expect(run("extend-video", [video(fixed(30))], { provider: "seedance-2-extend", duration: ceiling + 5 })).toEqual(fixed(30 + ceiling))
+  it("Seedance extend adds at most its provider's window ceiling", () => {
+    expect(run("extend-video", [video(fixed(30))], { provider: "seedance-2-5-extend", duration: 35 })).toEqual(fixed(60))
+    expect(run("extend-video", [video(fixed(30))], { provider: "seedance-2-extend", duration: 35 })).toEqual(fixed(60))
+    expect(run("extend-video", [video(fixed(30))], { provider: "seedance-2-0-extend", duration: 25 })).toEqual(fixed(45))
   })
+  it.each(["seedance-2-5-extend", "seedance-2-0-extend"] as const)(
+    "Seedance extend adds the seconds the route queues and the worker generates (tailRecipeSeconds, %s)",
+    (provider) => {
+      for (const duration of [undefined, 1, 4, 7.6, "12", 15, 16, 25, 30, 45]) {
+        expect(run("extend-video", [video(fixed(30))], { provider, duration }), String(duration)).toEqual(fixed(30 + tailRecipeSeconds(provider, duration)))
+      }
+    },
+  )
   it("VEO and Runway extend add a length the catalog does not declare: unknown", () => {
     expect(run("extend-video", [video(fixed(8))], { provider: "veo-extend" })).toBe("unknown")
     expect(run("extend-video", [video(fixed(8))], { provider: "runway-extend" })).toBe("unknown")

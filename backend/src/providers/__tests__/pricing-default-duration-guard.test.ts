@@ -20,7 +20,7 @@ const PRICE_FILES = [
   "packages/shared/src/credit-identifiers.ts",
   "packages/shared/src/model-constants.ts",
   "packages/shared/src/credit-estimators",
-  "backend/src/lib/seedance-extend-model.ts",
+  "backend/src/lib/extend-recipe.ts",
   "backend/src/lib/reconcile/loop-trim-refund.ts",
   "backend/src/lib/loop-trim-addon.ts",
   "backend/src/workers/handlers/video-ai.ts",

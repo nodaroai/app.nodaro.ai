@@ -19,6 +19,13 @@ describe("migrateRetiredVideoProviders", () => {
     expect(saved.data.provider).toBe("seedance")
   })
 
+  it("a node saved on seedance-2-extend loads on seedance-2-5-extend", () => {
+    const saved = { id: "x", type: "extend-video", data: { provider: "seedance-2-extend", duration: 12, resolution: "1080p" } }
+    const [loaded] = migrateRetiredVideoProviders([saved])
+    expect(loaded.data).toEqual({ provider: "seedance-2-5-extend", duration: 12, resolution: "1080p" })
+    expect(saved.data.provider).toBe("seedance-2-extend")
+  })
+
   it("passes every other node through by reference", () => {
     const live = { id: "v", type: "generate-video", data: { provider: "kling" } }
     const none = { id: "t", type: "text", data: { text: "seedance" } }

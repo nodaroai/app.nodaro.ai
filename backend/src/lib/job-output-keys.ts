@@ -140,6 +140,10 @@ export function rawExtensionObjectId(jobId: string): string {
  * expiry never breaks it. A key of its own: every object is served immutable,
  * so no url is ever written twice — not even the job's `-raw` slot, which
  * holds the job's own raw extension.
+ *
+ * No longer written: a chained extend now sends the last seconds of the
+ * source's raw `.mov`, cut into its own scratch folder. The outputs of the
+ * extends that made this copy still name it, and their expiry deletes it.
  */
 export function rawExtensionReferenceObjectId(jobId: string): string {
   return `${jobId}-raw-ref`

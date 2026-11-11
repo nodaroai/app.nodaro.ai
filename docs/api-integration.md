@@ -3094,16 +3094,17 @@ orchestrator already use):
   exactly as before — a pre-assembled `prompt` + flat `referenceImageUrls` pass
   through unchanged. `connectedReferences` feeds the **image** channel only;
   `referenceVideoUrls` / `referenceAudioUrls` stay as explicit flat inputs.
-- **Extend Video: Seedance 2 Extend only, with one seat reserved.** On
+- **Extend Video: the Seedance providers only, with one seat reserved.** On
   `POST /v1/extend-video` both `connectedReferences` and the flat
-  `referenceImageUrls` are accepted when `provider` is `seedance-2-extend` — the
-  only extend transport with a reference path; any other extend provider
-  refuses them with a 400 rather than silently dropping. The image budget is
-  the Seedance 2 cap **minus one** (up to **8** user references): the extension
+  `referenceImageUrls` are accepted when `provider` is `seedance-2-5-extend`
+  (Seedance 2.5) or `seedance-2-0-extend` (Seedance 2.0) — the only extend
+  transports with a reference path; any other extend provider refuses them with
+  a 400 rather than silently dropping. The image budget, on both, is the
+  Seedance 2.0 cap **minus one** (up to **8** user references): the extension
   pipeline itself occupies one reference seat with the source's last frame (the
   continuation anchor), appended AFTER the user references so `@image_1…@image_8`
-  ordinals never shift. The source's 2-second tail rides as `@video_1` and is
-  already priced into the extend rates — reference images add no extra credits.
+  ordinals never shift. The source's 2-second tail rides as `@video_1`.
+  Reference images add no extra credits.
 
 Each ref's `url` rides the same SSRF gate as the flat `referenceImageUrls`, so a
 ref pointing at a private address / non-http(s) scheme is rejected at the route

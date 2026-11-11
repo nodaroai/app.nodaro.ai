@@ -1,23 +1,24 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 // ---------------------------------------------------------------------------
-// seedance-2-extend on Seedance 2.5 (SEEDANCE_EXTEND_GENERATION_MODEL).
+// The Seedance extend providers: the job's provider id picks the model.
 //
 // The contract this file exists to pin, in order of importance:
-//   1. LEVER OFF ⇒ byte-identical to today. Same model, same options object
-//      (deep-equal, no stray keys), same 4–15s snap, same persisted
-//      `rawExtensionUrl` (KIE's own URL), no extra storage write, no DB read.
-//   2. LEVER ON ⇒ the generation moves to 2.5 and nothing else does: the
-//      deliverable is still the stitched, watermarked mp4, and the KIE task is
-//      still NOT persisted (a reconcile finalize would ship the unstitched
-//      extension).
+//   1. `seedance-2-0-extend` generates on Seedance 2.0 and `seedance-2-5-extend`
+//      on Seedance 2.5, whatever the deployment's environment says; the retired
+//      `seedance-2-extend` runs as `seedance-2-5-extend`. 2.0 keeps the options
+//      object it has sent since the 2026-07-12 spike (deep-equal, no stray
+//      keys), its 4–15s snap, KIE's own URL as `rawExtensionUrl`, no extra
+//      storage write and no DB read.
+//   2. On either model the deliverable is the stitched, watermarked mp4, and
+//      the KIE task is NOT persisted (a reconcile finalize would ship the
+//      unstitched extension).
 //   3. The mov chain: a 2.5 raw extension is kept as OUR R2 `.mov` object and
 //      persisted as `rawExtensionUrl`, so the next extension can reference it
-//      un-transcoded. A KIE temp URL must never be what we persist for that.
-//   4. The next extension COPIES that clip into its own family
-//      (`videos/<its jobId>-raw-ref.mov`), reads its own copy and names it in
-//      its output, so the source's expiry never breaks it and no url is ever
-//      written twice (decided 2026-10-08, round 12).
+//      in its own container. A KIE temp URL must never be what we persist.
+//   4. The next extension sends only that clip's last 2 s (cut to a MOV that
+//      keeps its pixel format and PCM, uploaded to the job's scratch folder),
+//      never the whole clip.
 // ---------------------------------------------------------------------------
 
 const mocks = vi.hoisted(() => ({
@@ -30,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   mockUploadJobScratchFile: vi.fn(),
   mockUploadToR2: vi.fn(),
   mockFindChainedMovReference: vi.fn(),
+  mockCutChainedMovTail: vi.fn(),
   mockFinalizeJobWithMedia: vi.fn(),
   mockWatermarkLocalVideoAndUpload: vi.fn(),
   mockGenerateAndUploadThumbnail: vi.fn(),
@@ -48,6 +50,7 @@ vi.mock("@/lib/job-scratch.js", () => ({ uploadJobScratchFile: mocks.mockUploadJ
 
 vi.mock("@/lib/seedance-extend-mov-chain.js", () => ({
   findChainedMovReference: mocks.mockFindChainedMovReference,
+  cutChainedMovTail: mocks.mockCutChainedMovTail,
   isMovUrl: (u: string) => {
     try {
       return new URL(u).pathname.toLowerCase().endsWith(".mov")
@@ -114,25 +117,33 @@ vi.mock("../../../lib/job-finalize.js", () => ({ finalizeJobWithMedia: mocks.moc
 vi.mock("@/lib/discard-job-copies.js", () => ({ discardFailedRunCopies: mocks.mockDiscardFailedRunCopies }))
 
 import { videoAIHandlers } from "../video-ai.js"
+import { extendSourceTooShortMessage, tailRecipeSeconds } from "../../../lib/extend-recipe.js"
 
 const SOURCE_URL = "https://r2.example.com/videos/prev-job.mp4"
 const KIE_MP4 = "https://kie.example.com/extension.mp4"
 const KIE_MOV = "https://kie.example.com/extension.mov?token=abc"
 const R2_MOV = "https://r2.example.com/videos/9f2c-raw.mov"
 const CHAINED_MOV = "https://r2.example.com/videos/aaaa-raw.mov"
-/** The extend's OWN copy of the source's raw clip (decided 2026-10-08, round 12). */
-const REF_COPY = "https://r2.example.com/videos/job-1-raw-ref.mov"
+const CHAIN_CUT_PATH = "/tmp/test-workdir/chain-tail.mov"
 const TAIL_URL = "https://r2.example.com/tmp/provider-input/job-1/extend-tail-aaaaaaaa.mp4"
 const LAST_FRAME_URL = "https://r2.example.com/tmp/provider-input/job-1/extend-last-frame-bbbbbbbb.png"
+const CHAIN_CUT_URL = "https://r2.example.com/tmp/provider-input/job-1/extend-chain-tail-cccccccc.mov"
 const STITCHED_PATH = "/tmp/combine-abc/output.mp4"
 const STITCHED_R2 = "https://r2.example.com/videos/job-1.mp4"
+
+/** What each scratch upload answers, by the name the worker gives it. */
+const SCRATCH_URLS: Record<string, string> = {
+  "extend-tail": TAIL_URL,
+  "extend-last-frame": LAST_FRAME_URL,
+  "extend-chain-tail": CHAIN_CUT_URL,
+}
 
 function makeJob(data: Record<string, unknown> = {}) {
   return {
     name: "extend-video",
     data: {
       jobId: "job-1",
-      provider: "seedance-2-extend",
+      provider: "seedance-2-5-extend",
       video: SOURCE_URL,
       prompt: "she opens the door",
       ...data,
@@ -144,6 +155,7 @@ function makeJob(data: Record<string, unknown> = {}) {
 
 const ctx = { jobId: "job-1", jobUserId: "user-1", usageLogId: "usage-1", shouldWatermark: false }
 const handler = () => videoAIHandlers["extend-video"]!
+const run = (data: Record<string, unknown> = {}) => handler()(makeJob(data) as never, ctx as never)
 
 /** The i2v options the extend transport has sent since the 2026-07-12 spike. */
 const OPTIONS_TODAY = {
@@ -158,9 +170,10 @@ beforeEach(() => {
   mocks.mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 6 })
   mocks.mockExtractTailToFile.mockResolvedValue("/tmp/test-workdir/source.mp4.tail.mp4")
   mocks.mockExtractFrame.mockResolvedValue({ imagePath: "/tmp/extract-frame-x/frame.png" })
-  mocks.mockUploadJobScratchFile.mockResolvedValueOnce(TAIL_URL).mockResolvedValueOnce(LAST_FRAME_URL)
+  mocks.mockUploadJobScratchFile.mockImplementation(async (_path: string, name: string) => SCRATCH_URLS[name])
   mocks.mockUploadToR2.mockResolvedValue(R2_MOV)
   mocks.mockFindChainedMovReference.mockResolvedValue(undefined)
+  mocks.mockCutChainedMovTail.mockResolvedValue(CHAIN_CUT_PATH)
   mocks.mockImageToVideo.mockResolvedValue({ url: KIE_MP4, cost: 0.2, providerUsed: "kie", kieTaskId: "kie-9" })
   mocks.mockCombineVideos.mockResolvedValue({ outputPath: STITCHED_PATH })
   mocks.mockWatermarkLocalVideoAndUpload.mockResolvedValue(STITCHED_R2)
@@ -173,14 +186,91 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
-describe("lever OFF — byte-identical to today", () => {
+describe("the job's provider picks the model", () => {
+  it("a seedance-2-5-extend job generates on seedance-2-5", async () => {
+    await run({ provider: "seedance-2-5-extend" })
+    expect(mocks.mockImageToVideo.mock.calls[0]![1]).toBe("seedance-2-5")
+  })
+
+  it("a seedance-2-0-extend job generates on seedance-2", async () => {
+    await run({ provider: "seedance-2-0-extend" })
+    expect(mocks.mockImageToVideo.mock.calls[0]![1]).toBe("seedance-2")
+  })
+
+  it("the retired seedance-2-extend runs as seedance-2-5-extend", async () => {
+    await run({ provider: "seedance-2-extend" })
+    expect(mocks.mockImageToVideo.mock.calls[0]![1]).toBe("seedance-2-5")
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].result).toMatchObject({ providerUsed: "seedance-2-5-extend" })
+  })
+
+  it.each(["seedance-2-5-extend", "seedance-2-0-extend"])("providerUsed is the job's provider id (%s)", async (provider) => {
+    await run({ provider })
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].result).toMatchObject({ url: STITCHED_R2, providerUsed: provider })
+  })
+
+  it.each(["seedance-2-5-extend", "seedance-2-0-extend", "seedance-2-extend"])(
+    "an unset duration renders the provider's 8 s default (%s)",
+    async (provider) => {
+      await run({ provider })
+      expect(mocks.mockImageToVideo.mock.calls[0]![3]).toBe(8)
+    },
+  )
+
+  it.each(["seedance-2-5-extend", "seedance-2-0-extend"] as const)(
+    "generates the seconds the route queues and the output length records (tailRecipeSeconds, %s)",
+    async (provider) => {
+      for (const duration of [undefined, 1, 4, 7.6, "12", 15, 16, 25, 30, 45]) {
+        mocks.mockImageToVideo.mockClear()
+        await run({ provider, duration })
+        expect(mocks.mockImageToVideo.mock.calls[0]![3], String(duration)).toBe(tailRecipeSeconds(provider, duration))
+      }
+    },
+  )
+
+  // A job carries the resolution its row was priced at; one that names a
+  // resolution the model does not offer (a hand-written queue entry, an older
+  // payload) renders at the 720p it would have been priced at, never above it.
+  it.each(["seedance-2-5-extend", "seedance-2-0-extend", "seedance-2-extend"])(
+    "renders a resolution the model offers as sent, and any other at 720p (%s)",
+    async (provider) => {
+      for (const [sent, rendered] of [["480p", "480p"], ["1080p", "1080p"], [undefined, "720p"], ["4k", "720p"], ["2160p", "720p"]] as const) {
+        mocks.mockImageToVideo.mockClear()
+        await run({ provider, resolution: sent })
+        expect(mocks.mockImageToVideo.mock.calls[0]![5], String(sent)).toMatchObject({ resolution: rendered })
+      }
+    },
+  )
+
+  // The route refuses the same sources with the same words (one floor, one
+  // message: extend-recipe.ts) — this is the backstop for a probe that failed there.
+  it.each(["seedance-2-5-extend", "seedance-2-0-extend"] as const)(
+    "floors the source at the recipe's minSourceSec: 1.97 s runs, 1.5 s is refused before any provider call (%s)",
+    async (provider) => {
+      mocks.mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 1.97, videoDurationSeconds: 1.97 })
+      await run({ provider })
+      expect(mocks.mockImageToVideo).toHaveBeenCalledTimes(1)
+      mocks.mockImageToVideo.mockClear()
+      mocks.mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 1.5, videoDurationSeconds: 1.5 })
+      await expect(run({ provider })).rejects.toThrow(extendSourceTooShortMessage(provider, 1.5))
+      expect(mocks.mockImageToVideo).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each(["seedance-2-5-extend", "seedance-2-0-extend"])("cuts a 2 s tail from the picture's end (%s)", async (provider) => {
+    await run({ provider })
+    expect(mocks.mockExtractTailToFile).toHaveBeenCalledWith("/tmp/test-workdir/source.mp4", 2, { measureFrom: "picture" })
+  })
+})
+
+describe("seedance-2-0-extend — today's transport, unchanged", () => {
+  const run20 = (data: Record<string, unknown> = {}) => run({ provider: "seedance-2-0-extend", ...data })
+
   beforeEach(() => {
-    vi.stubEnv("SEEDANCE_EXTEND_GENERATION_MODEL", undefined as unknown as string)
     vi.stubEnv("KIE_SEEDANCE_25_OUTPUT_FORMAT", undefined as unknown as string)
   })
 
   it("same model, same options object, same 4–15s snap", async () => {
-    await handler()(makeJob({ duration: 40 }) as never, ctx as never)
+    await run20({ duration: 40 })
     const [imageUrl, provider, prompt, duration, endFrame, opts, reconcileOpts] =
       mocks.mockImageToVideo.mock.calls[0]!
     expect(imageUrl).toBe(LAST_FRAME_URL)
@@ -194,7 +284,7 @@ describe("lever OFF — byte-identical to today", () => {
   })
 
   it("the tail and the last frame go to the job's scratch folder, on no one's quota (decided 2026-10-09)", async () => {
-    await handler()(makeJob() as never, ctx as never)
+    await run20()
     expect(mocks.mockUploadJobScratchFile.mock.calls).toEqual([
       ["/tmp/test-workdir/source.mp4.tail.mp4", "extend-tail", "mp4", "video/mp4", "job-1"],
       ["/tmp/extract-frame-x/frame.png", "extend-last-frame", "png", "image/png", "job-1"],
@@ -202,13 +292,14 @@ describe("lever OFF — byte-identical to today", () => {
   })
 
   it("never looks up a chained mov and never writes an extra R2 object", async () => {
-    await handler()(makeJob() as never, ctx as never)
+    await run20()
     expect(mocks.mockFindChainedMovReference).not.toHaveBeenCalled()
+    expect(mocks.mockCutChainedMovTail).not.toHaveBeenCalled()
     expect(mocks.mockUploadToR2).not.toHaveBeenCalled()
   })
 
   it("persists KIE's own URL as rawExtensionUrl, exactly as today", async () => {
-    await handler()(makeJob() as never, ctx as never)
+    await run20()
     expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].extraOutputData).toMatchObject({
       rawExtensionUrl: KIE_MP4,
     })
@@ -216,61 +307,50 @@ describe("lever OFF — byte-identical to today", () => {
 
   it("even with KIE_SEEDANCE_25_OUTPUT_FORMAT=mov, a 2.0 dispatch is untouched", async () => {
     vi.stubEnv("KIE_SEEDANCE_25_OUTPUT_FORMAT", "mov")
-    await handler()(makeJob() as never, ctx as never)
+    await run20()
     const [, provider, , , , opts] = mocks.mockImageToVideo.mock.calls[0]!
     expect(provider).toBe("seedance-2")
     expect(opts).toEqual(OPTIONS_TODAY)
   })
 })
 
-describe("lever ON — generation moves to 2.5", () => {
-  beforeEach(() => {
-    vi.stubEnv("SEEDANCE_EXTEND_GENERATION_MODEL", "seedance-2-5")
-  })
-
-  it("dispatches on seedance-2-5 and snaps into ITS 4–30s window", async () => {
-    await handler()(makeJob({ duration: 24 }) as never, ctx as never)
+describe("seedance-2-5-extend — generation on 2.5", () => {
+  it("snaps into ITS 4–30s window", async () => {
+    await run({ duration: 24 })
     const [, provider, , duration] = mocks.mockImageToVideo.mock.calls[0]!
     expect(provider).toBe("seedance-2-5")
     expect(duration).toBe(24)
   })
 
-  it("clamps above 30 and below 4", async () => {
-    await handler()(makeJob({ duration: 45 }) as never, ctx as never)
+  it("clamps above 30", async () => {
+    await run({ duration: 45 })
     expect(mocks.mockImageToVideo.mock.calls[0]![3]).toBe(30)
-    vi.clearAllMocks()
-    mocks.mockUploadJobScratchFile.mockResolvedValueOnce(TAIL_URL).mockResolvedValueOnce(LAST_FRAME_URL)
-    mocks.mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 6 })
-    mocks.mockExtractTailToFile.mockResolvedValue("/tmp/test-workdir/source.mp4.tail.mp4")
-    mocks.mockExtractFrame.mockResolvedValue({ imagePath: "/tmp/extract-frame-x/frame.png" })
-    mocks.mockFindChainedMovReference.mockResolvedValue(undefined)
-    mocks.mockImageToVideo.mockResolvedValue({ url: KIE_MP4, cost: 0.2 })
-    mocks.mockCombineVideos.mockResolvedValue({ outputPath: STITCHED_PATH })
-    mocks.mockWatermarkLocalVideoAndUpload.mockResolvedValue(STITCHED_R2)
-    mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })
-    await handler()(makeJob({ duration: 1 }) as never, ctx as never)
+  })
+
+  it("clamps below 4", async () => {
+    await run({ duration: 1 })
     expect(mocks.mockImageToVideo.mock.calls[0]![3]).toBe(4)
   })
 
   it("without the container lever, no output_format is requested", async () => {
     vi.stubEnv("KIE_SEEDANCE_25_OUTPUT_FORMAT", undefined as unknown as string)
-    await handler()(makeJob() as never, ctx as never)
+    await run()
     expect(mocks.mockImageToVideo.mock.calls[0]![5]).toEqual(OPTIONS_TODAY)
   })
 
   it("with the container lever, asks KIE for mov", async () => {
     vi.stubEnv("KIE_SEEDANCE_25_OUTPUT_FORMAT", "mov")
-    await handler()(makeJob() as never, ctx as never)
+    await run()
     expect(mocks.mockImageToVideo.mock.calls[0]![5]).toEqual({ ...OPTIONS_TODAY, outputFormat: "mov" })
   })
 
   it("STILL persists no KIE task — the reconcile cron must never ship the raw extension", async () => {
-    await handler()(makeJob() as never, ctx as never)
+    await run()
     expect(mocks.mockImageToVideo.mock.calls[0]![6]).toBeUndefined()
   })
 
   it("the deliverable path is unchanged: stitch source+extension, watermark, finalize", async () => {
-    await handler()(makeJob() as never, ctx as never)
+    await run()
     expect(mocks.mockCombineVideos).toHaveBeenCalledTimes(1)
     expect(mocks.mockCombineVideos.mock.calls[0]![0]).toMatchObject({
       videoUrls: [SOURCE_URL, KIE_MP4],
@@ -279,85 +359,53 @@ describe("lever ON — generation moves to 2.5", () => {
     expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalledWith(STITCHED_PATH, "job-1", "user-1", false)
     const finalize = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0]
     expect(finalize.mediaUrl).toBe(STITCHED_R2)
-    expect(finalize.result).toMatchObject({ url: STITCHED_R2, providerUsed: "seedance-2-extend" })
+    expect(finalize.result).toMatchObject({ url: STITCHED_R2, providerUsed: "seedance-2-5-extend" })
   })
 })
 
-describe("lever ON — the mov reference chain", () => {
+describe("seedance-2-5-extend — the mov reference chain", () => {
   beforeEach(() => {
-    vi.stubEnv("SEEDANCE_EXTEND_GENERATION_MODEL", "seedance-2-5")
     vi.stubEnv("KIE_SEEDANCE_25_OUTPUT_FORMAT", "mov")
   })
 
-  it("no prior mov ⇒ the 2s tail, exactly as today", async () => {
+  it("no prior mov ⇒ the 2s tail, exactly as today, and nothing cut", async () => {
     mocks.mockFindChainedMovReference.mockResolvedValue(undefined)
-    await handler()(makeJob() as never, ctx as never)
+    await run()
     expect(mocks.mockFindChainedMovReference).toHaveBeenCalledWith(SOURCE_URL, "user-1")
+    expect(mocks.mockCutChainedMovTail).not.toHaveBeenCalled()
     expect(mocks.mockImageToVideo.mock.calls[0]![5]).toMatchObject({ referenceVideoUrls: [TAIL_URL] })
   })
 
-  /** The copy answers with the extend's own `-raw-ref` url; its own raw with R2_MOV. */
-  function uploadsByKey(): void {
-    mocks.mockUploadToR2.mockImplementation(async (src: string, id: string) => {
-      if (src === CHAINED_MOV && id === "job-1-raw-ref") return REF_COPY
-      return R2_MOV
-    })
-  }
-
-  it("a prior mov ⇒ copied into the extend's own -raw-ref and read from there, never the source's object", async () => {
+  it("a chained 2.5 extend sends the previous MOV's last 2 s, not the whole clip", async () => {
     mocks.mockFindChainedMovReference.mockResolvedValue(CHAINED_MOV)
-    uploadsByKey()
-    await handler()(makeJob() as never, ctx as never)
+    await run()
 
-    expect(mocks.mockUploadToR2).toHaveBeenCalledWith(CHAINED_MOV, "job-1-raw-ref", "video", "user-1", { ext: "mov" })
-    expect(mocks.mockImageToVideo.mock.calls[0]![5]).toMatchObject({ referenceVideoUrls: [REF_COPY] })
-    // Copied BEFORE the generation reads it.
-    const copyOrder = mocks.mockUploadToR2.mock.invocationCallOrder[0]!
-    expect(copyOrder).toBeLessThan(mocks.mockImageToVideo.mock.invocationCallOrder[0]!)
-    // Named in the extend's own output, so its expiry deletes it with the job.
-    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].extraOutputData).toMatchObject({
-      chainReferenceUrl: REF_COPY,
-    })
-  })
-
-  it("the reference copy and the extend's own raw extension never share a key (no url is written twice)", async () => {
-    mocks.mockFindChainedMovReference.mockResolvedValue(CHAINED_MOV)
-    mocks.mockImageToVideo.mockResolvedValue({ url: KIE_MOV, cost: 0.3 })
-    uploadsByKey()
-    await handler()(makeJob() as never, ctx as never)
-
-    const ids = mocks.mockUploadToR2.mock.calls.map((c) => c[1])
-    expect(ids).toEqual(["job-1-raw-ref", "job-1-raw"])
-    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].extraOutputData).toMatchObject({
-      rawExtensionUrl: R2_MOV,
-      chainReferenceUrl: REF_COPY,
-    })
-  })
-
-  it("the source's raw clip already expired ⇒ the copy fails and the extend falls back to the tail, still completing", async () => {
-    mocks.mockFindChainedMovReference.mockResolvedValue(CHAINED_MOV)
-    mocks.mockUploadToR2.mockImplementation(async (src: string) => {
-      if (src === CHAINED_MOV) throw new Error("Failed to download video: 404")
-      return R2_MOV
-    })
-    await handler()(makeJob() as never, ctx as never)
-
-    expect(mocks.mockImageToVideo.mock.calls[0]![5]).toMatchObject({ referenceVideoUrls: [TAIL_URL] })
-    const finalize = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0]
-    expect(finalize.mediaUrl).toBe(STITCHED_R2)
-    expect(finalize.extraOutputData.chainReferenceUrl).toBeUndefined()
-  })
-
-  it("no prior mov ⇒ nothing copied and no chainReferenceUrl", async () => {
-    mocks.mockFindChainedMovReference.mockResolvedValue(undefined)
-    await handler()(makeJob() as never, ctx as never)
+    // Cut from the previous raw mov, into the run's own work dir…
+    expect(mocks.mockCutChainedMovTail).toHaveBeenCalledWith(CHAINED_MOV, 2, "/tmp/test-workdir")
+    // …uploaded to the job's scratch folder, as a mov…
+    expect(mocks.mockUploadJobScratchFile).toHaveBeenCalledWith(CHAIN_CUT_PATH, "extend-chain-tail", "mov", "video/quicktime", "job-1")
+    // …and that cut is the generation's @video_1, never the whole clip.
+    expect(mocks.mockImageToVideo.mock.calls[0]![5]).toMatchObject({ referenceVideoUrls: [CHAIN_CUT_URL] })
+    // The whole clip is copied nowhere (an mp4 result: no raw copy either).
     expect(mocks.mockUploadToR2).not.toHaveBeenCalled()
+    // Cut BEFORE the generation reads it.
+    expect(mocks.mockCutChainedMovTail.mock.invocationCallOrder[0]!).toBeLessThan(mocks.mockImageToVideo.mock.invocationCallOrder[0]!)
+    // The cut lives in the job's scratch folder, emptied when the job ends: nothing to name in the output.
     expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].extraOutputData.chainReferenceUrl).toBeUndefined()
+  })
+
+  it("a failed cut falls back to the tail, still completing", async () => {
+    mocks.mockFindChainedMovReference.mockResolvedValue(CHAINED_MOV)
+    mocks.mockCutChainedMovTail.mockRejectedValue(new Error("Failed to download video: 404"))
+    await run()
+
+    expect(mocks.mockImageToVideo.mock.calls[0]![5]).toMatchObject({ referenceVideoUrls: [TAIL_URL] })
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].mediaUrl).toBe(STITCHED_R2)
   })
 
   it("a mov result is stored as OUR R2 .mov and persisted — never KIE's expiring URL", async () => {
     mocks.mockImageToVideo.mockResolvedValue({ url: KIE_MOV, cost: 0.3 })
-    await handler()(makeJob() as never, ctx as never)
+    await run()
 
     expect(mocks.mockUploadToR2).toHaveBeenCalledTimes(1)
     const [srcUrl, keyId, type, userId, opts] = mocks.mockUploadToR2.mock.calls[0]!
@@ -378,7 +426,7 @@ describe("lever ON — the mov reference chain", () => {
 
   it("an mp4 result (KIE ignored the field) falls back to today's persistence", async () => {
     mocks.mockImageToVideo.mockResolvedValue({ url: KIE_MP4, cost: 0.3 })
-    await handler()(makeJob() as never, ctx as never)
+    await run()
     expect(mocks.mockUploadToR2).not.toHaveBeenCalled()
     expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].extraOutputData).toMatchObject({
       rawExtensionUrl: KIE_MP4,
@@ -388,57 +436,55 @@ describe("lever ON — the mov reference chain", () => {
   it("a failed mov copy does NOT fail the job — the deliverable is the stitch", async () => {
     mocks.mockImageToVideo.mockResolvedValue({ url: KIE_MOV, cost: 0.3 })
     mocks.mockUploadToR2.mockRejectedValue(new Error("R2 down"))
-    await handler()(makeJob() as never, ctx as never)
+    await run()
     const finalize = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0]
     expect(finalize.mediaUrl).toBe(STITCHED_R2)
     // Chain broken (next extension falls back to the tail), job still correct.
     expect(finalize.extraOutputData.rawExtensionUrl).toBe(KIE_MOV)
   })
 
-  // Independent review round: the copies are written before the generation,
-  // but only a completed job's output names them — a run that fails after
-  // them discards them, or nothing ever would.
-  describe("a run that fails after its copies discards them", () => {
+  // Independent review round: the raw copy is written after the generation,
+  // but only a completed job's output names it — a run that fails after it
+  // discards it, or nothing ever would.
+  describe("a run that fails after its raw copy discards it", () => {
     function chainWithRawMov(): void {
       mocks.mockFindChainedMovReference.mockResolvedValue(CHAINED_MOV)
       mocks.mockImageToVideo.mockResolvedValue({ url: KIE_MOV, cost: 0.3 })
-      uploadsByKey()
     }
 
     it.each([
       ["the stitch", () => mocks.mockCombineVideos.mockRejectedValue(new Error("stitch failed"))],
       ["the watermark upload", () => mocks.mockWatermarkLocalVideoAndUpload.mockRejectedValue(new Error("upload failed"))],
       ["the finalize", () => mocks.mockFinalizeJobWithMedia.mockRejectedValue(new Error("finalize failed"))],
-    ])("%s fails: both copies are discarded, and the job still fails", async (_step, breakIt) => {
+    ])("%s fails: the raw copy is discarded, and the job still fails", async (_step, breakIt) => {
       chainWithRawMov()
       breakIt()
 
-      await expect(handler()(makeJob() as never, ctx as never)).rejects.toThrow(/failed/)
+      await expect(run()).rejects.toThrow(/failed/)
 
-      expect(mocks.mockDiscardFailedRunCopies).toHaveBeenCalledWith("job-1", "user-1", [REF_COPY, R2_MOV])
+      expect(mocks.mockDiscardFailedRunCopies).toHaveBeenCalledWith("job-1", "user-1", [R2_MOV])
     })
 
-    it("the generation fails: the reference copy is discarded (no raw extension exists yet)", async () => {
+    it("the generation fails: nothing was copied yet", async () => {
       mocks.mockFindChainedMovReference.mockResolvedValue(CHAINED_MOV)
-      uploadsByKey()
       mocks.mockImageToVideo.mockRejectedValue(new Error("generation failed"))
 
-      await expect(handler()(makeJob() as never, ctx as never)).rejects.toThrow(/generation failed/)
+      await expect(run()).rejects.toThrow(/generation failed/)
 
-      expect(mocks.mockDiscardFailedRunCopies).toHaveBeenCalledWith("job-1", "user-1", [REF_COPY, undefined])
+      expect(mocks.mockDiscardFailedRunCopies).toHaveBeenCalledWith("job-1", "user-1", [undefined])
     })
 
     it("a completed run discards nothing", async () => {
       chainWithRawMov()
-      await handler()(makeJob() as never, ctx as never)
+      await run()
       expect(mocks.mockDiscardFailedRunCopies).not.toHaveBeenCalled()
     })
 
-    it("a url that is not our copy (KIE's own, or a reference used in place) is never handed over", async () => {
-      // No chained mov and an mp4 result: neither copy was made.
+    it("a url that is not our copy (KIE's own) is never handed over", async () => {
+      // An mp4 result: no copy was made.
       mocks.mockCombineVideos.mockRejectedValue(new Error("stitch failed"))
-      await expect(handler()(makeJob() as never, ctx as never)).rejects.toThrow(/stitch failed/)
-      expect(mocks.mockDiscardFailedRunCopies).toHaveBeenCalledWith("job-1", "user-1", [undefined, undefined])
+      await expect(run()).rejects.toThrow(/stitch failed/)
+      expect(mocks.mockDiscardFailedRunCopies).toHaveBeenCalledWith("job-1", "user-1", [undefined])
     })
   })
 })

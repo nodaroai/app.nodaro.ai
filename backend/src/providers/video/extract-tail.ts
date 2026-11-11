@@ -1,4 +1,4 @@
-import { probeMediaDuration, runFfmpeg } from "./ffmpeg-utils.js"
+import { getVideoStreamDuration, probeMediaDuration, runFfmpeg } from "./ffmpeg-utils.js"
 
 /**
  * Re-encode the last `seconds` of `inputPath` into a new local file.
@@ -15,9 +15,20 @@ import { probeMediaDuration, runFfmpeg } from "./ffmpeg-utils.js"
  * `-ss` before `-i` (input seeking) is used for speed; re-encoding (not
  * stream-copy) is what keeps the cut frame-accurate despite input seeking's
  * normal keyframe-rounding behavior.
+ *
+ * `measureFrom` picks the end the `seconds` count back from: the container's
+ * (the default) or the picture's (`getVideoStreamDuration`). They differ when
+ * the sound runs past the last frame, as it routinely does in a generated
+ * clip; measured from the container, part of the tail is then sound with no
+ * picture, and the tail holds less picture than asked. `"picture"` (local
+ * files only) ends the tail on the last frame.
  */
-export async function extractTailToFile(inputPath: string, seconds: number): Promise<string> {
-  const duration = await probeMediaDuration(inputPath)
+export async function extractTailToFile(
+  inputPath: string,
+  seconds: number,
+  opts: { measureFrom?: "container" | "picture" } = {},
+): Promise<string> {
+  const duration = opts.measureFrom === "picture" ? await getVideoStreamDuration(inputPath) : await probeMediaDuration(inputPath)
   const start = Math.max(0, duration - seconds)
   const out = `${inputPath}.tail.mp4`
   await runFfmpeg([

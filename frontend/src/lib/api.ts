@@ -6696,7 +6696,7 @@ export async function extendVideo(params: {
   kieTaskId?: string
   prompt?: string
   negativePrompt?: string
-  // LTX 2.3 Pro + seedance-2-extend require videoUrl; extendMode is LTX-only
+  // LTX 2.3 Pro + the Seedance providers (seedance-2-5-extend, seedance-2-0-extend) require videoUrl; extendMode is LTX-only
   videoUrl?: string
   extendMode?: "start" | "end"
   duration?: number
@@ -6704,7 +6704,7 @@ export async function extendVideo(params: {
   model?: string
   seeds?: number
   quality?: string
-  // seedance-2-extend only
+  // Seedance providers only
   resolution?: "480p" | "720p" | "1080p"
   generateAudio?: boolean
   userId?: string

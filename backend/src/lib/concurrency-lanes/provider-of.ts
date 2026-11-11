@@ -44,6 +44,7 @@ import {
   REPLICATE_LIP_SYNC_PROVIDERS,
   SEEDANCE_LIP_SYNC_PROVIDERS,
   DEFAULT_TRANSCRIBE_PROVIDER,
+  canonicalVideoProvider,
 } from "@nodaro/shared/models"
 import { baseProviderChain } from "../../providers/base-chain.js"
 import type { ProviderCapability } from "../../providers/provider.interface.js"
@@ -51,7 +52,7 @@ import { providerRegistry } from "../../providers/registry.js"
 import { resolveModel } from "../llm/params.js"
 import { laneForCallNow } from "../llm/router.js"
 import type { LlmRequest } from "../llm/types.js"
-import { seedanceExtendGenerationModel } from "../seedance-extend-model.js"
+import { isTailRecipeProvider, TAIL_RECIPES } from "../extend-recipe.js"
 import {
   CHARACTER_MOTION_DEFAULT_PROVIDER, CREATURE_MOTION_DEFAULT_PROVIDER, EDIT_IMAGE_DEFAULT_PROVIDER, generateImageModelOf,
   IMAGE_TO_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, LOCATION_MOTION_DEFAULT_PROVIDER, MOTION_TRANSFER_DEFAULT_PROVIDER,
@@ -161,9 +162,10 @@ const entityImage = (d: Data): string | null =>
   route("image-generation", str(d.provider) ?? IMAGE_MODEL_ROLE_DEFAULTS.character)
 
 function extendVideoProvider(d: Data): string | null {
-  const model = str(d.provider)
+  const model = canonicalVideoProvider(str(d.provider))
   if (model === "ltx-2.3-pro") return "replicate" // runLtxExtend
-  if (model === "seedance-2-extend") return route("image-to-video", seedanceExtendGenerationModel())
+  // A tail recipe generates its continuation on its own model (extend-recipe.ts).
+  if (typeof model === "string" && isTailRecipeProvider(model)) return route("image-to-video", TAIL_RECIPES[model].genModel)
   return "kie" // veo-extend / runway-extend: KIE task extensions of a prior KIE generation
 }
 

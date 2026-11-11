@@ -72,6 +72,7 @@ vi.mock("@/lib/config.js", () => ({
 
 import {
   CreditsService,
+  getNodeModelIdentifier,
   invalidateModelPricingCache,
   PriceNotConfiguredError,
   registerStaticCreditCosts,
@@ -928,22 +929,40 @@ describe("CreditsService", () => {
       ])).toBe(190)
     })
 
-    it("resolves extend-video seedance-2-extend default (8s 720p = ref-mode 50 + 3 stitch)", () => {
-      expect(CreditsService.estimateWorkflowBaseCredits([
-        { type: "extend-video", data: { provider: "seedance-2-extend" } },
-      ])).toBe(530)
+    it("quotes an extend-video node naming no provider as the VEO extend it runs (never the node-type row)", () => {
+      expect(CreditsService.estimateWorkflowBaseCredits([{ type: "extend-video", data: {} }])).toBe(STATIC_CREDIT_COSTS["veo-extend"])
+      expect(CreditsService.estimateWorkflowBaseCredits([{ type: "extend-video", data: { model: "quality" } }])).toBe(STATIC_CREDIT_COSTS["veo-extend:quality"])
+      expect(getNodeModelIdentifier({ type: "extend-video", data: {} })).toBe("veo-extend")
     })
 
-    it("resolves extend-video seedance-2-extend:12s:1080p", () => {
+    it("resolves extend-video seedance-2-0-extend default (its seedance-2-0-extend:8s:720p row)", () => {
+      expect(CreditsService.estimateWorkflowBaseCredits([
+        { type: "extend-video", data: { provider: "seedance-2-0-extend" } },
+      ])).toBe(625)
+    })
+
+    it("resolves extend-video seedance-2-0-extend at 12s 1080p (its seedance-2-0-extend:12s:1080p row)", () => {
+      expect(CreditsService.estimateWorkflowBaseCredits([
+        { type: "extend-video", data: { provider: "seedance-2-0-extend", duration: 12, resolution: "1080p" } },
+      ])).toBe(STATIC_CREDIT_COSTS["seedance-2-0-extend:12s:1080p"])
+    })
+
+    it("resolves extend-video seedance-2-0-extend per second added (6s 480p is its own row)", () => {
+      expect(CreditsService.estimateWorkflowBaseCredits([
+        { type: "extend-video", data: { provider: "seedance-2-0-extend", duration: 6, resolution: "480p" } },
+      ])).toBe(STATIC_CREDIT_COSTS["seedance-2-0-extend:6s:480p"])
+    })
+
+    it("resolves extend-video seedance-2-5-extend per second added (6s 480p is its own row)", () => {
+      expect(CreditsService.estimateWorkflowBaseCredits([
+        { type: "extend-video", data: { provider: "seedance-2-5-extend", duration: 6, resolution: "480p" } },
+      ])).toBe(STATIC_CREDIT_COSTS["seedance-2-5-extend:6s:480p"])
+    })
+
+    it("quotes a stored node on the retired seedance-2-extend as seedance-2-5-extend", () => {
       expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "extend-video", data: { provider: "seedance-2-extend", duration: 12, resolution: "1080p" } },
-      ])).toBe(1160)
-    })
-
-    it("snaps off-tier seedance-2-extend durations into the next tier (6s → 8s 480p)", () => {
-      expect(CreditsService.estimateWorkflowBaseCredits([
-        { type: "extend-video", data: { provider: "seedance-2-extend", duration: 6, resolution: "480p" } },
-      ])).toBe(260)
+      ])).toBe(STATIC_CREDIT_COSTS["seedance-2-5-extend:12s:1080p"])
     })
 
     it("resolves I2V kling-3.0:5s — no sound field estimates the :audio tier (model default is audio ON)", () => {

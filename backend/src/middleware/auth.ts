@@ -41,8 +41,10 @@ declare module "fastify" {
     /** Set by the video routes' credit-identifier preHandler: the provider,
      *  duration and resolution the run will generate at, judged by the credit
      *  guard against the free-credit video limits. Other routes fall back to
-     *  their body's own `provider`/`duration`/`resolution`. */
-    freeVideoRequest?: { provider: string; duration?: number | string | null; resolution?: string | null; videoSize?: string | null }
+     *  their body's own `provider`/`duration`/`resolution`. `extend`: the run
+     *  extends a video (Extend Video), refused as an extension whatever model
+     *  its provider names. */
+    freeVideoRequest?: { provider: string; duration?: number | string | null; resolution?: string | null; videoSize?: string | null; extend?: boolean }
     /** RAW per-reference-video ffprobe durations (seconds), in request order,
      *  set by the video routes' `validateRefVideoDurationPreHandler` BEFORE
      *  creditGuard runs. A FAILED probe is carried as `NaN`, never dropped:

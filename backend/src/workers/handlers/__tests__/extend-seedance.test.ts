@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 // ---------------------------------------------------------------------------
-// seedance-2-extend worker branch: bare-template continuation generation via
-// the seedance-2 reference-video transport + trim-stitch via combineVideos.
-// Template phrasing, trim counts, and "stitch failure = job failure" are all
-// spike-validated invariants — these tests pin them.
+// The Seedance extend worker branch, on Seedance 2.0 (seedance-2-0-extend):
+// bare-template continuation generation via the seedance-2 reference-video
+// transport + trim-stitch via combineVideos. Template phrasing, trim counts,
+// and "stitch failure = job failure" are all spike-validated invariants —
+// these tests pin them. The Seedance 2.5 provider and the mov chain:
+// extend-seedance25.test.ts.
 // ---------------------------------------------------------------------------
 
 const mocks = vi.hoisted(() => {
@@ -151,7 +153,7 @@ function makeJob(data: Record<string, unknown> = {}) {
     name: "extend-video",
     data: {
       jobId: "job-1",
-      provider: "seedance-2-extend",
+      provider: "seedance-2-0-extend",
       video: SOURCE_URL,
       prompt: "the ball keeps rolling until it hits a cup",
       ...data,
@@ -194,15 +196,15 @@ beforeEach(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("extend-video / seedance-2-extend", () => {
+describe("extend-video / seedance-2-0-extend", () => {
   it("generates via i2v: last-frame anchor + 2s tail reference + the EXACT extend template", async () => {
     await handler()(makeJob({ duration: 6, resolution: "480p", generateAudio: false }) as never, makeCtx() as never)
 
-    // Prep: tail extracted from the downloaded source at the shared
-    // continuation-ref length (2s — KIE rejects r2v reference videos under
-    // 1.8s), then uploaded; the frame-exact extractor reads the tail's R2
-    // copy (its last frame IS the source's last frame).
-    expect(mocks.mockExtractTailToFile).toHaveBeenCalledWith("/tmp/test-workdir/source.mp4", 2)
+    // Prep: tail extracted from the downloaded source at the recipe's tail
+    // length (2s — KIE rejects r2v reference videos under 1.8s), then
+    // uploaded; the frame-exact extractor reads the tail's R2 copy (its last
+    // frame IS the source's last frame).
+    expect(mocks.mockExtractTailToFile).toHaveBeenCalledWith("/tmp/test-workdir/source.mp4", 2, { measureFrom: "picture" })
     expect(mocks.mockExtractFrame).toHaveBeenCalledWith({ videoUrl: TAIL_URL, mode: "last" })
 
     expect(mocks.mockImageToVideo).toHaveBeenCalledTimes(1)
@@ -226,6 +228,12 @@ describe("extend-video / seedance-2-extend", () => {
     // NO onTaskCreated by design: persisting the KIE task would let the
     // reconcile cron finalize this job with the UNSTITCHED extension clip.
     expect(reconcileOpts).toBeUndefined()
+  })
+
+  it("cuts the tail from the picture's end", async () => {
+    await handler()(makeJob() as never, makeCtx() as never)
+    expect(mocks.mockExtractTailToFile).toHaveBeenCalledTimes(1)
+    expect(mocks.mockExtractTailToFile.mock.calls[0]![2]).toEqual({ measureFrom: "picture" })
   })
 
   it("trims user prompt whitespace inside the template", async () => {
@@ -289,6 +297,15 @@ describe("extend-video / seedance-2-extend", () => {
     expect(mocks.mockImageToVideo).not.toHaveBeenCalled()
   })
 
+  it("the short-source floor reads the picture's length, not the container's", async () => {
+    // 2 s of container, but the picture ends at 1.6 s (the sound runs past it).
+    mocks.mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 2, videoDurationSeconds: 1.6 })
+    await expect(
+      handler()(makeJob() as never, makeCtx() as never),
+    ).rejects.toThrow(/too short to extend.*got 1\.60s/)
+    expect(mocks.mockImageToVideo).not.toHaveBeenCalled()
+  })
+
   it("trim-stitches with the spike-validated recipe (cut, −4 tail / −3 head, 0.15s anchored fades)", async () => {
     await handler()(makeJob() as never, makeCtx() as never)
     expect(mocks.mockCombineVideos).toHaveBeenCalledWith({
@@ -307,7 +324,7 @@ describe("extend-video / seedance-2-extend", () => {
     })
   })
 
-  it("uploads the stitched LOCAL file (watermark-aware) and finalizes as seedance-2-extend", async () => {
+  it("uploads the stitched LOCAL file (watermark-aware) and finalizes as seedance-2-0-extend", async () => {
     await handler()(makeJob() as never, makeCtx({ shouldWatermark: true }) as never)
 
     expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalledWith(STITCHED_PATH, "job-1", "user-1", true)
@@ -316,7 +333,7 @@ describe("extend-video / seedance-2-extend", () => {
       jobId: "job-1",
       jobType: "extend-video",
       mediaUrl: "https://r2.example.com/videos/job-1.mp4",
-      result: expect.objectContaining({ providerUsed: "seedance-2-extend", cost: 0.2 }),
+      result: expect.objectContaining({ providerUsed: "seedance-2-0-extend", cost: 0.2 }),
       extraOutputData: expect.objectContaining({
         thumbnailUrl: "https://r2.example.com/thumbnails/job-1.png",
       }),

@@ -1473,6 +1473,13 @@ const OWNED_SETTINGS_GUARD_BYTES = 262
 const GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES = 334
 const GPT_IMAGE_2_6_FORMAT_TOTAL_BYTES = 1_014
 
+// RAISED 2026-11-11 by Extend Video's Seedance split, and nothing else: `extend_video` offers
+// `seedance-2-5-extend` and `seedance-2-0-extend` where it offered one Seedance id, its Seedance-only
+// arguments name both, and `duration` states each model's window (4–30 s and 4–15 s, now listed up to
+// 30). No tool was added, so the fixture does NOT move. Measured by this suite on the same tree with
+// and without it: extend_video 2_722 → 2_974 B.
+const EXTEND_SEEDANCE_SPLIT_BYTES = 252
+
 // RAISED 2026-11-11 by image_to_image's `mask_url` naming the models that take a mask
 // (`I2I_MASK_SUPPORT`, now with GPT Image 2.6 Flare's and Sunburst's edits), and that it is
 // refused with a GIF or an SVG, and nothing else. No tool was added, so the fixture does NOT move.
@@ -1682,6 +1689,7 @@ export const TOOL_WIRE_BUDGET = {
     SPEAKER_VIEW_TOOL_BYTES +
     SPEAKER_VIEW_REGION_LIMITS_BYTES +
     GPT_IMAGE_2_6_FORMAT_TOTAL_BYTES +
+    EXTEND_SEEDANCE_SPLIT_BYTES +
     I2I_MASK_MODELS_BYTES +
     MODIFY_IMAGE_MASK_BYTES +
     KLING_4_FLASH_MODELS_BYTES,

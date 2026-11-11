@@ -1,5 +1,16 @@
+import { join } from "node:path"
 import { config } from "./config.js"
 import { supabase } from "./supabase.js"
+import { downloadFile, getVideoStreamDuration, runFfmpeg } from "../providers/video/ffmpeg-utils.js"
+import { reencodePeakMemoryMiB } from "../providers/video/video-file-stages.js"
+import {
+  probeReferenceVideo,
+  referenceVideoAudio,
+  referenceVideoPictureArgs,
+  referenceVideoTargetBitRate,
+  SEEDANCE_2_5_REF_VIDEO_MAX_BYTES,
+  type ReferenceVideoProbe,
+} from "../providers/kie/reference-video-reencode.js"
 
 /**
  * Is this URL's OBJECT a QuickTime container? Decided by the path, never by
@@ -56,7 +67,8 @@ function jobIdFromDeliverableUrl(url: string): string | undefined {
  * stitched deliverable with ffmpeg, which re-encodes it to 4:2:0 — throwing
  * away exactly the colour fidelity `output_format: "mov"` was requested for.
  * If the source IS a job of ours whose raw extension we kept as a `.mov`
- * object, referencing that object directly keeps the whole chain in yuv444p.
+ * object, the reference is cut from that object instead
+ * ({@link cutChainedMovTail}), which keeps the whole chain in yuv444p.
  *
  * EVERY failure is silent and falls back to the tail: a foreign source URL, a
  * URL that is not a job-keyed deliverable, a job that is not the caller's, an
@@ -87,4 +99,64 @@ export async function findChainedMovReference(
     console.warn(`[seedance-extend] chained mov lookup failed for job ${jobId}:`, err)
     return undefined
   }
+}
+
+/**
+ * The last `seconds` of the PICTURE of the raw mov at `movUrl` (from
+ * {@link findChainedMovReference}), as a local `.mov` in `workDir`: the
+ * `@video_1` reference a chained extend sends in place of the tail it cuts
+ * from the stitched deliverable. Sending the whole clip would have the model
+ * re-stage all of it instead of continuing its last moments.
+ *
+ * The cut keeps what the mov was requested for, by the same rules a reference
+ * video's re-encode follows (`providers/kie/reference-video-reencode.ts`): the
+ * picture at the source's own bitrate in two passes (a visually lossless
+ * constant quality when the bitrate is unreadable), its pixel format (4:4:4
+ * stays 4:4:4) and colour tags; the sound copied when a MOV holds it as it is
+ * (its PCM), else AAC. Measured from the picture's end (`getVideoStreamDuration`),
+ * since the sound may run past the last frame. A copied sound is held to the
+ * cut (`-copypriorss 0`): input seeking starts each stream at the keyframe
+ * before the cut, and a copied stream would otherwise keep that pre-roll.
+ *
+ * Throws when the clip cannot be fetched or cut; the caller falls back to the tail.
+ */
+export async function cutChainedMovTail(movUrl: string, seconds: number, workDir: string): Promise<string> {
+  const input = join(workDir, "chain-source.mov")
+  const output = join(workDir, "chain-tail.mov")
+  await downloadFile(movUrl, input)
+  const probe = await probeReferenceVideo(input)
+  const pictureSec = await getVideoStreamDuration(input)
+  const start = Math.max(0, pictureSec - seconds)
+  // The cut's own length: its bitrate and size limit are the cut's, not the whole clip's.
+  const cut: ReferenceVideoProbe = { ...probe, durationSec: Math.min(seconds, pictureSec) }
+  // A chained mov is a Seedance 2.5 extension, and so is the run it is cut for.
+  const maxBytes = SEEDANCE_2_5_REF_VIDEO_MAX_BYTES
+  const passLog = referenceVideoTargetBitRate(cut, maxBytes) ? join(workDir, "chain-tail-pass") : undefined
+  const window = ["-ss", start.toFixed(3), "-i", input, "-t", String(seconds)]
+  // Admitted like every ffmpeg, at the clip's own size (unknown = assumed 4K).
+  const launch = {
+    peakMemoryMiB: reencodePeakMemoryMiB(probe.width && probe.height ? { width: probe.width, height: probe.height } : undefined),
+  }
+  if (passLog) {
+    await runFfmpeg(
+      ["-y", ...window, "-map", "0:v:0", "-an", ...referenceVideoPictureArgs(cut, maxBytes, { n: 1, log: passLog }), "-f", "null", "-"],
+      undefined,
+      launch,
+    )
+  }
+  const audio = referenceVideoAudio(probe, "mov")
+  await runFfmpeg(
+    [
+      "-y", ...window,
+      "-map", "0:v:0", "-map", "0:a:0?",
+      "-map_metadata", "-1", "-map_chapters", "-1",
+      ...referenceVideoPictureArgs(cut, maxBytes, passLog ? { n: 2, log: passLog } : undefined),
+      ...(audio === "copy" ? ["-c:a", "copy", "-copypriorss", "0"] : ["-c:a", "aac", "-b:a", "192k"]),
+      "-movflags", "+faststart",
+      output,
+    ],
+    undefined,
+    launch,
+  )
+  return output
 }

@@ -724,6 +724,7 @@ export {
   resolutionHeight,
   type FreeVideoLimits,
   type FreeVideoLock,
+  type FreeVideoModelLockOptions,
   type FreeVideoRequest,
 } from "./free-video-limits"
 // The recordings of one conversation as one master-clock edit (Speaker Layout on two or more recordings).

@@ -54,6 +54,7 @@ import { describeToPickerModel, structuredOutputModel, structuredVisionModel } f
 import { PROVIDER_NODE_CATEGORY_MODELS, validProviderSelection } from "./provider-node-categories"
 import { llmFeatureDefaultModel, motionTransferModelOf } from "./provider-model"
 import { EDIT_IMAGE_DEFAULT_PROVIDER, EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, MOTION_TRANSFER_DEFAULT_PROVIDER } from "./node-default-models"
+import type { FreeVideoModelLockOptions } from "./free-video-limits"
 
 type Data = Readonly<Record<string, unknown>>
 
@@ -81,6 +82,14 @@ export interface NodeModelLever {
    * The editor's census holds this to the menus that render the mark.
    */
   readonly marksLocks?: boolean
+  /**
+   * How the free-credit limits judge this menu's rows, where a row's model id
+   * alone cannot say it: `extend` — every row EXTENDS a video, so each is
+   * locked as an extension, even a model that extends under its generation id
+   * (LTX 2.3 Pro). The judge (`NodeModelJudge.locked`) and the menu that marks
+   * the rows both read it from here.
+   */
+  readonly lockAs?: FreeVideoModelLockOptions
   /** The data with the node on `row` (a menu value). */
   readonly put: (d: Data, row: string) => Record<string, unknown>
 }
@@ -184,7 +193,8 @@ export const NODE_MODEL_LEVERS: Readonly<Record<string, readonly NodeModelLever[
   "text-to-video": [{ ...providerLever(VIDEO_T2V_MODELS), marksLocks: true }],
   "generate-video-pro": [providerLever(GVP_PROVIDERS, () => GVP_DEFAULT_PROVIDER)],
   "edit-video-pro": [providerLever(EVP_PROVIDERS, () => GVP_DEFAULT_PROVIDER)],
-  "extend-video": [{ ...providerLever(EXTEND_VIDEO_MODELS, () => EXTEND_VIDEO_DEFAULT_PROVIDER), marksLocks: true }],
+  // Every row extends a video: each is judged as an extension (`lockAs`).
+  "extend-video": [{ ...providerLever(EXTEND_VIDEO_MODELS, () => EXTEND_VIDEO_DEFAULT_PROVIDER), marksLocks: true, lockAs: { extend: true } }],
   "video-to-video": [providerLever(VIDEO_V2V_MODELS, () => DEFAULT_VIDEO_TO_VIDEO_PROVIDER)],
   "video-depth": [{
     ...providerLever(VIDEO_DEPTH_MODELS),
@@ -271,9 +281,10 @@ export interface NodeModelJudge {
   readonly withheld: (model: string) => boolean
   /**
    * Whether the user cannot run `model` (the free-credit video limits) — asked
-   * only on a lever whose menu marks such a row (`marksLocks`).
+   * only on a lever whose menu marks such a row (`marksLocks`), with how that
+   * lever's rows run (`lockAs`: an Extend Video row is an extension).
    */
-  readonly locked?: (model: string) => boolean
+  readonly locked?: (model: string, opts?: FreeVideoModelLockOptions) => boolean
 }
 
 /** A lever's row as the model it runs (null: no catalog model). */
@@ -328,7 +339,7 @@ export function planNodeModels(
     const runnable = judge.locked && lever.marksLocks
       ? offered.find((row) => {
           const rowModel = modelOfRow(lever, row, next)
-          return rowModel === null || !judge.locked!(rowModel)
+          return rowModel === null || !judge.locked!(rowModel, lever.lockAs)
         })
       : offered[0]
     const to = runnable ?? offered[0]!

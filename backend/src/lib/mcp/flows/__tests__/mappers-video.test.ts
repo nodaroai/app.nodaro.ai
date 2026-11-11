@@ -58,12 +58,20 @@ describe("a mapped video node re-runs the call it was made from", () => {
     expect(flowNodeFor("/v1/text-to-video", { ...TRANSPORT, prompt: "p", provider: "veo3.1", loopTrim }, "generate_video")).toBeNull()
   })
 
-  it("extend_video, Seedance 2: the video by URL", () => {
-    const body = { videoUrl: VIDEO, prompt: "the car drives off", provider: "seedance-2-extend", duration: 8, resolution: "720p", generateAudio: true }
+  it.each(["seedance-2-5-extend", "seedance-2-0-extend"])("extend_video, %s: the video by URL", (provider) => {
+    const body = { videoUrl: VIDEO, prompt: "the car drives off", provider, duration: 8, resolution: "720p", generateAudio: true }
     expect(wires("/v1/extend-video", body)).toEqual([[VIDEO, "video", "video"]])
+    expect(nodeFor("/v1/extend-video", body)?.data.provider).toBe(provider)
     const payload = run("/v1/extend-video", body, { videoUrl: VIDEO })
-    expect(payload).toMatchObject({ provider: "seedance-2-extend", video: VIDEO, duration: 8, resolution: "720p", generateAudio: true })
+    expect(payload).toMatchObject({ provider, video: VIDEO, duration: 8, resolution: "720p", generateAudio: true })
     expect(String(payload.prompt)).toContain(body.prompt)
+  })
+
+  it("extend_video on the retired seedance-2-extend: the node is a Seedance 2.5 extend", () => {
+    const body = { videoUrl: VIDEO, prompt: "the car drives off", provider: "seedance-2-extend", duration: 8, resolution: "720p" }
+    expect(wires("/v1/extend-video", body)).toEqual([[VIDEO, "video", "video"]])
+    expect(nodeFor("/v1/extend-video", body)?.data.provider).toBe("seedance-2-5-extend")
+    expect(run("/v1/extend-video", body, { videoUrl: VIDEO })).toMatchObject({ provider: "seedance-2-5-extend", video: VIDEO, duration: 8 })
   })
 
   it("extend_video, VEO and Runway: the prior task", () => {
@@ -212,7 +220,8 @@ describe("a mapped video node re-runs the call it was made from", () => {
 
 describe("a video call the node cannot reproduce maps to no node", () => {
   it.each([
-    ["/v1/extend-video", { videoUrl: VIDEO, prompt: "x", provider: "seedance-2-extend", referenceImageUrls: [IMAGE] }],
+    ["/v1/extend-video", { videoUrl: VIDEO, prompt: "x", provider: "seedance-2-5-extend", referenceImageUrls: [IMAGE] }],
+    ["/v1/extend-video", { videoUrl: VIDEO, prompt: "x", provider: "seedance-2-0-extend", taskId: "t-1" }],
     ["/v1/extend-video", { prompt: "x", provider: "veo-extend" }],
     ["/v1/video-upscale", { provider: "seedance-2-5-hd", sourceJobId: "job-1" }],
     ["/v1/merge-video-audio", { videoUrl: VIDEO, audioTracks: [{ url: AUDIO, startTime: 2 }] }],

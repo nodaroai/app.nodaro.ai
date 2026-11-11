@@ -295,7 +295,8 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   "seedance-2": 20000,
   "seedance-2-fast": 20000,
   "seedance-2-mini": 20000,
-  "seedance-2-extend": 20000,
+  "seedance-2-5-extend": 20000,
+  "seedance-2-0-extend": 20000,
   // Seedance 2.5 raises the prompt ceiling to 30000
   // (docs.kie.ai/market/bytedance/seedance-2-5).
   "seedance-2-5": 30000,
@@ -1186,9 +1187,14 @@ export const VIDEO_MODE_ALIASES: readonly VideoModeAlias[] = [
  * - `seedance` (Seedance 1.5 Pro, KIE `bytedance/seedance-1.5-pro`): retired
  *   upstream 2026-10-25 (KIE answers 410). Runs as Seedance 2 Mini, the
  *   cheapest Seedance left (owner's decision 2026-10-25).
+ * - `seedance-2-extend` (the one Seedance Extend Video provider, its model
+ *   chosen by the deployment): split 2026-11-11 into one provider per model.
+ *   Runs as `seedance-2-5-extend`, the Seedance 2.5 extend, and is priced on
+ *   its rows; `seedance-2-0-extend` is the Seedance 2.0 one.
  */
 export const RETIRED_VIDEO_PROVIDERS: Readonly<Record<string, string>> = {
   seedance: "seedance-2-mini",
+  "seedance-2-extend": "seedance-2-5-extend",
 }
 
 /** A retired video model id becomes the id it runs as; any other value passes through unchanged. Own properties only. */
@@ -1417,9 +1423,26 @@ export const EXTEND_VIDEO_PROVIDERS = [
   "veo-extend",
   "runway-extend",
   "ltx-2.3-pro",
-  "seedance-2-extend",
+  // Seedance extends ANY video, one provider per model: Seedance 2.5 (4–30 s
+  // added) and Seedance 2.0 (4–15 s), each priced on its own rows
+  // (`seedanceExtendCreditId`). The earlier single id `seedance-2-extend` is
+  // retired (RETIRED_VIDEO_PROVIDERS) and runs as Seedance 2.5.
+  "seedance-2-5-extend",
+  "seedance-2-0-extend",
 ] as const
 export type ExtendVideoProvider = typeof EXTEND_VIDEO_PROVIDERS[number]
+
+/** The Extend Video providers that run on Seedance, one per model. */
+export type SeedanceExtendProvider = Extract<ExtendVideoProvider, "seedance-2-5-extend" | "seedance-2-0-extend">
+const SEEDANCE_EXTEND_PROVIDERS: readonly SeedanceExtendProvider[] = ["seedance-2-5-extend", "seedance-2-0-extend"]
+
+/**
+ * Whether a value is one of the Seedance Extend Video providers. A retired id
+ * answers false: pass it through {@link canonicalVideoProvider} first.
+ */
+export function isSeedanceExtendProvider(p: unknown): p is SeedanceExtendProvider {
+  return typeof p === "string" && (SEEDANCE_EXTEND_PROVIDERS as readonly string[]).includes(p)
+}
 
 /** Lip sync providers */
 export const LIP_SYNC_PROVIDERS = [
@@ -1937,7 +1960,6 @@ export const GUIDANCE_SCALE_SUPPORT: Record<string, { min: number; max: number; 
  * TODO: Run verification script and update costs after confirming actual KIE pricing.
  */
 export const DURATION_PRICED_PROVIDERS = new Set([
-  "seedance-2-extend",
   "kling-3.0",
   "kling-3-omni",
   "kling",
@@ -2566,8 +2588,8 @@ export const SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC = 1.8
 export const SEEDANCE_2_CONTINUATION_REF_SEC = 2
 
 /**
- * Trim-stitch parameters for the seedance-2-extend provider (spike-validated
- * 2026-06-11):
+ * Trim-stitch parameters for the Seedance Extend Video providers
+ * (`seedance-2-5-extend`, `seedance-2-0-extend`; spike-validated 2026-06-11):
  * the model's extension output wobbles for its first ~3 frames and the source
  * tail's last ~4 frames lead into it; dropping both and butt-joining yields a
  * seam SMOOTHER than ordinary in-clip motion (PSNR 34.4dB vs 30.6dB
@@ -2937,9 +2959,6 @@ export const RESOLUTION_VIDEO_REF_PRICING = SEEDANCE_2_PROVIDERS
 export const RESOLUTION_DURATION_PRICING: Record<string, readonly string[]> = {
   // KIE supports only 480p/720p here; 480p is the default.
   "grok-imagine-video-1.5": ["480p", "720p"],
-  // seedance-2-extend always uses a video ref, so pricing has no -ref
-  // dimension — duration tier + ":res" only (rates = seedance-2 -ref + stitch).
-  "seedance-2-extend": ["480p", "720p", "1080p"],
   // HappyHorse 1.1 — per-second billing at two published resolution rates
   // (kie.ai/happyhorse-1-1: 22.5 cr/s @720p, 29 cr/s @1080p, uniform across
   // t2v/i2v/ref2v). 720p first = billing default; the KIE-side default is
@@ -3664,6 +3683,10 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
     { maxSeconds: 12, suffix: "12s" },
     { maxSeconds: 15, suffix: "15s" },
   ],
+  // The length tiers of the earlier Seedance Extend rows
+  // (`seedance-2-extend:<tier>:<res>`). No extend is priced on them any more —
+  // each Seedance extend provider has a row per second (`seedanceExtendCreditId`)
+  // — but the rows stay, and so do their tiers.
   "seedance-2-extend": [
     { maxSeconds: 4, suffix: "4s" },
     { maxSeconds: 8, suffix: "8s" },

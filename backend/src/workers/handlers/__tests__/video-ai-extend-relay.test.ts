@@ -1,9 +1,9 @@
 /**
  * Relay provenance on the LAST rebuilt finalize literal (spec §8.2 lane 1,
- * migration 383): `extend-video` / `seedance-2-extend`.
+ * migration 383): `extend-video` / `seedance-2-5-extend` and `seedance-2-0-extend`.
  *
  * This branch generates its continuation through the CAPABILITY ROUTER
- * (`providers/index.ts` imageToVideo) with `seedance-2` / `seedance-2-5` — both
+ * (`providers/index.ts` imageToVideo) with `seedance-2-5` / `seedance-2` — both
  * of them keys of `KIE_VIDEO_MODELS`, which `providers/nodaro/index.ts` declares
  * as the cloud provider's "image-to-video" models. So on a keyless install with
  * a live nodaro.ai connection the chain is `[nodaro]`, the far end runs the
@@ -129,13 +129,13 @@ const VENDOR_ROUTE_RESULT = {
   providerUsed: "seedance-2",
 }
 
-function runExtend() {
+function runExtend(provider = "seedance-2-0-extend") {
   return videoAIHandlers["extend-video"]!(
     {
       name: "extend-video",
       data: {
         jobId: "job-1",
-        provider: "seedance-2-extend",
+        provider,
         video: "https://src/v.mp4",
         prompt: "keep going",
       },
@@ -157,11 +157,14 @@ beforeEach(() => {
   mocks.mockImageToVideo.mockResolvedValue(VENDOR_ROUTE_RESULT)
 })
 
-describe("extend-video / seedance-2-extend — relay provenance on the rebuilt literal", () => {
-  it("routes the continuation through the capability router (so a relay lane exists at all)", async () => {
-    await runExtend()
+describe("extend-video / Seedance extend — relay provenance on the rebuilt literal", () => {
+  it.each([
+    ["seedance-2-0-extend", "seedance-2"],
+    ["seedance-2-5-extend", "seedance-2-5"],
+  ])("routes the continuation through the capability router (so a relay lane exists at all): %s", async (provider, model) => {
+    await runExtend(provider)
     expect(mocks.mockImageToVideo).toHaveBeenCalledTimes(1)
-    expect(mocks.mockImageToVideo.mock.calls[0][1]).toBe("seedance-2")
+    expect(mocks.mockImageToVideo.mock.calls[0][1]).toBe(model)
   })
 
   it("carries relayJobId/relayCredits into finalizeJobWithMedia", async () => {

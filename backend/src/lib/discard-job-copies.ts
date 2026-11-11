@@ -2,9 +2,9 @@
  * Files a run copied into its own job's family, discarded when the run fails
  * (independent review round of the expiry walk).
  *
- * A Seedance extend copies the clip it continues from to
- * `videos/<jobId>-raw-ref.mov` BEFORE it generates, and its raw extension to
- * `videos/<jobId>-raw.mov` after. Expiry deletes a job's files by walking its
+ * A Seedance extend copies its raw extension to `videos/<jobId>-raw.mov` after
+ * it generates (it used to copy the clip it continues from to
+ * `videos/<jobId>-raw-ref.mov` too). Expiry deletes a job's files by walking its
  * output (decided 2026-10-08, round 12: "the job's output names it, so expiry
  * deletes it"), but only a COMPLETED job has an output naming them. A run
  * that fails or is cancelled after a copy would leave it in storage, counted

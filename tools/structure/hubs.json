@@ -115,7 +115,6 @@
     "backend/src/lib/retained-image-keys.ts",
     "backend/src/lib/safe-fetch.ts",
     "backend/src/lib/scopes.ts",
-    "backend/src/lib/seedance-extend-model.ts",
     "backend/src/lib/site-asset-keys.ts",
     "backend/src/lib/site-capture-switch.ts",
     "backend/src/lib/sleep.ts",

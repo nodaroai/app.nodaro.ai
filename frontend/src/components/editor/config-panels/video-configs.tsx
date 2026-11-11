@@ -60,8 +60,8 @@ import { TOPAZ_VIDEO_FPS_CHOICES, TOPAZ_VIDEO_RESOLUTIONS, clampTopazVideoFps, i
 import { TOPAZ_VIDEO_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
 import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
 import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, KLING_4_MAX_MIDDLE_FRAMES, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
-import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, videoSourceTrimMaxSec } from "@nodaro/shared/models"
-import { buildVideoCreditModelIdentifier, VIDEO_AUDIT_BUCKET_CREDITS } from "@nodaro/shared/credits"
+import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, videoSourceTrimMaxSec, isSeedanceExtendProvider, pricedOutputDurationSec, snapToNearestDuration, type SeedanceExtendProvider } from "@nodaro/shared/models"
+import { VIDEO_AUDIT_BUCKET_CREDITS, ltxExtendDurationSec, seedanceExtendCreditId } from "@nodaro/shared/credits"
 import { characterMentionSlug, characterMentionableAssetArrays, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared/entities"
 import { DEFAULT_LABEL_BY_SOURCE, type ReferenceSource, type ConnectedReference } from "@nodaro/shared/types"
 import { FRAME_TARGET_HANDLES } from "@nodaro/shared/workflow"
@@ -119,7 +119,7 @@ import { PromptHelperButton } from "./prompt-helper-button"
 import { SpanRangeSlider } from "./span-range-slider"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { useFreeVideoLimits } from "@/hooks/use-free-video-limits"
-import { lockedVideoDuration, lockedVideoModel, lockedVideoResolution, openVideoDuration, openVideoResolution } from "@/lib/free-video-locks"
+import { EXTEND_VIDEO_ROW_LOCK, lockedVideoDuration, lockedVideoModel, lockedVideoResolution, openVideoDuration, openVideoResolution } from "@/lib/free-video-locks"
 import { LockableSelectItem } from "./lockable-select-item"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import { NsfwFilterCheckbox } from "./nsfw-filter-checkbox"
@@ -5027,34 +5027,49 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
     // prompt as `Avoid: …` (matches the /v1/extend-video route + payload-builder).
     videoProvider: data.provider || "veo-extend",
   })
-  const isSeedanceExtend = data.provider === "seedance-2-extend"
-  // Levers are catalog-driven (single source of truth shared with the
-  // backend route/worker) — durations 4-15, resolutions 480p/720p/1080p.
-  const seedanceCatalog = MODEL_CATALOG["seedance-2-extend"]
-  const seedanceDurations = seedanceCatalog?.durations ?? [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-  const seedanceResolutions = seedanceCatalog?.resolutions ?? ["480p", "720p", "1080p"]
-  const seedanceDuration = data.duration ?? 8
+  // Seedance extends on two providers, one per model (Seedance 2.5, Seedance 2.0).
+  const seedanceProvider: SeedanceExtendProvider | null = isSeedanceExtendProvider(data.provider) ? data.provider : null
+  const isSeedanceExtend = seedanceProvider !== null
+  // Levers are catalog-driven, per model (single source of truth shared with
+  // the backend route/worker): Seedance 2.5 adds 4–30 s, Seedance 2.0 4–15 s.
+  const seedanceCatalog = seedanceProvider ? MODEL_CATALOG[seedanceProvider] : undefined
+  const seedanceDurations = seedanceCatalog?.durations ?? []
+  const seedanceResolutions = seedanceCatalog?.resolutions ?? []
+  // The length the run is priced and sent at: the stored seconds in the
+  // model's window, else its catalog default.
+  const seedanceDuration = seedanceProvider ? pricedOutputDurationSec(seedanceProvider, data.duration) : 0
 
-  // Credit labels track the duration tier — re-prefetch when it changes.
+  // Credit labels name the model's own row for the length chosen — re-prefetch when either changes.
   useEffect(() => {
-    if (!isSeedanceExtend) return
-    prefetchModelCredits(seedanceResolutions.map((r) =>
-      buildVideoCreditModelIdentifier("seedance-2-extend", seedanceDuration, undefined, undefined, undefined, r),
-    ))
-  }, [isSeedanceExtend, seedanceDuration]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!seedanceProvider) return
+    prefetchModelCredits(seedanceResolutions.map((r) => seedanceExtendCreditId(seedanceProvider, seedanceDuration, r)))
+  }, [seedanceProvider, seedanceDuration]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fail-safe (Provider Enum Sync step 12b): when the provider changes, snap
-  // a stale duration into seedance's 4–15s window (LTX allows 1–20) and clear
-  // the seedance-only levers when switching away — the dropdowns hide but the
-  // stale values would still be forwarded.
+  // a stale length into the new provider's window (a Seedance model's catalog
+  // lengths; LTX's 1–20 s) and clear the Seedance-only levers on a provider
+  // that has none — the dropdowns hide but the stale values would still be
+  // forwarded, and the route refuses a length outside the provider's window.
   useEffect(() => {
-    if (isSeedanceExtend) {
-      if (data.duration !== undefined && (data.duration < 4 || data.duration > 15)) {
-        onUpdate({ duration: Math.min(15, Math.max(4, Math.round(data.duration))) })
+    const patch: Partial<ExtendVideoData> = {}
+    if (seedanceProvider) {
+      const entry = MODEL_CATALOG[seedanceProvider]
+      if (data.duration !== undefined) {
+        const snapped = snapToNearestDuration(data.duration, entry?.durations)
+        if (snapped !== data.duration) patch.duration = snapped
       }
-    } else if (data.resolution !== undefined || data.generateAudio !== undefined) {
-      onUpdate({ resolution: undefined, generateAudio: undefined })
+      if (data.resolution !== undefined && entry?.resolutions && !entry.resolutions.includes(data.resolution)) patch.resolution = undefined
+    } else {
+      if (data.resolution !== undefined || data.generateAudio !== undefined) {
+        patch.resolution = undefined
+        patch.generateAudio = undefined
+      }
+      if (data.provider === "ltx-2.3-pro" && data.duration !== undefined) {
+        const ltxSeconds = ltxExtendDurationSec(data.duration)
+        if (ltxSeconds !== data.duration) patch.duration = ltxSeconds
+      }
     }
+    if (Object.keys(patch).length > 0) onUpdate(patch)
   }, [data.provider]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -5067,7 +5082,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {offeredExtendModels.map((m) => (
-              <LockableSelectItem key={m.value} value={m.value} locked={lockedVideoModel(freeVideoLimits, m.value)}>{localizeOption(m.label)}</LockableSelectItem>
+              <LockableSelectItem key={m.value} value={m.value} locked={lockedVideoModel(freeVideoLimits, m.value, EXTEND_VIDEO_ROW_LOCK)}>{localizeOption(m.label)}</LockableSelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -5187,7 +5202,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         </>
       )}
 
-      {isSeedanceExtend && (
+      {seedanceProvider && (
         <>
           <MappableField field="duration" label={t("vidcfg.secondsToAdd")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Select
@@ -5212,7 +5227,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
               <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {seedanceResolutions.map((r) => {
-                  const credits = getCachedCredits(buildVideoCreditModelIdentifier("seedance-2-extend", seedanceDuration, undefined, undefined, undefined, r))
+                  const credits = getCachedCredits(seedanceExtendCreditId(seedanceProvider, seedanceDuration, r))
                   return (
                     <SelectItem key={r} value={r}>{credits != null ? t("vidcfg.resWithCredits", { res: r, credits: creditUnits(credits) }) : r}</SelectItem>
                   )

@@ -88,4 +88,27 @@ describe.skipIf(!ffmpegAvailable)("extractTailToFile (real ffmpeg)", () => {
     expect(codec).toBe("h264")
     expect(pixFmt).toBe("yuv420p")
   }, 60_000)
+
+  it("measureFrom picture: the tail ends on the last frame when the sound runs past it", async () => {
+    const src = join(dir, `${randomUUID()}.mp4`)
+    // 4 s of picture, 4.5 s of sound.
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "testsrc=duration=4:size=320x240:rate=24",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=4.5",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p",
+      "-c:a", "aac",
+      src,
+    ])
+    const pictureFrames = async (file: string) =>
+      Number((await runFfprobe([
+        "-v", "error", "-select_streams", "v:0", "-count_frames",
+        "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", file,
+      ])).trim())
+
+    // From the container's end the 1 s tail starts at 3.5 s: half of it is past the last frame.
+    expect(await pictureFrames(await extractTailToFile(src, 1))).toBeLessThanOrEqual(13)
+    // From the picture's end it is a full second of picture, ending on the last frame.
+    expect(await pictureFrames(await extractTailToFile(src, 1, { measureFrom: "picture" }))).toBe(24)
+  }, 60_000)
 })

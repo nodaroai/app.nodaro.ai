@@ -20,8 +20,13 @@ import { VideoResultOverlay } from "./video-result-overlay"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
-import type { ExtendVideoData } from "@/types/nodes"
-import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec } from "@nodaro/shared/credits"
+import type { ExtendVideoData, WorkflowNode } from "@/types/nodes"
+import { canonicalVideoProvider } from "@nodaro/shared/models"
+import { EXTEND_VIDEO_MODELS } from "@nodaro/render-rules"
+import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
+import { extendVideoPricingUnits } from "@/lib/extend-video-estimate"
+import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
+// @registry-lookup localizes the one option label it shows (its own model's name)
 
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_VIDEO          = (t: string) => isValidExtendVideoConnection("video",          t, isPickerType)
@@ -45,15 +50,24 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [videoError, setVideoError] = useState(false)
-  const extendProvider = nodeData.provider || "veo-extend"
-  // LTX 2.3 Pro is priced per second added: its per-second row × the seconds
-  // the run sends (ltxExtendDurationSec) — what the route and a workflow run
-  // both reserve. Every other provider is one row per run.
-  const isLtxExtend = extendProvider === "ltx-2.3-pro"
-  // LTX: the whole run's price for its seconds, marked up once as the run is charged (lib/unit-quote.ts).
+  const localizeOption = useLocalizeOptionLabel()
+  // The provider the node runs as: a retired id (`seedance-2-extend`) runs as the model it became.
+  const extendProvider = canonicalVideoProvider(nodeData.provider || "veo-extend")
+  // The model the node runs, named from its menu row ("Seedance 2.5", "VEO
+  // Extend", …). The sentence adds "Extend" itself in every language ("Estender
+  // com {provider}"), so a label that already ends in it is named without it.
+  const extendModelLabel = EXTEND_VIDEO_MODELS.find((m) => m.value === extendProvider)?.label.replace(/\s+Extend$/, "")
+  // The Run price is the row the run reserves on × the units it is charged —
+  // the SAME mapping the config panel and the pre-run estimate use
+  // (`getModelIdentifier`, `extendVideoPricingUnits`), so the node, the panel
+  // and the Execute total cannot quote different rows: a Seedance extend on
+  // its model's row for its seconds and resolution, LTX 2.3 Pro on its
+  // per-second row × the seconds, VEO Quality on its own row. The whole run's
+  // price is marked up once, as the run is charged (lib/unit-quote.ts).
+  const priced = { id, type: "extend-video", position: { x: 0, y: 0 }, data: nodeData } as unknown as WorkflowNode
   const credits = useUnitQuoteCredits(
-    isLtxExtend ? LTX_EXTEND_PER_SECOND_CREDIT_ID : extendProvider,
-    isLtxExtend ? ltxExtendDurationSec(nodeData.duration) : 1,
+    getModelIdentifier(priced),
+    extendVideoPricingUnits(priced, [], []),
     extendProvider === "runway-extend" ? 32 : 40,
   )
 
@@ -196,7 +210,7 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
             )}
 
             <div className="flex justify-center text-muted-foreground text-xs">
-              <span>{t("node.extendWithProvider", { provider: nodeData.provider === "runway-extend" ? "Runway" : "VEO" })}</span>
+              <span>{t("node.extendWithProvider", { provider: extendModelLabel ? localizeOption(extendModelLabel) : extendProvider })}</span>
             </div>
           </div>
         )}

@@ -354,6 +354,8 @@ Lives in `packages/shared/src/prompt-wizard-categories.ts`. AI uses these descri
 |----------|----------------------|
 | `veo-extend` | Extend VEO-generated videos |
 | `runway-extend` | Extend Runway-generated videos |
+| `seedance-2-5-extend` | Extend ANY video by URL — seamless trim-stitched continuation with audio, 4–30s added (Seedance 2.5) |
+| `seedance-2-0-extend` | Extend ANY video by URL — seamless trim-stitched continuation with audio, 4–15s added (Seedance 2.0) |
 
 ### generate-music
 

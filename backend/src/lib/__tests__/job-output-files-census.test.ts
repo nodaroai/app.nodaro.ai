@@ -200,6 +200,7 @@ const SCRATCH_CALL_SITES: Readonly<Record<string, string>> = {
   "workers/handlers/heygen-avatar-audio-cap.ts :: \"ai-avatar-audio-cap\"": "HeyGen's capped audio: `jobId` is the avatar handler's `ctx.jobId`",
   "workers/handlers/video-ai.ts :: \"extend-tail\"": "a Seedance extend's source tail: `ctx.jobId`",
   "workers/handlers/video-ai.ts :: \"extend-last-frame\"": "a Seedance extend's last frame: `ctx.jobId`",
+  "workers/handlers/video-ai.ts :: \"extend-chain-tail\"": "a chained Seedance 2.5 extend's reference, the last seconds of the previous extension's raw mov: `ctx.jobId`",
   "workers/handlers/video-mask.ts :: `mask-src-c${chunk.index}`": "Video Mask's chunk of a long clip (what SAM 3 is sent): `ctx.jobId`",
   "workers/handlers/video-mask.ts :: \"mask-src-c0\"": "Video Mask's re-encoded source of a one-request clip (what SAM 3 is sent): `ctx.jobId`",
   "workers/handlers/video-mask.ts :: rleCacheName(value.chunk.index)": "Video Mask's kept chunk segmentation, so a retry after the model answered never pays it again: `jobId` is the handler's `ctx.jobId`",
@@ -248,10 +249,6 @@ const IN_FAMILY_BUILT_ELSEWHERE: Readonly<Record<string, { key: (jobId: string) 
   "workers/handlers/video-ai.ts :: rawExtensionObjectId(ctx.jobId)": {
     key: (j) => `videos/${rawExtensionObjectId(j)}.mov`,
     why: "a Seedance extend's raw .mov copy, `<jobId>-raw`: the job's family, never the deliverable's slot",
-  },
-  "workers/handlers/video-ai.ts :: rawExtensionReferenceObjectId(ctx.jobId)": {
-    key: (j) => `videos/${rawExtensionReferenceObjectId(j)}.mov`,
-    why: "a later extend's own copy of the clip it continues from, `<jobId>-raw-ref` (decided 2026-10-08, round 12): named in its output, so its expiry deletes it",
   },
   "lib/private-plugins/toolkit.ts :: jobFileObjectId(getJobId(), \"combine\")": {
     key: (j) => `videos/${jobFileObjectId(j, "combine")}.mp4`,
@@ -557,7 +554,9 @@ describe("the output shapes the app knows of", () => {
   it("a Seedance extend: the stitch, its poster, its raw .mov (`-raw`) and its copy of the source clip (`-raw-ref`)", () => {
     // Decided 2026-10-08: both are keyed in the job's family and named in its
     // output, so the walk returns them and the job's expiry deletes them —
-    // no hold-back (round 12): a later extend reads its own copy.
+    // no hold-back (round 12): a later extend reads its own copy. Extends no
+    // longer write the `-raw-ref` copy (they send a cut of the clip from the
+    // job's scratch folder), but the outputs of those that did still name it.
     const raw = url(`videos/${rawExtensionObjectId(JOB)}.mov`)
     const ref = url(`videos/${rawExtensionReferenceObjectId(JOB)}.mov`)
     const output = {

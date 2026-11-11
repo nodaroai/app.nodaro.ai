@@ -100,7 +100,7 @@ import {
   maskCompositeUsesForeground
 } from "@nodaro/shared/media"
 import { MASK_COMPOSITE_AUDIO_LABEL_KEYS, MASK_COMPOSITE_FIT_LABEL_KEYS } from "@/components/editor/config-panels/mask-composite-config"
-import { cachedFreeVideoLimits, lockedVideoDuration, lockedVideoModel, lockedVideoResolution, type FreeVideoLimits } from "@/lib/free-video-locks"
+import { EXTEND_VIDEO_ROW_LOCK, cachedFreeVideoLimits, lockedVideoDuration, lockedVideoModel, lockedVideoResolution, type FreeVideoLimits } from "@/lib/free-video-locks"
 
 /**
  * Data-driven quick-config controls for {@link NodeQuickStrip}. Each AI node
@@ -613,6 +613,12 @@ const videoUpscaleProviderControl = (): QuickConfigControl => ({
     { value: "veo-4k", label: "VEO 4K" },
     { value: "seedance-2-5-hd", label: "Seedance 2.5 HD (from draft)" },
   ], (v, limits) => lockedVideoModel(limits, v)),
+})
+/** Extend Video model — mirrors video-configs.tsx `ExtendVideoConfig`: each
+ *  row is an extension, locked on free credits as its lever says. */
+const extendVideoProviderControl = (): QuickConfigControl => ({
+  ...providerControl(EXTEND_VIDEO_MODELS, "veo-extend"),
+  options: (_data) => withFreeVideoLocks(toOptions(EXTEND_VIDEO_MODELS), (v, limits) => lockedVideoModel(limits, v, EXTEND_VIDEO_ROW_LOCK)),
 })
 /** video-upscale target resolution — Topaz's lever only (the shared
  *  `TOPAZ_VIDEO_RESOLUTIONS`, as `VideoUpscaleConfig` lists it): `[]` on every
@@ -1240,7 +1246,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       ],
     },
   ],
-  "extend-video": [providerControl(EXTEND_VIDEO_MODELS, "veo-extend")],
+  "extend-video": [extendVideoProviderControl()],
   "lip-sync": [providerControl(LIP_SYNC_MODELS, "kling-avatar")],
   "text-to-speech": [ttsProviderControl()],
   "motion-transfer": [providerControl(MOTION_TRANSFER_MODELS)],

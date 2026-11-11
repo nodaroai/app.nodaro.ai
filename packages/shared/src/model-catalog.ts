@@ -3168,24 +3168,45 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["extend"],
     pricing: [{ identifier: "runway-extend", credits: 320 }],
   },
-  "seedance-2-extend": {
-    id: "seedance-2-extend",
+  // Seedance extends ANY video, one provider per model. Each is priced on its
+  // own rows (`seedanceExtendCreditId`), one per second added and resolution.
+  // The earlier single id `seedance-2-extend` is retired and runs as Seedance 2.5.
+  "seedance-2-5-extend": {
+    id: "seedance-2-5-extend",
     kind: "video",
     modes: ["extend"] as const,
     family: "Bytedance",
     maker: "bytedance",
-    label: "Seedance 2 Extend",
+    label: "Seedance 2.5 Extend",
     series: "Seedance",
-    description: "Extend ANY video: generates the continuation (audio included) and trim-stitches it into one seamless clip.",
+    description: "Extend ANY video with Seedance 2.5: 4–30s continuation (audio included), stitched into one seamless clip.",
+    useCases: ["extend"],
+    durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+    defaultDuration: 8,
+    resolutions: ["480p", "720p", "1080p"],
+    pricing: [
+      { identifier: "seedance-2-5-extend:8s:720p", credits: 950, note: "default 8s 720p — see :Ns:res variants for exact" },
+      { identifier: "seedance-2-5-extend:8s:480p", credits: 425, note: "8s 480p" },
+      { identifier: "seedance-2-5-extend:8s:1080p", credits: 2375, note: "8s 1080p" },
+    ],
+  },
+  "seedance-2-0-extend": {
+    id: "seedance-2-0-extend",
+    kind: "video",
+    modes: ["extend"] as const,
+    family: "Bytedance",
+    maker: "bytedance",
+    label: "Seedance 2.0 Extend",
+    series: "Seedance",
+    description: "Extend ANY video with Seedance 2.0: 4–15s continuation (audio included), stitched into one seamless clip.",
     useCases: ["extend"],
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     defaultDuration: 8,
     resolutions: ["480p", "720p", "1080p"],
     pricing: [
-      { identifier: "seedance-2-extend", credits: 530, note: "default 8s 720p (ref-mode 50 + 3 stitch) — see :NsR variants" },
-      { identifier: "seedance-2-extend:8s:480p", credits: 260, note: "8s 480p (23+3)" },
-      { identifier: "seedance-2-extend:8s:720p", credits: 530, note: "8s 720p (50+3)" },
-      { identifier: "seedance-2-extend:8s:1080p", credits: 780, note: "8s 1080p (75+3)" },
+      { identifier: "seedance-2-0-extend:8s:720p", credits: 625, note: "default 8s 720p — see :Ns:res variants for exact" },
+      { identifier: "seedance-2-0-extend:8s:480p", credits: 288, note: "8s 480p" },
+      { identifier: "seedance-2-0-extend:8s:1080p", credits: 1550, note: "8s 1080p" },
     ],
   },
   "veo-1080p": {

@@ -26,7 +26,7 @@ export const EXPOSABLE_DECLARED_FIELDS: Readonly<Record<string, Readonly<Record<
     "provider": { kind: "select", values: ["seedance-2","seedance-2-fast","seedance-2-mini","seedance-2-5"] },
   },
   "extend-video": {
-    "provider": { kind: "select", values: ["runway-extend","veo-extend","ltx-2.3-pro","seedance-2-extend"] },
+    "provider": { kind: "select", values: ["seedance-2-5-extend","seedance-2-0-extend","veo-extend","runway-extend","ltx-2.3-pro"] },
   },
   "generate-image": {
     "aspectRatio": { kind: "select", values: ["1:1","16:9","9:16","4:3","3:4","3:2","2:3","5:4","4:5","21:9"] },
