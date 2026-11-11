@@ -12,7 +12,7 @@
  * it is worth finding.
  */
 import { SOURCE_IMAGE_NODE_TYPES, nodeAspectRatio } from "@nodaro/shared/nodes"
-import { autoAspectNeedsSourceImage, defaultImageModel } from "@nodaro/shared/model-catalog"
+import { defaultImageModel, sourceImageSizeNeeded } from "@nodaro/shared/model-catalog"
 import { imageGenAutoAspectNeedsSourceImage } from "@nodaro/shared/credits"
 import { savedOutputFor } from "./output-extractor.js"
 import type { NodeExecutionState, ResolvedInputs, SimpleEdge, SimpleNode } from "./types.js"
@@ -122,11 +122,13 @@ export function orderedSourceImages(
 }
 
 /**
- * The url whose size decides this node's "auto" aspect ratio, or undefined when
- * the build will not use a size: only a source-image node
- * (`SOURCE_IMAGE_NODE_TYPES`) asking for "auto" on a model without a native
- * auto. The caller reads the size (the builder is synchronous) and hands it
- * back as `PayloadBuildContext.sourceImage`.
+ * The url whose size decides this node's "auto" aspect ratio, or a masked
+ * edit's ratio and size on a model that follows its photo; undefined when the
+ * build will not use a size: only a source-image node
+ * (`SOURCE_IMAGE_NODE_TYPES`) asking for "auto" that keeps the photo's shape,
+ * or carrying a mask on such a model (`sourceImageSizeNeeded`). The caller
+ * reads the size (the builder is synchronous) and hands it back as
+ * `PayloadBuildContext.sourceImage`.
  */
 export function autoAspectSourceImageUrl(
   node: SimpleNode,
@@ -134,7 +136,8 @@ export function autoAspectSourceImageUrl(
   graph?: SourceImageGraph,
 ): string | undefined {
   if (!SOURCE_IMAGE_NODE_TYPES.has(node.type)) return undefined
-  if (!autoAspectNeedsSourceImage(sourceImageNodeProvider(node.type, node.data), nodeAspectRatio(node.type, node.data.aspectRatio))) return undefined
+  const masked = Boolean(resolvedInputs.maskUrl || node.data.maskUrl)
+  if (!sourceImageSizeNeeded(sourceImageNodeProvider(node.type, node.data), nodeAspectRatio(node.type, node.data.aspectRatio), masked)) return undefined
   const { main } = orderedSourceImages(node, resolvedInputs, graph)
   return typeof main === "string" && main.length > 0 ? main : undefined
 }

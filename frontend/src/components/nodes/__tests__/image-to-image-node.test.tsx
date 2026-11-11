@@ -210,4 +210,20 @@ describe("ImageToImageNode", () => {
     expect(imageSource).toHaveAttribute("data-type", "source")
     expect(imageSource).toHaveAttribute("data-position", "right")
   })
+
+  // The mask input (a Paint Mask or Generate Mask wired in) is drawn only for
+  // the models that take a mask of their own (`I2I_MASK_SUPPORT`).
+  for (const provider of ["gpt-image-2-6-flare-i2i", "gpt-image-2-6-sunburst-i2i", "ideogram-edit", "flux-fill"]) {
+    it(`${provider}: draws the mask input`, () => {
+      renderNode({ data: { label: "Image to Image", provider } })
+      expect(screen.getAllByTestId("handle-target-mask").length).toBeGreaterThan(0)
+    })
+  }
+
+  for (const provider of ["gpt-image-2-6-economy-i2i", "gpt-image-2-5-flare-i2i", "nano-banana"]) {
+    it(`${provider}: no mask input`, () => {
+      renderNode({ data: { label: "Image to Image", provider } })
+      expect(screen.queryAllByTestId("handle-target-mask")).toHaveLength(0)
+    })
+  }
 })

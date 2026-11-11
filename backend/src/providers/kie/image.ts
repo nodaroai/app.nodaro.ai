@@ -126,17 +126,29 @@ async function downloadAndMeasure(url: string): Promise<{ buffer: Buffer; width:
 }
 
 /**
+ * The form a model reads an inpainting mask in (models.ts): the platform's own
+ * grey image, white = the area to change; the same image the other way round
+ * (`maskEditColor` "black"); or a PNG whose transparent area is the change
+ * (`maskFormat` "alpha-transparent-edits").
+ */
+export type KieMaskForm = "white-edits" | "black-edits" | "alpha-transparent-edits"
+
+/**
  * Fit an inpainting mask to the model: resize it to the source image when the
- * sizes differ, and invert it when `invert` is set (a model whose
- * `maskEditColor` is "black" reads the mask the other way round), so every
- * caller keeps the platform's one convention, white = the area to change.
- * Returns the URL unchanged when neither applies; otherwise stores the
+ * sizes differ, and turn it into the form the model reads, so every caller
+ * keeps the platform's one convention, white = the area to change.
+ *  - "white-edits": resized only;
+ *  - "black-edits": its grey level inverted, the painted area black;
+ *  - "alpha-transparent-edits": always re-encoded as an RGBA PNG at the
+ *    source's size, alpha 255 − its grey level (white → fully transparent,
+ *    black → opaque, a grey in between, so a soft edge stays soft).
+ * Returns the URL unchanged when nothing applies; otherwise stores the
  * prepared mask in the running job's scratch folder and returns its URL.
  */
 export async function prepareMask(
   imageUrl: string,
   maskUrl: string,
-  opts: { invert: boolean },
+  opts: { form: KieMaskForm },
 ): Promise<string> {
   const [img, mask] = await Promise.all([
     downloadAndMeasure(imageUrl),
@@ -144,7 +156,7 @@ export async function prepareMask(
   ])
 
   const resize = img.width !== mask.width || img.height !== mask.height
-  if (!resize && !opts.invert) {
+  if (!resize && opts.form === "white-edits") {
     return maskUrl
   }
 
@@ -156,13 +168,27 @@ export async function prepareMask(
 
   let pipeline = sharp(mask.buffer)
   if (resize) pipeline = pipeline.resize(img.width, img.height, { fit: "fill" })
-  // Read the mask's grey level the way the inpaint composite does (alpha
-  // ignored), then flip it: the painted area becomes black.
-  if (opts.invert) pipeline = pipeline.removeAlpha().greyscale().negate()
-  const prepared = await pipeline.png().toBuffer()
+  const prepared = opts.form === "alpha-transparent-edits"
+    ? await transparentEditsMask(pipeline, img.width, img.height)
+    // Read the mask's grey level the way the inpaint composite does (alpha
+    // ignored), then flip it: the painted area becomes black.
+    : await (opts.form === "black-edits" ? pipeline.removeAlpha().greyscale().negate() : pipeline).png().toBuffer()
 
   // A provider input: the running job's scratch folder, emptied when the job ends.
   return uploadJobScratchBuffer(prepared, "prepared-mask", "png", "image/png")
+}
+
+/**
+ * The mask as an RGBA PNG whose alpha is the inverse of its grey level (read
+ * as for every other form: alpha ignored), black underneath: the area to
+ * change is transparent. Every pixel keeps an alpha channel, an all-black mask
+ * included, so the file is always "a PNG with an alpha channel".
+ */
+async function transparentEditsMask(sized: sharp.Sharp, width: number, height: number): Promise<Buffer> {
+  const grey = await sized.removeAlpha().greyscale().raw().toBuffer()
+  const rgba = Buffer.alloc(width * height * 4)
+  for (let i = 0; i < width * height; i++) rgba[i * 4 + 3] = 255 - grey[i]!
+  return sharp(rgba, { raw: { width, height, channels: 4 } }).png().toBuffer()
 }
 
 /**
@@ -267,6 +293,42 @@ export function applyOutputFormat(modelConfig: KieModelConfig, input: Record<str
     const author = (typeof level === "string" && GPT_IMAGE_2_6_SVG_AUTHOR_MODELS[level]) || GPT_IMAGE_2_6_SVG_AUTHOR_MODELS.standard
     input.svg = { model: author }
   }
+}
+
+/** The image a request edits: the first of its input images, as sent. */
+function firstInputImage(modelConfig: KieModelConfig, input: Record<string, unknown>): string | undefined {
+  const value = input[modelConfig.imageParam ?? "image"]
+  const first = Array.isArray(value) ? value[0] : value
+  return typeof first === "string" && first.length > 0 ? first : undefined
+}
+
+/**
+ * A caller's inpainting mask in the form a model with a `maskFormat` reads
+ * (models.ts), sized to the image it edits as sent. Mutates `input`:
+ * `mask_url` becomes the converted mask, or is removed when this request
+ * cannot carry one (no caller mask, no source, or an output format whose field
+ * list does not name `mask_url`: a GIF or an SVG), so nothing is converted for
+ * a mask that would not be sent. Returns that source when the model redraws
+ * outside the mask (`maskEditRedrawsOutside`), for the handler to paste back.
+ * A model without a `maskFormat` is left as it is.
+ */
+async function applyMaskFormat(
+  modelConfig: KieModelConfig,
+  input: Record<string, unknown>,
+  extraParams: Record<string, unknown> | undefined,
+): Promise<string | undefined> {
+  if (!modelConfig.maskFormat) return undefined
+  const callerMask = typeof extraParams?.mask_url === "string" && extraParams.mask_url.length > 0
+    ? extraParams.mask_url
+    : undefined
+  const source = firstInputImage(modelConfig, input)
+  const fields = declaredInputFields(modelConfig, input)
+  if (!callerMask || !source || (fields && !fields.includes("mask_url"))) {
+    delete input.mask_url
+    return undefined
+  }
+  input.mask_url = await prepareMask(source, callerMask, { form: modelConfig.maskFormat })
+  return modelConfig.maskEditRedrawsOutside ? source : undefined
 }
 
 function wireResolution(modelConfig: KieModelConfig, input: Record<string, unknown>): string | number | undefined {
@@ -500,7 +562,7 @@ export class KieImageProvider
       input.mask_url = await prepareMask(
         input.image_url as string,
         input.mask_url as string,
-        { invert: callerMask && modelConfig.maskEditColor === "black" },
+        { form: callerMask && modelConfig.maskEditColor === "black" ? "black-edits" : "white-edits" },
       )
     }
 
@@ -514,6 +576,8 @@ export class KieImageProvider
     // The output format's levers in this SKU's shape, read off the FINAL
     // modelConfig (after the t2i → i2i swap: an edit's GIF schema has no size).
     applyOutputFormat(modelConfig, input)
+    // After the format: whether this request may carry a mask depends on it.
+    const maskEditSourceUrl = await applyMaskFormat(modelConfig, input, extraParams)
     keepDeclaredInputFields(modelConfig, input)
 
     console.log(
@@ -601,6 +665,7 @@ export class KieImageProvider
       ...(kieTaskId && { kieTaskId }),
       ...(providerMs !== undefined && { providerMs }),
       ...(autoQualityKieCredits !== undefined && { autoQualityKieCredits }),
+      ...(maskEditSourceUrl !== undefined && { maskEditSourceUrl }),
     }
   }
 

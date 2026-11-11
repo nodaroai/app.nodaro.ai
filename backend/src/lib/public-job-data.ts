@@ -1,4 +1,5 @@
 import { withoutServerOnlyKeys } from "./job-output-visibility.js"
+import { jobRowProviderWords } from "./provider-words.js"
 
 /**
  * Remove server-only fields from arbitrary job JSON before it crosses a public
@@ -117,11 +118,17 @@ function isTrendRun(row: Record<string, unknown>): boolean {
  * text is safe. `error_hint` stays: it is the user-safe channel. A row with no
  * failure text keeps its nulls. Admins author the hidden data and read the
  * real text. Never mutates the row.
+ *
+ * Every job read applies this, so it is also where a job row passes the
+ * deployment's provider-words setting (`jobRowProviderWords`,
+ * lib/provider-words.ts): where a deployment keeps a failed job's provider
+ * words for its admins, a non-admin reads `error_detail` null on every job.
+ * Without that setting the row is returned exactly as before.
  */
 export function maskTrendRunError<T extends object>(row: T, isAdmin: boolean): T {
-  const rec = row as unknown as Record<string, unknown>
+  const rec = jobRowProviderWords(row, isAdmin) as unknown as Record<string, unknown>
   const masks = !isAdmin && isTrendRun(rec) && (rec.error_message != null || rec.error_detail != null)
-  if (!(TREND_RUN_MARKER in rec) && !masks) return row
+  if (!(TREND_RUN_MARKER in rec) && !masks) return rec as unknown as T
   const { [TREND_RUN_MARKER]: _marker, ...rest } = rec
   if (masks) {
     if (rest.error_message != null) rest.error_message = TREND_RUN_FAILURE_MESSAGE

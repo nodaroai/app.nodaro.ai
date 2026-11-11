@@ -7,6 +7,7 @@ import { config } from "../config.js"
 import { supabase } from "../supabase.js"
 import { markJobFailed, FAILABLE_STATUSES } from "../job-failure.js"
 import { finalizeJobWithMedia, isFinalizeJobType, NOT_GENERIC_RECOVERABLE, loadUsageLogId } from "../job-finalize.js"
+import { recoveredMaskComposite } from "./mask-paste-back.js"
 import { redactProviderDetail, logProviderFailure } from "../provider-error-detail.js"
 import type { ReconcileOpts } from "./kie.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
@@ -450,15 +451,19 @@ export async function reconcileReplicateJob(row: ReplicateJobRow, opts?: Reconci
     const meteredBaseCredits = topazUnits !== undefined
       ? await unitRateBaseCredits(TOPAZ_VIDEO_UNIT_CREDIT_ID, topazUnits)
       : undefined
+    // A recovered inpaint gets the composite its worker runs before finalize
+    // (a failure throws into the catch below, never a raw result finalized).
+    const composite = await recoveredMaskComposite(row, urls[0]!)
     await finalizeJobWithMedia({
       jobId: row.id,
       jobType: row.job_type,
       claimant: opts?.claimant ?? "cron",
       ...(loopTrimAddon > 0 && { loopTrimAddonRefundCredits: loopTrimAddon }),
       ...(meteredBaseCredits !== undefined ? { meteredBaseCredits } : {}),
+      ...(composite?.extraOutputData && { extraOutputData: composite.extraOutputData }),
       result: {
-        url: urls[0]!,
-        extraUrls: urls.slice(1),
+        url: composite?.url ?? urls[0]!,
+        extraUrls: composite ? [] : urls.slice(1),
         cost: outputCost,
         ...(outputCost !== null ? { displayCost: outputCost } : {}),
         providerUsed: "replicate",

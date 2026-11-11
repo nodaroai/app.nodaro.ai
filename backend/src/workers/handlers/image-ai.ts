@@ -16,7 +16,7 @@ import { describeMaskRegion } from "@nodaro/shared/media"
 import { resolveTopazUpscale } from "@nodaro/shared/credits"
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
 import { EDIT_IMAGE_DEFAULT_PROVIDER, generateImageModelOf } from "./default-models.js"
-import { compositeInpaint, maskBoundingBoxFromUrl, imageDimensions } from "../../services/inpaint/composite.js"
+import { compositeInpaint, maskBoundingBoxFromUrl, imageDimensions, pasteSourceOutsideMask } from "../../services/inpaint/composite.js"
 
 /** The text-to-image model each image-to-image sibling belongs to
  *  (`T2I_TO_I2I_VARIANT`, reversed). With references attached, both engines
@@ -403,10 +403,30 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
   }
   await setJobProgress(job, ctx.jobId, 60)
 
+  // A model that redraws the whole picture around a mask (the provider says
+  // so with `maskEditSourceUrl`, the source it was sent): the source is pasted
+  // back everywhere outside the mask, so the rest of the picture is the
+  // source's own. REFUND-CRITICAL, as the generate-image composite above: it
+  // runs BEFORE finalize and a plain Error propagates (no try/catch), so a
+  // failed composite fails the job and refunds instead of charging for a
+  // picture that was never delivered. One image, so no variants.
+  const pasted = maskUrl && result.maskEditSourceUrl
+    ? await pasteSourceOutsideMask({
+        sourceUrl: result.maskEditSourceUrl,
+        resultUrl: result.url,
+        maskUrl,
+        jobId: ctx.jobId,
+      })
+    : undefined
+  const { extraUrls: _unpasted, ...single } = result
+  const delivered = pasted ? { ...single, url: pasted } : result
+
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "image-to-image",
-    result,
+    result: delivered,
+    // The delivered picture is the source outside the mask.
+    ...(pasted && { extraOutputData: { maskComposited: true } }),
   })
   if (!ok) return
   await setJobProgress(job, ctx.jobId, 100)

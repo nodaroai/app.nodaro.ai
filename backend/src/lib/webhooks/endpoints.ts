@@ -12,6 +12,7 @@ import type { FastifyRequest } from "fastify"
 import { supabase } from "../supabase.js"
 import { getRuntimeEnv } from "../runtime-env.js"
 import { CHILD_JOB_COLUMN } from "../public-job-data.js"
+import { webhookBodyProviderWords } from "../provider-words.js"
 import type {
   WebhookDeliveryStatus,
   WebhookDisabledReason,
@@ -119,7 +120,9 @@ export function toDeliveryResponse(row: DeliveryRow, hideBody = false) {
     responseBody: row.response_body,
     durationMs: row.duration_ms,
     error: row.last_error,
-    requestBody: !hideBody && typeof row.payload === "string" ? row.payload : null,
+    // The body as recorded — less the provider words of its job where this
+    // deployment keeps them for its admins (lib/provider-words.ts).
+    requestBody: !hideBody && typeof row.payload === "string" ? webhookBodyProviderWords(row.payload) : null,
     createdAt: row.created_at,
     lastAttemptAt: row.last_attempt_at,
     nextAttemptAt: row.status === "pending" ? row.next_retry_at : null,

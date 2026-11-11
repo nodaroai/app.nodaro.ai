@@ -60,6 +60,7 @@ import { migrateLegacyNodeType } from "../services/workflow-engine/normalize-nod
 import { accessAtLeast, canRunWorkflow, workflowAccessFromRow } from "../lib/workflow-access.js"
 import { toAccessRow } from "../lib/workflow-route-access.js"
 import { limitedKeyWorkflows, refuseLimitedKey } from "../middleware/token-workflow-scope.js"
+import { nodeStatesProviderWords } from "../lib/provider-words.js"
 import { deriveRenderFinalRun, isRenderFinalRefusal, parseRenderFinalBody, renderFinalCredits, type ContinuationPricing } from "../lib/render-final-run.js"
 import {
   CONTINUATION_REFUSAL_MESSAGE,
@@ -1189,6 +1190,8 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })
     }
 
+    // The reader's admin test, as every job read by id takes it.
+    const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
     const { data: execution, error } = await supabase
       .from("workflow_executions")
       .select("*")
@@ -1201,7 +1204,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       // stands (a row the lanes never stamped costs no gate read).
       const queues = await queueInfoFor(waitingRowsOf("execution", [execution]))
       return {
-        data: { ...toExecutionResponse(execution), ...queueField(execution.id as string, queues) },
+        data: { ...toExecutionResponse(execution, isAdmin), ...queueField(execution.id as string, queues) },
       }
     }
 
@@ -1210,7 +1213,6 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // lookup needs the same fallback so a list row's `id` works uniformly.
     // A child job (CHILD_JOB_COLUMN) is never one: it reads as not found to a
     // non-admin, as on every job read by id.
-    const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
     // Also reads `lane_queued_at` (tolerantly: readWithLaneStamp): a job waits
     // only once a lane stamped it, and its wait counts from that stamp, as on
     // GET /v1/jobs/:id. The stamp itself is never sent.
@@ -1261,6 +1263,9 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     }
 
     const execId = parsed.data.id
+    // The reader's admin test, as on the detail read: it decides a child job's
+    // fallback below and whether the run's states carry the provider's words.
+    const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
 
     // Load current state from DB. The detail GET (and the executions-list
     // endpoint) merges standalone-job rows into the execution surface, so any
@@ -1281,7 +1286,6 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       // initial snapshot — the frontend's 3-s job-detail polling carries the
       // live updates from here.
       // As the detail read: never a child job for a non-admin (CHILD_JOB_COLUMN).
-      const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
       // With the lane stamp, tolerantly, as the detail read (its `queued` sidecar).
       const { data: jobRead, error: jobError } = await readWithLaneStamp("job", (stamp) => {
         let jobQuery = supabase
@@ -1322,7 +1326,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // never miss state that was written before the SSE connection opened.
     sse.sendEvent({
       type: "metadata",
-      data: toExecutionResponse(execution) as unknown as Record<string, unknown>,
+      data: toExecutionResponse(execution, isAdmin) as unknown as Record<string, unknown>,
     })
 
     // If already terminal, send done immediately and close
@@ -1330,7 +1334,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     if (terminalStatuses.has(execution.status as string)) {
       sse.sendEvent({
         type: "done",
-        data: toExecutionResponse(execution) as unknown as Record<string, unknown>,
+        data: toExecutionResponse(execution, isAdmin) as unknown as Record<string, unknown>,
       })
       sse.close()
       return reply
@@ -1350,7 +1354,10 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         type: isTerminal ? "done" : "execution",
         data: {
           eventType: event.type,
-          nodeStates: event.nodeStates,
+          // The live states as this reader may read them: a failed node's
+          // provider words withheld from a non-admin where the deployment keeps
+          // them for its admins (lib/provider-words.ts).
+          nodeStates: nodeStatesProviderWords(event.nodeStates, isAdmin),
           completedNodes: event.completedNodes,
           failedNodes: event.failedNodes,
           totalNodes: event.totalNodes,
@@ -1716,10 +1723,11 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     }
 
     // Merge both sources, sort by created_at desc, take limit + 1
-    const execRows = (execResult.data ?? []).map(toExecutionSummary)
+    const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
+    const execRows = (execResult.data ?? []).map((row) => toExecutionSummary(row, isAdmin))
     // Each standalone job as a run (its steps' charges included), in one read per table.
     const jobCredits = await runCreditsFor(jobsResult.data ?? [], req.userId)
-    const jobRows = (jobsResult.data ?? []).map((row) => jobToExecutionSummary(row, req.userRole === "admin" || req.userRole === "super_admin", jobCredits))
+    const jobRows = (jobsResult.data ?? []).map((row) => jobToExecutionSummary(row, isAdmin, jobCredits))
     const merged = [...execRows, ...jobRows]
       .sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime())
 
@@ -1856,8 +1864,12 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, execResult.error, "Failed to load executions")
     }
 
-    // Merge both sources, sort by created_at desc, take limit + 1
-    const execRows = (execResult.data ?? []).map((row) => ({ ...toExecutionSummary(row), workflowId: row.workflow_id, userId: row.user_id, _source: "exec" as const }))
+    // Merge both sources, sort by created_at desc, take limit + 1. The reader
+    // is an admin when the admin view was asked for (checked above) or by the
+    // role every job read takes: it decides whether the runs' states carry the
+    // provider's words (lib/provider-words.ts).
+    const readerIsAdmin = isAdminViewAll || req.userRole === "admin" || req.userRole === "super_admin"
+    const execRows = (execResult.data ?? []).map((row) => ({ ...toExecutionSummary(row, readerIsAdmin), workflowId: row.workflow_id, userId: row.user_id, _source: "exec" as const }))
     // Each standalone job as a run (its steps' charges included), in one read per table.
     const jobCredits = await runCreditsFor(jobsResult.data ?? [], [...new Set((jobsResult.data ?? []).map((row) => row.user_id as string))])
     const jobRows = (jobsResult.data ?? []).map((row) => ({ ...jobToExecutionSummary(row, isAdminViewAll, jobCredits), workflowId: row.workflow_id, userId: row.user_id, _source: "job" as const }))
@@ -1970,7 +1982,13 @@ function executionRetryOf(row: Record<string, unknown>): { attempt: number; maxA
   return stamp ? { attempt: stamp.attempt, maxAttempts: stamp.maxAttempts, retryOf: stamp.retryOf } : undefined
 }
 
-function toExecutionResponse(row: Record<string, unknown>) {
+/**
+ * A run as its reader reads it (GET /v1/workflow-executions/:id and the
+ * stream's snapshots). `isAdmin` is the reader's: a failed node's provider
+ * words (`errorDetail`) are withheld from a non-admin where the deployment
+ * keeps them for its admins (lib/provider-words.ts).
+ */
+function toExecutionResponse(row: Record<string, unknown>, isAdmin: boolean) {
   const retry = executionRetryOf(row)
   return {
     id: row.id,
@@ -1987,7 +2005,7 @@ function toExecutionResponse(row: Record<string, unknown>) {
     // consumer (verified across frontend/backend), so it's omitted here to
     // trim the hot-path detail/poll response. The per-node `inputs` blobs are
     // also stripped — pollers read `node_states[].output`, never `inputs`.
-    nodeStates: stripNodeStateInputs(row.node_states),
+    nodeStates: nodeStatesProviderWords(stripNodeStateInputs(row.node_states), isAdmin),
     // What a continue-from-failed of this run sent no nodeIds considers,
     // besides what it left unfinished (lib/continue-from-failed-lineage.ts):
     // the editor predicts the server's set by it. null: every node.
@@ -2004,7 +2022,12 @@ function toExecutionResponse(row: Record<string, unknown>) {
   }
 }
 
-export function toExecutionSummary(row: Record<string, unknown>) {
+/**
+ * A run as a list row (GET /v1/workflows/:id/executions, GET /v1/executions).
+ * `isAdmin` is the reader's, as on `toExecutionResponse`; absent reads as a
+ * non-admin (the side that withholds the provider's words).
+ */
+export function toExecutionSummary(row: Record<string, unknown>, isAdmin = false) {
   const retry = executionRetryOf(row)
   return {
     id: row.id,
@@ -2019,7 +2042,7 @@ export function toExecutionSummary(row: Record<string, unknown>) {
     // modal render status/type/timing/error/output, never `inputs`, so this
     // trims the paginated (and polled) list payload without changing the UI.
     // Full node_states (incl. inputs) remain on GET /v1/workflow-executions/:id.
-    nodeStates: stripNodeStateInputs(row.node_states),
+    nodeStates: nodeStatesProviderWords(stripNodeStateInputs(row.node_states), isAdmin),
     totalNodes: row.total_nodes,
     completedNodes: row.completed_nodes,
     failedNodes: row.failed_nodes,

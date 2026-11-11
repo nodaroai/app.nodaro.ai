@@ -1770,7 +1770,7 @@ Needs `workflows:execute`.
 | `aspect_ratio` | string |  |  |
 | `negative_prompt` | string |  | At most 5000 characters. |
 | `seed` | integer |  | At least 0. |
-| `mask_url` | string (URL) |  | Inpainting mask image URL (white=edit, black=keep). |
+| `mask_url` | string (URL) |  | Inpainting mask image URL (white=edit, black=keep). Used by ideogram-edit, flux-fill, gpt-image-2-6-flare-i2i, gpt-image-2-6-sunburst-i2i; others ignore it. Not with GIF or SVG. |
 | `output_format` | string |  | png, jpeg, webp, gif (animated, square) or svg; see outputFormats. |
 | `gif_frames` | number |  | GIF frames 2-16. |
 | `gif_frame_duration_ms` | number |  | GIF ms per frame 20-2000. |
@@ -2256,6 +2256,7 @@ Needs `workflows:execute`.
 | `svg_level` | string |  | standard, detailed or max. |
 | `aspect_ratio` | string |  | Aspect ratio. 'auto' keeps the photo's shape on every model. Variations and unsupported values fall back. |
 | `negative_prompt` | string |  | At most 2000 characters. |
+| `mask_url` | string (URL) |  | Inpainting mask image URL (white=edit, black=keep). Used by ideogram-edit, flux-fill, gpt-image-2-6-flare-i2i, gpt-image-2-6-sunburst-i2i; others ignore it. Not with GIF or SVG. |
 | `structured` | object |  |  |
 | `structured.person` | object |  |  |
 | `structured.person.age` | integer |  | From 0 to 120. |

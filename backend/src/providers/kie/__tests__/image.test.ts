@@ -655,13 +655,22 @@ describe("GPT Image 2.6 on the wire", () => {
     expect(Object.keys(input).sort()).toEqual(["aspect_ratio", "background", "prompt", "quality", "resolution"])
   })
 
-  it("an edit keeps its images and no mask", async () => {
+  it("an edit keeps its images and drops a stray seed", async () => {
     mocks.mockRunKieTask.mockResolvedValue(done(12))
-    await provider.generateImage("keep it", ["https://a.png"], "gpt-image-2-6-sunburst-i2i", { mask_url: "https://m.png", seed: 3 })
+    await provider.generateImage("keep it", ["https://a.png"], "gpt-image-2-6-sunburst-i2i", { seed: 3 })
     const [, input] = mocks.mockRunKieTask.mock.calls[0]!
     expect(input.input_urls).toHaveLength(1)
     expect(input.mask_url).toBeUndefined()
     expect(input.seed).toBeUndefined()
+  })
+
+  it("Economy's edit sends no mask (its schema has none)", async () => {
+    mocks.mockRunKieTask.mockResolvedValue(done(5))
+    const result = await provider.generateImage("keep it", ["https://a.png"], "gpt-image-2-6-economy-i2i", { mask_url: "https://m.png" })
+    const [, input] = mocks.mockRunKieTask.mock.calls[0]!
+    expect(input.mask_url).toBeUndefined()
+    expect(mocks.mockUploadBufferToR2).not.toHaveBeenCalled()
+    expect(result.maskEditSourceUrl).toBeUndefined()
   })
 
   it("quality auto is sent as it is and reports what KIE billed", async () => {
@@ -712,5 +721,119 @@ describe("GPT Image 2.6 on the wire", () => {
     mocks.mockRunKieTask.mockResolvedValue(done())
     const result = await provider.generateImage("a cat", undefined, "gpt-image-2-6-flare")
     expect(result.cost).toBe(0.0391)
+  })
+})
+
+describe("GPT Image 2.6 masks (models.ts `maskFormat`: transparent = change)", () => {
+  // A live masked run (2026-11-11): an opaque white-on-black mask is refused
+  // ("must be a PNG with an alpha channel"); a transparent box is where it
+  // changes. The platform's mask stays white = change, converted here.
+  const SOURCE = "https://src.png"
+  let source8: Buffer // 8x8, the image the mask is aligned to
+  let mask8: Buffer // 8x8: column 0 white, column 1 grey 128, the rest black
+  let mask4White: Buffer // 4x4 all white: resized to the source
+
+  beforeAll(async () => {
+    source8 = await sharp({ create: { width: 8, height: 8, channels: 3, background: "#3366cc" } }).png().toBuffer()
+    const raw = Buffer.alloc(8 * 8)
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) raw[y * 8 + x] = x === 0 ? 255 : x === 1 ? 128 : 0
+    mask8 = await sharp(raw, { raw: { width: 8, height: 8, channels: 1 } }).png().toBuffer()
+    mask4White = await sharp({ create: { width: 4, height: 4, channels: 3, background: "#fff" } }).png().toBuffer()
+  })
+
+  const serve = (masks: Record<string, Buffer>) => {
+    mocks.mockSafeFetch.mockImplementation(async (url: string) => ({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => masks[url] ?? source8,
+    }))
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    serve({ "https://x/mask.png": mask8, "https://x/mask-small.png": mask4White })
+    mocks.mockRunKieTask.mockResolvedValue({ resultJson: { resultUrls: ["https://result.png"] } })
+    mocks.mockUploadBufferToR2.mockResolvedValue("https://cdn.example.com/prepared-mask.png")
+  })
+
+  const sentInput = () => mocks.mockRunKieTask.mock.calls[0]![1] as Record<string, unknown>
+  const uploadedMask = () => mocks.mockUploadBufferToR2.mock.calls[0]! as [Buffer, string, string]
+  const rgbaAt = async (png: Buffer, x: number, y: number) => {
+    const { data, info } = await sharp(png).raw().toBuffer({ resolveWithObject: true })
+    const i = (y * info.width + x) * info.channels
+    return [...data.subarray(i, i + info.channels)]
+  }
+
+  for (const model of ["gpt-image-2-6-flare-i2i", "gpt-image-2-6-sunburst-i2i"] as const) {
+    it(`${model}: sends a PNG with an alpha channel, transparent where the mask is white`, async () => {
+      const result = await provider.generateImage("make it green", [SOURCE], model, { mask_url: "https://x/mask.png" })
+
+      const [buffer, key, contentType] = uploadedMask()
+      expect(key).toContain("prepared-mask")
+      expect(key).toMatch(/\.png$/)
+      expect(contentType).toBe("image/png")
+      const meta = await sharp(buffer).metadata()
+      expect(meta.format).toBe("png")
+      expect(meta.hasAlpha).toBe(true)
+      expect(meta.channels).toBe(4)
+      expect((await rgbaAt(buffer, 0, 3))[3]).toBe(0) // white → transparent: change
+      expect((await rgbaAt(buffer, 5, 3))[3]).toBe(255) // black → opaque: keep
+      expect((await rgbaAt(buffer, 1, 3))[3]).toBe(127) // grey 128 → alpha 127: a soft edge stays soft
+
+      const input = sentInput()
+      expect(input.mask_url).toBe("https://cdn.example.com/prepared-mask.png")
+      expect(input.input_urls).toEqual([SOURCE])
+      expect(input).not.toHaveProperty("markup")
+      expect(result.maskEditSourceUrl).toBe(SOURCE)
+    })
+  }
+
+  it("sizes the mask to the source image", async () => {
+    await provider.generateImage("make it green", [SOURCE], "gpt-image-2-6-flare-i2i", { mask_url: "https://x/mask-small.png" })
+    const [buffer] = uploadedMask()
+    const meta = await sharp(buffer).metadata()
+    expect([meta.width, meta.height]).toEqual([8, 8])
+    expect(meta.hasAlpha).toBe(true)
+    expect((await rgbaAt(buffer, 7, 7))[3]).toBe(0)
+  })
+
+  it("an all-black mask is still a PNG with an alpha channel, opaque everywhere", async () => {
+    const black = await sharp({ create: { width: 8, height: 8, channels: 3, background: "#000" } }).png().toBuffer()
+    serve({ "https://x/black.png": black })
+    await provider.generateImage("nothing", [SOURCE], "gpt-image-2-6-flare-i2i", { mask_url: "https://x/black.png" })
+    const [buffer] = uploadedMask()
+    const meta = await sharp(buffer).metadata()
+    expect(meta.channels).toBe(4)
+    expect((await rgbaAt(buffer, 0, 0))[3]).toBe(255)
+    expect((await rgbaAt(buffer, 7, 7))[3]).toBe(255)
+  })
+
+  for (const format of ["jpeg", "webp"] as const) {
+    it(`a ${format} edit sends the mask too`, async () => {
+      await provider.generateImage("make it green", [SOURCE], "gpt-image-2-6-flare-i2i", { mask_url: "https://x/mask.png", output_format: format })
+      expect(sentInput()).toMatchObject({ output_format: format, mask_url: "https://cdn.example.com/prepared-mask.png" })
+    })
+  }
+
+  for (const format of ["gif", "svg"] as const) {
+    it(`a ${format} edit sends no mask and converts none (KIE refuses a mask with it)`, async () => {
+      const result = await provider.generateImage("make it green", [SOURCE], "gpt-image-2-6-flare-i2i", { mask_url: "https://x/mask.png", output_format: format })
+      expect(sentInput()).not.toHaveProperty("mask_url")
+      expect(mocks.mockUploadBufferToR2).not.toHaveBeenCalled()
+      expect(result.maskEditSourceUrl).toBeUndefined()
+    })
+  }
+
+  it("an edit with no mask sends none and asks for no paste-back", async () => {
+    const result = await provider.generateImage("make it green", [SOURCE], "gpt-image-2-6-flare-i2i")
+    expect(sentInput()).not.toHaveProperty("mask_url")
+    expect(mocks.mockUploadBufferToR2).not.toHaveBeenCalled()
+    expect(result.maskEditSourceUrl).toBeUndefined()
+  })
+
+  it("a mask on GPT Image 2.6's text-to-image id with no image is dropped, as before", async () => {
+    const result = await provider.generateImage("a cat", undefined, "gpt-image-2-6-flare", { mask_url: "https://x/mask.png" })
+    expect(sentInput()).not.toHaveProperty("mask_url")
+    expect(result.maskEditSourceUrl).toBeUndefined()
   })
 })

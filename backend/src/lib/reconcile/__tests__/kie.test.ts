@@ -1131,3 +1131,53 @@ describe("NOT_GENERIC_RECOVERABLE rows", () => {
     spy.mockRestore()
   })
 })
+
+// A recovered inpaint or masked edit gets the paste-back its worker runs before
+// finalize (lib/reconcile/mask-paste-back.ts), so a stall re-pick or the cron
+// never delivers the model's redraw.
+const pasteBack = vi.hoisted(() => ({
+  compositeInpaint: vi.fn(async () => "https://r2/inpaint/j.png"),
+  pasteSourceOutsideMask: vi.fn(async (): Promise<string | undefined> => "https://scratch/mask-composite.png"),
+}))
+vi.mock("../../../services/inpaint/composite.js", () => pasteBack)
+
+describe("reconcileKieJob: a recovered mask job is pasted back before it is finalized", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.finalizeMock.mockResolvedValue({ ok: true })
+    mocks.jobsSingleMock.mockResolvedValue({ data: { reconcile_attempts: 0 }, error: null })
+    mocks.pollKieTaskMock.mockResolvedValue({ resultJson: { resultUrls: ["https://kie.example/out.png"] }, providerMs: 10, taskId: "t" })
+  })
+  const row = (job_type: string, input_data: Record<string, unknown>): KieJobRow => ({
+    id: "j-mask", provider_kind: "kie-standard", provider_task_id: "t", reconcile_attempts: 0, job_type, input_data,
+  })
+
+  it("a GPT Image 2.6 mask edit: the source pasted back outside the mask, recorded as maskComposited", async () => {
+    await reconcileKieJob(row("image-to-image", { provider: "gpt-image-2-6-flare-i2i", imageUrl: "https://r2/src.png", maskUrl: "https://r2/mask.png" }))
+    expect(pasteBack.pasteSourceOutsideMask).toHaveBeenCalledWith({ sourceUrl: "https://r2/src.png", resultUrl: "https://kie.example/out.png", maskUrl: "https://r2/mask.png", jobId: "j-mask" })
+    const input = mocks.finalizeMock.mock.calls[0]![0]
+    expect(input.result.url).toBe("https://scratch/mask-composite.png")
+    expect(input.result).not.toHaveProperty("extraUrls")
+    expect(input.extraOutputData).toEqual({ maskComposited: true })
+  })
+
+  it("a Generate Image inpaint: the result composited over its base", async () => {
+    await reconcileKieJob(row("generate-image", { provider: "gpt-image-2", baseImageUrl: "https://r2/base.png", maskUrl: "https://r2/mask.png" }))
+    expect(pasteBack.compositeInpaint).toHaveBeenCalledWith({ baseUrl: "https://r2/base.png", resultUrl: "https://kie.example/out.png", maskUrl: "https://r2/mask.png", jobId: "j-mask" })
+    expect(mocks.finalizeMock.mock.calls[0]![0].result.url).toBe("https://r2/inpaint/j.png")
+  })
+
+  it("a failed paste-back is never finalized: the attempt is bumped (and an exhausted job refunded)", async () => {
+    pasteBack.pasteSourceOutsideMask.mockRejectedValueOnce(new Error("compositeInpaint: failed to fetch https://r2/src.png (500)"))
+    await reconcileKieJob(row("image-to-image", { provider: "gpt-image-2-6-sunburst-i2i", imageUrl: "https://r2/src.png", maskUrl: "https://r2/mask.png" }))
+    expect(mocks.finalizeMock).not.toHaveBeenCalled()
+  })
+
+  it("an edit without a mask, or on a model that keeps the outside itself, is finalized as before", async () => {
+    await reconcileKieJob(row("image-to-image", { provider: "gpt-image-2-6-flare-i2i", imageUrl: "https://r2/src.png" }))
+    await reconcileKieJob(row("image-to-image", { provider: "ideogram-edit", imageUrl: "https://r2/src.png", maskUrl: "https://r2/mask.png" }))
+    expect(pasteBack.pasteSourceOutsideMask).not.toHaveBeenCalled()
+    expect(pasteBack.compositeInpaint).not.toHaveBeenCalled()
+    for (const [input] of mocks.finalizeMock.mock.calls) expect(input.result.url).toBe("https://kie.example/out.png")
+  })
+})

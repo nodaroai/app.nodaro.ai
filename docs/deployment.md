@@ -1061,6 +1061,38 @@ optional; each array empty = "keep the default"):
   - the AI Avatar node's voices in its text mode, which come from that node's
     own voice catalog;
   - a Cloud plugin lane, until it checks its voices through the toolkit.
+- `jobs.errorDetail`: who reads a failed job's **provider words** — what the
+  provider itself said about the failure, which the API carries as
+  `error_detail` on a job, `errorDetail` on a failed node of a run and in the
+  MCP job envelope, and `providerReason` on `diagnose_run`
+  ([api-integration.md](./api-integration.md#the-providers-own-words-error_detail)).
+  `"owner"` (the default, and what an absent key means): the job's owner and
+  administrators. `"admin"`: administrators only — every other reader sees a
+  failed job exactly as one the provider said nothing about (`error_detail`
+  `null`, no `errorDetail` on a node's entry, no `providerReason`), with the
+  same keys, so no client changes. Any other value, and a `jobs` that is not an
+  object, reads as `"admin"`, with a warning. Enforced by the server on every
+  surface that carries the words: the job reads (`GET /v1/jobs`,
+  `GET /v1/jobs/:id`, `GET /v1/jobs/:id/status`, `GET /v1/jobs/status`,
+  `POST /v1/jobs/batch-status`), a run's node states
+  (`GET /v1/workflow-executions/:id`, its stream, the run lists and a shared
+  workflow's run status), the MCP tools (`get_job`, `wait_for_job`,
+  `list_jobs`, `get_asset`, `diagnose_run`), and the `job.failed` webhook
+  event — a body recorded before the key was set loses the words too, on a
+  retry and in the endpoint's delivery log. Who counts as an administrator
+  (role `admin` or `super_admin`) is decided as each read already decides it:
+  the job and run reads go by the role of an account signed in to the app, so
+  a read through MCP, a personal API token or an app's token is never an
+  administrator's there; the admin-only reads (the admin job pages, the
+  all-accounts run list) use the admin check, which an administrator's own
+  token passes too, and keep the words. A webhook delivery is never an
+  administrator's, and a published app's runner never receives the words,
+  whatever this says.
+  Backend-only: stripped from `/config.js`. The key governs what the server
+  serves from a job and from a run. Words an editor has already saved onto a
+  workflow's nodes, before the key was set or on an administrator's own
+  canvas, stay in that workflow and are read with it by anyone who can open
+  it; a published app's copy of the workflow leaves them out.
 - `features` — whole features this deployment switches off:
   `{"features":{"hide":["copilot","presentation"]}}`. `copilot` removes the
   Workflow Copilot everywhere — the canvas rail and its collapsed tab, the

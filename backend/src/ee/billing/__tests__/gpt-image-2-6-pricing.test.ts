@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest"
 import { buildCreditModelIdentifier } from "@nodaro/shared/credits"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { countImageInputEdges } from "@nodaro/shared/workflow"
 import { STATIC_CREDIT_COSTS, getNodeModelIdentifier } from "../credits.js"
 import { imageCreditIdentifierFor } from "../../../routes/generate-image-credit-id.js"
 import { resolveImageToImageCreditIdentifier } from "../../../routes/image-to-image-credit-id.js"
@@ -179,4 +180,32 @@ describe("GPT Image 2.6 as the default", () => {
       expect(STATIC_CREDIT_COSTS[id], id).toBeGreaterThan(0)
     }
   })
+})
+
+// A masked GPT Image 2.6 edit costs what the same edit costs without a mask:
+// the mask is not an input image, and there is no price id of its own.
+describe("GPT Image 2.6: a mask costs nothing extra", () => {
+  const MASK = "https://a/mask.png"
+  const edit = (body: Record<string, unknown>) => resolveImageToImageCreditIdentifier({ body } as never)
+  const estimate = (type: string, data: Record<string, unknown>, edges: { source: string; target: string; targetHandle: string }[] = []) =>
+    getNodeModelIdentifier({ id: "n", type, data } as never, { imageRefsWired: countImageInputEdges(edges, "n") })
+
+  for (const provider of I2I) {
+    it(`${provider}: the route's check prices a masked edit as the same edit`, () => {
+      const body = { imageUrl: "https://a/x.png", prompt: "x", provider, quality: "high", resolution: "2K", referenceImageUrls: ["https://a/y.png"] }
+      expect(edit({ ...body, maskUrl: MASK })).toBe(`${provider}:high:2K:2ref`)
+      expect(edit({ ...body, maskUrl: MASK })).toBe(edit(body))
+    })
+
+    for (const type of ["modify-image", "image-to-image"]) {
+      it(`${provider}: a ${type} node's estimate counts neither its painted mask nor a wired one`, () => {
+        const data = { provider, quality: "medium", resolution: "1K" }
+        const image = { source: "src", target: "n", targetHandle: "image" }
+        const maskWire = { source: "gen-mask", target: "n", targetHandle: "mask" }
+        expect(estimate(type, { ...data, maskUrl: MASK })).toBe(estimate(type, data))
+        expect(estimate(type, data, [image, maskWire])).toBe(estimate(type, data, [image]))
+        expect(estimate(type, { ...data, maskUrl: MASK }, [image, maskWire])).toBe(`${provider}:medium:1K:1ref`)
+      })
+    }
+  }
 })

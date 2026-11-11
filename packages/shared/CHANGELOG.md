@@ -1,5 +1,16 @@
 # @nodaro/shared
 
+## 3.61.0
+
+### Minor Changes
+
+- 8a4de41: GPT Image 2.6 Flare and Sunburst edits take an inpainting mask: `gpt-image-2-6-flare-i2i` and `gpt-image-2-6-sunburst-i2i` join `I2I_MASK_SUPPORT`, and their catalog entries list the `mask` feature (`/v1/models`, MCP `list_models`). The rest of the picture is kept as it was, and a mask costs nothing extra.
+- 8a4de41: A masked GPT Image 2.6 Flare or Sunburst edit follows its photo. `normalizeModelInput` takes `context.masked`: on a model whose catalog entry sets `maskEditMatchesSource`, the run keeps the photo's shape ("auto", whatever ratio it names) and renders at the size of its new `outputSizes` table nearest the photo's long side, each change reported in `adjustments`; with the photo's size unknown the size asked is kept. `resolveNormalizedImageGen` takes `masked`. Adds `maskEditMatchesSource`, `sourceImageSizeNeeded`, `resolutionNearestSource` and `maskedEditResolution` (model catalog), and `wiredImageSize`, `recordedImageSize` and `nodeIsMasked` (workflow), for an estimate that knows the photo's size from the node it comes from.
+
+### Patch Changes
+
+- b1a17e6: A deployment can keep a failed job's provider words for its administrators. There, `Job.error_detail` and `JobStatusResult.error_detail` are `null`, and a failed node's `errorDetail` is absent from its `NodeExecutionStateWire` entry, for every caller who is not an administrator, exactly as for a failure that had no provider text. The types are unchanged; their documentation now says so.
+
 ## 3.60.1
 
 ### Patch Changes

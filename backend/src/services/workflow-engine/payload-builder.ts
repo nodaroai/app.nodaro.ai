@@ -3542,7 +3542,9 @@ function buildPayloadOf(
           background: data.background as string | undefined,
           ...imageFormatInputOf(data),
         },
-        { sourceImage: buildCtx?.sourceImage },
+        // A masked edit on a model that follows its photo takes its ratio and
+        // size from the photo too, as on the route.
+        { sourceImage: buildCtx?.sourceImage, masked: Boolean(resolvedInputs.maskUrl || data.maskUrl) },
       )
       const i2iMaskConflict = maskFormatConflict({ outputFormat: i2iParams.outputFormat, maskUrl: resolvedInputs.maskUrl || data.maskUrl })
       if (i2iMaskConflict) throw new Error(i2iMaskConflict)
@@ -3704,7 +3706,7 @@ function buildPayloadOf(
           background: data.background as string | undefined,
           ...imageFormatInputOf(data),
         },
-        { sourceImage: buildCtx?.sourceImage },
+        { sourceImage: buildCtx?.sourceImage, masked: Boolean(resolvedInputs.maskUrl || data.maskUrl) },
       )
       const modMaskConflict = maskFormatConflict({ outputFormat: modParams.outputFormat, maskUrl: resolvedInputs.maskUrl || data.maskUrl })
       if (modMaskConflict) throw new Error(modMaskConflict)

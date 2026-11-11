@@ -87,9 +87,16 @@ export interface ImageToImageParams extends GenerationSessionParams {
   /** 0–30: prompt adherence (taken by the models in `GUIDANCE_SCALE_SUPPORT`). */
   guidanceScale?: number
   /**
-   * Inpainting mask — white = the area to change, black = keep. Sent to the
-   * model as its own mask, so only the mask-capable image-to-image models use
-   * it (`I2I_MASK_SUPPORT`: `ideogram-edit`, `flux-fill`); others ignore it.
+   * Inpainting mask — white = the area to change, black = keep, aligned to
+   * `imageUrl`. Sent to the model as its own mask (in the form that model
+   * reads), so only the mask-capable image-to-image models use it (`I2I_MASK_SUPPORT`:
+   * `ideogram-edit`, `flux-fill`, `gpt-image-2-6-flare-i2i`,
+   * `gpt-image-2-6-sunburst-i2i`); others ignore it. On GPT Image 2.6 the rest
+   * of the picture is kept as it was: the source is pasted back outside the
+   * mask, and the result is the source's size: the run keeps the photo's
+   * shape and is rendered, and priced, at the size nearest the photo (both
+   * reported in `adjustments`). Not with a GIF or an SVG
+   * `outputFormat` (`400`). It costs nothing extra and is not an input image.
    * For a mask on any image model, see `GenerateImageParams.maskUrl`.
    */
   maskUrl?: string

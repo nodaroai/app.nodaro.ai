@@ -65,13 +65,17 @@ export function renderSurfaceProfileForRuntimeConfig(readManifest?: ReadUiString
   // every locale offered, plain text with the base placeholders. When nothing
   // survives, or the build left no manifest, the key is left out.
   //
-  // Whole-object identity on mainline: with none of the three billing keys
-  // and no `strings` set, this is the same single JSON.stringify(profile) it
-  // has always been.
+  // `jobs` is backend-only too: who reads a failed job's provider words is
+  // decided by the server on every response (lib/provider-words.ts), and no
+  // page reads the setting, so it is never published to one.
+  //
+  // Whole-object identity on mainline: with none of the three billing keys,
+  // no `jobs` and no `strings` set, this is the same single
+  // JSON.stringify(profile) it has always been.
   const { payerAccount, defaultAllowanceUnits, allowances } = profile.billing
   const redactBilling = payerAccount !== undefined || defaultAllowanceUnits !== undefined || allowances !== undefined
-  if (!redactBilling && profile.strings === undefined) return JSON.stringify(profile)
-  const { strings: rawStrings, ...rest } = profile
+  if (!redactBilling && profile.strings === undefined && profile.jobs === undefined) return JSON.stringify(profile)
+  const { strings: rawStrings, jobs: _jobs, ...rest } = profile
   const out: Record<string, unknown> = { ...rest }
   if (redactBilling) {
     const {

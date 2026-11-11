@@ -145,6 +145,7 @@ export { resolveFieldMappings, resolveLocationFields, type FieldEdgeSource } fro
 export { resolveNodeRefs, parseNodeRef, canonicalVarName, NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, REF_HANDLE_CATEGORY, REFERENCE_HANDLE_MAP, referenceModalityForHandle, FRAME_TARGET_HANDLES, countImageInputEdges, countRefModalityEdges, REF_TOKEN_NAMESPACE_PREFIXES, classifyRefToken, unresolvedRefTokens } from "../node-refs.js"
 export type { RefCandidate, ReferenceModality, RefModalityEdge, RefTokenKind } from "../node-refs.js"
 export { resolveSourceThroughConnectedList } from "../list-source-resolver.js"
+export { wiredImageSize, recordedImageSize, nodeIsMasked, type SizedGraphNode, type SizedGraphEdge } from "../wired-image-size.js"
 export { zipMergeLists } from "../list-merge.js"
 export type {
   WorkflowExport,

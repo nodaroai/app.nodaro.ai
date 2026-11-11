@@ -456,6 +456,23 @@ describe("routeAndExecute (via generateImage)", () => {
 
     expect("relayJobId" in result).toBe(false)
     expect("relayCredits" in result).toBe(false)
+    expect("maskEditSourceUrl" in result).toBe(false)
+  })
+
+  // The image-to-image handler pastes the source back outside a mask only when
+  // the result names it; a router that rebuilt the result without it would
+  // deliver the model's redraw of the whole picture.
+  it("propagates maskEditSourceUrl, the source a masked edit was sent", async () => {
+    const generate = vi.fn().mockResolvedValue({ url: "u", cost: 1, maskEditSourceUrl: "https://src.png" })
+    configMocks.buildRoutingDecision.mockResolvedValue(decision({ chain: ["kie"] }))
+    registryMocks.supportsModel.mockReturnValue(true)
+    registryMocks.getProvider.mockReturnValue(
+      makeProviderInstance({ image: { generateImage: generate } }),
+    )
+
+    const result = await generateImage("p", "m")
+
+    expect(result.maskEditSourceUrl).toBe("https://src.png")
   })
 
   it("throws when the resolved provider instance is missing the requested submodule", async () => {

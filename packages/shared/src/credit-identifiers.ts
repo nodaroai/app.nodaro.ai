@@ -289,10 +289,12 @@ export function imageFormatInputOf(source: object): { outputFormat?: string; gif
  *
  * `sourceImage` is the size of the photo the request transforms or is drawn
  * from (an image-to-image / edit source, or Generate Image's first wired
- * reference). It only decides "auto" on a model without a native auto, and the
+ * reference). It decides "auto" on a model without a native auto, and the
  * ratio is not a pricing dimension on any such model (pinned across the catalog
- * by `auto-aspect-source.test.ts`), so a CHECK that runs before the size is
- * known prices the same identifier as the DEBIT that knows it.
+ * by `auto-aspect-source.test.ts`). With `masked` on a model whose masked edit
+ * follows its photo (`maskEditMatchesSource`) it also decides the SIZE, a
+ * pricing dimension: the CHECK and the DEBIT must then both be given it (the
+ * image-to-image route reads it once, before its credit check).
  */
 export function resolveNormalizedImageGen(opts: {
   provider: string | undefined
@@ -310,6 +312,8 @@ export function resolveNormalizedImageGen(opts: {
   refCount: number
   swapToI2i?: boolean
   sourceImage?: SourceImageSize
+  /** The request carries an inpainting mask: on a model whose masked edit follows its photo, the photo's size decides the ratio and the priced size. */
+  masked?: boolean
 }): NormalizedImageGen {
   const str = (v: unknown): string | undefined =>
     typeof v === "string" && v.length > 0 ? v : undefined
@@ -325,7 +329,7 @@ export function resolveNormalizedImageGen(opts: {
       background: str(opts.background),
       ...imageFormatInputOf(opts),
     },
-    { sourceImage: opts.sourceImage },
+    { sourceImage: opts.sourceImage, masked: opts.masked },
   )
 
   return {

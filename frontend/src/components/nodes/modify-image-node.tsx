@@ -20,6 +20,7 @@ import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
 import { useWiredImageRefCount } from "@/hooks/use-wired-image-ref-count"
+import { useMaskedEditPhoto } from "@/hooks/use-masked-edit-photo"
 import { imageDownloadExtension } from "@/lib/image"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
@@ -60,10 +61,12 @@ function ModifyImageNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const wiredImageRefs = useWiredImageRefCount(id)
+  const maskedEditPhoto = useMaskedEditPhoto(id)
   const creditModelId = buildCreditModelIdentifier(
     nodeData.provider ?? IMAGE_MODEL_ROLE_DEFAULTS.edit,
     nodeData as unknown as Record<string, unknown>,
     wiredImageRefs,
+    maskedEditPhoto,
   )
   const credits = useModelCredits(creditModelId, 1)
   const useFull = useFullResolution(id)

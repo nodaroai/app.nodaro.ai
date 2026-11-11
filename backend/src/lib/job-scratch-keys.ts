@@ -5,8 +5,10 @@
  * A temporary provider upload is a copy of the user's media made only so a
  * provider can fetch it: a Seedance extend's source tail and last frame, KIE's
  * resized mask, trimmed lip-sync audio and motion video, and format-converted
- * frames, HeyGen's capped audio, Suno's re-hosted source audio. No output names
- * one. Each lives in its job's scratch folder,
+ * frames, HeyGen's capped audio, Suno's re-hosted source audio. A handler's
+ * in-between picture that finalize stores as the job's own copy (a mask edit's
+ * source pasted back outside the mask) lives here too. No output names one.
+ * Each lives in its job's scratch folder,
  * `tmp/provider-input/<jobId>/<name>-<nonce>.<ext>`, which `discardJobScratch`
  * (`lib/job-scratch.ts`) empties when the job ends.
  *

@@ -2,8 +2,8 @@ import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from 
 import type { SourceNodeInfo } from "./types"
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
-import { defaultImageModelForNode, gptImage26EstimatedImages, imageFormatLeversOf, isGptImage26Tiered, resolutionAtAspectRatio } from "@nodaro/shared/model-catalog"
-import { countImageInputEdges } from "@nodaro/shared/workflow"
+import { defaultImageModelForNode, gptImage26EstimatedImages, imageFormatLeversOf, isGptImage26Tiered, maskedEditResolution, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
+import { countImageInputEdges, nodeIsMasked, wiredImageSize } from "@nodaro/shared/workflow"
 import {
   buildCreditModelIdentifier as sharedBuildCreditModelIdentifier,
   buildVideoCreditModelIdentifier,
@@ -781,6 +781,12 @@ export function getModelIdentifier(
     provider,
     data,
     edges && isGptImage26Tiered(provider) ? countImageInputEdges(edges, node.id) : 0,
+    // A masked edit on a model that follows its photo is priced at the size
+    // nearest the photo, when the node it comes from records the photo's size.
+    {
+      masked: nodeIsMasked(node.id, data, edges),
+      sourceImage: edges && nodes ? wiredImageSize(node.id, nodes, edges) : undefined,
+    },
   )
 }
 
@@ -788,8 +794,16 @@ export function getModelIdentifier(
  * Build composite credit model identifier from provider + node data.
  * Extracts quality/resolution/renderingSpeed from data and delegates to the shared function.
  * `wiredImageRefs`: reference images wired into the node, for a model priced per input image.
+ * `photo`: whether the node carries a mask and the size of its photo, when
+ * known: a masked edit on a model that follows its photo (GPT Image 2.6 Flare
+ * and Sunburst) runs, and is priced, at the size nearest the photo.
  */
-export function buildCreditModelIdentifier(provider: string, data: Record<string, unknown>, wiredImageRefs = 0): string {
+export function buildCreditModelIdentifier(
+  provider: string,
+  data: Record<string, unknown>,
+  wiredImageRefs = 0,
+  photo?: { masked?: boolean; sourceImage?: SourceImageSize },
+): string {
   // flux-2-max bills per reference image — the UI cost preview pulls the
   // ref count from `data.referenceImageUrls` (panel-local mirror of the wired
   // refs) so the displayed credit number matches what the route will charge.
@@ -808,9 +822,12 @@ export function buildCreditModelIdentifier(provider: string, data: Record<string
     : (data.targetResolution as string | undefined)
   // The size the run renders at its ratio: GPT Image 2.5 draws 27:16, 16:27,
   // 9:8 and 8:9 at 1K only, and the run is charged that size.
-  const resolution = typeof data.resolution === "string"
-    ? resolutionAtAspectRatio(provider, data.aspectRatio, data.resolution)
+  const followed = (photo?.masked ?? (typeof data.maskUrl === "string" && data.maskUrl.length > 0))
+    ? maskedEditResolution(provider, data, photo?.sourceImage)
     : undefined
+  const resolution = followed ?? (typeof data.resolution === "string"
+    ? resolutionAtAspectRatio(provider, data.aspectRatio, data.resolution)
+    : undefined)
   return sharedBuildCreditModelIdentifier(
     provider,
     data.quality as string | undefined,

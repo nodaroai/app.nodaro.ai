@@ -163,6 +163,31 @@ describe("generate-image inpaint", () => {
     })
   })
 
+  // GPT Image 2.6's edit takes a mask of its own on /v1/image-to-image; the
+  // Generate Image inpaint stays the prompt tier + the composite floor: the mask
+  // is never sent to the model here.
+  it("base + mask on GPT Image 2.6: sends no mask_url, and composites as before", async () => {
+    const job = makeJob({
+      prompt: "a red hat",
+      provider: "gpt-image-2-6-flare",
+      baseImageUrl: "https://r2/base.png",
+      maskUrl: "https://r2/mask.png",
+    })
+
+    await handler(job as never, makeCtx())
+
+    const [, model, refs, extra] = mocks.mockGenerateImage.mock.calls[0]!
+    expect(model).toBe("gpt-image-2-6-flare-i2i")
+    expect(refs).toEqual(["https://r2/base.png"])
+    expect((extra as Record<string, unknown> | undefined)?.mask_url).toBeUndefined()
+    expect(mocks.mockCompositeInpaint).toHaveBeenCalledTimes(1)
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith({
+      jobId: "job-1",
+      jobType: "generate-image",
+      result: { ...PROVIDER_RESULT, url: COMPOSITE_URL },
+    })
+  })
+
   it("base + mask with extra variants: finalizes only the composite, never a raw variant", async () => {
     mocks.mockGenerateImage.mockResolvedValueOnce({
       ...PROVIDER_RESULT,

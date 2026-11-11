@@ -22,10 +22,18 @@ For non-prompt utility operations (pure upscaling, background removal) use [Upsc
 
 **Inputs:**
 - `image` — source image from an upstream node (required).
-- `mask` — *optional* inpainting mask (white = edit, black = preserve). Forwarded to providers that support masks. Wire one from a [Generate Mask](./generate-mask.md) or [Paint Mask](./paint-mask.md) node, or paint in place: an interactive Mask Painter is available when the **Ideogram Edit** provider is selected.
+- `mask` — *optional* inpainting mask (white = edit, black = preserve). Shown, and sent, on the models that take a mask: GPT Image 2.6 Flare and Sunburst (the default included), Ideogram Edit and FLUX Fill. Wire one from a [Generate Mask](./generate-mask.md) or [Paint Mask](./paint-mask.md) node, or paint in place with the Mask Painter in the settings panel.
 
 **Outputs:**
 - `image` — the modified image URL.
+
+### Masks on GPT Image 2.6
+
+- **The rest of the picture is kept exactly as it was.** GPT Image 2.6 redraws the whole picture, so after the run the source image is pasted back everywhere outside the mask, with a soft edge a few pixels wide just inside the painted area. The result is the source image's size. In a PNG the area outside the mask is the source's own pixels; a JPEG or WebP is saved once more in its format.
+- **The size and shape follow the photo.** The edit keeps the photo's shape (the node's Aspect Ratio is ignored) and renders at the size (1K, 2K or 4K) whose long side is nearest the photo's, whatever size is set: a 768×1024 photo runs at 1K, a 3000×4000 one at 4K. It is priced at that size. When the photo's size cannot be read, the size set is kept.
+- **A mask costs nothing extra:** the edit is priced as the same edit without one at that size, and the mask is not counted as an input image.
+- **Grey is a partial change**, so a soft brush edge stays soft.
+- **PNG, JPEG or WebP only:** a mask with Format GIF or SVG is refused before anything is charged.
 
 ## Supported Providers
 

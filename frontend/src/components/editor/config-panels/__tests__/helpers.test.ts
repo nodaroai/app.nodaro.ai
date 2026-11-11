@@ -793,6 +793,40 @@ describe("GPT Image 2.6's estimate", () => {
     expect(buildCreditModelIdentifier("gpt-image-2-6-flare-i2i", { outputFormat: "svg", svgLevel: "max", resolution: "2K" }, 2)).toBe("gpt-image-2-6-flare-i2i:medium:2K:svg-max:3ref")
   })
 
+  // The node's badge: a mask, painted or wired, costs nothing and is not an input image.
+  it("a Modify Image or Image to Image node's mask does not move its price", () => {
+    for (const type of ["modify-image", "image-to-image"] as const) {
+      for (const provider of ["gpt-image-2-6-flare-i2i", "gpt-image-2-6-sunburst-i2i"]) {
+        const node = (data: Record<string, unknown>) => ({ id: "n", type, position: { x: 0, y: 0 }, data: { label: type, provider, ...data } }) as unknown as WorkflowNode
+        const image = { id: "e1", source: "src", target: "n", targetHandle: "image" } as WorkflowEdge
+        const mask = { id: "e2", source: "gm", target: "n", targetHandle: "mask" } as WorkflowEdge
+        const plain = getModelIdentifier(node({}), [image])
+        expect(plain).toBe(`${provider}:medium:1K:1ref`)
+        expect(getModelIdentifier(node({ maskUrl: "https://a/mask.png" }), [image])).toBe(plain)
+        expect(getModelIdentifier(node({}), [image, mask])).toBe(plain)
+      }
+    }
+  })
+
+  // A masked 2.6 edit follows its photo: the badge prices the size nearest the
+  // photo its source node records, as the run does.
+  it("a masked 2.6 node is priced at the size nearest its photo, when its source records the photo's size", () => {
+    const source = (data: Record<string, unknown>) => ({ id: "src", type: "upload-image", position: { x: 0, y: 0 }, data }) as unknown as WorkflowNode
+    const node = (data: Record<string, unknown>) => ({ id: "n", type: "modify-image", position: { x: 0, y: 0 }, data: { label: "m", provider: "gpt-image-2-6-flare-i2i", ...data } }) as unknown as WorkflowNode
+    const image = { id: "e1", source: "src", target: "n", targetHandle: "image" } as WorkflowEdge
+    const mask = { id: "e2", source: "gm", target: "n", targetHandle: "mask" } as WorkflowEdge
+    const small = source({ generatedResults: [{ url: "https://a/s.png", width: 768, height: 1024 }] })
+    const big = source({ width: 3000, height: 4000 })
+    // 1K photo, 4K asked, masked: 1K.
+    expect(getModelIdentifier(node({ resolution: "4K", maskUrl: "https://a/m.png" }), [image], [small])).toBe("gpt-image-2-6-flare-i2i:medium:1K:1ref")
+    // 4000 px photo, 1K asked, a wired mask: 4K.
+    expect(getModelIdentifier(node({ resolution: "1K" }), [image, mask], [big])).toBe("gpt-image-2-6-flare-i2i:medium:4K:1ref")
+    // No mask: the size asked.
+    expect(getModelIdentifier(node({ resolution: "4K" }), [image], [small])).toBe("gpt-image-2-6-flare-i2i:medium:4K:1ref")
+    // No recorded size: the size asked.
+    expect(getModelIdentifier(node({ resolution: "4K", maskUrl: "https://a/m.png" }), [image], [source({})])).toBe("gpt-image-2-6-flare-i2i:medium:4K:1ref")
+  })
+
   it("a model not priced by format ignores the levers", () => {
     expect(buildCreditModelIdentifier("gpt-image-2-6-economy", { outputFormat: "gif", gifFrames: 16 })).toBe(buildCreditModelIdentifier("gpt-image-2-6-economy", {}))
     expect(buildCreditModelIdentifier("gpt-image-2", { outputFormat: "gif", quality: "high" })).toBe(buildCreditModelIdentifier("gpt-image-2", { quality: "high" }))
