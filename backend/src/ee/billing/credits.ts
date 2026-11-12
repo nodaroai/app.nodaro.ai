@@ -135,7 +135,7 @@ import { AUDIO_SYNC_CREDIT_COSTS, audioSyncCreditId } from "../../lib/audio-sync
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
 import { PIPELINE_ACCEPTED_SCRIPT_LLMS } from "@nodaro/shared/pipeline"
 import { captionRoutesToRemotion } from "@nodaro/shared/captions"
-import { getLlmTier, defaultReasoningEffort, llmDefaultsFeature, LLM_FEATURE_DEFAULTS, buildLlmCreditIdentifier, llmPriceKey, motionGraphicsFeature, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, type LlmFeature } from "@nodaro/shared/llm-models"
+import { getLlmModel, getLlmTier, defaultReasoningEffort, llmDefaultsFeature, LLM_FEATURE_DEFAULTS, buildLlmCreditIdentifier, llmPriceKey, motionGraphicsFeature, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, type LlmFeature } from "@nodaro/shared/llm-models"
 import { FLUX2_RES_MP, type Flux2Model } from "@nodaro/shared/model-catalog"
 import { renderVideoCreditId, scene3DRenderTierCredits } from "@nodaro/shared/scene3d"
 import { META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SCRAPE_ANALYSIS_FEATURE, scrapeAnalysisPriceParts, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS } from "@nodaro/shared/social"
@@ -152,7 +152,7 @@ import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
 import { priceMarginKey, speechUnitRowServed } from "../../lib/speech-credits.js"
 import { wholeRequestQuoteOf } from "./whole-request-quotes.js"
-import { refVideoClipSources, seedanceRefVideoEstimateCredits } from "./seedance-ref-video-estimate.js"
+import { refVideoClipSources, seedanceDraftFinalizeEstimateCredits, seedanceFinalizeDraftQuoteOf, seedanceRefVideoEstimateCredits } from "./seedance-ref-video-estimate.js"
 import { uploadClipSec, withUploadClipLengths } from "./upload-clip-lengths.js"
 import { listingCeiling, listingFieldDomains } from "./listing-range.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
@@ -2736,7 +2736,7 @@ export function registerStaticCreditCosts(costs: Record<string, number>): void {
 
 /**
  * The id a metered LLM node is PRICED under for a run estimate (A5/§8.5): the
- * price key `<feature>:<model>[:direct]` (`llmPriceKey`), which the charged
+ * price key `<feature>:<model>[:direct | :effort-<level>]` (`llmPriceKey`), which the charged
  * price table answers with the model's typical-usage estimate — never a tier
  * row. An unset model is the feature's default (`llmDefaultsFeature`). Under
  * the rollback (`!llmMeteredPricing()`) the tier id, exactly as before. The
@@ -3369,6 +3369,29 @@ export interface ChargedPriceTable {
    *  from these and Video Depth its source clip, and a clip not here at the
    *  node's worst case. */
   readonly uploadClipSec?: ReadonlyMap<string, number>
+  /** Seedance drafts that already exist, which a run-set estimate's run
+   *  finalizes (decided 2026-11-12; `withExistingSeedanceDrafts`): each one's
+   *  exact finalize price by its provider task id, and the task a node that
+   *  does not run hands on from an earlier run's state. */
+  readonly seedanceDrafts?: {
+    readonly stateTaskIdOf?: (nodeId: string) => string | undefined
+    readonly credits: ReadonlyMap<string, number>
+  }
+}
+
+/**
+ * The exact price of finalizing the Seedance draft with this provider task id,
+ * as the finalize's own gate prices it for the run's user — undefined when the
+ * gate refuses it or it cannot be priced (`existingDraftFinalizePricer`).
+ */
+export type ExistingDraftFinalizePricer = (taskId: string) => Promise<number | undefined>
+
+/** What a run-set estimate is told about the Seedance drafts its run finalizes without making them. */
+export interface ExistingSeedanceDrafts {
+  /** The user's own drafts, priced exactly (`existingDraftFinalizePricer(userId)`). */
+  readonly priceOf: ExistingDraftFinalizePricer
+  /** The task a node that does not run again hands on from an earlier run's state (an app's Retry). */
+  readonly stateTaskIdOf?: (nodeId: string) => string | undefined
 }
 
 /**
@@ -3471,14 +3494,26 @@ export function chargedPriceTableFrom(
   }
 }
 
+/**
+ * The effort a parsed metered key's call runs at, as `llmPriceKey` built it:
+ * none on the direct lane (`:direct` is the Advanced pin, priced there); on a
+ * model whose price depends on the effort (`effortPriced`) exactly the one the
+ * key names — its key always says it, so a key with none sends none, and the
+ * feature's default is never applied on top; on every other model the default
+ * effort of the feature it borrows its defaults from (`llmDefaultsFeature`).
+ */
+function meteredKeyEffort(metered: NonNullable<ReturnType<typeof parseMeteredLlmId>>): string | undefined {
+  if (metered.lane === "direct") return undefined
+  if (getLlmModel(metered.modelId)?.effortPriced) return metered.reasoningEffort
+  return defaultReasoningEffort(llmDefaultsFeature(metered.feature), metered.modelId)
+}
+
 /** A metered price key's estimate in base credits: the feature's typical call
- *  on the lane it runs on — `:direct` pinned direct; a bare key at the default
- *  effort of the feature it borrows its defaults from (`llmDefaultsFeature`),
- *  as `llmPriceKey` and the run read it. Throws `LlmUnpricedModelError`. */
+ *  on the lane it runs on — `:direct` pinned direct — at the effort the key
+ *  stands for (`meteredKeyEffort`), as `llmPriceKey` and the run read it.
+ *  Throws `LlmUnpricedModelError`. */
 function meteredLlmEstimateBase(metered: NonNullable<ReturnType<typeof parseMeteredLlmId>>): number {
-  const direct = metered.lane === "direct"
-  const effort = direct ? undefined : defaultReasoningEffort(llmDefaultsFeature(metered.feature), metered.modelId)
-  return llmEstimateBaseCredits(metered.feature, metered.modelId, effort, direct)
+  return llmEstimateBaseCredits(metered.feature, metered.modelId, meteredKeyEffort(metered), metered.lane === "direct")
 }
 
 /** {@link meteredLlmEstimateBase}, or undefined for a model with no price on its lane: a price
@@ -3493,7 +3528,7 @@ function meteredLlmListedBase(metered: NonNullable<ReturnType<typeof parseMetere
 }
 
 /**
- * The metered LLM price key `identifier` names (`<feature>:<model>[:direct]`,
+ * The metered LLM price key `identifier` names (`<feature>:<model>[:direct | :effort-<level>]`,
  * `llmPriceKey` in `@nodaro/shared/llm-models`), or null — for every other id,
  * and for every id under the rollback (`!llmMeteredPricing()`), when metered
  * keys are priced nowhere. The switch is read only for an id that parses.
@@ -5241,6 +5276,10 @@ export type WorkflowEstimateOptions = {
    *  the even split. Absent: available — `auto` priced following faces
    *  (decided 2026-10-20). */
   framesWithheld?: boolean
+  /** A run that finalizes Seedance drafts that already exist (decided
+   *  2026-11-12): each such finalize is priced exactly, as its gate prices it,
+   *  never at the provider's bare row. Absent: priced as before. */
+  existingDrafts?: ExistingSeedanceDrafts
 }
 
 /**
@@ -5394,7 +5433,9 @@ async function estimateRunGraphFigures(
   // to read: the figure stays the static one these editions always showed.
   // With one, the uploaded reference clips of a Seedance reference-video
   // run are probed (cached per URL), as its reservation probes them.
-  const prices = hasCredits() ? await withUploadClipLengths(await getChargedPriceTable(), lengthPricedUploads(nodes, edges)) : STATIC_BASE_PRICES
+  const prices = hasCredits()
+    ? await withExistingSeedanceDrafts(await withUploadClipLengths(await getChargedPriceTable(), lengthPricedUploads(nodes, edges)), nodes, edges, runRerunIds(nodes, options?.runNodeIds), options?.existingDrafts)
+    : STATIC_BASE_PRICES
   // UGC graphs (Cloud only): the clip model and length live in the plugin, so the UGC part is priced through
   // its seam (spec 6.8). The UGC nodes, and the nodes downstream of UGC Clip that the seam's figure already
   // counts as its fixed lines, stay out of the per-node sum; they stay IN the graph the sum reads, so the
@@ -5404,6 +5445,37 @@ async function estimateRunGraphFigures(
   if (onNode) for (const [id, figure] of ugc?.perNode ?? []) onNode(id, figure.credits, figure.estimate)
   const rest = sumWorkflowEstimate(nodes, edges, prices, options, ugc?.skip, onNode)
   return { credits: rest + (ugc?.credits ?? 0), hold: rest + (ugc?.hold ?? 0) }
+}
+
+/** The nodes a priced run executes: its run set, else every node that is not frozen (`sumWorkflowEstimate`'s reading). */
+function runRerunIds(nodes: ReadonlyArray<EstimateNode>, runNodeIds: ReadonlySet<string> | undefined): ReadonlySet<string> {
+  return runNodeIds ?? new Set(nodes.flatMap((n) => (n.id && !isFrozenNode(n) ? [n.id] : [])))
+}
+
+/**
+ * The price table with the exact finalize price of every Seedance draft the
+ * run finalizes without making it (decided 2026-11-12): a run that only
+ * finalizes a draft that already exists is priced as its finalize's gate
+ * prices that draft (`existingDrafts.priceOf`, the caller's — it knows the
+ * user), never at the provider's bare row. A draft the gate refuses is left
+ * out: the run refuses it too, and the finalize is priced as before.
+ */
+async function withExistingSeedanceDrafts(
+  prices: ChargedPriceTable,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  rerunIds: ReadonlySet<string>,
+  existing: ExistingSeedanceDrafts | undefined,
+): Promise<ChargedPriceTable> {
+  if (!existing || !edges) return prices
+  const options = { stateTaskIdOf: existing.stateTaskIdOf }
+  const taskIds = new Set(nodes.flatMap((n) => {
+    const quote = seedanceFinalizeDraftQuoteOf(n, nodes, edges, rerunIds, options)
+    return quote?.kind === "existing" ? [quote.taskId] : []
+  }))
+  const priced = await Promise.all([...taskIds].map(async (taskId) => [taskId, await existing.priceOf(taskId)] as const))
+  const credits = new Map(priced.flatMap(([taskId, c]) => (c === undefined ? [] : [[taskId, c] as const])))
+  return { ...prices, seedanceDrafts: { ...options, credits } }
 }
 
 /** A detailed estimate's tally: one priced node's credits, and whether they are a metered estimate. */
@@ -5822,6 +5894,11 @@ function estimateNodeCredits(
   // worst case for a clip the estimate cannot know).
   const refVideo = seedanceRefVideoEstimateCredits(node, nodes, edges, prices)
   if (refVideo !== undefined) return refVideo
+  // A Seedance 2.5 HD finalize of a draft this run makes: priced at the length
+  // the draft's run reserves for (decided 2026-11-12) — the shared rule the
+  // editor's Run total reads. A draft that exists, or none wired: as before.
+  const finalize = seedanceDraftFinalizeEstimateCredits(node, nodes, edges, rerunIds, prices)
+  if (finalize !== undefined) return finalize
   const modelId = getNodeModelIdentifier(priced, {
     renderCreditId: renderEstimateCreditId(priced, listingGateNodes(nodes), edges ? listingGateEdges(edges) : undefined, rerunIds),
     timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges),
@@ -5884,9 +5961,7 @@ function meteredUsageCredits(
 ): number | undefined {
   const metered = meteredLlmIdOf(identifier)
   if (!metered) return undefined
-  const direct = metered.lane === "direct"
-  const effort = direct ? undefined : defaultReasoningEffort(llmDefaultsFeature(metered.feature), metered.modelId)
-  return prices.charge(identifier, quoteBaseCredits(llmUsageBaseCredits(usage, metered.modelId, effort, direct), units))
+  return prices.charge(identifier, quoteBaseCredits(llmUsageBaseCredits(usage, metered.modelId, meteredKeyEffort(metered), metered.lane === "direct"), units))
 }
 
 /**
@@ -7444,8 +7519,10 @@ export async function estimateRunSetCredits(
   viewer?: UseCaseViewerFlags,
   /** Told each priced node's figure and whether it is a metered estimate (its UGC parts' flags included). */
   onNode?: NodeTally,
+  /** Seedance drafts the run finalizes without making them (`WorkflowEstimateOptions.existingDrafts`). */
+  existingDrafts?: ExistingSeedanceDrafts,
 ): Promise<number> {
-  return (await estimateRunSetFigures(nodes, edges, runNodeIds, pricedElsewhereNodeIds, viewer, onNode)).credits
+  return (await estimateRunSetFigures(nodes, edges, runNodeIds, pricedElsewhereNodeIds, viewer, onNode, existingDrafts)).credits
 }
 
 /**
@@ -7460,12 +7537,15 @@ export function estimateRunSetFigures(
   pricedElsewhereNodeIds?: ReadonlySet<string>,
   viewer?: UseCaseViewerFlags,
   onNode?: NodeTally,
+  /** Seedance drafts the run finalizes without making them (`WorkflowEstimateOptions.existingDrafts`). */
+  existingDrafts?: ExistingSeedanceDrafts,
 ): Promise<RunFigures> {
   // The run's graph, its overrides (a Render final's continuation) merged: never re-read as a saved graph.
   return estimateRunGraphFigures(nodes, edges, {
     runNodeIds,
     ...(pricedElsewhereNodeIds && pricedElsewhereNodeIds.size > 0 ? { pricedElsewhereNodeIds } : {}),
     ...usecaseExpandFlags(viewer),
+    ...(existingDrafts ? { existingDrafts } : {}),
   }, onNode)
 }
 
@@ -7482,9 +7562,13 @@ export async function estimateRunSetCreditsWithoutUgc(
   runNodeIds: ReadonlySet<string>,
   /** What the run's viewer may use (`WorkflowEstimateOptions.multicam` / `.framesWithheld`). */
   viewer?: UseCaseViewerFlags,
+  /** Seedance drafts the run finalizes without making them (`WorkflowEstimateOptions.existingDrafts`). */
+  existingDrafts?: ExistingSeedanceDrafts,
 ): Promise<number> {
   const edges = bypassTeleports(nodes, rawEdges)
-  const prices = hasCredits() ? await withUploadClipLengths(await getChargedPriceTable(), lengthPricedUploads(nodes, edges)) : STATIC_BASE_PRICES
+  const prices = hasCredits()
+    ? await withExistingSeedanceDrafts(await withUploadClipLengths(await getChargedPriceTable(), lengthPricedUploads(nodes, edges)), nodes, edges, runNodeIds, existingDrafts)
+    : STATIC_BASE_PRICES
   const covered = new Set(ugcChains(nodes, edges).flatMap((c) => c.members.map((m) => m.id)))
   return sumWorkflowEstimate(nodes, edges, prices, { runNodeIds, ...usecaseExpandFlags(viewer) }, (n) => UGC_NODE_TYPES.has(n.type) || (n.id !== undefined && covered.has(n.id)))
 }

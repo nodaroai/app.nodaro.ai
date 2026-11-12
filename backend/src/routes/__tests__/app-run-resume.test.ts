@@ -38,7 +38,11 @@ vi.mock("@/ee/billing/credits.js", () => ({
   checkRunSetCredits: mocks.checkRunSet,
   estimateRunSetFigures: vi.fn().mockResolvedValue({ credits: 0, hold: 0 }),
 }))
-vi.mock("@/ee/lib/app-run-resume-price.js", () => ({ appRunResumeCredits: mocks.price }))
+vi.mock("@/ee/lib/app-run-resume-price.js", () => ({
+  appRunResumeCredits: mocks.price,
+  // The Seedance drafts a Retry finalizes without making them: none priced here.
+  appRunExistingDrafts: () => ({ priceOf: async () => undefined }),
+}))
 vi.mock("@/lib/idempotent-insert.js", () => ({
   insertWithIdempotencyKey: vi.fn(async (_table: string, row: Record<string, unknown>, key: string | null | undefined) => {
     mocks.inserts.push({ row, key })

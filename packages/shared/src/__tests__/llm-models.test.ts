@@ -56,6 +56,7 @@ const EXPECTED_MODEL_IDS = [
   "gpt-5.2",
   "gemini-3.1-pro",
   "gemini-4-argon",
+  "gemini-4-carbon",
   "claude-opus-4.7",
   "gpt-5.4",
   "gpt-5.5",
@@ -66,6 +67,7 @@ const EXPECTED_MODEL_IDS = [
   "gpt-6-luna",
   "gpt-6-sol",
   "gpt-6.1-sol",
+  "gpt-6.1-terra",
   "grok-4.6",
   "grok-4.7",
   "claude-sonnet-5",
@@ -75,6 +77,7 @@ const EXPECTED_MODEL_IDS = [
   "claude-opus-5.5",
   "claude-fable-5",
   "kimi-k3",
+  "kimi-k3.1-pro",
   "deepseek-v4.1-flash",
 ]
 
@@ -120,14 +123,14 @@ describe("LLM_MODELS data integrity", () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it("has 9 economy, 7 standard, 14 premium models", () => {
+  it("has 9 economy, 8 standard, 16 premium models", () => {
     const tierCounts: Record<LlmTier, number> = { economy: 0, standard: 0, premium: 0 }
     for (const model of LLM_MODELS) {
       tierCounts[model.tier]++
     }
     expect(tierCounts.economy).toBe(9)
-    expect(tierCounts.standard).toBe(7)
-    expect(tierCounts.premium).toBe(14)
+    expect(tierCounts.standard).toBe(8)
+    expect(tierCounts.premium).toBe(16)
   })
 
   it("all three kieFormats are represented", () => {
@@ -685,6 +688,11 @@ describe("STRUCTURED_VISION_MODELS", () => {
         "deepseek-v4.1-flash",
         // directOnly; the direct lane enforced responseJsonSchema (2026-10-17).
         "gemini-4-argon",
+        // 2026-11-12 — text.format json_schema enforced on KIE, vision read.
+        // gemini-4-carbon is NOT here: KIE did not enforce its schema, so it
+        // declares no structured mode (parse, validate and re-ask instead).
+        "gpt-6.1-terra",
+        "kimi-k3.1-pro",
       ].sort(),
     )
   })
@@ -1062,6 +1070,127 @@ describe("gemini-4-argon exposure", () => {
     // caps — only valid TOGETHER with that decision.
     expect(getLlmModalityCaps("gemini-4-argon")).toEqual({ image: true, video: false, audio: false })
     expect(VIDEO_ANALYSIS_LLM_MODELS).not.toContain("gemini-4-argon")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 2026-11-12 additions: Kimi K3.1 Pro, GPT-6.1 Terra, Gemini 4 Carbon (KIE
+// lanes probed that day; Carbon's Google lane checked too)
+// ---------------------------------------------------------------------------
+describe("gemini-4-carbon exposure", () => {
+  it("premium Gemini, KIE first with Google's own API as the fallback — never direct-only or direct-first", () => {
+    const m = getLlmModel("gemini-4-carbon")!
+    expect(m.tier).toBe("premium")
+    expect(m.vendor).toBe("google")
+    expect(m.kieFormat).toBe("chat-completions")
+    expect(m.kieSlugOrModel).toBe("gemini-4-carbon-openai")
+    expect(m.directGeminiModel).toBe("gemini-4-carbon")
+    expect(m.directOnly).toBeUndefined()
+    expect(m.preferDirect).toBeUndefined()
+    expect(supportsAdvancedMode("gemini-4-carbon")).toBe(true)
+    // Only Advanced mode moves it to Google's API — no effort does.
+    expect(llmServesDirect("gemini-4-carbon")).toBe(false)
+    expect(llmServesDirect("gemini-4-carbon", "high")).toBe(false)
+    expect(llmServesDirect("gemini-4-carbon", undefined, true)).toBe(true)
+  })
+
+  it("declares NO structured mode — KIE left an off-enum value in a schema field, so callers parse and re-ask", () => {
+    expect(getLlmModel("gemini-4-carbon")?.structuredOutputMode).toBeUndefined()
+    expect(STRUCTURED_VISION_MODELS.map((m) => m.id)).not.toContain("gemini-4-carbon")
+    expect(DESCRIBE_TO_PICKER_MODELS.map((m) => m.id)).not.toContain("gemini-4-carbon")
+  })
+
+  it("offers low / medium / high on both lanes — never `none`, which Google 400s as MINIMAL", () => {
+    expect(availableReasoningEfforts("gemini-4-carbon")).toEqual(["low", "medium", "high"])
+    expect(availableReasoningEfforts("gemini-4-carbon", true)).toEqual(["low", "medium", "high"])
+    expect(effectiveReasoningEffort("gemini-4-carbon", "none")).toBeUndefined()
+    expect(effectiveReasoningEffort("gemini-4-carbon", "max")).toBe("high")
+  })
+
+  it("reasons by default, floored at the default 32768 on the registry's usual 16384 cap", () => {
+    const m = getLlmModel("gemini-4-carbon")!
+    expect(m.thinkingDefaultOn).toBe(true)
+    expect(m.reasoningOutputFloor).toBeUndefined()
+    expect(reasoningOutputFloor(m)).toBe(REASONING_OUTPUT_FLOOR)
+    expect(m.maxOutputTokens).toBe(16384)
+  })
+
+  it("resolves by its id and its KIE slug, and backs no feature default", () => {
+    expect(getLlmModel("gemini-4-carbon-openai")?.id).toBe("gemini-4-carbon")
+    expect(Object.values(LLM_FEATURE_DEFAULTS)).not.toContain("gemini-4-carbon")
+  })
+
+  it("stays OUT of video-analysis — image-only caps until its video + audio change", () => {
+    expect(getLlmModalityCaps("gemini-4-carbon")).toEqual({ image: true, video: false, audio: false })
+    expect(VIDEO_ANALYSIS_LLM_MODELS).not.toContain("gemini-4-carbon")
+  })
+})
+
+describe("gpt-6.1-terra exposure", () => {
+  it("standard GPT-6.1 on the codex responses wire with an enforced schema, KIE only", () => {
+    const m = getLlmModel("gpt-6.1-terra")!
+    expect(m.tier).toBe("standard")
+    expect(m.vendor).toBe("openai")
+    expect(m.kieFormat).toBe("responses")
+    expect(m.kieSlugOrModel).toBe("gpt-6-1-terra")
+    expect(m.structuredOutputMode).toBe("responses-json-schema")
+    expect(m.supportsImages).toBe(true)
+    expect(m.supportsTemperature).toBe(false)
+    expect(m.kieCollapseStream).toBeUndefined()
+    expect(supportsAdvancedMode("gpt-6.1-terra")).toBe(false)
+    expect(getLlmModalityCaps("gpt-6.1-terra")).toEqual({ image: true, video: false, audio: false })
+  })
+
+  it("offers low…max but never `none`: a `none` request clamps to Auto (nothing sent)", () => {
+    expect(availableReasoningEfforts("gpt-6.1-terra")).toEqual(["low", "medium", "high", "xhigh", "max"])
+    expect(effectiveReasoningEffort("gpt-6.1-terra", "none")).toBeUndefined()
+    expect(effectiveReasoningEffort("gpt-6.1-terra", "medium")).toBe("medium")
+  })
+
+  it("does not reason by default (0 reasoning tokens with no effort) — no floor on an Auto call", () => {
+    expect(getLlmModel("gpt-6.1-terra")?.thinkingDefaultOn).toBeUndefined()
+  })
+
+  it("is the default of no feature, and the GPT-5.6 Terra entry is untouched", () => {
+    expect(Object.values(LLM_FEATURE_DEFAULTS)).not.toContain("gpt-6.1-terra")
+    expect(getLlmModel("gpt-5.6-terra")?.reasoningEfforts).toEqual(["none", "low", "medium", "high", "xhigh", "max"])
+  })
+})
+
+describe("kimi-k3.1-pro exposure", () => {
+  it("premium Kimi on the openai responses wire with an enforced schema, KIE only", () => {
+    const m = getLlmModel("kimi-k3.1-pro")!
+    expect(m.tier).toBe("premium")
+    expect(m.vendor).toBe("moonshot")
+    expect(m.series).toBe("Kimi")
+    expect(m.kieFormat).toBe("responses")
+    expect(m.kieSlugOrModel).toBe("kimi-k3-1-pro")
+    expect(m.structuredOutputMode).toBe("responses-json-schema")
+    expect(m.supportsTemperature).toBe(false)
+    expect(supportsAdvancedMode("kimi-k3.1-pro")).toBe(false)
+    expect(getLlmModalityCaps("kimi-k3.1-pro")).toEqual({ image: true, video: false, audio: false })
+  })
+
+  it("offers KIE's low / high / max — `none` and `medium` send low, `xhigh` high", () => {
+    expect(availableReasoningEfforts("kimi-k3.1-pro")).toEqual(["low", "high", "max"])
+    expect(effectiveReasoningEffort("kimi-k3.1-pro", "medium")).toBe("low")
+    expect(effectiveReasoningEffort("kimi-k3.1-pro", "xhigh")).toBe("high")
+    // Below `low` it sends `low`, never nothing (with none sent KIE runs it at `max`).
+    expect(effectiveReasoningEffort("kimi-k3.1-pro", "none")).toBe("low")
+    expect(effectiveReasoningEffort("kimi-k3.1-pro", undefined)).toBeUndefined()
+  })
+
+  it("reasons by default, so every call is floored at 32768", () => {
+    const m = getLlmModel("kimi-k3.1-pro")!
+    expect(m.thinkingDefaultOn).toBe(true)
+    expect(reasoningOutputFloor(m)).toBe(REASONING_OUTPUT_FLOOR)
+  })
+
+  it("never resolves to kimi-k3, and kimi-k3 keeps its own ladder", () => {
+    expect(getLlmModel("kimi-k3-1-pro")?.id).toBe("kimi-k3.1-pro")
+    expect(getLlmModel("kimi-k3")?.id).toBe("kimi-k3")
+    expect(getLlmModel("kimi-k3")?.reasoningEfforts).toEqual(["low", "medium", "high"])
+    expect(Object.values(LLM_FEATURE_DEFAULTS)).not.toContain("kimi-k3.1-pro")
   })
 })
 

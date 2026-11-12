@@ -110,6 +110,10 @@ describe("calculateLlmCost", () => {
     ["grok-4.7", 0.80, 2.40],
     ["kimi-k3", 2.40, 12.00],
     ["deepseek-v4.1-flash", 0.12, 0.475],
+    // 2026-11-12 additions — KIE list credits/M × $0.005, read that day.
+    ["kimi-k3.1-pro", 0.80, 4.00],
+    ["gpt-6.1-terra", 0.30, 1.50],
+    ["gemini-4-carbon", 0.80, 4.00],
   ])("prices %s at KIE list rates ($%s / $%s per M)", (id, inUsd, outUsd) => {
     expect(calculateLlmCost(id, { inputTokens: 1_000_000, outputTokens: 0 })).toBeCloseTo(inUsd, 10)
     expect(calculateLlmCost(id, { inputTokens: 0, outputTokens: 1_000_000 })).toBeCloseTo(outUsd, 10)

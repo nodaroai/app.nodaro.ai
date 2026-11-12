@@ -16,7 +16,8 @@
  */
 import { ugcClipTicketQuote, ugcSumPerNode, type UseCaseViewerFlags } from "@nodaro/render-rules"
 import { ugcClipBody } from "@nodaro/shared/ugc"
-import { estimateRunSetCreditsWithoutUgc } from "../billing/credits.js"
+import { estimateRunSetCreditsWithoutUgc, type ExistingSeedanceDrafts } from "../billing/credits.js"
+import { existingDraftFinalizePricer } from "../billing/seedance-draft-finalize-credits.js"
 import { ugcRunSetVideos, ugcVideoEstimate } from "../billing/ugc-run-set.js"
 import { estimateUgcRun, quoteUgcTickets } from "./ugc-estimate.js"
 import type { BillingContext } from "../../lib/billing-context.js"
@@ -66,7 +67,9 @@ export async function appRunResumeCredits(input: {
   readonly viewer?: UseCaseViewerFlags
 }): Promise<AppRunResumeCredits> {
   const { caller, nodes, edges, runNodeIds, sourceStates, runKey } = input
-  const rest = await (input.viewer ? estimateRunSetCreditsWithoutUgc(nodes, edges, runNodeIds, input.viewer) : estimateRunSetCreditsWithoutUgc(nodes, edges, runNodeIds))
+  // A Retry that finalizes a Seedance draft the failed run made: priced exactly, as its gate prices that draft.
+  const existingDrafts = appRunExistingDrafts(caller.userId, sourceStates)
+  const rest = await estimateRunSetCreditsWithoutUgc(nodes, edges, runNodeIds, input.viewer, existingDrafts)
   const byId = new Map(nodes.map((n) => [n.id, n] as const))
   const prices: Array<{ id: string; credits: number }> = []
   const holds: Array<{ id: string; credits: number }> = []
@@ -97,4 +100,20 @@ export async function appRunResumeCredits(input: {
     }
   }
   return { credits: rest + ugcSumPerNode(prices), hold: rest + ugcSumPerNode(holds), reusedClips }
+}
+
+/**
+ * The Seedance drafts a Retry finalizes without making them again (decided
+ * 2026-11-12): the user's own, priced exactly; a step that does not run again
+ * hands on the task its state in the failed run recorded (what the Retry's
+ * finalize names). Read by the app Retry's price and by its fallback estimate.
+ */
+export function appRunExistingDrafts(userId: string, sourceStates: Readonly<Record<string, State | undefined>>): ExistingSeedanceDrafts {
+  return {
+    priceOf: existingDraftFinalizePricer(userId),
+    stateTaskIdOf: (nodeId) => {
+      const taskId = sourceStates[nodeId]?.output?.kieTaskId
+      return typeof taskId === "string" && taskId !== "" ? taskId : undefined
+    },
+  }
 }

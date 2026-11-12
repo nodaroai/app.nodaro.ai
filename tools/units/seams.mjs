@@ -29,7 +29,7 @@ export const GENERATED_DIRS = ["frontend/src/nodes/_generated", "backend/src/nod
 // the layout stays the one every tool (the engine, the guards) assumes.
 export const UNIT_FILES = {
   frontend: ["unit.json", "strings.json", "definition.generated.ts", "labels.generated.ts", "types.ts", "node.tsx", "config.tsx", "option.tsx", "exec.ts", "api.ts", "price-id.ts"],
-  backend: ["descriptor.generated.ts", "route.ts", "route.ee.ts", "payload.ts", "worker.ts", "price.ee.ts", "output.ts", "inputs.ts", "characterize.char.ts", "use-case.ts", "budget.ts", "recover.ts"],
+  backend: ["descriptor.generated.ts", "route.ts", "route.ee.ts", "quote.ts", "payload.ts", "worker.ts", "price.ee.ts", "output.ts", "inputs.ts", "characterize.char.ts", "use-case.ts", "budget.ts", "recover.ts"],
 }
 
 /**
@@ -79,6 +79,11 @@ export const AGGREGATES = [
   // the exhaustion refund. Composed by lib/reconcile/unit-recovery.ts, a lookup
   // by the job type (the unit's type).
   { id: "recovers", kitType: "UnitRecover", tree: "backend", out: "backend/src/nodes/_generated/recovers.ts", member: "recover.ts", binding: "recover", exportName: "UNIT_RECOVERS", composer: "backend/src/lib/reconcile/unit-recovery.ts", live: true },
+  // The price of a run before it starts (quote.ts): the unit's run route's own
+  // body and pricing chain, declared once — route.ts registers it as its
+  // preHandlers and POST /v1/quote runs the same steps without a job. Composed
+  // by lib/unit-quotes.ts, the quote route's one door to it.
+  { id: "quotes", kitType: "UnitQuote", tree: "backend", out: "backend/src/nodes/_generated/quotes.ts", member: "quote.ts", binding: "quote", exportName: "UNIT_QUOTES", composer: "backend/src/lib/unit-quotes.ts", live: true },
   // A use-case node's request body and /v1/nodes input schema (use-case.ts):
   // USE_CASE_BODIES composes them, and the route factory serves POST /v1/<type>.
   { id: "use-cases", kitType: "UnitUseCase", tree: "backend", out: "backend/src/nodes/_generated/use-cases.ts", member: "use-case.ts", binding: "useCase", exportName: "UNIT_USE_CASES", composer: "backend/src/lib/use-case/bodies.ts", live: true },

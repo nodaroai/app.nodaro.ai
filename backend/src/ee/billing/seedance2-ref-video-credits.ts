@@ -676,3 +676,40 @@ export function seedanceDraftFinalizeRefBilledSec(args: SeedanceDraftFinalizeRef
   const { totalSec } = billedInputSeconds(SEEDANCE_DRAFT_MODELS[0], wholeSec)
   return totalSec + args.outputSec
 }
+
+/**
+ * A Seedance draft's own run, as its job records it (`input_data`): what its
+ * reservation held, and so the most its 1080p finalize bills for output.
+ */
+export interface SeedanceDraftRun {
+  provider: string
+  /** The length the run was sent at, as recorded (Auto = -1): the resolved one when a task type moved it. */
+  duration: unknown
+  /** The run's resolved reference task type (`input_data.referenceTaskType`); absent = none declared, as a draft
+   *  recorded before drafts could declare one ran. */
+  referenceTaskType: unknown
+  /** The reservation's probe of its reference clips, in order (NaN = unmeasured: the worst case); empty without one. */
+  refVideoDurationsSec: readonly unknown[]
+}
+
+/**
+ * The OUTPUT seconds a Seedance draft's run held (decided 2026-11-12): the ONE
+ * rule a finalize of that draft is quoted, reserved, estimated and charged
+ * by, since a finalize never bills more output than its draft reserved.
+ *
+ *  - with reference video(s): the reference-video hold the run's reservation
+ *    held ({@link seedance2RefVideoHeldOutputSec}, at its recorded length and
+ *    task type, from its probe of the clips);
+ *  - without: the length it was priced at (`pricedOutputDurationSec`: Auto =
+ *    the model's longest clip).
+ *
+ * Seconds as held, not yet the finalize's whole billed seconds
+ * (`seedanceDraftFinalizeBillableSec`).
+ */
+export function seedanceDraftHeldOutputSec(run: SeedanceDraftRun): number {
+  const { provider, duration, referenceTaskType, refVideoDurationsSec } = run
+  const requested = typeof duration === "number" || typeof duration === "string" ? duration : undefined
+  const outputDurationSec = pricedOutputDurationSec(provider, requested)
+  if (refVideoDurationsSec.length === 0) return outputDurationSec
+  return seedance2RefVideoHeldOutputSec({ provider, outputDurationSec, requestedDuration: duration, referenceTaskType, durationsSec: refVideoDurationsSec })
+}

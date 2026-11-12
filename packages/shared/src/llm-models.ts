@@ -75,6 +75,18 @@ export interface LlmModelDef {
    * Capability-driven so `llmCompleteStructured` never hardcodes provider ids.
    */
   structuredOutputMode?: "anthropic-tool" | "kie-response-format" | "responses-json-schema"
+  /**
+   * For a model with NO trusted `structuredOutputMode`: the wire field a
+   * structured call still sends its schema in, as a hint the model reads but
+   * the provider was not found to hold its answer to. Read through
+   * {@link structuredWireMode}, which every request builder uses; everything
+   * that decides TRUST (STRUCTURED_VISION_MODELS, the structured-model
+   * filters) keeps reading `structuredOutputMode` alone, so a hinted model is
+   * never offered where guaranteed structured output is required. Every answer
+   * is still parsed, validated and re-asked by `llmCompleteStructured`, as for
+   * any model. Never set together with `structuredOutputMode` (registry test).
+   */
+  structuredOutputHint?: "kie-response-format" | "responses-json-schema"
   /** If set, fallback to direct Anthropic SDK with this model ID when KIE.ai fails */
   directFallbackModel?: string
   /**
@@ -118,6 +130,27 @@ export interface LlmModelDef {
   directOnly?: true
   /** Effort levels this model accepts (ascending). Absent/empty = no effort lever, picker hidden. */
   reasoningEfforts?: readonly LlmReasoningEffort[]
+  /**
+   * true = a REQUESTED effort below this model's lowest level is sent as that
+   * lowest level, never as nothing ({@link effectiveReasoningEffort}): with no
+   * effort on the wire the provider runs this model at its HIGHEST level, so
+   * dropping a `none` request would buy the most reasoning instead of the
+   * least. Auto — no effort requested at all — still sends nothing. Absent =
+   * a request below the lowest level is dropped (Auto), the usual rule.
+   */
+  effortBelowLowestSendsLowest?: true
+  /**
+   * true = the PRICE of a call on this model depends on whether it sends a
+   * reasoning effort, not only on its lane: the aggregator adds input of its
+   * own to every call, whose size depends on it. So the model's price key
+   * names the effort a call sends ({@link llmPriceKey}: `:effort-<level>`),
+   * and every estimate surface quotes that call. The sizes themselves are
+   * backend data (`backend/src/lib/pricing/llm-cost.ts`), held to this flag by
+   * a backend test. No model sets it today (GPT-6.1 Terra did for part of
+   * 2026-11-12, until its aggregator's added input stopped depending on the
+   * effort).
+   */
+  effortPriced?: true
   /**
    * Effort levels available on the DIRECT lane, when the vendor's own API
    * accepts more than the aggregator does. Absent = the direct lane offers the
@@ -565,6 +598,54 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     thinkingDefaultOn: true,
   },
   {
+    id: "gemini-4-carbon",
+    displayName: "Gemini 4 Carbon",
+    series: "Gemini",
+    desc: "Deepest-reasoning Gemini, 1M context",
+    tier: "premium",
+    kieFormat: "chat-completions",
+    // KIE serves it on the OpenAI-compatible dialect under this slug
+    // (docs.kie.ai/market/gemini/gemini-4-carbon-openai — Argon's page with the
+    // name swapped). Unlike Argon's, this lane passed its probe (2026-11-12):
+    // every call answered, images read, a stream ended cleanly, no empty 200,
+    // no negative counts, no code-execution fences. KIE flags it "Chat only",
+    // like Argon: it may not back a tool-loop feature (none does today).
+    kieSlugOrModel: "gemini-4-carbon-openai",
+    vendor: "google",
+    // NO trusted `structuredOutputMode` (decided 2026-11-12): KIE did NOT
+    // enforce a `response_format` json_schema — both probe calls came back as
+    // JSON holding an off-enum value in the enum field ("cheerful and
+    // energized" for happy | sad). So it is not a STRUCTURED_VISION_MODELS
+    // member (not offered by describe-to-picker), and every answer is parsed,
+    // validated and re-asked by `llmCompleteStructured`.
+    // The schema still goes on the wire, as a hint (`structuredOutputHint`): as
+    // `response_format` on KIE (the probe's replies followed its shape, only the
+    // enum slipped) and as `responseJsonSchema` on the direct Google lane,
+    // which enforced it in the probe — on every attempt, the re-ask included.
+    structuredOutputHint: "kie-response-format",
+    supportsImages: true,
+    // The registry's usual 16384, as Argon. Every call is floored to the
+    // default 32768 (`thinkingDefaultOn`, below): Google lists an output cap of
+    // 32,768 (models.list) and accepted maxOutputTokens 65536; KIE's doc
+    // states up to 65,536 tokens, thinking included.
+    maxOutputTokens: 16384,
+    // KIE first, Google as the reliability fallback (and Advanced mode) — no
+    // `preferDirect`, no `directOnly`. Google serves `models/gemini-4-carbon`
+    // beside Argon (models.list, 2026-11-12).
+    directGeminiModel: "gemini-4-carbon",
+    // KIE's documented `reasoning_effort` enum, and the direct lane's ladder
+    // too: Google 400s thinkingLevel MINIMAL on this model ("not supported")
+    // and answers LOW / MEDIUM / HIGH (probed 2026-11-12) — Argon's shape. So
+    // no `none` (it maps to MINIMAL in the direct client) and no
+    // `directReasoningEfforts`: a `none` request clamps to Auto on both lanes.
+    reasoningEfforts: ["low", "medium", "high"],
+    // Reasons with no thinking param sent on both lanes: KIE's `total_tokens`
+    // ran well past prompt + completion on every no-effort call (its dialect
+    // reports no reasoning split), and Google's no-level call reported thought
+    // tokens. No `reasoningOutputFloor`: both lanes take the default 32768.
+    thinkingDefaultOn: true,
+  },
+  {
     id: "claude-opus-4.7",
     displayName: "Claude Opus 4.7",
     series: "Claude",
@@ -808,6 +889,43 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     thinkingDefaultOn: true,
   },
   {
+    id: "gpt-6.1-terra",
+    displayName: "GPT-6.1 Terra",
+    series: "GPT",
+    desc: "Fast, efficient GPT-6.1, sharp visual reasoning",
+    tier: "standard",
+    kieFormat: "responses",
+    // The GPT-6 wire (codex/v1/responses, derived from `vendor`); KIE's doc is
+    // 6.1 Sol's page with the name swapped and `none` added to the effort enum.
+    // Live-probed 2026-11-12: non-stream 16/16, `text.format` json_schema
+    // ENFORCED (asked for prose, it returned schema JSON with the enum
+    // honoured), data-URI vision, SSE deltas. Unlike luna / sol / 6.1 sol it
+    // reports REAL top-level `usage.input_tokens` — see `kieInputUntrusted` in
+    // backend/src/lib/llm/kie-cost.ts.
+    //
+    // KIE's endpoint adds its own instructions to every call and counts them as
+    // input. The hold and the estimate count them too
+    // (backend/src/lib/pricing/llm-cost.ts, `llmLaneAddedInputTokens`). They
+    // were several times larger with an effort sent on the morning of
+    // 2026-11-12 and the same size either way by that afternoon, so its price
+    // does not depend on the effort: not `effortPriced` (re-measure if KIE's
+    // reported input jumps again).
+    kieSlugOrModel: "gpt-6-1-terra",
+    vendor: "openai",
+    structuredOutputMode: "responses-json-schema",
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    // NO `none` (decided 2026-11-12): KIE answers it, but a `none` sent on the
+    // wire is answered as an effort (it echoed `medium`) while reasoning no
+    // more than Auto. Clamping maps a `none` request to nothing sent (Auto).
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    // Same doc as 6.1 Sol: no temperature lever.
+    supportsTemperature: false,
+    // NO `thinkingDefaultOn`: with no effort sent (and at low / medium / high)
+    // the probe reported 0 reasoning tokens; only xhigh (8) and max (27)
+    // reasoned, and those already floor the cap (`raiseToReasoningFloor`).
+  },
+  {
     id: "grok-4.6",
     displayName: "Grok 4.6",
     series: "Grok",
@@ -1036,10 +1154,47 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     // KIE's documented enum. The endpoint accepted xhigh/none without error but
     // never echoes an effort back, so nothing beyond the doc is verifiable.
     reasoningEfforts: ["low", "medium", "high"],
+    // Decided 2026-11-12: a request below `low` (`none`) is sent as `low`,
+    // never as nothing — KIE runs Kimi at its highest level when no effort is
+    // sent (K3.1 Pro's no-effort replies echoed `max`). Auto still sends nothing.
+    effortBelowLowestSendsLowest: true,
     // The doc lists no `temperature` field at all.
     supportsTemperature: false,
     // "Reasons by default" per KIE's doc (its usage reports no reasoning-token
     // split, so this is the doc's word, not a measurement).
+    thinkingDefaultOn: true,
+  },
+  {
+    id: "kimi-k3.1-pro",
+    displayName: "Kimi K3.1 Pro",
+    series: "Kimi",
+    desc: "Kimi tuned for coding and research, 1M context",
+    tier: "premium",
+    kieFormat: "responses",
+    // Same openai/v1/responses family path and wire as kimi-k3 (KIE's doc is
+    // K3's page with the name and the effort enum changed). Live-probed
+    // 2026-11-12: non-stream 9/9, `text.format` json_schema ENFORCED (asked for
+    // prose, it returned schema JSON with the enum honoured), data-URI vision,
+    // real `usage.input_tokens` and `credits_consumed`. Its stream sends
+    // `response.reasoning_text.delta` frames apart from the
+    // `response.output_text.delta` ones, and only the latter are the answer.
+    kieSlugOrModel: "kimi-k3-1-pro",
+    vendor: "moonshot",
+    structuredOutputMode: "responses-json-schema",
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    // KIE's documented enum (K3's was low / medium / high). Each level was
+    // echoed back. An off-enum `medium` answered too (echoed as `high`), so it
+    // is not offered: a `medium` request clamps down to `low`.
+    reasoningEfforts: ["low", "high", "max"],
+    // Decided 2026-11-12: a request below `low` (`none`) is sent as `low`,
+    // never as nothing — with no effort sent KIE runs it at `max` (the probe's
+    // no-effort replies echoed `max`). Auto still sends nothing.
+    effortBelowLowestSendsLowest: true,
+    // The doc lists no `temperature` field at all, as K3's.
+    supportsTemperature: false,
+    // Measured: every probe call reported reasoning tokens (20 to 163), the
+    // no-effort ones included (they echoed effort `max`).
     thinkingDefaultOn: true,
   },
   {
@@ -1098,6 +1253,31 @@ export function pickableLlmModels(currentId?: string): LlmModelDef[] {
 export const STRUCTURED_VISION_MODELS = LLM_MODELS.filter(
   (m) => m.supportsImages && m.structuredOutputMode != null,
 )
+
+/**
+ * How a structured call's schema goes on the wire for `model`: its trusted
+ * `structuredOutputMode`, else its `structuredOutputHint`; undefined = the
+ * schema is not sent at all (a model with neither: plain text, parsed and
+ * re-asked). What the request builders read — never a TRUST decision, which
+ * reads `structuredOutputMode` alone.
+ */
+export function structuredWireMode(
+  model: Pick<LlmModelDef, "structuredOutputMode" | "structuredOutputHint">,
+): LlmModelDef["structuredOutputMode"] {
+  return model.structuredOutputMode ?? model.structuredOutputHint
+}
+
+/**
+ * Does a structured call on `modelId` (unset = `feature`'s default model) put
+ * its schema on the wire ({@link structuredWireMode})? What a request's size
+ * counts the schema by — a schema that is not sent is not read by the model.
+ * A model the registry does not know counts as yes (the larger size).
+ */
+export function llmSendsSchema(modelId: string | undefined, feature?: string): boolean {
+  const id = modelId || (feature ? LLM_FEATURE_DEFAULTS[feature as LlmFeature] : undefined)
+  const model = id ? getLlmModel(id) : undefined
+  return !model || structuredWireMode(model) !== undefined
+}
 
 /**
  * Models {@link STRUCTURED_VISION_MODELS} carries that describe-to-picker does
@@ -1376,6 +1556,12 @@ export const LLM_MODALITY_CAPS: Record<string, { image: boolean; video: boolean;
   // video-analysis tier + pricing decision. That waits on a Video Analysis
   // bake-off; flip these two flags ONLY together with its outcome.
   "gemini-4-argon":    { image: true,  video: false, audio: false },
+  // gemini-4-carbon is IMAGE-ONLY for now, by decision (2026-11-12): the model
+  // reads video and audio, but full caps would auto-enroll it in
+  // VIDEO_ANALYSIS_LLM_MODELS (derived below). Its video + audio input comes in
+  // a follow-up change that also decides its Video Analysis enrolment; flip
+  // these two flags ONLY together with that.
+  "gemini-4-carbon":   { image: true,  video: false, audio: false },
   "claude-haiku-4.5":  { image: true,  video: false, audio: false },
   "claude-haiku-5.5":  { image: true,  video: false, audio: false },
   "claude-sonnet-4.6": { image: true,  video: false, audio: false },
@@ -1392,6 +1578,8 @@ export const LLM_MODALITY_CAPS: Record<string, { image: boolean; video: boolean;
   "gpt-6-luna":        { image: true,  video: false, audio: false },
   "gpt-6-sol":         { image: true,  video: false, audio: false },
   "gpt-6.1-sol":       { image: true,  video: false, audio: false },
+  // KIE's doc also takes files (PDFs, documents); that input is not wired here.
+  "gpt-6.1-terra":     { image: true,  video: false, audio: false },
   "grok-4.6":          { image: true,  video: false, audio: false },
   "grok-4.7":          { image: true,  video: false, audio: false },
   "claude-sonnet-5":   { image: true,  video: false, audio: false },
@@ -1402,6 +1590,7 @@ export const LLM_MODALITY_CAPS: Record<string, { image: boolean; video: boolean;
   "claude-fable-5":    { image: true,  video: false, audio: false },
   // KIE documents text + image input only for both.
   "kimi-k3":           { image: true,  video: false, audio: false },
+  "kimi-k3.1-pro":     { image: true,  video: false, audio: false },
   "deepseek-v4.1-flash": { image: true, video: false, audio: false },
 }
 
@@ -1479,7 +1668,12 @@ export function availableReasoningEfforts(
   return model.reasoningEfforts ?? []
 }
 
-/** Highest level the model supports that is ≤ the requested level; undefined = treat as Auto. */
+/**
+ * Highest level the model supports that is ≤ the requested level; undefined =
+ * treat as Auto. A request below the model's lowest level is dropped (Auto) —
+ * except on a model that declares `effortBelowLowestSendsLowest`, where it is
+ * sent as that lowest level. No request at all is always Auto.
+ */
 export function effectiveReasoningEffort(
   modelId: string | undefined,
   requested?: string,
@@ -1493,6 +1687,7 @@ export function effectiveReasoningEffort(
   for (const l of levels) {
     if (EFFORT_RANK[l] <= EFFORT_RANK[req] && (best === undefined || EFFORT_RANK[l] > EFFORT_RANK[best])) best = l
   }
+  if (best === undefined && getLlmModel(modelId ?? "")?.effortBelowLowestSendsLowest) return levels[0]
   return best
 }
 
@@ -1610,12 +1805,16 @@ export function llmServesDirect(
  * `POST /v1/credits/model-costs` (or `GET /v1/credits/model-cost?model=`) for
  * the call's estimated price: `<feature>:<modelId>`, plus `:direct` when the
  * call is served on the vendor's own API ({@link llmServesDirect}), which is
- * priced at the direct rate.
+ * priced at the direct rate, or — on a model whose price depends on the effort
+ * (`effortPriced`, served on the aggregator) — `:effort-<level>` naming the
+ * effort the call sends. On every other model the effort changes the key only
+ * through its lane. Read back by {@link parseLlmPriceKeyModel}.
  *
  * With no `reasoningEffort` the default effort of the feature the call
  * borrows its defaults from applies ({@link llmDefaultsFeature},
  * {@link defaultReasoningEffort}) — the effort the call then runs at — so the
- * key names the lane the call is held and charged on.
+ * key names the lane (and, where it matters, the effort) the call is held and
+ * charged on.
  *
  * `modelId` must already be resolved: the model the call runs on, never empty
  * (a caller with no model passes the feature's default, `LLM_FEATURE_DEFAULTS`
@@ -1629,7 +1828,53 @@ export function llmPriceKey(
 ): string {
   if (!modelId) throw new TypeError(`llmPriceKey: modelId must be a resolved model id (feature "${feature}")`)
   const effort = reasoningEffort ?? defaultReasoningEffort(llmDefaultsFeature(feature), modelId)
-  return llmServesDirect(modelId, effort, advancedMode) ? `${feature}:${modelId}:direct` : `${feature}:${modelId}`
+  if (llmServesDirect(modelId, effort, advancedMode)) return `${feature}:${modelId}${LLM_PRICE_KEY_DIRECT}`
+  // A model whose price depends on the effort (`effortPriced`) names the one
+  // the call sends — clamped as the aggregator's wire clamps it, so a level it
+  // does not offer is the effort that is really sent (or none). Every other
+  // model's key is unchanged.
+  const sent = getLlmModel(modelId)?.effortPriced ? effectiveReasoningEffort(modelId, effort) : undefined
+  return sent ? `${feature}:${modelId}${LLM_PRICE_KEY_EFFORT}${sent}` : `${feature}:${modelId}`
+}
+
+/** The price-key suffix of a call served on the vendor's own API (see {@link llmPriceKey}). */
+export const LLM_PRICE_KEY_DIRECT = ":direct"
+/** The price-key suffix naming the effort a call sends, on an `effortPriced` model: `:effort-<level>`. */
+export const LLM_PRICE_KEY_EFFORT = ":effort-"
+
+/** A price key's model part, read back by {@link parseLlmPriceKeyModel}. */
+export interface LlmPriceKeyModel {
+  modelId: string
+  /** Present only for a key that names the direct lane. */
+  lane?: "direct"
+  /** Present only for a key that names an effort (an `effortPriced` model's). */
+  reasoningEffort?: LlmReasoningEffort
+}
+
+const REGISTRY_MODEL_IDS: ReadonlySet<string> = new Set(LLM_MODEL_IDS)
+
+/**
+ * The part of a price key after its `<feature>:` — `<modelId>`,
+ * `<modelId>:direct` or `<modelId>:effort-<level>` — read back, or null for
+ * anything that is not a key {@link llmPriceKey} could build: a model that is
+ * not a registry id (never a borrowed slug), an effort on a model whose price
+ * does not depend on it, a level it does not offer on the aggregator, any
+ * other suffix. The one reader both the server and the editor use, so every
+ * key names exactly one price.
+ */
+export function parseLlmPriceKeyModel(tail: string): LlmPriceKeyModel | null {
+  if (REGISTRY_MODEL_IDS.has(tail)) return { modelId: tail }
+  if (tail.endsWith(LLM_PRICE_KEY_DIRECT)) {
+    const modelId = tail.slice(0, -LLM_PRICE_KEY_DIRECT.length)
+    return REGISTRY_MODEL_IDS.has(modelId) ? { modelId, lane: "direct" } : null
+  }
+  const at = tail.lastIndexOf(LLM_PRICE_KEY_EFFORT)
+  if (at <= 0) return null
+  const modelId = tail.slice(0, at)
+  const level = tail.slice(at + LLM_PRICE_KEY_EFFORT.length) as LlmReasoningEffort
+  const model = REGISTRY_MODEL_IDS.has(modelId) ? getLlmModel(modelId) : undefined
+  if (!model?.effortPriced || !availableReasoningEfforts(modelId).includes(level)) return null
+  return { modelId, reasoningEffort: level }
 }
 
 /**

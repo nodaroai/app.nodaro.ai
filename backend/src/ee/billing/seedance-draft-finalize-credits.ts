@@ -8,8 +8,8 @@ import {
   VIDEO_REF_VIDEO_DURATION_LIMITS,
 } from "@nodaro/shared/models"
 import { getAppSettings } from "../../lib/app-settings.js"
-import { seedanceDraftFinalizeBaseCredits, type SeedanceDraftFinalizePlan } from "../../lib/seedance-draft-finalize.js"
-import { getModelCreditCostFromDB } from "./credits.js"
+import { resolveSeedanceDraftFinalize, seedanceDraftFinalizeBaseCredits, type SeedanceDraftFinalizePlan } from "../../lib/seedance-draft-finalize.js"
+import { getModelCreditCostFromDB, type ExistingDraftFinalizePricer } from "./credits.js"
 import { applyServiceMarkup } from "./service-margin.js"
 
 /** What prices a finalize: the resolver's plan, or a hypothetical draft. */
@@ -78,4 +78,32 @@ function floorCandidates(): SeedanceDraftFinalizePricedPlan[] {
 export async function seedanceDraftFinalizeMinimumCredits(): Promise<number> {
   const prices = await Promise.all(floorCandidates().map(seedanceDraftFinalizeChargedCredits))
   return Math.min(...prices)
+}
+
+/**
+ * The exact price of finalizing a draft that already exists, for a workflow
+ * estimate of a run that only finalizes it (decided 2026-11-12): the
+ * finalize's own gate (`resolveSeedanceDraftFinalize`: the draft is the
+ * caller's, completed, a draft, its take capped at its hold) priced as the
+ * reservation prices it ({@link seedanceDraftFinalizeChargedCredits}) — the
+ * figure `POST /v1/credits/seedance-hd-estimate` answers for the same task id.
+ * Undefined when the gate refuses the draft (the run refuses it too, so
+ * nothing is charged) or it cannot be priced; the estimate then quotes the
+ * finalize as before.
+ *
+ * Handed to the run-set estimates (`estimateRunSetFigures`,
+ * `estimateRunSetCreditsWithoutUgc`) by their callers, who know the user —
+ * injected rather than imported, so the estimate module stays free of the
+ * draft lookup.
+ */
+export function existingDraftFinalizePricer(userId: string): ExistingDraftFinalizePricer {
+  return async (taskId) => {
+    try {
+      const resolved = await resolveSeedanceDraftFinalize({ userId, taskId })
+      return resolved.ok ? await seedanceDraftFinalizeChargedCredits(resolved) : undefined
+    } catch (err) {
+      console.warn("[seedance-draft-finalize] could not price an existing draft's finalize; the estimate quotes it as before:", err)
+      return undefined
+    }
+  }
 }

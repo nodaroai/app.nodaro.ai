@@ -1,7 +1,8 @@
 /**
  * The two ids an LLM call can be priced at, and which one applies.
  *
- * - `key` — the metered price key (`llmPriceKey`: `<feature>:<model>[:direct]`).
+ * - `key` — the metered price key (`llmPriceKey`: `<feature>:<model>[:direct |
+ *   :effort-<level>]`, the effort only on a model whose price depends on it).
  *   The server prices it as an ESTIMATE of the call's usage while metered
  *   pricing is on, and reports it `missing` under the tier-pricing rollback.
  * - `tierId` — today's tier credit id (`buildLlmCreditIdentifier`), the

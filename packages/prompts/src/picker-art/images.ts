@@ -23,6 +23,23 @@ export interface PickerImageOptions {
    * ask for it), and four URLs per option are dead weight to an agent (MCP).
    */
   readonly srcSet?: boolean
+  /**
+   * A deployment's own pictures, in place of the platform's. When set, an
+   * option is pictured by what this returns for it and by nothing else — no
+   * self-hosted photo, emoji or flag, no render — so an option it has nothing
+   * for has no picture, and no Person / Styling topic has one (a topic is not
+   * an option). `baseUrl` and `lookPreviews` are not read. The package names no
+   * deployment picture itself: the API passes what the deployment registered.
+   */
+  readonly own?: (catalogId: string, optionId: string) => PickerOwnPicture | undefined
+}
+
+/** A deployment's own picture for one picker option (`PickerImageOptions.own`). */
+export interface PickerOwnPicture {
+  /** Absolute URL of the picture. */
+  readonly url: string
+  /** Absolute URL of its enlarged version, when the deployment gave one. */
+  readonly largeUrl?: string
 }
 
 /** Hosts whose Cloudflare zone resizes on the fly (`/cdn-cgi/image/`, `/cdn-cgi/media/`). */
@@ -65,6 +82,12 @@ export interface PickerOptionImage {
   readonly url: string
   /** `<url> 240w, <url> 480w, …` — present only for a render the CDN resizes (Nodaro Cloud), when asked for (`srcSet: true`). */
   readonly srcSet?: string
+  /**
+   * The option's enlarged picture — present only for a deployment's own
+   * picture that has one (`PickerImageOptions.own`), when asked for
+   * (`srcSet: true`, the same request that asks for a srcset).
+   */
+  readonly largeUrl?: string
 }
 
 /**
@@ -84,7 +107,10 @@ function renderImage(url: string, withSrcSet: boolean): PickerOptionImage | unde
 }
 
 /**
- * The picture of one picker option, or undefined when it has none:
+ * The picture of one picker option, or undefined when it has none.
+ *
+ * With `images.own` (a deployment's own pictures), what it returns for the
+ * option, and nothing else. Otherwise, the platform's:
  *
  * 1. the self-hosted character photos;
  * 2. when renders are allowed (Nodaro Cloud), the music / voice pickers'
@@ -101,6 +127,7 @@ export function pickerOptionImage(
   id: string,
   images: PickerImageOptions,
 ): PickerOptionImage | undefined {
+  if (images.own) return ownImage(images.own(catalog.catalogId, id), images.srcSet === true)
   const origin = originOf(images.baseUrl)
   const photo = characterArtPath(catalog.catalogId, id)
   if (photo) return origin ? { url: origin + photo } : undefined
@@ -116,6 +143,11 @@ export function pickerOptionImage(
   return render ? renderImage(render, images.srcSet === true) : undefined
 }
 
+function ownImage(own: PickerOwnPicture | undefined, withLarge: boolean): PickerOptionImage | undefined {
+  if (!own) return undefined
+  return withLarge && own.largeUrl ? { url: own.url, largeUrl: own.largeUrl } : { url: own.url }
+}
+
 /** The absolute picture URL of one picker option, or undefined — `pickerOptionImage(...)?.url`. */
 export function pickerOptionImageUrl(
   catalog: { readonly nodeType: string; readonly catalogId: string },
@@ -126,8 +158,13 @@ export function pickerOptionImageUrl(
   return pickerOptionImage(catalog, field, id, images)?.url
 }
 
-/** The absolute URL of a Person / Styling topic's round picture, or undefined. */
+/**
+ * The absolute URL of a Person / Styling topic's round picture, or undefined —
+ * always, with a deployment's own pictures (`images.own`): a topic is not an
+ * option, so it has none of them.
+ */
 export function pickerSectionImageUrl(sectionLabel: string, images: PickerImageOptions): string | undefined {
+  if (images.own) return undefined
   const origin = originOf(images.baseUrl)
   const path = characterSectionArtPath(sectionLabel)
   return origin && path ? origin + path : undefined

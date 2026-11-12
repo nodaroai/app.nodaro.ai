@@ -24,7 +24,7 @@
  */
 
 import { GoogleGenAI, ThinkingLevel } from "@google/genai"
-import type { LlmModelDef, LlmReasoningEffort } from "@nodaro/shared/llm-models"
+import { structuredWireMode, type LlmModelDef, type LlmReasoningEffort } from "@nodaro/shared/llm-models"
 import { config } from "../config.js"
 import { llmCostOrZero } from "../pricing/llm-cost.js"
 import { blocksToGeminiParts } from "./media.js"
@@ -90,10 +90,11 @@ function buildConfig(model: LlmModelDef, req: LlmRequest, p: GeminiCallParams, s
     ...(p.temperature !== undefined ? { temperature: p.temperature } : {}),
     ...(p.topP !== undefined ? { topP: p.topP } : {}),
     ...(p.eff !== undefined ? { thinkingConfig: { thinkingLevel: THINKING_LEVEL[p.eff] } } : {}),
-    // Gated on the model declaring SOME native structured mode, not on a
-    // vendor id — a model with no native mode falls through to
-    // llmCompleteStructured's parse+retry, exactly as on the KIE lane.
-    ...(req.jsonSchema && model.structuredOutputMode
+    // Gated on the model sending its schema at all (`structuredWireMode`: a
+    // trusted mode, or a hint like Gemini 4 Carbon's), not on a vendor id — a
+    // model with neither falls through to llmCompleteStructured's parse+retry,
+    // exactly as on the KIE lane. Every answer is validated there either way.
+    ...(req.jsonSchema && structuredWireMode(model)
       ? { responseMimeType: "application/json", responseJsonSchema: toGeminiResponseSchema(req.jsonSchema.schema) }
       : {}),
     ...(signal ? { abortSignal: signal } : {}),

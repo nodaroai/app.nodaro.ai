@@ -12,7 +12,8 @@ import { seedance2RefVideoChargedQuote } from "../billing/seedance2-ref-video-qu
 const ROUTE = "/v1/credits/seedance-ref-estimate"
 const MAX_CLIPS = SEEDANCE_2_5_REF_LIMITS.videos
 
-const estimateBody = z.object({
+/** The quote body (exported: the Seedance 2.5 HD estimate reads a planned draft through these same fields). */
+export const seedanceRefEstimateBody = z.object({
   /** A Seedance 2 model (seedance-2, seedance-2-fast, seedance-2-mini, seedance-2-5). */
   provider: z.string().min(1).max(64),
   /** The run's resolution; omitted = the model's default, as the run sends it. */
@@ -55,7 +56,7 @@ const estimateBody = z.object({
  * newer than this server must not lose its price). Done before validation
  * because the documented schema stays a plain optional enum.
  */
-function ignoringUnknownTaskType(body: unknown): unknown {
+export function ignoringUnknownTaskType(body: unknown): unknown {
   if (!body || typeof body !== "object" || Array.isArray(body)) return body
   const { referenceTaskType, ...rest } = body as Record<string, unknown>
   return (SEEDANCE_REFERENCE_TASK_TYPES as readonly unknown[]).includes(referenceTaskType) ? body : rest
@@ -82,7 +83,7 @@ export function registerSeedanceRefEstimate(app: FastifyInstance): void {
       "The reference clips are probed and priced exactly as the run's reservation prices them (input + output seconds). " +
       "Clips not produced yet (unknownReferenceVideos) are quoted at the provider's worst case (exact: false; min = the least the run can reserve, whatever their length). Both are reservations: a run whose length the model decides is charged what it makes, which can be below min.",
     security: [{ bearerAuth: [] }],
-    request: { body: { content: { "application/json": { schema: estimateBody } } } },
+    request: { body: { content: { "application/json": { schema: seedanceRefEstimateBody } } } },
     responses: {
       200: { description: "Credit estimate", content: { "application/json": { schema: z.object({
         data: z.object({ credits: z.number(), min: z.number(), exact: z.boolean() }),
@@ -99,7 +100,7 @@ export function registerSeedanceRefEstimate(app: FastifyInstance): void {
     if (!req.userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
-    const parsed = estimateBody.safeParse(ignoringUnknownTaskType(req.body ?? {}))
+    const parsed = seedanceRefEstimateBody.safeParse(ignoringUnknownTaskType(req.body ?? {}))
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     }

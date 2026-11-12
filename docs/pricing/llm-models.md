@@ -34,6 +34,8 @@ Workflow Copilot is priced separately and is not charged by these rates.
 | Gemini 3.1 Pro | `gemini-3.1-pro` | Provider's own API | 1,100<!-- credits-llm-rate: gemini-3.1-pro:direct:input --> | 6,600<!-- credits-llm-rate: gemini-3.1-pro:direct:output --> |
 | Gemini 3.1 Pro | `gemini-3.1-pro` | Provider's own API, prompt over 200,000 tokens | 2,200<!-- credits-llm-rate: gemini-3.1-pro:direct:input:long --> | 9,900<!-- credits-llm-rate: gemini-3.1-pro:direct:output:long --> |
 | Gemini 4 Argon | `gemini-4-argon` | Provider's own API (default) | 2,200<!-- credits-llm-rate: gemini-4-argon:direct:input --> | 11,000<!-- credits-llm-rate: gemini-4-argon:direct:output --> |
+| Gemini 4 Carbon | `gemini-4-carbon` | Aggregator (default) | 440<!-- credits-llm-rate: gemini-4-carbon:kie:input --> | 2,200<!-- credits-llm-rate: gemini-4-carbon:kie:output --> |
+| Gemini 4 Carbon | `gemini-4-carbon` | Provider's own API | 2,200<!-- credits-llm-rate: gemini-4-carbon:direct:input --> | 11,000<!-- credits-llm-rate: gemini-4-carbon:direct:output --> |
 | Claude Opus 4.7 | `claude-opus-4.7` | Aggregator (default) | 785<!-- credits-llm-rate: claude-opus-4.7:kie:input --> | 3,933<!-- credits-llm-rate: claude-opus-4.7:kie:output --> |
 | Claude Opus 4.7 | `claude-opus-4.7` | Provider's own API | 2,750<!-- credits-llm-rate: claude-opus-4.7:direct:input --> | 13,750<!-- credits-llm-rate: claude-opus-4.7:direct:output --> |
 | GPT-5.4 | `gpt-5.4` | Aggregator (default) | 385<!-- credits-llm-rate: gpt-5.4:kie:input --> | 3,080<!-- credits-llm-rate: gpt-5.4:kie:output --> |
@@ -45,6 +47,7 @@ Workflow Copilot is priced separately and is not charged by these rates.
 | GPT-6 Luna | `gpt-6-luna` | Aggregator (default) | 17<!-- credits-llm-rate: gpt-6-luna:kie:input --> | 83<!-- credits-llm-rate: gpt-6-luna:kie:output --> |
 | GPT-6 Sol | `gpt-6-sol` | Aggregator (default) | 330<!-- credits-llm-rate: gpt-6-sol:kie:input --> | 1,650<!-- credits-llm-rate: gpt-6-sol:kie:output --> |
 | GPT-6.1 Sol | `gpt-6.1-sol` | Aggregator (default) | 330<!-- credits-llm-rate: gpt-6.1-sol:kie:input --> | 1,650<!-- credits-llm-rate: gpt-6.1-sol:kie:output --> |
+| GPT-6.1 Terra | `gpt-6.1-terra` | Aggregator (default) | 165<!-- credits-llm-rate: gpt-6.1-terra:kie:input --> | 825<!-- credits-llm-rate: gpt-6.1-terra:kie:output --> |
 | Grok 4.6 | `grok-4.6` | Aggregator (default) | 440<!-- credits-llm-rate: grok-4.6:kie:input --> | 1,320<!-- credits-llm-rate: grok-4.6:kie:output --> |
 | Grok 4.7 | `grok-4.7` | Aggregator (default) | 440<!-- credits-llm-rate: grok-4.7:kie:input --> | 1,320<!-- credits-llm-rate: grok-4.7:kie:output --> |
 | Claude Sonnet 5 | `claude-sonnet-5` | Aggregator (default) | 468<!-- credits-llm-rate: claude-sonnet-5:kie:input --> | 2,352<!-- credits-llm-rate: claude-sonnet-5:kie:output --> |
@@ -60,6 +63,7 @@ Workflow Copilot is priced separately and is not charged by these rates.
 | Claude Fable 5 | `claude-fable-5` | Aggregator (default) | 2,200<!-- credits-llm-rate: claude-fable-5:kie:input --> | 11,000<!-- credits-llm-rate: claude-fable-5:kie:output --> |
 | Claude Fable 5 | `claude-fable-5` | Provider's own API | 5,500<!-- credits-llm-rate: claude-fable-5:direct:input --> | 27,500<!-- credits-llm-rate: claude-fable-5:direct:output --> |
 | Kimi K3 | `kimi-k3` | Aggregator (default) | 1,320<!-- credits-llm-rate: kimi-k3:kie:input --> | 6,600<!-- credits-llm-rate: kimi-k3:kie:output --> |
+| Kimi K3.1 Pro | `kimi-k3.1-pro` | Aggregator (default) | 440<!-- credits-llm-rate: kimi-k3.1-pro:kie:input --> | 2,200<!-- credits-llm-rate: kimi-k3.1-pro:kie:output --> |
 | DeepSeek V4.1 Flash | `deepseek-v4.1-flash` | Aggregator (default) | 66<!-- credits-llm-rate: deepseek-v4.1-flash:kie:input --> | 262<!-- credits-llm-rate: deepseek-v4.1-flash:kie:output --> |
 
 See [Choosing models](../choosing-models.md#text-llm-models) for worked examples and which model each node uses by default.

@@ -28,7 +28,7 @@ import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { computeLiveRunEstimate } from "@/hooks/use-live-run-estimate"
 import { runCostLabel } from "@/lib/run-price"
 import type { WorkflowNode } from "@/types/nodes"
-import { llmNodeFeature, llmNodePriceIds, meteredModeProbeId } from "@/lib/llm-price-ids"
+import { llmNodeFeature, llmNodePriceIds, llmPriceIds, meteredModeProbeId } from "@/lib/llm-price-ids"
 import { buildLlmCreditIdentifier, llmPriceKey, resolveScriptModelId } from "@nodaro/shared/llm-models"
 import { scrapeAnalysisPriceParts, scrapeAnalysisQuoteId } from "@nodaro/shared/social"
 import { estimateRunCreditLines, estimateWholeRun, runModelIds } from "../estimate-run-credits"
@@ -71,6 +71,20 @@ describe("whole-run estimate with a metered LLM node", () => {
     const lines = estimateRunCreditLines(nodes, nodes, [], getCachedModelCredits)
     expect(lines.find((l) => l.nodeId === "chat")).toMatchObject({ credits: 6, estimate: true })
     expect(lines.find((l) => l.nodeId === "img")?.estimate).toBeUndefined()
+  })
+
+  // GPT-6.1 Terra's price does not depend on its effort: its node's key (and
+  // so its badge and the run's line) is the bare key at every effort.
+  it("a GPT-6.1 Terra node's key, badge and line are the same at every effort", () => {
+    const terra = (effort?: string) => n("terra", "llm-chat", { llmModel: "gpt-6.1-terra", ...(effort ? { reasoningEffort: effort } : {}) })
+    for (const effort of [undefined, "none", "low", "high", "max"]) {
+      expect(llmNodePriceIds(terra(effort))?.key, String(effort)).toBe("llm-chat:gpt-6.1-terra")
+    }
+    expect(llmPriceIds("ai-writer", "gpt-6.1-terra", "medium").key).toBe("ai-writer:gpt-6.1-terra")
+    cache({ "llm-chat:gpt-6.1-terra": 3 })
+    rememberEstimateModels(["llm-chat:gpt-6.1-terra"])
+    expect(estimateWholeRun([terra()], [], getCachedModelCredits)).toMatchObject({ total: 3, estimate: true })
+    expect(estimateWholeRun([terra("high")], [], getCachedModelCredits)).toMatchObject({ total: 3, estimate: true })
   })
 
   it("a run set with no UGC part (Run from here, Run up to here, Render final) is `approx` exactly when a metered line is", () => {

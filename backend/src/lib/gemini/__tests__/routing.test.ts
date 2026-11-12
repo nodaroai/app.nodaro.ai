@@ -249,6 +249,58 @@ describe("KIE-first Gemini models keep their existing routing", () => {
   })
 })
 
+describe("gemini-4-carbon: KIE first, Google's own API as its fallback and Advanced mode's lane", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    vi.resetModules()
+    callGeminiDirect.mockReset()
+    configMock.KIE_API_KEY = "test-kie-key"
+    configMock.GEMINI_API_KEY = "test-gemini-key"
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("an unpinned call is served by KIE on its own slug, never touching Google on success", async () => {
+    const { llmComplete } = await import("../../llm-client.js")
+    fetchMock.mockResolvedValue(kieOk())
+
+    const res = await llmComplete({ modelId: "gemini-4-carbon", ...baseReq, reasoningEffort: "high" })
+
+    expect(res.text).toBe("from-kie")
+    expect(fetchMock.mock.calls[0]?.[0]).toMatch(/\/gemini-4-carbon-openai\/v1\/chat\/completions$/)
+    expect(callGeminiDirect).not.toHaveBeenCalled()
+  })
+
+  it("falls back to Google's gemini-4-carbon when KIE fails", async () => {
+    const { llmComplete } = await import("../../llm-client.js")
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    fetchMock.mockRejectedValue(new Error("kie down"))
+    callGeminiDirect.mockResolvedValue(directOk("recovered"))
+
+    const res = await llmComplete({ modelId: "gemini-4-carbon", ...baseReq })
+
+    expect(res.text).toBe("recovered")
+    const model = callGeminiDirect.mock.calls[0]![0] as { id: string; directGeminiModel: string }
+    expect(model.directGeminiModel).toBe("gemini-4-carbon")
+  })
+
+  it("Advanced (a direct pin) goes to Google with the direct ladder: `none` is Auto, `max` lands on high", async () => {
+    const { llmComplete } = await import("../../llm-client.js")
+    callGeminiDirect.mockResolvedValue(directOk())
+
+    for (const reasoningEffort of ["none", "max"] as const) {
+      await llmComplete({ modelId: "gemini-4-carbon", ...baseReq, reasoningEffort, maxTokens: 2048, requireLane: "direct" })
+    }
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    // It reasons by default, so a small cap is floored to the default 32768.
+    expect(callGeminiDirect.mock.calls[0]![2]).toMatchObject({ eff: undefined, maxTokens: 32_768 })
+    expect(callGeminiDirect.mock.calls[1]![2]).toMatchObject({ eff: "high" })
+  })
+})
+
 describe("gemini-3.7-flash (retired) still runs: KIE lane on 3.8's endpoint, direct lane real 3.7", () => {
   let fetchMock: ReturnType<typeof vi.fn>
 

@@ -131,14 +131,20 @@ describe("media split-layers command", () => {
   it("sends the image and --max-layers, --size and --prompt to client.media.splitIntoLayers", async () => {
     mocks.splitIntoLayers.mockResolvedValueOnce({ jobId: "j-layers" })
     await runCmd("media", "split-layers", "https://x/poster.png", "--max-layers", "4", "--size", "2K", "--prompt", "the title, the car", "--json")
-    expect(mocks.splitIntoLayers).toHaveBeenCalledWith({ imageUrl: "https://x/poster.png", maxLayers: 4, size: "2K", prompt: "the title, the car" })
+    expect(mocks.splitIntoLayers).toHaveBeenCalledWith({ imageUrl: "https://x/poster.png", maxLayers: 4, size: "2K", prompt: "the title, the car" }, {})
     expect(vi.mocked(emit)).toHaveBeenCalledWith({ jobId: "j-layers" }, expect.anything())
   })
 
   it("sends only the image when no flag is given (the server defaults apply)", async () => {
     mocks.splitIntoLayers.mockResolvedValueOnce({ jobId: "j-layers" })
     await runCmd("media", "split-layers", "https://x/poster.png", "--json")
-    expect(mocks.splitIntoLayers).toHaveBeenCalledWith({ imageUrl: "https://x/poster.png" })
+    expect(mocks.splitIntoLayers).toHaveBeenCalledWith({ imageUrl: "https://x/poster.png" }, {})
+  })
+
+  it("files the job in --session and sends --idempotency-key as the request's Idempotency-Key", async () => {
+    mocks.splitIntoLayers.mockResolvedValueOnce({ jobId: "j-layers" })
+    await runCmd("media", "split-layers", "https://x/poster.png", "--session", "s-1", "--idempotency-key", "poster-1-layers", "--json")
+    expect(mocks.splitIntoLayers).toHaveBeenCalledWith({ imageUrl: "https://x/poster.png", sessionId: "s-1" }, { idempotencyKey: "poster-1-layers" })
   })
 
   it.each([["0"], ["100"], ["2.5"], ["abc"]])("refuses --max-layers %s before calling the API", async (v) => {
@@ -161,7 +167,7 @@ describe("media split-layers command", () => {
       data: { id: "j-layers", status: "completed", output_data: { imageUrl: "https://x/base.png", layers: ["https://x/l1.png"], layerCount: 1 } },
     })
     await runCmd("media", "split-layers", "https://x/poster.png", "--size", "auto", "--watch", "--poll-interval", "1")
-    expect(mocks.splitIntoLayers).toHaveBeenCalledWith({ imageUrl: "https://x/poster.png", size: "auto" })
+    expect(mocks.splitIntoLayers).toHaveBeenCalledWith({ imageUrl: "https://x/poster.png", size: "auto" }, {})
     expect(mocks.jobsGet).toHaveBeenCalledWith("j-layers")
     expect(vi.mocked(success)).toHaveBeenCalledWith(expect.stringContaining("completed"))
   })
@@ -976,7 +982,7 @@ describe("docs/cli.md covers the media command surface", () => {
     const line = synopsisOf("split-layers") ?? ""
     const sub = mediaCommand().commands.find((c) => c.name() === "split-layers")
     const flags = (sub?.options ?? []).map((o) => o.long).filter((f): f is string => !!f && f !== "--profile")
-    expect(flags).toEqual(expect.arrayContaining(["--max-layers", "--size", "--prompt"]))
+    expect(flags).toEqual(expect.arrayContaining(["--max-layers", "--size", "--prompt", "--session", "--idempotency-key"]))
     for (const flag of flags) expect(line).toContain(`[${flag}`)
     expect(line).toContain("--size 1K|1.5K|2K|auto")
   })

@@ -186,7 +186,7 @@ nodaro models list [--kind image|video|audio] [--mode t2v|i2v|t2i|tts|…] [--fa
 #   table shows id, kind, family, maker (the company that made the model; "-" for a model offered under the instance's own label), modes, credit tiers, featured ★ and the doctrine ✓ flag
 #   --json for the full sheets, incl. each model's maker { id, name } (absent on an own-label model) and the maker's logoUrl (null when the instance publishes no mark)
 nodaro models cost <id…> [--json]                       # what each identifier is charged (POST /v1/credits/model-costs)
-#   an id is a model id, a credit id, or a metered LLM price key <feature>:<model>[:direct] (llmPriceKey)
+#   an id is a model id, a credit id, or a metered LLM price key <feature>:<model>[:direct | :effort-<level>] (llmPriceKey)
 #   a metered LLM call is charged for the tokens it uses, so its figure is an estimate and prints as ≈N;
 #   every model's per-token rate is in docs/pricing/llm-models.md. An id with no price prints "-" and why
 
@@ -523,7 +523,7 @@ nodaro media generate-mask <imageUrl> <prompt> [--threshold <n>] [--watch] [--po
                                                          # mask image (white = the subject). --threshold 0-1 (default 0.3; lower selects more). The job's
                                                          # output carries maskUrl (the mask) and imageUrl (the source, passed through) — feed both to an
                                                          # inpainting edit. Price: GET /v1/credits/model-cost?model=generate-mask. See docs/nodes/ai-image/generate-mask.md.
-nodaro media split-layers <imageUrl> [--max-layers <1-99>] [--size 1K|1.5K|2K|auto] [--prompt <text>] [--watch] [--poll-interval <ms>] [--json]
+nodaro media split-layers <imageUrl> [--max-layers <1-99>] [--size 1K|1.5K|2K|auto] [--prompt <text>] [--session <id>] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
                                                          # splits one image into a base picture and separate layers, each element on its own
                                                          # transparent PNG. --max-layers (default 9) caps the layers: more elements merge into fewer
                                                          # layers, none is dropped. --size is each image's pixel budget (1K, the default, is about one
@@ -534,7 +534,10 @@ nodaro media split-layers <imageUrl> [--max-layers <1-99>] [--size 1K|1.5K|2K|au
                                                          # the base's pixels, and baseUrl: the base it was cut from). A layer is cropped to its element:
                                                          # scale it to its box to put it back.
                                                          # A run holds the price of --max-layers + 1 images (the base included) and is charged only
-                                                         # for the images it returns. Prices: docs/nodes/ai-image/split-into-layers.md.
+                                                         # for the images it returns. Prices: docs/nodes/ai-image/split-into-layers.md; the SDK's
+                                                         # nodes.quote states a run's hold before it starts. --session files the job in one of your
+                                                         # generation sessions; --idempotency-key (8+ characters) makes a retry answer the job the
+                                                         # first request started instead of starting a second one.
 nodaro media video-overlay <videoUrl> [layerUrls...] [--at <start[-end]>...] [--preset card|corner-badge|full-frame] [--corner top-left|top-right|bottom-left|bottom-right] [--layers-file <path>] [--aspect 16:9|9:16|1:1|4:5] [--base-fit cover|contain] [--background-color <hex>] [--layout video-bottom|video-top|stack-whole|stack-filled|pip] [--base-box <json>] [--watch] [--poll-interval <ms>] [--json]
                                                          # 1-20 timed image or video layers over a video in one local FFmpeg render (no AI). Positional
                                                          # URLs are IMAGE layers: one --at per URL, in order ("3" = from 3 s to the end, "1.2-2.6");

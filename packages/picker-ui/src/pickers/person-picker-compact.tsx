@@ -13,6 +13,7 @@ import { useLocalizedCatalog } from "../i18n"
 import { PersonDimensionGrid, usePersonDimension } from "./person-dimension-grid"
 import { CharacterThumb } from "./character-art-tile"
 import { characterArtShape, characterArtUrl } from "../icons/character-art"
+import { useOwnPickerPicturesVersion } from "../icons/own-pictures"
 import { useMinorAgeFloor } from "./person-minor-floor"
 
 /** The age-dimension sentinel whose selection opens a free-form number input.
@@ -137,6 +138,8 @@ function DimensionPill({
   const dimensionLabel = L(PERSON_DIMENSION_LABELS[dimension])
   const { selectedIds, multi, toggleOff } = usePersonDimension(dimension, value, onChange)
   const selected = selectedIds.length > 0
+  // A deployment's own photos arrive after the first render (icons/own-pictures.ts).
+  useOwnPickerPicturesVersion()
 
   const valueLabel = selected
     ? multi && selectedIds.length > 1

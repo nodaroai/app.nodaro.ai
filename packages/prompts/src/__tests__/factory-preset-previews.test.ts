@@ -29,9 +29,11 @@ import {
   FACTORY_PRESETS,
   FACTORY_PRESET_PREVIEW_FILES,
   FACTORY_PRESET_PREVIEW_LARGE_FILES,
+  FACTORY_PRESET_PREVIEW_SIZES,
   PRESET_PREVIEW_LARGE_WIDTH,
   PRESET_PREVIEW_PATH,
   PRESET_PREVIEW_WIDTH,
+  factoryPresetPreviewSize,
   factoryPresetPreviewSrcSet,
   factoryPresetPreviewUrl,
 } from "../factory-presets.js"
@@ -128,6 +130,42 @@ describe("factory preset previews — the maps and the folder agree", () => {
   it("each file is mapped from exactly one preset", () => {
     const files = [...Object.values(FACTORY_PRESET_PREVIEW_FILES), ...Object.values(LARGE_FILES)]
     expect(files.length).toBe(new Set(files).size)
+  })
+})
+
+/** A WebP file's width and height, from its header (VP8, VP8L or VP8X), so the test needs no image library. */
+function webpSize(bytes: Buffer): readonly [number, number] | null {
+  if (bytes.toString("ascii", 0, 4) !== "RIFF" || bytes.toString("ascii", 8, 12) !== "WEBP") return null
+  const chunk = bytes.toString("ascii", 12, 16)
+  if (chunk === "VP8X") return [1 + bytes.readUIntLE(24, 3), 1 + bytes.readUIntLE(27, 3)]
+  if (chunk === "VP8L") {
+    const b = bytes.readUInt32LE(21)
+    return [(b & 0x3fff) + 1, ((b >> 14) & 0x3fff) + 1]
+  }
+  if (chunk === "VP8 ") return [bytes.readUInt16LE(26) & 0x3fff, bytes.readUInt16LE(28) & 0x3fff]
+  return null
+}
+
+describe("factory preset previews — each tile picture's recorded size", () => {
+  it("every tile picture has its size, and only those", () => {
+    const tiles = Object.keys(FACTORY_PRESET_PREVIEW_FILES).sort()
+    expect(Object.keys(FACTORY_PRESET_PREVIEW_SIZES).sort()).toEqual(tiles)
+  })
+
+  it("each recorded size is the file's own (run tools/preset-previews/build.mts after changing a picture)", () => {
+    const wrong: string[] = []
+    for (const [id, file] of Object.entries(FACTORY_PRESET_PREVIEW_FILES)) {
+      const actual = webpSize(readFileSync(join(PREVIEW_DIR, file)))
+      const recorded = FACTORY_PRESET_PREVIEW_SIZES[id]
+      if (!actual || !recorded || actual[0] !== recorded[0] || actual[1] !== recorded[1]) wrong.push(`${id}: recorded ${JSON.stringify(recorded)}, file ${JSON.stringify(actual)}`)
+    }
+    expect(wrong).toEqual([])
+  })
+
+  it("factoryPresetPreviewSize answers the recorded size, or null for a preset with no picture", () => {
+    const [id, [width, height]] = Object.entries(FACTORY_PRESET_PREVIEW_SIZES)[0] as [string, readonly [number, number]]
+    expect(factoryPresetPreviewSize(id)).toEqual({ width, height })
+    expect(factoryPresetPreviewSize("generate-image/no-such-preset")).toBeNull()
   })
 })
 

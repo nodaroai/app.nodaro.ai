@@ -8,10 +8,10 @@
  * run is priced:
  *   - `/v1/edit-image`'s guard (routes/edit-image.ts): `copyOutsideInput`
  *     without a job id (a flat scratch copy the 7-day sweep removes);
- *   - a quote of that route: `inspectOutsideInput` — the same checks and the
- *     same measurement, nothing stored. Unused today: `edit-image` is not one
- *     of `/v1/quote`'s quotable node types (`QUOTABLE_NODE_TYPES`), so the
- *     branch is ready for when it is;
+ *   - a quote of that route (`POST /v1/quote` with type `edit-image`, which
+ *     runs the route's own pricing chain, `editImagePricing`):
+ *     `inspectOutsideInput` — the same checks (the deployment's link-import
+ *     switch included) and the same measurement, nothing stored;
  *   - a workflow run's stamp (node-executor.ts): `copyOutsideInput` in the
  *     job's scratch folder.
  * Each passes the lane row's `input.maxBytes` as the cap and reads the
@@ -115,6 +115,15 @@ export async function copyNodaroImageUpscaleInput(
   const copied = await copyOutsideInput(url, { ...nodaroImageUpscaleCopyOptions(opts.userId, opts.signal), ...(opts.jobId ? { jobId: opts.jobId } : {}) })
   return measureNodaroImageUpscaleInput(copied.url, copied, factor)
 }
+
+/**
+ * The longest a QUOTE may spend reading an outside picture, waiting for its
+ * slot included. A quote reads under the quotes' own few slots (one per user,
+ * a handful per process: `lib/outside-input-copy.ts`), so a slow link must give
+ * its slot back long before a run's download limit; past this the quote is
+ * answered `input_timed_out` (try again), never priced.
+ */
+export const NODARO_IMAGE_UPSCALE_QUOTE_READ_MS = 15_000
 
 /** The plugin's arguments for a run (`plan` and `start`). */
 export function nodaroImageUpscaleArgs(imageUrl: string, factor: unknown, outputPixels: number): Readonly<Record<string, unknown>> {

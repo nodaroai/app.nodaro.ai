@@ -1,5 +1,6 @@
 /**
- * `sessionId` and `origin` on image-to-image, edit-image and generate-mask.
+ * `sessionId` and `origin` on image-to-image, edit-image, generate-mask and
+ * split-into-layers.
  *
  * None of these route bodies declares either field: the job funnel
  * (`insertJob` → `requestStamps`) reads both off the RAW body, checks the
@@ -86,6 +87,7 @@ vi.mock("@/lib/url-validator.js", async () => {
 import { imageToImageRoutes } from "../image-to-image.js"
 import { editImageRoutes } from "../edit-image.js"
 import { generateMaskRoutes } from "../generate-mask.js"
+import { route as splitIntoLayersRoute } from "../../nodes/split-into-layers/route.js"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 let app: FastifyInstance
@@ -108,6 +110,7 @@ beforeEach(async () => {
     await imageToImageRoutes(instance)
     await editImageRoutes(instance)
     await generateMaskRoutes(instance)
+    await instance.register(splitIntoLayersRoute)
   })
   await app.ready()
 })
@@ -120,6 +123,7 @@ const ROUTES: Array<[string, Record<string, unknown>]> = [
   ["/v1/image-to-image", { imageUrl: "https://example.com/a.png", prompt: "watercolor", provider: "flux-fill" }],
   ["/v1/edit-image", { imageUrl: "https://example.com/a.png", provider: "recraft-upscale" }],
   ["/v1/generate-mask", { imageUrl: "https://example.com/a.png", prompt: "the red car" }],
+  ["/v1/split-into-layers", { imageUrl: "https://example.com/a.png", maxLayers: 3 }],
 ]
 
 describe.each(ROUTES)("%s stamps the request's session and origin on its job", (url, body) => {

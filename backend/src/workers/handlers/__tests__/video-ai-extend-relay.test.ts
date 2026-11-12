@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   mockFinalize: vi.fn(),
   mockUploadJobScratchFile: vi.fn(),
   mockUploadToR2: vi.fn(),
+  mockStitchExtension: vi.fn(),
   mockCombineVideos: vi.fn(),
   mockWatermarkLocal: vi.fn(),
   mockThumb: vi.fn(),
@@ -81,6 +82,17 @@ vi.mock("@/lib/seedance-extend-mov-chain.js", () => ({
   findChainedMovReference: vi.fn(async () => undefined),
   isMovUrl: vi.fn(() => false),
 }))
+// The tail's picture rule is the real one (`extendTailPicture`); the stitch itself is mocked.
+vi.mock("@/providers/video/extend-stitch.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/providers/video/extend-stitch.js")>()),
+  stitchExtension: mocks.mockStitchExtension,
+}))
+// The source's colour probe: an SDR source, so its tail is cut exactly as it always was.
+vi.mock("@/providers/video/matched-encode.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/providers/video/matched-encode.js")>()),
+  probeMatched: vi.fn(async () => ({ width: 1920, height: 1080, videoCodec: "h264" })),
+}))
+// Kept mocked so a regression back to the general combine is caught, never run.
 vi.mock("@/providers/video/combine-videos.js", () => ({
   combineVideos: mocks.mockCombineVideos,
 }))
@@ -149,7 +161,10 @@ function runExtend(provider = "seedance-2-0-extend") {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.mockFinalize.mockResolvedValue({ ok: true })
-  mocks.mockCombineVideos.mockResolvedValue({ outputPath: "/tmp/stitch/out.mp4", smartCuts: null })
+  mocks.mockStitchExtension.mockResolvedValue({
+    outputPath: "/tmp/workdir/stitched.mp4",
+    boundary: { matched: false, psnrDb: null, trimEndFrames: 4, trimStartFrames: 3, searchedPrevFrames: null, searchedNextFrames: null },
+  })
   mocks.mockWatermarkLocal.mockResolvedValue("https://r2.example.com/stitched.mp4")
   mocks.mockThumb.mockResolvedValue("https://r2.example.com/thumb.png")
   mocks.mockUploadJobScratchFile.mockResolvedValue("https://r2.example.com/tail.mp4")
@@ -165,6 +180,9 @@ describe("extend-video / Seedance extend — relay provenance on the rebuilt lit
     await runExtend(provider)
     expect(mocks.mockImageToVideo).toHaveBeenCalledTimes(1)
     expect(mocks.mockImageToVideo.mock.calls[0][1]).toBe(model)
+    // The deliverable is the extend stitch's, never the general combine's.
+    expect(mocks.mockStitchExtension).toHaveBeenCalledTimes(1)
+    expect(mocks.mockCombineVideos).not.toHaveBeenCalled()
   })
 
   it("carries relayJobId/relayCredits into finalizeJobWithMedia", async () => {

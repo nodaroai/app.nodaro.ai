@@ -34,8 +34,14 @@ vi.mock("../credits.js", () => ({
   getModelCreditCostFromDB: vi.fn(async () => ({ creditCost: 100 })),
 }))
 vi.mock("../credit-anomaly.js", () => ({ computeActualCredits: h.actual }))
+const reserveCreditsForJob = vi.hoisted(() => vi.fn(async (..._a: unknown[]) => ({ usageLogId: "log-1" }) as unknown))
+vi.mock("@/middleware/credit-guard.js", () => ({ reserveCreditsForJob }))
 
-const { settleFixedPlusLlmCallsImpl } = await import("../llm-fixed-plus-calls-impl.js")
+const { reserveFixedPlusLlmCallsImpl, settleFixedPlusLlmCallsImpl } = await import("../llm-fixed-plus-calls-impl.js")
+const { llmEstimateBaseCredits } = await import("../llm-metered.js")
+const { applyServiceMarkup } = await import("../service-margin.js")
+/** `items` typical calls, marked up once at 10% — the figure the reserve holds for the calls. */
+const held = (base: number, chargeId: string) => applyServiceMarkup(base * 10, { cost_markup_percent: 10 } as never, chargeId)
 const { LlmSpend } = await import("../../../lib/llm-billing.js")
 
 const CHARGE_ID = "meta-ads-analysis:claude-sonnet-5.5"
@@ -91,5 +97,41 @@ describe("settleFixedPlusLlmCalls — what the settle writes on the job", () => 
     h.commit.mockResolvedValue({ charged: 100, collectedOverHold: 0, shortfall: 0 })
     await settleFixedPlusLlmCallsImpl("job-1", HOLD, new LlmSpend(), "charge")
     expect(h.updates).toEqual([{ credits_actual: 100 }])
+  })
+})
+
+// The per-item hold is the item's TYPICAL call priced as the planned call
+// runs: its effort and its lane. Scrapes send neither, so their figure is the
+// model's effort-free one; a planned call with an effort is held at that
+// effort's price (on GPT-6.1 Terra the same as Auto: its price does not depend
+// on it).
+describe("reserveFixedPlusLlmCalls — the per-item hold follows the planned call", () => {
+  const reserveWith = async (modelId: string, plannedRequest: Record<string, unknown>) => {
+    reserveCreditsForJob.mockClear()
+    const hold = await reserveFixedPlusLlmCallsImpl({} as never, { sent: false } as never, "job-1", {
+      fixedId: "meta-ads-scrape:10:analysis", feature: "meta-ads-analysis", modelId, items: 10,
+      plannedRequest: { modelId, system: "", messages: [{ role: "user", content: "a" }], ...plannedRequest } as never,
+    })
+    return hold
+  }
+
+  it("a scrape's planned call (no effort, no pin) is held exactly as before", async () => {
+    const hold = await reserveWith("claude-sonnet-5.5", {})
+    // 10 items × the typical call, marked up 10% once.
+    expect(hold?.llmHoldCredits).toBe(held(llmEstimateBaseCredits("meta-ads-analysis", "claude-sonnet-5.5"), "meta-ads-analysis:claude-sonnet-5.5"))
+  })
+
+  it("a planned call's effort reaches the per-item price: a Claude effort is held on its direct lane", async () => {
+    const plain = await reserveWith("claude-sonnet-5.5", {})
+    const high = await reserveWith("claude-sonnet-5.5", { reasoningEffort: "high" })
+    expect(high?.llmHoldCredits).toBe(held(llmEstimateBaseCredits("meta-ads-analysis", "claude-sonnet-5.5", "high"), "meta-ads-analysis:claude-sonnet-5.5"))
+    expect(high!.llmHoldCredits).toBeGreaterThan(plain!.llmHoldCredits)
+  })
+
+  it("a planned GPT-6.1 Terra call is held the same at Auto and with an effort", async () => {
+    const auto = await reserveWith("gpt-6.1-terra", {})
+    const high = await reserveWith("gpt-6.1-terra", { reasoningEffort: "high" })
+    expect(auto?.llmHoldCredits).toBe(held(llmEstimateBaseCredits("meta-ads-analysis", "gpt-6.1-terra"), "meta-ads-analysis:gpt-6.1-terra"))
+    expect(high?.llmHoldCredits).toBe(auto?.llmHoldCredits)
   })
 })

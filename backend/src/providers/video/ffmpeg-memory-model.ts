@@ -227,6 +227,20 @@
  * NOT MEASURED: the thread term at more than 4 inputs is a straight
  * extrapolation; only decode / filter threads were varied together (the term
  * follows the graph's side by mechanism).
+ *
+ * A TONE-MAP (decided 2026-11-12) adds a term of its own
+ * (`toneMapPeakMemoryMiB`): an HDR source taken to SDR (the extend stitch and
+ * its tail, `extend-stitch-args.ts` `toSdr`) passes through float RGB
+ * (`gbrpf32le`, 12 bytes a pixel) on three links (zscale, zscale, tonemap),
+ * each holding about two frames, at the canvas's size:
+ *
+ *   tone-map ≈ MP·72 MiB   (3 × 2 × 12 B = 72 B a pixel, 68.7 MiB a megapixel,
+ *                           held at 72: ≈ 597 MiB at 4K, 149 at 1080p).
+ *
+ * NOT MEASURED: it follows the frame size and the chain's links, not a row.
+ * To be replaced by a measured one (one 4K HLG stitch's peak RSS on the pinned
+ * build), as the model's other terms were. The 10-bit decode is not modelled
+ * either.
  * `defaultPeakMemoryMiB` (a launch that predicts nothing: a sound-only slice,
  * an unclassified launch) carries no input term, it stays 393 + 22.9·T.
  *
@@ -249,6 +263,11 @@ const PER_MEGAPIXEL_DECODE_THREAD_MIB = 2.9
 const ZOOM_PER_MEGAPIXEL_MIB = 44
 const ZOOM_SEGMENT_PER_MEGAPIXEL_MIB = 26
 const ZOOM_SEGMENT_PER_MEGAPIXEL_THREAD_MIB = 6.5
+
+/** The tone-map's term (MiB) per canvas megapixel: float RGB (12 B a pixel)
+ *  on three links, two frames each - 72 B a pixel, held at 72 MiB a megapixel.
+ *  Not measured (`toneMapPeakMemoryMiB`). */
+const TONE_MAP_PER_MEGAPIXEL_MIB = 72
 
 /** The per-input part: MiB per extra input per decode / filter thread above
  *  the two the base model is anchored at (`BASE_THREADS`). Canvas-independent:
@@ -284,6 +303,9 @@ export interface PictureMemoryExtras {
   /** How many of the slice's segments draw a zoom
    *  (`EdlPictureFragment.memoryHint`). 0 or absent: none. */
   readonly zoomSegments?: number
+  /** The launch tone-maps an HDR picture to SDR (float RGB through zscale and
+   *  tonemap, `toneMapPeakMemoryMiB`). False or absent: it does not. */
+  readonly toneMap?: boolean
 }
 
 /** 4K: the picture size assumed when a launch cannot say what it will process. */
@@ -298,8 +320,9 @@ const DEFAULT_PER_THREAD_MIB = 22.9
 const decodeSide = (threads: FfmpegThreads): number => Math.max(threads.decode, threads.filter)
 
 /** One picture launch's predicted peak memory in MiB, rounded up — with the
- *  per-input term when it opens more than one file (`extras.inputs`) and the
- *  zoom's term when `extras.zoomSegments` says the slice draws any. */
+ *  per-input term when it opens more than one file (`extras.inputs`), the
+ *  zoom's term when `extras.zoomSegments` says the slice draws any, and the
+ *  tone-map's when `extras.toneMap` says it takes an HDR picture to SDR. */
 export function canvasPeakMemoryMiB(
   canvas: { readonly width: number; readonly height: number },
   segments: number,
@@ -314,7 +337,8 @@ export function canvasPeakMemoryMiB(
     PER_MEGAPIXEL_DECODE_THREAD_MIB * decodeSide(threads)
   const zoomSegments = extras.zoomSegments ?? 0
   const zoom = zoomSegments > 0 ? zoomPeakMemoryMiB(canvas, threads, zoomSegments) : 0
-  return Math.ceil(BASE_MIB + megapixels * perMegapixel + inputsPeakMemoryMiB(threads, extras.inputs, extras.cameraMegapixels) + zoom)
+  const toneMap = extras.toneMap ? toneMapPeakMemoryMiB(canvas) : 0
+  return Math.ceil(BASE_MIB + megapixels * perMegapixel + inputsPeakMemoryMiB(threads, extras.inputs, extras.cameraMegapixels) + zoom + toneMap)
 }
 
 /** The per-input term in MiB, unrounded: (inputs − 1)·(T − 2)·9·S, T the graph's
@@ -343,6 +367,13 @@ export function zoomPeakMemoryMiB(
   const t = decodeSide(threads)
   const perZoom = ZOOM_SEGMENT_PER_MEGAPIXEL_MIB + ZOOM_SEGMENT_PER_MEGAPIXEL_THREAD_MIB * t
   return megapixels * (ZOOM_PER_MEGAPIXEL_MIB + Math.max(1, zoomSegments) * perZoom)
+}
+
+/** The tone-map's own term in MiB, unrounded: MP·72, the float RGB frames an
+ *  HDR picture's trip to SDR holds (`canvasPeakMemoryMiB` with `{ toneMap }`).
+ *  Not measured; it follows the frame size. */
+export function toneMapPeakMemoryMiB(canvas: { readonly width: number; readonly height: number }): number {
+  return ((canvas.width * canvas.height) / 1e6) * TONE_MAP_PER_MEGAPIXEL_MIB
 }
 
 /** What a launch that predicts nothing reserves, in MiB: 393 + 22.9·T at the

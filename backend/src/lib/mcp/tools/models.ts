@@ -147,7 +147,7 @@ export type PriceIdAnswer =
 /**
  * The price lookup `list_models` answers for `priceIds` — the figures
  * `POST /v1/credits/model-costs` answers, from the same charged prices: a
- * metered LLM call's price key (`<feature>:<model id>[:direct]`, any model)
+ * metered LLM call's price key (`<feature>:<model id>[:direct | :effort-<level>]`, any model)
  * at its estimate, marked `estimate`; a model with no rate on its lane
  * `llm_model_unpriced` (a run on it is refused); any other id its charged
  * price, or `not_priced` (under the tier-pricing rollback a metered key lands
@@ -210,7 +210,7 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
           .max(LIST_MODELS_PRICE_IDS_MAX)
           .optional()
           .describe(
-            "Quote prices instead of listing: credit ids, or an LLM call's key `<feature>:<model id>` (any model; `:direct` = vendor API), e.g. `llm-chat:claude-sonnet-5.5`. " +
+            "Quote prices instead of listing: credit ids, or an LLM call's key `<feature>:<model id>` (any model; `:direct` = vendor API; `:effort-<level>` = the effort sent, where it sets the price), e.g. `llm-chat:claude-sonnet-5.5`. " +
               "Answers `{ prices: { <id>: { credits, estimate? } | { error } } }`; `estimate`: charged actual usage, show `≈N`.",
           ),
       },

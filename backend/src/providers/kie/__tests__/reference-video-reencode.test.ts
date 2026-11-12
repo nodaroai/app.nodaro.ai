@@ -39,7 +39,6 @@ import {
   REFERENCE_VIDEO_FALLBACK_CRF,
   SEEDANCE_2_5_REF_VIDEO_MAX_BYTES,
   SEEDANCE_2_REF_VIDEO_MAX_BYTES,
-  parseReferenceVideoProbe,
   reencodeFirstPassArgs,
   reencodeReferenceVideo,
   reencodeReferenceVideoArgs,
@@ -51,6 +50,7 @@ import {
   referenceVideoTargetBitRate,
   type ReferenceVideoProbe,
 } from "../reference-video-reencode.js"
+import { parseMatchedProbe } from "../../video/matched-encode.js"
 
 const URL_IN = "https://cdn.nodaro.ai/videos/0f0e6b1c-seedance-output.mp4"
 const REENCODED = "https://cdn.nodaro.ai/tmp/provider-input/job/provider-reencoded-1.mp4"
@@ -248,9 +248,9 @@ describe("referenceVideoAudio", () => {
   })
 })
 
-describe("parseReferenceVideoProbe", () => {
+describe("the re-encode's probe (parseMatchedProbe)", () => {
   it("reads the picture, the sound's rate, the length and the QuickTime brand", () => {
-    const probe = parseReferenceVideoProbe(JSON.stringify({
+    const probe = parseMatchedProbe(JSON.stringify({
       streams: [
         { codec_type: "video", width: 1280, height: 720, pix_fmt: "yuv444p", bit_rate: "9000000", color_space: "bt709" },
         { codec_type: "audio", codec_name: "pcm_s16le", bit_rate: "1536000" },
@@ -264,7 +264,7 @@ describe("parseReferenceVideoProbe", () => {
   })
 
   it("takes the picture's rate from the container less the sound when the stream reports none", () => {
-    const probe = parseReferenceVideoProbe(JSON.stringify({
+    const probe = parseMatchedProbe(JSON.stringify({
       streams: [{ codec_type: "video", width: 640, height: 360, pix_fmt: "yuv420p" }, { codec_type: "audio", bit_rate: "128000" }],
       format: { bit_rate: "2128000", duration: "5", tags: { major_brand: "isom" } },
     }))
@@ -273,8 +273,8 @@ describe("parseReferenceVideoProbe", () => {
   })
 
   it("leaves out what it cannot read, and reads nothing from output that is not ffprobe's", () => {
-    expect(parseReferenceVideoProbe("not json")).toEqual({})
-    expect(parseReferenceVideoProbe(JSON.stringify({ streams: [{ codec_type: "audio" }] }))).toEqual({})
+    expect(parseMatchedProbe("not json")).toEqual({})
+    expect(parseMatchedProbe(JSON.stringify({ streams: [{ codec_type: "audio" }] }))).toEqual({})
   })
 })
 

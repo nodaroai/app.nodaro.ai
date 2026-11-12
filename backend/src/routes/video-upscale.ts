@@ -32,6 +32,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
+import { CLIENT_CLOSED, clientGoneSignal } from "../lib/client-gone.js"
 import { insertJob } from "../lib/insert-job.js"
 import { mayUseChildJobAsSource } from "../lib/job-submission-context.js"
 import { kieTaskOwnedByAnother } from "../lib/kie-task-ownership.js"
@@ -154,7 +155,9 @@ const isTopazBody = (body: unknown): boolean => {
  * (every edition — the legacy factor and "same as source" need the clip's size
  * and rate), so the guard holds the plan's units and the worker renders the
  * target that was priced. An unreadable source is a 400 before anything is
- * reserved. Inert for every other provider.
+ * reserved. A link to outside content is first held to the deployment's
+ * link-import switch, in every edition: where link imports are off it is
+ * refused (403, nothing read, created or held). Inert for every other provider.
  */
 async function topazPlanPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   if (!isTopazBody(req.body)) return
@@ -162,6 +165,10 @@ async function topazPlanPreHandler(req: FastifyRequest, reply: FastifyReply): Pr
   const videoUrl = typeof body.videoUrl === "string" ? body.videoUrl : undefined
   // No URL (or one Zod will refuse) → the handler answers the validation error.
   if (!videoUrl || !safeUrlSchema.safeParse(videoUrl).success) return
+  // Measuring the clip reads the link, and the run hands it to the model:
+  // the deployment's switch is asked first.
+  const linkRefused = linkImportRefusal(videoUrl)
+  if (linkRefused) return reply.status(403).send({ error: linkRefused })
   try {
     req.topazVideoUpscale = await planTopazVideoUpscale(videoUrl, body)
   } catch (err) {
@@ -182,20 +189,6 @@ const nodaroNotServed = { code: NODARO_VIDEO_UPSCALE_NOT_SERVED_CODE, message: N
  * caller sees the same answer whichever check refuses it (decided 2026-11-12).
  */
 const NOT_SERVED_STATUS = 403
-
-/**
- * The client going away before the response is sent: the response's `close`
- * before it finished (never the request's, which fires once the body is read).
- * Aborts the clip's fetch and copy, so a disconnected request stops
- * downloading and frees the person's fetch slot.
- */
-function clientGoneSignal(reply: FastifyReply): AbortSignal {
-  const gone = new AbortController()
-  reply.raw.once("close", () => {
-    if (!reply.raw.writableFinished) gone.abort()
-  })
-  return gone.signal
-}
 
 /**
  * Nodaro Video Upscale's refusal by this deployment, BEFORE the credit guard
@@ -243,6 +236,8 @@ async function nodaroVideoUpscaleBeforePricing(req: FastifyRequest, reply: Fasti
   const linkRefused = linkImportRefusal(videoUrl)
   if (linkRefused) return reply.status(403).send({ error: linkRefused })
   const quote = req.quoteOnly === true
+  // The client going away aborts the clip's fetch and copy, so a disconnected
+  // request stops downloading and frees the person's fetch slot.
   const signal = clientGoneSignal(reply)
   let plan: Awaited<ReturnType<typeof planNodaroVideoUpscale>>
   try {
@@ -251,7 +246,7 @@ async function nodaroVideoUpscaleBeforePricing(req: FastifyRequest, reply: Fasti
     // The client went away mid-fetch: the request ends here, nothing held (a
     // client's own disconnect is no server error to report — as the keyed
     // chat's wait answers it, lib/llm-chat-keyed.ts).
-    if (signal.aborted) return reply.status(499).send({ error: { code: "client_closed", message: "The client closed the request." } })
+    if (signal.aborted) return reply.status(499).send({ error: CLIENT_CLOSED })
     const refusal = nodaroVideoUpscaleRefusalOf(err)
     if (!refusal) throw err
     // "Try again in a moment" (nothing about the clip is wrong: too many fetches

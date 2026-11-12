@@ -8,6 +8,7 @@
 // What a unit file exports, by file:
 //   descriptor.generated.ts → `descriptor: UnitDescriptor` (generated from unit.json)
 //   route.ts / route.ee.ts  → `route: UnitRoute`
+//   quote.ts                → `quote: UnitQuote` (a unit whose run can be priced before it starts, POST /v1/quote)
 //   payload.ts              → `payload: UnitPayload`
 //   worker.ts               → `worker: UnitWorker`
 //   price.ee.ts             → `price: UnitPrice` (Enterprise License, by filename)
@@ -24,6 +25,7 @@ import type { FinalizeClaimant, FinalizeOutcome } from "../lib/job-finalize.js"
 import type { HandlerFn } from "../workers/shared.js"
 import type { PayloadResult } from "../services/workflow-engine/payload-builder.js"
 import type { ResolvedInputs, SimpleNode } from "../services/workflow-engine/types.js"
+import type { RoutePricing } from "../middleware/credit-guard.js"
 
 /** What a handle carries (tools/units/vocabulary.mjs HANDLE_KINDS — the editor's HANDLE_COLORS keys). */
 export type UnitHandleKind =
@@ -129,6 +131,21 @@ export interface UnitDescriptor {
 
 /** route.ts / route.ee.ts — the unit's Fastify plugin (Zod body, creditGuard, the insert-job funnel). */
 export type UnitRoute = FastifyPluginAsync
+
+/**
+ * quote.ts — the price of a run of the unit before it starts. Its run route's
+ * own body schema and pricing chain, declared ONCE: route.ts registers the
+ * chain as its preHandlers (`[...pricing.prechecks, creditGuard(pricing.modelResolver,
+ * pricing.opts)]`), and `POST /v1/quote` (ee/routes/node-quote.ts, through
+ * lib/unit-quotes.ts) runs the very same steps on the same body with no job,
+ * so a quote cannot drift from what the run reserves. The route is the unit's
+ * run route (`nodeRunRoute(type)`, `POST /v1/<type>`).
+ */
+export interface UnitQuote {
+  /** The run route's body schema. A function: a unit module runs no code while it loads (G7). */
+  readonly body: () => z.ZodTypeAny
+  readonly pricing: RoutePricing
+}
 
 /** What payload.ts is handed by buildPayload, after the shared prelude (deny checks, required media). */
 export interface UnitPayloadKit {

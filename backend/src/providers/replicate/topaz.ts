@@ -28,6 +28,7 @@ import type {
 import { probeVideoSource } from "../video/ffmpeg-utils.js"
 import { ensureImageForProvider } from "../kie/video.js"
 import { probeImageDisplaySize } from "../../lib/image-source-size.js"
+import { assertLinkImportAllowed } from "../../lib/link-imports.js"
 import { extractUrl, runReplicatePrediction } from "./client.js"
 import { topazBilledUnits } from "./topaz-units.js"
 
@@ -76,6 +77,10 @@ export async function runTopazVideoUpscale(
   _options?: ProviderOptions,
   reconcileOpts?: ReconcileOpts,
 ): Promise<ProviderResult> {
+  // The route and the workflow run refused an outside link where link imports
+  // are off; a job queued before the switch was turned off is refused here,
+  // final, before the clip is read or sent.
+  assertLinkImportAllowed(videoUrl)
   const run = await resolveTopazVideoRun(videoUrl, request)
   const started = Date.now()
   const { output, metrics } = await runReplicatePrediction({

@@ -18,6 +18,11 @@
  *    `pickerImageOptions(…)`, with no spread after it, or without it, that could
  *    carry another `images`. Options without `images` picture nothing.
  * 4. No other @nodaro/prompts entry hands out the same picture maps or helpers.
+ * 5. The deployment's own pictures (lib/picker-pictures.ts) are read for
+ *    serving only by picker-images.ts — the boot check
+ *    (picker-pictures-check.ts) reads them too, to judge them — and no backend
+ *    file registers any: the platform ships no picture of its own there, only
+ *    a deployment's overlay does.
  *
  * Test files are not scanned: they may mock or read anything.
  */
@@ -56,7 +61,19 @@ const REPO = join(BACKEND, "..")
 const DECIDER = "src/lib/picker-images.ts"
 const PROFILE = "src/lib/surface-profile.ts"
 /** What the decider may take from the picture maps' module. */
-const DECIDER_TAKES = ["PickerImageOptions", "lookPreviewStillUrl"]
+const DECIDER_TAKES = ["PickerImageOptions", "PickerOwnPicture", "lookPreviewStillUrl"]
+
+/** The deployment's own pictures: the registry, its readers and who may use them. */
+const REGISTRY = "src/lib/picker-pictures.ts"
+const CHECK = "src/lib/picker-pictures-check.ts"
+const REGISTRY_READERS: Readonly<Record<string, readonly string[]>> = {
+  registeredPickerPicture: [REGISTRY, DECIDER],
+  hasRegisteredPickerPictures: [REGISTRY, DECIDER],
+  getRegisteredPickerPictures: [REGISTRY, CHECK],
+  // Registration is a deployment's, at its composition root: no backend file calls it.
+  registerPickerPictures: [REGISTRY],
+  resetPickerPicturesForTests: [REGISTRY],
+}
 
 /** Each projection and the index of its options argument. */
 const PROJECTIONS: Readonly<Record<string, number>> = {
@@ -227,6 +244,10 @@ function scanFile(file: string, text: string): Scan {
       }
     }
 
+    if (ts.isIdentifier(node) && Object.hasOwn(REGISTRY_READERS, node.text) && !REGISTRY_READERS[node.text]!.includes(file)) {
+      fail(node, `uses ${node.text}: only ${REGISTRY_READERS[node.text]!.join(" / ")} may (a reply takes the deployment's pictures from ${GATE}())`)
+    }
+
     if (ts.isIdentifier(node) && node.text === SETTING) {
       settingRefs += 1
       const declaredHere = file === PROFILE && ts.isFunctionDeclaration(node.parent) && node.parent.name === node
@@ -254,7 +275,7 @@ function scanBackend(): Map<string, Scan> {
   for (const path of [...sourceFiles(join(BACKEND, "src")), ...sourceFiles(join(BACKEND, "scripts"))]) {
     const text = readFileSync(path, "utf8")
     // Every rule below needs one of these words in the file; skip parsing the rest.
-    if (!/picker-art|@nodaro\/prompts|packages\/prompts|catalogs|surfaceCatalogImages|projectPickerCatalog|projectAllCatalogs|summarizePickerCatalogs/.test(text)) continue
+    if (!/picker-art|@nodaro\/prompts|packages\/prompts|catalogs|surfaceCatalogImages|projectPickerCatalog|projectAllCatalogs|summarizePickerCatalogs|PickerPicture/.test(text)) continue
     const file = relative(BACKEND, path).split(sep).join("/")
     scans.set(file, scanFile(file, text))
   }
@@ -267,6 +288,8 @@ describe("picker pictures have one decider on the server", () => {
   it("scans the decider, the profile reader and every file that calls a projection", () => {
     expect(scans.has(DECIDER)).toBe(true)
     expect(scans.has(PROFILE)).toBe(true)
+    expect(scans.has(REGISTRY)).toBe(true)
+    expect(scans.has(CHECK)).toBe(true)
     expect(scans.has("src/routes/picker-catalogs.ts")).toBe(true)
   })
 
@@ -353,6 +376,14 @@ describe("the guard's own matching", () => {
     flags("src/routes/x.ts", 'import { SOUND_ART } from "../../../packages/prompts/src/picker-art/index.js"', /picture maps/)
     flags("scripts/x.mts", 'import { SOUND_ART } from "@nodaro/prompts/dist/index.js"', /picture maps/)
     expect(scanFile(DECIDER, 'export * from "@nodaro/prompts/picker-art"').pictureNames).toEqual(["*"])
+  })
+
+  it("flags the deployment's own pictures read or registered anywhere but their places", () => {
+    flags("src/routes/x.ts", 'import { registeredPickerPicture } from "../lib/picker-pictures.js"\nregisteredPickerPicture("style", "a")', /only src\/lib\/picker-pictures.ts \/ src\/lib\/picker-images.ts may/)
+    flags("src/routes/x.ts", 'import { getRegisteredPickerPictures } from "../lib/picker-pictures.js"', /uses getRegisteredPickerPictures/)
+    flags("src/lib/x.ts", 'import { registerPickerPictures } from "./picker-pictures.js"\nregisterPickerPictures([])', /uses registerPickerPictures: only src\/lib\/picker-pictures.ts may/)
+    ok(DECIDER, 'import { hasRegisteredPickerPictures, registeredPickerPicture } from "./picker-pictures.js"')
+    ok(CHECK, 'import { getRegisteredPickerPictures } from "./picker-pictures.js"')
   })
 
   it("flags the setting read anywhere but the decider", () => {

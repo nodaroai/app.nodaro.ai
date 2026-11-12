@@ -58,6 +58,14 @@ export interface PickerOption {
    * large tile stays sharp; `imageUrl` is its 480px member.
    */
   imageSrcSet?: string
+  /**
+   * Absolute URL of the option's enlarged picture: the larger version to show
+   * where your picker shows the option big (hover, zoom, a detail view).
+   * Present only on a deployment that shows its own pictures (its surface
+   * profile's `catalogs.images: "own"`) and gave one for this option; absent
+   * everywhere else, so draw `imageUrl` there instead.
+   */
+  imageLargeUrl?: string
 }
 
 export interface PickerDimension {

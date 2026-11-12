@@ -60,7 +60,7 @@ vi.mock("../combine-videos.js", () => ({
   pickTargetFps: async () => 30,
 }))
 
-import { cameraMegapixelsOf, canvasPeakMemoryMiB, defaultPeakMemoryMiB, inputsPeakMemoryMiB, UNKNOWN_INPUTS } from "../ffmpeg-memory-model.js"
+import { cameraMegapixelsOf, canvasPeakMemoryMiB, defaultPeakMemoryMiB, inputsPeakMemoryMiB, toneMapPeakMemoryMiB, UNKNOWN_INPUTS } from "../ffmpeg-memory-model.js"
 import { ffmpegMemoryBudget } from "../ffmpeg-memory.js"
 import { applyEdl, buildSliceCommand, slicePeakMemoryMiB, type SliceOptions } from "../apply-edl.js"
 
@@ -161,6 +161,28 @@ describe("defaultPeakMemoryMiB — a launch that predicts nothing: 393 + 22.9·T
 
   it("weighs the encoder's and the decoders' counts as the canvas model does", () => {
     expect(defaultPeakMemoryMiB({ decode: 2, filter: 2, encode: 32 })).toBeGreaterThan(defaultPeakMemoryMiB({ decode: 32, filter: 32, encode: 2 }))
+  })
+})
+
+describe("toneMapPeakMemoryMiB - an HDR source's tone-map (decided 2026-11-12, not measured)", () => {
+  // Its float RGB frames: 3 float links (zscale, zscale, tonemap) x 2 frames each x 12 bytes a pixel.
+  const PER_MEGAPIXEL = 72
+
+  it("is 72 MiB per canvas megapixel: about 597 MiB at 4K, 149 at 1080p", () => {
+    expect(toneMapPeakMemoryMiB(UHD)).toBeCloseTo(8.2944 * PER_MEGAPIXEL, 6)
+    expect(toneMapPeakMemoryMiB(FHD)).toBeCloseTo(2.0736 * PER_MEGAPIXEL, 6)
+  })
+
+  it("puts a launch that tone-maps (`toneMap`) above the same launch without it by that much, whatever its threads", () => {
+    for (const t of [2, 8, 32]) {
+      const extras = { inputs: 2, cameraMegapixels: cameraMegapixelsOf(UHD) }
+      const sdr = canvasPeakMemoryMiB(UHD, 2, same(t), extras)
+      const hdr = canvasPeakMemoryMiB(UHD, 2, same(t), { ...extras, toneMap: true })
+      expect(hdr - sdr, `T = ${t}`).toBeGreaterThanOrEqual(Math.floor(8.2944 * PER_MEGAPIXEL))
+      expect(hdr - sdr, `T = ${t}`).toBeLessThanOrEqual(Math.ceil(8.2944 * PER_MEGAPIXEL))
+      // `false` or absent: the prediction exactly as before.
+      expect(canvasPeakMemoryMiB(UHD, 2, same(t), { ...extras, toneMap: false })).toBe(sdr)
+    }
   })
 })
 
@@ -545,11 +567,12 @@ describe("census: every caller of the memory model states its input count", () =
     }
     // Every production caller today: the re-encode, the yt-dlp recode, the
     // media proxy, the face detector's frame decode, the timeline slice, Mask
-    // Composite (three files for the video fill, two for pixelate / blur), Video Mask (its source re-encode, and one estimate at the mask's geometry its chunk split, cut scan and mask encode share), Video Face Mesh (its two lockstep decodes, the clip and the mask)
-    // and Split into Chunks' constant-rate re-encode, and Video Overlay's render
+    // Composite (three files for the video fill, two for pixelate / blur), Video Mask (its source re-encode, and one estimate at the mask's geometry its chunk split, cut scan and mask encode share), Video Face Mesh (its two lockstep decodes, the clip and the mask),
+    // Split into Chunks' constant-rate re-encode, the extend stitch (two inputs, one encode), and Video Overlay's render
     // when it decodes more than the base (its video layer files and the base).
     expect(sites.map((s) => s.file).sort()).toEqual([
       "providers/video/edl-timeline.ts",
+      "providers/video/extend-stitch.ts",
       "providers/video/mask-composite.ts",
       "providers/video/mask-composite.ts",
       "providers/video/split-media.ts",

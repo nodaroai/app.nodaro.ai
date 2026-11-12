@@ -67,7 +67,9 @@ export interface VideoToVideoParams extends GenerationSessionParams {
 /** One way the platform shaped the price — shown so a client can explain it. */
 export interface QuoteAdjustment {
   /** Stable code, e.g. `ref_video_length`, `extra_reference_images`,
-   *  `loop_trim_addon`, `voiced_audio_addon`, `params_adjusted`. */
+   *  `loop_trim_addon`, `voiced_audio_addon`, `params_adjusted`,
+   *  `output_size` (priced by the output's size), `max_images` (priced as the
+   *  most images the run can return). */
   readonly code: string
   readonly message: string
   /** Credits this adjustment adds to `reserve`, when it is a separate amount. */
@@ -76,7 +78,9 @@ export interface QuoteAdjustment {
 
 /** Something the caller should know before running. */
 export interface QuoteWarning {
-  /** Stable code, e.g. `ref_video_unmeasured`, `settles_to_actual`. */
+  /** Stable code, e.g. `ref_video_unmeasured`, `image_size_unmeasured`,
+   *  `settles_to_actual` (`reserve` is the most the run can cost: it is
+   *  charged for what it delivers and the rest is refunded). */
   readonly code: string
   readonly message: string
 }

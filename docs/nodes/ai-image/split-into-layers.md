@@ -108,7 +108,11 @@ The base picture and every layer are filed in your Library; each layer is filed 
 
 ## API
 
-`POST /v1/split-into-layers` with `{ imageUrl, maxLayers?, size?, prompt? }` queues a job and answers `{ jobId }`; a malformed request answers `400 validation_error` before any credits are held. The finished job's `output_data.imageUrl` is the base picture, `output_data.layers` the layer files in order, `output_data.layerData` the layer data above, `output_data.layerCount` the number of layers saved and `output_data.layersNotSaved` the number the model returned that could not be saved (0 when every layer was saved). See [API Integration](../../api-integration.md) and the [SDK Reference](../../sdk-reference.md) (`client.media.splitIntoLayers`). MCP: `split_into_layers`. CLI: `nodaro media split-layers`.
+`POST /v1/split-into-layers` with `{ imageUrl, maxLayers?, size?, prompt?, sessionId?, origin? }` queues a job and answers `{ jobId }`; a malformed request answers `400 validation_error` before any credits are held. `sessionId` files the job in one of your sessions and `origin` tags it with your app's slug; an `Idempotency-Key` header makes a retry answer the job the first request started (`{ jobId, deduped: true }`) instead of starting a second one.
+
+The finished job's `output_data.imageUrl` is the base picture, `output_data.layers` the layer files in order, `output_data.layerData` the layer data above, `output_data.layerCount` the number of layers saved and `output_data.layersNotSaved` the number the model returned that could not be saved (0 when every layer was saved). See [API Integration](../../api-integration.md) and the [SDK Reference](../../sdk-reference.md) (`client.media.splitIntoLayers`). MCP: `split_into_layers`. CLI: `nodaro media split-layers`.
+
+**The price before a run.** `POST /v1/quote` with `{ "type": "split-into-layers", "params": { … the same body … } }` answers the hold without starting anything: `identifier` is the row it holds (`split-into-layers:<1k|2k>:<images>`), `reserve` the credits, a `max_images` adjustment says how many images that is, and the warning `settles_to_actual` says it is the most the run can cost. Max layers 5 at 1K quotes 64 credits<!-- credits: split-into-layers:1k:6 -->; the default quotes 104 credits<!-- credits: split-into-layers:1k:10 -->. SDK: `client.nodes.quote("split-into-layers", body)`. A deployment that does not offer you the node refuses the quote as it refuses the run (`403 node_not_available`).
 
 ## Tips
 

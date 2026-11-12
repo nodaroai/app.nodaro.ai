@@ -226,14 +226,17 @@ describe("runModel — a withheld run model is refused before the handler", () =
 })
 
 describe("the guard carries what it judges, for the route census", () => {
-  it("exposes the resolver and the run model on the preHandler", () => {
+  it("exposes the resolver, the run model and the options it was built with on the preHandler", () => {
     const resolver = () => "x"
-    const guard = creditGuard(resolver, { runModel })
-    expect(creditGuardModelOf(guard)).toEqual({ modelResolver: resolver, runModel, denyResolvedModel: false })
+    const opts = { runModel }
+    const guard = creditGuard(resolver, opts)
+    expect(creditGuardModelOf(guard)).toEqual({ modelResolver: resolver, runModel, denyResolvedModel: false, opts })
+    expect(creditGuardModelOf(guard)?.opts).toBe(opts)
     expect(creditGuardModelOf(creditGuard(resolver, { denyResolvedModel: true }))).toEqual({
       modelResolver: resolver,
       runModel: undefined,
       denyResolvedModel: true,
+      opts: { denyResolvedModel: true },
     })
     expect(creditGuardModelOf(() => undefined)).toBeUndefined()
   })

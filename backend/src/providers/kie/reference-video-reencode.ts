@@ -19,7 +19,8 @@
  *   frame count, same timestamps, same frame rate, same length; no trim, no
  *   scale, no filter (a phone clip's rotation is applied, so it is stored the
  *   way it is shown);
- * - the picture keeps the source's quality (the house rule for a re-encode):
+ * - the picture keeps the source's quality (the house rule for a re-encode,
+ *   `../video/matched-encode.ts`):
  *   H.264 at the source's own picture bitrate, in two passes (one pass aims
  *   low on a short clip), its pixel format where 8-bit H.264 can hold it
  *   (Seedance's 4:4:4 MOV stays 4:4:4) and its colour tags; a bitrate the
@@ -41,7 +42,8 @@
  */
 import { stat } from "node:fs/promises"
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, runFfprobe, createWorkDir, cleanupWorkDir } from "../video/ffmpeg-utils.js"
+import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "../video/ffmpeg-utils.js"
+import { MATCHED_FALLBACK_CRF, matchedPictureArgs, probeMatched, type MatchedProbe } from "../video/matched-encode.js"
 import { reencodePeakMemoryMiB } from "../video/video-file-stages.js"
 import { uploadJobScratchFile } from "../../lib/job-scratch.js"
 import { createSanitizedError } from "./client.js"
@@ -69,31 +71,14 @@ export function referenceVideoMaxBytes(provider: string): number {
  *  target. */
 const SIZE_HEADROOM = 0.9
 
-/** The constant quality the picture is encoded at when its bitrate is unknown (visually lossless). */
-export const REFERENCE_VIDEO_FALLBACK_CRF = "14"
+/** The constant quality the picture is encoded at when its bitrate is unknown (visually lossless; `MATCHED_FALLBACK_CRF`). */
+export const REFERENCE_VIDEO_FALLBACK_CRF = MATCHED_FALLBACK_CRF
 
-/** Pixel formats an 8-bit libx264 keeps as they are; any other is encoded as yuv420p. */
-const KEPT_PIX_FMTS = new Set(["yuv420p", "yuv422p", "yuv444p"])
+/** What the probe read of the downloaded clip (`MatchedProbe`). Absent = not reported. */
+export type ReferenceVideoProbe = MatchedProbe
 
-/** What the probe read of the downloaded clip. Absent = not reported. */
-export interface ReferenceVideoProbe {
-  width?: number
-  height?: number
-  pixFmt?: string
-  /** Bits per second of the picture alone. */
-  videoBitRate?: number
-  /** Bits per second of the sound (every track). */
-  audioBitRate?: number
-  /** The first sound track's codec. */
-  audioCodec?: string
-  durationSec?: number
-  /** The file is QuickTime (major brand `qt`), not MP4. */
-  quickTime?: boolean
-  colorSpace?: string
-  colorPrimaries?: string
-  colorTransfer?: string
-  colorRange?: string
-}
+/** Probe a local file: the matched encode's own (`probeMatched`). Never throws. */
+export { probeMatched as probeReferenceVideo }
 
 export type ReferenceVideoContainer = "mp4" | "mov"
 
@@ -161,30 +146,17 @@ export function referenceVideoTargetBitRate(probe: ReferenceVideoProbe, maxBytes
 
 /**
  * The picture encode shared by both passes (`pass` only with a known bitrate):
- * the source's quality, as the module header sets out. Also the picture of a
- * chained extend's cut (`lib/seedance-extend-mov-chain.ts`).
+ * the source's quality (`matchedPictureArgs`), at the bitrate that fits the
+ * provider's size limit `maxBytes` (`referenceVideoTargetBitRate`), the
+ * constant-quality fallback capped to it (`referenceVideoMaxBitRate`). Also
+ * the picture of a chained extend's cut (`lib/seedance-extend-mov-chain.ts`).
  */
 export function referenceVideoPictureArgs(probe: ReferenceVideoProbe, maxBytes: number, pass?: { n: 1 | 2; log: string }): string[] {
-  const pix = probe.pixFmt === "yuvj420p" ? "yuv420p" : probe.pixFmt
-  const pixFmt = pix && KEPT_PIX_FMTS.has(pix) ? pix : "yuv420p"
-  const tag = (flag: string, v: string | undefined) => (v && v !== "unknown" ? [flag, v] : [])
-  const rate = referenceVideoTargetBitRate(probe, maxBytes)
-  const max = referenceVideoMaxBitRate(probe, maxBytes)
-  const quality = rate
-    ? ["-b:v", String(rate), ...(pass ? ["-pass", String(pass.n), "-passlogfile", pass.log] : [])]
-    : ["-crf", REFERENCE_VIDEO_FALLBACK_CRF, ...(max !== undefined ? ["-maxrate", String(max), "-bufsize", String(max * 2)] : [])]
-  return [
-    // Every frame as it is: no frame dropped, duplicated or retimed.
-    "-fps_mode", "passthrough",
-    "-c:v", "libx264",
-    "-preset", "medium",
-    ...quality,
-    "-pix_fmt", pixFmt,
-    ...tag("-colorspace", probe.colorSpace),
-    ...tag("-color_primaries", probe.colorPrimaries),
-    ...tag("-color_trc", probe.colorTransfer),
-    ...tag("-color_range", probe.colorRange),
-  ]
+  return matchedPictureArgs(probe, {
+    targetBitRate: referenceVideoTargetBitRate(probe, maxBytes),
+    maxBitRate: referenceVideoMaxBitRate(probe, maxBytes),
+    pass,
+  })
 }
 
 /**
@@ -224,68 +196,6 @@ export function reencodeFirstPassArgs(input: string, probe: ReferenceVideoProbe,
   ]
 }
 
-const num = (v: unknown): number | undefined => {
-  const n = Number(v)
-  return Number.isFinite(n) && n > 0 ? n : undefined
-}
-const text = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined)
-
-/**
- * Read ffprobe's JSON (`probeReferenceVideo`'s arguments). The picture's
- * bitrate is the stream's own, else the container's less the sound's (a
- * stream in some containers reports none). Never throws: what it cannot read
- * is left out, and nothing is read without a picture stream.
- */
-export function parseReferenceVideoProbe(json: string): ReferenceVideoProbe {
-  let parsed: { streams?: Array<Record<string, unknown>>; format?: Record<string, unknown> }
-  try {
-    parsed = JSON.parse(json) as typeof parsed
-  } catch {
-    return {}
-  }
-  const streams = Array.isArray(parsed?.streams) ? parsed.streams : []
-  const v = streams.find((s) => s.codec_type === "video")
-  if (!v) return {}
-  const audio = streams.filter((s) => s.codec_type === "audio")
-  const audioBitRate = audio.reduce((n, a) => n + (num(a.bit_rate) ?? 0), 0) || undefined
-  const audioCodec = text(audio[0]?.codec_name)
-  const formatRate = num(parsed.format?.bit_rate)
-  const videoBitRate = num(v.bit_rate) ?? (formatRate && formatRate > (audioBitRate ?? 0) ? formatRate - (audioBitRate ?? 0) : undefined)
-  const brand = text((parsed.format?.tags as Record<string, unknown> | undefined)?.major_brand)?.trim()
-  const width = num(v.width)
-  const height = num(v.height)
-  const durationSec = num(parsed.format?.duration)
-  return {
-    ...(width ? { width } : {}),
-    ...(height ? { height } : {}),
-    ...(text(v.pix_fmt) ? { pixFmt: text(v.pix_fmt) } : {}),
-    ...(videoBitRate ? { videoBitRate } : {}),
-    ...(audioBitRate ? { audioBitRate } : {}),
-    ...(audioCodec ? { audioCodec } : {}),
-    ...(durationSec ? { durationSec } : {}),
-    ...(brand !== undefined ? { quickTime: brand === "qt" } : {}),
-    ...(text(v.color_space) ? { colorSpace: text(v.color_space) } : {}),
-    ...(text(v.color_primaries) ? { colorPrimaries: text(v.color_primaries) } : {}),
-    ...(text(v.color_transfer) ? { colorTransfer: text(v.color_transfer) } : {}),
-    ...(text(v.color_range) ? { colorRange: text(v.color_range) } : {}),
-  }
-}
-
-/** Probe the local `file`. Never throws: an unreadable probe is an empty one (constant quality, container by address). */
-export async function probeReferenceVideo(file: string): Promise<ReferenceVideoProbe> {
-  try {
-    return parseReferenceVideoProbe(await runFfprobe([
-      "-v", "error",
-      "-show_entries",
-      "stream=codec_type,codec_name,width,height,pix_fmt,bit_rate,color_space,color_primaries,color_transfer,color_range:format=bit_rate,duration:format_tags=major_brand",
-      "-of", "json",
-      file,
-    ]))
-  } catch {
-    return {}
-  }
-}
-
 /**
  * The copy failures the AAC encode cures: the container cannot hold the
  * sound (stream #1: the picture is #0) as it is — the MP4 muxer's wording,
@@ -317,7 +227,7 @@ export async function reencodeReferenceVideo(
     workDir = await createWorkDir("ref-video-reencode")
     const inputPath = join(workDir, "input")
     await atInputStep(label, videoUrl, "download", () => downloadFile(videoUrl, inputPath))
-    const probe = await probeReferenceVideo(inputPath)
+    const probe = await probeMatched(inputPath)
     const container = referenceVideoContainer(probe, videoUrl)
     const outputPath = join(workDir, `reencoded.${container}`)
     // Admitted like every ffmpeg, at the clip's own size (unknown = assumed 4K).

@@ -172,3 +172,83 @@ describe("POST /v1/credits/seedance-hd-estimate", () => {
     expect(res.json().data.credits).toBeLessThan(STATIC_CREDIT_COSTS["seedance-2-5-hd:4s"]!)
   })
 })
+
+/**
+ * `plannedDraft` (with no draft named): the finalize of a draft not made yet,
+ * at the length its run reserves for. Additive: a request naming a draft, and
+ * one with neither, are answered exactly as before. The money is held to the
+ * server's workflow estimate in
+ * ee/billing/__tests__/seedance-draft-finalize-estimate.test.ts.
+ */
+describe("POST /v1/credits/seedance-hd-estimate with a planned draft", () => {
+  let app: FastifyInstance
+  const PLANNED = { provider: "seedance-2-5", resolution: "480p", duration: 5, draft: true }
+
+  beforeEach(async () => {
+    resolver.calls = []
+    resolver.result = PLAN
+    resolver.throws = false
+    app = Fastify({ logger: false })
+    // The app's rate limiter: opt-in per route, as app.ts registers it.
+    await app.register((await import("@fastify/rate-limit")).default, { global: false })
+    app.addHook("preHandler", async (req) => {
+      const user = req.headers["x-test-user"]
+      if (typeof user === "string") req.userId = user
+    })
+    registerSeedanceHdEstimate(app)
+    await app.ready()
+  })
+  afterEach(async () => { await app.close() })
+
+  const post = (payload: Record<string, unknown>) =>
+    app.inject({ method: "POST", url: URL_, payload, headers: { "x-test-user": "user-a" } })
+
+  it("a draft with no reference video: its length's row (5 s → 1980), without resolving anything", async () => {
+    const res = await post({ plannedDraft: PLANNED })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ data: { credits: STATIC_CREDIT_COSTS["seedance-2-5-hd:5s"], minimum: false } })
+    expect(STATIC_CREDIT_COSTS["seedance-2-5-hd:5s"]).toBe(1980)
+    expect(resolver.calls).toEqual([])
+  })
+
+  it("an Auto draft with no reference video: the model's longest take, the 30 s row (11850)", async () => {
+    const res = await post({ plannedDraft: { ...PLANNED, duration: -1 } })
+    expect(res.json()).toEqual({ data: { credits: 11850, minimum: false } })
+  })
+
+  it("a named draft wins: the answer is the named draft's, byte for byte, whatever plannedDraft holds", async () => {
+    const named = await post({ taskId: "task-draft" })
+    for (const plannedDraft of [PLANNED, { provider: 42 }, "nonsense"]) {
+      const both = await post({ taskId: "task-draft", plannedDraft })
+      expect(both.statusCode).toBe(named.statusCode)
+      expect(both.body).toBe(named.body)
+    }
+    expect(resolver.calls).toHaveLength(4)
+  })
+
+  it.each<[string, Record<string, unknown>]>([
+    ["a model that makes no draft", { ...PLANNED, provider: "seedance-2" }],
+    ["Draft off", { ...PLANNED, draft: false }],
+    ["a malformed clip list", { ...PLANNED, referenceVideoUrls: ["not a url"] }],
+    ["too many clips not produced yet", { ...PLANNED, unknownReferenceVideos: 99 }],
+  ])("%s is a 400 validation_error", async (_name, plannedDraft) => {
+    const res = await post({ plannedDraft })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("an unknown reference task type is ignored, never refused (as the reference-video quote ignores it)", async () => {
+    const res = await post({ plannedDraft: { ...PLANNED, referenceTaskType: "from-the-future" } })
+    expect(res.json()).toEqual((await post({ plannedDraft: PLANNED })).json())
+  })
+
+  it("only a planned-draft quote is rate-limited: a named draft and the minimum carry no rate-limit headers, as before", async () => {
+    const limited = await post({ plannedDraft: PLANNED })
+    expect(limited.headers["x-ratelimit-limit"]).toBe("60")
+    for (const payload of [{ taskId: "task-draft" }, {}, { sourceJobId: PLAN.sourceJobId, plannedDraft: PLANNED }]) {
+      const res = await post(payload)
+      expect(res.statusCode).toBe(200)
+      expect(res.headers["x-ratelimit-limit"], JSON.stringify(payload)).toBeUndefined()
+    }
+  })
+})

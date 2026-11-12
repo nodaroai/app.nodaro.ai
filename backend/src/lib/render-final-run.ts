@@ -145,8 +145,12 @@ export async function renderFinalCredits(input: {
 }): Promise<RenderFinalCredits | null> {
   if (!hasCredits()) return null
   const { estimateRunSetFigures, checkRunSetCredits, runHoldsMeteredLlmEstimate } = await import("../ee/billing/credits.js")
+  const { existingDraftFinalizePricer } = await import("../ee/billing/seedance-draft-finalize-credits.js")
   const priced = withRunOverrides(input.nodes as Array<GraphNode & { type?: string }>, input.overrides)
-  const resumed = await resumedCredits(input)
+  // The continuation's source is read at most once, by whichever price needs it.
+  const continuation = input.continuation && { ...input.continuation, source: once(input.continuation.source) }
+  const resumed = await resumedCredits({ ...input, continuation })
+  const stateTaskIdOf = await continuationTaskIdOf(priced, input.runNodeIds, continuation)
   // The figure's own lines: a part priced elsewhere (a UGC video's, from its quote) says itself whether it is an estimate.
   const lines: Array<{ readonly credits: number; readonly estimate: boolean }> = []
   const figures = await estimateRunSetFigures(
@@ -157,6 +161,9 @@ export async function renderFinalCredits(input: {
     // A use-case node reads the recordings and framing source its user's run reads: priced as it runs.
     await usecaseViewerEstimateFor(priced as unknown as Parameters<typeof estimateRunSetFigures>[0], input.userId),
     (_nodeId, credits, estimate) => lines.push({ credits, estimate }),
+    // A finalize of a Seedance draft that already exists: priced exactly, as its gate prices that draft —
+    // the task the run finalizes, which a continued run takes from the states it is seeded from.
+    { priceOf: existingDraftFinalizePricer(input.userId), ...(stateTaskIdOf ? { stateTaskIdOf } : {}) },
   )
   const resumedTotal = [...resumed.values()].reduce((sum, credits) => sum + credits, 0)
   const estimatedCredits = figures.credits + resumedTotal
@@ -186,6 +193,39 @@ export async function renderFinalCredits(input: {
     sufficient,
     available: check.available,
     ...(!sufficient && check.message !== undefined ? { message: check.message } : {}),
+  }
+}
+
+/** `load`, called at most once: every caller shares its one answer. */
+function once<T>(load: () => Promise<T>): () => Promise<T> {
+  let answer: Promise<T> | undefined
+  return () => (answer ??= load())
+}
+
+/**
+ * The provider task a node that does not run again hands on in a continued
+ * run, from the states the run is seeded from (`nodeStates[id].output.kieTaskId`,
+ * what the run's input resolver reads before the node's own data). Read only
+ * when the run executes a Video Upscale node — a Seedance 2.5 HD finalize
+ * names its draft by that task; undefined without a continuation, or when its
+ * source cannot be read (the saved graph's task is read, as before).
+ */
+async function continuationTaskIdOf(
+  nodes: ReadonlyArray<{ readonly id: string; readonly type?: string }>,
+  runNodeIds: readonly string[],
+  continuation: ContinuationPricing | undefined,
+): Promise<((nodeId: string) => string | undefined) | undefined> {
+  const run = new Set(runNodeIds)
+  if (!continuation || !nodes.some((n) => run.has(n.id) && n.type === "video-upscale")) return undefined
+  try {
+    const states = (await continuation.source())?.nodeStates
+    if (!states) return undefined
+    return (nodeId) => {
+      const taskId = (states[nodeId]?.output as { kieTaskId?: unknown } | undefined)?.kieTaskId
+      return typeof taskId === "string" && taskId !== "" ? taskId : undefined
+    }
+  } catch {
+    return undefined
   }
 }
 

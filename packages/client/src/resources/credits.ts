@@ -198,7 +198,7 @@ export interface ModelCostsResult {
   /**
    * The identifiers in `data` whose figure is an ESTIMATE, not a fixed price:
    * metered LLM price keys (`llmPriceKey` from `@nodaro/shared/llm-models`,
-   * `<feature>:<model>[:direct]`), charged on what the call actually uses.
+   * `<feature>:<model>[:direct | :effort-<level>]`), charged on what the call actually uses.
    * Show these as `≈N`. Omitted when there are none, so a batch of fixed ids
    * answers exactly as it always has. A metered key that lands in `missing`
    * instead means the server is not pricing LLM calls per model — show no

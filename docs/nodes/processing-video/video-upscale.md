@@ -46,6 +46,8 @@ For example, a 5-second 720p clip upscaled to 1080p at 30 fps holds 176 credits<
 
 **The price you see before you run** is the hold, marked as an estimate (≈). The editor reads the clip's length from the node wired into it when it knows it (an upload, a generation's duration), and otherwise prices a 10-second clip; it assumes a 16:9 frame and, with "Same as source", 30 fps. The run itself measures the real clip, so the amount held can differ from the estimate.
 
+**Clips from a link.** Topaz measures a clip from a link to another site before it holds anything, and hands that link to the model. A deployment that has turned off links to other sites refuses such a clip first, before anything is read or held, with its standard message (`403 link_imports_disabled`; upload the file instead). This applies on every edition, and to a workflow run as well: there the node fails with that code. A clip already stored on Nodaro is not affected.
+
 ### Nodaro Video Upscale
 
 Provider id `nodaro-video-upscale`. Upscales any clip of up to **60 seconds** and **50 MB** into a **1080p**, **2K** or **4K** frame:
@@ -105,7 +107,7 @@ Provider id `seedance-2-5-hd`. It finalizes a **Seedance 2.5 draft** — a Gener
 
 #### Credits
 
-The price is set by the **draft**, never by this node: the length of the take the provider rendered for it, in whole seconds (a clip's 4.04 s counts as 4 s; anything under 4 s counts as 4 s, the most is 30 s), and whether the draft used a reference **video**. Reference images do not change the price. The length is the take itself, not the clip you see in the node: an audio track merged onto the draft, or a Smart Loop Cut, changes the stored clip but not the take the finalize re-renders.
+The price is set by the **draft**, never by this node: the length of the take the provider rendered for it, in whole seconds (a clip's 4.04 s counts as 4 s; anything under 4 s counts as 4 s, the most is 30 s), and whether the draft used a reference **video**. A finalize is never charged for more output than its draft's run reserved: a take that came back longer than the length the draft was held for (see the draft's held length below) is billed at that length. Reference images do not change the price. The length is the take itself, not the clip you see in the node: an audio track merged onto the draft, or a Smart Loop Cut, changes the stored clip but not the take the finalize re-renders.
 
 | Draft | Credits |
 |---|---|
@@ -126,7 +128,29 @@ Worked examples:
 
 The reference-clip seconds are the ones measured when the draft was reserved; a clip that could not be measured counts as 30 s (the per-clip cap), never less. If the draft's length cannot be read at all, the finalize is refused and nothing is charged.
 
-**The price you see before you run.** The node's Run button shows the **exact** credits for the draft that is wired into it — the same number the run reserves, read from the draft itself (its length and reference clips). Before a draft is wired, or while the wired video cannot be finalized (still rendering, not a draft), it shows **"from N"**: the lowest price any draft can finalize for. The provider dropdown shows the same "from N". That minimum is the cheapest draft there can be: the shortest reference clip Seedance 2.5 accepts (2 s) with the shortest draft (4 s) — **1568** credits<!-- credits: seedance-2-5-hd:4s-ref@1.5 -->, below the 4 s draft without a reference video (**1738**<!-- credits: seedance-2-5-hd:4s -->). The workflow's pre-run cost estimate does not read the draft yet and quotes this provider at its 8 s row.
+**The price you see before you run.** The node's Run button shows the **exact** credits for the draft that is wired into it — the same number the run reserves, read from the draft itself (its length and reference clips). Before a draft is wired, or while the wired video cannot be finalized (still rendering, not a draft), it shows **"from N"**: the lowest price any draft can finalize for. The provider dropdown shows the same "from N". That minimum is the cheapest draft there can be: the shortest reference clip Seedance 2.5 accepts (2 s) with the shortest draft (4 s) — **1568** credits<!-- credits: seedance-2-5-hd:4s-ref@1.5 -->, below the 4 s draft without a reference video (**1738**<!-- credits: seedance-2-5-hd:4s -->).
+
+**The run's estimate, before the draft exists.** When one run makes the draft and finalizes it — **Execute workflow**, an app's run, **Run from here** on the draft node — the workflow's cost estimate (the Run total, the run's confirm and its balance check, and a published app's listed price) quotes the finalize at the length the **draft's run reserves for**: the length the draft is held for, plus its reference clips. That is the most its finalize can be charged — a finalize never bills more output than its draft's run reserved — so the estimate is never below the charge; the finalize itself is then charged by the take it gets, as above. The draft's held length is:
+
+- **No reference video:** the draft's Duration; on **Auto**, 30 s (the longest take Seedance 2.5 makes).
+- **With a reference video**, by the length the draft runs at (as [Use the reference video as](../ai-video/generate-video.md#seedance-25-use-the-reference-video-as) sets it):
+  - **Auto** — which includes **The video to edit** when every clip is 4–30 s long: the longest clip rounded up to a whole second, plus one second (at most 30 s);
+  - **A reference** with Duration on **Auto**: 30 s;
+  - a set length — **Extend this video** on Auto runs at 8 s: the longer of that length and the longest clip, since Seedance may treat a wired clip as the video to edit and render the clip's length.
+
+  A clip made earlier in the same run is not known yet, so it counts as 30 s (the longest clip Seedance 2.5 accepts), both as a reference clip and for the length. So does an uploaded clip in a published app's or template's listed price when the app's user sends their own, as it does in the draft's own listed price.
+
+Worked examples, for a run whose reference clips are uploads it sends as they are:
+
+| Draft the run makes | Quoted as | Credits |
+|---|---|---:|
+| Duration Auto, no reference video | the 30 s price | **13035**<!-- credits: seedance-2-5-hd:30s --> |
+| 5 s, no reference video | the 5 s price | **2178**<!-- credits: seedance-2-5-hd:5s --> |
+| The video to edit, one 6 s clip | 6 + 7 seconds | **3397**<!-- credits: seedance-2-5-hd:4s-ref@3.25 --> |
+| The video to edit, one 20 s clip | 20 + 21 seconds | **10712**<!-- credits: seedance-2-5-hd:4s-ref@10.25 --> |
+| Auto task type, 4 s, one 6 s clip | 6 + 6 seconds | **3135**<!-- credits: seedance-2-5-hd:4s-ref@3 --> |
+
+The editor gets the figure for a draft with a reference video from `POST /v1/credits/seedance-hd-estimate` with `plannedDraft` (see [Seedance 2.5 HD finalize estimates](../../api-integration.md#seedance-25-hd-finalize-estimates)); the server's workflow estimate prices the same draft the same way. With no draft wired, or a video that is not a Seedance 2.5 draft, the estimate quotes this provider at its 8 s row, as before; such a run is refused before anything is reserved. A run that only finalizes a draft you already have (the draft node does not run again) is priced at that draft's **exact** price, read from the draft itself — the same figure as the node's Run button — by the editor's Run total, run confirm and balance check for **Run** or **Run from here** on this node, and by the server's balance check of a **Render final**, a **continue from failed** step and an app's **Retry** of this step. A whole-workflow estimate through the API or MCP still shows this provider's 8 s row for such a finalize.
 
 **Audio.** A draft that got an audio track after it was rendered — the **Audio** input of Generate Video, or the voice of a voiced clip (Character voices / dialogue) — gets the **same** audio mixed onto the 1080p render, with the same settings, at no extra cost. A draft without such a track is delivered as the provider renders it (with the model's own sound if the draft had it). If the audio cannot be re-applied (its source can no longer be read or processed — a network hiccup is retried briefly first), the 1080p video is still delivered and charged, **without** that audio, and the result shows a warning; add the audio back with a **Merge Video & Audio** node. The same happens when the stored draft's picture is not the length of the 1080p take — for example a draft trimmed by a **Smart Loop Cut**: its audio is not copied onto the render, because it would come out truncated or out of sync, so the 1080p video is delivered without it, with the same warning.
 

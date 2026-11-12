@@ -320,3 +320,57 @@ describe("restyle previews (RESTYLE_PREVIEWS)", () => {
     expect(Object.values(LOOK_PREVIEW_SETS.style).filter((u) => !u.endsWith(".png"))).toEqual([])
   })
 })
+
+describe("a deployment's own pictures (PickerImageOptions.own)", () => {
+  const MEDIA = "https://media.example.com/p"
+  const OWN: Record<string, { url: string; largeUrl?: string }> = {
+    "style/anime": { url: `${MEDIA}/anime.webp`, largeUrl: `${MEDIA}/anime.large.webp` },
+    "person/man": { url: `${MEDIA}/man.webp` },
+  }
+  const own = (catalogId: string, optionId: string) => OWN[`${catalogId}/${optionId}`]
+  const OWN_REST: PickerImageOptions = { ...CLOUD, srcSet: true, own }
+  const OWN_MCP: PickerImageOptions = { ...CLOUD, own }
+
+  it("pictures an option by what it returns, with the enlarged picture when a srcset is asked for", () => {
+    expect(pickerOptionImage({ nodeType: "style", catalogId: "style" }, "style", "anime", OWN_REST)).toEqual({
+      url: `${MEDIA}/anime.webp`,
+      largeUrl: `${MEDIA}/anime.large.webp`,
+    })
+    expect(pickerOptionImage({ nodeType: "style", catalogId: "style" }, "style", "anime", OWN_MCP)).toEqual({ url: `${MEDIA}/anime.webp` })
+    expect(pickerOptionImage({ nodeType: "person", catalogId: "person" }, "type", "man", OWN_REST)).toEqual({ url: `${MEDIA}/man.webp` })
+  })
+
+  it("never falls back to a platform picture: an option it has nothing for has none", () => {
+    for (const c of getRegisteredPickerCatalogs()) {
+      for (const { option } of projectedOptions(c, OWN_REST)) {
+        const expected = own(c.catalogId, option.id)
+        expect(option.imageUrl, `${c.catalogId}/${option.id}`).toBe(expected?.url)
+        expect(option.imageLargeUrl, `${c.catalogId}/${option.id}`).toBe(expected?.largeUrl)
+        expect(option.imageSrcSet).toBeUndefined()
+      }
+    }
+  })
+
+  it("no Person / Styling topic has a picture (a topic is not an option)", () => {
+    for (const id of ["person", "styling"]) {
+      const sections = projectPickerCatalog(getPickerCatalog(id)!, { images: OWN_REST }).sections ?? []
+      expect(sections.length).toBeGreaterThan(0)
+      expect(sections.filter((s) => s.imageUrl !== undefined)).toEqual([])
+    }
+  })
+
+  it("the directory counts its pictures", () => {
+    const counted = Object.fromEntries(
+      summarizePickerCatalogs({ images: OWN_MCP }).filter((s) => s.imageCount > 0).map((s) => [s.catalogId, s.imageCount]),
+    )
+    expect(counted).toEqual({ style: 1, person: 1 })
+  })
+
+  it("without it, nothing changes: no option carries imageLargeUrl", () => {
+    for (const images of [CLOUD, COMMUNITY, { ...CLOUD, srcSet: true }]) {
+      for (const c of getRegisteredPickerCatalogs()) {
+        expect(projectedOptions(c, images).filter(({ option }) => option.imageLargeUrl !== undefined)).toEqual([])
+      }
+    }
+  })
+})

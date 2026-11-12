@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { LLM_FEATURE_DEFAULTS, LLM_MODELS, getLlmModel, type LlmModelDef, type LlmReasoningEffort } from "@nodaro/shared/llm-models"
-import { llmPossibleLanes, llmPrimaryLane } from "../../../lib/pricing/llm-cost.js"
+import { laneAddedInputModelIds, llmLaneAddedInputTokens, llmPossibleLanes, llmPrimaryLane } from "../../../lib/pricing/llm-cost.js"
 import { claudeMustServeDirect } from "../../../lib/llm/router.js"
 import type { LlmContentBlock, LlmRequest } from "../../../lib/llm/types.js"
 import {
@@ -189,6 +189,25 @@ describe("llmHoldBaseCredits (D1: primary lane, one attempt, real output cap)", 
   })
 })
 
+// A schema is counted in a request's size only when the model's calls send it
+// (`llmSendsSchema`): gpt-5.2 sends none; Gemini 4 Carbon sends its hint; an
+// unset model is the feature's default, an unknown one counts it.
+describe("llmRequestInputBound: the schema counts only when it is sent", () => {
+  const schema = { type: "object", properties: { mood: { type: "string", enum: ["happy", "sad"] } } }
+  const withSchema = (modelId: string): LlmRequest => ({
+    modelId, system: "", messages: [{ role: "user", content: "x".repeat(30) }], jsonSchema: { name: "r", schema },
+  })
+  const schemaTokens = Math.ceil((30 + JSON.stringify(schema).length) / LLM_CEILING_CHARS_PER_TOKEN) - Math.ceil(30 / LLM_CEILING_CHARS_PER_TOKEN)
+
+  it("gpt-5.2 (no schema sent) leaves it out; Carbon, an unset model and an unknown one count it", () => {
+    expect(schemaTokens).toBeGreaterThan(0)
+    expect(llmRequestInputBound(withSchema("gpt-5.2"))).toBe(10)
+    expect(llmRequestInputBound(withSchema("gemini-4-carbon"))).toBe(10 + schemaTokens)
+    expect(llmRequestInputBound(withSchema(""))).toBe(10 + schemaTokens)
+    expect(llmRequestInputBound(withSchema("no-such-model"))).toBe(10 + schemaTokens)
+  })
+})
+
 describe("llmEstimateBaseCredits", () => {
   it("estimate: llm-chat on Gemini 3.8 Flash is at least 1 credit", () => {
     expect(llmEstimateBaseCredits("llm-chat", "gemini-3.8-flash")).toBe(1)
@@ -216,6 +235,72 @@ describe("llmEstimateBaseCredits", () => {
 
   it("refuses a feature with no typical usage instead of pricing NaN", () => {
     expect(() => llmEstimateBaseCredits("no-such-feature" as MeteredLlmFeature, "claude-opus-5.5")).toThrow(/typical usage/)
+  })
+})
+
+// GPT-6.1 Terra: KIE adds instructions of its own to every call and bills them
+// as input — about 4,400 tokens, with or without an effort (re-measured
+// 2026-11-12 in the afternoon; that morning an effort carried about 25,500).
+// The charge follows the reported usage, which includes them; the estimate and
+// the hold count them too, so the quote matches.
+describe("GPT-6.1 Terra: the input KIE adds is in the estimate and the hold", () => {
+  const TERRA = "gpt-6.1-terra"
+  /** Base credits of `inputTokens` / `outputTokens` at Terra's KIE rate ($0.30 / $1.50 per M), as usdToCredits rounds. */
+  const base = (inputTokens: number, outputTokens: number) => Math.ceil(Math.round(((inputTokens * 0.3 + outputTokens * 1.5) / 1e6 / 0.002) * 1000) / 1000)
+
+  it("pins the added tokens per case, on the KIE lane only, and nowhere else", () => {
+    expect(llmLaneAddedInputTokens(TERRA, "kie")).toBe(4_400)
+    expect(llmLaneAddedInputTokens(TERRA, "kie", "high")).toBe(4_400)
+    expect(llmLaneAddedInputTokens(TERRA, "kie", "low")).toBe(4_400)
+    // `none` is not one of its levels: clamped to no effort, nothing sent.
+    expect(llmLaneAddedInputTokens(TERRA, "kie", "none")).toBe(4_400)
+    expect(llmLaneAddedInputTokens(TERRA, "direct", "high")).toBe(0)
+    expect(laneAddedInputModelIds()).toEqual([TERRA])
+    for (const m of LLM_MODELS) {
+      if (m.id === TERRA) continue
+      expect(llmLaneAddedInputTokens(m.id, "kie"), m.id).toBe(0)
+      expect(llmLaneAddedInputTokens(m.id, "kie", "high"), m.id).toBe(0)
+    }
+  })
+
+  it("a model's price key names its effort exactly when its KIE lane adds input that depends on it", () => {
+    for (const m of LLM_MODELS) {
+      const differs = llmLaneAddedInputTokens(m.id, "kie") !== llmLaneAddedInputTokens(m.id, "kie", m.reasoningEfforts?.[0])
+      expect(m.effortPriced === true, m.id).toBe(differs && (m.reasoningEfforts?.length ?? 0) > 0)
+    }
+  })
+
+  it("estimate: about 4,400 counted at every effort (llm-chat's typical 1k / 1k)", () => {
+    const auto = llmEstimateBaseCredits("llm-chat", TERRA)
+    expect(auto).toBe(base(1_000 + 4_400, 1_000)) // 2
+    expect(auto).toBe(2)
+    for (const effort of ["none", "low", "medium", "high", "xhigh", "max"] as const) expect(llmEstimateBaseCredits("llm-chat", TERRA, effort), effort).toBe(auto)
+  })
+
+  it("estimate: a 2k / 2k call (ai-writer's typical size), the same at every effort", () => {
+    expect(llmEstimateBaseCredits("ai-writer", TERRA)).toBe(base(2_000 + 4_400, 2_000)) // 3
+    expect(llmEstimateBaseCredits("ai-writer", TERRA, "medium")).toBe(llmEstimateBaseCredits("ai-writer", TERRA))
+  })
+
+  it("hold: the request's own bound plus the added tokens, at the output cap it is sent with", () => {
+    // 300 chars → 100 tokens; maxTokens 1,000 (Terra does not reason by default: no floor at Auto).
+    const auto = llmHoldBaseCredits(TERRA, { request: req({ modelId: TERRA, chars: 300, maxTokens: 1_000 }) })
+    const none = llmHoldBaseCredits(TERRA, { request: req({ modelId: TERRA, chars: 300, maxTokens: 1_000, reasoningEffort: "none" }) })
+    const high = llmHoldBaseCredits(TERRA, { request: req({ modelId: TERRA, chars: 300, maxTokens: 1_000, reasoningEffort: "high" }) })
+    expect(auto).toBe(base(100 + 4_400, 1_000))
+    expect(none).toBe(auto)
+    expect(high).toBe(base(100 + 4_400, 1_000))
+    // xhigh / max floor the cap to 32,768.
+    const max = llmHoldBaseCredits(TERRA, { request: req({ modelId: TERRA, chars: 300, maxTokens: 1_000, reasoningEffort: "max" }) })
+    expect(max).toBe(base(100 + 4_400, 32_768))
+  })
+
+  it("leaves its siblings exactly as they were", () => {
+    for (const id of ["gpt-6.1-sol", "gpt-5.6-terra"]) {
+      expect(llmEstimateBaseCredits("llm-chat", id, "high"), id).toBe(llmEstimateBaseCredits("llm-chat", id))
+    }
+    // gpt-6.1-sol: 1k × $0.60 + 1k × $3.00 per M = $0.0036 → 2 base, at any effort.
+    expect(llmEstimateBaseCredits("llm-chat", "gpt-6.1-sol", "high")).toBe(2)
   })
 })
 

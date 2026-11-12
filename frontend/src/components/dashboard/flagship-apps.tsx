@@ -8,6 +8,7 @@ import { PreviewVideo } from "@/components/ui/preview-video"
 import { studioBaseUrl } from "@/lib/studio"
 import { voiceBaseUrl } from "@/lib/voice"
 import { personAppCollage, personAppBaseUrl } from "@/lib/person-app"
+import { useOwnPickerPicturesVersion } from "@nodaro/picker-ui"
 
 /**
  * Flagship "Nodaro apps" band — Nodaro's dedicated, purpose-built products
@@ -104,6 +105,8 @@ function FlagshipCard({ app }: { readonly app: FlagshipApp }) {
   const isVideo = app.media?.type === "video"
   const Icon = app.icon
   const taglineKey = FLAGSHIP_TAGLINE_KEYS[app.id]
+  // A deployment's own photos arrive after the first render: re-render then.
+  useOwnPickerPicturesVersion()
   const collage = app.collage?.() ?? []
 
   const inner = (

@@ -123,7 +123,10 @@ import { characterArtUrl, type CharacterArtFamily } from "./icons/character-art"
  * render when this deployment registered one — with the label as the fallback
  * if it fails to load — otherwise null, so the app card shows its own text.
  * Reads the registry without subscribing: bootstrapLookPreviews() runs before
- * the first render (frontend/src/main.tsx), so the answer is fixed by mount.
+ * the first render (frontend/src/main.tsx), so the platform's renders are fixed
+ * by mount. A deployment's own pictures arrive later, with the server's
+ * catalogs; the callers that mount before then (the app input card) subscribe
+ * through useShowsLookRenders, and the others open after start.
  */
 function renderArtOrNull(pickerKey: string, id: string, label: string): ReactNode {
   return getLookPreviewUrl(pickerKey, id) ? (

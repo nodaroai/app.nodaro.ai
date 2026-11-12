@@ -60,6 +60,14 @@ export interface ProjectedCatalogOption {
    * large tile stays sharp; `imageUrl` is its 480px member.
    */
   imageSrcSet?: string
+  /**
+   * Absolute URL of the option's enlarged picture: the larger version to show
+   * where a picker shows the option big (hover, zoom, a detail view). Present
+   * only on a deployment that shows its own pictures (`catalogs.images:
+   * "own"`) and gave one for this option, on the REST replies; on its media
+   * host, like `imageUrl`. Absent otherwise — draw `imageUrl` there instead.
+   */
+  imageLargeUrl?: string
 }
 
 export interface ProjectedCatalogDimension {

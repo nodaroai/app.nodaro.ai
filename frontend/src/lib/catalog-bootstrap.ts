@@ -1,4 +1,5 @@
 import { surfaceCatalogsRequired } from "./surface-selectors"
+import { applyServerPickerPictures } from "./look-previews-bootstrap"
 import { PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
 import { PEOPLE } from "@nodaro/prompts/person"
 import { registerCatalogPack, resetCatalogPacks, type PickerCatalogInput } from "@nodaro/prompts/catalog-packs"
@@ -32,7 +33,10 @@ import { registerCatalogPack, resetCatalogPacks, type PickerCatalogInput } from 
  *
  * `curated: false` arrives WITHOUT a body (the route omits the projection
  * when it has nothing to say), so a deployment with no packs pays a few
- * cached bytes per page load and registers nothing.
+ * cached bytes per page load and registers nothing — unless it shows its own
+ * picker pictures: then the body comes with `curated: false`, no pack is
+ * registered from it, and its pictures are (look-previews-bootstrap.ts
+ * `applyServerPickerPictures`, which alone decides whether to take them).
  */
 
 interface CatalogsResponse {
@@ -136,6 +140,7 @@ export function bootstrapCatalogs(opts: { timeoutMs?: number } = {}): Promise<vo
         return
       }
       const payload = (await res.json()) as CatalogsResponse
+      applyServerPickerPictures(payload.data)
       const n = applyServerCatalogs(payload)
       if (n > 0) console.info(`[catalog-bootstrap] ${n} curated catalog(s) registered (packs=${payload.packs ?? "?"}, v${payload.version ?? "?"})`)
     } catch (err) {

@@ -6,3 +6,5 @@ export * from "./parameter-picker-icons-weapons"
 export * from "./character-art"
 /** Whether the deployment shows the platform's own picker pictures at all. */
 export * from "./platform-pictures"
+/** A deployment's own picker pictures (catalogs.images: "own"), registered by the app at start. */
+export * from "./own-pictures"

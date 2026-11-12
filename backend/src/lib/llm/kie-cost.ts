@@ -5,7 +5,7 @@
  * wires that count leaves out the caller's own prompt (a few tokens for a
  * long request), so a cost read from it is close to nothing whatever was sent.
  */
-import { getLlmModel } from "@nodaro/shared/llm-models"
+import { getLlmModel, llmSendsSchema } from "@nodaro/shared/llm-models"
 import { calculateLlmCost } from "../pricing/llm-cost.js"
 import type { LlmFailureUsage } from "../llm-errors.js"
 import { extractActualUsd } from "./response.js"
@@ -15,22 +15,36 @@ import type { LlmRequest } from "./types.js"
 export const KIE_IMAGE_ESTIMATE_CHARS = 6_400
 
 /**
+ * The models whose KIE endpoint reports a top-level `usage.input_tokens: 0`
+ * (GPT-6 on codex/v1/responses, measured 2026-10-08 — the real counts sit in
+ * `usage.attribution`). Named one by one, never by an id prefix: GPT-6.1 Terra
+ * shares the endpoint and the `gpt-6` prefix but reports its real input count,
+ * the instructions KIE adds included (measured 2026-11-12), so costing it from
+ * the request's size would leave those billed tokens out.
+ */
+const KIE_INPUT_UNREPORTED: ReadonlySet<string> = new Set(["gpt-6-astra", "gpt-6-luna", "gpt-6-sol", "gpt-6.1-sol"])
+
+/**
  * Whether KIE's reported INPUT token count for `modelId` cannot be billed
  * from: its Claude wires leave the caller's own prompt out of the count (a few
  * tokens for a long request), and its GPT-6 endpoint reports a top-level
- * `input_tokens: 0` (measured 2026-10-08). Such a call is costed from the
- * request's size (`requestChars ÷ 4`) when KIE stated no charge
- * (`kieCostUsd`). Its OUTPUT count is sound and is used as is.
+ * `input_tokens: 0` for the models in {@link KIE_INPUT_UNREPORTED}. Such a call
+ * is costed from the request's size (`requestChars ÷ 4`) when KIE stated no
+ * charge (`kieCostUsd`). Its OUTPUT count is sound and is used as is.
  */
 export function kieInputUntrusted(modelId: string): boolean {
   const model = getLlmModel(modelId)
   if (!model) return false
-  return model.vendor === "anthropic" || model.id.startsWith("gpt-6")
+  return model.vendor === "anthropic" || KIE_INPUT_UNREPORTED.has(model.id)
 }
 
-/** The request's size in characters: system prompt, schema, text, and {@link KIE_IMAGE_ESTIMATE_CHARS} per media block. */
+/**
+ * The request's size in characters: system prompt, schema (only when the
+ * model's calls send it: `llmSendsSchema`), text, and
+ * {@link KIE_IMAGE_ESTIMATE_CHARS} per media block.
+ */
 export function requestChars(req: LlmRequest): number {
-  let chars = req.system.length + (req.jsonSchema ? JSON.stringify(req.jsonSchema.schema).length : 0)
+  let chars = req.system.length + (req.jsonSchema && llmSendsSchema(req.modelId, req.feature) ? JSON.stringify(req.jsonSchema.schema).length : 0)
   for (const message of req.messages) {
     if (typeof message.content === "string") {
       chars += message.content.length

@@ -8,9 +8,13 @@
  * App (frontend/src):
  *  1. Only the bootstrap reads the setting (`surfaceCatalogImages`, declared in
  *     surface-selectors.ts, the one reader of `catalogs.images`) and throws the
- *     two switches: `registerLookPreviews` (the renders on the Nodaro CDN) and
- *     `setPlatformPickerPictures` (the self-hosted photos, emoji and flags).
- *     It alone names the render sets.
+ *     three switches: `registerLookPreviews` (the renders on the Nodaro CDN),
+ *     `setPlatformPickerPictures` (the self-hosted photos, emoji and flags) and
+ *     `registerOwnPickerPictures` (a deployment's own pictures, under "own",
+ *     taken from the server's catalog projection — the API's one picture
+ *     decider — so the editor and the API agree). It alone names the render
+ *     sets. No app file reads the own pictures except through picker-ui's
+ *     helpers.
  *  2. Nothing imports the picture maps' module (`@nodaro/prompts/picker-art`,
  *     the package root, or the package's own files), names a picture map or
  *     base path picker-ui hands out, or writes a /picker-art/ address: a
@@ -23,7 +27,9 @@
  *  4. Every use of a picture path builder or file map sits in a function that
  *     asks `platformPickerPicturesShown()`, and no other file names the maps,
  *     the base paths or the render sets, throws a switch, or writes a
- *     /picker-art/ address.
+ *     /picker-art/ address. A deployment's own pictures are read only by the
+ *     helpers that would otherwise name a platform picture (character-art.ts,
+ *     look-previews/registry.ts).
  *
  * Test files are not scanned.
  */
@@ -60,7 +66,7 @@ function isPictureModule(spec: string): boolean {
 }
 
 /** Names the bootstrap alone may use in the app. */
-const BOOTSTRAP_ONLY = ["registerLookPreviews", "setPlatformPickerPictures", "LOOK_PREVIEW_SETS", "SOUND_RENDER_SETS"]
+const BOOTSTRAP_ONLY = ["registerLookPreviews", "setPlatformPickerPictures", "registerOwnPickerPictures", "LOOK_PREVIEW_SETS", "SOUND_RENDER_SETS"]
 /** Names no app file may use: a map or base path would build a picture address past the switch. */
 const APP_NEVER = [
   "CHARACTER_ART_BASE",
@@ -74,6 +80,12 @@ const APP_NEVER = [
   "soundArtPath",
   "resetPlatformPickerPicturesForTests",
   "resetLookPreviewsForTests",
+  // A deployment's own pictures: drawn through the helpers, never read directly.
+  "ownPickerPicture",
+  "hasOwnPickerPictures",
+  "ownLookPicture",
+  "hasOwnLookPictures",
+  "resetOwnPickerPicturesForTests",
 ]
 /** picker-ui: what each file may take from the picture maps' module. */
 const PICKER_UI_TAKES: Readonly<Record<string, readonly string[]>> = {
@@ -97,12 +109,21 @@ const PICKER_UI_TAKES: Readonly<Record<string, readonly string[]>> = {
   "packages/picker-ui/src/look-previews/sets.ts": ["LOOK_PREVIEW_SETS", "SOUND_RENDER_SETS"],
 }
 const PICTURE_HELPERS = ["packages/picker-ui/src/icons/character-art.ts", "packages/picker-ui/src/icons/sound-art.ts"]
+const OWN_PICTURES = "packages/picker-ui/src/icons/own-pictures.ts"
+/** picker-ui: the helpers that read a deployment's own pictures, where they would name a platform one. */
+const OWN_PICTURE_READERS = [OWN_PICTURES, "packages/picker-ui/src/icons/character-art.ts"]
+const OWN_LOOK_PICTURE_READERS = [OWN_PICTURES, "packages/picker-ui/src/look-previews/registry.ts"]
 /** picker-ui: a use of one of these must sit in a function that asks the switch. */
 const GATED = ["characterArtPath", "characterSectionArtPath", "soundArtFilePath", "soundArtPath", "CHARACTER_ART_FILES", "SOUND_ART_FILES"]
 /** picker-ui: names only their own module (or the helpers / the sets' re-export) may use. */
 const PICKER_UI_CONFINED: Readonly<Record<string, readonly string[]>> = {
   registerLookPreviews: ["packages/picker-ui/src/look-previews/registry.ts"],
   setPlatformPickerPictures: ["packages/picker-ui/src/icons/platform-pictures.ts"],
+  registerOwnPickerPictures: [OWN_PICTURES],
+  ownPickerPicture: OWN_PICTURE_READERS,
+  hasOwnPickerPictures: OWN_PICTURE_READERS,
+  ownLookPicture: OWN_LOOK_PICTURE_READERS,
+  hasOwnLookPictures: OWN_LOOK_PICTURE_READERS,
   LOOK_PREVIEW_SETS: ["packages/picker-ui/src/look-previews/sets.ts"],
   SOUND_RENDER_SETS: ["packages/picker-ui/src/look-previews/sets.ts"],
   CHARACTER_ART_BASE: PICTURE_HELPERS,
@@ -247,9 +268,9 @@ describe("picker pictures have one decider in the editor", () => {
     expect([...scans.values()].flatMap((s) => s.violations)).toEqual([])
   })
 
-  it("the bootstrap reads the setting and throws both switches", () => {
+  it("the bootstrap reads the setting and throws the three switches", () => {
     const names = scans.get(BOOTSTRAP)!.names
-    for (const name of ["surfaceCatalogImages", "setPlatformPickerPictures", "registerLookPreviews", "isCloud"]) {
+    for (const name of ["surfaceCatalogImages", "setPlatformPickerPictures", "registerLookPreviews", "registerOwnPickerPictures", "isCloud"]) {
       expect(names.get(name), name).toBeGreaterThanOrEqual(2)
     }
   })
@@ -291,6 +312,8 @@ describe("the guard's own matching", () => {
     flags(APP, 'import { setPlatformPickerPictures } from "@nodaro/picker-ui"\nsetPlatformPickerPictures(true)', /decides/)
     flags(APP, 'import { surfaceCatalogImages } from "@/lib/surface-selectors"\nif (surfaceCatalogImages() === "none") {}', /reads the picture setting/)
     flags(APP, "const v = runtimeSurfaceProfile().catalogs?.images", /reads catalogs.images/)
+    flags(APP, 'import { registerOwnPickerPictures } from "@nodaro/picker-ui"\nregisterOwnPickerPictures([])', /only frontend\/src\/lib\/look-previews-bootstrap.ts decides/)
+    flags(APP, 'import { ownPickerPicture } from "@nodaro/picker-ui"\nconst u = ownPickerPicture("person", id)?.url', /past the deployment's setting/)
   })
 
   it("flags picker-ui reaching a picture past the switch", () => {
@@ -298,6 +321,8 @@ describe("the guard's own matching", () => {
     flags(UI, 'const src = "/picker-art/emoji/x.webp"', /\/picker-art\/ address/)
     flags(UI, 'import { SOUND_ART_BASE } from "../icons/sound-art"\nconst u = SOUND_ART_BASE + key', /uses SOUND_ART_BASE outside/)
     flags(UI, 'import { registerLookPreviews } from "../look-previews/registry"\nregisterLookPreviews({})', /uses registerLookPreviews outside/)
+    flags(UI, 'import { ownPickerPicture } from "../icons/own-pictures"\nconst u = ownPickerPicture("style", id)', /uses ownPickerPicture outside/)
+    flags(UI, 'import { registerOwnPickerPictures } from "../icons/own-pictures"\nregisterOwnPickerPictures([])', /uses registerOwnPickerPictures outside/)
     flags(
       PICTURE_HELPERS[1]!,
       'import { soundArtFilePath } from "@nodaro/prompts/picker-art"\nexport function soundArtUrl(key) { return soundArtFilePath(key) }',

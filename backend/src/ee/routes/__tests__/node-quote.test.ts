@@ -1,4 +1,4 @@
-// @test-units-by-name prices only the video run routes it names (text-to-video, generate-video, video-to-video, video-upscale)
+// @test-units-by-name prices only the video run routes it names (text-to-video, generate-video, video-to-video, video-upscale), and lists the quotable types (split-into-layers among them)
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 import { z } from "zod"
@@ -533,7 +533,8 @@ describe("POST /v1/quote refusals", () => {
     const app = await buildApp()
     const res = await app.inject({ method: "POST", url: "/v1/quote", payload: { type: "generate-music", params: {} } })
     expect(res.statusCode).toBe(400)
-    expect(res.json().error).toMatchObject({ code: "quote_unsupported", supported: ["text-to-video", "generate-video", "video-to-video", "video-upscale"] })
+    // The hand-written rows, then each node unit with a quote.ts.
+    expect(res.json().error).toMatchObject({ code: "quote_unsupported", supported: ["text-to-video", "generate-video", "video-to-video", "video-upscale", "edit-image", "split-into-layers"] })
     await app.close()
   })
 

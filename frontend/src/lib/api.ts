@@ -11248,14 +11248,26 @@ export async function estimateVideoProCredits(input:VideoProEstimateInput):Promi
 }
 
 /**
+ * The request of a Seedance 2.5 draft not made yet — its own reference-video
+ * quote request (`seedanceRefQuoteRequest`), which the HD estimate prices the
+ * finalize of (`plannedDraft`).
+ */
+export type SeedancePlannedDraftRequest = Pick<
+  SeedanceRefEstimateRequest,
+  "provider" | "resolution" | "duration" | "draft" | "referenceTaskType" | "referenceVideoUrls" | "unknownReferenceVideos"
+>
+
+/**
  * Credits to finalize a Seedance 2.5 draft at 1080p (Video Upscale →
  * Seedance 2.5 HD). Name the draft (`taskId` — what the run sends — or
- * `sourceJobId`) for the exact price its run reserves; name none for the
- * lowest price any draft can finalize for (`minimum: true`). A draft the run
- * would refuse throws with the run's own error code.
+ * `sourceJobId`) for the exact price its run reserves; with none named, a
+ * `plannedDraft` (a draft this run makes) for the finalize at the length that
+ * draft's run reserves for; with neither, the lowest price any draft can
+ * finalize for (`minimum: true`). A draft the run would refuse throws with the
+ * run's own error code.
  */
 export async function estimateSeedanceHdCredits(
-  draft: { readonly taskId?: string; readonly sourceJobId?: string } = {},
+  draft: { readonly taskId?: string; readonly sourceJobId?: string; readonly plannedDraft?: SeedancePlannedDraftRequest } = {},
 ): Promise<{ credits: number; minimum: boolean }> {
   const result = await apiJson<{ data: { credits: number; minimum: boolean } }>("/v1/credits/seedance-hd-estimate", {
     body: { ...draft },

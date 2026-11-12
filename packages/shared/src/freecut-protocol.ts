@@ -32,6 +32,14 @@ export interface NodaroLoadVideoPayload {
   readonly videoBuffer?: ArrayBuffer
   readonly projectJson?: unknown
   readonly additionalFiles?: ReadonlyArray<FreecutImportFile>
+  /**
+   * What the editor's Save & Exit hands back. "video": it renders the timeline
+   * and answers with FREECUT_EXPORT_COMPLETE (the video and the project JSON),
+   * for a parent that keeps an edit as a new video (the workflow editor).
+   * Absent or "project": it answers with the project JSON alone
+   * (FREECUT_SAVE_EXIT), for a parent that renders the cut itself (Studio).
+   */
+  readonly saveExit?: "video" | "project"
 }
 
 export interface NodaroLoadTimelinePayload {

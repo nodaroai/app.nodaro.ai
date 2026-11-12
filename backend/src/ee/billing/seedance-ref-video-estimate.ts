@@ -16,8 +16,10 @@ import {
 import {
   withWiredSettings,
 } from "@nodaro/shared/nodes"
+import { seedanceFinalizeDraftQuote, type SeedanceFinalizeDraftOptions } from "@nodaro/render-rules"
 import type { ChargedPriceTable, EstimateEdge, EstimateNode } from "./credits.js"
-import { seedance2RefVideoQuote } from "./seedance2-ref-video-quote.js"
+import { plannedSeedanceDraftFinalizePlan, seedance2RefVideoQuote } from "./seedance2-ref-video-quote.js"
+import { seedanceDraftFinalizeRefBaseCredits } from "./seedance2-ref-video-credits.js"
 import { knownClipUrl } from "./upload-clip-lengths.js"
 
 /**
@@ -46,7 +48,7 @@ import { knownClipUrl } from "./upload-clip-lengths.js"
 
 const VIDEO_GENERATION_TYPES = new Set(["generate-video", "image-to-video", "text-to-video"])
 
-interface RefVideoEstimateRequest {
+export interface RefVideoEstimateRequest {
   provider: string
   resolution?: string
   duration?: number | string
@@ -130,16 +132,20 @@ function refVideoEstimateRequest(
 }
 
 /**
- * The charged credits of one run of `node` when its price follows reference
- * clips, else undefined. `prices.uploadClipSec` holds the lengths the
- * pre-pass probed; a clip not there is the worst case.
+ * What one run of `node` sends when its price follows reference clips, as an
+ * estimate knows it, else undefined: the request's levers, the clips whose
+ * length the estimate knows (`prices.uploadClipSec`, what the pre-pass
+ * probed), and how many it does not (each the worst case). The one reading
+ * of a node's clips every estimate of its run shares — its own price, and the
+ * price of a Seedance 2.5 HD finalize of the draft it makes
+ * ({@link seedanceDraftFinalizeEstimateCredits}).
  */
-export function seedanceRefVideoEstimateCredits(
+export function seedanceRefVideoEstimateInput(
   node: EstimateNode,
   nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
-  prices: ChargedPriceTable,
-): number | undefined {
+  prices: Pick<ChargedPriceTable, "uploadClipSec">,
+): (Omit<RefVideoEstimateRequest, "clipSources" | "soundtrack"> & { durationsSec: number[]; unknownClips: number }) | undefined {
   const priced = withWiredSettings(node, nodes, edges) as EstimateNode
   const request = refVideoEstimateRequest(priced, nodes, edges)
   if (!request) return undefined
@@ -157,15 +163,32 @@ export function seedanceRefVideoEstimateCredits(
     const audioSec = url === undefined ? undefined : prices.uploadClipSec?.get(url)
     durationsSec.push(audioSoundtrackClipSec(audioSec ?? Number.NaN, pricedOutputDurationSec(request.provider, request.duration)))
   }
+  const { clipSources: _clips, soundtrack: _soundtrack, ...levers } = request
+  return { ...levers, durationsSec, unknownClips }
+}
+
+/**
+ * The charged credits of one run of `node` when its price follows reference
+ * clips, else undefined. `prices.uploadClipSec` holds the lengths the
+ * pre-pass probed; a clip not there is the worst case.
+ */
+export function seedanceRefVideoEstimateCredits(
+  node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  prices: ChargedPriceTable,
+): number | undefined {
+  const input = seedanceRefVideoEstimateInput(node, nodes, edges, prices)
+  if (!input) return undefined
   return seedance2RefVideoQuote({
-    provider: request.provider,
-    resolution: request.resolution,
-    duration: request.duration,
-    draft: request.draft,
-    referenceTaskType: request.referenceTaskType,
-    durationsSec,
-    unknownClips,
-    videoTrim: request.videoTrim,
+    provider: input.provider,
+    resolution: input.resolution,
+    duration: input.duration,
+    draft: input.draft,
+    referenceTaskType: input.referenceTaskType,
+    durationsSec: input.durationsSec,
+    unknownClips: input.unknownClips,
+    videoTrim: input.videoTrim,
     charge: (identifier, base) => prices.charge(identifier, base),
   }).credits
 }
@@ -183,4 +206,72 @@ export function refVideoClipSources(
     const request = refVideoEstimateRequest(withWiredSettings(node, nodes, edges) as EstimateNode, nodes, edges)
     return request ? [...request.clipSources, ...(request.soundtrack ? [request.soundtrack.source] : [])] : []
   })
+}
+
+/**
+ * A Seedance 2.5 HD finalize (Video Upscale, provider `seedance-2-5-hd`) in the
+ * server's workflow estimates — the run estimate, the published-app listing
+ * and the balance checks (decided 2026-11-12). Which node is the draft, and
+ * whether the run makes it, is the shared rule the editor's Run total reads
+ * too (`seedanceFinalizeDraftQuote`, @nodaro/render-rules):
+ *
+ *  - the run MAKES the draft: priced at the length the draft's run reserves
+ *    for, which is also the most the finalize bills for output — so the
+ *    figure is a true ceiling:
+ *    - no reference video: the finalize row for its priced length
+ *      (`seedance-2-5-hd:{N}s`), its charged price;
+ *    - reference video(s): the draft's request as its own estimate reads it
+ *      ({@link seedanceRefVideoEstimateInput}: an uploaded clip at its probed
+ *      length, any other at the worst case), priced as a finalize of that
+ *      draft (`plannedSeedanceDraftFinalizePlan`) and marked up once at the
+ *      finalize's id — the reference lane of
+ *      `seedanceDraftFinalizeChargedCredits`, step for step. The editor gets
+ *      this figure from `POST /v1/credits/seedance-hd-estimate`
+ *      (`plannedDraft`), which prices the same plan;
+ *  - the draft EXISTS: its exact price, as the finalize's own gate prices it,
+ *    when the estimate resolved it (`prices.seedanceDrafts`, by task id — a
+ *    run-set estimate of the user's own run); else as before.
+ *
+ * Undefined for every other node, for a finalize with no draft wired, and for
+ * an existing draft the estimate could not price: priced as before.
+ */
+export function seedanceDraftFinalizeEstimateCredits(
+  node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  rerunIds: ReadonlySet<string>,
+  prices: ChargedPriceTable,
+): number | undefined {
+  const quote = seedanceFinalizeDraftQuoteOf(node, nodes, edges, rerunIds, { stateTaskIdOf: prices.seedanceDrafts?.stateTaskIdOf })
+  if (!quote) return undefined
+  if (quote.kind === "existing") return prices.seedanceDrafts?.credits.get(quote.taskId)
+  if (!quote.hasRefVideo) {
+    const base = prices.base(quote.creditId)
+    return base === undefined ? undefined : prices.charge(quote.creditId, base)
+  }
+  const draft = seedanceRefVideoEstimateInput(quote.draft as EstimateNode, nodes, edges, prices)
+  if (!draft) return undefined
+  const plan = plannedSeedanceDraftFinalizePlan({
+    provider: draft.provider,
+    resolution: draft.resolution,
+    duration: draft.duration,
+    referenceTaskType: draft.referenceTaskType,
+    durationsSec: draft.durationsSec,
+    unknownClips: draft.unknownClips,
+  })
+  return prices.charge(plan.creditId, seedanceDraftFinalizeRefBaseCredits(plan))
+}
+
+/** {@link seedanceFinalizeDraftQuote} on an estimate's graph (nodes and edges without an id or a source left out). */
+export function seedanceFinalizeDraftQuoteOf(
+  node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  rerunIds: ReadonlySet<string>,
+  options: SeedanceFinalizeDraftOptions = {},
+): ReturnType<typeof seedanceFinalizeDraftQuote> {
+  if (node.type !== "video-upscale" || node.id === undefined || !edges) return undefined
+  const graphNodes = nodes.flatMap((n) => (n.id === undefined ? [] : [{ ...n, id: n.id }]))
+  const graphEdges = edges.flatMap((e) => (e.source === undefined ? [] : [{ ...e, source: e.source }]))
+  return seedanceFinalizeDraftQuote({ ...node, id: node.id }, graphNodes, graphEdges, rerunIds, options)
 }

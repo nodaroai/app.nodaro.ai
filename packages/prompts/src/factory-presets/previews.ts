@@ -1,6 +1,21 @@
-import { FACTORY_PRESET_PREVIEW_FILES, FACTORY_PRESET_PREVIEW_LARGE_FILES } from "./preview-files.generated.js"
+import { FACTORY_PRESET_PREVIEW_FILES, FACTORY_PRESET_PREVIEW_LARGE_FILES, FACTORY_PRESET_PREVIEW_SIZES } from "./preview-files.generated.js"
 
-export { FACTORY_PRESET_PREVIEW_FILES, FACTORY_PRESET_PREVIEW_LARGE_FILES }
+export { FACTORY_PRESET_PREVIEW_FILES, FACTORY_PRESET_PREVIEW_LARGE_FILES, FACTORY_PRESET_PREVIEW_SIZES }
+
+/**
+ * The tile picture's real width and height (`previewUrl`'s), or null when the
+ * preset has no committed picture: a client sizes the picture's box from it
+ * before the picture loads, whatever shape the preset itself asks for.
+ *
+ * @param sizes the preset id → [width, height] map; defaults to the committed one
+ */
+export function factoryPresetPreviewSize(
+  presetId: string,
+  sizes: Readonly<Record<string, readonly [number, number]>> = FACTORY_PRESET_PREVIEW_SIZES,
+): { readonly width: number; readonly height: number } | null {
+  const size = Object.prototype.hasOwnProperty.call(sizes, presetId) ? sizes[presetId] : undefined
+  return size ? { width: size[0], height: size[1] } : null
+}
 
 /**
  * Where the factory preset previews live, relative to the app's origin:

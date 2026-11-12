@@ -70,7 +70,7 @@ Examples:
   cmd
     .command("cost <ids...>")
     .description(
-      "credits each identifier is charged — a model id, a credit id, or a metered LLM price key (<feature>:<model>[:direct]); an estimate prints as ≈N",
+      "credits each identifier is charged — a model id, a credit id, or a metered LLM price key (<feature>:<model>[:direct | :effort-<level>]); an estimate prints as ≈N",
     )
     .option("--profile <name>")
     .option("--json")

@@ -240,7 +240,7 @@ export async function creditsRoutes(app: FastifyInstance) {
       errorCodes: zOpenApi.record(zOpenApi.string(), zOpenApi.object({ code: zOpenApi.literal("llm_model_unpriced"), message: zOpenApi.string() })).optional()
         .describe("Why each identifier in `errors` has no price. Omitted when `errors` is empty."),
       estimates: zOpenApi.array(zOpenApi.string()).optional()
-        .describe("The identifiers in `data` whose figure is an estimate (a metered LLM price key, `<feature>:<model>[:direct]`) — show it as `≈N`. Omitted when there are none."),
+        .describe("The identifiers in `data` whose figure is an estimate (a metered LLM price key, `<feature>:<model>[:direct | :effort-<level>]`) — show it as `≈N`. Omitted when there are none."),
       display: zOpenApi.object({
         unit: zOpenApi.string(),
         decimals: zOpenApi.number().int(),

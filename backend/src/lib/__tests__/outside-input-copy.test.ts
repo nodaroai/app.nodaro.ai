@@ -345,6 +345,8 @@ describe("an outside input", () => {
     expect(h.uploads).toEqual([])
     expect(asked).toHaveLength(1)
     expect(asked[0]).toMatchObject({ kind: "video", lane: "media-import", mime: "video/mp4", sizeBytes: MP4.length, userId: USER })
+    // A real copy is no dry run: the policy counts it.
+    expect(asked[0]).not.toHaveProperty("quote")
     expect(asked[0]!.buffer!.equals(MP4)).toBe(true)
   })
 
@@ -386,18 +388,29 @@ describe("an outside input", () => {
 })
 
 describe("the quote's mode (inspectOutsideInput)", () => {
-  it("downloads, caps, types and inspects an outside input exactly as a run would, and stores nothing", async () => {
+  it("downloads, caps, types, inspects and asks the upload policy of an outside input exactly as a run would, and stores nothing", async () => {
     h.responses.set(OUTSIDE, respond([MP4]))
-    const policy = vi.fn(() => ({ allow: true }))
-    registerUploadPolicy({ id: "test-gate", check: policy })
+    const asked: UploadCheckInput[] = []
+    registerUploadPolicy({ id: "test-gate", check: (input) => { asked.push(input); return { allow: true } } })
     let seen = ""
     const out = await inspectOutsideInput(OUTSIDE, { kind: "video", maxBytes: 1_000, userId: USER, inspect: (p) => { seen = p; return 9.4 } })
     expect(out).toEqual({ bytes: MP4.length, outside: true, inspected: 9.4 })
     expect(h.uploads).toEqual([])
-    expect(policy).not.toHaveBeenCalled()
+    // The policy reads the same bytes a copy would show it, under the same lane.
+    expect(asked).toHaveLength(1)
+    expect(asked[0]).toMatchObject({ kind: "video", lane: "media-import", sizeBytes: MP4.length, userId: USER, quote: true })
+    expect(asked[0]!.buffer?.equals(MP4)).toBe(true)
     expect(existsSync(seen)).toBe(false)
     h.responses.set(OUTSIDE, respond([Buffer.alloc(40), Buffer.alloc(40)], 10))
     await expect(inspectOutsideInput(OUTSIDE, { kind: "video", maxBytes: 50, userId: USER })).rejects.toBeInstanceOf(OutsideInputTooLargeError)
+  })
+
+  it("refuses what the upload policy denies, as a copy would, and stores nothing", async () => {
+    h.responses.set(OUTSIDE, respond([MP4]))
+    registerUploadPolicy({ id: "test-gate", check: () => ({ allow: false, reason: "Not here." }) })
+    await expect(inspectOutsideInput(OUTSIDE, { kind: "video", maxBytes: 1_000, userId: USER })).rejects.toBeInstanceOf(UploadBlockedError)
+    expect(h.uploads).toEqual([])
+    expect(outsideInputSlotsHeld("quote")).toBe(0)
   })
 
   it("sizes an already-stored input from storage, with no fetch", async () => {

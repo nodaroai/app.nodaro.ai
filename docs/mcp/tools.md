@@ -2744,7 +2744,11 @@ Example (`node_type: "person"`, trimmed):
 The host is the installation's own public address; rendered look-picker
 previews (Nodaro CDN) are returned on Nodaro Cloud only. On a deployment that
 turned the platform's pictures off (`catalogs.images` in its surface profile),
-no option or topic carries an `imageUrl` and every `imageCount` is `0`. Rules:
+no option or topic carries an `imageUrl` and every `imageCount` is `0`. On a
+deployment that shows its own pictures (`catalogs.images: "own"`), an option's
+`imageUrl` is the deployment's picture, on its own media host, only the options
+it gave one have one, and no topic does; the tool leaves out the enlarged
+picture (`imageLargeUrl`), as it leaves out `imageSrcSet`. Rules:
 [Pictures](../api-integration.md#pictures-imageurl-sections).
 
 See [Parameter Picker Catalogs](../picker-catalogs.md) for the underlying

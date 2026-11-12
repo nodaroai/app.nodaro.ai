@@ -61,9 +61,9 @@
  *     refused.
  *
  * A quote binds nothing and must store nothing: {@link inspectOutsideInput}
- * runs the same checks and the same `inspect` on the same bytes, stores
- * nothing, and draws on its own, smaller set of slots so quotes cannot starve
- * runs.
+ * runs the same checks, the same `inspect` and the same upload policy on the
+ * same bytes, stores nothing, and draws on its own, smaller set of slots so
+ * quotes cannot starve runs.
  *
  * Errors: a typed refusal, a cancellation / drain / the caller's abort (thrown
  * as they are), `LinkImportsDisabledError`, `UploadBlockedError`, or
@@ -287,17 +287,7 @@ export async function copyOutsideInput<T>(url: string, opts: CopyOutsideInputOpt
     if (own) return { ...own, copied: false }
     assertLinkImportAllowed(url)
     return await withDownload(url, opts, copySlots, OUTSIDE_INPUT_SLOT_WAIT_MS, async (local, stillHeld) => {
-      if (hasUploadPolicies()) {
-        const decision = await applyUploadPolicies({
-          kind: local.kind,
-          lane: "media-import",
-          mime: local.contentType,
-          sizeBytes: local.bytes,
-          userId: opts.userId,
-          buffer: await policySample(local.path, local.bytes),
-        })
-        if (!decision.allow) throw new UploadBlockedError(decision)
-      }
+      await askUploadPolicies(local, opts.userId)
       stillHeld()
       // A full random name: a copy is served immutable, so two must never share a key.
       const stored = await uploadJobScratchFile(local.path, `outside-input-${randomUUID()}`, local.ext, local.contentType, opts.jobId)
@@ -314,9 +304,10 @@ export async function copyOutsideInput<T>(url: string, opts: CopyOutsideInputOpt
 /**
  * {@link copyOutsideInput}'s checks without the copy, for a quote: an
  * already-stored input's size from storage, an outside one downloaded,
- * capped, typed and inspected exactly as a run would, then discarded. Nothing
- * is stored and the upload policy is not asked (nothing is uploaded). Draws on
- * the quotes' own slots.
+ * capped, typed, inspected and held to the deployment's upload policy exactly
+ * as a run would, then discarded — so a quote never prices a file the run
+ * refuses. Nothing is stored (the policy only reads the bytes). Draws on the
+ * quotes' own slots.
  */
 export async function inspectOutsideInput<T = never>(url: string, opts: InspectOutsideInputOptions<T>): Promise<InspectedInput<T>> {
   checkOptions(opts)
@@ -324,11 +315,16 @@ export async function inspectOutsideInput<T = never>(url: string, opts: InspectO
     const own = await storedInput(url, opts.maxBytes)
     if (own) return { bytes: own.bytes, outside: false }
     assertLinkImportAllowed(url)
-    return await withDownload(url, opts, quoteSlots, OUTSIDE_INPUT_QUOTE_SLOT_WAIT_MS, async (local) => ({
-      bytes: local.bytes,
-      outside: true,
-      ...(local.inspected !== undefined ? { inspected: local.inspected } : {}),
-    }))
+    return await withDownload(url, opts, quoteSlots, OUTSIDE_INPUT_QUOTE_SLOT_WAIT_MS, async (local, stillHeld) => {
+      // A dry run for the policy: the run's copy asks again before anything is stored.
+      await askUploadPolicies(local, opts.userId, true)
+      stillHeld()
+      return {
+        bytes: local.bytes,
+        outside: true,
+        ...(local.inspected !== undefined ? { inspected: local.inspected } : {}),
+      }
+    })
   } catch (err) {
     throw publicError(err, opts.signal)
   }
@@ -506,6 +502,31 @@ function stopping(err: unknown, signal: AbortSignal | undefined): unknown {
   if (err instanceof JobCancelledError || isDrainAbortError(err)) return err
   if (signal?.aborted) return signal.reason ?? err
   return undefined
+}
+
+/**
+ * The deployment's upload policy, asked of a downloaded input as the
+ * media-import lane asks it: a denial is `UploadBlockedError`. Reads the bytes
+ * and stores nothing, so a copy and a quote ask it alike — a quote's ask
+ * flagged `quote: true`, a dry run the policy may answer from its cheap checks
+ * (`UploadCheckInput.quote`). With no policy registered, nothing is read.
+ */
+async function askUploadPolicies(
+  local: { readonly path: string; readonly bytes: number; readonly kind: OutsideInputKind; readonly contentType: string },
+  userId: string,
+  quote = false,
+): Promise<void> {
+  if (!hasUploadPolicies()) return
+  const decision = await applyUploadPolicies({
+    kind: local.kind,
+    lane: "media-import",
+    mime: local.contentType,
+    sizeBytes: local.bytes,
+    userId,
+    buffer: await policySample(local.path, local.bytes),
+    ...(quote ? { quote: true as const } : {}),
+  })
+  if (!decision.allow) throw new UploadBlockedError(decision)
 }
 
 /** The upload policy's look at the bytes: the whole file up to 25 MiB (every image), else its first 256 KiB, as the media-import lane does. */

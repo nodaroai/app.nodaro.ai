@@ -1088,8 +1088,9 @@ function projectOption(o: PickerOption, detail: PickerCatalogDetail, image?: Pic
 }
 
 function projectOptionFields(o: PickerOption, detail: PickerCatalogDetail, image?: PickerOptionImage): ProjectedPickerOption {
-  // `imageUrl` / `imageSrcSet` (display data) ride at both detail levels too,
-  // present only when the option has a picture (a srcset only for a CDN render).
+  // `imageUrl` / `imageSrcSet` / `imageLargeUrl` (display data) ride at both
+  // detail levels too, present only when the option has a picture (a srcset
+  // only for a CDN render, a large picture only for a deployment's own).
   const extras = {
     ...(o.motion ? { motion: o.motion } : {}),
     // A style's media rides at both detail levels: a thin client filters its image style list by it.
@@ -1098,6 +1099,7 @@ function projectOptionFields(o: PickerOption, detail: PickerCatalogDetail, image
     ...(o.restyle === false ? { restyle: false as const } : {}),
     ...(image ? { imageUrl: image.url } : {}),
     ...(image?.srcSet ? { imageSrcSet: image.srcSet } : {}),
+    ...(image?.largeUrl ? { imageLargeUrl: image.largeUrl } : {}),
   }
   return detail === "full"
     ? {

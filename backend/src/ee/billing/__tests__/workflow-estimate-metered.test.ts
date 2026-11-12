@@ -17,7 +17,7 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { llmPriceKey, LLM_FEATURE_DEFAULTS, buildLlmCreditIdentifier } from "@nodaro/shared/llm-models"
+import { getLlmModel, llmPriceKey, LLM_FEATURE_DEFAULTS, buildLlmCreditIdentifier } from "@nodaro/shared/llm-models"
 import { scrapeAnalysisPriceParts, scrapeAnalysisQuoteId } from "@nodaro/shared/social"
 
 vi.mock("@/lib/supabase.js", () => {
@@ -140,6 +140,43 @@ describe("metered: a workflow estimate prices LLM nodes per model", () => {
   it("a node's own model, effort and Advanced flag decide its key", () => {
     expect(getNodeModelIdentifier({ type: "qa-check", data: { llmModel: "claude-opus-5.5", advancedMode: true } })).toBe(llmPriceKey("qa-check", "claude-opus-5.5", undefined, true))
     expect(getNodeModelIdentifier({ type: "image-to-text", data: { llmModel: "gpt-5.6-terra", reasoningEffort: "max" } })).toBe(llmPriceKey("image-to-text", "gpt-5.6-terra", "max"))
+  })
+
+  // GPT-6.1 Terra's price does not depend on its effort: its key is the bare
+  // key at every effort, and the estimate, the badge and the workflow total
+  // quote it the same. Typical llm-chat call (1k / 1k): 2 base → 3 charged;
+  // ai-writer (2k / 2k): 3 base → 4.
+  it("GPT-6.1 Terra: the same key, quote and workflow estimate at every effort", async () => {
+    const terra = (data: Record<string, unknown>): EstimateNode => ({ id: "terra", type: "llm-chat", data: { llmModel: "gpt-6.1-terra", ...data } })
+    for (const reasoningEffort of [undefined, "none", "low", "high", "max"]) {
+      expect(getNodeModelIdentifier(terra(reasoningEffort ? { reasoningEffort } : {})), String(reasoningEffort)).toBe("llm-chat:gpt-6.1-terra")
+    }
+    expect(charged("llm-chat:gpt-6.1-terra")).toBe(3)
+    expect(charged("ai-writer:gpt-6.1-terra")).toBe(4)
+    // A key naming an effort is no key for a model whose price does not depend on it.
+    expect(isMeteredLlmQuoteId("llm-chat:gpt-6.1-terra:effort-high")).toBe(false)
+    const auto = await estimateWorkflowCreditsDetailed([terra({})], [])
+    const high = await estimateWorkflowCreditsDetailed([terra({ reasoningEffort: "high" })], [])
+    expect(auto).toEqual({ credits: 3, estimate: true, perNode: { terra: { credits: 3, estimate: true } } })
+    expect(high).toEqual(auto)
+    // A Terra node with its own expected call size is priced at that size (2k / 2k → 4).
+    const sized = await estimateWorkflowCreditsDetailed([terra({ reasoningEffort: "high", expectedUsage: { inputTokens: 2_000, outputTokens: 2_000 } })], [])
+    expect(sized.credits).toBe(4)
+  })
+
+  // The effort suffix still prices on a model flagged `effortPriced` (none is today): Terra
+  // stands in, flagged for this test. Its added input no longer differs by effort, so the
+  // effort key quotes what its bare key does.
+  it("an effort-priced model's effort key is quoted (a stand-in: Terra flagged for this test)", () => {
+    const model = getLlmModel("gpt-6.1-terra") as { effortPriced?: true }
+    model.effortPriced = true
+    try {
+      expect(getNodeModelIdentifier({ type: "llm-chat", data: { llmModel: "gpt-6.1-terra", reasoningEffort: "high" } })).toBe("llm-chat:gpt-6.1-terra:effort-high")
+      expect(isMeteredLlmQuoteId("llm-chat:gpt-6.1-terra:effort-high")).toBe(true)
+      expect(charged("llm-chat:gpt-6.1-terra:effort-high")).toBe(charged("llm-chat:gpt-6.1-terra"))
+    } finally {
+      delete model.effortPriced
+    }
   })
 
   it("Generate Script prices the model its run resolves (a legacy script provider maps to its model)", () => {

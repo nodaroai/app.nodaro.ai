@@ -1,0 +1,661 @@
+// @test-reads-none reads only the temp files it writes
+/**
+ * Real-ffmpeg tests for `stitchExtension` (`../extend-stitch.ts`): tiny
+ * generated clips, stitched by the local ffmpeg, the result probed. Skips when
+ * ffmpeg is not on PATH, like `extract-tail.test.ts` (CI installs the pinned
+ * build).
+ *
+ * No smart-cut matcher registers in this repo's own processes (the matcher is
+ * the cloud plugin's), so every stitch here takes the fixed trims (4 and 3).
+ *
+ * The sound is cut to the picture's frame count, sample for sample, so the
+ * result's sound and picture end together: to within one AAC frame (1024
+ * samples at 48 kHz), the most an encoder's framing can add.
+ */
+import { describe, it, expect, beforeAll, afterAll } from "vitest"
+import { execFileSync } from "node:child_process"
+import { dirname, join } from "node:path"
+import { promises as fs } from "node:fs"
+import { tmpdir } from "node:os"
+import { needsTranscode, runFfmpeg, runFfmpegCapture, runFfprobe } from "../ffmpeg-utils.js"
+import { stitchExtension } from "../extend-stitch.js"
+import { extendStitchArgs } from "../extend-stitch-args.js"
+import { probeMatched } from "../matched-encode.js"
+import { colourTagArgs, hdrTags, writeTaggedClip, type ColourTags } from "./colour-tagged-clip.js"
+
+function isFfmpegAvailable(): boolean {
+  try {
+    execFileSync("ffmpeg", ["-version"], { stdio: "ignore" })
+    return true
+  } catch {
+    return false
+  }
+}
+
+const ffmpegAvailable = isFfmpegAvailable()
+
+/** Whether this ffmpeg can encode with `name` (libx265: the pinned build and most local ones can). */
+function hasEncoder(name: string): boolean {
+  try {
+    return execFileSync("ffmpeg", ["-hide_banner", "-encoders"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).includes(name)
+  } catch {
+    return false
+  }
+}
+
+/** Whether this ffmpeg has the filter `name` (zscale needs libzimg: the pinned build has it, Homebrew's does not). */
+function hasFilter(name: string): boolean {
+  try {
+    const out = execFileSync("ffmpeg", ["-hide_banner", "-filters"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })
+    return new RegExp(`\\s${name}\\s`).test(out)
+  } catch {
+    return false
+  }
+}
+
+const x265Available = ffmpegAvailable && hasEncoder("libx265")
+if (ffmpegAvailable && !x265Available) console.warn("[extend-stitch-output] HEVC case skipped: this ffmpeg has no libx265 (CI's pinned build does)")
+const zscaleAvailable = ffmpegAvailable && hasFilter("zscale")
+if (ffmpegAvailable && !zscaleAvailable) console.warn("[extend-stitch-output] HDR cases skipped: this ffmpeg has no zscale filter (CI's pinned build does)")
+
+/** One AAC frame at 48 kHz: how far the sound may end from the picture. */
+const LOCKED_WITHIN_SEC = 1024 / 48_000
+
+type Stream = Record<string, unknown> & { side_data_list?: Array<Record<string, unknown>> }
+
+interface Probed {
+  video: Stream
+  audio: Stream | undefined
+  brand: string | undefined
+}
+
+async function probe(file: string): Promise<Probed> {
+  const out = JSON.parse(await runFfprobe([
+    "-v", "error", "-count_frames",
+    "-show_entries",
+    "stream=codec_type,codec_name,width,height,pix_fmt,sample_aspect_ratio,r_frame_rate,avg_frame_rate,nb_read_frames,duration" +
+      ":stream_side_data=rotation:format_tags=major_brand",
+    "-of", "json", file,
+  ])) as { streams: Stream[]; format?: { tags?: { major_brand?: string } } }
+  return {
+    video: out.streams.find((s) => s.codec_type === "video")!,
+    audio: out.streams.find((s) => s.codec_type === "audio"),
+    brand: out.format?.tags?.major_brand?.trim(),
+  }
+}
+
+/** The settings x264 recorded in `file` (its SEI): how its picture was rate-controlled ("rc=crf … crf=14.0", "rc=2pass"). */
+async function x264Settings(file: string): Promise<string> {
+  return /x264 - core[^\0]*/.exec((await fs.readFile(file)).toString("latin1"))?.[0] ?? ""
+}
+
+/** The result's sound ends with its picture. */
+function expectLocked(p: Probed): void {
+  expect(p.audio, "the result has sound").toBeDefined()
+  expect(Math.abs(Number(p.audio!.duration) - Number(p.video.duration))).toBeLessThan(LOCKED_WITHIN_SEC)
+}
+
+describe.skipIf(!ffmpegAvailable)("stitchExtension (real ffmpeg)", () => {
+  let dir: string
+  /** An 854×480 @ 24 MP4, 3 s (72 frames), AAC sound. */
+  let source: string
+  /** A 1280×720 @ 24 MP4, 2 s (48 frames), no sound. */
+  let extension: string
+
+  /** Stitch into a fresh work dir with the fixed trims, and probe the result. */
+  const stitch = async (sourcePath: string, extensionPath: string) => {
+    const workDir = await fs.mkdtemp(join(dir, "w-"))
+    const result = await stitchExtension({
+      sourcePath,
+      extensionPath,
+      workDir,
+      smartCut: { framesFromPrev: 8, framesFromNext: 8 },
+      fallbackTrims: { trimEndFrames: 4, trimStartFrames: 3 },
+      audioFadeSec: 0.15,
+    })
+    return { ...result, probed: await probe(result.outputPath) }
+  }
+
+  /** The source's picture chain exactly as the stitch builds it (`extendStitchArgs`, fed the real probe), its end trim 4. */
+  const sourceChainOf = async (file: string, sourceFrames: number): Promise<string> => {
+    const args = extendStitchArgs({
+      sourcePath: file, extensionPath: extension, outputPath: join(dir, "unused.mp4"), source: await probeMatched(file),
+      sourceFrames, extensionFrames: 60, trimEndFrames: 4, trimStartFrames: 3, audioFadeSec: 0.15, sourceHasAudio: false, extensionHasAudio: false,
+    })
+    const graph = args[args.indexOf("-filter_complex") + 1]!
+    return graph.split(";").find((c) => c.endsWith("[sv]"))!.slice("[0:v:0]".length, -"[sv]".length)
+  }
+
+  /** Every picture frame `file` gives with these output options, as its framemd5 hash, in order. */
+  const frameHashes = async (file: string, options: string[]): Promise<string[]> => (await runFfmpeg([
+    "-v", "error", "-i", file, "-map", "0:v:0", "-an", ...options, "-fps_mode", "passthrough", "-f", "framemd5", "-",
+  ])).split("\n").filter((l) => l && !l.startsWith("#")).map((l) => l.split(",").at(-1)!.trim())
+
+  beforeAll(async () => {
+    dir = await fs.mkdtemp(join(tmpdir(), "extend-stitch-test-"))
+    source = join(dir, "source.mp4")
+    extension = join(dir, "extension.mp4")
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "testsrc2=size=854x480:rate=24:duration=3",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=3:sample_rate=48000",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-b:v", "600k",
+      "-c:a", "aac", "-shortest",
+      source,
+    ])
+    await runFfmpeg([
+      "-y", "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=24:duration=2",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an",
+      extension,
+    ])
+  }, 120_000)
+
+  afterAll(async () => {
+    await fs.rm(dir, { recursive: true, force: true }).catch(() => {})
+  })
+
+  it("keeps the source's size, rate, pixel format and frame count, with the sound as long as the picture", async () => {
+    const { outputPath, boundary, probed } = await stitch(source, extension)
+    expect(boundary).toEqual({ matched: false, psnrDb: null, trimEndFrames: 4, trimStartFrames: 3, searchedPrevFrames: null, searchedNextFrames: null })
+    expect(outputPath.endsWith(".mp4")).toBe(true)
+    const { video } = probed
+    expect(video.width).toBe(854)
+    expect(video.height).toBe(480)
+    expect(video.r_frame_rate).toBe("24/1")
+    expect(video.avg_frame_rate).toBe("24/1")
+    expect(video.pix_fmt).toBe("yuv420p")
+    // The source less its end trim, then the extension less its start trim.
+    expect(Number(video.nb_read_frames)).toBe(72 - 4 + (48 - 3))
+    expectLocked(probed)
+  }, 60_000)
+
+  it("takes a 4:4:4 PCM MOV extension (a Seedance raw clip) onto an H.264 4:2:0 MP4 source as a 4:2:0 MP4 with AAC", async () => {
+    const mov = join(dir, "extension-444.mov")
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=24:duration=2",
+      "-f", "lavfi", "-i", "sine=frequency=660:duration=2:sample_rate=48000",
+      "-c:v", "libx264", "-pix_fmt", "yuv444p", "-c:a", "pcm_s16le", "-shortest",
+      mov,
+    ])
+    const { outputPath, probed } = await stitch(source, mov)
+    expect(outputPath.endsWith(".mp4")).toBe(true)
+    expect(probed.brand).not.toBe("qt")
+    expect(probed.video.pix_fmt).toBe("yuv420p")
+    expect([probed.video.width, probed.video.height]).toEqual([854, 480])
+    expect(probed.audio?.codec_name).toBe("aac")
+    expect(Number(probed.video.nb_read_frames)).toBe(72 - 4 + (48 - 3))
+    expectLocked(probed)
+  }, 60_000)
+
+  // A full-range source (yuvj420p / pc, as some phones and screen recorders make):
+  // delivered limited range, its levels converted in the stitch's one encode, so
+  // the upload's browser-safe check takes it as it is. Flat black and white panels:
+  // the full range's 0 and 255 land on about 16 and 235. A moving third panel gives
+  // the clip a real bitrate: a clip of flat panels alone compresses to a few kb/s,
+  // which the stitch then matches, and a flat region's level drifts at that rate.
+  it.each<[string, ColourTags | undefined, string]>([
+    ["with colour tags", { primaries: "bt709", transfer: "bt709", matrix: "bt709", range: "pc" }, "tv"],
+    // No colour description at all: no signal type is written, which H.264 reads as limited.
+    ["with no colour tags", undefined, "unknown"],
+  ])("delivers a full-range source %s as limited range, levels converted, no second encode", async (_label, tags, range) => {
+    const full = join(dir, `source-full-${tags ? "tagged" : "untagged"}.mp4`)
+    // Tagged on any ffmpeg (`colourTagArgs`); untagged, only the full range is said.
+    const tagging = tags ? colourTagArgs(tags) : undefined
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "color=c=black:s=160x90:r=24:d=3[b];color=c=white:s=160x90:r=24:d=3[w];testsrc2=s=160x90:r=24:d=3[t];[b][w][t]hstack=inputs=3",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=3:sample_rate=48000",
+      // The tags go on after the conversion to full range (`setparams` labels, it does not convert).
+      "-vf", tagging ? `format=yuvj420p,${tagging.filter}` : "format=yuvj420p",
+      "-c:v", "libx264", "-pix_fmt", "yuvj420p", "-b:v", "300k", ...(tagging ? tagging.encoder : ["-color_range", "pc"]),
+      "-c:a", "aac", "-shortest",
+      full,
+    ])
+    const levels = async (file: string, select: string): Promise<[number, number]> => {
+      const out = await runFfmpeg(["-v", "error", "-i", file, "-vf", `${select},signalstats,metadata=print:file=-`, "-f", "null", "-"])
+      const all = (key: string) => [...out.matchAll(new RegExp(`lavfi\\.signalstats\\.${key}=(\\d+)`, "g"))].map((m) => Number(m[1]))
+      return [Math.min(...all("YMIN")), Math.max(...all("YMAX"))]
+    }
+    // The fixture really is full range (and tagged, when it is meant to be).
+    expect((await probe(full)).video.pix_fmt).toBe("yuvj420p")
+    expect(await levels(full, "null")).toEqual([0, 255])
+    if (tags) {
+      const fixture = JSON.parse(await runFfprobe(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=color_primaries,color_transfer,color_space", "-of", "json", full])) as { streams: Array<Record<string, string>> }
+      expect(fixture.streams[0]).toMatchObject({ color_primaries: "bt709", color_transfer: "bt709", color_space: "bt709" })
+    }
+
+    const { outputPath, probed } = await stitch(full, extension)
+    const stream = JSON.parse(await runFfprobe(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=pix_fmt,color_range", "-of", "json", outputPath])) as { streams: Array<{ pix_fmt: string; color_range?: string }> }
+    expect(stream.streams[0]!.pix_fmt).toBe("yuv420p")
+    expect(stream.streams[0]!.color_range ?? "unknown").toBe(range)
+    expect(await needsTranscode(outputPath)).toBe(false)
+    // The source's frames (72 − 4), each flat panel's mean inside its edges: black at about
+    // 16 and white at about 235, as limited range has them, not full range's 0 and 255.
+    // (A mean over the flat region, not an extreme: encode noise moves a single pixel.)
+    const meanLuma = async (x: number): Promise<number> => {
+      const out = await runFfmpeg([
+        "-v", "error", "-i", outputPath, "-vf", `select=lt(n\\,68),crop=120:70:${x}:10,signalstats,metadata=print:file=-`, "-f", "null", "-",
+      ])
+      const yavg = [...out.matchAll(/lavfi\.signalstats\.YAVG=([\d.]+)/g)].map((m) => Number(m[1]))
+      expect(yavg).toHaveLength(68)
+      return yavg.reduce((a, b) => a + b, 0) / yavg.length
+    }
+    const black = await meanLuma(20)
+    const white = await meanLuma(180)
+    expect(black).toBeGreaterThanOrEqual(12)
+    expect(black).toBeLessThanOrEqual(20)
+    expect(white).toBeGreaterThanOrEqual(230)
+    expect(white).toBeLessThanOrEqual(240)
+    expect(Number(probed.video.nb_read_frames)).toBe(72 - 4 + (48 - 3))
+  }, 60_000)
+
+  it("delivers a 4:4:4 PCM MOV source (a chained raw clip) as an H.264 4:2:0 MP4 with AAC, at its size", async () => {
+    const mov = join(dir, "source-444.mov")
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "testsrc2=size=854x480:rate=24:duration=3",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=3:sample_rate=48000",
+      "-c:v", "libx264", "-pix_fmt", "yuv444p", "-b:v", "600k", "-c:a", "pcm_s16le", "-shortest",
+      mov,
+    ])
+    const { outputPath, probed } = await stitch(mov, extension)
+    expect(outputPath.endsWith(".mp4")).toBe(true)
+    expect(probed.brand).not.toBe("qt")
+    expect(probed.video.codec_name).toBe("h264")
+    expect(probed.video.pix_fmt).toBe("yuv420p")
+    expect([probed.video.width, probed.video.height]).toEqual([854, 480])
+    expect(probed.audio?.codec_name).toBe("aac")
+    expect(Number(probed.video.nb_read_frames)).toBe(72 - 4 + (48 - 3))
+    expectLocked(probed)
+  }, 60_000)
+
+  // A near-static H.264 source compresses to a few kb/s; matched as it is, the moving extension
+  // after it would be starved. The stitch encodes at the floor instead (ruling AI): 0.1 bits per
+  // pixel per frame at the output's size and rate, 320 × 180 × 24 × 0.1 = 138,240 b/s here.
+  it("encodes a near-static, low-bitrate H.264 source at the floor, not at its own rate", async () => {
+    const still = join(dir, "source-still.mp4")
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "color=c=gray:s=320x180:r=24:d=3",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=3:sample_rate=48000",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-b:v", "300k", "-c:a", "aac", "-shortest",
+      still,
+    ])
+    const floor = 320 * 180 * 24 * 0.1
+    const own = (await probeMatched(still)).videoBitRate!
+    // The fixture really is far below the floor (a flat picture compresses to almost nothing).
+    expect(own).toBeLessThan(floor / 10)
+
+    const { outputPath, probed } = await stitch(still, extension)
+    // Two passes at the floor, as the encoder records its target (in kb/s)…
+    const settings = await x264Settings(outputPath)
+    expect(settings).toMatch(/ rc=2pass /)
+    expect(settings).toContain(` bitrate=${Math.floor(floor / 1000)} `)
+    // …and the result's picture comes out near it, many times the source's own rate.
+    const rate = Number((JSON.parse(await runFfprobe([
+      "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=bit_rate", "-of", "json", outputPath,
+    ])) as { streams: Array<{ bit_rate: string }> }).streams[0]!.bit_rate)
+    expect(rate).toBeGreaterThan(floor * 0.5)
+    expect(rate).toBeLessThan(floor * 1.5)
+    expect(rate).toBeGreaterThan(own * 10)
+    expect(Number(probed.video.nb_read_frames)).toBe(72 - 4 + (48 - 3))
+    expectLocked(probed)
+  }, 60_000)
+
+  // An iPhone's default: HEVC, whose bitrate does not carry its quality over to H.264.
+  it.skipIf(!x265Available)("encodes an HEVC source once, at the near-lossless constant quality, as H.264 the upload takes as it is", async () => {
+    const hevc = join(dir, "source-hevc.mp4")
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "testsrc2=size=854x480:rate=24:duration=3",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=3:sample_rate=48000",
+      "-c:v", "libx265", "-preset", "ultrafast", "-x265-params", "log-level=error", "-b:v", "300k", "-pix_fmt", "yuv420p", "-tag:v", "hvc1",
+      "-c:a", "aac", "-shortest",
+      hevc,
+    ])
+    expect((await probe(hevc)).video.codec_name).toBe("hevc")
+
+    const { outputPath, probed } = await stitch(hevc, extension)
+    expect(probed.video.codec_name).toBe("h264")
+    expect(probed.video.pix_fmt).toBe("yuv420p")
+    expect([probed.video.width, probed.video.height]).toEqual([854, 480])
+    expect(await needsTranscode(outputPath)).toBe(false)
+    expect(Number(probed.video.nb_read_frames)).toBe(72 - 4 + (48 - 3))
+    expectLocked(probed)
+    // One pass at CRF 14, as the encoder records it, and no two-pass log beside the result.
+    const settings = await x264Settings(outputPath)
+    expect(settings).toMatch(/ rc=crf /)
+    expect(settings).toMatch(/ crf=14\.0 /)
+    expect((await fs.readdir(dirname(outputPath))).filter((f) => f.startsWith("stitch-pass"))).toEqual([])
+
+    // The H.264 source, for contrast: its bitrate, in two passes.
+    const h264 = await stitch(source, extension)
+    expect(await x264Settings(h264.outputPath)).toMatch(/ rc=2pass /)
+    expect((await fs.readdir(dirname(h264.outputPath))).some((f) => f.startsWith("stitch-pass"))).toBe(true)
+  }, 60_000)
+
+  // An HDR source (an iPhone's HLG, an HDR10 file's PQ) comes back in SDR BT.709, the
+  // extension's own: tone-mapped in the one encode, tagged BT.709, so the upload takes it as
+  // it is. The fixture only carries the tags (8-bit H.264): the tags are what the stitch reads.
+  it.skipIf(!zscaleAvailable).each([
+    ["HLG", "arib-std-b67"],
+    ["PQ", "smpte2084"],
+  ])("delivers an %s source in SDR BT.709, limited range, no second encode", async (_label, transfer) => {
+    const hdr = join(dir, `source-${transfer}.mp4`)
+    await writeTaggedClip(hdr, hdrTags(transfer), { size: "854x480", seconds: 3, bitRate: "600k" })
+    const colourOf = async (file: string) => (JSON.parse(await runFfprobe([
+      "-v", "error", "-select_streams", "v:0",
+      "-show_entries", "stream=pix_fmt,color_primaries,color_transfer,color_space,color_range", "-of", "json", file,
+    ])) as { streams: Array<Record<string, string | undefined>> }).streams[0]!
+    // The fixture really is tagged HDR.
+    expect((await colourOf(hdr)).color_transfer).toBe(transfer)
+
+    const { outputPath, probed } = await stitch(hdr, extension)
+    expect(await colourOf(outputPath)).toMatchObject({
+      pix_fmt: "yuv420p", color_primaries: "bt709", color_transfer: "bt709", color_space: "bt709", color_range: "tv",
+    })
+    expect(probed.video.codec_name).toBe("h264")
+    expect(await needsTranscode(outputPath)).toBe(false)
+    expect(Number(probed.video.nb_read_frames)).toBe(72 - 4 + (48 - 3))
+    expectLocked(probed)
+    // The source's frames are a picture, not black or blown out.
+    const out = await runFfmpeg(["-v", "error", "-i", outputPath, "-vf", "select=lt(n\\,68),signalstats,metadata=print:file=-", "-f", "null", "-"])
+    const yavg = [...out.matchAll(/lavfi\.signalstats\.YAVG=([\d.]+)/g)].map((m) => Number(m[1]))
+    expect(yavg).toHaveLength(68)
+    for (const y of yavg) {
+      expect(y).toBeGreaterThan(30)
+      expect(y).toBeLessThan(230)
+    }
+  }, 60_000)
+
+  it("keeps the sound with the picture for a variable-rate WebM source (its demuxer reports a rate it never measured)", async () => {
+    // 120 frames spread over ~4.6 s (a 0.2 s gap after every second), Opus sound
+    // for the whole span: the Matroska demuxer reports 30/1 for both rates.
+    const webm = join(dir, "source-vfr.webm")
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30:duration=4,setpts=N/30/TB+0.2*floor(N/30)/TB",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=4.65:sample_rate=48000",
+      "-fps_mode", "passthrough",
+      "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "300k",
+      "-c:a", "libopus",
+      webm,
+    ])
+    const { probed } = await stitch(webm, extension)
+    expect([probed.video.width, probed.video.height]).toEqual([320, 180])
+    expect(probed.video.r_frame_rate).toBe("30/1")
+    expectLocked(probed)
+  }, 60_000)
+
+  it("keeps the sound with the picture when a source's and an extension's containers outlast their pictures", async () => {
+    // A WebM states no length of its own picture; its container's runs 0.2 s past it (the sound's).
+    const webm = join(dir, "overshoot.webm")
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30:duration=3",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=3.2:sample_rate=48000",
+      "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "300k",
+      "-c:a", "libopus",
+      webm,
+    ])
+    const { probed } = await stitch(webm, webm)
+    expectLocked(probed)
+  }, 60_000)
+
+  it("keeps the sound with the picture for an MP4 whose rate drops for its last frames", async () => {
+    // 170 frames at 30 fps, then 10 at 15 fps (a phone clip slowing as the light drops):
+    // it probes as a near-constant 5400/187 average against a 30/1 nominal rate. The
+    // timestamps are whole ticks of testsrc2's 1/30 time base, so no two frames share one.
+    const mp4 = join(dir, "source-slow-tail.mp4")
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30:duration=6,setpts='if(lt(N\\,170)\\,N\\,170+2*(N-170))'",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=6.4:sample_rate=48000",
+      "-fps_mode", "passthrough",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+      mp4,
+    ])
+    const { probed } = await stitch(mp4, extension)
+    expectLocked(probed)
+
+    // Conformed to its nominal 30 fps, not its average: every frame of its 30 fps body passes, exactly once,
+    // in order; only the 15 fps tail repeats (each frame twice, as it was shown).
+    const chain = await sourceChainOf(mp4, 180)
+    const conformed = await frameHashes(mp4, ["-vf", chain])
+    const body = await frameHashes(mp4, ["-frames:v", "170"])
+    for (const hash of body) expect(conformed.filter((h) => h === hash)).toHaveLength(1)
+    expect(conformed.slice(0, 170)).toEqual(body)
+    expect(chain.startsWith("fps=30/1,")).toBe(true)
+    expect(probed.video.r_frame_rate).toBe("30/1")
+  }, 60_000)
+
+  it("conforms an even-rate (30000/1001) source without repeating or dropping a frame", async () => {
+    const ntsc = join(dir, "source-ntsc.mp4")
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30000/1001:duration=3",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=3:sample_rate=48000",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+      ntsc,
+    ])
+    const sourceFrames = Number((await probe(ntsc)).video.nb_read_frames)
+    const kept = sourceFrames - 4
+
+    // The source's chain exactly as the stitch builds it, run alone: its frames, hashed as decoded.
+    const chain = await sourceChainOf(ntsc, sourceFrames)
+    expect(chain.startsWith("fps=30000/1001,")).toBe(true)
+    const conformed = await frameHashes(ntsc, ["-vf", chain])
+    // Every frame the source shows, once each, in order, up to its end trim.
+    expect(conformed).toHaveLength(kept)
+    expect(conformed).toEqual(await frameHashes(ntsc, ["-frames:v", String(kept)]))
+
+    // And the stitch keeps that many: the source less its end trim, then the extension (2 s at the source's rate) less its start trim.
+    const { probed } = await stitch(ntsc, extension)
+    expect(probed.video.r_frame_rate).toBe("30000/1001")
+    expect(Number(probed.video.nb_read_frames)).toBe(kept + (60 - 3))
+    expectLocked(probed)
+  }, 60_000)
+
+  it("keeps the sound with the picture for a slideshow below 1 fps (put on 1 fps)", async () => {
+    // Five pictures over 10 s (1/2 fps) with sound, and a 5 s 24 fps extension with sound.
+    const slides = join(dir, "source-slides.mp4")
+    const longer = join(dir, "extension-5s.mp4")
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=1/2:duration=10",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=10:sample_rate=48000",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+      slides,
+    ])
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=24:duration=5",
+      "-f", "lavfi", "-i", "sine=frequency=660:duration=5:sample_rate=48000",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+      longer,
+    ])
+    const { probed } = await stitch(slides, longer)
+    expectLocked(probed)
+  }, 60_000)
+
+  it("keeps a 120 fps source at 120/1, every frame of it", async () => {
+    const fast = join(dir, "source-120.mp4")
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=120:duration=1",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=1:sample_rate=48000",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+      fast,
+    ])
+    const sourceFrames = Number((await probe(fast)).video.nb_read_frames)
+    const kept = sourceFrames - 4
+    const chain = await sourceChainOf(fast, sourceFrames)
+    const conformed = await frameHashes(fast, ["-vf", chain])
+    expect(conformed).toHaveLength(kept)
+    expect(conformed).toEqual(await frameHashes(fast, ["-frames:v", String(kept)]))
+    expect(chain.startsWith("fps=120/1,")).toBe(true)
+
+    // The extension (2 s) at 120 fps less its start trim.
+    const { probed } = await stitch(fast, extension)
+    expect(probed.video.r_frame_rate).toBe("120/1")
+    expect(Number(probed.video.nb_read_frames)).toBe(kept + (240 - 3))
+    expectLocked(probed)
+  }, 60_000)
+
+  it("labels an NTSC MOV on a millisecond timescale 30000/1001, its nominal rate, and keeps every frame", async () => {
+    // Its timestamps are rounded to the millisecond, so its average reads 8900/297, off the NTSC grid.
+    const mov = join(dir, "source-ntsc-ms.mov")
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30000/1001:duration=3",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=3:sample_rate=48000",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", "-video_track_timescale", "1000",
+      mov,
+    ])
+    const sourceFrames = Number((await probe(mov)).video.nb_read_frames)
+    const kept = sourceFrames - 4
+    const chain = await sourceChainOf(mov, sourceFrames)
+    expect(chain.startsWith("fps=30000/1001,")).toBe(true)
+    expect(await frameHashes(mov, ["-vf", chain])).toEqual(await frameHashes(mov, ["-frames:v", String(kept)]))
+
+    const { outputPath, probed } = await stitch(mov, extension)
+    // A MOV source still delivers an MP4.
+    expect(outputPath.endsWith(".mp4")).toBe(true)
+    expect(probed.brand).not.toBe("qt")
+    expect(probed.video.r_frame_rate).toBe("30000/1001")
+    expect(Number(probed.video.nb_read_frames)).toBe(kept + (60 - 3))
+    expectLocked(probed)
+  }, 60_000)
+
+  it("stitches onto a source shown rotated 90°: upright pixels at its displayed size, no display matrix", async () => {
+    const rotated = join(dir, "source-rot90.mp4")
+    await runFfmpeg(["-y", "-display_rotation:v:0", "90", "-i", source, "-c", "copy", rotated])
+    const { probed } = await stitch(rotated, extension)
+    expect([probed.video.width, probed.video.height]).toEqual([480, 854])
+    expect(probed.video.side_data_list ?? []).toEqual([])
+    expect(Number(probed.video.nb_read_frames)).toBe(72 - 4 + (48 - 3))
+    expectLocked(probed)
+  }, 60_000)
+
+  it("stitches onto a source shown rotated 180°: its size, upright pixels, no display matrix", async () => {
+    const rotated = join(dir, "source-rot180.mp4")
+    await runFfmpeg(["-y", "-display_rotation:v:0", "180", "-i", source, "-c", "copy", rotated])
+    const { probed } = await stitch(rotated, extension)
+    expect([probed.video.width, probed.video.height]).toEqual([854, 480])
+    expect(probed.video.side_data_list ?? []).toEqual([])
+    expect(Number(probed.video.nb_read_frames)).toBe(72 - 4 + (48 - 3))
+    expectLocked(probed)
+  }, 60_000)
+
+  it("stitches onto a non-square-pixel source: its size and SAR", async () => {
+    const anamorphic = join(dir, "source-sar.mp4")
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "testsrc2=size=720x480:rate=24:duration=3,setsar=32/27",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=3:sample_rate=48000",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-b:v", "600k",
+      "-c:a", "aac", "-shortest",
+      anamorphic,
+    ])
+    const { probed } = await stitch(anamorphic, extension)
+    expect([probed.video.width, probed.video.height]).toEqual([720, 480])
+    expect(probed.video.sample_aspect_ratio).toBe("32:27")
+    expect(Number(probed.video.nb_read_frames)).toBe(72 - 4 + (48 - 3))
+    expectLocked(probed)
+  }, 60_000)
+
+  // Picture and sound that start apart in their container (a stream-copied trim, some phone
+  // and platform muxes): a white flash and a 1 kHz beep presented together at 1 s, one stream
+  // starting `delay` after the other. The result must keep the input's own sync as played.
+  describe("keeps lip-sync when a clip's picture and sound start apart", () => {
+    /** A black, silent 3 s clip: the other side of each stitch, so the first flash and beep are the clip's. */
+    let plain: string
+
+    beforeAll(async () => {
+      plain = join(dir, "plain.mp4")
+      await runFfmpeg([
+        "-y",
+        "-f", "lavfi", "-i", "color=c=black:size=320x180:rate=24:duration=3",
+        "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+        "-t", "3", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+        plain,
+      ])
+    }, 60_000)
+
+    /** The flash and the beep, played together at 1 s; `late` starts `delay` after the other stream. */
+    const flashAndBeep = async (late: "picture" | "sound", delay: number): Promise<string> => {
+      const tag = `${late}-${delay.toFixed(4)}`
+      const picture = join(dir, `flash-${tag}.mp4`)
+      const sound = join(dir, `beep-${tag}.m4a`)
+      const clip = join(dir, `flash-beep-${tag}.mp4`)
+      await runFfmpeg([
+        "-y", "-f", "lavfi", "-i", "color=c=black:size=320x180:rate=24:duration=3",
+        "-vf", "drawbox=x=0:y=0:w=iw:h=ih:color=white:t=fill:enable='between(n,24,25)'",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", picture,
+      ])
+      // The beep sits where it plays at 1 s: later in a sound that starts first, earlier in one that starts late.
+      const beep = late === "picture" ? 1 + delay : 1 - delay
+      await runFfmpeg([
+        "-y", "-f", "lavfi", "-i", `sine=frequency=1000:sample_rate=48000:duration=${late === "picture" ? 3 + delay : 3}`,
+        "-af", `volume=enable='not(between(t,${beep},${beep + 0.1}))':volume=0`, "-c:a", "aac", sound,
+      ])
+      // The late stream is the second input, offset by `delay`.
+      const [first, second] = late === "picture" ? [sound, picture] : [picture, sound]
+      await runFfmpeg([
+        "-y", "-itsoffset", "0", "-i", first, "-itsoffset", String(delay), "-i", second,
+        "-map", late === "picture" ? "1:v" : "0:v", "-map", late === "picture" ? "0:a" : "1:a", "-c", "copy", clip,
+      ])
+      return clip
+    }
+
+    /** When the first flash shows and the first beep sounds, as a player presents `file`. */
+    const flashAndBeepAt = async (file: string): Promise<{ flash: number; beep: number }> => {
+      const stats = join(dir, `yavg-${Math.random().toString(36).slice(2)}.txt`)
+      await runFfmpeg([
+        "-y", "-v", "error", "-i", file, "-map", "0:v",
+        "-vf", `signalstats,metadata=mode=print:key=lavfi.signalstats.YAVG:file=${stats}`, "-f", "null", "-",
+      ])
+      let time = Number.NaN
+      let flash = Number.NaN
+      for (const line of (await fs.readFile(stats, "utf8")).split("\n")) {
+        const pts = /pts_time:([-\d.]+)/.exec(line)
+        if (pts) time = Number(pts[1])
+        const yavg = /YAVG=([\d.]+)/.exec(line)
+        if (yavg && Number(yavg[1]) > 100) {
+          flash = time
+          break
+        }
+      }
+      const { stderr } = await runFfmpegCapture(["-i", file, "-map", "0:a", "-af", "silencedetect=n=-30dB:d=0.05", "-f", "null", "-"])
+      const beep = Number(/silence_end: ([\d.]+)/.exec(stderr)?.[1])
+      return { flash, beep }
+    }
+
+    /** The result's beep sits on its flash as the input's own does: within half a frame (24 fps). */
+    const expectSameSync = async (input: string, result: string) => {
+      const before = await flashAndBeepAt(input)
+      const after = await flashAndBeepAt(result)
+      expect(Number.isFinite(after.flash) && Number.isFinite(after.beep), JSON.stringify(after)).toBe(true)
+      expect(Math.abs((after.beep - after.flash) - (before.beep - before.flash)), JSON.stringify({ before, after })).toBeLessThan(1 / 48)
+    }
+
+    const cases = [
+      ["picture", 2 / 24], ["picture", 0.5], ["sound", 2 / 24], ["sound", 0.5],
+    ] as const
+
+    it.each(cases)("on the source: its %s starting %ss after the other", async (late, delay) => {
+      const clip = await flashAndBeep(late, delay)
+      const { outputPath, probed } = await stitch(clip, plain)
+      await expectSameSync(clip, outputPath)
+      expectLocked(probed)
+    }, 60_000)
+
+    it.each(cases)("on the extension: its %s starting %ss after the other", async (late, delay) => {
+      const clip = await flashAndBeep(late, delay)
+      const { outputPath, probed } = await stitch(plain, clip)
+      await expectSameSync(clip, outputPath)
+      expectLocked(probed)
+    }, 60_000)
+  })
+})

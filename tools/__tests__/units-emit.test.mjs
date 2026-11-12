@@ -252,6 +252,28 @@ test("an own-writer worker's recover.ts: the recovers aggregate binds it under i
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
+test("a unit's quote.ts: the quotes aggregate binds it under its type, typed by the kit", async () => {
+  const root = tree()
+  try {
+    const OUT = "backend/src/nodes/_generated/quotes.ts"
+    // The fixture has none: the aggregate is emitted with no member.
+    const bare = await run(root)
+    assert.deepEqual(bare.errors, [])
+    assert.doesNotMatch(bare.outputs.get(OUT), /unit:fixture-echo/)
+    // A unit with a route and its quote.
+    writeFileSync(path.join(root, "backend/src/nodes/fixture-echo/quote.ts"), "export const quote = { body: () => undefined, pricing: { prechecks: [], modelResolver: () => \"fixture-echo\" } }\n")
+    const r = await run(root)
+    assert.deepEqual(r.errors, [])
+    const quotes = r.outputs.get(OUT)
+    assert.match(quotes, /^\/\/ @registry backend\/src\/nodes\/\*\/quote\.ts$/m)
+    assert.match(quotes, /^\/\/ @registry-exports quotes: UNIT_QUOTES$/m)
+    assert.match(quotes, /^import type \{ UnitQuote \} from "\.\.\/kit\.js"$/m)
+    assert.match(quotes, /^import \{ quote as unit_fixture_echo \} from "\.\.\/fixture-echo\/quote\.js" \/\/ unit:fixture-echo$/m)
+    assert.match(quotes, /^export const UNIT_QUOTES: Readonly<Record<string, UnitQuote>> = Object\.assign\(Object\.create\(null\), \{$/m)
+    assert.match(quotes, /^ {2}"fixture-echo": unit_fixture_echo, \/\/ unit:fixture-echo$/m)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
 test("an unknown argument is a usage error", async () => {
   const err = []
   assert.equal(await main(["--wat"], REPO, { write() {} }, { write: (s) => err.push(s) }), 2)

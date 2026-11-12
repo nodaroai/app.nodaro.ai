@@ -3,7 +3,7 @@
 import { useEffect, useCallback, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { X, Loader2, Check, FilePlus } from "lucide-react"
-import { NODARO_LOAD_VIDEO, NODARO_IMPORT_FILES, NODARO_RESET_PROJECT, FREECUT_READY, FREECUT_EXPORT_COMPLETE, FREECUT_REQUEST_IMPORT } from "@nodaro/shared/media"
+import { NODARO_LOAD_VIDEO, NODARO_IMPORT_FILES, NODARO_RESET_PROJECT, FREECUT_READY, FREECUT_EXPORT_COMPLETE, FREECUT_REQUEST_IMPORT, type NodaroLoadVideoPayload } from "@nodaro/shared/media"
 import { runtimeFreecutOrigin, runtimeFreecutUrl } from "@/lib/runtime-config"
 import { useT } from "@/lib/i18n"
 import { useInertBehind } from "@/lib/use-inert-behind"
@@ -95,11 +95,11 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
       }
 
       console.warn("[FreeCut] Sending to iframe", { hasBuffer: !!videoBuffer, hasProjectJson: !!projectJson, additionalFiles: additionalFiles?.map((f) => ({ name: f.name, size: f.size })) ?? [] })
-      iframe.contentWindow!.postMessage(
-        { type: NODARO_LOAD_VIDEO, payload: { videoUrl, videoBuffer, projectJson, additionalFiles } },
-        freecutOrigin(),
-        [videoBuffer],
-      )
+      // An edit is kept as a new video on the node, so the editor's Save & Exit
+      // must render and hand the video back (FREECUT_EXPORT_COMPLETE), not the
+      // project JSON alone.
+      const payload: NodaroLoadVideoPayload = { videoUrl, videoBuffer, projectJson, additionalFiles, saveExit: "video" }
+      iframe.contentWindow!.postMessage({ type: NODARO_LOAD_VIDEO, payload }, freecutOrigin(), [videoBuffer])
     },
     [videoUrl, freecutProjectUrl, additionalAssets],
   )

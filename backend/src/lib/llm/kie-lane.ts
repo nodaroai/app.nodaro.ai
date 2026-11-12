@@ -21,6 +21,7 @@ import {
 } from "./message-builders.js"
 import { assertKieEnvelope, assertMediaIngested, buildResponse, extractActualUsd } from "./response.js"
 import { requestChars } from "./kie-cost.js"
+import { llmLaneAddedInputTokens } from "../pricing/llm-cost.js"
 import { CHAT_COMPLETIONS_USAGE_KEYS, MESSAGES_USAGE_KEYS, kieReportedUsage } from "./kie-usage.js"
 import { parseSseStream } from "./sse.js"
 import { asStoppedStream, type StreamAbortContext } from "./stream-abort.js"
@@ -152,7 +153,9 @@ async function streamKieUnguarded(
   onToken: (chunk: string) => void,
   signal?: AbortSignal,
 ): Promise<LlmResponse> {
-  const abort = signal ? { signal, requestChars: requestChars(req) } : undefined
+  const abort = signal
+    ? { signal, requestChars: requestChars(req), addedInputTokens: llmLaneAddedInputTokens(model, "kie", req.reasoningEffort) }
+    : undefined
   switch (model.kieFormat) {
     case "chat-completions":
       return streamKieChatCompletions(model, await inlineImagesForKie(req, { signal }), onToken, signal, abort)

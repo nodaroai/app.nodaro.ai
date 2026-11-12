@@ -45,7 +45,19 @@ model availability follows from that one rule:
   at run).
 - Admin → Availability shows no switch for it.
 - A request that runs it is refused before any credit is reserved
-  (`model_not_available`), and so is a workflow run.
+  (`model_not_available`), and so is a workflow run. A quote of such a run
+  (`POST /v1/quote`) gets the same refusal, before its input is read.
+- Where it is served, a quote runs the route's own pricing chain: the same
+  checks of its input file (the upload policy included) and the same
+  measurement as a run, with nothing stored (`inspectOutsideInput`), so the
+  price it states is the price the run holds. The upload policy is asked with
+  `quote: true` on its input (`UploadCheckInput.quote`): a dry run. A policy
+  may skip what it counts or pays for per upload (a quota, a paid moderation
+  call) and answer from its cheap checks, because the run's own copy asks it
+  again, unflagged, before anything is stored. With no policy registered
+  nothing changes. A quote reads an outside file
+  under its own deadline (`NODARO_IMAGE_UPSCALE_QUOTE_READ_MS`) and stops when
+  its caller hangs up: the quotes share a few download slots.
 - A deployment overlay's preset pack that names it logs a warning at boot,
   naming the pack, the preset and the model, and the process starts. The
   preset is refused when it runs, before any hold. Whether a house model is

@@ -900,6 +900,10 @@ Use it to iterate cheaply on a shot and only pay for 1080p once you like the tak
   than one direct 1080p run (308<!-- credits: seedance-2-5:4s:480p --> + 1738<!-- credits: seedance-2-5-hd:4s --> = 2046<!-- credits: seedance-2-5:4s:480p + seedance-2-5-hd:4s --> vs 1738<!-- credits: seedance-2-5:4s:1080p --> at 4 s), but cheaper as soon
   as a direct 1080p would need **two or more tries** (2 × 308 + 1738 = 2354<!-- credits: 2*seedance-2-5:4s:480p + seedance-2-5-hd:4s --> vs
   2 × 1738 = 3476<!-- credits: 2*seedance-2-5:4s:1080p -->).
+- **A run that makes the draft and finalizes it** is estimated at the length the draft's run
+  reserves for (Duration Auto: 30 s). A finalize is never charged for more output than its
+  draft reserved, so the estimate is never below the charge; the finalize is then charged by
+  the take it gets ([how](../processing-video/video-upscale.md#seedance-25-hd-from-draft)).
 - **Audio carries over.** An Audio input merged onto the draft, or a voiced clip's
   dialogue track, is mixed onto the 1080p render the same way.
 - **Drafts are kept for about 7 days.** Finalize within that window.

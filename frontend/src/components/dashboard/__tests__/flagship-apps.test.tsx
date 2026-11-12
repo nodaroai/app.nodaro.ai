@@ -1,6 +1,12 @@
 import { afterEach, describe, it, expect, vi } from "vitest"
-import { render, screen } from "@testing-library/react"
-import { characterArtUrl, resetPlatformPickerPicturesForTests, setPlatformPickerPictures } from "@nodaro/picker-ui"
+import { act, render, screen } from "@testing-library/react"
+import {
+  characterArtUrl,
+  registerOwnPickerPictures,
+  resetOwnPickerPicturesForTests,
+  resetPlatformPickerPicturesForTests,
+  setPlatformPickerPictures,
+} from "@nodaro/picker-ui"
 
 // Coming-soon cards call sonner's toast on click; stub it (no Toaster in jsdom).
 vi.mock("sonner", () => ({ toast: vi.fn() }))
@@ -13,7 +19,10 @@ import { studioBaseUrl } from "@/lib/studio"
 import { voiceBaseUrl } from "@/lib/voice"
 import { PERSON_APP_COLLAGE_IDS, personAppBaseUrl, personAppCollage } from "@/lib/person-app"
 
-afterEach(() => resetPlatformPickerPicturesForTests())
+afterEach(() => {
+  resetPlatformPickerPicturesForTests()
+  resetOwnPickerPicturesForTests()
+})
 
 describe("FlagshipApps", () => {
   it("renders the three flagship products", () => {
@@ -76,5 +85,14 @@ describe("FlagshipApps", () => {
     const { container } = render(<FlagshipApps />)
     expect(container.querySelectorAll("img")).toHaveLength(0)
     expect(screen.getByRole("link", { name: /Open Person/i })).toBeInTheDocument()
+  })
+
+  it("shows the deployment's own photos of those options, once they arrive (catalogs.images: \"own\")", () => {
+    setPlatformPickerPictures(false)
+    const { container } = render(<FlagshipApps />)
+    expect(container.querySelectorAll("img")).toHaveLength(0)
+    const own = { url: "https://media.example.com/p/supermodel.webp" }
+    act(() => registerOwnPickerPictures([{ catalogId: "person", pictures: { [PERSON_APP_COLLAGE_IDS[0]!]: own } }]))
+    expect([...container.querySelectorAll("img")].map((img) => img.getAttribute("src"))).toEqual([own.url])
   })
 })

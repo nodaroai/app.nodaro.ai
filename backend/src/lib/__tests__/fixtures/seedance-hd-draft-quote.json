@@ -1,0 +1,52 @@
+{
+  "clipSec": 6,
+  "nodes": [
+    { "id": "clip", "type": "upload-video", "data": { "url": "https://cdn.example/ref.mp4" } },
+    {
+      "id": "gv",
+      "type": "generate-video",
+      "data": {
+        "provider": "seedance-2-5",
+        "prompt": "make it black and white",
+        "aspectRatio": "16:9",
+        "duration": 5,
+        "resolution": "480p",
+        "draft": true,
+        "referenceTaskType": "edit",
+        "generatedResults": [{ "url": "https://cdn.example/draft.mp4" }],
+        "kieTaskId": "task-existing"
+      }
+    },
+    { "id": "hd", "type": "video-upscale", "data": { "provider": "seedance-2-5-hd" } },
+    {
+      "id": "v2v",
+      "type": "video-to-video",
+      "data": { "provider": "seedance-2-5", "prompt": "make it a watercolour", "v2vResolution": "480p", "draft": true }
+    },
+    { "id": "hd-v2v", "type": "video-upscale", "data": { "provider": "seedance-2-5-hd" } }
+  ],
+  "edges": [
+    { "id": "clip->gv", "source": "clip", "target": "gv", "sourceHandle": "video", "targetHandle": "videoReferences" },
+    { "id": "gv->hd", "source": "gv", "target": "hd", "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "clip->v2v", "source": "clip", "target": "v2v", "sourceHandle": "video", "targetHandle": "video" },
+    { "id": "v2v->hd-v2v", "source": "v2v", "target": "hd-v2v", "sourceHandle": "video", "targetHandle": "video" }
+  ],
+  "existingDraftTaskId": "task-existing",
+  "editorPlannedDrafts": {
+    "hd": {
+      "provider": "seedance-2-5",
+      "resolution": "480p",
+      "duration": 5,
+      "draft": true,
+      "referenceTaskType": "edit",
+      "referenceVideoUrls": ["https://cdn.example/ref.mp4"]
+    },
+    "hd-v2v": {
+      "provider": "seedance-2-5",
+      "resolution": "480p",
+      "duration": -1,
+      "draft": true,
+      "referenceVideoUrls": ["https://cdn.example/ref.mp4"]
+    }
+  }
+}

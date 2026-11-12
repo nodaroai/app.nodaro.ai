@@ -18,6 +18,7 @@ import {
   reportUnclassifiedRoute,
   routeNodeGate,
   unclassifiedRouteMessage,
+  type RouteNodeGate,
 } from "../lib/route-node-gate.js"
 import { providerIsItsModel } from "../lib/provider-model.js"
 import { rawBodyRecord } from "../lib/run-model.js"
@@ -262,6 +263,120 @@ export function withheldRunModels(
   )
 }
 
+/** A refusal of the guard's model or node door: its 403 code and message. */
+export interface RunNodeRefusal {
+  readonly code: "node_not_available" | "catalog_value_not_available"
+  readonly message: string
+}
+
+/**
+ * The guard's MODEL door, for a request to the run route `route` (a route
+ * PATTERN): the model ids it would refuse the request for (403
+ * `model_not_available`, `deniedModelRejectionMessage(ids)`), else empty. In
+ * order: the raw `provider` when it is the model the route's node runs, the
+ * models a fan-out names in `models`, the resolved id of a route that declares
+ * `denyResolvedModel`, then the model it runs on (`withheldRunModels`). The
+ * credit guard answers with it, and so does `POST /v1/quote` on the run's own
+ * route and body, so a quote never prices a model the run refuses.
+ */
+export function deniedRunModels(
+  req: FastifyRequest,
+  route: string,
+  modelResolver: (req: FastifyRequest) => string,
+  opts: CreditGuardOpts | undefined,
+  gate: RouteNodeGate = routeNodeGate(route, req.body),
+): string[] {
+  const rawProvider =
+    typeof (req.body as { provider?: unknown } | undefined)?.provider === "string"
+      ? (req.body as { provider: string }).provider
+      : undefined
+  // The raw provider is judged here only when it IS the model the node
+  // runs. An engine name (lib/provider-model.ts: Generate Music's
+  // `minimax`, Motion Transfer's `kling`) shares its id with another model
+  // and is no model of this node; the model it runs is judged with the
+  // run's own model below (`runModel`), where models are restricted.
+  const judgedProvider =
+    rawProvider && providerIsItsModel(gate.kind === "node" ? gate.types : [], rawProvider, rawBodyRecord(req))
+      ? rawProvider
+      : undefined
+  if (judgedProvider && isModelDenied(judgedProvider)) return [judgedProvider]
+  // A fan-out names its models in `models` instead of `provider`: each is
+  // a model the request runs on, so each passes the same door.
+  const deniedModels = requestedModels(req.body).filter((m) => isModelDenied(m))
+  if (deniedModels.length > 0) return deniedModels
+  // The id the request actually runs on, for routes that opt in (see
+  // `CreditGuardOpts.denyResolvedModel`): the SAME function the credit row
+  // is priced from, so the model denied is the model billed and run.
+  if (opts?.denyResolvedModel) {
+    const resolved = modelResolver(req)
+    // Not when it is the raw provider: that was judged above, or is an engine name that is no model.
+    if (typeof resolved === "string" && resolved && resolved !== rawProvider && isModelDenied(resolved)) return [resolved]
+  }
+  // The model the request RUNS on (`CreditGuardOpts.runModel`), asked only
+  // where models are restricted: a request that names no model runs on a
+  // default the route fills in after this guard, and that default is a
+  // model the deployment may withhold.
+  return withheldRunModels(req, opts?.runModel, judgedProvider)
+}
+
+/**
+ * The guard's NODE door, for a request to the run route `route` (a route
+ * PATTERN) with `body` from `userId` that is not a plugin step's: the node it
+ * runs withheld from them (Admin → Availability, a surface profile), a route
+ * linked to no node that a whitelist refuses (reported once either way), or a
+ * picker id a curated deployment does not offer — else undefined. The credit
+ * guard answers with it, and so does `POST /v1/quote` on the run's own route
+ * (its own path, `/v1/quote`, names no node), so a quote never prices a run
+ * the guard refuses.
+ */
+export async function runNodeRefusal(
+  route: string,
+  body: unknown,
+  userId: string | undefined,
+  gate: RouteNodeGate = routeNodeGate(route, body),
+): Promise<RunNodeRefusal | undefined> {
+  // Per USER, not per credential: the admin switch hides a node from users,
+  // and an admin's run reaches this door three ways — their browser session,
+  // their API token, and the orchestrator's internal call, which carries only
+  // `body.userId`. The sync question is asked first, so a node that is not
+  // hidden costs no admin lookup. The BODY rides along because a route can
+  // host a capability another node governs: Web Scrape's Instagram source
+  // follows the Instagram node, and this guard is the one place every run
+  // of it passes (editor, SDK, orchestrator, a keyless install's relay).
+  if (gate.kind === "node") {
+    const denied = await deniedRouteCapabilityForUser(gate.types, body, userId, gate.since)
+    if (denied) return { code: "node_not_available", message: deniedNodeRejectionMessage([denied]) }
+  }
+  // A credit-spending route no node accounts for: a whitelist deployment
+  // never allowed it (its rule is "not listed ⇒ unavailable"), and every
+  // deployment is told once, loudly, so the route gets its node named.
+  if (gate.kind === "unclassified" && route) {
+    const refused = refusesUnclassifiedRoutes()
+    reportUnclassifiedRoute(route, refused)
+    if (refused) return { code: "node_not_available", message: unclassifiedRouteMessage(route) }
+  }
+  return catalogRefusal(route, gate, body, userId)
+}
+
+/**
+ * Catalog curation, single-node lane. Three routes (generate-image,
+ * generate-video, text-to-video) accept folded `direction` / `subject`
+ * records whose values are picker ids, with schemas that tolerate unknown ids
+ * by design ("skipped, never rejected"). On a curated deployment an unknown id
+ * is exactly what must be rejected — the orchestrator wall covers the graph
+ * lane; this is the same door for the wire lane. Inert without catalog packs.
+ */
+function catalogRefusal(route: string, gate: RouteNodeGate, body: unknown, userId: string | undefined): RunNodeRefusal | undefined {
+  const nodeType = gate.kind === "node" ? gate.types[0] : undefined
+  const foreign = findForeignCatalogIdsInBody(nodeType ?? "", body as { direction?: unknown; subject?: unknown } | undefined)
+  if (foreign.length === 0) return undefined
+  console.warn(
+    `[catalog-guard] ${route || nodeType} REFUSED for user ${userId ?? "anonymous"} — ` +
+      foreign.map((f) => `${f.field}="${f.id}"`).join(", "),
+  )
+  return { code: "catalog_value_not_available", message: foreignCatalogIdMessage(foreign) }
+}
+
 /** The model ids a request names in `models` (generate-image's fan-out), for the surface deny. */
 function requestedModels(body: unknown): string[] {
   const models = (body as { models?: unknown } | null | undefined)?.models
@@ -316,37 +431,15 @@ export function creditGuard(
     // a NODARO_SURFACE_PROFILE is set. Uses the RAW body.provider, never the
     // remapped pricing id (T2V_CREDIT_OVERRIDES turns t2v "grok" -> "grok-i2v"),
     // so it matches the deny vocabulary and the DAG backstop's coded error shape
-    // -- every door rejects identically.
+    // -- every door rejects identically. The model and node doors are shared
+    // with POST /v1/quote (`deniedRunModels`, `runNodeRefusal`).
     {
-      const rawProvider =
-        typeof (req.body as { provider?: unknown } | undefined)?.provider === "string"
-          ? (req.body as { provider: string }).provider
-          : undefined
       // The node this route RUNS (lib/route-node-gate.ts) — not its path: a
       // nested route (`/v1/suno/generate`) runs a node its path does not name,
       // and a plugin route reaches this same guard through the toolkit.
       const route = req.routeOptions?.url ?? ""
       const gate = routeNodeGate(route, req.body)
-      // The raw provider is judged here only when it IS the model the node
-      // runs. An engine name (lib/provider-model.ts: Generate Music's
-      // `minimax`, Motion Transfer's `kling`) shares its id with another model
-      // and is no model of this node; the model it runs is judged with the
-      // run's own model below (`runModel`), where models are restricted.
-      const judgedProvider =
-        rawProvider && providerIsItsModel(gate.kind === "node" ? gate.types : [], rawProvider, rawBodyRecord(req))
-          ? rawProvider
-          : undefined
-      if (judgedProvider && isModelDenied(judgedProvider)) {
-        return reply.code(403).send({
-          error: {
-            code: "model_not_available",
-            message: deniedModelRejectionMessage([judgedProvider]),
-          },
-        })
-      }
-      // A fan-out names its models in `models` instead of `provider`: each is
-      // a model the request runs on, so each passes the same door.
-      const deniedModels = requestedModels(req.body).filter((m) => isModelDenied(m))
+      const deniedModels = deniedRunModels(req, route, modelResolver, opts, gate)
       if (deniedModels.length > 0) {
         return reply.code(403).send({
           error: {
@@ -355,97 +448,24 @@ export function creditGuard(
           },
         })
       }
-      // The id the request actually runs on, for routes that opt in (see
-      // `CreditGuardOpts.denyResolvedModel`): the SAME function the credit row
-      // is priced from, so the model denied is the model billed and run.
-      if (opts?.denyResolvedModel) {
-        const resolved = modelResolver(req)
-        // Not when it is the raw provider: that was judged above, or is an engine name that is no model.
-        if (typeof resolved === "string" && resolved && resolved !== rawProvider && isModelDenied(resolved)) {
-          return reply.code(403).send({
-            error: {
-              code: "model_not_available",
-              message: deniedModelRejectionMessage([resolved]),
-            },
-          })
-        }
-      }
-      // The model the request RUNS on (`CreditGuardOpts.runModel`), asked only
-      // where models are restricted: a request that names no model runs on a
-      // default the route fills in after this guard, and that default is a
-      // model the deployment may withhold.
-      {
-        const denied = withheldRunModels(req, opts?.runModel, judgedProvider)
-        if (denied.length > 0) {
-          return reply.code(403).send({
-            error: {
-              code: "model_not_available",
-              message: deniedModelRejectionMessage(denied),
-            },
-          })
-        }
-      }
-      const nodeType = gate.kind === "node" ? gate.types[0] : undefined
-      // Per USER, not per credential: the admin switch hides a node from users,
-      // and an admin's run reaches this door three ways — their browser session,
-      // their API token, and the orchestrator's internal call, which carries only
-      // `body.userId`. The sync question is asked first, so a node that is not
-      // hidden costs no admin lookup. The BODY rides along because a route can
-      // host a capability another node governs: Web Scrape's Instagram source
-      // follows the Instagram node, and this guard is the one place every run
-      // of it passes (editor, SDK, orchestrator, a keyless install's relay).
-      //
       // A step a plugin engine's job sends (Nodaro Motion's depth, mask or
       // audio-separation step) is gated as the node the user ran, its parent
       // job's (lib/child-step-node.ts) — only the NODE: its models were judged
       // above as this route's own. A door that opened with that rule, like
-      // the route doors (`ROUTE_GATES_GENERATION`).
+      // the route doors (`ROUTE_GATES_GENERATION`). Every other request passes
+      // the route's own node door (`runNodeRefusal`).
       const childNode = await childStepNodeType(req)
-      const deniedCapability =
-        childNode !== undefined
-          ? await deniedRouteCapabilityForUser([childNode], {}, req.userId, ROUTE_GATES_GENERATION)
-          : gate.kind === "node"
-            ? await deniedRouteCapabilityForUser(gate.types, req.body, req.userId, gate.since)
-            : undefined
-      if (deniedCapability) {
-        return reply.code(403).send({
-          error: {
-            code: "node_not_available",
-            message: deniedNodeRejectionMessage([deniedCapability]),
-          },
-        })
+      let refusal: RunNodeRefusal | undefined
+      if (childNode !== undefined) {
+        const deniedCapability = await deniedRouteCapabilityForUser([childNode], {}, req.userId, ROUTE_GATES_GENERATION)
+        refusal = deniedCapability
+          ? { code: "node_not_available", message: deniedNodeRejectionMessage([deniedCapability]) }
+          : catalogRefusal(route, gate, req.body, req.userId)
+      } else {
+        refusal = await runNodeRefusal(route, req.body, req.userId, gate)
       }
-      // A credit-spending route no node accounts for: a whitelist deployment
-      // never allowed it (its rule is "not listed ⇒ unavailable"), and every
-      // deployment is told once, loudly, so the route gets its node named.
-      if (childNode === undefined && gate.kind === "unclassified" && route) {
-        const refused = refusesUnclassifiedRoutes()
-        reportUnclassifiedRoute(route, refused)
-        if (refused) {
-          return reply.code(403).send({
-            error: { code: "node_not_available", message: unclassifiedRouteMessage(route) },
-          })
-        }
-      }
-      // Catalog curation, single-node lane. Three routes (generate-image,
-      // generate-video, text-to-video) accept folded `direction` / `subject`
-      // records whose values are picker ids, with schemas that tolerate
-      // unknown ids by design ("skipped, never rejected"). On a curated
-      // deployment an unknown id is exactly what must be rejected — the
-      // orchestrator wall covers the graph lane; this is the same door for
-      // the wire lane. Inert without catalog packs.
-      const foreign = findForeignCatalogIdsInBody(nodeType ?? "", req.body as { direction?: unknown; subject?: unknown } | undefined)
-      if (foreign.length > 0) {
-        console.warn(
-          `[catalog-guard] ${req.routeOptions?.url ?? nodeType} REFUSED for user ${req.userId ?? "anonymous"} — ` +
-            foreign.map((f) => `${f.field}="${f.id}"`).join(", "),
-        )
-        return reply.code(403).send({
-          error: {
-            code: "catalog_value_not_available",
-            message: foreignCatalogIdMessage(foreign),
-          },
-        })
+      if (refusal) {
+        return reply.code(403).send({ error: { code: refusal.code, message: refusal.message } })
       }
     }
 
@@ -529,6 +549,7 @@ export function creditGuard(
     modelResolver,
     runModel: opts?.runModel,
     denyResolvedModel: opts?.denyResolvedModel === true,
+    opts,
   }
   return Object.assign(guard, { [CREDIT_GUARD]: true as const, [CREDIT_GUARD_MODEL]: model })
 }
@@ -538,6 +559,8 @@ export interface CreditGuardModel {
   readonly modelResolver: (req: FastifyRequest) => string
   readonly runModel: CreditGuardOpts["runModel"]
   readonly denyResolvedModel: boolean
+  /** The options the guard was built with, as given (a route's declared pricing chain shares them with POST /v1/quote). */
+  readonly opts: CreditGuardOpts | undefined
 }
 
 /**

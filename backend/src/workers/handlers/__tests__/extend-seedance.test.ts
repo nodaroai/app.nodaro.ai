@@ -3,7 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 // ---------------------------------------------------------------------------
 // The Seedance extend worker branch, on Seedance 2.0 (seedance-2-0-extend):
 // bare-template continuation generation via the seedance-2 reference-video
-// transport + trim-stitch via combineVideos. Template phrasing, trim counts,
+// transport + the extend stitch (`stitchExtension`: the source's size, frame
+// rate and quality; never combineVideos). Template phrasing, trim counts,
 // and "stitch failure = job failure" are all spike-validated invariants —
 // these tests pin them. The Seedance 2.5 provider and the mov chain:
 // extend-seedance25.test.ts.
@@ -13,6 +14,10 @@ const mocks = vi.hoisted(() => {
   const mockTextToVideo = vi.fn()
   const mockImageToVideo = vi.fn()
   const mockCombineVideos = vi.fn()
+  const mockStitchExtension = vi.fn()
+  const mockCreateWorkDir = vi.fn()
+  const mockCleanupWorkDir = vi.fn()
+  const mockDownloadFile = vi.fn()
   const mockProbeVideoSource = vi.fn()
   const mockExtractTailToFile = vi.fn().mockResolvedValue("/tmp/test-workdir/source.mp4.tail.mp4")
   const mockExtractFrame = vi.fn().mockResolvedValue({ imagePath: "/tmp/extract-frame-x/frame.png" })
@@ -35,6 +40,10 @@ const mocks = vi.hoisted(() => {
     mockTextToVideo,
     mockImageToVideo,
     mockCombineVideos,
+    mockStitchExtension,
+    mockCreateWorkDir,
+    mockCleanupWorkDir,
+    mockDownloadFile,
     mockProbeVideoSource,
     mockExtractTailToFile,
     mockExtractFrame,
@@ -80,8 +89,20 @@ vi.mock("@/providers/index.js", () => ({
   videoUpscale: vi.fn(),
 }))
 
+// Kept mocked so a regression back to the general combine is caught, never run.
 vi.mock("@/providers/video/combine-videos.js", () => ({
   combineVideos: mocks.mockCombineVideos,
+}))
+
+// The tail's picture rule is the real one (`extendTailPicture`); the stitch itself is mocked.
+vi.mock("@/providers/video/extend-stitch.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/providers/video/extend-stitch.js")>()),
+  stitchExtension: mocks.mockStitchExtension,
+}))
+// The source's colour probe: an SDR source, so its tail is cut exactly as it always was.
+vi.mock("@/providers/video/matched-encode.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/providers/video/matched-encode.js")>()),
+  probeMatched: vi.fn(async () => ({ width: 1920, height: 1080, videoCodec: "h264" })),
 }))
 
 vi.mock("@/providers/video/merge-video-audio.js", () => ({
@@ -89,9 +110,9 @@ vi.mock("@/providers/video/merge-video-audio.js", () => ({
 }))
 
 vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
-  cleanupWorkDir: vi.fn().mockResolvedValue(undefined),
-  createWorkDir: vi.fn().mockResolvedValue("/tmp/test-workdir"),
-  downloadFile: vi.fn().mockResolvedValue(undefined),
+  cleanupWorkDir: mocks.mockCleanupWorkDir,
+  createWorkDir: mocks.mockCreateWorkDir,
+  downloadFile: mocks.mockDownloadFile,
   stripAudio: vi.fn().mockResolvedValue(undefined),
   probeVideoSource: mocks.mockProbeVideoSource,
 }))
@@ -144,7 +165,13 @@ import { videoAIHandlers } from "../video-ai.js"
 
 const SOURCE_URL = "https://cdn.example.com/source.mp4"
 const EXTENSION_URL = "https://kie.example.com/extension.mp4"
-const STITCHED_PATH = "/tmp/combine-abc/output.mp4"
+/** The prep folder: the source's local copy, its tail and its last frame. */
+const PREP_DIR = "/tmp/test-workdir"
+/** The stitch's own folder: the extension's download, the stitch's proxies, passes and result. */
+const STITCH_DIR = "/tmp/extend-stitch-x"
+const STITCHED_PATH = `${STITCH_DIR}/stitched.mp4`
+/** A matched boundary, as `stitchExtension` reports it. */
+const BOUNDARY = { matched: true, psnrDb: 41.27, trimEndFrames: 2, trimStartFrames: 3, searchedPrevFrames: 8, searchedNextFrames: 8 }
 const TAIL_URL = "https://r2.example.com/tmp/provider-input/job-1/extend-tail-aaaaaaaa.mp4"
 const LAST_FRAME_URL = "https://r2.example.com/tmp/provider-input/job-1/extend-last-frame-bbbbbbbb.png"
 
@@ -189,7 +216,10 @@ beforeEach(() => {
   mocks.mockExtractFrame.mockResolvedValue({ imagePath: "/tmp/extract-frame-x/frame.png" })
   // First upload = the tail video, second = the last-frame image.
   mocks.mockUploadJobScratchFile.mockResolvedValueOnce(TAIL_URL).mockResolvedValueOnce(LAST_FRAME_URL)
-  mocks.mockCombineVideos.mockResolvedValue({ outputPath: STITCHED_PATH })
+  mocks.mockCreateWorkDir.mockImplementation(async (prefix: string) => (prefix === "extend-stitch" ? STITCH_DIR : PREP_DIR))
+  mocks.mockCleanupWorkDir.mockResolvedValue(undefined)
+  mocks.mockDownloadFile.mockResolvedValue(undefined)
+  mocks.mockStitchExtension.mockResolvedValue({ outputPath: STITCHED_PATH, boundary: BOUNDARY })
 })
 
 // ---------------------------------------------------------------------------
@@ -276,7 +306,7 @@ describe("extend-video / seedance-2-0-extend", () => {
     mocks.mockUploadJobScratchFile.mockResolvedValueOnce(TAIL_URL).mockResolvedValueOnce(LAST_FRAME_URL)
     mocks.mockExtractFrame.mockResolvedValue({ imagePath: "/tmp/extract-frame-x/frame.png" })
     mocks.mockExtractTailToFile.mockResolvedValue("/tmp/test-workdir/source.mp4.tail.mp4")
-    mocks.mockCombineVideos.mockResolvedValue({ outputPath: STITCHED_PATH })
+    mocks.mockStitchExtension.mockResolvedValue({ outputPath: STITCHED_PATH, boundary: BOUNDARY })
     await handler()(makeJob({ duration: 1 }) as never, makeCtx() as never)
     expect(mocks.mockImageToVideo.mock.calls[0]![3]).toBe(4)
   })
@@ -306,22 +336,114 @@ describe("extend-video / seedance-2-0-extend", () => {
     expect(mocks.mockImageToVideo).not.toHaveBeenCalled()
   })
 
-  it("trim-stitches with the spike-validated recipe (cut, −4 tail / −3 head, 0.15s anchored fades)", async () => {
+  it("stitches with stitchExtension, never combineVideos (the spike-validated recipe: −4 tail / −3 head fallback, 8/8 smart cut, 0.15s fade)", async () => {
     await handler()(makeJob() as never, makeCtx() as never)
-    expect(mocks.mockCombineVideos).toHaveBeenCalledWith({
-      videoUrls: [SOURCE_URL, EXTENSION_URL],
-      transition: "cut",
-      transitionDuration: 0.15,
-      audioMode: "crossfade",
-      audioCrossfadeCurve: "equal-power",
-      // Fixed recipe trims stay as the smart-cut FALLBACK: trimEndFrames
-      // hits the source's tail, trimStartFrames the extension's head.
-      trimStartFrames: 3,
-      trimEndFrames: 4,
+    expect(mocks.mockCombineVideos).not.toHaveBeenCalled()
+    expect(mocks.mockStitchExtension).toHaveBeenCalledTimes(1)
+    expect(mocks.mockStitchExtension).toHaveBeenCalledWith({
+      // The source's local copy the tail was cut from: no second download.
+      sourcePath: `${PREP_DIR}/source.mp4`,
+      extensionPath: `${STITCH_DIR}/extension.mp4`,
+      workDir: STITCH_DIR,
       // The extension is generated FROM the source's tail — the exact
       // continuation case smart cut solves. PSNR-match the boundary.
-      smartCut: { enabled: true, framesFromPrev: 8, framesFromNext: 8 },
+      smartCut: { framesFromPrev: 8, framesFromNext: 8 },
+      // Fixed recipe trims stay as the smart-cut FALLBACK: trimEndFrames
+      // hits the source's tail, trimStartFrames the extension's head.
+      fallbackTrims: { trimEndFrames: 4, trimStartFrames: 3 },
+      audioFadeSec: 0.15,
     })
+  })
+
+  it("downloads the source once (the prep's copy is the stitch's source) and the extension into the stitch's own folder", async () => {
+    await handler()(makeJob() as never, makeCtx() as never)
+    expect(mocks.mockDownloadFile.mock.calls).toEqual([
+      [SOURCE_URL, `${PREP_DIR}/source.mp4`],
+      [EXTENSION_URL, `${STITCH_DIR}/extension.mp4`],
+    ])
+  })
+
+  it("a mov extension is downloaded as a .mov", async () => {
+    const KIE_MOV = "https://kie.example.com/extension.mov?token=abc"
+    mocks.mockImageToVideo.mockResolvedValue({ url: KIE_MOV, cost: 0.2, providerUsed: "kie" })
+    await handler()(makeJob() as never, makeCtx() as never)
+    expect(mocks.mockDownloadFile).toHaveBeenCalledWith(KIE_MOV, `${STITCH_DIR}/extension.mov`)
+    expect(mocks.mockStitchExtension.mock.calls[0]![0]).toMatchObject({ extensionPath: `${STITCH_DIR}/extension.mov` })
+  })
+
+  it("keeps the source on disk until the stitch has read it, then removes both folders", async () => {
+    await handler()(makeJob() as never, makeCtx() as never)
+    const cleanups = mocks.mockCleanupWorkDir.mock.calls.map((c) => c[0])
+    expect(cleanups).toContain(PREP_DIR)
+    expect(cleanups).toContain(STITCH_DIR)
+    const order = (dir: string) => mocks.mockCleanupWorkDir.mock.invocationCallOrder[cleanups.indexOf(dir)]!
+    const stitched = mocks.mockStitchExtension.mock.invocationCallOrder[0]!
+    const uploaded = mocks.mockWatermarkLocalVideoAndUpload.mock.invocationCallOrder[0]!
+    // The prep folder holds the stitch's source: removed only after the stitch.
+    expect(order(PREP_DIR)).toBeGreaterThan(stitched)
+    // The stitch folder holds the result: removed only after it is uploaded.
+    expect(order(STITCH_DIR)).toBeGreaterThan(uploaded)
+  })
+
+  it.each([
+    ["the stitch", () => mocks.mockStitchExtension.mockRejectedValue(new Error("Extend stitch: the extension has no video stream"))],
+    ["the extension's download", () => mocks.mockDownloadFile.mockImplementation(async (url: string) => {
+      if (url === EXTENSION_URL) throw new Error("Failed to download video: 404")
+    })],
+    ["the upload", () => mocks.mockWatermarkLocalVideoAndUpload.mockRejectedValueOnce(new Error("upload failed"))],
+  ])("%s fails: both folders are still removed", async (_step, breakIt) => {
+    breakIt()
+    await expect(handler()(makeJob() as never, makeCtx() as never)).rejects.toThrow()
+    const cleanups = mocks.mockCleanupWorkDir.mock.calls.map((c) => c[0])
+    expect(cleanups).toContain(PREP_DIR)
+    expect(cleanups).toContain(STITCH_DIR)
+  })
+
+  it("the generation fails: the prep folder is still removed", async () => {
+    mocks.mockImageToVideo.mockRejectedValue(new Error("generation failed"))
+    await expect(handler()(makeJob() as never, makeCtx() as never)).rejects.toThrow("generation failed")
+    expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith(PREP_DIR)
+    expect(mocks.mockStitchExtension).not.toHaveBeenCalled()
+  })
+
+  it("a source refused as too short: the prep folder is still removed", async () => {
+    mocks.mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 1.2 })
+    await expect(handler()(makeJob() as never, makeCtx() as never)).rejects.toThrow(/too short/)
+    expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith(PREP_DIR)
+  })
+
+  it("output_data.smartCuts keeps its shape: one boundary, combineVideos' fields in combineVideos' order", async () => {
+    await handler()(makeJob() as never, makeCtx() as never)
+    const { smartCuts } = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].extraOutputData
+    expect(smartCuts).toEqual([{
+      boundary: 0,
+      prevClipEndTrimFrames: 2,
+      nextClipStartTrimFrames: 3,
+      psnrDb: 41.27,
+      matched: true,
+      searchedPrevFrames: 8,
+      searchedNextFrames: 8,
+    }])
+    expect(Object.keys(smartCuts[0])).toEqual([
+      "boundary", "prevClipEndTrimFrames", "nextClipStartTrimFrames", "psnrDb", "matched", "searchedPrevFrames", "searchedNextFrames",
+    ])
+  })
+
+  it("output_data.smartCuts reports the fixed trims and nulls when no search ran (no matcher)", async () => {
+    mocks.mockStitchExtension.mockResolvedValue({
+      outputPath: STITCHED_PATH,
+      boundary: { matched: false, psnrDb: null, trimEndFrames: 4, trimStartFrames: 3, searchedPrevFrames: null, searchedNextFrames: null },
+    })
+    await handler()(makeJob() as never, makeCtx() as never)
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].extraOutputData.smartCuts).toEqual([{
+      boundary: 0,
+      prevClipEndTrimFrames: 4,
+      nextClipStartTrimFrames: 3,
+      psnrDb: null,
+      matched: false,
+      searchedPrevFrames: null,
+      searchedNextFrames: null,
+    }])
   })
 
   it("uploads the stitched LOCAL file (watermark-aware) and finalizes as seedance-2-0-extend", async () => {
@@ -341,8 +463,8 @@ describe("extend-video / seedance-2-0-extend", () => {
   })
 
   it("stitch failure fails the job — never delivers the bare extension", async () => {
-    mocks.mockCombineVideos.mockRejectedValue(new Error("xfade: input streams mismatch"))
-    await expect(handler()(makeJob() as never, makeCtx() as never)).rejects.toThrow("xfade")
+    mocks.mockStitchExtension.mockRejectedValue(new Error("ffmpeg exited with code 1"))
+    await expect(handler()(makeJob() as never, makeCtx() as never)).rejects.toThrow("ffmpeg exited with code 1")
     expect(mocks.mockWatermarkLocalVideoAndUpload).not.toHaveBeenCalled()
     expect(mocks.mockUploadVideoMaybeWatermark).not.toHaveBeenCalled()
     expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()

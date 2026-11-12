@@ -21,6 +21,7 @@ import {
 } from "@nodaro/render-rules"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
+import { linkImportRefusal } from "./link-imports.js"
 
 export interface TopazVideoUpscalePlan {
   readonly resolution: TopazVideoResolution
@@ -96,9 +97,9 @@ export async function topazVideoHoldBaseCredits(plan: Pick<TopazVideoUpscalePlan
   return unitRateBaseCredits(TOPAZ_VIDEO_UNIT_CREDIT_ID, plan.holdUnits)
 }
 
-/** A workflow run's Topaz upscale whose source cannot be read: refused before a jobs row is kept. */
+/** A workflow run's Topaz upscale refused before a jobs row is kept: a source it cannot read or measure, or a link the deployment does not import. */
 export interface TopazVideoRefusal {
-  readonly code: "video_unreadable" | "video_too_long"
+  readonly code: "video_unreadable" | "video_too_long" | "link_imports_disabled"
   readonly message: string
 }
 
@@ -112,8 +113,10 @@ export function isTopazVideoUpscaleJob(jobName: string, payload: Record<string, 
  * payload sends, resolve the target and stamp it — with the units it holds —
  * onto the payload before input_data is written, so the reservation, the
  * worker and the reconcile lane read one plan. An unreadable source is refused
- * (no jobs row, nothing reserved), as the route refuses it. Every edition: the
- * legacy factor and "same as source" need the clip either way.
+ * (no jobs row, nothing reserved), as the route refuses it, and so is a link to
+ * outside content where the deployment turned link imports off — asked before
+ * the clip is read. Every edition: the legacy factor and "same as source" need
+ * the clip either way.
  */
 export async function stampTopazVideoUpscale(
   jobName: string,
@@ -122,6 +125,8 @@ export async function stampTopazVideoUpscale(
   if (!isTopazVideoUpscaleJob(jobName, payload)) return { ok: true, patch: {} }
   const videoUrl = typeof payload.videoUrl === "string" ? payload.videoUrl : undefined
   if (!videoUrl) return { ok: true, patch: {} }
+  const linkRefused = linkImportRefusal(videoUrl)
+  if (linkRefused) return { ok: false, refusal: linkRefused }
   try {
     const plan = await planTopazVideoUpscale(videoUrl, payload)
     return {

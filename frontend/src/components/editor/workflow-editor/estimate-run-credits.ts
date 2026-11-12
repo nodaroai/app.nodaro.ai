@@ -35,6 +35,7 @@ import { unitQuoteIdFor, upperUnits } from "@/lib/unit-quote"
 import { carriedEdges } from "./carried-edges"
 import { runLinesUnpriced, type RunUnpriced } from "./run-unpriced"
 import { seedanceRefQuoteKeyFor } from "@/lib/seedance-ref-quote"
+import { seedanceHdQuoteIdFor } from "@/lib/seedance-hd-quote"
 import { nodaroVideoUpscaleRefusedSec } from "@/lib/video-utility-estimate"
 import { NODARO_VIDEO_UPSCALE_MAX_SEC } from "@nodaro/shared/models"
 import { tx } from "@/lib/i18n"
@@ -223,7 +224,8 @@ export function runModelIds(
         // from the probed clips (`lib/seedance-ref-quote.ts`).
         // A Component holding a stored estimate flag: the mode probe, so the flag is read only while metered.
         const probe = componentStoredEstimate(v) ? [meteredModeProbeId()] : []
-        return [id, ...(llm ? [llm.key, llm.tierId] : []), ...(scrape ? [scrape.fixedId, scrape.quoteId] : []), ...probe, unitQuoteIdFor(id, units), seedanceRefQuoteKeyFor(v, allNodes, edges, rerunIds)]
+        // A Seedance 2.5 HD finalize of a draft this run makes: its row, or the server's quote of it.
+        return [id, ...(llm ? [llm.key, llm.tierId] : []), ...(scrape ? [scrape.fixedId, scrape.quoteId] : []), ...probe, unitQuoteIdFor(id, units), seedanceRefQuoteKeyFor(v, allNodes, edges, rerunIds), seedanceHdQuoteIdFor(v, allNodes, edges, rerunIds)]
       })
     }),
     ...speechPriceIdsFor(runs, allNodes, edges),
@@ -293,6 +295,13 @@ function oneRunCost(
   const refQuoteKey = seedanceRefQuoteKeyFor(node, allNodes, edges, rerunIds)
   const refQuote = refQuoteKey === undefined ? undefined : cachedCost(refQuoteKey)
   if (refQuote !== undefined) return refQuote * upperUnits(units)
+  // A Seedance 2.5 HD finalize of a draft this run makes is charged by that
+  // draft: quoted at the length the draft's run reserves for — its
+  // `seedance-2-5-hd:{N}s` row, or (a draft with reference videos) the
+  // server's quote of it. Uncached → the row below, as before.
+  const hdQuoteId = seedanceHdQuoteIdFor(node, allNodes, edges, rerunIds)
+  const hdQuote = hdQuoteId === undefined ? undefined : cachedCost(hdQuoteId)
+  if (hdQuote !== undefined) return hdQuote * upperUnits(units)
   // A scrape whose analysis is priced per call (metered): fixed + the whole analysis's quote (the server's figure).
   const scrape = scrapeAnalysisRunCredits(node, cachedCost)
   if (scrape !== undefined) return scrape

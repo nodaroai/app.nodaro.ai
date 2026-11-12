@@ -42,7 +42,10 @@ export async function reserveFixedPlusLlmCallsImpl(
     llmHoldBaseCredits(args.modelId, { request: args.plannedRequest })
     // D12: each item is held at its TYPICAL cost (LLM_TYPICAL_USAGE), not
     // one attempt at the full output cap; the actual is collected at settle.
-    perItemBase = llmEstimateBaseCredits(args.feature, args.modelId)
+    // Priced as the planned call runs: its effort (which on some models adds
+    // input of the aggregator's own) and its lane (a direct pin).
+    const planned = args.plannedRequest
+    perItemBase = llmEstimateBaseCredits(args.feature, args.modelId, planned.reasoningEffort, planned.requireLane === "direct" || planned.advancedMode === true)
   } catch (err) {
     if (!(err instanceof LlmUnpricedModelError)) throw err
     console.warn(`[llm-billing] ${args.feature}: refused unpriced model ${err.modelId} (${err.lane} lane), job=${jobId}`)

@@ -39,8 +39,13 @@ export interface SeedanceDraftFinalizePlan {
   readonly sourceJobId: string
   /** The draft's provider task — what the finalize task names. */
   readonly draftTaskId: string
-  /** Whole seconds the finalize bills for its output (= the draft's length). */
+  /** Whole seconds the finalize bills for its output: the draft's take, never above
+   *  the output its draft's run reserved (decided 2026-11-12). */
   readonly outputSec: number
+  /** The draft's take in whole seconds, when it is past its draft's hold — what the
+   *  provider renders and bills for the 1080p take (`outputSec` is then the hold).
+   *  Absent when the take is within the hold. */
+  readonly takeSec?: number
   readonly hasRefVideo: boolean
   /** The draft's reservation probe of its reference clips (only when hasRefVideo). */
   readonly refVideoDurationsSec: readonly unknown[]
@@ -160,8 +165,8 @@ export async function resolveSeedanceDraftFinalize(args: {
     )
   }
 
-  const outputSec = await draftOutputSeconds(completed)
-  if (outputSec === undefined) {
+  const takeSec = await draftOutputSeconds(completed)
+  if (takeSec === undefined) {
     return refuse(422, "invalid_media_duration", "Couldn't read the draft's length, so the finalize can't be priced. Nothing was charged.")
   }
 
@@ -173,12 +178,16 @@ export async function resolveSeedanceDraftFinalize(args: {
     : Array.isArray(input.refVideoDurationsSec)
       ? (input.refVideoDurationsSec as unknown[])
       : await probeRefVideoDurations({ provider: input.provider as string, referenceVideoUrls: refUrls })
+  // Never more output than the draft's run reserved: a take past that hold is billed at it.
+  const heldSec = await draftHeldBillableSec(completed)
+  const outputSec = heldSec === undefined ? takeSec : Math.min(takeSec, heldSec)
 
   return {
     ok: true,
     sourceJobId: completed.id,
     draftTaskId: completed.provider_task_id,
     outputSec,
+    ...(outputSec < takeSec ? { takeSec } : {}),
     hasRefVideo,
     refVideoDurationsSec,
     creditId: seedanceDraftFinalizeCreditId(outputSec, hasRefVideo),
@@ -225,6 +234,40 @@ export async function measureSeedanceDraftRenderSec(args: {
     console.warn("[seedance-draft-finalize] could not measure the raw draft take; the finalize will read the stored clip:", err)
     return undefined
   }
+}
+
+/**
+ * The output seconds the draft's own run reserved, in the finalize's whole
+ * billed seconds — the most its finalize bills for output (decided
+ * 2026-11-12): the ONE hold rule its quote and its charge read
+ * (`seedanceDraftHeldOutputSec`), computed from what the draft's job recorded
+ * — the length it was sent at, its resolved reference task type (none on a
+ * draft recorded before drafts could declare one: it ran undeclared), and its
+ * reservation's probe of its reference clips.
+ *
+ * A run sent with no length was reserved at the model's default length, so an
+ * absent `duration` reads as that default, as its reservation and its
+ * settlement read it. Undefined in an edition without credits (nothing is
+ * billed), and when a draft with reference clips records no probe of them (no
+ * draft does: the probe was recorded before drafts existed): the take is then
+ * billed as it was before the cap, and a warning names the draft. Core shim
+ * over the ee rule (dynamic import), like {@link seedanceDraftFinalizeBaseCredits}.
+ */
+async function draftHeldBillableSec(row: DraftJobRow): Promise<number | undefined> {
+  if (!hasCredits()) return undefined
+  const input = row.input_data ?? {}
+  const hasRefVideo = Array.isArray(input.referenceVideoUrls) && input.referenceVideoUrls.length > 0
+  if (hasRefVideo && !Array.isArray(input.refVideoDurationsSec)) {
+    console.warn(`[seedance-draft-finalize] draft ${row.id} records no probe of its reference clips, so its hold cannot be read; its finalize bills the take uncapped`)
+    return undefined
+  }
+  const { seedanceDraftHeldOutputSec } = await import("../ee/billing/seedance2-ref-video-credits.js")
+  return seedanceDraftFinalizeBillableSec(seedanceDraftHeldOutputSec({
+    provider: input.provider as string,
+    duration: input.duration,
+    referenceTaskType: input.referenceTaskType,
+    refVideoDurationsSec: hasRefVideo ? (input.refVideoDurationsSec as unknown[]) : [],
+  }))
 }
 
 /** The `extraOutputData` entry a completing draft records (empty when unmeasured). */
@@ -287,12 +330,14 @@ export async function seedanceDraftFinalizeBaseCredits(
  * {@link seedanceDraftFinalizeBaseCredits}.
  */
 export async function seedanceDraftFinalizeBilledSec(
-  plan: Pick<SeedanceDraftFinalizePlan, "hasRefVideo" | "outputSec" | "refVideoDurationsSec">,
+  plan: Pick<SeedanceDraftFinalizePlan, "hasRefVideo" | "outputSec" | "refVideoDurationsSec" | "takeSec">,
 ): Promise<number | undefined> {
   if (!hasCredits()) return undefined
-  if (!plan.hasRefVideo) return plan.outputSec
+  // The provider renders, and bills, the whole take — even past the hold the charge stops at.
+  const outputSec = plan.takeSec ?? plan.outputSec
+  if (!plan.hasRefVideo) return outputSec
   const { seedanceDraftFinalizeRefBilledSec } = await import("../ee/billing/seedance2-ref-video-credits.js")
-  return seedanceDraftFinalizeRefBilledSec({ outputSec: plan.outputSec, refVideoDurationsSec: plan.refVideoDurationsSec })
+  return seedanceDraftFinalizeRefBilledSec({ outputSec, refVideoDurationsSec: plan.refVideoDurationsSec })
 }
 
 /** A count of seconds read off a payload: a finite positive number, else undefined. */
@@ -311,9 +356,11 @@ export async function seedanceDraftFinalizeQueuedBilledSec(payload: Readonly<Rec
   if (sent !== undefined) return sent
   const outputSec = positiveSeconds(payload.draftOutputSec)
   if (outputSec === undefined) return undefined
+  const takeSec = positiveSeconds(payload.draftTakeSec)
   return positiveSeconds(await seedanceDraftFinalizeBilledSec({
     hasRefVideo: payload.draftHasRefVideo === true,
     outputSec,
+    ...(takeSec !== undefined ? { takeSec } : {}),
     refVideoDurationsSec: Array.isArray(payload.draftRefVideoDurationsSec) ? payload.draftRefVideoDurationsSec : [],
   }))
 }
@@ -358,6 +405,8 @@ export async function seedanceDraftFinalizeStamp(
       kieTaskId: resolved.draftTaskId,
       reservedCreditId: resolved.creditId,
       draftOutputSec: resolved.outputSec,
+      // Only a take past its draft's hold: the provider renders, and bills, all of it.
+      ...(resolved.takeSec !== undefined ? { draftTakeSec: resolved.takeSec } : {}),
       draftHasRefVideo: resolved.hasRefVideo,
       draftRefVideoDurationsSec: resolved.refVideoDurationsSec,
       ...(resolved.nsfwChecker ? { draftNsfwChecker: true } : {}),

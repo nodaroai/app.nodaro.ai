@@ -1,4 +1,4 @@
-import { factoryPresetPreviewSrcSet, factoryPresetPreviewUrl, presetMinReferences } from "@nodaro/prompts/presets"
+import { factoryPresetPreviewSize, factoryPresetPreviewSrcSet, factoryPresetPreviewUrl, presetMinReferences } from "@nodaro/prompts/presets"
 import { appBaseUrl } from "../deployment-urls.js"
 
 /**
@@ -65,7 +65,18 @@ export function factoryPresetView(nodeType: string, preset: CatalogEntry) {
     // looked up among the committed files (null until one is committed).
     previewUrl: preset.previewUrl ?? factoryPresetPreviewUrl(preset.id, appBaseUrl()),
     ...(preset.previewUrl === undefined ? previewSrcSetField(preset.id) : {}),
+    ...(preset.previewUrl === undefined ? previewSizeFields(preset.id) : {}),
   }
+}
+
+/**
+ * `previewWidth` / `previewHeight` — the committed tile picture's real size, so a client draws each
+ * preset's picture in a box of its own shape before the picture loads (a preset's `aspectRatio` is
+ * what it generates, not always its picture's shape). A deployment preset's own picture states none.
+ */
+function previewSizeFields(presetId: string): { previewWidth?: number; previewHeight?: number } {
+  const size = factoryPresetPreviewSize(presetId)
+  return size ? { previewWidth: size.width, previewHeight: size.height } : {}
 }
 
 /**

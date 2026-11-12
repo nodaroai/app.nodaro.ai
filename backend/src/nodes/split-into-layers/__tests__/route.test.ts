@@ -20,11 +20,17 @@ vi.mock("@/lib/url-validator.js", async () => {
   const { z } = await import("zod")
   return { safeUrlSchema: z.string().url() }
 })
-vi.mock("@/lib/insert-job.js", () => ({ insertJob: m.insertJob }))
+vi.mock("@/lib/insert-job.js", () => ({ insertJobIdempotent: m.insertJob }))
 vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: m.queueAdd }, redis: {} }))
-vi.mock("@/middleware/credit-guard.js", () => ({
+vi.mock("@/middleware/credit-guard.js", async () => ({
   creditGuard: (resolver: (req: FastifyRequest) => string) => async (req: FastifyRequest) => {
     m.resolved.push(resolver(req))
+    // As the real guard keeps a request's Idempotency-Key for the route's insert:
+    // trimmed, and only from its minimum length (a shorter key dedups nothing).
+    const { MIN_IDEMPOTENCY_KEY_LENGTH } = await import("@/lib/dedup-fingerprint.js")
+    const raw = req.headers["idempotency-key"]
+    const key = typeof raw === "string" ? raw.trim() : ""
+    if (key.length >= MIN_IDEMPOTENCY_KEY_LENGTH) req.idempotencyKey = key
   },
   reserveCreditsForJob: async (_req: unknown, _reply: unknown, _jobId: string, id: string) => {
     m.reserveIds.push(id)
@@ -51,7 +57,7 @@ async function makeApp(userId: string | null = USER_ID): Promise<FastifyInstance
 beforeEach(() => {
   m.resolved = []
   m.reserveIds = []
-  m.insertJob.mockReset().mockResolvedValue({ data: { id: "job-1" }, error: null })
+  m.insertJob.mockReset().mockResolvedValue({ row: { id: "job-1" }, created: true })
   m.queueAdd.mockReset().mockResolvedValue({ id: "q-1" })
 })
 
@@ -107,6 +113,28 @@ describe("POST /v1/split-into-layers", () => {
     expect(res.json().error.code).toBe("validation_error")
     expect(m.resolved).toEqual([])
     expect(m.insertJob).not.toHaveBeenCalled()
+  })
+
+  it("files the row under the request's Idempotency-Key, and answers a repeat with the job it already started", async () => {
+    const app = await makeApp()
+    m.insertJob.mockResolvedValueOnce({ row: { id: "job-1" }, created: false })
+    const res = await app.inject({ method: "POST", url: URL, payload: { imageUrl: IMAGE }, headers: { "idempotency-key": "poster-1-layers" } })
+    expect(m.insertJob.mock.calls[0]![2]).toBe("poster-1-layers")
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ jobId: "job-1", deduped: true })
+    expect(res.headers["x-dedup-hit"]).toBe("1")
+    // A repeat holds nothing and queues nothing.
+    expect(m.reserveIds).toEqual([])
+    expect(m.queueAdd).not.toHaveBeenCalled()
+  })
+
+  it("a key shorter than the guard's minimum is no key: the row is inserted without one and the run starts", async () => {
+    const app = await makeApp()
+    const res = await app.inject({ method: "POST", url: URL, payload: { imageUrl: IMAGE }, headers: { "idempotency-key": "short" } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ jobId: "job-1" })
+    expect(m.insertJob.mock.calls[0]![2]).toBeUndefined()
+    expect(m.reserveIds).toEqual(["split-into-layers:1k:10"])
   })
 
   it("needs a user", async () => {

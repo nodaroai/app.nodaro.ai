@@ -74,6 +74,13 @@ describe("parseVideoOverlayProbe", () => {
   it.each(["0:1", "N/A", undefined])("a SAR of %s is 1 (Review Focus 3)", (sar) => {
     expect(parseVideoOverlayProbe(json([video({ sample_aspect_ratio: sar })])).sar).toBe(1)
   })
+  it("states a SAR that is not 1 as its exact fraction too (a `setsar` value), inverted when the axes swap", () => {
+    expect(parseVideoOverlayProbe(json([video({ width: 720, height: 480, sample_aspect_ratio: "32:27" })])).sarRatio).toBe("32/27")
+    expect(parseVideoOverlayProbe(json([video({ width: 720, height: 480, sample_aspect_ratio: "32:27", side_data_list: [{ rotation: 90 }] })])).sarRatio).toBe("27/32")
+    for (const sar of ["1:1", "0:1", "N/A", undefined]) {
+      expect(parseVideoOverlayProbe(json([video({ sample_aspect_ratio: sar })]))).not.toHaveProperty("sarRatio")
+    }
+  })
   it("an embedded cover picture is not a video (Review Focus 2)", () => {
     const cover = video({ codec_name: "mjpeg", width: 600, height: 600, disposition: { attached_pic: 1 } })
     expectNotVideo(() => parseVideoOverlayProbe(json([audio("mp3"), cover])))

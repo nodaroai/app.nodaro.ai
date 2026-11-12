@@ -27,6 +27,14 @@ export interface ProjectedCatalogOption {
    * as given: file names carry a content hash, so it can be cached for good.
    */
   imageUrl?: string
+  /**
+   * Absolute URL of the option's enlarged picture: the larger version to show
+   * where your picker shows the option big (hover, zoom, a detail view).
+   * Present only on a deployment that shows its own pictures (its surface
+   * profile's `catalogs.images: "own"`) and gave one for this option; absent
+   * everywhere else, so draw `imageUrl` there instead.
+   */
+  imageLargeUrl?: string
 }
 export interface ProjectedCatalogDimension {
   field: string
@@ -58,9 +66,11 @@ export interface ProjectedCatalogSection {
 }
 
 /**
- * `GET /v1/catalogs`. `data` is present only when the deployment registered
- * catalog packs (`curated: true`); with none the catalogs are the bundled
- * ones — read them per picker with `client.pickerCatalogs.get(nodeType)`.
+ * `GET /v1/catalogs`. `data` is present when the deployment registered
+ * catalog packs (`curated: true`), and when it shows its own picker pictures
+ * (`curated: false`: the catalogs are the bundled ones, the pictures in them
+ * are the deployment's). Otherwise it is absent and the catalogs are the
+ * bundled ones — read them per picker with `client.pickerCatalogs.get(nodeType)`.
  */
 export interface CatalogsListResponse {
   curated: boolean
@@ -74,7 +84,8 @@ export class CatalogsResource {
 
   /** Every catalog, projected & pack-composed (honors the deployment's
    *  registered vendored packs). Cached publicly 5 min. `data` is absent
-   *  when the deployment registered no packs (`curated: false`). */
+   *  when the deployment registered no packs and shows none of its own
+   *  picker pictures. */
   list(opts: { detail?: "compact" | "full" } = {}): Promise<CatalogsListResponse> {
     const qs = opts.detail ? `?detail=${opts.detail}` : ""
     return this.client.request("GET", `/v1/catalogs${qs}`)

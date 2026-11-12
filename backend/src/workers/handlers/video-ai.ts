@@ -50,7 +50,8 @@ import { ttsSupportsAudioTags, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared/pipeline"
 import type { VideoCharacterReference, FrameFit, FrameDelivery } from "@nodaro/shared/video"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
-import { combineVideos } from "../../providers/video/combine-videos.js"
+import { extendTailPicture, stitchExtension, type ExtendStitchResult } from "../../providers/video/extend-stitch.js"
+import { probeMatched } from "../../providers/video/matched-encode.js"
 import { extractTailToFile } from "../../providers/video/extract-tail.js"
 import { extractFrame } from "../../providers/video/extract-frame.js"
 import { resolveSourceMatchedAspect } from "../../providers/video/source-matched-aspect.js"
@@ -81,7 +82,7 @@ import { houseModelTiming } from "../../lib/house-model-timeouts.js"
 import { deliverHouseModelRun } from "../../lib/house-model-delivery.js"
 import { applySmartLoopCutToR2Url } from "../../providers/video/apply-smart-loop-cut.js"
 import { join } from "node:path"
-import { readFile, rm } from "node:fs/promises"
+import { readFile } from "node:fs/promises"
 import { uploadBufferToR2, mediaObjectKey } from "../../lib/storage.js"
 import { uploadJobScratchFile } from "../../lib/job-scratch.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
@@ -1504,7 +1505,8 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     // window (2.0: 4–15s, 2.5: 4–30s): what the route queued.
     const extSeconds = tailRecipeSeconds(provider, duration)
 
-    // The extension must match the SOURCE's shape or the stitch letterboxes.
+    // The extension must match the SOURCE's shape or the stitch crops it
+    // (`stitchExtension` scales it to cover the source's frame).
     // seedance-2 natively accepts aspect_ratio "adaptive" (adopts the
     // reference video's ratio — live-verified: 720×1280 ref → 496×864 out),
     // so this resolves without a probe round-trip; providers without a
@@ -1530,10 +1532,16 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     // (a foreign source, a first extension, an mp4 chain) or a failed cut (the
     // source's clip already expired, say) falls back to the tail, the
     // transport that works today.
+    //
+    // The source's local copy is the stitch's source too, so the prep folder
+    // stays until the stitch has read it, and is removed on every way out
+    // (the `finally` below).
     const prepDir = await createWorkDir("extend-prep")
-    let tailUrl: string
-    let lastFrameUrl: string
-    let chainTailUrl: string | undefined
+    // The raw copy below is named only in a COMPLETED job's output, which is
+    // how expiry finds a job's files: a run that fails after it discards it
+    // on the way out (`discardFailedRunCopies`), or it would stay in storage,
+    // on the user's quota, for good.
+    let rawCopyUrl: string | undefined
     try {
       const srcLocal = join(prepDir, "source.mp4")
       await downloadFile(sourceUrl, srcLocal)
@@ -1544,16 +1552,23 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       const srcProbe = await probeVideoSource(srcLocal)
       const pictureSec = srcProbe.videoDurationSeconds ?? srcProbe.durationSeconds
       if (pictureSec < recipe.minSourceSec) throw new Error(extendSourceTooShortMessage(provider, pictureSec))
-      const tailPath = await extractTailToFile(srcLocal, recipe.tailSec, { measureFrom: "picture" })
+      // An HDR source's tail, and so the last frame taken from it below, goes
+      // through the stitch's own SDR conversion (`extendTailPicture`): the
+      // result shows the source in SDR, so the model continues that picture
+      // and the seam matches. Any other source's tail is cut as it always
+      // was, and so is a chained MOV reference (Seedance's own SDR clip).
+      const tailPicture = extendTailPicture(await probeMatched(srcLocal))
+      const tailPath = await extractTailToFile(srcLocal, recipe.tailSec, { measureFrom: "picture", ...tailPicture })
       // Generation inputs only, never the deliverable: the tail, the frame and
       // a chained cut go to the job's scratch folder (`lib/job-scratch.ts`),
       // emptied when the job ends, and count against no one's quota.
-      tailUrl = await uploadJobScratchFile(tailPath, "extend-tail", "mp4", "video/mp4", ctx.jobId)
+      const tailUrl = await uploadJobScratchFile(tailPath, "extend-tail", "mp4", "video/mp4", ctx.jobId)
       // Last frame of the tail IS the source's last frame; the tail is
       // already on R2, so the frame-exact extractor can read it directly.
       const frame = await extractFrame({ videoUrl: tailUrl, mode: "last" })
-      lastFrameUrl = await uploadJobScratchFile(frame.imagePath, "extend-last-frame", "png", "image/png", ctx.jobId)
+      const lastFrameUrl = await uploadJobScratchFile(frame.imagePath, "extend-last-frame", "png", "image/png", ctx.jobId)
       await cleanupWorkDir(dirname(frame.imagePath))
+      let chainTailUrl: string | undefined
       const chainedMovUrl = genModel === "seedance-2-5" ? await findChainedMovReference(sourceUrl, ctx.jobUserId) : undefined
       if (chainedMovUrl) {
         try {
@@ -1563,23 +1578,14 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
           console.warn(`[worker] Job ${ctx.jobId}: chained mov cut failed, extending from the tail:`, err)
         }
       }
-    } finally {
-      await cleanupWorkDir(prepDir)
-    }
-    await setJobProgress(job, ctx.jobId, 10)
+      await setJobProgress(job, ctx.jobId, 10)
 
-    const kiePrompt = recipe.prompt(userPrompt)
-    const referenceVideoUrl = chainTailUrl ?? tailUrl
-    // `mp4` is KIE's default and is sent as no field at all, so the mp4
-    // payload stays byte-identical to today.
-    const outputFormat = genModel === "seedance-2-5" ? seedance25OutputFormat() : "mp4"
+      const kiePrompt = recipe.prompt(userPrompt)
+      const referenceVideoUrl = chainTailUrl ?? tailUrl
+      // `mp4` is KIE's default and is sent as no field at all, so the mp4
+      // payload stays byte-identical to today.
+      const outputFormat = genModel === "seedance-2-5" ? seedance25OutputFormat() : "mp4"
 
-    // The raw copy below is named only in a COMPLETED job's output, which is
-    // how expiry finds a job's files: a run that fails after it discards it
-    // on the way out (`discardFailedRunCopies`), or it would stay in storage,
-    // on the user's quota, for good.
-    let rawCopyUrl: string | undefined
-    try {
       const seedanceRamp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 75 })
       let gen
       try {
@@ -1627,35 +1633,47 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         }
       }
 
-      // Smart-stitch: the extension was generated FROM the source's tail, so
-      // this is exactly the continuation case the smart cut solves — PSNR-
-      // match the source's last frames against the extension's first frames
-      // and cut at the closest pair (duplicate plays once, motion continues).
-      // The fixed SEEDANCE_2_EXTEND_STITCH trims remain the FALLBACK for
-      // boundaries where no genuine match is found (or the search fails).
-      // Hard cut + anchored audio blend keeps A/V sample-locked. A stitch
-      // failure fails the job (full refund) — never deliver the bare
-      // extension as the result.
-      const { outputPath: stitchedPath, smartCuts: stitchCuts } = await combineVideos({
-        videoUrls: [sourceUrl, gen.url],
-        transition: "cut",
-        transitionDuration: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
-        audioMode: "crossfade",
-        audioCrossfadeCurve: "equal-power",
-        trimStartFrames: SEEDANCE_2_EXTEND_STITCH.trimHeadFrames,
-        trimEndFrames: SEEDANCE_2_EXTEND_STITCH.trimTailFrames,
-        smartCut: { enabled: true, framesFromPrev: 8, framesFromNext: 8 },
-      })
-      await setJobProgress(job, ctx.jobId, 85)
+      // Smart-stitch (`stitchExtension`): the extension was generated FROM
+      // the source's tail, so this is exactly the continuation case the smart
+      // cut solves — PSNR-match the source's last frames against the
+      // extension's first frames and cut at the closest pair (duplicate plays
+      // once, motion continues). The fixed SEEDANCE_2_EXTEND_STITCH trims
+      // remain the FALLBACK for boundaries where no genuine match is found
+      // (or the search fails). Hard cut + a sound crossfade at the join; the
+      // result has the source's size, frame rate and picture quality. It
+      // reads the source's prep copy and the extension, downloaded into the
+      // stitch's own folder, removed once the result is uploaded, on success
+      // and failure. A stitch failure fails the job (full refund) — never
+      // deliver the bare extension (or the bare source) as the result.
+      const stitchDir = await createWorkDir("extend-stitch")
+      let stitchedR2Url: string
+      let stitchBoundary: ExtendStitchResult["boundary"]
+      try {
+        const extensionPath = join(stitchDir, isMovUrl(gen.url) ? "extension.mov" : "extension.mp4")
+        await downloadFile(gen.url, extensionPath)
+        const stitched = await stitchExtension({
+          sourcePath: srcLocal,
+          extensionPath,
+          workDir: stitchDir,
+          smartCut: { framesFromPrev: 8, framesFromNext: 8 },
+          fallbackTrims: {
+            trimEndFrames: SEEDANCE_2_EXTEND_STITCH.trimTailFrames,
+            trimStartFrames: SEEDANCE_2_EXTEND_STITCH.trimHeadFrames,
+          },
+          audioFadeSec: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
+        })
+        stitchBoundary = stitched.boundary
+        await setJobProgress(job, ctx.jobId, 85)
 
-      const stitchedR2Url = await watermarkLocalVideoAndUpload(
-        stitchedPath,
-        ctx.jobId,
-        ctx.jobUserId,
-        ctx.shouldWatermark,
-      )
-      // combineVideos manages its own temp dir (not cleanupWorkDir-compatible)
-      await rm(dirname(stitchedPath), { recursive: true, force: true }).catch(() => {})
+        stitchedR2Url = await watermarkLocalVideoAndUpload(
+          stitched.outputPath,
+          ctx.jobId,
+          ctx.jobUserId,
+          ctx.shouldWatermark,
+        )
+      } finally {
+        await cleanupWorkDir(stitchDir)
+      }
       await setJobProgress(job, ctx.jobId, 100)
 
       const stitchedThumbUrl = await generateAndUploadThumbnail(stitchedR2Url, ctx.jobId, ctx.jobUserId)
@@ -1682,8 +1700,17 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
           // Raw (unstitched) extension clip — provenance/debug, AND the mov
           // the next extension in this chain cuts its reference from.
           rawExtensionUrl,
-          // Where the stitch actually cut (smart-cut decision + PSNR).
-          ...(stitchCuts ? { smartCuts: stitchCuts } : {}),
+          // Where the stitch actually cut (smart-cut decision + PSNR), in the
+          // shape combineVideos reported it: one boundary, its fields in its order.
+          smartCuts: [{
+            boundary: 0,
+            prevClipEndTrimFrames: stitchBoundary.trimEndFrames,
+            nextClipStartTrimFrames: stitchBoundary.trimStartFrames,
+            psnrDb: stitchBoundary.psnrDb,
+            matched: stitchBoundary.matched,
+            searchedPrevFrames: stitchBoundary.searchedPrevFrames,
+            searchedNextFrames: stitchBoundary.searchedNextFrames,
+          }],
         },
       })
       if (seedanceOk) {
@@ -1695,6 +1722,8 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     } catch (err) {
       await discardFailedRunCopies(ctx.jobId, ctx.jobUserId, [rawCopyUrl])
       throw err
+    } finally {
+      await cleanupWorkDir(prepDir)
     }
   }
 

@@ -47,7 +47,8 @@ function attemptSource(a: LlmAttemptSpend): AttemptSource {
  * What one attempt cost (USD). The rules, in order:
  *  1. KIE's stated charge (`creditsUsd`) when the reply carried one;
  *  2. on the `kie` lane for a model whose reported input count is untrusted
- *     (`kieInputUntrusted`: Claude, GPT-6): the size estimate — the request's
+ *     (`kieInputUntrusted`: Claude, and the GPT-6 models that report none —
+ *     never GPT-6.1 Terra, whose count is real): the size estimate — the request's
  *     characters ÷ 4 in, the reported output tokens out — at the KIE rate
  *     (`kieCostUsd`);
  *  3. the adapter's `providerCost` — unless it is 0 beside real tokens (the

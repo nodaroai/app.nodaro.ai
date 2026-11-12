@@ -20,6 +20,7 @@ import { getPersonSwatch } from "./color-swatches"
 import { MultiPickBadge } from "./multi-pick-ui"
 import { CharacterArtTile, characterArtGridClass } from "./character-art-tile"
 import { characterArtShape, characterArtUrl, type CharacterArtShape } from "../icons/character-art"
+import { useOwnPickerPicturesVersion } from "../icons/own-pictures"
 import { usePickerFieldRestriction } from "../lib/field-restrictions"
 import { usePickerLabel, fillLabel } from "../i18n"
 import {
@@ -531,6 +532,8 @@ export function PersonDimensionGrid({
 
   const isAge = dimension === "age"
   const isAgeCustom = isAge && value.age === "age-custom"
+  // A deployment's own photos arrive after the first render (icons/own-pictures.ts).
+  useOwnPickerPicturesVersion()
   const photoShape = personPhotoShape(dimension)
 
   return (

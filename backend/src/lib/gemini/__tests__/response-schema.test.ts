@@ -160,6 +160,34 @@ describe("the wire: no array cap reaches Google on either call shape", () => {
   })
 })
 
+// Gemini 4 Carbon has no TRUSTED structured mode, only a hint
+// (`structuredOutputHint`): Google still gets the schema on every attempt (it
+// enforced one in the probe), and every answer is still validated and re-asked.
+describe("Gemini 4 Carbon's schema hint on the direct lane", () => {
+  const Mood = z.object({ mood: z.enum(["happy", "sad"]) }).strict()
+
+  it("carries responseJsonSchema on every attempt, and an off-enum answer is still re-asked", async () => {
+    const { llmCompleteStructured } = await import("../../llm-client.js")
+    generateContent
+      .mockResolvedValueOnce({ text: JSON.stringify({ mood: "cheerful and energized" }), usageMetadata: { promptTokenCount: 40, candidatesTokenCount: 9 } })
+      .mockResolvedValueOnce({ text: JSON.stringify({ mood: "happy" }), usageMetadata: { promptTokenCount: 60, candidatesTokenCount: 5 } })
+
+    const result = await llmCompleteStructured({
+      modelId: "gemini-4-carbon", system: "", requireLane: "direct",
+      messages: [{ role: "user", content: "How does a sunny morning feel?" }],
+    }, Mood)
+
+    expect(result.output).toEqual({ mood: "happy" })
+    expect(generateContent).toHaveBeenCalledTimes(2)
+    for (const call of generateContent.mock.calls) {
+      const config = (call[0] as { model: string; config: { responseMimeType?: string; responseJsonSchema?: unknown } })
+      expect(config.model).toBe("gemini-4-carbon")
+      expect(config.config.responseMimeType).toBe("application/json")
+      expect(JSON.stringify(config.config.responseJsonSchema)).toContain('"enum":["happy","sad"]')
+    }
+  })
+})
+
 describe("the enum-value budget", () => {
   const enumOf = (n: number, prefix = "v") => ({ type: "string", enum: Array.from({ length: n }, (_, i) => `${prefix}${i}`) })
 

@@ -11,7 +11,7 @@
  * labels) re-renders the moment an answer changes it.
  */
 import { useSyncExternalStore } from "react"
-import { LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS } from "@nodaro/shared/llm-models"
+import { LLM_FEATURE_DEFAULTS, parseLlmPriceKeyModel } from "@nodaro/shared/llm-models"
 import { isTierBilledLlmFeature } from "@nodaro/render-rules"
 
 export type LlmPricingMode = "unknown" | "metered" | "tier"
@@ -45,9 +45,6 @@ export function useLlmPricingMode(): LlmPricingMode {
   return useSyncExternalStore(subscribe, llmPricingMode, () => "unknown")
 }
 
-const MODEL_IDS: ReadonlySet<string> = new Set(LLM_MODEL_IDS)
-const DIRECT_SUFFIX = ":direct"
-
 /**
  * The features whose price key the server meters (its `METERED_LLM_FEATURES`
  * reading of the shared registry): every LLM feature but the tier-billed ones
@@ -62,17 +59,17 @@ const METERED_FEATURES_LONGEST_FIRST: readonly string[] = [
 ].sort((a, b) => b.length - a.length)
 
 /**
- * Is `id` a metered LLM price key (`llmPriceKey`: `<feature>:<model>[:direct]`)
- * — a feature the server meters, then a registry model id — exactly the ids
- * the server answers as estimates while it prices per model? A tier id
+ * Is `id` a metered LLM price key (`llmPriceKey`: `<feature>:<model>[:direct |
+ * :effort-<level>]`) — a feature the server meters, then a registry model read
+ * by the server's own reader (`parseLlmPriceKeyModel`) — exactly the ids the
+ * server answers as estimates while it prices per model? A tier id
  * (`llm-chat:premium`), an unknown feature, and any other composite
  * (`gpt-image:high`) is not.
  */
 export function isMeteredLlmPriceKey(id: string): boolean {
   const feature = METERED_FEATURES_LONGEST_FIRST.find((f) => id.startsWith(`${f}:`))
   if (!feature) return false
-  const rest = id.slice(feature.length + 1)
-  return MODEL_IDS.has(rest) || (rest.endsWith(DIRECT_SUFFIX) && MODEL_IDS.has(rest.slice(0, -DIRECT_SUFFIX.length)))
+  return parseLlmPriceKeyModel(id.slice(feature.length + 1)) !== null
 }
 
 /**

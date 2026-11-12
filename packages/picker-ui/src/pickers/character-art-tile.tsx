@@ -9,6 +9,7 @@ import {
   type CharacterArtFamily,
   type CharacterArtShape,
 } from "../icons/character-art"
+import { useOwnPickerPicturesVersion } from "../icons/own-pictures"
 
 interface CharacterArtProps {
   readonly family: CharacterArtFamily
@@ -31,6 +32,8 @@ const FILL_NOT_GROW: CSSProperties = { width: 0, minWidth: "100%" }
  * picture a user picks is the picture they see everywhere.
  */
 export const CharacterArt = memo(function CharacterArt({ family, id, className, position, fallback }: CharacterArtProps) {
+  // A deployment's own photos arrive after the first render: re-render then.
+  useOwnPickerPicturesVersion()
   const url = characterArtUrl(family, id)
   // Keyed by URL, so moving to another option retries instead of sticking to the fallback.
   const [failedUrl, setFailedUrl] = useState<string | undefined>(undefined)
@@ -157,6 +160,7 @@ export function CharacterArtTile({
   badge,
   stopDoubleClick = false,
 }: CharacterArtTileProps) {
+  useOwnPickerPicturesVersion()
   const hasArt = characterArtUrl(family, id) !== undefined
   // No photo and no drawn icon: a soft pink ground, so the box reads as
   // intentional rather than as a picture that failed to load. (A photo brings

@@ -4,6 +4,7 @@ import type { OverlayAnchor, VideoMaskRequest, MaskCompositeRequest } from "@nod
 import type { CaptionStyle, CaptionLookId, SupportedFontName } from "@nodaro/shared/captions"
 import type { TranscribeLane } from "@nodaro/shared/models"
 import type { VideoOverlayRequest } from "@nodaro/shared/video"
+import type { GenerationSessionParams, RunNodeOptions } from "./nodes.js"
 
 /** One word-timed caption entry (one per WORD for the kinetic styles). */
 export interface CaptionEntry {
@@ -408,11 +409,24 @@ export class MediaResource {
    * pixel budget (`1K` default, `auto` keeps the picture's own size between 1K
    * and 2K); `prompt` names what to separate. A run holds the price of the
    * most images it may return (`maxLayers` + 1, the base included) and is
-   * charged only for the images it returns. Poll `jobs.get(jobId)`; the
-   * completed job's `output_data` is a {@link SplitIntoLayersOutput}.
+   * charged only for the images it returns: ask that price first with
+   * `client.nodes.quote("split-into-layers", input)` (nothing is started).
+   * Poll `jobs.get(jobId)`; the completed job's `output_data` is a
+   * {@link SplitIntoLayersOutput}. `sessionId` files the job in one of your
+   * sessions; `origin` tags it with your app's slug.
+   *
+   * With `options.idempotencyKey` (sent as the `Idempotency-Key` header, at
+   * least 8 characters) a retry of the same request answers the job it
+   * already started (`deduped: true`) instead of starting and charging a
+   * second one.
    */
-  splitIntoLayers(input: SplitIntoLayersInput): Promise<{ jobId: string }> {
-    return this.client.request<{ jobId: string }>("POST", "/v1/split-into-layers", { body: input })
+  splitIntoLayers(input: SplitIntoLayersInput, options: MediaRunOptions = {}): Promise<MediaJobStarted> {
+    return this.client.request<MediaJobStarted>("POST", "/v1/split-into-layers", {
+      body: input,
+      ...(options.idempotencyKey ? { headers: { "Idempotency-Key": options.idempotencyKey } } : {}),
+      ...(options.signal ? { signal: options.signal } : {}),
+      ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+    })
   }
 
   /**
@@ -743,8 +757,22 @@ export interface ShotCutsOutput {
 /** A layer split's pixel budget per image: about one megapixel at `1K`; `auto` keeps the picture's own size (between 1K and 2K). */
 export type SplitIntoLayersSize = "1K" | "1.5K" | "2K" | "auto"
 
-/** Body of {@link MediaResource.splitIntoLayers} (`POST /v1/split-into-layers`). */
-export interface SplitIntoLayersInput {
+/** Per-call options of a media request that starts a job ({@link MediaResource.splitIntoLayers}). */
+export interface MediaRunOptions extends RunNodeOptions {
+  /** Abort the request. */
+  readonly signal?: AbortSignal
+  /** This request's timeout in ms, in place of the client's `timeoutMs`. */
+  readonly timeoutMs?: number
+}
+
+/** A media job started: its id, and `deduped: true` when an `Idempotency-Key` retry found the job already started. */
+export interface MediaJobStarted {
+  jobId: string
+  deduped?: true
+}
+
+/** Body of {@link MediaResource.splitIntoLayers} (`POST /v1/split-into-layers`), and of its quote (`nodes.quote("split-into-layers", …)`). */
+export interface SplitIntoLayersInput extends GenerationSessionParams {
   /** The picture to split (an http or https URL). */
   imageUrl: string
   /** "Max layers", 1–99 (default 9): more elements than this merge into fewer layers; none is dropped. */

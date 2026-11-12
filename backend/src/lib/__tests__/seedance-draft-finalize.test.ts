@@ -220,11 +220,21 @@ describe("resolveSeedanceDraftFinalize — pricing from the source job", () => {
   })
 
   it("without a recorded take, reads the stored clip's VIDEO stream", async () => {
-    db.rows = [draftRow()]
+    // An Auto-length draft: its take (6 s) is within the 30 s its run held.
+    db.rows = [draftRow({}, { duration: -1 })]
     probe.fn = async () => 6.04
     const r = await resolveSeedanceDraftFinalize({ userId: USER, taskId: "task-draft" })
     expect(r).toMatchObject({ ok: true, outputSec: 6 })
+    expect(r).not.toHaveProperty("takeSec")
     expect(probe.urls).toEqual(["https://cdn.example/draft.mp4"])
+  })
+
+  it("a take past what the draft's run held is billed at the hold, the take kept for the provider's bill (decided 2026-11-12)", async () => {
+    // A fixed 4 s draft whose clip reads 6.04 s: its run held 4 s, so its finalize bills 4.
+    db.rows = [draftRow()]
+    probe.fn = async () => 6.04
+    const r = await resolveSeedanceDraftFinalize({ userId: USER, taskId: "task-draft" })
+    expect(r).toMatchObject({ ok: true, outputSec: 4, takeSec: 6, creditId: "seedance-2-5-hd:4s" })
   })
 
   it("without a recorded take, a smart-loop-cut draft bills at least its requested length (the finalize renders the full take)", async () => {

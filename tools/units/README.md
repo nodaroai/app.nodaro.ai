@@ -7,7 +7,7 @@ central registration files (§5.8 option B, decided 2026-10-16):
 | Tree | Folder | Holds |
 |---|---|---|
 | frontend | `frontend/src/nodes/<type>/` | `unit.json` (**the manifest, source of truth**), `strings.json`, `types.ts`, `node.tsx`, `config.tsx`, `option.tsx`, `exec.ts`, `api.ts`, `price-id.ts` (a unit priced by its settings: the credit id a run reserves), generated `definition.generated.ts` / `labels.generated.ts`, `__tests__/` |
-| backend | `backend/src/nodes/<type>/` | `route.ts` (or `route.ee.ts` when Cloud-only), `payload.ts`, `worker.ts`, `price.ee.ts`, `output.ts` / `inputs.ts`, `characterize.char.ts` (an ffmpeg worker's characterization operation), `use-case.ts` (a use-case node's request body), `budget.ts` (a worker's job budget), `recover.ts` (an own-writer worker's recovery from its provider task), generated `descriptor.generated.ts`, `__tests__/` |
+| backend | `backend/src/nodes/<type>/` | `route.ts` (or `route.ee.ts` when Cloud-only), `quote.ts` (the route's pricing chain, so `POST /v1/quote` can price a run), `payload.ts`, `worker.ts`, `price.ee.ts`, `output.ts` / `inputs.ts`, `characterize.char.ts` (an ffmpeg worker's characterization operation), `use-case.ts` (a use-case node's request body), `budget.ts` (a worker's job budget), `recover.ts` (an own-writer worker's recovery from its provider task), generated `descriptor.generated.ts`, `__tests__/` |
 
 The central registries become **generated, checked-in aggregates** built from
 the manifests (`frontend/src/nodes/_generated/`, `backend/src/nodes/_generated/`,
@@ -254,6 +254,7 @@ seams: a capability, an input kind (`ACCEPTS_KINDS`) or a category
 | the ffmpeg characterization operations (`OPERATIONS`; each named by its unit's type — its golden key — and placed after its `after`) | `backend/src/providers/video/__characterization__/operations.ts`. The unit file and its aggregate are `.char.ts`, like the harness: excluded from the build and the default test run |
 | the job budgets (`DECLARED_JOB_BUDGETS`, read through `declaredJobBudgetMs` and `BUDGETED_JOB_NAMES`: the video worker's liveness fallback, the orchestrator's ceilings, the row sweeps) | `backend/src/lib/job-budget.ts`, the legacy rows ∪ the `budgets` aggregate (`UNIT_BUDGETS`, each unit's `budget.ts` under its type) |
 | an own-writer worker's recovery from its provider task (`UNIT_RECOVERS`, each unit's `recover.ts` under its type; read by the KIE reconcile — its cron and the video worker's stall re-pick — before its `NOT_GENERIC_RECOVERABLE` bump) | `backend/src/lib/reconcile/unit-recovery.ts` (`unitRecoverOf(jobType)`, a lookup; no legacy rows) |
+| the price of a run before it starts (`UNIT_QUOTES`, each unit's `quote.ts` under its type: its run route's body schema and pricing chain) | `backend/src/lib/unit-quotes.ts` (`unitQuoteOf(type)`, a lookup, and `unitQuotableTypes()`), read by `POST /v1/quote` (`ee/routes/node-quote.ts`) beside its hand-written rows (`QUOTABLE_NODE_TYPES`) |
 | the long single-node restore horizon (`LONG_RUNNING_NODE_TYPES`: a reload re-attaches a running job's poll for 6 h instead of 30 minutes) | `frontend/src/lib/single-node-restore.ts`, the legacy rows ∪ the units whose definition is `longRunning` (through `unit-definitions.ts`) |
 | the kept-length sets (`LENGTH_KEEPING_VIDEO_TYPES` / `EXACT_LENGTH_VIDEO_TYPES`, the `length:*` capabilities — the run estimates, the run's charge and, through them, the listing's `VIDEO_OUTPUT_LENGTH_RULES`) | `packages/render-rules/src/kept-length.ts` ∪ `unit-kept-lengths.generated.ts` |
 | the image typing sets (the server's `IMAGE_SOURCE_TYPES`; the editor's `IMAGE_SOURCE_TYPES` and `IMAGE_RESULT_TYPES`: every unit whose `contract.producer` is `image`) and the routing of a unit's image pip (as an Upload Image, both engines' `routedAs`) | `workflow-engine/execution-graph.ts` and `input-resolver.ts` (through `unit-descriptors.ts`); `lib/preview-node-types.ts`, `config-panels/results-gallery-media.ts` and `workflow-editor/node-input-resolver.ts` (through `unit-definitions.ts`) |
@@ -527,6 +528,26 @@ that tick (`reconcile_last_error` `delivery_failed`), never the 18-tick bump; a
 `{ ok: false }` outcome (a lost claim, a held or blocked result) is not a
 failure. The fal and Replicate reconciles do not read the seam (no own-writer
 unit runs there), so the validator refuses `recover.ts` on any other provider.
+
+**A unit's quote.** A unit with a route may let a client ask the price of a
+run before it starts (`POST /v1/quote` with its type). It declares its run
+route's pricing chain once, in `quote.ts`: `export const quote: UnitQuote = {
+body, pricing }` (`backend/src/nodes/kit.ts`) — `body()` builds the route's
+Zod body (a function, so the module runs no code while it loads, G7) and
+`pricing` is a `RoutePricing` (`prechecks`, `modelResolver`, `opts`). Its
+`route.ts` registers exactly that chain as its preHandlers
+(`[...quote.pricing.prechecks, creditGuard(quote.pricing.modelResolver,
+quote.pricing.opts)]`) and reserves the id the same resolver names, so the
+quote and the run read one resolver. The quote route asks it through
+`lib/unit-quotes.ts` after its hand-written rows, on the unit's run route
+(`nodeRunRoute(type)`): the run's body, its prechecks, its model and node
+doors, its `beforePricing` step and its price, with no job and nothing
+reserved. A quote opens a notebook on the request (`lib/price-notes.ts`): a
+precheck or `computeCredits` that knows more than the number — a hold the run
+settles below (`settles_to_actual`), what it measured — says so there, and
+the notes are no-ops on a run. The validator refuses `quote.ts` on a unit
+with no route. Split into Layers is the first: its quote is the hold (the
+most images the run may return), stated as such.
 
 **A unit's app fields.** A published app lets its creator expose some of a
 node's settings to the app's users. A unit declares which, and how each is
