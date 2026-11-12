@@ -1530,7 +1530,7 @@ describe("POST /v1/generate-video — Grok Imagine Video 1.5 frames", () => {
         endFrameUrl: END,
         referenceImageUrls: MIDS,
         duration: 8,
-        resolution: "1080p",
+        resolution: "720p",
       },
     })
     expect(res.statusCode).toBe(200)
@@ -1539,7 +1539,107 @@ describe("POST /v1/generate-video — Grok Imagine Video 1.5 frames", () => {
     expect(payload.imageUrl).toBe(START)
     expect(payload.endFrameUrl).toBe(END)
     expect(payload.referenceImageUrls).toEqual(MIDS)
+    expect(payload.resolution).toBe("720p")
+  })
+})
+
+describe("POST /v1/generate-video — Grok Imagine Video 1.5 takes a start frame only at 1080p", () => {
+  const USER = "00000000-0000-4000-8000-000000000001"
+  const START = "https://cdn.example/start.png"
+  const END = "https://cdn.example/end.png"
+  const MIDS = ["https://cdn.example/m1.png", "https://cdn.example/m2.png"]
+  const SENTENCE =
+    "Grok Imagine Video 1.5 takes a start frame only at 1080p: no end frame, loop or in-between frames. " +
+    "Choose 720p, or remove the end frame and the in-between frames. Nothing was charged."
+
+  const refusals: Array<[string, Record<string, unknown>]> = [
+    ["an end frame", { imageUrl: START, endFrameUrl: END }],
+    ["a loop (the start picture as the end frame)", { imageUrl: START, endFrameUrl: START }],
+    ["in-between frames", { imageUrl: START, referenceImageUrls: MIDS }],
+    ["an end frame and in-between frames", { imageUrl: START, endFrameUrl: END, referenceImageUrls: MIDS }],
+  ]
+  for (const [what, frames] of refusals) {
+    it(`refuses ${what} at 1080p before any job row or reservation`, async () => {
+      mockJobInsert({ data: { id: "job-never" }, error: null })
+      const { reserveCreditsForJob } = await import("../../middleware/credit-guard.js")
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-video",
+        payload: { userId: USER, provider: "grok-imagine-video-1.5", prompt: "a walk", duration: 8, resolution: "1080p", ...frames },
+      })
+      expect(res.statusCode).toBe(400)
+      const body = res.json() as { error: { code: string; message: string } }
+      expect(body.error.code).toBe("start_frame_only_resolution")
+      expect(body.error.message).toBe(SENTENCE)
+      expect(supabase.from).not.toHaveBeenCalledWith("jobs")
+      expect(reserveCreditsForJob).not.toHaveBeenCalled()
+      expect(videoQueue.add).not.toHaveBeenCalled()
+    })
+  }
+
+  it("reads the resolution case-folded (1080P is 1080p)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: { userId: USER, provider: "grok-imagine-video-1.5", prompt: "a walk", imageUrl: START, endFrameUrl: END, resolution: "1080P" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect((res.json() as { error: { code: string } }).error.code).toBe("start_frame_only_resolution")
+  })
+
+  it("counts connected references that join the in-between frames", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        userId: USER,
+        provider: "grok-imagine-video-1.5",
+        prompt: "a walk",
+        imageUrl: START,
+        resolution: "1080p",
+        connectedReferences: [cref({ source: "wired-image", url: "https://cdn.example/r1.png", description: "a red car" })],
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect((res.json() as { error: { code: string } }).error.code).toBe("start_frame_only_resolution")
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("runs a lone start frame at 1080p", async () => {
+    mockJobInsert({ data: { id: "job-grok-1080" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: { userId: USER, provider: "grok-imagine-video-1.5", prompt: "a walk", imageUrl: START, duration: 8, resolution: "1080p" },
+    })
+    expect(res.statusCode).toBe(200)
+    const [, payload] = vi.mocked(videoQueue.add).mock.calls[0] as [string, Record<string, unknown>]
     expect(payload.resolution).toBe("1080p")
+  })
+
+  it("runs at 1080p when the clip's cap drops every in-between frame (a 1-second clip)", async () => {
+    mockJobInsert({ data: { id: "job-grok-1s" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: { userId: USER, provider: "grok-imagine-video-1.5", prompt: "a walk", imageUrl: START, referenceImageUrls: MIDS, duration: 1, resolution: "1080p" },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+
+  it("runs every frame combination at 480p and 720p", async () => {
+    for (const resolution of ["480p", "720p"]) {
+      for (const [, frames] of refusals) {
+        vi.clearAllMocks()
+        mockJobInsert({ data: { id: `job-${resolution}` }, error: null })
+        const res = await app.inject({
+          method: "POST",
+          url: "/v1/generate-video",
+          payload: { userId: USER, provider: "grok-imagine-video-1.5", prompt: "a walk", duration: 8, resolution, ...frames },
+        })
+        expect(res.statusCode, `${resolution} ${JSON.stringify(frames)}`).toBe(200)
+      }
+    }
   })
 })
 

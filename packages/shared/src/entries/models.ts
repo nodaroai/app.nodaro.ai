@@ -152,6 +152,10 @@ export {
   videoProviderFoldsLoneEndFrame,
   videoProviderTakesLoneEndFrame,
   videoProviderRefsReplaceStartFrame,
+  VIDEO_START_FRAME_ONLY_CODE,
+  videoStartFrameOnlyResolution,
+  videoStartFrameOnlyMessage,
+  videoStartFrameOnlyProblem,
   VIDEO_MODE_ALIASES,
   RETIRED_VIDEO_PROVIDERS,
   canonicalVideoProvider,
@@ -246,6 +250,7 @@ export {
   maxVideoDurationSec,
   PRICING_DEFAULT_RESOLUTION,
 } from "../model-constants.js"
+export type { VideoStartFrameOnlyProblem } from "../model-constants.js"
 export {
   CAST_SWAP_POST_PROMPT_MAX,
   TREND_PROMPT_LIMITS,

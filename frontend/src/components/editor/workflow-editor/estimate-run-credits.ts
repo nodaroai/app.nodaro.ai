@@ -35,6 +35,7 @@ import { unitQuoteIdFor, upperUnits } from "@/lib/unit-quote"
 import { carriedEdges } from "./carried-edges"
 import { runLinesUnpriced, type RunUnpriced } from "./run-unpriced"
 import { seedanceRefQuoteKeyFor } from "@/lib/seedance-ref-quote"
+import { nodeStartFrameOnlyProblem, startFrameOnlyText, wiredVideoFrames } from "@/lib/video-start-frame-only"
 // @registry-lookup prices each node of a run by its own type (NODE_CREDIT_COSTS / estimateNodeCredits)
 
 /** The units a run is priced at, exactly: the factors' whole units unless they carry fractional ones. */
@@ -97,17 +98,35 @@ export function estimateRunCreditLines(
     // A metered call on a model the server refuses to price (R49): no figure — never the tier's —
     // and the server's sentence for the refusal, which every total this line is in shows.
     const unpricedId = variants.map((v) => getModelIdentifier(v, edges, allNodes, rerunIds)).find((id) => isModelRefused(id))
-    const unpricedMessage = unpricedId === undefined ? undefined : refusedModelMessage(unpricedId)
+    // A video run refused before it starts for its resolution and frames (Grok
+    // Imagine Video 1.5 takes a start frame only at 1080p): no price either —
+    // the line carries no credits, so no total counts a run nobody is charged
+    // for — and the refusal's own sentence.
+    const startFrameOnly = startFrameOnlyRefusal(node, edges)
+    const unpricedMessage = unpricedId !== undefined ? refusedModelMessage(unpricedId) : startFrameOnly
     // Both factors are shown by the confirm; the units are already in `cost`.
     return {
       nodeId: node.id,
       label: runNodeLabel(node),
       quantity,
-      credits: cost * quantity.fanOut,
+      credits: startFrameOnly !== undefined ? 0 : cost * quantity.fanOut,
       ...(estimate ? { estimate: true as const } : {}),
-      ...(unpricedId !== undefined ? { unpriced: true as const, ...(unpricedMessage ? { unpricedMessage } : {}) } : {}),
+      ...(unpricedId !== undefined || startFrameOnly !== undefined ? { unpriced: true as const, ...(unpricedMessage ? { unpricedMessage } : {}) } : {}),
     }
   })
+}
+
+/**
+ * The sentence a video node's run is refused with for a resolution that takes
+ * a start frame only, judged on its saved settings and what is wired into it
+ * (the editor's Run refuses it before calling the server), else undefined.
+ */
+function startFrameOnlyRefusal(node: WorkflowNode, edges: WorkflowEdge[]): string | undefined {
+  if (node.type !== "generate-video" && node.type !== "image-to-video") return undefined
+  const data = (node.data ?? {}) as { provider?: unknown; resolution?: unknown; duration?: unknown }
+  const provider = typeof data.provider === "string" ? data.provider : undefined
+  const problem = nodeStartFrameOnlyProblem(provider, data, wiredVideoFrames(node.id, edges))
+  return problem && provider ? startFrameOnlyText(provider, problem, "vidcfg.startFrameOnlyResolution") : undefined
 }
 
 /** Is `node` priced at a metered LLM estimate the server returned (and is it cached)? */

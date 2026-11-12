@@ -158,6 +158,7 @@ import {
   isWan3Provider,
   isGeminiOmniProvider,
   videoProviderTakesLoneEndFrame,
+  videoStartFrameOnlyProblem,
   PRICING_DEFAULT_RESOLUTION,
   supportsExtendRender,
   COMPOSER_PLAN_MAP,
@@ -333,6 +334,32 @@ function assertImagePromptLongEnough(provider: string, prompt: string | undefine
 /** Throw the Vidu Q4 input rule's message (a no-op for every other provider). */
 function assertViduQ4Inputs(args: Parameters<typeof viduQ4InputProblem>[0]): void {
   const problem = viduQ4InputProblem(args)
+  if (problem) throw new Error(problem.message)
+}
+
+/**
+ * Throw the start-frame-only rule's message (`videoStartFrameOnlyProblem`:
+ * Grok Imagine Video 1.5 at 1080p takes a start frame only) before any jobs row
+ * or reservation — a deterministic refusal like "requires an input image". A
+ * no-op for a run with no start frame (the image-required rule owns that) and
+ * for every model that declares no such resolution.
+ */
+function assertVideoStartFrameOnly(args: {
+  provider: string | undefined
+  resolution: string | undefined
+  durationSec: number | string | undefined
+  startFrameUrl: string | undefined
+  endFrameUrl: string | undefined
+  inBetweenFrameUrls: readonly string[] | undefined
+}): void {
+  if (!args.startFrameUrl) return
+  const problem = videoStartFrameOnlyProblem(args.provider, {
+    resolution: args.resolution,
+    durationSec: args.durationSec,
+    hasEndFrame: !!args.endFrameUrl,
+    inBetweenFrameCount: args.inBetweenFrameUrls?.length ?? 0,
+    nothingCharged: true,
+  })
   if (problem) throw new Error(problem.message)
 }
 
@@ -4155,6 +4182,16 @@ function buildPayloadOf(
           i2vNorm.adjustments.map((a) => `${a.field} "${a.from}" → ${a.to ?? "removed"}`).join("; "),
         )
       }
+      // A resolution that takes a start frame only (Grok Imagine Video 1.5 at
+      // 1080p): refused before the reservation, on the frames this run sends.
+      assertVideoStartFrameOnly({
+        provider,
+        resolution: i2vNorm.resolution,
+        durationSec: i2vNorm.duration ?? (data.duration as number | string | undefined),
+        startFrameUrl: i2vImageUrl,
+        endFrameUrl: resolvedInputs.endFrameUrl,
+        inBetweenFrameUrls: i2vReferenceImageUrls,
+      })
       return {
         jobName: "image-to-video",
         queueName: "video-generation",
@@ -4676,6 +4713,17 @@ function buildPayloadOf(
         characterCount: 0,
       })
       if (kling4Problem) throw new Error(kling4Problem.message)
+      // A resolution that takes a start frame only (Grok Imagine Video 1.5 at
+      // 1080p): refused before the reservation, on the frames this run sends —
+      // after a lone end frame has moved into the start slot (a start-only run).
+      assertVideoStartFrameOnly({
+        provider: resolvedProvider,
+        resolution: gvNorm.resolution,
+        durationSec: gvNorm.duration ?? (data.duration as number | string | undefined),
+        startFrameUrl: imageUrl,
+        endFrameUrl,
+        inBetweenFrameUrls: referenceImageUrls,
+      })
       return {
         jobName: effectiveMode,
         queueName: "video-generation",

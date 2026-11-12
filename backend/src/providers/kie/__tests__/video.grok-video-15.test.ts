@@ -185,6 +185,16 @@ describe("Grok Imagine Video 1.5 — dispatch", () => {
     expect(await at("480p", 8, ["https://x/m1.png", "https://x/m2.png"])).toBeCloseTo(0.096, 6)
   })
 
+  it("backstop: refuses 1080p beside an end frame, a loop or in-between frames before calling KIE", async () => {
+    for (const [end, refs] of [[END, undefined], [START, undefined], [undefined, ["https://x/m1.png"]]] as const) {
+      vi.clearAllMocks()
+      await expect(
+        provider.imageToVideo(START, "p", ID, 8, end, { resolution: "1080p", referenceImageUrls: refs ? [...refs] : undefined }),
+      ).rejects.toThrow(/start frame only at 1080p/)
+      expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
+    }
+  })
+
   it("refuses a run with no start image before calling KIE", async () => {
     await expect(provider.imageToVideo(undefined, "p", ID, 5, END)).rejects.toThrow(/start frame is required/)
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()

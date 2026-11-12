@@ -3304,6 +3304,105 @@ export function videoProviderRefsReplaceStartFrame(provider: string | undefined)
   return !keyframes || videoProviderRunsFromReferences(provider)
 }
 
+/** The error code of a {@link videoStartFrameOnlyProblem} refusal. */
+export const VIDEO_START_FRAME_ONLY_CODE = "start_frame_only_resolution" as const
+
+/**
+ * The resolution tier a run of `provider` renders for `resolution` when that
+ * tier takes a start frame only (the catalog's `startFrameOnlyResolutions`),
+ * else undefined. Case-folded, as the runners send it (`"1080P"` is 1080p).
+ */
+export function videoStartFrameOnlyResolution(provider: string | undefined, resolution: string | undefined): string | undefined {
+  const tiers = provider ? MODEL_CATALOG[provider]?.startFrameOnlyResolutions : undefined
+  const r = resolution?.trim().toLowerCase()
+  if (!tiers?.length || !r) return undefined
+  return tiers.find((t) => t.toLowerCase() === r)
+}
+
+/** The highest listed resolution of `provider` that takes every frame — the one to offer instead. */
+function videoFramesResolutionFallback(provider: string): string | undefined {
+  const entry = MODEL_CATALOG[provider]
+  const restricted = new Set((entry?.startFrameOnlyResolutions ?? []).map((t) => t.toLowerCase()))
+  const open = (entry?.resolutions ?? []).filter((r) => !restricted.has(r.toLowerCase()))
+  const height = (r: string): number => Number.parseInt(r, 10) || 0
+  return [...open].sort((a, b) => height(b) - height(a))[0]
+}
+
+/**
+ * The sentence for a start-frame-only refusal: which tier takes a start frame
+ * only, and the two ways out (the highest tier that takes every frame, or
+ * removing the extra frames). `nothingCharged` adds that nothing was charged —
+ * for a refusal of a run (the API, the workflow run, the editor's Run), never
+ * for the editor's note beside the setting.
+ */
+export function videoStartFrameOnlyMessage(
+  provider: string,
+  resolution: string,
+  opts: { readonly nothingCharged?: boolean } = {},
+): string {
+  const label = MODEL_CATALOG[provider]?.label ?? provider
+  const fallback = videoFramesResolutionFallback(provider)
+  const choose = fallback ? `Choose ${fallback}, or remove` : "Remove"
+  const sentence =
+    `${label} takes a start frame only at ${resolution}: no end frame, loop or in-between frames. ` +
+    `${choose} the end frame and the in-between frames.`
+  return opts.nothingCharged ? `${sentence} Nothing was charged.` : sentence
+}
+
+/** A {@link videoStartFrameOnlyProblem} refusal. */
+export interface VideoStartFrameOnlyProblem {
+  readonly code: typeof VIDEO_START_FRAME_ONLY_CODE
+  /** The sentence, in English — the API's `error.message`. */
+  readonly message: string
+  /** The tier that takes a start frame only (catalog spelling). */
+  readonly resolution: string
+  /** The highest tier that takes every frame, when the model has one. */
+  readonly fallbackResolution?: string
+}
+
+/**
+ * THE rule for a resolution that takes a start frame only (decided 2026-11-12:
+ * refuse up front). Given the resolution a run renders and the frames it would
+ * send BESIDE its start frame, is the combination refused, and with what
+ * sentence? Undefined when it runs.
+ *
+ *   - `hasEndFrame`: an end frame is wired. The same picture as the start frame
+ *     (a loop) counts too — the provider refuses a loop at such a tier as well.
+ *   - `inBetweenFrameCount`: the in-between frames wired (a `keyframes` model's
+ *     image references), BEFORE the clip's cap. The cap is applied here through
+ *     {@link videoKeyframesMiddleCap} — the same function the provider runner
+ *     truncates with — so a request whose extra frames are all dropped (a
+ *     1-second Grok Imagine Video 1.5 clip has no in-between second) is a
+ *     start-only request and runs.
+ *
+ * Judged only on a run that has a start frame: a run without one is refused by
+ * the image-required rule first, so every caller runs this after that gate.
+ * Read by `/v1/generate-video`, the workflow payload builder and the editor's
+ * Run; the editor's note and resolution menus read it too.
+ */
+export function videoStartFrameOnlyProblem(
+  provider: string | undefined,
+  args: {
+    readonly resolution: string | undefined
+    readonly durationSec?: number | string
+    readonly hasEndFrame: boolean
+    readonly inBetweenFrameCount: number
+    readonly nothingCharged?: boolean
+  },
+): VideoStartFrameOnlyProblem | undefined {
+  const tier = videoStartFrameOnlyResolution(provider, args.resolution)
+  if (!provider || !tier) return undefined
+  const cap = videoKeyframesMiddleCap(provider, args.durationSec, { hasStartFrame: true, hasEndFrame: args.hasEndFrame })
+  const inBetween = Math.max(0, cap === undefined ? args.inBetweenFrameCount : Math.min(cap, args.inBetweenFrameCount))
+  if (!args.hasEndFrame && inBetween === 0) return undefined
+  return {
+    code: VIDEO_START_FRAME_ONLY_CODE,
+    message: videoStartFrameOnlyMessage(provider, tier, { nothingCharged: args.nothingCharged }),
+    resolution: tier,
+    fallbackResolution: videoFramesResolutionFallback(provider),
+  }
+}
+
 /**
  * Video models where enabling audio/sound incurs an additional cost.
  * The audio addon is expressed as a separate composite identifier suffix.

@@ -17,10 +17,10 @@
 import { describe, it, expect, vi } from "vitest"
 import { renderHook } from "@testing-library/react"
 
-const store = vi.hoisted(() => ({ updateNodeData: vi.fn() }))
+const store = vi.hoisted(() => ({ updateNodeData: vi.fn(), edges: [] as Array<{ id: string; source: string; target: string; targetHandle: string }> }))
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ updateNodeData: store.updateNodeData, runSingleNode: () => {} }),
+    selector({ updateNodeData: store.updateNodeData, runSingleNode: () => {}, edges: store.edges }),
 }))
 
 import { useGenerateVideoStripModel } from "../use-generate-video-strip-model"
@@ -125,5 +125,56 @@ describe("useGenerateVideoStripModel — Seedance Draft", () => {
   })
   it("exposes the registry's Draft control for a draft-capable model only", () => {
     expect(strip({ provider: "seedance-2-5" }).draftControl?.field).toBe("draft")
+  })
+})
+
+describe("useGenerateVideoStripModel — a resolution that takes a start frame only (Grok Imagine Video 1.5 at 1080p)", () => {
+  const GROK = "grok-imagine-video-1.5"
+  const wireInto = (...handles: string[]) => {
+    store.edges = handles.map((targetHandle, i) => ({ id: `e${i}`, source: `s${i}`, target: "n1", targetHandle }))
+  }
+  const values = (s: ReturnType<typeof strip>) => (s.resolutionOptions ?? []).map((o) => o.value)
+
+  it("offers 1080p while only a start frame is wired", () => {
+    wireInto("startFrame")
+    expect(values(strip({ provider: GROK }))).toEqual(["480p", "720p", "1080p"])
+  })
+
+  for (const [what, handles] of [
+    ["an end frame", ["startFrame", "endFrame"]],
+    ["Image References", ["startFrame", "imageReferences"]],
+    ["Image References on the older node's handle", ["startFrame", "references"]],
+  ] as const) {
+    it(`hides 1080p while ${what} is wired`, () => {
+      wireInto(...handles)
+      expect(values(strip({ provider: GROK, duration: 8 }))).toEqual(["480p", "720p"])
+    })
+  }
+
+  it("keeps a saved 1080p shown, never snapped, when frames are wired after it was chosen", () => {
+    wireInto("startFrame", "endFrame")
+    store.updateNodeData.mockClear()
+    const s = strip({ provider: GROK, resolution: "1080p" })
+    expect(values(s)).toEqual(["480p", "720p", "1080p"])
+    expect(s.currentResolution).toBe("1080p")
+    expect(store.updateNodeData).not.toHaveBeenCalled()
+  })
+
+  it("does not write 1080p from the strip while other frames are wired", () => {
+    wireInto("startFrame", "imageReferences")
+    store.updateNodeData.mockClear()
+    strip({ provider: GROK, resolution: "720p", duration: 8 }).onResolutionChange("1080p")
+    expect(store.updateNodeData).not.toHaveBeenCalled()
+  })
+
+  it("offers 1080p beside Image References a 1-second clip leaves out (a start-only run)", () => {
+    wireInto("startFrame", "imageReferences")
+    expect(values(strip({ provider: GROK, duration: 1 }))).toEqual(["480p", "720p", "1080p"])
+  })
+
+  it("leaves every other model's menu as it was", () => {
+    wireInto("startFrame", "endFrame", "imageReferences")
+    expect(values(strip({ provider: "kling-4-keyframes" }))).toContain("1080p")
+    store.edges = []
   })
 })

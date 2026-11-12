@@ -2985,7 +2985,14 @@ so a value the model doesn't support is ignored, never a 400:
   alone. `duration` 1–15 (default 8); `resolution` `480p` (default) / `720p` /
   `1080p`, anything else renders and bills 480p; no `seed`; no reference
   videos, audio or characters. Priced per second by resolution; the frames add
-  nothing.
+  nothing. **At `1080p` it takes the `imageUrl` alone:** a run that would also
+  send an `endFrameUrl` (the same URL included, a loop) or in-between frames
+  (`referenceImageUrls` and the images of `connectedReferences`, counted after
+  the D − 1 limit) is a `400` with code `start_frame_only_resolution` before
+  any credits are reserved: "Grok Imagine Video 1.5 takes a start frame only at
+  1080p: no end frame, loop or in-between frames. Choose 720p, or remove the
+  end frame and the in-between frames. Nothing was charged." 480p and 720p take
+  every frame.
 - **`gemini-omni-flash`** takes exactly the same fields as
   `gemini-omni-video` on the same 720p / 1080p / 4K tiers, the same 4 / 6 / 8 /
   10 `duration` menu (an omitted duration renders and bills as 8 s), the same

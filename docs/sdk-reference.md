@@ -3201,7 +3201,10 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `referenceImageUrls` (in order, spread over the clip at whole seconds; a
 > D-second clip takes at most D − 1, the rest are left out). `duration` 1–15
 > (default 8); `resolution` `480p` / `720p` / `1080p` (anything else → 480p);
-> no seed. See
+> no seed. At `1080p` it takes `imageUrl` alone: with an `endFrameUrl` (a loop
+> included) or in-between frames the run is refused with a `400`
+> (`start_frame_only_resolution`) before any credits are reserved — use `720p`
+> for those. See
 > [Grok Imagine 1.5 frames](nodes/ai-video/generate-video.md#grok-imagine-15-frames).
 > **Gemini Omni Flash** (`gemini-omni-flash`) is the cheaper, faster sibling of
 > `gemini-omni-video` on an identical request shape — same 4 / 6 / 8 / 10

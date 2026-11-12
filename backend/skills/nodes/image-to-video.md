@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-11-11T19:50:52.870Z
-generated_from: b2f971c6a
+generated_at: 2026-11-12T08:24:21.803Z
+generated_from: 593e33c93
 ---
 
 # image-to-video
@@ -387,7 +387,7 @@ descriptions of static/unchanged parts — spend the words on what MOVES.
 - Native audio generates with the clip — background music, SFX, and lip-synced dialogue. Quote the spoken line; describe the music/SFX plainly. The platform offers no audio toggle for it — cue (or exclude) sound in the prompt text.
 
 **Durations / tiers**
-- grok-i2v: 6 or 10 seconds. grok-imagine-video-1.5: 1-15 seconds in 1s steps (default 8), 480p (default) / 720p / 1080p. Prompt cap 4096 chars — but shorter is better here.
+- grok-i2v: 6 or 10 seconds. grok-imagine-video-1.5: 1-15 seconds in 1s steps (default 8), 480p (default) / 720p / 1080p. At 1080p it takes the start frame ALONE — a run with an end frame, a loop or in-between frames is refused before any credits are held, so use 720p for those. Prompt cap 4096 chars — but shorter is better here.
 
 Sources: KIE Grok Imagine contracts (docs.kie.ai/market/grok-imagine/image-to-video,
 docs.kie.ai/market/grok-imagine/1-5-preview), xAI Grok Imagine 1.5 release notes

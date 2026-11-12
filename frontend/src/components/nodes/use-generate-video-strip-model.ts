@@ -17,6 +17,7 @@ import { lockedVideoDuration, lockedVideoModel, lockedVideoResolution, type Free
 import { shortenLabel } from "./strip-label"
 import { draftLockedResolutions, getQuickConfigs } from "./node-quick-configs"
 import type { GenerateVideoNodeData } from "@/types/nodes"
+import { offersVideoResolution, wiredVideoFrames } from "@/lib/video-start-frame-only"
 
 /**
  * Single source for the generate-video run-strip derivation: model / aspect /
@@ -78,14 +79,25 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
     () => getDurationsForVideoModel(currentProvider).map((o) => ({ ...o, locked: lockedVideoDuration(freeVideoLimits, currentProvider, o.value) })),
     [currentProvider, freeVideoLimits],
   )
+  // What is wired beside the start frame (primitives, so the strip re-renders
+  // only when they change): a tier that takes a start frame only (Grok Imagine
+  // Video 1.5 at 1080p) is offered only while nothing else would be sent.
+  const hasEndFrame = useWorkflowStore((s) => wiredVideoFrames(nodeId, s.edges ?? []).hasEndFrame)
+  const inBetweenFrameCount = useWorkflowStore((s) => wiredVideoFrames(nodeId, s.edges ?? []).inBetweenFrameCount)
   // A Seedance draft renders at 480p only, so while Draft is on the lever
-  // offers just that — the same rule as the generic strip and the panel.
+  // offers just that — the same rule as the generic strip and the panel. A
+  // start-frame-only tier is left out while other frames are wired, unless it
+  // is the node's saved value: that stays, never snapped, and the panel's note
+  // and the Run say why such a run is refused.
   const resolutionOptions = useMemo(() => {
     const opts = VIDEO_RESOLUTION_OPTIONS[currentProvider]
     if (!opts) return undefined
+    const frames = { hasEndFrame, inBetweenFrameCount }
+    const nodeSettings = { resolution: data.resolution, duration: data.duration }
     return draftLockedResolutions(currentProvider, data.draft, opts)
+      .filter((o) => offersVideoResolution(currentProvider, o.value, nodeSettings, frames))
       .map((o) => ({ ...o, locked: lockedVideoResolution(freeVideoLimits, currentProvider, o.value) }))
-  }, [currentProvider, data.draft, freeVideoLimits])
+  }, [currentProvider, data.draft, data.resolution, data.duration, hasEndFrame, inBetweenFrameCount, freeVideoLimits])
   // The registry's Draft lever (one definition for every strip); null when the
   // model cannot draft.
   const draftControl = useMemo(
@@ -159,6 +171,7 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
   }
   const handleResolutionChange = (value: string) => {
     if (lockedVideoResolution(freeVideoLimits, currentProvider, value)) return
+    if (resolutionOptions && !resolutionOptions.some((o) => o.value === value)) return
     updateNodeData(nodeId, { resolution: value })
   }
 
