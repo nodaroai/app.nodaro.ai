@@ -156,11 +156,13 @@ vi.mock("@/providers/audio/youtube-extractor.js", () => ({
   extractYouTubeAudioWithMeta: mocks.mockExtractYouTubeAudioWithMeta,
 }))
 vi.mock("../../../lib/job-finalize.js", () => ({ finalizeJobWithMedia: mocks.mockFinalizeJobWithMedia }))
+const settle = vi.hoisted(() => ({ commitJobCreditsAtActualPrice: vi.fn() }))
 vi.mock("../../shared.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../shared.js")>()
   return {
     ...actual,
     commitJobCredits: mocks.mockCommitJobCredits,
+    commitJobCreditsAtActualPrice: settle.commitJobCreditsAtActualPrice,
     shouldSaveJobResult: mocks.mockShouldSaveJobResult,
     markJobCompleted: mocks.mockMarkJobCompleted,
     setJobProgress: vi.fn().mockResolvedValue(undefined),
@@ -965,6 +967,56 @@ describe("transcribe handler", () => {
     expect(mocks.mockExtractYouTubeAudio).not.toHaveBeenCalled()
     expect(gate.downloadAudioToR2).toHaveBeenCalledWith(page, { userId: "user-1", confirmationId, lane: "route", requestId: "job-1", via: null, appId: null, authorizationId: null }, { scratchJobId: "job-1" })
     expect(mocks.mockTranscribe).toHaveBeenCalledWith("https://r2.example.com/scratch/cover-src.mp3", undefined, undefined, expect.anything())
+  })
+})
+
+// Nemotron 3.5 Transcribe (2026-11-12): the translation and the measured length
+// reach transcribe(); what KIE billed is recorded (the commit stays the reserved
+// tier); KIE's truncated flag is kept on the result.
+describe("transcribe handler — Nemotron 3.5 Transcribe", () => {
+  const handler = audioAIHandlers["transcribe"]
+
+  it("passes the translation and the measured length, records KIE's cost and keeps the truncated flag", async () => {
+    mocks.mockTranscribe.mockResolvedValueOnce({ text: "Hello.", language: "en", json: { version: 1, language: "en", words: [] }, cost: 0.0025, truncated: true, billedDurationSec: 100 })
+    const job = makeJob("transcribe", { audioUrl: "https://example.com/es.mp3", provider: "nemotron-3-5-transcribe", targetLanguage: "en", duration_seconds: 100, bucketKey: "nemotron-3-5-transcribe:2m" })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockTranscribe).toHaveBeenCalledWith(
+      "https://example.com/es.mp3",
+      "nemotron-3-5-transcribe",
+      undefined,
+      expect.objectContaining({ targetLanguage: "en", durationSec: 100, onTaskCreated: expect.any(Function) }),
+    )
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      output_data: expect.objectContaining({ text: "Hello.", language: "en", truncated: true }),
+      provider_cost: 0.0025,
+    }))
+    // KIE's minutes are the held minutes: the reserved tier, one commit.
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledTimes(1)
+    expect(settle.commitJobCreditsAtActualPrice).not.toHaveBeenCalled()
+  })
+
+  it("charges for the minutes KIE decoded when they are not the held ones — one commit, up or down", async () => {
+    mocks.mockTranscribe.mockResolvedValueOnce({ text: "Hi", language: "unknown", json: { version: 1, words: [] }, cost: 0.0045, billedDurationSec: 180 })
+    const job = makeJob("transcribe", { audioUrl: "https://example.com/a.mp3", provider: "nemotron-3-5-transcribe", duration_seconds: 60, bucketKey: "nemotron-3-5-transcribe:1m" })
+    await handler(job as never, makeCtx())
+    expect(settle.commitJobCreditsAtActualPrice).toHaveBeenCalledTimes(1)
+    expect(settle.commitJobCreditsAtActualPrice).toHaveBeenCalledWith(expect.anything(), "job-1", "nemotron-3-5-transcribe:3m")
+    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+  })
+
+  it("records no provider_cost for the other engines (unchanged)", async () => {
+    mocks.mockTranscribe.mockResolvedValueOnce({ text: "Hi", language: "en", segments: [], cost: 0.01 })
+    const job = makeJob("transcribe", { audioUrl: "https://example.com/a.mp3", provider: "whisper" })
+    await handler(job as never, makeCtx())
+    const fields = mocks.mockMarkJobCompleted.mock.calls.at(-1)![1] as Record<string, unknown>
+    expect(fields).not.toHaveProperty("provider_cost")
+  })
+
+  it("resolves its local key to KIE's", async () => {
+    mocks.mockShouldRunOnCloud.mockResolvedValue(false)
+    const job = makeJob("transcribe", { audioUrl: "https://example.com/a.mp3", provider: "nemotron-3-5-transcribe" })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockShouldRunOnCloud).toHaveBeenCalledWith(config.KIE_API_KEY)
   })
 })
 

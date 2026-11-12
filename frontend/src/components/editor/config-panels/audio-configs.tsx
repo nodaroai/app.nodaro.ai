@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select"
 import { VoiceBrowser } from "./voice-browser"
 import { wordlessTranscriptWarning } from "./transcribe-word-timings"
+import { TRANSCRIBE_TARGET_LANGUAGE_LABEL_KEYS, TRANSCRIBE_TARGET_LANGUAGE_OPTIONS, transcribeTranslationSnap } from "./transcribe-translation"
 import { DEFAULT_DIALOGUE_VOICE } from "@/lib/tts-voices"
 import type {
   TextToSpeechData,
@@ -1609,6 +1610,14 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
     if (data.provider === undefined) onUpdate({ provider: "elevenlabs-stt" })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.provider])
+  // Step-12b fail-safe: a translation is Nemotron's alone, so switching to an
+  // engine that cannot translate clears the stale choice (the run would refuse it).
+  useEffect(() => {
+    const patch = transcribeTranslationSnap(data.provider, data.targetLanguage)
+    if (patch) onUpdate(patch)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.provider, data.targetLanguage])
+  const isNemotron = data.provider === "nemotron-3-5-transcribe"
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -1626,15 +1635,39 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
                 rather than after a paid run hands back `words: []`. */}
             <SelectItem value="whisper">{t("audiocfg.providerWhisper")} — {t("audiocfg.noWordTimings")}</SelectItem>
             <SelectItem value="incredibly-fast-whisper">{t("audiocfg.providerIncrediblyFastWhisper")}</SelectItem>
+            <SelectItem value="nemotron-3-5-transcribe">{t("audiocfg.providerNemotron")}</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
       {wordlessWarning && (
         <div className="flex items-start gap-1.5 text-[11px] text-amber-600 dark:text-amber-400 leading-snug" role="status">
           <AlertTriangle className="size-3 shrink-0 mt-0.5" aria-hidden />
-          {t("audiocfg.wordlessTranscriptWarning")}
+          {/* A translating Nemotron node is wordless by choice, not by engine: say which fix applies. */}
+          {isNemotron && data.targetLanguage ? t("audiocfg.translationTranscriptWarning") : t("audiocfg.wordlessTranscriptWarning")}
         </div>
       )}
+      {isNemotron && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="transcribe-target-language">{t("audiocfg.translateTo")}</Label>
+          <Select
+            value={data.targetLanguage ?? "none"}
+            onValueChange={(v) => onUpdate({ targetLanguage: v === "none" ? undefined : (v as TranscribeData["targetLanguage"]) })}
+          >
+            <SelectTrigger id="transcribe-target-language" aria-label={t("audiocfg.translateTo")}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">{t("audiocfg.translateNone")}</SelectItem>
+              {TRANSCRIBE_TARGET_LANGUAGE_OPTIONS.map((code) => (
+                <SelectItem key={code} value={code}>{t(TRANSCRIBE_TARGET_LANGUAGE_LABEL_KEYS[code])}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[11px] text-muted-foreground leading-snug">{t("audiocfg.translateHint")}</p>
+        </div>
+      )}
+      {/* Nemotron takes no language: it detects the spoken one itself, so no picker is shown for it. */}
+      {isNemotron ? (
+        <p className="text-[11px] text-muted-foreground leading-snug">{t("audiocfg.nemotronDetectsLanguage")}</p>
+      ) : (
       <MappableField field="language" label={t("field.language")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.language || "auto"} onValueChange={(v) => onUpdate({ language: v })}>
           <SelectTrigger aria-label={t("field.language")}><SelectValue /></SelectTrigger>
@@ -1663,6 +1696,7 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
           </SelectContent>
         </Select>
       </MappableField>
+      )}
       {data.provider === "elevenlabs-stt" && (
         <>
           <div className="flex items-center gap-2">

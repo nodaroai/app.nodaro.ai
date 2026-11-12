@@ -27,10 +27,12 @@ import {
   normalizeTranscript,
 } from "@nodaro/shared/edl"
 import {
-  TRANSCRIBE_LANES,
+  CAPTION_TRANSCRIBE_LANES,
   TRANSCRIBE_PROVIDER_CAPABILITIES,
-  transcribeProvidersWithWordTimestamps,
 } from "@nodaro/shared/models"
+
+/** The lanes Add Captions may transcribe on that return word timings (named in its refusal). */
+const CAPTION_WORD_TIMED_LANES = CAPTION_TRANSCRIBE_LANES.filter((p) => TRANSCRIBE_PROVIDER_CAPABILITIES[p].wordTimestamps)
 import { captionsNeedTranscription, captionsNeedWordTimings, isStaticTextCaptionSource } from "../providers/video/caption-segments.js"
 import { ADD_CAPTIONS_DEFAULT_TRANSCRIBE_PROVIDER } from "../lib/transcribe-lane-key.js"
 import { rawBodyRecord, textField } from "../lib/run-model.js"
@@ -120,7 +122,11 @@ export const addCaptionsBody = z.object({
   // Only meaningful with a wired `transcript`; defaults to word-level.
   wordLevel: z.boolean().optional(),
   auto_transcribe: z.boolean().optional(),
-  transcribe_provider: z.enum(TRANSCRIBE_LANES).optional(),
+  // Add Captions' own lanes (`CAPTION_TRANSCRIBE_LANES`): its flat render price
+  // covers the transcription it runs, so a lane priced by the file's length
+  // (Nemotron 3.5 Transcribe) is not offered here — transcribe with it on a
+  // Transcribe node and wire the transcript in.
+  transcribe_provider: z.enum(CAPTION_TRANSCRIBE_LANES).optional(),
   style: z.enum(ALL_CAPTION_STYLES).optional().default("subtitle"),
   position: z.enum(["bottom", "top", "center"]).optional().default("bottom"),
   fontSize: z.number().min(12).max(200).optional().default(32),
@@ -210,7 +216,7 @@ export const addCaptionsBody = z.object({
         path: ["transcribe_provider"],
         message:
           `"${v.transcribe_provider}" does not return word timestamps, and this render has no other ` +
-          `caption source — use ${transcribeProvidersWithWordTimestamps().join(" or ")}, or supply ` +
+          `caption source — use ${CAPTION_WORD_TIMED_LANES.join(" or ")}, or supply ` +
           `text/captions/transcript instead`,
       })
     }

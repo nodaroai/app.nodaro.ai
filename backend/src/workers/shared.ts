@@ -724,6 +724,35 @@ export async function commitJobCreditsAtChargedPrice(
 }
 
 /**
+ * Settle a run at ANOTHER credit id's charged price, UP or DOWN (cloud edition
+ * only): below the hold the rest is released, above it the overrun is
+ * collected from the payer — the metered settle the metered LLM calls use
+ * (`ee/billing/commit-at-charged-price.ts` `settleAtChargedPrice`). For a run
+ * held on a measured size and charged for the size the provider reports doing
+ * (Nemotron 3.5 Transcribe). A failure is logged and never fails the job,
+ * like `commitJobCredits`.
+ */
+export async function commitJobCreditsAtActualPrice(
+  usageLogId: string | null | undefined,
+  jobId: string,
+  creditId: string,
+): Promise<void> {
+  if (!hasCredits() || !usageLogId) return
+
+  try {
+    const { settleAtChargedPrice } = await import("../ee/billing/commit-at-charged-price.js")
+    const { charged, reserved, collectedOverHold, shortfall } = await settleAtChargedPrice(usageLogId, jobId, creditId)
+    console.log(
+      `[worker] Credits settled at ${creditId}'s charged price for job ${jobId} ` +
+        `(charged: ${charged ?? "??"}, reserved: ${reserved ?? "??"}, collected over the hold: ${collectedOverHold}, uncollected: ${shortfall})`,
+    )
+  } catch (error) {
+    console.error(`[worker] Failed to settle credits for job ${jobId}:`, error)
+    // Don't fail the job if the settle fails
+  }
+}
+
+/**
  * Refund credits after job failure (cloud edition only).
  *
  * Defaults to refunding (safe for the user). The ONLY case we skip the refund

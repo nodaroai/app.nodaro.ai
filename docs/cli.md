@@ -582,12 +582,15 @@ nodaro audio mix --audio <url> --audio <url> ... [--volumes <csv>] [--duck-under
 nodaro audio adjust-volume --audio <url>|--video <url> [--volume <0-200>] [--normalize] [--fade-in <sec>] [--fade-out <sec>] [--watch] [--poll-interval <ms>] [--json]
 nodaro audio pitch-tempo --audio <url>|--video <url> [--semitones <-12..12>] [--tempo <0.5-2>] [--no-preserve-formants] [--watch] [--poll-interval <ms>] [--json]
 nodaro audio combine --segment <url[@a-b]> --segment ... [--watch] [--poll-interval <ms>] [--json]
-nodaro audio transcribe --audio <url> [--provider elevenlabs-stt|incredibly-fast-whisper|whisper] [--language <code>] [--diarize] [--tag-audio-events] [--word-timestamps] [--watch] [--poll-interval <ms>] [--json]
-                                                         # speech → text. Three engines: elevenlabs-stt is always word-level and is the lane that
-                                                         # honours --diarize / --tag-audio-events; incredibly-fast-whisper returns word timings
-                                                         # with --word-timestamps; whisper returns phrase segments only — NO word timings, so
-                                                         # --word-timestamps is refused there, before credits. OMITTING --provider still runs the
-                                                         # legacy whisper lane, so name an engine whenever you need word timings.
+nodaro audio transcribe --audio <url> [--provider elevenlabs-stt|incredibly-fast-whisper|whisper|nemotron-3-5-transcribe] [--language <code>] [--diarize] [--tag-audio-events] [--word-timestamps] [--target-language <code>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # speech → text. Four engines: elevenlabs-stt is always word-level and is the lane that
+                                                         # honours --diarize / --tag-audio-events; incredibly-fast-whisper and nemotron-3-5-transcribe
+                                                         # return word timings with --word-timestamps (Nemotron with a speaker per word); whisper
+                                                         # returns phrase segments only — NO word timings, so --word-timestamps is refused there,
+                                                         # before credits. OMITTING --provider still runs the legacy whisper lane, so name an engine
+                                                         # whenever you need word timings. --target-language (nemotron-3-5-transcribe only, to or
+                                                         # from English) translates the speech instead, with no word timings; Nemotron is priced
+                                                         # per started minute of the file (up to 60 minutes and 200 MB).
                                                          # The completed job's output_data carries text, words (one per word, in MILLISECONDS)
                                                          # and json (the normalized transcript, also ms); top-level segments (SECONDS) exist only
                                                          # on the legacy lanes — elevenlabs-stt returns none, so read words.
@@ -984,9 +987,10 @@ nodaro media add-captions https://example.com/talk.mp4 \
 Correct a word's `text` in `words.json` between steps 2 and 3 and the correction
 is what burns in. Add `--max-words-per-line 2` to step 3 for the punchy
 two-words-at-a-time read — it caps each held line on top of the frame-width
-budget. Step 1 needs a word-capable engine (`elevenlabs-stt` or
-`incredibly-fast-whisper`); `--provider whisper` returns phrase segments with no
-words, so there would be nothing to feed a kinetic style.
+budget. Step 1 needs a word-capable engine (`elevenlabs-stt`, or
+`incredibly-fast-whisper` / `nemotron-3-5-transcribe` with `--word-timestamps`);
+`--provider whisper` returns phrase segments with no words, so there would be
+nothing to feed a kinetic style.
 
 ### Wrap an app's prompt with hidden text for one run
 

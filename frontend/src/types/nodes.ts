@@ -43,6 +43,8 @@ import {
   type TextToAudioProvider,
   type MusicProvider,
   type TranscribeProvider,
+  type TranscribeTargetLanguage,
+  type CaptionTranscribeLane,
   type LipSyncProvider,
   type ScriptProvider,
   type QaCheckProvider,
@@ -3640,7 +3642,17 @@ export type TranscribeData = {
   /** Set true by graph-aware request builders when the `json` handle is wired,
    *  so the two whisper providers emit word timings for the transcript. */
   wordTimestamps?: boolean
+  /** Translate the speech into this language instead of transcribing it
+   *  (Nemotron 3.5 Transcribe only; never with word timings). Unset = transcribe. */
+  targetLanguage?: TranscribeTargetLanguage
 }
+
+// Compile-time pin: Add Captions' spelled-out engine union is exactly CAPTION_TRANSCRIBE_LANES.
+type _AddCaptionsLanesMatch = [AddCaptionsData["transcribeProvider"] & string] extends [CaptionTranscribeLane]
+  ? [CaptionTranscribeLane] extends [AddCaptionsData["transcribeProvider"] & string] ? true : never
+  : never
+const _ADD_CAPTIONS_LANES_MATCH: _AddCaptionsLanesMatch = true
+void _ADD_CAPTIONS_LANES_MATCH
 
 export interface DialogueLine {
   readonly id: string
@@ -4364,6 +4376,8 @@ export type AddCaptionsData = {
   activeResultIndex?: number
   // NEW
   autoTranscribe?: boolean
+  // Add Captions' own lanes — exactly `CaptionTranscribeLane` (@nodaro/shared), spelled
+  // out so its generated skill names them (a length-priced engine is not one of them).
   transcribeProvider?: "whisper" | "incredibly-fast-whisper" | "elevenlabs-stt"
   // A Transcript wired into the `transcript` json handle is the caption source
   // (from transcribe or apply-edl's remapped json). wordLevel picks word-level

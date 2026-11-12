@@ -14,6 +14,7 @@ import {
   estimateTrimVideoCredits,
   VIDEO_UTIL_PRICING,
   PITCH_TEMPO_PRICING,
+  NEMOTRON_TRANSCRIBE_PRICING,
   LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS,
   lipSyncAudioRateOf,
   lipSyncEstimateSeconds,
@@ -140,6 +141,25 @@ export function pitchTempoQuotedSec(
   const fromGraph = edges.filter((e) => e.target === node.id).map((e) => lengthOf(e.source)).find((v) => v !== undefined)
   const sec = fromGraph ?? upstreamVideoDurationSec(node.id, "in", nodes, edges)
   return sec === null || sec === undefined ? null : Math.min(sec, PITCH_TEMPO_PRICING.MAX_DURATION_SEC)
+}
+
+/**
+ * The file length, in seconds, a Transcribe on Nemotron 3.5 Transcribe (priced
+ * per started minute) is QUOTED at, or `null` when unknown (the 60-minute
+ * price): the length the graph gives its `audio` wire, else what the upstream
+ * node itself reports (an upload's length). Capped at the 60 minutes a run
+ * accepts. The run itself measures the real file.
+ */
+export function transcribeQuotedSec(
+  node: Pick<WorkflowNode, "id">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number | null {
+  const lengthOf = wireDurationReader(nodes, edges, rerunIds)
+  const fromGraph = edges.filter((e) => e.target === node.id).map((e) => lengthOf(e.source)).find((v) => v !== undefined)
+  const sec = fromGraph ?? upstreamVideoDurationSec(node.id, "audio", nodes, edges)
+  return sec === null || sec === undefined ? null : Math.min(sec, NEMOTRON_TRANSCRIBE_PRICING.MAX_DURATION_SEC)
 }
 
 /**

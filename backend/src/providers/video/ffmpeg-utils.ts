@@ -1116,6 +1116,35 @@ export async function probeMediaDuration(srcUrlOrPath: string, opts?: { timeoutM
 }
 
 /**
+ * Duration and byte size of a media file in ONE ffprobe call — for a provider
+ * that limits both (Nemotron 3.5 Transcribe: 60 minutes, 200 MB). Same source
+ * handling and SSRF guard as {@link probeMediaDuration}. Either field is
+ * ABSENT when the file does not declare it — a duration a container leaves out
+ * (a browser-recorded WebM written as a stream, a fragmented MP4), a size a
+ * remote source does not send (no Content-Length) — rather than guessed; the
+ * call throws only when ffprobe cannot read the source at all.
+ */
+export async function probeMediaDurationAndSize(
+  srcUrlOrPath: string,
+): Promise<{ durationSec?: number; sizeBytes?: number }> {
+  await assertSafeProbeSource(srcUrlOrPath)
+  const output = await runFfprobe([
+    "-v", "error",
+    "-protocol_whitelist", "file,http,https,tcp,tls",
+    "-show_entries", "format=duration,size",
+    "-of", "json",
+    srcUrlOrPath,
+  ])
+  const parsed = JSON.parse(output) as { format?: { duration?: string; size?: string } }
+  const durationSec = parseFloat(parsed.format?.duration ?? "")
+  const sizeBytes = Number(parsed.format?.size ?? "")
+  return {
+    ...(Number.isFinite(durationSec) && durationSec > 0 ? { durationSec } : {}),
+    ...(Number.isFinite(sizeBytes) && sizeBytes > 0 ? { sizeBytes } : {}),
+  }
+}
+
+/**
  * Container format and duration of a media file in ONE ffprobe call — what a
  * provider's reference-audio contract needs (`format_name` "mp3" for an
  * MP3-only lane, plus the clip length). Same source handling and SSRF guard as

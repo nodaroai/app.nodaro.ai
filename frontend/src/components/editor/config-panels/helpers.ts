@@ -26,6 +26,8 @@ import {
   LTX_RETAKE_PER_SECOND_CREDIT_ID,
   seedanceExtendCreditId,
   pitchTempoQuoteCreditId,
+  NEMOTRON_TRANSCRIBE_ID,
+  nemotronTranscribeQuoteCreditId,
   videoGenerationCreditId,
   lipSyncAudioRateOf,
   videoOverlayCreditId,
@@ -54,7 +56,7 @@ import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
-import { isTopazVideoUpscaleProvider, pitchTempoQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
+import { isTopazVideoUpscaleProvider, pitchTempoQuotedSec, transcribeQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
@@ -675,7 +677,15 @@ export function getModelIdentifier(
   // `transcribe` row. ABOVE the `!provider` bail for exactly that reason. Mirror
   // of the backend estimator's transcribe branch (ee/billing/credits.ts).
   if (nodeType === "transcribe") {
-    return (typeof data.provider === "string" && data.provider) || DEFAULT_TRANSCRIBE_NODE_PROVIDER
+    const engine = (typeof data.provider === "string" && data.provider) || DEFAULT_TRANSCRIBE_NODE_PROVIDER
+    // Nemotron 3.5 Transcribe: per started minute of the file — the
+    // `:<N>m` id the route and the workflow run reserve from the measured file,
+    // quoted at the length the graph or the upstream node tells; unknown → 60
+    // minutes, the most a run is charged (it refuses a file it cannot measure).
+    if (engine === NEMOTRON_TRANSCRIBE_ID) {
+      return nemotronTranscribeQuoteCreditId(transcribeQuotedSec(node, nodes ?? [], edges ?? [], reruns))
+    }
+    return engine
   }
 
   // Adjust Speed: the smooth tier is its own, dearer id (route + orchestrator

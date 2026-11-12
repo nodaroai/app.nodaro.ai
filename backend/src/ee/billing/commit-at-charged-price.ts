@@ -40,3 +40,53 @@ export async function commitAtChargedPrice(
   ])
   return { committed, reserved }
 }
+
+/**
+ * Settle a run at ANOTHER credit id's charged price, UP or DOWN — a run held
+ * on a measured size and charged for the size the provider reports doing
+ * (Nemotron 3.5 Transcribe: held at the minutes the file's header declares,
+ * charged for the minutes KIE decoded; decided 2026-11-12).
+ *
+ * Below the hold the rest is released; above it the overrun is collected from
+ * the payer's available balance — the metered settle (`commit_credits_metered`,
+ * `CreditsService.commitCredits(…, { collectOverHold: true })`), which the
+ * metered LLM calls use and which logs any part it cannot collect as an
+ * `uncollected_overrun` anomaly itself. `jobs.credits_actual` is the RPC's
+ * confirmed charge.
+ *
+ * When the metered RPC gives no receipt and the log is still `reserved` (the
+ * RPC failed), the log is LEFT `reserved` and loud (an `[ALERT]`), exactly as
+ * `settleCommitMetered` leaves a failed metered settle: no second settlement is
+ * attempted here — a plain `commit_credits` that also failed would fall into
+ * `settleCommit`'s TS fallback, which commits the WHOLE hold (while
+ * `credits_actual` would say the charge), and a raw RPC call would skip the
+ * service's balance and external-wallet follow-ups. A later RPC retry is the
+ * only correct settlement. A log already committed (a re-run after a confirmed
+ * settle) is left as it is. A managed (job-once) reservation settles from its
+ * saved decision; nothing else is done then.
+ */
+export async function settleAtChargedPrice(
+  usageLogId: string,
+  jobId: string,
+  creditId: string,
+): Promise<{ charged: number | undefined; reserved: number | undefined; collectedOverHold: number; shortfall: number }> {
+  if (await CreditsService.trySettleManagedCredits(usageLogId)) {
+    return { charged: undefined, reserved: undefined, collectedOverHold: 0, shortfall: 0 }
+  }
+  const charge = (await getModelCreditCostFromDB(creditId)).creditCost
+  const outcome = await CreditsService.commitCredits(usageLogId, charge, { collectOverHold: true })
+  if (outcome) {
+    await supabase.from("jobs").update({ credits_actual: outcome.charged }).eq("id", jobId)
+    const { data } = await supabase.from("usage_logs").select("credits_used").eq("id", usageLogId).maybeSingle()
+    const reserved = typeof data?.credits_used === "number" ? data.credits_used : undefined
+    return { charged: outcome.charged, reserved, collectedOverHold: outcome.collectedOverHold, shortfall: outcome.shortfall }
+  }
+  const { data: log } = await supabase.from("usage_logs").select("status, credits_used").eq("id", usageLogId).maybeSingle()
+  const reserved = typeof log?.credits_used === "number" ? log.credits_used : undefined
+  if (log?.status !== "reserved") return { charged: undefined, reserved, collectedOverHold: 0, shortfall: 0 }
+  console.error(
+    `[ALERT] [credits] metered settle of job ${jobId} (log ${usageLogId}, ${creditId}, ${charge} credits) gave no receipt — ` +
+      `the log is left reserved for an RPC retry (no fallback settlement)`,
+  )
+  return { charged: undefined, reserved, collectedOverHold: 0, shortfall: 0 }
+}

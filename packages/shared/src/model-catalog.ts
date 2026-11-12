@@ -180,6 +180,7 @@ export const MODEL_MAKERS = {
   meituan: { name: "Meituan" },
   minimax: { name: "MiniMax" },
   nodaro: { name: "Nodaro" },
+  nvidia: { name: "NVIDIA" },
   openai: { name: "OpenAI" },
   pixverse: { name: "PixVerse" },
   recraft: { name: "Recraft" },
@@ -581,7 +582,7 @@ export const MODEL_RECOMMENDATIONS: readonly ModelRecommendation[] = [
   { intent: "music / song generation", modelIds: ["suno-v6", "suno-v6_wild", "suno-v6_mini", "suno-v5_5"], note: "V6 is the default flagship; V6 Wild for bolder, less predictable results; V6 Mini when speed matters; v5.5 / v5 / v4 keep their own character. Same price." },
   { intent: "voice over / narration", modelIds: ["elevenlabs-v4", "elevenlabs-v3", "elevenlabs-v4-turbo", "elevenlabs-turbo"], note: "v4 is the default: [audio tags] for emotion and up to 10,000 characters per request. v3 is the previous expressive model, still selectable. v4 Turbo keeps v4's tags at Turbo's credit price; Turbo v2.5 is the cheapest for plain narration without tags." },
   { intent: "lip-sync a portrait to audio", modelIds: ["kling-avatar-pro", "kling-avatar", "infinitalk"], note: "Pro for best mouth shape; InfiniTalk for resolution control." },
-  { intent: "transcription / captions", modelIds: ["elevenlabs-stt", "incredibly-fast-whisper", "whisper"], note: "Captions need WORD timestamps: ElevenLabs STT (always) or Incredibly Fast Whisper. Plain Whisper returns phrase segments only." },
+  { intent: "transcription / captions", modelIds: ["elevenlabs-stt", "incredibly-fast-whisper", "whisper", "nemotron-3-5-transcribe"], note: "Captions need WORD timestamps: ElevenLabs STT (always), Incredibly Fast Whisper or Nemotron 3.5 Transcribe (on request, with a speaker per word). Plain Whisper returns phrase segments only. To translate the speech (to or from English) instead of transcribing it, use Nemotron 3.5 Transcribe with a target language; a translation carries no word timings." },
   { intent: "motion transfer (drive a subject by another video)", modelIds: ["motion-transfer", "kling-3.0-motion"], note: "Kling 2.6 base is cheap; Kling 3.0 is premium." },
 ] as const
 
@@ -4256,6 +4257,23 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Whisper speech-to-text — PHRASE-level segments only, NO word timestamps. Fine for a transcript or a static subtitle; not for word-timed (kinetic) captions.",
     useCases: ["transcription", "stt"],
     pricing: [{ identifier: "whisper", credits: 40 }],
+  },
+  // NVIDIA's speech-to-text on KIE, priced per started minute of the file. Its
+  // per-minute base fits no whole-credit row, so the row prices FOUR
+  // minutes and a run is charged row × minutes ÷ 4, rounded up once
+  // (`@nodaro/shared` credit-estimators/nemotron-transcribe.ts).
+  "nemotron-3-5-transcribe": {
+    id: "nemotron-3-5-transcribe",
+    kind: "audio",
+    modes: ["stt"] as const,
+    family: "NVIDIA",
+    maker: "nvidia",
+    label: "Nemotron 3.5 Transcribe",
+    series: "Nemotron",
+    description: "NVIDIA speech-to-text in 40 languages, detected automatically, with a low word error rate. On request it returns WORD-level timestamps with a speaker label per word, so its transcript can feed captions; or it translates the speech instead (to or from English: other speech into English, or English speech into one of 31 languages), with no word timings. Files up to 60 minutes and 200 MB. Priced per started minute of the file, whatever the options; the listed price is four minutes.",
+    useCases: ["transcription", "stt", "captions", "translation"],
+    features: ["word-timestamps", "diarization", "translation"],
+    pricing: [{ identifier: "nemotron-3-5-transcribe:per-4m", credits: 3, note: "per 4 minutes of the file; charged per started minute, the whole run rounded up" }],
   },
   "elevenlabs-isolation": {
     id: "elevenlabs-isolation",

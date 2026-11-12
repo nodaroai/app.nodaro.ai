@@ -57,6 +57,10 @@ vi.mock("../../kie/audio.js", () => ({
   },
 }))
 
+// Nemotron 3.5 Transcribe runs on KIE through its own runner (kie/nemotron-transcribe.ts).
+const nemotron = vi.hoisted(() => ({ run: vi.fn() }))
+vi.mock("../../kie/nemotron-transcribe.js", () => ({ runNemotronTranscribe: nemotron.run }))
+
 // elevenlabs-stt now calls Scribe DIRECTLY (KIE's queue stalled — see direct-stt.ts).
 vi.mock("../../elevenlabs/direct-stt.js", () => ({
   directSpeechToText: mocks.directStt,
@@ -830,6 +834,51 @@ describe("transcribe — provider: elevenlabs-stt", () => {
 // ===========================================================================
 // 5) Cross-cutting: cost extraction
 // ===========================================================================
+
+describe("transcribe — provider: nemotron-3-5-transcribe", () => {
+  beforeEach(() => {
+    nemotron.run.mockReset()
+  })
+
+  it("runs Nemotron with the request's options (never a language) and returns its cost and words", async () => {
+    nemotron.run.mockResolvedValue({
+      text: "Hi there.",
+      language: "unknown",
+      words: [{ text: "Hi", startMs: 0, endMs: 300, timestampMs: null, confidence: null, speaker: "speaker_0" }],
+      json: { version: 1, words: [{ text: "Hi", startMs: 0, endMs: 300, speaker: "speaker_0" }] },
+      cost: 0.003,
+    })
+    const onTaskCreated = vi.fn()
+    const out = await transcribe("https://x/a.mp3", "nemotron-3-5-transcribe", "es", { wordTimestamps: true, durationSec: 120, onTaskCreated })
+    expect(nemotron.run).toHaveBeenCalledWith(
+      { audioUrl: "https://x/a.mp3", wordTimestamps: true, targetLanguage: undefined, fallbackDurationSec: 120 },
+      { onTaskCreated: expect.any(Function) },
+    )
+    expect(out).toMatchObject({ text: "Hi there.", cost: 0.003 })
+    expect(out.words).toHaveLength(1)
+    expect(mocks.predictionsCreate).not.toHaveBeenCalled()
+    expect(mocks.directStt).not.toHaveBeenCalled()
+  })
+
+  it("translates, and keeps KIE's truncated flag", async () => {
+    nemotron.run.mockResolvedValue({ text: "Hello.", language: "en", json: { version: 1, language: "en", words: [] }, truncated: true })
+    const out = await transcribe("https://x/es.mp3", "nemotron-3-5-transcribe", undefined, { targetLanguage: "en" })
+    expect(nemotron.run).toHaveBeenCalledWith(expect.objectContaining({ targetLanguage: "en" }), undefined)
+    expect(out).toMatchObject({ text: "Hello.", language: "en", truncated: true })
+  })
+
+  it("REFUSES a translation with word timings before any provider call", async () => {
+    await expect(transcribe("u", "nemotron-3-5-transcribe", undefined, { targetLanguage: "en", wordTimestamps: true })).rejects.toThrow(/word timings and a translation/)
+    expect(nemotron.run).not.toHaveBeenCalled()
+  })
+
+  it("REFUSES a translation on an engine that cannot translate, before any provider call", async () => {
+    await expect(transcribe("u", "whisper", undefined, { targetLanguage: "en" })).rejects.toThrow(/does not translate/)
+    await expect(transcribe("u", "elevenlabs-stt", undefined, { targetLanguage: "en" })).rejects.toThrow(/does not translate/)
+    expect(mocks.predictionsCreate).not.toHaveBeenCalled()
+    expect(mocks.directStt).not.toHaveBeenCalled()
+  })
+})
 
 describe("transcribe — cost extraction", () => {
   it("returns undefined cost when extractCost returns null", async () => {

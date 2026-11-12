@@ -610,10 +610,15 @@ const visionModelControl = (): QuickConfigControl => ({
 // commented out in the panel). Cleanup: lift each into `model-options.ts` and
 // import in both places (as done for EXTEND_VIDEO_MODELS) to remove the mirror.
 
-/** transcribe provider — mirrors audio-configs.tsx (~L887). */
+/** transcribe provider — mirrors audio-configs.tsx `TranscribeConfig`. A translation
+ *  (`targetLanguage`) is Nemotron's alone, so any engine switch clears it. */
 const sttProviderControl = (): QuickConfigControl => ({
   field: "provider", ariaLabel: tx("field.provider"), icon: Sparkles,
-  options: [{ value: "elevenlabs-stt", label: "ElevenLabs STT" }],
+  options: [
+    { value: "elevenlabs-stt", label: "ElevenLabs STT" },
+    { value: "nemotron-3-5-transcribe", label: "Nemotron 3.5 Transcribe" },
+  ],
+  additionalClear: ["targetLanguage"],
 })
 /** generate-music provider — mirrors music-config.tsx (~L75). */
 const musicProviderControl = (): QuickConfigControl => ({

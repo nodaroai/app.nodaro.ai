@@ -783,6 +783,17 @@ describe("getModelIdentifier", () => {
         expect(getModelIdentifier(node, [])).toBe(provider)
       }
     })
+
+    // Nemotron 3.5 Transcribe is priced per started minute of the file: the
+    // id its run reserves from the measured file, at the length the graph or the
+    // upstream node tells; unknown → 60 minutes, the most a run is charged.
+    it("Nemotron is quoted at the started minutes of its file, 60 when the length is not known", () => {
+      const node = makeNode({ id: "t1", type: "transcribe", data: { label: "Transcribe", provider: "nemotron-3-5-transcribe" } as any })
+      expect(getModelIdentifier(node, [], [node])).toBe("nemotron-3-5-transcribe:60m")
+      const audio = makeNode({ id: "a", type: "upload-audio", data: { label: "Audio", metadata: { durationSeconds: 190 } } as any })
+      const edges = [{ id: "e", source: "a", target: "t1", targetHandle: "audio" }] as any
+      expect(getModelIdentifier(node, edges, [audio, node])).toBe("nemotron-3-5-transcribe:4m")
+    })
   })
 })
 

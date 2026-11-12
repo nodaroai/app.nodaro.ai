@@ -3357,10 +3357,12 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `audio_url` | string (URL) |  |  |
 | `audio_asset_id` | string |  | Nodaro audio or video job id. |
-| `language` | string |  | BCP-47 language code (e.g. 'en', 'es', 'fr'). Auto-detected when omitted. At most 10 characters. |
-| `diarize` | boolean |  | Label each speaker (speaker 1, speaker 2, …). Default false. |
-| `tag_audio_events` | boolean |  | Annotate non-speech events like [laughter], [music]. Default false. |
-| `word_timestamps` | boolean |  | Kept for compatibility — this engine is word-level, so word timings are returned either way. |
+| `model` | string |  | Engine. Default elevenlabs-stt. whisper returns no word timings; nemotron-3-5-transcribe detects the language itself and is the one that translates. One of `elevenlabs-stt`, `whisper`, `incredibly-fast-whisper`, `nemotron-3-5-transcribe`. |
+| `language` | string |  | BCP-47 language code (e.g. 'en', 'es', 'fr'). Auto-detected when omitted; Nemotron always detects it. At most 10 characters. |
+| `diarize` | boolean |  | ElevenLabs STT: label each speaker (speaker 1, speaker 2, …). Default false. (Nemotron labels speakers with word_timestamps.) |
+| `tag_audio_events` | boolean |  | ElevenLabs STT: annotate non-speech events like [laughter], [music]. Default false. |
+| `word_timestamps` | boolean |  | Per-word timings. ElevenLabs STT returns them either way; never with target_language. |
+| `target_language` | string |  | nemotron-3-5-transcribe only: translate the speech into this language instead (to or from English). No word timings. One of `en`, `zh`, `ja`, `ko`, `fr`, `de`, `es`, `pt`, `it`, `ru`, `nl`, `pl`, `cs`, `sk`, `hi`, `bg`, `hr`, `da`, `et`, `fi`, `hu`, `lv`, `lt`, `ro`, `sl`, `sv`, `th`, `uk`, `ar`, `el`, `he`, `mt`. |
 
 ## `trim_audio`
 

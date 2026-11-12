@@ -25,6 +25,7 @@ const PLACEHOLDER = /\{[^{}]*\}/g
  */
 const SAME_AS_EN: ReadonlySet<string> = new Set<string>([
   "audiocfg.providerIncrediblyFastWhisper",
+  "audiocfg.providerNemotron",
   "integ.viaEnvKey",
   "pipe.cinemaCodec",
   "pipe.heading",

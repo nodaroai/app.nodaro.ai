@@ -1585,6 +1585,15 @@ const LLM_PRICE_KEY_EFFORT_WORDING_BYTES = 62
 // NOT move. Measured by this suite: 528_052 total − 528_030 = 22 B.
 const FLUX_FILL_CATALOG_ENTRY_BYTES = 22
 
+// RAISED 2026-11-12 by Nemotron 3.5 Transcribe on `transcribe`, and nothing else: the tool gains
+// a `model` arg (the TRANSCRIBE_PROVIDERS enum, ElevenLabs STT still the default) and a
+// `target_language` arg (Nemotron's 32 translation targets), and its description and describes
+// say which engine returns word timings, that Nemotron translates and how it is priced.
+// `add_captions` does not move: its `transcribe_provider` enum is CAPTION_TRANSCRIBE_LANES, the
+// three lanes it took before. No tool added, so the fixture does not move. Measured by this suite
+// (before FLUX Fill's entry): 529_585 total − 528_463 = 1_122 B, all on transcribe (1_851 → 2_973 B).
+const NEMOTRON_TRANSCRIBE_BYTES = 1_122
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES,
   totalBytes:
@@ -1784,7 +1793,8 @@ export const TOOL_WIRE_BUDGET = {
     NODARO_IMAGE_UPSCALE_BYTES +
     LLM_REGISTRY_2026_11_IDS_BYTES +
     LLM_PRICE_KEY_EFFORT_WORDING_BYTES +
-    FLUX_FILL_CATALOG_ENTRY_BYTES,
+    FLUX_FILL_CATALOG_ENTRY_BYTES +
+    NEMOTRON_TRANSCRIBE_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

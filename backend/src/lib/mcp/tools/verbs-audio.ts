@@ -14,11 +14,11 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, TTS_OUTPUT_FORMATS, DEFAULT_TTS_PROVIDER, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, SUNO_SEPARATE_TYPES } from "@nodaro/shared/models"
+import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, TTS_OUTPUT_FORMATS, DEFAULT_TTS_PROVIDER, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, SUNO_SEPARATE_TYPES, TRANSCRIBE_PROVIDERS, TRANSCRIBE_TARGET_LANGUAGES, type TranscribeProvider } from "@nodaro/shared/models"
 import { MCP_TRANSCRIBE_PROVIDER } from "./_transcribe-provider.js"
 import { AUDIO_FX_PRESETS } from "@nodaro/shared/media"
 import { PITCH_TEMPO_LIMITS } from "@nodaro/shared/credits"
-import { readPromptAffixes } from "@nodaro/shared/nodes"
+import { readPromptAffixes, transcribeTranslationRefusal } from "@nodaro/shared/nodes"
 import { MODEL_CATALOG, canonicalTtsProvider } from "@nodaro/shared/model-catalog"
 
 // The engine the MCP `transcribe` tool runs on lives in _transcribe-provider.ts
@@ -2472,16 +2472,21 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Transcribe Audio",
       description:
-        "Transcribe speech from an audio or video file to text using ElevenLabs STT. " +
-        "Returns a job_id; the transcript text is in the job output, and per-word timings " +
-        "(ms) are ALWAYS in `output_data.json.words` — the input for add_captions `captions[]`.",
+        "Transcribe speech from an audio or video file to text — ElevenLabs STT unless `model` names another engine. " +
+        "Returns a job_id; the transcript text is in the job output. Per-word timings (ms) land in " +
+        "`output_data.json.words` (the input for add_captions `captions[]`): ALWAYS on ElevenLabs STT, " +
+        "with `word_timestamps: true` on Incredibly Fast Whisper and Nemotron 3.5 Transcribe (Nemotron adds a speaker per word). " +
+        "Nemotron 3.5 Transcribe can instead translate the speech (`target_language`, to or from English), with no word timings; " +
+        "it is priced per started minute of the file (up to 60 minutes and 200 MB, a direct file link, not a video's page).",
       inputSchema: {
         audio_url: z.string().url().optional(),
         audio_asset_id: z.string().optional().describe("Nodaro audio or video job id."),
-        language: z.string().max(10).optional().describe("BCP-47 language code (e.g. 'en', 'es', 'fr'). Auto-detected when omitted."),
-        diarize: z.boolean().optional().describe("Label each speaker (speaker 1, speaker 2, …). Default false."),
-        tag_audio_events: z.boolean().optional().describe("Annotate non-speech events like [laughter], [music]. Default false."),
-        word_timestamps: z.boolean().optional().describe("Kept for compatibility — this engine is word-level, so word timings are returned either way."),
+        model: z.enum(TRANSCRIBE_PROVIDERS).optional().describe(`Engine. Default ${MCP_TRANSCRIBE_PROVIDER}. whisper returns no word timings; nemotron-3-5-transcribe detects the language itself and is the one that translates.`),
+        language: z.string().max(10).optional().describe("BCP-47 language code (e.g. 'en', 'es', 'fr'). Auto-detected when omitted; Nemotron always detects it."),
+        diarize: z.boolean().optional().describe("ElevenLabs STT: label each speaker (speaker 1, speaker 2, …). Default false. (Nemotron labels speakers with word_timestamps.)"),
+        tag_audio_events: z.boolean().optional().describe("ElevenLabs STT: annotate non-speech events like [laughter], [music]. Default false."),
+        word_timestamps: z.boolean().optional().describe("Per-word timings. ElevenLabs STT returns them either way; never with target_language."),
+        target_language: z.enum(TRANSCRIBE_TARGET_LANGUAGES).optional().describe("nemotron-3-5-transcribe only: translate the speech into this language instead (to or from English). No word timings."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -2490,6 +2495,11 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     async (args) => {
       const audioUrl = args.audio_url ?? (args.audio_asset_id ? await resolveSpeechSourceUrl(args.audio_asset_id, session.userId) : null)
       if (!audioUrl) return { content: [{ type: "text" as const, text: "Pass audio_url or audio_asset_id." }], isError: true }
+      const engine: TranscribeProvider = args.model ?? MCP_TRANSCRIBE_PROVIDER
+      // A translation is Nemotron's alone, never with word timings: the
+      // route's own refusal, said before anything is dispatched.
+      const translationRefusal = transcribeTranslationRefusal(engine, args.target_language, args.word_timestamps)
+      if (translationRefusal) return { content: [{ type: "text" as const, text: `Can't transcribe: ${translationRefusal}.` }], isError: true }
       const payload: Record<string, unknown> = {
         audioUrl,
         // Send the engine EXPLICITLY. This tool always described itself as
@@ -2497,16 +2507,17 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         // used to send no `provider`, so the route's fallback lane served every
         // call instead: no word timings (`json.words: []`), diarize/tag options
         // ignored. Explicit here ⇒ the credit guard reserves on the same id that
-        // runs.
-        provider: MCP_TRANSCRIBE_PROVIDER,
+        // runs — the caller's `model`, else the default above.
+        provider: engine,
         ...(args.language ? { language: args.language } : {}),
         ...(args.diarize !== undefined ? { diarize: args.diarize } : {}),
         ...(args.tag_audio_events !== undefined ? { tagAudioEvents: args.tag_audio_events } : {}),
         ...(args.word_timestamps !== undefined ? { wordTimestamps: args.word_timestamps } : {}),
+        ...(args.target_language ? { targetLanguage: args.target_language } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      return dispatchJob(fastify, session, { url: "/v1/transcribe", payload, label: "transcribe", widgetKind: "generic", widgetData: { prompt: "(transcribe)", model: MCP_TRANSCRIBE_PROVIDER } })
+      return dispatchJob(fastify, session, { url: "/v1/transcribe", payload, label: "transcribe", widgetKind: "generic", widgetData: { prompt: args.target_language ? `(translate → ${args.target_language})` : "(transcribe)", model: engine } })
     },
   )
 

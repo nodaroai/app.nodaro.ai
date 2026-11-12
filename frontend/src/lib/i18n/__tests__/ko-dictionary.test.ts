@@ -29,6 +29,7 @@ const LATIN_OK: ReadonlySet<string> = new Set<string>([
   // Brand, product, model and provider names, and their fixed product labels.
   "audiocfg.providerElevenLabsStt",
   "audiocfg.providerIncrediblyFastWhisper",
+  "audiocfg.providerNemotron",
   "audiocfg.providerWhisper",
   "cfgext.igTitle",
   "cfgext.slideKenBurns",

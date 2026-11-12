@@ -13,7 +13,9 @@ import {
   readPromptAffixes,
   PROMPT_PREFIX_KEY,
   PROMPT_SUFFIX_KEY,
-  transcribeWordTimestampsRefusal
+  transcribeWordTimestampsRefusal,
+  transcribeTranslationRefusal,
+  transcribeTargetLanguageOf,
 } from "@nodaro/shared/nodes";
 import { toast } from "sonner";
 import { namesUserDirectionRef } from "@/lib/user-direction-refs";
@@ -5398,6 +5400,17 @@ function executeNodeCore(
         return Promise.reject(new Error("Word timings unavailable"));
       }
     }
+    // A translation is Nemotron 3.5 Transcribe's alone, into the languages it
+    // lists, and never beside an explicit word-timings request: refused here,
+    // before anything starts, with the same sentence the route gives.
+    {
+      const refusal = transcribeTranslationRefusal(d.provider || DEFAULT_TRANSCRIBE_NODE_PROVIDER, d.targetLanguage, d.wordTimestamps === true);
+      if (refusal) {
+        toast.error(nodeRunText(d.label, refusal));
+        return Promise.reject(new Error("Translation unavailable"));
+      }
+    }
+    const transcribeTarget = transcribeTargetLanguageOf(d.targetLanguage);
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, {
       ...RUN_START_RESET,
@@ -5435,9 +5448,13 @@ function executeNodeCore(
             // INFERRED, not asked for: gate it on what the lane can actually do.
             // On an incapable lane the run degrades to a segments-only
             // transcript (what this node did before word timings existed) rather
-            // than being refused by transcribe() after credits reserve.
+            // than being refused by transcribe() after credits reserve. A
+            // translation carries none either (and KIE refuses the pair): off
+            // while translating, as payload-builder does.
             (jsonWired || d.wordTimestamps) &&
-              transcribeLaneSupportsWordTimestamps(transcribeProvider),
+              transcribeLaneSupportsWordTimestamps(transcribeProvider) &&
+              transcribeTarget === undefined,
+            transcribeTarget,
           );
         })
         .then(({ jobId }) => {

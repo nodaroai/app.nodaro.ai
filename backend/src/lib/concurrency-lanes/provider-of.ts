@@ -225,7 +225,10 @@ export const ROUTED_JOBS: Readonly<Record<string, (d: Data) => string | null>> =
   "video-depth": videoDepthProvider,
   // tangoflux (Replicate) is reachable only from a stale payload; elevenlabs-sfx is the default.
   "text-to-audio": (d) => (str(d.provider) === "tangoflux" ? "replicate" : "elevenlabs"),
-  "transcribe": (d) => ((str(d.provider) ?? DEFAULT_TRANSCRIBE_PROVIDER) === "elevenlabs-stt" ? "elevenlabs" : "replicate"),
+  "transcribe": (d) => {
+    const engine = str(d.provider) ?? DEFAULT_TRANSCRIBE_PROVIDER
+    return engine === "elevenlabs-stt" ? "elevenlabs" : engine === "nemotron-3-5-transcribe" ? "kie" : "replicate"
+  },
   // An RSS feed is a plain fetch on this server; every other actor is Apify's.
   "web-scrape": (d) => {
     const body = d.body !== null && typeof d.body === "object" ? (d.body as Data) : {}

@@ -170,6 +170,7 @@ import {
   extractCharacterLoraFields,
   resolveGvpAnchorWire,
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
+  CAPTION_TRANSCRIBE_LANES,
   transcribeLaneSupportsWordTimestamps,
   resolveMusicProvider,
   MUSIC_CREDIT_ID,
@@ -200,6 +201,8 @@ import {
   PROMPT_PREFIX_KEY,
   PROMPT_SUFFIX_KEY,
   transcribeWordTimestampsRefusal,
+  transcribeTranslationRefusal,
+  transcribeTargetLanguageOf,
   isSettingsHintEdge,
   nodeAspectRatio,
 } from "@nodaro/shared/nodes"
@@ -6886,6 +6889,13 @@ function buildPayloadOf(
       // empty word list: the user paid for an answer that could not contain what
       // they asked for. Same refusal text as `/v1/transcribe` and
       // `transcribe()`, from the one shared helper.
+      // A translation (Nemotron 3.5 Transcribe only) is refused here too, for
+      // the same reason: an engine that cannot translate, a language it does
+      // not translate into, or an explicit word-timings request beside it —
+      // never coerced, never after the reserve.
+      const targetLanguage = transcribeTargetLanguageOf(data.targetLanguage)
+      const translationRefusal = transcribeTranslationRefusal(provider, targetLanguage, data.wordTimestamps === true)
+      if (translationRefusal) throw new Error(`transcribe: ${translationRefusal}`)
       if (data.wordTimestamps === true) {
         const refusal = transcribeWordTimestampsRefusal(provider)
         if (refusal) throw new Error(`transcribe: ${refusal}`)
@@ -6895,10 +6905,13 @@ function buildPayloadOf(
       // user, so an incapable lane must degrade to a segments-only transcript —
       // exactly what this node did before word timings existed — not turn a
       // working run into a `transcribe()` refusal thrown AFTER the credits
-      // reserve.
+      // reserve. A translation is the same: it carries no word timings, and KIE
+      // refuses the pair, so the inferred flag is off while translating (a
+      // translation feeding captions is refused before the run, as wordless).
       const wordTimestamps =
         (jsonWired || Boolean(data.wordTimestamps)) &&
-        transcribeLaneSupportsWordTimestamps(provider)
+        transcribeLaneSupportsWordTimestamps(provider) &&
+        targetLanguage === undefined
       return {
         jobName: "transcribe",
         queueName: "video-generation",
@@ -6911,6 +6924,7 @@ function buildPayloadOf(
           diarize: data.diarize,
           tagAudioEvents: data.tagAudioEvents,
           wordTimestamps,
+          ...(targetLanguage ? { targetLanguage } : {}),
           usageLogId,
         },
       }
@@ -7639,6 +7653,17 @@ function buildPayloadOf(
           throw new Error("add-captions: transcript has no words to caption")
         }
       }
+      // Add Captions transcribes only on its own lanes (`CAPTION_TRANSCRIBE_LANES`,
+      // the route's enum): its flat render price covers that transcription, so a
+      // lane priced by the file's length (Nemotron 3.5 Transcribe) authored into
+      // node data is refused here, before the reserve, instead of running unpriced.
+      const acTranscribeProvider = (data.transcribeProvider ?? data.transcribe_provider) as string | undefined
+      if (acTranscribeProvider && !(CAPTION_TRANSCRIBE_LANES as readonly string[]).includes(acTranscribeProvider)) {
+        throw new Error(
+          `add-captions: "${acTranscribeProvider}" is not an engine Add Captions transcribes on — pick ${CAPTION_TRANSCRIBE_LANES.join(", ")}, ` +
+            "or transcribe on a Transcribe node and wire its transcript in",
+        )
+      }
       const acText = !isCaptionArray ? (resolvedInputs.prompt || resolveRefs(data.text as string | undefined, refMap)) : undefined
       const acCaptions = isCaptionArray ? captionsValue : (resolvedInputs.captions ?? undefined)
       // Price follows the renderer (same predicate as the route's credit id and
@@ -7683,7 +7708,7 @@ function buildPayloadOf(
         // always undefined → an explicit autoTranscribe:false and any transcribeProvider
         // choice were silently dropped in workflow runs. Snake fallback kept for safety.
         auto_transcribe: (data.autoTranscribe ?? data.auto_transcribe) as boolean | undefined,
-        transcribe_provider: (data.transcribeProvider ?? data.transcribe_provider) as string | undefined,
+        transcribe_provider: acTranscribeProvider,
         style: data.captionStyle ?? data.style,
         position: data.captionPosition ?? data.position,
         fontSize: cap.fontSize,

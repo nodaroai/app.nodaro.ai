@@ -2,7 +2,7 @@ import type { NodaroClientCore } from "../core.js"
 import { readSseStream } from "../sse.js"
 import type { OverlayAnchor, VideoMaskRequest, MaskCompositeRequest } from "@nodaro/shared/media"
 import type { CaptionStyle, CaptionLookId, SupportedFontName } from "@nodaro/shared/captions"
-import type { TranscribeLane } from "@nodaro/shared/models"
+import type { CaptionTranscribeLane } from "@nodaro/shared/models"
 import type { VideoOverlayRequest } from "@nodaro/shared/video"
 import type { GenerationSessionParams, RunNodeOptions } from "./nodes.js"
 
@@ -67,7 +67,8 @@ export interface AddCaptionsInput extends CaptionLookInput {
   captions?: CaptionEntry[]
   /** Transcribe the video's audio when no text/captions are given (default true). */
   autoTranscribe?: boolean
-  transcribeProvider?: TranscribeLane
+  /** The engine the render transcribes on — Add Captions' own lanes (a length-priced engine such as Nemotron 3.5 Transcribe is not one: transcribe with `audio.transcribe` and pass its `words` as `captions`). */
+  transcribeProvider?: CaptionTranscribeLane
   style?: CaptionStyle
   position?: "bottom" | "top" | "center"
   fontSize?: number

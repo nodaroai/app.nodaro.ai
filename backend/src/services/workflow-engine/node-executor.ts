@@ -114,6 +114,7 @@ import { videoUtilityChargeBaseCredits } from "../../lib/video-utility-credits.j
 import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-duration.js"
 import { stampVideoDepthInput, videoDepthReserveId } from "../../lib/video-depth-input.js"
 import { stampPitchTempoDuration, pitchTempoReserveId } from "../../lib/pitch-tempo-duration.js"
+import { stampNemotronTranscribeInput, nemotronTranscribeReserveId } from "../../lib/nemotron-transcribe-input.js"
 import {
   seedanceDraftFinalizeStamp,
   seedanceDraftFinalizeReserveId,
@@ -2592,6 +2593,18 @@ async function executeWorkerNode(
     throw err
   }
 
+  // Transcribe on Nemotron 3.5 Transcribe: the same shape, the route's own
+  // rule (per started minute of the measured file, refused over 60 minutes or
+  // 200 MB, or unreadable). Stamps the length and its `:<N>m` id before
+  // input_data is written; a refusal leaves no jobs row and nothing reserved.
+  const nemotronRefusal = await stampNemotronTranscribeInput(jobName, payload)
+  if (nemotronRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(nemotronRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = nemotronRefusal.code
+    throw err
+  }
+
   // 2b' (cont.). Video Depth: the same shape. Measure the clip by the route's own
   // rule, refuse one the provider cannot take (over its frame/seconds cap, or
   // unreadable — including a videoUrl that is not an http(s) link), and stamp
@@ -2759,6 +2772,7 @@ async function executeWorkerNode(
         nodaroImageUpscaleReserveId(jobName, payload) ??
         videoDepthReserveId(jobName, payload) ??
         pitchTempoReserveId(jobName, payload) ??
+        nemotronTranscribeReserveId(jobName, payload) ??
         seedanceDraftFinalizeReserveId(jobName, payload) ??
         videoMaskReserveId(jobName, payload) ??
         nodaroVideoUpscaleReserveId(jobName, payload) ??

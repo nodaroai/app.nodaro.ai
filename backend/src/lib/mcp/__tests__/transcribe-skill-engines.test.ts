@@ -45,7 +45,14 @@ describe("the transcribe skill describes every accepted engine", () => {
     expect(SKILL).not.toMatch(/no longer lets a caller name/)
   })
 
-  it("still says the MCP tool itself always runs the word-level engine", () => {
-    expect(SKILL).toMatch(/MCP `transcribe` tool ALWAYS runs/)
+  // Since Nemotron 3.5 Transcribe (2026-11-12) the MCP tool takes a `model`;
+  // the word-level engine is still what it runs when none is named.
+  it("still says the MCP tool runs the word-level engine unless a model is named", () => {
+    expect(SKILL).toMatch(/MCP `transcribe` tool runs `elevenlabs-stt` unless its `model` names another engine/)
+  })
+
+  it("says which engine translates, and that a translation carries no word timings", () => {
+    expect(SKILL).toMatch(/`targetLanguage`/)
+    expect(SKILL).toMatch(/there are NO word timings/)
   })
 })

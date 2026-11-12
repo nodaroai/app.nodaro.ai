@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { findWordlessTranscriptFeeds, transcribeWordTimestampsRefusal } from "../transcribe-preflight.js"
+import { findWordlessTranscriptFeeds, transcribeTargetLanguageOf, transcribeTranslationRefusal, transcribeWordTimestampsRefusal } from "../transcribe-preflight.js"
 
 const n = (id: string, type: string, data: Record<string, unknown> = {}) => ({ id, type, data })
 const e = (source: string, sourceHandle: string, target: string, targetHandle: string) => ({ source, sourceHandle, target, targetHandle })
@@ -61,5 +61,54 @@ describe("findWordlessTranscriptFeeds", () => {
       [n("t", "transcribe", { provider: "whisper" }), n("a", "apply-edl"), n("b", "apply-edl")],
       [e("t", "json", "a", "transcript"), e("a", "json", "b", "transcript"), e("b", "json", "a", "transcript")],
     )).toEqual([])
+  })
+})
+
+// Nemotron 3.5 Transcribe (2026-11-12): word-capable, and the one engine that
+// translates — never together with word timings (KIE refuses the pair).
+describe("Nemotron 3.5 Transcribe: word timings and translation", () => {
+  it("is word-capable, unless it translates", () => {
+    expect(transcribeWordTimestampsRefusal("nemotron-3-5-transcribe")).toBeNull()
+    expect(transcribeWordTimestampsRefusal("nemotron-3-5-transcribe", "en")).toContain("translation")
+    expect(transcribeWordTimestampsRefusal("nemotron-3-5-transcribe", "")).toBeNull()
+  })
+
+  it("refuses a translation on any other engine, naming the one that translates", () => {
+    for (const lane of ["elevenlabs-stt", "whisper", "incredibly-fast-whisper"]) {
+      const msg = transcribeTranslationRefusal(lane, "en")!
+      expect(msg).toContain(`"${lane}"`)
+      expect(msg).toContain("nemotron-3-5-transcribe")
+    }
+    // An absent provider is the NODE default (elevenlabs-stt), which does not translate.
+    expect(transcribeTranslationRefusal(undefined, "en")).toContain('"elevenlabs-stt"')
+  })
+
+  it("refuses a language KIE does not translate into, and word timings beside a translation", () => {
+    expect(transcribeTranslationRefusal("nemotron-3-5-transcribe", "vi")).toContain('"vi"')
+    expect(transcribeTranslationRefusal("nemotron-3-5-transcribe", "en", true)).toContain("word timings")
+  })
+
+  it("passes a valid translation, and no translation at all on any engine", () => {
+    expect(transcribeTranslationRefusal("nemotron-3-5-transcribe", "he")).toBeNull()
+    expect(transcribeTranslationRefusal("nemotron-3-5-transcribe", "en", false)).toBeNull()
+    expect(transcribeTranslationRefusal("whisper", undefined, true)).toBeNull()
+    expect(transcribeTranslationRefusal("elevenlabs-stt", "")).toBeNull()
+  })
+
+  it("reads a target language as data carries it", () => {
+    expect(transcribeTargetLanguageOf(" en ")).toBe("en")
+    expect(transcribeTargetLanguageOf("")).toBeUndefined()
+    expect(transcribeTargetLanguageOf(undefined)).toBeUndefined()
+    expect(transcribeTargetLanguageOf(3)).toBeUndefined()
+  })
+
+  it("a translating node feeding captions is wordless; a transcribing one is not", () => {
+    const nodes = (data: Record<string, unknown>) => [n("t", "transcribe", { provider: "nemotron-3-5-transcribe", ...data }), n("c", "add-captions")]
+    const edges = [e("t", "json", "c", "transcript")]
+    expect(findWordlessTranscriptFeeds(nodes({}), edges)).toEqual([])
+    const hits = findWordlessTranscriptFeeds(nodes({ targetLanguage: "en" }), edges)
+    expect(hits).toHaveLength(1)
+    expect(hits[0]).toMatchObject({ transcribeNodeId: "t", consumerNodeId: "c", provider: "nemotron-3-5-transcribe" })
+    expect(hits[0]!.message).toContain("translation")
   })
 })

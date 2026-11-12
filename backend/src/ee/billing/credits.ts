@@ -44,6 +44,11 @@ import {
   parsePitchTempoCreditId,
   pitchTempoBaseCredits,
   pitchTempoQuoteCreditId,
+  NEMOTRON_TRANSCRIBE_ID,
+  NEMOTRON_TRANSCRIBE_PRICING,
+  parseNemotronTranscribeCreditId,
+  nemotronTranscribeBaseCredits,
+  nemotronTranscribeQuoteCreditId,
   videoGenerationCreditId,
   parseUnitQuoteCreditId,
   VIDEO_OVERLAY_PRICING,
@@ -400,13 +405,31 @@ function pitchTempoMinutesBase(identifier: string, rowOf: (id: string) => number
 }
 
 /**
+ * The base price of a `nemotron-3-5-transcribe:<N>m` id (Nemotron 3.5
+ * Transcribe, per started minute of the file — decided 2026-11-12): the
+ * four-minute rate row × N ÷ 4, rounded up once, read through `rowOf`, or
+ * `undefined` when `identifier` is not such an id or the rate row is priced
+ * nowhere. Never a row of its own, like the Pitch & Tempo minutes ids.
+ */
+function nemotronTranscribeMinutesBase(identifier: string, rowOf: (id: string) => number | undefined): number | undefined {
+  const parsed = parseNemotronTranscribeCreditId(identifier)
+  if (!parsed) return undefined
+  const rate = rowOf(NEMOTRON_TRANSCRIBE_PRICING.RATE_CREDIT_ID)
+  return rate === undefined ? undefined : nemotronTranscribeBaseCredits(rate, parsed.minutes)
+}
+
+/**
  * Every id priced from rate rows rather than a row of its own: Edit Plan,
- * Pitch & Tempo, and a whole-request quote (`./whole-request-quotes.ts` — N
- * units of a per-unit rate, a speech request, a whole Voice Changer Pro
- * convert), each read through `rowOf` with the request's own pricing rule.
+ * Pitch & Tempo, Nemotron 3.5 Transcribe, and a whole-request quote
+ * (`./whole-request-quotes.ts` — N units of a per-unit rate, a speech request,
+ * a whole Voice Changer Pro convert), each read through `rowOf` with the
+ * request's own pricing rule.
  */
 function rateCompositeBase(identifier: string, rowOf: (id: string) => number | undefined): number | undefined {
-  return editPlanMinutesBase(identifier, rowOf) ?? pitchTempoMinutesBase(identifier, rowOf) ?? wholeRequestQuoteOf(identifier)?.base(rowOf)
+  return editPlanMinutesBase(identifier, rowOf) ??
+    pitchTempoMinutesBase(identifier, rowOf) ??
+    nemotronTranscribeMinutesBase(identifier, rowOf) ??
+    wholeRequestQuoteOf(identifier)?.base(rowOf)
 }
 
 // ============================================================
@@ -2033,6 +2056,16 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "whisper": 40,                  // Replicate openai/whisper — no word timings (BASE price, = migration 288; the service markup is applied on top at read time)
   "incredibly-fast-whisper": 40,  // Replicate fast whisper — word timings on request (BASE price, = migration 288)
   "elevenlabs-stt": 22,           // avg (from audit)
+  // Nemotron 3.5 Transcribe (KIE) — per STARTED minute of the file, any
+  // option (decided 2026-11-12). The RATE row prices FOUR minutes (0.75 a
+  // minute fits no whole-credit row); a run reserves
+  // `nemotron-3-5-transcribe:<N>m` (N = 1..60), priced as this row × N ÷ 4
+  // rounded up once (`nemotronTranscribeMinutesBase`), never stored. The bare
+  // engine id is the 60-minute maximum (45 = 3 × 60 ÷ 4): never what a run
+  // reserves (the route and the workflow run measure the file first), it bounds
+  // any path that would name the engine alone. Migration 636.
+  "nemotron-3-5-transcribe:per-4m": 3,
+  "nemotron-3-5-transcribe": 45,
   "elevenlabs-dialogue": 25,     // direct ElevenLabs API; flat per request, whatever the length (the price with length pricing off)
   "elevenlabs-dialogue:per-100-chars": 4, // one started 100 characters across lines (decided 2026-10-06)
   "elevenlabs-dialogue-v4": 25,  // direct ElevenLabs API; the same flat price as v3 dialogue, per request
@@ -3269,6 +3302,17 @@ export async function getModelCreditBaseCost(modelIdentifier: string): Promise<M
   if (pitchTempo) {
     const rate = await getModelCreditBaseCost(PITCH_TEMPO_PRICING.RATE_CREDIT_ID)
     const priced: ModelPricing = { ...rate, creditCost: pitchTempoBaseCredits(rate.creditCost, pitchTempo.minutes) }
+    modelPricingCache.set(modelIdentifier, priced)
+    return priced
+  }
+
+  // Nemotron 3.5 Transcribe `:<N>m` ids are priced from the four-minute rate
+  // row × N ÷ 4, rounded up once (decided 2026-11-12); the rate row carries the
+  // admin switch.
+  const nemotron = parseNemotronTranscribeCreditId(modelIdentifier)
+  if (nemotron) {
+    const rate = await getModelCreditBaseCost(NEMOTRON_TRANSCRIBE_PRICING.RATE_CREDIT_ID)
+    const priced: ModelPricing = { ...rate, creditCost: nemotronTranscribeBaseCredits(rate.creditCost, nemotron.minutes) }
     modelPricingCache.set(modelIdentifier, priced)
     return priced
   }
@@ -5914,6 +5958,7 @@ function estimateNodeCredits(
     videoSfxSec: node.type === "video-sfx" ? videoSfxClipSecOf(node, edges, wireSec) : undefined,
     videoDepthSec: node.type === "video-depth" ? videoDepthClipSecOf(node, nodes, edges, wireSec, prices) : undefined,
     pitchTempoSec: node.type === "pitch-tempo" ? pitchTempoInputSecOf(node, edges, wireSec) : undefined,
+    transcribeSec: node.type === "transcribe" ? transcribeInputSecOf(node, edges, wireSec) : undefined,
     videoMaskSec: node.type === "video-mask" ? videoMaskClipSecOf(node, edges, wireSec, wireFps) : undefined,
     // Video Face Mesh (the Cast Swap engine's quote graph): its `video` wire, priced as Video Mask's (the 30 fps basis).
     videoFaceMeshSec: node.type === "video-face-mesh" ? videoMaskClipSecOf(node, edges, wireSec, wireFps) : undefined,
@@ -6002,6 +6047,24 @@ function pitchTempoInputSecOf(
   if (node.id === undefined || !edges) return undefined
   const sec = edges.filter((e) => e.target === node.id).map((e) => wireSec(e.source)).find((v) => v !== undefined)
   return sec === undefined ? undefined : Math.min(sec, PITCH_TEMPO_PRICING.MAX_DURATION_SEC)
+}
+
+/**
+ * The file length a Transcribe on a length-priced engine (Nemotron 3.5
+ * Transcribe, per started minute) is priced at when a run is estimated: its
+ * audio wire's length where a run estimate knows it, at most the 60 minutes a
+ * run accepts. Undefined when unknown: the 60-minute id stands in
+ * (`nemotronTranscribeQuoteCreditId`) — a run measures the real file before it
+ * reserves, so no run is charged more.
+ */
+function transcribeInputSecOf(
+  node: EstimateNode,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  wireSec: WireSecOf,
+): number | undefined {
+  if (node.id === undefined || !edges) return undefined
+  const sec = edges.filter((e) => e.target === node.id).map((e) => wireSec(e.source)).find((v) => v !== undefined)
+  return sec === undefined ? undefined : Math.min(sec, NEMOTRON_TRANSCRIBE_PRICING.MAX_DURATION_SEC)
 }
 
 /**
@@ -7093,6 +7156,8 @@ export function getNodeModelIdentifier(
     videoDepthSec?: number
     /** Pitch & Tempo: the input's length a run estimate knows (undefined = the one-minute id). */
     pitchTempoSec?: number
+    /** Transcribe on Nemotron 3.5 Transcribe: the file's length a run estimate knows (undefined = the 60-minute id). */
+    transcribeSec?: number
     /** Video Mask: the input clip's length a run estimate knows (undefined = not known yet). */
     videoMaskSec?: number
     /** Video Face Mesh: the input clip's PRICED length a run estimate knows (the 30 fps basis; undefined = not known yet). */
@@ -7303,7 +7368,12 @@ export function getNodeModelIdentifier(
   // provider-less node at the generic `transcribe` row while the run reserved the
   // engine's. An estimate may over-quote, never under-quote.
   if (nodeType === "transcribe") {
-    return (typeof data.provider === "string" && data.provider) || DEFAULT_TRANSCRIBE_NODE_PROVIDER
+    const engine = (typeof data.provider === "string" && data.provider) || DEFAULT_TRANSCRIBE_NODE_PROVIDER
+    // Nemotron 3.5 Transcribe is priced per started minute of the file: the
+    // `:<N>m` id its run reserves from the measured file, quoted at the length
+    // the graph tells, else at 60 minutes (the most a run is charged).
+    if (engine === NEMOTRON_TRANSCRIBE_ID) return nemotronTranscribeQuoteCreditId(graph.transcribeSec)
+    return engine
   }
 
   // Video Retake: priced per second of the replaced window — the per-second

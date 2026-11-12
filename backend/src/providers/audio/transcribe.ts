@@ -6,6 +6,7 @@ import {
   transcribeProvidersWithWordTimestamps,
   DEFAULT_TRANSCRIBE_PROVIDER,
 } from "@nodaro/shared/models"
+import { transcribeTranslationRefusal, transcribeTargetLanguageOf } from "@nodaro/shared/nodes"
 import { replicate, extractCost } from "../replicate/client.js"
 import { withReplicateRequestFailure } from "../replicate/failure-messages.js"
 import { directSpeechToText } from "../elevenlabs/direct-stt.js"
@@ -18,6 +19,7 @@ import {
 } from "./transcribe-output.js"
 import { scribeWordsToCaptions } from "./captions-mappers.js"
 import { buildTranscriptFromOutput } from "./transcript-normalize.js"
+import { runNemotronTranscribe } from "../kie/nemotron-transcribe.js"
 
 /**
  * A transcript with its non-speech annotations removed — `[music]`,
@@ -54,6 +56,12 @@ interface TranscribeResult {
   words?: Array<Caption & { speaker?: string }>
   /** Normalized `Transcript` — the node's `json` output handle (always set). */
   json?: Transcript
+  /** Nemotron: KIE says the output hit its length limit for the audio (it usually repeats itself). */
+  truncated?: true
+  /** Nemotron: the audio's length KIE decoded and billed (seconds) — what the run is charged for. */
+  billedDurationSec?: number
+  /** Nemotron: KIE's `creditsConsumed` for the task — the length to charge on when it reports no duration. */
+  billedKieCredits?: number
 }
 
 const TRANSCRIBE_MODELS: Record<string, string> = {
@@ -69,12 +77,30 @@ export async function transcribe(
     diarize?: boolean
     tagAudioEvents?: boolean
     wordTimestamps?: boolean
-    /** Persist the Replicate prediction id so a stall-retry reconciles instead
-     *  of re-billing the transcribe call. Only fired on the Replicate paths. */
+    /** Translate the speech into this language instead (Nemotron 3.5
+     *  Transcribe only, never with word timings — refused below otherwise). */
+    targetLanguage?: string
+    /** Persist the provider's task id so a stall-retry reconciles instead of
+     *  re-billing the transcribe call: the Replicate prediction id on the two
+     *  whisper paths, the KIE task id on Nemotron (the caller picks the kind,
+     *  `transcribeTaskKind`). Not fired on the direct Scribe path. */
     onTaskCreated?: (taskId: string) => void | Promise<void>
+    /** Nemotron: the file's length as the route / workflow run measured it —
+     *  the provider cost's fallback when KIE does not report the length. */
+    durationSec?: number
   },
 ): Promise<TranscribeResult> {
   const resolvedProvider = provider ?? DEFAULT_TRANSCRIBE_PROVIDER
+  const targetLanguage = transcribeTargetLanguageOf(options?.targetLanguage)
+
+  // A translation is one engine's ability (Nemotron 3.5 Transcribe), into the
+  // languages KIE lists, and never together with word timings. Refused here —
+  // before any provider call — for every caller that bypasses the route's Zod
+  // (the orchestrator/DAG path builds its payload straight from node data).
+  const translationRefusal = transcribeTranslationRefusal(resolvedProvider, targetLanguage, options?.wordTimestamps)
+  if (translationRefusal) {
+    throw new Error(`Transcription refused: ${translationRefusal}.`)
+  }
 
   // Word timings are a per-lane CAPABILITY, and the incapable lane fails
   // silently: Replicate drops an unknown input key, so openai/whisper returns
@@ -137,6 +163,33 @@ export async function transcribe(
       // always carries word timings for the default provider (no segments —
       // Scribe emits none). The mapper layer sets `json` on the whisper paths.
       json: buildTranscriptFromOutput({ language: result.language, words }),
+    }
+  }
+
+  if (resolvedProvider === "nemotron-3-5-transcribe") {
+    // KIE-hosted; priced per minute of the file (the route and the workflow
+    // run measured it before the hold). No `language` is sent: the model
+    // detects it and has no such input. Words (with a speaker each) only when
+    // asked — and the "speech in, words out" contract is enforced by the mapper.
+    const result = await runNemotronTranscribe(
+      {
+        audioUrl,
+        wordTimestamps: options?.wordTimestamps,
+        targetLanguage,
+        fallbackDurationSec: options?.durationSec,
+      },
+      options?.onTaskCreated ? { onTaskCreated: async (taskId) => { await options.onTaskCreated?.(taskId) } } : undefined,
+    )
+    return {
+      text: result.text,
+      language: result.language,
+      ...(result.words ? { words: result.words } : {}),
+      ...(result.segments ? { segments: result.segments } : {}),
+      json: result.json,
+      ...(result.cost !== undefined ? { cost: result.cost } : {}),
+      ...(result.truncated ? { truncated: true as const } : {}),
+      ...(result.durationSec !== undefined ? { billedDurationSec: result.durationSec } : {}),
+      ...(result.kieCredits !== undefined ? { billedKieCredits: result.kieCredits } : {}),
     }
   }
 

@@ -162,7 +162,7 @@ Instead of `auto_transcribe`, you can pass a `captions[]` array. For the **kinet
 
 ### The auto-transcribe engine (`transcribe_provider`)
 
-The node transcribes the video's audio itself unless something else already supplies the words: `captions[]`, a wired `transcript`, `text` on a `subtitle`, `auto_transcribe: false`, or — for a `segments[]` render — every segment carrying its own `text`/`captions`. When a call carries more than one source, the precedence is `captions[]` > wired `transcript` > `text` on `subtitle` > auto-transcription. `transcribe_provider` chooses the engine: `incredibly-fast-whisper` (the default), `elevenlabs-stt`, or `whisper`.
+The node transcribes the video's audio itself unless something else already supplies the words: `captions[]`, a wired `transcript`, `text` on a `subtitle`, `auto_transcribe: false`, or — for a `segments[]` render — every segment carrying its own `text`/`captions`. When a call carries more than one source, the precedence is `captions[]` > wired `transcript` > `text` on `subtitle` > auto-transcription. `transcribe_provider` chooses the engine: `incredibly-fast-whisper` (the default), `elevenlabs-stt`, or `whisper`. Nemotron 3.5 Transcribe is not one of them: it is priced by the file's length, which Add Captions' own price does not cover — transcribe on a [Transcribe](../ai-text/transcribe.md) node with it and wire the `json` output into `transcript` instead (naming it here is a `400 validation_error`, and a refusal before a workflow runs).
 
 **What `text` does depends on the style.**
 

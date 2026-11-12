@@ -34,8 +34,8 @@ import {
   type SupportedFontName,
 } from "@nodaro/shared/captions"
 import {
-  TRANSCRIBE_LANES,
-  type TranscribeLane,
+  CAPTION_TRANSCRIBE_LANES,
+  type CaptionTranscribeLane,
 } from "@nodaro/shared/models"
 import {
   VIDEO_OVERLAY_CORNERS,
@@ -582,7 +582,7 @@ Examples:
       "freeze per-word motion on the kinetic styles — keeps grouping, line-holding and the spoken-word highlight (kinetic styles only)",
     )
     .option("--no-auto-transcribe", "do NOT transcribe the video's audio when no --text / --captions-file is given")
-    .option("--transcribe-provider <name>", `engine for the auto-transcription: ${TRANSCRIBE_LANES.join(" | ")}`)
+    .option("--transcribe-provider <name>", `engine for the auto-transcription: ${CAPTION_TRANSCRIBE_LANES.join(" | ")}`)
     .option(
       "--segments-file <path>",
       "JSON array of caption SEGMENTS — non-overlapping { startMs, endMs } ranges, each with its own style/look/position overrides and optional own words",
@@ -661,8 +661,8 @@ Examples:
             warn(`--font-weight must be 100-900 in steps of 100 (got "${opts.fontWeight}")`)
             process.exit(1)
           }
-          if (opts.transcribeProvider && !(TRANSCRIBE_LANES as readonly string[]).includes(opts.transcribeProvider)) {
-            warn(`--transcribe-provider must be one of ${TRANSCRIBE_LANES.join(", ")} (got "${opts.transcribeProvider}")`)
+          if (opts.transcribeProvider && !(CAPTION_TRANSCRIBE_LANES as readonly string[]).includes(opts.transcribeProvider)) {
+            warn(`--transcribe-provider must be one of ${CAPTION_TRANSCRIBE_LANES.join(", ")} (got "${opts.transcribeProvider}")`)
             process.exit(1)
           }
           const maxWordsPerLine =
@@ -703,7 +703,7 @@ Examples:
             // every call would pin auto_transcribe and the route could never
             // see an absent flag.
             ...(opts.autoTranscribe === false ? { autoTranscribe: false } : {}),
-            ...(opts.transcribeProvider ? { transcribeProvider: opts.transcribeProvider as TranscribeLane } : {}),
+            ...(opts.transcribeProvider ? { transcribeProvider: opts.transcribeProvider as CaptionTranscribeLane } : {}),
           })
           await reportQueuedJob(result, () => client.jobs.get(result.jobId), {
             ...opts,

@@ -36,8 +36,12 @@ import {
   finalizeJobWithMedia,
   isFinalizeJobType,
   NOT_GENERIC_RECOVERABLE,
+  loadUsageLogId,
   type FinalizeClaimant,
 } from "../job-finalize.js"
+import { markJobCompleted } from "../../workers/shared.js"
+import { nemotronOutputFromResult } from "../../providers/kie/nemotron-transcribe.js"
+import { settleNemotronTranscribe } from "../nemotron-transcribe-settle.js"
 import { loopTrimAddonForReconcile } from "./loop-trim-refund.js"
 import { measureSeedance2Settle } from "../seedance2-ref-video-settle.js"
 import { gptImage26AutoSettledBase } from "../gpt-image-2-6-settle.js"
@@ -455,6 +459,64 @@ async function reconcileKieUnitJob(row: KieJobRow, recover: UnitRecover, opts?: 
 }
 
 /**
+ * Recover a Nemotron 3.5 Transcribe job (the transcribe worker saves its KIE
+ * task id under `kie-standard`): read the task's whole result and write the
+ * SAME `output_data` the worker writes (`nemotronOutputFromResult` — never
+ * finalize, which would treat the transcript as media), then settle exactly as
+ * the worker does — at the minutes KIE decoded, up or down, in one commit
+ * (`settleNemotronTranscribe`) — recording what KIE billed as `provider_cost`.
+ *
+ *   - the poll threw: the shared failure path (`failOrBumpPolled`) — a task
+ *     that failed upstream fails fast + refunds, a running one bumps;
+ *   - the result could not be mapped (word timings asked and not delivered —
+ *     the worker's own contract — or no resultObject): the task is done and
+ *     will not change, so the job fails and is refunded now, never the 18-tick
+ *     bump. Refunded only when THIS write flipped the row.
+ */
+async function reconcileKieTranscribeJob(row: KieJobRow, opts?: ReconcileOpts): Promise<void> {
+  let task: Awaited<ReturnType<typeof readRecordInfoTask>>
+  try {
+    task = await readRecordInfoTask(row, opts?.pollAttempts ?? 1)
+  } catch (err) {
+    return failOrBumpPolled(row, err, opts)
+  }
+  const input = (row.input_data ?? {}) as Record<string, unknown>
+  const measuredSec = typeof input.duration_seconds === "number" ? input.duration_seconds : undefined
+  let output: Awaited<ReturnType<typeof nemotronOutputFromResult>>
+  try {
+    output = await nemotronOutputFromResult(task.result, {
+      wordTimestamps: input.wordTimestamps === true,
+      targetLanguage: typeof input.targetLanguage === "string" && input.targetLanguage ? input.targetLanguage : undefined,
+      fallbackDurationSec: measuredSec,
+      ...(task.kieCredits !== undefined ? { kieCredits: task.kieCredits } : {}),
+    })
+  } catch (err) {
+    if (isDrainAbortError(err)) throw err
+    const message = userFacingMessage(err, "The provider returned a transcript we could not read. Your credits were refunded.")
+    const flipped = await markFailed(row.id, message, providerDetailOf(err), null, "delivery_failed")
+    if (flipped) await refundReservedCreditsForJob(row.id)
+    return
+  }
+  const outputData: Record<string, unknown> = { text: output.text, language: output.language, json: output.json }
+  if (output.segments) outputData.segments = output.segments
+  if (output.words) outputData.words = output.words
+  if (output.truncated) outputData.truncated = true
+  const ok = await markJobCompleted(row.id, {
+    output_data: outputData,
+    ...(output.cost !== undefined ? { provider_cost: output.cost } : {}),
+  })
+  if (!ok) return
+  await settleNemotronTranscribe({
+    usageLogId: await loadUsageLogId(row.id),
+    jobId: row.id,
+    heldId: typeof input.bucketKey === "string" ? input.bucketKey : undefined,
+    measuredSec,
+    kieSec: output.durationSec,
+    kieCredits: task.kieCredits,
+  })
+}
+
+/**
  * Reconcile a stuck KIE job. Polls the upstream task once via the right
  * `pollX` for the row's `provider_kind`, then:
  *   - on success: forwards the result URLs to `finalizeJobWithMedia` so
@@ -481,6 +543,11 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
   // never reaches the NOT_GENERIC_RECOVERABLE bump it is listed in.
   const unitRecover = unitRecoverOf(row.job_type)
   if (unitRecover) return reconcileKieUnitJob(row, unitRecover, opts)
+
+  // A transcription's result is text, not media: recovered through the worker's
+  // own mapping (only Nemotron saves a KIE task id on this job type), and never
+  // through the NOT_GENERIC_RECOVERABLE bump it is listed in.
+  if (row.job_type === "transcribe") return reconcileKieTranscribeJob(row, opts)
 
   let result: Awaited<ReturnType<typeof singlePoll>>
   try {

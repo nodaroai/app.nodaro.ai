@@ -1760,12 +1760,14 @@ export function resolveMusicProvider(value: unknown): MusicProvider {
  * (the canvas picker re-offered the two Replicate lanes in #768 while this enum
  * still hid them, so a single-node Run on Whisper 400'd where the same node in a
  * workflow Run worked). `elevenlabs-stt` stays FIRST: several call sites take
- * "the first enabled word-capable provider" from this order.
+ * "the first enabled word-capable provider" from this order. A new engine goes
+ * at the END (Nemotron 3.5 Transcribe, 2026-11-12), so that answer never moves.
  */
 export const TRANSCRIBE_PROVIDERS = [
   "elevenlabs-stt",
   "whisper",
   "incredibly-fast-whisper",
+  "nemotron-3-5-transcribe",
 ] as const
 export type TranscribeProvider = typeof TRANSCRIBE_PROVIDERS[number]
 
@@ -1781,6 +1783,7 @@ export const TRANSCRIBE_LANES = [
   "whisper",
   "incredibly-fast-whisper",
   "elevenlabs-stt",
+  "nemotron-3-5-transcribe",
 ] as const
 export type TranscribeLane = typeof TRANSCRIBE_LANES[number]
 
@@ -1788,6 +1791,22 @@ export type TranscribeLane = typeof TRANSCRIBE_LANES[number]
 // provider a caller can name has a capability row below.
 const _TRANSCRIBE_PROVIDERS_ARE_LANES: readonly TranscribeLane[] = TRANSCRIBE_PROVIDERS
 void _TRANSCRIBE_PROVIDERS_ARE_LANES
+
+/**
+ * The lanes Add Captions may transcribe on (its `transcribe_provider`, on the
+ * route, MCP `add_captions` and the SDK's `media.addCaptions`). Add Captions
+ * charges its own flat render price (`add-captions`, `add-captions:kinetic`)
+ * and reserves nothing for the transcription it runs inside, so a lane priced
+ * by the file's length (Nemotron 3.5 Transcribe, per minute) is not one of
+ * them: it would run unpriced inside the render. Kept to the lanes it offered
+ * before Nemotron (2026-11-12); widening it is a pricing decision, not a sync.
+ */
+export const CAPTION_TRANSCRIBE_LANES = [
+  "whisper",
+  "incredibly-fast-whisper",
+  "elevenlabs-stt",
+] as const satisfies readonly TranscribeLane[]
+export type CaptionTranscribeLane = typeof CAPTION_TRANSCRIBE_LANES[number]
 
 /**
  * What each transcription lane can actually DO. Single source of truth — never
@@ -1800,11 +1819,44 @@ void _TRANSCRIBE_PROVIDERS_ARE_LANES
  *    for word timings yields an empty array, never an error.
  *  - `incredibly-fast-whisper` — yes, via `timestamp: "word"`.
  *  - `elevenlabs-stt` (direct Scribe) — always word-level, flag or not.
+ *  - `nemotron-3-5-transcribe` (KIE) — yes, with a speaker per word, via
+ *    `timestamps: true` (transcription only: never with a translation).
+ *
+ * `translation`: can the lane translate the speech instead of transcribing it
+ * (`targetLanguage`)? Only Nemotron 3.5 Transcribe, to or from English, and
+ * never together with word timings (KIE refuses the pair).
  */
-export const TRANSCRIBE_PROVIDER_CAPABILITIES: Record<TranscribeLane, { wordTimestamps: boolean }> = {
-  "whisper": { wordTimestamps: false },
-  "incredibly-fast-whisper": { wordTimestamps: true },
-  "elevenlabs-stt": { wordTimestamps: true },
+export const TRANSCRIBE_PROVIDER_CAPABILITIES: Record<TranscribeLane, { wordTimestamps: boolean; translation: boolean }> = {
+  "whisper": { wordTimestamps: false, translation: false },
+  "incredibly-fast-whisper": { wordTimestamps: true, translation: false },
+  "elevenlabs-stt": { wordTimestamps: true, translation: false },
+  "nemotron-3-5-transcribe": { wordTimestamps: true, translation: true },
+}
+
+/**
+ * The languages Nemotron 3.5 Transcribe translates INTO (KIE's
+ * `target_language` enum, ISO 639-1). Translation is supported to or from
+ * English: other speech into `en`, or English speech into any other listed
+ * language. Fewer than the 40 it transcribes.
+ */
+export const TRANSCRIBE_TARGET_LANGUAGES = [
+  "en", "zh", "ja", "ko", "fr", "de", "es", "pt", "it", "ru", "nl", "pl", "cs", "sk", "hi", "bg",
+  "hr", "da", "et", "fi", "hu", "lv", "lt", "ro", "sl", "sv", "th", "uk", "ar", "el", "he", "mt",
+] as const
+export type TranscribeTargetLanguage = typeof TRANSCRIBE_TARGET_LANGUAGES[number]
+
+/** The lanes that can translate, in declaration order. */
+export function transcribeProvidersWithTranslation(): TranscribeLane[] {
+  return TRANSCRIBE_LANES.filter((p) => TRANSCRIBE_PROVIDER_CAPABILITIES[p].translation)
+}
+
+/**
+ * Capability question for a lane id from UNTRUSTED data (node data, an
+ * imported workflow, a wire body): an unknown lane answers `false`.
+ */
+export function transcribeLaneSupportsTranslation(lane: string | null | undefined): boolean {
+  if (!lane) return false
+  return TRANSCRIBE_PROVIDER_CAPABILITIES[lane as TranscribeLane]?.translation === true
 }
 
 /** The lanes that can honour a word-timestamps request, in declaration order. */

@@ -7633,13 +7633,14 @@ it with `403` before the job is created, unless the request comes through a
 key or an agent whose account holds a standing authorization
 (`contentRights.authorize()`). A direct file link needs none.
 
-Three engines are accepted:
+Four engines are accepted:
 
 | `provider` | Word timings | Notes |
 |------------|--------------|-------|
 | `"elevenlabs-stt"` | ✓ always | Scribe — word-level flag or not, and the only lane that honours `diarize` and `tagAudioEvents` |
 | `"incredibly-fast-whisper"` | ✓ with `wordTimestamps: true` | ONLY when asked — without the flag the job succeeds and is charged, with phrase `segments` and an empty `words` list |
 | `"whisper"` | ✗ | phrase segments only; `wordTimestamps: true` is rejected with `400 validation_error`, before any credit is spent |
+| `"nemotron-3-5-transcribe"` | ✓ with `wordTimestamps: true` | NVIDIA; detects the language itself (`language` is not used), a `speaker` per word. The one engine that translates: `targetLanguage` (to or from English) returns a translation, with no word timings — beside `wordTimestamps: true`, or on another engine, it is a `400 validation_error`. Priced per started minute of the audio: measured first, charged for the length the model decoded; a direct https file link up to 60 minutes and 200 MB |
 
 **Omitting `provider`** still falls back to the legacy `whisper` lane, so
 `wordTimestamps: true` with no `provider` earns the same `400`. Name
