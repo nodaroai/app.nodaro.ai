@@ -907,10 +907,56 @@ export function pricedVideoSelection(opts: {
  * "wan-animate-move" (480p default), "wan-animate-move:580p", "wan-animate-move:720p"
  *
  * @param provider - Motion control provider key ("kling" for 2.6, "kling-3.0", "wan-animate-move", "wan-animate-replace")
- * @param resolution - "720p" or "1080p" (Kling), "480p" or "580p" or "720p" (Wan Animate)
+ * @param resolution - "720p" or "1080p" (Kling), "480p" or "580p" or "720p" (Wan Animate); a size the
+ *   model does not have is priced as the size it runs at (`motionTransferResolution`: Wan Animate's 1080p as 720p)
  * @param videoDuration - Reference video duration in seconds (defaults to 10s, unused for Wan Animate)
  */
 export function buildMotionCreditModelIdentifier(
+  provider: string,
+  resolution: string,
+  videoDuration?: number,
+): string {
+  return motionCreditIdentifier(provider, motionTransferResolution(provider, resolution).resolution, videoDuration)
+}
+
+/** The catalog model a Motion Transfer option runs: the base of the id it is billed under. */
+function motionModelOf(provider: string): string {
+  return motionCreditIdentifier(provider, "720p").split(":")[0]!
+}
+
+/**
+ * Motion models still SENT at a size their catalog entry does not list, as
+ * before Wan Animate had entries: Kling 2.6 and Kling 3.0 Motion Control
+ * (720p and 1080p). Their price is the same either way (any size but 1080p is
+ * charged on the 720p rows), and Kling 3.0's provider already sends such a
+ * size as 720p; whether Kling 2.6 should too is not decided. Only shrinks.
+ */
+const MOTION_MODELS_SENT_AS_NAMED: ReadonlySet<string> = new Set(["motion-transfer", "kling-3.0-motion"])
+
+/** The size a Motion Transfer run is sent and charged at, and what moved. */
+export interface MotionTransferResolution {
+  resolution: string
+  /** Empty when the size it names is the one it runs at. */
+  adjustments: ModelInputAdjustment[]
+}
+
+/**
+ * The size a Motion Transfer run is sent and charged at (decided 2026-11-12):
+ * the size it names, held to the catalog entry of the model its option runs
+ * (`normalizeModelInput`), so a size that model does not have moves to the
+ * entry's `defaultResolution` — a Wan Animate request at 1080p runs, and is
+ * charged, as 720p. The route, the workflow build, the MCP workflow writes and
+ * every price (through `buildMotionCreditModelIdentifier`) read this one rule.
+ */
+export function motionTransferResolution(provider: string, resolution: string): MotionTransferResolution {
+  const model = motionModelOf(provider)
+  if (MOTION_MODELS_SENT_AS_NAMED.has(model)) return { resolution, adjustments: [] }
+  const normalized = normalizeModelInput(model, { resolution })
+  if (normalized.resolution === undefined) return { resolution, adjustments: [] }
+  return { resolution: normalized.resolution, adjustments: normalized.adjustments }
+}
+
+function motionCreditIdentifier(
   provider: string,
   resolution: string,
   videoDuration?: number,

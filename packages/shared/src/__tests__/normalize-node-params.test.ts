@@ -129,3 +129,28 @@ describe("normalizeNodeModelParams", () => {
     expect(second.adjustments).toEqual([])
   })
 })
+
+describe("normalizeNodeModelParams — Motion Transfer (decided 2026-11-12)", () => {
+  it("a Wan Animate node at a size it does not have is written at 720p, the size it runs at", () => {
+    const { nodes, adjustments } = normalizeNodeModelParams([
+      { id: "m1", type: "motion-transfer", data: { provider: "wan-animate-move", resolution: "1080p", prompt: "dance" } },
+    ])
+    expect(nodes[0]!.data).toEqual({ provider: "wan-animate-move", resolution: "720p", prompt: "dance" })
+    expect(adjustments.map(({ nodeId, provider, field, from, to }) => ({ nodeId, provider, field, from, to }))).toEqual([
+      { nodeId: "m1", provider: "wan-animate-move", field: "resolution", from: "1080p", to: "720p" },
+    ])
+  })
+
+  it("leaves a Wan Animate size it has, an unset size, and every Kling node as it came", () => {
+    const input = [
+      { id: "a", type: "motion-transfer", data: { provider: "wan-animate-replace", resolution: "580p" } },
+      { id: "b", type: "motion-transfer", data: { provider: "wan-animate-replace" } },
+      { id: "c", type: "motion-transfer", data: { provider: "kling", resolution: "480p" } },
+      { id: "d", type: "motion-transfer", data: { resolution: "580p" } },
+      { id: "e", type: "motion-transfer", data: { provider: "kling-3.0", resolution: "1080p" } },
+    ]
+    const { nodes, adjustments } = normalizeNodeModelParams(input)
+    expect(adjustments).toEqual([])
+    nodes.forEach((n, i) => expect(n).toBe(input[i]))
+  })
+})

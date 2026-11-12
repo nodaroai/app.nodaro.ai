@@ -21,7 +21,7 @@
  */
 
 import { autoAspectNeedsSourceImage, normalizeModelInput, type ModelInputAdjustment } from "./model-catalog.js"
-import { imageGenAutoAspectNeedsSourceImage } from "./credit-identifiers.js"
+import { imageGenAutoAspectNeedsSourceImage, motionTransferResolution } from "./credit-identifiers.js"
 import { normalizeVideoUpscaleResolution, VIDEO_UPSCALE_RESOLUTIONS, videoUpscaleResolutionsFor } from "./video-upscale-params.js"
 
 /**
@@ -142,6 +142,7 @@ export function normalizeNodeModelParams<T extends NodeLike>(
   const out = nodes.map((node) => {
     const type = typeof node.type === "string" ? node.type : ""
     if (type === "video-upscale") return normalizeVideoUpscaleNode(node, adjustments)
+    if (type === "motion-transfer") return normalizeMotionTransferNode(node, adjustments)
     if (!MODEL_PARAM_NODE_TYPES.has(type)) return node
 
     const data = node.data
@@ -225,6 +226,25 @@ function normalizeVideoUpscaleNode<T extends NodeLike>(node: T, adjustments: Nod
   const nodeId = typeof node.id === "string" ? node.id : "(unknown node)"
   if (normalized.adjustment) adjustments.push({ ...normalized.adjustment, nodeId, provider })
   return { ...node, data: { ...d, targetResolution: normalized.targetResolution } }
+}
+
+/**
+ * A Motion Transfer node: its `resolution` held to the size its model runs at
+ * (`motionTransferResolution`: a Wan Animate node at 1080p runs as 720p), the
+ * same rule its run is sent and charged by. Only that key is rewritten, and
+ * only when the rule moves it; an unset size is left for the run's default.
+ */
+function normalizeMotionTransferNode<T extends NodeLike>(node: T, adjustments: NodeParamAdjustment[]): T {
+  const data = node.data
+  if (!data || typeof data !== "object" || Array.isArray(data)) return node
+  const d = data as Record<string, unknown>
+  if (typeof d.resolution !== "string" || d.resolution === "") return node
+  const provider = typeof d.provider === "string" && d.provider !== "" ? d.provider : "kling"
+  const sized = motionTransferResolution(provider, d.resolution)
+  if (sized.resolution === d.resolution) return node
+  const nodeId = typeof node.id === "string" ? node.id : "(unknown node)"
+  for (const adj of sized.adjustments) adjustments.push({ ...adj, nodeId, provider })
+  return { ...node, data: { ...d, resolution: sized.resolution } }
 }
 
 /** One-line-per-change summary, for surfacing back to an agent or a log. */

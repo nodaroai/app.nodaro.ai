@@ -61,6 +61,7 @@ import {
 } from "@nodaro/shared/model-catalog"
 import { TOPAZ_VIDEO_FPS_CHOICES, TOPAZ_VIDEO_RESOLUTIONS, clampTopazVideoFps, isTopazVideoResolution, NODARO_VIDEO_UPSCALE_PROVIDER, type TopazVideoResolution } from "@nodaro/shared/models"
 import { nodaroVideoUpscaleTierOf } from "@nodaro/render-rules"
+import { motionTransferShownSize, motionTransferSizes, motionTransferSnap } from "@/lib/motion-transfer-sizes"
 import { TOPAZ_VIDEO_RESOLUTION_LABELS, VIDEO_UPSCALE_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
 import { nodeStartFrameOnlyProblem, startFrameOnlyText } from "@/lib/video-start-frame-only"
 import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
@@ -2060,20 +2061,14 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
     return () => { video.onloadedmetadata = null; video.src = "" }
   }, [connectedVideoInfo])
 
-  // Fail-safe (Provider Enum Sync step 12b): when the provider changes, snap a
-  // stale resolution to a valid option for the NEW provider. wan-animate
-  // exposes 480p/580p/720p; kling exposes 720p/1080p. Without this, a value set
-  // under one provider (e.g. 1080p on Kling) persists after switching to
-  // wan-animate — the dropdown hides it but the stale value is still forwarded.
-  // The route enum is the union of both sets so it won't 400, but an
-  // unsupported resolution would otherwise reach the model. Mirrors
-  // ImageToVideoConfig / LipSyncConfig.
+  // Fail-safe (Provider Enum Sync step 12b): when the provider changes, a
+  // stale size the new model does not offer moves to the size the server would
+  // run it at (Wan Animate's 1080p → 720p), from the catalog and the shared
+  // size rule (lib/motion-transfer-sizes.ts). Mirrors ImageToVideoConfig /
+  // LipSyncConfig.
   useEffect(() => {
-    const isWanAnimate = provider === "wan-animate-move" || provider === "wan-animate-replace"
-    const valid: readonly string[] = isWanAnimate ? ["480p", "580p", "720p"] : ["720p", "1080p"]
-    if (data.resolution && !valid.includes(data.resolution)) {
-      onUpdate({ resolution: valid[0] as MotionTransferData["resolution"] })
-    }
+    const snapped = motionTransferSnap(provider, data.resolution)
+    if (snapped !== undefined) onUpdate({ resolution: snapped as MotionTransferData["resolution"] })
   }, [provider]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -2174,24 +2169,16 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
         </MappableField>
       )}
       <MappableField field="resolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        {/* The size the run is sent and priced at: an unset size shows the run's fill (720p). */}
         <Select
-          value={data.resolution || (provider === "wan-animate-move" || provider === "wan-animate-replace" ? "480p" : "720p")}
+          value={motionTransferShownSize(provider, data.resolution)}
           onValueChange={(v) => onUpdate({ resolution: v as MotionTransferData["resolution"] })}
         >
           <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
           <SelectContent>
-            {provider === "wan-animate-move" || provider === "wan-animate-replace" ? (
-              <>
-                <SelectItem value="480p">480p</SelectItem>
-                <SelectItem value="580p">580p</SelectItem>
-                <SelectItem value="720p">720p</SelectItem>
-              </>
-            ) : (
-              <>
-                <SelectItem value="720p">720p</SelectItem>
-                <SelectItem value="1080p">1080p</SelectItem>
-              </>
-            )}
+            {motionTransferSizes(provider).map((size) => (
+              <SelectItem key={size} value={size}>{size}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </MappableField>

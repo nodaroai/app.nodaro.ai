@@ -111,6 +111,7 @@ import {
   resolveImageGenCreditIdentifier,
   buildVideoCreditModelIdentifier,
   buildMotionCreditModelIdentifier,
+  motionTransferResolution,
   buildLipSyncCreditId,
   isPerSecondLipSyncProvider,
   resolveAiAvatarCreditId,
@@ -5786,7 +5787,8 @@ function buildPayloadOf(
 
     case "motion-transfer": {
       const mtProvider = (data.provider as string) ?? "kling"
-      const mtResolution = (data.resolution as string) ?? "720p"
+      // The size the model runs at, sent and charged alike, as on the route.
+      const mtResolution = motionTransferResolution(mtProvider, (data.resolution as string) ?? "720p").resolution
       const mtVideoDuration = data.videoDuration as number | undefined
       const mtModelId = buildMotionCreditModelIdentifier(mtProvider, mtResolution, mtVideoDuration)
       return {

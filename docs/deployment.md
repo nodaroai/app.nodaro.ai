@@ -836,11 +836,15 @@ optional; each array empty = "keep the default"):
   A model allow list withholds the models `GET /v1/models` lists (and the
   LLMs). A model it does not list is not withheld by omission: withhold its
   node with `nodes.allow` / `nodes.deny`. FLUX Fill Pro (`flux-fill`, a
-  Modify Image and Image to Image model) is listed, so an allow list that
-  leaves it out refuses it on `/v1/image-to-image` and in workflow runs
+  Modify Image and Image to Image model) and Wan Animate Move and Replace
+  (`wan-animate-move`, `wan-animate-replace`, Motion Transfer models) are
+  listed, so an allow list that leaves one out refuses it on its route
+  (`/v1/image-to-image`, `/v1/motion-transfer`) and in workflow runs
   (`403 model_not_available`), while the node's other models keep running.
-  A models override saved in Admin → Availability before FLUX Fill Pro was
-  listed does not tick it, so it stays off there until an admin ticks it.
+  A models override saved in Admin → Availability before a model was listed
+  does not tick a model listed later, so it stays off there until an admin
+  ticks it. The models listed later so far: `flux-fill`, `wan-animate-move`
+  and `wan-animate-replace`.
 
   A model restriction holds on the model a request RUNS on, not only on the
   one it names. A request that names no model is judged as the default its
@@ -895,7 +899,7 @@ optional; each array empty = "keep the default"):
   run, as the run does: Generate Music's MiniMax engine is offered even where
   the MiniMax video model is withheld, and Motion Transfer's Kling options
   follow the motion models they run (Kling 2.6 is `motion-transfer`, Kling 3.0
-  `kling-3.0-motion`). Some menus list their models by hand or by values that
+  `kling-3.0-motion`; the Wan Animate options are the models of the same id). Some menus list their models by hand or by values that
   are not model ids — Suno's versions,
   the voice changers, Video Upscale, Transcribe, Text to
   Audio, Voice Design, Generate Music, Reference Board and the Generate Video

@@ -150,6 +150,8 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Kling 4.0 Flash | Kuaishou | Standard | 242<!-- credits: kling-4-flash --> | i2v, t2v | Kling 4.0 Flash — the faster, lower-cost Kling 4.0 at 720p, up to 20s with native audio; a start frame, reference images, videos and characters (each can carry a voice clip), or plain text. |
 | LTX 2.3 Pro | Lightricks | Standard | 264<!-- credits: ltx-2.3-pro --> | i2v, t2v | Lightricks LTX 2.3 Pro — text/image/audio→video up to 4K, 6/8/10s, end-frame interpolation. |
 | Kling 3 Omni | Kuaishou | Standard | 275<!-- credits: kling-3-omni --> | i2v | Kling 3 Omni via Replicate — 3-15s, 720p/1080p, end frame + reference images, native audio. |
+| Wan Animate Move | Alibaba | Standard | 281<!-- credits: wan-animate-move --> | motion-transfer | Wan 2.2 Animate: moves the subject of a still image with the motion of a driving video. |
+| Wan Animate Replace | Alibaba | Standard | 281<!-- credits: wan-animate-replace --> | motion-transfer | Wan 2.2 Animate: replaces the person in a driving video with the subject of a still image, keeping the motion. |
 | Gemini Omni Flash | Google | Standard | 297<!-- credits: gemini-omni-flash --> | i2v, t2v | Google Gemini Omni Flash — faster/cheaper Omni tier: multimodal video with native audio, text/image-to-video + video-edit. |
 | Kling 2.6 | Kuaishou | Standard | 308<!-- credits: kling --> | i2v, t2v | Kling 2.6 I2V — strong motion realism. 5s/10s, optional native audio. |
 | Kling Avatar Standard | Kuaishou | Standard | 308<!-- credits: kling-avatar --> | lip-sync | Lip-sync a still portrait to driving audio. Standard quality. |

@@ -29,6 +29,8 @@ export {
   videoGenerationCreditId,
   pricedVideoSelection,
   buildMotionCreditModelIdentifier,
+  motionTransferResolution,
+  type MotionTransferResolution,
   speedRampCreditId,
   applyEdlCreditId,
   speakerViewCreditId,

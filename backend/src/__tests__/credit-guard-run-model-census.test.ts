@@ -650,12 +650,10 @@ function optionCensusOf(name: string, url: string, site: string, model: CreditGu
  * deployment's allow list cannot withhold on a route it cannot withhold either.
  */
 const LIP_SYNC_AWAITING = "LatentSync, Wav2Lip, VideoReTalking, SadTalker, HeyGen Lipsync Precision and Lipsync 2 Pro run beside its catalog models and have no catalog entry. An entry needs each one's maker: two are not makers in MODEL_MAKERS yet, and Wav2Lip is a research release. Awaiting that decision (2026-11-12)"
-const MOTION_AWAITING = "Wan Animate Move and Replace run beside the catalog's Kling motion models and have no catalog entry. An entry is straightforward (Alibaba, motion transfer, 480p / 580p / 720p on its existing flat rows; nothing normalizes a motion-transfer request), and was left out only because a models override saved before a model is listed withholds it (pinned for FLUX Fill Pro in payload-builder-flux-fill-restriction.test.ts): pending that decision (2026-11-12)"
 const SUNO_AWAITING = "Suno V4_5PLUS, V4_5ALL and V4_5 run beside the catalog's Suno versions and have no catalog entry; each is charged under its operation's row (`sunoCreditType`), so an entry needs a price row of its own, or one it is not charged under. Awaiting that decision (2026-11-12)"
 const LORA_AWAITING = "`flux-lora-character` (a trained character's Flux LoRA, Cloud, behind CHARACTER_LORA_ROUTING_ENABLED) is a literal of the body's `provider` and what `_internalLora` runs, and has no catalog entry. Awaiting a decision (2026-11-12) on naming it or judging it as the model the request names"
 const MIXED_AWAITING_DECISION: Readonly<Record<string, string>> = {
   "POST /v1/lip-sync": LIP_SYNC_AWAITING,
-  "POST /v1/motion-transfer": MOTION_AWAITING,
   "POST /v1/suno/generate": SUNO_AWAITING,
   "POST /v1/suno/cover": SUNO_AWAITING,
   "POST /v1/suno/extend": SUNO_AWAITING,
@@ -721,6 +719,10 @@ describe("every option a credit-guarded route accepts runs a model a restriction
     const i2i = byName("POST /v1/image-to-image")!
     expect(i2i.gateable).toContain("flux-fill")
     expect(i2i.outside.size).toBe(0)
+    // Wan Animate on /v1/motion-transfer, beside the Kling motion models (decided 2026-11-12).
+    const motion = byName("POST /v1/motion-transfer")!
+    expect([...motion.gateable]).toEqual(expect.arrayContaining(["wan-animate-move", "wan-animate-replace", "motion-transfer", "kling-3.0-motion"]))
+    expect(motion.outside.size).toBe(0)
     // A mixed route is visible to it.
     expect([...byName("POST /v1/lip-sync")!.outside.keys()]).toContain("latentsync")
   })

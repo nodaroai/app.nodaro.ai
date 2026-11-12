@@ -4,6 +4,7 @@ import {
   resolveNormalizedImageGen,
   buildVideoCreditModelIdentifier,
   buildMotionCreditModelIdentifier,
+  motionTransferResolution,
 } from "../credit-identifiers.js"
 
 // ---------------------------------------------------------------------------
@@ -792,6 +793,34 @@ describe("buildMotionCreditModelIdentifier", () => {
       expect(buildMotionCreditModelIdentifier("wan-animate-replace", "720p")).toBe(
         "wan-animate-replace:720p",
       )
+    })
+  })
+
+  // --- A size the model does not have (decided 2026-11-12) ---
+  describe("a size the model does not have", () => {
+    it("Wan Animate at 1080p runs, and is priced, as 720p, and says so", () => {
+      for (const provider of ["wan-animate-move", "wan-animate-replace"]) {
+        expect(buildMotionCreditModelIdentifier(provider, "1080p")).toBe(`${provider}:720p`)
+        const sized = motionTransferResolution(provider, "1080p")
+        expect(sized.resolution).toBe("720p")
+        expect(sized.adjustments.map(({ field, from, to }) => ({ field, from, to }))).toEqual([{ field: "resolution", from: "1080p", to: "720p" }])
+      }
+    })
+
+    it("Wan Animate's own sizes are kept, with nothing to say", () => {
+      for (const size of ["480p", "580p", "720p"]) {
+        expect(motionTransferResolution("wan-animate-replace", size)).toEqual({ resolution: size, adjustments: [] })
+      }
+    })
+
+    it("the Kling motion models are sent the size they name, as before (their price is the same either way)", () => {
+      for (const provider of ["kling", "kling-3.0"]) {
+        for (const size of ["480p", "580p", "720p", "1080p"]) {
+          expect(motionTransferResolution(provider, size), `${provider} ${size}`).toEqual({ resolution: size, adjustments: [] })
+        }
+      }
+      expect(buildMotionCreditModelIdentifier("kling", "480p")).toBe("motion-transfer:10s")
+      expect(buildMotionCreditModelIdentifier("kling-3.0", "1080p")).toBe("kling-3.0-motion:1080p:10s")
     })
   })
 

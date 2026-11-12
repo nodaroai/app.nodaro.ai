@@ -29,7 +29,7 @@ import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PR
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
 import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
-import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, buildVideoAnalysisCreditId, buildVideoAuditCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared/credits"
+import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, buildVideoAnalysisCreditId, buildVideoAuditCreditId, isPerSecondLipSyncProvider, motionTransferResolution } from "@nodaro/shared/credits"
 import { VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_CHARACTER_REFS_WIRE_MAX, VIDEO_CHARACTER_EXTRA_IMAGES_MAX, videoCharacterRefProviders } from "@nodaro/shared/video"
 import { readPromptAffixes } from "@nodaro/shared/nodes"
 import { VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_COLORMAPS, VIDEO_DEPTH_RESOLUTIONS } from "@nodaro/shared/media"
@@ -2730,7 +2730,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       const provider = (MOTION_TRANSFER_PROVIDERS as readonly string[]).includes(mappedProvider)
         ? mappedProvider
         : "kling"
-      const resolution = args.resolution ?? "720p"
+      // The size the model runs at (a Wan Animate run at 1080p runs as 720p),
+      // as the route will send and charge it, so the job's card says so too.
+      const resolution = motionTransferResolution(provider, args.resolution ?? "720p").resolution
       const payload: Record<string, unknown> = {
         imageUrl,
         videoUrl,
