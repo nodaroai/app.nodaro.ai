@@ -22,6 +22,7 @@ import { randomBytes } from "node:crypto"
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { hasAdmin, hasOrganizations } from "../lib/config.js"
 import { hashApiToken, invalidateApiTokenCache, resolveApiToken } from "../lib/api-token-resolver.js"
 import { ACCESS_BLOCKED_BODY, isUserBlocked } from "../lib/access-blocks.js"
@@ -827,6 +828,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
           user_id: resolved.userId,
           status: "pending",
           trigger_type: "api",
+          runtime_env: getRuntimeEnv(),
           trigger_data: { apiTokenId: resolved.id },
           // P14/W7: the hook-resolved payer's pair (personal adds nothing).
           ...billingPairColumns(req.billingContext),

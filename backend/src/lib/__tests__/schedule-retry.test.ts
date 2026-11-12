@@ -123,6 +123,19 @@ describe("scheduleRetryDue — a failed scheduled run is retried after the wait,
     expect(decide(failedFire({ completed_at: "not a date" }))).toEqual({ skip: "no_end_time" })
   })
 
+  it("(c) a run that never started counts its window from when it was created: a sweep that failed it weeks later does not make it new", () => {
+    const weeksAgo = new Date(NOW.getTime() - 21 * 24 * 60 * 60_000).toISOString()
+    // Failed 45 minutes ago by the never-started sweep (reconcile/never-started-executions.ts),
+    // but the fire is three weeks old: replaying it now would run a stale window.
+    expect(decide(failedFire({ started_at: null, created_at: weeksAgo }))).toEqual({ skip: "too_old" })
+    // Created 5 hours ago and failed by the sweep 45 minutes ago: retried like any failure.
+    expect(decide(failedFire({ started_at: null, created_at: minutesAgo(300) }))).toMatchObject({ fire: { stamp: { attempt: 1 } } })
+    // Still waits afterMinutes from the failure itself.
+    expect(decide(failedFire({ started_at: null, created_at: minutesAgo(300), completed_at: minutesAgo(10) }))).toEqual({ skip: "too_soon" })
+    // A run that started counts from when it ended, as before.
+    expect(decide(failedFire({ started_at: minutesAgo(60), created_at: weeksAgo }))).toMatchObject({ fire: {} })
+  })
+
   it("(d) the chain gets at most maxAttempts retries — the original run is not an attempt", () => {
     expect(decide(failedRetry(3))).toEqual({ skip: "attempts_exhausted" })
     expect(decide(failedRetry(1), { config: { retry: { ...RETRY, maxAttempts: 1 } } })).toEqual({ skip: "attempts_exhausted" })

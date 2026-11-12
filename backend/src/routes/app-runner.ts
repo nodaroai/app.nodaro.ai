@@ -26,6 +26,7 @@ import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { IN_FLIGHT_JOB_STATUSES } from "../lib/job-status.js"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { isUserBlocked } from "../lib/access-blocks.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { checkPayerCanAfford, resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
@@ -731,6 +732,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
           user_id: req.userId,
           status: "pending",
           trigger_type: "manual",
+          runtime_env: getRuntimeEnv(),
           // The run it re-runs (lib/app-run-stamp.ts): the run's pointer moves
           // to this execution, and the stamp keeps the earlier one findable.
           trigger_data: appRunStamp(runId),

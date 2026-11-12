@@ -43,6 +43,7 @@ import { filterCloneNodes } from "@nodaro/shared/workflow"
 import { CONTINUATION_SUBSET_REQUIRED, isPreviewHoldingType, withRunOverrides } from "@nodaro/shared/nodes"
 import { calculateMonetizationMarkup } from "@nodaro/shared/credits"
 import { supabase } from "../lib/supabase.js"
+import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { isUserBlocked } from "../lib/access-blocks.js"
 import { hasCredits } from "../lib/config.js"
@@ -335,6 +336,7 @@ export async function appRunResumeRoutes(app: FastifyInstance) {
           user_id: userId,
           status: "pending",
           trigger_type: "app_run",
+          runtime_env: getRuntimeEnv(),
           trigger_data: appRunResumeStamp(runId, source.id),
           ...billingPairColumns(billingContext),
         },

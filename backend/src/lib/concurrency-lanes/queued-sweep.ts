@@ -50,6 +50,7 @@
 // (lane_env, lane_queued_at) over its waiting rows (migrations 569 and 573).
 import { Job, type Queue } from "bullmq"
 import { isUserQuietStopped } from "../access-blocks.js"
+import { BullCallTimeoutError, bounded } from "../bull-call-timeout.js"
 import { hasCredits } from "../config.js"
 import { refundJobHoldsConfirmed } from "../credits-job-lifecycle.js"
 import { TERMINAL_JOB_STATUSES } from "../job-status.js"
@@ -79,9 +80,6 @@ export const QUEUED_SWEEP_MAX_PAGES = 20
 
 /** A line head not seen for this long has its row read (2 × the park backstop). */
 export const LANE_GHOST_AGE_MS = 2 * LANE_PARK_BACKSTOP_MS
-
-/** The most one BullMQ call may take before the pass reads Redis as down. */
-const BULL_CALL_TIMEOUT_MS = 5_000
 
 /** The tables the sweep reads: every table whose rows park. */
 const SWEPT_TABLES: readonly LaneTable[] = ["jobs", "workflow_executions", "pipelines"]
@@ -140,25 +138,8 @@ export function setQueuedSweepTablesForTests(tables: readonly LaneTable[]): void
 }
 
 // ---------------------------------------------------------------- helpers
-
-/** BullMQ did not answer in time: Redis is unreachable for this pass. */
-class BullCallTimeoutError extends Error {
-  constructor(what: string) {
-    super(`BullMQ did not answer "${what}" within ${BULL_CALL_TIMEOUT_MS} ms`)
-    this.name = "BullCallTimeoutError"
-  }
-}
-
-/** `promise`, or a BullCallTimeoutError after BULL_CALL_TIMEOUT_MS (the BullMQ connection queues commands while Redis is down). */
-function bounded<T>(promise: Promise<T>, what: string): Promise<T> {
-  promise.catch(() => undefined)
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new BullCallTimeoutError(what)), BULL_CALL_TIMEOUT_MS)
-    timer.unref?.()
-  })
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
-}
+// A BullMQ call is wrapped in `bounded` (`../bull-call-timeout.ts`): one that
+// does not answer ends the pass's Redis work.
 
 interface Pass {
   now: number

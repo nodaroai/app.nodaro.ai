@@ -1099,6 +1099,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
           user_id: req.userId,
           status: "pending",
           trigger_type: mcpClient ? "mcp" : "manual",
+          runtime_env: getRuntimeEnv(),
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
           // A generation of a continue-from-failed lineage names the run it
           // continues and its lineage (and carries the lineage's node scope);
@@ -1427,7 +1428,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // Try workflow_executions first
     const { data: execution, error } = await supabase
       .from("workflow_executions")
-      .select("id, status")
+      .select("id, status, runtime_env")
       .eq("id", parsed.data.id)
       .eq("user_id", req.userId)
       .single()
@@ -1537,12 +1538,14 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // by the orchestrator, which sets completed_at once jobs settle.
     if (targetStatus === "cancelled") updates.completed_at = new Date().toISOString()
     // A row that was still `pending` never reached the orchestrator's claim
-    // write, so nothing has stamped its environment (migration 374) — yet
+    // write. Rows are stamped with the install that created them at insert,
+    // but a row written before that stamp carries none (migration 374) — yet
     // "stopping" IS a status the reconcile sweeps scan. Stamp it here, and
-    // ONLY here: a row an orchestrator already claimed owns its stamp, and
-    // overwriting it would hand a live execution to the wrong environment's
-    // sweep.
-    if (targetStatus === "stopping" && execution.status === "pending") {
+    // ONLY a `pending` row with no stamp: a stamped row belongs to the install
+    // that created or claimed it (its queue job lives in that install's
+    // Redis), and overwriting the stamp from another install's API would hand
+    // the run to the wrong environment's sweep.
+    if (targetStatus === "stopping" && execution.status === "pending" && execution.runtime_env == null) {
       updates.runtime_env = getRuntimeEnv()
     }
 

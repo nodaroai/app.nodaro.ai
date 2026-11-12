@@ -29,6 +29,9 @@ const { db, mockQueueAdd } = vi.hoisted(() => ({
   mockQueueAdd: vi.fn(async () => ({})),
 }))
 
+const settle = vi.hoisted(() => ({ failWaitingExecution: vi.fn(async (_id: string, _message: string) => true) }))
+vi.mock("@/lib/concurrency-lanes/run-failure.js", () => settle)
+
 vi.mock("@/lib/workflow-access.js", () => ({ canRunWorkflow: vi.fn(async () => true) }))
 vi.mock("@/lib/trigger-fire-refusal.js", () => ({
   recordTriggerFireRefusal: vi.fn(async () => undefined),
@@ -272,6 +275,60 @@ describe("checkScheduledTriggers — a tick fires only after it claims the tick"
     seed(PREVIOUS)
     await checkScheduledTriggers(NOW)
     expect((mockQueueAdd.mock.calls[0] as unknown as [string, Record<string, unknown>])[1]).not.toHaveProperty("cheapLanesOnly")
+  })
+
+  it("a queue that refuses the run settles the row it wrote as failed, and KEEPS the claim (that row holds the fire's key)", async () => {
+    seed(PREVIOUS, { interval: "1m", nodeId: "sched-node", executionCount: 4 })
+    mockQueueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+
+    await checkScheduledTriggers(NOW)
+
+    // The row was written, then failed through the run's own failure path —
+    // never left `pending`, which every later fire would read as "already running".
+    expect(db.insertAttempts).toHaveLength(1)
+    expect(settle.failWaitingExecution).toHaveBeenCalledTimes(1)
+    expect(settle.failWaitingExecution).toHaveBeenCalledWith("exec-1", expect.stringContaining("could not be queued"))
+    // Released, the claim would only collide with that key on the next due tick.
+    expect(db.trigger?.last_triggered_at).toBe(NOW.toISOString())
+    // A run that never ran is not counted against maxExecutions.
+    expect((db.trigger?.config as Record<string, unknown>).executionCount).toBe(4)
+  })
+
+  it("a refusal whose job reached the queue after all (the row already left `pending`) is a run: counted, claim kept", async () => {
+    seed(PREVIOUS, { interval: "1m", nodeId: "sched-node", executionCount: 4 })
+    mockQueueAdd.mockRejectedValueOnce(new Error("Command timed out"))
+    // The compare-and-set from `pending` matched nothing: an orchestrator claimed it.
+    settle.failWaitingExecution.mockResolvedValueOnce(false)
+
+    await checkScheduledTriggers(NOW)
+
+    expect(settle.failWaitingExecution).toHaveBeenCalledTimes(1)
+    expect(db.trigger?.last_triggered_at).toBe(NOW.toISOString())
+    expect((db.trigger?.config as Record<string, unknown>).executionCount).toBe(5)
+  })
+
+  it("a failure write that itself fails leaves the row to the never-started sweep, and keeps the claim", async () => {
+    seed(PREVIOUS, { interval: "1m", nodeId: "sched-node", executionCount: 4 })
+    mockQueueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+    settle.failWaitingExecution.mockRejectedValueOnce(new Error("updateExecutionWithRetry exhausted"))
+
+    await checkScheduledTriggers(NOW)
+
+    expect(db.trigger?.last_triggered_at).toBe(NOW.toISOString())
+    expect((db.trigger?.config as Record<string, unknown>).executionCount).toBe(4)
+  })
+
+  it("the run is created with the install that wrote it, so only this install's sweeps ever judge it", async () => {
+    const saved = process.env.RUNTIME_ENV
+    process.env.RUNTIME_ENV = "staging"
+    try {
+      seed(PREVIOUS)
+      await checkScheduledTriggers(NOW)
+      expect(db.insertAttempts[0]).toMatchObject({ status: "pending", runtime_env: "staging" })
+    } finally {
+      if (saved === undefined) delete process.env.RUNTIME_ENV
+      else process.env.RUNTIME_ENV = saved
+    }
   })
 
   it("a duplicate idempotency key keeps the claim: that tick already ran, and the schedule moves on instead of colliding every minute", async () => {

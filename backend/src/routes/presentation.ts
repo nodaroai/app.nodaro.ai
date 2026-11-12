@@ -14,6 +14,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { stripStudioTakeVoiceRecords } from "@nodaro/shared/pipeline"
 import { supabase } from "../lib/supabase.js"
+import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
@@ -433,6 +434,7 @@ export async function presentationRoutes(app: FastifyInstance) {
         user_id: req.userId,
         status: "pending",
         trigger_type: "manual",
+        runtime_env: getRuntimeEnv(),
         // P14/W7: the hook-resolved payer's pair (personal adds nothing).
         ...billingPairColumns(req.billingContext),
       })

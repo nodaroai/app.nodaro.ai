@@ -38,7 +38,6 @@
  *
  * See the stuck-execution prevention design for the broader picture.
  */
-import os from "node:os"
 import { supabase } from "../supabase.js"
 import { orchestrationQueue } from "../orchestration-queue.js"
 import { ORCHESTRATOR_ALIVE_STATES, ORCHESTRATOR_LOCK_MS } from "../orchestration-queue-config.js"
@@ -46,11 +45,13 @@ import { IN_FLIGHT_JOB_STATUSES } from "../job-status.js"
 import { reconcileNodeStatesFromJobs } from "./node-states.js"
 import { updateExecutionWithRetry } from "../execution-writes.js"
 import { redactProviderDetail } from "../provider-error-detail.js"
-import { getRuntimeEnv, scopeToRuntimeEnv } from "../runtime-env.js"
+import { scopeToRuntimeEnv } from "../runtime-env.js"
+import { processIdentity } from "./process-identity.js"
 import type { NodeExecutionState } from "../../services/workflow-engine/types.js"
 import { STALE_EXECUTION_THRESHOLD_MS, staleExecutionThresholdMs } from "../job-budget.js"
 import { executionBudgetExcessMs } from "../execution-budget.js"
 import { executionQueuedMs } from "../concurrency-lanes/execution-wait.js"
+import { sweepNeverStartedExecutions } from "./never-started-executions.js"
 
 /** Every queued-or-running BullMQ state for the orchestration queue — defined
  *  in the Redis-free leaf `../orchestration-queue-config.js` so
@@ -90,21 +91,6 @@ const BACKOFF_FROM_START_MS = 120_000
  */
 const BATCH_LIMIT = 500
 
-/**
- * Who this process is, for the two orphan-gate log lines below. The verdict
- * "no orchestrator job in queue" is only ever as true as the Redis THIS
- * process is holding, so a log line about it that doesn't name the process is
- * not diagnosable — which is exactly what happened on 2026-09-15: three live
- * production executions were marked orphaned and NO deployment that runs this
- * code had logged a tick, because `skipped` is (deliberately) not in the
- * tick-log gate and the owning environment's cron had simply skipped them.
- * Identifying the writer then took a log crawl across six containers and
- * still failed.
- */
-function processIdentity(): string {
-  return `${getRuntimeEnv()}/${process.env.RAILWAY_ENVIRONMENT_ID ?? os.hostname()}`
-}
-
 let intervalId: ReturnType<typeof setInterval> | null = null
 
 export function startWorkflowExecutionsReconcileCron(): void {
@@ -116,6 +102,13 @@ export function startWorkflowExecutionsReconcileCron(): void {
       await reconcileWorkflowExecutionsTick()
     } catch (err) {
       console.error("[reconcile/workflow-executions] tick failed:", err)
+    }
+    // The scan above sees only runs an orchestrator claimed. A run that was
+    // created but never started is settled here (never-started-executions.ts).
+    try {
+      await sweepNeverStartedExecutions()
+    } catch (err) {
+      console.error("[reconcile/never-started] tick failed:", err)
     }
   }, TICK_INTERVAL_MS)
 }

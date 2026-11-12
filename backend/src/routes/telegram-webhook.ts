@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { decryptToken } from "../services/social/encryption.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { uploadBufferToR2 } from "../lib/storage.js"
@@ -179,6 +180,7 @@ export async function telegramWebhookRoutes(app: FastifyInstance) {
           user_id: trigger.userId,
           status: "pending",
           trigger_type: "telegram",
+          runtime_env: getRuntimeEnv(),
           trigger_data: triggerData,
           ...billingPairColumns(billingContext),
         })

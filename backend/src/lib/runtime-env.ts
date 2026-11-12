@@ -11,9 +11,12 @@
  * 2m38s after it started, while its nodes were still progressing, and the
  * in-flight generation it had already paid for was never delivered).
  *
- * The fix: `workflow_executions.runtime_env` records which environment's
- * orchestrator claimed the row (migration 374), and every sweep scopes its
- * scan through `scopeToRuntimeEnv` below.
+ * The fix: `workflow_executions.runtime_env` records which environment owns
+ * the row (migration 374): every insert stamps the environment that created it
+ * (`lib/__tests__/workflow-execution-install-stamp.test.ts`), and the
+ * orchestrator's claim writes its own, which is the same one, since only that
+ * environment's queue holds the job. Every sweep scopes its scan through
+ * `scopeToRuntimeEnv` below.
  *
  * Deliberately Redis-free and import-free: the boot sweep in
  * `workers/orchestrator-worker.ts` and the cron in `lib/reconcile/` both
@@ -21,12 +24,13 @@
  */
 
 /**
- * The one environment that also reconciles LEGACY rows — those claimed
- * before migration 374, whose `runtime_env` is NULL. A legacy row can only
- * have been claimed by an older production or staging build; production is
- * where an abandoned row costs a user real money, and staging's stale legacy
- * rows are harmless, so production takes them. Both environments touching
- * them would reintroduce the exact cross-environment kill this module fixes.
+ * The one environment that also reconciles LEGACY rows, whose `runtime_env`
+ * is NULL: rows claimed before migration 374, and rows created `pending`
+ * before inserts carried the stamp and never claimed. A legacy row can only
+ * have come from an older production or staging build; production is where an
+ * abandoned row costs a user real money, and staging's stale legacy rows are
+ * harmless, so production takes them. Both environments touching them would
+ * reintroduce the exact cross-environment kill this module fixes.
  */
 export const PRODUCTION_RUNTIME_ENV = "production"
 

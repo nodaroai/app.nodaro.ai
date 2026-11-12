@@ -234,12 +234,13 @@ export async function checkScheduledTriggers(now: Date = new Date()): Promise<re
       })
 
       if (!created.ok) {
-        // A duplicate key means this previous fire already has its run: keep
-        // the claim, so the schedule moves on instead of colliding with that
-        // key every minute. Any other failure leaves the schedule as it was
-        // (the run never existed), so the next tick may retry — released only
-        // while the row still carries THIS claim.
-        if (!created.duplicate) {
+        // A row holding this fire's key (a duplicate: this previous fire
+        // already has its run; or the run this call wrote, failed because the
+        // queue refused it): keep the claim, so the schedule moves on instead
+        // of colliding with that key on its next due tick. No row at all
+        // leaves the schedule as it was, so a later tick may fire — released
+        // only while the row still carries THIS claim.
+        if (!created.keepClaim) {
           await releaseTick(trigger.id, claimedAt, previousLastTriggeredAt)
         }
         continue

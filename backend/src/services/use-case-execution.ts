@@ -14,6 +14,7 @@
  */
 import type { StoredInlineGraph } from "@nodaro/render-rules"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
+import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { payloadBillingContext, type BillingContext } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
@@ -101,6 +102,7 @@ export async function executeInlineGraph(p: ExecuteInlineGraphParams): Promise<E
         user_id: p.userId,
         status: "pending",
         trigger_type: "use_case",
+        runtime_env: getRuntimeEnv(),
         // The run it works for, written by the server alone (lib/use-case-outer-run.ts); none on a standalone run.
         ...(p.outerRunId ? { trigger_data: outerRunStamp(p.outerRunId) } : {}),
         ...inlineExecutionColumns(p.graph, p.wrapperJobId),
@@ -143,9 +145,10 @@ export async function executeInlineGraph(p: ExecuteInlineGraphParams): Promise<E
   try {
     await orchestrationQueue.add("workflow-execution", jobData, { jobId: result.row.id })
   } catch (err) {
-    // Never left `pending` with nothing queued: no reaper takes a pending row
-    // and the budget reads it as still dispatching. The caller fails the
-    // wrapper and refunds its fee on the rethrow.
+    // Never left `pending` with nothing queued: the never-started sweep takes
+    // such a row only after 4 hours (lib/reconcile/never-started-executions.ts),
+    // and until then the budget reads it as still dispatching. The caller
+    // fails the wrapper and refunds its fee on the rethrow.
     await updateExecutionWithRetry(result.row.id, {
       status: "failed",
       error_message: "The run could not be queued",

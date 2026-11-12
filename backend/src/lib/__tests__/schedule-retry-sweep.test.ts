@@ -26,6 +26,9 @@ const { db, mockQueueAdd } = vi.hoisted(() => ({
   mockQueueAdd: vi.fn(async () => ({})),
 }))
 
+const settle = vi.hoisted(() => ({ failWaitingExecution: vi.fn(async (_id: string, _message: string) => true) }))
+vi.mock("@/lib/concurrency-lanes/run-failure.js", () => settle)
+
 vi.mock("@/lib/workflow-access.js", () => ({ canRunWorkflow: vi.fn(async () => true) }))
 vi.mock("@/lib/trigger-fire-refusal.js", () => ({
   recordTriggerFireRefusal: vi.fn(async () => undefined),
@@ -276,6 +279,18 @@ describe("sweepScheduleRetries — a due failure is run again, the way the cron 
     expect(db.triggers[0]!.last_triggered_at).toBe(NOW.toISOString())
   })
 
+  it("a retry the queue refuses is settled as failed, never left pending, and its claim is kept", async () => {
+    db.triggers = [trigger()]
+    db.executions = [failedFire()]
+    mockQueueAdd.mockRejectedValueOnce(new Error("Connection is closed."))
+
+    await sweep()
+
+    expect(db.insertAttempts).toHaveLength(1)
+    expect(settle.failWaitingExecution).toHaveBeenCalledWith("exec-new-1", expect.stringContaining("could not be queued"))
+    expect(db.triggers[0]!.last_triggered_at).toBe(NOW.toISOString())
+  })
+
   it("a fire and a retry of the same trigger on the same tick never both insert — they serialize on the trigger's claim", async () => {
     // 12:00 matches the "every 2 hours at :00" rule, and the fire 50 minutes
     // ago failed 45 minutes ago: the check wants to fire, the sweep wants to retry.
@@ -379,6 +394,20 @@ describe("sweepScheduleRetries — a due failure is run again, the way the cron 
     await sweep()
     expect(db.insertAttempts).toHaveLength(0)
     expect(mockQueueAdd).not.toHaveBeenCalled()
+  })
+
+  it("a fire that never started and was failed weeks after its creation is not retried: the sweep reads when the run was created and whether it started", async () => {
+    db.triggers = [trigger()]
+    db.executions = [failedFire({ started_at: null, created_at: minutesAgo(21 * 24 * 60) })]
+
+    await sweep()
+
+    expect(db.insertAttempts).toHaveLength(0)
+    expect(mockQueueAdd).not.toHaveBeenCalled()
+    // The fake hands back whole rows, so pin the read itself: without these two
+    // columns the window would count from the failure and replay the old fire.
+    const read = db.selects.find((s) => s.table === "workflow_executions" && s.columns.includes("idempotency_key"))
+    expect(read?.columns.split(",").map((c) => c.trim())).toEqual(expect.arrayContaining(["started_at", "created_at"]))
   })
 
   it("not yet due, cancelled, or a trigger with no policy: no retry — and no policy means no execution read at all", async () => {

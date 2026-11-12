@@ -32,6 +32,7 @@
  * the workflow's own home if they ever need these rows.
  */
 import { supabase } from "./supabase.js"
+import { getRuntimeEnv } from "./runtime-env.js"
 
 /** Stable refusal code — P16's history UI branches on this, never on text. */
 export const RUN_REQUIRES_AUTHENTICATED_MEMBER = "run_requires_authenticated_member"
@@ -68,6 +69,7 @@ export async function recordTriggerFireRefusal(args: {
       user_id: args.userId,
       status: "failed",
       trigger_type: args.triggerType,
+      runtime_env: getRuntimeEnv(),
       error_message: code,
       ...(args.triggerId ? { trigger_data: { triggerId: args.triggerId } } : {}),
       completed_at: new Date().toISOString(),

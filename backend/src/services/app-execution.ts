@@ -4,6 +4,7 @@
  */
 
 import { supabase } from "../lib/supabase.js"
+import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { payloadBillingContext, type BillingContext } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
@@ -132,6 +133,7 @@ export async function executeAppRun(
         user_id: userId,
         status: "pending",
         trigger_type: "app_run",
+        runtime_env: getRuntimeEnv(),
         trigger_data: appRunStamp(appRunId),
         ...(isComponentExecution ? { is_component_execution: true } : {}),
         // P14/W7: the carried payer's pair rides the row (personal adds nothing).

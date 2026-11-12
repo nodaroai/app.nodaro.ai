@@ -160,7 +160,7 @@ here for each one anyway.
 | `SCENE3D_PRIVATE_S3_ENDPOINT` / `SCENE3D_PRIVATE_S3_REGION` | existing R2 settings | S3-compatible endpoint and region for the private scene bucket. No public bucket URL is used. |
 | `SCENE3D_PRIVATE_S3_ACCESS_KEY_ID` / `SCENE3D_PRIVATE_S3_SECRET_ACCESS_KEY` | existing R2 credentials | Server-side credentials for the private scene bucket. Prefer credentials restricted to that bucket. |
 | `SCENE3D_PRIVATE_S3_FORCE_PATH_STYLE` | existing R2 setting | Enable with `true` or `1` for an S3-compatible store that requires path-style addressing. |
-| `RUNTIME_ENV` | `RAILWAY_ENVIRONMENT_NAME`, else `local` | Names this deployment. Only matters when two installs share ONE database but have SEPARATE Redis instances (a staging + production pair): each install's stale-execution sweeps then reconcile only the runs its own orchestrator claimed, instead of marking the other install's healthy executions "orphaned". On Railway, `RAILWAY_ENVIRONMENT_NAME` already supplies it — set `RUNTIME_ENV` yourself only elsewhere. Every container of one install (API, workers, orchestrator) must use the SAME value. A [webhook endpoint](./webhooks.md) belongs to the install that created it (only that install lists it, sends to it and can open its secret), so renaming `RUNTIME_ENV` hides the endpoints created under the old name |
+| `RUNTIME_ENV` | `RAILWAY_ENVIRONMENT_NAME`, else `local` | Names this deployment. Only matters when two installs share ONE database but have SEPARATE Redis instances (a staging + production pair): each install's stale-execution sweeps then reconcile only the runs it created or its own orchestrator claimed, instead of marking the other install's healthy executions "orphaned". On Railway, `RAILWAY_ENVIRONMENT_NAME` already supplies it — set `RUNTIME_ENV` yourself only elsewhere. Every container of one install (API, workers, orchestrator) must use the SAME value. A [webhook endpoint](./webhooks.md) belongs to the install that created it (only that install lists it, sends to it and can open its secret), so renaming `RUNTIME_ENV` hides the endpoints created under the old name |
 | `SCHEDULE_TRIGGERS_ENABLED` | on — except on a Railway environment not named `production` | Whether this install fires scheduled workflows (Schedule Trigger nodes and schedule triggers made through the API). Unset: an install off Railway fires them, and on Railway only the environment named `production` does — a staging environment that shares production's database must not run production users' schedules on its own build. `true` / `1` turns it on anywhere, `false` / `0` turns it off anywhere; any other value stops the API from starting. Two installs that both fire the same database are still safe: each tick is claimed atomically, so only one of them starts the run. Restart to apply |
 | `CLIENT_IP_HEADER` | unset (Railway: `x-real-ip`, set by the image) | A header your platform's edge proxy uses to state the real client address. Trusted only from `CLIENT_IP_HEADER_FROM` hops — see §3, "How the backend picks the client address". `none` (or empty) switches it off, also on Railway |
 | `CLIENT_IP_HEADER_FROM` | unset (Railway: `100.64.0.0/10`) | Comma-separated ranges the edge connects from. Required with `CLIENT_IP_HEADER`: unset (or no valid range) and the API refuses to start; `any` trusts the header from every hop — only safe when nothing but your edge can reach the container |
@@ -1857,13 +1857,19 @@ point.
 staging copy, a preview environment) at the SAME Supabase project but
 give it its OWN Redis, name each install with `RUNTIME_ENV` — on
 Railway `RAILWAY_ENVIRONMENT_NAME` already does this for you. Workflow
-executions record the name of the install whose orchestrator claimed
-them, and each install's stale-execution sweeps only reconcile its own.
-Without distinct names, each install looks for the other's
+executions record the name of the install that created them (and whose
+orchestrator claimed them), and each install's stale-execution sweeps
+only reconcile its own. That includes a run that was created but never
+started: once it is 4 hours old (time spent waiting for a free run slot
+does not count) and its install's queue no longer holds it, that install
+marks it failed, so it cannot block its workflow's schedule or webhook
+trigger. Without distinct names, each install looks for the other's
 orchestration jobs in its own Redis, fails to find them, and marks
-perfectly healthy runs failed with "Execution orphaned". Rows already
-running at the moment you upgrade carry no name yet; the install named
-`production` reconciles those.
+perfectly healthy runs failed with "Execution orphaned". Rows written
+before an install recorded its name carry none; the install named
+`production` reconciles those. On any other install, such a run left
+`pending` stays so until it is cancelled
+(`POST /v1/workflow-executions/:id/cancel`).
 
 Scheduled workflows are stored in that shared database too, so only one
 of the installs should fire them. On Railway that is automatic: only the

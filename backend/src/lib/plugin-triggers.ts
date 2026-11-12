@@ -250,6 +250,7 @@ export async function firePluginTrigger(input: PluginTriggerFireInput): Promise<
       user_id: userId,
       status: "pending",
       trigger_type: lane,
+      runtime_env: getRuntimeEnv(),
       trigger_data: triggerData,
       // Namespaced by lane so no other lane's key can ever collide with it.
       idempotency_key: `${lane}:${input.idempotencyKey}`,
