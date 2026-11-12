@@ -21,9 +21,11 @@ export { MAX_PRESET_REFERENCES, presetMinReferences } from "./references.js"
 export {
   FACTORY_PRESET_PREVIEW_FILES,
   FACTORY_PRESET_PREVIEW_LARGE_FILES,
+  FACTORY_PRESET_PREVIEW_SIZES,
   PRESET_PREVIEW_LARGE_WIDTH,
   PRESET_PREVIEW_PATH,
   PRESET_PREVIEW_WIDTH,
+  factoryPresetPreviewSize,
   factoryPresetPreviewSrcSet,
   factoryPresetPreviewUrl,
 } from "./previews.js"

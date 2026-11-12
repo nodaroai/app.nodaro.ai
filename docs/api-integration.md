@@ -6524,6 +6524,12 @@ real widths, ready for an `<img srcset>`, so the browser picks by the room it ha
 It is present only on a preset that has both files, and never on a preset of
 your own. The MCP listing leaves it out.
 
+**Shape — `previewWidth`, `previewHeight`.** The tile picture's real width and
+height, so a client draws each picture in a box of its own shape before it
+loads (a preset's `data.aspectRatio` is what it generates, which is not always
+its picture's shape). Present on a factory preset with a committed picture;
+never on a preset of your own.
+
 ### Writes
 
 | Method | Path | Body / Query | Purpose |

@@ -64,6 +64,14 @@ export interface FactoryPresetEntry extends FactoryPreset {
    * preset has both; absent from servers that predate it.
    */
   previewSrcSet?: string
+  /**
+   * The tile picture's real width and height (`previewUrl`'s), so a client
+   * draws it in a box of its own shape before it loads — a preset's
+   * `data.aspectRatio` is what it generates, not always its picture's shape.
+   * Present for a built-in picture; absent from servers that predate it.
+   */
+  previewWidth?: number
+  previewHeight?: number
 }
 
 /**

@@ -39,7 +39,7 @@ vi.mock("../../lib/presets/preview-copy.js", () => ({
   releasePresetPreviews: async () => {},
 }))
 
-import { presetShelf, presetShelfRank } from "@nodaro/prompts/presets"
+import { factoryPresetPreviewSize, presetShelf, presetShelfRank } from "@nodaro/prompts/presets"
 import { nodePresetRoutes } from "../node-presets.js"
 import { supabase } from "../../lib/supabase.js"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
@@ -322,7 +322,13 @@ describe("node-presets routes", () => {
       expect(Number.isInteger(p.minReferences), String(p.id)).toBe(true)
       expect(p.needsImage, String(p.id)).toBe((p.minReferences as number) > 0)
       expect(p).toHaveProperty("previewUrl")
+      // A committed picture states its own size, so a client boxes it at its shape before it loads.
+      if (typeof p.previewUrl === "string" && p.previewUrl.includes("/preset-previews/")) {
+        const size = factoryPresetPreviewSize(String(p.id))
+        expect({ width: p.previewWidth, height: p.previewHeight }, String(p.id)).toEqual(size)
+      }
     }
+    expect(data.some((p) => typeof p.previewWidth === "number" && typeof p.previewHeight === "number")).toBe(true)
 
     const signedIn = buildApp()
     await signedIn.register(nodePresetRoutes)

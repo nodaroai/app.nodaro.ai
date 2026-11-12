@@ -63,9 +63,12 @@ const IGNORED_SOURCE = /^(\..*|thumbs\.db|desktop\.ini)$/i
 type FileMap = Record<string, string>
 /** Preset id → the large file (`1024/<nodeType>/<slug>.<hash8>.webp`) and its real width. */
 type LargeFileMap = Record<string, { file: string; width: number }>
+/** Preset id → the tile picture's real width and height, so a client sizes its box before the picture loads. */
+type SizeMap = Record<string, readonly [number, number]>
 interface FileMaps {
   readonly small: FileMap
   readonly large: LargeFileMap
+  readonly sizes: SizeMap
 }
 
 function parseArgs(argv: ReadonlyArray<string>): { src?: string; remove: string[] } {
@@ -90,14 +93,15 @@ async function factoryIds(): Promise<ReadonlySet<string>> {
   return new Set(Object.values(presets.FACTORY_PRESETS).flatMap((list) => list.map((p) => p.id)))
 }
 
-/** The maps the last build published (empty on the first run; the large map empty before it existed). */
+/** The maps the last build published (empty on the first run; the large and size maps empty before they existed). */
 async function publishedMaps(): Promise<FileMaps> {
-  if (!existsSync(GENERATED_TS)) return { small: {}, large: {} }
+  if (!existsSync(GENERATED_TS)) return { small: {}, large: {}, sizes: {} }
   const mod = (await import(pathToFileURL(GENERATED_TS).href)) as {
     FACTORY_PRESET_PREVIEW_FILES: FileMap
     FACTORY_PRESET_PREVIEW_LARGE_FILES?: LargeFileMap
+    FACTORY_PRESET_PREVIEW_SIZES?: SizeMap
   }
-  return { small: { ...mod.FACTORY_PRESET_PREVIEW_FILES }, large: { ...(mod.FACTORY_PRESET_PREVIEW_LARGE_FILES ?? {}) } }
+  return { small: { ...mod.FACTORY_PRESET_PREVIEW_FILES }, large: { ...(mod.FACTORY_PRESET_PREVIEW_LARGE_FILES ?? {}) }, sizes: { ...(mod.FACTORY_PRESET_PREVIEW_SIZES ?? {}) } }
 }
 
 /** Splits a preset id into its node type and slug, refusing one that cannot be a file name. */
@@ -205,6 +209,13 @@ async function buildInto(
   const previous = await publishedMaps()
   const small: FileMap = {}
   const large: LargeFileMap = {}
+  const sizes: SizeMap = {}
+  /** The tile picture's own width and height, read from its bytes. */
+  const sizeOf = async (id: string, bytes: Buffer): Promise<readonly [number, number]> => {
+    const meta = await sharp(bytes).metadata()
+    if (!meta.width || !meta.height) throw new Error(`${id}: its tile picture has no size`)
+    return [meta.width, meta.height]
+  }
   let encoded = 0
   let kept = 0
   const dropped: string[] = []
@@ -233,7 +244,9 @@ async function buildInto(
 
   for (const [id, path] of sources) {
     const bytes = await readSource(path)
-    small[id] = place("", id, (await encode(path, bytes, SMALL_WIDTH)).bytes)
+    const tile = (await encode(path, bytes, SMALL_WIDTH)).bytes
+    small[id] = place("", id, tile)
+    sizes[id] = await sizeOf(id, tile)
     const big = await encode(path, bytes, LARGE_WIDTH)
     large[id] = { file: place(`${LARGE_DIR}/`, id, big.bytes), width: big.width }
     encoded++
@@ -244,7 +257,9 @@ async function buildInto(
       dropped.push(id)
       continue
     }
-    small[id] = place("", id, published(id, previous.small[id], "small"))
+    const tile = published(id, previous.small[id], "small")
+    small[id] = place("", id, tile)
+    sizes[id] = await sizeOf(id, tile)
     const big = previous.large[id]
     large[id] = { file: place(`${LARGE_DIR}/`, id, published(id, big?.file, "large")), width: big.width }
     kept++
@@ -254,7 +269,7 @@ async function buildInto(
       (remove.length ? `, removed: ${remove.join(", ")}` : "") +
       (dropped.length ? `, dropped (preset removed): ${dropped.join(", ")}` : ""),
   )
-  return { small, large }
+  return { small, large, sizes }
 }
 
 function writeGenerated(maps: FileMaps): void {
@@ -272,7 +287,10 @@ function writeGenerated(maps: FileMaps): void {
       `// what \`previewSrcSet\` states).\n` +
       `export const FACTORY_PRESET_PREVIEW_FILES: Readonly<Record<string, string>> = {\n${rows(maps.small)}}\n` +
       `\n` +
-      `export const FACTORY_PRESET_PREVIEW_LARGE_FILES: Readonly<Record<string, { readonly file: string; readonly width: number }>> = {\n${rows(maps.large)}}\n`,
+      `export const FACTORY_PRESET_PREVIEW_LARGE_FILES: Readonly<Record<string, { readonly file: string; readonly width: number }>> = {\n${rows(maps.large)}}\n` +
+      `\n` +
+      `// The tile picture's real width and height (the box a client draws it in, before it loads).\n` +
+      `export const FACTORY_PRESET_PREVIEW_SIZES: Readonly<Record<string, readonly [number, number]>> = {\n${rows(maps.sizes)}}\n`,
   )
 }
 

@@ -8316,6 +8316,9 @@ carries:
   or `null`. On your own presets, the image you stored with it.
 - On a factory entry, `previewSrcSet` — the same picture at its two sizes
   (512w and up to 1024w) for an `<img srcset>`; present only when it has both.
+- On a factory entry, `previewWidth` / `previewHeight` — the tile picture's
+  real size, so a client boxes it at its own shape before it loads (a preset's
+  `data.aspectRatio` is what it generates, not always its picture's shape).
 - On a factory entry, `section` (a sub-heading inside its `group`, such as a
   YouTube topic) and `platforms` (where the result is meant to be posted, most
   fitting first) — present only on a preset that has them, so a client groups
