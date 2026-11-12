@@ -293,6 +293,7 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 - \`negative_prompt\`
 - \`seed\`
 - \`draft\`
+- \`reference_task_type\`
 - \`structured\`
 - \`connected_references\`
 - \`described_references\`

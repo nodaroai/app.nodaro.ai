@@ -89,6 +89,12 @@ describe("tk.capabilities", () => {
     expect(buildToolkit().capabilities?.pitchTempoTwoOctaves).toBe(true)
   })
 
+  it("advertises that /v1/generate-video takes referenceTaskType for Seedance 2.5", () => {
+    // An older host drops the field silently (its Zod strips it): the child runs
+    // undeclared there. lib/__tests__/video-request-norm.test.ts proves the resolution.
+    expect(buildToolkit().capabilities?.seedanceReferenceTaskType).toBe(true)
+  })
+
   it("is a stable, frozen snapshot, not a per-call mutable object", () => {
     const caps = buildToolkit().capabilities
     expect(caps).toBeDefined()

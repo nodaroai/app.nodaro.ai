@@ -124,6 +124,9 @@ export function projectModel(m: ModelCatalogEntry, prices: ChargedPrices, opts: 
   // What an unset `duration` renders AND is charged at (the catalog funnel).
   if (m.defaultDuration !== undefined) out.defaultDuration = m.defaultDuration
   if (m.autoDuration) out.autoDuration = true
+  // What a request's reference media can be declared to be for (Seedance 2.5:
+  // `reference`, `edit`, `extend`); absent on a model that takes no declaration.
+  if (m.referenceTaskTypes?.length) out.referenceTaskTypes = [...m.referenceTaskTypes]
   const promptTips = getPromptTips(m.id)
   if (promptTips.length) out.promptTips = promptTips
   // Truth flag for optimizer badges ("vendor doctrine · real rewrite"):

@@ -88,11 +88,12 @@ vi.mock("@/lib/video-schemas.js", async () => {
   }
 })
 
-import { textToVideoRoutes } from "../text-to-video.js"
-import { generateVideoRoutes } from "../generate-video.js"
+import { textToVideoRoutes, textToVideoPricing } from "../text-to-video.js"
+import { generateVideoRoutes, generateVideoPricing } from "../generate-video.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
-import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
+import { reserveCreditsForJob, type RoutePricing } from "../../middleware/credit-guard.js"
+import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
 import { textToVideoBody } from "../text-to-video.js"
@@ -383,6 +384,144 @@ for (const route of ROUTES) {
           false,
         ),
       )
+    })
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Seedance 2.5 `referenceTaskType`: the declaration is resolved before pricing,
+// so the ratio and length it forces are what is checked, reserved, recorded and
+// queued — and the job carries the RESOLVED declaration, never `auto`.
+// ---------------------------------------------------------------------------
+
+const REF_VIDEO = "https://example.com/ref.mp4"
+
+/** Every reference clip this test's pre-check measures is `sec` long. */
+async function withClipsOf<T>(sec: number, run: () => Promise<T>): Promise<T> {
+  vi.mocked(probeMediaDuration).mockResolvedValue(sec)
+  try {
+    return await run()
+  } finally {
+    vi.mocked(probeMediaDuration).mockResolvedValue(5)
+  }
+}
+
+/** Runs one request through the route and returns what it queued, recorded and reserved against. */
+async function runOnce(url: string, payload: Record<string, unknown>) {
+  const res = await app.inject({ method: "POST", url, payload })
+  expect(res.statusCode, res.body).toBe(200)
+  const insert = vi.mocked(supabase.from).mock.results[0]!.value as { insert: ReturnType<typeof vi.fn> }
+  return {
+    queued: queued(),
+    persisted: (insert.insert.mock.calls.at(-1)![0] as Record<string, unknown>).input_data as Record<string, unknown>,
+    identifier: reservedIdentifier(),
+  }
+}
+
+/**
+ * What the credit guard checks and reserves for `payload`: the route's own
+ * pre-checks, then its identifier and its amount, in the order the guard and
+ * `POST /v1/quote` run them (this file stubs the guard itself out).
+ */
+async function guardPrice(pricing: RoutePricing, payload: Record<string, unknown>): Promise<{ identifier: string; credits: number | null }> {
+  const priceApp = Fastify({ logger: false })
+  priceApp.post("/price", { preHandler: [...pricing.prechecks] }, async (req) => {
+    const identifier = pricing.modelResolver(req)
+    const credits = await pricing.opts?.computeCredits?.(req.body, req)
+    return { identifier, credits: credits ?? null }
+  })
+  await priceApp.ready()
+  try {
+    const res = await priceApp.inject({ method: "POST", url: "/price", payload })
+    expect(res.statusCode, res.body).toBe(200)
+    return res.json()
+  } finally {
+    await priceApp.close()
+  }
+}
+
+const TASK_TYPE_ROUTES = [
+  { url: "/v1/text-to-video", pricing: textToVideoPricing },
+  { url: "/v1/generate-video", pricing: generateVideoPricing },
+]
+
+for (const route of TASK_TYPE_ROUTES) {
+  describe(`POST ${route.url} — Seedance 2.5 referenceTaskType`, () => {
+    const base = { prompt: "make it black and white", userId: USER, provider: "seedance-2-5", referenceVideoUrls: [REF_VIDEO] }
+    const asked = { ...base, aspectRatio: "16:9", duration: 5 }
+    const editShape = { ...base, aspectRatio: "adaptive", duration: -1 }
+
+    it("an edit of a 6 s clip is queued and recorded adaptive at Auto length, with the declaration", async () => {
+      await withClipsOf(6, async () => {
+        const edit = await runOnce(route.url, { ...asked, referenceTaskType: "edit" })
+        expect(edit.queued).toMatchObject({ referenceTaskType: "edit", aspectRatio: "adaptive", duration: -1 })
+        expect(edit.persisted).toMatchObject({ referenceTaskType: "edit", aspectRatio: "adaptive", duration: -1 })
+
+        // The run IS the edit-shaped request plus the declaration: nothing else moves.
+        const shaped = await runOnce(route.url, editShape)
+        expect(edit.queued).toStrictEqual({ ...shaped.queued, referenceTaskType: "edit" })
+        expect(edit.persisted).toStrictEqual({ ...shaped.persisted, referenceTaskType: "edit" })
+        expect(edit.identifier).toBe(shaped.identifier)
+      })
+    })
+
+    it("an edit reserves what the same body sent as adaptive at Auto length reserves", async () => {
+      await withClipsOf(6, async () => {
+        const edit = await guardPrice(route.pricing, { ...asked, referenceTaskType: "edit" })
+        const shaped = await guardPrice(route.pricing, editShape)
+        expect(edit).toStrictEqual(shaped)
+        // …and not what the ratio and length it asked for would have reserved.
+        expect(edit).not.toStrictEqual(await guardPrice(route.pricing, asked))
+      })
+    })
+
+    it("an edit of a 3 s clip declares nothing: its own ratio and length, no declaration", async () => {
+      await withClipsOf(3, async () => {
+        const run = await runOnce(route.url, { ...asked, referenceTaskType: "edit" })
+        expect(run.queued).toMatchObject({ aspectRatio: "16:9", duration: 5 })
+        expect(run.persisted).toMatchObject({ aspectRatio: "16:9", duration: 5 })
+        expect(run.queued).not.toHaveProperty("referenceTaskType")
+        expect(run.persisted).not.toHaveProperty("referenceTaskType")
+      })
+    })
+
+    it('"auto" is queued and recorded exactly like a body without the field', async () => {
+      await withClipsOf(6, async () => {
+        const auto = await runOnce(route.url, { ...asked, referenceTaskType: "auto" })
+        const none = await runOnce(route.url, asked)
+        expect(auto.queued).toStrictEqual(none.queued)
+        expect(auto.persisted).toStrictEqual(none.persisted)
+        expect(none.queued).not.toHaveProperty("referenceTaskType")
+        expect(none.persisted).not.toHaveProperty("referenceTaskType")
+        expect(await guardPrice(route.pricing, { ...asked, referenceTaskType: "auto" })).toStrictEqual(await guardPrice(route.pricing, asked))
+      })
+    })
+
+    // "Auto" (generate-video's spelling) or "auto" with a reference video already
+    // runs at "adaptive" — the ratio edit and extend force — so nothing is replaced.
+    it("an edit or extend asked at the Auto ratio reports no ratio adjustment; asked at 16:9 it still does", async () => {
+      const autoToken = route.url === "/v1/generate-video" ? "Auto" : "auto"
+      await withClipsOf(6, async () => {
+        for (const [referenceTaskType, duration] of [["edit", -1], ["extend", 8]] as const) {
+          const atAuto = await app.inject({ method: "POST", url: route.url, payload: { ...base, aspectRatio: autoToken, duration, referenceTaskType } })
+          expect(atAuto.statusCode, atAuto.body).toBe(200)
+          expect(atAuto.json(), referenceTaskType).toEqual({ jobId: "job-1" })
+          expect(queued()).toMatchObject({ referenceTaskType, aspectRatio: "adaptive", duration })
+
+          const at169 = await app.inject({ method: "POST", url: route.url, payload: { ...base, aspectRatio: "16:9", duration, referenceTaskType } })
+          expect(at169.statusCode, at169.body).toBe(200)
+          expect(at169.json().adjustments, referenceTaskType).toEqual([expect.objectContaining({ field: "aspectRatio", from: "16:9", to: "adaptive" })])
+          expect(queued()).toMatchObject({ referenceTaskType, aspectRatio: "adaptive", duration })
+        }
+      })
+    })
+
+    it("a model other than Seedance 2.5 ignores the field", async () => {
+      const other = { ...asked, provider: "seedance-2", duration: 8 }
+      const declared = await runOnce(route.url, { ...other, referenceTaskType: "edit" })
+      const none = await runOnce(route.url, other)
+      expect(declared.queued).toStrictEqual(none.queued)
+      expect(declared.persisted).toStrictEqual(none.persisted)
     })
   })
 }

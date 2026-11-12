@@ -1,4 +1,4 @@
-import type { TopazVideoResolution, TtsOutputFormat } from "@nodaro/shared/models"
+import type { DeclaredSeedanceTaskType, TopazVideoResolution, TtsOutputFormat } from "@nodaro/shared/models"
 import type { FrameFit, FrameDelivery, VideoCharacterReference } from "@nodaro/shared/video"
 
 // Result types
@@ -161,6 +161,14 @@ export interface ProviderOptions {
   // text-to-video CHILD job whose parent re-encodes it (the route's
   // `seedance25OutputFormatFor`), stored with `{ ext: "mov" }`.
   outputFormat?: "mp4" | "mov"
+  // Seedance 2.5 ONLY: what the reference media is for, as the route resolved
+  // it (`resolveSeedanceTaskType`) — sent as KIE's `omni_reference_task_type`.
+  // The KIE adapter writes it only on a body the provider takes it on (a model
+  // whose catalog lists the value, not a draft, reference media on the body —
+  // a reference video for `edit`/`extend` — and no start frame); absent = no
+  // field, today's request. The Nodaro cloud relay forwards it as
+  // `referenceTaskType`. Other models ignore it.
+  referenceTaskType?: DeclaredSeedanceTaskType
   webSearch?: boolean      // Enable online search capability (Seedance 2, required field)
   nsfwChecker?: boolean    // Toggle NSFW content filter (Seedance 2)
   generationType?: string // Generation type (e.g., "TEXT_2_VIDEO", "FIRST_AND_LAST_FRAMES_2_VIDEO", "REFERENCE_2_VIDEO")

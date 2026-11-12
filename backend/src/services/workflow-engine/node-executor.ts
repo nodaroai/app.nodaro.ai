@@ -127,6 +127,7 @@ import { stampTopazVideoUpscale, topazVideoStampedBaseCredits } from "../../lib/
 import { stampTopazImageSize, topazImageStampedBaseCredits } from "../../lib/topaz-image-size.js"
 import { ltxRetakeBaseCredits } from "../../lib/ltx-retake-credits.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
+import { stampSeedanceReferenceTaskType } from "../../lib/seedance-task-type-stamp.js"
 import { applyAudioSoundtrack } from "../../lib/audio-soundtrack.js"
 import { probeAndCheckRefAudio } from "../../lib/ref-audio-probe.js"
 import { computeEditPlanReserveId } from "../../lib/edit-plan-pricing.js"
@@ -1851,8 +1852,12 @@ async function computeSeedance2RefVideoCreditOverride(
     // provider's own default, the same source the identifier's tier reads
     // (#1397: a literal 5 under-reserved seedance-2-5's 8s render).
     outputDurationSec: pricedOutputDurationSec(provider as string, payload.duration as number | string | undefined),
-    // Auto (-1) is the edit shape: its hold follows the source clip.
+    // Auto (-1) is the edit shape: its hold follows the longest reference clip.
     requestedDuration: payload.duration,
+    // The RESOLVED declaration: the 2b+ stamp ran before this, so the payload
+    // carries a declared type or no key. A declared `reference` with an
+    // automatic length holds the worst case, not the edit's.
+    referenceTaskType: payload.referenceTaskType,
     // Per-second Gemini Omni: the node's trim decides what is billed.
     videoTrim: { start: payload.videoTrimStart, end: payload.videoTrimEnd },
   }
@@ -2279,7 +2284,8 @@ async function executeWorkerNode(
       : new Error(`Failed to build payload for ${node.type}: ${String(err)}`)
   }
   const { jobName, queueName, modelIdentifier } = buildResult
-  // `let`: the Seedance draft-finalize stamp (2b'++) rebinds it to a merged copy.
+  // `let`: the reference task type stamp (2b+) and the Seedance draft-finalize
+  // stamp (2b'++) rebind it to a copy.
   let { payload } = buildResult
 
   // 2. The restriction gate, FIRST: a file an administrator restricted after
@@ -2357,6 +2363,13 @@ async function executeWorkerNode(
   // off the job — so probe it once now rather than leaving the pricer to probe
   // privately and the settlement to probe again.
   const refVideoDurationsSec = refVideoCheck.durationsSec ?? (await probeRefVideosForReservation(payload))
+
+  // 2b+. A requested reference task type (the Video to Video node's Seedance
+  // edit requests `edit`), resolved by the routes' own rule now that the clips
+  // are measured — BEFORE input_data, the reservation and the queued payload
+  // below, which all read this `payload`. Undeclared → no key at all. A payload
+  // that requests nothing is the same object (lib/seedance-task-type-stamp.ts).
+  payload = stampSeedanceReferenceTaskType(payload, refVideoDurationsSec)
 
   // 2b'. Video SFX: measure the clip by the route's own rule and stamp the
   // length (what the model scores) and its price row on the payload, BEFORE

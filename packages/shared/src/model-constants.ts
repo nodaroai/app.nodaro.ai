@@ -3,8 +3,9 @@
  * Single source of truth for model capability sets and variable pricing rules.
  */
 import { z } from "zod"
-import { MODEL_CATALOG } from "./model-catalog.js"
+import { MODEL_CATALOG, isVideoAutoAspectToken, videoAutoAspectRunsAt, type ModelInputAdjustment } from "./model-catalog.js"
 import { isAutoVideoDuration, VIDEO_DURATION_AUTO } from "./video-duration-auto.js"
+import { SEEDANCE_EDIT_REF_VIDEO_SEC, type DeclaredSeedanceTaskType } from "./seedance-task-type.js"
 
 /** Base USD value of 1 Nodaro credit. Used for cost→credit conversion. */
 export const CREDIT_BASE_USD = 0.002
@@ -1444,6 +1445,17 @@ export const DEFAULT_VIDEO_TO_VIDEO_PROVIDER: VideoToVideoNodeProvider = "wan"
  * ordinary run as an edit.
  */
 export const SEEDANCE_VIDEO_EDIT_SHAPE = { aspectRatio: "adaptive", duration: VIDEO_DURATION_AUTO } as const
+
+/**
+ * The reference task type a purpose-built Seedance video edit requests (the
+ * Video to Video route and node, MCP `modify_video`): the reference video is
+ * the clip to edit, said outright instead of left to the prompt. A request, not
+ * a promise: `resolveSeedanceTaskType` declares it only when the edit's
+ * reference videos qualify, and otherwise the edit goes out undeclared, as
+ * before. Kept apart from `SEEDANCE_VIDEO_EDIT_SHAPE`, whose exact value other
+ * callers spread and pin.
+ */
+export const SEEDANCE_VIDEO_EDIT_TASK_TYPE = "edit" as const satisfies DeclaredSeedanceTaskType
 
 /** Face swap providers */
 export const FACE_SWAP_PROVIDERS = [
@@ -3552,6 +3564,156 @@ export function pricedOutputDurationSec(provider: string, requested: number | st
  *  the Seedance 2 family, "4-15 seconds or -1" / 2.5 "Special values -1"). */
 export function supportsAutoVideoDuration(provider: string | undefined): boolean {
   return !!provider && MODEL_CATALOG[provider]?.autoDuration === true
+}
+
+/** Models that accept a reference task type declaration — a catalog capability
+ *  (`MODEL_CATALOG[id].referenceTaskTypes`, see `SEEDANCE_REFERENCE_TASK_TYPES`). */
+export function supportsReferenceTaskType(provider: string | undefined): boolean {
+  return !!provider && (MODEL_CATALOG[provider]?.referenceTaskTypes?.length ?? 0) > 0
+}
+
+/** What a request knows that decides its reference task type. */
+export interface SeedanceTaskTypeFacts {
+  provider: string | undefined
+  /** The value the request carries, unvalidated: anything but a declared value is Auto. */
+  requested: unknown
+  draft: boolean
+  /** Reference images only: a start or end frame is not counted. */
+  referenceImageCount: number
+  referenceAudioCount: number
+  /** One entry per reference video; `undefined` = its length could not be measured. */
+  referenceVideoSec: ReadonlyArray<number | undefined>
+  aspectRatio: string | undefined
+  duration: number | undefined
+}
+
+/** The declaration a request sends (if any), and the ratio and length it runs at. */
+export interface SeedanceTaskTypeResolution {
+  /** `undefined`: nothing is declared and the provider guesses from the prompt. */
+  taskType: DeclaredSeedanceTaskType | undefined
+  aspectRatio: string | undefined
+  duration: number | undefined
+  /** Each change made to the ratio or length, for disclosure. Empty when nothing changed. */
+  adjustments: ModelInputAdjustment[]
+}
+
+/** The aspect ratio an `extend` runs at: the reference video's own (an `edit`
+ *  takes its whole shape from `SEEDANCE_VIDEO_EDIT_SHAPE`). */
+const SEEDANCE_EXTEND_ASPECT = "adaptive"
+
+/**
+ * `requested` when the model's catalog `referenceTaskTypes` lists it (strict
+ * match), else `undefined`. The one membership test: the resolver below and the
+ * provider adapter that writes the value both ask it.
+ */
+export function listedSeedanceTaskType(provider: string | undefined, requested: unknown): DeclaredSeedanceTaskType | undefined {
+  return provider ? MODEL_CATALOG[provider]?.referenceTaskTypes?.find((t) => t === requested) : undefined
+}
+
+/** How many of each kind of reference media a request carries. A start or end frame is not reference media. */
+export interface SeedanceReferenceMediaCount {
+  imageCount: number
+  videoCount: number
+  audioCount: number
+}
+
+/**
+ * Whether a request's reference media is what the declared type needs:
+ * `reference` takes any reference media; `edit` and `extend` need a reference
+ * video, since both act on one. The one media rule: the resolver below asks it
+ * of the request, and the provider adapter of the body as it will be sent.
+ */
+export function seedanceTaskTypeFitsMedia(type: DeclaredSeedanceTaskType, media: SeedanceReferenceMediaCount): boolean {
+  return type === "reference" ? media.imageCount + media.videoCount + media.audioCount > 0 : media.videoCount > 0
+}
+
+function editReferenceVideosFit(referenceVideoSec: ReadonlyArray<number | undefined>): boolean {
+  const { min, max } = SEEDANCE_EDIT_REF_VIDEO_SEC
+  return referenceVideoSec.every((sec) => typeof sec === "number" && sec >= min && sec <= max)
+}
+
+/**
+ * The ONE place that decides whether a request declares a reference task type,
+ * and the aspect ratio and length that declaration forces.
+ *
+ * Declared only when every condition holds; otherwise the result is the input
+ * unchanged (no declaration, ratio and length as given, nothing reported):
+ *   - the request asks for a value the model's catalog `referenceTaskTypes`
+ *     LISTS, matched exactly. The list is what is honoured: a model that lists
+ *     nothing, a value it does not list (`auto`, a wrong case, a number) and a
+ *     model that lists only some values are all Auto;
+ *   - the run is not a draft;
+ *   - it has the reference media the type needs
+ *     ({@link seedanceTaskTypeFitsMedia}): `edit` and `extend` need a
+ *     reference video;
+ *   - for `edit`, every reference video is measured and between
+ *     `SEEDANCE_EDIT_REF_VIDEO_SEC.min` and `.max` seconds inclusive.
+ *
+ * What a declaration forces:
+ *   - `reference` — nothing;
+ *   - `edit`      — the edit shape, `SEEDANCE_VIDEO_EDIT_SHAPE` (`"adaptive"`
+ *                   and Auto length): the output takes the video's own shape
+ *                   and length;
+ *   - `extend`    — `"adaptive"`; a fixed length is kept, and Auto or no length
+ *                   becomes the model's catalog `defaultDuration`.
+ *
+ * Each value it changes is reported as one adjustment; a value it fills where
+ * the request had none is not a correction and reports nothing, and neither is
+ * a ratio that already runs at the forced one (`"Auto"` with a reference video
+ * runs at `"adaptive"`). Pure.
+ */
+export function resolveSeedanceTaskType(facts: SeedanceTaskTypeFacts): SeedanceTaskTypeResolution {
+  const { provider, aspectRatio, duration, referenceVideoSec } = facts
+  const unchanged: SeedanceTaskTypeResolution = { taskType: undefined, aspectRatio, duration, adjustments: [] }
+  const taskType = listedSeedanceTaskType(provider, facts.requested)
+  if (!taskType || !provider || facts.draft) return unchanged
+  const media = {
+    imageCount: facts.referenceImageCount,
+    videoCount: referenceVideoSec.length,
+    audioCount: facts.referenceAudioCount,
+  }
+  if (!seedanceTaskTypeFitsMedia(taskType, media)) return unchanged
+  if (taskType === "edit" && !editReferenceVideosFit(referenceVideoSec)) return unchanged
+  if (taskType === "reference") return { ...unchanged, taskType }
+
+  const verb = taskType === "edit" ? "Edit" : "Extend"
+  const nextAspect = taskType === "edit" ? SEEDANCE_VIDEO_EDIT_SHAPE.aspectRatio : SEEDANCE_EXTEND_ASPECT
+  const adjustments: ModelInputAdjustment[] = []
+  const askedAspect = typeof aspectRatio === "string" ? aspectRatio.trim() : ""
+  // A ratio that already runs at the forced one is not replaced: the forced
+  // value itself, or the "Auto" token, which a request with a reference video
+  // runs at "adaptive" (`videoAutoAspectRunsAt`, the adapter's own rule).
+  const runsAtForced = askedAspect.toLowerCase() === nextAspect
+    || (isVideoAutoAspectToken(askedAspect) && videoAutoAspectRunsAt(provider, media.videoCount > 0) === nextAspect)
+  if (askedAspect !== "" && !runsAtForced) {
+    adjustments.push({
+      field: "aspectRatio", from: askedAspect, to: nextAspect,
+      reason: `${verb} keeps the video's own shape — using "${nextAspect}" instead of "${askedAspect}".`,
+    })
+  }
+
+  let nextDuration: number
+  if (taskType === "edit") {
+    nextDuration = SEEDANCE_VIDEO_EDIT_SHAPE.duration
+    if (duration !== undefined && !isAutoVideoDuration(duration)) {
+      adjustments.push({
+        field: "duration", from: duration, to: nextDuration,
+        reason: `Edit keeps the video's own length — using Auto instead of ${duration}s.`,
+      })
+    }
+  } else if (duration === undefined || isAutoVideoDuration(duration)) {
+    nextDuration = videoDefaultDurationSec(provider)
+    if (duration !== undefined) {
+      adjustments.push({
+        field: "duration", from: duration, to: nextDuration,
+        reason: `Extend needs a set length — using ${nextDuration}s, the model's default, instead of Auto.`,
+      })
+    }
+  } else {
+    nextDuration = duration
+  }
+
+  return { taskType, aspectRatio: nextAspect, duration: nextDuration, adjustments }
 }
 
 /** The longest clip a duration-tiered provider can render (its top priced tier). */

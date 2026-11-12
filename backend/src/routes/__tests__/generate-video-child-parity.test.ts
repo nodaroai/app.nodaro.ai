@@ -54,10 +54,12 @@ vi.mock("@/lib/url-validator.js", async () => {
   return { safeUrlSchema: z.string().url() }
 })
 
-// The reference clip's probe (route prechecks): a fixed 8 s, the same on both lanes.
+// The reference clip's probe (route prechecks): a fixed 8 s, the same on both
+// lanes — except the 6 s clip the reference-task-type chain below sends. Keyed
+// on its own URL because the route caches a clip's length by URL.
 vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/providers/video/ffmpeg-utils.js")>()),
-  probeMediaDuration: vi.fn(async () => 8),
+  probeMediaDuration: vi.fn(async (url: string) => (url === "https://cdn.nodaro.ai/videos/six-second-clip.mp4" ? 6 : 8)),
 }))
 
 // KIE: the task call is the provider-bound request under test.
@@ -279,4 +281,44 @@ describe("a cast-swap child sends the same request on /v1/generate-video as on /
     expect(gv.kieInput.output_format).toBe("mov")
     expect((gv.row.input_data as Record<string, unknown>).outputFormat).toBe("mov")
   })
+})
+
+/**
+ * A declared Seedance 2.5 reference task type, from the request to the body KIE
+ * receives: the route resolves it before pricing (an edit runs at the video's
+ * own shape and length), queues it, and the worker hands it to the provider,
+ * which writes `omni_reference_task_type`. The body asks for 16:9 at 8 s so the
+ * coercion to "adaptive" and Auto length is proved, not assumed.
+ */
+describe("a declared reference task type reaches the KIE request", () => {
+  const SIX_SECOND_VIDEO = "https://cdn.nodaro.ai/videos/six-second-clip.mp4"
+  const EDIT_BODY = {
+    ...CHILD,
+    referenceVideoUrls: [SIX_SECOND_VIDEO],
+    provider: "seedance-2-5",
+    aspectRatio: "16:9",
+    duration: 8,
+    resolution: "720p",
+  }
+
+  for (const url of ["/v1/generate-video", "/v1/text-to-video"] as const) {
+    describe(url, () => {
+      it('"edit" with one measured 6 s reference video: the field, "adaptive" and Auto length', async () => {
+        const r = await runChild(url, { ...EDIT_BODY, referenceTaskType: "edit" })
+        expect(r.kieInput.omni_reference_task_type).toBe("edit")
+        expect(r.kieInput.aspect_ratio).toBe("adaptive")
+        expect(r.kieInput.duration).toBe(-1)
+        expect(r.kieInput.reference_video_urls).toEqual([SIX_SECOND_VIDEO])
+        expect((r.row.input_data as Record<string, unknown>).referenceTaskType).toBe("edit")
+      })
+
+      it("the same body without the field: no such key, and the requested shape", async () => {
+        const r = await runChild(url, EDIT_BODY)
+        expect("omni_reference_task_type" in r.kieInput).toBe(false)
+        expect(r.kieInput.aspect_ratio).toBe("16:9")
+        expect(r.kieInput.duration).toBe(8)
+        expect(r.row.input_data as Record<string, unknown>).not.toHaveProperty("referenceTaskType")
+      })
+    })
+  }
 })

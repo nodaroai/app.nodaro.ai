@@ -21,8 +21,8 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, supportsAutoVideoDuration, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isViduQ4Provider, normalizeViduQ4Resolution, isKling4RunnerProvider, isVeoProvider, videoProviderReferenceSyntax, applyVideoNegativePrompt, applyVideoAudioToggle, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
-import { VIDEO_DURATION_AUTO, isAutoVideoDuration, getModel, isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION } from "@nodaro/shared/model-catalog"
+import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, supportsAutoVideoDuration, listedSeedanceTaskType, seedanceTaskTypeFitsMedia, type DeclaredSeedanceTaskType, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isViduQ4Provider, normalizeViduQ4Resolution, isVeoProvider, videoProviderReferenceSyntax, applyVideoNegativePrompt, applyVideoAudioToggle, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER, isKling4RunnerProvider } from "@nodaro/shared/models"
+import { VIDEO_DURATION_AUTO, isAutoVideoDuration, getModel, isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION, isVideoAutoAspectToken, videoAutoAspectRunsAt } from "@nodaro/shared/model-catalog"
 import { getLipSyncMaxAudioSeconds } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared/video"
 import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs, placeFramesAfterReferences } from "@nodaro/prompts/assembly"
@@ -74,7 +74,9 @@ import {
   isSeedance2EditModeInput,
   isSeedance2EditModeRejection,
   providerErrorText,
+  seedance2EditModeResendInput,
   SEEDANCE_2_EDIT_MODE_PARAMS,
+  SEEDANCE_TASK_TYPE_WIRE_KEY,
 } from "./seedance-edit-mode.js"
 
 function mapAspectRatio(_provider: string, aspectRatio: string): string {
@@ -139,8 +141,10 @@ export function seedance25OutputFormat(): "mp4" | "mov" {
  * NB: generate_audio is set by applyVideoAudioToggle (the shared neutral-intent
  * dispatcher) at the call sites, BEFORE this runs — so the Studio `sound`
  * toggle reaches Seedance 2 too, not just the legacy `generateAudio` key.
- * Reference audio deliberately coexists with a first frame (audio-driven
- * lip-sync); the resolver keeps both in that case.
+ * Reference audio beside a first frame (audio-driven lip-sync) is reference
+ * media like any other: the resolver moves the frame into
+ * `reference_image_urls`, after the user's own images, and the run goes out in
+ * reference mode beside the audio.
  */
 export function applySeedance2Params(
   input: Record<string, unknown>,
@@ -252,6 +256,11 @@ export function applySeedance2Params(
     input.output_format = "mov"
   }
 
+  // The declared reference task type: decided AFTER the resolver, because only
+  // it knows whether the body became a multimodal reference task.
+  const referenceTaskType = seedanceTaskTypeForBody(input, options, provider)
+  if (referenceTaskType !== undefined) input[SEEDANCE_TASK_TYPE_WIRE_KEY] = referenceTaskType
+
   if (resolved.promptSuffix) {
     const base = typeof input.prompt === "string" ? input.prompt : ""
     input.prompt = base ? `${base}\n\n${resolved.promptSuffix}` : resolved.promptSuffix
@@ -262,6 +271,60 @@ export function applySeedance2Params(
  *  (docs.kie.ai/market/bytedance/seedance-2) — also the value a pure-t2v
  *  "Auto" resolves to, since `adaptive` means "match the input" and t2v has none. */
 const SEEDANCE_2_DEFAULT_ASPECT = "16:9"
+
+/**
+ * The `omni_reference_task_type` a prepared Seedance body carries, or
+ * `undefined` for none — the last line of defence behind the routes, which
+ * already resolved the declaration before pricing (`resolveSeedanceTaskType`).
+ * Read off the body as it will be sent, after `resolveSeedance2Inputs` chose
+ * its mode and the aspect ratio was snapped, and only when every condition
+ * holds:
+ *   - the model's catalog `referenceTaskTypes` lists the value
+ *     (`listedSeedanceTaskType`: an unknown model, `auto` and junk are none);
+ *   - the run is not a draft (the platform's rule: a draft never declares);
+ *   - no `first_frame_url` — KIE refuses the field on a text-only body and in
+ *     both frame modes ("only supported in multimodal reference tasks");
+ *   - the body's `reference_*_urls` are the media the type needs
+ *     (`seedanceTaskTypeFitsMedia`, the resolver's own rule): `edit` and
+ *     `extend` need `reference_video_urls`, `reference` any reference media;
+ *   - the body is in the type's shape: `edit` in the edit shape (`adaptive`
+ *     and -1, {@link isSeedance2EditModeInput}), `extend` at `adaptive`. A
+ *     request through the routes always is (the resolver forced it); a caller
+ *     that skipped them (a plugin queueing free-form job data) may not be, and
+ *     the provider refuses such a body, so the field is left off and one
+ *     warning is logged.
+ * No option → no field, so the body stays byte-identical to today's.
+ */
+function seedanceTaskTypeForBody(
+  input: Record<string, unknown>,
+  options: ProviderOptions | undefined,
+  provider: string | undefined,
+): DeclaredSeedanceTaskType | undefined {
+  const taskType = listedSeedanceTaskType(provider, options?.referenceTaskType)
+  if (taskType === undefined || options?.draft === true) return undefined
+  if (input.first_frame_url !== undefined) return undefined
+  const count = (key: string): number => {
+    const urls = input[key]
+    return Array.isArray(urls) ? urls.length : 0
+  }
+  const media = {
+    imageCount: count("reference_image_urls"),
+    videoCount: count("reference_video_urls"),
+    audioCount: count("reference_audio_urls"),
+  }
+  if (!seedanceTaskTypeFitsMedia(taskType, media)) return undefined
+  const inShape =
+    taskType === "edit" ? isSeedance2EditModeInput(input)
+    : taskType === "extend" ? input.aspect_ratio === "adaptive"
+    : true
+  if (!inShape) {
+    console.warn(
+      `[KIE.ai] ${provider}: not declaring reference task type "${taskType}": the body is not in its shape (aspect_ratio=${String(input.aspect_ratio)}, duration=${String(input.duration)}; ${taskType === "edit" ? "edit needs adaptive and -1" : "extend needs adaptive"}). Sending it undeclared.`,
+    )
+    return undefined
+  }
+  return taskType
+}
 
 export { isSeedance2EditModeRejection, SEEDANCE_2_EDIT_MODE_PARAMS }
 
@@ -302,11 +365,21 @@ async function runVideoTaskWithSeedanceEditRetry(
     ) {
       throw err
     }
-    // Never mutate the caller's payload — the retry is a new body.
-    const editInput = { ...input, ...SEEDANCE_2_EDIT_MODE_PARAMS }
+    // Never mutate the caller's payload — the retry is a new body, the
+    // undeclared edit shape (a declared task type is dropped: the provider
+    // overrode it).
+    const editInput = seedance2EditModeResendInput(input)
     console.warn(
       `[KIE.ai] ${provider} rejected this run as a video EDIT — ratio and duration must follow the source clip. Resubmitting once with ${JSON.stringify(SEEDANCE_2_EDIT_MODE_PARAMS)}. Provider said: ${message}`,
     )
+    // No job or task id is in scope here: the client's "Task … FAILED" line
+    // above names the task when the rejection came from a poll.
+    const declared = input[SEEDANCE_TASK_TYPE_WIRE_KEY]
+    if (declared !== undefined) {
+      console.warn(
+        `[KIE.ai] ${provider}: dropped the declared reference task type "${String(declared)}" from the resubmit — the provider ran the request as an edit`,
+      )
+    }
     const retried = await runKieTask(taskModel, editInput, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress, meta(editInput))
     return { ...retried, sentInput: editInput }
   }
@@ -323,7 +396,9 @@ async function runVideoTaskWithSeedanceEditRetry(
  * `"adaptive"` is a real provider enum member for the seedance family and is
  * returned untouched. `"Auto"` is the unified node's provider-agnostic token
  * with no provider meaning: it becomes `"adaptive"` when the model offers it
- * AND there is something to match, and the model's fixed default otherwise.
+ * AND there is something to match, and the model's fixed default otherwise —
+ * `videoAutoAspectRunsAt`, the shared rule the reference task type resolver
+ * reads too.
  */
 function resolveCatalogAspect(
   modelId: string | undefined,
@@ -336,8 +411,8 @@ function resolveCatalogAspect(
   if (allowed.length === 0) return raw
   const fixed = allowed.filter((a) => a !== "adaptive")
 
-  if (raw === "Auto" || raw === "auto") {
-    return opts.hasVisualInput && allowed.includes("adaptive") ? "adaptive" : opts.fallback
+  if (isVideoAutoAspectToken(raw)) {
+    return videoAutoAspectRunsAt(modelId, opts.hasVisualInput) ?? opts.fallback
   }
   if (allowed.includes(raw)) return raw
   return snapAspectRatioToken(raw, fixed) ?? opts.fallback

@@ -466,6 +466,8 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
       referenceVideoUrls: input.referenceVideoUrls,
       refVideoDurationsSec: input.refVideoDurationsSec,
       duration: input.duration,
+      // Recorded only when a type was declared: the hold the reservation sized.
+      referenceTaskType: input.referenceTaskType,
       jobId: row.id,
     })
     // A recovered clip is the RAW take, so a Seedance draft records its length

@@ -13,7 +13,7 @@ import { creditGuard, reserveCreditsForJob, type RoutePricing } from "../middlew
 import { videoRefBilledDurations } from "../lib/gemini-omni-12-source.js"
 import { noteAddon, noteAutoDurationSettles, noteExtraReferenceImages, noteRefVideoPricing } from "../lib/video-price-notes.js"
 import { noteExpectedBase } from "../lib/price-notes.js"
-import { resolveVideoRequestNorm } from "../lib/video-request-norm.js"
+import { resolveVideoRequestNorm, videoRequestAsRun, videoRequestReferenceMedia } from "../lib/video-request-norm.js"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../lib/ref-video-probe.js"
 import { probeAndCheckRefAudio } from "../lib/ref-audio-probe.js"
@@ -32,7 +32,7 @@ import { judgeVoicesUnderLock } from "../lib/voice-lock.js"
 import { voiceNotAvailableBody } from "../lib/voice-policy.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoSourceTrimMaxSec, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderRefModeFrameSeats, resolveVideoProviderForMode } from "@nodaro/shared/models"
+import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, SEEDANCE_REFERENCE_TASK_TYPES, PROMPT_HARD_CEILING, videoSourceTrimMaxSec, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderRefModeFrameSeats, resolveVideoProviderForMode } from "@nodaro/shared/models"
 import { VIDEO_DURATION_AUTO, isAutoVideoDuration, isSeedanceDraftCapable, hasFeature } from "@nodaro/shared/model-catalog"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, FRAME_FITS, FRAME_DELIVERIES } from "@nodaro/shared/video"
@@ -83,9 +83,9 @@ const generateVideoPublicFields = z.object({
   generateAudio: z.boolean().optional(),
   // Seconds, or VIDEO_DURATION_AUTO (-1): the model picks the length. Only the
   // providers that accept it send it on (`supportsAutoVideoDuration`); pricing
-  // reserves the model's longest clip (with a measured reference clip: that
-  // clip rounded up plus a second, `seedance2RefVideoHeldOutputSec`) and
-  // settles on the delivered one.
+  // reserves the model's longest clip (with measured reference clips: the
+  // longest of them rounded up plus a second, `seedance2RefVideoHeldOutputSec`,
+  // unless the request declares `reference`) and settles on the delivered one.
   duration: z.union([z.literal(VIDEO_DURATION_AUTO), z.number().int().min(1).max(60)]).optional(),
   mode: z.enum(["pro", "std", "4K"]).optional(),
   sound: z.boolean().optional(),
@@ -101,6 +101,12 @@ const generateVideoPublicFields = z.object({
   // 480p draft whose same take a `seedance-2-5-hd` Video Upscale finalizes at
   // 1080p. Forces 480p before pricing; any other model ignores it.
   draft: z.boolean().optional(),
+  // Seedance 2.5: what the reference media is for — a reference, an edit of the
+  // reference video, or its extension. `auto` (or absent) declares nothing.
+  // Resolved before pricing (`resolveVideoRequestNorm`); one that does not fit
+  // the request is dropped (a start or end frame is no reference), and any
+  // other model ignores it.
+  referenceTaskType: z.enum(SEEDANCE_REFERENCE_TASK_TYPES).optional(),
   grokMode: z.enum(["fun", "normal", "spicy"]).optional(),
   videoSize: z.enum(["standard", "high"]).optional(),
   seed: z.number().int().min(-1).max(2147483647).optional(),
@@ -817,12 +823,16 @@ export const generateVideoPricing: RoutePricing = {
     // Placement rule: the CHECK identifier, `computeCredits` and the
     // reservation must all be computed from the SAME normalized values.
     // Stash them so the two later sites cannot re-derive them differently.
+    // The reference clips' lengths are the pre-check's measurement, taken
+    // before this resolver runs; the handler reads the same one.
     const norm = resolveVideoRequestNorm({
       provider: sel.provider,
       aspectRatio: body?.aspectRatio as string | undefined,
       resolution: body?.resolution as string | undefined,
       duration: sel.duration,
       draft: body?.draft === true,
+      referenceTaskType: body?.referenceTaskType,
+      referenceMedia: videoRequestReferenceMedia(body ?? {}, req.refVideoDurationsSec),
     })
     req.videoNorm = norm
     req.freeVideoRequest = { provider: sel.provider, duration: norm.duration ?? sel.duration, resolution: norm.resolution ?? null, videoSize: (body?.videoSize as string | undefined) ?? null }
@@ -838,8 +848,12 @@ export const generateVideoPricing: RoutePricing = {
   },
   opts: {
     runModel: videoRunModel,
-    computeCredits: async (body, req) => {
-      const b = body as Record<string, unknown>
+    computeCredits: async (rawBody, req) => {
+      // The body as the run sends it: a declared reference task type's ratio
+      // and length replace the requested ones (the same object otherwise), so
+      // every read below — the reference-video base, the add-ons — prices the
+      // run that is sent.
+      const b = videoRequestAsRun(rawBody as Record<string, unknown>, req.videoNorm)
       const hasVideoRef = Array.isArray(b?.referenceVideoUrls) && (b.referenceVideoUrls as unknown[]).length > 0
       // R14: read the resolution the CHECK identifier was built from, never
       // the raw body — normalizing in the preHandler but not here would make
@@ -891,7 +905,15 @@ export const generateVideoPricing: RoutePricing = {
           durationsSec: videoRefBilledDurations(priceArgs.provider, durationsSec, videoTrim),
           settlesToActual: true,
         })
-        dynamicBase = seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, requestedDuration: b.duration, durationsSec, videoTrim })
+        dynamicBase = seedance2RefVideoBaseCreditsFromDurations({
+          ...priceArgs,
+          requestedDuration: b.duration,
+          // The RESOLVED declaration (the body's own field is only a request):
+          // a declared `reference` with an automatic length holds the worst case.
+          referenceTaskType: req.videoNorm?.referenceTaskType,
+          durationsSec,
+          videoTrim,
+        })
       }
       // MiniMax Hailuo 3 bills unit×(input+output) for reference-video runs
       // AND surcharges input images beyond the first 5 (11 KIE cr each).
@@ -1032,10 +1054,22 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     const outputFormat = seedance25OutputFormatFor(req, provider, parsed.data.outputFormat)
     delete parsed.data.outputFormat
     delete parsed.data.contentPolicyRewrite
+    // The requested reference task type leaves `parsed.data` too: the job
+    // records and queues the RESOLVED one by name below, and nothing when none
+    // is declared.
+    const requestedTaskType = parsed.data.referenceTaskType
+    delete parsed.data.referenceTaskType
     // Recomputed rather than read off `req` so the handler is correct even when
     // credits are disabled (community edition never runs the guard). Pure, so it
-    // agrees with the preHandler by construction.
-    const normalized = resolveVideoRequestNorm({ provider, aspectRatio, resolution, duration, draft: rawDraft })
+    // agrees with the preHandler by construction: the same reference media, read
+    // from the reference arrays as sent (before the assembly below reshapes
+    // them) and the pre-check's measurement.
+    const normalized = resolveVideoRequestNorm({
+      provider, aspectRatio, resolution, duration, draft: rawDraft,
+      referenceTaskType: requestedTaskType,
+      referenceMedia: videoRequestReferenceMedia(parsed.data, req.refVideoDurationsSec),
+    })
+    const referenceTaskType = normalized.referenceTaskType
     // Recorded only where it means something: the finalize gate reads
     // `input_data.draft === true` off this job.
     const draft = rawDraft === true && isSeedanceDraftCapable(provider) ? true : undefined
@@ -1436,6 +1470,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
               resolution: normResolution,
               duration: normDuration,
               draft,
+              // Only when declared, so `auto` records exactly what no field does.
+              ...(referenceTaskType ? { referenceTaskType } : {}),
               // The pre-check's ffprobe of the reference clips: the settlement
               // (worker, or the reconcile cron) prices from the SAME numbers
               // the reservation did instead of probing again.
@@ -1503,6 +1539,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       elements,
       resolution: normResolution,
       draft,
+      ...(referenceTaskType ? { referenceTaskType } : {}),
       grokMode,
       videoSize,
       seed,

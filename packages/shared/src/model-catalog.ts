@@ -32,6 +32,7 @@ import { isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION } from "./seedance-dr
 import { isFlux2Model } from "./flux2-pricing.js"
 import { MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION, MINIMAX_H3_IMAGE_RESOLUTIONS } from "./minimax-h3-image.js"
 import { isAutoVideoDuration } from "./video-duration-auto.js"
+import type { DeclaredSeedanceTaskType } from "./seedance-task-type.js"
 import { SEEDREAM_5_5_DEFAULT_RESOLUTION, SEEDREAM_5_5_RESOLUTIONS } from "./seedream-5-5.js"
 
 export type ModelKind = "image" | "video" | "audio"
@@ -451,6 +452,16 @@ export interface ModelCatalogEntryFields {
    * the longest clip and settled on the delivered one.
    */
   autoDuration?: boolean
+  /**
+   * The reference task types this model accepts as a declaration (see
+   * `SEEDANCE_REFERENCE_TASK_TYPES`): what the request's reference media is for
+   * — a `reference`, an `edit` of the reference video, or an `extend` of it.
+   * The list is what is honoured: `resolveSeedanceTaskType` declares only a
+   * value listed here, and anything else runs as Auto. Absent or empty: the
+   * model takes no such declaration and the provider guesses from the prompt.
+   * `supportsReferenceTaskType` says whether the list is non-empty.
+   */
+  referenceTaskTypes?: readonly DeclaredSeedanceTaskType[]
   /**
    * The model takes NO seed: its provider schema has none, so a seed the
    * request carries is dropped before the provider call and repeat runs vary.
@@ -2696,6 +2707,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
     defaultDuration: 8,
     autoDuration: true,
+    referenceTaskTypes: ["reference", "edit", "extend"],
     resolutions: ["480p", "720p", "1080p"],
     // KIE refuses a seed on Seedance 2.5 (422) — the provider config omits it.
     noSeed: true,
@@ -4533,6 +4545,31 @@ export function resolutionNearestSource(
 /** True for the "auto" aspect token in any case or padding. */
 export function isAutoAspectToken(value: unknown): boolean {
   return typeof value === "string" && value.trim().toLowerCase() === "auto"
+}
+
+/**
+ * True for the video request's "Auto" ratio — the unified node's
+ * provider-agnostic token — in exactly the spellings a video provider adapter
+ * receives it as (`"Auto"`, `"auto"`). Narrower than {@link isAutoAspectToken}
+ * on purpose: it is the wire rule's own match, so a reader of it agrees with
+ * what is sent.
+ */
+export function isVideoAutoAspectToken(value: string | undefined): boolean {
+  return value === "Auto" || value === "auto"
+}
+
+/**
+ * The ratio a video model runs the "Auto" token ({@link isVideoAutoAspectToken})
+ * at: `"adaptive"` (match the input) when the request has a visual input to
+ * match — a frame, a reference image or a reference video — and the model's
+ * catalog lists `"adaptive"`; otherwise `undefined`, and the provider adapter
+ * sends its own fixed default. The ONE mapping: the KIE adapter sends what it
+ * says, and the Seedance reference task type resolver reads it to tell a ratio
+ * it would replace from one that already runs at the ratio it forces.
+ */
+export function videoAutoAspectRunsAt(modelId: string | undefined, hasVisualInput: boolean): "adaptive" | undefined {
+  if (!hasVisualInput || !modelId) return undefined
+  return MODEL_CATALOG[modelId]?.aspectRatios?.includes("adaptive") ? "adaptive" : undefined
 }
 
 function usableSize(size: SourceImageSize | undefined): size is SourceImageSize {

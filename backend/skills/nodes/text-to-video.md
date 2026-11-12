@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-11-11T18:06:58.218Z
-generated_from: 98d2c4dc4
+generated_at: 2026-11-11T19:25:18.595Z
+generated_from: 2f1f8c4f2
 ---
 
 # Text to Video
@@ -82,6 +82,7 @@ generated_from: 98d2c4dc4
 - `negative_prompt`
 - `seed`
 - `draft`
+- `reference_task_type`
 - `structured`
 - `connected_references`
 - `described_references`

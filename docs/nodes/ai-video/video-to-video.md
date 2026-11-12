@@ -82,7 +82,10 @@ above itself (`audio` becomes the native sound) and runs it on the same Seedance
 reference-video lane, so the price, the clip-length check and the settlement
 are the ones described here. `480p`, `draft` and the three reference lists are
 accepted for this model only (any other model answers `400`). Price it first
-with `POST /v1/quote` (`type: "video-to-video"`).
+with `POST /v1/quote` (`type: "video-to-video"`). When every clip, the source and
+any extra `referenceVideoUrls`, is 4–30 seconds long (not on a draft), the server also tells Seedance
+outright that the run is an edit, instead of leaving the model to read that from
+the prompt.
 
 How the references are numbered, for `{video:N}` / `{image:N}` / `{audio:N}` in
 the prompt:
@@ -139,11 +142,13 @@ one on Generate Video: the price of `clip_seconds + delivered_seconds` seconds
 on the `-ref` ladder for the chosen resolution, as one charge rounded up.
 
 Duration is `Auto`, so an edit renders the source clip's own length. Once the
-source clip is measured, the run is **reserved for that clip's length rounded up
-to a whole second, plus one second** (never more than the model's longest clip,
-30 s), and **refunded down to the length actually delivered**. Extra reference
-clips add their seconds to the input side; the output is still the source
-clip's length, even when an extra clip is longer. A clip that cannot be
+clips are measured, the run is **reserved for the longest clip's length rounded
+up to a whole second, plus one second** (never more than the model's longest
+clip, 30 s), and **refunded down to the length actually delivered**. With the
+source clip alone, that is the source clip. Extra reference clips add their
+seconds to the input side, and when one is longer than the source the output is
+reserved for it, since the model may edit it instead; the edit usually renders
+the source clip's length and is refunded down to it. A clip that cannot be
 measured is reserved at the worst case instead: the model's longest clip out,
 and the per-clip cap in. Your balance must cover the reservation for the run to
 start.

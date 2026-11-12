@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-11-11T18:06:58.065Z
-generated_from: 98d2c4dc4
+generated_at: 2026-11-11T19:25:18.441Z
+generated_from: 2f1f8c4f2
 ---
 
 # Generate Video
@@ -118,6 +118,7 @@ The per-family doctrine below (Kling, MiniMax, VEO, Gemini Omni, Grok, Wan, Happ
 - `negative_prompt`
 - `seed`
 - `draft`
+- `reference_task_type`
 - `structured`
 - `connected_references`
 - `described_references`

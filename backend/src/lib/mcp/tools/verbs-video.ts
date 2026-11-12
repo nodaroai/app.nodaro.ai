@@ -25,7 +25,7 @@ import {
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { widgetModelOf } from "../widget-models.js"
 import { MODEL_CATALOG, modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
-import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, TOPAZ_VIDEO_RESOLUTIONS, VIDEO_UPSCALE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, type ExtendVideoProvider } from "@nodaro/shared/models"
+import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, TOPAZ_VIDEO_RESOLUTIONS, VIDEO_UPSCALE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, type ExtendVideoProvider } from "@nodaro/shared/models"
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
 import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
@@ -202,6 +202,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         negative_prompt: z.string().max(8000).optional(),
         seed: z.number().int().min(0).max(2147483647).optional(),
         draft: z.boolean().optional().describe("seedance-2-5: 480p draft (480p price); finalize with video_upscale seedance-2-5-hd."),
+        reference_task_type: z.enum(SEEDANCE_REFERENCE_TASK_TYPES).optional()
+          .describe("seedance-2-5: what the references are for (auto: model guesses). edit: the reference video's own ratio+length (each 4-30s); extend: adaptive, set length."),
         structured: StructuredFields.optional(),
         connected_references: z.array(connectedReferenceSchema).max(14).optional()
           .describe(
@@ -450,6 +452,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         negativePrompt: effective.negative_prompt as string | undefined,
         seed: effective.seed as number | undefined,
         ...(args.draft === true && isSeedanceDraftCapable(provider) ? { draft: true } : {}),
+        // Forwarded as asked: the route resolves it (and drops what does not fit).
+        ...(args.reference_task_type !== undefined ? { referenceTaskType: args.reference_task_type } : {}),
         ...(args.connected_references ? { connectedReferences: args.connected_references } : {}),
         ...(args.described_references ? { describedReferences: args.described_references } : {}),
         ...(args.reference_order ? { referenceOrder: args.reference_order } : {}),
@@ -1690,6 +1694,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             prompt: buildSeedanceVideoEditPrompt(args.prompt),
             provider,
             ...SEEDANCE_VIDEO_EDIT_SHAPE,
+            // Requested; the route declares it only when the clips qualify.
+            referenceTaskType: SEEDANCE_VIDEO_EDIT_TASK_TYPE,
             ...(args.resolution ? { resolution: args.resolution } : {}),
             ...(args.draft === true && isSeedanceDraftCapable(provider) ? { draft: true } : {}),
             referenceVideoUrls: [videoUrl, ...(args.reference_video_urls ?? [])],

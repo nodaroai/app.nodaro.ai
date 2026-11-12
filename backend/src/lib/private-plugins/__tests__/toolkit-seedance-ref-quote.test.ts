@@ -35,11 +35,11 @@ describe("tk.http.quoteSeedanceRefVideo", () => {
     await expect(quote(args)).resolves.toEqual(await seedance2RefVideoChargedHoldQuote(args))
   })
 
-  it("several clips: the first decides the Auto output, all count as input", async () => {
-    // hold ceil(95 × (16.1 + 6)) = 2100 → 2310; expected ceil(95 × (16.1 + 4.1)) — 20.2 s in floating
+  it("several clips: the longest holds the Auto output, the first is the expected one, all count as input", async () => {
+    // hold ceil(95 × (16.1 + 13)) = 2765 → 3042; expected ceil(95 × (16.1 + 4.1)) — 20.2 s in floating
     // point is a hair over, so 1920 → 2112 (the run's settlement does the same arithmetic).
     await expect(quote({ provider: "seedance-2-5", resolution: "720p", duration: -1, durationsSec: [4.1, 12] }))
-      .resolves.toEqual({ hold: 2310, expected: 2112 })
+      .resolves.toEqual({ hold: 3042, expected: 2112 })
   })
 
   it("a fixed duration: held and expected at the requested seconds", async () => {
@@ -60,6 +60,23 @@ describe("tk.http.quoteSeedanceRefVideo", () => {
     // 480p -ref 340 / 8 = 42.5: hold ceil(42.5 × 10.1) = 430 → 473.
     const draft = await quote({ provider: "seedance-2-5", resolution: "1080p", draft: true, duration: -1, durationsSec: [4.1] })
     expect(draft.hold).toBe(473)
+  })
+
+  it("a run that declares reference with an Auto duration holds the model's longest output, as the run reserves it", async () => {
+    // 5 s in + 30 s out: ceil(95 × 35) = 3325 → 3658 (not the edit hold's 5 + 6 s).
+    const args = { provider: "seedance-2-5", resolution: "720p", duration: -1, durationsSec: [5], referenceTaskType: "reference" as const }
+    const declared = await quote(args)
+    expect(declared.hold).toBe(3658)
+    await expect(quote(args)).resolves.toEqual(await seedance2RefVideoChargedHoldQuote(args))
+    const { referenceTaskType: _type, ...plain } = args
+    expect((await quote(plain)).hold).toBe(1150)
+  })
+
+  it("edit, extend and a fixed-length reference quote exactly as without the field", async () => {
+    for (const [duration, referenceTaskType] of [[-1, "edit"], [8, "extend"], [8, "reference"], [-1, "auto"]] as const) {
+      const args = { provider: "seedance-2-5", resolution: "720p", duration, durationsSec: [5] }
+      await expect(quote({ ...args, referenceTaskType }), `${referenceTaskType} ${duration}`).resolves.toStrictEqual(await quote(args))
+    }
   })
 
   it("refuses a model whose price does not follow its reference clips, and an empty clip list", async () => {

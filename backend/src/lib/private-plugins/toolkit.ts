@@ -1749,6 +1749,8 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   // tk.media.pitchTempo takes -24..24 semitones, half steps included, in one pass (providers/video/pitch-tempo.ts
   // `PITCH_SHIFT_MAX_SEMITONES`).
   pitchTempoTwoOctaves: true,
+  // /v1/generate-video takes `referenceTaskType` for Seedance 2.5 (lib/video-request-norm.ts resolves it).
+  seedanceReferenceTaskType: true,
 })
 
 export interface BuildToolkitOptions {

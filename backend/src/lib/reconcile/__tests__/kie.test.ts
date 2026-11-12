@@ -270,6 +270,37 @@ describe("reconcileKieJob", () => {
     expect(mocks.finalizeMock).toHaveBeenCalledWith(expect.objectContaining({ jobId: "j-seedance", meteredBaseCredits: 7193 }))
   })
 
+  it("a recovered run hands the settlement the reference task type its job recorded (the hold it sized)", async () => {
+    mocks.pollKieTaskMock.mockResolvedValueOnce({
+      resultJson: { resultUrls: ["https://kie.example/out.mp4"] },
+      providerMs: 40000,
+      taskId: "t-ref",
+    })
+    settle.measure.mockResolvedValueOnce(3325)
+    await reconcileKieJob({
+      id: "j-ref",
+      provider_kind: "kie-standard",
+      provider_task_id: "t-ref",
+      reconcile_attempts: 0,
+      job_type: "text-to-video",
+      input_data: {
+        provider: "seedance-2-5", resolution: "720p", duration: -1, referenceTaskType: "reference",
+        referenceVideoUrls: ["https://r2.example.com/videos/ref.mp4"], refVideoDurationsSec: [5],
+      },
+    })
+    expect(settle.measure.mock.calls.at(-1)![0]).toStrictEqual({
+      provider: "seedance-2-5",
+      resolution: "720p",
+      outputUrl: "https://kie.example/out.mp4",
+      referenceVideoUrls: ["https://r2.example.com/videos/ref.mp4"],
+      refVideoDurationsSec: [5],
+      duration: -1,
+      referenceTaskType: "reference",
+      jobId: "j-ref",
+    })
+    expect(mocks.finalizeMock).toHaveBeenCalledWith(expect.objectContaining({ jobId: "j-ref", meteredBaseCredits: 3325 }))
+  })
+
   it("a recovered GPT Image 2.6 Auto run settles on what KIE billed, as the worker would have", async () => {
     mocks.pollKieTaskMock.mockResolvedValueOnce({
       resultJson: { resultUrls: ["https://kie.example/out.png"] },

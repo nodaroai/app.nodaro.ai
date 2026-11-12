@@ -246,6 +246,65 @@ describe("voiced-video handler — wired references ride along (#1396)", () => {
   })
 })
 
+/**
+ * Seedance 2.5 is audio_driven, so a voiced run can carry reference videos and
+ * the route's resolved `referenceTaskType` on the same payload as an unvoiced
+ * one. The lane passes it to the provider like `draft` — on every call it can
+ * make — and the KIE adapter decides whether the request takes it.
+ */
+describe("voiced-video handler — the declared reference task type", () => {
+  const REFS = ["https://r2.example.com/videos/ref.mp4"]
+  const voicedEdit = (over: Record<string, unknown> = {}) =>
+    makeJob({
+      imageUrl: "https://x.png",
+      prompt: "she greets",
+      provider: "seedance-2-5",
+      aspectRatio: "adaptive",
+      duration: -1,
+      referenceVideoUrls: REFS,
+      refVideoDurationsSec: [6],
+      characterVoices: [{ voiceId: "W3C2vBPukr5b5jvoXhPK", voiceType: "library", speaker: "Natalie" }],
+      dialogue: [{ speaker: "Natalie", line: "good morning" }],
+      voicedAudioAddon: 25,
+      referenceTaskType: "edit",
+      ...over,
+    }) as never
+
+  it("audio_driven: the payload's value reaches the provider beside the synthesised track", async () => {
+    await handler(voicedEdit(), ctx)
+    const opts = mocks.mockImageToVideo.mock.calls[0]![5] as Record<string, unknown>
+    expect(opts.referenceTaskType).toBe("edit")
+    expect(opts.referenceVideoUrls).toEqual(REFS)
+    expect(opts.referenceAudioUrls).toEqual(["https://r2.example.com/tts.mp3"])
+  })
+
+  it("the voice chain failed: the plain clip it falls back to still carries it", async () => {
+    mocks.mockDirectTTS.mockRejectedValueOnce(new Error("tts down"))
+    await handler(voicedEdit(), ctx)
+    expect(mocks.mockImageToVideo).toHaveBeenCalledTimes(1)
+    const opts = mocks.mockImageToVideo.mock.calls[0]![5] as Record<string, unknown>
+    expect(opts.referenceTaskType).toBe("edit")
+    expect(opts.referenceVideoUrls).toEqual(REFS)
+  })
+
+  it("no voice resolvable: the plain clip carries it", async () => {
+    await handler(voicedEdit({ characterVoices: [], dialogue: [], referenceTaskType: "reference" }), ctx)
+    const opts = mocks.mockImageToVideo.mock.calls[0]![5] as Record<string, unknown>
+    expect(opts.referenceTaskType).toBe("reference")
+  })
+
+  it("the settlement is handed the declared type the hold was sized from", async () => {
+    await handler(voicedEdit({ referenceTaskType: "reference" }), ctx)
+    expect(mocks.mockMeasure).toHaveBeenCalledWith(expect.objectContaining({ duration: -1, refVideoDurationsSec: [6], referenceTaskType: "reference" }))
+  })
+
+  it("absent: the provider options have no such key", async () => {
+    await handler(voicedEdit({ referenceTaskType: undefined }), ctx)
+    const opts = mocks.mockImageToVideo.mock.calls[0]![5] as Record<string, unknown>
+    expect(opts).not.toHaveProperty("referenceTaskType")
+  })
+})
+
 describe("voiced-video handler — [audio tags] on the single-voice path", () => {
   const TAGGED = "[whispers] good morning"
   const run = (ttsProvider: string | undefined) =>

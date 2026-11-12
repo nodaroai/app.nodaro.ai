@@ -102,7 +102,7 @@ describe("POST /v1/credits/seedance-ref-estimate", () => {
   it("equals the reservation's own arithmetic, markup applied once at the run's identifier", async () => {
     settings.value = { cost_markup_percent: 40 }
     const res = await post({ provider: "seedance-2-5", resolution: "1080p", duration: 8, referenceVideoUrls: [CLIP_4, CLIP_10] })
-    const base = seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "1080p", outputDurationSec: 8, requestedDuration: 8, durationsSec: [4, 10.04] })
+    const base = seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "1080p", outputDurationSec: 8, requestedDuration: 8, referenceTaskType: undefined, durationsSec: [4, 10.04] })
     expect(res.json().data.credits).toBe(applyServiceMarkup(base, settings.value as never, "seedance-2-5:8s:1080p-ref"))
   })
 
@@ -141,5 +141,64 @@ describe("POST /v1/credits/seedance-ref-estimate", () => {
   it("refuses a provider whose reference-video runs are not priced this way, and an empty request", async () => {
     expect((await post({ provider: "kling", referenceVideoUrls: [CLIP_10] })).statusCode).toBe(400)
     expect((await post({ provider: "seedance-2-5", referenceVideoUrls: [] })).statusCode).toBe(400)
+  })
+
+  // A run that declares `reference` with an automatic length is reserved at the
+  // model's longest output (Seedance picks a reference's length; only an edit
+  // follows its clip), so the estimate prices it there too.
+  describe("referenceTaskType", () => {
+    const CLIP_5 = "https://cdn.example/clip-5.mp4"
+    const CLIP_12 = "https://cdn.example/clip-12.mp4"
+    beforeEach(() => {
+      probe.durations.set(CLIP_5, 5)
+      probe.durations.set(CLIP_12, 12)
+    })
+    const auto = { provider: "seedance-2-5", resolution: "720p", duration: VIDEO_DURATION_AUTO }
+    const worst = (durationsSec: number[]) => seedance2RefVideoBaseCreditsFromDurations({
+      provider: "seedance-2-5", resolution: "720p", outputDurationSec: 30, requestedDuration: VIDEO_DURATION_AUTO, referenceTaskType: "reference", durationsSec,
+    })
+
+    it("reference + Auto, one 5 s clip at 720p: the worst case, ceil(95 × 35) = 3325 — what the run reserves", async () => {
+      const res = await post({ ...auto, referenceTaskType: "reference", referenceVideoUrls: [CLIP_5] })
+      expect(res.statusCode).toBe(200)
+      expect(worst([5])).toBe(Math.ceil(perSec("720p") * 35))
+      expect(res.json().data).toStrictEqual({ credits: worst([5]), min: worst([5]), exact: true })
+    })
+
+    it("reference + Auto, two clips: the longest output, both clips as input", async () => {
+      const res = await post({ ...auto, referenceTaskType: "reference", referenceVideoUrls: [CLIP_5, CLIP_12] })
+      expect(res.json().data).toStrictEqual({ credits: worst([5, 12]), min: worst([5, 12]), exact: true })
+    })
+
+    it("reference + Auto with a clip not produced yet: the worst case, and the least is the longest output with the shortest clip", async () => {
+      const res = await post({ ...auto, referenceTaskType: "reference", referenceVideoUrls: [], unknownReferenceVideos: 1 })
+      const { minSec, maxSec } = VIDEO_REF_VIDEO_DURATION_LIMITS["seedance-2-5"]!
+      expect(res.json().data).toStrictEqual({ credits: worst([maxSec]), min: worst([minSec]), exact: false })
+      // Undeclared, the least is the edit hold of the shortest clip.
+      const plain = await post({ ...auto, referenceVideoUrls: [], unknownReferenceVideos: 1 })
+      expect(plain.json().data).toStrictEqual({ credits: worst([maxSec]), min: Math.ceil(perSec("720p") * (minSec + Math.ceil(minSec) + 1)), exact: false })
+    })
+
+    it("anything else answers exactly what the request without the field answers", async () => {
+      const cases: Array<[Record<string, unknown>, string]> = [
+        [{ ...auto, referenceVideoUrls: [CLIP_5] }, "edit"],
+        [{ ...auto, referenceVideoUrls: [CLIP_5] }, "auto"],
+        [{ ...auto, duration: 8, referenceVideoUrls: [CLIP_5] }, "extend"],
+        [{ ...auto, duration: 8, referenceVideoUrls: [CLIP_5] }, "reference"],
+        [{ ...auto, draft: true, referenceVideoUrls: [CLIP_5] }, "reference"],
+        [{ ...auto, provider: "seedance-2", referenceVideoUrls: [CLIP_5] }, "reference"],
+        [{ ...auto, referenceVideoUrls: [], unknownReferenceVideos: 1 }, "edit"],
+      ]
+      for (const [body, referenceTaskType] of cases) {
+        const declared = await post({ ...body, referenceTaskType })
+        const plain = await post(body)
+        expect(declared.statusCode, `${referenceTaskType} ${JSON.stringify(body)}`).toBe(200)
+        expect(declared.json(), `${referenceTaskType} ${JSON.stringify(body)}`).toStrictEqual(plain.json())
+      }
+    })
+
+    it("a value outside the vocabulary is a 400", async () => {
+      expect((await post({ ...auto, referenceTaskType: "Edit", referenceVideoUrls: [CLIP_5] })).statusCode).toBe(400)
+    })
   })
 })

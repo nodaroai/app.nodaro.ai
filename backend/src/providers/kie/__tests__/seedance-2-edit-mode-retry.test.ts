@@ -69,6 +69,7 @@ vi.mock("sharp", () => {
 })
 
 import { KieVideoProvider, isSeedance2EditModeRejection, SEEDANCE_2_EDIT_MODE_PARAMS } from "../video.js"
+import { seedance2EditModeResendInput } from "../seedance-edit-mode.js"
 
 /** KIE's message, verbatim from the field report. */
 const EDIT_MODE_FAILMSG =
@@ -127,6 +128,39 @@ describe("isSeedance2EditModeRejection", () => {
     ]) {
       expect(isSeedance2EditModeRejection(msg), msg).toBe(false)
     }
+  })
+})
+
+describe("seedance2EditModeResendInput — the one resend body both lanes send", () => {
+  const SENT = {
+    prompt: "make it night",
+    duration: 8,
+    aspect_ratio: "16:9",
+    resolution: "720p",
+    reference_video_urls: ["https://cdn.nodaro.ai/videos/source.mp4"],
+  }
+
+  it("drops the declared task type and applies the edit shape", () => {
+    const original = { ...SENT, omni_reference_task_type: "reference" }
+    const resend = seedance2EditModeResendInput(original)
+    expect(resend).toEqual({ ...SENT, aspect_ratio: "adaptive", duration: -1 })
+    expect("omni_reference_task_type" in resend).toBe(false)
+  })
+
+  it("never mutates the original", () => {
+    const original = { ...SENT, omni_reference_task_type: "extend" }
+    const before = structuredClone(original)
+    const resend = seedance2EditModeResendInput(original)
+    expect(original).toEqual(before)
+    expect(resend).not.toBe(original)
+  })
+
+  it("an undeclared input gives exactly what `{ ...input, ...SEEDANCE_2_EDIT_MODE_PARAMS }` gave", () => {
+    const resend = seedance2EditModeResendInput(SENT)
+    const old = { ...SENT, ...SEEDANCE_2_EDIT_MODE_PARAMS }
+    expect(resend).toEqual(old)
+    // Same keys in the same order: the body is byte for byte today's.
+    expect(JSON.stringify(resend)).toBe(JSON.stringify(old))
   })
 })
 
@@ -263,6 +297,54 @@ describe("seedance-2-5 edit-mode retry (i2v entry path)", () => {
     ).rejects.toThrow()
 
     expect(mocks.mockRunKieTask).toHaveBeenCalledTimes(1)
+  })
+
+  it("a declared task type the provider overrode as an edit is dropped from the resubmit", async () => {
+    // The provider answered a declared `reference` with its edit-mode words:
+    // the resubmit is the undeclared edit-shape request, never `reference`
+    // laid over adaptive / -1.
+    mocks.mockRunKieTask
+      .mockRejectedValueOnce(new Error(EDIT_MODE_FAILMSG))
+      .mockResolvedValueOnce(OK)
+
+    await provider.imageToVideo(undefined, "make it night", "seedance-2-5", 12, undefined, {
+      aspectRatio: "16:9",
+      resolution: "720p",
+      referenceVideoUrls: ["https://cdn.nodaro.ai/videos/source.mp4"],
+      referenceTaskType: "reference",
+    } as never)
+
+    expect(mocks.mockRunKieTask).toHaveBeenCalledTimes(2)
+    const [first, second] = sentInputs()
+    expect(first.omni_reference_task_type).toBe("reference")
+    expect(second.aspect_ratio).toBe("adaptive")
+    expect(second.duration).toBe(-1)
+    expect("omni_reference_task_type" in second).toBe(false)
+    // Everything else is the first payload's: only the declaration and the shape move.
+    expect(second.prompt).toBe(first.prompt)
+    expect(second.reference_video_urls).toEqual(first.reference_video_urls)
+    // One log line says which declaration was dropped, and why.
+    const dropped = vi.mocked(console.warn).mock.calls.map((c) => String(c[0])).filter((l) => l.includes("dropped the declared reference task type"))
+    expect(dropped).toHaveLength(1)
+    expect(dropped[0]).toContain('"reference"')
+    expect(dropped[0]).toContain("seedance-2-5")
+    expect(dropped[0]).toContain("ran the request as an edit")
+  })
+
+  it("an undeclared resubmit logs no dropped declaration", async () => {
+    mocks.mockRunKieTask
+      .mockRejectedValueOnce(new Error(EDIT_MODE_FAILMSG))
+      .mockResolvedValueOnce(OK)
+
+    await provider.imageToVideo(undefined, "make it night", "seedance-2-5", 12, undefined, {
+      aspectRatio: "16:9",
+      resolution: "720p",
+      referenceVideoUrls: ["https://cdn.nodaro.ai/videos/source.mp4"],
+    } as never)
+
+    expect(mocks.mockRunKieTask).toHaveBeenCalledTimes(2)
+    const lines = vi.mocked(console.warn).mock.calls.map((c) => String(c[0]))
+    expect(lines.some((l) => l.includes("dropped the declared reference task type"))).toBe(false)
   })
 
   it("leaves the happy path at exactly one submit", async () => {

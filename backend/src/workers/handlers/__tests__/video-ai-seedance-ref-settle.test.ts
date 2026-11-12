@@ -158,6 +158,17 @@ describe("image-to-video handler — Seedance reference-video settlement", () =>
     expect(finalizeArg().extraNonProviderCredits).toBe(30)
   })
 
+  it("hands the settlement the type the route declared (the hold it sized)", async () => {
+    await handler(
+      makeJob("image-to-video", {
+        imageUrl: "https://x.png", provider: "seedance-2-5", resolution: "720p", duration: -1,
+        referenceVideoUrls: REFS, refVideoDurationsSec: [5], referenceTaskType: "reference",
+      }) as never,
+      ctx as never,
+    )
+    expect(mocks.mockMeasure).toHaveBeenCalledWith(expect.objectContaining({ duration: -1, refVideoDurationsSec: [5], referenceTaskType: "reference" }))
+  })
+
   it("no measurement (not a Seedance ref run, or unmeasurable) → finalize commits the reservation as before", async () => {
     await handler(makeJob("image-to-video", { imageUrl: "https://x.png", provider: "veo3.1", duration: 8 }) as never, ctx as never)
     expect(mocks.mockMeasure).toHaveBeenCalledWith({
@@ -183,6 +194,16 @@ describe("text-to-video handler — Seedance reference-video settlement", () => 
       provider: "seedance-2-5", resolution: "720p", outputUrl: RAW_URL, referenceVideoUrls: REFS, refVideoDurationsSec: [30], duration: 12, jobId: "job-1",
     })
     expect(finalizeArg().meteredBaseCredits).toBe(3990)
+  })
+
+  it("hands the settlement the type the route declared (the hold it sized), and none when none was", async () => {
+    const job = { prompt: "a cat in the style of @video_1", provider: "seedance-2-5", resolution: "720p", duration: -1, referenceVideoUrls: REFS, refVideoDurationsSec: [5] }
+    await handler(makeJob("text-to-video", { ...job, referenceTaskType: "reference" }) as never, ctx as never)
+    expect(mocks.mockMeasure.mock.calls.at(-1)![0]).toStrictEqual({
+      provider: "seedance-2-5", resolution: "720p", outputUrl: RAW_URL, referenceVideoUrls: REFS, refVideoDurationsSec: [5], duration: -1, referenceTaskType: "reference", jobId: "job-1",
+    })
+    await handler(makeJob("text-to-video", job) as never, ctx as never)
+    expect(mocks.mockMeasure.mock.calls.at(-1)![0]).toHaveProperty("referenceTaskType", undefined)
   })
 
   it("no measurement → finalize commits the reservation as before", async () => {

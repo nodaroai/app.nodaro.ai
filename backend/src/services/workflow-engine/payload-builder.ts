@@ -152,6 +152,7 @@ import {
   isSeedanceExtendProvider,
   canonicalVideoProvider,
   SEEDANCE_VIDEO_EDIT_SHAPE,
+  SEEDANCE_VIDEO_EDIT_TASK_TYPE,
   isMinimaxH3Provider,
   isWan3Provider,
   isGeminiOmniProvider,
@@ -5224,6 +5225,10 @@ function buildPayloadOf(
             referenceVideoUrls: editVideoUrl ? [editVideoUrl] : undefined,
             referenceImageUrls: editImageUrls.length > 0 ? editImageUrls : undefined,
             referenceAudioUrls: resolvedInputs.referenceAudioUrls,
+            // REQUESTED, as the route requests it: the executor resolves it
+            // once the clip is measured (lib/seedance-task-type-stamp.ts), and
+            // it moves nothing priced here (the edit shape is already its own).
+            referenceTaskType: SEEDANCE_VIDEO_EDIT_TASK_TYPE,
             usageLogId,
           },
         }

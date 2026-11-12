@@ -1496,6 +1496,12 @@ const I2I_MASK_MODELS_BYTES = 126
 // description shared), and nothing else. No tool was added, so the fixture does NOT move. Measured
 // by this suite: 522_874 total − 522_636 = 238 B, all on modify_image.
 const MODIFY_IMAGE_MASK_BYTES = 238
+// RAISED 2026-11-11 by `reference_task_type` on generate_video (what a Seedance 2.5 run's
+// references are for: auto, reference, edit or extend, and that edit takes the reference video's
+// own ratio and length while extend runs adaptive at a set length), and nothing else. No tool was
+// added, so the fixture does NOT move. Measured by this suite: 523_128 total − 522_874 = 254 B, all
+// on generate_video (9_470 → 9_724 B, under the per-tool budget).
+const SEEDANCE_REFERENCE_TASK_TYPE_ARG_BYTES = 254
 // RAISED 2026-11-11 by Seedream 5.5 (`seedream-5-5` t2i + `seedream-5-5-i2i`), and nothing else:
 // it widens the model lists generate_image / modify_image / image_to_image already carry, adds
 // `1.5K` (its middle size) to generate_image's resolution note and image_to_image's resolution
@@ -1710,6 +1716,7 @@ export const TOOL_WIRE_BUDGET = {
     EXTEND_SEEDANCE_SPLIT_BYTES +
     I2I_MASK_MODELS_BYTES +
     MODIFY_IMAGE_MASK_BYTES +
+    SEEDANCE_REFERENCE_TASK_TYPE_ARG_BYTES +
     SEEDREAM_5_5_TOTAL_BYTES +
     VIDEO_OVERLAY_VIDEO_LAYERS_BYTES +
     KLING_4_FLASH_MODELS_BYTES,

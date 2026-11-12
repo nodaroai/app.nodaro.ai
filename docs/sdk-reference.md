@@ -3361,6 +3361,36 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > source is refused with a 4xx before anything is charged. See
 > [Seedance 2.5 HD (from draft)](./nodes/processing-video/video-upscale.md#seedance-25-hd-from-draft).
 
+> **Seedance 2.5 reference task type.** `GenerateVideoParams` and
+> `TextToVideoParams` take `referenceTaskType?: "auto" | "reference" | "edit" | "extend"`,
+> which tells `seedance-2-5` what the reference media is for instead of leaving
+> it to the prompt; every other model ignores it, and so does a draft
+> (`draft: true`) or a run with no reference media (a start or end frame does
+> not count). `"auto"` (the default) declares nothing. `"reference"` keeps your
+> `aspectRatio` and `duration`; with an Auto `duration` (`-1`) the run is
+> reserved at the longest output the model can make, and charged what it makes.
+> `"edit"` edits the reference video in its own
+> shape and length (`aspectRatio` becomes `"adaptive"`, `duration` Auto) and
+> needs every reference video to be 4–30 s long; otherwise nothing is declared
+> and the run keeps the ratio and length you sent. `"extend"` continues the
+> reference video in its own shape at a set length (Auto or no `duration`
+> becomes the model's default); the platform returns the model's clip as
+> delivered, without joining the source to it, so expect the continuation
+> only (for both as one video, run `extend-video`). `edit` and `extend` need a
+> reference video. What they
+> change comes back in `result.adjustments`, and `nodes.quote` prices the body
+> the same way the run does. See
+> [Seedance 2.5 reference task type](./api-integration.md#seedance-25-reference-task-type).
+>
+> ```ts
+> await client.nodes.run("generate-video", {
+>   provider: "seedance-2-5",
+>   prompt: "remove the sign on the wall",
+>   referenceVideoUrls: [clipUrl],
+>   referenceTaskType: "edit",
+> } satisfies GenerateVideoParams)
+> ```
+
 > **Topaz video upscale.** `VideoUpscaleParams` takes `targetResolution`
 > (`"720p" | "1080p" | "4k"`, the frame's short side, default 1080p) and
 > `targetFps` (15–60, default the source's own rate):
@@ -3892,8 +3922,10 @@ string[]` (its default first) and, where it writes them, `gifFrameSize` (512),
 (each absent on every other model, and on an older server).
 
 `ModelSummary` also types `defaultDuration` (the length an unset `duration`
-renders and is charged at) and `autoDuration` (`duration: -1` lets the model
-pick the length).
+renders and is charged at), `autoDuration` (`duration: -1` lets the model
+pick the length) and `referenceTaskTypes` (the values `referenceTaskType`
+takes on that model: `["reference", "edit", "extend"]` on `seedance-2-5`,
+absent elsewhere).
 
 ```ts
 const { sections } = await client.models.list({ kind: "image" })

@@ -390,6 +390,41 @@ ONCE with `SEEDANCE_2_EDIT_MODE_PARAMS`. Gated on the provider AND the provider'
 own words; every other model keeps plain `runKieTask` behaviour. The retry
 returns `sentInput` so the credit audit reports the body that actually billed.
 
+**Declared task type (`omni_reference_task_type`, `seedanceTaskTypeForBody`).**
+A request can say what its reference media is for instead of leaving Seedance
+to guess from the prompt: `referenceTaskType` = `reference` | `edit` | `extend`
+(`auto` or absent declares nothing). The routes resolve it before pricing
+(`resolveSeedanceTaskType` through `resolveVideoRequestNorm`: `edit` runs at
+`adaptive` + `-1`, `extend` at `adaptive` + a fixed length) and queue only the
+resolved value; the i2v, t2v and voiced-video handlers pass it on as
+`ProviderOptions.referenceTaskType`. `applySeedance2Params` writes it AFTER
+`resolveSeedance2Inputs`, on the body as it will be sent, only when ALL hold:
+the model's catalog `referenceTaskTypes` lists the value
+(`listedSeedanceTaskType` — `seedance-2-5` today; never a hand-written model
+id), the run is not a draft, the body's `reference_*_urls` are the media the
+type needs (`seedanceTaskTypeFitsMedia`, the resolver's own rule: `edit` and
+`extend` need `reference_video_urls`, since both act on a reference video,
+while `reference` takes any reference media), `first_frame_url` is not on the
+body (a start frame beside reference media rides as a reference image, so that
+run still takes it), and an `edit` or `extend` body is in its shape (`edit`:
+`isSeedance2EditModeInput`, `adaptive` + `-1`; `extend`: `adaptive`). A route
+request always is; one that skipped the routes and is not gets no key and one
+warning. It is NEVER sent on a text-only body or in either frame mode (KIE:
+"only supported in multimodal reference tasks"), on a draft, on an
+`edit`/`extend` without a reference video or out of its shape, or on another
+model; no option means no key, so the body is byte-identical to the
+undeclared one. **An edit-mode re-send drops the declaration:** when the
+provider answers with its edit-mode words it has overridden the declared type,
+so both re-send lanes — the retry above and the reconcile resend
+(`lib/reconcile/seedance-edit-resubmit.ts`) — send
+`seedance2EditModeResendInput(body)` (`seedance-edit-mode.ts`): the original
+without `omni_reference_task_type`, with `SEEDANCE_2_EDIT_MODE_PARAMS` applied,
+exactly the undeclared edit-shape request, and logs one line naming the
+dropped value (the reconcile lane also names the job and the task). A declared
+`edit` is already in edit shape, so neither lane re-sends it. The Nodaro cloud relay
+(`providers/nodaro/video.ts`) forwards the option as the public
+`referenceTaskType` field, and the far end resolves it again.
+
 **Billing:** commit can only refund, so the reservation is the WORST CASE and the
 commit is measured. `seedance2RefVideoBaseCreditsFromDurations` (ee/billing)
 bills the output at the longer of the requested duration and the longest
@@ -408,7 +443,15 @@ basis), clamped at the reservation, no anomaly filed for settling below it, and
 parked in `held_completion_fields` so a review approve replays it
 (`heldCommitArgs` is the one mapping both use). A style run is refunded to its
 requested duration; an edit of a 30s clip from a node set to 12s pays for 30s.
-An unmeasurable delivery commits the reservation.
+An unmeasurable delivery commits the reservation. An Auto (`-1`) run with every
+clip measured is held as an edit (the longest clip + 1 s,
+`seedance2RefVideoHeldOutputSec`) — except a run whose RESOLVED type is
+`reference`: a reference runs at a length the model picks, so it is held at the
+worst case (Auto = the model's longest output) and charged what it delivers,
+capped at that hold. The type is a REQUIRED key on the hold, the reservation
+(`…FromDurations`/`…FromUrls`), the quote and the settlement args, read from
+`req.videoNorm.referenceTaskType` (routes), the stamped payload (executor) and
+the job's `referenceTaskType` (worker lanes, reconcile) — never the raw body.
 
 **Reference videos are re-encoded (`reference-video-reencode.ts`).** Both
 Seedance branches of `KieVideoProvider` (i2v + t2v) swap the prepared body's

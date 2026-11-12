@@ -1374,6 +1374,7 @@ Needs `workflows:execute`.
 | `negative_prompt` | string |  | At most 8000 characters. |
 | `seed` | integer |  | From 0 to 2147483647. |
 | `draft` | boolean |  | seedance-2-5: 480p draft (480p price); finalize with video_upscale seedance-2-5-hd. |
+| `reference_task_type` | string |  | seedance-2-5: what the references are for (auto: model guesses). edit: the reference video's own ratio+length (each 4-30s); extend: adaptive, set length. One of `auto`, `reference`, `edit`, `extend`. |
 | `structured` | object |  |  |
 | `structured.person` | object |  |  |
 | `structured.person.age` | integer |  | From 0 to 120. |

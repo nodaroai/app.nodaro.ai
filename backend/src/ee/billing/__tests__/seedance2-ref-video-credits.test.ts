@@ -72,48 +72,49 @@ describe("seedance2RefVideoBaseCredits", () => {
  */
 describe("seedance2RefVideoBaseCreditsFromDurations (the reservation)", () => {
   it("a clip shorter than the requested duration changes nothing: 2.5 1080p, 8s out + 5s in = 3088", () => {
-    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "1080p", outputDurationSec: 8, requestedDuration: 8, durationsSec: [5] })).toBe(3088)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "1080p", outputDurationSec: 8, requestedDuration: 8, referenceTaskType: undefined, durationsSec: [5] })).toBe(3088)
   })
 
   it("a clip LONGER than the requested duration bills the output at the clip's length (an edit renders it): 12s requested + 30s clip = ceil(237.5 × (30 + 30)) = 14250", () => {
-    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "1080p", outputDurationSec: 12, requestedDuration: 12, durationsSec: [30] })).toBe(14250)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "1080p", outputDurationSec: 12, requestedDuration: 12, referenceTaskType: undefined, durationsSec: [30] })).toBe(14250)
     expect(Math.ceil(S25_1080P_PER_SEC * 60)).toBe(14250)
   })
 
   it("several clips: every clip is input, the LONGEST is the output worst case: 720p, 8s + [5, 20] = ceil(95 × (25 + 20)) = 4275", () => {
-    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "720p", outputDurationSec: 8, requestedDuration: 8, durationsSec: [5, 20] })).toBe(4275)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "720p", outputDurationSec: 8, requestedDuration: 8, referenceTaskType: undefined, durationsSec: [5, 20] })).toBe(4275)
     expect(Math.ceil(S25_720P_PER_SEC * 45)).toBe(4275)
   })
 
   it("an unusable probe counts as the provider's per-clip cap, in AND out: seedance-2-5 (30s cap), 8s + [NaN] = ceil(95 × 60) = 5700", () => {
-    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "720p", outputDurationSec: 8, requestedDuration: 8, durationsSec: [NaN] })).toBe(5700)
-    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "720p", outputDurationSec: 8, requestedDuration: 8, durationsSec: [0] })).toBe(5700)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "720p", outputDurationSec: 8, requestedDuration: 8, referenceTaskType: undefined, durationsSec: [NaN] })).toBe(5700)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "720p", outputDurationSec: 8, requestedDuration: 8, referenceTaskType: undefined, durationsSec: [0] })).toBe(5700)
   })
 
   it("a provider with no declared bound keeps the 2.0 family's 15s worst case: seedance-2, 8s + [NaN] = ceil(62.5 × (15 + 15)) = 1875", () => {
-    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2", resolution: "720p", outputDurationSec: 8, requestedDuration: 8, durationsSec: [NaN] })).toBe(1875)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2", resolution: "720p", outputDurationSec: 8, requestedDuration: 8, referenceTaskType: undefined, durationsSec: [NaN] })).toBe(1875)
     expect(Math.ceil(S2_720P_PER_SEC * 30)).toBe(1875)
   })
 
   it("no clips at all → the requested duration alone (8s 720p seedance-2 = 500)", () => {
-    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2", resolution: "720p", outputDurationSec: 8, requestedDuration: 8, durationsSec: [] })).toBe(500)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2", resolution: "720p", outputDurationSec: 8, requestedDuration: 8, referenceTaskType: undefined, durationsSec: [] })).toBe(500)
   })
 
   it("the summed input is capped at the provider's declared total — past it the provider rejects the run: 2.5, 8s + [NaN, NaN] = ceil(95 × (30 + 30)) = 5700, not ceil(95 × 90)", () => {
-    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "720p", outputDurationSec: 8, requestedDuration: 8, durationsSec: [NaN, NaN] })).toBe(5700)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "720p", outputDurationSec: 8, requestedDuration: 8, referenceTaskType: undefined, durationsSec: [NaN, NaN] })).toBe(5700)
   })
 
   it("a null (a NaN that went through JSON) is an unusable probe too", () => {
-    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "720p", outputDurationSec: 8, requestedDuration: 8, durationsSec: [null as unknown as number] })).toBe(5700)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "720p", outputDurationSec: 8, requestedDuration: 8, referenceTaskType: undefined, durationsSec: [null as unknown as number] })).toBe(5700)
   })
 })
 
 /**
  * The AUTO-duration edit hold (2026-10-26): an Auto run with every reference
- * clip measured renders its SOURCE clip (`@video_1`), so the hold covers that
- * clip rounded up to a whole second plus one second — never the model's
- * longest clip. Evidence: a 4.1 s clip at 720p on seedance-2-5 used to hold
- * 4.1 + 30 s and delivered ≈ 4.1 s.
+ * clip measured renders the length of the clip it edits, so the hold covers
+ * the LONGEST clip (the model may edit any of them; with one clip, that clip)
+ * rounded up to a whole second plus one second — never the model's longest
+ * clip. Evidence: a 4.1 s clip at 720p on seedance-2-5 used to hold 4.1 + 30 s
+ * and delivered ≈ 4.1 s.
  */
 describe("the Auto-duration edit hold", () => {
   const AUTO = VIDEO_DURATION_AUTO
@@ -124,8 +125,8 @@ describe("the Auto-duration edit hold", () => {
   })
 
   it("one clip: 4.1 s → 6 s output held (ceil 5 + 1), input 4.1 s: ceil(95 × 10.1) = 960, not ceil(95 × 34.1) = 3240", () => {
-    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, durationsSec: [4.1] })).toBe(6)
-    expect(seedance2RefVideoBaseCreditsFromDurations({ ...s25, requestedDuration: AUTO, durationsSec: [4.1] })).toBe(960)
+    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [4.1] })).toBe(6)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [4.1] })).toBe(960)
     expect(Math.ceil(S25_720P_PER_SEC * 10.1)).toBe(960)
     // The old hold, for the record: the model's 30 s out.
     expect(Math.ceil(S25_720P_PER_SEC * (4.1 + 30))).toBe(3240)
@@ -134,76 +135,100 @@ describe("the Auto-duration edit hold", () => {
   it("the evidence case, charged at 10% markup: hold 3564 → 1056 (settled 854 in production)", () => {
     const settings = { cost_markup_percent: 10 } as never
     const charge = (id: string, base: number) => applyServiceMarkup(base, settings, id)
-    const quote = seedance2RefVideoQuote({ provider: "seedance-2-5", resolution: "720p", duration: AUTO, durationsSec: [4.1], unknownClips: 0, charge })
-    const reserve = charge("seedance-2-5:30s:720p-ref", seedance2RefVideoBaseCreditsFromDurations({ ...s25, requestedDuration: AUTO, durationsSec: [4.1] }))
+    const quote = seedance2RefVideoQuote({ provider: "seedance-2-5", resolution: "720p", duration: AUTO, durationsSec: [4.1], unknownClips: 0, referenceTaskType: undefined, charge })
+    const reserve = charge("seedance-2-5:30s:720p-ref", seedance2RefVideoBaseCreditsFromDurations({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [4.1] }))
     expect(quote).toEqual({ credits: reserve, min: reserve, exact: true })
     expect(reserve).toBe(1056)
     expect(charge("seedance-2-5:30s:720p-ref", Math.ceil(S25_720P_PER_SEC * (4.1 + 30)))).toBe(3564)
   })
 
   it("a whole-second clip still gets its second of margin: 4 s → 5 s", () => {
-    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, durationsSec: [4] })).toBe(5)
+    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [4] })).toBe(5)
   })
 
-  it("several clips: the FIRST clip decides the output, every clip counts as input: [4.1, 12] → 6 s out + 16.1 s in = ceil(95 × 22.1) = 2100", () => {
-    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, durationsSec: [4.1, 12] })).toBe(6)
-    expect(seedance2RefVideoBaseCreditsFromDurations({ ...s25, requestedDuration: AUTO, durationsSec: [4.1, 12] })).toBe(2100)
-    expect(Math.ceil(S25_720P_PER_SEC * 22.1)).toBe(2100)
+  it("several clips: the LONGEST clip decides the output hold (the model may edit any of them), every clip counts as input: [4.1, 12] → 13 s out + 16.1 s in = ceil(95 × 29.1) = 2765", () => {
+    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [4.1, 12] })).toBe(13)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [4.1, 12] })).toBe(2765)
+    expect(Math.ceil(S25_720P_PER_SEC * 29.1)).toBe(2765)
+  })
+
+  it("the longest clip wherever it is: [5, 25] and [25, 5] both hold 26 s; one 6 s clip holds 7 s", () => {
+    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [5, 25] })).toBe(26)
+    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [25, 5] })).toBe(26)
+    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [6] })).toBe(7)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [5, 25] })).toBe(Math.ceil(S25_720P_PER_SEC * (30 + 26)))
+  })
+
+  it("a longest clip whose margin passes the model's longest clip is held at that cap: [5, 29.5] → 30 s", () => {
+    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [5, 29.5] })).toBe(30)
+  })
+
+  it("an unmeasured clip beside a long one keeps today's worst case: [5, NaN] and [NaN, 25] hold 30 s", () => {
+    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [5, Number.NaN] })).toBe(30)
+    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [Number.NaN, 25] })).toBe(30)
+  })
+
+  it("the quote of an Auto run with several clips is exactly its reservation", () => {
+    const settings = { cost_markup_percent: 10 } as never
+    const charge = (id: string, base: number) => applyServiceMarkup(base, settings, id)
+    const quote = seedance2RefVideoQuote({ provider: "seedance-2-5", resolution: "720p", duration: AUTO, durationsSec: [5, 25], unknownClips: 0, referenceTaskType: undefined, charge })
+    const reserve = charge("seedance-2-5:30s:720p-ref", seedance2RefVideoBaseCreditsFromDurations({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [5, 25] }))
+    expect(quote).toEqual({ credits: reserve, min: reserve, exact: true })
   })
 
   it("never above the model's longest clip: a 29.5 s clip holds 30 s out, not 31", () => {
-    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, durationsSec: [29.5] })).toBe(30)
+    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [29.5] })).toBe(30)
   })
 
   it("Auto is recognized as the string \"-1\" too (a workflow field may carry it as text)", () => {
-    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: "-1", durationsSec: [4.1] })).toBe(6)
+    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: "-1", referenceTaskType: undefined, durationsSec: [4.1] })).toBe(6)
   })
 
   it("a fixed duration is unchanged: the longer of the requested seconds and the longest clip", () => {
     const fixed = (d: number, durationsSec: number[]) =>
-      seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "720p", outputDurationSec: d, requestedDuration: d, durationsSec })
+      seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "720p", outputDurationSec: d, requestedDuration: d, referenceTaskType: undefined, durationsSec })
     expect(fixed(8, [4.1])).toBe(Math.ceil(S25_720P_PER_SEC * (4.1 + 8)))
     expect(fixed(4, [12])).toBe(Math.ceil(S25_720P_PER_SEC * (12 + 12)))
-    expect(seedance2RefVideoHeldOutputSec({ ...s25, outputDurationSec: 8, requestedDuration: 8, durationsSec: [4.1, 12] })).toBe(12)
+    expect(seedance2RefVideoHeldOutputSec({ ...s25, outputDurationSec: 8, requestedDuration: 8, referenceTaskType: undefined, durationsSec: [4.1, 12] })).toBe(12)
   })
 
   it("an unmeasurable clip keeps today's worst case, the first clip's or any other's: [NaN] and [4.1, NaN] both hold 30 s out", () => {
-    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, durationsSec: [Number.NaN] })).toBe(30)
-    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, durationsSec: [4.1, Number.NaN] })).toBe(30)
-    expect(seedance2RefVideoBaseCreditsFromDurations({ ...s25, requestedDuration: AUTO, durationsSec: [Number.NaN] })).toBe(Math.ceil(S25_720P_PER_SEC * 60))
-    expect(seedance2RefVideoBaseCreditsFromDurations({ ...s25, requestedDuration: AUTO, durationsSec: [null as unknown as number] })).toBe(Math.ceil(S25_720P_PER_SEC * 60))
+    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [Number.NaN] })).toBe(30)
+    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [4.1, Number.NaN] })).toBe(30)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [Number.NaN] })).toBe(Math.ceil(S25_720P_PER_SEC * 60))
+    expect(seedance2RefVideoBaseCreditsFromDurations({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [null as unknown as number] })).toBe(Math.ceil(S25_720P_PER_SEC * 60))
   })
 
   it("no reference clip: the rule does not apply (Auto stays at the model's longest clip)", () => {
-    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, durationsSec: [] })).toBe(30)
+    expect(seedance2RefVideoHeldOutputSec({ ...s25, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [] })).toBe(30)
   })
 
   it("the 2.0 family: seedance-2 Auto + 4.1 s = 6 s out, ceil(62.5 × 10.1) = 632; capped at its 15 s longest clip", () => {
-    const s2 = { provider: "seedance-2", resolution: "720p", outputDurationSec: pricedOutputDurationSec("seedance-2", AUTO), requestedDuration: AUTO }
+    const s2 = { provider: "seedance-2", resolution: "720p", outputDurationSec: pricedOutputDurationSec("seedance-2", AUTO), requestedDuration: AUTO, referenceTaskType: undefined }
     expect(s2.outputDurationSec).toBe(15)
     expect(seedance2RefVideoBaseCreditsFromDurations({ ...s2, durationsSec: [4.1] })).toBe(632)
     expect(Math.ceil(S2_720P_PER_SEC * 10.1)).toBe(632)
     expect(seedance2RefVideoHeldOutputSec({ ...s2, durationsSec: [14.5] })).toBe(15)
   })
 
-  it("every model whose output follows its reference clip and that takes Auto holds the source clip + margin", () => {
+  it("every model whose output follows its reference clip and that takes Auto holds the (longest) clip + margin", () => {
     const models = Object.keys(MODEL_CATALOG).filter(
       (id) => billsReferenceVideoSeconds(id) && supportsAutoVideoDuration(id) && !VIDEO_REF_RATE_PROVIDERS.has(id),
     )
     expect(models).toEqual(expect.arrayContaining(["seedance-2", "seedance-2-fast", "seedance-2-mini", "seedance-2-5"]))
     for (const provider of models) {
       const outputDurationSec = pricedOutputDurationSec(provider, AUTO)
-      expect(seedance2RefVideoHeldOutputSec({ provider, outputDurationSec, requestedDuration: AUTO, durationsSec: [4.1] }), provider).toBe(6)
-      expect(seedance2RefVideoHeldOutputSec({ provider, outputDurationSec, requestedDuration: AUTO, durationsSec: [Number.NaN] }), provider)
+      expect(seedance2RefVideoHeldOutputSec({ provider, outputDurationSec, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [4.1] }), provider).toBe(6)
+      expect(seedance2RefVideoHeldOutputSec({ provider, outputDurationSec, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [Number.NaN] }), provider)
         .toBe(Math.max(outputDurationSec, refVideoWorstCaseSecFor(provider)))
     }
   })
 
   it("Kling 4.0 renders the requested duration: Auto changes nothing there", () => {
     const k = { provider: "kling-4", resolution: "720p", outputDurationSec: 10 }
-    expect(seedance2RefVideoHeldOutputSec({ ...k, requestedDuration: AUTO, durationsSec: [4.1] })).toBe(10)
-    expect(seedance2RefVideoBaseCreditsFromDurations({ ...k, requestedDuration: AUTO, durationsSec: [4.1] }))
-      .toBe(seedance2RefVideoBaseCreditsFromDurations({ ...k, requestedDuration: 10, durationsSec: [4.1] }))
+    expect(seedance2RefVideoHeldOutputSec({ ...k, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [4.1] })).toBe(10)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ ...k, requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [4.1] }))
+      .toBe(seedance2RefVideoBaseCreditsFromDurations({ ...k, requestedDuration: 10, referenceTaskType: undefined, durationsSec: [4.1] }))
   })
 })
 
@@ -233,7 +258,7 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
     probe.durations.set(OUT, 12)
     probe.durations.set(REF, 30)
     await expect(
-      seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "1080p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF] }),
+      seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "1080p", requestedDuration: undefined, referenceTaskType: undefined, outputUrl: OUT, referenceVideoUrls: [REF] }),
     ).resolves.toBe(9975)
     expect(Math.ceil(S25_1080P_PER_SEC * 42)).toBe(9975)
   })
@@ -242,7 +267,7 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
     probe.durations.set(OUT, 30)
     probe.durations.set(REF, 30)
     await expect(
-      seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "1080p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF] }),
+      seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "1080p", requestedDuration: undefined, referenceTaskType: undefined, outputUrl: OUT, referenceVideoUrls: [REF] }),
     ).resolves.toBe(14250)
   })
 
@@ -250,7 +275,7 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
     probe.durations.set(OUT, 12)
     probe.durations.set(REF, new Error("ffprobe: connection reset"))
     await expect(
-      seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF] }),
+      seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, referenceTaskType: undefined, outputUrl: OUT, referenceVideoUrls: [REF] }),
     ).resolves.toBe(3990)
   })
 
@@ -260,7 +285,7 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
     // Stored probe [NaN] (null once it has been through JSON): reserved as the 30s cap.
     for (const stored of [[Number.NaN], [null]]) {
       await expect(
-        seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: stored }),
+        seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, referenceTaskType: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: stored }),
       ).resolves.toBe(Math.ceil(95 * (6 + 12)))
     }
   })
@@ -268,8 +293,8 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
   it("a clip measured only at the settlement never counts above the worst case the reservation held (no cap of its own on Seedance 2.0: 15s)", async () => {
     probe.durations.set(OUT, 8)
     probe.durations.set(REF, 40)
-    const measured = await seedance2RefVideoActualBaseCredits({ provider: "seedance-2", resolution: "720p", requestedDuration: 8, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [Number.NaN] })
-    const heldAtWorst = await seedance2RefVideoActualBaseCredits({ provider: "seedance-2", resolution: "720p", requestedDuration: 8, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [15] })
+    const measured = await seedance2RefVideoActualBaseCredits({ provider: "seedance-2", resolution: "720p", requestedDuration: 8, referenceTaskType: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [Number.NaN] })
+    const heldAtWorst = await seedance2RefVideoActualBaseCredits({ provider: "seedance-2", resolution: "720p", requestedDuration: 8, referenceTaskType: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [15] })
     expect(measured).toBe(heldAtWorst)
   })
 
@@ -281,7 +306,7 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
       for (const r of refs) probe.durations.set(r, "hang")
       let done = false
       const settled = seedance2RefVideoActualBaseCredits({
-        provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, outputUrl: OUT,
+        provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, referenceTaskType: undefined, outputUrl: OUT,
         referenceVideoUrls: refs, durationsSec: refs.map(() => Number.NaN),
       }).finally(() => { done = true })
       // Four at a time, ten clips would take three rounds of the per-clip budget; the ceiling allows two.
@@ -299,22 +324,60 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
 
   it("a clip already measured by the reservation is not probed again", async () => {
     probe.durations.set(OUT, 12)
-    await seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [6] })
+    await seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, referenceTaskType: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [6] })
     expect(probe.probeMediaDuration).toHaveBeenCalledTimes(1)
+  })
+
+  describe("a clip measured only at the settlement re-sizes no hold: every hold reads the reservation's probe", () => {
+    // Stored probe [NaN]: the reservation held that clip at the 30 s cap. It
+    // reads now, so the input side bills its real length; the hold a delivery
+    // is compared with stays the one the reservation made.
+    const unread = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [Number.NaN], jobId: "job-remeasure" }
+    let alert: ReturnType<typeof vi.spyOn>
+    beforeEach(() => { alert = vi.spyOn(console, "error").mockImplementation(() => {}) })
+    afterEach(() => { alert.mockRestore() })
+
+    it("a fixed 8 s run held at the 30 s clip: a 12 s delivery is charged as measured, with no over-run alert against the re-measured 6 s", async () => {
+      probe.durations.set(OUT, 12)
+      probe.durations.set(REF, 6)
+      const run = { ...unread, requestedDuration: 8, referenceTaskType: undefined }
+      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 6 })
+      expect(alert).not.toHaveBeenCalled()
+    })
+
+    it("an undeclared Auto run held at the worst case: no edit hold is made from the re-measured clip (5 s → 6 s), so a 12 s delivery is charged as measured, with no alert", async () => {
+      probe.durations.set(OUT, 12)
+      probe.durations.set(REF, 5)
+      const run = { ...unread, requestedDuration: VIDEO_DURATION_AUTO, referenceTaskType: undefined }
+      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 5 })
+      expect(alert).not.toHaveBeenCalled()
+    })
+
+    it("a declared reference with an automatic length: charged what it delivered up to the 30 s hold, the clip billed at its re-measured length", async () => {
+      probe.durations.set(REF, 5)
+      const run = { ...unread, requestedDuration: VIDEO_DURATION_AUTO, referenceTaskType: "reference" }
+      probe.durations.set(OUT, 12)
+      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 5 })
+      expect(alert).not.toHaveBeenCalled()
+      probe.durations.set(OUT, 31.5)
+      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 31.5, chargedOutputSec: 30, inputSec: 5 })
+      expect(alert).toHaveBeenCalledTimes(1)
+      expect(String(alert.mock.calls[0]?.[0])).toContain("heldSec=30")
+    })
   })
 
   it("a delivered clip that cannot be measured THROWS — the caller then commits the reservation", async () => {
     probe.durations.set(OUT, new Error("ffprobe: 403"))
     probe.durations.set(REF, 30)
     await expect(
-      seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF] }),
+      seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, referenceTaskType: undefined, outputUrl: OUT, referenceVideoUrls: [REF] }),
     ).rejects.toThrow("ffprobe: 403")
   })
 
   it("with no stored probe: probes the delivered clip and every reference clip, nothing else", async () => {
     probe.durations.set(OUT, 8)
     probe.durations.set(REF, 5)
-    await seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF, 42, ""] })
+    await seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, referenceTaskType: undefined, outputUrl: OUT, referenceVideoUrls: [REF, 42, ""] })
     expect(probe.probeMediaDuration.mock.calls.map((c) => c[0]).sort()).toEqual([OUT, REF].sort())
   })
 
@@ -322,7 +385,7 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
     probe.durations.set(OUT, 12)
     probe.durations.set(REF, new Error("ffprobe: 403"))
     await expect(
-      seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [5] }),
+      seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, referenceTaskType: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [5] }),
     ).resolves.toBe(Math.ceil(S25_720P_PER_SEC * (5 + 12)))
     expect(probe.probeMediaDuration.mock.calls.map((c) => c[0])).toEqual([OUT])
   })
@@ -330,12 +393,12 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
   it("a stored probe that was unusable at reservation stays the worst case at settlement (the reserve counted it that way): [null] on 2.5 = 30s in", async () => {
     probe.durations.set(OUT, 12)
     await expect(
-      seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [null] }),
+      seedance2RefVideoActualBaseCredits({ provider: "seedance-2-5", resolution: "720p", requestedDuration: undefined, referenceTaskType: undefined, outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [null] }),
     ).resolves.toBe(3990)
   })
 
   describe("an Auto edit held for its source clip + 1 s", () => {
-    const auto = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [4.1], requestedDuration: VIDEO_DURATION_AUTO, jobId: "job-evidence" }
+    const auto = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [4.1], requestedDuration: VIDEO_DURATION_AUTO, referenceTaskType: undefined, jobId: "job-evidence" }
     let alert: ReturnType<typeof vi.spyOn>
     beforeEach(() => { alert = vi.spyOn(console, "error").mockImplementation(() => {}) })
     afterEach(() => { alert.mockRestore() })
@@ -357,7 +420,7 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
     it("delivered past the hold: charged AT the hold (never above the reservation) and alerted with the job, held and delivered seconds", async () => {
       probe.durations.set(OUT, 9.5)
       const reserved = seedance2RefVideoBaseCreditsFromDurations({
-        provider: "seedance-2-5", resolution: "720p", outputDurationSec: 30, requestedDuration: VIDEO_DURATION_AUTO, durationsSec: [4.1],
+        provider: "seedance-2-5", resolution: "720p", outputDurationSec: 30, requestedDuration: VIDEO_DURATION_AUTO, referenceTaskType: undefined, durationsSec: [4.1],
       })
       await expect(seedance2RefVideoActualBaseCredits(auto)).resolves.toBe(reserved)
       expect(reserved).toBe(960)
@@ -371,13 +434,69 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
 
     it("a fixed-duration run is not this rule: a hair over its held seconds raises no alert (the commit's own clamp still applies)", async () => {
       probe.durations.set(OUT, 8.04)
-      await expect(seedance2RefVideoActualBaseCredits({ ...auto, requestedDuration: 8 })).resolves.toBe(Math.ceil(S25_720P_PER_SEC * (4.1 + 8.04)))
+      await expect(seedance2RefVideoActualBaseCredits({ ...auto, requestedDuration: 8, referenceTaskType: undefined })).resolves.toBe(Math.ceil(S25_720P_PER_SEC * (4.1 + 8.04)))
       expect(alert).not.toHaveBeenCalled()
+    })
+
+    it("several clips: held for the longest clip, so a delivery of that clip's length is charged as delivered, with no alert", async () => {
+      probe.durations.set(OUT, 25.04)
+      const several = { ...auto, durationsSec: [5, 25] }
+      await expect(seedance2RefVideoActualSeconds(several)).resolves.toEqual({ deliveredSec: 25.04, chargedOutputSec: 25.04, inputSec: 30 })
+      expect(alert).not.toHaveBeenCalled()
+      probe.durations.set(OUT, 27)
+      await expect(seedance2RefVideoActualSeconds(several)).resolves.toMatchObject({ deliveredSec: 27, chargedOutputSec: 26 })
+      expect(alert).toHaveBeenCalledTimes(1)
+      expect(String(alert.mock.calls[0]?.[0])).toContain("heldSec=26")
     })
 
     it("an Auto run whose clip was unmeasurable was held at the worst case: nothing to alert on", async () => {
       probe.durations.set(OUT, 12)
       await expect(seedance2RefVideoActualBaseCredits({ ...auto, durationsSec: [null] })).resolves.toBe(3990)
+      expect(alert).not.toHaveBeenCalled()
+    })
+  })
+
+  describe("a fixed-length run (a declared extend) delivered past its hold", () => {
+    // Held at the longer of the priced length and the longest clip (8 s here).
+    // A delivery past it costs more than the reservation, which the commit
+    // cannot collect: the charge stays as measured, and an [ALERT] says so.
+    const extend = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [6], requestedDuration: 8, referenceTaskType: undefined, jobId: "job-extend" }
+    let alert: ReturnType<typeof vi.spyOn>
+    beforeEach(() => { alert = vi.spyOn(console, "error").mockImplementation(() => {}) })
+    afterEach(() => { alert.mockRestore() })
+
+    it("alerts with the job, held and delivered seconds, and charges exactly what it charged before", async () => {
+      probe.durations.set(OUT, 14.04)
+      const seconds = await seedance2RefVideoActualSeconds(extend)
+      expect(seconds).toEqual({ deliveredSec: 14.04, chargedOutputSec: 14.04, inputSec: 6 })
+      await expect(seedance2RefVideoActualBaseCredits(extend, seconds)).resolves.toBe(Math.ceil(S25_720P_PER_SEC * (6 + 14.04)))
+      expect(alert).toHaveBeenCalledTimes(1)
+      const line = String(alert.mock.calls[0]?.[0])
+      expect(line).toMatch(/^\[ALERT\]/)
+      expect(line).toContain("job=job-extend")
+      expect(line).toContain("heldSec=8")
+      expect(line).toContain("deliveredSec=14.04")
+    })
+
+    it("held at the longest clip when it is longer than the length asked for", async () => {
+      probe.durations.set(OUT, 20)
+      await seedance2RefVideoActualSeconds({ ...extend, durationsSec: [20] })
+      expect(alert).not.toHaveBeenCalled()
+      probe.durations.set(OUT, 28)
+      await seedance2RefVideoActualSeconds({ ...extend, durationsSec: [20] })
+      expect(alert).toHaveBeenCalledTimes(1)
+      expect(String(alert.mock.calls[0]?.[0])).toContain("heldSec=20")
+    })
+
+    it("a container's hair over the hold raises nothing", async () => {
+      probe.durations.set(OUT, 8.08)
+      await seedance2RefVideoActualSeconds(extend)
+      expect(alert).not.toHaveBeenCalled()
+    })
+
+    it("Kling 4.0 renders the length asked for: rounded to the second, nothing to alert on", async () => {
+      probe.durations.set(OUT, 5.04)
+      await seedance2RefVideoActualSeconds({ ...extend, provider: "kling-4", requestedDuration: 5, referenceTaskType: undefined, durationsSec: [4] })
       expect(alert).not.toHaveBeenCalled()
     })
   })
@@ -394,7 +513,7 @@ describe("seedance2RefVideoActualBaseCredits (the settlement)", () => {
 describe("seedance2RefVideoActualSeconds (what the settlement measures)", () => {
   const OUT = "https://kie.example/out.mp4"
   const REF = "https://r2.example.com/videos/ref.mp4"
-  const run = { provider: "seedance-2-5", resolution: "1080p", requestedDuration: 12, outputUrl: OUT, referenceVideoUrls: [REF] }
+  const run = { provider: "seedance-2-5", resolution: "1080p", requestedDuration: 12, referenceTaskType: undefined, outputUrl: OUT, referenceVideoUrls: [REF] }
 
   beforeEach(() => {
     probe.durations.clear()
@@ -411,7 +530,7 @@ describe("seedance2RefVideoActualSeconds (what the settlement measures)", () => 
     probe.durations.set(OUT, 12.04)
     await expect(seedance2RefVideoActualSeconds({ ...run, durationsSec: [30] })).resolves.toMatchObject({ deliveredSec: 12.04, chargedOutputSec: 12.04 })
     probe.durations.set(OUT, 3.04)
-    await expect(seedance2RefVideoActualSeconds({ ...run, provider: "kling-4", resolution: "720p", requestedDuration: 3, durationsSec: [5] }))
+    await expect(seedance2RefVideoActualSeconds({ ...run, provider: "kling-4", resolution: "720p", requestedDuration: 3, referenceTaskType: undefined, durationsSec: [5] }))
       .resolves.toMatchObject({ deliveredSec: 3, chargedOutputSec: 3 })
   })
 
@@ -426,7 +545,7 @@ describe("seedance2RefVideoActualSeconds (what the settlement measures)", () => 
     const alert = vi.spyOn(console, "error").mockImplementation(() => {})
     try {
       probe.durations.set(OUT, 9.5)
-      const auto = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [4.1], requestedDuration: VIDEO_DURATION_AUTO, jobId: "job-evidence" }
+      const auto = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [4.1], requestedDuration: VIDEO_DURATION_AUTO, referenceTaskType: undefined, jobId: "job-evidence" }
       const seconds = await seedance2RefVideoActualSeconds(auto)
       expect(seconds).toEqual({ deliveredSec: 9.5, chargedOutputSec: 6, inputSec: 4.1 })
       expect(seconds.deliveredSec).toBeGreaterThan(seconds.chargedOutputSec)
@@ -477,7 +596,7 @@ describe("measureSeedance2Settle over the real settlement", () => {
 
   it("probes the delivered clip once and returns the settlement's credits with its seconds", async () => {
     probe.durations.set(OUT, 12)
-    const args = { provider: "seedance-2-5", resolution: "1080p", outputUrl: OUT, referenceVideoUrls: [REF], refVideoDurationsSec: [30], duration: 12, jobId: "job-1" }
+    const args = { provider: "seedance-2-5", resolution: "1080p", outputUrl: OUT, referenceVideoUrls: [REF], refVideoDurationsSec: [30], duration: 12, referenceTaskType: undefined, jobId: "job-1" }
     const baseCredits = Math.ceil(S25_1080P_PER_SEC * 42)
     await expect(measureSeedance2Settle(args)).resolves.toEqual({ baseCredits, seconds: { outputSec: 12, inputSec: 30 } })
     expect(probe.probeMediaDuration.mock.calls.map((c) => c[0])).toEqual([OUT])
@@ -489,7 +608,7 @@ describe("measureSeedance2Settle over the real settlement", () => {
     const alert = vi.spyOn(console, "error").mockImplementation(() => {})
     try {
       probe.durations.set(OUT, 9.5)
-      const args = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], refVideoDurationsSec: [4.1], duration: VIDEO_DURATION_AUTO, jobId: "job-evidence" }
+      const args = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], refVideoDurationsSec: [4.1], duration: VIDEO_DURATION_AUTO, referenceTaskType: undefined, jobId: "job-evidence" }
       await expect(measureSeedance2Settle(args)).resolves.toEqual({ baseCredits: 960, seconds: { outputSec: 9.5, inputSec: 4.1 } })
       expect(probe.probeMediaDuration).toHaveBeenCalledTimes(1)
       expect(alert).toHaveBeenCalledTimes(1)
@@ -522,12 +641,194 @@ describe("seedance2RefVideoExpectedBaseCredits", () => {
   it("is never above what the reservation holds", () => {
     const durationsSec = [12, 4]
     const expected = seedance2RefVideoExpectedBaseCredits({ ...base, outputDurationSec: 15, autoDuration: true, durationsSec })!
-    const reserved = seedance2RefVideoBaseCreditsFromDurations({ ...base, outputDurationSec: 15, requestedDuration: -1, durationsSec })
+    const reserved = seedance2RefVideoBaseCreditsFromDurations({ ...base, outputDurationSec: 15, requestedDuration: -1, referenceTaskType: undefined, durationsSec })
     expect(expected).toBeLessThanOrEqual(reserved)
   })
 
   it("has no answer when a clip could not be measured", () => {
     expect(seedance2RefVideoExpectedBaseCredits({ ...base, outputDurationSec: 5, autoDuration: false, durationsSec: [Number.NaN] }))
       .toBeUndefined()
+  })
+})
+
+/**
+ * A request that DECLARES `reference` with an automatic length: Seedance runs a
+ * reference at a length it picks within its range (4 to 30 s on 2.5), not the
+ * length of a clip — only an edit renders its clip's length. So the edit hold
+ * (the longest clip + 1 s) does not apply: the run is held at the worst case
+ * (the model's longest output, or the longest clip if that is longer) and
+ * charged what it makes, never above that hold. Every other request holds,
+ * quotes and settles exactly as before.
+ */
+describe("a declared reference with an automatic length", () => {
+  const AUTO = VIDEO_DURATION_AUTO
+  const OUT = "https://kie.example/out.mp4"
+  const REF = "https://r2.example.com/videos/ref.mp4"
+  const longest = pricedOutputDurationSec("seedance-2-5", AUTO)
+  const s25 = { provider: "seedance-2-5", resolution: "720p", outputDurationSec: longest, requestedDuration: AUTO, referenceTaskType: undefined }
+  /** The worst case through the code's own arithmetic: the longest output (or clip), every clip as input. */
+  const worst = (clips: number[], provider = "seedance-2-5") => seedance2RefVideoBaseCredits({
+    provider, resolution: "720p",
+    outputDurationSec: Math.max(pricedOutputDurationSec(provider, AUTO), ...clips),
+    inputVideoDurationSec: clips.reduce((sum, d) => sum + d, 0),
+  })
+  const settings = { cost_markup_percent: 10 } as never
+  const charge = (id: string, base: number) => applyServiceMarkup(base, settings, id)
+
+  it("one 5 s clip at 720p holds the model's longest output (30 s), not the edit hold's 6 s: ceil(95 × 35) = 3325, not 1045", () => {
+    expect(longest).toBe(30)
+    expect(seedance2RefVideoHeldOutputSec({ ...s25, durationsSec: [5], referenceTaskType: "reference" })).toBe(30)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ ...s25, durationsSec: [5], referenceTaskType: "reference" })).toBe(worst([5]))
+    expect(worst([5])).toBe(Math.ceil(S25_720P_PER_SEC * 35))
+    expect(worst([5])).toBe(3325)
+    // Undeclared, the same request is held as an edit: 5 + (5 + 1) s.
+    expect(seedance2RefVideoBaseCreditsFromDurations({ ...s25, durationsSec: [5], referenceTaskType: undefined })).toBe(1045)
+  })
+
+  it("two clips [5, 12]: the longest output, both clips as input", () => {
+    expect(seedance2RefVideoHeldOutputSec({ ...s25, durationsSec: [5, 12], referenceTaskType: "reference" })).toBe(30)
+    expect(seedance2RefVideoBaseCreditsFromDurations({ ...s25, durationsSec: [5, 12], referenceTaskType: "reference" })).toBe(worst([5, 12]))
+  })
+
+  it("the quote of the request is exactly that reservation, one clip or two", () => {
+    for (const clips of [[5], [5, 12]]) {
+      const quote = seedance2RefVideoQuote({ provider: "seedance-2-5", resolution: "720p", duration: AUTO, referenceTaskType: "reference", durationsSec: clips, unknownClips: 0, charge })
+      const reserve = charge("seedance-2-5:30s:720p-ref", worst(clips))
+      expect(quote).toStrictEqual({ credits: reserve, min: reserve, exact: true })
+    }
+  })
+
+  it("the quote resolves the declaration as the run does: a draft, or a model that does not take it, declares nothing", () => {
+    const quote = (args: Record<string, unknown>) => seedance2RefVideoQuote({ resolution: "720p", duration: AUTO, durationsSec: [5], unknownClips: 0, charge, provider: "seedance-2-5", referenceTaskType: undefined, ...args })
+    expect(quote({ draft: true, referenceTaskType: "reference" })).toStrictEqual(quote({ draft: true }))
+    expect(quote({ provider: "seedance-2", referenceTaskType: "reference" })).toStrictEqual(quote({ provider: "seedance-2" }))
+  })
+
+  describe("the settlement: charged what it makes, never above the hold", () => {
+    const run = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], durationsSec: [5], requestedDuration: AUTO, referenceTaskType: "reference", jobId: "job-ref" }
+    let alert: ReturnType<typeof vi.spyOn>
+    beforeEach(() => {
+      probe.durations.clear()
+      probe.probeMediaDuration.mockClear()
+      alert = vi.spyOn(console, "error").mockImplementation(() => {})
+    })
+    afterEach(() => { alert.mockRestore() })
+
+    it("a delivered 30 s is charged as 30 s, not capped at the edit's 6 s", async () => {
+      probe.durations.set(OUT, 30)
+      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 30, chargedOutputSec: 30, inputSec: 5 })
+      await expect(seedance2RefVideoActualBaseCredits(run)).resolves.toBe(worst([5]))
+      expect(alert).not.toHaveBeenCalled()
+    })
+
+    it("a delivered 12 s is charged as 12 s", async () => {
+      probe.durations.set(OUT, 12)
+      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 12, chargedOutputSec: 12, inputSec: 5 })
+      await expect(seedance2RefVideoActualBaseCredits(run)).resolves.toBe(Math.ceil(S25_720P_PER_SEC * (5 + 12)))
+      expect(alert).not.toHaveBeenCalled()
+    })
+
+    it("two clips: a delivered 30 s is charged as 30 s, both clips as input", async () => {
+      probe.durations.set(OUT, 30)
+      const two = { ...run, durationsSec: [5, 12] }
+      await expect(seedance2RefVideoActualSeconds(two)).resolves.toStrictEqual({ deliveredSec: 30, chargedOutputSec: 30, inputSec: 17 })
+      await expect(seedance2RefVideoActualBaseCredits(two)).resolves.toBe(worst([5, 12]))
+    })
+
+    it("a container's hair past the hold (30.04 s) is charged at the hold, with no alert", async () => {
+      probe.durations.set(OUT, 30.04)
+      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 30.04, chargedOutputSec: 30, inputSec: 5 })
+      await expect(seedance2RefVideoActualBaseCredits(run)).resolves.toBe(seedance2RefVideoBaseCreditsFromDurations({ ...s25, durationsSec: [5], referenceTaskType: "reference" }))
+      expect(alert).not.toHaveBeenCalled()
+    })
+
+    it("past the hold by more than that: charged at the hold and alerted with the job, held and delivered seconds", async () => {
+      probe.durations.set(OUT, 31.5)
+      await expect(seedance2RefVideoActualSeconds(run)).resolves.toStrictEqual({ deliveredSec: 31.5, chargedOutputSec: 30, inputSec: 5 })
+      expect(alert).toHaveBeenCalledTimes(1)
+      const line = String(alert.mock.calls[0]?.[0])
+      expect(line).toMatch(/^\[ALERT\]/)
+      expect(line).toContain("job=job-ref")
+      expect(line).toContain("heldSec=30")
+      expect(line).toContain("deliveredSec=31.5")
+    })
+
+    it("an unmeasured clip: held at the worst case as before, a delivery within it charged as delivered", async () => {
+      probe.durations.set(OUT, 12)
+      const unmeasured = { ...run, durationsSec: [null] }
+      await expect(seedance2RefVideoActualSeconds(unmeasured)).resolves.toStrictEqual(await seedance2RefVideoActualSeconds({ ...unmeasured, referenceTaskType: undefined }))
+      await expect(seedance2RefVideoActualBaseCredits(unmeasured)).resolves.toBe(3990)
+    })
+
+    it("the core shim reads the job's recorded type: the settle lanes charge the delivered 30 s", async () => {
+      probe.durations.set(OUT, 30)
+      const lane = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], refVideoDurationsSec: [5], duration: AUTO, referenceTaskType: "reference", jobId: "job-ref" }
+      await expect(measureSeedance2Settle(lane)).resolves.toStrictEqual({ baseCredits: worst([5]), seconds: { outputSec: 30, inputSec: 5 } })
+      // Without the recorded type (undeclared), the same delivery is charged at the edit hold, as before.
+      await expect(measureSeedance2Settle({ ...lane, referenceTaskType: undefined })).resolves.toStrictEqual({ baseCredits: 1045, seconds: { outputSec: 30, inputSec: 5 } })
+    })
+  })
+
+  describe("every other request is byte-identical to an undeclared one", () => {
+    const clipSets = [[5], [5, 12], [Number.NaN], [5, Number.NaN], [3], [30]]
+    const shapes = [
+      ["edit with an automatic length", { requestedDuration: AUTO, outputDurationSec: longest, referenceTaskType: "edit" }],
+      ["extend at a fixed 8 s", { requestedDuration: 8, outputDurationSec: 8, referenceTaskType: "extend" }],
+      ["reference at a fixed 8 s", { requestedDuration: 8, outputDurationSec: 8, referenceTaskType: "reference" }],
+      ["auto", { requestedDuration: AUTO, outputDurationSec: longest, referenceTaskType: "auto" }],
+    ] as const
+
+    it.each(shapes)("%s: the same hold and reservation", (_name, shape) => {
+      for (const durationsSec of clipSets) {
+        const args = { provider: "seedance-2-5", resolution: "720p", ...shape, durationsSec }
+        expect(seedance2RefVideoHeldOutputSec(args), String(durationsSec)).toBe(seedance2RefVideoHeldOutputSec({ ...args, referenceTaskType: undefined }))
+        expect(seedance2RefVideoBaseCreditsFromDurations(args), String(durationsSec)).toBe(seedance2RefVideoBaseCreditsFromDurations({ ...args, referenceTaskType: undefined }))
+      }
+    })
+
+    it("an undeclared Auto run keeps the edit hold it had: [5] → 6 s, ceil(95 × 11) = 1045", () => {
+      expect(seedance2RefVideoHeldOutputSec({ ...s25, durationsSec: [5], referenceTaskType: undefined })).toBe(6)
+      expect(seedance2RefVideoBaseCreditsFromDurations({ ...s25, durationsSec: [5], referenceTaskType: undefined })).toBe(Math.ceil(S25_720P_PER_SEC * 11))
+    })
+
+    it("a model that does not take the type: reference changes nothing (Seedance 2.0, Kling 4.0, Gemini Omni)", () => {
+      for (const provider of ["seedance-2", "seedance-2-fast", "kling-4", "gemini-omni-flash-1-2"]) {
+        const args = { provider, resolution: "720p", outputDurationSec: pricedOutputDurationSec(provider, AUTO), requestedDuration: AUTO, referenceTaskType: undefined, durationsSec: [5] }
+        expect(seedance2RefVideoHeldOutputSec({ ...args, referenceTaskType: "reference" }), provider).toBe(seedance2RefVideoHeldOutputSec({ ...args, referenceTaskType: undefined }))
+        expect(seedance2RefVideoBaseCreditsFromDurations({ ...args, referenceTaskType: "reference" }), provider).toBe(seedance2RefVideoBaseCreditsFromDurations({ ...args, referenceTaskType: undefined }))
+      }
+    })
+
+    it.each(shapes)("%s: the same quote", (_name, shape) => {
+      for (const durationsSec of clipSets) {
+        for (const unknownClips of [0, 1]) {
+          const req = { provider: "seedance-2-5", resolution: "720p", duration: shape.requestedDuration, durationsSec, unknownClips, charge }
+          expect(seedance2RefVideoQuote({ ...req, referenceTaskType: shape.referenceTaskType }), `${String(durationsSec)} +${unknownClips}`)
+            .toStrictEqual(seedance2RefVideoQuote({ ...req, referenceTaskType: undefined }))
+        }
+      }
+    })
+
+    it.each(shapes)("%s: the same settlement", async (_name, shape) => {
+      const alert = vi.spyOn(console, "error").mockImplementation(() => {})
+      try {
+        for (const delivered of [4.1, 8.04, 9.5, 14.04, 30]) {
+          for (const durationsSec of [[5], [5, 12], [null]]) {
+            probe.durations.clear()
+            probe.durations.set(OUT, delivered)
+            const run = { provider: "seedance-2-5", resolution: "720p", outputUrl: OUT, referenceVideoUrls: [REF], durationsSec, requestedDuration: shape.requestedDuration, referenceTaskType: undefined, jobId: "job-x" }
+            const before = alert.mock.calls.length
+            const declared = await seedance2RefVideoActualSeconds({ ...run, referenceTaskType: shape.referenceTaskType })
+            const between = alert.mock.calls.length
+            const undeclared = await seedance2RefVideoActualSeconds({ ...run, referenceTaskType: undefined })
+            expect(declared, `${delivered} ${String(durationsSec)}`).toStrictEqual(undeclared)
+            // The same alerts too: as many from the declared run as from the undeclared one.
+            expect(between - before, `${delivered} ${String(durationsSec)}`).toBe(alert.mock.calls.length - between)
+          }
+        }
+      } finally {
+        alert.mockRestore()
+      }
+    })
   })
 })

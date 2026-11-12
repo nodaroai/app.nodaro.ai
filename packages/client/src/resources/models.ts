@@ -87,6 +87,13 @@ export interface ModelSummary {
   defaultDuration?: number
   /** `true` when the model accepts `duration: -1`: it picks the length itself. */
   autoDuration?: true
+  /**
+   * The values `referenceTaskType` takes on this model (what a request's
+   * reference media is for): `["reference", "edit", "extend"]` on
+   * `seedance-2-5`. Absent on a model that takes none (and on an older
+   * server); `"auto"`, the default, is never listed.
+   */
+  referenceTaskTypes?: Array<"reference" | "edit" | "extend">
   /** Compact per-model prompting tips (present when a doctrine exists). */
   promptTips?: string[]
   /** TRUE only when a sourced per-family prompt doctrine exists for this

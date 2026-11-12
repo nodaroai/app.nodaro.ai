@@ -245,6 +245,78 @@ describe("/v1/video-to-video with a Seedance edit model", () => {
     await app.close()
   })
 
+  // The route REQUESTS the edit task type; the reference lane resolves it on the
+  // clip's measured length, so a clip outside 4–30 s goes out undeclared.
+  /** The job one edit request queues, and what it reserved. */
+  async function queuedEdit(payload: Record<string, unknown>) {
+    const { videoQueue } = await import("../../../lib/queue.js")
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/video-to-video", payload })
+    expect(res.statusCode, res.body).toBe(200)
+    const [name, queued] = vi.mocked(videoQueue.add).mock.calls.at(-1)! as [string, Record<string, unknown>]
+    expect(name).toBe("text-to-video")
+    expect(reserveSpy).toHaveBeenCalledTimes(1)
+    const [, , identifier, , , options] = reserveSpy.mock.calls[0]! as [string, string, string, number, number, { creditOverride?: number }]
+    await app.close()
+    return { queued, identifier, creditOverride: options?.creditOverride }
+  }
+
+  it("declares the edit task type for a 6 s clip, at the same price as without it", async () => {
+    probe.probeMediaDuration.mockImplementation(async () => 6)
+    try {
+      const { queued, identifier, creditOverride } = await queuedEdit(EDIT)
+      expect(queued).toMatchObject({ provider: "seedance-2-5", referenceTaskType: "edit", aspectRatio: "adaptive", duration: -1, referenceVideoUrls: [CLIP] })
+      const { seedanceVideoEditCreditId } = await import("@nodaro/shared/credits")
+      expect(identifier).toBe(seedanceVideoEditCreditId("seedance-2-5", "480p"))
+      // The same edit sent straight to the reference lane, undeclared, reserves the same.
+      vi.clearAllMocks()
+      const app = await buildApp()
+      const plain = await app.inject({
+        method: "POST", url: "/v1/text-to-video",
+        payload: { prompt: "edit {video:1} as follows:\nmake it black and white", provider: "seedance-2-5", resolution: "480p", duration: -1, aspectRatio: "adaptive", referenceVideoUrls: [CLIP] },
+      })
+      expect(plain.statusCode, plain.body).toBe(200)
+      const [, , plainId, , , plainOptions] = reserveSpy.mock.calls[0]! as [string, string, string, number, number, { creditOverride?: number }]
+      await app.close()
+      expect(identifier).toBe(plainId)
+      expect(creditOverride).toBe(plainOptions?.creditOverride)
+    } finally {
+      probe.probeMediaDuration.mockImplementation(async () => 10)
+    }
+  })
+
+  it("queues a 3 s clip's edit without the task type, and otherwise unchanged", async () => {
+    probe.probeMediaDuration.mockImplementation(async () => 3)
+    try {
+      const { queued } = await queuedEdit(EDIT)
+      expect(queued).not.toHaveProperty("referenceTaskType")
+      expect(queued).toMatchObject({ provider: "seedance-2-5", aspectRatio: "adaptive", duration: -1, referenceVideoUrls: [CLIP], refVideoDurationsSec: [3] })
+    } finally {
+      probe.probeMediaDuration.mockImplementation(async () => 10)
+    }
+  })
+
+  it("an edit always requests the edit task type: a caller's own referenceTaskType does not turn it into an extension", async () => {
+    probe.probeMediaDuration.mockImplementation(async () => 6)
+    try {
+      const { queued } = await queuedEdit({ ...EDIT, referenceTaskType: "extend" })
+      expect(queued).toMatchObject({ referenceTaskType: "edit", aspectRatio: "adaptive", duration: -1 })
+    } finally {
+      probe.probeMediaDuration.mockImplementation(async () => 10)
+    }
+  })
+
+  it("a model of the route's own queues no task type", async () => {
+    const { videoQueue } = await import("../../../lib/queue.js")
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/video-to-video", payload: { videoUrl: CLIP, prompt: "make it noir", provider: "luma-modify" } })
+    expect(res.statusCode, res.body).toBe(200)
+    const [name, queued] = vi.mocked(videoQueue.add).mock.calls.at(-1)! as [string, Record<string, unknown>]
+    expect(name).toBe("video-to-video")
+    expect(queued).not.toHaveProperty("referenceTaskType")
+    await app.close()
+  })
+
   const CLIP2 = "https://cdn.example.com/sky.mp4"
   const HAT = "https://cdn.example.com/hat.png"
   const COAT = "https://cdn.example.com/coat.png"
@@ -285,6 +357,8 @@ describe("/v1/video-to-video with a Seedance edit model", () => {
         ...EDIT, referenceImageUrl: HAT, referenceImageUrls: [COAT], referenceVideoUrls: [CLIP2],
       })
       expect(quote.reserve).toBe(reserved)
+      // Reserved for the LONGEST clip, the extra one (the model may edit it): input 10 + 12, output 12 + 1 s.
+      expect(reserved).toBe(mk(Math.ceil(42.5 * (22 + 13))))
       // input 10 + 12, output the source's 10 s
       expect(quote.expected).toBe(mk(Math.ceil(42.5 * 32)))
     } finally {
@@ -429,5 +503,78 @@ describe("POST /v1/quote refusals", () => {
     expect(res.json().error.code).toBe("video_too_long")
     await app.close()
     probe.probeMediaDuration.mockResolvedValue(10)
+  })
+})
+
+describe("a declared edit with several reference videos", () => {
+  const SHORT = "https://cdn.example.com/short.mp4"
+  const LONG = "https://cdn.example.com/long.mp4"
+
+  it("reserves its automatic length for the longest clip: [5, 25] holds 26 s, and the quote equals the reservation", async () => {
+    probe.probeMediaDuration.mockImplementation(async (url: unknown) => (url === LONG ? 25 : 5))
+    try {
+      const params = {
+        prompt: "make it night", provider: "seedance-2-5", resolution: "480p", aspectRatio: "16:9", duration: 8,
+        referenceVideoUrls: [SHORT, LONG], referenceTaskType: "edit",
+      }
+      const { quote, reserved } = await quoteThenRun("text-to-video", params)
+      const { videoQueue } = await import("../../../lib/queue.js")
+      const [, queued] = vi.mocked(videoQueue.add).mock.calls.at(-1)! as [string, Record<string, unknown>]
+      expect(queued).toMatchObject({ referenceTaskType: "edit", aspectRatio: "adaptive", duration: -1, refVideoDurationsSec: [5, 25] })
+      // 480p -ref is 42.5 a second: input 5 + 25, output the longest clip 25 + 1 s.
+      expect(reserved).toBe(mk(Math.ceil(42.5 * (30 + 26))))
+      expect(quote.reserve).toBe(reserved)
+    } finally {
+      probe.probeMediaDuration.mockImplementation(async () => 10)
+    }
+  })
+})
+
+describe("a declared reference with an automatic length", () => {
+  const CLIP = "https://cdn.example.com/five.mp4"
+  const LONG = "https://cdn.example.com/twelve.mp4"
+  const params = { prompt: "a cat in the style of {video:1}", provider: "seedance-2-5", resolution: "720p", duration: -1, referenceVideoUrls: [CLIP], referenceTaskType: "reference" }
+  /** The worst case, through the reservation's own function: the model's longest output, the clips as input. */
+  async function worstBase(durationsSec: number[]) {
+    const { seedance2RefVideoBaseCreditsFromDurations } = await import("../../billing/seedance2-ref-video-credits.js")
+    return seedance2RefVideoBaseCreditsFromDurations({ provider: "seedance-2-5", resolution: "720p", outputDurationSec: 30, requestedDuration: -1, referenceTaskType: "reference", durationsSec })
+  }
+
+  it.each(["text-to-video", "generate-video"])("%s: one 5 s clip at 720p — the quote and the reservation are the worst case", async (type) => {
+    probe.probeMediaDuration.mockImplementation(async () => 5)
+    try {
+      const { quote, identifier, reserved } = await quoteThenRun(type, params)
+      const base = await worstBase([5])
+      expect(base).toBe(Math.ceil(95 * (5 + 30)))
+      expect(identifier).toBe("seedance-2-5:30s:720p-ref")
+      expect(reserved).toBe(mk(base))
+      expect(quote.reserve).toBe(reserved)
+      expect(quote.identifier).toBe(identifier)
+    } finally {
+      probe.probeMediaDuration.mockImplementation(async () => 10)
+    }
+  })
+
+  it("two clips: the quote and the reservation are the worst case, both clips as input", async () => {
+    probe.probeMediaDuration.mockImplementation(async (url: unknown) => (url === LONG ? 12 : 5))
+    try {
+      const { quote, reserved } = await quoteThenRun("text-to-video", { ...params, referenceVideoUrls: [CLIP, LONG] })
+      expect(reserved).toBe(mk(await worstBase([5, 12])))
+      expect(quote.reserve).toBe(reserved)
+    } finally {
+      probe.probeMediaDuration.mockImplementation(async () => 10)
+    }
+  })
+
+  it("undeclared, the same body keeps the edit hold it had: 5 + (5 + 1) s", async () => {
+    probe.probeMediaDuration.mockImplementation(async () => 5)
+    try {
+      const { referenceTaskType: _declared, ...plain } = params
+      const { quote, reserved } = await quoteThenRun("text-to-video", plain)
+      expect(reserved).toBe(mk(Math.ceil(95 * (5 + 6))))
+      expect(quote.reserve).toBe(reserved)
+    } finally {
+      probe.probeMediaDuration.mockImplementation(async () => 10)
+    }
   })
 })

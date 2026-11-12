@@ -1119,9 +1119,13 @@ request on an LTX 2.3 model renders and bills 6 s.
 family — `autoDuration: true` in `GET /v1/models`): the model picks the clip
 length, which is the source clip's length when it edits a reference video. An
 Auto run reserves credits for the model's longest clip — or, with measured
-reference videos, for the first clip's length rounded up to a whole second plus
-one second (never above the longest clip) — and is refunded down to the length
-actually delivered. On any other model `-1` is ignored and the model
+reference videos, for the longest reference video's length rounded up to a whole
+second plus one second (never above the model's longest clip; the model may edit
+any of the reference videos) — and is refunded down to the length actually
+delivered. A request that declares `referenceTaskType: "reference"` (see
+[Seedance 2.5 reference task type](#seedance-25-reference-task-type)) with an
+Auto length is reserved at the longest output the model can make, and charged
+what it makes. On any other model `-1` is ignored and the model
 renders its default duration.
 
 ## 4e. Generation sessions
@@ -2526,6 +2530,9 @@ per-variant credit `pricing` — the credits a run is charged, the price
 `promptTips`, and the
 `doctrineCovered` truth flag (`true` only when a sourced per-family prompt
 doctrine exists — gate "vendor doctrine" badges on it; never overclaim).
+A video model that takes a [reference task type](#seedance-25-reference-task-type)
+lists the values it takes in `referenceTaskTypes` (`["reference", "edit", "extend"]`
+on `seedance-2-5`; absent on every other model).
 
 Every model also names its **maker** and carries the maker's mark, except a
 model offered under the instance's own label, which names no maker (`maker` is
@@ -2838,7 +2845,9 @@ so a value the model doesn't support is ignored, never a 400:
   other Seedance 2 SKU stops at 15s — and raises the reference caps to
   **30 images / 10 videos / 10 audio** (audio ≤ 30s per clip). With a start
   frame it always renders at that frame's aspect ratio; an explicit
-  `aspectRatio` is coerced to `adaptive` rather than sent.
+  `aspectRatio` is coerced to `adaptive` rather than sent. `referenceTaskType`
+  says what its reference media is for (see
+  [Seedance 2.5 reference task type](#seedance-25-reference-task-type)).
 - **`minimax-h3`** (MiniMax H3) takes the same reference fields with the
   same 9 / 3 / 3 caps and renders at `resolution: "2K"` (default) or `"768P"`
   (the cheaper per-second rate) — any other resolution value renders and bills
@@ -2974,6 +2983,48 @@ so a value the model doesn't support is ignored, never a 400:
   `kling-4` and `kling-4-flash` count the input differently: they bill output +
   max(output, total reference-video seconds), so a clip shorter than the output
   counts as the output's length.
+
+#### Seedance 2.5 reference task type
+
+`POST /v1/generate-video` and `POST /v1/text-to-video` take an optional
+`referenceTaskType` that tells `seedance-2-5` what the request's reference
+media (`referenceImageUrls`, `referenceVideoUrls`, `referenceAudioUrls`) is
+for, instead of leaving the model to guess it from the prompt:
+
+| Value | What it does |
+|---|---|
+| `auto` (the default, also when absent) | Nothing is declared; the model decides from the prompt. |
+| `reference` | The media only guides a new clip. Nothing else changes: the request keeps the aspect ratio and length it was sent with. |
+| `edit` | The clip is an edit of the reference video, in the video's own shape and length: `aspectRatio` becomes `adaptive` and `duration` becomes Auto (`-1`). Needs at least one reference video, and **every** reference video 4–30 s long as the platform measures it (a clip whose length cannot be read does not qualify). Otherwise nothing is declared and the request goes out with the ratio and length it was sent with. |
+| `extend` | The clip continues the reference video, in the video's own shape (`aspectRatio` becomes `adaptive`), at a set length: an Auto or missing `duration` becomes the model's default length (`defaultDuration` in `GET /v1/models`, 8 s on Seedance 2.5). The platform returns the model's clip as delivered and does not join the source clip to it, so expect the continuation only; for the source and the continuation as one video, use [Extend Video](nodes/ai-video/extend-video.md). Needs at least one reference video; otherwise nothing is declared. |
+
+- **Ignored, never an error,** on any other model (the models that take it
+  list the values they take in `referenceTaskTypes` in
+  [`GET /v1/models`](#model-catalog)), on a draft (`draft: true`)
+  and on a request with no reference media. A start or end frame (`imageUrl`,
+  `endFrameUrl`) is not reference media, so a first-frame or
+  first-and-last-frame request without references declares nothing. A value
+  other than the four above is a `400 validation_error`.
+- **What it changes is reported.** A ratio or length that `edit` or `extend`
+  replaces comes back in `adjustments` (on `/v1/generate-video` also in
+  `warnings`), like any other [correction](#on-the-video-routes). An `Auto`
+  ratio is not replaced: with a reference video it already runs at `adaptive`. The run is
+  priced, reserved and sent at the values it runs at, and `POST /v1/quote`
+  with the same body as its `params` prices it the same way. An Auto length is reserved and
+  settled as described for `duration: -1` under
+  [On the video routes](#on-the-video-routes).
+- **A dropped declaration is not reported.** A request that asked for a type
+  and did not get it (a draft, missing reference media, a clip outside 4–30 s
+  for `edit`) answers like any other, so a response with no adjustment does
+  not mean the type was declared. The job's `input_data.referenceTaskType` is
+  set only when one was.
+- **`POST /v1/video-to-video`** with `provider: "seedance-2-5"` asks for `edit`
+  itself, whatever `referenceTaskType` the body carries. The edit is declared
+  when every clip, the source `videoUrl` and any `referenceVideoUrls`, is
+  4–30 s long (not on a draft); otherwise it goes out undeclared and the model
+  reads the prompt.
+
+MCP: `reference_task_type` on `generate_video`.
 
 ### `{image:N}` tokens on the image routes
 
@@ -4616,8 +4667,9 @@ Send `{}` (no draft) for the lowest price any draft can finalize for, returned w
 |---|---|---|
 | `provider` | string | A Seedance 2 model, `kling-4` or `kling-4-flash`. Any other model is a `400 validation_error` whose message names the models that qualify (Seedance 2, Kling 4.0, Kling 4.0 Flash). |
 | `resolution` | string? | As the run sends it; omitted = the model's default. |
-| `duration` | number? | Output seconds; `-1` = Auto, priced as the run reserves it: the first clip's length rounded up to a whole second plus one second (never above the model's longest clip), or the model's longest clip while a clip is unmeasured or unknown. Omitted = the model's default. |
+| `duration` | number? | Output seconds; `-1` = Auto, priced as the run reserves it: the longest clip's length rounded up to a whole second plus one second (never above the model's longest clip), or the model's longest clip while a clip is unmeasured or unknown, or when `referenceTaskType` is `reference`. Omitted = the model's default. |
 | `draft` | boolean? | Seedance 2.5 Draft: priced at 480p. |
+| `referenceTaskType` | string? | Seedance 2.5: the [reference task type](#seedance-25-reference-task-type) the run will send (`auto`, `reference`, `edit`, `extend`), decided as the run decides it. `reference` with an Auto `duration` is priced at the model's longest output; `edit` and `extend` at the length they run at. Any other value is a `400 validation_error`. |
 | `referenceVideoUrls` | string[] | The reference clips the run will send, in order. |
 | `unknownReferenceVideos` | number? | Wired clips whose file does not exist yet (their upstream node has not produced them). |
 
@@ -4640,7 +4692,7 @@ The response is `{ "data": { identifier, reserve, expected?, adjustments, warnin
 |---|---|
 | `identifier` | The credit id the run is charged under. |
 | `reserve` | Credits the run holds when it starts. |
-| `expected` | Credits the run should actually cost, when that can be worked out from the measured inputs. A Seedance reference-video run is reserved at its worst case (input seconds plus the longer of the requested length and the longest clip, since Seedance can treat the run as an edit; for an Auto-duration run with every clip measured, input seconds plus the first clip's length rounded up to a whole second plus one second); `expected` is input plus the length it will most likely render — the source clip's length (`{video:1}`, the first clip) for an Auto-duration run, the requested seconds otherwise. Never above `reserve`. |
+| `expected` | Credits the run should actually cost, when that can be worked out from the measured inputs. A Seedance reference-video run is reserved at its worst case (input seconds plus the longer of the requested length and the longest clip, since Seedance can treat the run as an edit; for an Auto-duration run with every clip measured, input seconds plus the longest clip's length rounded up to a whole second plus one second, unless it declares `referenceTaskType: "reference"`, which is reserved at the model's longest output); `expected` is input plus the length it will most likely render — the source clip's length (`{video:1}`, the first clip) for an Auto-duration run, the requested seconds otherwise. Never above `reserve`. |
 | `adjustments` | `{ code, message, credits? }` — why the price is what it is: `ref_video_length` (priced by the clips' lengths), `extra_reference_images` (MiniMax Hailuo 3 images past the first 5), `auto_duration`, `loop_trim_addon` / `voiced_audio_addon` (with their credits), `params_adjusted` (a resolution or ratio snapped to one the model offers). |
 | `warnings` | `{ code, message }` — `settles_to_actual` (the run is charged for what was generated and the rest of `reserve` is refunded), `ref_video_unmeasured` (a clip could not be measured and is priced as the longest the model accepts). |
 

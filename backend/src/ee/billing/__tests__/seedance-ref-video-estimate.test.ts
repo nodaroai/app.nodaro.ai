@@ -51,7 +51,7 @@ const v2v = { id: "v2v", type: "video-to-video", data: { provider: "seedance-2-5
 const cap = VIDEO_REF_VIDEO_DURATION_LIMITS["seedance-2-5"]!.maxSec
 
 const quote = (args: { duration: number; durationsSec: number[]; unknownClips?: number }) =>
-  seedance2RefVideoChargedQuote({ provider: "seedance-2-5", resolution: "720p", unknownClips: 0, ...args }).then((q) => q.credits)
+  seedance2RefVideoChargedQuote({ provider: "seedance-2-5", resolution: "720p", unknownClips: 0, referenceTaskType: undefined, ...args }).then((q) => q.credits)
 
 beforeEach(() => {
   probe.durations = new Map([[CLIP, 10.04]])

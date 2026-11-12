@@ -5,6 +5,7 @@ import {
   billsReferenceVideoSeconds,
   isSeedanceVideoEditProvider,
   pricedOutputDurationSec,
+  SEEDANCE_VIDEO_EDIT_TASK_TYPE,
 } from "@nodaro/shared/models"
 import {
   referenceModalityForHandle,
@@ -50,6 +51,13 @@ interface RefVideoEstimateRequest {
   resolution?: string
   duration?: number | string
   draft: boolean
+  /**
+   * The reference task type the run's payload requests, as the workflow
+   * builder sets it (`payload-builder.ts`): Video to Video's Seedance edit lane
+   * requests `edit`; a generation node's payload carries none, so neither does
+   * its estimate. The quote resolves it on the clips, as the run does.
+   */
+  referenceTaskType: typeof SEEDANCE_VIDEO_EDIT_TASK_TYPE | undefined
   /** One entry per clip wire: the upstream node, when the estimate has it. */
   clipSources: ReadonlyArray<EstimateNode | undefined>
   /**
@@ -94,21 +102,24 @@ function refVideoEstimateRequest(
   let provider: string
   let resolution: string | undefined
   let duration: number | string | undefined
+  let referenceTaskType: RefVideoEstimateRequest["referenceTaskType"]
   if (isGeneration) {
     const sel = applyDefaultVideoSelection({ provider: data.provider as string | undefined, duration: data.duration as number | string | undefined })
     provider = sel.provider
     resolution = data.resolution as string | undefined
     duration = sel.duration
+    referenceTaskType = undefined
   } else {
     provider = (data.provider as string | undefined) ?? ""
     if (!isSeedanceVideoEditProvider(provider)) return undefined
     resolution = data.v2vResolution as string | undefined
     duration = VIDEO_DURATION_AUTO
+    referenceTaskType = SEEDANCE_VIDEO_EDIT_TASK_TYPE
   }
   if (!billsReferenceVideoSeconds(provider)) return undefined
   const byId = new Map(nodes.map((n) => [n.id, n]))
   return {
-    provider, resolution, duration, draft: data.draft === true,
+    provider, resolution, duration, draft: data.draft === true, referenceTaskType,
     videoTrim: { start: data.videoTrimStart, end: data.videoTrimEnd },
     clipSources: clipSourceIds.map((id) => (id === undefined ? undefined : byId.get(id))),
     ...(soundtrack ? { soundtrack: { source: byId.get(audioEdges[0]!.source) } } : {}),
@@ -148,6 +159,7 @@ export function seedanceRefVideoEstimateCredits(
     resolution: request.resolution,
     duration: request.duration,
     draft: request.draft,
+    referenceTaskType: request.referenceTaskType,
     durationsSec,
     unknownClips,
     videoTrim: request.videoTrim,

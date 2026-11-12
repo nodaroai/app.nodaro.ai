@@ -74,6 +74,10 @@ function sharedVideoBody(options?: ProviderOptions): Record<string, unknown> {
     ...(options.referenceImageUrls?.length ? { referenceImageUrls: options.referenceImageUrls } : {}),
     ...(options.referenceVideoUrls?.length ? { referenceVideoUrls: options.referenceVideoUrls } : {}),
     ...(options.referenceAudioUrls?.length ? { referenceAudioUrls: options.referenceAudioUrls } : {}),
+    // Seedance 2.5's declared reference task type, beside the media it is
+    // about: the far end resolves it again on its own route. Absent = no key;
+    // a far end that predates the field ignores it.
+    ...(options.referenceTaskType !== undefined ? { referenceTaskType: options.referenceTaskType } : {}),
     ...(options.characterReferences?.length ? { characterReferences: options.characterReferences } : {}),
     ...(options.webSearch !== undefined ? { webSearch: options.webSearch } : {}),
     ...(options.nsfwChecker !== undefined ? { nsfwChecker: options.nsfwChecker } : {}),

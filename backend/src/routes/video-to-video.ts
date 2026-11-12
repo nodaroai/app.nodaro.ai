@@ -11,7 +11,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { VIDEO_TO_VIDEO_DEFAULT_PROVIDER } from "../workers/handlers/default-models.js"
-import { VIDEO_TO_VIDEO_NODE_PROVIDERS, SEEDANCE_VIDEO_EDIT_SHAPE, isSeedanceVideoEditProvider } from "@nodaro/shared/models"
+import { VIDEO_TO_VIDEO_NODE_PROVIDERS, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, isSeedanceVideoEditProvider } from "@nodaro/shared/models"
 import { buildSeedanceVideoEditPrompt } from "@nodaro/prompts/assembly"
 import { handleTextToVideoRequest, textToVideoBody, textToVideoPricing } from "./text-to-video.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -78,6 +78,11 @@ const listOf = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
  * duration), and every other reference after it. The same body the canvas
  * node and MCP `modify_video` send, built server-side so no client has to. Request-level fields (sessionId, origin,
  * workflow/node ids, mcp_client) ride along untouched.
+ *
+ * It also requests the edit task type, set LAST so a caller's own
+ * `referenceTaskType` cannot turn the edit into something else. The lane
+ * declares it only when the clips qualify (`resolveVideoRequestNorm`); an edit
+ * whose clip is outside the edit's lengths goes out undeclared, as before.
  */
 export function seedanceEditRunBody(body: Record<string, unknown>): Record<string, unknown> {
   const {
@@ -96,6 +101,7 @@ export function seedanceEditRunBody(body: Record<string, unknown>): Record<strin
     referenceVideoUrls: [videoUrl, ...listOf(referenceVideoUrls)],
     ...(imageUrls.length > 0 ? { referenceImageUrls: imageUrls } : {}),
     ...(typeof audio === "boolean" ? { generateAudio: audio } : {}),
+    referenceTaskType: SEEDANCE_VIDEO_EDIT_TASK_TYPE,
   }
 }
 
