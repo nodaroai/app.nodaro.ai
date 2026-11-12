@@ -32,6 +32,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
+import { CLIENT_CLOSED, clientGoneSignal } from "../lib/client-gone.js"
 import { insertJob } from "../lib/insert-job.js"
 import { mayUseChildJobAsSource } from "../lib/job-submission-context.js"
 import { kieTaskOwnedByAnother } from "../lib/kie-task-ownership.js"
@@ -184,20 +185,6 @@ const nodaroNotServed = { code: NODARO_VIDEO_UPSCALE_NOT_SERVED_CODE, message: N
 const NOT_SERVED_STATUS = 403
 
 /**
- * The client going away before the response is sent: the response's `close`
- * before it finished (never the request's, which fires once the body is read).
- * Aborts the clip's fetch and copy, so a disconnected request stops
- * downloading and frees the person's fetch slot.
- */
-function clientGoneSignal(reply: FastifyReply): AbortSignal {
-  const gone = new AbortController()
-  reply.raw.once("close", () => {
-    if (!reply.raw.writableFinished) gone.abort()
-  })
-  return gone.signal
-}
-
-/**
  * Nodaro Video Upscale's refusal by this deployment, BEFORE the credit guard
  * (every edition): one that does not serve it (`houseModelServed`) refuses it
  * first, in the model's own sentence, before anything is fetched or held. A
@@ -243,6 +230,8 @@ async function nodaroVideoUpscaleBeforePricing(req: FastifyRequest, reply: Fasti
   const linkRefused = linkImportRefusal(videoUrl)
   if (linkRefused) return reply.status(403).send({ error: linkRefused })
   const quote = req.quoteOnly === true
+  // The client going away aborts the clip's fetch and copy, so a disconnected
+  // request stops downloading and frees the person's fetch slot.
   const signal = clientGoneSignal(reply)
   let plan: Awaited<ReturnType<typeof planNodaroVideoUpscale>>
   try {
@@ -251,7 +240,7 @@ async function nodaroVideoUpscaleBeforePricing(req: FastifyRequest, reply: Fasti
     // The client went away mid-fetch: the request ends here, nothing held (a
     // client's own disconnect is no server error to report — as the keyed
     // chat's wait answers it, lib/llm-chat-keyed.ts).
-    if (signal.aborted) return reply.status(499).send({ error: { code: "client_closed", message: "The client closed the request." } })
+    if (signal.aborted) return reply.status(499).send({ error: CLIENT_CLOSED })
     const refusal = nodaroVideoUpscaleRefusalOf(err)
     if (!refusal) throw err
     // "Try again in a moment" (nothing about the clip is wrong: too many fetches

@@ -252,6 +252,17 @@
       "lookups": [
         "unitRecoverOf"
       ]
+    },
+    "backend/src/lib/unit-quotes.ts": {
+      "composes": "unitQuoteOf(type) = UNIT_QUOTES[type], each unit's quote.ts under its type (its run route's own body schema and pricing chain), and unitQuotableTypes() = those types: POST /v1/quote prices a unit through them beside its hand-written rows",
+      "exports": {
+        "quotes": [
+          "unitQuotableTypes"
+        ]
+      },
+      "lookups": [
+        "unitQuoteOf"
+      ]
     }
   }
 }

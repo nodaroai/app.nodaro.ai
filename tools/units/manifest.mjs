@@ -357,6 +357,8 @@ function checkFiles(unit, m, ctx, errors) {
   if (need.route && routes.length === 0) errors.push(`execution.kind "${kind}" needs ${unit.dirs.backend}/route.ts (or route.ee.ts when Cloud-only)`)
   if (!need.route && routes.length > 0) errors.push(`execution.kind "${kind}" runs no route — remove ${routes.join(", ")} or change the kind`)
   for (const f of ["payload.ts", "worker.ts"]) if (kind !== "worker" && kind !== "use-case" && has("backend", f)) errors.push(`${f} is only for execution.kind "worker"`)
+  // A quote prices the unit's own run route with that route's pricing chain (the "quotes" seam): no route, nothing to quote.
+  if (routes.length === 0 && has("backend", "quote.ts")) errors.push(`quote.ts prices the unit's run route: it needs ${unit.dirs.backend}/route.ts (or route.ee.ts)`)
   // The video worker sizes a job's liveness from it (declaredJobBudgetMs), so only a worker's job has one.
   if (kind !== "worker" && has("backend", "budget.ts")) errors.push(`budget.ts is only for execution.kind "worker" (the video worker's liveness budget)`)
   // The reconcile finishes an own-writer worker's job from its saved provider

@@ -166,8 +166,9 @@ test("G3: every aggregate declares @registry and @registry-exports; only reviewe
 // the node's data, only picks that type's row — it returns a credit id, never a
 // collection. unitRecoverOf: its argument is a row's job_type, which for a
 // unit's worker job is its BullMQ job name — the unit's type — and it returns
-// that one unit's recovery.)
-const LOOKUPS_BY_NODE_TYPE = new Set(["isExecutableNode", "familyLabel", "isLocalizedTableKey", "unitDefinitionOf", "unitDescriptorOf", "unitInputHandleOf", "usecaseInputSchemaOf", "declaredJobBudgetMs", "laneOf", "providerOf", "unitCreditIdOf", "unitRecoverOf"])
+// that one unit's recovery. unitQuoteOf: its argument is the node type a quote
+// names, and it returns that one unit's quote.)
+const LOOKUPS_BY_NODE_TYPE = new Set(["isExecutableNode", "familyLabel", "isLocalizedTableKey", "unitDefinitionOf", "unitDescriptorOf", "unitInputHandleOf", "usecaseInputSchemaOf", "declaredJobBudgetMs", "laneOf", "providerOf", "unitCreditIdOf", "unitRecoverOf", "unitQuoteOf"])
 
 test("G3: composer `lookups` are only one-node-type lookups", () => {
   const bad = Object.entries(composerMap).flatMap(([f, e]) => (e.lookups ?? []).filter((n) => !LOOKUPS_BY_NODE_TYPE.has(n)).map((n) => `${f}: ${n}`))

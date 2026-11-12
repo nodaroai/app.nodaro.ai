@@ -46,7 +46,7 @@ afterAll(() => { if (tree) rmSync(tree, { recursive: true, force: true }) })
 describe("gen:units on the fixture unit", () => {
   it("validates and emits", () => {
     expect(result.errors).toEqual([])
-    expect(result.outputs.size).toBe(32) // 17 aggregates, 5 projections (fixture-case has no labels), 5 dicts, the docs index, the contracts, the kept lengths, the use-case rows, the list outputs
+    expect(result.outputs.size).toBe(33) // 18 aggregates, 5 projections (fixture-case has no labels), 5 dicts, the docs index, the contracts, the kept lengths, the use-case rows, the list outputs
   })
 
   it("every output matches its golden", async () => {

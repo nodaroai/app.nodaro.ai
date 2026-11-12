@@ -3696,11 +3696,14 @@ quote(type: string, params?: Record<string, unknown>): Promise<NodeQuote>
 
 The price of a run before you start it (`POST /v1/quote`). Pass exactly the
 body you would pass to `run`: the platform prices it with the run route's own
-code — validation, measuring reference clips, the credit id and the amount — and
-starts nothing. Typed for `text-to-video`, `generate-video`,
-`video-to-video` and `video-upscale` (a Seedance 2.5 draft's 1080p finalize is
-priced from the draft); those are the types the platform can quote today (any other
-rejects with `400 quote_unsupported`). Cloud only.
+code — validation, measuring reference clips or a picture, the credit id and
+the amount — and starts nothing. Typed for `text-to-video`, `generate-video`,
+`video-to-video`, `video-upscale` (a Seedance 2.5 draft's 1080p finalize is
+priced from the draft) and `edit-image`; `split-into-layers` is quotable too and
+takes the body `client.media.splitIntoLayers` takes. Those are the types the
+platform can quote today (any other rejects with `400 quote_unsupported`). It
+rejects with the run's own `400` / `403` for a body, model or node the run would
+refuse. Cloud only.
 
 ```ts
 const q = await client.nodes.quote("video-to-video", {
@@ -3709,6 +3712,32 @@ const q = await client.nodes.quote("video-to-video", {
 q.reserve   // credits held when the run starts
 q.expected  // what it should actually cost (the run settles to what it rendered), when known
 ```
+
+A `settles_to_actual` warning marks a `reserve` that is the most the run can
+cost (it is charged for what it delivers, the rest refunded); without it,
+`reserve` is what the run is charged when it completes.
+
+```ts
+// Nodaro Image Upscale: the exact price of this picture at this factor.
+// The platform reads the picture to measure it and stores nothing.
+const up = await client.nodes.quote("edit-image", {
+  provider: "nodaro-image-upscale", imageUrl: "https://example.com/photo-1024.png", upscaleFactor: "2",
+})
+up.identifier // "nodaro-image-upscale:2K" for a 1024 × 1024 picture
+up.reserve    // its exact price
+
+// Split into Layers: the hold, the most the run can cost (warning settles_to_actual).
+const split = await client.nodes.quote("split-into-layers", { imageUrl: "https://example.com/poster.png", maxLayers: 5 })
+split.identifier // "split-into-layers:1k:6": 5 layers and the base at 1K
+split.reserve    // the hold; the run is charged only for the images it returns
+```
+
+Here `up.reserve` is 5 credits<!-- credits: nodaro-image-upscale:2K --> and
+`split.reserve` 64 credits<!-- credits: split-into-layers:1k:6 -->.
+
+Where Nodaro Image Upscale is not offered, the quote rejects with the run's
+`403 model_not_available` (`ModelUnavailableError`) before the picture is read,
+and a link to another site follows the deployment's link-import setting.
 
 `NodeQuote` is `{ identifier, reserve, expected?, adjustments, warnings }` —
 see [Run quotes](api-integration.md#run-quotes) for every field and code.
@@ -6873,15 +6902,24 @@ const { jobId } = await client.media.shotCuts({ videoUrl: "https://example.com/a
 
 Full reference: [Shot Cuts](./nodes/processing-video/shot-cuts.md).
 
-#### `splitIntoLayers(input)`
+#### `splitIntoLayers(input, options?)`
 
 ```ts
-splitIntoLayers(input: {
-  imageUrl: string
-  maxLayers?: number                       // 1–99, default 9
-  size?: "1K" | "1.5K" | "2K" | "auto"     // default "1K"
-  prompt?: string                          // what to separate, up to 2,000 characters
-}): Promise<{ jobId: string }>
+splitIntoLayers(
+  input: {
+    imageUrl: string
+    maxLayers?: number                       // 1–99, default 9
+    size?: "1K" | "1.5K" | "2K" | "auto"     // default "1K"
+    prompt?: string                          // what to separate, up to 2,000 characters
+    sessionId?: string                       // one of your sessions: the job is filed in it
+    origin?: string                          // your app's slug, stored on the job
+  },
+  options?: {
+    idempotencyKey?: string                  // sent as the Idempotency-Key header (8+ characters)
+    signal?: AbortSignal
+    timeoutMs?: number
+  },
+): Promise<{ jobId: string; deduped?: true }>
 ```
 
 Split one image into a base picture and separate layers
@@ -6896,6 +6934,11 @@ name, description, stacking order and the box it sits in on the base.
   `<bbox>x1 y1 x2 y2</bbox>` marks (0–1000) to point at a region. Left empty,
   the main elements are found automatically.
 - A malformed body is a `400 validation_error` before any credits are held.
+- `sessionId` and `origin` work as on every job-creating route (a session that
+  is not yours is a `404`, before anything is created or charged).
+- With `options.idempotencyKey`, a retry of the same request answers the job it
+  already started (`deduped: true`) instead of starting and charging a second
+  one.
 
 On Nodaro Cloud a run holds the price of the most images it may return
 (`maxLayers` + 1, the base included) at its size, and is charged only for the
@@ -6905,7 +6948,8 @@ one that returns 3 layers at 1K is charged 44 credits<!-- credits: split-into-la
 (74 credits<!-- credits: split-into-layers:2k:4 --> at 2K or `auto`); `maxLayers: 5`
 at 1K holds 64 credits<!-- credits: split-into-layers:1k:6 -->. A run that finds no
 element completes with the base picture only (`layers` empty) and is charged the
-one-image price.
+one-image price. `client.nodes.quote("split-into-layers", input)` states a run's
+hold before it starts, and starts nothing.
 
 Poll `jobs.get(jobId)`; the completed job's `output_data` is a
 `SplitIntoLayersOutput`:

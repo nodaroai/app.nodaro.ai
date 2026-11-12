@@ -991,9 +991,14 @@ export class NodesResource {
    * `reserve` is what the run will hold when it starts; `expected`, when
    * present, is what it should actually cost (a Seedance edit renders the
    * source clip's length). A run settles to what was generated, never above
-   * `reserve`. Rejects with the same `400` the run would answer for an
-   * invalid body. Typed for the video lanes; any other node type takes its
-   * run body as-is.
+   * `reserve`. A `settles_to_actual` warning marks a `reserve` that is the
+   * most the run can cost rather than its exact price. Rejects with the same
+   * `400` / `403` the run would answer (an invalid body, a model or node this
+   * deployment does not offer you). Typed for the video lanes and
+   * `edit-image`; any other quotable node type takes its run body as-is —
+   * `"split-into-layers"` takes the body `client.media.splitIntoLayers` takes
+   * (`SplitIntoLayersInput`), and its `reserve` is the hold: `maxLayers` + 1
+   * images at the size's price.
    *
    * @param type    Node type slug, as for {@link run}.
    * @param params  The run body.
@@ -1004,6 +1009,11 @@ export class NodesResource {
   /** A Seedance 2.5 draft's 1080p finalize (`seedance-2-5-hd`) is priced from
    *  the draft itself, including the clips it was made with. */
   quote(type: "video-upscale", params: VideoUpscaleParams): Promise<NodeQuote>
+  /** Every edit model. `nodaro-image-upscale` is priced by its output's size:
+   *  the platform reads the picture (storing nothing) and quotes that size's
+   *  exact tier; an unreadable size quotes the hold, with a `settles_to_actual`
+   *  warning. Where the model is not offered the quote is refused as the run is. */
+  quote(type: "edit-image", params: EditImageParams): Promise<NodeQuote>
   quote(type: string, params?: Record<string, unknown>): Promise<NodeQuote>
   async quote(type: string, params: Record<string, unknown> = {}): Promise<NodeQuote> {
     const res = await this.client.request<{ data: NodeQuote }>("POST", "/v1/quote", { body: { type, params } })

@@ -9,6 +9,10 @@
  * and the workflow run's reservation (`node-executor.ts`). The size is read
  * from the image's header; an image whose size cannot be read is charged its
  * tier row (the worker reads it in full and fails an unreadable one, refunded).
+ * Both lanes ask the deployment's link-import switch first
+ * ({@link topazImageLinkRefusal}), in every edition, as Nodaro Image Upscale's
+ * copy helper does: where link imports are off, a link to outside content is
+ * refused — never read for its size, never handed to the provider.
  */
 import {
   TOPAZ_IMAGE_MAX_OUTPUT_MP,
@@ -19,6 +23,7 @@ import {
 import { resolveTopazUpscale } from "@nodaro/shared/credits"
 import { buildCreditModelIdentifier } from "@nodaro/shared/credits"
 import { probeImageDisplaySize } from "./image-source-size.js"
+import { linkImportRefusal } from "./link-imports.js"
 import { baseCreditCostFor, unitRateBaseCredits } from "./credit-base-cost.js"
 
 export type TopazImageSizeReading =
@@ -33,6 +38,16 @@ export async function readTopazImageSize(imageUrl: string, factor: string): Prom
   const megapixels = topazImageOutputMegapixels(size.width, size.height, Number(factor) || 2)
   const units = topazImageSizeUnits(megapixels)
   return units === undefined ? { kind: "too-large", megapixels } : { kind: "sized", units, megapixels }
+}
+
+/**
+ * The deployment's link-import switch, asked before the header of `imageUrl`
+ * is read: a link to outside content where the deployment turned link imports
+ * off is refused (`link_imports_disabled`, 403 on a route), as every lane that
+ * reads an outside link refuses it. Null for a link it may read.
+ */
+export function topazImageLinkRefusal(imageUrl: string): { code: "link_imports_disabled"; message: string } | null {
+  return linkImportRefusal(imageUrl)
 }
 
 /** The refusal of an output past the provider's largest size — before anything is reserved. */
@@ -72,18 +87,24 @@ export function isTopazImageUpscaleJob(jobName: string, payload: Record<string, 
 /**
  * The workflow run's twin of the route's guard: read the image the payload
  * sends and stamp its size units (`topazSizeUnits`), or refuse an output past
- * the largest size before a jobs row is kept. Only where credits are charged.
+ * the largest size before a jobs row is kept — only where credits are charged.
+ * In every edition, an outside link where link imports are off is refused first.
  */
 export async function stampTopazImageSize(
   jobName: string,
   payload: Record<string, unknown>,
   creditsOn: boolean,
-): Promise<{ ok: true; patch: Record<string, unknown> } | { ok: false; message: string }> {
-  if (!creditsOn || !isTopazImageUpscaleJob(jobName, payload)) return { ok: true, patch: {} }
+): Promise<{ ok: true; patch: Record<string, unknown> } | { ok: false; code: "image_too_large" | "link_imports_disabled"; message: string }> {
+  if (!isTopazImageUpscaleJob(jobName, payload)) return { ok: true, patch: {} }
   const imageUrl = typeof payload.imageUrl === "string" ? payload.imageUrl : undefined
   if (!imageUrl) return { ok: true, patch: {} }
+  // The switch, in every edition: where link imports are off an outside link
+  // is refused, whether or not its size is read for a price.
+  const refusal = topazImageLinkRefusal(imageUrl)
+  if (refusal) return { ok: false, ...refusal }
+  if (!creditsOn) return { ok: true, patch: {} }
   const reading = await readTopazImageSize(imageUrl, topazImageTier(payload).factor)
-  if (reading.kind === "too-large") return { ok: false, message: topazImageTooLargeMessage(reading.megapixels) }
+  if (reading.kind === "too-large") return { ok: false, code: "image_too_large", message: topazImageTooLargeMessage(reading.megapixels) }
   return { ok: true, patch: reading.kind === "sized" ? { topazSizeUnits: reading.units } : {} }
 }
 

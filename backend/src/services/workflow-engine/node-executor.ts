@@ -2511,7 +2511,7 @@ async function executeWorkerNode(
   if (!topazImageStamp.ok) {
     await supabase.from("jobs").delete().eq("id", jobId)
     const err = new Error(topazImageStamp.message) as Error & { errorCode?: string }
-    err.errorCode = "image_too_large"
+    err.errorCode = topazImageStamp.code
     throw err
   }
   if (Object.keys(topazImageStamp.patch).length > 0) payload = { ...payload, ...topazImageStamp.patch }

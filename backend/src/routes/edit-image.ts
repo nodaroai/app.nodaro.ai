@@ -1,15 +1,17 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { hasCredits } from "../lib/config.js"
-import { readTopazImageSize, topazImageSizeBaseCredits, topazImageTier, topazImageTooLargeMessage } from "../lib/topaz-image-size.js"
+import { readTopazImageSize, topazImageLinkRefusal, topazImageSizeBaseCredits, topazImageTier, topazImageTooLargeMessage } from "../lib/topaz-image-size.js"
 import { NODARO_IMAGE_UPSCALE_TOO_LARGE_CODE } from "../lib/nodaro-image-upscale-size.js"
 import {
   measureNodaroImageUpscaleInput,
+  NODARO_IMAGE_UPSCALE_QUOTE_READ_MS,
   nodaroImageUpscaleArgs,
   nodaroImageUpscaleCopyOptions,
   nodaroImageUpscaleInputRefusal,
   nodaroImageUpscaleStamp,
 } from "../lib/nodaro-image-upscale-lane.js"
-import { copyOutsideInput, inspectOutsideInput } from "../lib/outside-input-copy.js"
+import { copyOutsideInput, inspectOutsideInput, OutsideInputTimedOutError } from "../lib/outside-input-copy.js"
+import { CLIENT_CLOSED, clientGoneSignal } from "../lib/client-gone.js"
 import { houseModelInvalidRunError, houseModelServed, planHouseModelRun } from "../lib/house-models.js"
 import { NODARO_IMAGE_UPSCALE_HOLD_CREDIT_ID, nodaroImageUpscaleTooLargeMessage } from "@nodaro/render-rules"
 import { z } from "zod"
@@ -17,7 +19,8 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { insertJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
-import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { creditGuard, reserveCreditsForJob, type RoutePricing } from "../middleware/credit-guard.js"
+import { noteAdjustment, noteWarning } from "../lib/price-notes.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
@@ -150,19 +153,51 @@ export function resolveEditImageCreditIdentifier(req: FastifyRequest): string {
  * the guard, refuse an output past the provider's largest size (a 400, nothing
  * reserved), and let the guard charge the size's units when they cost more
  * than the factor's tier (lib/topaz-image-size.ts). Only where credits are
- * charged; inert for every other provider.
+ * charged. A link to outside content is first held to the deployment's
+ * link-import switch, in every edition. Inert for every other provider.
  */
 async function topazImageSizePreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
-  if (!hasCredits()) return
   const body = req.body as Record<string, unknown> | null
   if (body?.provider !== "topaz-image-upscale") return
   const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl : undefined
   if (!imageUrl || !safeUrlSchema.safeParse(imageUrl).success) return
+  // The deployment's link-import switch, in every edition: a link to outside
+  // content is refused where link imports are off (403, nothing read), as
+  // Nodaro Image Upscale's copy refuses it — whether or not its size is read.
+  const linkRefusal = topazImageLinkRefusal(imageUrl)
+  if (linkRefusal) return reply.status(403).send({ error: linkRefusal })
+  if (!hasCredits()) return
   const reading = await readTopazImageSize(imageUrl, topazImageTier(body).factor)
   if (reading.kind === "too-large") {
     return reply.status(400).send({ error: { code: "image_too_large", message: topazImageTooLargeMessage(reading.megapixels) } })
   }
   if (reading.kind === "sized") req.topazImageSizeUnits = reading.units
+  // A quote says when it could not price by size (a no-op on a run).
+  else noteWarning(req, IMAGE_SIZE_UNMEASURED_AT_TIER)
+}
+
+/** Topaz, an image whose size its header does not give: priced at its factor's own price. */
+const IMAGE_SIZE_UNMEASURED_AT_TIER = {
+  code: "image_size_unmeasured",
+  message: "The image's size could not be read before the run, so it is priced at its factor's own price. A run whose image cannot be read fails and is refunded.",
+} as const
+
+/**
+ * Edit models that take a prompt, refused without one — before the credit
+ * guard, so the 400 names the problem rather than a 402, and so a quote never
+ * prices a body the run refuses.
+ */
+async function editPromptRequiredPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const body = req.body as Record<string, unknown> | null
+  const provider = body?.provider
+  if ((provider === "nano-banana-edit" || provider === "grok-2-edit") && !body?.prompt) {
+    return reply.status(400).send({
+      error: {
+        code: "validation_error",
+        message: `Prompt is required for ${provider} provider`,
+      },
+    })
+  }
 }
 
 /**
@@ -189,18 +224,24 @@ async function nodaroImageUpscaleBeforePricing(req: FastifyRequest, reply: Fasti
   if (!houseModelServed(NODARO_IMAGE_UPSCALE_MODEL_ID)) return
   const userId = req.userId
   if (!userId) return
-  const quote = req.quoteOnly === true
+  // A quote reads under its own deadline and stops when the client hangs up:
+  // its slot is one of the few the quotes share.
+  const quote = req.quoteOnly === true ? quoteRead(reply) : undefined
   let input: Awaited<ReturnType<typeof measureNodaroImageUpscaleInput>>
   try {
     // A quote stores nothing: the same checks and the same measurement, on the caller's URL.
     const stored = quote
-      ? { url: imageUrl, ...(await inspectOutsideInput(imageUrl, nodaroImageUpscaleCopyOptions(userId))) }
+      ? { url: imageUrl, ...(await inspectOutsideInput(imageUrl, nodaroImageUpscaleCopyOptions(userId, quote.signal))) }
       : await copyOutsideInput(imageUrl, nodaroImageUpscaleCopyOptions(userId))
     input = await measureNodaroImageUpscaleInput(stored.url, stored, body.upscaleFactor)
   } catch (err) {
+    // Nobody is waiting for the answer: say so, and nothing more.
+    if (quote?.clientGone.aborted) return reply.status(499).send({ error: CLIENT_CLOSED })
     const refusal = nodaroImageUpscaleInputRefusal(err)
     if (refusal) return reply.status(refusal.status).send({ error: { code: refusal.code, message: refusal.message } })
     return sendInternalError(reply, req, err)
+  } finally {
+    quote?.dispose()
   }
   if (input.sizing?.kind === "too-large") {
     return reply.status(400).send({ error: { code: NODARO_IMAGE_UPSCALE_TOO_LARGE_CODE, message: nodaroImageUpscaleTooLargeMessage(input.sizing) } })
@@ -210,6 +251,37 @@ async function nodaroImageUpscaleBeforePricing(req: FastifyRequest, reply: Fasti
   }
   // The stored copy rides beside the caller's link: priced, inserted and sent as the stamp.
   req.nodaroImageUpscale = { creditId: input.creditId, stamp: nodaroImageUpscaleStamp(input) }
+  // What a quote says of the price (no-ops on a run): the output it priced, or the hold.
+  if (input.sizing?.kind === "sized") {
+    const fmt = (n: number) => n.toLocaleString("en-US")
+    noteAdjustment(req, {
+      code: "output_size",
+      message: `Priced by the output's size: ${fmt(input.sizing.width)} × ${fmt(input.sizing.height)} (${fmt(input.sizing.pixels)} pixels).`,
+    })
+  } else {
+    noteWarning(req, { code: "image_size_unmeasured", message: "The picture's size could not be read before the run, so it is priced as the largest output." })
+    noteWarning(req, {
+      code: "settles_to_actual",
+      message: "This is the most the run can cost: it is charged for the picture it delivers, and the difference is refunded when it finishes.",
+    })
+  }
+}
+
+/**
+ * The signal a quote reads its picture under: its deadline
+ * (`NODARO_IMAGE_UPSCALE_QUOTE_READ_MS`, refused as `input_timed_out`, a
+ * refusal to try again) and the client hanging up — the response's `close`
+ * before it finished, never the request's, which fires once the body is read.
+ */
+function quoteRead(reply: FastifyReply): { signal: AbortSignal; clientGone: AbortSignal; dispose(): void } {
+  const deadline = new AbortController()
+  const timer = setTimeout(() => deadline.abort(new OutsideInputTimedOutError()), NODARO_IMAGE_UPSCALE_QUOTE_READ_MS)
+  const clientGone = clientGoneSignal(reply)
+  return {
+    signal: AbortSignal.any([deadline.signal, clientGone]),
+    clientGone,
+    dispose: () => clearTimeout(timer),
+  }
 }
 
 /**
@@ -226,17 +298,37 @@ async function retiredEditProviderPreHandler(req: FastifyRequest, reply: Fastify
   }
 }
 
-const editImageGuard = creditGuard(resolveEditImageCreditIdentifier, {
-  runModel: jobRunModel("edit-image"),
-  beforePricing: nodaroImageUpscaleBeforePricing,
-  computeCredits: async (_body, req) =>
-    req.topazImageSizeUnits !== undefined
-      ? topazImageSizeBaseCredits(resolveEditImageCreditIdentifier(req), req.topazImageSizeUnits)
-      : undefined,
-})
+/** A Topaz upscale priced above its factor's own price by its output's size (computeCredits). */
+async function topazImageSizeCredits(_body: unknown, req: FastifyRequest): Promise<number | undefined> {
+  if (req.topazImageSizeUnits === undefined) return undefined
+  const base = await topazImageSizeBaseCredits(resolveEditImageCreditIdentifier(req), req.topazImageSizeUnits)
+  if (base !== undefined) {
+    noteAdjustment(req, { code: "output_size", message: "Priced by the output's size: a large output costs more than its factor's own price." })
+  }
+  return base
+}
+
+/**
+ * The route's whole pricing chain, declared ONCE (`RoutePricing`): the run
+ * registers it as its preHandlers and `POST /v1/quote` runs the same steps on
+ * the same body without a job — the same resolver, the same Nodaro Image
+ * Upscale measurement (a quote checks the picture with nothing stored), the
+ * same Topaz size reading — so a quote cannot drift from what the run reserves.
+ */
+export const editImagePricing: RoutePricing = {
+  prechecks: [retiredEditProviderPreHandler, editPromptRequiredPreHandler, topazImageSizePreHandler],
+  modelResolver: resolveEditImageCreditIdentifier,
+  opts: {
+    runModel: jobRunModel("edit-image"),
+    beforePricing: nodaroImageUpscaleBeforePricing,
+    computeCredits: topazImageSizeCredits,
+  },
+}
 
 export async function editImageRoutes(app: FastifyInstance) {
-  app.post("/v1/edit-image", { preHandler: [retiredEditProviderPreHandler, topazImageSizePreHandler, editImageGuard] }, async (req, reply) => {
+  app.post("/v1/edit-image", {
+    preHandler: [...editImagePricing.prechecks, creditGuard(editImagePricing.modelResolver, editImagePricing.opts)],
+  }, async (req, reply) => {
     const parsed = editImageBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -257,16 +349,7 @@ export async function editImageRoutes(app: FastifyInstance) {
       })
     }
 
-    // Validate that prompt-driven edit providers have a prompt
-    if ((provider === "nano-banana-edit" || provider === "grok-2-edit") && !prompt) {
-      return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: `Prompt is required for ${provider} provider`,
-        },
-      })
-    }
-
+    // A prompt-driven edit with no prompt was refused before the guard (editPromptRequiredPreHandler).
     const baseProvider = provider ?? "recraft-upscale"
     // `topaz.adjustments` is deliberately discarded rather than folded into the
     // `withAdjustments` response below: `ModelInputAdjustment.field` is a closed

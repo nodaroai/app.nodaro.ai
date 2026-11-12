@@ -17,6 +17,12 @@
  * deployment preferring availability over enforcement catches inside its own
  * `check` and returns `{ allow: true }` itself.
  *
+ * QUOTES: a quote of a run whose input comes from an outside link asks the
+ * policy too (lib/outside-input-copy.ts `inspectOutsideInput`), with
+ * `quote: true` on the input, so a quote never prices a file the run would
+ * refuse. A policy may treat that as a dry run and skip counting or paid
+ * checks; the run asks again, unflagged, before anything is stored.
+ *
  * COVERAGE (the totality half lives in __tests__/upload-policy.test.ts):
  * every lane where upload bytes flow THROUGH this backend — the multipart
  * routes (/v1/upload, /v1/upload/image, /v1/upload/audio, /v1/upload-json),
@@ -62,6 +68,15 @@ export interface UploadCheckInput {
   readonly filename?: string
   /** The raw bytes — present on every core lane (all of them buffer). */
   readonly buffer?: Buffer
+  /**
+   * A DRY RUN: `POST /v1/quote` pricing a run whose input this is
+   * (`inspectOutsideInput`). Nothing is stored and the run may never start, so
+   * a policy may skip what it counts or pays for per upload (a quota, a paid
+   * moderation call) and answer from its cheap checks — the run's own copy
+   * asks again without this flag before anything is stored. A policy that
+   * ignores it treats a quote as an upload. Absent on every real upload.
+   */
+  readonly quote?: true
 }
 
 export interface UploadVerdict {

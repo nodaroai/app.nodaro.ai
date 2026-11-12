@@ -671,6 +671,17 @@ test("provider:* — a worker in the provider lane names the one provider it cal
   assert.deepEqual(CAPABILITIES["provider:kie"].seams, ["registry"])
 })
 
+test("quote.ts prices the unit's run route: only a unit with a route has one", () => {
+  const QUOTE = "export const quote = { body: () => undefined, pricing: { prechecks: [], modelResolver: () => \"x\" } }\n"
+  // The fixture worker has a route: valid.
+  assert.ok(!problemsAfter((root) => writeFileSync(path.join(root, BACKEND, "quote.ts"), QUOTE)).some((e) => /quote\.ts/.test(e)))
+  // A use-case node runs the factory route, not a route of its own.
+  expectProblem(
+    problemsAfter((root) => writeFileSync(path.join(root, CASE_BACKEND, "quote.ts"), QUOTE)),
+    /^fixture-case: quote\.ts prices the unit's run route: it needs backend\/src\/nodes\/fixture-case\/route\.ts \(or route\.ee\.ts\)$/,
+  )
+})
+
 test("recover.ts: only an own-writer worker on a provider whose reconcile reads it (RECOVERING_PROVIDERS) has one", () => {
   const capabilities = CAPABILITIES
   const withRecover = (list, dir = UNIT, backend = BACKEND) => problemsAfter((root) => {

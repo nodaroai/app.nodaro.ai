@@ -21,6 +21,7 @@
  * guard): `open` is an explicit "not yet" with its reason, not a pass.
  */
 import { describe, it, expect } from "vitest"
+import ts from "typescript"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { dirname, join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -51,18 +52,167 @@ const OWN_MEDIA_ONLY = /\b(?:isOurCdnUrl|isOwnMediaUrl|isOwnStoredFileUrl|r2KeyF
 /** A direct fetch of a URL in a route (workers fetch job payloads; their routes are counted here). */
 const FETCH_PRIMITIVE = /\b(?:safeFetch|downloadFile|uploadToR2)\s*\(/
 
+/**
+ * Calls that read a link before any job exists: its header, its length, its
+ * bytes, a download or an import. Asking the switch is a property of each
+ * CALL, not of the file: in a file marked `asks`, every one of these must ask
+ * the switch itself (the copy helper does) or come after an ask that refuses
+ * — in its own function or one around it. One ask elsewhere in the file covers
+ * nothing: a second lane in the same route (one model's image copied through
+ * the helper, another's header read directly) is still a fetch.
+ */
+const LINK_READERS = new Set([
+  "readTopazImageSize",
+  "probeImageDisplaySize",
+  "sourceImageForAutoAspect",
+  "probeMediaDuration",
+  "probeRefVideoDurations",
+  "boundedPublicChunks",
+  "safeFetch",
+  "downloadFile",
+  "uploadToR2",
+  "startTrackedDownload",
+  "importImageFromUrl",
+  "importRecordingFromUrl",
+  "ytMetadataProbe",
+  "runYtDlpOptions",
+  "planNodaroVideoUpscale",
+  "planTopazVideoUpscale",
+])
+/** Asks that THROW their refusal: evaluating the call refuses (an awaited gate, the copy helper). */
+const THROWING_ASKERS = new Set([
+  "requireImportAllowed",
+  "requireAccountlessImportAllowed",
+  "spendImportConfirmation",
+  "assertLinkImportAllowed",
+  "copyOutsideInput",
+  "inspectOutsideInput",
+])
+/**
+ * Asks that RETURN a refusal. Such a call refuses nothing by being made: it
+ * counts only where its result refuses — the condition of an `if` whose
+ * branch returns or throws, directly or through the variable it was stored in.
+ */
+const RETURNING_ASKERS = new Set(["linkImportRefusal", "topazImageLinkRefusal"])
+
+/** Local name → imported name, for every `import { a as b }` in the file. */
+function importAliases(sf: ts.SourceFile): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const st of sf.statements) {
+    const named = ts.isImportDeclaration(st) ? st.importClause?.namedBindings : undefined
+    if (named && ts.isNamedImports(named)) for (const el of named.elements) if (el.propertyName) out.set(el.name.text, el.propertyName.text)
+  }
+  return out
+}
+
+/** A statement that leaves: a return or a throw, or a block that ends in one at its top level. */
+function exits(st: ts.Statement | undefined): boolean {
+  if (!st) return false
+  if (ts.isReturnStatement(st) || ts.isThrowStatement(st)) return true
+  return ts.isBlock(st) && st.statements.some((x) => ts.isReturnStatement(x) || ts.isThrowStatement(x))
+}
+
+/** Whether `expr` holds `target` as a truthy test (not under a `!`), so an `if` on it exits when the target is truthy. */
+function testsTruthy(expr: ts.Expression, target: (n: ts.Node) => boolean): boolean {
+  if (target(expr)) return true
+  if (ts.isParenthesizedExpression(expr) || ts.isAwaitExpression(expr)) return testsTruthy(expr.expression, target)
+  if (ts.isBinaryExpression(expr) && expr.operatorToken.kind === ts.SyntaxKind.BarBarToken) return testsTruthy(expr.left, target) || testsTruthy(expr.right, target)
+  return false
+}
+
+/**
+ * Each read of a link in `source` that neither asks the switch itself nor
+ * follows, in its own function or one around it, an ask that refuses.
+ */
+function unaskedReads(path: string, source: string): Array<{ callee: string; line: number }> {
+  return scanLinkCalls(path, source).unasked
+}
+
+/** The reads of a link in `source` (callee names, aliases resolved), and those no ask covers. */
+function scanLinkCalls(path: string, source: string): { reads: string[]; unasked: Array<{ callee: string; line: number }> } {
+  const sf = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const aliases = importAliases(sf)
+  const calls: Array<{ node: ts.CallExpression; callee: string }> = []
+  const ifs: ts.IfStatement[] = []
+  const visit = (n: ts.Node): void => {
+    if (ts.isCallExpression(n)) {
+      const c = n.expression
+      const local = ts.isIdentifier(c) ? c.text : ts.isPropertyAccessExpression(c) ? c.name.text : ""
+      calls.push({ node: n, callee: (ts.isIdentifier(c) && aliases.get(local)) || local })
+    }
+    if (ts.isIfStatement(n)) ifs.push(n)
+    ts.forEachChild(n, visit)
+  }
+  visit(sf)
+  const functionsAround = (n: ts.Node): ts.Node[] => {
+    const out: ts.Node[] = []
+    for (let p: ts.Node | undefined = n.parent; p; p = p.parent) if (ts.isFunctionLike(p)) out.push(p)
+    return out.length > 0 ? out : [sf]
+  }
+  const within = (n: ts.Node, scope: ts.Node) => n.pos >= scope.pos && n.end <= scope.end
+  /** Where an ask has refused by: the call itself for a throwing ask; the exiting `if` for a returning one; undefined when it refuses nothing. */
+  const refusesBy = (ask: { node: ts.CallExpression; callee: string }): number | undefined => {
+    if (THROWING_ASKERS.has(ask.callee)) return ask.node.end
+    if (!RETURNING_ASKERS.has(ask.callee)) return undefined
+    const direct = ifs.find((st) => exits(st.thenStatement) && testsTruthy(st.expression, (x) => x === ask.node))
+    if (direct) return direct.end
+    // Stored first: `const refusal = linkImportRefusal(url)`, then `if (refusal) return …`.
+    const decl = ask.node.parent
+    if (!decl || !ts.isVariableDeclaration(decl) || !ts.isIdentifier(decl.name) || decl.initializer !== ask.node) return undefined
+    const name = decl.name.text
+    const scope = functionsAround(ask.node)[0]!
+    const viaVar = ifs.find((st) => st.pos >= ask.node.end && within(st, scope) && exits(st.thenStatement) && testsTruthy(st.expression, (x) => ts.isIdentifier(x) && x.text === name))
+    return viaVar?.end
+  }
+  const reads = calls.filter((c) => LINK_READERS.has(c.callee))
+  const unasked = reads
+    .filter((read) => {
+      const start = read.node.getStart()
+      const scopes = functionsAround(read.node)
+      return !calls.some((ask) => {
+        const by = refusesBy(ask)
+        return by !== undefined && by <= start && scopes.some((scope) => within(ask.node, scope))
+      })
+    })
+    .map((read) => ({ callee: read.callee, line: sf.getLineAndCharacterOfPosition(read.node.getStart()).line + 1 }))
+  return { reads: reads.map((r) => r.callee), unasked }
+}
+
+/** Problems of the `asks` lanes: a read no ask covers (unless it is an open read), a stale open read, and a lane with no read it can see that does not say where its reads are. */
+function asksLaneProblems(lanes: Readonly<Record<string, Lane>>, sourceOf: (rel: string) => string): string[] {
+  const problems: string[] = []
+  for (const [rel, lane] of Object.entries(lanes)) {
+    if (lane.kind !== "asks") continue
+    const open = lane.openReads ?? {}
+    const { reads, unasked } = scanLinkCalls(rel, sourceOf(rel))
+    for (const r of unasked) if (!(r.callee in open)) problems.push(`${rel}:${r.line} ${r.callee}`)
+    for (const [callee, why] of Object.entries(open)) {
+      if (!unasked.some((r) => r.callee === callee)) problems.push(`${rel}: openReads names ${callee}, which no longer reads a link unasked there — remove it`)
+      if (why.length <= 20) problems.push(`${rel}: say why ${callee} is open`)
+    }
+    if (reads.length === 0 && !lane.readsElsewhere) problems.push(`${rel}: marked asks, but no read of a link is recognised here — name its reader in LINK_READERS, or say where its reads are (readsElsewhere)`)
+    if (reads.length > 0 && lane.readsElsewhere) problems.push(`${rel}: readsElsewhere is declared, but its reads are here — remove it`)
+  }
+  return problems
+}
+
 interface Lane {
   /**
-   * `asks`: the file asks the switch, directly or through the gate (verified).
+   * `asks`: the file asks the switch, directly or through the gate (verified),
+   * before EVERY read of a link it makes (verified per call; `openReads` names
+   * the reads that await the open decision instead, each with why).
    * `own`: the file only ever fetches this deployment's own storage (verified).
    * `none`: no media is fetched from the URL (stored as given, or not media at all).
    * `open`: an outside URL still reaches a fetch or a provider, awaiting a decision.
    */
   readonly kind: "asks" | "own" | "none" | "open"
   readonly why: string
+  readonly openReads?: Readonly<Record<string, string>>
+  /** An `asks` lane whose reads happen outside the file (a worker, from the job it queues after the ask): where, and why that is still behind the ask. */
+  readonly readsElsewhere?: string
 }
 
-const asks = (why: string): Lane => ({ kind: "asks", why })
+const asks = (why: string, more: { openReads?: Readonly<Record<string, string>>; readsElsewhere?: string } = {}): Lane => ({ kind: "asks", why, ...more })
 const own = (why: string): Lane => ({ kind: "own", why })
 const none = (why: string): Lane => ({ kind: "none", why })
 const open = (why: string): Lane => ({ kind: "open", why })
@@ -88,15 +238,25 @@ const SHARED_SCHEMA_LINK_ROUTES = ["routes/web-scrape.ts", "routes/site-capture.
 const LANES: Readonly<Record<string, Lane>> = {
   // Asks the switch.
   "routes/download-video.ts": GATE,
-  "routes/dubbing.ts": asks("the sourceUrl lane asks the gate (lib/dubbing-source.ts); its audioUrl/videoUrl upload fields are the processing-input question"),
-  "routes/extract-youtube-audio.ts": GATE,
+  "routes/dubbing.ts": asks("the sourceUrl lane asks the gate (lib/dubbing-source.ts); its audioUrl/videoUrl upload fields are the processing-input question", {
+    readsElsewhere: "the link is fetched by the worker, from the job this route queues only after the ask has refused nothing (the dubbing job)",
+  }),
+  "routes/extract-youtube-audio.ts": asks("asks the import gate (lib/import-gate.ts), which asks the switch first", {
+    readsElsewhere: "the link is fetched by the worker, from the job this route queues only after the ask has refused nothing (the extract-youtube-audio job)",
+  }),
   "routes/media-import-url.ts": GATE,
   "routes/media-url-import.ts": GATE,
   "routes/media-process.ts": SWITCH,
   "routes/save-to-storage.ts": SWITCH,
-  "routes/suno.ts": asks("cover and upload-extend ask the switch for any link and the gate for a social one; mashup, add-vocals and voice-sample audio are the processing-input question"),
-  "routes/transcribe.ts": SWITCH,
-  "routes/trim-audio.ts": SWITCH,
+  "routes/suno.ts": asks("cover and upload-extend ask the switch for any link and the gate for a social one; mashup, add-vocals and voice-sample audio are the processing-input question", {
+    readsElsewhere: "the link is fetched by the worker, from the job this route queues only after the ask has refused nothing (the suno-* jobs)",
+  }),
+  "routes/transcribe.ts": asks("a link to outside content is refused here directly (lib/link-imports.ts)", {
+    readsElsewhere: "the link is fetched by the worker, from the job this route queues only after the ask has refused nothing (the transcribe job)",
+  }),
+  "routes/trim-audio.ts": asks("a link to outside content is refused here directly (lib/link-imports.ts)", {
+    readsElsewhere: "the link is fetched by the worker, from the job this route queues only after the ask has refused nothing (the trim-audio job)",
+  }),
   "routes/video-metadata.ts": SWITCH,
   "routes/youtube-audio.ts": GATE,
 
@@ -136,7 +296,7 @@ const LANES: Readonly<Record<string, Lane>> = {
   "nodes/shot-cuts/route.ts": PROCESSING_INPUT,
   "nodes/speaker-map/payload.ts": PROCESSING_INPUT,
   "nodes/speaker-map/route.ts": PROCESSING_INPUT,
-  "nodes/split-into-layers/route.ts": PROCESSING_INPUT,
+  "nodes/split-into-layers/quote.ts": PROCESSING_INPUT,
   "nodes/tighten-episode/use-case.ts": PROCESSING_INPUT,
   "routes/3d-scene.ts": GENERATION_REFERENCE,
   "routes/add-captions.ts": PROCESSING_INPUT,
@@ -158,7 +318,13 @@ const LANES: Readonly<Record<string, Lane>> = {
   "routes/creatures.ts": ENTITY_REFERENCE,
   "routes/describe-to-picker.ts": GENERATION_REFERENCE,
   "routes/edit-image.ts": asks(
-    "Nodaro Image Upscale's image goes through the outside-input copy (lib/nodaro-image-upscale-lane.ts), which asks the switch before any fetch; the other edit models' images await the generation-reference decision",
+    "Nodaro Image Upscale's image goes through the outside-input copy (lib/nodaro-image-upscale-lane.ts), which asks the switch before any fetch, and Topaz's header read asks it first (topazImageLinkRefusal); the other edit models' images await the generation-reference decision",
+    {
+      openReads: {
+        sourceImageForAutoAspect:
+          "a prompt edit's `auto` aspect reads the source photo's header to keep its shape: a generation reference's read, awaiting the same decision as the other generation routes that call it",
+      },
+    },
   ),
   "routes/extend-video.ts": GENERATION_REFERENCE,
   "routes/extract-audio.ts": PROCESSING_INPUT,
@@ -243,6 +409,12 @@ const LANES: Readonly<Record<string, Lane>> = {
     "only the nodaro-video-upscale provider asks the switch (before its clip is copied to our storage; the outside-input copy asks again); " +
       "Topaz still probes an outside videoUrl's length here and hands the link to its provider WITHOUT asking — the open processing-input question; " +
       "VEO and Seedance 2.5 HD take a task id, not a link",
+    {
+      openReads: {
+        planTopazVideoUpscale:
+          "Topaz measures an outside clip's length and size here and hands the link to its provider without asking: the open processing-input question",
+      },
+    },
   ),
   "routes/voice-changer.ts": GENERATION_REFERENCE,
 }
@@ -339,6 +511,57 @@ describe("every route that takes a URL is counted", () => {
       if (lane.kind === "asks") expect(ASKS_THE_SWITCH.test(source), `${rel} is marked asks but never asks the switch`).toBe(true)
       if (lane.kind === "own") expect(OWN_MEDIA_ONLY.test(source), `${rel} is marked own but holds no own-media check`).toBe(true)
     }
+  })
+
+  it("in a file marked `asks`, every read of a link follows an ask that refuses (or is named an open read, with why), and a lane with no read it can see says where its reads are", () => {
+    const problems = asksLaneProblems(LANES, (rel) => files.find((f) => f.rel === rel)!.source)
+    expect(problems, "a route marked `asks` reads a link without an ask that refuses before it: ask the switch (lib/link-imports.ts) and refuse on its answer before the read, or name the read in the lane's openReads with why").toEqual([])
+  })
+
+  it("fixtures: a read after an ask that refuses passes, in its function or one around it", () => {
+    expect(unaskedReads("x.ts", "async function a(url: string) { if (linkImportRefusal(url)) return; await probeImageDisplaySize(url) }")).toEqual([])
+    expect(unaskedReads("x.ts", "async function a(url: string) { const r = linkImportRefusal(url); if (r) throw new Error(\"no\"); await probeImageDisplaySize(url) }")).toEqual([])
+    expect(unaskedReads("x.ts", "async function a(url: string) { await requireImportAllowed(url); const go = async () => { await safeFetch(url) }; await go() }")).toEqual([])
+    expect(unaskedReads("x.ts", "async function a(url: string) { return inspectOutsideInput(url, opts) }")).toEqual([])
+  })
+
+  it("fixtures: an ask in another function of the file covers nothing, nor one after the read", () => {
+    const elsewhere = [
+      "async function a(url: string) { await copyOutsideInput(url, opts) }",
+      "async function b(url: string) { await readTopazImageSize(url, \"2\") }",
+    ].join("\n")
+    expect(unaskedReads("x.ts", elsewhere)).toEqual([{ callee: "readTopazImageSize", line: 2 }])
+    expect(unaskedReads("x.ts", "async function a(url: string) { await probeImageDisplaySize(url); assertLinkImportAllowed(url) }").map((r) => r.callee)).toEqual(["probeImageDisplaySize"])
+  })
+
+  it("fixtures (used to pass, now fail): an import alias no longer hides a read, and resolves an ask", () => {
+    // The reader under another name was invisible to a name match.
+    const aliasedRead = "import { probeImageDisplaySize as sizeOf } from \"./image-source-size.js\"\nasync function a(url: string) { await sizeOf(url) }"
+    expect(unaskedReads("x.ts", aliasedRead).map((r) => r.callee)).toEqual(["probeImageDisplaySize"])
+    // And an ask under another name counts.
+    const aliasedAsk = "import { linkImportRefusal as refusal } from \"./link-imports.js\"\nasync function a(url: string) { if (refusal(url)) return; await probeImageDisplaySize(url) }"
+    expect(unaskedReads("x.ts", aliasedAsk)).toEqual([])
+  })
+
+  it("fixtures (used to pass, now fail): a returned refusal that refuses nothing is no ask", () => {
+    // Called and dropped.
+    expect(unaskedReads("x.ts", "async function a(url: string) { linkImportRefusal(url); await probeImageDisplaySize(url) }").map((r) => r.callee)).toEqual(["probeImageDisplaySize"])
+    // Stored and never tested.
+    expect(unaskedReads("x.ts", "async function a(url: string) { const r = linkImportRefusal(url); log(r); await probeImageDisplaySize(url) }").map((r) => r.callee)).toEqual(["probeImageDisplaySize"])
+    // Tested, but the branch goes on instead of leaving.
+    expect(unaskedReads("x.ts", "async function a(url: string) { if (linkImportRefusal(url)) log(url); await probeImageDisplaySize(url) }").map((r) => r.callee)).toEqual(["probeImageDisplaySize"])
+    // Tested negated: its branch runs when there is NO refusal.
+    expect(unaskedReads("x.ts", "async function a(url: string) { if (!linkImportRefusal(url)) return; await probeImageDisplaySize(url) }").map((r) => r.callee)).toEqual(["probeImageDisplaySize"])
+    // Tested only after the read.
+    expect(unaskedReads("x.ts", "async function a(url: string) { const r = linkImportRefusal(url); await probeImageDisplaySize(url); if (r) return }").map((r) => r.callee)).toEqual(["probeImageDisplaySize"])
+  })
+
+  it("fixtures (used to pass, now fail): a lane marked `asks` with no read it can see must say where its reads are", () => {
+    const source = "async function a(url: string) { if (linkImportRefusal(url)) return; await queue.add(\"job\", { url }) }"
+    expect(asksLaneProblems({ "routes/x.ts": asks("asks the switch before it queues the job") }, () => source)).toEqual([
+      "routes/x.ts: marked asks, but no read of a link is recognised here — name its reader in LINK_READERS, or say where its reads are (readsElsewhere)",
+    ])
+    expect(asksLaneProblems({ "routes/x.ts": asks("asks the switch before it queues the job", { readsElsewhere: "the worker fetches it from the job queued after the ask" }) }, () => source)).toEqual([])
   })
 
   it("a lane that starts asking the switch moves off `open`/`none`, so the census never claims less than the code does", () => {

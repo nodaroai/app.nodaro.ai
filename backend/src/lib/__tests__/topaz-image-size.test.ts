@@ -76,8 +76,24 @@ describe("the workflow run's stamp", () => {
   it("refuses an output past the largest size; skips other providers and credit-less installs", async () => {
     size.current = { width: 8192, height: 8192 }
     const payload = { provider: "topaz-image-upscale", imageUrl: "https://cdn/a.png", upscaleFactor: "4" }
-    expect(await stampTopazImageSize("edit-image", payload, true)).toEqual({ ok: false, message: expect.stringContaining("512 megapixels") })
+    expect(await stampTopazImageSize("edit-image", payload, true)).toEqual({ ok: false, code: "image_too_large", message: expect.stringContaining("512 megapixels") })
     expect(await stampTopazImageSize("edit-image", payload, false)).toEqual({ ok: true, patch: {} })
     expect(await stampTopazImageSize("edit-image", { provider: "recraft-upscale", imageUrl: "https://cdn/a.png" }, true)).toEqual({ ok: true, patch: {} })
+  })
+
+  it("asks the deployment's link-import switch before it reads a header: links off, an outside link is refused and nothing is read", async () => {
+    const { probeImageDisplaySize } = await import("@/lib/image-source-size.js")
+    const { __resetSurfaceProfileCacheForTests } = await import("@/lib/surface-profile.js")
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ imports: { links: false } })
+    __resetSurfaceProfileCacheForTests()
+    vi.mocked(probeImageDisplaySize).mockClear()
+    try {
+      const payload = { provider: "topaz-image-upscale", imageUrl: "https://cdn/a.png", upscaleFactor: "2" }
+      expect(await stampTopazImageSize("edit-image", payload, true)).toEqual({ ok: false, code: "link_imports_disabled", message: expect.stringContaining("turned off") })
+      expect(probeImageDisplaySize).not.toHaveBeenCalled()
+    } finally {
+      delete process.env.NODARO_SURFACE_PROFILE
+      __resetSurfaceProfileCacheForTests()
+    }
   })
 })
