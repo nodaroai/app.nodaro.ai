@@ -287,6 +287,7 @@ import { config, llmMeteredPricing } from "../../lib/config.js"
 import { resolveScriptModelId, type ScriptProvider } from "../../providers/script/script-generator.js"
 import { isNodeDenied, nodeNotAvailableError, isModelDenied, modelNotAvailableError, modelRestrictionConfigured, namesHouseModel, unservedHouseModelsOf, USER_VIEWER, type AvailabilityViewer } from "../../lib/surface-deny.js"
 import { jobRunModelOfBuild } from "../../lib/run-model.js"
+import { trainedCharacterModelWithheld } from "../../lib/trained-character-model.js"
 import { servesEveryHouseModel } from "../../lib/house-models-served.js"
 import { providerIsItsModel } from "../../lib/provider-model.js"
 import { VIDEO_RETAKE_MODEL } from "../../workers/handlers/default-models.js"
@@ -3026,10 +3027,11 @@ function refuseWithheldDefaultModel(
 ): void {
   const node = nodeAsBuilt(rawNode, buildCtx?.edges ?? [])
   const named = effectiveDispatchProvider(node.type, node.data, handed)
-  // Judged at the top of the build: a provider that IS the model it runs. An
-  // engine name (lib/provider-model.ts) is not, and its model is judged here.
-  if (named && providerIsItsModel([node.type], named, node.data ?? {})) return
   const runsOn = jobRunModelOfBuild(built.jobName, built.payload, built.modelIdentifier)
+  // Judged at the top of the build: a provider that IS the model it runs. An
+  // engine name (lib/provider-model.ts) is not, and its model is judged here;
+  // so is a model the build switched to (a trained character's model).
+  if (named && providerIsItsModel([node.type], named, node.data ?? {}) && (runsOn === undefined || runsOn === named)) return
   if (runsOn && isModelDenied(runsOn)) throw modelNotAvailableError([runsOn])
 }
 
@@ -3330,7 +3332,10 @@ function buildPayloadOf(
       // Gated by CHARACTER_LORA_ROUTING_ENABLED (default true) — operators
       // can flip the env to "false" to disable the swap org-wide without
       // a deploy if inference quality regresses.
-      const lora = config.CHARACTER_LORA_ROUTING_ENABLED
+      // A deployment that withholds the trained model does not switch to it:
+      // the node runs the model it names, with the character's pictures
+      // (decided 2026-11-12, lib/trained-character-model.ts).
+      const lora = config.CHARACTER_LORA_ROUTING_ENABLED && !trainedCharacterModelWithheld()
         ? selectLoraRoutingForMentions(wiredCharRefs)
         : null
       const effectiveProvider = lora ? "replicate" : provider

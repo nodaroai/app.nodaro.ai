@@ -25,6 +25,7 @@ import {
   DEFAULT_TEXT_TO_AUDIO_PROVIDER,
   DEFAULT_TRANSCRIBE_PROVIDER,
   dialogueProviderOf,
+  T2I_TO_I2I_VARIANT,
   type ScriptProvider,
 } from "@nodaro/shared/models"
 import { DEFAULT_VIDEO_MASK_PROVIDER } from "@nodaro/shared/media"
@@ -140,7 +141,9 @@ export function resolvedModelOfJob(jobName: string, data: unknown): string | und
  *    payload's `provider`, else the general default — BEFORE the image-to-image
  *    swap the workflow build (`model`) or the handler (`effectiveModel`)
  *    applies, as a named `provider` is judged (the route's run model judges the
- *    same model);
+ *    same model); but a build that switched to another model (`model`, not the
+ *    named one's image-to-image sibling: a trained character's model) is
+ *    judged on that model (`imageModelJudged`);
  *  - a 3D scene build with an advanced `engine`: none — that build sends no
  *    planner model (`scene3d-http.ts` drops it), and the engine is judged where
  *    it runs.
@@ -148,9 +151,24 @@ export function resolvedModelOfJob(jobName: string, data: unknown): string | und
 const imageModelChosen = (d: Data): string | undefined =>
   str(generateImageModelOf({ provider: str(d.provider), aspectRatio: str(d.aspectRatio) }).resolvedModel)
 
+/**
+ * The model a built image job is judged on: the model it was routed to when
+ * the build switched it to another model (a trained character's model, carried
+ * in `model` while `provider` names the provider that serves it), else the
+ * model named or defaulted. A routed model that is the named one's declared
+ * image-to-image sibling (`T2I_TO_I2I_VARIANT`) is not a switch: the named
+ * model is judged, as above.
+ */
+const imageModelJudged = (d: Data): string | undefined => {
+  const chosen = imageModelChosen(d)
+  const routed = str(d.model)
+  if (routed === undefined || routed === chosen) return chosen
+  return chosen !== undefined && T2I_TO_I2I_VARIANT[chosen] === routed ? chosen : routed
+}
+
 const JUDGED_OVERRIDES: Readonly<Record<string, (d: Data) => string | undefined>> = Object.freeze({
-  "generate-image": imageModelChosen,
-  "reference-board": imageModelChosen,
+  "generate-image": imageModelJudged,
+  "reference-board": imageModelJudged,
   "generate-3d-scene": (d) => (d.engine ? undefined : scene3d(d)),
   "edit-3d-scene": (d) => (d.engine ? undefined : scene3d(d)),
 })

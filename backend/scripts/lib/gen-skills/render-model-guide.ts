@@ -99,7 +99,7 @@ export function renderModelTable(
     return row ? { credits: chargedOf(row.identifier, row.credits), identifier: row.identifier } : { credits: 0, identifier: null }
   }
   const rows = Object.values(catalog)
-    .filter((e) => e.kind === kind && !e.mcpHidden && !e.docsHidden)
+    .filter((e) => e.kind === kind && !e.mcpHidden && !e.docsHidden && e.pickerHidden !== true)
     .map((e) => ({ e, ...priced(e) }))
     .sort((a, b) => {
       if (a.credits !== b.credits) return a.credits - b.credits

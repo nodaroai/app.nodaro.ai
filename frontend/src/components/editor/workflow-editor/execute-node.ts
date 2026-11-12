@@ -19,6 +19,7 @@ import {
 } from "@nodaro/shared/nodes";
 import { toast } from "sonner";
 import { namesUserDirectionRef } from "@/lib/user-direction-refs";
+import { trainedCharacterModelWithheld } from "@/lib/trained-character-model";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
 import {
   styleCaptionPlan,
@@ -1883,7 +1884,9 @@ function executeNodeCore(
     // version/trigger) so a stolen JWT can't spoof another user's LoRA. The
     // route looks up `lora_replicate_version` + `lora_trigger_word` scoped
     // by `req.userId`.
-    const loraRouting = selectLoraRoutingForMentions(connectedReferences);
+    // A deployment that withholds the trained model is not switched to it: the
+    // node's own model runs with the character's pictures (decided 2026-11-12).
+    const loraRouting = trainedCharacterModelWithheld() ? null : selectLoraRoutingForMentions(connectedReferences);
     let internalLora: { characterId: string } | undefined;
     if (loraRouting) {
       // The routed character by the slug its refs carry: a wired node this

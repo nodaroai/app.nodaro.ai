@@ -523,6 +523,18 @@ export interface ModelCatalogEntryFields {
    */
   docsHidden?: boolean
   /**
+   * Never picked: the platform runs this model on its own, never because a
+   * person or a client chose it (a trained character's model, which a Generate
+   * Image run switches to when its one character has one). It is listed
+   * nowhere a model is offered — `listModels` (so `GET /v1/models` and MCP
+   * `list_models`), the editor's Models tab and add-node search
+   * (`buildModelTree`), the MCP tool model enums (`modelIdsByKindMode`), the
+   * docs' model tables and the recommendations — and is still a model a
+   * deployment's restriction can name: it counts in the gateable model ids and
+   * Admin → Availability shows it.
+   */
+  pickerHidden?: true
+  /**
    * The provider's safety filter is known to be non-deterministic on this
    * model — the platform retries a blocked request once; `fallback` names
    * the catalog model to offer when it blocks again.
@@ -1044,6 +1056,26 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["edit", "inpaint"],
     features: ["mask"],
     pricing: [{ identifier: "flux-fill", credits: 30 }],
+  },
+  // A trained character's model (decided 2026-11-12): FLUX.1 [dev] with the
+  // character's own LoRA, which a Generate Image run switches to when the one
+  // character it names has a succeeded trained model. Never picked
+  // (`pickerHidden`): listed here so a deployment's restriction can name it.
+  // Where a deployment withholds it, a run does not switch and uses the
+  // character's reference pictures, as for a character with no trained model.
+  // Its levers are not listed: nothing snaps a request against this entry.
+  "flux-lora-character": {
+    id: "flux-lora-character",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "Black Forest Labs",
+    maker: "black-forest-labs",
+    label: "Trained character (FLUX LoRA)",
+    series: "Flux",
+    description: "A trained character's own model (FLUX.1 [dev] with its LoRA), run when a prompt names that one character.",
+    useCases: ["character"],
+    pricing: [{ identifier: "flux-lora-character", credits: 20 }],
+    pickerHidden: true,
   },
 
   // ── OpenAI (GPT Image) ──
@@ -4468,7 +4500,8 @@ export function listModels(filter?: {
   mode?: ModelMode
   family?: string
 }): ModelCatalogEntry[] {
-  const all = Object.values(MODEL_CATALOG)
+  // A model the platform runs on its own is offered nowhere (`pickerHidden`).
+  const all = Object.values(MODEL_CATALOG).filter((m) => m.pickerHidden !== true)
   if (!filter) return all
   return all.filter((m) => {
     if (filter.kind && m.kind !== filter.kind) return false
@@ -5813,7 +5846,7 @@ export function modelIdsByKindMode(
     .filter((m) => (kind === null ? true : m.kind === kind))
     .filter((m) => m.modes.some((md) => modes.includes(md)))
     .filter((m) => includeHidden || !m.mcpHidden)
-    .filter((m) => !m.docsHidden)
+    .filter((m) => !m.docsHidden && m.pickerHidden !== true)
     .map((m) => m.id)
     .sort()
   if (ids.length === 0) {

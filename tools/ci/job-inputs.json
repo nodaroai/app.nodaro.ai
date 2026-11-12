@@ -748,6 +748,7 @@
         "backend/src/lib/svg-sanitize.ts",
         "backend/src/lib/sync-llm-meter.ts",
         "backend/src/lib/template-preview-key.ts",
+        "backend/src/lib/trained-character-model.ts",
         "backend/src/lib/transfer-watchdog.ts",
         "backend/src/lib/trigger-data-stamps.ts",
         "backend/src/lib/trigger-fire-refusal.ts",

@@ -651,7 +651,6 @@ function optionCensusOf(name: string, url: string, site: string, model: CreditGu
  */
 const LIP_SYNC_AWAITING = "LatentSync, Wav2Lip, VideoReTalking, SadTalker, HeyGen Lipsync Precision and Lipsync 2 Pro run beside its catalog models and have no catalog entry. An entry needs each one's maker: two are not makers in MODEL_MAKERS yet, and Wav2Lip is a research release. Awaiting that decision (2026-11-12)"
 const SUNO_AWAITING = "Suno V4_5PLUS, V4_5ALL and V4_5 run beside the catalog's Suno versions and have no catalog entry; each is charged under its operation's row (`sunoCreditType`), so an entry needs a price row of its own, or one it is not charged under. Awaiting that decision (2026-11-12)"
-const LORA_AWAITING = "`flux-lora-character` (a trained character's Flux LoRA, Cloud, behind CHARACTER_LORA_ROUTING_ENABLED) is a literal of the body's `provider` and what `_internalLora` runs, and has no catalog entry. Awaiting a decision (2026-11-12) on naming it or judging it as the model the request names"
 const MIXED_AWAITING_DECISION: Readonly<Record<string, string>> = {
   "POST /v1/lip-sync": LIP_SYNC_AWAITING,
   "POST /v1/suno/generate": SUNO_AWAITING,
@@ -661,7 +660,6 @@ const MIXED_AWAITING_DECISION: Readonly<Record<string, string>> = {
   "POST /v1/suno/upload-extend": SUNO_AWAITING,
   "POST /v1/suno/add-instrumental": SUNO_AWAITING,
   "POST /v1/suno/add-vocals": SUNO_AWAITING,
-  "POST /v1/generate-image": LORA_AWAITING,
 }
 
 /**
@@ -675,7 +673,7 @@ const SERVED_IMAGE_IDS_OUTSIDE_CATALOG = [...new Set([...Object.keys(KIE_IMAGE_M
 
 /** An image route whose `provider` takes any string: what can run there is what the image router serves. */
 const OPEN_IMAGE_PROVIDER =
-  "`provider` takes any string, and what runs is what the image router serves: catalog ids, and `flux-lora-character`, which runs only with a trained character's LoRA version (held below)"
+  "`provider` takes any string, and what runs is what the image router serves: catalog ids only (the trained-character model `flux-lora-character` among them, a hidden entry)"
 
 /** A structured-LLM route whose wrapper schema takes any `llmModel` string. */
 const OPEN_STRUCTURED_LLM =
@@ -723,6 +721,10 @@ describe("every option a credit-guarded route accepts runs a model a restriction
     const motion = byName("POST /v1/motion-transfer")!
     expect([...motion.gateable]).toEqual(expect.arrayContaining(["wan-animate-move", "wan-animate-replace", "motion-transfer", "kling-3.0-motion"]))
     expect(motion.outside.size).toBe(0)
+    // The trained-character model on /v1/generate-image (decided 2026-11-12).
+    const image = byName("POST /v1/generate-image")!
+    expect([...image.gateable]).toContain("flux-lora-character")
+    expect(image.outside.size).toBe(0)
     // A mixed route is visible to it.
     expect([...byName("POST /v1/lip-sync")!.outside.keys()]).toContain("latentsync")
   })
@@ -746,10 +748,10 @@ describe("every option a credit-guarded route accepts runs a model a restriction
     expect(named).toEqual([])
   })
 
-  it("every open model field is listed with its reason, and the image router serves nothing outside the catalog but the LoRA id", () => {
+  it("every open model field is listed with its reason, and the image router serves nothing outside the catalog", () => {
     const unlisted = all.flatMap((c) => c.open.filter((f) => !Object.hasOwn(OPEN_MODEL_FIELDS[c.name] ?? {}, f)).map((f) => `${c.name}: ${f}`))
     expect(unlisted).toEqual([])
-    expect(SERVED_IMAGE_IDS_OUTSIDE_CATALOG).toEqual(["flux-lora-character"])
+    expect(SERVED_IMAGE_IDS_OUTSIDE_CATALOG).toEqual([])
   })
 
   it("no listed entry is stale", () => {

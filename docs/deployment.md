@@ -843,8 +843,21 @@ optional; each array empty = "keep the default"):
   (`403 model_not_available`), while the node's other models keep running.
   A models override saved in Admin → Availability before a model was listed
   does not tick a model listed later, so it stays off there until an admin
-  ticks it. The models listed later so far: `flux-fill`, `wan-animate-move`
-  and `wan-animate-replace`.
+  ticks it. The models listed later so far: `flux-fill`, `wan-animate-move`,
+  `wan-animate-replace` and `flux-lora-character`.
+
+  A trained character's model (`flux-lora-character`, FLUX.1 [dev] with the
+  character's own LoRA) is a model a restriction can name, though no menu,
+  `GET /v1/models` or MCP `list_models` offers it: a Generate Image run
+  switches to it on its own when the one character it names has a trained
+  model. Admin → Availability lists it as "Trained character (FLUX LoRA)".
+  Where a restriction withholds it, a run does not switch: it runs the model
+  the node (or the request) names, at that model's price, and uses the
+  character through its reference pictures, exactly as for a character with no
+  trained model. This holds in the editor, on `/v1/generate-image` and in
+  workflow runs. A request that names `flux-lora-character` itself as its model
+  is refused (`403 model_not_available`). A deployment with no model
+  restriction runs trained characters as before.
 
   A model restriction holds on the model a request RUNS on, not only on the
   one it names. A request that names no model is judged as the default its

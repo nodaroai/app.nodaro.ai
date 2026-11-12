@@ -27,7 +27,8 @@ import { JOB_LANE_CLASSES, laneClassOf } from "../../../lib/concurrency-lanes/re
 import { UNIT_NODE_DESCRIPTORS, laneOf } from "../../../lib/unit-descriptors.js"
 import { __availabilityUniverseReadyForTests, GATEABLE_MODEL_IDS, GATEABLE_NODE_TYPES } from "../../../lib/availability-override.js"
 import { FIXED_MODEL_JOBS, jobRunModelOfBuild, judgesJobRunModel } from "../../../lib/run-model.js"
-import { RESOLVED_MODEL_OF_JOB } from "../../../lib/job-resolved-model.js"
+import { RESOLVED_MODEL_OF_JOB, resolvedModelOfJob } from "../../../lib/job-resolved-model.js"
+import { T2I_TO_I2I_VARIANT } from "@nodaro/shared/models"
 import { providerIsItsModel } from "../../../lib/provider-model.js"
 import { nodeModelOptions } from "../../../lib/__tests__/model-option-vocabularies.js"
 
@@ -330,5 +331,94 @@ describe("every option a workflow node accepts runs a model a restriction can na
       const o = byType(t)
       return !o || o.gateable.size === 0 || o.outside.size === 0
     })).toEqual([])
+  })
+})
+
+// ── 4. A build that switches to another model ────────────────────────────────
+
+/**
+ * TOTALITY for "a build is judged on the model it runs" (decided 2026-11-12):
+ * a build may end on a different model than the one its node names — the
+ * trained-character model a Generate Image run switches to when its one wired
+ * character has a succeeded trained model. Such a job must be judged on the
+ * model it runs, or a deployment that withholds that model still runs it.
+ *
+ * Every option of every node type (part 3), and the Generate Image and
+ * Reference Board nodes wired to a trained character, is built; the model its
+ * handler runs (`resolvedModelOfJob`, decided as the handler decides) is held
+ * to the model the build is judged on (`jobRunModelOfBuild`). The one allowed
+ * difference is a declared image-to-image sibling (`T2I_TO_I2I_VARIANT`): the
+ * named model is judged, by design. Anything else is listed below with why.
+ */
+const JUDGED_APART_FROM_RUN: Readonly<Record<string, string>> = {}
+
+const TRAINED_CHARACTER: SimpleNode = {
+  id: "c1",
+  type: "character",
+  data: {
+    label: "Kira",
+    characterName: "Kira",
+    sourceImageUrl: IMG,
+    loraReplicateVersion: "owner/char-kira:abc123",
+    loraTriggerWord: "TOK_kira",
+    loraTrainingStatus: "succeeded",
+  },
+}
+
+/** The model a node's build runs and the one it is judged on; undefined when it does not build or calls no model. */
+function runAndJudge(type: string, data: Record<string, unknown>, trained: boolean): { jobName: string; runs: string | undefined; judged: string | undefined } | undefined {
+  const node: SimpleNode = { id: `${type}-1`, type, data: { label: "My Node", prompt: "Kira at the beach", ...data } }
+  const nodes = trained ? [TRAINED_CHARACTER, node] : [node]
+  const edges = trained ? [{ id: "e1", source: "c1", target: node.id, sourceHandle: "character" }] : []
+  let result: ReturnType<typeof buildPayload>
+  try {
+    result = buildPayload(node, "job-census", (trained ? {} : { ...WIRED }) as ResolvedInputs, undefined, { nodes, edges, nodeStates: {} } as never)
+  } catch {
+    return undefined
+  }
+  const cls = laneClassOf(result.queueName, result.jobName, result.payload)
+  const lane = cls.kind === "leaf" ? cls.lane : cls.kind
+  if (lane !== "provider" && lane !== "llm") return undefined
+  return {
+    jobName: result.jobName,
+    runs: resolvedModelOfJob(result.jobName, result.payload),
+    judged: jobRunModelOfBuild(result.jobName, result.payload, result.modelIdentifier),
+  }
+}
+
+describe("a build is judged on the model it runs, a declared image-to-image sibling aside", () => {
+  let checked = 0
+  const apart: string[] = []
+
+  beforeAll(async () => {
+    await __availabilityUniverseReadyForTests()
+    const types = [...new Set([...GATEABLE_NODE_TYPES, ...UNIT_NODE_DESCRIPTORS.map((d) => d.type), ...editorExecutableTypes()])].sort()
+    const note = (label: string, b: ReturnType<typeof runAndJudge>) => {
+      if (!b || !judgesJobRunModel(b.jobName)) return
+      checked += 1
+      if (b.runs === b.judged) return
+      if (b.judged !== undefined && T2I_TO_I2I_VARIANT[b.judged] === b.runs) return
+      if (Object.hasOwn(JUDGED_APART_FROM_RUN, label.split(" ")[0]!)) return
+      apart.push(`${label}: runs ${String(b.runs)}, judged ${String(b.judged)}`)
+    }
+    for (const type of types) {
+      note(`${type} (no option)`, runAndJudge(type, {}, false))
+      for (const [field, values] of nodeModelOptions(type)) for (const value of values) note(`${type} ${field}=${value}`, runAndJudge(type, { [field]: value }, false))
+    }
+    for (const type of ["generate-image", "reference-board"]) {
+      note(`${type} with a trained character`, runAndJudge(type, {}, true))
+      for (const value of nodeModelOptions(type).get("provider") ?? []) note(`${type} provider=${value} with a trained character`, runAndJudge(type, { provider: value }, true))
+    }
+  }, 120_000)
+
+  it("built enough to mean something, the trained-character switch among them", () => {
+    expect(checked).toBeGreaterThan(300)
+    const switched = runAndJudge("generate-image", { provider: "gpt-image-2" }, true)!
+    expect(switched.runs).toBe("flux-lora-character")
+    expect(switched.judged).toBe("flux-lora-character")
+  })
+
+  it("no build runs one model and is judged on another, unless listed", () => {
+    expect(apart).toEqual([])
   })
 })
